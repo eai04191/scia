@@ -37,6 +37,10 @@ public final class SearchModel {
     private let client: MastodonClient
     private let pagers: [SearchCategory: SearchPager]
     private var states: [SearchCategory: SectionState] = [:]
+    /// 確定してから、最初の結果がそろうまでの間か。この間に届いた結果は、確定した操作の結果として動きで見せる。確定から間をおかずに届くため、動かさずに入れると、確定の動きの途中で行が跳ねて見えるため。
+    private var isSettlingSubmission = false
+    /// 打っている途中の候補から引き継いだ行。その種類の結果が届くまで、見出しの下に出す。確定した直後に一覧が空にならず、同じ行がその場に残るようにするため。
+    private var carried: [SearchCategory: [TimelineEntry]] = [:]
     /// 最後に始めた読み込み。古い読み込みの結果を捨てるのに使う。
     private var generation = 0
     /// APIが401を返したときに呼ぶ。トークンが無効かを確かめ、ログインし直しを促すのはセッションに任せる。
@@ -54,7 +58,10 @@ public final class SearchModel {
         case failed(ErrorPresentation)
     }
 
-    public init(input: SearchInput, scope: Scope = .all, client: MastodonClient, tasks: TaskScope, onUnauthorized: @escaping () -> Void) {
+    /// - Parameters:
+    ///   - carriedAccounts: 打っている途中の候補のユーザー。3つの種類を並べるときに、ユーザーの結果が届くまで出す。
+    ///   - carriedHashtags: 打っている途中の候補のハッシュタグ。3つの種類を並べるときに、ハッシュタグの結果が届くまで出す。
+    public init(input: SearchInput, scope: Scope = .all, carriedAccounts: [Account] = [], carriedHashtags: [Hashtag] = [], client: MastodonClient, tasks: TaskScope, onUnauthorized: @escaping () -> Void) {
         self.input = input
         self.scope = scope
         self.client = client
@@ -77,6 +84,10 @@ public final class SearchModel {
             }
         }
         self.pagers = pagers
+        if scope == .all {
+            carried[.accounts] = carriedAccounts.prefix(Self.previewCount).map(TimelineEntry.account)
+            carried[.hashtags] = carriedHashtags.prefix(Self.previewCount).map { .search(.hashtag($0)) }
+        }
     }
 
     private static func categories(of scope: Scope) -> [SearchCategory] {
@@ -88,11 +99,19 @@ public final class SearchModel {
 
     private var categories: [SearchCategory] { Self.categories(of: scope) }
 
-    /// 探し始める。
+    /// 探し始める。一覧に残っていた候補の行を最初の結果に置き換えるまでを、確定した操作の結果として動きで見せる。
     public func start() {
         guard !isStopped else { return }
+        isSettlingSubmission = true
         display?.setContentState(.loading)
         load(isRefresh: false, purpose: .action)
+    }
+
+    /// 結果を伝える一覧を付け替え、今の結果を並べ直す。検索欄で打ち直してから閉じ、候補から結果に戻すときに使う。
+    public func attach(_ display: any TimelineDisplay) {
+        self.display = display
+        guard !isStopped else { return }
+        render(arrived: true)
     }
 
     /// 一覧を引っぱって離したときに、同じ語でもう一度探す。読めるまでは、前の結果を残す。
@@ -288,11 +307,21 @@ public final class SearchModel {
             case .loaded:
                 entries += rows(of: pager)
             case .loading, nil:
-                break
+                if let rows = carried[category], !rows.isEmpty {
+                    entries += [.search(.heading(category))] + rows
+                }
+                continue
             }
+            // 結果が届くか失敗したら、引き継いだ行はもう出さない。
+            carried[category] = nil
         }
         if animatesRemoval {
             display?.show(entries, animatesRemoval: true)
+        } else if isSettlingSubmission {
+            display?.transition(to: entries)
+            if !categories.contains(where: { states[$0] == .loading || states[$0] == nil }) {
+                isSettlingSubmission = false
+            }
         } else if arrived {
             display?.setEntries(entries, keeping: nil, placingAtTop: nil, keepsOffset: true, animatesRemoval: false, keepingRowContentsOf: nil)
         } else {

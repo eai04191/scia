@@ -1575,18 +1575,21 @@ final class SessionController {
 
     // MARK: - 検索
 
-    /// 検索の画面に、確定した語の結果の一覧を作らせる。
+    /// 検索の画面に、候補と結果を並べる一覧と、確定した語の結果を読むモデルを作らせる。
     private func prepare(_ search: SearchViewController) {
-        search.makeResults = { [weak self] input in
-            self?.makeSearchResults(input, scope: .all) ?? TimelineViewController(texts: .search(.all, query: input.query)) {}
+        search.makeResults = { [weak self] input, carried, list in
+            self?.makeSearchModel(input, scope: .all, carried: carried, presenter: list)
         }
-        search.makeSuggestionsList = { [weak self] in
-            // 候補のユーザーとハッシュタグを、確定した結果と同じ行で描き、押したときと長押ししたときも同じにする。
-            let list = TimelineViewController(texts: .searchSuggestions) {}
+        search.makeList = { [weak self, weak search] in
+            let list = TimelineViewController(texts: .search(.all, query: "")) { await search?.refreshResults() }
             self?.configure(list)
             return list
         }
         search.onOpenHashtag = { [weak self] name, source in self?.openFeed(.hashtag(name: name), from: source) }
+        search.onShowAll = { [weak self] input, category, source in
+            guard let self else { return }
+            source.navigationController?.pushViewController(makeSearchResults(input, scope: .only(category)), animated: true)
+        }
         search.suggestions = SearchSuggestions(
             client: client,
             recents: RecentSearches(defaults: .standard, account: credential.handle),
@@ -1614,13 +1617,11 @@ final class SessionController {
         navigation.pushViewController(search, animated: true)
     }
 
-    /// 確定した語の結果の一覧を作り、探し始める。決まりはdocs/search.mdにある。
+    /// 確定した語の結果の一覧を作り、探し始める。「すべて見る」で積む、1つの種類だけの一覧に使う。決まりはdocs/search.mdにある。
     private func makeSearchResults(_ input: SearchInput, scope: SearchModel.Scope) -> TimelineViewController {
         weak var owner: SearchModel?
         let viewController = TimelineViewController(texts: .search(scope, query: input.query)) { await owner?.refresh() }
-        let model = SearchModel(input: input, scope: scope, client: client, tasks: tasks.child()) { [weak self] in
-            self?.reportUnauthorized()
-        }
+        let model = makeSearchModel(input, scope: scope, carried: nil, presenter: viewController)
         owner = model
         model.display = viewController
         viewController.lifetimeOwner = model
@@ -1640,9 +1641,22 @@ final class SessionController {
             case .failed(let category, _):
                 model?.retry(category)
             case .heading, .action, .recentsHeading, .recent:
-                // 候補の一覧にだけ出る行は、結果の一覧には並ばない。
+                // 打っている途中の候補にだけ出る行は、この一覧には並ばない。
                 break
             }
+        }
+        configure(viewController)
+        model.start()
+        return viewController
+    }
+
+    /// 確定した語の結果を読むモデルを作る。結果を伝える一覧と読み始めは、呼び出し側が決める。
+    /// - Parameters:
+    ///   - carried: 打っている途中の候補。そのユーザーとハッシュタグを、結果が届くまで引き継ぐ。
+    ///   - presenter: 結果を並べる一覧。URLやハンドルが1つに決まったときに、この上に開く。
+    private func makeSearchModel(_ input: SearchInput, scope: SearchModel.Scope, carried: SearchSuggestions.Content?, presenter viewController: TimelineViewController) -> SearchModel {
+        let model = SearchModel(input: input, scope: scope, carriedAccounts: carried?.accounts ?? [], carriedHashtags: carried?.hashtags ?? [], client: client, tasks: tasks.child()) { [weak self] in
+            self?.reportUnauthorized()
         }
         // URLやハンドルが1つに決まったら、結果の一覧の上に開く。待つ間にタブを移ったり、ほかの画面を開いたりしていたら開かない。
         model.onFound = { [weak self, weak viewController] found in
@@ -1659,10 +1673,8 @@ final class SessionController {
                 openProfile(account, from: viewController)
             }
         }
-        configure(viewController)
         searches.add(model)
-        model.start()
-        return viewController
+        return model
     }
 
     // MARK: - スレッド

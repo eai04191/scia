@@ -41,9 +41,7 @@ public struct TimelineTexts: Sendable {
     public static func accountNotifications(name: String) -> TimelineTexts {
         TimelineTexts(dumpName: "accountNotifications", title: "\(name)からの通知", empty: "通知はありません", reachedEnd: "これより前の通知はありません", unreadable: "表示できない通知")
     }
-    /// 検索欄に打っている途中の候補と最近の検索。状態ダンプで結果の一覧と見分けられるよう、名前を分ける。行がないときは一覧を出さないので、空の文は使わない。
-    public static let searchSuggestions = TimelineTexts(dumpName: "searchSuggestions", title: "検索", empty: "", reachedEnd: "", unreadable: "表示できない投稿")
-    /// 検索の結果。1つの種類だけの一覧では、題に種類を、題の下に探した語を出す。
+    /// 検索の画面の一覧と、検索の結果。3つの種類を並べる一覧は、打っている途中の候補も並べるので、語を渡さない。1つの種類だけの一覧では、題に種類を、題の下に探した語を出す。
     public static func search(_ scope: SearchModel.Scope, query: String) -> TimelineTexts {
         switch scope {
         case .all:

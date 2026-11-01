@@ -772,6 +772,15 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// - Parameter base: `newEntries`は、この並びに行を足すか除くかしただけで、残る行の中身を変えていない。
     ///   前回並べた配列と同じものなら、描き直す行を探すために行の中身を比べるのを省く。一覧が長いと、比べるだけで重くなるため。
     func setEntries(_ newEntries: [TimelineEntry], keeping anchorID: ItemID? = nil, placingAtTop topID: ItemID? = nil, keepsOffset: Bool = false, animatesRemoval: Bool = false, keepingRowContentsOf base: [TimelineEntry]? = nil) {
+        updateEntries(newEntries, keeping: anchorID, placingAtTop: topID, keepsOffset: keepsOffset, animatesRemoval: animatesRemoval, animatesChanges: false, keepingRowContentsOf: base)
+    }
+
+    func transition(to newEntries: [TimelineEntry]) {
+        updateEntries(newEntries, keeping: nil, placingAtTop: nil, keepsOffset: true, animatesRemoval: false, animatesChanges: true, keepingRowContentsOf: nil)
+    }
+
+    /// - Parameter animatesChanges: 使う人の操作の結果として、足す、消す、並べ替えるをどれも動きで見せる。動かせなければ`keepsOffset`などの指定どおりに置き換える。
+    private func updateEntries(_ newEntries: [TimelineEntry], keeping anchorID: ItemID?, placingAtTop topID: ItemID?, keepsOffset: Bool, animatesRemoval: Bool, animatesChanges: Bool, keepingRowContentsOf base: [TimelineEntry]?) {
         guard !isShowingMenu else {
             // 後の呼び出しの並びが新しい。基準は、メニューが閉じたときに最後に指定されたものを使う。
             heldEntries = HeldEntries(
@@ -780,7 +789,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                 topID: topID ?? heldEntries?.topID,
                 keepsOffset: keepsOffset || (heldEntries?.keepsOffset ?? false),
                 // 操作によらない変化と混ざったら、どれが操作の結果か分からないため、動かさない。
-                animatesRemoval: heldEntries == nil && animatesRemoval
+                animatesRemoval: heldEntries == nil && animatesRemoval,
+                animatesChanges: heldEntries == nil && animatesChanges
             )
             return
         }
@@ -816,6 +826,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         if animatesRemoval, changedIDs.isEmpty, canAnimateRemoval(leaving: newIDs) {
             FrameWork.measure("snapshot.apply") { dataSource.apply(snapshot, animatingDifferences: true) }
             logger.info("setEntries count=\(newEntries.count, privacy: .public) animatesRemoval=true")
+        } else if animatesChanges, !revealsFromLoading, view.window != nil, !UIAccessibility.isReduceMotionEnabled {
+            // 読み込み中の表示から最初の行を出すときは、下で行を浮かび上がらせるので、ここでは動かさない。
+            FrameWork.measure("snapshot.apply") { dataSource.apply(snapshot, animatingDifferences: true) }
+            logger.info("setEntries count=\(newEntries.count, privacy: .public) animatesChanges=true")
         } else if let topID {
             isRestoringAnchor = true
             FrameWork.measure("snapshot.apply") { dataSource.apply(snapshot, animatingDifferences: false) }
@@ -970,6 +984,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let topID: ItemID?
         let keepsOffset: Bool
         let animatesRemoval: Bool
+        let animatesChanges: Bool
     }
 
     /// 長押しのメニューを出した。メニューの元になった行が動かないよう、閉じるまで一覧の並びの更新と描き直しを溜めておく。
@@ -983,7 +998,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         isShowingMenu = false
         if let held = heldEntries {
             heldEntries = nil
-            setEntries(held.entries, keeping: held.anchorID, placingAtTop: held.topID, keepsOffset: held.keepsOffset, animatesRemoval: held.animatesRemoval)
+            updateEntries(held.entries, keeping: held.anchorID, placingAtTop: held.topID, keepsOffset: held.keepsOffset, animatesRemoval: held.animatesRemoval, animatesChanges: held.animatesChanges, keepingRowContentsOf: nil)
         }
         let existing = Set(dataSource.snapshot().itemIdentifiers)
         let reconfigureIDs = heldReconfigureIDs.intersection(existing)

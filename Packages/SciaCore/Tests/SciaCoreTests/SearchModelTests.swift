@@ -47,9 +47,9 @@ struct SearchModelTests {
         return Data(#"{"accounts":[\#(accountsJSON.joined(separator: ","))],"statuses":\#(statusesJSON),"hashtags":[\#(hashtagsJSON.joined(separator: ","))]}"#.utf8)
     }
 
-    private func makeModel(_ text: String, scope: SearchModel.Scope = .all, transport: RoutedTransport) throws -> (SearchModel, RecordingTimelineDisplay) {
+    private func makeModel(_ text: String, scope: SearchModel.Scope = .all, carriedAccounts: [Account] = [], carriedHashtags: [Hashtag] = [], transport: RoutedTransport) throws -> (SearchModel, RecordingTimelineDisplay) {
         let input = try #require(SearchInput(text))
-        let model = SearchModel(input: input, scope: scope, client: MastodonClient(credential: TimelineModelFixtures.credential(), transport: transport), tasks: TaskScope()) {}
+        let model = SearchModel(input: input, scope: scope, carriedAccounts: carriedAccounts, carriedHashtags: carriedHashtags, client: MastodonClient(credential: TimelineModelFixtures.credential(), transport: transport), tasks: TaskScope()) {}
         let display = RecordingTimelineDisplay()
         model.display = display
         return (model, display)
@@ -319,8 +319,9 @@ struct SearchModelTests {
         #expect(display.footerState == .idle)
     }
 
-    /// 種類の結果が届いたときは、行を基準にせずスクロール位置を保つ。先に届いた種類の上にあとから届いた種類が入っても、最上部の行が画面の外へ出ないようにするため。
-    @Test func arrivalsKeepOffset() async throws {
+    /// 確定してから最初の結果がそろうまでは、確定した操作の結果として動きで見せる。そろったあとに読み直して届いた結果は、動かさずに、行を基準にせずスクロール位置を保つ。
+    /// 先に届いた種類の上にあとから届いた種類が入っても、最上部の行が画面の外へ出ないようにするため。
+    @Test func firstArrivalsTransitionAndLaterArrivalsKeepOffset() async throws {
         let transport = Self.transport { query in
             query.type == "hashtags" ? try Self.body(hashtags: ["a"]) : try Self.body(accounts: query.type == "accounts" ? [1] : [])
         }
@@ -331,7 +332,57 @@ struct SearchModelTests {
         try await waitUntil { model.runningTaskCount == 0 }
 
         #expect(Self.rows(display) == ["[accounts]", "@a1", "[hashtags]", "#a"])
-        #expect(display.entriesCalls.allSatisfy { $0.anchorID == nil && $0.keepsOffset })
+        #expect(display.entriesCalls.allSatisfy { $0.isTransition })
+
+        let settled = display.entriesCalls.count
+        await model.refresh()
+        let later = display.entriesCalls.dropFirst(settled)
+        #expect(!later.isEmpty)
+        #expect(later.allSatisfy { !$0.isTransition && $0.anchorID == nil && $0.keepsOffset })
+    }
+
+    /// 確定した直後は、打っている途中の候補のユーザーとハッシュタグを、その種類の結果が届くまで見出しの下に出す。
+    /// 候補の一覧に残っていた行のうち、引き継がない行（「“語”を検索」など）は閉じる動きで消す。
+    @Test func carriedRowsStayUntilTheirCategoryArrives() async throws {
+        let gate = Gate()
+        let transport = RoutedTransport { request in
+            let query = Query(request)
+            if query.type == "accounts" { try await gate.wait() }
+            return (200, query.type == "accounts" ? try Self.body(accounts: [1]) : try Self.body())
+        }
+        let url = try #require(Bundle.module.url(forResource: "account", withExtension: "json", subdirectory: "Fixtures"))
+        let account = try MastodonDecoder.make().decode(Account.self, from: Data(contentsOf: url))
+        let hashtag = try MastodonDecoder.make().decode(Hashtag.self, from: Data(#"{"name":"neko","url":"https://example.social/tags/neko","history":[]}"#.utf8))
+        let (model, display) = try makeModel("猫", carriedAccounts: [account], carriedHashtags: [hashtag], transport: transport)
+        defer { model.stop() }
+        model.start()
+
+        #expect(Self.rows(display) == ["[accounts]", "@\(account.id)", "[hashtags]", "#neko"])
+        #expect(display.entriesCalls.first?.isTransition == true)
+        #expect(display.contentState == .loaded)
+        // ハッシュタグは0件で届いたので、引き継いだ行も見出しごと消す。ユーザーは届くまで残す。
+        try await waitUntil { transport.requests.count == 3 && Self.rows(display) == ["[accounts]", "@\(account.id)"] }
+
+        gate.open()
+        try await waitUntil { model.runningTaskCount == 0 }
+        #expect(Self.rows(display) == ["[accounts]", "@a1"])
+    }
+
+    /// 一覧を付け替えたら、今の結果をその一覧に並べ直す。
+    @Test func attachRendersCurrentResults() async throws {
+        let transport = Self.transport { query in
+            query.type == "statuses" ? try Self.body(statuses: [2, 1]) : try Self.body()
+        }
+        let (model, _) = try makeModel("猫", transport: transport)
+        defer { model.stop() }
+        model.start()
+        try await waitUntil { model.runningTaskCount == 0 }
+
+        let other = RecordingTimelineDisplay()
+        model.display = nil
+        model.attach(other)
+        #expect(other.statusIDs == ["2", "1"])
+        #expect(other.contentState == .loaded)
     }
 
     /// 削除した投稿とミュートした人の投稿は、閉じる動きで除く。

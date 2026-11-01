@@ -28,6 +28,9 @@ public protocol TimelineDisplay: AnyObject {
     /// - Parameter animatesRemoval: 使う人の操作で行を消した。消える行を閉じる動きで消す。
     /// - Parameter base: `entries`は、この並びに行を足すか除くかしただけで、残る行の中身を変えていない。
     func setEntries(_ entries: [TimelineEntry], keeping anchorID: TimelineEntry.ID?, placingAtTop topID: TimelineEntry.ID?, keepsOffset: Bool, animatesRemoval: Bool, keepingRowContentsOf base: [TimelineEntry]?)
+    /// 使う人の操作の結果として、表示中の行を`entries`で置き換える。足す、消す、並べ替えるをどれも動きで見せ、スクロール位置はそのまま保つ。
+    /// 検索の確定のように、操作のすぐあとに届く結果も操作の結果として見せるときに使う。動かせなければ、スクロール位置を保って置き換える。
+    func transition(to entries: [TimelineEntry])
     func setContentState(_ state: TimelineContentState)
     func setFooterState(_ state: TimelineFooterState)
     /// 読み込み中のギャップを読み込み中の表示に、読めなかったギャップを読めなかった表示にする。

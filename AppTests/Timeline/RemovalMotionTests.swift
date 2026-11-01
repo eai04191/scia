@@ -39,6 +39,21 @@ struct RemovalMotionTests {
         #expect(isAnimating(cell), "消した行の下の行が動いていません")
     }
 
+    /// 操作の結果として入れ替えるときは、行を足すのも動きで見せ、足した行の下の行が下がる動きで動く。検索の確定から最初の結果がそろうまでに使う。
+    @Test func transitionAnimatesInsertion() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let statuses = StatusFactory.make(count: 60, startingAt: 1_000)
+        let inserted = try #require(statuses.dropFirst().first)
+        harness.setStatuses(statuses.filter { $0.id != inserted.id })
+        let below = try #require(statuses.dropFirst(2).first)
+
+        harness.viewController.transition(to: statuses.map(TimelineEntry.status))
+
+        let cell = try #require(harness.visibleCell(of: .status(below.id)))
+        #expect(isAnimating(cell), "足した行の下の行が動いていません")
+    }
+
     /// 使う人の操作によらない削除は、動かさずに読んでいる位置を保つ。
     @Test func removalNotByUserDoesNotAnimate() throws {
         let harness = try TimelineHarness()

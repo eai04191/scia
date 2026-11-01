@@ -14,6 +14,8 @@ final class RecordingTimelineDisplay: TimelineDisplay, StreamingStatusDisplay {
         let keepsOffset: Bool
         let animatesRemoval: Bool
         let base: [TimelineEntry]?
+        /// `transition(to:)`で送られた。
+        var isTransition = false
     }
 
     private(set) var entriesCalls: [EntriesCall] = []
@@ -34,6 +36,11 @@ final class RecordingTimelineDisplay: TimelineDisplay, StreamingStatusDisplay {
     func setEntries(_ entries: [TimelineEntry], keeping anchorID: TimelineEntry.ID?, placingAtTop topID: TimelineEntry.ID?, keepsOffset: Bool, animatesRemoval: Bool, keepingRowContentsOf base: [TimelineEntry]?) {
         commandCount += 1
         entriesCalls.append(EntriesCall(entries: entries, anchorID: anchorID, topID: topID, keepsOffset: keepsOffset, animatesRemoval: animatesRemoval, base: base))
+    }
+
+    func transition(to entries: [TimelineEntry]) {
+        commandCount += 1
+        entriesCalls.append(EntriesCall(entries: entries, anchorID: nil, topID: nil, keepsOffset: true, animatesRemoval: false, base: nil, isTransition: true))
     }
 
     func setContentState(_ state: TimelineContentState) {
