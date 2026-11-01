@@ -3386,6 +3386,18 @@ final class SessionController {
     }
 
     /// Documents/DebugInjectの`file`をAPIの応答と同じ形のJSONとして読み、`tab`の一覧に新着として流す。読めなければ流さずにログに残す。
+    private func replyForDebug(to file: String) {
+        let url = URL.documentsDirectory.appending(path: "DebugInject").appending(fileName: SafeFileName(file))
+        do {
+            guard let status = try MastodonDecoder.make().decode([Status].self, from: Data(contentsOf: url)).first else { return }
+            composer.reply(to: status)
+        } catch {
+            // デバッグ版だけで読むファイルなので、`inject`と同じく失敗を丸ごと残す。
+            // scialint:disable:next log_private_value
+            logger.error("debug reply failed file=\(file, privacy: .public): \(String(describing: error), privacy: .public)")
+        }
+    }
+
     private func inject(_ file: String, into tab: DebugURL.Tab) {
         let url = URL.documentsDirectory.appending(path: "DebugInject").appending(fileName: SafeFileName(file))
         do {
@@ -3528,6 +3540,8 @@ final class SessionController {
             composer.endEditing()
         case .composeOpen:
             composer.beginEditing()
+        case .composeReply(let file):
+            replyForDebug(to: file)
         case .holdArrivals(let isOn):
             DebugFaults.setHoldingArrivals(isOn)
             if !isOn {

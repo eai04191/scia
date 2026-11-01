@@ -90,6 +90,9 @@ enum DebugURL: Equatable {
     case composeClose
     /// `scia-debug://compose/open`。下書きを変えずに、カプセルを押したときと同じく書き始める。開閉の動きを確かめるため。
     case composeOpen
+    /// `scia-debug://compose/reply?file=<ファイル名>`。`inject`と同じ置き場所のファイルにある最初の投稿へ、返信を始める。
+    /// 一覧で投稿を探して長押しせずに、長いハンドルの人への返信を作るため。
+    case composeReply(file: String)
     /// `scia-debug://profile-edit?note=<自己紹介>&field=<補足情報の内容>&crop=<avatar|header>`。自分のプロフィールの編集を開く。`note`を渡すと、読み込んだあとに自己紹介をその文に置き換えて、
     /// 末尾にキーボードを出す。`field`を渡すと、その内容の補足情報を足して、内容の欄の末尾にキーボードを出す。どちらも、打ったときと同じく末尾の語の補完を出す。
     /// シミュレーターの日本語のキーボードでは半角の`:`や`@`を打てないため、補完を確かめるときに語の頭を用意する。
@@ -270,6 +273,9 @@ enum DebugURL: Equatable {
     }
 
     private static func compose(_ url: URL) -> DebugURL? {
+        if url.lastPathComponent == "reply" {
+            return query("file", in: url).map { .composeReply(file: $0) }
+        }
         let text = query("text", in: url)
         let pollOptions = query("poll", in: url).map { $0.components(separatedBy: ",") }
         guard let mediaCount = Int(query("media", in: url) ?? "0"), mediaCount >= 0, text != nil || mediaCount > 0 || pollOptions != nil else { return nil }
