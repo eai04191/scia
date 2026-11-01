@@ -19,7 +19,7 @@ struct MenuLayoutDeletionTests {
             imageRevision: 0,
             options: [],
             actions: [],
-            itemDeletion: MenuLayoutItemDeletion(canDelete: \.isUserAdded, footer: "") { deleted.append($0) }
+            itemDeletion: MenuLayoutItemDeletion(canDelete: \.isUserAdded) { deleted.append($0) }
         ) { _ in }
         let before = controller.rowIDs
         let bobIndex = try #require(layout.elements.firstIndex(of: .item(Self.bob, isVisible: true)))

@@ -314,10 +314,7 @@ struct SettingsView: View {
                     isOn: $settings.showsTabMenuCustomize
                 )],
                 actions: [MenuLayoutAction(title: "リストを作成", symbolName: "plus", handler: lists.create)],
-                itemDeletion: MenuLayoutItemDeletion(
-                    canDelete: { $0.isList || $0.isUserAdded },
-                    footer: "リストと、プロフィールなどの画面から追加したタブは、左へスワイプすると削除できます。"
-                ) { item in
+                itemDeletion: MenuLayoutItemDeletion(canDelete: { $0.isList || $0.isUserAdded }) { item in
                     if case .list(let id, let title) = item {
                         lists.delete(id, title)
                     } else if item.isUserAdded {

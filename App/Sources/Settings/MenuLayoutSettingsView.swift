@@ -38,8 +38,6 @@ struct MenuLayoutAction {
 /// 並びの行は、外されて並びが変わったときに消える。
 struct MenuLayoutItemDeletion<Item> {
     let canDelete: (Item) -> Bool
-    /// 並びの下の説明に添える文。
-    let footer: String
     let delete: @MainActor (Item) -> Void
 }
 
@@ -278,14 +276,14 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             if case .option(let index) = self?.dataSource?.sectionIdentifier(for: indexPath.section) {
                 content.text = self?.options[index].footer
             } else if indexPath.section == 0 {
-                let base = if !Item.supportsSeparators {
-                    "右のつまみをドラッグすると並べ替えられます。"
+                // ドラッグで並べ替える、左へスワイプして消すといった操作は、Appleの標準の操作なので説明しない。区切り線が何を分けるかだけを書く。
+                content.text = if !Item.supportsSeparators {
+                    nil
                 } else if Item.supportsRowSeparators {
-                    "右のつまみをドラッグすると並べ替えられます。区切り線はメニューの項目のまとまりを分け、左へスワイプすると消せます。横並びの区切り線より下のまとまりは、メニューの中で横に並びます。"
+                    "区切り線はメニューの項目のまとまりを分けます。横並びの区切り線より下のまとまりは、メニューの中で横に並びます。"
                 } else {
-                    "右のつまみをドラッグすると並べ替えられます。区切り線はメニューの項目のまとまりを分け、左へスワイプすると消せます。"
+                    "区切り線はメニューの項目のまとまりを分けます。"
                 }
-                content.text = [base, self?.itemDeletion?.footer].compactMap(\.self).joined()
             }
             footer.contentConfiguration = content
         }
