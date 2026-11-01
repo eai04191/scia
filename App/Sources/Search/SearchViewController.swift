@@ -40,6 +40,11 @@ final class SearchViewController: UIViewController, UISearchBarDelegate, UISearc
         list.flatMap { $0.view.isHidden ? nil : $0 }
     }
 
+    /// 確定した語の結果を並べているか。打ち直している間はfalse。
+    var isShowingResults: Bool {
+        !showsSuggestions && results != nil
+    }
+
     /// 並べている結果。候補を並べていればnil。
     private var shownResults: SearchModel? {
         showsSuggestions ? nil : results

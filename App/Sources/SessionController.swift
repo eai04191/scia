@@ -1665,6 +1665,8 @@ final class SessionController {
                   viewController.navigationController?.topViewController === (viewController.parent ?? viewController) else { return }
             let presented = viewController.navigationController?.presentedViewController
             guard presented == nil || presented is UISearchController else { return }
+            // 検索欄で打ち直している間は、前の語で決まっても開かない。欄の語と違うものが開くため。
+            if let search = viewController.parent as? SearchViewController, !search.isShowingResults { return }
             switch found {
             case .status(let status):
                 // 押した行がないため、一覧の安全領域の上端に置いて開く。
