@@ -20,6 +20,9 @@ final class TextInputCompletion {
     var isLocked: () -> Bool = { false }
     /// 補完やパレットで入力欄の文字を変えたあとに呼ぶ。入力欄の知らせが来なくても、持っている文字を入力欄に合わせられるようにする。
     var onApply: (any UITextInput) -> Void = { _ in }
+    /// 候補を選んだときに、入力欄に入れる前に呼ぶ。trueを返したら入力欄に入れない。
+    /// プロフィールの編集の追加の行のように、選んだものを文字ではなく項目として足す入力欄で使う。
+    var onSelect: (CompletionCandidate, any UITextInput) -> Bool = { _, _ in false }
     /// 補完している入力欄。
     private(set) weak var input: (any UITextInput)?
     private var inputHadMarkedText = false
@@ -103,6 +106,12 @@ final class TextInputCompletion {
     /// 入力欄の`replace`で入れ、取り消し（シェイクや⌘Z）で戻せるようにする。
     func complete(with candidate: CompletionCandidate) {
         guard let input, let shown = completion.token, !isLocked() else { return }
+        if onSelect(candidate, input) {
+            completion.didComplete(candidate)
+            // 選んだ側が入力欄の文字を変えていれば、その語の候補を出し直す。
+            textDidChange(in: input)
+            return
+        }
         // 候補を出したあとにカーソルだけを語の中で動かしていれば、置き換える範囲はいまのカーソルで決め直す。
         // ハッシュタグはカーソルより後ろを語に含めないため、出したときの範囲のままだと後ろの文まで消してしまう。
         let current = token(in: input, appliesMinimumLength: false)

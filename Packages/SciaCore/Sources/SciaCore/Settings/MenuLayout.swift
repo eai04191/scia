@@ -313,6 +313,8 @@ public enum UserMenuItem: String, MenuItemKind {
     case showReblogs
     /// フォローしている相手が投稿したら通知するかを切り替える。
     case notify
+    /// フォローしている相手を、自分のプロフィールで紹介する。紹介していれば外す。
+    case endorse
     /// 相手のプロフィールに、自分にしか見えないメモを書くシートを開く。メモがあれば編集する。メモは関係と一緒に返る。
     case note
     /// ミュートしていなければ、期間を選んでミュートする。ミュート中なら解除する。
@@ -345,6 +347,7 @@ public enum UserMenuItem: String, MenuItemKind {
         .more,
         .item(.showReblogs, isVisible: true),
         .item(.notify, isVisible: true),
+        .item(.endorse, isVisible: true),
         .separator,
         .item(.mute, isVisible: true),
         .item(.block, isVisible: true),
@@ -369,7 +372,7 @@ public enum UserMenuItem: String, MenuItemKind {
     /// 相手との関係で中身が変わる項目。通報は関係で変わらず、自分に出さないかはIDで決まるため含めない。
     public var dependsOnRelationship: Bool {
         switch self {
-        case .follow, .showReblogs, .notify, .note, .mute, .block: true
+        case .follow, .showReblogs, .notify, .endorse, .note, .mute, .block: true
         case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .addToList, .report, .customize: false
         }
     }
@@ -493,6 +496,8 @@ public enum HashtagMenuItem: String, MenuItemKind {
     case openInAppSafari
     case copyLink
     case share
+    /// 自分のプロフィールの注目のハッシュタグに載せる。載せていれば外す。
+    case feature
 
     /// このメニューの並びの設定の画面を開く。決まりはdocs/menus.mdの「並びの設定」にある。
     case customize
@@ -510,6 +515,9 @@ public enum HashtagMenuItem: String, MenuItemKind {
         .item(.copyLink, isVisible: true),
         .item(.share, isVisible: true),
         .more,
+        // 投稿のメニューの「固定」と同じく、自分のプロフィールの操作で、たまにしか使わない。
+        .item(.feature, isVisible: true),
+        .separator,
         .item(.customize, isVisible: true),
     ])
 }

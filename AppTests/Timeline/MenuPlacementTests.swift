@@ -59,11 +59,11 @@ struct MenuPlacementTests {
         let mention = try #require(try bodyLinkMenu(for: .mention(acct: alice.acct, url: profileURL), in: viewController, settings: settings))
         let profile = try #require(viewController.profileUserMenu(for: alice, from: UIBarButtonItem()))
 
-        let expected = "プロフィール,メンション,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー|リンクをコピー,共有,ブラウザで開く,既定のブラウザで開く|その他[アプリ内のSafariで開く,フォローを外す,リストに追加,ブーストを表示,投稿を通知,メモを追加,ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日],ブロック,通報,カスタマイズ]"
+        let expected = "プロフィール,メンション,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー|リンクをコピー,共有,ブラウザで開く,既定のブラウザで開く|その他[アプリ内のSafariで開く,フォローを外す,リストに追加,ブーストを表示,投稿を通知,プロフィールで紹介する,メモを追加,ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日],ブロック,通報,カスタマイズ]"
         #expect(describe(submenu.children) == expected)
         #expect(describe(avatar.children) == expected)
         #expect(describe(mention.children) == expected)
-        #expect(describe(profile.children) == "メンション,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー|リンクをコピー,共有,ブラウザで開く,既定のブラウザで開く|その他[アプリ内のSafariで開く,フォローを外す,リストに追加,ブーストを表示,投稿を通知,メモを追加,ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日],ブロック,通報,カスタマイズ]")
+        #expect(describe(profile.children) == "メンション,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー|リンクをコピー,共有,ブラウザで開く,既定のブラウザで開く|その他[アプリ内のSafariで開く,フォローを外す,リストに追加,ブーストを表示,投稿を通知,プロフィールで紹介する,メモを追加,ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日],ブロック,通報,カスタマイズ]")
         // 見出しは、サブメニューでは名前とサブタイトル、単独で出すメニューでは2行に置く。
         #expect(submenu.title == "@alice")
         #expect(submenu.subtitle == "remote.example")

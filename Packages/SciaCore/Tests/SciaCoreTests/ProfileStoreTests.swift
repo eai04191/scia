@@ -359,11 +359,128 @@ struct ProfileStoreTests {
     func pinnedSettlesWhetherLoadedOrFailed(failsPinned: Bool) async throws {
         let known = try account()
         let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: makeAPI(account: known, failsPinned: failsPinned))
-        #expect(!store.isPinnedSettled)
+        #expect(!store.isShelvesSettled)
 
         _ = await store.loadProfile()
 
-        #expect(store.isPinnedSettled)
+        #expect(store.isShelvesSettled)
+    }
+
+    /// 注目のハッシュタグと紹介している人を、固定された投稿と一緒に読む。紹介している人に続きがあるかも分かる。
+    @Test func loadProfileReadsFeaturedTagsAndEndorsements() async throws {
+        let known = try account()
+        let tag = FeaturedTag(id: "7", name: "猫写真", statusesCount: 3)
+        let endorsed = try account(statusesCount: 1)
+        let pageSizes = Mutex<[Int]>([])
+        var api = makeAPI(account: known)
+        api.featuredTags = { id in
+            #expect(id == "2")
+            return [tag]
+        }
+        api.endorsements = { id, limit in
+            #expect(id == "2")
+            pageSizes.withLock { $0.append(limit) }
+            return AccountListPage(accounts: [endorsed], nextMaxID: "100")
+        }
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: api)
+
+        let failures = await store.loadProfile()
+
+        #expect(failures.isEmpty)
+        #expect(store.featuredTags == [tag])
+        #expect(store.endorsements == [endorsed])
+        #expect(store.hasMoreEndorsements)
+        #expect(pageSizes.withLock { $0 } == [ProfileStore.endorsementsPageSize])
+    }
+
+    /// 注目のハッシュタグや紹介している人を読めなくても、棚を出さずに一覧を出せるよう、読み終えたことにする。
+    /// 4.4より前のサーバーでは、ほかの人の紹介している人を読めない。
+    @Test(arguments: [(true, false), (false, true), (true, true)])
+    func shelvesSettleWhenFeaturedFails(failsTags: Bool, failsEndorsements: Bool) async throws {
+        let known = try account()
+        var api = makeAPI(account: known)
+        api.featuredTags = { _ in
+            if failsTags { throw Failure() }
+            return [FeaturedTag(id: "7", name: "猫写真", statusesCount: 3)]
+        }
+        api.endorsements = { _, _ in
+            if failsEndorsements { throw Failure() }
+            return AccountListPage(accounts: [known], nextMaxID: nil)
+        }
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: api)
+
+        let failures = await store.loadProfile()
+
+        #expect(store.isShelvesSettled)
+        #expect((failures.featuredTags != nil) == failsTags)
+        #expect((failures.endorsements != nil) == failsEndorsements)
+        #expect(store.featuredTags.isEmpty == failsTags)
+        #expect(store.endorsements.isEmpty == failsEndorsements)
+        #expect(Set(failures.all.map(\.part)) == Set((failsTags ? ["featuredTags"] : []) + (failsEndorsements ? ["endorsements"] : [])))
+    }
+
+    /// 自分のプロフィールで載せるものを変えたあと、注目のハッシュタグと紹介している人だけを読み直す。
+    /// 読めなかったほうは前のまま残し、投げる。
+    @Test func reloadFeaturedReplacesWhatWasRead() async throws {
+        let known = try account()
+        let before = FeaturedTag(id: "7", name: "猫写真", statusesCount: 3)
+        let after = FeaturedTag(id: "8", name: "犬写真", statusesCount: 1)
+        let reads = Mutex(0)
+        var api = makeAPI(account: known)
+        api.featuredTags = { _ in
+            let read = reads.withLock { count in
+                count += 1
+                return count
+            }
+            return read == 1 ? [before] : [before, after]
+        }
+        let endorsementReads = Mutex(0)
+        api.endorsements = { _, _ in
+            let read = endorsementReads.withLock { count in
+                count += 1
+                return count
+            }
+            if read > 1 { throw Failure() }
+            return AccountListPage(accounts: [known], nextMaxID: nil)
+        }
+        let store = ProfileStore(account: known, myAccountID: "2", postsFilter: .standard, relationshipCache: localRelationships(), api: api)
+        _ = await store.loadProfile()
+
+        await #expect(throws: Failure.self) { try await store.reloadFeatured() }
+
+        #expect(store.featuredTags == [before, after])
+        #expect(store.endorsements == [known])
+    }
+
+    /// 続けて読み直したとき、先に読み始めた読み直しの応答が遅れて届いても、あとの読み直しの結果を戻さない。
+    @Test func olderFeaturedReloadDoesNotOverwriteNewerOne() async throws {
+        let known = try account()
+        let old = FeaturedTag(id: "7", name: "猫写真", statusesCount: 3)
+        let gate = Gate()
+        let calls = Mutex(0)
+        var api = makeAPI(account: known)
+        api.featuredTags = { _ in
+            // 1回目は最初の読み込み、2回目は止めておく読み直し、3回目はあとの読み直し。
+            let call = calls.withLock { count in
+                count += 1
+                return count
+            }
+            if call == 2 {
+                await gate.enter()
+                return [old]
+            }
+            return []
+        }
+        let store = ProfileStore(account: known, myAccountID: "2", postsFilter: .standard, relationshipCache: localRelationships(), api: api)
+        _ = await store.loadProfile()
+        let earlier = Task { try await store.reloadFeatured() }
+        try await waitUntil { await gate.isEntered }
+
+        try await store.reloadFeatured()
+        await gate.open()
+        try await earlier.value
+
+        #expect(store.featuredTags.isEmpty)
     }
 
     /// プロフィールの場所で隠すフィルターに一致した固定された投稿は出さない。編集で一致しなくなれば出す。

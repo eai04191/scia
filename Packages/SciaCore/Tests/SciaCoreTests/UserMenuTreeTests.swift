@@ -50,6 +50,22 @@ struct UserMenuTreeTests {
         #expect(describe(.notify, Relationship(id: "2", notifying: true, requested: true)) == "投稿を通知✓")
     }
 
+    /// プロフィールで紹介は、サーバーがフォローしていない相手を断るので、フォロー中の相手にだけ出し、紹介していれば外す。リクエスト中とブロックでは出さない。
+    @Test func endorseItemShownOnlyWhenFollowing() throws {
+        #expect(describe(.endorse, Relationship(id: "2")).isEmpty)
+        #expect(describe(.endorse, Relationship(id: "2", requested: true)).isEmpty)
+        #expect(describe(.endorse, Relationship(id: "2", following: true, blockedBy: true)).isEmpty)
+        #expect(describe(.endorse, Relationship(id: "2", following: true)) == "プロフィールで紹介する")
+        #expect(describe(.endorse, Relationship(id: "2", following: true, endorsed: true)) == "プロフィールから外す")
+
+        let command = try #require(UserMenuTree.relationNodes(.endorse, relation: UserRelation(accountID: "2", acct: "alice", relationship: Relationship(id: "2", following: true, endorsed: true))).first?.command)
+        guard case .changeRelation(.endorse(let endorses), _) = command else {
+            Issue.record("紹介を変える操作になっていません")
+            return
+        }
+        #expect(!endorses)
+    }
+
     /// ミュートは期間を選ぶサブメニューにし、ミュート中なら解除を出す。ブロックは取り消せない操作として示し、ブロック中なら解除を出す。
     @Test func muteAndBlockItems() {
         #expect(describe(.mute, Relationship(id: "2")) == "ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日]")
@@ -140,10 +156,10 @@ struct UserMenuTreeTests {
 
     // MARK: - 投稿のメニューのサブメニュー
 
-    /// 既定のユーザーのメニューは、開く・書く操作（メモを含む）、フォローとリストに追加、持ち出す操作でまとまりを分け、フォローの設定、ミュート、ブロックは「その他」に入れる。
+    /// 既定のユーザーのメニューは、開く・書く操作（メモを含む）、フォローとリストに追加、持ち出す操作でまとまりを分け、フォローの設定、プロフィールで紹介、ミュート、ブロックは「その他」に入れる。
     /// 関係を覚えていない相手の関係の項目は、読んでから中身を決める。通報は関係で変わらないため、読まずに出す。開く場所を選んで開く2つは隠れている。
     @Test func defaultUserMenuHasMentionAndCopyUsername() {
-        #expect(submenu(actions: actions()) == "@alice[プロフィール,メンション,…,…,リストに追加,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,通報,カスタマイズ]]")
+        #expect(submenu(actions: actions()) == "@alice[プロフィール,メンション,…,…,リストに追加,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,…,通報,カスタマイズ]]")
     }
 
     /// メンション、ハンドルをコピー、関係の項目を組むものを渡されていない画面では、これらを出さない。

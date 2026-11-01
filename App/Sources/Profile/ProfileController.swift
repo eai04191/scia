@@ -26,6 +26,8 @@ final class ProfileController {
     var onEditProfile: (() -> Void)?
     /// フォローかフォロワーの数が押されたときに、開く人の一覧を渡して呼ぶ。
     var onOpenAccountList: ((AccountListKind) -> Void)?
+    /// フォローのボタンで、紹介している相手のフォローを外した。サーバーは紹介も消すので、自分のプロフィールの棚を読み直すのに使う。
+    var onEndorsementRemoved: (() -> Void)?
     /// この画面が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときと、画面を閉じてこのコントローラーが捨てられたときに閉じる。
     private let tasks: TaskScope
     /// 表示している一覧と、その一覧のタブ。切り替えた一覧が届くまでは、前の一覧を出し続ける。
@@ -130,6 +132,25 @@ final class ProfileController {
         }
         header.onOpenImage = { [weak self] image in self?.openImage(image) }
         header.onOpenPinned = { [weak viewController] status, frame in viewController?.onOpenThread?(status, frame) }
+        // 注目のハッシュタグは、ハッシュタグのメニューの「投稿したユーザーの投稿」と同じく、そのプロフィールの人のそのタグの付いた投稿を開く。
+        header.onOpenFeaturedTag = { [weak self] tag in
+            guard let self else { return }
+            self.viewController?.onOpenAccountHashtag?(tag.name, store.account)
+        }
+        header.menuForFeaturedTag = { [weak self] tag, view in
+            guard let self else { return nil }
+            return self.viewController?.profileFeaturedTagMenu(for: tag, of: store.account, from: view)
+        }
+        header.onOpenEndorsed = { [weak viewController] account in viewController?.onOpenProfile?(account) }
+        header.menuForEndorsed = { [weak viewController] account, view in viewController?.profileEndorsedUserMenu(for: account, from: view) }
+        header.onOpenAllEndorsements = { [weak self] in
+            guard let self else { return }
+            onOpenAccountList?(.endorsements(accountID: store.account.id))
+        }
+        header.shelfMenuLifecycle = MenuLifecycle(
+            willShow: { [weak viewController] in viewController?.linkMenuWillShow() },
+            didHide: { [weak viewController] in viewController?.linkMenuDidHide() }
+        )
         header.menuForImage = { [weak self] image, groups in self?.imageMenu(image, groups: groups) }
         header.menuForText = { [weak self] part in
             guard let self, let text = store.account.profileText(part) else { return nil }
@@ -167,6 +188,9 @@ final class ProfileController {
             guard let self else { return }
             // 固定された投稿は一覧の行ではなく棚に並べるので、一覧の描き直しでは描き直されない。棚のカードもここで描き直す。
             if self.header.redrawPinned(ifUsing: Set(urls)) {
+                self.viewController?.headerDidChangeSize()
+            }
+            if self.header.redrawEndorsements(ifUsing: Set(urls)) {
                 self.viewController?.headerDidChangeSize()
             }
             guard !Set(self.store.account.emojis.map(\.staticUrl)).isDisjoint(with: urls) else { return }
@@ -210,7 +234,9 @@ final class ProfileController {
         withObservationTracking {
             updateHeader()
             _ = store.pinned
-            _ = store.isPinnedSettled
+            _ = store.featuredTags
+            _ = store.endorsements
+            _ = store.isShelvesSettled
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor in
                 self?.afterTransition { controller in
@@ -371,6 +397,20 @@ final class ProfileController {
         }
     }
 
+    /// 載せるものを変えたあとに、注目のハッシュタグと紹介しているユーザーを読み直す。外したものは、使う人の操作の結果なので、閉じて詰める動きで消す。
+    /// 読めなかったときは、前の棚のまま残す。載せる操作はできているので、知らせない。
+    func reloadFeatured() {
+        run(.action) { controller in
+            do {
+                try await controller.store.reloadFeatured()
+                controller.afterTransition { $0.showEntries() }
+            } catch {
+                controller.logger.error("profile featured reload failed: \(SciaLog.describe(error), privacy: .public)")
+                controller.handleUnauthorized(error)
+            }
+        }
+    }
+
     @discardableResult
     private func run(_ purpose: RequestPurpose, _ operation: @escaping @MainActor (ProfileController) async -> Void) -> Task<Void, Never>? {
         tasks.run(purpose) { [weak self] in
@@ -429,7 +469,18 @@ final class ProfileController {
         // 棚にも、一覧の行と同じサーバーのフィルターの警告とぼかしを当てる。
         let items = { (statuses: [Status]) in statuses.map { ProfileShelfItem(status: $0, verdict: self.store.filtering.verdict(for: $0)) } }
         let changesPinned = header.setPinned(isRevealed ? items(store.pinned) : [], glyphLanguage: settings.glyphLanguageIdentifier())
-        if changesSections || changesPinned {
+        let changesFeatured = header.setFeatured(
+            tags: isRevealed ? store.featuredTags : [],
+            endorsements: ProfileEndorsementsShelfView.Content(
+                accounts: isRevealed ? store.endorsements : [],
+                hasMore: store.hasMoreEndorsements,
+                avatarShape: settings.appearance.avatarShape,
+                animatesAvatars: settings.appearance.animatesAvatars,
+                animatesCustomEmojis: settings.appearance.animatesCustomEmojis,
+                glyphLanguage: settings.glyphLanguageIdentifier()
+            )
+        )
+        if changesSections || changesPinned || changesFeatured {
             viewController?.headerDidChangeSize()
         }
         viewController?.setEntries(listReveal == .revealed ? shownEntries() : [], keepsOffset: replacing, animatesRemoval: animatesRemoval)
@@ -467,9 +518,9 @@ final class ProfileController {
         }
     }
 
-    /// 最初の一覧の投稿と、固定された投稿を読み終えた。棚が後から現れて、タブと一覧を押し下げないようにするため。
+    /// 最初の一覧の投稿と、ヘッダーの棚を読み終えた。棚が後から現れて、タブと一覧を押し下げないようにするため。
     private var isReadyToRevealList: Bool {
-        isInitialListLoaded && store.isPinnedSettled
+        isInitialListLoaded && store.isShelvesSettled
     }
 
     private var revealDuration: TimeInterval {
@@ -521,8 +572,7 @@ final class ProfileController {
         run(.action) { controller in
             let failures = await controller.store.loadProfile()
             controller.finishWaitingForRelationship()
-            for (part, error) in [("account", failures.account), ("relationship", failures.relationship), ("pinned", failures.pinned)] {
-                guard let error else { continue }
+            for (part, error) in failures.all {
                 controller.logger.error("profile \(part, privacy: .public) load failed: \(SciaLog.describe(error), privacy: .public)")
                 controller.handleUnauthorized(error)
             }
@@ -638,8 +688,7 @@ final class ProfileController {
 
     private func refreshProfile() async {
         let failures = await store.loadProfile()
-        for (part, error) in [("account", failures.account), ("relationship", failures.relationship), ("pinned", failures.pinned)] {
-            guard let error else { continue }
+        for (part, error) in failures.all {
             logger.error("profile refresh \(part, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
             handleUnauthorized(error)
         }
@@ -716,7 +765,7 @@ final class ProfileController {
     /// フォローは確かめずに送る。外すときとリクエストを取り消すときは、押し間違えに備えて、ユーザーのメニューと同じ文言で確かめる。
     private func confirmToggleFollow(from source: UIView) {
         guard let change = store.followState.toggleChange else { return }
-        guard let confirmation = Confirmation.relationChange(change, acct: store.account.acct) else {
+        guard let confirmation = Confirmation.relationChange(change, acct: store.account.acct, endorsed: store.relationship?.endorsed ?? false) else {
             toggleFollow()
             return
         }
@@ -733,8 +782,12 @@ final class ProfileController {
 
     private func toggleFollow() {
         run(.action) { controller in
+            let wasEndorsed = controller.store.relationship?.endorsed == true
             do {
                 guard try await controller.store.toggleFollow() else { return }
+                if wasEndorsed, controller.store.relationship?.endorsed != true {
+                    controller.onEndorsementRemoved?()
+                }
             } catch {
                 controller.logger.error("follow change failed: \(SciaLog.describe(error), privacy: .public)")
                 controller.onError(error, "フォローを変更できませんでした")

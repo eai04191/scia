@@ -390,6 +390,31 @@ extension TimelineViewController {
         return menu.handleMenu()
     }
 
+    /// プロフィールの注目のハッシュタグを長押ししたときの、ハッシュタグのメニュー。「投稿したユーザーの投稿」は、そのプロフィールの人で開く。
+    /// URLの項目は、その人のそのタグの付いた投稿のページを開く。タップで開くものと同じページになるため。出す項目がなければnil。
+    func profileFeaturedTagMenu(for tag: FeaturedTag, of account: Account, from view: UIView) -> UIMenu? {
+        HashtagMenu(
+            name: tag.name,
+            url: tag.url,
+            account: account,
+            handlers: profileURLHandlers(shareFrom: view),
+            actions: hashtagMenuActions,
+            openTimeline: { [weak self] in self?.onOpenHashtag?(tag.name) },
+            openAccountStatuses: { [weak self] account in self?.onOpenAccountHashtag?(tag.name, account) }
+        ).built(groups: settings.hashtagMenuLayout.groups)?.menu
+    }
+
+    /// プロフィールの紹介しているユーザーのカードを長押ししたときの、その人のユーザーのメニュー。出す項目がなければnil。
+    func profileEndorsedUserMenu(for account: Account, from view: UIView) -> UIMenu? {
+        let user = MenuUser.account(account)
+        let menu = UserMenu(subject: UserMenuSubject(user), actions: userMenuActions, handlers: profileURLHandlers(shareFrom: view), host: self)
+        let built = menu.built(groups: settings.userMenuLayout.groups, openProfile: openProfile(of: user), avatar: .user(user)) { [weak self] _ in
+            self?.userMenuIcon(for: user, id: nil)
+        }
+        defer { loadPendingMenuIcons() }
+        return built?.menu
+    }
+
     /// プロフィール画面のユーザーのメニューの、URLの項目の動き。共有のシートは`barButtonItem`から出す。
     private func profileURLHandlers(shareFrom barButtonItem: UIBarButtonItem?) -> URLMenuHandlers {
         URLMenuHandlers(
@@ -398,6 +423,20 @@ extension TimelineViewController {
             share: { [weak self, weak barButtonItem] url in
                 guard let self else { return }
                 URLSharing.presentShareSheet(for: url, from: self) { $0.sourceItem = barButtonItem }
+            },
+            open: { [weak self] url, browser in self?.openURL(url, in: browser) },
+            openSettings: { [weak self] page in self?.openMenuSettings(page) }
+        )
+    }
+
+    /// プロフィールのヘッダーの部品から出すメニューの、URLの項目の動き。共有のシートは押した部品から出す。
+    private func profileURLHandlers(shareFrom view: UIView) -> URLMenuHandlers {
+        URLMenuHandlers(
+            linkBrowser: settings.linkBrowser,
+            copy: { [weak self] url in URLSharing.copy(url, notifying: self) },
+            share: { [weak self, weak view] url in
+                guard let self else { return }
+                URLSharing.presentShareSheet(for: url, from: self) { $0.sourceView = view }
             },
             open: { [weak self] url, browser in self?.openURL(url, in: browser) },
             openSettings: { [weak self] page in self?.openMenuSettings(page) }

@@ -173,6 +173,10 @@ private final class StatusesTransport: HTTPTransport {
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let url = try #require(request.url)
+        // 注目のハッシュタグと紹介しているユーザーは、一覧を出す前に読み終える。一時的な失敗は時計で待って送り直すので、空の一覧を返す。
+        if ["/api/v1/accounts/2/featured_tags", "/api/v1/accounts/2/endorsements"].contains(url.path()) {
+            return (Data("[]".utf8), try #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)))
+        }
         guard url.path() == "/api/v1/accounts/2/statuses" else { throw URLError(.notConnectedToInternet) }
         let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         let ids: [String]

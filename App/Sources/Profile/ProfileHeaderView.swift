@@ -75,6 +75,39 @@ final class ProfileHeaderView: UIView {
         get { pinnedShelf.onOpen }
         set { pinnedShelf.onOpen = newValue }
     }
+    /// 注目のハッシュタグのカプセルが押された。
+    var onOpenFeaturedTag: ((FeaturedTag) -> Void)? {
+        get { featuredTagsShelf.onOpen }
+        set { featuredTagsShelf.onOpen = newValue }
+    }
+    /// 注目のハッシュタグのカプセルを長押ししたときの、ハッシュタグのメニュー。押したカプセルを渡す。nilを返せばメニューを出さない。
+    var menuForFeaturedTag: ((FeaturedTag, UIView) -> UIMenu?)? {
+        get { featuredTagsShelf.menuForTag }
+        set { featuredTagsShelf.menuForTag = newValue }
+    }
+    /// 紹介しているユーザーのカードが押された。
+    var onOpenEndorsed: ((Account) -> Void)? {
+        get { endorsementsShelf.onOpen }
+        set { endorsementsShelf.onOpen = newValue }
+    }
+    /// 紹介しているユーザーの棚の「すべて見る」が押された。
+    var onOpenAllEndorsements: (() -> Void)? {
+        get { endorsementsShelf.onOpenAll }
+        set { endorsementsShelf.onOpenAll = newValue }
+    }
+    /// 紹介しているユーザーのカードを長押ししたときの、ユーザーのメニュー。押したカードを渡す。nilを返せばメニューを出さない。
+    var menuForEndorsed: ((Account, UIView) -> UIMenu?)? {
+        get { endorsementsShelf.menuForAccount }
+        set { endorsementsShelf.menuForAccount = newValue }
+    }
+    /// 棚のメニューを出したときと閉じたとき。
+    var shelfMenuLifecycle: MenuLifecycle {
+        get { featuredTagsShelf.menuLifecycle }
+        set {
+            featuredTagsShelf.menuLifecycle = newValue
+            endorsementsShelf.menuLifecycle = newValue
+        }
+    }
     /// 「さらに表示」で自己紹介を広げたときに、下の内容を下げていく時間を渡して呼ぶ。0なら動かさずに切り替える。
     var onExpandNote: ((TimeInterval) -> Void)?
     /// 「さらに表示」で自己紹介を広げるときに、下の内容を下げていく時間。0なら切り替える。
@@ -187,6 +220,9 @@ final class ProfileHeaderView: UIView {
     private let filterButton = UIButton(configuration: .plain())
     /// 固定された投稿の棚。カードを画面の端まで流すため、左右の余白の外まで広げる。
     private let pinnedShelf: ProfilePinnedShelfView
+    /// 注目のハッシュタグと紹介しているユーザーの棚。固定された投稿の棚と同じく、左右の余白の外まで広げる。
+    private let featuredTagsShelf = ProfileFeaturedTagsShelfView()
+    private let endorsementsShelf: ProfileEndorsementsShelfView
     /// 投稿、フォロー、フォロワーの数。補足情報のカードの一番下に小さく出す。
     /// フォローとフォロワーは、押すとその一覧を開く。押した文字で見分けるため、文字の位置を探せるラベルにする。
     private let countsLabel = EmojiLabel()
@@ -245,6 +281,7 @@ final class ProfileHeaderView: UIView {
         self.mediaImages = mediaImages
         avatarView = AvatarView(store: avatarImages)
         pinnedShelf = ProfilePinnedShelfView(emojiImages: emojiImages, mediaImages: mediaImages)
+        endorsementsShelf = ProfileEndorsementsShelfView(emojiImages: emojiImages, avatarImages: avatarImages)
         super.init(frame: .zero)
         configureSubviews()
     }
@@ -461,9 +498,12 @@ final class ProfileHeaderView: UIView {
         let about = inset([aboutBox])
 
         pinnedShelf.isHidden = true
+        featuredTagsShelf.isHidden = true
+        endorsementsShelf.isHidden = true
         let tabs = inset([tabRow])
         let contentStack = UIStackView()
-        for view in [identity, note, privateNote, about, pinnedShelf, tabs] as [UIView] {
+        // 固定された投稿は投稿の一覧に近いところに残し、注目のハッシュタグと紹介しているユーザーはその上に置く。
+        for view in [identity, note, privateNote, about, featuredTagsShelf, endorsementsShelf, pinnedShelf, tabs] as [UIView] {
             contentStack.addArrangedSubview(view)
         }
         noteContainer = note
@@ -1086,6 +1126,24 @@ final class ProfileHeaderView: UIView {
         pinnedShelf.setItems(items, glyphLanguage: glyphLanguage)
         pinnedShelf.isHidden = items.isEmpty
         return wasHidden != pinnedShelf.isHidden || previous != items
+    }
+
+    /// 注目のハッシュタグと紹介しているユーザーを並べる。どちらも空なら、その棚を見出しごと隠す。変わったらtrue。
+    func setFeatured(tags: [FeaturedTag], endorsements: ProfileEndorsementsShelfView.Content) -> Bool {
+        let before = (featuredTagsShelf.isHidden, endorsementsShelf.isHidden, featuredTagsShelf.tags, endorsementsShelf.content)
+        featuredTagsShelf.setTags(tags)
+        featuredTagsShelf.isHidden = tags.isEmpty
+        endorsementsShelf.setContent(endorsements)
+        endorsementsShelf.isHidden = endorsements.accounts.isEmpty
+        return before != (featuredTagsShelf.isHidden, endorsementsShelf.isHidden, featuredTagsShelf.tags, endorsementsShelf.content)
+    }
+
+    /// 紹介しているユーザーの表示名に、`urls`のカスタム絵文字を使っている人がいれば描き直す。描き直したらtrue。
+    @discardableResult
+    func redrawEndorsements(ifUsing urls: Set<URL>) -> Bool {
+        guard endorsementsShelf.uses(emojiURLs: urls) else { return false }
+        endorsementsShelf.redraw()
+        return true
     }
 
     private func applyCountsSpacing() {

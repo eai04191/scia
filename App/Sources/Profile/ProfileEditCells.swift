@@ -231,6 +231,39 @@ final class ProfileEditFieldCell: UITableViewCell, UITextFieldDelegate {
 
 /// 区切りの下に出す文字数と、問題の文言。右に寄せ、上限を超えたら赤くする。
 /// 余白は表が決める`contentView`の余白に合わせる。ただの`UIView`で余白を決めると、表が高さを測るときと置いたときで幅が変わり、折り返した文言が切れた。
+/// 区切りの見出し。小さい文字で出す。
+final class ProfileEditHeader: UITableViewHeaderFooterView {
+    static let reuseIdentifier = "ProfileEditHeader"
+    private let label = UILabel()
+
+    var title: String? {
+        get { label.text }
+        set { label.text = newValue }
+    }
+
+    override init(reuseIdentifier: String?) {
+        super.init(reuseIdentifier: reuseIdentifier)
+        label.font = .preferredFont(forTextStyle: .footnote)
+        label.adjustsFontForContentSizeCategory = true
+        label.textColor = .label
+        label.numberOfLines = 0
+        label.accessibilityTraits = .header
+        label.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.topAnchor.constraint(equalTo: contentView.layoutMarginsGuide.topAnchor, constant: 8),
+            label.bottomAnchor.constraint(equalTo: contentView.layoutMarginsGuide.bottomAnchor),
+            label.leadingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.leadingAnchor),
+            label.trailingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.trailingAnchor),
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+}
+
 final class ProfileEditFooter: UITableViewHeaderFooterView {
     private let label = UILabel()
 
@@ -546,5 +579,60 @@ final class ProfileEditImagesCell: UITableViewCell {
             actions.append(UIAction(title: "削除", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in self?.onRemove(kind) })
         }
         return UIMenu(children: actions)
+    }
+}
+
+/// 紹介しているユーザーの1行。アイコンと、表示名とハンドルを並べる。
+final class ProfileEditAccountCell: UITableViewCell {
+    static let reuseIdentifier = "ProfileEditAccountCell"
+    private static let avatarSide: CGFloat = 32
+
+    private let avatarView = AvatarView(store: AppDependencies.avatarImages)
+    private let nameLabel = EmojiLabel()
+    private let handleLabel = UILabel()
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        selectionStyle = .none
+        nameLabel.font = .preferredFont(forTextStyle: .body)
+        nameLabel.adjustsFontForContentSizeCategory = true
+        nameLabel.lineBreakMode = .byTruncatingTail
+        handleLabel.font = .preferredFont(forTextStyle: .footnote)
+        handleLabel.adjustsFontForContentSizeCategory = true
+        handleLabel.textColor = .secondaryLabel
+        handleLabel.lineBreakMode = .byTruncatingMiddle
+        let labels = UIStackView(arrangedSubviews: [nameLabel, handleLabel])
+        labels.axis = .vertical
+        labels.spacing = 2
+        let row = UIStackView(arrangedSubviews: [avatarView, labels])
+        row.axis = .horizontal
+        row.alignment = .center
+        row.spacing = 12
+        row.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(row)
+        labels.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        NSLayoutConstraint.activate([
+            avatarView.widthAnchor.constraint(equalToConstant: Self.avatarSide),
+            avatarView.heightAnchor.constraint(equalToConstant: Self.avatarSide),
+            row.topAnchor.constraint(equalTo: contentView.layoutMarginsGuide.topAnchor),
+            row.bottomAnchor.constraint(equalTo: contentView.layoutMarginsGuide.bottomAnchor),
+            row.leadingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.leadingAnchor),
+            row.trailingAnchor.constraint(lessThanOrEqualTo: contentView.layoutMarginsGuide.trailingAnchor),
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(account: Account, avatarShape: AvatarShape, language: String) {
+        avatarView.apply(AvatarView.Content(url: account.avatarStatic, shape: avatarShape, animates: false))
+        nameLabel.attributedText = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, emojiImages: AppDependencies.emojiImages, language: language)
+            .render(.plain(account.displayNameOrUsername, emojis: account.emojis))
+            .truncatingTail(alignment: .natural)
+        handleLabel.text = "@\(account.acct)"
+        // 人の一覧の行と同じく、描いた名前を読ませる。カスタム絵文字の`:shortcode:`を読ませないため。
+        accessibilityLabel = "\(nameLabel.attributedText?.string ?? account.displayNameOrUsername)、@\(account.acct)"
     }
 }

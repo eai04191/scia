@@ -159,6 +159,8 @@ final class SessionController {
     private let accounts: AccountCache
     /// 読んだ自分のフィルター。ハッシュタグのメニューの「ミュート」を、メニューを組むときに決めるのに使う。
     private let serverFilters: ServerFilterCache
+    /// 自分の注目のハッシュタグ。ハッシュタグのメニューの「プロフィールで紹介する」と、投稿欄のハッシュタグの補完で同じものを使う。
+    private let ownFeaturedTags: LatestValueCache<[FeaturedTag]>
     /// 補完の候補を読む口。投稿欄とプロフィールの編集で使う。
     private let completionSources: ComposeCompletion.Sources
     /// 補完で読めたカスタム絵文字の一覧。開くたびに補完を作るプロフィールの編集に渡し、読み直さずに並べる。
@@ -467,10 +469,13 @@ final class SessionController {
         let accounts = AccountCache { [client] ids in try await client.accounts(ids) }
         self.accounts = accounts
         serverFilters = ServerFilterCache(label: "filters") { [client] in try await client.filters() }
+        let ownFeaturedTags = LatestValueCache<[FeaturedTag]>(label: "featuredTags") { [client] in try await client.featuredTags() }
+        self.ownFeaturedTags = ownFeaturedTags
         // キャッシュが自分で始めた通信も、ログアウトやアカウントの切り替えで止める。
-        tasks.onClose { [weak accounts, weak serverFilters, weak relationships = profiles.relationships] in
+        tasks.onClose { [weak accounts, weak serverFilters, weak ownFeaturedTags, weak relationships = profiles.relationships] in
             accounts?.close()
             serverFilters?.close()
+            ownFeaturedTags?.close()
             relationships?.close()
         }
         let customEmojis = CustomEmojiCache()
@@ -502,7 +507,9 @@ final class SessionController {
             },
             featuredTags: {
                 do {
-                    return try await client.featuredTags()
+                    // 補完が読むのは、まだ持っていないか、前に読めなかったときだけなので、そのたびに読み直す。
+                    await ownFeaturedTags.refresh(purpose: .display)
+                    return try await ownFeaturedTags.latest()
                 } catch {
                     await reportCompletionFailure(error)
                     throw error
@@ -1366,6 +1373,10 @@ final class SessionController {
         }
         configure(viewController)
         controller.onEditProfile = { [weak self] in self?.presentProfileEditor() }
+        controller.onEndorsementRemoved = { [weak self] in
+            guard let self else { return }
+            profiles.reloadFeatured(of: credential.accountID)
+        }
         controller.onOpenAccountList = { [weak self, weak viewController] kind in
             guard let viewController else { return }
             self?.openAccountList(kind, ownerAcct: account.acct, from: viewController)
@@ -1720,11 +1731,14 @@ final class SessionController {
     ///   - debugField: デバッグURLで渡した、読み込んだあとに足す補足情報の内容。
     ///   - debugCrop: デバッグURLで渡した、読み込んだあとにダミーの画像で切り抜きを開く画像。
     private func presentProfileEditor(debugNote: String? = nil, debugField: String? = nil, debugCrop: ProfileImage? = nil) {
-        let client = client
-        let editor = ProfileEditor(api: ProfileEditor.API(
-            source: { try await client.profileSource() },
-            save: { draft in try await client.updateProfile(draft) }
-        ))
+        let editor = ProfileEditor(api: ProfileEditor.API(client: client))
+        // 注目のハッシュタグか紹介しているユーザーを送れたら、途中で送れなくなっても、覚えている自分のタグと開いている自分のプロフィールの棚を読み直す。
+        editor.onFeaturedChange = { [weak self] in self?.ownFeaturedTagsDidChange() }
+        // そのあとに注目のハッシュタグや紹介を送れずにシートを閉じなくても、保存できたプロフィールは開いている自分のプロフィールに反映する。
+        editor.onProfileSaved = { [weak self] saved in
+            self?.cachedMyAccount = saved.account
+            self?.profiles.apply(edited: saved.account)
+        }
         // 上限を読めなければ、4.6.0より前のMastodonの値のまま使う。超えた分はサーバーが拒む。
         tasks.run(.action) { [weak self] in
             guard let configuration = await self?.loadInstanceConfiguration() else { return }
@@ -1735,11 +1749,14 @@ final class SessionController {
             completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, account: credential.handle), emojis: customEmojis.emojis),
             recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
         )
-        let controller = ProfileEditViewController(editor: editor, completion: completion)
-        controller.onSaved = { [weak self] saved in
-            self?.cachedMyAccount = saved.account
-            self?.profiles.apply(edited: saved.account)
-        }
+        // 紹介しているユーザーの追加の行は、サーバーがフォローしていない相手を断るので、フォローしている人だけから探す。
+        var endorsementSources = ComposeCompletion.Sources.unavailable
+        endorsementSources.searchAccounts = { [client] query, limit in try await client.searchAccountsForCompletion(query, limit: limit, following: true) }
+        let endorsementCompletion = TextInputCompletion(
+            completion: ComposeCompletion(sources: endorsementSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
+            recentEmojis: nil
+        )
+        let controller = ProfileEditViewController(editor: editor, completion: completion, endorsementCompletion: endorsementCompletion)
         controller.onError = { [weak self] error, title in self?.handle(error, title: title) }
         #if DEBUG
         controller.debugNote = debugNote
@@ -1936,7 +1953,69 @@ final class SessionController {
 
     /// ハッシュタグのメニューの、自分の状態を読んで変える項目。
     private var hashtagMenuActions: HashtagMenuActions {
-        HashtagMenuActions(mute: hashtagMuteActions)
+        HashtagMenuActions(mute: hashtagMuteActions, feature: hashtagFeatureActions)
+    }
+
+    /// ハッシュタグのメニューの「プロフィールで紹介する」。覚えている自分の注目のハッシュタグで載せているかを決め、メニューを開くたびに読み直す。
+    private var hashtagFeatureActions: HashtagFeatureActions {
+        let ownFeaturedTags = ownFeaturedTags
+        return HashtagFeatureActions(
+            known: { name in ownFeaturedTags.value.map { $0.first(named: name) != nil } },
+            // まだ読めていなければ、開いたメニューがこの読み直しを待つので、操作として送る。
+            refresh: { ownFeaturedTags.refresh(purpose: .action) },
+            load: { name in try await ownFeaturedTags.latest().first(named: name) != nil },
+            feature: { [weak self] name in self?.featureHashtag(name) },
+            unfeature: { [weak self] name in self?.unfeatureHashtag(name) }
+        )
+    }
+
+    /// ハッシュタグを自分のプロフィールの注目のハッシュタグに載せる。上限を超えたときなどは、サーバーが返す理由を知らせる。
+    private func featureHashtag(_ name: String) {
+        let client = client
+        logger.info("hashtag feature")
+        // 送り終える前にメニューを開き直して押しても、同じ要求を重ねて送らない。二重に載せようとすると、サーバーが断るため。
+        tasks.run(key: "hashtagFeature:\(name)", .skippingWhileRunning, .action) { [weak self] in
+            guard let self else { return }
+            do {
+                _ = try await client.featureTag(name)
+                ownFeaturedTagsDidChange()
+                notices.showTransient(Notice(id: "hashtag.featureChanged", kind: .success, title: "#\(name)をプロフィールで紹介しました"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+            } catch {
+                logger.error("hashtag feature failed: \(SciaLog.describe(error), privacy: .public)")
+                // 応答が届かなかっただけで載っていることがあるので、読み直す。
+                ownFeaturedTags.reload(purpose: .action)
+                handle(error, title: "プロフィールでの紹介を変更できませんでした")
+            }
+        }
+    }
+
+    /// ハッシュタグを自分のプロフィールの注目のハッシュタグから外す。外すIDは、外すときに読み直した一覧で決める。
+    /// 別の端末やwebで消したり足し直したりしたタグを、メニューを組んだときに覚えていた古いIDで消さないため。もう載っていなければ、外れているとして知らせる。
+    private func unfeatureHashtag(_ name: String) {
+        let client = client
+        logger.info("hashtag unfeature")
+        tasks.run(key: "hashtagFeature:\(name)", .skippingWhileRunning, .action) { [weak self] in
+            guard let self else { return }
+            do {
+                ownFeaturedTags.reload(purpose: .action)
+                if let featured = try await ownFeaturedTags.latest().first(named: name) {
+                    try await client.unfeatureTag(featured.id)
+                }
+                ownFeaturedTagsDidChange()
+                notices.showTransient(Notice(id: "hashtag.featureChanged", kind: .success, title: "#\(name)をプロフィールから外しました"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+            } catch {
+                logger.error("hashtag unfeature failed: \(SciaLog.describe(error), privacy: .public)")
+                ownFeaturedTags.reload(purpose: .action)
+                handle(error, title: "プロフィールでの紹介を変更できませんでした")
+            }
+        }
+    }
+
+    /// 自分の注目のハッシュタグを変えたあとに、覚えている一覧、投稿欄の補完の自分のタグ、開いている自分のプロフィールの棚を読み直す。
+    private func ownFeaturedTagsDidChange() {
+        ownFeaturedTags.reload(purpose: .action)
+        composer.completion.forgetOwnTags()
+        profiles.reloadFeatured(of: credential.accountID)
     }
 
     /// ハッシュタグのメニューのミュート。覚えている自分のフィルターでミュートしているかを決め、メニューを開くたびに読み直す。
@@ -2145,7 +2224,7 @@ final class SessionController {
 
     /// フォローを外す、リクエストを取り消す、ブロックは、押し間違えに備えて確かめてから送る。プロフィール画面のフォローのボタンと同じく、フォローとミュートは確かめずに送る。
     private func confirmChanging(_ change: UserRelationChange, of relation: UserRelation) {
-        guard let confirmation = Confirmation.relationChange(change, acct: relation.acct) else {
+        guard let confirmation = Confirmation.relationChange(change, acct: relation.acct, endorsed: relation.relationship.endorsed) else {
             send(change, to: relation)
             return
         }
@@ -2168,6 +2247,8 @@ final class SessionController {
                 case .unfollow, .cancelFollowRequest: try await client.unfollow(id)
                 case .showReblogs(let shows): try await client.follow(id, reblogs: shows)
                 case .notify(let notifies): try await client.follow(id, notify: notifies)
+                case .endorse(true): try await client.endorse(id)
+                case .endorse(false): try await client.unendorse(id)
                 case .mute(let duration): try await client.mute(id, duration: duration)
                 case .unmute: try await client.unmute(id)
                 case .block: try await client.block(id)
@@ -2189,7 +2270,16 @@ final class SessionController {
             if case .mute(let duration?) = change {
                 includeAfterMuteExpires(relationship.id, duration: duration)
             }
-        case .follow, .unfollow, .cancelFollowRequest, .showReblogs, .notify:
+        case .follow, .showReblogs, .notify:
+            break
+        case .unfollow, .cancelFollowRequest, .endorse:
+            break
+        }
+        // 紹介を変えたときと、サーバーが紹介も消すフォローの解除とブロックのあとは、開いている自分のプロフィールの紹介しているユーザーを読み直す。
+        switch change {
+        case .endorse, .unfollow, .block:
+            profiles.reloadFeatured(of: credential.accountID)
+        case .follow, .cancelFollowRequest, .showReblogs, .notify, .mute, .unmute, .unblock:
             break
         }
         notices.showTransient(Notice(id: "user.relationChanged", kind: .success, title: change.doneTitle(relationship)), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
@@ -3988,6 +4078,14 @@ private final class ProfileRegistry {
         entries.removeAll { $0.controller == nil }
         for entry in entries where entry.controller?.accountID == accountID {
             entry.controller?.reloadPinned()
+        }
+    }
+
+    /// `accountID`のプロフィールを開いていれば、注目のハッシュタグと紹介しているユーザーを読み直す。
+    func reloadFeatured(of accountID: String) {
+        entries.removeAll { $0.controller == nil }
+        for entry in entries where entry.controller?.accountID == accountID {
+            entry.controller?.reloadFeatured()
         }
     }
 }

@@ -277,6 +277,7 @@ struct MastodonClientTests {
             .json("[]", statusCode: 200),
             .json("[]", statusCode: 200),
             .json("[]", statusCode: 200),
+            .json("[]", statusCode: 200),
         ])
         let client = try makeClient(transport)
 
@@ -284,6 +285,7 @@ struct MastodonClientTests {
         let last = try await client.accounts(in: .rebloggedBy("1"), maxID: "777", limit: 40)
         _ = try await client.accounts(in: .followers(accountID: "9"), maxID: nil, limit: 40)
         _ = try await client.accounts(in: .following(accountID: "9"), maxID: nil, limit: 40)
+        _ = try await client.accounts(in: .endorsements(accountID: "9"), maxID: nil, limit: 40)
 
         #expect(page.accounts.map(\.acct) == ["carol@remote.example"])
         #expect(page.nextMaxID == "777")
@@ -294,6 +296,7 @@ struct MastodonClientTests {
             "/api/v1/statuses/1/reblogged_by",
             "/api/v1/accounts/9/followers",
             "/api/v1/accounts/9/following",
+            "/api/v1/accounts/9/endorsements",
         ])
         #expect(requests[1].url?.query()?.contains("max_id=777") == true)
     }
@@ -520,22 +523,22 @@ struct MastodonClientTests {
 
     @Test func instanceConfigurationReadsProfileLimits() async throws {
         let json = #"""
-        {"configuration":{"urls":{"streaming":"wss://example.social"},"accounts":{"max_display_name_length":40,"max_note_length":1000,"max_profile_fields":6,"profile_field_name_limit":100,"profile_field_value_limit":2000}}}
+        {"configuration":{"urls":{"streaming":"wss://example.social"},"accounts":{"max_display_name_length":40,"max_note_length":1000,"max_profile_fields":6,"profile_field_name_limit":100,"profile_field_value_limit":2000,"max_featured_tags":20}}}
         """#
         let transport = StubTransport([.json(json, statusCode: 200)])
 
         let configuration = try await makeClient(transport).instanceConfiguration()
 
-        #expect(configuration.profileLimits == ProfileLimits(displayName: 40, note: 1000, fields: 6, fieldName: 100, fieldValue: 2000))
+        #expect(configuration.profileLimits == ProfileLimits(displayName: 40, note: 1000, fields: 6, fieldName: 100, fieldValue: 2000, featuredTags: 20))
     }
 
-    /// 4.6.0より前のMastodonは上限を返さないが、決まった値で検証している。
+    /// 4.6.0より前のMastodonは上限を返さないが、決まった値で検証している。注目のハッシュタグの上限は4.0から返る。
     @Test func instanceConfigurationUsesFixedProfileLimitsBeforeMastodon46() async throws {
         let transport = StubTransport([try .fixture("instance_v2")])
 
         let configuration = try await makeClient(transport).instanceConfiguration()
 
-        #expect(configuration.profileLimits == ProfileLimits(displayName: 30, note: 500, fields: 4, fieldName: 255, fieldValue: 255))
+        #expect(configuration.profileLimits == ProfileLimits(displayName: 30, note: 500, fields: 4, fieldName: 255, fieldValue: 255, featuredTags: 10))
     }
 
     @Test func homeMarkerReadsLastReadID() async throws {
@@ -627,7 +630,7 @@ struct MastodonClientTests {
     }
 
     @Test func followAndUnfollowPostToAccount() async throws {
-        let relationship = #"{"id":"2","following":true,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"note":""}"#
+        let relationship = #"{"id":"2","following":true,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"endorsed":false,"note":""}"#
         let transport = StubTransport([.json(relationship, statusCode: 200), .json(relationship, statusCode: 200)])
         let client = try makeClient(transport)
 
@@ -641,7 +644,7 @@ struct MastodonClientTests {
 
     /// フォローの設定は渡したものだけを送り、渡さなければサーバーの既定に任せる。
     @Test func followSendsOnlyGivenSettings() async throws {
-        let relationship = #"{"id":"2","following":true,"showing_reblogs":false,"notifying":true,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"note":""}"#
+        let relationship = #"{"id":"2","following":true,"showing_reblogs":false,"notifying":true,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"endorsed":false,"note":""}"#
         let transport = StubTransport([.json(relationship, statusCode: 200), .json(relationship, statusCode: 200), .json(relationship, statusCode: 200)])
         let client = try makeClient(transport)
 
@@ -657,7 +660,7 @@ struct MastodonClientTests {
 
     /// ミュートの時間は秒で送り、無期限なら送らない（サーバーの既定の0が無期限）。ミュート、ブロックと解除は、それぞれのパスにPOSTする。
     @Test func muteBlockAndTheirUndoPostToAccount() async throws {
-        let relationship = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":true,"muting_notifications":true,"note":""}"#
+        let relationship = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":true,"muting_notifications":true,"endorsed":false,"note":""}"#
         let transport = StubTransport(Array(repeating: .json(relationship, statusCode: 200), count: 5))
         let client = try makeClient(transport)
 
@@ -720,8 +723,8 @@ struct MastodonClientTests {
 
     /// メモは`comment`で送り、空なら空の`comment`を送って消す。応答の関係からメモを読む。
     @Test func setNotePostsCommentAndDecodesNote() async throws {
-        let written = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"note":"前に会った & 話した"}"#
-        let cleared = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"note":""}"#
+        let written = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"endorsed":false,"note":"前に会った & 話した"}"#
+        let cleared = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"endorsed":false,"note":""}"#
         let transport = StubTransport([.json(written, statusCode: 200), .json(cleared, statusCode: 200)])
         let client = try makeClient(transport)
 
@@ -740,7 +743,7 @@ struct MastodonClientTests {
     }
 
     @Test func authorizeAndRejectFollowRequestPostToFollowRequests() async throws {
-        let relationship = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":true,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"note":""}"#
+        let relationship = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":true,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"endorsed":false,"note":""}"#
         let transport = StubTransport([.json(relationship, statusCode: 200), .json(relationship, statusCode: 200)])
         let client = try makeClient(transport)
 
@@ -796,6 +799,16 @@ struct MastodonClientTests {
         ])
         // 読めないアカウントがあっても、読めた分は候補にする。
         #expect(accounts.map(\.acct) == ["carol", "bob@remote.example"])
+    }
+
+    /// フォローしている人だけから探すときは、`following=true`を付ける。
+    @Test func searchAccountsForCompletionCanLimitToFollowing() async throws {
+        let transport = StubTransport([try .fixture("accounts_search")])
+
+        _ = try await makeClient(transport).searchAccountsForCompletion("ca", limit: 5, following: true)
+
+        let url = try #require(await transport.requests.first?.url)
+        #expect(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains(URLQueryItem(name: "following", value: "true")) == true)
     }
 
     /// 打っている途中の問い合わせは、一時的な失敗でも送り直さない。
@@ -878,7 +891,68 @@ struct MastodonClientTests {
         let tags = try await makeClient(transport).featuredTags()
 
         #expect(await transport.requests.first?.url?.path() == "/api/v1/featured_tags")
-        #expect(tags == [FeaturedTag(name: "nowplaying", statusesCount: 70), FeaturedTag(name: "猫写真", statusesCount: 312)])
+        #expect(tags.map(\.id) == ["627", "628"])
+        #expect(tags.map(\.name) == ["nowplaying", "猫写真"])
+        #expect(tags.map(\.statusesCount) == [70, 312])
+        // 押して開く先として読む。
+        #expect(tags.first?.url?.absoluteString == "https://example.social/@alice/tagged/nowplaying")
+    }
+
+    @Test func featuredTagsOfAccount() async throws {
+        let transport = StubTransport([try .fixture("featured_tags")])
+
+        let tags = try await makeClient(transport).featuredTags(of: "9")
+
+        #expect(await transport.requests.first?.url?.path() == "/api/v1/accounts/9/featured_tags")
+        #expect(tags.map(\.name) == ["nowplaying", "猫写真"])
+    }
+
+    /// 載せるときは名前を送り、外すときは載せたことのIDを消す。載せるのは、二重に載せて断られないよう送り直さない。
+    @Test func featureAndUnfeatureTag() async throws {
+        let tag = #"{"id":"13174","name":"猫写真","url":"https://example.social/@alice/tagged/猫写真","statuses_count":23,"last_status_at":"2026-10-22"}"#
+        let transport = StubTransport([.json("", statusCode: 503), .json(tag, statusCode: 200), .json("{}", statusCode: 200)])
+        let client = try makeClient(transport)
+
+        await #expect(throws: (any Error).self) { try await client.featureTag("猫写真") }
+        let featured = try await client.featureTag("猫写真")
+        try await client.unfeatureTag("13174")
+
+        #expect(featured.id == "13174")
+        #expect(featured.statusesCount == 23)
+        let requests = await transport.requests
+        #expect(requests.map(\.httpMethod) == ["POST", "POST", "DELETE"])
+        #expect(requests.map { $0.url?.path() } == ["/api/v1/featured_tags", "/api/v1/featured_tags", "/api/v1/featured_tags/13174"])
+        #expect(requests[0].httpBody.map { String(decoding: $0, as: UTF8.self) } == "name=%E7%8C%AB%E5%86%99%E7%9C%9F")
+    }
+
+    /// 自分の紹介している人は、`Link`ヘッダーの`max_id`で最後まで読む。
+    @Test func endorsementsReadAllPages() async throws {
+        let account = #"{"id":"3","username":"carol","acct":"carol@remote.example","display_name":"Carol","avatar":"https://example.social/avatars/carol.png","avatar_static":"https://example.social/avatars/carol.png","header":"https://example.social/headers/original/missing.png","header_static":"https://example.social/headers/original/missing.png","note":"","url":"https://remote.example/@carol","fields":[],"locked":false,"bot":false,"followers_count":0,"following_count":0,"statuses_count":0,"emojis":[]}"#
+        let transport = StubTransport([
+            .json("[\(account)]", statusCode: 200, headers: ["Link": #"<https://example.social/api/v1/endorsements?max_id=777>; rel="next""#]),
+            .json("[\(account.replacingOccurrences(of: #""id":"3""#, with: #""id":"4""#))]", statusCode: 200),
+        ])
+
+        let accounts = try await makeClient(transport).endorsements()
+
+        #expect(accounts.map(\.id) == ["3", "4"])
+        let requests = await transport.requests
+        #expect(requests.map { $0.url?.path() } == ["/api/v1/endorsements", "/api/v1/endorsements"])
+        #expect(requests[1].url?.query()?.contains("max_id=777") == true)
+    }
+
+    /// 紹介は、4.4より前のサーバーにもある`pin`と`unpin`で送り、応答の関係から紹介しているかを読む。
+    @Test func endorseAndUnendorsePostToPinPaths() async throws {
+        let endorsed = #"{"id":"2","following":true,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"endorsed":true,"note":""}"#
+        let transport = StubTransport([.json(endorsed, statusCode: 200), .json(endorsed.replacingOccurrences(of: #""endorsed":true"#, with: #""endorsed":false"#), statusCode: 200)])
+        let client = try makeClient(transport)
+
+        let afterEndorse = try await client.endorse("2")
+        let afterUnendorse = try await client.unendorse("2")
+
+        #expect(afterEndorse.endorsed)
+        #expect(!afterUnendorse.endorsed)
+        #expect(await transport.requests.map { $0.url?.path() } == ["/api/v1/accounts/2/pin", "/api/v1/accounts/2/unpin"])
     }
 
     @Test func featuredTagSuggestions() async throws {

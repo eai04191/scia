@@ -1,26 +1,34 @@
-import Foundation
+public import Foundation
 
 /// プロフィールに載せているハッシュタグ。
 /// https://docs.joinmastodon.org/entities/FeaturedTag/
 public struct FeaturedTag: Decodable, Hashable, Sendable {
+    /// プロフィールに載せたことのID。タグそのもの（`Tag`）のIDではない。外すときに使う。
+    public let id: String
     /// `#`を除いた名前。
     public let name: String
-    /// このタグを付けた自分の投稿の数。
+    /// このタグを付けた、その人の投稿の数。
     public let statusesCount: Int
+    /// サーバーの、その人のこのタグの付いた投稿のページ。押して開く先として読み、使えなければnil。
+    public let url: URL?
 
-    public init(name: String, statusesCount: Int) {
+    public init(id: String, name: String, statusesCount: Int, url: URL? = nil) {
+        self.id = id
         self.name = name
         self.statusesCount = statusesCount
+        self.url = url
     }
 
     private enum CodingKeys: String, CodingKey {
-        case name, statusesCount
+        case id, name, statusesCount, url
     }
 
     /// 文書では`statuses_count`は文字列だが、Mastodonは数で返す。どちらでも読み、読めなければ0にする。
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
+        url = container.decodeURL(.destination, forKey: .url)
         if let count = try? container.decodeCount(forKey: .statusesCount) {
             statusesCount = count
         } else {

@@ -66,13 +66,16 @@ public struct ProfileLimits: Sendable, Equatable {
     public let fields: Int
     public let fieldName: Int
     public let fieldValue: Int
+    /// 注目のハッシュタグの数。Mastodonは4.0から返す。返らなければnilで、数だけを出して止めない。
+    public let featuredTags: Int?
 
-    public init(displayName: Int, note: Int, fields: Int, fieldName: Int, fieldValue: Int) {
+    public init(displayName: Int, note: Int, fields: Int, fieldName: Int, fieldValue: Int, featuredTags: Int? = nil) {
         self.displayName = displayName
         self.note = note
         self.fields = fields
         self.fieldName = fieldName
         self.fieldValue = fieldValue
+        self.featuredTags = featuredTags
     }
 
     /// 上限は4.6.0から`api/v2/instance`で返る。それより前のMastodonは、決まったこの値で検証している。

@@ -38,14 +38,22 @@ public enum FollowState: Equatable, Sendable {
 }
 
 /// プロフィールの読み込みで失敗したもの。読めたものはnil。
-/// 知らせ方が違うため分けて返す。関係はフォローのボタンの場所で知らせ、アカウントと固定された投稿はログだけにする。
+/// 知らせ方が違うため分けて返す。関係はフォローのボタンの場所で知らせ、アカウントとヘッダーの棚（固定された投稿、注目のハッシュタグ、紹介しているユーザー）はログだけにする。
 public struct ProfileLoadFailures: Sendable {
     public var account: (any Error)?
     public var relationship: (any Error)?
     public var pinned: (any Error)?
+    public var featuredTags: (any Error)?
+    public var endorsements: (any Error)?
 
     public var isEmpty: Bool {
-        account == nil && relationship == nil && pinned == nil
+        all.isEmpty
+    }
+
+    /// 失敗したものを、ログに残す名前と並べる。
+    public var all: [(part: String, error: any Error)] {
+        [("account", account), ("relationship", relationship), ("pinned", pinned), ("featuredTags", featuredTags), ("endorsements", endorsements)]
+            .compactMap { part, error in error.map { (part, $0) } }
     }
 }
 
@@ -60,19 +68,27 @@ public final class ProfileStore {
         public var statuses: @Sendable (String, AccountStatusFilter, TimelineQuery) async throws -> TimelinePage
         public var follow: @Sendable (String) async throws -> Relationship
         public var unfollow: @Sendable (String) async throws -> Relationship
+        /// アカウントがプロフィールに載せているハッシュタグ。
+        public var featuredTags: @Sendable (String) async throws -> [FeaturedTag]
+        /// アカウントがプロフィールで紹介している人の、最初のページ。
+        public var endorsements: @Sendable (String, Int) async throws -> AccountListPage
 
         public init(
             account: @escaping @Sendable (String) async throws -> Account,
             relationship: @escaping @Sendable (String) async throws -> Relationship?,
             statuses: @escaping @Sendable (String, AccountStatusFilter, TimelineQuery) async throws -> TimelinePage,
             follow: @escaping @Sendable (String) async throws -> Relationship,
-            unfollow: @escaping @Sendable (String) async throws -> Relationship
+            unfollow: @escaping @Sendable (String) async throws -> Relationship,
+            featuredTags: @escaping @Sendable (String) async throws -> [FeaturedTag] = { _ in [] },
+            endorsements: @escaping @Sendable (String, Int) async throws -> AccountListPage = { _, _ in AccountListPage(accounts: [], nextMaxID: nil) }
         ) {
             self.account = account
             self.relationship = relationship
             self.statuses = statuses
             self.follow = follow
             self.unfollow = unfollow
+            self.featuredTags = featuredTags
+            self.endorsements = endorsements
         }
 
         public init(client: MastodonClient) {
@@ -81,7 +97,9 @@ public final class ProfileStore {
                 relationship: { try await client.relationship(with: $0) },
                 statuses: { try await client.accountStatuses($0, filter: $1, query: $2) },
                 follow: { try await client.follow($0) },
-                unfollow: { try await client.unfollow($0) }
+                unfollow: { try await client.unfollow($0) },
+                featuredTags: { try await client.featuredTags(of: $0) },
+                endorsements: { try await client.accounts(in: .endorsements(accountID: $0), maxID: nil, limit: $1) }
             )
         }
     }
@@ -98,8 +116,21 @@ public final class ProfileStore {
     }
     /// 読んだ固定された投稿。編集でフィルターに一致しなくなったら出せるよう、隠す投稿も持つ。
     private var loadedPinned: [Status] = []
-    /// 固定された投稿を読み終えた。読めなかったときも含む。一覧を固定された投稿と一緒に出すために、これを待つ。
-    public private(set) var isPinnedSettled = false
+    /// 固定された投稿を読み終えた。読めなかったときも含む。
+    private var isPinnedSettled = false
+    /// プロフィールに載せているハッシュタグ。サーバーが返した順。読めなければ空。
+    public private(set) var featuredTags: [FeaturedTag] = []
+    /// プロフィールで紹介している人の、最初のページ。読めなければ空。
+    public private(set) var endorsements: [Account] = []
+    /// 紹介している人に、最初のページより後の続きがある。
+    public private(set) var hasMoreEndorsements = false
+    /// 注目のハッシュタグと紹介している人を読み終えた。読めなかったときも含む。
+    private var isFeaturedSettled = false
+    /// ヘッダーの棚（固定された投稿、注目のハッシュタグ、紹介している人）を読み終えた。読めなかったときも含む。
+    /// 棚が後から現れて一覧を押し下げないよう、一覧はこれを待って出す。
+    public var isShelvesSettled: Bool {
+        isPinnedSettled && isFeaturedSettled
+    }
     /// 関係を読めず、まだ読み直せていない。
     public private(set) var relationshipFailed = false
     /// 読めなかった関係を読み直している途中。
@@ -116,6 +147,8 @@ public final class ProfileStore {
     private var followChanges = 0
     /// 固定された投稿を読み始めた回数。固定と解除を続けて押すと読み直しが重なるため、遅れて届いた古い応答を捨てる。
     private var pinnedLoads = 0
+    /// 注目のハッシュタグと紹介している人を読み始めた回数。プロフィールで紹介したり外したりして読み直しが重なったとき、遅れて届いた古い応答を捨てる。
+    private var featuredLoads = 0
     /// アカウントを読み始めたか、編集したものを反映した回数。フォローしたあとの読み直しや保存した編集より前に頼んだ読み込みが、
     /// 遅れて届いても古い数や内容で戻さない。
     private var accountChanges = 0
@@ -162,18 +195,22 @@ public final class ProfileStore {
         return .notFollowing(locked: account.locked)
     }
 
-    /// アカウント、関係、固定された投稿を並行して読み、届いたものから差し替える。どれかが失敗しても、他の結果は反映する。
+    /// アカウント、関係、ヘッダーの棚を並行して読み、届いたものから差し替える。どれかが失敗しても、他の結果は反映する。
     /// 失敗したものを、どれが失敗したか分けて返す。
     public func loadProfile() async -> ProfileLoadFailures {
         enum Part: Sendable {
             case account
             case relationship
             case pinned
+            case featuredTags
+            case endorsements
         }
         enum Loaded: Sendable {
             case account(Account)
             case relationship(Relationship?)
             case pinned([Status])
+            case featuredTags([FeaturedTag])
+            case endorsements(AccountListPage)
         }
         let id = account.id
         let api = api
@@ -183,12 +220,19 @@ public final class ProfileStore {
         let accountChange = accountChanges
         pinnedLoads += 1
         let pinnedLoad = pinnedLoads
+        featuredLoads += 1
+        let featuredLoad = featuredLoads
+        // 注目のハッシュタグと紹介している人は、両方が届いてから一覧を出す。
+        var featuredPending = 2
         return await withTaskGroup(of: (Part, Result<Loaded, any Error>).self) { group -> ProfileLoadFailures in
             group.addTask { (.account, await Result { .account(try await api.account(id)) }) }
             // 自分のプロフィールでも読む。自分に書いたメモが関係に入って返るため。
             group.addTask { (.relationship, await Result { .relationship(try await api.relationship(id)) }) }
             // 固定された投稿は一覧の補足なので、読めなかったものは並べない。読めなかったことはデコードの記録に残る。
             group.addTask { (.pinned, await Result { .pinned(try await api.statuses(id, AccountStatusFilter(pinned: true), TimelineQuery(limit: pageSize)).statuses) }) }
+            group.addTask { (.featuredTags, await Result { .featuredTags(try await api.featuredTags(id)) }) }
+            // 4.4より前のサーバーは、ほかの人の紹介している人を返さない。読めなかったものとして、棚を出さない。
+            group.addTask { (.endorsements, await Result { .endorsements(try await api.endorsements(id, Self.endorsementsPageSize)) }) }
             var failures = ProfileLoadFailures()
             for await (part, result) in group {
                 switch result {
@@ -205,6 +249,17 @@ public final class ProfileStore {
                         loadedPinned = pinned.filter { !deletedIDs.contains($0.id) }
                     }
                     isPinnedSettled = true
+                case .success(.featuredTags(let tags)):
+                    if featuredLoad == featuredLoads {
+                        featuredTags = tags
+                    }
+                    featuredPending -= 1
+                case .success(.endorsements(let page)):
+                    if featuredLoad == featuredLoads {
+                        endorsements = page.accounts
+                        hasMoreEndorsements = page.nextMaxID != nil
+                    }
+                    featuredPending -= 1
                 case .failure(let error):
                     switch part {
                     case .account: failures.account = error
@@ -214,7 +269,16 @@ public final class ProfileStore {
                     case .pinned:
                         failures.pinned = error
                         isPinnedSettled = true
+                    case .featuredTags:
+                        failures.featuredTags = error
+                        featuredPending -= 1
+                    case .endorsements:
+                        failures.endorsements = error
+                        featuredPending -= 1
                     }
+                }
+                if featuredPending == 0 {
+                    isFeaturedSettled = true
                 }
             }
             return failures
@@ -234,6 +298,32 @@ public final class ProfileStore {
         loadedPinned = pinned.filter { !deletedIDs.contains($0.id) }.map { current[$0.id] ?? $0 }
         isPinnedSettled = true
     }
+
+    /// 注目のハッシュタグと紹介している人を読み直す。自分のプロフィールで、載せるものを変えたあとに呼ぶ。
+    /// 読めなかったものは前のまま残し、読めなかったものがあれば投げる。あとから読み始めた読み直しがあれば、この応答は捨てる。
+    public func reloadFeatured() async throws {
+        featuredLoads += 1
+        let featuredLoad = featuredLoads
+        let id = account.id
+        let api = api
+        async let tags = Result { try await api.featuredTags(id) }
+        async let page = Result { try await api.endorsements(id, Self.endorsementsPageSize) }
+        let (loadedTags, loadedPage) = await (tags, page)
+        guard featuredLoad == featuredLoads else { return }
+        if case .success(let tags) = loadedTags {
+            featuredTags = tags
+        }
+        if case .success(let page) = loadedPage {
+            endorsements = page.accounts
+            hasMoreEndorsements = page.nextMaxID != nil
+        }
+        isFeaturedSettled = true
+        _ = try loadedTags.get()
+        _ = try loadedPage.get()
+    }
+
+    /// 紹介している人の棚に並べる数。続きは人の一覧で読む。
+    public static let endorsementsPageSize = 40
 
     /// 読めなかった関係を読み直す。失敗したら、読めなかったままにして投げる。読み直している途中なら何もしない。
     public func reloadRelationship() async throws {

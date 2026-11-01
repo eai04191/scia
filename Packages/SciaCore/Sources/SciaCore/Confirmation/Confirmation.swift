@@ -71,15 +71,16 @@ extension Confirmation where Choice == Proceed {
 
     /// フォローを外す、リクエストを取り消す、ブロックは、押し間違えに備えて確かめる。フォローとミュートなどは確かめない（nil）。
     /// ユーザーのメニューとプロフィールのフォローのボタンで同じ文言を使う。
-    public static func relationChange(_ change: UserRelationChange, acct: String) -> Confirmation? {
+    /// - Parameter endorsed: 相手を自分のプロフィールで紹介している。サーバーはフォローを外すと紹介も消すので、フォローを外すときに添える。
+    public static func relationChange(_ change: UserRelationChange, acct: String, endorsed: Bool = false) -> Confirmation? {
         switch change {
         case .unfollow:
-            .destructive(title: "@\(acct)のフォローを外しますか？", message: nil, action: "フォローを外す")
+            .destructive(title: "@\(acct)のフォローを外しますか？", message: endorsed ? "プロフィールでの紹介も外れます。" : nil, action: "フォローを外す")
         case .cancelFollowRequest:
             .destructive(title: "@\(acct)へのフォローのリクエストを取り消しますか？", message: nil, action: "リクエストを取り消す")
         case .block:
             .destructive(title: "@\(acct)をブロックしますか？", message: "相手の投稿と通知が表示されなくなり、お互いのフォローが外れます。", action: "ブロック")
-        case .follow, .showReblogs, .notify, .mute, .unmute, .unblock:
+        case .follow, .showReblogs, .notify, .endorse, .mute, .unmute, .unblock:
             nil
         }
     }

@@ -11,13 +11,13 @@ import UniformTypeIdentifiers
 /// 表示名、自己紹介、補足情報では、投稿欄と同じ補完と絵文字のシートでカスタム絵文字を入れられる。自己紹介と補足情報の内容では、サーバーがメンションとハッシュタグもリンクにするので、それも補完する。
 @MainActor
 final class ProfileEditViewController: UIViewController {
-    /// 保存できたら、シートを閉じる前に呼ぶ。
-    var onSaved: (ProfileSource) -> Void = { _ in }
     /// 保存や写真の読み込みに失敗したら、アラートの見出しと一緒に呼ぶ。書いたものはそのまま残る。
     var onError: (any Error, String) -> Void = { _, _ in }
 
     let editor: ProfileEditor
     private let textCompletion: TextInputCompletion
+    /// 紹介しているユーザーの追加の行の補完。フォローしている人だけから探すため、ほかの入力欄と分ける。
+    private let endorsementCompletion: TextInputCompletion
     private let mediaImages: MediaImageStore<UIImage>
     private let settings: AppSettings
     private let tuning: TuningStore
@@ -43,6 +43,16 @@ final class ProfileEditViewController: UIViewController {
     private let displayNameFooter = ProfileEditFooter()
     private let noteFooter = ProfileEditFooter()
     private let fieldsFooter = ProfileEditFooter()
+    private let featuredTagsFooter = ProfileEditFooter()
+    /// 注目のハッシュタグと紹介しているユーザーの追加の行の入力欄。補完で選んだものを、文字ではなく行として足す。
+    private let featuredTagField = ProfileEditTextField()
+    private let endorsementField = ProfileEditTextField()
+    private lazy var featuredTagAddCell = ProfileEditInputCell(input: featuredTagField)
+    private lazy var endorsementAddCell = ProfileEditInputCell(input: endorsementField)
+    /// 注目のハッシュタグの区切りに、追加の行を出しているか。補足情報と同じく、出し入れしたときだけ変える。
+    private var showsFeaturedTagAddRow = false
+    /// 表に映した、注目のハッシュタグと紹介しているユーザーの読み込みの状態。変わったら、その区切りを作り直す。
+    private var shownSectionStates: [Section: SectionState] = [:]
     private let imagesCell = ProfileEditImagesCell()
     private lazy var displayNameCell = ProfileEditInputCell(input: displayNameField)
     private lazy var noteCell = ProfileEditInputCell(input: noteView)
@@ -79,13 +89,23 @@ final class ProfileEditViewController: UIViewController {
         case displayName
         case note
         case fields
+        case featuredTags
+        case endorsements
         case flags
     }
 
-    init(editor: ProfileEditor, completion: TextInputCompletion, mediaImages: MediaImageStore<UIImage> = AppDependencies.mediaImages, settings: AppSettings = AppDependencies.settings, tuning: TuningStore = AppDependencies.tuning, clock: any Clock<Duration> = AppDependencies.clock) {
+    /// 注目のハッシュタグと紹介しているユーザーの区切りの、読み込みの状態。
+    private enum SectionState: Equatable {
+        case loading
+        case loaded
+        case failed
+    }
+
+    init(editor: ProfileEditor, completion: TextInputCompletion, endorsementCompletion: TextInputCompletion? = nil, mediaImages: MediaImageStore<UIImage> = AppDependencies.mediaImages, settings: AppSettings = AppDependencies.settings, tuning: TuningStore = AppDependencies.tuning, clock: any Clock<Duration> = AppDependencies.clock) {
         self.editor = editor
         self.clock = clock
         textCompletion = completion
+        self.endorsementCompletion = endorsementCompletion ?? TextInputCompletion(completion: ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning)), recentEmojis: nil)
         self.mediaImages = mediaImages
         self.settings = settings
         self.tuning = tuning
@@ -132,6 +152,9 @@ final class ProfileEditViewController: UIViewController {
     }
 
     private func load() async {
+        // 注目のハッシュタグと紹介しているユーザーは、プロフィールの項目を待たせずに読み、読めた区切りから映す。
+        Task(.action) { [editor] in await editor.loadFeaturedTags() }
+        Task(.action) { [editor] in await editor.loadEndorsements() }
         await editor.load()
         // プロフィールを開くときと同じく、アイコンとヘッダー画像を上限まで待ってから表を出す。表を出したあとに画像が1コマで入らないようにするため。
         if case .loaded(let source) = editor.source {
@@ -185,6 +208,8 @@ final class ProfileEditViewController: UIViewController {
         }
         updateImages()
         showsAddFieldRow = canAddField
+        showsFeaturedTagAddRow = canAddFeaturedTag
+        shownSectionStates = currentSectionStates
         isTableLoaded = true
         updateFooters()
         tableView.reloadData()
@@ -200,10 +225,19 @@ final class ProfileEditViewController: UIViewController {
         let draft = editor.draft
         return """
         source: \(source) saving: \(editor.isSaving) hasChanges: \(editor.hasChanges) canSave: \(editor.canSave) problems: \(editor.problems.count)
+        featuredTags: \(Self.describe(editor.featuredTagsSource)) \(editor.featuredTagNames.count) endorsements: \(Self.describe(editor.endorsementsSource)) \(editor.endorsedAccounts.count)
         fields: \(draft?.fields.count ?? 0) avatar: \(Self.describe(draft?.avatar)) header: \(Self.describe(draft?.header))
         completion: input=\(textCompletion.input.map { String(describing: type(of: $0)) } ?? "none") content=\(textCompletion.contentSummary) shown=\(isCompletionListShown)
         emojiSheet: \(emojiSheet != nil)
         """
+    }
+
+    private static func describe<Value>(_ source: ProfileEditor.SectionSource<Value>) -> String {
+        switch source {
+        case .loading: "loading"
+        case .loaded: "loaded"
+        case .failed(let error): "failed(\(ErrorPresentation(error).code ?? "unknown"))"
+        }
     }
 
     private static func describe(_ change: ProfileImageChange?) -> String {
@@ -262,6 +296,7 @@ final class ProfileEditViewController: UIViewController {
         }
         isModalInPresentation = editor.hasChanges || saving
         syncAddFieldRow()
+        syncFeaturedSections()
         updateFooters()
     }
 
@@ -286,7 +321,7 @@ final class ProfileEditViewController: UIViewController {
     /// 文字数や問題の文言を変える。行数が変わったら、表を作り直さずに高さを測り直す。
     private func updateFooters() {
         guard let draft = editor.draft else { return }
-        let footers = [displayNameFooter, noteFooter, fieldsFooter]
+        let footers = [displayNameFooter, noteFooter, fieldsFooter, featuredTagsFooter]
         let heights = footers.map(\.fittingHeight)
         defer {
             if isTableLoaded, footers.map(\.fittingHeight) != heights {
@@ -312,6 +347,11 @@ final class ProfileEditViewController: UIViewController {
             fieldsText = "ラベルと内容は\(limits.fieldName)文字までです"
         }
         fieldsFooter.setText(fieldsText, isProblem: fieldsText != "\(fieldCount) / \(limits.fields)" || fieldCount > limits.fields)
+        // 上限が返らなければ、数だけを出して止めない。
+        let tagCount = editor.featuredTagNames.count
+        // 読めるまでは数を出さない。
+        let tagCountText = editor.featuredTagsSource.value == nil ? "" : limits.featuredTags.map { "\(tagCount) / \($0)" } ?? "\(tagCount)"
+        featuredTagsFooter.setText(tagCountText, isProblem: editor.hasTooManyFeaturedTags)
     }
 
     // MARK: - 保存と取りやめ
@@ -321,9 +361,8 @@ final class ProfileEditViewController: UIViewController {
         view.endEditing(true)
         Task(.action) { [self] in
             do {
-                let saved = try await editor.save()
+                _ = try await editor.save()
                 logger.info("profile saved")
-                onSaved(saved)
                 dismiss(animated: true)
             } catch {
                 logger.error("profile save failed: \(SciaLog.describe(error), privacy: .public)")
@@ -368,6 +407,8 @@ final class ProfileEditViewController: UIViewController {
         tableView.allowsSelectionDuringEditing = true
         tableView.keyboardDismissMode = .interactive
         tableView.register(ProfileEditFieldCell.self, forCellReuseIdentifier: ProfileEditFieldCell.reuseIdentifier)
+        tableView.register(ProfileEditAccountCell.self, forCellReuseIdentifier: ProfileEditAccountCell.reuseIdentifier)
+        tableView.register(ProfileEditHeader.self, forHeaderFooterViewReuseIdentifier: ProfileEditHeader.reuseIdentifier)
         view.addSubview(tableView)
         let followsKeyboard = tableView.bottomAnchor.constraint(lessThanOrEqualTo: view.keyboardLayoutGuide.topAnchor)
         let fillsBottom = tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
@@ -404,6 +445,7 @@ final class ProfileEditViewController: UIViewController {
         }
         displayNameField.delegate = self
         noteView.delegate = self
+        configureAddFields()
         lockedSwitch.addAction(UIAction { [weak self] _ in
             guard let self else { return }
             editor.draft?.locked = lockedSwitch.isOn
@@ -591,6 +633,168 @@ final class ProfileEditViewController: UIViewController {
         if let value { editor.draft?.fields[index].value = value }
     }
 
+    // MARK: - 注目のハッシュタグと紹介しているユーザー
+
+    private var canAddFeaturedTag: Bool {
+        guard editor.featuredTagsSource.value != nil else { return false }
+        guard let limit = editor.limits.featuredTags else { return true }
+        return editor.featuredTagNames.count < limit
+    }
+
+    private var currentSectionStates: [Section: SectionState] {
+        func state<Value>(_ source: ProfileEditor.SectionSource<Value>) -> SectionState {
+            switch source {
+            case .loading: .loading
+            case .loaded: .loaded
+            case .failed: .failed
+            }
+        }
+        return [.featuredTags: state(editor.featuredTagsSource), .endorsements: state(editor.endorsementsSource)]
+    }
+
+    /// 読み込みの状態が変わった区切りを作り直す。上限があとから届いて追加の行を出すかが変わったら、その行も出し入れする。
+    private func syncFeaturedSections() {
+        guard isTableLoaded else { return }
+        let states = currentSectionStates
+        let changed = Section.allCases.filter { states[$0] != nil && states[$0] != shownSectionStates[$0] }
+        if !changed.isEmpty {
+            // 区切りごと作り直すと、見出しがほかの区切りと違う大きさで描かれるため、行だけを入れ替える。
+            let oldCounts = changed.map { tableView.numberOfRows(inSection: $0.rawValue) }
+            shownSectionStates = states
+            showsFeaturedTagAddRow = canAddFeaturedTag
+            tableView.performBatchUpdates {
+                for (section, oldCount) in zip(changed, oldCounts) {
+                    let newCount = self.tableView(tableView, numberOfRowsInSection: section.rawValue)
+                    tableView.deleteRows(at: (0 ..< oldCount).map { IndexPath(row: $0, section: section.rawValue) }, with: .fade)
+                    tableView.insertRows(at: (0 ..< newCount).map { IndexPath(row: $0, section: section.rawValue) }, with: .fade)
+                }
+            }
+            return
+        }
+        guard editor.featuredTagsSource.value != nil, showsFeaturedTagAddRow != canAddFeaturedTag else { return }
+        let path = IndexPath(row: editor.featuredTagNames.count, section: Section.featuredTags.rawValue)
+        showsFeaturedTagAddRow = canAddFeaturedTag
+        if showsFeaturedTagAddRow {
+            tableView.insertRows(at: [path], with: .automatic)
+        } else {
+            tableView.deleteRows(at: [path], with: .automatic)
+        }
+    }
+
+    private func configureAddFields() {
+        featuredTagField.placeholder = "ハッシュタグを追加"
+        featuredTagField.accessibilityLabel = "注目のハッシュタグを追加"
+        featuredTagField.completionKinds = [.hashtag]
+        endorsementField.placeholder = "ユーザーを追加"
+        endorsementField.accessibilityLabel = "紹介するユーザーを追加"
+        for field in [featuredTagField, endorsementField] {
+            field.autocapitalizationType = .none
+            field.autocorrectionType = .no
+            field.returnKeyType = .done
+            field.clearButtonMode = .never
+            field.delegate = self
+            field.followGlyphLanguage(of: settings)
+            field.completionKeys = completion(for: field).keys(
+                isShown: { [weak self] in self?.isCompletionListShown == true },
+                growsUpward: { [weak self] in self?.completionList.growsUpward == true }
+            )
+            field.addAction(UIAction { [weak self, weak field] _ in
+                guard let self, let field else { return }
+                completion(for: field).textDidChange(in: field)
+            }, for: .editingChanged)
+        }
+    }
+
+    /// 追加の行を書き始めたら、`#`か`@`を入れて補完を出す。補完は記号から語を読むため。ハッシュタグでは、記号だけで最近使ったタグが出る。
+    private func addFieldDidBeginEditing(_ field: UITextField) {
+        guard field === featuredTagField || field === endorsementField else { return }
+        if field === featuredTagField {
+            // 最近使ったタグとプロフィールに載せているタグを先に読み、記号だけで出せるようにする。
+            textCompletion.completion.prefetch()
+        }
+        guard field.text?.isEmpty ?? true else { return }
+        field.text = field === featuredTagField ? "#" : "@"
+        completion(for: field).textDidChange(in: field)
+    }
+
+    /// 記号だけを残して書くのをやめたら、空に戻してプレースホルダーを見せる。
+    private func addFieldDidEndEditing(_ field: UITextField) {
+        guard field === featuredTagField || field === endorsementField, field.text == "#" || field.text == "@" else { return }
+        field.text = ""
+    }
+
+    /// 追加の行で選んだか打ったタグを足す。足せなかった名前（空、すでにある）は捨てて、続けて足せるよう記号だけに戻す。
+    private func addFeaturedTag(_ raw: String) {
+        let section = Section.featuredTags.rawValue
+        let before = editor.featuredTagNames.count
+        tableView.performBatchUpdates {
+            guard editor.addFeaturedTag(raw) else { return }
+            tableView.insertRows(at: [IndexPath(row: before, section: section)], with: .automatic)
+            // 上限に届いたら、追加の行を消す。消すのは足す前の位置の行。
+            if showsFeaturedTagAddRow, !canAddFeaturedTag {
+                showsFeaturedTagAddRow = false
+                tableView.deleteRows(at: [IndexPath(row: before, section: section)], with: .automatic)
+            }
+        }
+        guard showsFeaturedTagAddRow else { return }
+        featuredTagField.text = "#"
+        textCompletion.textDidChange(in: featuredTagField)
+    }
+
+    private func removeFeaturedTag(at row: Int) {
+        let section = Section.featuredTags.rawValue
+        tableView.performBatchUpdates {
+            editor.removeFeaturedTag(at: row)
+            tableView.deleteRows(at: [IndexPath(row: row, section: section)], with: .automatic)
+            if !showsFeaturedTagAddRow, canAddFeaturedTag {
+                showsFeaturedTagAddRow = true
+                tableView.insertRows(at: [IndexPath(row: editor.featuredTagNames.count, section: section)], with: .automatic)
+            }
+        }
+    }
+
+    /// 追加の行で選んだ人を足し、続けて足せるよう記号だけに戻す。
+    private func addEndorsement(_ account: Account) {
+        let before = editor.endorsedAccounts.count
+        if editor.addEndorsement(account) {
+            tableView.insertRows(at: [IndexPath(row: before, section: Section.endorsements.rawValue)], with: .automatic)
+        }
+        endorsementField.text = "@"
+        endorsementCompletion.textDidChange(in: endorsementField)
+    }
+
+    private func removeEndorsement(at row: Int) {
+        editor.removeEndorsement(at: row)
+        tableView.deleteRows(at: [IndexPath(row: row, section: Section.endorsements.rawValue)], with: .automatic)
+    }
+
+    private func sectionLoadingCell() -> UITableViewCell {
+        let cell = UITableViewCell()
+        var content = cell.defaultContentConfiguration()
+        content.text = "読み込み中"
+        content.textProperties.color = .secondaryLabel
+        cell.contentConfiguration = content
+        let indicator = UIActivityIndicatorView(style: .medium)
+        indicator.startAnimating()
+        cell.accessoryView = indicator
+        cell.editingAccessoryView = indicator
+        cell.selectionStyle = .none
+        return cell
+    }
+
+    /// 読めなかった区切りの行。押すと読み直す。
+    private func sectionFailureCell(_ error: any Error) -> UITableViewCell {
+        let cell = UITableViewCell()
+        var content = UIListContentConfiguration.subtitleCell()
+        content.text = "再読み込み"
+        content.textProperties.color = .tintColor
+        content.secondaryText = "読み込めませんでした。\(ErrorPresentation(error).text)"
+        content.secondaryTextProperties.color = .secondaryLabel
+        content.secondaryTextProperties.font = .preferredFont(forTextStyle: .footnote)
+        cell.contentConfiguration = content
+        return cell
+    }
+
     // MARK: - 補完
 
     private func configureCompletion() {
@@ -602,11 +806,43 @@ final class ProfileEditViewController: UIViewController {
         }
         textCompletion.isLocked = { [weak self] in self?.editor.isSaving ?? true }
         textCompletion.onApply = { [weak self] input in self?.inputDidChange(input) }
+        // 注目のハッシュタグの追加の行で選んだタグは、文字として入れずに行として足し、すでに足したタグは候補に出さない。
+        textCompletion.onSelect = { [weak self] candidate, input in
+            guard let self, input === featuredTagField else { return false }
+            switch candidate {
+            case .hashtag(let tag): addFeaturedTag(tag.name)
+            case .ownHashtag(let tag): addFeaturedTag(tag.name)
+            case .account, .localAccount, .emoji, .standardEmoji: break
+            }
+            return true
+        }
+        textCompletion.completion.hidesCandidate = { [weak self] candidate in
+            guard let self, textCompletion.input === featuredTagField else { return false }
+            let name = switch candidate {
+            case .hashtag(let tag): tag.name
+            case .ownHashtag(let tag): tag.name
+            case .account, .localAccount, .emoji, .standardEmoji: String?.none
+            }
+            guard let name else { return false }
+            return editor.featuredTagNames.contains { Hashtag.normalizedName($0) == Hashtag.normalizedName(name) }
+        }
+        endorsementCompletion.kinds = { _ in [.mention] }
+        endorsementCompletion.isLocked = { [weak self] in self?.editor.isSaving ?? true }
+        endorsementCompletion.onSelect = { [weak self] candidate, _ in
+            if case .account(let account) = candidate {
+                self?.addEndorsement(account)
+            }
+            return true
+        }
+        endorsementCompletion.completion.hidesCandidate = { [weak self] candidate in
+            guard let self, case .account(let account) = candidate else { return false }
+            return editor.endorsedAccounts.contains { $0.id == account.id }
+        }
         completionList.translatesAutoresizingMaskIntoConstraints = false
         completionList.alpha = 0
         completionList.isHidden = true
-        completionList.onSelect = { [weak self] candidate in self?.textCompletion.complete(with: candidate) }
-        completionList.onRetry = { [weak self] in self?.textCompletion.completion.retry() }
+        completionList.onSelect = { [weak self] candidate in self?.activeCompletion.complete(with: candidate) }
+        completionList.onRetry = { [weak self] in self?.activeCompletion.completion.retry() }
         view.addSubview(completionList)
         let top = completionList.topAnchor.constraint(equalTo: view.topAnchor)
         let height = completionList.heightAnchor.constraint(equalToConstant: 0)
@@ -621,8 +857,22 @@ final class ProfileEditViewController: UIViewController {
         observeCompletion()
     }
 
+    /// 書いている入力欄の補完。紹介しているユーザーの追加の行だけ、フォローしている人から探す補完を使う。
+    private var activeCompletion: TextInputCompletion {
+        completion(for: lastFocusedInput)
+    }
+
+    private func completion(for input: (any UITextInput)?) -> TextInputCompletion {
+        input === endorsementField ? endorsementCompletion : textCompletion
+    }
+
     private func observeCompletion() {
         withObservationTracking {
+            // 書いている入力欄が替わると見る補完も替わるので、両方の中身の変化を見る。
+            for completion in [textCompletion.completion, endorsementCompletion.completion] {
+                _ = completion.content
+                _ = completion.selectedIndex
+            }
             updateCompletionList()
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor in self?.observeCompletion() }
@@ -630,6 +880,7 @@ final class ProfileEditViewController: UIViewController {
     }
 
     private func updateCompletionList() {
+        let textCompletion = activeCompletion
         let completion = textCompletion.completion
         let content = completion.content
         if let content, let kind = completion.token?.kind {
@@ -649,7 +900,7 @@ final class ProfileEditViewController: UIViewController {
 
     /// 打っている行のすぐ下に置く。キーボードまでに入りきらなければ、行の上の広い方に置き、入りきらない分は一覧の中でスクロールする。
     private func layoutCompletionList() {
-        guard let completionListTop, let completionListHeight, let caret = textCompletion.caretRect(in: view) else { return }
+        guard let completionListTop, let completionListHeight, let caret = activeCompletion.caretRect(in: view) else { return }
         let spacing: CGFloat = 6
         let wanted = completionList.contentHeight
         let lower = view.keyboardLayoutGuide.layoutFrame.minY - spacing
@@ -719,7 +970,8 @@ final class ProfileEditViewController: UIViewController {
 
     fileprivate func inputDidBeginEditing(_ input: any UITextInput & UIView) {
         lastFocusedInput = input
-        textCompletion.inputDidBeginEditing(input)
+        completion(for: input).inputDidBeginEditing(input)
+        updateCompletionList()
         guard let emojiSheet, !emojiSheet.isClosing else { return }
         emojiSheet.close(notifiesWillClose: false)
     }
@@ -818,6 +1070,16 @@ extension ProfileEditViewController: UITableViewDataSource, UITableViewDelegate 
         switch Section(rawValue: section) {
         case .images, .displayName, .note: 1
         case .fields: fieldRowCount()
+        case .featuredTags:
+            switch editor.featuredTagsSource {
+            case .loading, .failed: 1
+            case .loaded: editor.featuredTagNames.count + (showsFeaturedTagAddRow ? 1 : 0)
+            }
+        case .endorsements:
+            switch editor.endorsementsSource {
+            case .loading, .failed: 1
+            case .loaded: editor.endorsedAccounts.count + 1
+            }
         case .flags: 2
         case nil: 0
         }
@@ -853,6 +1115,27 @@ extension ProfileEditViewController: UITableViewDataSource, UITableViewDelegate 
                 cell.onEndEditing = { [weak self] input in self?.textCompletion.endEditing(in: input) }
             }
             return cell
+        case .featuredTags:
+            if case .failed(let error) = editor.featuredTagsSource {
+                return sectionFailureCell(error)
+            }
+            guard editor.featuredTagsSource.value != nil else { return sectionLoadingCell() }
+            guard let name = editor.featuredTagNames[safe: indexPath.row] else { return featuredTagAddCell }
+            let cell = UITableViewCell()
+            var content = cell.defaultContentConfiguration()
+            content.text = "#\(name)"
+            cell.contentConfiguration = content
+            cell.selectionStyle = .none
+            return cell
+        case .endorsements:
+            if case .failed(let error) = editor.endorsementsSource {
+                return sectionFailureCell(error)
+            }
+            guard editor.endorsementsSource.value != nil else { return sectionLoadingCell() }
+            guard let account = editor.endorsedAccounts[safe: indexPath.row] else { return endorsementAddCell }
+            let cell = tableView.dequeueReusableCell(withIdentifier: ProfileEditAccountCell.reuseIdentifier, for: indexPath)
+            (cell as? ProfileEditAccountCell)?.configure(account: account, avatarShape: settings.appearance.avatarShape, language: settings.glyphLanguageIdentifier())
+            return cell
         case .flags:
             let cell = UITableViewCell()
             // 説明はスイッチごとに、名前の下に小さく出す。
@@ -874,13 +1157,23 @@ extension ProfileEditViewController: UITableViewDataSource, UITableViewDelegate 
         }
     }
 
-    func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+    private func headerTitle(of section: Int) -> String? {
         switch Section(rawValue: section) {
         case .displayName: "表示名"
         case .note: "自己紹介"
         case .fields: "補足情報"
+        case .featuredTags: "注目のハッシュタグ"
+        case .endorsements: "紹介しているユーザー"
         default: nil
         }
+    }
+
+    /// 見出しは、どの区切りも同じ部品で描く。文字だけを返すと、UIKitがあとから足した区切りの見出しを、ほかより大きい太字で描くことがあったため。
+    func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
+        guard let title = headerTitle(of: section) else { return nil }
+        let header = tableView.dequeueReusableHeaderFooterView(withIdentifier: ProfileEditHeader.reuseIdentifier) as? ProfileEditHeader ?? ProfileEditHeader(reuseIdentifier: ProfileEditHeader.reuseIdentifier)
+        header.title = title
+        return header
     }
 
     func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
@@ -888,23 +1181,34 @@ extension ProfileEditViewController: UITableViewDataSource, UITableViewDelegate 
         case .displayName: displayNameFooter
         case .note: noteFooter
         case .fields: fieldsFooter
+        case .featuredTags: featuredTagsFooter
         default: nil
         }
     }
 
     func tableView(_ tableView: UITableView, editingStyleForRowAt indexPath: IndexPath) -> UITableViewCell.EditingStyle {
-        guard Section(rawValue: indexPath.section) == .fields else { return .none }
-        return indexPath.row < (editor.draft?.fields.count ?? 0) ? .delete : .insert
+        switch Section(rawValue: indexPath.section) {
+        case .fields: indexPath.row < (editor.draft?.fields.count ?? 0) ? .delete : .insert
+        case .featuredTags: editor.featuredTagsSource.value != nil && indexPath.row < editor.featuredTagNames.count ? .delete : .none
+        case .endorsements: editor.endorsementsSource.value != nil && indexPath.row < editor.endorsedAccounts.count ? .delete : .none
+        default: .none
+        }
     }
 
     func tableView(_ tableView: UITableView, shouldIndentWhileEditingRowAt indexPath: IndexPath) -> Bool {
-        Section(rawValue: indexPath.section) == .fields
+        switch Section(rawValue: indexPath.section) {
+        case .fields: true
+        case .featuredTags, .endorsements: self.tableView(tableView, editingStyleForRowAt: indexPath) == .delete
+        default: false
+        }
     }
 
     func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
-        switch editingStyle {
-        case .delete: removeField(at: indexPath.row)
-        case .insert: addField()
+        switch (Section(rawValue: indexPath.section), editingStyle) {
+        case (.fields, .delete): removeField(at: indexPath.row)
+        case (.fields, .insert): addField()
+        case (.featuredTags, .delete): removeFeaturedTag(at: indexPath.row)
+        case (.endorsements, .delete): removeEndorsement(at: indexPath.row)
         default: break
         }
     }
@@ -934,13 +1238,29 @@ extension ProfileEditViewController: UITableViewDataSource, UITableViewDelegate 
     }
 
     func tableView(_ tableView: UITableView, shouldHighlightRowAt indexPath: IndexPath) -> Bool {
-        Section(rawValue: indexPath.section) == .fields && indexPath.row == (editor.draft?.fields.count ?? 0)
+        switch Section(rawValue: indexPath.section) {
+        case .fields: indexPath.row == (editor.draft?.fields.count ?? 0)
+        case .featuredTags: if case .failed = editor.featuredTagsSource { true } else { false }
+        case .endorsements: if case .failed = editor.endorsementsSource { true } else { false }
+        default: false
+        }
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        guard Section(rawValue: indexPath.section) == .fields, indexPath.row == (editor.draft?.fields.count ?? 0) else { return }
-        addField()
+        switch Section(rawValue: indexPath.section) {
+        case .fields:
+            guard indexPath.row == (editor.draft?.fields.count ?? 0) else { return }
+            addField()
+        case .featuredTags:
+            guard case .failed = editor.featuredTagsSource else { return }
+            Task(.action) { [editor] in await editor.loadFeaturedTags() }
+        case .endorsements:
+            guard case .failed = editor.endorsementsSource else { return }
+            Task(.action) { [editor] in await editor.loadEndorsements() }
+        default:
+            return
+        }
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
@@ -954,14 +1274,16 @@ extension ProfileEditViewController: UITextFieldDelegate, UITextViewDelegate {
     func textFieldDidBeginEditing(_ textField: UITextField) {
         guard let field = textField as? ProfileEditTextField else { return }
         inputDidBeginEditing(field)
+        addFieldDidBeginEditing(field)
     }
 
     func textFieldDidEndEditing(_ textField: UITextField) {
-        textCompletion.endEditing(in: textField)
+        completion(for: textField).endEditing(in: textField)
+        addFieldDidEndEditing(textField)
     }
 
     func textFieldDidChangeSelection(_ textField: UITextField) {
-        textCompletion.selectionDidChange(in: textField)
+        completion(for: textField).selectionDidChange(in: textField)
     }
 
     func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
@@ -969,6 +1291,18 @@ extension ProfileEditViewController: UITextFieldDelegate, UITextViewDelegate {
     }
 
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        if textField === featuredTagField {
+            // 候補を選ばずに確定しても、打った名前で足す。
+            addFeaturedTag(textField.text ?? "")
+            return false
+        }
+        if textField === endorsementField {
+            // サーバーはフォローしている人しか受け付けないので、候補から選んだときだけ足す。
+            if let candidate = endorsementCompletion.completion.selectedCandidate {
+                endorsementCompletion.complete(with: candidate)
+            }
+            return false
+        }
         noteView.becomeFirstResponder()
         return false
     }

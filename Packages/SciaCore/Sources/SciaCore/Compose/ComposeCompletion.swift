@@ -193,12 +193,22 @@ public final class ComposeCompletion {
     public private(set) var isLoading = false
     private var failureMessage: String?
     /// ハードウェアキーボードで選んでいる候補。
-    public private(set) var selectedIndex = 0
+    private var storedSelectedIndex = 0
+    /// 出す候補の中での位置。出さない候補を除いた数に収める。
+    public var selectedIndex: Int {
+        min(storedSelectedIndex, max(selectableCandidates.count - 1, 0))
+    }
     public var settings: Settings
+    /// 出さない候補。プロフィールの編集の追加の行で、すでに足したタグや人を候補から除くのに使う。
+    @ObservationIgnored public var hidesCandidate: (CompletionCandidate) -> Bool = { _ in false }
 
     /// 出すもの。出さないならnil。
     public var content: Content? {
         guard let token, !isDismissed else { return nil }
+        let candidates = candidates.filter { !hidesCandidate($0) }
+        // 出さない候補しかなければ、「一致しない」と出さずに閉じておく。すでに足したものを打ったときに、ないように見せないため。
+        // 失敗と読み込み中は、押して読み直せるよう、候補の場所で知らせ続ける。
+        if candidates.isEmpty, !self.candidates.isEmpty, failureMessage == nil, !isLoading { return nil }
         // 手元の候補だけを出す間は、合うものがなければ何も出さない。「一致しない」と出すと、記号を打つたびに一覧が出るため。
         // 日本語の文の`：`かもしれない語も、合うものがなければ、読み込み中や失敗も含めて何も出さない。文を書くたびに一覧が出るため。
         if !searchesServer(token) || token.mayBeProse, candidates.isEmpty { return nil }
@@ -236,6 +246,8 @@ public final class ComposeCompletion {
     @ObservationIgnored private var featuredTags: [FeaturedTag]?
     @ObservationIgnored private var recentTags: [Hashtag]?
     @ObservationIgnored private var ownTagsTask: Task<Void, Never>?
+    /// 自分のタグを忘れた回数。忘れる前に読み始めた応答で、古いタグに戻さない。
+    @ObservationIgnored private var ownTagsGeneration = 0
     /// 自分のタグを読んでいる間はtrue。テストで、読み終えて候補に混ぜ直すまで待つ。
     var isLoadingOwnTags: Bool { ownTagsTask != nil }
     /// 始めた検索のうち、取り消されたものも含めて終えた数。テストで、取り消した検索が終わるまで待つ。
@@ -292,7 +304,7 @@ public final class ComposeCompletion {
             return
         }
         isDismissed = false
-        selectedIndex = 0
+        storedSelectedIndex = 0
         if previous?.kind != new.kind {
             candidates = []
         }
@@ -334,7 +346,7 @@ public final class ComposeCompletion {
     public func moveSelection(by offset: Int) {
         let candidates = selectableCandidates
         guard !candidates.isEmpty else { return }
-        selectedIndex = min(max(selectedIndex + offset, 0), candidates.count - 1)
+        storedSelectedIndex = min(max(selectedIndex + offset, 0), candidates.count - 1)
     }
 
     /// 失敗の表示を押したら、問い合わせ直す。
@@ -357,6 +369,15 @@ public final class ComposeCompletion {
         }
     }
 
+    /// 自分のタグを忘れ、次に書き始めたときに読み直す。プロフィールに載せるタグを変えたあとに呼ぶ。
+    /// 最近使ったタグも忘れるのは、サーバーがプロフィールに載せているタグを除いて返すため。
+    public func forgetOwnTags() {
+        ownTagsGeneration += 1
+        ownTagsTask = nil
+        featuredTags = nil
+        recentTags = nil
+    }
+
     private func clear() {
         searchTask?.cancel()
         searchTask = nil
@@ -365,7 +386,7 @@ public final class ComposeCompletion {
         candidates = []
         isLoading = false
         failureMessage = nil
-        selectedIndex = 0
+        storedSelectedIndex = 0
     }
 
     private func load() {
@@ -481,7 +502,7 @@ public final class ComposeCompletion {
     private func show(_ candidates: [CompletionCandidate]) {
         self.candidates = candidates
         isLoading = false
-        selectedIndex = min(selectedIndex, max(candidates.count - 1, 0))
+        storedSelectedIndex = min(selectedIndex, max(candidates.count - 1, 0))
     }
 
     /// 届いた応答が今の語のものなら出す。語が変わっていれば、覚えるだけで出さない。
@@ -501,7 +522,7 @@ public final class ComposeCompletion {
         searchTask = nil
         // 合う手元の候補は、検索が失敗しても選べるまま残す。
         candidates = Array(localCandidates().prefix(settings.limit))
-        selectedIndex = min(selectedIndex, max(candidates.count - 1, 0))
+        storedSelectedIndex = min(selectedIndex, max(candidates.count - 1, 0))
         isLoading = false
         failureMessage = Self.failureMessage(for: error)
     }
@@ -550,7 +571,7 @@ public final class ComposeCompletion {
         guard let token, token.kind == .emoji else { return }
         // Unicodeの絵文字の候補は、失敗の上に残して選べるようにする。
         candidates = emojiCandidates(for: token)
-        selectedIndex = min(selectedIndex, max(candidates.count - 1, 0))
+        storedSelectedIndex = min(selectedIndex, max(candidates.count - 1, 0))
         isLoading = false
         failureMessage = Self.failureMessage(for: error)
     }
@@ -560,13 +581,15 @@ public final class ComposeCompletion {
         guard ownTagsTask == nil else { return }
         let loadsFeatured = featuredTags == nil
         let loadsRecent = recentTags == nil
+        let generation = ownTagsGeneration
         ownTagsTask = Task { [weak self, sources] in
             let (featuredResult, recentResult) = await RequestPurpose.$current.withValue(.display) {
                 async let featured = Self.result(loadsFeatured ? sources.featuredTags : nil)
                 async let recent = Self.result(loadsRecent ? sources.recentTags : nil)
                 return await (featured, recent)
             }
-            self?.didLoadOwnTags(featured: featuredResult, recent: recentResult)
+            guard let self, generation == ownTagsGeneration else { return }
+            didLoadOwnTags(featured: featuredResult, recent: recentResult)
         }
     }
 
@@ -641,7 +664,7 @@ public final class ComposeCompletion {
     private func showWhileLoading(_ own: [CompletionCandidate]) {
         guard !own.isEmpty else { return }
         candidates = Array(own.prefix(settings.limit))
-        selectedIndex = min(selectedIndex, candidates.count - 1)
+        storedSelectedIndex = min(selectedIndex, candidates.count - 1)
     }
 
     private nonisolated static func isCancellation(_ error: any Error) -> Bool {

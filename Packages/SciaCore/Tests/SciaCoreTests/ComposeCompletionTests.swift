@@ -49,7 +49,7 @@ struct ComposeCompletionTests {
             if failsOwnTags {
                 throw URLError(.notConnectedToInternet)
             }
-            return [FeaturedTag(name: "猫写真", statusesCount: 10), FeaturedTag(name: "今日の猫", statusesCount: 300)]
+            return [FeaturedTag(id: "1", name: "猫写真", statusesCount: 10), FeaturedTag(id: "2", name: "今日の猫", statusesCount: 300)]
         }
 
         func recent() -> [Hashtag] {
@@ -414,7 +414,7 @@ struct ComposeCompletionTests {
     /// 自分のタグは、先頭一致を部分一致より先に、同じ一致の中ではプロフィールのタグ（投稿の多い順）を最近使ったタグより先に並べる。
     @Test func ordersOwnHashtags() {
         let tags = OwnHashtag.list(
-            featured: [FeaturedTag(name: "猫写真", statusesCount: 10), FeaturedTag(name: "今日の猫", statusesCount: 300), FeaturedTag(name: "猫鍋", statusesCount: 50)],
+            featured: [FeaturedTag(id: "3", name: "猫写真", statusesCount: 10), FeaturedTag(id: "4", name: "今日の猫", statusesCount: 300), FeaturedTag(id: "5", name: "猫鍋", statusesCount: 50)],
             recent: [Hashtag(name: "猫"), Hashtag(name: "猫写真"), Hashtag(name: "犬")]
         )
         #expect(OwnHashtag.matching("猫", in: tags).map(\.name) == ["猫鍋", "猫写真", "猫", "今日の猫"])
@@ -469,6 +469,75 @@ struct ComposeCompletionTests {
         await server.setFailsOwnTags(false)
         completion.prefetch()
         try await waitUntil { await server.ownTagRequests == 2 }
+    }
+
+    /// プロフィールに載せるタグを変えたら、持っている自分のタグを忘れ、次に書き始めたときに読み直す。忘れる前に読み始めた応答では戻さない。
+    @Test func forgetOwnTagsReloadsOnNextPrefetch() async throws {
+        let completion = makeCompletion()
+        completion.prefetch()
+        try await waitUntil { !completion.isLoadingOwnTags }
+        completion.prefetch()
+        #expect(!completion.isLoadingOwnTags)
+
+        completion.forgetOwnTags()
+        completion.textDidChange(hashtag("猫"))
+        try await waitUntil { !completion.isLoading }
+        #expect(accts(completion.content) == ["#猫", "#猫写真", "#猫2"])
+        completion.prefetch()
+        try await waitUntil { !completion.isLoadingOwnTags }
+
+        #expect(await server.ownTagRequests == 2)
+    }
+
+    /// 出さない候補は、出す中身からも、Tab・Returnで確定する候補からも除く。
+    @Test func hiddenCandidatesAreNotShownOrSelected() async throws {
+        let completion = makeCompletion()
+        completion.prefetch()
+        try await waitUntil { !completion.isLoadingOwnTags }
+        completion.hidesCandidate = { candidate in
+            if case .ownHashtag(let tag) = candidate { return tag.name == "猫写真" }
+            return false
+        }
+
+        completion.textDidChange(hashtag("猫"))
+        try await waitUntil { !completion.isLoading }
+
+        #expect(accts(completion.content) == ["#猫", "#今日の猫", "#猫2"])
+        #expect(completion.selectedCandidate?.id == "hashtag:猫")
+    }
+
+    /// 出さない候補しかなければ、「一致しない」を出さずに一覧を出さない。選んでいる位置は、出す候補の中に収める。
+    @Test func hiddenOnlyCandidatesShowNothingAndSelectionStaysInside() async throws {
+        let completion = makeCompletion()
+        completion.textDidChange(hashtag("猫"))
+        try await waitUntil { !completion.isLoading }
+        completion.moveSelection(by: 2)
+        #expect(completion.selectedCandidate?.id == "hashtag:猫2")
+
+        completion.hidesCandidate = { $0.id != "hashtag:猫" }
+        completion.textDidChange(hashtag("猫"))
+        #expect(completion.selectedCandidate?.id == "hashtag:猫")
+
+        completion.hidesCandidate = { _ in true }
+        completion.textDidChange(hashtag("猫"))
+        #expect(completion.content == nil)
+    }
+
+    /// 出さない候補しかなくても、検索に失敗したことは知らせ、押して読み直せるようにする。
+    @Test func hiddenOnlyCandidatesStillShowFailure() async throws {
+        let completion = makeCompletion()
+        completion.prefetch()
+        try await waitUntil { !completion.isLoadingOwnTags }
+        await server.setFailingHashtags(["猫"])
+        completion.hidesCandidate = { _ in true }
+
+        completion.textDidChange(hashtag("猫"))
+        try await waitUntil { !completion.isLoading }
+
+        guard case .failed = completion.content else {
+            Issue.record("失敗を知らせていません: \(String(describing: completion.content))")
+            return
+        }
     }
 
     /// 前の語の候補で下を選んでいる間に、少ない自分のタグが届いても、選んでいる位置を候補の中に収める。

@@ -56,4 +56,47 @@ struct HashtagMenuTreeTests {
 
         #expect(MenuNodeTests.describe(await load()) == "ミュートを読み込めませんでした(押せない)")
     }
+
+    private func featureActions(known: Bool?, recorder: Recorder = Recorder(), load: @escaping @MainActor (String) async throws -> Bool = { _ in false }) -> HashtagMenuActions {
+        HashtagMenuActions(mute: nil, feature: HashtagFeatureActions(known: { _ in known }, refresh: { recorder.refreshes += 1 }, load: load, feature: { _ in }, unfeature: { _ in }))
+    }
+
+    /// 「プロフィールで紹介する」は、覚えている自分の注目のハッシュタグで、その場で載せているかを決め、載せていれば「プロフィールから外す」にする。
+    /// まだ読めていなければ、読んでから決める。どちらでも、メニューを組むたびに読み直す。
+    @Test func featureUsesKnownTagsAndRefreshes() async throws {
+        let recorder = Recorder()
+        func describe(_ known: Bool?) throws -> String {
+            let tree = HashtagMenuTree(name: "cat", url: nil, account: nil, linkBrowser: .inApp, actions: featureActions(known: known, recorder: recorder))
+            return MenuNodeTests.describe(try #require(tree.menu(groups: .single(.feature))).children)
+        }
+
+        #expect(try describe(true) == "プロフィールから外す")
+        #expect(try describe(false) == "プロフィールで紹介する")
+        #expect(try describe(nil) == "…")
+        #expect(recorder.refreshes == 3)
+    }
+
+    /// 読んでから決めるときは、読んだ一覧で載せているかを決める。読めなかったら、押せない行で知らせる。
+    @Test func featureDecidesAfterLoadingOrShowsFailure() async throws {
+        func loaded(_ load: @escaping @MainActor (String) async throws -> Bool) async throws -> String {
+            let tree = HashtagMenuTree(name: "cat", url: nil, account: nil, linkBrowser: .inApp, actions: featureActions(known: nil, load: load))
+            let menu = try #require(tree.menu(groups: .single(.feature)))
+            guard case .deferred(let load) = try #require(menu.flattenedChildren.first).content else {
+                Issue.record("読み込み中の行になっていません")
+                return ""
+            }
+            return MenuNodeTests.describe(await load())
+        }
+
+        #expect(try await loaded { _ in true } == "プロフィールから外す")
+        #expect(try await loaded { _ in throw URLError(.notConnectedToInternet) } == "注目のハッシュタグを読み込めませんでした(押せない)")
+    }
+
+    /// 載せているかは、サーバーと同じ決まりでそろえた名前で比べる。
+    @Test func featuredTagsMatchNormalizedName() {
+        let tags = [FeaturedTag(id: "1", name: "Cat", statusesCount: 3)]
+
+        #expect(tags.first(named: "cat")?.id == "1")
+        #expect(tags.first(named: "dog") == nil)
+    }
 }

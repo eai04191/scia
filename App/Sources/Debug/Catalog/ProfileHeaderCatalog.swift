@@ -67,6 +67,20 @@ enum ProfileHeaderCatalog {
     }
 
     /// 3行に収まらない自己紹介。「さらに表示」を押すと、その場で全文に広がる。
+    private static let featuredTags: [FeaturedTag] = [
+        FeaturedTag(id: "1", name: "nowplaying", statusesCount: 1_234),
+        FeaturedTag(id: "2", name: "猫写真", statusesCount: 312),
+        FeaturedTag(id: "3", name: "とても長いハッシュタグの名前で画面の幅を超えてしまうもの", statusesCount: 0),
+        FeaturedTag(id: "4", name: "scia", statusesCount: 5),
+    ]
+
+    private static let endorsedAccounts: [Account] = [
+        Fixtures.account(displayName: "アリス", acct: "alice"),
+        Fixtures.account(displayName: "とても長い表示名で名前の欄に入りきらない人", acct: "a_very_long_username@a.very.long.server.name.example"),
+        Fixtures.account(displayName: "", acct: "noname@remote.example"),
+        Fixtures.account(displayName: "ボブ", acct: "bob@remote.example", avatar: nil),
+    ]
+
     private static let longNoteAccount = Fixtures.account(
         displayName: "長い自己紹介のアカウント",
         acct: "long@remote.example",
@@ -118,6 +132,15 @@ enum ProfileHeaderCatalog {
             CatalogState(title: "メディアのタブ、角丸のアイコン") { header(fullAccount, .following, tab: .media, avatarShape: .roundedSquare) },
             CatalogState(title: "固定された投稿の棚（長い本文、添付ファイル、閲覧注意の警告、閲覧注意の添付ファイル、短い本文）") {
                 header(fullAccount, .following, pinned: pinnedStatuses)
+            },
+            CatalogState(title: "注目のハッシュタグと紹介しているユーザー、固定された投稿（長い名前、多い投稿の数、すべて見る）") {
+                header(fullAccount, .following, pinned: pinnedStatuses, featuredTags: featuredTags, endorsements: endorsedAccounts, hasMoreEndorsements: true)
+            },
+            CatalogState(title: "注目のハッシュタグが1つだけで、紹介しているユーザーなし") {
+                header(fullAccount, .following, featuredTags: Array(featuredTags.prefix(1)))
+            },
+            CatalogState(title: "紹介しているユーザーが1人だけで、注目のハッシュタグなし") {
+                header(fullAccount, .following, endorsements: Array(endorsedAccounts.prefix(1)))
             },
             CatalogState(title: "固定された投稿が1件") { header(fullAccount, .following, pinned: Array(pinnedStatuses.prefix(1))) },
             CatalogState(title: "フィルターに一致した固定された投稿（1つ目が警告、2つ目がぼかし）") {
@@ -287,6 +310,9 @@ enum ProfileHeaderCatalog {
         postsFilter: ProfilePostsFilter = .standard,
         avatarShape: AvatarShape = .circle,
         pinned: [Status] = [],
+        featuredTags: [FeaturedTag] = [],
+        endorsements: [Account] = [],
+        hasMoreEndorsements: Bool = false,
         privateNote: String = "",
         configure: (ProfileHeaderView) -> Void = { _ in }
     ) -> UIView {
@@ -323,6 +349,14 @@ enum ProfileHeaderCatalog {
             statuses.map { ProfileShelfItem(status: $0, verdict: filtering.verdict(for: $0)) }
         }
         header.setPinned(items(pinned), glyphLanguage: content.glyphLanguage)
+        _ = header.setFeatured(tags: featuredTags, endorsements: ProfileEndorsementsShelfView.Content(
+            accounts: endorsements,
+            hasMore: hasMoreEndorsements,
+            avatarShape: avatarShape,
+            animatesAvatars: false,
+            animatesCustomEmojis: false,
+            glyphLanguage: content.glyphLanguage
+        ))
         header.onToggleFollow = { [weak header] _ in
             content = content.replacing(followState: nextFollowState(after: content.followState, locked: account.locked))
             header?.apply(content)

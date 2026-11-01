@@ -22,6 +22,10 @@ struct ConfirmationTests {
         #expect(Confirmation.relationChange(.cancelFollowRequest, acct: "bob")?.buttons.last?.title == "リクエストを取り消す")
         #expect(Confirmation.relationChange(.follow, acct: "bob") == nil)
         #expect(Confirmation.relationChange(.unblock, acct: "bob") == nil)
+        #expect(Confirmation.relationChange(.endorse(true), acct: "bob") == nil)
+        #expect(Confirmation.relationChange(.endorse(false), acct: "bob") == nil)
+        // 紹介している相手のフォローを外すと、サーバーは紹介も消すので、そのことを添える。
+        #expect(Confirmation.relationChange(.unfollow, acct: "bob", endorsed: true)?.message == "プロフィールでの紹介も外れます。")
     }
 
     /// プロフィールのフォローのボタンは、状態から送る変更を決め、ユーザーのメニューと同じ確認を使う。

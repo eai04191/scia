@@ -1,8 +1,8 @@
-/// ユーザーのメニューの、相手との関係で中身が変わる項目（フォロー、フォローの設定、メモ、ミュート、ブロック）。決まりはdocs/menus.mdの「ユーザーのメニュー」にある。
+/// ユーザーのメニューの、相手との関係で中身が変わる項目（フォロー、フォローの設定、プロフィールで紹介、メモ、ミュート、ブロック）。決まりはdocs/menus.mdの「ユーザーのメニュー」にある。
 extension UserMenuItem {
     public var isRelation: Bool {
         switch self {
-        case .follow, .showReblogs, .notify, .note, .mute, .block, .report: true
+        case .follow, .showReblogs, .notify, .endorse, .note, .mute, .block, .report: true
         case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .addToList, .customize: false
         }
     }
@@ -28,6 +28,8 @@ public enum UserRelationChange: Sendable {
     case cancelFollowRequest
     case showReblogs(Bool)
     case notify(Bool)
+    /// 自分のプロフィールで紹介するか。
+    case endorse(Bool)
     /// nilなら解除するまで続ける。
     case mute(Duration?)
     case unmute
@@ -52,7 +54,7 @@ extension UserRelationChange {
     public var changesFollow: Bool {
         switch self {
         case .follow, .unfollow, .cancelFollowRequest, .block: true
-        case .showReblogs, .notify, .mute, .unmute, .unblock: false
+        case .showReblogs, .notify, .endorse, .mute, .unmute, .unblock: false
         }
     }
 
@@ -64,6 +66,7 @@ extension UserRelationChange {
         case .cancelFollowRequest: "リクエストを取り消しました"
         case .showReblogs(let shows): shows ? "ブーストを表示します" : "ブーストを表示しません"
         case .notify(let notifies): notifies ? "投稿を通知します" : "投稿を通知しません"
+        case .endorse(let endorses): endorses ? "プロフィールで紹介しました" : "プロフィールから外しました"
         case .mute: "ミュートしました"
         case .unmute: "ミュートを解除しました"
         case .block: "ブロックしました"
@@ -75,6 +78,7 @@ extension UserRelationChange {
         switch self {
         case .follow, .unfollow, .cancelFollowRequest: "フォローを変更できませんでした"
         case .showReblogs, .notify: "フォローの設定を変更できませんでした"
+        case .endorse: "プロフィールでの紹介を変更できませんでした"
         case .mute, .unmute: "ミュートを変更できませんでした"
         case .block, .unblock: "ブロックを変更できませんでした"
         }

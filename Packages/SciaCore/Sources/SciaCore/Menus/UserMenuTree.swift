@@ -244,7 +244,7 @@ public struct UserMenuTree {
             case .addToList:
                 guard tree.actions != nil else { return [] }
                 return [.action(inSubmenu ? item.title : "@\(subject.acct)をリストに追加", icon: .symbol(item.symbolName), .addToList)]
-            case .follow, .showReblogs, .notify, .note, .mute, .block, .report:
+            case .follow, .showReblogs, .notify, .endorse, .note, .mute, .block, .report:
                 guard let actions = tree.actions, let load else { return [] }
                 return tree.relationNodes(item, actions: actions, load: load, failureSlots: failureSlots)
             case .customize:
@@ -375,6 +375,10 @@ extension UserMenuTree {
         case .notify:
             guard !blocked, followsOrRequests else { return [] }
             return [node(item.title, "bell", isSelected: relationship.notifying, .notify(!relationship.notifying))]
+        case .endorse:
+            // サーバーは、フォローしていない相手の紹介を断る。リクエスト中もまだフォローしていない。
+            guard !blocked, relationship.following else { return [] }
+            return [node(relationship.endorsed ? "プロフィールから外す" : "プロフィールで紹介する", item.symbolName, .endorse(!relationship.endorsed))]
         case .note:
             // ブロックしていてもメモは書ける。
             return [.action(relationship.note.isEmpty ? item.title : "メモを編集", icon: .symbol(item.symbolName), .editNote(relation))]

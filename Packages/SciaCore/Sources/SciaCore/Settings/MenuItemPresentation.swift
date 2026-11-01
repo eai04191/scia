@@ -132,6 +132,7 @@ extension UserMenuItem: MenuItemContentProviding {
         case .addToList: .own(title: "リストに追加", symbolName: "text.badge.plus", note: "どのリストに入れるかを選びます。フォローしていない人は、フォローしてから入れます")
         case .showReblogs: .own(title: "ブーストを表示", symbolName: "arrow.2.squarepath", note: "フォローしている相手でだけ出ます")
         case .notify: .own(title: "投稿を通知", symbolName: "bell", note: "フォローしている相手でだけ出ます")
+        case .endorse: .own(title: "プロフィールで紹介", symbolName: "person.text.rectangle", note: "自分のプロフィールで紹介します。紹介していれば外します。フォローしている相手でだけ出ます")
         case .note: .own(title: "メモを追加", symbolName: "note.text", note: "自分にしか見えないメモを書きます。メモがあれば編集します。自分には出ません")
         case .mute: .own(title: "ミュート", symbolName: "speaker.slash", note: "期間を選んでミュートします。ミュート中なら解除します")
         case .block: .own(title: "ブロック", symbolName: "hand.raised", note: "ブロック中なら解除します")
@@ -188,6 +189,7 @@ extension HashtagMenuItem: MenuItemContentProviding {
         switch self {
         case .timeline: .own(title: "すべての投稿", symbolName: "number", note: "ハッシュタグのタイムラインを開きます。ハッシュタグをタップしたときと同じです")
         case .mute: .own(title: "ミュート", symbolName: "speaker.slash", note: "このハッシュタグの付いた投稿を、サーバーのフィルターで隠します。ミュート中なら解除します")
+        case .feature: .own(title: "プロフィールで紹介", symbolName: "person.text.rectangle", note: "自分のプロフィールの注目のハッシュタグに載せます。載せていれば外します")
         case .accountStatuses: .own(title: "投稿したユーザーの投稿", symbolName: "person.crop.square", note: "このハッシュタグの付いた、投稿したユーザーの投稿を開きます。プロフィールではその人の投稿です。メニューでは「@名前の投稿」と出ます")
         case .openInBrowser: .url(.openInBrowser)
         case .openInDefaultBrowser: .url(.openInDefaultBrowser)

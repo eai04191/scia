@@ -85,7 +85,7 @@ struct StatusMenuTests {
 
         let outline = try outline(menu(for: .status(status(url: nil)), userMenuActions: actions))
 
-        #expect(outline.dropLast().last == ["@alice[プロフィール,メンション,…,…,リストに追加,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,通報,カスタマイズ]]"])
+        #expect(outline.dropLast().last == ["@alice[プロフィール,メンション,…,…,リストに追加,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,…,通報,カスタマイズ]]"])
     }
 
     /// 人の一覧の行の長押しでは、その人のサブメニュー1つだけのメニューにせず、項目を直接並べる。

@@ -203,6 +203,7 @@ public struct MastodonClient: Sendable {
                     let maxProfileFields: ServerLimit?
                     let profileFieldNameLimit: ServerLimit?
                     let profileFieldValueLimit: ServerLimit?
+                    let maxFeaturedTags: ServerLimit?
                 }
                 struct Polls: Decodable {
                     let maxOptions: ServerLimit?
@@ -245,7 +246,8 @@ public struct MastodonClient: Sendable {
                 note: configuration.accounts?.maxNoteLength?.value ?? ProfileLimits.beforeMastodon46.note,
                 fields: configuration.accounts?.maxProfileFields?.value ?? ProfileLimits.beforeMastodon46.fields,
                 fieldName: configuration.accounts?.profileFieldNameLimit?.value ?? ProfileLimits.beforeMastodon46.fieldName,
-                fieldValue: configuration.accounts?.profileFieldValueLimit?.value ?? ProfileLimits.beforeMastodon46.fieldValue
+                fieldValue: configuration.accounts?.profileFieldValueLimit?.value ?? ProfileLimits.beforeMastodon46.fieldValue,
+                featuredTags: configuration.accounts?.maxFeaturedTags?.value
             ),
             pollLimits: Self.pollLimits(configuration.polls.map { ($0.maxOptions?.value, $0.maxCharactersPerOption?.value, $0.minExpiration?.value, $0.maxExpiration?.value) }),
             // 上限はサーバーごとに変えられていることが多いので、返さない項目をMastodonの既定値で補わない。
@@ -834,6 +836,7 @@ public struct MastodonClient: Sendable {
     /// https://docs.joinmastodon.org/methods/accounts/#followers
     /// https://docs.joinmastodon.org/methods/accounts/#following
     /// https://docs.joinmastodon.org/methods/lists/#accounts
+    /// https://docs.joinmastodon.org/methods/accounts/#endorsements
     public func accounts(in list: AccountListKind, maxID: String?, limit: Int) async throws -> AccountListPage {
         let path = switch list {
         case .favouritedBy(let statusID): "api/v1/statuses/\(statusID)/favourited_by"
@@ -841,6 +844,7 @@ public struct MastodonClient: Sendable {
         case .followers(let accountID): "api/v1/accounts/\(accountID)/followers"
         case .following(let accountID): "api/v1/accounts/\(accountID)/following"
         case .listMembers(let listID): "api/v1/lists/\(listID)/accounts"
+        case .endorsements(let accountID): "api/v1/accounts/\(accountID)/endorsements"
         }
         let query = [URLQueryItem(name: "limit", value: String(limit))] + (maxID.map { [URLQueryItem(name: "max_id", value: $0)] } ?? [])
         let (accounts, response) = try await get(ElementList<Account>.self, path: path, query: query)
@@ -885,12 +889,16 @@ public struct MastodonClient: Sendable {
     /// `api/v2/search`の`type=accounts`もサーバーの中では同じ検索をするが、アカウントだけを返す専用の口で、web UIの補完と同じこちらを使う。
     /// 打っている途中の問い合わせなので、一時的な失敗でも送り直さない。待つより、次に打った文字で問い合わせ直すほうが早い。
     /// https://docs.joinmastodon.org/methods/accounts/#search
-    public func searchAccountsForCompletion(_ query: String, limit: Int) async throws -> [Account] {
-        let items = [
+    /// - Parameter following: フォローしている人だけから探す。
+    public func searchAccountsForCompletion(_ query: String, limit: Int, following: Bool = false) async throws -> [Account] {
+        var items = [
             URLQueryItem(name: "q", value: query),
             URLQueryItem(name: "resolve", value: "false"),
             URLQueryItem(name: "limit", value: "\(limit)"),
         ]
+        if following {
+            items.append(URLQueryItem(name: "following", value: "true"))
+        }
         return try await get(ElementList<Account>.self, path: "api/v1/accounts/search", query: items, retries: false).0.elements
     }
 
@@ -947,6 +955,59 @@ public struct MastodonClient: Sendable {
     /// https://docs.joinmastodon.org/methods/featured_tags/#get
     public func featuredTags() async throws -> [FeaturedTag] {
         try await get(ElementList<FeaturedTag>.self, path: "api/v1/featured_tags", query: []).0.elements
+    }
+
+    /// アカウントがプロフィールに載せているハッシュタグ。サーバーが返した順。
+    /// https://docs.joinmastodon.org/methods/accounts/#featured_tags
+    public func featuredTags(of accountID: String) async throws -> [FeaturedTag] {
+        try await get(ElementList<FeaturedTag>.self, path: "api/v1/accounts/\(accountID)/featured_tags", query: []).0.elements
+    }
+
+    /// ハッシュタグを自分のプロフィールに載せる。上限を超えたときや、載せているタグをもう一度載せたときは、サーバーが422を返す。
+    /// 二重に載せようとして断られないよう、一時的な失敗でも送り直さない。
+    /// https://docs.joinmastodon.org/methods/featured_tags/#feature
+    public func featureTag(_ name: String) async throws -> FeaturedTag {
+        try await send(formRequest(method: "POST", path: "api/v1/featured_tags", form: [URLQueryItem(name: "name", value: name)]), decoding: FeaturedTag.self, retries: false).0
+    }
+
+    /// ハッシュタグを自分のプロフィールから外す。`id`は`FeaturedTag`のID。外したものをもう一度外すと、サーバーは404を返す。
+    /// https://docs.joinmastodon.org/methods/featured_tags/#unfeature
+    public func unfeatureTag(_ id: String) async throws {
+        var request = URLRequest(url: credential.instance.appending(path: "api/v1/featured_tags/\(id)"))
+        request.httpMethod = "DELETE"
+        _ = try await send(request)
+    }
+
+    /// 自分のプロフィールで紹介しているアカウントをすべて返す。続きを`Link`ヘッダーで読み、最後まで読み切ってから返す。途中で読めなければ投げる。
+    /// 1回に読める件数の上限は80件。
+    /// https://docs.joinmastodon.org/methods/endorsements/#get
+    public func endorsements() async throws -> [Account] {
+        var accounts: [Account] = []
+        var maxID: String?
+        var readMaxIDs: Set<String> = []
+        repeat {
+            let query = [URLQueryItem(name: "limit", value: "80")] + (maxID.map { [URLQueryItem(name: "max_id", value: $0)] } ?? [])
+            let (page, response) = try await get(ElementList<Account>.self, path: "api/v1/endorsements", query: query)
+            accounts += page.elements
+            let next = response.value(forHTTPHeaderField: "Link").map(LinkHeader.init)?.queryValue("max_id", of: "next")
+            // 読んだ位置を返すサーバー（同じ位置を返し続ける、位置が循環する）で、同じページを読み続けないよう止める。
+            if let maxID { readMaxIDs.insert(maxID) }
+            maxID = next.flatMap { readMaxIDs.contains($0) || page.elements.isEmpty ? nil : $0 }
+        } while maxID != nil
+        return accounts
+    }
+
+    /// 相手を自分のプロフィールで紹介する。フォローしていない相手は、サーバーが422で断る。
+    /// Mastodon 4.4で`endorse`に名前が変わったが、`pin`は同じ処理の別名として残っていて、4.4より前のサーバーにもあるため、こちらで送る。
+    /// https://docs.joinmastodon.org/methods/accounts/#pin
+    public func endorse(_ id: String) async throws -> Relationship {
+        try await post(Relationship.self, path: "api/v1/accounts/\(id)/pin", form: []).0
+    }
+
+    /// 相手をプロフィールの紹介から外す。`endorse`と同じく、どの版にもある古い名前で送る。
+    /// https://docs.joinmastodon.org/methods/accounts/#unpin
+    public func unendorse(_ id: String) async throws -> Relationship {
+        try await post(Relationship.self, path: "api/v1/accounts/\(id)/unpin", form: []).0
     }
 
     /// 最近使ったハッシュタグ（最大10件）。補完で、自分のタグとして先に出す。
@@ -1377,6 +1438,8 @@ public enum AccountListKind: Hashable, Sendable {
     case rebloggedBy(Status.ID)
     /// アカウントのフォロワー。
     case followers(accountID: String)
+    /// アカウントがプロフィールで紹介している人。Mastodon 4.4から。
+    case endorsements(accountID: String)
     /// アカウントがフォローしている人。
     case following(accountID: String)
     /// 自分のリストのメンバー。

@@ -10,6 +10,10 @@ public enum HashtagMenuCommand: Equatable, Sendable {
     /// ミュートする。nilなら解除するまで続ける。
     case mute(Duration?)
     case unmute
+    /// 自分のプロフィールの注目のハッシュタグに載せる。
+    case feature
+    /// 自分のプロフィールの注目のハッシュタグから外す。
+    case unfeature
     /// このメニューの並びの設定の画面を開く。
     case customize
 }
@@ -65,6 +69,9 @@ public struct HashtagMenuTree {
             case .mute:
                 guard let muteActions = actions?.mute else { return [] }
                 return muteNodes(muteActions, item: item)
+            case .feature:
+                guard let featureActions = actions?.feature else { return [] }
+                return featureNodes(featureActions, item: item)
             case .customize:
                 return [.action(item.title, icon: .symbol(item.symbolName), .customize)]
             // 共通の項目は、上で中身から組んだ。
@@ -104,13 +111,79 @@ public struct HashtagMenuTree {
     }
 }
 
+extension HashtagMenuTree {
+    /// 載せていなければ「プロフィールで紹介する」、載せていれば「プロフィールから外す」にする。
+    /// ミュートと同じく、覚えている一覧でその場で決め、メニューを開くたびに読み直す。まだ読めていなければ、読む間は読み込み中の行を出し、読めなければ押せない行で知らせる。
+    @MainActor
+    fileprivate func featureNodes(_ featureActions: HashtagFeatureActions, item: HashtagMenuItem) -> [MenuNode<HashtagMenuCommand>] {
+        let name = name
+        func nodes(isFeatured: Bool) -> [MenuNode<HashtagMenuCommand>] {
+            isFeatured
+                ? [.action("プロフィールから外す", icon: .symbol(item.symbolName), .unfeature)]
+                : [.action("プロフィールで紹介する", icon: .symbol(item.symbolName), .feature)]
+        }
+        let isFeatured = featureActions.known(name)
+        featureActions.refresh()
+        if let isFeatured {
+            return nodes(isFeatured: isFeatured)
+        }
+        return [.deferred {
+            do {
+                return nodes(isFeatured: try await featureActions.load(name))
+            } catch {
+                return [.action("注目のハッシュタグを読み込めませんでした", icon: .symbol("exclamationmark.triangle"), isEnabled: false, nil)]
+            }
+        }]
+    }
+}
+
 /// ハッシュタグのメニューの、自分の状態を読んで変える項目のためのもの。出す場所が、セッションの持ち物から組んで渡す。
 public struct HashtagMenuActions {
     /// nilなら「ミュート」を出さない。
     public var mute: HashtagMuteActions?
+    /// nilなら「プロフィールで紹介する」を出さない。
+    public var feature: HashtagFeatureActions?
 
-    public init(mute: HashtagMuteActions?) {
+    public init(mute: HashtagMuteActions?, feature: HashtagFeatureActions? = nil) {
         self.mute = mute
+        self.feature = feature
+    }
+}
+
+/// ハッシュタグのメニューの「プロフィールで紹介する」で、自分のプロフィールに載せているかを読み、変える。項目は`HashtagMenuTree`が組む。
+/// 決まりはdocs/menus.mdの「ハッシュタグのメニュー」にある。
+public struct HashtagFeatureActions {
+    /// 覚えている自分の注目のハッシュタグで決めた、`#`を除いた名前のタグを載せているか。まだ読めていなければnil。
+    public let known: @MainActor (String) -> Bool?
+    /// 自分の注目のハッシュタグを読み直していなければ読み直す。メニューを開いたときに呼び、次に開いたときから使う。
+    public let refresh: @MainActor () -> Void
+    /// `#`を除いた名前のタグを載せているか。読み直している途中なら、それを待つ。
+    public let load: @MainActor (String) async throws -> Bool
+    /// 載せる。
+    public let feature: @MainActor (String) -> Void
+    /// 外す。外すIDは、外すときに読み直した一覧で決める。
+    public let unfeature: @MainActor (String) -> Void
+
+    public init(
+        known: @escaping @MainActor (String) -> Bool?,
+        refresh: @escaping @MainActor () -> Void,
+        load: @escaping @MainActor (String) async throws -> Bool,
+        feature: @escaping @MainActor (String) -> Void,
+        unfeature: @escaping @MainActor (String) -> Void
+    ) {
+        self.known = known
+        self.refresh = refresh
+        self.load = load
+        self.feature = feature
+        self.unfeature = unfeature
+    }
+}
+
+extension [FeaturedTag] {
+    /// サーバーと同じ決まりでそろえた名前が同じタグ。
+    public func first(named name: String) -> FeaturedTag? {
+        let normalized = Hashtag.normalizedName(name)
+        return first { Hashtag.normalizedName($0.name) == normalized }
     }
 }
 
