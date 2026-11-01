@@ -54,7 +54,8 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
             self.current = safari
             logger.info("in-app browser replace")
             // 同じ位置に同じ大きさで出し直すので、動かさずに入れ替える。
-            current.dismiss(animated: false) {
+            // 上に重ねた画面（投稿欄のシートなど）があれば一緒に閉じ、閉じたことを知らせる。`current`の`dismiss`では、上の画面だけが閉じてシートが残る。
+            presenter.dismissPresentedScreens(animated: false) {
                 presenter.present(safari, animated: false)
             }
             return
