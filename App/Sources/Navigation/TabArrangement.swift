@@ -26,11 +26,12 @@ final class TabArrangement {
     private var navigations: [TabItem: UINavigationController] = [:]
     /// 項目のナビゲーションを作る。作れない項目ならnil。
     private let makeNavigation: (TabItem) -> UINavigationController?
-    /// 項目ごとのタブ。一度作ったものを使い続け、並びに合わせて出し入れする。
+    /// 項目ごとのタブと、その中身の入れ物。一度作ったものを使い続け、並びに合わせて出し入れする。
     /// リストの名前が変わっても作り直さないため、タブの名前は起動し直すまで前の名前のまま残る。docs/tabs.mdの「リスト」を参照。
-    private var itemTabs: [TabItem: UITab] = [:]
+    /// 作り直すときは、入れ物も一緒に作り直し、ナビゲーションを新しい入れ物へ移す。UIKitは、1つの画面を2つのタブに渡すとアサーションで落ちるため。
+    private var itemTabs: [TabItem: (tab: UITab, container: TabContainerViewController)] = [:]
     /// 切り替えタブの中身と、そのタブ。作り直すときは2つ一緒に作り直す。UIKitは、1つの画面を2つのタブに渡すとアサーションで落ちるため。
-    private var switchContainer = SwitchTabViewController()
+    private var switchContainer = TabContainerViewController()
     private var switchTab: UITab
     /// 切り替えタブで開いている項目。
     private(set) var switchSelection: TabItem?
@@ -117,13 +118,18 @@ final class TabArrangement {
         return navigation
     }
 
-    /// 項目のタブ。まだなければ作る。
+    /// 項目のタブ。まだなければ作る。切り替えタブへ移っていたナビゲーションは、タブの入れ物へ戻す。
     private func tab(for item: TabItem) -> UITab? {
-        if let tab = itemTabs[item] { return tab }
         guard let navigation = navigation(for: item) else { return nil }
-        let tab = UITab(title: item.title, image: nil, identifier: item.rawValue) { _ in navigation }
+        if let existing = itemTabs[item] {
+            existing.container.show(navigation)
+            return existing.tab
+        }
+        let container = TabContainerViewController()
+        container.show(navigation)
+        let tab = UITab(title: item.title, image: nil, identifier: item.rawValue) { _ in container }
         setImage(of: tab, for: item)
-        itemTabs[item] = tab
+        itemTabs[item] = (tab, container)
         return tab
     }
 
@@ -131,7 +137,7 @@ final class TabArrangement {
     var shownItem: TabItem? {
         guard let selected = tabBarController.selectedTab else { return nil }
         if selected === switchTab { return switchSelection }
-        return itemTabs.first { $0.value === selected }?.key
+        return itemTabs.first { $0.value.tab === selected }?.key
     }
 
     /// 選んでいるタブで前に出ているナビゲーション。切り替えタブなら、開いている項目のもの。
@@ -140,13 +146,13 @@ final class TabArrangement {
     }
 
     func navigation(for tab: UITab) -> UINavigationController? {
-        tab === switchTab ? switchContainer.current : tab.viewController as? UINavigationController
+        tab === switchTab ? switchContainer.current : itemTabs.values.first { $0.tab === tab }?.container.current
     }
 
     /// 項目を開いて見せているか。切り替えタブなら、開いている項目で見る。
     func isShowing(_ item: TabItem) -> Bool {
         guard let selected = tabBarController.selectedTab else { return false }
-        return selected === switchTab ? switchSelection == item : selected === itemTabs[item]
+        return selected === switchTab ? switchSelection == item : selected === itemTabs[item]?.tab
     }
 
     /// 項目を開く。切り替えタブの中にあれば、切り替えてから切り替えタブを選ぶ。無効にしている項目では何もしない。
@@ -174,7 +180,7 @@ final class TabArrangement {
         // 使う人が名前を変えたユーザーのハッシュタグとプロフィールは、作ってあるタブを、新しい名前で作り直す。無効にしている間に変えた名前も、有効に戻したときに出す。
         // 同じタブの`title`を変えると、タブバーの読み上げの名前が前の名前のまま残ることがあるため、作り直して差し替える。
         let renamesAtOnce = { (item: TabItem) in item.isUserAdded || self.retitled.contains(item) }
-        for item in placement.tabs where renamesAtOnce(item) && itemTabs[item].map({ $0.title != item.title }) == true {
+        for item in placement.tabs where renamesAtOnce(item) && itemTabs[item].map({ $0.tab.title != item.title }) == true {
             itemTabs[item] = nil
         }
         if let current = switchSelection, let item = placement.switchable.first(where: { $0 == current }), renamesAtOnce(item), item.title != switchTab.title {
@@ -233,7 +239,7 @@ final class TabArrangement {
     /// 中身の入れ物も一緒に作り直す。UIKitは、1つの画面を2つのタブに渡すとアサーションで落ちるため。
     private func renewSwitchTab(for item: TabItem) {
         switchContainer.show(nil)
-        switchContainer = SwitchTabViewController()
+        switchContainer = TabContainerViewController()
         switchTab = Self.makeSwitchTab(for: item, container: switchContainer)
         setImage(of: switchTab, for: item)
         // 新しいタブには、前のタブに出していた通知の未読の数を付け直す。
@@ -249,7 +255,7 @@ final class TabArrangement {
         }
     }
 
-    private static func makeSwitchTab(for item: TabItem, container: SwitchTabViewController) -> UITab {
+    private static func makeSwitchTab(for item: TabItem, container: TabContainerViewController) -> UITab {
         UITab(title: item.title, image: UIImage(systemName: item.symbolName), identifier: switchIdentifier) { _ in container }
     }
 
@@ -302,8 +308,8 @@ final class TabArrangement {
 
     /// 記号の代わりに出すアイコンが変わったら、作ってあるタブのアイコンを出し直す。
     func refreshIcons() {
-        for (item, tab) in itemTabs {
-            setImage(of: tab, for: item)
+        for (item, itemTab) in itemTabs {
+            setImage(of: itemTab.tab, for: item)
         }
         if let switchSelection {
             setImage(of: switchTab, for: switchSelection)
@@ -321,18 +327,24 @@ final class TabArrangement {
 
     /// 通知の未読の数は、通知を並べているタブに出す。切り替えタブの中なら、開いている項目によらず切り替えタブに出す。
     private func applyBadges() {
-        itemTabs[.notifications]?.badgeValue = placement.location(of: .notifications) == .tab ? notificationsBadge : nil
+        itemTabs[.notifications]?.tab.badgeValue = placement.location(of: .notifications) == .tab ? notificationsBadge : nil
         switchTab.badgeValue = placement.location(of: .notifications) == .switchTab ? notificationsBadge : nil
     }
 }
 
-/// 切り替えタブの中身。項目ごとのナビゲーションを子にして、開いている1つだけを出す。
-final class SwitchTabViewController: UIViewController {
+/// タブの中身。項目のナビゲーションを子にして、開いている1つだけを出す。
+/// 切り替えタブは、中の項目を切り替えるたびにナビゲーションを差し替える。項目のタブは、1つの項目のナビゲーションだけを出す。
+/// タブを作り直すときは、入れ物も作り直してナビゲーションを移す。UIKitは、1つの画面を2つのタブに渡すとアサーションで落ちるため。
+final class TabContainerViewController: UIViewController {
     private(set) var current: UINavigationController?
 
     /// 開くナビゲーションを差し替える。nilなら何も出さない。
+    /// ナビゲーションがほかの入れ物に出ていれば、そこから外してから移す。外さずに移すと、前の入れ物が、移ったナビゲーションを出しているつもりのまま残るため。
     func show(_ navigation: UINavigationController?) {
         guard navigation !== current else { return }
+        if let navigation, let previous = navigation.parent as? TabContainerViewController {
+            previous.show(nil)
+        }
         if let current {
             current.willMove(toParent: nil)
             current.view.removeFromSuperview()

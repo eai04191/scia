@@ -175,6 +175,47 @@ struct TabArrangementTests {
         #expect(harness.arrangement.selectedNavigation === harness.navigations[.local])
     }
 
+    /// タブに並べたプロフィールの名前を変えると、同じナビゲーションのまま、新しい名前のタブに差し替える。
+    /// UIKitは1つの画面を2つのタブに渡すとアサーションで落ちるため、作り直したタブにも同じ画面を渡さない。
+    @Test func renamingPlacedProfileKeepsItsNavigation() throws {
+        let harness = try Harness(Self.layout(tabs: [.home, Self.bob], switchable: [.local]))
+        harness.arrangement.show(Self.bob)
+        let navigation = try #require(harness.arrangement.selectedNavigation)
+
+        harness.apply(Self.layout(tabs: [.home, Self.bob.renamed("ボブ")], switchable: [.local]))
+
+        #expect(harness.arrangement.tabBarController.tabs.map(\.title) == ["ホーム", "ボブ", "ローカル"])
+        #expect(harness.arrangement.isShowing(Self.bob))
+        #expect(harness.arrangement.selectedNavigation === navigation)
+
+        // 名前を変えたあとも、切り替えタブとの行き来で同じナビゲーションを使う。
+        harness.apply(Self.layout(tabs: [.home], switchable: [Self.bob.renamed("ボブ"), .local]))
+        #expect(harness.arrangement.isShowing(Self.bob))
+        #expect(harness.arrangement.selectedNavigation === navigation)
+        harness.apply(Self.layout(tabs: [.home, Self.bob.renamed("ボブ")], switchable: [.local]))
+        #expect(harness.arrangement.isShowing(Self.bob))
+        #expect(harness.arrangement.selectedNavigation === navigation)
+    }
+
+    /// 選んでいるタブをもう一度押すと、奥に開いた画面から最初の画面へ戻す。タブの中身は入れ物に入れているので、UIKitに任せず戻す。
+    /// タブに並べた項目も、切り替えタブの中の項目も同じ。
+    @Test func reselectingTabPopsToRoot() throws {
+        let harness = try Harness(Self.layout(tabs: [.home], switchable: [.local]))
+        let delegate = TabReselectionDelegate(scrollToTop: { _ in }, navigation: { [arrangement = harness.arrangement] in arrangement.navigation(for: $0) }) { _ in }
+        let controller = harness.arrangement.tabBarController
+
+        for item in [TabItem.home, .local] {
+            harness.arrangement.show(item)
+            let navigation = try #require(harness.navigations[item])
+            navigation.pushViewController(UIViewController(), animated: false)
+            harness.window.layoutIfNeeded()
+            let selected = try #require(controller.selectedTab)
+
+            #expect(delegate.tabBarController(controller, shouldSelectTab: selected) == false)
+            #expect(navigation.viewControllers.count == 1)
+        }
+    }
+
     /// 横幅の狭いタブバーに入りきらない項目は、UIKitの「その他」に任せず切り替えタブに入れ、開いたあともほかのタブへ移れる。
     @Test func overflowingTabsGoToSwitchTabInsteadOfMore() throws {
         let harness = try Harness(Self.layout(tabs: [.home, .notifications, .local, .federated, .bookmarks, .favourites], switchable: []))

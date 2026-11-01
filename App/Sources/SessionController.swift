@@ -4094,7 +4094,7 @@ private final class ProfileRegistry {
 /// 選んでいるタブをもう一度押したとき、奥の画面を開いていれば標準どおり最初の画面へ戻し、最初の画面にいれば最上部へ動かす。
 /// タブを切り替えたら、`didSelect`で知らせる。
 @MainActor
-private final class TabReselectionDelegate: NSObject, UITabBarControllerDelegate {
+final class TabReselectionDelegate: NSObject, UITabBarControllerDelegate {
     private let scrollToTop: (UINavigationController) -> Void
     /// タブで前に出ているナビゲーション。切り替えタブなら、開いている項目のもの。
     private let navigation: (UITab) -> UINavigationController?
@@ -4119,11 +4119,15 @@ private final class TabReselectionDelegate: NSObject, UITabBarControllerDelegate
             UserAction.selectTab(Self.logName(of: tab)).record()
             return true
         }
-        guard let navigation = navigation(tab),
-              navigation.viewControllers.count == 1
-        else {
+        guard let navigation = navigation(tab) else {
             UserAction.reselectTab(Self.logName(of: tab)).record()
             return true
+        }
+        guard navigation.viewControllers.count == 1 else {
+            // タブの中身はナビゲーションを入れ物に入れているので、UIKitは最初の画面へ戻さない（TabContainerViewController）。標準と同じく動きを付けて戻す。
+            navigation.popToRootViewController(animated: true)
+            UserAction.reselectTab(Self.logName(of: tab)).record()
+            return false
         }
         // 慣性で動いている途中なら、最上部へ動かす時点でそれまでのスクロールが記録される。一覧で押した操作がその後に並ぶよう、後で記録する。
         scrollToTop(navigation)
