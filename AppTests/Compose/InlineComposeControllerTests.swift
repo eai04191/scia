@@ -603,6 +603,74 @@ final class InlineComposeControllerTests {
         #expect(composer.stateDump().contains("editing: false"), "キーボードを閉じても書いている状態のままです\n\(composer.stateDump())")
     }
 
+    /// 変換中の文字を残したまま送っても、送り終えたら本文を空に戻す。
+    /// 書き終えてキーボードを閉じると、入力欄は変換中の文字を確定するか取り消して本文が変わったと知らせる。
+    /// 空にした本文をまだ入力欄に入れていないと、そのとき入力欄に残っていた本文が下書きに戻るため。
+    @Test func postingWithMarkedTextClearsDraft() async throws {
+        defer { window.isHidden = true }
+        let composer = try installComposer { _ in }
+        composer.model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
+        composer.beginEditing()
+        try await waitUntilSettled()
+        let textView = try #require(textViews(in: window).first)
+        textView.becomeFirstResponder()
+        textView.insertText("本文")
+        textView.setMarkedText("へんかん", selectedRange: NSRange(location: 4, length: 0))
+        try await waitUntilSettled()
+        #expect(composer.model.text == "本文へんかん")
+        // ハードウェアキーボードの日本語入力は、キーボードを閉じると変換中の文字を取り消して、本文が変わったと知らせる。
+        // テストの入力欄はキーボードを閉じても変換中の文字を扱わないので、閉じたときに知らせを送って同じ順にする。
+        let observer = NotificationCenter.default.addObserver(forName: UITextView.textDidEndEditingNotification, object: textView, queue: nil) { _ in
+            MainActor.assumeIsolated {
+                textView.delegate?.textViewDidChange?(textView)
+            }
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        await composer.model.submit()
+        try await waitUntilSettled()
+        #expect(composer.model.text.isEmpty, "送り終えたのに本文が残りました: \(composer.model.text)")
+        #expect(textView.text.isEmpty, "送り終えたのに入力欄に本文が残りました: \(textView.text ?? "")")
+    }
+
+    /// 注意書きの欄で変換中の文字を残したまま送っても、送り終えたら注意書きを空に戻し、フォーカスを本文へ移さずに書き終える。
+    @Test func postingWithMarkedSpoilerClearsDraft() async throws {
+        defer { window.isHidden = true }
+        let composer = try installComposer { _ in }
+        composer.model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
+        composer.beginEditing()
+        composer.model.showsSpoiler = true
+        composer.model.text = "本文"
+        try await waitUntilSettled()
+        let field = try #require(textFields(in: window).first)
+        let textView = try #require(textViews(in: window).first)
+        field.becomeFirstResponder()
+        field.insertText("注意")
+        // テストの注意書きの欄は、変換中の文字を置いても文字として返さない。閉じたときに残っていた文字が書き戻されないことを確かめる。
+        field.setMarkedText("へんかん", selectedRange: NSRange(location: 4, length: 0))
+        try await waitUntilSettled()
+        #expect(composer.model.spoilerText.hasPrefix("注意"))
+        // `postingWithMarkedTextClearsDraft`と同じく、閉じたときに本文が変わった知らせを送って、日本語入力と同じ順にする。
+        let observer = NotificationCenter.default.addObserver(forName: UITextField.textDidEndEditingNotification, object: field, queue: nil) { _ in
+            MainActor.assumeIsolated {
+                field.sendActions(for: .editingChanged)
+            }
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+        var textViewBeganEditing = false
+        let began = NotificationCenter.default.addObserver(forName: UITextView.textDidBeginEditingNotification, object: textView, queue: nil) { _ in
+            MainActor.assumeIsolated { textViewBeganEditing = true }
+        }
+        defer { NotificationCenter.default.removeObserver(began) }
+
+        await composer.model.submit()
+        try await waitUntilSettled()
+        #expect(composer.model.spoilerText.isEmpty, "送り終えたのに注意書きが残りました: \(composer.model.spoilerText)")
+        #expect(composer.model.text.isEmpty)
+        #expect(!textViewBeganEditing, "送り終えるときにフォーカスが本文へ移りました")
+        #expect(composer.stateDump().contains("editing: false"), "投稿したのに書いている状態のままです\n\(composer.stateDump())")
+    }
+
     private func expectShown(_ shown: [UIButton], hidden: [UIButton], sourceLocation: SourceLocation = #_sourceLocation) {
         for button in shown {
             let row = (button.superview as? UIStackView)?.arrangedSubviews.map { "\(type(of: $0)) \($0.accessibilityLabel ?? "") hidden=\($0.isHidden) frame=\($0.frame) constraints=\($0.constraints.map(\.description))" }.joined(separator: "\n") ?? ""

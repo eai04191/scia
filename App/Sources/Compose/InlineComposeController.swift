@@ -335,6 +335,10 @@ final class InlineComposeController: NSObject {
             // 添付したメディアは、下書きと一緒にモデルが空にしている。
             guard let self else { return }
             bottomSheet?.close(notifiesWillClose: false)
+            // 空にした本文が入力欄に届くのは少しあとなので、キーボードを閉じる前に入れておく。変換中の文字を残したまま閉じると、
+            // 入力欄は変換中の文字を確定するか取り消して本文が変わったと知らせ、そのとき入力欄に残っていた本文が下書きに戻るため。
+            // 欄の出し入れは`update()`に任せる。書き終える前に行うと、書いている間の動きで欄を畳み、フォーカスも本文へ移すため。
+            applyTexts()
             resignInput()
             // 送っている間に添付のビューアを開いていると、入力欄はもうキーボードを出しておらず、書き終えたことにならない。
             // ビューアを閉じるのを待たずにここで書き終え、閉じたあとに空になった本文へキーボードを戻さないようにする。
@@ -2210,8 +2214,8 @@ final class InlineComposeController: NSObject {
         }
     }
 
-    private func update() {
-        // 変換中の文字を消さないよう、入力欄から来た変更は書き戻さない。
+    /// 下書きの本文と注意書きを入力欄に入れる。変換中の文字を消さないよう、入力欄から来た変更は書き戻さない。
+    private func applyTexts() {
         if textView.text != model.text {
             textView.text = model.text
             textDidChange()
@@ -2223,6 +2227,10 @@ final class InlineComposeController: NSObject {
             spoilerField.text = model.spoilerText
             textCompletion.textWasReplaced(in: spoilerField)
         }
+    }
+
+    private func update() {
+        applyTexts()
         // 返信先を外して引き継いだ注意書きが消えたときなども含め、欄を隠すときは、隠れた欄にキーボードを残さず本文へ移す。
         if !model.showsSpoiler {
             if spoilerField.isFirstResponder {
