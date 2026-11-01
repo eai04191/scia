@@ -3,8 +3,8 @@ import Testing
 
 /// メインのRunLoopが、積まれた処理（メインキューの処理、入力、レイアウトと描画の確定）を流し終えて手すきになるまで待つ。
 ///
-/// RunLoopが次の入力を待つ待機に入る直前の知らせ（`beforeWaiting`）が来ただけでは、流し終えたとは限らない。RunLoopは、メインキューを流した次の回はメインキューを見ずに待機に入ろうとするので、
-/// メインキューの処理が次の処理を積んでいると、処理が残ったまま知らせが来て、待機に入った直後に起こされる。
+/// RunLoopが次の入力を待つ待機に入る直前のobserver（`beforeWaiting`）が呼ばれただけでは、流し終えたとは限らない。RunLoopは、メインキューを流した次の回はメインキューを見ずに待機に入ろうとするので、
+/// メインキューの処理が次の処理を積んでいると、処理が残ったままobserverが呼ばれ、待機に入った直後に起こされる。
 /// そこで、待機に入るたびに`quietLength`で起こすタイマーを掛け、その長さだけ待機が続いた（その間に何も届かなかった）ことが`quietTimesNeeded`回続いたら、手すきとみなす。
 /// 処理が続けて積まれている間は、待機に入るたびにすぐ起こされるので、流し終えるまで戻らない。
 ///
@@ -45,8 +45,8 @@ private final class MainRunLoopIdleWaiter {
         self.continuation = continuation
         let runLoop = CFRunLoopGetMain()
         let now = CFAbsoluteTimeGetCurrent()
-        // 描画を確定する処理（Core Animationの知らせ）より後に呼ばれるよう、知らせの順番を最後にする。
-        // 待ち終えるまで、この型は知らせとタイマーから握られる。待ち終えたら外すので、握り合いは残らない。
+        // 描画を確定する処理（Core AnimationのRunLoopのobserver）より後に呼ばれるよう、observerの順番を最後にする。
+        // 待ち終えるまで、この型はobserverとタイマーから握られる。待ち終えたら外すので、握り合いは残らない。
         let observer = CFRunLoopObserverCreateWithHandler(nil, CFRunLoopActivity.beforeWaiting.rawValue | CFRunLoopActivity.afterWaiting.rawValue, true, CFIndex.max) { _, activity in
             MainActor.assumeIsolated { self.handle(activity) }
         }
