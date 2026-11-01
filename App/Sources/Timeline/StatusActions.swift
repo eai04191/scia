@@ -43,13 +43,13 @@ extension TimelineViewController {
         let body = status.flatMap { selectableBody(for: id, statusID: $0.displayed.id) }
         let request: NotificationRequest? = if case .notificationRequest(let request) = entry { request } else { nil }
         let renderer = statusMenuRenderer(status: status, notification: notification, request: request, id: id, selectableBody: body, emojis: emojis)
-        // 人の一覧の行では、その人へのユーザーのメニューを、そのまま出す。
+        // 人の一覧の行では、その人へのユーザーのメニューを、単独で出す形で出す。投稿のメニューに入れるサブメニューの形のままだと、項目がそのサブメニュー1つだけのメニューになるため。
         if case .account(let account) = entry {
             defer { reloadRelations([account.id]) }
             let user = MenuUser.account(account)
             let tree = UserMenuTree(subject: UserMenuSubject(user), actions: userMenuActions, linkBrowser: settings.linkBrowser)
-            guard let node = tree.submenu(groups: settings.userMenuLayout.groups, avatar: .user(user)) else { return nil }
-            return BuiltMenu(root: .submenu("", [node.map { .user(user, $0) }]), renderer: renderer) { [weak self] in self?.loadPendingMenuIcons() }
+            guard let root = tree.menu(groups: settings.userMenuLayout.groups, avatar: .user(user)) else { return nil }
+            return BuiltMenu(root: root.map { .user(user, $0) }, renderer: renderer) { [weak self] in self?.loadPendingMenuIcons() }
         }
         // 保留中の通知の行では、受け入れると無視の下に、その人へのユーザーのメニューを出す。
         if let request {

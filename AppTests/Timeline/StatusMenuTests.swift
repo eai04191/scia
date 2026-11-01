@@ -88,6 +88,14 @@ struct StatusMenuTests {
         #expect(outline.dropLast().last == ["@alice[プロフィール,メンション,…,…,リストに追加,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,通報,カスタマイズ]]"])
     }
 
+    /// 人の一覧の行の長押しでは、その人のサブメニュー1つだけのメニューにせず、項目を直接並べる。
+    @Test func accountRowMenuListsItemsDirectly() throws {
+        let menu = try menu(for: .account(account("3", "carol")), userMenuActions: userMenuActions())
+
+        #expect(menu?.title.contains("carol") == true)
+        #expect(outline(menu).flatMap(\.self).contains("プロフィール"))
+    }
+
     /// メニューを開いたら、メニューに出る人全員の関係を1回でまとめて読み直す。
     /// 関係で中身が変わる項目を出していない設定では読まない。
     @Test func openingMenuReloadsRelationsOfShownUsersAtOnce() throws {
