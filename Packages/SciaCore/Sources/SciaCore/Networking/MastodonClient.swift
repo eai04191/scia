@@ -441,19 +441,31 @@ public struct MastodonClient: Sendable {
     /// 予約は1人300件までで、1回に読める件数の上限は40件。
     /// https://docs.joinmastodon.org/methods/scheduled_statuses/#get
     public func scheduledStatuses() async throws -> [ScheduledStatus] {
-        var statuses: [ScheduledStatus] = []
+        try await allPages(path: "api/v1/scheduled_statuses", limit: 40) { path, query in
+            try await get([ScheduledStatus].self, path: path, query: query)
+        }
+    }
+
+    /// 続きを`Link`ヘッダーの`next`の`max_id`で読み、最後まで読み切ってから返す。途中で読めなければ投げる。
+    /// - Parameter page: `path`を`query`で読み、そのページの要素と応答を返す。
+    private func allPages<Element>(
+        path: String,
+        limit: Int,
+        page: (String, [URLQueryItem]) async throws -> ([Element], HTTPURLResponse)
+    ) async throws -> [Element] {
+        var elements: [Element] = []
         var maxID: String?
         var readMaxIDs: Set<String> = []
         repeat {
-            let query = [URLQueryItem(name: "limit", value: "40")] + (maxID.map { [URLQueryItem(name: "max_id", value: $0)] } ?? [])
-            let (page, response) = try await get([ScheduledStatus].self, path: "api/v1/scheduled_statuses", query: query)
-            statuses += page
+            let query = [URLQueryItem(name: "limit", value: String(limit))] + (maxID.map { [URLQueryItem(name: "max_id", value: $0)] } ?? [])
+            let (read, response) = try await page(path, query)
+            elements += read
             let next = response.value(forHTTPHeaderField: "Link").map(LinkHeader.init)?.queryValue("max_id", of: "next")
             // 読んだ位置を返すサーバー（同じ位置を返し続ける、位置が循環する）で、同じページを読み続けないよう止める。
             if let maxID { readMaxIDs.insert(maxID) }
-            maxID = next.flatMap { readMaxIDs.contains($0) || page.isEmpty ? nil : $0 }
+            maxID = next.flatMap { readMaxIDs.contains($0) || read.isEmpty ? nil : $0 }
         } while maxID != nil
-        return statuses
+        return elements
     }
 
     /// 予約の日時を変える。中身は変えられない。今から5分以内の日時は、サーバーが422で断る。
@@ -800,19 +812,9 @@ public struct MastodonClient: Sendable {
     /// 1回に読める件数の上限は200件。
     /// https://docs.joinmastodon.org/methods/followed_tags/#get
     public func followedTags() async throws -> [Hashtag] {
-        var tags: [Hashtag] = []
-        var maxID: String?
-        var readMaxIDs: Set<String> = []
-        repeat {
-            let query = [URLQueryItem(name: "limit", value: "200")] + (maxID.map { [URLQueryItem(name: "max_id", value: $0)] } ?? [])
-            let (page, response) = try await get([Hashtag].self, path: "api/v1/followed_tags", query: query)
-            tags += page
-            let next = response.value(forHTTPHeaderField: "Link").map(LinkHeader.init)?.queryValue("max_id", of: "next")
-            // 読んだ位置を返すサーバー（同じ位置を返し続ける、位置が循環する）で、同じページを読み続けないよう止める。
-            if let maxID { readMaxIDs.insert(maxID) }
-            maxID = next.flatMap { readMaxIDs.contains($0) || page.isEmpty ? nil : $0 }
-        } while maxID != nil
-        return tags
+        try await allPages(path: "api/v1/followed_tags", limit: 200) { path, query in
+            try await get([Hashtag].self, path: path, query: query)
+        }
     }
 
     /// ブックマークした投稿を、ブックマークした新しい順に返す。1回に読める件数の上限は40件。
@@ -982,19 +984,10 @@ public struct MastodonClient: Sendable {
     /// 1回に読める件数の上限は80件。
     /// https://docs.joinmastodon.org/methods/endorsements/#get
     public func endorsements() async throws -> [Account] {
-        var accounts: [Account] = []
-        var maxID: String?
-        var readMaxIDs: Set<String> = []
-        repeat {
-            let query = [URLQueryItem(name: "limit", value: "80")] + (maxID.map { [URLQueryItem(name: "max_id", value: $0)] } ?? [])
-            let (page, response) = try await get(ElementList<Account>.self, path: "api/v1/endorsements", query: query)
-            accounts += page.elements
-            let next = response.value(forHTTPHeaderField: "Link").map(LinkHeader.init)?.queryValue("max_id", of: "next")
-            // 読んだ位置を返すサーバー（同じ位置を返し続ける、位置が循環する）で、同じページを読み続けないよう止める。
-            if let maxID { readMaxIDs.insert(maxID) }
-            maxID = next.flatMap { readMaxIDs.contains($0) || page.elements.isEmpty ? nil : $0 }
-        } while maxID != nil
-        return accounts
+        try await allPages(path: "api/v1/endorsements", limit: 80) { path, query in
+            let (page, response) = try await get(ElementList<Account>.self, path: path, query: query)
+            return (page.elements, response)
+        }
     }
 
     /// 相手を自分のプロフィールで紹介する。フォローしていない相手は、サーバーが422で断る。
