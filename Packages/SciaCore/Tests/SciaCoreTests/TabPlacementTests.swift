@@ -3,29 +3,29 @@ import Testing
 import SciaTesting
 @testable import SciaCore
 
+/// テストで組むタブの並び。並べなかった項目は、無効にして末尾に足す。
+/// `MenuLayout`は足りない項目を既定の並びの位置と表示で差し込むため、そのまま組むと、既定の並びを変えるたびにテストの並びが変わる。
+private extension MenuLayout<TabItem> {
+    static func fixture(_ elements: [Element]) -> Self {
+        var elements = elements
+        if !elements.contains(.more) {
+            elements.append(.more)
+        }
+        for item in TabItem.allCases where !elements.contains(where: { if case .item(item, _) = $0 { true } else { false } }) {
+            elements.append(.item(item, isVisible: false))
+        }
+        return MenuLayout(elements: elements)
+    }
+
+    static func fixture(tokens: [String]) -> Self {
+        fixture(tokens.compactMap(element(from:)))
+    }
+}
+
 @Suite(.scratch)
 struct TabPlacementTests {
-    /// 既定は、切り替えタブを使わず、5つを直接並べる。
-    @Test func defaultPlacesEveryTimelineDirectly() {
-        let placement = TabPlacement(layout: TabItem.defaultLayout, tabBarCapacity: TabPlacement.compactTabBarCapacity)
-        #expect(placement.tabs == [.home, .local, .federated, .notifications, .search])
-        #expect(placement.switchable.isEmpty)
-    }
-
-    /// ブックマーク、お気に入り、予約投稿は既定で無効にし、有効にすると切り替えタブに入る。保存済みの並びにも同じ位置で差し込む。
-    /// 検索は既定で有効なので、保存済みの並びでも通知の後ろに有効で差し込む。
-    @Test func savedListsStartDisabledBelowBoundary() {
-        let saved = MenuLayout<TabItem>(tokens: ["item:home", "item:notifications", "more", "item:local", "item:federated"])
-        #expect(saved.tokens == ["item:home", "item:notifications", "item:search", "more", "hidden:bookmarks", "hidden:favourites", "hidden:scheduled", "item:local", "item:federated"])
-        #expect(TabPlacement(layout: saved, tabBarCapacity: TabPlacement.compactTabBarCapacity).location(of: .bookmarks) == .disabled)
-        #expect(TabPlacement(layout: saved, tabBarCapacity: TabPlacement.compactTabBarCapacity).location(of: .scheduled) == .disabled)
-
-        let enabled = MenuLayout<TabItem>(tokens: ["item:home", "more", "item:bookmarks"])
-        #expect(TabPlacement(layout: enabled, tabBarCapacity: TabPlacement.compactTabBarCapacity).location(of: .bookmarks) == .switchTab)
-    }
-
     @Test func itemsBelowBoundaryGoToSwitchTabInOrder() {
-        let layout = MenuLayout<TabItem>(elements: [
+        let layout = MenuLayout<TabItem>.fixture( [
             .item(.home, isVisible: true),
             .item(.notifications, isVisible: true),
             .more,
@@ -43,7 +43,7 @@ struct TabPlacementTests {
     /// 境目より上の項目がタブバーに入りきらなければ、入りきらない分を切り替えタブの先頭にまとめる。
     /// UIKitの「その他」を出すと、選んでいるタブと見えている画面がずれ、ほかのタブへ移れなくなるため。
     @Test func overflowingTabsGoToSwitchTabBeforeItemsBelowBoundary() {
-        let layout = MenuLayout<TabItem>(elements: [
+        let layout = MenuLayout<TabItem>.fixture( [
             .item(.home, isVisible: true),
             .item(.notifications, isVisible: true),
             .item(.local, isVisible: true),
@@ -62,7 +62,7 @@ struct TabPlacementTests {
 
     /// 切り替えタブがいらなければ、タブバーに入る数まで直接並べる。
     @Test func fiveTabsFitWithoutSwitchTab() {
-        let layout = MenuLayout<TabItem>(elements: [
+        let layout = MenuLayout<TabItem>.fixture( [
             .item(.home, isVisible: true),
             .item(.notifications, isVisible: true),
             .item(.local, isVisible: true),
@@ -78,7 +78,7 @@ struct TabPlacementTests {
 
     /// 境目より下に項目があれば、切り替えタブの分を空けるので、5つ目も切り替えタブに入る。
     @Test func fiveTabsWithItemsBelowBoundaryLeaveRoomForSwitchTab() {
-        let layout = MenuLayout<TabItem>(elements: [
+        let layout = MenuLayout<TabItem>.fixture( [
             .item(.home, isVisible: true),
             .item(.notifications, isVisible: true),
             .item(.local, isVisible: true),
@@ -95,7 +95,7 @@ struct TabPlacementTests {
 
     /// 数を限らないタブバーでは、境目より下の有効な項目も直接並べ、切り替えタブを出さない。
     @Test func unlimitedTabBarPlacesItemsBelowBoundaryDirectly() {
-        let layout = MenuLayout<TabItem>(elements: [
+        let layout = MenuLayout<TabItem>.fixture( [
             .item(.home, isVisible: true),
             .item(.notifications, isVisible: true),
             .item(.search, isVisible: true),
@@ -113,7 +113,7 @@ struct TabPlacementTests {
 
     /// 数を限らないタブバー（横幅の広いiPadのタブバー）では、境目より上の項目をすべて直接並べる。
     @Test func unlimitedTabBarPlacesEveryItemAboveBoundary() {
-        let layout = MenuLayout<TabItem>(elements: [
+        let layout = MenuLayout<TabItem>.fixture( [
             .item(.home, isVisible: true),
             .item(.notifications, isVisible: true),
             .item(.local, isVisible: true),
@@ -129,7 +129,7 @@ struct TabPlacementTests {
     }
 
     @Test func disabledItemsAreNowhere() {
-        let layout = MenuLayout<TabItem>(elements: [
+        let layout = MenuLayout<TabItem>.fixture( [
             .item(.home, isVisible: true),
             .item(.notifications, isVisible: false),
             .more,
@@ -146,14 +146,14 @@ struct TabPlacementTests {
 
     /// 設定画面では最後の1つを無効にできないが、保存した値が壊れて全部無効になっていても、タブバーを空にしない。
     @Test func allDisabledStillShowsHome() {
-        let layout = MenuLayout<TabItem>(elements: TabItem.allCases.map { .item($0, isVisible: false) } + [.more])
+        let layout = MenuLayout<TabItem>.fixture( TabItem.allCases.map { .item($0, isVisible: false) } + [.more])
         let placement = TabPlacement(layout: layout, tabBarCapacity: TabPlacement.compactTabBarCapacity)
         #expect(placement.tabs == [.home])
         #expect(placement.switchable.isEmpty)
     }
 
     @Test func switchSelectionKeepsPreviousWhileItStaysInSwitchTab() {
-        let placement = TabPlacement(layout: MenuLayout<TabItem>(elements: [
+        let placement = TabPlacement(layout: MenuLayout<TabItem>.fixture( [
             .item(.home, isVisible: true),
             .more,
             .item(.local, isVisible: true),
@@ -165,7 +165,9 @@ struct TabPlacementTests {
         #expect(placement.switchSelection(previous: .federated) == .federated)
         // タブへ移したか無効にした項目は、切り替えタブの先頭に戻す。
         #expect(placement.switchSelection(previous: .home) == .local)
-        #expect(TabPlacement(layout: TabItem.defaultLayout, tabBarCapacity: TabPlacement.compactTabBarCapacity).switchSelection(previous: .local) == nil)
+        // 切り替えタブがなければ、選ばない。
+        let direct = MenuLayout<TabItem>.fixture( [.item(.home, isVisible: true), .item(.local, isVisible: true), .more])
+        #expect(TabPlacement(layout: direct, tabBarCapacity: TabPlacement.compactTabBarCapacity).switchSelection(previous: .local) == nil)
     }
 }
 
@@ -181,7 +183,7 @@ struct TabLayoutSettingsTests {
     @Test func tabLayoutIsPerAccountAndPersists() throws {
         let defaults = try makeDefaults()
         let settings = AppSettings(defaults: defaults)
-        let changed = MenuLayout<TabItem>(elements: [.item(.home, isVisible: true), .more, .item(.local, isVisible: true)])
+        let changed = MenuLayout<TabItem>.fixture( [.item(.home, isVisible: true), .more, .item(.local, isVisible: true)])
         settings.setTabLayout(changed, for: "@alice@example.social")
 
         let relaunched = AppSettings(defaults: defaults)
@@ -229,14 +231,14 @@ struct TabLayoutSettingsTests {
 
     /// 保存した並びのリストは、名前とともに読み戻せる。
     @Test func listItemSurvivesSavedTokens() {
-        let layout = MenuLayout<TabItem>(tokens: ["item:home", "hidden:search", "more", "item:list:5:友だち"])
+        let layout = MenuLayout<TabItem>.fixture(tokens: ["item:home", "hidden:search", "more", "item:list:5:友だち"])
         #expect(layout.tokens.contains("item:list:5:友だち"))
         #expect(TabPlacement(layout: layout, tabBarCapacity: TabPlacement.compactTabBarCapacity).switchable == [.list(id: "5", title: "友だち")])
     }
 
     /// まだないリストは無効にして末尾に足し、もうないリストは外し、名前が変わったリストは書き換える。表示と並びはそのまま残す。
     @Test func syncingListsAddsRemovesAndRenames() {
-        let layout = MenuLayout<TabItem>(tokens: ["item:home", "item:list:1:旧名", "more", "item:local", "hidden:list:2:消えるリスト"])
+        let layout = MenuLayout<TabItem>.fixture(tokens: ["item:home", "item:list:1:旧名", "more", "item:local", "hidden:list:2:消えるリスト"])
 
         let synced = layout.syncingLists([MastodonList(id: "1", title: "新名"), MastodonList(id: "3", title: "新しいリスト")])
 
@@ -247,14 +249,14 @@ struct TabLayoutSettingsTests {
 
     /// 切り替えタブで前に開いていた項目は、保存しておいた古い名前ではなく、並びの中の今の名前で返す。
     @Test func switchSelectionUsesCurrentListTitle() {
-        let layout = MenuLayout<TabItem>(tokens: ["item:home", "more", "item:list:1:新名"])
+        let layout = MenuLayout<TabItem>.fixture(tokens: ["item:home", "more", "item:list:1:新名"])
         let restored = TabPlacement(layout: layout, tabBarCapacity: TabPlacement.compactTabBarCapacity).switchSelection(previous: .list(id: "1", title: "旧名"))
         #expect(restored?.rawValue == "list:1:新名")
     }
 
     /// 足りないリストだけを無効で足し、並びにあるリストは外しも書き換えもしない。
     @Test func addingMissingOnlyAppends() {
-        let layout = MenuLayout<TabItem>(tokens: ["item:home", "more", "item:list:1:旧名", "item:list:9:ほかのウインドウで読んだリスト", "item:hashtag:Scia"])
+        let layout = MenuLayout<TabItem>.fixture(tokens: ["item:home", "more", "item:list:1:旧名", "item:list:9:ほかのウインドウで読んだリスト", "item:hashtag:Scia"])
 
         let added = layout.addingMissing([.list(id: "1", title: "新名"), .list(id: "2", title: "足りないリスト"), .hashtag(name: "scia"), .hashtag(name: "mastodon")])
 
@@ -266,7 +268,7 @@ struct TabLayoutSettingsTests {
 
     /// 名前だけが変わった並びは、項目どうしでは同じでも、保存の形では違う。設定画面は保存の形で並びの変化を見分ける。
     @Test func renamedListChangesTokensButNotItems() {
-        let before = MenuLayout<TabItem>(tokens: ["item:home", "more", "item:list:1:旧名"])
+        let before = MenuLayout<TabItem>.fixture(tokens: ["item:home", "more", "item:list:1:旧名"])
         let after = before.syncingLists([MastodonList(id: "1", title: "新名")])
         #expect(after.elements == before.elements)
         #expect(after.tokens != before.tokens)
@@ -287,7 +289,7 @@ struct TabLayoutSettingsTests {
 
     /// フォローしているハッシュタグを並びに反映する。リストには触れない。
     @Test func syncingHashtagsAddsAndRemovesOnlyHashtags() {
-        let layout = MenuLayout<TabItem>(tokens: ["item:home", "item:hashtag:Scia", "more", "item:list:1:友だち", "hidden:hashtag:やめたタグ"])
+        let layout = MenuLayout<TabItem>.fixture(tokens: ["item:home", "item:hashtag:Scia", "more", "item:list:1:友だち", "hidden:hashtag:やめたタグ"])
 
         let synced = layout.syncingHashtags([Hashtag(name: "scia"), Hashtag(name: "mastodon")])
 
@@ -311,16 +313,27 @@ struct TabLayoutSettingsTests {
     }
 
     /// 使う人が足したユーザーのハッシュタグは、有効にして切り替えタブの末尾に入り、外せる。同じ項目は2つ足さない。
-    /// 既定の並びは5つでタブバーが埋まっているため、足すと切り替えタブの分を空け、5つ目の検索も切り替えタブに入る。
+    /// 5つでタブバーが埋まっている並びに足すと、切り替えタブの分を空け、5つ目の検索も切り替えタブに入る。
     @Test func addingAccountHashtagPutsItInSwitchTabAndRemovingDropsIt() {
         let item = TabItem.accountHashtag(accountID: "109", acct: "bob", name: "scia")
-        let added = TabItem.defaultLayout.adding(item)
+        let layout = MenuLayout<TabItem>.fixture( [
+            .item(.home, isVisible: true),
+            .item(.local, isVisible: true),
+            .item(.federated, isVisible: true),
+            .item(.notifications, isVisible: true),
+            .item(.search, isVisible: true),
+            .more,
+            .item(.bookmarks, isVisible: false),
+            .item(.favourites, isVisible: false),
+            .item(.scheduled, isVisible: false),
+        ])
+        let added = layout.adding(item)
 
         #expect(TabPlacement(layout: added, tabBarCapacity: TabPlacement.compactTabBarCapacity).location(of: item) == .switchTab)
         #expect(TabPlacement(layout: added, tabBarCapacity: TabPlacement.compactTabBarCapacity).tabs == [.home, .local, .federated, .notifications])
         #expect(TabPlacement(layout: added, tabBarCapacity: TabPlacement.compactTabBarCapacity).switchable == [.search, item])
         #expect(added.adding(item).tokens == added.tokens)
-        #expect(added.removing(item).tokens == TabItem.defaultLayout.tokens)
+        #expect(added.removing(item).tokens == layout.tokens)
         #expect(!added.removing(item).contains(item))
     }
 

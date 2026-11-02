@@ -42,20 +42,21 @@ struct MenuDefaultsTests {
         checkInsertion(ProfileTextMenuItem.self)
         checkInsertion(HashtagMenuItem.self)
         checkInsertion(MediaMenuItem.self)
+        checkInsertion(TabItem.self)
     }
 
-    private func checkInsertion<Item: BundledMenuDefaults>(_: Item.Type) {
+    private func checkInsertion<Item: MenuItemKind>(_: Item.Type) {
         let elements = Item.defaultLayout.elements
         for (index, element) in elements.enumerated() {
             guard case .item(let item, _) = element else { continue }
             let predecessor = elements[..<index].last { $0 != .separator && $0 != .rowSeparator }
             let saved = MenuLayout<Item>(tokens: Item.defaultLayout.tokens.filter { $0.split(separator: ":").last.map(String.init) != item.rawValue })
             guard let restored = saved.elements.firstIndex(of: element) else {
-                Issue.record("\(Item.defaultsKey)の\(item.rawValue)が戻らない")
+                Issue.record("\(Item.self)の\(item.rawValue)が戻らない")
                 continue
             }
-            #expect(saved.elements.filter { $0 == element }.count == 1, "\(Item.defaultsKey)の\(item.rawValue)")
-            #expect(restored == 0 ? predecessor == nil : saved.elements[restored - 1] == predecessor, "\(Item.defaultsKey)の\(item.rawValue)の位置")
+            #expect(saved.elements.filter { $0 == element }.count == 1, "\(Item.self)の\(item.rawValue)")
+            #expect(restored == 0 ? predecessor == nil : saved.elements[restored - 1] == predecessor, "\(Item.self)の\(item.rawValue)の位置")
         }
     }
 

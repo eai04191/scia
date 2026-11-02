@@ -17,8 +17,11 @@ struct PushAnchorTests {
                 navigations[item] = UINavigationController(rootViewController: UIViewController())
             }
             self.navigations = navigations
-            // 検索は既定で表示するため、ナビゲーションを作らない検索を無効にして置く。
-            let layout = MenuLayout<TabItem>(elements: [.item(.home, isVisible: true), .item(.notifications, isVisible: true), .more, .item(.local, isVisible: true), .item(.federated, isVisible: true), .item(.search, isVisible: false)])
+            // 並べなかった項目は既定の並びから既定の表示で差し込まれるため、ナビゲーションを作らない項目も無効にして置く。
+            let layout = MenuLayout<TabItem>(elements: [
+                .item(.home, isVisible: true), .item(.notifications, isVisible: true), .more, .item(.local, isVisible: true), .item(.federated, isVisible: true),
+                .item(.search, isVisible: false), .item(.bookmarks, isVisible: false), .item(.favourites, isVisible: false), .item(.scheduled, isVisible: false),
+            ])
             arrangement = TabArrangement(navigation: { navigations[$0] }, layout: layout, restoring: .home)
             let scene = try #require(
                 UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
