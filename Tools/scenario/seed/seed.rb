@@ -1,10 +1,10 @@
 # シナリオのMastodonに、使う人のアカウントと、相手役の人、投稿、通知になるやりとりを流し込む。
 # setup.shが空のデータベースに1回だけ`rails runner`で走らせ、終わった状態をスナップショットにする。何度も走らせる前提にはしない。
-# パスワードはこのローカルのサーバーだけのテスト用の値。
+# パスワードは、ログインするsetup.shと同じ値を使うため、common.shのSCENARIO_PASSWORDを環境変数で受け取る。
 require 'zlib'
 require 'sidekiq/api'
 
-PASSWORD = 'scenario-password'
+PASSWORD = ENV.fetch('SCENARIO_PASSWORD')
 
 # 本番モードのMastodonは、メールアドレスのドメインのMXレコードを引いて、ないと作らせない（User.skip_mx_check?が外すのは開発モードだけ）。
 # このサーバーのドメインはmastodon.localhostで、コンテナは外へ出られないので、流し込みの間だけ引かないようにする。

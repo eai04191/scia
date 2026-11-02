@@ -3,6 +3,9 @@ SCENARIO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # 証明書、Mastodonの秘密の値、データ、スナップショットは、リポジトリの外に置く。worktreeを消しても残し、どのworktreeからも同じものを使う
 export SCENARIO_HOME="${SCIA_SCENARIO_HOME:-$HOME/.scia-scenario}"
 SCENARIO_HOST=mastodon.localhost
+# 流し込むアカウントのパスワード。このローカルのサーバーだけのテスト用の値
+SCENARIO_PASSWORD=scenario-password
+SCIA_BUNDLE_ID=net.mizle.scia
 DEVICE_NAME='Scia Scenario'
 DEVICE_TYPE=com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro
 
@@ -13,7 +16,7 @@ compose() { docker compose -f "$SCENARIO_DIR/compose.yml" "$@"; }
 
 # スナップショットを作ったときの中身を表す値。compose.yml（Mastodonの版など）、流し込みの中身、秘密の値のどれかが変われば、作り直す
 snapshot_key() {
-    cat "$SCENARIO_DIR/compose.yml" "$SCENARIO_DIR/seed/seed.rb" "$SCENARIO_HOME/env.production" | shasum -a 256 | cut -d' ' -f1
+    { cat "$SCENARIO_DIR/compose.yml" "$SCENARIO_DIR/seed/seed.rb" "$SCENARIO_HOME/env.production"; echo "$SCENARIO_PASSWORD"; } | shasum -a 256 | cut -d' ' -f1
 }
 
 # データの置き場所をスナップショットで置き換えてから動かす。前に使った人の投稿やフォローを持ち越さないため、毎回置き換える
@@ -54,4 +57,60 @@ boot_device() {
 
 shutdown_device() {
     [ "$(device_state "$1")" = Shutdown ] || xcrun simctl shutdown "$1"
+}
+
+# Sciaを消して入れ直す。Sciaを消してもKeychainのログイン情報は残り、Sciaは起動するとKeychainのログイン情報をすべて読む（CredentialStore.loadAll）。
+# そのため、設定やキャッシュは初めての状態で、ログインした状態から始まる
+reinstall_app() {
+    local udid="$1" app="$2"
+    if xcrun simctl get_app_container "$udid" "$SCIA_BUNDLE_ID" >/dev/null 2>&1; then
+        xcrun simctl uninstall "$udid" "$SCIA_BUNDLE_ID"
+    fi
+    xcrun simctl install "$udid" "$app"
+}
+
+# Sciaを入れ直して起動し、ログインした状態でホームにyouの投稿が出れば0、ログイン画面が出たか、30秒で投稿が出なければ1を返す。
+# 人として触った人がログアウトすると、SciaがKeychainのログイン情報を消すので、次の人の前にこれで確かめる
+app_logged_in() {
+    local udid="$1" app="$2" deadline=$((SECONDS + 30)) tree
+    reinstall_app "$udid" "$app"
+    xcrun simctl launch "$udid" "$SCIA_BUNDLE_ID" >/dev/null
+    while [ $SECONDS -lt $deadline ]; do
+        tree="$(axe describe-ui --udid "$udid" 2>/dev/null || true)"
+        if python3 -I "$SCENARIO_DIR/ui.py" contains はじめての投稿です <<< "$tree"; then
+            xcrun simctl terminate "$udid" "$SCIA_BUNDLE_ID"
+            return 0
+        fi
+        python3 -I "$SCENARIO_DIR/ui.py" has stellaria.network TextField <<< "$tree" && break
+        sleep 1
+    done
+    xcrun simctl terminate "$udid" "$SCIA_BUNDLE_ID"
+    return 1
+}
+
+# ハードウェアキーボードがつながっていると、画面にキーボードが出ず、ログインで押すキーボードの上の「次へ」もない。毎回外す
+use_software_keyboard() {
+    swift "$SCENARIO_DIR/../sim-keyboard.swift" "$1" software >/dev/null
+}
+
+# 画面に、AXLabelと種類が一致する要素が出るまで待つ。Sciaの外の画面（サインインのダイアログやログインのページ）は全体の木に出ないので、wait_pointで待つ
+wait_label() {
+    local udid="$1" label="$2" kind="${3:-}" deadline=$((SECONDS + 30))
+    until axe describe-ui --udid "$udid" 2>/dev/null | python3 -I "$SCENARIO_DIR/ui.py" has "$label" $kind; do
+        [ $SECONDS -lt $deadline ] || fail "30秒待っても「$label」が出なかった"
+        sleep 1
+    done
+}
+
+wait_point() {
+    local udid="$1" x="$2" y="$3" label="$4" deadline=$((SECONDS + 30))
+    until [ "$(axe describe-ui --point "$x,$y" --udid "$udid" 2>/dev/null | python3 -I "$SCENARIO_DIR/ui.py" label)" = "$label" ]; do
+        [ $SECONDS -lt $deadline ] || fail "30秒待っても($x,$y)に「$label」が出なかった"
+        sleep 1
+    done
+}
+
+# AXeの既定のタップはSciaのボタンにもキーボードにも届かなかった。押し下げと離しを送るphysicalにする
+tap_point() {
+    axe tap -x "$2" -y "$3" --tap-style physical --udid "$1" >/dev/null
 }

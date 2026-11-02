@@ -1,13 +1,18 @@
 #!/bin/bash
 # シナリオの準備をする。何度走らせても、最後は同じ状態になる。
 # - 外へ出ないMastodonが、流し込んだ直後の中身で動いている
-# - 専用の端末（Scia Scenario）があり、使わないサービスを止め、シナリオの認証局を信頼している
-# 足りないものだけを作り、Mastodonのデータは毎回スナップショットで置き換える。最後に端末の中からhttpsで届くかを確かめ、端末を止める。
-# 使い方: Tools/scenario/setup.sh
+# - 専用の端末（Scia Scenario）があり、使わないサービスを止め、キーボードを英語だけにし、シナリオの認証局を信頼している
+# - 端末のKeychainに、スナップショットの中のyouのログイン情報がある。ログインのページやサインインのダイアログはSciaの外にあり、
+#   人として触らせても直せないので、スナップショットを作るときにAXeで1回だけログインしておく
+# 足りないものだけを作り、Mastodonのデータは毎回スナップショットで置き換える。最後に、端末の中からhttpsで届くかと、
+# 入れ直したSciaがログインした状態でホームを出すかを確かめ、端末を止める。
+# 使い方: Tools/scenario/setup.sh <Scia.appのパス>
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 
-for command in docker mkcert simslim xcrun shasum sqlite3; do
+app="${1:?使い方: Tools/scenario/setup.sh <Scia.appのパス>}"
+[ -d "$app" ] || fail "$app がない"
+for command in docker mkcert simslim xcrun shasum sqlite3 axe; do
     command -v "$command" >/dev/null || fail "$command が見つからない"
 done
 docker info >/dev/null 2>&1 || fail "Dockerにつながらない。OrbStackかDocker Desktopを起動する"
@@ -52,11 +57,13 @@ EOF
 }
 
 ensure_snapshot() {
-    local key
+    local udid="$1" key
     key="$(snapshot_key)"
     # 投稿の日時と投票の締め切り（7日）は、流し込んだときの日時で固まる。6日を超えたスナップショットは、投票が締め切り間近か締め切り済みで始まるので作り直す
+    # ログイン情報は端末のKeychainにあり、そのアクセストークンはスナップショットの中にある。端末を作り直したら、ログインし直してスナップショットも作り直す
     if [ -f "$SCENARIO_HOME/snapshot/key" ] && [ "$(cat "$SCENARIO_HOME/snapshot/key")" = "$key" ] \
-        && [ -z "$(find "$SCENARIO_HOME/snapshot/key" -mtime +6)" ]; then
+        && [ -z "$(find "$SCENARIO_HOME/snapshot/key" -mtime +6)" ] \
+        && [ "$(cat "$SCENARIO_HOME/snapshot/udid" 2>/dev/null)" = "$udid" ]; then
         return
     fi
     log "空のデータから立てて流し込み、スナップショットを作る"
@@ -66,12 +73,62 @@ ensure_snapshot() {
     compose up -d --wait db redis
     compose run --rm -T web bundle exec rails db:setup
     compose up -d --wait sidekiq
-    compose run --rm -T web bin/rails runner /seed/seed.rb
+    compose run --rm -T -e SCENARIO_PASSWORD="$SCENARIO_PASSWORD" web bin/rails runner /seed/seed.rb
+    compose up -d --wait
+    login_on_device "$udid"
     # 止めるとRedisが中身をファイルに書くので、止めてから固める
     compose down
     mkdir -p "$SCENARIO_HOME/snapshot"
     tar -cf "$SCENARIO_HOME/snapshot/data.tar" -C "$SCENARIO_HOME/data" .
+    echo "$udid" > "$SCENARIO_HOME/snapshot/udid"
     echo "$key" > "$SCENARIO_HOME/snapshot/key"
+}
+
+# 前のログイン情報を消し、入れ直したSciaでyouとしてログインする。
+# Mastodonのログインのページとサインインのダイアログは、AXeの全体の木に出ないので、位置で要素の名前を確かめてから押す。位置はiPhone 16 Proの画面のもの
+login_on_device() {
+    local udid="$1"
+    log "端末のSciaでyouとしてログインする"
+    boot_device "$udid"
+    xcrun simctl keychain "$udid" reset
+    reinstall_app "$udid" "$app"
+    xcrun simctl launch "$udid" "$SCIA_BUNDLE_ID" >/dev/null
+    wait_label "$udid" stellaria.network TextField
+    axe tap --value stellaria.network --element-type TextField --tap-style physical --udid "$udid" >/dev/null
+    axe type "$SCENARIO_HOST" --udid "$udid" >/dev/null
+    axe tap --label ログイン --element-type PopUpButton --tap-style physical --udid "$udid" >/dev/null
+    wait_label "$udid" 続ける Button
+    axe tap --label 続ける --element-type Button --tap-style physical --udid "$udid" >/dev/null
+    wait_point "$udid" 201 544 メールアドレス
+    tap_point "$udid" 201 544
+    # キーボードが出るとページが動き、パスワードの欄の位置が変わる。Tabキーでは次の欄に移らなかったので、キーボードの上の「次へ」で移る
+    # Returnキーでは送られないことがあったので、動いたあとの位置にある「ログイン」のボタンを押す
+    axe type "you@$SCENARIO_HOST" --udid "$udid" >/dev/null
+    wait_point "$udid" 93 512 次へ
+    tap_point "$udid" 93 512
+    axe type "$SCENARIO_PASSWORD" --udid "$udid" >/dev/null
+    wait_point "$udid" 201 386 ログイン
+    tap_point "$udid" 201 386
+    wait_point "$udid" 201 593 今はしない
+    tap_point "$udid" 201 593
+    wait_point "$udid" 103 594 承認
+    tap_point "$udid" 103 594
+    wait_label "$udid" ホーム Heading
+    xcrun simctl terminate "$udid" "$SCIA_BUNDLE_ID"
+}
+
+ensure_keyboard() {
+    local udid="$1"
+    # 日本語のキーボードでは、AXeで打った文字が変換中のまま残ったり、遅れて二重に入ったりした。英語のソフトウェアキーボードだけにする
+    # ハードウェアキーボードはつながない。つなぐと画面にキーボードが出ず、投稿欄とキーボードが重なる見え方を確かめられない
+    boot_device "$udid"
+    use_software_keyboard "$udid"
+    [ "$(xcrun simctl spawn "$udid" defaults read -g AppleKeyboards 2>/dev/null | tr -d ' \n')" = '("en_US@sw=QWERTY;hw=Automatic")' ] && return
+    log "キーボードを英語だけにする"
+    xcrun simctl spawn "$udid" defaults write -g AppleKeyboards -array 'en_US@sw=QWERTY;hw=Automatic'
+    xcrun simctl spawn "$udid" defaults write com.apple.keyboard.preferences KeyboardsCurrentAndNext -array 'en_US@sw=QWERTY;hw=Automatic'
+    shutdown_device "$udid"
+    boot_device "$udid"
 }
 
 ensure_device() {
@@ -134,13 +191,27 @@ verify_reach() {
     xcrun simctl spawn "$udid" "$probe" "https://$SCENARIO_HOST/api/v2/instance" >/dev/null || fail "端末の中からMastodonに届かなかった"
 }
 
+verify_logged_in() {
+    local udid="$1"
+    log "入れ直したSciaが、ログインした状態でホームにyouの投稿を出すか確かめる"
+    app_logged_in "$udid" "$app" && return
+    # 人として触った人がログアウトすると、Keychainのログイン情報が消える。ログインし直して、そのトークンを含むスナップショットを作り直す
+    log "ログインした状態で始まらなかったので、ログインし直してスナップショットを作り直す"
+    rm -f "$SCENARIO_HOME/snapshot/key"
+    ensure_snapshot "$udid"
+    restore_server
+    app_logged_in "$udid" "$app" || fail "ログインし直しても、Sciaがログインした状態で始まらなかった"
+}
+
 ensure_certs
 ensure_env
-ensure_snapshot
-restore_server
 udid="$(ensure_device)"
 ensure_slim "$udid"
+ensure_keyboard "$udid"
 ensure_root_cert "$udid"
+ensure_snapshot "$udid"
+restore_server
 verify_reach "$udid"
+verify_logged_in "$udid"
 shutdown_device "$udid"
 log "準備できた: $DEVICE_NAME ($udid)、https://$SCENARIO_HOST"
