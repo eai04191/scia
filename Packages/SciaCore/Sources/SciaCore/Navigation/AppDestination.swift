@@ -249,6 +249,8 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     case compose
     /// メディアの分類。HDRの明るさ、サムネイルの画質、代替テキストを並べる。
     case media
+    /// 情報。アプリのビルドと、接続の状態、ライセンスを並べる。
+    case about
     case appearance
     case notificationAppearance = "notification-appearance"
     case tabs
@@ -289,8 +291,9 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
         case .hashtagMenu: [.interaction, .hashtagActions, self]
         case .mediaMenu: [.interaction, .mediaActions, self]
         case .composeTools: [.compose, self]
+        case .connection, .licenses: [.about, self]
         case .viewedMediaCache, .prefetchedMediaCache: [.storage, self]
-        case .display, .interaction, .compose, .media, .tabs, .connection, .storage, .licenses: [self]
+        case .display, .interaction, .compose, .media, .about, .tabs, .storage: [self]
         }
     }
 }

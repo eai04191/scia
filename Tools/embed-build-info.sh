@@ -1,5 +1,5 @@
 #!/bin/sh
-# ビルドしたアプリのInfo.plistに、ビルド元のブランチとcommitを書き込む。
+# ビルドしたアプリのInfo.plistに、ビルド元のブランチとcommitと、ビルドした日時を書き込む。
 # 実機でいろいろなブランチのビルドを入れ替えて試すときに、いま入っているのがどれか分かるようにする（App/Sources/BuildInfo.swift）。
 # 未commitの変更を含むビルドは、commitに「-dirty」を付ける。gitで読めないときは、ビルドを失敗させる。
 set -eu
@@ -22,3 +22,5 @@ fi
 plist="$TARGET_BUILD_DIR/$INFOPLIST_PATH"
 plutil -replace SciaGitBranch -string "$branch" "$plist"
 plutil -replace SciaGitCommit -string "$commit" "$plist"
+# 同じcommitから作り直したビルドも見分けられるよう、このスクリプトが走った日時をUTCのISO 8601で書く
+plutil -replace SciaBuildDate -string "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$plist"

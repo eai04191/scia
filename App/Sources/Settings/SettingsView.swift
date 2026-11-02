@@ -18,7 +18,6 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     /// コピーしたことを知らせる表示を戻すまでの時計。
     private let clock: any Clock<Duration>
-    @State private var copiedBuildInfo = false
     /// 一覧から重ねて開いた画面。
     @State private var path: [SettingsPage]
 
@@ -84,43 +83,11 @@ struct SettingsView: View {
                     }
                 }
                 Section {
-                    NavigationLink(value: SettingsPage.connection) {
-                        SettingsCategoryLabel("接続の状態", systemImage: "antenna.radiowaves.left.and.right", color: .green)
-                    }
                     NavigationLink(value: SettingsPage.storage) {
                         SettingsCategoryLabel("ストレージ", systemImage: "internaldrive.fill", color: .gray)
                     }
-                    NavigationLink(value: SettingsPage.licenses) {
-                        SettingsCategoryLabel("ライセンス", systemImage: "doc.text.fill", color: .gray)
-                    }
-                }
-                Section {
-                    // いろいろなブランチのビルドを入れ替えて試すときに、いま入っているのがどれか分かるようにする。
-                    // 違和感の報告などに貼れるよう、タップでコピーする
-                    Button {
-                        UIPasteboard.general.string = BuildInfo.current.text
-                        copiedBuildInfo = true
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text(BuildInfo.current.branch)
-                                Text("\(BuildInfo.current.version) @ \(BuildInfo.current.commit)")
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Image(systemName: copiedBuildInfo ? "checkmark" : "doc.on.doc")
-                                .foregroundStyle(.secondary)
-                                .accessibilityHidden(true)
-                        }
-                    }
-                    // 押すとコピーする行だが、ほかの行と同じ文字の色にそろえる
-                    .tint(.primary)
-                    .accessibilityHint(copiedBuildInfo ? "コピーしました" : "タップでコピーします")
-                    .task(.withoutRequests, id: copiedBuildInfo) {
-                        guard copiedBuildInfo else { return }
-                        try? await clock.sleep(for: .seconds(1.5))
-                        copiedBuildInfo = false
+                    NavigationLink(value: SettingsPage.about) {
+                        SettingsCategoryLabel("情報", systemImage: "info.circle.fill", color: .gray)
                     }
                 }
             }
@@ -142,6 +109,7 @@ struct SettingsView: View {
         case .interaction: InteractionSettingsView(settings: settings)
         case .compose: ComposeSettingsView(settings: settings)
         case .media: MediaSettingsView(settings: settings)
+        case .about: AboutSettingsView(clock: clock)
         case .appearance: AppearanceEditorView(settings: settings)
         case .notificationAppearance: NotificationAppearanceEditorView(settings: settings)
         case .tabs:

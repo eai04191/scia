@@ -156,7 +156,7 @@ struct AppDestinationTests {
 
     @Test func pushesStorageBeforeMediaCache() {
         #expect(SettingsPage.viewedMediaCache.path == [.storage, .viewedMediaCache])
-        #expect(SettingsPage.licenses.path == [.licenses])
+        #expect(SettingsPage.licenses.path == [.about, .licenses])
     }
 
     /// 分類の中の画面は、分類の画面を挟んで開く。対象のメニューは、その対象の画面も挟む。戻ると、挟んだ画面に1つずつ戻る。
@@ -168,6 +168,7 @@ struct AppDestinationTests {
         #expect(SettingsPage.mediaActions.path == [.interaction, .mediaActions])
         #expect(SettingsPage.composeTools.path == [.compose, .composeTools])
         #expect(SettingsPage.tabs.path == [.tabs])
+        #expect(SettingsPage.connection.path == [.about, .connection])
     }
 
     /// ログには、誰の何を開いたかが分かるハンドルやIDを書かない。
