@@ -1260,10 +1260,10 @@ public enum TuningCatalog {
         defaultValue: 0.2
     )
 
-    /// メニューの並びの設定で、横並びの区切り線の知らせが出たり消えたりして、行が伸び縮みする時間。
-    public static let menuLayoutNoteDuration = NumberTuning(
-        id: "settings.menuLayoutNoteDuration",
-        title: "メニューの並びの設定で、横並びの知らせが出入りする時間（秒）",
+    /// メニューの並びの設定で、横並びに入る項目が変わり、字下げが付いたり外れたりする時間。
+    public static let menuLayoutIndentDuration = NumberTuning(
+        id: "settings.menuLayoutIndentDuration",
+        title: "メニューの並びの設定で、横並びの字下げが変わる時間（秒）",
         range: 0...1.5,
         step: 0.05,
         defaultValue: 0.25
@@ -1766,7 +1766,7 @@ public enum TuningCatalog {
             .number(completionResizeDuration),
         ]),
         TuningSection(id: "settings", title: "設定画面", items: [
-            .number(menuLayoutNoteDuration),
+            .number(menuLayoutIndentDuration),
         ]),
         TuningSection(id: "batch", title: "まとめて行う操作", items: [
             .number(batchReblogInterval),

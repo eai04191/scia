@@ -318,6 +318,10 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
 
     private func configure(_ cell: UICollectionViewListCell, for row: Row) {
         let reorder = UICellAccessory.reorder(displayed: .always, options: .init(showsVerticalSeparator: false))
+        // セルは種類をまたいで使い回され、字下げは使い回しても残るため、区切り線などの行でも付け直す。
+        let index = rows.firstIndex { $0.id == row.id }
+        cell.indentationWidth = rowGroupIndentation
+        setRowGroupMembership(index.map(rowGroupIndices.contains) == true, of: cell)
         switch row.element {
         case .item(let item, let isVisible):
             var content = UIListContentConfiguration.subtitleCell()
@@ -340,8 +344,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             cell.contentConfiguration = UIHostingConfiguration { SeparatorRow() }
             cell.accessories = [reorder]
         case .rowSeparator:
-            let count = visibleItemCount(after: row.id)
-            cell.contentConfiguration = UIHostingConfiguration { RowSeparatorRow(count: count, capacity: rowCapacity) }
+            cell.contentConfiguration = UIHostingConfiguration { RowSeparatorRow() }
             cell.accessories = [reorder]
         case .more:
             var content = UIListContentConfiguration.subtitleCell()
@@ -355,8 +358,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         }
     }
 
-    /// 横並びの知らせは、まとまりの項目の数で出たり消えたりして行の高さが変わるため、行を足したり消したりし終わってから描き直す。
-    /// 同じ`apply`で描き直すと、足したり消したりする行が動かずに一度に入れ替わる。
+    /// 横並びの字下げは、行を足したり消したりし終わってから付け直す。
     private func applySnapshot(animated: Bool) {
         var snapshot = NSDiffableDataSourceSnapshot<Section, Cell>()
         snapshot.appendSections([.rows, .actions])
@@ -373,17 +375,17 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             snapshot.appendSections([.option(index)])
             snapshot.appendItems([.option(index)], toSection: .option(index))
         }
-        dataSource?.apply(snapshot, animatingDifferences: animated) { [weak self] in self?.refreshRowSeparatorNotes() }
+        dataSource?.apply(snapshot, animatingDifferences: animated) { [weak self] in self?.refreshRowGroups() }
     }
 
-    /// 横並びの知らせと行どうしの線は、ほかの行の並びや表示で変わるため、並びが変わるたびに描き直す。
+    /// 横並びの字下げと行どうしの線は、ほかの行の並びや表示で変わるため、並びが変わるたびに描き直す。
     /// 線は、すべての行に大きさを測り直させて引き直す。並べ替えている間、一覧は途中の並びの位置で線の出方を聞くが、`rows`は指を離すまで元の並びなので、ほかの行の出方で引いてしまう。
     /// 区切り線の行が動くと、その行は前後とも上下に線を引かないままなのに、下の行の出方で線を引いて残るため、出方が変わった行に絞らない。
     /// レイアウトを無効にすると、無効にする行を絞っても画面の外の行の測った高さが見積もりの高さに戻って一覧の高さが縮み、
     /// 下のほうまでスクロールしていると、指を離した直後に持ち上げていた行が離れた位置に描かれ、そこから跳ねて戻るため、行に測り直させる。
     /// 画面の外の行はセルがなく測り直させられないので、画面に入るときに測り直させる。
     private func refreshDependentRows() {
-        refreshRowSeparatorNotes()
+        refreshRowGroups()
         for index in rows.indices {
             if let cell = collectionView.cellForItem(at: IndexPath(item: index, section: 0)) {
                 cell.invalidateIntrinsicContentSize()
@@ -407,41 +409,63 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         var bottom: Bool
     }
 
-    /// 横並びの知らせは、まとまりの項目の表示を切り替えても変わる。
-    /// data sourceへの`apply`で描き直すと、ほかの行のスイッチまで以後のタップに反応しなくなったため、見えているセルを直接描き直す。
+    /// 横並びの字下げは、まとまりの項目の表示を切り替えても変わる。
+    /// data sourceへの`apply`で描き直すと、ほかの行のスイッチまで以後のタップに反応しなくなったため、見えているセルの字下げだけを変える。
     /// 見えていない行は、出てくるときに今の行から作られる。
-    /// 知らせが出たり消えたりすると行の高さが変わるため、下の行が一度に跳ねないよう、伸び縮みを動かす。
-    private func refreshRowSeparatorNotes() {
+    private func refreshRowGroups() {
+        let members = rowGroupIndices
         // 視差効果を減らす設定では動かさない（docs/vision.mdの「一覧の動き」）。
-        let duration = UIAccessibility.isReduceMotionEnabled ? 0 : AppDependencies.tuning.value(of: TuningCatalog.menuLayoutNoteDuration)
-        UIView.animate(withDuration: duration, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState]) { [self] in
-            for row in rows where row.element == .rowSeparator {
-                guard let indexPath = dataSource?.indexPath(for: .row(row.id)),
+        let duration = UIAccessibility.isReduceMotionEnabled ? 0 : AppDependencies.tuning.value(of: TuningCatalog.menuLayoutIndentDuration)
+        UIView.animateSmoothly(duration: duration) { [self] in
+            for (index, row) in rows.enumerated() {
+                guard case .item = row.element,
+                      let indexPath = dataSource?.indexPath(for: .row(row.id)),
                       let cell = collectionView.cellForItem(at: indexPath) as? UICollectionViewListCell else { continue }
-                configure(cell, for: row)
+                setRowGroupMembership(members.contains(index), of: cell)
             }
             collectionView.layoutIfNeeded()
         }
     }
 
-    /// 横並びの区切り線から、次の区切り線か「その他」の境目までにある、表示する項目の数。
-    private func visibleItemCount(after id: UUID) -> Int {
-        guard let index = rows.firstIndex(where: { $0.id == id }) else { return 0 }
-        var count = 0
-        for next in rows[(index + 1)...] {
-            switch next.element {
-            case .item(_, let isVisible): if isVisible { count += 1 }
-            case .separator, .rowSeparator, .more: return count
+    /// 横並びに入る項目は、字下げし、字下げの見えないVoiceOverでは横に並ぶことを読み上げる。
+    private func setRowGroupMembership(_ isMember: Bool, of cell: UICollectionViewListCell) {
+        cell.indentationLevel = isMember ? 1 : 0
+        cell.accessibilityHint = isMember ? "メニューで横に並びます" : nil
+    }
+
+    /// 横並びに入る項目の字下げの幅。既定の幅では、アイコンがずれて見えるだけで、まとまりに見えないため広げる。
+    private let rowGroupIndentation: CGFloat = 24
+
+    /// メニューで横に並ぶ項目の、`rows`の中の位置。
+    private var rowGroupIndices: Set<Int> {
+        Self.rowGroupIndices(in: rows.map(\.element), capacity: rowCapacity)
+    }
+
+    /// 横並びの区切り線の下で、メニューで横に並ぶ項目と、その間に挟まる隠した項目の位置。字下げして、どこまでが横に並ぶかを見せる。
+    /// 区切り線か「その他」の境目でまとまりが終わり、表示する項目が`capacity`個に達したあとの項目は、ふだんの行で出るので含めない。
+    static func rowGroupIndices(in elements: [MenuLayout<Item>.Element], capacity: Int) -> Set<Int> {
+        var indices: Set<Int> = []
+        var remaining = 0
+        for (index, element) in elements.enumerated() {
+            switch element {
+            case .rowSeparator:
+                remaining = capacity
+            case .separator, .more:
+                remaining = 0
+            case .item(_, let isVisible):
+                guard remaining > 0 else { continue }
+                indices.insert(index)
+                if isVisible { remaining -= 1 }
             }
         }
-        return count
+        return indices
     }
 
     private func setVisible(_ isVisible: Bool, id: UUID) {
         guard let index = rows.firstIndex(where: { $0.id == id }), case .item(let item, _) = rows[index].element else { return }
         rows[index].element = .item(item, isVisible: isVisible)
         save()
-        refreshRowSeparatorNotes()
+        refreshRowGroups()
         if Item.requiresVisibleItem {
             refreshItemSwitches()
         }
@@ -453,7 +477,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     }
 
     /// 最後の1つのスイッチを切れなくするため、表示の切り替えのたびに、見えている項目の行を描き直す。
-    /// `refreshRowSeparatorNotes`と同じく、data sourceへの`apply`ではなく見えているセルを直接描き直す。
+    /// `refreshRowGroups`と同じく、data sourceへの`apply`ではなく見えているセルを直接描き直す。
     private func refreshItemSwitches() {
         for row in rows {
             guard case .item = row.element,
@@ -536,30 +560,19 @@ private struct SeparatorRow: View {
 }
 
 private struct RowSeparatorRow: View {
-    let count: Int
-    let capacity: Int
-
     var body: some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 12) {
-                SeparatorLine()
-                Label("横並び", systemImage: "rectangle.split.3x1")
-                    // リストの行の中では、指定しないとアイコンだけになる。
-                    .labelStyle(.titleAndIcon)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize()
-                SeparatorLine()
-            }
-            if count > capacity {
-                Text("横に並ぶのは\(capacity)個までです。\(capacity + 1)個目からは、その下にふだんの行で出ます")
-                    .font(.footnote)
-                    .foregroundStyle(.orange)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+        HStack(spacing: 12) {
+            SeparatorLine()
+            Label("横並び", systemImage: "rectangle.split.3x1")
+                // リストの行の中では、指定しないとアイコンだけになる。
+                .labelStyle(.titleAndIcon)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize()
+            SeparatorLine()
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(count > capacity ? "横並びの区切り線。横に並ぶのは\(capacity)個までです" : "横並びの区切り線")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("横並びの区切り線")
     }
 }
 
