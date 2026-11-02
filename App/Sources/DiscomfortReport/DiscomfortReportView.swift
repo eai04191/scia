@@ -1,3 +1,4 @@
+#if DEBUG
 import SciaCore
 import SwiftUI
 
@@ -178,3 +179,4 @@ struct DiscomfortReportView: View {
         }
     }
 }
+#endif

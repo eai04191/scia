@@ -1,3 +1,4 @@
+#if DEBUG
 import SciaCore
 import SwiftUI
 import UIKit
@@ -34,3 +35,4 @@ private final class DiscomfortReportHostingController: UIHostingController<Disco
         fatalError("init(coder:) has not been implemented")
     }
 }
+#endif
