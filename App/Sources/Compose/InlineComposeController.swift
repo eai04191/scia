@@ -206,7 +206,7 @@ final class InlineComposeController: NSObject {
     private var isEditing = false
     /// バーを広げて、入力欄とボタンを出す。書いているときと、設定で書いていないときも畳まないとき。
     private var isOpen: Bool {
-        isEditing || settings.keepsComposeBarOpen
+        isEditing || settings.composeBarIdle == .open
     }
     /// 最後に並べたバーの形が、入力欄とボタンを出した形か。
     private var isLayoutOpen = false
@@ -2409,7 +2409,7 @@ final class InlineComposeController: NSObject {
     /// 畳まない設定を切り替えたら、書いていないときのバーの形を合わせる。
     private func observeKeepsOpen() {
         withObservationTracking {
-            _ = settings.keepsComposeBarOpen
+            _ = settings.composeBarIdle
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor in
                 self?.keepsOpenDidChange()

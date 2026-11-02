@@ -119,6 +119,25 @@ struct AppSettingsTests {
         #expect(!AppSettings(defaults: defaults, keepsComposeBarOpenByDefault: true).keepsComposeBarOpen)
     }
 
+    /// 設定の画面の1つの選択が、2つの保存値のどの組み合わせになるか。
+    @Test(arguments: [(ComposeBarIdle.hidden, true, false), (.collapsed, false, false), (.open, false, true)])
+    func composeBarIdleSetsBothFlags(idle: ComposeBarIdle, hides: Bool, keepsOpen: Bool) throws {
+        let settings = AppSettings(defaults: try makeDefaults(), keepsComposeBarOpenByDefault: !keepsOpen)
+        settings.hidesEmptyComposeBar = !hides
+        settings.composeBarIdle = idle
+        #expect(settings.hidesEmptyComposeBar == hides)
+        #expect(settings.keepsComposeBarOpen == keepsOpen)
+        #expect(settings.composeBarIdle == idle)
+    }
+
+    /// 前に両方をオンにしていたら、隠すほうとして読む。
+    @Test func readsHiddenWhenBothFlagsAreOn() throws {
+        let settings = AppSettings(defaults: try makeDefaults())
+        settings.hidesEmptyComposeBar = true
+        settings.keepsComposeBarOpen = true
+        #expect(settings.composeBarIdle == .hidden)
+    }
+
     @Test func persistsKeepsComposeBarOpen() throws {
         let defaults = try makeDefaults()
         AppSettings(defaults: defaults).keepsComposeBarOpen = true

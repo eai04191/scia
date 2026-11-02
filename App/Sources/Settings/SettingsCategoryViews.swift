@@ -137,8 +137,11 @@ struct ComposeSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Toggle("書いていないときは隠す", isOn: $settings.hidesEmptyComposeBar)
-                Toggle("書いていないときも畳まない", isOn: $settings.keepsComposeBarOpen)
+                Picker("書いていないとき", selection: $settings.composeBarIdle) {
+                    Text("隠す").tag(ComposeBarIdle.hidden)
+                    Text("折りたたむ").tag(ComposeBarIdle.collapsed)
+                    Text("開いたまま").tag(ComposeBarIdle.open)
+                }
                 NavigationLink("投稿欄のボタン", value: SettingsPage.composeTools)
             }
             Section {
