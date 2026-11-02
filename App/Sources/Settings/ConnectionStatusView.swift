@@ -71,6 +71,7 @@ struct ConnectionStatusView: View {
         }
         .topEdgeEffectHiddenOnMac()
         .navigationTitle("接続の状態")
+        .navigationBarTitleDisplayMode(.inline)
         .task(.withoutRequests) {
             // 開いている間も状態は変わるため、読み直し続ける。
             while !Task.isCancelled {

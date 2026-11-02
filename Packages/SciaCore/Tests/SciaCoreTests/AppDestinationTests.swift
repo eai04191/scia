@@ -159,6 +159,15 @@ struct AppDestinationTests {
         #expect(SettingsPage.licenses.path == [.licenses])
     }
 
+    /// 分類の中の画面は、分類の画面を挟んで開く。戻ると、その分類の画面に戻る。
+    @Test func pushesCategoryBeforeItsPages() {
+        #expect(SettingsPage.appearance.path == [.display, .appearance])
+        #expect(SettingsPage.statusMenu.path == [.interaction, .statusMenu])
+        #expect(SettingsPage.mediaActions.path == [.interaction, .mediaActions])
+        #expect(SettingsPage.composeTools.path == [.compose, .composeTools])
+        #expect(SettingsPage.tabs.path == [.tabs])
+    }
+
     /// ログには、誰の何を開いたかが分かるハンドルやIDを書かない。
     @Test func logsWithoutIdentifiers() {
         #expect(!AppDestination.note(acct: "bob@example.com").logDescription.contains("bob"))
