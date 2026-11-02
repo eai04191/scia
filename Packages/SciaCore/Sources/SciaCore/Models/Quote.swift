@@ -73,6 +73,15 @@ public struct Quote: Codable, Hashable, Sendable {
         self.quotedStatusID = quotedStatusID ?? quotedStatus?.id
     }
 
+    /// 承認待ちだった引用を、取り直した`fresh`に揃えたもの。
+    /// 引用元の中の引用だけが承認待ちなら、引用元は手元のまま残し、中の引用だけを差し替える。
+    /// 取り直している間に囲みから行ったお気に入りなどを、取り直した中身で戻さないため。引用そのものの状態が変わっていたら、まるごと差し替える。
+    func adoptingRefreshed(_ fresh: Quote) -> Quote {
+        guard state == fresh.state, state != .pending, let shown = quotedStatus else { return fresh }
+        guard let source = fresh.quotedStatus, source.id == shown.id, let nested = source.quote else { return self }
+        return Quote(state: rawState, quotedStatus: shown.replacingQuote(nested), quotedStatusID: quotedStatusID)
+    }
+
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         rawState = try container.decode(String.self, forKey: .state)

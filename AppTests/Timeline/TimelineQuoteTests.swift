@@ -240,6 +240,34 @@ struct TimelineQuoteTests {
         #expect(TimelineViewController.emojiURLs(of: status, quoteSources: changes).contains(added.staticUrl))
     }
 
+    /// 承認待ちだった引用を取り直して、承認された引用元の囲みに替わるときは、docs/vision.mdの「一覧の動き」のとおり伸ばす。
+    /// 上端が表示領域より上にある行は画面上の位置を保ち、下の行は元の位置から新しい位置へ動かす。
+    @Test func refreshedQuoteGrowsRowWithMotion() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
+        let base = statuses[10]
+        statuses[10] = quoting(base, Quote(state: "pending"))
+        harness.setStatuses(statuses)
+        let id = TimelineViewController.ItemID.status(base.id)
+        try harness.scroll(to: id, at: .top)
+        harness.collectionView.contentOffset.y += 20
+        harness.collectionView.layoutIfNeeded()
+        let y = try #require(harness.windowMinY(of: id))
+        let height = try #require(harness.visibleCell(of: id)?.frame.height)
+        let belowCell = try #require(harness.visibleCell(of: .status(statuses[11].id)))
+
+        statuses[10] = quoting(base, Quote(state: "accepted", quotedStatus: quoted("q1")))
+        harness.viewController.refreshedStatusID = base.id
+        harness.setStatuses(statuses)
+        harness.viewController.refreshedStatusID = nil
+
+        #expect(configuration(in: harness, of: base.id)?.embed?.text.string == "引用元の本文")
+        #expect(try #require(harness.visibleCell(of: id)?.frame.height) > height, "囲みに替わって行が伸びていません")
+        #expect(harness.windowMinY(of: id) == y)
+        #expect(belowCell.layer.animationKeys()?.contains { $0.hasPrefix("rowShift") } == true, "下の行を動かしていません")
+    }
+
     /// 引用元の編集と削除、読み込んだあとのミュートを受け取ると、引用している行の囲みを描き直す。
     @Test func sourceChangesRedrawQuotingRows() throws {
         let harness = try TimelineHarness()

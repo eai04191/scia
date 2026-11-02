@@ -14,11 +14,16 @@ public struct StatusRefreshNeeds: OptionSet, Sendable {
     /// 自分のサーバーの投稿には数秒で付き、ほかのサーバーの投稿は、受け取ってから0〜60秒のランダムな時間をおいて取りに行く。
     /// 取りに行く仕事は優先度の低いキューに入るため、混んでいるサーバーではさらに遅れる。
     public static let linkCard = StatusRefreshNeeds(rawValue: 1 << 0)
+    /// 引用か、引用元の中の引用が承認待ち。
+    /// Mastodonは、ほかのサーバーの投稿の引用の承認を確かめられなかったとき、承認待ちのまま配信し、あとで確かめ直す。
+    /// 確かめ終えたことは、その投稿の作者のフォロワーのホームにしかストリーミングで流さない。引用元の中の引用は、引用元の作者のフォロワーにしか流れない。
+    public static let pendingQuote = StatusRefreshNeeds(rawValue: 1 << 1)
 
     /// `status`を取り直す理由。ブーストなら、ブーストされた投稿を渡す。
     public init(_ status: Status) {
         self = []
         if case .link = LinkCard(status: status) { insert(.linkCard) }
+        if status.quote?.state == .pending || status.quote?.quotedStatus?.quote?.state == .pending { insert(.pendingQuote) }
     }
 }
 
@@ -241,33 +246,33 @@ public final class StatusRefresher {
             let statuses = try await RequestPurpose.$current.withValue(.display) {
                 try await fetch(ids)
             }
-            let carded = statuses.filter { $0.card != nil }
-            for status in carded {
+            // 理由の一部だけが仕上がったときも、その分を先に出す。
+            for status in statuses {
                 apply(status)
             }
-            // カードが届いた版と、返らなかった投稿（消えたか見られなくなった）は、もう取り直さない。
-            let cardedIDs = Set(carded.map(\.id))
-            let finishedIDs = cardedIDs.union(Set(ids).subtracting(statuses.map(\.id)))
+            // 仕上がった版と、返らなかった投稿（消えたか見られなくなった）は、もう取り直さない。
+            let settledIDs = Set(statuses.filter { StatusRefreshNeeds($0).isEmpty }.map(\.id))
+            let finishedIDs = settledIDs.union(Set(ids).subtracting(statuses.map(\.id)))
             schedule.finish(attempts.map(\.version).filter { finishedIDs.contains($0.statusID) })
-            logger.info("link card refresh requested=\(ids.count, privacy: .public) carded=\(carded.count, privacy: .public)")
-            logOutcomes(of: attempts, cardedIDs: cardedIDs)
+            logger.info("status refresh requested=\(ids.count, privacy: .public) settled=\(settledIDs.count, privacy: .public)")
+            logOutcomes(of: attempts, settledIDs: settledIDs)
         } catch is FeatureUnavailable {
             isUnsupported = true
         } catch {
-            logger.error("link card refresh failed: \(SciaLog.describe(error), privacy: .public)")
-            logOutcomes(of: attempts, cardedIDs: [])
+            logger.error("status refresh failed: \(SciaLog.describe(error), privacy: .public)")
+            logOutcomes(of: attempts, settledIDs: [])
         }
     }
 
-    /// 間隔や諦めるまでの時間を見直せるよう、カードが届くまでの時間と、諦めた投稿を残す。
-    private func logOutcomes(of attempts: [StatusRefreshSchedule.Attempt], cardedIDs: Set<Status.ID>) {
+    /// 間隔や諦めるまでの時間を見直せるよう、仕上がるまでの時間と、諦めた投稿を残す。
+    private func logOutcomes(of attempts: [StatusRefreshSchedule.Attempt], settledIDs: Set<Status.ID>) {
         let now = now()
         for attempt in attempts {
             let elapsed = Int(now.timeIntervalSince(attempt.firstSeen).rounded())
-            if cardedIDs.contains(attempt.version.statusID) {
-                logger.info("link card arrived elapsed=\(elapsed, privacy: .public)s attempts=\(attempt.count, privacy: .public)")
+            if settledIDs.contains(attempt.version.statusID) {
+                logger.info("status refresh settled elapsed=\(elapsed, privacy: .public)s attempts=\(attempt.count, privacy: .public)")
             } else if attempt.isFinal {
-                logger.info("link card gave up elapsed=\(elapsed, privacy: .public)s attempts=\(attempt.count, privacy: .public)")
+                logger.info("status refresh gave up elapsed=\(elapsed, privacy: .public)s attempts=\(attempt.count, privacy: .public)")
             }
         }
     }

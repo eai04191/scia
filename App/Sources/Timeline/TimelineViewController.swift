@@ -808,6 +808,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     ///   操作の結果が分かるよう、消える行を閉じ、下の行を詰める動きで消す。消せないときは、ほかの更新と同じく動かさずに位置を保つ。
     /// - Parameter base: `newEntries`は、この並びに行を足すか除くかしただけで、残る行の中身を変えていない。
     ///   前回並べた配列と同じものなら、描き直す行を探すために行の中身を比べるのを省く。一覧が長いと、比べるだけで重くなるため。
+    /// サーバーから取り直した中身を反映している間の投稿。この投稿の行を描き直すときは、高さが変わる分を下の行ごと動かしてつなぐ。
+    /// 承認された引用のように、あとから届いた中身で見えている行の高さが変わるため（docs/vision.mdの「一覧の動き」）。
+    /// 取り直した投稿は各一覧の`updateStatus`から並びの置き換えを通って届くので、置き換えの間だけ立てる。
+    var refreshedStatusID: Status.ID?
+
     func setEntries(_ newEntries: [TimelineEntry], keeping anchorID: ItemID? = nil, placingAtTop topID: ItemID? = nil, keepsOffset: Bool = false, animatesRemoval: Bool = false, keepingRowContentsOf base: [TimelineEntry]? = nil) {
         updateEntries(newEntries, keeping: anchorID, placingAtTop: topID, keepsOffset: keepsOffset, animatesRemoval: animatesRemoval, animatesChanges: false, keepingRowContentsOf: base)
     }
@@ -860,7 +865,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let reconnectedIDs = Set(previousConnections.keys).union(replyConnections.keys).filter { id in
             previous[id] != nil && entries[id] != nil && previousConnections[id] != replyConnections[id]
         }
-        snapshot.reconfigureItems(Array(reconnectedIDs.union(changedIDs)))
+        // 取り直した投稿の行は、並びを置き換えたあとで高さを動かして描き直す。
+        let refreshedIDs = refreshedStatusID.map { refreshed in Set(changedIDs.filter { status(for: $0)?.displayed.id == refreshed }) } ?? []
+        defer { reconfigureAnimatingHeight(refreshedIDs, duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration)) }
+        snapshot.reconfigureItems(Array(reconnectedIDs.union(changedIDs).subtracting(refreshedIDs)))
         if animatesRemoval, changedIDs.isEmpty, canAnimateRemoval(leaving: newIDs) {
             FrameWork.measure("snapshot.apply") { dataSource.apply(snapshot, animatingDifferences: true) }
             logger.info("setEntries count=\(newEntries.count, privacy: .public) animatesRemoval=true")
@@ -1659,6 +1667,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             else { return nil }
             var shown: StatusRefreshNeeds = []
             if configuration.card != nil { shown.insert(.linkCard) }
+            if configuration.embed != nil { shown.insert(.pendingQuote) }
             return StatusRefreshNeeds(status).isDisjoint(with: shown) ? nil : status
         }
     }

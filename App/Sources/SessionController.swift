@@ -322,7 +322,11 @@ final class SessionController {
             threads.updateStatus(id, transform)
             searches.updateStatus(id, transform)
         }
+        let timelines = timelines
         let statusRefresher = StatusRefresher(client: client) { refetched in
+            let shown = timelines.allObjects
+            for timeline in shown { timeline.refreshedStatusID = refetched.id }
+            defer { for timeline in shown { timeline.refreshedStatusID = nil } }
             for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, serverFeeds.updateStatus, pushedFeeds.updateStatus, profiles.updateStatus, threads.updateStatus, searches.updateStatus] {
                 update(refetched.id) { $0.adoptingRefreshed(of: refetched) }
             }

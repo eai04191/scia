@@ -227,10 +227,13 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
 
     /// 取り直した同じ投稿から、サーバーがあとから仕上げる中身（`StatusRefreshNeeds`）を移したもの。
     /// 取り直している間に編集が届いていたら、取り直したのは編集の前の版で、カードもその版のリンクのものなので、移さずにそのまま返す。
+    /// 移すのは、取り直す理由になっている中身だけ。ほかの中身は、取り直している間に行った操作（引用元へのお気に入りなど）を戻さないよう、そのままにする。
     public func adoptingRefreshed(of refetched: Status) -> Status {
         guard refetched.id == id, refetched.editedAt == editedAt else { return self }
+        let needs = StatusRefreshNeeds(self)
         var status = self
-        status.card = refetched.card
+        if needs.contains(.linkCard) { status.card = refetched.card }
+        if needs.contains(.pendingQuote), let quote, let fresh = refetched.quote { status.quote = quote.adoptingRefreshed(fresh) }
         return status
     }
 

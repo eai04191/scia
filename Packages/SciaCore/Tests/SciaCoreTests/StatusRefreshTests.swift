@@ -3,7 +3,7 @@ import SciaTesting
 import Testing
 @testable import SciaCore
 
-/// カードが付く前に受け取った投稿を、見えている間だけ間隔を空けてまとめて取り直し、届いたカードを反映することを確かめる。
+/// サーバーが仕上げ終える前に受け取った投稿を、見えている間だけ間隔を空けてまとめて取り直し、仕上がった中身を反映することを確かめる。
 struct StatusRefreshTests {
     private static let account = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: URL(string: "https://example.social/a.png"))
     private static let start = Date(timeIntervalSince1970: 1_000_000)
@@ -23,6 +23,31 @@ struct StatusRefreshTests {
 
     private static func card() throws -> PreviewCard {
         PreviewCard(url: try #require(URL(string: "https://news.example/articles/1")), title: "見出し", description: "", type: .link, providerName: "News")
+    }
+
+    private static func quoting(_ id: String, state: String, nestedState: String? = nil) -> Status {
+        let nested = nestedState.map { Quote(state: $0, quotedStatusID: "nested") }
+        let quoted = Status(id: "quoted-\(id)", createdAt: start, account: account, content: "<p>引用元</p>", spoilerText: "", url: nil, quote: nested)
+        return Status(
+            id: id,
+            createdAt: start,
+            account: account,
+            content: "<p>引用した投稿</p>",
+            spoilerText: "",
+            url: nil,
+            quote: Quote(state: state, quotedStatus: state == "accepted" ? quoted : nil, quotedStatusID: "quoted-\(id)")
+        )
+    }
+
+    // MARK: - 理由
+
+    /// 引用か、引用元の中の引用が承認待ちなら、取り直す。Mastodonは、引用の承認を確かめ終える前に配信することがあり、
+    /// 確かめ終えたことは、その投稿の作者のフォロワーにしかストリーミングで流さないため。
+    @Test func pendingQuoteNeedsRefresh() {
+        #expect(StatusRefreshNeeds(Self.quoting("1", state: "pending")) == .pendingQuote)
+        #expect(StatusRefreshNeeds(Self.quoting("2", state: "accepted", nestedState: "pending")) == .pendingQuote)
+        #expect(StatusRefreshNeeds(Self.quoting("3", state: "accepted", nestedState: "accepted")).isEmpty)
+        #expect(StatusRefreshNeeds(Self.quoting("4", state: "revoked")).isEmpty)
     }
 
     // MARK: - 予定
@@ -169,7 +194,7 @@ struct StatusRefreshTests {
 
     // MARK: - 取り直し
 
-    /// 2回目でカードが届いたら反映し、それより後は取り直さない。
+    /// 取り直すたびに反映し、2回目でカードが届いたら、それより後は取り直さない。
     @MainActor
     @Test func appliesCardWhenItArrives() async throws {
         let clock = FakeClock(now: Self.start)
@@ -191,8 +216,8 @@ struct StatusRefreshTests {
         await refresher.waitUntilIdle()
 
         #expect(await fetches.values == [["1"], ["1"]])
-        #expect(applied.map(\.id) == ["1"])
-        #expect(applied.first?.card == card)
+        #expect(applied.map(\.id) == ["1", "1"])
+        #expect(applied.last?.card == card)
         #expect(clock.now == Self.start.addingTimeInterval(13))
     }
 
@@ -315,6 +340,60 @@ struct StatusRefreshTests {
         await refresher.waitUntilIdle()
 
         #expect(await origins.values == [.display])
+    }
+
+    /// 承認待ちの引用は、取り直した引用に差し替える。
+    @Test func adoptsSettledQuote() {
+        let refetched = Self.quoting("1", state: "accepted", nestedState: "accepted")
+
+        #expect(Self.quoting("1", state: "pending").adoptingRefreshed(of: refetched).quote == refetched.quote)
+        #expect(Self.quoting("1", state: "accepted", nestedState: "pending").adoptingRefreshed(of: refetched).quote == refetched.quote)
+    }
+
+    /// 引用元の中の引用だけが承認待ちなら、引用元は手元のまま残し、中の引用だけを差し替える。
+    /// 取り直している間に囲みから行ったお気に入りを、取り直した中身で戻さないため。
+    @MainActor
+    @Test func nestedQuoteKeepsActionsOnQuotedStatus() throws {
+        let shown = Self.quoting("1", state: "accepted", nestedState: "pending")
+        let favourited = TimelineStore.updatingQuoted("quoted-1", in: shown) { $0.settingFavourited(true) }
+        let refetched = Self.quoting("1", state: "accepted", nestedState: "accepted")
+
+        let adopted = try #require(favourited.adoptingRefreshed(of: refetched).quote?.quotedStatus)
+
+        #expect(adopted.quote?.state == .accepted)
+        #expect(adopted.favourited)
+    }
+
+    /// 承認待ちでない引用は、取り直した引用に差し替えない。取り直している間に囲みから行ったお気に入りなどを、取り直した中身で戻さないため。
+    @Test func keepsQuoteThatWasNotPending() {
+        let shown = Self.quoting("1", state: "accepted", nestedState: "accepted")
+        let refetched = Self.quoting("1", state: "revoked")
+
+        #expect(shown.adoptingRefreshed(of: refetched).quote == shown.quote)
+    }
+
+    /// 承認待ちの引用が承認されたら反映し、それより後は取り直さない。
+    @MainActor
+    @Test func appliesQuoteWhenItIsAccepted() async {
+        let clock = FakeClock(now: Self.start)
+        let fetches = Recorder<[Status.ID]>()
+        var applied: [Status] = []
+        let refresher = StatusRefresher(
+            fetch: { ids in
+                let count = await fetches.append(ids)
+                return ids.map { Self.quoting($0, state: count >= 2 ? "accepted" : "pending") }
+            },
+            apply: { applied.append($0) },
+            now: { clock.now },
+            sleep: { await clock.advance($0) }
+        )
+        let owner = NSObject()
+
+        refresher.setVisible([Self.quoting("1", state: "pending")], from: owner)
+        await refresher.waitUntilIdle()
+
+        #expect(await fetches.values == [["1"], ["1"]])
+        #expect(applied.last?.quote?.state == .accepted)
     }
 
     @Test func adoptsCardOfSameVersion() throws {
