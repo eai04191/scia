@@ -211,6 +211,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private(set) var newArrivalsButtonShowsArrow = true
     /// 新着ボタンの出し入れを始めた回数。途中で向きを変えると、前の動きの完了がその場で呼ばれるため、最後の動きの完了でだけ隠す。
     private var newArrivalsButtonGeneration = 0
+    /// 使う人の操作（新着ボタン、タブの選び直し、ステータスバーのタップ）で最上部へ戻している。戻る間は新着ボタンを隠す。
+    /// 新着に追従して戻る間は、出ているボタンをそのまま出しておく。
+    private var isScrollingToNewestByUser = false
     /// 一覧の最上部から引っぱって、浮かべた新着のボタンを下げている量。
     private var pulledDistance: CGFloat = 0
     /// アプリ全体のアプリ内通知。お気に入りやブーストの失敗、リンクのコピーを出す。セッションが入れる。
@@ -923,6 +926,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
         reportVisibleItems()
         reportApproachingGaps()
+        updateNewArrivalsButtonArrow()
     }
 
     /// 全面に出している読み込み中の表示の像を、同じ位置に重ねて返す。表示を外したあとも、薄くし終えるまで残すため。
@@ -1079,7 +1083,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         // 通知のタブのバッジと同じく、読み込んでいない分があるときは「+」を付ける。
         let title = isLowerBound ? "\(count)+" : "\(count)"
         newArrivalsButton.accessibilityLabel = isLowerBound ? "\(count)件以上の新着" : "\(count)件の新着"
-        if newArrivalsButton.configuration?.title != title || newArrivalsButtonShowsArrow != !isAtTop {
+        if newArrivalsButton.configuration?.title != title || newArrivalsButtonShowsArrow != newArrivalsButtonWantsArrow {
             // 桁が変わると幅が変わるため、出ている間は前後のカプセルをクロスフェードする。幅を伸ばすと、伸びる途中で件数の文字が切れるため。
             // 「↑」の有無も同じく幅を変えるので、同じクロスフェードで入れ替える。続けて2回入れ替えると、幅が2段に変わって見えるため。
             if newArrivalsButtonShown, view.window != nil {
@@ -1089,7 +1093,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                 guard update == unreadCountUpdates else { return }
                 UIView.transition(with: newArrivalsButton, duration: newArrivalsButtonDuration, options: [.transitionCrossDissolve, .allowUserInteraction]) {
                     self.newArrivalsButton.configuration?.title = title
-                    self.setNewArrivalsButtonShowsArrow(!self.isAtTop)
+                    self.setNewArrivalsButtonShowsArrow(self.newArrivalsButtonWantsArrow)
                     self.view.layoutIfNeeded()
                 }
             } else {
@@ -1105,7 +1109,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 矢印の有無で幅が変わるため、件数の桁が変わるときと同じく、出ている間は前後のカプセルをクロスフェードする。
     /// 消えていく途中は変えず、次に出すときに合わせる。消えきる前に幅が詰まるのが見えるため。
     private func updateNewArrivalsButtonArrow() {
-        let showsArrow = !isAtTop
+        let showsArrow = newArrivalsButtonWantsArrow
         guard newArrivalsButtonShowsArrow != showsArrow else { return }
         if newArrivalsButtonShown, view.window != nil {
             UIView.transition(with: newArrivalsButton, duration: newArrivalsButtonDuration, options: [.transitionCrossDissolve, .allowUserInteraction]) {
@@ -1117,6 +1121,12 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
+    /// 最上部へ戻っている間は、行き先が最上部なので「↑」を外したままにする。新着に追従するときは、足した行の高さぶん下から戻るため、
+    /// 途中の位置で決めると、件数を変えるだけのところで「↑」を出して外す2回の入れ替えが見えるため。
+    private var newArrivalsButtonWantsArrow: Bool {
+        !isAtTop && !isScrollingToTop
+    }
+
     private func setNewArrivalsButtonShowsArrow(_ showsArrow: Bool) {
         newArrivalsButtonShowsArrow = showsArrow
         newArrivalsButton.configuration?.image = showsArrow ? UIImage(systemName: "arrow.up") : nil
@@ -1126,14 +1136,17 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         tuning.value(of: TuningCatalog.newArrivalsButtonDuration)
     }
 
-    /// 最上部へ動かしている間は隠す。新着を足して最上部へ動かすときに、新着が画面に入るまでの間だけ出てしまうため。
+    /// 使う人の操作で最上部へ動かしている間は隠す。
+    /// 新着に追従して最上部へ動かしている間は、出し入れを変えない。隠れていれば、新着が画面に入るまでの間だけ出てしまうため隠したままにし、
+    /// 出ていれば（ウィンドウが前面にない間など、追従した新着が未読に残るとき）、件数が変わるだけなので、消して出し直さない。
     /// 出し入れは濃さで動かす。消え終えてから隠すので、消える途中にまた出すときは、見えている濃さから戻す。
     private func updateNewArrivalsButtonVisibility() {
-        let isShown = unreadCount > 0 && !isScrollingToTop
+        let hidesWhileScrolling = isScrollingToTop && (isScrollingToNewestByUser || !newArrivalsButtonShown)
+        let isShown = unreadCount > 0 && !hidesWhileScrolling
         guard newArrivalsButtonShown != isShown else { return }
         // 消えていく途中に見送った「↑」の入れ替えを、出す前に済ませる。
         if isShown, newArrivalsButton.isHidden {
-            setNewArrivalsButtonShowsArrow(!isAtTop)
+            setNewArrivalsButtonShowsArrow(newArrivalsButtonWantsArrow)
         }
         newArrivalsButtonShown = isShown
         let button = newArrivalsButton
@@ -1474,6 +1487,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     func scrollToNewest() {
         // 慣性で動いている途中にこちらで動かすと、止まりの通知が来ないため、ここまでのスクロールを記録する。
         recordScroll()
+        isScrollingToNewestByUser = true
         scrollToTop(
             duration: tuning.value(of: TuningCatalog.scrollToTopDuration),
             bounce: tuning.value(of: TuningCatalog.scrollToTopBounce)
@@ -1565,15 +1579,18 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         reportInteractionSettled()
     }
 
+    /// 途中で止めたら、止まった位置で「↑」を決め直す。最上部へ戻る間は外しているため。
     private func stopSpringScroll() {
         endSpringScroll()
         updateNewArrivalsButtonVisibility()
+        updateNewArrivalsButtonArrow()
     }
 
     private func endSpringScroll() {
         springScrollTicker?.stop()
         springScrollTicker = nil
         springScroll = nil
+        isScrollingToNewestByUser = false
         // 触れて止めたときは、指が離れるまで有効のままにする。途中で無効にすると、止めた指のタッチが中身に渡る。
         if !springScrollInterruption.isHolding {
             springScrollInterruption.isEnabled = false
@@ -2199,7 +2216,11 @@ extension TimelineViewController: UICollectionViewDelegate {
             }
         }
         reportVisibleItems(byUser: isUserScrolling)
-        updateNewArrivalsButtonArrow()
+        // 並びを置き換えて位置を補正している途中の位置では決めない。最上部で新着に追従するときは、補正で一度下へずれてから最上部へ戻るため。
+        // 置き換えを終えたところで決め直す。
+        if !isRestoringAnchor {
+            updateNewArrivalsButtonArrow()
+        }
         reportApproachingGaps()
         onScroll?(scrollView)
         // 最上部からさらに引っぱっている間は、浮かぶ新着のボタンも一覧と一緒に下げる。上に現れるストリーミングの状態を覆わないようにする。

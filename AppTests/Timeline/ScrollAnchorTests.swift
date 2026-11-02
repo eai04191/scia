@@ -92,6 +92,71 @@ struct ScrollAnchorTests {
         #expect(harness.viewController.newArrivalsButtonShowsArrow, "最上部を離れたのに「↑」を出しませんでした")
     }
 
+    /// ウィンドウが前面にない間に、新着のボタンを出したまま最上部で新着に追従するときは、件数だけを変え、ボタンを消して出し直さない。
+    /// 足した行の高さぶん下から最上部へ戻る間も、行き先は最上部なので「↑」を出さない。
+    @Test func followingArrivalsWhileWindowInactiveKeepsNewArrivalsButton() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.settings.insertionMotion = .animated
+        let existing = StatusFactory.make(count: 60, startingAt: 1_000)
+        harness.setStatuses(existing)
+        harness.scroll(toFraction: 0)
+        harness.viewController.setWindowInactive(true)
+        harness.viewController.setUnreadCount(3)
+        let inserted = StatusFactory.make(count: 2, startingAt: 1_002)
+
+        harness.setStatuses(inserted + existing)
+        harness.viewController.setUnreadCount(5)
+
+        #expect(harness.viewController.isScrollingToTop)
+        while harness.viewController.isScrollingToTop {
+            #expect(harness.viewController.newArrivalsButtonShown, "最上部へ戻る途中で新着のボタンを隠しました")
+            #expect(!harness.viewController.newArrivalsButtonShowsArrow, "最上部へ戻る途中で「↑」を出しました")
+            harness.frames.step()
+        }
+        #expect(harness.viewController.newArrivalsButtonShown, "最上部へ戻り終えたのに新着のボタンを出していません")
+        #expect(!harness.viewController.newArrivalsButtonShowsArrow, "最上部へ戻り終えたのに「↑」を出しました")
+    }
+
+    /// 前面にない間に新着へ追従している途中で触れて止めたら、止まった位置が最上部でなければ「↑」を出す。
+    @Test func touchingWhileFollowingArrivalsShowsArrowWhenStoppedBelowTop() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.settings.insertionMotion = .animated
+        harness.tuning.setValue(1, for: TuningCatalog.insertionScrollDuration)
+        let existing = StatusFactory.make(count: 60, startingAt: 1_000)
+        harness.setStatuses(existing)
+        harness.scroll(toFraction: 0)
+        harness.viewController.setWindowInactive(true)
+        harness.viewController.setUnreadCount(3)
+        harness.setStatuses(StatusFactory.make(count: 5, startingAt: 1_005) + existing)
+        harness.viewController.setUnreadCount(8)
+        harness.frames.advance(by: 0.05)
+
+        let interruption = harness.viewController.springScrollInterruption
+        interruption.touchesBegan([], with: UIEvent())
+        interruption.touchesEnded([], with: UIEvent())
+
+        #expect(!harness.viewController.isAtTop, "止める前に最上部へ着きました")
+        #expect(harness.viewController.newArrivalsButtonShown)
+        #expect(harness.viewController.newArrivalsButtonShowsArrow, "最上部の手前で止まったのに「↑」を出していません")
+    }
+
+    /// 新着のボタンなど、使う人の操作で最上部へ戻る間は、新着のボタンを隠す。
+    @Test func scrollingToNewestHidesNewArrivalsButton() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.setStatuses(StatusFactory.make(count: 60, startingAt: 1_000))
+        harness.scroll(toFraction: 0.5)
+        harness.viewController.setUnreadCount(3)
+        #expect(harness.viewController.newArrivalsButtonShown)
+
+        harness.viewController.scrollToNewest()
+
+        #expect(harness.viewController.isScrollingToTop)
+        #expect(!harness.viewController.newArrivalsButtonShown, "最上部へ戻る間も新着のボタンを出しています")
+    }
+
     /// 最上部で新着に追従するとき、アニメーションで挿入しても、終わった時点で最上部に新着が並んでいる。
     @Test(arguments: [true, false])
     func prependAtTopWithAnimationEndsAtTop(animates: Bool) async throws {
