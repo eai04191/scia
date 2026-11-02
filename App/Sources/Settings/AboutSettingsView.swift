@@ -4,23 +4,15 @@ import UIKit
 
 /// 設定の「情報」。iPhoneの設定アプリの「一般」>「情報」と同じく、ビルドを灰色の値の行で並べ、接続の状態とライセンスの画面を開く。
 struct AboutSettingsView: View {
-    /// コピーしたことを知らせる表示を戻すまでの時計。
-    let clock: any Clock<Duration>
-    @State private var copied = false
-
     var body: some View {
         Form {
             // いろいろなブランチのビルドを入れ替えて試すときに、いま入っているのがどれか分かるようにする。
-            // 違和感の報告などに貼れるよう、どの行をタップしても全部をまとめてコピーする
+            // iPhoneの設定の「情報」と同じく、長押しでその行の値をコピーする。違和感の報告などに貼れるよう、全部をまとめてもコピーできる
             Section {
                 buildRow("バージョン", value: BuildInfo.current.version)
                 buildRow("ブランチ", value: BuildInfo.current.branch)
                 buildRow("commit", value: BuildInfo.current.commit)
                 buildRow("ビルド日時", value: BuildInfo.current.builtAt.formatted(date: .numeric, time: .shortened))
-            } footer: {
-                if copied {
-                    Text("コピーしました")
-                }
             }
             Section {
                 NavigationLink("接続の状態", value: SettingsPage.connection)
@@ -30,22 +22,58 @@ struct AboutSettingsView: View {
         .topEdgeEffectHiddenOnMac()
         .navigationTitle("情報")
         .navigationBarTitleDisplayMode(.inline)
-        .task(.withoutRequests, id: copied) {
-            guard copied else { return }
-            try? await clock.sleep(for: .seconds(1.5))
-            copied = false
-        }
     }
 
     private func buildRow(_ title: String, value: String) -> some View {
-        Button {
-            UIPasteboard.general.string = BuildInfo.current.text
-            copied = true
-        } label: {
-            LabeledContent(title, value: value)
-        }
-        // 押すとコピーする行だが、ほかの行と同じ文字の色にそろえる
-        .tint(.primary)
-        .accessibilityHint(copied ? "コピーしました" : "タップでビルドの情報をコピーします")
+        LabeledContent(title, value: value)
+            .overlay {
+                CopyMenuArea(value: value, all: BuildInfo.current.text)
+            }
+            .accessibilityAction(named: "コピー") { UIPasteboard.general.string = value }
+            .accessibilityAction(named: "すべてコピー") { UIPasteboard.general.string = BuildInfo.current.text }
+    }
+}
+
+/// 長押しで、押した位置に「コピー」と「すべてコピー」の編集メニューを出す。iPhoneの設定の「情報」の行と同じ出し方。
+private struct CopyMenuArea: UIViewRepresentable {
+    let value: String
+    let all: String
+
+    func makeUIView(context: Context) -> CopyMenuView {
+        CopyMenuView()
+    }
+
+    func updateUIView(_ view: CopyMenuView, context: Context) {
+        view.value = value
+        view.all = all
+    }
+}
+
+private final class CopyMenuView: UIView, @MainActor UIEditMenuInteractionDelegate {
+    var value = ""
+    var all = ""
+    private lazy var editMenu = UIEditMenuInteraction(delegate: self)
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        addInteraction(editMenu)
+        addGestureRecognizer(UILongPressGestureRecognizer(target: self, action: #selector(longPressed)))
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    @objc private func longPressed(_ recognizer: UILongPressGestureRecognizer) {
+        guard recognizer.state == .began else { return }
+        editMenu.presentEditMenu(with: UIEditMenuConfiguration(identifier: nil, sourcePoint: recognizer.location(in: self)))
+    }
+
+    func editMenuInteraction(_ interaction: UIEditMenuInteraction, menuFor configuration: UIEditMenuConfiguration, suggestedActions: [UIMenuElement]) -> UIMenu? {
+        UIMenu(children: [
+            UIAction(title: "コピー") { [value] _ in UIPasteboard.general.string = value },
+            UIAction(title: "すべてコピー") { [all] _ in UIPasteboard.general.string = all },
+        ])
     }
 }

@@ -16,8 +16,6 @@ struct SettingsView: View {
     /// タブの並びでリストを作る、消す。
     let lists: SettingsListActions
     @Environment(\.dismiss) private var dismiss
-    /// コピーしたことを知らせる表示を戻すまでの時計。
-    private let clock: any Clock<Duration>
     /// 一覧から重ねて開いた画面。
     @State private var path: [SettingsPage]
 
@@ -28,8 +26,7 @@ struct SettingsView: View {
         diagnostics: ConnectionDiagnostics,
         tabIcons: ProfileTabIcons,
         lists: SettingsListActions,
-        opening page: SettingsPage? = nil,
-        clock: any Clock<Duration> = AppDependencies.clock
+        opening page: SettingsPage? = nil
     ) {
         self.settings = settings
         self.instance = instance
@@ -38,7 +35,6 @@ struct SettingsView: View {
         self.tabIcons = tabIcons
         self.lists = lists
         _path = State(initialValue: page?.path ?? [])
-        self.clock = clock
     }
 
     private var tabLayoutBinding: Binding<MenuLayout<TabItem>> {
@@ -112,7 +108,7 @@ struct SettingsView: View {
         case .interaction: InteractionSettingsView(settings: settings)
         case .compose: ComposeSettingsView(settings: settings)
         case .media: MediaSettingsView(settings: settings)
-        case .about: AboutSettingsView(clock: clock)
+        case .about: AboutSettingsView()
         case .appIcon: AppIconSettingsView()
         case .appearance: AppearanceEditorView(settings: settings)
         case .notificationAppearance: NotificationAppearanceEditorView(settings: settings)
