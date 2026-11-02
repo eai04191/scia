@@ -25,6 +25,7 @@ enum CatalogComponent: String, CaseIterable {
     case statusBarTicker = "status-bar-ticker"
     case operationStatus = "operation-status"
     case videoControls = "video-controls"
+    case mediaStatus = "media-status"
     case timelineEmpty = "timeline-empty"
     case timelineFooter = "timeline-footer"
     case timelineRows = "timeline-rows"
@@ -63,6 +64,7 @@ enum CatalogComponent: String, CaseIterable {
         case .statusBarTicker: "ステータスバーの通知"
         case .operationStatus: "操作の状況の一覧"
         case .videoControls: "動画の再生の操作"
+        case .mediaStatus: "ビューアの読み込み中と見せられないとき"
         case .timelineEmpty: "タイムラインが空のときの表示"
         case .timelineFooter: "タイムラインの末尾"
         case .timelineRows: "読めない行とギャップの行"
@@ -104,6 +106,7 @@ enum CatalogComponent: String, CaseIterable {
         case .statusBarTicker: StatusBarTickerCatalog.states()
         case .operationStatus: OperationStatusCatalog.states()
         case .videoControls: VideoControlsCatalog.states()
+        case .mediaStatus: MediaStatusCatalog.states()
         case .timelineEmpty: TimelineCatalog.emptyStates()
         case .timelineFooter: TimelineCatalog.footerStates()
         case .timelineRows: TimelineCatalog.rowStates()
