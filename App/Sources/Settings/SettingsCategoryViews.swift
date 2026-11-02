@@ -81,13 +81,9 @@ struct DisplaySettingsView: View {
                 .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 16))
             } header: {
                 Text("投稿の見た目")
-            } footer: {
-                Text("文字の大きさや余白、名前や時刻の表記、お気に入りとブーストの光を、プレビューを見ながら変えます。")
             }
             Section {
                 NavigationLink("通知の見た目", value: SettingsPage.notificationAppearance)
-            } footer: {
-                Text("誰が何をしたかの行や、お気に入りやブーストで再掲する投稿の、文字の大きさと余白を変えます。")
             }
             Section {
                 Picker("最上部での新着の挿入", selection: $settings.insertionMotion) {
@@ -95,10 +91,8 @@ struct DisplaySettingsView: View {
                     Text("動かして見せる").tag(InsertionMotion.animated)
                     Text("動かさない").tag(InsertionMotion.instant)
                 }
-            } header: {
-                Text("動き")
             } footer: {
-                Text("一覧の最上部にいるときに届いた新着を、下から動かして見せるかを選びます。「自動」では、iPhoneの設定の「アクセシビリティ」>「動作」>「視差効果を減らす」がオンのときは動かしません。")
+                Text("「自動」では、「視差効果を減らす」がオンのときは動かしません。")
             }
             StatusBarTickerSettingsSection(isOn: $settings.showsStatusBarTicker, isAvailable: StatusBarCutout.isAvailable)
             Section {
@@ -140,8 +134,6 @@ struct InteractionSettingsView: View {
                 ObjectActionsRow(entity: .media, settings: settings, page: .mediaActions)
             } header: {
                 Text("タップと長押し")
-            } footer: {
-                Text("投稿や通知、ユーザーのアイコン、リンク、ハッシュタグ、メディアをタップ、長押ししたときに、メニューを開くか、メニューのどの操作をするかを選びます。引用の囲みは投稿、リンクカードはリンク、Xの投稿の囲みはほかのサービスの投稿として扱います。ビューアの中は対象にしません。")
             }
             Section {
                 NavigationLink("投稿のメニュー", value: SettingsPage.statusMenu)
@@ -153,8 +145,6 @@ struct InteractionSettingsView: View {
                 NavigationLink("メディアのメニュー", value: SettingsPage.mediaMenu)
             } header: {
                 Text("長押しのメニュー")
-            } footer: {
-                Text("投稿や通知、本文のリンクやハッシュタグ、メディアを長押ししたときのメニューに出す項目と、その並びを選びます。ユーザーのメニューは、投稿のメニューの中に、投稿したユーザーなどのサブメニューとして出るほか、本文のメンションを長押ししたときと、プロフィール画面の右上にも出ます。メディアのメニューは、サムネイルやプロフィールの画像を長押ししたときと、ビューアのメニューに出ます。ほかのサービスの投稿のメニューは、Xの投稿の囲みを長押ししたときに出ます。プロフィールの文章のメニューは、プロフィールの表示名、自己紹介、補足情報の行を長押ししたときに出ます。")
             }
             Section {
                 Picker("開く場所", selection: $settings.linkBrowser) {
@@ -163,8 +153,6 @@ struct InteractionSettingsView: View {
                 }
             } header: {
                 Text("リンク")
-            } footer: {
-                Text("URLのリンクを開く場所です。アプリ内のSafariでは、画面の下半分にページを開き、上に一覧を見ながら読めます。読んでいる間も新着が届きます。httpとhttps以外のリンクは、この設定にかかわらず対応するアプリで開きます。")
             }
             Section {
                 Picker("公開範囲", selection: $settings.reblogVisibility) {
@@ -175,8 +163,6 @@ struct InteractionSettingsView: View {
                 }
             } header: {
                 Text("ブースト")
-            } footer: {
-                Text("メニューの「ブースト」でブーストするときの公開範囲です。「アカウントの既定」では、サーバーで設定した投稿の公開範囲でブーストします。フォロワーのみの自分の投稿は、この設定にかかわらずフォロワーのみでブーストします。ほかの公開範囲でブーストするときは、メニューの「公開範囲を選んでブースト」を使います。")
             }
         }
         .topEdgeEffectHiddenOnMac()
@@ -195,8 +181,6 @@ struct ComposeSettingsView: View {
                 Toggle("書いていないときは隠す", isOn: $settings.hidesEmptyComposeBar)
                 Toggle("書いていないときも畳まない", isOn: $settings.keepsComposeBarOpen)
                 NavigationLink("投稿欄のボタン", value: SettingsPage.composeTools)
-            } footer: {
-                Text("隠すと、一覧を広く使えます。書くときは、右上のボタンで投稿欄を出します。書きかけの下書きや返信先があるときは、隠さずに表示します。\n畳まないと、書いていないときも投稿欄のボタンの行を出しておきます。押した投稿欄が広がって、ボタンの位置が動くことがなくなります。\n投稿欄のボタンでは、公開範囲、添付、注意書きのような項目を、投稿欄のボタンの行に常に出すか、＋の中に入れるかと、その並びを選びます。")
             }
             Section {
                 Picker("画像", selection: $settings.imageUploadSize) {
@@ -211,8 +195,6 @@ struct ComposeSettingsView: View {
                 }
             } header: {
                 Text("送る前に縮める")
-            } footer: {
-                Text("添付するメディアを、送る前にこの大きさまで縮めて、通信量を減らします。この大きさに収まるメディアは、元のまま送ります。「縮めない」でも、サーバーの上限を超えるメディアは、上限に合わせて縮めます。")
             }
         }
         .topEdgeEffectHiddenOnMac()
@@ -236,22 +218,14 @@ struct MediaSettingsView: View {
                 }
             } header: {
                 Text("HDRのメディアの明るさ")
-            } footer: {
-                Text("HDRで撮った写真や動画を、どれくらいの明るさで表示するかを選びます。「控えめなHDR」は、まわりのボタンや文字と並んでも眩しすぎないよう明るさを抑えます。「HDR」は、画面の明るさの上限まで使います。")
             }
             Section {
                 Toggle("モバイル通信で高画質のサムネイルを使う", isOn: $settings.usesOriginalThumbnailsOnExpensiveNetwork)
-            } header: {
-                Text("画像")
-            } footer: {
-                Text("オフにすると、モバイル通信とインターネット共有では、サーバーが縮小した画像を一覧に表示します。低データモードでは、この設定にかかわらず縮小した画像を表示します。")
             }
             Section {
                 Toggle("役に立たない代替テキストを無視する", isOn: $settings.ignoresUselessAltText)
-            } header: {
-                Text("代替テキスト")
             } footer: {
-                Text("代替テキストが「undefined」や「Screenshot」だけのメディアを、代替テキストのないメディアとして扱います。空白だけの代替テキストは、この設定にかかわらず無視します。")
+                Text("「undefined」や「Screenshot」だけの代替テキストを、ないものとして扱います。")
             }
         }
         .topEdgeEffectHiddenOnMac()
@@ -270,13 +244,9 @@ struct StatusBarTickerSettingsSection: View {
         Section {
             Toggle("通知をステータスバーに流す", isOn: Binding { isAvailable && isOn } set: { isOn = $0 })
                 .disabled(!isAvailable)
-        } header: {
-            Text("ステータスバーの通知")
         } footer: {
-            if isAvailable {
-                Text("通知を、画面の上のステータスバーの場所に1件ずつ流します。押すと通知のタブを開きます。通知のタブを見ている間は流しません。")
-            } else {
-                Text("このiPhoneでは使えません。この機種の画面の上端の形をまだ調べていないため、ステータスバーの場所に合わせて描けません。")
+            if !isAvailable {
+                Text("このiPhoneでは使えません。")
             }
         }
     }
