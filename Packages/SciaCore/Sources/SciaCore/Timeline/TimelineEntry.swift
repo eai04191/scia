@@ -86,4 +86,8 @@ public struct TimelineGap: Hashable, Sendable {
     func narrowed(newerID: Status.ID? = nil, olderID: Status.ID? = nil) -> TimelineGap {
         TimelineGap(id: id, newerID: newerID ?? self.newerID, olderID: olderID ?? self.olderID)
     }
+
+    func widened(olderID: Status.ID) -> TimelineGap {
+        TimelineGap(id: id, newerID: newerID, olderID: olderID)
+    }
 }

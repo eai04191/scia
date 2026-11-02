@@ -266,13 +266,15 @@ struct FilteredTimelineTests {
     }
 
     /// 削除された投稿は、隠していても忘れる。あとで同じIDの投稿が届いても戻さない。
+    /// 続きを古い方へ読む位置は、その投稿のIDのまま残す。上げると、その間を読み直すうえ、一覧が空になったときに末尾の位置を失うため。
     @Test func deletingHiddenStatusForgetsIt() async throws {
-        let (store, queries) = store(pages: [[status("30"), status("29", filtered: [filter("x", .hide)])], []])
+        let (store, queries) = store(pages: [[status("30"), status("29", filtered: [filter("x", .hide)])], [status("29")]])
         _ = try await store.loadInitial()
 
         store.removeStatus("29")
         _ = try await store.loadOlder()
-        #expect(queries().last?.maxID == "30")
+        #expect(queries().last?.maxID == "29")
+        #expect(store.entries.map(\.id) == [.status("30")])
     }
 }
 

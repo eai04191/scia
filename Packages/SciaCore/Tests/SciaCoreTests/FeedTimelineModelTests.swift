@@ -111,6 +111,34 @@ struct FeedTimelineModelTests {
         #expect(display.contentState == .regenerating)
     }
 
+    /// 空のホームの補完で最新のページを読めたら、続けて読む補完が失敗しても、読めた投稿を画面に出す。
+    @Test func latestPageIsShownWhenFollowingFillFails() async throws {
+        let latestGate = Gate()
+        let latestCount = Mutex(0)
+        let sinceFails = FailOnce()
+        let transport = RoutedTransport { request in
+            guard request.url?.path() == "/api/v1/timelines/home" else { return (200, Data("{}".utf8)) }
+            if request.url?.query()?.contains("since_id") == true {
+                return sinceFails.shouldFail() ? (500, Data("{}".utf8)) : (200, Data("[]".utf8))
+            }
+            guard latestCount.withLock({ count in count += 1; return count }) > 1 else { return (200, Data("[]".utf8)) }
+            try await latestGate.wait()
+            return (200, try TimelineModelFixtures.body([2, 1]))
+        }
+        let (model, display) = makeModel(transport: transport)
+        defer { model.stop() }
+
+        model.start(purpose: .action)
+        try await waitUntil { latestGate.waiterCount == 1 }
+        // 最新のページを読んでいる間に補完を求め、読み終えたあと続けて読ませる。
+        let refresh = Task { await model.refresh() }
+        try await waitUntil { model.fillWaiterCount == 1 && model.runningTaskCount == 1 }
+        latestGate.open()
+        await refresh.value
+
+        #expect(display.statusIDs == ["2", "1"])
+    }
+
     /// 届いた新着は、間隔をおいて挿入する。指で操作している間は、操作が終わるまで待つ。
     @Test func arrivalWaitsForInteractionToSettle() async throws {
         let firstMessage = Gate()

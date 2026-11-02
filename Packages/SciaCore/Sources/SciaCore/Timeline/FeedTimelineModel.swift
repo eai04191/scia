@@ -419,8 +419,8 @@ public final class FeedTimelineModel {
         activeFills += 1
         run(purpose) { model in
             defer { model.endFill() }
+            let before = model.store.entries
             do {
-                let before = model.store.entries
                 let maxPages = Int(model.tuning.value(of: TuningCatalog.fillPageLimit))
                 model.logger.info("\(model.feed.name, privacy: .public) fill start")
                 // 呼んだ時点ではなく読み始める直前に変える。呼んでから読み始めるまでに前の補完が終わると、その終わりで戻ってしまうため。
@@ -439,23 +439,32 @@ public final class FeedTimelineModel {
                 if model.store.isRegenerating {
                     model.scheduleRegeneratingRetry()
                 }
-                // 待っている間に同じ投稿がストリーミングで挿入されていても、ギャップだけが増えていることがある。
-                guard model.store.entries != before else { return }
-                model.showEntries()
-                if before.isEmpty {
-                    // 空のホームへ最新のページを読んだ。その先に古い投稿が残っているかもしれない。
-                    model.setFooterState(model.store.reachedEnd ? .reachedEnd : .idle)
-                }
+                model.showFilledEntries(since: before)
             } catch {
                 // 失敗しても、次につながったときに同じ基準から読み直す。
                 model.updateCatchUp { $0.fail(error) }
                 model.showPauseAfterFill()
                 model.handle(error, during: "fill") { _ in }
+                // 先に読めたページは、失敗する前にストアへ入っている。
+                if !model.isStopped {
+                    model.showFilledEntries(since: before)
+                }
                 // 作り直し中の読み直しが失敗したら、つながったままでは次のきっかけが来ないので、読み直しを続ける。
                 if model.store.isRegenerating {
                     model.scheduleRegeneratingRetry()
                 }
             }
+        }
+    }
+
+    /// 補完で一覧が変わっていれば画面に出す。
+    private func showFilledEntries(since before: [TimelineEntry]) {
+        // 待っている間に同じ投稿がストリーミングで挿入されていても、ギャップだけが増えていることがある。
+        guard store.entries != before else { return }
+        showEntries()
+        if before.isEmpty {
+            // 空のホームへ最新のページを読んだ。その先に古い投稿が残っているかもしれない。
+            setFooterState(store.reachedEnd ? .reachedEnd : .idle)
         }
     }
 

@@ -801,6 +801,374 @@ struct TimelineGapTests {
         #expect(ids(store) == Array((11...20).reversed()))
     }
 
+    // MARK: - 末尾より古い新着
+
+    /// 古いページを読んでいる間に、末尾より古いIDの投稿が遅れて届いても、読んでいたページに入っていなければ、末尾が下がったところで一覧に入れる。
+    /// ページはその投稿が届く前にサーバーが作ったので入っておらず、捨てるとどこからも読めないため。
+    @Test func lateArrivalOlderThanTailDuringLoadOlderIsKept() async throws {
+        let server = FakeHomeServer(ids: (1...20).map { $0 * 10 })
+        let gate = FetchGate()
+        let gated = FailOnce()
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.maxID != nil, gated.shouldFail() {
+                let page = server.page(query)
+                await gate.wait()
+                return page
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        let older = Task { try await store.loadOlder() }
+        await gate.waitUntilWaiting()
+        server.post(155...155)
+        _ = store.receive(.update(server.status(155)))
+        _ = store.flushPending()
+        await gate.open()
+        _ = try await older.value
+
+        #expect(ids(store) == [200, 190, 180, 170, 160, 155, 150], "遅れて届いた投稿が抜けました: \(store.entries.map(\.debugLabel))")
+    }
+
+    // MARK: - 一覧が空のときの補完
+
+    /// 最初の読み込みが空で、一覧が空のときの補完に失敗したあとで新着が入っても、次の補完は最新のページから読み、失敗した間を読み飛ばさない。
+    @Test func failedFillIntoEmptyListIsRetriedFromLatestPage() async throws {
+        let server = FakeHomeServer(ids: [Int]())
+        let failing = FailOnce()
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.maxID == nil, query.sinceID == nil, query.minID == nil, !server.ids.isEmpty, failing.shouldFail() {
+                throw URLError(.notConnectedToInternet)
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        server.post(1...2)
+        await #expect(throws: URLError.self) { try await store.fillFromLatest() }
+        server.post(3...3)
+        _ = store.receive(.update(server.status(3)))
+        _ = store.flushPending()
+
+        _ = try await store.fillFromLatest()
+        while let gap = store.gaps.first {
+            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        }
+        for _ in 0..<10 where !store.reachedEnd {
+            _ = try await store.loadOlder()
+        }
+
+        #expect(ids(store) == [3, 2, 1], "失敗した補完の間を読み飛ばしました: \(store.entries.map(\.debugLabel))")
+    }
+
+    /// 一覧が空のときの補完が最新のページを読んでいる間に、古いIDの新着が入っても、最新のページとその間をギャップにする。
+    @Test func arrivalsDuringFillIntoEmptyListKeepGapBelowLatestPage() async throws {
+        let server = FakeHomeServer(ids: [Int]())
+        let gate = FetchGate()
+        let gated = FailOnce()
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.maxID == nil, query.sinceID == nil, query.minID == nil, !server.ids.isEmpty, gated.shouldFail() {
+                let page = server.page(query)
+                await gate.wait()
+                return page
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        for id in [10, 20, 30, 40, 50, 60] {
+            server.post(id...id)
+        }
+        let fill = Task { try await store.fillFromLatest() }
+        await gate.waitUntilWaiting()
+        server.post(15...15)
+        _ = store.receive(.update(server.status(15)))
+        _ = store.flushPending()
+        await gate.open()
+        _ = try await fill.value
+
+        while let gap = store.gaps.first {
+            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        }
+        for _ in 0..<10 where !store.reachedEnd {
+            _ = try await store.loadOlder()
+        }
+        #expect(Set(ids(store)) == [10, 15, 20, 30, 40, 50, 60], "最新のページと新着の間を読み飛ばしました: \(store.entries.map(\.debugLabel))")
+    }
+
+    /// 一覧が空のときの補完が最新のページを読んでいる間に、また補完を求められたら、読み終えた後に続けて読む。
+    @Test func fillRequestedDuringFillIntoEmptyListRunsAfterIt() async throws {
+        let server = FakeHomeServer(ids: [Int]())
+        let gate = FetchGate()
+        let gated = FailOnce()
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.maxID == nil, query.sinceID == nil, query.minID == nil, !server.ids.isEmpty, gated.shouldFail() {
+                let page = server.page(query)
+                await gate.wait()
+                return page
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        server.post(1...2)
+        let fill = Task { try await store.fillFromLatest() }
+        await gate.waitUntilWaiting()
+        server.post(3...3)
+        #expect(try await store.fillFromLatest() == nil)
+        await gate.open()
+        _ = try await fill.value
+
+        #expect(ids(store) == [3, 2, 1], "読んでいる間に求められた補完を読みませんでした: \(store.entries.map(\.debugLabel))")
+    }
+
+    /// 一覧が空のときの補完が再生成中で1件も返らなければ、そのあと新着が入っても、次の補完も最新のページから読む。
+    @Test func emptyRegeneratingFillIntoEmptyListIsRetriedFromLatestPage() async throws {
+        let server = FakeHomeServer(ids: [Int]())
+        let regenerating = FailOnce()
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.maxID == nil, query.sinceID == nil, query.minID == nil, !server.ids.isEmpty, regenerating.shouldFail() {
+                return TimelinePage(statuses: [], isRegenerating: true)
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        server.post(1...2)
+        _ = try await store.fillFromLatest()
+        server.post(3...3)
+        _ = store.receive(.update(server.status(3)))
+        _ = store.flushPending()
+
+        _ = try await store.fillFromLatest()
+
+        #expect(ids(store) == [3, 2, 1], "再生成中で読めなかった間を読み飛ばしました: \(store.entries.map(\.debugLabel))")
+    }
+
+    /// 一覧が空のときの補完が再生成中で一部の投稿だけを返したら、そのあと新着が入っても、次の補完は返った中で最も新しい投稿から読む。
+    @Test func regeneratingFillIntoEmptyListReadsAboveNewestReturnedStatusNext() async throws {
+        let server = FakeHomeServer(ids: [Int]())
+        let regenerating = FailOnce()
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.maxID == nil, query.sinceID == nil, query.minID == nil, !server.ids.isEmpty, regenerating.shouldFail() {
+                return TimelinePage(statuses: [30, 10].map(server.status), isRegenerating: true)
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        for id in [10, 20, 30, 40] {
+            server.post(id...id)
+        }
+        _ = try await store.fillFromLatest()
+        server.post(50...50)
+        _ = store.receive(.update(server.status(50)))
+        _ = store.flushPending()
+
+        _ = try await store.fillFromLatest()
+        while let gap = store.gaps.first {
+            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        }
+
+        #expect(Set(ids(store)) == [10, 20, 30, 40, 50], "返った投稿より上を読み飛ばしました: \(store.entries.map(\.debugLabel))")
+    }
+
+    /// 既読位置のすぐ後の読み込みが再生成中で、最新のページを読んだ後に増えた投稿まで返しても、その投稿までをギャップにする。
+    @Test func regeneratingPageAfterMarkerWithNewerStatusesKeepsGap() async throws {
+        let server = FakeHomeServer(ids: 1...20)
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.minID != nil {
+                server.post(21...22)
+                return TimelinePage(statuses: [22, 6].map(server.status), isRegenerating: true)
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial(around: "5")
+
+        _ = try await store.fillFromLatest()
+        while let gap = store.gaps.first {
+            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        }
+
+        #expect(Set(ids(store)) == Set(3...22), "最新のページより新しい投稿の間を読み飛ばしました: \(store.entries.map(\.debugLabel))")
+    }
+
+    /// 削除で一覧が空になったまま補完が読んでいる間に、また補完を求められたら、読み終えた後に同じ基準から読み直す。
+    @Test func fillRequestedDuringFillAfterDeletingEveryStatusRunsAfterIt() async throws {
+        let server = FakeHomeServer(ids: [10])
+        let gate = FetchGate()
+        let gated = FailOnce()
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.sinceID != nil, gated.shouldFail() {
+                let page = server.page(query)
+                await gate.wait()
+                return page
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        let fill = Task { try await store.fillFromLatest() }
+        await gate.waitUntilWaiting()
+        _ = store.receive(.delete(statusID: "10"))
+        server.post(20...20)
+        #expect(try await store.fillFromLatest() == nil)
+        await gate.open()
+        _ = try await fill.value
+
+        #expect(ids(store) == [20], "読んでいる間に求められた補完を読みませんでした: \(store.entries.map(\.debugLabel))")
+    }
+
+    /// 削除で一覧が空になっても、末尾の位置を残す。古いIDの新着が末尾にならず、その上の投稿を読み飛ばさない。
+    @Test func deletingEveryStatusKeepsTailPosition() async throws {
+        let server = FakeHomeServer(ids: (1...5).map { $0 * 10 })
+        let store = makeStore(server)
+        _ = try await store.loadInitial()
+        for id in ["50", "40", "30"] {
+            _ = store.receive(.delete(statusID: id))
+        }
+        server.post(5...5)
+        _ = store.receive(.update(server.status(5)))
+        _ = store.flushPending()
+        server.post(60...60)
+        _ = store.receive(.update(server.status(60)))
+        _ = store.flushPending()
+
+        for _ in 0..<10 where !store.reachedEnd {
+            _ = try await store.loadOlder()
+        }
+
+        #expect(Set(ids(store)) == [60, 20, 10, 5], "削除した投稿より古い投稿を読み飛ばしました: \(store.entries.map(\.debugLabel))")
+    }
+
+    // MARK: - 端の投稿が消えたギャップ
+
+    /// ギャップの新しい側の端の投稿が消えても、補完はその端から読み、同じ範囲にギャップをもう1つ作らない。
+    @Test func fillAfterDeletingNewerEndOfGapDoesNotOverlapGaps() async throws {
+        let server = FakeHomeServer(ids: 1...20)
+        let regenerating = FailOnce()
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if regenerating.shouldFail() {
+                return TimelinePage(statuses: [20, 11].map(server.status), isRegenerating: true)
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        _ = store.receive(.delete(statusID: "20"))
+        server.post(21...21)
+
+        _ = try await store.fillFromLatest()
+
+        #expect(!hasOverlappingGaps(store), "範囲の重なるギャップがあります: \(store.entries.map(\.debugLabel))")
+    }
+
+    /// 空の一覧の補完と古い方の読み込みが並行して、どちらも作り直し中の応答を受けても、範囲の一部が重なるギャップを残さない。
+    @Test func latestPageAndOlderPageDuringRegenerationDoNotOverlapGaps() async throws {
+        let server = FakeHomeServer(ids: (1...20).map { $0 * 10 })
+        let latestCount = Mutex(0)
+        let gate = FetchGate()
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.maxID == nil, query.sinceID == nil, query.minID == nil {
+                switch latestCount.withLock({ count in count += 1; return count }) {
+                case 1:
+                    return TimelinePage(statuses: [], isRegenerating: true)
+                case 2:
+                    await gate.wait()
+                    return TimelinePage(statuses: [200, 50].map(server.status), isRegenerating: true)
+                default:
+                    break
+                }
+            }
+            if query.maxID == "100" {
+                return TimelinePage(statuses: [90, 50, 10].map(server.status), isRegenerating: true)
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        let fill = Task { try await store.fillFromLatest() }
+        await gate.waitUntilWaiting()
+        _ = store.receive(.update(server.status(100)))
+        _ = store.flushPending()
+        _ = try await store.loadOlder()
+        await gate.open()
+        _ = try await fill.value
+
+        #expect(!hasOverlappingGaps(store), "範囲の重なるギャップがあります: \(store.entries.map(\.debugLabel))")
+    }
+
+    /// ギャップを読んでいる間に、ほかの読み込みのギャップとまとまって範囲が広がっても、読んだ範囲の外を読み込み済みにしない。
+    @Test func gapWidenedWhileLoadingKeepsUnreadRange() async throws {
+        let server = FakeHomeServer(ids: [200, 150, 130, 120, 110, 100, 90, 80, 70, 60, 50])
+        let latestCount = Mutex(0)
+        let latestGate = FetchGate()
+        let gapGate = FetchGate()
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.maxID == nil, query.sinceID == nil, query.minID == nil {
+                switch latestCount.withLock({ count in count += 1; return count }) {
+                case 1:
+                    return TimelinePage(statuses: [], isRegenerating: true)
+                case 2:
+                    await latestGate.wait()
+                    return TimelinePage(statuses: [150, 50].map(server.status), isRegenerating: true)
+                default:
+                    break
+                }
+            }
+            if query.maxID == "200", query.sinceID == nil, query.minID == nil {
+                return TimelinePage(statuses: [server.status(100)], isRegenerating: true)
+            }
+            if query.maxID == "200", query.minID == "100" {
+                let page = server.page(query)
+                await gapGate.wait()
+                return page
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        let fill = Task { try await store.fillFromLatest() }
+        await latestGate.waitUntilWaiting()
+        _ = store.receive(.update(server.status(200)))
+        _ = store.flushPending()
+        _ = try await store.loadOlder()
+        let gap = try #require(store.gaps.first)
+        // 200から100までのギャップを古い側から読み始め、その応答を待つ間に、最新のページのギャップとまとまって50まで広がる。
+        let loading = Task { try await store.loadGap(gap.id, from: .fromOlder) }
+        await gapGate.waitUntilWaiting()
+        await latestGate.open()
+        _ = try await fill.value
+        await gapGate.open()
+        _ = try await loading.value
+
+        for _ in 0..<10 {
+            guard let gap = store.gaps.first else { break }
+            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        }
+        for _ in 0..<10 where !store.reachedEnd {
+            _ = try await store.loadOlder()
+        }
+        #expect(ids(store) == server.ids.sorted(by: >))
+    }
+
+    /// ギャップの古い側の端の投稿が消えても、古い方はその端から読み、同じ範囲にギャップをもう1つ作らない。
+    @Test func loadOlderAfterDeletingOlderEndOfGapDoesNotOverlapGaps() async throws {
+        let server = FakeHomeServer(ids: 1...20)
+        let latestRegenerating = FailOnce()
+        let olderRegenerating = FailOnce()
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.maxID == nil, latestRegenerating.shouldFail() {
+                return TimelinePage(statuses: [20, 11].map(server.status), isRegenerating: true)
+            }
+            if query.maxID != nil, olderRegenerating.shouldFail() {
+                let page = server.page(query)
+                return TimelinePage(statuses: [page.statuses.first, page.statuses.last].compactMap(\.self), isRegenerating: true)
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        _ = store.receive(.delete(statusID: "11"))
+
+        _ = try await store.loadOlder()
+
+        #expect(!hasOverlappingGaps(store), "範囲の重なるギャップがあります: \(store.entries.map(\.debugLabel))")
+        while let gap = store.gaps.first {
+            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        }
+        #expect(ids(store) == Array((8...20).reversed()).filter { $0 != 11 })
+    }
+
     @Test func regeneratingShortPageKeepsGap() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let regenerating = FailOnce()
@@ -1167,6 +1535,15 @@ struct TimelineGapTests {
 
     private func ids(_ store: TimelineStore) -> [Int] {
         store.statuses.compactMap { Int($0.id) }
+    }
+
+    private func hasOverlappingGaps(_ store: TimelineStore) -> Bool {
+        let gaps = store.gaps
+        return gaps.indices.contains { i in
+            gaps.indices.contains { j in
+                i != j && StatusID.isNewer(gaps[i].newerID, than: gaps[j].olderID) && StatusID.isNewer(gaps[j].newerID, than: gaps[i].olderID)
+            }
+        }
     }
 
     /// 読めなかった投稿も含めた並び。
