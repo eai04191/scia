@@ -21,7 +21,6 @@ struct Menu: Encodable {
 struct Item: Encodable {
     let id: String
     let title: String
-    let note: String?
     let symbol: String
 }
 
@@ -32,7 +31,7 @@ func menu<Kind: BundledMenuDefaults & MenuItemPresentable>(_: Kind.Type, title: 
         moreTitle: Kind.moreBoundaryTitle,
         supportsSeparators: Kind.supportsSeparators,
         supportsRowSeparators: Kind.supportsRowSeparators,
-        items: Kind.allCases.map { Item(id: $0.rawValue, title: $0.title, note: $0.note, symbol: $0.symbolName) },
+        items: Kind.allCases.map { Item(id: $0.rawValue, title: $0.title, symbol: $0.symbolName) },
         defaults: Kind.defaultLayout.tokens
     )
 }

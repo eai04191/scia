@@ -377,13 +377,13 @@ struct TabLayoutSettingsTests {
     }
 
     /// タブの名前は、付けた名前がなければハンドルの`@`より前にする。ほかのサーバーの人と付けた名前のときは、設定の並びにハンドルを添える。
-    @Test func profileItemTitleAndNote() {
+    @Test func profileItemTitleAndDetail() {
         #expect(TabItem.profile(accountID: "1", acct: "bob").title == "@bob")
-        #expect(TabItem.profile(accountID: "1", acct: "bob").note == nil)
+        #expect(TabItem.profile(accountID: "1", acct: "bob").detail == nil)
         #expect(TabItem.profile(accountID: "1", acct: "bob@remote.example").title == "@bob")
-        #expect(TabItem.profile(accountID: "1", acct: "bob@remote.example").note == "@bob@remote.example")
+        #expect(TabItem.profile(accountID: "1", acct: "bob@remote.example").detail == "@bob@remote.example")
         #expect(TabItem.profile(accountID: "1", acct: "bob", title: "ボブ").title == "ボブ")
-        #expect(TabItem.profile(accountID: "1", acct: "bob", title: "ボブ").note == "@bob")
+        #expect(TabItem.profile(accountID: "1", acct: "bob", title: "ボブ").detail == "@bob")
     }
 
     @Test func renamedChangesOnlyUserAddedItems() {

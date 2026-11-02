@@ -322,7 +322,8 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         case .item(let item, let isVisible):
             var content = UIListContentConfiguration.subtitleCell()
             content.text = item.title
-            content.secondaryText = item.note
+            // 足したタブのように、名前だけでは見分けられない項目にだけ添える。
+            content.secondaryText = item.detail
             content.secondaryTextProperties.color = .secondaryLabel
             content.secondaryTextProperties.font = .preferredFont(forTextStyle: .footnote)
             content.image = image(item) ?? UIImage(systemName: item.symbolName)

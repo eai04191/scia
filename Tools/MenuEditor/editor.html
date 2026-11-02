@@ -279,7 +279,6 @@ function renderRows() {
       const code = document.createElement("code");
       code.textContent = id;
       meta.append(code);
-      if (item.note) meta.append(` · ${item.note}`);
       label.append(meta);
     }
     li.append(toggleCell, label);

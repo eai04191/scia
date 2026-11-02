@@ -26,15 +26,9 @@ struct MenuItemContentTests {
         #expect(LinkMenuItem.allCases.filter { $0.urlAction == nil } == [.openAsProfile, .customize])
     }
 
-    /// 共通の項目の名前と説明はどのメニューでも同じで、メニューに固有の決まりだけを書き足す。
-    @Test func sharedItemsHaveTheSameTitleAndNote() {
+    /// 共通の項目の名前はどのメニューでも同じ。
+    @Test func sharedItemsHaveTheSameTitle() {
         #expect(StatusMenuItem.openInBrowser.title == "ブラウザで開く")
         #expect(HashtagMenuItem.openInBrowser.title == "ブラウザで開く")
-        #expect(StatusMenuItem.openInBrowser.note == "設定の開く場所で開きます")
-        #expect(HashtagMenuItem.openInBrowser.note == "設定の開く場所で開きます")
-        #expect(LinkMenuItem.openInBrowser.note == "設定の開く場所で開きます。リンクをタップしたときと同じです")
-        #expect(StatusMenuItem.openInAppSafari.note == "設定の開く場所にかかわらず、アプリ内のSafariで開きます")
-        #expect(LinkMenuItem.openInAppSafari.note == "設定の開く場所にかかわらず、アプリ内のSafariで開きます。httpとhttpsのリンクでだけ押せます")
-        #expect(UserMenuItem.copyLink.note == nil)
     }
 }
