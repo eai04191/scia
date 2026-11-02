@@ -74,10 +74,7 @@ struct TimelineStoreInterleavingTests {
             case .respond:
                 guard !server.requests.isEmpty else { continue }
                 let index = Int.random(in: server.requests.indices, using: &random)
-                var response = Response.random(using: &random)
-                if response == .regenerating, !Self.handlesRegenerating(server.requests[index].query, client: client) {
-                    response = .full
-                }
+                let response = Response.random(using: &random)
                 trace.append("respond(\(server.requests[index].label), \(response))")
                 server.respond(index, with: response, using: &random)
             case .fill:
@@ -197,11 +194,12 @@ struct TimelineStoreInterleavingTests {
         if let reversed = gaps.first(where: { $0.older >= $0.newer }) {
             return "ギャップ\(TimelineEntry.gap(reversed.gap).debugLabel)の両端が逆です"
         }
-        // 新しい側の端の投稿が一覧にないギャップは、重なりを確かめない。端の投稿が消えると（削除のイベントで消したときと、
-        // 削除より前に受けた応答に消した投稿が入っていて、それを端にしたときがある）、補完の基準がそのギャップより下まで下がり、
-        // 同じ範囲にギャップがもう1つできて、続きを読む行が2つ並ぶ。投稿は抜けない。見つけた不具合で、直すかは別に決める。
+        // 端の投稿が一覧にないギャップは、重なりを確かめない。端の投稿が消えると（削除のイベントで消したときと、
+        // 削除より前に受けた応答に消した投稿が入っていて、それを端にしたときがある）、新しい側の端なら補完の基準が、
+        // 古い側の端なら一覧の末尾が、そのギャップの中に入る。そこから読むと同じ範囲にギャップがもう1つできて、続きを読む行が2つ並ぶ。
+        // 投稿は抜けない。見つけた不具合で、直すかは別に決める。
         let loadedIDs = Set(ids)
-        let anchoredGaps = gaps.filter { loadedIDs.contains($0.gap.newerID) }
+        let anchoredGaps = gaps.filter { loadedIDs.contains($0.gap.newerID) && loadedIDs.contains($0.gap.olderID) }
         for (index, lhs) in anchoredGaps.enumerated() {
             for rhs in anchoredGaps[(index + 1)...] where max(lhs.older, rhs.older) + 1 < min(lhs.newer, rhs.newer) {
                 return "ギャップ\(TimelineEntry.gap(lhs.gap).debugLabel)と\(TimelineEntry.gap(rhs.gap).debugLabel)が重なりました"
@@ -223,20 +221,6 @@ struct TimelineStoreInterleavingTests {
     ///   続けて読む基準が空の一覧にはないので覚えず、最新のページより後の投稿が抜ける。この間に補完とつなぎ直しを起こさないことで除く
     private static func isEmptyListCase(store: TimelineStore, server: InterleavingServer) -> Bool {
         store.isEmpty && server.isLoadingLatestPage
-    }
-
-    /// 再生成中の応答を返す要求か。再生成中の応答は、返った投稿の間にもまだ出ていない投稿が残りうるので、ストアはその間をギャップにする。
-    ///
-    /// 次の3つの要求では、ストアが返った投稿の間をギャップにせず、つなげて並べるため、間の投稿が抜ける。見つけた不具合で、直すかは別に決める。
-    /// - 古い方のページ（`max_id`だけ）: 古い方を読むときと、最初の読み込みで既読位置から古い方を読むとき
-    /// - 既読位置のすぐ後（`min_id`だけ）: 最初の読み込みで既読位置の後を読むとき
-    /// - 最初の読み込みを終えたあとの最新のページ（何も付けない）: 一覧が空のときの補完
-    private static func handlesRegenerating(_ query: TimelineQuery, client: ClientState) -> Bool {
-        switch (query.maxID != nil, query.sinceID != nil, query.minID != nil) {
-        case (true, false, false), (false, false, true): false
-        case (false, false, false): !client.hasLoadedInitial
-        default: true
-        }
     }
 
     /// アプリの側の状態。アプリと同じ順でしか手を打たないようにする。
