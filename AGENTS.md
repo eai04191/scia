@@ -30,6 +30,8 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `make test SIM='<使う端末>' ONLY='SciaTests/LinkLabelTests'`: 一部のテストだけを走らせる。識別子は空白で区切って複数渡せる。通っても中身は覚えない。`xcodebuild ... test`を直接走らせるときは、`-collect-test-diagnostics never`を付ける。付けないと、テストが失敗したときにシミュレーターの診断を集め、応答を待って10分止まる
 - `make check`: 変更を報告する前に必ず通す。通ると、確かめた作業ツリーの中身（commitしていない変更も含む）を覚える
 - `make menu-editor`: 長押しのメニューの既定の並びを並べ替えるページを、今の項目の名前と既定の並びを入れて`DerivedData/menu-editor.html`に書き出す
+- `make archive`: 実機向けのReleaseビルドをアーカイブする。ビルド番号はアーカイブしたUTCの日時になる
+- `make testflight`: アーカイブしてApp Store Connectへ上げる。mainは、GitHub Actions（`.github/workflows/testflight.yml`）が毎朝5時（JST）に、前に上げたときから変わっていれば上げる
 - `make hooks`: ローカルのmainを、`make check`と`make test`の両方が通った中身のcommitにしか動かさないhookを入れる。checkoutごとに1回で、worktreeにも効く。通った中身との違いがMarkdown（`*.md`）とログイン画面の補完に使うサーバーの一覧（`known-servers.txt`）だけなら、走らせ直さずに通ったものとして扱う
 - `make scenario-run PERSONA=<役>`: 何も知らないエージェントを、`Tools/scenario/personas/`の役で初めて使う人としてSciaに触らせ、報告とスクリーンショットを`~/scia-scenario/runs/`に残す。外へ出ないMastodon（`mastodon.localhost`）と専用の端末`Scia Scenario`を使い、Release構成のSciaを入れる。先に`make scenario-setup`で準備する（何度走らせても同じ状態になる）。DockerとAXe（`brew install cameroncooke/axe/axe`）が要る。ユーザーが`/scenario`で起動したときは、`.claude/skills/scenario`の手順で走らせてまとめる
 
@@ -143,7 +145,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - 見た目: 実データに近いfixtureを使い、スクリーンショットで確認する
 - 好みで決まる値は、ハードコードで決め打ちしない。余白や文字の大きさのような投稿の見た目の値は、設定の「投稿の見た目」（`AppearanceCatalog`）に項目を足す。アニメーションの時間や新着をまとめて挿入する間隔のような、動きや間合いの値は、`TuningCatalog`に項目を足してデバッグ用のチューニングパネルから調整できるようにする。どちらも、ユーザーに選んでもらう
 - フレームが落ちたスクロールでは、落ちたフレームに使った処理の時間（行の組み立て、行の大きさの計算、並べ直しなど）を、`frameWork`のnoticeのログに1行で残し、アプリのDocuments/FrameWork.jsonに起動をまたいで足し上げる。直す場所を選ぶときは、まずこのファイルで合計の長い処理を見る。測るのは`FrameWork.measure`で囲んだ処理だけなので、`measured`が`hitchTime`よりずっと小さければ、測っていない処理が重い。そのときは`FrameWork.measure`で囲む場所を足すか、Time Profilerで測る
-- ユーザーがシェイクで残した違和感レポートは、アプリのDocuments/DiscomfortReportsにJSONで保存される。シミュレーターでは`xcrun simctl get_app_container '<使う端末>' net.mizle.scia data`で場所を調べられる。状態を追いたい画面は`AppDependencies.stateDumps`に状態ダンプを登録し、調査に必要なイベントはinfo以上のレベルで`SciaLog`に出す（debugレベルはレポートに残らない）
+- 違和感レポートはDEBUGのビルドだけに入れ、TestFlightで配るReleaseのビルドには入れない。ユーザーがシェイクで残した違和感レポートは、アプリのDocuments/DiscomfortReportsにJSONで保存される。シミュレーターでは`xcrun simctl get_app_container '<使う端末>' net.mizle.scia data`で場所を調べられる。状態を追いたい画面は`AppDependencies.stateDumps`に状態ダンプを登録し、調査に必要なイベントはinfo以上のレベルで`SciaLog`に出す（debugレベルはレポートに残らない）
 
 ## テスト
 
