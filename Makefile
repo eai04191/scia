@@ -5,7 +5,7 @@ SIM_DESTINATION ?= generic/platform=iOS Simulator
 # 端末を決めないビルドは、既定ではシミュレーターの全アーキテクチャ（arm64とx86_64）を作る。このMacで動く分だけにして、コンパイルを半分にする
 SIM_ARCH ?= $(shell uname -m)
 
-.PHONY: generate lint test-lint test-core build warnings test sim-keyboard scenario-build scenario-setup scenario-reset scenario-run promo readme-screenshots readme-icons update-known-servers check check-steps hooks menu-editor clean
+.PHONY: generate lint test-lint test-core build warnings test sim-keyboard scenario-build scenario-setup scenario-reset scenario-run archive testflight promo readme-screenshots readme-icons update-known-servers check check-steps hooks menu-editor clean
 
 ## project.ymlからXcodeプロジェクトを生成する
 generate:
@@ -78,6 +78,16 @@ scenario-reset: scenario-build
 ## 例: make scenario-run PERSONA=literal
 scenario-run: scenario-build
 	Tools/scenario/run.sh '$(SCENARIO_APP)' '$(PERSONA)'
+
+## 実機向けのReleaseビルドをアーカイブする。署名のチームはConfig/Local.xcconfigのDEVELOPMENT_TEAMから読む
+## App Store Connectは、同じバージョンで前に上げたものより大きいビルド番号しか受け付けないため、ビルド番号をアーカイブしたUTCの日時（例: 20261103.124500）にする
+ARCHIVE := $(DERIVED_DATA)/Scia.xcarchive
+archive: generate
+	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Release -destination 'generic/platform=iOS' -derivedDataPath $(DERIVED_DATA) -archivePath $(ARCHIVE) -allowProvisioningUpdates CURRENT_PROJECT_VERSION=$$(date -u +%Y%m%d.%H%M%S) archive
+
+## アーカイブしてApp Store Connectへ上げる。処理が終わるとTestFlightに出る
+testflight: archive
+	xcodebuild -exportArchive -archivePath $(ARCHIVE) -exportOptionsPlist Config/ExportOptions.plist -exportPath $(DERIVED_DATA)/export -allowProvisioningUpdates
 
 ## プロモーション動画の素材を、シナリオのUIテストを走らせながら撮る（docs/promo-video.md）。SIMにはシミュレーターか実機の名前を渡す
 ## 例: make promo SIM='Scia 1'

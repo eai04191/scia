@@ -40,6 +40,7 @@ targets:
     sources:
       - App/Sources
       - App/Resources
+      - App/Privacy
     dependencies:
       - package: SciaCore
       - target: SciaShareExtension
@@ -87,6 +88,9 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: $(SCIA_DISPLAY_NAME)
         # ビューアの共有から画像を写真に保存するため
         INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: 添付ファイルのメディアを写真に保存します。
+        # 暗号はOSの機能（HTTPS、Keychain）と、PKCEやキャッシュのファイル名に使うSHA-256のハッシュだけなので、輸出規制の対象外と申告する。
+        # ないと、App Store Connectにビルドを上げるたびに暗号の使い方を聞かれる
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         CODE_SIGN_STYLE: Automatic
     entitlements:
       path: App/Scia.entitlements
@@ -131,6 +135,8 @@ targets:
     platform: iOS
     sources:
       - ShareExtension
+      # 共有拡張もSciaCoreを静的にリンクし、ファイルの日時を読むAPIを含むため、アプリと同じプライバシーマニフェストを入れる
+      - App/Privacy
     dependencies:
       - package: SciaCore
     settings:
