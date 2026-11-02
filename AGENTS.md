@@ -31,10 +31,12 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `make check`: 変更を報告する前に必ず通す。通ると、確かめた作業ツリーの中身（commitしていない変更も含む）を覚える
 - `make menu-editor`: 長押しのメニューの既定の並びを並べ替えるページを、今の項目の名前と既定の並びを入れて`DerivedData/menu-editor.html`に書き出す
 - `make hooks`: ローカルのmainを、`make check`と`make test`の両方が通った中身のcommitにしか動かさないhookを入れる。checkoutごとに1回で、worktreeにも効く。通った中身との違いがMarkdown（`*.md`）とログイン画面の補完に使うサーバーの一覧（`known-servers.txt`）だけなら、走らせ直さずに通ったものとして扱う
+- `make scenario-run PERSONA=<役>`: 何も知らないエージェントを、`Tools/scenario/personas/`の役で初めて使う人としてSciaに触らせ、報告とスクリーンショットを`~/scia-scenario/runs/`に残す。外へ出ないMastodon（`mastodon.localhost`）と専用の端末`Scia Scenario`を使い、Release構成のSciaを入れる。先に`make scenario-setup`で準備する（何度走らせても同じ状態になる）。DockerとAXe（`brew install cameroncooke/axe/axe`）が要る。ユーザーが`/scenario`で起動したときは、`.claude/skills/scenario`の手順で走らせてまとめる
 
 ## シミュレーター
 
 - 動作確認とテストには、`Scia 1`、`Scia 2`、`Scia 3`、`Scia 4`のどれかのシミュレーターを使う。どれもログイン済みの端末の複製で、ログイン情報が端末のKeychainに残っているため、ログインし直さずに済む
+- `Scia Scenario`は`make scenario-*`の専用の端末で、`Tools/sim.sh`では貸し借りしない。ほかの確かめには使わない
 - 端末は4台なので、シミュレーターを触る間だけ借りる。触る直前に`sim`のskillで`Tools/sim.sh acquire`を走らせて借り（空きがなければ空くまで待つ）、触り終えたら`Tools/sim.sh release`で返す。借りた端末をほかのworktreeが使ったあとなら、`Tools/sim.sh reset '<使う端末>'`でアプリの設定を既定に戻し、自分のビルドを入れ直す
 - 端末の設定は、ほかのスレッドが変えたり、借りるときに既定に戻したりする。確かめに要る設定（チューニング、タップや長押しの操作、見た目など）は、前に入れたものが残っている前提にせず、確かめる直前に入れる
 - シミュレーターのツールでは、決まった端末を毎回`device`で指定する。省略すると、他のスレッドが使っている端末を操作してしまうことがある
