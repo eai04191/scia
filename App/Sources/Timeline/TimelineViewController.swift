@@ -1358,6 +1358,15 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             scrollToNewest()
             UserAction.tapNewArrivals(screen: texts.dumpName).record()
         })
+        // Macでウインドウが前面にない間は、色付きの下地が淡い灰色に変わる。白い文字のままでは読めないため、文字を下地に合わせる。
+        // 色は動的な色で渡さず、前面かどうかが変わったところで決め直す。Macでは、ボタンが色を解決するtintの知らせが、
+        // 前面かどうかの変化より先に届くため、動的な色では1回前の状態の色が残り、青い下地に黒い文字になる（issue #1と同じずれ）。
+        button.configurationUpdateHandler = { button in
+            button.configuration?.baseForegroundColor = button.traitCollection.activeAppearance == .inactive ? .label : .white
+        }
+        button.registerForTraitChanges([UITraitActiveAppearance.self]) { (button: UIButton, _) in
+            button.setNeedsUpdateConfiguration()
+        }
         button.translatesAutoresizingMaskIntoConstraints = false
         button.isHidden = true
         button.alpha = 0
