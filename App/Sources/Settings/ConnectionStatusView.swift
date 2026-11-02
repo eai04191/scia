@@ -20,13 +20,7 @@ struct ConnectionStatusView: View {
             Section("ストリーミング") {
                 LabeledContent("接続", value: Self.text(diagnostics.streaming))
                 ForEach(diagnostics.streamingSubscriptions, id: \.self) { subscription in
-                    // 報告に添えたときにサーバー側の購読と突き合わせられるよう、APIのストリームの名前を添える。
-                    VStack(alignment: .leading) {
-                        Text(name(of: subscription))
-                        Text(Self.identifier(of: subscription))
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                    }
+                    Text(name(of: subscription))
                 }
             }
             if let status {
@@ -50,8 +44,6 @@ struct ConnectionStatusView: View {
                     }
                 } header: {
                     Text("使っていない機能")
-                } footer: {
-                    Text("このサーバーにないと分かった機能は、アプリを起動し直すまで使いません。起動し直すと、もう一度試します。サーバーが処理できなかった画像の形式は、起動し直しても使いません。サーバーの版が変わると、もう一度試します。")
                 }
                 Section("最近のエラー") {
                     if status.recentFailures.isEmpty {
@@ -102,11 +94,6 @@ struct ConnectionStatusView: View {
         case "hashtag": subscription.tag.map { "#\($0)" } ?? "ハッシュタグ"
         default: subscription.stream
         }
-    }
-
-    /// `public:local`、`list:<ID>`、`hashtag:<名前>`のように、APIのストリームの名前に引数を続けたもの。
-    private static func identifier(of subscription: StreamingSubscription) -> String {
-        ([subscription.stream] + [subscription.list, subscription.tag].compactMap(\.self)).joined(separator: ":")
     }
 
     /// 今の版のサーバーでは送らないと覚えている形式。
