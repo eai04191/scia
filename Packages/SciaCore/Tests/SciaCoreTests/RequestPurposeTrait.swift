@@ -2,7 +2,7 @@ import SciaCore
 import Testing
 
 /// テストの本文から送る通信の目的を名乗るトレイト。クライアントやストアのように、目的を名乗らない層を直接呼ぶテストに付ける。
-/// 目的を自分で名乗るもの（モデル、`LinkCardRefresher`、`XPostStore`など）を確かめるテストには付けない。名乗り忘れを見逃すため。
+/// 目的を自分で名乗るもの（モデル、`StatusRefresher`、`XPostStore`など）を確かめるテストには付けない。名乗り忘れを見逃すため。
 struct RequestPurposeTrait: SuiteTrait, TestTrait, TestScoping {
     let purpose: RequestPurpose
 

@@ -1,20 +1,38 @@
 public import Foundation
 import os
 
-/// カードが付く前に受け取った投稿を、いつ取り直すかの予定。
+/// サーバーが仕上げ終える前に受け取ったため、取り直す投稿の、取り直す理由。
+public struct StatusRefreshNeeds: OptionSet, Sendable {
+    public let rawValue: Int
+
+    public init(rawValue: Int) {
+        self.rawValue = rawValue
+    }
+
+    /// サーバーがまだカードを付けていない。
+    /// Mastodonは投稿を配信してからリンク先を取りに行ってカードを付け、付けたことをストリーミングで知らせない。
+    /// 自分のサーバーの投稿には数秒で付き、ほかのサーバーの投稿は、受け取ってから0〜60秒のランダムな時間をおいて取りに行く。
+    /// 取りに行く仕事は優先度の低いキューに入るため、混んでいるサーバーではさらに遅れる。
+    public static let linkCard = StatusRefreshNeeds(rawValue: 1 << 0)
+
+    /// `status`を取り直す理由。ブーストなら、ブーストされた投稿を渡す。
+    public init(_ status: Status) {
+        self = []
+        if case .link = LinkCard(status: status) { insert(.linkCard) }
+    }
+}
+
+/// サーバーが仕上げ終える前に受け取った投稿を、いつ取り直すかの予定。取り直す理由は`StatusRefreshNeeds`。
 ///
-/// Mastodonは投稿を配信してからリンク先を取りに行ってカードを付け、付けたことをストリーミングで知らせない。
-/// 自分のサーバーの投稿には数秒で付き、ほかのサーバーの投稿は、受け取ってから0〜60秒のランダムな時間をおいて取りに行く。
-/// 取りに行く仕事は優先度の低いキューに入るため、混んでいるサーバーではさらに遅れる。
-/// そのため、リンク先だけのカードを出している投稿を、初めて見てから`firstDelay`後から`giveUpAfter`まで取り直す。
+/// どれも仕上がるまでに秒から分の単位でかかるため、取り直す理由のある投稿を、初めて見てから`firstDelay`後から`giveUpAfter`まで取り直す。
 /// 取り直しは投稿ごとに送らず、`interval`に1回、そのとき待っている投稿をまとめて送る。
-/// リンクの投稿がいくつ流れてきても、リクエストは`interval`に1回を超えず、トークンごとのレート制限（Mastodonの既定で5分に300回）の1割に収まる。
+/// 取り直す投稿がいくつ流れてきても、リクエストは`interval`に1回を超えず、トークンごとのレート制限（Mastodonの既定で5分に300回）の1割に収まる。
 /// 画面に出ていない投稿は取り直さず、また見えたときに、`giveUpAfter`を過ぎていても1回だけ取り直す。どれだけ経っていても忘れない。
-/// 見かけたあと画面を離れていた間にサーバーがカードを付けても、手元の投稿は見かけた時点の中身のままのため。
+/// 見かけたあと画面を離れていた間にサーバーが仕上げても、手元の投稿は見かけた時点の中身のままのため。
 /// 作られてから`maximumAge`より経った投稿は、初めて見たときに待たずに1回だけ取り直す。若いうちに受け取って、見えないまま時間が経った投稿のため。
 /// 予定は起動している間だけ持つ。1件は小さく、溜まってもメモリを圧迫しない。
 /// Mastodonは編集でカードを消して取りに行き直すため、予定は投稿の版（IDと編集した日時の組）ごとに立てる。
-public struct LinkCardRefreshSchedule: Sendable {
+public struct StatusRefreshSchedule: Sendable {
     /// 投稿の版。
     public struct Version: Hashable, Sendable {
         public let statusID: Status.ID
@@ -37,17 +55,17 @@ public struct LinkCardRefreshSchedule: Sendable {
         public let firstSeen: Date
         /// この取り直しを含めて、何回取り直したか。
         public let count: Int
-        /// これで最後で、カードが届かなければ諦める。
+        /// これで最後で、仕上がっていなければ諦める。
         public let isFinal: Bool
     }
 
     /// 初めて見てから、何秒後に最初に取り直すか。自分のサーバーの投稿には、このころにはカードが付いている。
     public static let firstDelay: TimeInterval = 3
-    /// 取り直しのリクエストの間隔。カードが付いてから表示されるまでの遅れは、長くてもこの間隔になる。
+    /// 取り直しのリクエストの間隔。サーバーが仕上げてから表示されるまでの遅れは、長くてもこの間隔になる。
     public static let interval: TimeInterval = 10
     /// 初めて見てから、何秒経ったら諦めるか。ほかのサーバーの投稿の、最大1分の遅れと、キューの待ちと、取得の時間を待つ。
     public static let giveUpAfter: TimeInterval = 180
-    /// 作られてから（編集した投稿は編集してから）これより経った投稿は、サーバーがカードを付け終えたとみなし、待たずに1回だけ取り直す。
+    /// 作られてから（編集した投稿は編集してから）これより経った投稿は、サーバーが仕上げ終えたとみなし、待たずに1回だけ取り直す。
     public static let maximumAge: TimeInterval = 600
 
     private struct Entry: Sendable {
@@ -63,24 +81,24 @@ public struct LinkCardRefreshSchedule: Sendable {
 
         init(firstSeen: Date, isOld: Bool) {
             self.firstSeen = firstSeen
-            firstDate = isOld ? firstSeen : firstSeen.addingTimeInterval(LinkCardRefreshSchedule.firstDelay)
-            giveUpDate = isOld ? firstSeen : firstSeen.addingTimeInterval(LinkCardRefreshSchedule.giveUpAfter)
+            firstDate = isOld ? firstSeen : firstSeen.addingTimeInterval(StatusRefreshSchedule.firstDelay)
+            giveUpDate = isOld ? firstSeen : firstSeen.addingTimeInterval(StatusRefreshSchedule.giveUpAfter)
         }
     }
 
     private var entries: [Version: Entry] = [:]
-    /// 取り直し終えた版。カードが届いたか、諦めたか、サーバーにもうない。
+    /// 取り直し終えた版。仕上がったか、諦めたか、サーバーにもうない。
     private var finished: Set<Version> = []
     /// 最後に取り直しを送った時刻。
     private var lastRequest: Date?
 
     public init() {}
 
-    /// リンク先だけのカードを出している投稿を見た。初めて見た投稿の予定を立てる。ブーストなら、ブーストされた投稿を渡す。
+    /// 取り直す理由のある投稿を見た。初めて見た投稿の予定を立てる。ブーストなら、ブーストされた投稿を渡す。
     public mutating func note(_ statuses: [Status], now: Date) {
         for status in statuses {
             let version = Version(status)
-            guard entries[version] == nil, !finished.contains(version), case .link = LinkCard(status: status) else { continue }
+            guard entries[version] == nil, !finished.contains(version), !StatusRefreshNeeds(status).isEmpty else { continue }
             let isOld = now.timeIntervalSince(status.editedAt ?? status.createdAt) > Self.maximumAge
             entries[version] = Entry(firstSeen: now, isOld: isOld)
         }
@@ -122,7 +140,7 @@ public struct LinkCardRefreshSchedule: Sendable {
         return max(first, lastRequest.addingTimeInterval(Self.interval))
     }
 
-    /// 取り直す必要がなくなった。カードが届いたか、サーバーにもうない。
+    /// 取り直す必要がなくなった。仕上がったか、サーバーにもうない。
     public mutating func finish(_ versions: some Sequence<Version>) {
         for version in versions {
             entries[version] = nil
@@ -131,20 +149,20 @@ public struct LinkCardRefreshSchedule: Sendable {
     }
 }
 
-/// カードが付く前に受け取った投稿を、見えている間だけ、予定どおりにまとめて取り直し、届いたカードを表示へ反映する。
+/// サーバーが仕上げ終える前に受け取った投稿を、見えている間だけ、予定どおりにまとめて取り直し、表示へ反映する。
 /// セッションの中で1つ持ち、ホーム、通知、プロフィールの一覧が、見えている投稿を知らせる。
 @MainActor
-public final class LinkCardRefresher {
+public final class StatusRefresher {
     public typealias Fetch = @Sendable ([Status.ID]) async throws -> [Status]
-    /// カードの付いた、取り直した投稿を渡す。表示しているすべての一覧で、その投稿とそれをブーストした投稿にカードを付ける。
+    /// 取り直した投稿を渡す。表示しているすべての一覧で、その投稿とそれをブーストした投稿に、取り直した中身を反映する。
     public typealias Apply = @MainActor (Status) -> Void
 
     private let fetch: Fetch
     private let apply: Apply
     private let now: @MainActor () -> Date
     private let sleep: @Sendable (Duration) async throws -> Void
-    private var schedule = LinkCardRefreshSchedule()
-    /// 一覧ごとの、見えていて、リンク先だけのカードを出している投稿。
+    private var schedule = StatusRefreshSchedule()
+    /// 一覧ごとの、見えていて、取り直す理由のある投稿。
     private var visible: [ObjectIdentifier: [Status]] = [:]
     private var loop: Task<Void, Never>?
     /// 取り直しの結果を待っている。待っている間に見える投稿が変わっても、結果を捨てないよう、ループを作り直さない。
@@ -171,7 +189,7 @@ public final class LinkCardRefresher {
         self.init(fetch: { try await client.statuses($0) }, apply: apply)
     }
 
-    /// `source`の一覧で見えていて、リンク先だけのカードを出している投稿を知らせる。画面から消えたら空で知らせる。
+    /// `source`の一覧で見えていて、取り直す理由のある投稿を知らせる。画面から消えたら空で知らせる。
     public func setVisible(_ statuses: [Status], from source: AnyObject) {
         guard !isUnsupported, !isStopped else { return }
         visible[ObjectIdentifier(source)] = statuses
@@ -195,8 +213,8 @@ public final class LinkCardRefresher {
         }
     }
 
-    private var visibleVersions: Set<LinkCardRefreshSchedule.Version> {
-        Set(visible.values.joined().map(LinkCardRefreshSchedule.Version.init))
+    private var visibleVersions: Set<StatusRefreshSchedule.Version> {
+        Set(visible.values.joined().map(StatusRefreshSchedule.Version.init))
     }
 
     private func run() async {
@@ -213,7 +231,7 @@ public final class LinkCardRefresher {
         }
     }
 
-    private func refresh(_ attempts: [LinkCardRefreshSchedule.Attempt]) async {
+    private func refresh(_ attempts: [StatusRefreshSchedule.Attempt]) async {
         let ids = attempts.map(\.version.statusID)
         isFetching = true
         defer { isFetching = false }
@@ -242,7 +260,7 @@ public final class LinkCardRefresher {
     }
 
     /// 間隔や諦めるまでの時間を見直せるよう、カードが届くまでの時間と、諦めた投稿を残す。
-    private func logOutcomes(of attempts: [LinkCardRefreshSchedule.Attempt], cardedIDs: Set<Status.ID>) {
+    private func logOutcomes(of attempts: [StatusRefreshSchedule.Attempt], cardedIDs: Set<Status.ID>) {
         let now = now()
         for attempt in attempts {
             let elapsed = Int(now.timeIntervalSince(attempt.firstSeen).rounded())

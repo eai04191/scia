@@ -107,8 +107,8 @@ extension TimelineViewController {
     ///   - subject: 添付ファイルの投稿。プロフィールの画像ならnil。
     ///   - sourceTile: 開閉の起点にするビューを返す。見つからなければnilを返し、画像を動かさずに薄くして開閉する。
     func openMedia(_ attachments: [MediaAttachment], at index: Int, subject: OperationStatus.Subject?, sourceTile: @escaping @MainActor (MediaAttachment.ID) -> (any MediaViewerSource)?) {
-        // ビューアは一覧を残したまま覆うため、覆っている間は、リンクカードを取り直す投稿として見えていないことにする。閉じたら報告し直す。
-        onVisibleLinkOnlyCardsChange?([])
+        // ビューアは一覧を残したまま覆うため、覆っている間は、取り直す投稿として見えていないことにする。閉じたら報告し直す。
+        onVisibleUnsettledStatusesChange?([])
         MediaViewerOpener(store: mediaImages, tuning: tuning, transfers: mediaTransfers, notices: notices).open(
             attachments,
             at: index,

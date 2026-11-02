@@ -406,7 +406,7 @@ extension FeedTimelineController {
             model.debugStore.debugLocalOnlyIDs.insert(dummy.id)
             model.debugReceive(.update(dummy))
             guard (try? await model.clock.sleep(for: Self.dummyLinkCardDelay)) != nil, !model.isStopped else { return }
-            model.updateStatus(dummy.id) { $0.adoptingCard(of: carded) }
+            model.updateStatus(dummy.id) { $0.adoptingRefreshed(of: carded) }
         }
     }
 

@@ -4,7 +4,7 @@ import Testing
 @testable import SciaCore
 
 /// カードが付く前に受け取った投稿を、見えている間だけ間隔を空けてまとめて取り直し、届いたカードを反映することを確かめる。
-struct LinkCardRefreshTests {
+struct StatusRefreshTests {
     private static let account = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: URL(string: "https://example.social/a.png"))
     private static let start = Date(timeIntervalSince1970: 1_000_000)
     private static let link = #"<p><a href="https://news.example/articles/1">news.example/articles/1</a></p>"#
@@ -13,8 +13,8 @@ struct LinkCardRefreshTests {
         Status(id: id, createdAt: createdAt, account: account, content: content, spoilerText: "", url: nil, card: card)
     }
 
-    private static func version(_ id: String, editedAt: Date? = nil) -> LinkCardRefreshSchedule.Version {
-        LinkCardRefreshSchedule.Version(statusID: id, editedAt: editedAt)
+    private static func version(_ id: String, editedAt: Date? = nil) -> StatusRefreshSchedule.Version {
+        StatusRefreshSchedule.Version(statusID: id, editedAt: editedAt)
     }
 
     private static func edited(_ id: String, createdAt: Date = start, editedAt: Date) -> Status {
@@ -29,7 +29,7 @@ struct LinkCardRefreshTests {
 
     /// 最初は3秒後に、そのあとは10秒ごとに取り直し、初めて見てから180秒を過ぎた取り直しで諦める。
     @Test func refreshesEveryIntervalUntilGivingUp() throws {
-        var schedule = LinkCardRefreshSchedule()
+        var schedule = StatusRefreshSchedule()
         schedule.note([Self.status("1")], now: Self.start)
         let visible: Set = [Self.version("1")]
 
@@ -38,7 +38,7 @@ struct LinkCardRefreshTests {
         #expect(schedule.due(now: Self.start.addingTimeInterval(3), visible: visible, limit: 20).map(\.version.statusID) == ["1"])
         #expect(schedule.nextDate(visible: visible) == Self.start.addingTimeInterval(13))
         #expect(schedule.due(now: Self.start.addingTimeInterval(12), visible: visible, limit: 20).isEmpty)
-        var last: LinkCardRefreshSchedule.Attempt?
+        var last: StatusRefreshSchedule.Attempt?
         var date = Self.start.addingTimeInterval(13)
         while let next = schedule.nextDate(visible: visible), next <= Self.start.addingTimeInterval(500) {
             #expect(next == date)
@@ -54,7 +54,7 @@ struct LinkCardRefreshTests {
 
     /// 見えない間は取り直さず、また見えたら、すぐに取り直す。
     @Test func waitsWhileHiddenAndCatchesUpOnce() {
-        var schedule = LinkCardRefreshSchedule()
+        var schedule = StatusRefreshSchedule()
         schedule.note([Self.status("1")], now: Self.start)
 
         #expect(schedule.due(now: Self.start.addingTimeInterval(20), visible: [], limit: 20).isEmpty)
@@ -65,7 +65,7 @@ struct LinkCardRefreshTests {
 
     /// 見えないまま諦める時刻を過ぎても、また見えたら1回だけ取り直す。
     @Test func refreshesOnceWhenSeenAgainAfterGivingUpTime() {
-        var schedule = LinkCardRefreshSchedule()
+        var schedule = StatusRefreshSchedule()
         schedule.note([Self.status("1")], now: Self.start)
 
         let due = schedule.due(now: Self.start.addingTimeInterval(300), visible: [Self.version("1")], limit: 20)
@@ -78,7 +78,7 @@ struct LinkCardRefreshTests {
     /// 初めて見てから長く見えないままでも、予定を忘れず、また見えたら1回だけ取り直す。
     /// 見かけたあと画面を離れている間にサーバーがカードを付けても、戻ったときに出すため。
     @Test func refreshesOnceWhenSeenAgainLongAfterFirstSeen() {
-        var schedule = LinkCardRefreshSchedule()
+        var schedule = StatusRefreshSchedule()
         schedule.note([Self.status("1")], now: Self.start)
 
         let due = schedule.due(now: Self.start.addingTimeInterval(900), visible: [Self.version("1")], limit: 20)
@@ -91,7 +91,7 @@ struct LinkCardRefreshTests {
     /// 作られてから時間の経った投稿を初めて見たら、待たずに1回だけ取り直す。
     /// 若いうちに受け取って見えないままだった投稿は、サーバーがカードを付けたあとも、受け取った時点の中身のままのため。
     @Test func oldStatusIsRefreshedOnceRightAway() {
-        var schedule = LinkCardRefreshSchedule()
+        var schedule = StatusRefreshSchedule()
         schedule.note([Self.status("old", createdAt: Self.start.addingTimeInterval(-601))], now: Self.start)
         let visible: Set = [Self.version("old")]
 
@@ -104,7 +104,7 @@ struct LinkCardRefreshTests {
 
     /// 投稿がいくつあっても、取り直しは10秒に1回にまとめる。
     @Test func batchesStatusesIntoOneRequestPerInterval() {
-        var schedule = LinkCardRefreshSchedule()
+        var schedule = StatusRefreshSchedule()
         schedule.note([Self.status("a")], now: Self.start)
         schedule.note([Self.status("b")], now: Self.start.addingTimeInterval(5))
         let visible: Set = [Self.version("a"), Self.version("b")]
@@ -117,7 +117,7 @@ struct LinkCardRefreshTests {
 
     /// サーバーのカードがある投稿と、リンクのない投稿は、予定に入れない。
     @Test func ignoresStatusesThatNeedNoRefresh() throws {
-        var schedule = LinkCardRefreshSchedule()
+        var schedule = StatusRefreshSchedule()
         schedule.note([
             Self.status("carded", card: try Self.card()),
             Self.status("plain", content: "<p>リンクのない本文</p>"),
@@ -128,7 +128,7 @@ struct LinkCardRefreshTests {
 
     /// Mastodonは編集でカードを消して取りに行き直すため、取り直し終えた投稿も、編集されたら予定を立て直す。
     @Test func editGetsNewSchedule() {
-        var schedule = LinkCardRefreshSchedule()
+        var schedule = StatusRefreshSchedule()
         schedule.note([Self.status("1")], now: Self.start)
         schedule.finish([Self.version("1")])
         let editedAt = Self.start.addingTimeInterval(100)
@@ -139,7 +139,7 @@ struct LinkCardRefreshTests {
 
     /// 作られてから時間の経った投稿でも、編集したばかりなら取り直す。
     @Test func recentEditOfOldPostIsRefreshed() {
-        var schedule = LinkCardRefreshSchedule()
+        var schedule = StatusRefreshSchedule()
         let editedAt = Self.start.addingTimeInterval(-10)
         schedule.note([Self.edited("1", createdAt: Self.start.addingTimeInterval(-3_600), editedAt: editedAt)], now: Self.start)
 
@@ -147,7 +147,7 @@ struct LinkCardRefreshTests {
     }
 
     @Test func finishedStatusIsNotNotedAgain() {
-        var schedule = LinkCardRefreshSchedule()
+        var schedule = StatusRefreshSchedule()
         schedule.note([Self.status("1")], now: Self.start)
         schedule.finish([Self.version("1")])
         schedule.note([Self.status("1")], now: Self.start.addingTimeInterval(1))
@@ -157,7 +157,7 @@ struct LinkCardRefreshTests {
 
     /// 1回で送れる件数を超えたら、長く取り直していない投稿から送る。
     @Test func rotatesStatusesBeyondLimit() {
-        var schedule = LinkCardRefreshSchedule()
+        var schedule = StatusRefreshSchedule()
         schedule.note([Self.status("b")], now: Self.start)
         schedule.note([Self.status("a")], now: Self.start.addingTimeInterval(1))
         let visible: Set = [Self.version("a"), Self.version("b")]
@@ -176,7 +176,7 @@ struct LinkCardRefreshTests {
         let card = try Self.card()
         let fetches = Recorder<[Status.ID]>()
         var applied: [Status] = []
-        let refresher = LinkCardRefresher(
+        let refresher = StatusRefresher(
             fetch: { ids in
                 let count = await fetches.append(ids)
                 return ids.map { Self.status($0, card: count >= 2 ? card : nil) }
@@ -201,7 +201,7 @@ struct LinkCardRefreshTests {
     @Test func stopsRefreshingStatusesTheServerDoesNotReturn() async {
         let clock = FakeClock(now: Self.start)
         let fetches = Recorder<[Status.ID]>()
-        let refresher = LinkCardRefresher(
+        let refresher = StatusRefresher(
             fetch: { ids in
                 await fetches.append(ids)
                 return []
@@ -224,7 +224,7 @@ struct LinkCardRefreshTests {
         let clock = FakeClock(now: Self.start)
         let fetches = Recorder<[Status.ID]>()
         let gate = Gate()
-        let refresher = LinkCardRefresher(
+        let refresher = StatusRefresher(
             fetch: { ids in
                 await fetches.append(ids)
                 try await gate.wait()
@@ -253,7 +253,7 @@ struct LinkCardRefreshTests {
     @Test func doesNotRefreshAfterSourceHides() async {
         let clock = FakeClock(now: Self.start)
         let fetches = Recorder<[Status.ID]>()
-        let refresher = LinkCardRefresher(
+        let refresher = StatusRefresher(
             fetch: { ids in
                 await fetches.append(ids)
                 return ids.map { Self.status($0) }
@@ -276,7 +276,7 @@ struct LinkCardRefreshTests {
     @Test func stopsWhenServerCannotReadMultipleStatuses() async {
         let clock = FakeClock(now: Self.start)
         let fetches = Recorder<[Status.ID]>()
-        let refresher = LinkCardRefresher(
+        let refresher = StatusRefresher(
             fetch: { ids in
                 await fetches.append(ids)
                 throw FeatureUnavailable(feature: .multipleStatuses)
@@ -300,7 +300,7 @@ struct LinkCardRefreshTests {
     @Test func refreshesAsAutomaticRequest() async {
         let clock = FakeClock(now: Self.start)
         let origins = Recorder<RequestPurpose?>()
-        let refresher = LinkCardRefresher(
+        let refresher = StatusRefresher(
             fetch: { ids in
                 await origins.append(RequestPurpose.current)
                 return []
@@ -321,7 +321,7 @@ struct LinkCardRefreshTests {
         let card = try Self.card()
         let shown = Self.status("1")
 
-        #expect(shown.adoptingCard(of: Self.status("1", card: card)).card == card)
+        #expect(shown.adoptingRefreshed(of: Self.status("1", card: card)).card == card)
     }
 
     /// 取り直している間に編集が届いていたら、取り直したのは編集の前の版なので、そのカードは付けない。
@@ -337,7 +337,7 @@ struct LinkCardRefreshTests {
             editedAt: Self.start.addingTimeInterval(5)
         )
 
-        #expect(edited.adoptingCard(of: Self.status("1", card: card)).card == nil)
+        #expect(edited.adoptingRefreshed(of: Self.status("1", card: card)).card == nil)
     }
 
     @Test(.requestPurpose(.action)) func clientRequestsStatusesByID() async throws {

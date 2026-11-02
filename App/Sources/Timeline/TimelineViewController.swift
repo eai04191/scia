@@ -26,9 +26,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onVisibleStatusesChange: (([Status.ID]) -> Void)?
     /// 画面に表示されている通知が変わったときに、表示中の通知のIDを渡して呼ぶ。
     var onVisibleNotificationsChange: (([MastodonNotification.ID]) -> Void)?
-    /// 画面に表示されている行のうち、サーバーのカードがまだなく、リンク先だけのカードを出している投稿が変わったときに呼ぶ。
+    /// 画面に表示されている行のうち、サーバーが仕上げ終える前に受け取ったため取り直す投稿（`StatusRefreshNeeds`）が変わったときに呼ぶ。
     /// ブーストなら、ブーストされた投稿を渡す。画面から消えたら空で呼ぶ。
-    var onVisibleLinkOnlyCardsChange: (([Status]) -> Void)?
+    var onVisibleUnsettledStatusesChange: (([Status]) -> Void)?
     /// 投稿への操作が選ばれたときに呼ぶ。ブーストなら、ブーストした投稿を渡す。
     var onStatusAction: ((StatusAction, Status) -> Void)?
     /// フォローリクエストの通知のメニューで、承認か却下が選ばれたときに、その通知を渡して呼ぶ。
@@ -471,7 +471,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         endPostSelection()
         timeRefreshTask?.cancel()
         timeRefreshTask = nil
-        onVisibleLinkOnlyCardsChange?([])
+        onVisibleUnsettledStatusesChange?([])
         onVisibilityChange?(false)
     }
 
@@ -1403,7 +1403,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         guard isCoveredByInAppBrowser != covered else { return }
         isCoveredByInAppBrowser = covered
         if covered {
-            onVisibleLinkOnlyCardsChange?([])
+            onVisibleUnsettledStatusesChange?([])
         } else {
             reportVisibleItems()
         }
@@ -1423,7 +1423,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         isWindowInactive = inactive
         logger.info("window inactive=\(inactive, privacy: .public)")
         if inactive {
-            onVisibleLinkOnlyCardsChange?([])
+            onVisibleUnsettledStatusesChange?([])
         } else {
             reportVisibleItems()
         }
@@ -1628,7 +1628,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         onVisibleNotificationsChange?(ids.compactMap { id in
             if case .notification(let notificationID) = id { notificationID } else { nil }
         })
-        onVisibleLinkOnlyCardsChange?(linkOnlyCardStatuses(among: ids))
+        onVisibleUnsettledStatusesChange?(unsettledStatuses(among: ids))
         prefetchMediaIfSettled(among: ids)
     }
 
@@ -1649,14 +1649,17 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         mediaPrefetcher.prefetch(attachments)
     }
 
-    /// `ids`の行のうち、リンク先だけのカードを出している投稿。通知でカードを出さない行は除くため、組み立てた中身で見分ける。
-    private func linkOnlyCardStatuses(among ids: [ItemID]) -> [Status] {
+    /// `ids`の行のうち、取り直す理由のある投稿。理由は、その行に出している部品のものだけを数える。
+    /// 通知でカードを出さない行などを除くため、組み立てた中身で見分ける。
+    private func unsettledStatuses(among ids: [ItemID]) -> [Status] {
         ids.compactMap { id -> Status? in
             guard let indexPath = dataSource.indexPath(for: id),
                   let configuration = collectionView.cellForItem(at: indexPath)?.contentConfiguration as? PostContentConfiguration,
-                  case .link = configuration.card?.card
+                  let status = status(for: id)?.displayed
             else { return nil }
-            return status(for: id)?.displayed
+            var shown: StatusRefreshNeeds = []
+            if configuration.card != nil { shown.insert(.linkCard) }
+            return StatusRefreshNeeds(status).isDisjoint(with: shown) ? nil : status
         }
     }
 

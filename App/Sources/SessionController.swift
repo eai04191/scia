@@ -105,7 +105,7 @@ final class SessionController {
     private let interactions: StatusInteractions
     private let polls: PollVoting
     /// カードが付く前に受け取った投稿を、見えている間に取り直す。
-    private let linkCards: LinkCardRefresher
+    private let statusRefresher: StatusRefresher
     /// 「操作の状況」の一覧に並べる、処理の途中と最近の失敗。
     let operationStatus = OperationStatus()
     /// アプリ全体のアプリ内通知。ウインドウごとのチップの列に配る。
@@ -322,14 +322,14 @@ final class SessionController {
             threads.updateStatus(id, transform)
             searches.updateStatus(id, transform)
         }
-        let linkCards = LinkCardRefresher(client: client) { refetched in
+        let statusRefresher = StatusRefresher(client: client) { refetched in
             for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, serverFeeds.updateStatus, pushedFeeds.updateStatus, profiles.updateStatus, threads.updateStatus, searches.updateStatus] {
-                update(refetched.id) { $0.adoptingCard(of: refetched) }
+                update(refetched.id) { $0.adoptingRefreshed(of: refetched) }
             }
         }
-        self.linkCards = linkCards
+        self.statusRefresher = statusRefresher
         // セッションを閉じたら、取り直している途中でも止める。前のアカウントのトークンで取り直し続けないため。
-        tasks.onClose { [weak linkCards] in linkCards?.stop() }
+        tasks.onClose { [weak statusRefresher] in statusRefresher?.stop() }
 
         let homeNavigation = ContentNavigationController(rootViewController: home.viewController)
         let localNavigation = ContentNavigationController(rootViewController: local.viewController)
@@ -1099,13 +1099,13 @@ final class SessionController {
         }
         viewController.userMenuActions = userMenuActions
         viewController.hashtagMenuActions = hashtagMenuActions
-        viewController.onVisibleLinkOnlyCardsChange = { [weak self, weak viewController] statuses in
+        viewController.onVisibleUnsettledStatusesChange = { [weak self, weak viewController] statuses in
             guard let self, let viewController else { return }
             #if DEBUG
             // ダミー投稿はサーバーにないため、取り直さない。カードはダミーを流した側が届ける。
             let statuses = statuses.filter { status in !self.feeds.contains { $0.isDebugLocalOnly(status.id) } }
             #endif
-            self.linkCards.setVisible(statuses, from: viewController)
+            self.statusRefresher.setVisible(statuses, from: viewController)
         }
     }
 
