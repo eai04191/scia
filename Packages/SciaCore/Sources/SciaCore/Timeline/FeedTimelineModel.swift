@@ -149,6 +149,11 @@ public final class FeedTimelineModel {
         tasks.close()
     }
 
+    /// 止めたとき（`stop()`か、セッションを閉じたとき）に呼ぶ処理を足す。足した順に、購読をやめたあとに呼ぶ。
+    public func onStop(_ action: @escaping @MainActor () -> Void) {
+        tasks.onClose(action)
+    }
+
     /// 持ち主が閉じたときに呼ぶ。走っている処理は持ち主が取り消すので、ここではTaskでないものを止める。
     private func didStop() {
         stopStreaming()
@@ -802,3 +807,27 @@ extension FeedTimelineModel {
     }
 }
 #endif
+
+extension FeedTimelineModel: SessionList {
+    /// `session`の部品で作り、`session`に登録する。401は`session`へ流し、電波の回復などのやり直しと、トークンが無効と分かったときに止めるのを`session`から受け取る。
+    public convenience init(
+        feed: TimelineFeed,
+        session: AccountSession,
+        tuning: TuningStore,
+        clock: any Clock<Duration>,
+        now: @escaping () -> Date,
+        backgroundTime: @escaping @MainActor (String, _ onExpire: @escaping @MainActor () -> Void) -> @MainActor () -> Void
+    ) {
+        self.init(
+            feed: feed,
+            client: session.client,
+            streamingHub: session.streamingHub,
+            tuning: tuning,
+            clock: clock,
+            now: now,
+            backgroundTime: backgroundTime,
+            tasks: session.tasks.child()
+        ) { [weak session] in session?.reportUnauthorized() }
+        session.register(self)
+    }
+}

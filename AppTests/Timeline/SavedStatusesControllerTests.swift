@@ -10,6 +10,7 @@ import UIKit
 @MainActor
 @Suite(.serialized)
 struct SavedStatusesControllerTests {
+    private let sessions = TestAccountSessions()
     private var tolerance: CGFloat { 1 / max(UITraitCollection.current.displayScale, 1) }
 
     /// 一覧に載せる60件。ブックマークした状態にする。
@@ -20,14 +21,6 @@ struct SavedStatusesControllerTests {
 
     /// - Parameter next: ページごとの、`Link`ヘッダーの`next`に入れる`max_id`。足りない分と`nil`は、続きがないことにする。
     private func makeController(pages: [[Status]], next: [String?] = []) throws -> SavedStatusesController {
-        let credential = Credential(
-            instance: try #require(URL(string: "https://example.social")),
-            accessToken: "token",
-            clientID: "client-id",
-            clientSecret: "client-secret",
-            accountID: "1",
-            username: "alice"
-        )
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
         encoder.dateEncodingStrategy = .iso8601
@@ -41,7 +34,7 @@ struct SavedStatusesControllerTests {
                 return (bodies[page], link)
             }
         }
-        return SavedStatusesController(kind: .bookmarks, client: MastodonClient(credential: credential, transport: transport), tasks: TaskScope()) {}
+        return SavedStatusesController(kind: .bookmarks, session: try sessions.make(transport: transport))
     }
 
     /// 一覧をウィンドウに載せて読み込み、最上部にいる状態にする。

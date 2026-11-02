@@ -35,27 +35,14 @@ final class FeedTimelineController {
     init(
         feed: TimelineFeed,
         texts: TimelineViewController.Texts? = nil,
-        client: MastodonClient,
-        streamingHub: StreamingHub,
+        session: AccountSession,
         tuning: TuningStore = AppDependencies.tuning,
         clock: any Clock<Duration> = AppDependencies.clock,
-        now: @escaping () -> Date = AppDependencies.now,
-        tasks: TaskScope,
-        onUnauthorized: @escaping () -> Void
+        now: @escaping () -> Date = AppDependencies.now
     ) {
-        model = FeedTimelineModel(
-            feed: feed,
-            client: client,
-            streamingHub: streamingHub,
-            tuning: tuning,
-            clock: clock,
-            now: now,
-            backgroundTime: BackgroundTime.request,
-            tasks: tasks,
-            onUnauthorized: onUnauthorized
-        )
+        model = FeedTimelineModel(feed: feed, session: session, tuning: tuning, clock: clock, now: now, backgroundTime: BackgroundTime.request)
         self.texts = texts ?? Self.texts(for: feed)
-        self.client = client
+        self.client = session.client
         self.tuning = tuning
         model.display = viewController
         model.streamingStatus = streamingStatusView
@@ -76,8 +63,7 @@ final class FeedTimelineController {
         #if DEBUG
         viewController.debugActions = makeDebugActions()
         #endif
-        // モデルが購読をやめたあとに呼ぶよう、モデルを作ったあとに登録する。持ち主は登録した順に呼ぶ。
-        tasks.onClose { [weak viewController] in
+        model.onStop { [weak viewController] in
             // 積んで開いた一覧は、画面がこのコントローラーを生かしているため、持ち合いを解いて捨てられるようにする。
             viewController?.lifetimeOwner = nil
         }
@@ -132,11 +118,6 @@ final class FeedTimelineController {
     /// バックグラウンドから戻ったときに呼ぶ。
     func enterForeground() {
         model.enterForeground()
-    }
-
-    /// 電波が戻ったときや、レート制限が明けたときに呼ぶ。
-    func recover() {
-        model.recover()
     }
 
     /// ストリーミングの接続の状態を、引っぱったときに見せる表示へ伝える。

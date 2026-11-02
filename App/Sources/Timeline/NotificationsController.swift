@@ -31,24 +31,12 @@ final class NotificationsController {
     private let accountScreens = NSHashTable<AccountNotificationsController>.weakObjects()
 
     init(
-        client: MastodonClient,
-        streamingHub: StreamingHub,
+        session: AccountSession,
         tuning: TuningStore = AppDependencies.tuning,
         clock: any Clock<Duration> = AppDependencies.clock,
-        now: @escaping () -> Date = AppDependencies.now,
-        tasks: TaskScope,
-        onUnauthorized: @escaping () -> Void
+        now: @escaping () -> Date = AppDependencies.now
     ) {
-        model = NotificationsModel(
-            client: client,
-            streamingHub: streamingHub,
-            tuning: tuning,
-            clock: clock,
-            now: now,
-            backgroundTime: BackgroundTime.request,
-            tasks: tasks,
-            onUnauthorized: onUnauthorized
-        )
+        model = NotificationsModel(session: session, tuning: tuning, clock: clock, now: now, backgroundTime: BackgroundTime.request)
         model.display = viewController
         model.streamingStatus = streamingStatusView
         #if DEBUG
@@ -91,11 +79,6 @@ final class NotificationsController {
     /// バックグラウンドから戻ったときに呼ぶ。
     func enterForeground() {
         model.enterForeground()
-    }
-
-    /// 電波が戻ったときや、レート制限が明けたときに呼ぶ。
-    func recover() {
-        model.recover()
     }
 
     /// ストリーミングの接続の状態を、引っぱったときに見せる表示へ伝える。

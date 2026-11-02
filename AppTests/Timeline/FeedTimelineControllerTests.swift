@@ -9,42 +9,17 @@ import UIKit
 @MainActor
 @Suite(.serialized)
 struct FeedTimelineControllerTests {
-    private func makeCredential() throws -> Credential {
-        Credential(
-            instance: try #require(URL(string: "https://example.social")),
-            accessToken: "token",
-            clientID: "client-id",
-            clientSecret: "client-secret",
-            accountID: "1",
-            username: "alice"
-        )
-    }
+    private let sessions = TestAccountSessions()
 
     private func makeController(
         feed: TimelineFeed = .home,
         transport: some HTTPTransport,
         connector: some WebSocketConnector = MessageQueueConnector(),
         tuning: TuningStore = TuningStore(defaults: nil),
-        clock: TestClock = TestClock(),
-        tasks: TaskScope = TaskScope(),
-        onUnauthorized: @escaping () -> Void = {}
+        clock: TestClock = TestClock()
     ) throws -> FeedTimelineController {
-        let credential = try makeCredential()
-        let client = MastodonClient(credential: credential, transport: transport)
-        let streaming = StreamingClient(credential: credential, connector: connector)
-        let streamingEndpoint = StreamingEndpoint(client: client)
-        let streamingHub = StreamingHub(livePolicy: { TuningCatalog.liveUpdates(in: tuning) }) {
-            try await streaming.open(baseURL: try await streamingEndpoint.url())
-        }
-        return FeedTimelineController(
-            feed: feed,
-            client: client,
-            streamingHub: streamingHub,
-            tuning: tuning,
-            clock: clock,
-            tasks: tasks,
-            onUnauthorized: onUnauthorized
-        )
+        let session = try sessions.make(transport: transport, connector: connector, tuning: tuning)
+        return FeedTimelineController(feed: feed, session: session, tuning: tuning, clock: clock)
     }
 
     /// 投稿を、ストリーミングの`update`イベントのテキストにする。
@@ -101,16 +76,19 @@ struct FeedTimelineControllerTests {
         #expect(homeRequests.withLock { $0 } == countWhenDisabled)
     }
 
+    /// 401を受けたら、セッションはトークンを確かめに`verify_credentials`を読む。止めた一覧の401は、セッションに知らせない。
     @Test func stoppedControllerDoesNotReportUnauthorized() async throws {
         let gate = ResponseGate()
-        let transport = ScriptedTransport { _ in
+        let reported = Mutex(false)
+        let transport = ScriptedTransport { request in
+            if request.url?.path().hasSuffix("verify_credentials") == true {
+                reported.withLock { $0 = true }
+                return (200, Data())
+            }
             await gate.wait()
             return (401, Data(#"{"error":"The access token is invalid"}"#.utf8))
         }
-        let reported = Box(false)
-        let controller = try makeController(transport: transport) {
-            reported.value = true
-        }
+        let controller = try makeController(transport: transport)
 
         controller.start(purpose: .action)
         await gate.waitUntilWaiting()
@@ -118,30 +96,35 @@ struct FeedTimelineControllerTests {
         await gate.open()
         // 止めた読み込みが、取り消しを受けて戻り切るまで待つ。
         try await waitUntil { controller.runningTaskCount == 0 }
+        let session = try #require(sessions.sessions.last)
+        try await waitUntil { session.tasks.runningCount == 0 }
 
-        #expect(!reported.value)
+        #expect(!reported.withLock { $0 })
     }
 
     /// ログアウトなどでセッションを閉じたら、一覧の`stop()`を呼ばなくても、走っている読み込みを止めて結果を使わない。
     @Test func closingSessionStopsLoadsWithoutStop() async throws {
         let gate = ResponseGate()
-        let transport = ScriptedTransport { _ in
+        let reported = Mutex(false)
+        let transport = ScriptedTransport { request in
+            if request.url?.path().hasSuffix("verify_credentials") == true {
+                reported.withLock { $0 = true }
+                return (200, Data())
+            }
             await gate.wait()
             return (401, Data(#"{"error":"The access token is invalid"}"#.utf8))
         }
-        let reported = Box(false)
-        let session = TaskScope()
-        let controller = try makeController(transport: transport, tasks: session.child()) {
-            reported.value = true
-        }
+        let controller = try makeController(transport: transport)
+        let session = try #require(sessions.sessions.last)
 
         controller.start(purpose: .action)
         await gate.waitUntilWaiting()
         session.close()
         await gate.open()
         try await waitUntil { controller.runningTaskCount == 0 }
+        try await waitUntil { session.tasks.runningCount == 0 }
 
-        #expect(!reported.value)
+        #expect(!reported.withLock { $0 })
         // 閉じたあとは、始め直しても読まない。
         controller.start(purpose: .action)
         #expect(controller.runningTaskCount == 0)

@@ -54,23 +54,15 @@ final class SessionController {
     private let accountMenu: @MainActor () -> UIMenu
     /// 自分で残した投稿の一覧のタブ。ブックマーク、お気に入り。
     private var savedLists: [SavedStatusesController] { [bookmarks, favourites] }
+    /// アカウント1つ分の部品（通信、ストリーミング、401の確かめ、電波の回復などのやり直し）と、その決まり。
+    private let session: AccountSession
     /// 各タブで共有する、ストリーミングの接続。
-    private let streamingHub: StreamingHub
+    private var streamingHub: StreamingHub { session.streamingHub }
     private let client: MastodonClient
     /// 時間をおく処理の時計。テストでは手で進める時計に差し替える。
     var clock: any Clock<Duration> = AppDependencies.clock
     /// 編集できるかやミュートの期限を決める今の日付。テストでは決まった日付に差し替える。
     var now: () -> Date = AppDependencies.now
-    /// 429や503で止められたときに、自動の通信を控える。このセッションの通信で共有する。
-    private let rateLimit = RateLimitGate()
-    /// 使えないと分かった機能を、このセッションの間だけ止める。次の起動では作り直し、もう一度試す。
-    private let features = FeatureAvailability()
-    /// 失敗の記録。デバッグ版でだけ応答の本文も残す。
-    #if DEBUG
-    private let requestLog = RequestLog(includesBody: true)
-    #else
-    private let requestLog = RequestLog(includesBody: false)
-    #endif
     /// このセッションで始めた処理の持ち主。各一覧、開いた画面、投稿欄は、この子の持ち主で処理を始める。
     /// `stop()`で閉じると、開いている画面の数や種類によらず、どれも止まる。
     private let tasks: TaskScope
@@ -134,7 +126,7 @@ final class SessionController {
         await self?.failureReason(for: error) ?? ErrorPresentation(error)
     }
     /// APIが401を返したときに、トークンが本当に無効かを確かめる。
-    private let authorization: AuthorizationCheck
+    private var authorization: AuthorizationCheck { session.authorization }
     private let onReauthenticate: (SessionController) async -> Void
     /// ログインし直しの途中。続けて押されても、認可画面を重ねて出さない。
     private var isReauthenticating = false
@@ -194,10 +186,6 @@ final class SessionController {
     private var browserCoversTimelines = false
     /// 積んだ画面の下を覆っている高さ。投稿欄とアプリ内のSafariのシートのうち、高いほう。
     private var obscuredBottomHeight: CGFloat { max(composerObscuredHeight, browserObscuredHeight) }
-    /// 投稿欄で使う、インスタンスの上限。一度読めたら使い回す。
-    private var instanceConfiguration: InstanceConfiguration?
-    /// アカウントの設定。一度読めたら使い回す。
-    private var preferences: ServerPreferences?
     private let logger = SciaLog.logger(category: "session")
 
     /// - Parameters:
@@ -207,50 +195,51 @@ final class SessionController {
         self.credential = credential
         self.onReauthenticate = onReauthenticate
         self.accountMenu = accountMenu
-        let tasks = TaskScope()
-        self.tasks = tasks
-        #if DEBUG
-        let client = MastodonClient(credential: credential, transport: BurstMonitoringTransport(base: FaultInjectingTransport(base: ScenarioMode.server?.transport ?? URLSessionTransport()), monitor: RequestBurstLog.monitor), rateLimit: rateLimit, features: features, requestLog: requestLog)
-        #else
-        let client = MastodonClient(credential: credential, transport: BurstMonitoringTransport(base: URLSessionTransport(), monitor: RequestBurstLog.monitor), rateLimit: rateLimit, features: features, requestLog: requestLog)
-        #endif
-        #if DEBUG
-        let streaming = StreamingClient(credential: credential, connector: FaultInjectingWebSocketConnector(base: ScenarioMode.server?.connector ?? URLSessionWebSocketConnector()), rateLimit: rateLimit)
-        #else
-        let streaming = StreamingClient(credential: credential, connector: URLSessionWebSocketConnector(), rateLimit: rateLimit)
-        #endif
-        authorization = AuthorizationCheck { try await client.verifyCredentials() }
-        // selfを作り終える前に組み立てる部品から呼ぶため、後で中身を差し替える。
-        var forward: () -> Void = {}
-        let streamingEndpoint = StreamingEndpoint(client: client)
         let tuning = AppDependencies.tuning
-        let streamingHub = StreamingHub(livePolicy: { TuningCatalog.liveUpdates(in: tuning) }) {
-            try await streaming.open(baseURL: try await streamingEndpoint.url())
-        }
-        self.streamingHub = streamingHub
-        // セッションを閉じたら、申し込みが残っていても切る。開いているスレッドなどの購読を、閉じる順に頼らずに止めるため。
-        tasks.onClose { [weak streamingHub] in streamingHub?.shutDown() }
-        let home = FeedTimelineController(feed: .home, client: client, streamingHub: streamingHub, tasks: tasks.child()) { forward() }
-        let local = FeedTimelineController(feed: .local, client: client, streamingHub: streamingHub, tasks: tasks.child()) { forward() }
-        let federated = FeedTimelineController(feed: .federated, client: client, streamingHub: streamingHub, tasks: tasks.child()) { forward() }
-        let notifications = NotificationsController(client: client, streamingHub: streamingHub, tasks: tasks.child()) { forward() }
-        let bookmarks = SavedStatusesController(kind: .bookmarks, client: client, tasks: tasks.child()) { forward() }
-        let favourites = SavedStatusesController(kind: .favourites, client: client, tasks: tasks.child()) { forward() }
+        #if DEBUG
+        let session = AccountSession(
+            credential: credential,
+            transport: BurstMonitoringTransport(base: FaultInjectingTransport(base: ScenarioMode.server?.transport ?? URLSessionTransport()), monitor: RequestBurstLog.monitor),
+            connector: FaultInjectingWebSocketConnector(base: ScenarioMode.server?.connector ?? URLSessionWebSocketConnector()),
+            // デバッグ版でだけ応答の本文も残す。
+            requestLog: RequestLog(includesBody: true),
+            tuning: tuning
+        )
+        #else
+        let session = AccountSession(
+            credential: credential,
+            transport: BurstMonitoringTransport(base: URLSessionTransport(), monitor: RequestBurstLog.monitor),
+            connector: URLSessionWebSocketConnector(),
+            tuning: tuning
+        )
+        #endif
+        self.session = session
+        let tasks = session.tasks
+        self.tasks = tasks
+        let client = session.client
+        let streamingHub = session.streamingHub
+        let reportUnauthorizedToSession = { [weak session] in session?.reportUnauthorized() }
+        let home = FeedTimelineController(feed: .home, session: session)
+        let local = FeedTimelineController(feed: .local, session: session)
+        let federated = FeedTimelineController(feed: .federated, session: session)
+        let notifications = NotificationsController(session: session)
+        let bookmarks = SavedStatusesController(kind: .bookmarks, session: session)
+        let favourites = SavedStatusesController(kind: .favourites, session: session)
         // 自分のアカウントを読むのはselfなので、作り終えてからつなぐ。
         let myAccountReference = SessionReference()
         let scheduled = ScheduledStatusesController(client: client, tasks: tasks.child(), myAccount: {
             guard let session = myAccountReference.session else { throw CancellationError() }
             return try await session.myAccount()
-        }) { forward() }
-        let serverFeeds = ServerFeedRegistry { [weak tasks] item in
-            guard let tasks else { return nil }
+        }) { reportUnauthorizedToSession() }
+        let serverFeeds = ServerFeedRegistry { [weak session] item in
+            guard let session else { return nil }
             return switch item {
             case .list(let id, let title):
-                FeedTimelineController(feed: .list(id: id), texts: .list(title: title), client: client, streamingHub: streamingHub, tasks: tasks.child()) { forward() }
+                FeedTimelineController(feed: .list(id: id), texts: .list(title: title), session: session)
             case .hashtag(let name):
-                FeedTimelineController(feed: .hashtag(name: name), texts: .hashtag(name: name), client: client, streamingHub: streamingHub, tasks: tasks.child()) { forward() }
+                FeedTimelineController(feed: .hashtag(name: name), texts: .hashtag(name: name), session: session)
             case .accountHashtag(let accountID, let acct, let name, _):
-                FeedTimelineController(feed: .accountHashtag(accountID: accountID, name: name), texts: .accountHashtag(name: name, acct: acct), client: client, streamingHub: streamingHub, tasks: tasks.child()) { forward() }
+                FeedTimelineController(feed: .accountHashtag(accountID: accountID, name: name), texts: .accountHashtag(name: name, acct: acct), session: session)
             case .home, .local, .federated, .notifications, .search, .bookmarks, .favourites, .scheduled, .profile:
                 nil
             }
@@ -278,10 +267,10 @@ final class SessionController {
         }
         notifications.viewController.onAppearing = { [weak notifications] in notifications?.startIfNeeded() }
         self.notifications = notifications
-        notificationPolicy = NotificationPolicyModel(client: client, tasks: tasks.child()) { forward() }
-        announcements = AnnouncementsModel(operations: AnnouncementsModel.Operations(client: client), streamingHub: streamingHub, tasks: tasks.child()) { forward() }
+        notificationPolicy = NotificationPolicyModel(client: client, tasks: tasks.child()) { reportUnauthorizedToSession() }
+        announcements = AnnouncementsModel(operations: AnnouncementsModel.Operations(client: client), streamingHub: streamingHub, tasks: tasks.child()) { reportUnauthorizedToSession() }
         let mediaFormats = UnprocessableMediaFormats(defaults: .standard, instance: credential.instance)
-        let diagnostics = ConnectionDiagnostics(rateLimit: rateLimit, features: features, requestLog: requestLog, mediaFormats: mediaFormats)
+        let diagnostics = ConnectionDiagnostics(rateLimit: session.rateLimit, features: session.features, requestLog: session.requestLog, mediaFormats: mediaFormats)
         self.diagnostics = diagnostics
         // コントローラーはHubを持っているので、弱く持って循環させない。
         let pushedFeeds = PushedFeedRegistry()
@@ -294,7 +283,6 @@ final class SessionController {
             }
             notifications?.showStreamingState(streamingHub.state)
         }
-        streamingHub.onUnauthorized = { forward() }
         self.client = client
         let profiles = ProfileRegistry(relationships: RelationshipCache { [client] ids in try await client.relationships(ids) })
         self.profiles = profiles
@@ -394,7 +382,7 @@ final class SessionController {
         // トークンの失効は、どのAPIで分かっても同じくログインし直しを促す。
         let reportIfUnauthorized = { (error: any Error) in
             if let error = error as? MastodonAPIError, error.isUnauthorized {
-                forward()
+                reportUnauthorizedToSession()
             }
         }
         let media = ComposeMediaService<UIImage>(
@@ -462,7 +450,7 @@ final class SessionController {
             }
         )
         // 補完の検索は別のスレッドから呼ばれるため、ほかのAPIと同じ知らせ方を、隔離されたAuthorizationCheckに直接送る。
-        let reportCompletionFailure: @Sendable (any Error) async -> Void = { [authorization] error in
+        let reportCompletionFailure: @Sendable (any Error) async -> Void = { [authorization = session.authorization] error in
             guard let error = error as? MastodonAPIError, error.isUnauthorized else { return }
             _ = await authorization.reportUnauthorized()
         }
@@ -559,7 +547,6 @@ final class SessionController {
             languages: PostingLanguageSource(recent: RecentPostingLanguages(defaults: .standard, account: credential.handle), load: PostingLanguageCache { try await client.postingLanguages() }.languages)
         )
         rootViewController = tabBarController
-        forward = { [weak self] in self?.reportUnauthorized() }
         prepare(searchRoot)
         tabBarController.view.addInteraction(UIDropInteraction(delegate: mediaDrop))
         // ペーストと同じく、書きかけの下書きがあっても聞かずに後ろに足す。
@@ -573,9 +560,11 @@ final class SessionController {
         }
         composer.onLinkTitleLoadingChange = { [weak self] in self?.linkTitleActivityDidChange() }
         composer.onLinkTitleFailed = { [weak self] failure in self?.linkTitleDidFail(failure) }
-        authorization.onChange = { [weak self] state in
-            guard state == .invalid else { return }
-            self?.credentialsDidBecomeInvalid()
+        session.onCredentialsInvalid = { [weak self] in self?.credentialsDidBecomeInvalid() }
+        session.onPreferencesLoad = { [weak self] preferences in
+            for timeline in self?.timelines.allObjects ?? [] {
+                timeline.spoilerExpansion.expandsByDefault = preferences.expandsSpoilers
+            }
         }
         for viewController in [home.viewController, local.viewController, federated.viewController, notifications.viewController, bookmarks.viewController, favourites.viewController] {
             configureTabRoot(viewController)
@@ -1041,7 +1030,7 @@ final class SessionController {
         viewController.onFocusInlineCompose = { [weak self] in self?.composer.beginEditing() }
         viewController.setShowsFocusInlineCompose(showsFocusInlineCompose)
         viewController.myAccountID = credential.accountID
-        viewController.spoilerExpansion.expandsByDefault = preferences?.expandsSpoilers ?? false
+        viewController.spoilerExpansion.expandsByDefault = session.preferences?.expandsSpoilers ?? false
         viewController.mediaCovers = mediaCovers
         viewController.quoteSourceChanges = quoteSources
         viewController.xPosts = xPosts
@@ -1240,9 +1229,7 @@ final class SessionController {
     /// 一覧を開いた画面に積み、すぐ読み始めてストリームを購読する。ナビゲーションから外されたら止める。
     private func openFeed(_ feed: TimelineFeed, texts: TimelineViewController.Texts? = nil, barItems: [UIBarButtonItem] = [], from source: UIViewController) {
         guard let navigation = source.navigationController else { return }
-        let controller = FeedTimelineController(feed: feed, texts: texts, client: client, streamingHub: streamingHub, tasks: tasks.child()) { [weak self] in
-            self?.reportUnauthorized()
-        }
+        let controller = FeedTimelineController(feed: feed, texts: texts, session: session)
         let viewController = controller.viewController
         configure(viewController)
         viewController.screenBarItems = barItems
@@ -1742,7 +1729,7 @@ final class SessionController {
         }
         // 上限を読めなければ、4.6.0より前のMastodonの値のまま使う。超えた分はサーバーが拒む。
         tasks.run(.action) { [weak self] in
-            guard let configuration = await self?.loadInstanceConfiguration() else { return }
+            guard let configuration = await self?.session.loadInstanceConfiguration() else { return }
             editor.limits = configuration.profileLimits
             editor.charactersReservedPerURL = configuration.charactersReservedPerURL
         }
@@ -2949,44 +2936,11 @@ final class SessionController {
     private func applyComposeDefaults() {
         composeDefaultsTask = tasks.run(.action) { [weak self] in
             guard let self else { return }
-            async let configuration = self.loadInstanceConfiguration()
-            async let preferences = self.loadPreferences()
             #if DEBUG
-            let loaded = DebugFaults.applyingMediaLimits(to: await configuration)
+            await session.applyComposeDefaults(to: composer.model, adjustingConfiguration: DebugFaults.applyingMediaLimits(to:))
             #else
-            let loaded = await configuration
+            await session.applyComposeDefaults(to: composer.model)
             #endif
-            self.composer.model.apply(configuration: loaded, defaultVisibility: await preferences?.defaultVisibility, defaultSensitive: await preferences?.defaultSensitive, defaultLanguage: await preferences.map(\.defaultLanguage))
-        }
-    }
-
-    /// 読めなければ、既定のまま投稿欄を使えるようnilを返し、次に書き始めたときに読み直す。
-    private func loadInstanceConfiguration() async -> InstanceConfiguration? {
-        if let instanceConfiguration { return instanceConfiguration }
-        do {
-            instanceConfiguration = try await client.instanceConfiguration()
-        } catch {
-            // 読めないと添付とペーストが使えないため、違和感レポートで理由を追えるよう残す。
-            logger.info("instance configuration unavailable error=\(SciaLog.describe(error), privacy: .public)")
-        }
-        return instanceConfiguration
-    }
-
-    /// アカウントの設定を読み、注意書きを最初から開いておくかを一覧に反映する。
-    /// 読めなければnilを返す。一覧は注意書きを折りたたんだままにし、次に投稿欄で書き始めたときに読み直す。
-    @discardableResult
-    private func loadPreferences() async -> ServerPreferences? {
-        if let preferences { return preferences }
-        do {
-            let loaded = try await client.preferences()
-            preferences = loaded
-            for timeline in timelines.allObjects {
-                timeline.spoilerExpansion.expandsByDefault = loaded.expandsSpoilers
-            }
-            return loaded
-        } catch {
-            logger.info("preferences unavailable error=\(SciaLog.describe(error), privacy: .public)")
-            return nil
         }
     }
 
@@ -3000,11 +2954,13 @@ final class SessionController {
             notifications.start(purpose: .action)
         }
         loadProfileTabIcons(tabs.placement)
-        observeRecoveries()
+        let network = AppDependencies.network
+        session.observeRecoveries { network.recoveryCount }
         loadServerVersion()
         loadTabSources()
         announcements.start()
-        tasks.run(.display) { [weak self] in await self?.loadPreferences() }
+        // 注意書きを最初から開いておくかを一覧に反映する。読めなければ折りたたんだままにし、次に投稿欄で書き始めたときに読み直す。
+        tasks.run(.display) { [session] in await session.loadPreferences() }
     }
 
     /// 原因を絞れるよう、サーバーの版を記録に残す。読めなくても使うのに困らないので、失敗は記録するだけにする。
@@ -3022,54 +2978,14 @@ final class SessionController {
         }
     }
 
-    private func observeRecoveries() {
-        let rateLimit = rateLimit
-        let network = AppDependencies.network
-        tasks.run(.display) { [weak self] in
-            for await _ in rateLimit.resumptions {
-                self?.recover(reason: "rate limit resumed")
-            }
-        }
-        tasks.run(.display) { [weak self] in
-            // 最初の値は今の回数なので飛ばす。
-            for await _ in Observations({ network.recoveryCount }).dropFirst() {
-                self?.recover(reason: "network recovered")
-            }
-        }
-    }
-
-    private func recover(reason: String) {
-        logger.info("recover reason=\(reason, privacy: .public)")
-        // つながっていなければ、待っている間隔を飛ばしてつなぎ直す。
-        streamingHub.recover()
-        for feed in feeds {
-            feed.recover()
-        }
-        notifications.recover()
-        for list in savedLists {
-            list.recover()
-        }
-    }
-
     // MARK: - ログインし直し
 
     private func reportUnauthorized() {
-        let authorization = authorization
-        tasks.run(.display) { _ = await authorization.reportUnauthorized() }
+        session.reportUnauthorized()
     }
 
-    /// トークンが無効だと確かめられたら、表示中の内容とアカウントのメニューは残したまま、自動の通信を止めてログインし直しを促す。
-    /// 資格情報は消さない。消すのは、使う人がログアウトを選んだときだけ。
+    /// トークンが無効だと確かめられ、`session`が自動の通信を止めたら、表示中の内容とアカウントのメニューは残したまま、ログインし直しを促す。
     private func credentialsDidBecomeInvalid() {
-        logger.info("credentials invalid")
-        streamingHub.stopUntilLogin()
-        for feed in feeds {
-            feed.stop()
-        }
-        notifications.stop()
-        for list in savedLists {
-            list.stop()
-        }
         // どの画面にいても見えるよう、チップの列の一番上に段を出す。
         notices.reauthentication = NoticeCenter.Reauthentication(handle: credential.handle, isInProgress: isReauthenticating) { [weak self] in
             self?.reauthenticate()
@@ -3111,7 +3027,7 @@ final class SessionController {
     /// 一覧、開いている画面、投稿欄の送信とアップロード、ストリーミングは、どれも持ち主の子で始めているので、ここで並べなくても止まる。
     func stop() {
         statusBarTicker.clear()
-        tasks.close()
+        session.close()
     }
 
     /// 走り終えていない処理の数。止めたあとに何も起きないことを、テストが確かめるのに使う。

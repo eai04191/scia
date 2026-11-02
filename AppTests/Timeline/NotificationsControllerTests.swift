@@ -11,6 +11,8 @@ import UIKit
 struct NotificationsControllerTests {
     private var tolerance: CGFloat { 1 / max(UITraitCollection.current.displayScale, 1) }
 
+    private let sessions = TestAccountSessions()
+
     /// 最初に読む60件。
     private static let initialIDs = Array((1_000..<1_060).reversed())
     /// つないだときの補完で読む40件。1ページで満杯なので、手元とつながったか分からない。
@@ -19,23 +21,10 @@ struct NotificationsControllerTests {
     private static let gapIDs = Array((2_000..<2_010).reversed())
 
     private func makeController() throws -> NotificationsController {
-        let credential = Credential(
-            instance: try #require(URL(string: "https://example.social")),
-            accessToken: "token",
-            clientID: "client-id",
-            clientSecret: "client-secret",
-            accountID: "1",
-            username: "alice"
-        )
-        let client = MastodonClient(credential: credential, transport: NotificationsTransport(initial: Self.initialIDs, latest: Self.latestIDs, inGap: Self.gapIDs))
         let tuning = TuningStore(defaults: nil)
         tuning.setValue(1, for: TuningCatalog.fillPageLimit)
-        let streaming = StreamingClient(credential: credential, connector: MessageQueueConnector())
-        let streamingEndpoint = StreamingEndpoint(client: client)
-        let streamingHub = StreamingHub(livePolicy: { TuningCatalog.liveUpdates(in: tuning) }) {
-            try await streaming.open(baseURL: try await streamingEndpoint.url())
-        }
-        return NotificationsController(client: client, streamingHub: streamingHub, tuning: tuning, clock: TestClock(), tasks: TaskScope()) {}
+        let session = try sessions.make(transport: NotificationsTransport(initial: Self.initialIDs, latest: Self.latestIDs, inGap: Self.gapIDs), tuning: tuning)
+        return NotificationsController(session: session, tuning: tuning, clock: TestClock())
     }
 
     private func windowMinY(of id: TimelineEntry.ID, in controller: NotificationsController, window: UIWindow) throws -> CGFloat {

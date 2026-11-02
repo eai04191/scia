@@ -12,8 +12,8 @@ final class SavedStatusesController {
     /// 走り終えていない処理の数。止めたあとに何も起きないことを、テストが確かめるのに使う。
     var runningTaskCount: Int { model.runningTaskCount }
 
-    init(kind: SavedStatusesKind, client: MastodonClient, tasks: TaskScope, onUnauthorized: @escaping () -> Void) {
-        model = SavedStatusesModel(kind: kind, client: client, tasks: tasks, onUnauthorized: onUnauthorized)
+    init(kind: SavedStatusesKind, session: AccountSession) {
+        model = SavedStatusesModel(kind: kind, session: session)
         model.display = viewController
         viewController.filterWarnings = FilterWarnings(filtering: model.filtering)
         viewController.onApproachingEnd = { [weak model] in model?.approachEnd() }
@@ -49,16 +49,6 @@ final class SavedStatusesController {
     /// バックグラウンドから戻ったときに呼ぶ。
     func enterForeground() {
         model.enterForeground()
-    }
-
-    /// 電波が戻ったときや、レート制限が明けたときに呼ぶ。
-    func recover() {
-        model.recover()
-    }
-
-    /// 読み込みを打ち切り、以後の結果を捨てる。セッションを閉じたときは、呼ばなくても持ち主が閉じて止まる。
-    func stop() {
-        model.stop()
     }
 
     /// アプリの中で付け外しした操作を、サーバーが受け付けたときに呼ぶ。

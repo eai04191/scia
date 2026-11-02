@@ -292,3 +292,11 @@ public final class SavedStatusesModel {
         show(ErrorPresentation(error))
     }
 }
+
+extension SavedStatusesModel: SessionList {
+    /// `session`の部品で作り、`session`に登録する。401は`session`へ流し、電波の回復などのやり直しと、トークンが無効と分かったときに止めるのを`session`から受け取る。
+    public convenience init(kind: SavedStatusesKind, session: AccountSession) {
+        self.init(kind: kind, client: session.client, tasks: session.tasks.child()) { [weak session] in session?.reportUnauthorized() }
+        session.register(self)
+    }
+}

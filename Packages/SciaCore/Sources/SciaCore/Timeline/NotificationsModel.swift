@@ -709,3 +709,25 @@ public final class NotificationsModel {
         show(ErrorPresentation(error))
     }
 }
+
+extension NotificationsModel: SessionList {
+    /// `session`の部品で作り、`session`に登録する。401は`session`へ流し、電波の回復などのやり直しと、トークンが無効と分かったときに止めるのを`session`から受け取る。
+    public convenience init(
+        session: AccountSession,
+        tuning: TuningStore,
+        clock: any Clock<Duration>,
+        now: @escaping () -> Date,
+        backgroundTime: @escaping @MainActor (String, _ onExpire: @escaping @MainActor () -> Void) -> @MainActor () -> Void
+    ) {
+        self.init(
+            client: session.client,
+            streamingHub: session.streamingHub,
+            tuning: tuning,
+            clock: clock,
+            now: now,
+            backgroundTime: backgroundTime,
+            tasks: session.tasks.child()
+        ) { [weak session] in session?.reportUnauthorized() }
+        session.register(self)
+    }
+}
