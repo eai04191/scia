@@ -34,11 +34,16 @@ struct StorageView: View {
     /// 消せる項目。ほかの項目は、使う人のデータか、なくなるとアプリが動かないもの。
     static let removableCategories: [StorageBreakdown.Category] = [.mediaFiles, .mediaPrefetch, .networkCache, .temporaryFiles, .inAppSafari, .discomfortReports]
 
+    /// 内訳と消すボタンに出すか。違和感レポートは開発のための仕組みなので、残っているときだけ出す。測れなかったときは、残っているかもしれないので出す。
+    static func isShown(_ category: StorageBreakdown.Category, bytes: Int64?) -> Bool {
+        category != .discomfortReports || bytes != 0
+    }
+
     var body: some View {
         List {
             if let breakdown {
                 Section {
-                    ForEach(breakdown.items, id: \.category) { item in
+                    ForEach(breakdown.items.filter { Self.isShown($0.category, bytes: $0.bytes) }, id: \.category) { item in
                         switch item.category {
                         case .mediaFiles:
                             mediaCacheRows(viewed: item, prefetched: breakdown.item(.mediaPrefetch))
@@ -62,7 +67,7 @@ struct StorageView: View {
                     }
                 }
                 Section {
-                    ForEach(Self.removableCategories, id: \.self) { category in
+                    ForEach(Self.removableCategories.filter { Self.isShown($0, bytes: breakdown.item($0)?.bytes) }, id: \.self) { category in
                         removeButton(category, bytes: breakdown.item(category).map(\.removableBytes) ?? 0)
                     }
                 } footer: {
