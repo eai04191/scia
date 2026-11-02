@@ -249,6 +249,28 @@ struct TabArrangementTests {
         #expect(harness.arrangement.isShowing(.favourites))
     }
 
+    /// 横幅の広いタブバーでは、境目より下の項目も直接並べて切り替えタブを出さない。
+    /// 切り替えタブで最後に選んだ項目は、出していない間も覚えておき、狭くなって切り替えタブに戻ったらその項目で開く。
+    @Test func regularWidthPadPlacesSwitchableDirectlyAndKeepsSwitchSelection() throws {
+        let harness = try Harness(Self.layout(tabs: [.home, .notifications, .local, .federated], switchable: [.bookmarks, .favourites], disabled: [.local, .federated]))
+        var saved: [TabItem] = []
+        harness.arrangement.onSwitchSelectionChange = { saved.append($0) }
+        harness.arrangement.show(.favourites)
+        harness.arrangement.show(.home)
+
+        harness.arrangement.tabBarController.traitOverrides.userInterfaceIdiom = .pad
+        harness.arrangement.tabBarController.traitOverrides.horizontalSizeClass = .regular
+        harness.window.layoutIfNeeded()
+        #expect(harness.tabIdentifiers == ["home", "notifications", "bookmarks", "favourites"])
+        #expect(harness.arrangement.isShowing(.home))
+
+        harness.arrangement.tabBarController.traitOverrides.horizontalSizeClass = .compact
+        harness.window.layoutIfNeeded()
+        #expect(harness.tabIdentifiers == ["home", "notifications", TabArrangement.switchIdentifier])
+        #expect(harness.switchTitle == "お気に入り")
+        #expect(!saved.contains(.bookmarks))
+    }
+
     /// 通知の未読の数は、通知を置いた場所のタブに出す。
     @Test func notificationsBadgeFollowsNotifications() throws {
         let harness = try Harness(Self.layout(tabs: [.home, .notifications], switchable: [.local]))

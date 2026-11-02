@@ -43,7 +43,8 @@ final class TabArrangement {
     /// アプリの中で変えた名前は使う人が変えたものなので、ユーザーのハッシュタグと同じくすぐタブに出す（docs/lists.mdの「変える」）。
     /// 無効にしている間に変えたら、有効に戻してタブを作るまで残す。
     private var retitled: Set<TabItem> = []
-    /// 最初の`apply`で、切り替えタブで開く項目を決めるのに使う。
+    /// 切り替えタブを出していないときに、次に出したら開く項目。最初の`apply`では、起動し直す前に開いていた項目。
+    /// 横幅の広いタブバーで切り替えタブを出していない間も、最後に選んだ項目を覚えておき、狭くなって出し直したらそこから開くため。
     private var restoredSwitchSelection: TabItem?
     /// 切り替えタブの長押しで出すメニュー。iOS 27以降だけ付ける。
     private(set) var switchTabMenu: SwitchTabMenuInteraction?
@@ -188,7 +189,8 @@ final class TabArrangement {
             renewSwitchTab(for: item)
         }
         retitled.subtract(placement.tabs + placement.switchable)
-        let selection = placement.switchSelection(previous: switchSelection ?? restoredSwitchSelection)
+        let previousSelection = switchSelection ?? restoredSwitchSelection
+        let selection = placement.switchSelection(previous: previousSelection)
         restoredSwitchSelection = nil
         // 切り替えタブからタブへ移るナビゲーションは、タブに渡す前に入れ物から外す。
         if switchContainer.current !== selection.flatMap(navigation(for:)) {
@@ -209,6 +211,7 @@ final class TabArrangement {
         if let selection {
             showInSwitchContainer(selection)
         } else {
+            restoredSwitchSelection = previousSelection
             switchSelection = nil
         }
         updateTitleMenus()
