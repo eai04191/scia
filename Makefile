@@ -81,13 +81,15 @@ scenario-run: scenario-build
 
 ## 実機向けのReleaseビルドをアーカイブする。署名のチームはConfig/Local.xcconfigのDEVELOPMENT_TEAMから読む
 ## App Store Connectは、同じバージョンで前に上げたものより大きいビルド番号しか受け付けないため、ビルド番号をアーカイブしたUTCの日時（例: 20261103.124500）にする
+## APPLE_AUTHには、Xcodeにサインインしていない環境（GitHub Actions）で、App Store ConnectのAPIキーを渡すxcodebuildの引数を入れる（.github/workflows/testflight.yml）
 ARCHIVE := $(DERIVED_DATA)/Scia.xcarchive
+APPLE_AUTH ?=
 archive: generate
-	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Release -destination 'generic/platform=iOS' -derivedDataPath $(DERIVED_DATA) -archivePath $(ARCHIVE) -allowProvisioningUpdates CURRENT_PROJECT_VERSION=$$(date -u +%Y%m%d.%H%M%S) archive
+	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Release -destination 'generic/platform=iOS' -derivedDataPath $(DERIVED_DATA) -archivePath $(ARCHIVE) -allowProvisioningUpdates $(APPLE_AUTH) CURRENT_PROJECT_VERSION=$$(date -u +%Y%m%d.%H%M%S) archive
 
 ## アーカイブしてApp Store Connectへ上げる。処理が終わるとTestFlightに出る
 testflight: archive
-	xcodebuild -exportArchive -archivePath $(ARCHIVE) -exportOptionsPlist Config/ExportOptions.plist -exportPath $(DERIVED_DATA)/export -allowProvisioningUpdates
+	xcodebuild -exportArchive -archivePath $(ARCHIVE) -exportOptionsPlist Config/ExportOptions.plist -exportPath $(DERIVED_DATA)/export -allowProvisioningUpdates $(APPLE_AUTH)
 
 ## プロモーション動画の素材を、シナリオのUIテストを走らせながら撮る（docs/promo-video.md）。SIMにはシミュレーターか実機の名前を渡す
 ## 例: make promo SIM='Scia 1'

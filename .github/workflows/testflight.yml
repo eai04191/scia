@@ -1,0 +1,102 @@
+# 毎朝5:00（JST）に、mainをReleaseでアーカイブしてTestFlightへ上げる。前に上げたときからmainが変わっていなければ上げない。
+# 手で走らせたとき（workflow_dispatch）は、変わっていなくても上げる。
+#
+# Xcodeにサインインできないため、署名は次の2つで行う。
+# - アーカイブ: 開発用の証明書（.p12）を一時的なキーチェーンに入れ、プロビジョニングプロファイルはAPIキーで取らせる
+# - 書き出しとアップロード: APIキーで、Appleが管理する配布用の証明書（クラウド署名）を使う。APIキーの役割はAdminにする
+#
+# リポジトリに置く値:
+# - variables.DEVELOPMENT_TEAM: チームID
+# - secrets.APP_STORE_CONNECT_KEY_ID / APP_STORE_CONNECT_ISSUER_ID: App Store ConnectのAPIキーのIDと発行者ID
+# - secrets.APP_STORE_CONNECT_KEY: APIキーの.p8の中身
+# - secrets.DEVELOPMENT_CERTIFICATE_P12: 開発用の証明書と秘密鍵を書き出した.p12をbase64にしたもの
+# - secrets.DEVELOPMENT_CERTIFICATE_PASSWORD: .p12のパスワード
+name: TestFlight
+
+on:
+  schedule:
+    - cron: "0 20 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: testflight
+
+jobs:
+  upload:
+    # 前回の判定は、実行に記録されるSHA（github.sha）を上げたcommitとして使う。ほかのbranchから手で走らせるとそれがmainでなくなるため、mainからだけ走らせる
+    if: github.ref == 'refs/heads/main'
+    # Xcode 27は、macOS 27の`xcode-27`のイメージにしか入っていない
+    runs-on: xcode-27
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      # 発火したあとにmainが進んでも、実行に記録されるSHAと同じcommitをビルドする。アプリに埋め込むブランチ名（Tools/embed-build-info.sh）のため、mainとしてcheckoutする
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - run: git checkout -B main
+
+      - name: Skip if main is unchanged
+        id: changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          head=$GITHUB_SHA
+          last=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow testflight.yml --status success --limit 1 --json headSha --jq '.[0].headSha // ""')
+          if [ "$EVENT" = schedule ] && [ "$head" = "$last" ]; then
+            echo "main ($head) was already uploaded"
+            echo "upload=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "upload=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Select Xcode
+        if: steps.changed.outputs.upload == 'true'
+        run: sudo xcode-select -s /Applications/Xcode_27.2.app
+
+      - name: Install XcodeGen
+        if: steps.changed.outputs.upload == 'true'
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
+          echo "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+
+      - name: Install signing certificate and API key
+        if: steps.changed.outputs.upload == 'true'
+        env:
+          DEVELOPMENT_TEAM: ${{ vars.DEVELOPMENT_TEAM }}
+          CERTIFICATE_P12: ${{ secrets.DEVELOPMENT_CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPMENT_CERTIFICATE_PASSWORD }}
+          API_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
+        run: |
+          printf 'DEVELOPMENT_TEAM = %s\n' "$DEVELOPMENT_TEAM" > Config/Local.xcconfig
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password=$(uuidgen)
+          printf '%s' "$CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/development.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/development.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain"
+          printf '%s' "$API_KEY" > "$RUNNER_TEMP/AuthKey.p8"
+
+      - name: Archive and upload
+        if: steps.changed.outputs.upload == 'true'
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: make testflight APPLE_AUTH="-authenticationKeyPath $RUNNER_TEMP/AuthKey.p8 -authenticationKeyID $KEY_ID -authenticationKeyIssuerID $ISSUER_ID"
+
+      - name: Remove signing keychain
+        if: always() && steps.changed.outputs.upload == 'true'
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/development.p12" "$RUNNER_TEMP/AuthKey.p8"
