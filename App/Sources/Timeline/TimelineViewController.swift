@@ -2697,8 +2697,9 @@ extension TimelineViewController {
         isRestoringAnchor = true
         defer { isRestoringAnchor = false }
         // 表示領域の上端にかかっている行が消えるときは、残る行のうち一番上に見えている行を基準にする。
-        // 消える行を基準にすると、当て直したあとに位置を合わせる行がなく、読んでいる行が流れるため。
-        let anchor = anchorID.flatMap(anchor(of:)) ?? currentAnchor(among: Set(snapshot.itemIdentifiers))
+        // 消える行を基準にすると、当て直したあとに位置を合わせる行がなく、読んでいる行が流れるため。指定された行が消えるときも同じにする。
+        let remainingAnchorID = anchorID.flatMap { snapshot.indexOfItem($0) != nil ? $0 : nil }
+        let anchor = remainingAnchorID.flatMap(anchor(of:)) ?? currentAnchor(among: Set(snapshot.itemIdentifiers))
         FrameWork.measure("snapshot.apply") { dataSource.apply(snapshot, animatingDifferences: false) }
         if let anchor {
             restore(anchor)

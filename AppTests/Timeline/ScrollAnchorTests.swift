@@ -503,6 +503,28 @@ struct ScrollAnchorTests {
         #expect(harness.collectionView.contentOffset == offset)
     }
 
+    /// 保つ行に指定した行が同じ更新で消えるときは、残る行のうち一番上に見えている行の位置を保つ。最上部にいても追従しない。
+    @Test(arguments: [0.0, 0.4])
+    func removingKeptRowKeepsNextVisibleRow(scrollFraction: CGFloat) throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let existing = StatusFactory.make(count: 60, startingAt: 1_000)
+        harness.setStatuses(existing)
+        harness.scroll(toFraction: scrollFraction)
+        let anchor = try #require(harness.viewController.currentAnchor())
+        let index = try #require(existing.firstIndex { TimelineEntry.ID.status($0.id) == anchor.id })
+        let next = TimelineEntry.ID.status(existing[index + 1].id)
+        let before = try #require(harness.windowMinY(of: next))
+
+        var remaining = existing
+        remaining.remove(at: index)
+        let inserted = StatusFactory.make(count: 3, startingAt: 1_003)
+        harness.viewController.setEntries((inserted + remaining).map(TimelineEntry.status), keeping: anchor.id)
+
+        let after = try #require(harness.windowMinY(of: next), "消えた行の次の行が画面外へ出ました")
+        #expect(abs(after - before) <= tolerance, "消えた行の次の行が\(after - before)pt動きました")
+    }
+
     /// 切れていた間の投稿、ギャップ、切れる前の投稿の順に並べる。
     private func entriesWithGap(loadedInGap: [Status] = [], remainingGap: Bool = true) -> (entries: [TimelineEntry], gap: TimelineGap, above: Status, below: Status) {
         let newer = StatusFactory.make(count: 20, startingAt: 2_000)
