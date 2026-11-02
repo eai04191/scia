@@ -33,8 +33,7 @@ Scia（シア、/ˈʃi.a/）はストリーミングAPIに対応した、手触�
 
 ## 動作環境
 
-- iOS, iPadOS 26以降
-- macOS 26以降（Designed for iPadビルド）
+- iOS 26以降
 - Mastodon 4.7.3でのみ動作確認
 
 ## ビルド
