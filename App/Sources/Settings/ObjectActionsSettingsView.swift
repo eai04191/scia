@@ -2,13 +2,15 @@ import SciaCore
 import SwiftUI
 
 /// 1つの対象の操作の画面。タップと長押しの操作を選び、その対象のメニューの並びの画面を開く。決まりはdocs/object-actions.mdの「設定画面」にある。
-/// 選択は、先頭に「メニューを開く」、続けてその対象のメニューの項目を、既定の並びの順で、メニューと同じ名前とアイコンで並べる。
+/// 選択は、先頭の欄に既定の「メニューを開く」とタップの既定の項目を、次の欄に残りのメニューの項目を、既定の並びの順で、メニューと同じ名前とアイコンで並べる。
 /// 項目が多いため、選ぶときは別の画面の一覧で選ぶ。
 struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
     let title: String
     @Binding var actions: ObjectActions<Item>
     /// この対象のメニューの並びの画面。通知は投稿のメニューを出し、自分のメニューを持たないのでnil。
     let menu: SettingsPage?
+    /// タップの既定の項目。長い一覧に埋もれないよう、「メニューを開く」と並べて先頭の欄に出す。
+    let primary: Item
 
     var body: some View {
         Form {
@@ -33,9 +35,14 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
     /// 行の右端の今の値は、iPhoneの設定アプリと同じく、アイコンを付けない灰色の名前だけにする。アイコンは選ぶ一覧にだけ出す。
     private func picker(_ label: String, selection: Binding<ObjectAction<Item>>) -> some View {
         Picker(selection: selection) {
-            Label("メニューを開く", systemImage: "contextualmenu.and.cursorarrow").tag(ObjectAction<Item>.menu)
-            ForEach(items, id: \.self) { item in
-                Label(item.title, systemImage: item.symbolName).tag(ObjectAction<Item>.item(item))
+            Section {
+                Label("メニューを開く", systemImage: "contextualmenu.and.cursorarrow").tag(ObjectAction<Item>.menu)
+                option(primary)
+            }
+            Section {
+                ForEach(items.filter { $0 != primary }, id: \.self) { item in
+                    option(item)
+                }
             }
         } label: {
             Text(label)
@@ -44,6 +51,10 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
                 .foregroundStyle(.secondary)
         }
         .pickerStyle(.navigationLink)
+    }
+
+    private func option(_ item: Item) -> some View {
+        Label(item.title, systemImage: item.symbolName).tag(ObjectAction<Item>.item(item))
     }
 
     private func name(of action: ObjectAction<Item>) -> String {
@@ -72,6 +83,6 @@ extension ObjectEntity {
 
 extension ObjectActionsSettingsView where Item: ObjectActionItem {
     init(entity: ObjectEntity<Item>, settings: AppSettings, menu: SettingsPage?) {
-        self.init(title: entity.title, actions: entity.actions(in: settings), menu: menu)
+        self.init(title: entity.title, actions: entity.actions(in: settings), menu: menu, primary: Item.primaryItem)
     }
 }
