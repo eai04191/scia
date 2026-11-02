@@ -29,9 +29,34 @@ struct SettingsCategoryLabel: View {
     }
 }
 
-/// 表示の分類。投稿と通知の見た目、新着の動き、ステータスバーの通知、アプリのアイコン。
+/// 表示の分類。投稿と通知の見た目、新着の動き、ステータスバーの通知。
 struct DisplaySettingsView: View {
     @Bindable var settings: AppSettings
+    var body: some View {
+        Form {
+            Section {
+                NavigationLink("投稿", value: SettingsPage.appearance)
+                NavigationLink("通知", value: SettingsPage.notificationAppearance)
+            }
+            Section {
+                Picker("最上部での新着の挿入", selection: $settings.insertionMotion) {
+                    Text("自動").tag(InsertionMotion.followsSystem)
+                    Text("動かして見せる").tag(InsertionMotion.animated)
+                    Text("動かさない").tag(InsertionMotion.instant)
+                }
+            } footer: {
+                Text("「自動」では、「視差効果を減らす」がオンのときは動かしません。")
+            }
+            StatusBarTickerSettingsSection(isOn: $settings.showsStatusBarTicker, isAvailable: StatusBarCutout.isAvailable)
+        }
+        .topEdgeEffectHiddenOnMac()
+        .navigationTitle("表示")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// アプリのアイコンを選ぶ画面。
+struct AppIconSettingsView: View {
     @State private var appIconError: String?
 
     /// 選択の表示は共有のAppIconSelectionから読む。設定を複数のウィンドウで開いていても、どれも同じ選択を表示する。
@@ -53,20 +78,6 @@ struct DisplaySettingsView: View {
     var body: some View {
         Form {
             Section {
-                NavigationLink("投稿", value: SettingsPage.appearance)
-                NavigationLink("通知", value: SettingsPage.notificationAppearance)
-            }
-            Section {
-                Picker("最上部での新着の挿入", selection: $settings.insertionMotion) {
-                    Text("自動").tag(InsertionMotion.followsSystem)
-                    Text("動かして見せる").tag(InsertionMotion.animated)
-                    Text("動かさない").tag(InsertionMotion.instant)
-                }
-            } footer: {
-                Text("「自動」では、「視差効果を減らす」がオンのときは動かしません。")
-            }
-            StatusBarTickerSettingsSection(isOn: $settings.showsStatusBarTicker, isAvailable: StatusBarCutout.isAvailable)
-            Section {
                 Picker("アイコン", selection: appIconBinding) {
                     ForEach(AppIconChoice.allCases, id: \.self) { choice in
                         AppIconChoiceRow(choice: choice)
@@ -75,8 +86,6 @@ struct DisplaySettingsView: View {
                 }
                 .pickerStyle(.inline)
                 .labelsHidden()
-            } header: {
-                Text("アプリのアイコン")
             } footer: {
                 if let appIconError {
                     Text("アイコンを変えられませんでした。\(appIconError)")
@@ -84,8 +93,31 @@ struct DisplaySettingsView: View {
             }
         }
         .topEdgeEffectHiddenOnMac()
-        .navigationTitle("表示")
+        .navigationTitle("アプリのアイコン")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// 設定の一覧の、アプリのアイコンの画面へ入る行のラベル。分類の行の色付きの四角の代わりに、いま選んでいるアイコンを同じ大きさで添える。
+struct AppIconSettingsLabel: View {
+    @ScaledMetric(relativeTo: .body) private var side: CGFloat = 28
+
+    var body: some View {
+        Label {
+            Text("アプリのアイコン")
+        } icon: {
+            if let image = AppDependencies.appIcon.current.previewImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .frame(width: side, height: side)
+                    .clipShape(RoundedRectangle(cornerRadius: side * 0.22, style: .continuous))
+                    // 白地のアイコンが行の背景に溶けないよう、選ぶ一覧と同じく縁を引く
+                    .overlay {
+                        RoundedRectangle(cornerRadius: side * 0.22, style: .continuous)
+                            .strokeBorder(Color(uiColor: .separator), lineWidth: 0.5)
+                    }
+            }
+        }
     }
 }
 

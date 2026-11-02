@@ -81,6 +81,9 @@ struct SettingsView: View {
                     NavigationLink(value: SettingsPage.media) {
                         SettingsCategoryLabel("メディア", systemImage: "photo.fill", color: .red)
                     }
+                    NavigationLink(value: SettingsPage.appIcon) {
+                        AppIconSettingsLabel()
+                    }
                 }
                 Section {
                     NavigationLink(value: SettingsPage.storage) {
@@ -110,6 +113,7 @@ struct SettingsView: View {
         case .compose: ComposeSettingsView(settings: settings)
         case .media: MediaSettingsView(settings: settings)
         case .about: AboutSettingsView(clock: clock)
+        case .appIcon: AppIconSettingsView()
         case .appearance: AppearanceEditorView(settings: settings)
         case .notificationAppearance: NotificationAppearanceEditorView(settings: settings)
         case .tabs:
