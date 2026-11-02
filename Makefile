@@ -5,7 +5,7 @@ SIM_DESTINATION ?= generic/platform=iOS Simulator
 # 端末を決めないビルドは、既定ではシミュレーターの全アーキテクチャ（arm64とx86_64）を作る。このMacで動く分だけにして、コンパイルを半分にする
 SIM_ARCH ?= $(shell uname -m)
 
-.PHONY: generate lint test-lint test-core build warnings test sim-keyboard scenario-build scenario-setup scenario-reset promo readme-screenshots readme-icons update-known-servers check check-steps hooks menu-editor clean
+.PHONY: generate lint test-lint test-core build warnings test sim-keyboard scenario-build scenario-setup scenario-reset scenario-run promo readme-screenshots readme-icons update-known-servers check check-steps hooks menu-editor clean
 
 ## project.ymlからXcodeプロジェクトを生成する
 generate:
@@ -72,6 +72,12 @@ scenario-setup: scenario-build
 ## 1人分を始める前に、Mastodonのデータをスナップショットに戻し、専用の端末のSciaを入れ直す。Keychainは残すので、youでログインした状態から始まる
 scenario-reset: scenario-build
 	Tools/scenario/reset.sh '$(SCENARIO_APP)'
+
+## 1人分を走らせる。リセットしてから、何も知らないエージェントをPERSONAの役で初めて使う人として触らせ、報告を~/scia-scenario/runs/に残す
+## 役はTools/scenario/personas/にある（literal、impatient、breaker）。claude -pを使うので、利用枠を使う
+## 例: make scenario-run PERSONA=literal
+scenario-run: scenario-build
+	Tools/scenario/run.sh '$(SCENARIO_APP)' '$(PERSONA)'
 
 ## プロモーション動画の素材を、シナリオのUIテストを走らせながら撮る（docs/promo-video.md）。SIMにはシミュレーターか実機の名前を渡す
 ## 例: make promo SIM='Scia 1'

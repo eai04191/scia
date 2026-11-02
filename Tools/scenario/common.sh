@@ -1,7 +1,8 @@
-# setup.shとreset.shが読み込む、シナリオの置き場所と共通の手順。
+# setup.sh、reset.sh、run.shが読み込む、シナリオの置き場所と共通の手順。
 SCENARIO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# 証明書、Mastodonの秘密の値、データ、スナップショットは、リポジトリの外に置く。worktreeを消しても残し、どのworktreeからも同じものを使う
-export SCENARIO_HOME="${SCIA_SCENARIO_HOME:-$HOME/.scia-scenario}"
+# 証明書、Mastodonの秘密の値、データ、スナップショット、人として触らせた報告は、リポジトリの外に置く。worktreeを消しても残し、どのworktreeからも同じものを使う
+export SCENARIO_HOME="${SCIA_SCENARIO_HOME:-$HOME/scia-scenario}"
+SCENARIO_RUNS="$SCENARIO_HOME/runs"
 SCENARIO_HOST=mastodon.localhost
 # 流し込むアカウントのパスワード。このローカルのサーバーだけのテスト用の値
 SCENARIO_PASSWORD=scenario-password
