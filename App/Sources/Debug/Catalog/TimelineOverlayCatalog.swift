@@ -15,6 +15,11 @@ enum TimelineOverlayCatalog {
             state("ストリーミングが止まっている（小見出し）") { timeline, _ in timeline.setOutageNotice(true) },
             state("新着がある") { timeline, _ in timeline.setUnreadCount(12) },
             state("新着が読み込んだ分より多い") { timeline, _ in timeline.setUnreadCount(40, isLowerBound: true) },
+            // Macでウインドウが前面にないときの見た目。シミュレーターでは前面から外せないので、特性で作る。
+            state("新着がある（ウインドウが前面にない）") { timeline, _ in
+                timeline.traitOverrides.activeAppearance = .inactive
+                timeline.setUnreadCount(12)
+            },
             state("ログインし直しを促す") { _, column in column.setReauthentication(NoticeCatalog.reauthentication(handle), animated: false) },
             state("ログインし直しを促す（新着のボタンに重ねる）") { timeline, column in
                 timeline.setUnreadCount(12)
