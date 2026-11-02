@@ -717,8 +717,8 @@ struct MediaViewerControllerTests {
         #expect(!page.isWaitingForDisplay)
     }
 
-    /// 読み込めなかったら、インジケーターを回さずに待つのをやめ、サムネイルは出したままにする。
-    @Test func failedPlaybackStopsWaitingAndKeepsPoster() async throws {
+    /// 読み込めなかったら、インジケーターを回さずに待つのをやめ、読み込めなかったことを出す。サムネイルは出したままにする。
+    @Test func failedPlaybackShowsFailureAndKeepsPoster() async throws {
         let clock = TestClock()
         let missing = LocalMediaFile(url: URL(filePath: "/tmp/scia-missing-\(UUID().uuidString).mp4"), mimeType: "video/mp4", kind: .gifv)
         let page = PlayerPageController(item: MediaViewerItem(id: "g", kind: .gifv, description: "", file: missing, thumbnail: nil, status: .ready), preview: UIImage(systemName: "photo"))
@@ -728,7 +728,9 @@ struct MediaViewerControllerTests {
         try await waitUntil { !page.isWaitingForDisplay }
         clock.advance(by: .seconds(10))
         #expect(!page.isShowingLoadingIndicator)
+        #expect(page.shownFailure == "GIFを読み込めませんでした")
         #expect(page.isShowingPoster)
+        #expect(page.transitionOverlay != nil)
     }
 
     /// 動画の操作の部品を出している間は、中央の再生のボタンと重ならないよう、インジケーターを隠す。
@@ -747,12 +749,27 @@ struct MediaViewerControllerTests {
         #expect(page.isShowingLoadingIndicator)
     }
 
-    /// サーバーの添付ファイルに再生するURLがなければ、描けるときは来ないので、インジケーターを回さずに待つのをやめる。
-    @Test func serverAttachmentWithoutURLDoesNotWait() {
-        let page = PlayerPageController(item: MediaViewerItem(MediaAttachment(id: "1", type: .gifv, url: nil, previewUrl: nil)), preview: UIImage(systemName: "photo"))
+    /// サーバーの添付ファイルに再生するURLがなければ、描けるときは来ないので、インジケーターを回さずに、読み込めなかったことを出す。
+    @Test func serverAttachmentWithoutURLShowsFailure() {
+        let page = PlayerPageController(item: MediaViewerItem(MediaAttachment(id: "1", type: .video, url: nil, previewUrl: nil)), preview: UIImage(systemName: "photo"))
+        page.setChromeHidden(true, animated: false)
         page.loadViewIfNeeded()
         #expect(!page.isWaitingForDisplay)
+        #expect(page.shownFailure == "動画を読み込めませんでした")
         #expect(page.isShowingPoster)
+    }
+
+    /// 動画の操作の部品を出している間は、中央の再生のボタンと重ならないよう、読み込めなかったことの表示も隠す。
+    @Test func failureHidesWhileVideoControlsAreShown() {
+        let page = PlayerPageController(item: MediaViewerItem(MediaAttachment(id: "1", type: .video, url: nil, previewUrl: nil)))
+        page.setChromeHidden(true, animated: false)
+        page.loadViewIfNeeded()
+        #expect(page.shownFailure != nil)
+
+        page.setChromeHidden(false, animated: false)
+        #expect(page.shownFailure == nil)
+        page.setChromeHidden(true, animated: false)
+        #expect(page.shownFailure != nil)
     }
 
     /// インジケーターを出している間に閉じ始めたら、ビューアが薄くして消せるよう、開閉で重ねる部品としてインジケーターを渡す。
@@ -765,6 +782,70 @@ struct MediaViewerControllerTests {
         #expect(page.transitionOverlay == nil)
         try await waitUntil { page.isShowingLoadingIndicator }
         #expect(page.transitionOverlay != nil)
+    }
+
+    /// 投稿の動画を読み込めなかったら、「ブラウザで開く」を添え、押すと元のサーバーのURLを開く。自分のサーバーのコピーが読めなくても、元のファイルなら見られることがあるため。
+    @Test func failedServerVideoOpensRemoteURLInBrowser() async throws {
+        let missing = URL(filePath: "/tmp/scia-missing-\(UUID().uuidString).mp4")
+        let remote = try #require(URL(string: "https://remote.example/1.gif"))
+        let page = PlayerPageController(item: MediaViewerItem(MediaAttachment(id: "1", type: .gifv, url: missing, previewUrl: nil, remoteUrl: remote)))
+        var opened: [URL] = []
+        page.onOpenInBrowser = { opened.append($0) }
+        page.loadViewIfNeeded()
+        try await waitUntil { page.shownFailure != nil }
+        #expect(page.offersBrowserFallback)
+
+        try #require(button(titled: "ブラウザで開く", in: page.view)).sendActions(for: .primaryActionTriggered)
+        #expect(opened == [remote])
+    }
+
+    /// 投稿欄で選んだメディアは、ブラウザで開くURLがないので、「ブラウザで開く」を添えない。
+    @Test func failedLocalMediaDoesNotOfferBrowser() async throws {
+        let missing = LocalMediaFile(url: URL(filePath: "/tmp/scia-missing-\(UUID().uuidString).mp4"), mimeType: "video/mp4", kind: .gifv)
+        let page = PlayerPageController(item: MediaViewerItem(id: "g", kind: .gifv, description: "", file: missing, thumbnail: nil, status: .ready))
+        page.onOpenInBrowser = { _ in }
+        page.loadViewIfNeeded()
+        try await waitUntil { page.shownFailure != nil }
+        #expect(!page.offersBrowserFallback)
+    }
+
+    /// 画像を読み込めなかったら、サムネイルを出せていても読み込めなかったことを出し、「ブラウザで開く」を添える。
+    @Test func failedImageShowsFailureWithBrowser() async throws {
+        let store = MediaImageStore<UIImage>(files: .temporary()) { _, _ in throw URLError(.notConnectedToInternet) }
+        let attachment = MediaAttachment(id: "1", type: .image, url: URL(string: "https://x.example/original/1.png"), previewUrl: nil)
+        let page = ImagePageController(item: MediaViewerItem(attachment), store: store, preview: UIImage(systemName: "photo"))
+        page.onOpenInBrowser = { _ in }
+        page.loadViewIfNeeded()
+        try await waitUntil { page.shownFailure != nil }
+        #expect(page.shownFailure == "画像を読み込めませんでした")
+        #expect(page.offersBrowserFallback)
+    }
+
+    /// 画像の失敗を出している間に閉じ始めたら、ビューアが薄くして消せるよう、開閉で重ねる部品として失敗の表示を渡す。
+    @Test func imageFailureIsHandedToTransition() async throws {
+        let store = MediaImageStore<UIImage>(files: .temporary()) { _, _ in throw URLError(.notConnectedToInternet) }
+        let attachment = MediaAttachment(id: "1", type: .image, url: URL(string: "https://x.example/original/1.png"), previewUrl: nil)
+        let page = ImagePageController(item: MediaViewerItem(attachment), store: store, preview: UIImage(systemName: "photo"))
+        page.loadViewIfNeeded()
+        #expect(page.transitionOverlay == nil)
+        try await waitUntil { page.shownFailure != nil }
+        #expect(page.transitionOverlay != nil)
+    }
+
+    /// アプリで表示できない種類のファイルも、読み込めなかったときと同じ表示で、ブラウザで開けるようにする。
+    @Test func unsupportedFileOffersBrowser() throws {
+        let remote = try #require(URL(string: "https://remote.example/1.bin"))
+        let page = UnsupportedPageController(item: MediaViewerItem(MediaAttachment(id: "1", type: .unknown("unknown"), url: nil, previewUrl: nil, remoteUrl: remote)))
+        var opened: [URL] = []
+        page.onOpenInBrowser = { opened.append($0) }
+        page.loadViewIfNeeded()
+        try #require(button(titled: "ブラウザで開く", in: page.view)).sendActions(for: .primaryActionTriggered)
+        #expect(opened == [remote])
+    }
+
+    private func button(titled title: String, in view: UIView) -> UIButton? {
+        if let button = view as? UIButton, button.configuration?.title == title { return button }
+        return view.subviews.lazy.compactMap { button(titled: title, in: $0) }.first
     }
 
     /// 音声は映像を描かないので、最初のコマを待たない。

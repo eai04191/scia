@@ -62,6 +62,12 @@ public struct MediaAttachment: Codable, Hashable, Sendable, Identifiable {
         MediaAttachment(id: id, type: type, url: url, previewUrl: previewUrl, remoteUrl: remoteUrl, previewRemoteUrl: previewRemoteUrl, description: description, meta: meta, blurhash: blurhash)
     }
 
+    /// ビューアで読み込めなかったときや、アプリで表示できない種類のときに、ブラウザで開くURL。
+    /// 自分のサーバーのコピーが読めなくても元のファイルなら見られることがあるため、元のサーバーのURLを先にする。
+    public var browserFallbackURL: URL? {
+        remoteUrl ?? url
+    }
+
     public var aspectRatio: Double? {
         for size in [meta?.original, meta?.small] {
             if let width = size?.width, let height = size?.height, width > 0, height > 0 {

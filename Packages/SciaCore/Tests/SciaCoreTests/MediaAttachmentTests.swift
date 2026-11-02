@@ -9,6 +9,15 @@ struct MediaAttachmentTests {
         return try MastodonDecoder.make().decode(Status.self, from: Data(contentsOf: url))
     }
 
+    /// 読み込めなかったときにブラウザで開くのは、元のサーバーのURLを先にし、なければ自分のサーバーのコピーにする。
+    @Test func browserFallbackPrefersRemoteURL() throws {
+        let local = try #require(URL(string: "https://local.example/original/1.mp4"))
+        let remote = try #require(URL(string: "https://remote.example/1.gif"))
+        #expect(MediaAttachment(id: "1", type: .gifv, url: local, previewUrl: nil, remoteUrl: remote).browserFallbackURL == remote)
+        #expect(MediaAttachment(id: "1", type: .gifv, url: local, previewUrl: nil).browserFallbackURL == local)
+        #expect(MediaAttachment(id: "1", type: .gifv, url: nil, previewUrl: nil).browserFallbackURL == nil)
+    }
+
     @Test func decodesEachKindOfAttachment() throws {
         let status = try decodeFixture()
 

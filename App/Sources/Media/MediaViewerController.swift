@@ -643,6 +643,7 @@ final class MediaViewerController: UIViewController {
         page.onSingleTap = { [weak self] in self?.toggleChrome() }
         page.menuElements = { [weak self] in self?.menuElements() ?? [] }
         page.setChromeHidden(isChromeHidden, animated: false)
+        page.onOpenInBrowser = { [weak self] url in self?.openInBrowser(url) }
         page.bottomCoveredHeight = captionCoveredHeight
         page.isEditingDescription = isEditingDescription
         if let image = page as? ImagePageController {
@@ -665,6 +666,19 @@ final class MediaViewerController: UIViewController {
         }
         pages[index] = page
         return page
+    }
+
+    /// 見せられないページの「ブラウザで開く」。メニューの「ブラウザで開く」と同じく、開く場所の設定に従い、ビューアを閉じてから開く。
+    /// 開く先を持たないビューア（Macの別のウィンドウ、編集履歴から開いたとき）では、既定のブラウザで開く。
+    /// アプリで表示できない種類のページが、これまでそのビューアでも既定のブラウザで開いていたため。
+    private func openInBrowser(_ url: URL) {
+        guard onOpenURL != nil else {
+            UIApplication.shared.open(url)
+            return
+        }
+        // アプリ内のSafariはhttpとhttps以外で落ちる。添付のURLにはdataなども来るので、それらは外で開く。
+        urlToOpenAfterDismiss = (url, settings.linkBrowser.browser(for: url))
+        close()
     }
 
     /// 中身を描くページの種類。
@@ -1819,6 +1833,14 @@ class MediaPageController: UIViewController {
     var menuElements: (() -> [UIMenuElement])?
     /// ファイルの中身から読んだ、メディアの情報に出す詳しい値。読み終えるまでと、読めなかったときはnil。
     var fileDetails: MediaFileDetails?
+    /// 見せられないときに、URLをブラウザで開く。
+    var onOpenInBrowser: ((URL) -> Void)?
+
+    /// 見せられないときの「ブラウザで開く」の操作。ブラウザで開けるURLがなければnil。
+    func browserFallbackAction() -> (() -> Void)? {
+        guard let url = item.serverAttachment?.browserFallbackURL else { return nil }
+        return { [weak self] in self?.onOpenInBrowser?(url) }
+    }
 
     init(item: MediaViewerItem) {
         self.item = item
@@ -1921,8 +1943,10 @@ extension MediaPageController: UIContextMenuInteractionDelegate {
 final class ImagePageController: MediaPageController {
     private let store: MediaImageStore<UIImage>
     private let zoomView = ZoomingImageView()
-    private let spinner = UIActivityIndicatorView(style: .medium)
-    private let failureLabel = UILabel()
+    /// 読み込み中と、読み込めなかったことの表示。
+    private let statusView = MediaStatusView()
+    /// 閉じ始めに、ビューアが読み込み中や失敗の表示を薄くして消せるよう渡す。
+    override var transitionOverlay: UIView? { statusView.state == .hidden ? nil : statusView }
     private var loadTask: Task<Void, Never>?
     /// 前に開いたときの元のファイルがキャッシュに残っているかを確かめる。
     private var originalCheckTask: Task<Void, Never>?
@@ -2036,18 +2060,9 @@ final class ImagePageController: MediaPageController {
         liveText.isSupplementaryInterfaceHidden = true
         zoomView.addImageInteraction(liveText)
         addLongPressMenu(to: zoomView)
-        spinner.color = .white
-        failureLabel.text = "画像を読み込めませんでした"
-        failureLabel.textColor = .secondaryLabel
-        failureLabel.isHidden = true
-        for subview in [spinner, failureLabel] {
-            subview.translatesAutoresizingMaskIntoConstraints = false
-            view.addSubview(subview)
-            NSLayoutConstraint.activate([
-                subview.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-                subview.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            ])
-        }
+        statusView.frame = view.bounds
+        statusView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(statusView)
         // 一覧のサムネイルが手元にあればそれを、なければblurhashのぼかしを、元の画像が届くまでの下地にする。
         let attachment = item.serverAttachment
         let placeholder = preview == nil ? attachment?.blurhash.flatMap { store.placeholder(for: $0, aspectRatio: attachment?.aspectRatio) } : nil
@@ -2083,7 +2098,7 @@ final class ImagePageController: MediaPageController {
         }
     }
 
-    /// - Parameter hasPreview: 中身の分かるサムネイルを出せている。blurhashのぼかしだけなら、読み込み中と失敗を知らせる。
+    /// - Parameter hasPreview: 中身の分かるサムネイルを出せている。blurhashのぼかしだけなら、読み込み中を知らせる。読み込めなかったことは、どちらでも知らせる。
     private func load(hasPreview: Bool) {
         switch item.source {
         case .server(let attachment):
@@ -2093,7 +2108,7 @@ final class ImagePageController: MediaPageController {
             guard let file else {
                 // 読み込み終えたら`itemDidChange`で読み始める。
                 if !hasPreview {
-                    spinner.startAnimating()
+                    statusView.setState(.loading, animated: false)
                 }
                 return
             }
@@ -2105,22 +2120,22 @@ final class ImagePageController: MediaPageController {
     /// 投稿欄で選んだメディアを、手元のファイルから読む。キャッシュにはコピーしない。
     private func load(_ file: LocalMediaFile, hasPreview: Bool) {
         if !hasPreview {
-            spinner.startAnimating()
+            statusView.setState(.loading, animated: false)
         }
         loadedLocalURL = file.url
         loadTask?.cancel()
         loadTask = Task(.withoutRequests) { [weak self] in
             let image = await LocalMediaThumbnail.make(for: file, maxPixelSize: CGFloat(MediaImagePixelSize.full))
             guard let self, !Task.isCancelled else { return }
-            self.spinner.stopAnimating()
             if let image {
+                self.statusView.setState(.hidden, animated: true)
                 self.imageSource = "local"
                 self.zoomView.naturalSize = image.size
                 self.zoomView.image = image
                 self.onImageChange?(0)
                 self.analyze(image)
             } else {
-                self.failureLabel.isHidden = hasPreview
+                self.showFailure()
             }
         }
     }
@@ -2141,11 +2156,11 @@ final class ImagePageController: MediaPageController {
     private func load(_ attachment: MediaAttachment, hasPreview: Bool) {
         // 先読みしたファイルを使えるよう、先読みと同じURLを読む（docs/image-loading.md）。
         guard let url = MediaPrefetch.viewerImageURL(of: attachment) ?? attachment.previewUrl else {
-            failureLabel.isHidden = hasPreview
+            showFailure()
             return
         }
         if !hasPreview {
-            spinner.startAnimating()
+            statusView.setState(.loading, animated: false)
         }
         // 前に開いたときの元のファイルが残っていれば、表示のための読み込みを待たずに共有と保存を選べるようにする。
         originalCheckTask = Task(.withoutRequests) { [weak self, store] in
@@ -2156,8 +2171,8 @@ final class ImagePageController: MediaPageController {
             // ビューアは使う人が開いたものなので、前に読めなかった画像も間隔を待たずに読み直す。
             let image = try? await store.image(for: url, maxPixelSize: MediaImagePixelSize.full, keepsOriginal: true, retriesNow: true, purpose: .action)
             guard let self, !Task.isCancelled else { return }
-            self.spinner.stopAnimating()
             if let image {
+                self.statusView.setState(.hidden, animated: true)
                 self.originalURL = await store.hasOriginal(for: url) ? url : nil
                 let replacesPlaceholder = self.imageSource == "blurhash"
                 self.imageSource = "full"
@@ -2173,10 +2188,25 @@ final class ImagePageController: MediaPageController {
                 self.analyze(image)
             } else {
                 // サムネイルを出せていれば、そのまま見せる。
-                self.failureLabel.isHidden = hasPreview
+                self.showFailure()
             }
         }
     }
+
+    /// 読み込めなかったことを、ブラウザで開けるなら「ブラウザで開く」を添えて出す。
+    private func showFailure() {
+        statusView.onOpen = browserFallbackAction()
+        statusView.setState(.failed("画像を読み込めませんでした"), animated: true)
+    }
+
+    /// 出している、読み込めなかったことの文言。出していなければnil。
+    var shownFailure: String? {
+        guard case .failed(let text) = statusView.state else { return nil }
+        return text
+    }
+
+    /// 読み込めなかったことの表示に「ブラウザで開く」を添えている。
+    var offersBrowserFallback: Bool { statusView.onOpen != nil }
 }
 
 extension ImagePageController {
@@ -2235,9 +2265,9 @@ final class PlayerPageController: MediaPageController {
     /// 動画と音声の操作の部品。GIFではnil。
     private var controls: VideoControlsView?
 
-    /// 読み込み中のインジケーターは、操作の部品を出している間は隠しているので、どちらか見えているほうを返す。
+    /// 読み込み中や失敗の表示は、操作の部品を出している間は隠しているので、どちらか見えているほうを返す。
     override var transitionOverlay: UIView? {
-        if isShowingLoadingIndicator { return loadingPlatter }
+        if loadStatusView.state != .hidden, loadStatusView.alpha > 0 { return loadStatusView }
         guard !isChromeHidden, let controls, controls.isShowingControls else { return nil }
         return controls
     }
@@ -2273,11 +2303,8 @@ final class PlayerPageController: MediaPageController {
     /// 最初のコマを描けるまで出すサムネイル。開く動きの複製を消したあとに、黒い背景だけが見えないようにする。
     /// 複製と同じく、映像の枠に焦点で切り抜いて描く。投稿者が付けたサムネイルは、動画と縦横比が違うことがあるため。
     private let posterView = FocusCroppedImageView()
-    /// 最初のコマを描けないまま`loadingIndicatorDelay`秒たったら回す、読み込み中のインジケーター。
-    private let spinner = UIActivityIndicatorView(style: .medium)
-    /// インジケーターの下に敷く暗い丸。白いインジケーターが、明るいサムネイルの上でも見えるようにする。
-    /// ぼかし（`UIVisualEffectView`）にしないのは、閉じ始めにビューアが描き写す複製（`snapshotView`）にぼかしが写らず、丸だけが一コマで消えるため。
-    private let loadingPlatter = UIView()
+    /// 最初のコマを描けないまま`loadingIndicatorDelay`秒たったら回す読み込み中のインジケーターと、読み込めなかったことの表示。
+    private let loadStatusView = MediaStatusView()
     /// 最初のコマを描けないまま、読み込み中のインジケーターを出すまでの時間。
     var loadingIndicatorDelay: TimeInterval = 0.5
     private var loadingIndicatorTask: Task<Void, Never>?
@@ -2287,7 +2314,14 @@ final class PlayerPageController: MediaPageController {
     /// 最初のコマを描くのを待っている。音声は映像を描かないので待たない。
     private(set) var isWaitingForDisplay = false
     /// 読み込み中のインジケーターを回している。
-    var isShowingLoadingIndicator: Bool { spinner.isAnimating && loadingPlatter.alpha > 0 }
+    var isShowingLoadingIndicator: Bool { loadStatusView.state == .loading && loadStatusView.alpha > 0 }
+    /// 読み込めなかったことを出している。出していなければnil。
+    var shownFailure: String? {
+        guard case .failed(let text) = loadStatusView.state, loadStatusView.alpha > 0 else { return nil }
+        return text
+    }
+    /// 読み込めなかったことの表示に「ブラウザで開く」を添えている。
+    var offersBrowserFallback: Bool { loadStatusView.onOpen != nil }
     /// 最初のコマを描けるまで、映像の下にサムネイルを出している。
     var isShowingPoster: Bool { !posterView.isHidden && posterView.image != nil }
 
@@ -2325,23 +2359,9 @@ final class PlayerPageController: MediaPageController {
         posterView.focus = item.serverAttachment?.meta?.focus
         posterView.isUserInteractionEnabled = false
         view.insertSubview(posterView, belowSubview: playerController.view)
-        spinner.color = .white
-        spinner.translatesAutoresizingMaskIntoConstraints = false
-        loadingPlatter.translatesAutoresizingMaskIntoConstraints = false
-        loadingPlatter.backgroundColor = UIColor.black.withAlphaComponent(0.5)
-        loadingPlatter.layer.cornerRadius = Self.loadingPlatterDiameter / 2
-        loadingPlatter.isUserInteractionEnabled = false
-        loadingPlatter.isHidden = true
-        loadingPlatter.addSubview(spinner)
-        view.addSubview(loadingPlatter)
-        NSLayoutConstraint.activate([
-            loadingPlatter.widthAnchor.constraint(equalToConstant: Self.loadingPlatterDiameter),
-            loadingPlatter.heightAnchor.constraint(equalToConstant: Self.loadingPlatterDiameter),
-            loadingPlatter.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            loadingPlatter.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            spinner.centerXAnchor.constraint(equalTo: loadingPlatter.centerXAnchor),
-            spinner.centerYAnchor.constraint(equalTo: loadingPlatter.centerYAnchor),
-        ])
+        loadStatusView.frame = view.bounds
+        loadStatusView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(loadStatusView)
         let tap = UITapGestureRecognizer(target: self, action: #selector(tapped))
         tap.delegate = self
         view.addGestureRecognizer(tap)
@@ -2419,9 +2439,8 @@ final class PlayerPageController: MediaPageController {
         loadingIndicatorTask = Task(.withoutRequests) { [weak self, clock, delay = loadingIndicatorDelay] in
             try? await clock.sleep(for: .seconds(delay))
             guard let self, !Task.isCancelled else { return }
-            self.updateSpinnerVisibility(animated: false)
-            self.loadingPlatter.isHidden = false
-            self.spinner.startAnimating()
+            self.updateLoadStatusVisibility(animated: false)
+            self.loadStatusView.setState(.loading, animated: false)
         }
     }
 
@@ -2432,43 +2451,40 @@ final class PlayerPageController: MediaPageController {
         posterView.isHidden = true
     }
 
-    /// 読み込めずに終わったら、インジケーターを止める。サムネイルは、画像のページと同じく、出せていればそのまま見せる。
+    /// 読み込めずに終わったら、インジケーターの代わりに読み込めなかったことを出す。サムネイルは、出せていればそのまま見せる。
     func playbackDidFail() {
         guard isWaitingForDisplay else { return }
-        stopWaitingForDisplay()
+        loadStatusView.onOpen = browserFallbackAction()
+        stopWaitingForDisplay(showing: .failed(Self.failureText(of: item.kind)))
+    }
+
+    /// 画像のページの「画像を読み込めませんでした」と揃え、種類の名前で言う。
+    static func failureText(of kind: MediaAttachment.Kind) -> String {
+        "\(kind == .gifv ? "GIF" : "動画")を読み込めませんでした"
     }
 
     /// インジケーターは、出ていれば薄くして消す。
-    private func stopWaitingForDisplay() {
+    private func stopWaitingForDisplay(showing state: MediaStatusView.State = .hidden) {
         isWaitingForDisplay = false
         loadingIndicatorTask?.cancel()
         loadingIndicatorTask = nil
         readyForDisplayObservation = nil
         itemStatusObservation = nil
-        UIView.animateSmoothly(duration: Self.spinnerFadeDuration) {
-            self.loadingPlatter.alpha = 0
-        } completion: {
-            self.spinner.stopAnimating()
-            self.loadingPlatter.isHidden = true
-        }
+        updateLoadStatusVisibility(animated: false)
+        loadStatusView.setState(state, animated: true)
     }
 
-    /// 動画の操作の部品を出している間は、中央の再生のボタンと重なるので、インジケーターを隠す。
-    private func updateSpinnerVisibility(animated: Bool) {
-        guard isWaitingForDisplay else { return }
+    /// 動画の操作の部品を出している間は、中央の再生のボタンと重なるので、読み込み中や失敗の表示を隠す。
+    private func updateLoadStatusVisibility(animated: Bool) {
         let alpha: CGFloat = controls != nil && !isChromeHidden && !isEditingDescription ? 0 : 1
         guard animated else {
-            loadingPlatter.alpha = alpha
+            loadStatusView.alpha = alpha
             return
         }
-        UIView.animateSmoothly(duration: Self.spinnerFadeDuration) {
-            self.loadingPlatter.alpha = alpha
+        UIView.animateSmoothly(duration: MediaStatusView.fadeDuration) {
+            self.loadStatusView.alpha = alpha
         }
     }
-
-    /// 操作の部品の出し入れ（`VideoControlsView.setControlsHidden`）と揃える。
-    private static let spinnerFadeDuration: TimeInterval = 0.2
-    private static let loadingPlatterDiameter: CGFloat = 48
 
     /// 投稿の添付ファイルはURLから、投稿欄で選んだメディアは手元のファイルから再生する。手元のファイルを読み込み終える前なら、読み込み終えたときに作る。
     override func itemDidChange() {
@@ -2836,7 +2852,7 @@ final class PlayerPageController: MediaPageController {
     /// ボタンと説明を隠している間と、代替テキストを書いている間は、操作の部品も隠す。書いている間は、部品が入力欄やキーボードと重なるため。
     private func updateControlsVisibility(animated: Bool) {
         controls?.setControlsHidden(isChromeHidden || isEditingDescription, animated: animated)
-        updateSpinnerVisibility(animated: animated)
+        updateLoadStatusVisibility(animated: animated)
         scheduleAutoHide()
     }
 
@@ -2976,7 +2992,7 @@ final class PlayerPageController: MediaPageController {
     }
 
     override func stateDump() -> String {
-        let loading = "loading: waiting=\(isWaitingForDisplay) poster=\(isShowingPoster) indicator=\(isShowingLoadingIndicator)"
+        let loading = "loading: waiting=\(isWaitingForDisplay) poster=\(isShowingPoster) indicator=\(isShowingLoadingIndicator) failure=\(shownFailure ?? "nil")"
         guard let controls else { return loading }
         return """
         \(loading)
@@ -2987,26 +3003,29 @@ final class PlayerPageController: MediaPageController {
 
 extension PlayerPageController: UIGestureRecognizerDelegate {
     /// 操作の部品の上のタッチは、部品に任せ、動画のタップや長押しにしない。
+    /// 「ブラウザで開く」のタッチも、ボタンに任せる。
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        if loadStatusView.isOpenButtonTouch(touch) { return false }
         guard let controls, let touched = touch.view else { return true }
         return !touched.isDescendant(of: controls)
     }
 }
 
 /// アプリで開けない種類のファイルのページ。ブラウザで開く操作を出す。
+/// アプリで表示できない種類のファイルのページ。画像や動画を読み込めなかったときと同じ表示で、ブラウザで開けるようにする。
 final class UnsupportedPageController: MediaPageController {
+    private let statusView = MediaStatusView()
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        var configuration = UIContentUnavailableConfiguration.empty()
-        configuration.image = UIImage(systemName: "doc")
-        configuration.text = "このファイルはアプリで表示できません"
-        if let url = item.serverAttachment.flatMap({ $0.remoteUrl ?? $0.url }) {
-            configuration.button = .bordered()
-            configuration.button.title = "ブラウザで開く"
-            configuration.buttonProperties.primaryAction = UIAction { _ in UIApplication.shared.open(url) }
-        }
-        contentUnavailableConfiguration = configuration
+        statusView.frame = view.bounds
+        statusView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        statusView.onOpen = browserFallbackAction()
+        statusView.setState(.failed("このファイルはアプリで表示できません"), animated: false)
+        view.addSubview(statusView)
     }
+
+    override var transitionOverlay: UIView? { statusView }
 }
 
 /// 画面の下に出す代替テキスト。長ければスクロールして読む。
