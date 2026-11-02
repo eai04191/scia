@@ -167,6 +167,112 @@ struct FeedTimelineModelTests {
         #expect(display.entriesCalls.last?.base != nil, "挿入では、残る行の中身を変えていないと伝えます")
     }
 
+    /// バックグラウンドから戻ったときは、切れていた間の補完を終えるまで、最上部にいても追従せず、一番上に見えていた行の位置を保つ。
+    /// 補完を終えたあとに届いた新着は、また最上部で追従する。
+    @Test func resumeFillKeepsTopRowUntilFillEnds() async throws {
+        let fillIDs = Mutex<[Int]>([])
+        let transport = RoutedTransport { request in
+            guard request.url?.path() == "/api/v1/timelines/home" else { return (200, Data("{}".utf8)) }
+            let query = request.url?.query() ?? ""
+            let ids = query.contains("min_id") || query.contains("since_id") ? fillIDs.withLock { $0 } : [2, 1]
+            return (200, try TimelineModelFixtures.body(ids))
+        }
+        let laterMessage = Gate()
+        let connector = ScriptedConnector([.init(), .init(messages: [try TimelineModelFixtures.updateMessage(4)], firstMessageGate: laterMessage)])
+        let clock = TestClock()
+        let tuning = TuningStore(defaults: nil)
+        tuning.setValue(2, for: TuningCatalog.insertionInterval)
+        let (model, display) = makeModel(transport: transport, hub: TimelineModelFixtures.hub(connector), tuning: tuning, clock: clock)
+        defer { model.stop() }
+
+        model.start(purpose: .action)
+        try await waitUntil { display.contentState == .loaded && display.catchUp?.attempt == 1 && display.catchUp?.phase == .idle && model.runningTaskCount == 0 }
+        display.anchorID = .status("2")
+        model.enterBackground()
+        fillIDs.withLock { $0 = [3] }
+        model.enterForeground()
+        try await waitUntil { display.statusIDs == ["3", "2", "1"] && model.runningTaskCount == 0 }
+        #expect(display.entriesCalls.last?.anchorID == .status("2"), "補完で最上部に追従しました")
+
+        laterMessage.open()
+        try await waitUntil { clock.sleeperCount == 1 }
+        clock.advance(by: .seconds(2))
+        try await waitUntil { display.statusIDs == ["4", "3", "2", "1"] }
+        #expect(display.entriesCalls.last?.anchorID == nil, "補完を終えたあとも位置を保ち続けました")
+    }
+
+    /// 補完の最中に届いた新着の挿入が、補完を終えたあとになっても、位置を保って挿入する。
+    @Test func arrivalDuringResumeFillInsertedAfterFillEndsKeepsTopRow() async throws {
+        let fillGate = Gate()
+        let fillCount = Mutex(0)
+        let transport = RoutedTransport { request in
+            guard request.url?.path() == "/api/v1/timelines/home" else { return (200, Data("{}".utf8)) }
+            let query = request.url?.query() ?? ""
+            guard query.contains("min_id") || query.contains("since_id") else { return (200, try TimelineModelFixtures.body([2, 1])) }
+            if fillCount.withLock({ count in count += 1; return count }) > 1 {
+                try await fillGate.wait()
+            }
+            return (200, Data("[]".utf8))
+        }
+        let connector = ScriptedConnector([.init(), .init(messages: [try TimelineModelFixtures.updateMessage(3)])])
+        let clock = TestClock()
+        let tuning = TuningStore(defaults: nil)
+        tuning.setValue(2, for: TuningCatalog.insertionInterval)
+        let (model, display) = makeModel(transport: transport, hub: TimelineModelFixtures.hub(connector), tuning: tuning, clock: clock)
+        defer { model.stop() }
+
+        model.start(purpose: .action)
+        try await waitUntil { display.contentState == .loaded && display.catchUp?.attempt == 1 && display.catchUp?.phase == .idle && model.runningTaskCount == 0 }
+        display.anchorID = .status("2")
+        model.enterBackground()
+        model.enterForeground()
+        try await waitUntil { fillGate.waiterCount == 1 && clock.sleeperCount == 1 }
+        fillGate.open()
+        try await waitUntil { display.catchUp?.attempt == 2 && display.catchUp?.phase == .idle && model.runningTaskCount == 1 }
+        clock.advance(by: .seconds(2))
+        try await waitUntil { display.statusIDs == ["3", "2", "1"] && model.runningTaskCount == 0 }
+
+        #expect(display.entriesCalls.last?.anchorID == .status("2"), "補完を終えたあとの挿入で、最上部へ追従しました")
+    }
+
+    /// 戻る前から古い投稿を読んでいて、補完の途中で読み終えても、補完で入った新着に追従しない。
+    @Test func olderLoadDuringResumeFillKeepsTopRow() async throws {
+        let gapGate = Gate()
+        let olderGate = Gate()
+        let fillCount = Mutex(0)
+        let transport = RoutedTransport { request in
+            guard request.url?.path() == "/api/v1/timelines/home" else { return (200, Data("{}".utf8)) }
+            let query = request.url?.query() ?? ""
+            if query.contains("max_id") {
+                // since_idの付いたものは補完がギャップを読む読み込み、付かないものは古い投稿の読み込み。
+                try await (query.contains("since_id") ? gapGate : olderGate).wait()
+                return (200, Data("[]".utf8))
+            }
+            if query.contains("since_id") {
+                let count = fillCount.withLock { count in count += 1; return count }
+                return (200, try TimelineModelFixtures.body(count == 1 ? [] : [3]))
+            }
+            return (200, try TimelineModelFixtures.body([2, 1]))
+        }
+        let (model, display) = makeModel(transport: transport, hub: TimelineModelFixtures.hub(ScriptedConnector([.init(), .init()])))
+        defer { model.stop() }
+
+        model.start(purpose: .action)
+        try await waitUntil { display.contentState == .loaded && display.catchUp?.attempt == 1 && display.catchUp?.phase == .idle && model.runningTaskCount == 0 }
+        display.anchorID = .status("2")
+        model.approachEnd()
+        try await waitUntil { olderGate.waiterCount == 1 }
+        model.enterBackground()
+        model.enterForeground()
+        try await waitUntil { gapGate.waiterCount == 1 }
+        olderGate.open()
+        try await waitUntil { display.statusIDs == ["3", "2", "1"] }
+
+        #expect(display.entriesCalls.last?.anchorID == .status("2"), "古い投稿の読み込みで、補完で入った新着に追従しました")
+        gapGate.open()
+        try await waitUntil { model.runningTaskCount == 0 }
+    }
+
     /// 止めたあとに届いた401は、ログインし直しを促さず、画面にも何も伝えない。
     @Test func stoppedModelIgnoresLateResults() async throws {
         let gate = Gate()

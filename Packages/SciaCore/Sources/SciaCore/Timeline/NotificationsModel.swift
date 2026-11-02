@@ -67,6 +67,10 @@ public final class NotificationsModel {
     private static let mergeCheckDelays: [Duration] = [.seconds(2), .seconds(4), .seconds(8), .seconds(16), .seconds(32)]
     /// 走っている補完の数と、すべて終わるのを待っている引っぱった読み直し。
     private var activeFills = 0
+    /// バックグラウンドから戻ってから、切れていた間の補完を終えるまで。最上部にいても追従せず、一番上に見えていた行の位置を保つ。
+    /// 戻ってから始めた補完があり、走っている補完がすべて終わり、その間に届いた新着も挿入し終えたら解く。決まりはdocs/vision.mdの「一覧の動き」にある。
+    private var keepsPositionAfterResume = false
+    private var hasStartedFillAfterResume = false
     private var fillWaiters: [CheckedContinuation<Void, Never>] = []
     /// 走っている補完が終わるのを待っている、引っぱった読み直しの数。テストで、待ち始めたことを時間を待たずに確かめる。
     public var fillWaiterCount: Int { fillWaiters.count }
@@ -149,6 +153,8 @@ public final class NotificationsModel {
         // バックグラウンドにいる間に電波が戻ったり、レート制限が明けたりしても、その知らせでは読み込まない。戻ったここでやり直す。
         retryFailedLoads()
         guard hasLoadedInitial else { return }
+        keepsPositionAfterResume = true
+        hasStartedFillAfterResume = false
         startStreaming()
         syncReadPosition()
     }
@@ -198,9 +204,22 @@ public final class NotificationsModel {
         onReload()
     }
 
+    /// 戻ってから始めた補完がすべて終わり、その間に届いた新着も挿入し終えたら、最上部での追従に戻す。
+    private func endResumeIfSettled() {
+        guard hasStartedFillAfterResume, activeFills == 0, store.pending.isEmpty else { return }
+        keepsPositionAfterResume = false
+        hasStartedFillAfterResume = false
+    }
+
+    /// 戻ってから補完を終えるまでは、最上部にいても追従しないよう、表示領域の上端にかかっている行を保つ行として渡す。
+    private var resumeAnchorID: TimelineEntry.ID? {
+        keepsPositionAfterResume ? display?.currentAnchorID() : nil
+    }
+
     private func endFill() {
         activeFills -= 1
         guard activeFills == 0 else { return }
+        endResumeIfSettled()
         let waiters = fillWaiters
         fillWaiters.removeAll()
         waiters.forEach { $0.resume() }
@@ -482,6 +501,9 @@ public final class NotificationsModel {
         #endif
         // 読み始める前に数える。走り始める前に引っぱった読み直しが待ち始めても、この補完を待つため。
         activeFills += 1
+        if keepsPositionAfterResume {
+            hasStartedFillAfterResume = true
+        }
         run(purpose) { model in
             defer { model.endFill() }
             let before = model.store.entries
@@ -618,6 +640,8 @@ public final class NotificationsModel {
         }
         #endif
         let added = store.flushPending()
+        // 挿入した新着を描いてから、追従に戻す。
+        defer { endResumeIfSettled() }
         logger.info("notifications insert pending added=\(added.count, privacy: .public)")
         guard !added.isEmpty else { return }
         showEntries()
@@ -700,7 +724,7 @@ public final class NotificationsModel {
     /// - Parameter animatesRemoval: 使う人の操作で行を消した。消える行を閉じる動きで消す。
     private func showEntries(animatesRemoval: Bool = false, placingAtTop topID: TimelineEntry.ID? = nil) {
         showGapStates()
-        display?.show(store.entries, placingAtTop: topID, animatesRemoval: animatesRemoval)
+        display?.show(store.entries, keeping: resumeAnchorID, placingAtTop: topID, animatesRemoval: animatesRemoval)
         updateUnreadCount()
     }
 

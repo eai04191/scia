@@ -127,6 +127,48 @@ struct NotificationsModelTests {
         try await waitUntil { display.entries.first?.id == .notification("34975865") }
     }
 
+    /// バックグラウンドから戻ったときは、切れていた間の補完を終えるまで、最上部にいても追従せず、一番上に見えていた行の位置を保つ。
+    /// 補完の最中に届いた通知も、補完を終える前に挿入しても後に挿入しても、位置を保って挿入する。
+    @Test(arguments: [true, false])
+    func arrivalDuringResumeFillKeepsTopRow(insertsBeforeFillEnds: Bool) async throws {
+        let base = try Self.transport()
+        let fillGate = Gate()
+        let fillCount = Mutex(0)
+        let transport = RoutedTransport { request in
+            let query = request.url?.query() ?? ""
+            if request.url?.path() == "/api/v2/notifications", query.contains("min_id") || query.contains("since_id"),
+               fillCount.withLock({ count in count += 1; return count }) > 1 {
+                try await fillGate.wait()
+            }
+            let (body, response) = try await base.send(request)
+            return (response.statusCode, body)
+        }
+        let connector = ScriptedConnector([.init(), .init(messages: [try TimelineModelFixtures.notificationMessage(Self.reblogPayload)])])
+        let clock = TestClock()
+        let tuning = TuningStore(defaults: nil)
+        tuning.setValue(2, for: TuningCatalog.insertionInterval)
+        let (model, display) = makeModel(transport: transport, hub: TimelineModelFixtures.hub(connector), tuning: tuning, clock: clock)
+        defer { model.stop() }
+
+        model.start(purpose: .action)
+        try await waitUntil { display.contentState == .loaded && display.catchUp?.attempt == 1 && display.catchUp?.phase == .idle && model.runningTaskCount == 0 }
+        display.anchorID = .notification("34975864")
+        model.enterBackground()
+        model.enterForeground()
+        try await waitUntil { fillGate.waiterCount == 1 && clock.sleeperCount == 1 }
+        if insertsBeforeFillEnds {
+            clock.advance(by: .seconds(2))
+            try await waitUntil { display.entries.first?.id == .notification("34975865") }
+            fillGate.open()
+        } else {
+            fillGate.open()
+            try await waitUntil { display.catchUp?.attempt == 2 && display.catchUp?.phase == .idle && model.runningTaskCount == 1 }
+            clock.advance(by: .seconds(2))
+        }
+        try await waitUntil { display.entries.first?.id == .notification("34975865") && model.runningTaskCount == 0 }
+        #expect(display.entriesCalls.last?.anchorID == .notification("34975864"), "補完の最中に届いた通知の挿入で、最上部へ追従しました")
+    }
+
     /// 既読位置は、スクロールが止まるのを待たずに保存する。指で操作している間は、操作が終わってから保存する。
     @Test func markReadSavesUnlessInteracting() async throws {
         let transport = try Self.transport()
