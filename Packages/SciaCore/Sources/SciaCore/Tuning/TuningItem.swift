@@ -976,6 +976,15 @@ public enum TuningCatalog {
         defaultValue: 0.3
     )
 
+    /// 動画とGIFの最初のコマを描けないまま、読み込み中のインジケーターを出すまでの時間。すぐに描けたときに、インジケーターが一瞬だけ出ないようにする。
+    public static let mediaVideoLoadingIndicatorDelay = NumberTuning(
+        id: "media.videoLoadingIndicatorDelay",
+        title: "動画の読み込み中のインジケーターを出すまでの時間（秒）",
+        range: 0...3,
+        step: 0.1,
+        defaultValue: 0.5
+    )
+
     /// 代替テキストを書いているとき、残りの文字数がこれ以下になったら残りを出す。
     public static let mediaDescriptionRemainingThreshold = NumberTuning(
         id: "media.descriptionRemainingThreshold",
@@ -1804,6 +1813,7 @@ public enum TuningCatalog {
         TuningSection(id: "media.video", title: "ビューア：動画", items: [
             .number(mediaVideoControlsHideDelay),
             .number(mediaVideoSkipEffectDuration),
+            .number(mediaVideoLoadingIndicatorDelay),
         ]),
         TuningSection(id: "media.description", title: "ビューア：代替テキスト", items: [
             .number(mediaDescriptionRemainingThreshold),

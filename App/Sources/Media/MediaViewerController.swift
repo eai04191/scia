@@ -131,6 +131,8 @@ final class MediaViewerController: UIViewController {
         var placeholderFadeDuration: TimeInterval = 0.15
         /// 代替テキストを書き始めるときと書き終えるときに、下の説明の帯と入力欄を薄くして入れ替える時間。
         var descriptionEditorFadeDuration: TimeInterval = 0.2
+        /// 動画とGIFの最初のコマを描けないまま、読み込み中のインジケーターを出すまでの時間。
+        var videoLoadingIndicatorDelay: TimeInterval = 0.5
     }
 
     /// 投稿欄で選んだメディアを開いたときの操作。ビューアは投稿欄を知らず、メニューと代替テキストの書き終わりをここから渡す。
@@ -634,7 +636,7 @@ final class MediaViewerController: UIViewController {
         let item = items[index]
         let page: MediaPageController = switch Self.pageKind(of: item) {
         case .image: ImagePageController(item: item, store: store, preview: imageSource(of: item.id)?.loadedThumbnail ?? item.localThumbnail)
-        case .player: PlayerPageController(item: item)
+        case .player: PlayerPageController(item: item, preview: imageSource(of: item.id)?.loadedThumbnail ?? item.localThumbnail)
         case .unsupported: UnsupportedPageController(item: item)
         }
         page.index = index
@@ -651,6 +653,7 @@ final class MediaViewerController: UIViewController {
         if let player = page as? PlayerPageController {
             player.controlsHideDelay = timing.videoControlsHideDelay
             player.skipEffectDuration = timing.videoSkipEffectDuration
+            player.loadingIndicatorDelay = timing.videoLoadingIndicatorDelay
             player.onRequestChromeHidden = { [weak self, weak player] hidden in
                 guard let self, let player, player.index == self.currentIndex else { return }
                 self.setChromeHidden(hidden)
@@ -1190,7 +1193,7 @@ extension MediaViewerController {
     private func attachPageOverlayCopy(from page: MediaPageController?) {
         pageOverlayCopy?.removeFromSuperview()
         pageOverlayCopy = nil
-        guard !isChromeHidden, let overlay = page?.transitionOverlay, overlay.window != nil,
+        guard let overlay = page?.transitionOverlay, overlay.window != nil,
               let copy = overlay.snapshotView(afterScreenUpdates: false)
         else { return }
         copy.frame = overlay.convert(overlay.bounds, to: view)
@@ -2232,8 +2235,10 @@ final class PlayerPageController: MediaPageController {
     /// 動画と音声の操作の部品。GIFではnil。
     private var controls: VideoControlsView?
 
+    /// 読み込み中のインジケーターは、操作の部品を出している間は隠しているので、どちらか見えているほうを返す。
     override var transitionOverlay: UIView? {
-        guard let controls, controls.isShowingControls else { return nil }
+        if isShowingLoadingIndicator { return loadingPlatter }
+        guard !isChromeHidden, let controls, controls.isShowingControls else { return nil }
         return controls
     }
     /// 音声のトラックがあるか。なければ消音のボタンを出さない。
@@ -2263,6 +2268,34 @@ final class PlayerPageController: MediaPageController {
     private var wasPlayingBeforeFastForward: Bool?
     /// このページがNow Playingに再生の情報を出しているか。
     private var holdsNowPlaying = false
+    /// 一覧で読み込んだサムネイル。動画とGIFの最初のコマを描けるまで、映像の下に出す。
+    private let preview: UIImage?
+    /// 最初のコマを描けるまで出すサムネイル。開く動きの複製を消したあとに、黒い背景だけが見えないようにする。
+    /// 複製と同じく、映像の枠に焦点で切り抜いて描く。投稿者が付けたサムネイルは、動画と縦横比が違うことがあるため。
+    private let posterView = FocusCroppedImageView()
+    /// 最初のコマを描けないまま`loadingIndicatorDelay`秒たったら回す、読み込み中のインジケーター。
+    private let spinner = UIActivityIndicatorView(style: .medium)
+    /// インジケーターの下に敷く暗い丸。白いインジケーターが、明るいサムネイルの上でも見えるようにする。
+    /// ぼかし（`UIVisualEffectView`）にしないのは、閉じ始めにビューアが描き写す複製（`snapshotView`）にぼかしが写らず、丸だけが一コマで消えるため。
+    private let loadingPlatter = UIView()
+    /// 最初のコマを描けないまま、読み込み中のインジケーターを出すまでの時間。
+    var loadingIndicatorDelay: TimeInterval = 0.5
+    private var loadingIndicatorTask: Task<Void, Never>?
+    private var readyForDisplayObservation: AnyCancellable?
+    private var itemStatusObservation: AnyCancellable?
+
+    /// 最初のコマを描くのを待っている。音声は映像を描かないので待たない。
+    private(set) var isWaitingForDisplay = false
+    /// 読み込み中のインジケーターを回している。
+    var isShowingLoadingIndicator: Bool { spinner.isAnimating && loadingPlatter.alpha > 0 }
+    /// 最初のコマを描けるまで、映像の下にサムネイルを出している。
+    var isShowingPoster: Bool { !posterView.isHidden && posterView.image != nil }
+
+    /// - Parameter preview: 一覧で読み込んだサムネイル。動画とGIFの最初のコマを描けるまでの下地にする。
+    init(item: MediaViewerItem, preview: UIImage? = nil) {
+        self.preview = preview
+        super.init(item: item)
+    }
 
     /// 動画の表示の準備が整うまでは、添付ファイルの縦横比で画面に収めた枠を返す。開く遷移はその準備より先に始まるため。
     override var contentFrame: CGRect {
@@ -2288,6 +2321,27 @@ final class PlayerPageController: MediaPageController {
         playerController.updatesNowPlayingInfoCenter = false
         view.addSubview(playerController.view)
         playerController.didMove(toParent: self)
+        // 再生の画面の背景は透明なので、最初のコマを描くまでは下のサムネイルが見え、描いたら映像が同じ枠に重なる。
+        posterView.focus = item.serverAttachment?.meta?.focus
+        posterView.isUserInteractionEnabled = false
+        view.insertSubview(posterView, belowSubview: playerController.view)
+        spinner.color = .white
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        loadingPlatter.translatesAutoresizingMaskIntoConstraints = false
+        loadingPlatter.backgroundColor = UIColor.black.withAlphaComponent(0.5)
+        loadingPlatter.layer.cornerRadius = Self.loadingPlatterDiameter / 2
+        loadingPlatter.isUserInteractionEnabled = false
+        loadingPlatter.isHidden = true
+        loadingPlatter.addSubview(spinner)
+        view.addSubview(loadingPlatter)
+        NSLayoutConstraint.activate([
+            loadingPlatter.widthAnchor.constraint(equalToConstant: Self.loadingPlatterDiameter),
+            loadingPlatter.heightAnchor.constraint(equalToConstant: Self.loadingPlatterDiameter),
+            loadingPlatter.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            loadingPlatter.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            spinner.centerXAnchor.constraint(equalTo: loadingPlatter.centerXAnchor),
+            spinner.centerYAnchor.constraint(equalTo: loadingPlatter.centerYAnchor),
+        ])
         let tap = UITapGestureRecognizer(target: self, action: #selector(tapped))
         tap.delegate = self
         view.addGestureRecognizer(tap)
@@ -2305,7 +2359,14 @@ final class PlayerPageController: MediaPageController {
             view.addGestureRecognizer(doubleTap)
             tap.require(toFail: doubleTap)
         }
+        if item.kind != .audio {
+            waitForDisplay()
+        }
         setUpPlayer()
+        // サーバーの添付ファイルに再生するURLがなければ、描けるときは来ないので待たない。手元のファイルは、読み込み終えたら再生し始める。
+        if case .server = item.source, playerController.player == nil {
+            playbackDidFail()
+        }
         registerForTraitChanges([UITraitImageDynamicRange.self]) { (self: Self, _) in
             self.applyDynamicRange()
         }
@@ -2318,6 +2379,7 @@ final class PlayerPageController: MediaPageController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        posterView.frame = contentFrame
         applyDynamicRange()
     }
 
@@ -2340,6 +2402,73 @@ final class PlayerPageController: MediaPageController {
             pending.append(contentsOf: layer.sublayers ?? [])
         }
     }
+
+    /// 最初のコマを描くまで、サムネイルを出し、少し待っても描けなければ読み込み中のインジケーターを回す。
+    /// 手元のファイルを読み込み終える前も、プレイヤーを作る前から同じく待つ。
+    private func waitForDisplay() {
+        isWaitingForDisplay = true
+        posterView.image = preview
+        readyForDisplayObservation = playerController.publisher(for: \.isReadyForDisplay)
+            .filter { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.displayDidBecomeReady()
+                }
+            }
+        loadingIndicatorTask = Task(.withoutRequests) { [weak self, clock, delay = loadingIndicatorDelay] in
+            try? await clock.sleep(for: .seconds(delay))
+            guard let self, !Task.isCancelled else { return }
+            self.updateSpinnerVisibility(animated: false)
+            self.loadingPlatter.isHidden = false
+            self.spinner.startAnimating()
+        }
+    }
+
+    /// 最初のコマを描けたら、サムネイルを外して映像だけにする。サムネイルは映像と同じ枠に収めた同じ絵なので、細部が増えるだけになり、薄くせずに外す。
+    func displayDidBecomeReady() {
+        guard isWaitingForDisplay else { return }
+        stopWaitingForDisplay()
+        posterView.isHidden = true
+    }
+
+    /// 読み込めずに終わったら、インジケーターを止める。サムネイルは、画像のページと同じく、出せていればそのまま見せる。
+    func playbackDidFail() {
+        guard isWaitingForDisplay else { return }
+        stopWaitingForDisplay()
+    }
+
+    /// インジケーターは、出ていれば薄くして消す。
+    private func stopWaitingForDisplay() {
+        isWaitingForDisplay = false
+        loadingIndicatorTask?.cancel()
+        loadingIndicatorTask = nil
+        readyForDisplayObservation = nil
+        itemStatusObservation = nil
+        UIView.animateSmoothly(duration: Self.spinnerFadeDuration) {
+            self.loadingPlatter.alpha = 0
+        } completion: {
+            self.spinner.stopAnimating()
+            self.loadingPlatter.isHidden = true
+        }
+    }
+
+    /// 動画の操作の部品を出している間は、中央の再生のボタンと重なるので、インジケーターを隠す。
+    private func updateSpinnerVisibility(animated: Bool) {
+        guard isWaitingForDisplay else { return }
+        let alpha: CGFloat = controls != nil && !isChromeHidden && !isEditingDescription ? 0 : 1
+        guard animated else {
+            loadingPlatter.alpha = alpha
+            return
+        }
+        UIView.animateSmoothly(duration: Self.spinnerFadeDuration) {
+            self.loadingPlatter.alpha = alpha
+        }
+    }
+
+    /// 操作の部品の出し入れ（`VideoControlsView.setControlsHidden`）と揃える。
+    private static let spinnerFadeDuration: TimeInterval = 0.2
+    private static let loadingPlatterDiameter: CGFloat = 48
 
     /// 投稿の添付ファイルはURLから、投稿欄で選んだメディアは手元のファイルから再生する。手元のファイルを読み込み終える前なら、読み込み終えたときに作る。
     override func itemDidChange() {
@@ -2410,6 +2539,16 @@ final class PlayerPageController: MediaPageController {
         } else {
             player = AVPlayer(playerItem: playerItem)
             playerController.player = player
+        }
+        if isWaitingForDisplay {
+            itemStatusObservation = playerItem.publisher(for: \.status)
+                .filter { $0 == .failed }
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        self?.playbackDidFail()
+                    }
+                }
         }
         if item.kind == .gifv {
             // `AVPlayerLooper`は使わず、同じ項目を最後で先頭へ戻してくり返す。
@@ -2697,6 +2836,7 @@ final class PlayerPageController: MediaPageController {
     /// ボタンと説明を隠している間と、代替テキストを書いている間は、操作の部品も隠す。書いている間は、部品が入力欄やキーボードと重なるため。
     private func updateControlsVisibility(animated: Bool) {
         controls?.setControlsHidden(isChromeHidden || isEditingDescription, animated: animated)
+        updateSpinnerVisibility(animated: animated)
         scheduleAutoHide()
     }
 
@@ -2836,8 +2976,12 @@ final class PlayerPageController: MediaPageController {
     }
 
     override func stateDump() -> String {
-        guard let controls else { return "" }
-        return "controls: playing=\(controls.state.isPlaying) chromeHidden=\(isChromeHidden) interacting=\(controls.isInteracting) fastForward=\(wasPlayingBeforeFastForward != nil)"
+        let loading = "loading: waiting=\(isWaitingForDisplay) poster=\(isShowingPoster) indicator=\(isShowingLoadingIndicator)"
+        guard let controls else { return loading }
+        return """
+        \(loading)
+        controls: playing=\(controls.state.isPlaying) chromeHidden=\(isChromeHidden) interacting=\(controls.isInteracting) fastForward=\(wasPlayingBeforeFastForward != nil)
+        """
     }
 }
 
@@ -2966,7 +3110,8 @@ extension MediaViewerController.Timing {
             interruptedOpenFadeDuration: tuning.value(of: TuningCatalog.mediaInterruptedOpenFadeDuration),
             naturalSizeDuration: tuning.value(of: TuningCatalog.mediaNaturalSizeDuration),
             placeholderFadeDuration: tuning.value(of: TuningCatalog.mediaPlaceholderFadeDuration),
-            descriptionEditorFadeDuration: tuning.value(of: TuningCatalog.mediaDescriptionEditorFadeDuration)
+            descriptionEditorFadeDuration: tuning.value(of: TuningCatalog.mediaDescriptionEditorFadeDuration),
+            videoLoadingIndicatorDelay: tuning.value(of: TuningCatalog.mediaVideoLoadingIndicatorDelay)
         )
     }
 }

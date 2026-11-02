@@ -677,6 +677,103 @@ struct MediaViewerControllerTests {
         #expect(page.loopMenuAction() == nil)
     }
 
+    /// 動画とGIFは、最初のコマを描けるまでサムネイルを出し、黒い背景だけにしない。少し待っても描けなければ、読み込み中のインジケーターを回す。
+    /// 描けたら、サムネイルを外してインジケーターを止める。
+    @Test(arguments: [MediaAttachment.Kind.video, .gifv])
+    func posterAndLoadingIndicatorUntilFirstFrame(kind: MediaAttachment.Kind) async throws {
+        let clock = TestClock()
+        // 手元のファイルを読み込み終える前のページ。プレイヤーを作らないので、映像を描かずに待ち続ける。
+        let page = PlayerPageController(item: MediaViewerItem(id: "v", kind: kind, description: "", file: nil, thumbnail: nil, status: .ready), preview: UIImage(systemName: "photo"))
+        page.clock = clock
+        page.loadingIndicatorDelay = 0.5
+        page.setChromeHidden(true, animated: false)
+        page.loadViewIfNeeded()
+
+        #expect(page.isShowingPoster)
+        try await waitUntil { clock.sleeperCount == 1 }
+        clock.advance(by: .milliseconds(499))
+        // 進めただけでは、起きた処理はまだ走っていない。早く回さないことは、待ちが残っていることで確かめる。
+        #expect(clock.sleeperCount == 1, "待つ時間より早くインジケーターを回しました")
+        #expect(!page.isShowingLoadingIndicator)
+        clock.advance(by: .milliseconds(1))
+        try await waitUntil { page.isShowingLoadingIndicator }
+
+        page.displayDidBecomeReady()
+        #expect(!page.isShowingPoster)
+        #expect(!page.isShowingLoadingIndicator)
+    }
+
+    /// 描く前に最初のコマが届けば、インジケーターは回さない。
+    @Test func loadingIndicatorIsNotShownWhenFirstFrameArrivesInTime() async throws {
+        let clock = TestClock()
+        let page = PlayerPageController(item: MediaViewerItem(id: "g", kind: .gifv, description: "", file: nil, thumbnail: nil, status: .ready), preview: UIImage(systemName: "photo"))
+        page.clock = clock
+        page.loadViewIfNeeded()
+        try await waitUntil { clock.sleeperCount == 1 }
+
+        page.displayDidBecomeReady()
+        clock.advance(by: .seconds(10))
+        #expect(!page.isShowingLoadingIndicator)
+        #expect(!page.isWaitingForDisplay)
+    }
+
+    /// 読み込めなかったら、インジケーターを回さずに待つのをやめ、サムネイルは出したままにする。
+    @Test func failedPlaybackStopsWaitingAndKeepsPoster() async throws {
+        let clock = TestClock()
+        let missing = LocalMediaFile(url: URL(filePath: "/tmp/scia-missing-\(UUID().uuidString).mp4"), mimeType: "video/mp4", kind: .gifv)
+        let page = PlayerPageController(item: MediaViewerItem(id: "g", kind: .gifv, description: "", file: missing, thumbnail: nil, status: .ready), preview: UIImage(systemName: "photo"))
+        page.clock = clock
+        page.loadViewIfNeeded()
+
+        try await waitUntil { !page.isWaitingForDisplay }
+        clock.advance(by: .seconds(10))
+        #expect(!page.isShowingLoadingIndicator)
+        #expect(page.isShowingPoster)
+    }
+
+    /// 動画の操作の部品を出している間は、中央の再生のボタンと重ならないよう、インジケーターを隠す。
+    @Test func loadingIndicatorHidesWhileVideoControlsAreShown() async throws {
+        let clock = TestClock()
+        let page = PlayerPageController(item: MediaViewerItem(id: "v", kind: .video, description: "", file: nil, thumbnail: nil, status: .ready))
+        page.clock = clock
+        page.loadingIndicatorDelay = 0
+        page.setChromeHidden(true, animated: false)
+        page.loadViewIfNeeded()
+        try await waitUntil { page.isShowingLoadingIndicator }
+
+        page.setChromeHidden(false, animated: false)
+        #expect(!page.isShowingLoadingIndicator)
+        page.setChromeHidden(true, animated: false)
+        #expect(page.isShowingLoadingIndicator)
+    }
+
+    /// サーバーの添付ファイルに再生するURLがなければ、描けるときは来ないので、インジケーターを回さずに待つのをやめる。
+    @Test func serverAttachmentWithoutURLDoesNotWait() {
+        let page = PlayerPageController(item: MediaViewerItem(MediaAttachment(id: "1", type: .gifv, url: nil, previewUrl: nil)), preview: UIImage(systemName: "photo"))
+        page.loadViewIfNeeded()
+        #expect(!page.isWaitingForDisplay)
+        #expect(page.isShowingPoster)
+    }
+
+    /// インジケーターを出している間に閉じ始めたら、ビューアが薄くして消せるよう、開閉で重ねる部品としてインジケーターを渡す。
+    @Test func loadingIndicatorIsHandedToTransition() async throws {
+        let clock = TestClock()
+        let page = PlayerPageController(item: MediaViewerItem(id: "g", kind: .gifv, description: "", file: nil, thumbnail: nil, status: .ready))
+        page.clock = clock
+        page.loadingIndicatorDelay = 0
+        page.loadViewIfNeeded()
+        #expect(page.transitionOverlay == nil)
+        try await waitUntil { page.isShowingLoadingIndicator }
+        #expect(page.transitionOverlay != nil)
+    }
+
+    /// 音声は映像を描かないので、最初のコマを待たない。
+    @Test func audioDoesNotWaitForFirstFrame() {
+        let page = PlayerPageController(item: MediaViewerItem(id: "a", kind: .audio, description: "", file: nil, thumbnail: nil, status: .ready))
+        page.loadViewIfNeeded()
+        #expect(!page.isWaitingForDisplay)
+    }
+
     private func allContextMenuInteractions(in view: UIView) -> [UIContextMenuInteraction] {
         view.interactions.compactMap { $0 as? UIContextMenuInteraction } + view.subviews.flatMap { allContextMenuInteractions(in: $0) }
     }
