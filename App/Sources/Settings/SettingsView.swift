@@ -16,8 +16,6 @@ struct SettingsView: View {
     /// タブの並びでリストを作る、消す。
     let lists: SettingsListActions
     @Environment(\.dismiss) private var dismiss
-    /// 時刻の表記の見本に使う、3分前の日時。
-    @State private var previewDate: Date
     /// コピーしたことを知らせる表示を戻すまでの時計。
     private let clock: any Clock<Duration>
     @State private var copiedBuildInfo = false
@@ -32,7 +30,6 @@ struct SettingsView: View {
         tabIcons: ProfileTabIcons,
         lists: SettingsListActions,
         opening page: SettingsPage? = nil,
-        now: () -> Date = AppDependencies.now,
         clock: any Clock<Duration> = AppDependencies.clock
     ) {
         self.settings = settings
@@ -41,7 +38,6 @@ struct SettingsView: View {
         self.diagnostics = diagnostics
         self.tabIcons = tabIcons
         self.lists = lists
-        _previewDate = State(initialValue: now().addingTimeInterval(-180))
         _path = State(initialValue: page?.path ?? [])
         self.clock = clock
     }
@@ -142,7 +138,7 @@ struct SettingsView: View {
     @ViewBuilder
     private func destination(_ page: SettingsPage) -> some View {
         switch page {
-        case .display: DisplaySettingsView(settings: settings, previewDate: previewDate)
+        case .display: DisplaySettingsView(settings: settings)
         case .interaction: InteractionSettingsView(settings: settings)
         case .compose: ComposeSettingsView(settings: settings)
         case .media: MediaSettingsView(settings: settings)

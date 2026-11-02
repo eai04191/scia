@@ -32,8 +32,6 @@ struct SettingsCategoryLabel: View {
 /// 表示の分類。投稿と通知の見た目、新着の動き、ステータスバーの通知、アプリのアイコン。
 struct DisplaySettingsView: View {
     @Bindable var settings: AppSettings
-    /// 時刻の表記の見本に使う日時。
-    let previewDate: Date
     @State private var appIconError: String?
 
     /// 選択の表示は共有のAppIconSelectionから読む。設定を複数のウィンドウで開いていても、どれも同じ選択を表示する。
@@ -55,34 +53,7 @@ struct DisplaySettingsView: View {
     var body: some View {
         Form {
             Section {
-                NavigationLink(value: SettingsPage.appearance) {
-                    PostPreview(
-                        createdAt: previewDate,
-                        nameStyle: settings.appearance.statusNameStyle,
-                        timeStyle: settings.appearance.statusTimeStyle,
-                        avatarShape: settings.appearance.avatarShape,
-                        animatesAvatars: settings.appearance.animatesAvatars,
-                        linkCardThumbnailSide: settings.appearance.linkCardThumbnailSide,
-                        glyphLanguage: settings.appearance.glyphLanguage,
-                        emojiStyle: settings.appearance.emojiStyle,
-                        appearanceValues: settings.appearanceValues,
-                        builder: PostContentBuilder(
-                            tuning: AppDependencies.tuning,
-                            settings: settings,
-                            emojiImages: AppDependencies.emojiImages,
-                            mediaImages: AppDependencies.mediaImages,
-                            avatarImages: AppDependencies.avatarImages
-                        )
-                    )
-                    // 見本は押しても動かさず、行全体で「投稿の見た目」を開く。
-                    .allowsHitTesting(false)
-                }
-                // 見本は一覧の行と同じ余白を自分で取るので、行の余白を重ねない。右は、開く印を置くぶんだけ空ける。
-                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 16))
-            } header: {
-                Text("投稿の見た目")
-            }
-            Section {
+                NavigationLink("投稿の見た目", value: SettingsPage.appearance)
                 NavigationLink("通知の見た目", value: SettingsPage.notificationAppearance)
             }
             Section {
