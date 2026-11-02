@@ -68,6 +68,8 @@ public final class NotificationsModel {
     /// 走っている補完の数と、すべて終わるのを待っている引っぱった読み直し。
     private var activeFills = 0
     private var fillWaiters: [CheckedContinuation<Void, Never>] = []
+    /// 走っている補完が終わるのを待っている、引っぱった読み直しの数。テストで、待ち始めたことを時間を待たずに確かめる。
+    public var fillWaiterCount: Int { fillWaiters.count }
 
     /// 新着をまとめて挿入する間隔を待つ時計。テストでは手で進める時計に替える。
     private let clock: any Clock<Duration>
@@ -482,8 +484,8 @@ public final class NotificationsModel {
         activeFills += 1
         run(purpose) { model in
             defer { model.endFill() }
+            let before = model.store.entries
             do {
-                let before = model.store.entries
                 let maxPages = Int(model.tuning.value(of: TuningCatalog.fillPageLimit))
                 model.logger.info("notifications fill start")
                 // 呼んだ時点ではなく読み始める直前に変える。呼んでから読み始めるまでに前の補完が終わると、その終わりで戻ってしまうため。
@@ -495,18 +497,27 @@ public final class NotificationsModel {
                 model.updateCatchUp { $0.finish(at: model.now()) }
                 model.showPauseAfterFill()
                 model.logger.info("notifications fill done added=\(added.count, privacy: .public)")
-                // 待っている間に同じ通知がストリーミングで挿入されていても、ギャップを置いていることがある。
-                // 読めなかった通知だけが増えたときも描き直すよう、表示する並びで比べる。
-                guard model.store.entries != before else { return }
-                model.showEntries()
-                model.setFooterState(model.store.reachedEnd ? .reachedEnd : .idle)
+                model.showFilledEntries(since: before)
             } catch {
                 // 失敗しても、次につながったときに同じ基準から読み直す。
                 model.updateCatchUp { $0.fail(error) }
                 model.showPauseAfterFill()
                 model.handle(error, during: "fill") { _ in }
+                // 補完の最中に頼まれた補完を続けて読んで失敗しても、先に読めた通知は、失敗する前にストアへ入っている。
+                if !model.isStopped {
+                    model.showFilledEntries(since: before)
+                }
             }
         }
+    }
+
+    /// 補完で一覧が変わっていれば画面に出す。
+    private func showFilledEntries(since before: [TimelineEntry]) {
+        // 待っている間に同じ通知がストリーミングで挿入されていても、ギャップを置いていることがある。
+        // 読めなかった通知だけが増えたときも描き直すよう、表示する並びで比べる。
+        guard store.entries != before else { return }
+        showEntries()
+        setFooterState(store.reachedEnd ? .reachedEnd : .idle)
     }
 
     /// 最初の通知が届いてから間隔をおいて、溜まった通知をまとめて挿入する。ホームと同じ間隔を使う。

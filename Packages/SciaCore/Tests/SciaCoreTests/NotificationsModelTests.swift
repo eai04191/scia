@@ -60,6 +60,49 @@ struct NotificationsModelTests {
         #expect(display.footerState == model.footerState)
     }
 
+    /// 補完の最中に頼まれた補完を続けて読み、それが失敗しても、先に読めた通知を画面に出す。
+    @Test func filledNotificationsAreShownWhenFollowingFillFails() async throws {
+        let url = try #require(Bundle.module.url(forResource: "grouped_notifications", withExtension: "json", subdirectory: "Fixtures"))
+        let fixture = try Data(contentsOf: url)
+        // 最初の読み込みでは、最も新しい通知をまだ返さない。
+        var initial = try #require(try JSONSerialization.jsonObject(with: fixture) as? [String: Any])
+        initial["notification_groups"] = try #require(initial["notification_groups"] as? [Any]).dropFirst().map { $0 }
+        let initialBody = try JSONSerialization.data(withJSONObject: initial)
+        let empty = Data(#"{"accounts":[],"statuses":[],"notification_groups":[]}"#.utf8)
+        let firstFillGate = Gate()
+        let sinceCount = Mutex(0)
+        let transport = RoutedTransport { request in
+            guard request.url?.path() == "/api/v2/notifications" else { return (200, Data("{}".utf8)) }
+            let query = request.url?.query() ?? ""
+            guard query.contains("min_id") || query.contains("since_id") else { return (200, initialBody) }
+            switch sinceCount.withLock({ count in count += 1; return count }) {
+            case 1:
+                // 1回目の補完は、最も新しい通知を返す。
+                try await firstFillGate.wait()
+                return (200, fixture)
+            case 3:
+                // 続けて読む補完を失敗させる。2回目は、1回目の補完がつながったかを確かめる読み込み。
+                return (500, Data("{}".utf8))
+            default:
+                return (200, empty)
+            }
+        }
+        let (model, display) = makeModel(transport: transport)
+        defer { model.stop() }
+
+        model.start(purpose: .action)
+        try await waitUntil { firstFillGate.waiterCount == 1 }
+        #expect(display.entries.first?.id == .notification("34975863"))
+        // 1回目の補完の応答を待つ間に補完を求め、読み終えたあと続けて読ませる。
+        let refresh = Task { await model.refresh() }
+        try await waitUntil { model.fillWaiterCount == 1 && model.runningTaskCount == 1 }
+        firstFillGate.open()
+        await refresh.value
+
+        #expect(sinceCount.withLock { $0 } == 3, "続けて読む補完が走っていません")
+        #expect(display.entries.map(\.id) == ["34975864", "34975863", "34975862", "34975861"].map { .notification($0) })
+    }
+
     /// 届いた通知は、すぐステータスバーへ流し、一覧へは間隔をおいて挿入する。
     @Test func arrivalIsReportedAtOnceAndInsertedAfterInterval() async throws {
         let firstMessage = Gate()
