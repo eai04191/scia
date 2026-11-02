@@ -25,14 +25,15 @@ concurrency:
 
 jobs:
   upload:
+    name: Archive and upload to TestFlight
     # 前回の判定は、実行に記録されるSHA（github.sha）を上げたcommitとして使う。ほかのbranchから手で走らせるとそれがmainでなくなるため、mainからだけ走らせる
     if: github.ref == 'refs/heads/main'
     # Xcode 27は、macOS 27の`xcode-27`のイメージにしか入っていない
     runs-on: xcode-27
     timeout-minutes: 60
     permissions:
-      contents: read
-      actions: read
+      contents: read # mainをcheckoutする
+      actions: read # 前に上げたcommitを、このworkflowの前の実行から読む
     steps:
       # 発火したあとにmainが進んでも、実行に記録されるSHAと同じcommitをビルドする。アプリに埋め込むブランチ名（Tools/embed-build-info.sh）のため、mainとしてcheckoutする
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
