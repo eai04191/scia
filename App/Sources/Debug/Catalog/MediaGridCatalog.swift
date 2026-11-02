@@ -42,7 +42,7 @@ enum MediaGridCatalog {
             CatalogState(title: "バッジ（ALTとGIF。幅160pt、投稿欄の64pt、通知の再掲の既定の40ptと最小の24ptのタイル。入らなければ頭の1文字にし、余白、文字の順に詰める）") {
                 tiles(Fixtures.attachment("a", type: .gifv, width: 1_200, height: 900, color: .systemIndigo, description: "動くGIF"))
             },
-            CatalogState(title: "バッジ（ALTとGIFとHDR。HDRは、ビューアの設定がビューア以外より明るいときだけ出る）") {
+            CatalogState(title: "バッジ（ALTとGIFとHDR。HDRは、ビューアの設定がアプリの設定より明るいときだけ出る）") {
                 tiles(Fixtures.attachment("a", type: .gifv, width: 1_200, height: 900, color: .systemIndigo, description: "動くGIF", hdr: true))
             },
             CatalogState(title: "バッジ（文字の大きさを最大にしたとき。バッジの文字は上限で止まる）") {

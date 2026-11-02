@@ -169,7 +169,7 @@ struct MediaSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Picker("ビューア以外", selection: $settings.mediaDynamicRange) {
+                Picker("アプリ", selection: $settings.mediaDynamicRange) {
                     MediaDynamicRangeOptions()
                 }
                 Picker("ビューア", selection: $settings.viewerMediaDynamicRange) {
@@ -179,12 +179,16 @@ struct MediaSettingsView: View {
                 Text("HDRのメディアの明るさ")
             }
             Section {
-                Toggle("モバイル通信で高画質のサムネイルを使う", isOn: $settings.usesOriginalThumbnailsOnExpensiveNetwork)
+                Toggle("高画質のサムネイル", isOn: $settings.usesOriginalThumbnailsOnExpensiveNetwork)
+            } header: {
+                Text("モバイル通信")
             }
             Section {
-                Toggle("役に立たない代替テキストを無視する", isOn: $settings.ignoresUselessAltText)
+                Toggle("仮の代替テキストを無視", isOn: $settings.ignoresUselessAltText)
+            } header: {
+                Text("代替テキスト")
             } footer: {
-                Text("「undefined」や「Screenshot」だけの代替テキストを、ないものとして扱います。")
+                Text("投稿したアプリが自動で付けた、説明にならない代替テキストを、ないものとして扱います。")
             }
         }
         .topEdgeEffectHiddenOnMac()
@@ -233,7 +237,7 @@ private struct AppIconChoiceRow: View {
     }
 }
 
-/// HDRのメディアの明るさの選択肢。ビューア以外とビューアで同じものを並べる。
+/// HDRのメディアの明るさの選択肢。アプリとビューアで同じものを並べる。
 private struct MediaDynamicRangeOptions: View {
     var body: some View {
         Text("SDR").tag(MediaDynamicRange.standard)
