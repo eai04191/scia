@@ -407,9 +407,10 @@ extension UIViewController {
     ///   - tabIcons: タブの並びで、タブに置いたプロフィールに出すその人のアイコン。
     ///   - lists: タブの並びでリストを作る、消す。
     ///   - page: 一覧から重ねて開いておく画面。
-    func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, lists: SettingsListActions, opening page: SettingsPage? = nil) {
+    ///   - onShownChange: 設定の画面が出たときにtrue、消えたときにfalseで呼ぶ。
+    func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, lists: SettingsListActions, opening page: SettingsPage? = nil, onShownChange: @escaping (Bool) -> Void) {
         let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, lists: lists, opening: page)
-        present(UIHostingController(rootView: view), animated: true)
+        present(SettingsHostingController(rootView: view, onShownChange: onShownChange), animated: true)
     }
 
     /// メニューの「カスタマイズ」から、その並びの設定の画面を、設定の一覧に重ねて開く。決まりはdocs/menus.mdの「並びの設定」にある。
@@ -426,6 +427,38 @@ extension UIViewController {
 }
 
 private let settingsLogger = SciaLog.logger(category: "settings")
+
+/// 設定の画面を載せ、出たときと消えたときを1回ずつ知らせる。設定の画面の上に重ねたシートが出ている間は、まだ出ている扱いにする。
+/// スワイプして閉じるのを途中でやめると、消えないまま`viewWillAppear`がもう一度呼ばれるので、出ているかを持って、変わったときだけ知らせる。
+private final class SettingsHostingController: UIHostingController<SettingsView> {
+    private let onShownChange: (Bool) -> Void
+    private var isShown = false {
+        didSet {
+            guard isShown != oldValue else { return }
+            onShownChange(isShown)
+        }
+    }
+
+    init(rootView: SettingsView, onShownChange: @escaping (Bool) -> Void) {
+        self.onShownChange = onShownChange
+        super.init(rootView: rootView)
+    }
+
+    @available(*, unavailable)
+    @MainActor required dynamic init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        isShown = true
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        isShown = false
+    }
+}
 
 /// HDRのメディアの明るさの選択肢。ビューア以外とビューアで同じものを並べる。
 private struct MediaDynamicRangeOptions: View {

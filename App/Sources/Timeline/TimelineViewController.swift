@@ -433,6 +433,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         onAppearing?()
         onVisibilityChange?(true)
         applyPendingOpening()
+        applyHeldSettingsChange()
     }
 
     /// 読んでいる途中にもう一度引っぱっても、読み込みは重ねず、今の読み込みが終わったところで閉じる。
@@ -532,12 +533,38 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor in
                 guard let self else { return }
-                self.reconfigure(Set(self.dataSource.snapshot().itemIdentifiers))
-                // 区切り線はリストのレイアウトが引くので、描き直しでは変わらない。引き直させる。
-                self.collectionView.collectionViewLayout.invalidateLayout()
                 self.observeTuning()
+                // 見えていない間は描き直さず、見えたときに1回だけ描き直す。設定の+−を押すたびに、見えない一覧のすべての行を組み直すと、押してから数字が変わるまでが遅れるため。
+                guard !self.holdsSettingsChanges, self.view.window != nil else {
+                    self.hasHeldSettingsChange = true
+                    return
+                }
+                self.applySettingsChange()
             }
         }
+    }
+
+    /// 設定の画面が手前にある間は、設定やチューニングが変わっても描き直さずに溜める。画面を閉じて外したときに、溜めた変更を1回で描き直す。
+    /// 設定の画面のシートは一覧をほぼ覆うので、上の端に見えている一覧は、閉じるまで前の見た目のまま残る。
+    var holdsSettingsChanges = false {
+        didSet {
+            guard !holdsSettingsChanges, oldValue else { return }
+            applyHeldSettingsChange()
+        }
+    }
+    /// 見えていない間か、`holdsSettingsChanges`の間に、設定やチューニングが変わった。
+    private(set) var hasHeldSettingsChange = false
+
+    private func applyHeldSettingsChange() {
+        guard hasHeldSettingsChange, !holdsSettingsChanges, viewIfLoaded?.window != nil else { return }
+        hasHeldSettingsChange = false
+        applySettingsChange()
+    }
+
+    private func applySettingsChange() {
+        reconfigure(Set(dataSource.snapshot().itemIdentifiers))
+        // 区切り線はリストのレイアウトが引くので、描き直しでは変わらない。引き直させる。
+        collectionView.collectionViewLayout.invalidateLayout()
     }
 
     /// 絵文字の画像が届いたら、その絵文字を使う投稿だけを描き直す。読んでいる位置は保つ。

@@ -272,7 +272,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 account: session.credential.handle,
                 diagnostics: session.diagnostics,
                 tabIcons: session.profileTabIcons,
-                lists: session.settingsListActions
+                lists: session.settingsListActions,
+                onShownChange: { [weak session] in session?.settingsShownChanged($0) }
             )
         }
         let logOut = UIAction(title: "ログアウト", image: UIImage(systemName: "rectangle.portrait.and.arrow.right"), attributes: .destructive) { [weak self] _ in

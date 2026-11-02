@@ -184,6 +184,8 @@ final class SessionController {
     private let browser = InAppBrowser()
     private var browserObscuredHeight: CGFloat = 0
     private var browserCoversTimelines = false
+    /// 出ている設定の画面の数。設定の画面の上に、URLで設定の画面をもう1枚重ねることがある。
+    private var shownSettingsCount = 0
     /// 積んだ画面の下を覆っている高さ。投稿欄とアプリ内のSafariのシートのうち、高いほう。
     private var obscuredBottomHeight: CGFloat { max(composerObscuredHeight, browserObscuredHeight) }
     private let logger = SciaLog.logger(category: "session")
@@ -1031,6 +1033,7 @@ final class SessionController {
             showReauthenticationPrompt(on: viewController)
         }
         viewController.setCoveredByInAppBrowser(browserCoversTimelines)
+        viewController.holdsSettingsChanges = shownSettingsCount > 0
         viewController.onFocusInlineCompose = { [weak self] in self?.composer.beginEditing() }
         viewController.setShowsFocusInlineCompose(showsFocusInlineCompose)
         viewController.myAccountID = credential.accountID
@@ -2381,6 +2384,15 @@ final class SessionController {
         topViewController.present(sheet, animated: true)
     }
 
+    /// 設定の画面が1枚でも出ている間は、一覧が設定の変更で描き直すのを溜め、すべて閉じたときにまとめて描き直させる。
+    /// 設定の画面ごとに、出たときと消えたときに1回ずつ呼ぶ。
+    func settingsShownChanged(_ isShown: Bool) {
+        shownSettingsCount = max(shownSettingsCount + (isShown ? 1 : -1), 0)
+        for timeline in timelines.allObjects {
+            timeline.holdsSettingsChanges = shownSettingsCount > 0
+        }
+    }
+
     /// タブの並びの画面で、リストを作る、消す。
     var settingsListActions: SettingsListActions {
         SettingsListActions { [weak self] in
@@ -3246,7 +3258,8 @@ final class SessionController {
                 diagnostics: diagnostics,
                 tabIcons: profileTabIcons,
                 lists: settingsListActions,
-                opening: page
+                opening: page,
+                onShownChange: { [weak self] in self?.settingsShownChanged($0) }
             )
         case .profile(let acct):
             openProfile(acct: acct)
