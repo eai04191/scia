@@ -110,7 +110,7 @@ struct AppearanceEditorView: View {
                 }
             }
         }
-        .navigationTitle("投稿の見た目")
+        .navigationTitle("投稿")
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("投稿の見た目をすべて既定に戻しますか？", isPresented: $confirmsReset, titleVisibility: .visible) {
             Button("既定に戻す", role: .destructive) {

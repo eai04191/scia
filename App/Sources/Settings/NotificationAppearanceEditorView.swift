@@ -63,7 +63,7 @@ struct NotificationAppearanceEditorView: View {
                             Button("すべて既定に戻す", role: .destructive) { confirmsReset = true }
                                 .disabled(!settings.isNotificationAppearanceModified)
                         } footer: {
-                            Text("メンションなどの投稿の見た目と、行の余白やアイコンの列の幅は「投稿の見た目」に従います。文字の大きさは、投稿の本文との差を保ちます。")
+                            Text("メンションなどの投稿の見た目と、行の余白やアイコンの列の幅は、「表示」の「投稿」に従います。文字の大きさは、投稿の本文との差を保ちます。")
                         }
                     }
                     .onChange(of: scrollTarget) { _, target in
@@ -83,7 +83,7 @@ struct NotificationAppearanceEditorView: View {
                 }
             }
         }
-        .navigationTitle("通知の見た目")
+        .navigationTitle("通知")
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("通知の見た目をすべて既定に戻しますか？", isPresented: $confirmsReset, titleVisibility: .visible) {
             Button("既定に戻す", role: .destructive) {

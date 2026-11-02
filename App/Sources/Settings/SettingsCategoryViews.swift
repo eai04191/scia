@@ -53,8 +53,8 @@ struct DisplaySettingsView: View {
     var body: some View {
         Form {
             Section {
-                NavigationLink("投稿の見た目", value: SettingsPage.appearance)
-                NavigationLink("通知の見た目", value: SettingsPage.notificationAppearance)
+                NavigationLink("投稿", value: SettingsPage.appearance)
+                NavigationLink("通知", value: SettingsPage.notificationAppearance)
             }
             Section {
                 Picker("最上部での新着の挿入", selection: $settings.insertionMotion) {
