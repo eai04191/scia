@@ -61,8 +61,8 @@ final class LinkLabel: EmojiLabel {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override var attributedText: NSAttributedString? {
-        didSet { lineLimits = [:] }
+    override func attributedTextDidChange() {
+        lineLimits = [:]
     }
 
     /// 今の幅で、長い本文を切っている。

@@ -30,8 +30,16 @@ class EmojiLabel: UILabel {
         }
     }
 
+    /// 置く側が前に渡したものと中身が同じなら、入れ替えない。行を組み直すたびに文字列は作り直されるが、
+    /// 入れ替えるとUILabelがベースラインや大きさを測り直し、長い本文では組み直しの大半をそこに使うため。
     override var attributedText: NSAttributedString? {
-        willSet {
+        get { super.attributedText }
+        set {
+            if let assignedText, Self.hasSameContent(assignedText, newValue) {
+                // 入れ替えていれば、そこで読めなかったアニメーション版を読み直していた。入れ替えなくても読み直す。
+                animatedEmojis?.reloadMissingAnimations()
+                return
+            }
             // UILabelは受け取った文字列を写し替えて持ち、絵文字の画像も同じものではなくなるため、置く側が渡したもの同士で比べる。
             let filled = Self.filledEmojiIndices(from: assignedText, to: newValue)
             if !filled.isEmpty {
@@ -41,16 +49,47 @@ class EmojiLabel: UILabel {
                 cancelEmojiArrival()
             }
             assignedText = newValue
-        }
-        didSet {
+            super.attributedText = newValue
             layoutCache = nil
             truncationCache = nil
-            sourceText = attributedText
-            hasCustomEmoji = attributedText.map(Self.containsCustomEmoji) ?? false
+            sourceText = super.attributedText
+            hasCustomEmoji = sourceText.map(Self.containsCustomEmoji) ?? false
             showsReplacedText = false
             stillEmojiIndices = []
+            attributedTextDidChange()
             applyAnimatedEmojis()
         }
+    }
+
+    /// 置く側が中身の違う文字列を入れたあとに呼ぶ。文字列から測った結果を持つ派生のラベルが、ここで捨てる。
+    func attributedTextDidChange() {}
+
+    /// 2つの文字列の、描いたときの中身が同じか。文字と属性を比べ、カスタム絵文字の添付は、画像が同じものかと大きさで比べる。
+    /// 添付は描き直すたびに新しく作られ、`NSTextAttachment`同士はものが同じでないと等しくならないため。
+    static func hasSameContent(_ old: NSAttributedString?, _ new: NSAttributedString?) -> Bool {
+        guard let old, let new else { return old == nil && new == nil }
+        guard old !== new else { return true }
+        guard old.length == new.length, old.string == new.string else { return false }
+        var isSame = true
+        old.enumerateAttributes(in: NSRange(location: 0, length: old.length)) { attributes, range, stop in
+            var newRange = NSRange()
+            let newAttributes = new.attributes(at: range.location, longestEffectiveRange: &newRange, in: range)
+            guard newRange == range, attributes.count == newAttributes.count, attributes.allSatisfy({ key, value in
+                newAttributes[key].map { Self.isSameAttribute(value, $0) } ?? false
+            }) else {
+                isSame = false
+                stop.pointee = true
+                return
+            }
+        }
+        return isSame
+    }
+
+    private static func isSameAttribute(_ old: Any, _ new: Any) -> Bool {
+        if let old = old as? NSTextAttachment, let new = new as? NSTextAttachment {
+            return old === new || (old.image === new.image && old.bounds == new.bounds)
+        }
+        return (old as AnyObject).isEqual(new as AnyObject)
     }
 
     override var text: String? {

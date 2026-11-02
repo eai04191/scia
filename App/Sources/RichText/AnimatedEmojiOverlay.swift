@@ -28,6 +28,8 @@ final class AnimatedEmojiOverlay {
     private let onChange: @MainActor () -> Void
     /// 今の文字列にある絵文字の、元の画像のURL。届いたアニメーションがこのラベルのものかを見分ける。
     private var emojiURLs: Set<URL> = []
+    /// `emojiURLs`のうち、`prepare`のときにアニメーション版が届いていたもの。
+    private var animatedURLs: Set<URL> = []
     private(set) var entries: [Entry] = []
     private var layers: [CALayer] = []
     /// 層を作ったときの`entries`。変わっていなければ、層を作り直さずに位置だけを合わせる。
@@ -76,12 +78,14 @@ final class AnimatedEmojiOverlay {
             self.entries = entries
         }
         emojiURLs = []
+        animatedURLs = []
         guard let text, text.length > 0, AnimatedImagePlayback.isAllowed else { return text }
         var result: NSMutableAttributedString?
         text.enumerateAttribute(.customEmoji, in: NSRange(location: 0, length: text.length)) { value, range, _ in
             guard let emoji = value as? CustomEmoji else { return }
             emojiURLs.insert(emoji.url)
             guard let animation = store.animation(for: emoji.url) else { return }
+            animatedURLs.insert(emoji.url)
             // 同じ絵文字が続くと1つの範囲にまとまるため、1文字ずつ差し替える。
             for index in range.location..<NSMaxRange(range) where !stillIndices.contains(index) {
                 guard let attachment = text.attribute(.attachment, at: index, effectiveRange: nil) as? NSTextAttachment else { continue }
@@ -95,6 +99,15 @@ final class AnimatedEmojiOverlay {
             }
         }
         return result ?? text
+    }
+
+    /// 今の文字列の絵文字のうち、アニメーション版が届いていないものを読み直す。届いていれば`onChange`を呼ぶ。
+    /// 同じ中身の文字列を入れ直したときに、文字列を組み直さずに、`prepare`と同じく読めなかったアニメーション版を読み直すのに使う。
+    func reloadMissingAnimations() {
+        for url in emojiURLs.subtracting(animatedURLs) where store.animation(for: url) != nil {
+            onChange()
+            return
+        }
     }
 
     /// `entries`の絵文字を、`frames`（`entries`と同じ順の、ラベルの座標の枠）に重ねる。枠がnilの絵文字は出さない。
