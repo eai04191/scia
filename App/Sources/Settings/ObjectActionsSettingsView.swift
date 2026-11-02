@@ -30,14 +30,27 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
         .navigationBarTitleDisplayMode(.inline)
     }
 
+    /// 行の右端の今の値は、iPhoneの設定アプリと同じく、アイコンを付けない灰色の名前だけにする。アイコンは選ぶ一覧にだけ出す。
     private func picker(_ label: String, selection: Binding<ObjectAction<Item>>) -> some View {
-        Picker(label, selection: selection) {
+        Picker(selection: selection) {
             Label("メニューを開く", systemImage: "contextualmenu.and.cursorarrow").tag(ObjectAction<Item>.menu)
             ForEach(items, id: \.self) { item in
                 Label(item.title, systemImage: item.symbolName).tag(ObjectAction<Item>.item(item))
             }
+        } label: {
+            Text(label)
+        } currentValueLabel: {
+            Text(name(of: selection.wrappedValue))
+                .foregroundStyle(.secondary)
         }
         .pickerStyle(.navigationLink)
+    }
+
+    private func name(of action: ObjectAction<Item>) -> String {
+        switch action {
+        case .menu: "メニューを開く"
+        case .item(let item): item.title
+        }
     }
 
     /// メニューの既定の並びの順。メニューで隠しているかによらず、すべて並べる。
