@@ -167,18 +167,16 @@ public enum TabItem: MenuItemKind {
         }
     }
 
-    /// 既定は、切り替えタブを使わず5つを直接並べる。ブックマーク、お気に入り、予約投稿は無効にして、切り替えタブの側に置く。
-    /// 有効にすると切り替えタブに入る。たまに見る一覧なので、ふだん並べる5つを押しのけないため。
     public static let defaultLayout = MenuLayout<TabItem>(defaultElements: [
         .item(.home, isVisible: true),
+        .item(.notifications, isVisible: true),
+        .more,
+        .item(.search, isVisible: true),
         .item(.local, isVisible: true),
         .item(.federated, isVisible: true),
-        .item(.notifications, isVisible: true),
-        .item(.search, isVisible: true),
-        .more,
-        .item(.bookmarks, isVisible: false),
-        .item(.favourites, isVisible: false),
-        .item(.scheduled, isVisible: false),
+        .item(.favourites, isVisible: true),
+        .item(.bookmarks, isVisible: true),
+        .item(.scheduled, isVisible: true),
     ])
 }
 
