@@ -75,6 +75,33 @@ struct LinkCardRefreshTests {
         #expect(schedule.nextDate(visible: [Self.version("1")]) == nil)
     }
 
+    /// 初めて見てから長く見えないままでも、予定を忘れず、また見えたら1回だけ取り直す。
+    /// 見かけたあと画面を離れている間にサーバーがカードを付けても、戻ったときに出すため。
+    @Test func refreshesOnceWhenSeenAgainLongAfterFirstSeen() {
+        var schedule = LinkCardRefreshSchedule()
+        schedule.note([Self.status("1")], now: Self.start)
+
+        let due = schedule.due(now: Self.start.addingTimeInterval(900), visible: [Self.version("1")], limit: 20)
+
+        #expect(due.map(\.version.statusID) == ["1"])
+        #expect(due.first?.isFinal == true)
+        #expect(schedule.nextDate(visible: [Self.version("1")]) == nil)
+    }
+
+    /// 作られてから時間の経った投稿を初めて見たら、待たずに1回だけ取り直す。
+    /// 若いうちに受け取って見えないままだった投稿は、サーバーがカードを付けたあとも、受け取った時点の中身のままのため。
+    @Test func oldStatusIsRefreshedOnceRightAway() {
+        var schedule = LinkCardRefreshSchedule()
+        schedule.note([Self.status("old", createdAt: Self.start.addingTimeInterval(-601))], now: Self.start)
+        let visible: Set = [Self.version("old")]
+
+        #expect(schedule.nextDate(visible: visible) == Self.start)
+        let due = schedule.due(now: Self.start, visible: visible, limit: 20)
+        #expect(due.map(\.version.statusID) == ["old"])
+        #expect(due.first?.isFinal == true)
+        #expect(schedule.nextDate(visible: visible) == nil)
+    }
+
     /// 投稿がいくつあっても、取り直しは10秒に1回にまとめる。
     @Test func batchesStatusesIntoOneRequestPerInterval() {
         var schedule = LinkCardRefreshSchedule()
@@ -88,16 +115,15 @@ struct LinkCardRefreshTests {
         #expect(schedule.due(now: Self.start.addingTimeInterval(13), visible: visible, limit: 20).map(\.version.statusID) == ["b", "a"])
     }
 
-    /// サーバーのカードがある投稿と、リンクのない投稿と、カードを付け終えたとみなせる古い投稿は、予定に入れない。
+    /// サーバーのカードがある投稿と、リンクのない投稿は、予定に入れない。
     @Test func ignoresStatusesThatNeedNoRefresh() throws {
         var schedule = LinkCardRefreshSchedule()
         schedule.note([
             Self.status("carded", card: try Self.card()),
             Self.status("plain", content: "<p>リンクのない本文</p>"),
-            Self.status("old", createdAt: Self.start.addingTimeInterval(-601)),
         ], now: Self.start)
 
-        #expect(schedule.nextDate(visible: [Self.version("carded"), Self.version("plain"), Self.version("old")]) == nil)
+        #expect(schedule.nextDate(visible: [Self.version("carded"), Self.version("plain")]) == nil)
     }
 
     /// Mastodonは編集でカードを消して取りに行き直すため、取り直し終えた投稿も、編集されたら予定を立て直す。

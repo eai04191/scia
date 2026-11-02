@@ -9,7 +9,10 @@ import os
 /// そのため、リンク先だけのカードを出している投稿を、初めて見てから`firstDelay`後から`giveUpAfter`まで取り直す。
 /// 取り直しは投稿ごとに送らず、`interval`に1回、そのとき待っている投稿をまとめて送る。
 /// リンクの投稿がいくつ流れてきても、リクエストは`interval`に1回を超えず、トークンごとのレート制限（Mastodonの既定で5分に300回）の1割に収まる。
-/// 画面に出ていない投稿は取り直さず、また見えたときに、`giveUpAfter`を過ぎていても1回だけ取り直す。
+/// 画面に出ていない投稿は取り直さず、また見えたときに、`giveUpAfter`を過ぎていても1回だけ取り直す。どれだけ経っていても忘れない。
+/// 見かけたあと画面を離れていた間にサーバーがカードを付けても、手元の投稿は見かけた時点の中身のままのため。
+/// 作られてから`maximumAge`より経った投稿は、初めて見たときに待たずに1回だけ取り直す。若いうちに受け取って、見えないまま時間が経った投稿のため。
+/// 予定は起動している間だけ持つ。1件は小さく、溜まってもメモリを圧迫しない。
 /// Mastodonは編集でカードを消して取りに行き直すため、予定は投稿の版（IDと編集した日時の組）ごとに立てる。
 public struct LinkCardRefreshSchedule: Sendable {
     /// 投稿の版。
@@ -44,19 +47,24 @@ public struct LinkCardRefreshSchedule: Sendable {
     public static let interval: TimeInterval = 10
     /// 初めて見てから、何秒経ったら諦めるか。ほかのサーバーの投稿の、最大1分の遅れと、キューの待ちと、取得の時間を待つ。
     public static let giveUpAfter: TimeInterval = 180
-    /// 作られてから（編集した投稿は編集してから）これより経った投稿は、サーバーがカードを付け終えたとみなし、取り直さない。
-    /// 初めて見てからこれより経った投稿も、見えないまま予定が過ぎたものとして忘れる。
+    /// 作られてから（編集した投稿は編集してから）これより経った投稿は、サーバーがカードを付け終えたとみなし、待たずに1回だけ取り直す。
     public static let maximumAge: TimeInterval = 600
 
     private struct Entry: Sendable {
         let firstSeen: Date
+        /// 最初に取り直す時刻。
+        let firstDate: Date
+        /// この時刻を過ぎた取り直しで諦める。
+        let giveUpDate: Date
         /// 取り直した回数。
         var attempts = 0
         /// 最後に取り直した時刻。まとめて送れる件数を超えたとき、長く取り直していない投稿から送るために使う。
         var lastAttempt: Date?
 
-        var firstDate: Date {
-            firstSeen.addingTimeInterval(LinkCardRefreshSchedule.firstDelay)
+        init(firstSeen: Date, isOld: Bool) {
+            self.firstSeen = firstSeen
+            firstDate = isOld ? firstSeen : firstSeen.addingTimeInterval(LinkCardRefreshSchedule.firstDelay)
+            giveUpDate = isOld ? firstSeen : firstSeen.addingTimeInterval(LinkCardRefreshSchedule.giveUpAfter)
         }
     }
 
@@ -72,17 +80,15 @@ public struct LinkCardRefreshSchedule: Sendable {
     public mutating func note(_ statuses: [Status], now: Date) {
         for status in statuses {
             let version = Version(status)
-            guard entries[version] == nil, !finished.contains(version), case .link = LinkCard(status: status),
-                  now.timeIntervalSince(status.editedAt ?? status.createdAt) <= Self.maximumAge
-            else { continue }
-            entries[version] = Entry(firstSeen: now)
+            guard entries[version] == nil, !finished.contains(version), case .link = LinkCard(status: status) else { continue }
+            let isOld = now.timeIntervalSince(status.editedAt ?? status.createdAt) > Self.maximumAge
+            entries[version] = Entry(firstSeen: now, isOld: isOld)
         }
     }
 
     /// `now`の時点で取り直す投稿。前の取り直しから`interval`経っていれば、見えていて最初の取り直しの時刻を過ぎた投稿を、
     /// 長く取り直していない順に`limit`件まで返し、取り直したことにする。諦める投稿は、取り直し終えたことにする。
     public mutating func due(now: Date, visible: Set<Version>, limit: Int) -> [Attempt] {
-        forgetExpired(now: now)
         if let lastRequest, now < lastRequest.addingTimeInterval(Self.interval) { return [] }
         let due = entries
             .filter { visible.contains($0.key) && $0.value.firstDate <= now }
@@ -98,7 +104,7 @@ public struct LinkCardRefreshSchedule: Sendable {
             var entry = entry
             entry.attempts += 1
             entry.lastAttempt = now
-            let isFinal = now >= entry.firstSeen.addingTimeInterval(Self.giveUpAfter)
+            let isFinal = now >= entry.giveUpDate
             if isFinal {
                 entries[version] = nil
                 finished.insert(version)
@@ -122,11 +128,6 @@ public struct LinkCardRefreshSchedule: Sendable {
             entries[version] = nil
             finished.insert(version)
         }
-    }
-
-    private mutating func forgetExpired(now: Date) {
-        let expired = entries.filter { now.timeIntervalSince($0.value.firstSeen) > Self.maximumAge }.map(\.key)
-        finish(expired)
     }
 }
 
