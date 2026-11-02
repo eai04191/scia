@@ -1611,18 +1611,17 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         reportVisibleItems(byUser: byUser)
     }
 
-    /// 表示領域に半分以上入っている投稿と通知を、表示中として報告する。ナビゲーションバーの下に隠れている部分は数えない。
-    /// 他のタブにいる間や、添付ファイルのビューアや全画面のアプリ内のSafariで覆っている間など、見ていなければ報告しない。
-    /// ウィンドウが前面にない間は、使う人がスクロールしたとき（`byUser`）だけ報告する。
+    /// 表示中の投稿と通知を報告する。どの行を含めるかと、どんな間は報告しないかは`ReadVisibility`が決める。ナビゲーションバーの下に隠れている部分は数えない。
+    /// レイアウト中に位置を戻している間は、行が仮の位置にあるので報告しない。
     func reportVisibleItems(byUser: Bool = false) {
-        guard !isRestoringAnchor, viewIfLoaded?.window != nil, !isCoveredByMediaViewer, !isCoveredByInAppBrowser, !isWindowInactive || byUser else { return }
+        let isShown = viewIfLoaded?.window != nil && !isCoveredByMediaViewer && !isCoveredByInAppBrowser
+        guard !isRestoringAnchor, ReadVisibility.shouldReport(isShown: isShown, isWindowActive: !isWindowInactive, byUser: byUser) else { return }
         let visibleRect = collectionView.bounds.inset(by: collectionView.adjustedContentInset)
-        let ids = collectionView.indexPathsForVisibleItems.compactMap { indexPath -> ItemID? in
-            guard let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else { return nil }
-            let visibleHeight = frame.intersection(visibleRect).height
-            guard visibleHeight >= min(frame.height, visibleRect.height) / 2 else { return nil }
-            return dataSource.itemIdentifier(for: indexPath)
+        let rows = collectionView.indexPathsForVisibleItems.compactMap { indexPath -> (id: ItemID, frame: CGRect)? in
+            guard let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame, let id = dataSource.itemIdentifier(for: indexPath) else { return nil }
+            return (id, frame)
         }
+        let ids = ReadVisibility.visibleIDs(of: rows, in: visibleRect)
         onVisibleStatusesChange?(ids.compactMap { id in
             if case .status(let statusID) = id { statusID } else { nil }
         })
