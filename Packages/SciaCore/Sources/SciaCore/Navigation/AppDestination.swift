@@ -243,7 +243,7 @@ public enum AppDestination: Equatable, Sendable {
 public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     /// 表示の分類。投稿と通知の見た目、動き、ステータスバーの通知、アプリのアイコンを並べる。
     case display
-    /// 操作の分類。タップと長押し、長押しのメニュー、リンクを開く場所、ブーストの公開範囲を並べる。
+    /// 操作の分類。対象ごとの画面（タップと長押しの操作と、その対象のメニューの並び）、リンクを開く場所、ブーストの公開範囲を並べる。
     case interaction
     /// 投稿欄の分類。
     case compose
@@ -280,8 +280,14 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
         switch self {
         case .appearance, .notificationAppearance: [.display, self]
         case .statusActions, .notificationActions, .userActions, .linkActions, .externalPostActions, .hashtagActions, .mediaActions,
-             .statusMenu, .userMenu, .linkMenu, .externalPostMenu, .profileTextMenu, .hashtagMenu, .mediaMenu:
+             .profileTextMenu:
             [.interaction, self]
+        case .statusMenu: [.interaction, .statusActions, self]
+        case .userMenu: [.interaction, .userActions, self]
+        case .linkMenu: [.interaction, .linkActions, self]
+        case .externalPostMenu: [.interaction, .externalPostActions, self]
+        case .hashtagMenu: [.interaction, .hashtagActions, self]
+        case .mediaMenu: [.interaction, .mediaActions, self]
         case .composeTools: [.compose, self]
         case .viewedMediaCache, .prefetchedMediaCache: [.storage, self]
         case .display, .interaction, .compose, .media, .tabs, .connection, .storage, .licenses: [self]

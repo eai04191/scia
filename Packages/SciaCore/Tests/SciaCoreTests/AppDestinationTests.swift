@@ -159,10 +159,12 @@ struct AppDestinationTests {
         #expect(SettingsPage.licenses.path == [.licenses])
     }
 
-    /// 分類の中の画面は、分類の画面を挟んで開く。戻ると、その分類の画面に戻る。
+    /// 分類の中の画面は、分類の画面を挟んで開く。対象のメニューは、その対象の画面も挟む。戻ると、挟んだ画面に1つずつ戻る。
     @Test func pushesCategoryBeforeItsPages() {
         #expect(SettingsPage.appearance.path == [.display, .appearance])
-        #expect(SettingsPage.statusMenu.path == [.interaction, .statusMenu])
+        #expect(SettingsPage.statusMenu.path == [.interaction, .statusActions, .statusMenu])
+        #expect(SettingsPage.mediaMenu.path == [.interaction, .mediaActions, .mediaMenu])
+        #expect(SettingsPage.profileTextMenu.path == [.interaction, .profileTextMenu])
         #expect(SettingsPage.mediaActions.path == [.interaction, .mediaActions])
         #expect(SettingsPage.composeTools.path == [.compose, .composeTools])
         #expect(SettingsPage.tabs.path == [.tabs])

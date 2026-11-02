@@ -1,12 +1,14 @@
 import SciaCore
 import SwiftUI
 
-/// 1つの対象のタップと長押しの操作を選ぶ画面。決まりはdocs/object-actions.mdの「設定画面」にある。
+/// 1つの対象の操作の画面。タップと長押しの操作を選び、その対象のメニューの並びの画面を開く。決まりはdocs/object-actions.mdの「設定画面」にある。
 /// 選択は、先頭に「メニューを開く」、続けてその対象のメニューの項目を、既定の並びの順で、メニューと同じ名前とアイコンで並べる。
 /// 項目が多いため、選ぶときは別の画面の一覧で選ぶ。
 struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
     let title: String
     @Binding var actions: ObjectActions<Item>
+    /// この対象のメニューの並びの画面。通知は投稿のメニューを出し、自分のメニューを持たないのでnil。
+    let menu: SettingsPage?
 
     var body: some View {
         Form {
@@ -18,8 +20,14 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
                     Text("タップでも長押しでもメニューを開かないため、\(title)のメニューにしかない操作は使えません。")
                 }
             }
+            if let menu {
+                Section {
+                    NavigationLink("メニュー", value: menu)
+                }
+            }
         }
         .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func picker(_ label: String, selection: Binding<ObjectAction<Item>>) -> some View {
@@ -41,36 +49,6 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
     }
 }
 
-/// 設定の一覧に並べる、対象の行。今のタップと長押しの操作の名前を出す。
-struct ObjectActionsRow<Item: ObjectActionItem & MenuItemPresentable>: View {
-    let entity: ObjectEntity<Item>
-    let settings: AppSettings
-    /// 押して開く、この対象の操作を選ぶ画面。
-    let page: SettingsPage
-
-    private var actions: Binding<ObjectActions<Item>> {
-        entity.actions(in: settings)
-    }
-
-    var body: some View {
-        NavigationLink(value: page) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entity.title)
-                Text("タップ: \(name(of: actions.wrappedValue.tap))、長押し: \(name(of: actions.wrappedValue.longPress))")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private func name(of action: ObjectAction<Item>) -> String {
-        switch action {
-        case .menu: "メニューを開く"
-        case .item(let item): item.title
-        }
-    }
-}
-
 @MainActor
 extension ObjectEntity {
     func actions(in settings: AppSettings) -> Binding<ObjectActions<Item>> {
@@ -80,7 +58,7 @@ extension ObjectEntity {
 }
 
 extension ObjectActionsSettingsView where Item: ObjectActionItem {
-    init(entity: ObjectEntity<Item>, settings: AppSettings) {
-        self.init(title: entity.title, actions: entity.actions(in: settings))
+    init(entity: ObjectEntity<Item>, settings: AppSettings, menu: SettingsPage?) {
+        self.init(title: entity.title, actions: entity.actions(in: settings), menu: menu)
     }
 }

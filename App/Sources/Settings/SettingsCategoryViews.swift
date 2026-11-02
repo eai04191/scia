@@ -89,33 +89,21 @@ struct DisplaySettingsView: View {
     }
 }
 
-/// 操作の分類。タップと長押し、長押しのメニュー、リンクを開く場所、ブーストの公開範囲。
+/// 操作の分類。対象ごとのタップと長押しとメニューの画面、リンクを開く場所、ブーストの公開範囲。
 struct InteractionSettingsView: View {
     @Bindable var settings: AppSettings
 
     var body: some View {
         Form {
             Section {
-                ObjectActionsRow(entity: .status, settings: settings, page: .statusActions)
-                ObjectActionsRow(entity: .notification, settings: settings, page: .notificationActions)
-                ObjectActionsRow(entity: .user, settings: settings, page: .userActions)
-                ObjectActionsRow(entity: .link, settings: settings, page: .linkActions)
-                ObjectActionsRow(entity: .externalPost, settings: settings, page: .externalPostActions)
-                ObjectActionsRow(entity: .hashtag, settings: settings, page: .hashtagActions)
-                ObjectActionsRow(entity: .media, settings: settings, page: .mediaActions)
-            } header: {
-                Text("タップと長押し")
-            }
-            Section {
-                NavigationLink("投稿のメニュー", value: SettingsPage.statusMenu)
-                NavigationLink("ユーザーのメニュー", value: SettingsPage.userMenu)
-                NavigationLink("リンクのメニュー", value: SettingsPage.linkMenu)
-                NavigationLink("ほかのサービスの投稿のメニュー", value: SettingsPage.externalPostMenu)
-                NavigationLink("プロフィールの文章のメニュー", value: SettingsPage.profileTextMenu)
-                NavigationLink("ハッシュタグのメニュー", value: SettingsPage.hashtagMenu)
-                NavigationLink("メディアのメニュー", value: SettingsPage.mediaMenu)
-            } header: {
-                Text("長押しのメニュー")
+                NavigationLink(ObjectEntity.status.title, value: SettingsPage.statusActions)
+                NavigationLink(ObjectEntity.notification.title, value: SettingsPage.notificationActions)
+                NavigationLink(ObjectEntity.user.title, value: SettingsPage.userActions)
+                NavigationLink(ObjectEntity.link.title, value: SettingsPage.linkActions)
+                NavigationLink(ObjectEntity.externalPost.title, value: SettingsPage.externalPostActions)
+                NavigationLink(ObjectEntity.hashtag.title, value: SettingsPage.hashtagActions)
+                NavigationLink(ObjectEntity.media.title, value: SettingsPage.mediaActions)
+                NavigationLink("プロフィールの文章", value: SettingsPage.profileTextMenu)
             }
             Section {
                 Picker("開く場所", selection: $settings.linkBrowser) {
