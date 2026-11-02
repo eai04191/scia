@@ -246,7 +246,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
                 content.text = "区切り線を足す"
                 content.textProperties.color = .tintColor
             case .addRowSeparator:
-                content.text = "横並びの区切り線を足す"
+                content.text = "横並びを足す"
                 content.textProperties.color = .tintColor
             case .reset:
                 content.text = "最初の並びに戻す"
@@ -275,15 +275,6 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             var content = UIListContentConfiguration.footer()
             if case .option(let index) = self?.dataSource?.sectionIdentifier(for: indexPath.section) {
                 content.text = self?.options[index].footer
-            } else if indexPath.section == 0 {
-                // ドラッグで並べ替える、左へスワイプして消すといった操作は、Appleの標準の操作なので説明しない。区切り線が何を分けるかだけを書く。
-                content.text = if !Item.supportsSeparators {
-                    nil
-                } else if Item.supportsRowSeparators {
-                    "区切り線はメニューの項目のまとまりを分けます。横並びの区切り線より下のまとまりは、メニューの中で横に並びます。"
-                } else {
-                    "区切り線はメニューの項目のまとまりを分けます。"
-                }
             }
             footer.contentConfiguration = content
         }
