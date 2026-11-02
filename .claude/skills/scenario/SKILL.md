@@ -1,14 +1,18 @@
 ---
 name: scenario
 description: 何も知らないエージェントを「初めて使う人」の役でSciaに触らせ、迷った・止まった・苛立ったところを集めて、当たった役の数の順に並べて報告する。ユーザーが/scenarioで起動したときに使う。直したあとに同じ役で触らせ直して、消えたかを確かめるときにも使う。
-argument-hint: "[役...]"
+argument-hint: "[役... | *]"
 ---
 
 # 初めて使う人として触らせる
 
 準備と1人分の実行は`Tools/scenario/`のスクリプトが行う。このskillは、それを順に走らせ、報告を読んで確かめ、まとめてユーザーに渡す。外へ出ないMastodon（`mastodon.localhost`）と専用の端末`Scia Scenario`を使うので、`Scia 1`〜`Scia 4`は借りない。
 
-引数（`$ARGUMENTS`）には、走らせる役の名前が空白区切りで入ることがある。役は`Tools/scenario/personas/`の、`common.md`以外のファイルの名前（`literal`、`impatient`、`breaker`）。引数がなければ全部を走らせる。1人ごとに`claude -p`で利用枠を使うので、引数で絞られたら、それだけを走らせる。
+引数（`$ARGUMENTS`）で、走らせる役を決める。役は`Tools/scenario/personas/`の、`common.md`以外のファイルの名前（`literal`、`impatient`、`breaker`）。1人ごとに`claude -p`で利用枠を使う。
+
+- `*`なら、全部の役を走らせる
+- 役の名前が空白区切りで入っていれば、それだけを走らせる
+- 引数がなければ、準備に入る前に、どの役を走らせるかを質問のツールで聞く。役ごとに選択肢を作り（複数選べるようにする）、説明には役のファイルの人となりを短く書く
 
 ## 1. 準備する
 
