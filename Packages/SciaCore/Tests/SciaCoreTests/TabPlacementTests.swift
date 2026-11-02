@@ -93,6 +93,24 @@ struct TabPlacementTests {
         #expect(placement.switchable == [.bookmarks, .favourites])
     }
 
+    /// 数を限らないタブバーでは、境目より下の有効な項目も直接並べ、切り替えタブを出さない。
+    @Test func unlimitedTabBarPlacesItemsBelowBoundaryDirectly() {
+        let layout = MenuLayout<TabItem>(elements: [
+            .item(.home, isVisible: true),
+            .item(.notifications, isVisible: true),
+            .item(.search, isVisible: true),
+            .more,
+            .item(.bookmarks, isVisible: true),
+            .item(.favourites, isVisible: true),
+            .item(.local, isVisible: false),
+            .item(.federated, isVisible: false),
+        ])
+        let placement = TabPlacement(layout: layout, tabBarCapacity: nil)
+        #expect(placement.tabs == [.home, .notifications, .search, .bookmarks, .favourites])
+        #expect(placement.switchable.isEmpty)
+        #expect(placement.location(of: .local) == .disabled)
+    }
+
     /// 数を限らないタブバー（横幅の広いiPadのタブバー）では、境目より上の項目をすべて直接並べる。
     @Test func unlimitedTabBarPlacesEveryItemAboveBoundary() {
         let layout = MenuLayout<TabItem>(elements: [

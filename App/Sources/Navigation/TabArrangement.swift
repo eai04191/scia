@@ -70,7 +70,7 @@ final class TabArrangement {
         }
     }
 
-    /// タブバーに並べられるタブの数。横幅の広いiPadのタブバーは、上に出て横にスクロールするので数を限らない。
+    /// タブバーに並べられるタブの数。横幅の広いiPadのタブバーは、上に出て横にスクロールするので数を限らず、切り替えタブも出さない。
     /// ほかは、UIKitが「その他」を出さずに並べられる数にする。「その他」は、選んでいるタブを変えず、中の項目の画面を自分のナビゲーションへ移すため、Sciaの作りとぶつかる。
     private static func tabBarCapacity(for traits: UITraitCollection) -> Int? {
         traits.userInterfaceIdiom == .pad && traits.horizontalSizeClass == .regular ? nil : TabPlacement.compactTabBarCapacity

@@ -287,14 +287,18 @@ public struct TabPlacement: Equatable, Sendable {
     /// 横幅の狭いタブバーに、UIKitが「その他」を出さずに並べられるタブの数。
     public static let compactTabBarCapacity = 5
 
-    /// - Parameter tabBarCapacity: タブバーに並べられるタブの数。切り替えタブも1つに数える。nilなら数を限らない。
+    /// - Parameter tabBarCapacity: タブバーに並べられるタブの数。切り替えタブも1つに数える。
+    ///   nilなら数を限らず、境目より下の項目も直接並べて、切り替えタブを出さない。数を限らない上のタブバーでは、切り替えタブがほかのタブと同じ形で並び、見分けがつかないため。
     ///   境目より上の項目が入りきらなければ、入りきらない分を、境目より下の項目の前に並べて切り替えタブにまとめる。
     ///   UIKitの「その他」は、選んでいるタブ（`selectedTab`）を変えず、中の項目の画面を自分のナビゲーションへ移すため、タブを移れなくなるから。
     public init(layout: MenuLayout<TabItem>, tabBarCapacity: Int?) {
         let groups = layout.groups
         var tabs = groups.main.flatMap(\.items)
         var switchable = groups.more.flatMap(\.items)
-        if let tabBarCapacity, tabs.count + (switchable.isEmpty ? 0 : 1) > tabBarCapacity {
+        if tabBarCapacity == nil {
+            tabs += switchable
+            switchable = []
+        } else if let tabBarCapacity, tabs.count + (switchable.isEmpty ? 0 : 1) > tabBarCapacity {
             let kept = tabBarCapacity - 1
             switchable = Array(tabs[kept...]) + switchable
             tabs = Array(tabs[..<kept])
