@@ -1,0 +1,77 @@
+# シナリオで使う、外へ出ないMastodon。公式のdocker-compose.yml（v4.7.4）をもとにしている。
+# Mastodonのコンテナはinternalのネットワークだけにつなぎ、インターネットに出さない。検索に実在のサーバーのハンドルを入れても、取りに行けない。
+# 入口はCaddyだけで、Macの127.0.0.1:443で受け、mkcertの証明書でhttpsを終端する。
+# データはSCENARIO_HOMEの下に置く。中身はsetup.shがスナップショットで揃えるので、ここではコンテナを動かすことだけを決める。
+name: scia-scenario
+
+services:
+  db:
+    image: postgres:14-alpine
+    shm_size: 256mb
+    networks: [internal]
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'postgres']
+      interval: 2s
+    volumes:
+      - ${SCENARIO_HOME}/data/postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_HOST_AUTH_METHOD=trust
+
+  redis:
+    image: redis:7-alpine
+    networks: [internal]
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 2s
+    volumes:
+      - ${SCENARIO_HOME}/data/redis:/data
+
+  web:
+    image: ghcr.io/mastodon/mastodon:v4.7.4
+    env_file: ${SCENARIO_HOME}/env.production
+    command: bundle exec puma -C config/puma.rb
+    networks: [internal]
+    healthcheck:
+      test: ['CMD-SHELL', "curl -s --noproxy localhost localhost:3000/health | grep -q 'OK' || exit 1"]
+      interval: 2s
+      # pumaの起動には数十秒かかる。その間の失敗を数えると、up --waitが起動中に「不健康」として止まる
+      start_period: 120s
+    depends_on: [db, redis]
+    volumes:
+      - ${SCENARIO_HOME}/data/system:/mastodon/public/system
+      - ./seed:/seed:ro
+
+  streaming:
+    image: ghcr.io/mastodon/mastodon-streaming:v4.7.4
+    env_file: ${SCENARIO_HOME}/env.production
+    command: node ./streaming/index.js
+    networks: [internal]
+    healthcheck:
+      test: ['CMD-SHELL', "curl -s --noproxy localhost localhost:4000/api/v1/streaming/health | grep -q 'OK' || exit 1"]
+      interval: 2s
+    depends_on: [db, redis]
+
+  sidekiq:
+    image: ghcr.io/mastodon/mastodon:v4.7.4
+    env_file: ${SCENARIO_HOME}/env.production
+    command: bundle exec sidekiq
+    networks: [internal]
+    depends_on: [db, redis]
+    volumes:
+      - ${SCENARIO_HOME}/data/system:/mastodon/public/system
+
+  caddy:
+    image: caddy:2-alpine
+    # 127.0.0.1に公開するには、internalでないネットワークにもつなぐ必要がある。つなぐのはCaddyだけ
+    networks: [internal, published]
+    ports:
+      - '127.0.0.1:443:443'
+    depends_on: [web, streaming]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${SCENARIO_HOME}/certs:/certs:ro
+
+networks:
+  internal:
+    internal: true
+  published:

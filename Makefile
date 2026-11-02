@@ -5,7 +5,7 @@ SIM_DESTINATION ?= generic/platform=iOS Simulator
 # 端末を決めないビルドは、既定ではシミュレーターの全アーキテクチャ（arm64とx86_64）を作る。このMacで動く分だけにして、コンパイルを半分にする
 SIM_ARCH ?= $(shell uname -m)
 
-.PHONY: generate lint test-lint test-core build warnings test sim-keyboard promo readme-screenshots readme-icons update-known-servers check check-steps hooks menu-editor clean
+.PHONY: generate lint test-lint test-core build warnings test sim-keyboard scenario-setup scenario-reset promo readme-screenshots readme-icons update-known-servers check check-steps hooks menu-editor clean
 
 ## project.ymlからXcodeプロジェクトを生成する
 generate:
@@ -58,6 +58,16 @@ endif
 KEYBOARD ?= software
 sim-keyboard:
 	swift Tools/sim-keyboard.swift '$(SIM)' $(KEYBOARD)
+
+## 初めて使う人として触るエージェントのための、外へ出ないMastodonと専用の端末（Scia Scenario）を用意する。何度走らせても同じ状態になる
+## Mastodonのデータは毎回、流し込んだ直後のスナップショットに戻す。Dockerを起動しておく
+scenario-setup:
+	Tools/scenario/setup.sh
+
+## 1人分を始める前に、Mastodonのデータをスナップショットに戻し、専用の端末のSciaとKeychainを消してAPPのSciaを入れ直す
+## 例: make scenario-reset APP=DerivedData/Build/Products/Debug-iphonesimulator/Scia.app
+scenario-reset:
+	Tools/scenario/reset.sh '$(APP)'
 
 ## プロモーション動画の素材を、シナリオのUIテストを走らせながら撮る（docs/promo-video.md）。SIMにはシミュレーターか実機の名前を渡す
 ## 例: make promo SIM='Scia 1'
