@@ -49,8 +49,7 @@ struct TimelineStoreInterleavingTests {
 
     private static func run(seed: UInt64) async -> Failure? {
         var random = SplitMix64(seed: seed)
-        // 投稿が1件もないホームから始める場合は除く。`isEmptyListCase`を参照。
-        let server = InterleavingServer(initialCount: Int.random(in: 1...15, using: &random))
+        let server = InterleavingServer(initialCount: Int.random(in: 0...15, using: &random))
         let store = TimelineStore(pageSize: pageSize, now: { Date(timeIntervalSince1970: 0) }) { query in
             try await server.fetch(query)
         }
@@ -78,7 +77,7 @@ struct TimelineStoreInterleavingTests {
                 trace.append("respond(\(server.requests[index].label), \(response))")
                 server.respond(index, with: response, using: &random)
             case .fill:
-                guard client.hasLoadedInitial, !Self.isEmptyListCase(store: store, server: server) else { continue }
+                guard client.hasLoadedInitial else { continue }
                 let maxPages = Int.random(in: 1...3, using: &random)
                 trace.append("fillFromLatest(maxPages: \(maxPages))")
                 server.start { _ = try await store.fillFromLatest(maxPages: maxPages) }
@@ -106,22 +105,17 @@ struct TimelineStoreInterleavingTests {
                 }
             case .latePost:
                 // ほかのサーバーから遅れて届く投稿。切断中に投稿されると、Mastodonの補完では読めないので、つないでいるときだけ起こす。
-                // 古い方のページを読んでいる間に、それより古いIDの投稿が届く場合は除く。届いた投稿は一覧の末尾より古いので捨て、
-                // 古い方のページで読むことにしているが、要求を受けた時点のサーバーにはまだないので、応答にも入らず、どちらからも抜ける。
-                // 見つけた不具合で、直すかは別に決める。
-                guard client.isConnected, !server.isLoadingOlderPage, let id = server.postLate(using: &random) else { continue }
+                guard client.isConnected, let id = server.postLate(using: &random) else { continue }
                 trace.append("latePost(\(id))")
                 _ = store.receive(.update(server.status(id)))
             case .delete:
                 // 切断中の削除は、Mastodonの補完では知る手段がないので、つないでいるときだけ起こす。
-                // 一覧の最後の1件を消す場合は除く。`isEmptyListCase`を参照。
-                guard client.isConnected, let id = server.ids.sorted().randomElement(using: &random),
-                      store.statuses.contains(where: { $0.id != String(id) }) else { continue }
+                guard client.isConnected, let id = server.ids.sorted().randomElement(using: &random) else { continue }
                 trace.append("delete(\(id))")
                 server.delete(id)
                 _ = store.receive(.delete(statusID: String(id)))
             case .flush:
-                guard client.hasLoadedInitial, !store.isEmpty else { continue }
+                guard client.hasLoadedInitial else { continue }
                 trace.append("flushPending")
                 _ = store.flushPending()
             case .disconnect:
@@ -130,7 +124,7 @@ struct TimelineStoreInterleavingTests {
                 client.isConnected = false
             case .reconnect:
                 // アプリは、最初の読み込みを終えてからストリーミングにつなぎ、つないだら切れていた間を補完する。
-                guard client.hasLoadedInitial, !client.isConnected, !Self.isEmptyListCase(store: store, server: server) else { continue }
+                guard client.hasLoadedInitial, !client.isConnected else { continue }
                 trace.append("reconnect")
                 client.isConnected = true
                 server.start { _ = try await store.fillFromLatest() }
@@ -194,14 +188,8 @@ struct TimelineStoreInterleavingTests {
         if let reversed = gaps.first(where: { $0.older >= $0.newer }) {
             return "ギャップ\(TimelineEntry.gap(reversed.gap).debugLabel)の両端が逆です"
         }
-        // 端の投稿が一覧にないギャップは、重なりを確かめない。端の投稿が消えると（削除のイベントで消したときと、
-        // 削除より前に受けた応答に消した投稿が入っていて、それを端にしたときがある）、新しい側の端なら補完の基準が、
-        // 古い側の端なら一覧の末尾が、そのギャップの中に入る。そこから読むと同じ範囲にギャップがもう1つできて、続きを読む行が2つ並ぶ。
-        // 投稿は抜けない。見つけた不具合で、直すかは別に決める。
-        let loadedIDs = Set(ids)
-        let anchoredGaps = gaps.filter { loadedIDs.contains($0.gap.newerID) && loadedIDs.contains($0.gap.olderID) }
-        for (index, lhs) in anchoredGaps.enumerated() {
-            for rhs in anchoredGaps[(index + 1)...] where max(lhs.older, rhs.older) + 1 < min(lhs.newer, rhs.newer) {
+        for (index, lhs) in gaps.enumerated() {
+            for rhs in gaps[(index + 1)...] where max(lhs.older, rhs.older) + 1 < min(lhs.newer, rhs.newer) {
                 return "ギャップ\(TimelineEntry.gap(lhs.gap).debugLabel)と\(TimelineEntry.gap(rhs.gap).debugLabel)が重なりました"
             }
         }
@@ -209,19 +197,6 @@ struct TimelineStoreInterleavingTests {
     }
 
     // MARK: - 手と応答
-
-    /// 一覧が空のときの補完で、最新のページを読んでいる。
-    ///
-    /// 一覧が空のときの扱いでは、次の場合に投稿が抜けるので、試験から除く。見つけた不具合で、直すかは別に決める。
-    /// - 最初の読み込みが空だと、ストアはこれより古い投稿はないと覚える。そのあと一覧が空のまま補完に失敗して新着を合流させると、
-    ///   最初の読み込みから新着までの間を読む基準がなく、その間が抜ける。投稿が1件もないホームから始めないことで除く
-    /// - 削除で一覧が空になると、末尾の位置を失う。そこへ古いIDの新着を合流させると、続きを読む位置がそこまで下がり、その上との間が抜ける。
-    ///   一覧の最後の1件を消さず、空の一覧に新着を合流させないことで除く
-    /// - 補完は、読み始めたときに一覧が空なら、最新のページを空の一覧に足すだけにする。読んでいる間に補完を求められると、
-    ///   続けて読む基準が空の一覧にはないので覚えず、最新のページより後の投稿が抜ける。この間に補完とつなぎ直しを起こさないことで除く
-    private static func isEmptyListCase(store: TimelineStore, server: InterleavingServer) -> Bool {
-        store.isEmpty && server.isLoadingLatestPage
-    }
 
     /// アプリの側の状態。アプリと同じ順でしか手を打たないようにする。
     @MainActor
@@ -349,16 +324,6 @@ final class InterleavingServer {
     }
 
     private var isSettled: Bool { running == requests.count }
-
-    /// 古い方のページ（`max_id`だけ）の要求に、まだ答えていない。
-    var isLoadingOlderPage: Bool {
-        requests.contains { $0.query.maxID != nil && $0.query.sinceID == nil && $0.query.minID == nil }
-    }
-
-    /// 最新のページ（何も付けない）の要求に、まだ答えていない。
-    var isLoadingLatestPage: Bool {
-        requests.contains { $0.query.maxID == nil && $0.query.sinceID == nil && $0.query.minID == nil }
-    }
 
     private func notifyIfSettled() {
         guard isSettled, let settleWaiter else { return }
