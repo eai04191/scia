@@ -191,7 +191,7 @@ struct MediaSettingsView: View {
             } header: {
                 Text("代替テキスト")
             } footer: {
-                Text("投稿したアプリが自動で付けた、説明にならない代替テキストを、ないものとして扱います。")
+                Text("投稿したアプリが自動で付けたと思われる、説明にならない代替テキストをないものとして扱います。")
             }
         }
         .topEdgeEffectHiddenOnMac()
