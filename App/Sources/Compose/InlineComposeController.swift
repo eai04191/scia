@@ -1956,7 +1956,8 @@ final class InlineComposeController: NSObject {
         let morphDuration = tuning.value(of: TuningCatalog.composeMorphDuration)
         let morphEnd = mediaTime() + morphDuration
         // SwiftUIの`.smooth`と同じスプリングで動かす。複製を見えている形で止めて向かい直すため、Core Animationで動くUIKitの書き方にする。
-        UIView.animate(springDuration: morphDuration, bounce: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+        // UIKitがスプリングを打ち切って、動き終わりのコマでバーと中身が残りの分だけ飛ばないよう、止まるところまで動かす。
+        UIView.animateSpringToRest(duration: morphDuration, options: [.allowUserInteraction, .beginFromCurrentState], in: bar) {
             if collapses {
                 self.applyExpandedLayout()
             }
@@ -2004,14 +2005,15 @@ final class InlineComposeController: NSObject {
         }
         if let flightGeneration {
             // 行が次の実行ループで並べ直されたときは、複製の行き先を測り直す。残りの時間で、行の動きと同じ時刻に着かせる。
+            // 行と同じく止まるところまで動かす。UIKitのまま打ち切ると、行が止まる前に複製だけが残りの分だけ飛ぶ。
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
-                morphFlights.retarget(on: morphEnds(editing: editing), generation: flightGeneration) { delay, animations in
-                    UIView.animate(springDuration: max(morphEnd - mediaTime() - delay, 0.05), bounce: 0, delay: delay, options: [.allowUserInteraction, .beginFromCurrentState], animations: animations)
+                morphFlights.retarget(on: morphEnds(editing: editing), generation: flightGeneration) { [bar] delay, animations in
+                    UIView.animateSpringToRest(duration: max(morphEnd - mediaTime() - delay, 0.05), delay: delay, options: [.allowUserInteraction, .beginFromCurrentState], in: bar, animations: animations)
                 }
                 if let textGeneration, let side = textMorphSide(editing: editing) {
-                    textMorph.retarget(on: side, generation: textGeneration) { animations in
-                        UIView.animate(springDuration: max(morphEnd - mediaTime(), 0.05), bounce: 0, options: [.allowUserInteraction, .beginFromCurrentState], animations: animations)
+                    textMorph.retarget(on: side, generation: textGeneration) { [bar] animations in
+                        UIView.animateSpringToRest(duration: max(morphEnd - mediaTime(), 0.05), options: [.allowUserInteraction, .beginFromCurrentState], in: bar, animations: animations)
                     }
                 }
             }
