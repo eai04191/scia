@@ -720,6 +720,87 @@ struct TimelineGapTests {
         #expect(ids(store) == Array((11...20).reversed()))
     }
 
+    /// 古いページの読み込みが再生成中で一部の投稿だけを返しても、末尾から返った投稿までをギャップにする。
+    @Test func regeneratingOlderPageKeepsGapToReturnedStatuses() async throws {
+        let server = FakeHomeServer(ids: 1...20)
+        let regenerating = FailOnce()
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.maxID != nil, regenerating.shouldFail() {
+                return TimelinePage(statuses: [17, 12].map(server.status), isRegenerating: true)
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        _ = try await store.loadOlder()
+
+        #expect(store.gaps.map { [$0.newerID, $0.olderID] } == [["18", "12"]], "再生成中の結果の間にギャップがありません: \(store.entries.map(\.debugLabel))")
+        while let gap = store.gaps.first {
+            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        }
+        #expect(ids(store) == Array((12...20).reversed()))
+    }
+
+    /// 既読位置のすぐ後の読み込みが再生成中で一部の投稿だけを返しても、最新のページから返った投稿の一番古いものまでをギャップにする。
+    @Test func regeneratingPageAfterMarkerKeepsGap() async throws {
+        let server = FakeHomeServer(ids: 1...20)
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.minID != nil {
+                return TimelinePage(statuses: [9, 6].map(server.status), isRegenerating: true)
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial(around: "5")
+
+        #expect(store.gaps.map { [$0.newerID, $0.olderID] } == [["18", "6"]], "再生成中の結果の間にギャップがありません: \(store.entries.map(\.debugLabel))")
+        while let gap = store.gaps.first {
+            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        }
+        #expect(ids(store) == Array((3...20).reversed()))
+    }
+
+    /// 既読位置から古い方の読み込みが再生成中で一部の投稿だけを返しても、読み始めた投稿から返った投稿の一番古いものまでをギャップにする。
+    @Test func regeneratingPageFromMarkerKeepsGap() async throws {
+        let server = FakeHomeServer(ids: 1...20)
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.maxID == "6", query.sinceID == nil, query.minID == nil {
+                return TimelinePage(statuses: [5, 2].map(server.status), isRegenerating: true)
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial(around: "5")
+
+        #expect(store.gaps.map { [$0.newerID, $0.olderID] } == [["18", "8"], ["6", "2"]], "再生成中の結果の間にギャップがありません: \(store.entries.map(\.debugLabel))")
+        while let gap = store.gaps.first {
+            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        }
+        #expect(ids(store) == Array((2...20).reversed()))
+    }
+
+    /// 一覧が空のときの補完が再生成中で一部の投稿だけを返しても、返った投稿の間をギャップにする。
+    @Test func regeneratingFillIntoEmptyListKeepsGapBetweenReturnedStatuses() async throws {
+        let server = FakeHomeServer(ids: 1...20)
+        let latestLoads = Mutex(0)
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.maxID == nil, query.sinceID == nil, query.minID == nil {
+                // 最初の読み込みは再生成中で空、続く補完は再生成中で一部の投稿を返す。
+                switch latestLoads.withLock({ count in count += 1; return count }) {
+                case 1: return TimelinePage(statuses: [], isRegenerating: true)
+                case 2: return TimelinePage(statuses: [20, 11].map(server.status), isRegenerating: true)
+                default: break
+                }
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        _ = try await store.fillFromLatest()
+
+        #expect(store.gaps.map { [$0.newerID, $0.olderID] } == [["20", "11"]], "再生成中の結果の間にギャップがありません: \(store.entries.map(\.debugLabel))")
+        while let gap = store.gaps.first {
+            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        }
+        #expect(ids(store) == Array((11...20).reversed()))
+    }
+
     @Test func regeneratingShortPageKeepsGap() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let regenerating = FailOnce()

@@ -155,13 +155,18 @@ public final class TimelineStore {
         var loadedGaps: [TimelineGap] = []
         if let markerID, !latest.isRegenerating, let oldestLatest = Self.oldestID(of: latest), StatusID.isNewer(oldestLatest, than: markerID) {
             let afterMarker = try await fetch(TimelineQuery(minID: markerID, limit: pageSize))
-            let fromMarker = try await fetch(TimelineQuery(maxID: Self.oldestID(of: afterMarker) ?? oldestLatest, limit: pageSize))
+            let fromMarkerMaxID = Self.oldestID(of: afterMarker) ?? oldestLatest
+            let fromMarker = try await fetch(TimelineQuery(maxID: fromMarkerMaxID, limit: pageSize))
             loaded += [afterMarker, fromMarker]
             // 件数では判断しない。求めた件数より少なく返すサーバーでは、満杯でなくても間に投稿が残っているため。
             // 間に投稿がなかったときは、ギャップを読んだときに0件が返って閉じる。
-            if let newestAfterMarker = Self.newestID(of: afterMarker),
-               StatusID.isNewer(oldestLatest, than: newestAfterMarker) {
-                loadedGaps.append(TimelineGap(newerID: oldestLatest, olderID: newestAfterMarker))
+            // 再生成中の結果は、返った投稿の間にもまだ出ていない投稿が残りうるため、返った投稿の一番古いものまでをギャップにする。
+            let afterMarkerOlderID = afterMarker.isRegenerating ? Self.oldestID(of: afterMarker) : Self.newestID(of: afterMarker)
+            if let afterMarkerOlderID, StatusID.isNewer(oldestLatest, than: afterMarkerOlderID) {
+                loadedGaps.append(TimelineGap(newerID: oldestLatest, olderID: afterMarkerOlderID))
+            }
+            if fromMarker.isRegenerating, let oldestFromMarker = Self.oldestID(of: fromMarker) {
+                loadedGaps.append(TimelineGap(newerID: fromMarkerMaxID, olderID: oldestFromMarker))
             }
         }
         // 再生成中の結果は揃っておらず、返った投稿の間にもまだ出ていない投稿が残りうる。最も新しい投稿から最も古い投稿までをギャップにする。
@@ -215,6 +220,10 @@ public final class TimelineStore {
             let page = try await fetch(TimelineQuery(maxID: maxID, limit: pageSize))
             isRegenerating = page.isRegenerating
             let added = merge(page)
+            // 再生成中の結果は、返った投稿の間にもまだ出ていない投稿が残りうるため、読み始めた投稿から返った投稿の一番古いものまでをギャップにする。
+            if page.isRegenerating, let oldestFetched = Self.oldestID(of: page) {
+                rebuild(statuses: allStatuses, gaps: gaps + [TimelineGap(newerID: maxID, olderID: oldestFetched)])
+            }
             if page.isEmpty && !page.isRegenerating {
                 reachedEnd = true
             }
@@ -262,6 +271,10 @@ public final class TimelineStore {
             let page = try await fetch(TimelineQuery(limit: pageSize))
             isRegenerating = page.isRegenerating
             let added = merge(page)
+            // 最初の読み込みと同じく、再生成中なら返った投稿の間をギャップにする。最も新しい投稿より上は次の補完で読む。
+            if page.isRegenerating, let newest = Self.newestID(of: page), let oldest = Self.oldestID(of: page), newest != oldest {
+                rebuild(statuses: allStatuses, gaps: gaps + [TimelineGap(newerID: newest, olderID: oldest)])
+            }
             reachedEnd = page.isEmpty && !page.isRegenerating
             progress?(added.count)
             return added
