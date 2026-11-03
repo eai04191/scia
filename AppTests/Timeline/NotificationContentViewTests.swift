@@ -201,6 +201,23 @@ struct NotificationAppearanceTests {
         #expect(typography.standardPointSize(.notificationQuotedBody) == typography.standardPointSize(.body) - 3)
     }
 
+    /// 再掲する本文は、段落と改行を詰めて1続きに描く。メンションのように投稿として描く通知は、段落を分けたまま描く。
+    @Test func quotedTextJoinsParagraphs() throws {
+        let date = Date(timeIntervalSince1970: 0)
+        let me = Account(id: "1", username: "me", acct: "me", displayName: "Me", avatar: nil)
+        let bob = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: nil)
+        let content = "<p>一つ目<br />二行目</p><p>二つ目</p>"
+        let mine = Status(id: "s", createdAt: date, account: me, content: content, spoilerText: "", url: nil)
+        let vc = makeViewController(.isolated())
+        let favourite = MastodonNotification(id: "1", type: .favourite, createdAt: date, account: bob, status: mine)
+        let quoted = try #require(vc.contentConfiguration(for: favourite, base: .cell()) as? NotificationContentConfiguration)
+        #expect(quoted.body.text.string == "一つ目 二行目 二つ目")
+        let mentioning = Status(id: "m", createdAt: date, account: bob, content: content, spoilerText: "", url: nil)
+        let mention = MastodonNotification(id: "2", type: .mention, createdAt: date, account: bob, status: mentioning)
+        let post = try #require(vc.contentConfiguration(for: mention, base: .cell()) as? PostContentConfiguration)
+        #expect(post.body.string.contains("\n"))
+    }
+
     /// メンションは投稿として描き、名前の上に足す誰が何をしたかの行だけを「通知の見た目」で描く。
     @Test func mentionContextFollowsNotificationSettings() throws {
         typealias N = NotificationAppearanceCatalog

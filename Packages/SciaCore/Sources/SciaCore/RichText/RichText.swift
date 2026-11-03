@@ -130,3 +130,69 @@ struct CustomEmojiSplitter {
         return result
     }
 }
+
+extension RichText {
+    /// 段落と改行を詰めて、1つの段落にしたもの。通知で再掲する投稿の本文に使う。決まりはdocs/notification-display.mdの「再掲する投稿の本文」にある。
+    /// 境目には空白を1つ置き、境目の前後がもともと空白なら足さない。引用とリストの字下げはせず、リスト項目の記号は文字として残す。
+    /// コードブロックの文字とリンクは、改行を空白にし、等幅の書体で描くよう`code`の書式を付ける。
+    /// リンクは1つの部品のまま残し、表示する文字の中の改行（`<a>`の中の`<br>`）も空白にする。
+    public func joiningLines() -> RichText {
+        guard !blocks.isEmpty else { return self }
+        var inlines: [Inline] = []
+        // 次の部品の前に、境目の空白を置くか。
+        var pendsSeparator = false
+        func append(_ inline: Inline) {
+            if pendsSeparator, let last = inlines.last, !last.endsWithWhitespace, !inline.startsWithWhitespace {
+                inlines.append(.text(" ", []))
+            }
+            pendsSeparator = false
+            inlines.append(inline)
+        }
+        for block in blocks {
+            if let marker = block.listMarker {
+                append(.text(marker, []))
+            }
+            for inline in block.inlines {
+                switch inline {
+                case .lineBreak:
+                    pendsSeparator = true
+                case .text(let text, let style):
+                    // コードブロックの中の改行も、段落の境目と同じく空白にする。
+                    for (index, line) in text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).enumerated() {
+                        if index > 0 {
+                            pendsSeparator = true
+                        }
+                        if !line.isEmpty {
+                            append(.text(String(line), block.isCode ? style.union(.code) : style))
+                        }
+                    }
+                case .link(let text, let destination, let style):
+                    let joined = text.split(whereSeparator: \.isNewline).joined(separator: " ")
+                    append(.link(joined, destination, block.isCode ? style.union(.code) : style))
+                case .emoji:
+                    append(inline)
+                }
+            }
+            pendsSeparator = true
+        }
+        return RichText(blocks: [Block(inlines: inlines)])
+    }
+}
+
+private extension RichText.Inline {
+    /// 文字とリンクの、表示する文字。
+    var displayedText: String? {
+        switch self {
+        case .text(let text, _), .link(let text, _, _): text
+        case .emoji, .lineBreak: nil
+        }
+    }
+
+    var startsWithWhitespace: Bool {
+        displayedText?.first?.isWhitespace ?? false
+    }
+
+    var endsWithWhitespace: Bool {
+        displayedText?.last?.isWhitespace ?? false
+    }
+}

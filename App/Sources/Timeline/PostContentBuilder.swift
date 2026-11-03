@@ -179,7 +179,8 @@ struct PostContentBuilder {
     /// 引用ブロックは、RichTextRendererがこれより一段薄く描く。
     /// - Parameter font: 本文の文字と違う大きさで描くときの書体。通知で再掲する投稿は「通知の見た目」の文字で描く。
     /// - Parameter enlargesEmojiOnly: 本文が絵文字だけなら、絵文字を大きく描く。一覧の投稿の本文だけで使い、縮めた見た目の再掲では使わない。
-    func body(of status: Status, base: UIListContentConfiguration, color: UIColor = .label, font: UIFont? = nil, enlargesEmojiOnly: Bool = false) -> NSAttributedString {
+    /// - Parameter joinsLines: 段落と改行を詰めて1続きに描く。通知で再掲する投稿で使う（docs/notification-display.mdの「再掲する投稿の本文」）。
+    func body(of status: Status, base: UIListContentConfiguration, color: UIColor = .label, font: UIFont? = nil, enlargesEmojiOnly: Bool = false, joinsLines: Bool = false) -> NSAttributedString {
         var renderer = bodyRenderer(of: status, font: font ?? PostTypography(settings: settings).font(.body), color: color)
         if enlargesEmojiOnly {
             renderer.emojiOnly = EmojiOnlyEnlargement(
@@ -187,7 +188,8 @@ struct PostContentBuilder {
                 limit: Int(settings.value(of: AppearanceCatalog.emojiOnlyLimit))
             )
         }
-        return renderer.render(.status(status))
+        let text = RichText.status(status)
+        return renderer.render(joinsLines ? text.joiningLines() : text)
     }
 
     /// HTMLではない文字（予約した投稿のソースなど）を、投稿の本文と同じ文字の大きさと行間で描く。空白と改行は書いたまま残す。

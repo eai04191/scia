@@ -78,7 +78,7 @@ extension TimelineViewController {
         return configuration
     }
 
-    /// お気に入りやブーストなど、自分の投稿の再掲になる通知。誰が何をしたかの行を目立たせ、本文は控えめな色で短く切り、
+    /// お気に入りやブーストなど、自分の投稿の再掲になる通知。誰が何をしたかの行を目立たせ、本文は控えめな色で、段落と改行を詰めて短く切り、
     /// 添付ファイルは小さなサムネイルを1列だけ並べる。引用は囲みを出さず、引用のある投稿であることを示す1行にする。
     /// 再掲の縮めた形は通知のためのものなので、大きさと余白は「通知の見た目」で決める。注意書きのボックスや投票の部品は、投稿と同じ部品を使う。
     /// - Parameter showsPollResults: 投票を結果の形で足す。投票はできない形にし、選択肢は押下を受けない。
@@ -94,7 +94,7 @@ extension TimelineViewController {
             for: notification,
             body: PostBodyContent(
                 spoiler: spoiler(of: status, base: base, color: .secondaryLabel, font: bodyFont),
-                text: postContentBuilder.body(of: shown, base: base, color: .secondaryLabel, font: bodyFont),
+                text: postContentBuilder.body(of: shown, base: base, color: .secondaryLabel, font: bodyFont, joinsLines: true),
                 maximumLines: Int(settings.value(of: N.quotedBodyLines)),
                 media: media,
                 mediaSpacing: settings.value(of: N.quotedMediaSpacing),
