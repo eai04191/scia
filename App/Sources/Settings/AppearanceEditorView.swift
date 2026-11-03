@@ -683,7 +683,7 @@ struct AppearanceSamples {
     /// 行の余白と区切り線は投稿のあいだの見た目なので、行には2件を出す。
     /// 部品の少ない投稿は、どの投稿にもある部品の分類（行、アイコン、名前の行、本文）にも出す。分類の一覧の画面の見本で部品をタップして分類の画面を開いたとき、タップした投稿がその画面にも出るようにするため。
     private static let groupSamples: [AppearanceGroup.ID: [String]] = [
-        "row": ["basic", "emoji-only"],
+        "row": ["basic", "next"],
         "context": ["boost-plain", "emoji-only"],
         "avatar": ["basic", "parent", "child"],
         "name": ["basic", "name"],
@@ -852,6 +852,8 @@ struct AppearanceSamples {
             // 段落のあいだ、引用の字下げ、本文の絵文字を見せる投稿。
             (status("paragraphs", minutes: 1.2, account: friend, content: "<p>段落の1つ目です🎉:scia:</p><blockquote><p>引用した文です。</p></blockquote><p>段落の2つ目です。</p>", emojis: emojis), ReplyConnection()),
             (plainBoost, ReplyConnection()),
+            // 行の余白と区切り線を見せる、部品の少ない投稿の次に並べる1行の投稿。
+            (status("next", minutes: 0.5, account: scia, content: "<p>次の投稿です。</p>"), ReplyConnection()),
             // 返信をつなぐ線を見せる、本文だけの2件。下の投稿は返信のラベルが線に重ならないよう、返信にはせず、線だけでつなぐ。
             (status("parent", minutes: 1.1, account: scia, content: "<p>返信でつながった投稿の、最初の投稿です。</p>"), ReplyConnection(below: true)),
             (status("child", minutes: 1, account: friend, content: "<p>返信です。</p>"), ReplyConnection(above: true)),
