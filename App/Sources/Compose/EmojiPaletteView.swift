@@ -73,13 +73,6 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         }
     }
 
-    var animatesEmojis = false {
-        didSet {
-            guard animatesEmojis != oldValue else { return }
-            reconfigureCells(matching: nil)
-        }
-    }
-
     /// 打った検索語。前後の空白と`:`は除く。
     var query: String {
         (searchField.text ?? "").trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: ":"))
@@ -415,7 +408,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
             }
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: EmojiPaletteCell.reuseIdentifier, for: indexPath)
             if let self, let cell = cell as? EmojiPaletteCell, let emoji = emoji(at: indexPath) {
-                cell.configure(emoji, store: emojiImages, animates: animatesEmojis, emojiStyle: emojiStyle)
+                cell.configure(emoji, store: emojiImages, emojiStyle: emojiStyle)
             }
             return cell
         }
@@ -663,13 +656,14 @@ final class EmojiPaletteCell: UICollectionViewCell {
         didSet { highlight.isHidden = !isHighlighted }
     }
 
-    func configure(_ emoji: PaletteEmoji, store: EmojiImageStore<UIImage>, animates: Bool, emojiStyle: EmojiStyle) {
+    /// カスタム絵文字は、「カスタム絵文字のアニメーションを再生する」の設定によらず動かす。
+    func configure(_ emoji: PaletteEmoji, store: EmojiImageStore<UIImage>, emojiStyle: EmojiStyle) {
         switch emoji {
         case .custom(let custom):
             label.isHidden = true
             imageView.isHidden = false
             imageView.stillImage = store.image(for: custom.staticUrl)
-            imageView.animation = animates ? store.animation(for: custom.url) : nil
+            imageView.animation = store.animation(for: custom.url)
             accessibilityLabel = custom.shortcode
         case .standard(let standard):
             imageView.isHidden = true

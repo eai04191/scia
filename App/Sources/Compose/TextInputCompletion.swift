@@ -177,7 +177,6 @@ final class TextInputCompletion {
         palette.hardEdgeEffect = tuning.value(of: TuningCatalog.composeEmojiPaletteHardEdgeEffect)
         palette.barHeight = tuning.value(of: TuningCatalog.composeEmojiPaletteBarHeight)
         palette.barBottomInset = tuning.value(of: TuningCatalog.composeEmojiPaletteBarBottomInset)
-        palette.animatesEmojis = settings.appearance.animatesCustomEmojis
         palette.emojiStyle = settings.appearance.emojiStyle
         let query = palette.query
         let standardGroups = StandardEmojiAvailability.groups(for: settings.appearance.emojiStyle)
