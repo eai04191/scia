@@ -100,6 +100,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// ハッシュタグのメニューのミュートを組むもの。nilなら項目を出さない。
     var hashtagMenuActions: HashtagMenuActions?
     /// この画面が表示されている間、生かしておくもの。画面を組み立てたコントローラーを、ナビゲーションから外されるまで残すのに使う。
+    /// 外されたら手放す。コントローラーが画面を強く持つ持ち合いを、コントローラーの止め方によらず解くため。
     var lifetimeOwner: AnyObject?
     /// 一覧の頭に置き、一緒にスクロールするビュー。プロフィールのヘッダーに使う。表示より前に設定する。
     /// 置くと、投稿がないときの全面の表示は出さず、読み込みの状態はフッターだけで示す。ヘッダーを覆わないようにするため。
@@ -479,7 +480,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     override func didMove(toParent parent: UIViewController?) {
         super.didMove(toParent: parent)
-        if parent == nil { onRemovedFromParent?() }
+        if parent == nil {
+            onRemovedFromParent?()
+            lifetimeOwner = nil
+        }
     }
 
     override func viewDidDisappear(_ animated: Bool) {

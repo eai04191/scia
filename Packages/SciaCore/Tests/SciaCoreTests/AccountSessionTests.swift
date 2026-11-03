@@ -106,6 +106,23 @@ struct AccountSessionTests {
         #expect(transport.requests(to: "/api/v1/timelines/home").isEmpty)
     }
 
+    /// トークンが無効と分かったあとにセッションから作った一覧（あとから開いたハッシュタグやリスト）も、止まっていて、始めても読まない。
+    @Test func listsMadeAfterCredentialsBecameInvalidAreStopped() async throws {
+        let transport = RoutedTransport { _ in Self.unauthorized() }
+        let session = makeSession(transport: transport)
+        defer { session.close() }
+        var notified = false
+        session.onCredentialsInvalid = { notified = true }
+        session.reportUnauthorized()
+        try await waitUntil { notified }
+
+        let model = FeedTimelineModel(feed: .hashtag(name: "scia"), session: session, tuning: TuningStore(defaults: nil), clock: TestClock(), now: { Self.now }) { _, _ in {} }
+        model.start(purpose: .action)
+
+        #expect(model.runningTaskCount == 0)
+        #expect(transport.requests(to: "/api/v1/timelines/tag/scia").isEmpty, "トークンが無効と分かったあとに作った一覧が読み込みました")
+    }
+
     /// 電波が戻るたびに、登録した一覧にやり直させる。
     @Test func networkRecoveryRecoversLists() async throws {
         let session = makeSession(transport: RoutedTransport { _ in (404, Data()) })

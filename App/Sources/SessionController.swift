@@ -1033,6 +1033,8 @@ final class SessionController {
         viewController.notices = notices
         if authorization.state == .invalid {
             showReauthenticationPrompt(on: viewController)
+            // トークンが無効と分かったあとに作った一覧は、セッションが止めていて読み込まないので、空のまま残さず、ログインし直しを促す。
+            viewController.setContentState(.failed(Self.reauthenticationListMessage))
         }
         viewController.setCoveredByInAppBrowser(browserCoversTimelines)
         viewController.holdsSettingsChanges = shownSettingsCount > 0
@@ -3059,14 +3061,15 @@ final class SessionController {
     private func showReauthenticationPrompt(on viewController: TimelineViewController) {
         viewController.onRetry = { [weak self] in self?.reauthenticate() }
         // 読み込みの途中で止めた一覧が、読み込み中のまま残らないようにする。
-        let message = ErrorPresentation(message: "ログインし直すと読み込めます。", code: nil)
         if viewController.contentState == .loading {
-            viewController.setContentState(.failed(message))
+            viewController.setContentState(.failed(Self.reauthenticationListMessage))
         }
         if viewController.footerState == .loading {
-            viewController.setFooterState(.failed(message))
+            viewController.setFooterState(.failed(Self.reauthenticationListMessage))
         }
     }
+
+    private static let reauthenticationListMessage = ErrorPresentation(message: "ログインし直すと読み込めます。", code: nil)
 
     private func reauthenticate() {
         guard !isReauthenticating else { return }

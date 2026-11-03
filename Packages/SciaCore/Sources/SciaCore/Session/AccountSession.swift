@@ -100,9 +100,13 @@ public final class AccountSession {
     }
 
     /// 一覧を登録し、やり直しと止めるのを受け取らせる。弱く持つので、外す必要はない。
+    /// トークンが無効と分かったあとに登録した一覧は、その場で止める。無効になったときに止めた一覧と同じく、ログインし直すまで読まないようにするため。
     public func register(_ list: some SessionList) {
         lists.removeAll { $0.list == nil }
         lists.append(WeakList(list: list))
+        if authorization.state == .invalid {
+            list.stop()
+        }
     }
 
     /// 閉じる。ストリーミングを切り、セッションで始めた処理を全部止める。

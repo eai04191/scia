@@ -32,6 +32,24 @@ struct FeedTimelineControllerTests {
         return String(decoding: envelope, as: UTF8.self)
     }
 
+    /// 積んで開いた一覧を外したら、画面とコントローラーの持ち合いを解く。持ち合いを作る前にコントローラーが止まっていても（トークンが無効と分かったあとに開いた一覧）解く。
+    @Test func removingStackedFeedReleasesStoppedController() throws {
+        let viewController: TimelineViewController
+        weak var released: FeedTimelineController?
+        do {
+            let controller = try makeController(feed: .hashtag(name: "scia"), transport: ScriptedTransport { _ in (404, Data()) })
+            controller.stop()
+            viewController = controller.viewController
+            viewController.lifetimeOwner = controller
+            released = controller
+        }
+        #expect(released != nil, "外す前に手放しました")
+
+        viewController.didMove(toParent: nil)
+
+        #expect(released == nil, "外しても、止まっていたコントローラーを手放しません")
+    }
+
     @Test func emptyRegeneratingHomeOffersReload() async throws {
         let transport = ScriptedTransport { _ in (206, Data("[]".utf8)) }
         let controller = try makeController(transport: transport)
