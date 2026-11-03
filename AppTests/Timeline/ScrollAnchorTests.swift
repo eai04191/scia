@@ -261,6 +261,27 @@ struct ScrollAnchorTests {
         #expect(!interruption.isEnabled, "止まったあとも、触れて止めるジェスチャーが有効なままです")
     }
 
+    /// 最上部へ戻る途中で触れて止め、ドラッグせずに離したら、離したときに操作が終わったと知らせる。
+    /// スクロールの止まりの知らせは来ないので、知らせないと、操作の終わりを待って溜めた新着が、次に指でスクロールするまで入らない。
+    @Test func liftingAfterStoppingSpringScrollReportsSettled() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.tuning.setValue(1, for: TuningCatalog.scrollToTopDuration)
+        harness.setStatuses(StatusFactory.make(count: 60, startingAt: 1_000))
+        harness.scroll(toFraction: 0.4)
+        harness.viewController.scrollToNewest()
+        harness.frames.advance(by: 0.2)
+        var settled = 0
+        harness.viewController.onInteractionSettle = { settled += 1 }
+        let interruption = harness.viewController.springScrollInterruption
+
+        interruption.touchesBegan([], with: UIEvent())
+        #expect(settled == 0, "止めた指を離す前に、操作が終わったと知らせました")
+
+        interruption.touchesEnded([], with: UIEvent())
+        #expect(settled == 1, "止めた指を離しても、操作が終わったと知らせません")
+    }
+
     /// 最上部より下で読んでいるときは、アニメーションの設定によらず、読んでいる位置を保つ。
     @Test func prependBelowTopKeepsAnchorEvenWhenAnimationIsOn() throws {
         let harness = try TimelineHarness()

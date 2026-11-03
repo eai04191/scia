@@ -1696,6 +1696,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         recognizer.onRelease = { [weak self] in
             guard let self, springScrollTicker == nil else { return }
             springScrollInterruption.isEnabled = false
+            // 止めた指をドラッグせずに離すと、スクロールの止まりの知らせが来ないので、ここで知らせる。ドラッグしたなら、その止まりの知らせに任せる。
+            guard !isUserScrolling else { return }
+            reportInteractionSettled()
         }
         return recognizer
     }
