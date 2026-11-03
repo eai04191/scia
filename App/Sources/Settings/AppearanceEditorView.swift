@@ -663,7 +663,6 @@ struct AppearanceSamples {
     ///   - focus: 触っている項目。`groups`を渡したとき、その項目にしか要らない見本を足す。
     func configurations(colorScheme: ColorScheme, revision _: Int, groups: Set<AppearanceGroup.ID>? = nil, focus: AppearanceFocus? = nil) -> [PostContentConfiguration] {
         let shown = groups.map { Self.sampleIDs(for: $0, focus: focus) }
-        let cardImage = PreviewImages.cardURL(for: colorScheme == .dark ? .dark : .light)
         let shownPosts = (colorScheme == .dark ? posts : lightPosts).filter { shown?.contains($0.status.id) ?? true }
         let configurations = shownPosts.map { post in
             var configuration = timeline.contentConfiguration(for: post.status, base: .cell())
@@ -671,7 +670,7 @@ struct AppearanceSamples {
             return configuration
         }
         let showsQuote = shown?.contains(Self.quoteID) ?? true
-        return configurations + (showsQuote ? [quoteConfiguration(image: cardImage)] : [])
+        return configurations + (showsQuote ? [quoteConfiguration()] : [])
     }
 
     /// 分類の見本の投稿のID。分類ごとの見本に、触っている項目にしか要らない見本を足す。分類が空なら、分類の一覧の画面に出す部品の少ない投稿を1件だけにする。
@@ -713,7 +712,8 @@ struct AppearanceSamples {
     private static let quoteID = "preview-quote"
 
     /// 投稿を引用した投稿。引用元には、囲みの中の部品が出るよう、本文と画像を付ける。
-    private func quoteConfiguration(image: URL?) -> PostContentConfiguration {
+    private func quoteConfiguration() -> PostContentConfiguration {
+        let image = PreviewImages.photoURL(.wide)
         let avatar = PreviewImages.avatarURL()
         let friend = Account(id: "preview-friend", username: "friend", acct: "friend@example.com", displayName: "ともだち", avatar: avatar)
         let scia = Account(id: Self.myAccountID, username: "scia", acct: "scia", displayName: "Scia", avatar: avatar)
@@ -722,14 +722,14 @@ struct AppearanceSamples {
             type: .image,
             url: image,
             previewUrl: image,
-            // 見本の枠に収まるよう、横長の画像にする。
-            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 2_400, height: 800))
+            // 見本の枠に収まるよう、横長の写真にする。
+            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_600, height: 400))
         )
         let quoted = Status(
             id: "preview-quoted",
             createdAt: now.addingTimeInterval(-3_600),
             account: scia,
-            content: "<p>引用された投稿の本文です。</p>",
+            content: PreviewPhoto.credit([.wide]),
             spoilerText: "",
             url: nil,
             mediaAttachments: [attachment]
@@ -760,37 +760,23 @@ struct AppearanceSamples {
         // 入りきらない名前の行末のぼかしを見せるため、名前の長いアカウントも用意する。
         // 名前の絵文字の大きさも同じ投稿で見せるため、名前に絵文字とカスタム絵文字を入れる。
         let longNamed = Account(id: "preview-long", username: "long", acct: "long@example.com", displayName: "とても長い名前🌱:scia:のアカウントで、名前の行に入りきりません", avatar: animated, avatarStatic: avatar, emojis: emojis)
-        let image = MediaAttachment(
-            id: "preview-image",
-            type: .image,
-            url: cardImage,
-            previewUrl: cardImage,
-            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_200, height: 900))
-        )
-        // 縦長と横長の比率の上限を見せるため、縦長の画像と横長の画像を1枚ずつ出す投稿を用意する。
-        let tallImage = MediaAttachment(
-            id: "preview-tall-image",
-            type: .image,
-            url: cardImage,
-            previewUrl: cardImage,
-            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 600, height: 1_200))
-        )
-        let wideImage = MediaAttachment(
-            id: "preview-wide-image",
-            type: .image,
-            url: cardImage,
-            previewUrl: cardImage,
-            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 2_400, height: 600))
-        )
+        func photo(_ photo: PreviewPhoto, width: Int, height: Int, description: String? = nil) -> MediaAttachment {
+            let url = PreviewImages.photoURL(photo)
+            return MediaAttachment(
+                id: photo.rawValue,
+                type: .image,
+                url: url,
+                previewUrl: url,
+                description: description,
+                meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: width, height: height))
+            )
+        }
+        // 縦長と横長の比率の上限を見せるため、縦長の写真と横長の写真を1枚ずつ出す投稿を用意する。
+        let tallImage = photo(.tall, width: 1_200, height: 1_800)
+        let wideImage = photo(.wide, width: 1_600, height: 400)
         // 代替テキストのバッジを見せるため、1枚には代替テキストを付ける。
-        let describedImage = MediaAttachment(
-            id: "preview-described-image",
-            type: .image,
-            url: cardImage,
-            previewUrl: cardImage,
-            description: "アプリのアイコン",
-            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_200, height: 900))
-        )
+        let describedImage = photo(.gridFirst, width: 800, height: 800, description: "窓辺の猫")
+        let image = photo(.gridSecond, width: 800, height: 800)
         let ownFilter = FilterResult(
             filter: FilterResult.Filter(id: "preview-filter", title: "見本", context: [.home], filterAction: .warn),
             keywordMatches: ["見本"]
@@ -847,20 +833,20 @@ struct AppearanceSamples {
             (status("basic", minutes: 1, account: scia, content: "<p>設定を変えると、タイムラインの投稿がこのように表示されます。</p>"), ReplyConnection()),
             (boost, ReplyConnection()),
             // 注意書きのある投稿の画像はぼかされ、サムネイル同士のすき間が見えないため、画像は注意書きのない投稿に付ける。
-            (status("thread", minutes: 20, account: scia, content: "<p>画像を2枚付けた投稿です。</p>", media: [describedImage, image]), ReplyConnection()),
+            (status("thread", minutes: 20, account: scia, content: PreviewPhoto.credit([.gridFirst, .gridSecond]), media: [describedImage, image]), ReplyConnection()),
             // 公開範囲の記号と編集済みの「*」を見せるため、未収載で編集した投稿にする。
             (status("reply", minutes: 12, account: friend, content: "<p>注意書きの下の本文です。</p>", spoiler: "注意書き", replyingTo: scia, visibility: .unlisted, edited: true), ReplyConnection()),
-            (status("media", minutes: 8, account: scia, content: "", media: [tallImage]), ReplyConnection()),
+            (status("media", minutes: 8, account: scia, content: PreviewPhoto.credit([.tall]), media: [tallImage]), ReplyConnection()),
             // 絵文字だけの本文を見せるため、先頭にメンションの付いた、絵文字だけの返信を用意する。メンションは大きくしない。
             (status("emoji-only", minutes: 7.5, account: friend, content: #"<p><span class="h-card"><a href="https://example.com/@scia" class="u-url mention">@<span>scia</span></a></span> 👍:scia:🎉</p>"#, replyingTo: scia, emojis: emojis), ReplyConnection()),
             // 長い本文を切って「続きを読む」を出すところを見せるため、1行ずつの段落を、既定の切り始める行数より1行だけ多く並べる。
             // 切り始める行数を少し増やすと切らなくなり、値の違いが見本に出る。
             (status("long", minutes: 7.2, account: scia, content: (1...33).map { "<p>長い本文の\($0)行目です。</p>" }.joined()), ReplyConnection()),
             // 片方だけのときの光の幅を見せるため、お気に入りだけをした投稿にする。
-            (status("wide", minutes: 7, account: friend, content: "<p>横長の画像を1枚付けた投稿です。</p>", media: [wideImage], favourited: true), ReplyConnection()),
+            (status("wide", minutes: 7, account: friend, content: PreviewPhoto.credit([.wide]), media: [wideImage], favourited: true), ReplyConnection()),
             (status("poll", minutes: 5, account: longNamed, content: "<p>アイコンの形はどちらが好きですか？</p>", poll: poll), ReplyConnection()),
             (status("filtered", minutes: 2, account: scia, content: "<p>自分のフィルターに一致した、自分の投稿です。</p>", filtered: [ownFilter]), ReplyConnection()),
-            // 名前の行の部品を1件で見せる投稿。入りきらない名前、公開範囲の記号、編集済みの「*」を出し、名前と画像のあいだを見せるため本文を付けない。
+            // 名前の行の部品を1件で見せる投稿。入りきらない名前、公開範囲の記号、編集済みの「*」を出し、名前と画像のあいだを見せるため本文を付けないので、写真のクレジットは書かない。
             // 画像は、見本の枠に収まるよう横長にする。
             (status("name", minutes: 1.5, account: longNamed, content: "", media: [wideImage], visibility: .unlisted, edited: true), ReplyConnection()),
             // 段落のあいだ、引用の字下げ、本文の絵文字を見せる投稿。

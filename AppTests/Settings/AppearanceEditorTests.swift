@@ -192,6 +192,21 @@ struct AppearanceEditorTests {
         #expect(heights[1] == preview.contentHeight)
     }
 
+    /// 同梱した見本の写真は、どれも読めて、比率の上限を見せる写真は既定の上限を超えている。上限ちょうどでは、値を変えても見本が変わらないため。
+    @Test func previewPhotosDecode() throws {
+        func size(_ photo: PreviewPhoto) throws -> CGSize {
+            let url = try #require(PreviewImages.photoURL(photo), "\(photo)が同梱されていません")
+            let image = try #require(PreviewImages.data(for: url).flatMap(UIImage.init(data:)), "\(photo)を読めません")
+            return CGSize(width: image.size.width * image.scale, height: image.size.height * image.scale)
+        }
+        let tall = try size(.tall)
+        #expect(tall.width / tall.height < AppearanceCatalog.mediaTallestAspectRatio.defaultValue)
+        let wide = try size(.wide)
+        #expect(wide.width / wide.height > AppearanceCatalog.mediaWidestAspectRatio.defaultValue)
+        _ = try size(.gridFirst)
+        _ = try size(.gridSecond)
+    }
+
     /// 2×2に並べたサムネイルでは、横の2つと縦の2つのすき間を示し、斜めの組は示さない。
     @Test func gapsBetweenTiles() {
         let tiles = [

@@ -90,7 +90,18 @@ enum PreviewImages {
         }
     }
 
-    /// 見本の画像のURLなら、そのPNG。ほかのURLならnil。
+    /// 見本の投稿に添付する写真のURL。アプリに同梱した写真を読む。読めなければnil。
+    static func photoURL(_ photo: PreviewPhoto) -> URL? {
+        data(named: photo.rawValue) {
+            guard let url = Bundle.main.url(forResource: photo.rawValue, withExtension: "avif"), let data = try? Data(contentsOf: url) else {
+                logger.error("preview photo missing name=\(photo.rawValue, privacy: .public)")
+                return nil
+            }
+            return data
+        }
+    }
+
+    /// 見本の画像のURLなら、その画像のデータ。ほかのURLならnil。
     static func data(for url: URL) -> Data? {
         url.scheme == scheme ? images[url] : nil
     }
@@ -145,5 +156,57 @@ enum PreviewImages {
             return nil
         }
         return data as Data
+    }
+}
+
+/// 見本の投稿に添付する写真。どれもUnsplashの写真（Unsplash License）を、見本の大きさに縮めてAVIFにした。
+/// 比率の上限を見せる写真は、既定の上限を超える比率にする。上限ちょうどでは、値を変えても見本が変わらないため。
+enum PreviewPhoto: String {
+    /// 縦長の比率の上限（既定は3:4）を超える、2:3の写真。
+    case tall = "preview-tall"
+    /// 横長の比率の上限（既定は3:1）を超える、4:1の写真。ボートが入るよう、元の16:9から切り抜いた。
+    case wide = "preview-wide"
+    /// 2枚並べる投稿の1枚目。
+    case gridFirst = "preview-grid-1"
+    /// 2枚並べる投稿の2枚目。
+    case gridSecond = "preview-grid-2"
+
+    /// 撮った人。Unsplashの写真のページに出る名前。
+    var photographer: String {
+        switch self {
+        case .tall: "Nick"
+        case .wide: "Ishan @seefromthesky"
+        case .gridFirst, .gridSecond: "Alperen Erfidan"
+        }
+    }
+
+    /// Unsplashの写真のページ。
+    var page: String {
+        switch self {
+        case .tall: "https://unsplash.com/photos/ElDn5SmTmB4"
+        case .wide: "https://unsplash.com/photos/qE1Y8GQKhEk"
+        case .gridFirst: "https://unsplash.com/photos/jDGw_rE0XAk"
+        case .gridSecond: "https://unsplash.com/photos/cM-6-zgw-pg"
+        }
+    }
+
+    /// 写真を付けた見本の投稿の本文に書くクレジット。Unsplashの「Photo by 撮った人 on Unsplash」の書き方で、「Photo」を写真のページへのリンクにする。
+    /// 同じ人の写真が続くときは、「Photo and photo by 撮った人 on Unsplash」とまとめる。
+    static func credit(_ photos: [PreviewPhoto]) -> String {
+        var groups: [(photographer: String, photos: [PreviewPhoto])] = []
+        for photo in photos {
+            if groups.last?.photographer == photo.photographer {
+                groups[groups.count - 1].photos.append(photo)
+            } else {
+                groups.append((photo.photographer, [photo]))
+            }
+        }
+        let credits = groups.map { group in
+            let links = group.photos.enumerated().map { index, photo in
+                "<a href=\"\(photo.page)\">\(index == 0 ? "Photo" : "photo")</a>"
+            }
+            return links.joined(separator: " and ") + " by \(group.photographer) on Unsplash"
+        }
+        return "<p>\(credits.joined(separator: "、"))</p>"
     }
 }
