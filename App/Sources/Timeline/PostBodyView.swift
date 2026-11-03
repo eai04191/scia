@@ -131,8 +131,16 @@ final class PostBodyView: UIView {
     private let avatarImages: AvatarImageStore<UIImage>
     private let textLabel = LinkLabel()
     /// 本文の最初と最後のベースラインの位置。本文の上下のすき間は字面から測るので、「投稿の見た目」のプレビューで字面の枠を求めるのに使う。
+    /// 本文の上下の部品は、ラベルのベースラインではなく、この位置から置く。
     private let textFirstBaselineGuide = UILayoutGuide()
     private let textLastBaselineGuide = UILayoutGuide()
+    /// ベースラインの位置を、UILabelのベースラインに合わせる制約。本文をUILabelで描くときに、初めて使うときに作る。
+    /// ラベルのベースラインの制約を一度作ると、UILabelは文字列を入れるたびにベースラインを並べ直して求めるので、TextKit 2で描くあいだは作らない。
+    private var labelBaselineConstraints: [NSLayoutConstraint]?
+    /// ベースラインの位置を、TextKit 2で並べた結果からラベルの上下の端に合わせる制約。本文をTextKit 2で描くときに使う。
+    /// UILabelのベースラインは、TextKit 2で並べた結果を使わずにUILabelが並べ直して求めるため、描き方の違うラベルでは使わない。
+    private var textKitFirstBaseline: NSLayoutConstraint?
+    private var textKitLastBaseline: NSLayoutConstraint?
     /// フィルターの注記の最初のベースラインの位置。注記の上のすき間も字面から測るので、プレビューで字面の上端を求めるのに使う。
     private let filterNoteBaselineGuide = UILayoutGuide()
     // 本文のほかの部品は、その中身が初めて来たときに作り、そのあとは隠して持っておく。
@@ -347,11 +355,11 @@ final class PostBodyView: UIView {
             addLayoutGuide(guide)
         }
         NSLayoutConstraint.activate([
-            textFirstBaselineGuide.topAnchor.constraint(equalTo: textLabel.firstBaselineAnchor),
             textFirstBaselineGuide.heightAnchor.constraint(equalToConstant: 0),
-            textLastBaselineGuide.topAnchor.constraint(equalTo: textLabel.lastBaselineAnchor),
             textLastBaselineGuide.heightAnchor.constraint(equalToConstant: 0),
         ])
+        textKitFirstBaseline = textFirstBaselineGuide.topAnchor.constraint(equalTo: textLabel.topAnchor)
+        textKitLastBaseline = textLastBaselineGuide.topAnchor.constraint(equalTo: textLabel.bottomAnchor)
         textLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
         textLabel.onExpand = { [weak self] in self?.onExpandBody?() }
     }
@@ -548,6 +556,7 @@ final class PostBodyView: UIView {
             textLabel.numberOfLines = content.maximumLines
         }
         textLabel.truncation = content.truncation
+        applyTextDrawing(textKit: AppDependencies.tuning.value(of: TuningCatalog.bodyTextKitDrawing))
         NSLayoutConstraint.deactivate(variableConstraints)
         variableConstraints = []
         let shownSpoiler = applySpoiler(content.spoiler)
@@ -562,9 +571,9 @@ final class PostBodyView: UIView {
         // 本文と添付ファイルは、注意書きがあればその下から並べる。
         let contentTop = shownSpoiler?.bottomAnchor ?? topAnchor
         let contentTopSpacing = shownSpoiler == nil ? 0 : content.spoiler?.bodySpacing ?? 0
-        let text = textLabel.isHidden ? nil : (label: textLabel, bottomInset: Self.textBottomInset(of: content.text, isTruncated: content.maximumLines > 0))
+        let text = textLabel.isHidden ? nil : (lastBaseline: textLastBaselineGuide.topAnchor, bottomInset: Self.textBottomInset(of: content.text, isTruncated: content.maximumLines > 0))
         if !textLabel.isHidden {
-            variableConstraints.append(textLabel.firstBaselineAnchor.constraint(equalTo: contentTop, constant: contentTopSpacing + Self.textTopInset(of: content.text)))
+            variableConstraints.append(textFirstBaselineGuide.topAnchor.constraint(equalTo: contentTop, constant: contentTopSpacing + Self.textTopInset(of: content.text)))
         }
         let besideBottom = media.flatMap { media in
             besideSide.map { applyBesideMedia(media, side: $0, top: contentTop, topSpacing: contentTopSpacing, text: text) }
@@ -613,7 +622,7 @@ final class PostBodyView: UIView {
         let contentTop: NSLayoutYAxisAnchor
         let contentTopSpacing: CGFloat
         /// 出している本文と、その最後の文字の、ベースラインから字面の下端まで。本文を出していなければnil。
-        let text: (label: UILabel, bottomInset: CGFloat)?
+        let text: (lastBaseline: NSLayoutYAxisAnchor, bottomInset: CGFloat)?
         /// 添付ファイルを本文の右に出すとき、本文の字面とサムネイルの下端のうち、下にあるほう。出さなければnil。
         let besideBottom: NSLayoutYAxisAnchor?
 
@@ -624,11 +633,54 @@ final class PostBodyView: UIView {
             } else if let besideBottom {
                 view.topAnchor.constraint(equalTo: besideBottom, constant: spacing)
             } else if let text {
-                view.topAnchor.constraint(equalTo: text.label.lastBaselineAnchor, constant: spacing + text.bottomInset)
+                view.topAnchor.constraint(equalTo: text.lastBaseline, constant: spacing + text.bottomInset)
             } else {
                 view.topAnchor.constraint(equalTo: contentTop, constant: contentTopSpacing)
             }
         }
+    }
+
+    /// 本文をTextKit 2で描くか、UILabelで描くかを替え、ベースラインの位置の決め方を合わせる。
+    private func applyTextDrawing(textKit: Bool) {
+        textLabel.drawsWithTextKit = textKit
+        guard let textKitFirstBaseline, let textKitLastBaseline else { return }
+        if textKit {
+            labelBaselineConstraints.map(NSLayoutConstraint.deactivate)
+            updateTextKitBaselines(width: textLabel.bounds.width > 0 ? textLabel.bounds.width : bounds.width)
+            NSLayoutConstraint.activate([textKitFirstBaseline, textKitLastBaseline])
+        } else {
+            NSLayoutConstraint.deactivate([textKitFirstBaseline, textKitLastBaseline])
+            let constraints = labelBaselineConstraints ?? [
+                textFirstBaselineGuide.topAnchor.constraint(equalTo: textLabel.firstBaselineAnchor),
+                textLastBaselineGuide.topAnchor.constraint(equalTo: textLabel.lastBaselineAnchor),
+            ]
+            labelBaselineConstraints = constraints
+            NSLayoutConstraint.activate(constraints)
+        }
+    }
+
+    /// TextKit 2で描くとき、本文を`width`で並べた結果から、ベースラインの位置をラベルの上下の端からの距離で決める。
+    /// 中身を適用するときはまだ本文の幅が決まっていないことがあるので、前の幅か自分の幅で決め、並べたあとに本文の幅で決め直す。
+    /// 決め直して変わるのは、幅で最初か最後の行に入る文字の書体が替わり、行の高さが変わるときだけ。
+    private func updateTextKitBaselines(width: CGFloat) {
+        guard textLabel.drawsWithTextKit else { return }
+        // 初めて中身を入れるときは、まだ幅が決まっていない。十分に広い幅で並べて決め、高さを測る前にベースラインを置いておく。
+        // 0のままにすると、ベースラインがラベルの上端に重なり、並べ直すまで本文が上へずれた高さで測られる。
+        let baselines = textLabel.textKitBaselines(width: width > 0 ? width : Self.unknownTextWidth)
+        if textKitFirstBaseline?.constant != baselines.first {
+            textKitFirstBaseline?.constant = baselines.first
+        }
+        if textKitLastBaseline?.constant != -baselines.lastFromBottom {
+            textKitLastBaseline?.constant = -baselines.lastFromBottom
+        }
+    }
+
+    /// 本文の幅が決まる前に、ベースラインを決めるために並べる幅。
+    private static let unknownTextWidth: CGFloat = 10_000
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        updateTextKitBaselines(width: textLabel.bounds.width)
     }
 
     /// 出した注意書きのボックスを返す。
@@ -680,7 +732,7 @@ final class PostBodyView: UIView {
 
     /// 添付ファイルを本文の右に、一辺`side`の正方形で出す。上端は本文の1行目の字面の上端にそろえる。
     /// - Returns: 本文の字面とサムネイルの下端のうち下にあるほう（下の部品を並べ始める位置）と、本文のラベルとサムネイルの下端のうち下にあるほう（ほかに何もないときの自分の下端）。
-    private func applyBesideMedia(_ media: MediaGridView.Content, side: CGFloat, top: NSLayoutYAxisAnchor, topSpacing: CGFloat, text: (label: UILabel, bottomInset: CGFloat)?) -> (parts: NSLayoutYAxisAnchor, end: NSLayoutYAxisAnchor) {
+    private func applyBesideMedia(_ media: MediaGridView.Content, side: CGFloat, top: NSLayoutYAxisAnchor, topSpacing: CGFloat, text: (lastBaseline: NSLayoutYAxisAnchor, bottomInset: CGFloat)?) -> (parts: NSLayoutYAxisAnchor, end: NSLayoutYAxisAnchor) {
         let mediaView = loadedMediaView()
         mediaView.isHidden = false
         mediaView.apply(media)
@@ -691,8 +743,8 @@ final class PostBodyView: UIView {
             mediaView.heightAnchor.constraint(equalToConstant: side),
         ]
         let mediaBottom = (anchor: mediaView.bottomAnchor, inset: CGFloat(0))
-        let textGlyphsBottom = text.map { (anchor: $0.label.lastBaselineAnchor, inset: $0.bottomInset) }
-        let textLabelBottom = text.map { (anchor: $0.label.bottomAnchor, inset: CGFloat(0)) }
+        let textGlyphsBottom = text.map { (anchor: $0.lastBaseline, inset: $0.bottomInset) }
+        let textLabelBottom = text.map { _ in (anchor: textLabel.bottomAnchor, inset: CGFloat(0)) }
         variableConstraints += lowestBottom(besideGuide, top: top, of: [mediaBottom, textGlyphsBottom].compactMap(\.self))
         variableConstraints += lowestBottom(besideEndGuide, top: top, of: [mediaBottom, textLabelBottom].compactMap(\.self))
         return (besideGuide.bottomAnchor, besideEndGuide.bottomAnchor)
@@ -818,7 +870,7 @@ final class PostBodyView: UIView {
         filterNoteLabel.accessibilityLabel = note.string.trimmingCharacters(in: CharacterSet(charactersIn: "\u{FFFC}").union(.whitespaces))
         // 本文の下なら、ほかの部品と同じく字面の下端から測る。
         let lastBottom = switch bottom {
-        case .view(let last) where last === textLabel: (anchor: textLabel.lastBaselineAnchor, inset: textBottomInset)
+        case .view(let last) where last === textLabel: (anchor: textLastBaselineGuide.topAnchor, inset: textBottomInset)
         case .view(let last): (anchor: last.bottomAnchor, inset: CGFloat(0))
         case .beside(let parts, _): (anchor: parts, inset: CGFloat(0))
         }

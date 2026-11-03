@@ -21,8 +21,14 @@ public struct StatusRefreshNeeds: OptionSet, Sendable {
 
     /// `status`を取り直す理由。ブーストなら、ブーストされた投稿を渡す。
     public init(_ status: Status) {
+        self.init(status, card: LinkCard(status: status))
+    }
+
+    /// `status`を取り直す理由。`card`には、`status`から作ったリンクカードを渡す。
+    /// 作ってあるカードを使い回すため。カードは本文のHTMLを読み直して作るので、スクロールのたびに作ると重い。
+    public init(_ status: Status, card: LinkCard?) {
         self = []
-        if case .link = LinkCard(status: status) { insert(.linkCard) }
+        if case .link = card { insert(.linkCard) }
         if status.quote?.state == .pending || status.quote?.quotedStatus?.quote?.state == .pending { insert(.pendingQuote) }
     }
 }

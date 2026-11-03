@@ -538,6 +538,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             _ = settings.appearanceValues
             _ = tuning.value(of: TuningCatalog.mediaThumbnailUpscaleTolerance)
             _ = tuning.value(of: TuningCatalog.xPostEmbeds)
+            _ = tuning.value(of: TuningCatalog.bodyTextKitDrawing)
             _ = tuning.value(of: TuningCatalog.reactionGlowMixesInOKLab)
             _ = tuning.value(of: TuningCatalog.reactionGlowIconRiseDelay)
             _ = tuning.value(of: TuningCatalog.reactionGlowHDRExposure)
@@ -1805,7 +1806,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             var shown: StatusRefreshNeeds = []
             if configuration.card != nil { shown.insert(.linkCard) }
             if configuration.embed != nil { shown.insert(.pendingQuote) }
-            return StatusRefreshNeeds(status).isDisjoint(with: shown) ? nil : status
+            guard !shown.isEmpty else { return nil }
+            // スクロールのたびに呼ばれるので、カードは行を組み立てたときに作ったものを使う。
+            return StatusRefreshNeeds(status, card: configuration.card?.card).isDisjoint(with: shown) ? nil : status
         }
     }
 

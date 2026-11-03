@@ -22,7 +22,7 @@ class EmojiLabel: UILabel {
                 AnimatedEmojiOverlay(store: store) { [weak self] in self?.applyAnimatedEmojis() }
             }
             if animatedEmojis == nil, showsReplacedText {
-                super.attributedText = sourceText
+                setShownText(sourceText)
                 layoutCache = nil
                 showsReplacedText = false
             }
@@ -33,7 +33,7 @@ class EmojiLabel: UILabel {
     /// 置く側が前に渡したものと中身が同じなら、入れ替えない。行を組み直すたびに文字列は作り直されるが、
     /// 入れ替えるとUILabelがベースラインや大きさを測り直し、長い本文では組み直しの大半をそこに使うため。
     override var attributedText: NSAttributedString? {
-        get { super.attributedText }
+        get { drawsWithTextKit ? textKitText : super.attributedText }
         set {
             if let assignedText, Self.hasSameContent(assignedText, newValue) {
                 // 入れ替えていれば、そこで読めなかったアニメーション版を読み直していた。入れ替えなくても読み直す。
@@ -49,20 +49,23 @@ class EmojiLabel: UILabel {
                 cancelEmojiArrival()
             }
             assignedText = newValue
-            super.attributedText = newValue
+            // 測った結果は、文字列を入れる前に捨てる。UILabelは文字列を入れる中で大きさを測り直して覚えるため、
+            // あとで捨てると、使い回したラベルが前の文字列で測った大きさのままになる。
             layoutCache = nil
             truncationCache = nil
-            sourceText = super.attributedText
+            attributedTextWillChange()
+            setShownText(newValue)
+            sourceText = attributedText
             hasCustomEmoji = sourceText.map(Self.containsCustomEmoji) ?? false
             showsReplacedText = false
             stillEmojiIndices = []
-            attributedTextDidChange()
             applyAnimatedEmojis()
         }
     }
 
-    /// 置く側が中身の違う文字列を入れたあとに呼ぶ。文字列から測った結果を持つ派生のラベルが、ここで捨てる。
-    func attributedTextDidChange() {}
+    /// 置く側が中身の違う文字列を入れる前に呼ぶ。文字列から測った結果を持つ派生のラベルが、ここで捨てる。
+    /// UILabelは文字列を入れる中で大きさを測り直して覚えるため、入れたあとに捨てると、前の文字列で測った結果を使われる。
+    func attributedTextWillChange() {}
 
     /// 2つの文字列の、描いたときの中身が同じか。文字と属性を比べ、カスタム絵文字の添付は、画像が同じものかと大きさで比べる。
     /// 添付は描き直すたびに新しく作られ、`NSTextAttachment`同士はものが同じでないと等しくならないため。
@@ -93,6 +96,10 @@ class EmojiLabel: UILabel {
     }
 
     override var text: String? {
+        willSet {
+            layoutCache = nil
+            attributedTextWillChange()
+        }
         didSet {
             assignedText = nil
             cancelEmojiArrival()
@@ -195,7 +202,12 @@ class EmojiLabel: UILabel {
     private var stillEmojiIndices: Set<Int> = []
     private var animatedEmojis: AnimatedEmojiOverlay?
     /// 並べ直した結果。リンクを探すたびや、並べ直すたびに作らないよう、文字列と幅が変わるまで使い回す。
-    private var layoutCache: TextLayout?
+    private var layoutCache: TextLayout? {
+        didSet {
+            // 並べ直すときは、測った大きさも捨てる。並べ直すのは、文字列や行数、改行の仕方が変わったとき。
+            if layoutCache == nil { textKitMetrics = [:] }
+        }
+    }
     /// 「…」で切られているかを、調べたときの幅とともに持つ。
     private var truncationCache: (width: CGFloat, isTruncated: Bool)?
     /// 描いた文字を薄くしたり消したりしている範囲。ラベルの座標。ここにかかる絵文字は、動かす層を重ねず、文字の中の静止画のまま描く。
@@ -226,7 +238,7 @@ class EmojiLabel: UILabel {
         let replaces = shown !== sourceText
         // 差し替えないときは、置く側が渡した文字列をすでに描いている。前に差し替えていたら、元に戻す。
         if replaces || showsReplacedText {
-            super.attributedText = shown
+            setShownText(shown)
             layoutCache = nil
         }
         showsReplacedText = replaces
@@ -391,21 +403,195 @@ class EmojiLabel: UILabel {
         if let layoutCache, layoutCache.width == bounds.width, layoutCache.direction == direction {
             return layoutCache
         }
+        let layout = makeTextLayout(of: attributedText, width: bounds.width, maximumLines: numberOfLines)
+        layoutCache = layout
+        return layout
+    }
+
+    private func makeTextLayout(of attributedText: NSAttributedString, width: CGFloat, maximumLines: Int) -> TextLayout {
         let contentStorage = NSTextContentStorage()
         let layoutManager = NSTextLayoutManager()
         contentStorage.addTextLayoutManager(layoutManager)
         // 高さは限らない。最後の行の下の行間まで数えるとラベルより高くなり、ラベルの高さで切ると最後の行が並ばない。
-        let container = NSTextContainer(size: CGSize(width: bounds.width, height: 0))
+        let container = NSTextContainer(size: CGSize(width: width, height: 0))
         container.lineFragmentPadding = 0
-        container.maximumNumberOfLines = numberOfLines
+        container.maximumNumberOfLines = maximumLines
         // 段落は折り返しにして、コンテナで最後の行だけを「…」で切る。最後の行に入りきらない単語も、UILabelと同じく「…」の前まで途中を並べる。
         container.lineBreakMode = truncationMode(of: attributedText) ?? lineBreakMode
         layoutManager.textContainer = container
         contentStorage.attributedString = Self.wrappingInsteadOfTruncating(alignedLikeLabel(attributedText))
         layoutManager.ensureLayout(for: layoutManager.documentRange)
-        let layout = TextLayout(width: bounds.width, direction: direction, contentStorage: contentStorage, layoutManager: layoutManager)
-        layoutCache = layout
-        return layout
+        return TextLayout(width: width, direction: effectiveUserInterfaceLayoutDirection, contentStorage: contentStorage, layoutManager: layoutManager)
+    }
+
+    /// TextKit 2で描くときの、描いている文字列。UILabelが自分のフォントと色で埋めるのと同じく、フォントと色のない部分を埋めてある。
+    /// UILabelには持たせない。UILabelは文字列を入れるたびに、自分で並べ直してベースラインを求めるため。
+    private var textKitText: NSAttributedString?
+
+    /// 描いている文字列を替える。TextKit 2で描くときは、UILabelには空白1文字だけを渡す。
+    /// 空にするとUILabelが描画を省くため、1文字にする。同じ1文字を渡し直してもUILabelは大きさを測り直さないので、測り直しと描き直しは自分で頼む。
+    private func setShownText(_ text: NSAttributedString?) {
+        guard drawsWithTextKit else {
+            super.attributedText = text
+            return
+        }
+        textKitText = text.map(filledLikeLabel)
+        if super.attributedText?.string != Self.textKitPlaceholder {
+            super.attributedText = NSAttributedString(string: Self.textKitPlaceholder)
+        }
+        invalidateIntrinsicContentSize()
+        setNeedsLayout()
+        setNeedsDisplay()
+    }
+
+    private static let textKitPlaceholder = " "
+
+    /// フォントと色のない部分を、ラベルのフォントと色で埋めた文字列。UILabelは渡された文字列をこうして埋めてから並べる。
+    private func filledLikeLabel(_ text: NSAttributedString) -> NSAttributedString {
+        let result = NSMutableAttributedString(attributedString: text)
+        let whole = NSRange(location: 0, length: result.length)
+        result.enumerateAttribute(.font, in: whole) { value, range, _ in
+            if value == nil, let font { result.addAttribute(.font, value: font, range: range) }
+        }
+        result.enumerateAttribute(.foregroundColor, in: whole) { value, range, _ in
+            if value == nil, let textColor { result.addAttribute(.foregroundColor, value: textColor, range: range) }
+        }
+        return result
+    }
+
+    /// TextKit 2で描くときは、UILabelが持つ空白1文字ではなく、描いている文字列を読み上げる。置く側が決めた文言があれば、そちらを使う。
+    override var accessibilityLabel: String? {
+        get {
+            let label = super.accessibilityLabel
+            return drawsWithTextKit && label == Self.textKitPlaceholder ? textKitText?.string : label
+        }
+        set { super.accessibilityLabel = newValue }
+    }
+
+    /// UILabelではなく、TextKit 2で並べて描く。大きさも、位置を読むのと同じ並べ方で測る。
+    /// UILabelは端末で長い段落の改行位置を段落全体から選び、その計算が重い。行を組み立てるたびに、大きさ、ベースライン、描画で何度も並べるため、
+    /// 長い本文の行でフレームが落ちた。TextKit 2はその計算をせず、並べた結果を幅と行数ごとに使い回す。
+    /// UILabelのベースライン（`firstBaselineAnchor`など）は、TextKit 2の並びを使わずにUILabelが並べ直して求めるので、置く側は使わず、`textKitBaselines(width:)`で置く。
+    var drawsWithTextKit = false {
+        didSet {
+            guard drawsWithTextKit != oldValue else { return }
+            // 描いている文字列を、新しい描き方の置き場所へ移す。
+            let shown = oldValue ? textKitText : super.attributedText
+            if drawsWithTextKit {
+                setShownText(shown)
+            } else {
+                textKitText = nil
+                super.attributedText = shown
+            }
+            layoutCache = nil
+            textKitMetrics = [:]
+            invalidateIntrinsicContentSize()
+            setNeedsDisplay()
+        }
+    }
+
+    /// TextKit 2で並べた結果の大きさとベースライン。幅と行数ごとに、文字列が変わるまで使い回す。
+    private struct TextKitMetrics {
+        let size: CGSize
+        let lineCount: Int
+        /// 上端から最初の行のベースラインまで。
+        let firstBaseline: CGFloat
+        /// 最後の行のベースラインから下端まで。
+        let lastBaselineFromBottom: CGFloat
+    }
+
+    private struct TextKitMetricsKey: Hashable {
+        let width: CGFloat
+        let maximumLines: Int
+    }
+
+    private var textKitMetrics: [TextKitMetricsKey: TextKitMetrics] = [:]
+
+    private func textKitMetrics(width: CGFloat, maximumLines: Int) -> TextKitMetrics? {
+        guard let attributedText, attributedText.length > 0 else { return nil }
+        let key = TextKitMetricsKey(width: width, maximumLines: maximumLines)
+        if let metrics = textKitMetrics[key] { return metrics }
+        // 描くのと同じ幅と行数なら、描くときの並びを使い回す。並びは文字列を入れる前に捨てるので、前の文字列の並びは残らない。
+        let layout = width == bounds.width && maximumLines == numberOfLines
+            ? textLayout(of: attributedText)
+            : makeTextLayout(of: attributedText, width: width, maximumLines: maximumLines)
+        var lineCount = 0
+        var maxX: CGFloat = 0
+        var firstBaseline: CGFloat?
+        var last: (baseline: CGFloat, line: NSTextLineFragment)?
+        layout.layoutManager.enumerateTextLayoutFragments(from: layout.layoutManager.documentRange.location, options: [.ensuresLayout]) { fragment in
+            let origin = fragment.layoutFragmentFrame.origin
+            for line in fragment.textLineFragments {
+                let bounds = line.typographicBounds.offsetBy(dx: origin.x, dy: origin.y)
+                let baseline = bounds.minY + line.glyphOrigin.y
+                lineCount += 1
+                maxX = max(maxX, bounds.maxX)
+                if firstBaseline == nil { firstBaseline = baseline }
+                last = (baseline, line)
+            }
+            return true
+        }
+        guard let firstBaseline, let last else { return nil }
+        let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 1
+        let height = ceil((last.baseline + Self.descent(of: last.line)) * scale) / scale
+        let metrics = TextKitMetrics(
+            size: CGSize(width: ceil(maxX * scale) / scale, height: height),
+            lineCount: lineCount,
+            firstBaseline: firstBaseline,
+            lastBaselineFromBottom: height - last.baseline
+        )
+        textKitMetrics[key] = metrics
+        return metrics
+    }
+
+    /// 行のベースラインから下端まで。TextKit 2の行の枠は、下にフォントのleadingを含むが、UILabelは最後の行の下にleadingを足さないため、
+    /// 最後の行の下端は、UILabelと同じくCoreTextで測った行の下の長さで決める。
+    /// カスタム絵文字の画像がベースラインより下へ伸びる行では、CoreTextの行の下の長さが、画像の下端までになる。
+    private static func descent(of line: NSTextLineFragment) -> CGFloat {
+        guard line.characterRange.length > 0 else { return line.typographicBounds.height - line.glyphOrigin.y }
+        var ascent: CGFloat = 0
+        var descent: CGFloat = 0
+        var leading: CGFloat = 0
+        _ = CTLineGetTypographicBounds(CTLineCreateWithAttributedString(line.attributedString.attributedSubstring(from: line.characterRange)), &ascent, &descent, &leading)
+        return descent
+    }
+
+    /// TextKit 2で行数を限らずに並べたときの行数。
+    final func textKitLineCount(width: CGFloat) -> Int {
+        textKitMetrics(width: width, maximumLines: 0)?.lineCount ?? 0
+    }
+
+    /// TextKit 2で`width`の幅に今の行数で並べたときの、上端から最初の行のベースラインまでと、最後の行のベースラインから下端まで。
+    /// 文字がなければ、どちらも0。
+    final func textKitBaselines(width: CGFloat) -> (first: CGFloat, lastFromBottom: CGFloat) {
+        textKitMetrics(width: width, maximumLines: numberOfLines).map { ($0.firstBaseline, $0.lastBaselineFromBottom) } ?? (0, 0)
+    }
+
+    override func textRect(forBounds bounds: CGRect, limitedToNumberOfLines numberOfLines: Int) -> CGRect {
+        guard drawsWithTextKit else { return super.textRect(forBounds: bounds, limitedToNumberOfLines: numberOfLines) }
+        // 文字がなければ、UILabelに渡した空白1文字ではなく、空の大きさを返す。UILabelも、空の文字列では高さを0にする。
+        guard let metrics = textKitMetrics(width: bounds.width, maximumLines: numberOfLines) else {
+            return CGRect(origin: bounds.origin, size: .zero)
+        }
+        return CGRect(origin: bounds.origin, size: CGSize(width: min(metrics.size.width, bounds.width), height: min(metrics.size.height, bounds.height)))
+    }
+
+    override func drawText(in rect: CGRect) {
+        guard drawsWithTextKit, let attributedText, attributedText.length > 0, let context = UIGraphicsGetCurrentContext() else {
+            super.drawText(in: rect)
+            return
+        }
+        let layout = textLayout(of: attributedText)
+        context.saveGState()
+        // 幅より大きい絵文字は、UILabelと同じくラベルの左右の端で切る。切らないと、本文の右に並べた添付ファイルに重なる。
+        // 上下は切らない。UILabelも、積み重なる結合文字のように行の外へ伸びる字形は、ラベルの外まで描く。
+        context.clip(to: CGRect(x: 0, y: -bounds.height, width: bounds.width, height: bounds.height * 3))
+        layout.layoutManager.enumerateTextLayoutFragments(from: layout.layoutManager.documentRange.location, options: [.ensuresLayout]) { fragment in
+            guard fragment.layoutFragmentFrame.minY < bounds.maxY else { return false }
+            fragment.draw(at: fragment.layoutFragmentFrame.origin, in: context)
+            return true
+        }
+        context.restoreGState()
     }
 
     /// カスタム絵文字を描く枠。ラベルの座標で返す。「投稿の見た目」のプレビューで、絵文字の場所を示すのに使う。

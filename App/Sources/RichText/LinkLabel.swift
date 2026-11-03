@@ -63,8 +63,12 @@ final class LinkLabel: EmojiLabel {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override func attributedTextDidChange() {
+    override func attributedTextWillChange() {
         lineLimits = [:]
+    }
+
+    override var drawsWithTextKit: Bool {
+        didSet { lineLimits = [:] }
     }
 
     /// 今の幅で、長い本文を切っている。
@@ -89,10 +93,17 @@ final class LinkLabel: EmojiLabel {
     private func lineLimit(forWidth width: CGFloat) -> Int {
         guard let truncation else { return numberOfLines }
         if let limit = lineLimits[width] { return limit }
-        let bounds = CGRect(x: 0, y: 0, width: width, height: .greatestFiniteMagnitude)
-        let atThreshold = super.textRect(forBounds: bounds, limitedToNumberOfLines: truncation.threshold).height
-        let beyond = super.textRect(forBounds: bounds, limitedToNumberOfLines: truncation.threshold + 1).height
-        let limit = truncation.lineLimit(exceedsThreshold: beyond > atThreshold)
+        let exceedsThreshold: Bool
+        if drawsWithTextKit {
+            // 描くのと同じ並べ方の行数で決める。並べた結果は幅ごとに残るので、高さを測るときにも並べ直さない。
+            exceedsThreshold = textKitLineCount(width: width) > truncation.threshold
+        } else {
+            let bounds = CGRect(x: 0, y: 0, width: width, height: .greatestFiniteMagnitude)
+            let atThreshold = super.textRect(forBounds: bounds, limitedToNumberOfLines: truncation.threshold).height
+            let beyond = super.textRect(forBounds: bounds, limitedToNumberOfLines: truncation.threshold + 1).height
+            exceedsThreshold = beyond > atThreshold
+        }
+        let limit = truncation.lineLimit(exceedsThreshold: exceedsThreshold)
         lineLimits[width] = limit
         return limit
     }
