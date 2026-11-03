@@ -70,10 +70,21 @@ struct AppDestinationTests {
         #expect(AppDestination(url) == .settings(page))
     }
 
+    /// 「投稿の見た目」のどの分類の画面も、URLで開ける。分類にない名前は読まない。
+    @Test(arguments: AppearanceCatalog.groups.map(\.id))
+    func readsEveryAppearanceGroup(_ id: AppearanceGroup.ID) throws {
+        let url = try #require(URL(string: "scia://settings/appearance/\(id)"))
+        #expect(AppDestination(url) == .appearanceGroup(id))
+    }
+
+    @Test func ignoresUnknownAppearanceGroup() throws {
+        #expect(AppDestination(try #require(URL(string: "scia://settings/appearance/unknown"))) == nil)
+    }
+
     /// 開く先の項目ごとに1つ以上。開く先を足したら、ここにも足す。
     static let samples: [AppDestination] = [.tab(.home), .tab(.scheduled)]
         + [.userTab(.list(id: "12")), .userTab(.hashtag(name: "日本語")), .userTab(.profile(acct: "bob@example.com")), .userTab(.accountHashtag(acct: "bob", name: "scia"))]
-        + [.settings(nil)] + SettingsPage.allCases.map { .settings($0) }
+        + [.settings(nil)] + SettingsPage.allCases.map { .settings($0) } + [.appearanceGroup("name")]
         + [.profile(acct: "bob@example.com"), .profile(acct: "bob"), .myProfile, .profileEdit]
         + [.thread(statusID: "123"), .editHistory(statusID: "123"), .apiResponse(statusID: "123")]
         + [.accounts(.followers(accountID: nil)), .accounts(.followers(accountID: "9")), .accounts(.following(accountID: nil)), .accounts(.following(accountID: "9"))]
@@ -111,7 +122,7 @@ struct AppDestinationTests {
     }
 
     enum Kind: CaseIterable {
-        case tab, userTabList, userTabHashtag, userTabProfile, userTabAccountHashtag, settings, profile, myProfile, profileEdit
+        case tab, userTabList, userTabHashtag, userTabProfile, userTabAccountHashtag, settings, appearanceGroup, profile, myProfile, profileEdit
         case thread, editHistory, apiResponse, followers, following, favourited, reblogged, hashtag, accountHashtag, search, scheduled, operationStatus
         case notificationRequests, notificationRequest, notificationPolicy, announcements, inAppBrowserHeight
         case note, report, composeTools, composeLanguage, composeSchedule, composeEmoji, composeMediaPicker, composeAttachment, composeAltText, composeCrop
@@ -125,6 +136,7 @@ struct AppDestinationTests {
         case .userTab(.profile): .userTabProfile
         case .userTab(.accountHashtag): .userTabAccountHashtag
         case .settings: .settings
+        case .appearanceGroup: .appearanceGroup
         case .profile: .profile
         case .myProfile: .myProfile
         case .profileEdit: .profileEdit

@@ -9,6 +9,8 @@ public enum AppDestination: Equatable, Sendable {
     case userTab(UserTab)
     /// `settings`で設定を、`settings/<SettingsPage.rawValue>`で設定の一覧から入るその画面まで重ねて開く。
     case settings(SettingsPage?)
+    /// `settings/appearance/<分類のID>`。「投稿の見た目」の、その分類（`AppearanceCatalog.groups`）の画面まで重ねて開く。
+    case appearanceGroup(AppearanceGroup.ID)
     /// `profile/<user@domain>`。ローカルのアカウントは`<user>`だけでもよい。ホームのタブにプロフィールを開く。
     case profile(acct: String)
     /// `my-profile`。選んでいるタブに、自分のプロフィールを開く。
@@ -110,6 +112,7 @@ public enum AppDestination: Equatable, Sendable {
         case .tab(let item): "tab \(item.rawValue)"
         case .userTab: "user tab"
         case .settings(let page): "settings \(page?.rawValue ?? "")"
+        case .appearanceGroup(let id): "settings appearance/\(id)"
         case .profile: "profile"
         case .myProfile: "my profile"
         case .profileEdit: "profile edit"
@@ -152,6 +155,8 @@ public enum AppDestination: Equatable, Sendable {
         case ("tab", "account-hashtag"): query("acct").flatMap { acct in query("name").map { .userTab(.accountHashtag(acct: acct, name: $0)) } }
         case ("tab", _): Self.fixedTabs.first { $0.rawValue == path }.map { .tab($0) }
         case ("settings", ""): .settings(nil)
+        case ("settings", _) where path.hasPrefix(Self.appearanceGroupPrefix):
+            Self.appearanceGroup(id: String(path.dropFirst(Self.appearanceGroupPrefix.count)))
         case ("settings", _): SettingsPage(rawValue: path).map { .settings($0) }
         case ("profile", _):
             // `@user@domain`の形で書かれていても読めるよう、先頭の@を外す。
@@ -206,6 +211,7 @@ public enum AppDestination: Equatable, Sendable {
         case .userTab(.profile(let acct)): ("tab", "profile", [("acct", acct)])
         case .userTab(.accountHashtag(let acct, let name)): ("tab", "account-hashtag", [("acct", acct), ("name", name)])
         case .settings(let page): ("settings", page?.rawValue, [])
+        case .appearanceGroup(let id): ("settings", Self.appearanceGroupPrefix + id, [])
         case .profile(let acct): ("profile", acct, [])
         case .myProfile: ("my-profile", nil, [])
         case .profileEdit: ("profile-edit", nil, [])
@@ -244,6 +250,14 @@ public enum AppDestination: Equatable, Sendable {
         components.queryItems = query.isEmpty ? nil : query.map { URLQueryItem(name: $0.0, value: $0.1) }
         guard let url = components.url, AppDestination(url) == self else { return nil }
         return url
+    }
+
+    /// 分類の画面のパスの、分類のIDの前。
+    private static let appearanceGroupPrefix = "\(SettingsPage.appearance.rawValue)/"
+
+    /// 分類のIDが「投稿の見た目」の分類なら、その画面。
+    private static func appearanceGroup(id: String) -> AppDestination? {
+        AppearanceCatalog.groups.contains { $0.id == id } ? .appearanceGroup(id) : nil
     }
 
     /// 最初からあるタブ。足したタブは`userTab`で選ぶ。

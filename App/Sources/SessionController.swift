@@ -2386,6 +2386,22 @@ final class SessionController {
         topViewController.present(sheet, animated: true)
     }
 
+    /// 設定の画面を出す。閉じる途中の画面には重ねられないため、閉じる途中の画面を飛ばして重ねる。
+    /// - Parameter appearanceGroup: `page`が「投稿の見た目」のとき、その上に重ねておく分類の画面。
+    private func presentSettings(opening page: SettingsPage?, appearanceGroup: AppearanceGroup.ID? = nil) {
+        rootViewController.frontmostPresented.presentSettings(
+            instance: credential.instance,
+            account: credential.handle,
+            diagnostics: diagnostics,
+            tabIcons: profileTabIcons,
+            lists: settingsListActions,
+            openInAppBrowserHeight: { [weak self] in self?.open(.inAppBrowserHeight(returningTo: .interaction)) },
+            opening: page,
+            appearanceGroup: appearanceGroup,
+            onShownChange: { [weak self] in self?.settingsShownChanged($0) }
+        )
+    }
+
     /// 設定の画面が1枚でも出ている間は、一覧が設定の変更で描き直すのを溜め、すべて閉じたときにまとめて描き直させる。
     /// 設定の画面ごとに、出たときと消えたときに1回ずつ呼ぶ。
     func settingsShownChanged(_ isShown: Bool) {
@@ -3278,17 +3294,9 @@ final class SessionController {
             }
             logger.error("open tab: no matching tab in layout")
         case .settings(let page):
-            // 閉じる途中の画面には重ねられないため、閉じる途中の画面を飛ばして重ねる。
-            rootViewController.frontmostPresented.presentSettings(
-                instance: credential.instance,
-                account: credential.handle,
-                diagnostics: diagnostics,
-                tabIcons: profileTabIcons,
-                lists: settingsListActions,
-                openInAppBrowserHeight: { [weak self] in self?.open(.inAppBrowserHeight(returningTo: .interaction)) },
-                opening: page,
-                onShownChange: { [weak self] in self?.settingsShownChanged($0) }
-            )
+            presentSettings(opening: page)
+        case .appearanceGroup(let id):
+            presentSettings(opening: .appearance, appearanceGroup: id)
         case .profile(let acct):
             openProfile(acct: acct)
         case .myProfile:

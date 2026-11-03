@@ -20,6 +20,8 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     /// 一覧から重ねて開いた画面。
     @State private var path: [SettingsPage]
+    /// 開いたときに「投稿の見た目」の上に重ねておく分類の画面。一度重ねたら、戻ってまた「投稿の見た目」を開いても重ねないよう、消す。
+    @State private var appearanceGroup: AppearanceGroup.ID?
 
     init(
         settings: AppSettings,
@@ -29,7 +31,8 @@ struct SettingsView: View {
         tabIcons: ProfileTabIcons,
         lists: SettingsListActions,
         openInAppBrowserHeight: @escaping @MainActor () -> Void,
-        opening page: SettingsPage? = nil
+        opening page: SettingsPage? = nil,
+        appearanceGroup: AppearanceGroup.ID? = nil
     ) {
         self.settings = settings
         self.instance = instance
@@ -39,6 +42,7 @@ struct SettingsView: View {
         self.lists = lists
         self.openInAppBrowserHeight = openInAppBrowserHeight
         _path = State(initialValue: page?.path ?? [])
+        _appearanceGroup = State(initialValue: page == .appearance ? appearanceGroup : nil)
     }
 
     private var tabLayoutBinding: Binding<MenuLayout<TabItem>> {
@@ -114,7 +118,9 @@ struct SettingsView: View {
         case .media: MediaSettingsView(settings: settings)
         case .about: AboutSettingsView()
         case .appIcon: AppIconSettingsView()
-        case .appearance: AppearanceEditorView(settings: settings)
+        case .appearance:
+            AppearanceEditorView(settings: settings, opening: appearanceGroup)
+                .onAppear { appearanceGroup = nil }
         case .notificationAppearance: NotificationAppearanceEditorView(settings: settings)
         case .tabs:
             MenuLayoutSettingsView(
@@ -178,9 +184,10 @@ extension UIViewController {
     ///   - lists: タブの並びでリストを作る、消す。
     ///   - openInAppBrowserHeight: 設定を閉じ、ホームの上でアプリ内のSafariの高さを選ぶシートを出す。
     ///   - page: 一覧から重ねて開いておく画面。
+    ///   - appearanceGroup: `page`が「投稿の見た目」のとき、その上に重ねておく分類の画面。
     ///   - onShownChange: 設定の画面が出たときにtrue、消えたときにfalseで呼ぶ。
-    func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, lists: SettingsListActions, openInAppBrowserHeight: @escaping @MainActor () -> Void, opening page: SettingsPage? = nil, onShownChange: @escaping (Bool) -> Void) {
-        let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, lists: lists, openInAppBrowserHeight: openInAppBrowserHeight, opening: page)
+    func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, lists: SettingsListActions, openInAppBrowserHeight: @escaping @MainActor () -> Void, opening page: SettingsPage? = nil, appearanceGroup: AppearanceGroup.ID? = nil, onShownChange: @escaping (Bool) -> Void) {
+        let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, lists: lists, openInAppBrowserHeight: openInAppBrowserHeight, opening: page, appearanceGroup: appearanceGroup)
         present(SettingsHostingController(rootView: view, onShownChange: onShownChange), animated: true)
     }
 
