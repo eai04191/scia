@@ -228,7 +228,7 @@ public final class AppSettings {
         didSet { defaults.set(mediaActions.tokens, forKey: Keys.mediaActions) }
     }
 
-    /// 投稿欄の部品を足す項目の並び。どれをボタンの行に常に出し、どれを＋のメニューに入れるか。
+    /// 投稿欄の部品を足す項目の並び。どれをツールバーに常に出し、どれを＋のメニューに入れるか。
     public var composeToolLayout: MenuLayout<ComposeToolItem> {
         didSet { defaults.set(composeToolLayout.tokens, forKey: Keys.composeToolLayout) }
     }

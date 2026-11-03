@@ -334,7 +334,7 @@ extension ComposeToolItem: MenuItemPresentable {
     public static var mainSectionTitle: String { "＋のメニュー" }
     public static var moreSectionTitle: String { "ツールバー" }
     public static var moreSectionNote: String? { "入りきらない項目は＋のメニューに表示されます。" }
-    /// ＋のメニューは項目が少なく、ボタンの行は横並びの区切り線に関わらず横に並ぶため、足させない。
+    /// ＋のメニューは項目が少なく、ツールバーは横並びの区切り線に関わらず横に並ぶため、足させない。
     public static var supportsRowSeparators: Bool { false }
 }
 

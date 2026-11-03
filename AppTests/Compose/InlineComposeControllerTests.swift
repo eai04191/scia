@@ -464,7 +464,7 @@ final class InlineComposeControllerTests {
         #expect(composer.stateDump().contains("editing: true"), "返信をやめると書き終えたことになりました\n\(composer.stateDump())")
     }
 
-    /// 書いている間に設定で並びを変えると、すぐにボタンの行と＋が並びに合う。行の中のボタンが重ならない。
+    /// 書いている間に設定で並びを変えると、すぐにツールバーと＋が並びに合う。行の中のボタンが重ならない。
     @Test func toolButtonsFollowLayoutChangedWhileEditing() async throws {
         defer { window.isHidden = true }
         composer.beginEditing()
@@ -1037,7 +1037,7 @@ final class InlineComposeControllerTests {
         #expect(!composer.isBarHidden, "設定を戻しても、投稿欄が隠れたままです\n\(composer.stateDump())")
     }
 
-    /// 畳まない設定では、書いていないときも入力欄とボタンの行を出しておき、書き始めても書き終えても、ボタンの位置を動かさない。
+    /// 畳まない設定では、書いていないときも入力欄とツールバーを出しておき、書き始めても書き終えても、ボタンの位置を動かさない。
     /// 押した投稿欄が広がると、押した位置にボタンが来て、続けて押したときにボタンを押してしまうため。
     @Test func keepsBarOpenWhileNotEditing() async throws {
         defer { window.isHidden = true }

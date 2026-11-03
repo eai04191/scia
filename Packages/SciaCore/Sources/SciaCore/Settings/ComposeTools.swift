@@ -1,4 +1,4 @@
-/// 投稿欄のボタンの行か＋のメニューに置く項目。公開範囲や展開のような書き方を変える項目と、添付や注意書きのような部品を足す項目。並びの「その他」の境目を＋のボタンに見立て、境目より上は＋のメニューに入れ、下はボタンの行に＋の右から常に出す。設定を上から読む順が、画面の左から並ぶ順と同じになるようにするため。
+/// 投稿欄のツールバーか＋のメニューに置く項目。公開範囲や展開のような書き方を変える項目と、添付や注意書きのような部品を足す項目。並びの「その他」の境目を＋のボタンに見立て、境目より上は＋のメニューに入れ、下はツールバーに＋の右から常に出す。設定を上から読む順が、画面の左から並ぶ順と同じになるようにするため。
 /// 決まりはdocs/menus.mdの「投稿欄の＋」にある。
 public enum ComposeToolItem: String, MenuItemKind {
     case visibility
@@ -22,7 +22,7 @@ public enum ComposeToolItem: String, MenuItemKind {
     /// 本文のカーソルの位置に半角の`#`を入れ、補完を出す。
     case hashtag
 
-    /// ＋の中は、上からカスタマイズ、区切り線、リンクにタイトルを付ける、注意書き、投票、予約、言語、区切り線、メンション、ハッシュタグにし、ボタンの行は「＋ 公開範囲 添付 絵文字 展開」にする。
+    /// ＋の中は、上からカスタマイズ、区切り線、リンクにタイトルを付ける、注意書き、投票、予約、言語、区切り線、メンション、ハッシュタグにし、ツールバーは「＋ 公開範囲 添付 絵文字 展開」にする。
     /// ＋のメニューはボタンの上に開き、下ほど指が届きやすいので、使う頻度の低いカスタマイズをいちばん上に、書きながら何度も使う記号をいちばん下に置く。
     public static let defaultLayout = MenuLayout<ComposeToolItem>(defaultElements: [
         .item(.customize, isVisible: true),
@@ -43,9 +43,9 @@ public enum ComposeToolItem: String, MenuItemKind {
     ])
 }
 
-/// 項目の、ボタンの行と＋のメニューへの振り分け。
+/// 項目の、ツールバーと＋のメニューへの振り分け。
 public struct ComposeToolPlacement: Equatable, Sendable {
-    /// ボタンの行に、＋の右から出す項目。並びの順。
+    /// ツールバーに、＋の右から出す項目。並びの順。
     public var row: [ComposeToolItem]
     /// ＋のメニューのまとまり。上から並びの順。行に入りきらなかった項目は、最後のまとまりにする。空なら＋を出さない。
     public var menu: [[ComposeToolItem]]
@@ -66,7 +66,7 @@ public struct ComposeToolPlacement: Equatable, Sendable {
     ///   - width: 項目のボタンの幅。隣との間隔を含める。
     public init(layout: MenuLayout<ComposeToolItem>, available: Double, addButtonWidth: Double, width: (ComposeToolItem) -> Double) {
         let groups = layout.groups
-        // 境目より下（`more`）がボタンの行、上（`main`）が＋のメニュー。行では区切り線を数えない。横並びの区切り線も、ふつうの区切り線と同じに扱う。
+        // 境目より下（`more`）がツールバー、上（`main`）が＋のメニュー。行では区切り線を数えない。横並びの区切り線も、ふつうの区切り線と同じに扱う。
         let wanted = groups.more.flatMap(\.items)
         let menu = groups.main.map(\.items)
         let widths = wanted.map(width)

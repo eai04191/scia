@@ -139,7 +139,7 @@ final class InlineComposeController: NSObject {
     private let languages: PostingLanguageSource
     /// シートで選んだ言語の名前。端末が名前を知らない言語でも、メニューの副題とVoiceOverでサーバーの名前を出すため。
     private var chosenLanguageNames: [String: String] = [:]
-    /// 既定と違う言語を選んでいて、言語の項目が＋の中にあるときに、＋の右上に付けるコードのバッジ。ボタンの行の幅を変えないよう、＋に重ねる。
+    /// 既定と違う言語を選んでいて、言語の項目が＋の中にあるときに、＋の右上に付けるコードのバッジ。ツールバーの幅を変えないよう、＋に重ねる。
     private let languageBadge = UILabel()
     /// 添付したメディアのサムネイルの列。書いていて、添付があるときだけ出す。
     let attachmentStrip = ComposeAttachmentStrip()
@@ -165,7 +165,7 @@ final class InlineComposeController: NSObject {
         constraint.priority = .required - 1
         return constraint
     }()
-    /// 広げている間の本文の高さ。上端に届いたら、ボタンの行より先にこれが負けて本文が縮み、中でスクロールする。
+    /// 広げている間の本文の高さ。上端に届いたら、ツールバーより先にこれが負けて本文が縮み、中でスクロールする。
     private lazy var expandedTextHeight: NSLayoutConstraint = {
         let constraint = textView.heightAnchor.constraint(equalToConstant: maxTextHeight)
         constraint.priority = .defaultLow
@@ -197,7 +197,7 @@ final class InlineComposeController: NSObject {
     private var barSpacing: CGFloat { Self.barSpacing }
     /// ＋と部品のボタンの幅。記号の幅で決めると、記号ごとに幅が揃わず、公開範囲を切り替えるだけで幅が変わるので、HIGの推奨の当たり判定の44ptに揃え、間を空けずに並べる。
     private let toolButtonWidth: CGFloat = 44
-    /// 残り文字数と送信の間隔。ボタンの行の間隔は0にしているので、ここだけ空ける。
+    /// 残り文字数と送信の間隔。ツールバーの間隔は0にしているので、ここだけ空ける。
     private let sendSpacing: CGFloat = 4
     private var obscuredHeight: CGFloat = 0
     /// 書いていないときの、中身の上下の余白。
@@ -246,7 +246,7 @@ final class InlineComposeController: NSObject {
     private let dragArea = KeyboardDragArea()
     /// 添付などの部品を足す項目をまとめたメニューのボタン。書いていないときや短い投稿のときに、欄を部品のボタンで大きくしないため、1つにまとめる。
     private let addButton = UIButton(configuration: .plain())
-    /// 部品を足す項目のうち、設定でボタンの行に常に出すもののボタン。行に入りきらなければ隠し、＋のメニューに回す。
+    /// 部品を足す項目のうち、設定でツールバーに常に出すもののボタン。行に入りきらなければ隠し、＋のメニューに回す。
     private lazy var toolButtons: [ComposeToolItem: UIButton] = Dictionary(uniqueKeysWithValues: ComposeToolItem.allCases.map { item in
         switch item {
         case .visibility: (item, visibilityButton)
@@ -254,7 +254,7 @@ final class InlineComposeController: NSObject {
         case .media, .spoiler, .poll, .schedule, .language, .linkTitle, .customEmoji, .customize, .mention, .hashtag: (item, makeToolButton(item))
         }
     })
-    /// 今のボタンの行と＋のメニューへの振り分け。ボタンの行の幅が決まるたびに決め直す。まだ一度も振り分けていなければnil。
+    /// 今のツールバーと＋のメニューへの振り分け。ツールバーの幅が決まるたびに決め直す。まだ一度も振り分けていなければnil。
     /// 全部を非表示にした振り分けは行も＋も空になるので、空の値を初期値にすると、最初の振り分けを済んだものとして飛ばしてしまう。
     private var toolPlacement: ComposeToolPlacement?
     private var isToolPlacementScheduled = false
@@ -1283,7 +1283,7 @@ final class InlineComposeController: NSObject {
         textDidChange()
     }
 
-    // MARK: - ボタンの行に出す部品のボタン
+    // MARK: - ツールバーに出す部品のボタン
 
     /// 添付、注意書き、カスタマイズのボタン。公開範囲と展開は、＋を置く前からあるボタンをそのまま使う。
     private func makeToolButton(_ item: ComposeToolItem) -> UIButton {
@@ -1380,7 +1380,7 @@ final class InlineComposeController: NSObject {
         updateLanguageIndicators()
     }
 
-    /// 既定と違う言語を選んでいる間、言語のコードを見せる。項目がボタンの行にあれば記号の代わりにコードを、＋の中にあれば＋の右上にバッジを出す。
+    /// 既定と違う言語を選んでいる間、言語のコードを見せる。項目がツールバーにあれば記号の代わりにコードを、＋の中にあれば＋の右上にバッジを出す。
     private func updateLanguageIndicators() {
         let code = model.choosesNonDefaultLanguage ? model.language.map(PostingLanguage.badgeText(of:)) : nil
         if let button = toolButtons[.language] {
@@ -1429,7 +1429,7 @@ final class InlineComposeController: NSObject {
         placeTools()
     }
 
-    /// ボタンの行に常に出す項目のうち、行に入りきらない分を＋のメニューへ回す。幅は文字の大きさや残り文字数の桁で変わるので、行を並べ直すたびに決め直す。
+    /// ツールバーに常に出す項目のうち、行に入りきらない分を＋のメニューへ回す。幅は文字の大きさや残り文字数の桁で変わるので、行を並べ直すたびに決め直す。
     private func placeTools() {
         // 書いていないときは行を隠していて幅が決まらないので、決め直さない。
         guard !tools.isHidden, tools.bounds.width > 0 else { return }
@@ -2946,7 +2946,7 @@ final class InlineComposeController: NSObject {
         if isCollapsingFromExpanded {
             // 戻す動きの途中でスクロールを止めると、バーが動きを待たずにほぼ戻した高さまで縮んで見えた（スクロールを止めると、UIKitが入力欄の高さを動きの外で決め直すためと見ている）。
             // 動き終わるまではスクロールできるまま、高さの制約で本文に合わせる。
-            // 投票の欄を出しているときは、上端を止めたままなので、戻す途中も本文から縮むよう弱い制約にする。強い制約だと、選択肢やボタンの行が先に潰れる。
+            // 投票の欄を出しているときは、上端を止めたままなので、戻す途中も本文から縮むよう弱い制約にする。強い制約だと、選択肢やツールバーが先に潰れる。
             let usesWeakHeight = limitsBarTopForPoll
             expandedTextHeight.constant = min(fitting, maxTextHeight)
             expandedTextHeight.isActive = usesWeakHeight
@@ -2957,7 +2957,7 @@ final class InlineComposeController: NSObject {
         let scrolls: Bool
         if limitsBarTopForPoll {
             // 投票の欄を出している間は、本文の高さを、ほかの行より弱い制約で本文に合わせる（上限は広げていないときと同じ）。
-            // 上端に届いたら、選択肢やボタンの行より先に本文が縮み、中でスクロールする。
+            // 上端に届いたら、選択肢やツールバーより先に本文が縮み、中でスクロールする。
             expandedTextHeight.constant = min(fitting, maxTextHeight)
             expandedTextHeight.isActive = true
             textHeightLimit.isActive = false
@@ -2972,7 +2972,7 @@ final class InlineComposeController: NSObject {
         }
         if textView.isScrollEnabled != scrolls {
             textView.isScrollEnabled = scrolls
-            // スクロールを止めても、入力欄は本来の高さを測り直さない。測り直させないと、5行から4行に減らしたときに入力欄が潰れ、下のボタンの行に重なった。
+            // スクロールを止めても、入力欄は本来の高さを測り直さない。測り直させないと、5行から4行に減らしたときに入力欄が潰れ、下のツールバーに重なった。
             textView.invalidateIntrinsicContentSize()
         }
     }
@@ -3479,7 +3479,7 @@ extension InlineComposeController: UITextViewDelegate {
         guard !isReplacingLink, !textView.isScrollEnabled, !UIAccessibility.isReduceMotionEnabled, let host, host.view.window != nil else { return }
         let fitting = textView.sizeThatFits(CGSize(width: textView.bounds.width, height: .greatestFiniteMagnitude)).height
         guard abs(fitting - textView.bounds.height) > 0.5 else { return }
-        // 入力欄は文字を切り抜かないため、伸ばす途中は、増えた行が下のボタンの行に重なって見える。伸ばしている間だけ切り抜く。
+        // 入力欄は文字を切り抜かないため、伸ばす途中は、増えた行が下のツールバーに重なって見える。伸ばしている間だけ切り抜く。
         // ふだんは切り抜かない。入力欄の上に重ねる部品（ハイライトしたURLなど）が枠の外へ出ることがあるため。
         textHeightAnimations += 1
         textView.clipsToBounds = true
@@ -3749,7 +3749,7 @@ private final class ComposeTextView: GlyphLanguageTextView {
     }
 }
 
-/// 投稿欄のボタンの行。並べ直すたびに知らせ、行に入りきらない部品のボタンを＋へ回せるようにする。
+/// 投稿欄のツールバー。並べ直すたびに知らせ、行に入りきらない部品のボタンを＋へ回せるようにする。
 private final class ComposeToolsView: UIStackView {
     var onLayout: () -> Void = {}
 
