@@ -28,7 +28,7 @@ func menu<Kind: BundledMenuDefaults & MenuItemPresentable>(_: Kind.Type, title: 
     Menu(
         key: Kind.defaultsKey,
         title: title,
-        moreTitle: Kind.moreBoundaryTitle,
+        moreTitle: Kind.moreSectionTitle,
         supportsSeparators: Kind.supportsSeparators,
         supportsRowSeparators: Kind.supportsRowSeparators,
         items: Kind.allCases.map { Item(id: $0.rawValue, title: $0.title, symbol: $0.symbolName) },

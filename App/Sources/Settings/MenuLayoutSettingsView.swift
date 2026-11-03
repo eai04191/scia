@@ -2,7 +2,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 長押しのメニューや投稿欄の＋の並びを変える画面。項目、区切り線、「その他」の境目を1本のリストで並べ替え、項目ごとに表示を切り替える。決まりはdocs/menus.mdにある。
+/// 長押しのメニューや投稿欄の＋の並びを変える画面。項目と区切り線を「その他」の境目の前と後ろの2つの節に分けて並べ替え、項目ごとに表示を切り替える。決まりはdocs/menus.mdにある。
 /// 中身は`MenuLayoutViewController`で、UIKitのリストで作る。SwiftUIの`List`では、つまみは編集モードでしか出ず、編集モードでは行のスイッチが押せなくなるため、
 /// スイッチを押せたまま、つまみをつかんですぐ並べ替えられる形にできない。
 struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
@@ -74,13 +74,17 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     var onChange: (MenuLayout<Item>) -> Void
 
     /// 区切り線は同じ値が並ぶため、リストで見分けるIDを行ごとに振る。
+    /// 「その他」の境目も行として持つが、一覧には出さず、節の分かれ目にする。
     private struct Row: Identifiable {
         let id = UUID()
         var element: MenuLayout<Item>.Element
     }
 
     private enum Section: Hashable {
-        case rows
+        /// 「その他」の境目より前の行。
+        case main
+        /// 「その他」の境目より後ろの行。
+        case more
         case actions
         /// `options`の何番目のスイッチか。
         case option(Int)
@@ -88,6 +92,8 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
 
     private enum Cell: Hashable {
         case row(UUID)
+        /// 項目のない節に置く行。空の節には指を離せる場所がなく、ほかの節から項目を動かして入れられないため、置く場所にする。
+        case empty(Section)
         /// `actions`の何番目のボタンか。
         case action(Int)
         case addSeparator
@@ -193,13 +199,32 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     }
 
     private func makeLayout() -> UICollectionViewLayout {
+        UICollectionViewCompositionalLayout { [weak self] sectionIndex, environment in
+            let section = self?.dataSource?.sectionIdentifier(for: sectionIndex)
+            return .list(using: self?.listConfiguration(for: section) ?? .init(appearance: .insetGrouped), layoutEnvironment: environment)
+        }
+    }
+
+    /// 見出しは並びの2つの節にだけ付け、注記は書くことのある節にだけ付ける。
+    private func listConfiguration(for section: Section?) -> UICollectionLayoutListConfiguration {
         var configuration = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
-        configuration.footerMode = .supplementary
+        switch section {
+        case .main:
+            configuration.headerMode = .supplementary
+            configuration.footerMode = Item.mainSectionNote == nil ? .none : .supplementary
+        case .more:
+            configuration.headerMode = .supplementary
+            configuration.footerMode = Item.moreSectionNote == nil ? .none : .supplementary
+        case .option:
+            configuration.footerMode = .supplementary
+        case .actions, nil:
+            break
+        }
         // 項目どうしの間だけに線を引く。区切り線の行は自分が線なので、その上下には引かない。
         configuration.itemSeparatorHandler = { [weak self] indexPath, separator in
             var separator = separator
-            guard let self, indexPath.section == 0 else { return separator }
-            let hidden = Self.hiddenSeparators(at: indexPath.item, in: rows)
+            guard let self, let index = rowIndex(at: indexPath) else { return separator }
+            let hidden = Self.hiddenSeparators(at: index, in: rows)
             if hidden.top {
                 separator.topSeparatorVisibility = .hidden
             }
@@ -209,8 +234,8 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             return separator
         }
         configuration.trailingSwipeActionsConfigurationProvider = { [weak self] indexPath in
-            guard let self, indexPath.section == 0, rows.indices.contains(indexPath.item) else { return nil }
-            let element = rows[indexPath.item].element
+            guard let self, let index = rowIndex(at: indexPath) else { return nil }
+            let element = rows[index].element
             if case .item(let item, _) = element, let itemDeletion, itemDeletion.canDelete(item) {
                 // 消すのは確かめてサーバーが受け付けてからなので、スワイプした行はいったん戻す。外れた並びが届いたら、行を動きで閉じる。
                 let delete = UIContextualAction(style: .destructive, title: "削除") { [weak self] _, _, completion in
@@ -220,13 +245,30 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
                 return UISwipeActionsConfiguration(actions: [delete])
             }
             guard element.isSeparator else { return nil }
-            let delete = UIContextualAction(style: .destructive, title: "削除") { [weak self, id = rows[indexPath.item].id] _, _, completion in
+            let delete = UIContextualAction(style: .destructive, title: "削除") { [weak self, id = rows[index].id] _, _, completion in
                 self?.removeRow(id: id)
                 completion(true)
             }
             return UISwipeActionsConfiguration(actions: [delete])
         }
-        return UICollectionViewCompositionalLayout.list(using: configuration)
+        return configuration
+    }
+
+    /// 「その他」の境目の`rows`の中の位置。
+    private var moreIndex: Int {
+        rows.firstIndex { $0.element == .more } ?? rows.endIndex
+    }
+
+    /// 一覧の位置にある行の、`rows`の中の位置。並びの2つの節の外ならnil。
+    /// 並べ替えている間、一覧は途中の並びの位置で聞くが、`rows`は指を離すまで元の並びなので、ほかの行の位置になることがある。
+    private func rowIndex(at indexPath: IndexPath) -> Int? {
+        let index = switch dataSource?.sectionIdentifier(for: indexPath.section) {
+        case .main: indexPath.item
+        case .more: moreIndex + 1 + indexPath.item
+        default: -1
+        }
+        guard rows.indices.contains(index), rows[index].element != .more else { return nil }
+        return index
     }
 
     private func makeDataSource() -> UICollectionViewDiffableDataSource<Section, Cell> {
@@ -251,6 +293,9 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             case .reset:
                 content.text = "最初の並びに戻す"
                 content.textProperties.color = .systemRed
+            case .empty:
+                content.text = "なし"
+                content.textProperties.color = .secondaryLabel
             case .row, .option:
                 break
             }
@@ -269,12 +314,26 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             }, for: .valueChanged)
             cell.accessories = [.customView(configuration: .init(customView: toggle, placement: .trailing()))]
         }
+        let headerRegistration = UICollectionView.SupplementaryRegistration<UICollectionViewListCell>(
+            elementKind: UICollectionView.elementKindSectionHeader
+        ) { [weak self] header, _, indexPath in
+            var content = UIListContentConfiguration.header()
+            switch self?.dataSource?.sectionIdentifier(for: indexPath.section) {
+            case .main: content.text = Item.mainSectionTitle
+            case .more: content.text = Item.moreSectionTitle
+            default: break
+            }
+            header.contentConfiguration = content
+        }
         let footerRegistration = UICollectionView.SupplementaryRegistration<UICollectionViewListCell>(
             elementKind: UICollectionView.elementKindSectionFooter
         ) { [weak self] footer, _, indexPath in
             var content = UIListContentConfiguration.footer()
-            if case .option(let index) = self?.dataSource?.sectionIdentifier(for: indexPath.section) {
-                content.text = self?.options[index].footer
+            switch self?.dataSource?.sectionIdentifier(for: indexPath.section) {
+            case .main: content.text = Item.mainSectionNote
+            case .more: content.text = Item.moreSectionNote
+            case .option(let index): content.text = self?.options[index].footer
+            case .actions, nil: break
             }
             footer.contentConfiguration = content
         }
@@ -283,14 +342,18 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             switch item {
             case .row(let id):
                 collectionView.dequeueConfiguredReusableCell(using: rowRegistration, for: indexPath, item: id)
-            case .action, .addSeparator, .addRowSeparator, .reset:
+            case .action, .addSeparator, .addRowSeparator, .reset, .empty:
                 collectionView.dequeueConfiguredReusableCell(using: actionRegistration, for: indexPath, item: item)
             case .option(let index):
                 collectionView.dequeueConfiguredReusableCell(using: optionRegistration, for: indexPath, item: index)
             }
         }
-        dataSource.supplementaryViewProvider = { collectionView, _, indexPath in
-            collectionView.dequeueConfiguredReusableSupplementary(using: footerRegistration, for: indexPath)
+        dataSource.supplementaryViewProvider = { collectionView, kind, indexPath in
+            if kind == UICollectionView.elementKindSectionHeader {
+                collectionView.dequeueConfiguredReusableSupplementary(using: headerRegistration, for: indexPath)
+            } else {
+                collectionView.dequeueConfiguredReusableSupplementary(using: footerRegistration, for: indexPath)
+            }
         }
         dataSource.reorderingHandlers.canReorderItem = { item in
             if case .row = item { true } else { false }
@@ -298,10 +361,20 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         dataSource.reorderingHandlers.didReorder = { [weak self] transaction in
             guard let self else { return }
             let rowsByID = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
-            rows = transaction.finalSnapshot.itemIdentifiers(inSection: .rows).compactMap { cell in
-                if case .row(let id) = cell { rowsByID[id] } else { nil }
+            let rowsIn = { (section: Section) in
+                transaction.finalSnapshot.itemIdentifiers(inSection: section).compactMap { cell in
+                    if case .row(let id) = cell { rowsByID[id] } else { nil }
+                }
             }
+            rows = rowsIn(.main) + rows.filter { $0.element == .more } + rowsIn(.more)
             save()
+            // 節が空になったり空でなくなったりしたら、「なし」の行を出し入れする。並べ替えを当てている最中には当てられないので、終えてから当てる。
+            let placeholdersChanged = [Section.main, .more].contains { section in
+                rowsIn(section).isEmpty != transaction.finalSnapshot.itemIdentifiers(inSection: section).contains(.empty(section))
+            }
+            if placeholdersChanged {
+                Task(.withoutRequests) { @MainActor [weak self] in self?.applySnapshot(animated: !UIAccessibility.isReduceMotionEnabled) }
+            }
             refreshDependentRows()
         }
         return dataSource
@@ -338,22 +411,18 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             cell.contentConfiguration = UIHostingConfiguration { RowSeparatorRow() }
             cell.accessories = [reorder]
         case .more:
-            var content = UIListContentConfiguration.subtitleCell()
-            content.text = Item.moreBoundaryTitle
-            content.secondaryText = Item.moreBoundaryNote
-            content.secondaryTextProperties.color = .secondaryLabel
-            content.secondaryTextProperties.font = .preferredFont(forTextStyle: .footnote)
-            content.image = UIImage(systemName: Item.moreBoundarySymbolName)
-            cell.contentConfiguration = content
-            cell.accessories = [reorder]
+            // 境目は行として出さず、節の分かれ目にする。
+            break
         }
     }
 
     /// 横並びの字下げは、行を足したり消したりし終わってから付け直す。
     private func applySnapshot(animated: Bool) {
         var snapshot = NSDiffableDataSourceSnapshot<Section, Cell>()
-        snapshot.appendSections([.rows, .actions])
-        snapshot.appendItems(rows.map { .row($0.id) }, toSection: .rows)
+        snapshot.appendSections([.main, .more, .actions])
+        for (section, rows) in [(Section.main, rows[..<moreIndex]), (.more, rows[min(moreIndex + 1, rows.endIndex)...])] {
+            snapshot.appendItems(rows.isEmpty ? [.empty(section)] : rows.map { .row($0.id) }, toSection: section)
+        }
         let buttons: [Cell] = if !Item.supportsSeparators {
             [.reset]
         } else if Item.supportsRowSeparators {
@@ -377,11 +446,11 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     /// 画面の外の行はセルがなく測り直させられないので、画面に入るときに測り直させる。
     private func refreshDependentRows() {
         refreshRowGroups()
-        for index in rows.indices {
-            if let cell = collectionView.cellForItem(at: IndexPath(item: index, section: 0)) {
+        for row in rows where row.element != .more {
+            if let indexPath = dataSource?.indexPath(for: .row(row.id)), let cell = collectionView.cellForItem(at: indexPath) {
                 cell.invalidateIntrinsicContentSize()
             } else {
-                rowsWithStaleSeparators.insert(rows[index].id)
+                rowsWithStaleSeparators.insert(row.id)
             }
         }
     }
@@ -495,13 +564,12 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     }
 
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
-        guard indexPath.section == 0, rows.indices.contains(indexPath.item),
-              rowsWithStaleSeparators.remove(rows[indexPath.item].id) != nil else { return }
+        guard let index = rowIndex(at: indexPath), rowsWithStaleSeparators.remove(rows[index].id) != nil else { return }
         cell.invalidateIntrinsicContentSize()
     }
 
     func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
-        indexPath.section == 1
+        dataSource?.sectionIdentifier(for: indexPath.section) == .actions
     }
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
@@ -518,20 +586,23 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             rows = Item.defaultLayout.elements.map { Row(element: $0) }
             save()
             applySnapshot(animated: !UIAccessibility.isReduceMotionEnabled)
-        case .row, .option, nil:
+        case .row, .empty, .option, nil:
             break
         }
     }
 
-    /// 並べ替えは並びの中だけで行い、下のボタンの間には入れない。
+    /// 並べ替えは並びの2つの節の中だけで行い、下のボタンの間には入れない。節をまたいで動かせる。
     func collectionView(
         _ collectionView: UICollectionView,
         targetIndexPathForMoveOfItemFromOriginalIndexPath originalIndexPath: IndexPath,
         atCurrentIndexPath currentIndexPath: IndexPath,
         toProposedIndexPath proposedIndexPath: IndexPath
     ) -> IndexPath {
-        guard proposedIndexPath.section != 0 else { return proposedIndexPath }
-        return IndexPath(item: rows.count - 1, section: 0)
+        guard let dataSource, let more = dataSource.index(for: .more) else { return proposedIndexPath }
+        if proposedIndexPath.section <= more { return proposedIndexPath }
+        // 下のボタンの上に来たら、「その他」の節の最後に置く。動かしている行がその節にあれば、その行の分だけ数が減る。
+        let count = dataSource.snapshot().numberOfItems(inSection: .more) - (originalIndexPath.section == more ? 1 : 0)
+        return IndexPath(item: count, section: more)
     }
 }
 

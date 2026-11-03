@@ -6,10 +6,12 @@ public protocol MenuItemPresentable {
     /// 名前だけでは同じ並びのほかの項目と見分けられないときに、名前の下に添える文字。
     var detail: String? { get }
     var symbolName: String { get }
-    /// 「その他」の境目の行の名前と説明とアイコン。境目より下の項目をどこへ入れるかは、項目の種類ごとに違う。
-    static var moreBoundaryTitle: String { get }
-    static var moreBoundaryNote: String { get }
-    static var moreBoundarySymbolName: String { get }
+    /// 並びの画面で、「その他」の境目の前と後ろに分けた節の見出しと、見出しだけでは伝わらないことを添える注記。
+    /// 境目の前と後ろの項目をどこへ入れるかは、項目の種類ごとに違う。
+    static var mainSectionTitle: String { get }
+    static var mainSectionNote: String? { get }
+    static var moreSectionTitle: String { get }
+    static var moreSectionNote: String? { get }
     /// 区切り線を足せるか。
     static var supportsSeparators: Bool { get }
     /// 横並びの区切り線を足せるか。
@@ -21,9 +23,10 @@ public protocol MenuItemPresentable {
 /// 長押しのメニューでは、境目より下の項目は「その他」のサブメニューに入る。
 extension MenuItemPresentable {
     public var detail: String? { nil }
-    public static var moreBoundaryTitle: String { "その他" }
-    public static var moreBoundaryNote: String { "これより下の項目は、メニューの「その他」の中に入ります" }
-    public static var moreBoundarySymbolName: String { "ellipsis.circle" }
+    public static var mainSectionTitle: String { "メニュー" }
+    public static var mainSectionNote: String? { nil }
+    public static var moreSectionTitle: String { "その他" }
+    public static var moreSectionNote: String? { nil }
     public static var supportsSeparators: Bool { true }
     public static var supportsRowSeparators: Bool { true }
     public static var requiresVisibleItem: Bool { false }
@@ -282,9 +285,9 @@ extension TabItem: MenuItemPresentable {
         }
     }
 
-    public static var moreBoundaryTitle: String { "切り替えタブ" }
-    public static var moreBoundaryNote: String { "これより下の項目は、タブバーの最後のタブにまとめ、見出しのメニューで切り替えます" }
-    public static var moreBoundarySymbolName: String { "rectangle.stack" }
+    public static var mainSectionTitle: String { "タブバー" }
+    public static var moreSectionTitle: String { "切り替えタブ" }
+    public static var moreSectionNote: String? { "タブバーの最後のタブにまとめて表示されます。" }
     /// タブは1つずつ並ぶだけで、まとまりを分けるものがないため、区切り線を足させない。
     public static var supportsSeparators: Bool { false }
     public static var supportsRowSeparators: Bool { false }
@@ -328,9 +331,9 @@ extension ComposeToolItem: MenuItemPresentable {
         }
     }
 
-    public static var moreBoundaryTitle: String { "＋ボタン" }
-    public static var moreBoundaryNote: String { "これより上の項目は＋の中に入れ、下の項目はボタンの行に＋の右から並べます。行に入りきらない項目は＋の中に入ります" }
-    public static var moreBoundarySymbolName: String { "plus.circle" }
+    public static var mainSectionTitle: String { "＋のメニュー" }
+    public static var moreSectionTitle: String { "ツールバー" }
+    public static var moreSectionNote: String? { "入りきらない項目は＋のメニューに表示されます。" }
     /// ＋のメニューは項目が少なく、ボタンの行は横並びの区切り線に関わらず横に並ぶため、足させない。
     public static var supportsRowSeparators: Bool { false }
 }
