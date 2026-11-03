@@ -255,7 +255,7 @@ enum AgentScreenDump {
     }
 
     /// 画面と、外側のスクロールビューの見えている範囲で切り取った枠。スクロールビューは、上下のバーに隠れる余白（adjustedContentInset）も除く。
-    private static func visibleFrame(of element: NSObject, frame: CGRect, screen: CGRect) -> CGRect {
+    static func visibleFrame(of element: NSObject, frame: CGRect, screen: CGRect) -> CGRect {
         var visible = frame.intersection(screen)
         var ancestor = (element as? UIView)?.superview ?? ((element as? UIAccessibilityElement)?.accessibilityContainer as? UIView)
         while let view = ancestor, !visible.isNull {

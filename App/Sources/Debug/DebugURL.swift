@@ -62,6 +62,8 @@ enum DebugURL: Equatable {
     case dump
     /// `scia-debug://storage-probe`。ストレージの画面が測る置き場所を、読めるかを含めて、アプリのDocuments/AgentDump/storage.txtに書き出す（`StorageProbe`）。
     case storageProbe
+    /// `scia-debug://text-benchmark`。画面に出ている本文を、UILabelとTextKit 2で並べる時間を、アプリのDocuments/AgentDump/text-benchmark.txtに書き出す（`TextLayoutBenchmark`）。
+    case textBenchmark
     /// `scia-debug://browser?url=<URL>`。アプリ内のSafariでURLを開く。実機でアプリ内のSafariのデータを溜めるため。
     case browser(URL)
     /// `scia-debug://reset`。重ねた画面をすべて閉じ、どのタブも最初の画面に戻して、ホームのタブを選ぶ。
@@ -145,6 +147,7 @@ enum DebugURL: Equatable {
         "catalog": .catalog(nil),
         "dump": .dump,
         "storage-probe": .storageProbe,
+        "text-benchmark": .textBenchmark,
         "reset": .reset,
         "compose/close": .composeClose,
         "compose/open": .composeOpen,
