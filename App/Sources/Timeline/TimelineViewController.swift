@@ -1800,6 +1800,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                 separator.bottomSeparatorVisibility = .hidden
                 return separator
             }
+            // 区切り線は行と行のあいだにだけ引き、1件目の上と最後の行の下には引かない。決まりはdocs/post-header-layout.mdにある。
+            if indexPath.item == 0 {
+                separator.topSeparatorVisibility = .hidden
+            }
+            if self.dataSource.itemIdentifier(for: IndexPath(item: indexPath.item + 1, section: indexPath.section)) == nil {
+                separator.bottomSeparatorVisibility = .hidden
+            }
             if let shown = self.status(for: id)?.displayed, shown.favourited || shown.reblogged {
                 separator.bottomSeparatorVisibility = .hidden
             }
