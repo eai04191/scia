@@ -368,14 +368,15 @@ struct AppearanceValueRow: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
+                // 印の幅は変えていなくても取っておく。値を変えて印が出たときに名前が折り返すと、行が高くなり、押しているステッパーが指の下から動くため。
                 HStack(spacing: 6) {
                     Text(item.title)
-                    if settings.isModified(item) {
-                        Circle()
-                            .fill(.tint)
-                            .frame(width: 6, height: 6)
-                            .accessibilityLabel("変更あり")
-                    }
+                    Circle()
+                        .fill(.tint)
+                        .frame(width: 6, height: 6)
+                        .opacity(settings.isModified(item) ? 1 : 0)
+                        .accessibilityLabel("変更あり")
+                        .accessibilityHidden(!settings.isModified(item))
                 }
                 if let note {
                     Text(note)
