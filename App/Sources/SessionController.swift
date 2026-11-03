@@ -3306,12 +3306,14 @@ final class SessionController {
         show(destination)
     }
 
-    /// タブを選ぶ行き先（`.tab`、`.userTab`）なら、そのタブが並びにあって有効か。ほかの行き先はtrue。
+    /// 決まったタブに開く行き先（`.tab`、`.userTab`、保留中の通知）なら、そのタブが並びにあって有効か。ほかの行き先はtrue。
+    /// 検索と予約投稿は、タブを無効にしていても選んでいるタブに積むか手前に重ねて開くので、true。
     private func canShowTab(of destination: AppDestination) -> Bool {
         let item: TabItem?
         switch destination {
         case .tab(let tab): item = tab
         case .userTab(let tab): item = layoutItem(for: tab)
+        case .notificationRequests, .notificationRequest: item = .notifications
         default: return true
         }
         guard let item else { return false }
