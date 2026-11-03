@@ -50,17 +50,21 @@ final class TabArrangement {
     private(set) var switchTabMenu: SwitchTabMenuInteraction?
 
     static let switchIdentifier = "switch"
+    /// アクセントカラーを読む設定。
+    private let settings: AppSettings
 
     /// - Parameter navigation: 項目のナビゲーションを作る。項目ごとに1回だけ呼ぶ。
     /// - Parameter restoring: 前に切り替えタブで開いていた項目。まだ切り替えタブにあれば、そこから開く。
-    init(navigation: @escaping (TabItem) -> UINavigationController?, layout: MenuLayout<TabItem>, restoring: TabItem? = nil) {
+    init(navigation: @escaping (TabItem) -> UINavigationController?, layout: MenuLayout<TabItem>, restoring: TabItem? = nil, settings: AppSettings = AppDependencies.settings) {
         makeNavigation = navigation
+        self.settings = settings
         self.layout = layout
         tabBarController = UITabBarController(tabs: [])
         placement = TabPlacement(layout: layout, tabBarCapacity: Self.tabBarCapacity(for: tabBarController.traitCollection))
         switchTab = Self.makeSwitchTab(for: .home, container: switchContainer)
         restoredSwitchSelection = restoring
         apply(placement)
+        observeAccentColor()
         if #available(iOS 27.0, *) {
             switchTabMenu = SwitchTabMenuInteraction(on: tabBarController.tabBar, isPlaced: { [weak self] in self?.switchSelection != nil }, menuBottom: { [weak self] in self?.switchMenuBottom }, menu: { [weak self] in self?.switchMenu(from: .longPress) })
         }
@@ -321,10 +325,34 @@ final class TabArrangement {
 
     private func setImage(of tab: UITab, for item: TabItem) {
         let icon = icon?(item)
-        tab.image = icon?.tab ?? UIImage(systemName: item.symbolName)
+        let symbol = UIImage(systemName: item.symbolName)
         // 選んでいるときの画像はiOS 26.1から渡せる。26.0では、選んでいるときも同じアイコンのままになり、名前の色だけが変わる。
-        if #available(iOS 26.1, *) {
-            tab.selectedImage = icon?.selectedTab
+        // 本文の色の濃淡で描くと、26.0では選んでいるタブも薄くなって見分けにくくなるので、26.1からにする。
+        guard #available(iOS 26.1, *) else {
+            tab.image = icon?.tab ?? symbol
+            return
+        }
+        let inTextColors = settings.accentColor.drawsTabsInTextColors
+        tab.image = icon?.tab ?? (inTextColors ? Self.coloredSymbol(item.symbolName, color: .secondaryLabel) : symbol)
+        tab.selectedImage = icon?.selectedTab ?? (inTextColors ? Self.coloredSymbol(item.symbolName, color: .label) : nil)
+    }
+
+    /// `drawsTabsInTextColors`で描くタブのアイコン。`unselectedItemTintColor`も`UITabBarAppearance`も効かないため、色を付けた記号で渡す。
+    /// 塗りつぶしの版がある記号は、タブバーが塗りつぶしの版に差し替えて付けた色を落とすので、初めから塗りつぶしの版を渡す。
+    private static func coloredSymbol(_ name: String, color: UIColor) -> UIImage? {
+        (UIImage(systemName: name + ".fill") ?? UIImage(systemName: name))?.withTintColor(color, renderingMode: .alwaysOriginal)
+    }
+
+    /// アクセントカラーを選び直したら、アイコンを出し直す。本文の色の濃淡で描くかと、プロフィールのアイコンの、選んでいるときの縁の色が変わるため。
+    private func observeAccentColor() {
+        withObservationTracking {
+            _ = settings.accentColor
+        } onChange: { [weak self] in
+            Task(.withoutRequests) { @MainActor [weak self] in
+                guard let self else { return }
+                refreshIcons()
+                observeAccentColor()
+            }
         }
     }
 

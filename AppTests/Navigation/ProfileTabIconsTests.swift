@@ -63,18 +63,6 @@ struct ProfileTabIconsTests {
         try await waitUntil { changes == 1 }
     }
 
-    /// アクセントカラーを変えたら、縁を描き直させる。
-    @Test func accentColorChangeAsksToRefresh() async throws {
-        let settings = AppSettings.isolated()
-        let icons = ProfileTabIcons(settings: settings)
-        var changes = 0
-        icons.onChange = { changes += 1 }
-
-        settings.accentColor = .orange
-
-        try await waitUntil { changes == 1 }
-    }
-
     /// 並びから外したプロフィールのアイコンは捨てる。
     @Test func removedAvatarIsForgotten() {
         let icons = ProfileTabIcons(settings: .isolated())

@@ -40,6 +40,10 @@ struct DisplaySettingsView: View {
             }
             Section {
                 AccentColorPicker(selection: $settings.accentColor)
+            } footer: {
+                if settings.accentColor.obscuresSelectedTab {
+                    Text("iOS 26.0では、このカラーを使用すると選択中のタブがほかのタブと区別しにくくなります。iOS 26.1以降での使用を推奨します。")
+                }
             }
             Section {
                 Picker("最上部での新着の挿入", selection: $settings.insertionMotion) {

@@ -1,9 +1,11 @@
 import SciaCore
+import SciaTesting
 import Testing
 import UIKit
 @testable import Scia
 
 @MainActor
+@Suite(.scratch)
 struct TabArrangementTests {
     /// 確かめに使うリスト。
     private static let friends = TabItem.list(id: "1", title: "友だち")
@@ -50,10 +52,10 @@ struct TabArrangementTests {
 
         var navigations: [TabItem: UINavigationController] { made.all }
 
-        init(_ layout: MenuLayout<TabItem>, restoring: TabItem? = nil) throws {
+        init(_ layout: MenuLayout<TabItem>, restoring: TabItem? = nil, settings: AppSettings = .isolated()) throws {
             let made = Navigations()
             self.made = made
-            arrangement = TabArrangement(navigation: made.make, layout: layout, restoring: restoring)
+            arrangement = TabArrangement(navigation: made.make, layout: layout, restoring: restoring, settings: settings)
             let scene = try #require(
                 UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
                 "テストのホストアプリにウィンドウシーンがありません"
@@ -347,6 +349,40 @@ struct TabArrangementTests {
         let images = timelines.compactMap { ($0 as? UIAction)?.image }
         #expect(images.first === icons[Self.carol]?.menu)
         #expect(images.last?.renderingMode != .alwaysOriginal)
+    }
+
+    /// モノトーンとグレーでは、タブのアイコンを本文の色の濃淡で描くため、色を付けた記号で渡す。ほかの色では、タブバーの描き方に任せる。
+    /// 選んでいるときの画像を渡せないiOS 26.0では、薄くしない。
+    @available(iOS 26.1, *)
+    @Test(arguments: [AccentColorChoice.monochrome, .gray])
+    func colorlessAccentDimsUnselectedSymbols(_ accent: AccentColorChoice) async throws {
+        let settings = AppSettings.isolated()
+        let harness = try Harness(Self.layout(tabs: [.home, .search], switchable: [.local]), settings: settings)
+        let tabs = harness.arrangement.tabBarController.tabs
+        #expect(tabs.allSatisfy { $0.image?.renderingMode != .alwaysOriginal })
+
+        settings.accentColor = accent
+        try await waitUntil { tabs.allSatisfy { $0.image?.renderingMode == .alwaysOriginal } }
+        #expect(tabs.allSatisfy { $0.image?.isSymbolImage == true })
+        #expect(tabs.allSatisfy { $0.selectedImage?.renderingMode == .alwaysOriginal })
+
+        settings.accentColor = .blue
+        try await waitUntil { tabs.allSatisfy { $0.image?.renderingMode != .alwaysOriginal } }
+    }
+
+    /// アクセントカラーを選び直したら、プロフィールのアイコンを読み直して、選んでいるときの縁を新しい色で描かせる。
+    @Test func accentColorChangeRequestsIconsAgain() async throws {
+        let settings = AppSettings.isolated()
+        let harness = try Harness(Self.layout(tabs: [.home, Self.bob], switchable: [.local]), settings: settings)
+        var requested: [TabItem] = []
+        harness.arrangement.icon = { item in
+            requested.append(item)
+            return nil
+        }
+
+        settings.accentColor = .orange
+
+        try await waitUntil { requested.contains(Self.bob) }
     }
 
     private static func icon(_ color: UIColor) -> ProfileTabIcons.Icon {

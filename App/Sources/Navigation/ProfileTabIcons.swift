@@ -30,7 +30,7 @@ final class ProfileTabIcons {
     @ObservationIgnored private var avatars: [String: UIImage] = [:]
     /// アイコンが変わるたびに増える。設定の並びは、これが変わったら行を描き直す。
     private(set) var revision = 0
-    /// アイコンが変わったとき。届いたときと、アイコンの形かアクセントカラーの設定を変えたとき。
+    /// アイコンが変わったとき。届いたときと、アイコンの形の設定を変えたとき。アクセントカラーで変わる縁は、タブバーが選び直しを見張って描き直させる。
     @ObservationIgnored var onChange: (() -> Void)?
 
     init(settings: AppSettings) {
@@ -92,7 +92,6 @@ final class ProfileTabIcons {
     private func observeAppearance() {
         withObservationTracking {
             _ = settings.appearance.avatarShape
-            _ = settings.accentColor
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor [weak self] in
                 guard let self else { return }
