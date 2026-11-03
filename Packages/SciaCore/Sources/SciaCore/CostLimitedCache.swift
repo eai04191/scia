@@ -30,7 +30,9 @@ public struct CostLimitedCache<Key: Hashable, Value> {
     }
 
     /// 上限を超えたら、使ってから一番長いものから捨てる。入れたものは最後に使ったものになるので、1つで上限を超えるときだけ捨てる。
-    public mutating func setValue(_ value: Value, forKey key: Key, cost: Int) {
+    /// - Returns: 捨てたもののキー。
+    @discardableResult
+    public mutating func setValue(_ value: Value, forKey key: Key, cost: Int) -> [Key] {
         let cost = max(cost, 0)
         if let old = entries[key] {
             totalCost -= old.cost
@@ -39,9 +41,12 @@ public struct CostLimitedCache<Key: Hashable, Value> {
         entries[key] = Entry(value: value, cost: cost, lastUse: useCount)
         totalCost += cost
         // 捨てるたびに全体から一番古いものを探す。持つのは数百個ほどで、捨てるのはあふれたときだけなので、並びを別に持たない。
+        var evicted: [Key] = []
         while totalCost > totalCostLimit, let oldest = entries.min(by: { $0.value.lastUse < $1.value.lastUse }) {
             entries[oldest.key] = nil
             totalCost -= oldest.value.cost
+            evicted.append(oldest.key)
         }
+        return evicted
     }
 }

@@ -39,6 +39,9 @@ public final class EmojiImageStore<Image: Sendable> {
     /// 画面に出ている絵文字が捨てられると空けた場所で描いて読み直し、読み終えるとまた行を描き直す。
     /// Macで名前の絵文字が出たり消えたりを繰り返したときに`NSCache`から捨てられていたかと、何が捨てさせたかは確かめていない。
     private var stills = CostLimitedCache<URL, Image>(totalCostLimit: 32 * 1024 * 1024)
+    /// 上限を超えて`stills`から捨てた静止画。もう一度描こうとして読み直した回数を数えるのに使う。
+    private var evictedStills: Set<URL> = []
+    private var stats = Stats()
     /// 読めなかった静止画。読み直している途中も、読めるまでは`:shortcode:`の文字で描き続けるため、読んでいる途中とは分けて持つ。
     private var failedStills: Set<URL> = []
     /// 静止画を読んでいる途中のURL。
@@ -100,6 +103,7 @@ public final class EmojiImageStore<Image: Sendable> {
             if let animation = animations.object(forKey: url as NSURL) ?? liveAnimations.object(forKey: url as NSURL) {
                 return animation
             }
+            stats.animationReloads += 1
             loadAnimation(url)
             return nil
         case .failed:
@@ -130,13 +134,18 @@ public final class EmojiImageStore<Image: Sendable> {
     /// - Parameter purpose: 行に描いたときの読み込みは自動の通信として送り、止められている間は送らない（docs/network.md）。
     private func load(_ url: URL, purpose: RequestPurpose) {
         guard loading.insert(url).inserted else { return }
+        if evictedStills.contains(url) {
+            stats.stillReloads += 1
+        }
         let maker = maker
         RequestPurpose.$current.withValue(purpose) { Task {
             defer { loading.remove(url) }
             do {
                 let data = try await fetch(url)
                 guard let image = await Self.decodeStill(data) else { throw DecodeError() }
-                stills.setValue(maker.still(image), forKey: url, cost: PlatformImageMaker<Image>.cost(of: image))
+                evictedStills.formUnion(stills.setValue(maker.still(image), forKey: url, cost: PlatformImageMaker<Image>.cost(of: image)))
+                evictedStills.remove(url)
+                stats.peakStillCost = max(stats.peakStillCost, stills.totalCost)
                 failedStills.remove(url)
                 retry.recordSuccess(for: url)
             } catch {
@@ -149,6 +158,33 @@ public final class EmojiImageStore<Image: Sendable> {
     }
 
     public struct DecodeError: Error {}
+
+    /// 読み直しの回数を数える。解像度とキャッシュの上限を決めるときに、上限を超えて捨てたものをどれだけ読み直したかを見る。
+    private struct Stats {
+        /// 上限を超えて捨てた静止画を、もう一度描こうとして読み直した回数。
+        var stillReloads = 0
+        /// `animations`から捨てられ、描いている層もつかんでいなかったアニメーションを読み直した回数。
+        var animationReloads = 0
+        /// `stills`の重さの合計の、これまでの最大。
+        var peakStillCost = 0
+        /// 読み込んだアニメーションの重さの合計。読み直した分も足す。
+        var animationBytes = 0
+        /// 読み込んだアニメーション1つの重さの、これまでの最大。
+        var largestAnimationBytes = 0
+    }
+
+    /// 状態ダンプ。URLは出さず、数だけを書く。
+    public func stateDump() -> String {
+        let kilobyte = 1024
+        let animated = animationStates.values.filter { if case .animated = $0 { true } else { false } }.count
+        return [
+            "pixelHeight: \(Self.pixelHeight)",
+            "stills: \(stills.count) cost: \(stills.totalCost / kilobyte)KB peak: \(stats.peakStillCost / kilobyte)KB limit: \(stills.totalCostLimit / kilobyte)KB",
+            "stillReloadsAfterEviction: \(stats.stillReloads) evictedNow: \(evictedStills.count)",
+            "animated: \(animated) animationReloadsAfterEviction: \(stats.animationReloads)",
+            "animationLoaded: \(stats.animationBytes / kilobyte)KB largest: \(stats.largestAnimationBytes / kilobyte)KB limit: \(animations.totalCostLimit / kilobyte)KB",
+        ].joined(separator: "\n")
+    }
 
     /// 高さを`pixelHeight`にそろえて縮め、描く前に展開しておく。描くたびにメインスレッドで原寸のまま展開しないため。
     /// カスタム絵文字は文字と一緒にSDRで描く決まりなので（docs/hdr-display.md）、HDRを求めずに読む。
@@ -171,6 +207,8 @@ public final class EmojiImageStore<Image: Sendable> {
                 if let image {
                     let animation = EmojiAnimation(image)
                     animations.setObject(animation, forKey: url as NSURL, cost: image.byteCount)
+                    stats.animationBytes += image.byteCount
+                    stats.largestAnimationBytes = max(stats.largestAnimationBytes, image.byteCount)
                     liveAnimations.setObject(animation, forKey: url as NSURL)
                     state = .animated
                 } else {

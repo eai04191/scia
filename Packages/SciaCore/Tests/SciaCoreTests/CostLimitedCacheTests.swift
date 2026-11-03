@@ -42,4 +42,12 @@ struct CostLimitedCacheTests {
         #expect(cache.value(forKey: "b") == nil)
         #expect(cache.totalCost == 0)
     }
+
+    /// 捨てたもののキーを、捨てた順に返す。
+    @Test func returnsEvictedKeys() {
+        var cache = CostLimitedCache<String, Int>(totalCostLimit: 10)
+        #expect(cache.setValue(1, forKey: "a", cost: 4).isEmpty)
+        #expect(cache.setValue(2, forKey: "b", cost: 4).isEmpty)
+        #expect(cache.setValue(3, forKey: "c", cost: 8) == ["a", "b"])
+    }
 }

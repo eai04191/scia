@@ -12,6 +12,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         MacNativeScale.installIfOnMac()
         #endif
         MacNavigationBarBackground.install()
+        AppDependencies.stateDumps.register("emojiImages", owner: AppDependencies.emojiImages) { $0.stateDump() }
         // 受け取られないまま残った共有拡張のファイルを消す。開かれたばかりの共有は新しいので消さない。
         SharedMediaInbox.app?.removeStale(now: AppDependencies.now())
         return true
