@@ -62,7 +62,7 @@ final class MediaViewerController: UIViewController {
     private var urlToOpenAfterDismiss: (url: URL, browser: LinkBrowser)?
     /// 複製がサムネイルへ戻る動きを終えたときに呼ぶ。投稿欄は、ここで入力欄にキーボードを戻す。
     var onCloseFinish: (() -> Void)?
-    /// `closeForSharedContent(dismissed:)`で渡された、画面の重なりから外れたときに呼ぶもの。
+    /// `closeItself(dismissed:)`で渡された、画面の重なりから外れたときに呼ぶもの。
     private var dismissedHandlers: [() -> Void] = []
     /// 黒い下地。画像だけを動かし、下地はその場で濃くしたり薄くしたりする。
     private let backdrop = UIView()
@@ -346,9 +346,9 @@ final class MediaViewerController: UIViewController {
         beginClosing()
     }
 
-    /// 共有で投稿欄に入れるときのように、ビューアの中の操作によらずに閉じる。閉じ方は`close()`と同じ。
+    /// 共有で投稿欄に入れるときや、外から送られた行き先を開くときのように、ビューアの中の操作によらずに閉じる。閉じ方は`close()`と同じ。
     /// `dismissed`は、画面の重なりから外れたときに呼ぶ。複製がサムネイルへ戻る動きは、そのあとも続く。
-    func closeForSharedContent(dismissed: @escaping () -> Void) {
+    func closeItself(dismissed: @escaping () -> Void) {
         // 閉じる動きの途中なら、もう画面の重なりから外れている。
         guard presentingViewController != nil, !isBeingDismissed else {
             dismissed()
