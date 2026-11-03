@@ -31,7 +31,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `make check`: 変更を報告する前に必ず通す。通ると、確かめた作業ツリーの中身（commitしていない変更も含む）を覚える
 - `make menu-editor`: 長押しのメニューの既定の並びを並べ替えるページを、今の項目の名前と既定の並びを入れて`DerivedData/menu-editor.html`に書き出す
 - `make archive`: 実機向けのReleaseビルドをアーカイブする。ビルド番号はアーカイブしたUTCの日時になる
-- `make testflight`: アーカイブしてApp Store Connectへ上げる。mainは、GitHub Actions（`.github/workflows/testflight.yml`）が毎朝5時（JST）に、前に上げたときから変わっていれば上げる
+- `make testflight`: アーカイブしてApp Store Connectへ上げる。mainは、GitHub Actions（`.github/workflows/testflight.yml`）が毎朝5時（JST）に、前に上げたときから変わっていれば上げる。上げたビルドは、`make testflight-external`で外部テストのグループ（リポジトリのvariablesの`TESTFLIGHT_EXTERNAL_GROUP`）に足し、TestFlight App Reviewに出す
 - `make hooks`: ローカルのmainを、`make check`と`make test`の両方が通った中身のcommitにしか動かさないhookを入れる。checkoutごとに1回で、worktreeにも効く。通った中身との違いがMarkdown（`*.md`）とログイン画面の補完に使うサーバーの一覧（`known-servers.txt`）だけなら、走らせ直さずに通ったものとして扱う
 - `make scenario-run PERSONA=<役>`: 何も知らないエージェントを、`Tools/scenario/personas/`の役で初めて使う人としてSciaに触らせ、報告とスクリーンショットを`~/scia-scenario/runs/`に残す。外へ出ないMastodon（`mastodon.localhost`）と専用の端末`Scia Scenario`を使い、Release構成のSciaを入れる。先に`make scenario-setup`で準備する（何度走らせても同じ状態になる）。DockerとAXe（`brew install cameroncooke/axe/axe`）が要る。ユーザーが`/scenario`で起動したときは、`.claude/skills/scenario`の手順で走らせてまとめる
 
