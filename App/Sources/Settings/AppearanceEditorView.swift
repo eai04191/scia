@@ -250,13 +250,6 @@ enum AppearanceFocus: Hashable {
     case value(AppearanceValue)
     case choice(AppearanceChoice)
 
-    var highlight: AppearanceHighlight? {
-        switch self {
-        case .value(let item): AppearanceHighlight(item)
-        case .choice(let choice): choice.highlight
-        }
-    }
-
     /// この項目が効く外観。どちらの外観でも効く項目はnil。
     var colorScheme: ColorScheme? {
         switch self {

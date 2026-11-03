@@ -212,14 +212,5 @@ extension AppearancePreviewPart {
     }
 }
 
-extension AppearancePreviewPart {
-    /// 通知の行だけにある部品。「投稿の見た目」の項目は開かない。
-    public static let notificationParts: Set<AppearancePreviewPart> = [
-        .notificationSymbol, .notificationHeader, .notificationHeaderGlyphs, .notificationHeaderAvatar, .notificationHeaderAvatarGap,
-        .groupAvatars, .groupAvatarGaps, .notificationAccount, .notificationAccountGlyphs,
-        .quotedSpoiler, .quotedBodyText, .quotedBodyGlyphs, .quotedMedia, .quotedThumbnails, .quotedThumbnailGaps, .quotedPoll, .quotedNote,
-    ]
-}
-
 /// 部品ごとの枠。1つの部品が離れた複数の枠を持つことがある（リンクカードのサイト名と説明など）。
 public typealias AppearancePreviewFrames = [AppearancePreviewPart: [CGRect]]

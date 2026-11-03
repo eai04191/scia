@@ -204,7 +204,7 @@ struct AppearanceSheets {
     private static func render(settings: AppSettings, highlight: AppearanceHighlight?) -> UIImage {
         let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: width, height: 6_000))
         let samples = AppearanceSamples(settings: settings, tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
-        preview.apply(samples.configurations(colorScheme: .light, revision: 0), highlight: nil, showsSeparators: settings.appearance.showsSeparators)
+        preview.apply(samples.configurations(colorScheme: .light, revision: 0), showsSeparators: settings.appearance.showsSeparators)
         preview.layoutIfNeeded()
         guard let highlight, let found = highlight.locate(in: preview.rowFrames()) else {
             return label("示す場所が見本にない", size: CGSize(width: width, height: 40))
@@ -214,12 +214,12 @@ struct AppearanceSheets {
             UIColor.systemBackground.setFill()
             context.fill(row.bounds)
             row.layer.render(in: context.cgContext)
-            // アプリのプレビューと同じく、部品は外側に枠を引き、場所は塗る。
+            // 部品は中を隠さないよう外側に枠を引き、すき間や余白のような場所は塗る。
             for rect in found.rects {
                 var band = rect.insetBy(dx: min((rect.width - 2) / 2, 0), dy: min((rect.height - 2) / 2, 0))
                 let encloses = found.style == .enclose
                 if encloses {
-                    band = band.insetBy(dx: -AppearancePreviewView.encloseOutset, dy: -AppearancePreviewView.encloseOutset)
+                    band = band.insetBy(dx: -3, dy: -3)
                 }
                 UIColor.systemRed.withAlphaComponent(encloses ? 0.06 : 0.25).setFill()
                 // fill(_:)は下の画素を置き換えるので、文字が隠れないよう重ねて塗る。

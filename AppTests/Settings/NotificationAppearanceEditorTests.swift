@@ -13,7 +13,7 @@ struct NotificationAppearanceEditorTests {
     private func layOutPreview(_ settings: AppSettings, height: CGFloat = 4_000, groups: Set<AppearanceGroup.ID>? = nil, focus: AppearanceValue? = nil) -> AppearancePreviewView {
         let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: height))
         let samples = NotificationAppearanceSamples(settings: settings, tuning: TuningStore(defaults: nil), now: now)
-        preview.apply(Self.previewConfigurations(samples, groups: groups, focus: focus), highlight: nil)
+        preview.apply(Self.previewConfigurations(samples, groups: groups, focus: focus))
         preview.layoutIfNeeded()
         return preview
     }
@@ -87,7 +87,7 @@ struct NotificationAppearanceEditorTests {
         }
     }
 
-    /// 既定値と範囲の両端で、見本を並べて落ちず、どの項目を示しても帯を置く計算が落ちない。
+    /// 既定値と範囲の両端で、見本を並べて落ちず、どの項目の場所を探しても落ちない。
     /// - Parameter extreme: 全項目を最小にするならfalse、最大にするならtrue、既定値のままならnil。
     @Test(arguments: [nil, false, true] as [Bool?])
     func extremesShowEveryItem(extreme: Bool?) throws {
@@ -97,12 +97,9 @@ struct NotificationAppearanceEditorTests {
                 settings.setValue(atMaximum ? item.range.upperBound : item.range.lowerBound, for: item)
             }
         }
-        let preview = layOutPreview(settings, height: 400)
-        let samples = NotificationAppearanceSamples(settings: settings, tuning: TuningStore(defaults: nil), now: now)
-        let configurations = Self.previewConfigurations(samples)
+        let rows = layOutPreview(settings, height: 400).rowFrames()
         for item in NotificationAppearanceCatalog.values {
-            preview.apply(configurations, highlight: AppearanceHighlight(item))
-            preview.layoutIfNeeded()
+            _ = AppearanceHighlight(item)?.locate(in: rows)
         }
     }
 

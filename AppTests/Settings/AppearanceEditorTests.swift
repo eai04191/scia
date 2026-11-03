@@ -109,7 +109,7 @@ struct AppearanceEditorTests {
         let settings = try makeSettings()
         let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: 2_000))
         let samples = AppearanceSamples(settings: settings, tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
-        preview.apply(samples.configurations(colorScheme: .light, revision: 0), highlight: nil)
+        preview.apply(samples.configurations(colorScheme: .light, revision: 0))
         preview.layoutIfNeeded()
         let rows = preview.rowFrames()
         for item in AppearanceCatalog.values {
@@ -156,7 +156,7 @@ struct AppearanceEditorTests {
     func groupSamplesFitPreview(group: AppearanceGroup.ID) throws {
         let samples = AppearanceSamples(settings: try makeSettings(), tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
         let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: 400))
-        preview.apply(samples.configurations(colorScheme: .light, revision: 0, groups: [group]), highlight: nil)
+        preview.apply(samples.configurations(colorScheme: .light, revision: 0, groups: [group]))
         preview.layoutIfNeeded()
         #expect(preview.contentHeight <= 300, "\(group)の見本の高さが\(preview.contentHeight)ptあります")
     }
@@ -188,21 +188,23 @@ struct AppearanceEditorTests {
     @Test func fitsHeightOnlyWhenFitRevisionChanges() async throws {
         let settings = try makeSettings()
         let samples = AppearanceSamples(settings: settings, tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
-        let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: 400))
+        let preview = AppearanceTimelinePreviewController(timeline: samples.timeline)
+        preview.view.frame = CGRect(x: 0, y: 0, width: 402, height: 400)
         var heights: [CGFloat] = []
         preview.onFitHeight = { heights.append($0) }
         func apply(fitRevision: Int) {
-            preview.apply(samples.configurations(colorScheme: .light, revision: 0, groups: ["body"]), highlight: nil, fitRevision: fitRevision)
-            preview.layoutIfNeeded()
+            preview.apply(entries: samples.entries(colorScheme: .light, groups: ["body"]), fitRevision: fitRevision)
+            preview.view.layoutIfNeeded()
         }
         apply(fitRevision: 0)
         settings.setValue(40, for: AppearanceCatalog.bodyText)
         apply(fitRevision: 0)
         settings.setValue(20, for: AppearanceCatalog.bodyText)
         apply(fitRevision: 1)
-        // 渡すのは並べ終えたあとなので、2回目が届くまで待つ。値を変えたときに渡していれば、2回目はその高さになる。
+        // 渡すのは並べ終えたあとなので、2回目が届くまで待つ。値を変えたときに渡していれば、3回渡る。
         try await waitUntil { heights.count >= 2 }
-        #expect(heights[1] == preview.contentHeight)
+        #expect(heights.count == 2)
+        #expect(heights[1] == samples.timeline.collectionView.collectionViewLayout.collectionViewContentSize.height)
     }
 
     /// 同梱した見本の写真は、どれも読めて、比率の上限を見せる写真は既定の上限を超えている。上限ちょうどでは、値を変えても見本が変わらないため。
@@ -341,17 +343,6 @@ struct AppearanceEditorTests {
         #expect(AppearanceFocus.choice(.drawsReactionGlowInHDR).colorScheme == nil)
     }
 
-    /// プレビューのどの部品をタップしても、何かの項目が開く。通知の行だけにある部品は「通知の見た目」の項目を開く。
-    @Test func everyPartOpensAnItem() {
-        for part in AppearancePreviewPart.allCases {
-            if AppearancePreviewPart.notificationParts.contains(part) {
-                #expect(AppearanceHighlight.notificationItem(selectedBy: part) != nil, "\(part)をタップしても通知の項目が開きません")
-            } else {
-                #expect(AppearanceHighlight.item(selectedBy: part) != nil, "\(part)をタップしても項目が開きません")
-            }
-        }
-    }
-
     /// 既定値と範囲の両端で、見本の投稿を並べて落ちず、行の高さが有限になる。投稿は起動してすぐ描くため、ある値で落ちると、起動するたびに落ちて設定まで戻れない。
     /// 高さは一覧のセルと同じく、大きな高さを目安に、高さを譲れる優先度で測る。高さの決まらない制約があると、目安の高さまで伸びる。
     /// - Parameter extreme: 全項目を最小にするならfalse、最大にするならtrue、既定値のままならnil。
@@ -374,11 +365,13 @@ struct AppearanceEditorTests {
             ).height
             #expect(height.isFinite && height > 0 && height < 100_000, "見本の\(index)番目の高さが\(height)になりました")
         }
-        // どの項目を示しても、帯を置く計算が落ちない。
+        // どの項目の場所を探しても、落ちない。
         let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: 400))
+        preview.apply(configurations)
+        preview.layoutIfNeeded()
+        let rows = preview.rowFrames()
         for item in AppearanceCatalog.values {
-            preview.apply(configurations, highlight: AppearanceHighlight(item))
-            preview.layoutIfNeeded()
+            _ = AppearanceHighlight(item)?.locate(in: rows)
         }
     }
 
@@ -397,7 +390,7 @@ struct AppearanceEditorTests {
         settings.setValue(value, for: item)
         let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: 4_000))
         let samples = AppearanceSamples(settings: settings, tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
-        preview.apply(samples.configurations(colorScheme: .light, revision: 0), highlight: nil)
+        preview.apply(samples.configurations(colorScheme: .light, revision: 0))
         preview.layoutIfNeeded()
         let found = try #require(AppearanceHighlight(item)?.locate(in: preview.rowFrames()), "\(item.id)の場所が見本にありません")
         for rect in found.rects {
@@ -437,7 +430,7 @@ struct AppearanceEditorTests {
     private func layOutSamples(_ settings: AppSettings, groups: Set<AppearanceGroup.ID>? = nil, focus: AppearanceFocus? = nil) -> [AppearancePreviewFrames] {
         let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: 6_000))
         let samples = AppearanceSamples(settings: settings, tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
-        preview.apply(samples.configurations(colorScheme: .light, revision: 0, groups: groups, focus: focus), highlight: nil)
+        preview.apply(samples.configurations(colorScheme: .light, revision: 0, groups: groups, focus: focus))
         preview.layoutIfNeeded()
         return preview.rowFrames()
     }
