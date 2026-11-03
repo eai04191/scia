@@ -87,6 +87,17 @@ make test SIM='iPhone 16 Pro'
 
 アプリのテストをシミュレーターで走らせます。`make check`は、lint、SciaCoreのテスト、ビルド、警告の検出をまとめて行います。
 
+## 謝辞
+
+Sciaは次のクライアントから多くの影響を受けています
+
+- [SubwayTooter](https://github.com/tateisu/SubwayTooter)
+- [Metatext](https://github.com/metabolist/metatext)
+- [iMast](https://github.com/cinderella-project/iMast)
+- [DAWN](https://noppe.dev/dawn/)
+- [Mona](https://mastodon.social/@MonaApp)
+- twitcle plus
+
 ## ライセンス
 
 ソースコードは[MIT No Attribution（MIT-0）](LICENSE)で公開しています。ただし、名称とアプリアイコン・ロゴは除きます。
