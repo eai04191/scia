@@ -1,4 +1,5 @@
 # 毎朝5:00（JST）に、mainをReleaseでアーカイブしてTestFlightへ上げる。前に上げたときからmainが変わっていなければ上げない。
+# 上げたビルドは、処理が終わるのを待って外部テストのグループに足し、TestFlight App Reviewに出す（Tools/testflight-external.swift）。
 # 手で走らせたとき（workflow_dispatch）は、変わっていなくても上げる。
 #
 # Xcodeにサインインできないため、署名は次の2つで行う。
@@ -7,6 +8,7 @@
 #
 # リポジトリに置く値:
 # - variables.DEVELOPMENT_TEAM: チームID
+# - variables.TESTFLIGHT_EXTERNAL_GROUP: ビルドを足す外部テストのグループの名前
 # - secrets.APP_STORE_CONNECT_KEY_ID / APP_STORE_CONNECT_ISSUER_ID: App Store ConnectのAPIキーのIDと発行者ID
 # - secrets.APP_STORE_CONNECT_KEY: APIキーの.p8の中身
 # - secrets.DEVELOPMENT_CERTIFICATE_P12: 開発用の証明書と秘密鍵を書き出した.p12をbase64にしたもの
@@ -30,7 +32,8 @@ jobs:
     if: github.ref == 'refs/heads/main'
     # Xcode 27は、macOS 27の`xcode-27`のイメージにしか入っていない
     runs-on: xcode-27
-    timeout-minutes: 60
+    # ビルドの処理を待つ時間（最大40分）を、アーカイブとアップロードに足している
+    timeout-minutes: 90
     permissions:
       contents: read # mainをcheckoutする
       actions: read # 前に上げたcommitを、このworkflowの前の実行から読む
@@ -39,6 +42,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
+          # What to Testに、前に上げたcommitからの変更を並べるため
+          fetch-depth: 0
           persist-credentials: false
       - run: git checkout -B main
 
@@ -56,6 +61,7 @@ jobs:
           else
             echo "upload=true" >> "$GITHUB_OUTPUT"
           fi
+          echo "last=$last" >> "$GITHUB_OUTPUT"
 
       - name: Select Xcode
         if: steps.changed.outputs.upload == 'true'
@@ -95,6 +101,32 @@ jobs:
           KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: make testflight APPLE_AUTH="-authenticationKeyPath $RUNNER_TEMP/AuthKey.p8 -authenticationKeyID $KEY_ID -authenticationKeyIssuerID $ISSUER_ID"
+
+      # 前に上げたcommitからの、使う人向けの変更（dev scopeのない feat・fix・perf）のcommitの件名を並べる。
+      # 前に上げたcommitは、このworkflowの前の成功した実行のものなので、そのビルドを外部に出さなかった日（同じバージョンのほかのビルドが審査中だった日）の変更は、次のビルドのWhat to Testに入らない。
+      # 外部に出したビルドとcommitの対応はApp Store Connectに残らず、対応を残すにはリポジトリへの書き込みが要るため、これは受け入れている。
+      - name: Write What to Test
+        if: steps.changed.outputs.upload == 'true'
+        env:
+          LAST: ${{ steps.changed.outputs.last }}
+        run: |
+          if [ -z "$LAST" ]; then
+            echo 'Sciaのベータ版です。'
+          else
+            changes=$(git log --format=%s "$LAST..HEAD" | grep -E '^(feat|fix|perf)(\([^)]*\))?!?: ' | grep -v -E '^[a-z]+\(dev\)' | sed 's/^/* /' || true)
+            printf '前のビルドからの変更:\n\n%s\n' "${changes:-* 使う人に見える変更はありません}"
+          fi > "$RUNNER_TEMP/what-to-test.txt"
+          cat "$RUNNER_TEMP/what-to-test.txt"
+
+      - name: Submit to external testing
+        if: steps.changed.outputs.upload == 'true'
+        env:
+          APP_STORE_CONNECT_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          TESTFLIGHT_EXTERNAL_GROUP: ${{ vars.TESTFLIGHT_EXTERNAL_GROUP }}
+          WHAT_TO_TEST_PATH: ${{ runner.temp }}/what-to-test.txt
+        run: make testflight-external
 
       - name: Remove signing keychain
         if: always() && steps.changed.outputs.upload == 'true'

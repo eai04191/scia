@@ -5,7 +5,7 @@ SIM_DESTINATION ?= generic/platform=iOS Simulator
 # 端末を決めないビルドは、既定ではシミュレーターの全アーキテクチャ（arm64とx86_64）を作る。このMacで動く分だけにして、コンパイルを半分にする
 SIM_ARCH ?= $(shell uname -m)
 
-.PHONY: generate lint test-lint test-core build warnings test sim-keyboard scenario-build scenario-setup scenario-reset scenario-run archive testflight promo readme-screenshots readme-icons update-known-servers check check-steps hooks menu-editor clean
+.PHONY: generate lint test-lint test-core build warnings test sim-keyboard scenario-build scenario-setup scenario-reset scenario-run archive testflight testflight-external promo readme-screenshots readme-icons update-known-servers check check-steps hooks menu-editor clean
 
 ## project.ymlからXcodeプロジェクトを生成する
 generate:
@@ -90,6 +90,11 @@ archive: generate
 ## アーカイブしてApp Store Connectへ上げる。処理が終わるとTestFlightに出る
 testflight: archive
 	xcodebuild -exportArchive -archivePath $(ARCHIVE) -exportOptionsPlist Config/ExportOptions.plist -exportPath $(DERIVED_DATA)/export -allowProvisioningUpdates $(APPLE_AUTH)
+
+## make testflightで上げたビルドを、処理が終わるのを待って外部テストのグループに足し、TestFlight App Reviewに出す（Tools/testflight-external.swift）
+## 外部グループの名前、What to Testを書いたファイル、APIキーは、環境変数（TESTFLIGHT_EXTERNAL_GROUP、WHAT_TO_TEST_PATH、APP_STORE_CONNECT_KEY_PATH、APP_STORE_CONNECT_KEY_ID、APP_STORE_CONNECT_ISSUER_ID）で渡す
+testflight-external:
+	swift Tools/testflight-external.swift $(ARCHIVE)
 
 ## プロモーション動画の素材を、シナリオのUIテストを走らせながら撮る（docs/promo-video.md）。SIMにはシミュレーターか実機の名前を渡す
 ## 例: make promo SIM='Scia 1'
