@@ -221,6 +221,27 @@ struct AppSettingsTests {
         #expect(AppSettings(defaults: defaults).linkBrowser == .external)
     }
 
+    @Test func inAppBrowserHeightIsStandardByDefaultAndPersists() throws {
+        let defaults = try makeDefaults()
+        #expect(AppSettings(defaults: defaults).inAppBrowserHeight == .standard)
+        AppSettings(defaults: defaults).inAppBrowserHeight = InAppBrowserHeight(spaceAbove: 132)
+        #expect(AppSettings(defaults: defaults).inAppBrowserHeight == InAppBrowserHeight(spaceAbove: 132))
+    }
+
+    /// 数でない値が保存されていても、刻みに寄せられないので、保存していないときと同じく標準にする。
+    @Test func inAppBrowserHeightIgnoresNonFiniteStoredValue() throws {
+        let defaults = try makeDefaults()
+        defaults.set(Double.nan, forKey: "settings.inAppBrowserSpaceAbove")
+        #expect(AppSettings(defaults: defaults).inAppBrowserHeight == .standard)
+    }
+
+    @Test func opensInAppBrowserFullScreenIsOffByDefaultAndPersists() throws {
+        let defaults = try makeDefaults()
+        #expect(AppSettings(defaults: defaults).opensInAppBrowserFullScreen == false)
+        AppSettings(defaults: defaults).opensInAppBrowserFullScreen = true
+        #expect(AppSettings(defaults: defaults).opensInAppBrowserFullScreen)
+    }
+
     /// 既定は、設定を足す前と同じく公開範囲を送らず、アカウントの既定に任せる。
     @Test func reblogsWithAccountDefaultUntilChosen() throws {
         let defaults = try makeDefaults()

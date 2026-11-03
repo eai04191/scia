@@ -1039,16 +1039,6 @@ public enum TuningCatalog {
         defaultValue: 40
     )
 
-    /// 本文のリンクを開くアプリ内のSafariの、全画面でないときのシートの高さ。シートが取れる最大の高さに対する割合。
-    /// 0.5でシステムの中くらいの高さとほぼ同じになる。シートを出したまま、上に一覧を見る高さ。
-    public static let inAppBrowserMediumFraction = NumberTuning(
-        id: "browser.mediumFraction",
-        title: "アプリ内のSafariのシートの高さ（割合）",
-        range: 0.25...0.85,
-        step: 0.05,
-        defaultValue: 0.5
-    )
-
     /// アプリ内のSafariのシートをいちばん下げたときの高さ（pt、下の安全領域を除く）。投稿欄で書いている間はこの高さまで下げる。
     /// 一時的に伏せておくために、つまみで下げることもできる。中くらいの高さで一覧をスクロールする指がシートを引き下ろしても、
     /// いったんこの高さで止まるため、閉じにくくする役も持つ。
@@ -1779,7 +1769,6 @@ public enum TuningCatalog {
             .number(mediaExportProgressShare),
         ]),
         TuningSection(id: "browser", title: "アプリ内のSafari", items: [
-            .number(inAppBrowserMediumFraction),
             .number(inAppBrowserCollapsedHeight),
             .toggle(inAppBrowserGrowsFromCollapsed),
         ]),

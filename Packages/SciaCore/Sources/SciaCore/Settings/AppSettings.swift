@@ -41,6 +41,16 @@ public final class AppSettings {
         didSet { defaults.set(linkBrowser.rawValue, forKey: Keys.linkBrowser) }
     }
 
+    /// アプリ内のSafariを中くらいの高さで出すときのシートの高さ。
+    public var inAppBrowserHeight: InAppBrowserHeight {
+        didSet { defaults.set(inAppBrowserHeight.spaceAbove, forKey: Keys.inAppBrowserSpaceAbove) }
+    }
+
+    /// アプリ内のSafariを最初から全画面で開くか。オフなら`inAppBrowserHeight`の高さで開く。
+    public var opensInAppBrowserFullScreen: Bool {
+        didSet { defaults.set(opensInAppBrowserFullScreen, forKey: Keys.opensInAppBrowserFullScreen) }
+    }
+
     /// メニューの「ブースト」でブーストするときの公開範囲。
     public var reblogVisibility: ReblogVisibility {
         didSet { defaults.set(reblogVisibility.rawValue, forKey: Keys.reblogVisibility) }
@@ -272,6 +282,12 @@ public final class AppSettings {
         didSet { defaults.set(viewerMediaDynamicRange.rawValue, forKey: Keys.viewerMediaDynamicRange) }
     }
 
+    /// 保存した値から、アプリ内のSafariの高さを読む。数でない値（NaNや無限大）は刻みに寄せられないので、保存していないときと同じく標準にする。
+    private static func inAppBrowserHeight(stored: Any?) -> InAppBrowserHeight {
+        guard let space = stored as? Double, space.isFinite else { return .standard }
+        return InAppBrowserHeight(spaceAbove: space)
+    }
+
     private enum Keys {
         static let usesOriginalThumbnailsOnExpensiveNetwork = "settings.usesOriginalThumbnailsOnExpensiveNetwork"
         static let ignoresUselessAltText = "settings.ignoresUselessAltText"
@@ -281,6 +297,8 @@ public final class AppSettings {
         static let profileShowsReplies = "settings.profileShowsReplies"
         static let profileShowsBoosts = "settings.profileShowsBoosts"
         static let linkBrowser = "settings.linkBrowser"
+        static let inAppBrowserSpaceAbove = "settings.inAppBrowserSpaceAbove"
+        static let opensInAppBrowserFullScreen = "settings.opensInAppBrowserFullScreen"
         static let reblogVisibility = "settings.reblogVisibility"
         static let statusMenuLayout = "settings.statusMenuLayout"
         static let userMenuLayout = "settings.userMenuLayout"
@@ -323,6 +341,8 @@ public final class AppSettings {
         appearance = AppearanceChoices(stored: defaults.data(forKey: Keys.appearanceChoices))
         insertionMotion = defaults.string(forKey: Keys.insertionMotion).flatMap(InsertionMotion.init(rawValue:)) ?? .followsSystem
         linkBrowser = defaults.string(forKey: Keys.linkBrowser).flatMap(LinkBrowser.init(rawValue:)) ?? .inApp
+        inAppBrowserHeight = Self.inAppBrowserHeight(stored: defaults.object(forKey: Keys.inAppBrowserSpaceAbove))
+        opensInAppBrowserFullScreen = defaults.bool(forKey: Keys.opensInAppBrowserFullScreen)
         reblogVisibility = defaults.string(forKey: Keys.reblogVisibility).flatMap(ReblogVisibility.init(rawValue:)) ?? .accountDefault
         statusMenuLayout = defaults.stringArray(forKey: Keys.statusMenuLayout).map(MenuLayout.init(tokens:)) ?? StatusMenuItem.defaultLayout
         userMenuLayout = defaults.stringArray(forKey: Keys.userMenuLayout).map(MenuLayout.init(tokens:)) ?? UserMenuItem.defaultLayout

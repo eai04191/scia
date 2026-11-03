@@ -15,6 +15,8 @@ struct SettingsView: View {
     let tabIcons: ProfileTabIcons
     /// タブの並びでリストを作る、消す。
     let lists: SettingsListActions
+    /// 設定を閉じ、ホームの上でアプリ内のSafariの高さを選ぶシートを出す。
+    let openInAppBrowserHeight: @MainActor () -> Void
     @Environment(\.dismiss) private var dismiss
     /// 一覧から重ねて開いた画面。
     @State private var path: [SettingsPage]
@@ -26,6 +28,7 @@ struct SettingsView: View {
         diagnostics: ConnectionDiagnostics,
         tabIcons: ProfileTabIcons,
         lists: SettingsListActions,
+        openInAppBrowserHeight: @escaping @MainActor () -> Void,
         opening page: SettingsPage? = nil
     ) {
         self.settings = settings
@@ -34,6 +37,7 @@ struct SettingsView: View {
         self.diagnostics = diagnostics
         self.tabIcons = tabIcons
         self.lists = lists
+        self.openInAppBrowserHeight = openInAppBrowserHeight
         _path = State(initialValue: page?.path ?? [])
     }
 
@@ -105,7 +109,7 @@ struct SettingsView: View {
     private func destination(_ page: SettingsPage) -> some View {
         switch page {
         case .display: DisplaySettingsView(settings: settings)
-        case .interaction: InteractionSettingsView(settings: settings)
+        case .interaction: InteractionSettingsView(settings: settings, openInAppBrowserHeight: openInAppBrowserHeight)
         case .compose: ComposeSettingsView(settings: settings)
         case .media: MediaSettingsView(settings: settings)
         case .about: AboutSettingsView()
@@ -172,10 +176,11 @@ extension UIViewController {
     ///   - diagnostics: 「接続の状態」画面に出す、ログイン中のアカウントの接続の状態。
     ///   - tabIcons: タブの並びで、タブに置いたプロフィールに出すその人のアイコン。
     ///   - lists: タブの並びでリストを作る、消す。
+    ///   - openInAppBrowserHeight: 設定を閉じ、ホームの上でアプリ内のSafariの高さを選ぶシートを出す。
     ///   - page: 一覧から重ねて開いておく画面。
     ///   - onShownChange: 設定の画面が出たときにtrue、消えたときにfalseで呼ぶ。
-    func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, lists: SettingsListActions, opening page: SettingsPage? = nil, onShownChange: @escaping (Bool) -> Void) {
-        let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, lists: lists, opening: page)
+    func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, lists: SettingsListActions, openInAppBrowserHeight: @escaping @MainActor () -> Void, opening page: SettingsPage? = nil, onShownChange: @escaping (Bool) -> Void) {
+        let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, lists: lists, openInAppBrowserHeight: openInAppBrowserHeight, opening: page)
         present(SettingsHostingController(rootView: view, onShownChange: onShownChange), animated: true)
     }
 

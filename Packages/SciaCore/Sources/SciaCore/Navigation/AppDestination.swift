@@ -42,6 +42,9 @@ public enum AppDestination: Equatable, Sendable {
     case notificationPolicy
     /// `announcements`。サーバーのお知らせの一覧を開く。
     case announcements
+    /// `in-app-browser-height`。重ねた画面を閉じてホームのタブを出し、その上にアプリ内のSafariの高さを選ぶシートを出す。
+    /// `?return=<SettingsPage.rawValue>`で、シートを閉じたときにその設定の画面を開き直す。
+    case inAppBrowserHeight(returningTo: SettingsPage?)
     /// `note?acct=<ハンドル>`。その人のプロフィールに書く、自分にしか見えないメモの画面を開く。
     case note(acct: String)
     /// `report?acct=<ハンドル>`。その人を通報する画面を開く。送らない限りサーバーに届かない。
@@ -123,6 +126,7 @@ public enum AppDestination: Equatable, Sendable {
         case .notificationRequest: "notification request"
         case .notificationPolicy: "notification policy"
         case .announcements: "announcements"
+        case .inAppBrowserHeight: "in-app browser height"
         case .note: "note"
         case .report: "report"
         case .compose: "compose screen"
@@ -170,6 +174,12 @@ public enum AppDestination: Equatable, Sendable {
         case ("notification-request", ""): query("id").map { .notificationRequest(id: $0) }
         case ("notification-policy", ""): .notificationPolicy
         case ("announcements", ""): .announcements
+        case ("in-app-browser-height", ""):
+            if let page = query("return") {
+                SettingsPage(rawValue: page).map { .inAppBrowserHeight(returningTo: $0) }
+            } else {
+                .inAppBrowserHeight(returningTo: nil)
+            }
         case ("note", ""): query("acct").map { .note(acct: $0) }
         case ("report", ""): query("acct").map { .report(acct: $0) }
         case ("compose", "tools"): .compose(.tools)
@@ -215,6 +225,7 @@ public enum AppDestination: Equatable, Sendable {
         case .notificationRequest(let id): ("notification-request", nil, [("id", id)])
         case .notificationPolicy: ("notification-policy", nil, [])
         case .announcements: ("announcements", nil, [])
+        case .inAppBrowserHeight(let page): ("in-app-browser-height", nil, page.map { [("return", $0.rawValue)] } ?? [])
         case .note(let acct): ("note", nil, [("acct", acct)])
         case .report(let acct): ("report", nil, [("acct", acct)])
         case .compose(.tools): ("compose", "tools", [])

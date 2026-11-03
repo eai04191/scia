@@ -17,6 +17,11 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
     var onPresenceChange: ((Bool) -> Void)?
 
     private let tuning: TuningStore
+    private let settings: AppSettings
+    /// シートを出した窓。中くらいの高さは、この窓の安全領域の中の高さから、段を決めるたびに決める（`InAppBrowserHeight`）。
+    /// 窓の安全領域は窓とシーンで決まり、シートの並べ方に左右されないので、段の計算の中で読んでも、
+    /// シート自身の安全領域を読んだときのような入れ子（`reportObscuredHeightAfterResolving`）にならない。
+    private weak var window: UIWindow?
     private weak var current: SFSafariViewController?
     /// 段ごとに解決した高さ（安全領域の中の高さ）。シートの見た目の位置はビューの枠に出ず（シートのビューの枠は画面全体のまま）、
     /// 出したあとに測れないため、高さを決めるところで受け取って覚えておく。
@@ -27,8 +32,9 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
     private var detentBeforeCompose: UISheetPresentationController.Detent.Identifier?
     private let logger = SciaLog.logger(category: "browser")
 
-    init(tuning: TuningStore = AppDependencies.tuning) {
+    init(tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings) {
         self.tuning = tuning
+        self.settings = settings
     }
 
     /// シートを出している。中身を差し替える途中も含む。
@@ -37,6 +43,12 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
     /// `url`はhttpかhttpsに限る。ほかのスキームを渡すとSFSafariViewControllerが例外で落ちるため、呼び出し側で`LinkBrowser`に振り分けさせる。
     /// シートを出している間に別のリンクが押されたら、高さを保ったまま中身を差し替える。
     func open(_ url: URL, from root: UIViewController) {
+        guard let window = root.viewIfLoaded?.window else {
+            // 窓にない画面からはシートを出せないので、開かない。
+            logger.error("in-app browser open ignored without window")
+            return
+        }
+        self.window = window
         let safari = SFSafariViewController(url: url)
         safari.delegate = self
         safari.modalPresentationStyle = .pageSheet
@@ -44,8 +56,8 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
             sheet.detents = [detent(Self.collapsedIdentifier, for: safari), detent(Self.mediumIdentifier, for: safari), .large()]
             // 中くらいの高さまでは後ろを暗くせず、一覧を触れるままにする。
             sheet.largestUndimmedDetentIdentifier = Self.mediumIdentifier
-            // 選んでいなければいちばん低い段で出るため、中くらいの高さを選んでおく。
-            sheet.selectedDetentIdentifier = Self.mediumIdentifier
+            // 選んでいなければいちばん低い段で出るため、設定の高さの段を選んでおく。
+            sheet.selectedDetentIdentifier = openingIdentifier
             sheet.prefersGrabberVisible = true
             // ページのスクロールでシートを広げない。広げるのはつまみを引いたときだけ。
             sheet.prefersScrollingExpandsWhenScrolledToEdge = false
@@ -70,11 +82,16 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         }
         logger.info("in-app browser open grows=\(grows, privacy: .public)")
         onPresenceChange?(true)
+        let opening = openingIdentifier
         root.frontmostPresented.present(safari, animated: true) { [weak self, weak safari] in
-            guard grows, let self, let safari, self.current === safari, let sheet = safari.sheetPresentationController,
-                  sheet.selectedDetentIdentifier == Self.collapsedIdentifier
-            else { return }
-            self.select(Self.mediumIdentifier, on: sheet)
+            guard let self, let safari, self.current === safari, let sheet = safari.sheetPresentationController else { return }
+            if grows {
+                guard sheet.selectedDetentIdentifier == Self.collapsedIdentifier else { return }
+                self.select(opening, on: sheet)
+            } else {
+                // 全画面で開いたときに、一覧を覆ったことを知らせる。
+                self.selectionDidChange(sheet)
+            }
         }
     }
 
@@ -105,11 +122,16 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         selectionDidChange(sheet)
     }
 
+    /// 開くときの段。最初から全画面で開く設定なら全画面、そうでなければ中くらいの高さ。
+    private var openingIdentifier: UISheetPresentationController.Detent.Identifier {
+        settings.opensInAppBrowserFullScreen ? .large : Self.mediumIdentifier
+    }
+
     private static let collapsedIdentifier = UISheetPresentationController.Detent.Identifier("net.mizle.scia.inAppBrowser.collapsed")
     private static let mediumIdentifier = UISheetPresentationController.Detent.Identifier("net.mizle.scia.inAppBrowser.medium")
 
-    /// 高さはチューニングから読む。値は安全領域の中の高さで、下端に付くシートでは、これに下の安全領域が足される。
-    /// 一覧の余白も安全領域の外から数えるので、知らせるときに足す。チューニングを変えたら、次にシートの高さを決め直すとき（開き直す、段を変える）に効く。
+    /// 中くらいの高さは設定から、伏せた高さはチューニングから読む。中くらいの高さは伏せた高さより低くしない。値は安全領域の中の高さで、下端に付くシートでは、これに下の安全領域が足される。
+    /// 一覧の余白も安全領域の外から数えるので、知らせるときに足す。設定やチューニングを変えたら、次にシートの高さを決め直すとき（開き直す、段を変える）に効く。
     /// 高さの狭い画面（iPhoneの横向き）では、中くらいの高さの段を出さず、シートは全画面になる。
     /// 段は低い順に並べる決まりがあるため、伏せた高さは中くらいの高さより低く抑える。チューニングの組み合わせによっては、伏せた高さが設定より低くなる。
     private func detent(_ identifier: UISheetPresentationController.Detent.Identifier, for safari: SFSafariViewController) -> UISheetPresentationController.Detent {
@@ -144,7 +166,9 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
 
     private func mediumHeight(in context: any UISheetPresentationControllerDetentResolutionContext) -> CGFloat? {
         guard context.containerTraitCollection.verticalSizeClass != .compact else { return nil }
-        return context.maximumDetentValue * CGFloat(tuning.value(of: TuningCatalog.inAppBrowserMediumFraction))
+        guard let window else { return nil }
+        let minimum = tuning.value(of: TuningCatalog.inAppBrowserCollapsedHeight)
+        return min(CGFloat(settings.inAppBrowserHeight.sheetHeight(available: Double(window.safeAreaHeight), minimum: minimum)), context.maximumDetentValue)
     }
 
     /// 全画面に広げている間は一覧が見えないため、中くらいの高さの値を使い続ける。
@@ -193,5 +217,12 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         guard let safari = presentationController.presentedViewController as? SFSafariViewController else { return }
         logger.info("in-app browser dismissed by swipe")
         didClose(safari)
+    }
+}
+
+extension UIWindow {
+    /// 窓の高さから上下の安全領域を除いた高さ。アプリ内のSafariと、その高さを選ぶシートの段の元にする（`InAppBrowserHeight`）。
+    var safeAreaHeight: CGFloat {
+        bounds.height - safeAreaInsets.top - safeAreaInsets.bottom
     }
 }

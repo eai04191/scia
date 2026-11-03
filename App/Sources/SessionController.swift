@@ -184,10 +184,12 @@ final class SessionController {
     private let browser = InAppBrowser()
     private var browserObscuredHeight: CGFloat = 0
     private var browserCoversTimelines = false
+    /// アプリ内のSafariの高さを選ぶシートが覆っている高さ。
+    private var heightPickerObscuredHeight: CGFloat = 0
     /// 出ている設定の画面の数。設定の画面の上に、URLで設定の画面をもう1枚重ねることがある。
     private var shownSettingsCount = 0
-    /// 積んだ画面の下を覆っている高さ。投稿欄とアプリ内のSafariのシートのうち、高いほう。
-    private var obscuredBottomHeight: CGFloat { max(composerObscuredHeight, browserObscuredHeight) }
+    /// 積んだ画面の下を覆っている高さ。投稿欄、アプリ内のSafariのシート、その高さを選ぶシートのうち、いちばん高いもの。
+    private var obscuredBottomHeight: CGFloat { max(composerObscuredHeight, browserObscuredHeight, heightPickerObscuredHeight) }
     private let logger = SciaLog.logger(category: "session")
 
     /// - Parameters:
@@ -2393,6 +2395,31 @@ final class SessionController {
         }
     }
 
+    /// 重ねた画面を閉じてホームのタブの一覧を出し、本物のタイムラインの上に、アプリ内のSafariの高さを選ぶシートを出す。
+    /// 選んだ高さの段にシートを置くので、シートの上にホームがどのくらい見えるかを、実物のまま見比べられる。
+    /// ホームに積んだ画面（スレッドやプロフィール）は閉じて一覧まで戻す。積んだ画面の上では、一覧がどのくらい見えるかを比べられないため。
+    /// ホームのタブを無効にしていれば、選んでいるタブの一覧の上に出す。
+    /// - Parameter page: 閉じたときに開き直す設定の画面。nilなら開き直さない。
+    private func showInAppBrowserHeight(returningTo page: SettingsPage?) {
+        rootViewController.dismissPresentedScreens(animated: true) { [weak self] in
+            guard let self, let window = rootViewController.viewIfLoaded?.window else { return }
+            tabs.show(.home)
+            tabs.selectedNavigation?.popToRootViewController(animated: false)
+            let sheet = InAppBrowserHeightSheet(settings: AppDependencies.settings, window: window) { [weak self] in
+                // 上にアプリ内のSafariを重ねていれば一緒に閉じるので、閉じたことが届くよう、まとめて閉じる経路を通す。
+                self?.rootViewController.dismissPresentedScreens(animated: true) {
+                    if let page { self?.open(.settings(page)) }
+                }
+            }
+            // アプリ内のSafariと同じく、覆う高さを一覧の下の余白と見えた投稿の判定に使わせる。
+            sheet.onObscuredHeightChange = { [weak self] height in
+                self?.heightPickerObscuredHeight = height
+                self?.applyObscuredBottomHeight()
+            }
+            rootViewController.present(sheet, animated: true)
+        }
+    }
+
     /// タブの並びの画面で、リストを作る、消す。
     var settingsListActions: SettingsListActions {
         SettingsListActions { [weak self] in
@@ -3258,6 +3285,7 @@ final class SessionController {
                 diagnostics: diagnostics,
                 tabIcons: profileTabIcons,
                 lists: settingsListActions,
+                openInAppBrowserHeight: { [weak self] in self?.open(.inAppBrowserHeight(returningTo: .interaction)) },
                 opening: page,
                 onShownChange: { [weak self] in self?.settingsShownChanged($0) }
             )
@@ -3324,6 +3352,8 @@ final class SessionController {
             showNotificationPolicy()
         case .announcements:
             showAnnouncements()
+        case .inAppBrowserHeight(let page):
+            showInAppBrowserHeight(returningTo: page)
         case .note(let acct):
             let client = client
             let resolve = resolvingAccount(acct)

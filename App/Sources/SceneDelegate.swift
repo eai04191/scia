@@ -273,6 +273,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 diagnostics: session.diagnostics,
                 tabIcons: session.profileTabIcons,
                 lists: session.settingsListActions,
+                openInAppBrowserHeight: { [weak session] in session?.open(.inAppBrowserHeight(returningTo: .interaction)) },
                 onShownChange: { [weak session] in session?.settingsShownChanged($0) }
             )
         }

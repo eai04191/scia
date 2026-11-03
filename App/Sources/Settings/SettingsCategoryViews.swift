@@ -121,9 +121,11 @@ struct AppIconSettingsLabel: View {
     }
 }
 
-/// 操作の分類。対象ごとのタップと長押しとメニューの画面、リンクを開く場所、ブーストの公開範囲。
+/// 操作の分類。対象ごとのタップと長押しとメニューの画面、リンクを開く場所とアプリ内のSafariの高さ、ブーストの公開範囲。
 struct InteractionSettingsView: View {
     @Bindable var settings: AppSettings
+    /// 設定を閉じ、ホームの上でアプリ内のSafariの高さを選ぶシートを出す。
+    let openInAppBrowserHeight: @MainActor () -> Void
 
     var body: some View {
         Form {
@@ -142,6 +144,11 @@ struct InteractionSettingsView: View {
                     Text("既定のブラウザ").tag(LinkBrowser.external)
                     Text("アプリ内のSafari").tag(LinkBrowser.inApp)
                 }
+                // 本物のホームの上で選ぶので、設定の画面を重ねずに外へ出る。行の見た目は、ほかの画面へ入る行に揃える。
+                Button(action: openInAppBrowserHeight) {
+                    LabeledContent("アプリ内のSafariの高さ", value: settings.opensInAppBrowserFullScreen ? "全画面" : settings.inAppBrowserHeight.title)
+                }
+                .tint(.primary)
             } header: {
                 Text("リンク")
             }

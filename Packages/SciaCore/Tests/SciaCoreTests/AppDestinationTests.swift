@@ -43,6 +43,9 @@ struct AppDestinationTests {
             ("scia://notification-request", nil),
             ("scia://notification-policy", .notificationPolicy),
             ("scia://announcements", .announcements),
+            ("scia://in-app-browser-height", .inAppBrowserHeight(returningTo: nil)),
+            ("scia://in-app-browser-height?return=interaction", .inAppBrowserHeight(returningTo: .interaction)),
+            ("scia://in-app-browser-height?return=unknown", nil),
             ("scia://note?acct=bob%40example.com", .note(acct: "bob@example.com")),
             ("scia://report?acct=bob", .report(acct: "bob")),
             ("scia://compose/tools", .compose(.tools)),
@@ -76,7 +79,7 @@ struct AppDestinationTests {
         + [.accounts(.followers(accountID: nil)), .accounts(.followers(accountID: "9")), .accounts(.following(accountID: nil)), .accounts(.following(accountID: "9"))]
         + [.accounts(.favourited(statusID: "123")), .accounts(.reblogged(statusID: "123"))]
         + [.hashtag(name: "日本語 & tag"), .accountHashtag(acct: "bob@example.com", name: "scia"), .search(query: nil), .search(query: "https://example.com/@bob/1"), .scheduled, .operationStatus]
-        + [.notificationRequests, .notificationRequest(id: "7"), .notificationPolicy, .announcements]
+        + [.notificationRequests, .notificationRequest(id: "7"), .notificationPolicy, .announcements, .inAppBrowserHeight(returningTo: nil), .inAppBrowserHeight(returningTo: .interaction)]
         + [.note(acct: "bob@example.com"), .report(acct: "bob+1@example.com")]
         + [.compose(.tools), .compose(.language), .compose(.schedule), .compose(.emoji), .compose(.mediaPicker)]
         + [.compose(.attachment(index: 0)), .compose(.altText(index: 2)), .compose(.crop(index: 3))]
@@ -110,7 +113,7 @@ struct AppDestinationTests {
     enum Kind: CaseIterable {
         case tab, userTabList, userTabHashtag, userTabProfile, userTabAccountHashtag, settings, profile, myProfile, profileEdit
         case thread, editHistory, apiResponse, followers, following, favourited, reblogged, hashtag, accountHashtag, search, scheduled, operationStatus
-        case notificationRequests, notificationRequest, notificationPolicy, announcements
+        case notificationRequests, notificationRequest, notificationPolicy, announcements, inAppBrowserHeight
         case note, report, composeTools, composeLanguage, composeSchedule, composeEmoji, composeMediaPicker, composeAttachment, composeAltText, composeCrop
     }
 
@@ -141,6 +144,7 @@ struct AppDestinationTests {
         case .notificationRequest: .notificationRequest
         case .notificationPolicy: .notificationPolicy
         case .announcements: .announcements
+        case .inAppBrowserHeight: .inAppBrowserHeight
         case .note: .note
         case .report: .report
         case .compose(.tools): .composeTools
