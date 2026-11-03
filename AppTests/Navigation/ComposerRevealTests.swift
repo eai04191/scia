@@ -202,4 +202,22 @@ struct ComposerRevealTests {
 
         #expect(continued)
     }
+
+    /// 重ねた画面のどこかに確認のアラートがあれば、答えを待っている途中として見分ける。送られた行き先は、そのとき閉じずにやめる。
+    @Test func tellsWhetherAlertIsShown() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let viewer = makeViewer()
+        try await root.presentForTesting(viewer)
+        defer { viewer.dismiss(animated: false) }
+        #expect(!root.isShowingAlert)
+
+        let confirmation = UIAlertController(title: "下書きを捨てますか？", message: nil, preferredStyle: .alert)
+        confirmation.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        try await viewer.presentForTesting(confirmation)
+        defer { confirmation.dismiss(animated: false) }
+
+        #expect(root.isShowingAlert)
+    }
 }

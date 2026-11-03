@@ -28,6 +28,16 @@ extension UIViewController {
         closeScreens(stoppingAt: { $0.staysForSharedContent }, completion: completion)
     }
 
+    /// 上に重ねた画面のどこかに、確認のアラートがあるか。
+    var isShowingAlert: Bool {
+        var current = self
+        while let presented = current.presentedViewController {
+            if presented is UIAlertController { return true }
+            current = presented
+        }
+        return false
+    }
+
     /// 上に重ねた画面を、手前から順にすべて閉じる。閉じ終えたら`completion`を呼ぶ。
     func closeAllScreens(completion: @escaping () -> Void) {
         closeScreens(stoppingAt: { _ in false }, completion: completion)

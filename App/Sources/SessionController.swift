@@ -2420,7 +2420,7 @@ final class SessionController {
     /// ホームのタブを無効にしていれば、選んでいるタブの一覧の上に出す。
     /// - Parameter page: 閉じたときに開き直す設定の画面。nilなら開き直さない。
     private func showInAppBrowserHeight(returningTo page: SettingsPage?) {
-        rootViewController.closeAllScreens { [weak self] in
+        closeScreensForDestination { [weak self] in
             guard let self, let window = rootViewController.viewIfLoaded?.window else { return }
             tabs.show(.home)
             tabs.selectedNavigation?.popToRootViewController(animated: false)
@@ -3300,10 +3300,21 @@ final class SessionController {
                 logger.error("open tab: no enabled tab in layout")
                 return
             }
-            rootViewController.closeAllScreens { [weak self] in self?.show(destination) }
+            closeScreensForDestination { [weak self] in self?.show(destination) }
             return
         }
         show(destination)
+    }
+
+    /// 送られた行き先のために、上に重ねた画面をすべて閉じてから`open`を呼ぶ。
+    /// 確認のアラートが出ていれば、答えを待っている途中なので、閉じずにやめる。アラートは出した側から閉じると選んだときの処理が走らず、
+    /// 後始末（投稿欄がアラートを出している扱いを解くなど）がされないため。アラートごとに選ばずに閉じたときの後始末を持たせる手間をかけない。
+    private func closeScreensForDestination(then open: @escaping () -> Void) {
+        guard !rootViewController.isShowingAlert else {
+            logger.error("open destination dropped: alert shown")
+            return
+        }
+        rootViewController.closeAllScreens(completion: open)
     }
 
     /// 決まったタブに開く行き先（`.tab`、`.userTab`、保留中の通知）なら、そのタブが並びにあって有効か。ほかの行き先はtrue。
