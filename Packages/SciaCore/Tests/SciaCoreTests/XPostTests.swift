@@ -47,6 +47,42 @@ struct XPostTests {
         #expect(XPostLink.postID(of: status) == "2110205221557453003")
     }
 
+    private func status(content: String, card: PreviewCard? = nil) throws -> Status {
+        let account = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: try url("https://example.social/a.png"))
+        return Status(
+            id: "10",
+            createdAt: Date(timeIntervalSince1970: 0),
+            account: account,
+            content: content,
+            spoilerText: "",
+            url: nil,
+            card: card
+        )
+    }
+
+    /// Xの投稿の本文を貼ると、画像のt.coがXの投稿のリンクより前に入り、サーバーはt.coにカードを付ける。t.coを飛ばして読む。
+    @Test func readsPostIDAfterTCoLinks() throws {
+        let content = #"<p>【公式】beatmania IIDX on X: "今週のWEEKLY RANKING <a href="https://t.co/AbCdEf123">https://t.co/AbCdEf123</a>" / X <a href="https://x.com/IIDX_OFFICIAL/status/2110205221557453003">x.com/IIDX_OFFICIAL/status/2110205221557453003</a></p>"#
+        let card = PreviewCard(url: try url("https://t.co/AbCdEf123"), title: "", description: "", type: .link, providerName: "")
+
+        #expect(XPostLink.postID(of: try status(content: content)) == "2110205221557453003")
+        #expect(XPostLink.postID(of: try status(content: content, card: card)) == "2110205221557453003")
+    }
+
+    /// 本文で決まらなければ、サーバーのカードのURLで決める。
+    @Test func readsPostIDFromCardWithoutBodyLink() throws {
+        let card = PreviewCard(url: try url("https://x.com/IIDX_OFFICIAL/status/2110205221557453003"), title: "", description: "", type: .link, providerName: "")
+
+        #expect(XPostLink.postID(of: try status(content: "<p>リンクのない本文</p>", card: card)) == "2110205221557453003")
+    }
+
+    /// 最初のリンクがXの投稿でなければ、後ろにXの投稿へのリンクがあっても、サーバーと同じく最初のリンクのカードを出す。
+    @Test func ignoresPostLinkAfterOtherLink() throws {
+        let content = #"<p><a href="https://news.example/articles/1">news.example/articles/1</a> <a href="https://x.com/IIDX_OFFICIAL/status/2110205221557453003">x.com/IIDX_OFFICIAL/status/2110205221557453003</a></p>"#
+
+        #expect(XPostLink.postID(of: try status(content: content)) == nil)
+    }
+
     @Test(.requestPurpose(.action)) func decodesPhoto() async throws {
         let transport = StubTransport([try .fixture("fxtwitter_photo")])
         let post = try await XPostClient(client: HTTPClient(transport: transport, retry: RetryPolicy(maxRetries: 0, initialDelay: .zero), clock: TestClock())).post(id: "2110205221557453003")

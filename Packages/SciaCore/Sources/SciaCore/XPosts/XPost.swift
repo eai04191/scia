@@ -45,9 +45,30 @@ public enum XPostLink {
         "fxtwitter.com", "vxtwitter.com", "fixupx.com", "fixvx.com",
     ]
 
-    /// `status`に出すリンクカードが、Xの投稿へのリンクなら、その投稿のID。ブーストなら、ブーストされた投稿を渡す。
+    /// Xの短縮URLのホスト。
+    static let shortenerHost = "t.co"
+
+    /// `status`のリンクカードの代わりに囲みで出す、Xの投稿のID。ブーストなら、ブーストされた投稿を渡す。
+    /// 本文のカードを付けうるリンクのうち、t.coを飛ばした最初のリンクで決める（docs/link-card.md）。
+    /// そのリンクがXの投稿でなくても、ほかの短縮URLからたどった先のように、サーバーのカードのURLがXの投稿なら、そのID。
+    /// 行を描くたびと、Xの投稿が届くたびに一覧の全件で呼ぶため、Xの投稿へのリンクがありえない本文は解析しない。
     public static func postID(of status: Status) -> String? {
-        LinkCard(status: status).flatMap { postID(in: $0.url) }
+        bodyPostID(of: status) ?? status.card.flatMap { postID(in: $0.url) }
+    }
+
+    private static func bodyPostID(of status: Status) -> String? {
+        // `postID(in:)`はパスに`status`か`statuses`がなければnilを返すので、本文にその文字がなければ、HTMLを解析しても見つからない。
+        guard contains(status.content, "/status") else { return nil }
+        return LinkCard.cardCandidates(in: status).first { $0.host()?.lowercased() != shortenerHost }.flatMap { postID(in: $0) }
+    }
+
+    /// `text`に`needle`のバイト列があるか。`String.contains`や`range(of:)`は、日本語の本文ではUnicodeを考えて比べる分だけ、HTMLを解析するより遅かった。
+    private static func contains(_ text: String, _ needle: StaticString) -> Bool {
+        var text = text
+        return text.withUTF8 { buffer in
+            guard let base = buffer.baseAddress else { return false }
+            return memmem(base, buffer.count, needle.utf8Start, needle.utf8CodeUnitCount) != nil
+        }
     }
 
     /// `url`がXの投稿へのリンクなら、その投稿のID。`/<名前>/status/<ID>`と`/i/web/status/<ID>`の形を読む。
