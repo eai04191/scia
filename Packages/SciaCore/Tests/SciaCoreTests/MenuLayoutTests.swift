@@ -89,6 +89,32 @@ struct MenuLayoutTests {
         #expect(layout.groups.main == [.init([.a]), .init([.c])])
     }
 
+    /// ほかの対象のメニューの中のサブメニューでは、タップと長押しに割り当てた項目を、隠していても並びの位置に出す。メニューを開くは項目ではないので何も足さない。
+    @Test func submenuGroupsRevealAssignedItemsInPlace() {
+        let layout = MenuLayout<TestMenuItem>(elements: [
+            .item(.a, isVisible: false),
+            .item(.b, isVisible: true),
+            .separator,
+            .item(.c, isVisible: true),
+            .item(.hiddenByDefault, isVisible: false),
+            .more,
+            .item(.delete, isVisible: true),
+        ])
+
+        let groups = layout.submenuGroups(actions: ObjectActions(tap: .item(.hiddenByDefault), longPress: .item(.a)))
+
+        #expect(groups.main.map(\.items) == [[.a, .b], [.c, .hiddenByDefault]])
+        #expect(groups.more.map(\.items) == [[.delete]])
+        #expect(layout.submenuGroups(actions: ObjectActions(tap: .menu, longPress: .menu)) == layout.groups)
+    }
+
+    /// 表示にしている項目を割り当てていても、二重に出さない。
+    @Test func submenuGroupsDoNotDuplicateVisibleItems() {
+        let groups = TestMenuItem.defaultLayout.submenuGroups(actions: ObjectActions(tap: .item(.b), longPress: .item(.b)))
+
+        #expect(groups == TestMenuItem.defaultLayout.groups)
+    }
+
     @Test func tokensRoundTripIncludingHiddenItemsAndSeparators() {
         let layout = MenuLayout<TestMenuItem>(elements: [
             .rowSeparator,

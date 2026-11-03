@@ -53,7 +53,10 @@ extension TimelineViewController {
 
     func builtMediaMenu(for target: MediaMenuTarget, entry: TimelineEntry, id: ItemID, groups: MenuLayout<MediaMenuItem>.Groups? = nil) -> BuiltMenu<MediaMenuCommand>? {
         let subject = Self.status(of: entry).map { OperationStatus.Subject($0.displayed) }
-        return builtMediaMenu(for: target, subject: subject, statusMenu: statusMenu(for: entry, id: id), groups: groups)
+        // 「投稿」はほかの対象のメニューの中のサブメニューなので、投稿（通知の行なら通知）のタップと長押しに割り当てた項目も出す。
+        let statusActions = if case .notification = entry { settings.notificationActions } else { settings.statusActions }
+        let statusGroups = settings.statusMenuLayout.submenuGroups(actions: statusActions)
+        return builtMediaMenu(for: target, subject: subject, statusMenu: statusMenu(for: entry, id: id, groups: statusGroups), groups: groups)
     }
 
     private func mediaMenuTarget(of tile: MediaTileView) -> MediaMenuTarget? {
@@ -190,7 +193,7 @@ final class CustomEmojiMenus {
         guard let timeline else { return nil }
         // 使う人が開いたメニューなので、前に読めなかった画像も間隔を待たずに読み直す。
         images[emoji.staticUrl] = timeline.emojiImages.image(for: emoji.staticUrl, retriesNow: true)
-        return timeline.mediaMenuTree(for: target(for: emoji), statusMenu: nil).customEmojiSubmenu(emoji, groups: timeline.settings.mediaMenuLayout.groups)
+        return timeline.mediaMenuTree(for: target(for: emoji), statusMenu: nil).customEmojiSubmenu(emoji, groups: timeline.settings.mediaMenuLayout.submenuGroups(actions: timeline.settings.mediaActions))
     }
 
     /// サブメニューのアイコン。動く絵文字は、動かす設定なら動く画像にする。画像がまだ届いていなければnil。

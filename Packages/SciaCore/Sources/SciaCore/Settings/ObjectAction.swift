@@ -61,6 +61,14 @@ public struct ObjectActions<Item: MenuItemKind>: Hashable, Sendable {
         tap == .menu || longPress == .menu
     }
 
+    /// タップと長押しに割り当てた項目。メニューを開くは含めない。
+    public var assignedItems: Set<Item> {
+        Set([tap, longPress].compactMap { action in
+            guard case .item(let item) = action else { return nil }
+            return item
+        })
+    }
+
     /// 設定に保存する形。タップ、長押しの順に並べる。
     public var tokens: [String] {
         [tap.token, longPress.token]

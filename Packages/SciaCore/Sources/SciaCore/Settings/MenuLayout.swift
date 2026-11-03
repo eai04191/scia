@@ -61,6 +61,11 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
     }
 
     public var groups: Groups {
+        groups(revealing: [])
+    }
+
+    /// `revealing`の項目は、隠していても並びの位置に出す。
+    private func groups(revealing: Set<Item>) -> Groups {
         var groups = Groups(main: [], more: [])
         var current: [Item] = []
         var isRow = false
@@ -76,7 +81,7 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
         for element in elements {
             switch element {
             case .item(let item, let isVisible):
-                if isVisible { current.append(item) }
+                if isVisible || revealing.contains(item) { current.append(item) }
             case .separator:
                 close(startingRow: false)
             case .rowSeparator:
@@ -88,6 +93,12 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
         }
         close(startingRow: false)
         return groups
+    }
+
+    /// ほかの対象のメニューの中に、この対象のサブメニューで出すときの並び。タップと長押しに割り当てた項目は、隠していても並びの位置に出す。
+    /// 1段目のメニューではタップや長押しで行えるので隠すが、メニューの中で対象を選んだときは、閉じて押し直させないため。決まりはdocs/menus.mdの「並びの設定」にある。
+    public func submenuGroups(actions: ObjectActions<Item>) -> Groups {
+        groups(revealing: actions.assignedItems)
     }
 
     // MARK: - 保存

@@ -34,7 +34,7 @@ extension TimelineViewController {
     /// 項目の出し分けはSciaCoreの`StatusMenuTree`が決め、ここでは画面の状態（スレッドを開けるか、ぼかしているか、本文を選べるか）を渡し、押された操作を行う。
     /// 出す項目がなければnil。
     /// - Parameter id: メニューを出した要素。共有のシートを、その行から出す。
-    /// - Parameter groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
+    /// - Parameter groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときと、ほかの対象のメニューの中のサブメニューで組むときに渡す。渡したときは、フォローリクエストの承認と却下を置かない。
     func statusMenu(for entry: TimelineEntry, id: ItemID, groups: MenuLayout<StatusMenuItem>.Groups? = nil) -> BuiltMenu<StatusMenuCommand>? {
         let status = Self.status(of: entry)
         let notification: MastodonNotification? = if case .notification(let notification) = entry { notification } else { nil }
@@ -45,18 +45,20 @@ extension TimelineViewController {
         let renderer = statusMenuRenderer(status: status, notification: notification, request: request, id: id, selectableBody: body, emojis: emojis)
         // 人の一覧の行では、その人へのユーザーのメニューを、単独で出す形で出す。投稿のメニューに入れるサブメニューの形のままだと、項目がそのサブメニュー1つだけのメニューになるため。
         if case .account(let account) = entry {
-            defer { reloadRelations([account.id]) }
+            let userGroups = settings.userMenuLayout.groups
+            defer { reloadRelations([account.id], groups: userGroups) }
             let user = MenuUser.account(account)
             let tree = UserMenuTree(subject: UserMenuSubject(user), actions: userMenuActions, linkBrowser: settings.linkBrowser)
-            guard let root = tree.menu(groups: settings.userMenuLayout.groups, avatar: .user(user)) else { return nil }
+            guard let root = tree.menu(groups: userGroups, avatar: .user(user)) else { return nil }
             return BuiltMenu(root: root.map { .user(user, $0) }, renderer: renderer) { [weak self] in self?.loadPendingMenuIcons() }
         }
-        // 保留中の通知の行では、受け入れると無視の下に、その人へのユーザーのメニューを出す。
+        // 保留中の通知の行では、受け入れると無視の下に、その人へのユーザーのメニューをサブメニューで出す。
         if let request {
-            defer { reloadRelations([request.account.id]) }
+            let userGroups = settings.userMenuLayout.submenuGroups(actions: settings.userActions)
+            defer { reloadRelations([request.account.id], groups: userGroups) }
             let user = MenuUser.account(request.account)
             let tree = UserMenuTree(subject: UserMenuSubject(user), actions: userMenuActions, linkBrowser: settings.linkBrowser)
-            let node = tree.submenu(groups: settings.userMenuLayout.groups, avatar: .user(user))
+            let node = tree.submenu(groups: userGroups, avatar: .user(user))
             return BuiltMenu(root: StatusMenuTree.notificationRequestMenu(user: node?.map { .user(user, $0) }), renderer: renderer) { [weak self] in self?.loadPendingMenuIcons() }
         }
         var tree = StatusMenuTree(status: status, notification: notification, now: now(), linkBrowser: settings.linkBrowser)
@@ -66,21 +68,22 @@ extension TimelineViewController {
         tree.mediaIsCovered = status.map { mediaCover(for: $0) != nil } ?? false
         tree.canSelectText = body != nil
         tree.canSelectPosts = canSelectPost(id)
-        tree.userMenu = settings.userMenuLayout.groups
+        tree.userMenu = settings.userMenuLayout.submenuGroups(actions: settings.userActions)
         tree.userActions = userMenuActions
-        tree.hashtagMenu = settings.hashtagMenuLayout.groups
+        tree.hashtagMenu = settings.hashtagMenuLayout.submenuGroups(actions: settings.hashtagActions)
         tree.hashtagActions = hashtagMenuActions
         tree.customEmoji = { emojis.node(for: $0) }
         let built = tree.menu(groups: groups ?? settings.statusMenuLayout.groups, includesFollowRequest: groups == nil)
-        reloadRelations(built.shownUserIDs)
+        reloadRelations(built.shownUserIDs, groups: tree.userMenu)
         // 描きながら集めた、アイコンのまだない人をまとめて読む。
         return built.root.map { BuiltMenu(root: $0, renderer: renderer) { [weak self] in self?.loadPendingMenuIcons() } }
     }
 
     /// メニューに出る人の関係を、まとめて1回で読み直す。組んだメニューは覚えていた関係のまま出し、読み直した関係は次に開いたときから使う。
     /// 覚えていなかった人の関係の項目は、この読み直しを待って中身を渡す。関係で中身が変わる項目を出していなければ読まない。
-    private func reloadRelations(_ ids: [String]) {
-        guard !ids.isEmpty, settings.userMenuLayout.groups.needsRelationship else { return }
+    /// - Parameter groups: ユーザーのメニューを組んだ並び。サブメニューでは隠した関係の項目も出るので、組んだ並びで決める。
+    private func reloadRelations(_ ids: [String], groups: MenuLayout<UserMenuItem>.Groups) {
+        guard !ids.isEmpty, groups.needsRelationship else { return }
         userMenuActions?.reloadRelations(ids)
     }
 
