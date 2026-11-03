@@ -99,6 +99,43 @@ struct FeedTimelineModelTests {
         #expect(display.statusIDs == ["1"])
     }
 
+    /// 無効にした一覧は、最初の読み込みに失敗していても、電波の回復や前面に戻ったときにやり直さない。使わない一覧への通信になるため。
+    /// 有効に戻したら、やり直す。
+    @Test func disabledFeedDoesNotRetryFailedInitialLoad() async throws {
+        let failsTimeline = Mutex(true)
+        let timelineRequests = Mutex(0)
+        let transport = RoutedTransport { request in
+            switch request.url?.path() {
+            case "/api/v1/timelines/home":
+                timelineRequests.withLock { $0 += 1 }
+                if failsTimeline.withLock({ $0 }) {
+                    return (422, Data(#"{"error":"Unprocessable"}"#.utf8))
+                }
+                return (200, try TimelineModelFixtures.body([1]))
+            default:
+                return (200, Data("{}".utf8))
+            }
+        }
+        let (model, display) = makeModel(transport: transport)
+        defer { model.stop() }
+        model.start(purpose: .action)
+        try await waitUntil { model.runningTaskCount == 0 }
+        guard case .failed = model.contentState else {
+            Issue.record("最初の読み込みが失敗していません: \(model.contentState)")
+            return
+        }
+        failsTimeline.withLock { $0 = false }
+        model.setEnabled(false)
+
+        model.recover()
+        model.enterForeground()
+        try await waitUntil { model.runningTaskCount == 0 }
+        #expect(timelineRequests.withLock { $0 } == 1, "無効にした一覧の読み込みをやり直しました")
+
+        model.setEnabled(true)
+        try await waitUntil { display.contentState == .loaded }
+    }
+
     /// 作り直し中で投稿のないホームは、作り直し中と伝える。
     @Test func emptyRegeneratingHomeShowsRegenerating() async throws {
         let transport = RoutedTransport { _ in (206, Data("[]".utf8)) }

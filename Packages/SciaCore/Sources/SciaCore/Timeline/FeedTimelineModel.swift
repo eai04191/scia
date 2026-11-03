@@ -141,9 +141,13 @@ public final class FeedTimelineModel {
             // 作り直し中の読み直しも、使わない一覧への通信なのでやめる。有効に戻したら、つないだところで補完する。
             cancelRegeneratingRetry()
             stopPolling()
-        } else if hasLoadedInitial {
-            startStreaming()
-            startPolling()
+        } else {
+            // 無効の間は、失敗した読み込みのやり直しを見送っているので、ここでやり直す。
+            retryFailedLoads()
+            if hasLoadedInitial {
+                startStreaming()
+                startPolling()
+            }
         }
     }
 
@@ -255,8 +259,9 @@ public final class FeedTimelineModel {
 
     /// 失敗したままの最初の読み込みか、末尾の読み込みをやり直す。最初の読み込みが済めば、そこでつなぐ。
     /// ユーザーのハッシュタグは、見ていない間は読まない。見えたときに`setShown`でやり直す。
+    /// 無効にした一覧も、使わない一覧への通信になるので読まない。有効に戻したときに`setEnabled`でやり直す。
     private func retryFailedLoads() {
-        guard !feed.isAccountHashtag || isShown else { return }
+        guard !isDisabled, !feed.isAccountHashtag || isShown else { return }
         if case .failed = contentState {
             start(purpose: .display)
         } else if case .failed = footerState {
