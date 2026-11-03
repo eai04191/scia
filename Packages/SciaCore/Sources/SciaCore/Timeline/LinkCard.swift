@@ -39,9 +39,15 @@ public enum LinkCard: Equatable, Sendable {
     /// サーバーがカードを付けないまま、リンク先だけのカードが出る。見せ方の決まりで、カードが付かなかったときも
     /// リンク先だけのカードを残すため、見た目は付かなかった投稿と変わらない。
     static func cardCandidate(in status: Status) -> URL? {
-        guard status.mediaAttachments.isEmpty, status.quote == nil else { return nil }
+        cardCandidates(in: status).first
+    }
+
+    /// `cardCandidate(in:)`と同じ決まりで、カードを付けうるリンクを本文の順に返す。最初のものが、サーバーがカードを付けるリンク。
+    static func cardCandidates(in status: Status) -> [URL] {
+        guard status.mediaAttachments.isEmpty, status.quote == nil else { return [] }
         let mentionURLs = Set(status.mentions.compactMap(\.url))
         let tagNames = Hashtag.normalizedNames(of: status.tags)
+        var links: [URL] = []
         var candidate: (url: URL, text: String)?
         for token in HTMLTokenizer.tokenize(status.content) {
             switch token {
@@ -53,12 +59,15 @@ public enum LinkCard: Equatable, Sendable {
                 guard let link = candidate else { continue }
                 candidate = nil
                 if Hashtag.isTagText(link.text, normalizedNames: tagNames) { continue }
-                return link.url
+                links.append(link.url)
             default:
                 continue
             }
         }
-        return candidate?.url
+        if let link = candidate {
+            links.append(link.url)
+        }
+        return links
     }
 
     /// `a`の属性から、httpかhttpsのリンクで、メンションとハッシュタグのクラスがないもののURLを返す。
