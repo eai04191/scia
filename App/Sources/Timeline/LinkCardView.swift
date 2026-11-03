@@ -51,7 +51,7 @@ final class LinkCardView: UIButton {
     /// 画像を長押ししたときのメディアのメニュー。カードはボタンで、一覧の行の長押しのメニューが届かないため、画像が自分で受ける。
     private var imageMenuInteraction: MediaMenuInteraction?
     /// サムネイルの画像がタップされたときに、ビューアを開閉する起点として、サムネイルを渡して呼ぶ。
-    /// 画像を読み込み終えたカードでだけ受け付け、それ以外の場所や画像のないカードのタップは、リンクを開く。
+    /// 画像のあるカードでは、読み込む前（blurhashのぼかしのうち）も受け付ける。それ以外の場所や画像のないカードのタップは、リンクを開く。
     var onOpenImage: ((LinkCardThumbnailView) -> Void)?
     /// 閲覧注意でぼかした画像がタップされたときに呼ぶ。ぼかしを外すのは置く側で、適用し直すまで見た目は変わらない。リンクは開かない。
     var onRevealImage: (() -> Void)?
@@ -217,7 +217,7 @@ final class LinkCardView: UIButton {
     }
 
     /// 閲覧注意でぼかした画像を押すと、ぼかしを外す。
-    /// サムネイルの画像を開けるのは、読み込み終えた画像を出しているとき。ぼかしの下地のうちは、大きくして見るものがないため、リンクを開く。
+    /// サムネイルの画像は、読み込む前（blurhashのぼかしのうち）も、添付ファイルと同じく開け、ビューアで読み込みを待つ。
     private func updateImageInteraction() {
         if isCoveringImage {
             thumbnailView.isUserInteractionEnabled = true
@@ -227,7 +227,7 @@ final class LinkCardView: UIButton {
             }]
             return
         }
-        let opensImage = thumbnailView.loadedThumbnail != nil && thumbnailView.imageURL == request?.url
+        let opensImage = request != nil && thumbnailView.imageURL == request?.url
         thumbnailView.isUserInteractionEnabled = opensImage
         accessibilityCustomActions = opensImage
             ? [UIAccessibilityCustomAction(name: "画像を開く") { [weak self] _ in
@@ -534,7 +534,7 @@ final class LinkCardView: UIButton {
         loadTask = nil
         if !keepsImage {
             let placeholder = card?.blurhash.flatMap { store.placeholder(for: $0, aspectRatio: bounds.height > 0 ? thumbnailWidth / bounds.height : 1) }
-            crossfadeThumbnail(duration: crossfadeDuration) { $0.showPlaceholder(placeholder) }
+            crossfadeThumbnail(duration: crossfadeDuration) { $0.showPlaceholder(placeholder, for: request?.url) }
         }
         updateImageInteraction()
         // ぼかしている間は画像を読まない。ぼかしを外さない投稿で通信しないようにする。
@@ -638,14 +638,14 @@ final class LinkCardView: UIButton {
 final class LinkCardThumbnailView: UIImageView, MediaViewerSource {
     /// 読み込んだ画像。ぼかしの下地は含まない。ビューアで元の画像が届くまでの下地にする。
     private(set) var loadedThumbnail: UIImage?
-    /// 読み込んだ画像のURL。ビューアを閉じるとき、セルが別の投稿に使い回されていないかを確かめる。
+    /// 描いている画像のURL。読み込む前のぼかしの下地を描いている間も、これから読む画像のURLを持つ。ビューアを閉じるとき、セルが別の投稿に使い回されていないかを確かめる。
     private(set) var imageURL: URL?
 
     var thumbnailImage: UIImage? { image }
 
-    func showPlaceholder(_ placeholder: UIImage?) {
+    func showPlaceholder(_ placeholder: UIImage?, for url: URL?) {
         loadedThumbnail = nil
-        imageURL = nil
+        imageURL = url
         image = placeholder
     }
 

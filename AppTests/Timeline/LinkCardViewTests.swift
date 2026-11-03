@@ -56,6 +56,51 @@ struct LinkCardViewTests {
         #expect(compact.view.intrinsicContentSize.height < full.view.intrinsicContentSize.height)
     }
 
+    /// 画像を読み込む前（blurhashのぼかしのうち）も、添付ファイルと同じく画像を押すとビューアで開き、閉じるときはそのサムネイルへ戻す。
+    @Test func opensImageBeforeLoading() throws {
+        let url = try #require(URL(string: "https://example.com/article"))
+        let image = try #require(URL(string: "https://example.com/image.png"))
+        let card = PreviewCard(
+            url: url,
+            title: "記事のタイトル",
+            description: "説明",
+            type: .link,
+            providerName: "Example",
+            image: image,
+            width: 400,
+            height: 225,
+            blurhash: "UcQmF#ay~qofj[WBj[j[~qof9Fayofj[WBj["
+        )
+        let view = LinkCardView(store: .offline)
+        var opened: LinkCardThumbnailView?
+        view.onOpenImage = { opened = $0 }
+        view.apply(LinkCardView.Content(
+            card: .card(card),
+            padding: 10,
+            transitionDuration: 0,
+            thumbnailSide: .left,
+            typography: .standard,
+            showsSite: true,
+            descriptionLines: 1,
+            lineSpacing: 2
+        ))
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 328, height: 400)
+        window.addSubview(view)
+        window.isHidden = false
+        defer { window.isHidden = true }
+        view.frame = CGRect(origin: .zero, size: CGSize(width: 328, height: view.intrinsicContentSize.height))
+        view.layoutIfNeeded()
+
+        let open = try #require(view.accessibilityCustomActions?.first { $0.name == "画像を開く" })
+        _ = open.actionHandler?(open)
+
+        let thumbnail = try #require(opened)
+        #expect(thumbnail.loadedThumbnail == nil)
+        #expect(thumbnail.isShowing(image))
+    }
+
     /// ラベルの枠の高さに収まる行の数。UILabelと同じく、収まらない行は数えない。
     private func linesFitting(in label: UILabel) -> Int {
         let storage = NSTextStorage(string: label.text ?? "", attributes: [.font: label.font as Any])
