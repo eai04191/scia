@@ -93,6 +93,15 @@ struct ProfileCardPaletteTests {
         #expect(!ProfileCardPalette(color: green, options: ProfileCardPalette.Options().raisingContrast(), isDark: true).underlinesScreenLinks)
     }
 
+    @Test("鮮やかさの低いティントカラーは、控えめな文字の灰色と見分けにくいので、カードの外のリンクに下線を引く", arguments: [false, true])
+    func dullTintUnderlinesLinks(isDark: Bool) {
+        // 淡い青灰色のアイコン。ライトモードでは明るさ0.54ほどのリンクになり、黒い本文とは明るさで離れても、ハンドルや日付の灰色に近い。
+        let slate = ProfileAccentColor.fitted(lightness: 0.84, chroma: 0.04, hue: -1.75)
+        #expect(ProfileCardPalette(color: slate, isDark: isDark).underlinesScreenLinks)
+        // 濃紺は、ダークモードで明るくしても色が残るので、下線を引かない。
+        #expect(!ProfileCardPalette(color: Self.navy, isDark: isDark).underlinesScreenLinks)
+    }
+
     @Test("ダークモードでは、灰色のカードを明るさの上限まで暗くする")
     func darkModeDimsNeutral() {
         let white = ProfileAccentColor(lightness: 0.86, chroma: 0, hue: 0)

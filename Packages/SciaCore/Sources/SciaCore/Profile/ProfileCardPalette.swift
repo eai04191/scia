@@ -55,11 +55,15 @@ public struct ProfileCardPalette: Equatable, Sendable {
     /// カードの外のリンクと「さらに表示」に下線を引く。灰色のときは、ティントカラーが本文と同じ黒か白で、色では見分けられないため。
     /// 色があっても、画面の地の上で目標に届かせるために本文の色の近くまで動かしたときも引く。
     /// 「コントラストを上げる」のダークモードで、赤や青が明るさ0.92ほどの淡い色になり、白い本文と見分けにくくなるときなど。
+    /// 本文と明るさが離れていても、鮮やかさが低ければ引く。ハンドルや日付のような灰色の控えめな文字と、色で見分けられないため。
     public let underlinesScreenLinks: Bool
 
     /// ティントカラーを本文と色で見分けられるとみなす、OKLabでの本文の色との差。
     /// 赤や青は、ふつうは0.18ほど、「コントラストを上げる」のダークモードでは0.09ほどの差になり、後者は白い本文と見分けにくかった。
     static let distinguishableDifference = 0.15
+    /// ティントカラーを灰色の文字と色で見分けられるとみなす、OKLCHの鮮やかさ。灰色の文字はどの明るさでも鮮やかさが0なので、鮮やかさがそのまま差になる。
+    /// 淡い青灰色のアイコンでは0.04ほどのリンクになり、ハンドルや日付の灰色と見分けにくかった。濃紺や青は、ダークモードで明るくしても0.085ほどの差が残る。
+    static let distinguishableChroma = 0.07
 
     public init(color: ProfileAccentColor, options: Options = Options(), isDark: Bool) {
         let screen: DisplayP3Color = isDark ? .black : .white
@@ -72,6 +76,7 @@ public struct ProfileCardPalette: Equatable, Sendable {
         // 本文の色は、明るさが1か0の白か黒。OKLabでは、明るさの差と鮮やかさから差が出る。
         let textLightness: Double = isDark ? 1 : 0
         underlinesScreenLinks = hypot(screenTint.lightness - textLightness, screenTint.chroma) < Self.distinguishableDifference
+            || screenTint.chroma < Self.distinguishableChroma
         let lightText = Self.prefersLightText(on: base.displayP3Color)
         let text: DisplayP3Color = lightText ? .white : .black
         background = base.ensuringContrast(options.body, against: text, as: .background)
