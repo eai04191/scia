@@ -64,6 +64,7 @@ targetは、指定がなければ`git symbolic-ref --short refs/remotes/origin/H
   - 作業branchの変更が触れていないテストなら、一度だけ並び直す。通れば、たまに落ちるテストとして報告に書く。また落ちたら報告する。`Tools/check-stamp.sh missing <targetのSHA>`で、targetの中身では通っていたかも添える
   - 直すのに、仕様や挙動の判断が要るなら、報告する
 - 5（前提のbranchが、列にもmainにもないまま10分経った）: 前提のスレッドを`get_session`で引き、`isRunning`がtrueなら、まだ準備の途中なので並び直す。falseなら、並び直さずに、どのスレッドが入らないまま止まっているかを報告する
+- 6（FEATURES.mdかREADME.mdの変更を人が承認していない）: ユーザーに、自分の端末で出力にある`Tools/human-review.sh approve <commit>`を走らせて承認してもらうよう頼み、ターンを終える。agentは承認を走らせない。承認されたと伝えられたら、手順3で並び直す
 - 1（それ以外）: 出力を報告する
 
 入れたら、次を報告する。

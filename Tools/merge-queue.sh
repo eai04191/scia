@@ -1,7 +1,7 @@
 #!/bin/bash
 # 作業branchを、1つずつローカルのmainへ入れる。/merge-to-mainのskillが、作業branchのworktreeでバックグラウンドで走らせる。
 # 番が来たら、最新のmainへrebaseし、Tools/check-stamp.shでまだ通っていないmake checkとmake testだけを走らせ、fast-forwardで入れる。
-# 判断の要ること（rebaseのconflict、落ちたcheckやtest、未commitの変更、来ない前提）は扱わず、番を譲って終わる。直したら並び直す。
+# 判断の要ること（rebaseのconflict、落ちたcheckやtest、未commitの変更、来ない前提、人が承認していないFEATURES.mdとREADME.mdの変更）は扱わず、番を譲って終わる。直したら並び直す。
 # 列は、worktreeどうしで共有する.gitの共通ディレクトリのscia-merge-queue/に、並んだ順の番号を名前にしたファイルで置く。
 # 番は、前提がすべてmainに入っている並びのうち、一番前のものに来る。前提を待つ並びは、後ろのものに追い越される。
 # 追い越しがあると並んだ順だけでは1つずつにならないので、mainへ入れる処理は、.turnのロックを持って走らせる。
@@ -11,7 +11,7 @@
 #   Tools/merge-queue.sh run [<前提のbranch>...]   今のbranchを列に並べ、番が来たら入れる。make testの端末は、走らせる直前にTools/sim.sh acquireで借りる
 #   Tools/merge-queue.sh status                         並んでいるbranchを順に出す
 # runの終了コード: 0 入れた、1 使い方の誤りや想定外の失敗、2 未commitの変更がある、3 rebaseがconflictした、4 make checkかmake testが落ちた、
-#   5 前提のbranchが、列にもmainにもないまま10分経った
+#   5 前提のbranchが、列にもmainにもないまま10分経った、6 FEATURES.mdかREADME.mdの変更を人が承認していない（Tools/human-review.sh）
 set -euo pipefail
 
 TARGET=main
@@ -175,6 +175,16 @@ rebase_onto_target() {
     fi
 }
 
+# 承認はユーザーを待つので、make checkとmake testに時間を使う前に調べる
+require_human_review() {
+    local missing
+    missing=$(Tools/human-review.sh missing HEAD "$TARGET") || { echo "error: 人が承認したかを調べられませんでした" >&2; exit 1; }
+    if [[ -n "$missing" ]]; then
+        echo "error: $(echo $missing)の変更を人が承認していないので、列を離れます。ユーザーが自分の端末で Tools/human-review.sh approve $(git rev-parse --short HEAD) を走らせて承認してから、並び直してください" >&2
+        exit 6
+    fi
+}
+
 run_missing_steps() {
     local missing steps step sim lent
     # 調べられなかったときに、出力が空なのを通ったものと取り違えないよう、失敗したら止める
@@ -221,6 +231,7 @@ land() {
     while :; do
         before=$(git rev-parse "$TARGET")
         rebase_onto_target
+        require_human_review
         run_missing_steps
         [[ "$(git rev-parse "$TARGET")" == "$before" ]] && break
         echo "$TARGET が動いたので、載せ直します"

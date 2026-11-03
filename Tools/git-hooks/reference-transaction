@@ -1,5 +1,6 @@
 #!/bin/bash
 # ローカルのmainを、`make check`と`make test`の両方が通った中身（Tools/check-stamp.shが覚えたtree）のcommitにしか動かさない。`make hooks`で入れる。
+# FEATURES.mdとREADME.mdが今のmainと違うcommitは、その中身を人が承認していなければ（Tools/human-review.sh）動かさない。
 # mainにあったcommitへ戻すのと、mainを消すのは止めない。
 # fast-forwardのmergeは、作業ツリーとindexを書き換えてからmainを動かすので、mainを動かす時点で止めると、入れようとした中身が作業ツリーに残る。
 # そのため、mergeとpullは、作業ツリーに触る前に更新するORIG_HEADの時点で、相手のcommitを調べて止める。
@@ -14,6 +15,7 @@ set -euo pipefail
 # 古い版が新しい置き場所を読めず拒否するので、その1回だけ、古い置き場所にも同じ記録を置いてから入れる
 
 stamp="$(git rev-parse --path-format=absolute --git-common-dir)/../Tools/check-stamp.sh"
+review="$(git rev-parse --path-format=absolute --git-common-dir)/../Tools/human-review.sh"
 # 今のmainの中身で通っていて、違いがMarkdownとサーバーの一覧だけなら、通ったものとして扱う（Tools/check-stamp.shのmissing）
 main=$(git rev-parse -q --verify refs/heads/main || true)
 
@@ -22,6 +24,20 @@ checked() {
     # 調べられなかったときに、出力が空なのを通ったものと取り違えないよう、失敗したら拒否する
     missing=$("$stamp" missing "$1" ${main:+"$main"}) || reject "$stamp で、$(git log -1 --format='%h' "$1")の中身が検証済みかを調べられなかったので、mainに入れません"
     [[ -z "$missing" ]]
+}
+
+# mainがまだないときは、比べる中身がないので調べない
+reviewed() {
+    local missing
+    [[ -n "$main" ]] || return 0
+    missing=$("$review" missing "$1" "$main") || reject "$review で、$(git log -1 --format='%h' "$1")の中身が承認済みかを調べられなかったので、mainに入れません"
+    [[ -z "$missing" ]]
+}
+
+not_reviewed_message() {
+    local files
+    files=$("$review" missing "$1" "$main" | awk 'NR > 1 { printf "と" } { printf "%s", $0 }')
+    echo "$(git log -1 --format='%h %s' "$1") の${files}の変更は、人が承認していないので、mainに入れません。ユーザーが自分の端末で Tools/human-review.sh approve $(git log -1 --format='%h' "$1") を走らせて承認してから、入れ直してください"
 }
 
 reject() {
@@ -64,12 +80,14 @@ while read -r _old new ref; do
                 git merge-base --is-ancestor HEAD "$target" ||
                     reject "mainへはfast-forwardでだけ入れます。$(git log -1 --format='%h' "$target")をmainへrebaseし、make checkとmake testを通してから入れ直してください"
                 checked "$target" || reject "$(not_checked_message "$target")"
+                reviewed "$target" || reject "$(not_reviewed_message "$target")"
             done
             ;;
         refs/heads/main)
             [[ "$new" =~ ^0+$ ]] && continue
             [[ -n "$main" ]] && git merge-base --is-ancestor "$new" "$main" && continue
             checked "$new" || reject "$(not_checked_message "$new")"
+            reviewed "$new" || reject "$(not_reviewed_message "$new")"
             ;;
     esac
 done

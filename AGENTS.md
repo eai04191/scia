@@ -13,6 +13,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 
 - `docs/`はagentが読む文書で、人は読まない。人が読むのは`README.md`と`FEATURES.md`で、`docs/`とは別物として扱う
 - `README.md`と`FEATURES.md`は、ユーザーが頼んだときだけ変える。機能を足した、roadmapの項目が済んだ、仕様のdocsを書いたといった作業のついでに書き足さない。載せたほうがよさそうなことは、書かずに報告でユーザーに聞く
+- `README.md`と`FEATURES.md`の変更は、ユーザーが自分の端末で`Tools/human-review.sh approve <commit>`を走らせて承認するまで、mainに入らない（`make hooks`のhookと`Tools/merge-queue.sh`で止める）。agentは承認を走らせず、`script`などで端末を作って入力を流し込むこともしない
 - `FEATURES.md`: Sciaでできることの一覧。頼まれて書くときは、ファイルの先頭のコメントに従う
 - `docs/vision.md`: 何を作り、何を作らないかと、設計の判断の基準。作業が終わっても残す考え方を書く
 - `docs/roadmap.md`: これからの作業の単位と順序。1項目1行で、何をするかだけを書く。設計の判断や、作業を進めるための細かい合意・状態・調べて分かったことは書かない。済んだ項目は消す
@@ -32,7 +33,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `make menu-editor`: 長押しのメニューの既定の並びを並べ替えるページを、今の項目の名前と既定の並びを入れて`DerivedData/menu-editor.html`に書き出す
 - `make archive`: 実機向けのReleaseビルドをアーカイブする。ビルド番号はアーカイブしたUTCの日時になる
 - `make testflight`: アーカイブしてApp Store Connectへ上げる。mainは、GitHub Actions（`.github/workflows/testflight.yml`）が毎朝5時（JST）に、前に上げたときから変わっていれば上げる。上げたビルドは、`make testflight-external`で外部テストのグループ（リポジトリのvariablesの`TESTFLIGHT_EXTERNAL_GROUP`）に足し、TestFlight App Reviewに出す
-- `make hooks`: ローカルのmainを、`make check`と`make test`の両方が通った中身のcommitにしか動かさないhookを入れる。checkoutごとに1回で、worktreeにも効く。通った中身との違いがMarkdown（`*.md`）とログイン画面の補完に使うサーバーの一覧（`known-servers.txt`）だけなら、走らせ直さずに通ったものとして扱う
+- `make hooks`: ローカルのmainを、`make check`と`make test`の両方が通った中身のcommitにしか動かさないhookを入れる。checkoutごとに1回で、worktreeにも効く。通った中身との違いがMarkdown（`*.md`）とログイン画面の補完に使うサーバーの一覧（`known-servers.txt`）だけなら、走らせ直さずに通ったものとして扱う。`README.md`と`FEATURES.md`がmainと違うcommitは、`Tools/human-review.sh`で人が承認するまで入れない
 - `make scenario-run PERSONA=<役>`: 何も知らないエージェントを、`Tools/scenario/personas/`の役で初めて使う人としてSciaに触らせ、報告とスクリーンショットを`~/scia-scenario/runs/`に残す。外へ出ないMastodon（`mastodon.localhost`）と専用の端末`Scia Scenario`を使い、Release構成のSciaを入れる。先に`make scenario-setup`で準備する（何度走らせても同じ状態になる）。DockerとAXe（`brew install cameroncooke/axe/axe`）が要る。ユーザーが`/scenario`で起動したときは、`.claude/skills/scenario`の手順で走らせてまとめる
 
 ## シミュレーター
