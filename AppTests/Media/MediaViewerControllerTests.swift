@@ -1428,6 +1428,60 @@ struct MediaViewerControllerTests {
         #expect(viewer.view.superview == nil)
     }
 
+    /// 閉じる動きの途中に同じサムネイルを押して開き直したら、前の閉じる動きが着地しても、開き直したビューアが開き終えるまでサムネイルを隠したままにする。
+    /// 見せると、開く途中の複製と一覧のサムネイルが二重に見える。
+    @Test func reopeningSameTileWhileClosingKeepsTileConcealedUntilOpened() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let tile = MediaTileView(store: .offline)
+        tile.frame = CGRect(x: 20, y: 200, width: 160, height: 90)
+        harness.viewController.view.addSubview(tile)
+        let attachment = MediaAttachment(
+            id: "1",
+            type: .image,
+            url: nil,
+            previewUrl: nil,
+            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_600, height: 900)),
+            blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+        )
+        tile.apply(attachment, hiddenCount: 0, isCovered: false, policy: .offline)
+        func open() async throws -> MediaViewerController {
+            MediaViewerController.present(
+                attachments: [attachment],
+                startIndex: 0,
+                store: .offline,
+                dragToDismiss: drag,
+                timing: timing,
+                from: harness.viewController,
+                sourceTile: { _ in tile },
+                onDismiss: {},
+                frameSource: harness.frames
+            )
+            let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
+            try await waitUntil { viewer.isContentHiddenForTransition }
+            return viewer
+        }
+        let first = try await open()
+        harness.frames.runUntilStopped()
+        first.close()
+        try await waitUntil { harness.viewController.presentedViewController == nil }
+        // 閉じる動きの半ばで開き直す。前の閉じる動きは、開き直したビューアが開き終えるより先に着地する。
+        harness.frames.advance(by: timing.closeDuration / 2)
+        #expect(tile.isConcealedForViewer)
+
+        let second = try await open()
+        var exposedWhileOpening = false
+        for _ in 0..<120 where second.isMoving {
+            harness.frames.advance(by: 1.0 / 60)
+            if second.isMoving, !tile.isConcealedForViewer {
+                exposedWhileOpening = true
+            }
+        }
+        #expect(!exposedWhileOpening, "開き直したビューアが開いている途中に、前の閉じる動きがサムネイルを見せました")
+        harness.frames.runUntilStopped()
+        #expect(!tile.isConcealedForViewer)
+    }
+
     /// 一覧で重ねた写真のように回して置いた起点からは、同じ角度と大きさから回しながら開き、開ききったらまっすぐにする。
     /// 閉じるときは、起点の角度と大きさまで回しながら戻す。外側に接する四角へ戻すと、閉じ終わりにまっすぐな四角から回した写真へ切り替わって見えるため。
     /// 写真の白いフチも、フチを含めた写真の枠から始めて開くにつれて細くしてなくし、閉じるときは元の太さに戻す。

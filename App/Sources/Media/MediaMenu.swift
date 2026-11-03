@@ -51,10 +51,8 @@ final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
     private let sharperImage: (@MainActor (_ maxPixelSize: Int) async -> UIImage?)?
     /// 持ち上げ始めたときにtrue、メニューを閉じ終えたときにfalseで呼ぶ。UIKitは持ち上げる間、元の場所からビューを隠すため、
     /// その場所が抜けて見えないよう、隠すビューを出したり外したりする（プロフィールのヘッダー画像）。
-    /// 持ち上げた画像をタップしてビューアを開いたときは、ビューアが隠すビューの出し入れを受け持つため、falseでは呼ばない。
+    /// 持ち上げた画像をタップしてビューアを開いたときも、閉じ終えたらfalseで呼ぶ。そのときはビューアが自分の分として隠しているので、外しても見えない。
     private let onLiftChange: (@MainActor (Bool) -> Void)?
-    /// 持ち上げた画像をタップして、ビューアを開いた。閉じ終えても`onLiftChange`を呼ばない。
-    private var isOpeningViewer = false
 
     /// - Parameter menu: 一覧の行の外にある画像（プロフィールの画像）のメニュー。
     init(
@@ -114,7 +112,6 @@ final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
     }
 
     func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration, highlightPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
-        isOpeningViewer = false
         onLiftChange?(true)
         return thumbnailPreview
     }
@@ -128,7 +125,6 @@ final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
     /// ビューアが開いて見える。UIKitは閉じる動きを終えるまでビューアの表示を待たせるため、開き始めを早めるだけでは下がる動きが残った。
     func contextMenuInteraction(_ interaction: UIContextMenuInteraction, willPerformPreviewActionForMenuWith configuration: UIContextMenuConfiguration, animator: any UIContextMenuInteractionCommitAnimating) {
         animator.preferredCommitStyle = .pop
-        isOpeningViewer = true
         animator.addAnimations { [open] in open() }
     }
 
@@ -151,10 +147,7 @@ final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
     }
 
     private func endLift() {
-        if !isOpeningViewer {
-            onLiftChange?(false)
-        }
-        isOpeningViewer = false
+        onLiftChange?(false)
     }
 
     private var host: (any MediaMenuHost)? {

@@ -17,6 +17,7 @@ protocol MediaViewerSource: UIView {
     func makeDecorationCopy() -> UIView
     /// ビューアがこのビューとのあいだで画像を動かしている間、見えなくする。
     /// 透明にすると触れても反応しなくなり、閉じる途中にタップし直しても開けないため、空のマスクで隠す。
+    /// 隠す側が複数になることがあるので、直接書かず`ViewerConcealment`を通す。
     var isConcealedForViewer: Bool { get set }
     /// このビューの上に重なっているビュー。手前にあるものほど後ろに並べる。ビューアは画像の複製のさらに手前に、これらの複製を重ねる。
     var overlappingViews: [UIView] { get }
@@ -42,6 +43,57 @@ extension MediaViewerSource {
     var paperBorder: (width: CGFloat, cornerRadius: CGFloat)? { nil }
     var viewerAppearance: (contentOpacity: CGFloat, dimming: CGFloat) { (1, 0) }
     var viewerShadowOpacity: Float { 0 }
+}
+
+/// 起点を隠している、隠す側1つ分の取り分。隠す側（開いているビューア、サムネイルへ戻る動き、持ち上げた画像）は、隠すときにこれを作って持ち、要らなくなったら`release()`で返す。
+/// 起点は、隠す側がすべて返したときに見せる。閉じる動きの途中に同じ起点から開き直すと、2つが同じ起点を隠し、先に終わった側が見せると、もう一方が動かしている複製と起点が二重に見えるため。
+@MainActor
+final class ViewerConcealment {
+    /// 起点ごとの、隠している取り分の数。
+    private final class Holders {
+        weak var source: (any MediaViewerSource)?
+        var count = 0
+
+        init(source: any MediaViewerSource) {
+            self.source = source
+        }
+    }
+
+    /// 起点のビューを持たないよう、識別子で引く。解放されたビューと同じ識別子を新しいビューが使っても取り違えないよう、引いたあとでビューが同じかを確かめる。
+    private static var holders: [ObjectIdentifier: Holders] = [:]
+
+    private(set) weak var source: (any MediaViewerSource)?
+    private let id: ObjectIdentifier
+    private var holder: Holders?
+
+    init(_ source: any MediaViewerSource) {
+        self.source = source
+        let id = ObjectIdentifier(source)
+        self.id = id
+        let holder = Self.holders[id].flatMap { $0.source === source ? $0 : nil } ?? Holders(source: source)
+        Self.holders[id] = holder
+        holder.count += 1
+        self.holder = holder
+        source.isConcealedForViewer = true
+    }
+
+    /// 返さないまま持ち主が解放されても、起点が隠れたままにならないよう返す。
+    isolated deinit {
+        release()
+    }
+
+    /// 返す。2回目からは何もしない。
+    func release() {
+        guard let holder else { return }
+        self.holder = nil
+        holder.count -= 1
+        guard holder.count == 0 else { return }
+        // 起点のビューが先に解放されていても、表に残さない。
+        if Self.holders[id] === holder {
+            Self.holders[id] = nil
+        }
+        holder.source?.isConcealedForViewer = false
+    }
 }
 
 extension UIView {

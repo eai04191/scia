@@ -165,6 +165,8 @@ final class ProfileHeaderView: UIView {
     private let emojiImages: EmojiImageStore<UIImage>
     private let mediaImages: MediaImageStore<UIImage>
     private let bannerView = ProfileBannerView()
+    /// ヘッダー画像を持ち上げている間、ヘッダー画像を隠している取り分。
+    private var liftConcealment: ViewerConcealment?
     /// ヘッダー画像の上を、画面の上端までぼかして伸ばす部分。画像はナビゲーションバーのボタンの奥まで上げて置き（`ProfileBannerLayout`）、
     /// 届かないステータスバーの帯と、引っぱった分だけを埋める。中の画像の下端を画像の上端に合わせ、見える高さで切り抜く。
     private let bannerReflectionClip = UIView()
@@ -700,7 +702,11 @@ final class ProfileHeaderView: UIView {
         }
         // ビューアで開くときと同じく、持ち上げている間はヘッダー画像の場所にぼかしたビューを出し、抜けて見えないようにする。
         let onLiftChange: (@MainActor (Bool) -> Void)? = switch image {
-        case .header: { [weak self] isLifted in self?.bannerView.isConcealedForViewer = isLifted }
+        case .header: { [weak self] isLifted in
+            guard let self else { return }
+            liftConcealment?.release()
+            liftConcealment = isLifted ? ViewerConcealment(bannerView) : nil
+        }
         case .avatar: nil
         }
         return MediaMenuInteraction(on: view, wholeImage: wholeImage, open: { [weak self] in

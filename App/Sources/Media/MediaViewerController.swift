@@ -82,8 +82,8 @@ final class MediaViewerController: UIViewController {
     private var motion = Motion.idle
     private let timing: Timing
     private let sourceTile: @MainActor (String) -> (any MediaViewerSource)?
-    /// 複製を動かしている間、隠している一覧のサムネイル。画像がそこへ戻っていく途中で消えて見えないよう、動かし始めから隠す。
-    private var hiddenTile: (any MediaViewerSource)?
+    /// 複製を動かしている間、一覧のサムネイルを隠している取り分。画像がそこへ戻っていく途中で消えて見えないよう、動かし始めから隠す。
+    private var hiddenTile: ViewerConcealment?
     /// 開く途中と、開く途中でつかんでから複製を手前へ寄せ終えるまで、複製を一覧のバーの手前と奥に描き分ける。
     private var barLayering: MediaBarLayering?
     /// `barLayering`で、複製をバーの手前と奥のどちらに見せているか。
@@ -1340,14 +1340,13 @@ extension MediaViewerController {
 
     /// 隠すサムネイルを入れ替える。左右の切り替えで、隠していたものと別の添付ファイルに移っていることがあるため。
     private func hide(_ tile: (any MediaViewerSource)?) {
-        guard tile !== hiddenTile else { return }
+        guard tile !== hiddenTile?.source else { return }
         showHiddenTile()
-        tile?.isConcealedForViewer = true
-        hiddenTile = tile
+        hiddenTile = tile.map(ViewerConcealment.init)
     }
 
     private func showHiddenTile() {
-        hiddenTile?.isConcealedForViewer = false
+        hiddenTile?.release()
         hiddenTile = nil
     }
 
@@ -1632,7 +1631,7 @@ extension MediaViewerController {
         if morph.isHidden {
             showMorph(frame: presentedContentFrame(in: view), cornerRadius: 0, tile: tile, decorationAlpha: 0, copiesPageOverlay: true)
         } else {
-            if tile !== hiddenTile {
+            if tile !== hiddenTile?.source {
                 // 左右の切り替えで戻り先が変わっていたら、重ねた表示をその戻り先のものに載せ直す。
                 attachDecoration(from: tile, alpha: morphDecoration?.alpha ?? 0)
             }

@@ -62,7 +62,7 @@ final class MediaClosingFlight {
     private let paperBorderPortion: CGFloat
     private let startDecorationAlpha: CGFloat
     private let startFadingAlphas: [CGFloat]
-    private var concealedTile: (any MediaViewerSource)?
+    private var concealedTile: ViewerConcealment?
     /// 戻り先の、回転を戻したときの枠、角度、角の丸み。回した起点（一覧で重ねた写真）へは、その角度まで回しながら戻す。
     private var lastTarget: (frame: CGRect, rotation: CGFloat, radius: CGFloat, border: CGFloat, appearance: (contentOpacity: CGFloat, dimming: CGFloat), shadowOpacity: Float)?
     private let source: any FrameSource
@@ -73,7 +73,7 @@ final class MediaClosingFlight {
     var onFinish: (() -> Void)?
 
     /// - Parameters:
-    ///   - concealedTile: 戻り先として隠しているサムネイル。戻り終えたら見せる。
+    ///   - concealedTile: 戻り先のサムネイルを隠している取り分。戻り終えたら返す。
     ///   - handoffStart: 一覧の中の複製へ受け渡し始める進み具合。一覧の中の複製がなければ使わない。
     ///   - barOverlapFadeEnd: 閉じ始めにバーと重なっていた部分を、一覧の中の複製へ入れ替え終える進み具合。一覧の中の複製がなければ使わない。
     ///   - startOverlapOpacity: 閉じ始めに、バーと重なっていた部分を手前に見せていた濃さ。開く途中から閉じるときは1未満になる。
@@ -89,7 +89,7 @@ final class MediaClosingFlight {
         startOverlapOpacity: CGFloat,
         movesImage: Bool,
         paperBorderPortion: CGFloat = 1,
-        concealedTile: (any MediaViewerSource)?,
+        concealedTile: ViewerConcealment?,
         source: any FrameSource = DisplayLinkFrameSource.shared,
         findTile: @escaping @MainActor () -> (any MediaViewerSource)?
     ) {
@@ -140,10 +140,9 @@ final class MediaClosingFlight {
         let tile = findTile()
         // 複製を動かさないときは、複製がサムネイルへ戻らないため隠さない。隠すと、複製が消えてからサムネイルが急に現れる。
         let tileToConceal = movesImage ? tile : nil
-        if tileToConceal !== concealedTile {
-            concealedTile?.isConcealedForViewer = false
-            tileToConceal?.isConcealedForViewer = true
-            concealedTile = tileToConceal
+        if tileToConceal !== concealedTile?.source {
+            concealedTile?.release()
+            concealedTile = tileToConceal.map(ViewerConcealment.init)
         }
         if let tile {
             // 白いフチの付いた起点（一覧で重ねた写真）へは、フチを含めた写真の枠と角の丸みへ、フチを太くしながら戻す。
@@ -208,7 +207,7 @@ final class MediaClosingFlight {
         ticker = nil
         parts.overlay.removeFromSuperview()
         parts.layering.tearDown()
-        concealedTile?.isConcealedForViewer = false
+        concealedTile?.release()
         concealedTile = nil
         onFinish?()
     }
