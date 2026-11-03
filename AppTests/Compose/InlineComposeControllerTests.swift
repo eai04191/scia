@@ -752,6 +752,31 @@ final class InlineComposeControllerTests {
         #expect(composer.stateDump().contains("editing: false"), "投稿したのに書いている状態のままです\n\(composer.stateDump())")
     }
 
+    /// 投稿して畳むときは、空にした下書きの「いまどうしてる？」のカプセルへ戻す。送った本文をカプセルの行に描いて、そこへ畳まない。
+    @Test func postingCollapsesToEmptyCapsule() async throws {
+        defer { window.isHidden = true }
+        let composer = try installComposer { _ in }
+        composer.model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
+        composer.beginEditing()
+        try await waitUntilSettled()
+        let textView = try #require(textViews(in: window).first)
+        textView.becomeFirstResponder()
+        textView.insertText("送った本文")
+        try await waitUntilSettled()
+        useDefaultAnimationDurations()
+
+        await composer.model.submit()
+        let rest = try #require(restContents(in: window).first)
+        let drawsPosted = { self.textLines(in: self.window).contains { $0.attributedText.string.contains("送った本文") } }
+        #expect(!drawsPosted(), "畳み始めに、送った本文を描いています")
+        #expect(rest.label.attributedText.string == "いまどうしてる？")
+        try await clock.advance(by: 0.1)
+        #expect(!drawsPosted(), "畳む途中に、送った本文を描いています")
+        try await waitUntilSettled()
+        #expect(!drawsPosted(), "畳んだあとに、送った本文を描いています")
+        #expect(rest.label.concealedRanges.isEmpty, "畳んだあとも、カプセルの文字を隠しています")
+    }
+
     /// 送信に失敗して知らせを出している間も、書き終えたことにせず、バーをキーボードの高さに留めて広げた欄を保つ。
     /// 知らせを閉じたあとにキーボードが戻ることは、知らせのボタンを押せないためシミュレーターで確かめる。
     @Test func failedPostKeepsEditingWhileShowingError() async throws {

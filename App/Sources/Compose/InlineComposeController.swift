@@ -360,6 +360,9 @@ final class InlineComposeController: NSObject {
             // 入力欄は変換中の文字を確定するか取り消して本文が変わったと知らせ、そのとき入力欄に残っていた本文が下書きに戻るため。
             // 欄の出し入れは`update()`に任せる。書き終える前に行うと、書いている間の動きで欄を畳み、フォーカスも本文へ移すため。
             applyTexts()
+            // カプセルの1行も、畳む動きの行き先になるので、空にした下書きに合わせておく。送った本文のまま畳むと、送った本文へ向かって畳み、
+            // 着いたあとで「いまどうしてる？」に替わったため。
+            applyRestContent(chip: chip, attachments: attachmentItems())
             resignInput()
             // 送っている間に添付のビューアを開いていると、入力欄はもうキーボードを出しておらず、書き終えたことにならない。
             // ビューアを閉じるのを待たずにここで書き終え、閉じたあとに空になった本文へキーボードを戻さないようにする。
@@ -2500,15 +2503,7 @@ final class InlineComposeController: NSObject {
         }
         setRowShown(scheduleRow, isOpen && model.scheduledAt != nil)
 
-        let attachmentItems = model.attachments.map { attachment in
-            ComposeAttachmentStrip.Item(
-                attachment: attachment,
-                local: model.localMedia[attachment.id],
-                status: model.attachmentStatus(of: attachment.id) ?? .uploading,
-                progress: model.attachmentProgress(of: attachment.id),
-                isSensitive: model.isSensitive
-            )
-        }
+        let attachmentItems = attachmentItems()
         attachmentStrip.update(attachmentItems, isLocked: model.isPosting)
         mediaViewer?.update(items: viewerItems())
         setRowShown(attachmentStrip, isOpen && !model.attachments.isEmpty)
@@ -2554,10 +2549,27 @@ final class InlineComposeController: NSObject {
         }
         sendButton.largeContentTitle = sendButton.accessibilityLabel
 
-        restContent.configure(symbolName: chip?.symbolName, showsSchedule: model.scheduledAt != nil, attachments: attachmentItems, text: restText(), isPosting: model.isPosting)
-        restRow.accessibilityValue = restAccessibilityValue(chip: chip, attachments: attachmentItems)
+        applyRestContent(chip: chip, attachments: attachmentItems)
         presentErrorIfNeeded()
         logOverlappingRows(after: "update")
+    }
+
+    private func attachmentItems() -> [ComposeAttachmentStrip.Item] {
+        model.attachments.map { attachment in
+            ComposeAttachmentStrip.Item(
+                attachment: attachment,
+                local: model.localMedia[attachment.id],
+                status: model.attachmentStatus(of: attachment.id) ?? .uploading,
+                progress: model.attachmentProgress(of: attachment.id),
+                isSensitive: model.isSensitive
+            )
+        }
+    }
+
+    /// 書いていないときの1行を、今の下書きに合わせる。
+    private func applyRestContent(chip: Chip?, attachments: [ComposeAttachmentStrip.Item]) {
+        restContent.configure(symbolName: chip?.symbolName, showsSchedule: model.scheduledAt != nil, attachments: attachments, text: restText(), isPosting: model.isPosting)
+        restRow.accessibilityValue = restAccessibilityValue(chip: chip, attachments: attachments)
     }
 
     /// 書いている間にラベルやサムネイルの列を出したり消したりするときは、パッと切り替えず、行を薄くしながら縮める（広げる）。
