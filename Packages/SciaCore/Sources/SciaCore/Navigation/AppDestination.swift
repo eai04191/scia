@@ -106,6 +106,19 @@ public enum AppDestination: Equatable, Sendable {
         case crop(index: Int)
     }
 
+    /// タブを選ぶか、タブに積んで見せる行き先か。上に重ねた画面があると見えず、積むのもやめるので、重ねた画面を閉じてから開く。
+    /// 手前に重ねる行き先は、下の画面を残して重ねる。ビューアのメニューから開いた設定を閉じると、ビューアに戻るため。
+    /// 予約投稿は、タブを無効にしていれば手前に重ねるが、タブに並べていればタブを見せるので、こちらに入れる。
+    public var showsTab: Bool {
+        switch self {
+        case .tab, .userTab, .profile, .myProfile, .thread, .editHistory, .apiResponse, .accounts, .hashtag, .accountHashtag, .search, .scheduled,
+             .notificationRequests, .notificationRequest:
+            true
+        case .settings, .appearanceGroup, .profileEdit, .operationStatus, .notificationPolicy, .announcements, .inAppBrowserHeight, .note, .report, .compose:
+            false
+        }
+    }
+
     /// ログに書く説明。ハンドルやID、名前は、誰の何を開いたかが分かるので書かず、画面の種類だけにする（docs/logging.md）。
     public var logDescription: String {
         switch self {

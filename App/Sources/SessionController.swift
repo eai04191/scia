@@ -2417,7 +2417,7 @@ final class SessionController {
     /// ホームのタブを無効にしていれば、選んでいるタブの一覧の上に出す。
     /// - Parameter page: 閉じたときに開き直す設定の画面。nilなら開き直さない。
     private func showInAppBrowserHeight(returningTo page: SettingsPage?) {
-        rootViewController.dismissPresentedScreens(animated: true) { [weak self] in
+        rootViewController.closeAllScreens { [weak self] in
             guard let self, let window = rootViewController.viewIfLoaded?.window else { return }
             tabs.show(.home)
             tabs.selectedNavigation?.popToRootViewController(animated: false)
@@ -3279,20 +3279,60 @@ final class SessionController {
 
     /// 外から頼まれた画面を開く。アプリのURL（`scia://`）と、これから足すショートカットは、ここを通す。
     func open(_ destination: AppDestination) {
-        // 重ねた画面を閉じている途中に届くと、閉じていく画面を手前にあるものとして扱い、重ねたり積んだりできずに何もしないことがある。閉じ終えてから行う。
-        if let dismissing = rootViewController.presentedViewController, dismissing.isBeingDismissed, let coordinator = dismissing.transitionCoordinator {
+        // 重ねた画面のどれかを閉じている途中に届くと、閉じていく画面を手前にあるものとして扱い、重ねたり積んだりできずに何もしないことがある。
+        // 手前の画面を閉じている途中にその下の画面を閉じ始めると、下の画面が閉じられずに残る。閉じ終えてから行う。
+        var screen = rootViewController.presentedViewController
+        while let current = screen, !current.isBeingDismissed {
+            screen = current.presentedViewController
+        }
+        if let dismissing = screen, let coordinator = dismissing.transitionCoordinator {
             coordinator.animate(alongsideTransition: nil) { [weak self] _ in self?.open(destination) }
             return
         }
+        // タブを見せる行き先は、上に重ねた画面を、書きかけのある画面やアプリ内のSafariも含めてすべて閉じてから開く。重ねたままでは見えず、積むのもやめるため。
+        // 送られた行き先は使う人の新しい操作なので、出ていた画面より優先する。並びにないか無効にしているタブは開かないので、閉じずにやめる。
+        if destination.showsTab, rootViewController.presentedViewController != nil {
+            guard canShowTab(of: destination) else {
+                logger.error("open tab: no enabled tab in layout")
+                return
+            }
+            rootViewController.closeAllScreens { [weak self] in self?.show(destination) }
+            return
+        }
+        show(destination)
+    }
+
+    /// タブを選ぶ行き先（`.tab`、`.userTab`）なら、そのタブが並びにあって有効か。ほかの行き先はtrue。
+    private func canShowTab(of destination: AppDestination) -> Bool {
+        let item: TabItem?
+        switch destination {
+        case .tab(let tab): item = tab
+        case .userTab(let tab): item = layoutItem(for: tab)
+        default: return true
+        }
+        guard let item else { return false }
+        return tabs.placement.location(of: item) != .disabled
+    }
+
+    /// 足したタブの行き先に合う、並びの項目。
+    private func layoutItem(for tab: AppDestination.UserTab) -> TabItem? {
+        for case .item(let item, _) in AppDependencies.settings.tabLayout(for: credential.handle).elements where tab.matches(item, credential: credential) {
+            return item
+        }
+        return nil
+    }
+
+    /// 行き先の画面を開く。タブを見せる行き先は、上に重ねた画面を閉じたあとに呼ぶ。
+    private func show(_ destination: AppDestination) {
         switch destination {
         case .tab(let item):
             tabs.show(item)
         case .userTab(let tab):
-            for case .item(let item, _) in AppDependencies.settings.tabLayout(for: credential.handle).elements where tab.matches(item, credential: credential) {
-                tabs.show(item)
+            guard let item = layoutItem(for: tab) else {
+                logger.error("open tab: no matching tab in layout")
                 return
             }
-            logger.error("open tab: no matching tab in layout")
+            tabs.show(item)
         case .settings(let page):
             presentSettings(opening: page)
         case .appearanceGroup(let id):

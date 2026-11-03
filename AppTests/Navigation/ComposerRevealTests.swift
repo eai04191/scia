@@ -5,6 +5,7 @@ import UIKit
 @testable import Scia
 
 /// 共有で投稿欄に入れるときに、一覧の上に重ねた画面を閉じる。閉じると失うものがあると示した画面だけを残す。
+/// 外から送られた行き先でタブを見せるときは、残す画面も含めてすべて閉じる。
 @MainActor
 @Suite(.scratch, .serialized)
 struct ComposerRevealTests {
@@ -167,5 +168,38 @@ struct ComposerRevealTests {
         #expect(continued)
         #expect(root.presentedViewController === viewer)
         #expect(viewer.presentedViewController === confirmation)
+    }
+
+    /// すべて閉じるときは、書きかけのある画面や確認のアラートのような残す画面も閉じる。間にあるビューアは、ビューアの閉じ方で閉じる。
+    @Test func closesAllScreensIncludingThoseThatStay() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let editor = makeScreenWithUnsavedInput()
+        try await root.presentForTesting(editor)
+        let viewer = makeViewer()
+        var finishedClosing = false
+        viewer.onCloseFinish = { finishedClosing = true }
+        try await editor.presentForTesting(viewer)
+        let confirmation = UIAlertController(title: "下書きを捨てますか？", message: nil, preferredStyle: .alert)
+        confirmation.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        try await viewer.presentForTesting(confirmation)
+
+        var continued = false
+        root.closeAllScreens { continued = true }
+
+        try await waitUntil { continued && finishedClosing }
+        #expect(root.presentedViewController == nil)
+    }
+
+    /// 何も重ねていなければ、閉じずにすぐ続きを呼ぶ。
+    @Test func continuesAtOnceWithNothingToClose() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+
+        var continued = false
+        harness.viewController.closeAllScreens { continued = true }
+
+        #expect(continued)
     }
 }

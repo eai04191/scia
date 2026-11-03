@@ -194,6 +194,36 @@ struct AppDestinationTests {
         #expect(!AppDestination.thread(statusID: "123").logDescription.contains("123"))
     }
 
+    /// タブを見せる行き先は、上に重ねた画面を閉じてから開く。重ねたままでは見えず、積むのもやめるため。
+    /// 手前に重ねる行き先は、下の画面を残して重ねる。ビューアのメニューから開いた設定を閉じると、ビューアに戻るため。
+    @Test func tellsWhichDestinationsShowTabs() {
+        #expect(AppDestination.tab(.home).showsTab)
+        #expect(AppDestination.userTab(.list(id: "1")).showsTab)
+        #expect(AppDestination.profile(acct: "bob").showsTab)
+        #expect(AppDestination.myProfile.showsTab)
+        #expect(AppDestination.thread(statusID: "1").showsTab)
+        #expect(AppDestination.editHistory(statusID: "1").showsTab)
+        #expect(AppDestination.apiResponse(statusID: "1").showsTab)
+        #expect(AppDestination.accounts(.followers(accountID: nil)).showsTab)
+        #expect(AppDestination.hashtag(name: "a").showsTab)
+        #expect(AppDestination.accountHashtag(acct: "bob", name: "a").showsTab)
+        #expect(AppDestination.search(query: nil).showsTab)
+        #expect(AppDestination.scheduled.showsTab)
+        #expect(AppDestination.notificationRequests.showsTab)
+        #expect(AppDestination.notificationRequest(id: "1").showsTab)
+
+        #expect(!AppDestination.settings(nil).showsTab)
+        #expect(!AppDestination.appearanceGroup("row").showsTab)
+        #expect(!AppDestination.profileEdit.showsTab)
+        #expect(!AppDestination.operationStatus.showsTab)
+        #expect(!AppDestination.notificationPolicy.showsTab)
+        #expect(!AppDestination.announcements.showsTab)
+        #expect(!AppDestination.inAppBrowserHeight(returningTo: nil).showsTab)
+        #expect(!AppDestination.note(acct: "bob").showsTab)
+        #expect(!AppDestination.report(acct: "bob").showsTab)
+        #expect(!AppDestination.compose(.tools).showsTab)
+    }
+
     @Test func matchesUserTabsLikeTheLayout() throws {
         let credential = Credential(instance: try #require(URL(string: "https://example.social")), accessToken: "", clientID: "", clientSecret: "", accountID: "1", username: "me")
         #expect(AppDestination.UserTab.profile(acct: "bob@example.social").matches(.profile(accountID: "2", acct: "bob"), credential: credential))
