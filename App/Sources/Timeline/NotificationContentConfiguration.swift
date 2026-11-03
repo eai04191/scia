@@ -335,7 +335,7 @@ extension NotificationContentView {
     /// 「通知の見た目」のプレビューで示す、部品ごとの枠。本文の列の部品は、置いた中身の種類で通知の部品に読み替える。
     func previewFrames() -> AppearancePreviewFrames {
         var frames: AppearancePreviewFrames = [
-            .notificationSymbol: symbolView.image == nil ? nil : symbolView.previewFrame(in: self),
+            .notificationSymbol: symbolView.image == nil ? nil : symbolView.previewAlignmentFrame(in: self),
             .notificationHeader: headerLabel.previewFrame(in: self),
             .notificationHeaderGlyphs: headerGlyphsFrame(),
         ].compactMapValues(\.self)

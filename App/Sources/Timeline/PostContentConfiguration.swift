@@ -489,7 +489,7 @@ final class PostContentView: UIView, UIContentView {
             .rowPaddingBottom: [CGRect(x: 0, y: bounds.height - margins.bottom, width: bounds.width, height: margins.bottom)],
             .rowPaddingLeading: [CGRect(x: 0, y: 0, width: margins.leading, height: bounds.height)],
             .rowPaddingTrailing: [CGRect(x: bounds.width - margins.trailing, y: 0, width: margins.trailing, height: bounds.height)],
-            .contextSymbol: contextIcon.image == nil ? nil : contextIcon.previewFrame(in: self),
+            .contextSymbol: contextIcon.image == nil ? nil : contextIcon.previewAlignmentFrame(in: self),
             .contextAvatar: contextAvatarView.previewFrame(in: self),
             .contextLine: textExtent(of: contextLabel),
             .avatar: avatarView.previewFrame(in: self),
