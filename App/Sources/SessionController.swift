@@ -2396,6 +2396,7 @@ final class SessionController {
             tabIcons: profileTabIcons,
             lists: settingsListActions,
             openInAppBrowserHeight: { [weak self] in self?.open(.inAppBrowserHeight(returningTo: .interaction)) },
+            openProfile: { [weak self] in self?.open(.profile(acct: $0)) },
             opening: page,
             appearanceGroup: appearanceGroup,
             onShownChange: { [weak self] in self?.settingsShownChanged($0) }

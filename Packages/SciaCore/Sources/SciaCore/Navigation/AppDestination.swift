@@ -287,7 +287,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     case compose
     /// メディアの分類。HDRの明るさ、サムネイルの画質、代替テキストを並べる。
     case media
-    /// 情報。アプリのビルドと、接続の状態、ライセンスを並べる。
+    /// 情報。アプリのビルドと、接続の状態、ライセンス、謝辞を並べる。
     case about
     /// アプリのアイコン。
     case appIcon = "app-icon"
@@ -316,6 +316,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     /// ストレージの、メディアのキャッシュの先読みの段。
     case prefetchedMediaCache = "storage-prefetched"
     case licenses
+    case acknowledgments
 
     /// 設定の一覧からこの画面までに重ねる画面。
     public var path: [SettingsPage] {
@@ -331,7 +332,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
         case .hashtagMenu: [.interaction, .hashtagActions, self]
         case .mediaMenu: [.interaction, .mediaActions, self]
         case .composeTools: [.compose, self]
-        case .connection, .licenses: [.about, self]
+        case .connection, .licenses, .acknowledgments: [.about, self]
         case .viewedMediaCache, .prefetchedMediaCache: [.storage, self]
         case .display, .interaction, .compose, .media, .about, .appIcon, .tabs, .storage: [self]
         }

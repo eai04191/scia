@@ -2,7 +2,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 設定の「情報」。iPhoneの設定アプリの「一般」>「情報」と同じく、ビルドを灰色の値の行で並べ、接続の状態とライセンスの画面を開く。
+/// 設定の「情報」。iPhoneの設定アプリの「一般」>「情報」と同じく、ビルドを灰色の値の行で並べ、接続の状態、ライセンス、謝辞の画面を開く。
 struct AboutSettingsView: View {
     var body: some View {
         Form {
@@ -17,6 +17,7 @@ struct AboutSettingsView: View {
             Section {
                 NavigationLink("接続の状態", value: SettingsPage.connection)
                 NavigationLink("ライセンス", value: SettingsPage.licenses)
+                NavigationLink("謝辞", value: SettingsPage.acknowledgments)
             }
         }
         .topEdgeEffectHiddenOnMac()

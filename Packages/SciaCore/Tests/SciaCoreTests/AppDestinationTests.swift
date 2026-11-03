@@ -173,6 +173,7 @@ struct AppDestinationTests {
     @Test func pushesStorageBeforeMediaCache() {
         #expect(SettingsPage.viewedMediaCache.path == [.storage, .viewedMediaCache])
         #expect(SettingsPage.licenses.path == [.about, .licenses])
+        #expect(SettingsPage.acknowledgments.path == [.about, .acknowledgments])
     }
 
     /// 分類の中の画面は、分類の画面を挟んで開く。対象のメニューは、その対象の画面も挟む。戻ると、挟んだ画面に1つずつ戻る。
