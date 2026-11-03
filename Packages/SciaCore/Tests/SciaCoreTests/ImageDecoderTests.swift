@@ -21,22 +21,22 @@ struct ImageDecoderTests {
     }
 
     @Test(arguments: [ImageDecoder.DynamicRange.high, .standard])
-    func shrinksTheLongSideToTheLimit(dynamicRange: ImageDecoder.DynamicRange) throws {
-        let image = try #require(ImageDecoder.thumbnail(of: try png(width: 400, height: 100), maxPixelSize: 96, dynamicRange: dynamicRange))
+    func shrinksTheLongSideToTheLimit(dynamicRange: ImageDecoder.DynamicRange) async throws {
+        let image = try #require(await ImageDecoder.thumbnail(of: try png(width: 400, height: 100), maxPixelSize: 96, dynamicRange: dynamicRange))
         #expect(image.width == 96)
         #expect(image.height == 24)
     }
 
     /// 限りより小さい画像は、拡大しない。
-    @Test func doesNotEnlargeSmallImages() throws {
-        let image = try #require(ImageDecoder.thumbnail(of: try png(width: 40, height: 20), maxPixelSize: 96, dynamicRange: .high))
+    @Test func doesNotEnlargeSmallImages() async throws {
+        let image = try #require(await ImageDecoder.thumbnail(of: try png(width: 40, height: 20), maxPixelSize: 96, dynamicRange: .high))
         #expect(image.width == 40)
         #expect(image.height == 20)
     }
 
     /// 向きを画素に反映する。
-    @Test func appliesOrientation() throws {
-        let image = try #require(ImageDecoder.thumbnail(of: try png(width: 40, height: 20, orientation: .right), maxPixelSize: 96, dynamicRange: .standard))
+    @Test func appliesOrientation() async throws {
+        let image = try #require(await ImageDecoder.thumbnail(of: try png(width: 40, height: 20, orientation: .right), maxPixelSize: 96, dynamicRange: .standard))
         #expect(image.width == 20)
         #expect(image.height == 40)
     }
@@ -51,7 +51,7 @@ struct ImageDecoderTests {
         #expect(ImageDecoder.maxPixelSize(forHeight: 96, of: try png(width: 100, height: 400, orientation: .right)) == 384)
     }
 
-    @Test func returnsNilForDataThatIsNotAnImage() {
-        #expect(ImageDecoder.thumbnail(of: Data("<html>503</html>".utf8), maxPixelSize: 96, dynamicRange: .high) == nil)
+    @Test func returnsNilForDataThatIsNotAnImage() async {
+        #expect(await ImageDecoder.thumbnail(of: Data("<html>503</html>".utf8), maxPixelSize: 96, dynamicRange: .high) == nil)
     }
 }

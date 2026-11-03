@@ -85,7 +85,7 @@ public enum ImageReencoder {
         quality: Double,
         destination: URL
     ) async throws -> PreparedMedia {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+        guard CGImageSourceCreateWithURL(url as CFURL, nil) != nil,
               let type = UTType(mimeType: plan.mimeType)
         else { throw MediaReencodingError.imageFailed }
         let output = destination.deletingPathExtension().appendingPathExtension(type.preferredFilenameExtension ?? "img")
@@ -93,7 +93,7 @@ public enum ImageReencoder {
         var size = plan.size
         while true {
             try Task.checkCancellation()
-            let written = try write(source, crop: crop, size: size, type: type, quality: plan.mimeType == "image/png" ? nil : quality, to: output)
+            let written = try await write(url, crop: crop, size: size, type: type, quality: plan.mimeType == "image/png" ? nil : quality, to: output)
             let byteCount = byteCount(of: output)
             if sizeLimit.map({ byteCount <= $0 }) ?? true {
                 // 設定で選んだ大きさのとおりに縮めただけなら、使う人が選んだ変化なので知らせない。
@@ -121,6 +121,16 @@ public enum ImageReencoder {
     }
 
     /// - Returns: 書き出した大きさ。縮めるときの丸めで、`size`と1画素ずれることがある。
+    /// 展開は`ImageDecoder.run`の専用のキューで行う。
+    private static func write(_ input: URL, crop: ImageCrop?, size: PixelSize, type: UTType, quality: Double?, to url: URL) async throws -> PixelSize {
+        try await ImageDecoder.run {
+            Result {
+                guard let source = CGImageSourceCreateWithURL(input as CFURL, nil) else { throw MediaReencodingError.imageFailed }
+                return try write(source, crop: crop, size: size, type: type, quality: quality, to: url)
+            }
+        }.get()
+    }
+
     private static func write(_ source: CGImageSource, crop: ImageCrop?, size: PixelSize, type: UTType, quality: Double?, to url: URL) throws -> PixelSize {
         // 縮めた画像を作る関数で、向きを画素に反映して読む。メタデータは付いてこない。
         // 切り抜くときは、元の大きさで読んでから切り抜いて縮める。

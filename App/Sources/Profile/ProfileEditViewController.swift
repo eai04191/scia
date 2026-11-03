@@ -1352,8 +1352,8 @@ extension ProfileEditViewController: PHPickerViewControllerDelegate {
         let isGIF = provider.hasItemConformingToTypeIdentifier(UTType.gif.identifier)
         let type = isGIF ? UTType.gif : UTType.image
         provider.loadDataRepresentation(forTypeIdentifier: type.identifier) { [weak self] data, error in
-            let decoded = data.flatMap(ProfileImageCropViewController.decode)
             Task(.withoutRequests) { @MainActor in
+                let decoded = if let data { await ProfileImageCropViewController.decode(data) } else { CGImage?.none }
                 guard let self else { return }
                 picker.dismiss(animated: true) {
                     guard let data, let decoded else {

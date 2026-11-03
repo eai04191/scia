@@ -139,8 +139,8 @@ struct AnimatedEmojiTests {
     }
 
     /// メニューの動くアイコンは、いちばん短いコマを刻みにして、長いコマはその分だけ繰り返し、1周の長さを保つ。
-    @Test func menuIconKeepsFrameDurations() throws {
-        let animation = try #require(AnimatedImage.decode(imageData(.gif, frames: 2, delays: [0.1, 0.3]), maxPixelSize: 96))
+    @Test func menuIconKeepsFrameDurations() async throws {
+        let animation = try #require(await AnimatedImage.decode(imageData(.gif, frames: 2, delays: [0.1, 0.3]), maxPixelSize: 96))
         let icon = try #require(TimelineViewController.animatedMenuIcon(animation))
 
         #expect(icon.images?.count == 4)
@@ -148,8 +148,8 @@ struct AnimatedEmojiTests {
     }
 
     /// コマが多い絵文字でも、メニューのアイコンの画像は300枚に収め、1周の長さは変えない。
-    @Test func menuIconLimitsImagesWithoutSlowingDown() throws {
-        let animation = try #require(AnimatedImage.decode(imageData(.gif, frames: 400), maxPixelSize: 96))
+    @Test func menuIconLimitsImagesWithoutSlowingDown() async throws {
+        let animation = try #require(await AnimatedImage.decode(imageData(.gif, frames: 400), maxPixelSize: 96))
         let icon = try #require(TimelineViewController.animatedMenuIcon(animation))
 
         #expect(icon.images?.count == 300)

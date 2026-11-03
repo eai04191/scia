@@ -68,8 +68,12 @@ public struct AnimatedImage: Sendable {
 
     /// `data`を、長い辺が`maxPixelSize`ピクセル以下のコマに分けて並べる。2コマ以上ない画像、読めないデータ、
     /// 原寸が`maxSourcePixelCount`を超えるか`maxFrameCount`より多いコマの画像、展開すると`maxByteCount`を超える画像はnil。
-    /// コマはImageIOが前のコマと重ねた、そのまま描ける画像になる。
-    public static func decode(_ data: Data, maxPixelSize: Int) -> AnimatedImage? {
+    /// コマはImageIOが前のコマと重ねた、そのまま描ける画像になる。展開は`ImageDecoder.run`の専用のキューで行う。
+    public static func decode(_ data: Data, maxPixelSize: Int) async -> AnimatedImage? {
+        await ImageDecoder.run { decodeOnDecodeQueue(data, maxPixelSize: maxPixelSize) }
+    }
+
+    private static func decodeOnDecodeQueue(_ data: Data, maxPixelSize: Int) -> AnimatedImage? {
         guard !hasSeparateDefaultImage(data), let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         let count = CGImageSourceGetCount(source)
         guard count > 1, count <= maxFrameCount else { return nil }

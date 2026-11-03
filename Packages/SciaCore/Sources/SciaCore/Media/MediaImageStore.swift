@@ -376,7 +376,7 @@ public final class MediaImageStore<Image: Sendable> {
     /// どれくらいの明るさで描くかは、画面ごとのtraitで決める（`MediaDynamicRangeTraits`）。そのため、設定を選び直しても読み込み直さずに済む。
     @concurrent
     private static func decode(_ data: Data, maxPixelSize: Int, maker: PlatformImageMaker<Image>) async -> Decoded? {
-        ImageDecoder.thumbnail(of: data, maxPixelSize: maxPixelSize, dynamicRange: .high).map { Decoded(image: maker.still($0), cost: PlatformImageMaker<Image>.cost(of: $0)) }
+        await ImageDecoder.thumbnail(of: data, maxPixelSize: maxPixelSize, dynamicRange: .high).map { Decoded(image: maker.still($0), cost: PlatformImageMaker<Image>.cost(of: $0)) }
     }
 
     /// 動画の先頭の部分から、0秒目のフレームを`maxPixelSize`まで縮めて作る。AVFoundationはファイルから読むため、一時ファイルに書く。

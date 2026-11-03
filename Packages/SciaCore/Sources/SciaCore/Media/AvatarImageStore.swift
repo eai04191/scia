@@ -179,8 +179,13 @@ public final class AvatarImageStore<Image: Sendable> {
     public struct DecodeError: Error {}
 
     /// `maxPixelSize`まで縮めて展開する。`animates`なら、GIF・APNG・WebPのコマを、それぞれの表示時間に合わせて並べる。
+    /// 展開は`ImageDecoder.run`の専用のキューで行う。
     @concurrent
     private static func decode(_ data: Data, maxPixelSize: Int, animates: Bool, maker: PlatformImageMaker<Image>) async -> Decoded? {
+        await ImageDecoder.run { decodeOnDecodeQueue(data, maxPixelSize: maxPixelSize, animates: animates, maker: maker) }
+    }
+
+    private nonisolated static func decodeOnDecodeQueue(_ data: Data, maxPixelSize: Int, animates: Bool, maker: PlatformImageMaker<Image>) -> Decoded? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         // HDRの画像はHDRのまま展開し、描く明るさは画面ごとのtraitで決める。`MediaImageStore`と同じ。
         let frame = { (index: Int) in ImageDecoder.thumbnail(of: source, at: index, maxPixelSize: maxPixelSize, dynamicRange: .high) }

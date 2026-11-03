@@ -245,8 +245,8 @@ extension ProfileImageCropViewController: UIScrollViewDelegate {
 extension ProfileImageCropViewController {
     /// 選んだ写真を、向きを直して読む。大きな写真は、送る大きさより十分大きい辺4096ピクセルまで縮めて展開する。
     /// 書き出し直して送るので、SDRで読む。
-    nonisolated static func decode(_ data: Data) -> CGImage? {
-        ImageDecoder.thumbnail(of: data, maxPixelSize: 4_096, dynamicRange: .standard)
+    nonisolated static func decode(_ data: Data) async -> CGImage? {
+        await ImageDecoder.thumbnail(of: data, maxPixelSize: 4_096, dynamicRange: .standard)
     }
 }
 

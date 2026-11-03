@@ -156,6 +156,6 @@ enum LocalMediaThumbnail {
             return try? await UIImage(cgImage: generator.image(at: .zero).image)
         }
         // HDRの写真はHDRのまま展開し、描く明るさは画面ごとのtraitで決める。`MediaImageStore<UIImage>`と同じ。
-        return ImageDecoder.thumbnail(ofFile: file.url, maxPixelSize: Int(maxPixelSize.rounded(.up)), dynamicRange: .high).map { UIImage(cgImage: $0) }
+        return await ImageDecoder.thumbnail(ofFile: file.url, maxPixelSize: Int(maxPixelSize.rounded(.up)), dynamicRange: .high).map { UIImage(cgImage: $0) }
     }
 }

@@ -155,7 +155,7 @@ public final class EmojiImageStore<Image: Sendable> {
     @concurrent
     private static func decodeStill(_ data: Data) async -> CGImage? {
         let maxPixelSize = ImageDecoder.maxPixelSize(forHeight: pixelHeight, of: data)
-        return ImageDecoder.thumbnail(of: data, maxPixelSize: maxPixelSize, dynamicRange: .standard)
+        return await ImageDecoder.thumbnail(of: data, maxPixelSize: maxPixelSize, dynamicRange: .standard)
     }
 
     /// 動かすかは行に描くときに決めるため、いつも自動の通信として送る。
@@ -166,7 +166,7 @@ public final class EmojiImageStore<Image: Sendable> {
             do {
                 let data = try await fetch(url)
                 let image = await Task.detached(priority: .utility) {
-                    AnimatedImage.decode(data, maxPixelSize: ImageDecoder.maxPixelSize(forHeight: Self.pixelHeight, of: data))
+                    await AnimatedImage.decode(data, maxPixelSize: ImageDecoder.maxPixelSize(forHeight: Self.pixelHeight, of: data))
                 }.value
                 if let image {
                     let animation = EmojiAnimation(image)

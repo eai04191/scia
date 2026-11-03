@@ -29,8 +29,8 @@ struct AnimatedImageTests {
         return data as Data
     }
 
-    @Test func splitsGIFIntoFramesWithTheirDurations() throws {
-        let image = try #require(AnimatedImage.decode(animation(.gif, delays: [0.05, 0.2, 0.5]), maxPixelSize: 96))
+    @Test func splitsGIFIntoFramesWithTheirDurations() async throws {
+        let image = try #require(await AnimatedImage.decode(animation(.gif, delays: [0.05, 0.2, 0.5]), maxPixelSize: 96))
 
         #expect(image.durations == [0.05, 0.2, 0.5])
         #expect(abs(image.duration - 0.75) < 0.0001)
@@ -38,8 +38,8 @@ struct AnimatedImageTests {
     }
 
     /// コマは、1枚の画像に左上から行ごとに、2pxのすき間を空けて並べる。5コマなら3列2行で、`contentsRect`はそのコマの部分だけを指す。
-    @Test func arrangesFramesInSheetFromTopLeft() throws {
-        let image = try #require(AnimatedImage.decode(animation(.gif, size: 10, delays: Array(repeating: 0.1, count: 5)), maxPixelSize: 96))
+    @Test func arrangesFramesInSheetFromTopLeft() async throws {
+        let image = try #require(await AnimatedImage.decode(animation(.gif, size: 10, delays: Array(repeating: 0.1, count: 5)), maxPixelSize: 96))
 
         #expect(image.columns == 3)
         #expect(image.sheet.width == 34 && image.sheet.height == 22)
@@ -70,8 +70,8 @@ struct AnimatedImageTests {
         return pixels
     }
 
-    @Test func splitsAPNGIntoFrames() throws {
-        let image = try #require(AnimatedImage.decode(animation(.png, delays: [0.1, 0.3]), maxPixelSize: 96))
+    @Test func splitsAPNGIntoFrames() async throws {
+        let image = try #require(await AnimatedImage.decode(animation(.png, delays: [0.1, 0.3]), maxPixelSize: 96))
 
         // APNGのコマの長さは単精度で持つため、ずれを許して比べる。
         #expect(zip(image.durations, [0.1, 0.3]).allSatisfy { abs($0 - $1) < 0.0001 })
@@ -79,29 +79,29 @@ struct AnimatedImageTests {
     }
 
     /// 0秒や0.01秒のコマは、ブラウザと同じく0.1秒で出す。
-    @Test func treatsTooShortDelaysAsTenthOfSecond() throws {
-        let image = try #require(AnimatedImage.decode(animation(.gif, delays: [0, 0.01, 0.02]), maxPixelSize: 96))
+    @Test func treatsTooShortDelaysAsTenthOfSecond() async throws {
+        let image = try #require(await AnimatedImage.decode(animation(.gif, delays: [0, 0.01, 0.02]), maxPixelSize: 96))
 
         #expect(image.durations == [0.1, 0.1, 0.02])
     }
 
     /// 0.02秒より短いコマは、アイコンと同じく0.1秒で出す。APNGはミリ秒単位で書けるので、GIFにない0.015秒のようなコマがある。
-    @Test func treatsDelaysShorterThanTwoHundredthsAsTenthOfSecond() throws {
-        let image = try #require(AnimatedImage.decode(animation(.png, delays: [0.015, 0.03]), maxPixelSize: 96))
+    @Test func treatsDelaysShorterThanTwoHundredthsAsTenthOfSecond() async throws {
+        let image = try #require(await AnimatedImage.decode(animation(.png, delays: [0.015, 0.03]), maxPixelSize: 96))
 
         #expect(abs(image.durations[0] - 0.1) < 0.0001)
         #expect(abs(image.durations[1] - 0.03) < 0.0001)
     }
 
-    @Test func shrinksFramesToMaxPixelSize() throws {
-        let image = try #require(AnimatedImage.decode(animation(.gif, size: 200, delays: [0.1, 0.1]), maxPixelSize: 96))
+    @Test func shrinksFramesToMaxPixelSize() async throws {
+        let image = try #require(await AnimatedImage.decode(animation(.gif, size: 200, delays: [0.1, 0.1]), maxPixelSize: 96))
 
         #expect(image.frameWidth == 96 && image.frameHeight == 96)
     }
 
     /// グレースケールの画像でも、並べた画像はRGBAで持つので、RGBAに直した大きさで上限を確かめる。
     /// 96pxのコマはRGBAで約36KBなので、230コマで8MBを超える。グレースケールのままなら約2MBで、上限に収まって見える。
-    @Test func grayscaleFramesAreCountedAsRGBA() throws {
+    @Test func grayscaleFramesAreCountedAsRGBA() async throws {
         let data = NSMutableData()
         let count = 230
         let destination = try #require(CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, count, nil))
@@ -115,21 +115,21 @@ struct AnimatedImageTests {
         }
         #expect(CGImageDestinationFinalize(destination))
 
-        #expect(AnimatedImage.decode(data as Data, maxPixelSize: 96) == nil)
+        #expect(await AnimatedImage.decode(data as Data, maxPixelSize: 96) == nil)
     }
 
     /// 並べた画像は、すき間と空いたコマの分だけコマの合計より大きいので、並べた画像でも上限を確かめる。
     /// 96pxの225コマは、コマの合計が約7.9MBで上限に収まるが、15列15行にすき間を空けて並べると8MBを超える。
-    @Test func sheetIncludingGuttersRespectsMemoryLimit() throws {
-        #expect(try AnimatedImage.decode(animation(.gif, size: 96, delays: Array(repeating: 0.1, count: 225)), maxPixelSize: 96) == nil)
+    @Test func sheetIncludingGuttersRespectsMemoryLimit() async throws {
+        #expect(try await AnimatedImage.decode(animation(.gif, size: 96, delays: Array(repeating: 0.1, count: 225)), maxPixelSize: 96) == nil)
     }
 
     /// 既定の画像がアニメーションに含まれないAPNGは、ImageIOが最初のコマを欠いて読むため、動かさずに静止画で描く。
     /// 最初の`fcTL`が`IDAT`の前にある、ふつうのAPNGは動かす。
-    @Test func separateDefaultImageAPNGIsNotAnimated() throws {
+    @Test func separateDefaultImageAPNGIsNotAnimated() async throws {
         let normal = try animation(.png, delays: [0.1, 0.1])
         #expect(!AnimatedImage.hasSeparateDefaultImage(normal))
-        #expect(AnimatedImage.decode(normal, maxPixelSize: 96) != nil)
+        #expect(await AnimatedImage.decode(normal, maxPixelSize: 96) != nil)
 
         // 最初の`fcTL`を`IDAT`の後ろへ動かして、既定の画像を別にした形にする。チャンクの中身とCRCは確かめないので、並べ替えるだけでよい。
         let chunks = pngChunks(normal)
@@ -142,7 +142,7 @@ struct AnimatedImageTests {
         let separate = Data(normal.prefix(8)) + reordered.reduce(Data()) { $0 + $1.bytes }
 
         #expect(AnimatedImage.hasSeparateDefaultImage(separate))
-        #expect(AnimatedImage.decode(separate, maxPixelSize: 96) == nil)
+        #expect(await AnimatedImage.decode(separate, maxPixelSize: 96) == nil)
     }
 
     /// PNGのチャンクを、種類と、長さからCRCまでのバイト列で並べる。
@@ -159,23 +159,23 @@ struct AnimatedImageTests {
     }
 
     /// 1コマの画像は動かないので、静止画のまま描くためにnilを返す。
-    @Test func returnsNilForStillImage() throws {
-        #expect(try AnimatedImage.decode(animation(.png, delays: [0.1]), maxPixelSize: 96) == nil)
-        #expect(AnimatedImage.decode(Data("not an image".utf8), maxPixelSize: 96) == nil)
+    @Test func returnsNilForStillImage() async throws {
+        #expect(try await AnimatedImage.decode(animation(.png, delays: [0.1]), maxPixelSize: 96) == nil)
+        #expect(await AnimatedImage.decode(Data("not an image".utf8), maxPixelSize: 96) == nil)
     }
 
     /// 原寸が大きすぎる画像は、縮める前の展開でメモリを使いすぎるため、展開せずに断る。
-    @Test func returnsNilWhenSourceIsTooLarge() throws {
+    @Test func returnsNilWhenSourceIsTooLarge() async throws {
         let data = try animation(.gif, size: 1025, delays: [0.1, 0.1])
 
-        #expect(AnimatedImage.decode(data, maxPixelSize: 96) == nil)
-        #expect(try AnimatedImage.decode(animation(.gif, size: 1024, delays: [0.1, 0.1]), maxPixelSize: 96) != nil)
+        #expect(await AnimatedImage.decode(data, maxPixelSize: 96) == nil)
+        #expect(try await AnimatedImage.decode(animation(.gif, size: 1024, delays: [0.1, 0.1]), maxPixelSize: 96) != nil)
     }
 
     /// 展開すると上限を超える画像は、動かさずに静止画で描く。96pxのコマは1枚約36KBなので、300コマで上限を超える。
-    @Test func returnsNilWhenFramesExceedMemoryLimit() throws {
+    @Test func returnsNilWhenFramesExceedMemoryLimit() async throws {
         let data = try animation(.gif, size: 96, delays: Array(repeating: 0.1, count: 300))
 
-        #expect(AnimatedImage.decode(data, maxPixelSize: 96) == nil)
+        #expect(await AnimatedImage.decode(data, maxPixelSize: 96) == nil)
     }
 }
