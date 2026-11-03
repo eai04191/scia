@@ -21,6 +21,9 @@ public struct CostLimitedCache<Key: Hashable, Value> {
 
     public var count: Int { entries.count }
 
+    /// 持っている値。使ったものとして扱わない。
+    public var values: [Value] { entries.values.map(\.value) }
+
     /// 値を返し、最後に使ったものとして扱う。
     public mutating func value(forKey key: Key) -> Value? {
         guard entries[key] != nil else { return nil }

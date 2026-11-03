@@ -240,12 +240,12 @@ public final class EmojiImageStore<Image: Sendable> {
     /// 状態ダンプ。URLは出さず、数だけを書く。
     public func stateDump() -> String {
         let kilobyte = 1024
-        let animated = animationStates.values.filter { if case .animated = $0 { true } else { false } }.count
+        let resolutions = animationStates.values.compactMap { if case .animated(let resolution) = $0 { resolution } else { nil } }
         return [
-            "pixelHeight: \(Self.pixelHeight)",
+            "pixelHeight: \(Self.pixelHeight) enlarged: \(stills.values.filter { $0.resolution.pixelHeight > Self.pixelHeight }.count)",
             "stills: \(stills.count) cost: \(stills.totalCost / kilobyte)KB peak: \(stats.peakStillCost / kilobyte)KB limit: \(stills.totalCostLimit / kilobyte)KB",
             "stillReloadsAfterEviction: \(stats.stillReloads) evictedNow: \(evictedStills.count)",
-            "animated: \(animated) animationReloadsAfterEviction: \(stats.animationReloads)",
+            "animated: \(resolutions.count) enlarged: \(resolutions.filter { $0.pixelHeight > Self.pixelHeight }.count) animationReloadsAfterEviction: \(stats.animationReloads)",
             "animationLoaded: \(stats.animationBytes / kilobyte)KB largest: \(stats.largestAnimationBytes / kilobyte)KB limit: \(animations.totalCostLimit / kilobyte)KB",
         ].joined(separator: "\n")
     }
