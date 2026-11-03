@@ -137,6 +137,19 @@ struct AppearanceEditorTests {
         }
     }
 
+    /// 投稿の添付ファイルは本文の下、囲みの添付ファイルだけ本文の右に並べるときも、右に並べる写真にだけ効く項目を触っている間は、その場所を示せる。
+    @Test func besideItemsShowWhenOnlyEmbedIsBeside() throws {
+        let settings = try makeSettings()
+        settings.appearance.mediaArrangement = .belowBody
+        settings.appearance.embedMediaArrangement = .besideBody
+        // 項目の場所は、右に並べた写真がなければ下に並べた写真で示すので、右に並べた写真が見本にあるかを直接確かめる。
+        func showsBesideMedia(_ focus: AppearanceFocus) -> Bool {
+            layOutSamples(settings, groups: ["media"], focus: focus).contains { $0[.besideMedia] != nil || $0[.xPostBesideMedia] != nil }
+        }
+        #expect(showsBesideMedia(.value(AppearanceCatalog.mediaBesideSide)))
+        #expect(showsBesideMedia(.choice(.tiltsStackedPhotos)))
+    }
+
     /// 既定の設定では、どの分類の画面の見本も、見本の枠に収まる。
     /// 枠の高さは、幅402ptのiPhone 17 Proで、分類の画面の見本の枠の上限（画面の高さの42%）が約300ptになるのに合わせる。
     @Test(arguments: AppearanceCatalog.groups.map(\.id))

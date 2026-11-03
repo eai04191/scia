@@ -5,6 +5,8 @@ import UIKit
 final class LinkLabel: EmojiLabel {
     /// 長押しのメニューの並び。
     var settings: AppSettings = AppDependencies.settings
+    /// リンクのタップで、タップと長押しの設定によらず、いつも開く。長押しのメニューも出さない。「投稿の見た目」のプレビューの見本で使う。
+    var opensLinksOnTapOnly = false
 
     /// リンクがタップされたときと、メンションの長押しのメニューでプロフィールを、ハッシュタグの長押しのメニューでタイムラインを選んだときに、その行き先を渡して呼ぶ。
     var onTapLink: ((RichText.LinkDestination) -> Void)?
@@ -392,6 +394,10 @@ final class LinkHitArea: UIControl {
         super.endTracking(touch, with: event)
         guard let touch, isTouchInside else { return }
         let point = touch.location(in: self)
+        if let label, label.opensLinksOnTapOnly {
+            label.link(at: convert(point, to: label)).map(label.open)
+            return
+        }
         target(at: point)?.perform(.tap, in: self, at: point)
     }
 
@@ -422,7 +428,8 @@ final class LinkHitArea: UIControl {
     /// 長押しにメニュー以外を選んだときに、リンクの上の長押しを受ける。
     func installLongPress() {
         longPress = ObjectLongPress(on: self, accepts: { [weak self] point in
-            self?.target(at: point)?.performsLongPress() ?? false
+            guard self?.label?.opensLinksOnTapOnly == false else { return false }
+            return self?.target(at: point)?.performsLongPress() ?? false
         }, perform: { [weak self] point in
             guard let self else { return }
             target(at: point)?.perform(.longPress, in: self, at: point)
@@ -431,7 +438,7 @@ final class LinkHitArea: UIControl {
 
     /// 長押しのメニューの構成。リンクの外か、出す項目をすべて隠していればnil。
     fileprivate func menuConfiguration(at location: CGPoint) -> UIContextMenuConfiguration? {
-        guard let label, target(at: location)?.performsLongPress() != true else { return nil }
+        guard let label, !label.opensLinksOnTapOnly, target(at: location)?.performsLongPress() != true else { return nil }
         let point = convert(location, to: label)
         // 出す項目をすべて隠していれば、メニューを出さない。
         guard let destination = label.link(at: point), let menu = menu(for: destination, at: point) else { return nil }

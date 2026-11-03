@@ -1,5 +1,6 @@
 import os
 import SciaCore
+import SwiftUI
 import UIKit
 
 /// タイムライン表示。スクロール位置の制御を細かく行うため、UICollectionViewとdiffable data sourceで組む。
@@ -273,6 +274,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 「続きを読む」で本文を広げたときに、広げたあとの状態と広げたものを渡して呼ぶ。セッションが、ほかの一覧にもそろえる。
     var onChangeLongBodyExpansion: ((LongBodyExpansion, LongBodyExpansion.Key) -> Void)?
 
+    /// 「投稿の見た目」のプレビューに置く一覧。見本の投稿を並べて見せるだけで、リンクを開くほかは、押す、長押し、スワイプ、引っぱって読み直す操作と、末尾の表示を出さない。
+    /// 設定の値を変えたときは、行の部品を新しい位置まで動かして見せる。決まりはdocs/appearance.mdの「プレビュー」にある。画面を読み込む前に決める。
+    var isAppearancePreview = false
+
     init(
         texts: Texts = .home,
         refresh: @escaping @MainActor () async -> Void,
@@ -344,11 +349,19 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         collectionView.delegate = self
         collectionView.prefetchDataSource = self
         collectionView.addGestureRecognizer(springScrollInterruption)
-        installRowObjectActions()
+        if isAppearancePreview {
+            // 枠の中の見本の位置を、置いた側が決める。ナビゲーションバーの下などの安全領域で、見本を下へずらさない。
+            collectionView.contentInsetAdjustmentBehavior = .never
+            previewChoices = settings.appearance
+        } else {
+            installRowObjectActions()
+        }
         // タブバーの上の投稿欄で書いている間も、読み進めるだけならキーボードを閉じない。キーボードまで引き下ろしたら閉じる。
         collectionView.keyboardDismissMode = .interactive
-        refreshControl.addAction(UIAction { [weak self] _ in self?.beginRefresh() }, for: .valueChanged)
-        collectionView.refreshControl = refreshControl
+        if !isAppearancePreview {
+            refreshControl.addAction(UIAction { [weak self] _ in self?.beginRefresh() }, for: .valueChanged)
+            collectionView.refreshControl = refreshControl
+        }
         // 一覧が画面の高さに満たないときも、引っぱって読み直せるようにする。
         collectionView.alwaysBounceVertical = true
         view.addSubview(collectionView)
@@ -562,9 +575,55 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     private func applySettingsChange() {
+        if isAppearancePreview {
+            applyPreviewSettingsChange()
+            return
+        }
         reconfigure(Set(dataSource.snapshot().itemIdentifiers))
         // 区切り線はリストのレイアウトが引くので、描き直しでは変わらない。引き直させる。
         collectionView.collectionViewLayout.invalidateLayout()
+    }
+
+    /// 前に描き直したときの、数値以外の見た目の設定。プレビューで、部品を動かすかを決める。
+    private var previewChoices: AppearanceChoices?
+
+    /// プレビューで、余白や大きさを変えたときは、行の中の部品と下の行を新しい位置まで動かして見せる。どこがどう変わったかを目で追えるようにするため。
+    /// 文字の大きさは補間できないので、文字は新しい大きさに切り替わり、位置だけが動く。
+    /// 数値以外の設定（出すかどうかや表記）を変えたときは動かさない。出していなかった部品は前の位置を持たないため、動かすと、位置0から飛んでくるように見える。
+    /// 差分を当てる描き直し（`dataSource.apply`）は、中で動きを止めて並べ直しまで済ませるので、見えている行は差分を通さずにセルの中身を差し替え、
+    /// 行の大きさと中の部品の並べ直しを動きの中で行う。見えていない行は、動かさずに描き直す。
+    private func applyPreviewSettingsChange() {
+        let choices = settings.appearance
+        let animates = previewChoices == choices && !UIAccessibility.isReduceMotionEnabled
+        previewChoices = choices
+        var visibleIDs: Set<ItemID> = []
+        let apply = {
+            for case let cell as TimelineCell in self.collectionView.visibleCells {
+                guard let indexPath = self.collectionView.indexPath(for: cell), let id = self.dataSource.itemIdentifier(for: indexPath), let entry = self.entries[id] else { continue }
+                // セルの`contentConfiguration`に入れ直すと、セルが動きの外で中を並べ直すため、投稿の行は、行のビューに中身を直接渡す。
+                if case .status(let status) = entry, let content = cell.contentView as? PostContentView {
+                    content.configuration = self.contentConfiguration(for: status, itemID: id, base: cell.defaultContentConfiguration())
+                } else {
+                    self.configure(cell, for: entry, id: id)
+                }
+                // リストは行の高さを測るとき、動きの外でセルの中を並べ直すので、その前に、動きの中で中の部品を新しい位置へ動かしておく。
+                cell.layoutIfNeeded()
+                visibleIDs.insert(id)
+            }
+            // 行の高さと区切り線はリストのレイアウトが決めるので、測り直させる。
+            self.collectionView.collectionViewLayout.invalidateLayout()
+            self.collectionView.layoutIfNeeded()
+        }
+        if animates {
+            UIView.animate(.smooth, changes: apply)
+        } else {
+            UIView.performWithoutAnimation(apply)
+        }
+        let hiddenIDs = Set(dataSource.snapshot().itemIdentifiers).subtracting(visibleIDs)
+        guard !hiddenIDs.isEmpty else { return }
+        var snapshot = dataSource.snapshot()
+        snapshot.reconfigureItems(Array(hiddenIDs))
+        dataSource.apply(snapshot, animatingDifferences: false)
     }
 
     /// 絵文字の画像が届いたら、その絵文字を使う投稿だけを描き直す。読んでいる位置は保つ。
@@ -1727,7 +1786,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     private func makeLayout() -> UICollectionViewLayout {
         var configuration = UICollectionLayoutListConfiguration(appearance: .plain)
-        configuration.footerMode = .supplementary
+        configuration.footerMode = isAppearancePreview ? .none : .supplementary
         configuration.headerMode = headerView == nil ? .none : .supplementary
         // ヘッダー画像をナビゲーションバーのすぐ下から置く。
         configuration.headerTopPadding = 0
@@ -1770,10 +1829,12 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
         // 保留中の通知の行は、右へスワイプで受け入れ、左へスワイプで無視する。決まりはdocs/notification-filter.mdにある。
         configuration.leadingSwipeActionsConfigurationProvider = { [weak self] indexPath in
-            self?.notificationRequestSwipe(at: indexPath, .accept)
+            guard self?.isAppearancePreview == false else { return nil }
+            return self?.notificationRequestSwipe(at: indexPath, .accept)
         }
         configuration.trailingSwipeActionsConfigurationProvider = { [weak self] indexPath in
-            self?.notificationRequestSwipe(at: indexPath, .dismiss) ?? self?.accountRemovalSwipe(at: indexPath) ?? self?.recentSearchSwipe(at: indexPath)
+            guard self?.isAppearancePreview == false else { return nil }
+            return self?.notificationRequestSwipe(at: indexPath, .dismiss) ?? self?.accountRemovalSwipe(at: indexPath) ?? self?.recentSearchSwipe(at: indexPath)
         }
         return UICollectionViewCompositionalLayout { _, environment in
             let section = NSCollectionLayoutSection.list(using: configuration, layoutEnvironment: environment)
@@ -2104,7 +2165,29 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         configuration.onToggleSpoiler = { [weak self] in self?.toggleSpoiler(of: status, keeping: itemID) }
         configuration.bodyTruncation = longBodyExpansion.truncation(forBodyOf: status, isThreadFocus: shown.id == threadFocusID, rule: bodyTruncationRule)
         configuration.onExpandBody = { [weak self] in self?.expandBody(.status(shown.id), keeping: itemID) }
-        return configuration
+        return isAppearancePreview ? Self.keepingOnlyLinks(configuration) : configuration
+    }
+
+    /// プレビューの見本で、本文やリンクカードのリンクを押す操作だけを残す。見本の写真のクレジットのリンクを開けるようにするため。
+    /// ほかの操作（サムネイル、投票、注意書きの開閉、名前やアイコンなど）は、見本を変えたり別の画面を開いたりするので外す。
+    private static func keepingOnlyLinks(_ configuration: PostContentConfiguration) -> PostContentConfiguration {
+        var kept = configuration
+        kept.onSelectMedia = nil
+        kept.onRevealMedia = nil
+        kept.onToggleSpoiler = nil
+        kept.onExpandBody = nil
+        kept.onOpenAccount = nil
+        kept.onOpenContextAccount = nil
+        kept.authorTarget = nil
+        kept.contextTarget = nil
+        kept.onOpenLinkCardImage = nil
+        // リンクカードの対象を外すと、カードのタップは`onOpenLink`で開く。
+        kept.linkCardTarget = nil
+        kept.onPollAction = nil
+        kept.embedActions = EmbedActions(openLink: configuration.embedActions.openLink)
+        // リンクのタップと長押しの設定によらず、タップで開く。
+        kept.opensLinksOnTapOnly = true
+        return kept
     }
 
     /// 長い本文を切る行数。「投稿の見た目」の値で決める。
@@ -2337,6 +2420,7 @@ extension TimelineViewController: UICollectionViewDelegate {
     /// 長押しで投稿への操作のメニューを出す。添付ファイルのサムネイルとリンクカードの画像はボタンで、ここへは届かないため、
     /// それぞれが`MediaMenuHost`に問い合わせてメディアのメニューを出す。
     func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemsAt indexPaths: [IndexPath], point: CGPoint) -> UIContextMenuConfiguration? {
+        if isAppearancePreview { return nil }
         // 選んでいる本文の上の長押しは、テキストビューが単語を選ぶのに使う。
         if let body = textSelectionBody, let frame = body.textSelectionFrame, body.convert(frame, to: collectionView).contains(point) { return nil }
         // 投稿を選んでいる間は、行の長押しのメニューを出さない。
@@ -2370,6 +2454,7 @@ extension TimelineViewController: UICollectionViewDelegate {
     /// 選べるのはギャップと、ブラウザで開ける読めなかった要素と、スレッドを開ける投稿と、投稿を含む通知と、人の一覧の人にする。
     /// 本文のリンクや添付ファイルなど、行の中の部品が押下を先に受けるため、投稿の行を選ぶのは、どの部品も受けなかったときだけになる。
     func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
+        if isAppearancePreview { return false }
         // 本文を選んでいる間の行のタップは、選ぶのをやめるだけにし、行の操作は行わない。
         if endTextSelection() { return false }
         guard let id = dataSource.itemIdentifier(for: indexPath) else { return false }
@@ -2789,5 +2874,10 @@ extension TimelineViewController: MediaMenuHost {
 
     func mediaMenuDidHide() {
         menuDidHide()
+    }
+
+    /// プレビューの見本では、メディアを押しても何もしない。
+    var offersMediaActions: Bool {
+        !isAppearancePreview
     }
 }

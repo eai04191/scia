@@ -102,6 +102,13 @@ final class PostBodyView: UIView {
     var onExpandBody: (() -> Void)?
     /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
+    /// 本文と囲みの本文のリンクのタップで、タップと長押しの設定によらず、いつも開く（`LinkLabel.opensLinksOnTapOnly`）。
+    var opensLinksOnTapOnly = false {
+        didSet {
+            textLabel.opensLinksOnTapOnly = opensLinksOnTapOnly
+            embedView?.opensLinksOnTapOnly = opensLinksOnTapOnly
+        }
+    }
     /// リンクカードの画像がタップされたときに、ビューアを開閉する起点として、サムネイルを渡して呼ぶ。
     var onOpenLinkCardImage: ((LinkCardThumbnailView) -> Void)?
     /// 囲みの押下と、囲みの中の部品の押下を受ける。
@@ -424,6 +431,7 @@ final class PostBodyView: UIView {
         if let embedView { return embedView }
         let view = EmbeddedPostView(store: mediaImages, avatarImages: avatarImages)
         view.emojiImages = textLabel.emojiImages
+        view.opensLinksOnTapOnly = opensLinksOnTapOnly
         install(view)
         view.onSelectMedia = { [weak self] index, grid in self?.embedActions.selectMedia?(index, grid) }
         view.onRevealMedia = { [weak self] in self?.embedActions.revealMedia?() }

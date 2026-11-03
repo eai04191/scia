@@ -103,6 +103,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var contextTarget: (any ObjectActionTarget)?
     /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
+    /// 本文のリンクのタップで、タップと長押しの設定によらず、いつも開く（`LinkLabel.opensLinksOnTapOnly`）。
+    var opensLinksOnTapOnly = false
     /// リンクカードの画像がタップされたときに、ビューアを開閉する起点として、サムネイルを渡して呼ぶ。
     var onOpenLinkCardImage: ((LinkCardThumbnailView) -> Void)?
     /// 囲みの押下と、囲みの中の部品の押下で呼ぶ処理。
@@ -449,6 +451,7 @@ final class PostContentView: UIView, UIContentView {
 
         bodyView.emojiImages = configuration.emojiImages
         bodyView.embedActions = configuration.embedActions
+        bodyView.opensLinksOnTapOnly = configuration.opensLinksOnTapOnly
         bodyView.cardTarget = configuration.linkCardTarget
         bodyView.apply(PostBodyContent(
             spoiler: configuration.spoiler,

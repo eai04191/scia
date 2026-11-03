@@ -102,6 +102,12 @@ final class EmbeddedPostView: UIButton {
         mediaView.isHidden ? nil : mediaView
     }
 
+    /// 本文のリンクのタップで、タップと長押しの設定によらず、いつも開く（`LinkLabel.opensLinksOnTapOnly`）。
+    var opensLinksOnTapOnly: Bool {
+        get { textLabel.opensLinksOnTapOnly }
+        set { textLabel.opensLinksOnTapOnly = newValue }
+    }
+
     init(store: MediaImageStore<UIImage>, avatarImages: AvatarImageStore<UIImage>) {
         mediaView = MediaGridView(store: store)
         avatarView = AvatarView(store: avatarImages)

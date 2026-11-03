@@ -13,6 +13,14 @@ protocol MediaMenuHost: AnyObject {
     func mediaMenuDidHide()
     /// タップや長押しに選んだ項目が使えないことを、数秒で消えるチップで知らせる。
     func showNotice(_ notice: Notice)
+    /// メディアの長押しのメニューと、タップや長押しに選んだ操作を受け付けるか。falseなら、メディアを押しても何もしない。
+    var offersMediaActions: Bool { get }
+}
+
+extension MediaMenuHost {
+    var offersMediaActions: Bool {
+        true
+    }
 }
 
 /// サムネイル、リンクカードの画像、プロフィールの画像に付ける、メディアのメニューの長押し。
@@ -88,8 +96,8 @@ final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
     /// 押したメディア。メニューを出さないメディア（ぼかしているものなど）ならnil。決まりはdocs/object-actions.mdにある。
     /// タップでメニューを出すときは、画像を持ち上げずに押した位置にメニューだけを出す。
     func target(at point: CGPoint) -> ObjectTarget<MediaMenuItem, MediaMenuCommand>? {
-        guard offersMenu(point) else { return nil }
         let host = host
+        guard offersMenu(point), host?.offersMediaActions != false else { return nil }
         return ObjectTarget(
             entity: .media,
             primary: { [open] _ in open() },

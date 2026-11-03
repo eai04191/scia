@@ -3,14 +3,12 @@ import SwiftUI
 import UIKit
 
 /// 「投稿の見た目」。上にプレビューを固定し、下に投稿の部品ごとの分類を、投稿の上から下への並びで置く。
-/// 分類を押すと、その分類の画面（`AppearanceGroupEditorView`）を重ねる。プレビューの部品をタップすると、その部品の項目の分類の画面を重ね、その場所を示す。
+/// 分類を押すと、その分類の画面（`AppearanceGroupEditorView`）を重ねる。決まりはdocs/appearance.mdにある。
 struct AppearanceEditorView: View {
     @Bindable var settings: AppSettings
     @State private var samples: AppearanceSamples
-    /// カスタム絵文字の画像が届いたら、プレビューを描き直す。本文は描いた時点の画像で組むため。
-    @State private var emojiArrivals = EmojiArrivals(store: AppDependencies.emojiImages)
-    /// プレビューの部品をタップして重ねた分類の画面。
-    @State private var opened: OpenedAppearanceGroup?
+    /// 開いたときに重ねておく分類の画面。
+    @State private var opened: AppearanceGroup.ID?
     @State private var confirmsReset = false
     /// すべて既定に戻した回数。戻すと値がまとめて変わるので、プレビューの高さを合わせ直す。
     @State private var resets = 0
@@ -20,21 +18,15 @@ struct AppearanceEditorView: View {
     init(settings: AppSettings, opening group: AppearanceGroup.ID? = nil, tuning: TuningStore = AppDependencies.tuning, now: () -> Date = AppDependencies.now) {
         self.settings = settings
         _samples = State(initialValue: AppearanceSamples(settings: settings, tuning: tuning, now: now()))
-        _opened = State(initialValue: group.map { OpenedAppearanceGroup(groupID: $0, focus: nil) })
+        _opened = State(initialValue: group)
     }
 
     var body: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
                 FittedAppearancePreview(
-                    preview: AppearancePreview(
-                        configurations: samples.configurations(colorScheme: colorScheme, revision: revision, groups: []),
-                        highlight: nil,
-                        onSelectPart: select,
-                        onTapHighlight: {},
-                        showsSeparators: settings.appearance.showsSeparators,
-                        choices: settings.appearance.hashValue
-                    ),
+                    samples: samples,
+                    entries: samples.entries(colorScheme: colorScheme, groups: []),
                     heightLimit: geometry.size.height * AppearanceGroupEditorView.previewHeightLimit,
                     fitRevision: resets
                 )
@@ -43,13 +35,11 @@ struct AppearanceEditorView: View {
                     Section {
                         ForEach(groups) { group in
                             NavigationLink {
-                                groupEditor(group, focus: nil)
+                                AppearanceGroupEditorView(group: group, settings: settings)
                             } label: {
                                 GroupLabel(title: group.title, isModified: group.values.contains(where: settings.isModified))
                             }
                         }
-                    } footer: {
-                        Text("プレビューの部品をタップすると、その部品の項目を開きます。")
                     }
                     Section {
                         Button("すべて既定に戻す", role: .destructive) { confirmsReset = true }
@@ -60,9 +50,9 @@ struct AppearanceEditorView: View {
                 }
             }
         }
-        .navigationDestination(item: $opened) { opened in
-            if let group = groups.first(where: { $0.id == opened.groupID }) {
-                groupEditor(group, focus: opened.focus)
+        .navigationDestination(item: $opened) { id in
+            if let group = groups.first(where: { $0.id == id }) {
+                AppearanceGroupEditorView(group: group, settings: settings)
             }
         }
         .navigationTitle("投稿")
@@ -75,102 +65,34 @@ struct AppearanceEditorView: View {
         }
     }
 
-    private func groupEditor(_ group: AppearanceGroup, focus: AppearanceFocus?) -> some View {
-        AppearanceGroupEditorView(group: group, settings: settings, samples: samples, emojiArrivals: emojiArrivals, focus: focus)
-    }
-
     private var groups: [AppearanceGroup] {
         AppearanceCatalog.groups
-    }
-
-    /// プレビューを描き直すきっかけ。見本の組み立ては設定を直接読むので、読んだ値が変わったら描き直すよう、ここで読んでおく。
-    private var revision: Int {
-        var hasher = Hasher()
-        hasher.combine(emojiArrivals.count)
-        hasher.combine(settings.appearanceValues)
-        hasher.combine(settings.appearance)
-        return hasher.finalize()
-    }
-
-    /// プレビューでタップした部品のうち、項目のある最も小さい部品の項目の分類の画面を重ね、その場所を示す。
-    private func select(_ parts: [AppearancePreviewPart]) {
-        guard let item = parts.lazy.compactMap(AppearanceHighlight.item(selectedBy:)).first,
-              let group = groups.first(where: { $0.values.contains(item) }) else { return }
-        opened = OpenedAppearanceGroup(groupID: group.id, focus: .value(item))
-    }
-}
-
-/// プレビューの部品をタップして重ねる分類の画面と、そこで示す項目。
-private struct OpenedAppearanceGroup: Hashable {
-    let groupID: AppearanceGroup.ID
-    let focus: AppearanceFocus?
-}
-
-/// 見本が収まる高さにし、収まらなければ上限の高さの中でスクロールさせるプレビュー。
-/// 高さは、画面に出たときと`fitRevision`が変わったときだけ合わせ直し、値を変えている間は変えない。
-/// 変えると下の項目の一覧が動き、スライダーなどの操作している部品が指の下から動いてしまうため。
-private struct FittedAppearancePreview: View {
-    let preview: AppearancePreview
-    let heightLimit: CGFloat
-    var fitRevision = 0
-    @State private var height: CGFloat?
-    /// 画面に出た回数。重ねた画面から戻ったときは、そこで変えた値で見本の高さが変わっているので、合わせ直す。
-    @State private var appearances = 0
-
-    var body: some View {
-        var preview = preview
-        var hasher = Hasher()
-        hasher.combine(fitRevision)
-        hasher.combine(appearances)
-        preview.fitRevision = hasher.finalize()
-        preview.onFitHeight = fit
-        return preview
-            .frame(height: min(height ?? .infinity, heightLimit))
-            .onAppear { appearances += 1 }
-    }
-
-    /// 最初の高さは、動かさずに合わせる。
-    private func fit(_ newHeight: CGFloat) {
-        guard height != nil else {
-            height = newHeight
-            return
-        }
-        withAnimation(.smooth) { height = newHeight }
     }
 }
 
 /// 「投稿の見た目」の、1つの分類の画面。上にその分類の見本を固定し、下にその分類の項目を置く。
-/// 項目を触っている間は、プレビューでその場所を示す。プレビューの部品をタップすると、その部品の項目の場所を示す。
+/// 最後に触った項目にしか要らない見本は、触っている間だけプレビューに足す。
 struct AppearanceGroupEditorView: View {
     let group: AppearanceGroup
     @Bindable var settings: AppSettings
-    let samples: AppearanceSamples
-    let emojiArrivals: EmojiArrivals
-    /// 最後に触った項目。プレビューでその場所を示す。
+    @State private var samples: AppearanceSamples
+    /// 最後に触った項目。
     @State private var focused: AppearanceFocus?
     @Environment(\.colorScheme) private var colorScheme
 
-    init(group: AppearanceGroup, settings: AppSettings, samples: AppearanceSamples, emojiArrivals: EmojiArrivals, focus: AppearanceFocus? = nil) {
+    init(group: AppearanceGroup, settings: AppSettings, tuning: TuningStore = AppDependencies.tuning, now: () -> Date = AppDependencies.now) {
         self.group = group
         self.settings = settings
-        self.samples = samples
-        self.emojiArrivals = emojiArrivals
-        _focused = State(initialValue: focus)
+        _samples = State(initialValue: AppearanceSamples(settings: settings, tuning: tuning, now: now()))
     }
 
     var body: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
                 FittedAppearancePreview(
-                    preview: AppearancePreview(
-                        configurations: samples.configurations(colorScheme: previewColorScheme, revision: revision, groups: [group.id], focus: focused),
-                        highlight: focused?.highlight,
-                        onSelectPart: select,
-                        onTapHighlight: { focused = nil },
-                        showsSeparators: settings.appearance.showsSeparators,
-                        choices: choicesRevision,
-                        interfaceStyle: focused?.colorScheme.map { $0 == .dark ? .dark : .light } ?? .unspecified
-                    ),
+                    samples: samples,
+                    entries: samples.entries(colorScheme: previewColorScheme, groups: [group.id], focus: focused),
+                    interfaceStyle: focused?.colorScheme.map { $0 == .dark ? .dark : .light } ?? .unspecified,
                     heightLimit: geometry.size.height * Self.previewHeightLimit
                 )
                 Divider()
@@ -190,11 +112,9 @@ struct AppearanceGroupEditorView: View {
                             )
                             .disabled(isUnused(item))
                         }
-                    } footer: {
-                        Text("項目の名前やプレビューの部品をタップすると、その場所を示します。もう一度タップすると、示すのをやめます。")
                     }
                 }
-                // スイッチは押すとすぐ切り替わるので、切り替えたときにその場所を示す。メニューで選ぶ項目は、メニューを開いたときに示す。
+                // スイッチは押すとすぐ切り替わるので、切り替えたときに触っている項目にする。メニューで選ぶ項目は、メニューを開いたときにする。
                 .onChange(of: settings.appearance.showsBoosterAvatar) { focused = .choice(.showsBoosterAvatar) }
                 .onChange(of: settings.appearance.showsContextSymbol) { focused = .choice(.showsContextSymbol) }
                 .onChange(of: settings.appearance.boldsName) { focused = .choice(.boldsName) }
@@ -240,32 +160,7 @@ struct AppearanceGroupEditorView: View {
         focused?.colorScheme ?? colorScheme
     }
 
-    /// プレビューを描き直すきっかけ。見本の組み立ては設定を直接読むので、読んだ値が変わったら描き直すよう、ここで読んでおく。
-    private var revision: Int {
-        var hasher = Hasher()
-        hasher.combine(emojiArrivals.count)
-        hasher.combine(settings.appearanceValues)
-        hasher.combine(choicesRevision)
-        return hasher.finalize()
-    }
-
-    /// 数値以外の設定。変わったときは、プレビューの部品を動かさずに切り替える。
-    private var choicesRevision: Int {
-        settings.appearance.hashValue
-    }
-
-    /// プレビューでタップした部品のうち、この分類の項目のある最も小さい部品の場所を示す。
-    /// 部品のない場所や、ほかの分類の部品、いま示している項目の部品をタップしたときは、示すのをやめる。示した帯で、確かめたい見た目が隠れることがあるため。
-    private func select(_ parts: [AppearancePreviewPart]) {
-        guard let item = parts.lazy.compactMap(AppearanceHighlight.item(selectedBy:)).first(where: group.values.contains),
-              focused != .value(item) else {
-            focused = nil
-            return
-        }
-        focused = .value(item)
-    }
-
-    /// 項目の名前をタップしたとき、その項目の場所を示す。示していれば、示すのをやめる。
+    /// 項目の名前をタップしたとき、その項目を触っている項目にする。触っている項目なら、やめる。
     private func toggleFocus(_ focus: AppearanceFocus) {
         focused = focused == focus ? nil : focus
     }
@@ -629,65 +524,81 @@ struct AppearanceValueRow: View {
     }
 }
 
-/// プレビューに並べる見本の投稿。調整できる部品がどれかの投稿に出るように組む。
-/// 一覧と同じ組み立て（`TimelineViewController`）を通し、画像は通信しないよう、アプリのアイコンから作ったものを使う。
+/// プレビューに並べる見本の投稿。調整できる部品がどれかの投稿に出るように組む。決まりはdocs/appearance.mdの「プレビュー」にある。
+/// 一覧（`TimelineViewController`）に並べて描き、画像は通信しないよう、アプリのアイコンから作ったものと同梱した写真を使う。
 @MainActor
 struct AppearanceSamples {
-    private let timeline: TimelineViewController
+    /// 見本を並べる一覧。見本を組むのにも、プレビューに置いて見せるのにも使う。1つの画面に1つずつ置く。
+    let timeline: TimelineViewController
     private let settings: AppSettings
     private let tuning: TuningStore
     private let now: Date
-    private let posts: [(status: Status, connection: ReplyConnection)]
-    private let lightPosts: [(status: Status, connection: ReplyConnection)]
+    private let posts: [Status]
+    private let lightPosts: [Status]
+    private let quote: Status
 
     init(settings: AppSettings, tuning: TuningStore, now: Date) {
         self.settings = settings
         self.tuning = tuning
         self.now = now
         timeline = TimelineViewController(texts: .home, refresh: {}, tuning: tuning, settings: settings)
+        timeline.isAppearancePreview = true
+        // 設定の画面からはアプリ内のSafariを開けないので、見本のリンク（写真のクレジットなど）は、設定によらず既定のブラウザで開く。
+        // 見本のメンションやハッシュタグの行き先は実在しないので、開かない。
+        timeline.onOpenLink = { destination, _ in
+            guard case .url(let url) = destination else { return }
+            UIApplication.shared.open(url)
+        }
         // 自分のフィルターに一致した自分の投稿の注記を見せるため、見本のSciaのアカウントを自分として組む。
         timeline.myAccountID = Self.myAccountID
         timeline.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: Self.myAccountID))
         posts = Self.posts(now: now, cardImage: PreviewImages.cardURL(for: .dark))
         lightPosts = Self.posts(now: now, cardImage: PreviewImages.cardURL(for: .light))
+        quote = Self.quote(now: now)
         // 注意書きの開閉と本文のあいだを見せるため、注意書きは開いておく。開いた状態は投稿のIDで持つので、外観ごとの見本で同じIDを1回だけ開く。
-        for status in posts.map(\.status) where !status.displayed.spoilerText.isEmpty {
+        for status in posts where !status.displayed.spoilerText.isEmpty {
             timeline.toggleSpoiler(of: status)
         }
     }
 
-    /// 引用の囲みを出した投稿は、いつも最後に並べる。Xの投稿の囲みも同じ値で描くが、Xの投稿は既定では出さない試作のため、見本には出さない。
+    /// プレビューの一覧に並べる見本。引用の囲みを出した投稿は、いつも最後に並べる。Xの投稿の囲みも同じ値で描くが、Xの投稿は既定では出さない試作のため、見本には出さない。
     /// - Parameters:
-    ///   - revision: 描き直しのきっかけ。中身は使わない。
     ///   - groups: 見本を出す分類。渡すと、その分類の見本（`sampleIDs(for:focus:)`）だけを返す。nilならすべての見本を返す。
     ///   - focus: 触っている項目。`groups`を渡したとき、その項目にしか要らない見本を足す。
+    func entries(colorScheme: ColorScheme, groups: Set<AppearanceGroup.ID>? = nil, focus: AppearanceFocus? = nil) -> [TimelineEntry] {
+        let shown = groups.map { Self.sampleIDs(for: $0, focus: focus, appearance: settings.appearance) }
+        return ((colorScheme == .dark ? posts : lightPosts) + [quote])
+            .filter { shown?.contains($0.id) ?? true }
+            .map { .status($0) }
+    }
+
+    /// 見本の行の中身。一覧に並べたときと同じく、返信でつながった隣の行と線でつなぐ。テストで、見本の部品の位置を測るのに使う。
+    /// - Parameter revision: 描き直しのきっかけ。中身は使わない。
     func configurations(colorScheme: ColorScheme, revision _: Int, groups: Set<AppearanceGroup.ID>? = nil, focus: AppearanceFocus? = nil) -> [PostContentConfiguration] {
-        let shown = groups.map { Self.sampleIDs(for: $0, focus: focus) }
-        let shownPosts = (colorScheme == .dark ? posts : lightPosts).filter { shown?.contains($0.status.id) ?? true }
-        let configurations = shownPosts.map { post in
-            var configuration = timeline.contentConfiguration(for: post.status, base: .cell())
-            configuration.replyConnection = post.connection
+        let entries = entries(colorScheme: colorScheme, groups: groups, focus: focus)
+        let connections = ReplyConnection.connections(in: entries)
+        return entries.compactMap { entry in
+            guard case .status(let status) = entry else { return nil }
+            var configuration = timeline.contentConfiguration(for: status, base: .cell())
+            configuration.replyConnection = connections[entry.id] ?? ReplyConnection()
             return configuration
         }
-        let showsQuote = shown?.contains(Self.quoteID) ?? true
-        return configurations + (showsQuote ? [quoteConfiguration()] : [])
     }
 
     /// 分類の見本の投稿のID。分類ごとの見本に、触っている項目にしか要らない見本を足す。分類が空なら、分類の一覧の画面に出す部品の少ない投稿を1件だけにする。
-    static func sampleIDs(for groups: Set<AppearanceGroup.ID>, focus: AppearanceFocus? = nil) -> Set<String> {
-        let names = groups.isEmpty ? ["basic"] : groups.flatMap { groupSamples[$0] ?? [] } + focusSamples(focus)
+    static func sampleIDs(for groups: Set<AppearanceGroup.ID>, focus: AppearanceFocus?, appearance: AppearanceChoices) -> Set<String> {
+        let names = groups.isEmpty ? ["basic"] : groups.flatMap { groupSamples[$0] ?? [] } + focusSamples(focus, appearance: appearance)
         return Set(names.map { "preview-\($0)" })
     }
 
     /// 分類ごとに出す見本。その分類の項目の場所を示せる、なるべく小さい投稿を選び、既定の設定では見本の枠に収まるようにする。
     /// 行の余白と区切り線は投稿のあいだの見た目なので、行には2件を出す。
-    /// 部品の少ない投稿は、どの投稿にもある部品の分類（行、アイコン、名前の行、本文）にも出す。分類の一覧の画面の見本で部品をタップして分類の画面を開いたとき、タップした投稿がその画面にも出るようにするため。
     private static let groupSamples: [AppearanceGroup.ID: [String]] = [
         "row": ["basic", "next"],
         "context": ["boost-plain", "emoji-only"],
-        "avatar": ["basic", "parent", "child"],
+        "avatar": ["parent", "child"],
         "name": ["basic", "name"],
-        "body": ["basic", "paragraphs"],
+        "body": ["paragraphs"],
         "spoiler": ["reply"],
         "media": ["thread"],
         "linkCard": ["boost"],
@@ -697,14 +608,17 @@ struct AppearanceSamples {
     ]
 
     /// 分類のうち一部の項目にしか要らない見本。上限を見せる大きい見本などは、ふだん出すと見本の枠からはみ出すので、その項目を触っている間だけ出す。
-    private static func focusSamples(_ focus: AppearanceFocus?) -> [String] {
-        switch focus {
+    /// 右に並べる写真にだけ効く項目は、投稿の添付ファイルを本文の下に並べ、囲みの添付ファイルだけを右に並べるときは、引用の見本で見せる。
+    private static func focusSamples(_ focus: AppearanceFocus?, appearance: AppearanceChoices) -> [String] {
+        let onlyEmbedIsBeside = appearance.mediaArrangement == .belowBody && appearance.resolvedEmbedMediaArrangement == .besideBody
+        return switch focus {
         case .value(AppearanceCatalog.bodyTruncationThreshold), .value(AppearanceCatalog.bodyTruncatedLines): ["long"]
         case .value(AppearanceCatalog.emojiOnlyScale), .value(AppearanceCatalog.emojiOnlyLimit): ["emoji-only"]
         case .value(AppearanceCatalog.filterNoteText), .value(AppearanceCatalog.filterNoteSpacing): ["filtered"]
         case .value(AppearanceCatalog.mediaTallestAspectRatio): ["media"]
         case .value(AppearanceCatalog.mediaWidestAspectRatio): ["wide"]
         case .choice(.embedMediaArrangement): ["quote"]
+        case .value(AppearanceCatalog.mediaBesideSide), .choice(.tiltsStackedPhotos): onlyEmbedIsBeside ? ["quote"] : []
         default: []
         }
     }
@@ -712,11 +626,11 @@ struct AppearanceSamples {
     private static let quoteID = "preview-quote"
 
     /// 投稿を引用した投稿。引用元には、囲みの中の部品が出るよう、本文と画像を付ける。
-    private func quoteConfiguration() -> PostContentConfiguration {
+    private static func quote(now: Date) -> Status {
         let image = PreviewImages.photoURL(.wide)
         let avatar = PreviewImages.avatarURL()
         let friend = Account(id: "preview-friend", username: "friend", acct: "friend@example.com", displayName: "ともだち", avatar: avatar)
-        let scia = Account(id: Self.myAccountID, username: "scia", acct: "scia", displayName: "Scia", avatar: avatar)
+        let scia = Account(id: myAccountID, username: "scia", acct: "scia", displayName: "Scia", avatar: avatar)
         let attachment = MediaAttachment(
             id: "preview-quote-image",
             type: .image,
@@ -734,8 +648,8 @@ struct AppearanceSamples {
             url: nil,
             mediaAttachments: [attachment]
         )
-        let status = Status(
-            id: Self.quoteID,
+        return Status(
+            id: quoteID,
             createdAt: now.addingTimeInterval(-60),
             account: friend,
             content: "<p>投稿を引用した投稿です。</p>",
@@ -743,12 +657,11 @@ struct AppearanceSamples {
             url: nil,
             quote: Quote(state: "accepted", quotedStatus: quoted)
         )
-        return timeline.contentConfiguration(for: status, base: .cell())
     }
 
     private static let myAccountID = "preview-scia"
 
-    private static func posts(now: Date, cardImage: URL?) -> [(status: Status, connection: ReplyConnection)] {
+    private static func posts(now: Date, cardImage: URL?) -> [Status] {
         let avatar = PreviewImages.avatarURL()
         // アニメーションを再生する設定の違いを見せるため、アイコンと絵文字には色相の回るアニメーション版を付ける。
         let animated = PreviewImages.animatedAvatarURL() ?? avatar
@@ -792,7 +705,7 @@ struct AppearanceSamples {
                 image: cardImage
             )
         }
-        func status(_ id: String, minutes: Double, account: Account, content: String, spoiler: String = "", media: [MediaAttachment] = [], poll: Poll? = nil, card: PreviewCard? = nil, replyingTo: Account? = nil, visibility: Status.Visibility = .public, edited: Bool = false, emojis: [CustomEmoji] = [], filtered: [FilterResult] = [], favourited: Bool = false, reblogged: Bool = false) -> Status {
+        func status(_ id: String, minutes: Double, account: Account, content: String, spoiler: String = "", media: [MediaAttachment] = [], poll: Poll? = nil, card: PreviewCard? = nil, replyingTo: Account? = nil, inReplyTo: Status.ID = "preview-thread", visibility: Status.Visibility = .public, edited: Bool = false, emojis: [CustomEmoji] = [], filtered: [FilterResult] = [], favourited: Bool = false, reblogged: Bool = false) -> Status {
             Status(
                 id: "preview-\(id)",
                 createdAt: now.addingTimeInterval(-minutes * 60),
@@ -804,7 +717,7 @@ struct AppearanceSamples {
                 emojis: emojis,
                 mediaAttachments: media,
                 visibility: visibility,
-                inReplyToId: replyingTo.map { _ in "preview-thread" },
+                inReplyToId: replyingTo.map { _ in inReplyTo },
                 inReplyToAccountId: replyingTo?.id,
                 poll: poll,
                 card: card,
@@ -830,33 +743,33 @@ struct AppearanceSamples {
         )
         return [
             // 分類の一覧の画面に出す、部品の少ない投稿。
-            (status("basic", minutes: 1, account: scia, content: "<p>設定を変えると、タイムラインの投稿がこのように表示されます。</p>"), ReplyConnection()),
-            (boost, ReplyConnection()),
+            status("basic", minutes: 1, account: scia, content: "<p>設定を変えると、タイムラインの投稿がこのように表示されます。</p>"),
+            boost,
             // 注意書きのある投稿の画像はぼかされ、サムネイル同士のすき間が見えないため、画像は注意書きのない投稿に付ける。
-            (status("thread", minutes: 20, account: scia, content: PreviewPhoto.credit([.gridFirst, .gridSecond]), media: [describedImage, image]), ReplyConnection()),
+            status("thread", minutes: 20, account: scia, content: PreviewPhoto.credit([.gridFirst, .gridSecond]), media: [describedImage, image]),
             // 公開範囲の記号と編集済みの「*」を見せるため、未収載で編集した投稿にする。
-            (status("reply", minutes: 12, account: friend, content: "<p>注意書きの下の本文です。</p>", spoiler: "注意書き", replyingTo: scia, visibility: .unlisted, edited: true), ReplyConnection()),
-            (status("media", minutes: 8, account: scia, content: PreviewPhoto.credit([.tall]), media: [tallImage]), ReplyConnection()),
+            status("reply", minutes: 12, account: friend, content: "<p>注意書きの下の本文です。</p>", spoiler: "注意書き", replyingTo: scia, visibility: .unlisted, edited: true),
+            status("media", minutes: 8, account: scia, content: PreviewPhoto.credit([.tall]), media: [tallImage]),
             // 絵文字だけの本文を見せるため、先頭にメンションの付いた、絵文字だけの返信を用意する。メンションは大きくしない。
-            (status("emoji-only", minutes: 7.5, account: friend, content: #"<p><span class="h-card"><a href="https://example.com/@scia" class="u-url mention">@<span>scia</span></a></span> 👍:scia:🎉</p>"#, replyingTo: scia, emojis: emojis), ReplyConnection()),
+            status("emoji-only", minutes: 7.5, account: friend, content: #"<p><span class="h-card"><a href="https://example.com/@scia" class="u-url mention">@<span>scia</span></a></span> 👍:scia:🎉</p>"#, replyingTo: scia, emojis: emojis),
             // 長い本文を切って「続きを読む」を出すところを見せるため、1行ずつの段落を、既定の切り始める行数より1行だけ多く並べる。
             // 切り始める行数を少し増やすと切らなくなり、値の違いが見本に出る。
-            (status("long", minutes: 7.2, account: scia, content: (1...33).map { "<p>長い本文の\($0)行目です。</p>" }.joined()), ReplyConnection()),
+            status("long", minutes: 7.2, account: scia, content: (1...33).map { "<p>長い本文の\($0)行目です。</p>" }.joined()),
             // 片方だけのときの光の幅を見せるため、お気に入りだけをした投稿にする。
-            (status("wide", minutes: 7, account: friend, content: PreviewPhoto.credit([.wide]), media: [wideImage], favourited: true), ReplyConnection()),
-            (status("poll", minutes: 5, account: longNamed, content: "<p>アイコンの形はどちらが好きですか？</p>", poll: poll), ReplyConnection()),
-            (status("filtered", minutes: 2, account: scia, content: "<p>自分のフィルターに一致した、自分の投稿です。</p>", filtered: [ownFilter]), ReplyConnection()),
+            status("wide", minutes: 7, account: friend, content: PreviewPhoto.credit([.wide]), media: [wideImage], favourited: true),
+            status("poll", minutes: 5, account: longNamed, content: "<p>アイコンの形はどちらが好きですか？</p>", poll: poll),
+            status("filtered", minutes: 2, account: scia, content: "<p>自分のフィルターに一致した、自分の投稿です。</p>", filtered: [ownFilter]),
             // 名前の行の部品を1件で見せる投稿。入りきらない名前、公開範囲の記号、編集済みの「*」を出し、名前と画像のあいだを見せるため本文を付けないので、写真のクレジットは書かない。
             // 画像は、見本の枠に収まるよう横長にする。
-            (status("name", minutes: 1.5, account: longNamed, content: "", media: [wideImage], visibility: .unlisted, edited: true), ReplyConnection()),
+            status("name", minutes: 1.5, account: longNamed, content: "", media: [wideImage], visibility: .unlisted, edited: true),
             // 段落のあいだ、引用の字下げ、本文の絵文字を見せる投稿。
-            (status("paragraphs", minutes: 1.2, account: friend, content: "<p>段落の1つ目です🎉:scia:</p><blockquote><p>引用した文です。</p></blockquote><p>段落の2つ目です。</p>", emojis: emojis), ReplyConnection()),
-            (plainBoost, ReplyConnection()),
+            status("paragraphs", minutes: 1.2, account: friend, content: "<p>段落の1つ目です🎉:scia:</p><blockquote><p>引用した文です。</p></blockquote><p>段落の2つ目です。</p>", emojis: emojis),
+            plainBoost,
             // 行の余白と区切り線を見せる、部品の少ない投稿の次に並べる1行の投稿。
-            (status("next", minutes: 0.5, account: scia, content: "<p>次の投稿です。</p>"), ReplyConnection()),
-            // 返信をつなぐ線を見せる、本文だけの2件。下の投稿は返信のラベルが線に重ならないよう、返信にはせず、線だけでつなぐ。
-            (status("parent", minutes: 1.1, account: scia, content: "<p>返信でつながった投稿の、最初の投稿です。</p>"), ReplyConnection(below: true)),
-            (status("child", minutes: 1, account: friend, content: "<p>返信です。</p>"), ReplyConnection(above: true)),
+            status("next", minutes: 0.5, account: scia, content: "<p>次の投稿です。</p>"),
+            // 返信をつなぐ線を見せる、本文だけの2件。一覧と同じく、すぐ上の投稿への返信は線でつなぎ、返信のラベルを出さない。
+            status("parent", minutes: 1.1, account: scia, content: "<p>返信でつながった投稿の、最初の投稿です。</p>"),
+            status("child", minutes: 1, account: friend, content: "<p>返信です。</p>", replyingTo: scia, inReplyTo: "preview-parent"),
         ]
     }
 }
