@@ -33,4 +33,42 @@ struct InAppBrowserTests {
         #expect(browser.isPresented)
         root.dismiss(animated: false)
     }
+
+    /// シートの高さを決める間は、覆う高さを知らせず、決め終えてから知らせる。
+    /// 知らせを受けた一覧が安全領域を変えると、UIKitが高さを決めている途中のシートに位置を聞き直し、入れ子になって落ちるため。
+    @Test func reportsObscuredHeightAfterResolvingDetents() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let browser = InAppBrowser()
+        var resolving = false
+        var reportedWhileResolving = false
+        var reported: [CGFloat] = []
+        browser.onObscuredHeightChange = { height in
+            if resolving { reportedWhileResolving = true }
+            reported.append(height)
+        }
+        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
+        try await waitUntil { root.presentedViewController is SFSafariViewController && root.presentedViewController?.isBeingPresented == false }
+        let sheet = try #require(root.presentedViewController?.sheetPresentationController)
+        reported.removeAll()
+
+        resolving = true
+        let values = sheet.detents.map { $0.resolvedValue(in: DetentResolutionContext(maximumDetentValue: 1000)) }
+        resolving = false
+
+        #expect(values.contains { $0 != nil })
+        #expect(!reportedWhileResolving)
+        try await waitUntil { !reported.isEmpty }
+        root.dismiss(animated: false)
+    }
+}
+
+private final class DetentResolutionContext: NSObject, UISheetPresentationControllerDetentResolutionContext {
+    let containerTraitCollection = UITraitCollection(verticalSizeClass: .regular)
+    let maximumDetentValue: CGFloat
+
+    init(maximumDetentValue: CGFloat) {
+        self.maximumDetentValue = maximumDetentValue
+    }
 }

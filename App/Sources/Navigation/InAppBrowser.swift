@@ -18,9 +18,11 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
 
     private let tuning: TuningStore
     private weak var current: SFSafariViewController?
-    /// 段ごとに解決した高さ（下の安全領域を含む）。シートの見た目の位置はビューの枠に出ず（シートのビューの枠は画面全体のまま）、
+    /// 段ごとに解決した高さ（安全領域の中の高さ）。シートの見た目の位置はビューの枠に出ず（シートのビューの枠は画面全体のまま）、
     /// 出したあとに測れないため、高さを決めるところで受け取って覚えておく。
     private var resolvedHeights: [UISheetPresentationController.Detent.Identifier: CGFloat] = [:]
+    /// 高さを決め終えたあとに、覆う高さを知らせると決めてある。
+    private var reportsObscuredHeightAfterResolving = false
     /// 投稿欄で書き始めて伏せる前の高さ。書き終えたらここへ戻す。書いている間に手で高さを変えたら、手で選んだ高さを尊重して戻さない。
     private var detentBeforeCompose: UISheetPresentationController.Detent.Identifier?
     private let logger = SciaLog.logger(category: "browser")
@@ -107,7 +109,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
     private static let mediumIdentifier = UISheetPresentationController.Detent.Identifier("net.mizle.scia.inAppBrowser.medium")
 
     /// 高さはチューニングから読む。値は安全領域の中の高さで、下端に付くシートでは、これに下の安全領域が足される。
-    /// 一覧の余白も安全領域の外から数えるので、足したものを覚える。チューニングを変えたら、次にシートの高さを決め直すとき（開き直す、段を変える）に効く。
+    /// 一覧の余白も安全領域の外から数えるので、知らせるときに足す。チューニングを変えたら、次にシートの高さを決め直すとき（開き直す、段を変える）に効く。
     /// 高さの狭い画面（iPhoneの横向き）では、中くらいの高さの段を出さず、シートは全画面になる。
     /// 段は低い順に並べる決まりがあるため、伏せた高さは中くらいの高さより低く抑える。チューニングの組み合わせによっては、伏せた高さが設定より低くなる。
     private func detent(_ identifier: UISheetPresentationController.Detent.Identifier, for safari: SFSafariViewController) -> UISheetPresentationController.Detent {
@@ -120,10 +122,23 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
                 self.mediumHeight(in: context)
             }
             if let safari, self.current === safari {
-                self.resolvedHeights[identifier] = value.map { $0 + safari.view.safeAreaInsets.bottom }
-                if let sheet = safari.sheetPresentationController { self.reportObscuredHeight(of: sheet) }
+                self.resolvedHeights[identifier] = value
+                self.reportObscuredHeightAfterResolving()
             }
             return value
+        }
+    }
+
+    /// 高さを決めている間は、知らせも安全領域の読み出しもしない。知らせを受けた一覧が安全領域を変えると、UIKitが高さを決めている途中のシートに
+    /// 位置を聞き直し、入れ子になって落ちるため。次のメインループで、決め終えた高さを知らせる。
+    private func reportObscuredHeightAfterResolving() {
+        guard !reportsObscuredHeightAfterResolving else { return }
+        reportsObscuredHeightAfterResolving = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            reportsObscuredHeightAfterResolving = false
+            guard let sheet = current?.sheetPresentationController, !(current?.isBeingDismissed ?? true) else { return }
+            reportObscuredHeight(of: sheet)
         }
     }
 
@@ -135,7 +150,8 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
     /// 全画面に広げている間は一覧が見えないため、中くらいの高さの値を使い続ける。
     private func reportObscuredHeight(of sheet: UISheetPresentationController) {
         let selected = sheet.selectedDetentIdentifier == Self.collapsedIdentifier ? Self.collapsedIdentifier : Self.mediumIdentifier
-        onObscuredHeightChange?(resolvedHeights[selected] ?? 0)
+        let bottomInset = sheet.presentedViewController.view.safeAreaInsets.bottom
+        onObscuredHeightChange?(resolvedHeights[selected].map { $0 + bottomInset } ?? 0)
     }
 
     private func selectionDidChange(_ sheet: UISheetPresentationController) {
