@@ -183,7 +183,7 @@ final class InlineComposeController: NSObject {
     private var expansionGeneration = 0
     private let remainingLabel = UILabel()
     /// 添付の準備を待っている間に押すと、待つのをやめる。決まりはdocs/compose.mdの「メディアの準備を待って送る」にある。
-    private lazy var sendButton = UIButton(configuration: .filled(), primaryAction: UIAction { [weak self] _ in
+    private lazy var sendButton = TintFollowingButton(configuration: .filled(), primaryAction: UIAction { [weak self] _ in
         guard let self else { return }
         if model.isWaitingForMedia {
             model.cancelWaitingForMedia()
@@ -3358,6 +3358,8 @@ final class InlineComposeController: NSObject {
         remainingLabel.setContentHuggingPriority(.required, for: .horizontal)
         sendButton.configuration?.image = UIImage(systemName: "arrow.up")
         sendButton.configuration?.cornerStyle = .capsule
+        // 投稿欄のガラスの中にあるので、モノトーンでは白い地に黒い記号にできない。
+        sendButton.followsGlassAccent(monochromeFill: .tertiarySystemFill)
         sendButton.accessibilityLabel = "投稿"
         sendButton.setContentHuggingPriority(.required, for: .horizontal)
 

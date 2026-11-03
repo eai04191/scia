@@ -97,7 +97,7 @@ struct LoginView: View {
                 } primaryAction: {
                     login()
                 }
-                .buttonStyle(.glassProminent)
+                .accentProminentGlassButtonStyle(AppDependencies.settings.accentColor)
                 .controlSize(.large)
                 .disabled(!canLogin)
                 .padding(.horizontal, 20)

@@ -157,9 +157,9 @@ final class ProfileFollowButton: UIView {
         colorSource.traitOverrides.userInterfaceStyle = traitCollection.userInterfaceStyle
         colorSource.traitOverrides.accessibilityContrast = traitCollection.accessibilityContrast
         let background = configuration.updated(for: colorSource).background.backgroundColor ?? .clear
-        // 標準の形の文字の色。塗りつぶしは白、ティントはティントカラー、灰色は本文の色で描く。
+        // 標準の形の文字の色。塗りつぶしは白（ティントカラーがモノトーンなら地の反対の色）、ティントはティントカラー、灰色は本文の色で描く。
         let foreground: UIColor = switch style {
-        case .filled: filledColors?.foreground ?? .white
+        case .filled: filledColors?.foreground ?? .filledForeground(on: tintColor, traits: traitCollection)
         case .tinted: tintColor
         case .gray: .label
         }

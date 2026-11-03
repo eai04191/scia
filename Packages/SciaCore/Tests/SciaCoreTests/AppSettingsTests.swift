@@ -201,6 +201,22 @@ struct AppSettingsTests {
         #expect(motion.animates(reducesMotion: reducesMotion) == expected)
     }
 
+    /// アクセントカラーは、既定ではシステムと同じ青で、選び直した値は起動し直しても残る。
+    @Test func accentColorIsBlueByDefaultAndPersists() throws {
+        let defaults = try makeDefaults()
+        let settings = AppSettings(defaults: defaults)
+        #expect(settings.accentColor == .blue)
+
+        settings.accentColor = .orange
+
+        #expect(AppSettings(defaults: defaults).accentColor == .orange)
+    }
+
+    /// 本文の文字や控えめな文字と色で見分けられないアクセントカラーでだけ、リンクに下線を引く。
+    @Test func underlinesLinksOnlyForColorsIndistinguishableFromText() {
+        #expect(AccentColorChoice.allCases.filter(\.underlinesLinks) == [.gray, .monochrome])
+    }
+
     @Test func persistsProfilePostsFilter() throws {
         let defaults = try makeDefaults()
         #expect(AppSettings(defaults: defaults).profilePostsFilter == .standard)

@@ -36,15 +36,17 @@ struct ProfileTabIconsTests {
         #expect(icons.icon(for: .profile(accountID: "3", acct: "carol")) == nil)
     }
 
-    /// 選んでいるときは、縁の内側に縮めたアイコンを置き、角は縁の色になる。
+    /// 選んでいるときは、縁の内側に縮めたアイコンを置き、角は縁の色になる。縁はアクセントカラーで描く。
     @Test func selectedIconHasRing() throws {
-        let icons = ProfileTabIcons(settings: .isolated())
+        let settings = AppSettings.isolated()
+        settings.accentColor = .orange
+        let icons = ProfileTabIcons(settings: settings)
         icons.setAvatar(Self.avatar, forAccountID: "2")
         let icon = try #require(icons.icon(for: Self.bob))
 
         // 縁の上の点は選んだ色、縁とアイコンの間は透明、真ん中はアイコンの色。
         let side = ProfileTabIcons.tabSide
-        #expect(try Self.color(of: icon.selectedTab, at: CGPoint(x: side / 2, y: 0.5)).isClose(to: UIColor.tintColor.resolvedRGBA))
+        #expect(try Self.color(of: icon.selectedTab, at: CGPoint(x: side / 2, y: 0.5)).isClose(to: Self.drawnColor(.systemOrange)))
         #expect(try Self.color(of: icon.selectedTab, at: CGPoint(x: side / 2, y: 3)).alpha == 0)
         #expect(try Self.color(of: icon.selectedTab, at: CGPoint(x: side / 2, y: side / 2)).isClose(to: UIColor.red.resolvedRGBA))
     }
@@ -57,6 +59,18 @@ struct ProfileTabIconsTests {
         icons.onChange = { changes += 1 }
 
         settings.appearance.avatarShape = settings.appearance.avatarShape == .circle ? .roundedSquare : .circle
+
+        try await waitUntil { changes == 1 }
+    }
+
+    /// アクセントカラーを変えたら、縁を描き直させる。
+    @Test func accentColorChangeAsksToRefresh() async throws {
+        let settings = AppSettings.isolated()
+        let icons = ProfileTabIcons(settings: settings)
+        var changes = 0
+        icons.onChange = { changes += 1 }
+
+        settings.accentColor = .orange
 
         try await waitUntil { changes == 1 }
     }
@@ -74,6 +88,16 @@ struct ProfileTabIconsTests {
         #expect(icons.revision == revision + 1)
         #expect(icons.icon(for: Self.bob) == nil)
         #expect(icons.icon(for: .profile(accountID: "3", acct: "carol")) != nil)
+    }
+
+    /// `color`を、アイコンと同じ端末の広い色空間で描いてから読んだ色。鮮やかな色は、読み出すときの変換で`isClose`の幅より大きくずれるため、同じ変換を通して比べる。
+    private static func drawnColor(_ color: UIColor) throws -> RGBA {
+        let format = UIGraphicsImageRendererFormat.preferred()
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1), format: format).image { _ in
+            color.setFill()
+            UIRectFill(CGRect(x: 0, y: 0, width: 1, height: 1))
+        }
+        return try Self.color(of: image, at: .zero)
     }
 
     private static func color(of image: UIImage, at point: CGPoint) throws -> RGBA {

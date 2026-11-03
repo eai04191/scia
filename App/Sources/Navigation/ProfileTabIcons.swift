@@ -30,12 +30,12 @@ final class ProfileTabIcons {
     @ObservationIgnored private var avatars: [String: UIImage] = [:]
     /// アイコンが変わるたびに増える。設定の並びは、これが変わったら行を描き直す。
     private(set) var revision = 0
-    /// アイコンが変わったとき。届いたときと、アイコンの形の設定を変えたとき。
+    /// アイコンが変わったとき。届いたときと、アイコンの形かアクセントカラーの設定を変えたとき。
     @ObservationIgnored var onChange: (() -> Void)?
 
     init(settings: AppSettings) {
         self.settings = settings
-        observeShape()
+        observeAppearance()
     }
 
     func setAvatar(_ avatar: UIImage, forAccountID id: String) {
@@ -67,13 +67,14 @@ final class ProfileTabIcons {
         guard case .profile(let accountID, _, _) = item, let avatar = avatars[accountID] else { return nil }
         let shape = settings.appearance.avatarShape
         guard let tab = AvatarIcon.image(avatar, side: Self.tabSide, shape: shape),
-              let selectedTab = Self.ringed(avatar, shape: shape),
+              let selectedTab = Self.ringed(avatar, shape: shape, color: settings.accentColor.uiColor),
               let menu = AvatarIcon.image(avatar, side: AvatarIcon.menuSide, shape: shape) else { return nil }
         return Icon(tab: tab, selectedTab: selectedTab, menu: menu)
     }
 
-    /// 縁の内側にアイコンを縮めて置き、選んだ色の縁で囲む。大きさは選んでいないときと同じにし、選んでもタブの中身がずれないようにする。
-    private static func ringed(_ avatar: UIImage, shape: AvatarShape) -> UIImage? {
+    /// 縁の内側にアイコンを縮めて置き、`color`の縁で囲む。大きさは選んでいないときと同じにし、選んでもタブの中身がずれないようにする。
+    /// 画像に描き込むので、ビューのティントカラーを引き継ぐ`UIColor.tintColor`では描けない。アクセントカラーの設定の色を渡す。
+    private static func ringed(_ avatar: UIImage, shape: AvatarShape, color: UIColor) -> UIImage? {
         let gap = ringWidth * 2
         guard let inner = AvatarIcon.image(avatar, side: tabSide - gap * 2, shape: shape) else { return nil }
         let bounds = CGRect(x: 0, y: 0, width: tabSide, height: tabSide)
@@ -83,19 +84,20 @@ final class ProfileTabIcons {
             inner.draw(at: CGPoint(x: gap, y: gap))
             let ring = AvatarIcon.path(in: bounds.insetBy(dx: ringWidth / 2, dy: ringWidth / 2), shape: shape)
             ring.lineWidth = ringWidth
-            UIColor.tintColor.setStroke()
+            color.setStroke()
             ring.stroke()
         }.withRenderingMode(.alwaysOriginal)
     }
 
-    private func observeShape() {
+    private func observeAppearance() {
         withObservationTracking {
             _ = settings.appearance.avatarShape
+            _ = settings.accentColor
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor [weak self] in
                 guard let self else { return }
                 changed()
-                observeShape()
+                observeAppearance()
             }
         }
     }

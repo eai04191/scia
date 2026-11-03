@@ -56,7 +56,7 @@ final class ImageCropViewController: UIViewController, StaysForSharedContent {
     private lazy var cropElement = CropAccessibilityElement(accessibilityContainer: canvas)
     private let spinner = UIActivityIndicatorView(style: .medium)
     private let cancelButton = UIButton(configuration: .glass())
-    private let doneButton = UIButton(configuration: .prominentGlass())
+    private let doneButton = TintFollowingButton(configuration: .prominentGlass())
     private let rotateButton = UIButton(configuration: .glass())
     private let aspectButton = UIButton(configuration: .glass())
     private let resetButton = UIButton(configuration: .glass())
@@ -168,6 +168,7 @@ final class ImageCropViewController: UIViewController, StaysForSharedContent {
 
         configure(cancelButton, title: "キャンセル", action: #selector(cancel))
         configure(doneButton, title: "完了", action: #selector(finish))
+        doneButton.followsGlassAccent()
         configure(rotateButton, symbol: "rotate.left", label: "回転", action: #selector(rotate))
         configure(resetButton, title: "リセット", action: #selector(reset))
         configure(aspectButton, symbol: "aspectratio", label: "縦横比", action: nil)

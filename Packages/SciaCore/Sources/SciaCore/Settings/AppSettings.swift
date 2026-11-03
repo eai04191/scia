@@ -28,6 +28,11 @@ public final class AppSettings {
         didSet { defaults.set(insertionMotion.rawValue, forKey: Keys.insertionMotion) }
     }
 
+    /// ボタンやリンクに付けるアクセントカラー。
+    public var accentColor: AccentColorChoice {
+        didSet { defaults.set(accentColor.rawValue, forKey: Keys.accentColor) }
+    }
+
     /// プロフィール画面の「投稿」に、返信とブーストを混ぜるか。どのアカウントのプロフィールにも効かせる。
     public var profilePostsFilter: ProfilePostsFilter {
         didSet {
@@ -294,6 +299,7 @@ public final class AppSettings {
         static let showsStatusBarTicker = "settings.showsStatusBarTicker"
         static let appearanceChoices = "settings.appearanceChoices"
         static let insertionMotion = "settings.insertionMotion"
+        static let accentColor = "settings.accentColor"
         static let profileShowsReplies = "settings.profileShowsReplies"
         static let profileShowsBoosts = "settings.profileShowsBoosts"
         static let linkBrowser = "settings.linkBrowser"
@@ -340,6 +346,7 @@ public final class AppSettings {
         showsStatusBarTicker = defaults.object(forKey: Keys.showsStatusBarTicker) as? Bool ?? true
         appearance = AppearanceChoices(stored: defaults.data(forKey: Keys.appearanceChoices))
         insertionMotion = defaults.string(forKey: Keys.insertionMotion).flatMap(InsertionMotion.init(rawValue:)) ?? .followsSystem
+        accentColor = defaults.string(forKey: Keys.accentColor).flatMap(AccentColorChoice.init(rawValue:)) ?? .blue
         linkBrowser = defaults.string(forKey: Keys.linkBrowser).flatMap(LinkBrowser.init(rawValue:)) ?? .inApp
         inAppBrowserHeight = Self.inAppBrowserHeight(stored: defaults.object(forKey: Keys.inAppBrowserSpaceAbove))
         opensInAppBrowserFullScreen = defaults.bool(forKey: Keys.opensInAppBrowserFullScreen)

@@ -547,6 +547,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             _ = network.usePolicy(settings: settings)
             _ = settings.ignoresUselessAltText
             _ = settings.appearance
+            _ = settings.accentColor.underlinesLinks
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor in
                 guard let self else { return }
@@ -1467,7 +1468,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(scale: .small)
         configuration.imagePadding = 1
         configuration.buttonSize = .small
-        let button = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in
+        let button = TintFollowingButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in
             guard let self else { return }
             // 慣性で動いている途中なら、それまでのスクロールが先に記録されるよう、動かしてから記録する。
             scrollToNewest()
@@ -1477,7 +1478,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         // 色は動的な色で渡さず、前面かどうかが変わったところで決め直す。Macでは、ボタンが色を解決するtintの知らせが、
         // 前面かどうかの変化より先に届くため、動的な色では1回前の状態の色が残り、青い下地に黒い文字になる（issue #1と同じずれ）。
         button.configurationUpdateHandler = { button in
-            button.configuration?.baseForegroundColor = button.traitCollection.activeAppearance == .inactive ? .label : .white
+            (button as? TintFollowingButton)?.appliesGlassAccent()
+            if button.traitCollection.activeAppearance == .inactive {
+                button.configuration?.baseForegroundColor = .label
+            }
         }
         button.registerForTraitChanges([UITraitActiveAppearance.self]) { (button: UIButton, _) in
             button.setNeedsUpdateConfiguration()

@@ -54,7 +54,7 @@ final class PollView: UIView {
     private let footer = UIView()
     private let summaryLabel = UILabel()
     private let secondaryButton = UIButton(configuration: .plain())
-    private let voteButton = UIButton(configuration: .filled())
+    private let voteButton = TintFollowingButton(configuration: .filled())
     private var secondaryTrailing: [NSLayoutConstraint] = []
     private lazy var footerTop = footer.topAnchor.constraint(equalTo: optionsStack.bottomAnchor)
     private var secondaryAction: Action?
@@ -81,6 +81,7 @@ final class PollView: UIView {
         vote.cornerStyle = .capsule
         vote.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14)
         voteButton.configuration = vote
+        voteButton.followsFilledForeground()
         voteButton.setContentCompressionResistancePriority(.required, for: .horizontal)
         voteButton.addAction(UIAction { [weak self] _ in self?.onAction?(.submit) }, for: .primaryActionTriggered)
 
@@ -290,10 +291,15 @@ final class PollOptionView: UIControl {
             view.isUserInteractionEnabled = false
             addSubview(view)
         }
-        // 枠の色はCGColorで、外観が変わっても描き直されないため、変わったら当て直す。
+        // 枠の色はCGColorで、外観やティントカラーが変わっても描き直されないため、変わったら当て直す。
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: Self, _) in
             self.layer.borderColor = UIColor.tintColor.cgColor
         }
+    }
+
+    override func tintColorDidChange() {
+        super.tintColorDidChange()
+        layer.borderColor = tintColor.cgColor
     }
 
     @available(*, unavailable)

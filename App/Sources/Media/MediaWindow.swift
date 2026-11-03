@@ -73,6 +73,7 @@ final class MediaWindowSceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
         let window = UIWindow(windowScene: windowScene)
+        AccentColorTint.follow(window, settings: AppDependencies.settings)
         window.rootViewController = MediaWindowRootController(request: request) {
             UIApplication.shared.requestSceneSessionDestruction(session, options: nil)
         }

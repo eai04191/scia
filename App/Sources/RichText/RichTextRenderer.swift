@@ -8,6 +8,8 @@ struct RichTextRenderer {
     var textColor: UIColor
     var secondaryColor: UIColor = .secondaryLabel
     var linkColor: UIColor = .tintColor
+    /// リンクに下線を引く。アクセントカラーが本文の文字と色で見分けられないときに引く。描く場所ごとに渡さず、設定から読む。
+    var underlinesLinks: Bool = AppDependencies.settings.accentColor.underlinesLinks
     var paragraphSpacing: CGFloat = 0
     /// 行と行のあいだに足す余白。
     var lineSpacing: CGFloat = 0
@@ -205,6 +207,9 @@ struct RichTextRenderer {
         case .link(let text, let destination, let style):
             var attributes = attributes(style: style, block: block)
             attributes[.foregroundColor] = linkColor
+            if underlinesLinks {
+                attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
+            }
             attributes[.linkDestination] = destination
             return NSAttributedString(string: Self.lineSeparated(text), attributes: attributes)
         case .emoji(let emoji):

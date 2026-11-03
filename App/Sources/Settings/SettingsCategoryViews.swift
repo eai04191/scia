@@ -29,7 +29,7 @@ struct SettingsCategoryLabel: View {
     }
 }
 
-/// 表示の分類。投稿と通知の見た目、新着の動き、ステータスバーの通知。
+/// 表示の分類。投稿と通知の見た目、アクセントカラー、新着の動き、ステータスバーの通知。
 struct DisplaySettingsView: View {
     @Bindable var settings: AppSettings
     var body: some View {
@@ -37,6 +37,9 @@ struct DisplaySettingsView: View {
             Section {
                 NavigationLink("投稿", value: SettingsPage.appearance)
                 NavigationLink("通知", value: SettingsPage.notificationAppearance)
+            }
+            Section {
+                AccentColorPicker(selection: $settings.accentColor)
             }
             Section {
                 Picker("最上部での新着の挿入", selection: $settings.insertionMotion) {

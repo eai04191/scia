@@ -176,9 +176,15 @@ private final class AnnouncementReactionButton: UIControl {
         return bounds.insetBy(dx: 0, dy: -extra).contains(point)
     }
 
+    // 枠の色はCGColorで、ティントカラーが変わっても描き直されないため、変わったら当て直す。
+    override func tintColorDidChange() {
+        super.tintColorDidChange()
+        updateColors()
+    }
+
     private func updateColors() {
-        backgroundColor = isMine ? UIColor.tintColor.withAlphaComponent(0.18) : .secondarySystemFill
+        backgroundColor = isMine ? tintColor.withAlphaComponent(0.18) : .secondarySystemFill
         layer.borderWidth = isMine ? 1 : 0
-        layer.borderColor = UIColor.tintColor.withAlphaComponent(0.5).resolvedColor(with: traitCollection).cgColor
+        layer.borderColor = tintColor.withAlphaComponent(0.5).resolvedColor(with: traitCollection).cgColor
     }
 }

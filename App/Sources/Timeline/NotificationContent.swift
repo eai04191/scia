@@ -169,6 +169,9 @@ extension TimelineViewController {
                 header.append(NSAttributedString(string: "と", attributes: phraseAttributes))
                 var linkAttributes = phraseAttributes
                 linkAttributes[.foregroundColor] = UIColor.tintColor
+                if settings.accentColor.underlinesLinks {
+                    linkAttributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
+                }
                 linkAttributes[.groupAccountsLink] = true
                 header.append(NSAttributedString(string: "ほか\((notification.notificationsCount - 1).formatted())人", attributes: linkAttributes))
             }
