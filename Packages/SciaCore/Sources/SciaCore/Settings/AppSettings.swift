@@ -166,11 +166,53 @@ public final class AppSettings {
         defaults.set(item.rawValue, forKey: AccountScopedDefaults.key(Keys.shownTabItem, account: account))
     }
 
-    /// ログアウトしたアカウントの並びと最後に開いた項目を忘れる。保存したキーは`AccountScopedDefaults.removeData`が消す。
+    /// アイコンのアニメーションを再生するか。選ぶまでは、表示しているアカウントのサーバーの設定（`serverAutoplaysAnimations`）に従う。
+    public var animatesAvatars: Bool {
+        get { appearance.animatesAvatars ?? serverAutoplaysAnimations }
+        set { appearance.animatesAvatars = newValue }
+    }
+
+    /// カスタム絵文字のアニメーションを再生するか。選ぶまでは、表示しているアカウントのサーバーの設定（`serverAutoplaysAnimations`）に従う。
+    public var animatesCustomEmojis: Bool {
+        get { appearance.animatesCustomEmojis ?? serverAutoplaysAnimations }
+        set { appearance.animatesCustomEmojis = newValue }
+    }
+
+    /// 表示しているアカウントの、サーバーの設定「アニメーションGIFを自動再生する」（`reading:autoplay:gifs`）。
+    /// 設定は端末に1つなので、窓を分けて別のアカウントを開いているときは、最後に表示を始めたアカウントの値になる。
+    /// 読めた値を覚えていないアカウントでは、Mastodonの既定と同じくfalseにする。
+    public private(set) var serverAutoplaysAnimations = false
+    @ObservationIgnored private var animationAccount: String?
+    /// アカウントごとに覚えた、サーバーの「アニメーションGIFを自動再生する」。キーはアカウントのハンドル。
+    /// 起動のたびに既定から始めて、読めたところで動き出さないよう、読めた値を覚えておき、表示を始めるときに使う。
+    @ObservationIgnored private var serverAnimationAutoplays: [String: Bool]
+
+    /// 表示を始めるアカウントの、覚えたサーバーの値に従う。
+    public func followServerAnimations(of account: String) {
+        animationAccount = account
+        serverAutoplaysAnimations = serverAnimationAutoplays[account] ?? false
+    }
+
+    /// 読めたサーバーの値を覚える。表示しているアカウントの値なら、すぐ従う。
+    public func rememberServerAnimations(_ autoplays: Bool, of account: String) {
+        if serverAnimationAutoplays[account] != autoplays {
+            serverAnimationAutoplays[account] = autoplays
+            defaults.set(autoplays, forKey: AccountScopedDefaults.key(Keys.serverAutoplaysAnimations, account: account))
+        }
+        if animationAccount == account, serverAutoplaysAnimations != autoplays {
+            serverAutoplaysAnimations = autoplays
+        }
+    }
+
+    /// ログアウトしたアカウントの並び、最後に開いた項目、覚えたサーバーの値を忘れる。保存したキーは`AccountScopedDefaults.removeData`が消す。
     func forgetAccount(_ account: String) {
         tabLayouts[account] = nil
         switchTabItems[account] = nil
         shownTabItems[account] = nil
+        serverAnimationAutoplays[account] = nil
+        if animationAccount == account {
+            serverAutoplaysAnimations = false
+        }
     }
 
     /// 投稿を長押しして出すメニューの並び。通知のメニューもこれで組む。
@@ -325,6 +367,7 @@ public final class AppSettings {
         static let tabLayout = "tabLayout"
         static let switchTabItem = "switchTabItem"
         static let shownTabItem = "shownTabItem"
+        static let serverAutoplaysAnimations = "serverAutoplaysAnimations"
         static let hidesEmptyComposeBar = "settings.hidesEmptyComposeBar"
         static let keepsComposeBarOpen = "settings.keepsComposeBarOpen"
         static let showsTabMenuCustomize = "settings.showsTabMenuCustomize"
@@ -369,6 +412,7 @@ public final class AppSettings {
         tabLayouts = AccountScopedDefaults.accountValues(named: Keys.tabLayout, in: defaults).compactMapValues { ($0 as? [String]).map(MenuLayout.init(tokens:)) }
         switchTabItems = AccountScopedDefaults.accountValues(named: Keys.switchTabItem, in: defaults).compactMapValues { ($0 as? String).flatMap(TabItem.init(rawValue:)) }
         shownTabItems = AccountScopedDefaults.accountValues(named: Keys.shownTabItem, in: defaults).compactMapValues { ($0 as? String).flatMap(TabItem.init(rawValue:)) }
+        serverAnimationAutoplays = AccountScopedDefaults.accountValues(named: Keys.serverAutoplaysAnimations, in: defaults).compactMapValues { $0 as? Bool }
         hidesEmptyComposeBar = defaults.object(forKey: Keys.hidesEmptyComposeBar) as? Bool ?? false
         keepsComposeBarOpen = defaults.object(forKey: Keys.keepsComposeBarOpen) as? Bool ?? keepsComposeBarOpenByDefault
         showsTabMenuCustomize = defaults.object(forKey: Keys.showsTabMenuCustomize) as? Bool ?? true
@@ -418,8 +462,6 @@ private enum AppearanceDefaults {
     static let stacksNameParts = false
     static let showsTime = true
     static let showsLinkCardImage = true
-    static let animatesAvatars = false
-    static let animatesCustomEmojis = true
     static let drawsReactionGlowInHDR = true
     static let reactionGlowIcons: ReactionGlowIcons = .none
     static let reactionGlowFillsWidthWhenAlone = false

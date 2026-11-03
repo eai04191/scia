@@ -22,7 +22,7 @@ struct AccountScopedDefaultsTests {
         return (try #require(UserDefaults(suiteName: suite)), suite)
     }
 
-    /// ログアウトしたら、そのアカウントのために覚えた値（最近のメンション、タブの並び、最後に開いたタブ）を全部消す。
+    /// ログアウトしたら、そのアカウントのために覚えた値（最近のメンション、タブの並び、最後に開いたタブ、覚えたサーバーのアニメーションの設定）を全部消す。
     /// サーバーごとの値（最近使った絵文字、処理できない形式）は、同じサーバーのアカウントが残っている間は残し、いなくなったら消す。
     /// ホスト名にも「.」が入るため、名前が前に一致する別のサーバーのアカウントとサーバーの値を巻き込まない。
     @Test func keepsDataOfServerWhoseNameStartsTheSame() throws {
@@ -49,6 +49,7 @@ struct AccountScopedDefaultsTests {
             settings.setTabLayout(MenuLayout(tokens: ["home", "notifications"]), for: account.handle)
             settings.setSwitchTabItem(.notifications, for: account.handle)
             settings.setShownTabItem(.local, for: account.handle)
+            settings.rememberServerAnimations(true, of: account.handle)
         }
         RecentEmojis(defaults: defaults, instance: alice.instance).record("blobcat")
         UnprocessableMediaFormats(defaults: defaults, instance: alice.instance).record("image/heic", serverVersion: "4.7.3", date: Date(timeIntervalSince1970: 1_800_000_000))
@@ -64,6 +65,8 @@ struct AccountScopedDefaultsTests {
         // 消したアカウントの値は、作り直した設定にも戻らない。
         #expect(AppSettings(defaults: defaults).switchTabItem(for: alice.handle) == nil)
         #expect(AppSettings(defaults: defaults).shownTabItem(for: alice.handle) == nil)
+        settings.followServerAnimations(of: alice.handle)
+        #expect(!settings.animatesCustomEmojis)
         // 残ったアカウントと、そのサーバーの値は残す。
         #expect(RecentMentions(defaults: defaults, account: bob.handle).mentions.map(\.id) == ["9"])
         #expect(AppSettings(defaults: defaults).switchTabItem(for: bob.handle) == .notifications)

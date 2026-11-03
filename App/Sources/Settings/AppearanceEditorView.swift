@@ -179,7 +179,7 @@ struct AppearanceGroupEditorView: View {
         case "avatar":
             PopUpChoiceRow(title: "形", selection: $settings.appearance.avatarShape, options: [(.circle, "円"), (.roundedSquare, "角丸の四角")], onOpen: { focus(.avatarShape) }, onTapTitle: { toggleFocus(.choice(.avatarShape)) })
             TitledToggleRow(title: "縁取りを出す", isOn: $settings.appearance.showsAvatarBorder) { toggleFocus(.choice(.showsAvatarBorder)) }
-            TitledToggleRow(title: "アニメーションを再生する", isOn: $settings.appearance.animatesAvatars) { toggleFocus(.choice(.animatesAvatars)) }
+            TitledToggleRow(title: "アニメーションを再生する", isOn: $settings.animatesAvatars) { toggleFocus(.choice(.animatesAvatars)) }
             TitledToggleRow(title: "アイコンの下を空けない", isOn: $settings.appearance.wrapsBelowAvatar) { toggleFocus(.choice(.wrapsBelowAvatar)) }
             // アイコンの下を空けないときは、線の通る場所に本文などが入るので、線を出さない。
             TitledToggleRow(title: "返信をつなぐ線を出す", isOn: $settings.appearance.showsReplyLines) { toggleFocus(.choice(.showsReplyLines)) }
@@ -200,7 +200,7 @@ struct AppearanceGroupEditorView: View {
                 options: [(.automatic, "自動"), (.japanese, "日本語"), (.simplifiedChinese, "簡体字中国語"), (.traditionalChinese, "繁体字中国語"), (.korean, "韓国語")]
             , onOpen: { focus(.glyphLanguage) }, onTapTitle: { toggleFocus(.choice(.glyphLanguage)) })
             PopUpChoiceRow(title: "絵文字", selection: $settings.appearance.emojiStyle, options: [(.system, "Apple"), (.twemoji, "Twemoji")], onOpen: { focus(.emojiStyle) }, onTapTitle: { toggleFocus(.choice(.emojiStyle)) })
-            TitledToggleRow(title: "カスタム絵文字のアニメーションを再生する", isOn: $settings.appearance.animatesCustomEmojis) { toggleFocus(.choice(.animatesCustomEmojis)) }
+            TitledToggleRow(title: "カスタム絵文字のアニメーションを再生する", isOn: $settings.animatesCustomEmojis) { toggleFocus(.choice(.animatesCustomEmojis)) }
         case "media":
             PopUpChoiceRow(title: "並べ方", selection: $settings.appearance.mediaArrangement, options: [(.belowBody, "本文の下に大きく"), (.besideBody, "本文の右に小さく")], onOpen: { focus(.mediaArrangement) }, onTapTitle: { toggleFocus(.choice(.mediaArrangement)) })
             PopUpChoiceRow(title: "引用", selection: $settings.appearance.embedMediaArrangement, options: [(.sameAsPost, "投稿と同じ"), (.besideBody, "本文の右に小さく"), (.belowBody, "本文の下に大きく")], onOpen: { focus(.embedMediaArrangement) }, onTapTitle: { toggleFocus(.choice(.embedMediaArrangement)) })

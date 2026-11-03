@@ -871,7 +871,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
             let fadeWidth = AppDependencies.tuning.value(of: TuningCatalog.statusBarTickerFadeWidth)
             nameLabel.fadeWidth = fadeWidth
             subjectLabel.fadeWidth = fadeWidth
-            let animatedEmojis = settings.appearance.animatesCustomEmojis ? AppDependencies.emojiImages : nil
+            let animatedEmojis = settings.animatesCustomEmojis ? AppDependencies.emojiImages : nil
             nameLabel.emojiImages = animatedEmojis
             subjectLabel.emojiImages = animatedEmojis
             // 文字はステータスバーの高さに収めるため、大きさを決め打ちする。文字を大きくする設定では、拡大表示で読む。

@@ -156,7 +156,7 @@ final class AnnouncementsViewController: UIViewController {
         let anchor = readingAnchor(keeping: Set(items.compactMap { item in
             if case .announcement(let announcement, _) = item { announcement.id } else { nil }
         }))
-        let animatedEmojis = settings.appearance.animatesCustomEmojis ? emojiImages : nil
+        let animatedEmojis = settings.animatesCustomEmojis ? emojiImages : nil
         var views: [UIView] = []
         var used: [Announcement.ID: AnnouncementEntryView] = [:]
         for item in items {

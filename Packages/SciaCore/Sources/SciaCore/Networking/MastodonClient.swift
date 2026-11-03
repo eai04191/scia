@@ -281,12 +281,14 @@ public struct MastodonClient: Sendable {
             let sensitive: Bool?
             let expandsSpoilers: Bool?
             let language: String?
+            let autoplaysAnimations: Bool?
 
             private enum CodingKeys: String, CodingKey {
                 case visibility = "posting:default:visibility"
                 case sensitive = "posting:default:sensitive"
                 case language = "posting:default:language"
                 case expandsSpoilers = "reading:expand:spoilers"
+                case autoplaysAnimations = "reading:autoplay:gifs"
             }
         }
         // キーにコロンを含むため、スネークケースからの変換を通さずに読む。
@@ -299,7 +301,8 @@ public struct MastodonClient: Sendable {
             defaultVisibility: preferences.visibility ?? .public,
             defaultSensitive: preferences.sensitive ?? false,
             expandsSpoilers: preferences.expandsSpoilers ?? false,
-            defaultLanguage: preferences.language.flatMap { $0.isEmpty ? nil : $0 }
+            defaultLanguage: preferences.language.flatMap { $0.isEmpty ? nil : $0 },
+            autoplaysAnimations: preferences.autoplaysAnimations ?? false
         )
     }
 

@@ -453,9 +453,9 @@ struct MastodonClientTests {
     }
 
     @Test func readsPreferences() async throws {
-        let transport = StubTransport([.json(#"{"posting:default:visibility":"unlisted","posting:default:sensitive":true,"posting:default:language":null,"reading:expand:media":"default","reading:expand:spoilers":true}"#, statusCode: 200)])
+        let transport = StubTransport([.json(#"{"posting:default:visibility":"unlisted","posting:default:sensitive":true,"posting:default:language":null,"reading:expand:media":"default","reading:expand:spoilers":true,"reading:autoplay:gifs":true}"#, statusCode: 200)])
 
-        #expect(try await makeClient(transport).preferences() == ServerPreferences(defaultVisibility: .unlisted, defaultSensitive: true, expandsSpoilers: true))
+        #expect(try await makeClient(transport).preferences() == ServerPreferences(defaultVisibility: .unlisted, defaultSensitive: true, expandsSpoilers: true, autoplaysAnimations: true))
         #expect(await transport.requests.first?.url?.path() == "/api/v1/preferences")
     }
 
@@ -476,7 +476,7 @@ struct MastodonClientTests {
     @Test func missingPreferencesUseMastodonDefaults() async throws {
         let transport = StubTransport([.json("{}", statusCode: 200)])
 
-        #expect(try await makeClient(transport).preferences() == ServerPreferences(defaultVisibility: .public, defaultSensitive: false, expandsSpoilers: false))
+        #expect(try await makeClient(transport).preferences() == ServerPreferences(defaultVisibility: .public, defaultSensitive: false, expandsSpoilers: false, autoplaysAnimations: false))
     }
 
     @Test func instanceConfigurationReadsStatusLimits() async throws {

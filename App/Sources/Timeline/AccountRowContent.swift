@@ -140,7 +140,7 @@ extension TimelineViewController {
             avatarSpacing: settings.value(of: AppearanceCatalog.avatarSpacing),
             nameFadeWidth: settings.value(of: AppearanceCatalog.nameFadeWidth),
             avatarImages: avatarImages,
-            emojiImages: settings.appearance.animatesCustomEmojis ? emojiImages : nil
+            emojiImages: settings.animatesCustomEmojis ? emojiImages : nil
         )
     }
 

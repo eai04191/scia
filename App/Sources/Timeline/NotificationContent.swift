@@ -196,7 +196,7 @@ extension TimelineViewController {
             ),
             mediaImages: mediaImages,
             avatarImages: avatarImages,
-            emojiImages: settings.appearance.animatesCustomEmojis ? emojiImages : nil
+            emojiImages: settings.animatesCustomEmojis ? emojiImages : nil
         )
         if appearance.phrase.includesName {
             configuration.accountName = notification.account.displayNameOrUsername

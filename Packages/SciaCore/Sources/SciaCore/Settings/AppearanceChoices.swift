@@ -56,9 +56,11 @@ public struct AppearanceChoices: Codable, Hashable, Sendable {
     /// リンクカードに画像を出す。
     public var showsLinkCardImage = true
     /// 一覧で、GIFなどのアニメーションするアイコンを動かす。オフなら最初のコマで止めた版を読む。
-    public var animatesAvatars = false
+    /// 選んでいなければnilで、サーバーの設定に従う（`AppSettings.animatesAvatars`）。
+    public var animatesAvatars: Bool?
     /// GIFやAPNGのアニメーションするカスタム絵文字を動かす。オフなら最初のコマで止めた版を描く。
-    public var animatesCustomEmojis = true
+    /// 選んでいなければnilで、サーバーの設定に従う（`AppSettings.animatesCustomEmojis`）。
+    public var animatesCustomEmojis: Bool?
     /// お気に入りとブーストの光を、HDRで描ける画面では白より明るく光らせる。オフならSDRで描く。
     /// メディアの明るさの設定（`mediaDynamicRange`）はメディアに対するものなので、光はそれに従わせず、ここで別に選ぶ。
     public var drawsReactionGlowInHDR = true
@@ -98,7 +100,9 @@ public struct AppearanceChoices: Codable, Hashable, Sendable {
             return
         }
         var kept = base
-        for (key, value) in saved where kept[key] != nil {
+        // 既定ではnilの項目は既定の値のJSONに出ないので、読む項目はプロパティの名前で決める。
+        let fields = Set(Mirror(reflecting: fallback).children.compactMap(\.label))
+        for (key, value) in saved where fields.contains(key) {
             var trial = kept
             trial[key] = value
             if Self.decode(trial) != nil {

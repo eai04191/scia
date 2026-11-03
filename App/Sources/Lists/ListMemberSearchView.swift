@@ -87,7 +87,7 @@ struct ListMemberSearchView: View {
             RowLayout {
                 AvatarImage(url: account.avatarStatic ?? account.avatar, shape: settings.appearance.avatarShape)
             } title: {
-                RichTextLabel(numberOfLines: 1, emojiImages: emojiImages, animatesEmojis: settings.appearance.animatesCustomEmojis, fadesTail: true) {
+                RichTextLabel(numberOfLines: 1, emojiImages: emojiImages, animatesEmojis: settings.animatesCustomEmojis, fadesTail: true) {
                     RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
                         .render(.plain(account.displayNameOrUsername, emojis: account.emojis))
                 }

@@ -199,7 +199,7 @@ final class CustomEmojiMenus {
     /// サブメニューのアイコン。動く絵文字は、動かす設定なら動く画像にする。画像がまだ届いていなければnil。
     func icon(for emoji: CustomEmoji) -> UIImage? {
         guard let timeline else { return nil }
-        let animation = timeline.settings.appearance.animatesCustomEmojis && AnimatedImagePlayback.isAllowed ? timeline.emojiImages.animation(for: emoji.url) : nil
+        let animation = timeline.settings.animatesCustomEmojis && AnimatedImagePlayback.isAllowed ? timeline.emojiImages.animation(for: emoji.url) : nil
         return animation.flatMap { TimelineViewController.animatedMenuIcon($0.image) } ?? images[emoji.staticUrl].map(TimelineViewController.menuIcon)
     }
 

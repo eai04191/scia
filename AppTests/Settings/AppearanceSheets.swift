@@ -164,7 +164,7 @@ struct AppearanceSheets {
         case .avatarShape:
             settings.appearance.avatarShape = settings.appearance.avatarShape == .circle ? .roundedSquare : .circle
             return "→ \(settings.appearance.avatarShape)"
-        case .animatesAvatars: return flip(\.appearance.animatesAvatars)
+        case .animatesAvatars: return flip(\.animatesAvatars)
         case .nameStyle:
             settings.appearance.statusNameStyle = .acctAndName
             return "→ ハンドル、名前"
@@ -177,7 +177,7 @@ struct AppearanceSheets {
         case .emojiStyle:
             settings.appearance.emojiStyle = .twemoji
             return "→ Twemoji"
-        case .animatesCustomEmojis: return flip(\.appearance.animatesCustomEmojis)
+        case .animatesCustomEmojis: return flip(\.animatesCustomEmojis)
         case .linkCardThumbnailSide:
             settings.appearance.linkCardThumbnailSide = .right
             return "→ 右"

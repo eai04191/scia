@@ -569,7 +569,8 @@ final class SessionController {
         composer.onLinkTitleLoadingChange = { [weak self] in self?.linkTitleActivityDidChange() }
         composer.onLinkTitleFailed = { [weak self] failure in self?.linkTitleDidFail(failure) }
         session.onCredentialsInvalid = { [weak self] in self?.credentialsDidBecomeInvalid() }
-        session.onPreferencesLoad = { [weak self] preferences in
+        session.onPreferencesLoad = { [weak self, handle = credential.handle] preferences in
+            AppDependencies.settings.rememberServerAnimations(preferences.autoplaysAnimations, of: handle)
             for timeline in self?.timelines.allObjects ?? [] {
                 timeline.spoilerExpansion.expandsByDefault = preferences.expandsSpoilers
             }
@@ -3021,7 +3022,9 @@ final class SessionController {
         loadServerVersion()
         loadTabSources()
         announcements.start()
-        // 注意書きを最初から開いておくかを一覧に反映する。読めなければ折りたたんだままにし、次に投稿欄で書き始めたときに読み直す。
+        // アニメーションを再生するかは、読み直すまで、前に読めたサーバーの値で描く。
+        AppDependencies.settings.followServerAnimations(of: credential.handle)
+        // 注意書きを最初から開いておくかと、アニメーションを再生するかを一覧に反映する。読めなければ前の値のままにし、次に投稿欄で書き始めたときに読み直す。
         tasks.run(.display) { [session] in await session.loadPreferences() }
     }
 

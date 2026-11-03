@@ -106,7 +106,7 @@ struct PostContentBuilder {
             statusID: shown.id,
             mediaImages: mediaImages,
             avatarImages: avatarImages,
-            emojiImages: settings.appearance.animatesCustomEmojis ? emojiImages : nil
+            emojiImages: settings.animatesCustomEmojis ? emojiImages : nil
         )
         configuration.reactionGlow = reactionGlow(for: shown)
         configuration.showsReplyLines = settings.appearance.showsReplyLines
@@ -147,9 +147,9 @@ struct PostContentBuilder {
 
     func avatarContent(of account: Account) -> AvatarView.Content {
         AvatarView.Content(
-            url: settings.appearance.animatesAvatars ? account.avatar : account.avatarStatic,
+            url: settings.animatesAvatars ? account.avatar : account.avatarStatic,
             shape: settings.appearance.avatarShape,
-            animates: settings.appearance.animatesAvatars,
+            animates: settings.animatesAvatars,
             cornerRatio: settings.value(of: AppearanceCatalog.avatarCornerRatio),
             showsBorder: settings.appearance.showsAvatarBorder
         )

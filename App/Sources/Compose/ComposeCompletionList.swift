@@ -392,7 +392,7 @@ private struct CompletionRowView: View {
             RowLayout {
                 AvatarImage(url: account.avatarStatic ?? account.avatar, shape: model.settings.appearance.avatarShape)
             } title: {
-                RichTextLabel(numberOfLines: 1, emojiImages: model.emojiImages, animatesEmojis: model.settings.appearance.animatesCustomEmojis, fadesTail: true) { [model] in
+                RichTextLabel(numberOfLines: 1, emojiImages: model.emojiImages, animatesEmojis: model.settings.animatesCustomEmojis, fadesTail: true) { [model] in
                     RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, emojiImages: model.emojiImages, language: model.settings.glyphLanguageIdentifier())
                         .render(.plain(account.displayNameOrUsername, emojis: account.emojis))
                 }
@@ -410,7 +410,7 @@ private struct CompletionRowView: View {
             RowLayout {
                 AvatarImage(url: mention.avatar, shape: model.settings.appearance.avatarShape)
             } title: {
-                RichTextLabel(numberOfLines: 1, emojiImages: model.emojiImages, animatesEmojis: model.settings.appearance.animatesCustomEmojis, fadesTail: true) { [model] in
+                RichTextLabel(numberOfLines: 1, emojiImages: model.emojiImages, animatesEmojis: model.settings.animatesCustomEmojis, fadesTail: true) { [model] in
                     RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, emojiImages: model.emojiImages, language: model.settings.glyphLanguageIdentifier())
                         .render(.plain(mention.displayNameOrUsername, emojis: mention.emojis))
                 }
@@ -452,7 +452,7 @@ private struct CompletionRowView: View {
             .accessibilityLabel("ハッシュタグ \(hashtag.name)、\(note)")
         case .emoji(let emoji):
             RowLayout {
-                EmojiImage(url: emoji.staticUrl, animationURL: model.settings.appearance.animatesCustomEmojis ? emoji.url : nil, store: model.emojiImages)
+                EmojiImage(url: emoji.staticUrl, animationURL: model.settings.animatesCustomEmojis ? emoji.url : nil, store: model.emojiImages)
             } title: {
                 Text(":\(emoji.shortcode):").fadingTail(of: emoji.shortcode)
             }

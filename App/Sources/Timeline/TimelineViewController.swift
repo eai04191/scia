@@ -547,6 +547,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             _ = network.usePolicy(settings: settings)
             _ = settings.ignoresUselessAltText
             _ = settings.appearance
+            // アニメーションを再生するかは、選ぶまでサーバーの値に従うため、読めた値が変わったときも描き直す。
+            _ = settings.serverAutoplaysAnimations
             _ = settings.accentColor.underlinesLinks
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor in

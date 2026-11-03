@@ -9,11 +9,14 @@ public struct ServerPreferences: Sendable, Equatable {
     public var expandsSpoilers: Bool
     /// 新しく投稿するときの言語のコード。決めていなければnil。
     public var defaultLanguage: String?
+    /// アイコンやカスタム絵文字などのアニメーションを自動で再生するか（「アニメーションGIFを自動再生する」）。
+    public var autoplaysAnimations: Bool
 
-    public init(defaultVisibility: Status.Visibility, defaultSensitive: Bool, expandsSpoilers: Bool, defaultLanguage: String? = nil) {
+    public init(defaultVisibility: Status.Visibility, defaultSensitive: Bool, expandsSpoilers: Bool, defaultLanguage: String? = nil, autoplaysAnimations: Bool = false) {
         self.defaultVisibility = defaultVisibility
         self.defaultSensitive = defaultSensitive
         self.expandsSpoilers = expandsSpoilers
         self.defaultLanguage = defaultLanguage
+        self.autoplaysAnimations = autoplaysAnimations
     }
 }

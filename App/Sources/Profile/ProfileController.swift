@@ -447,8 +447,8 @@ final class ProfileController {
             tab: store.tab,
             postsFilter: store.postsFilter,
             avatarShape: settings.appearance.avatarShape,
-            animatesAvatar: settings.appearance.animatesAvatars,
-            animatesCustomEmojis: settings.appearance.animatesCustomEmojis,
+            animatesAvatar: settings.animatesAvatars,
+            animatesCustomEmojis: settings.animatesCustomEmojis,
             glyphLanguage: settings.glyphLanguageIdentifier(),
             // ローカルのアカウントのacctには@以降が付かない。
             isRemote: account.acct.contains("@"),
@@ -475,8 +475,8 @@ final class ProfileController {
                 accounts: isRevealed ? store.endorsements : [],
                 hasMore: store.hasMoreEndorsements,
                 avatarShape: settings.appearance.avatarShape,
-                animatesAvatars: settings.appearance.animatesAvatars,
-                animatesCustomEmojis: settings.appearance.animatesCustomEmojis,
+                animatesAvatars: settings.animatesAvatars,
+                animatesCustomEmojis: settings.animatesCustomEmojis,
                 glyphLanguage: settings.glyphLanguageIdentifier()
             )
         )

@@ -152,9 +152,50 @@ struct AppSettingsTests {
         #expect(settings.appearance.linkCardThumbnailSide == .left)
         #expect(settings.appearance.glyphLanguage == .automatic)
         #expect(settings.appearance.emojiStyle == .system)
-        // 一覧でたくさん動くと読みにくいため、既定では止める。
-        #expect(!settings.appearance.animatesAvatars)
-        #expect(settings.appearance.animatesCustomEmojis)
+        // 選ぶまではサーバーの値に従い、サーバーの値が分からないうちは、Mastodonの既定と同じく止める。
+        #expect(settings.appearance.animatesAvatars == nil)
+        #expect(settings.appearance.animatesCustomEmojis == nil)
+        #expect(!settings.animatesAvatars)
+        #expect(!settings.animatesCustomEmojis)
+    }
+
+    /// アイコンとカスタム絵文字のアニメーションは、選ぶまでは表示しているアカウントのサーバーの値に従い、選んだらその値を使う。
+    @Test func animationsFollowServerUntilChosen() throws {
+        let settings = AppSettings(defaults: try makeDefaults())
+        settings.followServerAnimations(of: "alice@example.social")
+        settings.rememberServerAnimations(true, of: "alice@example.social")
+        #expect(settings.animatesAvatars)
+        #expect(settings.animatesCustomEmojis)
+
+        settings.animatesCustomEmojis = false
+        #expect(settings.appearance.animatesCustomEmojis == false)
+        #expect(!settings.animatesCustomEmojis)
+        #expect(settings.animatesAvatars)
+
+        // 既定に戻すと、選んだ値を忘れてサーバーの値に戻る。
+        settings.resetAppearance()
+        #expect(settings.animatesCustomEmojis)
+    }
+
+    /// サーバーの値はアカウントごとに覚え、次に表示を始めたときは読み直す前から覚えた値で描く。
+    /// 表示していないアカウントの値を読んでも、表示しているアカウントの値は変えない。
+    @Test func remembersServerAnimationsPerAccount() throws {
+        let defaults = try makeDefaults()
+        let settings = AppSettings(defaults: defaults)
+        settings.followServerAnimations(of: "alice@example.social")
+        settings.rememberServerAnimations(true, of: "alice@example.social")
+        settings.rememberServerAnimations(false, of: "bob@example.social")
+        #expect(settings.animatesCustomEmojis)
+
+        settings.followServerAnimations(of: "bob@example.social")
+        #expect(!settings.animatesCustomEmojis)
+
+        let relaunched = AppSettings(defaults: defaults)
+        #expect(!relaunched.animatesCustomEmojis)
+        relaunched.followServerAnimations(of: "alice@example.social")
+        #expect(relaunched.animatesCustomEmojis)
+        relaunched.followServerAnimations(of: "carol@example.social")
+        #expect(!relaunched.animatesCustomEmojis)
     }
 
     @Test func persistsStatusDisplay() throws {
@@ -176,8 +217,8 @@ struct AppSettingsTests {
         #expect(restored.appearance.linkCardThumbnailSide == .right)
         #expect(restored.appearance.glyphLanguage == .traditionalChinese)
         #expect(restored.appearance.emojiStyle == .twemoji)
-        #expect(restored.appearance.animatesAvatars)
-        #expect(!restored.appearance.animatesCustomEmojis)
+        #expect(restored.appearance.animatesAvatars == true)
+        #expect(restored.appearance.animatesCustomEmojis == false)
     }
 
     /// 新着の挿入は、既定では端末の「視差効果を減らす」に従い、選び直した値は起動し直しても残る。
@@ -383,6 +424,16 @@ struct AppSettingsTests {
 
         #expect(!choices.showsTime)
         #expect(choices.avatarShape == .circle)
+        #expect(choices.statusNameStyle == AppearanceChoices().statusNameStyle)
+    }
+
+    /// 既定ではnilの項目（選ぶまでサーバーの値に従うアニメーション）も、ほかの項目が読めないときに、保存した値のまま読む。
+    @Test func appearanceChoicesKeepOptionalFieldsWhenOtherFieldsAreUnreadable() throws {
+        let data = Data(#"{"statusNameStyle":"removedStyle","animatesAvatars":true,"animatesCustomEmojis":false}"#.utf8)
+        let choices = AppearanceChoices(stored: data)
+
+        #expect(choices.animatesAvatars == true)
+        #expect(choices.animatesCustomEmojis == false)
         #expect(choices.statusNameStyle == AppearanceChoices().statusNameStyle)
     }
 
