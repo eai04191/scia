@@ -121,6 +121,75 @@ struct AppearanceEditorTests {
         }
     }
 
+    /// 分類を1つだけ開いたときの見本でも、その分類のどの項目も場所を示せる。
+    @Test(arguments: AppearanceCatalog.groups.map(\.id))
+    func groupSamplesShowTheirItems(group: AppearanceGroup.ID) throws {
+        let rows = layOutSamples(try makeSettings(), groups: [group])
+        let values = try #require(AppearanceCatalog.groups.first { $0.id == group }).values
+        for item in values {
+            let highlight = try #require(AppearanceHighlight(item), "\(item.id)に示す場所がありません")
+            #expect(highlight.locate(in: rows) != nil, "\(item.id)の場所が\(group)の見本にありません")
+        }
+        for choice in Self.choices[group] ?? [] {
+            #expect(choice.highlight.locate(in: rows) != nil, "\(choice)の場所が\(group)の見本にありません")
+        }
+    }
+
+    /// 分類ごとの、選んで決める項目。`AppearanceEditorView.choices(of:)`に並べたものと同じにする。
+    private static let choices: [AppearanceGroup.ID: [AppearanceChoice]] = [
+        "row": [.showsSeparators],
+        "context": [.contextNameStyle, .showsContextSymbol, .showsBoosterAvatar, .showsReplyLabel],
+        "avatar": [.avatarShape, .showsAvatarBorder, .animatesAvatars, .wrapsBelowAvatar, .showsReplyLines],
+        "name": [.nameStyle, .stacksNameParts, .timeStyle, .boldsName, .showsTime, .showsVisibilitySymbol, .showsEditedMark],
+        "body": [.glyphLanguage, .emojiStyle, .animatesCustomEmojis],
+        "media": [.mediaArrangement, .embedMediaArrangement, .tiltsStackedPhotos, .showsMediaBadges],
+        "linkCard": [.showsLinkCard, .boldsLinkCardTitle, .showsLinkCardImage, .linkCardThumbnailSide, .showsLinkCardSite],
+        "reactionGlow": [.drawsReactionGlowInHDR, .reactionGlowIcons, .reactionGlowFillsWidthWhenAlone, .reactionGlowLightFavouriteColor],
+    ]
+
+    /// 分類ごとの選んで決める項目の一覧に、漏れがない。
+    @Test func groupChoicesCoverEveryChoice() {
+        #expect(Set(Self.choices.values.joined()) == Set(AppearanceChoice.allCases))
+    }
+
+    /// どの分類も開いていなければ、見本は1件だけにする。
+    @Test func closedGroupsShowOneSample() throws {
+        let samples = AppearanceSamples(settings: try makeSettings(), tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
+        #expect(samples.configurations(colorScheme: .light, revision: 0, groups: []).count == 1)
+    }
+
+    /// 返信でつながった相手の見本を出さないときは、つながりの線を引かない。出すときは引く。
+    @Test func replyConnectionNeedsBothSamples() throws {
+        let samples = AppearanceSamples(settings: try makeSettings(), tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
+        // 本文の見本には、返信でつながった2件のうち、上の投稿だけが入る。
+        let body = samples.configurations(colorScheme: .light, revision: 0, groups: ["body"])
+        #expect(!body.contains { $0.replyConnection.above || $0.replyConnection.below })
+        let avatar = samples.configurations(colorScheme: .light, revision: 0, groups: ["avatar"])
+        #expect(avatar.contains { $0.replyConnection.below })
+        #expect(avatar.contains { $0.replyConnection.above })
+    }
+
+    /// 見本の高さは、高さを合わせ直すきっかけが変わったときに渡し直し、値を変えて高さが変わっても渡さない。
+    @Test func fitsHeightOnlyWhenFitRevisionChanges() async throws {
+        let settings = try makeSettings()
+        let samples = AppearanceSamples(settings: settings, tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
+        let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: 400))
+        var heights: [CGFloat] = []
+        preview.onFitHeight = { heights.append($0) }
+        func apply(fitRevision: Int) {
+            preview.apply(samples.configurations(colorScheme: .light, revision: 0, groups: ["body"]), highlight: nil, fitRevision: fitRevision)
+            preview.layoutIfNeeded()
+        }
+        apply(fitRevision: 0)
+        settings.setValue(40, for: AppearanceCatalog.bodyText)
+        apply(fitRevision: 0)
+        settings.setValue(20, for: AppearanceCatalog.bodyText)
+        apply(fitRevision: 1)
+        // 渡すのは並べ終えたあとなので、2回目が届くまで待つ。値を変えたときに渡していれば、2回目はその高さになる。
+        try await waitUntil { heights.count >= 2 }
+        #expect(heights[1] == preview.contentHeight)
+    }
+
     /// 2×2に並べたサムネイルでは、横の2つと縦の2つのすき間を示し、斜めの組は示さない。
     @Test func gapsBetweenTiles() {
         let tiles = [
@@ -335,10 +404,10 @@ struct AppearanceEditorTests {
     }
 
     /// 見本の行を幅402で並べ、行ごとの部品の枠を返す。
-    private func layOutSamples(_ settings: AppSettings) -> [AppearancePreviewFrames] {
+    private func layOutSamples(_ settings: AppSettings, groups: Set<AppearanceGroup.ID>? = nil) -> [AppearancePreviewFrames] {
         let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: 6_000))
         let samples = AppearanceSamples(settings: settings, tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
-        preview.apply(samples.configurations(colorScheme: .light, revision: 0), highlight: nil)
+        preview.apply(samples.configurations(colorScheme: .light, revision: 0, groups: groups), highlight: nil)
         preview.layoutIfNeeded()
         return preview.rowFrames()
     }

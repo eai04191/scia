@@ -2,103 +2,221 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 「投稿の見た目」。上にプレビューを固定し、下に投稿の部品ごとの項目を、投稿の上から下への並びで置く。
-/// 項目を触っている間は、プレビューでその場所を示す。プレビューの部品をタップすると、その部品の項目を開く。
+/// 「投稿の見た目」。上にプレビューを固定し、下に投稿の部品ごとの分類を、投稿の上から下への並びで置く。
+/// 分類を押すと、その分類の画面（`AppearanceGroupEditorView`）を重ねる。プレビューの部品をタップすると、その部品の項目の分類の画面を重ね、その場所を示す。
 struct AppearanceEditorView: View {
     @Bindable var settings: AppSettings
-    private let tuning: TuningStore
     @State private var samples: AppearanceSamples
     /// カスタム絵文字の画像が届いたら、プレビューを描き直す。本文は描いた時点の画像で組むため。
     @State private var emojiArrivals = EmojiArrivals(store: AppDependencies.emojiImages)
-    /// 最後に触った項目。プレビューでその場所を示す。
-    @State private var focused: AppearanceFocus?
-    @State private var expandedGroups: Set<AppearanceGroup.ID> = []
-    /// プレビューでタップした部品の項目。リストをそこまでスクロールする。項目を触ったときは、押している行を動かさないようスクロールしない。
-    @State private var scrollTarget: AppearanceGroup.ID?
+    /// プレビューの部品をタップして重ねた分類の画面。
+    @State private var opened: OpenedAppearanceGroup?
     @State private var confirmsReset = false
+    /// すべて既定に戻した回数。戻すと値がまとめて変わるので、プレビューの高さを合わせ直す。
+    @State private var resets = 0
     @Environment(\.colorScheme) private var colorScheme
 
-    init(settings: AppSettings, tuning: TuningStore = AppDependencies.tuning, now: () -> Date = AppDependencies.now) {
+    /// - Parameter group: 開いたときに重ねておく分類の画面。
+    init(settings: AppSettings, opening group: AppearanceGroup.ID? = nil, tuning: TuningStore = AppDependencies.tuning, now: () -> Date = AppDependencies.now) {
         self.settings = settings
-        self.tuning = tuning
         _samples = State(initialValue: AppearanceSamples(settings: settings, tuning: tuning, now: now()))
+        _opened = State(initialValue: group.map { OpenedAppearanceGroup(groupID: $0, focus: nil) })
     }
 
     var body: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
-                AppearancePreview(
-                    configurations: samples.configurations(colorScheme: previewColorScheme, revision: revision),
-                    highlight: focused?.highlight,
-                    onSelectPart: select,
-                    onTapHighlight: { focused = nil },
-                    showsSeparators: settings.appearance.showsSeparators,
-                    choices: choicesRevision,
-                    interfaceStyle: focused?.colorScheme.map { $0 == .dark ? .dark : .light } ?? .unspecified
+                FittedAppearancePreview(
+                    preview: AppearancePreview(
+                        configurations: samples.configurations(colorScheme: colorScheme, revision: revision, groups: []),
+                        highlight: nil,
+                        onSelectPart: select,
+                        onTapHighlight: {},
+                        showsSeparators: settings.appearance.showsSeparators,
+                        choices: settings.appearance.hashValue
+                    ),
+                    heightLimit: geometry.size.height * AppearanceGroupEditorView.previewHeightLimit,
+                    fitRevision: resets
                 )
-                .frame(height: geometry.size.height * 0.42)
                 Divider()
-                ScrollViewReader { proxy in
-                    Form {
-                        // 開いていない部品は1行に縮むので、1つのセクションに並べて全体を見渡せるようにする。
-                        Section {
-                            ForEach(groups) { group in
-                                DisclosureGroup(isExpanded: expansion(of: group)) {
-                                    choices(of: group)
-                                    ForEach(group.values) { item in
-                                        AppearanceValueRow(
-                                            item: item,
-                                            settings: settings,
-                                            isFocused: focused == .value(item),
-                                            onFocus: { focused = .value(item) },
-                                            onToggleFocus: { toggleFocus(.value(item)) }
-                                        )
-                                        .disabled(isUnused(item))
-                                    }
-                                } label: {
-                                    GroupLabel(title: group.title, isModified: group.values.contains(where: settings.isModified))
-                                }
-                                .id(group.id)
+                Form {
+                    Section {
+                        ForEach(groups) { group in
+                            NavigationLink {
+                                groupEditor(group, focus: nil)
+                            } label: {
+                                GroupLabel(title: group.title, isModified: group.values.contains(where: settings.isModified))
                             }
-                        } footer: {
-                            Text("プレビューの部品をタップすると、その部品の項目を開きます。項目の名前やプレビューをもう一度タップすると、場所を示すのをやめます。")
                         }
-                        Section {
-                            Button("すべて既定に戻す", role: .destructive) { confirmsReset = true }
-                                .disabled(!settings.isAppearanceModified)
-                        } footer: {
-                            Text("文字の大きさは、iPhoneの文字サイズが標準のときの大きさです。本文はiPhoneの文字サイズに合わせて伸び縮みし、ほかの文字は本文との差を保ちます。")
-                        }
+                    } footer: {
+                        Text("プレビューの部品をタップすると、その部品の項目を開きます。")
                     }
-                    // スイッチは押すとすぐ切り替わるので、切り替えたときにその場所を示す。メニューで選ぶ項目は、メニューを開いたときに示す。
-                    .onChange(of: settings.appearance.showsBoosterAvatar) { focused = .choice(.showsBoosterAvatar) }
-                    .onChange(of: settings.appearance.showsContextSymbol) { focused = .choice(.showsContextSymbol) }
-                    .onChange(of: settings.appearance.boldsName) { focused = .choice(.boldsName) }
-                    .onChange(of: settings.appearance.showsAvatarBorder) { focused = .choice(.showsAvatarBorder) }
-                    .onChange(of: settings.appearance.showsMediaBadges) { focused = .choice(.showsMediaBadges) }
-                    .onChange(of: settings.appearance.tiltsStackedPhotos) { focused = .choice(.tiltsStackedPhotos) }
-                    .onChange(of: settings.appearance.showsLinkCard) { focused = .choice(.showsLinkCard) }
-                    .onChange(of: settings.appearance.boldsLinkCardTitle) { focused = .choice(.boldsLinkCardTitle) }
-                    .onChange(of: settings.appearance.showsSeparators) { focused = .choice(.showsSeparators) }
-                    .onChange(of: settings.appearance.showsReplyLabel) { focused = .choice(.showsReplyLabel) }
-                    .onChange(of: settings.appearance.showsReplyLines) { focused = .choice(.showsReplyLines) }
-                    .onChange(of: settings.appearance.wrapsBelowAvatar) { focused = .choice(.wrapsBelowAvatar) }
-                    .onChange(of: settings.appearance.stacksNameParts) { focused = .choice(.stacksNameParts) }
-                    .onChange(of: settings.appearance.showsTime) { focused = .choice(.showsTime) }
-                    .onChange(of: settings.appearance.showsVisibilitySymbol) { focused = .choice(.showsVisibilitySymbol) }
-                    .onChange(of: settings.appearance.showsEditedMark) { focused = .choice(.showsEditedMark) }
-                    .onChange(of: settings.appearance.showsLinkCardSite) { focused = .choice(.showsLinkCardSite) }
-                    .onChange(of: settings.appearance.showsLinkCardImage) { focused = .choice(.showsLinkCardImage) }
-                    .onChange(of: settings.appearance.animatesAvatars) { focused = .choice(.animatesAvatars) }
-                    .onChange(of: settings.appearance.animatesCustomEmojis) { focused = .choice(.animatesCustomEmojis) }
-                    .onChange(of: settings.appearance.drawsReactionGlowInHDR) { focused = .choice(.drawsReactionGlowInHDR) }
-                    .onChange(of: settings.appearance.reactionGlowFillsWidthWhenAlone) { focused = .choice(.reactionGlowFillsWidthWhenAlone) }
-                    .onChange(of: scrollTarget) { _, target in
-                        guard let target else { return }
-                        withAnimation { proxy.scrollTo(target, anchor: .top) }
-                        scrollTarget = nil
+                    Section {
+                        Button("すべて既定に戻す", role: .destructive) { confirmsReset = true }
+                            .disabled(!settings.isAppearanceModified)
+                    } footer: {
+                        Text("文字の大きさは、iPhoneの文字サイズが標準のときの大きさです。本文はiPhoneの文字サイズに合わせて伸び縮みし、ほかの文字は本文との差を保ちます。")
                     }
                 }
+            }
+        }
+        .navigationDestination(item: $opened) { opened in
+            if let group = groups.first(where: { $0.id == opened.groupID }) {
+                groupEditor(group, focus: opened.focus)
+            }
+        }
+        .navigationTitle("投稿")
+        .navigationBarTitleDisplayMode(.inline)
+        .confirmationDialog("投稿の見た目をすべて既定に戻しますか？", isPresented: $confirmsReset, titleVisibility: .visible) {
+            Button("既定に戻す", role: .destructive) {
+                settings.resetAppearance()
+                resets += 1
+            }
+        }
+    }
+
+    private func groupEditor(_ group: AppearanceGroup, focus: AppearanceFocus?) -> some View {
+        AppearanceGroupEditorView(group: group, settings: settings, samples: samples, emojiArrivals: emojiArrivals, focus: focus)
+    }
+
+    private var groups: [AppearanceGroup] {
+        AppearanceCatalog.groups
+    }
+
+    /// プレビューを描き直すきっかけ。見本の組み立ては設定を直接読むので、読んだ値が変わったら描き直すよう、ここで読んでおく。
+    private var revision: Int {
+        var hasher = Hasher()
+        hasher.combine(emojiArrivals.count)
+        hasher.combine(settings.appearanceValues)
+        hasher.combine(settings.appearance)
+        return hasher.finalize()
+    }
+
+    /// プレビューでタップした部品のうち、項目のある最も小さい部品の項目の分類の画面を重ね、その場所を示す。
+    private func select(_ parts: [AppearancePreviewPart]) {
+        guard let item = parts.lazy.compactMap(AppearanceHighlight.item(selectedBy:)).first,
+              let group = groups.first(where: { $0.values.contains(item) }) else { return }
+        opened = OpenedAppearanceGroup(groupID: group.id, focus: .value(item))
+    }
+}
+
+/// プレビューの部品をタップして重ねる分類の画面と、そこで示す項目。
+private struct OpenedAppearanceGroup: Hashable {
+    let groupID: AppearanceGroup.ID
+    let focus: AppearanceFocus?
+}
+
+/// 見本が収まる高さにし、収まらなければ上限の高さの中でスクロールさせるプレビュー。
+/// 高さは、画面に出たときと`fitRevision`が変わったときだけ合わせ直し、値を変えている間は変えない。
+/// 変えると下の項目の一覧が動き、スライダーなどの操作している部品が指の下から動いてしまうため。
+private struct FittedAppearancePreview: View {
+    let preview: AppearancePreview
+    let heightLimit: CGFloat
+    var fitRevision = 0
+    @State private var height: CGFloat?
+    /// 画面に出た回数。重ねた画面から戻ったときは、そこで変えた値で見本の高さが変わっているので、合わせ直す。
+    @State private var appearances = 0
+
+    var body: some View {
+        var preview = preview
+        var hasher = Hasher()
+        hasher.combine(fitRevision)
+        hasher.combine(appearances)
+        preview.fitRevision = hasher.finalize()
+        preview.onFitHeight = fit
+        return preview
+            .frame(height: min(height ?? .infinity, heightLimit))
+            .onAppear { appearances += 1 }
+    }
+
+    /// 最初の高さは、動かさずに合わせる。
+    private func fit(_ newHeight: CGFloat) {
+        guard height != nil else {
+            height = newHeight
+            return
+        }
+        withAnimation(.smooth) { height = newHeight }
+    }
+}
+
+/// 「投稿の見た目」の、1つの分類の画面。上にその分類の見本を固定し、下にその分類の項目を置く。
+/// 項目を触っている間は、プレビューでその場所を示す。プレビューの部品をタップすると、その部品の項目の場所を示す。
+struct AppearanceGroupEditorView: View {
+    let group: AppearanceGroup
+    @Bindable var settings: AppSettings
+    let samples: AppearanceSamples
+    let emojiArrivals: EmojiArrivals
+    /// 最後に触った項目。プレビューでその場所を示す。
+    @State private var focused: AppearanceFocus?
+    @Environment(\.colorScheme) private var colorScheme
+
+    init(group: AppearanceGroup, settings: AppSettings, samples: AppearanceSamples, emojiArrivals: EmojiArrivals, focus: AppearanceFocus? = nil) {
+        self.group = group
+        self.settings = settings
+        self.samples = samples
+        self.emojiArrivals = emojiArrivals
+        _focused = State(initialValue: focus)
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                FittedAppearancePreview(
+                    preview: AppearancePreview(
+                        configurations: samples.configurations(colorScheme: previewColorScheme, revision: revision, groups: [group.id]),
+                        highlight: focused?.highlight,
+                        onSelectPart: select,
+                        onTapHighlight: { focused = nil },
+                        showsSeparators: settings.appearance.showsSeparators,
+                        choices: choicesRevision,
+                        interfaceStyle: focused?.colorScheme.map { $0 == .dark ? .dark : .light } ?? .unspecified
+                    ),
+                    heightLimit: geometry.size.height * Self.previewHeightLimit
+                )
+                Divider()
+                Form {
+                    // 選んで決める項目のない分類では、中身のないセクションは描かれない。
+                    Section {
+                        choices(of: group)
+                    }
+                    Section {
+                        ForEach(group.values) { item in
+                            AppearanceValueRow(
+                                item: item,
+                                settings: settings,
+                                isFocused: focused == .value(item),
+                                onFocus: { focused = .value(item) },
+                                onToggleFocus: { toggleFocus(.value(item)) }
+                            )
+                            .disabled(isUnused(item))
+                        }
+                    } footer: {
+                        Text("項目の名前やプレビューの部品をタップすると、その場所を示します。もう一度タップすると、示すのをやめます。")
+                    }
+                }
+                // スイッチは押すとすぐ切り替わるので、切り替えたときにその場所を示す。メニューで選ぶ項目は、メニューを開いたときに示す。
+                .onChange(of: settings.appearance.showsBoosterAvatar) { focused = .choice(.showsBoosterAvatar) }
+                .onChange(of: settings.appearance.showsContextSymbol) { focused = .choice(.showsContextSymbol) }
+                .onChange(of: settings.appearance.boldsName) { focused = .choice(.boldsName) }
+                .onChange(of: settings.appearance.showsAvatarBorder) { focused = .choice(.showsAvatarBorder) }
+                .onChange(of: settings.appearance.showsMediaBadges) { focused = .choice(.showsMediaBadges) }
+                .onChange(of: settings.appearance.tiltsStackedPhotos) { focused = .choice(.tiltsStackedPhotos) }
+                .onChange(of: settings.appearance.showsLinkCard) { focused = .choice(.showsLinkCard) }
+                .onChange(of: settings.appearance.boldsLinkCardTitle) { focused = .choice(.boldsLinkCardTitle) }
+                .onChange(of: settings.appearance.showsSeparators) { focused = .choice(.showsSeparators) }
+                .onChange(of: settings.appearance.showsReplyLabel) { focused = .choice(.showsReplyLabel) }
+                .onChange(of: settings.appearance.showsReplyLines) { focused = .choice(.showsReplyLines) }
+                .onChange(of: settings.appearance.wrapsBelowAvatar) { focused = .choice(.wrapsBelowAvatar) }
+                .onChange(of: settings.appearance.stacksNameParts) { focused = .choice(.stacksNameParts) }
+                .onChange(of: settings.appearance.showsTime) { focused = .choice(.showsTime) }
+                .onChange(of: settings.appearance.showsVisibilitySymbol) { focused = .choice(.showsVisibilitySymbol) }
+                .onChange(of: settings.appearance.showsEditedMark) { focused = .choice(.showsEditedMark) }
+                .onChange(of: settings.appearance.showsLinkCardSite) { focused = .choice(.showsLinkCardSite) }
+                .onChange(of: settings.appearance.showsLinkCardImage) { focused = .choice(.showsLinkCardImage) }
+                .onChange(of: settings.appearance.animatesAvatars) { focused = .choice(.animatesAvatars) }
+                .onChange(of: settings.appearance.animatesCustomEmojis) { focused = .choice(.animatesCustomEmojis) }
+                .onChange(of: settings.appearance.drawsReactionGlowInHDR) { focused = .choice(.drawsReactionGlowInHDR) }
+                .onChange(of: settings.appearance.reactionGlowFillsWidthWhenAlone) { focused = .choice(.reactionGlowFillsWidthWhenAlone) }
             }
         }
         .toolbar {
@@ -110,23 +228,16 @@ struct AppearanceEditorView: View {
                 }
             }
         }
-        .navigationTitle("投稿")
+        .navigationTitle(group.title)
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog("投稿の見た目をすべて既定に戻しますか？", isPresented: $confirmsReset, titleVisibility: .visible) {
-            Button("既定に戻す", role: .destructive) {
-                settings.resetAppearance()
-                focused = nil
-            }
-        }
     }
+
+    /// 見本の高さの上限。画面の高さに対する割合。
+    static let previewHeightLimit: CGFloat = 0.42
 
     /// 見本を描く外観。外観ごとにしか効かない項目を触っている間は、その外観で描く。端末と違う外観の項目では、値を変えても見た目が変わらないため。
     private var previewColorScheme: ColorScheme {
         focused?.colorScheme ?? colorScheme
-    }
-
-    private var groups: [AppearanceGroup] {
-        AppearanceCatalog.groups
     }
 
     /// プレビューを描き直すきっかけ。見本の組み立ては設定を直接読むので、読んだ値が変わったら描き直すよう、ここで読んでおく。
@@ -143,30 +254,15 @@ struct AppearanceEditorView: View {
         settings.appearance.hashValue
     }
 
-    private func expansion(of group: AppearanceGroup) -> Binding<Bool> {
-        Binding {
-            expandedGroups.contains(group.id)
-        } set: { isExpanded in
-            if isExpanded {
-                expandedGroups.insert(group.id)
-            } else {
-                expandedGroups.remove(group.id)
-            }
-        }
-    }
-
-    /// プレビューでタップした部品のうち、項目のある最も小さい部品の項目を開き、その場所を示す。
-    /// 部品のない場所や、いま示している項目の部品をタップしたときは、示すのをやめる。示した帯で、確かめたい見た目が隠れることがあるため。
+    /// プレビューでタップした部品のうち、この分類の項目のある最も小さい部品の場所を示す。
+    /// 部品のない場所や、ほかの分類の部品、いま示している項目の部品をタップしたときは、示すのをやめる。示した帯で、確かめたい見た目が隠れることがあるため。
     private func select(_ parts: [AppearancePreviewPart]) {
-        guard let item = parts.lazy.compactMap(AppearanceHighlight.item(selectedBy:)).first,
-              let group = groups.first(where: { $0.values.contains(item) }),
+        guard let item = parts.lazy.compactMap(AppearanceHighlight.item(selectedBy:)).first(where: group.values.contains),
               focused != .value(item) else {
             focused = nil
             return
         }
-        expandedGroups.insert(group.id)
         focused = .value(item)
-        scrollTarget = group.id
     }
 
     /// 項目の名前をタップしたとき、その項目の場所を示す。示していれば、示すのをやめる。
@@ -561,16 +657,50 @@ struct AppearanceSamples {
     }
 
     /// 引用の囲みを出した投稿は、いつも最後に並べる。Xの投稿の囲みも同じ値で描くが、Xの投稿は既定では出さない試作のため、見本には出さない。
-    /// - Parameter revision: 描き直しのきっかけ。中身は使わない。
-    func configurations(colorScheme: ColorScheme, revision _: Int) -> [PostContentConfiguration] {
+    /// - Parameters:
+    ///   - revision: 描き直しのきっかけ。中身は使わない。
+    ///   - groups: 見本を出す分類。渡すと、その分類の見本（`sampleIDs(for:)`）だけを返す。nilならすべての見本を返す。
+    func configurations(colorScheme: ColorScheme, revision _: Int, groups: Set<AppearanceGroup.ID>? = nil) -> [PostContentConfiguration] {
+        let shown = groups.map(Self.sampleIDs(for:))
         let cardImage = PreviewImages.cardURL(for: colorScheme == .dark ? .dark : .light)
-        let configurations = (colorScheme == .dark ? posts : lightPosts).map { post in
+        let shownPosts = (colorScheme == .dark ? posts : lightPosts).filter { shown?.contains($0.status.id) ?? true }
+        let configurations = shownPosts.enumerated().map { index, post in
             var configuration = timeline.contentConfiguration(for: post.status, base: .cell())
-            configuration.replyConnection = post.connection
+            // 返信でつながった相手の見本を出さないときは、行き先のない線を引かないよう、つながりを切る。
+            var connection = post.connection
+            connection.above = connection.above && index > 0 && shownPosts[index - 1].connection.below
+            connection.below = connection.below && index + 1 < shownPosts.count && shownPosts[index + 1].connection.above
+            configuration.replyConnection = connection
             return configuration
         }
-        return configurations + [quoteConfiguration(image: cardImage)]
+        let showsQuote = shown?.contains(Self.quoteID) ?? true
+        return configurations + (showsQuote ? [quoteConfiguration(image: cardImage)] : [])
     }
+
+    /// 分類の見本の投稿のID。分類ごとの見本を合わせ、分類が空なら、分類の一覧の画面に出す部品の少ない投稿を1件だけにする。
+    static func sampleIDs(for groups: Set<AppearanceGroup.ID>) -> Set<String> {
+        let names = groups.isEmpty ? ["basic"] : groups.flatMap { groupSamples[$0] ?? [] }
+        return Set(names.map { "preview-\($0)" })
+    }
+
+    /// 分類ごとに出す見本。その分類の項目の場所が、どれかの見本に出るように選ぶ。
+    /// 行の余白と区切り線は投稿のあいだの見た目なので、行には2件を出す。
+    /// 部品の少ない投稿は、どの投稿にもある部品の分類（行、アイコン、名前の行、本文）にも出す。分類の一覧の画面の見本で部品をタップして分類の画面を開いたとき、タップした投稿がその画面にも出るようにするため。
+    private static let groupSamples: [AppearanceGroup.ID: [String]] = [
+        "row": ["basic", "emoji-only"],
+        "context": ["boost", "emoji-only"],
+        "avatar": ["basic", "thread", "reply"],
+        "name": ["basic", "reply", "media", "poll"],
+        "body": ["basic", "boost", "thread", "emoji-only", "long", "filtered"],
+        "spoiler": ["reply"],
+        "media": ["thread", "media", "wide", "quote"],
+        "linkCard": ["boost"],
+        AppearanceCatalog.xPostGroupID: ["quote"],
+        "poll": ["poll"],
+        "reactionGlow": ["boost", "wide"],
+    ]
+
+    private static let quoteID = "preview-quote"
 
     /// 投稿を引用した投稿。引用元には、囲みの中の部品が出るよう、本文と画像を付ける。
     private func quoteConfiguration(image: URL?) -> PostContentConfiguration {
@@ -594,7 +724,7 @@ struct AppearanceSamples {
             mediaAttachments: [attachment]
         )
         let status = Status(
-            id: "preview-quote",
+            id: Self.quoteID,
             createdAt: now.addingTimeInterval(-60),
             account: friend,
             content: "<p>投稿を引用した投稿です。</p>",
@@ -698,6 +828,8 @@ struct AppearanceSamples {
             options: [Poll.Option(title: "円", votesCount: nil), Poll.Option(title: "角丸の四角", votesCount: nil)]
         )
         return [
+            // 分類の一覧の画面に出す、部品の少ない投稿。
+            (status("basic", minutes: 1, account: scia, content: "<p>設定を変えると、タイムラインの投稿がこのように表示されます。</p>"), ReplyConnection()),
             (boost, ReplyConnection()),
             // 注意書きのある投稿の画像はぼかされ、サムネイル同士のすき間が見えないため、画像は注意書きのない投稿に付ける。
             (status("thread", minutes: 20, account: scia, content: "<p>返信でつながった投稿の、最初の投稿です。</p><blockquote><p>引用した文です。</p></blockquote>", media: [describedImage, image]), ReplyConnection(below: true)),

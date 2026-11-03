@@ -21,6 +21,8 @@ final class AppearancePreviewView: UIView {
     var onSelectPart: (([AppearancePreviewPart]) -> Void)?
     /// 示している帯がタップされたときに呼ぶ。
     var onTapHighlight: (() -> Void)?
+    /// `fitRevision`が変わったときと幅が変わったときに、並べた見本の高さを渡す。値を変えて見本の高さが変わっても呼ばない。
+    var onFitHeight: ((CGFloat) -> Void)?
 
     private let scrollView = UIScrollView()
     private let stack = UIStackView()
@@ -33,6 +35,10 @@ final class AppearancePreviewView: UIView {
     private var highlight: AppearanceHighlight?
     /// 最後に示した場所。同じ場所なら、スクロールし直さない。
     private var shownHighlight: (highlight: AppearanceHighlight, row: Int)?
+    /// 前に描いたときの、高さを合わせ直すきっかけ。
+    private var lastFitRevision: Int?
+    /// 高さを渡した幅。nilなら、次に並べたときに渡す。
+    private var fittedWidth: CGFloat?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -69,9 +75,14 @@ final class AppearancePreviewView: UIView {
     ///   - showsSeparators: 一覧と同じく、投稿のあいだに区切り線を引く。
     ///   - choices: 数値以外の設定（出すかどうかや表記）を表す値。変わったときは部品を動かさない。
     ///     出していなかった部品は前の位置を持たないため、動かすと、位置0から飛んでくるように見える。
-    func apply(_ configurations: [any AppearancePreviewConfiguration], highlight: AppearanceHighlight?, showsSeparators: Bool = true, choices: Int = 0) {
+    ///   - fitRevision: 高さを合わせ直すきっかけ。変わったときは、並べた見本の高さを`onFitHeight`で渡し直す。
+    func apply(_ configurations: [any AppearancePreviewConfiguration], highlight: AppearanceHighlight?, showsSeparators: Bool = true, choices: Int = 0, fitRevision: Int = 0) {
         let choicesChanged = lastChoices.map { $0 != choices } ?? false
         lastChoices = choices
+        if lastFitRevision.map({ $0 != fitRevision }) ?? false {
+            fittedWidth = nil
+        }
+        lastFitRevision = fitRevision
         // 行の数か、行の種類（投稿か通知か）が変わったら、行を作り直す。行のビューは、自分の種類の中身しか受け付けないため。
         let kindsChanged = zip(rows, configurations).contains { row, configuration in type(of: row.configuration) != type(of: configuration) }
         if rows.count != configurations.count || kindsChanged {
@@ -134,7 +145,19 @@ final class AppearancePreviewView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         scrollView.layoutIfNeeded()
+        fitHeight()
         updateHighlight()
+    }
+
+    /// 初めて並べたときと、`fitRevision`が変わってから初めて並べたとき、幅が変わったときに、見本の高さを渡す。
+    private func fitHeight() {
+        guard let onFitHeight, bounds.width > 0, fittedWidth != bounds.width else { return }
+        fittedWidth = bounds.width
+        let height = contentHeight
+        // 並べている最中にSwiftUIの状態を変えないよう、並べ終えてから渡す。
+        DispatchQueue.main.async {
+            onFitHeight(height)
+        }
     }
 
     private func updateHighlight() {
@@ -188,6 +211,11 @@ final class AppearancePreviewView: UIView {
         scrollView.scrollRectToVisible(target, animated: true)
     }
 
+    /// 並べた見本の高さ。
+    var contentHeight: CGFloat {
+        stack.frame.height
+    }
+
     /// 見本の行。テストで、行を画像にして確かめるときに使う。
     var rowViews: [any AppearancePreviewRow] {
         rows
@@ -239,6 +267,10 @@ struct AppearancePreview: UIViewRepresentable {
     var choices = 0
     /// 見本を描く外観。外観ごとにしか効かない項目を触っている間だけ、端末の外観と違うものにする。
     var interfaceStyle: UIUserInterfaceStyle = .unspecified
+    /// 高さを合わせ直すきっかけ。`AppearancePreviewView.apply`の`fitRevision`。
+    var fitRevision = 0
+    /// 高さを合わせ直すときに、並べた見本の高さを渡す。
+    var onFitHeight: ((CGFloat) -> Void)?
 
     func makeUIView(context: Context) -> AppearancePreviewView {
         AppearancePreviewView()
@@ -248,7 +280,8 @@ struct AppearancePreview: UIViewRepresentable {
         view.onSelectPart = onSelectPart
         view.onTapHighlight = onTapHighlight
         view.overrideUserInterfaceStyle = interfaceStyle
-        view.apply(configurations, highlight: highlight, showsSeparators: showsSeparators, choices: choices)
+        view.onFitHeight = onFitHeight
+        view.apply(configurations, highlight: highlight, showsSeparators: showsSeparators, choices: choices, fitRevision: fitRevision)
     }
 }
 
