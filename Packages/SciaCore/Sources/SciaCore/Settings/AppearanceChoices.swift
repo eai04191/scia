@@ -58,7 +58,7 @@ public struct AppearanceChoices: Codable, Hashable, Sendable {
     /// 一覧で、GIFなどのアニメーションするアイコンを動かす。オフなら最初のコマで止めた版を読む。
     public var animatesAvatars = false
     /// GIFやAPNGのアニメーションするカスタム絵文字を動かす。オフなら最初のコマで止めた版を描く。
-    public var animatesCustomEmojis = false
+    public var animatesCustomEmojis = true
     /// お気に入りとブーストの光を、HDRで描ける画面では白より明るく光らせる。オフならSDRで描く。
     /// メディアの明るさの設定（`mediaDynamicRange`）はメディアに対するものなので、光はそれに従わせず、ここで別に選ぶ。
     public var drawsReactionGlowInHDR = true

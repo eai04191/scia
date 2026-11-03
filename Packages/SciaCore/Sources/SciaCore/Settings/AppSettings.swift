@@ -419,7 +419,7 @@ private enum AppearanceDefaults {
     static let showsTime = true
     static let showsLinkCardImage = true
     static let animatesAvatars = false
-    static let animatesCustomEmojis = false
+    static let animatesCustomEmojis = true
     static let drawsReactionGlowInHDR = true
     static let reactionGlowIcons: ReactionGlowIcons = .none
     static let reactionGlowFillsWidthWhenAlone = false

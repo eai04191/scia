@@ -154,7 +154,7 @@ struct AppSettingsTests {
         #expect(settings.appearance.emojiStyle == .system)
         // 一覧でたくさん動くと読みにくいため、既定では止める。
         #expect(!settings.appearance.animatesAvatars)
-        #expect(!settings.appearance.animatesCustomEmojis)
+        #expect(settings.appearance.animatesCustomEmojis)
     }
 
     @Test func persistsStatusDisplay() throws {
@@ -167,7 +167,7 @@ struct AppSettingsTests {
         settings.appearance.glyphLanguage = .traditionalChinese
         settings.appearance.emojiStyle = .twemoji
         settings.appearance.animatesAvatars = true
-        settings.appearance.animatesCustomEmojis = true
+        settings.appearance.animatesCustomEmojis = false
 
         let restored = AppSettings(defaults: defaults)
         #expect(restored.appearance.statusNameStyle == .acctOnly)
@@ -177,7 +177,7 @@ struct AppSettingsTests {
         #expect(restored.appearance.glyphLanguage == .traditionalChinese)
         #expect(restored.appearance.emojiStyle == .twemoji)
         #expect(restored.appearance.animatesAvatars)
-        #expect(restored.appearance.animatesCustomEmojis)
+        #expect(!restored.appearance.animatesCustomEmojis)
     }
 
     /// 新着の挿入は、既定では端末の「視差効果を減らす」に従い、選び直した値は起動し直しても残る。
