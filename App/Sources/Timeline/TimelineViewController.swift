@@ -275,7 +275,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 「続きを読む」で本文を広げたときに、広げたあとの状態と広げたものを渡して呼ぶ。セッションが、ほかの一覧にもそろえる。
     var onChangeLongBodyExpansion: ((LongBodyExpansion, LongBodyExpansion.Key) -> Void)?
 
-    /// 「投稿の見た目」のプレビューに置く一覧。見本の投稿を並べて見せるだけで、リンクを開くほかは、押す、長押し、スワイプ、引っぱって読み直す操作と、末尾の表示を出さない。
+    /// 「投稿の見た目」と「通知の見た目」のプレビューに置く一覧。見本の投稿と通知を並べて見せるだけで、リンクを開くほかは、押す、長押し、スワイプ、引っぱって読み直す操作と、末尾の表示を出さない。
     /// 設定の値を変えたときは、行の部品を新しい位置まで動かして見せる。決まりはdocs/appearance.mdの「プレビュー」にある。画面を読み込む前に決める。
     var isAppearancePreview = false
 
@@ -588,6 +588,15 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         collectionView.collectionViewLayout.invalidateLayout()
     }
 
+    /// プレビューの見本の行の中身。見本に並べる投稿と通知のほかはnil。
+    private func previewContentConfiguration(for entry: TimelineEntry, id: ItemID, base: UIListContentConfiguration) -> (any UIContentConfiguration)? {
+        switch entry {
+        case .status(let status): contentConfiguration(for: status, itemID: id, base: base)
+        case .notification(let notification): contentConfiguration(for: notification, itemID: id, base: base)
+        case .pinned, .gap, .unreadable, .account, .notificationRequest, .search: nil
+        }
+    }
+
     /// 前に描き直したときの、数値以外の見た目の設定。プレビューで、部品を動かすかを決める。
     private var previewChoices: AppearanceChoices?
 
@@ -604,9 +613,12 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let apply = {
             for case let cell as TimelineCell in self.collectionView.visibleCells {
                 guard let indexPath = self.collectionView.indexPath(for: cell), let id = self.dataSource.itemIdentifier(for: indexPath), let entry = self.entries[id] else { continue }
-                // セルの`contentConfiguration`に入れ直すと、セルが動きの外で中を並べ直すため、投稿の行は、行のビューに中身を直接渡す。
-                if case .status(let status) = entry, let content = cell.contentView as? PostContentView {
-                    content.configuration = self.contentConfiguration(for: status, itemID: id, base: cell.defaultContentConfiguration())
+                // セルの`contentConfiguration`に入れ直すと、セルが動きの外で中を並べ直すため、投稿と通知の行は、行のビューに中身を直接渡す。
+                // 通知の組み方が変わって行のビューの種類が変わるときは、行のビューが受け付けないので、セルに入れ直す。
+                if let content = cell.contentView as? any UIContentView,
+                   let configuration = self.previewContentConfiguration(for: entry, id: id, base: cell.defaultContentConfiguration()),
+                   type(of: content.configuration) == type(of: configuration) {
+                    content.configuration = configuration
                 } else {
                     self.configure(cell, for: entry, id: id)
                 }
@@ -2184,7 +2196,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// プレビューの見本で、本文やリンクカードのリンクを押す操作だけを残す。見本の写真のクレジットのリンクを開けるようにするため。
     /// ほかの操作（サムネイル、投票、注意書きの開閉、名前やアイコンなど）は、見本を変えたり別の画面を開いたりするので外す。
-    private static func keepingOnlyLinks(_ configuration: PostContentConfiguration) -> PostContentConfiguration {
+    static func keepingOnlyLinks(_ configuration: PostContentConfiguration) -> PostContentConfiguration {
         var kept = configuration
         kept.onSelectMedia = nil
         kept.onRevealMedia = nil

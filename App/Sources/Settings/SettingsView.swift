@@ -22,7 +22,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     /// 一覧から重ねて開いた画面。
     @State private var path: [SettingsPage]
-    /// 開いたときに「投稿の見た目」の上に重ねておく分類の画面。一度重ねたら、戻ってまた「投稿の見た目」を開いても重ねないよう、消す。
+    /// 開いたときに「投稿の見た目」か「通知の見た目」の上に重ねておく分類の画面。一度重ねたら、戻ってまた開いても重ねないよう、消す。
     @State private var appearanceGroup: AppearanceGroup.ID?
 
     init(
@@ -46,7 +46,7 @@ struct SettingsView: View {
         self.openInAppBrowserHeight = openInAppBrowserHeight
         self.openProfile = openProfile
         _path = State(initialValue: page?.path ?? [])
-        _appearanceGroup = State(initialValue: page == .appearance ? appearanceGroup : nil)
+        _appearanceGroup = State(initialValue: page == .appearance || page == .notificationAppearance ? appearanceGroup : nil)
     }
 
     private var tabLayoutBinding: Binding<MenuLayout<TabItem>> {
@@ -125,7 +125,9 @@ struct SettingsView: View {
         case .appearance:
             AppearanceEditorView(settings: settings, opening: appearanceGroup)
                 .onAppear { appearanceGroup = nil }
-        case .notificationAppearance: NotificationAppearanceEditorView(settings: settings)
+        case .notificationAppearance:
+            NotificationAppearanceEditorView(settings: settings, opening: appearanceGroup)
+                .onAppear { appearanceGroup = nil }
         case .tabs:
             MenuLayoutSettingsView(
                 title: "タブ",
@@ -190,7 +192,7 @@ extension UIViewController {
     ///   - openInAppBrowserHeight: 設定を閉じ、ホームの上でアプリ内のSafariの高さを選ぶシートを出す。
     ///   - openProfile: 謝辞の画面で、設定の画面を閉じて、ハンドルの人のプロフィールを開く。
     ///   - page: 一覧から重ねて開いておく画面。
-    ///   - appearanceGroup: `page`が「投稿の見た目」のとき、その上に重ねておく分類の画面。
+    ///   - appearanceGroup: `page`が「投稿の見た目」か「通知の見た目」のとき、その上に重ねておく分類の画面。
     ///   - onShownChange: 設定の画面が出たときにtrue、消えたときにfalseで呼ぶ。
     func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, lists: SettingsListActions, openInAppBrowserHeight: @escaping @MainActor () -> Void, openProfile: @escaping @MainActor (_ acct: String) -> Void, opening page: SettingsPage? = nil, appearanceGroup: AppearanceGroup.ID? = nil, onShownChange: @escaping (Bool) -> Void) {
         let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, lists: lists, openInAppBrowserHeight: openInAppBrowserHeight, openProfile: openProfile, opening: page, appearanceGroup: appearanceGroup)

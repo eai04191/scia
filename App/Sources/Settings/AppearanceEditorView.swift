@@ -25,7 +25,7 @@ struct AppearanceEditorView: View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
                 FittedAppearancePreview(
-                    samples: samples,
+                    timeline: samples.timeline,
                     entries: samples.entries(colorScheme: colorScheme, groups: []),
                     heightLimit: geometry.size.height * AppearanceGroupEditorView.previewHeightLimit,
                     fitRevision: resets
@@ -90,7 +90,7 @@ struct AppearanceGroupEditorView: View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
                 FittedAppearancePreview(
-                    samples: samples,
+                    timeline: samples.timeline,
                     entries: samples.entries(colorScheme: previewColorScheme, groups: [group.id], focus: focused),
                     interfaceStyle: focused?.colorScheme.map { $0 == .dark ? .dark : .light } ?? .unspecified,
                     heightLimit: geometry.size.height * Self.previewHeightLimit
@@ -243,19 +243,6 @@ struct AppearanceGroupEditorView: View {
         (.acctOnly, "ハンドル"),
         (.acctAndName, "ハンドル、名前"),
     ]
-}
-
-/// カスタム絵文字の画像が届いた回数。数が変わると、読んだ画面が描き直す。
-@MainActor
-@Observable
-final class EmojiArrivals {
-    private(set) var count = 0
-
-    init(store: EmojiImageStore<UIImage>) {
-        store.addListener(owner: self) { [weak self] _ in
-            self?.count += 1
-        }
-    }
 }
 
 /// 「投稿の見た目」で、最後に触った項目。
@@ -541,17 +528,7 @@ struct AppearanceSamples {
         self.settings = settings
         self.tuning = tuning
         self.now = now
-        timeline = TimelineViewController(texts: .home, refresh: {}, tuning: tuning, settings: settings)
-        timeline.isAppearancePreview = true
-        // 設定の画面からはアプリ内のSafariを開けないので、見本のリンク（写真のクレジットなど）は、設定によらず既定のブラウザで開く。
-        // 見本のメンションやハッシュタグの行き先は実在しないので、開かない。
-        timeline.onOpenLink = { destination, _ in
-            guard case .url(let url) = destination else { return }
-            UIApplication.shared.open(url)
-        }
-        // 自分のフィルターに一致した自分の投稿の注記を見せるため、見本のSciaのアカウントを自分として組む。
-        timeline.myAccountID = Self.myAccountID
-        timeline.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: Self.myAccountID))
+        timeline = .appearancePreview(texts: .home, filterContext: .home, myAccountID: Self.myAccountID, tuning: tuning, settings: settings)
         posts = Self.posts(now: now, cardImage: PreviewImages.cardURL(for: .dark))
         lightPosts = Self.posts(now: now, cardImage: PreviewImages.cardURL(for: .light))
         quote = Self.quote(now: now)

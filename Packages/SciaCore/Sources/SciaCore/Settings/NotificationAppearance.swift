@@ -64,14 +64,14 @@ public enum NotificationAppearanceCatalog {
     /// メンションなどの名前の上の行と、投稿の名前の行のあいだ。
     public static let contextSpacing = AppearanceValue(id: "notification.contextSpacing", title: "名前の行とのあいだ", range: 0...100, step: 1, defaultValue: 4)
 
-    /// 通知の行の上から下への並びで並べる。
+    /// 通知の行の上から下への並びで並べる。IDは`scia://settings/notification-appearance/<ID>`で分類の画面を開くときの名前。
     public static let groups: [AppearanceGroup] = [
-        AppearanceGroup(id: "notification.group", title: "まとめた通知", values: [groupAvatarSize, groupAvatarSpacing, groupAvatarHeaderSpacing]),
-        AppearanceGroup(id: "notification.header", title: "誰が何をしたかの行", values: [headerText, headerAvatarSize, headerAvatarNameSpacing]),
-        AppearanceGroup(id: "notification.symbol", title: "種類の記号", values: [symbolSpacing]),
-        AppearanceGroup(id: "notification.account", title: "フォローなどのハンドル", values: [accountText, accountSpacing]),
-        AppearanceGroup(id: "notification.quoted", title: "お気に入りやブーストで再掲する投稿", values: [quotedSpacing, quotedBodyText, quotedBodyLines, quotedMediaSpacing, quotedThumbnailSize, quotedThumbnailSpacing, quotedPollSpacing, quotedNoteText, quotedNoteSpacing]),
-        AppearanceGroup(id: "notification.context", title: "メンションなどの名前の上の行", values: [contextText, contextSpacing]),
+        AppearanceGroup(id: "group", title: "まとめた通知", values: [groupAvatarSize, groupAvatarSpacing, groupAvatarHeaderSpacing]),
+        AppearanceGroup(id: "header", title: "誰が何をしたかの行", values: [headerText, headerAvatarSize, headerAvatarNameSpacing]),
+        AppearanceGroup(id: "symbol", title: "種類の記号", values: [symbolSpacing]),
+        AppearanceGroup(id: "account", title: "フォローなどのハンドル", values: [accountText, accountSpacing]),
+        AppearanceGroup(id: "quoted", title: "お気に入りやブーストで再掲する投稿", values: [quotedSpacing, quotedBodyText, quotedBodyLines, quotedMediaSpacing, quotedThumbnailSize, quotedThumbnailSpacing, quotedPollSpacing, quotedNoteText, quotedNoteSpacing]),
+        AppearanceGroup(id: "context", title: "メンションなどの名前の上の行", values: [contextText, contextSpacing]),
     ]
 
     public static let values: [AppearanceValue] = groups.flatMap(\.values)

@@ -81,10 +81,21 @@ struct AppDestinationTests {
         #expect(AppDestination(try #require(URL(string: "scia://settings/appearance/unknown"))) == nil)
     }
 
+    /// 「通知の見た目」のどの分類の画面も、URLで開ける。「投稿の見た目」の分類の名前は読まない。
+    @Test(arguments: NotificationAppearanceCatalog.groups.map(\.id))
+    func readsEveryNotificationAppearanceGroup(_ id: AppearanceGroup.ID) throws {
+        let url = try #require(URL(string: "scia://settings/notification-appearance/\(id)"))
+        #expect(AppDestination(url) == .notificationAppearanceGroup(id))
+    }
+
+    @Test func ignoresPostGroupAsNotificationAppearanceGroup() throws {
+        #expect(AppDestination(try #require(URL(string: "scia://settings/notification-appearance/name"))) == nil)
+    }
+
     /// 開く先の項目ごとに1つ以上。開く先を足したら、ここにも足す。
     static let samples: [AppDestination] = [.tab(.home), .tab(.scheduled)]
         + [.userTab(.list(id: "12")), .userTab(.hashtag(name: "日本語")), .userTab(.profile(acct: "bob@example.com")), .userTab(.accountHashtag(acct: "bob", name: "scia"))]
-        + [.settings(nil)] + SettingsPage.allCases.map { .settings($0) } + [.appearanceGroup("name")]
+        + [.settings(nil)] + SettingsPage.allCases.map { .settings($0) } + [.appearanceGroup("name"), .notificationAppearanceGroup("header")]
         + [.profile(acct: "bob@example.com"), .profile(acct: "bob"), .myProfile, .profileEdit]
         + [.thread(statusID: "123"), .editHistory(statusID: "123"), .apiResponse(statusID: "123")]
         + [.accounts(.followers(accountID: nil)), .accounts(.followers(accountID: "9")), .accounts(.following(accountID: nil)), .accounts(.following(accountID: "9"))]
@@ -122,7 +133,7 @@ struct AppDestinationTests {
     }
 
     enum Kind: CaseIterable {
-        case tab, userTabList, userTabHashtag, userTabProfile, userTabAccountHashtag, settings, appearanceGroup, profile, myProfile, profileEdit
+        case tab, userTabList, userTabHashtag, userTabProfile, userTabAccountHashtag, settings, appearanceGroup, notificationAppearanceGroup, profile, myProfile, profileEdit
         case thread, editHistory, apiResponse, followers, following, favourited, reblogged, hashtag, accountHashtag, search, scheduled, operationStatus
         case notificationRequests, notificationRequest, notificationPolicy, announcements, inAppBrowserHeight
         case note, report, composeTools, composeLanguage, composeSchedule, composeEmoji, composeMediaPicker, composeAttachment, composeAltText, composeCrop
@@ -137,6 +148,7 @@ struct AppDestinationTests {
         case .userTab(.accountHashtag): .userTabAccountHashtag
         case .settings: .settings
         case .appearanceGroup: .appearanceGroup
+        case .notificationAppearanceGroup: .notificationAppearanceGroup
         case .profile: .profile
         case .myProfile: .myProfile
         case .profileEdit: .profileEdit
@@ -215,6 +227,7 @@ struct AppDestinationTests {
 
         #expect(!AppDestination.settings(nil).showsTab)
         #expect(!AppDestination.appearanceGroup("row").showsTab)
+        #expect(!AppDestination.notificationAppearanceGroup("header").showsTab)
         #expect(!AppDestination.profileEdit.showsTab)
         #expect(!AppDestination.operationStatus.showsTab)
         #expect(!AppDestination.notificationPolicy.showsTab)

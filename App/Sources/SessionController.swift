@@ -2389,7 +2389,7 @@ final class SessionController {
     }
 
     /// 設定の画面を出す。閉じる途中の画面には重ねられないため、閉じる途中の画面を飛ばして重ねる。
-    /// - Parameter appearanceGroup: `page`が「投稿の見た目」のとき、その上に重ねておく分類の画面。
+    /// - Parameter appearanceGroup: `page`が「投稿の見た目」か「通知の見た目」のとき、その上に重ねておく分類の画面。
     private func presentSettings(opening page: SettingsPage?, appearanceGroup: AppearanceGroup.ID? = nil) {
         rootViewController.frontmostPresented.presentSettings(
             instance: credential.instance,
@@ -3354,6 +3354,8 @@ final class SessionController {
             presentSettings(opening: page)
         case .appearanceGroup(let id):
             presentSettings(opening: .appearance, appearanceGroup: id)
+        case .notificationAppearanceGroup(let id):
+            presentSettings(opening: .notificationAppearance, appearanceGroup: id)
         case .profile(let acct):
             openProfile(acct: acct)
         case .myProfile:

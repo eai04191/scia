@@ -10,12 +10,16 @@ import UIKit
 struct NotificationAppearanceEditorTests {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
-    private func layOutPreview(_ settings: AppSettings, height: CGFloat = 4_000) -> AppearancePreviewView {
+    private func layOutPreview(_ settings: AppSettings, height: CGFloat = 4_000, groups: Set<AppearanceGroup.ID>? = nil, focus: AppearanceValue? = nil) -> AppearancePreviewView {
         let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: height))
         let samples = NotificationAppearanceSamples(settings: settings, tuning: TuningStore(defaults: nil), now: now)
-        preview.apply(samples.configurations(colorScheme: .light, revision: 0), highlight: nil)
+        preview.apply(Self.previewConfigurations(samples, groups: groups, focus: focus), highlight: nil)
         preview.layoutIfNeeded()
         return preview
+    }
+
+    private static func previewConfigurations(_ samples: NotificationAppearanceSamples, groups: Set<AppearanceGroup.ID>? = nil, focus: AppearanceValue? = nil) -> [any AppearancePreviewConfiguration] {
+        samples.configurations(groups: groups, focus: focus).compactMap { $0 as? any AppearancePreviewConfiguration }
     }
 
     /// プレビューの見本だけで、どの項目も場所を示せる。
@@ -25,6 +29,46 @@ struct NotificationAppearanceEditorTests {
             let highlight = try #require(AppearanceHighlight(item), "\(item.id)に示す場所がありません")
             #expect(highlight.locate(in: rows) != nil, "\(item.id)の場所が見本にありません")
         }
+    }
+
+    /// 分類の画面の見本で、その分類のどの項目も、触っている間は場所を示せる。
+    @Test(arguments: NotificationAppearanceCatalog.groups.map(\.id))
+    func groupSamplesShowTheirItems(group: AppearanceGroup.ID) throws {
+        let values = try #require(NotificationAppearanceCatalog.groups.first { $0.id == group }).values
+        for item in values {
+            let highlight = try #require(AppearanceHighlight(item), "\(item.id)に示す場所がありません")
+            let rows = layOutPreview(.isolated(), groups: [group], focus: item).rowFrames()
+            #expect(highlight.locate(in: rows) != nil, "\(item.id)の場所が\(group)の見本にありません")
+        }
+    }
+
+    /// 既定の設定では、どの分類の画面の見本も、見本の枠に収まる。
+    /// 枠の高さは、幅402ptのiPhone 17 Proで、分類の画面の見本の枠の上限（画面の高さの42%）が約300ptになるのに合わせる。
+    @Test(arguments: NotificationAppearanceCatalog.groups.map(\.id))
+    func groupSamplesFitPreview(group: AppearanceGroup.ID) {
+        let preview = layOutPreview(.isolated(), height: 400, groups: [group])
+        #expect(preview.contentHeight <= 300, "\(group)の見本の高さが\(preview.contentHeight)ptあります")
+    }
+
+    /// どの分類も開いていなければ、見本は1件だけにする。
+    @Test func closedGroupsShowOneSample() {
+        let samples = NotificationAppearanceSamples(settings: .isolated(), tuning: TuningStore(defaults: nil), now: now)
+        #expect(samples.configurations(groups: []).count == 1)
+    }
+
+    /// 見本の通知で押せるのはリンクだけにし、誰が何をしたかの行、アイコン、サムネイル、注意書きの開閉などは押せない。
+    @Test func samplesKeepOnlyLinks() throws {
+        let samples = NotificationAppearanceSamples(settings: .isolated(), tuning: TuningStore(defaults: nil), now: now)
+        let configurations = samples.configurations()
+        for case let notification as NotificationContentConfiguration in configurations {
+            #expect(notification.onOpenAccount == nil && notification.accountTarget == nil)
+            #expect(notification.onOpenGroupAccount == nil && notification.onOpenGroupAccounts == nil && notification.groupAccountTargets.isEmpty)
+            #expect(notification.onSelectMedia == nil && notification.onRevealMedia == nil && notification.onToggleSpoiler == nil)
+        }
+        let quoted = try #require(configurations.lazy.compactMap { $0 as? NotificationContentConfiguration }.first { $0.bodyKind == .quotedPost })
+        #expect(quoted.onOpenLink != nil)
+        let mention = try #require(configurations.lazy.compactMap { $0 as? PostContentConfiguration }.first)
+        #expect(mention.onOpenContextAccount == nil && mention.contextTarget == nil && mention.onOpenAccount == nil)
     }
 
     /// すき間を示す帯の太さは、その項目の値と同じになる。帯がラベルの枠から測られていると、文字の上下の余白の分だけずれる。
@@ -55,7 +99,7 @@ struct NotificationAppearanceEditorTests {
         }
         let preview = layOutPreview(settings, height: 400)
         let samples = NotificationAppearanceSamples(settings: settings, tuning: TuningStore(defaults: nil), now: now)
-        let configurations = samples.configurations(colorScheme: .light, revision: 0)
+        let configurations = Self.previewConfigurations(samples)
         for item in NotificationAppearanceCatalog.values {
             preview.apply(configurations, highlight: AppearanceHighlight(item))
             preview.layoutIfNeeded()
@@ -77,7 +121,7 @@ struct NotificationAppearanceEditorTests {
     /// 見本は通知の組み方をひととおり含み、メンションは投稿の行で描く。
     @Test func samplesCoverEveryLayout() {
         let samples = NotificationAppearanceSamples(settings: .isolated(), tuning: TuningStore(defaults: nil), now: now)
-        let configurations = samples.configurations(colorScheme: .light, revision: 0)
+        let configurations = samples.configurations()
         #expect(configurations.contains { ($0 as? NotificationContentConfiguration)?.groupAvatars.isEmpty == false })
         #expect(configurations.contains { ($0 as? NotificationContentConfiguration)?.bodyKind == .quotedPost })
         #expect(configurations.contains { ($0 as? NotificationContentConfiguration)?.bodyKind == .account })

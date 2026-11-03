@@ -5,6 +5,17 @@ extension TimelineViewController {
     /// 通知のセルの中身。種類ごとの組み方は`MastodonNotification.Layout`で決める。
     /// - Parameter itemID: この中身を置く行。注意書きを開閉したときに、この行の画面上の位置を保つ。
     func contentConfiguration(for notification: MastodonNotification, itemID: ItemID? = nil, base: UIListContentConfiguration) -> any UIContentConfiguration {
+        let configuration = fullContentConfiguration(for: notification, itemID: itemID, base: base)
+        guard isAppearancePreview else { return configuration }
+        // プレビューの見本では、投稿と同じくリンクを押す操作だけを残す。決まりはdocs/appearance.mdの「プレビュー」にある。
+        switch configuration {
+        case let post as PostContentConfiguration: return Self.keepingOnlyLinks(post)
+        case let header as NotificationContentConfiguration: return Self.keepingOnlyLinks(header)
+        default: return configuration
+        }
+    }
+
+    private func fullContentConfiguration(for notification: MastodonNotification, itemID: ItemID?, base: UIListContentConfiguration) -> any UIContentConfiguration {
         switch notification.layout {
         case .post:
             guard let status = notification.status else { return headerOnlyConfiguration(for: notification, base: base) }
@@ -15,6 +26,21 @@ extension TimelineViewController {
         case .headerOnly:
             return headerOnlyConfiguration(for: notification, base: base)
         }
+    }
+
+    /// プレビューの見本の通知で、再掲する投稿の本文のリンクを押す操作だけを残す。
+    /// ほかの操作（サムネイル、注意書きの開閉、誰が何をしたかの行やアイコン、「ほか3人」など）は、見本を変えたり別の画面を開いたりするので外す。
+    private static func keepingOnlyLinks(_ configuration: NotificationContentConfiguration) -> NotificationContentConfiguration {
+        var kept = configuration
+        kept.onSelectMedia = nil
+        kept.onRevealMedia = nil
+        kept.onToggleSpoiler = nil
+        kept.onOpenAccount = nil
+        kept.accountTarget = nil
+        kept.groupAccountTargets = []
+        kept.onOpenGroupAccount = nil
+        kept.onOpenGroupAccounts = nil
+        return kept
     }
 
     /// メンションなど、相手が書いた投稿を読む通知。投稿として扱い、投稿の部品は「投稿の見た目」で描く。

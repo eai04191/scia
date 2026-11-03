@@ -2,7 +2,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 「投稿の見た目」のプレビュー。見本を並べたタイムラインの一覧（`AppearanceSamples.timeline`）を子に置く。
+/// 「投稿の見た目」と「通知の見た目」のプレビュー。見本を並べたタイムラインの一覧（`TimelineViewController.appearancePreview`）を子に置く。
 /// 区切り線、返信の線、光のように一覧が決める見た目も、タイムラインと同じになる。決まりはdocs/appearance.mdの「プレビュー」にある。
 final class AppearanceTimelinePreviewController: UIViewController {
     let timeline: TimelineViewController
@@ -47,8 +47,14 @@ final class AppearanceTimelinePreviewController: UIViewController {
         let isFirst = self.entries.isEmpty
         self.entries = entries
         timeline.setEntries(entries)
-        if !isFirst, case .status(let status)? = added.first {
-            timeline.scrollToStatus(status.id, at: .top)
+        guard !isFirst else { return }
+        switch added.first {
+        case .status(let status)?: timeline.scrollToStatus(status.id, at: .top)
+        case .notification(let notification)?:
+            if let status = notification.status {
+                timeline.scrollToStatus(status.id, at: .top)
+            }
+        default: break
         }
     }
 
@@ -67,7 +73,7 @@ final class AppearanceTimelinePreviewController: UIViewController {
 }
 
 struct AppearanceTimelinePreview: UIViewControllerRepresentable {
-    let samples: AppearanceSamples
+    let timeline: TimelineViewController
     let entries: [TimelineEntry]
     /// 見本を描く外観。外観ごとにしか効かない項目を触っている間だけ、端末の外観と違うものにする。
     var interfaceStyle: UIUserInterfaceStyle = .unspecified
@@ -75,7 +81,7 @@ struct AppearanceTimelinePreview: UIViewControllerRepresentable {
     let onFitHeight: (CGFloat) -> Void
 
     func makeUIViewController(context: Context) -> AppearanceTimelinePreviewController {
-        AppearanceTimelinePreviewController(timeline: samples.timeline)
+        AppearanceTimelinePreviewController(timeline: timeline)
     }
 
     func updateUIViewController(_ controller: AppearanceTimelinePreviewController, context: Context) {
@@ -89,7 +95,7 @@ struct AppearanceTimelinePreview: UIViewControllerRepresentable {
 /// 高さは、画面に出たときと`fitRevision`が変わったときだけ合わせ直し、値を変えている間は変えない。
 /// 変えると下の項目の一覧が動き、スライダーなどの操作している部品が指の下から動いてしまうため。
 struct FittedAppearancePreview: View {
-    let samples: AppearanceSamples
+    let timeline: TimelineViewController
     let entries: [TimelineEntry]
     var interfaceStyle: UIUserInterfaceStyle = .unspecified
     let heightLimit: CGFloat
@@ -102,7 +108,7 @@ struct FittedAppearancePreview: View {
         var hasher = Hasher()
         hasher.combine(fitRevision)
         hasher.combine(appearances)
-        return AppearanceTimelinePreview(samples: samples, entries: entries, interfaceStyle: interfaceStyle, fitRevision: hasher.finalize(), onFitHeight: fit)
+        return AppearanceTimelinePreview(timeline: timeline, entries: entries, interfaceStyle: interfaceStyle, fitRevision: hasher.finalize(), onFitHeight: fit)
             .frame(height: min(height ?? .infinity, heightLimit))
             .onAppear { appearances += 1 }
     }
@@ -114,5 +120,23 @@ struct FittedAppearancePreview: View {
             return
         }
         withAnimation(.smooth) { height = newHeight }
+    }
+}
+
+extension TimelineViewController {
+    /// 見た目の設定のプレビューに置く、見本を並べる一覧。1つの画面に1つずつ置く。
+    /// 設定の画面からはアプリ内のSafariを開けないので、見本のリンク（写真のクレジットなど）は、設定によらず既定のブラウザで開く。
+    /// 見本のメンションやハッシュタグの行き先は実在しないので、開かない。
+    /// 自分のフィルターに一致した自分の投稿の注記や、自分の投稿への通知を見せるため、見本の`myAccountID`のアカウントを自分として組む。
+    static func appearancePreview(texts: Texts, filterContext: FilterResult.Context, myAccountID: String, tuning: TuningStore, settings: AppSettings) -> TimelineViewController {
+        let timeline = TimelineViewController(texts: texts, refresh: {}, tuning: tuning, settings: settings)
+        timeline.isAppearancePreview = true
+        timeline.onOpenLink = { destination, _ in
+            guard case .url(let url) = destination else { return }
+            UIApplication.shared.open(url)
+        }
+        timeline.myAccountID = myAccountID
+        timeline.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: filterContext, myAccountID: myAccountID))
+        return timeline
     }
 }

@@ -11,6 +11,8 @@ public enum AppDestination: Equatable, Sendable {
     case settings(SettingsPage?)
     /// `settings/appearance/<分類のID>`。「投稿の見た目」の、その分類（`AppearanceCatalog.groups`）の画面まで重ねて開く。
     case appearanceGroup(AppearanceGroup.ID)
+    /// `settings/notification-appearance/<分類のID>`。「通知の見た目」の、その分類（`NotificationAppearanceCatalog.groups`）の画面まで重ねて開く。
+    case notificationAppearanceGroup(AppearanceGroup.ID)
     /// `profile/<user@domain>`。ローカルのアカウントは`<user>`だけでもよい。ホームのタブにプロフィールを開く。
     case profile(acct: String)
     /// `my-profile`。選んでいるタブに、自分のプロフィールを開く。
@@ -114,7 +116,7 @@ public enum AppDestination: Equatable, Sendable {
         case .tab, .userTab, .profile, .myProfile, .thread, .editHistory, .apiResponse, .accounts, .hashtag, .accountHashtag, .search, .scheduled,
              .notificationRequests, .notificationRequest:
             true
-        case .settings, .appearanceGroup, .profileEdit, .operationStatus, .notificationPolicy, .announcements, .inAppBrowserHeight, .note, .report, .compose:
+        case .settings, .appearanceGroup, .notificationAppearanceGroup, .profileEdit, .operationStatus, .notificationPolicy, .announcements, .inAppBrowserHeight, .note, .report, .compose:
             false
         }
     }
@@ -126,6 +128,7 @@ public enum AppDestination: Equatable, Sendable {
         case .userTab: "user tab"
         case .settings(let page): "settings \(page?.rawValue ?? "")"
         case .appearanceGroup(let id): "settings appearance/\(id)"
+        case .notificationAppearanceGroup(let id): "settings notification-appearance/\(id)"
         case .profile: "profile"
         case .myProfile: "my profile"
         case .profileEdit: "profile edit"
@@ -170,6 +173,8 @@ public enum AppDestination: Equatable, Sendable {
         case ("settings", ""): .settings(nil)
         case ("settings", _) where path.hasPrefix(Self.appearanceGroupPrefix):
             Self.appearanceGroup(id: String(path.dropFirst(Self.appearanceGroupPrefix.count)))
+        case ("settings", _) where path.hasPrefix(Self.notificationAppearanceGroupPrefix):
+            Self.notificationAppearanceGroup(id: String(path.dropFirst(Self.notificationAppearanceGroupPrefix.count)))
         case ("settings", _): SettingsPage(rawValue: path).map { .settings($0) }
         case ("profile", _):
             // `@user@domain`の形で書かれていても読めるよう、先頭の@を外す。
@@ -225,6 +230,7 @@ public enum AppDestination: Equatable, Sendable {
         case .userTab(.accountHashtag(let acct, let name)): ("tab", "account-hashtag", [("acct", acct), ("name", name)])
         case .settings(let page): ("settings", page?.rawValue, [])
         case .appearanceGroup(let id): ("settings", Self.appearanceGroupPrefix + id, [])
+        case .notificationAppearanceGroup(let id): ("settings", Self.notificationAppearanceGroupPrefix + id, [])
         case .profile(let acct): ("profile", acct, [])
         case .myProfile: ("my-profile", nil, [])
         case .profileEdit: ("profile-edit", nil, [])
@@ -271,6 +277,13 @@ public enum AppDestination: Equatable, Sendable {
     /// 分類のIDが「投稿の見た目」の分類なら、その画面。
     private static func appearanceGroup(id: String) -> AppDestination? {
         AppearanceCatalog.groups.contains { $0.id == id } ? .appearanceGroup(id) : nil
+    }
+
+    private static let notificationAppearanceGroupPrefix = "\(SettingsPage.notificationAppearance.rawValue)/"
+
+    /// 分類のIDが「通知の見た目」の分類なら、その画面。
+    private static func notificationAppearanceGroup(id: String) -> AppDestination? {
+        NotificationAppearanceCatalog.groups.contains { $0.id == id } ? .notificationAppearanceGroup(id) : nil
     }
 
     /// 最初からあるタブ。足したタブは`userTab`で選ぶ。
