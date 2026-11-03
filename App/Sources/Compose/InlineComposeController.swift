@@ -29,14 +29,14 @@ final class InlineComposeController: NSObject {
     var onOpenWithoutEditing: () -> Void = {}
     /// 書き終えてバーを細いカプセルに戻したときに呼ぶ。メディアを選ぶシートやビューアのためにキーボードを閉じたときは、書いている途中なので呼ばない。
     var onEndEditing: () -> Void = {}
-    /// 失敗の知らせや、メディアを選ぶシートを重ねる画面を返す。アプリ内のSafariのシートを出している間は、その上に重ねる必要がある。
+    /// メディアを選ぶシートや絵文字のシートを重ねる画面を返す。アプリ内のSafariのシートを出している間は、その上に重ねる必要がある。
     /// ほかの画面を出している間はnilを返す。渡されなければ、何も重ねていないときだけ投稿欄の画面に重ねる。
     var presenterAboveInlineCompose: (() -> UIViewController?)?
 
+    /// 失敗の知らせを重ねる画面。ほかの画面（シートやビューア）を出していても、いちばん上に重ねてすぐ知らせる。
+    /// 閉じるまで待つと、その間は送れたものと思わせ、閉じたことを知る手立てのない画面もあるため。
     private var presenterForErrors: UIViewController? {
-        if let presenterAboveInlineCompose { return presenterAboveInlineCompose() }
-        guard let host, host.presentedViewController == nil else { return nil }
-        return host
+        host.map(topPresenter(from:))
     }
     /// 返信先のラベルを押したときに呼ぶ。返信先の投稿を見せる。編集のラベルなら、編集している投稿を見せる。
     var onShowReplyTarget: (Status) -> Void = { _ in }
@@ -298,6 +298,8 @@ final class InlineComposeController: NSObject {
     private var isWaitingForKeyboardAfterViewer = false
     /// ビューアを開くたびに増やす。閉じる途中に別の添付を開いたら、前のビューアの閉じ終わりでキーボードを戻さないようにする。
     private var mediaViewerGeneration = 0
+    /// 出しているアラートを閉じたら、入力欄にキーボードを戻す。シートやビューアの上に出したときはfalse。
+    private var alertReturnsFocus = true
     /// 補完の候補の一覧。タイムラインに重ねて欄の上に出し、広げて欄の上に場所がなければ打っている行のすぐ下に重ねる。
     private let completionList = ComposeCompletionList()
     /// 欄の上に出すときの、一覧の下端を欄の上端に付ける制約。
@@ -783,6 +785,8 @@ final class InlineComposeController: NSObject {
     private func toolLayoutSettingsDidClose(resumesEditing: Bool) {
         logger.info("compose: tool layout settings closed")
         isShowingToolLayoutSettings = false
+        // 開く途中や閉じる途中で、失敗を知らせられなかったら、ここで知らせる。
+        defer { presentErrorIfNeeded() }
         guard resumesEditing, isEditing else { return }
         focusLastInput()
     }
@@ -1753,7 +1757,7 @@ final class InlineComposeController: NSObject {
         mediaPicker = nil
         model.mediaPickerDidClose()
         guard !presentPendingSheet() else { return }
-        // シートを出している間に投稿に失敗していたら、ここで知らせる。知らせはキーボードに戻った入力欄を一度閉じるので、戻ったかは知らせる前に見る。
+        // シートを閉じる途中で知らせられなかった失敗は、ここで知らせる。知らせはキーボードに戻った入力欄を一度閉じるので、戻ったかは知らせる前に見る。
         let returnedToKeyboard = isInputFocused
         // ハードウェアキーボードではキーボードが上がらず、上がりきった知らせも来ないので、待たずにバーをシートの上端から外す。
         if returnedToKeyboard, currentKeyboardHeight <= Self.softwareKeyboardMinimumHeight {
@@ -2720,7 +2724,7 @@ final class InlineComposeController: NSObject {
         return parts.joined(separator: "、")
     }
 
-    /// メディアを選ぶシートなどを出している間は出さず、閉じたときに知らせる。
+    /// 画面を出し入れしている途中で出せなければ、出し入れを終えたときに呼び直して知らせる。
     private func presentErrorIfNeeded() {
         guard let message = model.errorMessage, !isPresentingAlert, let presenter = presenterForErrors, presenter.presentedViewController == nil else { return }
         logger.info("compose: presenting post error (focused=\(self.isInputFocused) editing=\(self.isEditing) picker=\(self.mediaPicker != nil))")
@@ -2749,8 +2753,10 @@ final class InlineComposeController: NSObject {
     ///
     /// アラートは表示されると最初の応答者になるため、何もしないとキーボードが下がって投稿欄がカプセルに戻り、書いていたところから直せない。
     /// 添付のビューアと同じく、出す前に自分でキーボードを閉じ、バーをキーボードの高さに留め、閉じたら最後に書いていた入力欄にキーボードを戻す。
+    /// シートやビューアの上に出したら、閉じても入力欄にキーボードを戻さない。戻すと、その画面の上にキーボードが出るため。
     private func presentKeepingInput(_ alert: UIAlertController, from presenter: UIViewController) {
         isPresentingAlert = true
+        alertReturnsFocus = presenter === (presenterAboveInlineCompose?() ?? host)
         if bottomSheet == nil, isInputFocused {
             // ハードウェアキーボードでは、閉じたあとに上がりきった知らせが来ず、留めると外れなくなる。ソフトウェアキーボードが出ているときだけ留める。
             if currentKeyboardHeight > Self.softwareKeyboardMinimumHeight {
@@ -2763,7 +2769,7 @@ final class InlineComposeController: NSObject {
 
     private func alertDidClose() {
         isPresentingAlert = false
-        guard bottomSheet == nil, isEditing else { return }
+        guard alertReturnsFocus, bottomSheet == nil, isEditing else { return }
         focusLastInput()
     }
 
@@ -2834,6 +2840,8 @@ final class InlineComposeController: NSObject {
         guard generation == mediaViewerGeneration else { return }
         logger.info("attachment viewer did finish closing (picker=\(self.mediaPicker != nil))")
         isShowingMediaViewer = false
+        // 開く途中や閉じる途中で、失敗を知らせられなかったら、ここで知らせる。
+        defer { presentErrorIfNeeded() }
         guard bottomSheet == nil, isEditing else { return }
         focusLastInput()
         // 開いている間にハードウェアキーボードに替わると、キーボードは上がらず、上がりきった知らせも来ないので、留めたバーが外れなくなる。

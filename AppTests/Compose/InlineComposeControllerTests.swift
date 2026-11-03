@@ -843,6 +843,81 @@ final class InlineComposeControllerTests {
         #expect(!composer.isBarHeld, "ビューアを開いたまま投稿すると、バーがキーボードの高さに留まったままです\n\(composer.stateDump())")
     }
 
+    /// 投稿欄の外の画面（タイムラインのビューアなど）を出している間に投稿に失敗したら、閉じるのを待たずに、その画面の上に知らせる。
+    @Test func failedPostWhileOtherScreenIsShownShowsErrorAboveIt() async throws {
+        defer {
+            window.rootViewController?.dismiss(animated: false)
+            window.isHidden = true
+        }
+        struct Failure: Error {}
+        let gate = PostGate()
+        let composer = try installComposer { _ in
+            await gate.wait()
+            throw Failure()
+        }
+        composer.model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
+        composer.beginEditing()
+        composer.model.text = "本文"
+        let posting = Task { await composer.model.submit() }
+        try await waitUntilSettled()
+        let other = UIViewController()
+        other.modalPresentationStyle = .overFullScreen
+        try await #require(window.rootViewController).presentForTesting(other, advancing: clock)
+
+        gate.open()
+        await posting.value
+        try await clock.advance {
+            guard let alert = other.presentedViewController as? UIAlertController else { return false }
+            return !alert.isBeingPresented
+        }
+        #expect(other.presentedViewController is UIAlertController, "外の画面を出している間に、投稿の失敗を知らせません\n\(composer.stateDump())")
+    }
+
+    /// 送っている間に添付のビューアを開いたまま投稿に失敗したら、閉じるのを待たずに、ビューアの上に知らせる。
+    @Test func failedPostWhileViewerIsOpenShowsErrorAboveIt() async throws {
+        defer {
+            window.rootViewController?.dismiss(animated: false)
+            window.isHidden = true
+        }
+        struct Failure: Error {}
+        let gate = PostGate()
+        let media = ComposeMediaService<UIImage>(
+            upload: { upload in MediaAttachment(id: "m-\(upload.filename)", type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
+            waitUntilProcessed: { id in MediaAttachment(id: id, type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
+            updateDescription: { id, _ in MediaAttachment(id: id, type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
+            makeThumbnail: { _ in nil },
+            unprocessableImageTypes: { [] },
+            recordUnprocessableImageType: { _ in },
+            preparation: { .keepsOriginal }
+        )
+        let composer = try installComposer(media: media) { _ in
+            await gate.wait()
+            throw Failure()
+        }
+        composer.model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
+        composer.beginEditing()
+        composer.model.applyPickerSelection([try pickedImage()])
+        composer.model.text = "本文"
+        try await waitUntil { composer.model.canPost }
+        try await waitUntilSettled()
+        let id = try #require(composer.model.attachments.first?.id)
+        let strip = try #require(attachmentStrips(in: window).first)
+
+        let posting = Task { await composer.model.submit() }
+        try await waitUntilSettled()
+        strip.onSelect(id)
+        try await waitUntilSettled()
+        let viewer = try #require(window.rootViewController?.presentedViewController as? MediaViewerController, "添付のビューアが開きませんでした")
+
+        gate.open()
+        await posting.value
+        try await clock.advance {
+            guard let alert = viewer.presentedViewController as? UIAlertController else { return false }
+            return !alert.isBeingPresented
+        }
+        #expect(viewer.presentedViewController is UIAlertController, "ビューアを開いている間に、投稿の失敗を知らせません\n\(composer.stateDump())")
+    }
+
     /// ソフトウェアキーボードで開いたビューアを閉じるまでにハードウェアキーボードに替わると、キーボードは上がらず、上がりきった知らせも来ない。
     /// 閉じて入力欄に戻したあとに届いたキーボードの高さがソフトウェアキーボードのものでなければ、その時点でバーをキーボードの高さから外す。
     /// ソフトウェアキーボードが上がってくるなら、上がりきるまで留めたままにする。知らせが届く前に別の添付を開き直したら、開き直したビューアの間は留めたままにする。
