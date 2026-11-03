@@ -210,15 +210,15 @@ struct AppSettingsTests {
         #expect(AppSettings(defaults: defaults).profilePostsFilter == ProfilePostsFilter(showsReplies: true, showsBoosts: false))
     }
 
-    /// アプリを離れて既定のブラウザで開くのが一般に好まれるため、既定は外で開く。
-    @Test func opensLinksExternallyByDefault() throws {
-        #expect(AppSettings(defaults: try makeDefaults()).linkBrowser == .external)
+    /// 読んでいる間もタイムラインが流れ続けるよう、既定はアプリ内のSafariで開く。
+    @Test func opensLinksInAppByDefault() throws {
+        #expect(AppSettings(defaults: try makeDefaults()).linkBrowser == .inApp)
     }
 
     @Test func persistsLinkBrowser() throws {
         let defaults = try makeDefaults()
-        AppSettings(defaults: defaults).linkBrowser = .inApp
-        #expect(AppSettings(defaults: defaults).linkBrowser == .inApp)
+        AppSettings(defaults: defaults).linkBrowser = .external
+        #expect(AppSettings(defaults: defaults).linkBrowser == .external)
     }
 
     /// 既定は、設定を足す前と同じく公開範囲を送らず、アカウントの既定に任せる。
