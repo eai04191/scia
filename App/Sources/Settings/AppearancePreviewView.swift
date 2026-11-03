@@ -6,7 +6,15 @@ import UIKit
 protocol AppearancePreviewConfiguration: UIContentConfiguration {
     /// 一覧と同じく、この行の下に区切り線を引くか。
     var drawsPreviewSeparatorBelow: Bool { get }
+    /// どの見本の行か。変わったら、行を作り直す。nilなら、行の種類と数だけで決める。
+    var previewRowID: AnyHashable? { get }
     @MainActor func makePreviewRow() -> any AppearancePreviewRow
+}
+
+extension AppearancePreviewConfiguration {
+    var previewRowID: AnyHashable? {
+        nil
+    }
 }
 
 /// プレビューに並べる行のビュー。部品の枠を返し、触っている項目の場所を示すのに使う。
@@ -27,6 +35,8 @@ final class AppearancePreviewView: UIView {
     private let scrollView = UIScrollView()
     private let stack = UIStackView()
     private var rows: [any AppearancePreviewRow] = []
+    /// 並べている行の`previewRowID`。
+    private var rowIDs: [AnyHashable?] = []
     private var separators: [UIView] = []
     /// 前に描いたときの、数値以外の設定。変わっていれば、部品を動かさずに切り替える。
     private var lastChoices: Int?
@@ -84,8 +94,11 @@ final class AppearancePreviewView: UIView {
         }
         lastFitRevision = fitRevision
         // 行の数か、行の種類（投稿か通知か）が変わったら、行を作り直す。行のビューは、自分の種類の中身しか受け付けないため。
+        // 見本の投稿が替わったときも作り直す。別の投稿を前の行に入れて動かすと、前の投稿の部品が次の投稿へ形を変えて見えるため。
         let kindsChanged = zip(rows, configurations).contains { row, configuration in type(of: row.configuration) != type(of: configuration) }
-        if rows.count != configurations.count || kindsChanged {
+        let ids = configurations.map(\.previewRowID)
+        if rows.count != configurations.count || kindsChanged || ids != rowIDs {
+            rowIDs = ids
             stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
             separators = []
             rows = configurations.map { $0.makePreviewRow() }
@@ -102,6 +115,15 @@ final class AppearancePreviewView: UIView {
                     separator.heightAnchor.constraint(equalToConstant: 1 / max(traitCollection.displayScale, 1)).isActive = true
                     stack.addArrangedSubview(separator)
                     separators.append(separator)
+                }
+            }
+            // 作り直した行は、動かさずに並べる。動きの中で並べると、部品が大きさ0から広がって見えるため。
+            // 見本が短くなってスクロールの位置が見本の下端を越えたら、下端まで戻す。
+            UIView.performWithoutAnimation {
+                self.scrollView.layoutIfNeeded()
+                let maxOffsetY = max(self.scrollView.contentSize.height + self.scrollView.adjustedContentInset.bottom - self.scrollView.bounds.height, -self.scrollView.adjustedContentInset.top)
+                if self.scrollView.contentOffset.y > maxOffsetY {
+                    self.scrollView.contentOffset.y = maxOffsetY
                 }
             }
         } else {
@@ -290,6 +312,10 @@ struct AppearancePreview: UIViewRepresentable {
 extension PostContentConfiguration: AppearancePreviewConfiguration {
     var drawsPreviewSeparatorBelow: Bool {
         !replyConnection.below && reactionGlow?.isLit != true
+    }
+
+    var previewRowID: AnyHashable? {
+        statusID
     }
 
     func makePreviewRow() -> any AppearancePreviewRow {

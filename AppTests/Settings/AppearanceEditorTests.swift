@@ -121,18 +121,31 @@ struct AppearanceEditorTests {
         }
     }
 
-    /// 分類を1つだけ開いたときの見本でも、その分類のどの項目も場所を示せる。
+    /// 分類の画面の見本で、その分類のどの項目も、触っている間は場所を示せる。
     @Test(arguments: AppearanceCatalog.groups.map(\.id))
     func groupSamplesShowTheirItems(group: AppearanceGroup.ID) throws {
-        let rows = layOutSamples(try makeSettings(), groups: [group])
+        let settings = try makeSettings()
         let values = try #require(AppearanceCatalog.groups.first { $0.id == group }).values
         for item in values {
             let highlight = try #require(AppearanceHighlight(item), "\(item.id)に示す場所がありません")
+            let rows = layOutSamples(settings, groups: [group], focus: .value(item))
             #expect(highlight.locate(in: rows) != nil, "\(item.id)の場所が\(group)の見本にありません")
         }
         for choice in Self.choices[group] ?? [] {
+            let rows = layOutSamples(settings, groups: [group], focus: .choice(choice))
             #expect(choice.highlight.locate(in: rows) != nil, "\(choice)の場所が\(group)の見本にありません")
         }
+    }
+
+    /// 既定の設定では、どの分類の画面の見本も、見本の枠に収まる。
+    /// 枠の高さは、幅402ptのiPhone 17 Proで、分類の画面の見本の枠の上限（画面の高さの42%）が約300ptになるのに合わせる。
+    @Test(arguments: AppearanceCatalog.groups.map(\.id))
+    func groupSamplesFitPreview(group: AppearanceGroup.ID) throws {
+        let samples = AppearanceSamples(settings: try makeSettings(), tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
+        let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: 400))
+        preview.apply(samples.configurations(colorScheme: .light, revision: 0, groups: [group]), highlight: nil)
+        preview.layoutIfNeeded()
+        #expect(preview.contentHeight <= 300, "\(group)の見本の高さが\(preview.contentHeight)ptあります")
     }
 
     /// 分類ごとの、選んで決める項目。`AppearanceEditorView.choices(of:)`に並べたものと同じにする。
@@ -156,17 +169,6 @@ struct AppearanceEditorTests {
     @Test func closedGroupsShowOneSample() throws {
         let samples = AppearanceSamples(settings: try makeSettings(), tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
         #expect(samples.configurations(colorScheme: .light, revision: 0, groups: []).count == 1)
-    }
-
-    /// 返信でつながった相手の見本を出さないときは、つながりの線を引かない。出すときは引く。
-    @Test func replyConnectionNeedsBothSamples() throws {
-        let samples = AppearanceSamples(settings: try makeSettings(), tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
-        // 本文の見本には、返信でつながった2件のうち、上の投稿だけが入る。
-        let body = samples.configurations(colorScheme: .light, revision: 0, groups: ["body"])
-        #expect(!body.contains { $0.replyConnection.above || $0.replyConnection.below })
-        let avatar = samples.configurations(colorScheme: .light, revision: 0, groups: ["avatar"])
-        #expect(avatar.contains { $0.replyConnection.below })
-        #expect(avatar.contains { $0.replyConnection.above })
     }
 
     /// 見本の高さは、高さを合わせ直すきっかけが変わったときに渡し直し、値を変えて高さが変わっても渡さない。
@@ -404,10 +406,10 @@ struct AppearanceEditorTests {
     }
 
     /// 見本の行を幅402で並べ、行ごとの部品の枠を返す。
-    private func layOutSamples(_ settings: AppSettings, groups: Set<AppearanceGroup.ID>? = nil) -> [AppearancePreviewFrames] {
+    private func layOutSamples(_ settings: AppSettings, groups: Set<AppearanceGroup.ID>? = nil, focus: AppearanceFocus? = nil) -> [AppearancePreviewFrames] {
         let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: 6_000))
         let samples = AppearanceSamples(settings: settings, tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
-        preview.apply(samples.configurations(colorScheme: .light, revision: 0, groups: groups), highlight: nil)
+        preview.apply(samples.configurations(colorScheme: .light, revision: 0, groups: groups, focus: focus), highlight: nil)
         preview.layoutIfNeeded()
         return preview.rowFrames()
     }

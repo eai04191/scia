@@ -163,7 +163,7 @@ struct AppearanceGroupEditorView: View {
             VStack(spacing: 0) {
                 FittedAppearancePreview(
                     preview: AppearancePreview(
-                        configurations: samples.configurations(colorScheme: previewColorScheme, revision: revision, groups: [group.id]),
+                        configurations: samples.configurations(colorScheme: previewColorScheme, revision: revision, groups: [group.id], focus: focused),
                         highlight: focused?.highlight,
                         onSelectPart: select,
                         onTapHighlight: { focused = nil },
@@ -659,46 +659,56 @@ struct AppearanceSamples {
     /// 引用の囲みを出した投稿は、いつも最後に並べる。Xの投稿の囲みも同じ値で描くが、Xの投稿は既定では出さない試作のため、見本には出さない。
     /// - Parameters:
     ///   - revision: 描き直しのきっかけ。中身は使わない。
-    ///   - groups: 見本を出す分類。渡すと、その分類の見本（`sampleIDs(for:)`）だけを返す。nilならすべての見本を返す。
-    func configurations(colorScheme: ColorScheme, revision _: Int, groups: Set<AppearanceGroup.ID>? = nil) -> [PostContentConfiguration] {
-        let shown = groups.map(Self.sampleIDs(for:))
+    ///   - groups: 見本を出す分類。渡すと、その分類の見本（`sampleIDs(for:focus:)`）だけを返す。nilならすべての見本を返す。
+    ///   - focus: 触っている項目。`groups`を渡したとき、その項目にしか要らない見本を足す。
+    func configurations(colorScheme: ColorScheme, revision _: Int, groups: Set<AppearanceGroup.ID>? = nil, focus: AppearanceFocus? = nil) -> [PostContentConfiguration] {
+        let shown = groups.map { Self.sampleIDs(for: $0, focus: focus) }
         let cardImage = PreviewImages.cardURL(for: colorScheme == .dark ? .dark : .light)
         let shownPosts = (colorScheme == .dark ? posts : lightPosts).filter { shown?.contains($0.status.id) ?? true }
-        let configurations = shownPosts.enumerated().map { index, post in
+        let configurations = shownPosts.map { post in
             var configuration = timeline.contentConfiguration(for: post.status, base: .cell())
-            // 返信でつながった相手の見本を出さないときは、行き先のない線を引かないよう、つながりを切る。
-            var connection = post.connection
-            connection.above = connection.above && index > 0 && shownPosts[index - 1].connection.below
-            connection.below = connection.below && index + 1 < shownPosts.count && shownPosts[index + 1].connection.above
-            configuration.replyConnection = connection
+            configuration.replyConnection = post.connection
             return configuration
         }
         let showsQuote = shown?.contains(Self.quoteID) ?? true
         return configurations + (showsQuote ? [quoteConfiguration(image: cardImage)] : [])
     }
 
-    /// 分類の見本の投稿のID。分類ごとの見本を合わせ、分類が空なら、分類の一覧の画面に出す部品の少ない投稿を1件だけにする。
-    static func sampleIDs(for groups: Set<AppearanceGroup.ID>) -> Set<String> {
-        let names = groups.isEmpty ? ["basic"] : groups.flatMap { groupSamples[$0] ?? [] }
+    /// 分類の見本の投稿のID。分類ごとの見本に、触っている項目にしか要らない見本を足す。分類が空なら、分類の一覧の画面に出す部品の少ない投稿を1件だけにする。
+    static func sampleIDs(for groups: Set<AppearanceGroup.ID>, focus: AppearanceFocus? = nil) -> Set<String> {
+        let names = groups.isEmpty ? ["basic"] : groups.flatMap { groupSamples[$0] ?? [] } + focusSamples(focus)
         return Set(names.map { "preview-\($0)" })
     }
 
-    /// 分類ごとに出す見本。その分類の項目の場所が、どれかの見本に出るように選ぶ。
+    /// 分類ごとに出す見本。その分類の項目の場所を示せる、なるべく小さい投稿を選び、既定の設定では見本の枠に収まるようにする。
     /// 行の余白と区切り線は投稿のあいだの見た目なので、行には2件を出す。
     /// 部品の少ない投稿は、どの投稿にもある部品の分類（行、アイコン、名前の行、本文）にも出す。分類の一覧の画面の見本で部品をタップして分類の画面を開いたとき、タップした投稿がその画面にも出るようにするため。
     private static let groupSamples: [AppearanceGroup.ID: [String]] = [
         "row": ["basic", "emoji-only"],
-        "context": ["boost", "emoji-only"],
-        "avatar": ["basic", "thread", "reply"],
-        "name": ["basic", "reply", "media", "poll"],
-        "body": ["basic", "boost", "thread", "emoji-only", "long", "filtered"],
+        "context": ["boost-plain", "emoji-only"],
+        "avatar": ["basic", "parent", "child"],
+        "name": ["basic", "name"],
+        "body": ["basic", "paragraphs"],
         "spoiler": ["reply"],
-        "media": ["thread", "media", "wide", "quote"],
+        "media": ["thread"],
         "linkCard": ["boost"],
         AppearanceCatalog.xPostGroupID: ["quote"],
         "poll": ["poll"],
-        "reactionGlow": ["boost", "wide"],
+        "reactionGlow": ["boost-plain", "wide"],
     ]
+
+    /// 分類のうち一部の項目にしか要らない見本。上限を見せる大きい見本などは、ふだん出すと見本の枠からはみ出すので、その項目を触っている間だけ出す。
+    private static func focusSamples(_ focus: AppearanceFocus?) -> [String] {
+        switch focus {
+        case .value(AppearanceCatalog.bodyTruncationThreshold), .value(AppearanceCatalog.bodyTruncatedLines): ["long"]
+        case .value(AppearanceCatalog.emojiOnlyScale), .value(AppearanceCatalog.emojiOnlyLimit): ["emoji-only"]
+        case .value(AppearanceCatalog.filterNoteText), .value(AppearanceCatalog.filterNoteSpacing): ["filtered"]
+        case .value(AppearanceCatalog.mediaTallestAspectRatio): ["media"]
+        case .value(AppearanceCatalog.mediaWidestAspectRatio): ["wide"]
+        case .choice(.embedMediaArrangement): ["quote"]
+        default: []
+        }
+    }
 
     private static let quoteID = "preview-quote"
 
@@ -712,7 +722,8 @@ struct AppearanceSamples {
             type: .image,
             url: image,
             previewUrl: image,
-            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_200, height: 900))
+            // 見本の枠に収まるよう、横長の画像にする。
+            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 2_400, height: 800))
         )
         let quoted = Status(
             id: "preview-quoted",
@@ -747,7 +758,8 @@ struct AppearanceSamples {
         // 名前の絵文字とカスタム絵文字の大きさを見せるため、名前にも絵文字と本文と同じカスタム絵文字を付ける。
         let friend = Account(id: "preview-friend", username: "friend", acct: "friend@example.com", displayName: "ともだち🌱:scia:", avatar: animated, avatarStatic: avatar, emojis: emojis)
         // 入りきらない名前の行末のぼかしを見せるため、名前の長いアカウントも用意する。
-        let longNamed = Account(id: "preview-long", username: "long", acct: "long@example.com", displayName: "とても長い名前のアカウントで、名前の行に入りきりません", avatar: animated, avatarStatic: avatar)
+        // 名前の絵文字の大きさも同じ投稿で見せるため、名前に絵文字とカスタム絵文字を入れる。
+        let longNamed = Account(id: "preview-long", username: "long", acct: "long@example.com", displayName: "とても長い名前🌱:scia:のアカウントで、名前の行に入りきりません", avatar: animated, avatarStatic: avatar, emojis: emojis)
         let image = MediaAttachment(
             id: "preview-image",
             type: .image,
@@ -819,6 +831,9 @@ struct AppearanceSamples {
         // お気に入りとブーストの光を見せるため、ブーストした投稿は、お気に入りとブーストをした投稿にする。
         let boosted = status("boosted", minutes: 30, account: friend, content: #"<p>段落の1つ目です。設定を変えると、タイムラインの投稿がこのように表示されます🎉:scia:</p><p>段落の2つ目です。<a href="https://github.com/eai04191/scia">github.com/eai04191/scia</a></p>"#, card: card, emojis: emojis, favourited: true, reblogged: true)
         let boost = Status(id: "preview-boost", createdAt: now.addingTimeInterval(-180), account: scia, content: "", spoilerText: "", url: nil, reblog: boosted)
+        // 名前の上の行と光の分類の画面に出す、リンクカードのないブースト。
+        let plainBoosted = status("boosted-plain", minutes: 40, account: friend, content: "<p>ブーストされた投稿です。</p>", emojis: emojis, favourited: true, reblogged: true)
+        let plainBoost = Status(id: "preview-boost-plain", createdAt: now.addingTimeInterval(-240), account: scia, content: "", spoilerText: "", url: nil, reblog: plainBoosted)
         let poll = Poll(
             id: "preview-poll",
             expiresAt: now.addingTimeInterval(86_400),
@@ -832,9 +847,9 @@ struct AppearanceSamples {
             (status("basic", minutes: 1, account: scia, content: "<p>設定を変えると、タイムラインの投稿がこのように表示されます。</p>"), ReplyConnection()),
             (boost, ReplyConnection()),
             // 注意書きのある投稿の画像はぼかされ、サムネイル同士のすき間が見えないため、画像は注意書きのない投稿に付ける。
-            (status("thread", minutes: 20, account: scia, content: "<p>返信でつながった投稿の、最初の投稿です。</p><blockquote><p>引用した文です。</p></blockquote>", media: [describedImage, image]), ReplyConnection(below: true)),
+            (status("thread", minutes: 20, account: scia, content: "<p>画像を2枚付けた投稿です。</p>", media: [describedImage, image]), ReplyConnection()),
             // 公開範囲の記号と編集済みの「*」を見せるため、未収載で編集した投稿にする。
-            (status("reply", minutes: 12, account: friend, content: "<p>注意書きの下の本文です。</p>", spoiler: "注意書き", replyingTo: scia, visibility: .unlisted, edited: true), ReplyConnection(above: true)),
+            (status("reply", minutes: 12, account: friend, content: "<p>注意書きの下の本文です。</p>", spoiler: "注意書き", replyingTo: scia, visibility: .unlisted, edited: true), ReplyConnection()),
             (status("media", minutes: 8, account: scia, content: "", media: [tallImage]), ReplyConnection()),
             // 絵文字だけの本文を見せるため、先頭にメンションの付いた、絵文字だけの返信を用意する。メンションは大きくしない。
             (status("emoji-only", minutes: 7.5, account: friend, content: #"<p><span class="h-card"><a href="https://example.com/@scia" class="u-url mention">@<span>scia</span></a></span> 👍:scia:🎉</p>"#, replyingTo: scia, emojis: emojis), ReplyConnection()),
@@ -845,6 +860,15 @@ struct AppearanceSamples {
             (status("wide", minutes: 7, account: friend, content: "<p>横長の画像を1枚付けた投稿です。</p>", media: [wideImage], favourited: true), ReplyConnection()),
             (status("poll", minutes: 5, account: longNamed, content: "<p>アイコンの形はどちらが好きですか？</p>", poll: poll), ReplyConnection()),
             (status("filtered", minutes: 2, account: scia, content: "<p>自分のフィルターに一致した、自分の投稿です。</p>", filtered: [ownFilter]), ReplyConnection()),
+            // 名前の行の部品を1件で見せる投稿。入りきらない名前、公開範囲の記号、編集済みの「*」を出し、名前と画像のあいだを見せるため本文を付けない。
+            // 画像は、見本の枠に収まるよう横長にする。
+            (status("name", minutes: 1.5, account: longNamed, content: "", media: [wideImage], visibility: .unlisted, edited: true), ReplyConnection()),
+            // 段落のあいだ、引用の字下げ、本文の絵文字を見せる投稿。
+            (status("paragraphs", minutes: 1.2, account: friend, content: "<p>段落の1つ目です🎉:scia:</p><blockquote><p>引用した文です。</p></blockquote><p>段落の2つ目です。</p>", emojis: emojis), ReplyConnection()),
+            (plainBoost, ReplyConnection()),
+            // 返信をつなぐ線を見せる、本文だけの2件。下の投稿は返信のラベルが線に重ならないよう、返信にはせず、線だけでつなぐ。
+            (status("parent", minutes: 1.1, account: scia, content: "<p>返信でつながった投稿の、最初の投稿です。</p>"), ReplyConnection(below: true)),
+            (status("child", minutes: 1, account: friend, content: "<p>返信です。</p>"), ReplyConnection(above: true)),
         ]
     }
 }
