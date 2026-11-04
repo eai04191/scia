@@ -136,13 +136,10 @@ final class PostBodyView: UIView {
     /// 本文の上下の部品は、ラベルのベースラインではなく、この位置から置く。
     private let textFirstBaselineGuide = UILayoutGuide()
     private let textLastBaselineGuide = UILayoutGuide()
-    /// ベースラインの位置を、UILabelのベースラインに合わせる制約。本文をUILabelで描くときに、初めて使うときに作る。
-    /// ラベルのベースラインの制約を一度作ると、UILabelは文字列を入れるたびにベースラインを並べ直して求めるので、TextKit 2で描くあいだは作らない。
-    private var labelBaselineConstraints: [NSLayoutConstraint]?
-    /// ベースラインの位置を、TextKit 2で並べた結果からラベルの上下の端に合わせる制約。本文をTextKit 2で描くときに使う。
-    /// UILabelのベースラインは、TextKit 2で並べた結果を使わずにUILabelが並べ直して求めるため、描き方の違うラベルでは使わない。
-    private var textKitFirstBaseline: NSLayoutConstraint?
-    private var textKitLastBaseline: NSLayoutConstraint?
+    /// ベースラインの位置を、TextKit 2で並べた結果からラベルの上下の端に合わせる制約。
+    /// UILabelのベースライン（`firstBaselineAnchor`など）は、TextKit 2で並べた結果を使わずにUILabelが並べ直して求めるため、使わない。
+    private lazy var textKitFirstBaseline = textFirstBaselineGuide.topAnchor.constraint(equalTo: textLabel.topAnchor)
+    private lazy var textKitLastBaseline = textLastBaselineGuide.topAnchor.constraint(equalTo: textLabel.bottomAnchor)
     /// フィルターの注記の最初のベースラインの位置。注記の上のすき間も字面から測るので、プレビューで字面の上端を求めるのに使う。
     private let filterNoteBaselineGuide = UILayoutGuide()
     // 本文のほかの部品は、その中身が初めて来たときに作り、そのあとは隠して持っておく。
@@ -351,6 +348,8 @@ final class PostBodyView: UIView {
         self.mediaImages = mediaImages
         self.avatarImages = avatarImages
         super.init(frame: .zero)
+        // 文字列を入れる前にTextKit 2で描くようにする。UILabelで描くままのラベルに長い本文を入れると、UILabelがその場で並べるため。
+        textLabel.drawsWithTextKit = true
         textLabel.numberOfLines = 0
         textLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(textLabel)
@@ -363,9 +362,9 @@ final class PostBodyView: UIView {
         NSLayoutConstraint.activate([
             textFirstBaselineGuide.heightAnchor.constraint(equalToConstant: 0),
             textLastBaselineGuide.heightAnchor.constraint(equalToConstant: 0),
+            textKitFirstBaseline,
+            textKitLastBaseline,
         ])
-        textKitFirstBaseline = textFirstBaselineGuide.topAnchor.constraint(equalTo: textLabel.topAnchor)
-        textKitLastBaseline = textLastBaselineGuide.topAnchor.constraint(equalTo: textLabel.bottomAnchor)
         textLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
         textLabel.onExpand = { [weak self] in self?.onExpandBody?() }
     }
@@ -590,9 +589,6 @@ final class PostBodyView: UIView {
             }
         }
         self.content = content
-        // 文字列を入れる前に描き方を決める。UILabelで描くままの新しいラベルに長い本文を入れると、UILabelがその場で並べるため。
-        let drawsWithTextKit = AppDependencies.tuning.value(of: TuningCatalog.bodyTextKitDrawing)
-        textLabel.drawsWithTextKit = drawsWithTextKit
         textLabel.attributedText = Self.truncatingTail(content.text, when: content.maximumLines > 0)
         textLabel.hashtagAccount = content.hashtagAccount
         // 長い本文を切るときは、行数をラベルが幅から決める。
@@ -602,7 +598,7 @@ final class PostBodyView: UIView {
         textLabel.truncation = content.truncation
         // ベースラインを置く前に、先に並べた結果を渡す。渡さないと、ベースラインを置くために、ここで並べることになる。
         textLabel.usePreparedLayout(content.preparedLayout)
-        applyTextDrawing(textKit: drawsWithTextKit)
+        updateTextKitBaselines(width: textLabel.bounds.width > 0 ? textLabel.bounds.width : bounds.width)
         NSLayoutConstraint.deactivate(variableConstraints)
         variableConstraints = []
         let shownSpoiler = applySpoiler(content.spoiler)
@@ -686,39 +682,19 @@ final class PostBodyView: UIView {
         }
     }
 
-    /// 本文をTextKit 2で描くか、UILabelで描くかを替え、ベースラインの位置の決め方を合わせる。
-    private func applyTextDrawing(textKit: Bool) {
-        textLabel.drawsWithTextKit = textKit
-        guard let textKitFirstBaseline, let textKitLastBaseline else { return }
-        if textKit {
-            labelBaselineConstraints.map(NSLayoutConstraint.deactivate)
-            updateTextKitBaselines(width: textLabel.bounds.width > 0 ? textLabel.bounds.width : bounds.width)
-            NSLayoutConstraint.activate([textKitFirstBaseline, textKitLastBaseline])
-        } else {
-            NSLayoutConstraint.deactivate([textKitFirstBaseline, textKitLastBaseline])
-            let constraints = labelBaselineConstraints ?? [
-                textFirstBaselineGuide.topAnchor.constraint(equalTo: textLabel.firstBaselineAnchor),
-                textLastBaselineGuide.topAnchor.constraint(equalTo: textLabel.lastBaselineAnchor),
-            ]
-            labelBaselineConstraints = constraints
-            NSLayoutConstraint.activate(constraints)
-        }
-    }
-
-    /// TextKit 2で描くとき、本文を`width`で並べた結果から、ベースラインの位置をラベルの上下の端からの距離で決める。
+    /// 本文を`width`で並べた結果から、ベースラインの位置をラベルの上下の端からの距離で決める。
     /// 中身を適用するときはまだ本文の幅が決まっていないことがあるので、前の幅か自分の幅で決め、並べたあとに本文の幅で決め直す。
     /// 決め直して変わるのは、幅で最初か最後の行に入る文字の書体が替わり、行の高さが変わるときだけ。
     private func updateTextKitBaselines(width: CGFloat) {
-        guard textLabel.drawsWithTextKit else { return }
         // 初めて中身を入れるときは、まだ幅が決まっていない。十分に広い幅で並べて決め、高さを測る前にベースラインを置いておく。
         // 0のままにすると、ベースラインがラベルの上端に重なり、並べ直すまで本文が上へずれた高さで測られる。
         // 先に並べてあれば、並べた幅で決める。一覧の本文は、ふつうその幅に並ぶ。
         let baselines = textLabel.textKitBaselines(width: width > 0 ? width : textLabel.preparedLayoutWidth ?? Self.unknownTextWidth)
-        if textKitFirstBaseline?.constant != baselines.first {
-            textKitFirstBaseline?.constant = baselines.first
+        if textKitFirstBaseline.constant != baselines.first {
+            textKitFirstBaseline.constant = baselines.first
         }
-        if textKitLastBaseline?.constant != -baselines.lastFromBottom {
-            textKitLastBaseline?.constant = -baselines.lastFromBottom
+        if textKitLastBaseline.constant != -baselines.lastFromBottom {
+            textKitLastBaseline.constant = -baselines.lastFromBottom
         }
     }
 
@@ -962,7 +938,7 @@ final class PostBodyView: UIView {
 
     /// 本文を先に並べるときに使う、本文のラベルの値と幅。本文を出していないとき、添付ファイルを本文の右に並べて幅を狭めているとき、幅が決まる前はnil。
     var bodyTextGeometry: BodyTextPreparer.Geometry? {
-        guard !textLabel.isHidden, textLabel.drawsWithTextKit, textLabel.bounds.width > 0, textTrailing?.constant ?? 0 == 0 else { return nil }
+        guard !textLabel.isHidden, textLabel.bounds.width > 0, textTrailing?.constant ?? 0 == 0 else { return nil }
         return BodyTextPreparer.Geometry(style: textLabel.textKitStyle, width: textLabel.bounds.width)
     }
 

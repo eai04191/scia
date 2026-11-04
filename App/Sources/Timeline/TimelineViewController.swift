@@ -547,7 +547,6 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             _ = settings.appearanceValues
             _ = tuning.value(of: TuningCatalog.mediaThumbnailUpscaleTolerance)
             _ = tuning.value(of: TuningCatalog.xPostEmbeds)
-            _ = tuning.value(of: TuningCatalog.bodyTextKitDrawing)
             _ = tuning.value(of: TuningCatalog.reactionGlowMixesInOKLab)
             _ = tuning.value(of: TuningCatalog.reactionGlowIconRiseDelay)
             _ = tuning.value(of: TuningCatalog.reactionGlowHDRExposure)

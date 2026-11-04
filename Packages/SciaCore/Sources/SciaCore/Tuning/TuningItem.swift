@@ -115,14 +115,6 @@ public enum TuningCatalog {
         defaultValue: false
     )
 
-    /// 投稿の本文を、UILabelではなくTextKit 2で並べて描く。並べる回数と時間を減らし、長い本文の行を組み立てるときのフレーム落ちを減らすための試作。
-    /// UILabelは端末で長い段落の改行位置を段落全体から選び、その計算が重い。TextKit 2はその計算をせず、行の切れ目が変わる段落がある。
-    public static let bodyTextKitDrawing = ToggleTuning(
-        id: "timeline.bodyTextKitDrawing",
-        title: "本文をTextKit 2で描く（試作）",
-        defaultValue: true
-    )
-
     /// 編集履歴で、前の版から変わっていない部分がこの割合に満たない版は、書き直したものとして、前の版をまるごと消し、新しい版をまるごと足した形で出す。
     /// 0にすると、どれだけ書き直しても単語ごとの違いを重ねる。
     public static let editHistoryMinimumUnchangedRatio = NumberTuning(
@@ -1649,7 +1641,6 @@ public enum TuningCatalog {
             .number(linkCardTransitionDuration),
             .number(longBodyExpandDuration),
             .toggle(xPostEmbeds),
-            .toggle(bodyTextKitDrawing),
             .number(customEmojiArrivalDuration),
             .number(mediaSymbolRatio),
             .number(mediaSymbolMinSize),
