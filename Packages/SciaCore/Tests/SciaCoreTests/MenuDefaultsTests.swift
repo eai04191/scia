@@ -31,7 +31,8 @@ struct MenuDefaultsTests {
         check(MediaMenuItem.self)
     }
 
-    /// あとから足した項目は、保存した並びを読むときに、既定の並びで直前にある項目（区切り線は数えない）のすぐ後ろへ、既定の表示で入る。
+    /// あとから足した項目は、保存した並びを読むときに、既定の並びで直前にある項目（区切り線は数えない）の後ろへ、既定の表示で入る。
+    /// 既定の並びで区切り線を挟んでいれば、区切り線も入るので、あいだの区切り線は数えない。
     /// どの既定の並びでも成り立つよう、項目を1つずつ抜いた既定の並びを読み直して確かめる。
     @Test("足した項目は、既定で直前にある項目の後ろに、既定の表示で入る")
     func missingItemsReturnAfterTheirDefaultPredecessor() {
@@ -56,7 +57,9 @@ struct MenuDefaultsTests {
                 continue
             }
             #expect(saved.elements.filter { $0 == element }.count == 1, "\(Item.self)の\(item.rawValue)")
-            #expect(restored == 0 ? predecessor == nil : saved.elements[restored - 1] == predecessor, "\(Item.self)の\(item.rawValue)の位置")
+            let restoredPredecessor = saved.elements[..<restored].last { $0 != .separator && $0 != .rowSeparator }
+            #expect(restoredPredecessor == predecessor, "\(Item.self)の\(item.rawValue)の位置")
+            #expect(saved == Item.defaultLayout, "\(Item.self)の\(item.rawValue)を抜いた既定の並びが、既定に戻る")
         }
     }
 

@@ -22,6 +22,24 @@ private enum TestMenuItem: String, MenuItemKind {
     ])
 }
 
+/// 既定で区切り線に挟まれた、1つだけのまとまりの項目を持つ、テスト用のメニュー。
+private enum SoloMenuItem: String, MenuItemKind {
+    case a
+    case solo
+    case b
+    case c
+
+    static let defaultLayout = MenuLayout<SoloMenuItem>(defaultElements: [
+        .item(.a, isVisible: true),
+        .separator,
+        .item(.solo, isVisible: true),
+        .separator,
+        .item(.b, isVisible: true),
+        .more,
+        .item(.c, isVisible: true),
+    ])
+}
+
 @Suite(.scratch)
 @MainActor
 struct MenuLayoutTests {
@@ -132,6 +150,7 @@ struct MenuLayoutTests {
     }
 
     /// 新しい項目は、既定で直前にある項目の、保存した並びでの位置の後ろに入る。動かした項目についていく。
+    /// 既定ですぐ後ろにある区切り線も入れる。
     @Test func newItemFollowsItsDefaultPredecessor() {
         let saved = ["item:c", "separator", "item:a", "hidden:hiddenByDefault", "more", "item:delete"]
 
@@ -142,17 +161,79 @@ struct MenuLayoutTests {
             .separator,
             .item(.a, isVisible: true),
             .item(.b, isVisible: true),
+            .separator,
             .item(.hiddenByDefault, isVisible: false),
             .more,
             .item(.delete, isVisible: true),
         ])
     }
 
-    /// 区切り線は目印にしない。既定で区切り線の直後にある項目は、その前の項目の後ろに入る。
+    /// 区切り線は目印にしない。既定で区切り線の直後にある項目は、その前の項目の後ろに、既定と同じく区切り線を挟んで入る。
     @Test func separatorsAreNotAnchors() {
         let layout = MenuLayout<TestMenuItem>(tokens: ["item:b", "item:a", "separator", "hidden:hiddenByDefault", "more", "item:delete"])
 
-        #expect(layout.elements.prefix(3) == [.item(.b, isVisible: true), .item(.c, isVisible: true), .item(.a, isVisible: true)])
+        #expect(layout.elements.prefix(4) == [.item(.b, isVisible: true), .separator, .item(.c, isVisible: true), .item(.a, isVisible: true)])
+    }
+
+    /// 既定で区切り線に挟まれた1つだけのまとまりの項目は、保存した並びでも前後の区切り線と一緒に入り、1つだけのまとまりになる。
+    @Test func newItemBringsSurroundingSeparators() {
+        let layout = MenuLayout<SoloMenuItem>(tokens: ["item:a", "item:b", "more", "item:c"])
+
+        #expect(layout.elements == [
+            .item(.a, isVisible: true),
+            .separator,
+            .item(.solo, isVisible: true),
+            .separator,
+            .item(.b, isVisible: true),
+            .more,
+            .item(.c, isVisible: true),
+        ])
+    }
+
+    /// 差し込む位置のすぐ後ろが区切り線なら、区切り線を足さずにその後ろのまとまりに入れ、すでにある区切り線と並べない。
+    @Test func newItemReusesExistingSeparator() {
+        let layout = MenuLayout<SoloMenuItem>(tokens: ["item:a", "separator", "item:b", "more", "item:c"])
+
+        #expect(layout.elements == [
+            .item(.a, isVisible: true),
+            .separator,
+            .item(.solo, isVisible: true),
+            .separator,
+            .item(.b, isVisible: true),
+            .more,
+            .item(.c, isVisible: true),
+        ])
+    }
+
+    /// 並びの先頭、「その他」の境目、並びの終わりと接する側には、区切り線を足さない。
+    @Test func newItemDoesNotAddSeparatorsAtEdges() {
+        let atTop = MenuLayout<SoloMenuItem>(tokens: ["item:solo", "item:b", "more", "item:c"])
+        #expect(atTop.elements.first == .item(.a, isVisible: true))
+
+        let beforeMore = MenuLayout<SoloMenuItem>(tokens: ["item:b", "item:a", "more", "item:c"])
+        #expect(beforeMore.elements == [
+            .item(.b, isVisible: true),
+            .item(.a, isVisible: true),
+            .separator,
+            .item(.solo, isVisible: true),
+            .more,
+            .item(.c, isVisible: true),
+        ])
+    }
+
+    /// 既定で区切り線の両側にある2つの新しい項目は、区切り線を1本だけ挟んで並ぶ。
+    @Test func consecutiveNewItemsShareOneSeparator() {
+        let layout = MenuLayout<TestMenuItem>(tokens: ["item:a", "hidden:hiddenByDefault", "more", "item:delete"])
+
+        #expect(layout.elements == [
+            .item(.a, isVisible: true),
+            .item(.b, isVisible: true),
+            .separator,
+            .item(.c, isVisible: true),
+            .item(.hiddenByDefault, isVisible: false),
+            .more,
+            .item(.delete, isVisible: true),
+        ])
     }
 
     /// 既定で「その他」のすぐ後ろにある項目は、保存した並びでも「その他」の中の先頭に入る。

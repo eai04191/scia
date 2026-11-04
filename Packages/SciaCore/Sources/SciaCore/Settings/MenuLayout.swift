@@ -153,22 +153,55 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
     }
 
     /// 重なった項目と「その他」は先に出たほうを残す。足りない項目と「その他」は、既定の並びで直前にあるもの（区切り線は数えない）の後ろに差し込み、表示は既定に従う。
+    /// 足りない項目は、既定の並びですぐ前か後ろにある区切り線も一緒に入れる。決まりはdocs/menus.mdの「あとから項目が増えたとき」にある。
     private static func completing(_ elements: [Element]) -> [Element] {
         var seen: Set<Key> = []
         var result = elements.filter { element in
             guard let key = key(of: element) else { return true }
             return seen.insert(key).inserted
         }
+        let defaults = Item.defaultLayout.elements
         var previous: Key?
-        for element in Item.defaultLayout.elements {
+        for (offset, element) in defaults.enumerated() {
             guard let key = key(of: element) else { continue }
             defer { previous = key }
             guard !seen.contains(key) else { continue }
-            let index = previous.flatMap { anchor in result.firstIndex { Self.key(of: $0) == anchor } }.map { $0 + 1 } ?? 0
-            result.insert(element, at: index)
             seen.insert(key)
+            let index = previous.flatMap { anchor in result.firstIndex { Self.key(of: $0) == anchor } }.map { $0 + 1 } ?? 0
+            guard case .item = element else {
+                result.insert(element, at: index)
+                continue
+            }
+            let before = offset > 0 ? defaults[offset - 1] : nil
+            let after = offset + 1 < defaults.count ? defaults[offset + 1] : nil
+            insert(element, at: index, separatorBefore: before.flatMap(separator(_:)), separatorAfter: after.flatMap(separator(_:)), into: &result)
         }
         return result
+    }
+
+    /// 項目を`index`に入れ、既定の並びでその側にある区切り線を足す。並びの端と「その他」の境目に接する側と、すでに区切り線がある側には足さない。
+    /// 前に区切り線が要り、入れる位置のすぐ後ろがもう区切り線なら、並びの先頭や「その他」の境目でも、その区切り線の後ろに入れる。区切り線を2本並べず、既定で横並びの区切り線の下にある項目を、その下のまとまりに戻すため。
+    private static func insert(_ element: Element, at index: Int, separatorBefore: Element?, separatorAfter: Element?, into result: inout [Element]) {
+        var index = index
+        if separatorBefore != nil, index < result.count, separator(result[index]) != nil {
+            index += 1
+        } else if let separatorBefore, index > 0, result[index - 1] != .more {
+            result.insert(separatorBefore, at: index)
+            index += 1
+        }
+        result.insert(element, at: index)
+        let next = index + 1
+        if let separatorAfter, next < result.count, result[next] != .more, separator(result[next]) == nil {
+            result.insert(separatorAfter, at: next)
+        }
+    }
+
+    /// 区切り線（横並びの区切り線も含む）ならそれを、ほかはnilを返す。
+    private static func separator(_ element: Element) -> Element? {
+        switch element {
+        case .separator, .rowSeparator: element
+        case .item, .more: nil
+        }
     }
 }
 
