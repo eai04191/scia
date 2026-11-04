@@ -47,7 +47,7 @@ make readme-screenshots SIM='<シミュレーターの名前>'
 
 投稿、通知、新着は「流れても、動かない」のものを使い、次を足す。
 
-- タブの並び: ホーム、ローカル、通知を並べ、リストと連合を右端の切り替えタブに入れる。通知の既読位置を一番新しい通知より前にして、通知のタブにバッジを出す
+- タブの並び: ホームと通知を並べ、リストと連合を右端の切り替えタブに入れる。通知の既読位置を一番新しい通知より前にして、通知のタブにバッジを出す
 - 下書き: `scia-debug://compose?text=...&media=3`と同じ経路で、シナリオの写真（`ScenarioScript.draftImages`）を添付する。シナリオからは、本文を長いパスで送らずに済むよう、`scenario/draft`のような名前で送り、アプリがデバッグURLの操作（`ScenarioScript.actions`）に引き直す
 - 添付の送信: 架空のサーバーが`POST api/v2/media`に、変換を終えた添付で答える（`ScenarioScript.postResponses`）
 - ハッシュタグの補完: `featured_tags`と`featured_tags/suggestions`に答える。`#`だけでは問い合わせずに手元の候補を出すので、検索には答えない

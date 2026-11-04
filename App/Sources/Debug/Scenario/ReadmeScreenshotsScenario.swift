@@ -32,10 +32,9 @@ enum ReadmeScreenshotsScenario {
         let handle = base.credential.handle
         let list = list
         script.configure = { settings, _ in
-            // ホーム、ローカル、通知を並べ、連合とリストを右端の切り替えタブに入れる。切り替えタブはリストを開いておく。
+            // ホームと通知を並べ、連合とリストを右端の切り替えタブに入れる。切り替えタブはリストを開いておく。
             settings.setTabLayout(MenuLayout(elements: [
                 .item(.home, isVisible: true),
-                .item(.local, isVisible: true),
                 .item(.notifications, isVisible: true),
                 .more,
                 .item(.list(id: list.id, title: list.title), isVisible: true),
