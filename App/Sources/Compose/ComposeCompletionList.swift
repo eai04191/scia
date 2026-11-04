@@ -613,7 +613,7 @@ private struct EmojiImage: UIViewRepresentable {
         context.coordinator.url = url
         context.coordinator.animationURL = animationURL
         view.stillImage = store.image(for: url)
-        view.animation = animationURL.flatMap(store.animation(for:))
+        view.animation = animationURL.flatMap { store.animation(for: $0) }
     }
 
     /// アイコンと同じく、画像で大きさの希望が変わらないよう、決まった大きさにする。

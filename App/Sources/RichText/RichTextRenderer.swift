@@ -26,6 +26,9 @@ struct RichTextRenderer {
     let language: String
     /// Unicodeの絵文字を描く絵。描く場所ごとに渡さず、設定から読む。
     var emojiStyle: EmojiStyle = AppDependencies.settings.appearance.emojiStyle
+    /// カスタム絵文字を描く画面の、1ptあたりのピクセル数。読む画像の高さを決めるのに使う。
+    /// 文字列は描くビューより先に組むので、ビューのtraitではなく、組むときのtraitから読む。iPhoneの画面は1つなので、どのビューでも同じ値になる。
+    var displayScale: CGFloat = UITraitCollection.current.displayScale
 
     func render(_ text: RichText) -> NSAttributedString {
         if let emojiOnly, let count = text.emojiOnlyCount(isEmoji: { Self.isUnicodeEmoji($0, in: font(for: $1, block: $2)) }) {
@@ -222,13 +225,14 @@ struct RichTextRenderer {
 
     private func render(_ emoji: CustomEmoji, block: RichText.Block) -> NSAttributedString {
         let font = font(for: [], block: block)
+        // 割合が同じなら、Unicodeの絵文字と同じ高さに描く。
+        let height = EmojiFont.glyphHeight(of: font) * emojiScale
         // 先に画像を求める。前に読めなかった画像も、間隔が過ぎていればここで読み直しが始まる。読めるまでは文字で描く。
-        let image = emojiImages.image(for: emoji.staticUrl)
+        // 絵文字だけの本文のように大きく描くときは、その高さで読み直させ、読み終えるまでは持っている画像を拡大して描く。
+        let image = emojiImages.image(for: emoji.staticUrl, pixelHeight: Self.pixelHeight(of: height, scale: displayScale))
         if image == nil, emojiImages.hasFailed(emoji.staticUrl) {
             return NSAttributedString(string: ":\(emoji.shortcode):", attributes: attributes(style: [], block: block))
         }
-        // 割合が同じなら、Unicodeの絵文字と同じ高さに描く。
-        let height = EmojiFont.glyphHeight(of: font) * emojiScale
         // 絵文字の中心を、和文の字面（em枠）の中心に揃える。文字と大きさが違っても、文字が絵文字の横の真ん中に来るようにするため。
         // 欧文の大文字の中心とも0.03emほどしか違わない。等倍の絵文字は、下端がほぼ文字の下端（descender）に来る。
         let y = Self.emojiCenterHeight * font.pointSize - height / 2
@@ -435,6 +439,13 @@ extension NSAttributedString.Key {
     static let scaledUnicodeEmoji = NSAttributedString.Key("net.mizle.scia.scaledUnicodeEmoji")
     /// 絵文字だけの本文（`RichText.emojiOnlyCount`）。プレビューで、絵文字だけの本文の項目を示すのに使う。
     static let emojiOnlyBody = NSAttributedString.Key("net.mizle.scia.emojiOnlyBody")
+}
+
+extension RichTextRenderer {
+    /// `points`の高さで描く絵文字に要る、画像の高さのピクセル数。
+    static func pixelHeight(of points: CGFloat, scale: CGFloat) -> Int {
+        Int((points * scale).rounded(.up))
+    }
 }
 
 /// 絵文字だけの本文の絵文字を大きく描く決まり。

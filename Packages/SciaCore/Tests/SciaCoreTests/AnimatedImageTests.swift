@@ -178,4 +178,15 @@ struct AnimatedImageTests {
 
         #expect(await AnimatedImage.decode(data, maxPixelSize: 96) == nil)
     }
+
+    /// 収まる大きさは、並べた画像が`maxByteCount`に収まる一番大きいもの。1つ大きくすると超える。
+    @Test func fittingPixelSizeIsLargestWithinByteLimit() {
+        let size = AnimatedImage.fittingPixelSize(frameCount: 20, width: 512, height: 512, maxPixelSize: 1_024)
+        func bytes(_ frame: Int) -> Int {
+            ((frame + AnimatedImage.gutter) * 5 - AnimatedImage.gutter) * ((frame + AnimatedImage.gutter) * 4 - AnimatedImage.gutter) * 4
+        }
+        #expect(bytes(size) <= AnimatedImage.maxByteCount)
+        #expect(bytes(size + 1) > AnimatedImage.maxByteCount)
+        #expect(AnimatedImage.fittingPixelSize(frameCount: 2, width: 32, height: 32, maxPixelSize: 96) == 96, "収まるなら求めた大きさのまま")
+    }
 }

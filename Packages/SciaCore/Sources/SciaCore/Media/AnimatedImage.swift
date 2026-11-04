@@ -55,6 +55,7 @@ public struct AnimatedImage: Sendable {
     }
 
     /// 展開したコマが使ってよいメモリの上限。超える画像は動かさず、静止画で描く。
+    /// 大きく描く絵文字を高く読むときは、`fittingPixelSize`で収まる大きさまで下げて読む（`EmojiImageStore`）。
     /// 絵文字を96pxで展開すると1コマ約36KBで、200コマ余りまで入る。それを超える長いアニメーションの絵文字はまれなため。
     public static let maxByteCount = 8 * 1024 * 1024
 
@@ -93,6 +94,33 @@ public struct AnimatedImage: Sendable {
             frames.append((image, frameDuration(properties)))
         }
         return sheet(of: frames)
+    }
+
+    /// `width`×`height`のコマを`frameCount`枚並べた画像が`maxByteCount`に収まる、`maxPixelSize`以下で一番大きい、長い辺の上限。
+    /// 1ピクセルまで縮めても収まらなければ0。コマの大きさは`scaled`と同じく求め、並べ方は`sheet`と同じく求める。
+    static func fittingPixelSize(frameCount: Int, width: Int, height: Int, maxPixelSize: Int) -> Int {
+        guard frameCount > 0, width > 0, height > 0 else { return 0 }
+        let columns = Int(Double(frameCount).squareRoot().rounded(.up))
+        let rows = (frameCount + columns - 1) / columns
+        func fits(_ pixelSize: Int) -> Bool {
+            let longest = max(width, height)
+            let scale = longest > pixelSize ? Double(pixelSize) / Double(longest) : 1
+            let frameWidth = max(1, Int((Double(width) * scale).rounded()))
+            let frameHeight = max(1, Int((Double(height) * scale).rounded()))
+            return ((frameWidth + gutter) * columns - gutter) * ((frameHeight + gutter) * rows - gutter) * 4 <= maxByteCount
+        }
+        // 大きさを上げるほど重くなるので、収まる一番大きいものを二分探索で探す。
+        var low = 0
+        var high = maxPixelSize
+        while low < high {
+            let middle = (low + high + 1) / 2
+            if fits(middle) {
+                low = middle
+            } else {
+                high = middle - 1
+            }
+        }
+        return low
     }
 
     /// コマを、なるべく正方形に近い格子に、すき間を空けて並べた画像にする。コマの大きさは最初のコマに揃える。

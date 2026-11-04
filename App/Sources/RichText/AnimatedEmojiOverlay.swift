@@ -30,6 +30,8 @@ final class AnimatedEmojiOverlay {
     private var emojiURLs: Set<URL> = []
     /// `emojiURLs`のうち、`prepare`のときにアニメーション版が届いていたもの。
     private var animatedURLs: Set<URL> = []
+    /// `emojiURLs`の絵文字を描く高さのピクセル数。読み直すときも、この高さで求める。
+    private var pixelHeights: [URL: Int] = [:]
     private(set) var entries: [Entry] = []
     private var layers: [CALayer] = []
     /// 層を作ったときの`entries`。変わっていなければ、層を作り直さずに位置だけを合わせる。
@@ -66,8 +68,10 @@ final class AnimatedEmojiOverlay {
 
     /// `text`の、アニメーション版が届いている絵文字を透明な画像に差し替えた文字列。差し替えるものがなければ`text`をそのまま返す。
     /// まだ届いていない絵文字は読み込みを始め、届いたら`onChange`を呼ぶ。
-    /// - Parameter stillIndices: 動かさず、文字の中の静止画のまま描く絵文字の位置。
-    func prepare(_ text: NSAttributedString?, keepingStill stillIndices: Set<Int> = []) -> NSAttributedString? {
+    /// - Parameters:
+    ///   - stillIndices: 動かさず、文字の中の静止画のまま描く絵文字の位置。
+    ///   - displayScale: 描く画面の、1ptあたりのピクセル数。絵文字を描く高さから、読むコマの高さを決める。
+    func prepare(_ text: NSAttributedString?, keepingStill stillIndices: Set<Int> = [], displayScale: CGFloat) -> NSAttributedString? {
         // 組み終えるまで前の`entries`を持っておく。先に手放すと、ストアから捨てられたアニメーションの最後の参照が切れ、読み直すことになるため。
         var entries: [Entry] = []
         defer {
@@ -79,12 +83,19 @@ final class AnimatedEmojiOverlay {
         }
         emojiURLs = []
         animatedURLs = []
+        pixelHeights = [:]
         guard let text, text.length > 0, AnimatedImagePlayback.isAllowed else { return text }
         var result: NSMutableAttributedString?
         text.enumerateAttribute(.customEmoji, in: NSRange(location: 0, length: text.length)) { value, range, _ in
             guard let emoji = value as? CustomEmoji else { return }
             emojiURLs.insert(emoji.url)
-            guard let animation = store.animation(for: emoji.url) else { return }
+            // 同じ絵文字を違う大きさで描くこともあるので、一番大きいものに合わせる。
+            for index in range.location..<NSMaxRange(range) {
+                guard let attachment = text.attribute(.attachment, at: index, effectiveRange: nil) as? NSTextAttachment else { continue }
+                let pixelHeight = RichTextRenderer.pixelHeight(of: attachment.bounds.height, scale: displayScale)
+                pixelHeights[emoji.url] = max(pixelHeights[emoji.url] ?? 0, pixelHeight)
+            }
+            guard let animation = store.animation(for: emoji.url, pixelHeight: pixelHeights[emoji.url] ?? EmojiImageStore<UIImage>.pixelHeight) else { return }
             animatedURLs.insert(emoji.url)
             // 同じ絵文字が続くと1つの範囲にまとまるため、1文字ずつ差し替える。
             for index in range.location..<NSMaxRange(range) where !stillIndices.contains(index) {
@@ -104,7 +115,7 @@ final class AnimatedEmojiOverlay {
     /// 今の文字列の絵文字のうち、アニメーション版が届いていないものを読み直す。届いていれば`onChange`を呼ぶ。
     /// 同じ中身の文字列を入れ直したときに、文字列を組み直さずに、`prepare`と同じく読めなかったアニメーション版を読み直すのに使う。
     func reloadMissingAnimations() {
-        for url in emojiURLs.subtracting(animatedURLs) where store.animation(for: url) != nil {
+        for url in emojiURLs.subtracting(animatedURLs) where store.animation(for: url, pixelHeight: pixelHeights[url] ?? EmojiImageStore<UIImage>.pixelHeight) != nil {
             onChange()
             return
         }

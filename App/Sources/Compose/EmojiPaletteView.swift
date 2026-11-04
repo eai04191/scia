@@ -647,7 +647,7 @@ final class EmojiPaletteCell: UICollectionViewCell {
     override func layoutSubviews() {
         super.layoutSubviews()
         highlight.frame = contentView.bounds.insetBy(dx: 2, dy: 2)
-        let inset = round(contentView.bounds.width * 0.15)
+        let inset = Self.imageInset(in: contentView.bounds.size)
         imageView.frame = contentView.bounds.insetBy(dx: inset, dy: inset)
         label.frame = imageView.frame
     }
@@ -656,14 +656,25 @@ final class EmojiPaletteCell: UICollectionViewCell {
         didSet { highlight.isHidden = !isHighlighted }
     }
 
+    private static func imageInset(in size: CGSize) -> CGFloat {
+        round(size.width * 0.15)
+    }
+
+    /// 絵を描く枠の高さ。
+    private static func imageSide(in size: CGSize) -> CGFloat {
+        size.height - imageInset(in: size) * 2
+    }
+
     /// カスタム絵文字は、「カスタム絵文字のアニメーションを再生する」の設定によらず動かす。
     func configure(_ emoji: PaletteEmoji, store: EmojiImageStore<UIImage>, emojiStyle: EmojiStyle) {
         switch emoji {
         case .custom(let custom):
             label.isHidden = true
             imageView.isHidden = false
-            imageView.stillImage = store.image(for: custom.staticUrl)
-            imageView.animation = store.animation(for: custom.url)
+            // 枠を大きくしたときは、描く高さで読む。既定の枠（48pt）は既定の高さの1.1倍以内なので、読み直さない。
+            let pixelHeight = RichTextRenderer.pixelHeight(of: Self.imageSide(in: bounds.size), scale: traitCollection.displayScale)
+            imageView.stillImage = store.image(for: custom.staticUrl, pixelHeight: pixelHeight)
+            imageView.animation = store.animation(for: custom.url, pixelHeight: pixelHeight)
             accessibilityLabel = custom.shortcode
         case .standard(let standard):
             imageView.isHidden = true

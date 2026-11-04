@@ -222,7 +222,7 @@ class EmojiLabel: UILabel {
     /// 差し替えた画像は元と同じ大きさなので、ラベルの大きさは変わらない。
     private func applyAnimatedEmojis() {
         guard let animatedEmojis else { return }
-        let shown = animatedEmojis.prepare(sourceText, keepingStill: stillEmojiIndices)
+        let shown = animatedEmojis.prepare(sourceText, keepingStill: stillEmojiIndices, displayScale: traitCollection.displayScale)
         let replaces = shown !== sourceText
         // 差し替えないときは、置く側が渡した文字列をすでに描いている。前に差し替えていたら、元に戻す。
         if replaces || showsReplacedText {
