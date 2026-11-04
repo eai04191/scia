@@ -3744,7 +3744,15 @@ final class SessionController {
 
     private func finishAutoScroll(label: String, distance: CGFloat, duration: CFTimeInterval) {
         let hitches = debugScrollHitches.stop()
-        let line = String(format: "%@ distance=%.0f duration=%.2f dropped=%d hitch=%.3f\n", label, distance, duration, hitches.droppedFrames, hitches.hitchTime)
+        // 低電力モード、温度、電池の残りでは端末が処理を遅くすることがあるため、比べる条件として一緒に書く。
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        let device = String(
+            format: "lowPower=%@ thermal=%d battery=%.2f",
+            ProcessInfo.processInfo.isLowPowerModeEnabled ? "true" : "false",
+            ProcessInfo.processInfo.thermalState.rawValue,
+            UIDevice.current.batteryLevel
+        )
+        let line = String(format: "%@ distance=%.0f duration=%.2f dropped=%d hitch=%.3f %@\n", label, distance, duration, hitches.droppedFrames, hitches.hitchTime, device)
         logger.info("debug autoscroll: \(line, privacy: .public)")
         let file = URL.documentsDirectory.appending(path: "DebugAutoscroll.log")
         guard let data = line.data(using: .utf8) else { return }
