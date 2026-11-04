@@ -88,11 +88,12 @@ scenario-run: scenario-build
 
 ## 実機向けのReleaseビルドをアーカイブする。署名のチームはConfig/Local.xcconfigのDEVELOPMENT_TEAMから読む
 ## App Store Connectは、同じバージョンで前に上げたものより大きいビルド番号しか受け付けないため、ビルド番号をアーカイブしたUTCの日時（例: 20261103.124500）にする
+## App Store Connectは区切りごとの数を整数として出す（20261104.025903は20261104.25903になる）ので、設定の「情報」に出す値と同じ表記になるよう、時刻の先頭の0を落としてから渡す
 ## APPLE_AUTHには、Xcodeにサインインしていない環境（GitHub Actions）で、App Store ConnectのAPIキーを渡すxcodebuildの引数を入れる（.github/workflows/testflight.yml）
 ARCHIVE := $(DERIVED_DATA)/Scia.xcarchive
 APPLE_AUTH ?=
 archive: generate
-	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Release -destination 'generic/platform=iOS' -derivedDataPath $(DERIVED_DATA) -archivePath $(ARCHIVE) -allowProvisioningUpdates $(APPLE_AUTH) CURRENT_PROJECT_VERSION=$$(date -u +%Y%m%d.%H%M%S) archive
+	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Release -destination 'generic/platform=iOS' -derivedDataPath $(DERIVED_DATA) -archivePath $(ARCHIVE) -allowProvisioningUpdates $(APPLE_AUTH) CURRENT_PROJECT_VERSION=$$(date -u +%Y%m%d.%H%M%S | sed -E 's/\.0+([0-9])/.\1/') archive
 
 ## アーカイブしてApp Store Connectへ上げる。処理が終わるとTestFlightに出る
 testflight: archive
