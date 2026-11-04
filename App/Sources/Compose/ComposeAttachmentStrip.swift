@@ -66,7 +66,9 @@ final class ComposeAttachmentStrip: UIView {
         collectionView.delegate = self
         collectionView.dragDelegate = self
         collectionView.dropDelegate = self
-        collectionView.dragInteractionEnabled = true
+        // Mac（Designed for iPad）では、ここで始めたドラッグがボタンを離しても終わらず、持ち上げたサムネイルが画面に浮いたまま残り、アプリを強制終了するまで消えない。
+        // アイテムに型を持たせても、アプリの中に限る指定を外しても直らなかったので、Macではドラッグでの並べ替えをせず、長押しのメニューの移動の項目で並べ替える。
+        collectionView.dragInteractionEnabled = !ProcessInfo.processInfo.isiOSAppOnMac
         addSubview(collectionView)
         NSLayoutConstraint.activate([
             collectionView.leadingAnchor.constraint(equalTo: leadingAnchor),
