@@ -107,4 +107,15 @@ struct QuoteBarsTests {
             #expect(isRightToLeft ? glyphs.maxX <= bar.minX : bar.maxX <= glyphs.minX, "線が本文に重なっています")
         }
     }
+
+    /// 字下げは、本文の文字の大きさに合わせて伸び縮みする。文字を大きくしても、線とすき間が文字に比べて詰まらない。
+    @Test func indentScalesWithFontSize() throws {
+        func indent(fontSize: CGFloat) throws -> CGFloat {
+            let text = RichTextRenderer(font: .systemFont(ofSize: fontSize), textColor: .label, emojiImages: .offline, language: "ja")
+                .render(RichText(blocks: [block("引用", quoteLevel: 1)]))
+            return try #require(text.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle).headIndent
+        }
+
+        #expect(try indent(fontSize: 30) == 2 * indent(fontSize: 15))
+    }
 }

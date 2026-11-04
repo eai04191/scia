@@ -473,6 +473,7 @@ struct AppearanceValueRow: View {
         case AppearanceCatalog.mediaTallestAspectRatio.id: "小さいほど縦長のまま出す"
         case AppearanceCatalog.mediaWidestAspectRatio.id: "大きいほど横長のまま出す"
         case AppearanceCatalog.avatarCornerRatio.id: "0.5で円になる"
+        case AppearanceCatalog.quoteIndent.id: "1で本文の1文字分"
         case AppearanceCatalog.linkCardImageWidthRatio.id: "画像はカードの高さの正方形より広くならない"
         // カスタム絵文字の割合の基準（普通の絵文字を文字の大きさのまま描いたときの大きさ）は見出しに書かず、1がどの大きさかで伝える。普通の絵文字は、1でいつもの大きさなのが倍率から分かるので添えない。
         case AppearanceCatalog.customEmojiScale.id, AppearanceCatalog.nameCustomEmojiScale.id: "1で絵文字と同じ大きさ"

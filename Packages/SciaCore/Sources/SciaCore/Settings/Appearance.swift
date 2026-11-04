@@ -112,8 +112,8 @@ public enum AppearanceCatalog {
     public static let visibilitySymbolSpacing = AppearanceValue(id: "timeline.visibilitySymbolSpacing", title: "公開範囲の記号と時刻のすき間", range: 0...100, step: 1, defaultValue: 4)
     /// 時刻の前の編集済みの「*」と、時刻のすき間。
     public static let editedMarkSpacing = AppearanceValue(id: "timeline.editedMarkSpacing", title: "「*」と時刻のすき間", range: 0...100, step: 1, defaultValue: 0)
-    /// 本文の引用とリストの、1段あたりの字下げ。
-    public static let quoteIndent = AppearanceValue(id: "timeline.quoteIndent", title: "引用とリストの字下げ", range: 0...100, step: 1, defaultValue: 16)
+    /// 本文の引用とリストの、1段あたりの字下げの、本文の文字の大きさに対する割合。1で1文字分。引用の縦線も、この中に引く。
+    public static let quoteIndent = AppearanceValue(id: "timeline.quoteIndentRatio", title: "引用とリストの字下げ", range: 0...10, step: 0.1, defaultValue: 1, unit: .ratio)
     /// 本文の引用の段落の頭に、深さの数だけ引く縦線の太さ。0なら引かない。
     public static let quoteBarWidth = AppearanceValue(id: "timeline.quoteBarWidth", title: "引用の縦線の太さ", range: 0...100, step: 1, defaultValue: 3)
     /// 本文と注意書きのカスタム絵文字の高さの、絵文字の標準の大きさ（絵文字を文字の大きさのまま描いたときの絵の高さ）に対する割合。

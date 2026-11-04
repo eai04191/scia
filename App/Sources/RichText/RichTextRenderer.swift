@@ -13,7 +13,7 @@ struct RichTextRenderer: Sendable {
     var paragraphSpacing: CGFloat
     /// 行と行のあいだに足す余白。
     var lineSpacing: CGFloat
-    /// 引用とリストの1段あたりの字下げ。
+    /// 引用とリストの1段あたりの字下げ（pt）。初期化で渡さなければ、設定の「引用とリストの字下げ」の割合を`font`の大きさに掛けた長さ。
     var indentPerLevel: CGFloat
     /// 引用の段落の頭に引く縦線の太さ。0なら引かない。
     var quoteBarWidth: CGFloat
@@ -41,7 +41,7 @@ struct RichTextRenderer: Sendable {
         underlinesLinks: Bool = AppDependencies.settings.accentColor.underlinesLinks,
         paragraphSpacing: CGFloat = 0,
         lineSpacing: CGFloat = 0,
-        indentPerLevel: CGFloat = 16,
+        indentPerLevel: CGFloat? = nil,
         quoteBarWidth: CGFloat = AppDependencies.settings.value(of: AppearanceCatalog.quoteBarWidth),
         emojiScale: CGFloat = 1,
         unicodeEmojiScale: CGFloat = 1,
@@ -58,7 +58,7 @@ struct RichTextRenderer: Sendable {
         self.underlinesLinks = underlinesLinks
         self.paragraphSpacing = paragraphSpacing
         self.lineSpacing = lineSpacing
-        self.indentPerLevel = indentPerLevel
+        self.indentPerLevel = indentPerLevel ?? font.pointSize * AppDependencies.settings.value(of: AppearanceCatalog.quoteIndent)
         self.quoteBarWidth = quoteBarWidth
         self.emojiScale = emojiScale
         self.unicodeEmojiScale = unicodeEmojiScale
