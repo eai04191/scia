@@ -46,13 +46,35 @@ struct MastodonHTMLParserTests {
         let text = parse(html)
 
         #expect(text.blocks.first?.inlines == [
-            .link("example.com/users/someone/stat…", .url(try url("https://example.com/users/someone/status/2109995948407476369?s=46")), []),
+            .link(
+                "example.com/users/someone/stat…",
+                .url(try url("https://example.com/users/someone/status/2109995948407476369?s=46")),
+                [],
+                copied: RichText.CopiedLinkText(text: "https://example.com/users/someone/status/2109995948407476369?s=46", index: 0)
+            ),
             .lineBreak,
             .text("え、な、なに？", []),
         ])
     }
 
-    /// プロフィールの補足情報は幅に余裕があるので、サーバーが30字で縮めた後ろの部分も出す。先頭のスキームは省いたまま。
+    /// 書式で分かれたリンクは、どのインラインにも同じ元の文字を持たせ、つないだときは1回だけ入れる。隣り合う同じ文字の別のリンクは、それぞれ入れる。
+    @Test func splitShortenedLinkCopiesWholeTextOnce() throws {
+        let link = #"<a href="https://example.com/a/very/long/path/to/some/page"><span class="invisible">https://</span><span class="ellipsis">example.com/<b>a/very/long/path/</b></span><span class="invisible">to/some/page</span></a>"#
+        let destination = RichText.LinkDestination.url(try url("https://example.com/a/very/long/path/to/some/page"))
+        let whole = "https://example.com/a/very/long/path/to/some/page"
+        let copied = RichText.CopiedLinkText(text: whole, index: 0)
+
+        let text = parse("<p>\(link)\(link)</p>")
+
+        #expect(text.blocks.first?.inlines.prefix(3) == [
+            .link("example.com/", destination, [], copied: copied),
+            .link("a/very/long/path/", destination, .bold, copied: copied),
+            .link("…", destination, [], copied: copied),
+        ])
+        #expect(text.copiedText == whole + whole)
+    }
+
+    /// プロフィールの補足情報は幅に余裕があるので、サーバーが30字で縮めた後ろの部分も出す。先頭のスキームは省いたまま出し、コピーには入れる。
     @Test func profileFieldShowsWholeShortenedURL() throws {
         let html = """
         <a href="https://github.com/eai04191/scia/blob/main/.claude/skills/codex-proof-review/SKILL.md" target="_blank" rel="nofollow noopener me" translate="no"><span class="invisible">https://</span><span class="ellipsis">github.com/eai04191/scia/blob/</span><span class="invisible">main/.claude/skills/codex-proof-review/SKILL.md</span></a>
@@ -64,9 +86,18 @@ struct MastodonHTMLParserTests {
             .link(
                 "github.com/eai04191/scia/blob/main/.claude/skills/codex-proof-review/SKILL.md",
                 .url(try url("https://github.com/eai04191/scia/blob/main/.claude/skills/codex-proof-review/SKILL.md")),
-                []
+                [],
+                copied: RichText.CopiedLinkText(text: "https://github.com/eai04191/scia/blob/main/.claude/skills/codex-proof-review/SKILL.md", index: 0)
             ),
         ])
+    }
+
+    /// プロフィールの補足情報のコピーと翻訳にも、縮めたURLは元の文字で渡す。
+    @Test func profileFieldCopiesShortenedURLWithScheme() {
+        let value = #"<a href="https://example.com/a/very/long/path/to/some/page"><span class="invisible">https://</span><span class="ellipsis">example.com/a/very/long/path/</span><span class="invisible">to/some/page</span></a>"#
+        let account = Account(id: "1", username: "a", acct: "a", displayName: "A", avatar: nil, fields: [Account.Field(name: "web", value: value)])
+
+        #expect(account.profileText(.field(0))?.text == "https://example.com/a/very/long/path/to/some/page")
     }
 
     @Test func resolvesMentionFromStatusMentions() throws {

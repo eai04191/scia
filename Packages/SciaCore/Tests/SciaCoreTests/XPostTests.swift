@@ -105,7 +105,7 @@ struct XPostTests {
     /// 本文のリンクを、文字と行き先の組で順に返す。
     private func links(of text: RichText) -> [(String, RichText.LinkDestination)] {
         text.blocks.flatMap(\.inlines).compactMap { inline in
-            if case .link(let text, let destination, _) = inline { (text, destination) } else { nil }
+            if case .link(let text, let destination, _, _) = inline { (text, destination) } else { nil }
         }
     }
 

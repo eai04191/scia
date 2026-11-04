@@ -310,10 +310,10 @@ public struct StatusMenuTree {
         return status.canBeReblogged(by: myAccountID)
     }
 
-    /// コピーや翻訳に渡す本文。書式やリンクは落とし、文字だけにする。カスタム絵文字は`:shortcode:`のまま残す。
+    /// コピーや翻訳に渡す本文。書式やリンクは落とし、文字だけにする。カスタム絵文字は`:shortcode:`のまま残し、サーバーが縮めて見せるURLは元の文字に戻す。
     /// 本文が空白だけならnil。
     public static func plainText(of status: Status) -> String? {
-        let text = RichText.status(status).plainText
+        let text = RichText.status(status).copiedText
         return text.allSatisfy(\.isWhitespace) ? nil : text
     }
 }

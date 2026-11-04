@@ -12,7 +12,7 @@ struct RichTextDiffTests {
         diff.blocks.map { block in
             block.pieces.map { piece in
                 let text = switch piece.inline {
-                case .text(let string, _), .link(let string, _, _): string
+                case .text(let string, _), .link(let string, _, _, _): string
                 case .emoji(let emoji): ":\(emoji.shortcode):"
                 case .lineBreak: "\n"
                 }

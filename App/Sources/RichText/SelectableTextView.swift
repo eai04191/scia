@@ -148,13 +148,23 @@ final class SelectableTextView: UITextView, UITextViewDelegate, @MainActor UIEdi
 
 extension NSAttributedString {
     /// RichTextRendererで描いた本文を、アプリの外に貼る文字にする。カスタム絵文字は`:shortcode:`に、段落の中の改行（行区切り文字）は改行にする。
-    /// 絵文字の前に置いた幅のない文字（`leadingEmojiGuard`）は除く。
+    /// 絵文字の前に置いた幅のない文字（`leadingEmojiGuard`）は除く。サーバーが縮めて見せるURLは、一部だけを選んでいても、元の文字の全体にする。
     var copiedPlainText: String {
         var result = ""
+        var lastLink: RichText.CopiedLinkText?
         enumerateAttributes(in: NSRange(location: 0, length: length)) { attributes, range, _ in
             if attributes[.leadingEmojiGuard] != nil {
                 return
             }
+            // 属性の範囲は、ほかの属性が途中で変わると1つのリンクの中でも分かれるので、同じリンクが続くあいだは1回だけ入れる。
+            if let link = attributes[.copiedLinkText] as? RichText.CopiedLinkText {
+                if link != lastLink {
+                    result += link.text
+                }
+                lastLink = link
+                return
+            }
+            lastLink = nil
             if let emoji = attributes[.customEmoji] as? CustomEmoji {
                 // 同じ絵文字が並ぶと1つの範囲にまとまるので、絵文字1つが1文字であることから数を戻す。
                 result += String(repeating: ":\(emoji.shortcode):", count: range.length)

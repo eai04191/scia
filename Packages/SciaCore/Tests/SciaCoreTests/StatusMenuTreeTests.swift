@@ -71,6 +71,16 @@ struct StatusMenuTreeTests {
         #expect(!titles.contains("翻訳"))
     }
 
+    /// コピーや翻訳に渡す本文では、サーバーが縮めて見せるURLを元の文字のまま渡す。Mastodonのwebで本文を選んでコピーしたときと同じく、
+    /// 見せずに残している先頭のスキームと後ろの部分を入れ、表示のために描いている「…」は入れない。
+    @Test func plainTextKeepsShortenedURLsWhole() {
+        let content = """
+        <p>見て <a href="https://example.com/users/someone/status/2109995948407476369?s=46" rel="nofollow noopener" target="_blank"><span class="invisible">https://</span><span class="ellipsis">example.com/users/someone/stat</span><span class="invisible">us/2109995948407476369?s=46</span></a> と <a href="https://example.com/" rel="nofollow noopener" target="_blank"><span class="invisible">https://</span><span class="">example.com/</span><span class="invisible"></span></a></p>
+        """
+        #expect(StatusMenuTree.plainText(of: status(content: content))
+            == "見て https://example.com/users/someone/status/2109995948407476369?s=46 と https://example.com/")
+    }
+
     /// ブーストは元の投稿のページを指す。ブーストの側のurlがなくても、元の投稿にあれば押せる。urlがなければ押せないまま並べ、uriで代わりにしない。
     /// ユーザーは元の投稿を書いた人、ブーストした人の順に並ぶ。
     @Test func reblogUsesOriginalStatusURLAndListsBothUsers() throws {

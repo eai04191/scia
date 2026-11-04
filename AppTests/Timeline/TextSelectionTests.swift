@@ -195,6 +195,35 @@ struct TextSelectionTests {
         #expect(textView.text(in: firstTwo) == "前\u{FFFC}")
     }
 
+    /// サーバーが縮めて見せるURLは、選んだ範囲のコピーでも、編集メニューの共有などが読む文字でも、元のURLにする。URLの一部だけを選んでいても全体を渡す。
+    @Test func selectedShortenedURLIsCopiedWhole() throws {
+        let html = #"<p>見て <a href="https://example.com/users/someone/status/2109995948407476369?s=46"><span class="invisible">https://</span><span class="ellipsis">example.com/users/someone/stat</span><span class="invisible">us/2109995948407476369?s=46</span></a> と <a href="https://example.com/a"><span class="invisible">https://</span><span class="ellipsis">example.com/a</span><span class="invisible">/b</span></a></p>"#
+        let text = renderer.render(RichText.html(html, emojis: []))
+        let textView = SelectableTextView(text: text)
+        let whole = "見て https://example.com/users/someone/status/2109995948407476369?s=46 と https://example.com/a/b"
+
+        textView.selectedRange = NSRange(location: 0, length: text.length)
+        let start = textView.beginningOfDocument
+        let wholeRange = try #require(textView.textRange(from: start, to: textView.endOfDocument))
+        #expect(textView.text(in: wholeRange) == whole)
+
+        // 1つ目のリンクの途中を選ぶ。
+        let linkStart = (text.string as NSString).range(of: "example.com/users").location
+        #expect(text.attributedSubstring(from: NSRange(location: linkStart + 4, length: 10)).copiedPlainText == "https://example.com/users/someone/status/2109995948407476369?s=46")
+    }
+
+    /// 書式で分かれたURLは、後ろの書式の部分だけを選んでも、元のURLの全体を渡す。
+    @Test func selectedPartOfSplitShortenedURLIsCopiedWhole() {
+        let html = #"<p><a href="https://example.com/a/very/long/path/to/some/page"><span class="invisible">https://</span><span class="ellipsis">example.com/<b>a/very/long/path/</b></span><span class="invisible">to/some/page</span></a></p>"#
+        let text = renderer.render(RichText.html(html, emojis: []))
+        let bold = (text.string as NSString).range(of: "a/very")
+        let ellipsis = (text.string as NSString).range(of: "…")
+
+        #expect(text.attributedSubstring(from: bold).copiedPlainText == "https://example.com/a/very/long/path/to/some/page")
+        #expect(text.attributedSubstring(from: ellipsis).copiedPlainText == "https://example.com/a/very/long/path/to/some/page")
+        #expect(text.copiedPlainText == "https://example.com/a/very/long/path/to/some/page")
+    }
+
     /// 押下を受ける高さ（差し替えたラベルの高さ）より下では押下を受けず、文字に合わせて伸ばした最後の行の下の行間が、下の部品へのタップを奪わない。
     @Test func spaceBelowTouchableHeightDoesNotTakeTouches() {
         let textView = SelectableTextView(text: NSAttributedString(string: "選ぶ本文"))

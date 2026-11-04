@@ -10,7 +10,7 @@ public enum ProfileTextPart: Hashable, Sendable {
 
 /// 長押しした文章の、コピーと翻訳に渡す文字と、描いているカスタム絵文字。
 public struct ProfileText: Equatable, Sendable {
-    /// 書式とリンクを落とした文字。カスタム絵文字は`:shortcode:`のまま残す。空白だけならnil。
+    /// 書式とリンクを落とした文字。カスタム絵文字は`:shortcode:`のまま残し、サーバーが縮めて見せるURLは元の文字に戻す。空白だけならnil。
     public let text: String?
     /// 補足情報のラベルを、`text`と同じ形にした文字。補足情報でないか、空白だけならnil。
     public let label: String?
@@ -32,7 +32,7 @@ public struct ProfileText: Equatable, Sendable {
     }
 
     private static func plain(_ text: RichText) -> String? {
-        let plain = text.plainText
+        let plain = text.copiedText
         return plain.allSatisfy(\.isWhitespace) ? nil : plain
     }
 }

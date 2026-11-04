@@ -48,6 +48,8 @@ private struct Builder {
         var hasEllipsis = false
         /// リンクの中の文字を、書式ごとのまとまりで持つ。
         var runs: [(text: String, style: RichText.Style)] = []
+        /// サーバーが`invisible`で隠した部分も入れ、「…」を入れない、元の文字。
+        var wholeText = ""
 
         var text: String { runs.map(\.text).joined() }
 
@@ -83,6 +85,8 @@ private struct Builder {
     private var lists: [ListContext] = []
     private var listMarker: String?
     private var link: LinkContext?
+    /// 閉じたリンクの数。
+    private var linkCount = 0
     private var spans: [SpanKind] = []
     /// `quote-inline`の段落の中にいて、閉じるまで読み飛ばしている。段落は入れ子にならないため、最初の`</p>`で終える。
     private var isSkippingQuoteInline = false
@@ -152,6 +156,7 @@ private struct Builder {
             let style = currentStyle
             if link != nil {
                 link?.append("\n", style: style)
+                link?.wholeText += "\n"
             } else if preDepth > 0 {
                 appendText("\n", style: currentStyle)
             } else {
@@ -251,15 +256,20 @@ private struct Builder {
         } else {
             destination = .url(url)
         }
+        // 表示する文字と元の文字が違えば、コピーには元の文字を渡す。
+        let copied = link.wholeText == text ? nil : RichText.CopiedLinkText(text: link.wholeText, index: linkCount)
+        linkCount += 1
         for run in link.runs {
-            inlines.append(.link(run.text, destination, run.style))
+            inlines.append(.link(run.text, destination, run.style, copied: copied))
         }
     }
 
     private mutating func appendRawText(_ raw: Substring) {
-        guard !isHidden else { return }
         let decoded = HTMLEntities.decode(raw)
-        appendDisplayedText(preDepth > 0 ? decoded : Self.collapseWhitespace(decoded))
+        let text = preDepth > 0 ? decoded : Self.collapseWhitespace(decoded)
+        link?.wholeText += text
+        guard !isHidden else { return }
+        appendDisplayedText(text)
     }
 
     private mutating func appendDisplayedText(_ text: String) {

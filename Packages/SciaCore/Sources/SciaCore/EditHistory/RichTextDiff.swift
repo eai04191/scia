@@ -189,8 +189,8 @@ public struct RichTextDiff: Equatable, Sendable {
                     switch inline {
                     case .text(let string, let style):
                         tokens += tokenizer.words(in: string).map { .inline(.text($0, style)) }
-                    case .link(_, let destination, _):
-                        if case .link(let previous)? = tokens.last, case .link(_, let previousDestination, _)? = previous.last,
+                    case .link(_, let destination, _, _):
+                        if case .link(let previous)? = tokens.last, case .link(_, let previousDestination, _, _)? = previous.last,
                            previousDestination == destination {
                             tokens[tokens.count - 1] = .link(previous + [inline])
                         } else {
@@ -212,7 +212,7 @@ public struct RichTextDiff: Equatable, Sendable {
         /// 書き直したかを決めるときに数える文字数。カスタム絵文字は1文字、区切りは0文字として数える。
         var length: Int {
             switch self {
-            case .inline(.text(let string, _)), .inline(.link(let string, _, _)): string.count
+            case .inline(.text(let string, _)), .inline(.link(let string, _, _, _)): string.count
             case .link(let inlines): inlines.map { Token.inline($0).length }.reduce(0, +)
             case .inline(.emoji): 1
             case .inline(.lineBreak), .blockStart: 0

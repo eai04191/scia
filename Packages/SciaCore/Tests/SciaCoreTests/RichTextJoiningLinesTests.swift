@@ -66,7 +66,7 @@ struct RichTextJoiningLinesTests {
     @Test func keepsMonospaceForLinkInCodeBlock() throws {
         let text = joined(#"<pre><code>curl <a href="https://example.com/">https://example.com/</a></code></pre>"#)
         let styles = text.blocks.first?.inlines.compactMap { inline -> RichText.Style? in
-            if case .link(_, _, let style) = inline { style } else { nil }
+            if case .link(_, _, let style, _) = inline { style } else { nil }
         }
         #expect(styles?.count == 1 && styles?.allSatisfy { $0.contains(.code) } == true)
     }

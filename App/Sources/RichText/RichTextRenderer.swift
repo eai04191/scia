@@ -283,7 +283,7 @@ struct RichTextRenderer: Sendable {
             }
             for piece in block.pieces {
                 let text = switch piece.inline {
-                case .text(let string, _), .link(let string, _, _): string
+                case .text(let string, _), .link(let string, _, _, _): string
                 case .emoji(let emoji): ":\(emoji.shortcode):"
                 case .lineBreak: "\n"
                 }
@@ -310,13 +310,14 @@ struct RichTextRenderer: Sendable {
         switch inline {
         case .text(let text, let style):
             return NSAttributedString(string: Self.lineSeparated(text), attributes: attributes(style: style, block: block))
-        case .link(let text, let destination, let style):
+        case .link(let text, let destination, let style, let copied):
             var attributes = attributes(style: style, block: block)
             attributes[.foregroundColor] = linkColor
             if underlinesLinks {
                 attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
             }
             attributes[.linkDestination] = destination
+            attributes[.copiedLinkText] = copied
             return NSAttributedString(string: Self.lineSeparated(text), attributes: attributes)
         case .emoji(let emoji):
             return render(emoji, block: block)
@@ -540,6 +541,8 @@ extension NSAttributedString.Key {
     static let customEmoji = NSAttributedString.Key("net.mizle.scia.customEmoji")
     /// カスタム絵文字を動かすときに、動く層の上に重ねる色（`UIColor`）。編集履歴で足した絵文字を示すのに使う。
     static let emojiTint = NSAttributedString.Key("net.mizle.scia.emojiTint")
+    /// 表示する文字と違う文字をコピーに渡すリンクの、その文字（`RichText.CopiedLinkText`）。サーバーが縮めて見せるURLで、選んでコピーや共有をしたときに元の文字を渡すのに使う。
+    static let copiedLinkText = NSAttributedString.Key("net.mizle.scia.copiedLinkText")
     /// 下げて描く絵文字の前に置いた、幅のない文字（`RichTextRenderer.leadingEmojiGuard`）。
     static let leadingEmojiGuard = NSAttributedString.Key("net.mizle.scia.leadingEmojiGuard")
     /// 大きさを変えたUnicodeの絵文字の、大きさを変える前の書体（`UIFont`）。行の高さと、本文の上下の余白を測るときに、文字の書体と見分けるのに使う。

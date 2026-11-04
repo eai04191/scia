@@ -13,7 +13,7 @@ extension RichText {
                 count += 1
             case .lineBreak:
                 continue
-            case .link(_, .mention, _) where count == 0:
+            case .link(_, .mention, _, _) where count == 0:
                 continue
             case .link:
                 return nil

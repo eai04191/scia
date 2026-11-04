@@ -31,7 +31,8 @@ public struct RichText: Hashable, Sendable {
 
     public enum Inline: Hashable, Sendable {
         case text(String, Style)
-        case link(String, LinkDestination, Style)
+        /// `copied`は、表示する文字の代わりにコピーや共有に渡すリンクの文字。表示する文字と同じならnil。
+        case link(String, LinkDestination, Style, copied: CopiedLinkText? = nil)
         case emoji(CustomEmoji)
         /// 段落の中の改行（`<br>`）。
         case lineBreak
@@ -51,6 +52,20 @@ public struct RichText: Hashable, Sendable {
         public static let code = Style(rawValue: 1 << 4)
     }
 
+    /// サーバーが縮めて見せるURLの、コピーや共有に渡す元の文字。Mastodonのwebで本文を選んでコピーしたときと同じく、
+    /// 隠した先頭のスキームと後ろの部分を入れ、「…」を入れない。
+    public struct CopiedLinkText: Hashable, Sendable {
+        public let text: String
+        /// 本文の中で何番目のリンクか。1つのリンクが書式で分かれたときは、どのインラインも同じ値を持ち、つないで1回だけ入れる。
+        /// 隣り合う同じ文字の別のリンクとは、この値で分ける。
+        public let index: Int
+
+        public init(text: String, index: Int) {
+            self.text = text
+            self.index = index
+        }
+    }
+
     public enum LinkDestination: Hashable, Sendable {
         case url(URL)
         /// `acct`はローカルならusername、リモートならusername@domain。
@@ -59,12 +74,31 @@ public struct RichText: Hashable, Sendable {
         case hashtag(name: String, url: URL)
     }
 
-    /// 本文の文字だけを、段落を改行でつないで返す。テストやログで使う。
+    /// 本文の表示する文字だけを、段落を改行でつないで返す。テストやログで使う。
     public var plainText: String {
+        joined { inline, _ in
+            if case .link(let text, _, _, _) = inline { text } else { nil }
+        }
+    }
+
+    /// コピーや共有に渡す文字。`plainText`と同じ形で、リンクは`copied`があればその文字にする。書式で分かれた1つのリンクの文字は1回だけ入れる。
+    public var copiedText: String {
+        joined { inline, previous in
+            guard case .link(let text, _, _, let copied) = inline else { return nil }
+            guard let copied else { return text }
+            if case .link(_, _, _, copied)? = previous { return "" }
+            return copied.text
+        }
+    }
+
+    /// 段落を改行でつなぐ。リンクの文字は、そのインラインと同じ段落の1つ前のインラインから`linkText`で決める。
+    private func joined(linkText: (_ inline: Inline, _ previous: Inline?) -> String?) -> String {
         blocks.map { block in
-            (block.listMarker ?? "") + block.inlines.map { inline in
-                switch inline {
-                case .text(let text, _), .link(let text, _, _): text
+            (block.listMarker ?? "") + block.inlines.indices.map { index in
+                let inline = block.inlines[index]
+                return switch inline {
+                case .text(let text, _): text
+                case .link: linkText(inline, index > 0 ? block.inlines[index - 1] : nil) ?? ""
                 case .emoji(let emoji): ":\(emoji.shortcode):"
                 case .lineBreak: "\n"
                 }
@@ -166,9 +200,9 @@ extension RichText {
                             append(.text(String(line), block.isCode ? style.union(.code) : style))
                         }
                     }
-                case .link(let text, let destination, let style):
+                case .link(let text, let destination, let style, let copied):
                     let joined = text.split(whereSeparator: \.isNewline).joined(separator: " ")
-                    append(.link(joined, destination, block.isCode ? style.union(.code) : style))
+                    append(.link(joined, destination, block.isCode ? style.union(.code) : style, copied: copied))
                 case .emoji:
                     append(inline)
                 }
@@ -183,7 +217,7 @@ private extension RichText.Inline {
     /// 文字とリンクの、表示する文字。
     var displayedText: String? {
         switch self {
-        case .text(let text, _), .link(let text, _, _): text
+        case .text(let text, _), .link(let text, _, _, _): text
         case .emoji, .lineBreak: nil
         }
     }

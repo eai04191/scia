@@ -79,7 +79,7 @@ extension RichText {
         }
         while let first = inlines.first {
             switch first {
-            case .link(_, .mention(_, _), _):
+            case .link(_, .mention(_, _), _, _):
                 inlines.removeFirst()
             case .text(let text, _) where text.allSatisfy(\.isWhitespace):
                 inlines.removeFirst()

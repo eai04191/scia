@@ -48,7 +48,7 @@ public final class OperationStatus {
             let words = text.blocks.map { block in
                 (block.listMarker ?? "") + block.inlines.map { inline in
                     switch inline {
-                    case .text(let text, _), .link(let text, _, _): text
+                    case .text(let text, _), .link(let text, _, _, _): text
                     case .emoji: ""
                     case .lineBreak: " "
                     }
