@@ -33,7 +33,7 @@ struct LoginView: View {
                         Image(systemName: "globe")
                             .foregroundStyle(.secondary)
                             .accessibilityHidden(true)
-                        InstanceTextField(placeholder: "stellaria.network", text: $model.instanceInput, onSubmit: login)
+                        InstanceTextField(placeholder: "mastodon.social", text: $model.instanceInput, onSubmit: login)
                     }
                     .disabled(model.isLoggingIn)
                 } header: {
