@@ -1454,7 +1454,7 @@ final class InlineComposeControllerTests {
         // かたまりは、濃さを変えている途中でもモデルの濃さ（行き先の値）で描かれないよう、中身を直接描く。
         let image = UIGraphicsImageRenderer(bounds: view.bounds, format: format).image { context in
             if let line = view as? TextLineView {
-                line.draw(line.bounds)
+                line.drawText(in: context.cgContext)
             } else {
                 view.layer.render(in: context.cgContext)
             }

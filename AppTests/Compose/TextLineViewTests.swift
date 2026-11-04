@@ -51,11 +51,10 @@ struct TextLineViewTests {
         #expect(abs(line.intrinsicContentSize.height - label.intrinsicContentSize.height) < 0.01, "TextLineViewは\(line.intrinsicContentSize.height)、UILabelは\(label.intrinsicContentSize.height)")
     }
 
-    /// 行の下の行間に掛かる字形（タイ文字の下に付く母音など）も、ビューの中に収まり、描いたときに欠けない。
-    /// 上端は確かめない。ミャンマー文字は字形がTextKit 2の行の上端を約0.9pt越え、行の高さで描く範囲を決めていたときから欠けている。
-    /// 直すには描く範囲を行の外へ広げる仕組みが要り、カプセルの文字の高さを揃えるこの変更の範囲から外している。
+    /// 本文のフォントより背の高い代替フォントの字形（ミャンマー文字の上、タイ文字の下に付く母音など）も、描く範囲に収まり、描いたときに欠けない。
+    /// ミャンマー文字の字形は、TextKit 2の行の上端を約0.9pt越える。
     @Test(arguments: ["မြန်မာ", "ฉันกำลังทำอะไรอยู่"])
-    func glyphsBelowBaselineFitInBounds(text: String) throws {
+    func tallGlyphsFitInDrawingRect(text: String) throws {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
         let attributed = NSAttributedString(string: text, attributes: [.font: UIFont.preferredFont(forTextStyle: .body)])
@@ -63,11 +62,14 @@ struct TextLineViewTests {
         line.attributedText = attributed
         window.addSubview(line)
         line.frame = line.frame(forAlignmentRect: CGRect(origin: CGPoint(x: 20, y: 40), size: line.intrinsicContentSize))
+        line.layoutIfNeeded()
 
         // 字形の枠は、ベースラインを原点に上向きを正とする。
         let ink = CTLineGetImageBounds(CTLineCreateWithAttributedString(attributed), nil)
         let baseline = line.baselineOrigin.y
-        #expect(baseline - ink.minY <= line.bounds.height, "字形の下端が\(baseline - ink.minY)pt、ビューの高さは\(line.bounds.height)pt")
+        let drawing = line.drawingRect
+        #expect(baseline - ink.maxY >= drawing.minY, "字形の上端が\(baseline - ink.maxY)pt、描く範囲の上端は\(drawing.minY)pt")
+        #expect(baseline - ink.minY <= drawing.maxY, "字形の下端が\(baseline - ink.minY)pt、描く範囲の下端は\(drawing.maxY)pt")
     }
 
     /// 入力欄の「いまどうしてる？」のように上端で置いたとき、入力欄の1行目と同じく、上端からフォントのアセンダーの位置にベースラインが来る。

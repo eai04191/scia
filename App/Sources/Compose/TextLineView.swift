@@ -26,7 +26,7 @@ final class TextLineView: UIView {
     var concealedRanges: [Range<Int>] = [] {
         didSet {
             guard concealedRanges != oldValue else { return }
-            setNeedsDisplay()
+            canvas.setNeedsDisplay()
         }
     }
 
@@ -34,7 +34,8 @@ final class TextLineView: UIView {
     var overhang: CGFloat = 0 {
         didSet {
             invalidateIntrinsicContentSize()
-            setNeedsDisplay()
+            setNeedsLayout()
+            canvas.setNeedsDisplay()
         }
     }
 
@@ -42,7 +43,8 @@ final class TextLineView: UIView {
     var phase: CGPoint = .zero {
         didSet {
             guard phase != oldValue else { return }
-            setNeedsDisplay()
+            setNeedsLayout()
+            canvas.setNeedsDisplay()
         }
     }
 
@@ -50,13 +52,17 @@ final class TextLineView: UIView {
     private let layoutManager = NSTextLayoutManager()
     private let fadeMask = CAGradientLayer()
     private var fragment: NSTextLayoutFragment?
+    /// 文字を描くビュー。ビューの枠より上下に広く取り、本文のフォントより背の高い代替フォントの字形（ミャンマー文字の上など）が、
+    /// 行の外へはみ出しても欠けないようにする。並べる大きさとベースラインの位置は、このビューの大きさによらない。
+    private let canvas = TextLineCanvas()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         isOpaque = false
         backgroundColor = .clear
-        contentMode = .redraw
         isUserInteractionEnabled = false
+        canvas.owner = self
+        addSubview(canvas)
         let container = NSTextContainer(size: CGSize(width: 100_000, height: 0))
         container.lineFragmentPadding = 0
         container.maximumNumberOfLines = 1
@@ -64,11 +70,12 @@ final class TextLineView: UIView {
         contentStorage.addTextLayoutManager(layoutManager)
         fadeMask.colors = [UIColor.black.cgColor, UIColor.clear.cgColor]
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: TextLineView, _) in
-            view.setNeedsDisplay()
+            view.canvas.setNeedsDisplay()
         }
         registerForTraitChanges([UITraitDisplayScale.self]) { (view: TextLineView, _) in
             view.invalidateIntrinsicContentSize()
-            view.setNeedsDisplay()
+            view.setNeedsLayout()
+            view.canvas.setNeedsDisplay()
         }
     }
 
@@ -89,7 +96,7 @@ final class TextLineView: UIView {
         }
         invalidateIntrinsicContentSize()
         setNeedsLayout()
-        setNeedsDisplay()
+        canvas.setNeedsDisplay()
     }
 
     private var line: NSTextLineFragment? { fragment?.textLineFragments.first }
@@ -151,15 +158,33 @@ final class TextLineView: UIView {
         }
     }
 
+    /// 字形が描かれる範囲の上端と下端。ビューの中の座標。
+    private var inkVerticalRange: ClosedRange<CGFloat>? {
+        guard let fragment, let line else { return nil }
+        // 描く範囲（`renderingSurfaceBounds`）は、行のかたまりの左上を原点にする。`drawText(in:)`で行の左上を`lineOrigin`に描くのと同じだけずらす。
+        let surface = fragment.renderingSurfaceBounds
+        let offset = lineOrigin.y - line.typographicBounds.minY
+        return (surface.minY + offset) ... (surface.maxY + offset)
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
+        // 上下は字形が描かれる範囲まで広げ、横はビューの枠のままにする。横は、入りきらない文字を枠で切っているため。
+        let ink = inkVerticalRange ?? 0 ... bounds.height
+        let top = min(0, ink.lowerBound.rounded(.down))
+        let canvasFrame = CGRect(x: 0, y: top, width: bounds.width, height: max(bounds.height, ink.upperBound.rounded(.up)) - top)
+        if canvas.frame != canvasFrame {
+            canvas.frame = canvasFrame
+            canvas.setNeedsDisplay()
+        }
         guard fadesTrailingEdge, textWidth > bounds.width + 0.5, bounds.width > 0 else {
             layer.mask = nil
             return
         }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        fadeMask.frame = bounds
+        // ぼかしは、文字を描くビューの広げた上下にも掛ける。
+        fadeMask.frame = canvasFrame
         let fade = min(Self.fadeWidth, bounds.width) / bounds.width
         let isRightToLeft = FadingLabel.isRightToLeft(attributedText.string)
         fadeMask.startPoint = CGPoint(x: isRightToLeft ? fade : 1 - fade, y: 0.5)
@@ -167,6 +192,9 @@ final class TextLineView: UIView {
         CATransaction.commit()
         layer.mask = fadeMask
     }
+
+    /// 文字を描く範囲。ビューの中の座標。
+    var drawingRect: CGRect { canvas.frame }
 
     /// 行末をぼかしているか。
     var isTruncated: Bool { layer.mask != nil }
@@ -181,8 +209,9 @@ final class TextLineView: UIView {
         }
     }
 
-    override func draw(_ rect: CGRect) {
-        guard let fragment, let line, let context = UIGraphicsGetCurrentContext() else { return }
+    /// 行を、このビューの座標で`context`に描く。
+    func drawText(in context: CGContext) {
+        guard let fragment, let line else { return }
         let origin = lineOrigin
         if !concealedRanges.isEmpty {
             // 隠す文字の枠を、描く範囲から抜く。色を透明にしても、色付きの絵文字は消えないため。
@@ -200,5 +229,31 @@ final class TextLineView: UIView {
         }
         context.translateBy(x: origin.x - fragment.layoutFragmentFrame.minX - line.typographicBounds.minX, y: origin.y - fragment.layoutFragmentFrame.minY - line.typographicBounds.minY)
         fragment.draw(at: fragment.layoutFragmentFrame.origin, in: context)
+    }
+}
+
+/// `TextLineView`の文字を描くビュー。描くのは`TextLineView`が受け持つ。
+@MainActor
+private final class TextLineCanvas: UIView {
+    weak var owner: TextLineView?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isOpaque = false
+        backgroundColor = .clear
+        contentMode = .redraw
+        isUserInteractionEnabled = false
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func draw(_ rect: CGRect) {
+        guard let context = UIGraphicsGetCurrentContext() else { return }
+        // `TextLineView`の座標で描くよう、このビューの位置の分だけずらす。
+        context.translateBy(x: -frame.minX, y: -frame.minY)
+        owner?.drawText(in: context)
     }
 }
