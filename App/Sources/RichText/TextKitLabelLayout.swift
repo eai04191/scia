@@ -1,8 +1,7 @@
 import CoreText
-import SciaCore
 import UIKit
 
-/// `EmojiLabel`がTextKit 2で文字を並べる手順。ラベルの値を受け取り、ラベルを使わずに並べる。
+/// `TextKitLabel`がTextKit 2で文字を並べる手順。ラベルの値を受け取り、ラベルを使わずに並べる。
 /// 一覧の本文をメインスレッドの外で先に並べるときも、ラベルと同じ手順で並べるため、ラベルから分けている。
 /// TextKit 2の部品は、同時に1つのスレッドだけが触るなら、メインスレッドの外で使ってよい（NSTextContainer.hの決まり）。
 enum TextKitLabelLayout {
@@ -140,7 +139,7 @@ enum TextKitLabelLayout {
 }
 
 /// メインスレッドの外で先に並べた、ラベルの文字列の並び。並べ終えたらメインスレッドへ渡し、以後はメインスレッドだけが触る。
-/// 置く側は、並べた文字列（`source`）をそのままラベルに入れ、`EmojiLabel.usePreparedLayout`で渡す。
+/// 置く側は、並べた文字列（`source`）をそのままラベルに入れ、`TextKitLabel.usePreparedLayout`で渡す。
 final class PreparedTextLayout {
     /// 並べた文字列。置く側がラベルに入れる文字列と同じもの。
     let source: NSAttributedString
@@ -149,8 +148,8 @@ final class PreparedTextLayout {
     /// 行数ごとの並びと大きさ。0は行数を限らない並び。
     private let entries: [Int: (layout: TextLayout, metrics: TextKitLabelLayout.Metrics)]
 
-    /// `source`を`width`の幅に、行数を限らずに並べる。`truncation`で切る行数を超えていれば、切ったときの行数でも並べる。
-    init(source: NSAttributedString, style: TextKitLabelLayout.Style, width: CGFloat, truncation: BodyTruncation?) {
+    /// `source`を`width`の幅に、行数を限らずに並べる。`truncatedLineLimit`が、並べた行数から切って出す行数を返せば、その行数でも並べる。
+    init(source: NSAttributedString, style: TextKitLabelLayout.Style, width: CGFloat, truncatedLineLimit: (_ lineCount: Int) -> Int?) {
         self.source = source
         self.style = style
         self.width = width
@@ -159,8 +158,7 @@ final class PreparedTextLayout {
         let full = TextKitLabelLayout.layout(of: filled, width: width, maximumLines: 0, style: style)
         if let metrics = TextKitLabelLayout.metrics(of: full, displayScale: style.displayScale) {
             entries[0] = (full, metrics)
-            if let truncation, metrics.lineCount > truncation.threshold {
-                let lines = truncation.lineLimit(exceedsThreshold: true)
+            if let lines = truncatedLineLimit(metrics.lineCount) {
                 let truncated = TextKitLabelLayout.layout(of: filled, width: width, maximumLines: lines, style: style)
                 if let truncatedMetrics = TextKitLabelLayout.metrics(of: truncated, displayScale: style.displayScale) {
                     entries[lines] = (truncated, truncatedMetrics)
@@ -175,4 +173,12 @@ final class PreparedTextLayout {
         guard width == self.width else { return nil }
         return entries[maximumLines]
     }
+}
+
+/// `TextKitLabelLayout`で文字を並べた結果と、並べたときの条件。
+struct TextLayout {
+    let width: CGFloat
+    let direction: UIUserInterfaceLayoutDirection
+    let contentStorage: NSTextContentStorage
+    let layoutManager: NSTextLayoutManager
 }

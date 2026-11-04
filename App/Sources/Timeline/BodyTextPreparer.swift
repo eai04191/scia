@@ -244,3 +244,12 @@ final class BodyTextPreparer {
         }
     }
 }
+
+extension PreparedTextLayout {
+    /// `source`を`width`の幅に、行数を限らずに並べる。`truncation`で切る行数を超えていれば、切ったときの行数でも並べる。
+    convenience init(source: NSAttributedString, style: TextKitLabelLayout.Style, width: CGFloat, truncation: BodyTruncation?) {
+        self.init(source: source, style: style, width: width) { lineCount in
+            truncation.flatMap { lineCount > $0.threshold ? $0.lineLimit(exceedsThreshold: true) : nil }
+        }
+    }
+}
