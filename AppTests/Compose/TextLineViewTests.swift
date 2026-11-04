@@ -61,7 +61,7 @@ struct TextLineViewTests {
         let line = TextLineView()
         line.attributedText = attributed
         window.addSubview(line)
-        line.frame = line.frame(forAlignmentRect: CGRect(origin: CGPoint(x: 20, y: 40), size: line.intrinsicContentSize))
+        line.frame = CGRect(origin: CGPoint(x: 20, y: 40), size: line.intrinsicContentSize)
         line.layoutIfNeeded()
 
         // 字形の枠は、ベースラインを原点に上向きを正とする。
@@ -83,7 +83,7 @@ struct TextLineViewTests {
         window.addSubview(line)
         window.isHidden = false
         defer { window.isHidden = true }
-        line.frame = line.frame(forAlignmentRect: CGRect(origin: CGPoint(x: 20, y: 40), size: line.intrinsicContentSize))
+        line.frame = CGRect(origin: CGPoint(x: 20, y: 40), size: line.intrinsicContentSize)
 
         #expect(abs(line.baselineOrigin.y - font.ascender) < 0.01, "ベースラインは\(line.baselineOrigin.y)")
     }

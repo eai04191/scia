@@ -428,7 +428,7 @@ final class ComposeTextMorph {
     private static func configure(_ view: TextLineView, text: NSAttributedString) {
         view.overhang = 6
         view.attributedText = text
-        view.bounds = CGRect(origin: .zero, size: view.frame(forAlignmentRect: CGRect(origin: .zero, size: view.intrinsicContentSize)).size)
+        view.bounds = CGRect(origin: .zero, size: view.intrinsicContentSize)
     }
 
     /// `staged`なら、出入りを`swap`の間合いに寄せる。消すときは`outEnd`までに消し切り、浮かび上がらせるときは`outEnd`から`inEnd`まで。

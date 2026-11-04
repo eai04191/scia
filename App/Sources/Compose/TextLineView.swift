@@ -124,15 +124,10 @@ final class TextLineView: UIView {
         CGSize(width: ceil(textWidth) + overhang * 2, height: roundedUpToPixel(textHeight) + overhang * 2)
     }
 
-    /// 並べる大きさの下に、行の下の行間を描く範囲として足す。行間に掛かる字形（タイ文字の下に付く母音など）が、描いたときに欠けないようにするため。
-    override var alignmentRectInsets: UIEdgeInsets {
-        UIEdgeInsets(top: 0, left: 0, bottom: max(0, roundedUpToPixel(lineHeight) - roundedUpToPixel(textHeight)), right: 0)
-    }
-
     /// 行を描く位置。並べる大きさが文字より大きければ、文字の高さを上下の真ん中に置く。
     /// 真ん中に置く位置は1pt単位で切り捨てる。入力欄に重ねる「いまどうしてる？」は上端で置き、画素の境目まで切り上げた余りで、入力欄の1行目よりベースラインが下がらないようにするため。
     private var lineOrigin: CGPoint {
-        CGPoint(x: overhang + phase.x, y: ((bounds.height - alignmentRectInsets.bottom - textHeight) / 2).rounded(.down) + phase.y)
+        CGPoint(x: overhang + phase.x, y: ((bounds.height - textHeight) / 2).rounded(.down) + phase.y)
     }
 
     /// 行の頭の文字の、ベースラインの左の点。ビューの中の座標。
