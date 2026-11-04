@@ -311,6 +311,7 @@ extension ComposeToolItem: MenuItemPresentable {
         case .customize: "カスタマイズ"
         case .mention: "メンション"
         case .hashtag: "ハッシュタグ"
+        case .discardDraft: "下書きを捨てる"
         }
     }
 
@@ -328,6 +329,7 @@ extension ComposeToolItem: MenuItemPresentable {
         case .customize: "slider.horizontal.3"
         case .mention: "at"
         case .hashtag: "number"
+        case .discardDraft: "trash"
         }
     }
 

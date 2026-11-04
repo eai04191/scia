@@ -422,6 +422,22 @@ public final class ComposeModel<Thumbnail: Sendable> {
             || !(poll?.filledOptions.isEmpty ?? true)
     }
 
+    /// 下書きを捨てて空の状態（`reset()`のあと）に戻せる。空の状態のときと、送っている間は戻せない。送れなかったときに送り直せるよう、下書きを残すため。
+    public var canDiscardDraft: Bool {
+        guard !isPosting else { return false }
+        return hasWrittenContent
+            || !text.isEmpty
+            || !spoilerText.isEmpty
+            || replyTo != nil
+            || quoteTarget != nil
+            || showsSpoiler
+            || poll != nil
+            || scheduledAt != nil
+            || visibility != resolvedVisibility
+            // 言語のバッジの判定（`choosesNonDefaultLanguage`）は、サーバーに任せる（nil）を既定扱いにするため使わない。
+            || language != defaultLanguage
+    }
+
     /// 自分の投稿の編集を始める。今の下書きは捨てる。送っている間は始めずfalseを返す。
     /// 投票を送り直せない投稿（締め切りまで5分を切った）でも、下書きを変えずにfalseを返す。
     /// 本文と注意書きは、HTMLの`content`ではなく、書いたときのソースから入れる。

@@ -21,11 +21,15 @@ public enum ComposeToolItem: String, MenuItemKind {
     case mention
     /// 本文のカーソルの位置に半角の`#`を入れ、補完を出す。
     case hashtag
+    /// 下書きを捨てて、投稿欄を空の状態に戻す。決まりはdocs/compose.mdの「＋のメニューとツールバー」にある。
+    case discardDraft
 
-    /// ＋の中は、上からカスタマイズ、区切り線、リンクにタイトルを付ける、注意書き、投票、予約、言語、区切り線、メンション、ハッシュタグにし、ツールバーは「＋ 公開範囲 添付 絵文字 展開」にする。
     /// ＋のメニューはボタンの上に開き、下ほど指が届きやすいので、使う頻度の低いカスタマイズをいちばん上に、書きながら何度も使う記号をいちばん下に置く。
+    /// カスタマイズのまとまりには、カスタマイズだけを置く。
     public static let defaultLayout = MenuLayout<ComposeToolItem>(defaultElements: [
         .item(.customize, isVisible: true),
+        .separator,
+        .item(.discardDraft, isVisible: false),
         .separator,
         .item(.linkTitle, isVisible: true),
         .item(.spoiler, isVisible: true),

@@ -130,6 +130,23 @@ extension Confirmation where Choice == Proceed {
         return .destructive(title: "書き直しをやめますか？", message: discardedDraftMessage(draft), action: "書き直しをやめる")
     }
 
+    /// ＋の「下書きを捨てる」で、捨てると失われる書いたものがあれば確かめる。なければ確かめない（nil）。
+    /// 編集や書き直しの途中なら、それをやめることを題とボタンにする。
+    @MainActor
+    public static func discardingDraft<Thumbnail>(draft: ComposeModel<Thumbnail>) -> Confirmation? {
+        guard draft.hasWrittenContent else { return nil }
+        if draft.editedStatus != nil {
+            return .destructive(title: "編集をやめますか？", message: discardedDraftMessage(draft), action: "編集をやめる")
+        }
+        if draft.redraft != nil {
+            return .destructive(title: "書き直しをやめますか？", message: discardedDraftMessage(draft), action: "書き直しをやめる")
+        }
+        if draft.rewritingSchedule != nil {
+            return .destructive(title: "予約の書き直しをやめますか？", message: "書き直し中の内容は消えます。元の予約は残ります。", action: "書き直しをやめる")
+        }
+        return .destructive(title: "下書きを捨てますか？", message: discardedDraftMessage(draft), action: "捨てる")
+    }
+
     /// 送ると元の投稿を削除することを、書きかけの下書きがあれば捨ててよいかも、確かめてから削除して書き直し始める。
     /// 投票の票は投票の付いた投稿でだけ、固定が外れることはプロフィールに固定している投稿でだけ書く。
     @MainActor

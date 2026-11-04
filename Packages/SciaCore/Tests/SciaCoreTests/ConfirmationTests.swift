@@ -55,6 +55,23 @@ struct ConfirmationTests {
         #expect(confirmation?.message == "書きかけの下書きは消えます。")
     }
 
+    /// ＋の「下書きを捨てる」は、書いたものがあるときだけ確かめ、予約の書き直しの途中ならそれをやめることを聞く。
+    @Test func discardingDraftConfirmsOnlyWithWrittenDraft() {
+        #expect(Confirmation.discardingDraft(draft: draft(poll: true)) == nil)
+        let confirmation = Confirmation.discardingDraft(draft: draft(text: "書きかけ"))
+        #expect(confirmation?.title == "下書きを捨てますか？")
+        #expect(confirmation?.message == "書きかけの下書きは消えます。")
+        #expect(confirmation?.buttons == [.cancel, .init("捨てる", role: .destructive, choice: .proceed)])
+
+        let rewriting = draft()
+        rewriting.beginRewriting(ScheduledStatus(
+            id: "70", scheduledAt: Date(timeIntervalSince1970: 1_800_000_000),
+            params: ScheduledStatus.Params(text: "予約した本文", visibility: .unlisted)
+        ))
+        #expect(Confirmation.discardingDraft(draft: rewriting)?.title == "予約の書き直しをやめますか？")
+        #expect(Confirmation.discardingDraft(draft: rewriting)?.message == "書き直し中の内容は消えます。元の予約は残ります。")
+    }
+
     /// 引用付きの予約投稿を書き直している間は、引用の投稿を読み直していないので`quoteTarget`がない。それでも引用を理由に断る。
     @Test func unattachableRefusalExplainsQuoteWhileRewritingScheduledQuote() {
         let model = draft()

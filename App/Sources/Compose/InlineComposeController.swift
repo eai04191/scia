@@ -251,7 +251,7 @@ final class InlineComposeController: NSObject {
         switch item {
         case .visibility: (item, visibilityButton)
         case .expand: (item, expandButton)
-        case .media, .spoiler, .poll, .schedule, .language, .linkTitle, .customEmoji, .customize, .mention, .hashtag: (item, makeToolButton(item))
+        case .media, .spoiler, .poll, .schedule, .language, .linkTitle, .customEmoji, .customize, .mention, .hashtag, .discardDraft: (item, makeToolButton(item))
         }
     })
     /// 今のツールバーと＋のメニューへの振り分け。ツールバーの幅が決まるたびに決め直す。まだ一度も振り分けていなければnil。
@@ -872,6 +872,10 @@ final class InlineComposeController: NSObject {
             return emojiSheet != nil
                 ? UIAction(title: "キーボードに戻る", image: UIImage(systemName: "keyboard")) { [weak self] _ in self?.toggleEmojiPalette() }
                 : UIAction(title: item.title, image: UIImage(systemName: item.symbolName)) { [weak self] _ in self?.toggleEmojiPalette() }
+        case .discardDraft:
+            return UIAction(title: item.title, image: UIImage(systemName: item.symbolName), attributes: model.canDiscardDraft ? .destructive : [.destructive, .disabled]) { [weak self] _ in
+                self?.confirmDiscardingDraft()
+            }
         }
     }
 
@@ -1302,6 +1306,7 @@ final class InlineComposeController: NSObject {
             case .linkTitle: self?.toggleLinkSelection()
             case .customEmoji: self?.toggleEmojiPalette()
             case .mention, .hashtag: self?.insertMark(item)
+            case .discardDraft: self?.confirmDiscardingDraft()
             case .visibility, .expand: break
             }
         })
@@ -1381,6 +1386,7 @@ final class InlineComposeController: NSObject {
             schedule.accessibilityTraits = model.scheduledAt != nil ? [.button, .selected] : .button
             schedule.isEnabled = model.scheduledAt != nil || model.canSchedule
         }
+        toolButtons[.discardDraft]?.isEnabled = model.canDiscardDraft
         updateLanguageIndicators()
     }
 
@@ -2771,6 +2777,23 @@ final class InlineComposeController: NSObject {
         guard !isPresentingAlert, let presenter = presenterForErrors, presenter.presentedViewController == nil else { return }
         let alert = UIAlertController(confirmation, preferredStyle: .alert, onClose: { [weak self] in self?.alertDidClose() }) { [weak self] _ in
             self?.cancelStatusEdit()
+        }
+        presentKeepingInput(alert, from: presenter)
+    }
+
+    /// ＋の「下書きを捨てる」。捨てると失われる書いたものがあれば、捨ててよいか聞く。
+    /// 聞いている間に送り始めていたら、`discardDraft()`が捨てずに断る。
+    private func confirmDiscardingDraft() {
+        guard model.canDiscardDraft else { return }
+        guard let confirmation = Confirmation.discardingDraft(draft: model) else {
+            logger.info("compose: discard draft without confirmation")
+            discardDraft()
+            return
+        }
+        guard !isPresentingAlert, let presenter = presenterForErrors, presenter.presentedViewController == nil else { return }
+        let alert = UIAlertController(confirmation, preferredStyle: .alert, onClose: { [weak self] in self?.alertDidClose() }) { [weak self] _ in
+            self?.logger.info("compose: discard draft confirmed")
+            self?.discardDraft()
         }
         presentKeepingInput(alert, from: presenter)
     }
