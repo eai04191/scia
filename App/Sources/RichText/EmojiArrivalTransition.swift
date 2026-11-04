@@ -31,18 +31,23 @@ final class EmojiArrivalTransition {
 
     /// 動き始めるときの、文字ごとの見え方。キーは文字（書記素クラスタ）の先頭のUTF-16の位置。
     private let start: [Int: Placement]
+    /// 動き始めるときの、引用の縦線の枠（`QuoteBars`）。
+    private let startBars: [CGRect]
     private let duration: TimeInterval
     private var overlay: CALayer?
     private var pieceLayers: [(piece: Piece, layer: CALayer)] = []
+    /// 引用の縦線を切り出した層。
+    private var barLayers: [CALayer] = []
     /// 新しい並びでの、文字ごとの枠。
     private var finalFrames: [Int: CGRect] = [:]
     private var hiddenLayers: [CALayer] = []
     private weak var label: EmojiLabel?
 
-    /// 文字列を入れ替える前に呼ぶ。`start`は、動き始めるときの文字ごとの見え方。
-    init(label: EmojiLabel, start: [Int: Placement], duration: TimeInterval) {
+    /// 文字列を入れ替える前に呼ぶ。`start`は、動き始めるときの文字ごとの見え方、`startBars`は引用の縦線の枠。
+    init(label: EmojiLabel, start: [Int: Placement], startBars: [CGRect], duration: TimeInterval) {
         self.label = label
         self.start = start
+        self.startBars = startBars
         self.duration = duration
     }
 
@@ -72,6 +77,11 @@ final class EmojiArrivalTransition {
             }
         }
         return result
+    }
+
+    /// 動いている途中の、いま見えている引用の縦線の枠。動いている途中に次の絵文字が届いたとき、そこから動かし直すのに使う。
+    func currentBars() -> [CGRect] {
+        barLayers.map { $0.presentation()?.frame ?? $0.frame }
     }
 
     /// 新しい文字列を並べ終えたあとに呼び、動き始める見え方から新しい位置へ動かす。
@@ -129,6 +139,28 @@ final class EmojiArrivalTransition {
                 layer.add(move, forKey: "move")
             }
         }
+        // 引用の縦線は、文字の枠の外（字下げの中）にあるので、文字とは別に切り出す。ラベル自身の描画を隠すため、切り出さないと動きの間だけ消える。
+        // 折り返しが変わって行数が変われば、線の長さも変わるので、文字と同じスプリングで前の枠から伸び縮みさせる。線は一色なので、像を伸ばしてよい。
+        let bars = label.quoteBarFrames()
+        for (index, bar) in bars.enumerated() where !bar.isEmpty {
+            let layer = CALayer()
+            layer.contents = image
+            layer.contentsScale = format.scale
+            layer.contentsRect = CGRect(x: bar.minX / bounds.width, y: bar.minY / bounds.height, width: bar.width / bounds.width, height: bar.height / bounds.height)
+            layer.frame = bar
+            overlay.addSublayer(layer)
+            barLayers.append(layer)
+            guard startBars.count == bars.count, startBars[index] != bar else { continue }
+            let from = startBars[index]
+            let resize = TimelineViewController.rowSpring(keyPath: "bounds", duration: duration)
+            resize.fromValue = CGRect(origin: .zero, size: from.size)
+            resize.toValue = layer.bounds
+            let move = TimelineViewController.rowSpring(keyPath: "position", duration: duration)
+            move.fromValue = CGPoint(x: from.midX, y: from.midY)
+            move.toValue = layer.position
+            layer.add(resize, forKey: "resize")
+            layer.add(move, forKey: "move")
+        }
         // どのまとまりも同じ時間で動くので、時間を測るためだけの動きを足し、その終わりで外す。スプリングが止まるまで待つ。
         // 外側の描き直しの中で始めるため、CATransactionの完了は動きの終わりを待たずに呼ばれる（シミュレーターで確かめた）。
         let timer = CABasicAnimation(keyPath: "opacity")
@@ -166,6 +198,7 @@ final class EmojiArrivalTransition {
         guard let overlay else { return }
         self.overlay = nil
         pieceLayers = []
+        barLayers = []
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         overlay.removeFromSuperlayer()

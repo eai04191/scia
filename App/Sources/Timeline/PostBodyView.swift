@@ -300,6 +300,8 @@ final class PostBodyView: UIView {
         frames[.bodyLineGaps] = lineGaps.isEmpty ? nil : lineGaps
         frames[.bodyParagraphGaps] = paragraphGaps.isEmpty ? nil : paragraphGaps
         frames[.quoteIndent] = indents.isEmpty ? nil : indents
+        let quoteBars = textLabel.quoteBarFrames().map { textLabel.convert($0, to: space) }
+        frames[.quoteBars] = quoteBars.isEmpty ? nil : quoteBars
         let emojis = textLabel.previewCustomEmojiFrames().map { textLabel.convert($0, to: space) }
         frames[.customEmojis] = emojis.isEmpty ? nil : emojis
         let unicodeEmojis = textLabel.previewUnicodeEmojiFrames().map { textLabel.convert($0, to: space) }

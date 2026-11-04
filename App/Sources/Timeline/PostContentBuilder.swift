@@ -426,6 +426,7 @@ struct PostContentBuilder {
             paragraphSpacing: settings.value(of: AppearanceCatalog.paragraphSpacing),
             lineSpacing: settings.value(of: AppearanceCatalog.bodyLineSpacing),
             indentPerLevel: settings.value(of: AppearanceCatalog.quoteIndent),
+            quoteBarWidth: settings.value(of: AppearanceCatalog.quoteBarWidth),
             emojiScale: settings.value(of: AppearanceCatalog.customEmojiScale),
             unicodeEmojiScale: settings.value(of: AppearanceCatalog.unicodeEmojiScale),
             emojiImages: emojiImages,

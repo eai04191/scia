@@ -77,6 +77,25 @@ struct TextSelectionTests {
         #expect(textLines == labelLines)
     }
 
+    /// 選べるテキストビューにも、ラベルと同じ位置に引用の縦線を引く。差し替えたときに線が消えないようにするため。
+    @Test func selectableTextDrawsQuoteBarsLikeLabel() throws {
+        let text = renderer.render(RichText(blocks: [
+            .init(inlines: [.text("前の段落", [])]),
+            .init(inlines: [.text("引用は、折り返すくらい長い文章にして、線が何行かにわたるようにしておく。", [])], quoteLevel: 1),
+            .init(inlines: [.text("入れ子の引用", [])], quoteLevel: 2),
+        ]))
+        let label = LinkLabel()
+        label.numberOfLines = 0
+        label.attributedText = text
+        label.frame = CGRect(origin: .zero, size: label.sizeThatFits(CGSize(width: 300, height: CGFloat.greatestFiniteMagnitude)))
+        let textView = SelectableTextView(text: try #require(label.textForTextKit))
+        textView.frame = CGRect(origin: .zero, size: textView.sizeThatFits(CGSize(width: label.bounds.width, height: CGFloat.greatestFiniteMagnitude)))
+        textView.layoutIfNeeded()
+
+        #expect(label.quoteBarFrames().count == 2)
+        #expect(textView.quoteBarFrames == label.quoteBarFrames())
+    }
+
     /// 選び始めると、本文の位置にテキストビューを置き、全体を選ぶ。
     @Test func beginningSelectionCoversTextAndSelectsAll() throws {
         let view = PostBodyView(mediaImages: .offline, avatarImages: .offline)

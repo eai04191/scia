@@ -296,4 +296,36 @@ struct EmojiArrivalTests {
         #expect(harness.windowMinY(of: id) == y)
         #expect(hasRowShift(belowCell), "下の行を動かしていません")
     }
+
+    /// 引用の中の絵文字が届いて動く間も、引用の縦線を見せる。縦線は文字の枠の外（字下げの中）にあり、ラベル自身の描画は隠すため、
+    /// 文字と別に切り出さないと、動きの間だけ消えて、終わると戻る。
+    @Test func quoteBarsStayDuringEmojiArrival() async throws {
+        let blobcat = try emoji("blobcat")
+        let png = try widePNG()
+        let store = EmojiImageStore { _ in png }
+        let renderer = RichTextRenderer(font: font, textColor: .label, quoteBarWidth: 3, emojiImages: store, language: "ja")
+        var text = RichText.plain("前 :blobcat: 後ろの文字", emojis: [blobcat])
+        text.blocks[0].quoteLevel = 1
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        let label = EmojiLabel()
+        label.numberOfLines = 0
+        label.emojiArrivalDuration = { 0.25 }
+        label.frame = CGRect(x: 0, y: 100, width: 300, height: 60)
+        window.addSubview(label)
+        _ = LayerClock(freezing: label.layer)
+
+        label.attributedText = renderer.render(text)
+        label.layoutIfNeeded()
+        try await waitUntil { store.image(for: blobcat.staticUrl) != nil }
+        label.attributedText = renderer.render(text)
+        label.layoutIfNeeded()
+
+        #expect(try #require(label.emojiArrival).isRunning)
+        let bar = try #require(label.quoteBarFrames().first)
+        let shown = label.layer.sublayers?.last?.sublayers ?? []
+        #expect(shown.contains { $0.frame == bar && !$0.isHidden && $0.opacity == 1 }, "動いている間に、引用の縦線を見せていません")
+    }
 }

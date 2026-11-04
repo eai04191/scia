@@ -114,6 +114,8 @@ public enum AppearanceCatalog {
     public static let editedMarkSpacing = AppearanceValue(id: "timeline.editedMarkSpacing", title: "「*」と時刻のすき間", range: 0...100, step: 1, defaultValue: 0)
     /// 本文の引用とリストの、1段あたりの字下げ。
     public static let quoteIndent = AppearanceValue(id: "timeline.quoteIndent", title: "引用とリストの字下げ", range: 0...100, step: 1, defaultValue: 16)
+    /// 本文の引用の段落の頭に、深さの数だけ引く縦線の太さ。0なら引かない。
+    public static let quoteBarWidth = AppearanceValue(id: "timeline.quoteBarWidth", title: "引用の縦線の太さ", range: 0...100, step: 1, defaultValue: 3)
     /// 本文と注意書きのカスタム絵文字の高さの、絵文字の標準の大きさ（絵文字を文字の大きさのまま描いたときの絵の高さ）に対する割合。
     /// 絵文字の大きさと同じ割合なら、同じ高さに描く。
     public static let customEmojiScale = AppearanceValue(id: "timeline.customEmojiScale", title: "カスタム絵文字の倍率", range: 0...4, step: 0.1, defaultValue: 1, unit: .ratio)
@@ -229,7 +231,7 @@ public enum AppearanceCatalog {
         AppearanceGroup(id: "context", title: "名前の上の行", values: [contextText, contextSecondaryText, contextPartsSpacing, contextLabelText, boosterAvatarSize, contextSymbolSpacing, contextAvatarTextSpacing, contextSpacing]),
         AppearanceGroup(id: "avatar", title: "アイコン", values: [avatarSize, avatarCornerRatio, avatarSpacing, replyLineWidth, replyLineGap]),
         AppearanceGroup(id: "name", title: "名前の行", values: [namePrimaryText, nameSecondaryText, timeText, namePartsSpacing, nameStackSpacing, nameTimeSpacing, visibilitySymbolSpacing, editedMarkSpacing, nameFadeWidth, nameUnicodeEmojiScale, nameCustomEmojiScale, nameBodySpacing, nameMediaSpacing]),
-        AppearanceGroup(id: "body", title: "本文", values: [bodyText, bodyLineSpacing, paragraphSpacing, quoteIndent, unicodeEmojiScale, customEmojiScale, emojiOnlyScale, emojiOnlyLimit, bodyTruncationThreshold, bodyTruncatedLines, filterNoteText, filterNoteSpacing]),
+        AppearanceGroup(id: "body", title: "本文", values: [bodyText, bodyLineSpacing, paragraphSpacing, quoteIndent, quoteBarWidth, unicodeEmojiScale, customEmojiScale, emojiOnlyScale, emojiOnlyLimit, bodyTruncationThreshold, bodyTruncatedLines, filterNoteText, filterNoteSpacing]),
         AppearanceGroup(id: "spoiler", title: "注意書き", values: [spoilerButtonText, spoilerButtonSpacing, spoilerPadding, spoilerCornerRadius, spoilerBodySpacing]),
         AppearanceGroup(id: "media", title: "メディア", values: [bodyMediaSpacing, mediaTileSpacing, mediaTallestAspectRatio, mediaWidestAspectRatio, mediaBesideSide]),
         AppearanceGroup(id: "linkCard", title: "リンクカード", values: [linkCardTitleText, linkCardDetailText, linkCardTitleLines, linkCardDescriptionLines, linkCardLineSpacing, linkCardImageWidthRatio, bodyLinkCardSpacing, linkCardPadding]),

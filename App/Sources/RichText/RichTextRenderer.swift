@@ -15,6 +15,8 @@ struct RichTextRenderer: Sendable {
     var lineSpacing: CGFloat
     /// 引用とリストの1段あたりの字下げ。
     var indentPerLevel: CGFloat
+    /// 引用の段落の頭に引く縦線の太さ。0なら引かない。
+    var quoteBarWidth: CGFloat
     /// カスタム絵文字の高さの、Unicodeの絵文字を文字の大きさのまま描いたときの絵の高さ（`EmojiFont.glyphHeight`）に対する割合。
     var emojiScale: CGFloat
     /// Unicodeの絵文字の絵の高さの、文字の大きさのまま描いたときの絵の高さに対する割合。カスタム絵文字と同じ割合なら、同じ高さに描く。
@@ -40,6 +42,7 @@ struct RichTextRenderer: Sendable {
         paragraphSpacing: CGFloat = 0,
         lineSpacing: CGFloat = 0,
         indentPerLevel: CGFloat = 16,
+        quoteBarWidth: CGFloat = AppDependencies.settings.value(of: AppearanceCatalog.quoteBarWidth),
         emojiScale: CGFloat = 1,
         unicodeEmojiScale: CGFloat = 1,
         emojiOnly: EmojiOnlyEnlargement? = nil,
@@ -56,6 +59,7 @@ struct RichTextRenderer: Sendable {
         self.paragraphSpacing = paragraphSpacing
         self.lineSpacing = lineSpacing
         self.indentPerLevel = indentPerLevel
+        self.quoteBarWidth = quoteBarWidth
         self.emojiScale = emojiScale
         self.unicodeEmojiScale = unicodeEmojiScale
         self.emojiOnly = emojiOnly
@@ -125,7 +129,7 @@ struct RichTextRenderer: Sendable {
     func hasSameStyle(as other: RichTextRenderer) -> Bool {
         font == other.font && textColor == other.textColor && secondaryColor == other.secondaryColor && linkColor == other.linkColor
             && underlinesLinks == other.underlinesLinks && paragraphSpacing == other.paragraphSpacing && lineSpacing == other.lineSpacing
-            && indentPerLevel == other.indentPerLevel && emojiScale == other.emojiScale && unicodeEmojiScale == other.unicodeEmojiScale
+            && indentPerLevel == other.indentPerLevel && quoteBarWidth == other.quoteBarWidth && emojiScale == other.emojiScale && unicodeEmojiScale == other.unicodeEmojiScale
             && emojiOnly == other.emojiOnly && language == other.language && emojiStyle == other.emojiStyle && displayScale == other.displayScale
     }
 
@@ -410,6 +414,9 @@ struct RichTextRenderer: Sendable {
             range.length += 1
         }
         result.addAttribute(.paragraphStyle, value: paragraphStyle(for: block, emojiExtent: Self.emojiExtent(in: result, range: range)), range: range)
+        if block.quoteLevel > 0, quoteBarWidth > 0 {
+            result.addAttribute(.quoteBars, value: QuoteBars(level: block.quoteLevel, indentPerLevel: indentPerLevel, width: quoteBarWidth), range: range)
+        }
     }
 
     /// 下げて描く絵文字の前に置く、幅のない文字。コピーするときは取り除く。

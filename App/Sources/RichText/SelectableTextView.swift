@@ -12,6 +12,10 @@ final class SelectableTextView: UITextView, UITextViewDelegate, @MainActor UIEdi
     var touchableHeight: (() -> CGFloat?)?
     /// 最後に触れたタッチの種類。選択が空になったときに、やめるかを決めるのに使う。
     var lastTouchType: UITouch.TouchType?
+    /// 引用の縦線。ラベルが文字と一緒に描く線を、文字の後ろの層に同じ位置で引く。差し替えたときに線が消えないようにするため。
+    private let quoteBarLayer = CAShapeLayer()
+    /// 引いている引用の縦線の枠。
+    private(set) var quoteBarFrames: [CGRect] = []
     private lazy var editMenu: UIEditMenuInteraction = {
         let interaction = UIEditMenuInteraction(delegate: self)
         addInteraction(interaction)
@@ -33,6 +37,31 @@ final class SelectableTextView: UITextView, UITextViewDelegate, @MainActor UIEdi
         attributedText = text
         delegate = self
         addGestureRecognizer(TouchDownObserver { [weak self] touch in self?.lastTouchType = touch.type })
+        layer.insertSublayer(quoteBarLayer, at: 0)
+        registerForTraitChanges([UITraitUserInterfaceStyle.self, UITraitAccessibilityContrast.self]) { (self: Self, _) in
+            self.setNeedsLayout()
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        layoutQuoteBars()
+    }
+
+    private func layoutQuoteBars() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        quoteBarFrames = []
+        if bounds.width > 0, QuoteBars.appear(in: attributedText),
+           let layoutManager = textLayoutManager, let contentStorage = layoutManager.textContentManager as? NSTextContentStorage {
+            let layout = TextLayout(width: bounds.width, direction: effectiveUserInterfaceLayoutDirection, contentStorage: contentStorage, layoutManager: layoutManager)
+            quoteBarFrames = QuoteBars.frames(in: layout, bounds: bounds)
+        }
+        let path = CGMutablePath()
+        path.addRects(quoteBarFrames)
+        quoteBarLayer.path = path
+        quoteBarLayer.fillColor = QuoteBars.color.resolvedColor(with: traitCollection).cgColor
     }
 
     @available(*, unavailable)
@@ -75,6 +104,7 @@ final class SelectableTextView: UITextView, UITextViewDelegate, @MainActor UIEdi
         let onEnd = self.onEnd
         self.onEnd = nil
         attributedText = text
+        setNeedsLayout()
         selectedRange = NSRange(location: min(range.location, text.length), length: min(range.length, text.length - min(range.location, text.length)))
         self.onEnd = onEnd
     }

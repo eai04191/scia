@@ -172,9 +172,10 @@ class EmojiLabel: UILabel {
             return
         }
         let start = running?.currentPlacements(filling: filled) ?? EmojiArrivalTransition.placements(of: shown, in: self, filling: filled)
+        let startBars = running?.currentBars() ?? quoteBarFrames()
         // 前の動きの層は、次の動きを始めるまで残す。同じ描き直しの中で入れ替わるので、そのあいだのコマは描かれない。
         let previous = emojiArrival
-        emojiArrival = EmojiArrivalTransition(label: self, start: start, duration: duration)
+        emojiArrival = EmojiArrivalTransition(label: self, start: start, startBars: startBars, duration: duration)
         previous?.finish()
         pendingEmojiArrival = true
         setNeedsLayout()
@@ -556,6 +557,7 @@ class EmojiLabel: UILabel {
     }
 
     override func drawText(in rect: CGRect) {
+        drawQuoteBars()
         guard drawsWithTextKit, let attributedText, attributedText.length > 0, let context = UIGraphicsGetCurrentContext() else {
             super.drawText(in: rect)
             return
@@ -571,6 +573,21 @@ class EmojiLabel: UILabel {
             return true
         }
         context.restoreGState()
+    }
+
+    /// 引用の段落の頭の縦線を、文字の下に描く。文字と同じ描画の中で描くので、文字と一緒に薄くなり、「続きを読む」の手前でも文字と同じく消える。
+    private func drawQuoteBars() {
+        let frames = quoteBarFrames()
+        guard !frames.isEmpty else { return }
+        QuoteBars.color.setFill()
+        frames.forEach { UIRectFill($0) }
+    }
+
+    /// 引用の縦線の枠。ラベルの座標で返す。引用がなければ、文字を並べ直さずに空を返す。
+    /// 絵文字が届くときの動きで線を切り出すのと、「投稿の見た目」のプレビューで線の場所を示すのにも使う。
+    final func quoteBarFrames() -> [CGRect] {
+        guard let attributedText, attributedText.length > 0, bounds.width > 0, QuoteBars.appear(in: attributedText) else { return [] }
+        return QuoteBars.frames(in: textLayout(of: attributedText), bounds: bounds)
     }
 
     /// カスタム絵文字を描く枠。ラベルの座標で返す。「投稿の見た目」のプレビューで、絵文字の場所を示すのに使う。

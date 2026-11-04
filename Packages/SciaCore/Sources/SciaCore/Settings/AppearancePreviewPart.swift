@@ -86,6 +86,8 @@ public enum AppearancePreviewPart: Hashable, CaseIterable, Sendable {
     case bodyParagraphGaps
     /// 本文の、引用やリストの字下げの部分。
     case quoteIndent
+    /// 本文の、引用の段落の頭の縦線。
+    case quoteBars
     /// 本文のカスタム絵文字。
     case customEmojis
     /// 本文の、大きさを変えた絵文字。等倍のときは示さない。

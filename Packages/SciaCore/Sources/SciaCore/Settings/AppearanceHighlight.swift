@@ -72,6 +72,7 @@ public enum AppearanceHighlight: Equatable, Sendable {
             (C.bodyLineSpacing, .firstOf([.part(.bodyLineGaps), .part(.bodyText)])),
             (C.paragraphSpacing, .firstOf([.part(.bodyParagraphGaps), .part(.bodyText)])),
             (C.quoteIndent, .firstOf([.part(.quoteIndent), .part(.bodyText)])),
+            (C.quoteBarWidth, .firstOf([.part(.quoteBars), .part(.bodyText)])),
             (C.unicodeEmojiScale, .firstOf([.part(.unicodeEmojis), .part(.bodyText)])),
             (C.customEmojiScale, .firstOf([.part(.customEmojis), .part(.bodyText)])),
             (C.emojiOnlyScale, .firstOf([.part(.emojiOnlyEmojis), .part(.emojiOnlyBody)])),
