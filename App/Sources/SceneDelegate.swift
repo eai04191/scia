@@ -430,7 +430,12 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         do {
             try accounts.remove(credential.id)
         } catch {
-            showLogin(errorMessage: error.localizedDescription)
+            // 消せなければ、アカウントは一覧にも端末にも残っているので、今の画面のまま知らせる。
+            // ログイン画面に替えると、残っているほかのアカウントにも、起動し直すまで戻れなくなるため。
+            logger.error("account removal failed: \(SciaLog.describe(error), privacy: .public)")
+            let alert = UIAlertController(title: "ログアウトできませんでした", message: ErrorPresentation(error).text, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .cancel))
+            window?.rootViewController?.frontmostPresented.present(alert, animated: true)
             return
         }
         logger.info("account removed")
@@ -450,7 +455,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func showLogin(errorMessage: String?) {
-        // ログイン画面に替えたら、出していたアカウントの処理を止める。ログアウトに失敗してここへ来たときも同じ。
+        // ログイン画面に替えたら、出していたアカウントの処理を止める。
         session = nil
         isShowingAccountsLoadFailure = false
         let model = LoginModel(oauth: AppDependencies.oauth, accountDomains: accountDomains) { [weak self] credential in
