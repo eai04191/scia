@@ -61,19 +61,28 @@ public struct MastodonClient: Sendable {
 
     /// 通知を、サーバーがまとめた形で新しい順に返す。まとめるのは`MastodonNotification.Kind.grouped`の種類だけにする。
     /// 1回に読めるまとまりの数の上限は80。
+    /// v2のないサーバー（Mastodon 4.2以前）では、v1でまとめずに読む。決まりはdocs/notification-display.mdの「まとめて表示する」にある。
     /// https://docs.joinmastodon.org/methods/grouped_notifications/#get-grouped
     public func notifications(_ query: TimelineQuery) async throws -> NotificationPage {
         let grouping = MastodonNotification.Kind.grouped.map { URLQueryItem(name: "grouped_types[]", value: $0.rawValue) }
-        return try await get(GroupedNotificationsResults.self, path: "api/v2/notifications", query: query.queryItems + grouping).0.page
+        do {
+            return try await get(GroupedNotificationsResults.self, path: "api/v2/notifications", query: query.queryItems + grouping, feature: .groupedNotifications).0.page
+        } catch is FeatureUnavailable {
+            return try await ungroupedNotifications(query, filter: [])
+        }
     }
 
     /// その人からの通知を、保留している通知も含めて、まとめずに新しい順に返す。
     /// v2はdocsに`account_id`があるが、Mastodonのサーバーは読まずにほかの人の通知も返すため、Mastodonのwebと同じくv1で読む。
     /// v1は`account_id`を渡すと、`include_filtered`がなくても保留した通知を含める（`Notification.browserable`）。
-    /// まとめないので、どの通知もそれだけを消せるよう、まとまりのキーを`ungrouped-<通知のID>`にする。
     /// https://docs.joinmastodon.org/methods/notifications/#get
     public func notifications(_ query: TimelineQuery, from accountID: String) async throws -> NotificationPage {
-        let filter = [URLQueryItem(name: "account_id", value: accountID)]
+        try await ungroupedNotifications(query, filter: [URLQueryItem(name: "account_id", value: accountID)])
+    }
+
+    /// v1で、通知をまとめずに読む。どの通知もそれだけを消せるよう、まとまりのキーを`ungrouped-<通知のID>`にする。
+    /// https://docs.joinmastodon.org/methods/notifications/#get
+    private func ungroupedNotifications(_ query: TimelineQuery, filter: [URLQueryItem]) async throws -> NotificationPage {
         let list = try await get(ElementList<MastodonNotification>.self, path: "api/v1/notifications", query: query.queryItems + filter).0
         let notifications = list.elements.map { MastodonNotification(id: $0.id, type: $0.type, createdAt: $0.createdAt, account: $0.account, status: $0.status) }
         return NotificationPage(notifications: notifications, unreadable: list.unreadable)
@@ -82,7 +91,7 @@ public struct MastodonClient: Sendable {
     /// 通知のフィルタリングの設定と、保留中の通知の数。
     /// https://docs.joinmastodon.org/methods/notifications/#get-policy
     public func notificationPolicy() async throws -> NotificationPolicy {
-        try await get(NotificationPolicy.self, path: "api/v2/notifications/policy", query: []).0
+        try await get(NotificationPolicy.self, path: "api/v2/notifications/policy", query: [], feature: .notificationFilter).0
     }
 
     /// 通知のフィルタリングの設定のうち、渡した項目だけを変える。変えたあとの設定を返す。
@@ -91,7 +100,7 @@ public struct MastodonClient: Sendable {
         let form = NotificationPolicy.Item.allCases.compactMap { item in
             changes[item]?.rawValue.map { URLQueryItem(name: item.rawValue, value: $0) }
         }
-        return try await send(formRequest(method: "PATCH", path: "api/v2/notifications/policy", form: form), decoding: NotificationPolicy.self).0
+        return try await send(formRequest(method: "PATCH", path: "api/v2/notifications/policy", form: form), decoding: NotificationPolicy.self, feature: .notificationFilter).0
     }
 
     /// 保留中の通知を、人ごとのまとまりでサーバーが返す順に返す。1回に読める件数の上限は80件。
@@ -99,7 +108,7 @@ public struct MastodonClient: Sendable {
     /// https://docs.joinmastodon.org/methods/notifications/#get-requests
     public func notificationRequests(maxID: String?, limit: Int) async throws -> NotificationRequestPage {
         let query = [URLQueryItem(name: "limit", value: String(limit))] + (maxID.map { [URLQueryItem(name: "max_id", value: $0)] } ?? [])
-        let (requests, response) = try await get(ElementList<NotificationRequest>.self, path: "api/v1/notifications/requests", query: query)
+        let (requests, response) = try await get(ElementList<NotificationRequest>.self, path: "api/v1/notifications/requests", query: query, feature: .notificationFilter)
         let link = response.value(forHTTPHeaderField: "Link").map(LinkHeader.init)
         return NotificationRequestPage(requests: requests.elements, nextMaxID: link?.queryValue("max_id", of: "next"))
     }
@@ -127,7 +136,7 @@ public struct MastodonClient: Sendable {
     /// 受け入れた保留中の通知を、サーバーが通知の一覧に戻し終えたか。
     /// https://docs.joinmastodon.org/methods/notifications/#requests-merged
     public func notificationRequestsMerged() async throws -> Bool {
-        try await get(MergedState.self, path: "api/v1/notifications/requests/merged", query: []).0.merged
+        try await get(MergedState.self, path: "api/v1/notifications/requests/merged", query: [], feature: .notificationFilter).0.merged
     }
 
     /// 既読位置。まだ保存されていなければnil。
@@ -1161,8 +1170,16 @@ public struct MastodonClient: Sendable {
     }
 
     /// 通知のまとまりを削除する。まとめない通知は、`ungrouped-<通知のID>`のキーで1件だけ消える。応答の中身は使わない。
+    /// v2のないサーバーでは、通知をまとめずに読んでいるので、キーの通知のIDをv1で消す。
+    /// v2の削除のパスはキーを含み、404はまとまりがないことも表すため、v2がないことはここでは判断せず、読み込みで分かったものを使う。
     /// https://docs.joinmastodon.org/methods/grouped_notifications/#dismiss-group
+    /// https://docs.joinmastodon.org/methods/notifications/#dismiss
     public func dismissNotificationGroup(_ groupKey: String) async throws {
+        if await features.isDisabled(.groupedNotifications), let id = MastodonNotification.ungroupedID(of: groupKey) {
+            let key = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))) ?? id
+            _ = try await send(formRequest(method: "POST", path: "api/v1/notifications/\(key)/dismiss", form: []))
+            return
+        }
         let key = groupKey.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))) ?? groupKey
         _ = try await send(formRequest(method: "POST", path: "api/v2/notifications/\(key)/dismiss", form: []))
     }

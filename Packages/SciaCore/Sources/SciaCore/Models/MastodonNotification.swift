@@ -53,8 +53,17 @@ public struct MastodonNotification: Codable, Hashable, Sendable, Identifiable {
     /// まとめる種類なら届いたキーを使い、ほかは`ungrouped-<通知のID>`にする。
     /// まとめる種類を絞る`grouped_types[]`はRESTにしか効かず、ストリーミングでは、まとめない種類にもまとめるためのキーが付くため。
     private static func groupKey(_ received: String?, of type: Kind, id: String) -> String {
-        guard type.isGrouped, let received else { return "ungrouped-\(id)" }
+        guard type.isGrouped, let received else { return ungroupedPrefix + id }
         return received
+    }
+
+    private static let ungroupedPrefix = "ungrouped-"
+
+    /// まとめない通知のキーなら、その通知のID。まとまりのキーならnil。
+    static func ungroupedID(of groupKey: String) -> String? {
+        guard groupKey.hasPrefix(ungroupedPrefix) else { return nil }
+        let id = String(groupKey.dropFirst(ungroupedPrefix.count))
+        return id.isEmpty ? nil : id
     }
 
     /// 2人以上の通知をまとめた行か。

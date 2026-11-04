@@ -11,6 +11,8 @@ public final class NotificationPolicyModel {
     public private(set) var policy: NotificationPolicy?
     /// 最初の読み込みに失敗した理由。読めたらnil。
     public private(set) var loadFailure: ErrorPresentation?
+    /// サーバーに通知のフィルタリングがあるか。ないと分かったら（Mastodon 4.2以前）、そのセッションの間はfalseにし、入口を出さない。
+    public private(set) var isSupported = true
     /// 保留中の通知を送った人の数。サーバーは100で止める。
     public var pendingRequestsCount: Int { policy?.pendingRequestsCount ?? 0 }
     /// サーバーが止める人数。これと同じなら、実際はもっと多いことがある。
@@ -58,6 +60,9 @@ public final class NotificationPolicyModel {
                 receive(policy)
                 loadFailure = nil
                 logger.info("notificationPolicy load done pending=\(policy.pendingRequestsCount, privacy: .public)")
+            } catch is FeatureUnavailable {
+                guard !tasks.isClosed else { return }
+                isSupported = false
             } catch {
                 guard let presentation = handle(error, during: "load") else { return }
                 // 読めた設定は消さず、まだ何も読めていなければ理由を出す。

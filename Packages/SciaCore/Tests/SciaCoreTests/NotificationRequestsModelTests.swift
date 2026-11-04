@@ -242,6 +242,18 @@ struct NotificationRequestsModelTests {
         #expect(model.pendingRequestsCount == 5)
     }
 
+    /// 通知のフィルタリングのAPIがないサーバーでは、使えないとして入口を隠させ、失敗の理由は出さない。
+    @Test func unsupportedPolicyIsReportedWithoutFailure() async throws {
+        let transport = RoutedTransport { _ in (404, Data("<html>Not Found</html>".utf8)) }
+        let model = NotificationPolicyModel(client: client(transport), tasks: TaskScope()) {}
+        #expect(model.isSupported)
+
+        await model.reload(purpose: .action)?.value
+
+        #expect(!model.isSupported)
+        #expect(model.loadFailure == nil)
+    }
+
     /// 送れなかったら、サーバーに残っている値に戻して知らせる。
     @Test func failedSelectionReverts() async throws {
         let transport = RoutedTransport { request in

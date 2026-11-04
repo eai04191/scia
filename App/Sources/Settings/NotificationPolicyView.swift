@@ -26,7 +26,9 @@ struct NotificationPolicyView: View {
 
     @ViewBuilder
     private var content: some View {
-        if let policy = model.policy {
+        if !model.isSupported {
+            ContentUnavailableView("このサーバーでは使えません", systemImage: "nosign", description: Text("通知のフィルタリングは、Mastodon 4.3から使えます。"))
+        } else if let policy = model.policy {
             Form {
                 ForEach(NotificationPolicy.Item.allCases, id: \.self) { item in
                     if let value = policy[item] {

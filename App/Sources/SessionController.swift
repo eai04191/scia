@@ -852,7 +852,9 @@ final class SessionController {
             let announcements = UIAction(title: "お知らせ", subtitle: unread > 0 ? "未読\(unread)件" : nil, image: UIImage(systemName: "megaphone")) { _ in
                 self?.showAnnouncements()
             }
-            return UIMenu(children: [UIMenu(options: .displayInline, children: [myProfile, recent, policy, announcements])] + accountMenu().children)
+            // サーバーに通知のフィルタリングがないと分かったら、入口を出さない。
+            let server = self?.notificationPolicy.isSupported == false ? [myProfile, recent, announcements] : [myProfile, recent, policy, announcements]
+            return UIMenu(children: [UIMenu(options: .displayInline, children: server)] + accountMenu().children)
         }
         if let item = viewController.navigationItem.leftBarButtonItem {
             accountButtons.add(item)
@@ -1424,7 +1426,6 @@ final class SessionController {
             guard let self else { return }
             openNotificationRequests(from: notifications.viewController)
         })
-        notifications.viewController.screenBarItems = [item]
         notifications.onReload = { [weak notificationPolicy] in notificationPolicy?.reload(purpose: .display) }
         notificationPolicy.onFailure = { [weak self] reason in
             guard let self else { return }
@@ -1438,8 +1439,13 @@ final class SessionController {
     }
 
     /// 人数が変わるたびに、ボタンの数字と読み上げを直す。サーバーは100で止めるので、100なら「100+」にする。
+    /// サーバーに通知のフィルタリングがないと分かったら、ボタンを外す。
     private func observePendingRequests(_ item: UIBarButtonItem) {
         withObservationTracking {
+            let items = notificationPolicy.isSupported ? [item] : []
+            if notifications.viewController.screenBarItems != items {
+                notifications.viewController.screenBarItems = items
+            }
             let count = notificationPolicy.pendingRequestsCount
             let text = count >= NotificationPolicyModel.pendingRequestsCap ? "\(count)+" : "\(count)"
             item.badge = count == 0 ? nil : .string(text)

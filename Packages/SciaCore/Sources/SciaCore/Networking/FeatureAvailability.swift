@@ -15,6 +15,12 @@ public enum OptionalFeature: String, Sendable, CaseIterable {
     /// 複数のアカウントをまとめて読む。Mastodon 4.3から。メニューと投稿欄の補完に、メンションされたユーザーのアイコンを出すのに使う。
     /// https://docs.joinmastodon.org/methods/accounts/#index
     case multipleAccounts
+    /// 通知をサーバーがまとめた形で読む（v2）。Mastodon 4.3から。使えなければ、v1でまとめずに読む。
+    /// https://docs.joinmastodon.org/methods/grouped_notifications/
+    case groupedNotifications
+    /// 通知のフィルタリングの設定と保留中の通知。Mastodon 4.3から。使えなければ、保留中の通知の入口を出さない。
+    /// https://docs.joinmastodon.org/methods/notifications/#get-policy
+    case notificationFilter
 }
 
 /// 使えないと分かった機能を、そのセッションの間だけ止める。セッションの中で共有する。
@@ -42,6 +48,10 @@ public actor FeatureAvailability {
     /// 機能がないことを表すステータスコード。404は、IDを含まないパスでは機能そのものがないことを表す。
     static func indicatesUnsupported(statusCode: Int) -> Bool {
         [404, 405, 410, 501].contains(statusCode)
+    }
+
+    func isDisabled(_ feature: OptionalFeature) -> Bool {
+        disabled.contains { $0.feature == feature }
     }
 
     func check(_ feature: OptionalFeature) throws(FeatureUnavailable) {

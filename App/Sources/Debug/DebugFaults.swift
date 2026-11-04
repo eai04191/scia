@@ -100,6 +100,8 @@ enum DebugFaults {
                 case .instanceV2: path.hasSuffix("api/v2/instance")
                 case .multipleStatuses: path.hasSuffix("api/v1/statuses") && request.httpMethod == "GET"
                 case .multipleAccounts: path.hasSuffix("api/v1/accounts") && request.httpMethod == "GET"
+                case .groupedNotifications: path.hasSuffix("api/v2/notifications")
+                case .notificationFilter: path.hasSuffix("api/v2/notifications/policy") || path.hasSuffix("api/v1/notifications/requests") || path.hasSuffix("api/v1/notifications/requests/merged")
                 }
             }
         }

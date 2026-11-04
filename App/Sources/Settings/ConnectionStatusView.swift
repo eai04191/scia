@@ -119,6 +119,8 @@ struct ConnectionStatusView: View {
         case .instanceV2: "サーバーの設定（v2）"
         case .multipleStatuses: "リンクカードの取り直し"
         case .multipleAccounts: "メンションされたユーザーのアイコン"
+        case .groupedNotifications: "通知のまとめ表示"
+        case .notificationFilter: "保留中の通知"
         }
     }
 }
