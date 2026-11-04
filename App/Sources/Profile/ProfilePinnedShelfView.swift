@@ -264,7 +264,7 @@ private final class ProfilePinnedCard: UIControl {
             return
         }
         thumbnailTask = Task(.display) { [weak self] in
-            guard let image = try? await mediaImages.image(for: request.url, maxPixelSize: request.maxPixelSize, purpose: request.purpose), let self, !Task.isCancelled else { return }
+            guard let image = await mediaImages.shownImage(for: request.url, maxPixelSize: request.maxPixelSize, purpose: request.purpose, while: { [weak self] in self != nil }, visible: { [weak self] in self?.isInVisibleHierarchy ?? false }), let self, !Task.isCancelled else { return }
             UIView.transition(with: self.thumbnailView, duration: 0.15, options: [.transitionCrossDissolve, .allowUserInteraction]) {
                 self.thumbnailView.image = image
             }

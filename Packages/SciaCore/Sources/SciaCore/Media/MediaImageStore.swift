@@ -26,6 +26,8 @@ public final class MediaImageStore<Image: Sendable> {
     private var failedVideoFrames: Set<URL> = []
     /// 読めなかった画像と動画の最初のフレームを、一覧に描いたときにいつ読み直すか。
     private var retry: RetrySchedule
+    /// 画面に描いている画像を読み直すまで待つ時計。
+    private let clock: any Clock<Duration>
     private let logger = SciaLog.logger(category: "media")
 
     public init(
@@ -40,6 +42,7 @@ public final class MediaImageStore<Image: Sendable> {
         self.maker = maker
         self.files = files
         self.prefetchedFiles = prefetchedFiles
+        self.clock = clock
         retry = RetrySchedule(policy: retryPolicy, clock: clock)
         // 4096px四方の画像が4枚ほど入る大きさ。
         cache.totalCostLimit = 256 * 1_024 * 1_024
@@ -157,6 +160,35 @@ public final class MediaImageStore<Image: Sendable> {
             }
             // ぼかしている間の先読みなら、代わりのプレビューも先読みとして読み、モバイル通信や低データモードでは読まない。
             return try await image(for: fallback, maxPixelSize: request.maxPixelSize, purpose: request.purpose == .prefetch ? .prefetch : .display)
+        }
+    }
+
+    /// 一覧に描くサムネイルを読み込む。待てば直る失敗なら、`isWanted`の間、見えていれば読み直してよくなった時刻に読み直す（`RetrySchedule.loadWhileShown`）。
+    public func shownThumbnail(for request: MediaThumbnailRequest, while isWanted: @MainActor () -> Bool, visible isVisible: @MainActor () -> Bool) async -> Image? {
+        // 動画の最初のフレームを作れなくてもプレビューで描くので、失敗として返るのはプレビューが読めなかったときだけ。
+        let failing = switch request.source {
+        case .image: request.url
+        case .videoFrame(let fallback): fallback
+        }
+        return await RetrySchedule.loadWhileShown(
+            clock: clock, isWanted: isWanted, isVisible: isVisible, recheck: { retry.hiddenRecheckInterval }, delay: { retry.delayUntilAutomaticLoad(of: failing) }
+        ) {
+            try await thumbnail(for: request)
+        }
+    }
+
+    /// 画面に描く画像（リンクのカード、プロフィールのヘッダー画像など）を読み込む。読み直しは`shownThumbnail`と同じ。
+    public func shownImage(
+        for url: URL,
+        maxPixelSize: Int,
+        purpose: RequestPurpose = .display,
+        while isWanted: @MainActor () -> Bool,
+        visible isVisible: @MainActor () -> Bool
+    ) async -> Image? {
+        await RetrySchedule.loadWhileShown(
+            clock: clock, isWanted: isWanted, isVisible: isVisible, recheck: { retry.hiddenRecheckInterval }, delay: { retry.delayUntilAutomaticLoad(of: url) }
+        ) {
+            try await image(for: url, maxPixelSize: maxPixelSize, purpose: purpose)
         }
     }
 
@@ -312,21 +344,26 @@ public final class MediaImageStore<Image: Sendable> {
             }
             return Loaded(decoded: image, keptOriginal: keptOriginal)
         } }
-        inFlight[key] = task
-        defer { inFlight[key] = nil }
-        do {
-            let loaded = try await task.value
-            cache.setObject(Entry(loaded.image), forKey: key.cacheKey, cost: loaded.decoded.cost)
-            retry.recordSuccess(for: url)
-            if keepsOriginal, !loaded.keptOriginal {
-                logger.error("media original write failed host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash))")
+        // 待ち合わせた呼び出しにも、読めたかを覚えてから結果を返す。覚える前に返すと、待ち合わせた側が読み直してよくなるまでの長さを聞いて、
+        // まだ失敗を覚えていない0を受け取り、描いている間の読み直しをやめてしまうため。
+        let settled = Task<Loaded, any Error> { @MainActor in
+            defer { inFlight[key] = nil }
+            do {
+                let loaded = try await task.value
+                cache.setObject(Entry(loaded.image), forKey: key.cacheKey, cost: loaded.decoded.cost)
+                retry.recordSuccess(for: url)
+                if keepsOriginal, !loaded.keptOriginal {
+                    logger.error("media original write failed host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash))")
+                }
+                return loaded
+            } catch {
+                logger.error("media load failed host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash)): \(SciaLog.describe(error), privacy: .public)")
+                retry.recordFailure(error, for: url)
+                throw error
             }
-            return loaded.image
-        } catch {
-            logger.error("media load failed host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash)): \(SciaLog.describe(error), privacy: .public)")
-            retry.recordFailure(error, for: url)
-            throw error
         }
+        inFlight[key] = settled
+        return try await settled.value.image
     }
 
     /// blurhashを、`aspectRatio`（幅÷高さ）の小さな画像に展開する。表示するときに拡大してぼかしとして見せるため、

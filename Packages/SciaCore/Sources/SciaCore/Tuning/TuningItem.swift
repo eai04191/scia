@@ -849,7 +849,7 @@ public enum TuningCatalog {
         defaultValue: 4
     )
 
-    /// 絵文字、アイコン、添付ファイルの画像を、通信の失敗やサーバーの一時的な障害で読めなかったあと、行を描いたときに読み直すまでの最初の間隔。続けて失敗するたびに倍にする。
+    /// 絵文字、アイコン、添付ファイルの画像を、通信の失敗やサーバーの一時的な障害で読めなかったあと、読み直すまでの最初の間隔。続けて失敗するたびに倍にする。
     public static let imageRetryInitialDelay = NumberTuning(
         id: "images.retryInitialDelay",
         title: "読めなかった画像を読み直すまでの最初の間隔（秒）",
@@ -865,6 +865,15 @@ public enum TuningCatalog {
         range: 10...600,
         step: 10,
         defaultValue: 60
+    )
+
+    /// 読めなかった画像が隠れている間に、見えるようになったかを確かめる間隔。見えてから読み直し始めるまでの遅れになる。
+    public static let imageRetryHiddenRecheck = NumberTuning(
+        id: "images.retryHiddenRecheck",
+        title: "読めなかった画像が隠れている間に、見えたかを確かめる間隔（秒）",
+        range: 0.2...10,
+        step: 0.2,
+        defaultValue: 1
     )
 
     /// プロフィールを開くときに、探し始めてから「取得中」のチップを出すまでの時間。すぐ見つかったときに、チップが一瞬だけ出入りしないようにする。
@@ -1522,13 +1531,14 @@ public enum TuningCatalog {
         [.mention: 0, .hashtag: 0, .emoji: Int(store.value(of: completionEmojiMinimumQuery))]
     }
 
-    /// 読めなかった画像を、行を描いたときに読み直す間隔。
+    /// 読めなかった画像を読み直す間隔。
     @MainActor
     public static func imageRetry(in store: TuningStore) -> RetrySchedule.Policy {
         RetrySchedule.Policy(
             initialDelay: .seconds(store.value(of: imageRetryInitialDelay)),
             maxDelay: .seconds(store.value(of: imageRetryMaxDelay)),
-            jitter: .standard
+            jitter: .standard,
+            hiddenRecheckInterval: .seconds(store.value(of: imageRetryHiddenRecheck))
         )
     }
 
@@ -1719,6 +1729,7 @@ public enum TuningCatalog {
             .number(outageNoticeDelay),
             .number(imageRetryInitialDelay),
             .number(imageRetryMaxDelay),
+            .number(imageRetryHiddenRecheck),
         ]),
         TuningSection(id: "compose", title: "投稿欄", items: [
             .number(composeRestingHeight),

@@ -158,21 +158,35 @@ public final class AvatarImageStore<Image: Sendable> {
                 return decoded
             }
         }
-        inFlight[key] = task
-        defer { inFlight[key] = nil }
-        do {
-            let decoded = try await task.value
-            cache.setObject(Entry(decoded.image), forKey: key.cacheKey, cost: decoded.cost)
-            retry.recordSuccess(for: key.url)
-            listeners.removeAll { $0.owner == nil }
-            for listener in listeners {
-                listener.onLoad(key)
+        // 待ち合わせた呼び出しにも、読めたかを覚えてから結果を返す。覚える前に返すと、待ち合わせた側が読み直してよくなるまでの長さを聞いて、
+        // まだ失敗を覚えていない0を受け取り、描いている間の読み直しをやめてしまうため。
+        let settled = Task<Decoded, any Error> { @MainActor in
+            defer { inFlight[key] = nil }
+            do {
+                let decoded = try await task.value
+                cache.setObject(Entry(decoded.image), forKey: key.cacheKey, cost: decoded.cost)
+                retry.recordSuccess(for: key.url)
+                listeners.removeAll { $0.owner == nil }
+                for listener in listeners {
+                    listener.onLoad(key)
+                }
+                return decoded
+            } catch {
+                logger.error("avatar load failed host=\(SciaLog.host(of: key.url), privacy: .public) url=\(key.url.absoluteString, privacy: .private(mask: .hash)): \(SciaLog.describe(error), privacy: .public)")
+                retry.recordFailure(error, for: key.url)
+                throw error
             }
-            return decoded.image
-        } catch {
-            logger.error("avatar load failed host=\(SciaLog.host(of: key.url), privacy: .public) url=\(key.url.absoluteString, privacy: .private(mask: .hash)): \(SciaLog.describe(error), privacy: .public)")
-            retry.recordFailure(error, for: key.url)
-            throw error
+        }
+        inFlight[key] = settled
+        return try await settled.value.image
+    }
+
+    /// 行に描くアイコンを読み込む。待てば直る失敗なら、`isWanted`の間、見えていれば読み直してよくなった時刻に読み直す（`RetrySchedule.loadWhileShown`）。
+    public func shownImage(for key: AvatarImageKey, while isWanted: @MainActor () -> Bool, visible isVisible: @MainActor () -> Bool) async -> Image? {
+        await RetrySchedule.loadWhileShown(
+            clock: clock, isWanted: isWanted, isVisible: isVisible, recheck: { retry.hiddenRecheckInterval }, delay: { retry.delayUntilAutomaticLoad(of: key.url) }
+        ) {
+            try await image(for: key)
         }
     }
 

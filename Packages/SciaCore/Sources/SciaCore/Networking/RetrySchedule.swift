@@ -11,11 +11,14 @@ public struct RetrySchedule {
         public var initialDelay: Duration
         public var maxDelay: Duration
         public var jitter: Jitter
+        /// 描いている画像が隠れている間に、見えるようになったかを確かめる間隔。見えたら、読み直してよければすぐ読む。
+        public var hiddenRecheckInterval: Duration
 
-        public init(initialDelay: Duration, maxDelay: Duration, jitter: Jitter = .none) {
+        public init(initialDelay: Duration, maxDelay: Duration, jitter: Jitter = .none, hiddenRecheckInterval: Duration = .seconds(1)) {
             self.initialDelay = initialDelay
             self.maxDelay = maxDelay
             self.jitter = jitter
+            self.hiddenRecheckInterval = hiddenRecheckInterval
         }
 
         func delay(afterFailures failures: Int, retryAfter: Duration?) -> Duration {
@@ -51,6 +54,57 @@ public struct RetrySchedule {
         case .permanent: return false
         case .temporary(_, let retryAt): return now >= retryAt
         }
+    }
+
+    /// 自動で読んでよくなるまでの長さ。今読んでよければ0、待っても直らない失敗ならnil。
+    public func delayUntilAutomaticLoad(of url: URL) -> Duration? {
+        let now = elapsed()
+        var until = now
+        if let scope = Self.rateLimitScope(of: url), let paused = pausedScopes[scope] {
+            until = max(until, paused)
+        }
+        switch records[url] {
+        case nil: break
+        case .permanent: return nil
+        case .temporary(_, let retryAt): until = max(until, retryAt)
+        }
+        return until - now
+    }
+
+    /// 描いている画像が隠れている間に、見えるようになったかを確かめる間隔。
+    public var hiddenRecheckInterval: Duration {
+        policy().hiddenRecheckInterval
+    }
+
+    /// 画面に描いている間、待てば直る失敗を、読み直してよくなった時刻に読み直す（docs/image-loading.md）。
+    /// 行を描き直したときだけ読み直すと、画面に出たままの行は、間隔が過ぎても、レート制限が明けても、読めないまま残るため。
+    /// 最初の1回は、見えているかによらず読む。読み直しは見えている間だけにし、隠れている間（ほかのタブ、折りたたんだ注意書きの下、使い回しを待つセルなど）は、
+    /// `recheck`ごとに見えたかを確かめる。隠れたまま読み直すと、見ている画像と同じ`/media_proxy`の制限を使ってしまうため。
+    /// 待っても直らない失敗、覚えない失敗（回線で控えたものなど）、取り消し、`isWanted`がfalseになったら、nilを返してやめる。
+    /// - Parameter isWanted: まだその画像を描こうとしているか。描く画像が替わったり、ビューがなくなったりしたらfalse。
+    /// - Parameter delay: 読めなかったあとに、読み直してよくなるまでの長さ（`delayUntilAutomaticLoad(of:)`）。
+    static func loadWhileShown<Value>(
+        clock: any Clock<Duration>,
+        isWanted: @MainActor () -> Bool,
+        isVisible: @MainActor () -> Bool,
+        recheck: @MainActor () -> Duration,
+        delay: @MainActor () -> Duration?,
+        load: @MainActor () async throws -> Value
+    ) async -> Value? {
+        var hasLoaded = false
+        while !Task.isCancelled, isWanted() {
+            if hasLoaded, !isVisible() {
+                guard (try? await clock.sleep(for: recheck())) != nil else { return nil }
+                continue
+            }
+            hasLoaded = true
+            if let value = try? await load() {
+                return value
+            }
+            // 覚えない失敗は今すぐ読んでよいことになるので、ここで続けると読み直し続けてしまう。
+            guard let wait = delay(), wait > .zero, (try? await clock.sleep(for: wait)) != nil else { return nil }
+        }
+        return nil
     }
 
     /// 読めなかったことがあるか。待てば直るものも含める。先読みのように、読めない画像のために通信を増やしたくないところで使う。

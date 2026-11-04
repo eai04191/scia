@@ -105,7 +105,7 @@ final class AvatarView: UIView {
         }
         show(nil)
         loadTask = Task(.display) { [weak self, store] in
-            guard let image = try? await store.image(for: key), let self, !Task.isCancelled, self.loadingKey == key else { return }
+            guard let image = await store.shownImage(for: key, while: { [weak self] in self?.loadingKey == key }, visible: { [weak self] in self?.isInVisibleHierarchy ?? false }), let self, !Task.isCancelled, self.loadingKey == key else { return }
             self.show(image, arrived: true)
             self.imageView.alpha = 0
             // フェードの間もプロフィールを開くタップを受け付ける。

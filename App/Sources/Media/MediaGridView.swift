@@ -686,7 +686,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
             return
         }
         loadTask = Task(.display) { [weak self, store] in
-            guard let image = try? await store.thumbnail(for: request),
+            guard let image = await store.shownThumbnail(for: request, while: { [weak self] in self?.source?.request == request }, visible: { [weak self] in self?.isInVisibleHierarchy ?? false }),
                   let self, !Task.isCancelled, self.source?.request == request
             else { return }
             self.loadedThumbnail = image

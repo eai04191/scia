@@ -543,7 +543,7 @@ final class LinkCardView: UIButton {
             return
         }
         loadTask = Task(.display) { [weak self, store] in
-            guard let image = try? await store.image(for: request.url, maxPixelSize: request.maxPixelSize, purpose: .display),
+            guard let image = await store.shownImage(for: request.url, maxPixelSize: request.maxPixelSize, while: { [weak self] in self?.request == request }, visible: { [weak self] in self?.isInVisibleHierarchy ?? false }),
                   let self, !Task.isCancelled, self.request == request
             else { return }
             if let incoming = self.incomingThumbnail {
