@@ -1350,6 +1350,44 @@ final class InlineComposeControllerTests {
         #expect(textView.layer.mask == nil, "動き終えても、入力欄の文字を隠しています")
     }
 
+    /// 開閉で本文を動かす間、かたまりの文字は本物と同じ大きさのまま描く。
+    /// かたまりの文字を描くビューの枠が、開閉のアニメーションの中で初めて決まると、0の大きさから育つ動きになり、描いた文字がその枠に合わせて縮んで見えた。
+    /// 開き始めは枠がほぼ0なので、カプセルの文字が消えたように見えた。
+    @Test(arguments: [true, false])
+    func textMorphKeepsGlyphSizeWhileMoving(opening: Bool) async throws {
+        defer { window.isHidden = true }
+        composer.beginEditing()
+        try await waitUntilSettled()
+        let textView = try #require(textViews(in: window).first)
+        textView.becomeFirstResponder()
+        textView.insertText((1...8).map { "\($0)行目" }.joined(separator: "\n"))
+        try await waitUntilSettled()
+        if opening {
+            composer.endEditing()
+            try await waitUntilSettled()
+        }
+        useDefaultAnimationDurations()
+
+        if opening {
+            composer.beginEditing()
+        } else {
+            composer.endEditing()
+        }
+        try await clock.advance(by: 0)
+        var checked = 0
+        while case let chunks = textLines(in: window).filter({ $0.overhang > 0 }), !chunks.isEmpty, clock.now < 5 {
+            for chunk in chunks {
+                // 文字を描くビュー（行のビューの中の1枚）の枠を、開閉の動きで動かしていないか。描いた中身は枠に合わせて伸び縮みするため。
+                let canvas = try #require(chunk.subviews.first)
+                let moving = (canvas.layer.animationKeys() ?? []).filter { $0.contains("bounds") || $0.contains("position") }
+                #expect(moving.isEmpty, "文字を描くビューの枠が動いています: \(moving) \(chunk.attributedText.string)")
+                checked += 1
+            }
+            try await clock.advance(by: LayerClock.frame)
+        }
+        #expect(checked > 0, "本文を動かすかたまりがありません")
+    }
+
     /// 入力欄の中でスクロールするほど書き、末尾にカーソルを置いたまま閉じて開き直すと、本文の文字を動かすかたまりは、カーソルの行までスクロールした本物の文字の位置に着地する。
     /// かたまりの着地点を、カーソルの行へスクロールする前の位置（先頭）で測っていたため、動き終えてから本文が1コマで飛んだ。
     @Test func reopeningLandsTextMorphOnCaretLine() async throws {

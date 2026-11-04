@@ -169,7 +169,11 @@ final class TextLineView: UIView {
         let top = min(0, ink.lowerBound.rounded(.down))
         let canvasFrame = CGRect(x: 0, y: top, width: bounds.width, height: max(bounds.height, ink.upperBound.rounded(.up)) - top)
         if canvas.frame != canvasFrame {
-            canvas.frame = canvasFrame
+            // 外側のアニメーションの中で並べ直しても、枠は動かさない。描いた中身は枠に合わせて伸び縮みするので、動かすと文字が縮んで見えるため。
+            // 開閉で動かす文字のかたまりは、開閉の動きの中で初めて並べ直され、枠が0から育って、開き始めに文字が消えたように見えた。
+            UIView.performWithoutAnimation {
+                canvas.frame = canvasFrame
+            }
             canvas.setNeedsDisplay()
         }
         guard fadesTrailingEdge, textWidth > bounds.width + 0.5, bounds.width > 0 else {
