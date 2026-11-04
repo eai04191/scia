@@ -159,6 +159,8 @@ final class SessionController {
     private let customEmojis: CustomEmojiCache
     /// タブバーの上の投稿欄。ホームと通知のどちらでも同じ下書きを使う。
     private let composer: InlineComposeController
+    /// 投稿欄に、捨てると失われる書きかけがあるか。下書きはこの画面一式だけが持つので、アカウントを切り替える前に確かめる。
+    var hasWrittenDraft: Bool { composer.model.hasWrittenContent }
     /// 書き始めたときに始めた、サーバーの上限と既定の公開範囲などの読み込み。共有されたメディアを、読み終えてから足すのに使う。
     private var composeDefaultsTask: Task<Void, Never>?
     /// 画面のどこにドロップした画像や動画でも、投稿欄に添付する受け口。

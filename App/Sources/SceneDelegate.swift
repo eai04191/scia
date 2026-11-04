@@ -264,7 +264,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private func makeAccountMenu() -> UIMenu {
         guard let accounts else { return UIMenu() }
         let add = UIAction(title: "アカウントを追加", image: UIImage(systemName: "person.badge.plus")) { [weak self] _ in
-            self?.presentAddAccount()
+            self?.confirmAddingAccount()
         }
         let settings = UIAction(title: "設定", image: UIImage(systemName: "gearshape")) { [weak self] _ in
             guard let session = self?.session else { return }
@@ -285,7 +285,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         #if DEBUG
         let isDummy = Self.showsDummySession
         let dummy = [UIAction(title: DummyServer.credential.handle, subtitle: "ダミーのデータ", state: isDummy ? .on : .off) { [weak self] _ in
-            self?.openDummySession()
+            guard let self else { return }
+            confirmDiscardingDraft(switchingTo: DummyServer.credential) { [weak self] in self?.openDummySession() }
         }]
         // ダミーを選んでいる間は、裏で選んだままの本物のアカウントにチェックマークを付けず、ログアウトも出さない。ログアウトすると、ダミーではなくその本物のアカウントが消えるため。
         let checkedID = isDummy ? nil : accounts.current?.id
@@ -297,7 +298,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         #endif
         let switching = accounts.accounts.map { account in
             UIAction(title: account.handle, state: account.id == checkedID ? .on : .off) { [weak self] _ in
-                self?.switchAccount(to: account.id)
+                guard let self else { return }
+                confirmDiscardingDraft(switchingTo: account) { [weak self] in self?.switchAccount(to: account.id) }
             }
         } + dummy
         return UIMenu(children: [
@@ -306,6 +308,51 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             UIMenu(options: .displayInline, children: [settings]),
             UIMenu(options: .displayInline, children: logOutItems),
         ])
+    }
+
+    /// 書きかけの投稿があれば、捨てて切り替えるかを確かめてから`perform`で切り替える。なければすぐ切り替える。
+    /// 下書きはアカウントの画面一式が持ち、切り替えると画面ごと作り直して消えるため。
+    /// 切り替えるとすべてのシーンの画面を作り直すので、どのシーンの書きかけも数える。今の画面と同じアカウントを選んだときは、作り直さないので確かめない。
+    private func confirmDiscardingDraft(switchingTo account: Credential, perform: @escaping @MainActor () -> Void) {
+        guard account != session?.credential, Self.hasWrittenDraftInAnyScene,
+              let presenter = window?.rootViewController?.frontmostPresented
+        else {
+            perform()
+            return
+        }
+        let alert = UIAlertController(
+            title: "\(account.handle)に切り替えますか？",
+            message: "書きかけの投稿は破棄されます。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        alert.addAction(UIAlertAction(title: "切り替える", style: .destructive) { _ in perform() })
+        presenter.present(alert, animated: true)
+    }
+
+    /// 書きかけの投稿があれば、ログインのシートを出す前に、追加すると破棄されることを確かめる。ログインできると追加したアカウントに切り替わり、画面ごと作り直すため。
+    /// シートを出している間は、出した窓の投稿欄に書けないので、出す前に一度だけ確かめる。
+    /// シートを出している間に、別の窓で書いたり、共有から本文が届いたりした下書きは、確かめないままログインできたときに消える。
+    /// 確かめるのをシートを出す前にしたのは、作者の判断。ログインできたときに確かめると、サーバーでのログインは済んでいるので、やめたときにそのアカウントを加えるだけにするか捨てるかを決める必要があるため、ここでは扱わない。
+    private func confirmAddingAccount() {
+        guard Self.hasWrittenDraftInAnyScene, let presenter = window?.rootViewController?.frontmostPresented else {
+            presentAddAccount()
+            return
+        }
+        let alert = UIAlertController(
+            title: "アカウントを追加しますか？",
+            message: "ログインすると追加したアカウントに切り替わり、書きかけの投稿は破棄されます。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        alert.addAction(UIAlertAction(title: "追加する", style: .default) { [weak self] _ in self?.presentAddAccount() })
+        presenter.present(alert, animated: true)
+    }
+
+    private static var hasWrittenDraftInAnyScene: Bool {
+        UIApplication.shared.connectedScenes.contains { scene in
+            (scene.delegate as? SceneDelegate)?.session?.hasWrittenDraft == true
+        }
     }
 
     /// ダミーを選んでいる間は、裏で選んだままのアカウントを選んでも、ダミーから抜けてそのアカウントに戻る。
@@ -410,7 +457,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let presenter = window?.rootViewController?.frontmostPresented, let current = accounts?.current else { return }
         let alert = UIAlertController(
             title: "\(current.handle)からログアウトしますか？",
-            message: "この端末からアカウントの情報を消します。もう一度使うにはログインし直します。",
+            // 使っているアカウントを消すと、画面ごと作り直して下書きも消えるため、書きかけがあれば添える。
+            message: "この端末からアカウントの情報を消します。もう一度使うにはログインし直します。"
+                + (Self.hasWrittenDraftInAnyScene ? "書きかけの投稿も破棄されます。" : ""),
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
