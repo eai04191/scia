@@ -234,6 +234,10 @@ public final class ComposeCompletion {
         }
     }
 
+    /// ハッシュタグの補完で、サーバーに頼む検索結果の数。並べ直してから候補の数で切るので、v2の検索の上限で頼む。
+    /// https://docs.joinmastodon.org/methods/search/#v2
+    public static let hashtagSearchLimit = 40
+
     @ObservationIgnored private let sources: Sources
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
     @ObservationIgnored private var searchTask: Task<Void, Never>?
@@ -442,7 +446,9 @@ public final class ComposeCompletion {
         case .mention:
             try await sources.searchAccounts(key.query, key.limit).prefix(key.limit).map(CompletionCandidate.account)
         case .hashtag:
-            try await sources.searchHashtags(key.query, key.limit).prefix(key.limit).map(CompletionCandidate.hashtag)
+            // サーバーの並びでは最近使われたタグが押し出されるので、多めに頼んで並べ直し、候補の数で切る。
+            try await Hashtag.orderedByRecentUse(sources.searchHashtags(key.query, hashtagSearchLimit), query: key.query)
+                .prefix(key.limit).map(CompletionCandidate.hashtag)
         case .emoji:
             []
         }

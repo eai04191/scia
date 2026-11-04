@@ -27,6 +27,30 @@ public struct Hashtag: Decodable, Hashable, Sendable {
         self.history = history
     }
 
+    /// サーバー全体で最近使われた順に並べる。最後に使われた日が新しい順、同じ日の中ではその日に使われた数が多い順にし、
+    /// `query`と同じ名前のタグは先頭に置く。日ごとの数は過去7日しかなく、日より細かい順も分からないので、
+    /// 同じ順位のタグと、7日のうちに使われていないタグは、渡された順のまま残す。
+    public static func orderedByRecentUse(_ tags: [Hashtag], query: String) -> [Hashtag] {
+        let normalizedQuery = normalizedName(query)
+        return tags.enumerated().sorted { lhs, rhs in
+            let left = recentUseRank(lhs.element, normalizedQuery: normalizedQuery)
+            let right = recentUseRank(rhs.element, normalizedQuery: normalizedQuery)
+            if left.isExact != right.isExact { return left.isExact }
+            if left.daysAgo != right.daysAgo { return left.daysAgo < right.daysAgo }
+            if left.uses != right.uses { return left.uses > right.uses }
+            return lhs.offset < rhs.offset
+        }.map(\.element)
+    }
+
+    private static func recentUseRank(_ tag: Hashtag, normalizedQuery: String) -> (isExact: Bool, daysAgo: Int, uses: Int) {
+        let lastUsed = tag.history.firstIndex { $0.uses > 0 }
+        return (
+            normalizedName(tag.name) == normalizedQuery,
+            lastUsed ?? Int.max,
+            lastUsed.map { tag.history[$0].uses } ?? 0
+        )
+    }
+
     /// サーバーが同じタグかを見分けるときの名前。Mastodonの`HashtagNormalizer`と同じく、NFKCで全角と半角などをそろえ、
     /// 小文字にし、ラテン文字のアクセント記号を外し（`ASCIIFolding`）、タグに使えない文字を除く。
     /// アクセント記号はサーバーと同じ表の文字だけを外し、日本語の濁点などは外さない。

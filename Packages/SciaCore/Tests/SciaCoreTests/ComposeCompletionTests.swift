@@ -33,15 +33,20 @@ struct ComposeCompletionTests {
         private var failingHashtags: Set<String> = []
         func setFailingHashtags(_ queries: Set<String>) { failingHashtags = queries }
 
-        func hashtags(_ query: String) async throws -> [Hashtag] {
+        private(set) var hashtagLimits: [Int] = []
+        private var hashtagResponses: [String: [Hashtag]] = [:]
+        func setHashtags(_ tags: [Hashtag], for query: String) { hashtagResponses[query] = tags }
+
+        func hashtags(_ query: String, limit: Int) async throws -> [Hashtag] {
             hashtagQueries.append(query)
+            hashtagLimits.append(limit)
             if held.contains(query) {
                 await withCheckedContinuation { waiting[query, default: []].append($0) }
             }
             if failingHashtags.contains(query) {
                 throw MastodonAPIError.from(statusCode: 502, body: Data())
             }
-            return [Hashtag(name: query), Hashtag(name: "\(query)写真"), Hashtag(name: "\(query)2")]
+            return hashtagResponses[query] ?? [Hashtag(name: query), Hashtag(name: "\(query)写真"), Hashtag(name: "\(query)2")]
         }
 
         func featured() throws -> [FeaturedTag] {
@@ -102,7 +107,7 @@ struct ComposeCompletionTests {
         return ComposeCompletion(
             sources: ComposeCompletion.Sources(
                 searchAccounts: { try await server.accounts($0, limit: $1) },
-                searchHashtags: { query, _ in try await server.hashtags(query) },
+                searchHashtags: { try await server.hashtags($0, limit: $1) },
                 customEmojis: { try await server.emojis() },
                 featuredTags: { try await server.featured() },
                 recentTags: { await server.recent() },
@@ -553,6 +558,39 @@ struct ComposeCompletionTests {
         try await waitUntil { !completion.isLoadingOwnTags }
         #expect(completion.selectedCandidate != nil)
         await server.release("今日")
+    }
+
+    /// 検索の結果は、最後に使われた日が新しい順、同じ日の中ではその日に使われた数が多い順に並べる。
+    /// 打った語と同じ名前のタグは先頭に置き、日ごとの数がないタグはサーバーの並びのまま後ろに置く。
+    @Test func ordersSearchedHashtagsByRecentUse() {
+        func tag(_ name: String, _ uses: [Int]) -> Hashtag {
+            Hashtag(name: name, history: uses.map { Hashtag.History(uses: $0, accounts: $0) })
+        }
+        let tags = [
+            tag("猫a", [0, 0, 0]),
+            tag("猫b", [0, 3, 0]),
+            tag("猫", [0, 0, 1]),
+            tag("猫c", [1, 0, 0]),
+            tag("猫d", []),
+            tag("猫e", [0, 9, 0]),
+            tag("猫f", [5, 0, 0]),
+        ]
+        #expect(Hashtag.orderedByRecentUse(tags, query: "猫").map(\.name) == ["猫", "猫f", "猫c", "猫e", "猫b", "猫a", "猫d"])
+        #expect(Hashtag.orderedByRecentUse(tags, query: "ねこ").map(\.name) == ["猫f", "猫c", "猫e", "猫b", "猫", "猫a", "猫d"])
+    }
+
+    /// 補完は、候補の数より多く検索して並べ直し、候補の数で切る。
+    @Test func showsSearchedHashtagsByRecentUse() async throws {
+        let completion = makeCompletion(limit: 2)
+        await server.setHashtags([
+            Hashtag(name: "ra", history: [Hashtag.History(uses: 0, accounts: 0), Hashtag.History(uses: 1, accounts: 1)]),
+            Hashtag(name: "raw", history: [Hashtag.History(uses: 0, accounts: 0)]),
+            Hashtag(name: "rain", history: [Hashtag.History(uses: 2, accounts: 1)]),
+        ], for: "ra")
+        completion.textDidChange(hashtag("ra"))
+        try await waitUntil { !completion.isLoading }
+        #expect(accts(completion.content) == ["#ra", "#rain"])
+        #expect(await server.hashtagLimits == [ComposeCompletion.hashtagSearchLimit])
     }
 
     /// サーバーが同じタグとして扱う表記（アクセント、全角、大文字）は、自分のタグの方だけを残す。
