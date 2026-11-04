@@ -101,7 +101,8 @@ struct StreamingClientTests {
         )
     }
 
-    @Test func opensWithoutStreamWithBearerToken() async throws {
+    /// Mastodonが推奨する`Authorization`に加えて、`Authorization`を読まないPleromaのために`Sec-WebSocket-Protocol`でも渡す。
+    @Test func opensWithoutStreamWithBearerTokenAndWebSocketProtocol() async throws {
         let connector = StubWebSocketConnector(messages: [])
         let client = StreamingClient(credential: try makeCredential(), connector: connector)
 
@@ -109,6 +110,7 @@ struct StreamingClientTests {
 
         let request = try #require(connector.requests.first)
         #expect(request.url?.absoluteString == "wss://streaming.example.social/api/v1/streaming")
+        #expect(request.value(forHTTPHeaderField: "Sec-WebSocket-Protocol") == "token")
         #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer token")
     }
 

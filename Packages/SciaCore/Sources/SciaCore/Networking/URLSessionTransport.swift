@@ -324,8 +324,28 @@ public struct URLSessionWebSocketConnector: WebSocketConnector {
             return FailedWebSocketConnection(error: error)
         }
         let task = session.webSocketTask(with: request)
+        task.delegate = SameHostRedirectsOnly.shared
         task.resume()
         return URLSessionWebSocketConnection(task: task)
+    }
+}
+
+/// WebSocketのハンドシェイクを、別のホストへリダイレクトさせない。
+/// ストリーミングはトークンを`Sec-WebSocket-Protocol`で渡す。URLSessionは別のホストへのリダイレクトで`Authorization`を外すが、
+/// このヘッダーはそのまま載せるため、従うとリダイレクト先にトークンが渡る。断ると、リダイレクトの応答で接続が失敗する。
+private final class SameHostRedirectsOnly: NSObject, URLSessionTaskDelegate, Sendable {
+    static let shared = SameHostRedirectsOnly()
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest
+    ) async -> URLRequest? {
+        guard let from = response.url?.host(), let to = request.url?.host(),
+              from.caseInsensitiveCompare(to) == .orderedSame
+        else { return nil }
+        return request
     }
 }
 

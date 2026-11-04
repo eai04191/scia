@@ -10,11 +10,11 @@ import Testing
 /// 応答が来ないまま固まったら、テストの実行を止めずに失敗させる。上限は待つ長さの見積もりではなく、固まったとみなす長さ。
 @Suite(.serialized, .timeLimit(.minutes(1)))
 struct URLSessionWebSocketTests {
-    @Test func receivesTextMessagesAndSendsAuthorizationHeader() async throws {
+    @Test func receivesTextMessagesAndSendsWebSocketProtocolHeader() async throws {
         let server = try await LocalWebSocketServer(messages: ["first", "second"])
         defer { server.stop() }
         var request = URLRequest(url: server.url)
-        request.setValue("Bearer token", forHTTPHeaderField: "Authorization")
+        request.setValue("token", forHTTPHeaderField: "Sec-WebSocket-Protocol")
 
         let connection = URLSessionWebSocketConnector().connect(request)
         defer { connection.close() }
@@ -26,7 +26,41 @@ struct URLSessionWebSocketTests {
         let receiving = Task { try? await connection.receive() }
         defer { receiving.cancel() }
         try await connection.ping()
-        #expect(server.receivedAuthorization == "Bearer token")
+        #expect(server.receivedHeader("Sec-WebSocket-Protocol") == "token")
+    }
+
+    /// トークンを載せた`Sec-WebSocket-Protocol`は、URLSessionが`Authorization`と違って別のホストへのリダイレクトにも載せるため、別のホストへは移らない。
+    @Test func refusesRedirectToAnotherHost() async throws {
+        let destination = try await LocalWebSocketServer(messages: ["moved"])
+        defer { destination.stop() }
+        let anotherHost = try #require(URL(string: destination.url.absoluteString.replacingOccurrences(of: "127.0.0.1", with: "localhost")))
+        let origin = try await LocalWebSocketServer(rejectingWith: 302, headers: "Location: \(anotherHost.absoluteString)\r\n")
+        defer { origin.stop() }
+        var request = URLRequest(url: origin.url)
+        request.setValue("token", forHTTPHeaderField: "Sec-WebSocket-Protocol")
+
+        let connection = URLSessionWebSocketConnector().connect(request)
+        defer { connection.close() }
+
+        let error = await #expect(throws: WebSocketHandshakeRejected.self) { _ = try await connection.receive() }
+        #expect(error?.statusCode == 302)
+        #expect(destination.receivedHeader("Sec-WebSocket-Protocol") == nil)
+    }
+
+    /// 同じホストへのリダイレクトには従う。
+    @Test func followsRedirectToSameHost() async throws {
+        let destination = try await LocalWebSocketServer(messages: ["moved"])
+        defer { destination.stop() }
+        let origin = try await LocalWebSocketServer(rejectingWith: 302, headers: "Location: \(destination.url.absoluteString)\r\n")
+        defer { origin.stop() }
+        var request = URLRequest(url: origin.url)
+        request.setValue("token", forHTTPHeaderField: "Sec-WebSocket-Protocol")
+
+        let connection = URLSessionWebSocketConnector().connect(request)
+        defer { connection.close() }
+
+        #expect(try await connection.receive() == "moved")
+        #expect(destination.receivedHeader("Sec-WebSocket-Protocol") == "token")
     }
 
     @Test func pingIsAnsweredBeforeAnyReceive() async throws {
@@ -105,24 +139,34 @@ struct URLSessionWebSocketTests {
 private final class LocalWebSocketServer: Sendable {
     private let listener: NWListener
     private let connections: ConnectionList
-    private let authorization: ReceivedHeader
+    private let headers: ReceivedHeaders
     let url: URL
 
-    var receivedAuthorization: String? { authorization.value.withLock { $0 } }
+    /// 最後に受けたハンドシェイクのヘッダー。名前の大文字と小文字は区別しない。
+    func receivedHeader(_ name: String) -> String? {
+        headers.value.withLock { $0[name.lowercased()] }
+    }
 
     convenience init(messages: [String]) async throws {
         let queue = DispatchQueue(label: "LocalWebSocketServer")
-        let authorization = ReceivedHeader()
+        let received = ReceivedHeaders()
         let options = NWProtocolWebSocket.Options()
         // Mastodonのストリーミングサーバーと同じく、pingに応答する。
         options.autoReplyPing = true
-        options.setClientRequestHandler(queue) { _, headers in
-            authorization.value.withLock { $0 = headers.first { $0.name.lowercased() == "authorization" }?.value }
-            return NWProtocolWebSocket.Response(status: .accept, subprotocol: nil)
+        options.setClientRequestHandler(queue) { subprotocols, headers in
+            received.value.withLock { received in
+                received = Dictionary(headers.map { ($0.name.lowercased(), $0.value) }, uniquingKeysWith: { first, _ in first })
+                // Network.frameworkは、Sec-WebSocket-Protocolをヘッダーに含めず、読み分けたプロトコルとして渡す。
+                if !subprotocols.isEmpty {
+                    received["sec-websocket-protocol"] = subprotocols.joined(separator: ", ")
+                }
+            }
+            // Mastodonのストリーミングサーバー（ws）と同じく、送られたプロトコルの先頭を選んで返す。
+            return NWProtocolWebSocket.Response(status: .accept, subprotocol: subprotocols.first)
         }
         let parameters = NWParameters.tcp
         parameters.defaultProtocolStack.applicationProtocols.insert(options, at: 0)
-        try await self.init(parameters: parameters, queue: queue, authorization: authorization) { connection in
+        try await self.init(parameters: parameters, queue: queue, headers: received) { connection in
             for message in messages {
                 let metadata = NWProtocolWebSocket.Metadata(opcode: .text)
                 let context = NWConnection.ContentContext(identifier: "text", metadata: [metadata])
@@ -135,7 +179,7 @@ private final class LocalWebSocketServer: Sendable {
 
     /// Network.frameworkのWebSocketは拒否してもHTTPの応答を返さないため、TCPのまま応答を書く。
     convenience init(rejectingWith statusCode: Int, headers: String = "") async throws {
-        try await self.init(parameters: .tcp, queue: DispatchQueue(label: "LocalWebSocketServer"), authorization: ReceivedHeader()) { connection in
+        try await self.init(parameters: .tcp, queue: DispatchQueue(label: "LocalWebSocketServer"), headers: ReceivedHeaders()) { connection in
             connection.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { _, _, _, _ in
                 let response = "HTTP/1.1 \(statusCode) Error\r\n\(headers)Content-Length: 0\r\nConnection: close\r\n\r\n"
                 connection.send(content: Data(response.utf8), completion: .contentProcessed { _ in connection.cancel() })
@@ -153,10 +197,10 @@ private final class LocalWebSocketServer: Sendable {
     private init(
         parameters: NWParameters,
         queue: DispatchQueue,
-        authorization: ReceivedHeader,
+        headers: ReceivedHeaders,
         handle: @escaping @Sendable (NWConnection) -> Void
     ) async throws {
-        self.authorization = authorization
+        self.headers = headers
         let connections = ConnectionList()
         self.connections = connections
         parameters.requiredLocalEndpoint = .loopbackWithAnyPort
@@ -206,8 +250,8 @@ private final class ConnectionList: Sendable {
     let value = Mutex<[NWConnection]>([])
 }
 
-private final class ReceivedHeader: Sendable {
-    let value = Mutex<String?>(nil)
+private final class ReceivedHeaders: Sendable {
+    let value = Mutex<[String: String]>([:])
 }
 
 private final class ResumeFlag: Sendable {
