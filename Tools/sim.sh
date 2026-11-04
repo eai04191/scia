@@ -30,6 +30,10 @@
 #     借りた端末に、設定を戻して自分のビルドを入れ終えたことを記録する。
 #   Tools/sim.sh status
 #     端末ごとの借り手、最後にビルドを入れたworktree、使っている処理の数を出す。
+#   Tools/sim.sh leased ['<端末>']
+#     make testなどが走らせる端末を出す。端末を省くと、このworktreeが借りている端末を出し、借りていなければ失敗する。
+#     貸し借りする端末（Scia 1〜）を渡したときは、このworktreeが借りていなければ失敗する。借りずに走らせると、ほかのスレッドが入れたビルドを入れ替えてしまうため。
+#     貸し借りしない端末（機種ごとに作った端末など）は、そのまま出す。
 #   shot、dump、resetは、このworktreeが借りている端末にしか使えない。
 set -euo pipefail
 
@@ -259,7 +263,7 @@ agent = re.compile(r"/claude-code/.*/MacOS/claude ")
 app = re.compile(r"^/Applications/Claude\.app/Contents/MacOS/Claude\b")
 booted = re.compile(r"^launchd_sim ")
 # 貸し借りの操作（空きを待っているacquireなど）は、端末名を引数に持つが、端末を触らない。
-bookkeeping = re.compile(r"sim\.sh (acquire|release|ready|status|busy|__[a-z_]+)( |$)")
+bookkeeping = re.compile(r"sim\.sh (acquire|release|ready|status|busy|leased|__[a-z_]+)( |$)")
 found = []
 for pid, (_, command) in procs.items():
     if pid in mine or not pattern.search(command):
@@ -476,6 +480,25 @@ command_ready() {
     echo "入れ終えた: $1"
 }
 
+command_leased() {
+    local sim=${1:-} me candidate sims
+    # 一覧を読めないときに、貸し借りする端末を貸し借りしない端末と取り違えて素通りさせないよう、止める。
+    sims=$(pool) || fail "端末の一覧を読めない"
+    if [ -z "$sim" ]; then
+        me=$(borrower)
+        while IFS= read -r candidate; do
+            if [ -n "$candidate" ] && [ "$(lease_holder "$candidate")" = "$me" ]; then
+                sim=$candidate
+                break
+            fi
+        done <<< "$sims"
+        [ -n "$sim" ] || fail "端末を借りていない。先にTools/sim.sh acquireで借りる"
+    elif grep -qxF "$sim" <<< "$sims"; then
+        require_lease "$sim"
+    fi
+    echo "$sim"
+}
+
 command_status() {
     local sim holder build procs
     while IFS= read -r sim; do
@@ -487,7 +510,7 @@ command_status() {
     done <<< "$(pool)"
 }
 
-[ $# -ge 1 ] || fail "使い方: Tools/sim.sh shot|dump|reset|busy|ready '<端末>' [オプション]、Tools/sim.sh acquire [--wait <秒>] ['<端末>']、Tools/sim.sh release|status、Tools/sim.sh drag <x1> <y1> <x2> <y2>"
+[ $# -ge 1 ] || fail "使い方: Tools/sim.sh shot|dump|reset|busy|ready '<端末>' [オプション]、Tools/sim.sh acquire [--wait <秒>] ['<端末>']、Tools/sim.sh release|status、Tools/sim.sh leased ['<端末>']、Tools/sim.sh drag <x1> <y1> <x2> <y2>"
 subcommand=$1
 shift
 case $subcommand in
@@ -500,6 +523,7 @@ case $subcommand in
     release) command_release "$@" ;;
     ready) command_ready "$@" ;;
     status) command_status "$@" ;;
+    leased) command_leased "$@" ;;
     __acquire_try) command___acquire_try "$@" ;;
     __release) command___release "$@" ;;
     __ready) command___ready "$@" ;;

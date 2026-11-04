@@ -5,7 +5,7 @@ SIM_DESTINATION ?= generic/platform=iOS Simulator
 # 端末を決めないビルドは、既定ではシミュレーターの全アーキテクチャ（arm64とx86_64）を作る。このMacで動く分だけにして、コンパイルを半分にする
 SIM_ARCH ?= $(shell uname -m)
 
-.PHONY: generate lint test-lint test-core build warnings test sim-keyboard scenario-build scenario-setup scenario-reset scenario-run archive testflight testflight-external promo readme-screenshots readme-icons update-known-servers check check-steps hooks menu-editor clean
+.PHONY: generate lint test-lint test-core build warnings test test-on-sim sim-keyboard scenario-build scenario-setup scenario-reset scenario-run archive testflight testflight-external promo readme-screenshots readme-icons update-known-servers check check-steps hooks menu-editor clean
 
 ## project.ymlからXcodeプロジェクトを生成する
 generate:
@@ -34,17 +34,23 @@ build: generate
 warnings: build
 	Tools/check-warnings.sh $(DERIVED_DATA) $(SIM_ARCH)
 
-## シミュレーター上でschemeのテストを実行する。SIMに端末の名前を指定する
+## シミュレーター上でschemeのテストを実行する。SIMを省くと、このworktreeが借りている端末（Tools/sim.sh acquire）で走らせる
+## 貸し借りする端末（Scia 1〜）をSIMで指定するときは、このworktreeが借りている端末だけを受け付ける（Tools/sim.sh leased）
 ## テストはハードウェアキーボードがつながった状態を前提にしているので、先につなぐ。sim-keyboardで外したままだと、投稿欄のテストが落ちる
 ## 端末のiOSの版で初めて走らせたときは、UIKitの公開されていない作りに頼る部分のUIテスト（SciaSystemUITests）も走らせる（Tools/system-ui-check.sh）
 ## 通ったら、確かめた作業ツリーの中身を覚える。make hooksを入れたcheckoutでは、make checkとmake testの両方が通った中身のcommitしかmainに入れられない
 ## ONLYにテストの識別子（空白区切りで複数）を渡すと、それだけを走らせる。全部は走らせていないので、SciaSystemUITestsも走らせず、通っても中身を覚えない
 ## 失敗時の診断の収集は止める。集めると、simctl diagnoseが応答を待って600秒のタイムアウトまで止まるため
-## 例: make test SIM='Scia 1'
-## 例: make test SIM='Scia 1' ONLY='SciaTests/LinkLabelTests SciaTests/TimelineNoticeTests/progressGainingDigitWidensWithAnimation()'
+## 例: make test
+## 例: make test ONLY='SciaTests/LinkLabelTests SciaTests/TimelineNoticeTests/progressGainingDigitWidensWithAnimation()'
+## 例: make test SIM='iPhone 16 Pro'
 TEST_TREE := $(DERIVED_DATA)/test-tree
+## 決めた端末をSIMに入れて呼び直す。テストの間ずっと、処理の引数に端末の名前が残り、Tools/sim.sh busyが使っている処理として見つけられるようにするため
 test: generate
-	@test -n '$(SIM)' || { echo "SIM='<端末の名前>'を指定する" >&2; exit 1; }
+	@sim=$$(Tools/sim.sh leased '$(SIM)') && $(MAKE) --no-print-directory test-on-sim SIM="$$sim"
+
+## make testから、走らせる端末を決めたあとに呼ぶ。直接は走らせない
+test-on-sim:
 	@mkdir -p $(DERIVED_DATA) && Tools/check-stamp.sh tree > $(TEST_TREE)
 	swift Tools/sim-keyboard.swift '$(SIM)' hardware
 	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination 'platform=iOS Simulator,name=$(SIM)' -derivedDataPath $(DERIVED_DATA) -collect-test-diagnostics never test $(foreach t,$(ONLY),'-only-testing:$(t)')
@@ -54,10 +60,11 @@ ifeq ($(strip $(ONLY)),)
 endif
 
 ## シミュレーターのハードウェアキーボードを外してソフトウェアキーボードを出す（KEYBOARD=hardwareでつなぎ直す）
-## 例: make sim-keyboard SIM='Scia 1'
+## SIMを省くと、このworktreeが借りている端末で行う。端末の選び方はmake testと同じ
+## 例: make sim-keyboard
 KEYBOARD ?= software
 sim-keyboard:
-	swift Tools/sim-keyboard.swift '$(SIM)' $(KEYBOARD)
+	@sim=$$(Tools/sim.sh leased '$(SIM)') && swift Tools/sim-keyboard.swift "$$sim" $(KEYBOARD)
 
 ## シナリオの端末に入れるSciaを、Release構成でビルドする。デバッグ版はホームにデバッグメニューのボタンを出し、使う人が触らない画面に入れてしまうため
 SCENARIO_APP := $(DERIVED_DATA)/Build/Products/Release-iphonesimulator/Scia.app
