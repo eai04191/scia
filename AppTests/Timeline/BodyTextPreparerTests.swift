@@ -150,8 +150,8 @@ struct BodyTextPreparerTests {
     @Test func guessesLinkCardDirectionsAhead() async throws {
         let preparer = BodyTextPreparer()
         let builder = builder(preparer: preparer)
-        let title = "مرحبا بكم في موقعنا \(UUID().uuidString)"
-        let description = "ようこそ、私たちのサイトへ \(UUID().uuidString)"
+        let title = "مرحبا بكم في موقعنا \(unique(in: "٠١٢٣٤٥٦٧٨٩ابتثجح"))"
+        let description = "ようこそ、私たちのサイトへ \(unique(in: "あいうえおかきくけこさしすせそた"))"
         let status = Status(
             id: "1",
             createdAt: Date(timeIntervalSince1970: 0),
@@ -166,6 +166,14 @@ struct BodyTextPreparerTests {
         try await waitUntil { GuessedWritingDirection.isKnown(title) && GuessedWritingDirection.isKnown(description) }
         #expect(GuessedWritingDirection.isRightToLeft(title))
         #expect(!GuessedWritingDirection.isRightToLeft(description))
+    }
+
+    /// 判定の結果はテストをまたいで覚えておくので、ほかのテストで判定済みにならないよう、文字を毎回変える。
+    /// UUIDの英数字をそのまま足すと、言語の判定がその英数字に引っぱられ、アラビア語の文がルーマニア語などと判定されることがある。
+    /// 16進の各字を、判定したい言語の16字に置き換えて足す。
+    private func unique(in digits: String) -> String {
+        let digits = Array(digits)
+        return String(UUID().uuidString.compactMap { $0.hexDigitValue.map { digits[$0] } })
     }
 
     /// 長い文字は先頭だけで判定し、覚えておく表のほかの結果を追い出さない。
