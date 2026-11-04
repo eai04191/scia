@@ -151,9 +151,15 @@ struct InteractionSettingsView: View {
                     Text("既定のブラウザ").tag(LinkBrowser.external)
                     Text("アプリ内のSafari").tag(LinkBrowser.inApp)
                 }
-                // 本物のホームの上で選ぶので、設定の画面を重ねずに外へ出る。行の見た目は、ほかの画面へ入る行に揃える。
+                // 本物のホームの上で選ぶので、設定の画面を重ねずに外へ出る。行の見た目は、ほかの画面へ入る行に揃え、シェブロンを付ける。
                 Button(action: openInAppBrowserHeight) {
-                    LabeledContent("アプリ内のSafariの高さ", value: settings.opensInAppBrowserFullScreen ? "全画面" : settings.inAppBrowserHeight.title)
+                    HStack(spacing: 8) {
+                        LabeledContent("アプリ内のSafariの高さ", value: settings.opensInAppBrowserFullScreen ? "全画面" : settings.inAppBrowserHeight.title)
+                        Image(systemName: "chevron.forward")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                            .accessibilityHidden(true)
+                    }
                 }
                 .tint(.primary)
             } header: {
