@@ -12,7 +12,7 @@
 
 Scia（シア、/ˈʃi.a/）はストリーミングAPIに対応した、手触りの良いiOS向けMastodonクライアントです。
 
-自分のメインクライアントとして使うために作っています。現在は基本的な機能が完成していないためTestFlightやApp Storeで配布していません。準備ができ次第配布する予定です。
+TestFlight: https://testflight.apple.com/join/6g69MEf8
 
 <p align="center">
   <img src="docs/images/screenshot-timeline.webp" width="260" alt="読んでいる途中に届いた新着が上に溜まっているホームのタイムライン">
@@ -33,8 +33,8 @@ Scia（シア、/ˈʃi.a/）はストリーミングAPIに対応した、手触�
 
 ## 動作環境
 
-- iOS 26以降
-- Mastodon 4.7.3でのみ動作確認
+- iOS 26以降（27以降での使用を推奨）
+- 接続先としてMastodon 4.7の最新版でのみ動作を確認
 
 ## ビルド
 
