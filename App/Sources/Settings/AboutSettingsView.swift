@@ -10,6 +10,7 @@ struct AboutSettingsView: View {
             // iPhoneの設定の「情報」と同じく、長押しでその行の値をコピーする。違和感の報告などに貼れるよう、全部をまとめてもコピーできる
             Section {
                 buildRow("バージョン", value: BuildInfo.current.version)
+                buildRow("ビルド", value: BuildInfo.current.build)
                 buildRow("ブランチ", value: BuildInfo.current.branch)
                 buildRow("commit", value: BuildInfo.current.commit)
                 buildRow("ビルド日時", value: BuildInfo.current.builtAt.formatted(date: .numeric, time: .shortened))
