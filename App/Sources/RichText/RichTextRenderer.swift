@@ -2,33 +2,132 @@ import SciaCore
 import UIKit
 
 /// RichTextを、UILabelに渡せるNSAttributedStringにする。
-@MainActor
-struct RichTextRenderer {
+/// メインスレッドで作り、一覧の本文を先に作るときは、カスタム絵文字の画像を写し取ったもの（`withEmojiSnapshot`）をメインスレッドの外で使う。
+struct RichTextRenderer: Sendable {
     var font: UIFont
     var textColor: UIColor
-    var secondaryColor: UIColor = .secondaryLabel
-    var linkColor: UIColor = .tintColor
+    var secondaryColor: UIColor
+    var linkColor: UIColor
     /// リンクに下線を引く。アクセントカラーが本文の文字と色で見分けられないときに引く。描く場所ごとに渡さず、設定から読む。
-    var underlinesLinks: Bool = AppDependencies.settings.accentColor.underlinesLinks
-    var paragraphSpacing: CGFloat = 0
+    var underlinesLinks: Bool
+    var paragraphSpacing: CGFloat
     /// 行と行のあいだに足す余白。
-    var lineSpacing: CGFloat = 0
+    var lineSpacing: CGFloat
     /// 引用とリストの1段あたりの字下げ。
-    var indentPerLevel: CGFloat = 16
+    var indentPerLevel: CGFloat
     /// カスタム絵文字の高さの、Unicodeの絵文字を文字の大きさのまま描いたときの絵の高さ（`EmojiFont.glyphHeight`）に対する割合。
-    var emojiScale: CGFloat = 1
+    var emojiScale: CGFloat
     /// Unicodeの絵文字の絵の高さの、文字の大きさのまま描いたときの絵の高さに対する割合。カスタム絵文字と同じ割合なら、同じ高さに描く。
-    var unicodeEmojiScale: CGFloat = 1
+    var unicodeEmojiScale: CGFloat
     /// 本文が絵文字だけのときに、絵文字を大きく描く決まり。nilなら絵文字だけでも大きくしない。
     var emojiOnly: EmojiOnlyEnlargement?
-    let emojiImages: EmojiImageStore<UIImage>
+    private(set) var emojiImages: EmojiImageSource
     /// 文字列に付ける言語。付けないと、漢字とかなの書体が端末の言語の設定で決まり、英語の設定では日本語も中国語の書体で描かれる。
     let language: String
     /// Unicodeの絵文字を描く絵。描く場所ごとに渡さず、設定から読む。
-    var emojiStyle: EmojiStyle = AppDependencies.settings.appearance.emojiStyle
+    var emojiStyle: EmojiStyle
     /// カスタム絵文字を描く画面の、1ptあたりのピクセル数。読む画像の高さを決めるのに使う。
     /// 文字列は描くビューより先に組むので、ビューのtraitではなく、組むときのtraitから読む。iPhoneの画面は1つなので、どのビューでも同じ値になる。
-    var displayScale: CGFloat = UITraitCollection.current.displayScale
+    var displayScale: CGFloat
+
+    @MainActor
+    init(
+        font: UIFont,
+        textColor: UIColor,
+        secondaryColor: UIColor = .secondaryLabel,
+        linkColor: UIColor = .tintColor,
+        underlinesLinks: Bool = AppDependencies.settings.accentColor.underlinesLinks,
+        paragraphSpacing: CGFloat = 0,
+        lineSpacing: CGFloat = 0,
+        indentPerLevel: CGFloat = 16,
+        emojiScale: CGFloat = 1,
+        unicodeEmojiScale: CGFloat = 1,
+        emojiOnly: EmojiOnlyEnlargement? = nil,
+        emojiImages: EmojiImageStore<UIImage>,
+        language: String,
+        emojiStyle: EmojiStyle = AppDependencies.settings.appearance.emojiStyle,
+        displayScale: CGFloat = UITraitCollection.current.displayScale
+    ) {
+        self.font = font
+        self.textColor = textColor
+        self.secondaryColor = secondaryColor
+        self.linkColor = linkColor
+        self.underlinesLinks = underlinesLinks
+        self.paragraphSpacing = paragraphSpacing
+        self.lineSpacing = lineSpacing
+        self.indentPerLevel = indentPerLevel
+        self.emojiScale = emojiScale
+        self.unicodeEmojiScale = unicodeEmojiScale
+        self.emojiOnly = emojiOnly
+        self.emojiImages = .store(emojiImages)
+        self.language = language
+        self.emojiStyle = emojiStyle
+        self.displayScale = displayScale
+    }
+
+    /// カスタム絵文字の画像の求め先。
+    enum EmojiImageSource: Sendable {
+        /// アプリのストア。メインスレッドで描くときに使う。読み込んでいなければ読み込みを始める。
+        case store(EmojiImageStore<UIImage>)
+        /// メインスレッドで写し取った画像と、読めなかった画像のURL。メインスレッドの外で描くときに使う。写し取っていないURLは、読み込み中として描く。
+        case snapshot(images: [URL: UIImage], failed: Set<URL>)
+    }
+
+    /// カスタム絵文字の画像の、描いたときの状態。
+    enum EmojiImageState: Equatable {
+        case loaded(UIImage)
+        case loading
+        case failed
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            switch (lhs, rhs) {
+            case (.loaded(let lhs), .loaded(let rhs)): lhs === rhs
+            case (.loading, .loading), (.failed, .failed): true
+            default: false
+            }
+        }
+    }
+
+    /// `urls`の画像を今のストアから写し取り、メインスレッドの外で描ける描き手を返す。写し取った状態は`emojiState(of:pixelHeight:)`で比べられる。
+    /// ストアはURLごとに画像を1枚だけ持つので、高さごとには写し取らない。大きく描く絵文字の読み直しは、メインスレッドで状態を比べるときに始まる。
+    @MainActor
+    func withEmojiSnapshot(of urls: some Sequence<URL>) -> RichTextRenderer {
+        var images: [URL: UIImage] = [:]
+        var failed: Set<URL> = []
+        for url in urls {
+            switch emojiState(of: url, pixelHeight: EmojiImageStore<UIImage>.pixelHeight) {
+            case .loaded(let image): images[url] = image
+            case .failed: failed.insert(url)
+            case .loading: break
+            }
+        }
+        var renderer = self
+        renderer.emojiImages = .snapshot(images: images, failed: failed)
+        return renderer
+    }
+
+    /// `url`の画像を`pixelHeight`の高さで描くときの状態。ストアから求めるときは、読み込んでいなければ読み込みを始め、
+    /// 持っている画像より高く描くなら、その高さで読み直しを始める（読み終えるまでは持っている画像を返す）。写し取ったものでは高さを見ない。
+    /// ストアはメインスレッドで作った描き手だけが持ち、メインスレッドの外では写し取ったものだけを使う（`withEmojiSnapshot`）。
+    nonisolated func emojiState(of url: URL, pixelHeight: Int) -> EmojiImageState {
+        switch emojiImages {
+        case .store(let store):
+            MainActor.assumeIsolated {
+                // 先に画像を求める。前に読めなかった画像も、間隔が過ぎていればここで読み直しが始まる。
+                if let image = store.image(for: url, pixelHeight: pixelHeight) { .loaded(image) } else if store.hasFailed(url) { .failed } else { .loading }
+            }
+        case .snapshot(let images, let failed):
+            if let image = images[url] { .loaded(image) } else if failed.contains(url) { .failed } else { .loading }
+        }
+    }
+
+    /// 描き方が同じか。カスタム絵文字の画像の求め先は比べない。
+    func hasSameStyle(as other: RichTextRenderer) -> Bool {
+        font == other.font && textColor == other.textColor && secondaryColor == other.secondaryColor && linkColor == other.linkColor
+            && underlinesLinks == other.underlinesLinks && paragraphSpacing == other.paragraphSpacing && lineSpacing == other.lineSpacing
+            && indentPerLevel == other.indentPerLevel && emojiScale == other.emojiScale && unicodeEmojiScale == other.unicodeEmojiScale
+            && emojiOnly == other.emojiOnly && language == other.language && emojiStyle == other.emojiStyle && displayScale == other.displayScale
+    }
 
     func render(_ text: RichText) -> NSAttributedString {
         if let emojiOnly, let count = text.emojiOnlyCount(isEmoji: { Self.isUnicodeEmoji($0, in: font(for: $1, block: $2)) }) {
@@ -229,10 +328,11 @@ struct RichTextRenderer {
         let height = EmojiFont.glyphHeight(of: font) * emojiScale
         // 先に画像を求める。前に読めなかった画像も、間隔が過ぎていればここで読み直しが始まる。読めるまでは文字で描く。
         // 絵文字だけの本文のように大きく描くときは、その高さで読み直させ、読み終えるまでは持っている画像を拡大して描く。
-        let image = emojiImages.image(for: emoji.staticUrl, pixelHeight: Self.pixelHeight(of: height, scale: displayScale))
-        if image == nil, emojiImages.hasFailed(emoji.staticUrl) {
+        let state = emojiState(of: emoji.staticUrl, pixelHeight: Self.pixelHeight(of: height, scale: displayScale))
+        if state == .failed {
             return NSAttributedString(string: ":\(emoji.shortcode):", attributes: attributes(style: [], block: block))
         }
+        let image: UIImage? = if case .loaded(let image) = state { image } else { nil }
         // 絵文字の中心を、和文の字面（em枠）の中心に揃える。文字と大きさが違っても、文字が絵文字の横の真ん中に来るようにするため。
         // 欧文の大文字の中心とも0.03emほどしか違わない。等倍の絵文字は、下端がほぼ文字の下端（descender）に来る。
         let y = Self.emojiCenterHeight * font.pointSize - height / 2
@@ -449,7 +549,7 @@ extension RichTextRenderer {
 }
 
 /// 絵文字だけの本文の絵文字を大きく描く決まり。
-struct EmojiOnlyEnlargement {
+struct EmojiOnlyEnlargement: Equatable, Sendable {
     /// 本文の絵文字の割合に掛ける倍率。
     var scale: CGFloat
     /// 大きくする絵文字の数の上限。

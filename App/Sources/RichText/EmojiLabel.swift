@@ -344,10 +344,10 @@ class EmojiLabel: UILabel {
 
     /// ラベルか文字列の段落が、はみ出す分を「…」で切る。
     private func usesEllipsis(_ text: NSAttributedString) -> Bool {
-        if Self.truncatingModes.contains(lineBreakMode) { return true }
+        if TextKitLabelLayout.truncatingModes.contains(lineBreakMode) { return true }
         var found = false
         text.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: text.length)) { value, _, stop in
-            if let style = value as? NSParagraphStyle, Self.truncatingModes.contains(style.lineBreakMode) {
+            if let style = value as? NSParagraphStyle, TextKitLabelLayout.truncatingModes.contains(style.lineBreakMode) {
                 found = true
                 stop.pointee = true
             }
@@ -363,7 +363,7 @@ class EmojiLabel: UILabel {
         let container = NSTextContainer(size: CGSize(width: bounds.width, height: 0))
         container.lineFragmentPadding = 0
         layoutManager.textContainer = container
-        contentStorage.attributedString = Self.wrappingInsteadOfTruncating(text)
+        contentStorage.attributedString = TextKitLabelLayout.wrappingInsteadOfTruncating(text)
         var count = 0
         layoutManager.enumerateTextLayoutFragments(from: layoutManager.documentRange.location, options: [.ensuresLayout]) { fragment in
             count += fragment.textLineFragments.count
@@ -409,19 +409,18 @@ class EmojiLabel: UILabel {
     }
 
     private func makeTextLayout(of attributedText: NSAttributedString, width: CGFloat, maximumLines: Int) -> TextLayout {
-        let contentStorage = NSTextContentStorage()
-        let layoutManager = NSTextLayoutManager()
-        contentStorage.addTextLayoutManager(layoutManager)
-        // 高さは限らない。最後の行の下の行間まで数えるとラベルより高くなり、ラベルの高さで切ると最後の行が並ばない。
-        let container = NSTextContainer(size: CGSize(width: width, height: 0))
-        container.lineFragmentPadding = 0
-        container.maximumNumberOfLines = maximumLines
-        // 段落は折り返しにして、コンテナで最後の行だけを「…」で切る。最後の行に入りきらない単語も、UILabelと同じく「…」の前まで途中を並べる。
-        container.lineBreakMode = truncationMode(of: attributedText) ?? lineBreakMode
-        layoutManager.textContainer = container
-        contentStorage.attributedString = Self.wrappingInsteadOfTruncating(alignedLikeLabel(attributedText))
-        layoutManager.ensureLayout(for: layoutManager.documentRange)
-        return TextLayout(width: width, direction: effectiveUserInterfaceLayoutDirection, contentStorage: contentStorage, layoutManager: layoutManager)
+        TextKitLabelLayout.layout(of: attributedText, width: width, maximumLines: maximumLines, style: textKitStyle)
+    }
+
+    /// TextKit 2で並べるときに使う、ラベルの値。
+    private var textKitStyle: TextKitLabelLayout.Style {
+        TextKitLabelLayout.Style(
+            font: font,
+            textColor: textColor,
+            lineBreakMode: lineBreakMode,
+            direction: effectiveUserInterfaceLayoutDirection,
+            displayScale: traitCollection.displayScale > 0 ? traitCollection.displayScale : 1
+        )
     }
 
     /// TextKit 2で描くときの、描いている文字列。UILabelが自分のフォントと色で埋めるのと同じく、フォントと色のない部分を埋めてある。
@@ -448,15 +447,7 @@ class EmojiLabel: UILabel {
 
     /// フォントと色のない部分を、ラベルのフォントと色で埋めた文字列。UILabelは渡された文字列をこうして埋めてから並べる。
     private func filledLikeLabel(_ text: NSAttributedString) -> NSAttributedString {
-        let result = NSMutableAttributedString(attributedString: text)
-        let whole = NSRange(location: 0, length: result.length)
-        result.enumerateAttribute(.font, in: whole) { value, range, _ in
-            if value == nil, let font { result.addAttribute(.font, value: font, range: range) }
-        }
-        result.enumerateAttribute(.foregroundColor, in: whole) { value, range, _ in
-            if value == nil, let textColor { result.addAttribute(.foregroundColor, value: textColor, range: range) }
-        }
-        return result
+        TextKitLabelLayout.filled(text, style: textKitStyle)
     }
 
     /// TextKit 2で描くときは、UILabelが持つ空白1文字ではなく、描いている文字列を読み上げる。置く側が決めた文言があれば、そちらを使う。
@@ -490,24 +481,15 @@ class EmojiLabel: UILabel {
         }
     }
 
-    /// TextKit 2で並べた結果の大きさとベースライン。幅と行数ごとに、文字列が変わるまで使い回す。
-    private struct TextKitMetrics {
-        let size: CGSize
-        let lineCount: Int
-        /// 上端から最初の行のベースラインまで。
-        let firstBaseline: CGFloat
-        /// 最後の行のベースラインから下端まで。
-        let lastBaselineFromBottom: CGFloat
-    }
-
     private struct TextKitMetricsKey: Hashable {
         let width: CGFloat
         let maximumLines: Int
     }
 
-    private var textKitMetrics: [TextKitMetricsKey: TextKitMetrics] = [:]
+    /// TextKit 2で並べた結果の大きさとベースライン。幅と行数ごとに、文字列が変わるまで使い回す。
+    private var textKitMetrics: [TextKitMetricsKey: TextKitLabelLayout.Metrics] = [:]
 
-    private func textKitMetrics(width: CGFloat, maximumLines: Int) -> TextKitMetrics? {
+    private func textKitMetrics(width: CGFloat, maximumLines: Int) -> TextKitLabelLayout.Metrics? {
         guard let attributedText, attributedText.length > 0 else { return nil }
         let key = TextKitMetricsKey(width: width, maximumLines: maximumLines)
         if let metrics = textKitMetrics[key] { return metrics }
@@ -515,45 +497,9 @@ class EmojiLabel: UILabel {
         let layout = width == bounds.width && maximumLines == numberOfLines
             ? textLayout(of: attributedText)
             : makeTextLayout(of: attributedText, width: width, maximumLines: maximumLines)
-        var lineCount = 0
-        var maxX: CGFloat = 0
-        var firstBaseline: CGFloat?
-        var last: (baseline: CGFloat, line: NSTextLineFragment)?
-        layout.layoutManager.enumerateTextLayoutFragments(from: layout.layoutManager.documentRange.location, options: [.ensuresLayout]) { fragment in
-            let origin = fragment.layoutFragmentFrame.origin
-            for line in fragment.textLineFragments {
-                let bounds = line.typographicBounds.offsetBy(dx: origin.x, dy: origin.y)
-                let baseline = bounds.minY + line.glyphOrigin.y
-                lineCount += 1
-                maxX = max(maxX, bounds.maxX)
-                if firstBaseline == nil { firstBaseline = baseline }
-                last = (baseline, line)
-            }
-            return true
-        }
-        guard let firstBaseline, let last else { return nil }
-        let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 1
-        let height = ceil((last.baseline + Self.descent(of: last.line)) * scale) / scale
-        let metrics = TextKitMetrics(
-            size: CGSize(width: ceil(maxX * scale) / scale, height: height),
-            lineCount: lineCount,
-            firstBaseline: firstBaseline,
-            lastBaselineFromBottom: height - last.baseline
-        )
+        guard let metrics = TextKitLabelLayout.metrics(of: layout, displayScale: textKitStyle.displayScale) else { return nil }
         textKitMetrics[key] = metrics
         return metrics
-    }
-
-    /// 行のベースラインから下端まで。TextKit 2の行の枠は、下にフォントのleadingを含むが、UILabelは最後の行の下にleadingを足さないため、
-    /// 最後の行の下端は、UILabelと同じくCoreTextで測った行の下の長さで決める。
-    /// カスタム絵文字の画像がベースラインより下へ伸びる行では、CoreTextの行の下の長さが、画像の下端までになる。
-    private static func descent(of line: NSTextLineFragment) -> CGFloat {
-        guard line.characterRange.length > 0 else { return line.typographicBounds.height - line.glyphOrigin.y }
-        var ascent: CGFloat = 0
-        var descent: CGFloat = 0
-        var leading: CGFloat = 0
-        _ = CTLineGetTypographicBounds(CTLineCreateWithAttributedString(line.attributedString.attributedSubstring(from: line.characterRange)), &ascent, &descent, &leading)
-        return descent
     }
 
     /// TextKit 2で行数を限らずに並べたときの行数。
@@ -667,54 +613,12 @@ class EmojiLabel: UILabel {
         return lines
     }
 
-    private static let truncatingModes: [NSLineBreakMode] = [.byTruncatingTail, .byTruncatingHead, .byTruncatingMiddle]
-
-    /// 段落の「…」で切る設定を、単語で折り返す設定に替えた文字列。
-    /// UILabelは、行数を限ったときも折り返してから最後の行だけを「…」で切るが、TextKit 2は「…」で切る段落を折り返さずに1行に並べる。
-    /// そのまま並べると、2行目より後の文字の位置がUILabelの描画と合わないため、段落は折り返して並べ、最後の行はコンテナの設定で「…」で切る。
-    /// ラベルか段落の「…」で切る設定。UILabelは文字列を入れると段落の設定で自分の`lineBreakMode`を上書きするので、段落の設定を先に見る。
-    private func truncationMode(of text: NSAttributedString) -> NSLineBreakMode? {
-        var mode: NSLineBreakMode?
-        text.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: text.length)) { value, _, stop in
-            if let style = value as? NSParagraphStyle, Self.truncatingModes.contains(style.lineBreakMode) {
-                mode = style.lineBreakMode
-                stop.pointee = true
-            }
-        }
-        return mode ?? (Self.truncatingModes.contains(lineBreakMode) ? lineBreakMode : nil)
-    }
-
-    private static func wrappingInsteadOfTruncating(_ text: NSAttributedString) -> NSAttributedString {
-        let result = NSMutableAttributedString(attributedString: text)
-        result.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: result.length)) { value, range, _ in
-            guard let style = (value as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle, truncatingModes.contains(style.lineBreakMode) else { return }
-            style.lineBreakMode = .byWordWrapping
-            result.addAttribute(.paragraphStyle, value: style, range: range)
-        }
-        return result
-    }
 
     /// TextKit 2で並べたときに、このラベルと同じ位置に文字が並ぶ文字列。「テキストを選択」で、ラベルの代わりに出すテキストビューに渡す。
     /// UILabelが自分のフォントや色で埋めたあとの文字列を使う。段落をつなぐ改行のようにフォントのない部分を、UITextViewは12ptの既定のフォントで並べ、
     /// 空行の高さが変わって下の行がずれるため。
     final var textForTextKit: NSAttributedString? {
-        sourceText.map { alignedLikeLabel(Self.wrappingInsteadOfTruncating($0)) }
-    }
-
-    /// 行の寄せ方を、UILabelが描くのと同じにした文字列。
-    /// 寄せ方が「自然」のとき、UILabelは画面の向き（日本語なら左から右）で寄せるが、TextKit 2は段落の文字の向きで寄せ、
-    /// ヘブライ語やアラビア語の段落を右に寄せる。そのままだと行の置き場所がまるごとずれ、リンクを外すため、画面の向きに合わせて決めておく。
-    private func alignedLikeLabel(_ text: NSAttributedString) -> NSAttributedString {
-        let resolved: NSTextAlignment = effectiveUserInterfaceLayoutDirection == .rightToLeft ? .right : .left
-        let result = NSMutableAttributedString(attributedString: text)
-        let whole = NSRange(location: 0, length: result.length)
-        result.enumerateAttribute(.paragraphStyle, in: whole) { value, range, _ in
-            let style = (value as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle ?? NSMutableParagraphStyle()
-            guard style.alignment == .natural else { return }
-            style.alignment = resolved
-            result.addAttribute(.paragraphStyle, value: style, range: range)
-        }
-        return result
+        sourceText.map { TextKitLabelLayout.aligned(TextKitLabelLayout.wrappingInsteadOfTruncating($0), direction: effectiveUserInterfaceLayoutDirection) }
     }
 
     /// ラベルの座標`point`にある文字の位置。文字の上でなければnil。

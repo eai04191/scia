@@ -882,8 +882,8 @@ final class PostBodyView: UIView {
 
     /// 和文の字面の枠（em枠）の、ベースラインから上端と下端までの距離。日本語の字面はcapHeightより上に出るため、em枠で測る。
     /// em枠はベースラインの上0.88em、下0.12emにあるとみなす。
-    static let emBoxAscent: CGFloat = 0.88
-    static let emBoxDescent: CGFloat = 0.12
+    nonisolated static let emBoxAscent: CGFloat = 0.88
+    nonisolated static let emBoxDescent: CGFloat = 0.12
 
     /// 先頭の文字の、ベースラインから字面の上端まで。絵文字が字面より上へ伸びていれば、その上端まで。
     /// 絵文字を文字の行より大きくした段落は、絵文字が字面の中心から上下へ伸び、行が文字の行より高くなる。
