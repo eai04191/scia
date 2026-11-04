@@ -61,6 +61,9 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         didSet {
             guard cellSize != oldValue else { return }
             collectionView.collectionViewLayout.invalidateLayout()
+            // 読む画像の高さとUnicodeの絵文字の文字の大きさは、組み立てたときの枠で決めるので、新しい枠で組み立て直す。
+            collectionView.layoutIfNeeded()
+            reconfigureCells(matching: nil)
         }
     }
 
