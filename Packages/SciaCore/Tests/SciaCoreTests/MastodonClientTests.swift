@@ -898,6 +898,17 @@ struct MastodonClientTests {
         #expect(emojis.first { $0.shortcode == "no_picker_flag" }?.visibleInPicker == true)
     }
 
+    /// 同じショートコードの絵文字を返すサーバーでは、Mastodonのwebと同じく、後に来た1件だけを残す。
+    /// 残すと、絵文字のパレットが同じ項目を2つ並べようとして落ちる。
+    @Test func customEmojisKeepLastOfSameShortcode() async throws {
+        let transport = StubTransport([try .fixture("custom_emojis_duplicate_shortcode")])
+
+        let emojis = try await makeClient(transport).customEmojis()
+
+        #expect(emojis.map(\.shortcode) == ["blobcat", "naruhodo"])
+        #expect(emojis.last?.url.lastPathComponent == "naruhodo_old.png")
+    }
+
     /// 自分の投稿の数は、文書どおりの文字列でも、Mastodonが返す数でも読む。
     @Test func featuredTags() async throws {
         let transport = StubTransport([try .fixture("featured_tags")])

@@ -1,0 +1,21 @@
+[
+  {
+    "shortcode": "naruhodo",
+    "url": "https://media.example.social/custom_emojis/images/000/072/235/original/naruhodo_new.png",
+    "static_url": "https://media.example.social/custom_emojis/images/000/072/235/static/naruhodo_new.png",
+    "visible_in_picker": true
+  },
+  {
+    "shortcode": "blobcat",
+    "url": "https://media.example.social/custom_emojis/images/000/000/012/original/blobcat.png",
+    "static_url": "https://media.example.social/custom_emojis/images/000/000/012/static/blobcat.png",
+    "visible_in_picker": true,
+    "category": "Blobs"
+  },
+  {
+    "shortcode": "naruhodo",
+    "url": "https://media.example.social/custom_emojis/images/000/000/527/original/naruhodo_old.png",
+    "static_url": "https://media.example.social/custom_emojis/images/000/000/527/static/naruhodo_old.png",
+    "visible_in_picker": true
+  }
+]

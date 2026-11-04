@@ -32,6 +32,14 @@ public struct ServerEmoji: Decodable, Hashable, Sendable {
         category = try? container.decodeIfPresent(String.self, forKey: .category)
     }
 
+    /// 同じショートコードの絵文字のうち、後に来た1件だけを、その位置に残す。Mastodonのwebも、ショートコードをキーに応答の順で保存するので、後に来たものが残る。
+    /// Mastodonはショートコードの重なりをアプリで止めているが、データベースの一意の索引は`domain`がNULLのサーバーの絵文字では効かず、同じショートコードを2件ずつ返すサーバーがあった。
+    /// 投稿の本文の絵文字は、サーバーがどちらか1件を選んで投稿に付けるので、2件を並べても選び分けられない。
+    public static func lastOfEachShortcode(_ emojis: [ServerEmoji]) -> [ServerEmoji] {
+        var seen: Set<String> = []
+        return emojis.reversed().filter { seen.insert($0.shortcode).inserted }.reversed()
+    }
+
     public var emoji: CustomEmoji {
         CustomEmoji(shortcode: shortcode, url: url, staticUrl: staticUrl)
     }

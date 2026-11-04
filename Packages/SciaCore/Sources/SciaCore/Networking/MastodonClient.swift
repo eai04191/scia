@@ -1032,9 +1032,11 @@ public struct MastodonClient: Sendable {
     }
 
     /// サーバーで使えるカスタム絵文字の一覧。補完ではまとめて一度だけ取り、手元で絞る。
+    /// 同じショートコードの絵文字は、後に来た1件だけを残す（`ServerEmoji.lastOfEachShortcode`）。
     /// https://docs.joinmastodon.org/methods/custom_emojis/
     public func customEmojis() async throws -> [ServerEmoji] {
-        try await get(ElementList<ServerEmoji>.self, path: "api/v1/custom_emojis", query: []).0.elements
+        let emojis = try await get(ElementList<ServerEmoji>.self, path: "api/v1/custom_emojis", query: []).0.elements
+        return ServerEmoji.lastOfEachShortcode(emojis)
     }
 
     // MARK: - お知らせ
