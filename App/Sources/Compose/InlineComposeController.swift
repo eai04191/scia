@@ -1976,6 +1976,9 @@ final class InlineComposeController: NSObject {
                 }
             }
             self.host?.view.layoutIfNeeded()
+            if editing {
+                self.scrollCaretIntoViewForOpening()
+            }
             if animatesFlights {
                 if let side = self.textMorphSide(editing: editing) {
                     self.textMorphBaseText = self.textView.text
@@ -2218,6 +2221,29 @@ final class InlineComposeController: NSObject {
                 textView.layer.mask = mask
             }
         )
+    }
+
+    /// 書き始めるときに、カーソルの行が見える位置へ、動かさずに本文をスクロールしておく。
+    /// UIKitもキーボードを出したあとにカーソルの行までスクロールするが、開く動きの文字の着地点はその前の位置（先頭）で測るので、
+    /// 本文が入力欄の高さを超えていると、動き終わってから本文がカーソルの行まで1コマで飛んだ。
+    private func scrollCaretIntoViewForOpening() {
+        guard textView.isScrollEnabled, let selection = textView.selectedTextRange else { return }
+        textView.layoutIfNeeded()
+        let height = expectedTextHeight()
+        let caret = textView.caretRect(for: selection.end)
+        guard height > 0, !caret.isNull, !caret.isInfinite else { return }
+        let inset = textView.textContainerInset
+        var offset = textView.contentOffset.y
+        if caret.maxY + inset.bottom > offset + height {
+            offset = caret.maxY + inset.bottom - height
+        }
+        if caret.minY - inset.top < offset {
+            offset = caret.minY - inset.top
+        }
+        offset = min(max(offset, 0), max(textView.contentSize.height - height, 0))
+        UIView.performWithoutAnimation {
+            textView.contentOffset.y = offset
+        }
     }
 
     /// 並べ終えたときの入力欄の高さ。スクロールしないときは文字に合わせた高さ、スクロールするときは高さの制約の値。

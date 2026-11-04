@@ -5,6 +5,9 @@ public import CoreGraphics
 /// 文字は、Bの1行ずつに切ったかたまりで動かす。Aは1行なので、Bの1行に入る文字はAでも並びが同じで、かたまりのまま平行に動かせる。
 /// 両方ではっきり見えている文字のかたまりは、Aの位置からBの位置へ動かす。Aではっきり見えていない（カプセルの行末のぼかしの中か、その先にある）文字だけのBの行は、
 /// Aの位置から動かすと、前の行の上を通って横切るので、Bの位置で浮かび上がらせる。ぼかしの中の文字は、カプセルの行と一緒にその場で薄くする。
+/// 動かすかたまりがあれば、Bの見える範囲の外の行も浮かび上がらせるかたまりに入れる。浮かび上がらせるかたまりは動かすかたまりと一緒に動くので、
+/// 入力欄をスクロールしていると、Aで見えている先頭の行からBで見えているカーソルの行までが、ひと続きの本文としてスクロールして見える。
+/// 外の行を描かないと、先頭の行が見える範囲を出てから、カーソルの行が入ってくるまで、欄が空になった。
 /// 返信の宛先のようにBにしかない文字も、Bの位置で浮かび上がらせる。
 /// カプセルの行末のぼかしにかかっていて動かさない文字（行末）は、その前の動かすかたまりと一緒に動かしながら薄くする。その場に残して薄くすると、
 /// 動いていく行から離れて、欠けた文字が浮いて見えたため。
@@ -63,6 +66,8 @@ public struct TextMorphPlan: Equatable, Sendable {
     public init(a: TextMorphScene, b: TextMorphScene) {
         var flights: [Flight] = []
         var stays: [Stay] = []
+        // Aで見えている文字がない行。動かすかたまりがあれば、Bの見える範囲の外の行も入れる。
+        var unshared: [TextMorphScene.Line] = []
         for line in b.lines {
             let shared = a.lines.lazy.compactMap { aLine -> (TextMorphScene.Line, Range<Int>)? in
                 guard aLine.content == line.content else { return nil }
@@ -76,9 +81,12 @@ public struct TextMorphPlan: Equatable, Sendable {
                 for rest in [line.range.lowerBound ..< overlap.lowerBound, overlap.upperBound ..< line.range.upperBound] where !rest.isEmpty {
                     stays.append(Stay(key: Key(content: line.content, range: rest), originInB: line.origin(of: rest.lowerBound)))
                 }
-            } else if b.shows(line), !line.range.isEmpty {
-                stays.append(Stay(key: Key(content: line.content, range: line.range), originInB: line.origin(of: line.range.lowerBound)))
+            } else if !line.range.isEmpty {
+                unshared.append(line)
             }
+        }
+        for line in unshared where b.shows(line) || flights.contains(where: { $0.key.content == line.content }) {
+            stays.append(Stay(key: Key(content: line.content, range: line.range), originInB: line.origin(of: line.range.lowerBound)))
         }
         self.flights = flights
         let tails = a.lines.compactMap { line -> Tail? in

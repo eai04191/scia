@@ -1350,6 +1350,48 @@ final class InlineComposeControllerTests {
         #expect(textView.layer.mask == nil, "動き終えても、入力欄の文字を隠しています")
     }
 
+    /// 入力欄の中でスクロールするほど書き、末尾にカーソルを置いたまま閉じて開き直すと、本文の文字を動かすかたまりは、カーソルの行までスクロールした本物の文字の位置に着地する。
+    /// かたまりの着地点を、カーソルの行へスクロールする前の位置（先頭）で測っていたため、動き終えてから本文が1コマで飛んだ。
+    @Test func reopeningLandsTextMorphOnCaretLine() async throws {
+        defer { window.isHidden = true }
+        composer.beginEditing()
+        try await waitUntilSettled()
+        let textView = try #require(textViews(in: window).first)
+        textView.becomeFirstResponder()
+        let lines = (1...8).map { "\($0)行目" }
+        let lastLine = lines[lines.count - 1]
+        textView.insertText(lines.joined(separator: "\n"))
+        try await waitUntilSettled()
+        composer.endEditing()
+        try await waitUntilSettled()
+        useDefaultAnimationDurations()
+        let bar = try composerBar()
+        let shown = {
+            self.textLines(in: self.window)
+                .filter { $0.overhang > 0 && $0.attributedText.string == lastLine }
+                .max { ($0.layer.presentation()?.opacity ?? 0) < ($1.layer.presentation()?.opacity ?? 0) }
+        }
+
+        composer.beginEditing()
+        try await clock.advance(by: 0)
+        // かたまりを外す直前のコマの、最後の行の位置。
+        var landing: CGPoint?
+        while let line = shown() {
+            #expect(clock.now < 5, "動き終えても、かたまりが残っています")
+            guard clock.now < 5 else { break }
+            landing = try glyphInk(of: line, in: bar)
+            try await clock.advance(by: LayerClock.frame)
+        }
+        try await waitUntilSettled()
+
+        #expect(textView.isScrollEnabled && textView.contentOffset.y > 0, "本文がカーソルの行までスクロールしていません\n\(composer.stateDump())")
+        let start = try #require(textView.position(from: textView.endOfDocument, offset: -(lastLine as NSString).length))
+        let range = try #require(textView.textRange(from: start, to: textView.position(from: start, offset: 1) ?? start))
+        // 上下に広げて測ると、上の行の文字のインクまで拾うので、行の枠のまま測る。
+        let field = try ink(of: textView, glyphs: textView.firstRect(for: range), in: bar)
+        expectClose(try #require(landing, "最後の行を動かすかたまりがありません"), field, "着地のコマのかたまりが、スクロールした本物の文字と同じ画素にありません")
+    }
+
     /// 開く途中に末尾へ打ち足したら、本文は動かし続け、打ち足した文字とカーソルを隠さない。行の途中に打ったら、かたまりを外して本物を見せる。
     /// 本物は動き始めに測った行の位置で隠すので、行の途中に打つと、打った文字が隠れ、かたまりは打つ前の文字のまま残っていた。
     @Test func typingWhileOpeningShowsTypedText() async throws {

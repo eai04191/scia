@@ -63,13 +63,13 @@ struct TextMorphPlanTests {
     }
 
     /// 入力欄をスクロールしていて、カプセルに見える文字の行が入力欄の見える範囲の外にあっても、動かす。見える範囲の端で薄くなって消える。
-    /// 入力欄の見える範囲の外の行は、浮かび上がらせない。
-    @Test func movesIntoScrolledOutLinesAndSkipsHiddenOnes() {
+    /// 入力欄の見える範囲の外の行も浮かび上がらせるかたまりに入れ、カプセルに見える先頭の行から入力欄に見える行まで、本文をひと続きにスクロールして見せる。
+    @Test func movesIntoScrolledOutLinesAndKeepsTheLinesBetween() {
         let a = capsule([line(0 ..< 30, x: 28, y: 30)])
         let b = field([line(0 ..< 10, x: 28, y: -20), line(10 ..< 20, x: 28, y: 2), line(20 ..< 30, x: 28, y: 60)])
         let plan = TextMorphPlan(a: a, b: b)
         #expect(plan.flights.map(\.key.range) == [0 ..< 10])
-        #expect(plan.stays.map(\.key.range) == [20 ..< 30])
+        #expect(plan.stays.map(\.key.range) == [10 ..< 20, 20 ..< 30])
     }
 
     /// 両方に「いまどうしてる？」があれば、本文と同じく動かす。
