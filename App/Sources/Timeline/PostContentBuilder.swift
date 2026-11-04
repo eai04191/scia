@@ -9,6 +9,8 @@ struct PostContentBuilder {
     let emojiImages: EmojiImageStore<UIImage>
     let mediaImages: MediaImageStore<UIImage>
     let avatarImages: AvatarImageStore<UIImage>
+    /// 一覧の投稿の本文を先に作っておく部品。あれば、作っておいた本文を使う。
+    var preparedBodies: BodyTextPreparer?
 
     /// タップしたときの処理と添付ファイルは含めない。一覧では呼び出し側が足す。
     /// - Parameter isPinned: プロフィールの上に置く、固定された投稿。名前の上に固定されていることを示す行を出す。
@@ -67,6 +69,8 @@ struct PostContentBuilder {
             case .acct: renderer.render(.plain("@\(shown.account.acct)", emojis: []))
             }
         }
+        let bodyRenderer = postBodyRenderer(of: shown)
+        let preparedBody = preparedBodies?.prepared(for: shown, renderer: bodyRenderer)
         let context: PostContentConfiguration.Context? = if isPinned {
             PostContentConfiguration.Context(
                 symbolName: "pin.fill",
@@ -99,7 +103,7 @@ struct PostContentBuilder {
             showsVisibilitySymbol: settings.appearance.showsVisibilitySymbol,
             showsEditedMark: settings.appearance.showsEditedMark,
             timeStyle: settings.appearance.statusTimeStyle,
-            body: body(of: shown, base: base, enlargesEmojiOnly: true),
+            body: preparedBody?.text ?? bodyRenderer.render(.status(shown)),
             spoiler: spoiler(of: shown, base: base),
             metrics: metrics,
             card: linkCard(of: shown),
@@ -108,6 +112,7 @@ struct PostContentBuilder {
             avatarImages: avatarImages,
             emojiImages: settings.animatesCustomEmojis ? emojiImages : nil
         )
+        configuration.preparedBodyLayout = preparedBody?.layout
         configuration.reactionGlow = reactionGlow(for: shown)
         configuration.showsReplyLines = settings.appearance.showsReplyLines
         configuration.showsTime = settings.appearance.showsTime
@@ -183,13 +188,24 @@ struct PostContentBuilder {
     func body(of status: Status, base: UIListContentConfiguration, color: UIColor = .label, font: UIFont? = nil, enlargesEmojiOnly: Bool = false, joinsLines: Bool = false) -> NSAttributedString {
         var renderer = bodyRenderer(of: status, font: font ?? PostTypography(settings: settings).font(.body), color: color)
         if enlargesEmojiOnly {
-            renderer.emojiOnly = EmojiOnlyEnlargement(
-                scale: settings.value(of: AppearanceCatalog.emojiOnlyScale),
-                limit: Int(settings.value(of: AppearanceCatalog.emojiOnlyLimit))
-            )
+            renderer.emojiOnly = emojiOnlyEnlargement
         }
         let text = RichText.status(status)
         return renderer.render(joinsLines ? text.joiningLines() : text)
+    }
+
+    /// 一覧の投稿の本文（`configuration(for:isPinned:replyLabel:base:)`の本文）の描き手。本文を先に作るときも、同じ描き手で作る。
+    func postBodyRenderer(of status: Status) -> RichTextRenderer {
+        var renderer = bodyRenderer(of: status, font: PostTypography(settings: settings).font(.body), color: .label)
+        renderer.emojiOnly = emojiOnlyEnlargement
+        return renderer
+    }
+
+    private var emojiOnlyEnlargement: EmojiOnlyEnlargement {
+        EmojiOnlyEnlargement(
+            scale: settings.value(of: AppearanceCatalog.emojiOnlyScale),
+            limit: Int(settings.value(of: AppearanceCatalog.emojiOnlyLimit))
+        )
     }
 
     /// HTMLではない文字（予約した投稿のソースなど）を、投稿の本文と同じ文字の大きさと行間で描く。空白と改行は書いたまま残す。

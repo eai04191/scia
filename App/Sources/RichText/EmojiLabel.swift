@@ -49,6 +49,7 @@ class EmojiLabel: UILabel {
                 cancelEmojiArrival()
             }
             assignedText = newValue
+            preparedLayout = nil
             // 測った結果は、文字列を入れる前に捨てる。UILabelは文字列を入れる中で大きさを測り直して覚えるため、
             // あとで捨てると、使い回したラベルが前の文字列で測った大きさのままになる。
             layoutCache = nil
@@ -102,6 +103,7 @@ class EmojiLabel: UILabel {
         }
         didSet {
             assignedText = nil
+            preparedLayout = nil
             cancelEmojiArrival()
             layoutCache = nil
             truncationCache = nil
@@ -123,6 +125,7 @@ class EmojiLabel: UILabel {
 
     override var lineBreakMode: NSLineBreakMode {
         didSet {
+            preparedLayout = nil
             layoutCache = nil
             truncationCache = nil
             setNeedsLayout()
@@ -403,7 +406,9 @@ class EmojiLabel: UILabel {
         if let layoutCache, layoutCache.width == bounds.width, layoutCache.direction == direction {
             return layoutCache
         }
-        let layout = makeTextLayout(of: attributedText, width: bounds.width, maximumLines: numberOfLines)
+        // 絵文字を透明な画像に差し替えて描いているときは、先に並べた並びを使わない。先に並べた並びは、差し替える前の画像を描くため。
+        let layout = (showsReplacedText ? nil : preparedLayout?.entry(width: bounds.width, maximumLines: numberOfLines)?.layout)
+            ?? makeTextLayout(of: attributedText, width: bounds.width, maximumLines: numberOfLines)
         layoutCache = layout
         return layout
     }
@@ -413,7 +418,7 @@ class EmojiLabel: UILabel {
     }
 
     /// TextKit 2で並べるときに使う、ラベルの値。
-    private var textKitStyle: TextKitLabelLayout.Style {
+    final var textKitStyle: TextKitLabelLayout.Style {
         TextKitLabelLayout.Style(
             font: font,
             textColor: textColor,
@@ -421,6 +426,28 @@ class EmojiLabel: UILabel {
             direction: effectiveUserInterfaceLayoutDirection,
             displayScale: traitCollection.displayScale > 0 ? traitCollection.displayScale : 1
         )
+    }
+
+    /// メインスレッドの外で先に並べた結果。置く側が渡した文字列と、ラベルの値が同じときだけ持ち、文字列が替わったら捨てる。
+    private var preparedLayout: PreparedTextLayout?
+
+    /// 先に並べた結果を、今の文字列の並びとして使う。文字列を入れたあとに渡す。
+    /// 並べた文字列が今の文字列と同じものでないか、並べたときのラベルの値（書体や色、行の切り方、文字の向き）が今と違えば使わない。
+    final func usePreparedLayout(_ prepared: PreparedTextLayout?) {
+        guard let prepared, drawsWithTextKit, prepared.source === assignedText, prepared.style == textKitStyle else {
+            preparedLayout = nil
+            return
+        }
+        guard prepared !== preparedLayout else { return }
+        preparedLayout = prepared
+        layoutCache = nil
+        invalidateIntrinsicContentSize()
+        setNeedsLayout()
+    }
+
+    /// 先に並べた結果の幅。本文の幅が決まる前に、ベースラインを置くのに使う。先に並べていなければnil。
+    final var preparedLayoutWidth: CGFloat? {
+        preparedLayout?.width
     }
 
     /// TextKit 2で描くときの、描いている文字列。UILabelが自分のフォントと色で埋めるのと同じく、フォントと色のない部分を埋めてある。
@@ -466,6 +493,7 @@ class EmojiLabel: UILabel {
     var drawsWithTextKit = false {
         didSet {
             guard drawsWithTextKit != oldValue else { return }
+            preparedLayout = nil
             // 描いている文字列を、新しい描き方の置き場所へ移す。
             let shown = oldValue ? textKitText : super.attributedText
             if drawsWithTextKit {
@@ -493,6 +521,11 @@ class EmojiLabel: UILabel {
         guard let attributedText, attributedText.length > 0 else { return nil }
         let key = TextKitMetricsKey(width: width, maximumLines: maximumLines)
         if let metrics = textKitMetrics[key] { return metrics }
+        // 先に並べてあれば、その大きさを使う。絵文字を透明な画像に差し替えて描いていても、画像の大きさは同じなので、大きさは変わらない。
+        if let prepared = preparedLayout?.entry(width: width, maximumLines: maximumLines) {
+            textKitMetrics[key] = prepared.metrics
+            return prepared.metrics
+        }
         // 描くのと同じ幅と行数なら、描くときの並びを使い回す。並びは文字列を入れる前に捨てるので、前の文字列の並びは残らない。
         let layout = width == bounds.width && maximumLines == numberOfLines
             ? textLayout(of: attributedText)

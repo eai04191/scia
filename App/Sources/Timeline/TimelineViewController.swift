@@ -223,6 +223,12 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 添付ファイルのビューアで、共有や保存のために落とす処理。ビューアを閉じても続けるため、セッションで持つ。
     var mediaTransfers: MediaTransferCenter?
     private var timeRefreshTask: Task<Void, Never>?
+    /// 画面の前後の投稿の本文を、先に作って並べておく。
+    private let bodyTextPreparer = BodyTextPreparer()
+    /// 本文を先に作った、画面に出ている行の範囲。同じ範囲では頼み直さない。
+    private var preparedBodyRange: ClosedRange<Int>?
+    /// 最後に読めた、本文のラベルの値と幅。
+    private var bodyTextGeometry: BodyTextPreparer.Geometry?
     /// 今の日付。テストでは決まった日付に差し替える。
     var now: () -> Date = AppDependencies.now
     /// 画面の描き換えと同じ時間。テストでは差し替える。
@@ -2124,8 +2130,44 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// 投稿のセルの中身を組み立てる。今のチューニングと設定を読むため、使うたびに作る。
     var postContentBuilder: PostContentBuilder {
-        PostContentBuilder(tuning: tuning, settings: settings, emojiImages: emojiImages, mediaImages: mediaImages, avatarImages: avatarImages)
+        PostContentBuilder(tuning: tuning, settings: settings, emojiImages: emojiImages, mediaImages: mediaImages, avatarImages: avatarImages, preparedBodies: bodyTextPreparer)
     }
+
+    /// 画面に出ている行の前後の投稿の本文を、先に作って並べておく。画面に出ている行の範囲が変わったときだけ頼む。
+    private func prepareBodiesAroundVisibleRows() {
+        let visible = collectionView.indexPathsForVisibleItems.filter { $0.section == 0 }.map(\.item)
+        guard let first = visible.min(), let last = visible.max() else { return }
+        if let geometry = collectionView.visibleCells.lazy.compactMap({ ($0.contentView as? PostContentView)?.bodyTextGeometry }).first,
+           geometry != bodyTextGeometry {
+            bodyTextGeometry = geometry
+            // 本文の幅が分かる前に頼んだ本文は、文字列だけを作っている。並びも作るよう、同じ範囲でも頼み直す。
+            preparedBodyRange = nil
+        }
+        guard preparedBodyRange != first...last else { return }
+        preparedBodyRange = first...last
+        let count = collectionView.numberOfItems(inSection: 0)
+        // 流している向きの先を先に作る。
+        let ahead = Array(min(last + 1, count)..<min(last + 1 + Self.preparedBodyRows, count))
+        let behind = Array(max(first - Self.preparedBodyRows, 0)..<first).reversed()
+        let rows = lastScrollDirection == .towardNewer ? Array(behind) + ahead : ahead + behind
+        var truncations: [Status.ID: BodyTruncation] = [:]
+        let statuses = rows.compactMap { item -> Status? in
+            guard let id = dataSource.itemIdentifier(for: IndexPath(item: item, section: 0)) else { return nil }
+            let status: Status
+            switch entries[id] {
+            case .status(let entry), .pinned(let entry): status = entry
+            default: return nil
+            }
+            let shown = status.displayed
+            truncations[shown.id] = longBodyExpansion.truncation(forBodyOf: status, isThreadFocus: shown.id == threadFocusID, rule: bodyTruncationRule)
+            return shown
+        }
+        let builder = postContentBuilder
+        bodyTextPreparer.prepare(statuses, renderer: builder.postBodyRenderer(of:), geometry: bodyTextGeometry, truncation: { truncations[$0.id] })
+    }
+
+    /// 画面に出ている行の前と後ろそれぞれで、本文を先に作る行の数。
+    private static let preparedBodyRows = 12
 
     /// - Parameters:
     ///   - isPinned: プロフィールの上に置く、固定された投稿。名前の上に固定されていることを示す行を出す。
@@ -2353,6 +2395,7 @@ extension TimelineViewController: UICollectionViewDelegate {
     }
 
     private func handleScroll(_ scrollView: UIScrollView) {
+        prepareBodiesAroundVisibleRows()
         if scrollView.isTracking {
             // 指が下へ動いていれば、内容は上の新しい投稿の方へ動く。
             let velocity = scrollView.panGestureRecognizer.velocity(in: scrollView).y
@@ -2600,6 +2643,8 @@ extension TimelineViewController: UICollectionViewDelegate {
     }
 
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+        // 最初にスクロールする前にも、画面の前後の本文を先に作っておく。スクロールのたびに頼むだけでは、起動して最初に流した数行に間に合わない。
+        prepareBodiesAroundVisibleRows()
         let count = dataSource.snapshot().numberOfItems
         if indexPath.item >= count - prefetchThreshold {
             onApproachingEnd?()

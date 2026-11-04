@@ -36,6 +36,8 @@ struct PostBodyContent {
     /// 注意書きがなければnil。
     var spoiler: Spoiler?
     var text: NSAttributedString
+    /// `text`を先に並べた結果。先に並べていなければnil。
+    var preparedLayout: PreparedTextLayout?
     /// 本文を切る行数。0なら切らない。
     var maximumLines = 0
     /// 長い本文を切って「続きを読む」を出す行数。nilなら切らない。`maximumLines`とは一緒に使わない。
@@ -549,6 +551,9 @@ final class PostBodyView: UIView {
             }
         }
         self.content = content
+        // 文字列を入れる前に描き方を決める。UILabelで描くままの新しいラベルに長い本文を入れると、UILabelがその場で並べるため。
+        let drawsWithTextKit = AppDependencies.tuning.value(of: TuningCatalog.bodyTextKitDrawing)
+        textLabel.drawsWithTextKit = drawsWithTextKit
         textLabel.attributedText = Self.truncatingTail(content.text, when: content.maximumLines > 0)
         textLabel.hashtagAccount = content.hashtagAccount
         // 長い本文を切るときは、行数をラベルが幅から決める。
@@ -556,7 +561,9 @@ final class PostBodyView: UIView {
             textLabel.numberOfLines = content.maximumLines
         }
         textLabel.truncation = content.truncation
-        applyTextDrawing(textKit: AppDependencies.tuning.value(of: TuningCatalog.bodyTextKitDrawing))
+        // ベースラインを置く前に、先に並べた結果を渡す。渡さないと、ベースラインを置くために、ここで並べることになる。
+        textLabel.usePreparedLayout(content.preparedLayout)
+        applyTextDrawing(textKit: drawsWithTextKit)
         NSLayoutConstraint.deactivate(variableConstraints)
         variableConstraints = []
         let shownSpoiler = applySpoiler(content.spoiler)
@@ -666,7 +673,8 @@ final class PostBodyView: UIView {
         guard textLabel.drawsWithTextKit else { return }
         // 初めて中身を入れるときは、まだ幅が決まっていない。十分に広い幅で並べて決め、高さを測る前にベースラインを置いておく。
         // 0のままにすると、ベースラインがラベルの上端に重なり、並べ直すまで本文が上へずれた高さで測られる。
-        let baselines = textLabel.textKitBaselines(width: width > 0 ? width : Self.unknownTextWidth)
+        // 先に並べてあれば、並べた幅で決める。一覧の本文は、ふつうその幅に並ぶ。
+        let baselines = textLabel.textKitBaselines(width: width > 0 ? width : textLabel.preparedLayoutWidth ?? Self.unknownTextWidth)
         if textKitFirstBaseline?.constant != baselines.first {
             textKitFirstBaseline?.constant = baselines.first
         }
@@ -911,6 +919,12 @@ final class PostBodyView: UIView {
             : (text.string as NSString).paragraphRange(for: NSRange(location: text.length - 1, length: 0))
         guard let font = RichTextRenderer.textFont(in: text, range: paragraph, fromEnd: true) else { return 0 }
         return max(font.pointSize * emBoxDescent, RichTextRenderer.emojiExtent(in: text, range: paragraph).below)
+    }
+
+    /// 本文を先に並べるときに使う、本文のラベルの値と幅。本文を出していないとき、添付ファイルを本文の右に並べて幅を狭めているとき、幅が決まる前はnil。
+    var bodyTextGeometry: BodyTextPreparer.Geometry? {
+        guard !textLabel.isHidden, textLabel.drawsWithTextKit, textLabel.bounds.width > 0, textTrailing?.constant ?? 0 == 0 else { return nil }
+        return BodyTextPreparer.Geometry(style: textLabel.textKitStyle, width: textLabel.bounds.width)
     }
 
     /// 長い本文を、今の幅で切っている。

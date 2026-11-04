@@ -1,4 +1,5 @@
 import CoreText
+import SciaCore
 import UIKit
 
 /// `EmojiLabel`がTextKit 2で文字を並べる手順。ラベルの値を受け取り、ラベルを使わずに並べる。
@@ -135,5 +136,43 @@ enum TextKitLabelLayout {
             result.addAttribute(.paragraphStyle, value: style, range: range)
         }
         return result
+    }
+}
+
+/// メインスレッドの外で先に並べた、ラベルの文字列の並び。並べ終えたらメインスレッドへ渡し、以後はメインスレッドだけが触る。
+/// 置く側は、並べた文字列（`source`）をそのままラベルに入れ、`EmojiLabel.usePreparedLayout`で渡す。
+final class PreparedTextLayout {
+    /// 並べた文字列。置く側がラベルに入れる文字列と同じもの。
+    let source: NSAttributedString
+    let style: TextKitLabelLayout.Style
+    let width: CGFloat
+    /// 行数ごとの並びと大きさ。0は行数を限らない並び。
+    private let entries: [Int: (layout: TextLayout, metrics: TextKitLabelLayout.Metrics)]
+
+    /// `source`を`width`の幅に、行数を限らずに並べる。`truncation`で切る行数を超えていれば、切ったときの行数でも並べる。
+    init(source: NSAttributedString, style: TextKitLabelLayout.Style, width: CGFloat, truncation: BodyTruncation?) {
+        self.source = source
+        self.style = style
+        self.width = width
+        let filled = TextKitLabelLayout.filled(source, style: style)
+        var entries: [Int: (layout: TextLayout, metrics: TextKitLabelLayout.Metrics)] = [:]
+        let full = TextKitLabelLayout.layout(of: filled, width: width, maximumLines: 0, style: style)
+        if let metrics = TextKitLabelLayout.metrics(of: full, displayScale: style.displayScale) {
+            entries[0] = (full, metrics)
+            if let truncation, metrics.lineCount > truncation.threshold {
+                let lines = truncation.lineLimit(exceedsThreshold: true)
+                let truncated = TextKitLabelLayout.layout(of: filled, width: width, maximumLines: lines, style: style)
+                if let truncatedMetrics = TextKitLabelLayout.metrics(of: truncated, displayScale: style.displayScale) {
+                    entries[lines] = (truncated, truncatedMetrics)
+                }
+            }
+        }
+        self.entries = entries
+    }
+
+    /// `width`の幅に`maximumLines`行まで並べた結果。並べていなければnil。
+    func entry(width: CGFloat, maximumLines: Int) -> (layout: TextLayout, metrics: TextKitLabelLayout.Metrics)? {
+        guard width == self.width else { return nil }
+        return entries[maximumLines]
     }
 }

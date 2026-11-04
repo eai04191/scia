@@ -72,8 +72,11 @@ final class LinkLabel: EmojiLabel {
     }
 
     /// 今の幅で、長い本文を切っている。
+    /// 幅が決まる前（新しく作った行に中身を入れたとき）は、先に並べた幅で決める。幅0のコンテナは幅を限らずに並べるため、
+    /// 1段落の長い本文を1行と数えて切らないと決めるうえ、並べ直す分だけメインスレッドで時間がかかる。先に並べていなければ、今までどおり幅0で決める。
     var isTruncatedByLength: Bool {
-        truncation != nil && lineLimit(forWidth: bounds.width) > 0
+        let width = bounds.width > 0 ? bounds.width : preparedLayoutWidth ?? bounds.width
+        return truncation != nil && lineLimit(forWidth: width) > 0
     }
 
     /// 「続きを読む」の枠。ラベルの座標で返す。切っていなければnil。「投稿の見た目」のプレビューで示すのに使う。

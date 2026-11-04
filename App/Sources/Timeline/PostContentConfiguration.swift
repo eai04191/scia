@@ -60,6 +60,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var showsEditedMark = true
     var timeStyle: StatusTimeStyle
     var body: NSAttributedString
+    /// `body`を先に並べた結果。先に並べていなければnil。
+    var preparedBodyLayout: PreparedTextLayout?
     /// 長い本文を切って「続きを読む」を出す行数。nilなら切らない。
     var bodyTruncation: BodyTruncation?
     /// 注意書きがなければnil。
@@ -225,6 +227,11 @@ final class PostContentView: UIView, UIContentView {
     private var timeText = ""
     private let nameRow = UIStackView()
     private let bodyView: PostBodyView
+
+    /// 本文を先に並べるときに使う、本文のラベルの値と幅。
+    var bodyTextGeometry: BodyTextPreparer.Geometry? {
+        bodyView.bodyTextGeometry
+    }
     private let textGuide = UILayoutGuide()
     /// 名前の最後のベースラインの位置。名前の行の下のすき間は字面から測るので、「投稿の見た目」のプレビューで字面の下端を求めるのに使う。
     private let nameBaselineGuide = UILayoutGuide()
@@ -456,6 +463,7 @@ final class PostContentView: UIView, UIContentView {
         bodyView.apply(PostBodyContent(
             spoiler: configuration.spoiler,
             text: configuration.body,
+            preparedLayout: configuration.preparedBodyLayout,
             truncation: configuration.bodyTruncation,
             media: configuration.media,
             mediaSpacing: metrics.bodyMediaSpacing,
