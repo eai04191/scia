@@ -3,6 +3,7 @@ import UIKit
 
 /// 一覧の投稿の本文を、画面に入る前に、メインスレッドの外で文字列にしてTextKit 2で並べておく。
 /// 初めて画面に入る行で、本文のHTMLを読んで文字列にし、並べる処理が、長い本文ではフレームを落としていたため。
+/// リンクカードの文字の書く方向の判定（`GuessedWritingDirection`）も、重いので一緒に先に済ませる。
 /// 行を組み立てるときは、作っておいた文字列と並びを、今の描き方と同じときだけ使い、違えばその場で作る。
 @MainActor
 final class BodyTextPreparer {
@@ -39,6 +40,21 @@ final class BodyTextPreparer {
         let renderer: RichTextRenderer
         let geometry: Geometry?
         let truncation: BodyTruncation?
+    }
+
+    /// メインスレッドの外で行う仕事。
+    private enum Work: Sendable {
+        case body(Request)
+        /// 投稿のリンクカードの文字の書く方向を判定しておく。カードを本文から探すのにHTMLを読むので、これもメインスレッドの外で行う。
+        case writingDirections(Status)
+
+        /// 同じ投稿の同じ種類の仕事を、新しく頼まれたもので置き換えるための鍵。
+        var key: String {
+            switch self {
+            case .body(let request): "body \(request.id)"
+            case .writingDirections(let status): "directions \(status.id)"
+            }
+        }
     }
 
     /// 本文のラベルの値と幅。
@@ -80,9 +96,21 @@ final class BodyTextPreparer {
     private var entries: [Status.ID: Entry] = [:]
     /// 作った順。古いものから捨てる。
     private var order: [Status.ID] = []
-    /// これから作る本文。新しく頼まれたものを先に作る。
-    private var pending: [Request] = []
+    /// これから行う仕事。新しく頼まれたものを先に行う。
+    private var pending: [Work] = []
     private var worker: Task<Void, Never>?
+
+    private struct WritingDirectionKey: Hashable {
+        let id: Status.ID
+        let card: URL?
+    }
+
+    /// リンクカードの文字の書く方向を判定するよう頼んだ投稿。持ちすぎないよう、上限を超えたら空にする。
+    private var guessedDirections: Set<WritingDirectionKey> = [] {
+        didSet {
+            if guessedDirections.count > Self.capacity * 4 { guessedDirections = [] }
+        }
+    }
 
     isolated deinit {
         worker?.cancel()
@@ -99,27 +127,42 @@ final class BodyTextPreparer {
     ///   - renderer: 投稿の本文の描き手を返す。行を組み立てるときと同じ描き手にする。
     ///   - geometry: 本文のラベルの値と幅。分からなければnilにし、文字列だけを作る。
     ///   - truncation: 投稿の長い本文を切る決まりを返す。
-    func prepare(_ statuses: [Status], renderer: (Status) -> RichTextRenderer, geometry: Geometry?, truncation: (Status) -> BodyTruncation?) {
-        var requests: [Request] = []
+    ///   - guessesLinkCardDirections: リンクカードの文字の書く方向を判定しておく。カードを出さない設定ならfalse。
+    func prepare(
+        _ statuses: [Status],
+        renderer: (Status) -> RichTextRenderer,
+        geometry: Geometry?,
+        truncation: (Status) -> BodyTruncation?,
+        guessesLinkCardDirections: Bool
+    ) {
+        var works: [Work] = []
         for status in statuses {
             let made = renderer(status)
             // カスタム絵文字の画像が届いたり読めなかったりして描き方が変わった本文は、作り直す。
-            if let entry = entries[status.id], entry.isCurrent(for: status, renderer: made),
-               entry.layout.map({ $0.style == geometry?.style && $0.width == geometry?.width }) ?? (geometry == nil) {
-                continue
+            let isPrepared = entries[status.id].map { entry in
+                entry.isCurrent(for: status, renderer: made)
+                    && entry.layout.map { $0.style == geometry?.style && $0.width == geometry?.width } ?? (geometry == nil)
+            } ?? false
+            if !isPrepared {
+                works.append(.body(Request(
+                    id: status.id,
+                    status: status,
+                    source: Source(status),
+                    renderer: made.withEmojiSnapshot(of: status.emojis.map(\.staticUrl)),
+                    geometry: geometry,
+                    truncation: truncation(status)
+                )))
             }
-            requests.append(Request(
-                id: status.id,
-                status: status,
-                source: Source(status),
-                renderer: made.withEmojiSnapshot(of: status.emojis.map(\.staticUrl)),
-                geometry: geometry,
-                truncation: truncation(status)
-            ))
+            // 同じ投稿は一度だけ判定する。サーバーのカードが後から届いたら、カードが変わるので判定し直す。
+            let directionKey = WritingDirectionKey(id: status.id, card: status.card?.url)
+            if guessesLinkCardDirections, !guessedDirections.contains(directionKey) {
+                guessedDirections.insert(directionKey)
+                works.append(.writingDirections(status))
+            }
         }
-        guard !requests.isEmpty else { return }
-        let requested = Set(requests.map(\.id))
-        pending = requests + pending.filter { !requested.contains($0.id) }
+        guard !works.isEmpty else { return }
+        let requested = Set(works.map(\.key))
+        pending = works + pending.filter { !requested.contains($0.key) }
         // 速く流すと、前に頼んだものは画面を過ぎていて要らなくなる。古いものは作らずに捨てる。
         if pending.count > Self.capacity / 2 {
             pending.removeLast(pending.count - Self.capacity / 2)
@@ -131,16 +174,21 @@ final class BodyTextPreparer {
         guard worker == nil else { return }
         // 作っている間は持ち主を持たない。一覧が閉じられたら、作り終えたものは捨てて止まる。
         worker = Task(.withoutRequests) { [weak self] in
-            while !Task.isCancelled, let request = self?.nextRequest() {
-                let entry = await Self.make(request)
-                guard !Task.isCancelled else { break }
-                self?.store(entry, for: request.id)
+            work: while !Task.isCancelled, let work = self?.nextWork() {
+                switch work {
+                case .body(let request):
+                    let entry = await Self.make(request)
+                    guard !Task.isCancelled else { break work }
+                    self?.store(entry, for: request.id)
+                case .writingDirections(let status):
+                    await Self.guessLinkCardDirections(of: status)
+                }
             }
             self?.worker = nil
         }
     }
 
-    private func nextRequest() -> Request? {
+    private func nextWork() -> Work? {
         pending.isEmpty ? nil : pending.removeFirst()
     }
 
@@ -184,5 +232,15 @@ final class BodyTextPreparer {
             heights[emoji.staticUrl] = max(heights[emoji.staticUrl] ?? 0, height)
         }
         return heights
+    }
+
+    /// 投稿のリンクカードの文字の書く方向を判定して覚えておく。メインスレッドの外で走らせる。
+    @concurrent
+    private nonisolated static func guessLinkCardDirections(of status: Status) async {
+        guard let card = LinkCard(status: status) else { return }
+        let text = LinkCardView.text(of: card)
+        for string in [text.site, text.title, text.description] {
+            _ = GuessedWritingDirection.isRightToLeft(string)
+        }
     }
 }

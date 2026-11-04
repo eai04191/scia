@@ -48,7 +48,7 @@ struct BodyTextPreparerTests {
     /// 先に作るのを頼んで、作り終えるまで待つ。作っている間にカスタム絵文字の画像の状態が変われば、一覧と同じく頼み直す。
     private func prepare(_ status: Status, builder: PostContentBuilder, preparer: BodyTextPreparer, geometry: BodyTextPreparer.Geometry?) async throws -> BodyTextPreparer.Prepared {
         try await waitUntil {
-            preparer.prepare([status], renderer: builder.postBodyRenderer(of:), geometry: geometry, truncation: { _ in nil })
+            preparer.prepare([status], renderer: builder.postBodyRenderer(of:), geometry: geometry, truncation: { _ in nil }, guessesLinkCardDirections: false)
             return preparer.prepared(for: status, renderer: builder.postBodyRenderer(of: status)) != nil
         }
         return try #require(preparer.prepared(for: status, renderer: builder.postBodyRenderer(of: status)))
@@ -144,5 +144,59 @@ struct BodyTextPreparerTests {
         let edited = status("<p>編集した本文</p>")
 
         #expect(preparer.prepared(for: edited, renderer: builder.postBodyRenderer(of: edited)) == nil)
+    }
+
+    /// リンクカードの文字の書く方向も、メインスレッドの外で判定しておく。
+    @Test func guessesLinkCardDirectionsAhead() async throws {
+        let preparer = BodyTextPreparer()
+        let builder = builder(preparer: preparer)
+        let title = "مرحبا بكم في موقعنا \(UUID().uuidString)"
+        let description = "ようこそ、私たちのサイトへ \(UUID().uuidString)"
+        let status = Status(
+            id: "1",
+            createdAt: Date(timeIntervalSince1970: 0),
+            account: Account(id: "1", username: "a", acct: "a", displayName: "A", avatar: nil),
+            content: "<p>本文</p>",
+            spoilerText: "",
+            url: nil,
+            card: PreviewCard(url: URL(string: "https://example.com/page")!, title: title, description: description, type: .link, providerName: "")
+        )
+        preparer.prepare([status], renderer: builder.postBodyRenderer(of:), geometry: nil, truncation: { _ in nil }, guessesLinkCardDirections: true)
+
+        try await waitUntil { GuessedWritingDirection.isKnown(title) && GuessedWritingDirection.isKnown(description) }
+        #expect(GuessedWritingDirection.isRightToLeft(title))
+        #expect(!GuessedWritingDirection.isRightToLeft(description))
+    }
+
+    /// 長い文字は先頭だけで判定し、覚えておく表のほかの結果を追い出さない。
+    @Test func longTextKeepsOtherGuesses() {
+        let short = "こんにちは \(UUID().uuidString)"
+        _ = GuessedWritingDirection.isRightToLeft(short)
+        let long = String(repeating: "مرحبا بكم في موقعنا ", count: 20_000)
+
+        #expect(GuessedWritingDirection.isRightToLeft(long))
+        #expect(GuessedWritingDirection.isKnown(long))
+        #expect(GuessedWritingDirection.isKnown(short))
+    }
+
+    /// 幅が決まる前のラベルでも、先に並べた幅で、長い本文を切るかを決める。
+    /// 幅0のコンテナは幅を限らずに並べるので、1段落の長い本文を1行と数え、切らないと決めてしまう。
+    @Test func truncationBeforeLayoutUsesPreparedWidth() async throws {
+        let preparer = BodyTextPreparer()
+        let builder = builder(preparer: preparer)
+        let status = status("<p>\(String(repeating: "1段落だけの長い本文です。", count: 30))</p>")
+        let truncation = try #require(BodyTruncation(threshold: 5, lines: 3))
+        let style = label().textKitStyle
+        let prepared = try await prepare(status, builder: builder, preparer: preparer, geometry: BodyTextPreparer.Geometry(style: style, width: width))
+        let fresh = LinkLabel()
+        fresh.numberOfLines = 0
+        fresh.drawsWithTextKit = true
+        fresh.truncation = truncation
+        fresh.attributedText = prepared.text
+        let layout = PreparedTextLayout(source: prepared.text, style: style, width: width, truncation: truncation)
+        fresh.usePreparedLayout(layout)
+
+        #expect(fresh.bounds.width == 0)
+        #expect(fresh.isTruncatedByLength)
     }
 }

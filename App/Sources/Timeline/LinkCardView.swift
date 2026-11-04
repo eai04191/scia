@@ -1,4 +1,3 @@
-import NaturalLanguage
 import SciaCore
 import UIKit
 
@@ -327,8 +326,7 @@ final class LinkCardView: UIButton {
     /// 文字を、その言語の書く方向に寄せる。サムネイルの位置にも、アプリの言語の方向にもよらない。
     /// リンク先のページの言語はサーバーから分からないため、文字から推し量る。
     private static func alignment(of string: String) -> NSTextAlignment {
-        guard let language = NLLanguageRecognizer.dominantLanguage(for: string) else { return .left }
-        return Locale.Language(identifier: language.rawValue).characterDirection == .rightToLeft ? .right : .left
+        GuessedWritingDirection.isRightToLeft(string) ? .right : .left
     }
 
     /// 同じリンクの、リンク先だけのカードに、サーバーのカードが届いた。
@@ -338,7 +336,7 @@ final class LinkCardView: UIButton {
     }
 
     /// サイトの名前、見出し、説明の文字。サーバーのカードがまだなければ、リンク先のドメインとURLを出す。
-    static func text(of card: LinkCard) -> (site: String, title: String, titleIsURL: Bool, description: String) {
+    nonisolated static func text(of card: LinkCard) -> (site: String, title: String, titleIsURL: Bool, description: String) {
         let host = card.url.host(percentEncoded: false) ?? ""
         let address = Self.addressText(of: card.url)
         switch card {
@@ -353,7 +351,7 @@ final class LinkCardView: UIButton {
     }
 
     /// スキームを除いたURL。
-    private static func addressText(of url: URL) -> String {
+    private nonisolated static func addressText(of url: URL) -> String {
         let string = url.absoluteString
         for prefix in ["https://", "http://"] where string.hasPrefix(prefix) {
             return String(string.dropFirst(prefix.count))

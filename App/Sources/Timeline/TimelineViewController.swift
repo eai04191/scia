@@ -2163,7 +2163,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             return shown
         }
         let builder = postContentBuilder
-        bodyTextPreparer.prepare(statuses, renderer: builder.postBodyRenderer(of:), geometry: bodyTextGeometry, truncation: { truncations[$0.id] })
+        bodyTextPreparer.prepare(
+            statuses,
+            renderer: builder.postBodyRenderer(of:),
+            geometry: bodyTextGeometry,
+            truncation: { truncations[$0.id] },
+            guessesLinkCardDirections: settings.appearance.showsLinkCard
+        )
     }
 
     /// 画面に出ている行の前と後ろそれぞれで、本文を先に作る行の数。
