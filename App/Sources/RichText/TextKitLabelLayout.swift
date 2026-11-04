@@ -86,7 +86,7 @@ enum TextKitLabelLayout {
     /// 行のベースラインから下端まで。TextKit 2の行の枠は、下にフォントのleadingを含むが、UILabelは最後の行の下にleadingを足さないため、
     /// 最後の行の下端は、UILabelと同じくCoreTextで測った行の下の長さで決める。
     /// カスタム絵文字の画像がベースラインより下へ伸びる行では、CoreTextの行の下の長さが、画像の下端までになる。
-    private static func descent(of line: NSTextLineFragment) -> CGFloat {
+    static func descent(of line: NSTextLineFragment) -> CGFloat {
         guard line.characterRange.length > 0 else { return line.typographicBounds.height - line.glyphOrigin.y }
         var ascent: CGFloat = 0
         var descent: CGFloat = 0

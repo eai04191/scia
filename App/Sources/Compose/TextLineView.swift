@@ -63,7 +63,11 @@ final class TextLineView: UIView {
         layoutManager.textContainer = container
         contentStorage.addTextLayoutManager(layoutManager)
         fadeMask.colors = [UIColor.black.cgColor, UIColor.clear.cgColor]
-        registerForTraitChanges([UITraitUserInterfaceStyle.self, UITraitDisplayScale.self]) { (view: TextLineView, _) in
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: TextLineView, _) in
+            view.setNeedsDisplay()
+        }
+        registerForTraitChanges([UITraitDisplayScale.self]) { (view: TextLineView, _) in
+            view.invalidateIntrinsicContentSize()
             view.setNeedsDisplay()
         }
     }
@@ -95,13 +99,33 @@ final class TextLineView: UIView {
 
     private var lineHeight: CGFloat { line?.typographicBounds.height ?? 0 }
 
-    override var intrinsicContentSize: CGSize {
-        CGSize(width: ceil(textWidth) + overhang * 2, height: ceil(lineHeight) + overhang * 2)
+    /// 文字の高さ。行の上端からベースラインを通り、文字の下端まで。
+    /// TextKit 2の行の高さには、フォントの行間がベースラインの下に足されている。行の高さで上下の真ん中に置くと、その分だけ文字が上に寄るので、
+    /// UILabelと同じく、ベースラインから下はCoreTextで測った長さにする（`TextKitLabelLayout.descent(of:)`）。
+    private var textHeight: CGFloat {
+        guard let line else { return 0 }
+        return ascent + TextKitLabelLayout.descent(of: line)
     }
 
-    /// 行を描く位置。高さが行より大きければ、上下の真ん中に置く。
+    private func roundedUpToPixel(_ value: CGFloat) -> CGFloat {
+        let scale = traitCollection.displayScale
+        return (value * scale).rounded(.up) / scale
+    }
+
+    /// 並べる大きさは、文字の高さ（`textHeight`）を画素の境目まで切り上げたもの。1pt単位で切り上げると、上下の真ん中に置いたときに、UILabelより最大1pt近く上に寄るため。
+    override var intrinsicContentSize: CGSize {
+        CGSize(width: ceil(textWidth) + overhang * 2, height: roundedUpToPixel(textHeight) + overhang * 2)
+    }
+
+    /// 並べる大きさの下に、行の下の行間を描く範囲として足す。行間に掛かる字形（タイ文字の下に付く母音など）が、描いたときに欠けないようにするため。
+    override var alignmentRectInsets: UIEdgeInsets {
+        UIEdgeInsets(top: 0, left: 0, bottom: max(0, roundedUpToPixel(lineHeight) - roundedUpToPixel(textHeight)), right: 0)
+    }
+
+    /// 行を描く位置。並べる大きさが文字より大きければ、文字の高さを上下の真ん中に置く。
+    /// 真ん中に置く位置は1pt単位で切り捨てる。入力欄に重ねる「いまどうしてる？」は上端で置き、画素の境目まで切り上げた余りで、入力欄の1行目よりベースラインが下がらないようにするため。
     private var lineOrigin: CGPoint {
-        CGPoint(x: overhang + phase.x, y: ((bounds.height - lineHeight) / 2).rounded(.down) + phase.y)
+        CGPoint(x: overhang + phase.x, y: ((bounds.height - alignmentRectInsets.bottom - textHeight) / 2).rounded(.down) + phase.y)
     }
 
     /// 行の頭の文字の、ベースラインの左の点。ビューの中の座標。
