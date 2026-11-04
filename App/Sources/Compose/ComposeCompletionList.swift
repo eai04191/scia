@@ -240,7 +240,7 @@ private struct CompletionListView: View {
     /// 行をガラスの枠の中に入れて枠ごと高さを動かすと、行がガラスの端に引きずられて動いたため。
     private func anchoredRows(_ items: [Item], rows: [ComposeCompletionList.Row]) -> some View {
         let edge: Alignment = model.growsUpward ? .bottom : .top
-        let direction: CGFloat = model.growsUpward ? -1 : 1
+        let paddedEdge: Edge.Set = model.growsUpward ? .bottom : .top
         var distances: [CGFloat] = []
         var distance = ComposeCompletionList.verticalInset
         for row in rows {
@@ -253,13 +253,18 @@ private struct CompletionListView: View {
                 CompletionRowView(model: model, index: item.index, row: item.row, rowCount: rows.count)
                     .frame(height: ComposeCompletionList.height(of: item.row))
                     .opacity(model.fadingOut.contains(item.id) ? 0 : 1)
-                    .offset(y: direction * distances[item.index])
+                    // 端からの距離は`offset`ではなく余白で置く。`offset`はレイアウト上の位置を変えないので、
+                    // 行の背景の`ConcentricRectangle`が、どの行も打っている文字に近い端に接しているものとして丸まり、反対の端の行が同心にならなかったため。
+                    .padding(paddedEdge, distances[item.index])
                     .transition(rowTransition)
             }
         }
-        .frame(maxWidth: .infinity, idealHeight: glassHeight, maxHeight: .infinity, alignment: edge)
-        // 行の背景（`ConcentricRectangle`）を、ガラスの形と同心に丸める。
+        .frame(maxWidth: .infinity)
+        // 行の背景（`ConcentricRectangle`）を、ガラスの形と同心に丸める。形はガラスと同じ高さの枠に付ける。
+        // 出してよい場所いっぱいの枠に付けると、打っている文字から遠い端がガラスの端と離れ、そちらの端の行が同心に丸まらなかったため。
+        .frame(height: glassHeight, alignment: edge)
         .containerShape(.rect(cornerRadius: Self.cornerRadius))
+        .frame(maxWidth: .infinity, idealHeight: glassHeight, maxHeight: .infinity, alignment: edge)
         .mask(alignment: edge) {
             RoundedRectangle(cornerRadius: Self.cornerRadius).frame(height: glassHeight)
         }
