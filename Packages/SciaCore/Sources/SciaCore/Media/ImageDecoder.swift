@@ -80,6 +80,11 @@ public enum ImageDecoder {
     }
 
     private static let queues = DecodeQueues(count: ProcessInfo.processInfo.activeProcessorCount)
+
+    /// 展開のキューの空きと順番待ちの数。待ちが固まったテストで、展開が詰まっているかを見る。
+    static func queueState() async -> String {
+        await queues.state()
+    }
 }
 
 /// 展開に使うシリアルキュー。空いているキューを貸し、空いていなければ返されるまで待たせる。
@@ -96,6 +101,10 @@ private actor DecodeQueues {
             return queue
         }
         return await withCheckedContinuation { waiting.append($0) }
+    }
+
+    func state() -> String {
+        "decodeQueues idle: \(idle.count) waiting: \(waiting.count)"
     }
 
     func put(_ queue: DispatchQueue) {

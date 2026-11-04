@@ -46,6 +46,11 @@ struct EmojiImageStoreTests {
         }
     }
 
+    /// 待ちが固まったときに失敗に添える、`url`のアニメーションの読み込みの状態。GIFを読むテストが、たまに読み終えないまま固まったため。
+    private func animationState(of store: EmojiImageStore<CGImage>, _ url: URL) async -> String {
+        [store.animationDiagnosis(of: url), await ImageDecoder.queueState(), "fetches: \(fetches.count.withLock { $0 })"].joined(separator: "\n")
+    }
+
     /// 1色で塗った`width`×`height`の画像。
     private static func image(width: Int, height: Int, gray: CGFloat = 0.5) throws -> CGImage {
         let space = try #require(CGColorSpace(name: CGColorSpace.sRGB))
@@ -104,9 +109,9 @@ struct EmojiImageStoreTests {
             if urls.contains(url) { _ = store.animation(for: url) }
         }
         #expect(store.animation(for: url) == nil)
-        try await waitUntil { store.hasFinishedLoadingAnimation(for: url) && clock.sleeperCount == 1 }
+        try await waitUntil(state: { await animationState(of: store, url) }) { store.hasFinishedLoadingAnimation(for: url) && clock.sleeperCount == 1 }
         clock.advance(by: .seconds(5))
-        try await waitUntil { store.animation(for: url) != nil }
+        try await waitUntil(state: { await animationState(of: store, url) }) { store.animation(for: url) != nil }
         #expect(fetches.count.withLock { $0 } == 2)
     }
 
@@ -187,12 +192,12 @@ struct EmojiImageStoreTests {
     @Test func reloadsAnimationAtLargestHeightWithinByteLimit() async throws {
         let store = makeStore(try Self.gif(size: 512, frameCount: 20))
         #expect(store.animation(for: url) == nil)
-        try await waitUntil { store.animation(for: url) != nil }
+        try await waitUntil(state: { await animationState(of: store, url) }) { store.animation(for: url) != nil }
         #expect(store.animation(for: url)?.image.frameHeight == 96)
 
         let previous = try #require(store.animation(for: url))
         #expect(store.animation(for: url, pixelHeight: 1_000) === previous, "読み直している間は、前のコマで動かす")
-        try await waitUntil { store.upgradingAnimations.isEmpty }
+        try await waitUntil(state: { await animationState(of: store, url) }) { store.upgradingAnimations.isEmpty }
         let enlarged = try #require(store.animation(for: url, pixelHeight: 1_000)).image
         // 512pxのまま20コマ並べると約20MBで超えるので、収まる高さまで下げる。
         #expect(enlarged.frameHeight > 96 && enlarged.frameHeight < 512)
@@ -271,11 +276,11 @@ struct EmojiImageStoreTests {
     @Test func reloadsWideAnimationLimitedByAspectRatio() async throws {
         let store = makeStore(try Self.gif(width: 1_024, height: 64, frameCount: 2))
         _ = store.animation(for: url)
-        try await waitUntil { store.animation(for: url) != nil }
+        try await waitUntil(state: { await animationState(of: store, url) }) { store.animation(for: url) != nil }
         #expect(store.animation(for: url)?.image.frameHeight == 48)
 
         _ = store.animation(for: url, pixelHeight: 128)
-        try await waitUntil { store.upgradingAnimations.isEmpty }
+        try await waitUntil(state: { await animationState(of: store, url) }) { store.upgradingAnimations.isEmpty }
         #expect(store.animation(for: url, pixelHeight: 128)?.image.frameHeight == 64)
     }
 }

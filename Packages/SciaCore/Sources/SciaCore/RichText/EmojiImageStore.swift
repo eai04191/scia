@@ -256,6 +256,16 @@ public final class EmojiImageStore<Image: Sendable> {
         ].joined(separator: "\n")
     }
 
+    /// `url`のアニメーションの読み込みの状態。待ちが固まったテストで、どこで止まったかを見る。
+    func animationDiagnosis(of url: URL) -> String {
+        let state = animationStates[url].map { String(describing: $0) } ?? "nil"
+        return [
+            "animationState: \(state) cached: \(animations.object(forKey: url as NSURL) != nil) live: \(liveAnimations.object(forKey: url as NSURL) != nil)",
+            "upgrading: \(upgradingAnimations.contains(url)) retryWake: \(retryWakes[url] != nil) allowsAutomaticLoad: \(retry.allowsAutomaticLoad(of: url))",
+            "animationReloadsAfterEviction: \(stats.animationReloads)",
+        ].joined(separator: "\n")
+    }
+
     /// 元の画像の、描く向きに直した大きさと、コマの数。
     private struct SourceSize {
         let width: Int

@@ -10,10 +10,21 @@ nonisolated(nonsending) public func waitUntil(
     _ condition: nonisolated(nonsending) () async throws -> Bool,
     sourceLocation: SourceLocation = #_sourceLocation
 ) async throws {
+    try await waitUntil(limit: limit, state: { nil }, condition, sourceLocation: sourceLocation)
+}
+
+/// 条件を満たすまで待ち、上限を過ぎたら、残す失敗に`state`が返す状態を添える。たまにしか固まらない待ちで、固まったときの状態から原因を探すために使う。
+nonisolated(nonsending) public func waitUntil(
+    limit: Duration = hangLimit,
+    state: nonisolated(nonsending) () async -> String?,
+    _ condition: nonisolated(nonsending) () async throws -> Bool,
+    sourceLocation: SourceLocation = #_sourceLocation
+) async throws {
     let deadline = ContinuousClock.now + limit
     while try await !condition() {
         guard ContinuousClock.now < deadline else {
-            Issue.record("条件を満たさないまま、固まったとみなす上限を過ぎました", sourceLocation: sourceLocation)
+            let message = ["条件を満たさないまま、固まったとみなす上限を過ぎました", await state()].compactMap(\.self).joined(separator: "\n")
+            Issue.record(Comment(rawValue: message), sourceLocation: sourceLocation)
             throw WaitHang()
         }
         // メインスレッドで待つテストでも、待っている間にRunLoopを回して画面の更新を進める。
