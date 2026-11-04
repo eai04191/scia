@@ -13,7 +13,7 @@ enum StorageCatalog {
     static func states() -> [CatalogState] {
         [
             state("測っている途中", measure: { try? await Task.sleep(for: .seconds(3_600)); return small }),
-            state("消している途中（一時ファイル）", removing: .temporaryFiles),
+            state("消している途中（キャッシュ）", removing: .caches),
             state("消せなかった", removeError: ErrorPresentation(Failure()).text),
             state("消せるものがない", breakdown: empty),
             state("測れない項目がある（実機のアプリ内のSafari）", breakdown: unmeasured),
@@ -127,7 +127,7 @@ enum StorageCatalog {
         _ title: String,
         breakdown: StorageBreakdown = small,
         measure: (@Sendable () async -> StorageBreakdown)? = nil,
-        removing: StorageBreakdown.Category? = nil,
+        removing: StorageView.RemoveTarget? = nil,
         removeError: String? = nil
     ) -> CatalogState {
         CatalogState(title: title) {

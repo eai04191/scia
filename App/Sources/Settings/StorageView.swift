@@ -16,23 +16,64 @@ struct StorageView: View {
 
     let actions: Actions
     @State private var breakdown: StorageBreakdown?
-    /// 消している途中の項目。消し終えて測り直すまで、ほかの項目も消せないようにする。
-    @State private var removing: StorageBreakdown.Category?
+    /// 消している途中のボタン。消し終えて測り直すまで、ほかのボタンも押せないようにする。
+    @State private var removing: RemoveTarget?
     @State private var removeError: String?
-    /// 消す前に確かめている項目。キャッシュと違い、消すと戻らないものがある項目だけ確かめる。
-    @State private var confirming: StorageBreakdown.Category?
+    /// 消す前に確かめているボタン。キャッシュと違い、消すと困ることがあるものだけ確かめる。
+    @State private var confirming: RemoveTarget?
 
     /// - Parameters:
-    ///   - removing: 消している途中の項目。部品カタログで、消している途中の見た目を作るために渡す。
+    ///   - removing: 消している途中のボタン。部品カタログで、消している途中の見た目を作るために渡す。
     ///   - removeError: 消せなかったときの説明。部品カタログで、失敗の見た目を作るために渡す。
-    init(actions: Actions = .app, removing: StorageBreakdown.Category? = nil, removeError: String? = nil) {
+    init(actions: Actions = .app, removing: RemoveTarget? = nil, removeError: String? = nil) {
         self.actions = actions
         _removing = State(initialValue: removing)
         _removeError = State(initialValue: removeError)
     }
 
-    /// 消せる項目。ほかの項目は、使う人のデータか、なくなるとアプリが動かないもの。
-    static let removableCategories: [StorageBreakdown.Category] = [.mediaFiles, .mediaPrefetch, .networkCache, .temporaryFiles, .inAppSafari, .discomfortReports]
+    /// 消すボタン。空き容量を増やすためのボタンなので、消してもまた見れば読み直すものは、1つのボタンでまとめて消す。
+    /// 消せない項目は、使う人のデータか、なくなるとアプリが動かないもの。
+    enum RemoveTarget: CaseIterable {
+        /// 消しても、また見れば読み直すもの。
+        case caches
+        /// 消すとサイトからログアウトするので、キャッシュと分ける。
+        case inAppSafari
+        /// 開発のための仕組みで、消すと戻らないので、キャッシュと分ける。
+        case discomfortReports
+
+        var categories: [StorageBreakdown.Category] {
+            switch self {
+            case .caches: [.mediaFiles, .mediaPrefetch, .networkCache, .temporaryFiles]
+            case .inAppSafari: [.inAppSafari]
+            case .discomfortReports: [.discomfortReports]
+            }
+        }
+
+        var name: String {
+            switch self {
+            case .caches: "キャッシュ"
+            case .inAppSafari: StorageView.name(of: .inAppSafari)
+            case .discomfortReports: StorageView.name(of: .discomfortReports)
+            }
+        }
+
+        /// 消す前に確かめるときの説明。確かめずに消すボタンではnil。
+        var confirmationMessage: String? {
+            switch self {
+            case .caches: nil
+            case .inAppSafari: "アプリ内のSafariで開いたサイトのキャッシュとCookieを消します。サイトからログアウトします。"
+            case .discomfortReports: "保存した違和感レポートを全部消します。消したレポートは戻せません。"
+            }
+        }
+
+        /// 消せる大きさ。測れない項目が1つでもあればnilにして、消せるものがあるかもしれないので押せるままにする。
+        func removableBytes(in breakdown: StorageBreakdown) -> Int64? {
+            categories.reduce(Int64(0)) { sum, category in
+                guard let sum, let bytes = breakdown.item(category).map(\.removableBytes) ?? 0 else { return nil }
+                return sum + bytes
+            }
+        }
+    }
 
     /// 内訳と消すボタンに出すか。違和感レポートは開発のための仕組みなので、残っているときだけ出す。測れなかったときは、残っているかもしれないので出す。
     static func isShown(_ category: StorageBreakdown.Category, bytes: Int64?) -> Bool {
@@ -67,8 +108,8 @@ struct StorageView: View {
                     }
                 }
                 Section {
-                    ForEach(Self.removableCategories.filter { Self.isShown($0, bytes: breakdown.item($0)?.bytes) }, id: \.self) { category in
-                        removeButton(category, bytes: breakdown.item(category).map(\.removableBytes) ?? 0)
+                    ForEach(RemoveTarget.allCases.filter { target in target.categories.allSatisfy { Self.isShown($0, bytes: breakdown.item($0)?.bytes) } }, id: \.self) { target in
+                        removeButton(target, bytes: target.removableBytes(in: breakdown))
                     }
                 } footer: {
                     if let removeError {
@@ -95,14 +136,14 @@ struct StorageView: View {
             breakdown = await actions.measure()
         }
         .confirmationDialog(
-            confirming.map { "\(Self.name(of: $0))を消しますか？" } ?? "",
+            confirming.map { "\($0.name)を消しますか？" } ?? "",
             isPresented: Binding { confirming != nil } set: { if !$0 { confirming = nil } },
             titleVisibility: .visible,
             presenting: confirming
-        ) { category in
-            Button("消す", role: .destructive) { remove(category) }
-        } message: { category in
-            Text(Self.confirmationMessage(for: category) ?? "")
+        ) { target in
+            Button("消す", role: .destructive) { remove(target) }
+        } message: { target in
+            Text(target.confirmationMessage ?? "")
         }
     }
 
@@ -132,53 +173,45 @@ struct StorageView: View {
     /// メディアのキャッシュの下の段を、合計の行より下げる幅。
     private static let subrowIndent: CGFloat = 16
 
+    /// 消せる大きさは、上の内訳の値と同じなので出さない。値を並べると、内訳と同じ押せない行の形になるため。
     /// `bytes`がnilなら、測れないだけで消せるものがあるかもしれないので、押せるままにする。
-    private func removeButton(_ category: StorageBreakdown.Category, bytes: Int64?) -> some View {
+    private func removeButton(_ target: RemoveTarget, bytes: Int64?) -> some View {
         Button {
-            if Self.confirmationMessage(for: category) != nil {
-                confirming = category
+            if target.confirmationMessage != nil {
+                confirming = target
             } else {
-                remove(category)
+                remove(target)
             }
         } label: {
             HStack {
-                Text("\(Self.name(of: category))を消す")
+                Text("\(target.name)を消す")
                 Spacer()
-                if removing == category {
+                if removing == target {
                     ProgressView()
-                } else {
-                    Text(Self.text(bytes))
-                        .foregroundStyle(.secondary)
                 }
             }
         }
         .disabled(removing != nil || bytes == 0)
     }
 
-    private func remove(_ category: StorageBreakdown.Category) {
-        removing = category
+    /// 項目を順に消す。1つ消せなくても残りは消し、最初に消せなかった理由を出す。
+    private func remove(_ target: RemoveTarget) {
+        removing = target
         removeError = nil
         Task(.withoutRequests) {
-            do {
-                try await actions.remove(category)
-            } catch {
-                removeError = ErrorPresentation(error).text
+            for category in target.categories {
+                do {
+                    try await actions.remove(category)
+                } catch {
+                    if removeError == nil { removeError = ErrorPresentation(error).text }
+                }
             }
             breakdown = await actions.measure()
             removing = nil
         }
     }
 
-    /// 消す前に確かめる項目の説明。確かめずに消す項目ではnil。
-    static func confirmationMessage(for category: StorageBreakdown.Category) -> String? {
-        switch category {
-        case .inAppSafari: "アプリ内のSafariで開いたサイトのキャッシュとCookieを消します。サイトからログアウトします。"
-        case .discomfortReports: "保存した違和感レポートを全部消します。消したレポートは戻せません。"
-        case .mediaFiles, .mediaPrefetch, .networkCache, .temporaryFiles, .settings, .sharedMedia, .other: nil
-        }
-    }
-
-    static func name(of category: StorageBreakdown.Category) -> String {
+    nonisolated static func name(of category: StorageBreakdown.Category) -> String {
         switch category {
         case .mediaFiles: "表示済みのメディア"
         case .mediaPrefetch: "先読みしたメディア"
