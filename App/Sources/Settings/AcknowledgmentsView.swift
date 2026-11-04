@@ -35,8 +35,9 @@ struct AcknowledgmentsView: View {
         AcknowledgmentItem(name: "iMast", site: URL(string: "https://cinderella-project.github.io/iMast/"), github: URL(string: "https://github.com/cinderella-project/iMast"), account: "imast_ios@mstdn.rinsuki.net"),
         AcknowledgmentItem(name: "DAWN", site: URL(string: "https://noppe.dev/dawn/")),
         AcknowledgmentItem(name: "Mona", account: "MonaApp@mastodon.social"),
-        // 提供を終えていて、今の公式のページがないので、名前だけ載せる。
+        // 次の2つは提供を終えていて、今の公式のページがないので、名前だけ載せる。
         AcknowledgmentItem(name: "twitcle plus"),
+        AcknowledgmentItem(name: "Hel1um"),
     ]
 
     private static let agents: [AcknowledgmentItem] = [
