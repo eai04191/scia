@@ -435,14 +435,14 @@ private struct CompletionRowView: View {
                 Text(hashtag.name).fadingTail(of: hashtag.name)
             } subtitle: {
                 if hashtag.recentUses > 0 {
-                    Text("最近の投稿\(hashtag.recentUses)件")
+                    Text("最近の投稿\(hashtag.recentUses.formatted())件")
                 }
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("ハッシュタグ \(hashtag.name)")
         case .ownHashtag(let hashtag):
             let note = switch hashtag.source {
-            case .featured(let count): "プロフィールのタグ・投稿\(count)件"
+            case .featured(let count): "プロフィールのタグ・投稿\(count.formatted())件"
             case .recent: "最近使ったタグ"
             }
             // 検索の結果より上に出る理由が分かるよう、自分のタグであることを添える。

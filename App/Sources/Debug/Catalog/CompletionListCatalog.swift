@@ -28,7 +28,7 @@ enum CompletionListCatalog {
         let hashtags: [CompletionCandidate] = [
             .ownHashtag(OwnHashtag(name: "猫写真", source: .featured(statusesCount: 12_345))),
             .ownHashtag(OwnHashtag(name: "猫鍋", source: .recent)),
-            .hashtag(Hashtag(name: "猫", history: [Hashtag.History(uses: 17, accounts: 6), Hashtag.History(uses: 56, accounts: 22)])),
+            .hashtag(Hashtag(name: "猫", history: [Hashtag.History(uses: 1_178, accounts: 406), Hashtag.History(uses: 56, accounts: 22)])),
             .hashtag(Hashtag(name: "猫のいる暮らしと日々の写真と長いタグの名前が一覧の幅に収まらないとき")),
         ]
         let emojis: [CompletionCandidate] = [
