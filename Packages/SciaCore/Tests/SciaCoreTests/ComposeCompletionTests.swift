@@ -61,6 +61,26 @@ struct ComposeCompletionTests {
             [Hashtag(name: "猫"), Hashtag(name: "猫写真"), Hashtag(name: "犬")]
         }
 
+        private(set) var statusTagRequests = 0
+        var failsStatusTags = false
+        func setFailsStatusTags(_ fails: Bool) { failsStatusTags = fails }
+        /// `hold`に渡すと、最近の投稿のタグを`release`するまで返さない。
+        static let statusTagsKey = "statusTags"
+        /// 最近の投稿のタグ。ほかのテストの候補を変えないよう、既定では空にする。
+        private var statusTagResponse: [Hashtag] = []
+        func setStatusTags(_ tags: [Hashtag]) { statusTagResponse = tags }
+
+        func statusTags() async throws -> [Hashtag] {
+            statusTagRequests += 1
+            if held.contains(Self.statusTagsKey) {
+                await withCheckedContinuation { waiting[Self.statusTagsKey, default: []].append($0) }
+            }
+            if failsStatusTags {
+                throw URLError(.notConnectedToInternet)
+            }
+            return statusTagResponse
+        }
+
         func accounts(_ query: String, limit: Int) async throws -> [Account] {
             queries.append(query)
             if held.contains(query) {
@@ -111,6 +131,7 @@ struct ComposeCompletionTests {
                 customEmojis: { try await server.emojis() },
                 featuredTags: { try await server.featured() },
                 recentTags: { await server.recent() },
+                statusTags: { try await server.statusTags() },
                 accounts: { await server.accounts($0) }
             ),
             settings: ComposeCompletion.Settings(debounce: .milliseconds(30), limit: limit, minimumSearchQueryLength: minimumSearch),
@@ -288,7 +309,7 @@ struct ComposeCompletionTests {
 
     /// Unicodeの絵文字は、名前と一致するものだけを語で始まるカスタム絵文字より上に、ほかは語で始まるカスタム絵文字と語を含むカスタム絵文字の間に混ぜる。
     @Test func mixesStandardEmojis() async throws {
-        let completion = makeCompletion(limit: 10)
+        let completion = makeCompletion(limit: 10, minimumSearch: 9)
         completion.standardEmojiGroups = { [standardGroups] in standardGroups }
         completion.prefetch()
         try await waitUntil { completion.emojis != nil }
@@ -558,6 +579,76 @@ struct ComposeCompletionTests {
         try await waitUntil { !completion.isLoadingOwnTags }
         #expect(completion.selectedCandidate != nil)
         await server.release("今日")
+    }
+
+    /// 投稿に付いていたタグを、新しい投稿のものから、投稿の中の順に、サーバーが同じタグとして扱うものを除いて並べる。
+    @Test func collectsTagsUsedInStatuses() {
+        func status(_ id: String, _ tags: [String]) -> Status {
+            Status(id: id, createdAt: Date(timeIntervalSince1970: 0), account: Account.stub(id: "me", acct: "me"), content: "", spoilerText: "", url: nil, tags: tags.map { Tag(name: $0, url: nil) })
+        }
+        let tags = Hashtag.used(in: [status("3", ["猫", "Cafe"]), status("2", []), status("1", ["café", "犬", "猫"])])
+        #expect(tags.map(\.name) == ["猫", "Cafe", "犬"])
+    }
+
+    /// 最近使ったタグは、投稿の応答のタグ、最近の投稿のタグ、よく使うタグの順に、同じタグを除いて並べる。プロフィールのタグはその前に置く。
+    @Test func ordersRecentlyUsedHashtagsByRecency() async throws {
+        await server.setStatusTags([Hashtag(name: "猫鍋"), Hashtag(name: "猫写真")])
+        let completion = makeCompletion(limit: 10, minimumSearch: 9)
+        completion.prefetch()
+        try await waitUntil { !completion.isLoadingOwnTags }
+        #expect(await server.statusTagRequests == 1)
+        completion.didUse([Tag(name: "猫", url: nil)])
+        completion.didUse([Tag(name: "猫缶", url: nil), Tag(name: "猫写真", url: nil)])
+        completion.textDidChange(hashtag("猫"))
+        #expect(accts(completion.content) == ["#猫写真", "#猫缶", "#猫", "#猫鍋", "#今日の猫"])
+    }
+
+    /// 最近の投稿のタグを読めなくても知らせず、ほかの自分のタグは出す。次に書き始めたときに読み直す。
+    @Test func statusTagFailureIsSilentAndRetried() async throws {
+        await server.setStatusTags([Hashtag(name: "猫鍋"), Hashtag(name: "猫写真")])
+        await server.setFailsStatusTags(true)
+        let completion = makeCompletion(limit: 10, minimumSearch: 9)
+        completion.prefetch()
+        try await waitUntil { !completion.isLoadingOwnTags }
+        completion.textDidChange(hashtag("猫"))
+        #expect(accts(completion.content) == ["#猫写真", "#猫", "#今日の猫"])
+        await server.setFailsStatusTags(false)
+        completion.prefetch()
+        try await waitUntil { !completion.isLoadingOwnTags }
+        #expect(await server.statusTagRequests == 2)
+        // プロフィールのタグとよく使うタグは読めているので、読み直さない。
+        #expect(await server.ownTagRequests == 1)
+        #expect(accts(completion.content) == ["#猫写真", "#猫鍋", "#猫", "#今日の猫"])
+    }
+
+    /// 最近の投稿のタグが遅くても、先に読めたプロフィールのタグとよく使うタグは待たずに出す。
+    @Test func showsOwnTagsBeforeSlowStatusTags() async throws {
+        await server.setStatusTags([Hashtag(name: "猫鍋"), Hashtag(name: "猫写真")])
+        await server.hold(Server.statusTagsKey)
+        let completion = makeCompletion(limit: 10, minimumSearch: 9)
+        completion.prefetch()
+        completion.textDidChange(hashtag("猫"))
+        try await waitUntil { accts(completion.content) == ["#猫写真", "#猫", "#今日の猫"] }
+        #expect(completion.isLoadingOwnTags)
+        await server.release(Server.statusTagsKey)
+        try await waitUntil { !completion.isLoadingOwnTags }
+        #expect(accts(completion.content) == ["#猫写真", "#猫鍋", "#猫", "#今日の猫"])
+    }
+
+    /// 投稿の応答のタグは、自分のタグを忘れても残し、最近の投稿のタグは読み直さない。
+    @Test func usedTagsSurviveForgetOwnTags() async throws {
+        await server.setStatusTags([Hashtag(name: "猫鍋"), Hashtag(name: "猫写真")])
+        let completion = makeCompletion(limit: 10, minimumSearch: 9)
+        completion.prefetch()
+        try await waitUntil { !completion.isLoadingOwnTags }
+        completion.didUse([Tag(name: "猫缶", url: nil)])
+        completion.forgetOwnTags()
+        completion.prefetch()
+        try await waitUntil { !completion.isLoadingOwnTags }
+        #expect(await server.ownTagRequests == 2)
+        #expect(await server.statusTagRequests == 1)
+        completion.textDidChange(hashtag("猫"))
+        #expect(accts(completion.content) == ["#猫写真", "#猫缶", "#猫鍋", "#猫", "#今日の猫"])
     }
 
     /// 検索の結果は、最後に使われた日が新しい順、同じ日の中ではその日に使われた数が多い順に並べる。

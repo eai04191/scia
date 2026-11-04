@@ -27,6 +27,17 @@ public struct Hashtag: Decodable, Hashable, Sendable {
         self.history = history
     }
 
+    /// 投稿に付いていたタグを、渡された投稿の順、投稿の中の順に並べる。サーバーが同じタグとして扱う表記は、先に出たものだけを残す。
+    public static func used(in statuses: [Status]) -> [Hashtag] {
+        unique(statuses.flatMap(\.tags).map { Hashtag(name: $0.name, url: $0.url) })
+    }
+
+    /// サーバーが同じタグとして扱う表記を、先に出たものだけを残して除く。
+    static func unique(_ tags: [Hashtag]) -> [Hashtag] {
+        var seen = Set<String>()
+        return tags.filter { seen.insert(normalizedName($0.name)).inserted }
+    }
+
     /// サーバー全体で最近使われた順に並べる。最後に使われた日が新しい順、同じ日の中ではその日に使われた数が多い順にし、
     /// `query`と同じ名前のタグは先頭に置く。日ごとの数は過去7日しかなく、日より細かい順も分からないので、
     /// 同じ順位のタグと、7日のうちに使われていないタグは、渡された順のまま残す。

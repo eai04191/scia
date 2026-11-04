@@ -1022,6 +1022,15 @@ public struct MastodonClient: Sendable {
         try await get(ElementList<Hashtag>.self, path: "api/v1/featured_tags/suggestions", query: []).0.elements
     }
 
+    /// 自分の最近の投稿に付いていたタグを、新しい投稿のものから返す。補完で、自分のタグとして先に出す。
+    /// `featuredTagSuggestions`は2回以上使ったタグしか返さないので、1回だけ使ったタグはここで拾う。
+    /// ブーストに付いたタグは自分が付けたものではないので除く。40件はこのAPIの上限。
+    /// https://docs.joinmastodon.org/methods/accounts/#statuses
+    public func recentStatusTags(of accountID: String) async throws -> [Hashtag] {
+        let page = try await accountStatuses(accountID, filter: AccountStatusFilter(excludesReblogs: true), query: TimelineQuery(limit: 40))
+        return Hashtag.used(in: page.statuses)
+    }
+
     /// サーバーで使えるカスタム絵文字の一覧。補完ではまとめて一度だけ取り、手元で絞る。
     /// https://docs.joinmastodon.org/methods/custom_emojis/
     public func customEmojis() async throws -> [ServerEmoji] {

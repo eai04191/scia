@@ -105,6 +105,7 @@ public enum EmojiCompletion {
 /// 取り消しが間に合わず届いた古い応答は捨てる。一度引いた語は覚えておき、消して打ち直したときに問い合わせ直さない。
 /// カスタム絵文字は一覧をまとめて一度だけ取り、手元で絞る。
 /// ハッシュタグは、プロフィールに載せているタグと最近使ったタグも一度だけ取り、打った語に合うものを検索結果より上に出す。
+/// 最近使ったタグは、投稿や編集で使ったタグ、最近の投稿のタグ、よく使うタグの順に並べる。投稿で使ったタグは、読み直さずに応答から足す。
 /// メンションは、返信先の人と補完で選んだことのある人を、同じく検索結果より上に出す。
 /// サーバーの検索は自分が使ったかを見ず、名前の短い順やサーバー全体の人気で並べるため、よく使うタグや人が候補から押し出されることがある。
 /// 打った文字数がサーバーで探す文字数に届くまでは、問い合わせずに、この手元の候補だけを出す。記号だけの時点から出せるようにするため。
@@ -119,6 +120,8 @@ public final class ComposeCompletion {
         public var customEmojis: @Sendable () async throws -> [ServerEmoji]
         public var featuredTags: @Sendable () async throws -> [FeaturedTag]
         public var recentTags: @Sendable () async throws -> [Hashtag]
+        /// 自分の最近の投稿に付いていたタグ。新しい投稿のものから並ぶ。
+        public var statusTags: @Sendable () async throws -> [Hashtag]
         /// アカウントをIDでまとめて読む。返信先でメンションされた人のように、アイコンと表示名が手元にない人に使う。読めなかった人は返さない。
         public var accounts: @Sendable ([String]) async throws -> [Account]
 
@@ -128,6 +131,7 @@ public final class ComposeCompletion {
             customEmojis: @escaping @Sendable () async throws -> [ServerEmoji],
             featuredTags: @escaping @Sendable () async throws -> [FeaturedTag] = { [] },
             recentTags: @escaping @Sendable () async throws -> [Hashtag] = { [] },
+            statusTags: @escaping @Sendable () async throws -> [Hashtag] = { [] },
             accounts: @escaping @Sendable ([String]) async throws -> [Account] = { _ in [] }
         ) {
             self.searchAccounts = searchAccounts
@@ -135,6 +139,7 @@ public final class ComposeCompletion {
             self.customEmojis = customEmojis
             self.featuredTags = featuredTags
             self.recentTags = recentTags
+            self.statusTags = statusTags
             self.accounts = accounts
         }
 
@@ -246,9 +251,12 @@ public final class ComposeCompletion {
     public private(set) var emojis: [ServerEmoji]?
     /// 絵文字の一覧を読めなかった理由の文言。パレットに出す。読み直し始めたらnilに戻す。
     public private(set) var emojiFailureMessage: String?
-    /// プロフィールに載せているタグと最近使ったタグ。読めるまではnilで、次に書き始めたときに読み直す。
+    /// プロフィールに載せているタグ、よく使うタグ、最近の投稿のタグ。読めるまではnilで、次に書き始めたときに読み直す。
     @ObservationIgnored private var featuredTags: [FeaturedTag]?
     @ObservationIgnored private var recentTags: [Hashtag]?
+    @ObservationIgnored private var statusTags: [Hashtag]?
+    /// 起動してから投稿や編集で使ったタグ。新しく使ったものから並ぶ。投稿のたびに最近の投稿を読み直さずに済ませるため、応答のタグをここに足す。
+    @ObservationIgnored private var usedTags: [Hashtag] = []
     @ObservationIgnored private var ownTagsTask: Task<Void, Never>?
     /// 自分のタグを忘れた回数。忘れる前に読み始めた応答で、古いタグに戻さない。
     @ObservationIgnored private var ownTagsGeneration = 0
@@ -368,13 +376,19 @@ public final class ComposeCompletion {
             loadEmojis()
         }
         loadParticipantAccounts()
-        if featuredTags == nil || recentTags == nil {
+        if featuredTags == nil || recentTags == nil || statusTags == nil {
             loadOwnTags()
         }
     }
 
+    /// 投稿や編集の応答の投稿に付いていたタグを、最近使ったタグの先頭に足す。
+    public func didUse(_ tags: [Tag]) {
+        usedTags = Hashtag.unique(tags.map { Hashtag(name: $0.name, url: $0.url) } + usedTags)
+    }
+
     /// 自分のタグを忘れ、次に書き始めたときに読み直す。プロフィールに載せるタグを変えたあとに呼ぶ。
-    /// 最近使ったタグも忘れるのは、サーバーがプロフィールに載せているタグを除いて返すため。
+    /// よく使うタグも忘れるのは、サーバーがプロフィールに載せているタグを除いて返すため。
+    /// 最近の投稿のタグと投稿で使ったタグは、プロフィールのタグに左右されないので残す。
     public func forgetOwnTags() {
         ownTagsGeneration += 1
         ownTagsTask = nil
@@ -475,7 +489,7 @@ public final class ComposeCompletion {
 
     private func ownCandidates() -> [CompletionCandidate] {
         guard let token else { return [] }
-        let tags = OwnHashtag.list(featured: featuredTags ?? [], recent: recentTags ?? [])
+        let tags = OwnHashtag.list(featured: featuredTags ?? [], recent: usedTags + (statusTags ?? []) + (recentTags ?? []))
         return OwnHashtag.matching(token.query, in: tags).map(CompletionCandidate.ownHashtag)
     }
 
@@ -582,25 +596,45 @@ public final class ComposeCompletion {
         failureMessage = Self.failureMessage(for: error)
     }
 
-    /// 2つを並べて読み、読めた方だけを持つ。読めなかった方はログに残し、次に書き始めたときに読み直す。
+    /// まだ持っていないものを並べて読み、届いたものから持って候補に混ぜる。最近の投稿のタグは投稿を読むので遅く、ほかを待たせないため。
+    /// 読めなかったものはログに残し、次に書き始めたときに読み直す。
     private func loadOwnTags() {
         guard ownTagsTask == nil else { return }
         let loadsFeatured = featuredTags == nil
         let loadsRecent = recentTags == nil
+        let loadsStatus = statusTags == nil
         let generation = ownTagsGeneration
         ownTagsTask = Task { [weak self, sources] in
-            let (featuredResult, recentResult) = await RequestPurpose.$current.withValue(.display) {
-                async let featured = Self.result(loadsFeatured ? sources.featuredTags : nil)
-                async let recent = Self.result(loadsRecent ? sources.recentTags : nil)
-                return await (featured, recent)
+            await RequestPurpose.$current.withValue(.display) {
+                await withTaskGroup(of: OwnTagsResult.self) { group in
+                    if loadsFeatured {
+                        group.addTask { .featured(await Self.result(sources.featuredTags)) }
+                    }
+                    if loadsRecent {
+                        group.addTask { .recent(await Self.result(sources.recentTags)) }
+                    }
+                    if loadsStatus {
+                        group.addTask { .status(await Self.result(sources.statusTags)) }
+                    }
+                    for await result in group {
+                        guard let self, generation == self.ownTagsGeneration else { continue }
+                        self.didLoadOwnTags(result)
+                    }
+                }
             }
             guard let self, generation == ownTagsGeneration else { return }
-            didLoadOwnTags(featured: featuredResult, recent: recentResult)
+            ownTagsTask = nil
+            logger.info("completion: own tags featured=\(self.featuredTags?.count ?? -1, privacy: .public) recent=\(self.recentTags?.count ?? -1, privacy: .public) status=\(self.statusTags?.count ?? -1, privacy: .public)")
         }
     }
 
-    private nonisolated static func result<T: Sendable>(_ load: (@Sendable () async throws -> [T])?) async -> Result<[T], any Error>? {
-        guard let load else { return nil }
+    private enum OwnTagsResult: Sendable {
+        case featured(Result<[FeaturedTag], any Error>)
+        case recent(Result<[Hashtag], any Error>)
+        case status(Result<[Hashtag], any Error>)
+    }
+
+    private nonisolated static func result<T: Sendable>(_ load: @Sendable () async throws -> [T]) async -> Result<[T], any Error> {
         do {
             return .success(try await load())
         } catch {
@@ -608,19 +642,15 @@ public final class ComposeCompletion {
         }
     }
 
-    private func didLoadOwnTags(featured: Result<[FeaturedTag], any Error>?, recent: Result<[Hashtag], any Error>?) {
-        ownTagsTask = nil
-        switch featured {
-        case .success(let tags): featuredTags = tags
-        case .failure(let error): logger.info("completion: featured tags failed: \(ErrorPresentation(error).code ?? "unknown", privacy: .public)")
-        case nil: break
+    private func didLoadOwnTags(_ result: OwnTagsResult) {
+        switch result {
+        case .featured(.success(let tags)): featuredTags = tags
+        case .featured(.failure(let error)): logger.info("completion: featured tags failed: \(ErrorPresentation(error).code ?? "unknown", privacy: .public)")
+        case .recent(.success(let tags)): recentTags = tags
+        case .recent(.failure(let error)): logger.info("completion: recent tags failed: \(ErrorPresentation(error).code ?? "unknown", privacy: .public)")
+        case .status(.success(let tags)): statusTags = tags
+        case .status(.failure(let error)): logger.info("completion: status tags failed: \(ErrorPresentation(error).code ?? "unknown", privacy: .public)")
         }
-        switch recent {
-        case .success(let tags): recentTags = tags
-        case .failure(let error): logger.info("completion: recent tags failed: \(ErrorPresentation(error).code ?? "unknown", privacy: .public)")
-        case nil: break
-        }
-        logger.info("completion: own tags featured=\(self.featuredTags?.count ?? -1, privacy: .public) recent=\(self.recentTags?.count ?? -1, privacy: .public)")
         // 打っているタグの候補に、読めた自分のタグを混ぜ直す。
         guard let token, token.kind == .hashtag else { return }
         if failureMessage != nil {

@@ -521,6 +521,14 @@ final class SessionController {
                     throw error
                 }
             },
+            statusTags: { [accountID = credential.accountID] in
+                do {
+                    return try await client.recentStatusTags(of: accountID)
+                } catch {
+                    await reportCompletionFailure(error)
+                    throw error
+                }
+            },
             // 読めなかった人は返らないだけで、失敗はAccountCacheがログに残す。
             accounts: { ids in await Array(accounts.load(ids).values) }
         ).remembering(customEmojisIn: customEmojis)
@@ -528,6 +536,7 @@ final class SessionController {
         let editedStatuses = SessionReference()
         // 予約できたことのチップを出す先も、初期化を終えてからつなぐ。
         let schedules = SessionReference()
+        let completion = ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, account: credential.handle))
         composer = InlineComposeController(
             model: ComposeModel<UIImage>(tasks: tasks.child(), myAccountID: credential.accountID, media: media, redraft: redraft, backgroundTime: BackgroundTime.request) { draft in
                 do {
@@ -538,6 +547,7 @@ final class SessionController {
                             update(edited.id) { _ in edited }
                         }
                         editedStatuses.session?.changeQuoteSources(.status(edited.id)) { $0.edit(edited) }
+                        completion.didUse(edited.tags)
                     } else if let scheduledAt = draft.scheduledAt {
                         let scheduledStatus = try await client.scheduleStatus(draft, at: scheduledAt)
                         schedules.session?.didSchedule(scheduledStatus)
@@ -546,13 +556,14 @@ final class SessionController {
                         let posted = try await client.postStatus(draft)
                         home.receivePosted(posted)
                         threads.receivePosted(posted)
+                        completion.didUse(posted.tags)
                     }
                 } catch {
                     reportIfUnauthorized(error)
                     throw error
                 }
             },
-            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, account: credential.handle)),
+            completion: completion,
             recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance),
             languages: PostingLanguageSource(recent: RecentPostingLanguages(defaults: .standard, account: credential.handle), load: PostingLanguageCache { try await client.postingLanguages() }.languages)
         )

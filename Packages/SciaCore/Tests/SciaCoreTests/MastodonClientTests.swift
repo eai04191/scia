@@ -601,6 +601,20 @@ struct MastodonClientTests {
         #expect(!statuses.isEmpty)
     }
 
+    /// 補完に出す自分のタグは、ブーストを除いた自分の投稿を、このAPIの上限の40件で読む。
+    @Test func recentStatusTagsReadsOwnPosts() async throws {
+        let transport = StubTransport([try .fixture("home_timeline")])
+
+        _ = try await makeClient(transport).recentStatusTags(of: "2")
+
+        let url = try #require(await transport.requests.first?.url)
+        #expect(url.path() == "/api/v1/accounts/2/statuses")
+        #expect(Set(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []) == [
+            URLQueryItem(name: "exclude_reblogs", value: "true"),
+            URLQueryItem(name: "limit", value: "40"),
+        ])
+    }
+
     @Test func relationshipPicksRequestedAccount() async throws {
         let transport = StubTransport([try .fixture("relationships")])
 

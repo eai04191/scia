@@ -42,7 +42,7 @@ public struct OwnHashtag: Hashable, Sendable {
     public enum Source: Hashable, Sendable {
         /// プロフィールに載せているタグ。自分の投稿の数を持つ。
         case featured(statusesCount: Int)
-        /// 最近使ったタグ（`api/v1/featured_tags/suggestions`）。
+        /// 最近使ったタグ（投稿で使ったタグ、最近の投稿のタグ、`api/v1/featured_tags/suggestions`）。
         case recent
     }
 
@@ -54,7 +54,7 @@ public struct OwnHashtag: Hashable, Sendable {
         self.source = source
     }
 
-    /// プロフィールに載せているタグを投稿の多い順に、続けて最近使ったタグをサーバーが返した順に並べる。
+    /// プロフィールに載せているタグを投稿の多い順に、続けて最近使ったタグを渡された順に並べる。
     /// 同じ名前は、プロフィールに載せている方だけを残す。
     public static func list(featured: [FeaturedTag], recent: [Hashtag]) -> [OwnHashtag] {
         // サーバーが同じタグとして扱う表記は、1つにまとめる。
