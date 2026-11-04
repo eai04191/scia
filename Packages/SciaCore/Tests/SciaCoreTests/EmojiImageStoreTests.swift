@@ -29,6 +29,23 @@ struct EmojiImageStoreTests {
         }
     }
 
+    /// 最初の`failures`回は503で失敗し、そのあとは`data`を返すストア。
+    private func makeStore(_ data: Data, failingFirst failures: Int, clock: TestClock) -> EmojiImageStore<CGImage> {
+        EmojiImageStore(
+            clock: clock,
+            retryPolicy: { RetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) },
+            maker: PlatformImageMaker(still: { $0 }, animated: { _, _ in nil }),
+            upgradePurpose: { nil }
+        ) { [fetches] _ in
+            let count = fetches.count.withLock { count in
+                count += 1
+                return count
+            }
+            if count <= failures { throw HTTPStatusError(statusCode: 503) }
+            return data
+        }
+    }
+
     /// 1色で塗った`width`×`height`の画像。
     private static func image(width: Int, height: Int, gray: CGFloat = 0.5) throws -> CGImage {
         let space = try #require(CGColorSpace(name: CGColorSpace.sRGB))
@@ -60,6 +77,81 @@ struct EmojiImageStoreTests {
         }
         #expect(CGImageDestinationFinalize(destination))
         return data as Data
+    }
+
+    /// 読めなかった絵文字は、読み直してよくなった時刻に知らせ、まだ描いている画面が描き直して読み直す。描き直しを待たない。
+    /// 描き直されない画面で、間隔が過ぎても`:shortcode:`のまま残らないため（docs/network.md）。
+    @Test func asksToRedrawFailedStillWhenRetryIsAllowed() async throws {
+        let clock = TestClock()
+        let store = makeStore(try Self.png(width: 96, height: 96), failingFirst: 1, clock: clock)
+        // 絵文字を描いている画面は、知らせを受けたら描き直し、描き直しで画像を求める。
+        store.addListener(owner: clock) { [url] urls in
+            if urls.contains(url) { _ = store.image(for: url) }
+        }
+        #expect(store.image(for: url) == nil)
+        try await waitUntil { store.hasFailed(url) && clock.sleeperCount == 1 }
+        clock.advance(by: .seconds(5))
+        try await waitUntil { !store.hasFailed(url) && store.loading.isEmpty }
+        #expect(store.image(for: url) != nil)
+        #expect(fetches.count.withLock { $0 } == 2)
+    }
+
+    /// 動く絵文字も、読めなかったら静止画で描き、読み直してよくなった時刻に知らせて、描いている画面に読み直させる。
+    @Test func asksToRedrawFailedAnimationWhenRetryIsAllowed() async throws {
+        let clock = TestClock()
+        let store = makeStore(try Self.gif(size: 96, frameCount: 2), failingFirst: 1, clock: clock)
+        store.addListener(owner: clock) { [url] urls in
+            if urls.contains(url) { _ = store.animation(for: url) }
+        }
+        #expect(store.animation(for: url) == nil)
+        try await waitUntil { store.hasFinishedLoadingAnimation(for: url) && clock.sleeperCount == 1 }
+        clock.advance(by: .seconds(5))
+        try await waitUntil { store.animation(for: url) != nil }
+        #expect(fetches.count.withLock { $0 } == 2)
+    }
+
+    /// 取り消しのように失敗として覚えないものは、読み直してよくなった知らせを送らない。送ると、描き直した画面がすぐ読み、また取り消されて、待たずに繰り返すため。
+    @Test func doesNotAskToRedrawAnimationAfterCancellation() async throws {
+        let clock = TestClock()
+        let other = URL(string: "https://example.com/other.gif")!
+        let store = EmojiImageStore<CGImage>(
+            clock: clock,
+            retryPolicy: { RetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) },
+            maker: PlatformImageMaker(still: { $0 }, animated: { _, _ in nil }),
+            upgradePurpose: { nil }
+        ) { [fetches, url] requested in
+            if requested == url {
+                fetches.count.withLock { $0 += 1 }
+                throw CancellationError()
+            }
+            throw HTTPStatusError(statusCode: 404)
+        }
+        store.addListener(owner: clock) { [url] urls in
+            if urls.contains(url) { _ = store.animation(for: url) }
+        }
+        _ = store.animation(for: url)
+        try await waitUntil { store.hasFinishedLoadingAnimation(for: url) }
+        // 知らせるなら、あとから求めた絵文字より先に読み直す。あとから求めた絵文字を読み終えるまで待ってから、読み直していないことを確かめる。
+        _ = store.animation(for: other)
+        try await waitUntil { store.hasFinishedLoadingAnimation(for: other) }
+        #expect(fetches.count.withLock { $0 } == 1)
+        #expect(clock.sleeperCount == 0)
+    }
+
+    /// 知らせを受けても描き直す画面がなければ（画面から外れた、隠れているなど）、読み直さない。
+    @Test func doesNotRetryFailedStillWithoutRedraw() async throws {
+        let clock = TestClock()
+        let store = makeStore(try Self.png(width: 96, height: 96), failingFirst: 1, clock: clock)
+        var notified: [Set<URL>] = []
+        store.addListener(owner: clock) { notified.append($0) }
+        _ = store.image(for: url)
+        // 読めなかったときにも1回知らせる。
+        try await waitUntil { store.hasFailed(url) && clock.sleeperCount == 1 && notified.count == 1 }
+        clock.advance(by: .seconds(5))
+        try await waitUntil { notified == [[url], [url]] }
+        #expect(clock.sleeperCount == 0)
+        #expect(store.loading.isEmpty)
+        #expect(fetches.count.withLock { $0 } == 1)
     }
 
     /// 既定より大きく描くと、そのURLを描く高さで読み直す。読み終えるまでは前の画像を返し、読み終えたら、小さく描く場所にも同じ1枚を返す。

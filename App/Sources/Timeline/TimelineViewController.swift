@@ -154,6 +154,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private var heldEntries: HeldEntries?
     /// メニューを出している間に求められた描き直し。
     private var heldReconfigureIDs: Set<ItemID> = []
+    /// 画面に出ていない間（ほかのタブ、上に重ねた画面の下）に、絵文字やXの投稿が届いて求められた描き直し。画面に出るときに描き直す。
+    private var hiddenReconfigureIDs: Set<ItemID> = []
     private var contentSizeObserver: (any NSObjectProtocol)?
     private var windowActivationObservers: [any NSObjectProtocol] = []
     /// 端末の文字の大きさが変わったときに、組み直す前に覚えた読んでいる位置。
@@ -454,6 +456,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         onVisibilityChange?(true)
         applyPendingOpening()
         applyHeldSettingsChange()
+        applyHiddenReconfigures()
     }
 
     /// 読んでいる途中にもう一度引っぱっても、読み込みは重ねず、今の読み込みが終わったところで閉じる。
@@ -657,6 +660,24 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 折り返しが変わって見えている行の高さが変わるときは、下の行ごと動かしてつなぐ（`reconfigureShiftingRowsBelow`）。
     /// リンクカードと同じ描き直し（`reconfigureAnimatingHeight`）にしないのは、1つの投稿の絵文字は続けて届き、
     /// 動いている途中に次の描き直しが重なると、一覧が行のセルを入れ替え、動かしているラベルが窓から外れて動きが止まるため（シミュレーターで確かめた）。
+    /// 画面に出ていれば`redraw`で描き直し、出ていなければ画面に出るまで溜める。
+    /// 絵文字とXの投稿のストアは、読めなかったものを読み直してよくなったときにも知らせ、描き直した行が求めると読みに行く。
+    /// 隠れたまま描き直すと、見えていない行の分まで読みに行くため（docs/network.md）。
+    func reconfigureWhenShown(_ ids: Set<ItemID>, redraw: (Set<ItemID>) -> Void) {
+        guard !ids.isEmpty else { return }
+        guard viewIfLoaded?.window != nil else {
+            hiddenReconfigureIDs.formUnion(ids)
+            return
+        }
+        redraw(ids)
+    }
+
+    private func applyHiddenReconfigures() {
+        let ids = hiddenReconfigureIDs.intersection(dataSource.snapshot().itemIdentifiers)
+        hiddenReconfigureIDs.removeAll()
+        reconfigure(ids)
+    }
+
     private func emojiImagesDidLoad(_ urls: Set<URL>) {
         let ids = dataSource.snapshot().itemIdentifiers.filter { id in
             switch entries[id] {
@@ -667,7 +688,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             case .gap, .unreadable, .search, nil: false
             }
         }
-        reconfigureShiftingRowsBelow(Set(ids), duration: tuning.value(of: TuningCatalog.customEmojiArrivalDuration))
+        reconfigureWhenShown(Set(ids)) { reconfigureShiftingRowsBelow($0, duration: tuning.value(of: TuningCatalog.customEmojiArrivalDuration)) }
     }
 
     /// 行の中身を、同じセルのまま動かさずに描き直し、高さが変わって位置がずれた見えている行と区切り線を、元の位置から新しい位置へ動かしてつなぐ。

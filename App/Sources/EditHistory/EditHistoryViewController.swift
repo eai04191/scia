@@ -71,7 +71,6 @@ final class EditHistoryViewController: UIViewController {
         builder = EditHistoryContentBuilder(tuning: tuning, settings: settings, emojiImages: emojiImages, network: network)
         super.init(nibName: nil, bundle: nil)
         title = "編集履歴"
-        emojiImages.addListener(owner: self) { [weak self] _ in self?.render() }
     }
 
     @available(*, unavailable)
@@ -81,6 +80,7 @@ final class EditHistoryViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        builder.emojiImages.addListener(whileShownIn: view) { [weak self] _ in self?.render() }
         view.backgroundColor = .systemBackground
         scrollView.alwaysBounceVertical = true
         scrollView.hidesTopEdgeEffectOnMac()

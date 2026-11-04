@@ -77,7 +77,7 @@ struct EmojiLabelReassignTests {
     }
 
     /// アニメーション版を読めなかった絵文字は、間隔が過ぎてから同じ中身を入れ直すと読み直し、届いたら動かす。
-    /// 入れ直しを省いても、入れ替えていたときと同じく読み直す。
+    /// 入れ直しを省いても、入れ替えていたときと同じく読み直す。ウィンドウにないラベルは、ウィンドウに入ってから動かす。
     @Test func reassigningSameContentRetriesFailedAnimation() async throws {
         let crab = CustomEmoji(
             shortcode: "crab",
@@ -109,14 +109,27 @@ struct EmojiLabelReassignTests {
         label.layoutIfNeeded()
         #expect(gifReads.withLock { $0 } == 1)
 
+        // ストアは知らせを別のTaskで配る。ラベルより後に登録したので、読み直したアニメーション版の知らせがここに届いたら、ラベルにも届いている。
+        let arrival = ArrivalRecorder()
+        store.addListener(owner: arrival) { [weak arrival] urls in
+            if urls.contains(crab.url), gifReads.withLock({ $0 }) == 2, store.hasFinishedLoadingAnimation(for: crab.url) {
+                arrival?.delivered = true
+            }
+        }
         clock.advance(by: .seconds(5))
         label.attributedText = renderer.render(text)
 
-        try await waitUntil { gifReads.withLock { $0 } == 2 }
-        try await waitUntil {
-            label.layoutIfNeeded()
-            return (label.layer.sublayers ?? []).contains { $0.animation(forKey: "frames") != nil }
-        }
+        try await waitUntil { arrival.delivered }
+        label.layoutIfNeeded()
+        #expect(!(label.layer.sublayers ?? []).contains { $0.animation(forKey: "frames") != nil }, "ウィンドウにないラベルで動かしました")
+
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        window.addSubview(label)
+        label.layoutIfNeeded()
+        #expect((label.layer.sublayers ?? []).contains { $0.animation(forKey: "frames") != nil }, "ウィンドウに入っても動かしていません")
     }
 
     /// `text`で入れたあとに文字列を入れると、同じ文字でも入れ替える。
@@ -128,4 +141,9 @@ struct EmojiLabelReassignTests {
         label.attributedText = attributed
         #expect(label.attributedText?.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor == .systemRed)
     }
+}
+
+/// 絵文字のストアの知らせが届いたかを記録する。
+private final class ArrivalRecorder {
+    var delivered = false
 }

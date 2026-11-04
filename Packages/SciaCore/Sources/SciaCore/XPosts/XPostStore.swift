@@ -39,8 +39,10 @@ public struct XPostClient: Sendable {
 
 /// 読んだXの投稿を、セッションの中で覚える。同じ投稿を並べた一覧とタブで、1回だけ読む。
 ///
-/// 読めないうちは、サーバーのカードを出したままにする。待てば読める失敗（429、5xx、通信の失敗）は、画像と同じく、
-/// 行を描き直したときに間隔をおいて読み直す（`RetrySchedule`）。待っても読めない失敗（投稿がないなど）は、このセッションでは読み直さない。
+/// 読めないうちは、サーバーのカードを出したままにする。待てば読める失敗（429、5xx、通信の失敗）は、画像と同じく間隔をおいて読み直す（`RetrySchedule`）。
+/// 読み直してよくなった時刻に`onChange`で知らせ、まだその投稿へのリンクを出している行が描き直して求めたら読む。行の描き直しを待つと、
+/// 描き直されない画面では、間隔が過ぎてもサーバーのカードのまま残るため（docs/network.md）。描き直す行がなければ読まないので、見えていない投稿は読まない。
+/// 待っても読めない失敗（投稿がないなど）は、このセッションでは読み直さない。
 @MainActor
 public final class XPostStore {
     public typealias Fetch = @Sendable (String) async throws -> XPost
@@ -54,8 +56,11 @@ public final class XPostStore {
     private let fetch: Fetch
     private var entries: [String: Entry] = [:]
     private var retry: RetrySchedule
-    /// 読み終えた投稿のIDを渡す。その投稿へのリンクを出している行を描き直す。
-    public var onLoad: ((String) -> Void)?
+    private let clock: any Clock<Duration>
+    /// 読めなかった投稿ごとの、読み直してよくなるのを待つ処理。
+    private var retryWakes: [String: Task<Void, Never>] = [:]
+    /// 読み終えたか、読めなかった投稿を読み直してよくなった投稿のIDを渡す。その投稿へのリンクを出している行を描き直す。
+    public var onChange: ((String) -> Void)?
     private let logger = SciaLog.logger(category: "xpost")
 
     /// - Parameters:
@@ -67,6 +72,7 @@ public final class XPostStore {
         fetch: @escaping Fetch
     ) {
         self.fetch = fetch
+        self.clock = clock
         retry = RetrySchedule(policy: retryPolicy, clock: clock)
     }
 
@@ -84,7 +90,7 @@ public final class XPostStore {
         if case .loaded(let post)? = entries[id] { post } else { nil }
     }
 
-    /// まだ読んでいなければ読みに行く。前に読めなかった投稿は、読み直してよくなっていれば読み直す。読み終えたら`onLoad`で知らせる。
+    /// まだ読んでいなければ読みに行く。前に読めなかった投稿は、読み直してよくなっていれば読み直す。読み終えたら`onChange`で知らせる。
     /// 行に描いたときに呼ぶので、自動の通信として送り、止められている間は送らない。
     public func request(id: String) {
         switch entries[id] {
@@ -113,8 +119,24 @@ public final class XPostStore {
     private func fail(_ id: String, with error: any Error) {
         if let url = XPostClient.url(id: id) {
             retry.recordFailure(error, for: url)
+            scheduleRetry(id, url: url)
         }
         finish(id, with: .failed)
+    }
+
+    /// 読み直してよくなった時刻に、まだ読めていなければ`onChange`で知らせる。待っても読めない失敗なら知らせない。
+    /// 取り消しのように失敗として覚えないものも知らせない。すぐ読んでよいことになるので、知らせると、描き直した行が読み、待たずに繰り返すため。
+    private func scheduleRetry(_ id: String, url: URL) {
+        guard retryWakes[id] == nil, retry.hasFailed(url) else { return }
+        let clock = clock
+        retryWakes[id] = Task { [weak self] in
+            let allowed = await RetrySchedule.waitUntilAutomaticLoad(clock: clock) { self?.retry.delayUntilAutomaticLoad(of: url) }
+            guard let self else { return }
+            retryWakes[id] = nil
+            if allowed, hasFailed(id: id) {
+                onChange?(id)
+            }
+        }
     }
 
     /// 読みに行かずに、読み込み中にしておく。`deliver(_:)`で届けるまで、`request(id:)`されても読まない。
@@ -124,7 +146,7 @@ public final class XPostStore {
         entries[id] = .loading
     }
 
-    /// 読まずに投稿を届ける。読み終えたときと同じく`onLoad`で知らせる。
+    /// 読まずに投稿を届ける。読み終えたときと同じく`onChange`で知らせる。
     public func deliver(_ post: XPost) {
         finish(post.id, with: .loaded(post))
     }
@@ -135,7 +157,7 @@ public final class XPostStore {
             if let url = XPostClient.url(id: id) {
                 retry.recordSuccess(for: url)
             }
-            onLoad?(id)
+            onChange?(id)
         }
     }
 }

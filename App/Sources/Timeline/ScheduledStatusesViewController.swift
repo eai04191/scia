@@ -83,7 +83,7 @@ final class ScheduledStatusesViewController: UICollectionViewController {
             self?.reconfigureAll()
         }
         // 名前のカスタム絵文字は、画像が届くまで空けて描くので、届いたら組み立て直す。
-        AppDependencies.emojiImages.addListener(owner: self) { [weak self] urls in
+        AppDependencies.emojiImages.addListener(whileShownIn: view) { [weak self] urls in
             guard let self, let account, !Set(account.emojis.map(\.staticUrl)).isDisjoint(with: urls) else { return }
             reconfigureAll()
         }

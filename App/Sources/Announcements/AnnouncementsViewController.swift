@@ -58,7 +58,6 @@ final class AnnouncementsViewController: UIViewController {
         self.now = now
         super.init(nibName: nil, bundle: nil)
         title = "お知らせ"
-        emojiImages.addListener(owner: self) { [weak self] _ in self?.render() }
     }
 
     @available(*, unavailable)
@@ -68,6 +67,7 @@ final class AnnouncementsViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        emojiImages.addListener(whileShownIn: view) { [weak self] _ in self?.render() }
         view.backgroundColor = .systemBackground
         navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .close, primaryAction: UIAction { [weak self] _ in
             self?.dismiss(animated: true)

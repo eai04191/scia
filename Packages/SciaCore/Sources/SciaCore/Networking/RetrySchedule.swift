@@ -107,6 +107,17 @@ public struct RetrySchedule {
         return nil
     }
 
+    /// 読み直してよくなるまで待つ（`delayUntilAutomaticLoad(of:)`）。待つ間に失敗を重ねたり制限が延びたりしたら、その時刻まで待ち直す。
+    /// 画面を描き直して読み直させるストア（絵文字、Xの投稿）が、読み直してよくなったことを知らせるのに使う。
+    /// - Returns: 読み直してよくなったらtrue。待っても直らない失敗になったか、取り消されたらfalse。
+    static func waitUntilAutomaticLoad(clock: any Clock<Duration>, delay: @MainActor () -> Duration?) async -> Bool {
+        while let wait = delay() {
+            guard wait > .zero else { return true }
+            guard (try? await clock.sleep(for: wait)) != nil else { return false }
+        }
+        return false
+    }
+
     /// 読めなかったことがあるか。待てば直るものも含める。先読みのように、読めない画像のために通信を増やしたくないところで使う。
     public func hasFailed(_ url: URL) -> Bool {
         records[url] != nil

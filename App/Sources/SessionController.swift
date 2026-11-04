@@ -646,7 +646,7 @@ final class SessionController {
             case .update, .notification, .filtersChanged, .notificationsMerged, .announcement, .announcementReaction, .announcementDelete, .unhandled: break
             }
         }
-        xPosts.onLoad = { [weak self] id in
+        xPosts.onChange = { [weak self] id in
             for timeline in self?.timelines.allObjects ?? [] {
                 timeline.applyXPost(id: id)
             }

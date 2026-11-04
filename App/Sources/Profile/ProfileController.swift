@@ -184,18 +184,22 @@ final class ProfileController {
         // ヘッダー画像をバーの下に見せる間はタイトルを出さない。最初に出してから消すと、開いた直後にちらつくため、最初から決める。
         viewController.navigationItem.title = header.extendsUnderBars ? nil : "@\(account.acct)"
         // 名前や自己紹介の絵文字が届いたら、ヘッダーを描き直す。投稿の絵文字は一覧が描き直す。
-        viewController.emojiImages.addListener(owner: self) { [weak self] urls in
-            guard let self else { return }
-            // 固定された投稿は一覧の行ではなく棚に並べるので、一覧の描き直しでは描き直されない。棚のカードもここで描き直す。
-            if self.header.redrawPinned(ifUsing: Set(urls)) {
-                self.viewController?.headerDidChangeSize()
-            }
-            if self.header.redrawEndorsements(ifUsing: Set(urls)) {
-                self.viewController?.headerDidChangeSize()
-            }
-            guard !Set(self.store.account.emojis.map(\.staticUrl)).isDisjoint(with: urls) else { return }
-            self.updateHeader()
+        // 画面に出ていない間に届いた知らせは、出たときに描き直す（`addListener(whileShownIn:onLoad:)`）。
+        viewController.emojiImages.addListener(whileShownIn: header) { [weak self] urls in
+            self?.emojiImagesDidLoad(urls)
         }
+    }
+
+    private func emojiImagesDidLoad(_ urls: Set<URL>) {
+        // 固定された投稿は一覧の行ではなく棚に並べるので、一覧の描き直しでは描き直されない。棚のカードもここで描き直す。
+        if header.redrawPinned(ifUsing: urls) {
+            viewController?.headerDidChangeSize()
+        }
+        if header.redrawEndorsements(ifUsing: urls) {
+            viewController?.headerDidChangeSize()
+        }
+        guard !Set(store.account.emojis.map(\.staticUrl)).isDisjoint(with: urls) else { return }
+        updateHeader()
     }
 
     /// ヘッダー画像の上を画面の上端まで伸ばす。画像がバーの下に見えている間は、タイトルとスクロールの上端の効果を消して画像を見せ、

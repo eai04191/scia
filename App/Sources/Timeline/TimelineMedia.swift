@@ -61,7 +61,7 @@ extension TimelineViewController {
         let ids = displayedItemIDs.filter { itemID in
             self.status(for: itemID).flatMap { XPostLink.postID(of: $0.displayed) } == id
         }
-        reconfigureAnimatingHeight(Set(ids), duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration))
+        reconfigureWhenShown(Set(ids)) { reconfigureAnimatingHeight($0, duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration)) }
     }
 
     /// Xの投稿へのリンクを出す投稿なら、読み終えた投稿の囲みを返す。まだなら読みに行き、読み終えるまではnilを返してリンクカードを出す。

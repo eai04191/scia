@@ -19,7 +19,7 @@ class EmojiLabel: UILabel {
             guard emojiImages !== oldValue else { return }
             animatedEmojis?.removeLayers()
             animatedEmojis = emojiImages.map { store in
-                AnimatedEmojiOverlay(store: store) { [weak self] in self?.applyAnimatedEmojis() }
+                AnimatedEmojiOverlay(store: store) { [weak self] in self?.animatedEmojisDidChange() }
             }
             if animatedEmojis == nil, showsReplacedText {
                 setShownText(sourceText)
@@ -202,6 +202,8 @@ class EmojiLabel: UILabel {
     private var hasCustomEmoji = false
     /// 描いているのが、絵文字を差し替えた文字列。
     private var showsReplacedText = false
+    /// ウィンドウにない間に、アニメーション版が届いたか読み直してよくなった。ウィンドウに入ったら差し替え直す。
+    private var needsAnimatedEmojiUpdate = false
     /// 動かさず、文字の中の静止画のまま描く絵文字の位置。並べてみるまで分からないため、`layoutSubviews`で決める。
     private var stillEmojiIndices: Set<Int> = []
     private var animatedEmojis: AnimatedEmojiOverlay?
@@ -236,7 +238,27 @@ class EmojiLabel: UILabel {
 
     /// 置く側が渡した文字列から、アニメーション版が届いている絵文字を透明な画像に差し替えて描き直す。
     /// 差し替えた画像は元と同じ大きさなので、ラベルの大きさは変わらない。
+    /// ウィンドウにない間（ほかのタブ、上に重ねた画面の下）は、ウィンドウに入るまで待つ。
+    /// ストアは、読めなかったアニメーション版を読み直してよくなったときにも知らせ、求め直したラベルの分を読みに行くため（docs/network.md）。
+    /// 隠したビュー（折りたたんだ注意書きの下、使い回しを待つセル）は待たない。隠すのを解くときに知らせがないため、待つと、
+    /// 読み終えたアニメーション版も、次に文字列が替わるまで動かない。これらは、隠れたまま読み直しの知らせを受けると読みに行く。
+    private func animatedEmojisDidChange() {
+        guard window != nil else {
+            needsAnimatedEmojiUpdate = true
+            return
+        }
+        applyAnimatedEmojis()
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if needsAnimatedEmojiUpdate, window != nil {
+            applyAnimatedEmojis()
+        }
+    }
+
     private func applyAnimatedEmojis() {
+        needsAnimatedEmojiUpdate = false
         guard let animatedEmojis else { return }
         let shown = animatedEmojis.prepare(sourceText, keepingStill: stillEmojiIndices, displayScale: traitCollection.displayScale)
         let replaces = shown !== sourceText

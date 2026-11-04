@@ -89,6 +89,9 @@ public final class EmojiImageStore<Image: Sendable> {
     private(set) var upgradingAnimations: Set<URL> = []
     /// 読めなかった画像を、描いたときにいつ読み直すか。静止画とアニメーション版で共有する。URLが違うので混ざらない。
     private var retry: RetrySchedule
+    private let clock: any Clock<Duration>
+    /// 読めなかった画像ごとの、読み直してよくなるのを待つ処理（`scheduleRetry`）。
+    private var retryWakes: [URL: Task<Void, Never>] = [:]
     private var animationStates: [URL: AnimationState] = [:]
     /// 描いている層がつかんでいるアニメーション。`animations`から捨てても、層が使っている間はコマが解放されないため、
     /// 読み直さずにこれを返す。読み直すと、捨てられた分をまた入れて別のものを押し出し、画面に出ているもの同士で読み直しを繰り返すため。
@@ -113,11 +116,13 @@ public final class EmojiImageStore<Image: Sendable> {
         self.fetch = fetch
         self.maker = maker
         self.upgradePurpose = upgradePurpose
+        self.clock = clock
         retry = RetrySchedule(policy: retryPolicy, clock: clock)
     }
 
     /// 読み込み済みなら画像を返す。まだなら読み込みを始めてnilを返す。
-    /// 読めなかった画像は、間隔をおいてから読み直す。
+    /// 読めなかった画像は、間隔をおいてから読み直す。読み直してよくなった時刻に`addListener`で登録した処理に知らせるので、
+    /// まだ描いている画面は描き直してこれを呼び、読み直させる（`scheduleRetry`）。
     /// - Parameters:
     ///   - pixelHeight: 描く高さのピクセル数。持っている画像より高ければ、その高さで読み直し、読み終えるまでは持っている画像を返す。
     ///     読み直すのは、質を上げる通信を送ってよいときだけ（`upgradePurpose`）。送れなければ、持っている画像を拡大して描く。
@@ -212,10 +217,11 @@ public final class EmojiImageStore<Image: Sendable> {
             } catch {
                 logger.error("emoji load failed host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash)): \(SciaLog.describe(error), privacy: .public)")
                 // 高さを上げて読み直すのに失敗したときは、持っている画像で描き続ける。
+                retry.recordFailure(error, for: url)
                 if stills.value(forKey: url) == nil {
                     failedStills.insert(url)
+                    scheduleRetry(url)
                 }
-                retry.recordFailure(error, for: url)
             }
             notify(url)
         } }
@@ -343,12 +349,35 @@ public final class EmojiImageStore<Image: Sendable> {
                 // 高さを上げて読み直すのに失敗したときは、今のコマで描き続け、間隔をおいてから読み直す。
                 state = current.map { .animated($0) } ?? .failed
                 retry.recordFailure(error, for: url)
+                if current == nil {
+                    scheduleRetry(url)
+                }
             }
             animationStates[url] = state
             if case .animated = state {
                 notify(url)
             }
         } }
+    }
+
+    /// 読めなかった画像を、読み直してよくなった時刻に、まだ読めていなければ知らせる。待っても直らない失敗なら知らせない。
+    /// ストアは描いている画面を知らないので、自分では読み直さず、知らせを受けて描き直した画面が求めたら読む。
+    /// 描き直しを待つと、描き直されない画面は、間隔が過ぎても`:shortcode:`の文字のまま残るため（docs/network.md）。
+    /// 描き直す画面がなければ読まないので、画面から外れた絵文字は読まない。隠れている画面に読ませないのは、描き直す側が受け持つ。
+    /// 高さを上げて読み直すのに失敗したものは、持っている画像で描けているので知らせない。
+    /// 取り消しのように失敗として覚えないものも知らせない。すぐ読んでよいことになるので、知らせると、描き直した画面が読み、待たずに繰り返すため。
+    private func scheduleRetry(_ url: URL) {
+        guard retryWakes[url] == nil, retry.hasFailed(url) else { return }
+        let clock = clock
+        retryWakes[url] = Task { [weak self] in
+            let allowed = await RetrySchedule.waitUntilAutomaticLoad(clock: clock) { self?.retry.delayUntilAutomaticLoad(of: url) }
+            guard let self else { return }
+            retryWakes[url] = nil
+            let isAnimationFailed = if case .failed? = animationStates[url] { true } else { false }
+            if allowed, failedStills.contains(url) || isAnimationFailed {
+                notify(url)
+            }
+        }
     }
 
     /// 同じ時期に届いた画像をまとめて知らせ、セルの再構成を減らす。

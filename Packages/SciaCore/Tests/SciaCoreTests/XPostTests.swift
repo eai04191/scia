@@ -219,6 +219,68 @@ struct XPostTests {
         #expect(await counter.count("1") == 2)
     }
 
+    /// 読み直してよくなった時刻に知らせ、まだその投稿を描いている行が描き直して読み直す。行の描き直しを待たない。
+    /// 描き直されない画面で、間隔が過ぎてもサーバーのカードのまま残らないため（docs/network.md）。
+    @MainActor @Test func storeAsksToRedrawWhenRetryIsAllowed() async throws {
+        let counter = FetchCounter()
+        let clock = TestClock()
+        let post = XPost(id: "1", url: try url("https://x.com/a/status/1"), authorName: "A", authorScreenName: "a", text: .plain("本文", emojis: []))
+        let store = XPostStore(clock: clock, retryPolicy: Self.retryPolicy) { id in
+            await counter.increment(id)
+            if await counter.count(id) == 1 { throw HTTPStatusError(statusCode: 503) }
+            return post
+        }
+        // 投稿を描いている行は、知らせを受けたら描き直し、描き直しで投稿を求める。
+        store.onChange = { store.request(id: $0) }
+
+        store.request(id: "1")
+        try await waitUntil { store.hasFailed(id: "1") && clock.sleeperCount == 1 }
+        clock.advance(by: .seconds(5))
+        try await waitUntil { store.post(id: "1") != nil }
+        #expect(await counter.count("1") == 2)
+    }
+
+    /// 知らせを受けても描き直す行がなければ（画面から外れた、隠れているなど）、読み直さない。待っても読めない失敗は、知らせを待たない。
+    @MainActor @Test func storeDoesNotRetryWithoutRedraw() async throws {
+        let counter = FetchCounter()
+        let clock = TestClock()
+        let store = XPostStore(clock: clock, retryPolicy: Self.retryPolicy) { id in
+            await counter.increment(id)
+            throw HTTPStatusError(statusCode: id == "1" ? 503 : 404)
+        }
+        var changed: [String] = []
+        store.onChange = { changed.append($0) }
+
+        store.request(id: "1")
+        store.request(id: "2")
+        try await waitUntil { store.hasFailed(id: "1") && store.hasFailed(id: "2") && clock.sleeperCount == 1 }
+        clock.advance(by: .seconds(5))
+        try await waitUntil { changed == ["1"] }
+        #expect(clock.sleeperCount == 0)
+        #expect(await counter.count("1") == 1)
+        #expect(await counter.count("2") == 1)
+    }
+
+    /// 取り消しのように失敗として覚えないものは、読み直してよくなった知らせを送らない。送ると、描き直した行がすぐ読み、また取り消されて、待たずに繰り返すため。
+    @MainActor @Test func storeDoesNotAskToRedrawAfterCancellation() async throws {
+        let counter = FetchCounter()
+        let clock = TestClock()
+        let store = XPostStore(clock: clock, retryPolicy: Self.retryPolicy) { id in
+            await counter.increment(id)
+            if id == "1" { throw CancellationError() }
+            throw HTTPStatusError(statusCode: 404)
+        }
+        store.onChange = { store.request(id: $0) }
+
+        store.request(id: "1")
+        try await waitUntil { store.hasFailed(id: "1") }
+        // 知らせるなら、あとから頼んだ投稿より先に読み直す。あとから頼んだ投稿が失敗するまで待ってから、読み直していないことを確かめる。
+        store.request(id: "2")
+        try await waitUntil { store.hasFailed(id: "2") }
+        #expect(await counter.count("1") == 1)
+        #expect(clock.sleeperCount == 0)
+    }
+
     /// 行に描いたときの読み込みなので、自動の通信として送り、止められている間は送らない。
     @MainActor @Test func storeFetchesAsAutomaticRequest() async throws {
         let origins = FetchOrigins()
@@ -243,7 +305,7 @@ struct XPostTests {
         }
         var loaded: [String] = []
         try await confirmation { done in
-            store.onLoad = { id in
+            store.onChange = { id in
                 loaded.append(id)
                 done()
             }
@@ -273,7 +335,7 @@ struct XPostTests {
             return post
         }
         var loaded: [String] = []
-        store.onLoad = { loaded.append($0) }
+        store.onChange = { loaded.append($0) }
 
         store.reserve(id: "1")
         store.request(id: "1")
