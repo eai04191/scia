@@ -157,6 +157,8 @@ final class PostBodyView: UIView {
     private var filterNoteLabel: UILabel?
     /// 「テキストを選択」で、本文のラベルの代わりに同じ位置に出している選べるテキストビュー。選んでいなければnil。
     private(set) var selectionTextView: SelectableTextView?
+    /// 選んでいる間、本文のラベルに出している本文。サーバーが縮めて見せるURLを元の文字に戻したもの。戻すURLがないか、選んでいなければnil。
+    private(set) var expandedText: NSAttributedString?
     private(set) var content: PostBodyContent?
     /// 添付ファイルの有無と並べ方で変わる制約。適用のたびに作り直す。
     private var variableConstraints: [NSLayoutConstraint] = []
@@ -509,8 +511,11 @@ final class PostBodyView: UIView {
 
     /// 本文のラベルを、同じ文字列を同じ位置に並べる選べるテキストビューに差し替え、全体を選ぶ。決まりはdocs/menus.mdの「本文の文字を選ぶ」にある。
     /// ラベルは並べ方の基準に使っているので外さず、透明にして残す。透明なラベルは押下も受けないため、リンクは開かない。
+    /// サーバーが縮めて見せるURLは、先にラベルを元の文字に戻した本文にしてから差し替える。
     func beginTextSelection() {
-        guard canSelectText, selectionTextView == nil, let text = textLabel.textForTextKit else { return }
+        guard canSelectText, selectionTextView == nil, let content else { return }
+        showExpandedText(content.text.expandingCopiedLinks)
+        guard let text = textLabel.textForTextKit else { return }
         let view = SelectableTextView(text: text)
         view.translatesAutoresizingMaskIntoConstraints = false
         addSubview(view)
@@ -536,7 +541,34 @@ final class PostBodyView: UIView {
         view.onEnd = nil
         view.removeFromSuperview()
         textLabel.alpha = 1
+        if expandedText != nil, let content {
+            expandedText = nil
+            textLabel.attributedText = content.text
+            textLabel.truncation = content.truncation
+            textLabel.usePreparedLayout(content.preparedLayout)
+            invalidateRowHeight()
+        }
         onTextSelectionChange?()
+    }
+
+    /// 縮めたURLを元の文字に戻した本文があれば、ラベルをその本文にして、行の高さを測り直させる。
+    /// 選べるのは切っていない本文だけなので、長い本文を切る決まりは外し、元の文字で伸びた分も切らずに出す。
+    private func showExpandedText(_ expanded: NSAttributedString?) {
+        guard let expanded else { return }
+        expandedText = expanded
+        textLabel.attributedText = expanded
+        textLabel.truncation = nil
+        textLabel.usePreparedLayout(nil)
+        invalidateRowHeight()
+    }
+
+    /// 本文の高さが変わったので、置いている一覧の行に高さを測り直させる。行の上端は動かさず、下の行を動かす。
+    private func invalidateRowHeight() {
+        var view: UIView? = self
+        while let current = view, !(current is UICollectionViewCell) {
+            view = current.superview
+        }
+        view?.invalidateIntrinsicContentSize()
     }
 
     func apply(_ content: PostBodyContent) {
@@ -544,11 +576,16 @@ final class PostBodyView: UIView {
         defer {
             // 同じ投稿の描き直し（画像が届いた、数が変わったなど）では選んだままにし、別の投稿に替わったときと、本文が変わったか選べなくなったときにやめる。
             // 選んだままにするときも、絵文字の画像や絵文字そのものは替わりうるので、ラベルと同じ中身にそろえる。
+            // 縮めたURLの隠した部分だけが編集されたときも、元のURLに戻して出している文字が変わり、選んだ範囲がずれるのでやめる。
             if isSelectingText {
-                if previous?.statusID != content.statusID || previous?.text.string != content.text.string || !canSelectText {
+                let expanded = content.text.expandingCopiedLinks
+                if previous?.statusID != content.statusID || previous?.text.string != content.text.string || expanded?.string != expandedText?.string || !canSelectText {
                     endTextSelection()
-                } else if let text = textLabel.textForTextKit {
-                    selectionTextView?.replaceText(text)
+                } else {
+                    showExpandedText(expanded)
+                    if let text = textLabel.textForTextKit {
+                        selectionTextView?.replaceText(text)
+                    }
                 }
             }
         }

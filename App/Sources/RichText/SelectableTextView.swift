@@ -148,29 +148,42 @@ final class SelectableTextView: UITextView, UITextViewDelegate, @MainActor UIEdi
 
 extension NSAttributedString {
     /// RichTextRendererで描いた本文を、アプリの外に貼る文字にする。カスタム絵文字は`:shortcode:`に、段落の中の改行（行区切り文字）は改行にする。
-    /// 絵文字の前に置いた幅のない文字（`leadingEmojiGuard`）は除く。サーバーが縮めて見せるURLは、一部だけを選んでいても、元の文字の全体にする。
+    /// 絵文字の前に置いた幅のない文字（`leadingEmojiGuard`）は除く。
     var copiedPlainText: String {
         var result = ""
-        var lastLink: RichText.CopiedLinkText?
         enumerateAttributes(in: NSRange(location: 0, length: length)) { attributes, range, _ in
             if attributes[.leadingEmojiGuard] != nil {
                 return
             }
-            // 属性の範囲は、ほかの属性が途中で変わると1つのリンクの中でも分かれるので、同じリンクが続くあいだは1回だけ入れる。
-            if let link = attributes[.copiedLinkText] as? RichText.CopiedLinkText {
-                if link != lastLink {
-                    result += link.text
-                }
-                lastLink = link
-                return
-            }
-            lastLink = nil
             if let emoji = attributes[.customEmoji] as? CustomEmoji {
                 // 同じ絵文字が並ぶと1つの範囲にまとまるので、絵文字1つが1文字であることから数を戻す。
                 result += String(repeating: ":\(emoji.shortcode):", count: range.length)
             } else {
                 result += (string as NSString).substring(with: range).replacingOccurrences(of: "\u{2028}", with: "\n")
             }
+        }
+        return result
+    }
+
+    /// サーバーが縮めて見せるURLを、元の文字（`RichText.CopiedLinkText`）に戻す。「テキストを選択」で、選んだ文字がそのまま渡るように出すのに使う。
+    /// 書式で分かれた1つのリンクは、先頭の部分の書式で全体を描く。戻すURLがなければnil。
+    var expandingCopiedLinks: NSAttributedString? {
+        var links: [(range: NSRange, link: RichText.CopiedLinkText)] = []
+        enumerateAttribute(.copiedLinkText, in: NSRange(location: 0, length: length)) { value, range, _ in
+            guard let link = value as? RichText.CopiedLinkText else { return }
+            // 属性の範囲は、書式などほかの属性が変わると1つのリンクの中でも分かれるので、続く同じリンクは1つにまとめる。
+            if let last = links.last, last.link == link, NSMaxRange(last.range) == range.location {
+                links[links.count - 1].range.length += range.length
+            } else {
+                links.append((range, link))
+            }
+        }
+        guard !links.isEmpty else { return nil }
+        let result = NSMutableAttributedString(attributedString: self)
+        for (range, link) in links.reversed() {
+            var attributes = attributes(at: range.location, effectiveRange: nil)
+            attributes[.copiedLinkText] = nil
+            result.replaceCharacters(in: range, with: NSAttributedString(string: link.text.replacingOccurrences(of: "\n", with: "\u{2028}"), attributes: attributes))
         }
         return result
     }

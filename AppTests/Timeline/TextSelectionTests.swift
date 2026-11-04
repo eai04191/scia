@@ -195,33 +195,71 @@ struct TextSelectionTests {
         #expect(textView.text(in: firstTwo) == "前\u{FFFC}")
     }
 
-    /// サーバーが縮めて見せるURLは、選んだ範囲のコピーでも、編集メニューの共有などが読む文字でも、元のURLにする。URLの一部だけを選んでいても全体を渡す。
-    @Test func selectedShortenedURLIsCopiedWhole() throws {
-        let html = #"<p>見て <a href="https://example.com/users/someone/status/2109995948407476369?s=46"><span class="invisible">https://</span><span class="ellipsis">example.com/users/someone/stat</span><span class="invisible">us/2109995948407476369?s=46</span></a> と <a href="https://example.com/a"><span class="invisible">https://</span><span class="ellipsis">example.com/a</span><span class="invisible">/b</span></a></p>"#
-        let text = renderer.render(RichText.html(html, emojis: []))
-        let textView = SelectableTextView(text: text)
-        let whole = "見て https://example.com/users/someone/status/2109995948407476369?s=46 と https://example.com/a/b"
-
-        textView.selectedRange = NSRange(location: 0, length: text.length)
-        let start = textView.beginningOfDocument
-        let wholeRange = try #require(textView.textRange(from: start, to: textView.endOfDocument))
-        #expect(textView.text(in: wholeRange) == whole)
-
-        // 1つ目のリンクの途中を選ぶ。
-        let linkStart = (text.string as NSString).range(of: "example.com/users").location
-        #expect(text.attributedSubstring(from: NSRange(location: linkStart + 4, length: 10)).copiedPlainText == "https://example.com/users/someone/status/2109995948407476369?s=46")
+    /// 一覧の行と同じく、幅を決めて測った高さ。
+    private func fittingHeight(of view: UIView) -> CGFloat {
+        view.systemLayoutSizeFitting(CGSize(width: 328, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel).height
     }
 
-    /// 書式で分かれたURLは、後ろの書式の部分だけを選んでも、元のURLの全体を渡す。
-    @Test func selectedPartOfSplitShortenedURLIsCopiedWhole() {
-        let html = #"<p><a href="https://example.com/a/very/long/path/to/some/page"><span class="invisible">https://</span><span class="ellipsis">example.com/<b>a/very/long/path/</b></span><span class="invisible">to/some/page</span></a></p>"#
-        let text = renderer.render(RichText.html(html, emojis: []))
-        let bold = (text.string as NSString).range(of: "a/very")
-        let ellipsis = (text.string as NSString).range(of: "…")
+    /// 選んでいる間は、サーバーが縮めて見せるURLを元のURLで出し、選んだ文字をそのまま渡す。書式で分かれたURLも1つのURLに戻す。
+    /// 伸びた分だけ本文が高くなり、やめたら縮めた表示と高さに戻す。
+    @Test func selectionShowsShortenedURLsWhole() throws {
+        let html = #"<p>見て <a href="https://example.com/users/someone/status/2109995948407476369?s=46"><span class="invisible">https://</span><span class="ellipsis">example.com/users/someone/stat</span><span class="invisible">us/2109995948407476369?s=46</span></a> と <a href="https://example.com/a/very/long/path/to/some/page"><span class="invisible">https://</span><span class="ellipsis">example.com/<b>a/very/long/path/</b></span><span class="invisible">to/some/page</span></a></p>"#
+        let whole = "見て https://example.com/users/someone/status/2109995948407476369?s=46 と https://example.com/a/very/long/path/to/some/page"
+        let view = PostBodyView(mediaImages: .offline, avatarImages: .offline)
+        let window = try window(showing: view)
+        defer { window.isHidden = true }
+        view.apply(body(renderer.render(RichText.html(html, emojis: []))))
+        view.layoutIfNeeded()
+        let shortHeight = fittingHeight(of: view)
 
-        #expect(text.attributedSubstring(from: bold).copiedPlainText == "https://example.com/a/very/long/path/to/some/page")
-        #expect(text.attributedSubstring(from: ellipsis).copiedPlainText == "https://example.com/a/very/long/path/to/some/page")
-        #expect(text.copiedPlainText == "https://example.com/a/very/long/path/to/some/page")
+        view.beginTextSelection()
+        let textView = try #require(view.selectionTextView)
+        #expect(textView.attributedText.copiedPlainText == whole)
+        // 選んだ文字が、そのまま共有などに渡る。
+        let urlStart = (textView.attributedText.string as NSString).range(of: "example.com/users").location
+        textView.selectedRange = NSRange(location: urlStart, length: 11)
+        let range = try #require(textView.selectedTextRange)
+        #expect(textView.text(in: range) == "example.com")
+        #expect(fittingHeight(of: view) > shortHeight)
+
+        view.endTextSelection()
+        #expect(view.expandedText == nil)
+        #expect(fittingHeight(of: view) == shortHeight)
+    }
+
+    /// 選んでいる間に同じ投稿を描き直しても、元のURLで出したまま選び続ける。
+    @Test func redrawingWhileSelectingKeepsURLsWhole() throws {
+        let html = #"<p><a href="https://example.com/a/very/long/path/to/some/page"><span class="invisible">https://</span><span class="ellipsis">example.com/a/very/long/path/</span><span class="invisible">to/some/page</span></a></p>"#
+        let text = renderer.render(RichText.html(html, emojis: []))
+        let view = PostBodyView(mediaImages: .offline, avatarImages: .offline)
+        let window = try window(showing: view)
+        defer { window.isHidden = true }
+        view.apply(body(text))
+        view.layoutIfNeeded()
+        view.beginTextSelection()
+
+        view.apply(body(text))
+
+        #expect(view.isSelectingText)
+        #expect(view.selectionTextView?.attributedText.copiedPlainText == "https://example.com/a/very/long/path/to/some/page")
+    }
+
+    /// 縮めて見せる文字は同じでも、隠した部分が編集されて元のURLが変わったら、選んだ範囲がずれるのでやめる。
+    @Test func redrawingWithEditedHiddenURLPartEndsSelection() throws {
+        func html(_ tail: String) -> String {
+            #"<p><a href="https://example.com/a/very/long/path/\#(tail)"><span class="invisible">https://</span><span class="ellipsis">example.com/a/very/long/path/</span><span class="invisible">\#(tail)</span></a> 後ろ</p>"#
+        }
+        let view = PostBodyView(mediaImages: .offline, avatarImages: .offline)
+        let window = try window(showing: view)
+        defer { window.isHidden = true }
+        view.apply(body(renderer.render(RichText.html(html("to/some/page"), emojis: []))))
+        view.layoutIfNeeded()
+        view.beginTextSelection()
+
+        view.apply(body(renderer.render(RichText.html(html("to/another/longer/page"), emojis: []))))
+
+        #expect(!view.isSelectingText)
+        #expect(view.expandedText == nil)
     }
 
     /// 押下を受ける高さ（差し替えたラベルの高さ）より下では押下を受けず、文字に合わせて伸ばした最後の行の下の行間が、下の部品へのタップを奪わない。

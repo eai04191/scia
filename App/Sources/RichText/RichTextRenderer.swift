@@ -541,7 +541,7 @@ extension NSAttributedString.Key {
     static let customEmoji = NSAttributedString.Key("net.mizle.scia.customEmoji")
     /// カスタム絵文字を動かすときに、動く層の上に重ねる色（`UIColor`）。編集履歴で足した絵文字を示すのに使う。
     static let emojiTint = NSAttributedString.Key("net.mizle.scia.emojiTint")
-    /// 表示する文字と違う文字をコピーに渡すリンクの、その文字（`RichText.CopiedLinkText`）。サーバーが縮めて見せるURLで、選んでコピーや共有をしたときに元の文字を渡すのに使う。
+    /// 表示する文字と違う文字をコピーに渡すリンクの、その文字（`RichText.CopiedLinkText`）。サーバーが縮めて見せるURLを、「テキストを選択」で元の文字に戻して出すのに使う。
     static let copiedLinkText = NSAttributedString.Key("net.mizle.scia.copiedLinkText")
     /// 下げて描く絵文字の前に置いた、幅のない文字（`RichTextRenderer.leadingEmojiGuard`）。
     static let leadingEmojiGuard = NSAttributedString.Key("net.mizle.scia.leadingEmojiGuard")
