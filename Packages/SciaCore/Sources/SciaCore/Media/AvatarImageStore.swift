@@ -51,6 +51,11 @@ public final class AvatarImageStore<Image: AnyObject & Sendable> {
         let onLoad: @MainActor (AvatarImageKey) -> Void
     }
 
+    /// 使っていないアイコンをすべて手放す。描いているアイコンは残す。メモリ警告を受けたときに呼ぶ（docs/image-loading.mdの「メモリに持つ画像」）。
+    public func releaseUnusedMemory() {
+        cache.releaseUnused()
+    }
+
     public func cachedImage(for key: AvatarImageKey) -> Image? {
         cache.value(forKey: key)
     }

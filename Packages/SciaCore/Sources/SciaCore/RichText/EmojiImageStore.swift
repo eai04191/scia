@@ -71,8 +71,12 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     /// 静止画は行を描き直すたびにここから求め直す。何をいつ捨てるかはdocs/image-loading.mdの「メモリに持つ画像」に従う。
     /// 画面に出ている絵文字が捨てられると空けた場所で描いて読み直し、読み終えるとまた行を描き直す。
     private var stills = MemoryCache<URL, Image>(totalCostLimit: 32 * 1024 * 1024)
-    /// `stills`に持つ静止画の高さ。`stills`が返さなくなったものは、求めたときに消す。
+    /// `stills`に持つ静止画の高さ。`stills`が返さなくなったものは、求めたときと`removeReleasedStillResolutions`で消す。
     private var stillResolutions: [URL: Resolution] = [:]
+    /// 高さを覚えている静止画の数。解放された静止画の高さを溜めないことを、テストで確かめる。
+    var stillResolutionCount: Int { stillResolutions.count }
+    /// `stillResolutions`がこの数を超えたら、`stills`が返さなくなったものを消す。消したあとに残った数の倍にする。
+    private var stillResolutionCleanupThreshold = 64
     /// 上限を超えて`stills`から捨てた静止画。もう一度描こうとして読み直した回数を数えるのに使う。
     private var evictedStills: Set<URL> = []
     private var stats = Stats()
@@ -178,6 +182,19 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
         }
     }
 
+    /// 使っていない静止画とアニメーションをすべて手放す。描いている画像は残す。メモリ警告を受けたときに呼ぶ（docs/image-loading.mdの「メモリに持つ画像」）。
+    public func releaseUnusedMemory() {
+        stills.releaseUnused()
+        animations.releaseUnused()
+        removeReleasedStillResolutions()
+    }
+
+    /// `stills`が返さなくなった静止画の高さを消す。通り過ぎて描き直さない絵文字の高さを、起動している間ずっと溜めないため。
+    private func removeReleasedStillResolutions() {
+        stillResolutions = stillResolutions.filter { stills.contains($0.key) }
+        stillResolutionCleanupThreshold = max(stillResolutions.count * 2, 64)
+    }
+
     public func hasFailed(_ url: URL) -> Bool {
         failedStills.contains(url)
     }
@@ -202,6 +219,9 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
                 guard let (image, isLargest) = await Self.decodeStill(data, pixelHeight: pixelHeight) else { throw DecodeError() }
                 evictedStills.formUnion(stills.setValue(maker.still(image), forKey: url, cost: PlatformImageMaker<Image>.cost(of: image)))
                 stillResolutions[url] = Resolution(pixelHeight: pixelHeight, isLargest: isLargest)
+                if stillResolutions.count > stillResolutionCleanupThreshold {
+                    removeReleasedStillResolutions()
+                }
                 evictedStills.remove(url)
                 stats.peakStillCost = max(stats.peakStillCost, stills.totalCost)
                 failedStills.remove(url)

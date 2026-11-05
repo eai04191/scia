@@ -18,6 +18,13 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         return true
     }
 
+    /// メモリに持つ画像のうち、使っていないものをすべて手放す。描いている画像は残す（docs/image-loading.mdの「メモリに持つ画像」）。
+    func applicationDidReceiveMemoryWarning(_ application: UIApplication) {
+        AppDependencies.emojiImages.releaseUnusedMemory()
+        AppDependencies.avatarImages.releaseUnusedMemory()
+        AppDependencies.mediaImages.releaseUnusedMemory()
+    }
+
     func application(
         _ application: UIApplication,
         configurationForConnecting connectingSceneSession: UISceneSession,

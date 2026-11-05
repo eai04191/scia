@@ -420,6 +420,21 @@ struct MediaImageStoreTests {
             #expect(store.cachedImage(for: url, maxPixelSize: 8) != nil, "裏に回ったときに画像を捨てました")
         }
     }
+
+    /// メモリ警告で手放すのは、使っていない画像だけ。描いている画像は、手放したあとも同じものを返す。
+    @Test func releasingUnusedMemoryKeepsShownImages() async throws {
+        let data = try pngData()
+        let store = MediaImageStore(files: .temporary()) { _, _ in data }
+        let shownURL = try #require(URL(string: "https://files.example.social/small/shown.png"))
+        let unusedURL = try #require(URL(string: "https://files.example.social/small/unused.png"))
+        let shown = try await store.image(for: shownURL, maxPixelSize: 8, purpose: .display)
+        _ = try await store.image(for: unusedURL, maxPixelSize: 8, purpose: .display)
+
+        store.releaseUnusedMemory()
+
+        #expect(store.cachedImage(for: shownURL, maxPixelSize: 8) === shown)
+        #expect(store.cachedImage(for: unusedURL, maxPixelSize: 8) == nil)
+    }
 }
 
 /// 読めなかった画像は、一覧に描いたときは間隔をおいてから読み直し、ビューアを開いたときはすぐ読み直す。

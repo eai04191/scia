@@ -283,4 +283,43 @@ struct EmojiImageStoreTests {
         try await waitUntil(state: { await animationState(of: store, url) }) { store.upgradingAnimations.isEmpty }
         #expect(store.animation(for: url, pixelHeight: 128)?.image.frameHeight == 64)
     }
+
+    /// メモリ警告で手放すのは、使っていない絵文字だけ。描いているアニメーションは、手放したあとも読み直さずに同じものを返す。
+    @Test func releasingUnusedMemoryKeepsDrawnAnimation() async throws {
+        let store = makeStore(try Self.gif(size: 96, frameCount: 2))
+        _ = store.animation(for: url)
+        try await waitUntil(state: { await animationState(of: store, url) }) { store.animation(for: url) != nil }
+        let drawn = try #require(store.animation(for: url))
+
+        store.releaseUnusedMemory()
+
+        #expect(store.animation(for: url) === drawn)
+        #expect(fetches.count.withLock { $0 } == 1)
+    }
+
+    /// 使っていない静止画は、メモリ警告で手放し、また描くときに読み直す。
+    @Test func releasingUnusedMemoryDropsUnusedStill() async throws {
+        let store = makeStore(try Self.png(width: 96, height: 96))
+        _ = store.image(for: url)
+        try await waitUntil { store.image(for: url) != nil }
+
+        store.releaseUnusedMemory()
+
+        #expect(store.image(for: url) == nil)
+        try await waitUntil { store.image(for: url) != nil }
+        #expect(fetches.count.withLock { $0 } == 2)
+    }
+
+    /// 手放した静止画の高さは、メモリ警告のときに一緒に消す。通り過ぎて描き直さない絵文字の高さを、起動している間ずっと溜めないため。
+    @Test func releasingUnusedMemoryForgetsResolutionsOfReleasedStills() async throws {
+        let store = makeStore(try Self.png(width: 96, height: 96))
+        let urls = try (0..<3).map { try #require(URL(string: "https://example.com/emoji\($0).png")) }
+        for url in urls { _ = store.image(for: url) }
+        try await waitUntil { urls.allSatisfy { store.image(for: $0) != nil } }
+        #expect(store.stillResolutionCount == 3)
+
+        store.releaseUnusedMemory()
+
+        #expect(store.stillResolutionCount == 0)
+    }
 }

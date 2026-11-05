@@ -228,7 +228,8 @@ extension TimelineViewController {
         guard side > 0 else { return NSAttributedString() }
         let content = avatarContent(of: account)
         let image = notificationAvatarKey(of: account, side: side).flatMap(avatarImages.requestImage(for:))
-        let attachment = NSTextAttachment()
+        let attachment = AvatarTextAttachment()
+        attachment.source = image
         attachment.image = Self.shapedAvatar(image, side: side, shape: content.shape, cornerRatio: content.cornerRatio)
         attachment.bounds = CGRect(x: 0, y: max((font.ascender + font.descender - side) / 2, -font.pointSize * PostBodyView.emBoxDescent), width: side, height: side)
         let string = NSMutableAttributedString(attachment: attachment)
@@ -302,4 +303,11 @@ extension NotificationAppearance {
         case .secondary: .secondaryLabel
         }
     }
+}
+
+/// 名前の前のアイコンの添付。角を丸めて描き直した画像のほかに、ストアから受け取った元のアイコンを持つ。
+/// ストアは、ほかで持たれている画像を使用中として捨てずに返すので、行が出ている間に元のアイコンを持っていないと、
+/// メモリ警告で手放したあと、行を組み直すたびに灰色に戻して読み直すため（docs/image-loading.mdの「メモリに持つ画像」）。
+private final class AvatarTextAttachment: NSTextAttachment {
+    var source: UIImage?
 }

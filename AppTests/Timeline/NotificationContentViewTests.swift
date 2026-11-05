@@ -1,6 +1,7 @@
 import SciaCore
 import Testing
 import SciaTesting
+import Synchronization
 import UIKit
 @testable import Scia
 
@@ -100,13 +101,55 @@ struct NotificationContentViewTests {
         #expect(try alpha(of: image, x: 0, y: 0) == center)
     }
 
+    /// 名前の前のアイコンは、角を丸めて描き直した画像のほかに、元のアイコンも持つ。メモリ警告で使っていないアイコンを手放しても、
+    /// 出ている行を組み直したときに、灰色に戻して読み直さないため（docs/image-loading.mdの「メモリに持つ画像」）。
+    @Test func headerAvatarKeepsSourceAcrossMemoryRelease() async throws {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8), format: format).image { context in
+            UIColor.red.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+        }.pngData())
+        let reads = Mutex(0)
+        let avatars = AvatarImageStore { _ in
+            reads.withLock { $0 += 1 }
+            return png
+        }
+        let vc = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: avatars, settings: AppSettings.isolated())
+        let bob = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: URL(string: "https://files.example.social/avatars/bob.png"))
+        let notification = MastodonNotification(id: "1", type: .follow, createdAt: Date(timeIntervalSince1970: 0), account: bob, status: nil)
+        func header() -> NSAttributedString? {
+            (vc.contentConfiguration(for: notification, base: .cell()) as? NotificationContentConfiguration)?.header
+        }
+        func isRed(_ header: NSAttributedString?) -> Bool {
+            guard let attachment = header?.attribute(.attachment, at: 0, effectiveRange: nil) as? NSTextAttachment,
+                  let image = attachment.image?.cgImage,
+                  let pixel = try? rgba(of: image, x: image.width / 2, y: image.height / 2)
+            else { return false }
+            return pixel[0] > 200 && pixel[1] < 50
+        }
+        try await waitUntil { isRed(header()) }
+        let shown = header()
+
+        avatars.releaseUnusedMemory()
+
+        #expect(isRed(header()), "手放したあとに組み直すと、アイコンを灰色に戻しました")
+        #expect(reads.withLock { $0 } == 1)
+        withExtendedLifetime(shown) {}
+    }
+
     /// 上端から数えた位置の画素の濃さ。
     private func alpha(of image: CGImage, x: Int, y: Int) throws -> UInt8 {
+        try rgba(of: image, x: x, y: y)[3]
+    }
+
+    /// 上端から数えた位置の画素の、乗算済みの赤、緑、青、濃さ。
+    private func rgba(of image: CGImage, x: Int, y: Int) throws -> [UInt8] {
         var pixel: [UInt8] = [0, 0, 0, 0]
         let context = try #require(CGContext(data: &pixel, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
         // その1画素だけが、1×1の描く先に入るようずらして描く。CGContextの原点は左下なので、上端からの位置を下からの位置に直す。
         context.draw(image, in: CGRect(x: -CGFloat(x), y: CGFloat(y + 1 - image.height), width: CGFloat(image.width), height: CGFloat(image.height)))
-        return pixel[3]
+        return pixel
     }
 }
 

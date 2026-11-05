@@ -152,4 +152,19 @@ struct AvatarImageStoreTests {
         }
         #expect(reads.withLock { $0 } == 3)
     }
+
+    /// メモリ警告で手放すのは、使っていないアイコンだけ。描いているアイコンは、手放したあとも同じものを返す。
+    @Test func releasingUnusedMemoryKeepsShownAvatars() async throws {
+        let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { _ in }.pngData())
+        let store = AvatarImageStore { _ in png }
+        let shownKey = AvatarImageKey(url: try #require(URL(string: "https://example.social/shown.png")), maxPixelSize: 8, animates: false)
+        let unusedKey = AvatarImageKey(url: try #require(URL(string: "https://example.social/unused.png")), maxPixelSize: 8, animates: false)
+        let shown = try await store.image(for: shownKey)
+        _ = try await store.image(for: unusedKey)
+
+        store.releaseUnusedMemory()
+
+        #expect(store.cachedImage(for: shownKey) === shown)
+        #expect(store.cachedImage(for: unusedKey) == nil)
+    }
 }

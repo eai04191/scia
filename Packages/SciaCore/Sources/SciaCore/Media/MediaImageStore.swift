@@ -74,6 +74,11 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
         var cacheKey: String { "\(isVideoFrame ? "frame " : "")\(maxPixelSize) \(url.absoluteString)" }
     }
 
+    /// 使っていない画像をすべて手放す。描いている画像は残す。メモリ警告を受けたときに呼ぶ（docs/image-loading.mdの「メモリに持つ画像」）。
+    public func releaseUnusedMemory() {
+        cache.releaseUnused()
+    }
+
     public func cachedImage(for url: URL, maxPixelSize: Int) -> Image? {
         cache.value(forKey: Key(url: url, maxPixelSize: maxPixelSize).cacheKey)
     }
