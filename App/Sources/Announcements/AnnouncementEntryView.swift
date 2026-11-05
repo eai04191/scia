@@ -8,7 +8,7 @@ final class AnnouncementEntryView: UIView {
         var showsUnreadMark: Bool
         var body: NSAttributedString
         /// サーバーがリアクションを許していなければnil。
-        var reactions: [AnnouncementReactionsView.Reaction]?
+        var reactions: [ReactionChipsView.Reaction]?
         /// 動くカスタム絵文字を動かすときのストア。nilなら動かさない。
         var animatedEmojis: EmojiImageStore<UIImage>?
     }
@@ -23,7 +23,7 @@ final class AnnouncementEntryView: UIView {
     private let dateLabel = UILabel()
     private let unreadMark = UIView()
     private let bodyLabel = LinkLabel()
-    private let reactionsView = AnnouncementReactionsView()
+    private let reactionsView = ReactionChipsView()
     private static let unreadMarkSize: CGFloat = 8
 
     override init(frame: CGRect) {

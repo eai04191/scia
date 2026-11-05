@@ -80,12 +80,12 @@ struct AnnouncementsViewControllerTests {
 
     /// 描き直しても、同じリアクションのボタンは作り替えない。押している途中のタップを取り消さないため。
     @Test func reusesReactionButtonsOnRedraw() {
-        let view = AnnouncementReactionsView()
-        let reaction = AnnouncementReactionsView.Reaction(name: "👍", emoji: NSAttributedString(string: "👍"), count: 1, isMine: false, spokenName: "👍")
+        let view = ReactionChipsView()
+        let reaction = ReactionChipsView.Reaction(name: "👍", emoji: NSAttributedString(string: "👍"), count: 1, isMine: false, spokenName: "👍")
         view.apply([reaction])
         let first = view.subviews.first { $0.accessibilityLabel == "👍 1件" }
 
-        view.apply([AnnouncementReactionsView.Reaction(name: "👍", emoji: NSAttributedString(string: "👍"), count: 2, isMine: true, spokenName: "👍")])
+        view.apply([ReactionChipsView.Reaction(name: "👍", emoji: NSAttributedString(string: "👍"), count: 2, isMine: true, spokenName: "👍")])
 
         #expect(first != nil)
         #expect(view.subviews.first { $0.accessibilityLabel == "👍 2件" } === first)

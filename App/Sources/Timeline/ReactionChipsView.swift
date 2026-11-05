@@ -1,8 +1,8 @@
 import SciaCore
 import UIKit
 
-/// お知らせのリアクションを、絵文字と数のボタンで並べ、入りきらなければ折り返す。最後に、絵文字のシートを開く「＋」を置く。
-final class AnnouncementReactionsView: UIView {
+/// リアクションを、絵文字と数のボタンで並べ、入りきらなければ折り返す。最後に、絵文字のシートを開く「＋」を置く。サーバーのお知らせと投稿で使う。
+final class ReactionChipsView: UIView {
     struct Reaction {
         var name: String
         /// 絵文字を描いた文字。カスタム絵文字は画像で描く。
@@ -23,14 +23,14 @@ final class AnnouncementReactionsView: UIView {
     /// 並べている順のボタン。最後は「＋」。
     private var buttons: [UIControl] = []
     /// 絵文字の名前ごとのボタン。描き直しでも同じリアクションのボタンは使い回し、押している途中のボタンを作り替えてタップを取り消さない。
-    private var reactionButtons: [String: AnnouncementReactionButton] = [:]
+    private var reactionButtons: [String: ReactionChipButton] = [:]
     private lazy var addButton = makeAddButton()
     private static let spacing: CGFloat = 6
     /// 最後に並べた幅。幅が変わったら高さを測り直す。
     private var measuredWidth: CGFloat = 0
 
     func apply(_ reactions: [Reaction]) {
-        var used: [String: AnnouncementReactionButton] = [:]
+        var used: [String: ReactionChipButton] = [:]
         for reaction in reactions {
             let button = reactionButtons[reaction.name] ?? makeButton(name: reaction.name)
             configure(button, with: reaction)
@@ -85,13 +85,13 @@ final class AnnouncementReactionsView: UIView {
         return (frames, y + rowHeight)
     }
 
-    private func makeButton(name: String) -> AnnouncementReactionButton {
-        let button = AnnouncementReactionButton()
+    private func makeButton(name: String) -> ReactionChipButton {
+        let button = ReactionChipButton()
         button.addAction(UIAction { [weak self] _ in self?.onToggle?(name) }, for: .touchUpInside)
         return button
     }
 
-    private func configure(_ button: AnnouncementReactionButton, with reaction: Reaction) {
+    private func configure(_ button: ReactionChipButton, with reaction: Reaction) {
         let text = NSMutableAttributedString(attributedString: reaction.emoji)
         text.append(NSAttributedString(string: " \(reaction.count)", attributes: [
             .font: UIFont.monospacedDigitFont(forTextStyle: .subheadline),
@@ -107,7 +107,7 @@ final class AnnouncementReactionsView: UIView {
     }
 
     private func makeAddButton() -> UIControl {
-        let button = AnnouncementReactionButton()
+        let button = ReactionChipButton()
         let symbol = NSTextAttachment(image: UIImage(systemName: "plus", withConfiguration: UIImage.SymbolConfiguration(textStyle: .subheadline)) ?? UIImage())
         button.label.attributedText = NSAttributedString(attachment: symbol)
         button.label.textColor = .secondaryLabel
@@ -119,7 +119,7 @@ final class AnnouncementReactionsView: UIView {
 }
 
 /// リアクションのボタン。カスタム絵文字を本文と同じく動かすため、`UIButton`ではなく`EmojiLabel`を載せる。自分がしたものはアプリの色で塗る。
-private final class AnnouncementReactionButton: UIControl {
+private final class ReactionChipButton: UIControl {
     let label = EmojiLabel()
     private static let padding = NSDirectionalEdgeInsets(top: 5, leading: 10, bottom: 5, trailing: 10)
     /// 押せる範囲の高さ。見た目は小さくても、押せる範囲は44pt取る。

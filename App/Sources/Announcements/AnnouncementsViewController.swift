@@ -226,7 +226,7 @@ final class AnnouncementsViewController: UIViewController {
         let reactions = announcement.reactions.map { reaction in
             let customEmoji = reaction.customEmoji
             let text: RichText = customEmoji.map { .plain(":\($0.shortcode):", emojis: [$0]) } ?? .plain(reaction.name, emojis: [])
-            return AnnouncementReactionsView.Reaction(
+            return ReactionChipsView.Reaction(
                 name: reaction.name,
                 emoji: reactionRenderer.render(text),
                 count: reaction.displayedCount,
