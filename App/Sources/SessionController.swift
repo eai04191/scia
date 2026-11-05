@@ -102,6 +102,8 @@ final class SessionController {
     }()
     /// 「接続の状態」画面に出す、このセッションの接続の状態。
     let diagnostics: ConnectionDiagnostics
+    /// 投稿のIDと変換を受け取り、表示しているすべての一覧で、その投稿とそれをブーストした投稿を変える。
+    private let updateStatusEverywhere: StatusInteractions.Update
     private let interactions: StatusInteractions
     private let polls: PollVoting
     /// カードが付く前に受け取った投稿を、見えている間に取り直す。
@@ -306,7 +308,7 @@ final class SessionController {
         let searches = SearchRegistry()
         self.searches = searches
         // 同じ投稿がいくつものタブと開いているプロフィールやスレッドにあることがあるため、どれにも反映する。
-        interactions = StatusInteractions(operations: .init(client: client)) { id, transform in
+        let updateStatusEverywhere: StatusInteractions.Update = { id, transform in
             home.updateStatus(id, transform)
             local.updateStatus(id, transform)
             federated.updateStatus(id, transform)
@@ -319,32 +321,20 @@ final class SessionController {
             threads.updateStatus(id, transform)
             searches.updateStatus(id, transform)
         }
+        self.updateStatusEverywhere = updateStatusEverywhere
+        interactions = StatusInteractions(operations: .init(client: client), update: updateStatusEverywhere)
         // 付けた投稿は、サーバーが受け付けたところでブックマークやお気に入りの一覧の先頭に入れる。外したときは行を残す。
         interactions.onSettle = { action, status in
             bookmarks.statusDidSettle(action, status)
             favourites.statusDidSettle(action, status)
         }
-        polls = PollVoting(operations: Self.pollOperations(client: client)) { id, transform in
-            home.updateStatus(id, transform)
-            local.updateStatus(id, transform)
-            federated.updateStatus(id, transform)
-            notifications.updateStatus(id, transform)
-            bookmarks.updateStatus(id, transform)
-            favourites.updateStatus(id, transform)
-            serverFeeds.updateStatus(id, transform)
-            pushedFeeds.updateStatus(id, transform)
-            profiles.updateStatus(id, transform)
-            threads.updateStatus(id, transform)
-            searches.updateStatus(id, transform)
-        }
+        polls = PollVoting(operations: Self.pollOperations(client: client), update: updateStatusEverywhere)
         let timelines = timelines
         let statusRefresher = StatusRefresher(client: client) { refetched in
             let shown = timelines.allObjects
             for timeline in shown { timeline.refreshedStatusID = refetched.id }
             defer { for timeline in shown { timeline.refreshedStatusID = nil } }
-            for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, serverFeeds.updateStatus, pushedFeeds.updateStatus, profiles.updateStatus, threads.updateStatus, searches.updateStatus] {
-                update(refetched.id) { $0.adoptingRefreshed(of: refetched) }
-            }
+            updateStatusEverywhere(refetched.id) { $0.adoptingRefreshed(of: refetched) }
         }
         self.statusRefresher = statusRefresher
         // セッションを閉じたら、取り直している途中でも止める。前のアカウントのトークンで取り直し続けないため。
