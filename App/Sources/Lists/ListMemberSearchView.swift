@@ -39,6 +39,8 @@ struct ListMemberSearchView: View {
                     ContentUnavailableView.search(text: trimmedQuery)
                 }
             }
+            // 検索欄の閉じるボタンは、語を空にする変更をアニメーション付きで流す。そのままだと、結果の行と案内の行と結果なしの表示が、検索バーが戻る動きのあいだに入れ替わりながら重なり、案内の行がずれた位置から飛んで戻る。
+            .animation(nil, value: trimmedQuery)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "フォローしている人を探す")
             .navigationTitle("メンバーを追加")
             .navigationBarTitleDisplayMode(.inline)
