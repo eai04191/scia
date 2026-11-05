@@ -1976,15 +1976,15 @@ final class SessionController {
     }
 
     /// ハッシュタグのメニューの「プロフィールで紹介する」。覚えている自分の注目のハッシュタグで載せているかを決め、メニューを開くたびに読み直す。
-    private var hashtagFeatureActions: HashtagFeatureActions {
+    private var hashtagFeatureActions: HashtagToggleActions {
         let ownFeaturedTags = ownFeaturedTags
-        return HashtagFeatureActions(
+        return HashtagToggleActions(
             known: { name in ownFeaturedTags.value.map { $0.first(named: name) != nil } },
             // まだ読めていなければ、開いたメニューがこの読み直しを待つので、操作として送る。
             refresh: { ownFeaturedTags.refresh(purpose: .action) },
             load: { name in try await ownFeaturedTags.latest().first(named: name) != nil },
-            feature: { [weak self] name in self?.featureHashtag(name) },
-            unfeature: { [weak self] name in self?.unfeatureHashtag(name) }
+            turnOn: { [weak self] name in self?.featureHashtag(name) },
+            turnOff: { [weak self] name in self?.unfeatureHashtag(name) }
         )
     }
 

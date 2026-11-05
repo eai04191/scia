@@ -113,25 +113,33 @@ public struct HashtagMenuTree {
 
 extension HashtagMenuTree {
     /// 載せていなければ「プロフィールで紹介する」、載せていれば「プロフィールから外す」にする。
-    /// ミュートと同じく、覚えている一覧でその場で決め、メニューを開くたびに読み直す。まだ読めていなければ、読む間は読み込み中の行を出し、読めなければ押せない行で知らせる。
     @MainActor
-    fileprivate func featureNodes(_ featureActions: HashtagFeatureActions, item: HashtagMenuItem) -> [MenuNode<HashtagMenuCommand>] {
+    fileprivate func featureNodes(_ featureActions: HashtagToggleActions, item: HashtagMenuItem) -> [MenuNode<HashtagMenuCommand>] {
+        toggleNodes(
+            featureActions,
+            on: .action("プロフィールから外す", icon: .symbol(item.symbolName), .unfeature),
+            off: .action("プロフィールで紹介する", icon: .symbol(item.symbolName), .feature),
+            failure: "注目のハッシュタグを読み込めませんでした"
+        )
+    }
+
+    /// 状態を持つ項目の行。ミュートと同じく、覚えている一覧でその場で決め、メニューを開くたびに読み直す。まだ読めていなければ、読む間は読み込み中の行を出し、読めなければ押せない行で知らせる。
+    /// - Parameters:
+    ///   - on: タグが当てはまっている（載せている、フォローしている）ときの行。
+    ///   - off: 当てはまっていないときの行。
+    @MainActor
+    fileprivate func toggleNodes(_ actions: HashtagToggleActions, on: MenuNode<HashtagMenuCommand>, off: MenuNode<HashtagMenuCommand>, failure: String) -> [MenuNode<HashtagMenuCommand>] {
         let name = name
-        func nodes(isFeatured: Bool) -> [MenuNode<HashtagMenuCommand>] {
-            isFeatured
-                ? [.action("プロフィールから外す", icon: .symbol(item.symbolName), .unfeature)]
-                : [.action("プロフィールで紹介する", icon: .symbol(item.symbolName), .feature)]
-        }
-        let isFeatured = featureActions.known(name)
-        featureActions.refresh()
-        if let isFeatured {
-            return nodes(isFeatured: isFeatured)
+        let isOn = actions.known(name)
+        actions.refresh()
+        if let isOn {
+            return [isOn ? on : off]
         }
         return [.deferred {
             do {
-                return nodes(isFeatured: try await featureActions.load(name))
+                return [try await actions.load(name) ? on : off]
             } catch {
-                return [.action("注目のハッシュタグを読み込めませんでした", icon: .symbol("exclamationmark.triangle"), isEnabled: false, nil)]
+                return [.action(failure, icon: .symbol("exclamationmark.triangle"), isEnabled: false, nil)]
             }
         }]
     }
@@ -142,40 +150,40 @@ public struct HashtagMenuActions {
     /// nilなら「ミュート」を出さない。
     public var mute: HashtagMuteActions?
     /// nilなら「プロフィールで紹介する」を出さない。
-    public var feature: HashtagFeatureActions?
+    public var feature: HashtagToggleActions?
 
-    public init(mute: HashtagMuteActions?, feature: HashtagFeatureActions? = nil) {
+    public init(mute: HashtagMuteActions?, feature: HashtagToggleActions? = nil) {
         self.mute = mute
         self.feature = feature
     }
 }
 
-/// ハッシュタグのメニューの「プロフィールで紹介する」で、自分のプロフィールに載せているかを読み、変える。項目は`HashtagMenuTree`が組む。
+/// ハッシュタグのメニューの、タグごとに当てはまるかどうかを持つ項目（「プロフィールで紹介する」など）で、当てはまるかを読み、変える。項目は`HashtagMenuTree`が組む。
 /// 決まりはdocs/menus.mdの「ハッシュタグのメニュー」にある。
-public struct HashtagFeatureActions {
-    /// 覚えている自分の注目のハッシュタグで決めた、`#`を除いた名前のタグを載せているか。まだ読めていなければnil。
+public struct HashtagToggleActions {
+    /// 覚えている一覧で決めた、`#`を除いた名前のタグが当てはまるか。まだ読めていなければnil。
     public let known: @MainActor (String) -> Bool?
-    /// 自分の注目のハッシュタグを読み直していなければ読み直す。メニューを開いたときに呼び、次に開いたときから使う。
+    /// 一覧を読み直していなければ読み直す。メニューを開いたときに呼び、次に開いたときから使う。
     public let refresh: @MainActor () -> Void
-    /// `#`を除いた名前のタグを載せているか。読み直している途中なら、それを待つ。
+    /// `#`を除いた名前のタグが当てはまるか。読み直している途中なら、それを待つ。
     public let load: @MainActor (String) async throws -> Bool
-    /// 載せる。
-    public let feature: @MainActor (String) -> Void
-    /// 外す。外すIDは、外すときに読み直した一覧で決める。
-    public let unfeature: @MainActor (String) -> Void
+    /// 当てはまるようにする（載せる、など）。
+    public let turnOn: @MainActor (String) -> Void
+    /// 当てはまらないようにする（外す、など）。
+    public let turnOff: @MainActor (String) -> Void
 
     public init(
         known: @escaping @MainActor (String) -> Bool?,
         refresh: @escaping @MainActor () -> Void,
         load: @escaping @MainActor (String) async throws -> Bool,
-        feature: @escaping @MainActor (String) -> Void,
-        unfeature: @escaping @MainActor (String) -> Void
+        turnOn: @escaping @MainActor (String) -> Void,
+        turnOff: @escaping @MainActor (String) -> Void
     ) {
         self.known = known
         self.refresh = refresh
         self.load = load
-        self.feature = feature
-        self.unfeature = unfeature
+        self.turnOn = turnOn
+        self.turnOff = turnOff
     }
 }
 

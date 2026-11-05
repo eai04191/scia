@@ -58,7 +58,7 @@ struct HashtagMenuTreeTests {
     }
 
     private func featureActions(known: Bool?, recorder: Recorder = Recorder(), load: @escaping @MainActor (String) async throws -> Bool = { _ in false }) -> HashtagMenuActions {
-        HashtagMenuActions(mute: nil, feature: HashtagFeatureActions(known: { _ in known }, refresh: { recorder.refreshes += 1 }, load: load, feature: { _ in }, unfeature: { _ in }))
+        HashtagMenuActions(mute: nil, feature: HashtagToggleActions(known: { _ in known }, refresh: { recorder.refreshes += 1 }, load: load, turnOn: { _ in }, turnOff: { _ in }))
     }
 
     /// 「プロフィールで紹介する」は、覚えている自分の注目のハッシュタグで、その場で載せているかを決め、載せていれば「プロフィールから外す」にする。
