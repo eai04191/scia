@@ -7,7 +7,7 @@ import UIKit
 /// 候補と結果は同じ一覧に並べる。両方にある行（同じ人、同じハッシュタグ、見出し）は、確定したときも打ち直したときも、その場に残す。
 /// `UISearchController`の結果の画面には載せない。結果の画面はナビゲーションの外に出るため、候補からプロフィールなどを積めないため。
 @MainActor
-final class SearchViewController: UIViewController, UISearchBarDelegate, UISearchControllerDelegate, UISearchResultsUpdating {
+final class SearchViewController: UIViewController, UISearchBarDelegate, UISearchControllerDelegate, UISearchResultsUpdating, UIGestureRecognizerDelegate {
     /// 確定した語の結果を読むモデルを作る。今の候補と、結果を並べる一覧を渡す。一覧に伝え始めるのと読み始めるのは、この画面が行う。
     var makeResults: ((SearchInput, SearchSuggestions.Content, TimelineViewController) -> SearchModel?)?
     /// 候補と結果を並べる一覧を作る。画面を読み込むときに1度だけ呼ぶ。
@@ -91,6 +91,39 @@ final class SearchViewController: UIViewController, UISearchBarDelegate, UISearc
         }
         suggestions.map { show($0.content) }
         updateListVisibility()
+        // キーボードがタブバーを覆うので、行のないところを押したらキーボードだけを閉じ、ほかのタブへ移れるようにする。
+        let dismissTap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
+        dismissTap.cancelsTouchesInView = false
+        dismissTap.delegate = self
+        view.addGestureRecognizer(dismissTap)
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        dismissesKeyboard(touching: touch.view)
+    }
+
+    /// 押したところでキーボードを閉じるか。検索欄にフォーカスがある間に、押しても何も起きないところ（行のない空き、見出しの行）を押したときだけ閉じる。
+    /// ボタンと、押すと開く行では閉じない。
+    func dismissesKeyboard(touching touchedView: UIView?) -> Bool {
+        guard searchController.searchBar.searchTextField.isFirstResponder else { return false }
+        var ancestor = touchedView
+        while let current = ancestor, current !== view {
+            if current is UIControl { return false }
+            if let cell = current as? UICollectionViewCell { return isHeading(cell) }
+            ancestor = current.superview
+        }
+        return true
+    }
+
+    private func isHeading(_ cell: UICollectionViewCell) -> Bool {
+        guard let list, let indexPath = list.collectionView.indexPath(for: cell), let id = list.itemIdentifier(at: indexPath),
+              case .search(let row) = list.entry(for: id) else { return false }
+        return row.isHeading
+    }
+
+    /// キーボードだけを閉じる。検索欄は開いたままにし、打った語と候補を残す。
+    @objc func dismissKeyboard() {
+        searchController.searchBar.searchTextField.resignFirstResponder()
     }
 
     override func viewDidAppear(_ animated: Bool) {

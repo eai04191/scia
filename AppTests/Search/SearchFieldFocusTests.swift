@@ -3,9 +3,9 @@ import SciaTesting
 import Testing
 import UIKit
 
-/// 検索欄のフォーカス。検索のタブを開くとフォーカスを入れ、タブをもう一度押すと、検索欄を閉じていても入れ直す。
+/// 検索欄のフォーカス。検索のタブを開くとフォーカスを入れ、タブをもう一度押すと、検索欄を閉じていても入れ直す。空いたところを押すとキーボードを閉じる。
 @MainActor
-@Suite(.serialized) struct SearchTabReselectionTests {
+@Suite(.serialized) struct SearchFieldFocusTests {
     /// 開いたときに、検索欄にフォーカスを入れる。
     @Test func openingFocusesSearchField() async throws {
         let search = SearchViewController()
@@ -35,6 +35,34 @@ import UIKit
         TabReselectionDelegate.reselectRoot(of: navigation)
 
         #expect(field.isFirstResponder)
+    }
+
+    /// 検索欄にフォーカスがある間に行とボタンのないところを押すと、キーボードだけを閉じ、検索欄と打った語は残す。ボタンや一覧にない行を押したときと、フォーカスがないときは閉じない。見出しの行はUIで確かめる。
+    @Test func tappingEmptySpaceDismissesOnlyKeyboard() async throws {
+        let search = SearchViewController()
+        let window = try Self.window(showing: search)
+        defer { window.isHidden = true }
+        let searchController = try #require(search.navigationItem.searchController)
+        let field = searchController.searchBar.searchTextField
+        try await waitUntil { field.isFirstResponder }
+        searchController.searchBar.text = "scia"
+        let button = UIButton()
+        search.view.addSubview(button)
+        let cellContent = UIView()
+        let cell = UICollectionViewCell()
+        cell.contentView.addSubview(cellContent)
+        search.view.addSubview(cell)
+
+        #expect(search.dismissesKeyboard(touching: search.view))
+        #expect(!search.dismissesKeyboard(touching: button))
+        #expect(!search.dismissesKeyboard(touching: cellContent))
+
+        search.dismissKeyboard()
+
+        #expect(!field.isFirstResponder)
+        #expect(searchController.isActive)
+        #expect(searchController.searchBar.text == "scia")
+        #expect(!search.dismissesKeyboard(touching: search.view))
     }
 
     private static func window(showing search: SearchViewController) throws -> UIWindow {
