@@ -12,6 +12,9 @@
 #   Tools/merge-queue.sh status                         並んでいるbranchを順に出す
 # runの終了コード: 0 入れた、1 使い方の誤りや想定外の失敗、2 未commitの変更がある、3 rebaseがconflictした、4 make checkかmake testが落ちた、
 #   5 前提のbranchが、列にもmainにもないまま10分経った、6 FEATURES.mdかREADME.mdの変更を人が承認していない（Tools/human-review.sh）
+# 段階ごとにかかった時間は、列のディレクトリのtiming.logに1行ずつ足す。列は「始めた時刻 branch 段階 秒 結果」のタブ区切りで、結果はokか終了コード。
+#   段階は、wait（並んでから番が来るまで）、rebase、check、sim-acquire（make testの端末を借りるまで）、sim-reset、test、total（並んでから終わるまで）。
+#   mainが動いて載せ直すと、rebaseからの段階がもう一度並ぶ
 set -euo pipefail
 
 TARGET=main
@@ -24,6 +27,27 @@ SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]
 
 queue_dir() {
     echo "$(git rev-parse --path-format=absolute --git-common-dir)/scia-merge-queue"
+}
+
+# runが並べたbranchと並んだ時刻。landはlockfから別のプロセスで走るので、環境変数で受け取る
+MERGE_QUEUE_BRANCH=${MERGE_QUEUE_BRANCH:-}
+MERGE_QUEUE_QUEUED_AT=${MERGE_QUEUE_QUEUED_AT:-}
+
+# 段階の名前、始めたUNIX時刻、結果（終了コード）を受け取り、timing.logに1行足す
+log_timing() {
+    local result=$3
+    [[ "$result" == 0 ]] && result=ok
+    printf '%s\t%s\t%s\t%s\t%s\n' "$(date -r "$2" '+%Y-%m-%dT%H:%M:%S%z')" "$MERGE_QUEUE_BRANCH" "$1" "$(( $(date +%s) - $2 ))" "$result" >> "$(queue_dir)/timing.log"
+}
+
+# 段階の名前とコマンドを受け取り、コマンドを走らせてかかった時間をtiming.logに足す。コマンドの終了コードを返す
+timed() {
+    local phase=$1 start status=0
+    shift
+    start=$(date +%s)
+    "$@" || status=$?
+    log_timing "$phase" "$start" "$status"
+    return "$status"
 }
 
 # 並びのファイルは、1行目がプロセスID、2行目がbranch、3行目がworktree、4行目が空白で区切った前提のbranch
@@ -168,7 +192,7 @@ require_clean() {
 rebase_onto_target() {
     git merge-base --is-ancestor "$TARGET" HEAD && return
     echo "$(git rev-parse --short HEAD) を $TARGET（$(git rev-parse --short "$TARGET")）へrebaseします"
-    if ! git rebase "$TARGET"; then
+    if ! timed rebase git rebase "$TARGET"; then
         git rebase --abort
         echo "error: $TARGET へのrebaseがconflictしたので、取りやめて列を離れます。解決してから並び直してください" >&2
         exit 3
@@ -194,17 +218,17 @@ run_missing_steps() {
         echo "make $step を走らせます"
         if [[ "$step" == test ]]; then
             # 並んで待つ間は端末を持たない。ほかのスレッドが使えるよう、走らせる直前に借りて、終わったら返す。
-            lent=$(Tools/sim.sh acquire --wait 0 | tail -1) || { echo "error: make test の端末を借りられませんでした" >&2; exit 1; }
+            lent=$(timed sim-acquire Tools/sim.sh acquire --wait 0 | tail -1) || { echo "error: make test の端末を借りられませんでした" >&2; exit 1; }
             sim=${lent% *}
             # ほかのworktreeが使ったあとの端末は、その設定やチューニングを持ち込まないよう、既定に戻してからテストする。
             if [[ "${lent##* }" != ready ]]; then
-                Tools/sim.sh reset "$sim" || { Tools/sim.sh release >/dev/null; echo "error: $sim の設定を戻せませんでした" >&2; exit 1; }
+                timed sim-reset Tools/sim.sh reset "$sim" || { Tools/sim.sh release >/dev/null; echo "error: $sim の設定を戻せませんでした" >&2; exit 1; }
             fi
             echo "make test を $sim で走らせます"
-            make test SIM="$sim" || { Tools/sim.sh release >/dev/null; echo "error: make test が落ちました" >&2; exit 4; }
+            timed test make test SIM="$sim" || { Tools/sim.sh release >/dev/null; echo "error: make test が落ちました" >&2; exit 4; }
             Tools/sim.sh release >/dev/null
         else
-            make "$step" || { echo "error: make $step が落ちました" >&2; exit 4; }
+            timed "$step" make "$step" || { echo "error: make $step が落ちました" >&2; exit 4; }
         fi
     done
 }
@@ -225,6 +249,7 @@ fast_forward() {
 land() {
     local before
     echo "番が来ました"
+    log_timing wait "$MERGE_QUEUE_QUEUED_AT" 0
     # 並んでから番が来るまでの間に変えたファイルを、確かめていない中身として入れないよう、もう一度確かめる
     require_clean "$(git rev-parse --show-toplevel)"
     # checkとtestの間に誰かがmainを動かしたら、載せ直して足りないものを通し直す
@@ -247,9 +272,16 @@ run() {
         git rev-parse -q --verify "refs/heads/$dep" > /dev/null || { echo "error: 前提のbranch $dep がありません" >&2; exit 1; }
     done
     require_clean "$(git rev-parse --show-toplevel)"
+    MERGE_QUEUE_BRANCH=$(git symbolic-ref --short HEAD)
+    MERGE_QUEUE_QUEUED_AT=$(date +%s)
+    export MERGE_QUEUE_BRANCH MERGE_QUEUE_QUEUED_AT
     # trapは関数を抜けたあとに走るので、並びのファイルはグローバルに持つ
     entry=$(enqueue "$@")
-    trap 'rm -f "$entry"' EXIT
+    trap 'exit_status=$?; rm -f "$entry"; log_timing total "$MERGE_QUEUE_QUEUED_AT" "$exit_status"' EXIT
+    # シグナルで止めると、EXITのtrapの$?が0になり、totalが止めた実行もokと残るので、シグナルの終了コードで抜ける
+    trap 'exit 129' HUP
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
     echo "$(git symbolic-ref --short HEAD) を列に並べました"
     wait_and_land "$entry"
 }
