@@ -87,3 +87,7 @@ targetは、指定がなければ`git symbolic-ref --short refs/remotes/origin/H
 どれもなければ「archiveしてよい」と書く。あれば、archiveの前に片付けるものと、閉じても困らないものに分けて挙げる。見つけたものは、確認せずに直したりdocsに書き足したりしない。
 
 「archiveしてよい」と書いたら、`mcp__ccd_session_mgmt__set_session_title`でthread名の先頭に✅を付ける。そのあと同じthreadで作業を始めたら、最初に✅を外す。
+
+- `session_id`は必須で、このthreadなら`"self"`を渡す。IDを調べる必要はない
+- `title`には新しい名前を丸ごと渡す。今の名前は`mcp__ccd_session_mgmt__get_session`に`"self"`を渡して引く
+- どちらも最初は名前しか分からないツールなので、`ToolSearch`で定義を読み込んでから呼ぶ
