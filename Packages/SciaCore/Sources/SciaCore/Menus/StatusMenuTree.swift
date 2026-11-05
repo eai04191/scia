@@ -10,6 +10,8 @@ public enum StatusAction: Sendable {
     case bookmark
     /// 投稿欄で投稿を引用して書き始める。
     case quote
+    /// 絵文字のシートを開き、選んだ絵文字で投稿にリアクションする。
+    case react
     case muteConversation
     case pin
     case editHistory
@@ -84,6 +86,8 @@ public struct StatusMenuTree {
     public var canSelectText = false
     /// 一覧で投稿を選び始められるか。投稿を選べる一覧の行でだけ選べる。
     public var canSelectPosts = false
+    /// サーバーが投稿への絵文字のリアクションに対応しているか。対応していなければ「リアクション」を出さない。
+    public var supportsEmojiReactions = false
     /// ユーザーのメニューの並びと、メンション、ハンドルをコピー、関係の項目を組むもの。
     public var userMenu: MenuLayout<UserMenuItem>.Groups = UserMenuItem.defaultLayout.groups
     public var userActions: UserMenuActions?
@@ -178,7 +182,7 @@ public struct StatusMenuTree {
         case .customize:
             // 投稿のない通知（フォローなど）でも出す。
             return [.action(item.title, icon: .symbol(item.symbolName), .customize)]
-        case .reply, .favourite, .reblog, .bookmark, .quote, .muteConversation, .pin, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .favouritedBy, .rebloggedBy, .hideMedia, .systemTranslate, .selectText, .edit, .delete, .redraft, .apiResponse:
+        case .reply, .favourite, .reblog, .bookmark, .quote, .emojiReaction, .muteConversation, .pin, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .favouritedBy, .rebloggedBy, .hideMedia, .systemTranslate, .selectText, .edit, .delete, .redraft, .apiResponse:
             guard let status else { return [] }
             return statusNode(item, on: status).map { [$0] } ?? []
         }
@@ -204,6 +208,9 @@ public struct StatusMenuTree {
             return .action(shown.bookmarked ? "ブックマークを外す" : item.title, icon: shown.bookmarked ? .symbol("bookmark.slash") : icon, .status(.bookmark))
         case .quote:
             return quoteNode(item, on: status)
+        case .emojiReaction:
+            guard supportsEmojiReactions else { return nil }
+            return .action(item.title, icon: icon, .status(.react))
         case .muteConversation:
             // サーバーはどの会話でもミュートできるが、通知が届かない会話をミュートしても変わらないため、自分が加わっていそうな投稿でだけ出す。
             // 自分が途中で返信した会話で、自分へのメンションを含まない投稿には出ない。そのときは、通知か自分の投稿からミュートする。

@@ -270,6 +270,17 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onVote: ((Set<Int>, Status) -> Void)?
     /// 投票の「更新」が押されたときに、押した投稿を渡して呼ぶ。読み終えたら、呼ばれた側が`finishRefreshingPoll(_:)`を呼ぶ。
     var onRefreshPoll: ((Status) -> Void)?
+    /// サーバーが投稿への絵文字のリアクションに対応しているか。読めたら、セッションが入れる。対応していなければ、投稿にリアクションがあっても出さない（docs/emoji-reaction.md）。
+    var supportsEmojiReactions = false {
+        didSet {
+            guard supportsEmojiReactions != oldValue, isViewLoaded else { return }
+            reconfigure(Set(displayedItemIDs.filter { status(for: $0)?.displayed.emojiReactions.isEmpty == false }))
+        }
+    }
+    /// リアクションのボタンが押されたときに、押した投稿（ブーストならブーストした投稿）と絵文字を渡して呼ぶ。
+    var onToggleEmojiReaction: ((Status, ReactionEmoji) -> Void)?
+    /// リアクションの列の「＋」が押されたときに、押した投稿を渡して呼ぶ。nilなら「＋」を出さない。
+    var onAddEmojiReaction: ((Status) -> Void)?
     /// 注意書きのある投稿の本文を開いているか。サーバーの設定が読めたら、セッションが既定を入れる。
     var spoilerExpansion = SpoilerExpansion() {
         didSet {
@@ -866,11 +877,12 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     static func emojiURLs(of status: Status, quoteSources: QuoteSourceChanges) -> Set<URL> {
         let shown = status.displayed
         let quoted = quoteSources.applying(to: shown).quote?.quotedStatus.map { $0.emojis + $0.account.emojis } ?? []
-        return Set((shown.emojis + (shown.poll?.emojis ?? []) + shown.account.emojis + status.account.emojis + quoted).map(\.staticUrl))
+        let reactions = shown.emojiReactions.compactMap(\.emoji.customEmoji)
+        return Set((shown.emojis + (shown.poll?.emojis ?? []) + shown.account.emojis + status.account.emojis + quoted + reactions).map(\.staticUrl))
     }
 
     private static func emojiURLs(of notification: MastodonNotification, quoteSources: QuoteSourceChanges) -> Set<URL> {
-        Set(notification.account.emojis.map(\.staticUrl)).union(notification.status.map { emojiURLs(of: $0, quoteSources: quoteSources) } ?? [])
+        Set((notification.account.emojis + [notification.reactionEmoji?.customEmoji].compactMap(\.self)).map(\.staticUrl)).union(notification.status.map { emojiURLs(of: $0, quoteSources: quoteSources) } ?? [])
     }
 
     /// 端末の文字の大きさが変わったら、行をすべて組み直し、変わる前に読んでいた位置へ戻す。
@@ -2268,6 +2280,16 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         configuration.onToggleSpoiler = { [weak self] in self?.toggleSpoiler(of: status, keeping: itemID) }
         configuration.bodyTruncation = longBodyExpansion.truncation(forBodyOf: status, isThreadFocus: shown.id == threadFocusID, rule: bodyTruncationRule)
         configuration.onExpandBody = { [weak self] in self?.expandBody(.status(shown.id), keeping: itemID) }
+        if supportsEmojiReactions, let reactions = postContentBuilder.reactionChips(for: shown) {
+            configuration.reactions = reactions
+            configuration.onToggleReaction = { [weak self] name in
+                guard let emoji = shown.emojiReactions.first(where: { $0.emoji.name == name })?.emoji else { return }
+                self?.onToggleEmojiReaction?(status, emoji)
+            }
+            if onAddEmojiReaction != nil {
+                configuration.onAddReaction = { [weak self] in self?.onAddEmojiReaction?(status) }
+            }
+        }
         return isAppearancePreview ? Self.keepingOnlyLinks(configuration) : configuration
     }
 
@@ -2287,6 +2309,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         // リンクカードの対象を外すと、カードのタップは`onOpenLink`で開く。
         kept.linkCardTarget = nil
         kept.onPollAction = nil
+        kept.onToggleReaction = nil
+        kept.onAddReaction = nil
         kept.embedActions = EmbedActions(openLink: configuration.embedActions.openLink)
         // リンクのタップと長押しの設定によらず、タップで開く。
         kept.opensLinksOnTapOnly = true

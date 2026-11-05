@@ -105,6 +105,11 @@ final class SessionController {
     /// 投稿のIDと変換を受け取り、表示しているすべての一覧で、その投稿とそれをブーストした投稿を変える。
     private let updateStatusEverywhere: StatusInteractions.Update
     private let interactions: StatusInteractions
+    /// 投稿にリアクションする絵文字を選ぶシート。開くときに、カスタム絵文字と最近使った絵文字を読む。
+    private lazy var emojiReactionPicker = EmojiReactionPicker(completion: TextInputCompletion(
+        completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), emojis: customEmojis.emojis),
+        recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
+    ))
     private let polls: PollVoting
     /// カードが付く前に受け取った投稿を、見えている間に取り直す。
     private let statusRefresher: StatusRefresher
@@ -584,6 +589,11 @@ final class SessionController {
         composer.onLinkTitleLoadingChange = { [weak self] in self?.linkTitleActivityDidChange() }
         composer.onLinkTitleFailed = { [weak self] failure in self?.linkTitleDidFail(failure) }
         session.onCredentialsInvalid = { [weak self] in self?.credentialsDidBecomeInvalid() }
+        session.onEmojiReactionSupportLoad = { [weak self] supports in
+            for timeline in self?.timelines.allObjects ?? [] {
+                timeline.supportsEmojiReactions = supports
+            }
+        }
         session.onPreferencesLoad = { [weak self, handle = credential.handle] preferences in
             AppDependencies.settings.rememberServerAnimations(preferences.autoplaysAnimations, of: handle)
             for timeline in self?.timelines.allObjects ?? [] {
@@ -662,6 +672,10 @@ final class SessionController {
                 self?.changeQuoteSources(.status(id)) { $0.delete(id) }
                 // 書き直している元の投稿がほかの端末で消えたら、やめる前に確かめるようにする。
                 self?.composer.model.redraftedStatusWasDeleted(id, stopsRedrafting: false)
+            case .emojiReaction(let update):
+                // 同じイベントがストリームごとに届いても、数を置き換えるだけなので結果は変わらない。
+                guard let self else { return }
+                interactions.apply(update, myAccountID: credential.accountID)
             case .update, .notification, .filtersChanged, .notificationsMerged, .announcement, .announcementReaction, .announcementDelete, .unhandled: break
             }
         }
@@ -1082,6 +1096,14 @@ final class SessionController {
         viewController.setShowsFocusInlineCompose(showsFocusInlineCompose)
         viewController.myAccountID = credential.accountID
         viewController.spoilerExpansion.expandsByDefault = session.preferences?.expandsSpoilers ?? false
+        viewController.supportsEmojiReactions = session.supportsEmojiReactions
+        viewController.onToggleEmojiReaction = { [weak self] status, emoji in
+            self?.toggle(.emojiReaction(emoji), on: status, failureTitle: Self.emojiReactionFailureTitle)
+        }
+        viewController.onAddEmojiReaction = { [weak self, weak viewController] status in
+            guard let viewController else { return }
+            self?.chooseEmojiReaction(for: status, from: viewController)
+        }
         viewController.mediaCovers = mediaCovers
         viewController.quoteSourceChanges = quoteSources
         viewController.xPosts = xPosts
@@ -1930,6 +1952,9 @@ final class SessionController {
         case .quote:
             UserAction.quote.record()
             startQuoting(status)
+        case .react:
+            guard let source = timeline ?? tabs.selectedNavigation?.topViewController else { return }
+            chooseEmojiReaction(for: status, from: source)
         case .favourite:
             UserAction.toggleFavourite.record()
             toggle(.favourite, on: status, failureTitle: "お気に入りを変更できませんでした")
@@ -3018,21 +3043,39 @@ final class SessionController {
         notices.showTransient(Notice(id: "status.toggled", kind: .success, title: title), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
     }
 
-    private func toggle(_ action: StatusInteractions.Action, on status: Status, reblogVisibility: ReblogVisibility = .accountDefault, failureTitle: String, onSuccess: (() -> Void)? = nil) {
+    /// - Parameter turningOn: 今の状態によらず、その向きにする。nilなら反転する。
+    private func toggle(_ action: StatusInteractions.Action, on status: Status, turningOn: Bool? = nil, reblogVisibility: ReblogVisibility = .accountDefault, failureTitle: String, onSuccess: (() -> Void)? = nil) {
         let interactions = interactions
         tasks.run(.action) { [weak self] in
             do {
-                guard try await interactions.toggle(action, on: status, reblogVisibility: reblogVisibility) else { return }
+                let sent = if let turningOn {
+                    try await interactions.set(action, to: turningOn, on: status, reblogVisibility: reblogVisibility)
+                } else {
+                    try await interactions.toggle(action, on: status, reblogVisibility: reblogVisibility)
+                }
+                guard sent else { return }
                 onSuccess?()
             } catch {
                 guard let self else { return }
-                logger.error("toggle \(String(describing: action), privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
+                // 絵文字のリアクションは、絵文字がサーバーの中身なので、種類だけを公開扱いで残す（docs/logging.md）。
+                let actionName = if case .emojiReaction = action { "emojiReaction" } else { String(describing: action) }
+                logger.error("toggle \(actionName, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
                 let reason = await failureReason(for: error)
                 operationStatus.recordFailure(title: failureTitle, reason: reason, subject: OperationStatus.Subject(status))
                 showFailureNotice(.interactionFailure(title: failureTitle) { [weak self] in
                     self?.presentAlert(title: failureTitle, message: reason.text)
                 })
             }
+        }
+    }
+
+    private static let emojiReactionFailureTitle = "リアクションを変更できませんでした"
+
+    /// 絵文字のシートを開き、選んだ絵文字で`status`にリアクションする。自分がすでにしている絵文字を選んだら、付けたままにする。
+    func chooseEmojiReaction(for status: Status, from viewController: UIViewController) {
+        guard session.supportsEmojiReactions else { return }
+        emojiReactionPicker.present(from: viewController.navigationController ?? viewController) { [weak self] emoji in
+            self?.toggle(.emojiReaction(emoji), on: status, turningOn: true, failureTitle: Self.emojiReactionFailureTitle)
         }
     }
 
@@ -3176,6 +3219,7 @@ final class SessionController {
         AppDependencies.settings.followServerAnimations(of: credential.handle)
         // 注意書きを最初から開いておくかと、アニメーションを再生するかを一覧に反映する。読めなければ前の値のままにし、次に投稿欄で書き始めたときに読み直す。
         tasks.run(.display) { [session] in await session.loadPreferences() }
+        session.loadEmojiReactionSupport()
     }
 
     /// 原因を絞れるよう、サーバーの版を記録に残す。読めなくても使うのに困らないので、失敗は記録するだけにする。

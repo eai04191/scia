@@ -130,6 +130,26 @@ struct PostContentBuilder {
         ReactionGlow(statusID: shown.id, isReblogged: shown.reblogged, isFavourited: shown.favourited, style: ReactionGlow.Style(tuning: tuning, settings: settings))
     }
 
+    /// 投稿の絵文字のリアクションを、リアクションの列のボタンにする。リアクションがなければnil。
+    /// ボタンは、絵文字の名前で見分ける。Fedibirdは名前でまとめるため、同じ名前のリアクションは1つしか並ばない。
+    func reactionChips(for shown: Status) -> [ReactionChipsView.Reaction]? {
+        guard !shown.emojiReactions.isEmpty else { return nil }
+        let renderer = RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
+        return shown.emojiReactions.map { reaction in
+            let emoji = reaction.emoji
+            // 画像のないカスタム絵文字（URLが読めなかったもの）は、ショートコードを文字で出す。
+            let shortcode = emoji.isCustom ? ":\(emoji.name):" : nil
+            let text: RichText = emoji.customEmoji.map { .plain(":\($0.shortcode):", emojis: [$0]) } ?? .plain(shortcode ?? emoji.name, emojis: [])
+            return ReactionChipsView.Reaction(
+                name: emoji.name,
+                emoji: renderer.render(text),
+                count: reaction.displayedCount,
+                isMine: reaction.me,
+                spokenName: shortcode ?? emoji.name
+            )
+        }
+    }
+
     /// 返信のラベル。自分への返信は、一覧の中で気づけるよう、記号と文字をアプリの色で描く。
     private func replyContext(_ label: ReplyLabel, font: UIFont, language: String) -> PostContentConfiguration.Context {
         let text = switch label {

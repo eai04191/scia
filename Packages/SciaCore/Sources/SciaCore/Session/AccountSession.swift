@@ -33,6 +33,11 @@ public final class AccountSession {
     /// 読めたアカウントの設定。まだ読めていなければnil。
     public private(set) var preferences: ServerPreferences?
     private var instanceConfiguration: InstanceConfiguration?
+    /// サーバーが投稿への絵文字のリアクションに対応しているか（docs/emoji-reaction.md）。読めていないうちと、読めなかったときはfalse。
+    public private(set) var supportsEmojiReactions = false
+    /// 絵文字のリアクションに対応しているかを読めたときに呼ぶ。
+    public var onEmojiReactionSupportLoad: (Bool) -> Void = { _ in }
+    private var emojiReactionSupport: EmojiReactionSupportState = .unknown
     private var lists: [WeakList] = []
     private let logger = SciaLog.logger(category: "session")
 
@@ -116,6 +121,7 @@ public final class AccountSession {
 
     private func recover(reason: String) {
         logger.info("recover reason=\(reason, privacy: .public)")
+        loadEmojiReactionSupport()
         // つながっていなければ、待っている間隔を飛ばしてつなぎ直す。
         streamingHub.recover()
         for list in lists.compactMap(\.list) {
@@ -145,6 +151,32 @@ public final class AccountSession {
             logger.info("instance configuration unavailable error=\(SciaLog.describe(error), privacy: .public)")
         }
         return instanceConfiguration
+    }
+
+    /// サーバーが絵文字のリアクションに対応しているかを読む。一度読めたら読み直さない。
+    /// 読めなかったら、次にやり直すとき（通信が戻ったときなど）にまた読む。起動のときの一時的な失敗で、ずっと出さないままにしないため。
+    public func loadEmojiReactionSupport() {
+        guard emojiReactionSupport == .unknown else { return }
+        emojiReactionSupport = .loading
+        let client = client
+        tasks.run(.display) { [weak self] in
+            do {
+                let supports = try await client.supportsEmojiReactions()
+                guard let self else { return }
+                emojiReactionSupport = .loaded
+                supportsEmojiReactions = supports
+                logger.info("emoji reaction support loaded supports=\(supports, privacy: .public)")
+                onEmojiReactionSupportLoad(supports)
+            } catch {
+                guard let self else { return }
+                emojiReactionSupport = .unknown
+                logger.info("emoji reaction support unavailable error=\(SciaLog.describe(error), privacy: .public)")
+            }
+        }
+    }
+
+    private enum EmojiReactionSupportState {
+        case unknown, loading, loaded
     }
 
     /// アカウントの設定。一度読めたら使い回す。読めなければnilを返し、次に呼ばれたときに読み直す。

@@ -64,6 +64,14 @@ struct StatusMenuTreeTests {
         #expect(!titles(withoutStatus).contains("選択"))
     }
 
+    /// 「リアクション」は、絵文字のリアクションに対応したサーバーでだけ出し、ブックマークと引用と同じまとまりに置く。
+    @Test func emojiReactionAppearsOnlyOnSupportingServer() {
+        var supporting = tree(status())
+        supporting.supportsEmojiReactions = true
+        #expect(outline(supporting).contains("|ブックマーク,リアクション|"))
+        #expect(!titles(tree(status())).contains("リアクション"))
+    }
+
     /// 本文が空白だけの投稿では、扱う文字がないのでテキストのコピーと翻訳を出さない。
     @Test func textItemsAreHiddenWithoutText() {
         let titles = titles(tree(status(content: "<p> </p>")))

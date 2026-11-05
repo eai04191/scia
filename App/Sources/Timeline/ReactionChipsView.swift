@@ -19,6 +19,18 @@ final class ReactionChipsView: UIView {
     var onAdd: (() -> Void)?
     /// 動くカスタム絵文字を動かすときのストア。nilなら動かさない。
     var animatedEmojis: EmojiImageStore<UIImage>?
+    /// まだ幅が決まっていないときに、高さを測る幅。一覧の行は、幅が決まる前に高さを測ることがあり、0の幅で測るとボタンが1つずつ折り返して高く測られるため。
+    var widthHint: CGFloat?
+    /// 幅が決まって、測った高さが変わったときに呼ぶ。置いている一覧の行に高さを測り直させる。
+    var onHeightChange: (() -> Void)?
+    /// 「＋」を出すか。
+    var showsAddButton = true {
+        didSet {
+            guard showsAddButton != oldValue else { return }
+            arrangeButtons()
+        }
+    }
+    private var reactionOrder: [String] = []
 
     /// 並べている順のボタン。最後は「＋」。
     private var buttons: [UIControl] = []
@@ -26,8 +38,8 @@ final class ReactionChipsView: UIView {
     private var reactionButtons: [String: ReactionChipButton] = [:]
     private lazy var addButton = makeAddButton()
     private static let spacing: CGFloat = 6
-    /// 最後に並べた幅。幅が変わったら高さを測り直す。
-    private var measuredWidth: CGFloat = 0
+    /// 最後に知らせた高さ。置かれた幅で並べた高さと違えば、測り直させる。
+    private var reportedHeight: CGFloat?
 
     func apply(_ reactions: [Reaction]) {
         var used: [String: ReactionChipButton] = [:]
@@ -40,7 +52,15 @@ final class ReactionChipsView: UIView {
             button.removeFromSuperview()
         }
         reactionButtons = used
-        buttons = reactions.compactMap { used[$0.name] } + [addButton]
+        reactionOrder = reactions.map(\.name)
+        arrangeButtons()
+    }
+
+    private func arrangeButtons() {
+        buttons = reactionOrder.compactMap { reactionButtons[$0] } + (showsAddButton ? [addButton] : [])
+        if !showsAddButton {
+            addButton.removeFromSuperview()
+        }
         for button in buttons where button.superview !== self {
             addSubview(button)
         }
@@ -49,7 +69,13 @@ final class ReactionChipsView: UIView {
     }
 
     override var intrinsicContentSize: CGSize {
-        CGSize(width: UIView.noIntrinsicMetric, height: layout(width: bounds.width).height)
+        let height = layout(width: measuringWidth).height
+        reportedHeight = height
+        return CGSize(width: UIView.noIntrinsicMetric, height: height)
+    }
+
+    private var measuringWidth: CGFloat {
+        bounds.width > 0 ? bounds.width : widthHint ?? bounds.width
     }
 
     override func layoutSubviews() {
@@ -58,9 +84,10 @@ final class ReactionChipsView: UIView {
         for (button, frame) in zip(buttons, frames) {
             button.frame = frame
         }
-        if measuredWidth != bounds.width {
-            measuredWidth = bounds.width
+        // 測ったときの幅と違う幅に置かれて高さが変わったら、測り直させる。
+        if bounds.width > 0, layout(width: bounds.width).height != reportedHeight {
             invalidateIntrinsicContentSize()
+            onHeightChange?()
         }
     }
 
@@ -93,14 +120,14 @@ final class ReactionChipsView: UIView {
 
     private func configure(_ button: ReactionChipButton, with reaction: Reaction) {
         let text = NSMutableAttributedString(attributedString: reaction.emoji)
-        text.append(NSAttributedString(string: " \(reaction.count)", attributes: [
+        text.append(NSAttributedString(string: " \(reaction.count.formatted())", attributes: [
             .font: UIFont.monospacedDigitFont(forTextStyle: .subheadline),
             .foregroundColor: reaction.isMine ? UIColor.tintColor : UIColor.label,
         ]))
         button.label.emojiImages = animatedEmojis
         button.label.attributedText = text
         button.isMine = reaction.isMine
-        button.accessibilityLabel = "\(reaction.spokenName) \(reaction.count)件"
+        button.accessibilityLabel = "\(reaction.spokenName) \(reaction.count.formatted())件"
         button.accessibilityValue = reaction.isMine ? "リアクション済み" : nil
         button.accessibilityTraits = reaction.isMine ? [.button, .selected] : .button
         button.setNeedsLayout()

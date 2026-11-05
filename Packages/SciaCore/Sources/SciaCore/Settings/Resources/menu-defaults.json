@@ -7,6 +7,7 @@
     "separator",
     "item:bookmark",
     "item:quote",
+    "item:emojiReaction",
     "hidden:reblogWithVisibility",
     "separator",
     "hidden:copyLink",

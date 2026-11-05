@@ -134,6 +134,59 @@ struct StatusInteractionsTests {
         #expect(shown.status.emojiReactions.map(\.emoji.name) == ["👍", "🎉"])
     }
 
+    /// ストリーミングの数は、リアクションした人に自分がいるかで、自分がしたかを決める。
+    @Test func streamedReactionDecidesMeFromAccountIDs() {
+        let emoji = ReactionEmoji(name: "👍")
+        let shown = Shown(status(reactions: []))
+        let interactions = StatusInteractions(operations: reactionOperations { _, _ in throw Failure() }) { shown.update($0, $1) }
+
+        interactions.apply(EmojiReactionUpdate(statusID: "10", emoji: emoji, count: 2, accountIDs: ["1", "me"]), myAccountID: "me")
+        #expect(shown.status.emojiReactions == [EmojiReaction(emoji: emoji, count: 2, me: true)])
+
+        interactions.apply(EmojiReactionUpdate(statusID: "10", emoji: emoji, count: 1, accountIDs: ["1"]), myAccountID: "me")
+        #expect(shown.status.emojiReactions == [EmojiReaction(emoji: emoji, count: 1, me: false)])
+    }
+
+    /// 結果を待っている間に届いた数では、押した状態を残す。押す前の数（0）が届いても消さない。
+    @Test func streamedReactionKeepsPressedStateWhileWaiting() async throws {
+        let emoji = ReactionEmoji(name: "👍")
+        let gate = Gate()
+        let shown = Shown(status(reactions: []))
+        let interactions = StatusInteractions(operations: reactionOperations { _, emoji in
+            try await gate.wait()
+            return Status(id: "10", createdAt: Date(timeIntervalSince1970: 0), account: Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: nil), content: "", spoilerText: "", url: nil, emojiReactions: [EmojiReaction(emoji: emoji, count: 1, me: true)])
+        }) { shown.update($0, $1) }
+
+        let pressing = Task { try await interactions.toggle(.emojiReaction(emoji), on: shown.status) }
+        try await waitUntil { interactions.inFlight.count == 1 }
+        interactions.apply(EmojiReactionUpdate(statusID: "10", emoji: emoji, count: 0, accountIDs: []), myAccountID: "me")
+        #expect(shown.status.emojiReactions.map(\.displayedCount) == [1])
+        #expect(shown.status.hasEmojiReaction(emoji))
+
+        gate.open()
+        #expect(try await pressing.value)
+    }
+
+    /// 結果を待っている間にサーバーの数が届いてから失敗したら、数はそのままにし、自分がしたかだけを戻す。付けるときも外すときも。
+    @Test(arguments: [false, true]) func failureAfterStreamedCountKeepsServerCount(wasOn: Bool) async throws {
+        let emoji = ReactionEmoji(name: "👍")
+        let gate = Gate()
+        let shown = Shown(status(reactions: [EmojiReaction(emoji: emoji, count: 2, me: wasOn)]))
+        let failing: @Sendable (Status.ID, ReactionEmoji) async throws -> Status = { _, _ in
+            try await gate.wait()
+            throw Failure()
+        }
+        let interactions = StatusInteractions(operations: reactionOperations(add: failing, remove: failing)) { shown.update($0, $1) }
+
+        let pressing = Task { try await interactions.toggle(.emojiReaction(emoji), on: shown.status) }
+        try await waitUntil { interactions.inFlight.count == 1 }
+        interactions.apply(EmojiReactionUpdate(statusID: "10", emoji: emoji, count: 2, accountIDs: wasOn ? ["me", "1"] : ["1", "2"]), myAccountID: "me")
+        gate.open()
+        await #expect(throws: Failure.self) { try await pressing.value }
+
+        #expect(shown.status.emojiReactions == [EmojiReaction(emoji: emoji, count: 2, me: wasOn)])
+    }
+
     @Test func showsFavouriteBeforeServerRespondsThenAppliesResult() async throws {
         let shown = Shown(try status(favourites: 3))
         let fromServer = try status(favourited: true, favourites: 5)

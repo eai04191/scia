@@ -44,7 +44,9 @@ public struct EmojiReaction: Codable, Hashable, Sendable {
 }
 
 /// リアクションに使う絵文字。Unicodeの絵文字か、カスタム絵文字。
-/// 同じ絵文字かは、名前とサーバー（`domain`）で見分ける。画像のURLは、投稿のリアクションと絵文字の一覧のように、取り方で変わりうるため比べない。
+/// 同じ絵文字かは、名前だけで見分ける。Fedibirdは投稿のリアクションを名前でまとめ（`Status#generate_grouped_emoji_reactions`）、取り消しも名前で照合するため、
+/// 同じショートコードのカスタム絵文字は、サーバーが違っても1つのリアクションになる。まとめたものの`domain`は、先に使われたカスタム絵文字のものになる。
+/// 画像のURLも、投稿のリアクションと絵文字の一覧のように、取り方で変わりうるため比べない。
 public struct ReactionEmoji: Codable, Hashable, Sendable {
     /// Unicodeの絵文字か、カスタム絵文字のショートコード。ショートコードにはサーバーを含まない。
     public let name: String
@@ -87,17 +89,21 @@ public struct ReactionEmoji: Codable, Hashable, Sendable {
     }
 
     public static func == (lhs: ReactionEmoji, rhs: ReactionEmoji) -> Bool {
-        lhs.name == rhs.name && lhs.domain == rhs.domain
+        lhs.name == rhs.name
     }
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(name)
-        hasher.combine(domain)
     }
 
     /// APIのパスに入れる名前。ほかのサーバーのカスタム絵文字は、Fedibirdが`name@domain`で受け取る。
     public var requestName: String {
         domain.map { "\(name)@\($0)" } ?? name
+    }
+
+    /// カスタム絵文字か。画像のURLが読めなかったものも、ショートコードの形（英数字と`_`）ならカスタム絵文字とする。
+    public var isCustom: Bool {
+        url != nil || domain != nil || (!name.isEmpty && name.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_") })
     }
 
     /// カスタム絵文字なら、本文の絵文字と同じ部品で描くための絵文字。
@@ -184,6 +190,20 @@ extension Status {
             }
         } else if reaction.displayedCount > 0 {
             reactions.append(reaction)
+        }
+        return replacingEmojiReactions(reactions)
+    }
+
+    /// `emoji`の自分がしたかだけを変え、数は変えないもの。結果を待っている間にサーバーの数が届いたあとで、失敗して戻すときに使う。
+    /// 数が自分のリアクションを含まない値（0）で、自分もしていなければ消す。
+    public func settingEmojiReactionMe(_ emoji: ReactionEmoji, _ me: Bool) -> Status {
+        guard let index = emojiReactions.firstIndex(where: { $0.emoji == emoji }) else { return self }
+        var reactions = emojiReactions
+        let reaction = reactions[index].setting(count: reactions[index].count, me: me)
+        if reaction.displayedCount == 0 {
+            reactions.remove(at: index)
+        } else {
+            reactions[index] = reaction
         }
         return replacingEmojiReactions(reactions)
     }

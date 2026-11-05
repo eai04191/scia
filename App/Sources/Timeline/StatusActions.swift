@@ -85,6 +85,7 @@ extension TimelineViewController {
         tree.mediaIsCovered = status.map { mediaCover(for: $0) != nil } ?? false
         tree.canSelectText = body != nil
         tree.canSelectPosts = canSelectPost(id)
+        tree.supportsEmojiReactions = supportsEmojiReactions
         tree.userMenu = settings.userMenuLayout.submenuGroups(actions: settings.userActions)
         tree.userActions = userMenuActions
         tree.hashtagMenu = settings.hashtagMenuLayout.submenuGroups(actions: settings.hashtagActions)

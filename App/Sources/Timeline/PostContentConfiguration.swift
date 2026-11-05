@@ -115,6 +115,12 @@ struct PostContentConfiguration: UIContentConfiguration {
     var linkCardTarget: (any ObjectActionTarget)?
     /// 投票の選択肢やボタンが押されたときに呼ぶ。
     var onPollAction: ((PollView.Action) -> Void)?
+    /// 絵文字のリアクション。サーバーが対応していないか、リアクションがなければnil（docs/emoji-reaction.md）。
+    var reactions: [ReactionChipsView.Reaction]?
+    /// リアクションのボタンが押されたときに、その絵文字の`Reaction.name`を渡して呼ぶ。
+    var onToggleReaction: ((String) -> Void)?
+    /// リアクションの列の「＋」が押されたときに呼ぶ。nilなら「＋」を出さない。
+    var onAddReaction: (() -> Void)?
 
     /// 大きさと文字の見た目。
     struct Metrics {
@@ -315,6 +321,7 @@ final class PostContentView: UIView, UIContentView {
         }
         bodyView.onOpenLinkCardImage = { [weak self] thumbnail in self?.current.onOpenLinkCardImage?(thumbnail) }
         bodyView.onPollAction = { [weak self] action in self?.current.onPollAction?(action) }
+        bodyView.onToggleReaction = { [weak self] name in self?.current.onToggleReaction?(name) }
         // 名前の行は押下を受けず、行全体の押下に渡す。受けると、1行の投稿では行を押せる場所が本文の1行ほどしか残らない。
         avatarView.isUserInteractionEnabled = true
         avatarView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(avatarTapped)))
@@ -460,6 +467,8 @@ final class PostContentView: UIView, UIContentView {
         bodyView.embedActions = configuration.embedActions
         bodyView.opensLinksOnTapOnly = configuration.opensLinksOnTapOnly
         bodyView.cardTarget = configuration.linkCardTarget
+        // 「＋」を出すかは渡すかどうかで決まるので、適用のたびに渡し直す。押したときは今の構成を読むので、使い回しても古くならない。
+        bodyView.onAddReaction = configuration.onAddReaction == nil ? nil : { [weak self] in self?.current.onAddReaction?() }
         bodyView.apply(PostBodyContent(
             spoiler: configuration.spoiler,
             text: configuration.body,
@@ -475,6 +484,8 @@ final class PostContentView: UIView, UIContentView {
             embedSpacing: metrics.bodyEmbedSpacing,
             statusID: configuration.statusID,
             hashtagAccount: configuration.hashtagAccount,
+            reactions: configuration.reactions,
+            reactionsSpacing: Self.reactionsSpacing,
             filterNote: configuration.filterNote,
             // リンクカードと同じく、本文から少し離した補足として置く。
             filterNoteSpacing: metrics.filterNoteSpacing
@@ -906,8 +917,11 @@ final class PostContentView: UIView, UIContentView {
         // 空にすると、次に並べ直すまで、VoiceOverで指でなぞってもこの行に止まらない。
         setNeedsLayout()
         // 「テキストを選択」で本文を選んでいる間は、選べるテキストビューを本文の要素の後ろに置き、読み上げでも選べるようにする。
-        accessibilityElements = [textAccessibilityElement] + [bodyView.selectionTextView].compactMap(\.self) + (bodyView.poll?.accessibilityParts ?? []) + [bodyView.mediaGrid, bodyView.linkCard, bodyView.embed, bodyView.filterNote].compactMap(\.self)
+        accessibilityElements = [textAccessibilityElement] + [bodyView.selectionTextView].compactMap(\.self) + (bodyView.poll?.accessibilityParts ?? []) + [bodyView.mediaGrid, bodyView.linkCard, bodyView.embed, bodyView.reactions, bodyView.filterNote].compactMap(\.self)
     }
+
+    /// 上の部品とリアクションの列のあいだ。サーバーのお知らせのリアクションと同じく、決まった値にしている。
+    private static let reactionsSpacing: CGFloat = 10
 
     private lazy var textAccessibilityElement = UIAccessibilityElement(accessibilityContainer: self)
     /// 読み上げの要素を作ったときに、本文を切っていたか。

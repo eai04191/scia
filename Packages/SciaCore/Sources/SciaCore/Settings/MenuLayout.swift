@@ -227,6 +227,8 @@ public enum StatusMenuItem: String, BundledMenuDefaults {
     case bookmark
     /// 投稿欄で投稿を引用して書き始める。引用に対応したサーバーでだけ出て、引用できない投稿では押せない。
     case quote
+    /// 絵文字のシートを開き、選んだ絵文字で投稿にリアクションする。絵文字のリアクションに対応したサーバーでだけ出る（docs/emoji-reaction.md）。
+    case emojiReaction
     /// 投稿の会話をミュートする。自分の投稿、通知、自分へのメンションを含む投稿でだけ出る。
     case muteConversation
     /// 自分の投稿をプロフィールに固定する。固定できる自分の投稿でだけ出る。

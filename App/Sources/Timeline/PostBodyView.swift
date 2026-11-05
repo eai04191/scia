@@ -62,6 +62,10 @@ struct PostBodyContent {
     var statusID: Status.ID?
     /// 本文のハッシュタグのメニューの「ユーザーの投稿」で開くユーザー。投稿した人。nilなら項目を出さない。
     var hashtagAccount: Account?
+    /// 絵文字のリアクション。サーバーが対応していないか、リアクションがなければnil（docs/emoji-reaction.md）。
+    var reactions: [ReactionChipsView.Reaction]?
+    /// 上の部品と、リアクションの列のあいだ。
+    var reactionsSpacing: CGFloat = 0
     /// 一番下に置く補足の1行。自分の投稿が自分のフィルターに一致していることか、通知で再掲する投稿に引用があることを示す。なければnil。
     var filterNote: NSAttributedString?
     /// 上の部品と、フィルターの注記のあいだ。
@@ -128,6 +132,12 @@ final class PostBodyView: UIView {
     private var embedInteraction: ObjectInteraction?
     /// 投票の選択肢やボタンが押されたときに呼ぶ。選んだ状態を持つのは置く側で、適用し直すまで見た目は変わらない。
     var onPollAction: ((PollView.Action) -> Void)?
+    /// リアクションのボタンが押されたときに、その絵文字の`Reaction.name`を渡して呼ぶ。
+    var onToggleReaction: ((String) -> Void)?
+    /// リアクションの列の「＋」が押されたときに呼ぶ。nilなら「＋」を出さない。
+    var onAddReaction: (() -> Void)? {
+        didSet { reactionsView?.showsAddButton = onAddReaction != nil }
+    }
 
     private let mediaImages: MediaImageStore<UIImage>
     private let avatarImages: AvatarImageStore<UIImage>
@@ -152,6 +162,7 @@ final class PostBodyView: UIView {
     /// 囲みに替わったリンクカードの像。囲みを濃くする間、カードのあった位置に重ねて薄くする。
     private(set) var leavingCardSnapshot: UIView?
     private var filterNoteLabel: UILabel?
+    private var reactionsView: ReactionChipsView?
     /// 「テキストを選択」で、本文のラベルの代わりに同じ位置に出している選べるテキストビュー。選んでいなければnil。
     private(set) var selectionTextView: SelectableTextView?
     /// 選んでいる間、本文のラベルに出している本文。サーバーが縮めて見せるURLを元の文字に戻したもの。戻すURLがないか、選んでいなければnil。
@@ -185,6 +196,11 @@ final class PostBodyView: UIView {
     /// 表示中の投票。読み上げの要素に加える。
     var poll: PollView? {
         Self.shown(pollView)
+    }
+
+    /// 表示中のリアクションの列。読み上げの要素に加える。
+    var reactions: ReactionChipsView? {
+        Self.shown(reactionsView)
     }
 
     /// 表示中のフィルターの注記。添付ファイルやリンクカードより下にあるため、読み上げでは本文と分け、それらの後の要素にする。
@@ -401,6 +417,18 @@ final class PostBodyView: UIView {
         install(view)
         view.onAction = { [weak self] action in self?.onPollAction?(action) }
         pollView = view
+        return view
+    }
+
+    private func loadedReactionsView() -> ReactionChipsView {
+        if let reactionsView { return reactionsView }
+        let view = ReactionChipsView()
+        install(view)
+        view.showsAddButton = onAddReaction != nil
+        view.onToggle = { [weak self] name in self?.onToggleReaction?(name) }
+        view.onAdd = { [weak self] in self?.onAddReaction?() }
+        view.onHeightChange = { [weak self] in self?.invalidateRowHeight() }
+        reactionsView = view
         return view
     }
 
@@ -653,8 +681,32 @@ final class PostBodyView: UIView {
         } else {
             .view(textLabel)
         }
-        applyFilterNote(content.filterNote, below: last, spacing: content.filterNoteSpacing, textBottomInset: Self.textBottomInset(of: content.text, isTruncated: content.maximumLines > 0))
+        let textBottomInset = Self.textBottomInset(of: content.text, isTruncated: content.maximumLines > 0)
+        let bottom = applyReactions(content.reactions, below: last, spacing: content.reactionsSpacing, textBottomInset: textBottomInset)
+        applyFilterNote(content.filterNote, below: bottom, spacing: content.filterNoteSpacing, textBottomInset: textBottomInset)
         NSLayoutConstraint.activate(variableConstraints)
+    }
+
+    /// リアクションの列を一番下の部品の下に置き、新しい一番下を返す。注意書きで折りたたんでいても出す。リアクションは投稿に付くもので、中身を開かなくても見られるため。
+    /// - Parameter textBottomInset: 一番下が本文のときの、最後の文字のベースラインから字面の下端まで。
+    private func applyReactions(_ reactions: [ReactionChipsView.Reaction]?, below bottom: Bottom, spacing: CGFloat, textBottomInset: CGFloat) -> Bottom {
+        guard let reactions, !reactions.isEmpty else {
+            reactionsView?.isHidden = true
+            return bottom
+        }
+        let view = loadedReactionsView()
+        view.isHidden = false
+        view.animatedEmojis = emojiImages
+        // 幅が決まる前に高さを測るときは、本文と同じく、先に並べた幅か十分に広い幅で測る。
+        view.widthHint = bounds.width > 0 ? bounds.width : textLabel.preparedLayoutWidth ?? Self.unknownTextWidth
+        view.apply(reactions)
+        let lastBottom = switch bottom {
+        case .view(let last) where last === textLabel: (anchor: textLastBaselineGuide.topAnchor, inset: textBottomInset)
+        case .view(let last): (anchor: last.bottomAnchor, inset: CGFloat(0))
+        case .beside(let parts, _): (anchor: parts, inset: CGFloat(0))
+        }
+        variableConstraints.append(view.topAnchor.constraint(equalTo: lastBottom.anchor, constant: lastBottom.inset + spacing))
+        return .view(view)
     }
 
     /// 本文の下の部品を縦に並べるときの、上端の決め方。

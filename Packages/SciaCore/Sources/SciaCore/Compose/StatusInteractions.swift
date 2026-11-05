@@ -1,3 +1,5 @@
+public import Foundation
+
 /// お気に入り、ブースト、ブックマーク、会話のミュート、プロフィールへの固定、絵文字のリアクションを付け外しする。サーバーの結果を待たずに表示へ反映し、失敗したら戻す。
 @MainActor
 public final class StatusInteractions {
@@ -14,8 +16,12 @@ public final class StatusInteractions {
     }
 
     /// サーバーが成功の応答を返したのに、リアクションを付けなかった。Fedibirdは、その投稿にまだ付いていないほかのサーバーのカスタム絵文字では、付けずに投稿を返す。
-    public struct EmojiReactionNotApplied: Error, Equatable {
+    public struct EmojiReactionNotApplied: LocalizedError, Equatable {
         public init() {}
+
+        public var errorDescription: String? {
+            "サーバーがこの絵文字でのリアクションを受け付けませんでした。ほかのサーバーのカスタム絵文字は、その投稿にすでに付いているものだけを使えます。"
+        }
     }
 
     /// APIを呼ぶ口。テストでは差し替える。
@@ -100,6 +106,9 @@ public final class StatusInteractions {
     /// 結果を待っている操作がある投稿の、いちばん新しい状態。あとから押した操作には、先に押した操作の見込みの状態が入っているため、押したときの投稿で置き換え、受け付けた結果と戻した状態を重ねる。
     /// `onSettle`に、先に押した操作の、押したときの古い状態を渡さないため。
     private var latest: [Status.ID: Status] = [:]
+    /// 結果を待っている間に、ストリーミングでサーバーの数が届いた絵文字のリアクション。届いた数は押した結果を手元で足し引きした分を含まないので、
+    /// 失敗したときは数を変えずに、自分がしたかだけを戻す。サーバーのお知らせのリアクションの`countIncludesChange`と同じ考え方。
+    private var streamedReactions: Set<Key> = []
     /// サーバーが受け付けた、投稿ごとの最後のブーストの状態。まとめてブーストで、選んだときの投稿より新しい状態を知るために使う。
     private var settledReblogs: [Status.ID: Bool] = [:]
 
@@ -126,6 +135,7 @@ public final class StatusInteractions {
         guard inFlight.insert(key).inserted else { return false }
         defer {
             inFlight.remove(key)
+            streamedReactions.remove(key)
             if !inFlight.contains(where: { $0.statusID == target.id }) {
                 latest[target.id] = nil
             }
@@ -146,11 +156,31 @@ public final class StatusInteractions {
             if action == .reblog { settledReblogs[target.id] = settled.reblogged }
             onSettle?(action, settled)
         } catch {
-            update(target.id) { Self.setting(action, wasOn, on: $0) }
-            latest[target.id] = latest[target.id].map { Self.setting(action, wasOn, on: $0) }
+            let revert: (Status) -> Status = if case .emojiReaction(let emoji) = action, streamedReactions.contains(key) {
+                { $0.settingEmojiReactionMe(emoji, wasOn) }
+            } else {
+                { Self.setting(action, wasOn, on: $0) }
+            }
+            update(target.id, revert)
+            latest[target.id] = latest[target.id].map(revert)
             throw error
         }
         return true
+    }
+
+    /// ストリーミングで届いた絵文字のリアクションの数を、表示しているすべての一覧に当てる。
+    /// 自分がしたかは、リアクションした人に`myAccountID`があるかで決める。その絵文字の結果を待っている間は、押した状態を残す。
+    public func apply(_ reactionUpdate: EmojiReactionUpdate, myAccountID: Account.ID) {
+        let key = Key(statusID: reactionUpdate.statusID, action: .emojiReaction(reactionUpdate.emoji))
+        let pending = inFlight.contains(key)
+        if pending {
+            streamedReactions.insert(key)
+        }
+        let reported = reactionUpdate.accountIDs.contains(myAccountID)
+        update(reactionUpdate.statusID) { status in
+            let me = pending ? status.displayed.hasEmojiReaction(reactionUpdate.emoji) : reported
+            return status.applyingEmojiReactionUpdate(reactionUpdate, me: me)
+        }
     }
 
     /// `status`（ブーストなら元の投稿）がブースト済みかもしれないか。結果を待っている操作の見込み、受け付けた結果、渡した投稿のどれかがブースト済みならtrue。
