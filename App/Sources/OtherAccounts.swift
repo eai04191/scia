@@ -9,7 +9,7 @@ final class OtherAccounts {
     private let current: Credential
     private let tasks: TaskScope
     private let makeClient: (Credential) -> MastodonClient
-    private var accounts: [Credential.ID: OtherAccountStatuses] = [:]
+    private var accounts: [Credential.ID: OtherAccount] = [:]
 
     /// - Parameters:
     ///   - current: このセッションのアカウント。並べない。
@@ -22,25 +22,35 @@ final class OtherAccounts {
     }
 
     /// 今ログインしているほかのアカウント。アカウントの切り替えのメニューと同じ順。開くたびに読み、追加やログアウトに追いつく。
-    func list() -> [OtherAccountStatuses] {
+    func list() -> [OtherAccount] {
         guard let registry = try? AppDependencies.accounts.get() else { return [] }
         let credentials = registry.accounts.filter { $0.id != current.id }
-        var kept: [Credential.ID: OtherAccountStatuses] = [:]
+        var kept: [Credential.ID: OtherAccount] = [:]
         let listed = credentials.map { credential in
             // ログインし直してトークンが変わったアカウントは作り直す。
             let account = accounts[credential.id].flatMap { $0.credential == credential ? $0 : nil }
-                ?? OtherAccountStatuses(credential: credential, operations: .init(client: makeClient(credential)), tasks: tasks)
+                ?? OtherAccount(credential: credential, operations: .init(client: makeClient(credential)), tasks: tasks)
             kept[credential.id] = account
             return account
         }
         accounts = kept
+        // 読めていないアイコンは、次に開いたときに出せるよう読み直す。
+        for account in listed {
+            account.loadProfile()
+        }
         return listed
     }
 
-    /// 前に見つけた`status`を、見つけたアカウントで探し直す。「別のアカウントで」を組んだメニューを出すときに呼び、次に開いたときから使う。
-    func refresh(_ status: Status) {
+    /// 前に見つけた`status`と、それに出る人の関係を、見つけたアカウントで読み直す。「別のアカウントで」を組んだメニューを出すときに呼び、次に開いたときから使う。
+    /// - Parameter relationIDs: 見つかった投稿で、関係の項目を出す人のID。組んだメニューの`otherAccountRelationIDs`を渡す。
+    func refresh(_ status: Status, relationIDs: @escaping @MainActor (Status, OtherAccount) -> [String]) {
         for account in accounts.values where account.known(status) != nil {
-            tasks.run(.action) { _ = await account.lookup(status) }
+            tasks.run(.action) { await account.refresh(status, relationIDs: relationIDs) }
         }
+    }
+
+    /// ほかのアカウントのプロフィールを読み、「別のアカウントで」の行にアイコンを出せるようにする。読めなかったアカウントは、次にメニューを組むときに読み直す。
+    func loadProfiles() {
+        _ = list()
     }
 }

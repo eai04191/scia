@@ -10,19 +10,43 @@ struct OtherAccountMenuTests {
     private struct Failure: Error {}
 
     private let uri = "https://remote.example/users/alice/statuses/1"
-    private let alice = Account(id: "1", username: "alice", acct: "alice@remote.example", displayName: "Alice", avatar: nil)
+    private let alice = Account(id: "1", username: "alice", acct: "alice@remote.example", displayName: "Alice", avatar: nil, url: URL(string: "https://remote.example/@alice"))
 
     /// 今のアカウントのサーバーでの投稿。
-    private func status(id: String = "100", uri: String?, favourited: Bool = false, visibility: Status.Visibility = .public) -> Status {
-        Status(id: id, createdAt: Date(timeIntervalSince1970: 100), account: alice, content: "<p>こんにちは</p>", spoilerText: "", uri: uri, url: nil, visibility: visibility, favourited: favourited)
+    private func status(id: String = "100", uri: String?, account: Account? = nil, mentions: [Mention] = [], favourited: Bool = false, visibility: Status.Visibility = .public) -> Status {
+        Status(id: id, createdAt: Date(timeIntervalSince1970: 100), account: account ?? alice, content: "<p>こんにちは</p>", spoilerText: "", uri: uri, url: nil, mentions: mentions, visibility: visibility, favourited: favourited)
+    }
+
+    private func mention(_ id: String, _ username: String) -> Mention {
+        Mention(id: id, username: username, url: URL(string: "https://remote.example/@\(username)"), acct: "\(username)@remote.example")
+    }
+
+    /// `title`で始まる名前のサブメニュー。
+    private func submenu(_ title: String, in nodes: [MenuNode<StatusMenuCommand>]) -> MenuNode<StatusMenuCommand>? {
+        nodes.flatMap { node -> [MenuNode<StatusMenuCommand>] in
+            if case .group(let children, _) = node.content { return children }
+            return [node]
+        }.first { $0.title == title }
+    }
+
+    /// サブメニューのアイコンの人のID。人のアイコンでなければnil。
+    private func avatarUserID(_ node: MenuNode<StatusMenuCommand>?) -> String? {
+        guard case .avatar(.user(let user), _) = node?.icon else { return nil }
+        return user.id
     }
 
     private func credential(_ username: String, server: String = "other.example", accountID: String = "50") throws -> Credential {
         Credential(instance: try #require(URL(string: "https://\(server)")), accessToken: "token", clientID: "id", clientSecret: "secret", accountID: accountID, username: username)
     }
 
-    private func operations(search: @escaping @Sendable (String) async throws -> [Status], favourite: @escaping @Sendable (Status.ID) async throws -> Status = { _ in throw Failure() }) -> OtherAccountStatuses.Operations {
-        OtherAccountStatuses.Operations(search: search, interactions: StatusInteractions.Operations(
+    private func operations(
+        search: @escaping @Sendable (String) async throws -> [Status],
+        favourite: @escaping @Sendable (Status.ID) async throws -> Status = { _ in throw Failure() },
+        profile: @escaping @Sendable () async throws -> Account = { throw Failure() },
+        relationships: @escaping RelationshipCache.Fetch = { _ in throw Failure() },
+        changeRelation: @escaping @Sendable (UserRelationChange, String) async throws -> Relationship = { _, _ in throw Failure() }
+    ) -> OtherAccount.Operations {
+        OtherAccount.Operations(search: search, interactions: StatusInteractions.Operations(
             favourite: favourite,
             unfavourite: { _ in throw Failure() },
             reblog: { _, _ in throw Failure() },
@@ -33,14 +57,14 @@ struct OtherAccountMenuTests {
             unmuteConversation: { _ in throw Failure() },
             pin: { _ in throw Failure() },
             unpin: { _ in throw Failure() }
-        ))
+        ), profile: profile, relationships: relationships, changeRelation: changeRelation)
     }
 
-    private func account(_ username: String, server: String = "other.example", accountID: String = "50", _ operations: OtherAccountStatuses.Operations) throws -> OtherAccountStatuses {
-        OtherAccountStatuses(credential: try credential(username, server: server, accountID: accountID), operations: operations, tasks: TaskScope())
+    private func account(_ username: String, server: String = "other.example", accountID: String = "50", _ operations: OtherAccount.Operations) throws -> OtherAccount {
+        OtherAccount(credential: try credential(username, server: server, accountID: accountID), operations: operations, tasks: TaskScope())
     }
 
-    private func tree(_ status: Status, accounts: [OtherAccountStatuses], groups: MenuLayout<StatusMenuItem>.Groups = StatusMenuItem.defaultLayout.groups) -> StatusMenuTree {
+    private func tree(_ status: Status, accounts: [OtherAccount], groups: MenuLayout<StatusMenuItem>.Groups = StatusMenuItem.defaultLayout.groups) -> StatusMenuTree {
         var tree = StatusMenuTree(status: status, notification: nil, now: Date(timeIntervalSince1970: 0), linkBrowser: .inApp)
         tree.myAccountID = "9"
         tree.otherAccounts = accounts
@@ -96,22 +120,22 @@ struct OtherAccountMenuTests {
         })
         let menu = try #require(node(tree(status(uri: uri), accounts: [bob])))
 
-        #expect(await loaded(menu.children) == "=ブースト,お気に入りを取り消す|ブックマーク")
+        #expect(await loaded(menu.children) == "=ブースト,お気に入りを取り消す|ブックマーク|@alice[…,…,…,…,…,…]")
         #expect(queries.withLock { $0 } == [uri])
 
         let reopened = try #require(node(tree(status(uri: uri), accounts: [bob])))
-        #expect(MenuNodeTests.describe(reopened.children) == "=ブースト,お気に入りを取り消す|ブックマーク")
+        #expect(MenuNodeTests.describe(reopened.children) == "=ブースト,お気に入りを取り消す|ブックマーク|@alice[…,…,…,…,…,…]")
         let favourite = try #require(reopened.flattenedChildren.first { $0.title == "お気に入りを取り消す" })
         guard case .otherAccount(let command) = favourite.command else {
             Issue.record("ほかのアカウントの操作になっていません")
             return
         }
-        #expect(command.status.id == "7000")
         #expect(command.account === bob)
-        guard case .favourite = command.action else {
+        guard case .status(let target, .favourite) = command.action else {
             Issue.record("お気に入りの操作になっていません")
             return
         }
+        #expect(target.id == "7000")
     }
 
     /// 中身は渡した並びに従い、そのアカウントで送るだけで済む項目だけを出す。「その他」に入れた項目も、まとめずに続けて並べる。
@@ -126,6 +150,7 @@ struct OtherAccountMenuTests {
 
         let items = await loaded(menu.children)
         #expect(items == "お気に入り,公開範囲を選んでブースト[公開,ひかえめな公開,フォロワーのみ]|ブックマーク")
+        // 渡した並びにない投稿者のユーザーのメニューは出さない。
     }
 
     /// そのアカウントから見られない投稿と、探せなかったときは、押せない行で知らせる。URIのない投稿は探さない。
@@ -254,5 +279,126 @@ struct OtherAccountMenuTests {
             return
         }
         #expect(bob.known(shown)?.id == "7000")
+    }
+
+    /// 投稿者とメンションされた人のユーザーのメニューを、そのアカウントから見た関係で出す。相手は、そのサーバーでのIDで扱う。
+    /// 出る人の関係は、見つけたときにまとめて1回で読む。中に出すのは、そのアカウントで送るだけで済む関係の項目だけ。
+    /// アイコンは、今のアカウントで同じ人をプロフィールのURLで探して付け、見つからない人には付けない。
+    @Test func showsUserMenusAsOtherAccount() async throws {
+        let carol = mention("2", "carol")
+        let shown = status(uri: uri, mentions: [carol])
+        let otherAlice = Account(id: "500", username: "alice", acct: "alice@remote.example", displayName: "Alice", avatar: nil, url: alice.url)
+        let found = status(id: "7000", uri: uri, account: otherAlice, mentions: [mention("501", "carol"), mention("502", "dave")])
+        let fetched = Mutex<[[String]]>([])
+        let bob = try account("bob", operations(search: { _ in [found] }, relationships: { ids in
+            fetched.withLock { $0.append(ids) }
+            return ids.map { Relationship(id: $0, following: $0 == "500") }
+        }))
+
+        let groups = MenuLayout<StatusMenuItem>.Groups(main: [.init([.favourite]), .init([.author, .mentionedUsers])], more: [])
+        _ = await loaded(try #require(node(tree(shown, accounts: [bob], groups: groups))).children)
+        try await waitUntil { bob.userActions.knownRelation(.account(id: "502", acct: "dave@remote.example")) != nil }
+        #expect(fetched.withLock { $0 } == [["500", "501", "502"]])
+
+        let items = try #require(node(tree(shown, accounts: [bob], groups: groups))).children
+        let aliceMenu = try #require(submenu("@alice", in: items))
+        #expect(MenuNodeTests.describe(aliceMenu.children).hasPrefix("フォローを外す|"))
+        #expect(!MenuNodeTests.describe(aliceMenu.children).contains("メモ"))
+        #expect(!MenuNodeTests.describe(aliceMenu.children).contains("通報"))
+        #expect(avatarUserID(aliceMenu) == "1")
+        #expect(avatarUserID(submenu("@carol", in: items)) == "2")
+        let dave = try #require(submenu("@dave", in: items))
+        #expect(dave.icon == nil)
+        #expect(MenuNodeTests.describe(dave.children).hasPrefix("フォロー|"))
+
+        let unfollow = try #require(aliceMenu.flattenedChildren.first { $0.title == "フォローを外す" })
+        guard case .otherAccount(let command) = unfollow.command, case .relation(.unfollow, let relation) = command.action else {
+            Issue.record("ほかのアカウントの関係の変更になっていません")
+            return
+        }
+        #expect(relation.accountID == "500")
+        #expect(command.account === bob)
+    }
+
+    /// 関係の変更は、そのアカウントとしてそのサーバーでのIDの相手へ送り、結果を次に開いたメニューで使う。
+    @Test func changeUpdatesKnownRelation() async throws {
+        let sent = Mutex<[String]>([])
+        let bob = try account("bob", operations(search: { _ in [] }, changeRelation: { change, id in
+            sent.withLock { $0.append("\(change)/\(id)") }
+            return Relationship(id: id, following: true)
+        }))
+        let relation = UserRelation(accountID: "500", acct: "alice@remote.example", relationship: Relationship(id: "500"))
+
+        let changed = try await bob.change(.follow, of: relation)
+
+        #expect(changed.following)
+        #expect(sent.withLock { $0 } == ["follow/500"])
+        guard case .relation(let known) = bob.userActions.knownRelation(.account(id: "500", acct: "alice@remote.example")) else {
+            Issue.record("関係を覚えていません")
+            return
+        }
+        #expect(known.relationship.following)
+    }
+
+    /// そのアカウント自身が投稿者やメンションの人なら、そのユーザーのメニューは出さない。出せる項目がないため。
+    @Test func hidesOwnUserMenu() async throws {
+        let me = Account(id: "50", username: "bob", acct: "bob", displayName: "Bob", avatar: nil)
+        let found = status(id: "7000", uri: uri, account: me, mentions: [mention("50", "bob")])
+        let bob = try account("bob", operations(search: { _ in [found] }, relationships: { ids in ids.map { Relationship(id: $0) } }))
+
+        #expect(await loaded(try #require(node(tree(status(uri: uri), accounts: [bob]))).children) == "=ブースト,お気に入り|ブックマーク")
+    }
+
+    /// アカウントの行のアイコンは、プロフィールを読む前からそのアカウント自身を指す。描く側が読み終えるのを待って差し替える。
+    @Test func rowIconPointsToOtherAccountBeforeProfileIsLoaded() throws {
+        let bob = try account("bob", operations(search: { _ in [] }))
+
+        guard case .avatar(.otherAccount(let shown), _) = try #require(node(tree(status(uri: uri), accounts: [bob]))).icon else {
+            Issue.record("アカウントの行のアイコンが、そのアカウントを指していません")
+            return
+        }
+        #expect(shown === bob)
+    }
+
+    /// プロフィールを待つ呼び出しは、読んでいる途中の読み込みを待ち、送り直さない。読めなければnilを返し、次に呼ばれたときに読み直す。
+    @Test func loadedProfileWaitsForRunningLoadAndRetriesAfterFailure() async throws {
+        let me = Account(id: "50", username: "bob", acct: "bob", displayName: "Bob", avatar: URL(string: "https://other.example/bob.png"))
+        let gate = Gate()
+        let calls = Mutex(0)
+        let bob = try account("bob", operations(search: { _ in [] }, profile: {
+            let call = calls.withLock { $0 += 1; return $0 }
+            guard call > 1 else { throw Failure() }
+            try await gate.wait()
+            return me
+        }))
+
+        #expect(await bob.loadedProfile() == nil)
+        bob.loadProfile()
+        async let waited = bob.loadedProfile()
+        try await waitUntil { calls.withLock { $0 } == 2 }
+        gate.open()
+        #expect(await waited?.id == "50")
+        #expect(calls.withLock { $0 } == 2)
+        #expect(bob.profile?.id == "50")
+    }
+
+    /// 関係は、組んだメニューに出る人の分だけ読む。人の項目を並びから外していれば読まない。
+    @Test func reloadsRelationsOnlyOfShownUsers() async throws {
+        let otherAlice = Account(id: "500", username: "alice", acct: "alice@remote.example", displayName: "Alice", avatar: nil, url: alice.url)
+        let found = status(id: "7000", uri: uri, account: otherAlice, mentions: [mention("501", "carol")])
+        let fetched = Mutex<[[String]]>([])
+        let bob = try account("bob", operations(search: { _ in [found] }, relationships: { ids in
+            fetched.withLock { $0.append(ids) }
+            return ids.map { Relationship(id: $0) }
+        }))
+        let noUsers = MenuLayout<StatusMenuItem>.Groups(main: [.init([.favourite])], more: [])
+        let authorOnly = MenuLayout<StatusMenuItem>.Groups(main: [.init([.favourite, .author])], more: [])
+
+        _ = await loaded(try #require(node(tree(status(uri: uri), accounts: [bob], groups: noUsers))).children)
+        let built = tree(status(uri: uri), accounts: [bob], groups: authorOnly).menu(groups: .single(.otherAccounts), includesFollowRequest: false)
+        await bob.refresh(status(uri: uri), relationIDs: built.otherAccountRelationIDs)
+        try await waitUntil { !fetched.withLock { $0 }.isEmpty }
+
+        #expect(fetched.withLock { $0 } == [["500"]])
     }
 }

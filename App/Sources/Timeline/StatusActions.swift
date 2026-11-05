@@ -3,9 +3,17 @@ import UIKit
 
 /// メニューにプレースホルダーのアイコンを出し、アイコンを読んでから差し替える人。
 struct PendingMenuIcon {
-    let user: MenuUser
-    /// 分かっているアカウント。メンションされた人で、一覧にも読み込み済みのものにもいなければnil。
-    let account: Account?
+    /// アイコンのURLを持つアカウントを、どう知るか。
+    enum Source {
+        /// 分かっているアカウント。
+        case account(Account)
+        /// 一覧にも読み込み済みのものにもいない、メンションされた人のID。まとめて読む。
+        case mention(id: String)
+        /// 「別のアカウントで」のアカウント自身。プロフィールを読み終えるのを待つ。
+        case otherAccount(OtherAccount)
+    }
+
+    let source: Source
     let placeholder: UIImage
 }
 
@@ -97,7 +105,7 @@ extension TimelineViewController {
         reloadRelations(built.shownUserIDs, groups: tree.userMenu)
         // 前に別のアカウントで見つけた投稿は、組んだメニューでは覚えていた状態で出し、探し直した状態は次に開いたときから使う。
         if built.showsOtherAccounts, let status {
-            otherAccounts?.refresh(status)
+            otherAccounts?.refresh(status, relationIDs: built.otherAccountRelationIDs)
         }
         // 描きながら集めた、アイコンのまだない人をまとめて読む。
         return built.root.map { BuiltMenu(root: $0, renderer: renderer) { [weak self] in self?.loadPendingMenuIcons() } }
@@ -163,6 +171,7 @@ extension TimelineViewController {
         } customIcon: { [weak self] icon in
             switch icon {
             case .avatar(.user(let user), _): self?.userMenuIcon(for: user, id: id)
+            case .avatar(.otherAccount(let account), _): self?.otherAccountMenuIcon(for: account)
             case .customEmoji(let emoji, _): emojis.icon(for: emoji)
             case .avatar(.mentionLink, _), .symbol: nil
             }
@@ -333,8 +342,19 @@ extension TimelineViewController {
         if let account, let image = cachedAvatar(of: account, id: id), let icon = Self.userMenuIcon(image, shape: settings.appearance.avatarShape) {
             return icon
         }
+        return pendingMenuIcon(account.map { .account($0) } ?? .mention(id: user.id))
+    }
+
+    /// 「別のアカウントで」のアカウントの行のアイコン。プロフィールをまだ読めていなければ、読み終えてから差し替える。
+    func otherAccountMenuIcon(for account: OtherAccount) -> UIImage {
+        guard let profile = account.profile else { return pendingMenuIcon(.otherAccount(account)) }
+        return userMenuIcon(for: .account(profile), id: nil)
+    }
+
+    /// 記号のプレースホルダーを返し、`loadPendingMenuIcons()`で読んで差し替えるよう積む。
+    private func pendingMenuIcon(_ source: PendingMenuIcon.Source) -> UIImage {
         let placeholder = contextMenuIcons.placeholder(symbolName: "person.crop.circle", side: Self.menuIconSide, traitCollection: traitCollection)
-        pendingMenuIcons.append(PendingMenuIcon(user: user, account: account, placeholder: placeholder))
+        pendingMenuIcons.append(PendingMenuIcon(source: source, placeholder: placeholder))
         return placeholder
     }
 
@@ -372,18 +392,26 @@ extension TimelineViewController {
             }
             #endif
             guard let self else { return }
-            // アカウントの分かっている人は、まとめ読みを待たずに画像を読み始める。
+            var mentions: [(id: String, placeholder: UIImage)] = []
             for icon in pending {
-                if let account = icon.account {
+                switch icon.source {
+                case .account(let account):
+                    // アカウントの分かっている人は、まとめ読みを待たずに画像を読み始める。
                     loadMenuIcon(of: account, replacing: icon.placeholder)
+                case .mention(let id):
+                    mentions.append((id, icon.placeholder))
+                case .otherAccount(let account):
+                    Task(.action) { [weak self] in
+                        guard let profile = await account.loadedProfile() else { return }
+                        self?.loadMenuIcon(of: profile, replacing: icon.placeholder)
+                    }
                 }
             }
-            let unresolved = pending.filter { $0.account == nil }
-            guard !unresolved.isEmpty, let accounts = userMenuActions?.accounts else { return }
-            let loaded = await accounts.load(unresolved.map(\.user.id))
-            for icon in unresolved {
-                if let account = loaded[icon.user.id] {
-                    loadMenuIcon(of: account, replacing: icon.placeholder)
+            guard !mentions.isEmpty, let accounts = userMenuActions?.accounts else { return }
+            let loaded = await accounts.load(mentions.map(\.id))
+            for mention in mentions {
+                if let account = loaded[mention.id] {
+                    loadMenuIcon(of: account, replacing: mention.placeholder)
                 }
             }
         }

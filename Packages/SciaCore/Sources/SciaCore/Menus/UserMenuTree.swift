@@ -138,8 +138,8 @@ public struct UserMenuTree {
     /// 投稿のメニューに置く、`@acct`のサブメニュー。サブメニューの項目にその人のアイコンを付け、中の「プロフィール」は記号のままにする。同じ顔が2つ並ばないようにするため。
     /// カスタマイズのほかの中身が1つで、「その他」にカスタマイズのほかに何もなければ、サブメニューにせず「@acctのプロフィール」のように直接並べ、カスタマイズは出さない。出す項目がなければnil。
     /// 関係の読み直しは、投稿のメニューに出る人をまとめて1回で頼むため、ここでは頼まない。
-    /// - Parameter avatar: その人のアイコン。
-    public func submenu(groups: MenuLayout<UserMenuItem>.Groups, avatar: MenuAvatar) -> MenuNode<UserMenuCommand>? {
+    /// - Parameter avatar: その人のアイコン。nilならアイコンを付けない。
+    public func submenu(groups: MenuLayout<UserMenuItem>.Groups, avatar: MenuAvatar?) -> MenuNode<UserMenuCommand>? {
         // 関係の項目は読んでから中身が決まり、名前に相手を入れられないため、1つだけでもサブメニューにする。
         let others = groups.excludingCustomize
         if others.more.isEmpty, others.main.count == 1, let only = others.main.first?.items, only.count == 1, !only[0].isRelation {
@@ -149,7 +149,7 @@ public struct UserMenuTree {
         let children = nodes(groups: groups, offersProfile: true, profileAvatar: nil)
         guard !children.isEmpty else { return nil }
         let heading = UserHeading(acct: subject.acct)
-        return .submenu(heading.title, subtitle: heading.subtitle, icon: .avatar(avatar, fallbackSymbol: nil), children)
+        return .submenu(heading.title, subtitle: heading.subtitle, icon: avatar.map { .avatar($0, fallbackSymbol: nil) }, children)
     }
 
     /// 単独で出すメニュー（アイコンや人の一覧の行、本文や自己紹介のメンション）。サブメニューの項目がないので、「プロフィール」にその人のアイコンを付ける。

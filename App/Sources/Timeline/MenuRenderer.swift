@@ -9,6 +9,8 @@ struct MenuRenderer<Command> {
     let perform: @MainActor (Command) -> Void
     /// 記号でないアイコン（人のアイコン、カスタム絵文字）の画像。nilを返したら、アイコンの記号を出す。
     var customIcon: @MainActor (MenuIcon) -> UIImage? = { _ in nil }
+    /// 開いてから読む中身を描き終えたあとに呼ぶ。`BuiltMenu`が、描きながら集めたまだ読んでいないアイコンを読み始める処理を入れる。
+    var didRenderDeferred: @MainActor () -> Void = {}
 
     init(perform: @escaping @MainActor (Command) -> Void, customIcon: @escaping @MainActor (MenuIcon) -> UIImage? = { _ in nil }) {
         self.perform = perform
@@ -40,6 +42,7 @@ struct MenuRenderer<Command> {
                 // 使う人が開いたメニューの中身なので、操作として読む。
                 Task(.action) {
                     completion(elements(await load()))
+                    didRenderDeferred()
                 }
             }
         }
@@ -76,6 +79,9 @@ struct BuiltMenu<Command> {
 
     init(root: MenuNode<Command>, renderer: MenuRenderer<Command>, didRender: @escaping @MainActor () -> Void = {}) {
         self.root = root
+        var renderer = renderer
+        // 開いてから読む中身に出たアイコンも、描き終えたら読み始める。
+        renderer.didRenderDeferred = didRender
         self.renderer = renderer
         self.didRender = didRender
     }

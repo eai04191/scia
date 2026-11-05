@@ -123,6 +123,8 @@ public enum MenuAvatar {
     case user(MenuUser)
     /// 本文や自己紹介のメンションのリンク。相手のIDが分からないため、プロフィールのURLで探す。
     case mentionLink(URL)
+    /// 「別のアカウントで」のアカウントの行の、そのアカウント自身。プロフィールを読むまでアイコンのURLが分からないため、描く側が読み終えるのを待って差し替える。
+    case otherAccount(OtherAccount)
 }
 
 /// 投稿のメニューの中で、ユーザーのメニューを出す相手。メンションはアカウントの全体を持たないため、IDでプロフィールを開く。

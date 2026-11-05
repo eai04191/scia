@@ -2027,9 +2027,18 @@ final class SessionController {
     /// 「別のアカウントで」で選んだ操作を、そのアカウントとして行う。今のアカウントの一覧は変わらないので、どのアカウントで何をしたかを知らせる。
     /// 失敗の理由は、このセッションのログインし直しの案内につなげず、そのまま出す。そのアカウントのトークンが無効でも、このセッションのものではないため。
     private func perform(_ command: OtherAccountCommand) {
-        let shown = command.status.displayed
-        let (action, visibility, done, failure): (StatusInteractions.Action, ReblogVisibility, String, String)
         switch command.action {
+        case .status(let status, let action):
+            perform(action, on: status, as: command.account, original: command.original)
+        case .relation(let change, let relation):
+            confirmChanging(change, of: relation, as: command.account)
+        }
+    }
+
+    private func perform(_ statusAction: StatusAction, on status: Status, as account: OtherAccount, original: Status) {
+        let shown = status.displayed
+        let (action, visibility, done, failure): (StatusInteractions.Action, ReblogVisibility, String, String)
+        switch statusAction {
         case .favourite:
             UserAction.toggleFavourite.record()
             (action, visibility) = (.favourite, .accountDefault)
@@ -2054,18 +2063,52 @@ final class SessionController {
             // 「別のアカウントで」には、そのアカウントのサーバーへ送るだけで済む操作しか出さない（`StatusMenuTree.otherAccountItems`）。
             return
         }
-        let account = command.account
         let handle = account.credential.handle
         let failureTitle = "\(handle)で\(failure)"
         tasks.run(.action) { [weak self] in
             do {
-                guard try await account.toggle(action, on: command.status, reblogVisibility: visibility) else { return }
+                guard try await account.toggle(action, on: status, reblogVisibility: visibility) else { return }
                 self?.showToggledNotice("\(handle)で\(done)")
             } catch {
                 guard let self else { return }
                 logger.error("other account toggle \(String(describing: action), privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
                 let reason = ErrorPresentation(error)
-                operationStatus.recordFailure(title: failureTitle, reason: reason, subject: OperationStatus.Subject(command.original))
+                operationStatus.recordFailure(title: failureTitle, reason: reason, subject: OperationStatus.Subject(original))
+                showFailureNotice(.interactionFailure(title: failureTitle) { [weak self] in
+                    self?.presentAlert(title: failureTitle, message: reason.text)
+                })
+            }
+        }
+    }
+
+    /// ほかのアカウントとしての関係の変更。取り消しにくい変更は、どのアカウントで行うかを見出しに入れて確かめてから送る。
+    private func confirmChanging(_ change: UserRelationChange, of relation: UserRelation, as account: OtherAccount) {
+        // 見出しは、メニューの行と同じくサーバー名を省く。ハンドルの全体を入れると、長いサーバー名の途中で折り返して読みにくいため。
+        guard let confirmation = Confirmation.relationChange(change, acct: relation.acct, endorsed: relation.relationship.endorsed, actor: "@\(account.credential.username)") else {
+            send(change, to: relation, as: account)
+            return
+        }
+        topViewController.present(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
+            self?.send(change, to: relation, as: account)
+        }, animated: true)
+    }
+
+    /// ほかのアカウントとして関係の変更を送る。今のアカウントの一覧やプロフィール、覚えている関係は変えないので、どのアカウントで何をしたかを知らせる。
+    /// 失敗は、投稿への操作と同じく、このセッションのログインし直しの案内につなげずに知らせる。
+    private func send(_ change: UserRelationChange, to relation: UserRelation, as account: OtherAccount) {
+        let handle = account.credential.handle
+        let failureTitle = "\(handle)で\(change.failureTitle)"
+        logger.info("other account relation change: \(String(describing: change), privacy: .public)")
+        // 送り終える前に押し直しても、同じ相手への変更は重ねて送らない。
+        tasks.run(key: "otherAccountRelation:\(account.credential.id):\(relation.accountID)", .skippingWhileRunning, .action) { [weak self] in
+            do {
+                let relationship = try await account.change(change, of: relation)
+                guard let self else { return }
+                notices.showTransient(Notice(id: "user.relationChanged", kind: .success, title: "\(handle)で\(change.doneTitle(relationship))"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+            } catch {
+                guard let self else { return }
+                logger.error("other account relation change failed: \(SciaLog.describe(error), privacy: .public)")
+                let reason = ErrorPresentation(error)
                 showFailureNotice(.interactionFailure(title: failureTitle) { [weak self] in
                     self?.presentAlert(title: failureTitle, message: reason.text)
                 })
@@ -3262,6 +3305,8 @@ final class SessionController {
             notifications.start(purpose: .action)
         }
         loadProfileTabIcons(tabs.placement)
+        // 「別のアカウントで」の行に出す、ほかのアカウントのアイコン。
+        otherAccounts.loadProfiles()
         let network = AppDependencies.network
         session.observeRecoveries { network.recoveryCount }
         loadServerVersion()
