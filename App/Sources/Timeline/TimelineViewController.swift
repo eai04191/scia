@@ -1349,7 +1349,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         case .loading:
             return UIContentUnavailableConfiguration.loading()
         case .loaded:
-            return emptyConfiguration(text: texts.empty, secondaryText: nil, buttonTitle: "再読み込み")
+            return emptyConfiguration(text: texts.empty, secondaryText: texts.emptyDetail, buttonTitle: "再読み込み")
         case .regenerating:
             return emptyConfiguration(
                 text: "ホームを準備しています",
