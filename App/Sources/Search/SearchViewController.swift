@@ -33,7 +33,7 @@ final class SearchViewController: UIViewController, UISearchBarDelegate, UISearc
     /// 打ち直す前に結果を見ていたスクロール位置。打ち直してから検索欄を閉じ、結果に戻すときに置き直す。
     private var resultsOffset: CGFloat?
     /// 開いたときに検索欄へフォーカスを入れるか。最初に見せるときだけにし、語を渡して開いたときは入れない。
-    private var focusesOnAppear = true
+    var focusesOnAppear = true
 
     /// 見えている一覧。候補も結果もなく一覧を隠していればnil。
     var shownList: TimelineViewController? {
@@ -98,11 +98,20 @@ final class SearchViewController: UIViewController, UISearchBarDelegate, UISearc
         // 検索欄が空なら、開いてすぐ打てるようにする。
         guard focusesOnAppear, results == nil, searchController.searchBar.text?.isEmpty ?? true else { return }
         focusesOnAppear = false
-        searchController.isActive = true
+        // `isActive`を立てるだけでは、検索欄は開いてもフォーカスが入らない。
+        focusSearchField()
     }
 
-    func didPresentSearchController(_ searchController: UISearchController) {
-        searchController.searchBar.becomeFirstResponder()
+    /// 検索欄にフォーカスを入れる。開いたときと、検索のタブをもう一度押したときに呼ぶ。検索欄を閉じていれば、押したときと同じく開く。
+    /// 検索欄を閉じる動きの途中では、フォーカスを入れても閉じ終えたときに外れるので、閉じ終えてから入れる。
+    func focusSearchField() {
+        guard let coordinator = searchController.transitionCoordinator else {
+            searchController.searchBar.becomeFirstResponder()
+            return
+        }
+        coordinator.animate(alongsideTransition: nil) { [weak self] _ in
+            self?.searchController.searchBar.becomeFirstResponder()
+        }
     }
 
     func didDismissSearchController(_ searchController: UISearchController) {

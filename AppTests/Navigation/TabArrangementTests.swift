@@ -203,7 +203,7 @@ struct TabArrangementTests {
     /// タブに並べた項目も、切り替えタブの中の項目も同じ。
     @Test func reselectingTabPopsToRoot() throws {
         let harness = try Harness(Self.layout(tabs: [.home], switchable: [.local]))
-        let delegate = TabReselectionDelegate(scrollToTop: { _ in }, navigation: { [arrangement = harness.arrangement] in arrangement.navigation(for: $0) }) { _ in }
+        let delegate = TabReselectionDelegate(reselectRoot: { _ in }, navigation: { [arrangement = harness.arrangement] in arrangement.navigation(for: $0) }) { _ in }
         let controller = harness.arrangement.tabBarController
 
         for item in [TabItem.home, .local] {

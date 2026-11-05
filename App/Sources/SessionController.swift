@@ -393,7 +393,7 @@ final class SessionController {
         let scrollToTop = { (navigation: UINavigationController) -> Void in
             TimelineViewController.shown(in: navigation.viewControllers.first)?.scrollToNewest()
         }
-        tabBarDelegate = TabReselectionDelegate(scrollToTop: scrollToTop, navigation: { [weak tabs] in tabs?.navigation(for: $0) }) { tabBarController in
+        tabBarDelegate = TabReselectionDelegate(reselectRoot: TabReselectionDelegate.reselectRoot(of:), navigation: { [weak tabs] in tabs?.navigation(for: $0) }) { tabBarController in
             // タブの切り替えには画面の移り変わりの動きがないため、チップだけを短く動かす。
             tabBarController.noticeOverlay?.follow(nil)
         }
@@ -4251,19 +4251,20 @@ private final class ProfileRegistry {
     }
 }
 
-/// 選んでいるタブをもう一度押したとき、奥の画面を開いていれば標準どおり最初の画面へ戻し、最初の画面にいれば最上部へ動かす。
+/// 選んでいるタブをもう一度押したとき、奥の画面を開いていれば標準どおり最初の画面へ戻し、最初の画面にいれば`reselectRoot(of:)`の動きをする。
 /// タブを切り替えたら、`didSelect`で知らせる。
 @MainActor
 final class TabReselectionDelegate: NSObject, UITabBarControllerDelegate {
-    private let scrollToTop: (UINavigationController) -> Void
+    /// 最初の画面にいるタブをもう一度押したとき。
+    private let reselectRoot: (UINavigationController) -> Void
     /// タブで前に出ているナビゲーション。切り替えタブなら、開いている項目のもの。
     private let navigation: (UITab) -> UINavigationController?
     private let didSelect: (UITabBarController) -> Void
     /// 別のタブを選び終えたとき。ステータスバーの通知を流してよいかを見直す。
     var onSelect: (() -> Void)?
 
-    init(scrollToTop: @escaping (UINavigationController) -> Void, navigation: @escaping (UITab) -> UINavigationController?, didSelect: @escaping (UITabBarController) -> Void) {
-        self.scrollToTop = scrollToTop
+    init(reselectRoot: @escaping (UINavigationController) -> Void, navigation: @escaping (UITab) -> UINavigationController?, didSelect: @escaping (UITabBarController) -> Void) {
+        self.reselectRoot = reselectRoot
         self.navigation = navigation
         self.didSelect = didSelect
     }
@@ -4290,9 +4291,21 @@ final class TabReselectionDelegate: NSObject, UITabBarControllerDelegate {
             return false
         }
         // 慣性で動いている途中なら、最上部へ動かす時点でそれまでのスクロールが記録される。一覧で押した操作がその後に並ぶよう、後で記録する。
-        scrollToTop(navigation)
+        reselectRoot(navigation)
         UserAction.reselectTab(Self.logName(of: tab)).record()
         return false
+    }
+
+    /// 最初の画面にいるタブをもう一度押したときの既定の動き。一覧を最上部へ動かす。
+    /// 検索の画面では、見えている一覧が最上部にあるか一覧がなければ、検索欄にフォーカスを入れる。
+    static func reselectRoot(of navigation: UINavigationController) {
+        let root = navigation.viewControllers.first
+        let list = TimelineViewController.shown(in: root)
+        if let search = root as? SearchViewController, list?.isAtTop ?? true {
+            search.focusSearchField()
+        } else {
+            list?.scrollToNewest()
+        }
     }
 
     /// 操作の記録に残すタブの名前。タブの識別子は並びに保存する値で、リストやハッシュタグの名前を含むため、そのまま残さない。
