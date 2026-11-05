@@ -49,6 +49,7 @@ warnings: build
 ## 例: make test ONLY='SciaTests/LinkLabelTests SciaTests/TimelineNoticeTests/progressGainingDigitWidensWithAnimation()'
 ## 例: make test SIM='iPhone 16 Pro'
 TEST_TREE := $(DERIVED_DATA)/test-tree
+TEST_ARGS = -project $(PROJECT) -scheme $(SCHEME) -destination 'platform=iOS Simulator,name=$(SIM)' -derivedDataPath $(DERIVED_DATA) -collect-test-diagnostics never
 ## 決めた端末をSIMに入れて呼び直す。テストの間ずっと、処理の引数に端末の名前が残り、Tools/sim.sh busyが使っている処理として見つけられるようにするため
 test: generate
 	@sim=$$(Tools/sim.sh leased '$(SIM)') && $(MAKE) --no-print-directory test-on-sim SIM="$$sim"
@@ -57,8 +58,21 @@ test: generate
 test-on-sim:
 	@mkdir -p $(DERIVED_DATA) && Tools/check-stamp.sh tree > $(TEST_TREE)
 	swift Tools/sim-keyboard.swift '$(SIM)' hardware
-	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination 'platform=iOS Simulator,name=$(SIM)' -derivedDataPath $(DERIVED_DATA) -collect-test-diagnostics never test $(foreach t,$(ONLY),'-only-testing:$(t)')
-ifeq ($(strip $(ONLY)),)
+ifneq ($(strip $(ONLY)),)
+	xcodebuild $(TEST_ARGS) test $(foreach t,$(ONLY),'-only-testing:$(t)')
+else
+	xcodebuild $(TEST_ARGS) build-for-testing
+	@# SciaCoreTestsはアプリの中で走らないので、SciaTestsと同じ端末で同時に走らせる。SciaTestsがアプリを入れて起動する15秒ほどの間に、ほぼ走り終える。
+	@# 止められたら、どちらのxcodebuildも止めて終わるのを待つ。前で走らせると、シェルはそれが終わるまで止める合図を扱わないので、どちらも後ろで走らせて待つ
+	@# 結果のファイルの名前は始めた秒で決まり、同時に始めると重なるので、SciaCoreTestsの分は名前を決めて書く。出力は混ざらないよう、ファイルに書いて落ちたときだけ出す
+	@core_log=$(DERIVED_DATA)/core-tests.log; \
+	stop() { kill $$core $$app 2>/dev/null; wait; exit $$1; }; \
+	trap 'stop 129' HUP; trap 'stop 130' INT; trap 'stop 143' TERM; \
+	xcodebuild $(TEST_ARGS) -resultBundlePath "$(DERIVED_DATA)/Logs/Test/SciaCore-$$(date +%Y.%m.%d_%H-%M-%S).xcresult" -only-testing:SciaCoreTests test-without-building > "$$core_log" 2>&1 & core=$$!; \
+	xcodebuild $(TEST_ARGS) -only-testing:SciaTests test-without-building & app=$$!; \
+	wait $$app; app=$$?; wait $$core; core_status=$$?; \
+	if [ $$core_status -ne 0 ]; then grep -aE '✘|error:' "$$core_log" | tail -40; echo "SciaCoreTestsが落ちました。出力は$$core_log"; else grep -a 'Test run with' "$$core_log"; fi; \
+	[ $$app -eq 0 ] && [ $$core_status -eq 0 ]
 	Tools/system-ui-check.sh '$(SIM)' $(DERIVED_DATA)
 	@Tools/check-stamp.sh record test "$$(cat $(TEST_TREE))"
 endif
