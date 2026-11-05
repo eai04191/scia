@@ -11,6 +11,8 @@ struct NotificationContentConfiguration: UIContentConfiguration {
     var symbolColor: UIColor
     /// 誰が何をしたかの行。名前の前に、文字と同じ高さのアイコンを差し込んである。
     var header: NSAttributedString
+    /// 見出しの代わりに読み上げる文。見出しにある画像の文字（カスタム絵文字）を、読める文字にして読むときに渡す。nilなら見出しの文字を読む。
+    var headerAccessibilityText: String?
     /// まとめた行で、誰が何をしたかの行の上に並べるアイコン。新しい人から。まとめない行では空。
     var groupAvatars: [AvatarView.Content] = []
     /// 通知のもとになる操作をした人の名前。VoiceOverの、プロフィールを開く操作の名前に使う。まとめた行では`groupAccountNames`を使う。
@@ -276,7 +278,7 @@ final class NotificationContentView: UIView, UIContentView {
 
     /// 読み上げでは、誰が何をしたかの行と本文を1つの要素として読む。サムネイルは別の要素のまま残す。
     private func updateAccessibility(for configuration: NotificationContentConfiguration) {
-        textAccessibilityElement.accessibilityLabel = [configuration.header.string, bodyView.accessibilityText, configuration.reactionGlow?.accessibilityText ?? ""]
+        textAccessibilityElement.accessibilityLabel = [configuration.headerAccessibilityText ?? configuration.header.string, bodyView.accessibilityText, configuration.reactionGlow?.accessibilityText ?? ""]
             // 名前の前に差し込んだアイコンの文字は読まない。
             .map { $0.replacingOccurrences(of: "\u{FFFC}", with: "").trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }

@@ -176,7 +176,16 @@ extension TimelineViewController {
                 header.append(NSAttributedString(string: "ほか\((notification.notificationsCount - 1).formatted())人", attributes: linkAttributes))
             }
         }
-        header.append(NSAttributedString(string: appearance.phrase.after, attributes: phraseAttributes))
+        let reactionEmoji = notification.type == .emojiReaction ? notification.reactionEmoji : nil
+        if let emoji = reactionEmoji {
+            // 付けた絵文字は、名前と同じ大きさで文の中に描く。カスタム絵文字は画像で描く。
+            let text: RichText = emoji.customEmoji.map { .plain(":\($0.shortcode):", emojis: [$0]) } ?? .plain(emoji.isCustom ? ":\(emoji.name):" : emoji.name, emojis: [])
+            header.append(NSAttributedString(string: "が", attributes: phraseAttributes))
+            header.append(nameRenderer.render(text))
+            header.append(NSAttributedString(string: "でリアクションしました", attributes: phraseAttributes))
+        } else {
+            header.append(NSAttributedString(string: appearance.phrase.after, attributes: phraseAttributes))
+        }
         var configuration = NotificationContentConfiguration(
             symbolName: appearance.symbolName,
             symbolColor: appearance.color,
@@ -198,6 +207,10 @@ extension TimelineViewController {
             avatarImages: avatarImages,
             emojiImages: settings.animatesCustomEmojis ? emojiImages : nil
         )
+        if let emoji = reactionEmoji {
+            // カスタム絵文字は画像の文字で読めないので、本文と同じくショートコードで読む。
+            configuration.headerAccessibilityText = "\(notification.account.displayNameOrUsername)が\(emoji.isCustom ? ":\(emoji.name):" : emoji.name)でリアクションしました"
+        }
         if appearance.phrase.includesName {
             configuration.accountName = notification.account.displayNameOrUsername
             configuration.onOpenAccount = { [weak self] in self?.onOpenProfile?(notification.account) }
