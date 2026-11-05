@@ -19,6 +19,9 @@ enum DebugURL: Equatable {
     case scenario(String)
     /// `scia-debug://unauthorized`。以後のREST APIに401を返させ、トークンが無効になった状態にする。
     case unauthorized
+    /// `scia-debug://account?acct=<ハンドル>`で、保存してあるアカウントに切り替える。メニューを触らずに、ほかのサーバーのアカウントで確かめるため。
+    /// ハンドルは`user@server`で、先頭の`@`はあってもなくてもよい。セッションがなくても受け付ける。
+    case account(acct: String)
     /// `scia-debug://dummy-session`で、通信しないダミーのデータでホームと通知の画面に入る（`DummyServer`）。ログイン画面でも、ログイン済みでも受け付ける。
     case dummySession
     /// `scia-debug://unreadable`。以後のホームと通知の応答の一部を読めない形に壊し、読み込み直す。
@@ -170,6 +173,7 @@ enum DebugURL: Equatable {
         let last = url.lastPathComponent
         let parsed: DebugURL? = switch host {
         case "dummy": DebugDummyPost(rawValue: last).map { .dummy($0) }
+        case "account": Self.query("acct", in: url).map { .account(acct: $0) }
         case "scenario": .scenario(last)
         case "unsupported": OptionalFeature(rawValue: last).map { .unsupported($0) }
         case "catalog": CatalogComponent(rawValue: last).map { .catalog($0) }

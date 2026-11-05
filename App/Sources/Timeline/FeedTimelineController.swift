@@ -241,6 +241,8 @@ extension FeedTimelineController {
             streamDummyPolls()
         case .quotes:
             streamDummyQuotes()
+        case .reactions:
+            streamDummyReactions()
         case .notifications:
             onDummyNotifications?()
         }
@@ -272,6 +274,41 @@ extension FeedTimelineController {
                     url: nil,
                     mediaAttachments: post.media ? DummyMedia.attachments(idPrefix: base.id) : [],
                     filtered: post.filtered
+                )
+                model.debugStore.debugLocalOnlyIDs.insert(dummy.id)
+                model.debugReceive(.update(dummy))
+            }
+        }
+    }
+
+    /// 絵文字のリアクションの付いたダミーの投稿を、新着と同じ経路で流す。1つだけ、折り返すほど多い、このサーバーとほかのサーバーのカスタム絵文字、数の大きいものの4件。
+    /// 列は、サーバーが絵文字のリアクションに対応しているときだけ出る（docs/emoji-reaction.md）。投稿はサーバーにないので、付け外しは失敗して戻る。
+    /// カスタム絵文字の画像には、一覧の投稿のアイコンを使う。
+    private func streamDummyReactions() {
+        let avatar = model.debugStore.statuses.first?.account.avatar ?? client.credential.instance
+        let local = ReactionEmoji(name: "dummy_custom", url: avatar, staticUrl: avatar)
+        let remote = ReactionEmoji(name: "dummy_remote", domain: "misskey.example", url: avatar, staticUrl: avatar)
+        let many = ["👍", "🎉", "❤️", "😂", "🤔", "👀", "🙏", "🔥", "✨", "🥺", "🍣", "#️⃣"].enumerated().map { index, emoji in
+            EmojiReaction(emoji: ReactionEmoji(name: emoji), count: index + 1, me: index == 2)
+        }
+        let posts: [(content: String, reactions: [EmojiReaction])] = [
+            ("リアクションが1つのダミー", [EmojiReaction(emoji: ReactionEmoji(name: "👍"), count: 1, me: false)]),
+            ("折り返すほどリアクションの多いダミー", many),
+            ("このサーバーとほかのサーバーのカスタム絵文字のリアクションのダミー", [EmojiReaction(emoji: local, count: 2, me: true), EmojiReaction(emoji: remote, count: 3, me: false)]),
+            ("数の大きいリアクションのダミー", [EmojiReaction(emoji: ReactionEmoji(name: "🎉"), count: 12_345, me: true), EmojiReaction(emoji: ReactionEmoji(name: "👀"), count: 999, me: false)]),
+        ]
+        model.debugRun { model in
+            for (index, post) in posts.enumerated() {
+                guard !model.isStopped else { return }
+                let base = Self.dummyStatus(number: index + 1, avatar: avatar, now: model.now())
+                let dummy = Status(
+                    id: base.id,
+                    createdAt: base.createdAt,
+                    account: Account(id: "dummy", username: "dummy", acct: "dummy", displayName: "ダミー（リアクション）", avatar: avatar),
+                    content: "<p>\(post.content)</p>",
+                    spoilerText: "",
+                    url: nil,
+                    emojiReactions: post.reactions
                 )
                 model.debugStore.debugLocalOnlyIDs.insert(dummy.id)
                 model.debugReceive(.update(dummy))
@@ -577,6 +614,7 @@ enum DebugDummyPost: String, CaseIterable {
     case animatedEmojis = "animated-emojis"
     case polls
     case quotes
+    case reactions
     case notifications
 
     var title: String {
@@ -596,6 +634,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .animatedEmojis: "動く絵文字の多い投稿（40件）"
         case .polls: "投票の付いた投稿（4件）"
         case .quotes: "引用のある投稿（4件）"
+        case .reactions: "絵文字のリアクションのある投稿（4件）"
         case .notifications: "ステータスバーに流す通知（連続）"
         }
     }
@@ -622,7 +661,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .arrivals, .animatedEmojis: .timeline
         case .images, .tall, .small, .transparent, .video, .longVideo: .media
         case .linkCard, .linkCardImage, .linkCardSensitive, .xPost: .delayed
-        case .filtered, .polls, .quotes: .content
+        case .filtered, .polls, .quotes, .reactions: .content
         case .notifications: nil
         }
     }
@@ -642,6 +681,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .animatedEmojis: "face.smiling"
         case .polls: "chart.bar.horizontal.page"
         case .quotes: "quote.opening"
+        case .reactions: "face.smiling.inverse"
         case .notifications: "bell.badge"
         }
     }

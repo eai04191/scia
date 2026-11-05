@@ -3739,8 +3739,8 @@ final class SessionController {
         switch url {
         case .dummy(let post):
             home.streamDummy(post)
-        case .dummySession:
-            // SceneDelegateが、セッションの有無にかかわらず先に受けてダミーのセッションを開くため、ここには来ない。
+        case .dummySession, .account:
+            // SceneDelegateが、セッションの有無にかかわらず先に受けるため、ここには来ない。
             break
         case .scenario(let event):
             if let action = ScenarioMode.server?.script.actions[event] {

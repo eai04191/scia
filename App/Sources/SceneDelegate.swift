@@ -127,6 +127,11 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 openDummySession()
                 continue
             }
+            if case .account(let acct) = url {
+                logger.info("debug url: \(context.url.absoluteString, privacy: .public)")
+                switchAccount(toHandle: acct)
+                continue
+            }
             guard let session else {
                 logger.error("debug url ignored without session: \(context.url.absoluteString, privacy: .public)")
                 continue
@@ -136,6 +141,16 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
     }
     // scialint:enable log_private_value
+
+    /// 保存してあるアカウントのうち、ハンドルが`acct`のものに切り替える。書きかけの投稿は、メニューから選ぶときと同じく、捨てるかを確かめる。
+    private func switchAccount(toHandle acct: String) {
+        let handle = acct.hasPrefix("@") ? acct : "@" + acct
+        guard let account = accounts?.accounts.first(where: { $0.handle.caseInsensitiveCompare(handle) == .orderedSame }) else {
+            logger.error("debug account not found")
+            return
+        }
+        confirmDiscardingDraft(switchingTo: account) { [weak self] in self?.switchAccount(to: account.id) }
+    }
     #endif
 
     #if DEBUG
