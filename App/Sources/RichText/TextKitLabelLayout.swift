@@ -12,6 +12,9 @@ enum TextKitLabelLayout {
         var lineBreakMode: NSLineBreakMode
         var direction: UIUserInterfaceLayoutDirection
         var displayScale: CGFloat
+        /// `.overlaidGlyphs`の文字を、場所取りの上に重ねて描く。TextKit 2で描くときだけtrueにする。
+        /// UILabelで描くラベルでは、UILabelと同じ位置を求めるため、ふつうの文字のまま並べる。
+        var overlaysGlyphs = false
     }
 
     /// 並べた結果の大きさとベースライン。
@@ -49,9 +52,150 @@ enum TextKitLabelLayout {
         // 段落は折り返しにして、コンテナで最後の行だけを「…」で切る。最後の行に入りきらない単語も、UILabelと同じく「…」の前まで途中を並べる。
         container.lineBreakMode = truncationMode(of: attributedText, lineBreakMode: style.lineBreakMode) ?? style.lineBreakMode
         layoutManager.textContainer = container
-        contentStorage.attributedString = wrappingInsteadOfTruncating(aligned(attributedText, direction: style.direction))
+        let placed = style.overlaysGlyphs ? placingOverlaidGlyphs(attributedText) : attributedText
+        contentStorage.attributedString = wrappingInsteadOfTruncating(aligned(placed, direction: style.direction))
         layoutManager.ensureLayout(for: layoutManager.documentRange)
-        return TextLayout(width: width, direction: style.direction, contentStorage: contentStorage, layoutManager: layoutManager)
+        return TextLayout(
+            width: width, direction: style.direction, contentStorage: contentStorage, layoutManager: layoutManager,
+            overlaidText: placed === attributedText ? nil : placed
+        )
+    }
+
+    /// `.overlaidGlyphs`の文字を、書記素クラスタごとに、描く字形の枠と同じ大きさの場所取り（中身のない添付）に置き換えた文字列。
+    /// TextKit 2は、行の高さを、行の文字の書体のascenderとdescenderとleadingで決める。大きくした絵文字は、書体が絵の上下に余白を持ち、
+    /// 下げて描いた分もdescentに足されるため、その書体で並べると、行が絵より上下に高くなる。添付は、枠の大きさだけを行の高さにする。
+    /// 文字の位置が変わらないよう、クラスタの2文字目からは幅のない文字にし、長さを変えない。字形は`drawOverlaidGlyphs(of:in:below:)`で重ねて描く。
+    static func placingOverlaidGlyphs(_ text: NSAttributedString) -> NSAttributedString {
+        var ranges: [NSRange] = []
+        text.enumerateAttribute(.overlaidGlyphs, in: NSRange(location: 0, length: text.length)) { value, range, _ in
+            if value != nil { ranges.append(range) }
+        }
+        guard !ranges.isEmpty else { return text }
+        let result = NSMutableAttributedString(attributedString: text)
+        let string = text.string as NSString
+        for range in ranges {
+            var location = range.location
+            while location < NSMaxRange(range) {
+                let cluster = NSIntersectionRange(string.rangeOfComposedCharacterSequence(at: location), range)
+                location = NSMaxRange(cluster)
+                var attributes = text.attributes(at: cluster.location, effectiveRange: nil)
+                guard let font = attributes[.font] as? UIFont, let placeholderFont = attributes[.overlaidGlyphs] as? UIFont else { continue }
+                let offset = attributes[.baselineOffset] as? CGFloat ?? 0
+                let glyph = string.substring(with: cluster)
+                let line = CTLineCreateWithAttributedString(NSAttributedString(string: glyph, attributes: [.font: font]))
+                let width = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
+                let bounds = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+                let placeholder = NSTextAttachment()
+                placeholder.image = emptyImage
+                placeholder.bounds = CGRect(x: 0, y: bounds.minY + offset, width: width, height: bounds.height)
+                attributes[.font] = placeholderFont
+                attributes[.baselineOffset] = nil
+                attributes[.overlaidGlyphs] = nil
+                var rest = attributes
+                attributes[.attachment] = placeholder
+                attributes[.overlaidGlyph] = OverlaidGlyph(text: glyph, font: font, color: attributes[.foregroundColor] as? UIColor, baselineOffset: offset)
+                // 結合子やサロゲートペアの2文字目からは、幅のない文字にする。前の文字に付く結合用の文字（U+034F）にし、
+                // 場所取りとのあいだで改行せず、後ろの文字との改行の機会は場所取りのものにする。語結合子（U+2060）では、後ろの文字との改行もなくなる。
+                rest[.attachment] = nil
+                rest[.overlaidGlyphFiller] = true
+                let replacement = NSMutableAttributedString(string: "\u{FFFC}", attributes: attributes)
+                replacement.append(NSAttributedString(string: String(repeating: "\u{034F}", count: cluster.length - 1), attributes: rest))
+                result.replaceCharacters(in: cluster, with: replacement)
+            }
+        }
+        return result
+    }
+
+    /// 場所取りに置き換えた文字の取り消し線と下線だけが見える文字列。場所取りに取り消し線も下線もなければnil。
+    /// 字形を文字より先に描けないところ（文字の後ろに選択のハイライトを描くテキストビュー）で、字形のあとに重ねて、線を字形の上に乗せるのに使う。
+    /// 同じ幅で並べれば元の文字列と同じ位置に並ぶよう、文字と添付は消さずに透明にする。
+    static func overlaidGlyphDecorations(_ placed: NSAttributedString) -> NSAttributedString? {
+        let whole = NSRange(location: 0, length: placed.length)
+        var decorated = false
+        placed.enumerateAttributes(in: whole) { attributes, _, stop in
+            let overlaid = attributes[.overlaidGlyph] != nil || attributes[.overlaidGlyphFiller] != nil
+            if overlaid, attributes[.strikethroughStyle] != nil || attributes[.underlineStyle] != nil {
+                decorated = true
+                stop.pointee = true
+            }
+        }
+        guard decorated else { return nil }
+        let result = NSMutableAttributedString(attributedString: placed)
+        placed.enumerateAttributes(in: whole) { attributes, range, _ in
+            let color = attributes[.foregroundColor] as? UIColor
+            if attributes[.overlaidGlyph] != nil || attributes[.overlaidGlyphFiller] != nil {
+                if attributes[.strikethroughColor] == nil, let color { result.addAttribute(.strikethroughColor, value: color, range: range) }
+                if attributes[.underlineColor] == nil, let color { result.addAttribute(.underlineColor, value: color, range: range) }
+            } else {
+                result.removeAttribute(.strikethroughStyle, range: range)
+                result.removeAttribute(.underlineStyle, range: range)
+            }
+            if let attachment = attributes[.attachment] as? NSTextAttachment, attachment.image !== emptyImage {
+                let placeholder = NSTextAttachment()
+                placeholder.image = emptyImage
+                placeholder.bounds = attachment.bounds
+                result.addAttribute(.attachment, value: placeholder, range: range)
+            }
+        }
+        result.addAttribute(.foregroundColor, value: UIColor.clear, range: whole)
+        return result
+    }
+
+    /// `placingOverlaidGlyphs(_:)`で場所取りに置き換えた文字列を、置き換える前の文字に戻した文字。
+    static func restoringOverlaidGlyphs(_ text: NSAttributedString) -> String {
+        var result = ""
+        text.enumerateAttributes(in: NSRange(location: 0, length: text.length)) { attributes, range, _ in
+            if attributes[.overlaidGlyphFiller] != nil { return }
+            if let glyph = attributes[.overlaidGlyph] as? OverlaidGlyph {
+                // 同じ絵文字が並ぶと1つの範囲にまとまるので、場所取り1つが1文字であることから数を戻す。
+                result += String(repeating: glyph.text, count: range.length)
+            } else {
+                result += (text.string as NSString).substring(with: range)
+            }
+        }
+        return result
+    }
+
+    /// 場所取りの添付に描く、透明な画像。
+    private static let emptyImage = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1)).image { _ in }
+
+    /// `placingOverlaidGlyphs(_:)`で場所取りに置き換えた字形を、場所取りの位置に描く。`context`はラベルの座標で描く。
+    static func drawOverlaidGlyphs(of layout: TextLayout, in context: CGContext, below maxY: CGFloat) {
+        for (glyph, origin) in overlaidGlyphs(of: layout, below: maxY) {
+            glyph.draw(atBaseline: origin, in: context)
+        }
+    }
+
+    /// 重ねて描く字形と、描く位置（ベースラインの左端）。ラベルの座標で返す。
+    /// 行数で切られて並ばなかった場所取りと、「…」に置き換わった場所取りと、`maxY`より下の行は含めない。
+    static func overlaidGlyphs(of layout: TextLayout, below maxY: CGFloat) -> [(glyph: OverlaidGlyph, origin: CGPoint)] {
+        guard let text = layout.overlaidText else { return [] }
+        let contentStorage = layout.contentStorage
+        let start = contentStorage.documentRange.location
+        var result: [(glyph: OverlaidGlyph, origin: CGPoint)] = []
+        text.enumerateAttribute(.overlaidGlyph, in: NSRange(location: 0, length: text.length)) { value, range, _ in
+            guard let glyph = value as? OverlaidGlyph else { return }
+            for index in range.location..<NSMaxRange(range) {
+                guard let location = contentStorage.location(start, offsetBy: index),
+                      let fragment = layout.layoutManager.textLayoutFragment(for: location),
+                      let line = line(at: location, in: fragment, contentStorage: contentStorage)
+                else { continue }
+                let frame = fragment.frameForTextAttachment(at: location)
+                let baseline = fragment.layoutFragmentFrame.minY + line.typographicBounds.minY + line.glyphOrigin.y
+                // 行の末尾で「…」に置き換わった場所取りも、添付の枠は返る。そのとき行の幅は「…」までになるので、枠が行の幅からはみ出るものは描かない。
+                let lineBounds = line.typographicBounds.insetBy(dx: -0.5, dy: 0)
+                guard !frame.isEmpty, frame.minX >= lineBounds.minX, frame.maxX <= lineBounds.maxX, baseline - glyph.font.lineHeight < maxY else { continue }
+                result.append((glyph, CGPoint(x: fragment.layoutFragmentFrame.minX + frame.minX, y: baseline)))
+            }
+        }
+        return result
+    }
+
+    /// `location`の文字が並ぶ行。
+    private static func line(at location: any NSTextLocation, in fragment: NSTextLayoutFragment, contentStorage: NSTextContentStorage) -> NSTextLineFragment? {
+        guard let paragraphStart = fragment.textElement?.elementRange?.location else { return nil }
+        let index = contentStorage.offset(from: paragraphStart, to: location)
+        return fragment.textLineFragments.first { NSLocationInRange(index, $0.characterRange) }
     }
 
     /// 並べた結果の大きさとベースライン。文字がなければnil。
@@ -181,4 +325,40 @@ struct TextLayout {
     let direction: UIUserInterfaceLayoutDirection
     let contentStorage: NSTextContentStorage
     let layoutManager: NSTextLayoutManager
+    /// 場所取りに置き換えた文字列（`TextKitLabelLayout.placingOverlaidGlyphs(_:)`）。置き換えた文字がなければnil。
+    /// 描くときに、置き換えた文字のない文字列では、重ねて描く字形を探さずに済ませるのに使う。
+    var overlaidText: NSAttributedString? = nil
+}
+
+/// 場所取りの上に重ねて描く字形（`TextKitLabelLayout.placingOverlaidGlyphs(_:)`）。置き換える前の文字と書体と色で描く。
+struct OverlaidGlyph: Hashable, Sendable {
+    let text: String
+    let font: UIFont
+    let color: UIColor?
+    let baselineOffset: CGFloat
+
+    /// `origin`（ベースラインの左端）に描く。`context`は、UIKitと同じく下向きが正の座標。
+    func draw(atBaseline origin: CGPoint, in context: CGContext) {
+        var attributes: [NSAttributedString.Key: Any] = [.font: font]
+        if let color { attributes[NSAttributedString.Key(kCTForegroundColorAttributeName as String)] = color.cgColor }
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
+        context.saveGState()
+        context.textMatrix = .identity
+        context.translateBy(x: origin.x, y: origin.y - baselineOffset)
+        context.scaleBy(x: 1, y: -1)
+        context.textPosition = .zero
+        CTLineDraw(line, context)
+        context.restoreGState()
+    }
+}
+
+extension NSAttributedString.Key {
+    /// TextKit 2で描くときに、場所取りの上に重ねて描く文字。値は、場所取りの文字の書体（`UIFont`）。
+    /// 行の高さを、書体のascenderとdescenderではなく、描く字形の枠で決めたい文字に付ける（`TextKitLabelLayout.placingOverlaidGlyphs(_:)`）。
+    /// UILabelで描くときは、ふつうの文字として描く。
+    static let overlaidGlyphs = NSAttributedString.Key("net.mizle.scia.overlaidGlyphs")
+    /// 場所取りに置き換えた文字の、重ねて描く字形（`OverlaidGlyph`）。並べるときに付け、置く側は付けない。
+    static let overlaidGlyph = NSAttributedString.Key("net.mizle.scia.overlaidGlyph")
+    /// 場所取りに置き換えた書記素クラスタの、2文字目からの幅のない文字。並べるときに付け、置く側は付けない。
+    static let overlaidGlyphFiller = NSAttributedString.Key("net.mizle.scia.overlaidGlyphFiller")
 }

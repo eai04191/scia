@@ -488,6 +488,10 @@ class EmojiLabel: TextKitLabel {
     /// UILabelが自分のフォントや色で埋めたあとの文字列を使う。段落をつなぐ改行のようにフォントのない部分を、UITextViewは12ptの既定のフォントで並べ、
     /// 空行の高さが変わって下の行がずれるため。
     final var textForTextKit: NSAttributedString? {
-        sourceText.map { TextKitLabelLayout.aligned(TextKitLabelLayout.wrappingInsteadOfTruncating($0), direction: effectiveUserInterfaceLayoutDirection) }
+        sourceText.map {
+            // TextKit 2で描くときは、大きくした絵文字を場所取りに置き換えて並べているので、同じ行の高さになるよう、同じく置き換える。
+            let placed = drawsWithTextKit ? TextKitLabelLayout.placingOverlaidGlyphs($0) : $0
+            return TextKitLabelLayout.aligned(TextKitLabelLayout.wrappingInsteadOfTruncating(placed), direction: effectiveUserInterfaceLayoutDirection)
+        }
     }
 }

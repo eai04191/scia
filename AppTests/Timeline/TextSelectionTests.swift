@@ -77,6 +77,68 @@ struct TextSelectionTests {
         #expect(textLines == labelLines)
     }
 
+    /// 大きくした絵文字を重ねて描くラベル（`TextKitLabelLayout.placingOverlaidGlyphs(_:)`）を差し替えても、行の位置は変わらず、
+    /// 絵文字を同じ位置に描き、選んだ文字には元の絵文字が渡る。
+    @Test func selectableTextKeepsOverlaidEmojiLinesAndText() throws {
+        var renderer = renderer
+        renderer.textColor = .black
+        renderer.emojiStyle = .system
+        renderer.unicodeEmojiScale = 2
+        let text = renderer.render(.plain("文😀文\n次の行", emojis: []))
+        let label = LinkLabel()
+        label.drawsWithTextKit = true
+        label.numberOfLines = 0
+        label.attributedText = text
+        label.frame = CGRect(origin: .zero, size: label.sizeThatFits(CGSize(width: 300, height: CGFloat.greatestFiniteMagnitude)))
+        let textView = SelectableTextView(text: try #require(label.textForTextKit))
+        textView.frame = CGRect(origin: .zero, size: textView.sizeThatFits(CGSize(width: label.bounds.width, height: CGFloat.greatestFiniteMagnitude)))
+        textView.layoutIfNeeded()
+
+        #expect(lineFrames(of: try #require(textView.textLayoutManager)) == lineFrames(of: label.textLayout(of: try #require(label.attributedText)).layoutManager))
+        #expect(textView.overlaidGlyphOrigins == label.overlaidGlyphOrigins)
+        #expect(textView.overlaidGlyphOrigins.count == 1)
+        let whole = try #require(textView.textRange(from: textView.beginningOfDocument, to: textView.endOfDocument))
+        textView.selectedRange = NSRange(location: 0, length: textView.attributedText.length)
+        #expect(textView.text(in: whole) == text.copiedPlainText)
+        #expect(textView.attributedText.copiedPlainText == "文😀文\n次の行")
+        // 読み上げも、場所取りではなく元の絵文字を読む。
+        #expect(textView.accessibilityValue == text.string)
+    }
+
+    /// 選べるテキストビューでも、取り消し線は重ねて描く絵文字の上に引く。
+    @Test func selectableTextDrawsStrikethroughOverOverlaidEmoji() throws {
+        var renderer = renderer
+        renderer.textColor = .black
+        renderer.emojiStyle = .system
+        renderer.unicodeEmojiScale = 2
+        let text = renderer.render(RichText(blocks: [.init(inlines: [.text("😀", .strikethrough)])]))
+        let label = LinkLabel()
+        label.drawsWithTextKit = true
+        label.attributedText = text
+        label.frame = CGRect(origin: .zero, size: label.sizeThatFits(CGSize(width: 300, height: CGFloat.greatestFiniteMagnitude)))
+        let textView = SelectableTextView(text: try #require(label.textForTextKit))
+        textView.frame = CGRect(origin: .zero, size: textView.sizeThatFits(CGSize(width: label.bounds.width, height: CGFloat.greatestFiniteMagnitude)))
+        textView.layoutIfNeeded()
+        let origin = try #require(textView.overlaidGlyphOrigins.first)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let image = UIGraphicsImageRenderer(bounds: textView.bounds, format: format).image { context in
+            UIColor.white.setFill()
+            context.fill(textView.bounds)
+            textView.layer.render(in: context.cgContext)
+        }
+        let cgImage = try #require(image.cgImage)
+        let bytes = try #require(CFDataGetBytePtr(cgImage.dataProvider?.data))
+        // 取り消し線の黒い画素が、絵文字の幅いっぱいに並ぶ行がある。
+        let darkRows = (0..<cgImage.height).filter { y in
+            (Int(origin.x) + 4..<min(cgImage.width, Int(origin.x) + 30)).filter { x in
+                let pixel = y * cgImage.bytesPerRow + x * 4
+                return Int(bytes[pixel]) + Int(bytes[pixel + 1]) + Int(bytes[pixel + 2]) < 120
+            }.count >= 24
+        }
+        #expect(!darkRows.isEmpty)
+    }
+
     /// 選べるテキストビューにも、ラベルと同じ位置に引用の縦線を引く。差し替えたときに線が消えないようにするため。
     @Test func selectableTextDrawsQuoteBarsLikeLabel() throws {
         let text = renderer.render(RichText(blocks: [

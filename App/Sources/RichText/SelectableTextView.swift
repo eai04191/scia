@@ -16,6 +16,9 @@ final class SelectableTextView: UITextView, UITextViewDelegate, @MainActor UIEdi
     private let quoteBarLayer = CAShapeLayer()
     /// 引いている引用の縦線の枠。
     private(set) var quoteBarFrames: [CGRect] = []
+    /// 大きくした絵文字など、場所取りの上に重ねて描く字形（`TextKitLabelLayout.placingOverlaidGlyphs(_:)`）を描くビュー。
+    /// UITextViewは場所取りの透明な添付だけを描くため。文字と同じく選択のハイライトの上に描き、場所取りに付いた取り消し線と下線は、字形の上に引き直す。
+    private let overlaidGlyphsView = OverlaidGlyphsView()
     private lazy var editMenu: UIEditMenuInteraction = {
         let interaction = UIEditMenuInteraction(delegate: self)
         addInteraction(interaction)
@@ -38,6 +41,7 @@ final class SelectableTextView: UITextView, UITextViewDelegate, @MainActor UIEdi
         delegate = self
         addGestureRecognizer(TouchDownObserver { [weak self] touch in self?.lastTouchType = touch.type })
         layer.insertSublayer(quoteBarLayer, at: 0)
+        addSubview(overlaidGlyphsView)
         registerForTraitChanges([UITraitUserInterfaceStyle.self, UITraitAccessibilityContrast.self]) { (self: Self, _) in
             self.setNeedsLayout()
         }
@@ -46,6 +50,37 @@ final class SelectableTextView: UITextView, UITextViewDelegate, @MainActor UIEdi
     override func layoutSubviews() {
         super.layoutSubviews()
         layoutQuoteBars()
+        layoutOverlaidGlyphs()
+    }
+
+    /// 読み上げる文字。場所取りに置き換えた絵文字は、元の絵文字で読む。
+    override var accessibilityValue: String? {
+        get { TextKitLabelLayout.restoringOverlaidGlyphs(attributedText) }
+        set { super.accessibilityValue = newValue }
+    }
+
+    /// 重ねて描く字形の位置（ベースラインの左端）。自分の座標で返す。
+    var overlaidGlyphOrigins: [CGPoint] {
+        overlaidGlyphsView.glyphs.map(\.origin)
+    }
+
+    private func layoutOverlaidGlyphs() {
+        var glyphs: [(glyph: OverlaidGlyph, origin: CGPoint)] = []
+        var decorations: TextLayout?
+        if bounds.width > 0, let layoutManager = textLayoutManager, let contentStorage = layoutManager.textContentManager as? NSTextContentStorage {
+            let layout = TextLayout(
+                width: bounds.width, direction: effectiveUserInterfaceLayoutDirection, contentStorage: contentStorage, layoutManager: layoutManager,
+                overlaidText: attributedText
+            )
+            glyphs = TextKitLabelLayout.overlaidGlyphs(of: layout, below: .greatestFiniteMagnitude)
+            if !glyphs.isEmpty, let text = TextKitLabelLayout.overlaidGlyphDecorations(attributedText) {
+                let style = TextKitLabelLayout.Style(font: nil, textColor: nil, lineBreakMode: .byWordWrapping, direction: effectiveUserInterfaceLayoutDirection, displayScale: traitCollection.displayScale)
+                decorations = TextKitLabelLayout.layout(of: text, width: bounds.width, maximumLines: 0, style: style)
+            }
+        }
+        bringSubviewToFront(overlaidGlyphsView)
+        overlaidGlyphsView.frame = bounds
+        overlaidGlyphsView.content = (glyphs, decorations)
     }
 
     private func layoutQuoteBars() {
@@ -148,11 +183,16 @@ final class SelectableTextView: UITextView, UITextViewDelegate, @MainActor UIEdi
 
 extension NSAttributedString {
     /// RichTextRendererで描いた本文を、アプリの外に貼る文字にする。カスタム絵文字は`:shortcode:`に、段落の中の改行（行区切り文字）は改行にする。
-    /// 絵文字の前に置いた幅のない文字（`leadingEmojiGuard`）は除く。
+    /// 絵文字の前に置いた幅のない文字（`leadingEmojiGuard`）は除く。場所取りに置き換えた絵文字（`TextKitLabelLayout.placingOverlaidGlyphs(_:)`）は、元の絵文字に戻す。
     var copiedPlainText: String {
         var result = ""
         enumerateAttributes(in: NSRange(location: 0, length: length)) { attributes, range, _ in
-            if attributes[.leadingEmojiGuard] != nil {
+            if attributes[.leadingEmojiGuard] != nil || attributes[.overlaidGlyphFiller] != nil {
+                return
+            }
+            if let glyph = attributes[.overlaidGlyph] as? OverlaidGlyph {
+                // 同じ絵文字が並ぶと1つの範囲にまとまるので、場所取り1つが1文字であることから数を戻す。
+                result += String(repeating: glyph.text, count: range.length)
                 return
             }
             if let emoji = attributes[.customEmoji] as? CustomEmoji {
@@ -186,5 +226,40 @@ extension NSAttributedString {
             result.replaceCharacters(in: range, with: NSAttributedString(string: link.text.replacingOccurrences(of: "\n", with: "\u{2028}"), attributes: attributes))
         }
         return result
+    }
+}
+
+/// 選べるテキストビューの上に、場所取りに置き換えた字形を描くビュー。押下は受けない。
+private final class OverlaidGlyphsView: UIView {
+    /// 描く字形と位置、字形の上に引き直す取り消し線と下線の並び（`TextKitLabelLayout.overlaidGlyphDecorations(_:)`）。
+    var content: (glyphs: [(glyph: OverlaidGlyph, origin: CGPoint)], decorations: TextLayout?) = ([], nil) {
+        didSet { setNeedsDisplay() }
+    }
+
+    var glyphs: [(glyph: OverlaidGlyph, origin: CGPoint)] { content.glyphs }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isOpaque = false
+        backgroundColor = .clear
+        isUserInteractionEnabled = false
+        contentMode = .redraw
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func draw(_ rect: CGRect) {
+        guard let context = UIGraphicsGetCurrentContext() else { return }
+        for (glyph, origin) in content.glyphs {
+            glyph.draw(atBaseline: origin, in: context)
+        }
+        guard let decorations = content.decorations else { return }
+        decorations.layoutManager.enumerateTextLayoutFragments(from: decorations.layoutManager.documentRange.location, options: [.ensuresLayout]) { fragment in
+            fragment.draw(at: fragment.layoutFragmentFrame.origin, in: context)
+            return true
+        }
     }
 }

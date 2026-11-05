@@ -333,6 +333,130 @@ extension RichTextRendererTests {
         #expect(abs((largeLines[3] - largeLines[2]) - (plainLines[3] - plainLines[2])) < 0.5, "段落の間隔は変わらない")
     }
 
+    /// 同じ行の中で「…」に置き換わった絵文字は描かない。
+    /// 色のある画素は、色の絵文字と同じ行にある文字の縁にも出るので、行ではなく画素の数で、絵文字を描いた量と比べる。
+    @Test func emojiReplacedByEllipsisInTheSameLineIsNotDrawn() throws {
+        var renderer = renderer(.offline)
+        renderer.textColor = .black
+        renderer.emojiStyle = .system
+        renderer.unicodeEmojiScale = 2
+        let truncated = try coloredPixelCount(of: renderer.render(.plain("文😀文", emojis: [])), width: 40, numberOfLines: 1)
+        let visible = try coloredPixelCount(of: renderer.render(.plain("文😀", emojis: [])), width: 200, numberOfLines: 1)
+
+        #expect(truncated * 10 < visible, "\(truncated) \(visible)")
+    }
+
+    /// 取り消し線は、重ねて描く絵文字の上に引く。
+    @Test func strikethroughIsDrawnOverOverlaidEmoji() throws {
+        var renderer = renderer(.offline)
+        renderer.textColor = .black
+        renderer.emojiStyle = .system
+        renderer.unicodeEmojiScale = 2
+        let text = renderer.render(RichText(blocks: [.init(inlines: [.text("😀", .strikethrough)])]))
+        let label = EmojiLabel()
+        label.drawsWithTextKit = true
+        label.attributedText = text
+        label.frame = CGRect(origin: .zero, size: label.sizeThatFits(CGSize(width: 200, height: CGFloat.greatestFiniteMagnitude)))
+        let layout = label.textLayout(of: try #require(label.attributedText))
+        let origin = try #require(label.overlaidGlyphOrigins.first)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let image = UIGraphicsImageRenderer(bounds: label.bounds, format: format).image { context in
+            UIColor.white.setFill()
+            context.fill(label.bounds)
+            label.drawText(in: label.bounds)
+        }
+        _ = layout
+        // 取り消し線は文字の書体の字面の中ほどに引かれる。そこに、線の黒い画素が絵文字の幅いっぱいに並ぶ行がある。
+        let cgImage = try #require(image.cgImage)
+        let bytes = try #require(CFDataGetBytePtr(cgImage.dataProvider?.data))
+        let width = Int(label.bounds.width)
+        let darkRows = (0..<cgImage.height).filter { y in
+            let dark = (Int(origin.x) + 4..<min(width, Int(origin.x) + 30)).filter { x in
+                let pixel = y * cgImage.bytesPerRow + x * 4
+                return Int(bytes[pixel]) + Int(bytes[pixel + 1]) + Int(bytes[pixel + 2]) < 120
+            }
+            return dark.count >= 24
+        }
+        #expect(!darkRows.isEmpty)
+    }
+
+    /// TextKit 2で描くときは、大きくしたUnicodeの絵文字の行を、同じ大きさのカスタム絵文字の行と同じ高さにする。
+    /// 絵文字の書体のascenderとdescenderとleadingは絵の上下に余白を持ち、下げて描いた分もdescentに足されるため、そのまま並べると行が高くなる。
+    @Test func overlaidUnicodeEmojiLineIsAsTallAsCustomEmojiLine() throws {
+        var unicode = renderer(.offline)
+        unicode.unicodeEmojiScale = 2
+        var custom = renderer(.offline)
+        custom.emojiScale = 2
+        let parser = MastodonHTMLParser(mentions: [], tags: [], emojis: [try emoji("a")])
+        let baselines = { (text: NSAttributedString, overlays: Bool) -> [CGFloat] in
+            var style = TextKitLabelLayout.Style(font: font, textColor: .label, lineBreakMode: .byWordWrapping, direction: .leftToRight, displayScale: 1)
+            style.overlaysGlyphs = overlays
+            let layout = TextKitLabelLayout.layout(of: TextKitLabelLayout.filled(text, style: style), width: 400, maximumLines: 0, style: style)
+            var result: [CGFloat] = []
+            layout.layoutManager.enumerateTextLayoutFragments(from: layout.layoutManager.documentRange.location, options: [.ensuresLayout]) { fragment in
+                for line in fragment.textLineFragments {
+                    result.append(fragment.layoutFragmentFrame.minY + line.typographicBounds.minY + line.glyphOrigin.y)
+                }
+                return true
+            }
+            return result
+        }
+        let overlaid = baselines(unicode.render(parser.parse("<p>文<br>😀文<br>文</p>")), true)
+        let plain = baselines(unicode.render(parser.parse("<p>文<br>😀文<br>文</p>")), false)
+        let customLines = baselines(custom.render(parser.parse("<p>文<br>:a:文<br>文</p>")), true)
+
+        try #require(overlaid.count == 3 && customLines.count == 3 && plain.count == 3)
+        for index in 0..<3 {
+            #expect(abs(overlaid[index] - customLines[index]) < 0.5, "\(overlaid) \(customLines)")
+        }
+        #expect(plain[2] > overlaid[2] + 10, "UILabelで描くときは、書体のまま並べる")
+    }
+
+    /// 場所取りに置き換えても、改行できる位置は変わらない。絵文字のすぐ後ろで折り返せる。
+    @Test func overlaidEmojiKeepsLineBreakOpportunities() throws {
+        var renderer = renderer(.offline)
+        renderer.unicodeEmojiScale = 2
+        let text = renderer.render(.plain("文😀文", emojis: []))
+        let firstLineLength = { (overlays: Bool, width: CGFloat) -> Int in
+            var style = TextKitLabelLayout.Style(font: font, textColor: .label, lineBreakMode: .byWordWrapping, direction: .leftToRight, displayScale: 1)
+            style.overlaysGlyphs = overlays
+            let layout = TextKitLabelLayout.layout(of: TextKitLabelLayout.filled(text, style: style), width: width, maximumLines: 0, style: style)
+            var length = 0
+            layout.layoutManager.enumerateTextLayoutFragments(from: layout.layoutManager.documentRange.location, options: [.ensuresLayout]) { fragment in
+                length = fragment.textLineFragments.first?.characterRange.length ?? 0
+                return false
+            }
+            return length
+        }
+        // 「文😀」までは入り、最後の「文」は入らない幅。
+        let width = (text.attributedSubstring(from: NSRange(location: 0, length: 3)).size().width).rounded(.up) + 2
+        let plain = firstLineLength(false, width)
+        #expect(plain == 3, "書体のまま並べると「文😀」で折り返す")
+        #expect(firstLineLength(true, width) == plain)
+    }
+
+    /// 場所取りに置き換えても、ラベルが返す文字列とコピーには、置き換える前の文字が渡る。
+    @Test func overlaidEmojiKeepsTheTextForCopyAndAccessibility() throws {
+        var renderer = renderer(.offline)
+        renderer.unicodeEmojiScale = 2
+        let text = renderer.render(.plain("文👨‍👩‍👧😀", emojis: []))
+        let label = EmojiLabel()
+        label.drawsWithTextKit = true
+        label.attributedText = text
+        label.frame = CGRect(x: 0, y: 0, width: 400, height: 100)
+
+        #expect(label.attributedText?.string == text.string)
+        #expect(label.attributedText?.copiedPlainText == "文👨‍👩‍👧😀")
+        let placed = TextKitLabelLayout.placingOverlaidGlyphs(TextKitLabelLayout.filled(text, style: label.textKitStyle))
+        #expect(placed.length == text.length, "文字の位置が変わらない")
+        // 家族の絵文字は1つの絵文字として、その全体が1つの枠になる。
+        let family = (text.string as NSString).range(of: "👨‍👩‍👧")
+        let layout = label.textLayout(of: try #require(label.attributedText))
+        let frame = try #require(label.characterFrame(at: family.location + 2, in: text, contentStorage: layout.contentStorage, layoutManager: layout.layoutManager))
+        #expect(frame.width > font.pointSize)
+    }
+
     /// 改行で区切った行を段落に分けても、行は分ける前の段落の書く向きで並ぶ。
     @Test func splitLinesKeepTheParagraphWritingDirection() throws {
         var renderer = renderer(.offline)
@@ -361,11 +485,42 @@ extension RichTextRendererTests {
 
 extension RichTextRendererTests {
     /// ラベルに描いた色のある画素の、上端と下端の行。文字は黒で描くので、色のある画素は絵文字だけになる。
-    private func coloredRows(of text: NSAttributedString, width: CGFloat = 400) throws -> ClosedRange<Int> {
+    /// TextKit 2で描くラベルに描いた、色のある画素の数。
+    private func coloredPixelCount(of text: NSAttributedString, width: CGFloat, numberOfLines: Int) throws -> Int {
         let label = EmojiLabel()
-        label.numberOfLines = 0
+        label.drawsWithTextKit = true
+        label.numberOfLines = numberOfLines
         label.attributedText = text
-        let size = label.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        var size = label.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        size.width = min(size.width, width)
+        label.frame = CGRect(origin: .zero, size: size)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            label.drawText(in: label.bounds)
+        }
+        let cgImage = try #require(image.cgImage)
+        let bytes = try #require(CFDataGetBytePtr(cgImage.dataProvider?.data))
+        return (0..<cgImage.height).reduce(0) { count, y in
+            count + (0..<cgImage.width).filter { x in
+                let pixel = y * cgImage.bytesPerRow + x * 4
+                let channels = [bytes[pixel], bytes[pixel + 1], bytes[pixel + 2]]
+                return Int(channels.max() ?? 0) - Int(channels.min() ?? 0) > 64
+            }.count
+        }
+    }
+
+    /// - Parameter drawsWithTextKit: TextKit 2で描くラベルで描く。
+    private func coloredRows(of text: NSAttributedString, width: CGFloat = 400, drawsWithTextKit: Bool = false, numberOfLines: Int = 0) throws -> ClosedRange<Int>? {
+        let label = EmojiLabel()
+        label.drawsWithTextKit = drawsWithTextKit
+        label.numberOfLines = numberOfLines
+        label.attributedText = text
+        var size = label.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        size.width = min(size.width, width)
         label.frame = CGRect(origin: .zero, size: size)
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
@@ -384,8 +539,7 @@ extension RichTextRendererTests {
                 return Int(channels.max() ?? 0) - Int(channels.min() ?? 0) > 64
             }
         }
-        let first = try #require(rows.first)
-        let last = try #require(rows.last)
+        guard let first = rows.first, let last = rows.last else { return nil }
         return first...last
     }
 
@@ -436,16 +590,35 @@ extension RichTextRendererTests {
     }
 
     /// 大きくした絵文字は、行の先頭に置いても末尾に置いても、ラベルの中で欠けずに同じ高さで描く。
-    @Test(arguments: [2.0, 4.0])
-    func largeUnicodeEmojiIsNotClippedAtLineStart(scale: Double) throws {
+    @Test(arguments: [2.0, 4.0], [false, true])
+    func largeUnicodeEmojiIsNotClippedAtLineStart(scale: Double, drawsWithTextKit: Bool) throws {
         var renderer = renderer(.offline)
         renderer.textColor = .black
         renderer.emojiStyle = .system
         renderer.unicodeEmojiScale = scale
-        let leading = try coloredRows(of: renderer.render(.plain("😀文", emojis: [])))
-        let trailing = try coloredRows(of: renderer.render(.plain("文😀", emojis: [])))
+        let leading = try #require(try coloredRows(of: renderer.render(.plain("😀文", emojis: [])), drawsWithTextKit: drawsWithTextKit))
+        let trailing = try #require(try coloredRows(of: renderer.render(.plain("文😀", emojis: [])), drawsWithTextKit: drawsWithTextKit))
 
-        #expect(abs(leading.count - trailing.count) <= 1, "先頭=\(leading) 末尾=\(trailing)")
+        #expect(abs(leading.count - trailing.count) <= 1, "TextKit=\(drawsWithTextKit) 先頭=\(leading) 末尾=\(trailing)")
+    }
+
+    /// TextKit 2で描くラベルは、大きくした絵文字を、UILabelで描くときと同じ大きさで、行の上端から描く。行数で切られて並ばなかった絵文字は描かない。
+    @Test func textKitLabelDrawsOverlaidEmojiAtTheLineTopAndSkipsTruncatedOnes() throws {
+        var renderer = renderer(.offline)
+        renderer.textColor = .black
+        renderer.emojiStyle = .system
+        renderer.unicodeEmojiScale = 2
+        let text = renderer.render(.plain("文😀", emojis: []))
+        let overlaid = try #require(try coloredRows(of: text, drawsWithTextKit: true))
+        let drawnByLabel = try #require(try coloredRows(of: text))
+
+        #expect(abs(overlaid.count - drawnByLabel.count) <= 1, "\(overlaid) \(drawnByLabel)")
+        // 書体のまま並べると、絵の上に書体の余白の分が空く。
+        #expect(overlaid.lowerBound < drawnByLabel.lowerBound - 8, "\(overlaid) \(drawnByLabel)")
+
+        // 色のある画素は、色の絵文字と同じ行にある文字の縁にも出るので、絵文字の高さより低いことで、絵文字を描いていないと確かめる。
+        let truncated = try coloredRows(of: renderer.render(.plain(String(repeating: "文", count: 40) + "😀", emojis: [])), width: 200, drawsWithTextKit: true, numberOfLines: 1)
+        #expect((truncated?.count ?? 0) < overlaid.count / 2, "\(String(describing: truncated))")
     }
 }
 

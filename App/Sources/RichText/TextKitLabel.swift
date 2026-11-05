@@ -99,7 +99,8 @@ class TextKitLabel: UILabel {
             textColor: textColor,
             lineBreakMode: lineBreakMode,
             direction: effectiveUserInterfaceLayoutDirection,
-            displayScale: traitCollection.displayScale > 0 ? traitCollection.displayScale : 1
+            displayScale: traitCollection.displayScale > 0 ? traitCollection.displayScale : 1,
+            overlaysGlyphs: drawsWithTextKit
         )
     }
 
@@ -240,12 +241,20 @@ class TextKitLabel: UILabel {
         // 幅より大きい絵文字は、UILabelと同じくラベルの左右の端で切る。切らないと、本文の右に並べた添付ファイルに重なる。
         // 上下は切らない。UILabelも、積み重なる結合文字のように行の外へ伸びる字形は、ラベルの外まで描く。
         context.clip(to: CGRect(x: 0, y: -bounds.height, width: bounds.width, height: bounds.height * 3))
+        // 重ねて描く字形は、文字より先に描く。TextKitは場所取りの上にも、元の文字の取り消し線や下線を引くので、その線が字形の上に乗る。
+        TextKitLabelLayout.drawOverlaidGlyphs(of: layout, in: context, below: bounds.maxY)
         layout.layoutManager.enumerateTextLayoutFragments(from: layout.layoutManager.documentRange.location, options: [.ensuresLayout]) { fragment in
             guard fragment.layoutFragmentFrame.minY < bounds.maxY else { return false }
             fragment.draw(at: fragment.layoutFragmentFrame.origin, in: context)
             return true
         }
         context.restoreGState()
+    }
+
+    /// TextKit 2で描くときに、大きくした絵文字などを重ねて描く位置（ベースラインの左端）。ラベルの座標で返す。
+    final var overlaidGlyphOrigins: [CGPoint] {
+        guard drawsWithTextKit, let attributedText, attributedText.length > 0 else { return [] }
+        return TextKitLabelLayout.overlaidGlyphs(of: textLayout(of: attributedText), below: bounds.maxY).map(\.origin)
     }
 
     // MARK: - 文字の位置

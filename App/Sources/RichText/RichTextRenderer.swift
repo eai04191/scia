@@ -498,6 +498,8 @@ struct RichTextRenderer: Sendable {
                 // 書体の字面ではなく描く絵の中心を揃える。絵文字の書体は、絵の上に余白を持つため。
                 .baselineOffset: Self.emojiCenterHeight * font.pointSize - EmojiFont.glyphBounds(of: emojiFont).midY,
                 .scaledUnicodeEmoji: font,
+                // TextKit 2で描くラベルでは、文字の書体の場所取りに置き換えて重ねて描き、行を絵の枠の高さにする。
+                .overlaidGlyphs: font,
             ], range: cluster)
         }
     }
