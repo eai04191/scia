@@ -236,15 +236,34 @@ struct TabLayoutSettingsTests {
         #expect(TabPlacement(layout: layout, tabBarCapacity: TabPlacement.compactTabBarCapacity).switchable == [.list(id: "5", title: "友だち")])
     }
 
-    /// まだないリストは無効にして末尾に足し、もうないリストは外し、名前が変わったリストは書き換える。表示と並びはそのまま残す。
+    /// まだないリストは無効にして最後のリストの後ろに足し、もうないリストは外し、名前が変わったリストは書き換える。表示と並びはそのまま残す。
+    /// 最後のリストは外す前の位置で決めるので、外したリストのあった場所に入る。
     @Test func syncingListsAddsRemovesAndRenames() {
-        let layout = MenuLayout<TabItem>.fixture(tokens: ["item:home", "item:list:1:旧名", "more", "item:local", "hidden:list:2:消えるリスト"])
+        let layout = MenuLayout<TabItem>.fixture(tokens: ["item:home", "item:list:1:旧名", "more", "item:local", "hidden:list:2:消えるリスト", "item:bookmarks"])
 
         let synced = layout.syncingLists([MastodonList(id: "1", title: "新名"), MastodonList(id: "3", title: "新しいリスト")])
 
         #expect(synced.tokens.filter { $0.contains("list:") } == ["item:list:1:新名", "hidden:list:3:新しいリスト"])
         #expect(synced.tokens.firstIndex(of: "item:list:1:新名") == 1)
-        #expect(synced.tokens.last == "hidden:list:3:新しいリスト")
+        #expect(synced.tokens.firstIndex(of: "hidden:list:3:新しいリスト") == synced.tokens.firstIndex(of: "item:local").map { $0 + 1 })
+        #expect(synced.tokens.firstIndex(of: "item:bookmarks") == synced.tokens.firstIndex(of: "hidden:list:3:新しいリスト").map { $0 + 1 })
+    }
+
+    /// 新しいハッシュタグとリストは、それぞれ最後の同じ種類の項目の後ろに入れ、ほかの種類の後ろに離れて並ばない。並びにその種類がなければ末尾に入れる。
+    @Test func syncingInsertsNewItemsAfterLastOfSameKind() {
+        let layout = MenuLayout<TabItem>.fixture(tokens: ["item:home", "more", "item:favourites", "hidden:hashtag:a", "item:hashtag:b", "hidden:list:1:友だち", "item:bookmarks"])
+
+        let synced = layout
+            .syncingHashtags([Hashtag(name: "a"), Hashtag(name: "b"), Hashtag(name: "c")])
+            .syncingLists([MastodonList(id: "1", title: "友だち"), MastodonList(id: "2", title: "仕事")])
+
+        // fixtureは並べなかった決まった項目を無効で末尾に足すので、ブックマークまでを見る。
+        #expect(Array(synced.tokens.drop { $0 != "item:favourites" }.prefix(7)) == [
+            "item:favourites", "hidden:hashtag:a", "item:hashtag:b", "hidden:hashtag:c", "hidden:list:1:友だち", "hidden:list:2:仕事", "item:bookmarks",
+        ])
+
+        let withoutHashtags = MenuLayout<TabItem>.fixture(tokens: ["item:home", "more", "item:list:1:友だち", "item:bookmarks"])
+        #expect(withoutHashtags.syncingHashtags([Hashtag(name: "c")]).tokens.last == "hidden:hashtag:c")
     }
 
     /// 切り替えタブで前に開いていた項目は、保存しておいた古い名前ではなく、並びの中の今の名前で返す。
@@ -294,6 +313,7 @@ struct TabLayoutSettingsTests {
         let synced = layout.syncingHashtags([Hashtag(name: "scia"), Hashtag(name: "mastodon")])
 
         #expect(synced.tokens.filter { $0.contains("list:") || $0.contains("hashtag:") } == ["item:hashtag:scia", "item:list:1:友だち", "hidden:hashtag:mastodon"])
+        // 外した「やめたタグ」が最後のハッシュタグだったので、新しいハッシュタグはその場所（リストの後ろ）に入る。
         // 並びに書かなかった決まった項目は既定の位置に差し込まれるため、境目より上に残ることで、元の場所を保ったと見る。
         #expect(TabPlacement(layout: synced, tabBarCapacity: nil).tabs.contains(.hashtag(name: "scia")))
     }

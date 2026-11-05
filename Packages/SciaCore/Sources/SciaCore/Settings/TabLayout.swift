@@ -182,13 +182,13 @@ public enum TabItem: MenuItemKind {
 
 extension MenuLayout where Item == TabItem {
     /// サーバーのリストの一覧を並びに反映する。決まりはdocs/tabs.mdの「リスト」にある。
-    /// まだないリストは無効にして末尾に足し、もうないリストは外し、名前が変わったリストは名前を書き換える。ほかの項目の並びと表示は変えない。
+    /// まだないリストは無効にして最後のリストの後ろに足し、もうないリストは外し、名前が変わったリストは名前を書き換える。ほかの項目の並びと表示は変えない。
     public func syncingLists(_ lists: [MastodonList]) -> MenuLayout<TabItem> {
         syncing(lists.map { .list(id: $0.id, title: $0.title) }, where: \.isList)
     }
 
     /// フォローしているハッシュタグの一覧を並びに反映する。決まりはdocs/tabs.mdの「フォローしているハッシュタグ」にある。
-    /// まだないハッシュタグは無効にして末尾に足し、フォローをやめたハッシュタグは外す。ほかの項目の並びと表示は変えない。
+    /// まだないハッシュタグは無効にして最後のハッシュタグの後ろに足し、フォローをやめたハッシュタグは外す。ほかの項目の並びと表示は変えない。
     public func syncingHashtags(_ hashtags: [Hashtag]) -> MenuLayout<TabItem> {
         syncing(hashtags.map { .hashtag(name: $0.name) }, where: \.isHashtag)
     }
@@ -250,18 +250,25 @@ extension MenuLayout where Item == TabItem {
     }
 
     /// `belongs`に当てはまる項目を、サーバーから取得した`fetched`にそろえる。並びにある項目は、読んだ項目で置き換えて名前を新しくし、表示はそのまま残す。
+    /// まだない項目は、無効にして、`belongs`に当てはまる最後の項目のすぐ後ろに足す。最後の項目は外す前の位置で決め、当てはまる項目がなければ末尾に足す。
     private func syncing(_ fetched: [TabItem], where belongs: (TabItem) -> Bool) -> MenuLayout<TabItem> {
         let latest = Dictionary(fetched.map { ($0, $0) }, uniquingKeysWith: { first, _ in first })
         var known: Set<TabItem> = []
-        var elements = self.elements.compactMap { element -> Element? in
-            guard case .item(let item, let isVisible) = element, belongs(item) else { return element }
-            guard let current = latest[item] else { return nil }
-            known.insert(item)
-            return .item(current, isVisible: isVisible)
+        var elements: [Element] = []
+        var insertionIndex: Int?
+        for element in self.elements {
+            guard case .item(let item, let isVisible) = element, belongs(item) else {
+                elements.append(element)
+                continue
+            }
+            if let current = latest[item] {
+                known.insert(item)
+                elements.append(.item(current, isVisible: isVisible))
+            }
+            insertionIndex = elements.count
         }
-        for item in fetched where known.insert(item).inserted {
-            elements.append(.item(item, isVisible: false))
-        }
+        let added = fetched.filter { known.insert($0).inserted }.map { Element.item($0, isVisible: false) }
+        elements.insert(contentsOf: added, at: insertionIndex ?? elements.count)
         return MenuLayout(elements: elements)
     }
 }
