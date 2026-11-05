@@ -153,10 +153,11 @@ class TextKitLabel: UILabel {
     private static let textKitPlaceholder = " "
 
     /// TextKit 2で描くときは、UILabelが持つ空白1文字ではなく、描いている文字列を読み上げる。置く側が決めた文言があれば、そちらを使う。
+    /// 置く側が決めていないときのUILabelの文言は、アクセシビリティが動いていれば空白1文字、動いていなければnilになる。どちらも描いている文字列に替え、端末の設定によらず同じ文言を返す。
     override var accessibilityLabel: String? {
         get {
             let label = super.accessibilityLabel
-            return drawsWithTextKit && label == Self.textKitPlaceholder ? textKitText?.string : label
+            return drawsWithTextKit && (label == nil || label == Self.textKitPlaceholder) ? textKitText?.string : label
         }
         set { super.accessibilityLabel = newValue }
     }
