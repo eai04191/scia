@@ -1,6 +1,7 @@
 import AVFoundation
 public import Foundation
 import ImageIO
+import MemoryCache
 import os
 import UniformTypeIdentifiers
 
@@ -9,14 +10,15 @@ import UniformTypeIdentifiers
 /// 絵文字と違って1枚が大きく、スクロールし続けると際限なく増えるため、上限のあるキャッシュに入れる。
 /// 描画のたびにメインスレッドで展開しないよう、表示する大きさまで縮めて展開したものを持つ。
 @MainActor
-public final class MediaImageStore<Image: Sendable> {
+public final class MediaImageStore<Image: AnyObject & Sendable> {
     /// URLのファイルを読む。範囲を渡したら、その部分だけを読む（ファイルの終わりを越えた分は返さない）。
     public typealias Fetch = @Sendable (URL, Range<Int>?) async throws -> Data
 
     private let fetch: Fetch
     private let maker: PlatformImageMaker<Image>
     /// 同じURLでも縮める大きさごとに分けて持つ。サーバーによってはプレビューと元の画像が同じURLのため。
-    private let cache = NSCache<NSString, Entry>()
+    /// 4096px四方の画像が4枚ほど入る大きさ。何をいつ捨てるかはdocs/image-loading.mdの「メモリに持つ画像」に従う。
+    private var cache = MemoryCache<String, Image>(totalCostLimit: 256 * 1_024 * 1_024)
     private var inFlight: [Key: Task<Loaded, any Error>] = [:]
     /// 元のファイルを置くディスクキャッシュ。共有や保存で縮めずに元の形式のまま渡すために残し、ビューアで開き直すときは通信せずにここから読む。
     private let files: MediaFileCache
@@ -44,17 +46,6 @@ public final class MediaImageStore<Image: Sendable> {
         self.prefetchedFiles = prefetchedFiles
         self.clock = clock
         retry = RetrySchedule(policy: retryPolicy, clock: clock)
-        // 4096px四方の画像が4枚ほど入る大きさ。
-        cache.totalCostLimit = 256 * 1_024 * 1_024
-    }
-
-    /// キャッシュに入れる値。`NSCache`はクラスしか持てないため包む。
-    private final class Entry {
-        let image: Image
-
-        init(_ image: Image) {
-            self.image = image
-        }
     }
 
     /// 展開した画像と、それが使うメモリのバイト数。
@@ -80,11 +71,11 @@ public final class MediaImageStore<Image: Sendable> {
         /// 違う回線の読み込みも`joinRestricted(of:)`で待つが、OSが断ったときは失敗を引き継がない。
         var networkAccess = RequestPurpose.display.networkAccess
 
-        var cacheKey: NSString { "\(isVideoFrame ? "frame " : "")\(maxPixelSize) \(url.absoluteString)" as NSString }
+        var cacheKey: String { "\(isVideoFrame ? "frame " : "")\(maxPixelSize) \(url.absoluteString)" }
     }
 
     public func cachedImage(for url: URL, maxPixelSize: Int) -> Image? {
-        cache.object(forKey: Key(url: url, maxPixelSize: maxPixelSize).cacheKey)?.image
+        cache.value(forKey: Key(url: url, maxPixelSize: maxPixelSize).cacheKey)
     }
 
     /// 一覧のサムネイルを、読み込み済みならすぐ返す。
@@ -94,7 +85,7 @@ public final class MediaImageStore<Image: Sendable> {
             return cachedImage(for: request.url, maxPixelSize: request.maxPixelSize)
         case .videoFrame(let fallback):
             let key = Key(url: request.url, maxPixelSize: request.maxPixelSize, isVideoFrame: true)
-            if let frame = cache.object(forKey: key.cacheKey)?.image {
+            if let frame = cache.value(forKey: key.cacheKey) {
                 return frame
             }
             return failedVideoFrames.contains(request.url) ? cachedImage(for: fallback, maxPixelSize: request.maxPixelSize) : nil
@@ -195,7 +186,7 @@ public final class MediaImageStore<Image: Sendable> {
     /// 動画の先頭だけを読み、最初のフレームを作る。読む長さは`VideoFirstFrame`が動画の目次から決める。
     private func videoFrame(for url: URL, maxPixelSize: Int, purpose: RequestPurpose) async throws -> Image {
         let key = Key(url: url, maxPixelSize: maxPixelSize, isVideoFrame: true, networkAccess: purpose.networkAccess)
-        if let image = cache.object(forKey: key.cacheKey)?.image {
+        if let image = cache.value(forKey: key.cacheKey) {
             return image
         }
         if let task = inFlight[key] {
@@ -205,7 +196,7 @@ public final class MediaImageStore<Image: Sendable> {
             return image
         }
         // 待っている間に、同じ目的のほかの呼び出しが読み始めたり読み終えたりしていれば、それを使う。
-        if let image = cache.object(forKey: key.cacheKey)?.image {
+        if let image = cache.value(forKey: key.cacheKey) {
             return image
         }
         if let task = inFlight[key] {
@@ -224,7 +215,7 @@ public final class MediaImageStore<Image: Sendable> {
         defer { inFlight[key] = nil }
         do {
             let loaded = try await task.value
-            cache.setObject(Entry(loaded.image), forKey: key.cacheKey, cost: loaded.decoded.cost)
+            cache.setValue(loaded.image, forKey: key.cacheKey, cost: loaded.decoded.cost)
             return loaded.image
         } catch {
             logger.info("video frame failed host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash)): \(SciaLog.describe(error), privacy: .public)")
@@ -275,7 +266,7 @@ public final class MediaImageStore<Image: Sendable> {
     ) async throws -> Image {
         let purpose = retriesNow ? .action : purpose
         let key = Key(url: url, maxPixelSize: maxPixelSize, networkAccess: purpose.networkAccess)
-        if let image = cache.object(forKey: key.cacheKey)?.image {
+        if let image = cache.value(forKey: key.cacheKey) {
             if !keepsOriginal {
                 return image
             }
@@ -292,7 +283,7 @@ public final class MediaImageStore<Image: Sendable> {
                 return image
             }
             // 待っている間に、同じ目的のほかの呼び出しが読み始めたり読み終えたりしていれば、それを使う。
-            if let image = cache.object(forKey: key.cacheKey)?.image {
+            if let image = cache.value(forKey: key.cacheKey) {
                 return image
             }
             if let task = inFlight[key] {
@@ -350,7 +341,7 @@ public final class MediaImageStore<Image: Sendable> {
             defer { inFlight[key] = nil }
             do {
                 let loaded = try await task.value
-                cache.setObject(Entry(loaded.image), forKey: key.cacheKey, cost: loaded.decoded.cost)
+                cache.setValue(loaded.image, forKey: key.cacheKey, cost: loaded.decoded.cost)
                 retry.recordSuccess(for: url)
                 if keepsOriginal, !loaded.keptOriginal {
                     logger.error("media original write failed host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash))")
@@ -373,8 +364,8 @@ public final class MediaImageStore<Image: Sendable> {
         let ratio = aspectRatio ?? 1
         let width = ratio >= 1 ? longSide : max(Int((Double(longSide) * ratio).rounded()), 1)
         let height = ratio >= 1 ? max(Int((Double(longSide) / ratio).rounded()), 1) : longSide
-        let key = "blurhash \(width)x\(height) \(blurhash)" as NSString
-        if let image = cache.object(forKey: key)?.image {
+        let key = "blurhash \(width)x\(height) \(blurhash)"
+        if let image = cache.value(forKey: key) {
             return image
         }
         guard let image = BlurHash(blurhash).flatMap({ Self.makeImage(rgba: $0.rgba(width: width, height: height), width: width, height: height) }) else {
@@ -382,7 +373,7 @@ public final class MediaImageStore<Image: Sendable> {
             return nil
         }
         let made = maker.still(image)
-        cache.setObject(Entry(made), forKey: key, cost: PlatformImageMaker<Image>.cost(of: image))
+        cache.setValue(made, forKey: key, cost: PlatformImageMaker<Image>.cost(of: image))
         return made
     }
 

@@ -131,4 +131,25 @@ struct AvatarImageStoreTests {
 
         #expect(origins.withLock { $0 } == [.display, .action])
     }
+
+    /// 文字に差し込むアイコンは、届いたら描き直す側に知らせ、描き直しで求め直す。裏に回っても読んだアイコンを捨てない。
+    /// 捨てると、通知の行が描き直しで読み直し、読み終えて知らせるとまた描き直すため。
+    @Test func requestedAvatarsSurviveEnteringTheBackground() async throws {
+        let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { _ in }.pngData())
+        let reads = Mutex(0)
+        let store = AvatarImageStore { _ in
+            reads.withLock { $0 += 1 }
+            return png
+        }
+        let keys = try (0..<3).map { AvatarImageKey(url: try #require(URL(string: "https://example.social/avatar\($0).png")), maxPixelSize: 8, animates: false) }
+
+        for key in keys { _ = store.requestImage(for: key) }
+        try await waitUntil { keys.allSatisfy { store.cachedImage(for: $0) != nil } }
+        NotificationCenter.default.post(name: UIApplication.didEnterBackgroundNotification, object: UIApplication.shared)
+
+        for key in keys {
+            #expect(store.requestImage(for: key) != nil, "裏に回ったときにアイコンを捨てました")
+        }
+        #expect(reads.withLock { $0 } == 3)
+    }
 }

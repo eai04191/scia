@@ -404,6 +404,22 @@ struct MediaImageStoreTests {
         await #expect(throws: URLError.self) { try await enhancement.value }
         _ = try await display.value
     }
+
+    /// 裏に回っても、読んだ画像を捨てない（docs/image-loading.mdの「メモリに持つ画像」）。
+    @Test func imagesSurviveEnteringTheBackground() async throws {
+        let data = try pngData()
+        let store = MediaImageStore(files: .temporary()) { _, _ in data }
+        let urls = try (0..<3).map { try #require(URL(string: "https://files.example.social/small/\($0).png")) }
+        for url in urls {
+            _ = try await store.image(for: url, maxPixelSize: 8, purpose: .display)
+        }
+
+        NotificationCenter.default.post(name: UIApplication.didEnterBackgroundNotification, object: UIApplication.shared)
+
+        for url in urls {
+            #expect(store.cachedImage(for: url, maxPixelSize: 8) != nil, "裏に回ったときに画像を捨てました")
+        }
+    }
 }
 
 /// 読めなかった画像は、一覧に描いたときは間隔をおいてから読み直し、ビューアを開いたときはすぐ読み直す。

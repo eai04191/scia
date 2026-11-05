@@ -10,7 +10,7 @@ import os
 /// 同じURLを大きさごとに別に持たず、1つのURLには、それまでに描いた一番大きい高さの画像を1つだけ持つ。小さく描く場所では、それを縮めて描く。
 /// ストアはアプリ全体で1つで、タイムラインやアカウント、絵文字のパレットをまたいで溜まるため。
 @MainActor
-public final class EmojiImageStore<Image: Sendable> {
+public final class EmojiImageStore<Image: AnyObject & Sendable> {
     public typealias Fetch = @Sendable (URL) async throws -> Data
 
     private struct Listener {
@@ -43,11 +43,6 @@ public final class EmojiImageStore<Image: Sendable> {
         }
     }
 
-    private struct Still {
-        let image: Image
-        let resolution: Resolution
-    }
-
     /// メモリに持つ静止画とコマの画像の、既定の高さのピクセル数。
     /// 文字の中の絵文字は行の高さ（ふつうの本文で20〜30pt）に合わせて描き、iPhoneの画面は1ptを3ピクセルで描くので、32ptまでは拡大せずに描けてぼけない。
     /// 幅は縦横の比で決まるので、長い辺ではなく高さで縮める（`ImageDecoder.maxPixelSize(forHeight:of:)`）。
@@ -72,13 +67,12 @@ public final class EmojiImageStore<Image: Sendable> {
     private let maker: PlatformImageMaker<Image>
     /// 持っている画像より高く読み直す通信を今送ってよいなら、その目的。持っている画像で描けるので、質を上げる通信として送る（docs/network.md）。
     private let upgradePurpose: @MainActor () -> RequestPurpose?
-    /// 縮めた静止画。96pxの高さで1枚40KBほどなので、正方形の絵文字なら800個ほど入る。
-    /// 静止画は行を描き直すたびにここから求め直す。上限を超えたときだけ、使ってから一番長いものから捨てる。
-    /// `NSCache`には持たない。`NSCache`はシステムの判断で中身を捨てるため。iOSシミュレーターでは、アプリが裏に回った知らせを送った直後に捨てた。
+    /// 縮めた静止画。96pxの高さで1枚40KBほどなので、正方形の絵文字なら800個ほど入る。大きく描いた絵文字だけが、その高さで重くなる。
+    /// 静止画は行を描き直すたびにここから求め直す。何をいつ捨てるかはdocs/image-loading.mdの「メモリに持つ画像」に従う。
     /// 画面に出ている絵文字が捨てられると空けた場所で描いて読み直し、読み終えるとまた行を描き直す。
-    /// Macで名前の絵文字が出たり消えたりを繰り返したときに`NSCache`から捨てられていたかと、何が捨てさせたかは確かめていない。
-    /// 大きく描いた絵文字だけが、その高さで重くなる。
-    private var stills = CostLimitedCache<URL, Still>(totalCostLimit: 32 * 1024 * 1024)
+    private var stills = MemoryCache<URL, Image>(totalCostLimit: 32 * 1024 * 1024)
+    /// `stills`に持つ静止画の高さ。`stills`が返さなくなったものは、求めたときに消す。
+    private var stillResolutions: [URL: Resolution] = [:]
     /// 上限を超えて`stills`から捨てた静止画。もう一度描こうとして読み直した回数を数えるのに使う。
     private var evictedStills: Set<URL> = []
     private var stats = Stats()
@@ -94,14 +88,11 @@ public final class EmojiImageStore<Image: Sendable> {
     /// 読めなかった画像ごとの、読み直してよくなるのを待つ処理（`scheduleRetry`）。
     private var retryWakes: [URL: Task<Void, Never>] = [:]
     private var animationStates: [URL: AnimationState] = [:]
-    /// 描いている層がつかんでいるアニメーション。上限を超えて`animations`から捨てても、層が使っている間はコマが解放されないため、
-    /// 読み直さずにこれを返す。読み直すと、捨てられた分をまた入れて別のものを押し出し、画面に出ているもの同士で読み直しを繰り返すため。
-    private let liveAnimations = NSMapTable<NSURL, EmojiAnimation>.strongToWeakObjects()
     /// コマに分けたアニメーション。96pxのコマで、40コマの絵文字なら40個ほど。画面に一度に出る絵文字はそれより少ないため、スクロールして戻っても読み直しはまれ。
-    /// 静止画と同じく`NSCache`には持たない。読み終えてから、知らせを受けた行が描き直して層がつかむまでは、ここのほかに持つものがない。
-    /// その間にシステムの判断で捨てられると、描き直しで読み直し、読み終えるとまた捨てられて、動き出さないまま読み直しを繰り返す。
-    /// macOSでテストを走らせたとき、読み終えても取り出せないまま、60秒の間に9万回あまり読み直したことがある。iOSシミュレーターでは、アプリが裏に回った知らせを送った直後に捨てた。
-    private var animations = CostLimitedCache<URL, EmojiAnimation>(totalCostLimit: 64 * 1024 * 1024)
+    /// 何をいつ捨てるかは静止画と同じ。読み終えてから、知らせを受けた行が描き直して層がつかむまでは、ここのほかに持つものがないので、
+    /// システムの判断で捨てるキャッシュに持つと、描き直しで読み直し、読み終えるとまた捨てられて、動き出さないまま読み直しを繰り返す。
+    /// macOSでテストを走らせたとき、`NSCache`に持っていて、読み終えても取り出せないまま60秒の間に9万回あまり読み直したことがある。
+    private var animations = MemoryCache<URL, EmojiAnimation>(totalCostLimit: 64 * 1024 * 1024)
     private var listeners: [Listener] = []
     private var pendingNotification: Set<URL> = []
     private let logger = SciaLog.logger(category: "emoji")
@@ -129,12 +120,13 @@ public final class EmojiImageStore<Image: Sendable> {
     ///   - retriesNow: 使う人が自分で見に行った操作（投稿のメニューを開くなど）で、間隔を待たずに読み直す。
     public func image(for url: URL, pixelHeight: Int = pixelHeight, retriesNow: Bool = false) -> Image? {
         let loadHeight = Self.loadHeight(for: pixelHeight)
-        if let still = stills.value(forKey: url) {
-            if still.resolution.needsReload(for: loadHeight), let purpose = retriesNow ? .action : upgradePurpose(), retriesNow || retry.allowsAutomaticLoad(of: url) {
+        if let image = stills.value(forKey: url), let resolution = stillResolutions[url] {
+            if resolution.needsReload(for: loadHeight), let purpose = retriesNow ? .action : upgradePurpose(), retriesNow || retry.allowsAutomaticLoad(of: url) {
                 load(url, pixelHeight: loadHeight, purpose: purpose)
             }
-            return still.image
+            return image
         }
+        stillResolutions[url] = nil
         // まだ読んでいない画像も、同じサーバーの`/media_proxy`が制限されている間は読まない（`RetrySchedule.rateLimitScope`）。
         // 初めて読むときは、大きく描くための高さでも通信の中身は同じなので、行に描く通信として送る。
         if retriesNow || retry.allowsAutomaticLoad(of: url) {
@@ -160,7 +152,7 @@ public final class EmojiImageStore<Image: Sendable> {
         let loadHeight = Self.loadHeight(for: pixelHeight)
         switch animationStates[url] {
         case .animated(let resolution):
-            guard let animation = animations.value(forKey: url) ?? liveAnimations.object(forKey: url as NSURL) else {
+            guard let animation = animations.value(forKey: url) else {
                 stats.animationReloads += 1
                 loadAnimation(url, pixelHeight: max(loadHeight, resolution.pixelHeight))
                 return nil
@@ -208,8 +200,8 @@ public final class EmojiImageStore<Image: Sendable> {
             do {
                 let data = try await fetch(url)
                 guard let (image, isLargest) = await Self.decodeStill(data, pixelHeight: pixelHeight) else { throw DecodeError() }
-                let still = Still(image: maker.still(image), resolution: Resolution(pixelHeight: pixelHeight, isLargest: isLargest))
-                evictedStills.formUnion(stills.setValue(still, forKey: url, cost: PlatformImageMaker<Image>.cost(of: image)))
+                evictedStills.formUnion(stills.setValue(maker.still(image), forKey: url, cost: PlatformImageMaker<Image>.cost(of: image)))
+                stillResolutions[url] = Resolution(pixelHeight: pixelHeight, isLargest: isLargest)
                 evictedStills.remove(url)
                 stats.peakStillCost = max(stats.peakStillCost, stills.totalCost)
                 failedStills.remove(url)
@@ -218,7 +210,7 @@ public final class EmojiImageStore<Image: Sendable> {
                 logger.error("emoji load failed host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash)): \(SciaLog.describe(error), privacy: .public)")
                 // 高さを上げて読み直すのに失敗したときは、持っている画像で描き続ける。
                 retry.recordFailure(error, for: url)
-                if stills.value(forKey: url) == nil {
+                if !stills.contains(url) {
                     failedStills.insert(url)
                     scheduleRetry(url)
                 }
@@ -248,7 +240,7 @@ public final class EmojiImageStore<Image: Sendable> {
         let kilobyte = 1024
         let resolutions = animationStates.values.compactMap { if case .animated(let resolution) = $0 { resolution } else { nil } }
         return [
-            "pixelHeight: \(Self.pixelHeight) enlarged: \(stills.values.filter { $0.resolution.pixelHeight > Self.pixelHeight }.count)",
+            "pixelHeight: \(Self.pixelHeight) enlarged: \(stillResolutions.filter { stills.contains($0.key) && $0.value.pixelHeight > Self.pixelHeight }.count)",
             "stills: \(stills.count) cost: \(stills.totalCost / kilobyte)KB peak: \(stats.peakStillCost / kilobyte)KB limit: \(stills.totalCostLimit / kilobyte)KB",
             "stillReloadsAfterEviction: \(stats.stillReloads) evictedNow: \(evictedStills.count)",
             "animated: \(resolutions.count) enlarged: \(resolutions.filter { $0.pixelHeight > Self.pixelHeight }.count) animationReloadsAfterEviction: \(stats.animationReloads)",
@@ -260,7 +252,7 @@ public final class EmojiImageStore<Image: Sendable> {
     func animationDiagnosis(of url: URL) -> String {
         let state = animationStates[url].map { String(describing: $0) } ?? "nil"
         return [
-            "animationState: \(state) cached: \(animations.contains(url)) live: \(liveAnimations.object(forKey: url as NSURL) != nil)",
+            "animationState: \(state) cached: \(animations.contains(url))",
             "upgrading: \(upgradingAnimations.contains(url)) retryWake: \(retryWakes[url] != nil) allowsAutomaticLoad: \(retry.allowsAutomaticLoad(of: url))",
             "animationReloadsAfterEviction: \(stats.animationReloads)",
         ].joined(separator: "\n")
@@ -346,7 +338,6 @@ public final class EmojiImageStore<Image: Sendable> {
                     animations.setValue(animation, forKey: url, cost: image.byteCount)
                     stats.animationBytes += image.byteCount
                     stats.largestAnimationBytes = max(stats.largestAnimationBytes, image.byteCount)
-                    liveAnimations.setObject(animation, forKey: url as NSURL)
                     state = .animated(Resolution(pixelHeight: pixelHeight, isLargest: isLargest))
                 } else if let current {
                     state = .animated(Resolution(pixelHeight: current.pixelHeight, isLargest: true))

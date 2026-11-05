@@ -1,5 +1,6 @@
 public import Foundation
 import ImageIO
+import MemoryCache
 import os
 
 /// アイコンの画像を読み込み、メモリに持つ。`Image`は描く側の画像の型で、iOSでは`UIImage`にする。
@@ -7,7 +8,7 @@ import os
 /// 絵文字と違って、スクロールし続けるとアカウントの数だけ増えるため、上限のあるキャッシュに入れる。
 /// 描画のたびにメインスレッドで展開しないよう、表示する大きさまで縮めて展開したものを持つ。
 @MainActor
-public final class AvatarImageStore<Image: Sendable> {
+public final class AvatarImageStore<Image: AnyObject & Sendable> {
     public typealias Fetch = @Sendable (URL) async throws -> Data
 
     /// アニメーションするアイコンで、展開するコマ数の上限。これより長いものは動かさず、先頭のコマで止める。
@@ -16,7 +17,8 @@ public final class AvatarImageStore<Image: Sendable> {
 
     private let fetch: Fetch
     private let maker: PlatformImageMaker<Image>
-    private let cache = NSCache<NSString, Entry>()
+    /// 120ピクセル四方の止まった画像なら500枚ほど入る大きさ。何をいつ捨てるかはdocs/image-loading.mdの「メモリに持つ画像」に従う。
+    private var cache = MemoryCache<AvatarImageKey, Image>(totalCostLimit: 32 * 1_024 * 1_024)
     private var inFlight: [AvatarImageKey: Task<Decoded, any Error>] = [:]
     /// 読めなかった画像。先読みと新着の挿入前の待ちでは読み直さず、読めないアイコンのために通信を増やしたり挿入を遅らせたりしない。
     /// 行に描くときは、間隔をおいてから読み直す。読めたら忘れる。
@@ -36,17 +38,6 @@ public final class AvatarImageStore<Image: Sendable> {
         self.fetch = fetch
         self.maker = maker
         retry = RetrySchedule(policy: retryPolicy, clock: clock)
-        // 120ピクセル四方の止まった画像なら500枚ほど入る大きさ。
-        cache.totalCostLimit = 32 * 1_024 * 1_024
-    }
-
-    /// キャッシュに入れる値。`NSCache`はクラスしか持てないため包む。
-    private final class Entry {
-        let image: Image
-
-        init(_ image: Image) {
-            self.image = image
-        }
     }
 
     /// 展開した画像と、それが使うメモリのバイト数。
@@ -61,7 +52,7 @@ public final class AvatarImageStore<Image: Sendable> {
     }
 
     public func cachedImage(for key: AvatarImageKey) -> Image? {
-        cache.object(forKey: key.cacheKey)?.image
+        cache.value(forKey: key)
     }
 
     /// 読み込み済みなら画像を返す。まだなら読み込みを始めてnilを返し、届いたら`addListener(owner:onLoad:)`で知らせる。
@@ -164,7 +155,7 @@ public final class AvatarImageStore<Image: Sendable> {
             defer { inFlight[key] = nil }
             do {
                 let decoded = try await task.value
-                cache.setObject(Entry(decoded.image), forKey: key.cacheKey, cost: decoded.cost)
+                cache.setValue(decoded.image, forKey: key, cost: decoded.cost)
                 retry.recordSuccess(for: key.url)
                 listeners.removeAll { $0.owner == nil }
                 for listener in listeners {
@@ -248,6 +239,4 @@ public struct AvatarImageKey: Hashable, Sendable {
         self.maxPixelSize = maxPixelSize
         self.animates = animates
     }
-
-    var cacheKey: NSString { "\(maxPixelSize) \(animates) \(url.absoluteString)" as NSString }
 }
