@@ -2416,7 +2416,7 @@ final class SessionController {
             account: credential.handle,
             diagnostics: diagnostics,
             tabIcons: profileTabIcons,
-            lists: settingsListActions,
+            tabSources: settingsTabSourceActions,
             openInAppBrowserHeight: { [weak self] in self?.open(.inAppBrowserHeight(returningTo: .interaction)) },
             openProfile: { [weak self] in self?.open(.profile(acct: $0)) },
             opening: page,
@@ -2460,10 +2460,10 @@ final class SessionController {
     }
 
     /// タブの並びの画面で、リストを作る、消す。
-    var settingsListActions: SettingsListActions {
-        SettingsListActions { [weak self] in
+    var settingsTabSourceActions: SettingsTabSourceActions {
+        SettingsTabSourceActions { [weak self] in
             self?.listEditor.presentCreate()
-        } delete: { [weak self] id, title in
+        } deleteList: { [weak self] id, title in
             self?.listEditor.confirmDelete(listID: id, title: title)
         }
     }

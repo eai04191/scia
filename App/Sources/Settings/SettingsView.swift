@@ -14,7 +14,7 @@ struct SettingsView: View {
     /// タブの並びで、タブに置いたプロフィールに出すその人のアイコン。
     let tabIcons: ProfileTabIcons
     /// タブの並びでリストを作る、消す。
-    let lists: SettingsListActions
+    let tabSources: SettingsTabSourceActions
     /// 設定を閉じ、ホームの上でアプリ内のSafariの高さを選ぶシートを出す。
     let openInAppBrowserHeight: @MainActor () -> Void
     /// 謝辞の画面で、設定の画面を閉じて、ハンドルの人のプロフィールを開く。
@@ -31,7 +31,7 @@ struct SettingsView: View {
         account: String,
         diagnostics: ConnectionDiagnostics,
         tabIcons: ProfileTabIcons,
-        lists: SettingsListActions,
+        tabSources: SettingsTabSourceActions,
         openInAppBrowserHeight: @escaping @MainActor () -> Void,
         openProfile: @escaping @MainActor (_ acct: String) -> Void,
         opening page: SettingsPage? = nil,
@@ -42,7 +42,7 @@ struct SettingsView: View {
         self.account = account
         self.diagnostics = diagnostics
         self.tabIcons = tabIcons
-        self.lists = lists
+        self.tabSources = tabSources
         self.openInAppBrowserHeight = openInAppBrowserHeight
         self.openProfile = openProfile
         _path = State(initialValue: page?.path ?? [])
@@ -139,10 +139,10 @@ struct SettingsView: View {
                     footer: "タブバーの最後のタブにまとめた項目を切り替えるメニューに、この画面を開く「カスタマイズ」を出します。",
                     isOn: $settings.showsTabMenuCustomize
                 )],
-                actions: [MenuLayoutAction(title: "リストを作成", symbolName: "plus", handler: lists.create)],
+                actions: [MenuLayoutAction(title: "リストを作成", symbolName: "plus", handler: tabSources.createList)],
                 itemDeletion: MenuLayoutItemDeletion(canDelete: { $0.isList || $0.isUserAdded }) { item in
                     if case .list(let id, let title) = item {
-                        lists.delete(id, title)
+                        tabSources.deleteList(id, title)
                     } else if item.isUserAdded {
                         // サーバーには何も残っていないので、確かめずに並びから外す。プロフィールなどの右上のメニューの「タブから外す」と同じ。
                         // 並びの画面の書き込み（`tabLayoutBinding`）は、最初の並びに戻したときのために、使う人が足した項目を残すので通さない。
@@ -176,11 +176,11 @@ struct SettingsView: View {
 }
 
 /// タブの並びの画面で、リストを作る、消す。決まりはdocs/lists.mdにある。セッションが作る。
-struct SettingsListActions {
+struct SettingsTabSourceActions {
     /// 名前を入れるアラートを出して作る。
-    let create: @MainActor () -> Void
+    let createList: @MainActor () -> Void
     /// 確かめてから消す。
-    let delete: @MainActor (_ id: String, _ title: String) -> Void
+    let deleteList: @MainActor (_ id: String, _ title: String) -> Void
 }
 
 extension UIViewController {
@@ -188,14 +188,14 @@ extension UIViewController {
     ///   - instance: ログイン中のアカウントのサーバー。
     ///   - diagnostics: 「接続の状態」画面に出す、ログイン中のアカウントの接続の状態。
     ///   - tabIcons: タブの並びで、タブに置いたプロフィールに出すその人のアイコン。
-    ///   - lists: タブの並びでリストを作る、消す。
+    ///   - tabSources: タブの並びでリストを作る、消す。
     ///   - openInAppBrowserHeight: 設定を閉じ、ホームの上でアプリ内のSafariの高さを選ぶシートを出す。
     ///   - openProfile: 謝辞の画面で、設定の画面を閉じて、ハンドルの人のプロフィールを開く。
     ///   - page: 一覧から重ねて開いておく画面。
     ///   - appearanceGroup: `page`が「投稿の見た目」か「通知の見た目」のとき、その上に重ねておく分類の画面。
     ///   - onShownChange: 設定の画面が出たときにtrue、消えたときにfalseで呼ぶ。
-    func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, lists: SettingsListActions, openInAppBrowserHeight: @escaping @MainActor () -> Void, openProfile: @escaping @MainActor (_ acct: String) -> Void, opening page: SettingsPage? = nil, appearanceGroup: AppearanceGroup.ID? = nil, onShownChange: @escaping (Bool) -> Void) {
-        let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, lists: lists, openInAppBrowserHeight: openInAppBrowserHeight, openProfile: openProfile, opening: page, appearanceGroup: appearanceGroup)
+    func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, tabSources: SettingsTabSourceActions, openInAppBrowserHeight: @escaping @MainActor () -> Void, openProfile: @escaping @MainActor (_ acct: String) -> Void, opening page: SettingsPage? = nil, appearanceGroup: AppearanceGroup.ID? = nil, onShownChange: @escaping (Bool) -> Void) {
+        let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, tabSources: tabSources, openInAppBrowserHeight: openInAppBrowserHeight, openProfile: openProfile, opening: page, appearanceGroup: appearanceGroup)
         present(SettingsHostingController(rootView: view, onShownChange: onShownChange), animated: true)
     }
 
