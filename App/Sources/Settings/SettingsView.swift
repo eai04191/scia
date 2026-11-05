@@ -71,23 +71,23 @@ struct SettingsView: View {
             Form {
                 Section {
                     NavigationLink(value: SettingsPage.tabs) {
-                        SettingsCategoryLabel("タブ", systemImage: "menubar.dock.rectangle", color: .blue)
+                        SettingsCategoryLabel("タブ", systemImage: "menubar.dock.rectangle", color: .systemBlue)
                     }
                 } header: {
                     Text(account)
                 }
                 Section {
                     NavigationLink(value: SettingsPage.display) {
-                        SettingsCategoryLabel("表示", systemImage: "textformat.size", color: .blue)
+                        SettingsCategoryLabel("表示", systemImage: "textformat.size", color: .systemBlue)
                     }
                     NavigationLink(value: SettingsPage.interaction) {
-                        SettingsCategoryLabel("操作", systemImage: "hand.tap.fill", color: .orange)
+                        SettingsCategoryLabel("操作", systemImage: "hand.tap.fill", color: .systemOrange)
                     }
                     NavigationLink(value: SettingsPage.compose) {
-                        SettingsCategoryLabel("投稿欄", systemImage: "square.and.pencil", color: .green)
+                        SettingsCategoryLabel("投稿欄", systemImage: "square.and.pencil", color: .systemGreen)
                     }
                     NavigationLink(value: SettingsPage.media) {
-                        SettingsCategoryLabel("メディア", systemImage: "photo.fill", color: .red)
+                        SettingsCategoryLabel("メディア", systemImage: "photo.fill", color: .systemRed)
                     }
                     NavigationLink(value: SettingsPage.appIcon) {
                         AppIconSettingsLabel()
@@ -95,10 +95,10 @@ struct SettingsView: View {
                 }
                 Section {
                     NavigationLink(value: SettingsPage.storage) {
-                        SettingsCategoryLabel("ストレージ", systemImage: "internaldrive.fill", color: .gray)
+                        SettingsCategoryLabel("ストレージ", systemImage: "internaldrive.fill", color: .systemGray)
                     }
                     NavigationLink(value: SettingsPage.about) {
-                        SettingsCategoryLabel("情報", systemImage: "info.circle.fill", color: .gray)
+                        SettingsCategoryLabel("情報", systemImage: "info.circle.fill", color: .systemGray)
                     }
                 }
             }

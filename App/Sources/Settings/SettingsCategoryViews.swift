@@ -6,11 +6,13 @@ import UIKit
 struct SettingsCategoryLabel: View {
     let title: String
     let systemImage: String
-    let color: Color
+    /// 四角に敷くシステムカラー。
+    let color: UIColor
     /// 四角の一辺。文字の大きさに合わせて伸ばす。
     @ScaledMetric(relativeTo: .body) private var side: CGFloat = 28
+    @Environment(\.colorSchemeContrast) private var contrast
 
-    init(_ title: String, systemImage: String, color: Color) {
+    init(_ title: String, systemImage: String, color: UIColor) {
         self.title = title
         self.systemImage = systemImage
         self.color = color
@@ -24,8 +26,18 @@ struct SettingsCategoryLabel: View {
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(.white)
                 .frame(width: side, height: side)
-                .background(color, in: RoundedRectangle(cornerRadius: side * 0.22, style: .continuous))
+                .background(tileColor, in: RoundedRectangle(cornerRadius: side * 0.22, style: .continuous))
         }
+    }
+
+    /// 「コントラストを上げる」では、設定アプリと同じく四角を濃くして、白い記号との差を広げる。ダークモードの高コントラスト版のシステムカラーは暗い背景との差を広げるために明るくなり、白い記号が見えにくくなるので、ライトモードの高コントラスト版の濃い色を使う。
+    private var tileColor: Color {
+        guard contrast == .increased else { return Color(uiColor: color) }
+        let darker = UITraitCollection { traits in
+            traits.userInterfaceStyle = .light
+            traits.accessibilityContrast = .high
+        }
+        return Color(uiColor: color.resolvedColor(with: darker))
     }
 }
 
