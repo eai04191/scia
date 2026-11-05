@@ -92,11 +92,55 @@ struct HashtagMenuTreeTests {
         #expect(try await loaded { _ in throw URLError(.notConnectedToInternet) } == "注目のハッシュタグを読み込めませんでした(押せない)")
     }
 
+    private func followActions(known: Bool?, recorder: Recorder = Recorder(), load: @escaping @MainActor (String) async throws -> Bool = { _ in false }) -> HashtagMenuActions {
+        HashtagMenuActions(mute: nil, follow: HashtagToggleActions(known: { _ in known }, refresh: { recorder.refreshes += 1 }, load: load, turnOn: { _ in }, turnOff: { _ in }))
+    }
+
+    /// 「フォロー」は、覚えているフォローしているハッシュタグで、その場でフォローしているかを決め、フォローしていれば「フォローを外す」にする。
+    /// まだ読めていなければ、読んでから決め、読めなかったら押せない行で知らせる。どちらでも、メニューを組むたびに読み直す。
+    @Test func followUsesKnownTagsAndRefreshes() async throws {
+        let recorder = Recorder()
+        func menu(_ known: Bool?, load: @escaping @MainActor (String) async throws -> Bool = { _ in false }) throws -> MenuNode<HashtagMenuCommand> {
+            let tree = HashtagMenuTree(name: "cat", url: nil, account: nil, linkBrowser: .inApp, actions: followActions(known: known, recorder: recorder, load: load))
+            return try #require(tree.menu(groups: .single(.follow)))
+        }
+
+        #expect(MenuNodeTests.describe(try menu(true).children) == "フォローを外す")
+        #expect(MenuNodeTests.describe(try menu(false).children) == "フォロー")
+        #expect(MenuNodeTests.describe(try menu(nil).children) == "…")
+        #expect(recorder.refreshes == 3)
+
+        guard case .deferred(let failing) = try #require(try menu(nil) { _ in throw URLError(.notConnectedToInternet) }.flattenedChildren.first).content else {
+            Issue.record("読み込み中の行になっていません")
+            return
+        }
+        #expect(MenuNodeTests.describe(await failing()) == "フォローしているハッシュタグを読み込めませんでした(押せない)")
+    }
+
+    /// 押したときに送る操作は、フォローしているかで決まる。
+    @Test func followCommands() throws {
+        func command(_ known: Bool) throws -> HashtagMenuCommand? {
+            let tree = HashtagMenuTree(name: "cat", url: nil, account: nil, linkBrowser: .inApp, actions: followActions(known: known))
+            return try #require(tree.menu(groups: .single(.follow))).flattenedChildren.first?.command
+        }
+
+        #expect(try command(false) == .follow)
+        #expect(try command(true) == .unfollow)
+    }
+
     /// 載せているかは、サーバーと同じ決まりでそろえた名前で比べる。
     @Test func featuredTagsMatchNormalizedName() {
         let tags = [FeaturedTag(id: "1", name: "Cat", statusesCount: 3)]
 
         #expect(tags.first(named: "cat")?.id == "1")
         #expect(tags.first(named: "dog") == nil)
+    }
+
+    /// フォローしているかも、サーバーと同じ決まりでそろえた名前で比べる。
+    @Test func followedTagsMatchNormalizedName() {
+        let tags = [Hashtag(name: "Cat")]
+
+        #expect(tags.contains(named: "ＣＡＴ"))
+        #expect(!tags.contains(named: "dog"))
     }
 }

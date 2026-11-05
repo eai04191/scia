@@ -794,7 +794,7 @@ public struct MastodonClient: Sendable {
         _ = try await post(Hashtag.self, url: tagURL("api/v1/tags", name, "follow"), form: [])
     }
 
-    /// ハッシュタグのフォローをやめる。フォローしていなくても成功する。
+    /// ハッシュタグのフォローを外す。フォローしていなくても成功する。
     /// https://docs.joinmastodon.org/methods/tags/#unfollow
     public func unfollowTag(_ name: String) async throws {
         _ = try await post(Hashtag.self, url: tagURL("api/v1/tags", name, "unfollow"), form: [])
@@ -805,6 +805,11 @@ public struct MastodonClient: Sendable {
     public func hashtagTimeline(_ name: String, _ query: TimelineQuery) async throws -> TimelinePage {
         let list = try await get(ElementList<Status>.self, url: tagURL("api/v1/timelines/tag", name), query: query.queryItems).0
         return TimelinePage(statuses: list.elements, unreadable: list.unreadable, isRegenerating: false)
+    }
+
+    /// 自分のサーバーのハッシュタグのページ（`https://<サーバー>/tags/<名前>`）。`Tag.url`と同じ形。名前はAPIのURLと同じく、1つの区切りとして符号化して足す。
+    public func tagPageURL(_ name: String) -> URL {
+        tagURL("tags", name)
     }
 
     /// ハッシュタグのAPIのURL。名前は本文のリンクの文字列から取ることがあり、`/`や`..`を含みうるため、1つの区切りとして符号化して足す。

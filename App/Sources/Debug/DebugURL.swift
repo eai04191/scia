@@ -112,7 +112,7 @@ enum DebugURL: Equatable {
     /// リストの作成と管理の画面がまだないため、リストのタブを実物で確かめるのに使う。サーバーのリストを書き換える。
     case createList(title: String)
     case deleteList(id: String)
-    /// `scia-debug://tags/follow?name=<名前>`でハッシュタグをフォローし、`scia-debug://tags/unfollow?name=<名前>`でやめて、フォローしているハッシュタグを読み直す。
+    /// `scia-debug://tags/follow?name=<名前>`でハッシュタグをフォローし、`scia-debug://tags/unfollow?name=<名前>`で外す。メニューから押したときと同じく、知らせを出し、「フォロー中のハッシュタグ」の一覧に反映する。
     /// ハッシュタグをフォローする操作がまだないため、ハッシュタグのタブを実物で確かめるのに使う。サーバーのフォローを書き換える。
     case followTag(name: String)
     case unfollowTag(name: String)

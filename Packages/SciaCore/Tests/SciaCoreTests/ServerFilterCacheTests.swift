@@ -55,6 +55,28 @@ struct ServerFilterCacheTests {
         #expect(server.requests == 1)
     }
 
+    /// 読めたら、読んだ値を知らせる。後から始めた読み直しに追い越された古い応答と、読めなかったときは知らせない。
+    @Test func onValueChangeReportsOnlyLatestSuccess() async throws {
+        let server = Server(titles: ["a"], holds: true)
+        let cache = makeCache(server)
+        var reported: [[String]] = []
+        cache.onValueChange = { reported.append($0.map(\.title)) }
+
+        cache.reload(purpose: .action)
+        try await waitUntil { server.requests == 1 }
+        server.setTitles(["b"])
+        cache.reload(purpose: .action)
+        try await waitUntil { server.requests == 2 }
+        server.gate?.open()
+        _ = try await cache.latest()
+        #expect(reported == [["b"]])
+
+        server.fail(true)
+        cache.reload(purpose: .action)
+        _ = try? await cache.latest()
+        #expect(reported == [["b"]])
+    }
+
     /// 読み直しは、渡した目的を名乗って読む。まだ読んでいない一覧を待つときは、待っている側が名乗った目的で読む。
     @Test func reloadDeclaresPurpose() async throws {
         let purposes = Mutex<[RequestPurpose?]>([])

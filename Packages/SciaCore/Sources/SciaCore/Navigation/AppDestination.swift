@@ -73,7 +73,7 @@ public enum AppDestination: Equatable, Sendable {
             }
             return switch (self, item) {
             case (.list(let id), .list(let itemID, _)): id == itemID
-            case (.hashtag(let name), .hashtag(let itemName)): sameTag(name, itemName)
+            case (.hashtag(let name), .hashtag(let itemName, _)): sameTag(name, itemName)
             case (.profile(let acct), .profile(_, let itemAcct, _)): sameAcct(acct, itemAcct)
             case (.accountHashtag(let acct, let name), .accountHashtag(_, let itemAcct, let itemName, _)): sameAcct(acct, itemAcct) && sameTag(name, itemName)
             default: false
@@ -287,7 +287,7 @@ public enum AppDestination: Equatable, Sendable {
     }
 
     /// 最初からあるタブ。足したタブは`userTab`で選ぶ。
-    private static let fixedTabs: [TabItem] = [.home, .local, .federated, .notifications, .search, .bookmarks, .favourites, .scheduled]
+    private static let fixedTabs: [TabItem] = [.home, .local, .federated, .notifications, .search, .bookmarks, .favourites, .scheduled, .followedTags]
 }
 
 /// 設定の一覧から重ねて開く画面。`rawValue`は、`scia://settings/<rawValue>`でその画面を直接開くときの名前。

@@ -11,12 +11,15 @@ public enum TabItem: MenuItemKind {
     case favourites
     /// 予約した投稿の一覧。決まりはdocs/tabs.mdの「予約投稿」にある。
     case scheduled
+    /// フォローしているハッシュタグの一覧。決まりはdocs/tabs.mdの「フォロー中のハッシュタグ」にある。
+    case followedTags
     /// 自分のリスト。`title`は、リストの一覧を読む前からタブの名前を出せるよう、並びと一緒に保存する。
     /// 同じ項目かどうかはIDだけで見る。名前が変わっても、並びの中の同じ場所の同じリストとして扱うため。
     case list(id: String, title: String)
-    /// フォローしているハッシュタグ。`name`は`#`を除いた名前。
+    /// ハッシュタグのタイムライン。フォローしているかに関わらず、使う人がこの端末の並びに足す。決まりはdocs/tabs.mdの「ハッシュタグ」にある。
+    /// `name`は`#`を除いた名前。`title`は使う人が付けたタブの名前で、空なら`#名前`を出す。
     /// 同じ項目かどうかは、サーバーと同じ決まりでそろえた名前（`Hashtag.normalizedName`）で見る。サーバーは大文字と小文字などを区別しないため。
-    case hashtag(name: String)
+    case hashtag(name: String, title: String = "")
     /// あるユーザーの、ハッシュタグの付いた投稿。サーバーには覚える仕組みがないため、使う人がこの端末の並びに足す。`name`は`#`を除いた名前。
     /// `acct`は、タブと一覧の見出しにハンドルを出すため、並びと一緒に保存する。`title`は使う人が付けたタブの名前で、空なら`#名前`を出す。
     /// 同じ項目かどうかは、アカウントのIDと、ハッシュタグのそろえた名前で見る。
@@ -28,7 +31,7 @@ public enum TabItem: MenuItemKind {
 
     /// リストの項目の`rawValue`の頭。`list:<ID>:<名前>`の形で保存する。リストのIDは`:`を含まないため、2つ目の`:`より後ろは名前として読む。
     private static let listPrefix = "list:"
-    /// ハッシュタグの項目の`rawValue`の頭。`hashtag:<名前>`の形で保存する。
+    /// ハッシュタグの項目の`rawValue`の頭。`hashtag:<名前>:<付けた名前>`の形で保存する。ハッシュタグの名前は`:`を含まないため、1つ目の`:`より後ろは付けた名前として読む。
     private static let hashtagPrefix = "hashtag:"
     /// ユーザーのハッシュタグの項目の`rawValue`の頭。`accountHashtag:<ID>:<acct>:<名前>:<付けた名前>`の形で保存する。
     /// ID、`acct`、ハッシュタグの名前は`:`を含まないため、4つ目の`:`より後ろは付けた名前として読む。付けた名前は`:`を含みうるので最後に置く。
@@ -38,7 +41,7 @@ public enum TabItem: MenuItemKind {
     private static let profilePrefix = "profile:"
 
     /// 決まった項目。リストとハッシュタグは使う人ごとに違うため含まない。既定の並びと、保存した並びに足りない項目を差し込むのに使う。
-    public static let allCases: [TabItem] = [.home, .local, .federated, .notifications, .search, .bookmarks, .favourites, .scheduled]
+    public static let allCases: [TabItem] = [.home, .local, .federated, .notifications, .search, .bookmarks, .favourites, .scheduled, .followedTags]
 
     public init?(rawValue: String) {
         if rawValue.hasPrefix(Self.accountHashtagPrefix) {
@@ -60,9 +63,9 @@ public enum TabItem: MenuItemKind {
             return
         }
         if rawValue.hasPrefix(Self.hashtagPrefix) {
-            let name = rawValue.dropFirst(Self.hashtagPrefix.count)
-            guard !name.isEmpty else { return nil }
-            self = .hashtag(name: String(name))
+            let parts = rawValue.dropFirst(Self.hashtagPrefix.count).split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+            guard let name = parts.first, !name.isEmpty else { return nil }
+            self = .hashtag(name: String(name), title: parts.count > 1 ? String(parts[1]) : "")
             return
         }
         guard let item = Self.allCases.first(where: { $0.rawValue == rawValue }) else { return nil }
@@ -79,8 +82,9 @@ public enum TabItem: MenuItemKind {
         case .bookmarks: "bookmarks"
         case .favourites: "favourites"
         case .scheduled: "scheduled"
+        case .followedTags: "followed-tags"
         case .list(let id, let title): "\(Self.listPrefix)\(id):\(title)"
-        case .hashtag(let name): "\(Self.hashtagPrefix)\(name)"
+        case .hashtag(let name, let title): "\(Self.hashtagPrefix)\(name):\(title)"
         case .accountHashtag(let accountID, let acct, let name, let title): "\(Self.accountHashtagPrefix)\(accountID):\(acct):\(name):\(title)"
         case .profile(let accountID, let acct, let title): "\(Self.profilePrefix)\(accountID):\(acct):\(title)"
         }
@@ -102,7 +106,7 @@ public enum TabItem: MenuItemKind {
     private var identity: String {
         switch self {
         case .list(let id, _): "\(Self.listPrefix)\(id)"
-        case .hashtag(let name): "\(Self.hashtagPrefix)\(Hashtag.normalizedName(name))"
+        case .hashtag(let name, _): "\(Self.hashtagPrefix)\(Hashtag.normalizedName(name))"
         case .accountHashtag(let accountID, _, let name, _): "\(Self.accountHashtagPrefix)\(accountID):\(Hashtag.normalizedName(name))"
         case .profile(let accountID, _, _): "\(Self.profilePrefix)\(accountID)"
         default: rawValue
@@ -135,12 +139,13 @@ public enum TabItem: MenuItemKind {
 
     /// 使う人がこの端末の並びに足す項目。サーバーから読んで足し直せないため、最初の並びに戻しても残し、使う人が名前を付けられる。
     public var isUserAdded: Bool {
-        isAccountHashtag || isProfile
+        isHashtag || isAccountHashtag || isProfile
     }
 
     /// 使う人が付けた名前を`title`に変えた項目。使う人が足す項目でなければ、そのまま返す。
     public func renamed(_ title: String) -> TabItem {
         switch self {
+        case .hashtag(let name, _): .hashtag(name: name, title: title)
         case .accountHashtag(let accountID, let acct, let name, _): .accountHashtag(accountID: accountID, acct: acct, name: name, title: title)
         case .profile(let accountID, let acct, _): .profile(accountID: accountID, acct: acct, title: title)
         default: self
@@ -176,6 +181,7 @@ public enum TabItem: MenuItemKind {
         .item(.federated, isVisible: true),
         .item(.favourites, isVisible: true),
         .item(.bookmarks, isVisible: true),
+        .item(.followedTags, isVisible: true),
         .item(.scheduled, isVisible: true),
     ])
 }
@@ -185,12 +191,6 @@ extension MenuLayout where Item == TabItem {
     /// まだないリストは無効にして最後のリストの後ろに足し、もうないリストは外し、名前が変わったリストは名前を書き換える。ほかの項目の並びと表示は変えない。
     public func syncingLists(_ lists: [MastodonList]) -> MenuLayout<TabItem> {
         syncing(lists.map { .list(id: $0.id, title: $0.title) }, where: \.isList)
-    }
-
-    /// フォローしているハッシュタグの一覧を並びに反映する。決まりはdocs/tabs.mdの「フォローしているハッシュタグ」にある。
-    /// まだないハッシュタグは無効にして最後のハッシュタグの後ろに足し、フォローをやめたハッシュタグは外す。ほかの項目の並びと表示は変えない。
-    public func syncingHashtags(_ hashtags: [Hashtag]) -> MenuLayout<TabItem> {
-        syncing(hashtags.map { .hashtag(name: $0.name) }, where: \.isHashtag)
     }
 
     /// 使う人が足した項目を、有効にして切り替えタブの末尾に入れる。ブックマークやお気に入りを有効にしたときと同じく、ふだん並べているタブを押しのけないため。

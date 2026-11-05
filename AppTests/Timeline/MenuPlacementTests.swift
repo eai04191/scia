@@ -95,8 +95,10 @@ struct MenuPlacementTests {
     /// 投稿のメニューでは、サブメニューの項目に「ハッシュタグ」のアイコンを付ける。
     @Test func sameHashtagMenuFromBodyAndStatusMenu() throws {
         let settings = makeSettings()
-        let items = HashtagMenuItem.allCases.map { MenuLayout<HashtagMenuItem>.Element.item($0, isVisible: true) }
-        settings.hashtagMenuLayout = MenuLayout(elements: Array(items.prefix(3)) + [.separator] + Array(items.dropFirst(3).prefix(2)) + [.more] + Array(items.dropFirst(5)))
+        // 項目の順番に頼らないよう、並びは項目の名前で書く。フォローと「プロフィールで紹介する」は、操作を渡さないので出ない。
+        func items(_ items: HashtagMenuItem...) -> [MenuLayout<HashtagMenuItem>.Element] { items.map { .item($0, isVisible: true) } }
+        settings.hashtagMenuLayout = MenuLayout(elements: items(.timeline, .accountStatuses, .follow, .mute) + [.separator] + items(.openInBrowser, .openInDefaultBrowser) + [.more]
+            + items(.openInAppSafari, .copyLink, .share, .feature, .customize))
         let viewController = makeViewController(settings: settings)
         viewController.hashtagMenuActions = HashtagMenuActions(mute: HashtagMuteActions(known: { _ in false }, refresh: {}, load: { _ in false }, mute: { _, _ in }, unmute: { _ in }))
         let tagURL = try #require(URL(string: "https://example.social/tags/cat"))

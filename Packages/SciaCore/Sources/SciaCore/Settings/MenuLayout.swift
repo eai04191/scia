@@ -45,6 +45,18 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
         public static func single(_ item: Item) -> Groups {
             Groups(main: [Group([item])], more: [])
         }
+
+        /// `items`を除いた並び。項目がなくなったまとまりは含めない。出す場所で意味のない項目（ハッシュタグのタイムラインの「すべての投稿」など）を除くのに使う。
+        /// 並び（`MenuLayout`）から除くと、足りない項目として既定の位置に差し込み直されるため、まとまりにしてから除く。
+        public func excluding(_ items: Set<Item>) -> Groups {
+            func filtered(_ groups: [Group]) -> [Group] {
+                groups.compactMap { group in
+                    let kept = group.items.filter { !items.contains($0) }
+                    return kept.isEmpty ? nil : Group(kept, isRow: group.isRow)
+                }
+            }
+            return Groups(main: filtered(main), more: filtered(more))
+        }
     }
 
     public private(set) var elements: [Element]
@@ -423,6 +435,8 @@ public enum HashtagMenuItem: String, BundledMenuDefaults {
     case timeline
     /// 投稿の本文なら投稿した人、プロフィールならその人の、このハッシュタグの付いた投稿を開く。
     case accountStatuses
+    /// フォローする。フォローしていれば外す。
+    case follow
     /// このハッシュタグの付いた投稿を、サーバーのフィルターで隠す。ミュート中なら解除する。
     case mute
     /// 開く場所の設定に従って開く。

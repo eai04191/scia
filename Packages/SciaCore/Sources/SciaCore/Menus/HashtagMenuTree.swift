@@ -10,6 +10,10 @@ public enum HashtagMenuCommand: Equatable, Sendable {
     /// ミュートする。nilなら解除するまで続ける。
     case mute(Duration?)
     case unmute
+    /// フォローする。
+    case follow
+    /// フォローを外す。
+    case unfollow
     /// 自分のプロフィールの注目のハッシュタグに載せる。
     case feature
     /// 自分のプロフィールの注目のハッシュタグから外す。
@@ -69,6 +73,9 @@ public struct HashtagMenuTree {
             case .mute:
                 guard let muteActions = actions?.mute else { return [] }
                 return muteNodes(muteActions, item: item)
+            case .follow:
+                guard let followActions = actions?.follow else { return [] }
+                return followNodes(followActions, item: item)
             case .feature:
                 guard let featureActions = actions?.feature else { return [] }
                 return featureNodes(featureActions, item: item)
@@ -123,6 +130,17 @@ extension HashtagMenuTree {
         )
     }
 
+    /// フォローしていなければ「フォロー」、フォローしていれば「フォローを外す」にする。
+    @MainActor
+    fileprivate func followNodes(_ followActions: HashtagToggleActions, item: HashtagMenuItem) -> [MenuNode<HashtagMenuCommand>] {
+        toggleNodes(
+            followActions,
+            on: .action("フォローを外す", icon: .symbol("minus.circle"), .unfollow),
+            off: .action("フォロー", icon: .symbol(item.symbolName), .follow),
+            failure: "フォローしているハッシュタグを読み込めませんでした"
+        )
+    }
+
     /// 状態を持つ項目の行。ミュートと同じく、覚えている一覧でその場で決め、メニューを開くたびに読み直す。まだ読めていなければ、読む間は読み込み中の行を出し、読めなければ押せない行で知らせる。
     /// - Parameters:
     ///   - on: タグが当てはまっている（載せている、フォローしている）ときの行。
@@ -149,11 +167,14 @@ extension HashtagMenuTree {
 public struct HashtagMenuActions {
     /// nilなら「ミュート」を出さない。
     public var mute: HashtagMuteActions?
+    /// nilなら「フォロー」を出さない。
+    public var follow: HashtagToggleActions?
     /// nilなら「プロフィールで紹介する」を出さない。
     public var feature: HashtagToggleActions?
 
-    public init(mute: HashtagMuteActions?, feature: HashtagToggleActions? = nil) {
+    public init(mute: HashtagMuteActions?, follow: HashtagToggleActions? = nil, feature: HashtagToggleActions? = nil) {
         self.mute = mute
+        self.follow = follow
         self.feature = feature
     }
 }
@@ -184,6 +205,14 @@ public struct HashtagToggleActions {
         self.load = load
         self.turnOn = turnOn
         self.turnOff = turnOff
+    }
+}
+
+extension [Hashtag] {
+    /// サーバーと同じ決まりでそろえた名前が同じタグがあるか。
+    public func contains(named name: String) -> Bool {
+        let normalized = Hashtag.normalizedName(name)
+        return contains { Hashtag.normalizedName($0.name) == normalized }
     }
 }
 

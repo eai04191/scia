@@ -54,6 +54,8 @@ struct HashtagMenu {
         case .openAccountStatuses(let account): openAccountStatuses(account)
         case .mute(let duration): actions?.mute?.mute(name, duration)
         case .unmute: actions?.mute?.unmute(name)
+        case .follow: actions?.follow?.turnOn(name)
+        case .unfollow: actions?.follow?.turnOff(name)
         case .feature: actions?.feature?.turnOn(name)
         case .unfeature: actions?.feature?.turnOff(name)
         case .customize: handlers.openSettings(.hashtagMenu)

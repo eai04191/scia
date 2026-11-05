@@ -249,21 +249,19 @@ struct TabLayoutSettingsTests {
         #expect(synced.tokens.firstIndex(of: "item:bookmarks") == synced.tokens.firstIndex(of: "hidden:list:3:新しいリスト").map { $0 + 1 })
     }
 
-    /// 新しいハッシュタグとリストは、それぞれ最後の同じ種類の項目の後ろに入れ、ほかの種類の後ろに離れて並ばない。並びにその種類がなければ末尾に入れる。
-    @Test func syncingInsertsNewItemsAfterLastOfSameKind() {
-        let layout = MenuLayout<TabItem>.fixture(tokens: ["item:home", "more", "item:favourites", "hidden:hashtag:a", "item:hashtag:b", "hidden:list:1:友だち", "item:bookmarks"])
+    /// 新しいリストは最後のリストの後ろに入れ、ほかの種類の後ろに離れて並ばない。並びにリストがなければ末尾に入れる。
+    @Test func syncingInsertsNewListsAfterLastList() {
+        let layout = MenuLayout<TabItem>.fixture(tokens: ["item:home", "more", "item:favourites", "hidden:list:1:友だち", "item:hashtag:a:", "item:bookmarks"])
 
-        let synced = layout
-            .syncingHashtags([Hashtag(name: "a"), Hashtag(name: "b"), Hashtag(name: "c")])
-            .syncingLists([MastodonList(id: "1", title: "友だち"), MastodonList(id: "2", title: "仕事")])
+        let synced = layout.syncingLists([MastodonList(id: "1", title: "友だち"), MastodonList(id: "2", title: "仕事")])
 
         // fixtureは並べなかった決まった項目を無効で末尾に足すので、ブックマークまでを見る。
-        #expect(Array(synced.tokens.drop { $0 != "item:favourites" }.prefix(7)) == [
-            "item:favourites", "hidden:hashtag:a", "item:hashtag:b", "hidden:hashtag:c", "hidden:list:1:友だち", "hidden:list:2:仕事", "item:bookmarks",
+        #expect(Array(synced.tokens.drop { $0 != "item:favourites" }.prefix(5)) == [
+            "item:favourites", "hidden:list:1:友だち", "hidden:list:2:仕事", "item:hashtag:a:", "item:bookmarks",
         ])
 
-        let withoutHashtags = MenuLayout<TabItem>.fixture(tokens: ["item:home", "more", "item:list:1:友だち", "item:bookmarks"])
-        #expect(withoutHashtags.syncingHashtags([Hashtag(name: "c")]).tokens.last == "hidden:hashtag:c")
+        let withoutLists = MenuLayout<TabItem>.fixture(tokens: ["item:home", "more", "item:hashtag:a:", "item:bookmarks"])
+        #expect(withoutLists.syncingLists([MastodonList(id: "2", title: "仕事")]).tokens.last == "hidden:list:2:仕事")
     }
 
     /// 切り替えタブで前に開いていた項目は、保存しておいた古い名前ではなく、並びの中の今の名前で返す。
@@ -275,12 +273,12 @@ struct TabLayoutSettingsTests {
 
     /// 足りないリストだけを無効で足し、並びにあるリストは外しも書き換えもしない。
     @Test func addingMissingOnlyAppends() {
-        let layout = MenuLayout<TabItem>.fixture(tokens: ["item:home", "more", "item:list:1:旧名", "item:list:9:ほかのウインドウで読んだリスト", "item:hashtag:Scia"])
+        let layout = MenuLayout<TabItem>.fixture(tokens: ["item:home", "more", "item:list:1:旧名", "item:list:9:ほかのウインドウで読んだリスト", "item:hashtag:Scia:"])
 
         let added = layout.addingMissing([.list(id: "1", title: "新名"), .list(id: "2", title: "足りないリスト"), .hashtag(name: "scia"), .hashtag(name: "mastodon")])
 
         #expect(added.tokens.filter { $0.contains("list:") || $0.contains("hashtag:") } == [
-            "item:list:1:旧名", "item:list:9:ほかのウインドウで読んだリスト", "item:hashtag:Scia", "hidden:list:2:足りないリスト", "hidden:hashtag:mastodon",
+            "item:list:1:旧名", "item:list:9:ほかのウインドウで読んだリスト", "item:hashtag:Scia:", "hidden:list:2:足りないリスト", "hidden:hashtag:mastodon:",
         ])
         #expect(added.addingMissing([.list(id: "2", title: "足りないリスト")]).tokens == added.tokens)
     }
@@ -293,11 +291,12 @@ struct TabLayoutSettingsTests {
         #expect(after.tokens != before.tokens)
     }
 
-    /// ハッシュタグは、サーバーと同じ決まりでそろえた名前で同じ項目かを見る。保存した名前はそのまま読み戻す。
+    /// ハッシュタグは、名前と付けた名前を並びに残し、同じ項目かはサーバーと同じ決まりでそろえた名前で見る。付けた名前のない前の形も読める。
     @Test func hashtagItemIsIdentifiedByNormalizedName() {
-        let item = TabItem.hashtag(name: "Scia")
-        #expect(item.rawValue == "hashtag:Scia")
-        #expect(TabItem(rawValue: "hashtag:Scia")?.rawValue == "hashtag:Scia")
+        let item = TabItem.hashtag(name: "Scia", title: "すきなタグ: 1")
+        #expect(item.rawValue == "hashtag:Scia:すきなタグ: 1")
+        #expect(TabItem(rawValue: item.rawValue)?.rawValue == item.rawValue)
+        #expect(TabItem(rawValue: "hashtag:Scia")?.rawValue == "hashtag:Scia:")
         #expect(item == .hashtag(name: "scia"))
         #expect(item == .hashtag(name: "ＳＣＩＡ"))
         #expect(item != .hashtag(name: "mastodon"))
@@ -306,16 +305,25 @@ struct TabLayoutSettingsTests {
         #expect(TabItem(.hashtag(name: "scia")) == item)
     }
 
-    /// フォローしているハッシュタグを並びに反映する。リストには触れない。
-    @Test func syncingHashtagsAddsAndRemovesOnlyHashtags() {
-        let layout = MenuLayout<TabItem>.fixture(tokens: ["item:home", "item:hashtag:Scia", "more", "item:list:1:友だち", "hidden:hashtag:やめたタグ"])
+    /// ハッシュタグは使う人が足す項目で、名前を付けられ、付けた名前と元のハッシュタグを並びに出す。
+    @Test func hashtagItemIsUserAddedAndRenamable() {
+        let item = TabItem.hashtag(name: "scia")
+        #expect(item.isUserAdded)
+        #expect(item.title == "#scia")
+        #expect(item.detail == nil)
 
-        let synced = layout.syncingHashtags([Hashtag(name: "scia"), Hashtag(name: "mastodon")])
+        let renamed = item.renamed("Scia")
+        #expect(renamed.title == "Scia")
+        #expect(renamed.detail == "#scia")
+        #expect(renamed.renamed("").title == "#scia")
+    }
 
-        #expect(synced.tokens.filter { $0.contains("list:") || $0.contains("hashtag:") } == ["item:hashtag:scia", "item:list:1:友だち", "hidden:hashtag:mastodon"])
-        // 外した「やめたタグ」が最後のハッシュタグだったので、新しいハッシュタグはその場所（リストの後ろ）に入る。
-        // 並びに書かなかった決まった項目は既定の位置に差し込まれるため、境目より上に残ることで、元の場所を保ったと見る。
-        #expect(TabPlacement(layout: synced, tabBarCapacity: nil).tabs.contains(.hashtag(name: "scia")))
+    /// 「フォロー中のハッシュタグ」は決まった項目で、最初の並びではブックマークの後ろに有効で入る。
+    @Test func followedTagsIsFixedItem() {
+        #expect(TabItem(rawValue: "followed-tags") == .followedTags)
+        #expect(!TabItem.followedTags.isUserAdded)
+        let tokens = TabItem.defaultLayout.tokens
+        #expect(tokens.firstIndex(of: "item:followed-tags") == tokens.firstIndex(of: "item:bookmarks").map { $0 + 1 })
     }
 
     /// ユーザーのハッシュタグは、IDとハンドルと名前と付けた名前を並びに残し、同じ項目かはIDとそろえた名前で見る。付けた名前は`:`を含んでもよい。

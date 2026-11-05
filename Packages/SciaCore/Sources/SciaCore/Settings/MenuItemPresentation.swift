@@ -181,6 +181,7 @@ extension HashtagMenuItem: MenuItemContentProviding {
     public var content: MenuItemContent {
         switch self {
         case .timeline: .own(title: "すべての投稿", symbolName: "number")
+        case .follow: .own(title: "フォロー", symbolName: "plus.circle")
         case .mute: .own(title: "ミュート", symbolName: "speaker.slash")
         case .feature: .own(title: "プロフィールで紹介", symbolName: "person.text.rectangle")
         case .accountStatuses: .own(title: "投稿したユーザーの投稿", symbolName: "person.crop.square")
@@ -250,18 +251,21 @@ extension TabItem: MenuItemPresentable {
         case .bookmarks: "ブックマーク"
         case .favourites: "お気に入り"
         case .scheduled: "予約投稿"
+        case .followedTags: "フォロー中のハッシュタグ"
         case .list(_, let title): title
-        case .hashtag(let name): "#\(name)"
+        case .hashtag(let name, let title): title.isEmpty ? "#\(name)" : title
         case .accountHashtag(_, _, let name, let title): title.isEmpty ? "#\(name)" : title
         // ほかのサーバーの人のハンドルは長く、タブバーの幅に収まらないため、`@`より前だけを出す。
         case .profile(_, let acct, let title): title.isEmpty ? "@\(acct.prefix { $0 != "@" })" : title
         }
     }
 
+    /// ハッシュタグは、名前を付けたら元のハッシュタグを添える。
     /// ユーザーのハッシュタグは、同じハッシュタグの項目と見分けられるよう、誰の投稿かを添える。
     /// プロフィールは、名前だけでは分からないハンドル（ほかのサーバーの人のサーバー、付けた名前のときはハンドル全体）を添える。
     public var detail: String? {
         switch self {
+        case .hashtag(let name, let title): title.isEmpty ? nil : "#\(name)"
         case .accountHashtag(_, let acct, let name, let title): title.isEmpty ? "@\(acct)の投稿" : "#\(name)、@\(acct)の投稿"
         case .profile(_, let acct, let title): title.isEmpty && !acct.contains("@") ? nil : "@\(acct)"
         default: nil
@@ -278,6 +282,7 @@ extension TabItem: MenuItemPresentable {
         case .bookmarks: "bookmark"
         case .favourites: "star"
         case .scheduled: "clock"
+        case .followedTags: "tag"
         case .list: "list.bullet"
         case .hashtag: "number"
         case .accountHashtag: "number.square"

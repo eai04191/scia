@@ -46,9 +46,7 @@ final class SessionController {
     private var listChangeCount = 0
     /// リストを作る、変える、消す。
     private lazy var listEditor = ListEditor(client: client, tasks: tasks.child(), host: self)
-    /// 直近に読んだ、フォローしているハッシュタグ。並びを最初の並びに戻したときに、足し直すのに使う。
-    private var loadedHashtags: [Hashtag]?
-    /// 読んでいる一覧（`lists`、`followedTags`）。起動したときは、始めたときと前面に出たときの両方で読みに来るため、重ねて読まない。
+    /// 読んでいる一覧（`lists`）。起動したときは、始めたときと前面に出たときの両方で読みに来るため、重ねて読まない。
     private var loadingTabSources: Set<String> = []
     /// アカウントの切り替えなどのメニュー。開くたびに呼んで組み立て直す。
     private let accountMenu: @MainActor () -> UIMenu
@@ -153,6 +151,11 @@ final class SessionController {
     private let serverFilters: ServerFilterCache
     /// 自分の注目のハッシュタグ。ハッシュタグのメニューの「プロフィールで紹介する」と、投稿欄のハッシュタグの補完で同じものを使う。
     private let ownFeaturedTags: LatestValueCache<[FeaturedTag]>
+    /// フォローしているハッシュタグ。ハッシュタグのメニューの「フォロー」を、メニューを組むときに決めるのに使う。
+    /// タブの並びに反映する読み込み（`loadTabSources`）とは別に持つ。並びは起動したときとアプリに戻ったときに読み、メニューは開くたびに読み直すため。
+    private let followedTags: LatestValueCache<[Hashtag]>
+    /// 「フォロー中のハッシュタグ」のタブ。
+    private let followedTagsList: FollowedTagsController
     /// 補完の候補を読む口。投稿欄とプロフィールの編集で使う。
     private let completionSources: ComposeCompletion.Sources
     /// 補完で読めたカスタム絵文字の一覧。開くたびに補完を作るプロフィールの編集に渡し、読み直さずに並べる。
@@ -231,6 +234,10 @@ final class SessionController {
         let notifications = NotificationsController(session: session)
         let bookmarks = SavedStatusesController(kind: .bookmarks, session: session)
         let favourites = SavedStatusesController(kind: .favourites, session: session)
+        let followedTags = LatestValueCache<[Hashtag]>(label: "followedTags") { [client] in try await client.followedTags() }
+        let followedTagsList = FollowedTagsController(followedTags: followedTags, session: session)
+        self.followedTags = followedTags
+        self.followedTagsList = followedTagsList
         // 自分のアカウントを読むのはselfなので、作り終えてからつなぐ。
         let myAccountReference = SessionReference()
         let scheduled = ScheduledStatusesController(client: client, tasks: tasks.child(), myAccount: {
@@ -242,11 +249,11 @@ final class SessionController {
             return switch item {
             case .list(let id, let title):
                 FeedTimelineController(feed: .list(id: id), texts: .list(title: title), session: session)
-            case .hashtag(let name):
+            case .hashtag(let name, _):
                 FeedTimelineController(feed: .hashtag(name: name), texts: .hashtag(name: name), session: session)
             case .accountHashtag(let accountID, let acct, let name, _):
                 FeedTimelineController(feed: .accountHashtag(accountID: accountID, name: name), texts: .accountHashtag(name: name, acct: acct), session: session)
-            case .home, .local, .federated, .notifications, .search, .bookmarks, .favourites, .scheduled, .profile:
+            case .home, .local, .federated, .notifications, .search, .bookmarks, .favourites, .scheduled, .followedTags, .profile:
                 nil
             }
         }
@@ -348,6 +355,7 @@ final class SessionController {
         let bookmarksNavigation = ContentNavigationController(rootViewController: bookmarks.viewController)
         let favouritesNavigation = ContentNavigationController(rootViewController: favourites.viewController)
         let scheduledNavigation = ContentNavigationController(rootViewController: scheduled.viewController)
+        let followedTagsNavigation = ContentNavigationController(rootViewController: followedTagsList.viewController)
         let searchNavigation = ContentNavigationController(rootViewController: searchRoot)
         let tabs = TabArrangement(
             navigation: { item in
@@ -359,6 +367,7 @@ final class SessionController {
                 case .bookmarks: bookmarksNavigation
                 case .favourites: favouritesNavigation
                 case .scheduled: scheduledNavigation
+                case .followedTags: followedTagsNavigation
                 case .search: searchNavigation
                 case .list, .hashtag, .accountHashtag: serverFeeds.navigation(for: item)
                 case .profile: profileTabs.navigation(for: item)
@@ -470,10 +479,11 @@ final class SessionController {
         let ownFeaturedTags = LatestValueCache<[FeaturedTag]>(label: "featuredTags") { [client] in try await client.featuredTags() }
         self.ownFeaturedTags = ownFeaturedTags
         // キャッシュが自分で始めた通信も、ログアウトやアカウントの切り替えで止める。
-        tasks.onClose { [weak accounts, weak serverFilters, weak ownFeaturedTags, weak relationships = profiles.relationships] in
+        tasks.onClose { [weak accounts, weak serverFilters, weak ownFeaturedTags, weak followedTags, weak relationships = profiles.relationships] in
             accounts?.close()
             serverFilters?.close()
             ownFeaturedTags?.close()
+            followedTags?.close()
             relationships?.close()
         }
         let customEmojis = CustomEmojiCache()
@@ -588,8 +598,12 @@ final class SessionController {
                 timeline.spoilerExpansion.expandsByDefault = preferences.expandsSpoilers
             }
         }
-        for viewController in [home.viewController, local.viewController, federated.viewController, notifications.viewController, bookmarks.viewController, favourites.viewController] {
+        for viewController in [home.viewController, local.viewController, federated.viewController, notifications.viewController, bookmarks.viewController, favourites.viewController, followedTagsList.viewController] {
             configureTabRoot(viewController)
+        }
+        followedTagsList.viewController.onSearchRowSelect = { [weak self, weak viewController = followedTagsList.viewController] row in
+            guard let self, let viewController else { return }
+            selectSearchResultRow(row, of: nil, from: viewController)
         }
         // 並びにあるリストとハッシュタグは、タブを組んだときに作ってある。それ以後に作るものも、ここで同じように整える。
         serverFeeds.onCreate = { [weak self] item, controller, navigation in
@@ -665,7 +679,7 @@ final class SessionController {
             }
         }
         configureStatusBarTicker(tabBarController: tabBarController)
-        for navigation in [homeNavigation, localNavigation, federatedNavigation, notificationsNavigation, bookmarksNavigation, favouritesNavigation, scheduledNavigation, searchNavigation] {
+        for navigation in [homeNavigation, localNavigation, federatedNavigation, notificationsNavigation, bookmarksNavigation, favouritesNavigation, scheduledNavigation, followedTagsNavigation, searchNavigation] {
             configure(navigation, scrollToTop: scrollToTop)
         }
         tabs.onPlacementChange = { [weak self] in self?.applyEnabledItems($0) }
@@ -689,9 +703,9 @@ final class SessionController {
                 // 最初の並びに戻したら、リストが消えるので足し直す。足し直した変更は、もう一度ここへ来て反映する。
                 addMissingServerItemsToTabLayout()
                 let layout = AppDependencies.settings.tabLayout(for: handle)
-                // ユーザーのハッシュタグとプロフィールは、「タブから外す」で並びから外したら、一覧を止めて捨てる。
+                // ハッシュタグ、ユーザーのハッシュタグ、プロフィールは、「タブから外す」で並びから外したら、一覧を止めて捨てる。
                 let userAdded = Set(Self.userAddedItems(in: layout))
-                tabs.forget(serverFeeds.removeAll(where: \.isAccountHashtag, except: userAdded))
+                tabs.forget(serverFeeds.removeAll(where: \.isUserAdded, except: userAdded))
                 tabs.forget(profileTabs.removeAll(except: userAdded))
                 profileTabIcons.removeAvatars(except: Set(userAdded.compactMap { item in
                     if case .profile(let accountID, _, _) = item { accountID } else { nil }
@@ -727,6 +741,7 @@ final class SessionController {
         for list in savedLists {
             list.setShown(tabs.isShowing(TabItem(list.kind)))
         }
+        followedTagsList.setShown(tabs.isShowing(.followedTags))
     }
 
     /// 見ているタブの項目を、次に起動したときに開けるよう覚えておく。
@@ -907,6 +922,9 @@ final class SessionController {
         if item.isAccountHashtag {
             controller.viewController.screenBarItems = [tabToggleItem(for: item)]
         }
+        if case .hashtag(let name, _) = item {
+            controller.viewController.screenBarItems = hashtagBarItems(name: name, on: controller.viewController)
+        }
         if case .list(let id, let title) = item {
             controller.viewController.screenBarItems = [listEditor.barItem(listID: id, fallbackTitle: title) { [weak self, weak viewController = controller.viewController] title in
                 guard let viewController else { return }
@@ -970,7 +988,7 @@ final class SessionController {
         }
     }
 
-    /// 自分のリストとフォローしているハッシュタグを読み、タブの並びに反映する。決まりはdocs/tabs.mdの「リスト」と「フォローしているハッシュタグ」にある。
+    /// 自分のリストを読み、タブの並びに反映する。決まりはdocs/tabs.mdの「リスト」にある。
     /// 読めなかった一覧は、並びを変えない。
     private func loadTabSources() {
         let listChangeCount = listChangeCount
@@ -983,7 +1001,6 @@ final class SessionController {
             }
             session.apply(lists: lists)
         }
-        loadTabSource("followedTags", fetch: { try await $0.followedTags() }, apply: { $0.apply(hashtags: $1) })
     }
 
     private func loadTabSource<Value: Sendable>(
@@ -1016,18 +1033,10 @@ final class SessionController {
         tabs.forget(serverFeeds.removeAll(where: \.isList, except: Set(lists.map { TabItem.list(id: $0.id, title: $0.title) })))
     }
 
-    /// 読んだハッシュタグを並びに反映し、フォローをやめたハッシュタグの一覧を止める。
-    private func apply(hashtags: [Hashtag]) {
-        loadedHashtags = hashtags
-        logger.info("followed tags loaded count=\(hashtags.count, privacy: .public)")
-        setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).syncingHashtags(hashtags))
-        tabs.forget(serverFeeds.removeAll(where: \.isHashtag, except: Set(hashtags.map { TabItem.hashtag(name: $0.name) })))
-    }
-
-    /// 最初の並びに戻したときに、直近に読んだリストとハッシュタグを無効のまま足し直す。並びにあるものは外しも書き換えもしない。
-    /// ユーザーのハッシュタグは、設定の画面が最初の並びを書くときに残す（`keepingUserAddedItems`）。
+    /// 最初の並びに戻したときに、直近に読んだリストを無効のまま足し直す。並びにあるものは外しも書き換えもしない。
+    /// ハッシュタグ、ユーザーのハッシュタグ、プロフィールは、設定の画面が最初の並びを書くときに残す（`keepingUserAddedItems`）。
     private func addMissingServerItemsToTabLayout() {
-        let items = (loadedLists ?? []).map { TabItem.list(id: $0.id, title: $0.title) } + (loadedHashtags ?? []).map { TabItem.hashtag(name: $0.name) }
+        let items = (loadedLists ?? []).map { TabItem.list(id: $0.id, title: $0.title) }
         setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).addingMissing(items))
     }
 
@@ -1205,6 +1214,12 @@ final class SessionController {
         openFeed(.accountHashtag(accountID: account.id, name: name), texts: .accountHashtag(name: name, acct: account.acct), barItems: [tabToggleItem(for: item)], from: source)
     }
 
+    /// ハッシュタグのタイムラインの右上に置くボタン。プロフィール画面と同じく、そのハッシュタグのメニューと、タブに足し外しするボタンを並べる。
+    /// 決まりはdocs/tabs.mdの「ハッシュタグ」にある。
+    private func hashtagBarItems(name: String, on viewController: TimelineViewController) -> [UIBarButtonItem] {
+        [viewController.makeHashtagMenuItem(name: name, url: client.tagPageURL(name)), tabToggleItem(for: .hashtag(name: name))]
+    }
+
     /// ユーザーのハッシュタグの一覧とプロフィール画面の右上に置く、タブの並びに足すか外すボタン。並びは開いている間にも変わるので、メニューを開くたびに並びを見て中身を決める。
     /// 決まりはdocs/tabs.mdの「ユーザーのハッシュタグ」と「プロフィール」にある。
     private func tabToggleItem(for item: TabItem) -> UIBarButtonItem {
@@ -1260,6 +1275,9 @@ final class SessionController {
         let viewController = controller.viewController
         configure(viewController)
         viewController.screenBarItems = barItems
+        if case .hashtag(let name) = feed {
+            viewController.screenBarItems += hashtagBarItems(name: name, on: viewController)
+        }
         // 画面が積まれている間だけ生かす。コントローラーは画面を強く持つので互いに持ち合うが、外されたときと、ログアウトなどで止めるときに、`stop()`が持ち合いを解く。
         viewController.lifetimeOwner = controller
         viewController.onRemovedFromParent = { [weak controller] in controller?.stop() }
@@ -1972,7 +1990,70 @@ final class SessionController {
 
     /// ハッシュタグのメニューの、自分の状態を読んで変える項目。
     private var hashtagMenuActions: HashtagMenuActions {
-        HashtagMenuActions(mute: hashtagMuteActions, feature: hashtagFeatureActions)
+        HashtagMenuActions(mute: hashtagMuteActions, follow: hashtagFollowActions, feature: hashtagFeatureActions)
+    }
+
+    /// ハッシュタグのメニューの「フォロー」。覚えているフォローしているハッシュタグでフォローしているかを決め、メニューを開くたびに読み直す。
+    private var hashtagFollowActions: HashtagToggleActions {
+        let followedTags = followedTags
+        return HashtagToggleActions(
+            known: { name in followedTags.value.map { $0.contains(named: name) } },
+            // まだ読めていなければ、開いたメニューがこの読み直しを待つので、操作として送る。
+            refresh: { followedTags.refresh(purpose: .action) },
+            load: { name in try await followedTags.latest().contains(named: name) },
+            turnOn: { [weak self] name in self?.followHashtag(name) },
+            turnOff: { [weak self] name in self?.unfollowHashtag(name) }
+        )
+    }
+
+    /// ハッシュタグをフォローし、「フォロー中のハッシュタグ」の一覧に反映する。決まりはdocs/menus.mdの「ハッシュタグのメニュー」にある。
+    private func followHashtag(_ name: String) {
+        let client = client
+        logger.info("hashtag follow")
+        // 送り終える前にメニューを開き直して押しても、同じ要求を重ねて送らない。
+        tasks.run(key: "hashtagFollow:\(name)", .skippingWhileRunning, .action) { [weak self] in
+            guard let self else { return }
+            do {
+                try await client.followTag(name)
+                hashtagDidFollow(name)
+                notices.showTransient(Notice(id: "hashtag.followChanged", kind: .success, title: "#\(name)をフォローしました"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+            } catch {
+                logger.error("hashtag follow failed: \(SciaLog.describe(error), privacy: .public)")
+                // 応答が届かなかっただけでフォローしていることがあるので、読み直す。
+                followedTags.reload(purpose: .action)
+                handle(error, title: "ハッシュタグをフォローできませんでした")
+            }
+        }
+    }
+
+    /// ハッシュタグのフォローを外し、「フォロー中のハッシュタグ」の一覧から除く。タブの並びには触れない。タブはフォローと関係なく置くため。
+    private func unfollowHashtag(_ name: String) {
+        let client = client
+        logger.info("hashtag unfollow")
+        tasks.run(key: "hashtagFollow:\(name)", .skippingWhileRunning, .action) { [weak self] in
+            guard let self else { return }
+            do {
+                try await client.unfollowTag(name)
+                hashtagDidUnfollow(name)
+                notices.showTransient(Notice(id: "hashtag.followChanged", kind: .success, title: "#\(name)のフォローを外しました"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+            } catch {
+                logger.error("hashtag unfollow failed: \(SciaLog.describe(error), privacy: .public)")
+                followedTags.reload(purpose: .action)
+                handle(error, title: "ハッシュタグのフォローを外せませんでした")
+            }
+        }
+    }
+
+    /// フォローしたハッシュタグを、読み直すのを待たずに「フォロー中のハッシュタグ」の一覧に入れ、メニューが使う一覧を読み直す。
+    private func hashtagDidFollow(_ name: String) {
+        followedTagsList.didFollow(Hashtag(name: name, url: client.tagPageURL(name)))
+        followedTags.reload(purpose: .action)
+    }
+
+    /// フォローを外したハッシュタグを、読み直すのを待たずに「フォロー中のハッシュタグ」の一覧から除き、メニューが使う一覧を読み直す。
+    private func hashtagDidUnfollow(_ name: String) {
+        followedTagsList.didUnfollow(name)
+        followedTags.reload(purpose: .action)
     }
 
     /// ハッシュタグのメニューの「プロフィールで紹介する」。覚えている自分の注目のハッシュタグで載せているかを決め、メニューを開くたびに読み直す。
@@ -3650,9 +3731,9 @@ final class SessionController {
         case .deleteList(let id):
             changeTabSourcesForDebug("delete") { try await $0.deleteList(id) }
         case .followTag(let name):
-            changeTabSourcesForDebug("follow tag") { try await $0.followTag(name) }
+            followHashtag(name)
         case .unfollowTag(let name):
-            changeTabSourcesForDebug("unfollow tag") { try await $0.unfollowTag(name) }
+            unfollowHashtag(name)
         case .statusBarTickerLoop(let isOn):
             statusBarTicker.setLooping(isOn, items: DummyNotifications.samples)
         case .inject(let tab, let file):
@@ -3687,7 +3768,7 @@ final class SessionController {
         }
     }
 
-    /// `scia-debug://lists/...`と`scia-debug://tags/...`で、サーバーのリストやハッシュタグのフォローを変えてから読み直し、タブの並びに反映する。
+    /// `scia-debug://lists/...`で、サーバーのリストを変えてから読み直し、タブの並びに反映する。
     private func changeTabSourcesForDebug(_ operation: String, _ change: @escaping @Sendable (MastodonClient) async throws -> Void) {
         let client = client
         tasks.run(.action) { [weak self] in
@@ -3808,6 +3889,7 @@ final class SessionController {
         for list in savedLists {
             list.enterForeground()
         }
+        followedTagsList.enterForeground()
         scheduled.enterForeground()
         presentedScheduled?.enterForeground()
         announcements.enterForeground()
@@ -3883,7 +3965,7 @@ private final class ServerFeedRegistry {
         }
     }
 
-    /// `belongs`に当てはまる項目のうち、`items`にないもの（サーバーにもうないリスト、フォローをやめたハッシュタグ）の一覧を止めて捨て、捨てた項目を返す。
+    /// `belongs`に当てはまる項目のうち、`items`にないもの（サーバーにもうないリスト、フォローを外したハッシュタグ）の一覧を止めて捨て、捨てた項目を返す。
     @discardableResult
     func removeAll(where belongs: (TabItem) -> Bool, except items: Set<TabItem>) -> [TabItem] {
         var removed: [TabItem] = []

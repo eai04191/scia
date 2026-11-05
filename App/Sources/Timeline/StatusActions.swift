@@ -27,7 +27,24 @@ extension TimelineViewController {
     /// - Parameter id: メニューを出した要素。共有のシートを、その行から出す。
     /// - Parameter groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
     func contextMenu(for entry: TimelineEntry, id: ItemID, groups: MenuLayout<StatusMenuItem>.Groups? = nil) -> UIMenu? {
-        statusMenu(for: entry, id: id, groups: groups)?.menu
+        // 検索の結果と「フォロー中のハッシュタグ」のハッシュタグの行では、本文のハッシュタグを長押ししたときと同じハッシュタグのメニューを出す。
+        if case .search(.hashtag(let hashtag)) = entry {
+            return hashtagRowMenu(for: hashtag, id: id)
+        }
+        return statusMenu(for: entry, id: id, groups: groups)?.menu
+    }
+
+    /// ハッシュタグの行のハッシュタグのメニュー。「すべての投稿」は、行を押したときと同じく、そのハッシュタグのタイムラインを開く。投稿がないので「投稿したユーザーの投稿」は出さない。
+    private func hashtagRowMenu(for hashtag: Hashtag, id: ItemID) -> UIMenu? {
+        HashtagMenu(
+            name: hashtag.name,
+            url: hashtag.url,
+            account: nil,
+            handlers: urlHandlers(id: id),
+            actions: hashtagMenuActions,
+            openTimeline: { [weak self] in self?.onSearchRowSelect?(.hashtag(hashtag)) },
+            openAccountStatuses: { _ in }
+        ).built(groups: settings.hashtagMenuLayout.groups)?.menu
     }
 
     /// 長押しのメニューの木と描き方。並びは設定の投稿のメニューに従い、関係するユーザーはユーザーのメニューのサブメニューにする。決まりはdocs/menus.mdにある。
@@ -421,6 +438,27 @@ extension TimelineViewController {
     /// プロフィール画面のユーザーのメニューの、URLの項目の動き。共有のシートは`barButtonItem`から出す。
     private func profileURLHandlers(shareFrom barButtonItem: UIBarButtonItem?) -> URLMenuHandlers {
         profileURLHandlers { [weak barButtonItem] in $0.sourceItem = barButtonItem }
+    }
+
+    /// ハッシュタグのタイムラインの右上に置く、ハッシュタグのメニューを出すボタン。決まりはdocs/tabs.mdの「フォローしているハッシュタグ」にある。
+    /// そのタイムラインを開いている画面なので「すべての投稿」を出さず、投稿がないので「投稿したユーザーの投稿」も出さない。並びは開くたびに設定から読む。
+    func makeHashtagMenuItem(name: String, url: URL) -> UIBarButtonItem {
+        // 右上に入り切らず「さらに表示」にまとめられたときも、何のボタンか分かるよう名前を付ける。
+        let item = UIBarButtonItem(title: "ハッシュタグ", image: UIImage(systemName: "ellipsis"))
+        item.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self, weak item] completion in
+            guard let self, let item else { return completion([]) }
+            let menu = HashtagMenu(
+                name: name,
+                url: url,
+                account: nil,
+                handlers: profileURLHandlers { [weak item] in $0.sourceItem = item },
+                actions: hashtagMenuActions,
+                openTimeline: {},
+                openAccountStatuses: { _ in }
+            )
+            completion(menu.built(groups: settings.hashtagMenuLayout.groups.excluding([.timeline]))?.menu.children ?? [])
+        }])
+        return item
     }
 
     /// プロフィールのヘッダーの部品から出すメニューの、URLの項目の動き。共有のシートは押した部品から出す。

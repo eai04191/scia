@@ -18,6 +18,14 @@ struct MastodonClientTests {
         )
     }
 
+    /// ハッシュタグのページは自分のサーバーの`/tags/<名前>`で、名前の`/`や`..`はパスの区切りにせず符号化する。
+    @Test func tagPageURLEncodesNameAsOneComponent() throws {
+        let client = try makeClient(StubTransport([]))
+
+        #expect(client.tagPageURL("猫").absoluteString == "https://example.social/tags/%E7%8C%AB")
+        #expect(client.tagPageURL("../api").absoluteString == "https://example.social/tags/..%2Fapi")
+    }
+
     @Test func homeTimelineDecodesStatusesAndReblogs() async throws {
         let transport = StubTransport([try .fixture("home_timeline")])
 

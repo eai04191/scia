@@ -112,6 +112,7 @@
   "hashtag": [
     "item:timeline",
     "item:accountStatuses",
+    "item:follow",
     "separator",
     "hidden:copyLink",
     "item:openInBrowser",

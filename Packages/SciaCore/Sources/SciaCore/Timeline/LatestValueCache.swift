@@ -15,6 +15,9 @@ public final class LatestValueCache<Value: Sendable> {
     private let label: String
     /// 覚えている値。まだ読めていなければnil。
     public private(set) var value: Value?
+    /// 読めて`value`が変わったときに呼ぶ。同じ値を画面にも出しているとき（「フォロー中のハッシュタグ」の一覧）に、メニューを開いたときの読み直しも届けるために使う。
+    /// 後から始めた読み直しに追い越された応答と、読めなかったときは呼ばない。
+    public var onValueChange: ((Value) -> Void)?
     /// いちばん新しく始めた読み直し。読み終えたら外す。
     private var task: Task<Void, Never>?
     /// 読み直しを始めた回数。後から始めた読み直しがあれば、先に始めた読み直しの応答で古い一覧に戻さない。
@@ -47,7 +50,9 @@ public final class LatestValueCache<Value: Sendable> {
             let result = await Result { try await RequestPurpose.$current.withValue(purpose) { try await fetch() } }
             guard generation == started else { return }
             switch result {
-            case .success(let loaded): value = loaded
+            case .success(let loaded):
+                value = loaded
+                onValueChange?(loaded)
             case .failure(let error): logger.error("\(label, privacy: .public) load failed: \(SciaLog.describe(error), privacy: .public)")
             }
             latestResult = (started, result)

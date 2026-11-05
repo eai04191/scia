@@ -55,6 +55,14 @@ struct MenuLayoutTests {
         #expect(groups.more.map(\.items) == [[.delete]])
     }
 
+    /// 出す場所で除いた項目は、まとまりから外し、空になったまとまりは出さない。ほかの項目の並びは変えない。
+    @Test func excludingDropsItemsAndEmptyGroups() {
+        let groups = TestMenuItem.defaultLayout.groups.excluding([.c, .b])
+
+        #expect(groups.main.map(\.items) == [[.a]])
+        #expect(groups.more.map(\.items) == [[.delete]])
+    }
+
     /// 非表示の項目を除いた結果、空になったまとまりは出さない。区切り線が続いても空のまとまりを作らない。
     @Test func emptyGroupsAreDropped() {
         let layout = MenuLayout<TestMenuItem>(elements: [
