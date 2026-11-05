@@ -10,6 +10,8 @@
 # 使い方:
 #   Tools/merge-queue.sh run [<前提のbranch>...]   今のbranchを列に並べ、番が来たら入れる。make testの端末は、走らせる直前にTools/sim.sh acquireで借りる
 #   Tools/merge-queue.sh status                         並んでいるbranchを順に出す
+# runを止めると（SIGTERM、SIGINT、SIGHUP）、mainへ入れている途中なら、走らせているrebaseやmakeを止め、rebaseを取りやめて端末を返してから終わる。
+#   fast-forwardを始めたあとは、mainを中途半端にしないよう、入れ終えてから終わる。終了コードは、入れたら0、止めたらシグナルの番号に128を足したもの
 # runの終了コード: 0 入れた、1 使い方の誤りや想定外の失敗、2 未commitの変更がある、3 rebaseがconflictした、4 make checkかmake testが落ちた、
 #   5 前提のbranchが、列にもmainにもないまま10分経った、6 FEATURES.mdかREADME.mdの変更を人が承認していない（Tools/human-review.sh）
 # 段階ごとにかかった時間は、列のディレクトリのtiming.logに1行ずつ足す。列は「始めた時刻 branch 段階 秒 結果」のタブ区切りで、結果はokか終了コード。
@@ -40,13 +42,32 @@ log_timing() {
     printf '%s\t%s\t%s\t%s\t%s\n' "$(date -r "$2" '+%Y-%m-%dT%H:%M:%S%z')" "$MERGE_QUEUE_BRANCH" "$1" "$(( $(date +%s) - $2 ))" "$result" >> "$(queue_dir)/timing.log"
 }
 
+# landが走らせている子のプロセス（自分のプロセスグループの長）と、その段階の名前と始めた時刻。止められたときに、子を止めて段階を記録する
+child=''
+child_phase=''
+child_start=''
+# 子を起動してからPIDを覚えるまでの間か。その間に届いた止める合図は、覚えてから扱う。覚える前に扱うと、子を止められないため
+starting=''
+pending_signal=''
+
 # 段階の名前とコマンドを受け取り、コマンドを走らせてかかった時間をtiming.logに足す。コマンドの終了コードを返す
+# 前面で走らせると、止める合図のtrapが子の終わるまで走らないので、自分のプロセスグループで後ろで走らせて待つ。
+# グループを分けるのは、makeから起動したxcodebuildなどの孫までまとめて止めるため
 timed() {
-    local phase=$1 start status=0
+    local status=0
+    child_phase=$1
     shift
-    start=$(date +%s)
-    "$@" || status=$?
-    log_timing "$phase" "$start" "$status"
+    child_start=$(date +%s)
+    starting=1
+    set -m
+    "$@" &
+    child=$!
+    set +m
+    starting=''
+    [[ -z "$pending_signal" ]] || on_land_signal "$pending_signal"
+    wait "$child" || status=$?
+    child=''
+    log_timing "$child_phase" "$child_start" "$status"
     return "$status"
 }
 
@@ -130,9 +151,41 @@ absent_deps() {
     return 0
 }
 
+# 番を取りに走らせているlockfのプロセス
+lock_holder=''
+# lockfを起動してからPIDを覚えるまでの間か。その間に届いた止める合図は、覚えてから扱う
+lock_starting=''
+pending_run_signal=''
+
+# runが止める合図を受けたときに、終了コードと受けたシグナルの名前を受け取って呼ばれる。
+# lockfを止めると、landが動いている間にロックが外れ、ほかの並びがmainを動かし始めるので、lockfの子のlandにだけ伝え、landが終わるのを待つ。
+# landが入れ終えていれば、その終了コードで終わる
+on_run_signal() {
+    local lander state status=0
+    if [[ -n "$lock_starting" ]]; then
+        pending_run_signal="$1 $2"
+        return
+    fi
+    if [[ -n "$lock_holder" ]]; then
+        while :; do
+            # lockfが子を起動する前なら、子を待って伝える。ロックを取れずに終わったlockfは、waitするまで終わった状態で残る
+            state=$(ps -p "$lock_holder" -o stat= 2>/dev/null) || break
+            [[ "$state" == Z* ]] && break
+            if lander=$(pgrep -P "$lock_holder"); then
+                kill -s "$2" "$lander"
+                break
+            fi
+            sleep 0.1
+        done
+        wait "$lock_holder" || status=$?
+        [[ "$status" == "$LOCK_BUSY" ]] || exit "$status"
+    fi
+    exit "$1"
+}
+
 # 番が来て入れ終わるか、判断の要ることで終わるまで待つ。入れる処理の終了コードで終わる
 wait_and_land() {
-    local me=$1 dep since expired entries absent absent_since='' status shown='' message
+    local me=$1 dep since expired entries absent absent_since='' status shown='' message turn
     while :; do
         for dep in $(entry_field "$me" 4); do
             git rev-parse -q --verify "refs/heads/$dep" > /dev/null || { echo "error: 前提のbranch $dep がなくなりました" >&2; exit 1; }
@@ -158,7 +211,20 @@ wait_and_land() {
 
         if ready "$me" && ! ready_ahead "$me" "$entries"; then
             status=0
-            lockf -s -k -t 0 "$(queue_dir)/.turn" "$SELF" land || status=$?
+            # 後ろで走らせたプロセスの子をlandと見なすので、引数のコマンド置換を後ろのプロセスの中で走らせない
+            turn="$(queue_dir)/.turn"
+            # 止める合図をすぐ受けられるよう後ろで走らせて待つ。ターミナルのCtrl-Cがlockfとlandに直に届かないよう、プロセスグループを分ける
+            lock_starting=1
+            set -m
+            lockf -s -k -t 0 "$turn" "$SELF" land &
+            lock_holder=$!
+            set +m
+            lock_starting=''
+            # 文字列の分割で、終了コードとシグナルの名前の2つの引数にする
+            # shellcheck disable=SC2086
+            [[ -z "$pending_run_signal" ]] || on_run_signal $pending_run_signal
+            wait "$lock_holder" || status=$?
+            lock_holder=''
             [[ "$status" == "$LOCK_BUSY" ]] || exit "$status"
             message="ほかの並びがmainへ入れているので、待っています"
         elif ready "$me"; then
@@ -209,8 +275,11 @@ require_human_review() {
     fi
 }
 
+# landが端末を借りたか。止められたときに返す
+lent_sim=''
+
 run_missing_steps() {
-    local missing steps step sim lent
+    local missing steps step sim lent acquired
     # 調べられなかったときに、出力が空なのを通ったものと取り違えないよう、失敗したら止める
     missing=$(Tools/check-stamp.sh missing HEAD "$TARGET") || { echo "error: 通っていないものを調べられませんでした" >&2; exit 1; }
     steps=$(awk '{ print $2 }' <<< "$missing")
@@ -218,7 +287,12 @@ run_missing_steps() {
         echo "make $step を走らせます"
         if [[ "$step" == test ]]; then
             # 並んで待つ間は端末を持たない。ほかのスレッドが使えるよう、走らせる直前に借りて、終わったら返す。
-            lent=$(timed sim-acquire Tools/sim.sh acquire --wait 0 | tail -1) || { echo "error: make test の端末を借りられませんでした" >&2; exit 1; }
+            # 借り終えてから記録するまでの間に止められても返せるよう、借り始める前に記録する。借りていないときのreleaseは何もしない
+            lent_sim=1
+            acquired=$(mktemp)
+            timed sim-acquire Tools/sim.sh acquire --wait 0 > "$acquired" || { rm -f "$acquired"; echo "error: make test の端末を借りられませんでした" >&2; exit 1; }
+            lent=$(tail -1 "$acquired")
+            rm -f "$acquired"
             sim=${lent% *}
             # ほかのworktreeが使ったあとの端末は、その設定やチューニングを持ち込まないよう、既定に戻してからテストする。
             if [[ "${lent##* }" != ready ]]; then
@@ -227,6 +301,7 @@ run_missing_steps() {
             echo "make test を $sim で走らせます"
             timed test make test SIM="$sim" || { Tools/sim.sh release >/dev/null; echo "error: make test が落ちました" >&2; exit 4; }
             Tools/sim.sh release >/dev/null
+            lent_sim=''
         else
             timed "$step" make "$step" || { echo "error: make $step が落ちました" >&2; exit 4; }
         fi
@@ -245,9 +320,42 @@ fast_forward() {
     fi
 }
 
+# fast-forwardを始めたか。始めたあとに届いた止める合図は、入れ終えるまで待たせる
+fast_forwarding=''
+
+# landが止める合図を受けたときに、終了コードを受け取って呼ばれる
+on_land_signal() {
+    if [[ -n "$starting" ]]; then
+        pending_signal=$1
+        return
+    fi
+    if [[ -n "$fast_forwarding" ]]; then
+        echo "止める合図が来ましたが、fast-forwardを始めていたので、入れ終えてから終わります" >&2
+        return
+    fi
+    if [[ -n "$child" ]]; then
+        kill -TERM -- "-$child" 2>/dev/null || true
+        wait "$child" || true
+        # 直接の子が終わっても、孫が終わる処理を続けていることがあり、その間にrebaseを取りやめたり端末を返したりすると重なるので、グループが空になるまで待つ
+        while pgrep -g "$child" > /dev/null; do
+            sleep 0.2
+        done
+        log_timing "$child_phase" "$child_start" "$1"
+    fi
+    if [[ -d "$(git rev-parse --git-path rebase-merge)" || -d "$(git rev-parse --git-path rebase-apply)" ]]; then
+        git rebase --abort
+    fi
+    [[ -n "$lent_sim" ]] && Tools/sim.sh release >/dev/null
+    echo "error: 止められたので、$TARGET へ入れずに終わります" >&2
+    exit "$1"
+}
+
 # .turnのロックを持った状態で、lockfから呼ばれる
 land() {
     local before
+    trap 'on_land_signal 129' HUP
+    trap 'on_land_signal 130' INT
+    trap 'on_land_signal 143' TERM
     echo "番が来ました"
     log_timing wait "$MERGE_QUEUE_QUEUED_AT" 0
     # 並んでから番が来るまでの間に変えたファイルを、確かめていない中身として入れないよう、もう一度確かめる
@@ -261,6 +369,7 @@ land() {
         [[ "$(git rev-parse "$TARGET")" == "$before" ]] && break
         echo "$TARGET が動いたので、載せ直します"
     done
+    fast_forwarding=1
     fast_forward
     echo "$TARGET へ入れました:"
     git log --oneline "$before..$TARGET"
@@ -279,9 +388,9 @@ run() {
     entry=$(enqueue "$@")
     trap 'exit_status=$?; rm -f "$entry"; log_timing total "$MERGE_QUEUE_QUEUED_AT" "$exit_status"' EXIT
     # シグナルで止めると、EXITのtrapの$?が0になり、totalが止めた実行もokと残るので、シグナルの終了コードで抜ける
-    trap 'exit 129' HUP
-    trap 'exit 130' INT
-    trap 'exit 143' TERM
+    trap 'on_run_signal 129 HUP' HUP
+    trap 'on_run_signal 130 INT' INT
+    trap 'on_run_signal 143 TERM' TERM
     echo "$(git symbolic-ref --short HEAD) を列に並べました"
     wait_and_land "$entry"
 }
