@@ -45,7 +45,7 @@ struct NotificationAppearanceEditorView: View {
                         Button("すべて既定に戻す", role: .destructive) { confirmsReset = true }
                             .disabled(!settings.isNotificationAppearanceModified)
                     } footer: {
-                        Text("メンションなどの投稿の見た目と、行の余白やアイコンの列の幅は、「表示」の「投稿」に従います。文字の大きさは、投稿の本文との差を保ちます。")
+                        Text("メンションなどの投稿の見た目と行の余白やアイコンの列の幅は、「表示」の「投稿」に従います。文字の大きさは投稿の本文との差を保ちます。")
                     }
                 }
             }
@@ -200,7 +200,7 @@ struct NotificationAppearanceSamples {
             id: "preview-reshown",
             createdAt: date,
             account: scia,
-            content: PreviewPhoto.credit(photos) + "<p>ブーストされた自分の投稿です。本文が長いときは、設定した行数で切ります。誰が何をしたかの行を主役にするため、本文は控えめな色で短く出します。添付ファイルは小さなサムネイルを1列に並べます。</p>",
+            content: PreviewPhoto.credit(photos) + "<p>ブーストされた自分の投稿です。本文が長いときは設定した行数で切ります。誰が何をしたかの行を主役にするため、本文は控えめな色で短く出します。添付ファイルは小さなサムネイルを1列に並べます。</p>",
             spoilerText: "",
             url: nil,
             mediaAttachments: photos.map(photo),

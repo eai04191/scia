@@ -25,7 +25,7 @@ public struct OAuthClient: Sendable {
         public var errorDescription: String? {
             switch self {
             case .authorizationDenied(let reason): "認可されませんでした: \(reason)"
-            case .stateMismatch: "認可の応答が、このアプリから送った要求と一致しませんでした"
+            case .stateMismatch: "認可の応答がこのアプリから送った要求と一致しませんでした"
             case .missingCode: "認可の応答に認可コードがありませんでした"
             }
         }

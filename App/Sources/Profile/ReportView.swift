@@ -61,7 +61,7 @@ struct ReportView: View {
                     Section {
                         Toggle("相手のサーバーにも送る", isOn: $draft.forward)
                     } footer: {
-                        Text("\(domain)の管理者にも、この通報を転送します。")
+                        Text("\(domain)の管理者にもこの通報を転送します。")
                     }
                 }
                 if let error = draft.submitError {

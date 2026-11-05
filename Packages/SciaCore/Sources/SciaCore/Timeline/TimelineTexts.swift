@@ -47,7 +47,7 @@ public struct TimelineTexts: Sendable {
         switch scope {
         case .all:
             // 0件の種類は見出しごと出さないため、投稿が0件のときに、全文検索のないサーバーでは投稿を探せないことをここで伝える。
-            TimelineTexts(dumpName: "search", title: "検索", empty: "見つかりませんでした。投稿は、全文検索に対応したサーバーでだけ探せます", reachedEnd: "", unreadable: "表示できない投稿")
+            TimelineTexts(dumpName: "search", title: "検索", empty: "見つかりませんでした。投稿は全文検索に対応したサーバーでだけ探せます", reachedEnd: "", unreadable: "表示できない投稿")
         case .only(let category):
             TimelineTexts(dumpName: "search", title: category.title, subtitle: query, empty: "見つかりませんでした", reachedEnd: "", unreadable: "表示できない投稿")
         }

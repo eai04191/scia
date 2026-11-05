@@ -54,7 +54,7 @@ struct DisplaySettingsView: View {
                 AccentColorPicker(selection: $settings.accentColor)
             } footer: {
                 if settings.accentColor.obscuresSelectedTab {
-                    Text("iOS 26.0では、このカラーを使用すると選択中のタブがほかのタブと区別しにくくなります。iOS 26.1以降での使用を推奨します。")
+                    Text("iOS 26.0ではこのカラーを使用すると選択中のタブがほかのタブと区別しにくくなります。iOS 26.1以降での使用を推奨します。")
                 }
             }
             Section {
@@ -64,7 +64,7 @@ struct DisplaySettingsView: View {
                     Text("動かさない").tag(InsertionMotion.instant)
                 }
             } footer: {
-                Text("「自動」では、「視差効果を減らす」がオンのときは動かしません。")
+                Text("「自動」では「視差効果を減らす」がオンのときは動かしません。")
             }
             StatusBarTickerSettingsSection(isOn: $settings.showsStatusBarTicker, isAvailable: StatusBarCutout.isAvailable)
         }
@@ -255,7 +255,7 @@ struct MediaSettingsView: View {
             } header: {
                 Text("代替テキスト")
             } footer: {
-                Text("投稿したアプリが自動で付けたと思われる、説明にならない代替テキストをないものとして扱います。")
+                Text("投稿したアプリが自動で付けたと思われる説明にならない代替テキストをないものとして扱います。")
             }
         }
         .topEdgeEffectHiddenOnMac()

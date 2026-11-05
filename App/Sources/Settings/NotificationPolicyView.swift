@@ -27,7 +27,7 @@ struct NotificationPolicyView: View {
     @ViewBuilder
     private var content: some View {
         if !model.isSupported {
-            ContentUnavailableView("このサーバーでは使えません", systemImage: "nosign", description: Text("通知のフィルタリングは、Mastodon 4.3から使えます。"))
+            ContentUnavailableView("このサーバーでは使えません", systemImage: "nosign", description: Text("通知のフィルタリングはMastodon 4.3から使えます。"))
         } else if let policy = model.policy {
             Form {
                 ForEach(NotificationPolicy.Item.allCases, id: \.self) { item in
@@ -50,7 +50,7 @@ struct NotificationPolicyView: View {
                 Button("「保留」に設定") { model.select(.filter, for: item) }
                 Button("キャンセル", role: .cancel) {}
             } message: { _ in
-                Text("無視した通知はサーバーが作らず、あとから見られません。「保留」にすると、保留中の通知で個別に確認できます。")
+                Text("無視した通知はサーバーが作らず、あとから見られません。「保留」にすると保留中の通知で個別に確認できます。")
             }
         } else if let failure = model.loadFailure {
             ContentUnavailableView {
@@ -103,7 +103,7 @@ struct NotificationPolicyView: View {
     static func hint(of item: NotificationPolicy.Item) -> String {
         switch item {
         case .notFollowing: "手動で通知を受け入れたアカウントは対象外です"
-        case .notFollowers: "フォローされていても、フォローから3日経っていない場合は対象になります"
+        case .notFollowers: "フォローされていてもフォローから3日経っていない場合は対象になります"
         case .newAccounts: "作成から30日以内のアカウントが対象です"
         case .privateMentions: "メンションした相手からの返信、およびフォローしているアカウントからの返信は対象外です"
         case .limitedAccounts: "モデレーターにより制限されたアカウントから送られる通知が対象です"

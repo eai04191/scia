@@ -157,7 +157,7 @@ extension Confirmation where Choice == Proceed {
         if discards {
             lines.append(discardedDraftMessage(draft))
         }
-        lines.append("書き直した投稿を送ると、元の投稿を削除します。\(lost)はなくなり、元の投稿への返信はつながりを失います。")
+        lines.append("書き直した投稿を送ると元の投稿を削除します。\(lost)はなくなり、元の投稿への返信はつながりを失います。")
         if status.pinned {
             lines.append("プロフィールへの固定も外れます。")
         }
@@ -174,7 +174,7 @@ extension Confirmation where Choice == Proceed {
     public static func quoting<Thumbnail>(draft: ComposeModel<Thumbnail>) -> Confirmation? {
         guard draft.hasQuoteConflicts else { return nil }
         let removing = [draft.attachments.isEmpty ? nil : "添付ファイル", draft.poll == nil ? nil : "投票"].compactMap(\.self).joined(separator: "と")
-        return .destructive(title: "\(removing)を外して引用しますか？", message: "引用する投稿には、添付ファイルや投票を付けられません。書いた本文は残ります。", action: "外して引用")
+        return .destructive(title: "\(removing)を外して引用しますか？", message: "引用する投稿には添付ファイルや投票を付けられません。書いた本文は残ります。", action: "外して引用")
     }
 
     /// 書きかけの下書きがあれば、捨ててよいか確かめてから、予約した投稿の書き直しを始める。なければ確かめない（nil）。
@@ -198,7 +198,7 @@ extension Confirmation where Choice == Proceed {
             lines.append(discardedDraftMessage(draft))
         }
         if hasPoll {
-            lines.append("投票はそのまま残りますが、締め切りは送った時点から数え直すため、少しずれます。")
+            lines.append("投票はそのまま残りますが、締め切りは送った時点から数え直すため少しずれます。")
         }
         return .confirm(Confirmation(
             title: discards ? "下書きを捨てて編集しますか？" : "投票の付いた投稿を編集しますか？",
@@ -213,7 +213,7 @@ extension Confirmation where Choice == Proceed {
         switch draft.redraft?.deletion {
         case .pending: return "書き直し中の内容は消えます。元の投稿は残ります。"
         case .uncertain: return "書き直し中の内容は消えます。元の投稿は削除したかもしれず、その場合は戻せません。"
-        case .done: return "書き直し中の内容は消えます。元の投稿は削除したため、戻せません。"
+        case .done: return "書き直し中の内容は消えます。元の投稿は削除したため戻せません。"
         case nil: return "書きかけの下書きは消えます。"
         }
     }
@@ -246,8 +246,8 @@ extension Confirmation where Choice == SharedContentChoice {
         guard draft.hasWrittenContent else { return .proceed }
         let isEditing = draft.editedStatus != nil
         let destination = switch content {
-        case .text: "共有された文を、\(isEditing ? "編集中の投稿" : "下書き")の後ろに足すか"
-        case .media(let allImages): "共有された\(allImages ? "画像" : "メディア")を、\(isEditing ? "編集中の投稿" : "下書き")に足すか"
+        case .text: "共有された文を\(isEditing ? "編集中の投稿" : "下書き")の後ろに足すか"
+        case .media(let allImages): "共有された\(allImages ? "画像" : "メディア")を\(isEditing ? "編集中の投稿" : "下書き")に足すか"
         }
         return .confirm(Confirmation(
             title: isEditing ? "編集中の投稿があります" : "書きかけの下書きがあります",
@@ -286,11 +286,11 @@ extension RefusalText {
     @MainActor
     private static func mediaUnattachable<Thumbnail>(draft: ComposeModel<Thumbnail>, title: String, retry: String) -> RefusalText {
         let message = if draft.isPosting {
-            "投稿を送っている間は添付できません。送り終えてから、\(retry)"
+            "投稿を送っている間は添付できません。送り終えてから\(retry)"
         } else if draft.isQuoting {
-            "引用する投稿には添付できません。引用をやめてから、\(retry)"
+            "引用する投稿には添付できません。引用をやめてから\(retry)"
         } else if draft.poll != nil {
-            "投票の付いた投稿には添付できません。投票を外してから、\(retry)"
+            "投票の付いた投稿には添付できません。投票を外してから\(retry)"
         } else {
             "サーバーの設定を読み込めませんでした。\(retry)"
         }
@@ -301,9 +301,9 @@ extension RefusalText {
     public static func sharedWhilePosting(_ content: SharedContent) -> RefusalText {
         switch content {
         case .text:
-            RefusalText(title: "共有された文で書き始められませんでした", message: "投稿を送っている間は書き始められません。送り終えてから、もう一度共有してください。")
+            RefusalText(title: "共有された文で書き始められませんでした", message: "投稿を送っている間は書き始められません。送り終えてからもう一度共有してください。")
         case .media:
-            RefusalText(title: sharedMediaFailureTitle, message: "投稿を送っている間は添付できません。送り終えてから、もう一度共有してください。")
+            RefusalText(title: sharedMediaFailureTitle, message: "投稿を送っている間は添付できません。送り終えてからもう一度共有してください。")
         }
     }
 

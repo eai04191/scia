@@ -73,7 +73,7 @@ struct ListMembershipView: View {
                     .disabled(model.isFollowing)
                 } footer: {
                     if model.availability == .blocked {
-                        Text("ブロックしているか、されているため、フォローできず、リストに追加できません。")
+                        Text("ブロックしているかされているため、フォローもリストへの追加もできません。")
                     }
                 }
             }

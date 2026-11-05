@@ -550,7 +550,7 @@ public final class ComposeCompletion {
     /// 候補の場所に出す、失敗の理由。止められている間の文言は、補完では自動で読み込み直さないため、押せば読み込めることを伝える。
     public nonisolated static func failureMessage(for error: any Error) -> String {
         if let paused = error as? AutomaticRequestsPaused {
-            return "短い間にリクエストが多すぎたため、サーバーに一時的に止められています。\(paused.until.formatted(date: .omitted, time: .shortened))を過ぎたら、押すと読み込み直せます。"
+            return "短い間にリクエストが多すぎたため、サーバーに一時的に止められています。\(paused.until.formatted(date: .omitted, time: .shortened))を過ぎたら押すと読み込み直せます。"
         }
         return ErrorPresentation(error).text
     }

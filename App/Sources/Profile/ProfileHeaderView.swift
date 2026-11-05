@@ -1024,7 +1024,7 @@ final class ProfileHeaderView: UIView {
             changed.showsBoosts.toggle()
             self?.onChangePostsFilter?(changed)
         }
-        return UIMenu(title: "自分のスレッドの続きは、返信を隠しても表示します", children: [replies, boosts])
+        return UIMenu(title: "自分のスレッドの続きは返信を隠しても表示します", children: [replies, boosts])
     }
 
     /// メニューのチェック。UIActionのstateを使うと、どちらもオフにしたときにメニューがチェックの列を詰め、文字が左へ動く。

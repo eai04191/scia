@@ -26,7 +26,7 @@ struct ListMemberSearchView: View {
                     Text(searchFailure.text)
                         .foregroundStyle(.secondary)
                 } else if trimmedQuery.isEmpty {
-                    Text("フォローしている人を、名前かハンドルで探します。")
+                    Text("フォローしている人を名前かハンドルで探します。")
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(results) { account in

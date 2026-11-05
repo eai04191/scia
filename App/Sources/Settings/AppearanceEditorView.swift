@@ -45,7 +45,7 @@ struct AppearanceEditorView: View {
                         Button("すべて既定に戻す", role: .destructive) { confirmsReset = true }
                             .disabled(!settings.isAppearanceModified)
                     } footer: {
-                        Text("文字の大きさは、iPhoneの文字サイズが標準のときの大きさです。本文はiPhoneの文字サイズに合わせて伸び縮みし、ほかの文字は本文との差を保ちます。")
+                        Text("文字の大きさはiPhoneの文字サイズが標準のときの大きさです。本文はiPhoneの文字サイズに合わせて伸び縮みし、ほかの文字は本文との差を保ちます。")
                     }
                 }
             }
@@ -700,7 +700,7 @@ struct AppearanceSamples {
             )
         }
         // お気に入りとブーストの光を見せるため、ブーストした投稿は、お気に入りとブーストをした投稿にする。
-        let boosted = status("boosted", minutes: 30, account: friend, content: #"<p>段落の1つ目です。設定を変えると、タイムラインの投稿がこのように表示されます🎉:scia:</p><p>段落の2つ目です。<a href="https://github.com/eai04191/scia">github.com/eai04191/scia</a></p>"#, card: card, emojis: emojis, favourited: true, reblogged: true)
+        let boosted = status("boosted", minutes: 30, account: friend, content: #"<p>段落の1つ目です。設定を変えるとタイムラインの投稿がこのように表示されます🎉:scia:</p><p>段落の2つ目です。<a href="https://github.com/eai04191/scia">github.com/eai04191/scia</a></p>"#, card: card, emojis: emojis, favourited: true, reblogged: true)
         let boost = Status(id: "preview-boost", createdAt: now.addingTimeInterval(-180), account: scia, content: "", spoilerText: "", url: nil, reblog: boosted)
         // 名前の上の行と光の分類の画面に出す、リンクカードのないブースト。
         let plainBoosted = status("boosted-plain", minutes: 40, account: friend, content: "<p>ブーストされた投稿です。</p>", emojis: emojis, favourited: true, reblogged: true)
@@ -715,7 +715,7 @@ struct AppearanceSamples {
         )
         return [
             // 分類の一覧の画面に出す、部品の少ない投稿。
-            status("basic", minutes: 1, account: scia, content: "<p>設定を変えると、タイムラインの投稿がこのように表示されます。</p>"),
+            status("basic", minutes: 1, account: scia, content: "<p>設定を変えるとタイムラインの投稿がこのように表示されます。</p>"),
             boost,
             // 注意書きのある投稿の画像はぼかされ、サムネイル同士のすき間が見えないため、画像は注意書きのない投稿に付ける。
             status("thread", minutes: 20, account: scia, content: PreviewPhoto.credit([.gridFirst, .gridSecond]), media: [describedImage, image]),
@@ -730,7 +730,7 @@ struct AppearanceSamples {
             // 片方だけのときの光の幅を見せるため、お気に入りだけをした投稿にする。
             status("wide", minutes: 7, account: friend, content: PreviewPhoto.credit([.wide]), media: [wideImage], favourited: true),
             status("poll", minutes: 5, account: longNamed, content: "<p>アイコンの形はどちらが好きですか？</p>", poll: poll),
-            status("filtered", minutes: 2, account: scia, content: "<p>自分のフィルターに一致した、自分の投稿です。</p>", filtered: [ownFilter]),
+            status("filtered", minutes: 2, account: scia, content: "<p>自分のフィルターに一致した自分の投稿です。</p>", filtered: [ownFilter]),
             // 名前の行の部品を1件で見せる投稿。入りきらない名前、公開範囲の記号、編集済みの「*」を出し、名前と画像のあいだを見せるため本文を付けないので、写真のクレジットは書かない。
             // 画像は、見本の枠に収まるよう横長にする。
             status("name", minutes: 1.5, account: longNamed, content: "", media: [wideImage], visibility: .unlisted, edited: true),
@@ -740,7 +740,7 @@ struct AppearanceSamples {
             // 行の余白と区切り線を見せる、部品の少ない投稿の次に並べる1行の投稿。
             status("next", minutes: 0.5, account: scia, content: "<p>次の投稿です。</p>"),
             // 返信をつなぐ線を見せる、本文だけの2件。一覧と同じく、すぐ上の投稿への返信は線でつなぎ、返信のラベルを出さない。
-            status("parent", minutes: 1.1, account: scia, content: "<p>返信でつながった投稿の、最初の投稿です。</p>"),
+            status("parent", minutes: 1.1, account: scia, content: "<p>返信でつながった投稿の最初の投稿です。</p>"),
             status("child", minutes: 1, account: friend, content: "<p>返信です。</p>", replyingTo: scia, inReplyTo: "preview-parent"),
         ]
     }

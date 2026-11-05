@@ -735,7 +735,7 @@ struct ComposeModelMediaTests {
         await posting.value
 
         #expect(sent.isEmpty)
-        #expect(model.errorMessage == "予約の日時は、今から5分より後にしてください。")
+        #expect(model.errorMessage == "予約の日時は今から5分より後にしてください。")
     }
 
     /// 待っている間にセッションを閉じたら、送らずに待つのをやめる。

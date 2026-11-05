@@ -166,7 +166,7 @@ extension AccountNoteViewController: UITableViewDataSource, UITableViewDelegate 
     }
 
     func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        "@\(acct)についての、自分にしか見えないメモ"
+        "@\(acct)についての自分にしか見えないメモ"
     }
 
     func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {

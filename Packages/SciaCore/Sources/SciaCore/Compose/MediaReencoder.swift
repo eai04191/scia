@@ -48,7 +48,7 @@ public enum MediaReencodingError: Error, Equatable, LocalizedError {
         switch self {
         case .imageFailed: "画像を作り直せませんでした。"
         case .cannotFitSizeLimit: "サーバーの上限に収まるよう縮められませんでした。"
-        case .videoTooLong: "動画が長すぎて、サーバーの上限に収められません。"
+        case .videoTooLong: "動画が長すぎてサーバーの上限に収められません。"
         case .videoFailed: "動画を書き出せませんでした。"
         }
     }

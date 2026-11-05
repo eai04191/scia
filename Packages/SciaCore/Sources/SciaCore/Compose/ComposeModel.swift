@@ -667,7 +667,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
                 redraft?.deletion = .uncertain
             }
             guard !(error is CancellationError) else { return false }
-            errorMessage = "元の投稿を削除できたか分からないため、投稿しませんでした。送り直すと、削除から送り直します。\n\(ErrorPresentation(error).text)"
+            errorMessage = "元の投稿を削除できたか分からないため、投稿しませんでした。送り直すと削除から送り直します。\n\(ErrorPresentation(error).text)"
             return false
         }
         redraft?.deletion = .done
@@ -705,7 +705,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     private func acceptsSchedule() -> Bool {
         guard let scheduledAt, !ScheduledPosting.accepts(scheduledAt, now: now()) else { return true }
         logger.info("compose: schedule too soon")
-        errorMessage = "予約の日時は、今から5分より後にしてください。"
+        errorMessage = "予約の日時は今から5分より後にしてください。"
         return false
     }
 

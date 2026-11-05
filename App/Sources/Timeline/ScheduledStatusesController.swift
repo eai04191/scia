@@ -76,7 +76,7 @@ final class ScheduledStatusesController {
         guard date != scheduled.scheduledAt else { return }
         // 選んでから決めるまでの間に5分を切ったら、送らずに知らせる。サーバーが断るため。
         guard ScheduledPosting.accepts(date, now: now()) else {
-            presentFailure(title: "日時を変えられませんでした", message: "予約の日時は、今から5分より後にしてください。")
+            presentFailure(title: "日時を変えられませんでした", message: "予約の日時は今から5分より後にしてください。")
             return
         }
         model.reschedule(scheduled, to: date)

@@ -80,8 +80,8 @@ struct ConfirmationTests {
             params: ScheduledStatus.Params(text: "予約した引用", visibility: .unlisted, quotedStatusID: "9")
         ))
         #expect(model.quoteTarget == nil)
-        #expect(RefusalText.sharedMediaUnattachable(draft: model).message == "引用する投稿には添付できません。引用をやめてから、もう一度共有してください。")
-        #expect(RefusalText.droppedMediaUnattachable(draft: model).message == "引用する投稿には添付できません。引用をやめてから、もう一度ドロップしてください。")
+        #expect(RefusalText.sharedMediaUnattachable(draft: model).message == "引用する投稿には添付できません。引用をやめてからもう一度共有してください。")
+        #expect(RefusalText.droppedMediaUnattachable(draft: model).message == "引用する投稿には添付できません。引用をやめてからもう一度ドロップしてください。")
     }
 
     @Test func sharedContentAsksWhetherToAppendOrDiscard() {
@@ -93,8 +93,8 @@ struct ConfirmationTests {
             return
         }
         #expect(text.title == "書きかけの下書きがあります")
-        #expect(text.message == "共有された文を、下書きの後ろに足すか、下書きを捨てて新しく書くかを選んでください。")
-        #expect(images.message == "共有された画像を、下書きに足すか、下書きを捨てて新しく書くかを選んでください。")
+        #expect(text.message == "共有された文を下書きの後ろに足すか、下書きを捨てて新しく書くかを選んでください。")
+        #expect(images.message == "共有された画像を下書きに足すか、下書きを捨てて新しく書くかを選んでください。")
         #expect(text.buttons.map(\.choice) == [.append, .discardAndWrite, .cancel])
         #expect(text.buttons.map(\.title) == ["下書きに足す", "下書きを捨てて新しく書く", "キャンセル"])
     }

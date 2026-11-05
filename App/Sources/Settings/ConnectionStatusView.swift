@@ -57,7 +57,7 @@ struct ConnectionStatusView: View {
                 Section {
                     LabeledContent("読めなかった項目", value: "\(status.droppedCount)件")
                 } footer: {
-                    Text("アプリを起動してから、サーバーから届いた内容のうち読めなかった投稿や通知などの数です。")
+                    Text("アプリを起動してからサーバーから届いた内容のうち読めなかった投稿や通知などの数です。")
                 }
             }
         }

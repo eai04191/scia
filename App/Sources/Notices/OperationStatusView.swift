@@ -51,7 +51,7 @@ struct OperationStatusView: View {
                 } header: {
                     Text("最近の失敗")
                 } footer: {
-                    Text("アプリを終了するまで、直近の\(OperationStatus.failureLimit)件を残します。")
+                    Text("アプリを終了するまで直近の\(OperationStatus.failureLimit)件を残します。")
                 }
             }
             .topEdgeEffectHiddenOnMac()
