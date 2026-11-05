@@ -414,10 +414,65 @@ struct RichTextRenderer: Sendable {
             result.insert(NSAttributedString(string: Self.leadingEmojiGuard, attributes: attributes), at: 0)
             range.length += 1
         }
-        result.addAttribute(.paragraphStyle, value: paragraphStyle(for: block, emojiExtent: Self.emojiExtent(in: result, range: range)), range: range)
+        applyLineHeights(for: block, to: result, range: range)
         if block.quoteLevel > 0, quoteBarWidth > 0 {
             result.addAttribute(.quoteBars, value: QuoteBars(level: block.quoteLevel, indentPerLevel: indentPerLevel, width: quoteBarWidth), range: range)
         }
+    }
+
+    /// 段落スタイルを付ける。行の高さは段落のどの行にも同じものが付くため、段落の中の改行（U+2028）で区切った行の高さが違えば、
+    /// 改行を段落の区切りにして、行ごとに高さを付ける。区切らないと、絵文字のある行に合わせた高さが、絵文字のない行にも付いて行間が開く。
+    /// 区切った行は、段落の間隔を最後の行にだけ付け、2行目からの字下げを折り返した行と揃えて、同じ段落の行と同じに並べる。
+    /// 改行で区切らずに折り返した行は、同じ段落なので、絵文字のある行に合わせた高さのまま並ぶ。
+    private func applyLineHeights(for block: RichText.Block, to result: NSMutableAttributedString, range: NSRange) {
+        let lines = Self.lineRanges(in: result.string as NSString, range: range)
+        let extents = lines.map { Self.emojiExtent(in: result, range: $0) }
+        let heights = Set(extents.map { lineHeight(emojiExtent: $0) })
+        guard lines.count > 1, heights.count > 1 else {
+            result.addAttribute(.paragraphStyle, value: paragraphStyle(for: block, emojiExtent: Self.emojiExtent(in: result, range: range)), range: range)
+            return
+        }
+        // 分けた行は、それぞれの最初の文字で書く向きを決め直すため、分ける前の段落の向きを引き継ぐ。
+        // 引き継がないと、左から右の段落の途中にアラビア語の行があると、その行から右から左になり、引用の縦線と字下げが反対の側に移る。
+        let direction = Self.baseWritingDirection(of: result.attributedSubstring(from: range))
+        for (index, line) in lines.enumerated() {
+            let isLast = index == lines.count - 1
+            let style = paragraphStyle(for: block, emojiExtent: extents[index], isFirstLine: index == 0, isLastLine: isLast, direction: direction)
+            // 区切りの文字は、その前の行の段落に入る。
+            let styled = NSRange(location: line.location, length: line.length + (isLast ? 0 : 1))
+            if !isLast {
+                result.replaceCharacters(in: NSRange(location: NSMaxRange(line), length: 1), with: "\n")
+            }
+            result.addAttribute(.paragraphStyle, value: style, range: styled)
+        }
+    }
+
+    /// 段落の中の改行（U+2028）で区切った行の範囲。区切りの文字は含めない。
+    /// 末尾の空の行（コードブロックの最後の改行など）は、前の行に区切りの文字ごと含める。
+    /// 空の行を最後の段落にすると、長さのない範囲には段落スタイルを付けられず、段落の間隔が消えるため。
+    private static func lineRanges(in text: NSString, range: NSRange) -> [NSRange] {
+        var lines: [NSRange] = []
+        var start = range.location
+        for location in range.location..<NSMaxRange(range) where text.character(at: location) == 0x2028 {
+            lines.append(NSRange(location: start, length: location - start))
+            start = location + 1
+        }
+        lines.append(NSRange(location: start, length: NSMaxRange(range) - start))
+        while lines.count > 1, lines[lines.count - 1].length == 0 {
+            lines.removeLast()
+        }
+        let last = lines[lines.count - 1]
+        lines[lines.count - 1].length = NSMaxRange(range) - last.location
+        return lines
+    }
+
+    /// 文字列を1つの段落として並べたときの、書く向き。TextKit 2が段落の最初の文字から決めるものと同じ。
+    private static func baseWritingDirection(of text: NSAttributedString) -> NSWritingDirection {
+        let contentStorage = NSTextContentStorage()
+        let layoutManager = NSTextLayoutManager()
+        contentStorage.addTextLayoutManager(layoutManager)
+        contentStorage.attributedString = text
+        return layoutManager.baseWritingDirection(at: layoutManager.documentRange.location) == .rightToLeft ? .rightToLeft : .leftToRight
     }
 
     /// 下げて描く絵文字の前に置く、幅のない文字。コピーするときは取り除く。
@@ -510,26 +565,40 @@ struct RichTextRenderer: Sendable {
         return attributes[.scaledUnicodeEmoji] as? UIFont ?? attributes[.font] as? UIFont
     }
 
-    private func paragraphStyle(for block: RichText.Block, emojiExtent: (above: CGFloat, below: CGFloat) = (0, 0)) -> NSParagraphStyle {
+    /// - Parameter isFirstLine: 段落の中の改行で区切った行を段落に分けたときの、最初の行か。2行目からは、折り返した行と同じく字下げする。
+    /// - Parameter isLastLine: 同じく、最後の行か。段落の間隔は最後の行にだけ付ける。
+    /// - Parameter direction: 同じく、分ける前の段落の書く向き。
+    private func paragraphStyle(
+        for block: RichText.Block,
+        emojiExtent: (above: CGFloat, below: CGFloat) = (0, 0),
+        isFirstLine: Bool = true,
+        isLastLine: Bool = true,
+        direction: NSWritingDirection = .natural
+    ) -> NSParagraphStyle {
         let style = NSMutableParagraphStyle()
-        style.paragraphSpacing = paragraphSpacing
+        style.baseWritingDirection = direction
+        style.paragraphSpacing = isLastLine ? paragraphSpacing : 0
         style.lineSpacing = lineSpacing
-        // 絵文字が文字の行より上へ伸びる段落は、行の高さを、絵文字の上端から文字の下端（descent）までにする。
-        // 指定しないと、UILabelが見積もる高さより描く行が高くなり、ラベルが文字を縦の中央に寄せて、1行目が上の部品に重なる。
-        // ラベルは、この高さから文字のdescentを引いた位置にベースラインを置き、絵文字が文字のdescentより下へ伸びる分は、行の下に自分で足す。
-        // 下へ伸びる分までこの高さに含めると、その分が行の上に空く。
-        let height = max(font.ascender, emojiExtent.above) - font.descender
-        if height > font.lineHeight + 0.5 {
-            style.minimumLineHeight = ceil(height)
+        if let height = lineHeight(emojiExtent: emojiExtent) {
+            style.minimumLineHeight = height
         }
         let indent = CGFloat(block.quoteLevel + max(0, block.listLevel - 1)) * indentPerLevel
-        style.firstLineHeadIndent = indent
         style.headIndent = indent
         if let marker = block.listMarker {
             // 折り返した行を、記号のあとの本文の位置に揃える。
             style.headIndent = indent + (marker as NSString).size(withAttributes: [.font: font]).width
         }
+        style.firstLineHeadIndent = isFirstLine ? indent : style.headIndent
         return style
+    }
+
+    /// 絵文字が文字の行より上へ伸びる行の高さ。絵文字の上端から文字の下端（descent）まで。伸びなければnil。
+    /// 指定しないと、UILabelが見積もる高さより描く行が高くなり、ラベルが文字を縦の中央に寄せて、1行目が上の部品に重なる。
+    /// ラベルは、この高さから文字のdescentを引いた位置にベースラインを置き、絵文字が文字のdescentより下へ伸びる分は、行の下に自分で足す。
+    /// 下へ伸びる分までこの高さに含めると、その分が行の上に空く。
+    private func lineHeight(emojiExtent: (above: CGFloat, below: CGFloat)) -> CGFloat? {
+        let height = max(font.ascender, emojiExtent.above) - font.descender
+        return height > font.lineHeight + 0.5 ? ceil(height) : nil
     }
 }
 

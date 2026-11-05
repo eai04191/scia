@@ -913,6 +913,7 @@ final class PostBodyView: UIView {
     /// 字面だけで測ると、1行目の絵文字が上の部品（名前の行）に重なるため、絵文字の上端で測る。
     /// 字面に、書体のascenderを超えた分だけを足すと、ascenderが字面より高いぶん絵文字の上端に届かず、上の部品との間隔が設定より狭くなる。
     /// 段落のどの行も同じ高さに広げるので（`RichTextRenderer`の`minimumLineHeight`）、絵文字が1行目になくても最初の段落の絵文字で測る。
+    /// 段落の中の改行で区切った行は、高さが違えば`RichTextRenderer`が段落に分けるので、最初の段落は改行の前の行だけになる。
     static func textTopInset(of text: NSAttributedString) -> CGFloat {
         guard text.length > 0 else { return 0 }
         let paragraph = (text.string as NSString).paragraphRange(for: NSRange(location: 0, length: 0))

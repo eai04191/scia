@@ -301,6 +301,62 @@ extension RichTextRendererTests {
             #expect(extent.below > -font.descender, "大きくした絵文字は、文字の下端より下へも伸びる")
         }
     }
+
+    /// 段落の中の改行で区切った行のうち、大きくした絵文字のある行だけを高くする。ほかの行は、絵文字のない段落の行と同じ間隔で並ぶ。
+    @Test func lineBreakAfterLargeEmojiKeepsFollowingLinesAtTextHeight() throws {
+        let html = "<p>😀文<br>文<br>文</p><p>文</p>"
+        let parser = MastodonHTMLParser(mentions: [], tags: [], emojis: [])
+        var large = renderer(.offline, paragraphSpacing: 12)
+        large.lineSpacing = 4
+        large.unicodeEmojiScale = 2
+        var plain = large
+        plain.unicodeEmojiScale = 1
+
+        let baselines = { (text: NSAttributedString) -> [CGFloat] in
+            let style = TextKitLabelLayout.Style(font: font, textColor: .label, lineBreakMode: .byWordWrapping, direction: .leftToRight, displayScale: 1)
+            let layout = TextKitLabelLayout.layout(of: TextKitLabelLayout.filled(text, style: style), width: 400, maximumLines: 0, style: style)
+            var result: [CGFloat] = []
+            layout.layoutManager.enumerateTextLayoutFragments(from: layout.layoutManager.documentRange.location, options: [.ensuresLayout]) { fragment in
+                for line in fragment.textLineFragments {
+                    result.append(fragment.layoutFragmentFrame.minY + line.typographicBounds.minY + line.glyphOrigin.y)
+                }
+                return true
+            }
+            return result
+        }
+        let largeLines = baselines(large.render(parser.parse(html)))
+        let plainLines = baselines(plain.render(parser.parse(html)))
+
+        try #require(largeLines.count == 4 && plainLines.count == 4)
+        #expect(largeLines[1] - largeLines[0] > plainLines[1] - plainLines[0], "絵文字の行は高くなる")
+        #expect(abs((largeLines[2] - largeLines[1]) - (plainLines[2] - plainLines[1])) < 0.5, "絵文字のない行は高くならない")
+        #expect(abs((largeLines[3] - largeLines[2]) - (plainLines[3] - plainLines[2])) < 0.5, "段落の間隔は変わらない")
+    }
+
+    /// 改行で区切った行を段落に分けても、行は分ける前の段落の書く向きで並ぶ。
+    @Test func splitLinesKeepTheParagraphWritingDirection() throws {
+        var renderer = renderer(.offline)
+        renderer.unicodeEmojiScale = 2
+        let text = renderer.render(MastodonHTMLParser(mentions: [], tags: [], emojis: []).parse("<p>😀English<br>العربية</p>"))
+        let style = TextKitLabelLayout.Style(font: font, textColor: .label, lineBreakMode: .byWordWrapping, direction: .leftToRight, displayScale: 1)
+        let layout = TextKitLabelLayout.layout(of: TextKitLabelLayout.filled(text, style: style), width: 400, maximumLines: 0, style: style)
+        let arabic = (text.string as NSString).range(of: "العربية")
+        let location = try #require(layout.contentStorage.location(layout.layoutManager.documentRange.location, offsetBy: arabic.location))
+
+        #expect(text.string.contains("\n"), "行の高さが違うので段落に分ける")
+        #expect(layout.layoutManager.baseWritingDirection(at: location) == .leftToRight)
+    }
+
+    /// 末尾が空の行で終わる段落を分けても、次の段落との間隔は残る。
+    @Test func splitParagraphEndingWithEmptyLineKeepsParagraphSpacing() throws {
+        var renderer = renderer(.offline, paragraphSpacing: 12)
+        renderer.unicodeEmojiScale = 2
+        let text = renderer.render(MastodonHTMLParser(mentions: [], tags: [], emojis: []).parse("<pre><code>😀\na\n</code></pre><p>後</p>"))
+        let next = (text.string as NSString).range(of: "後").location
+        let style = try #require(text.attribute(.paragraphStyle, at: next - 2, effectiveRange: nil) as? NSParagraphStyle)
+
+        #expect(style.paragraphSpacing == 12)
+    }
 }
 
 extension RichTextRendererTests {
