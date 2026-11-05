@@ -175,7 +175,6 @@ enum DebugFaults {
         guard let configuration, let override = mediaLimitsOverrideState.withLock({ $0 }) else { return configuration }
         let server = configuration.mediaLimits
         return InstanceConfiguration(
-            streamingURL: configuration.streamingURL,
             maxCharacters: configuration.maxCharacters,
             charactersReservedPerURL: configuration.charactersReservedPerURL,
             maxMediaAttachments: configuration.maxMediaAttachments,

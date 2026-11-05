@@ -135,7 +135,7 @@ struct ComposeModelTests {
         model.text = String(repeating: "あ", count: 600)
         #expect(!model.canPost)
 
-        model.apply(configuration: InstanceConfiguration(streamingURL: try #require(URL(string: "wss://example.social")), maxCharacters: 1000, charactersReservedPerURL: 23, maxMediaAttachments: 4, mediaDescriptionLimit: 1500, supportedMediaTypes: nil, mediaLimits: .unknown), defaultVisibility: nil, defaultSensitive: nil)
+        model.apply(configuration: InstanceConfiguration(maxCharacters: 1000, charactersReservedPerURL: 23, maxMediaAttachments: 4, mediaDescriptionLimit: 1500, supportedMediaTypes: nil, mediaLimits: .unknown), defaultVisibility: nil, defaultSensitive: nil)
 
         #expect(model.remainingCharacters == 400)
         #expect(model.canPost)

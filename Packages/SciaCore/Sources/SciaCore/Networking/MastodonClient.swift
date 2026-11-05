@@ -198,9 +198,6 @@ public struct MastodonClient: Sendable {
     public func instanceConfiguration() async throws -> InstanceConfiguration {
         struct Instance: Decodable {
             struct Configuration: Decodable {
-                struct URLs: Decodable {
-                    let streaming: URL
-                }
                 struct Statuses: Decodable {
                     let maxCharacters: ServerLimit?
                     let maxMediaAttachments: ServerLimit?
@@ -229,7 +226,6 @@ public struct MastodonClient: Sendable {
                     let videoMatrixLimit: ServerLimit?
                     let videoFrameRateLimit: ServerLimit?
                 }
-                let urls: URLs
                 let accounts: Accounts?
                 let statuses: Statuses?
                 let mediaAttachments: MediaAttachments?
@@ -244,7 +240,6 @@ public struct MastodonClient: Sendable {
         // URLの予約文字数は、文字数を数えるたびにその長さの文字列を作る。投稿の上限より長い予約は、URLを1つ書くだけで送れなくなる意味のない設定なので、既定値にする。
         let charactersReservedPerURL = configuration.statuses?.charactersReservedPerUrl?.value.flatMap { $0 <= maxCharacters ? $0 : nil } ?? 23
         return InstanceConfiguration(
-            streamingURL: configuration.urls.streaming,
             maxCharacters: maxCharacters,
             charactersReservedPerURL: charactersReservedPerURL,
             maxMediaAttachments: configuration.statuses?.maxMediaAttachments?.value ?? 4,
@@ -1318,7 +1313,6 @@ public struct MastodonClient: Sendable {
 
 /// インスタンスの設定のうち、Sciaが使うもの。
 public struct InstanceConfiguration: Sendable, Equatable {
-    public let streamingURL: URL
     /// 投稿の本文と注意書きを合わせた文字数の上限。
     public let maxCharacters: Int
     /// 本文中のURLを何文字と数えるか。
@@ -1337,7 +1331,6 @@ public struct InstanceConfiguration: Sendable, Equatable {
     public let pollLimits: PollLimits
 
     public init(
-        streamingURL: URL,
         maxCharacters: Int,
         charactersReservedPerURL: Int,
         maxMediaAttachments: Int,
@@ -1347,7 +1340,6 @@ public struct InstanceConfiguration: Sendable, Equatable {
         pollLimits: PollLimits = .mastodonDefault,
         mediaLimits: MediaLimits
     ) {
-        self.streamingURL = streamingURL
         self.maxCharacters = maxCharacters
         self.charactersReservedPerURL = charactersReservedPerURL
         self.maxMediaAttachments = maxMediaAttachments

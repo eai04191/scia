@@ -261,7 +261,7 @@ struct ComposeModelMediaTests {
         let model = ComposeModel(tasks: TaskScope(), myAccountID: "1", media: server.service) { _ in }
         model.apply(
             configuration: InstanceConfiguration(
-                streamingURL: try #require(URL(string: "wss://example.social")), maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 4,
+                maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 4,
                 mediaDescriptionLimit: 1500, supportedMediaTypes: ["image/jpeg"],
                 mediaLimits: MediaLimits(imageSizeLimit: byteCount / 2, imageMatrixLimit: nil, videoSizeLimit: nil, videoMatrixLimit: nil, videoFrameRateLimit: nil)
             ),
@@ -990,7 +990,7 @@ struct ComposeModelMediaTests {
         #expect(!model.canPasteMedia)
         model.apply(
             configuration: InstanceConfiguration(
-                streamingURL: try #require(URL(string: "wss://example.social")), maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 1,
+                maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 1,
                 mediaDescriptionLimit: 1500, supportedMediaTypes: ["image/jpeg"], mediaLimits: .unknown
             ),
             defaultVisibility: .public,
@@ -1297,7 +1297,7 @@ struct ComposeModelMediaTests {
         model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         #expect(!model.canAttachMedia)
 
-        model.apply(configuration: InstanceConfiguration(streamingURL: try #require(URL(string: "wss://example.social")), maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 16, mediaDescriptionLimit: 1500, supportedMediaTypes: nil, mediaLimits: .unknown), defaultVisibility: nil, defaultSensitive: nil)
+        model.apply(configuration: InstanceConfiguration(maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 16, mediaDescriptionLimit: 1500, supportedMediaTypes: nil, mediaLimits: .unknown), defaultVisibility: nil, defaultSensitive: nil)
 
         #expect(model.canAttachMedia)
         #expect(model.maxMediaAttachments == 16)

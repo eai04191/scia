@@ -486,7 +486,6 @@ struct MastodonClientTests {
 
         #expect(configuration.maxCharacters == 500)
         #expect(configuration.charactersReservedPerURL == 23)
-        #expect(configuration.streamingURL.absoluteString == "wss://streaming.example.social")
         #expect(configuration.maxMediaAttachments == 6)
         #expect(configuration.mediaDescriptionLimit == 1500)
         #expect(configuration.supportedMediaTypes?.contains("image/heic") == true)
@@ -513,6 +512,16 @@ struct MastodonClientTests {
         #expect(configuration.mediaLimits == MediaLimits(imageSizeLimit: nil, imageMatrixLimit: nil, videoSizeLimit: nil, videoMatrixLimit: nil, videoFrameRateLimit: nil))
         // 投票の上限は、Mastodonの既定値で補う。Mastodonは投票の上限を定数で持ち、運営者が変えられないため。
         #expect(configuration.pollLimits == .mastodonDefault)
+    }
+
+    /// ストリーミングの接続先を返さないサーバー（Hollo）でも、投稿の上限を読む。
+    @Test func instanceConfigurationReadsLimitsWithoutStreamingURL() async throws {
+        let transport = StubTransport([.json(#"{"configuration":{"statuses":{"max_characters":10000,"max_media_attachments":8}}}"#, statusCode: 200)])
+
+        let configuration = try await makeClient(transport).instanceConfiguration()
+
+        #expect(configuration.maxCharacters == 10000)
+        #expect(configuration.maxMediaAttachments == 8)
     }
 
     /// 下限が上限を超えるような読めない値なら、既定値にする。
