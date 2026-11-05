@@ -1388,6 +1388,36 @@ final class InlineComposeControllerTests {
         #expect(checked > 0, "本文を動かすかたまりがありません")
     }
 
+    /// 行が増えて欄を伸ばす動きの途中に、上限の行数を超えて中でスクロールするようになっても、動き終えたあと本文を枠で切る。
+    /// 動き終えたときに切り抜きを外していたので、スクロールしているのに枠の外の行が見え、下のツールバーに重なった。
+    @Test func growingPastLimitWhileGrowingKeepsTextClipped() async throws {
+        defer { window.isHidden = true }
+        // 動きの終わりの処理は、止めた窓では呼ばれるかが前に走ったテストで変わるので、変える分だけ並べ直し、終わりの処理はあとでまとめて呼ぶ。
+        var completions: [@MainActor () -> Void] = []
+        // 終わりの処理は投稿欄を持ち、投稿欄は差し替えたクロージャーを通してこの配列を持つので、テストの終わりに空にして持ち合いを切る。
+        defer { completions = [] }
+        composer.animateTextHeight = { _, changes, completion in
+            changes()
+            completions.append(completion)
+        }
+        composer.beginEditing()
+        try await waitUntilSettled()
+        let textView = try #require(textViews(in: window).first)
+        textView.becomeFirstResponder()
+        textView.insertText("1行目\n2行目\n3行目")
+        for completion in completions { completion() }
+        completions = []
+        try await waitUntilSettled()
+
+        textView.insertText("\n4行目")
+        #expect(completions.count == 1, "4行目に改行しても、欄の高さを変える動きが始まりません")
+        textView.insertText("\n5行目\n6行目\n7行目")
+        for completion in completions { completion() }
+        try await waitUntilSettled()
+
+        #expect(textView.isScrollEnabled && textView.clipsToBounds, "スクロールしているのに、本文を枠で切っていません\n\(composer.stateDump())")
+    }
+
     /// 入力欄の中でスクロールするほど書き、末尾にカーソルを置いたまま閉じて開き直すと、本文の文字を動かすかたまりは、カーソルの行までスクロールした本物の文字の位置に着地する。
     /// かたまりの着地点を、カーソルの行へスクロールする前の位置（先頭）で測っていたため、動き終えてから本文が1コマで飛んだ。
     @Test func reopeningLandsTextMorphOnCaretLine() async throws {

@@ -151,6 +151,11 @@ final class InlineComposeController: NSObject {
     private let textView = ComposeTextView()
     /// 本文の行の増減で欄の高さを動かしている数。動かし終えるまで入力欄を切り抜く。
     private var textHeightAnimations = 0
+    /// 本文の行の増減で欄の高さを変える動き。テストでは、動きの終わりの処理を呼ぶ時を決めるために差し替える。
+    /// この動きはSwiftUIのスプリングで、テストの止めた窓では、終わりの処理が呼ばれるかが前に走ったテストで変わり、全体を走らせると呼ばれなかったため。
+    var animateTextHeight: @MainActor (_ duration: TimeInterval, _ changes: () -> Void, _ completion: @escaping @MainActor () -> Void) -> Void = { duration, changes, completion in
+        UIView.animateSmoothly(duration: duration, changes: changes, completion: completion)
+    }
     /// 投票の欄。＋のメニューから足したときだけ、本文の下に出す。
     private let pollEditor = ComposePollEditor()
     /// 最後にキーボードを出していた入力欄。シートやビューアを閉じたら、ここへキーボードを戻す。
@@ -3543,14 +3548,15 @@ extension InlineComposeController: UITextViewDelegate {
         // ふだんは切り抜かない。入力欄の上に重ねる部品（ハイライトしたURLなど）が枠の外へ出ることがあるため。
         textHeightAnimations += 1
         textView.clipsToBounds = true
-        UIView.animateSmoothly(duration: tuning.value(of: TuningCatalog.composeTextGrowDuration)) {
+        animateTextHeight(tuning.value(of: TuningCatalog.composeTextGrowDuration)) {
             host.view.layoutIfNeeded()
             self.layoutCompletionListIfShown()
             host.view.layoutIfNeeded()
-        } completion: {
+        } _: {
             self.textHeightAnimations -= 1
+            // 動きの途中に行が増えて中でスクロールするようになっていたら、切り抜いたままにする。スクロールしているときに外すと、枠の外の行が下のツールバーに重なった。
             if self.textHeightAnimations == 0 {
-                self.textView.clipsToBounds = false
+                self.textView.clipsToBounds = self.textView.isScrollEnabled
             }
         }
     }
