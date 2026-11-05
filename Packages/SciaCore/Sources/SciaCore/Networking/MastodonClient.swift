@@ -84,7 +84,7 @@ public struct MastodonClient: Sendable {
     /// https://docs.joinmastodon.org/methods/notifications/#get
     private func ungroupedNotifications(_ query: TimelineQuery, filter: [URLQueryItem]) async throws -> NotificationPage {
         let list = try await get(ElementList<MastodonNotification>.self, path: "api/v1/notifications", query: query.queryItems + filter).0
-        let notifications = list.elements.map { MastodonNotification(id: $0.id, type: $0.type, createdAt: $0.createdAt, account: $0.account, status: $0.status) }
+        let notifications = list.elements.map { MastodonNotification(id: $0.id, type: $0.type, createdAt: $0.createdAt, account: $0.account, status: $0.status, reactionEmoji: $0.reactionEmoji) }
         return NotificationPage(notifications: notifications, unreadable: list.unreadable)
     }
 
@@ -192,6 +192,16 @@ public struct MastodonClient: Sendable {
         } catch {
             return try await get(Instance.self, path: "api/v1/instance", query: []).0.version
         }
+    }
+
+    /// 投稿への絵文字のリアクションに対応しているか。Fedibirdの拡張で、`api/v1/instance`の`fedibird_capabilities`に`emoji_reaction`があるかで決める（docs/emoji-reaction.md）。
+    /// Fedibirdとkmyblueはv1に必ず返すので、v2は読まない。項目がないサーバーは対応していない。
+    public func supportsEmojiReactions() async throws -> Bool {
+        struct Instance: Decodable {
+            let fedibirdCapabilities: [String]?
+        }
+        let capabilities = try await get(Instance.self, path: "api/v1/instance", query: []).0.fedibirdCapabilities ?? []
+        return capabilities.contains("emoji_reaction")
     }
 
     /// https://docs.joinmastodon.org/methods/instance/#v2
@@ -1072,6 +1082,25 @@ public struct MastodonClient: Sendable {
     /// 絵文字は1つのパスの要素としてエンコードする。キーキャップの`#️⃣`のように、URLで意味を持つ文字を含む絵文字があるため。
     private func announcementReactionURL(_ id: Announcement.ID, name: String) -> URL {
         credential.instance.appending(path: "api/v1/announcements/\(id)/reactions").appending(component: name)
+    }
+
+    /// 投稿に絵文字でリアクションする。Fedibirdの拡張で、`fedibird_capabilities`に`emoji_reaction`があるサーバーでだけ使う。
+    /// Fedibirdは、付けられなかったときも投稿を返すので、返った投稿に自分のリアクションがあるかで確かめる。
+    /// fedibird/mastodonの`app/controllers/api/v1/statuses/emoji_reactions_controller.rb`
+    public func addEmojiReaction(_ statusID: Status.ID, emoji: ReactionEmoji) async throws -> Status {
+        try await send(formRequest(method: "PUT", url: emojiReactionURL(statusID, emoji: emoji), form: []), decoding: Status.self).0
+    }
+
+    /// 投稿にした自分の絵文字のリアクションを外す。
+    public func removeEmojiReaction(_ statusID: Status.ID, emoji: ReactionEmoji) async throws -> Status {
+        var request = URLRequest(url: emojiReactionURL(statusID, emoji: emoji))
+        request.httpMethod = "DELETE"
+        return try await send(request, decoding: Status.self).0
+    }
+
+    /// 絵文字は1つのパスの要素としてエンコードする。お知らせのリアクションと同じ理由。
+    private func emojiReactionURL(_ statusID: Status.ID, emoji: ReactionEmoji) -> URL {
+        credential.instance.appending(path: "api/v1/statuses/\(statusID)/emoji_reactions").appending(component: emoji.requestName)
     }
 
     /// 鍵のかかったアカウントには、フォローのリクエストを送る。

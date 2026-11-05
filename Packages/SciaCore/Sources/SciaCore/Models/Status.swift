@@ -47,6 +47,8 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     public private(set) var pinned: Bool
     public private(set) var favouritesCount: Int
     public private(set) var reblogsCount: Int
+    /// 絵文字のリアクション。Fedibirdの形で、返さないサーバーでは空。出すかはサーバーが対応しているかで決める（docs/emoji-reaction.md）。
+    public private(set) var emojiReactions: [EmojiReaction]
     public let repliesCount: Int
     /// ブーストの場合、ブーストされた元の投稿。構造体は自分自身を直接持てないため、参照型の`StatusBox`に入れる。
     private var reblogBox: StatusBox?
@@ -80,6 +82,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         pinned: Bool = false,
         favouritesCount: Int = 0,
         reblogsCount: Int = 0,
+        emojiReactions: [EmojiReaction] = [],
         repliesCount: Int = 0,
         reblog: Status? = nil
     ) {
@@ -111,6 +114,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         self.pinned = pinned
         self.favouritesCount = favouritesCount
         self.reblogsCount = reblogsCount
+        self.emojiReactions = emojiReactions
         self.repliesCount = repliesCount
         reblogBox = reblog.map(StatusBox.init)
     }
@@ -153,6 +157,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         favouritesCount = try container.decodeCountIfPresent(forKey: .favouritesCount) ?? 0
         reblogsCount = try container.decodeCountIfPresent(forKey: .reblogsCount) ?? 0
         repliesCount = try container.decodeCountIfPresent(forKey: .repliesCount) ?? 0
+        emojiReactions = try container.decodeLossyArray(EmojiReaction.self, forKey: .emojiReactions)
         reblogBox = try container.decodeIfPresent(StatusBox.self, forKey: .reblogBox)
     }
 
@@ -171,6 +176,13 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         if adoptsFilterResults {
             status.filtered = reblog.filtered
         }
+        return status
+    }
+
+    /// 絵文字のリアクションを差し替えたもの。
+    func replacingEmojiReactions(_ emojiReactions: [EmojiReaction]) -> Status {
+        var status = self
+        status.emojiReactions = emojiReactions
         return status
     }
 
@@ -287,7 +299,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     private enum CodingKeys: String, CodingKey {
         case id, createdAt, account, content, spoilerText, language, url, mentions, tags, emojis, mediaAttachments, sensitive
         case visibility, inReplyToId, inReplyToAccountId, poll, card, quote, quoteApproval, filtered, editedAt
-        case favourited, reblogged, bookmarked, muted, pinned, favouritesCount, reblogsCount, repliesCount
+        case favourited, reblogged, bookmarked, muted, pinned, favouritesCount, reblogsCount, emojiReactions, repliesCount
         case reblogBox = "reblog"
     }
 

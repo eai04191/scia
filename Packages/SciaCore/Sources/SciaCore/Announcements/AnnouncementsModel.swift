@@ -182,7 +182,7 @@ public final class AnnouncementsModel {
             changeCount += 1
             unreadable.removeAll { $0.id == id }
             setAnnouncements(announcements.filter { $0.id != id })
-        case .update, .statusUpdate, .delete, .notification, .filtersChanged, .notificationsMerged, .unhandled:
+        case .update, .statusUpdate, .delete, .notification, .filtersChanged, .notificationsMerged, .emojiReaction, .unhandled:
             break
         }
     }

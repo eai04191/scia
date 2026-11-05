@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+import SciaTesting
 import Testing
 @testable import SciaCore
 
@@ -50,6 +51,87 @@ struct StatusInteractionsTests {
             pin: { _ in throw Failure() },
             unpin: { _ in throw Failure() }
         )
+    }
+
+    private func reactionOperations(
+        add: @escaping @Sendable (Status.ID, ReactionEmoji) async throws -> Status,
+        remove: @escaping @Sendable (Status.ID, ReactionEmoji) async throws -> Status = { _, _ in throw Failure() }
+    ) -> StatusInteractions.Operations {
+        StatusInteractions.Operations(
+            favourite: { _ in throw Failure() },
+            unfavourite: { _ in throw Failure() },
+            reblog: { _, _ in throw Failure() },
+            unreblog: { _ in throw Failure() },
+            bookmark: { _ in throw Failure() },
+            unbookmark: { _ in throw Failure() },
+            muteConversation: { _ in throw Failure() },
+            unmuteConversation: { _ in throw Failure() },
+            pin: { _ in throw Failure() },
+            unpin: { _ in throw Failure() },
+            addEmojiReaction: add,
+            removeEmojiReaction: remove
+        )
+    }
+
+    private func status(reactions: [EmojiReaction]) -> Status {
+        Status(
+            id: "10",
+            createdAt: Date(timeIntervalSince1970: 0),
+            account: Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: URL(string: "https://example.social/a.png")),
+            content: "<p>10</p>",
+            spoilerText: "",
+            url: nil,
+            emojiReactions: reactions
+        )
+    }
+
+    /// 絵文字のリアクションも、押したらすぐ出し、サーバーの数で置き換える。
+    @Test func showsEmojiReactionBeforeServerResponds() async throws {
+        let emoji = ReactionEmoji(name: "👍")
+        let shown = Shown(status(reactions: [EmojiReaction(emoji: emoji, count: 2, me: false)]))
+        let fromServer = status(reactions: [EmojiReaction(emoji: emoji, count: 5, me: true)])
+        let interactions = StatusInteractions(operations: reactionOperations { _, _ in fromServer }) { shown.update($0, $1) }
+
+        #expect(try await interactions.toggle(.emojiReaction(emoji), on: shown.status))
+
+        #expect(shown.history.map { $0.emojiReactions.map(\.count) } == [[3], [5]])
+        #expect(shown.status.hasEmojiReaction(emoji))
+    }
+
+    /// Fedibirdは、付けられなかったほかのサーバーのカスタム絵文字でも投稿を返す。返った投稿に自分のリアクションがなければ、戻して失敗にする。
+    @Test func revertsEmojiReactionServerDidNotApply() async throws {
+        let emoji = ReactionEmoji(name: "blobcat", domain: "misskey.example")
+        let shown = Shown(status(reactions: []))
+        let fromServer = status(reactions: [])
+        let interactions = StatusInteractions(operations: reactionOperations { _, _ in fromServer }) { shown.update($0, $1) }
+
+        await #expect(throws: StatusInteractions.EmojiReactionNotApplied.self) {
+            try await interactions.toggle(.emojiReaction(emoji), on: shown.status)
+        }
+
+        #expect(shown.history.map { $0.emojiReactions.count } == [1, 0])
+    }
+
+    /// 結果を待っている間に、同じ絵文字は送らず、ほかの絵文字は送る。
+    @Test func emojiReactionsInFlightAreKeyedByEmoji() async throws {
+        let thumbsUp = ReactionEmoji(name: "👍")
+        let gate = Gate()
+        let shown = Shown(status(reactions: []))
+        let interactions = StatusInteractions(operations: reactionOperations { _, emoji in
+            try await gate.wait()
+            return Status(id: "10", createdAt: Date(timeIntervalSince1970: 0), account: Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: nil), content: "", spoilerText: "", url: nil, emojiReactions: [EmojiReaction(emoji: emoji, count: 1, me: true)])
+        }) { shown.update($0, $1) }
+
+        let first = Task { try await interactions.toggle(.emojiReaction(thumbsUp), on: shown.status) }
+        try await waitUntil { interactions.inFlight.count == 1 }
+        #expect(try await interactions.toggle(.emojiReaction(ReactionEmoji(name: "👍", url: nil)), on: shown.status) == false)
+        let other = Task { try await interactions.toggle(.emojiReaction(ReactionEmoji(name: "🎉")), on: shown.status) }
+        try await waitUntil { interactions.inFlight.count == 2 }
+        gate.open()
+
+        #expect(try await first.value)
+        #expect(try await other.value)
+        #expect(shown.status.emojiReactions.map(\.emoji.name) == ["👍", "🎉"])
     }
 
     @Test func showsFavouriteBeforeServerRespondsThenAppliesResult() async throws {

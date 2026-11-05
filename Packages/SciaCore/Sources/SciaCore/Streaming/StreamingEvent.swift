@@ -21,6 +21,8 @@ public enum StreamingEvent: Sendable, Equatable {
     case announcementReaction(AnnouncementReactionUpdate)
     /// お知らせが取り下げられた。
     case announcementDelete(announcementID: Announcement.ID)
+    /// 投稿の絵文字のリアクションの数が変わった。Fedibirdの拡張で、`user`のストリームに届く。
+    case emojiReaction(EmojiReactionUpdate)
     /// まだ扱っていない種類のイベント。
     case unhandled(name: String)
 }
@@ -95,6 +97,8 @@ public enum StreamingMessageDecoder {
             return .announcementReaction(try decoder.decode(AnnouncementReactionUpdate.self, from: Data(try payload(of: envelope).utf8)))
         case "announcement.delete":
             return .announcementDelete(announcementID: try payload(of: envelope))
+        case "emoji_reaction":
+            return .emojiReaction(try decoder.decode(EmojiReactionUpdate.self, from: Data(try payload(of: envelope).utf8)))
         default:
             return .unhandled(name: event)
         }

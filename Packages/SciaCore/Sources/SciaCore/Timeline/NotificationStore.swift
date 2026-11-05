@@ -598,7 +598,7 @@ public final class NotificationStore {
             let page = StatusID.isNewer(grown.pageMinID, than: current.pageMinID) ? current.pageMinID : grown.pageMinID
             return MastodonNotification(
                 id: current.id, type: grown.type, createdAt: current.createdAt, account: grown.account, status: current.status, groupKey: grown.groupKey,
-                notificationsCount: grown.notificationsCount, sampleAccounts: grown.sampleAccounts, pageMinID: page
+                notificationsCount: grown.notificationsCount, sampleAccounts: grown.sampleAccounts, pageMinID: page, reactionEmoji: grown.reactionEmoji
             )
         }
         return (result, replayedKeys)

@@ -24,6 +24,8 @@ public struct MastodonNotification: Codable, Hashable, Sendable, Identifiable {
     public let sampleAccounts: [Account]
     /// 読んだ範囲の中で、まとまりの最も古い通知のID。続きを読む位置に使う。まとめない通知は`id`。
     public let pageMinID: String
+    /// 絵文字のリアクションの通知で、付けた絵文字。Fedibirdの拡張で、ほかの種類ではnil（docs/emoji-reaction.md）。
+    public let reactionEmoji: ReactionEmoji?
 
     /// まとまりに並べるアカウントの数の上限。Mastodonのwebとサーバーに合わせる。
     public static let maxSampleAccounts = 8
@@ -37,7 +39,8 @@ public struct MastodonNotification: Codable, Hashable, Sendable, Identifiable {
         groupKey: String? = nil,
         notificationsCount: Int = 1,
         sampleAccounts: [Account]? = nil,
-        pageMinID: String? = nil
+        pageMinID: String? = nil,
+        reactionEmoji: ReactionEmoji? = nil
     ) {
         self.id = id
         self.type = type
@@ -48,6 +51,7 @@ public struct MastodonNotification: Codable, Hashable, Sendable, Identifiable {
         self.notificationsCount = notificationsCount
         self.sampleAccounts = sampleAccounts ?? [account]
         self.pageMinID = pageMinID ?? id
+        self.reactionEmoji = reactionEmoji
     }
 
     /// まとめる種類なら届いたキーを使い、ほかは`ungrouped-<通知のID>`にする。
@@ -71,6 +75,7 @@ public struct MastodonNotification: Codable, Hashable, Sendable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case id, type, createdAt, account, status, groupKey
+        case reactionEmoji = "emojiReaction"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -81,7 +86,9 @@ public struct MastodonNotification: Codable, Hashable, Sendable, Identifiable {
             createdAt: try container.decode(Date.self, forKey: .createdAt),
             account: try container.decode(Account.self, forKey: .account),
             status: try container.decodeIfPresent(Status.self, forKey: .status),
-            groupKey: try container.decodeIfPresent(String.self, forKey: .groupKey)
+            groupKey: try container.decodeIfPresent(String.self, forKey: .groupKey),
+            // 絵文字が読めなくても、通知そのものは読む。行には絵文字なしで出す。
+            reactionEmoji: container.decodeLossyIfPresent(ReactionEmoji.self, forKey: .reactionEmoji)
         )
     }
 
@@ -94,6 +101,7 @@ public struct MastodonNotification: Codable, Hashable, Sendable, Identifiable {
         try container.encode(account, forKey: .account)
         try container.encodeIfPresent(status, forKey: .status)
         try container.encode(groupKey, forKey: .groupKey)
+        try container.encodeIfPresent(reactionEmoji, forKey: .reactionEmoji)
     }
 
     /// 通知の種類。サーバーは版を重ねるごとに種類を増やすため、知らない種類も読めるようにする。
@@ -112,6 +120,8 @@ public struct MastodonNotification: Codable, Hashable, Sendable, Identifiable {
         case quote
         /// 引用した投稿が編集された。
         case quotedUpdate
+        /// 投稿に絵文字でリアクションされた。Fedibirdの拡張。
+        case emojiReaction
         case other(String)
 
         /// まとめて1行に出す種類。Mastodonのwebと同じく、お気に入り、ブースト、フォローに限る。
@@ -131,6 +141,7 @@ public struct MastodonNotification: Codable, Hashable, Sendable, Identifiable {
             case "update": .update
             case "quote": .quote
             case "quoted_update": .quotedUpdate
+            case "emoji_reaction": .emojiReaction
             default: .other(rawValue)
             }
         }
@@ -147,6 +158,7 @@ public struct MastodonNotification: Codable, Hashable, Sendable, Identifiable {
             case .update: "update"
             case .quote: "quote"
             case .quotedUpdate: "quoted_update"
+            case .emojiReaction: "emoji_reaction"
             case .other(let rawValue): rawValue
             }
         }
@@ -176,7 +188,8 @@ extension MastodonNotification {
             groupKey: groupKey,
             notificationsCount: notificationsCount + 1,
             sampleAccounts: Array(([notification.account] + sampleAccounts).prefix(Self.maxSampleAccounts)),
-            pageMinID: pageMinID
+            pageMinID: pageMinID,
+            reactionEmoji: notification.reactionEmoji ?? reactionEmoji
         )
     }
 
@@ -184,7 +197,7 @@ extension MastodonNotification {
     func replacing(status: Status?) -> MastodonNotification {
         MastodonNotification(
             id: id, type: type, createdAt: createdAt, account: account, status: status, groupKey: groupKey,
-            notificationsCount: notificationsCount, sampleAccounts: sampleAccounts, pageMinID: pageMinID
+            notificationsCount: notificationsCount, sampleAccounts: sampleAccounts, pageMinID: pageMinID, reactionEmoji: reactionEmoji
         )
     }
 
@@ -193,7 +206,7 @@ extension MastodonNotification {
         guard StatusID.isNewer(pageMinID, than: id) else { return self }
         return MastodonNotification(
             id: self.id, type: type, createdAt: createdAt, account: account, status: status, groupKey: groupKey,
-            notificationsCount: notificationsCount, sampleAccounts: sampleAccounts, pageMinID: id
+            notificationsCount: notificationsCount, sampleAccounts: sampleAccounts, pageMinID: id, reactionEmoji: reactionEmoji
         )
     }
 
@@ -206,7 +219,7 @@ extension MastodonNotification {
         return MastodonNotification(
             id: id, type: type, createdAt: createdAt, account: first, status: status, groupKey: groupKey,
             notificationsCount: max(notificationsCount - (sampleAccounts.count - remaining.count), remaining.count),
-            sampleAccounts: remaining, pageMinID: pageMinID
+            sampleAccounts: remaining, pageMinID: pageMinID, reactionEmoji: reactionEmoji
         )
     }
 }

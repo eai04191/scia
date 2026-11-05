@@ -45,6 +45,8 @@ public struct NotificationAppearance: Sendable {
         case .update: ("pencil", .secondary, .named("がブーストした投稿を編集しました"))
         case .quote: ("quote.bubble.fill", .accent, .named("が引用しました"))
         case .quotedUpdate: ("pencil", .secondary, .named("引用した投稿を", "が編集しました"))
+        // 行では、付けた絵文字が読めればこの記号の代わりに絵文字を描く。
+        case .emojiReaction: ("face.smiling", .orange, .named("がリアクションしました"))
         // 種類を知らない通知も、誰からかだけは分かるように出す。
         case .other(let rawValue): ("bell", .secondary, .named("からの通知（\(rawValue)）"))
         }

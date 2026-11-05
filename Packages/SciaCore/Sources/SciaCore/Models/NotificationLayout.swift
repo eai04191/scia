@@ -15,7 +15,7 @@ extension MastodonNotification {
         guard status != nil else { return .headerOnly }
         return switch type {
         case .mention, .status, .quote: .post
-        case .favourite, .reblog, .update, .quotedUpdate: .quoted(showsPollResults: false)
+        case .favourite, .reblog, .update, .quotedUpdate, .emojiReaction: .quoted(showsPollResults: false)
         case .poll: .quoted(showsPollResults: true)
         case .follow, .followRequest, .other: .headerOnly
         }

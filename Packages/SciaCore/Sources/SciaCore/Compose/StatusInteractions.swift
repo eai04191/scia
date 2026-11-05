@@ -1,4 +1,4 @@
-/// お気に入り、ブースト、ブックマーク、会話のミュート、プロフィールへの固定を付け外しする。サーバーの結果を待たずに表示へ反映し、失敗したら戻す。
+/// お気に入り、ブースト、ブックマーク、会話のミュート、プロフィールへの固定、絵文字のリアクションを付け外しする。サーバーの結果を待たずに表示へ反映し、失敗したら戻す。
 @MainActor
 public final class StatusInteractions {
     public enum Action: Hashable, Sendable {
@@ -9,6 +9,13 @@ public final class StatusInteractions {
         /// 残った投稿でもう一度ミュートを選んでも、サーバーではミュートしたままで、その投稿の表示が正しくなるだけなので、会話のほかの投稿は読み直さない。
         case muteConversation
         case pin
+        /// その絵文字の自分のリアクション。Fedibirdの拡張で、決まりはdocs/emoji-reaction.mdにある。
+        case emojiReaction(ReactionEmoji)
+    }
+
+    /// サーバーが成功の応答を返したのに、リアクションを付けなかった。Fedibirdは、その投稿にまだ付いていないほかのサーバーのカスタム絵文字では、付けずに投稿を返す。
+    public struct EmojiReactionNotApplied: Error, Equatable {
+        public init() {}
     }
 
     /// APIを呼ぶ口。テストでは差し替える。
@@ -23,6 +30,8 @@ public final class StatusInteractions {
         public var unmuteConversation: @Sendable (Status.ID) async throws -> Status
         public var pin: @Sendable (Status.ID) async throws -> Status
         public var unpin: @Sendable (Status.ID) async throws -> Status
+        public var addEmojiReaction: @Sendable (Status.ID, ReactionEmoji) async throws -> Status
+        public var removeEmojiReaction: @Sendable (Status.ID, ReactionEmoji) async throws -> Status
 
         public init(
             favourite: @escaping @Sendable (Status.ID) async throws -> Status,
@@ -34,7 +43,10 @@ public final class StatusInteractions {
             muteConversation: @escaping @Sendable (Status.ID) async throws -> Status,
             unmuteConversation: @escaping @Sendable (Status.ID) async throws -> Status,
             pin: @escaping @Sendable (Status.ID) async throws -> Status,
-            unpin: @escaping @Sendable (Status.ID) async throws -> Status
+            unpin: @escaping @Sendable (Status.ID) async throws -> Status,
+            // 既定値は、絵文字のリアクションを使わないテストのためのもの。アプリは`init(client:)`で両方を渡す。
+            addEmojiReaction: @escaping @Sendable (Status.ID, ReactionEmoji) async throws -> Status = { _, _ in preconditionFailure("絵文字のリアクションの口を渡していない") },
+            removeEmojiReaction: @escaping @Sendable (Status.ID, ReactionEmoji) async throws -> Status = { _, _ in preconditionFailure("絵文字のリアクションの口を渡していない") }
         ) {
             self.favourite = favourite
             self.unfavourite = unfavourite
@@ -46,6 +58,8 @@ public final class StatusInteractions {
             self.unmuteConversation = unmuteConversation
             self.pin = pin
             self.unpin = unpin
+            self.addEmojiReaction = addEmojiReaction
+            self.removeEmojiReaction = removeEmojiReaction
         }
 
         public init(client: MastodonClient) {
@@ -59,7 +73,9 @@ public final class StatusInteractions {
                 muteConversation: { try await client.muteConversation($0) },
                 unmuteConversation: { try await client.unmuteConversation($0) },
                 pin: { try await client.pin($0) },
-                unpin: { try await client.unpin($0) }
+                unpin: { try await client.unpin($0) },
+                addEmojiReaction: { try await client.addEmojiReaction($0, emoji: $1) },
+                removeEmojiReaction: { try await client.removeEmojiReaction($0, emoji: $1) }
             )
         }
     }
@@ -120,6 +136,9 @@ public final class StatusInteractions {
         update(target.id) { Self.setting(action, turningOn, on: $0) }
         do {
             let result = try await call(action, turningOn, target.id, reblogVisibility: reblogVisibility)
+            if case .emojiReaction(let emoji) = action, turningOn, !result.displayed.hasEmojiReaction(emoji) {
+                throw EmojiReactionNotApplied()
+            }
             // 投稿全体を置き換えると、待っている間に届いた編集や、並行して成功した別の操作を古い内容で戻すため、この操作の結果だけを反映する。
             update(target.id) { Self.adopting(action, of: result, on: $0) }
             let settled = Self.adopting(action, of: result, on: latest[target.id] ?? target)
@@ -149,6 +168,7 @@ public final class StatusInteractions {
         case .bookmark: status.bookmarked
         case .muteConversation: status.muted
         case .pin: status.pinned
+        case .emojiReaction(let emoji): status.hasEmojiReaction(emoji)
         }
     }
 
@@ -159,6 +179,7 @@ public final class StatusInteractions {
         case .bookmark: status.settingBookmarked(isOn)
         case .muteConversation: status.settingMuted(isOn)
         case .pin: status.settingPinned(isOn)
+        case .emojiReaction(let emoji): status.settingEmojiReaction(emoji, isOn)
         }
     }
 
@@ -169,6 +190,7 @@ public final class StatusInteractions {
         case .bookmark: status.adoptingBookmark(of: result)
         case .muteConversation: status.settingMuted(result.muted)
         case .pin: status.settingPinned(result.pinned)
+        case .emojiReaction(let emoji): status.adoptingEmojiReaction(emoji, of: result.displayed)
         }
     }
 
@@ -184,6 +206,8 @@ public final class StatusInteractions {
         case (.muteConversation, false): try await operations.unmuteConversation(id)
         case (.pin, true): try await operations.pin(id)
         case (.pin, false): try await operations.unpin(id)
+        case (.emojiReaction(let emoji), true): try await operations.addEmojiReaction(id, emoji)
+        case (.emojiReaction(let emoji), false): try await operations.removeEmojiReaction(id, emoji)
         }
     }
 }
