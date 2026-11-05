@@ -1216,6 +1216,22 @@ public struct MastodonClient: Sendable {
         try await post(Relationship.self, path: "api/v1/accounts/\(id)/unblock", form: []).0
     }
 
+    /// ユーザーのメニューの関係の項目で選んだ変更を、相手`id`へ送る。
+    public func send(_ change: UserRelationChange, to id: String) async throws -> Relationship {
+        switch change {
+        case .follow: try await follow(id)
+        case .unfollow, .cancelFollowRequest: try await unfollow(id)
+        case .showReblogs(let shows): try await follow(id, reblogs: shows)
+        case .notify(let notifies): try await follow(id, notify: notifies)
+        case .endorse(true): try await endorse(id)
+        case .endorse(false): try await unendorse(id)
+        case .mute(let duration): try await mute(id, duration: duration)
+        case .unmute: try await unmute(id)
+        case .block: try await block(id)
+        case .unblock: try await unblock(id)
+        }
+    }
+
     /// アカウントを通報する。応答の中身は使わない。`Idempotency-Key`を受け付けないため、二重に届かないよう送り直さない。
     /// https://docs.joinmastodon.org/methods/reports/#post
     public func report(_ request: ReportRequest) async throws {

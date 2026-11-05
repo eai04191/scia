@@ -2480,18 +2480,7 @@ final class SessionController {
         tasks.run(key: "relation:\(id)", .skippingWhileRunning, .action) { [weak self] in
             guard let self else { return }
             do {
-                let relationship = switch change {
-                case .follow: try await client.follow(id)
-                case .unfollow, .cancelFollowRequest: try await client.unfollow(id)
-                case .showReblogs(let shows): try await client.follow(id, reblogs: shows)
-                case .notify(let notifies): try await client.follow(id, notify: notifies)
-                case .endorse(true): try await client.endorse(id)
-                case .endorse(false): try await client.unendorse(id)
-                case .mute(let duration): try await client.mute(id, duration: duration)
-                case .unmute: try await client.unmute(id)
-                case .block: try await client.block(id)
-                case .unblock: try await client.unblock(id)
-                }
+                let relationship = try await client.send(change, to: id)
                 apply(relationship, after: change)
             } catch {
                 logger.error("user relation change failed: \(SciaLog.describe(error), privacy: .public)")
