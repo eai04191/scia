@@ -93,15 +93,14 @@ public final class EmojiImageStore<Image: Sendable> {
     /// 読めなかった画像ごとの、読み直してよくなるのを待つ処理（`scheduleRetry`）。
     private var retryWakes: [URL: Task<Void, Never>] = [:]
     private var animationStates: [URL: AnimationState] = [:]
-    /// 描いている層がつかんでいるアニメーション。`animations`から捨てても、層が使っている間はコマが解放されないため、
+    /// 描いている層がつかんでいるアニメーション。上限を超えて`animations`から捨てても、層が使っている間はコマが解放されないため、
     /// 読み直さずにこれを返す。読み直すと、捨てられた分をまた入れて別のものを押し出し、画面に出ているもの同士で読み直しを繰り返すため。
     private let liveAnimations = NSMapTable<NSURL, EmojiAnimation>.strongToWeakObjects()
-    private let animations: NSCache<NSURL, EmojiAnimation> = {
-        let cache = NSCache<NSURL, EmojiAnimation>()
-        // 96pxのコマで、40コマの絵文字なら40個ほど。画面に一度に出る絵文字はそれより少ないため、スクロールして戻っても読み直しはまれ。
-        cache.totalCostLimit = 64 * 1024 * 1024
-        return cache
-    }()
+    /// コマに分けたアニメーション。96pxのコマで、40コマの絵文字なら40個ほど。画面に一度に出る絵文字はそれより少ないため、スクロールして戻っても読み直しはまれ。
+    /// 静止画と同じく`NSCache`には持たない。読み終えてから、知らせを受けた行が描き直して層がつかむまでは、ここのほかに持つものがない。
+    /// その間にシステムの判断で捨てられると、描き直しで読み直し、読み終えるとまた捨てられて、動き出さないまま読み直しを繰り返す。
+    /// macOSでテストを走らせたとき、読み終えても取り出せないまま、60秒の間に9万回あまり読み直したことがある。iOSシミュレーターでは、アプリが裏に回った知らせを送った直後に捨てた。
+    private var animations = CostLimitedCache<URL, EmojiAnimation>(totalCostLimit: 64 * 1024 * 1024)
     private var listeners: [Listener] = []
     private var pendingNotification: Set<URL> = []
     private let logger = SciaLog.logger(category: "emoji")
@@ -160,7 +159,7 @@ public final class EmojiImageStore<Image: Sendable> {
         let loadHeight = Self.loadHeight(for: pixelHeight)
         switch animationStates[url] {
         case .animated(let resolution):
-            guard let animation = animations.object(forKey: url as NSURL) ?? liveAnimations.object(forKey: url as NSURL) else {
+            guard let animation = animations.value(forKey: url) ?? liveAnimations.object(forKey: url as NSURL) else {
                 stats.animationReloads += 1
                 loadAnimation(url, pixelHeight: max(loadHeight, resolution.pixelHeight))
                 return nil
@@ -260,7 +259,7 @@ public final class EmojiImageStore<Image: Sendable> {
     func animationDiagnosis(of url: URL) -> String {
         let state = animationStates[url].map { String(describing: $0) } ?? "nil"
         return [
-            "animationState: \(state) cached: \(animations.object(forKey: url as NSURL) != nil) live: \(liveAnimations.object(forKey: url as NSURL) != nil)",
+            "animationState: \(state) cached: \(animations.contains(url)) live: \(liveAnimations.object(forKey: url as NSURL) != nil)",
             "upgrading: \(upgradingAnimations.contains(url)) retryWake: \(retryWakes[url] != nil) allowsAutomaticLoad: \(retry.allowsAutomaticLoad(of: url))",
             "animationReloadsAfterEviction: \(stats.animationReloads)",
         ].joined(separator: "\n")
@@ -343,7 +342,7 @@ public final class EmojiImageStore<Image: Sendable> {
                 }.value
                 if let (image, isLargest) = decoded {
                     let animation = EmojiAnimation(image)
-                    animations.setObject(animation, forKey: url as NSURL, cost: image.byteCount)
+                    animations.setValue(animation, forKey: url, cost: image.byteCount)
                     stats.animationBytes += image.byteCount
                     stats.largestAnimationBytes = max(stats.largestAnimationBytes, image.byteCount)
                     liveAnimations.setObject(animation, forKey: url as NSURL)

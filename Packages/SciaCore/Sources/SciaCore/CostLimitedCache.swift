@@ -1,7 +1,7 @@
 /// 重さの合計に上限を設け、あふれたら使ってから一番長いものから捨てるキャッシュ。
 /// `NSCache`と違い、上限を超えたとき以外は捨てない。`NSCache`はどれをいつ捨てるかをシステムが決め、使う側では決められない。
 /// iOSシミュレーターでは、アプリが裏に回った知らせを送った直後に`NSCache`が中身を捨てた。
-/// 描くたびに求め直すため画面に出ているものを捨てられると読み直しになる持ち物（カスタム絵文字の静止画）に使う。
+/// 描くたびに求め直すため画面に出ているものを捨てられると読み直しになる持ち物（カスタム絵文字の静止画とアニメーション）に使う。
 public struct CostLimitedCache<Key: Hashable, Value> {
     private struct Entry {
         var value: Value
@@ -23,6 +23,11 @@ public struct CostLimitedCache<Key: Hashable, Value> {
 
     /// 持っている値。使ったものとして扱わない。
     public var values: [Value] { entries.values.map(\.value) }
+
+    /// 持っているか。使ったものとして扱わない。
+    public func contains(_ key: Key) -> Bool {
+        entries[key] != nil
+    }
 
     /// 値を返し、最後に使ったものとして扱う。
     public mutating func value(forKey key: Key) -> Value? {

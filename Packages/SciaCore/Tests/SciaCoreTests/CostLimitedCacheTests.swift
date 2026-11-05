@@ -50,4 +50,15 @@ struct CostLimitedCacheTests {
         #expect(cache.setValue(2, forKey: "b", cost: 4).isEmpty)
         #expect(cache.setValue(3, forKey: "c", cost: 8) == ["a", "b"])
     }
+
+    /// 持っているかを調べても、使ったものとして扱わない。
+    @Test func containsDoesNotCountAsUse() {
+        var cache = CostLimitedCache<String, Int>(totalCostLimit: 10)
+        cache.setValue(1, forKey: "a", cost: 4)
+        cache.setValue(2, forKey: "b", cost: 4)
+        #expect(cache.contains("a"))
+        cache.setValue(3, forKey: "c", cost: 4)
+        #expect(!cache.contains("a"))
+        #expect(cache.contains("b"))
+    }
 }

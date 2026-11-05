@@ -1,9 +1,11 @@
 import Foundation
+import ImageIO
 import SciaCore
 import SciaTesting
 import Synchronization
 import Testing
 import UIKit
+import UniformTypeIdentifiers
 @testable import Scia
 
 /// 読めなかった絵文字は、起動し直すまで文字のままにせず、間隔をおいて読み直す。
@@ -152,5 +154,41 @@ struct EmojiImageStoreTests {
             #expect(store.image(for: url) != nil, "裏に回ったときに静止画を捨てました")
         }
         #expect(reads.withLock { $0 } == 3)
+    }
+
+    /// 動く絵文字も、裏に回っても読んだアニメーションを捨てない。読み終えてから行を描き直して層がつかむまでの間に捨てると、描き直しで読み直し、読み終えるとまた捨てられるため。
+    @Test func animationsSurviveEnteringTheBackground() async throws {
+        let urls = (0..<3).map { URL(filePath: "/").appending(path: "emoji\($0).gif") }
+        let reads = Mutex(0)
+        let gif = try Self.gif()
+        let store = EmojiImageStore(clock: clock) { _ in
+            reads.withLock { $0 += 1 }
+            return gif
+        }
+
+        for url in urls { _ = store.animation(for: url) }
+        try await waitUntil { urls.allSatisfy { store.hasFinishedLoadingAnimation(for: $0) } }
+        NotificationCenter.default.post(name: UIApplication.didEnterBackgroundNotification, object: UIApplication.shared)
+
+        for url in urls {
+            #expect(store.animation(for: url) != nil, "裏に回ったときにアニメーションを捨てました")
+        }
+        #expect(reads.withLock { $0 } == 3)
+    }
+
+    /// 2コマのGIF。
+    private static func gif() throws -> Data {
+        let data = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(data, UTType.gif.identifier as CFString, 2, nil))
+        let properties = [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 0.1]] as CFDictionary
+        for index in 0..<2 {
+            let image = UIGraphicsImageRenderer(size: CGSize(width: 20, height: 20)).image { context in
+                UIColor(white: CGFloat(index) / 2, alpha: 1).setFill()
+                context.fill(CGRect(x: 0, y: 0, width: 20, height: 20))
+            }
+            CGImageDestinationAddImage(destination, try #require(image.cgImage), properties)
+        }
+        #expect(CGImageDestinationFinalize(destination))
+        return data as Data
     }
 }
