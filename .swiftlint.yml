@@ -21,12 +21,14 @@ included:
   - ShareExtension
   - Packages/SciaCore/Sources
   - Packages/SciaCore/Tests
+  - Packages/MemoryCache/Sources
+  - Packages/MemoryCache/Tests
 
 custom_rules:
   # 時間の長さで順を作ったり、今の時刻で結果が変わったりするテストは、負荷や実行の時刻によってときどきだけ落ちる。
   # 待つ処理には手で進める時計（SciaTestingのTestClock）を渡し、ほかの処理を待つときは門（Gate）か条件（waitUntil）で待つ。日時は決まった値で作る
   time_dependent_test:
-    included: "(AppTests|Packages/SciaCore/Tests)/.*\\.swift"
+    included: "(AppTests|Packages/SciaCore/Tests|Packages/MemoryCache/Tests)/.*\\.swift"
     regex: "\\b(Task\\.sleep|Thread\\.sleep|usleep|DispatchTime\\.now|CACurrentMediaTime|CFAbsoluteTimeGetCurrent|ContinuousClock|SuspendingClock|asyncAfter)\\b|\\bTimer(\\(|\\.scheduledTimer\\b|\\.publish\\b)|\\bDate\\(\\)|\\bDate\\.init\\b(?!\\([^)])|\\bDate\\.now\\b|\\bDate\\(timeIntervalSinceNow|(?<![\\w.)\\]])\\.now\\b|\\bsystemUptime\\b"
     excluded_match_kinds:
       - comment
@@ -38,7 +40,7 @@ custom_rules:
   # テストが毎回違う名前で作る一時ファイルと設定の保存先は、消さないと走らせるたびに溜まる。アプリのテストは端末のアプリのコンテナに、
   # SciaCoreのテストはMacのユーザーのtmpとLibrary/Preferencesに残り、何万にもなっていた。SciaTestingのTestScratchで作ると、`.scratch`を付けたテストの終わりに消す
   test_file_without_scratch:
-    included: "(AppTests|Packages/SciaCore/Tests)/.*\\.swift"
+    included: "(AppTests|Packages/SciaCore/Tests|Packages/MemoryCache/Tests)/.*\\.swift"
     regex: "\\bUserDefaults\\(suiteName: \"|\\.temporaryDirectory\\b|\\bNSTemporaryDirectory\\("
     excluded_match_kinds:
       - comment
@@ -51,7 +53,7 @@ custom_rules:
   # 「何も起きない」ことを確かめる前に、起きるはずの処理がまだ始まっていないことがある。譲り続ける待ちは、固まっても止まらない。
   # 条件で待つ（waitUntil）か、止めた相手が着いたことを門（Gate）で確かめる
   yield_based_waiting:
-    included: "(AppTests|Packages/SciaCore/Tests)/.*\\.swift"
+    included: "(AppTests|Packages/SciaCore/Tests|Packages/MemoryCache/Tests)/.*\\.swift"
     regex: "\\bTask\\.yield\\b"
     excluded_match_kinds:
       - comment
@@ -102,7 +104,7 @@ custom_rules:
   # 既定値はSciaCoreのSystemTimeかアプリのAppDependenciesを参照する。実物を作ってよいのはその2つのファイルだけにする。
   # デバッグ用のコード（ダミーのサーバーや部品カタログ）は、人が見るためにわざと遅らせるもので、テストで確かめるロジックではないため対象外にする
   direct_time_access:
-    included: "(App/Sources|ShareExtension|Packages/SciaCore/Sources/SciaCore)/.*\\.swift"
+    included: "(App/Sources|ShareExtension|Packages/SciaCore/Sources/SciaCore|Packages/MemoryCache/Sources)/.*\\.swift"
     excluded: "(App/Sources/Debug/|App/Sources/AppDependencies\\.swift|Packages/SciaCore/Sources/SciaCore/SystemTime\\.swift)"
     regex: "\\b(Task\\.sleep|Thread\\.sleep|usleep|DispatchTime\\.now|CACurrentMediaTime|CFAbsoluteTimeGetCurrent|ContinuousClock|SuspendingClock|asyncAfter)\\b|\\bTimer(\\(|\\.scheduledTimer\\b|\\.publish\\b)|\\bDate\\(\\)|\\bDate\\.init\\b(?!\\([^)])|\\bDate\\.now\\b|\\bDate\\(timeIntervalSinceNow|(?<![\\w.)\\]])\\.now\\b|\\bsystemUptime\\b"
     excluded_match_kinds:

@@ -1,3 +1,4 @@
+import MemoryCache
 import NaturalLanguage
 import SciaCore
 import Synchronization

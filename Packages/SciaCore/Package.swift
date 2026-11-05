@@ -17,9 +17,13 @@ let package = Package(
         // テストだけが使う、時間の長さに頼らずに順を作る道具。SciaCoreのテストとアプリのテストで共有する
         .library(name: "SciaTesting", targets: ["SciaTesting"]),
     ],
+    dependencies: [
+        .package(path: "../MemoryCache"),
+    ],
     targets: [
         .target(
             name: "SciaCore",
+            dependencies: ["MemoryCache"],
             resources: [.copy("Auth/Resources/known-servers.txt"), .copy("Compose/Resources/standard-emoji.json"), .copy("Settings/Resources/menu-defaults.json")],
             swiftSettings: swiftSettings
         ),

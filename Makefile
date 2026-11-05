@@ -5,7 +5,7 @@ SIM_DESTINATION ?= generic/platform=iOS Simulator
 # 端末を決めないビルドは、既定ではシミュレーターの全アーキテクチャ（arm64とx86_64）を作る。このMacで動く分だけにして、コンパイルを半分にする
 SIM_ARCH ?= $(shell uname -m)
 
-.PHONY: generate lint test-lint test-core build warnings test test-on-sim sim-keyboard scenario-build scenario-setup scenario-reset scenario-run archive testflight testflight-external promo readme-screenshots readme-icons update-known-servers check check-steps hooks menu-editor clean
+.PHONY: generate lint test-lint test-core test-memory-cache build warnings test test-on-sim sim-keyboard scenario-build scenario-setup scenario-reset scenario-run archive testflight testflight-external promo readme-screenshots readme-icons update-known-servers check check-steps hooks menu-editor clean
 
 ## project.ymlからXcodeプロジェクトを生成する
 generate:
@@ -25,6 +25,10 @@ test-lint:
 ## SciaCoreのユニットテストをmacOS上で実行する（シミュレーター不要）
 test-core:
 	cd Packages/SciaCore && swift test
+
+## Sciaに依存しないキャッシュのパッケージ（Packages/MemoryCache）のテストをmacOS上で実行する
+test-memory-cache:
+	swift test --package-path Packages/MemoryCache --quiet
 
 ## アプリをシミュレーター向けにビルドする
 build: generate
@@ -144,9 +148,9 @@ check:
 	@$(MAKE) --no-print-directory check-steps
 	@Tools/check-stamp.sh record check "$$(cat $(CHECK_TREE))"
 
-## SciaCoreのテスト、lintの規則のテスト、アプリのビルドは互いを待たないので、並べて走らせる。出力が混ざるので、失敗はmakeが最後に出すターゲット名から追う
+## SciaCoreのテスト、キャッシュのパッケージのテスト、lintの規則のテスト、アプリのビルドは互いを待たないので、並べて走らせる。出力が混ざるので、失敗はmakeが最後に出すターゲット名から追う
 check-steps: lint
-	@$(MAKE) --no-print-directory -j3 test-core test-lint warnings
+	@$(MAKE) --no-print-directory -j4 test-core test-memory-cache test-lint warnings
 
 ## ローカルのmainを、make checkとmake testの両方が通った中身のcommitにしか動かさないhookを入れる。worktreeにも効く
 hooks:
@@ -157,4 +161,4 @@ menu-editor:
 	swift run --package-path Tools/MenuEditor --quiet menu-editor Tools/MenuEditor/editor.html $(DERIVED_DATA)/menu-editor.html
 
 clean:
-	rm -rf $(DERIVED_DATA) $(PROJECT) Packages/SciaCore/.build Tools/SciaLint/.build Tools/MenuEditor/.build
+	rm -rf $(DERIVED_DATA) $(PROJECT) Packages/SciaCore/.build Packages/MemoryCache/.build Tools/SciaLint/.build Tools/MenuEditor/.build

@@ -1,5 +1,5 @@
+import MemoryCache
 import Testing
-@testable import SciaCore
 
 struct CostLimitedCacheTests {
     @Test func keepsValuesWithinTheLimit() {

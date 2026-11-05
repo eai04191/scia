@@ -33,6 +33,8 @@ settings:
 packages:
   SciaCore:
     path: Packages/SciaCore
+  MemoryCache:
+    path: Packages/MemoryCache
 targets:
   Scia:
     type: application
@@ -43,6 +45,7 @@ targets:
       - App/Privacy
     dependencies:
       - package: SciaCore
+      - package: MemoryCache
       - target: SciaShareExtension
     postBuildScripts:
       - name: Embed Build Info

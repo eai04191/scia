@@ -1,4 +1,5 @@
 import CoreText
+import MemoryCache
 import SciaCore
 import Synchronization
 import UIKit

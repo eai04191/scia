@@ -7,6 +7,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `project.yml`: XcodeGenの定義。`Scia.xcodeproj`と`App/Info.plist`は生成物なのでコミットせず、直接編集しない。ターゲットや設定の変更は`project.yml`で行う
 - `Config/Local.xcconfig`: 署名のチーム（`DEVELOPMENT_TEAM = <チームID>`）など、人ごとに違うビルド設定を書く。コミットしないので、worktreeを作ったら元のcheckoutからコピーする。なくてもシミュレーター向けにはビルドできる
 - `Packages/SciaCore`: UIに依存しないロジック（モデル、APIクライアント、ストリーミング、タイムラインの状態管理）。iOSとmacOSで共有するため、UIKit／AppKit／SwiftUIをimportしない
+- `Packages/MemoryCache`: Sciaに依存しない、メモリに持つキャッシュ（`CostLimitedCache`）。SciaCoreとアプリが使う。SciaCoreに依存しないことを、パッケージを分けてコンパイラーで守る
 - `App/Sources`: iOSアプリ（UIKitライフサイクル）
 
 ## 文書の使い分け
@@ -26,6 +27,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `make lint`: SwiftLintで強制アンラップ、`try!`、IUOを検出する（`brew install swiftlint`が必要）。呼び出しや文字列の補間の形で決まる規則は、構文木で調べる`Tools/SciaLint`で検出し、`// scialint:disable:next <規則>`で外す
 - `make test-lint`: `Tools/SciaLint`の規則のテスト
 - `make test-core`: SciaCoreのテスト（macOS上、シミュレーター不要）
+- `make test-memory-cache`: `Packages/MemoryCache`のテスト（macOS上、シミュレーター不要）
 - `make build`: シミュレーター向けにビルドする
 - `make test`: シミュレーターでテストする。このworktreeが借りている端末で走らせる。`SIM='<端末>'`で指定もできるが、貸し借りする端末（`Scia 1`〜`Scia 4`）は借りているものしか受け付けない。先に端末のハードウェアキーボードをつなぐ。端末のiOSの版で初めて走らせたときは、UIKitの公開されていない作りに頼る部分のUIテスト（`SciaSystemUITests`）も走らせる。通ると、確かめた作業ツリーの中身を覚える
 - `make test ONLY='SciaTests/LinkLabelTests'`: 一部のテストだけを走らせる。識別子は空白で区切って複数渡せる。通っても中身は覚えない。`xcodebuild ... test`を直接走らせるときは、`-collect-test-diagnostics never`を付ける。付けないと、テストが失敗したときにシミュレーターの診断を集め、応答を待って10分止まる

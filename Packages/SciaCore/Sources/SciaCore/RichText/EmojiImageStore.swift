@@ -1,6 +1,7 @@
 import CoreGraphics
 public import Foundation
 import ImageIO
+import MemoryCache
 import os
 
 /// カスタム絵文字の画像を読み込み、メモリに持つ。`Image`は描く側の画像の型で、iOSでは`UIImage`にする。
