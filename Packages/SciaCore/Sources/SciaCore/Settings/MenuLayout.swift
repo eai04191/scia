@@ -235,6 +235,8 @@ public enum StatusMenuItem: String, BundledMenuDefaults {
     case pin
     /// 公開範囲を選んでブーストするサブメニュー。ブーストしていない、公開かひかえめな公開の投稿でだけ出る。
     case reblogWithVisibility
+    /// ログインしているほかのアカウントとして投稿を操作するサブメニュー。ほかのアカウントでログインしているときだけ出る。決まりはdocs/menus.mdにある。
+    case otherAccounts
     case copyLink
     /// 本文をプレーンテキストにしてコピーする。本文のある投稿でだけ出る。
     case copyText

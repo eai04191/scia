@@ -32,6 +32,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onVisibleUnsettledStatusesChange: (([Status]) -> Void)?
     /// 投稿への操作が選ばれたときに呼ぶ。ブーストなら、ブーストした投稿を渡す。
     var onStatusAction: ((StatusAction, Status) -> Void)?
+    /// 投稿のメニューの「別のアカウントで」に並べる、ログインしているほかのアカウント。なければ項目を出さない。
+    var otherAccounts: OtherAccounts?
+    /// 「別のアカウントで」で選んだ操作を行う。
+    var onOtherAccountAction: ((OtherAccountCommand) -> Void)?
     /// フォローリクエストの通知のメニューで、承認か却下が選ばれたときに、その通知を渡して呼ぶ。
     var onFollowRequestDecision: ((FollowRequestDecision, MastodonNotification) -> Void)?
     /// 保留中の通知の行で、受け入れるか無視が選ばれたときに、そのまとまりを渡して呼ぶ。nilなら行をスワイプできない。

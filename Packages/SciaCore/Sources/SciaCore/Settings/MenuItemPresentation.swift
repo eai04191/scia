@@ -78,6 +78,7 @@ extension StatusMenuItem: MenuItemContentProviding {
         case .quote: .own(title: "引用", symbolName: "quote.bubble")
         case .emojiReaction: .own(title: "リアクション", symbolName: "face.smiling")
         case .reblogWithVisibility: .own(title: "公開範囲を選んでブースト", symbolName: "arrow.2.squarepath")
+        case .otherAccounts: .own(title: "別のアカウントで", symbolName: "person.2")
         case .pin: .own(title: "プロフィールに固定", symbolName: "pin")
         case .muteConversation: .own(title: "会話をミュート", symbolName: "bell.slash")
         case .copyLink: .url(.copyLink)

@@ -91,8 +91,14 @@ extension TimelineViewController {
         tree.hashtagMenu = settings.hashtagMenuLayout.submenuGroups(actions: settings.hashtagActions)
         tree.hashtagActions = hashtagMenuActions
         tree.customEmoji = { emojis.node(for: $0) }
+        tree.otherAccounts = otherAccounts?.list() ?? []
+        tree.otherAccountGroups = settings.statusMenuLayout.submenuGroups(actions: settings.statusActions)
         let built = tree.menu(groups: groups ?? settings.statusMenuLayout.groups, includesFollowRequest: groups == nil)
         reloadRelations(built.shownUserIDs, groups: tree.userMenu)
+        // 前に別のアカウントで見つけた投稿は、組んだメニューでは覚えていた状態で出し、探し直した状態は次に開いたときから使う。
+        if built.showsOtherAccounts, let status {
+            otherAccounts?.refresh(status)
+        }
         // 描きながら集めた、アイコンのまだない人をまとめて読む。
         return built.root.map { BuiltMenu(root: $0, renderer: renderer) { [weak self] in self?.loadPendingMenuIcons() } }
     }
@@ -149,6 +155,8 @@ extension TimelineViewController {
                 self?.hashtagMenu(for: tag, of: status.displayed, id: id).perform(command)
             case .customEmoji(let emoji, let command):
                 emojis.perform(command, on: emoji)
+            case .otherAccount(let command):
+                self?.onOtherAccountAction?(command)
             case .customize:
                 self?.openMenuSettings(.statusMenu)
             }

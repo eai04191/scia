@@ -9,6 +9,7 @@
     "item:quote",
     "item:emojiReaction",
     "hidden:reblogWithVisibility",
+    "item:otherAccounts",
     "separator",
     "hidden:copyLink",
     "item:openInBrowser",

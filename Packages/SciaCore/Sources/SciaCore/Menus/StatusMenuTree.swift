@@ -58,8 +58,20 @@ public enum StatusMenuCommand {
     case hashtag(Tag, HashtagMenuCommand)
     /// カスタム絵文字の画像の、メディアのメニューのサブメニューの項目。
     indirect case customEmoji(CustomEmoji, MediaMenuCommand)
+    /// 「別のアカウントで」の、ほかのアカウントとしての投稿への操作。
+    case otherAccount(OtherAccountCommand)
     /// このメニューの並びの設定の画面を開く。
     case customize
+}
+
+/// 「別のアカウントで」で選んだ、ほかのアカウントとしての投稿への操作。
+public struct OtherAccountCommand {
+    public let account: OtherAccountStatuses
+    /// そのアカウントから見た投稿。IDはそのアカウントのサーバーのもの。
+    public let status: Status
+    /// メニューを出した、今のアカウントでの投稿。失敗を記録するときに、今のアカウントの一覧の投稿を指すのに使う。
+    public let original: Status
+    public let action: StatusAction
 }
 
 /// 投稿の長押しのメニュー。並びは設定の投稿のメニューに従い、関係するユーザーはユーザーのメニューのサブメニューにする。決まりはdocs/menus.mdにある。
@@ -96,6 +108,10 @@ public struct StatusMenuTree {
     public var hashtagActions: HashtagMenuActions?
     /// カスタム絵文字の画像のメディアのメニュー。メディアを共有や保存できるかは置く側で決まるため、置く側が組む。
     public var customEmoji: @MainActor (CustomEmoji) -> MenuNode<MediaMenuCommand>? = { _ in nil }
+    /// 「別のアカウントで」に並べる、ログインしているほかのアカウント。空なら項目を出さない。
+    public var otherAccounts: [OtherAccountStatuses] = []
+    /// 「別のアカウントで」の中の並び。投稿のメニューの、ほかのメニューの中に出すときの並び（`submenuGroups`）を渡す。
+    public var otherAccountGroups: MenuLayout<StatusMenuItem>.Groups = StatusMenuItem.defaultLayout.groups
 
     public init(status: Status?, notification: MastodonNotification?, now: Date, linkBrowser: LinkBrowser) {
         self.status = status
@@ -110,6 +126,8 @@ public struct StatusMenuTree {
         public let root: MenuNode<StatusMenuCommand>?
         /// ユーザーのメニューを出した人のID。メニューを開いたときに、関係をまとめて1回で読み直す。
         public let shownUserIDs: [String]
+        /// 「別のアカウントで」を組んだか。組んだときだけ、前に見つけた投稿を探し直す。
+        public let showsOtherAccounts: Bool
     }
 
     /// 投稿のメニュー。フォローリクエストの通知では、設定の並びの前に、承認と却下を設定によらず置く。
@@ -118,14 +136,17 @@ public struct StatusMenuTree {
     public func menu(groups: MenuLayout<StatusMenuItem>.Groups, includesFollowRequest: Bool) -> Built {
         var shownUserIDs: [String] = []
         var seenUserIDs: Set<String> = []
+        var showsOtherAccounts = false
         var children = groups.nodes { item in
-            nodes(for: item) { users in
+            let built = nodes(for: item) { users in
                 // 同じユーザーが2つの項目に当たるときは、先に出る項目で1度だけ出す。
                 users.filter { seenUserIDs.insert($0.id).inserted }.compactMap { user in
                     shownUserIDs.append(user.id)
                     return userNode(for: user)
                 }
             }
+            if item == .otherAccounts, !built.isEmpty { showsOtherAccounts = true }
+            return built
         }
         if includesFollowRequest, let notification, notification.type == .followRequest {
             children.insert(.group([
@@ -133,7 +154,7 @@ public struct StatusMenuTree {
                 .action("却下", icon: .symbol("xmark"), isDestructive: true, .followRequest(.reject)),
             ]), at: 0)
         }
-        return Built(root: children.isEmpty ? nil : .submenu("", children), shownUserIDs: shownUserIDs)
+        return Built(root: children.isEmpty ? nil : .submenu("", children), shownUserIDs: shownUserIDs, showsOtherAccounts: showsOtherAccounts)
     }
 
     /// 保留中の通知の行のメニュー。「受け入れる」と「無視」を1つのまとまりで置き、その下にその人のユーザーのメニューを並べる。
@@ -156,6 +177,9 @@ public struct StatusMenuTree {
         case .reblogWithVisibility:
             guard let status else { return [] }
             return reblogWithVisibilityMenu(for: status, item: item).map { [$0] } ?? []
+        case .otherAccounts:
+            guard let status else { return [] }
+            return otherAccountsMenu(for: status, item: item).map { [$0] } ?? []
         case .dismissNotification:
             // 投稿のない通知（フォローなど）でも出す。
             guard notification != nil else { return [] }
@@ -265,7 +289,7 @@ public struct StatusMenuTree {
             return .action(item.title, icon: icon, .selectText)
         case .apiResponse:
             return .action(item.title, icon: icon, .status(.viewAPIResponse))
-        case .openThread, .select, .notifyingUser, .author, .booster, .mentionedUsers, .customEmojis, .hashtags, .dismissNotification, .reblogWithVisibility, .customize:
+        case .openThread, .select, .notifyingUser, .author, .booster, .mentionedUsers, .customEmojis, .hashtags, .dismissNotification, .reblogWithVisibility, .otherAccounts, .customize:
             return nil
         }
     }
@@ -313,6 +337,59 @@ public struct StatusMenuTree {
             let option = VisibilityOption(visibility)
             return .action(option.title, icon: .symbol(option.symbolName), .status(.reblogWithVisibility(reblogVisibility)))
         })
+    }
+
+    /// 「別のアカウントで」の中に出す項目。そのアカウントのサーバーへ送るだけで済む操作に限る。
+    public static let otherAccountItems: Set<StatusMenuItem> = [.favourite, .reblog, .reblogWithVisibility, .bookmark]
+
+    /// 「別のアカウントで」のサブメニュー。ほかのアカウントが1つなら「@usernameで」を直に置き、2つ以上ならアカウントごとの`@username`のサブメニューを並べる。
+    /// サーバー名は、ユーザーのメニューの見出しと同じくサブタイトルに出す。名前に`@username@server`をそのまま置くと、長いサーバー名で途中から折り返されて読みにくいため。
+    private func otherAccountsMenu(for status: Status, item: StatusMenuItem) -> MenuNode<StatusMenuCommand>? {
+        guard !otherAccounts.isEmpty else { return nil }
+        if otherAccounts.count == 1, let account = otherAccounts.first {
+            let credential = account.credential
+            return .submenu("@\(credential.username)で", subtitle: credential.server, icon: .symbol(item.symbolName), otherAccountNodes(for: status, as: account))
+        }
+        return .submenu(item.title, icon: .symbol(item.symbolName), otherAccounts.map { account in
+            let credential = account.credential
+            return .submenu("@\(credential.username)", subtitle: credential.server, icon: .symbol("person.crop.circle"), otherAccountNodes(for: status, as: account))
+        })
+    }
+
+    /// `account`から見た投稿のメニュー。覚えている投稿があればすぐ組み、なければ開いてから探す。
+    private func otherAccountNodes(for status: Status, as account: OtherAccountStatuses) -> [MenuNode<StatusMenuCommand>] {
+        if let known = account.known(status) {
+            return otherAccountItems(for: known, original: status, as: account)
+        }
+        return [.deferred { [self] in
+            switch await account.lookup(status) {
+            case .found(let found):
+                return otherAccountItems(for: found, original: status, as: account)
+            case .notFound:
+                return [.action("このアカウントからは見られない投稿です", nil)]
+            case .failed(let error):
+                return [.action("投稿を探せませんでした", subtitle: ErrorPresentation(error).text, nil)]
+            }
+        }]
+    }
+
+    /// `account`から見た投稿`found`への操作。投稿のメニューと同じ組み方で、そのアカウントとして組む。
+    /// - Parameter original: メニューを出した、今のアカウントでの投稿。
+    private func otherAccountItems(for found: Status, original status: Status, as account: OtherAccountStatuses) -> [MenuNode<StatusMenuCommand>] {
+        let excluded = Set(StatusMenuItem.allCases).subtracting(Self.otherAccountItems)
+        let groups = otherAccountGroups.excluding(excluded)
+        var tree = StatusMenuTree(status: found, notification: nil, now: now, linkBrowser: linkBrowser)
+        tree.myAccountID = account.credential.accountID
+        // 中身が数個しかないので、「その他」に入れた項目もまとめずに続けて並べる。
+        let flattened = MenuLayout<StatusMenuItem>.Groups(main: groups.main + groups.more, more: [])
+        let root = tree.menu(groups: flattened, includesFollowRequest: false).root
+        return root?.children.map { node in
+            node.map { command in
+                // 組む項目を`otherAccountItems`に限っているので、投稿への操作のほかは来ない。
+                guard case .status(let action) = command else { return command }
+                return .otherAccount(OtherAccountCommand(account: account, status: found, original: status, action: action))
+            }
+        } ?? []
     }
 
     private func canReblog(_ status: Status) -> Bool {

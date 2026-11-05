@@ -59,6 +59,8 @@ final class SessionController {
     /// 各タブで共有する、ストリーミングの接続。
     private var streamingHub: StreamingHub { session.streamingHub }
     private let client: MastodonClient
+    /// 投稿のメニューの「別のアカウントで」に並べる、ログインしているほかのアカウント。
+    private let otherAccounts: OtherAccounts
     /// 時間をおく処理の時計。テストでは手で進める時計に差し替える。
     var clock: any Clock<Duration> = AppDependencies.clock
     /// 編集できるかやミュートの期限を決める今の日付。テストでは決まった日付に差し替える。
@@ -215,18 +217,20 @@ final class SessionController {
         self.accountMenu = accountMenu
         let tuning = AppDependencies.tuning
         #if DEBUG
+        let transport = BurstMonitoringTransport(base: FaultInjectingTransport(base: ScenarioMode.server?.transport ?? URLSessionTransport()), monitor: RequestBurstLog.monitor)
         let session = AccountSession(
             credential: credential,
-            transport: BurstMonitoringTransport(base: FaultInjectingTransport(base: ScenarioMode.server?.transport ?? URLSessionTransport()), monitor: RequestBurstLog.monitor),
+            transport: transport,
             connector: FaultInjectingWebSocketConnector(base: ScenarioMode.server?.connector ?? URLSessionWebSocketConnector()),
             // デバッグ版でだけ応答の本文も残す。
             requestLog: RequestLog(includesBody: true),
             tuning: tuning
         )
         #else
+        let transport = BurstMonitoringTransport(base: URLSessionTransport(), monitor: RequestBurstLog.monitor)
         let session = AccountSession(
             credential: credential,
-            transport: BurstMonitoringTransport(base: URLSessionTransport(), monitor: RequestBurstLog.monitor),
+            transport: transport,
             connector: URLSessionWebSocketConnector(),
             tuning: tuning
         )
@@ -235,6 +239,7 @@ final class SessionController {
         let tasks = session.tasks
         self.tasks = tasks
         let client = session.client
+        otherAccounts = OtherAccounts(current: credential, tasks: tasks) { MastodonClient(credential: $0, transport: transport) }
         let streamingHub = session.streamingHub
         let reportUnauthorizedToSession = { [weak session] in session?.reportUnauthorized() }
         let home = FeedTimelineController(feed: .home, session: session)
@@ -1123,6 +1128,8 @@ final class SessionController {
             self?.shareLongBodyExpansion(expansion, changed: key, from: viewController)
         }
         viewController.onStatusAction = { [weak self, weak viewController] action, status in self?.perform(action, on: status, from: viewController) }
+        viewController.otherAccounts = otherAccounts
+        viewController.onOtherAccountAction = { [weak self] command in self?.perform(command) }
         viewController.onPostSelectionChange = { [weak self] isSelecting in self?.composer.yieldsToToolbar = isSelecting }
         viewController.onBatchReblog = { [weak self] statuses in
             guard let self else { return }
@@ -2014,6 +2021,55 @@ final class SessionController {
         case .viewAPIResponse:
             // ブーストなら、ブーストの応答に元の投稿が入っているので、ブーストのIDで読む。
             openAPIResponse(statusID: status.id, from: timeline)
+        }
+    }
+
+    /// 「別のアカウントで」で選んだ操作を、そのアカウントとして行う。今のアカウントの一覧は変わらないので、どのアカウントで何をしたかを知らせる。
+    /// 失敗の理由は、このセッションのログインし直しの案内につなげず、そのまま出す。そのアカウントのトークンが無効でも、このセッションのものではないため。
+    private func perform(_ command: OtherAccountCommand) {
+        let shown = command.status.displayed
+        let (action, visibility, done, failure): (StatusInteractions.Action, ReblogVisibility, String, String)
+        switch command.action {
+        case .favourite:
+            UserAction.toggleFavourite.record()
+            (action, visibility) = (.favourite, .accountDefault)
+            done = shown.favourited ? "お気に入りを取り消しました" : "お気に入りしました"
+            failure = "お気に入りを変更できませんでした"
+        case .reblog:
+            UserAction.toggleReblog.record()
+            (action, visibility) = (.reblog, AppDependencies.settings.reblogVisibility)
+            done = shown.reblogged ? "ブーストを取り消しました" : "ブーストしました"
+            failure = "ブーストを変更できませんでした"
+        case .reblogWithVisibility(let chosen):
+            UserAction.toggleReblog.record()
+            (action, visibility) = (.reblog, chosen)
+            done = "ブーストしました"
+            failure = "ブーストできませんでした"
+        case .bookmark:
+            UserAction.toggleBookmark.record()
+            (action, visibility) = (.bookmark, .accountDefault)
+            done = shown.bookmarked ? "ブックマークを外しました" : "ブックマークしました"
+            failure = "ブックマークを変更できませんでした"
+        case .reply, .quote, .muteConversation, .pin, .editHistory, .openFavouritedBy, .openRebloggedBy, .edit, .delete, .redraft, .viewAPIResponse:
+            // 「別のアカウントで」には、そのアカウントのサーバーへ送るだけで済む操作しか出さない（`StatusMenuTree.otherAccountItems`）。
+            return
+        }
+        let account = command.account
+        let handle = account.credential.handle
+        let failureTitle = "\(handle)で\(failure)"
+        tasks.run(.action) { [weak self] in
+            do {
+                guard try await account.toggle(action, on: command.status, reblogVisibility: visibility) else { return }
+                self?.showToggledNotice("\(handle)で\(done)")
+            } catch {
+                guard let self else { return }
+                logger.error("other account toggle \(String(describing: action), privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
+                let reason = ErrorPresentation(error)
+                operationStatus.recordFailure(title: failureTitle, reason: reason, subject: OperationStatus.Subject(command.original))
+                showFailureNotice(.interactionFailure(title: failureTitle) { [weak self] in
+                    self?.presentAlert(title: failureTitle, message: reason.text)
+                })
+            }
         }
     }
 

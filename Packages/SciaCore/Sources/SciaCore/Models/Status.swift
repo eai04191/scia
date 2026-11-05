@@ -9,6 +9,9 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     public let spoilerText: String
     /// 投稿した人が選んだ本文の言語（ISO 639-1の2文字）。選ばれていなければnil。
     public let language: String?
+    /// 連合で使う投稿のID（ActivityPubのID）。ほかのサーバーでこの投稿を探すときに使う。開くページとは限らないため、ブラウザでは開かない。
+    /// Mastodonは必ず返すが、返さない実装でも本文は読めるため、なければnilにする。
+    public let uri: String?
     public let url: URL?
     public let mentions: [Mention]
     public let tags: [Tag]
@@ -60,6 +63,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         content: String,
         spoilerText: String,
         language: String? = nil,
+        uri: String? = nil,
         url: URL?,
         mentions: [Mention] = [],
         tags: [Tag] = [],
@@ -92,6 +96,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         self.content = content
         self.spoilerText = spoilerText
         self.language = language
+        self.uri = uri
         self.url = url
         self.mentions = mentions
         self.tags = tags
@@ -130,6 +135,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         content = try container.decode(String.self, forKey: .content)
         spoilerText = try container.decode(String.self, forKey: .spoilerText)
         language = try container.decodeIfPresent(String.self, forKey: .language)
+        uri = container.decodeLossyIfPresent(String.self, forKey: .uri)
         url = container.decodeURL(.destination, forKey: .url)
         mentions = try container.decodeLossyArray(Mention.self, forKey: .mentions)
         tags = try container.decodeLossyArray(Tag.self, forKey: .tags)
@@ -297,7 +303,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, createdAt, account, content, spoilerText, language, url, mentions, tags, emojis, mediaAttachments, sensitive
+        case id, createdAt, account, content, spoilerText, language, uri, url, mentions, tags, emojis, mediaAttachments, sensitive
         case visibility, inReplyToId, inReplyToAccountId, poll, card, quote, quoteApproval, filtered, editedAt
         case favourited, reblogged, bookmarked, muted, pinned, favouritesCount, reblogsCount, emojiReactions, repliesCount
         case reblogBox = "reblog"
