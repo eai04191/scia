@@ -58,6 +58,8 @@ test: generate
 test-on-sim:
 	@mkdir -p $(DERIVED_DATA) && Tools/check-stamp.sh tree > $(TEST_TREE)
 	swift Tools/sim-keyboard.swift '$(SIM)' hardware
+	@# アクセシビリティの要素を作る設定（Tools/sim.sh dumpが入れる）を切る。アプリは起動時にこの設定を読むので、端末の前の状態でテストの結果が変わらないよう、テストのアプリを起動する前に揃える
+	xcrun simctl spawn '$(SIM)' defaults write com.apple.Accessibility ApplicationAccessibilityEnabled -bool false
 ifneq ($(strip $(ONLY)),)
 	xcodebuild $(TEST_ARGS) test $(foreach t,$(ONLY),'-only-testing:$(t)')
 else
