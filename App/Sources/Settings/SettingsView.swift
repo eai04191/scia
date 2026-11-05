@@ -71,14 +71,14 @@ struct SettingsView: View {
             Form {
                 Section {
                     NavigationLink(value: SettingsPage.tabs) {
-                        SettingsCategoryLabel("タブ", systemImage: "menubar.dock.rectangle", color: .systemBlue)
+                        SettingsCategoryLabel("タブ", systemImage: "dock.rectangle", color: .systemBlue)
                     }
                 } header: {
                     Text(account)
                 }
                 Section {
                     NavigationLink(value: SettingsPage.display) {
-                        SettingsCategoryLabel("表示", systemImage: "textformat.size", color: .systemBlue)
+                        SettingsCategoryLabel("表示", systemImage: "circle.lefthalf.filled", color: .systemBlue)
                     }
                     NavigationLink(value: SettingsPage.interaction) {
                         SettingsCategoryLabel("操作", systemImage: "hand.tap.fill", color: .systemOrange)
@@ -95,10 +95,10 @@ struct SettingsView: View {
                 }
                 Section {
                     NavigationLink(value: SettingsPage.storage) {
-                        SettingsCategoryLabel("ストレージ", systemImage: "internaldrive.fill", color: .systemGray)
+                        SettingsCategoryLabel("ストレージ", systemImage: "externaldrive.fill", color: .systemGray)
                     }
                     NavigationLink(value: SettingsPage.about) {
-                        SettingsCategoryLabel("情報", systemImage: "info.circle.fill", color: .systemGray)
+                        SettingsCategoryLabel("情報", systemImage: "doc.text.fill", color: .systemGray)
                     }
                 }
             }
