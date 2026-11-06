@@ -24,6 +24,7 @@ enum EmojiPaletteCatalog {
         // カスタム絵文字の一覧がまだないときは、最近使ったもののうちUnicodeの絵文字だけが並ぶ。
         let withoutCustom = EmojiPalette.sections(emojis: [], standardGroups: standard, recentKeys: ["emoji_3", "🐈", "emoji_20", "👍"], recentLimit: 24)
         return [
+            CatalogState(title: "横長と縦長のカスタム絵文字（Fedibirdが返す縦横比で、マスを横に足す）") { palette(.sections(EmojiPalette.sections(emojis: shapedEmojis(), standardGroups: [], recentKeys: [], recentLimit: 0), customStatus: nil)) },
             CatalogState(title: "最近使ったもの（カスタム絵文字とUnicodeの絵文字）、カテゴリーのないもの、長い名前のカテゴリー") { palette(.sections(sections, customStatus: nil)) },
             CatalogState(title: "最近使ったものがない") { palette(.sections(EmojiPalette.sections(emojis: emojis, standardGroups: standard, recentKeys: [], recentLimit: 24), customStatus: nil)) },
             CatalogState(title: "サーバーにカスタム絵文字がなく、Unicodeの絵文字だけ") { palette(.sections(EmojiPalette.sections(emojis: [], standardGroups: standard, recentKeys: [], recentLimit: 24), customStatus: nil)) },
@@ -39,6 +40,21 @@ enum EmojiPaletteCatalog {
             },
             CatalogState(title: "検索で見つからない") { palette(.searchResults([], customStatus: nil), query: "nothing") },
         ]
+    }
+
+    /// Fedibirdにある縦横比の幅を並べる。四角のあいだに混ぜたものと、横長だけのカテゴリー。
+    /// 縦横比の分からない横長の画像（Mastodonのサーバー）は、1マスに縮めて描く。
+    private static func shapedEmojis() -> [ServerEmoji] {
+        let mixed: [Double] = [1, 1.5, 1, 2, 1, 0.4, 1, 4, 3, 1]
+        let words: [Double] = [5.6, 2.5, 8, 4, 17, 3.2, 6.5, 2.4, 4.6]
+        let shapes = mixed.map { ($0, nil as String?, true) } + words.map { ($0, "単語（横長）", true) } + [(4, "大きさを返さないサーバー", false)]
+        return shapes.enumerated().map { index, shape in
+            let (ratio, category, knowsSize) = shape
+            let height = 64.0
+            let label = ratio == 1 ? "\(index)" : "\(ratio.formatted()):1"
+            let url = CatalogFixtures.imageURL(width: Int(height * ratio), height: Int(height), color: [.systemPink, .systemBlue, .systemGreen, .systemOrange][index % 4], label: label) ?? URL(filePath: "/")
+            return ServerEmoji(shortcode: "shape_\(String(format: "%02d", index))", url: url, staticUrl: url, category: category, aspectRatio: knowsSize ? ratio : nil)
+        }
     }
 
     @MainActor
