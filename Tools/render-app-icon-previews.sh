@@ -7,7 +7,7 @@ set -eu
 ictool="$(dirname "$DEVELOPER_DIR")/Applications/Icon Composer.app/Contents/Executables/ictool"
 out="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
 
-# どのアイコンも同じ軌跡の形を使い、色（とScia Tryの方眼）だけをicon.jsonで変えている。
+# どのアイコンも同じ軌跡の形を使い、色（とScia Tryの作図線）だけをicon.jsonで変えている。
 # .iconは自分のAssetsの中の画像しか参照できず、シンボリックリンクにするとictoolが白地に青の絵を欠けて描き出したため、同じファイルを置き、1つだけ直したらビルドを止める
 trail="$SRCROOT/App/Resources/AppIcon.icon/Assets/trail.svg"
 for other in AppIconLight AppIconTry; do
