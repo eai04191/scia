@@ -123,14 +123,23 @@ public struct StreamingConnection: Sendable {
         }
     }
 
-    /// 次のイベントを待つ。読めないイベントはログに残して読み飛ばす。接続が切れたら投げる。
+    /// 次のイベントを待つ。読めないイベントと、購読を断ったエラーはログに残して読み飛ばす。接続が切れたら投げる。
+    /// MastodonもFedibirdも、WebSocketでエラーを返すのは購読と購読解除に失敗したときだけで、接続は開いたままにする（`streaming/index.js`）。
+    /// 切ってつなぎ直すと、断られた購読のためにほかの購読まで届かなくなる。Fedibirdはローカルの購読を断るため、ホームや通知まで止まっていた。
+    /// エラーにはどの購読かが付かないので、断られた購読は分からず、届かないまま接続中と出る。
+    /// サーバーの一時的な失敗（5xx）は、つなぎ直して購読し直すため投げる。Mastodonは、断るときは400か401を、予期しない失敗は500を返す（`streaming/errors.js`）。
+    /// Fedibirdは状態コードを付けずに返すので、一時的な失敗でも読み飛ばし、その購読は次につなぎ直すまで届かない。断ったのか一時的な失敗かを文から見分けるには、サーバーごとの文に頼ることになるため、見分けない。
     public func next() async throws -> StreamingMessage {
         while true {
             let text = try await translating { try await connection.receive() }
             do {
                 return try StreamingMessageDecoder.decode(text)
             } catch let error as StreamingServerError {
-                throw error
+                if let status = error.status, status >= 500 {
+                    throw error
+                }
+                // 文はサーバーが返したものなので、伏せる（docs/logging.md）。
+                logger.error("streaming subscription refused status=\(error.status.map(String.init) ?? "-", privacy: .public) message=\(error.message, privacy: .private)")
             } catch {
                 logger.error("streaming decode failed: \(SciaLog.describe(error), privacy: .public)")
             }

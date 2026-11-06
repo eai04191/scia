@@ -195,12 +195,32 @@ struct StreamingClientTests {
         #expect(connector.requests.count == 1)
     }
 
-    @Test func serverErrorEndsConnection() async throws {
-        let connector = StubWebSocketConnector(messages: [#"{"error":"Unknown stream type","status":400}"#])
+    /// 購読を断るエラーが届いても、接続を切らずに続くイベントを読む。
+    /// MastodonもFedibirdも、WebSocketでエラーを返すのは購読と購読解除に失敗したときだけで、接続は開いたままにする。
+    /// Fedibirdはローカルの購読を断るため、切るとホームや通知まで届かなくなる。
+    @Test func subscriptionErrorKeepsConnection() async throws {
+        let connector = StubWebSocketConnector(messages: [
+            #"{"error":"No local stream provided"}"#,
+            #"{"stream":["user"],"event":"delete","payload":"1"}"#,
+        ])
         let connection = try await StreamingClient(credential: try makeCredential(), connector: connector)
             .open(baseURL: try #require(URL(string: "wss://streaming.example.social")))
 
-        await #expect(throws: StreamingServerError.self) { try await connection.next() }
+        let message = try await connection.next()
+        #expect(message.event == .delete(statusID: "1"))
+    }
+
+    /// サーバーの一時的な失敗（5xx）で購読できなかったときは、つなぎ直して購読し直すため、切る。
+    /// Mastodonは、断るときは400か401を、DBの障害のような予期しない失敗は500を返す（`streaming/errors.js`の`extractStatusAndMessage`）。
+    @Test func temporarySubscriptionFailureEndsConnection() async throws {
+        let connector = StubWebSocketConnector(messages: [
+            #"{"error":"An unexpected error occurred","status":500}"#,
+            #"{"stream":["user"],"event":"delete","payload":"1"}"#,
+        ])
+        let connection = try await StreamingClient(credential: try makeCredential(), connector: connector)
+            .open(baseURL: try #require(URL(string: "wss://streaming.example.social")))
+
+        await #expect(throws: StreamingServerError(message: "An unexpected error occurred", status: 500)) { try await connection.next() }
     }
 }
 
