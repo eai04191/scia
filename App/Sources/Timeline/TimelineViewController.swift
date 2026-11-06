@@ -1380,6 +1380,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             var configuration = emptyConfiguration(text: "読み込めませんでした", secondaryText: nil, buttonTitle: "再試行")
             configuration.secondaryAttributedText = message.attributedText(textStyle: .body)
             return configuration
+        case .unavailable:
+            // 読み直しても読めないので、再試行のボタンは置かない。
+            var configuration = UIContentUnavailableConfiguration.empty()
+            configuration.text = texts.unavailable
+            return configuration
         }
     }
 

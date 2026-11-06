@@ -167,7 +167,7 @@ public final class AccountSession {
                 guard let self else { return }
                 capabilitiesState = .loaded
                 capabilities = loaded
-                logger.info("server capabilities loaded emojiReaction=\(loaded.supportsEmojiReactions, privacy: .public)")
+                logger.info("server capabilities loaded emojiReaction=\(loaded.supportsEmojiReactions, privacy: .public) localTimeline=\(loaded.hasLocalTimeline, privacy: .public)")
                 onCapabilitiesLoad(loaded)
             } catch {
                 guard let self else { return }

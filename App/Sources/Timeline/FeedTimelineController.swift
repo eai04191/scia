@@ -104,6 +104,11 @@ final class FeedTimelineController {
         model.setEnabled(isEnabled)
     }
 
+    /// サーバーがこの一覧を読ませないと分かったときに呼ぶ（docs/tabs.md）。
+    func markUnavailableOnServer() {
+        model.markUnavailableOnServer()
+    }
+
     /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときと、積んで開いた一覧がナビゲーションから外されたときに呼ぶ。
     /// セッションを閉じたときは、呼ばなくても持ち主が閉じて止まる。
     func stop() {

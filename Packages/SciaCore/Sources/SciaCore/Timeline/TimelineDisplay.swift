@@ -7,6 +7,8 @@ public enum TimelineContentState: Equatable, Sendable {
     /// サーバーがホームを再生成中で、まだ投稿が返ってこない。
     case regenerating
     case failed(ErrorPresentation)
+    /// サーバーがこの一覧を読ませない。読まず、購読もしない（docs/tabs.md）。
+    case unavailable
 }
 
 /// 末尾の読み込みの状態。フッターに出す。

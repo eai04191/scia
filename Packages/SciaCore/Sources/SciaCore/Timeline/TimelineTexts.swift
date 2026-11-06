@@ -13,8 +13,10 @@ public struct TimelineTexts: Sendable {
     public let reachedEnd: String
     /// サーバーから届いたが、読めなかった要素の行。
     public let unreadable: String
+    /// サーバーがこの一覧を読ませないとき（docs/tabs.md）。
+    public let unavailable: String
 
-    public init(dumpName: String, title: String, subtitle: String? = nil, empty: String, emptyDetail: String? = nil, reachedEnd: String, unreadable: String) {
+    public init(dumpName: String, title: String, subtitle: String? = nil, empty: String, emptyDetail: String? = nil, reachedEnd: String, unreadable: String, unavailable: String = "このサーバーではこの一覧を読めません") {
         self.dumpName = dumpName
         self.title = title
         self.subtitle = subtitle
@@ -22,10 +24,11 @@ public struct TimelineTexts: Sendable {
         self.emptyDetail = emptyDetail
         self.reachedEnd = reachedEnd
         self.unreadable = unreadable
+        self.unavailable = unavailable
     }
 
     public static let home = TimelineTexts(dumpName: "timeline", title: "ホーム", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
-    public static let local = TimelineTexts(dumpName: "local", title: "ローカル", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
+    public static let local = TimelineTexts(dumpName: "local", title: "ローカル", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿", unavailable: "ローカルのタイムラインはありません")
     public static let federated = TimelineTexts(dumpName: "federated", title: "連合", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
     public static let bookmarks = TimelineTexts(dumpName: "bookmarks", title: "ブックマーク", empty: "ブックマークした投稿はありません", reachedEnd: "これより前にブックマークした投稿はありません", unreadable: "表示できない投稿")
     public static let favourites = TimelineTexts(dumpName: "favourites", title: "お気に入り", empty: "お気に入りした投稿はありません", reachedEnd: "これより前にお気に入りした投稿はありません", unreadable: "表示できない投稿")

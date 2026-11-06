@@ -37,8 +37,12 @@ public final class FeedTimelineModel {
     public private(set) var contentState = TimelineContentState.loaded
     /// 末尾の読み込みの状態。失敗したままなら、電波の回復でやり直す。
     public private(set) var footerState = TimelineFooterState.idle
-    /// 設定で無効にしている。購読せず、有効に戻したらつなぎ直して、無効だった間を補う。
-    private var isDisabled = false
+    /// 設定で無効にしているか、サーバーが読ませない。購読せず、有効に戻したらつなぎ直して、無効だった間を補う。
+    private var isDisabled: Bool { isDisabledInSettings || isUnavailable }
+    /// 設定で無効にしている。
+    private var isDisabledInSettings = false
+    /// サーバーがこの一覧を読ませない。読まず、購読もせず、読めないと出す（docs/tabs.md）。
+    private var isUnavailable = false
     private var hasStarted = false
     /// 一覧のストリームの購読。読み込みが済んでから申し込み、止めるときやバックグラウンドではやめる。
     private var streamingSubscription: StreamingHub.Subscription?
@@ -114,6 +118,10 @@ public final class FeedTimelineModel {
     public func start(purpose: RequestPurpose) {
         guard !isStopped else { return }
         hasStarted = true
+        guard !isUnavailable else {
+            setContentState(.unavailable)
+            return
+        }
         setContentState(.loading)
         run(purpose) { await $0.loadInitial() }
     }
@@ -134,13 +142,10 @@ public final class FeedTimelineModel {
 
     /// 設定で有効か無効かを切り替える。無効にしたら購読をやめ、有効に戻したら、読み込み済みならつなぎ直す。
     public func setEnabled(_ isEnabled: Bool) {
-        guard isDisabled == isEnabled else { return }
-        isDisabled = !isEnabled
+        guard isDisabledInSettings == isEnabled else { return }
+        isDisabledInSettings = !isEnabled
         if isDisabled {
-            stopStreaming()
-            // 作り直し中の読み直しも、使わない一覧への通信なのでやめる。有効に戻したら、つないだところで補完する。
-            cancelRegeneratingRetry()
-            stopPolling()
+            stopReading()
         } else {
             // 無効の間は、失敗した読み込みのやり直しを見送っているので、ここでやり直す。
             retryFailedLoads()
@@ -149,6 +154,26 @@ public final class FeedTimelineModel {
                 startPolling()
             }
         }
+    }
+
+    /// サーバーがこの一覧を読ませないと分かったときに呼ぶ。購読をやめ、以後は読まず、読めないと出す。戻すことはない。
+    /// 走っている読み込みは止めないが、終わっても読み込み済みとは出さず、購読もしない。
+    public func markUnavailableOnServer() {
+        guard !isUnavailable else { return }
+        isUnavailable = true
+        logger.info("\(self.feed.name, privacy: .public) unavailable on server")
+        stopReading()
+        streamingStatus?.setState(nil)
+        setContentState(.unavailable)
+        setFooterState(.idle)
+    }
+
+    /// 購読と、時間をおいた読み直しをやめる。
+    private func stopReading() {
+        stopStreaming()
+        // 作り直し中の読み直しも、使わない一覧への通信なのでやめる。有効に戻したら、つないだところで補完する。
+        cancelRegeneratingRetry()
+        stopPolling()
     }
 
     /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときと、積んで開いた一覧がナビゲーションから外されたときに呼ぶ。
@@ -271,7 +296,8 @@ public final class FeedTimelineModel {
 
     /// ストリーミングの接続の状態を、引っぱったときに見せる表示へ伝える。
     public func showStreamingState(_ state: ConnectionDiagnostics.StreamingState?) {
-        streamingStatus?.setState(state)
+        // 読めない一覧は購読しないので、つながっていても未接続と出す。
+        streamingStatus?.setState(isUnavailable ? nil : state)
     }
 
     /// 補完で429や503を受けて止められていたら、待機中と出す。補完の終わりの反映を待たせないよう、別に確かめる。
@@ -298,8 +324,9 @@ public final class FeedTimelineModel {
     }
 
     private func setContentState(_ state: TimelineContentState) {
-        contentState = state
-        display?.setContentState(state)
+        // 読めないと分かったあとに終わった読み込みは、読み込み済みや失敗と出さない。
+        contentState = isUnavailable ? .unavailable : state
+        display?.setContentState(contentState)
     }
 
     private func setFooterState(_ state: TimelineFooterState) {
@@ -339,6 +366,7 @@ public final class FeedTimelineModel {
 
     /// 失敗の表示の再試行が押されたときに呼ぶ。
     public func retry() {
+        guard !isUnavailable else { return }
         if store.isEmpty {
             start(purpose: .action)
         } else {
@@ -372,7 +400,7 @@ public final class FeedTimelineModel {
     }
 
     private func loadOlder(purpose: RequestPurpose) {
-        guard !isStopped, !store.isLoading, !store.reachedEnd, !store.isEmpty else { return }
+        guard !isStopped, !isUnavailable, !store.isLoading, !store.reachedEnd, !store.isEmpty else { return }
         setFooterState(.loading)
         run(purpose) { model in
             model.logger.info("\(model.feed.name, privacy: .public) loadOlder start")

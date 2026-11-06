@@ -593,6 +593,9 @@ final class SessionController {
             for timeline in self?.timelines.allObjects ?? [] {
                 timeline.supportsEmojiReactions = capabilities.supportsEmojiReactions
             }
+            if !capabilities.hasLocalTimeline {
+                self?.local.markUnavailableOnServer()
+            }
         }
         session.onPreferencesLoad = { [weak self, handle = credential.handle] preferences in
             AppDependencies.settings.rememberServerAnimations(preferences.autoplaysAnimations, of: handle)

@@ -136,6 +136,76 @@ struct FeedTimelineModelTests {
         try await waitUntil { display.contentState == .loaded }
     }
 
+    /// ローカルの一覧の読み込みを数える。返すのは空。
+    private static func localTransport(gate: Gate? = nil, onRequest: @escaping @Sendable () -> Void) -> RoutedTransport {
+        RoutedTransport { request in
+            guard request.url?.path() == "/api/v1/timelines/public" else { return (200, Data("{}".utf8)) }
+            onRequest()
+            try await gate?.wait()
+            return (200, Data("[]".utf8))
+        }
+    }
+
+    /// サーバーが読ませない一覧は、読めないと伝え、購読をやめ、引っぱった読み直し、電波の回復、前面に戻ったとき、再試行でも読まない。
+    /// Fedibirdは、ローカルのタイムラインを空で返し、購読を断るため（docs/tabs.md）。
+    @Test func unavailableFeedStopsLoadingAndStreaming() async throws {
+        let requests = Mutex(0)
+        let (model, display) = makeModel(feed: .local, transport: Self.localTransport { requests.withLock { $0 += 1 } })
+        defer { model.stop() }
+        model.start(purpose: .action)
+        try await waitUntil { model.isSubscribedToStreaming }
+        // つながったときの補完が走っていれば、それが終わってから数え始める。
+        try await waitUntil { model.runningTaskCount == 0 }
+        let before = requests.withLock { $0 }
+
+        model.markUnavailableOnServer()
+
+        #expect(display.contentState == .unavailable)
+        #expect(!model.isSubscribedToStreaming)
+        await model.refresh()
+        model.recover()
+        model.enterForeground()
+        model.retry()
+        model.setEnabled(false)
+        model.setEnabled(true)
+        try await waitUntil { model.runningTaskCount == 0 }
+        #expect(requests.withLock { $0 } == before, "読めない一覧を読み直しました")
+        #expect(!model.isSubscribedToStreaming)
+        #expect(display.contentState == .unavailable)
+    }
+
+    /// 始める前に読めないと分かった一覧は、開いても読まない。
+    @Test func unavailableFeedDoesNotStart() async throws {
+        let requests = Mutex(0)
+        let (model, display) = makeModel(feed: .local, transport: Self.localTransport { requests.withLock { $0 += 1 } })
+        defer { model.stop() }
+
+        model.markUnavailableOnServer()
+        model.startIfNeeded()
+
+        try await waitUntil { model.runningTaskCount == 0 }
+        #expect(requests.withLock { $0 } == 0)
+        #expect(display.contentState == .unavailable)
+        #expect(!model.isSubscribedToStreaming)
+    }
+
+    /// 最初の読み込みの途中で読めないと分かったら、読み終えても、読み込み済みと出さず、購読もしない。
+    @Test func unavailableDuringInitialLoadKeepsUnavailable() async throws {
+        let requests = Mutex(0)
+        let gate = Gate()
+        let (model, display) = makeModel(feed: .local, transport: Self.localTransport(gate: gate) { requests.withLock { $0 += 1 } })
+        defer { model.stop() }
+        model.start(purpose: .action)
+        try await waitUntil { gate.waiterCount == 1 }
+
+        model.markUnavailableOnServer()
+        gate.open()
+
+        try await waitUntil { model.runningTaskCount == 0 }
+        #expect(display.contentState == .unavailable)
+        #expect(!model.isSubscribedToStreaming)
+    }
+
     /// 作り直し中で投稿のないホームは、作り直し中と伝える。
     @Test func emptyRegeneratingHomeShowsRegenerating() async throws {
         let transport = RoutedTransport { _ in (206, Data("[]".utf8)) }
