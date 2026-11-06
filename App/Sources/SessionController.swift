@@ -589,9 +589,9 @@ final class SessionController {
         composer.onLinkTitleLoadingChange = { [weak self] in self?.linkTitleActivityDidChange() }
         composer.onLinkTitleFailed = { [weak self] failure in self?.linkTitleDidFail(failure) }
         session.onCredentialsInvalid = { [weak self] in self?.credentialsDidBecomeInvalid() }
-        session.onEmojiReactionSupportLoad = { [weak self] supports in
+        session.onCapabilitiesLoad = { [weak self] capabilities in
             for timeline in self?.timelines.allObjects ?? [] {
-                timeline.supportsEmojiReactions = supports
+                timeline.supportsEmojiReactions = capabilities.supportsEmojiReactions
             }
         }
         session.onPreferencesLoad = { [weak self, handle = credential.handle] preferences in
@@ -3223,7 +3223,7 @@ final class SessionController {
         AppDependencies.settings.followServerAnimations(of: credential.handle)
         // 注意書きを最初から開いておくかと、アニメーションを再生するかを一覧に反映する。読めなければ前の値のままにし、次に投稿欄で書き始めたときに読み直す。
         tasks.run(.display) { [session] in await session.loadPreferences() }
-        session.loadEmojiReactionSupport()
+        session.loadCapabilities()
     }
 
     /// 原因を絞れるよう、サーバーの版を記録に残す。読めなくても使うのに困らないので、失敗は記録するだけにする。

@@ -194,14 +194,14 @@ public struct MastodonClient: Sendable {
         }
     }
 
-    /// 投稿への絵文字のリアクションに対応しているか。Fedibirdの拡張で、`api/v1/instance`の`fedibird_capabilities`に`emoji_reaction`があるかで決める（docs/emoji-reaction.md）。
-    /// Fedibirdとkmyblueはv1に必ず返すので、v2は読まない。項目がないサーバーは対応していない。
-    public func supportsEmojiReactions() async throws -> Bool {
+    /// サーバーの、Mastodonにない機能の有無。Fedibirdの拡張で、`api/v1/instance`の`fedibird_capabilities`で決める。
+    /// Fedibirdとkmyblueはv1に必ず返すので、v2は読まない。項目がないサーバーは、Mastodonと同じとみなす。
+    public func serverCapabilities() async throws -> ServerCapabilities {
         struct Instance: Decodable {
             let fedibirdCapabilities: [String]?
         }
         let capabilities = try await get(Instance.self, path: "api/v1/instance", query: []).0.fedibirdCapabilities ?? []
-        return capabilities.contains("emoji_reaction")
+        return ServerCapabilities(fedibirdCapabilities: capabilities)
     }
 
     /// https://docs.joinmastodon.org/methods/instance/#v2

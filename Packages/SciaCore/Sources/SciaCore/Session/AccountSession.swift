@@ -33,11 +33,13 @@ public final class AccountSession {
     /// 読めたアカウントの設定。まだ読めていなければnil。
     public private(set) var preferences: ServerPreferences?
     private var instanceConfiguration: InstanceConfiguration?
-    /// サーバーが投稿への絵文字のリアクションに対応しているか（docs/emoji-reaction.md）。読めていないうちと、読めなかったときはfalse。
-    public private(set) var supportsEmojiReactions = false
-    /// 絵文字のリアクションに対応しているかを読めたときに呼ぶ。
-    public var onEmojiReactionSupportLoad: (Bool) -> Void = { _ in }
-    private var emojiReactionSupport: EmojiReactionSupportState = .unknown
+    /// サーバーの、Mastodonにない機能の有無。読めていないうちと、読めなかったときはMastodonと同じ。
+    public private(set) var capabilities = ServerCapabilities.mastodon
+    /// サーバーが投稿への絵文字のリアクションに対応しているか（docs/emoji-reaction.md）。
+    public var supportsEmojiReactions: Bool { capabilities.supportsEmojiReactions }
+    /// サーバーの機能の有無を読めたときに呼ぶ。
+    public var onCapabilitiesLoad: (ServerCapabilities) -> Void = { _ in }
+    private var capabilitiesState: CapabilitiesState = .unknown
     private var lists: [WeakList] = []
     private let logger = SciaLog.logger(category: "session")
 
@@ -121,7 +123,7 @@ public final class AccountSession {
 
     private func recover(reason: String) {
         logger.info("recover reason=\(reason, privacy: .public)")
-        loadEmojiReactionSupport()
+        loadCapabilities()
         // つながっていなければ、待っている間隔を飛ばしてつなぎ直す。
         streamingHub.recover()
         for list in lists.compactMap(\.list) {
@@ -153,29 +155,29 @@ public final class AccountSession {
         return instanceConfiguration
     }
 
-    /// サーバーが絵文字のリアクションに対応しているかを読む。一度読めたら読み直さない。
-    /// 読めなかったら、次にやり直すとき（通信が戻ったときなど）にまた読む。起動のときの一時的な失敗で、ずっと出さないままにしないため。
-    public func loadEmojiReactionSupport() {
-        guard emojiReactionSupport == .unknown else { return }
-        emojiReactionSupport = .loading
+    /// サーバーの機能の有無を読む。一度読めたら読み直さない。
+    /// 読めなかったら、次にやり直すとき（通信が戻ったときなど）にまた読む。起動のときの一時的な失敗で、ずっとMastodonと同じ扱いのままにしないため。
+    public func loadCapabilities() {
+        guard capabilitiesState == .unknown else { return }
+        capabilitiesState = .loading
         let client = client
         tasks.run(.display) { [weak self] in
             do {
-                let supports = try await client.supportsEmojiReactions()
+                let loaded = try await client.serverCapabilities()
                 guard let self else { return }
-                emojiReactionSupport = .loaded
-                supportsEmojiReactions = supports
-                logger.info("emoji reaction support loaded supports=\(supports, privacy: .public)")
-                onEmojiReactionSupportLoad(supports)
+                capabilitiesState = .loaded
+                capabilities = loaded
+                logger.info("server capabilities loaded emojiReaction=\(loaded.supportsEmojiReactions, privacy: .public)")
+                onCapabilitiesLoad(loaded)
             } catch {
                 guard let self else { return }
-                emojiReactionSupport = .unknown
-                logger.info("emoji reaction support unavailable error=\(SciaLog.describe(error), privacy: .public)")
+                capabilitiesState = .unknown
+                logger.info("server capabilities unavailable error=\(SciaLog.describe(error), privacy: .public)")
             }
         }
     }
 
-    private enum EmojiReactionSupportState {
+    private enum CapabilitiesState {
         case unknown, loading, loaded
     }
 
