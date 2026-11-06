@@ -1350,6 +1350,39 @@ final class InlineComposeControllerTests {
         #expect(textView.layer.mask == nil, "動き終えても、入力欄の文字を隠しています")
     }
 
+    /// 返信の宛先だけを書いた下書きを開くと、宛先は入力欄の本物の文字と同じ位置で浮かび上がる。
+    /// カプセルでは隠している入力欄の枠の高さが0なので、その場で出し入れするかたまりの入れ物は高さ0から伸びる。入れ物の中身をその大きさに合わせて伸び縮みさせていたため、
+    /// 動いている途中に向かい直すと中身の高さがずれ、宛先が欄の高さの分だけ下（ツールバーの上）に描かれ、動き終えてから本文の行へ飛んだ。
+    @Test func openingReplyDraftShowsMentionOnTextLine() async throws {
+        defer { window.isHidden = true }
+        composer.reply(to: try status(id: "10"))
+        try await waitUntilSettled()
+        let textView = try #require(textViews(in: window).first)
+        let mention = textView.text ?? ""
+        try #require(mention.hasPrefix("@"), "返信の宛先が入っていません: \(mention)")
+        composer.endEditing()
+        try await waitUntilSettled()
+        useDefaultAnimationDurations()
+        let bar = try composerBar()
+        let chunk = { self.textLines(in: self.window).first { $0.overhang > 0 && mention.hasPrefix($0.attributedText.string) && !$0.attributedText.string.isEmpty } }
+
+        composer.beginEditing()
+        try await clock.advance(by: 0)
+        var landing: CGPoint?
+        while let line = chunk() {
+            #expect(clock.now < 5, "動き終えても、かたまりが残っています")
+            guard clock.now < 5 else { break }
+            if (line.layer.presentation()?.opacity ?? 0) > 0.5 {
+                landing = try glyphInk(of: line, in: bar)
+            }
+            try await clock.advance(by: LayerClock.frame)
+        }
+        try await waitUntilSettled()
+        let last = try #require(landing, "宛先を浮かび上がらせるかたまりがありません\n\(composer.stateDump())")
+        let range = try #require(textView.textRange(from: textView.beginningOfDocument, to: textView.position(from: textView.beginningOfDocument, offset: 1) ?? textView.beginningOfDocument))
+        expectClose(last, try ink(of: textView, glyphs: textView.firstRect(for: range).insetBy(dx: 0, dy: -8), in: bar), "着地のコマの宛先が、入力欄の本物の文字と同じ位置にありません")
+    }
+
     /// 開閉で本文を動かす間、かたまりの文字は本物と同じ大きさのまま描く。
     /// かたまりの文字を描くビューの枠が、開閉のアニメーションの中で初めて決まると、0の大きさから育つ動きになり、描いた文字がその枠に合わせて縮んで見えた。
     /// 開き始めは枠がほぼ0なので、カプセルの文字が消えたように見えた。

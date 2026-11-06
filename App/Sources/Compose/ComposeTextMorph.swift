@@ -601,10 +601,13 @@ final class ComposeTextMorph {
     private static let everywhere = CGRect(x: -5000, y: -5000, width: 10000, height: 10000)
 
     /// 動かしている途中のビューの位置と大きさを、そのとき見えている形で止める。`includingSubviews`なら、子のビューとマスクも止める。濃さの動きは残す。
+    /// 大きさは、`bounds`の原点を写さずに大きさだけを写す。どのビューも原点を動かさないが、大きさが0から伸びる動き（返信の宛先だけを書いた下書きを開くときの、
+    /// その場で出し入れするかたまりの入れ物）を始めた直後に止めると、表示の層の`bounds`の原点がずれた値（欄の高さの分だけ負）で返り、
+    /// 写すと中のかたまりがその分だけ下に描かれたため。
     static func freezePosition(_ view: UIView, includingSubviews: Bool = true) {
         if let presentation = view.layer.presentation() {
             view.layer.position = presentation.position
-            view.layer.bounds = presentation.bounds
+            view.layer.bounds.size = presentation.bounds.size
             for key in view.layer.animationKeys() ?? [] where key.hasPrefix("position") || key.hasPrefix("bounds") {
                 view.layer.removeAnimation(forKey: key)
             }
@@ -620,7 +623,8 @@ final class ComposeTextMorph {
     static func freeze(_ view: UIView) {
         guard let presentation = view.layer.presentation() else { return }
         view.layer.position = presentation.position
-        view.layer.bounds = presentation.bounds
+        // `freezePosition`と同じく、原点は写さない。
+        view.layer.bounds.size = presentation.bounds.size
         view.layer.opacity = presentation.opacity
         view.layer.removeAllAnimations()
         for subview in view.subviews {
