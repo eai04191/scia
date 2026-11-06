@@ -343,6 +343,32 @@ struct OtherAccountMenuTests {
         #expect(bob.known(shown) == nil)
     }
 
+    /// 編集して返った投稿を覚え、編集の前に始めた検索の結果で戻さない。次の編集を、編集の前の添付で始めないため。
+    @Test func editReplacesKnownStatus() async throws {
+        let before = status(id: "7000", uri: uri)
+        let refreshing = Gate()
+        let searches = Mutex(0)
+        let bob = try account("bob", operations(search: { _ in
+            let count = searches.withLock { count in
+                count += 1
+                return count
+            }
+            if count > 1 { try await refreshing.wait() }
+            return [before]
+        }))
+        let shown = status(uri: uri)
+        _ = await bob.lookup(shown)
+
+        let refresh = Task { await bob.lookup(shown) }
+        try await waitUntil { refreshing.waiterCount == 1 }
+        let edited = Status(id: "7000", createdAt: before.createdAt, account: before.account, content: "<p>編集した</p>", spoilerText: "", uri: uri, url: nil)
+        bob.didEdit(edited)
+        refreshing.open()
+        _ = await refresh.value
+
+        #expect(bob.known(shown)?.content == "<p>編集した</p>")
+    }
+
     /// そのアカウントから見られない投稿と、探せなかったときは、押せない行で知らせる。URIのない投稿は探さない。
     @Test func reportsStatusesThatCannotBeFound() async throws {
         let calls = Mutex(0)

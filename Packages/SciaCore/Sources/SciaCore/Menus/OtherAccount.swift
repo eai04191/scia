@@ -283,10 +283,22 @@ public final class OtherAccount {
     /// そのアカウントの投稿`status`を削除し、覚えている投稿からも除く。
     public func delete(_ status: Status) async throws {
         try await operations.deleteStatus(status.id)
-        for (uri, known) in statuses where known.id == status.id {
+        didDelete(status.id)
+    }
+
+    /// そのアカウントの投稿が消えたので、覚えている投稿から除く。削除して書き直す元の投稿を投稿欄が消したときにも呼ぶ。
+    /// 探している途中の検索の結果で、消えた投稿を戻さない。
+    public func didDelete(_ id: Status.ID) {
+        for (uri, known) in statuses where known.id == id {
             statuses[uri] = nil
             revisions[uri, default: 0] += 1
         }
+    }
+
+    /// そのアカウントで編集した投稿を、サーバーが返した編集のあとの投稿で覚え直す。
+    /// 次に開いたメニューの編集を、編集の前の添付で始めず、探している途中の検索の結果でも戻さない。
+    public func didEdit(_ edited: Status) {
+        update(edited.id) { _ in edited }
     }
 
     private func update(_ id: Status.ID, _ transform: (Status) -> Status) {

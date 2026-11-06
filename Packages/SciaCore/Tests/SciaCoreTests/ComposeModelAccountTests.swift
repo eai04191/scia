@@ -169,4 +169,72 @@ struct ComposeModelAccountTests {
         #expect(uploads.names.withLock { $0 } == ["home.example:a.jpg", "other.example:a.jpg"])
     }
 
+
+    /// ほかのアカウントの投稿の編集は、投稿するアカウントをそのアカウントにして始め、そのアカウントの送り先で送る。送ったら今のアカウントに戻す。
+    @Test func editsOtherAccountsStatus() async throws {
+        let posted = Posted()
+        let model = ComposeModel(tasks: TaskScope(), myAccountID: "1") { draft in
+            posted.texts.withLock { $0.append("home:\(draft.text)") }
+        }
+        model.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
+        let other = ComposeAccount<Never>(id: "other", myAccountID: "50", media: .unavailable) { draft in
+            posted.texts.withLock { $0.append("other:\(draft.editing?.statusID ?? "new"):\(draft.text)") }
+        }
+
+        #expect(model.beginEditing(status(id: "700", accountID: "50"), source: StatusSource(id: "700", text: "前の本文", spoilerText: ""), as: other))
+        #expect(model.otherAccount?.id == "other")
+        model.text = "直した本文"
+        await model.submit()
+
+        #expect(posted.texts.withLock { $0 } == ["other:700:直した本文"])
+        #expect(model.otherAccount == nil)
+    }
+
+    /// ほかのアカウントの投稿を削除して書き直すときは、そのアカウントのサーバーで元の投稿を消し、消せたことはそのアカウントに知らせる。今のアカウントには知らせない。
+    /// 今のアカウントで同じIDの投稿が消えたという知らせは、別の投稿なので使わない。
+    @Test func redraftsOtherAccountsStatus() async throws {
+        let deleted = Posted()
+        let model = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }
+        var homeDeleted: [String] = []
+        model.onRedraftDeleted = { homeDeleted.append($0) }
+        model.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
+        let redraft = ComposeRedraftService(
+            deleteStatus: { id in deleted.texts.withLock { $0.append("delete:\(id)") } },
+            waitUntilReleased: { id in MediaAttachment(id: id, type: .image, url: URL(string: "https://example/m.jpg"), previewUrl: nil) }
+        )
+        let other = ComposeAccount<Never>(id: "other", myAccountID: "50", media: .unavailable, redraft: redraft, onRedraftDeleted: { id in
+            deleted.texts.withLock { $0.append("forget:\(id)") }
+        }) { draft in
+            deleted.texts.withLock { $0.append("post:\(draft.text)") }
+        }
+
+        #expect(model.beginRedrafting(status(id: "700", accountID: "50"), source: StatusSource(id: "700", text: "前の本文", spoilerText: ""), as: other))
+        model.redraftedStatusWasDeleted("700", stopsRedrafting: true)
+        #expect(model.redraft != nil)
+        model.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil, accountID: "other")
+        await model.submit()
+
+        #expect(deleted.texts.withLock { $0 } == ["delete:700", "forget:700", "post:前の本文"])
+        #expect(homeDeleted.isEmpty)
+    }
+
+    /// ほかのアカウントの投稿を書き直すときは、投票の締め切りを、そのアカウントのサーバーの上限で決める。
+    /// 今のアカウントのサーバーの上限や、読む前の上限で決めると、そのサーバーで選べない締め切りになり、送れないため。
+    @Test func redraftsPollWithinOtherAccountsLimits() throws {
+        let limits = PollLimits(maxOptions: 4, maxCharactersPerOption: 50, expirationRange: 300...1500)
+        let otherConfiguration = InstanceConfiguration(maxCharacters: 1000, charactersReservedPerURL: 23, maxMediaAttachments: 4, mediaDescriptionLimit: 1500, supportedMediaTypes: nil, pollLimits: limits, mediaLimits: .unknown)
+        let author = Account(id: "50", username: "bob", acct: "bob", displayName: "Bob", avatar: nil)
+        let created = Date(timeIntervalSince1970: 1_800_000_000)
+        let poll = Poll(id: "p", expiresAt: created.addingTimeInterval(1500), expired: false, multiple: false, votesCount: 0, options: [.init(title: "a", votesCount: 0), .init(title: "b", votesCount: 0)])
+        let original = Status(id: "700", createdAt: created, account: author, content: "", spoilerText: "", url: nil, poll: poll)
+        let source = StatusSource(id: "700", text: "本文", spoilerText: "")
+        let model = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }
+        model.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
+        let other = ComposeAccount<Never>(id: "other", myAccountID: "50", media: .unavailable) { _ in }
+
+        #expect(model.beginRedrafting(original, source: source, as: other, configuration: otherConfiguration))
+
+        #expect(model.poll?.expiresIn == StatusDraft.redraft(of: original, source: source, pollLimits: limits).poll?.expiresIn)
+        #expect(model.pollLimits == limits)
+    }
 }

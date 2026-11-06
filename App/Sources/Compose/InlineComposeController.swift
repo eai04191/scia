@@ -170,6 +170,18 @@ final class InlineComposeController: NSObject {
     /// 書いているほかのアカウントの行。ほかのアカウントで書いているときだけ、返信や編集のラベルの上に出す。
     private lazy var accountRow = makeAccountRow()
     private let accountAvatarView = UIImageView()
+    /// 書いているアカウントの行の×。今のアカウントに戻す。編集と書き直しの間は、そのアカウントの投稿を指していて戻せないので隠す。
+    private lazy var accountClearButton: UIButton = {
+        var configuration = UIButton.Configuration.plain()
+        configuration.image = UIImage(systemName: "xmark.circle.fill")
+        configuration.baseForegroundColor = .secondaryLabel
+        configuration.contentInsets = .zero
+        let clear = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in self?.onSwitchToHomeAccount() })
+        clear.accessibilityLabel = "今のアカウントで投稿する"
+        clear.setContentHuggingPriority(.required, for: .horizontal)
+        clear.setContentCompressionResistancePriority(.required, for: .horizontal)
+        return clear
+    }()
     private let accountLabel = UILabel()
     /// 予約の行。＋のメニューから足したときと、予約を書き直しているときだけ、返信や編集のラベルの下に出す。
     private lazy var scheduleRow = makeScheduleRow()
@@ -640,12 +652,13 @@ final class InlineComposeController: NSObject {
     /// 自分の投稿の編集を始める。今の下書きは捨てるので、捨ててよいかは呼ぶ側で確かめておく。
     /// 始められなければ（送っている途中、投票を送り直せない）、下書きを変えずにfalseを返す。
     /// メディアのピッカーを開いていれば閉じる。開いたままだと、捨てた下書きの選択がピッカーに残り、次に選んだときに足し直されるため。
+    /// - Parameter account: 投稿を書いたアカウント。今のアカウントならnil。投稿するアカウントをそのアカウントにしてから始める。
     @discardableResult
-    func edit(_ status: Status, source: StatusSource) -> Bool {
+    func edit(_ status: Status, source: StatusSource, as account: ComposeAccount<UIImage>? = nil) -> Bool {
         let now = now()
         guard !model.isPosting, status.canBeEdited(now: now) else { return false }
         bottomSheet?.close(notifiesWillClose: true)
-        guard model.beginEditing(status, source: source, now: now) else { return false }
+        guard model.beginEditing(status, source: source, now: now, as: account) else { return false }
         update()
         beginEditing()
         return true
@@ -665,11 +678,13 @@ final class InlineComposeController: NSObject {
 
     /// 自分の投稿を削除して書き直し始める。今の下書きは捨てるので、捨ててよいかは呼ぶ側で確かめておく。送っている間は始めずfalseを返す。
     /// 開いているピッカーは、`edit(_:source:)`と同じ理由で閉じる。
+    /// - Parameter account: 投稿を書いたアカウント。今のアカウントならnil。投稿するアカウントをそのアカウントにしてから始める。
+    /// - Parameter configuration: `account`のサーバーの上限。投票の締め切りを、そのサーバーで選べるものにする。
     @discardableResult
-    func redraft(_ status: Status, source: StatusSource) -> Bool {
+    func redraft(_ status: Status, source: StatusSource, as account: ComposeAccount<UIImage>? = nil, configuration: InstanceConfiguration? = nil) -> Bool {
         guard !model.isPosting else { return false }
         bottomSheet?.close(notifiesWillClose: true)
-        guard model.beginRedrafting(status, source: source) else { return false }
+        guard model.beginRedrafting(status, source: source, as: account, configuration: configuration) else { return false }
         update()
         beginEditing()
         return true
@@ -2731,6 +2746,11 @@ final class InlineComposeController: NSObject {
         }
         setRowShown(replyRow, isOpen && chip != nil)
         setRowShown(accountRow, isOpen && writingAccount != nil)
+        // 編集と書き直しの間は戻せないので、×を隠す。やめるのは編集のラベルの×で、やめると今のアカウントに戻る。
+        // 隠しても場所は空けたままにし、行の高さと名前の位置を変えない。
+        accountClearButton.alpha = model.editedStatus == nil && model.redraft == nil ? 1 : 0
+        accountClearButton.isUserInteractionEnabled = accountClearButton.alpha > 0
+        accountClearButton.isAccessibilityElement = accountClearButton.alpha > 0
 
         // 行を消すときは、薄くなる間も日時が残るよう、前の日時のままにする。
         if let scheduledAt = model.scheduledAt {
@@ -3500,18 +3520,9 @@ final class InlineComposeController: NSObject {
         accountLabel.lineBreakMode = .byTruncatingTail
         accountLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        var configuration = UIButton.Configuration.plain()
-        configuration.image = UIImage(systemName: "xmark.circle.fill")
-        configuration.baseForegroundColor = .secondaryLabel
-        configuration.contentInsets = .zero
-        let clear = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in self?.onSwitchToHomeAccount() })
-        clear.accessibilityLabel = "今のアカウントで投稿する"
-        clear.setContentHuggingPriority(.required, for: .horizontal)
-        clear.setContentCompressionResistancePriority(.required, for: .horizontal)
-
         let spacer = UIView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let row = UIStackView(arrangedSubviews: [accountAvatarView, accountLabel, spacer, clear])
+        let row = UIStackView(arrangedSubviews: [accountAvatarView, accountLabel, spacer, accountClearButton])
         row.alignment = .center
         row.spacing = Self.iconColumnGap
         return row

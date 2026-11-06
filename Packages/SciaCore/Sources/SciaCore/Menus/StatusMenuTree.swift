@@ -378,14 +378,10 @@ public struct StatusMenuTree {
         .openThread, .select, .copyLink, .copyText, .selectText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari,
         .editHistory, .favouritedBy, .rebloggedBy, .dismissNotification, .hideMedia, .systemTranslate, .customEmojis, .apiResponse, .otherAccounts, .customize,
     ]
-    /// 「別のアカウントで」の中に、まだ出していない項目。編集と削除して書き直すは、投稿欄をそのアカウントに切り替えて、そのアカウントの投稿を書き直す作りが要り、まだ作っていない。
-    static let notYetOtherAccountItems: Set<StatusMenuItem> = [.edit, .redraft]
     /// 「別のアカウントで」のハッシュタグのメニューに出さない項目。どのアカウントで行っても同じ結果になるもの。
     static let sameForEveryAccountHashtagItems: Set<HashtagMenuItem> = [.timeline, .accountStatuses, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .copyLink, .share, .customize]
     /// 「別のアカウントで」のユーザーのメニューに出さない項目。どのアカウントで行っても同じ結果になるもの。
     static let sameForEveryAccountUserItems: Set<UserMenuItem> = [.profile, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .customize]
-    /// 「別のアカウントで」のユーザーのメニューに、まだ出していない項目。
-    static let notYetOtherAccountUserItems: Set<UserMenuItem> = []
 
     /// 「別のアカウントで」のサブメニュー。ほかのアカウントが1つなら「@usernameで」を直に置き、2つ以上ならアカウントごとの`@username`のサブメニューを並べる。
     /// サーバー名は、ユーザーのメニューの見出しと同じくサブタイトルに出す。名前に`@username@server`をそのまま置くと、長いサーバー名で途中から折り返されて読みにくいため。
@@ -469,7 +465,7 @@ public struct StatusMenuTree {
 
     /// 「別のアカウントで」の中の投稿のメニューの並び。投稿のメニューの並びから、出さない項目を除く。
     private var otherAccountStatusGroups: MenuLayout<StatusMenuItem>.Groups {
-        otherAccountGroups.excluding(Self.sameForEveryAccountItems.union(Self.notYetOtherAccountItems))
+        otherAccountGroups.excluding(Self.sameForEveryAccountItems)
     }
 
     /// 見つけた投稿のほかに「別のアカウントで」の中に出す人。そのサーバーでのIDが分からないため、プロフィールのURLで探す。
@@ -485,7 +481,7 @@ public struct StatusMenuTree {
 
     /// 「別のアカウントで」の中のユーザーのメニューの並び。ユーザーのメニューの並びから、出さない項目を除く。
     private var otherAccountUserGroups: MenuLayout<UserMenuItem>.Groups {
-        userMenu.excluding(Self.sameForEveryAccountUserItems.union(Self.notYetOtherAccountUserItems))
+        userMenu.excluding(Self.sameForEveryAccountUserItems)
     }
 
     /// `account`から見た投稿`found`のメニューを、そのアカウントとして組むもの。

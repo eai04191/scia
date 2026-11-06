@@ -2174,8 +2174,19 @@ final class SessionController {
             recordUnprocessableImageType: { _ in },
             preparation: { Self.mediaPreparation() }
         )
-        return ComposeAccount(id: account.credential.id, myAccountID: account.credential.accountID, media: media) { [weak self] draft in
-            if let scheduledAt = draft.scheduledAt {
+        // 新しい投稿に付け直すので、添付は残して削除する。今のアカウントで削除して書き直すときと同じ。
+        let redraft = ComposeRedraftService(
+            deleteStatus: { try await client.deleteStatus($0, deleteMedia: false) },
+            waitUntilReleased: { try await client.waitUntilReleased($0) }
+        )
+        return ComposeAccount(id: account.credential.id, myAccountID: account.credential.accountID, media: media, redraft: redraft, onRedraftDeleted: { [weak account] id in
+            account?.didDelete(id)
+        }) { [weak self, weak account] draft in
+            if let editing = draft.editing {
+                let edited = try await client.editStatus(editing, to: draft)
+                account?.didEdit(edited)
+                self?.showToggledNotice("\(handle)で編集しました")
+            } else if let scheduledAt = draft.scheduledAt {
                 _ = try await client.scheduleStatus(draft, at: scheduledAt)
                 self?.showToggledNotice("\(handle)で予約しました")
             } else {
@@ -2227,11 +2238,7 @@ final class SessionController {
         let defaults = otherAccounts.composeDefaults(of: account)
         composeDefaultsTask = tasks.run(.action) { [weak self] in
             let loaded = await defaults()
-            #if DEBUG
-            let configuration = DebugFaults.applyingMediaLimits(to: loaded.configuration)
-            #else
-            let configuration = loaded.configuration
-            #endif
+            let configuration = Self.composeConfiguration(loaded.configuration)
             let preferences = loaded.preferences
             self?.composer.model.apply(
                 configuration: configuration,
@@ -2241,6 +2248,15 @@ final class SessionController {
                 accountID: writing.id
             )
         }
+    }
+
+    /// ほかのアカウントのサーバーの上限を、投稿欄で使う形にする。デバッグ版では、メディアの上限の差し替えを入れる。
+    private static func composeConfiguration(_ configuration: InstanceConfiguration?) -> InstanceConfiguration? {
+        #if DEBUG
+        DebugFaults.applyingMediaLimits(to: configuration)
+        #else
+        configuration
+        #endif
     }
 
     /// 投稿欄で送る前に縮める大きさと、作り直すときの好みの値。どのアカウントで書いても同じ設定を使う。
@@ -2318,8 +2334,19 @@ final class SessionController {
             // そのアカウントのサーバーで探した投稿なので、引用できるかはログインしている人向けの形で分かっている。
             write(as: account, starting: "引用") { [weak self] writing in self?.confirmQuoting(status, as: writing) }
             return
-        case .edit, .redraft, .editHistory, .openFavouritedBy, .openRebloggedBy, .viewAPIResponse:
-            // 「別のアカウントで」の並びから除いているので来ない（`StatusMenuTree.sameForEveryAccountItems`と`notYetOtherAccountItems`）。
+        case .edit:
+            UserAction.editStatus.record()
+            startEditing(status, as: account)
+            return
+        case .redraft:
+            UserAction.redraftStatus.record()
+            startRedrafting(status, as: account)
+            return
+        case .editHistory, .openFavouritedBy, .openRebloggedBy, .viewAPIResponse:
+            // 「別のアカウントで」の並びから除いているので来ない（`StatusMenuTree.sameForEveryAccountItems`）。
+            return
+        case .react:
+            // 「別のアカウントで」のメニューは、絵文字のリアクションに対応しているかを読まずに組む（`StatusMenuTree.otherAccountTree`の`supportsEmojiReactions`は既定のfalse）ので、リアクションの項目は出ず、来ない。
             return
         }
         let handle = account.credential.handle
@@ -2357,7 +2384,17 @@ final class SessionController {
         tasks.run(key: "otherAccountDelete:\(account.credential.id):\(status.id)", .skippingWhileRunning, .action) { [weak self] in
             do {
                 try await account.delete(status)
-                self?.showToggledNotice("\(handle)で投稿を削除しました")
+                guard let self else { return }
+                showToggledNotice("\(handle)で投稿を削除しました")
+                // そのアカウントで編集か書き直しをしている投稿なら、今のアカウントで消したときと同じくやめる。
+                if composer.model.otherAccount?.id == account.credential.id {
+                    if composer.model.editedStatus?.id == status.id {
+                        composer.cancelStatusEdit()
+                    }
+                    if composer.model.redraft?.status.id == status.id, !composer.cancelStatusEdit() {
+                        composer.model.redraftedStatusWasDeleted(status.id, stopsRedrafting: true, accountID: account.credential.id)
+                    }
+                }
             } catch {
                 guard let self else { return }
                 logger.error("other account delete failed: \(SciaLog.describe(error), privacy: .public)")
@@ -3140,22 +3177,25 @@ final class SessionController {
 
     /// 編集の元にする本文をサーバーから取得し、取得できたら投稿欄で編集を始める。同じ投稿を編集している途中なら、読み直さずに投稿欄を開く。
     /// 読めなかったら、お気に入りの失敗と同じく、チップの列に出す。
-    private func startEditing(_ status: Status) {
+    /// - Parameter account: 投稿を書いたほかのアカウント。今のアカウントならnil。そのアカウントのサーバーから本文を読み、投稿するアカウントをそのアカウントにして編集する。
+    ///   失敗は、このセッションのログインし直しの案内につなげず、どのアカウントで失敗したかを添えて知らせる。
+    private func startEditing(_ status: Status, as account: OtherAccount? = nil) {
         let target = status.displayed
-        if composer.model.editedStatus?.id == target.id {
+        if composer.model.editedStatus?.id == target.id, composer.model.otherAccount?.id == account?.credential.id {
             composer.beginEditing()
             return
         }
-        let client = client
+        let client = account.map(otherAccounts.client) ?? client
+        let writing = account.map(composeAccount(for:))
         tasks.run(.action) { [weak self] in
             do {
                 let source = try await client.statusSource(target.id)
-                self?.confirmEditing(target, source: source)
+                self?.confirmEditing(target, source: source, as: writing, actor: account.map { "@\($0.credential.username)" })
             } catch {
                 guard let self else { return }
-                let title = "編集を始められませんでした"
+                let title = "\(account.map { "\($0.credential.handle)で" } ?? "")編集を始められませんでした"
                 logger.error("edit source failed: \(SciaLog.describe(error), privacy: .public)")
-                let reason = await failureReason(for: error)
+                let reason = account == nil ? await failureReason(for: error) : ErrorPresentation(error)
                 operationStatus.recordFailure(title: title, reason: reason, subject: OperationStatus.Subject(status))
                 showFailureNotice(.interactionFailure(title: title) { [weak self] in
                     self?.presentAlert(title: title, message: reason.text)
@@ -3166,22 +3206,27 @@ final class SessionController {
 
     /// 書き直しの元にする本文をサーバーから取得し、取得できたら、送ると元の投稿を削除することを確かめてから、投稿欄で書き直しを始める。
     /// 同じ投稿を書き直している途中なら、読み直さずに投稿欄を開く。読めなかったら、編集と同じく、チップの列に出す。
-    private func startRedrafting(_ status: Status) {
+    /// - Parameter account: 投稿を書いたほかのアカウント。今のアカウントならnil。`startEditing`と同じく、そのアカウントとして書き直す。
+    private func startRedrafting(_ status: Status, as account: OtherAccount? = nil) {
         let target = status.displayed
-        if composer.model.redraft?.status.id == target.id {
+        if composer.model.redraft?.status.id == target.id, composer.model.otherAccount?.id == account?.credential.id {
             composer.beginEditing()
             return
         }
-        let client = client
+        let client = account.map(otherAccounts.client) ?? client
+        let writing = account.map(composeAccount(for:))
+        let defaults = account.map(otherAccounts.composeDefaults(of:))
         tasks.run(.action) { [weak self] in
             do {
                 let source = try await client.statusSource(target.id)
-                self?.confirmRedrafting(target, source: source)
+                // 投票の締め切りを、そのアカウントのサーバーで選べるものにするため、上限を読んでから始める。読めなければ、読む前の上限で決める。
+                let configuration = Self.composeConfiguration(await defaults?().configuration)
+                self?.confirmRedrafting(target, source: source, as: writing, configuration: configuration, actor: account.map { "@\($0.credential.username)" })
             } catch {
                 guard let self else { return }
-                let title = "書き直しを始められませんでした"
+                let title = "\(account.map { "\($0.credential.handle)で" } ?? "")書き直しを始められませんでした"
                 logger.error("redraft source failed: \(SciaLog.describe(error), privacy: .public)")
-                let reason = await failureReason(for: error)
+                let reason = account == nil ? await failureReason(for: error) : ErrorPresentation(error)
                 operationStatus.recordFailure(title: title, reason: reason, subject: OperationStatus.Subject(status))
                 showFailureNotice(.interactionFailure(title: title) { [weak self] in
                     self?.presentAlert(title: title, message: reason.text)
@@ -3191,9 +3236,12 @@ final class SessionController {
     }
 
     /// 本文を読んでから聞く。先に聞くと、読んでいる間に書いたものを、聞かずに捨ててしまうため。
-    private func confirmRedrafting(_ status: Status, source: StatusSource) {
-        topViewController.present(UIAlertController(Confirmation.redrafting(status, draft: composer.model), preferredStyle: .alert) { [weak self] _ in
-            self?.composer.redraft(status, source: source)
+    /// - Parameter writing: 投稿を書いたほかのアカウントとして書くときの送り先。今のアカウントならnil。
+    /// - Parameter configuration: `writing`のサーバーの上限。
+    /// - Parameter actor: ほかのアカウントとして書くときの、そのアカウントの`@username`。確かめる見出しの初めに入れる。
+    private func confirmRedrafting(_ status: Status, source: StatusSource, as writing: ComposeAccount<UIImage>? = nil, configuration: InstanceConfiguration? = nil, actor: String? = nil) {
+        topViewController.present(UIAlertController(Confirmation.redrafting(status, draft: composer.model, actor: actor), preferredStyle: .alert) { [weak self] _ in
+            self?.composer.redraft(status, source: source, as: writing, configuration: configuration)
         }, animated: true)
     }
 
@@ -3280,10 +3328,12 @@ final class SessionController {
 
     /// 書きかけの下書きがあれば捨ててよいかを、投票の付いた投稿なら締め切りがずれることを、聞いてから編集を始める。どちらもなければすぐ始める。
     /// 本文を読んでから聞く。先に聞くと、読んでいる間に書いたものを、聞かずに捨ててしまうため。
-    private func confirmEditing(_ status: Status, source: StatusSource) {
-        switch Confirmation.editing(status, draft: composer.model, now: now()) {
+    /// - Parameter writing: 投稿を書いたほかのアカウントとして書くときの送り先。今のアカウントならnil。
+    /// - Parameter actor: ほかのアカウントとして書くときの、そのアカウントの`@username`。確かめる見出しの初めに入れる。
+    private func confirmEditing(_ status: Status, source: StatusSource, as writing: ComposeAccount<UIImage>? = nil, actor: String? = nil) {
+        switch Confirmation.editing(status, draft: composer.model, now: now(), actor: actor) {
         case .proceed:
-            composer.edit(status, source: source)
+            composer.edit(status, source: source, as: writing)
         case .refuse(let text):
             presentRefusal(text)
         case .confirm(let confirmation):
@@ -3293,7 +3343,7 @@ final class SessionController {
                 if !status.canBeEdited(now: now()) {
                     presentRefusal(.pollTooClose)
                 } else {
-                    composer.edit(status, source: source)
+                    composer.edit(status, source: source, as: writing)
                 }
             }, animated: true)
         }
@@ -3320,11 +3370,12 @@ final class SessionController {
                 try await client.deleteStatus(target.id, deleteMedia: true)
                 guard let self else { return }
                 removeDeletedStatus(target.id)
-                if composer.model.editedStatus?.id == target.id {
+                // ほかのアカウントの投稿を編集や書き直ししているときは、IDが同じでも別の投稿なのでやめない。
+                if composer.model.otherAccount == nil, composer.model.editedStatus?.id == target.id {
                     composer.cancelStatusEdit()
                 }
                 // 送っている間はやめられないので、送るのをやめられるところでやめさせる。
-                if composer.model.redraft?.status.id == target.id, !composer.cancelStatusEdit() {
+                if composer.model.otherAccount == nil, composer.model.redraft?.status.id == target.id, !composer.cancelStatusEdit() {
                     composer.model.redraftedStatusWasDeleted(target.id, stopsRedrafting: true)
                 }
             } catch {

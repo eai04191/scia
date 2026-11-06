@@ -156,8 +156,9 @@ extension Confirmation where Choice == Proceed {
 
     /// 送ると元の投稿を削除することを、書きかけの下書きがあれば捨ててよいかも、確かめてから削除して書き直し始める。
     /// 投票の票は投票の付いた投稿でだけ、固定が外れることはプロフィールに固定している投稿でだけ書く。
+    /// - Parameter actor: ほかのアカウントとして書き直すときの、そのアカウントの`@username`。見出しの初めに「〜で」と入れる。
     @MainActor
-    public static func redrafting<Thumbnail>(_ status: Status, draft: ComposeModel<Thumbnail>) -> Confirmation {
+    public static func redrafting<Thumbnail>(_ status: Status, draft: ComposeModel<Thumbnail>, actor: String? = nil) -> Confirmation {
         let discards = draft.hasWrittenContent
         let lost = ["お気に入り", "ブースト", status.poll == nil ? nil : "投票の票"].compactMap(\.self).joined(separator: "、")
         var lines: [String] = []
@@ -169,7 +170,7 @@ extension Confirmation where Choice == Proceed {
             lines.append("プロフィールへの固定も外れます。")
         }
         return .destructive(
-            title: discards ? "下書きを捨てて書き直しますか？" : "削除して書き直しますか？",
+            title: "\(actor.map { "\($0)で" } ?? "")\(discards ? "下書きを捨てて書き直しますか？" : "削除して書き直しますか？")",
             message: lines.joined(separator: "\n"),
             action: discards ? "捨てて書き直す" : "書き直す"
         )
@@ -194,8 +195,9 @@ extension Confirmation where Choice == Proceed {
     /// 書きかけの下書きがあれば捨ててよいかを、投票の付いた投稿なら締め切りがずれることを、確かめてから編集を始める。
     /// 投票の締め切りが近くて編集できなければ、そのことを知らせる。
     /// 押されたあとも、聞いている間に締め切りが近づいていないかを`Status.canBeEdited(now:)`で確かめ直し、近づいていれば`RefusalText.pollTooClose`を知らせる。
+    /// - Parameter actor: ほかのアカウントとして編集するときの、そのアカウントの`@username`。見出しの初めに「〜で」と入れる。
     @MainActor
-    public static func editing<Thumbnail>(_ status: Status, draft: ComposeModel<Thumbnail>, now: Date) -> ConfirmationDecision<Proceed> {
+    public static func editing<Thumbnail>(_ status: Status, draft: ComposeModel<Thumbnail>, now: Date, actor: String? = nil) -> ConfirmationDecision<Proceed> {
         guard status.canBeEdited(now: now) else { return .refuse(.pollTooClose) }
         let discards = draft.hasWrittenContent
         let hasPoll = status.poll != nil
@@ -208,7 +210,7 @@ extension Confirmation where Choice == Proceed {
             lines.append("投票はそのまま残りますが、締め切りは送った時点から数え直すため少しずれます。")
         }
         return .confirm(Confirmation(
-            title: discards ? "下書きを捨てて編集しますか？" : "投票の付いた投稿を編集しますか？",
+            title: "\(actor.map { "\($0)で" } ?? "")\(discards ? "下書きを捨てて編集しますか？" : "投票の付いた投稿を編集しますか？")",
             message: lines.joined(separator: "\n"),
             buttons: [.cancel, Button(discards ? "捨てて編集" : "編集", role: discards ? .destructive : .default, choice: .proceed)]
         ))

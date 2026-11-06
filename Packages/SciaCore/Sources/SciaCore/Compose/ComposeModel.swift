@@ -105,7 +105,9 @@ public final class ComposeModel<Thumbnail: Sendable> {
     private var releaseTasks: [DraftAttachment.ID: Task<Void, Never>] = [:] {
         didSet { settleMediaWait() }
     }
-    @ObservationIgnored private let redraftService: ComposeRedraftService
+    @ObservationIgnored private let homeRedraftService: ComposeRedraftService
+    /// 書いているアカウントのサーバーで、削除して書き直す元の投稿を消す口。
+    private var redraftService: ComposeRedraftService { otherAccount?.redraft ?? homeRedraftService }
     /// 送っている間に、書き直している元の投稿を「削除」で消した。送るのをやめられるところでやめ、送り終えたら空に戻す。
     @ObservationIgnored private var stopsRedraftingAfterSubmit = false
     /// 代替テキストを送っている添付。送っている間は、書き戻してサーバーの値と同じになっても、送り終えるまで投稿させない。
@@ -151,7 +153,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
         homeAccountID = myAccountID
         homePost = post
         homeMedia = media
-        self.redraftService = redraftService
+        homeRedraftService = redraftService
     }
 
     /// 送る内容。注意書きの欄を隠していれば、注意書きは送らない。
@@ -497,9 +499,10 @@ public final class ComposeModel<Thumbnail: Sendable> {
     /// 投票を送り直せない投稿（締め切りまで5分を切った）でも、下書きを変えずにfalseを返す。
     /// 本文と注意書きは、HTMLの`content`ではなく、書いたときのソースから入れる。
     @discardableResult
-    public func beginEditing(_ status: Status, source: StatusSource, now: Date = SystemTime.now()) -> Bool {
+    /// - Parameter account: 投稿を書いたアカウント。今のアカウントならnil。投稿するアカウントをそのアカウントにしてから始める。
+    public func beginEditing(_ status: Status, source: StatusSource, now: Date = SystemTime.now(), as account: ComposeAccount<Thumbnail>? = nil) -> Bool {
         guard !isPosting, let draft = StatusDraft.edit(of: status, source: source, now: now) else { return false }
-        leaveOtherAccount()
+        enterAccount(account)
         removeAllAttachments()
         initialDraft = draft
         editedStatus = status
@@ -562,9 +565,16 @@ public final class ComposeModel<Thumbnail: Sendable> {
     /// 自分の投稿を削除して書き直し始める。今の下書きは捨てる。送っている間は始めずfalseを返す。
     /// 元の投稿は、送るときに削除する。本文と注意書きは、HTMLの`content`ではなく、書いたときのソースから入れる。
     @discardableResult
-    public func beginRedrafting(_ status: Status, source: StatusSource) -> Bool {
+    /// - Parameter account: 投稿を書いたアカウント。今のアカウントならnil。投稿するアカウントをそのアカウントにしてから始める。
+    /// - Parameter configuration: `account`のサーバーの上限。読めていれば渡す。投票の締め切りを、そのサーバーで選べるものにするため。
+    ///   アカウントを替えると上限は読む前の値に戻り、あとから`apply`で読んでも、決めた締め切りは選び直さない。
+    public func beginRedrafting(_ status: Status, source: StatusSource, as account: ComposeAccount<Thumbnail>? = nil, configuration: InstanceConfiguration? = nil) -> Bool {
         guard !isPosting else { return false }
-        leaveOtherAccount()
+        enterAccount(account)
+        if let configuration {
+            applyLimits(configuration)
+            hasLoadedConfiguration = true
+        }
         let draft = StatusDraft.redraft(of: status, source: source, pollLimits: pollLimits)
         removeAllAttachments()
         initialDraft = draft
@@ -622,6 +632,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     /// 書いた本文、注意書き、投票、予約、言語は残す。返信先と引用元は、前のアカウントのサーバーでのIDなので外す。
     /// 添付は、新しいサーバーの上限を`apply`で読んでから、そのサーバーへアップロードし直す。
     /// 送っている間と、編集、削除して書き直す、予約の書き直しの間は替えずにfalseを返す。どれも前のアカウントのサーバーの投稿を指すため。
+    /// 編集と書き直しを、そのアカウントの投稿で始めるときは、`beginEditing`と`beginRedrafting`にアカウントを渡す。
     @discardableResult
     public func switchAccount(to account: ComposeAccount<Thumbnail>?) -> Bool {
         guard !isPosting, editedStatus == nil, redraft == nil, rewritingSchedule == nil else { return false }
@@ -641,13 +652,18 @@ public final class ComposeModel<Thumbnail: Sendable> {
         return true
     }
 
-    /// ほかのアカウントで書いていれば、今のアカウントに戻す。下書きを空にするときと、今のアカウントの投稿の編集や書き直しを始めるときに呼ぶ。
-    /// どちらも添付を捨てるので、アップロードし直さない。
+    /// ほかのアカウントで書いていれば、今のアカウントに戻す。下書きを空にするときに呼ぶ。
     private func leaveOtherAccount() {
-        guard otherAccount != nil else { return }
-        otherAccount = nil
+        enterAccount(nil)
+    }
+
+    /// 投稿するアカウントを`account`にする。編集や書き直しを始めるときと、下書きを空にするときに呼ぶ。
+    /// どれも添付を捨てるので、`switchAccount`と違ってアップロードし直さない。
+    private func enterAccount(_ account: ComposeAccount<Thumbnail>?) {
+        guard account?.id != otherAccount?.id else { return }
+        otherAccount = account
         forgetServerDefaults()
-        onAccountChange(nil)
+        onAccountChange(account)
     }
 
     /// 前のアカウントのサーバーの上限と既定値を忘れ、読む前の値に戻す。新しいアカウントの値を`apply`で読むまで、既定より広い範囲で投稿させず、メディアを選ばせない。
@@ -779,8 +795,9 @@ public final class ComposeModel<Thumbnail: Sendable> {
     /// 元の投稿はもうないので、やめる前に確かめ、送るときは削除せずに続ける。
     /// - Parameter stopsRedrafting: この端末の「削除」で消したならtrue。添付も消え、書き直した投稿に付けられないので、書き直しをやめる。
     ///   送るのを待っている間なら、待つのをやめ、送るのをやめてから空に戻す。もう投稿を送り始めていれば、送り終えてから空に戻す。
-    public func redraftedStatusWasDeleted(_ id: Status.ID, stopsRedrafting: Bool) {
-        guard redraft?.status.id == id else { return }
+    /// - Parameter accountID: 消えた投稿のアカウントの`ComposeAccount.id`。今のアカウントならnil。書いているアカウントと違えば、IDが同じでも別の投稿なので何もしない。
+    public func redraftedStatusWasDeleted(_ id: Status.ID, stopsRedrafting: Bool, accountID: String? = nil) {
+        guard accountID == otherAccount?.id, redraft?.status.id == id else { return }
         redraft?.deletion = .done
         guard stopsRedrafting else { return }
         guard isPosting else {
@@ -815,7 +832,11 @@ public final class ComposeModel<Thumbnail: Sendable> {
             return false
         }
         redraft?.deletion = .done
-        onRedraftDeleted(id)
+        if let otherAccount {
+            otherAccount.onRedraftDeleted(id)
+        } else {
+            onRedraftDeleted(id)
+        }
         return true
     }
 
