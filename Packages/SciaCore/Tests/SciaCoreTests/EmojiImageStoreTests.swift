@@ -159,6 +159,16 @@ struct EmojiImageStoreTests {
         #expect(fetches.count.withLock { $0 } == 1)
     }
 
+    /// 読めた画像の、縮める前の元の幅と高さを渡す。カスタム絵文字のリストに縦横比を残すため。
+    @Test func reportsSourceSizeOfLoadedStill() async throws {
+        let store = makeStore(try Self.png(width: 400, height: 100))
+        var sizes: [String] = []
+        store.onSourceSize = { url, width, height in sizes.append("\(url.lastPathComponent) \(width)x\(height)") }
+        _ = store.image(for: url)
+        try await waitUntil { store.image(for: url) != nil }
+        #expect(sizes == ["emoji.png 400x100"])
+    }
+
     /// 既定より大きく描くと、そのURLを描く高さで読み直す。読み終えるまでは前の画像を返し、読み終えたら、小さく描く場所にも同じ1枚を返す。
     @Test func reloadsAtLargerHeightAndKeepsOneImagePerURL() async throws {
         let store = makeStore(try Self.png(width: 400, height: 400))

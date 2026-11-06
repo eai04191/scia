@@ -98,6 +98,8 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     /// macOSでテストを走らせたとき、`NSCache`に持っていて、読み終えても取り出せないまま60秒の間に9万回あまり読み直したことがある。
     private var animations = MemoryCache<URL, EmojiAnimation>(totalCostLimit: 64 * 1024 * 1024)
     private var listeners: [Listener] = []
+    /// 画像を読めたときに、元の画像の、描く向きに直した幅と高さを渡す。サーバーが縦横比を返さないカスタム絵文字の縦横比を、リストに残すために使う（`CustomEmojiCaches.learn`）。
+    public var onSourceSize: (@MainActor (URL, Int, Int) -> Void)?
     private var pendingNotification: Set<URL> = []
     private let logger = SciaLog.logger(category: "emoji")
 
@@ -216,7 +218,8 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
             defer { loading.remove(url) }
             do {
                 let data = try await fetch(url)
-                guard let (image, isLargest) = await Self.decodeStill(data, pixelHeight: pixelHeight) else { throw DecodeError() }
+                guard let (image, isLargest, source) = await Self.decodeStill(data, pixelHeight: pixelHeight) else { throw DecodeError() }
+                onSourceSize?(url, source.width, source.height)
                 evictedStills.formUnion(stills.setValue(maker.still(image), forKey: url, cost: PlatformImageMaker<Image>.cost(of: image)))
                 stillResolutions[url] = Resolution(pixelHeight: pixelHeight, isLargest: isLargest)
                 if stillResolutions.count > stillResolutionCleanupThreshold {
@@ -309,9 +312,9 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     /// 高さを`pixelHeight`にそろえて縮め、描く前に展開しておく。描くたびにメインスレッドで原寸のまま展開しないため。
     /// 元の画像より大きくはしない。拡大しても、ぼけは消えないため。`maxStillPixelCount`を超える大きさにもしない。
     /// カスタム絵文字は文字と一緒にSDRで描く決まりなので（docs/hdr-display.md）、HDRを求めずに読む。
-    /// - Returns: 展開した画像と、これより高く読めないか（`Resolution.isLargest`）。
+    /// - Returns: 展開した画像と、これより高く読めないか（`Resolution.isLargest`）と、元の画像の大きさ。
     @concurrent
-    private static func decodeStill(_ data: Data, pixelHeight: Int) async -> (image: CGImage, isLargest: Bool)? {
+    private static func decodeStill(_ data: Data, pixelHeight: Int) async -> (image: CGImage, isLargest: Bool, source: SourceSize)? {
         guard let source = SourceSize(of: data) else { return nil }
         var maxPixelSize = ImageDecoder.maxPixelSize(forHeight: pixelHeight, of: data)
         let longest = max(source.width, source.height)
@@ -322,19 +325,19 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
             maxPixelSize = Int((Double(longest) * (Double(maxStillPixelCount) / Double(source.width * source.height)).squareRoot()).rounded(.down))
         }
         guard let image = await ImageDecoder.thumbnail(of: data, maxPixelSize: maxPixelSize, dynamicRange: .standard) else { return nil }
-        return (image, isLimited || source.isFullHeight(image.height))
+        return (image, isLimited || source.isFullHeight(image.height), source)
     }
 
     /// `pixelHeight`の高さにそろえてコマに分ける。その高さでは`AnimatedImage.maxByteCount`を超えるときは、収まる高さまで下げる。
     /// ただし既定の高さ（`Self.pixelHeight`）より下げない。既定の高さでも超えるものは、今までどおり動かさない。
-    /// - Returns: コマに分けた画像と、これより高く読めないか（`Resolution.isLargest`）。
-    nonisolated private static func decodeAnimation(_ data: Data, pixelHeight: Int) async -> (image: AnimatedImage, isLargest: Bool)? {
+    /// - Returns: コマに分けた画像と、これより高く読めないか（`Resolution.isLargest`）と、元の画像の大きさ。
+    nonisolated private static func decodeAnimation(_ data: Data, pixelHeight: Int) async -> (image: AnimatedImage, isLargest: Bool, source: SourceSize)? {
         guard let source = SourceSize(of: data) else { return nil }
         let requested = ImageDecoder.maxPixelSize(forHeight: pixelHeight, of: data)
         let minimum = ImageDecoder.maxPixelSize(forHeight: Self.pixelHeight, of: data)
         let fitting = AnimatedImage.fittingPixelSize(frameCount: source.frameCount, width: source.width, height: source.height, maxPixelSize: requested)
         guard let image = await AnimatedImage.decode(data, maxPixelSize: max(min(minimum, requested), fitting)) else { return nil }
-        return (image, fitting < requested || source.isFullHeight(image.frameHeight))
+        return (image, fitting < requested || source.isFullHeight(image.frameHeight), source)
     }
 
     /// 動かすかは行に描くときに決めるため、初めて読むときは自動の通信として送る。
@@ -353,7 +356,8 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
                 let decoded = await Task.detached(priority: .utility) {
                     await Self.decodeAnimation(data, pixelHeight: pixelHeight)
                 }.value
-                if let (image, isLargest) = decoded {
+                if let (image, isLargest, source) = decoded {
+                    onSourceSize?(url, source.width, source.height)
                     let animation = EmojiAnimation(image)
                     animations.setValue(animation, forKey: url, cost: image.byteCount)
                     stats.animationBytes += image.byteCount

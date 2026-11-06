@@ -509,9 +509,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         logger.info("account removed")
         // そのアカウントのために覚えた値と、そのアカウントで見たメディアのキャッシュを消す。
         AccountScopedDefaults.removeData(of: credential, remaining: accounts.accounts, defaults: .standard, settings: AppDependencies.settings)
+        let remainsOnServer = accounts.accounts.contains { $0.instance.host() == credential.instance.host() }
         Task(.withoutRequests) {
             await AppDependencies.mediaFiles.removeAll()
             await AppDependencies.mediaPrefetchFiles.removeAll()
+            // カスタム絵文字のリストはサーバーのものなので、同じサーバーのアカウントが残っていれば残す。
+            if !remainsOnServer {
+                await AppDependencies.customEmojis.remove(instance: credential.instance)
+            }
         }
         showCurrentAccount()
         Self.syncAllScenes()

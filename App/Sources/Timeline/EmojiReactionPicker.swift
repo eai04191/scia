@@ -20,7 +20,7 @@ final class EmojiReactionPicker {
     func present(from host: UIViewController, onChoose: @escaping (ReactionEmoji) -> Void) {
         guard sheet == nil else { return }
         self.onChoose = onChoose
-        completion.completion.loadEmojisIfNeeded()
+        completion.preparePalette()
         palette.clearQuery()
         updatePalette()
         observePalette()

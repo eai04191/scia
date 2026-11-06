@@ -124,6 +124,8 @@ public final class ComposeCompletion {
         public var statusTags: @Sendable () async throws -> [Hashtag]
         /// アカウントをIDでまとめて読む。返信先でメンションされた人のように、アイコンと表示名が手元にない人に使う。読めなかった人は返さない。
         public var accounts: @Sendable ([String]) async throws -> [Account]
+        /// 端末かこの起動で前に読んで残しているカスタム絵文字のリスト。リストを残す場所がなければnil。`remembering(customEmojisIn:)`で渡す。
+        public var cachedCustomEmojis: @MainActor @Sendable () -> CustomEmojiCache.Snapshot? = { nil }
 
         public init(
             searchAccounts: @escaping @Sendable (String, Int) async throws -> [Account],
@@ -250,7 +252,14 @@ public final class ComposeCompletion {
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var emojiTask: Task<Void, Never>?
     /// 候補に出す絵文字。読み終えるまではnil。絵文字のパレットも、このリストを並べる。
+    /// 端末に残したリストを渡されたときは、読み直すまでそのリストを出す。
     public private(set) var emojis: [ServerEmoji]?
+    /// `emojis`を、この起動のうちにサーバーから読んだか。端末に残したリストなら読み直す。
+    @ObservationIgnored private var emojisAreFresh = false
+    /// 最後に見た、残しているリストを消した回数（`CustomEmojiCache.Snapshot.generation`）。変わっていれば、設定のストレージで消したので、持っているリストも捨てて読み直す。
+    @ObservationIgnored private var cachedEmojisGeneration: Int?
+    /// 探すサーバーを替えた回数。絵文字のパレットが、開いた時点のリストを並べ続けるか、替えた先のリストに並べ直すかを決めるのに使う。
+    public private(set) var emojiSourceGeneration = 0
     /// 絵文字のリストを読めなかった理由の文言。パレットに出す。読み直し始めたらnilに戻す。
     public private(set) var emojiFailure: ErrorPresentation?
     /// プロフィールに載せているタグ、よく使うタグ、最近の投稿のタグ。読めるまではnilで、次に書き始めたときに読み直す。
@@ -296,13 +305,14 @@ public final class ComposeCompletion {
     }
 
     /// - Parameter recentMentions: 補完で選んだアカウントを覚える場所。なければ覚えず、出さない。
-    /// - Parameter emojis: 別の画面で読み終えたカスタム絵文字のリスト。渡せば読み直さず、絵文字のパレットを開いたときに読み込み中の段を挟まずに並べる。
-    public init(sources: Sources, settings: Settings, recentMentions: RecentMentions? = nil, emojis: [ServerEmoji]? = nil, sleep: @escaping @Sendable (Duration) async throws -> Void = { try await SystemTime.clock.sleep(for: $0) }) {
+    /// カスタム絵文字のリストは、`sources`が残しているリスト（`Sources.cachedCustomEmojis`）があれば、それを持って始める。
+    /// 絵文字のパレットを開いたときに読み込み中の段を挟まずに並べるため。
+    public init(sources: Sources, settings: Settings, recentMentions: RecentMentions? = nil, sleep: @escaping @Sendable (Duration) async throws -> Void = { try await SystemTime.clock.sleep(for: $0) }) {
         self.sources = sources
         self.settings = settings
         self.recentMentions = recentMentions
-        self.emojis = emojis?.filter(\.visibleInPicker)
         self.sleep = sleep
+        adoptCachedEmojis()
     }
 
     /// 本文が変わったら、カーソルの位置の語を渡す。語が変われば、閉じていても出し直す。
@@ -374,9 +384,7 @@ public final class ComposeCompletion {
     /// 絵文字のリストが読めなかったら、絵文字の語を打ったときに読み直す。
     /// 自分のタグは補助なので、読めなくても知らせず、次に書き始めたときに読み直す。
     public func prefetch() {
-        if emojis == nil {
-            loadEmojis()
-        }
+        loadEmojisIfNeeded()
         loadParticipantAccounts()
         if featuredTags == nil || recentTags == nil || statusTags == nil {
             loadOwnTags()
@@ -409,7 +417,11 @@ public final class ComposeCompletion {
         emojiTask?.cancel()
         emojiTask = nil
         emojis = nil
+        emojisAreFresh = false
+        cachedEmojisGeneration = nil
+        emojiSourceGeneration += 1
         emojiFailure = nil
+        adoptCachedEmojis()
         forgetOwnTags()
         statusTags = nil
         usedTags = []
@@ -577,10 +589,35 @@ public final class ComposeCompletion {
         return ErrorPresentation(error)
     }
 
-    /// 絵文字のパレットを開いたときに呼ぶ。まだ読めていなければ読む。失敗していたら読み直す。
+    /// 絵文字のパレットを開いたときに呼ぶ。この起動のうちにまだ読めていなければ読む。失敗していたら読み直す。
+    /// 端末に残したリストがあれば、読み直す間もそれを出す。ほかの画面がこの起動のうちに読めていれば、読まずにそのリストにする。
     public func loadEmojisIfNeeded() {
-        guard emojis == nil else { return }
+        adoptCachedEmojis()
+        guard !emojisAreFresh else { return }
         loadEmojis()
+    }
+
+    /// 絵文字のパレットに並べるリスト。`emojis`の縦横比を、画像から分かったもので埋める。まだリストがなければnil。
+    public func emojisForPalette() -> [ServerEmoji]? {
+        guard let emojis else { return nil }
+        guard let learned = sources.cachedCustomEmojis()?.learnedAspectRatios, !learned.isEmpty else { return emojis }
+        return emojis.map { emoji in
+            guard emoji.aspectRatio == nil, let aspectRatio = learned[emoji.staticUrl] else { return emoji }
+            return emoji.withAspectRatio(aspectRatio)
+        }
+    }
+
+    /// 残しているリストのほうが新しければ、それにする。サーバーから読んだリストを、端末に残した古いリストで戻さない。
+    private func adoptCachedEmojis() {
+        guard let cached = sources.cachedCustomEmojis() else { return }
+        if let seen = cachedEmojisGeneration, seen != cached.generation {
+            emojis = nil
+            emojisAreFresh = false
+        }
+        cachedEmojisGeneration = cached.generation
+        guard !emojisAreFresh, let cachedEmojis = cached.emojis, emojis == nil || cached.isFresh else { return }
+        emojis = cachedEmojis.filter(\.visibleInPicker)
+        emojisAreFresh = cached.isFresh
     }
 
     private func loadEmojis() {
@@ -604,6 +641,7 @@ public final class ComposeCompletion {
     private func didLoadEmojis(_ loaded: [ServerEmoji]) {
         emojiTask = nil
         emojis = loaded.filter(\.visibleInPicker)
+        emojisAreFresh = true
         logger.info("completion: loaded \(loaded.count, privacy: .public) custom emojis")
         guard token?.kind == .emoji, failure == nil else { return }
         load()
@@ -613,6 +651,8 @@ public final class ComposeCompletion {
         emojiTask = nil
         logger.info("completion: custom emojis failed: \(ErrorPresentation(error).code ?? "unknown", privacy: .public)")
         emojiFailure = Self.failure(for: error)
+        // 読み始めたときに端末のリストを読み終えていなくても、読み終えていれば、失敗の代わりにそのリストを出す。
+        adoptCachedEmojis()
         guard let token, token.kind == .emoji else { return }
         // Unicodeの絵文字の候補は、失敗の上に残して選べるようにする。
         candidates = emojiCandidates(for: token)

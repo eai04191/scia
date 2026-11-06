@@ -115,7 +115,7 @@ final class SessionController {
     private let interactions: StatusInteractions
     /// 投稿にリアクションする絵文字を選ぶシート。開くときに、カスタム絵文字と最近使った絵文字を読む。
     private lazy var emojiReactionPicker = EmojiReactionPicker(completion: TextInputCompletion(
-        completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), emojis: customEmojis.emojis),
+        completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
         recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
     ))
     private let polls: PollVoting
@@ -179,7 +179,7 @@ final class SessionController {
     private let followedTagsList: FollowedTagsController
     /// 補完の候補を読む口。投稿欄とプロフィールの編集で使う。
     private let completionSources: ComposeCompletion.Sources
-    /// 補完で読めたカスタム絵文字のリスト。開くたびに補完を作るプロフィールの編集に渡し、読み直さずに並べる。
+    /// このサーバーのカスタム絵文字のリスト。端末に残し、開くたびに補完を作るプロフィールの編集にも、読み込み中を挟まずに渡す。
     private let customEmojis: CustomEmojiCache
     /// タブバーの上の投稿欄。ホームと通知のどちらでも同じ下書きを使う。
     private let composer: InlineComposeController
@@ -490,7 +490,7 @@ final class SessionController {
             followedTags?.close()
             relationships?.close()
         }
-        let customEmojis = CustomEmojiCache()
+        let customEmojis = AppDependencies.customEmojis.cache(for: credential.instance)
         self.customEmojis = customEmojis
         completionSources = ComposeCompletion.Sources(
             searchAccounts: { query, limit in
@@ -1646,7 +1646,7 @@ final class SessionController {
         // シートは1つのモデルを画面として受け持つので、開いているときに重ねて開かない。重ねると、閉じて戻ったシートに変化が届かなくなる。
         if let presentedAnnouncements, presentedAnnouncements.presentingViewController != nil, !presentedAnnouncements.isBeingDismissed { return }
         let completion = TextInputCompletion(
-            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), emojis: customEmojis.emojis),
+            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
             recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
         )
         let controller = AnnouncementsViewController(model: announcements, completion: completion)
@@ -1875,7 +1875,7 @@ final class SessionController {
             editor.charactersReservedPerURL = configuration.charactersReservedPerURL
         }
         let completion = TextInputCompletion(
-            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, account: credential.handle), emojis: customEmojis.emojis),
+            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, account: credential.handle)),
             recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
         )
         // 紹介しているユーザーの追加の行は、サーバーがフォローしていない相手を断るので、フォローしている人だけから探す。
@@ -2207,7 +2207,8 @@ final class SessionController {
             return
         }
         let client = otherAccounts.client(for: account)
-        composer.completion.switchSources(ComposeCompletion.Sources(client: client), recentMentions: RecentMentions(defaults: .standard, account: account.credential.handle))
+        let sources = ComposeCompletion.Sources(client: client).remembering(customEmojisIn: AppDependencies.customEmojis.cache(for: account.credential.instance))
+        composer.completion.switchSources(sources, recentMentions: RecentMentions(defaults: .standard, account: account.credential.handle))
         // 開いている絵文字のパレットや補完が、替えた先のサーバーの絵文字とタグを読み直すよう、書き始めたときと同じく読み始める。
         composer.completion.prefetch()
         composer.writingAccount = InlineComposeController.WritingAccount(username: account.credential.username, avatar: nil)

@@ -345,7 +345,7 @@ final class AnnouncementsViewController: UIViewController {
     private func presentEmojiPalette(for id: Announcement.ID) {
         guard emojiSheet == nil else { return }
         reactingAnnouncementID = id
-        completion.completion.loadEmojisIfNeeded()
+        completion.preparePalette()
         emojiPalette.clearQuery()
         updateEmojiPalette()
         observeEmojiPalette()

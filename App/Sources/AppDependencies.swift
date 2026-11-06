@@ -1,6 +1,7 @@
 import Foundation
 import QuartzCore
 import SciaCore
+import UIKit
 
 /// シーンをまたいで共有する依存。
 @MainActor
@@ -65,9 +66,17 @@ enum AppDependencies {
         return try await remoteFetch.data(from: url)
     }
 
-    static let emojiImages = EmojiImageStore { url in
-        try await imageData(from: url)
-    }
+    /// 画像を読めたら元の大きさを渡し、サーバーが縦横比を返さないカスタム絵文字の縦横比を、リストに残す。
+    static let emojiImages: EmojiImageStore<UIImage> = {
+        let store = EmojiImageStore { url in
+            try await imageData(from: url)
+        }
+        store.onSourceSize = { url, width, height in customEmojis.learn(url, width: width, height: height) }
+        return store
+    }()
+
+    /// サーバーごとのカスタム絵文字のリスト。端末に残し、絵文字のパレットを開いたときに読み込み中を挟まずに並べる。
+    static let customEmojis = CustomEmojiCaches()
 
     static let avatarImages = AvatarImageStore { url in
         try await imageData(from: url)

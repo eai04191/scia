@@ -262,15 +262,16 @@ struct ComposeCompletionTests {
         #expect(accts(completion.content).first == ":blobcat:")
     }
 
-    /// 別の画面で読み終えた絵文字のリストを渡せば、作ったときから持ち、読み直さない。ピッカーに出さない絵文字は除く。
+    /// 別の画面がこの起動で読み終えた絵文字のリストを残していれば、作ったときから持ち、読み直さない。ピッカーに出さない絵文字は除く。
     /// 絵文字のパレットを開いたときに、読み込み中の段を挟まずに並べるため。
     @Test func startsWithEmojisLoadedElsewhere() async throws {
         let server = server
-        let loaded = try await server.emojis()
+        let cache = CustomEmojiCaches(directory: TestScratch.url("ComposeCompletionTests-loaded-elsewhere"), clock: TestClock()).cache(for: URL(string: "https://example.social")!)
+        cache.remember(try await server.emojis(), loadStartedAt: cache.generation)
         let completion = ComposeCompletion(
-            sources: ComposeCompletion.Sources(searchAccounts: { _, _ in [] }, searchHashtags: { _, _ in [] }, customEmojis: { try await server.emojis() }),
-            settings: ComposeCompletion.Settings(debounce: .milliseconds(30), limit: 5),
-            emojis: loaded
+            sources: ComposeCompletion.Sources(searchAccounts: { _, _ in [] }, searchHashtags: { _, _ in [] }, customEmojis: { try await server.emojis() })
+                .remembering(customEmojisIn: cache),
+            settings: ComposeCompletion.Settings(debounce: .milliseconds(30), limit: 5)
         )
         #expect(completion.emojis?.map(\.shortcode) == ["blobcat_heart", "blobcat", "ablob", "taiyaki"])
         completion.loadEmojisIfNeeded()
@@ -284,7 +285,7 @@ struct ComposeCompletionTests {
     /// 取得元に覚えさせると、読めた絵文字のリストを覚え、次の画面の補完に渡せる。読めなかったときは、前に読めたリストを残す。
     @Test func remembersLoadedEmojisInCache() async throws {
         let server = server
-        let cache = CustomEmojiCache()
+        let cache = CustomEmojiCaches(directory: TestScratch.url("ComposeCompletionTests-emojis"), clock: TestClock()).cache(for: URL(string: "https://example.social")!)
         let sources = ComposeCompletion.Sources(searchAccounts: { _, _ in [] }, searchHashtags: { _, _ in [] }, customEmojis: { try await server.emojis() })
             .remembering(customEmojisIn: cache)
         #expect(cache.emojis == nil)

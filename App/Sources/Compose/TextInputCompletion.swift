@@ -171,8 +171,26 @@ final class TextInputCompletion {
         recentEmojis?.keys ?? []
     }
 
+    /// パレットを出した時点のカスタム絵文字のリストと、そのときの探すサーバー。出している間は、読み直したリストが届いても、
+    /// 画像から横長の絵文字の縦横比が分かっても並べ直さない。押そうとしている絵文字が指の下から動かないようにするため。
+    /// 出した時点でリストがなければ、最初に届いたリストにする。投稿するアカウントを替えて探すサーバーが変わったら、替えた先のリストに並べ直す。
+    private var paletteEmojis: (emojis: [ServerEmoji], sourceGeneration: Int)?
+
+    /// パレットを出すときに呼ぶ。リストをこの起動でまだ読んでいなければ読み始め、出した時点のリストを並べる。
+    func preparePalette() {
+        completion.loadEmojisIfNeeded()
+        paletteEmojis = nil
+        takePaletteEmojis()
+    }
+
+    private func takePaletteEmojis() {
+        guard paletteEmojis?.sourceGeneration != completion.emojiSourceGeneration else { return }
+        paletteEmojis = completion.emojisForPalette().map { ($0, completion.emojiSourceGeneration) }
+    }
+
     /// 検索語があれば、補完と同じ順で並べた結果を出す。なければまとまりごとに並べる。
     func updatePalette(_ palette: EmojiPaletteView, recentKeys: [String]) {
+        takePaletteEmojis()
         palette.cellSize = tuning.value(of: TuningCatalog.composeEmojiPaletteCellSize)
         palette.maxSpan = Int(tuning.value(of: TuningCatalog.composeEmojiPaletteMaxSpan))
         palette.minimumHeightFraction = tuning.value(of: TuningCatalog.composeEmojiPaletteMinimumHeightFraction)
@@ -183,8 +201,8 @@ final class TextInputCompletion {
         let query = palette.query
         let standardGroups = StandardEmojiAvailability.groups(for: settings.appearance.emojiStyle)
         // カスタム絵文字のリストがまだないか読めなかったときも、Unicodeの絵文字は通信なしで並べられるので出し、カスタム絵文字の場所に状態を出す。
-        let emojis = completion.emojis ?? []
-        let customStatus: EmojiPaletteView.CustomEmojiStatus? = if completion.emojis != nil {
+        let emojis = paletteEmojis?.emojis ?? []
+        let customStatus: EmojiPaletteView.CustomEmojiStatus? = if paletteEmojis != nil {
             nil
         } else if let reason = completion.emojiFailure {
             .failed(reason)

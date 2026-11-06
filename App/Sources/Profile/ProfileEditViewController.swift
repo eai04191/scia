@@ -1004,7 +1004,7 @@ final class ProfileEditViewController: UIViewController {
         guard emojiSheet == nil, let input = lastFocusedInput else { return }
         let height = max(lastKeyboardHeight, 300)
         paletteRecentKeys = textCompletion.recentKeys
-        textCompletion.completion.loadEmojisIfNeeded()
+        textCompletion.preparePalette()
         emojiPalette.clearQuery()
         updateEmojiPalette()
         observeEmojiPalette()

@@ -10,6 +10,7 @@ public struct ServerEmoji: Decodable, Hashable, Sendable {
     public let visibleInPicker: Bool
     public let category: String?
     /// 画像の縦横比（幅/高さ）。Fedibirdが`width`と`height`で返す。Mastodonは返さないのでnil。
+    /// Mastodonでは、画像が届いたときに分かった縦横比を`CustomEmojiCache`が残し、パレットに渡すときに`withAspectRatio(_:)`で入れる。
     public let aspectRatio: Double?
 
     public init(shortcode: String, url: URL, staticUrl: URL, visibleInPicker: Bool = true, category: String? = nil, aspectRatio: Double? = nil) {
@@ -45,6 +46,11 @@ public struct ServerEmoji: Decodable, Hashable, Sendable {
     public static func lastOfEachShortcode(_ emojis: [ServerEmoji]) -> [ServerEmoji] {
         var seen: Set<String> = []
         return emojis.reversed().filter { seen.insert($0.shortcode).inserted }.reversed()
+    }
+
+    /// 縦横比を`aspectRatio`にした絵文字。
+    public func withAspectRatio(_ aspectRatio: Double?) -> ServerEmoji {
+        ServerEmoji(shortcode: shortcode, url: url, staticUrl: staticUrl, visibleInPicker: visibleInPicker, category: category, aspectRatio: aspectRatio)
     }
 
     public var emoji: CustomEmoji {

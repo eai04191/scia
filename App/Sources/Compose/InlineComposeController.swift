@@ -1769,7 +1769,7 @@ final class InlineComposeController: NSObject {
             expandForEditing()
         }
         paletteRecentKeys = textCompletion.recentKeys
-        completion.loadEmojisIfNeeded()
+        textCompletion.preparePalette()
         emojiPalette.clearQuery()
         updateEmojiPalette()
         observeEmojiPalette()
