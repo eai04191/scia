@@ -76,6 +76,12 @@ final class OtherAccounts {
         }
     }
 
+    /// ほかのアカウントでログインしているか。プロフィールの読み込みを起こさないので、投稿欄のボタンを並べ直すたびに読んでよい。
+    var hasOthers: Bool {
+        guard let registry = try? AppDependencies.accounts.get() else { return false }
+        return registry.accounts.contains { $0.id != current.id }
+    }
+
     /// ログインしているほかのアカウントのうち、`Credential.id`が`id`のもの。ログアウトしていればnil。
     func account(id: String) -> OtherAccount? {
         accounts[id]
@@ -85,7 +91,7 @@ final class OtherAccounts {
     private var configurations: [Credential.ID: InstanceConfiguration] = [:]
     private var preferences: [Credential.ID: ServerPreferences] = [:]
 
-    /// アカウントごとの、走っている上限と設定の読み込み。書き始めたときと書くアカウントを替えたときに重ねて呼ばれても、送り直さずに待つ。
+    /// アカウントごとの、走っている上限と設定の読み込み。書き始めたときと投稿するアカウントを替えたときに重ねて呼ばれても、送り直さずに待つ。
     private var composeDefaultsLoads: [Credential.ID: Task<Void, Never>] = [:]
 
     /// `account`で書くときの、サーバーの上限とアカウントの設定を読むもの。今のアカウントと同じく、一度読めたら使い回す。

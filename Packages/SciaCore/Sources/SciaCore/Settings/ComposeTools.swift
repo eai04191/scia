@@ -23,6 +23,8 @@ public enum ComposeToolItem: String, MenuItemKind {
     case hashtag
     /// 下書きを捨てて、投稿欄を空の状態に戻す。決まりはdocs/compose.mdの「＋のメニューとツールバー」にある。
     case discardDraft
+    /// 投稿するアカウントを、ログインしているアカウントから選ぶ。ほかのアカウントでログインしていなければ出さない。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
+    case account
 
     /// ＋のメニューはボタンの上に開き、下ほど指が届きやすいので、使う頻度の低いカスタマイズをいちばん上に、書きながら何度も使う記号をいちばん下に置く。
     /// カスタマイズのまとまりには、カスタマイズだけを置く。
@@ -36,6 +38,7 @@ public enum ComposeToolItem: String, MenuItemKind {
         .item(.poll, isVisible: true),
         .item(.schedule, isVisible: true),
         .item(.language, isVisible: true),
+        .item(.account, isVisible: false),
         .separator,
         .item(.mention, isVisible: true),
         .item(.hashtag, isVisible: true),

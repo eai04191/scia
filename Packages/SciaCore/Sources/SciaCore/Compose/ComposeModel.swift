@@ -82,9 +82,9 @@ public final class ComposeModel<Thumbnail: Sendable> {
     @ObservationIgnored private let homeAccountID: String
     /// 書いているアカウントの、そのサーバーでの自分のアカウントのID。
     public var myAccountID: String { otherAccount?.myAccountID ?? homeAccountID }
-    /// 書くアカウントを替えたあと、新しいサーバーの上限を読むまで、アップロードし直すのを待っている添付。上限に合わせて縮め直すため。
+    /// 投稿するアカウントを替えたあと、新しいサーバーの上限を読むまで、アップロードし直すのを待っている添付。上限に合わせて縮め直すため。
     @ObservationIgnored private var awaitingReupload: Set<DraftAttachment.ID> = []
-    /// 書くアカウントを替えた回数。替える前に始めたアップロードが、前のサーバーの結果を書き戻さないようにする。
+    /// 投稿するアカウントを替えた回数。替える前に始めたアップロードが、前のサーバーの結果を書き戻さないようにする。
     @ObservationIgnored private var accountGeneration = 0
     /// 予約の日時を決める今の日付。テストでは決まった日付に差し替える。
     @ObservationIgnored public var now: () -> Date = SystemTime.now
@@ -127,7 +127,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     @ObservationIgnored public var onMediaReduced: (MediaAttachment.Kind) -> Void = { _ in }
     /// ペーストしたメディアのうち、添付の上限を超えて足さなかったものの種類。
     @ObservationIgnored public var onPastedMediaSkipped: ([MediaAttachment.Kind]) -> Void = { _ in }
-    /// 書くアカウントを替えたあとに呼ぶ。今のアカウントに戻ったらnil。呼ぶ側は、そのアカウントのサーバーの上限と既定値を`apply`で入れる。
+    /// 投稿するアカウントを替えたあとに呼ぶ。今のアカウントに戻ったらnil。呼ぶ側は、そのアカウントのサーバーの上限と既定値を`apply`で入れる。
     @ObservationIgnored public var onAccountChange: (ComposeAccount<Thumbnail>?) -> Void = { _ in }
 
     public init(
@@ -301,7 +301,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     /// インスタンスの上限と、ユーザーの既定の公開範囲、閲覧注意、言語を反映する。公開範囲と言語は、自分で選んでいたら変えない。
     /// 既定の閲覧注意は、この後に最初の添付を足したときから使う。
     /// - Parameter defaultLanguage: 既定の言語。読めなければnilで、今のままにする。既定を決めていなければ`.some(nil)`。
-    /// - Parameter accountID: 値を読んだアカウントの`ComposeAccount.id`。今のアカウントならnil。読んでいる間に書くアカウントを替えていたら、何もしない。
+    /// - Parameter accountID: 値を読んだアカウントの`ComposeAccount.id`。今のアカウントならnil。読んでいる間に投稿するアカウントを替えていたら、何もしない。
     ///   前のアカウントのサーバーの上限や既定値で、替えたアカウントの下書きを決めないため。
     public func apply(configuration: InstanceConfiguration?, defaultVisibility: Status.Visibility?, defaultSensitive: Bool?, defaultLanguage: String?? = nil, accountID: String? = nil) {
         guard accountID == otherAccount?.id else { return }
@@ -618,7 +618,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
         language = defaultLanguage
     }
 
-    /// 書くアカウントを替える。nilなら今のアカウントに戻す。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
+    /// 投稿するアカウントを替える。nilなら今のアカウントに戻す。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
     /// 書いた本文、注意書き、投票、予約、言語は残す。返信先と引用元は、前のアカウントのサーバーでのIDなので外す。
     /// 添付は、新しいサーバーの上限を`apply`で読んでから、そのサーバーへアップロードし直す。
     /// 送っている間と、編集、削除して書き直す、予約の書き直しの間は替えずにfalseを返す。どれも前のアカウントのサーバーの投稿を指すため。
@@ -671,7 +671,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
         awaitingReupload.insert(id)
     }
 
-    /// 書くアカウントを替えたあと、新しいサーバーの上限を読んだら、待たせていた添付をアップロードし直す。読めなかったときも、読む前の上限のまま送る。
+    /// 投稿するアカウントを替えたあと、新しいサーバーの上限を読んだら、待たせていた添付をアップロードし直す。読めなかったときも、読む前の上限のまま送る。
     /// 前のサーバーへの処理が抜けるのを待ってから、前の上限で作り直したファイルを捨てて、作り直す。
     private func startAwaitingReuploads() {
         let waiting = awaitingReupload
@@ -1322,7 +1322,7 @@ extension ComposeModel {
         guard let local = localMedia[id], attachments.contains(where: { $0.id == id }) else { return }
         let endBackgroundTime = backgroundTime("upload attachment")
         defer { endBackgroundTime() }
-        // 書くアカウントを替えたら、送る前と応答を受けたところで抜ける。送り直しは`startAwaitingReuploads`が、この処理が抜けるのを待って始める。
+        // 投稿するアカウントを替えたら、送る前と応答を受けたところで抜ける。送り直しは`startAwaitingReuploads`が、この処理が抜けるのを待って始める。
         let generation = accountGeneration
         let isStale = { [unowned self] in generation != accountGeneration }
         localMedia[id]?.failure = nil

@@ -319,6 +319,7 @@ extension ComposeToolItem: MenuItemPresentable {
         case .mention: "メンション"
         case .hashtag: "ハッシュタグ"
         case .discardDraft: "下書きを捨てる"
+        case .account: "投稿するアカウント"
         }
     }
 
@@ -337,6 +338,7 @@ extension ComposeToolItem: MenuItemPresentable {
         case .mention: "at"
         case .hashtag: "number"
         case .discardDraft: "trash"
+        case .account: "person.crop.circle"
         }
     }
 

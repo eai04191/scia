@@ -398,7 +398,7 @@ public final class ComposeCompletion {
         recentTags = nil
     }
 
-    /// 投稿欄で書くアカウントを替えたときに、替えた先のサーバーで探すようにする。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
+    /// 投稿欄で投稿するアカウントを替えたときに、替えた先のサーバーで探すようにする。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
     /// 前のサーバーで読んだ絵文字、自分のタグ、返信先の人、検索の結果は、そのサーバーのものなので捨て、読んでいる途中の応答も使わない。
     /// - Parameter recentMentions: そのアカウントで補完で選んだアカウントを覚える場所。
     public func switchSources(_ sources: Sources, recentMentions: RecentMentions?) {

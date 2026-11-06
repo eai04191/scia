@@ -61,6 +61,33 @@ final class InlineComposeController: NSObject {
     }
     /// 書いているアカウントの行の×で、今のアカウントに戻す。
     var onSwitchToHomeAccount: () -> Void = {}
+
+    /// ＋のメニューの「投稿するアカウント」で選べるアカウント。
+    struct AccountChoice {
+        /// `ComposeAccount.id`。今のアカウントならnil。
+        let id: String?
+        /// `@`を付けない`username`。
+        let username: String
+        /// サーバー名。同じ`username`のアカウントを見分けるため、サブタイトルに出す。
+        let server: String
+        /// 今書いているアカウントか。
+        let isCurrent: Bool
+        /// アイコンの画像のURL。プロフィールをまだ読めていなければnil。
+        let avatarURL: URL?
+        /// プロフィールを読み終えるのを待ち、アイコンの画像のURLを返す。`avatarURL`がnilのときに、メニューを開いている間に読む。
+        let loadAvatarURL: @MainActor () async -> URL?
+    }
+
+    /// ＋のメニューの「投稿するアカウント」に並べるアカウント。ほかのアカウントでログインしていなければ空にし、項目を出さない。
+    var writingAccountChoices: () -> [AccountChoice] = { [] }
+    /// ほかのアカウントでログインしているか。いなければ「投稿するアカウント」を出さない。ボタンを並べ直すたびに読むので、通信を起こさないものを渡す。
+    var hasOtherWritingAccounts: () -> Bool = { false }
+    /// 「投稿するアカウント」の行に、開いている間に届いたアイコンを差し替える。投稿の長押しのメニューの人のアイコンと同じ仕組み。
+    private let menuIcons = ContextMenuIconSwapper()
+    /// アカウントのアイコンの画像を読む先。
+    var avatarImages: AvatarImageStore<UIImage> = AppDependencies.avatarImages
+    /// 「投稿するアカウント」で選んだ。今のアカウントならnil。
+    var onChooseWritingAccount: (String?) -> Void = { _ in }
     /// 画面の下端から、投稿欄（書いているときはキーボードも）が覆っている高さが変わったときに呼ぶ。
     var onObscuredHeightChange: (CGFloat) -> Void = { _ in }
     /// リンクに付けるタイトルを読み始めたときと、付け終えたときに呼ぶ。読んでいる途中かは`isLoadingLinkTitle`で見る。
@@ -269,13 +296,13 @@ final class InlineComposeController: NSObject {
     /// 入力バーの中身を載せるスクロールビュー。バーを下へ引くと、キーボードが指に付いて下がる。
     private let dragArea = KeyboardDragArea()
     /// 添付などの部品を足す項目をまとめたメニューのボタン。書いていないときや短い投稿のときに、欄を部品のボタンで大きくしないため、1つにまとめる。
-    private let addButton = UIButton(configuration: .plain())
+    private let addButton = MenuButton(configuration: .plain())
     /// 部品を足す項目のうち、設定でツールバーに常に出すもののボタン。行に入りきらなければ隠し、＋のメニューに回す。
     private lazy var toolButtons: [ComposeToolItem: UIButton] = Dictionary(uniqueKeysWithValues: ComposeToolItem.allCases.map { item in
         switch item {
         case .visibility: (item, visibilityButton)
         case .expand: (item, expandButton)
-        case .media, .spoiler, .poll, .schedule, .language, .linkTitle, .customEmoji, .customize, .mention, .hashtag, .discardDraft: (item, makeToolButton(item))
+        case .media, .spoiler, .poll, .schedule, .language, .linkTitle, .customEmoji, .customize, .mention, .hashtag, .discardDraft, .account: (item, makeToolButton(item))
         }
     })
     /// 今のツールバーと＋のメニューへの振り分け。ツールバーの幅が決まるたびに決め直す。まだ一度も振り分けていなければnil。
@@ -685,7 +712,7 @@ final class InlineComposeController: NSObject {
     }
 
     /// 返信先を付けて書き始める。
-    /// - Parameter account: 書くアカウント。nilなら今のアカウントで書く。返信先は、そのアカウントのサーバーの投稿を渡す。
+    /// - Parameter account: 投稿するアカウント。nilなら今のアカウントで書く。返信先は、そのアカウントのサーバーの投稿を渡す。
     ///   ほかのアカウントで書いている途中に今のアカウントの投稿へ返信するときも、今のアカウントに戻す。返信先のIDがサーバーごとに違うため。
     func reply(to status: Status, as account: ComposeAccount<UIImage>? = nil) {
         guard model.switchAccount(to: account) else { return }
@@ -697,7 +724,7 @@ final class InlineComposeController: NSObject {
 
     /// 引用元を付けて書き始める。添付と投票は外す。外してよいかは、呼ぶ側が先に聞く。
     /// 開いているピッカーは、外した添付をピッカーの選択から足し直されないよう、`discardDraft()`と同じく閉じる。
-    /// - Parameter account: 書くアカウント。nilなら今のアカウントで書く。引用元は、そのアカウントのサーバーの投稿を渡す。
+    /// - Parameter account: 投稿するアカウント。nilなら今のアカウントで書く。引用元は、そのアカウントのサーバーの投稿を渡す。
     func quote(_ status: Status, as account: ComposeAccount<UIImage>? = nil) {
         guard model.switchAccount(to: account) else { return }
         if model.hasQuoteConflicts {
@@ -873,6 +900,8 @@ final class InlineComposeController: NSObject {
 
     private func menuAction(for item: ComposeToolItem) -> UIMenuElement {
         switch item {
+        case .account:
+            return accountMenu()
         case .visibility:
             // 選んでいる公開範囲が分かるよう、サブメニューの項目に今の値を添える。
             let menu = UIMenu(title: item.title, subtitle: VisibilityOption(model.visibility).title, image: UIImage(systemName: VisibilityOption(model.visibility).symbolName), children: visibilityActions())
@@ -1328,7 +1357,7 @@ final class InlineComposeController: NSObject {
 
     /// ユーザーのメニューの「メンション」。書き始めて、カーソルの位置に`@acct`を入れる。下書きと返信先はそのまま残す。
     /// 送っている間は本文を変えられないため、何もしない。
-    /// - Parameter account: 書くアカウント。nilなら今のアカウントで書く。`acct`は、そのアカウントのサーバーから見たハンドルを渡す。
+    /// - Parameter account: 投稿するアカウント。nilなら今のアカウントで書く。`acct`は、そのアカウントのサーバーから見たハンドルを渡す。
     func mention(_ acct: String, as account: ComposeAccount<UIImage>? = nil) {
         guard !model.isPosting else {
             logger.info("compose: mention not inserted while posting")
@@ -1377,7 +1406,7 @@ final class InlineComposeController: NSObject {
 
     /// 添付、注意書き、カスタマイズのボタン。公開範囲と展開は、＋を置く前からあるボタンをそのまま使う。
     private func makeToolButton(_ item: ComposeToolItem) -> UIButton {
-        let button = UIButton(configuration: .plain(), primaryAction: UIAction { [weak self] _ in
+        let button = MenuButton(configuration: .plain(), primaryAction: UIAction { [weak self] _ in
             switch item {
             case .media: self?.toggleMediaPicker()
             case .spoiler: self?.toggleSpoiler()
@@ -1389,9 +1418,17 @@ final class InlineComposeController: NSObject {
             case .customEmoji: self?.toggleEmojiPalette()
             case .mention, .hashtag: self?.insertMark(item)
             case .discardDraft: self?.confirmDiscardingDraft()
-            case .visibility, .expand: break
+            case .visibility, .expand, .account: break
             }
         })
+        if item == .account {
+            // 押すと、＋のメニューの中と同じアカウントの一覧を出す。開いている間に届いたアイコンを差し替える。
+            watchMenuIcons(of: button)
+            button.showsMenuAsPrimaryAction = true
+            button.menu = UIMenu(title: item.title, children: [UIDeferredMenuElement.uncached { [weak self] completion in
+                completion(self?.accountMenu().children ?? [])
+            }])
+        }
         if item == .linkTitle {
             // VoiceOverでは、押した時点の本文のURLをメニューで選ばせる。URLがなければ、ないことだけを押せない形で出す。
             button.showsMenuAsPrimaryAction = UIAccessibility.isVoiceOverRunning
@@ -1412,6 +1449,75 @@ final class InlineComposeController: NSObject {
         button.accessibilityLabel = item.title
         button.isHidden = true
         return button
+    }
+
+    /// 「投稿するアカウント」のサブメニュー。今書いているアカウントにチェックを付け、サーバー名を添える。
+    /// 送っている間と、編集、削除して書き直す、予約の書き直しの間は、どれも今のアカウントの投稿を指すので替えられない。
+    private func accountMenu() -> UIMenu {
+        let choices = writingAccountChoices()
+        let current = choices.first(where: \.isCurrent)
+        let locked = model.isPosting || model.editedStatus != nil || model.redraft != nil || model.rewritingSchedule != nil
+        let actions = choices.map { choice in
+            let action = UIAction(title: "@\(choice.username)", subtitle: choice.server, image: accountIcon(for: choice), state: choice.isCurrent ? .on : .off) { [weak self] _ in
+                guard !choice.isCurrent else { return }
+                self?.onChooseWritingAccount(choice.id)
+            }
+            if locked, !choice.isCurrent {
+                action.attributes = .disabled
+            }
+            return action
+        }
+        let subtitle = locked && !model.isPosting ? "編集や書き直しの間は替えられません" : current.map { "@\($0.username)" }
+        return UIMenu(title: ComposeToolItem.account.title, subtitle: subtitle, image: UIImage(systemName: ComposeToolItem.account.symbolName), children: actions)
+    }
+
+    /// `button`のメニューを開いている間、届いたアイコンを差し替える。
+    private func watchMenuIcons(of button: MenuButton) {
+        button.onMenuOpenChange = { [weak self, weak button] isOpen in
+            if isOpen {
+                self?.menuIcons.menuWillAppear(in: button?.window)
+            } else {
+                self?.menuIcons.menuWillEnd()
+            }
+        }
+    }
+
+    /// 「投稿するアカウント」の行のアイコン。読み込み済みならそのアカウントのアイコンを、一覧と同じ形に切り抜いて出す。
+    /// まだなら記号のプレースホルダーを出し、プロフィールと画像を読み終えたら、開いているメニューのまま差し替える。
+    private func accountIcon(for choice: AccountChoice) -> UIImage {
+        let side = AvatarIcon.menuSide
+        let scale = bar.traitCollection.displayScale
+        let shape = settings.appearance.avatarShape
+        if let url = choice.avatarURL,
+           let cached = avatarImages.cachedImage(for: AvatarView.key(url: url, animates: false, side: side, scale: scale)),
+           let icon = AvatarIcon.image(cached, side: side, shape: shape) {
+            return icon
+        }
+        let placeholder = menuIcons.placeholder(symbolName: "person.crop.circle", side: side, traitCollection: bar.traitCollection)
+        let avatarImages = avatarImages
+        model.tasks.run(.display) { [weak self] in
+            guard let url = await choice.loadAvatarURL(),
+                  let image = try? await avatarImages.image(for: AvatarView.key(url: url, animates: false, side: side, scale: scale), retriesNow: true),
+                  let icon = AvatarIcon.image(image, side: side, shape: shape)
+            else { return }
+            self?.menuIcons.setIcon(icon, for: placeholder)
+        }
+        return placeholder
+    }
+
+    /// 「投稿するアカウント」で選んだアカウントに替え、替えた先のサーバーで見つけた返信先か引用元を付け直す。
+    /// - Parameters:
+    ///   - account: 投稿するアカウント。nilなら今のアカウント。
+    ///   - replyTo: 替えた先のサーバーの返信先。
+    ///   - quoteTarget: 替えた先のサーバーの引用元。
+    func switchWritingAccount(to account: ComposeAccount<UIImage>?, replyTo: Status? = nil, quoteTarget: Status? = nil) {
+        guard model.switchAccount(to: account) else { return }
+        if let replyTo {
+            model.setReplyTarget(replyTo)
+        } else if let quoteTarget {
+            model.setQuoteTarget(quoteTarget)
+        }
+        update()
     }
 
     /// ＋の右上に重ねる言語のコードのバッジ。＋の記号に少しかかる位置に置き、押しても＋のメニューが開くよう、触れたものを受けない。
@@ -1529,7 +1635,7 @@ final class InlineComposeController: NSObject {
         // 項目と＋のボタンは間を空けずに並べるので、残り文字数と送信の間隔だけを引く。
         let available = tools.bounds.width - fixed - sendSpacing
         let placement = ComposeToolPlacement(
-            layout: settings.composeToolLayout,
+            layout: shownToolLayout(),
             available: available,
             addButtonWidth: max(addButton.intrinsicContentSize.width, toolButtonWidth),
             // 言語のボタンは、記号とコードのどちらを出していても幅を変えない。コードの長さで振り分けが変わらないようにするため。
@@ -1544,6 +1650,17 @@ final class InlineComposeController: NSObject {
         setRowHidden(addButton, !placement.showsAddButton)
         // 言語の項目が行と＋のどちらにあるかで、コードの出し方が変わる。
         updateLanguageIndicators()
+    }
+
+    /// 振り分ける並び。ほかのアカウントでログインしていなければ、「投稿するアカウント」を隠した並びにする。
+    /// 振り分けたあとで除くと、その項目のために＋を出したり、行の幅を取ったりしたままになるため、振り分ける前に除く。
+    private func shownToolLayout() -> MenuLayout<ComposeToolItem> {
+        let layout = settings.composeToolLayout
+        guard !hasOtherWritingAccounts() else { return layout }
+        return MenuLayout(elements: layout.elements.map { element in
+            if case .item(.account, _) = element { return .item(.account, isVisible: false) }
+            return element
+        })
     }
 
     /// 行を並べ終えてから振り分けを決め直す。並べている最中にボタンを出したり隠したりすると、スタックビューが別のボタンを幅0で並べ、出したボタンと重なった。
@@ -3611,6 +3728,8 @@ final class InlineComposeController: NSObject {
         addButton.configuration?.baseForegroundColor = .label
         addButton.accessibilityLabel = "追加"
         addButton.showsMenuAsPrimaryAction = true
+        // 「投稿するアカウント」の行に、開いている間に届いたアイコンを差し替える。
+        watchMenuIcons(of: addButton)
         configureLanguageBadge()
         // 開くたびに項目を作り直し、添付できるかやシートを出しているかを、その時点の状態で出す。
         addButton.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in

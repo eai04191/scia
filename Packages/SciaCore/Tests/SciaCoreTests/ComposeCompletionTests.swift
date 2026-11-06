@@ -854,7 +854,7 @@ struct ComposeCompletionTests {
         #expect(await server.queries.isEmpty)
     }
 
-    /// 書くアカウントを替えたら、替えた先のサーバーの絵文字を読み直す。替える前に読み始めた応答は使わない。
+    /// 投稿するアカウントを替えたら、替えた先のサーバーの絵文字を読み直す。替える前に読み始めた応答は使わない。
     @Test func switchingSourcesForgetsEmojisOfPreviousServer() async throws {
         let gate = Gate()
         let home = ComposeCompletion.Sources(searchAccounts: { _, _ in [] }, searchHashtags: { _, _ in [] }, customEmojis: {

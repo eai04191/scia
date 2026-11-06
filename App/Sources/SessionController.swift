@@ -90,6 +90,12 @@ final class SessionController {
         tasks.onClose { [weak lookup] in lookup?.cancel() }
         return lookup
     }()
+    /// 投稿欄の「投稿するアカウント」で、替えた先のサーバーで返信先や引用元を探す操作の入口。後から選んだアカウントだけに替える。
+    private lazy var writingAccountLookup: LatestLookup = {
+        let lookup = LatestLookup(clock: clock) { nil }
+        tasks.onClose { [weak lookup] in lookup?.cancel() }
+        return lookup
+    }()
     /// 引用元の中の引用のように、IDしか分からない投稿のスレッドを開く操作の入口。後から押したものだけを開く。
     private lazy var statusOpening: LatestLookup = {
         let lookup = LatestLookup(clock: clock) { nil }
@@ -155,6 +161,10 @@ final class SessionController {
     /// 検索のタブの一番下の画面。
     private let searchRoot = SearchViewController()
     private var cachedMyAccount: Account?
+    /// 走っている`myAccount()`の読み込み。重ねて呼ばれても送り直さずに待つ。
+    private var myAccountLoad: Task<Void, Never>?
+    /// 最後の`myAccount()`の読み込みが失敗した理由。待っていた呼び出しに返す。
+    private var myAccountLoadError: (any Error)?
     /// セッションで読んだアカウント。メニューと投稿欄の補完に、メンションされたユーザーのアイコンを出すのに使う。
     /// 補完の口は`init`の中で`self`より先に作るので、それより前に作る。
     private let accounts: AccountCache
@@ -586,6 +596,9 @@ final class SessionController {
         composer.onLinkTitleFailed = { [weak self] failure in self?.linkTitleDidFail(failure) }
         composer.model.onAccountChange = { [weak self] account in self?.composeAccountDidChange(account) }
         composer.onSwitchToHomeAccount = { [weak self] in self?.composer.model.switchAccount(to: nil) }
+        composer.writingAccountChoices = { [weak self] in self?.writingAccountChoices() ?? [] }
+        composer.hasOtherWritingAccounts = { [weak self] in self?.otherAccounts.hasOthers ?? false }
+        composer.onChooseWritingAccount = { [weak self] id in self?.chooseWritingAccount(id) }
         session.onCredentialsInvalid = { [weak self] in self?.credentialsDidBecomeInvalid() }
         session.onCapabilitiesLoad = { [weak self] capabilities in
             for timeline in self?.timelines.allObjects ?? [] {
@@ -1882,14 +1895,30 @@ final class SessionController {
         rootViewController.frontmostPresented.present(controller.wrappedInNavigation(), animated: true)
     }
 
-    /// ログイン中のアカウント。手元にはCredentialしかないため、一度読んだら使い回す。
-    func myAccount() async throws -> Account {
+    /// ログイン中のアカウント。手元にはCredentialしかないため、一度読んだら使い回す。読んでいる途中なら、送り直さずにそれを待つ。
+    /// - Parameter purpose: 読み始めるときの通信の目的。読んでいる途中の読み込みを待つときは使わない。
+    func myAccount(purpose: RequestPurpose = .action) async throws -> Account {
         if let cachedMyAccount { return cachedMyAccount }
-        let account = try await client.account(client.credential.accountID)
-        // 読む間にプロフィールを保存していれば、保存した方が新しいので、読み始めた時点の応答で戻さない。
+        if myAccountLoad == nil {
+            let client = client
+            // 始めた読み込みは、このあとの代入を終えてから走るので、走り終えたときに自分で除ける。
+            myAccountLoad = tasks.run(purpose) { [weak self] in
+                do {
+                    let account = try await client.account(client.credential.accountID)
+                    // 読む間にプロフィールを保存していれば、保存した方が新しいので、読み始めた時点の応答で戻さない。
+                    if self?.cachedMyAccount == nil {
+                        self?.cachedMyAccount = account
+                    }
+                    self?.myAccountLoadError = nil
+                } catch {
+                    self?.myAccountLoadError = error
+                }
+                self?.myAccountLoad = nil
+            }
+        }
+        await myAccountLoad?.value
         if let cachedMyAccount { return cachedMyAccount }
-        cachedMyAccount = account
-        return account
+        throw myAccountLoadError ?? CancellationError()
     }
 
     private func openMyProfile(from source: UIViewController) {
@@ -2042,11 +2071,90 @@ final class SessionController {
     // MARK: - ほかのアカウントで書く
 
     /// 投稿欄で`account`として書き始める。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
-    /// 編集や書き直しの途中なら、今のアカウントで返信を始めるときと同じく、やめてよいか聞く。書くアカウントは、`proceed`に渡したものを投稿欄の入り口が替える。
+    /// 編集や書き直しの途中なら、今のアカウントで返信を始めるときと同じく、やめてよいか聞く。投稿するアカウントは、`proceed`に渡したものを投稿欄の入り口が替える。
     private func write(as account: OtherAccount, starting: String, _ proceed: @escaping (ComposeAccount<UIImage>) -> Void) {
         confirmLeavingEdit(starting: starting) { [weak self] in
             guard let self else { return }
             proceed(composeAccount(for: account))
+        }
+    }
+
+    /// 投稿欄の「投稿するアカウント」に並べる、ログインしているアカウント。今のアカウントを先頭にし、ほかのアカウントはアカウントの切り替えのメニューと同じ順に並べる。
+    /// ほかのアカウントでログインしていなければ空にし、項目を出さない。
+    private func writingAccountChoices() -> [InlineComposeController.AccountChoice] {
+        let others = otherAccounts.list()
+        guard !others.isEmpty else { return [] }
+        let writing = composer.model.otherAccount?.id
+        let home = InlineComposeController.AccountChoice(
+            id: nil, username: credential.username, server: credential.server, isCurrent: writing == nil,
+            avatarURL: cachedMyAccount?.avatarStatic,
+            loadAvatarURL: { [weak self] in try? await self?.myAccount(purpose: .display).avatarStatic }
+        )
+        return [home] + others.map { account in
+            InlineComposeController.AccountChoice(
+                id: account.credential.id, username: account.credential.username, server: account.credential.server, isCurrent: writing == account.credential.id,
+                avatarURL: account.profile?.avatarStatic,
+                loadAvatarURL: { await account.loadedProfile()?.avatarStatic }
+            )
+        }
+    }
+
+    /// 「投稿するアカウント」で選んだアカウントに替える。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
+    /// 返信か引用を書いていれば、替えた先のサーバーで返信先か引用元をURIで探して付け直し、見つからなければ替えずに知らせる。
+    /// 探している間にほかのアカウントを選び直したら、後から選んだものだけに替える。返信先や引用元を替えていたら、何もしない。
+    /// 引用元は、替えた先のアカウントで引用できなければ替えずに知らせる。フォロワーだけが引用できる投稿などで、替えた先では断られるため。
+    /// - Parameter id: 選んだアカウントの`Credential.id`。今のアカウントならnil。
+    private func chooseWritingAccount(_ id: String?) {
+        let other = id.flatMap { otherAccounts.account(id: $0) }
+        // 選んでいる間にログアウトしたアカウントには替えない。
+        guard id == nil || other != nil else { return }
+        let writing = other.map(composeAccount(for:))
+        let model = composer.model
+        guard let target = model.replyTo ?? model.quoteTarget else {
+            writingAccountLookup.cancel()
+            composer.switchWritingAccount(to: writing)
+            return
+        }
+        let isReply = model.replyTo != nil
+        let username = other?.credential.username ?? credential.username
+        writingAccountLookup.start(.action) { [weak self] () -> OtherAccount.Lookup in
+            if let other { return await other.lookup(target) }
+            return await self?.lookUpOnHome(target) ?? .notFound
+        } isStillWanted: { [weak self] in
+            let current = isReply ? self?.composer.model.replyTo : self?.composer.model.quoteTarget
+            return current?.displayed.uri == target.displayed.uri
+        } completion: { [weak self] result in
+            guard let self, case .success(let lookup) = result else { return }
+            let title = "投稿するアカウントを替えられませんでした"
+            let reason: String
+            switch lookup {
+            case .found(let found):
+                // 引用に対応していないサーバー（`quote_approval`がない）でも、引用できないものとして替えない。
+                if isReply || found.displayed.quoteApproval?.availability.canQuote == true {
+                    composer.switchWritingAccount(to: writing, replyTo: isReply ? found : nil, quoteTarget: isReply ? nil : found)
+                    return
+                }
+                reason = "@\(username)では引用元の投稿を引用できません。"
+            case .notFound:
+                reason = "@\(username)からは\(isReply ? "返信先" : "引用元")の投稿が見られません。"
+            case .failed(let error):
+                reason = ErrorPresentation(error).text
+            }
+            showFailureNotice(.interactionFailure(title: title) { [weak self] in
+                self?.presentAlert(title: title, message: reason)
+            })
+        }
+    }
+
+    /// 今のアカウントのサーバーで、`status`（ブーストなら元の投稿）をURIで探す。ほかのアカウントのサーバーの投稿を、今のアカウントの投稿に引き直すのに使う。
+    /// URIが同じ投稿だけを使う。検索はURIに近いほかの投稿を返すことがあり、違う投稿に返信しないため。
+    private func lookUpOnHome(_ status: Status) async -> OtherAccount.Lookup {
+        guard let uri = status.displayed.uri else { return .notFound }
+        do {
+            let results = try await client.search(uri, category: .statuses, resolve: true, limit: 5).statuses
+            return results.map(\.displayed).first { $0.uri == uri }.map { .found($0) } ?? .notFound
+        } catch {
+            return .failed(error)
         }
     }
 
@@ -2077,7 +2185,7 @@ final class SessionController {
         }
     }
 
-    /// 書くアカウントを替えたら、補完と絵文字をそのアカウントのサーバーで探すようにし、投稿欄に書いているアカウントを出して、上限と既定値を読む。
+    /// 投稿するアカウントを替えたら、補完と絵文字をそのアカウントのサーバーで探すようにし、投稿欄に書いているアカウントを出して、上限と既定値を読む。
     private func composeAccountDidChange(_ writing: ComposeAccount<UIImage>?) {
         guard let writing, let account = otherAccounts.account(id: writing.id) else {
             composer.writingAccount = nil
@@ -2113,7 +2221,7 @@ final class SessionController {
     }
 
     /// 書いているほかのアカウントのサーバーの上限と、そのアカウントの既定の公開範囲、閲覧注意、言語を読み、投稿欄に反映する。
-    /// 読み終える前に書くアカウントを替えていたら、投稿欄が使わない（`ComposeModel.apply`の`accountID`）。
+    /// 読み終える前に投稿するアカウントを替えていたら、投稿欄が使わない（`ComposeModel.apply`の`accountID`）。
     private func applyComposeDefaults(of writing: ComposeAccount<UIImage>) {
         guard let account = otherAccounts.account(id: writing.id) else { return }
         let defaults = otherAccounts.composeDefaults(of: account)
@@ -3019,7 +3127,7 @@ final class SessionController {
 
     /// 下書きに添付か投票があれば、外してよいか聞いてから引用を始める。なければすぐ始める。
     /// Mastodonは引用に添付と投票を付けられないため。本文は残す。
-    /// - Parameter account: 書くアカウント。nilなら今のアカウントで書く。
+    /// - Parameter account: 投稿するアカウント。nilなら今のアカウントで書く。
     private func confirmQuoting(_ status: Status, as account: ComposeAccount<UIImage>? = nil) {
         guard let confirmation = Confirmation.quoting(draft: composer.model) else {
             composer.quote(status, as: account)
@@ -3529,6 +3637,8 @@ final class SessionController {
             })
         }
         otherAccounts.loadProfiles()
+        // 投稿欄の「投稿するアカウント」の行に出す、このアカウント自身のアイコン。
+        tasks.run(.display) { [weak self] in _ = try? await self?.myAccount(purpose: .display) }
         let network = AppDependencies.network
         session.observeRecoveries { network.recoveryCount }
         loadServerVersion()

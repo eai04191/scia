@@ -7,7 +7,7 @@ import Synchronization
 import Testing
 import UniformTypeIdentifiers
 
-/// 投稿欄で書くアカウントを、ログインしているほかのアカウントに替える。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
+/// 投稿欄で投稿するアカウントを、ログインしているほかのアカウントに替える。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
 @Suite(.scratch)
 @MainActor
 struct ComposeModelAccountTests {
