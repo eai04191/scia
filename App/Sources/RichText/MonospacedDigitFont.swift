@@ -6,8 +6,12 @@ extension UIFont {
     /// `preferredFont(forTextStyle:).pointSize`で`monospacedDigitSystemFont`を作ると、作った時点の大きさで止まり、追従しないため、これで作る。
     /// - Parameter traits: この文字の大きさで作る。nilなら今の端末の文字の大きさで作る。
     static func monospacedDigitFont(forTextStyle style: UIFont.TextStyle, compatibleWith traits: UITraitCollection? = nil) -> UIFont {
-        let font = UIFont.preferredFont(forTextStyle: style, compatibleWith: traits)
-        let descriptor = font.fontDescriptor.addingAttributes([
+        UIFont.preferredFont(forTextStyle: style, compatibleWith: traits).withMonospacedDigits
+    }
+
+    /// この文字の大きさと書体のまま、数字の幅を揃えたもの。
+    var withMonospacedDigits: UIFont {
+        let descriptor = fontDescriptor.addingAttributes([
             .featureSettings: [[UIFontDescriptor.FeatureKey.type: kNumberSpacingType, UIFontDescriptor.FeatureKey.selector: kMonospacedNumbersSelector]],
         ])
         return UIFont(descriptor: descriptor, size: 0)
