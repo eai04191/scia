@@ -47,6 +47,21 @@ public final class AccountRegistry {
         persist()
     }
 
+    /// ログインし直したアカウントの認証情報を新しくする。使うアカウントは替えない。
+    /// ほかのアカウントにログインし直したときに、今のアカウントのまま使い続けるため。
+    /// - Returns: 一覧にあって新しくしたか。ログインし直している間にログアウトしたアカウントは、戻さずにfalseを返す。
+    @discardableResult
+    public func renew(_ credential: Credential) throws -> Bool {
+        guard let index = accounts.firstIndex(where: { $0.id == credential.id }) else { return false }
+        try storage.save(credential)
+        accounts[index] = credential
+        if current?.id == credential.id {
+            current = credential
+        }
+        persist()
+        return true
+    }
+
     /// 使うアカウントを切り替える。一覧にないアカウントなら何もしない。
     public func select(_ id: Credential.ID) {
         guard let account = accounts.first(where: { $0.id == id }) else { return }

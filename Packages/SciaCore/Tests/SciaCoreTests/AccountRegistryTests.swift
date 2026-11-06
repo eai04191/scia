@@ -77,6 +77,45 @@ struct AccountRegistryTests {
         #expect(registry.current?.accessToken == "new")
     }
 
+    /// ほかのアカウントにログインし直しても、使うアカウントは替えず、保存した資格情報も新しくする。
+    @Test func renewingOtherAccountKeepsCurrent() throws {
+        let storage = MemoryStorage()
+        let defaults = try makeDefaults()
+        let registry = try AccountRegistry(storage: storage, defaults: defaults)
+        try registry.add(try credential("1", token: "old"))
+        try registry.add(try credential("2"))
+
+        #expect(try registry.renew(try credential("1", token: "new")))
+
+        #expect(registry.accounts.map(\.accessToken) == ["new", "token"])
+        #expect(registry.current?.accountID == "2")
+        let relaunched = try AccountRegistry(storage: storage, defaults: defaults)
+        #expect(relaunched.accounts.map(\.accessToken) == ["new", "token"])
+        #expect(relaunched.current?.accountID == "2")
+    }
+
+    /// 使っているアカウントにログインし直したら、使うアカウントも新しい資格情報にする。
+    @Test func renewingCurrentAccountUpdatesCurrent() throws {
+        let registry = try AccountRegistry(storage: MemoryStorage(), defaults: try makeDefaults())
+        try registry.add(try credential("1", token: "old"))
+
+        #expect(try registry.renew(try credential("1", token: "new")))
+
+        #expect(registry.current?.accessToken == "new")
+    }
+
+    /// ログインし直している間にログアウトしたアカウントは、戻さない。
+    @Test func renewingRemovedAccountDoesNothing() throws {
+        let storage = MemoryStorage()
+        let registry = try AccountRegistry(storage: storage, defaults: try makeDefaults())
+        try registry.add(try credential("1"))
+
+        #expect(try registry.renew(try credential("2")) == false)
+
+        #expect(registry.accounts.map(\.accountID) == ["1"])
+        #expect(try storage.loadAll().map(\.accountID) == ["1"])
+    }
+
     @Test func removingCurrentSwitchesToFirstRemaining() throws {
         let registry = try AccountRegistry(storage: MemoryStorage(), defaults: try makeDefaults())
         try registry.add(try credential("1"))

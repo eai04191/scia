@@ -231,9 +231,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         isShowingAccountsLoadFailure = false
         let session = SessionController(credential: credential, accountMenu: { [weak self] in
             self?.makeAccountMenu() ?? UIMenu()
-        }, onReauthenticate: { [weak self] session in
+        }, onReauthenticate: { [weak self] session, credential in
             guard let self, session === self.session else { return }
-            await self.reauthenticate(session.credential)
+            await self.reauthenticate(credential, isCurrent: credential.id == session.credential.id)
         })
         let replacesSession = self.session != nil
         self.session = session
@@ -409,8 +409,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     /// トークンが無効になったアカウントに、ログインし直す。ログイン画面は挟まず、そのアカウントのサーバーの認可画面を出す。
     /// 別のアカウントでログインされたら、そのアカウントは加えない。ログインし直しのつもりで、アカウントが増えたり切り替わったりしないようにするため。
-    /// ログインし直している間に、使うアカウントが変わったら、結果を捨てる。
-    private func reauthenticate(_ credential: Credential) async {
+    /// - Parameter isCurrent: 使っているアカウントか。使っているアカウントなら、ログインし直している間に使うアカウントが変わったら、結果を捨てる。
+    ///   ほかのアカウント（「別のアカウントで」で操作したアカウント）なら、使うアカウントは替えずに認証情報だけを新しくし、その間にログアウトしていたら結果を捨てる。
+    private func reauthenticate(_ credential: Credential, isCurrent: Bool) async {
         guard let window, let accounts else { return }
         let authenticator = WebAuthenticator(anchor: window)
         do {
@@ -422,12 +423,19 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             }
             // ログインし直している間に、別のシーンでログアウトや切り替えをしていたら、結果を捨てる。
             // 加えると、消したアカウントが戻ったり、切り替えたアカウントから戻ったりするため。
-            guard accounts.current?.id == credential.id else {
-                logger.info("reauthentication discarded: account changed")
-                return
+            if isCurrent {
+                guard accounts.current?.id == credential.id else {
+                    logger.info("reauthentication discarded: account changed")
+                    return
+                }
+                try accounts.add(renewed)
+            } else {
+                guard try accounts.renew(renewed) else {
+                    logger.info("reauthentication discarded: account removed")
+                    return
+                }
             }
-            try accounts.add(renewed)
-            logger.info("account reauthenticated")
+            logger.info("account reauthenticated (current: \(isCurrent, privacy: .public))")
             Self.syncAllScenes()
         } catch is CancellationError {
             logger.info("reauthentication cancelled")

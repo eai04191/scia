@@ -142,7 +142,7 @@ final class SessionController {
     }
     /// APIが401を返したときに、トークンが本当に無効かを確かめる。
     private var authorization: AuthorizationCheck { session.authorization }
-    private let onReauthenticate: (SessionController) async -> Void
+    private let onReauthenticate: (SessionController, Credential) async -> Void
     /// ログインし直しの途中。続けて押されても、認可画面を重ねて出さない。
     private var isReauthenticating = false
     private let tabBarDelegate: TabReselectionDelegate
@@ -220,8 +220,9 @@ final class SessionController {
 
     /// - Parameters:
     ///   - accountMenu: アカウントの切り替えなどのメニュー。開くたびに呼んで組み立て直す。
-    ///   - onReauthenticate: トークンが無効なアカウントで、ログインし直しのボタンが押されたときに呼ぶ。ログインし直しが終わるか、取り消されたら返る。
-    init(credential: Credential, accountMenu: @escaping @MainActor () -> UIMenu, onReauthenticate: @escaping (SessionController) async -> Void) {
+    ///   - onReauthenticate: トークンが無効なアカウントで、ログインし直しのボタンが押されたときに、そのアカウントを渡して呼ぶ。ログインし直しが終わるか、取り消されたら返る。
+    ///     このセッションのアカウントのほか、「別のアカウントで」の操作で無効と分かったほかのアカウントも渡す。
+    init(credential: Credential, accountMenu: @escaping @MainActor () -> UIMenu, onReauthenticate: @escaping (SessionController, Credential) async -> Void) {
         self.credential = credential
         self.onReauthenticate = onReauthenticate
         self.accountMenu = accountMenu
@@ -2160,13 +2161,14 @@ final class SessionController {
 
     /// `account`として書くときの送り先。今のアカウントの一覧には入れず、送れたら、どのアカウントで送ったかを知らせる。
     /// 失敗は投稿欄に出し、このセッションのログインし直しの案内にはつなげない。
+    /// 書いている間にそのアカウントにログインし直しても新しいトークンで送るよう、送るたびにそのアカウントの今の認証情報でクライアントを作る。
     private func composeAccount(for account: OtherAccount) -> ComposeAccount<UIImage> {
-        let client = otherAccounts.client(for: account)
+        let client = otherAccounts.latestClient(for: account)
         let handle = account.credential.handle
         let media = ComposeMediaService<UIImage>(
-            upload: { try await client.uploadMedia($0) },
-            waitUntilProcessed: { try await client.waitUntilProcessed($0) },
-            updateDescription: { try await client.updateMediaDescription($0, description: $1) },
+            upload: { try await client().uploadMedia($0) },
+            waitUntilProcessed: { try await client().waitUntilProcessed($0) },
+            updateDescription: { try await client().updateMediaDescription($0, description: $1) },
             makeThumbnail: { file in await LocalMediaThumbnail.make(for: file, maxPixelSize: ComposeAttachmentStrip.thumbnailPixelSize) },
             // 処理できない画像の形式は、今のアカウントのサーバーの版ごとに覚えている。ほかのアカウントのサーバーの版は読まないので覚えず、
             // 処理できなかったときにJPEGで送り直すのを、送るたびに行う。
@@ -2176,21 +2178,21 @@ final class SessionController {
         )
         // 新しい投稿に付け直すので、添付は残して削除する。今のアカウントで削除して書き直すときと同じ。
         let redraft = ComposeRedraftService(
-            deleteStatus: { try await client.deleteStatus($0, deleteMedia: false) },
-            waitUntilReleased: { try await client.waitUntilReleased($0) }
+            deleteStatus: { try await client().deleteStatus($0, deleteMedia: false) },
+            waitUntilReleased: { try await client().waitUntilReleased($0) }
         )
         return ComposeAccount(id: account.credential.id, myAccountID: account.credential.accountID, media: media, redraft: redraft, onRedraftDeleted: { [weak account] id in
             account?.didDelete(id)
         }) { [weak self, weak account] draft in
             if let editing = draft.editing {
-                let edited = try await client.editStatus(editing, to: draft)
+                let edited = try await client().editStatus(editing, to: draft)
                 account?.didEdit(edited)
                 self?.showToggledNotice("\(handle)で編集しました")
             } else if let scheduledAt = draft.scheduledAt {
-                _ = try await client.scheduleStatus(draft, at: scheduledAt)
+                _ = try await client().scheduleStatus(draft, at: scheduledAt)
                 self?.showToggledNotice("\(handle)で予約しました")
             } else {
-                _ = try await client.postStatus(draft)
+                _ = try await client().postStatus(draft)
                 self?.showToggledNotice("\(handle)で投稿しました")
             }
         }
@@ -2358,11 +2360,7 @@ final class SessionController {
             } catch {
                 guard let self else { return }
                 logger.error("other account toggle \(String(describing: action), privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
-                let reason = ErrorPresentation(error)
-                operationStatus.recordFailure(title: failureTitle, reason: reason, subject: OperationStatus.Subject(original))
-                showFailureNotice(.interactionFailure(title: failureTitle) { [weak self] in
-                    self?.presentAlert(title: failureTitle, message: reason.text)
-                })
+                await showOtherAccountFailure(title: failureTitle, error: error, as: account, recording: OperationStatus.Subject(original))
             }
         }
     }
@@ -2398,11 +2396,7 @@ final class SessionController {
             } catch {
                 guard let self else { return }
                 logger.error("other account delete failed: \(SciaLog.describe(error), privacy: .public)")
-                let reason = ErrorPresentation(error)
-                operationStatus.recordFailure(title: failureTitle, reason: reason, subject: OperationStatus.Subject(original))
-                showFailureNotice(.interactionFailure(title: failureTitle) { [weak self] in
-                    self?.presentAlert(title: failureTitle, message: reason.text)
-                })
+                await showOtherAccountFailure(title: failureTitle, error: error, as: account, recording: OperationStatus.Subject(original))
             }
         }
     }
@@ -2434,10 +2428,7 @@ final class SessionController {
             } catch {
                 guard let self else { return }
                 logger.error("other account relation change failed: \(SciaLog.describe(error), privacy: .public)")
-                let reason = ErrorPresentation(error)
-                showFailureNotice(.interactionFailure(title: failureTitle) { [weak self] in
-                    self?.presentAlert(title: failureTitle, message: reason.text)
-                })
+                await showOtherAccountFailure(title: failureTitle, error: error, as: account)
             }
         }
     }
@@ -2885,10 +2876,17 @@ final class SessionController {
     /// - Parameter otherAccount: 「別のアカウントで」から開いたときの、そのアカウント。そのアカウントとして書き、どのアカウントで書いたかを知らせる。
     ///   今のアカウントのプロフィールや関係は変えず、失敗はこのセッションのログインし直しの案内につなげない。
     private func presentNoteEditor(for relation: UserRelation, as otherAccount: OtherAccount? = nil) {
-        let client = otherAccount.map(otherAccounts.client) ?? client
+        // 保存に失敗したアラートからログインし直したあと、同じシートで保存し直しても新しいトークンで送るよう、保存するたびに今の認証情報でクライアントを作る。
+        let sessionClient = self.client
+        let client: @MainActor @Sendable () -> MastodonClient
+        if let otherAccount {
+            client = otherAccounts.latestClient(for: otherAccount)
+        } else {
+            client = { sessionClient }
+        }
         let actor = otherAccount.map { "\($0.credential.handle)で" } ?? ""
         let editor = AccountNoteEditor(accountID: relation.accountID, note: relation.relationship.note) { id, comment in
-            try await client.setNote(id, comment: comment)
+            try await client().setNote(id, comment: comment)
         }
         logger.info("account note sheet opened (empty: \(relation.relationship.note.isEmpty, privacy: .public))")
         let controller = AccountNoteViewController(editor: editor, acct: relation.acct, tasks: tasks.child())
@@ -2903,8 +2901,10 @@ final class SessionController {
             notices.showTransient(Notice(id: "user.noteSaved", kind: .success, title: actor + title), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
         }
         controller.onError = { [weak self] error, title in
-            if otherAccount != nil {
-                self?.presentAlert(title: actor + title, message: ErrorPresentation(error).text)
+            if let otherAccount {
+                self?.tasks.run(.action) { [weak self] in
+                    await self?.presentOtherAccountFailure(title: actor + title, error: error, as: otherAccount)
+                }
             } else {
                 self?.handle(error, title: title)
             }
@@ -3193,9 +3193,13 @@ final class SessionController {
                 self?.confirmEditing(target, source: source, as: writing, actor: account.map { "@\($0.credential.username)" })
             } catch {
                 guard let self else { return }
-                let title = "\(account.map { "\($0.credential.handle)で" } ?? "")編集を始められませんでした"
                 logger.error("edit source failed: \(SciaLog.describe(error), privacy: .public)")
-                let reason = account == nil ? await failureReason(for: error) : ErrorPresentation(error)
+                if let account {
+                    await showOtherAccountFailure(title: "\(account.credential.handle)で編集を始められませんでした", error: error, as: account, recording: OperationStatus.Subject(status))
+                    return
+                }
+                let title = "編集を始められませんでした"
+                let reason = await failureReason(for: error)
                 operationStatus.recordFailure(title: title, reason: reason, subject: OperationStatus.Subject(status))
                 showFailureNotice(.interactionFailure(title: title) { [weak self] in
                     self?.presentAlert(title: title, message: reason.text)
@@ -3224,9 +3228,13 @@ final class SessionController {
                 self?.confirmRedrafting(target, source: source, as: writing, configuration: configuration, actor: account.map { "@\($0.credential.username)" })
             } catch {
                 guard let self else { return }
-                let title = "\(account.map { "\($0.credential.handle)で" } ?? "")書き直しを始められませんでした"
                 logger.error("redraft source failed: \(SciaLog.describe(error), privacy: .public)")
-                let reason = account == nil ? await failureReason(for: error) : ErrorPresentation(error)
+                if let account {
+                    await showOtherAccountFailure(title: "\(account.credential.handle)で書き直しを始められませんでした", error: error, as: account, recording: OperationStatus.Subject(status))
+                    return
+                }
+                let title = "書き直しを始められませんでした"
+                let reason = await failureReason(for: error)
                 operationStatus.recordFailure(title: title, reason: reason, subject: OperationStatus.Subject(status))
                 showFailureNotice(.interactionFailure(title: title) { [weak self] in
                     self?.presentAlert(title: title, message: reason.text)
@@ -3491,6 +3499,42 @@ final class SessionController {
         }
     }
 
+    /// 「別のアカウントで」の操作の失敗を、チップの列に数秒出す。押すと理由が出る。
+    /// そのアカウントがログアウトされていれば、理由でそう知らせ、そのアカウントでログインし直すボタンを添える。今のアカウントは切り替えない。
+    /// 今のアカウントのログインし直しの段は、このセッションのアカウントのトークンが無効なときだけのものなので、出さない。
+    /// - Parameter subject: 「最近の失敗」に残すときの対象。nilなら残さない。
+    private func showOtherAccountFailure(title: String, error: any Error, as account: OtherAccount, recording subject: OperationStatus.Subject? = nil) async {
+        let failure = await otherAccountFailure(error, as: account)
+        if let subject {
+            operationStatus.recordFailure(title: title, reason: failure.reason, subject: subject)
+        }
+        showFailureNotice(.interactionFailure(title: title) { [weak self] in
+            self?.presentOtherAccountFailure(title: title, failure: failure, as: account)
+        })
+    }
+
+    /// 「別のアカウントで」開いたシートでの失敗を、チップにせずにすぐアラートで出す。理由とボタンは`showOtherAccountFailure`と同じ。
+    private func presentOtherAccountFailure(title: String, error: any Error, as account: OtherAccount) async {
+        presentOtherAccountFailure(title: title, failure: await otherAccountFailure(error, as: account), as: account)
+    }
+
+    /// ほかのアカウントの操作の失敗の理由。ログアウトされていれば、そう知らせる。
+    private func otherAccountFailure(_ error: any Error, as account: OtherAccount) async -> (reason: ErrorPresentation, isLoggedOut: Bool) {
+        guard await otherAccounts.isLoggedOut(account, after: error) else { return (ErrorPresentation(error), false) }
+        return (ErrorPresentation(message: "\(account.credential.handle)はログアウトされています。", code: nil), true)
+    }
+
+    private func presentOtherAccountFailure(title: String, failure: (reason: ErrorPresentation, isLoggedOut: Bool), as account: OtherAccount) {
+        let alert = UIAlertController(title: title, message: failure.reason.text, preferredStyle: .alert)
+        if failure.isLoggedOut {
+            alert.addAction(UIAlertAction(title: "ログインし直す", style: .default) { [weak self] _ in
+                self?.reauthenticate(account.credential)
+            })
+        }
+        alert.addAction(UIAlertAction(title: "OK", style: .cancel))
+        topViewController.present(alert, animated: true)
+    }
+
     /// 押し直せば済む失敗を、チップの列に数秒出す。押すと理由が出る。
     private func showFailureNotice(_ notice: Notice) {
         notices.showTransient(notice, duration: AppDependencies.tuning.value(of: TuningCatalog.noticeFailureChipDuration))
@@ -3681,11 +3725,9 @@ final class SessionController {
             self?.notices.showTransient(Notice(id: "hashtag.otherAccountChanged", kind: .success, title: "\(account.credential.handle)で\(title)"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
         }
         otherAccounts.onHashtagFailure = { [weak self] account, title, error in
-            let failureTitle = "\(account.credential.handle)で\(title)"
-            let reason = ErrorPresentation(error)
-            self?.showFailureNotice(.interactionFailure(title: failureTitle) { [weak self] in
-                self?.presentAlert(title: failureTitle, message: reason.text)
-            })
+            self?.tasks.run(.action) { [weak self] in
+                await self?.showOtherAccountFailure(title: "\(account.credential.handle)で\(title)", error: error, as: account)
+            }
         }
         otherAccounts.loadProfiles()
         // 投稿欄の「投稿するアカウント」の行に出す、このアカウント自身のアイコン。
@@ -3748,12 +3790,20 @@ final class SessionController {
 
     private static let reauthenticationListMessage = ErrorPresentation(message: "ログインし直すと読み込めます。", code: nil)
 
+    /// ほかのアカウントにログインし直す。続けて押されても、同じアカウントの認可画面を重ねて出さない。
+    private func reauthenticate(_ other: Credential) {
+        tasks.run(key: "otherAccountReauthenticate:\(other.id)", .skippingWhileRunning, .action) { [weak self] in
+            guard let self else { return }
+            await onReauthenticate(self, other)
+        }
+    }
+
     private func reauthenticate() {
         guard !isReauthenticating else { return }
         setReauthenticating(true)
         tasks.run(.action) { [weak self] in
             guard let self else { return }
-            await onReauthenticate(self)
+            await onReauthenticate(self, credential)
             setReauthenticating(false)
         }
     }
