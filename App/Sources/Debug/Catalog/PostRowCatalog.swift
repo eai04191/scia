@@ -47,6 +47,9 @@ enum PostRowCatalog {
             (1...count).map { "<p>\($0)行目\($0 == count ? last : "")</p>" }.joined()
         }
         let wrappedLong = "<p>" + String(repeating: "長い本文を、段落を分けずに書いたときの切れ方を確かめるための文。", count: 40) + "</p>"
+        // 行より広いカスタム絵文字。縦横比を保って行の幅まで縮め、行の高さと本文の上下のすき間も縮めた大きさで決める。
+        // 置く幅は文字の高さ×縦横比なので、iPadの広い行でも文字の大きさのまま行より広くなるよう、縦横比を80にする。
+        let wideEmoji = Fixtures.imageURL(width: 4_000, height: 50, color: .systemPink, label: "横長の絵文字").map { [CustomEmoji(shortcode: "wide", url: $0, staticUrl: $0)] } ?? []
         return [
             post("短い本文", status(content: "<p>短い本文。</p>")),
             post("本文が短く、アイコンの方が下まで届く", status(content: "<p>あ</p>")),
@@ -143,6 +146,9 @@ enum PostRowCatalog {
                 visibility: .private
             )),
             post("アイコンがない", status(content: "<p>アイコンのURLがないアカウントの投稿。</p>", account: Fixtures.account(acct: "noavatar@example.com", avatar: nil))),
+            post("行より広いカスタム絵文字だけの本文（縮めて大きく描く）", status(content: "<p>:wide:</p>", emojis: wideEmoji)),
+            post("文の途中の、行より広いカスタム絵文字", status(content: "<p>文の途中に :wide: がある本文。</p>", emojis: wideEmoji)),
+            post("引用の段落の、行より広いカスタム絵文字（字下げの内側に縮める）", status(content: "<blockquote><p>引用の :wide:</p></blockquote><p>引用のあとの文。</p>", emojis: wideEmoji)),
         ]
     }
 
@@ -537,7 +543,8 @@ enum PostRowCatalog {
         rebloggedBy: Account? = nil,
         replyingTo replyTarget: Account? = nil,
         mentionsReplyTarget: Bool = true,
-        quote: Quote? = nil
+        quote: Quote? = nil,
+        emojis: [CustomEmoji] = []
     ) -> Status {
         let mentions = replyTarget.map { [Mention(id: $0.id, username: $0.username, url: nil, acct: $0.acct)] } ?? []
         let original = Status(
@@ -548,6 +555,7 @@ enum PostRowCatalog {
             spoilerText: spoilerText,
             url: nil,
             mentions: mentionsReplyTarget ? mentions : [],
+            emojis: emojis,
             mediaAttachments: media,
             sensitive: sensitive,
             visibility: visibility,
