@@ -60,7 +60,7 @@ struct ErrorPresentationTests {
     @Test func unauthorized() {
         let presentation = ErrorPresentation(MastodonAPIError.from(statusCode: 401, body: Data(#"{"error":"The access token is invalid"}"#.utf8)))
 
-        #expect(presentation.message == "サーバーがログインを受け付けませんでした。")
+        #expect(presentation.message == "ログアウトされています。")
         #expect(presentation.code == "HTTP 401")
     }
 

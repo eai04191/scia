@@ -43,7 +43,7 @@ public final class SearchModel {
     private var carried: [SearchCategory: [TimelineEntry]] = [:]
     /// 最後に始めた読み込み。古い読み込みの結果を捨てるのに使う。
     private var generation = 0
-    /// APIが401を返したときに呼ぶ。トークンが無効かを確かめ、ログインし直しを促すのはセッションに任せる。
+    /// APIが401を返したときに呼ぶ。ログアウトされたとして止め、ログインし直しを促すのはセッションに任せる。
     private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "search")
     /// この一覧が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときと、画面を閉じたときに閉じる。

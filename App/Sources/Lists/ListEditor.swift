@@ -15,7 +15,7 @@ protocol ListEditorHost: AnyObject {
     func listDidUpdate(_ list: MastodonList)
     /// 消したリストを、並びから外して購読を止める。
     func listDidDelete(_ id: String)
-    /// 失敗の理由。401ならトークンが無効かを確かめてから文言を選ぶ。
+    /// 失敗の理由。401なら、ログアウトされたとして、ログインし直しを促す文言にする。
     func listFailureReason(for error: any Error) async -> ErrorPresentation
     /// 押し直せば済む失敗を、「操作の状況」に残してチップで知らせる。押すと理由が出る。
     func reportListFailure(title: String, reason: ErrorPresentation)

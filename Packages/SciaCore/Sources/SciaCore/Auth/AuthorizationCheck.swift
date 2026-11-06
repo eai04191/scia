@@ -1,7 +1,10 @@
-/// APIが401を返したときに、トークンが本当に無効かを確かめる。
+/// 401を受けたときに、トークンが無効になったか（ログアウトされたか）を決める。
 ///
-/// 一部のAPIだけを401で断るサーバーや、手前のプロキシが一時的に401を返すことがあるため、1つの401ではトークンが無効と決めない。
-/// `verify_credentials`も401を返したときだけ無効とする。無効になっても資格情報は消さない。消すのは、使う人がログアウトを選んだときだけ。
+/// MastodonのREST APIは、トークンが無効なときだけ401を返す。有効なトークンで断るとき（アカウントの停止、許可の範囲が足りないなど）は403。
+/// そのため、REST APIの401では確かめずに無効とする。
+/// ストリーミングは、有効なトークンでも、消したリストや許可の範囲が足りないときに401を返す（Mastodonの`streaming/index.js`の`AuthenticationError`）。
+/// そのため、ストリーミングの401では、REST APIの`verify_credentials`も401を返したときだけ無効とする。
+/// 無効になっても資格情報は消さない。消すのは、使う人がログアウトを選んだときだけ。
 @MainActor
 public final class AuthorizationCheck {
     public enum State: Sendable, Equatable {
@@ -40,12 +43,22 @@ public final class AuthorizationCheck {
         self.verify = verify
     }
 
-    /// 401を受けたときに呼び、確かめた後の状態を返す。確かめている途中に呼ばれたら、その結果を待つ。
+    /// REST APIの401を受けたときに呼ぶ。確かめずに無効にする。
+    public func reportUnauthorized() {
+        guard state != .invalid else { return }
+        state = .invalid
+        onChange?(state)
+    }
+
+    /// ストリーミングの401を受けたときに呼び、確かめた後の状態を返す。確かめている途中に呼ばれたら、その結果を待つ。
     @discardableResult
-    public func reportUnauthorized() async -> State {
+    public func reportStreamingUnauthorized() async -> State {
         if state == .invalid { return .invalid }
         if let sinceValidated, sinceValidated() < revalidationInterval { return .valid }
-        if let verifying { return await verifying.value.state }
+        if let verifying {
+            let outcome = await verifying.value
+            return state == .invalid ? .invalid : outcome.state
+        }
         let verify = verify
         let task = Task { () -> Outcome in
             do {
@@ -61,6 +74,8 @@ public final class AuthorizationCheck {
         verifying = task
         let outcome = await task.value
         verifying = nil
+        // 確かめている間にREST APIの401で無効になっていたら、確かめた結果で有効に戻さない。
+        if state == .invalid { return .invalid }
         if outcome == .verified {
             sinceValidated = stopwatch(on: clock)
         }

@@ -41,7 +41,7 @@ public final class ScheduledStatusesModel {
     private let myAccount: () async throws -> Account
     /// この一覧が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
     private let tasks: TaskScope
-    /// APIが401を返したときに呼ぶ。トークンが無効かを確かめ、ログインし直しを促すのはセッションに任せる。
+    /// APIが401を返したときに呼ぶ。ログアウトされたとして止め、ログインし直しを促すのはセッションに任せる。
     private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "scheduled")
     /// 読み直している途中の読み込み。重ねて読まない。

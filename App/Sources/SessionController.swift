@@ -140,7 +140,7 @@ final class SessionController {
     ) { [weak self] error in
         await self?.failureReason(for: error) ?? ErrorPresentation(error)
     }
-    /// APIが401を返したときに、トークンが本当に無効かを確かめる。
+    /// 401を受けたときに、トークンが無効になったかを決める。
     private var authorization: AuthorizationCheck { session.authorization }
     private let onReauthenticate: (SessionController, Credential) async -> Void
     /// ログインし直しの途中。続けて押されても、認可画面を重ねて出さない。
@@ -475,7 +475,7 @@ final class SessionController {
         // 補完の検索は別のスレッドから呼ばれるため、ほかのAPIと同じ知らせ方を、隔離されたAuthorizationCheckに直接送る。
         let reportCompletionFailure: @Sendable (any Error) async -> Void = { [authorization = session.authorization] error in
             guard let error = error as? MastodonAPIError, error.isUnauthorized else { return }
-            _ = await authorization.reportUnauthorized()
+            await authorization.reportUnauthorized()
         }
         let accounts = AccountCache { [client] ids in try await client.accounts(ids) }
         self.accounts = accounts
@@ -1698,7 +1698,6 @@ final class SessionController {
     /// お知らせのリアクションの失敗。投稿への操作と同じく、数秒で消えるチップで知らせ、押すと理由を出す。
     private func reportAnnouncementReactionFailure(_ error: any Error) {
         let title = "リアクションを変更できませんでした"
-        // 401なら、トークンが無効かを確かめてから理由を決めるので、通信することがある。
         tasks.run(.action) { [weak self] in
             guard let self else { return }
             let reason = await failureReason(for: error)
@@ -3520,7 +3519,7 @@ final class SessionController {
 
     /// ほかのアカウントの操作の失敗の理由。ログアウトされていれば、そう知らせる。
     private func otherAccountFailure(_ error: any Error, as account: OtherAccount) async -> (reason: ErrorPresentation, isLoggedOut: Bool) {
-        guard await otherAccounts.isLoggedOut(account, after: error) else { return (ErrorPresentation(error), false) }
+        guard OtherAccounts.isLoggedOut(after: error) else { return (ErrorPresentation(error), false) }
         return (ErrorPresentation(message: "\(account.credential.handle)はログアウトされています。", code: nil), true)
     }
 
@@ -3661,14 +3660,13 @@ final class SessionController {
         }
     }
 
-    /// 失敗の理由。401なら、一部のAPIだけが401を返すこともあるため、トークンが本当に無効かを確かめてから文言を選ぶ。
-    /// 無効だと分かれば、ログインし直しのボタンも出る。
+    /// 失敗の理由。401なら、ログアウトされたとして、ログインし直しのボタンを出し、そこからログインし直すよう知らせる。
     private func failureReason(for error: any Error) async -> ErrorPresentation {
         guard let apiError = error as? MastodonAPIError, apiError.isUnauthorized else {
             return ErrorPresentation(error)
         }
-        let state = await authorization.reportUnauthorized()
-        return state == .invalid ? ErrorPresentation(message: Self.reauthenticationMessage, code: nil) : ErrorPresentation(error)
+        authorization.reportUnauthorized()
+        return ErrorPresentation(message: Self.reauthenticationMessage, code: nil)
     }
 
     private static let reauthenticationMessage = "ログアウトされています。上のボタンからログインし直してください。"
@@ -3765,7 +3763,7 @@ final class SessionController {
         session.reportUnauthorized()
     }
 
-    /// トークンが無効だと確かめられ、`session`が自動の通信を止めたら、表示中の内容とアカウントのメニューは残したまま、ログインし直しを促す。
+    /// トークンが無効になり、`session`が自動の通信を止めたら、表示中の内容とアカウントのメニューは残したまま、ログインし直しを促す。
     private func credentialsDidBecomeInvalid() {
         // どの画面にいても見えるよう、チップの列の一番上に段を出す。
         notices.reauthentication = NoticeCenter.Reauthentication(handle: credential.handle, isInProgress: isReauthenticating) { [weak self] in

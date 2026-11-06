@@ -9,7 +9,7 @@ final class FollowedTagsController {
     private(set) lazy var viewController = TimelineViewController(texts: .followedTags) { [weak self] in await self?.refresh() }
     private let store: FollowedTagsStore
     private let followedTags: LatestValueCache<[Hashtag]>
-    /// APIが401を返したときに呼ぶ。トークンが無効かを確かめ、ログインし直しを促すのはセッションに任せる。
+    /// APIが401を返したときに呼ぶ。ログアウトされたとして止め、ログインし直しを促すのはセッションに任せる。
     private let onUnauthorized: () -> Void
     /// この一覧が始めた処理の持ち主。セッションの持ち主の子で、ログアウトやアカウントの切り替えで止まる。
     private let tasks: TaskScope

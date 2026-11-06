@@ -94,15 +94,10 @@ struct FeedTimelineControllerTests {
         #expect(homeRequests.withLock { $0 } == countWhenDisabled)
     }
 
-    /// 401を受けたら、セッションはトークンを確かめに`verify_credentials`を読む。止めた一覧の401は、セッションに知らせない。
+    /// 止めた一覧の401は、セッションに知らせない。知らせると、ログアウトされたとして止まるため。
     @Test func stoppedControllerDoesNotReportUnauthorized() async throws {
         let gate = ResponseGate()
-        let reported = Mutex(false)
-        let transport = ScriptedTransport { request in
-            if request.url?.path().hasSuffix("verify_credentials") == true {
-                reported.withLock { $0 = true }
-                return (200, Data())
-            }
+        let transport = ScriptedTransport { _ in
             await gate.wait()
             return (401, Data(#"{"error":"The access token is invalid"}"#.utf8))
         }
@@ -117,18 +112,13 @@ struct FeedTimelineControllerTests {
         let session = try #require(sessions.sessions.last)
         try await waitUntil { session.tasks.runningCount == 0 }
 
-        #expect(!reported.withLock { $0 })
+        #expect(session.authorization.state == .valid, "止めた読み込みの401を、セッションに知らせました")
     }
 
     /// ログアウトなどでセッションを閉じたら、一覧の`stop()`を呼ばなくても、走っている読み込みを止めて結果を使わない。
     @Test func closingSessionStopsLoadsWithoutStop() async throws {
         let gate = ResponseGate()
-        let reported = Mutex(false)
-        let transport = ScriptedTransport { request in
-            if request.url?.path().hasSuffix("verify_credentials") == true {
-                reported.withLock { $0 = true }
-                return (200, Data())
-            }
+        let transport = ScriptedTransport { _ in
             await gate.wait()
             return (401, Data(#"{"error":"The access token is invalid"}"#.utf8))
         }
@@ -142,7 +132,7 @@ struct FeedTimelineControllerTests {
         try await waitUntil { controller.runningTaskCount == 0 }
         try await waitUntil { session.tasks.runningCount == 0 }
 
-        #expect(!reported.withLock { $0 })
+        #expect(session.authorization.state == .valid, "止めた読み込みの401を、セッションに知らせました")
         // 閉じたあとは、始め直しても読まない。
         controller.start(purpose: .action)
         #expect(controller.runningTaskCount == 0)

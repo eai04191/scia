@@ -3,7 +3,7 @@ import SciaCore
 /// 投稿のメニューの「別のアカウントで」に並べる、ログインしているほかのアカウント。決まりはdocs/menus.mdにある。
 /// アカウントごとのクライアントと、そのアカウントで見つけた投稿を、このセッションの間持つ。
 /// ほかのアカウントのクライアントは、そのアカウントのセッションとは別に作るため、レート制限の門や使えない機能の記録は共有しない。
-/// 401を受けたら、そのアカウントのトークンが無効かを確かめる。無効でも今のアカウントのログインし直しの段にはつなげず、操作の失敗の理由として知らせる。
+/// 401を受けたら、そのアカウントはログアウトされたとする。今のアカウントのログインし直しの段にはつなげず、操作の失敗の理由として知らせる。
 @MainActor
 final class OtherAccounts {
     private let current: Credential
@@ -12,8 +12,6 @@ final class OtherAccounts {
     private var accounts: [Credential.ID: OtherAccount] = [:]
     /// アカウントごとの、ハッシュタグの状態を読んで変えるもの。アカウントと一緒に作り直す。
     private var hashtags: [Credential.ID: OtherAccountHashtags] = [:]
-    /// アカウントごとの、401を受けたときにトークンが無効かを確かめるもの。ログインし直してトークンが変わったら作り直す。
-    private var authorizations: [Credential.ID: (credential: Credential, check: AuthorizationCheck)] = [:]
     /// ハッシュタグの変更が済んだことを、どのアカウントで行ったかを添えて知らせる。
     var onHashtagDone: (OtherAccount, String) -> Void = { _, _ in }
     /// ハッシュタグの変更の失敗を、どのアカウントで行ったかを添えて知らせる。
@@ -127,20 +125,9 @@ final class OtherAccounts {
         return load
     }
 
-    /// `error`を受けた`account`がログアウトされているか。401なら、今のアカウントと同じく、`verify_credentials`も401を返したときだけログアウトされているとする。
-    /// 一部のAPIだけを401で断るサーバーや、手前のプロキシが一時的に401を返すことがあるため。
-    func isLoggedOut(_ account: OtherAccount, after error: any Error) async -> Bool {
-        guard let apiError = error as? MastodonAPIError, apiError.isUnauthorized else { return false }
-        let credential = account.credential
-        let check: AuthorizationCheck
-        if let known = authorizations[credential.id], known.credential == credential {
-            check = known.check
-        } else {
-            let client = client(for: account)
-            check = AuthorizationCheck { try await client.verifyCredentials() }
-            authorizations[credential.id] = (credential, check)
-        }
-        return await check.reportUnauthorized() == .invalid
+    /// `error`を受けたアカウントがログアウトされているか。MastodonのREST APIは、トークンが無効なときだけ401を返す（`AuthorizationCheck`）。
+    static func isLoggedOut(after error: any Error) -> Bool {
+        (error as? MastodonAPIError)?.isUnauthorized == true
     }
 
     /// `account`としてAPIを呼ぶクライアントを、呼ぶたびにそのアカウントの今の認証情報で作るもの。

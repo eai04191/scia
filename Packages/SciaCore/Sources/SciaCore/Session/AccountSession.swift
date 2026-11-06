@@ -22,11 +22,11 @@ public final class AccountSession {
     /// 使えないと分かった機能を、このセッションの間だけ止める。次の起動では作り直し、もう一度試す。
     public let features: FeatureAvailability
     public let requestLog: RequestLog
-    /// APIが401を返したときに、トークンが本当に無効かを確かめる。
+    /// 401を受けたときに、トークンが無効になったかを決める。
     public let authorization: AuthorizationCheck
     /// セッションの持ち主。一覧、開いた画面、投稿欄の処理は、この子で始める。
     public let tasks: TaskScope
-    /// トークンが無効と確かめられ、ストリーミングと登録した一覧を止めたあとに呼ぶ。ログインし直しを促す表示はアプリが出す。
+    /// トークンが無効になり、ストリーミングと登録した一覧を止めたあとに呼ぶ。ログインし直しを促す表示はアプリが出す。
     public var onCredentialsInvalid: () -> Void = {}
     /// アカウントの設定を初めて読めたときに呼ぶ。
     public var onPreferencesLoad: (ServerPreferences) -> Void = { _ in }
@@ -76,7 +76,7 @@ public final class AccountSession {
         self.tasks = tasks
         // 開いているスレッドなどの購読を、閉じる順に頼らずに止めるため、申し込みが残っていても切る。
         tasks.onClose { [weak streamingHub] in streamingHub?.shutDown() }
-        streamingHub.onUnauthorized = { [weak self] in self?.reportUnauthorized() }
+        streamingHub.onUnauthorized = { [weak self] in self?.reportStreamingUnauthorized() }
         authorization.onChange = { [weak self] state in
             guard state == .invalid else { return }
             self?.credentialsDidBecomeInvalid()
@@ -100,10 +100,15 @@ public final class AccountSession {
         }
     }
 
-    /// 一覧が受けた401を知らせる。トークンが本当に無効かを確かめ、無効なら`onCredentialsInvalid`を呼ぶ。
+    /// REST APIで受けた401を知らせる。確かめずにトークンが無効になったとし、`onCredentialsInvalid`を呼ぶ。理由は`AuthorizationCheck`にある。
     public func reportUnauthorized() {
+        authorization.reportUnauthorized()
+    }
+
+    /// ストリーミングで受けた401を知らせる。有効なトークンでも返ることがあるので、確かめて無効なら`onCredentialsInvalid`を呼ぶ。
+    public func reportStreamingUnauthorized() {
         let authorization = authorization
-        tasks.run(.display) { _ = await authorization.reportUnauthorized() }
+        tasks.run(.display) { _ = await authorization.reportStreamingUnauthorized() }
     }
 
     /// 一覧を登録し、やり直しと止めるのを受け取らせる。弱く持つので、外す必要はない。

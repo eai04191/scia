@@ -27,7 +27,7 @@ public final class NotificationRequestsModel {
     private let client: MastodonClient
     /// この一覧が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
     private let tasks: TaskScope
-    /// APIが401を返したときに呼ぶ。トークンが無効かを確かめ、ログインし直しを促すのはセッションに任せる。
+    /// APIが401を返したときに呼ぶ。ログアウトされたとして止め、ログインし直しを促すのはセッションに任せる。
     private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "notificationRequests")
     /// 走り終えていない処理の数。止めたあとに何も起きないことを、テストが確かめるのに使う。

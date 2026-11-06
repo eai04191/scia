@@ -50,7 +50,7 @@ struct AccountSessionTests {
         try await waitUntil { await session.client.automaticRequestsPausedUntil() == Self.now.addingTimeInterval(30) }
     }
 
-    /// 401を受けてトークンが無効と確かめられたら、ストリーミングと登録した一覧を止め、そのあとにアプリへ知らせる。
+    /// REST APIの401を受けたら、ストリーミングと登録した一覧を止め、そのあとにアプリへ知らせる。
     @Test func invalidCredentialsStopStreamingAndLists() async throws {
         let transport = RoutedTransport { _ in Self.unauthorized() }
         let session = makeSession(transport: transport)
@@ -65,11 +65,10 @@ struct AccountSessionTests {
 
         #expect(stoppedListsWhenNotified == 1)
         #expect(session.streamingHub.state == .loginRequired)
-        #expect(transport.requests(to: "/api/v1/accounts/verify_credentials").count == 1)
     }
 
-    /// 一部のAPIだけが401を返しても、トークンが有効なら何も止めない。
-    @Test func unauthorizedWithValidTokenStopsNothing() async throws {
+    /// REST APIの401では、確かめずに止める。MastodonのREST APIは、トークンが無効なときだけ401を返すため。
+    @Test func restUnauthorizedStopsWithoutVerification() async throws {
         let transport = RoutedTransport { request in
             guard request.url?.path() == "/api/v1/accounts/verify_credentials" else { return Self.unauthorized() }
             return (200, Data())
@@ -82,6 +81,26 @@ struct AccountSessionTests {
         session.onCredentialsInvalid = { notified = true }
 
         session.reportUnauthorized()
+
+        #expect(notified)
+        #expect(list.stopCount == 1)
+        #expect(transport.requests(to: "/api/v1/accounts/verify_credentials").isEmpty)
+    }
+
+    /// ストリーミングの401は、消したリストなどで有効なトークンでも返るので、確かめて有効なら何も止めない。
+    @Test func streamingUnauthorizedWithValidTokenStopsNothing() async throws {
+        let transport = RoutedTransport { request in
+            guard request.url?.path() == "/api/v1/accounts/verify_credentials" else { return Self.unauthorized() }
+            return (200, Data())
+        }
+        let session = makeSession(transport: transport)
+        defer { session.close() }
+        let list = RecordingList()
+        session.register(list)
+        var notified = false
+        session.onCredentialsInvalid = { notified = true }
+
+        session.reportStreamingUnauthorized()
         try await waitUntil { session.tasks.runningCount == 0 }
 
         #expect(transport.requests(to: "/api/v1/accounts/verify_credentials").count == 1)

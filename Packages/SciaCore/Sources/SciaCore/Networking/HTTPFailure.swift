@@ -5,7 +5,7 @@ import Foundation
 public enum HTTPFailure: Equatable, Sendable {
     /// 待てば直る。通信の失敗、408、429、5xx、自動の通信を控えている間。`retryAfter`は、応答が示した再開までの長さ。
     case temporary(retryAfter: Duration?)
-    /// 認証の失敗（401）。トークンが無効かは、セッションが確かめる。
+    /// 認証の失敗（401）。REST APIでは、トークンが無効なときだけ返る。扱いは`AuthorizationCheck`にある。
     case unauthorized
     /// 待っても直らない。そのほかの4xx、範囲指定に応えない応答、上限を超えた応答、読めない中身。
     case permanent

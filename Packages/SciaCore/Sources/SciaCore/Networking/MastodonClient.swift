@@ -1672,7 +1672,7 @@ public struct NotificationPage: Sendable, Equatable {
 }
 
 extension MastodonAPIError {
-    /// 401。トークンが無効なことが多いが、一部のAPIだけを断るサーバーもあるため、ログインし直しが要るかは`AuthorizationCheck`で確かめる。
+    /// 401。MastodonのREST APIでは、トークンが無効なとき（ログアウトされたとき）だけ返る。扱いは`AuthorizationCheck`にある。
     public var isUnauthorized: Bool { statusCode == 401 }
 }
 

@@ -8,7 +8,7 @@ public struct ReconnectingStream: Sendable {
         /// 接続が成立した。つなぎ直したときは、切れていた間の投稿をRESTで補う。
         case connected
         case event(StreamingMessage)
-        /// 接続が401で断られた。トークンが無効かは呼び出し側が確かめる。この後に`disconnected`が続き、つなぎ直しも続ける。
+        /// 接続が401で断られた。ストリーミングは有効なトークンでも401を返すことがあるので、トークンが無効かは呼び出し側が確かめる。この後に`disconnected`が続き、つなぎ直しも続ける。
         case unauthorized
         /// 接続が切れた、またはつながらなかった。`retryAfter`だけ待ってつなぎ直す。つなぐときの応答が再開の時刻を示していれば、それまで待つ。`reason`はログに書く説明で、応答の中身を含まない。
         case disconnected(reason: String, retryAfter: Duration)
@@ -80,7 +80,7 @@ public struct ReconnectingStream: Sendable {
     }
 
     /// キャンセルされるまで、接続とつなぎ直しを続ける。`handle`は届いた順に1つずつ呼ぶ。
-    /// 401で断られても終わらない。ストリーミングだけが401を返すサーバーもあるため、`unauthorized`で知らせて、トークンが無効かは呼び出し側に任せる。
+    /// 401で断られても終わらない。ストリーミングは、消したリストや許可の範囲が足りないときにも、有効なトークンで401を返すため、`unauthorized`で知らせて、トークンが無効かは呼び出し側に任せる。
     public func run(_ handle: @escaping @Sendable (Activity) async -> Void) async throws {
         var failures = 0
         while true {

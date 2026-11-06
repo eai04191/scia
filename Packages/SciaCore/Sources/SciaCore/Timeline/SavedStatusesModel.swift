@@ -15,7 +15,7 @@ public final class SavedStatusesModel {
     /// この一覧で当てるサーバーのフィルター。公式のWebクライアントと同じく、ホームの文脈のフィルターを当て、「隠す」に一致した投稿も隠さずに警告で折りたたむ。自分で残した投稿だから。
     public let filtering: StatusFiltering
     private let store: SavedStatusesStore
-    /// APIが401を返したときに呼ぶ。トークンが無効かを確かめ、ログインし直しを促すのはセッションに任せる。
+    /// APIが401を返したときに呼ぶ。ログアウトされたとして止め、ログインし直しを促すのはセッションに任せる。
     private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "timeline")
     /// この一覧が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。

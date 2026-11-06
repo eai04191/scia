@@ -40,7 +40,7 @@ public struct ErrorPresentation: Hashable, Sendable {
     /// - Parameter serverMessage: REST APIがJSONで返した理由。API以外の通信ではnil。
     private static func presentation(statusCode: Int, serverMessage: String?) -> Self {
         let message = switch statusCode {
-        case 401: "サーバーがログインを受け付けませんでした。"
+        case 401: "ログアウトされています。"
         case 403: "サーバーがこの操作を許可しませんでした。"
         case 404, 410, 501: "見つからないか、このサーバーでは使えません。"
         case 429: "短い間にリクエストが多すぎたため、サーバーに一時的に止められています。しばらく待ってからやり直してください。"
