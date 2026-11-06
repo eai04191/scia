@@ -3627,7 +3627,7 @@ final class SessionController {
         return state == .invalid ? ErrorPresentation(message: Self.reauthenticationMessage, code: nil) : ErrorPresentation(error)
     }
 
-    private static let reauthenticationMessage = "ログインの有効期限が切れたか、アプリの許可が取り消されました。上のボタンからログインし直してください。"
+    private static let reauthenticationMessage = "ログアウトされています。上のボタンからログインし直してください。"
 
     private func presentAlert(title: String, message: String) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
