@@ -44,6 +44,8 @@ final class SessionController {
     private var loadedLists: [MastodonList]?
     /// アプリの中でリストを作ったり、変えたり、消したりした回数。読み始める前と読み終えたときで違えば、読んだ一覧はその変更より古いので使わない。
     private var listChangeCount = 0
+    /// 「タブに追加」で足した項目のアイコンを飛ばす処理。並びはタブバーへ後から反映するので、反映し終えてから行き先の切り替えタブを探す。
+    private var pendingTabAddFlight: (() -> Void)?
     /// リストを作る、変える、消す。
     private lazy var listEditor = ListEditor(client: client, tasks: tasks.child(), host: self)
     /// 読んでいる一覧（`lists`）。起動したときは、始めたときと前面に出たときの両方で読みに来るため、重ねて読まない。
@@ -712,6 +714,10 @@ final class SessionController {
                     if case .profile(let accountID, _, _) = item { accountID } else { nil }
                 }))
                 tabs.apply(layout)
+                if let flight = pendingTabAddFlight {
+                    pendingTabAddFlight = nil
+                    flight()
+                }
                 observeTabLayout()
             }
         }
@@ -1063,9 +1069,12 @@ final class SessionController {
     }
 
     /// 並びが変わったときだけ保存する。保存すると並びの変化の知らせが来るため、同じ並びを書き続けないようにする。
-    private func setTabLayout(_ layout: MenuLayout<TabItem>) {
-        guard layout.tokens != AppDependencies.settings.tabLayout(for: credential.handle).tokens else { return }
+    /// - Returns: 保存したか。
+    @discardableResult
+    private func setTabLayout(_ layout: MenuLayout<TabItem>) -> Bool {
+        guard layout.tokens != AppDependencies.settings.tabLayout(for: credential.handle).tokens else { return false }
         AppDependencies.settings.setTabLayout(layout, for: credential.handle)
+        return true
     }
 
     /// 一覧から投稿への操作とプロフィールを開けるようにする。プロフィール画面の一覧にも使う。
@@ -1238,8 +1247,9 @@ final class SessionController {
 
     /// ユーザーのハッシュタグの一覧とプロフィール画面の右上に置く、タブの並びに足すか外すボタン。並びは開いている間にも変わるので、メニューを開くたびに並びを見て中身を決める。
     /// 決まりはdocs/tabs.mdの「ユーザーのハッシュタグ」と「プロフィール」にある。
-    private func tabToggleItem(for item: TabItem) -> UIBarButtonItem {
+    private func tabToggleItem(for item: TabItem, avatarURL: URL? = nil) -> UIBarButtonItem {
         let handle = credential.handle
+        weak var barItem: UIBarButtonItem?
         let menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
             let layout = AppDependencies.settings.tabLayout(for: handle)
             if let current = layout.item(matching: item) {
@@ -1251,13 +1261,47 @@ final class SessionController {
                 }])
             } else {
                 completion([UIAction(title: "タブに追加", subtitle: "切り替えタブに入ります", image: UIImage(systemName: "rectangle.stack.badge.plus")) { [weak self] _ in
-                    self?.setTabLayout(AppDependencies.settings.tabLayout(for: handle).adding(item))
-                    self?.showTabLayoutNotice("タブに追加しました")
+                    guard let self else { return }
+                    // 並びを書いたら、タブバーへの反映を待ってから飛ばす。メニューを開いたあとにほかのウインドウで同じ項目を足していて、並びが変わらなければ飛ばさない。
+                    // 残すと、あとの関係のない並びの変化で飛んでしまうため。
+                    pendingTabAddFlight = { [weak self] in self?.flyAddedTab(item, avatarURL: avatarURL, from: barItem) }
+                    if !setTabLayout(AppDependencies.settings.tabLayout(for: handle).adding(item)) {
+                        pendingTabAddFlight = nil
+                    }
+                    showTabLayoutNotice("タブに追加しました")
                 }])
             }
         }])
         // 右上に入り切らず「さらに表示」にまとめられたときも、何のボタンか分かるよう名前を付ける。
-        return UIBarButtonItem(title: "タブ", image: UIImage(systemName: "rectangle.stack"), menu: menu)
+        let button = UIBarButtonItem(title: "タブ", image: UIImage(systemName: "rectangle.stack"), menu: menu)
+        barItem = button
+        return button
+    }
+
+    /// 足した項目のアイコンを、「タブ」ボタンから切り替えタブへ飛ばす。決まりはdocs/tabs.mdの「ユーザーのハッシュタグ」にある。
+    /// 切り替えタブのボタンを見分けられないときと、「視差効果を減らす」がオンのときは飛ばさない。
+    /// プロフィールは、その人のアイコンを決まった長さだけ待って読み、読めなければ記号で飛ばす。押してから飛び出すまでが遅れて、別の画面で飛ばないようにするため。
+    /// プロフィールを足したとき、飛ばすその人のアイコンを読み込むのを待つ長さ。過ぎたら記号で飛ばす。
+    private static let tabAddFlightIconWait: Duration = .milliseconds(200)
+
+    private func flyAddedTab(_ item: TabItem, avatarURL: URL?, from barItem: UIBarButtonItem?) {
+        guard !UIAccessibility.isReduceMotionEnabled, let barItem, let window = tabs.tabBarController.view.window,
+              let destination = tabs.switchTabButton, destination.window === window,
+              let source = barItem.frame(in: window), !source.isNull, !source.isEmpty else { return }
+        let symbol = TabAddFlight.symbolImage(item.symbolName, tint: window.tintColor, traits: window.traitCollection)
+        let shape = AppDependencies.settings.appearance.avatarShape
+        guard let avatarURL else {
+            TabAddFlight.fly(symbol, from: source, to: destination, in: window)
+            return
+        }
+        let key = AvatarView.key(url: avatarURL, animates: false, side: ProfileTabIcons.loadSide, scale: window.traitCollection.displayScale)
+        tasks.run(.display) {
+            await AppDependencies.avatarImages.load([key], within: Self.tabAddFlightIconWait)
+            // 待つ間に、ログアウトで止めたり、プロフィールを閉じて「タブ」ボタンが画面から消えたりしたら飛ばさない。
+            guard !Task.isCancelled, barItem.frame(in: window) == source else { return }
+            let avatar = AppDependencies.avatarImages.cachedImage(for: key).flatMap { AvatarIcon.image($0, side: TabAddFlightMotion.iconSide, shape: shape) }
+            TabAddFlight.fly(avatar ?? symbol, from: source, to: destination, in: window)
+        }
     }
 
     /// ユーザーのハッシュタグとプロフィールのタブの名前を変える。空にすると、既定の名前（`#名前`や`@name`）に戻す。
@@ -1407,7 +1451,7 @@ final class SessionController {
 
     private func pushProfile(_ account: Account, from source: UIViewController) {
         let (controller, viewController) = makeProfile(account, tasks: tasks.child())
-        viewController.screenBarItems.append(tabToggleItem(for: .profile(accountID: account.id, acct: account.acct)))
+        viewController.screenBarItems.append(tabToggleItem(for: .profile(accountID: account.id, acct: account.acct), avatarURL: account.avatarStatic))
         UserAction.openProfile.record()
         source.navigationController?.pushViewController(viewController, animated: true)
         controller.start()

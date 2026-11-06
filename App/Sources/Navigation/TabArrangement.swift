@@ -115,6 +115,12 @@ final class TabArrangement {
         }
     }
 
+    /// 切り替えタブの丸いボタン。見つからなければnil。
+    var switchTabButton: UIView? {
+        tabBarController.tabBar.layoutIfNeeded()
+        return switchTabMenu?.placedButton
+    }
+
     /// 項目のナビゲーション。まだなければ作る。
     private func navigation(for item: TabItem) -> UINavigationController? {
         if let navigation = navigations[item] { return navigation }
@@ -426,12 +432,18 @@ final class SwitchTabMenuInteraction: NSObject, UIContextMenuInteractionDelegate
 
     /// 長押しした場所（タブバーの座標）が切り替えタブのボタンなら、そのボタン。
     func switchTabButton(at location: CGPoint) -> UIView? {
+        guard let trailing = placedButton, trailing.frame.contains(location) else { return nil }
+        return trailing
+    }
+
+    /// 並べている切り替えタブのボタン。
+    var placedButton: UIView? {
         guard let tabBar, isPlaced() else { return nil }
         let groups = tabBar.subviews.filter { !$0.isHidden && $0.alpha > 0 && !$0.bounds.isEmpty }
         guard groups.count >= 2 else { return nil }
         let isRightToLeft = tabBar.effectiveUserInterfaceLayoutDirection == .rightToLeft
         let trailing = isRightToLeft ? groups.min { $0.frame.minX < $1.frame.minX } : groups.max { $0.frame.maxX < $1.frame.maxX }
-        guard let trailing, abs(trailing.bounds.width - trailing.bounds.height) < 1, trailing.frame.contains(location) else { return nil }
+        guard let trailing, abs(trailing.bounds.width - trailing.bounds.height) < 1 else { return nil }
         return trailing
     }
 
