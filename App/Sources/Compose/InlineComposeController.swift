@@ -292,6 +292,8 @@ final class InlineComposeController: NSObject {
     private var pendingPastedMedia: [PastedMedia?] = []
     /// 指す先を調べているファイルのURLの項目。なくなるまで、添付に足すのも投稿を送るのも待つ。
     private var resolvingPastedFiles: [UUID: Task<Void, Never>] = [:]
+    /// URLを覚えるために読んでいる、ペーストした文字。
+    private var readingPastedTexts: [UUID: Task<Void, Never>] = [:]
     /// 添付を開いているビューア。閉じたら（閉じる動きの途中でも）nilにする。
     private weak var mediaViewer: MediaViewerController?
     /// ビューアを開いてから、閉じる動きを終えるまでtrue。この間は、キーボードを閉じても書いている状態を解かない。
@@ -652,6 +654,7 @@ final class InlineComposeController: NSObject {
     /// 本文の上限は打っている途中にタイムラインを隠さないためのもので、別のアプリから戻ってきたところでは当てはまらない。
     func beginEditing(appendingShared shared: String) {
         model.text = SharedQuote.appending(shared, to: model.text)
+        model.noteInsertedText(shared)
         // モデルの変更が画面に届くのは少しあとなので、本文の高さを測る前に、本文をここで入れておく。
         update()
         beginEditing()
@@ -734,7 +737,54 @@ final class InlineComposeController: NSObject {
         textDidChange()
     }
 
+    /// ペーストか共有で入れたURLの後ろに文字が続いていれば、シートで改行を入れるか聞いてから送る。決まりはdocs/compose.mdの「URLの後ろに続いた文字」にある。
     private func submit() {
+        // ペーストした文字を読み終える前に判定すると、URLの後ろに続いた文字を見逃すため、読み終えてから判定する。
+        // 待っている間に下書きを捨てるか本文を入れ替えたら、押したときの下書きはもうないので送らない。
+        guard readingPastedTexts.isEmpty else {
+            let token = model.insertedTextToken
+            model.tasks.run(.action) { [weak self] in
+                while let reading = self?.readingPastedTexts.values.first {
+                    await reading.value
+                }
+                guard let self else { return }
+                guard model.insertedTextToken == token else {
+                    logger.info("compose: draft replaced while reading pasted text; not posting")
+                    return
+                }
+                submit()
+            }
+            return
+        }
+        guard model.canPost, let prompt = ExtendedURLPrompt(model.extendedURLs, scheduling: model.scheduledAt != nil) else {
+            send()
+            return
+        }
+        guard !isPresentingAlert, let presenter = presenterForErrors, presenter.presentedViewController == nil else { return }
+        logger.info("compose: asking about extended urls (count=\(prompt.lines.count))")
+        let sheet = ExtendedURLSheet(prompt: prompt, timing: ExtendedURLTiming(tuning: tuning)) { [weak self] choice in
+            guard let self else { return }
+            if choice == .separate {
+                model.separateExtendedURLs()
+                // 続いた文字を1文字ずつ数え直して上限を超えたら、送らずに書いている欄に戻す。
+                guard model.canPost else {
+                    logger.info("compose: separated urls exceed the limit")
+                    return
+                }
+            }
+            send()
+        } onClose: { [weak self] in
+            self?.alertDidClose()
+        } onDismissed: { [weak self] in
+            // 押してすぐ送るので、送るのが閉じている途中に失敗すると、失敗のアラートを出せない。閉じ終えてから出し直す。
+            self?.presentErrorIfNeeded()
+        }
+        sheet.measure(width: presenter.view.bounds.width)
+        // 本物の投稿欄は見せなくてよいので、バーは留めず、キーボードと一緒に下げる。下がるキーボードと上がるシートが入れ替わって見えるようにするため。
+        presentKeepingInput(sheet, from: presenter, holdsBar: false)
+    }
+
+    private func send() {
         model.tasks.run(.action) { [weak self] in
             // ペーストしたファイルを添付に回すか決まる前に送ると、画像のない投稿になるため、決まるのを待ってから送る。
             while let resolving = self?.resolvingPastedFiles.values.first {
@@ -2804,17 +2854,18 @@ final class InlineComposeController: NSObject {
         presentKeepingInput(alert, from: presenter)
     }
 
-    /// アラートを、書いている状態を保ったまま出す。閉じたら`alertDidClose()`を呼ぶ。
+    /// アラートやシートを、書いている状態を保ったまま出す。閉じたら`alertDidClose()`を呼ぶ。
     ///
     /// アラートは表示されると最初の応答者になるため、何もしないとキーボードが下がって投稿欄がカプセルに戻り、書いていたところから直せない。
     /// 添付のビューアと同じく、出す前に自分でキーボードを閉じ、バーをキーボードの高さに留め、閉じたら最後に書いていた入力欄にキーボードを戻す。
     /// シートやビューアの上に出したら、閉じても入力欄にキーボードを戻さない。戻すと、その画面の上にキーボードが出るため。
-    private func presentKeepingInput(_ alert: UIAlertController, from presenter: UIViewController) {
+    /// - Parameter holdsBar: バーをキーボードの高さに留める。下から上がって投稿欄を隠すシートでは留めない。
+    private func presentKeepingInput(_ alert: UIViewController, from presenter: UIViewController, holdsBar: Bool = true) {
         isPresentingAlert = true
         alertReturnsFocus = presenter === (presenterAboveInlineCompose?() ?? host)
         if bottomSheet == nil, isInputFocused {
             // ハードウェアキーボードでは、閉じたあとに上がりきった知らせが来ず、留めると外れなくなる。ソフトウェアキーボードが出ているときだけ留める。
-            if currentKeyboardHeight > Self.softwareKeyboardMinimumHeight {
+            if holdsBar, currentKeyboardHeight > Self.softwareKeyboardMinimumHeight {
                 setHoldAboveKeyboard(height: currentKeyboardHeight)
             }
             resignInput()
@@ -3644,6 +3695,7 @@ extension InlineComposeController: UITextPasteDelegate {
             return
         }
         guard let type = LocalMediaLoader.pastedMediaType(in: item.itemProvider) else {
+            noteInsertedText(of: item.itemProvider)
             item.setDefaultResult()
             return
         }
@@ -3656,6 +3708,39 @@ extension InlineComposeController: UITextPasteDelegate {
         }
         pendingPastedMedia.append(LocalMediaLoader.startLoadingPasted(from: item.itemProvider, type: type))
         addPendingPastedMediaLater()
+    }
+
+    /// ペーストした文字のURLを覚える。決まりはdocs/compose.mdの「URLの後ろに続いた文字」にある。
+    /// 本文に入れるのは`setDefaultResult()`に任せ、ここでは同じ項目から文字を読むだけにする。読み終える前に投稿ボタンを押したら、`submit()`が読み終えるのを待つ。
+    /// 読んでいる間に下書きを空に戻すか本文を入れ替えたら、読み終えても覚えない。
+    /// Safariの「リンクをコピー」のように、文字ではなくURLだけの項目は、URLを文字にして覚える。
+    private func noteInsertedText(of provider: NSItemProvider) {
+        let token = model.insertedTextToken
+        let id = UUID()
+        readingPastedTexts[id] = Task(.withoutRequests) { @MainActor [weak self] in
+            let text = await Self.pastedText(of: provider)
+            guard let self else { return }
+            readingPastedTexts[id] = nil
+            if let text {
+                model.noteInsertedText(text, token: token)
+            }
+        }
+    }
+
+    private static func pastedText(of provider: NSItemProvider) async -> String? {
+        await withCheckedContinuation { continuation in
+            if provider.canLoadObject(ofClass: NSString.self) {
+                _ = provider.loadObject(ofClass: NSString.self) { object, _ in
+                    continuation.resume(returning: object as? String)
+                }
+            } else if provider.canLoadObject(ofClass: URL.self) {
+                _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                    continuation.resume(returning: url?.absoluteString)
+                }
+            } else {
+                continuation.resume(returning: nil)
+            }
+        }
     }
 
     /// ファイルのURLの項目は、指す先が画像か動画なら、文字やアイコンより優先してそのファイルを添付する。それ以外のファイルなら、

@@ -21,6 +21,11 @@ struct StatusLengthTests {
         #expect(count("見て https://example.social/@alice/113000000000000001") == 3 + 23)
         // 文末の句点はURLに含めない。
         #expect(count("https://example.com/a.") == 23 + 1)
+        // 対になる開き括弧のない閉じ括弧から後ろは、URLに含めない。URLの中で対になる括弧は含める。
+        #expect(count("「https://example.com/a」いい") == 1 + 23 + 3)
+        #expect(count("https://example.com/A_(B)") == 23)
+        // 閉じ括弧で切った後ろに続くURLも、決まった文字数で数える。
+        #expect(count("(https://a.example/x)https://b.example/" + String(repeating: "y", count: 600)) == 1 + 23 + 1 + 23)
     }
 
     @Test func countsRemoteMentionAsLocalPart() {

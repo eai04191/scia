@@ -69,6 +69,10 @@ public final class ComposeModel<Thumbnail: Sendable> {
     @ObservationIgnored private var defaultSensitive = false
     /// サーバーの上限を読めた。読めるまでは、添付の枚数の上限が分からないのでメディアを選ばせない。
     private var hasLoadedConfiguration = false
+    /// ペーストか共有で入れた文字にあったURL。決まりはdocs/compose.mdの「URLの後ろに続いた文字」にある。
+    @ObservationIgnored private var insertedURLs: [String] = []
+    /// `insertedURLs`を忘れるたびに進める。忘れる前に読み始めたペーストを、読み終えたあとに覚えないため。
+    @ObservationIgnored private var insertedGeneration = 0
     /// 最後に送った内容。同じ内容を送り直すときだけ同じIdempotency-Keyを使い、変えたら別の投稿として新しいキーにする。
     /// 応答だけが失われていた場合に、変えた内容が投稿されないまま成功扱いにならないようにするため。
     @ObservationIgnored private var lastSubmitted: StatusDraft?
@@ -438,6 +442,35 @@ public final class ComposeModel<Thumbnail: Sendable> {
             || language != defaultLanguage
     }
 
+    /// ペーストを読み始めたときの下書き。読み終えたら`noteInsertedText(_:token:)`に渡す。
+    public var insertedTextToken: InsertedTextToken {
+        InsertedTextToken(generation: insertedGeneration)
+    }
+
+    /// ペーストか共有で入れた文字のURLを覚える。決まりはdocs/compose.mdの「URLの後ろに続いた文字」にある。
+    /// - Parameter token: 読み始めたときの`insertedTextToken`。そのあと下書きを空に戻すか本文を入れ替えていたら、覚えない。
+    public func noteInsertedText(_ inserted: String, token: InsertedTextToken? = nil) {
+        guard token == nil || token == insertedTextToken else { return }
+        for url in LinkTitling.urls(in: inserted) where !insertedURLs.contains(where: { $0.utf8.elementsEqual(url.utf8) }) {
+            insertedURLs.append(url)
+        }
+    }
+
+    /// 本文のURLのうち、ペーストか共有で入れたURLの後ろに文字が続いたもの。
+    public var extendedURLs: [ExtendedURL] {
+        ExtendedURL.find(in: text, inserted: insertedURLs)
+    }
+
+    private func forgetInsertedURLs() {
+        insertedURLs = []
+        insertedGeneration += 1
+    }
+
+    /// `extendedURLs`の続いた文字の前に改行を入れる。
+    public func separateExtendedURLs() {
+        text = ExtendedURL.separating(extendedURLs, in: text)
+    }
+
     /// 自分の投稿の編集を始める。今の下書きは捨てる。送っている間は始めずfalseを返す。
     /// 投票を送り直せない投稿（締め切りまで5分を切った）でも、下書きを変えずにfalseを返す。
     /// 本文と注意書きは、HTMLの`content`ではなく、書いたときのソースから入れる。
@@ -460,6 +493,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
         redraft = nil
         language = draft.language
         hasChosenLanguage = true
+        forgetInsertedURLs()
         lastSubmitted = nil
         hasChosenVisibility = false
         return true
@@ -494,6 +528,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
         // 言語を送っていない予約は、送らずにサーバーに任せたままにする。
         language = draft.language
         hasChosenLanguage = true
+        forgetInsertedURLs()
         lastSubmitted = nil
         // 予約したときの公開範囲を、あとから届く既定の公開範囲で上書きしない。公開範囲を送っていない予約は、既定の公開範囲が届くのを待つ。
         hasChosenVisibility = scheduled.params.visibility != nil
@@ -526,6 +561,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
         redraft = StatusRedraft(status: status)
         language = draft.language
         hasChosenLanguage = true
+        forgetInsertedURLs()
         lastSubmitted = nil
         // 元の投稿の公開範囲を、あとから届く既定の公開範囲で上書きしない。
         hasChosenVisibility = true
@@ -546,6 +582,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
         rewritingSchedule = nil
         redraft = nil
         removeAllAttachments()
+        forgetInsertedURLs()
         lastSubmitted = nil
         hasChosenVisibility = false
         visibility = resolvedVisibility

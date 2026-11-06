@@ -1233,6 +1233,87 @@ public enum TuningCatalog {
         defaultValue: 0.6
     )
 
+    /// URLの後ろに続いた文字を知らせるシートで、URLの頭を見せてからカメラが動き始めるまでの時間。決まりはdocs/compose.mdの「URLの後ろに続いた文字」にある。
+    public static let extendedURLHeadHold = NumberTuning(
+        id: "compose.extendedURLHeadHold",
+        title: "URLの後ろの文字：URLの頭を見せる時間（秒）",
+        range: 0...3,
+        step: 0.05,
+        defaultValue: 0.5
+    )
+
+    /// カメラがURLの頭から、文字がつながっているところまで動く時間。
+    public static let extendedURLPanDuration = NumberTuning(
+        id: "compose.extendedURLPanDuration",
+        title: "URLの後ろの文字：カメラが動く時間（秒）",
+        range: 0.1...4,
+        step: 0.05,
+        defaultValue: 0.9
+    )
+
+    /// カメラがつながっているところに着いてから、切る線が入り始めるまでの時間。つながっているのを見せる。
+    public static let extendedURLJunctionHold = NumberTuning(
+        id: "compose.extendedURLJunctionHold",
+        title: "URLの後ろの文字：つながっているところを見せる時間（秒）",
+        range: 0...2,
+        step: 0.05,
+        defaultValue: 0.3
+    )
+
+    /// つながっているところに縦の線が入りきる時間。短いほど素早く切れる。
+    public static let extendedURLCutDuration = NumberTuning(
+        id: "compose.extendedURLCutDuration",
+        title: "URLの後ろの文字：切る線が入る時間（秒）",
+        range: 0.01...1,
+        step: 0.01,
+        defaultValue: 0.06
+    )
+
+    /// 切ったところが開く幅。
+    public static let extendedURLCutGap = NumberTuning(
+        id: "compose.extendedURLCutGap",
+        title: "URLの後ろの文字：切ったところが開く幅（pt）",
+        range: 0...20,
+        step: 1,
+        defaultValue: 6
+    )
+
+    /// 切ってから、切り離した文字が次の行へ動き始めるまでの時間。
+    public static let extendedURLCutHold = NumberTuning(
+        id: "compose.extendedURLCutHold",
+        title: "URLの後ろの文字：切ってから動き始めるまでの時間（秒）",
+        range: 0...2,
+        step: 0.05,
+        defaultValue: 0.6
+    )
+
+    /// 切り離した文字が次の行の頭へ動き、カメラが左へ戻るスプリングの時間。
+    public static let extendedURLDropDuration = NumberTuning(
+        id: "compose.extendedURLDropDuration",
+        title: "URLの後ろの文字：次の行へ動く時間（秒）",
+        range: 0.1...3,
+        step: 0.05,
+        defaultValue: 0.8
+    )
+
+    /// 次の行へ着いた形を見せてから、薄くし始めるまでの時間。
+    public static let extendedURLEndHold = NumberTuning(
+        id: "compose.extendedURLEndHold",
+        title: "URLの後ろの文字：着いた形を見せる時間（秒）",
+        range: 0...5,
+        step: 0.1,
+        defaultValue: 1.4
+    )
+
+    /// 着いた形を薄くして消す時間と、最初の形を浮かび上がらせる時間。
+    public static let extendedURLFadeDuration = NumberTuning(
+        id: "compose.extendedURLFadeDuration",
+        title: "URLの後ろの文字：薄くして繰り返す時間（秒）",
+        range: 0.05...2,
+        step: 0.05,
+        defaultValue: 0.3
+    )
+
     /// リンクにタイトルを付けるとき、読んでいるURLの上をきらめきが1回流れる時間。
     public static let linkTitleShimmerPeriod = NumberTuning(
         id: "compose.linkTitleShimmerPeriod",
@@ -1743,6 +1824,15 @@ public enum TuningCatalog {
             .number(linkTitleMorphDuration),
             .number(linkTitleShimmerPeriod),
             .number(linkTitleShimmerFadeDuration),
+            .number(extendedURLHeadHold),
+            .number(extendedURLPanDuration),
+            .number(extendedURLJunctionHold),
+            .number(extendedURLCutDuration),
+            .number(extendedURLCutGap),
+            .number(extendedURLCutHold),
+            .number(extendedURLDropDuration),
+            .number(extendedURLEndHold),
+            .number(extendedURLFadeDuration),
             .toggle(composePickerMatchesKeyboard),
             .number(composePickerHeight),
             .toggle(composeEmojiPaletteHardEdgeEffect),

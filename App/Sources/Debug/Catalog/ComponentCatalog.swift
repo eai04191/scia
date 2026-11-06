@@ -19,6 +19,7 @@ enum CatalogComponent: String, CaseIterable {
     case emojiPalette = "emoji-palette"
     case composePoll = "compose-poll"
     case postingLanguage = "posting-language"
+    case extendedURL = "extended-url"
     case altTextEditor = "alt-text-editor"
     case caption
     case notices
@@ -58,6 +59,7 @@ enum CatalogComponent: String, CaseIterable {
         case .emojiPalette: "投稿欄のカスタム絵文字のパレット"
         case .composePoll: "投稿欄の投票の欄"
         case .postingLanguage: "投稿の言語を選ぶシート"
+        case .extendedURL: "URLの後ろに続いた文字のシート"
         case .altTextEditor: "代替テキストの入力欄"
         case .caption: "ビューアの説明"
         case .notices: "アプリ内通知のチップの列"
@@ -100,6 +102,7 @@ enum CatalogComponent: String, CaseIterable {
         case .emojiPalette: EmojiPaletteCatalog.states()
         case .composePoll: ComposePollEditorCatalog.states()
         case .postingLanguage: PostingLanguageCatalog.states()
+        case .extendedURL: ExtendedURLCatalog.states()
         case .altTextEditor: AltTextEditorCatalog.states()
         case .caption: CaptionCatalog.states()
         case .notices: NoticeCatalog.states()

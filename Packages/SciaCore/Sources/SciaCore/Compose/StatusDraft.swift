@@ -193,12 +193,44 @@ public enum StatusURLs {
     private static let pattern = regex(#"https?://[^\s<>"]+"#)
 
     /// 本文に出てくる順の、URLの範囲。文末の句読点はURLに含めない。
+    /// MastodonのUTS #58と同じく、URLの中に対になる開き括弧のない閉じ括弧が来たら、その前でURLを終える。`「URL」`と書いたときに、閉じ括弧から後ろをURLにしないため。
+    /// 閉じ括弧で切ったときは、切ったところから探し直す。`「URL」「URL」`のように空白なしで並べた後ろのURLも見つけるため。
     public static func ranges(in text: String) -> [Range<String.Index>] {
-        pattern.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match in
-            guard let range = Range(match.range, in: text) else { return nil }
+        var result: [Range<String.Index>] = []
+        var searchStart = text.startIndex
+        while searchStart < text.endIndex,
+              let match = pattern.firstMatch(in: text, range: NSRange(searchStart..., in: text)),
+              let matched = Range(match.range, in: text) {
+            let end = closingBracketEnd(of: text[matched])
+            let range = matched.lowerBound ..< end
             let trailing = text[range].reversed().prefix { ".,:;!?".contains($0) }.count
-            return range.lowerBound..<text.index(range.upperBound, offsetBy: -trailing)
+            result.append(range.lowerBound..<text.index(range.upperBound, offsetBy: -trailing))
+            // 切ったなら閉じ括弧から、切らなければマッチの終わりから探す。閉じ括弧はURLの頭にならないので、同じところで止まらない。
+            searchStart = end < matched.upperBound ? end : matched.upperBound
         }
+        return result
+    }
+
+    /// 閉じ括弧から、対になる開き括弧。UnicodeのBidi_Paired_Bracketのうち、本文で使いそうなもの。
+    private static let openingBrackets: [Character: Character] = [
+        ")": "(", "]": "[", "}": "{", "）": "（", "］": "［", "｝": "｛", "｠": "｟",
+        "」": "「", "』": "『", "】": "【", "〕": "〔", "〗": "〖", "〙": "〘", "〛": "〚", "〉": "〈", "》": "《",
+    ]
+    private static let openings = Set(openingBrackets.values)
+
+    /// 対になる開き括弧のない閉じ括弧の位置。なければ終わり。
+    private static func closingBracketEnd(of url: Substring) -> String.Index {
+        var stack: [Character] = []
+        for index in url.indices {
+            let character = url[index]
+            if openings.contains(character) {
+                stack.append(character)
+            } else if let opening = openingBrackets[character] {
+                guard stack.last == opening else { return index }
+                stack.removeLast()
+            }
+        }
+        return url.endIndex
     }
 }
 
