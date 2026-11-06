@@ -180,8 +180,6 @@ final class PostBodyView: UIView {
     private var animatesReactionChange = false
     /// 「テキストを選択」で、本文のラベルの代わりに同じ位置に出している選べるテキストビュー。選んでいなければnil。
     private(set) var selectionTextView: SelectableTextView?
-    /// 選べるテキストビューに入れた本文を、ラベルが並べていた幅。行より広いカスタム絵文字の段落の行の高さは並べる幅で決まるので、幅が変わったら入れ直す。
-    private var selectionTextWidth: CGFloat?
     /// 選んでいる間、本文のラベルに出している本文。サーバーが縮めて見せるURLを元の文字に戻したもの。戻すURLがないか、選んでいなければnil。
     private(set) var expandedText: NSAttributedString?
     private(set) var content: PostBodyContent?
@@ -648,7 +646,6 @@ final class PostBodyView: UIView {
         view.touchableHeight = { [weak textLabel] in textLabel?.bounds.height }
         textLabel.alpha = 0
         selectionTextView = view
-        selectionTextWidth = textLabel.bounds.width
         layoutIfNeeded()
         view.beginSelectingAll()
         // 選び始めるときにテキストビューの選択が一度空になることがあるため、選んでから終わりを受け取る。
@@ -707,7 +704,6 @@ final class PostBodyView: UIView {
                     showExpandedText(expanded)
                     if let text = textLabel.textForTextKit {
                         selectionTextView?.replaceText(text)
-                        selectionTextWidth = textLabel.bounds.width
                     }
                 }
             }
@@ -886,10 +882,6 @@ final class PostBodyView: UIView {
         // 行より広いカスタム絵文字の縮め方が、中身を適用したときに見込んだ幅と違えば、字面の上下の位置が変わり、本文の高さも変わるので、タイムラインの行に測り直させる。
         if updateTextKitBaselines(width: textLabel.bounds.width) {
             invalidateRowHeight()
-        }
-        if let selectionTextView, selectionTextWidth != textLabel.bounds.width, let text = textLabel.textForTextKit {
-            selectionTextView.replaceText(text)
-            selectionTextWidth = textLabel.bounds.width
         }
         startPendingReactionsFadeOut()
     }

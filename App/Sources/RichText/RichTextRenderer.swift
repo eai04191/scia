@@ -341,7 +341,7 @@ struct RichTextRenderer: Sendable {
         // 絵文字の中心を、和文の字面（em枠）の中心に揃える。文字と大きさが違っても、文字が絵文字の横の真ん中に来るようにするため。
         // 欧文の大文字の中心とも0.03emほどしか違わない。等倍の絵文字は、下端がほぼ文字の下端（descender）に来る。
         let y = Self.emojiCenterHeight * font.pointSize - height / 2
-        let attachment = LineFittingAttachment(lineFont: self.font)
+        let attachment = LineFittingAttachment()
         if let image, image.size.height > 0 {
             attachment.image = image
             attachment.bounds = CGRect(x: 0, y: y, width: height * image.size.width / image.size.height, height: height)

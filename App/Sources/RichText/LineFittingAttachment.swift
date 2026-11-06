@@ -6,23 +6,10 @@ import UIKit
 /// TextKitが渡す行の幅は、字下げした段落でもコンテナの幅のままなので、段落の字下げを引く。
 /// 行より広い絵文字は前の文字と同じ行に入らず、折り返した行の頭に置かれるので、折り返した行の字下げ（`headIndent`）で測る。
 final class LineFittingAttachment: NSTextAttachment {
-    /// 行の高さを決めた、本文の書体。縮めた絵文字に合わせて行の高さを付け直すのに使う（`RichTextRenderer.fittingWideEmojis`）。
-    let lineFont: UIFont
-
-    init(lineFont: UIFont) {
-        self.lineFont = lineFont
-        super.init(data: nil, ofType: nil)
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
     /// 同じ大きさで置く、`image`の添付。動く絵文字や線を重ねるために、透明な画像に差し替えるときに使う。
     /// 元が行の幅で縮める添付なら、差し替えたものも同じく縮める。
     static func placeholder(replacing attachment: NSTextAttachment, image: UIImage) -> NSTextAttachment {
-        let placeholder = (attachment as? LineFittingAttachment).map { LineFittingAttachment(lineFont: $0.lineFont) } ?? NSTextAttachment()
+        let placeholder = attachment is LineFittingAttachment ? LineFittingAttachment() : NSTextAttachment()
         placeholder.image = image
         placeholder.bounds = attachment.bounds
         return placeholder
