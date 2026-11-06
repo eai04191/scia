@@ -57,6 +57,8 @@ public final class XPostStore {
     private var entries: [String: Entry] = [:]
     private var retry: RetrySchedule
     private let clock: any Clock<Duration>
+    /// 読み込み中の投稿ごとの、読む処理。`cancelAll()`で取り消す。
+    private var loads: [String: Task<Void, Never>] = [:]
     /// 読めなかった投稿ごとの、読み直してよくなるのを待つ処理。
     private var retryWakes: [String: Task<Void, Never>] = [:]
     /// 読み終えたか、読めなかった投稿を読み直してよくなった投稿のIDを渡す。その投稿へのリンクを出している行を描き直す。
@@ -103,17 +105,32 @@ public final class XPostStore {
         }
         entries[id] = .loading
         let fetch = fetch
-        RequestPurpose.$current.withValue(.display) {
+        loads[id] = RequestPurpose.$current.withValue(.display) {
             Task { [weak self] in
                 do {
                     let post = try await fetch(id)
+                    guard !Task.isCancelled else { return }
                     self?.finish(id, with: .loaded(post))
                 } catch {
+                    // `cancelAll()`で取り消したら、読んでいないものに戻してあるので、失敗として覚えない。
+                    guard !Task.isCancelled else { return }
                     self?.logger.error("x post fetch failed: \(SciaLog.describe(error), privacy: .public)")
                     self?.fail(id, with: error)
                 }
             }
         }
+    }
+
+    /// 読み込み中の通信と、読み直しの待ちをすべてやめ、読み込み中の投稿を読んでいないものに戻す。読み終えた投稿は残す。
+    /// 設定で展開をオフにしたときに呼ぶ。オフのあいだfxtwitterに通信しないため。
+    public func cancelAll() {
+        for (id, load) in loads {
+            load.cancel()
+            entries[id] = nil
+        }
+        loads.removeAll()
+        retryWakes.values.forEach { $0.cancel() }
+        retryWakes.removeAll()
     }
 
     private func fail(_ id: String, with error: any Error) {
@@ -131,7 +148,8 @@ public final class XPostStore {
         let clock = clock
         retryWakes[id] = Task { [weak self] in
             let allowed = await RetrySchedule.waitUntilAutomaticLoad(clock: clock) { self?.retry.delayUntilAutomaticLoad(of: url) }
-            guard let self else { return }
+            // `cancelAll()`で取り消したら、知らせない。あとで同じ投稿に作った待ちも消さない。
+            guard let self, !Task.isCancelled else { return }
             retryWakes[id] = nil
             if allowed, hasFailed(id: id) {
                 onChange?(id)
@@ -152,6 +170,7 @@ public final class XPostStore {
     }
 
     private func finish(_ id: String, with entry: Entry) {
+        loads[id] = nil
         entries[id] = entry
         if case .loaded = entry {
             if let url = XPostClient.url(id: id) {

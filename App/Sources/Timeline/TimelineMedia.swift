@@ -57,7 +57,7 @@ extension TimelineViewController {
     /// Xの投稿を読み終えた。その投稿へのリンクを出している行を描き直し、リンクカードを囲みに替える。
     /// 行が伸びる分は、リンクカードが届いたときの差し替えと同じ時間で動きでつなぐ。
     func applyXPost(id: String) {
-        guard isViewLoaded, tuning.value(of: TuningCatalog.xPostEmbeds) else { return }
+        guard isViewLoaded, settings.expandsXPosts else { return }
         let ids = displayedItemIDs.filter { itemID in
             self.status(for: itemID).flatMap { XPostLink.postID(of: $0.displayed) } == id
         }
@@ -67,7 +67,7 @@ extension TimelineViewController {
     /// Xの投稿へのリンクを出す投稿なら、読み終えた投稿の囲みを返す。まだなら読みに行き、読み終えるまではnilを返してリンクカードを出す。
     /// `text`は、コピーや翻訳に渡す本文。本文が空白だけならnil。
     func xPostContent(for status: Status, base: UIListContentConfiguration) -> (content: EmbeddedPostView.Content, media: [MediaAttachment], url: URL, text: String?)? {
-        guard tuning.value(of: TuningCatalog.xPostEmbeds), let xPosts, let id = XPostLink.postID(of: status) else { return nil }
+        guard settings.expandsXPosts, let xPosts, let id = XPostLink.postID(of: status) else { return nil }
         guard let post = xPosts.post(id: id) else {
             xPosts.request(id: id)
             return nil

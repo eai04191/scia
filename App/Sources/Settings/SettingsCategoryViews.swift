@@ -155,7 +155,7 @@ struct SettingsIcon: View {
     }
 }
 
-/// 表示の分類。投稿と通知の見た目、アクセントカラー、新着の動き、ステータスバーの通知。
+/// 表示の分類。投稿と通知の見た目、アクセントカラー、新着の動き、ステータスバーの通知、リンク先の読み込み。
 struct DisplaySettingsView: View {
     @Bindable var settings: AppSettings
     var body: some View {
@@ -181,11 +181,42 @@ struct DisplaySettingsView: View {
                 Text("「自動」では「視差効果を減らす」がオンのときは動かしません。")
             }
             StatusBarTickerSettingsSection(isOn: $settings.showsStatusBarTicker, isAvailable: StatusBarCutout.isAvailable)
+            Section {
+                NavigationLink("リンク先の読み込み", value: SettingsPage.linkLoading)
+            }
         }
         .topEdgeEffectHiddenOnMac()
         .navigationTitle("表示")
         .navigationBarTitleDisplayMode(.inline)
     }
+}
+
+/// 表示しただけで、Sciaと関係のない外のサービスへ通信する機能の画面。決まりはdocs/link-card.mdにある。
+/// 同意は、トグルのすぐ下の説明で取る。オンにするときに確認は重ねない。
+struct LinkLoadingSettingsView: View {
+    @Bindable var settings: AppSettings
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Xの投稿を展開", isOn: $settings.expandsXPosts)
+            } footer: {
+                // 送り先、届くもの、通信のきっかけを、オンにする前に読めるように書く。fxtwitterのプライバシーの説明はFAQの中にある。
+                // 文字列リテラルのTextは、Markdownのリンクを押せるリンクにする。
+                Text("""
+                Xの投稿へのリンクを引用のように表示します。
+
+                オンにすると、Xの投稿へのリンクを含む投稿を表示するたびにfxtwitter（Sciaと無関係な外部サービス）へ問い合わせ、アイコンやメディアをXから読み込みます。IPアドレスや表示した投稿がfxtwitterとXに伝わり、通信量も増えます。
+
+                [fxtwitterのプライバシーについて](https://docs.fxembed.com/guide/faq/)
+                """)
+            }
+        }
+        .topEdgeEffectHiddenOnMac()
+        .navigationTitle("リンク先の読み込み")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
 }
 
 /// アプリのアイコンを選ぶ画面。

@@ -399,12 +399,12 @@ struct AppearanceEditorTests {
         }
     }
 
-    /// 囲みの区画は「引用」の区画で、見本の囲みも引用だけにする。Xの投稿は既定では出さない試作のため、見本に出さない。
+    /// 囲みの区画は「引用」の区画で、見本の囲みも引用だけにする。Xの投稿は設定でオンにしたときだけ出すため、見本に出さない。
     @Test func embedSamplesAreQuotesOnly() throws {
-        // Xの投稿の試作を出すようにしていても、見本には出さない。
-        let tuning = TuningStore(defaults: nil)
-        tuning.setValue(true, for: TuningCatalog.xPostEmbeds)
-        let samples = AppearanceSamples(settings: try makeSettings(), tuning: tuning, now: Date(timeIntervalSince1970: 1_800_000_000))
+        // Xの投稿を展開するようにしていても、見本には出さない。
+        let settings = try makeSettings()
+        settings.expandsXPosts = true
+        let samples = AppearanceSamples(settings: settings, tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
         let configurations = samples.configurations(colorScheme: .light, revision: 0)
 
         #expect(configurations.contains { $0.embed?.id.hasPrefix("quote:") == true })

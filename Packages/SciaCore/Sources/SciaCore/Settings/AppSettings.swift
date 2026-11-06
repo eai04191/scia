@@ -18,6 +18,12 @@ public final class AppSettings {
         didSet { defaults.set(ignoresUselessAltText, forKey: Keys.ignoresUselessAltText) }
     }
 
+    /// Xの投稿へのリンクを、fxtwitterから読んだ作者、本文、添付ファイルの囲みで出す。
+    /// 表示しただけでSciaと関係のないfxtwitterとXに通信するので、既定はオフにし、使う人がオンにしたときだけ通信する（docs/link-card.md）。
+    public var expandsXPosts: Bool {
+        didSet { defaults.set(expandsXPosts, forKey: Keys.expandsXPosts) }
+    }
+
     /// 届いた通知を、ステータスバーの場所に流す。
     public var showsStatusBarTicker: Bool {
         didSet { defaults.set(showsStatusBarTicker, forKey: Keys.showsStatusBarTicker) }
@@ -339,6 +345,7 @@ public final class AppSettings {
         static let usesOriginalThumbnailsOnExpensiveNetwork = "settings.usesOriginalThumbnailsOnExpensiveNetwork"
         static let ignoresUselessAltText = "settings.ignoresUselessAltText"
         static let showsStatusBarTicker = "settings.showsStatusBarTicker"
+        static let expandsXPosts = "settings.expandsXPosts"
         static let appearanceChoices = "settings.appearanceChoices"
         static let insertionMotion = "settings.insertionMotion"
         static let accentColor = "settings.accentColor"
@@ -387,6 +394,7 @@ public final class AppSettings {
         usesOriginalThumbnailsOnExpensiveNetwork = defaults.object(forKey: Keys.usesOriginalThumbnailsOnExpensiveNetwork) as? Bool ?? true
         ignoresUselessAltText = defaults.object(forKey: Keys.ignoresUselessAltText) as? Bool ?? true
         showsStatusBarTicker = defaults.object(forKey: Keys.showsStatusBarTicker) as? Bool ?? true
+        expandsXPosts = defaults.bool(forKey: Keys.expandsXPosts)
         appearance = AppearanceChoices(stored: defaults.data(forKey: Keys.appearanceChoices))
         insertionMotion = defaults.string(forKey: Keys.insertionMotion).flatMap(InsertionMotion.init(rawValue:)) ?? .followsSystem
         accentColor = defaults.string(forKey: Keys.accentColor).flatMap(AccentColorChoice.init(rawValue:)) ?? .blue

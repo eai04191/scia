@@ -678,6 +678,7 @@ final class SessionController {
                 timeline.applyXPost(id: id)
             }
         }
+        observeXPostSetting()
         configureStatusBarTicker(tabBarController: tabBarController)
         for navigation in [homeNavigation, localNavigation, federatedNavigation, notificationsNavigation, bookmarksNavigation, favouritesNavigation, scheduledNavigation, followedTagsNavigation, searchNavigation] {
             configure(navigation, scrollToTop: scrollToTop)
@@ -791,6 +792,21 @@ final class SessionController {
         #endif
     }
 
+
+    /// 設定でXの投稿の展開をオフにしたら、読み込み中のfxtwitterへの通信と読み直しの待ちをやめる。オフのあいだ通信しないため（docs/link-card.md）。
+    private func observeXPostSetting() {
+        withObservationTracking {
+            _ = AppDependencies.settings.expandsXPosts
+        } onChange: { [weak self] in
+            Task(.withoutRequests) { @MainActor in
+                guard let self, !self.tasks.isClosed else { return }
+                if !AppDependencies.settings.expandsXPosts {
+                    self.xPosts.cancelAll()
+                }
+                self.observeXPostSetting()
+            }
+        }
+    }
 
     /// 設定でステータスバーの通知をオフからオンにしたら、どう出るかが分かるよう、デモの通知を1件流す。
     private func observeStatusBarTickerSetting() {

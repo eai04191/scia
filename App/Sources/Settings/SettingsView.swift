@@ -128,6 +128,7 @@ struct SettingsView: View {
         case .notificationAppearance:
             NotificationAppearanceEditorView(settings: settings, opening: appearanceGroup)
                 .onAppear { appearanceGroup = nil }
+        case .linkLoading: LinkLoadingSettingsView(settings: settings)
         case .tabs:
             MenuLayoutSettingsView(
                 title: "タブ",

@@ -146,7 +146,7 @@ struct XPostArrivalScrollTests {
 
     private func harness(with statuses: [Status]) throws -> (TimelineHarness, XPostStore) {
         let harness = try TimelineHarness()
-        harness.tuning.setValue(true, for: TuningCatalog.xPostEmbeds)
+        harness.settings.expandsXPosts = true
         let store = XPostStore(retryPolicy: { RetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) }) { _ in throw URLError(.notConnectedToInternet) }
         store.reserve(id: "7")
         harness.viewController.xPosts = store

@@ -292,7 +292,7 @@ public enum AppDestination: Equatable, Sendable {
 
 /// 設定の一覧から重ねて開く画面。`rawValue`は、`scia://settings/<rawValue>`でその画面を直接開くときの名前。
 public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
-    /// 表示の分類。投稿と通知の見た目、動き、ステータスバーの通知を並べる。
+    /// 表示の分類。投稿と通知の見た目、動き、ステータスバーの通知、リンク先の読み込みを並べる。
     case display
     /// 操作の分類。対象ごとの画面（タップと長押しの操作と、その対象のメニューの並び）、リンクを開く場所、ブーストの公開範囲を並べる。
     case interaction
@@ -306,6 +306,8 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     case appIcon = "app-icon"
     case appearance
     case notificationAppearance = "notification-appearance"
+    /// 表示しただけで、Sciaと関係のない外のサービスへ通信する機能をまとめた画面。
+    case linkLoading = "link-loading"
     case tabs
     case statusActions = "status-actions"
     case notificationActions = "notification-actions"
@@ -334,7 +336,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     /// 設定の一覧からこの画面までに重ねる画面。
     public var path: [SettingsPage] {
         switch self {
-        case .appearance, .notificationAppearance: [.display, self]
+        case .appearance, .notificationAppearance, .linkLoading: [.display, self]
         case .statusActions, .notificationActions, .userActions, .linkActions, .externalPostActions, .hashtagActions, .mediaActions,
              .profileTextMenu:
             [.interaction, self]

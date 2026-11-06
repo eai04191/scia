@@ -281,6 +281,37 @@ struct XPostTests {
         #expect(clock.sleeperCount == 0)
     }
 
+    /// 設定で展開をオフにしたら、読み込み中の通信を取り消し、読み直しの待ちもやめる。オフのあいだはfxtwitterに通信しないため（docs/link-card.md）。
+    /// 取り消した投稿は読んでいないものに戻すので、オンに戻して描き直せば読み直す。
+    @MainActor @Test func cancelAllStopsLoadsAndRetries() async throws {
+        let counter = FetchCounter()
+        let clock = TestClock()
+        let gate = Gate()
+        let post = XPost(id: "1", url: try url("https://x.com/a/status/1"), authorName: "A", authorScreenName: "a", text: .plain("本文", emojis: []))
+        let store = XPostStore(clock: clock, retryPolicy: Self.retryPolicy) { id in
+            await counter.increment(id)
+            if id == "2" { throw HTTPStatusError(statusCode: 503) }
+            try await gate.wait()
+            return post
+        }
+        var changed: [String] = []
+        store.onChange = { changed.append($0) }
+
+        store.request(id: "1")
+        store.request(id: "2")
+        try await waitUntil { gate.waiterCount == 1 && store.hasFailed(id: "2") && clock.sleeperCount == 1 }
+        store.cancelAll()
+        try await waitUntil { gate.waiterCount == 0 && clock.sleeperCount == 0 }
+        #expect(store.post(id: "1") == nil)
+        #expect(!store.hasFailed(id: "1"))
+        #expect(changed.isEmpty)
+
+        gate.open()
+        store.request(id: "1")
+        try await waitUntil { store.post(id: "1") != nil }
+        #expect(await counter.count("1") == 2)
+    }
+
     /// 行に描いたときの読み込みなので、自動の通信として送り、止められている間は送らない。
     @MainActor @Test func storeFetchesAsAutomaticRequest() async throws {
         let origins = FetchOrigins()

@@ -107,14 +107,6 @@ public enum TuningCatalog {
         defaultValue: 0.25
     )
 
-    /// Xの投稿へのリンクを、fxtwitterから読んだ作者、本文、添付ファイルの囲みで出す。読み終えるまでと、読めなかったときは、リンクカードを出す。
-    /// 表示の試作。読み終えたときに行が伸びるため、ガタつきが気になるかを実機で確かめる。
-    public static let xPostEmbeds = ToggleTuning(
-        id: "timeline.xPostEmbeds",
-        title: "Xの投稿をfxtwitterから読んで出す（試作）",
-        defaultValue: false
-    )
-
     /// 編集履歴で、前の版から変わっていない部分がこの割合に満たない版は、書き直したものとして、前の版をまるごと消し、新しい版をまるごと足した形で出す。
     /// 0にすると、どれだけ書き直しても単語ごとの違いを重ねる。
     public static let editHistoryMinimumUnchangedRatio = NumberTuning(
@@ -1640,7 +1632,6 @@ public enum TuningCatalog {
             .number(pollBarDuration),
             .number(linkCardTransitionDuration),
             .number(longBodyExpandDuration),
-            .toggle(xPostEmbeds),
             .number(customEmojiArrivalDuration),
             .number(mediaSymbolRatio),
             .number(mediaSymbolMinSize),
