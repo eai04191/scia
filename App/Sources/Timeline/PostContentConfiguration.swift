@@ -117,6 +117,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var onPollAction: ((PollView.Action) -> Void)?
     /// 絵文字のリアクション。サーバーが対応していないか、リアクションがなければnil（docs/emoji-reaction.md）。
     var reactions: [ReactionChipsView.Reaction]?
+    /// リアクションが付いた、なくなった、数が変わったときに動かす時間。0なら切り替える。
+    var reactionTransitionDuration: TimeInterval = 0
     /// リアクションのボタンが押されたときに、その絵文字の`Reaction.name`を渡して呼ぶ。
     var onToggleReaction: ((String) -> Void)?
     /// リアクションの列の「＋」が押されたときに呼ぶ。nilなら「＋」を出さない。
@@ -491,6 +493,7 @@ final class PostContentView: UIView, UIContentView {
             reactions: configuration.reactions,
             reactionsSpacing: metrics.reactionsSpacing,
             reactionsStyle: metrics.reactionStyle,
+            reactionsTransitionDuration: configuration.reactionTransitionDuration,
             filterNote: configuration.filterNote,
             // リンクカードと同じく、本文から少し離した補足として置く。
             filterNoteSpacing: metrics.filterNoteSpacing

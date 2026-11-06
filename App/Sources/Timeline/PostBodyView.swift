@@ -67,6 +67,8 @@ struct PostBodyContent {
     /// 上の部品と、リアクションの列のあいだ。
     var reactionsSpacing: CGFloat = 0
     var reactionsStyle = ReactionChipsView.Style.standard
+    /// リアクションが付いた、なくなった、数が変わったときに動かす時間。0なら切り替える。
+    var reactionsTransitionDuration: TimeInterval = 0
     /// 一番下に置く補足の1行。自分の投稿が自分のフィルターに一致していることか、通知で再掲する投稿に引用があることを示す。なければnil。
     var filterNote: NSAttributedString?
     /// 上の部品と、フィルターの注記のあいだ。
@@ -164,6 +166,8 @@ final class PostBodyView: UIView {
     private(set) var leavingCardSnapshot: UIView?
     private var filterNoteLabel: UILabel?
     private var reactionsView: ReactionChipsView?
+    /// 今の`apply`で、リアクションの変化を動かすか。
+    private var animatesReactionChange = false
     /// 「テキストを選択」で、本文のラベルの代わりに同じ位置に出している選べるテキストビュー。選んでいなければnil。
     private(set) var selectionTextView: SelectableTextView?
     /// 選んでいる間、本文のラベルに出している本文。サーバーが縮めて見せるURLを元の文字に戻したもの。戻すURLがないか、選んでいなければnil。
@@ -450,6 +454,48 @@ final class PostBodyView: UIView {
         return frames
     }
 
+    /// リアクションがすべてなくなったときに、列の像をその場に残して、ボタンが消えるのと同じく縮めながら薄くして外す。
+    /// 列は並びから外れて行が縮むので、像は行の下へはみ出し、一覧が下の行を上へ動かして覆う（`reconfigureShiftingRowsBelow`）。
+    /// 動きは、次に並べるときに始める。一覧は行の中身を動きを止めた描き直しの中で当てるため、`apply`の中で始めた`UIView.animate`は効かない。
+    private func fadeOutReactions(_ view: ReactionChipsView, duration: TimeInterval) {
+        guard duration > 0, !UIAccessibility.isReduceMotionEnabled, let snapshot = view.snapshotView(afterScreenUpdates: false) else { return }
+        snapshot.frame = view.frame
+        snapshot.isUserInteractionEnabled = false
+        addSubview(snapshot)
+        reactionFadeOutSnapshots.append(snapshot)
+        pendingReactionsFadeOut?.snapshot.removeFromSuperview()
+        pendingReactionsFadeOut = (snapshot, duration)
+        setNeedsLayout()
+    }
+
+    /// 次に並べるときに薄くして外す、なくなったリアクションの列の像。
+    private var pendingReactionsFadeOut: (snapshot: UIView, duration: TimeInterval)?
+
+    /// リアクションの列で続いている動きと、消えかけの列の像を外す。行が別の投稿に使い回されたときに、前の投稿の動きを残さないため。
+    private func cancelReactionTransitions() {
+        pendingReactionsFadeOut = nil
+        for snapshot in reactionFadeOutSnapshots {
+            snapshot.removeFromSuperview()
+        }
+        reactionFadeOutSnapshots.removeAll()
+        reactionsView?.cancelTransitions()
+    }
+
+    /// 薄くしている途中の、なくなったリアクションの列の像。
+    private var reactionFadeOutSnapshots: [UIView] = []
+
+    private func startPendingReactionsFadeOut() {
+        guard let (snapshot, duration) = pendingReactionsFadeOut else { return }
+        pendingReactionsFadeOut = nil
+        UIView.animate(springDuration: duration, bounce: 0, options: [.allowUserInteraction]) {
+            snapshot.alpha = 0
+            snapshot.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
+        } completion: { [weak self] _ in
+            snapshot.removeFromSuperview()
+            self?.reactionFadeOutSnapshots.removeAll { $0 === snapshot }
+        }
+    }
+
     private func loadedReactionsView() -> ReactionChipsView {
         if let reactionsView { return reactionsView }
         let view = ReactionChipsView()
@@ -647,6 +693,11 @@ final class PostBodyView: UIView {
             }
         }
         self.content = content
+        // 同じ投稿の描き直しで、画面に出ているときだけ、リアクションの変化を動かす。使い回したセルで別の投稿に替わったときは動かさない。
+        animatesReactionChange = previous?.statusID != nil && previous?.statusID == content.statusID && window != nil
+        if previous?.statusID != content.statusID {
+            cancelReactionTransitions()
+        }
         textLabel.attributedText = Self.truncatingTail(content.text, when: content.maximumLines > 0)
         textLabel.hashtagAccount = content.hashtagAccount
         // 長い本文を切るときは、行数をラベルが幅から決める。
@@ -720,16 +771,25 @@ final class PostBodyView: UIView {
     /// リアクションの列を一番下の部品の下に置き、新しい一番下を返す。注意書きで折りたたんでいても出す。リアクションは投稿に付くもので、中身を開かなくても見られるため。
     /// - Parameter textBottomInset: 一番下が本文のときの、最後の文字のベースラインから字面の下端まで。
     private func applyReactions(_ reactions: [ReactionChipsView.Reaction]?, style: ReactionChipsView.Style, below bottom: Bottom, spacing: CGFloat, textBottomInset: CGFloat) -> Bottom {
+        let duration = content?.reactionsTransitionDuration ?? 0
         guard let reactions, !reactions.isEmpty else {
-            reactionsView?.isHidden = true
+            if let reactionsView, !reactionsView.isHidden {
+                if animatesReactionChange {
+                    fadeOutReactions(reactionsView, duration: duration)
+                }
+                // 次に付いたときに、どのボタンも新しく付いたものとして浮かび上がらせるため、空にしておく。
+                reactionsView.apply([], style: style)
+                reactionsView.isHidden = true
+            }
             return bottom
         }
         let view = loadedReactionsView()
         view.isHidden = false
         view.animatedEmojis = emojiImages
+        view.transitionDuration = duration
         // 幅が決まる前に高さを測るときは、本文と同じく、先に並べた幅か十分に広い幅で測る。
         view.widthHint = bounds.width > 0 ? bounds.width : textLabel.preparedLayoutWidth ?? Self.unknownTextWidth
-        view.apply(reactions, style: style)
+        view.apply(reactions, style: style, animated: animatesReactionChange)
         let lastBottom = switch bottom {
         case .view(let last) where last === textLabel: (anchor: textLastBaselineGuide.topAnchor, inset: textBottomInset)
         case .view(let last): (anchor: last.bottomAnchor, inset: CGFloat(0))
@@ -786,6 +846,7 @@ final class PostBodyView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         updateTextKitBaselines(width: textLabel.bounds.width)
+        startPendingReactionsFadeOut()
     }
 
     /// 出した注意書きのボックスを返す。

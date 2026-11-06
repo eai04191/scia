@@ -1015,7 +1015,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         // 取り直した投稿の行は、並びを置き換えたあとで高さを動かして描き直す。
         let refreshedIDs = refreshedStatusID.map { refreshed in Set(changedIDs.filter { status(for: $0)?.displayed.id == refreshed }) } ?? []
         defer { reconfigureAnimatingHeight(refreshedIDs, duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration)) }
-        snapshot.reconfigureItems(Array(reconnectedIDs.union(changedIDs).subtracting(refreshedIDs)))
+        // 絵文字のリアクションだけが変わった行は、並びを置き換えたあとで、ボタンの出入りと数を動かし、高さが変わる分を下の行ごと動かして描き直す（docs/emoji-reaction.mdの「動き」）。
+        let reactionChangedIDs = Set(changedIDs.filter { id in
+            guard let old = previous[id].flatMap(Self.statusOfRow), let new = entries[id].flatMap(Self.statusOfRow) else { return false }
+            return new.differsOnlyInEmojiReactions(from: old)
+        }).subtracting(refreshedIDs)
+        defer { reconfigureShiftingRowsBelow(reactionChangedIDs, keeping: anchorID, duration: tuning.value(of: TuningCatalog.reactionTransitionDuration)) }
+        snapshot.reconfigureItems(Array(reconnectedIDs.union(changedIDs).subtracting(refreshedIDs).subtracting(reactionChangedIDs)))
         if animatesRemoval, changedIDs.isEmpty, canAnimateRemoval(leaving: newIDs) {
             FrameWork.measure("snapshot.apply") { dataSource.apply(snapshot, animatingDifferences: true) }
             logger.info("setEntries count=\(newEntries.count, privacy: .public) animatesRemoval=true")
@@ -2280,6 +2286,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         configuration.onToggleSpoiler = { [weak self] in self?.toggleSpoiler(of: status, keeping: itemID) }
         configuration.bodyTruncation = longBodyExpansion.truncation(forBodyOf: status, isThreadFocus: shown.id == threadFocusID, rule: bodyTruncationRule)
         configuration.onExpandBody = { [weak self] in self?.expandBody(.status(shown.id), keeping: itemID) }
+        if supportsEmojiReactions {
+            configuration.reactionTransitionDuration = tuning.value(of: TuningCatalog.reactionTransitionDuration)
+        }
         if supportsEmojiReactions, let reactions = postContentBuilder.reactionChips(for: shown) {
             configuration.reactions = reactions
             configuration.onToggleReaction = { [weak self] name in
@@ -2295,6 +2304,14 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// プレビューの見本で、本文やリンクカードのリンクを押す操作だけを残す。見本の写真のクレジットのリンクを開けるようにするため。
     /// ほかの操作（サムネイル、投票、注意書きの開閉、名前やアイコンなど）は、見本を変えたり別の画面を開いたりするので外す。
+    /// 投稿の行の投稿。リアクションの列を出すのは、投稿と固定された投稿の行だけ。
+    private static func statusOfRow(_ entry: TimelineEntry) -> Status? {
+        switch entry {
+        case .status(let status), .pinned(let status): status
+        default: nil
+        }
+    }
+
     static func keepingOnlyLinks(_ configuration: PostContentConfiguration) -> PostContentConfiguration {
         var kept = configuration
         kept.onSelectMedia = nil

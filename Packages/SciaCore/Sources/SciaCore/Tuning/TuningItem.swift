@@ -97,6 +97,15 @@ public enum TuningCatalog {
         defaultValue: 0.25
     )
 
+    /// 絵文字のリアクションが付いた、なくなった、数が変わったときの、ボタンの出入りと数の入れ替わりと、行の高さが変わって下の行が動く時間。0なら切り替える。
+    public static let reactionTransitionDuration = NumberTuning(
+        id: "timeline.reactionTransitionDuration",
+        title: "絵文字のリアクションが変わったときの動きの時間（秒）",
+        range: 0...1.5,
+        step: 0.05,
+        defaultValue: 0.35
+    )
+
     /// アカウントを切り替えたとき、前のアカウントの画面から新しいアカウントの画面へのクロスフェードの時間。
     /// 一覧が最初の読み込みで、読み込み中の表示から行を出すとき（起動したときも）のフェードにも使う。0なら切り替える。
     public static let accountSwitchDuration = NumberTuning(
@@ -1714,6 +1723,7 @@ public enum TuningCatalog {
             .number(linkCardTransitionDuration),
             .number(longBodyExpandDuration),
             .number(customEmojiArrivalDuration),
+            .number(reactionTransitionDuration),
             .number(mediaSymbolRatio),
             .number(mediaSymbolMinSize),
             .number(mediaSymbolMaxSize),

@@ -24,6 +24,18 @@ struct EmojiReactionTests {
         )
     }
 
+    /// リアクションだけが変わった投稿を見分ける。ブーストでは元の投稿のリアクションを比べ、ほかも変わっていれば当たらない。
+    @Test func detectsReactionOnlyChange() {
+        let before = status([EmojiReaction(emoji: thumbsUp, count: 1, me: false)])
+        let after = before.settingEmojiReaction(thumbsUp, true)
+        #expect(after.differsOnlyInEmojiReactions(from: before))
+        #expect(!before.differsOnlyInEmojiReactions(from: before))
+        #expect(!after.settingFavourited(true).differsOnlyInEmojiReactions(from: before))
+
+        let boost = Status(id: "11", createdAt: Date(timeIntervalSince1970: 0), account: before.account, content: "", spoilerText: "", url: nil, reblog: before)
+        #expect(boost.replacingReblog(with: after).differsOnlyInEmojiReactions(from: boost))
+    }
+
     /// Fedibirdの形を読む。ほかのサーバーのカスタム絵文字は、そのサーバーを`domain`に持つ。
     /// 読み込む画像として受け付けないURLは、画像なしの絵文字として読み、名前のないものは除く。
     @Test func decodesFedibirdReactions() throws {

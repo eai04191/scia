@@ -208,6 +208,20 @@ extension Status {
         return replacingEmojiReactions(reactions)
     }
 
+    /// `other`と、表示している投稿の絵文字のリアクションのほかは同じか。リアクションが同じならfalse。
+    /// 一覧で、リアクションだけが変わった行を、ボタンの出入りと行の高さを動かして描き直すために使う（docs/emoji-reaction.md）。
+    public func differsOnlyInEmojiReactions(from other: Status) -> Bool {
+        guard displayed.emojiReactions != other.displayed.emojiReactions else { return false }
+        return adoptingDisplayedEmojiReactions(of: other) == other
+    }
+
+    /// 表示している投稿の絵文字のリアクションを、`other`の表示している投稿のものにしたもの。
+    private func adoptingDisplayedEmojiReactions(of other: Status) -> Status {
+        let reactions = other.displayed.emojiReactions
+        guard let reblog else { return replacingEmojiReactions(reactions) }
+        return replacingReblog(with: reblog.replacingEmojiReactions(reactions))
+    }
+
     /// 自分が`emoji`でリアクションしているか。
     public func hasEmojiReaction(_ emoji: ReactionEmoji) -> Bool {
         emojiReactions.contains { $0.emoji == emoji && $0.me }
