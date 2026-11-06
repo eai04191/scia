@@ -164,6 +164,18 @@ struct AnimatedImageTests {
         #expect(await AnimatedImage.decode(Data("not an image".utf8), maxPixelSize: 96) == nil)
     }
 
+    /// 複数のページを持つTIFFは、ImageIOがページの数を画像の数として返すが、動く画像ではないので静止画のまま描く。
+    @Test func returnsNilForMultipageTIFF() async throws {
+        let data = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(data, UTType.tiff.identifier as CFString, 2, nil))
+        CGImageDestinationAddImage(destination, try square(32, gray: 0), nil)
+        CGImageDestinationAddImage(destination, try square(32, gray: 1), nil)
+        #expect(CGImageDestinationFinalize(destination))
+
+        #expect(await AnimatedImage.decode(data as Data, maxPixelSize: 96, limits: .viewer) == nil)
+        #expect(await AnimatedImage.decodeFitting(data as Data, maxPixelSize: 96, limits: .viewer) == nil)
+    }
+
     /// 原寸が大きすぎる画像は、縮める前の展開でメモリを使いすぎるため、展開せずに断る。
     @Test func returnsNilWhenSourceIsTooLarge() async throws {
         let data = try animation(.gif, size: 1025, delays: [0.1, 0.1])
@@ -188,5 +200,27 @@ struct AnimatedImageTests {
         #expect(bytes(size) <= AnimatedImage.maxByteCount)
         #expect(bytes(size + 1) > AnimatedImage.maxByteCount)
         #expect(AnimatedImage.fittingPixelSize(frameCount: 2, width: 32, height: 32, maxPixelSize: 96) == 96, "収まるなら求めた大きさのまま")
+    }
+    /// ビューアの上限では、絵文字の上限で断る原寸の大きい画像も読む。
+    @Test func viewerLimitsAcceptLargerSource() async throws {
+        let data = try animation(.gif, size: 1100, delays: [0.1, 0.1])
+
+        #expect(await AnimatedImage.decode(data, maxPixelSize: 96) == nil)
+        let image = try #require(await AnimatedImage.decode(data, maxPixelSize: 96, limits: .viewer))
+        #expect(image.frameWidth == 96)
+    }
+
+    /// 収まるように読むときは、求めた大きさでは上限を超えるコマの多い画像も、上限に収まるまで縮めて動かす。
+    /// 96pxの300コマは絵文字の上限（8MB）を超えるが、収まる大きさまで縮めれば読める。
+    @Test func decodeFittingShrinksToStayWithinLimit() async throws {
+        let data = try animation(.gif, size: 96, delays: Array(repeating: 0.1, count: 300))
+        let limits = AnimatedImage.Limits.emoji
+
+        let image = try #require(await AnimatedImage.decodeFitting(data, maxPixelSize: 96, limits: limits))
+        #expect(image.frameCount == 300)
+        #expect(image.frameWidth < 96)
+        #expect(image.byteCount <= limits.maxByteCount)
+        #expect(try await AnimatedImage.decodeFitting(animation(.gif, size: 32, delays: [0.1, 0.1]), maxPixelSize: 96, limits: limits)?.frameWidth == 32, "収まるなら元の大きさのまま")
+        #expect(try await AnimatedImage.decodeFitting(animation(.png, delays: [0.1]), maxPixelSize: 96, limits: limits) == nil, "1コマなら動かさない")
     }
 }

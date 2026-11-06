@@ -1,3 +1,4 @@
+import SciaCore
 import UIKit
 
 /// 画像を画面に収めて出し、ピンチとダブルタップで拡大する。画面より小さい画像は、引き伸ばさずに等倍で出す。
@@ -50,10 +51,48 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
         if newImage !== imageView.image {
             imageView.fadeOutCurrentImage(duration: crossfadeDuration)
         }
+        if newImage !== imageView.image {
+            setAnimation(nil)
+        }
         imageView.image = newImage
         imageView.isHidden = newImage == nil
         // サムネイルから元の画像へ差し替えたときは、見ている位置を保つため、倍率を変えていれば見た目の大きさを変えない。
         updateZoomScales(resetting: wasAtRest)
+    }
+
+    /// コマを送っている動く画像。`image`を差し替えると止める。
+    private(set) var animation: AnimatedImage?
+
+    /// `image`の代わりに、`animation`のコマを最初のコマから送る。nilなら止めて`image`を描く。
+    /// 画像の枠、倍率、開閉の複製は`image`の大きさで決めたまま、描く中身だけを、並べたコマの画像と表示する範囲のアニメーションで替える。
+    func setAnimation(_ animation: AnimatedImage?) {
+        self.animation = animation
+        imageView.layer.removeAnimation(forKey: Self.animationContentsKey)
+        imageView.layer.removeAnimation(forKey: Self.animationFramesKey)
+        guard let animation else { return }
+        let frames = AnimatedEmojiOverlay.frameAnimation(of: animation, mediaTime: 0)
+        // 描く画像は`UIImageView`が`image`で決めるので、並べた画像に替えるのもアニメーションで行い、止めたら`image`に戻るようにする。
+        let contents = CABasicAnimation(keyPath: "contents")
+        contents.fromValue = animation.sheet
+        contents.toValue = animation.sheet
+        contents.duration = frames.duration
+        contents.repeatCount = .infinity
+        contents.isRemovedOnCompletion = false
+        imageView.layer.add(contents, forKey: Self.animationContentsKey)
+        imageView.layer.add(frames, forKey: Self.animationFramesKey)
+    }
+
+    private static let animationContentsKey = "animatedImageContents"
+    private static let animationFramesKey = "animatedImageFrames"
+
+    /// いま見えている中身。動く画像なら、いま出しているコマを`image`と同じ大きさの画像にする。開閉の複製に渡す。
+    var displayedImage: UIImage? {
+        guard let animation, let image = imageView.image, image.size.width > 0,
+              let shown = imageView.layer.presentation()?.contentsRect,
+              let index = (0..<animation.frameCount).first(where: { animation.contentsRect(ofFrame: $0) == shown }),
+              let frame = animation.frameImage(at: index)
+        else { return imageView.image }
+        return UIImage(cgImage: frame, scale: CGFloat(animation.frameWidth) / image.size.width, orientation: .up)
     }
 
     /// 元の画像が届いて、等倍の大きさが初めて分かったときに設定する。開いたときの倍率のままなら、画面に収めた大きさから等倍へ、`duration`秒かけて縮める。
@@ -191,6 +230,7 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
         bounds: \(bounds.size)
         fittedBoundsSize: \(fittedBoundsSize)
         imageSize: \(imageView.image.map { "\($0.size) scale=\($0.scale)" } ?? "nil")
+        animation: \(animation.map { "\($0.frameCount) frames \($0.frameWidth)x\($0.frameHeight)" } ?? "nil")
         naturalSize: \(naturalSize.map { "\($0)" } ?? "nil")
         zoomScale: \(zoomScale) min=\(minimumZoomScale) fit=\(fitScale) max=\(maximumZoomScale)
         contentSize: \(contentSize)

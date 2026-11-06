@@ -1974,6 +1974,18 @@ final class ImagePageController: MediaPageController {
     /// 送るファイルを作り終えるまで出している、投稿欄で切り抜いたサムネイル。
     private var shownLocalThumbnail: UIImage?
 
+    /// 出している画像の元のファイル。動く画像（GIF、APNG）なら、ここからコマに分けて動かす。読み終えるまでnil。
+    private var animationFile: URL?
+    /// `animationFile`をコマに分けている。
+    private var animationTask: Task<Void, Never>?
+    /// 動かすあいだ、Live Textの解析を外している。動く画像では、解析した最初のコマの文字の位置が、ほかのコマと合わないため。
+    /// 動かさなくなったら、解析し直す。
+    private var removedAnalysisForAnimation = false
+    private var playbackObservers: [any NSObjectProtocol] = []
+    /// 開いているページとして見えている。`viewDidAppear`から`viewDidDisappear`まで。
+    /// 隣のページはめくった後も`UIPageViewController`のスクロールの中に残り、windowを持ったままなので、windowでは決めない。
+    private var isShown = false
+
     /// - Parameter preview: 一覧で読み込んだサムネイル。元の画像が届くまでの下地にする。
     init(item: MediaViewerItem, store: MediaImageStore<UIImage>, preview: UIImage?) {
         self.store = store
@@ -1981,10 +1993,12 @@ final class ImagePageController: MediaPageController {
         super.init(item: item)
     }
 
-    deinit {
+    isolated deinit {
         loadTask?.cancel()
         originalCheckTask?.cancel()
         analysisTask?.cancel()
+        animationTask?.cancel()
+        playbackObservers.forEach(NotificationCenter.default.removeObserver)
     }
 
     /// ダブルタップして拡大するときと、戻すときの時間。
@@ -2032,7 +2046,8 @@ final class ImagePageController: MediaPageController {
         zoomView.presentedImageFrame.map { zoomView.convert($0, to: view) } ?? view.bounds
     }
 
-    override var transitionImage: UIImage? { zoomView.image }
+    /// 動いている画像では、いま出しているコマ。開閉の複製が、見えているコマから動き始めるため。
+    override var transitionImage: UIImage? { zoomView.displayedImage }
 
     override var drawsImage: Bool { true }
 
@@ -2072,6 +2087,78 @@ final class ImagePageController: MediaPageController {
         zoomView.image = preview ?? placeholder
         onImageChange?(0)
         load(hasPreview: preview != nil)
+        let center = NotificationCenter.default
+        playbackObservers = AnimatedImagePlayback.changeNotifications.map { name in
+            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.updateAnimation() }
+            }
+        }
+        // 裏に回っている間に描画のサーバーがアニメーションを外していることがあるため、戻ったら付け直す（`EmojiImageView`と同じ）。
+        playbackObservers.append(center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let animation = self.zoomView.animation else { return }
+                self.zoomView.setAnimation(animation)
+            }
+        })
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        isShown = true
+        updateAnimation()
+    }
+
+    /// 離れたページのコマは、メモリを使わないよう捨てる。戻ったら、最初のコマから動かし直す。
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        isShown = false
+        updateAnimation()
+    }
+
+    /// 見えていて、端末の設定が動く画像を許していれば、元のファイルをコマに分けて動かす。そうでなければ止める。
+    private func updateAnimation() {
+        let isVisible = isShown
+        guard isVisible, AnimatedImagePlayback.isAllowed, let file = animationFile, let image = zoomView.image else {
+            stopAnimation()
+            if removedAnalysisForAnimation, isVisible, let image = zoomView.image {
+                removedAnalysisForAnimation = false
+                analyze(image)
+            }
+            return
+        }
+        guard zoomView.animation == nil, animationTask == nil else { return }
+        animationTask = Task(.withoutRequests) { [weak self] in
+            let animation = await Self.decodeAnimation(at: file)
+            guard let self, !Task.isCancelled else { return }
+            self.animationTask = nil
+            // 読んでいる間に画像が替わったら、そのファイルのコマではないので使わない。
+            guard let animation, self.zoomView.image === image, self.animationFile == file else { return }
+            self.zoomView.setAnimation(animation)
+            self.removedAnalysisForAnimation = true
+            self.analysisTask?.cancel()
+            self.liveText.selectableItemsHighlighted = false
+            self.liveText.analysis = nil
+            self.hasFinishedAnalysis = true
+        }
+    }
+
+    private func stopAnimation() {
+        animationTask?.cancel()
+        animationTask = nil
+        zoomView.setAnimation(nil)
+    }
+
+    /// `file`が動く画像なら、ビューアの上限に収まる大きさでコマに分ける。動かない画像と、読めないファイルはnil。
+    nonisolated private static func decodeAnimation(at file: URL) async -> AnimatedImage? {
+        guard let data = try? Data(contentsOf: file, options: .mappedIfSafe) else { return nil }
+        return await AnimatedImage.decodeFitting(data, maxPixelSize: MediaImagePixelSize.full, limits: .viewer)
+    }
+
+    /// 出している画像を替えたときに、その元のファイルを渡す。動く画像なら、見えていれば動かし始める。
+    private func setAnimationFile(_ file: URL?) {
+        stopAnimation()
+        animationFile = file
+        updateAnimation()
     }
 
     override func itemDidChange() {
@@ -2090,6 +2177,8 @@ final class ImagePageController: MediaPageController {
             zoomView.naturalSize = thumbnail.size
             zoomView.image = thumbnail
             onImageChange?(0)
+            setAnimationFile(nil)
+            removedAnalysisForAnimation = false
             // 前の画像の文字の位置が残らないよう、切り抜いた画像で解析し直す。
             liveText.analysis = nil
             hasFinishedAnalysis = false
@@ -2132,7 +2221,9 @@ final class ImagePageController: MediaPageController {
                 self.zoomView.naturalSize = image.size
                 self.zoomView.image = image
                 self.onImageChange?(0)
+                self.removedAnalysisForAnimation = false
                 self.analyze(image)
+                self.setAnimationFile(file.url)
             } else {
                 self.showFailure()
             }
@@ -2184,7 +2275,12 @@ final class ImagePageController: MediaPageController {
                     self.zoomView.setNaturalSize(image.size, duration: UIAccessibility.isReduceMotionEnabled ? 0 : self.naturalSizeDuration)
                 }
                 self.onImageChange?(crossfadeDuration)
+                self.removedAnalysisForAnimation = false
                 self.analyze(image)
+                let file = await store.originalFile(for: url)
+                // 探している間に、投稿欄で切り抜くなどして出す画像が替わったら、このファイルでは動かさない。
+                guard !Task.isCancelled, self.zoomView.image === image else { return }
+                self.setAnimationFile(file)
             } else {
                 // サムネイルを出せていれば、そのまま見せる。
                 self.showFailure()
@@ -2229,7 +2325,7 @@ extension ImagePageController {
                 // 結果を渡すと、VisionKitが初めての準備でメインスレッドを数十ミリ秒使うことがある。元の大きさの分かった画像を等倍へ縮めている途中だと、
                 // 縮む動きが止まって見えるため、縮め終えてから渡す。
                 self.zoomView.afterZoomAnimation { [weak self] in
-                    guard let self, self.zoomView.image === image else { return }
+                    guard let self, self.zoomView.image === image, self.zoomView.animation == nil else { return }
                     self.liveText.analysis = analysis
                     self.hasFinishedAnalysis = true
                 }

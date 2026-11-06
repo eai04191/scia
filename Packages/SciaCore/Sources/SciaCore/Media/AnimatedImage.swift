@@ -1,6 +1,7 @@
 public import CoreGraphics
 public import Foundation
 import ImageIO
+import UniformTypeIdentifiers
 
 /// コマに分けた動く画像。アニメーションするカスタム絵文字（GIF、APNG）を描くのに使う。
 /// コマは1枚の画像（`sheet`）に、左上から行ごとに格子状に並べて持つ。描く側は、画像を1度渡すだけで、表示する範囲を切り替えてコマを送れる。
@@ -67,15 +68,50 @@ public struct AnimatedImage: Sendable {
     /// 分けてよいコマの数。展開する前に、コマの数だけで断る。
     public static let maxFrameCount = 1000
 
+    /// 展開してよい大きさ。描く場所ごとに決める。
+    public struct Limits: Sendable, Equatable {
+        /// 並べた画像が使ってよいメモリのバイト数。
+        public var maxByteCount: Int
+        /// 縮める前に原寸で展開してよい、1コマのピクセル数。
+        public var maxSourcePixelCount: Int
+
+        public init(maxByteCount: Int, maxSourcePixelCount: Int) {
+            self.maxByteCount = maxByteCount
+            self.maxSourcePixelCount = maxSourcePixelCount
+        }
+
+        /// 行やメニューに描くカスタム絵文字とアイコン。
+        public static let emoji = Limits(maxByteCount: AnimatedImage.maxByteCount, maxSourcePixelCount: AnimatedImage.maxSourcePixelCount)
+        /// ビューアで1枚を大きく出す画像（投稿欄で選んだGIF、カスタム絵文字）。
+        /// ビューアは開いているページの1枚だけを動かし、ページを離れたら捨てるので、絵文字より大きく取る。
+        /// 原寸は2048×2048（16MB）まで展開する。投稿欄で選ぶGIFは絵文字より大きいことがあるため。
+        public static let viewer = Limits(maxByteCount: 64 * 1024 * 1024, maxSourcePixelCount: 2048 * 2048)
+    }
+
     /// `data`を、長い辺が`maxPixelSize`ピクセル以下のコマに分けて並べる。2コマ以上ない画像、読めないデータ、
     /// 原寸が`maxSourcePixelCount`を超えるか`maxFrameCount`より多いコマの画像、展開すると`maxByteCount`を超える画像はnil。
     /// コマはImageIOが前のコマと重ねた、そのまま描ける画像になる。展開は`ImageDecoder.run`の専用のキューで行う。
-    public static func decode(_ data: Data, maxPixelSize: Int) async -> AnimatedImage? {
-        await ImageDecoder.run { decodeOnDecodeQueue(data, maxPixelSize: maxPixelSize) }
+    /// - Parameter limits: 上限。既定は絵文字の上限（`maxByteCount`、`maxSourcePixelCount`）。
+    public static func decode(_ data: Data, maxPixelSize: Int, limits: Limits = .emoji) async -> AnimatedImage? {
+        await ImageDecoder.run { decodeOnDecodeQueue(data, maxPixelSize: maxPixelSize, limits: limits) }
     }
 
-    private static func decodeOnDecodeQueue(_ data: Data, maxPixelSize: Int) -> AnimatedImage? {
-        guard !hasSeparateDefaultImage(data), let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+    /// `data`を、長い辺が`maxPixelSize`以下で、並べた画像が`limits`のバイト数に収まる一番大きい大きさのコマに分ける。
+    /// コマが多くて収まらないときは、動きを止めないよう、`maxPixelSize`より小さく読む。2コマ以上ない画像と、1ピクセルでも収まらない画像はnil。
+    public static func decodeFitting(_ data: Data, maxPixelSize: Int, limits: Limits) async -> AnimatedImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil), isAnimatedType(source) else { return nil }
+        let count = CGImageSourceGetCount(source)
+        guard count > 1, count <= maxFrameCount,
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int, let height = properties[kCGImagePropertyPixelHeight] as? Int
+        else { return nil }
+        let pixelSize = fittingPixelSize(frameCount: count, width: width, height: height, maxPixelSize: maxPixelSize, maxByteCount: limits.maxByteCount)
+        guard pixelSize > 0 else { return nil }
+        return await decode(data, maxPixelSize: pixelSize, limits: limits)
+    }
+
+    private static func decodeOnDecodeQueue(_ data: Data, maxPixelSize: Int, limits: Limits) -> AnimatedImage? {
+        guard !hasSeparateDefaultImage(data), let source = CGImageSourceCreateWithData(data as CFData, nil), isAnimatedType(source) else { return nil }
         let count = CGImageSourceGetCount(source)
         guard count > 1, count <= maxFrameCount else { return nil }
         var frames: [(image: CGImage, duration: TimeInterval)] = []
@@ -85,20 +121,27 @@ public struct AnimatedImage: Sendable {
         for index in 0..<count {
             let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any] ?? [:]
             guard let width = properties[kCGImagePropertyPixelWidth] as? Int, let height = properties[kCGImagePropertyPixelHeight] as? Int,
-                  width > 0, height > 0, width * height <= maxSourcePixelCount
+                  width > 0, height > 0, width * height <= limits.maxSourcePixelCount
             else { return nil }
             guard let image = CGImageSourceCreateImageAtIndex(source, index, options).flatMap({ scaled($0, maxPixelSize: maxPixelSize) }) else { return nil }
             // 並べた画像はRGBAで持つので、元のコマがグレースケールでも、RGBAに直した大きさで数える。
             byteCount += image.width * image.height * 4
-            guard byteCount <= maxByteCount else { return nil }
+            guard byteCount <= limits.maxByteCount else { return nil }
             frames.append((image, frameDuration(properties)))
         }
-        return sheet(of: frames)
+        return sheet(of: frames, maxByteCount: limits.maxByteCount)
+    }
+
+    /// コマを送って動く形式（GIF、APNG、WebP）か。`frameDuration`がコマの長さを読めるのも、この3つだけ。
+    /// TIFFのように複数のページを持つ形式でも、ImageIOはページの数を画像の数として返すため、数だけでは動く画像と決められない。
+    private static func isAnimatedType(_ source: CGImageSource) -> Bool {
+        guard let identifier = CGImageSourceGetType(source), let type = UTType(identifier as String) else { return false }
+        return [UTType.gif, .png, .webP].contains(type)
     }
 
     /// `width`×`height`のコマを`frameCount`枚並べた画像が`maxByteCount`に収まる、`maxPixelSize`以下で一番大きい、長い辺の上限。
     /// 1ピクセルまで縮めても収まらなければ0。コマの大きさは`scaled`と同じく求め、並べ方は`sheet`と同じく求める。
-    static func fittingPixelSize(frameCount: Int, width: Int, height: Int, maxPixelSize: Int) -> Int {
+    static func fittingPixelSize(frameCount: Int, width: Int, height: Int, maxPixelSize: Int, maxByteCount: Int = maxByteCount) -> Int {
         guard frameCount > 0, width > 0, height > 0 else { return 0 }
         let columns = Int(Double(frameCount).squareRoot().rounded(.up))
         let rows = (frameCount + columns - 1) / columns
@@ -125,7 +168,7 @@ public struct AnimatedImage: Sendable {
 
     /// コマを、なるべく正方形に近い格子に、すき間を空けて並べた画像にする。コマの大きさは最初のコマに揃える。
     /// GIFとAPNGのコマは、ImageIOが前のコマと重ねてキャンバス全体の大きさで返すので、ふつうは揃っている。
-    private static func sheet(of frames: [(image: CGImage, duration: TimeInterval)]) -> AnimatedImage? {
+    private static func sheet(of frames: [(image: CGImage, duration: TimeInterval)], maxByteCount: Int) -> AnimatedImage? {
         guard let first = frames.first?.image else { return nil }
         let columns = Int(Double(frames.count).squareRoot().rounded(.up))
         let rows = (frames.count + columns - 1) / columns
