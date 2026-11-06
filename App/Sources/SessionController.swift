@@ -250,7 +250,7 @@ final class SessionController {
         let tasks = session.tasks
         self.tasks = tasks
         let client = session.client
-        otherAccounts = OtherAccounts(current: credential, tasks: tasks) { MastodonClient(credential: $0, transport: transport) }
+        otherAccounts = OtherAccounts(current: credential, tasks: tasks) { MastodonClient(credential: $0, transport: transport, isOtherAccount: true) }
         let streamingHub = session.streamingHub
         let reportUnauthorizedToSession = { [weak session] in session?.reportUnauthorized() }
         let home = FeedTimelineController(feed: .home, session: session)

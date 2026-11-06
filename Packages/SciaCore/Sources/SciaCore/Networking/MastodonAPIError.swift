@@ -42,13 +42,16 @@ public struct RequestAccount: Hashable, Sendable {
     public let id: Credential.ID
     /// 使う人に見せるハンドル（`@username@server`）。
     public let handle: String
+    /// 「別のアカウントで」使う、今使っているアカウントとは別のアカウントか。そうなら、理由にどのアカウントかを出す。
+    public let isOtherAccount: Bool
 
-    public init(id: Credential.ID, handle: String) {
+    public init(id: Credential.ID, handle: String, isOtherAccount: Bool = false) {
         self.id = id
         self.handle = handle
+        self.isOtherAccount = isOtherAccount
     }
 
-    public init(_ credential: Credential) {
-        self.init(id: credential.id, handle: credential.handle)
+    public init(_ credential: Credential, isOtherAccount: Bool) {
+        self.init(id: credential.id, handle: credential.handle, isOtherAccount: isOtherAccount)
     }
 }

@@ -64,13 +64,22 @@ struct ErrorPresentationTests {
         #expect(presentation.code == "HTTP 401")
     }
 
-    /// どのアカウントの通信かが分かれば、そのアカウントがログアウトされていると出し、そのアカウントでログインし直せるようにする。
-    @Test func unauthorizedNamesLoggedOutAccount() {
-        let account = RequestAccount(id: "https://fedibird.com#9004", handle: "@Eai@fedibird.com")
+    /// 「別のアカウントで」使うほかのアカウントの通信なら、どのアカウントがログアウトされているかを出し、そのアカウントでログインし直せるようにする。
+    @Test func unauthorizedNamesLoggedOutOtherAccount() {
+        let account = RequestAccount(id: "https://fedibird.com#9004", handle: "@Eai@fedibird.com", isOtherAccount: true)
         let presentation = ErrorPresentation(MastodonAPIError(statusCode: 401, message: "The access token is invalid", account: account))
 
         #expect(presentation.message == "@Eai@fedibird.comはログアウトされています。")
         #expect(presentation.code == "HTTP 401")
+        #expect(presentation.loggedOutAccount == account)
+    }
+
+    /// 今使っているアカウントの通信なら、どのアカウントかは分かるので、ハンドルを出さない。ログインし直すボタンのためのアカウントは持つ。
+    @Test func unauthorizedOmitsHandleOfCurrentAccount() {
+        let account = RequestAccount(id: "https://stellaria.network#1", handle: "@agent_testing@stellaria.network")
+        let presentation = ErrorPresentation(MastodonAPIError(statusCode: 401, message: "The access token is invalid", account: account))
+
+        #expect(presentation.message == "ログアウトされています。")
         #expect(presentation.loggedOutAccount == account)
     }
 

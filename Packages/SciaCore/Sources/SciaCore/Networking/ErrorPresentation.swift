@@ -49,11 +49,12 @@ public struct ErrorPresentation: Hashable, Sendable {
     }
 
     /// - Parameter serverMessage: REST APIがJSONで返した理由。API以外の通信ではnil。
-    /// - Parameter account: 通信を送ったアカウント。分かれば、401でそのアカウントがログアウトされていると出す。
+    /// - Parameter account: 通信を送ったアカウント。401なら、ログインし直すボタンのために持つ。「別のアカウントで」使うほかのアカウントなら、どのアカウントがログアウトされているかを出す。
+    ///   今使っているアカウントなら、どのアカウントかは分かるので、ハンドルは出さない。
     private static func presentation(statusCode: Int, serverMessage: String?, account: RequestAccount?) -> Self {
         if statusCode == 401 {
             // MastodonのREST APIは、トークンが無効なときだけ401を返す（`AuthorizationCheck`）。
-            let message = account.map { "\($0.handle)はログアウトされています。" } ?? "ログアウトされています。"
+            let message = account.flatMap { $0.isOtherAccount ? "\($0.handle)はログアウトされています。" : nil } ?? "ログアウトされています。"
             return Self(message: message, code: "HTTP 401", loggedOutAccount: account)
         }
         let message = switch statusCode {

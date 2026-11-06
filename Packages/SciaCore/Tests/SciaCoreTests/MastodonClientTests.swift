@@ -131,6 +131,17 @@ struct MastodonClientTests {
         #expect(error?.account == RequestAccount(id: "https://example.social#1", handle: "@alice@example.social"))
     }
 
+    /// 「別のアカウントで」使うほかのアカウントのクライアントなら、断られた通信のアカウントにその印を付ける。理由にハンドルを出すため。
+    @Test func otherAccountClientMarksFailures() async throws {
+        let transport = StubTransport([.json(#"{"error":"The access token is invalid"}"#, statusCode: 401)])
+        let client = MastodonClient(credential: Credential(instance: try #require(URL(string: "https://example.social")), accessToken: "token", clientID: "client-id", clientSecret: "client-secret", accountID: "1", username: "alice"), transport: transport, isOtherAccount: true)
+
+        let error = await #expect(throws: MastodonAPIError.self) {
+            _ = try await client.homeTimeline(TimelineQuery(limit: 40))
+        }
+        #expect(error?.account?.isOtherAccount == true)
+    }
+
     /// アカウントの他の項目が読めないサーバーでも確かめられるよう、IDだけを読む。
     @Test func verifyCredentialsReadsOnlyID() async throws {
         let transport = StubTransport([.json(#"{"id":"1","avatar":""}"#, statusCode: 200)])

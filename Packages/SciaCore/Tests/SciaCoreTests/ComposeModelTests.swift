@@ -143,7 +143,7 @@ struct ComposeModelTests {
 
     /// 送ったアカウントがログアウトされていたら、その理由と、そのアカウントでログインし直すボタンのためのアカウントを持つ。
     @Test func postingRejectedAsLoggedOutKeepsAccountToLogInAgain() async {
-        let account = RequestAccount(id: "https://fedibird.com#9004", handle: "@Eai@fedibird.com")
+        let account = RequestAccount(id: "https://fedibird.com#9004", handle: "@Eai@fedibird.com", isOtherAccount: true)
         let model = ComposeModel(tasks: TaskScope(), replyTo: nil, myAccountID: "1") { _ in
             throw MastodonAPIError(statusCode: 401, message: "The access token is invalid", account: account)
         }

@@ -4,6 +4,7 @@ import os
 /// ログイン済みアカウントとしてMastodon APIを呼ぶ。
 public struct MastodonClient: Sendable {
     public let credential: Credential
+    private let isOtherAccount: Bool
     private let http: HTTPClient
     private let rateLimit: RateLimitGate
     private let features: FeatureAvailability
@@ -19,6 +20,7 @@ public struct MastodonClient: Sendable {
     ///   - features: 使えないと分かった機能を、セッションの間だけ止める。セッションの中で共有する。
     ///   - retry: 一時的な失敗で送り直す回数と間隔。
     ///   - requestLog: 失敗の記録。セッションの中で共有する。
+    ///   - isOtherAccount: 「別のアカウントで」使う、今使っているアカウントとは別のアカウントのクライアントか。断られた通信の理由に、どのアカウントかを出すために使う。
     public init(
         credential: Credential,
         transport: any HTTPTransport,
@@ -27,8 +29,10 @@ public struct MastodonClient: Sendable {
         retry: RetryPolicy = .standard,
         requestLog: RequestLog = RequestLog(includesBody: false),
         clock: any Clock<Duration> = SystemTime.clock,
-        now: @escaping @Sendable () -> Date = SystemTime.now
+        now: @escaping @Sendable () -> Date = SystemTime.now,
+        isOtherAccount: Bool = false
     ) {
+        self.isOtherAccount = isOtherAccount
         self.clock = clock
         self.credential = credential
         http = HTTPClient(transport: transport, retry: retry, clock: clock, now: now)
@@ -1385,7 +1389,7 @@ public struct MastodonClient: Sendable {
             throw FeatureUnavailable(feature: feature)
         }
         var failure = MastodonAPIError.from(statusCode: response.statusCode, body: data, retryAfter: RateLimitGate.retryAfter(of: response, now: now()))
-        failure.account = RequestAccount(credential)
+        failure.account = RequestAccount(credential, isOtherAccount: isOtherAccount)
         requestLog.record(request, statusCode: response.statusCode, error: failure, body: data)
         throw failure
     }
