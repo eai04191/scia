@@ -40,6 +40,12 @@ enum TextKitLabelLayout {
         return result
     }
 
+    /// TextKit 2で描くラベルで、行より広いカスタム絵文字を縮めて置く段落の行の高さを、`width`の幅で付け直した文字列（`RichTextRenderer.fittingWideEmojis`）。
+    /// UILabelで描くラベルでは付け直さない。UILabelは縮める前の行の高さで描くので、位置を求める並びも同じにする。
+    static func fittingWideEmojis(_ text: NSAttributedString, width: CGFloat, style: Style) -> NSAttributedString {
+        style.overlaysGlyphs ? RichTextRenderer.fittingWideEmojis(in: text, width: width) : text
+    }
+
     /// `filled(_:style:)`で埋めた文字列を、`width`の幅に`maximumLines`行まで並べる。0なら行数を限らない。
     static func layout(of attributedText: NSAttributedString, width: CGFloat, maximumLines: Int, style: Style) -> TextLayout {
         let contentStorage = NSTextContentStorage()
@@ -52,12 +58,13 @@ enum TextKitLabelLayout {
         // 段落は折り返しにして、コンテナで最後の行だけを「…」で切る。最後の行に入りきらない単語も、UILabelと同じく「…」の前まで途中を並べる。
         container.lineBreakMode = truncationMode(of: attributedText, lineBreakMode: style.lineBreakMode) ?? style.lineBreakMode
         layoutManager.textContainer = container
-        let placed = style.overlaysGlyphs ? placingOverlaidGlyphs(attributedText) : attributedText
+        let fitted = fittingWideEmojis(attributedText, width: width, style: style)
+        let placed = style.overlaysGlyphs ? placingOverlaidGlyphs(fitted) : fitted
         contentStorage.attributedString = wrappingInsteadOfTruncating(aligned(placed, direction: style.direction))
         layoutManager.ensureLayout(for: layoutManager.documentRange)
         return TextLayout(
             width: width, direction: style.direction, contentStorage: contentStorage, layoutManager: layoutManager,
-            overlaidText: placed === attributedText ? nil : placed
+            overlaidText: placed === fitted ? nil : placed
         )
     }
 
@@ -131,10 +138,7 @@ enum TextKitLabelLayout {
                 result.removeAttribute(.underlineStyle, range: range)
             }
             if let attachment = attributes[.attachment] as? NSTextAttachment, attachment.image !== emptyImage {
-                let placeholder = NSTextAttachment()
-                placeholder.image = emptyImage
-                placeholder.bounds = attachment.bounds
-                result.addAttribute(.attachment, value: placeholder, range: range)
+                result.addAttribute(.attachment, value: LineFittingAttachment.placeholder(replacing: attachment, image: emptyImage), range: range)
             }
         }
         result.addAttribute(.foregroundColor, value: UIColor.clear, range: whole)

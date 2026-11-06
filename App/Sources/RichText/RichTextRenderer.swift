@@ -341,7 +341,7 @@ struct RichTextRenderer: Sendable {
         // 絵文字の中心を、和文の字面（em枠）の中心に揃える。文字と大きさが違っても、文字が絵文字の横の真ん中に来るようにするため。
         // 欧文の大文字の中心とも0.03emほどしか違わない。等倍の絵文字は、下端がほぼ文字の下端（descender）に来る。
         let y = Self.emojiCenterHeight * font.pointSize - height / 2
-        let attachment = NSTextAttachment()
+        let attachment = LineFittingAttachment(lineFont: self.font)
         if let image, image.size.height > 0 {
             attachment.image = image
             attachment.bounds = CGRect(x: 0, y: y, width: height * image.size.width / image.size.height, height: height)
@@ -518,13 +518,15 @@ struct RichTextRenderer: Sendable {
     }
 
     /// 範囲の中の絵文字（カスタム絵文字の画像と、大きさを変えたUnicodeの絵文字）が、ベースラインから上と下へ伸びる長さ。絵文字がなければ0。
-    static func emojiExtent(in text: NSAttributedString, range: NSRange) -> (above: CGFloat, below: CGFloat) {
+    /// - Parameter width: 並べる幅。渡せば、行より広いカスタム絵文字は縮めて置く大きさ（`LineFittingAttachment`）で測る。nilなら縮める前の大きさで測る。
+    static func emojiExtent(in text: NSAttributedString, range: NSRange, width: CGFloat? = nil) -> (above: CGFloat, below: CGFloat) {
         var above: CGFloat = 0
         var below: CGFloat = 0
-        text.enumerateAttribute(.attachment, in: range) { value, _, _ in
+        text.enumerateAttribute(.attachment, in: range) { value, attachmentRange, _ in
             guard let attachment = value as? NSTextAttachment else { return }
-            above = max(above, attachment.bounds.maxY)
-            below = max(below, -attachment.bounds.minY)
+            let bounds = placedBounds(of: attachment, at: attachmentRange.location, in: text, width: width)
+            above = max(above, bounds.maxY)
+            below = max(below, -bounds.minY)
         }
         // 書体の大きさが違う絵文字が隣り合っても1つずつ測るよう、どの属性が変わってもランを分ける。
         text.enumerateAttributes(in: range) { attributes, run, _ in
@@ -543,6 +545,38 @@ struct RichTextRenderer: Sendable {
             }
         }
         return (above, below)
+    }
+
+    /// `attachment`を幅`width`に並べたときに置く大きさ。行の幅で縮める添付でないか、幅がnilなら`bounds`。
+    private static func placedBounds(of attachment: NSTextAttachment, at location: Int, in text: NSAttributedString, width: CGFloat?) -> CGRect {
+        guard let width, let fitting = attachment as? LineFittingAttachment else { return attachment.bounds }
+        return fitting.placedBounds(lineWidth: width, paragraphStyle: text.attribute(.paragraphStyle, at: location, effectiveRange: nil) as? NSParagraphStyle)
+    }
+
+    /// `text`を幅`width`で並べるときに、行より広いカスタム絵文字を縮めて置く段落の行の高さ（`minimumLineHeight`）を、縮めた大きさで付け直した文字列。
+    /// 行の高さは文字列を作るときに縮める前の大きさで決めるので、付け直さないと、縮めた絵文字の上が縮めた分だけ空く。
+    /// TextKit 2で自分で描くラベルが並べる直前に使う。UILabelで描くラベルには使えない。UILabelは並べ方を自分で決め、幅ごとに文字列を差し替える入口がないため、
+    /// 行の高さは縮める前のまま描く。行の高さが付くのは絵文字を文字の行より大きくしたときだけで、UILabelで描く名前の行では、「名前の行」のカスタム絵文字の倍率を上げたときに当たる。
+    /// 縮める絵文字がなければ、`text`をそのまま返す。ふつうの本文は、添付の幅を比べるだけで済む。
+    static func fittingWideEmojis(in text: NSAttributedString, width: CGFloat) -> NSAttributedString {
+        guard width > 0, width.isFinite, text.length > 0 else { return text }
+        let string = text.string as NSString
+        var paragraphs: [(range: NSRange, font: UIFont)] = []
+        text.enumerateAttribute(.attachment, in: NSRange(location: 0, length: text.length)) { value, range, _ in
+            guard let attachment = value as? LineFittingAttachment,
+                  placedBounds(of: attachment, at: range.location, in: text, width: width).width < attachment.bounds.width
+            else { return }
+            let paragraph = string.paragraphRange(for: range)
+            if paragraphs.last?.range != paragraph { paragraphs.append((paragraph, attachment.lineFont)) }
+        }
+        guard !paragraphs.isEmpty else { return text }
+        let result = NSMutableAttributedString(attributedString: text)
+        for paragraph in paragraphs {
+            guard let style = (text.attribute(.paragraphStyle, at: paragraph.range.location, effectiveRange: nil) as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle else { continue }
+            style.minimumLineHeight = lineHeight(font: paragraph.font, emojiExtent: emojiExtent(in: text, range: paragraph.range, width: width)) ?? 0
+            result.addAttribute(.paragraphStyle, value: style, range: paragraph.range)
+        }
+        return result
     }
 
     /// 1行目の上端から、文字と絵文字の上端までの空き。ふだんは0。
@@ -599,6 +633,10 @@ struct RichTextRenderer: Sendable {
     /// ラベルは、この高さから文字のdescentを引いた位置にベースラインを置き、絵文字が文字のdescentより下へ伸びる分は、行の下に自分で足す。
     /// 下へ伸びる分までこの高さに含めると、その分が行の上に空く。
     private func lineHeight(emojiExtent: (above: CGFloat, below: CGFloat)) -> CGFloat? {
+        Self.lineHeight(font: font, emojiExtent: emojiExtent)
+    }
+
+    private static func lineHeight(font: UIFont, emojiExtent: (above: CGFloat, below: CGFloat)) -> CGFloat? {
         let height = max(font.ascender, emojiExtent.above) - font.descender
         return height > font.lineHeight + 0.5 ? ceil(height) : nil
     }

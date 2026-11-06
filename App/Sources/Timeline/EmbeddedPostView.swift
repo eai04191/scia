@@ -80,6 +80,12 @@ final class EmbeddedPostView: UIButton {
     /// 本文の1行目のベースライン。TextKit 2で描くラベルのベースラインは、UILabelのベースライン（`firstBaselineAnchor`）ではなく、TextKit 2の並びから置く。
     private let textFirstBaselineGuide = UILayoutGuide()
     private lazy var textFirstBaseline = textFirstBaselineGuide.topAnchor.constraint(equalTo: textLabel.topAnchor)
+    /// 本文の1行目の字面の上端。本文の右に出すサムネイルの上端を合わせる。
+    /// 1行目のベースラインからの距離（`PostBodyView.textTopInset`）は、行より広いカスタム絵文字を縮めて置くと並べる幅で変わるので、ベースラインと一緒に決め直す。
+    private let textGlyphsTopGuide = UILayoutGuide()
+    private lazy var textGlyphsTop = textFirstBaselineGuide.topAnchor.constraint(equalTo: textGlyphsTopGuide.topAnchor)
+    /// 並べたあとに、本文の字面の上端が変わって高さが変わりうるときに呼ぶ。置く側は、タイムラインの行に高さを測り直させる。
+    var onHeightChange: (() -> Void)?
     private let mediaView: MediaGridView
     private var noteViews: [NoteRow] = []
     /// アイコンと名前を並べる作者の行。
@@ -138,7 +144,13 @@ final class EmbeddedPostView: UIButton {
         addLayoutGuide(headerGuide)
         addLayoutGuide(besideGuide)
         addLayoutGuide(textFirstBaselineGuide)
-        NSLayoutConstraint.activate([textFirstBaselineGuide.heightAnchor.constraint(equalToConstant: 0), textFirstBaseline])
+        addLayoutGuide(textGlyphsTopGuide)
+        NSLayoutConstraint.activate([
+            textFirstBaselineGuide.heightAnchor.constraint(equalToConstant: 0),
+            textFirstBaseline,
+            textGlyphsTopGuide.heightAnchor.constraint(equalToConstant: 0),
+            textGlyphsTop,
+        ])
         mediaView.onSelect = { [weak self] index in
             guard let self else { return }
             self.onSelectMedia?(index, self.mediaView)
@@ -239,7 +251,7 @@ final class EmbeddedPostView: UIButton {
         }
 
         if let media, let besideSide {
-            constraints += applyBesideMedia(media, side: besideSide, spacing: content.mediaSpacing, padding: padding, top: contentTop, text: content.text)
+            constraints += applyBesideMedia(media, side: besideSide, spacing: content.mediaSpacing, padding: padding, top: contentTop)
             last = (besideGuide.bottomAnchor, content.mediaSpacing)
         } else if let media, let aspectRatio = media.aspectRatio {
             mediaView.isHidden = false
@@ -285,13 +297,13 @@ final class EmbeddedPostView: UIButton {
     /// 添付ファイルを本文の右に、一辺`side`の正方形で出し、本文はその左に`spacing`をあけて折り返す。上端は本文の1行目の字面の上端にそろえ、本文がなければ本文のラベルの上端に置く。
     /// 囲みは投稿の本文より狭いので、サムネイルとすき間は囲みの内側の半分までに縮め、本文の幅を残す。
     /// `besideGuide`の下端を、本文のラベルとサムネイルの下端のうち、下にあるほうに合わせる。
-    private func applyBesideMedia(_ media: MediaGridView.Content, side: CGFloat, spacing: CGFloat, padding: CGFloat, top: (anchor: NSLayoutYAxisAnchor, spacing: CGFloat), text: NSAttributedString) -> [NSLayoutConstraint] {
+    private func applyBesideMedia(_ media: MediaGridView.Content, side: CGFloat, spacing: CGFloat, padding: CGFloat, top: (anchor: NSLayoutYAxisAnchor, spacing: CGFloat)) -> [NSLayoutConstraint] {
         mediaView.isHidden = false
         mediaView.apply(media)
         let mediaTop = if textLabel.isHidden {
             mediaView.topAnchor.constraint(equalTo: top.anchor, constant: top.spacing)
         } else {
-            mediaView.topAnchor.constraint(equalTo: textFirstBaselineGuide.topAnchor, constant: -PostBodyView.textTopInset(of: text))
+            mediaView.topAnchor.constraint(equalTo: textGlyphsTopGuide.topAnchor)
         }
         // 本文のラベルの縮みにくさ（`.defaultHigh`）より低くする。同じだと、ラベルを縮めてサムネイルの高さで本文を切ってしまう。
         let collapse = besideGuide.heightAnchor.constraint(equalToConstant: 0)
@@ -318,7 +330,7 @@ final class EmbeddedPostView: UIButton {
         return constraints
     }
 
-    /// 本文を今の幅で並べた結果から、1行目のベースラインをラベルの上端からの距離で決める。
+    /// 本文を今の幅で並べた結果から、1行目のベースラインをラベルの上端からの距離で、1行目の字面の上端をベースラインからの距離で決める。
     /// 中身を適用するときは、まだ本文の幅が決まっていないことがあるので、十分に広い幅で決め、並べたあとに本文の幅で決め直す。
     private func updateTextFirstBaseline() {
         let width = textLabel.bounds.width > 0 ? textLabel.bounds.width : Self.unknownTextWidth
@@ -327,6 +339,10 @@ final class EmbeddedPostView: UIButton {
         let first = (textLabel.textKitBaselines(width: width).first * scale).rounded() / scale
         if textFirstBaseline.constant != first {
             textFirstBaseline.constant = first
+        }
+        let top = content.map { PostBodyView.textTopInset(of: $0.text, width: width) } ?? 0
+        if textGlyphsTop.constant != top {
+            textGlyphsTop.constant = top
         }
     }
 
@@ -410,9 +426,14 @@ final class EmbeddedPostView: UIButton {
         super.layoutSubviews()
         // 本文の幅が決まってから、その幅で1行目のベースラインを決め直す。変わったら、サムネイルを置き直す。
         let baseline = textFirstBaseline.constant
+        let glyphsTop = textGlyphsTop.constant
         updateTextFirstBaseline()
-        if textFirstBaseline.constant != baseline {
+        if textFirstBaseline.constant != baseline || textGlyphsTop.constant != glyphsTop {
             super.layoutSubviews()
+        }
+        // 字面の上端は、行より広いカスタム絵文字の縮め方で変わる。サムネイルが本文より下へ伸びていれば、囲みの高さも変わる。
+        if textGlyphsTop.constant != glyphsTop {
+            onHeightChange?()
         }
         if let content, !textLabel.isHidden && textLabel.isTruncatedByLength != accessibilityReflectsTruncation {
             updateAccessibility(for: content)

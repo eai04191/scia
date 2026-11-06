@@ -155,6 +155,14 @@ final class PostBodyView: UIView {
     /// UILabelのベースライン（`firstBaselineAnchor`など）は、TextKit 2で並べた結果を使わずにUILabelが並べ直して求めるため、使わない。
     private lazy var textKitFirstBaseline = textFirstBaselineGuide.topAnchor.constraint(equalTo: textLabel.topAnchor)
     private lazy var textKitLastBaseline = textLastBaselineGuide.topAnchor.constraint(equalTo: textLabel.bottomAnchor)
+    /// 本文の最初の文字の字面の上端と、最後の文字の字面の下端の位置。本文の上下の部品は、ここからすき間を取って置く。
+    /// ベースラインからの距離（`textTopInset`、`textBottomInset`）は、行より広いカスタム絵文字を縮めて置くと並べる幅で変わるので、ベースラインと一緒に並べた幅で決め直す。
+    private let textGlyphsTopGuide = UILayoutGuide()
+    private let textGlyphsBottomGuide = UILayoutGuide()
+    private lazy var textGlyphsTop = textFirstBaselineGuide.topAnchor.constraint(equalTo: textGlyphsTopGuide.topAnchor)
+    private lazy var textGlyphsBottom = textGlyphsBottomGuide.topAnchor.constraint(equalTo: textLastBaselineGuide.topAnchor)
+    /// 字面の上下の位置を決めた、本文の文字列と幅と、切って描くか。同じなら決め直さない。
+    private var textGlyphsInsetsSource: (text: NSAttributedString, width: CGFloat, isTruncated: Bool)?
     /// フィルターの注記の最初のベースラインの位置。注記の上のすき間も字面から測るので、プレビューで字面の上端を求めるのに使う。
     private let filterNoteBaselineGuide = UILayoutGuide()
     // 本文のほかの部品は、その中身が初めて来たときに作り、そのあとは隠して持っておく。
@@ -172,6 +180,8 @@ final class PostBodyView: UIView {
     private var animatesReactionChange = false
     /// 「テキストを選択」で、本文のラベルの代わりに同じ位置に出している選べるテキストビュー。選んでいなければnil。
     private(set) var selectionTextView: SelectableTextView?
+    /// 選べるテキストビューに入れた本文を、ラベルが並べていた幅。行より広いカスタム絵文字の段落の行の高さは並べる幅で決まるので、幅が変わったら入れ直す。
+    private var selectionTextWidth: CGFloat?
     /// 選んでいる間、本文のラベルに出している本文。サーバーが縮めて見せるURLを元の文字に戻したもの。戻すURLがないか、選んでいなければnil。
     private(set) var expandedText: NSAttributedString?
     private(set) var content: PostBodyContent?
@@ -339,9 +349,9 @@ final class PostBodyView: UIView {
 
     /// 本文の字面の枠。上端は最初のベースラインから、下端は最後のベースラインから、em枠で測る。並びも同じ測り方で、すき間を取っている。
     private func textGlyphsFrame(in space: UIView) -> [CGRect]? {
-        guard let label = textLabel.previewFrame(in: space)?.first, let text = textLabel.attributedText else { return nil }
-        let top = convert(CGPoint(x: 0, y: textFirstBaselineGuide.layoutFrame.minY - Self.textTopInset(of: text)), to: space).y
-        let bottom = convert(CGPoint(x: 0, y: textLastBaselineGuide.layoutFrame.minY + Self.textBottomInset(of: text)), to: space).y
+        guard let label = textLabel.previewFrame(in: space)?.first else { return nil }
+        let top = convert(CGPoint(x: 0, y: textGlyphsTopGuide.layoutFrame.minY), to: space).y
+        let bottom = convert(CGPoint(x: 0, y: textGlyphsBottomGuide.layoutFrame.minY), to: space).y
         return [CGRect(x: label.minX, y: top, width: label.width, height: max(bottom - top, 0))]
     }
 
@@ -380,14 +390,18 @@ final class PostBodyView: UIView {
         let textTrailing = textLabel.trailingAnchor.constraint(equalTo: trailingAnchor)
         self.textTrailing = textTrailing
         NSLayoutConstraint.activate([textLabel.leadingAnchor.constraint(equalTo: leadingAnchor), textTrailing])
-        for guide in [textFirstBaselineGuide, textLastBaselineGuide, besideGuide, besideEndGuide] {
+        for guide in [textFirstBaselineGuide, textLastBaselineGuide, textGlyphsTopGuide, textGlyphsBottomGuide, besideGuide, besideEndGuide] {
             addLayoutGuide(guide)
         }
         NSLayoutConstraint.activate([
             textFirstBaselineGuide.heightAnchor.constraint(equalToConstant: 0),
             textLastBaselineGuide.heightAnchor.constraint(equalToConstant: 0),
+            textGlyphsTopGuide.heightAnchor.constraint(equalToConstant: 0),
+            textGlyphsBottomGuide.heightAnchor.constraint(equalToConstant: 0),
             textKitFirstBaseline,
             textKitLastBaseline,
+            textGlyphsTop,
+            textGlyphsBottom,
         ])
         textLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
         textLabel.onExpand = { [weak self] in self?.onExpandBody?() }
@@ -558,6 +572,7 @@ final class PostBodyView: UIView {
         view.onOpenLink = { [weak self] destination in self?.embedActions.openLink?(destination) }
         view.onOpenAccount = { [weak self] in self?.embedActions.openAccount?() }
         view.onToggleSpoiler = { [weak self] in self?.embedActions.toggleSpoiler?() }
+        view.onHeightChange = { [weak self] in self?.invalidateRowHeight() }
         view.onSelectNote = { [weak self] index in self?.embedActions.selectNote?(index) }
         view.onExpandBody = { [weak self] in self?.embedActions.expandBody?() }
         let interaction = ObjectInteraction(on: view, tapsSelf: false)
@@ -633,6 +648,7 @@ final class PostBodyView: UIView {
         view.touchableHeight = { [weak textLabel] in textLabel?.bounds.height }
         textLabel.alpha = 0
         selectionTextView = view
+        selectionTextWidth = textLabel.bounds.width
         layoutIfNeeded()
         view.beginSelectingAll()
         // 選び始めるときにテキストビューの選択が一度空になることがあるため、選んでから終わりを受け取る。
@@ -691,6 +707,7 @@ final class PostBodyView: UIView {
                     showExpandedText(expanded)
                     if let text = textLabel.textForTextKit {
                         selectionTextView?.replaceText(text)
+                        selectionTextWidth = textLabel.bounds.width
                     }
                 }
             }
@@ -725,9 +742,9 @@ final class PostBodyView: UIView {
         // 本文と添付ファイルは、注意書きがあればその下から並べる。
         let contentTop = shownSpoiler?.bottomAnchor ?? topAnchor
         let contentTopSpacing = shownSpoiler == nil ? 0 : content.spoiler?.bodySpacing ?? 0
-        let text = textLabel.isHidden ? nil : (lastBaseline: textLastBaselineGuide.topAnchor, bottomInset: Self.textBottomInset(of: content.text, isTruncated: content.maximumLines > 0))
+        let text = textLabel.isHidden ? nil : textGlyphsBottomGuide.topAnchor
         if !textLabel.isHidden {
-            variableConstraints.append(textFirstBaselineGuide.topAnchor.constraint(equalTo: contentTop, constant: contentTopSpacing + Self.textTopInset(of: content.text)))
+            variableConstraints.append(textGlyphsTopGuide.topAnchor.constraint(equalTo: contentTop, constant: contentTopSpacing))
         }
         let besideBottom = media.flatMap { media in
             besideSide.map { applyBesideMedia(media, side: $0, top: contentTop, topSpacing: contentTopSpacing, text: text) }
@@ -765,15 +782,13 @@ final class PostBodyView: UIView {
         } else {
             .view(textLabel)
         }
-        let textBottomInset = Self.textBottomInset(of: content.text, isTruncated: content.maximumLines > 0)
-        let bottom = applyReactions(content.reactions, style: content.reactionsStyle, below: last, spacing: content.reactionsSpacing, textBottomInset: textBottomInset)
-        applyFilterNote(content.filterNote, below: bottom, spacing: content.filterNoteSpacing, textBottomInset: textBottomInset)
+        let bottom = applyReactions(content.reactions, style: content.reactionsStyle, below: last, spacing: content.reactionsSpacing)
+        applyFilterNote(content.filterNote, below: bottom, spacing: content.filterNoteSpacing)
         NSLayoutConstraint.activate(variableConstraints)
     }
 
     /// リアクションの列を一番下の部品の下に置き、新しい一番下を返す。注意書きで折りたたんでいても出す。リアクションは投稿に付くもので、中身を開かなくても見られるため。
-    /// - Parameter textBottomInset: 一番下が本文のときの、最後の文字のベースラインから字面の下端まで。
-    private func applyReactions(_ reactions: [ReactionChipsView.Reaction]?, style: ReactionChipsView.Style, below bottom: Bottom, spacing: CGFloat, textBottomInset: CGFloat) -> Bottom {
+    private func applyReactions(_ reactions: [ReactionChipsView.Reaction]?, style: ReactionChipsView.Style, below bottom: Bottom, spacing: CGFloat) -> Bottom {
         let duration = content?.reactionsTransitionDuration ?? 0
         guard let reactions, !reactions.isEmpty else {
             if let reactionsView, !reactionsView.isHidden {
@@ -794,11 +809,11 @@ final class PostBodyView: UIView {
         view.widthHint = bounds.width > 0 ? bounds.width : textLabel.preparedLayoutWidth ?? Self.unknownTextWidth
         view.apply(reactions, style: style, animated: animatesReactionChange)
         let lastBottom = switch bottom {
-        case .view(let last) where last === textLabel: (anchor: textLastBaselineGuide.topAnchor, inset: textBottomInset)
-        case .view(let last): (anchor: last.bottomAnchor, inset: CGFloat(0))
-        case .beside(let parts, _): (anchor: parts, inset: CGFloat(0))
+        case .view(let last) where last === textLabel: textGlyphsBottomGuide.topAnchor
+        case .view(let last): last.bottomAnchor
+        case .beside(let parts, _): parts
         }
-        variableConstraints.append(view.topAnchor.constraint(equalTo: lastBottom.anchor, constant: lastBottom.inset + spacing))
+        variableConstraints.append(view.topAnchor.constraint(equalTo: lastBottom, constant: spacing))
         return .view(view)
     }
 
@@ -808,8 +823,8 @@ final class PostBodyView: UIView {
         /// 本文と添付ファイルを並べ始める位置。注意書きがあればその下。
         let contentTop: NSLayoutYAxisAnchor
         let contentTopSpacing: CGFloat
-        /// 出している本文と、その最後の文字の、ベースラインから字面の下端まで。本文を出していなければnil。
-        let text: (lastBaseline: NSLayoutYAxisAnchor, bottomInset: CGFloat)?
+        /// 出している本文の、最後の文字の字面の下端。本文を出していなければnil。
+        let text: NSLayoutYAxisAnchor?
         /// 添付ファイルを本文の右に出すとき、本文の字面とサムネイルの下端のうち、下にあるほう。出さなければnil。
         let besideBottom: NSLayoutYAxisAnchor?
 
@@ -820,27 +835,46 @@ final class PostBodyView: UIView {
             } else if let besideBottom {
                 view.topAnchor.constraint(equalTo: besideBottom, constant: spacing)
             } else if let text {
-                view.topAnchor.constraint(equalTo: text.lastBaseline, constant: spacing + text.bottomInset)
+                view.topAnchor.constraint(equalTo: text, constant: spacing)
             } else {
                 view.topAnchor.constraint(equalTo: contentTop, constant: contentTopSpacing)
             }
         }
     }
 
-    /// 本文を`width`で並べた結果から、ベースラインの位置をラベルの上下の端からの距離で決める。
+    /// 本文を`width`で並べた結果から、ベースラインの位置をラベルの上下の端からの距離で、字面の上下の位置をベースラインからの距離で決める。
     /// 中身を適用するときはまだ本文の幅が決まっていないことがあるので、前の幅か自分の幅で決め、並べたあとに本文の幅で決め直す。
-    /// 決め直して変わるのは、幅で最初か最後の行に入る文字の書体が替わり、行の高さが変わるときだけ。
-    private func updateTextKitBaselines(width: CGFloat) {
+    /// 決め直して変わるのは、幅で最初か最後の行に入る文字の書体が替わり、行の高さが変わるときと、行より広いカスタム絵文字の縮め方が変わるときだけ。
+    /// - Returns: 字面の上下の位置が変わったか。
+    @discardableResult
+    private func updateTextKitBaselines(width: CGFloat) -> Bool {
         // 初めて中身を入れるときは、まだ幅が決まっていない。十分に広い幅で並べて決め、高さを測る前にベースラインを置いておく。
         // 0のままにすると、ベースラインがラベルの上端に重なり、並べ直すまで本文が上へずれた高さで測られる。
         // 先に並べてあれば、並べた幅で決める。タイムラインの本文は、ふつうその幅に並ぶ。
-        let baselines = textLabel.textKitBaselines(width: width > 0 ? width : textLabel.preparedLayoutWidth ?? Self.unknownTextWidth)
+        let width = width > 0 ? width : textLabel.preparedLayoutWidth ?? Self.unknownTextWidth
+        let baselines = textLabel.textKitBaselines(width: width)
         if textKitFirstBaseline.constant != baselines.first {
             textKitFirstBaseline.constant = baselines.first
         }
         if textKitLastBaseline.constant != -baselines.lastFromBottom {
             textKitLastBaseline.constant = -baselines.lastFromBottom
         }
+        return updateTextGlyphsInsets(width: width)
+    }
+
+    /// 字面の上下の位置を、本文を`width`で並べたときのベースラインからの距離で決める。文字列と幅が前と同じなら測り直さない。
+    /// - Returns: 字面の上下の位置が変わったか。
+    private func updateTextGlyphsInsets(width: CGFloat) -> Bool {
+        guard let content else { return false }
+        let isTruncated = content.maximumLines > 0
+        if let source = textGlyphsInsetsSource, source.text === content.text, source.width == width, source.isTruncated == isTruncated { return false }
+        textGlyphsInsetsSource = (content.text, width, isTruncated)
+        let top = Self.textTopInset(of: content.text, width: width)
+        let bottom = Self.textBottomInset(of: content.text, isTruncated: isTruncated, width: width)
+        guard textGlyphsTop.constant != top || textGlyphsBottom.constant != bottom else { return false }
+        textGlyphsTop.constant = top
+        textGlyphsBottom.constant = bottom
+        return true
     }
 
     /// 本文の幅が決まる前に、ベースラインを決めるために並べる幅。
@@ -848,7 +882,14 @@ final class PostBodyView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        updateTextKitBaselines(width: textLabel.bounds.width)
+        // 行より広いカスタム絵文字の縮め方が、中身を適用したときに見込んだ幅と違えば、字面の上下の位置が変わり、本文の高さも変わるので、タイムラインの行に測り直させる。
+        if updateTextKitBaselines(width: textLabel.bounds.width) {
+            invalidateRowHeight()
+        }
+        if let selectionTextView, selectionTextWidth != textLabel.bounds.width, let text = textLabel.textForTextKit {
+            selectionTextView.replaceText(text)
+            selectionTextWidth = textLabel.bounds.width
+        }
         startPendingReactionsFadeOut()
     }
 
@@ -901,7 +942,7 @@ final class PostBodyView: UIView {
 
     /// 添付ファイルを本文の右に、一辺`side`の正方形で出す。上端は本文の1行目の字面の上端にそろえる。
     /// - Returns: 本文の字面とサムネイルの下端のうち下にあるほう（下の部品を並べ始める位置）と、本文のラベルとサムネイルの下端のうち下にあるほう（ほかに何もないときの自分の下端）。
-    private func applyBesideMedia(_ media: MediaGridView.Content, side: CGFloat, top: NSLayoutYAxisAnchor, topSpacing: CGFloat, text: (lastBaseline: NSLayoutYAxisAnchor, bottomInset: CGFloat)?) -> (parts: NSLayoutYAxisAnchor, end: NSLayoutYAxisAnchor) {
+    private func applyBesideMedia(_ media: MediaGridView.Content, side: CGFloat, top: NSLayoutYAxisAnchor, topSpacing: CGFloat, text: NSLayoutYAxisAnchor?) -> (parts: NSLayoutYAxisAnchor, end: NSLayoutYAxisAnchor) {
         let mediaView = loadedMediaView()
         mediaView.isHidden = false
         mediaView.apply(media)
@@ -911,21 +952,21 @@ final class PostBodyView: UIView {
             mediaView.widthAnchor.constraint(equalToConstant: side),
             mediaView.heightAnchor.constraint(equalToConstant: side),
         ]
-        let mediaBottom = (anchor: mediaView.bottomAnchor, inset: CGFloat(0))
-        let textGlyphsBottom = text.map { (anchor: $0.lastBaseline, inset: $0.bottomInset) }
-        let textLabelBottom = text.map { _ in (anchor: textLabel.bottomAnchor, inset: CGFloat(0)) }
+        let mediaBottom = mediaView.bottomAnchor
+        let textGlyphsBottom = text
+        let textLabelBottom = text.map { _ in textLabel.bottomAnchor }
         variableConstraints += lowestBottom(besideGuide, top: top, of: [mediaBottom, textGlyphsBottom].compactMap(\.self))
         variableConstraints += lowestBottom(besideEndGuide, top: top, of: [mediaBottom, textLabelBottom].compactMap(\.self))
         return (besideGuide.bottomAnchor, besideEndGuide.bottomAnchor)
     }
 
     /// `guide`の下端を、`bottoms`のうち一番下にあるものに合わせる。上端を`top`に置いて高さをできるだけ縮めるので、どれよりも下で一番上の位置に決まる。
-    private func lowestBottom(_ guide: UILayoutGuide, top: NSLayoutYAxisAnchor, of bottoms: [(anchor: NSLayoutYAxisAnchor, inset: CGFloat)]) -> [NSLayoutConstraint] {
+    private func lowestBottom(_ guide: UILayoutGuide, top: NSLayoutYAxisAnchor, of bottoms: [NSLayoutYAxisAnchor]) -> [NSLayoutConstraint] {
         // 本文のラベルの縮みにくさ（`.defaultHigh`）より低くする。同じだと、ラベルを縮めてサムネイルの高さで本文を切ってしまう。
         let collapse = guide.heightAnchor.constraint(equalToConstant: 0)
         collapse.priority = .defaultLow
         return [guide.topAnchor.constraint(equalTo: top), collapse] + bottoms.map {
-            guide.bottomAnchor.constraint(greaterThanOrEqualTo: $0.anchor, constant: $0.inset)
+            guide.bottomAnchor.constraint(greaterThanOrEqualTo: $0)
         }
     }
 
@@ -1021,8 +1062,7 @@ final class PostBodyView: UIView {
     }
 
     /// フィルターの注記を一番下の部品の下に置き、自分の下端を決める。
-    /// - Parameter textBottomInset: 一番下が本文のときの、最後の文字のベースラインから字面の下端まで。
-    private func applyFilterNote(_ note: NSAttributedString?, below bottom: Bottom, spacing: CGFloat, textBottomInset: CGFloat) {
+    private func applyFilterNote(_ note: NSAttributedString?, below bottom: Bottom, spacing: CGFloat) {
         guard let note else {
             filterNoteLabel?.isHidden = true
             let end = switch bottom {
@@ -1039,12 +1079,12 @@ final class PostBodyView: UIView {
         filterNoteLabel.accessibilityLabel = note.string.trimmingCharacters(in: CharacterSet(charactersIn: "\u{FFFC}").union(.whitespaces))
         // 本文の下なら、ほかの部品と同じく字面の下端から測る。
         let lastBottom = switch bottom {
-        case .view(let last) where last === textLabel: (anchor: textLastBaselineGuide.topAnchor, inset: textBottomInset)
-        case .view(let last): (anchor: last.bottomAnchor, inset: CGFloat(0))
-        case .beside(let parts, _): (anchor: parts, inset: CGFloat(0))
+        case .view(let last) where last === textLabel: textGlyphsBottomGuide.topAnchor
+        case .view(let last): last.bottomAnchor
+        case .beside(let parts, _): parts
         }
         variableConstraints += [
-            filterNoteLabel.firstBaselineAnchor.constraint(equalTo: lastBottom.anchor, constant: lastBottom.inset + spacing + Self.textTopInset(of: note)),
+            filterNoteLabel.firstBaselineAnchor.constraint(equalTo: lastBottom, constant: spacing + Self.textTopInset(of: note)),
             bottomAnchor.constraint(equalTo: filterNoteLabel.lastBaselineAnchor, constant: Self.textBottomInset(of: note)),
         ]
     }
@@ -1060,11 +1100,12 @@ final class PostBodyView: UIView {
     /// 字面に、書体のascenderを超えた分だけを足すと、ascenderが字面より高いぶん絵文字の上端に届かず、上の部品との間隔が設定より狭くなる。
     /// 段落のどの行も同じ高さに広げるので（`RichTextRenderer`の`minimumLineHeight`）、絵文字が1行目になくても最初の段落の絵文字で測る。
     /// 段落の中の改行で区切った行は、高さが違えば`RichTextRenderer`が段落に分けるので、最初の段落は改行の前の行だけになる。
-    static func textTopInset(of text: NSAttributedString) -> CGFloat {
+    /// - Parameter width: 並べる幅。渡せば、行より広いカスタム絵文字は縮めて置く大きさで測る。
+    static func textTopInset(of text: NSAttributedString, width: CGFloat? = nil) -> CGFloat {
         guard text.length > 0 else { return 0 }
         let paragraph = (text.string as NSString).paragraphRange(for: NSRange(location: 0, length: 0))
         guard let font = RichTextRenderer.textFont(in: text, range: paragraph) else { return 0 }
-        return max(font.pointSize * emBoxAscent, RichTextRenderer.emojiExtent(in: text, range: paragraph).above)
+        return max(font.pointSize * emBoxAscent, RichTextRenderer.emojiExtent(in: text, range: paragraph, width: width).above)
     }
 
     /// 最後の文字の、ベースラインから字面の下端まで。最後の段落の絵文字が字面より下へ伸びていれば、その下端まで。
@@ -1074,13 +1115,14 @@ final class PostBodyView: UIView {
     ///   全体で測ると、切っていないほとんどの投稿でも途中の段落の絵文字の分だけ下の部品とのあいだが広がる。切ったときは、見える最後の行に、
     ///   最後の段落より下へ伸びる大きい絵文字があると、その差の分だけ下の部品に近づく。幅が分かるのは並べるときで、あいだの制約を作る中身の適用では分からず、
     ///   並べるときに制約を変えると、行の高さがタイムラインの測った高さと食い違うため、対応しない。
-    static func textBottomInset(of text: NSAttributedString, isTruncated: Bool = false) -> CGFloat {
+    /// - Parameter width: 並べる幅。渡せば、行より広いカスタム絵文字は縮めて置く大きさで測る。
+    static func textBottomInset(of text: NSAttributedString, isTruncated: Bool = false, width: CGFloat? = nil) -> CGFloat {
         guard text.length > 0 else { return 0 }
         let paragraph = isTruncated
             ? NSRange(location: 0, length: text.length)
             : (text.string as NSString).paragraphRange(for: NSRange(location: text.length - 1, length: 0))
         guard let font = RichTextRenderer.textFont(in: text, range: paragraph, fromEnd: true) else { return 0 }
-        return max(font.pointSize * emBoxDescent, RichTextRenderer.emojiExtent(in: text, range: paragraph).below)
+        return max(font.pointSize * emBoxDescent, RichTextRenderer.emojiExtent(in: text, range: paragraph, width: width).below)
     }
 
     /// 本文を先に並べるときに使う、本文のラベルの値と幅。本文を出していないとき、添付ファイルを本文の右に並べて幅を狭めているとき、幅が決まる前はnil。

@@ -3,7 +3,7 @@ import UIKit
 /// UILabelの代わりに、TextKit 2で文字を並べて描けるラベル。`drawsWithTextKit`がfalseなら、UILabelのまま描く。
 /// どちらで描くときも、UILabelと同じ位置に文字が並ぶTextKit 2の並び（`textLayout(of:)`）を出し、押した文字や文字の枠を求められる。
 /// UILabelは文字の配置を公開しないため、同じ文字列と幅でTextKit 2に並べ直して位置を求める。
-/// UIKitとCoreTextだけで書き、並べる手順は`TextKitLabelLayout`に置く。ほかのアプリでも、この2つのファイルをコピーすれば使える。
+/// 並べる手順は`TextKitLabelLayout`に置く。UIKitとCoreTextのほかには、行より広いカスタム絵文字の行の高さを付け直すのに`RichTextRenderer`を使う。
 class TextKitLabel: UILabel {
     /// 置く側が最後に`attributedText`に入れた文字列そのもの。`text`を入れたらnil。先に並べた結果がこの文字列のものかを見分けるのに使う。
     private(set) var assignedText: NSAttributedString?

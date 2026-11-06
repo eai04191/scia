@@ -100,9 +100,7 @@ final class AnimatedEmojiOverlay {
             // 同じ絵文字が続くと1つの範囲にまとまるため、1文字ずつ差し替える。
             for index in range.location..<NSMaxRange(range) where !stillIndices.contains(index) {
                 guard let attachment = text.attribute(.attachment, at: index, effectiveRange: nil) as? NSTextAttachment else { continue }
-                let placeholder = NSTextAttachment()
-                placeholder.image = Self.clearImage
-                placeholder.bounds = attachment.bounds
+                let placeholder = LineFittingAttachment.placeholder(replacing: attachment, image: Self.clearImage)
                 let mutable = result ?? NSMutableAttributedString(attributedString: text)
                 mutable.addAttribute(.attachment, value: placeholder, range: NSRange(location: index, length: 1))
                 result = mutable

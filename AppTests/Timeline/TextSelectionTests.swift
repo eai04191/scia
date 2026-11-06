@@ -233,6 +233,39 @@ struct TextSelectionTests {
         #expect(textView.attributedText.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor == .systemRed)
     }
 
+    /// 選んでいる間に本文の幅が変わったら（画面を回したなど）、テキストビューの行の高さも新しい幅で付け直す。
+    /// 行より広いカスタム絵文字は並べる幅で縮め、その段落の行の高さも幅で決まるため、選び始めた幅のままだとラベルと行の位置がずれる。
+    @Test func selectionFollowsTheWidthOfWideEmojiLines() async throws {
+        let url = try #require(URL(string: "https://example.social/emoji/wide.png"))
+        let emoji = CustomEmoji(shortcode: "wide", url: url, staticUrl: url)
+        let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 160, height: 10)).image { _ in }.pngData())
+        let store = EmojiImageStore { _ in png }
+        var renderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, emojiImages: store, language: "ja")
+        renderer.emojiOnly = EmojiOnlyEnlargement(scale: 2, limit: 10)
+        let rich = RichText(blocks: [.init(inlines: [.emoji(emoji)])])
+        _ = renderer.render(rich)
+        try await waitUntil { store.image(for: url, pixelHeight: EmojiImageStore<UIImage>.pixelHeight) != nil }
+        let view = PostBodyView(mediaImages: .offline, avatarImages: .offline)
+        let window = try window(showing: view)
+        defer { window.isHidden = true }
+        view.apply(body(renderer.render(rich)))
+        view.layoutIfNeeded()
+        view.beginTextSelection()
+        let textView = try #require(view.selectionTextView)
+
+        // 絵文字は656ptの幅なので、どちらの幅でも縮めるが、縮めた高さと行の高さは幅で変わる。
+        view.frame.size.width = 200
+        view.layoutIfNeeded()
+
+        let minimumLineHeight = { (text: NSAttributedString) in
+            (text.attribute(.paragraphStyle, at: text.length - 1, effectiveRange: nil) as? NSParagraphStyle)?.minimumLineHeight
+        }
+        let expected = minimumLineHeight(RichTextRenderer.fittingWideEmojis(in: renderer.render(rich), width: 200))
+        #expect(expected != minimumLineHeight(RichTextRenderer.fittingWideEmojis(in: renderer.render(rich), width: 328)))
+        #expect(minimumLineHeight(textView.attributedText) == expected)
+        #expect(view.isSelectingText)
+    }
+
     /// 編集メニューの調べる、翻訳、ウェブを検索、共有が読む、選んだ範囲の文字では、カスタム絵文字を`:shortcode:`にする。
     /// 選んだ範囲のほかは、位置の計算がずれないよう、文字数をそろえたまま返す。
     @Test func selectedTextSpellsOutEmojis() throws {
