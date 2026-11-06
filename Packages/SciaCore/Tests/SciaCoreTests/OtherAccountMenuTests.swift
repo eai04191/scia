@@ -131,11 +131,11 @@ struct OtherAccountMenuTests {
         let groups = MenuLayout<StatusMenuItem>.Groups(main: interactionGroups.main + [.init([.author])], more: [])
         let menu = try #require(node(tree(status(uri: uri), accounts: [bob], groups: groups)))
 
-        #expect(await loaded(menu.children) == "=ブースト,お気に入りを取り消す|ブックマーク|@alice[…,…,…,…,…,…]")
+        #expect(await loaded(menu.children).hasPrefix("=ブースト,お気に入りを取り消す|ブックマーク|@alice["))
         #expect(queries.withLock { $0 } == [uri])
 
         let reopened = try #require(node(tree(status(uri: uri), accounts: [bob], groups: groups)))
-        #expect(MenuNodeTests.describe(reopened.children) == "=ブースト,お気に入りを取り消す|ブックマーク|@alice[…,…,…,…,…,…]")
+        #expect(MenuNodeTests.describe(reopened.children).hasPrefix("=ブースト,お気に入りを取り消す|ブックマーク|@alice["))
         let favourite = try #require(reopened.flattenedChildren.first { $0.title == "お気に入りを取り消す" })
         guard case .otherAccount(let command) = favourite.command else {
             Issue.record("ほかのアカウントの操作になっていません")
@@ -238,6 +238,89 @@ struct OtherAccountMenuTests {
 
         _ = await loaded(try #require(node(tree(boost(of: status(uri: uri), by: carl), accounts: [bob], groups: interactionGroups))).children)
         #expect(queries.withLock { $0 } == 0)
+    }
+
+    /// メモ、通報、リストに追加は、そのアカウントのサーバーでの相手と投稿のIDで、そのアカウントのシートを開く命令にする。
+    @Test func opensSheetsAsOtherAccount() async throws {
+        let otherAlice = Account(id: "500", username: "alice", acct: "alice@remote.example", displayName: "Alice", avatar: nil, url: alice.url)
+        let found = status(id: "7000", uri: uri, account: otherAlice)
+        let bob = try account("bob", operations(search: { _ in [found] }, relationships: { ids in ids.map { Relationship(id: $0) } }))
+        let groups = MenuLayout<StatusMenuItem>.Groups(main: [.init([.author])], more: [])
+        _ = await bob.lookup(status(uri: uri))
+        bob.reloadRelations(["500"])
+        try await waitUntil { bob.userActions.knownRelation(.account(id: "500", acct: "alice@remote.example")) != nil }
+
+        let menu = try #require(node(tree(status(uri: uri), accounts: [bob], groups: groups)))
+        let aliceMenu = try #require(submenu("@alice", in: menu.children))
+        func action(_ title: String) throws -> OtherAccountCommand.Action {
+            let item = try #require(aliceMenu.flattenedChildren.first { $0.title.hasPrefix(title) })
+            guard case .otherAccount(let command) = item.command else { throw Failure() }
+            #expect(command.account === bob)
+            return command.action
+        }
+        guard case .note(let relation) = try action("メモ") else {
+            Issue.record("メモのシートの命令になっていません")
+            return
+        }
+        #expect(relation.accountID == "500")
+        guard case .report(let accountID, _, let statusID) = try action("通報") else {
+            Issue.record("通報のシートの命令になっていません")
+            return
+        }
+        #expect(accountID == "500")
+        #expect(statusID == "7000")
+        guard case .addToList(let listedID, let acct) = try action("リストに追加") else {
+            Issue.record("リストに追加のシートの命令になっていません")
+            return
+        }
+        #expect(listedID == "500")
+        #expect(acct == "alice@remote.example")
+    }
+
+    /// ハッシュタグは、そのアカウントでのフォローなどの状態で項目を出し、そのアカウントとして行う命令にする。どのアカウントでも同じ結果になる項目は出さない。
+    @Test func showsHashtagMenusAsOtherAccount() async throws {
+        let found = Status(id: "7000", createdAt: Date(timeIntervalSince1970: 100), account: alice, content: "", spoilerText: "", uri: uri, url: nil, tags: [Tag(name: "swift", url: nil)])
+        let bob = try account("bob", operations { _ in [found] })
+        bob.hashtagActions = HashtagMenuActions(mute: nil, follow: HashtagToggleActions(
+            known: { _ in true },
+            refresh: {},
+            load: { _ in true },
+            turnOn: { _ in },
+            turnOff: { _ in }
+        ))
+        let groups = MenuLayout<StatusMenuItem>.Groups(main: [.init([.hashtags])], more: [])
+        _ = await bob.lookup(status(uri: uri))
+
+        let menu = try #require(node(tree(status(uri: uri), accounts: [bob], groups: groups)))
+        #expect(MenuNodeTests.describe(menu.children) == "#swift[フォローを外す]")
+        let unfollow = try #require(menu.flattenedChildren.first?.flattenedChildren.first)
+        guard case .otherAccount(let command) = unfollow.command, case .hashtag(let tag, .unfollow) = command.action else {
+            Issue.record("ほかのアカウントのハッシュタグの命令になっていません")
+            return
+        }
+        #expect(tag.name == "swift")
+        #expect(command.account === bob)
+    }
+
+    /// 関係を読む人を集めるときは、ハッシュタグを組まず、ハッシュタグの一覧の読み直しを重ねて送らない。
+    @Test func collectingRelationIDsDoesNotRefreshHashtags() async throws {
+        let found = Status(id: "7000", createdAt: Date(timeIntervalSince1970: 100), account: alice, content: "", spoilerText: "", uri: uri, url: nil, tags: [Tag(name: "swift", url: nil)])
+        let bob = try account("bob", operations { _ in [found] })
+        let refreshes = Mutex(0)
+        bob.hashtagActions = HashtagMenuActions(mute: nil, follow: HashtagToggleActions(
+            known: { _ in false },
+            refresh: { refreshes.withLock { $0 += 1 } },
+            load: { _ in false },
+            turnOn: { _ in },
+            turnOff: { _ in }
+        ))
+        let groups = MenuLayout<StatusMenuItem>.Groups(main: [.init([.author, .hashtags])], more: [])
+        _ = await bob.lookup(status(uri: uri))
+        let built = tree(status(uri: uri), accounts: [bob], groups: groups).menu(groups: .single(.otherAccounts), includesFollowRequest: false)
+        let before = refreshes.withLock { $0 }
+
+        #expect(built.otherAccountRelationIDs(found, bob) == ["1"])
+        #expect(refreshes.withLock { $0 } == before)
     }
 
     /// 削除したら、覚えている投稿からも除き、次に開いたときは探し直す。
@@ -383,7 +466,7 @@ struct OtherAccountMenuTests {
     }
 
     /// 投稿者とメンションされた人のユーザーのメニューを、そのアカウントから見た関係で出す。相手は、そのサーバーでのIDで扱う。
-    /// 出る人の関係は、見つけたときにまとめて1回で読む。中に出すのは、そのアカウントで送るだけで済む関係の項目だけ。
+    /// 出る人の関係は、見つけたときにまとめて1回で読む。どのアカウントでも同じ結果になる項目は出さない。
     /// アイコンは、今のアカウントで同じ人をプロフィールのURLで探して付け、見つからない人には付けない。
     @Test func showsUserMenusAsOtherAccount() async throws {
         let carol = mention("2", "carol")
@@ -403,14 +486,15 @@ struct OtherAccountMenuTests {
 
         let items = try #require(node(tree(shown, accounts: [bob], groups: groups))).children
         let aliceMenu = try #require(submenu("@alice", in: items))
-        #expect(MenuNodeTests.describe(aliceMenu.children).hasPrefix("フォローを外す|"))
-        #expect(!MenuNodeTests.describe(aliceMenu.children).contains("メモ"))
-        #expect(!MenuNodeTests.describe(aliceMenu.children).contains("通報"))
+        #expect(MenuNodeTests.describe(aliceMenu.children).hasPrefix("フォローを外す,"))
+        // どのアカウントでも同じ結果になるコピーやプロフィールは出さない。
+        #expect(!MenuNodeTests.describe(aliceMenu.children).contains("コピー"))
+        #expect(!MenuNodeTests.describe(aliceMenu.children).contains("プロフィール,"))
         #expect(avatarUserID(aliceMenu) == "1")
         #expect(avatarUserID(submenu("@carol", in: items)) == "2")
         let dave = try #require(submenu("@dave", in: items))
         #expect(dave.icon == nil)
-        #expect(MenuNodeTests.describe(dave.children).hasPrefix("フォロー|"))
+        #expect(MenuNodeTests.describe(dave.children).hasPrefix("フォロー,"))
 
         let unfollow = try #require(aliceMenu.flattenedChildren.first { $0.title == "フォローを外す" })
         guard case .otherAccount(let command) = unfollow.command, case .relation(.unfollow, let relation) = command.action else {
@@ -441,14 +525,23 @@ struct OtherAccountMenuTests {
         #expect(known.relationship.following)
     }
 
-    /// そのアカウント自身が投稿者やメンションの人なら、そのユーザーのメニューは出さない。出せる項目がないため。
-    @Test func hidesOwnUserMenu() async throws {
+    /// そのアカウント自身が投稿者なら、自分に出せる項目（メモ、リストに追加）だけを出し、関係の項目は出さない。
+    @Test func showsOwnUserMenuWithoutRelationItems() async throws {
         let me = Account(id: "50", username: "bob", acct: "bob", displayName: "Bob", avatar: nil)
-        let found = status(id: "7000", uri: uri, account: me, mentions: [mention("50", "bob")])
+        let found = status(id: "7000", uri: uri, account: me)
         let bob = try account("bob", operations(search: { _ in [found] }, relationships: { ids in ids.map { Relationship(id: $0) } }))
+        let groups = MenuLayout<StatusMenuItem>.Groups(main: [.init([.author])], more: [])
+        _ = await bob.lookup(status(uri: uri))
+        bob.reloadRelations(["50"])
+        try await waitUntil { bob.userActions.knownRelation(.account(id: "50", acct: "bob")).map { if case .myself(let relation) = $0 { relation != nil } else { false } } == true }
 
-        let groups = MenuLayout<StatusMenuItem>.Groups(main: interactionGroups.main + [.init([.author, .mentionedUsers])], more: [])
-        #expect(await loaded(try #require(node(tree(status(uri: uri), accounts: [bob], groups: groups))).children) == "=ブースト,お気に入り|ブックマーク")
+        let menu = try #require(node(tree(status(uri: uri), accounts: [bob], groups: groups)))
+        let own = try #require(submenu("@bob", in: menu.children))
+        let described = MenuNodeTests.describe(own.children)
+        #expect(described.contains("リストに追加"))
+        #expect(described.contains("メモ"))
+        #expect(!described.contains("フォロー"))
+        #expect(!described.contains("ブロック"))
     }
 
     /// アカウントの行のアイコンは、プロフィールを読む前からそのアカウント自身を指す。描く側が読み終えるのを待って差し替える。

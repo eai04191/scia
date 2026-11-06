@@ -88,6 +88,9 @@ public final class OtherAccount {
     private var peopleNotFound: Set<URL> = []
     /// プロフィールのURLごとの、走っている人の検索。同じ人を探しているときは、送り直さずに待つ。
     private var peopleSearches: [URL: Task<Void, Never>] = [:]
+    /// そのアカウントのハッシュタグのフォロー、ミュート、プロフィールでの紹介を読んで変えるもの。nilなら、それらの項目を出さない。
+    /// そのアカウントのクライアントで読む一覧が要るので、アプリが作って入れる。
+    public var hashtagActions: HashtagMenuActions?
     /// そのアカウント自身のプロフィール。読めるまでnil。
     public private(set) var profile: Account?
     private var profileLoad: Task<Void, Never>?
@@ -228,6 +231,11 @@ public final class OtherAccount {
         let relationship = try await operations.changeRelation(change, relation.accountID)
         relationships[relation.accountID] = relationship
         return relationship
+    }
+
+    /// そのアカウントのシート（メモ、リストに追加）で変わった関係を覚える。次に開いたメニューの項目に出す。
+    public func didChange(_ relationship: Relationship) {
+        relationships[relationship.id] = relationship
     }
 
     /// そのアカウントとしてのユーザーのメニューの、関係の項目を組むもの。

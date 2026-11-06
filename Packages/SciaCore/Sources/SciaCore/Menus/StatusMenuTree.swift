@@ -76,6 +76,14 @@ public struct OtherAccountCommand {
         case status(Status, StatusAction)
         /// 投稿に出る人との関係の変更。相手のIDはそのアカウントのサーバーのもの。
         case relation(UserRelationChange, UserRelation)
+        /// 投稿に出る人へのメモのシートを開く。相手のIDはそのアカウントのサーバーのもの。
+        case note(UserRelation)
+        /// 投稿に出る人の通報のシートを開く。相手と投稿のIDはそのアカウントのサーバーのもの。
+        case report(accountID: String, acct: String, statusID: String?)
+        /// 投稿に出る人を、そのアカウントのリストに入れるシートを開く。相手のIDと`acct`はそのアカウントのサーバーのもの。
+        case addToList(accountID: String, acct: String)
+        /// 投稿のハッシュタグを、そのアカウントでフォロー、ミュート、プロフィールで紹介する。
+        case hashtag(Tag, HashtagMenuCommand)
     }
 }
 
@@ -120,8 +128,6 @@ public struct StatusMenuTree {
     /// ユーザーのメニューのサブメニューに付ける、その人のアイコン。nilならアイコンを付けない。
     /// 「別のアカウントで」の中身では、人のIDがそのアカウントのサーバーのものなので、今のアカウントで同じ人を探して付ける。
     var userAvatar: (MenuUser) -> MenuAvatar? = { .user($0) }
-    /// 自分のユーザーのメニューを出さないか。「別のアカウントで」の中身では、そのアカウント自身に出せる項目がないため出さない。
-    var hidesMyself = false
     /// 「ブーストした人」に出す人。ブーストでなければnil。
     /// 「別のアカウントで」の中身では、見つけた投稿がブーストの元の投稿なので、そのサーバーで探した人を入れる。
     var booster: Account?
@@ -157,7 +163,7 @@ public struct StatusMenuTree {
     /// - Parameter includesFollowRequest: 承認と却下を置くか。設定の並びで組むときだけtrueにする。
     public func menu(groups: MenuLayout<StatusMenuItem>.Groups, includesFollowRequest: Bool) -> Built {
         var shownUserIDs: [String] = []
-        var seenUserIDs: Set<String> = hidesMyself ? Set([myAccountID].compactMap(\.self)) : []
+        var seenUserIDs: Set<String> = []
         var showsOtherAccounts = false
         var children = groups.nodes { item in
             let built = nodes(for: item) { users in
@@ -370,12 +376,14 @@ public struct StatusMenuTree {
         .openThread, .select, .copyLink, .copyText, .selectText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari,
         .editHistory, .favouritedBy, .rebloggedBy, .dismissNotification, .hideMedia, .systemTranslate, .customEmojis, .apiResponse, .otherAccounts, .customize,
     ]
-    /// 「別のアカウントで」の中に、まだ出していない項目。返信、引用、編集、削除して書き直すはそのアカウントの投稿欄が、ハッシュタグはそのアカウントでのフォローやミュートの状態の読み込みが要り、まだ作っていない。
-    static let notYetOtherAccountItems: Set<StatusMenuItem> = [.reply, .quote, .edit, .redraft, .hashtags]
+    /// 「別のアカウントで」の中に、まだ出していない項目。返信、引用、編集、削除して書き直すはそのアカウントの投稿欄が要り、まだ作っていない。
+    static let notYetOtherAccountItems: Set<StatusMenuItem> = [.reply, .quote, .edit, .redraft]
+    /// 「別のアカウントで」のハッシュタグのメニューに出さない項目。どのアカウントで行っても同じ結果になるもの。
+    static let sameForEveryAccountHashtagItems: Set<HashtagMenuItem> = [.timeline, .accountStatuses, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .copyLink, .share, .customize]
     /// 「別のアカウントで」のユーザーのメニューに出さない項目。どのアカウントで行っても同じ結果になるもの。
     static let sameForEveryAccountUserItems: Set<UserMenuItem> = [.profile, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .customize]
-    /// 「別のアカウントで」のユーザーのメニューに、まだ出していない項目。メンションはそのアカウントの投稿欄が、メモ、通報、リストに追加はそのアカウントのシートが要り、まだ作っていない。
-    static let notYetOtherAccountUserItems: Set<UserMenuItem> = [.mention, .note, .report, .addToList]
+    /// 「別のアカウントで」のユーザーのメニューに、まだ出していない項目。メンションはそのアカウントの投稿欄が要り、まだ作っていない。
+    static let notYetOtherAccountUserItems: Set<UserMenuItem> = [.mention]
 
     /// 「別のアカウントで」のサブメニュー。ほかのアカウントが1つなら「@usernameで」を直に置き、2つ以上ならアカウントごとの`@username`のサブメニューを並べる。
     /// サーバー名は、ユーザーのメニューの見出しと同じくサブタイトルに出す。名前に`@username@server`をそのまま置くと、長いサーバー名で途中から折り返されて読みにくいため。
@@ -425,12 +433,20 @@ public struct StatusMenuTree {
         let root = otherAccountTree(for: found, original: status, as: account).menu(groups: otherAccountStatusGroups, includesFollowRequest: false).root
         return root?.children.map { node in
             node.map { command in
-                // 組む並びから、ここで包まない命令を出す項目を除いているので、投稿への操作と関係の変更のほかは来ない。
+                // 組む並びから、ここで包まない命令を出す項目を除いているので、ほかの命令は来ない。
                 switch command {
                 case .status(let action):
                     .otherAccount(OtherAccountCommand(account: account, original: status, action: .status(found, action)))
                 case .user(_, .changeRelation(let change, let relation)):
                     .otherAccount(OtherAccountCommand(account: account, original: status, action: .relation(change, relation)))
+                case .user(_, .editNote(let relation)):
+                    .otherAccount(OtherAccountCommand(account: account, original: status, action: .note(relation)))
+                case .user(_, .report(let accountID, let acct, let statusID)):
+                    .otherAccount(OtherAccountCommand(account: account, original: status, action: .report(accountID: accountID, acct: acct, statusID: statusID)))
+                case .user(let user, .addToList):
+                    .otherAccount(OtherAccountCommand(account: account, original: status, action: .addToList(accountID: user.id, acct: user.acct)))
+                case .hashtag(let tag, let hashtagCommand):
+                    .otherAccount(OtherAccountCommand(account: account, original: status, action: .hashtag(tag, hashtagCommand)))
                 default:
                     command
                 }
@@ -443,7 +459,8 @@ public struct StatusMenuTree {
         guard let status else { return [] }
         let tree = otherAccountTree(for: found, original: status, as: account)
         guard tree.userMenu.needsRelationship else { return [] }
-        return tree.menu(groups: otherAccountStatusGroups, includesFollowRequest: false).shownUserIDs
+        // 人を集めるだけなので、ハッシュタグは組まない。組むと、ハッシュタグの一覧の読み直しを、メニューを組んだときと重ねて送るため。
+        return tree.menu(groups: otherAccountStatusGroups.excluding([.hashtags]), includesFollowRequest: false).shownUserIDs
     }
 
     /// 「別のアカウントで」の中の投稿のメニューの並び。投稿のメニューの並びから、出さない項目を除く。
@@ -472,9 +489,10 @@ public struct StatusMenuTree {
     private func otherAccountTree(for found: Status, original status: Status, as account: OtherAccount) -> StatusMenuTree {
         var tree = StatusMenuTree(status: found, notification: nil, now: now, linkBrowser: linkBrowser)
         tree.myAccountID = account.credential.accountID
-        tree.hidesMyself = true
         tree.userActions = account.userActions
         tree.userMenu = otherAccountUserGroups
+        tree.hashtagMenu = hashtagMenu.excluding(Self.sameForEveryAccountHashtagItems)
+        tree.hashtagActions = account.hashtagActions
         tree.booster = booster.flatMap(account.person)
         tree.notifyingAccounts = notifyingAccounts.compactMap(account.person)
         // IDはそのアカウントのサーバーのものなので、今のアカウントで同じ人をプロフィールのURLで探してアイコンを付ける。

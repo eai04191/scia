@@ -10,6 +10,12 @@ final class OtherAccounts {
     private let tasks: TaskScope
     private let makeClient: (Credential) -> MastodonClient
     private var accounts: [Credential.ID: OtherAccount] = [:]
+    /// アカウントごとの、ハッシュタグの状態を読んで変えるもの。アカウントと一緒に作り直す。
+    private var hashtags: [Credential.ID: OtherAccountHashtags] = [:]
+    /// ハッシュタグの変更が済んだことを、どのアカウントで行ったかを添えて知らせる。
+    var onHashtagDone: (OtherAccount, String) -> Void = { _, _ in }
+    /// ハッシュタグの変更の失敗を、どのアカウントで行ったかを添えて知らせる。
+    var onHashtagFailure: (OtherAccount, String, any Error) -> Void = { _, _, _ in }
 
     /// - Parameters:
     ///   - current: このセッションのアカウント。並べない。
@@ -26,14 +32,33 @@ final class OtherAccounts {
         guard let registry = try? AppDependencies.accounts.get() else { return [] }
         let credentials = registry.accounts.filter { $0.id != current.id }
         var kept: [Credential.ID: OtherAccount] = [:]
+        var keptHashtags: [Credential.ID: OtherAccountHashtags] = [:]
         let listed = credentials.map { credential in
             // ログインし直してトークンが変わったアカウントは作り直す。
-            let account = accounts[credential.id].flatMap { $0.credential == credential ? $0 : nil }
-                ?? OtherAccount(credential: credential, operations: .init(client: makeClient(credential)), tasks: tasks)
+            if let account = accounts[credential.id], account.credential == credential, let hashtags = hashtags[credential.id] {
+                kept[credential.id] = account
+                keptHashtags[credential.id] = hashtags
+                return account
+            }
+            let client = makeClient(credential)
+            let account = OtherAccount(credential: credential, operations: .init(client: client), tasks: tasks)
+            // 同じタグへの操作を重ねて送らない仕組みが、ほかのアカウントの操作まで止めないよう、アカウントごとの子で始める。
+            let hashtags = OtherAccountHashtags(client: client, tasks: tasks.child())
+            hashtags.onDone = { [weak self, weak account] title in
+                guard let account else { return }
+                self?.onHashtagDone(account, title)
+            }
+            hashtags.onFailure = { [weak self, weak account] title, error in
+                guard let account else { return }
+                self?.onHashtagFailure(account, title, error)
+            }
+            account.hashtagActions = hashtags.actions
             kept[credential.id] = account
+            keptHashtags[credential.id] = hashtags
             return account
         }
         accounts = kept
+        hashtags = keptHashtags
         // 読めていないアイコンは、次に開いたときに出せるよう読み直す。
         for account in listed {
             account.loadProfile()
@@ -49,6 +74,11 @@ final class OtherAccounts {
         for account in accounts.values where account.known(status) != nil {
             tasks.run(.action) { await account.refresh(status, people: people, relationIDs: relationIDs) }
         }
+    }
+
+    /// `account`としてAPIを呼ぶクライアント。そのアカウントのシートに渡す。
+    func client(for account: OtherAccount) -> MastodonClient {
+        makeClient(account.credential)
     }
 
     /// ほかのアカウントのプロフィールを読み、「別のアカウントで」の行にアイコンを出せるようにする。読めなかったアカウントは、次にメニューを組むときに読み直す。

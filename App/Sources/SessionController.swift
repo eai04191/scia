@@ -2032,6 +2032,30 @@ final class SessionController {
             perform(action, on: status, as: command.account, original: command.original)
         case .relation(let change, let relation):
             confirmChanging(change, of: relation, as: command.account)
+        case .note(let relation):
+            presentNoteEditor(for: relation, as: command.account)
+        case .report(let accountID, let acct, let statusID):
+            presentReport(accountID: accountID, acct: acct, statusID: statusID, as: command.account)
+        case .addToList(let accountID, let acct):
+            presentListMembership(accountID: accountID, acct: acct, as: command.account)
+        case .hashtag(let tag, let hashtagCommand):
+            perform(hashtagCommand, on: tag.name, as: command.account)
+        }
+    }
+
+    /// ほかのアカウントとして、ハッシュタグをフォロー、ミュート、プロフィールで紹介する。済んだことと失敗は`otherAccounts`の知らせで出す。
+    private func perform(_ command: HashtagMenuCommand, on name: String, as account: OtherAccount) {
+        let actions = account.hashtagActions
+        switch command {
+        case .mute(let duration): actions?.mute?.mute(name, duration)
+        case .unmute: actions?.mute?.unmute(name)
+        case .follow: actions?.follow?.turnOn(name)
+        case .unfollow: actions?.follow?.turnOff(name)
+        case .feature: actions?.feature?.turnOn(name)
+        case .unfeature: actions?.feature?.turnOff(name)
+        case .url, .openTimeline, .openAccountStatuses, .customize:
+            // 「別のアカウントで」の並びから除いているので来ない（`StatusMenuTree.sameForEveryAccountHashtagItems`）。
+            break
         }
     }
 
@@ -2599,8 +2623,11 @@ final class SessionController {
     }
 
     /// 相手のプロフィールに書く、自分にしか見えないメモのシートを開く。保存したら、シートを閉じて知らせ、開いているその人のプロフィールにも反映する。
-    private func presentNoteEditor(for relation: UserRelation) {
-        let client = client
+    /// - Parameter otherAccount: 「別のアカウントで」から開いたときの、そのアカウント。そのアカウントとして書き、どのアカウントで書いたかを知らせる。
+    ///   今のアカウントのプロフィールや関係は変えず、失敗はこのセッションのログインし直しの案内につなげない。
+    private func presentNoteEditor(for relation: UserRelation, as otherAccount: OtherAccount? = nil) {
+        let client = otherAccount.map(otherAccounts.client) ?? client
+        let actor = otherAccount.map { "\($0.credential.handle)で" } ?? ""
         let editor = AccountNoteEditor(accountID: relation.accountID, note: relation.relationship.note) { id, comment in
             try await client.setNote(id, comment: comment)
         }
@@ -2608,17 +2635,29 @@ final class SessionController {
         let controller = AccountNoteViewController(editor: editor, acct: relation.acct, tasks: tasks.child())
         controller.onSaved = { [weak self] relationship in
             guard let self else { return }
-            profiles.apply(relationship, reloadsAccount: false)
+            if let otherAccount {
+                otherAccount.didChange(relationship)
+            } else {
+                profiles.apply(relationship, reloadsAccount: false)
+            }
             let title = relationship.note.isEmpty ? "メモを消しました" : "メモを保存しました"
-            notices.showTransient(Notice(id: "user.noteSaved", kind: .success, title: title), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+            notices.showTransient(Notice(id: "user.noteSaved", kind: .success, title: actor + title), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
         }
-        controller.onError = { [weak self] error, title in self?.handle(error, title: title) }
+        controller.onError = { [weak self] error, title in
+            if otherAccount != nil {
+                self?.presentAlert(title: actor + title, message: ErrorPresentation(error).text)
+            } else {
+                self?.handle(error, title: title)
+            }
+        }
         topViewController.present(controller.wrappedInNavigation(), animated: true)
     }
 
     /// 通報のシートを開く。送れたら、シートを閉じて知らせる。
-    private func presentReport(accountID: String, acct: String, statusID: String?) {
-        let client = client
+    /// - Parameter otherAccount: 「別のアカウントで」から開いたときの、そのアカウント。そのアカウントのサーバーへ送り、どのアカウントで送ったかを知らせる。
+    private func presentReport(accountID: String, acct: String, statusID: String?, as otherAccount: OtherAccount? = nil) {
+        let client = otherAccount.map(otherAccounts.client) ?? client
+        let actor = otherAccount.map { "\($0.credential.handle)で" } ?? ""
         let draft = ReportDraft(accountID: accountID, acct: acct, statusID: statusID, api: ReportDraft.API(
             rules: { try await client.instanceRules() },
             submit: { try await client.report($0) }
@@ -2626,7 +2665,7 @@ final class SessionController {
         logger.info("report sheet opened (status: \(statusID != nil, privacy: .public))")
         let sheet = ReportView.sheet(draft: draft) { [weak self] in
             self?.logger.info("report submitted")
-            self?.notices.showTransient(Notice(id: "user.reported", kind: .success, title: "通報しました"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+            self?.notices.showTransient(Notice(id: "user.reported", kind: .success, title: actor + "通報しました"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
         }
         topViewController.present(sheet, animated: true)
     }
@@ -2634,9 +2673,13 @@ final class SessionController {
     // MARK: - リスト
 
     /// ユーザーのメニューの「リストに追加」のシートを開く。決まりはdocs/lists.mdの「リストに追加」にある。
-    private func presentListMembership(accountID: String, acct: String) {
-        let client = client
-        let model = ListMembershipModel(isMyself: accountID == credential.accountID, api: ListMembershipModel.API(
+    /// - Parameter otherAccount: 「別のアカウントで」から開いたときの、そのアカウント。そのアカウントのリストを出し、どのアカウントで失敗したかを添える。
+    ///   今のアカウントのプロフィールや関係、タブは変えず、失敗はこのセッションのログインし直しの案内につなげない。
+    private func presentListMembership(accountID: String, acct: String, as otherAccount: OtherAccount? = nil) {
+        let client = otherAccount.map(otherAccounts.client) ?? client
+        let actor = otherAccount.map { "\($0.credential.handle)で" } ?? ""
+        let myAccountID = otherAccount?.credential.accountID ?? credential.accountID
+        let model = ListMembershipModel(isMyself: accountID == myAccountID, api: ListMembershipModel.API(
             lists: { try await client.lists() },
             listsContaining: { try await client.lists(containing: accountID) },
             relationship: {
@@ -2648,17 +2691,24 @@ final class SessionController {
             follow: { try await client.follow(accountID) },
             create: { try await client.createList(title: $0) }
         ), tasks: tasks.child()) { [weak self] in
+            guard otherAccount == nil else { return }
             self?.reportUnauthorized()
         }
         model.onFailure = { [weak self] operation, reason in
-            self?.reportListFailure(title: operation.failureTitle, reason: reason)
+            self?.reportListFailure(title: actor + operation.failureTitle, reason: reason)
         }
         // 開いているその人のプロフィールと、覚えている関係にも入れる。
-        model.onFollowed = { [weak self] relationship in self?.profiles.apply(relationship, reloadsAccount: true) }
+        model.onFollowed = { [weak self] relationship in
+            if let otherAccount {
+                otherAccount.didChange(relationship)
+            } else {
+                self?.profiles.apply(relationship, reloadsAccount: true)
+            }
+        }
         logger.info("list membership sheet opened")
         let sheet = ListMembershipView.sheet(model: model, acct: acct) { [weak self, weak model] onCreate in
             guard let model else { return }
-            self?.listEditor.presentCreate(create: { try await model.create(title: $0) }, onCreate: onCreate)
+            self?.listEditor.presentCreate(create: { try await model.create(title: $0) }, otherAccount: otherAccount.map { "@\($0.credential.username)" }, onCreate: onCreate)
         }
         topViewController.present(sheet, animated: true)
         model.load()
@@ -3349,6 +3399,16 @@ final class SessionController {
         }
         loadProfileTabIcons(tabs.placement)
         // 「別のアカウントで」の行に出す、ほかのアカウントのアイコン。
+        otherAccounts.onHashtagDone = { [weak self] account, title in
+            self?.notices.showTransient(Notice(id: "hashtag.otherAccountChanged", kind: .success, title: "\(account.credential.handle)で\(title)"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+        }
+        otherAccounts.onHashtagFailure = { [weak self] account, title, error in
+            let failureTitle = "\(account.credential.handle)で\(title)"
+            let reason = ErrorPresentation(error)
+            self?.showFailureNotice(.interactionFailure(title: failureTitle) { [weak self] in
+                self?.presentAlert(title: failureTitle, message: reason.text)
+            })
+        }
         otherAccounts.loadProfiles()
         let network = AppDependencies.network
         session.observeRecoveries { network.recoveryCount }

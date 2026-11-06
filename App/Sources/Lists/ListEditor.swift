@@ -43,13 +43,18 @@ final class ListEditor {
     /// 名前を入れるアラートを出して、リストを作る。
     /// - Parameter create: 作る処理。「リストに追加」のシートは、作ったリストに人を足すので、自分の処理を渡す。
     /// - Parameter onCreate: 作れたら呼ぶ。
-    func presentCreate(text: String = "", create: (@MainActor (String) async throws -> MastodonList)? = nil, onCreate: @escaping @MainActor (MastodonList) -> Void = { _ in }) {
+    /// - Parameter otherAccount: 「別のアカウントで」のリストに追加から、ほかのアカウントのリストを作るときの、そのアカウントの`@username`。
+    ///   作ったリストは今のアカウントのものではないので、タブの並びに足さない。失敗の理由も、今のアカウントのトークンを確かめずにそのまま出す。
+    func presentCreate(text: String = "", create: (@MainActor (String) async throws -> MastodonList)? = nil, otherAccount: String? = nil, onCreate: @escaping @MainActor (MastodonList) -> Void = { _ in }) {
         let client = client
         let create = create ?? { title in try await client.createList(title: title) }
-        presentNameInput(title: "リストを作成", text: text, actionTitle: "作成", failureTitle: "リストを作成できませんでした") { [weak self] title in
+        let failureTitle = "\(otherAccount.map { "\($0)で" } ?? "")リストを作成できませんでした"
+        presentNameInput(title: "リストを作成", text: text, actionTitle: "作成", failureTitle: failureTitle, isOwnAccount: otherAccount == nil) { [weak self] title in
             let list = try await create(title)
             self?.logger.info("list created id=\(list.id, privacy: .public)")
-            self?.host?.listDidCreate(list)
+            if otherAccount == nil {
+                self?.host?.listDidCreate(list)
+            }
             onCreate(list)
         }
     }
@@ -182,7 +187,8 @@ final class ListEditor {
     // MARK: - 名前の入力
 
     /// 名前を入れるアラート。空では送れない。送れなければ理由のアラートを出し、閉じると入れた名前を残したまま、このアラートに戻す。
-    private func presentNameInput(title: String, text: String, actionTitle: String, failureTitle: String, submit: @escaping @MainActor (String) async throws -> Void) {
+    /// - Parameter isOwnAccount: 今のアカウントのリストか。ほかのアカウントのリストなら、失敗の理由を今のアカウントのトークンを確かめずにそのまま出す。
+    private func presentNameInput(title: String, text: String, actionTitle: String, failureTitle: String, isOwnAccount: Bool = true, submit: @escaping @MainActor (String) async throws -> Void) {
         guard let presenter = host?.listPresenter else { return }
         let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)
         let action = UIAlertAction(title: actionTitle, style: .default) { [weak self, weak alert] _ in
@@ -194,10 +200,10 @@ final class ListEditor {
                 } catch {
                     guard let self, let host, !(error is CancellationError) else { return }
                     logger.error("list name submit failed: \(SciaLog.describe(error), privacy: .public)")
-                    let reason = await host.listFailureReason(for: error)
+                    let reason = isOwnAccount ? await host.listFailureReason(for: error) : ErrorPresentation(error)
                     let failure = UIAlertController(title: failureTitle, message: reason.text, preferredStyle: .alert)
                     failure.addAction(UIAlertAction(title: "OK", style: .cancel) { [weak self] _ in
-                        self?.presentNameInput(title: title, text: entered, actionTitle: actionTitle, failureTitle: failureTitle, submit: submit)
+                        self?.presentNameInput(title: title, text: entered, actionTitle: actionTitle, failureTitle: failureTitle, isOwnAccount: isOwnAccount, submit: submit)
                     })
                     host.listPresenter.present(failure, animated: true)
                 }
