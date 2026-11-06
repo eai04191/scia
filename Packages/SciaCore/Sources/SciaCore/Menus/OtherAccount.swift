@@ -22,6 +22,8 @@ public final class OtherAccount {
         public var resolveAccount: @Sendable (URL) async throws -> Account?
         /// そのアカウントの投稿を、添付ごと削除する。
         public var deleteStatus: @Sendable (Status.ID) async throws -> Void
+        /// そのアカウントのサーバーの、Mastodonにない機能の有無。絵文字のリアクションを出すかに使う。
+        public var capabilities: @Sendable () async throws -> ServerCapabilities
 
         public init(
             search: @escaping @Sendable (String) async throws -> [Status],
@@ -30,7 +32,8 @@ public final class OtherAccount {
             relationships: @escaping RelationshipCache.Fetch,
             changeRelation: @escaping @Sendable (UserRelationChange, String) async throws -> Relationship,
             resolveAccount: @escaping @Sendable (URL) async throws -> Account?,
-            deleteStatus: @escaping @Sendable (Status.ID) async throws -> Void
+            deleteStatus: @escaping @Sendable (Status.ID) async throws -> Void,
+            capabilities: @escaping @Sendable () async throws -> ServerCapabilities
         ) {
             self.search = search
             self.interactions = interactions
@@ -39,6 +42,7 @@ public final class OtherAccount {
             self.changeRelation = changeRelation
             self.resolveAccount = resolveAccount
             self.deleteStatus = deleteStatus
+            self.capabilities = capabilities
         }
 
         public init(client: MastodonClient) {
@@ -51,7 +55,8 @@ public final class OtherAccount {
                 changeRelation: { try await client.send($0, to: $1) },
                 resolveAccount: { try await client.resolveAccount(at: $0) },
                 // web UIと同じく、添付もすぐ消す。今のアカウントで削除するときと同じ。
-                deleteStatus: { try await client.deleteStatus($0, deleteMedia: true) }
+                deleteStatus: { try await client.deleteStatus($0, deleteMedia: true) },
+                capabilities: { try await client.serverCapabilities() }
             )
         }
     }
@@ -113,6 +118,29 @@ public final class OtherAccount {
             let loaded = try? await operations.profile()
             self?.profile = loaded
             self?.profileLoad = nil
+        }
+    }
+
+    /// そのアカウントのサーバーが、絵文字のリアクションに対応しているか。読めないうちと、読めなかったときはfalse（docs/emoji-reaction.md）。
+    public private(set) var supportsEmojiReactions = false
+    private var capabilitiesState = CapabilitiesState.unknown
+    private enum CapabilitiesState { case unknown, loading, loaded }
+    /// サーバーの機能の有無を読んでいる途中か。
+    public var isLoadingCapabilities: Bool { capabilitiesState == .loading }
+
+    /// そのアカウントのサーバーの機能の有無を読む。読めたら読み直さず、読めなかったら次に呼ばれたときに読み直す。
+    public func loadCapabilities() {
+        guard capabilitiesState == .unknown else { return }
+        capabilitiesState = .loading
+        tasks.run(.display) { [weak self, operations] in
+            let loaded = try? await operations.capabilities()
+            guard let self else { return }
+            if let loaded {
+                supportsEmojiReactions = loaded.supportsEmojiReactions
+                capabilitiesState = .loaded
+            } else {
+                capabilitiesState = .unknown
+            }
         }
     }
 
@@ -278,6 +306,12 @@ public final class OtherAccount {
     @discardableResult
     public func toggle(_ action: StatusInteractions.Action, on status: Status, reblogVisibility: ReblogVisibility = .accountDefault) async throws -> Bool {
         try await interactions.toggle(action, on: status, reblogVisibility: reblogVisibility)
+    }
+
+    /// そのアカウントとして、`status`に`emoji`でリアクションする。すでに付けている絵文字なら、付けたままにする（docs/emoji-reaction.md）。
+    /// - Returns: 送ったか。同じ操作の結果を待っている間はfalse。
+    public func react(with emoji: ReactionEmoji, on status: Status) async throws -> Bool {
+        try await interactions.set(.emojiReaction(emoji), to: true, on: status)
     }
 
     /// そのアカウントの投稿`status`を削除し、覚えている投稿からも除く。

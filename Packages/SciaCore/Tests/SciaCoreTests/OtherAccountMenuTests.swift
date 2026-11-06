@@ -51,7 +51,9 @@ struct OtherAccountMenuTests {
         relationships: @escaping RelationshipCache.Fetch = { _ in throw Failure() },
         changeRelation: @escaping @Sendable (UserRelationChange, String) async throws -> Relationship = { _, _ in throw Failure() },
         resolveAccount: @escaping @Sendable (URL) async throws -> Account? = { _ in nil },
-        deleteStatus: @escaping @Sendable (Status.ID) async throws -> Void = { _ in throw Failure() }
+        deleteStatus: @escaping @Sendable (Status.ID) async throws -> Void = { _ in throw Failure() },
+        capabilities: @escaping @Sendable () async throws -> ServerCapabilities = { throw Failure() },
+        addEmojiReaction: @escaping @Sendable (Status.ID, ReactionEmoji) async throws -> Status = { _, _ in throw Failure() }
     ) -> OtherAccount.Operations {
         OtherAccount.Operations(search: search, interactions: StatusInteractions.Operations(
             favourite: favourite,
@@ -63,8 +65,10 @@ struct OtherAccountMenuTests {
             muteConversation: { _ in throw Failure() },
             unmuteConversation: { _ in throw Failure() },
             pin: { _ in throw Failure() },
-            unpin: { _ in throw Failure() }
-        ), profile: profile, relationships: relationships, changeRelation: changeRelation, resolveAccount: resolveAccount, deleteStatus: deleteStatus)
+            unpin: { _ in throw Failure() },
+            addEmojiReaction: addEmojiReaction,
+            removeEmojiReaction: { _, _ in throw Failure() }
+        ), profile: profile, relationships: relationships, changeRelation: changeRelation, resolveAccount: resolveAccount, deleteStatus: deleteStatus, capabilities: capabilities)
     }
 
     private func account(_ username: String, server: String = "other.example", accountID: String = "50", _ operations: OtherAccount.Operations) throws -> OtherAccount {
@@ -401,6 +405,69 @@ struct OtherAccountMenuTests {
     }
 
     /// 操作の結果は、そのアカウントで覚えている投稿に反映し、次に開いたメニューの名前に出る。
+    /// リアクションは、そのアカウントのサーバーが絵文字のリアクションに対応していると読めたときだけ出す。読めないうちと、読めなかったときは出さない。
+    @Test func showsEmojiReactionOnlyWhenOtherServerSupportsIt() async throws {
+        let found = status(id: "7000", uri: uri)
+        let groups = MenuLayout<StatusMenuItem>.Groups(main: [.init([.favourite, .emojiReaction])], more: [])
+        let gate = Gate()
+        let fedibird = try account("bob", operations(search: { _ in [found] }, capabilities: {
+            try await gate.wait()
+            return ServerCapabilities(fedibirdCapabilities: ["emoji_reaction"])
+        }))
+        let mastodon = try account("carol", operations(search: { _ in [found] }, capabilities: { .mastodon }))
+        let failing = try account("dave", operations(search: { _ in [found] }))
+
+        #expect(await loaded(try #require(node(tree(status(uri: uri), accounts: [fedibird], groups: groups))).children) == "お気に入り")
+        fedibird.loadCapabilities()
+        mastodon.loadCapabilities()
+        failing.loadCapabilities()
+        gate.open()
+        try await waitUntil { fedibird.supportsEmojiReactions }
+
+        #expect(MenuNodeTests.describe(try #require(node(tree(status(uri: uri), accounts: [fedibird], groups: groups))).children) == "お気に入り,リアクション")
+        #expect(await loaded(try #require(node(tree(status(uri: uri), accounts: [mastodon], groups: groups))).children) == "お気に入り")
+        #expect(await loaded(try #require(node(tree(status(uri: uri), accounts: [failing], groups: groups))).children) == "お気に入り")
+    }
+
+    /// 読めなかったサーバーの対応は、次に呼ばれたときに読み直す。読めたら読み直さない。
+    @Test func reloadsCapabilitiesOnlyAfterFailure() async throws {
+        let calls = Mutex(0)
+        let bob = try account("bob", operations(search: { _ in [] }, capabilities: {
+            let call = calls.withLock { $0 += 1; return $0 }
+            guard call > 1 else { throw Failure() }
+            return ServerCapabilities(fedibirdCapabilities: ["emoji_reaction"])
+        }))
+
+        bob.loadCapabilities()
+        try await waitUntil { calls.withLock { $0 } == 1 && !bob.isLoadingCapabilities }
+        #expect(!bob.supportsEmojiReactions)
+        bob.loadCapabilities()
+        try await waitUntil { bob.supportsEmojiReactions }
+        bob.loadCapabilities()
+        #expect(calls.withLock { $0 } == 2)
+    }
+
+    /// リアクションは、そのアカウントとして、そのサーバーでの投稿のIDに付け、覚えている投稿にも入れる。すでに付けている絵文字なら、付けたままにする。
+    @Test func reactsAsOtherAccount() async throws {
+        let found = status(id: "7000", uri: uri)
+        let emoji = ReactionEmoji(name: "🤔")
+        let reactedStatus = Status(id: "7000", createdAt: Date(timeIntervalSince1970: 100), account: alice, content: "<p>こんにちは</p>", spoilerText: "", uri: uri, url: nil, emojiReactions: [EmojiReaction(emoji: emoji, count: 1, me: true)])
+        let reacted = Mutex<[Status.ID]>([])
+        let bob = try account("bob", operations(search: { _ in [found] }, addEmojiReaction: { id, _ in
+            reacted.withLock { $0.append(id) }
+            return reactedStatus
+        }))
+        let shown = status(uri: uri)
+        guard case .found(let resolved) = await bob.lookup(shown) else {
+            Issue.record("投稿が見つかりません")
+            return
+        }
+
+        #expect(try await bob.react(with: emoji, on: resolved))
+        #expect(reacted.withLock { $0 } == ["7000"])
+        #expect(bob.known(shown)?.hasEmojiReaction(emoji) == true)
+    }
+
     @Test func toggleUpdatesKnownStatus() async throws {
         let found = status(id: "7000", uri: uri)
         let bob = try account("bob", operations(search: { _ in [found] }, favourite: { _ in found.settingFavourited(true) }))

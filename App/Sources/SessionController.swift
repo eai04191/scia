@@ -2347,7 +2347,7 @@ final class SessionController {
             // 「別のアカウントで」の並びから除いているので来ない（`StatusMenuTree.sameForEveryAccountItems`）。
             return
         case .react:
-            // 「別のアカウントで」のメニューは、絵文字のリアクションに対応しているかを読まずに組む（`StatusMenuTree.otherAccountTree`の`supportsEmojiReactions`は既定のfalse）ので、リアクションの項目は出ず、来ない。
+            chooseEmojiReaction(for: status, as: account, original: original)
             return
         }
         let handle = account.credential.handle
@@ -3577,6 +3577,25 @@ final class SessionController {
     private static let emojiReactionFailureTitle = "リアクションを変更できませんでした"
 
     /// 絵文字のシートを開き、選んだ絵文字で`status`にリアクションする。自分がすでにしている絵文字を選んだら、付けたままにする。
+    /// 「別のアカウントで」のリアクション。そのアカウントのサーバーの絵文字のシートを開き、選んだ絵文字でそのアカウントとしてリアクションする。
+    /// 今のアカウントの一覧の投稿は変えないので、どのアカウントでリアクションしたかを知らせる。
+    private func chooseEmojiReaction(for status: Status, as account: OtherAccount, original: Status) {
+        let handle = account.credential.handle
+        let host = topViewController
+        otherAccounts.emojiReactionPicker(for: account).present(from: host) { [weak self] emoji in
+            self?.tasks.run(.action) { [weak self] in
+                do {
+                    guard try await account.react(with: emoji, on: status) else { return }
+                    self?.showToggledNotice("\(handle)でリアクションしました")
+                } catch {
+                    guard let self else { return }
+                    logger.error("other account emoji reaction failed: \(SciaLog.describe(error), privacy: .public)")
+                    await showOtherAccountFailure(title: "\(handle)でリアクションできませんでした", error: error, as: account, recording: OperationStatus.Subject(original))
+                }
+            }
+        }
+    }
+
     func chooseEmojiReaction(for status: Status, from viewController: UIViewController) {
         guard session.supportsEmojiReactions else { return }
         emojiReactionPicker.present(from: viewController.navigationController ?? viewController) { [weak self] emoji in

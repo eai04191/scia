@@ -1,3 +1,4 @@
+import Foundation
 import SciaCore
 
 /// 投稿のメニューの「別のアカウントで」に並べる、ログインしているほかのアカウント。決まりはdocs/menus.mdにある。
@@ -62,6 +63,8 @@ final class OtherAccounts {
         // 読めていないアイコンは、次に開いたときに出せるよう読み直す。
         for account in listed {
             account.loadProfile()
+            // 「リアクション」を出すかを、そのアカウントのサーバーで決める（docs/emoji-reaction.md）。
+            account.loadCapabilities()
         }
         return listed
     }
@@ -140,6 +143,23 @@ final class OtherAccounts {
             let credential = (try? AppDependencies.accounts.get())?.accounts.first { $0.id == given.id } ?? given
             return makeClient(credential)
         }
+    }
+
+    /// アカウントごとの、リアクションする絵文字を選ぶシート。そのアカウントのサーバーのカスタム絵文字と、そのサーバーで最近使った絵文字を出す。ログインし直したら作り直す。
+    private var emojiReactionPickers: [Credential.ID: (credential: Credential, picker: EmojiReactionPicker)] = [:]
+
+    /// `account`としてリアクションする絵文字を選ぶシート。
+    func emojiReactionPicker(for account: OtherAccount) -> EmojiReactionPicker {
+        let credential = account.credential
+        if let known = emojiReactionPickers[credential.id], known.credential == credential {
+            return known.picker
+        }
+        let picker = EmojiReactionPicker(completion: TextInputCompletion(
+            completion: ComposeCompletion(sources: ComposeCompletion.Sources(client: client(for: account)), settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
+            recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
+        ))
+        emojiReactionPickers[credential.id] = (credential, picker)
+        return picker
     }
 
     /// `account`としてAPIを呼ぶクライアント。そのアカウントのシートに渡す。

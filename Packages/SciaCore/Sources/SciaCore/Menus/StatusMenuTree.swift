@@ -489,6 +489,7 @@ public struct StatusMenuTree {
     private func otherAccountTree(for found: Status, original status: Status, as account: OtherAccount) -> StatusMenuTree {
         var tree = StatusMenuTree(status: found, notification: nil, now: now, linkBrowser: linkBrowser)
         tree.myAccountID = account.credential.accountID
+        tree.supportsEmojiReactions = account.supportsEmojiReactions
         tree.userActions = account.userActions
         tree.userMenu = otherAccountUserGroups
         tree.hashtagMenu = hashtagMenu.excluding(Self.sameForEveryAccountHashtagItems)
