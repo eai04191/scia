@@ -77,6 +77,9 @@ final class EmbeddedPostView: UIButton {
     private let nameLabel = EmojiLabel()
     private let spoilerView = SpoilerView()
     private let textLabel = LinkLabel()
+    /// 本文の1行目のベースライン。TextKit 2で描くラベルのベースラインは、UILabelのベースライン（`firstBaselineAnchor`）ではなく、TextKit 2の並びから置く。
+    private let textFirstBaselineGuide = UILayoutGuide()
+    private lazy var textFirstBaseline = textFirstBaselineGuide.topAnchor.constraint(equalTo: textLabel.topAnchor)
     private let mediaView: MediaGridView
     private var noteViews: [NoteRow] = []
     /// アイコンと名前を並べる作者の行。
@@ -119,6 +122,8 @@ final class EmbeddedPostView: UIButton {
         isAccessibilityElement = false
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.isUserInteractionEnabled = false
+        // 投稿の本文と同じくTextKit 2で描き、大きくした絵文字の行を絵の高さにする。文字列を入れる前に切り替える。
+        textLabel.drawsWithTextKit = true
         textLabel.numberOfLines = 0
         // 本文はリンクの上だけ押下を受ける。リンクの外の押下は、囲みのボタンが受ける。
         textLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
@@ -132,6 +137,8 @@ final class EmbeddedPostView: UIButton {
         }
         addLayoutGuide(headerGuide)
         addLayoutGuide(besideGuide)
+        addLayoutGuide(textFirstBaselineGuide)
+        NSLayoutConstraint.activate([textFirstBaselineGuide.heightAnchor.constraint(equalToConstant: 0), textFirstBaseline])
         mediaView.onSelect = { [weak self] index in
             guard let self else { return }
             self.onSelectMedia?(index, self.mediaView)
@@ -269,6 +276,7 @@ final class EmbeddedPostView: UIButton {
         }
 
         constraints.append(bottomAnchor.constraint(equalTo: last.anchor, constant: padding))
+        updateTextFirstBaseline()
         variableConstraints = constraints
         NSLayoutConstraint.activate(constraints)
         updateAccessibility(for: content)
@@ -283,7 +291,7 @@ final class EmbeddedPostView: UIButton {
         let mediaTop = if textLabel.isHidden {
             mediaView.topAnchor.constraint(equalTo: top.anchor, constant: top.spacing)
         } else {
-            mediaView.topAnchor.constraint(equalTo: textLabel.firstBaselineAnchor, constant: -PostBodyView.textTopInset(of: text))
+            mediaView.topAnchor.constraint(equalTo: textFirstBaselineGuide.topAnchor, constant: -PostBodyView.textTopInset(of: text))
         }
         // 本文のラベルの縮みにくさ（`.defaultHigh`）より低くする。同じだと、ラベルを縮めてサムネイルの高さで本文を切ってしまう。
         let collapse = besideGuide.heightAnchor.constraint(equalToConstant: 0)
@@ -309,6 +317,21 @@ final class EmbeddedPostView: UIButton {
         }
         return constraints
     }
+
+    /// 本文を今の幅で並べた結果から、1行目のベースラインをラベルの上端からの距離で決める。
+    /// 中身を適用するときは、まだ本文の幅が決まっていないことがあるので、十分に広い幅で決め、並べたあとに本文の幅で決め直す。
+    private func updateTextFirstBaseline() {
+        let width = textLabel.bounds.width > 0 ? textLabel.bounds.width : Self.unknownTextWidth
+        // UILabelのベースラインと同じく画素にそろえる。そろえないと、ここから置くサムネイルの上下の端が別々に丸められ、正方形の高さが幅と1画素ずれる。
+        let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 1
+        let first = (textLabel.textKitBaselines(width: width).first * scale).rounded() / scale
+        if textFirstBaseline.constant != first {
+            textFirstBaseline.constant = first
+        }
+    }
+
+    /// 本文の幅が決まる前に、ベースラインを決めるために並べる幅。
+    private static let unknownTextWidth: CGFloat = 10_000
 
     private func horizontalConstraints(of view: UIView, padding: CGFloat) -> [NSLayoutConstraint] {
         [
@@ -385,6 +408,12 @@ final class EmbeddedPostView: UIButton {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        // 本文の幅が決まってから、その幅で1行目のベースラインを決め直す。変わったら、サムネイルを置き直す。
+        let baseline = textFirstBaseline.constant
+        updateTextFirstBaseline()
+        if textFirstBaseline.constant != baseline {
+            super.layoutSubviews()
+        }
         if let content, !textLabel.isHidden && textLabel.isTruncatedByLength != accessibilityReflectsTruncation {
             updateAccessibility(for: content)
         }
