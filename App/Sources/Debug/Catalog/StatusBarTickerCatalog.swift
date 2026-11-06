@@ -17,9 +17,17 @@ enum StatusBarTickerCatalog {
             CatalogState(title: "アイランド: 閲覧注意の画像だけの投稿") { preview(.island, item(.reblog, bob, media(sensitive: true))) },
             CatalogState(title: "アイランド: フォロー（アカウント名を出す）") { preview(.island, item(.follow, carol, .handle("@carol@remote.example"))) },
             CatalogState(title: "アイランド: 文字も画像もない投稿（右は空ける）") { preview(.island, item(.favourite, alice, .none)) },
+            CatalogState(title: "アイランド: 絵文字のリアクション（記号の代わりに付けた絵文字）") { preview(.island, item(.emojiReaction, alice, text("おはよう"), reaction: ReactionEmoji(name: "🎉"))) },
+            CatalogState(title: "アイランド: カスタム絵文字のリアクション") { preview(.island, item(.emojiReaction, bob, text("今日は駅前のパン屋が開いていた"), reaction: customEmoji)) },
+            CatalogState(title: "アイランド: 横長のカスタム絵文字のリアクション（枠に縮める）") { preview(.island, item(.emojiReaction, bob, text("おはよう"), reaction: wideEmoji)) },
+            CatalogState(title: "アイランド: 画像のURLがないカスタム絵文字のリアクション（記号のまま）") { preview(.island, item(.emojiReaction, alice, text("おはよう"), reaction: ReactionEmoji(name: "broken_emoji"))) },
+            CatalogState(title: "アイランド: 画像を読めなかったカスタム絵文字のリアクション（記号に戻す）") { preview(.island, item(.emojiReaction, alice, text("おはよう"), reaction: unreadableEmoji)) },
             CatalogState(title: "ノッチ（iPhone 11〜14）: お気に入り。左が狭いため、記号はアイコンに重ねる") { preview(.notch, item(.favourite, alice, text("おはよう"))) },
             CatalogState(title: "ノッチ: 長い名前と長い本文") { preview(.notch, item(.favourite, longName, text(longText))) },
             CatalogState(title: "ノッチ: 画像だけの投稿") { preview(.notch, item(.favourite, alice, media(sensitive: false))) },
+            CatalogState(title: "ノッチ: 絵文字のリアクション（アイコンに重ねる）") { preview(.notch, item(.emojiReaction, alice, text("おはよう"), reaction: ReactionEmoji(name: "🎉"))) },
+            CatalogState(title: "ノッチ: カスタム絵文字のリアクション") { preview(.notch, item(.emojiReaction, bob, text("おはよう"), reaction: customEmoji)) },
+            CatalogState(title: "ノッチ: 横長のカスタム絵文字のリアクション（丸に収める）") { preview(.notch, item(.emojiReaction, bob, text("おはよう"), reaction: wideEmoji)) },
             CatalogState(title: "切り欠きなし（iPhone SE、iPad）: お気に入り") { preview(.flat, item(.favourite, alice, text("おはよう"))) },
             CatalogState(title: "切り欠きなし: 長い名前と長い本文") { preview(.flat, item(.favourite, longName, text(longText))) },
             CatalogState(title: "切り欠きなし: 画像だけの投稿") { preview(.flat, item(.favourite, alice, media(sensitive: false))) },
@@ -60,8 +68,21 @@ enum StatusBarTickerCatalog {
         avatar: CatalogFixtures.imageURL(width: 120, height: 120, color: .systemTeal)
     )
 
-    private static func item(_ kind: MastodonNotification.Kind, _ account: Account, _ subject: StatusBarTickerItem.Subject) -> StatusBarTickerItem {
-        StatusBarTickerItem(id: "catalog", kind: kind, account: account, subject: subject)
+    private static let customEmoji: ReactionEmoji = {
+        let url = CatalogFixtures.imageURL(width: 64, height: 64, color: .systemOrange)
+        return ReactionEmoji(name: "square", url: url, staticUrl: url)
+    }()
+
+    private static let wideEmoji: ReactionEmoji = {
+        let url = CatalogFixtures.imageURL(width: 256, height: 64, color: .systemIndigo)
+        return ReactionEmoji(name: "wide", url: url, staticUrl: url)
+    }()
+
+    /// 画像として読めないデータ。読み込みは失敗する。
+    private static let unreadableEmoji = ReactionEmoji(name: "unreadable", url: URL(string: "data:image/png;base64,AAAA"), staticUrl: URL(string: "data:image/png;base64,AAAA"))
+
+    private static func item(_ kind: MastodonNotification.Kind, _ account: Account, _ subject: StatusBarTickerItem.Subject, reaction: ReactionEmoji? = nil) -> StatusBarTickerItem {
+        StatusBarTickerItem(id: "catalog", kind: kind, account: account, subject: subject, reactionEmoji: reaction)
     }
 
     private static func text(_ text: String) -> StatusBarTickerItem.Subject {

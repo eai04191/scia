@@ -635,6 +635,21 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
         let thumbnailSide: CGFloat
         /// 何をされたかの記号を、アイコンの右下に重ねる。名前の前に並べると、名前の入る幅が狭いとき。
         let badgesSymbol: Bool
+
+        /// 何をされたかの記号の大きさ。
+        var symbolPointSize: CGFloat {
+            badgesSymbol ? avatarSide * 0.36 : fontSize
+        }
+
+        /// 記号の代わりに描く、カスタム絵文字の画像を収める四角の一辺。アイコンに重ねるときは、四角の対角線が丸（アイコンの0.62倍）に収まる大きさにする。
+        var customReactionSide: CGFloat {
+            badgesSymbol ? avatarSide * 0.42 : ceil(fontSize * 1.2)
+        }
+
+        /// 記号の代わりに描く、Unicodeの絵文字の大きさ。アイコンに重ねるときは、記号と同じ大きさでは小さすぎて何の絵文字か分からないため、丸からはみ出さない大きさまで大きくする。
+        var reactionPointSize: CGFloat {
+            badgesSymbol ? avatarSide * 0.4 : fontSize
+        }
     }
 
     private var metrics: Metrics {
@@ -802,13 +817,20 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
         /// 入りきらない名前と文頭は、「…」で切らず、投稿の名前と同じく行末をぼかす。
         private let nameLabel = FadingLabel()
         private let subjectLabel = FadingLabel()
+        /// 絵文字のリアクションの通知で、記号の代わりに描くカスタム絵文字の画像と、読めなかったときに代わりに出す記号。ほかの通知ではnil。
+        private let reactionImage: (view: EmojiImageView, emoji: CustomEmoji, fallback: UIView)?
 
         init(item: StatusBarTickerItem, metrics: Metrics) {
             self.item = item
             self.metrics = metrics
             let appearance = NotificationAppearance(item.kind)
             let name = item.account.displayNameOrUsername
-            let action = appearance.phrase.includesName ? "\(appearance.phrase.before)\(name)\(appearance.phrase.after)" : appearance.phrase.before
+            let action = if let emoji = item.reactionEmoji {
+                // 通知の一覧の行と同じく、何の絵文字かまで読む。カスタム絵文字はショートコードで読む。
+                "\(name)が\(emoji.isCustom ? ":\(emoji.name):" : emoji.name)でリアクションしました"
+            } else {
+                appearance.phrase.includesName ? "\(appearance.phrase.before)\(name)\(appearance.phrase.after)" : appearance.phrase.before
+            }
             accessibilityLabel = switch item.subject {
             case .text(let text): "\(action)。\(text.plainText)"
             case .media(_, _, let isImageOnly): "\(action)。\(isImageOnly ? "画像" : "メディア")だけの投稿"
@@ -823,11 +845,57 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
                 stack.isUserInteractionEnabled = false
             }
 
-            let symbol = UIImageView(image: UIImage(
-                systemName: appearance.symbolName,
-                withConfiguration: UIImage.SymbolConfiguration(pointSize: metrics.badgesSymbol ? metrics.avatarSide * 0.36 : metrics.fontSize, weight: .semibold)
-            ))
-            symbol.tintColor = appearance.color
+            let makeSymbol = {
+                let image = UIImageView(image: UIImage(
+                    systemName: appearance.symbolName,
+                    withConfiguration: UIImage.SymbolConfiguration(pointSize: metrics.symbolPointSize, weight: .semibold)
+                ))
+                image.tintColor = appearance.color
+                return image
+            }
+            // 付けた絵文字は、通知の一覧の行と同じく記号の代わりに描く。中身は`render()`で入れる。
+            // カスタム絵文字は、決まった四角の枠に縮めて描き、画像のURLがないときと読めなかったときは記号にする。
+            // ショートコードの文字や横長の画像は、狭い左側で名前の入る幅を奪い、アイコンに重ねる丸からもはみ出すため。読み上げではショートコードを読む。
+            let symbol: UIView
+            switch item.reactionEmoji {
+            case let emoji? where !emoji.isCustom:
+                let label = UILabel()
+                // scialint:disable:next fixed_font_size
+                label.font = .systemFont(ofSize: metrics.reactionPointSize)
+                label.text = emoji.name
+                reactionImage = nil
+                symbol = label
+            case let emoji?:
+                if let custom = emoji.customEmoji {
+                    let container = UIView()
+                    container.translatesAutoresizingMaskIntoConstraints = false
+                    let side = metrics.customReactionSide
+                    let fallback = makeSymbol()
+                    let image = EmojiImageView(frame: .zero)
+                    image.translatesAutoresizingMaskIntoConstraints = false
+                    fallback.translatesAutoresizingMaskIntoConstraints = false
+                    container.addSubview(image)
+                    container.addSubview(fallback)
+                    NSLayoutConstraint.activate([
+                        container.widthAnchor.constraint(equalToConstant: side),
+                        container.heightAnchor.constraint(equalToConstant: side),
+                        image.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                        image.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+                        image.topAnchor.constraint(equalTo: container.topAnchor),
+                        image.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+                        fallback.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+                        fallback.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+                    ])
+                    reactionImage = (image, custom, fallback)
+                    symbol = container
+                } else {
+                    reactionImage = nil
+                    symbol = makeSymbol()
+                }
+            case nil:
+                reactionImage = nil
+                symbol = makeSymbol()
+            }
             symbol.setContentHuggingPriority(.required, for: .horizontal)
             symbol.setContentCompressionResistancePriority(.required, for: .horizontal)
 
@@ -889,6 +957,14 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
             )
             renderer.linkColor = subjectColor
             renderer.secondaryColor = subjectColor
+            if let (view, emoji, fallback) = reactionImage {
+                // 読み込みの途中は空けておき、読めなかったら記号にする。
+                let store = AppDependencies.emojiImages
+                let failed = store.hasFailed(emoji.staticUrl)
+                view.stillImage = failed ? nil : store.image(for: emoji.staticUrl)
+                view.animation = failed || !settings.animatesCustomEmojis ? nil : store.animation(for: emoji.url)
+                fallback.isHidden = !failed
+            }
             switch item.subject {
             case .text(let text):
                 subjectLabel.attributedText = renderer.render(text)
@@ -925,7 +1001,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
         }
 
         /// アイコンの右下に、黒い丸に載せた記号を重ねる。
-        private static func badged(_ avatar: UIView, with symbol: UIImageView, side: CGFloat) -> UIView {
+        private static func badged(_ avatar: UIView, with symbol: UIView, side: CGFloat) -> UIView {
             let container = UIView()
             container.translatesAutoresizingMaskIntoConstraints = false
             let badge = UIView()

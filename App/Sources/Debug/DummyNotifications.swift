@@ -8,17 +8,17 @@ import UIKit
 @MainActor
 enum DummyNotifications {
     static func stream(into ticker: StatusBarTicker) {
-        let delays: [Double] = [0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 9]
+        let delays: [Double] = [0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 9]
         let schedule = zip(delays, samples).map { (delay: $0, item: $1) }
         for (index, entry) in schedule.enumerated() {
             Task {
                 try? await Task.sleep(for: .seconds(entry.delay))
-                ticker.receive(StatusBarTickerItem(id: "dummy-\(index)", kind: entry.item.kind, account: entry.item.account, subject: entry.item.subject))
+                ticker.receive(entry.item.with(id: "dummy-\(index)"))
             }
         }
     }
 
-    /// 流す通知の見本。種類、名前と本文の長さ、画像だけの投稿、閲覧注意、注意書きを1つずつ含める。
+    /// 流す通知の見本。種類、名前と本文の長さ、画像だけの投稿、閲覧注意、注意書き、絵文字のリアクションを1つずつ含める。
     /// デバッグメニューの「ステータスバーの通知を出し続ける」でも、この順に1件ずつ出す。
     static var samples: [StatusBarTickerItem] {
         [
@@ -30,6 +30,7 @@ enum DummyNotifications {
             item(.follow, from: dave, subject: .handle("@dave@remote.example")),
             item(.reblog, from: carol, subject: media(sensitive: true)),
             item(.quote, from: bob, subject: .text(RichText.plain("閲覧注意: 映画の結末について", emojis: []))),
+            StatusBarTickerItem(id: "", kind: .emojiReaction, account: carol, subject: text("<p>今日は駅前のパン屋が開いていた</p>"), reactionEmoji: ReactionEmoji(name: "🥐")),
             item(.favourite, from: dave, subject: text("<p>1件だけ届いたときは、ゆっくり出す</p>")),
         ]
     }

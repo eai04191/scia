@@ -231,7 +231,7 @@ final class StatusBarTicker {
                 guard self.scene()?.activationState == .foregroundActive else { continue }
                 let item = items[index % items.count]
                 index += 1
-                self.receive(StatusBarTickerItem(id: "loop-\(index)", kind: item.kind, account: item.account, subject: item.subject))
+                self.receive(item.with(id: "loop-\(index)"))
                 // 出し始めて、出ている扱いになるのを待つ。通知タブを見ているなどで出せなかったときも、ここで間をおく。
                 try? await clock.sleep(for: .milliseconds(200))
             }

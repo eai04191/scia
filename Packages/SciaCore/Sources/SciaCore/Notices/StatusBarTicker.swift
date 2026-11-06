@@ -8,6 +8,8 @@ public struct StatusBarTickerItem: Sendable, Equatable, Identifiable {
     /// 通知のもとになる操作をしたアカウント。
     public let account: Account
     public let subject: Subject
+    /// 絵文字のリアクションの通知で、付けた絵文字。記号の代わりに描く。ほかの種類の通知と、絵文字を読めなかった通知ではnil。
+    public let reactionEmoji: ReactionEmoji?
 
     /// 右に出すもの。
     public enum Subject: Sendable, Equatable {
@@ -21,18 +23,24 @@ public struct StatusBarTickerItem: Sendable, Equatable, Identifiable {
         case none
     }
 
-    public init(id: MastodonNotification.ID, kind: MastodonNotification.Kind, account: Account, subject: Subject) {
+    public init(id: MastodonNotification.ID, kind: MastodonNotification.Kind, account: Account, subject: Subject, reactionEmoji: ReactionEmoji? = nil) {
         self.id = id
         self.kind = kind
         self.account = account
         self.subject = subject
+        self.reactionEmoji = kind == .emojiReaction ? reactionEmoji : nil
+    }
+
+    /// IDだけを替えた通知。同じ見本を何度も流すとき、前に流したものと別の通知として扱わせるため。
+    public func with(id: MastodonNotification.ID) -> StatusBarTickerItem {
+        StatusBarTickerItem(id: id, kind: kind, account: account, subject: subject, reactionEmoji: reactionEmoji)
     }
 
     /// 種類を知らない通知は、何をされたかを出せないため流さない。
     /// - Parameter verdict: 通知の投稿に当てたサーバーのフィルターの判定。通知の一覧と同じく、警告なら本文を見せずにフィルターの名前を出し、ぼかしならサムネイルをぼかす。
     public init?(_ notification: MastodonNotification, verdict: FilterVerdict = .none) {
         if case .other = notification.type { return nil }
-        self.init(id: notification.id, kind: notification.type, account: notification.account, subject: Self.subject(of: notification, verdict: verdict))
+        self.init(id: notification.id, kind: notification.type, account: notification.account, subject: Self.subject(of: notification, verdict: verdict), reactionEmoji: notification.reactionEmoji)
     }
 
     private static func subject(of notification: MastodonNotification, verdict: FilterVerdict) -> Subject {

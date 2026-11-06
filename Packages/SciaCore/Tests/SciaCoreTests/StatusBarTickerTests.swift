@@ -36,6 +36,16 @@ struct StatusBarTickerItemTests {
         return text.plainText
     }
 
+    /// 絵文字のリアクションの通知は、記号の代わりに描くため、付けた絵文字を持つ。ほかの種類には持たせない。
+    @Test func keepsReactionEmojiOnlyForEmojiReaction() {
+        let party = ReactionEmoji(name: "🎉")
+        let reaction = MastodonNotification(id: "1", type: .emojiReaction, createdAt: Date(timeIntervalSince1970: 0), account: actor, status: status(content: "<p>本文</p>"), reactionEmoji: party)
+
+        #expect(StatusBarTickerItem(reaction)?.reactionEmoji == party)
+        #expect(StatusBarTickerItem(reaction)?.with(id: "2").reactionEmoji == party)
+        #expect(StatusBarTickerItem(id: "1", kind: .favourite, account: actor, subject: .none, reactionEmoji: party).reactionEmoji == nil)
+    }
+
     @Test func joinsParagraphsAndLineBreaksIntoOneLine() {
         let item = StatusBarTickerItem(notification(.favourite, status: status(content: "<p>一行目<br>二行目</p><p>次の段落</p>")))
 
