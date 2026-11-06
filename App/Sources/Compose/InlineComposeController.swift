@@ -146,9 +146,7 @@ final class InlineComposeController: NSObject {
     private let accountLabel = UILabel()
     /// 予約の行。＋のメニューから足したときと、予約を書き直しているときだけ、返信や編集のラベルの下に出す。
     private lazy var scheduleRow = makeScheduleRow()
-    /// 予約の行の時計。開閉では、カプセルの時計とのあいだで動かす。
-    private let scheduleIcon = UIImageView(image: UIImage(systemName: "clock"))
-    /// 予約の日時。押すと日時を選ぶシートを出す。
+    /// 予約の時計と日時。押すと日時を選ぶシートを出す。時計は、開閉でカプセルの時計とのあいだで動かす。
     private lazy var scheduleDateButton = UIButton(configuration: .tinted(), primaryAction: UIAction { [weak self] _ in
         self?.presentScheduleDatePicker()
     })
@@ -2133,9 +2131,9 @@ final class InlineComposeController: NSObject {
                 replyButton.layoutIfNeeded()
                 ends[.chip] = .init(view: icon, content: .symbol(icon.image)) { icon.alpha = $0 ? 0 : 1 }
             }
-            if !scheduleRow.isHidden {
+            if !scheduleRow.isHidden, let icon = scheduleDateButton.imageView, icon.image != nil {
                 scheduleRow.layoutIfNeeded()
-                let icon = scheduleIcon
+                scheduleDateButton.layoutIfNeeded()
                 ends[.schedule] = .init(view: icon, content: .symbol(icon.image)) { icon.alpha = $0 ? 0 : 1 }
             }
             for id in ids {
@@ -2606,7 +2604,8 @@ final class InlineComposeController: NSObject {
         if let chip {
             let previous = replyLabelSwitchSnapshot(to: chip)
             setReplyTitle(chip.title)
-            replyButton.configuration?.image = UIImage(systemName: chip.symbolName)
+            replyButton.configuration?.image = Self.chipSymbol(chip.symbolName)
+            placeChipIcon(in: replyButton)
             replyButton.accessibilityHint = chip.hint
             replyClearButton.accessibilityLabel = chip.clearLabel
             if let previous {
@@ -2719,7 +2718,7 @@ final class InlineComposeController: NSObject {
     /// 出ているラベルの中身が替わるなら、替わる前のラベルの像。替わらないか、ラベルが見えていなければnil。
     private func replyLabelSwitchSnapshot(to chip: Chip) -> UIView? {
         guard isOpen, bar.window != nil, !replyRow.isHidden, replyRow.alpha > 0, !UIAccessibility.isReduceMotionEnabled,
-              replyButton.configuration?.title != chip.title || replyButton.configuration?.image != UIImage(systemName: chip.symbolName)
+              replyButton.configuration?.title != chip.title || replyButton.configuration?.image != Self.chipSymbol(chip.symbolName)
         else { return nil }
         return replyButton.snapshotView(afterScreenUpdates: false)
     }
@@ -3285,8 +3284,7 @@ final class InlineComposeController: NSObject {
     }
 
     private func makeReplyRow() -> UIView {
-        replyButton.configuration?.imagePadding = 4
-        replyButton.configuration?.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .footnote, scale: .small)
+        replyButton.configuration?.preferredSymbolConfigurationForImage = Self.chipSymbolScale
         replyButton.configuration?.titleLineBreakMode = .byTruncatingTail
         replyButton.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
             var attributes = attributes
@@ -3294,7 +3292,7 @@ final class InlineComposeController: NSObject {
             return attributes
         }
         replyButton.configuration?.cornerStyle = .capsule
-        replyButton.configuration?.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 10)
+        replyButton.configuration?.contentInsets = Self.chipInsets
         replyButton.contentHorizontalAlignment = .leading
         replyButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         let clear = replyClearButton
@@ -3306,12 +3304,62 @@ final class InlineComposeController: NSObject {
         let row = UIStackView(arrangedSubviews: [replyButton, spacer, clear])
         row.alignment = .center
         row.spacing = 6
+        Self.hangChipBackground(in: row)
         return row
+    }
+
+    /// 本文の上の行（書いているアカウント、返信先、予約、注意書き）の、アイコンや記号を置く枠の幅。記号はそれぞれの大きさのまま、枠の中央に置く。
+    /// どの行も、枠の右から`iconColumnGap`空けて文字を始め、文字の始まりを縦に揃える。
+    private static var iconColumnWidth: CGFloat { UIFontMetrics(forTextStyle: .footnote).scaledValue(for: 18) }
+    private static let iconColumnGap: CGFloat = 4
+    /// 記号を置く枠の幅と高さの制約。文字の大きさが変わったら、`applyIconColumn`で今の幅に合わせる。
+    private var iconColumnConstraints: [NSLayoutConstraint] = []
+
+    /// 文字の大きさが変わったら、記号を置く枠の幅と、背景の付いたラベルの記号の大きさと余白を、今の文字の大きさに合わせ直す。
+    /// 合わせ直さないと、作ったときの文字の大きさのまま残り、行ごとに文字の始まりがずれるため。
+    private func applyIconColumn() {
+        for constraint in iconColumnConstraints {
+            constraint.constant = Self.iconColumnWidth
+        }
+        scheduleDateButton.configuration?.image = Self.chipSymbol("clock")
+        placeChipIcon(in: scheduleDateButton)
+        if let chip {
+            replyButton.configuration?.image = Self.chipSymbol(chip.symbolName)
+            placeChipIcon(in: replyButton)
+        }
+    }
+
+    /// 背景の付いたラベル（返信先、予約の日時）の記号を、ほかの行と同じ幅の枠の中央に置く。ボタンの構成には画像の枠の幅を決める設定がないため、
+    /// 記号の幅から、背景の内側の余白と、記号と文字の間を決める。背景は行から内側の余白の分だけ左へはみ出している（`hangChipBackground`）。
+    private func placeChipIcon(in button: UIButton) {
+        guard let width = button.configuration?.image?.size.width else { return }
+        let side = max(0, (Self.iconColumnWidth - width) / 2)
+        button.configuration?.contentInsets.leading = Self.chipInsets.leading + side
+        button.configuration?.imagePadding = side + Self.iconColumnGap
+    }
+
+    /// 背景の付いたラベルの記号。ほかの行の記号と同じく、ラベルの文字と同じ文字のスタイルの、標準の段階の大きさにする。
+    /// ボタンは記号を、文字のスタイルや大きさの指定によらずボタンの文字の大きさで描き、段階（`scale`）だけを受け付け、指定しなければlargeにする。
+    /// そのためボタンには段階だけを渡し（`chipSymbolScale`）、画像には、記号の幅を求めるのに使う同じ大きさを持たせる。
+    private static func chipSymbol(_ name: String) -> UIImage? {
+        UIImage(systemName: name, withConfiguration: UIImage.SymbolConfiguration(textStyle: .footnote))
+    }
+
+    private static let chipSymbolScale = UIImage.SymbolConfiguration(scale: .medium)
+
+    /// 背景の付いたラベルの背景の内側の余白。記号の枠の左端からの余白で、記号を枠の中央に置く分は`placeChipIcon`が足す。
+    private static let chipInsets = NSDirectionalEdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 10)
+
+    /// 背景の付いたラベルで始まる行の、背景を内側の余白の分だけ左へはみ出させ、中の記号を、ほかの行のアイコンや記号と同じ左端から始める。
+    private static func hangChipBackground(in row: UIStackView) {
+        row.isLayoutMarginsRelativeArrangement = true
+        row.insetsLayoutMarginsFromSafeArea = false
+        row.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 0, leading: -chipInsets.leading, bottom: 0, trailing: 0)
     }
 
     /// 書いているほかのアカウントの行。アイコン、「@usernameで投稿」、今のアカウントに戻す×を並べる。
     private func makeAccountRow() -> UIView {
-        let side = UIFontMetrics(forTextStyle: .footnote).scaledValue(for: 18)
+        let side = Self.iconColumnWidth
         accountAvatarView.contentMode = .scaleAspectFit
         accountAvatarView.tintColor = .secondaryLabel
         accountAvatarView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .footnote)
@@ -3326,6 +3374,7 @@ final class InlineComposeController: NSObject {
             constraint.priority = .required - 1
         }
         NSLayoutConstraint.activate(avatarSize)
+        iconColumnConstraints += avatarSize
         accountAvatarView.isAccessibilityElement = false
 
         accountLabel.font = .preferredFont(forTextStyle: .footnote)
@@ -3347,7 +3396,7 @@ final class InlineComposeController: NSObject {
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         let row = UIStackView(arrangedSubviews: [accountAvatarView, accountLabel, spacer, clear])
         row.alignment = .center
-        row.spacing = 6
+        row.spacing = Self.iconColumnGap
         return row
     }
 
@@ -3361,14 +3410,10 @@ final class InlineComposeController: NSObject {
         setRowShown(accountRow, isOpen && writingAccount != nil)
     }
 
-    /// 予約の行。時計、日時、「に投稿」、外すボタンを並べる。日時は返信先のラベルと同じ形で、押すと日時を選ぶシートを出す。
+    /// 予約の行。時計と日時、「に投稿」、外すボタンを並べる。時計と日時は返信先のラベルと同じ形で、押すと日時を選ぶシートを出す。
     private func makeScheduleRow() -> UIView {
-        scheduleIcon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .footnote)
-        scheduleIcon.tintColor = .tintColor
-        scheduleIcon.setContentHuggingPriority(.required, for: .horizontal)
-        scheduleIcon.setContentCompressionResistancePriority(.required, for: .horizontal)
-        scheduleIcon.isAccessibilityElement = false
-
+        scheduleDateButton.configuration?.image = Self.chipSymbol("clock")
+        scheduleDateButton.configuration?.preferredSymbolConfigurationForImage = Self.chipSymbolScale
         scheduleDateButton.configuration?.titleLineBreakMode = .byTruncatingTail
         scheduleDateButton.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
             var attributes = attributes
@@ -3376,7 +3421,8 @@ final class InlineComposeController: NSObject {
             return attributes
         }
         scheduleDateButton.configuration?.cornerStyle = .capsule
-        scheduleDateButton.configuration?.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10)
+        scheduleDateButton.configuration?.contentInsets = Self.chipInsets
+        placeChipIcon(in: scheduleDateButton)
         scheduleDateButton.setContentHuggingPriority(.required, for: .horizontal)
         scheduleDateButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
@@ -3400,11 +3446,11 @@ final class InlineComposeController: NSObject {
 
         let spacer = UIView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let row = UIStackView(arrangedSubviews: [scheduleIcon, scheduleDateButton, suffix, spacer, clear])
+        let row = UIStackView(arrangedSubviews: [scheduleDateButton, suffix, spacer, clear])
         row.alignment = .center
         row.spacing = 6
-        row.setCustomSpacing(4, after: scheduleIcon)
         row.setCustomSpacing(4, after: scheduleDateButton)
+        Self.hangChipBackground(in: row)
         return row
     }
 
@@ -3412,6 +3458,10 @@ final class InlineComposeController: NSObject {
     private func makeSpoilerRow() -> UIView {
         let icon = UIImageView(image: UIImage(systemName: "exclamationmark.triangle"))
         icon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .footnote)
+        icon.contentMode = .center
+        let iconWidth = icon.widthAnchor.constraint(equalToConstant: Self.iconColumnWidth)
+        iconWidth.isActive = true
+        iconColumnConstraints.append(iconWidth)
         icon.tintColor = .secondaryLabel
         icon.setContentHuggingPriority(.required, for: .horizontal)
         icon.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -3445,7 +3495,7 @@ final class InlineComposeController: NSObject {
 
         let content = UIStackView(arrangedSubviews: [icon, spoilerField, clear])
         content.alignment = .center
-        content.spacing = 6
+        content.spacing = Self.iconColumnGap
         content.translatesAutoresizingMaskIntoConstraints = false
         let separator = UIView()
         separator.backgroundColor = .separator
@@ -3508,7 +3558,9 @@ final class InlineComposeController: NSObject {
             self?.updatePollFoldingAfterLayout()
         }
         // 文字の大きさが変わっても、行の高さが変わって広げている間の本文の高さが合わなくなるため、測り直す。
+        // 本文の上の行の、記号を置く枠と記号の大きさも合わせ直す。
         textView.registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { [weak self] (_: UITextView, _) in
+            self?.applyIconColumn()
             self?.textDidChange()
             self?.linkTitleEffects.layoutDidChange()
             self?.updatePollFoldingAfterLayout()
