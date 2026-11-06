@@ -58,8 +58,8 @@ struct LoginView: View {
                             .tint(.primary)
                         }
                     } footer: {
-                        // 一覧を無償で使わせてもらっている感謝を込めて、キラキラを添える。
-                        Text("サーバー一覧の提供: [FediDB](https://fedidb.com) \(Text(Image(systemName: "sparkles")).foregroundStyle(.yellow))")
+                        // サーバーのリストを無償で使わせてもらっている感謝を込めて、キラキラを添える。
+                        Text("サーバーのリストの提供: [FediDB](https://fedidb.com) \(Text(Image(systemName: "sparkles")).foregroundStyle(.yellow))")
                     }
                     .disabled(model.isLoggingIn)
                 }

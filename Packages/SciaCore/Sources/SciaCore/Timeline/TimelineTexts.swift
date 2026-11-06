@@ -16,7 +16,7 @@ public struct TimelineTexts: Sendable {
     /// サーバーがこの一覧を読ませないとき（docs/tabs.md）。
     public let unavailable: String
 
-    public init(dumpName: String, title: String, subtitle: String? = nil, empty: String, emptyDetail: String? = nil, reachedEnd: String, unreadable: String, unavailable: String = "このサーバーではこの一覧を読めません") {
+    public init(dumpName: String, title: String, subtitle: String? = nil, empty: String, emptyDetail: String? = nil, reachedEnd: String, unreadable: String, unavailable: String = "このサーバーではこのタイムラインを読めません") {
         self.dumpName = dumpName
         self.title = title
         self.subtitle = subtitle

@@ -3260,7 +3260,7 @@ final class SessionController {
     fileprivate func didSchedule(_ status: ScheduledStatus) {
         scheduled.didSchedule(status)
         let title = "\(ScheduleDateText.shortTitle(for: status.scheduledAt, now: now(), calendar: .autoupdatingCurrent))に予約しました"
-        let notice = Notice(id: "compose.scheduled", kind: .success, title: title, action: .disclosure(hint: "予約した投稿の一覧を表示します。") { [weak self] in
+        let notice = Notice(id: "compose.scheduled", kind: .success, title: title, action: .disclosure(hint: "予約投稿を表示します。") { [weak self] in
             self?.showScheduledStatuses()
         })
         notices.showTransient(notice, duration: AppDependencies.tuning.value(of: TuningCatalog.noticeFailureChipDuration))
@@ -3321,8 +3321,8 @@ final class SessionController {
                 if let error = error as? MastodonAPIError, error.isUnauthorized {
                     reportUnauthorized()
                 }
-                let alert = UIAlertController(title: "元の予約を取り消せませんでした", message: "書き直した投稿は送りましたが、元の予約が残っています。両方投稿されないよう、予約の一覧から取り消してください。\n\(ErrorPresentation(error).text)", preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: "予約の一覧を開く", style: .default) { [weak self] _ in self?.showScheduledStatuses() })
+                let alert = UIAlertController(title: "元の予約を取り消せませんでした", message: "書き直した投稿は送りましたが、元の予約が残っています。両方投稿されないよう、予約投稿の画面から取り消してください。\n\(ErrorPresentation(error).text)", preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "予約投稿を開く", style: .default) { [weak self] _ in self?.showScheduledStatuses() })
                 alert.addAction(UIAlertAction(title: "閉じる", style: .cancel))
                 topViewController.present(alert, animated: true)
                 return

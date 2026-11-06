@@ -60,7 +60,7 @@ struct PostingLanguageView: View {
                 .frame(maxWidth: .infinity)
         case .failed(let error):
             VStack(alignment: .leading, spacing: 4) {
-                Text("言語の一覧を読み込めませんでした")
+                Text("言語のリストを読み込めませんでした")
                 Text(ErrorPresentation(error).message)
                     .font(.footnote)
                     .foregroundStyle(.secondary)

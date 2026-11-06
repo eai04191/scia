@@ -2921,7 +2921,7 @@ final class InlineComposeController: NSObject {
             return Chip(title: title, symbolName: "square.and.pencil", hint: deleted ? "" : "タイムラインの元の投稿を表示します", clearLabel: "書き直しをやめる")
         }
         if let title = model.rewriteChipTitle {
-            return Chip(title: title, symbolName: "pencil", hint: "予約した投稿の一覧を表示します", clearLabel: "書き直しをやめる")
+            return Chip(title: title, symbolName: "pencil", hint: "予約投稿を表示します", clearLabel: "書き直しをやめる")
         }
         if let title = model.editChipTitle {
             return Chip(title: title, symbolName: "pencil", hint: "タイムラインの編集している投稿を表示します", clearLabel: "編集をやめる")

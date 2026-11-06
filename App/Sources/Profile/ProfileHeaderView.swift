@@ -1286,8 +1286,8 @@ enum ProfileCountList: String, CaseIterable {
 
     var accessibilityName: String {
         switch self {
-        case .following: "フォローしている人の一覧"
-        case .followers: "フォロワーの一覧"
+        case .following: "フォローしている人のリスト"
+        case .followers: "フォロワーのリスト"
         }
     }
 }

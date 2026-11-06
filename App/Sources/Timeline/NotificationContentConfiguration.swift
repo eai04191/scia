@@ -285,7 +285,7 @@ final class NotificationContentView: UIView, UIContentView {
             .joined(separator: "、")
         // まとめた行の「ほか3人」は文字の中にあり、読み上げでは押せないため、操作として足す。
         let groupAccountsAction = configuration.onOpenGroupAccounts.map { open in
-            UIAccessibilityCustomAction(name: "通知を送った人の一覧") { _ in
+            UIAccessibilityCustomAction(name: "通知を送った人のリスト") { _ in
                 open()
                 return true
             }
