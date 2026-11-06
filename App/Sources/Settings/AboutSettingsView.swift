@@ -3,6 +3,7 @@ import SwiftUI
 import UIKit
 
 /// 設定の「情報」。iPhoneの設定アプリの「一般」>「情報」と同じく、ビルドを灰色の値の行で並べ、接続の状態、ライセンス、謝辞の画面を開く。
+/// プライバシーポリシーは、App Store Connectに載せるものと同じ、リポジトリのPRIVACY.mdを開く。
 struct AboutSettingsView: View {
     var body: some View {
         Form {
@@ -20,11 +21,18 @@ struct AboutSettingsView: View {
                 NavigationLink("ライセンス", value: SettingsPage.licenses)
                 NavigationLink("謝辞", value: SettingsPage.acknowledgments)
             }
+            if let privacyPolicy = Self.privacyPolicy {
+                Section {
+                    Link("プライバシーポリシー", destination: privacyPolicy)
+                }
+            }
         }
         .topEdgeEffectHiddenOnMac()
         .navigationTitle("情報")
         .navigationBarTitleDisplayMode(.inline)
     }
+
+    private static let privacyPolicy = URL(string: "https://github.com/eai04191/scia/blob/main/PRIVACY.md")
 
     private func buildRow(_ title: String, value: String) -> some View {
         LabeledContent(title, value: value)
