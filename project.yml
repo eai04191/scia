@@ -23,6 +23,9 @@ settings:
     SCIA_DISPLAY_NAME: Scia
     SCIA_URL_SCHEME: scia
     SCIA_DEBUG_URL_SCHEME: scia-debug
+    # 主アイコン。scia-tryで実機に入れるScia TryはAppIconTryにして、ホーム画面で見分けられるようにする。
+    # 主アイコンにも切り替え用のアイコンにも指定していない.iconは、actoolがアプリに入れないので、ほかのビルドは大きくならない
+    SCIA_APP_ICON: AppIcon
     # 共有拡張が受け取ったメディアをアプリへ渡すためのApp Group（Packages/SciaCore/Sources/SciaCore/Compose/SharedMediaInbox.swift）
     SCIA_APP_GROUP: group.$(SCIA_BUNDLE_ID)
   configs:
@@ -69,6 +72,9 @@ targets:
           - $(SRCROOT)/App/Resources/AppIcon.icon/Assets/trail.svg
           - $(SRCROOT)/App/Resources/AppIconLight.icon/icon.json
           - $(SRCROOT)/App/Resources/AppIconLight.icon/Assets/trail.svg
+          - $(SRCROOT)/App/Resources/AppIconTry.icon/icon.json
+          - $(SRCROOT)/App/Resources/AppIconTry.icon/Assets/trail.svg
+          - $(SRCROOT)/App/Resources/AppIconTry.icon/Assets/grid.svg
         outputFiles:
           - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AppIconPreview@3x.png
           - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AppIconLightPreview@3x.png
@@ -79,7 +85,7 @@ targets:
         # iOSはなくてもインストールできるが、MacでDesigned for iPadとして動かすときはCFBundleVersionがないとインストールに失敗する
         MARKETING_VERSION: "0.0.0"
         CURRENT_PROJECT_VERSION: "1"
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_APPICON_NAME: $(SCIA_APP_ICON)
         # 設定で選べる、白地に青のアイコン（App/Sources/Settings/AppIconChoice.swift）
         ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: AppIconLight
         TARGETED_DEVICE_FAMILY: "1,2"
