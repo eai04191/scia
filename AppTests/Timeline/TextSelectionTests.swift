@@ -120,8 +120,10 @@ struct TextSelectionTests {
         textView.frame = CGRect(origin: .zero, size: textView.sizeThatFits(CGSize(width: label.bounds.width, height: CGFloat.greatestFiniteMagnitude)))
         textView.layoutIfNeeded()
         let origin = try #require(textView.overlaidGlyphOrigins.first)
+        // 端末と同じ3倍で描く。行の高さは画素に揃えないので、1倍では1ptの線が2つの画素の行に薄く分かれることがある。
+        let scale = 3
         let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
+        format.scale = CGFloat(scale)
         let image = UIGraphicsImageRenderer(bounds: textView.bounds, format: format).image { context in
             UIColor.white.setFill()
             context.fill(textView.bounds)
@@ -131,10 +133,10 @@ struct TextSelectionTests {
         let bytes = try #require(CFDataGetBytePtr(cgImage.dataProvider?.data))
         // 取り消し線の黒い画素が、絵文字の幅いっぱいに並ぶ行がある。
         let darkRows = (0..<cgImage.height).filter { y in
-            (Int(origin.x) + 4..<min(cgImage.width, Int(origin.x) + 30)).filter { x in
+            ((Int(origin.x) + 4) * scale..<min(cgImage.width, (Int(origin.x) + 30) * scale)).filter { x in
                 let pixel = y * cgImage.bytesPerRow + x * 4
                 return Int(bytes[pixel]) + Int(bytes[pixel + 1]) + Int(bytes[pixel + 2]) < 120
-            }.count >= 24
+            }.count >= 24 * scale
         }
         #expect(!darkRows.isEmpty)
     }
@@ -233,8 +235,8 @@ struct TextSelectionTests {
         #expect(textView.attributedText.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor == .systemRed)
     }
 
-    /// 選んでいる間に本文の幅が変わったら（画面を回したなど）、テキストビューの行の高さも新しい幅で付け直す。
-    /// 行より広いカスタム絵文字は並べる幅で縮め、その段落の行の高さも幅で決まるため、選び始めた幅のままだとラベルと行の位置がずれる。
+    /// 選んでいる間に本文の幅が変わっても（画面を回したなど）、テキストビューはラベルと同じ位置に行を並べる。
+    /// 行より広いカスタム絵文字は並べる幅で縮め、その行の高さも幅で決まる。
     @Test func selectionFollowsTheWidthOfWideEmojiLines() async throws {
         let url = try #require(URL(string: "https://example.social/emoji/wide.png"))
         let emoji = CustomEmoji(shortcode: "wide", url: url, staticUrl: url)
@@ -257,12 +259,15 @@ struct TextSelectionTests {
         view.frame.size.width = 200
         view.layoutIfNeeded()
 
-        let minimumLineHeight = { (text: NSAttributedString) in
-            (text.attribute(.paragraphStyle, at: text.length - 1, effectiveRange: nil) as? NSParagraphStyle)?.minimumLineHeight
-        }
-        let expected = minimumLineHeight(RichTextRenderer.fittingWideEmojis(in: renderer.render(rich), width: 200))
-        #expect(expected != minimumLineHeight(RichTextRenderer.fittingWideEmojis(in: renderer.render(rich), width: 328)))
-        #expect(minimumLineHeight(textView.attributedText) == expected)
+        textView.layoutIfNeeded()
+        // 本文のラベルと同じく、TextKit 2で描くラベルを同じ幅に置いて比べる。
+        let label = LinkLabel()
+        label.drawsWithTextKit = true
+        label.numberOfLines = 0
+        label.attributedText = renderer.render(rich)
+        label.frame = CGRect(x: 0, y: 0, width: textView.bounds.width, height: 1000)
+        #expect(textView.bounds.width == 200)
+        #expect(lineFrames(of: try #require(textView.textLayoutManager)) == lineFrames(of: label.textLayout(of: try #require(label.attributedText)).layoutManager))
         #expect(view.isSelectingText)
     }
 

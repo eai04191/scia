@@ -869,8 +869,9 @@ final class PostBodyView: UIView {
         let isTruncated = content.maximumLines > 0
         if let source = textGlyphsInsetsSource, source.text === content.text, source.width == width, source.isTruncated == isTruncated { return false }
         textGlyphsInsetsSource = (content.text, width, isTruncated)
-        let top = Self.textTopInset(of: content.text, width: width)
-        let bottom = Self.textBottomInset(of: content.text, isTruncated: isTruncated, width: width)
+        let lines = textLabel.textKitLineRanges(of: content.text, width: width)
+        let top = Self.textTopInset(of: content.text, width: width, firstLine: lines?.first)
+        let bottom = Self.textBottomInset(of: content.text, isTruncated: isTruncated, width: width, lastLine: lines?.last)
         guard textGlyphsTop.constant != top || textGlyphsBottom.constant != bottom else { return false }
         textGlyphsTop.constant = top
         textGlyphsBottom.constant = bottom
@@ -1098,14 +1099,15 @@ final class PostBodyView: UIView {
     /// 絵文字を文字の行より大きくした段落は、絵文字が字面の中心から上下へ伸び、行が文字の行より高くなる。
     /// 字面だけで測ると、1行目の絵文字が上の部品（名前の行）に重なるため、絵文字の上端で測る。
     /// 字面に、書体のascenderを超えた分だけを足すと、ascenderが字面より高いぶん絵文字の上端に届かず、上の部品との間隔が設定より狭くなる。
-    /// 段落のどの行も同じ高さに広げるので（`RichTextRenderer`の`minimumLineHeight`）、絵文字が1行目になくても最初の段落の絵文字で測る。
+    /// UILabelで描くラベルは段落のどの行も同じ高さに広げるので（`RichTextRenderer`の`minimumLineHeight`）、絵文字が1行目になくても最初の段落の絵文字で測る。
     /// 段落の中の改行で区切った行は、高さが違えば`RichTextRenderer`が段落に分けるので、最初の段落は改行の前の行だけになる。
     /// - Parameter width: 並べる幅。渡せば、行より広いカスタム絵文字は縮めて置く大きさで測る。
-    static func textTopInset(of text: NSAttributedString, width: CGFloat? = nil) -> CGFloat {
+    /// - Parameter firstLine: TextKit 2で並べた最初の行の文字の範囲（`TextKitLabel.textKitLineRanges(of:width:)`）。TextKit 2は行ごとに高さを決めるので、渡せばその行の絵文字で測る。
+    static func textTopInset(of text: NSAttributedString, width: CGFloat? = nil, firstLine: NSRange? = nil) -> CGFloat {
         guard text.length > 0 else { return 0 }
-        let paragraph = (text.string as NSString).paragraphRange(for: NSRange(location: 0, length: 0))
-        guard let font = RichTextRenderer.textFont(in: text, range: paragraph) else { return 0 }
-        return max(font.pointSize * emBoxAscent, RichTextRenderer.emojiExtent(in: text, range: paragraph, width: width).above)
+        let range = firstLine ?? (text.string as NSString).paragraphRange(for: NSRange(location: 0, length: 0))
+        guard let font = RichTextRenderer.textFont(in: text, range: range) else { return 0 }
+        return max(font.pointSize * emBoxAscent, RichTextRenderer.emojiExtent(in: text, range: range, width: width).above)
     }
 
     /// 最後の文字の、ベースラインから字面の下端まで。最後の段落の絵文字が字面より下へ伸びていれば、その下端まで。
@@ -1116,13 +1118,14 @@ final class PostBodyView: UIView {
     ///   最後の段落より下へ伸びる大きい絵文字があると、その差の分だけ下の部品に近づく。幅が分かるのは並べるときで、あいだの制約を作る中身の適用では分からず、
     ///   並べるときに制約を変えると、行の高さがタイムラインの測った高さと食い違うため、対応しない。
     /// - Parameter width: 並べる幅。渡せば、行より広いカスタム絵文字は縮めて置く大きさで測る。
-    static func textBottomInset(of text: NSAttributedString, isTruncated: Bool = false, width: CGFloat? = nil) -> CGFloat {
+    /// - Parameter lastLine: TextKit 2で並べた最後の行の文字の範囲（`TextKitLabel.textKitLineRanges(of:width:)`）。渡せばその行の絵文字で測る。`isTruncated`なら使わない。
+    static func textBottomInset(of text: NSAttributedString, isTruncated: Bool = false, width: CGFloat? = nil, lastLine: NSRange? = nil) -> CGFloat {
         guard text.length > 0 else { return 0 }
-        let paragraph = isTruncated
+        let range = isTruncated
             ? NSRange(location: 0, length: text.length)
-            : (text.string as NSString).paragraphRange(for: NSRange(location: text.length - 1, length: 0))
-        guard let font = RichTextRenderer.textFont(in: text, range: paragraph, fromEnd: true) else { return 0 }
-        return max(font.pointSize * emBoxDescent, RichTextRenderer.emojiExtent(in: text, range: paragraph, width: width).below)
+            : lastLine ?? (text.string as NSString).paragraphRange(for: NSRange(location: text.length - 1, length: 0))
+        guard let font = RichTextRenderer.textFont(in: text, range: range, fromEnd: true) else { return 0 }
+        return max(font.pointSize * emBoxDescent, RichTextRenderer.emojiExtent(in: text, range: range, width: width).below)
     }
 
     /// 本文を先に並べるときに使う、本文のラベルの値と幅。本文を出していないとき、添付ファイルを本文の右に並べて幅を狭めているとき、幅が決まる前はnil。

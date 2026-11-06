@@ -489,9 +489,8 @@ class EmojiLabel: TextKitLabel {
     /// 空行の高さが変わって下の行がずれるため。
     final var textForTextKit: NSAttributedString? {
         sourceText.map {
-            // TextKit 2で描くときは、大きくした絵文字を場所取りに置き換えて並べているので、同じ行の高さになるよう、同じく置き換える。
-            // 行より広い絵文字の段落の行の高さも、ラベルの幅で同じく付け直す。
-            let placed = drawsWithTextKit ? TextKitLabelLayout.placingOverlaidGlyphs(TextKitLabelLayout.fittingWideEmojis($0, width: bounds.width, style: textKitStyle)) : $0
+            // TextKit 2で描くときは、大きくした絵文字を場所取りに置き換え、絵文字に合わせた行の高さを外して並べているので、同じ行の高さになるよう、同じくする。
+            let placed = drawsWithTextKit ? TextKitLabelLayout.placingOverlaidGlyphs(TextKitLabelLayout.lineHeightsFromContent($0, style: textKitStyle)) : $0
             return TextKitLabelLayout.aligned(TextKitLabelLayout.wrappingInsteadOfTruncating(placed), direction: effectiveUserInterfaceLayoutDirection)
         }
     }

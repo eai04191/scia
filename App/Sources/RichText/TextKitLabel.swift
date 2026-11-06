@@ -3,7 +3,7 @@ import UIKit
 /// UILabelの代わりに、TextKit 2で文字を並べて描けるラベル。`drawsWithTextKit`がfalseなら、UILabelのまま描く。
 /// どちらで描くときも、UILabelと同じ位置に文字が並ぶTextKit 2の並び（`textLayout(of:)`）を出し、押した文字や文字の枠を求められる。
 /// UILabelは文字の配置を公開しないため、同じ文字列と幅でTextKit 2に並べ直して位置を求める。
-/// 並べる手順は`TextKitLabelLayout`に置く。UIKitとCoreTextのほかには、行より広いカスタム絵文字の行の高さを付け直すのに`RichTextRenderer`を使う。
+/// 並べる手順は`TextKitLabelLayout`に置く。
 class TextKitLabel: UILabel {
     /// 置く側が最後に`attributedText`に入れた文字列そのもの。`text`を入れたらnil。先に並べた結果がこの文字列のものかを見分けるのに使う。
     private(set) var assignedText: NSAttributedString?
@@ -220,6 +220,15 @@ class TextKitLabel: UILabel {
     /// 文字がなければ、どちらも0。
     final func textKitBaselines(width: CGFloat) -> (first: CGFloat, lastFromBottom: CGFloat) {
         textKitMetrics(width: width, maximumLines: numberOfLines).map { ($0.firstBaseline, $0.lastBaselineFromBottom) } ?? (0, 0)
+    }
+
+    /// TextKit 2で`width`の幅に今の行数で並べたときの、最初の行と最後の行の文字の範囲。
+    /// 置く側が最後に入れた文字列（`assignedText`）と`text`の長さが違うか、文字がなければnil。
+    /// 置く側は、属性だけを変えた文字列（「…」で切る段落スタイルにしたものなど）を入れることがあるので、同じオブジェクトかでは比べない。
+    /// 長さの違う文字列（テキストを選択している間に、URLを元の文字に戻した本文）の範囲を渡すと、位置がずれる。
+    final func textKitLineRanges(of text: NSAttributedString, width: CGFloat) -> (first: NSRange, last: NSRange)? {
+        guard assignedText?.length == text.length else { return nil }
+        return textKitMetrics(width: width, maximumLines: numberOfLines).map { ($0.firstLineRange, $0.lastLineRange) }
     }
 
     override func textRect(forBounds bounds: CGRect, limitedToNumberOfLines numberOfLines: Int) -> CGRect {

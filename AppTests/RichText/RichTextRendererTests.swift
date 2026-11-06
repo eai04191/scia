@@ -333,6 +333,56 @@ extension RichTextRendererTests {
         #expect(abs((largeLines[3] - largeLines[2]) - (plainLines[3] - plainLines[2])) < 0.5, "段落の間隔は変わらない")
     }
 
+    /// 改行で区切らずに折り返した行でも、TextKit 2で描くラベルでは、大きくした絵文字のある行だけを高くする。
+    @Test func wrappedLinesBeforeLargeEmojiKeepTextHeight() throws {
+        let html = "<p>" + String(repeating: "文", count: 30) + "😀</p>"
+        let parser = MastodonHTMLParser(mentions: [], tags: [], emojis: [])
+        var large = renderer(.offline)
+        large.lineSpacing = 4
+        large.unicodeEmojiScale = 2
+        var plain = large
+        plain.unicodeEmojiScale = 1
+
+        let baselines = { (text: NSAttributedString) -> [CGFloat] in
+            let style = TextKitLabelLayout.Style(font: font, textColor: .label, lineBreakMode: .byWordWrapping, direction: .leftToRight, displayScale: 1, overlaysGlyphs: true)
+            let layout = TextKitLabelLayout.layout(of: TextKitLabelLayout.filled(text, style: style), width: font.pointSize * 12, maximumLines: 0, style: style)
+            var result: [CGFloat] = []
+            layout.layoutManager.enumerateTextLayoutFragments(from: layout.layoutManager.documentRange.location, options: [.ensuresLayout]) { fragment in
+                for line in fragment.textLineFragments {
+                    result.append(fragment.layoutFragmentFrame.minY + line.typographicBounds.minY + line.glyphOrigin.y)
+                }
+                return true
+            }
+            return result
+        }
+        let largeLines = baselines(large.render(parser.parse(html)))
+        let plainLines = baselines(plain.render(parser.parse(html)))
+
+        try #require(largeLines.count == 3 && plainLines.count == 3)
+        #expect(abs((largeLines[1] - largeLines[0]) - (plainLines[1] - plainLines[0])) < 0.5, "絵文字のない行は高くならない")
+        #expect(largeLines[2] - largeLines[1] > plainLines[2] - plainLines[1], "絵文字の行は高くなる")
+    }
+
+    /// 並べた結果の最初と最後の行の範囲は、段落をまたいでも、渡した文字列での位置になる。
+    /// 本文の上下の余白は、この範囲の絵文字で測る。
+    @Test func metricsReportFirstAndLastLineRanges() throws {
+        var renderer = renderer(.offline)
+        renderer.unicodeEmojiScale = 2
+        let text = renderer.render(MastodonHTMLParser(mentions: [], tags: [], emojis: []).parse("<p>" + String(repeating: "文", count: 30) + "😀</p><p>後の段落😀" + String(repeating: "文", count: 30) + "</p>"))
+        let style = TextKitLabelLayout.Style(font: font, textColor: .label, lineBreakMode: .byWordWrapping, direction: .leftToRight, displayScale: 1, overlaysGlyphs: true)
+        let layout = TextKitLabelLayout.layout(of: TextKitLabelLayout.filled(text, style: style), width: font.pointSize * 12, maximumLines: 0, style: style)
+        let metrics = try #require(TextKitLabelLayout.metrics(of: layout, displayScale: 1))
+        let string = text.string as NSString
+
+        #expect(metrics.firstLineRange.location == 0)
+        #expect(!string.substring(with: metrics.firstLineRange).contains("😀"))
+        #expect(NSMaxRange(metrics.lastLineRange) == string.length)
+        #expect(!string.substring(with: metrics.lastLineRange).contains("😀"))
+        #expect(PostBodyView.textTopInset(of: text, firstLine: metrics.firstLineRange) == font.pointSize * PostBodyView.emBoxAscent)
+        #expect(PostBodyView.textTopInset(of: text) > font.pointSize * PostBodyView.emBoxAscent, "段落で測ると絵文字の上端になる")
+        #expect(PostBodyView.textBottomInset(of: text, lastLine: metrics.lastLineRange) == font.pointSize * PostBodyView.emBoxDescent)
+    }
+
     /// 同じ行の中で「…」に置き換わった絵文字は描かない。
     /// 色のある画素は、色の絵文字と同じ行にある文字の縁にも出るので、行ではなく画素の数で、絵文字を描いた量と比べる。
     @Test func emojiReplacedByEllipsisInTheSameLineIsNotDrawn() throws {

@@ -340,7 +340,7 @@ final class EmbeddedPostView: UIButton {
         if textFirstBaseline.constant != first {
             textFirstBaseline.constant = first
         }
-        let top = content.map { PostBodyView.textTopInset(of: $0.text, width: width) } ?? 0
+        let top = content.map { PostBodyView.textTopInset(of: $0.text, width: width, firstLine: textLabel.textKitLineRanges(of: $0.text, width: width)?.first) } ?? 0
         if textGlyphsTop.constant != top {
             textGlyphsTop.constant = top
         }

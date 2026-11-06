@@ -25,6 +25,9 @@ enum TextKitLabelLayout {
         let firstBaseline: CGFloat
         /// 最後の行のベースラインから下端まで。
         let lastBaselineFromBottom: CGFloat
+        /// 最初の行と最後の行の文字の範囲。並べた文字列での位置で、並べる前に場所取りに置き換えても長さは変えないので、渡した文字列での位置と同じ。
+        let firstLineRange: NSRange
+        let lastLineRange: NSRange
     }
 
     /// フォントと色のない部分を、ラベルのフォントと色で埋めた文字列。UILabelは渡された文字列をこうして埋めてから並べる。
@@ -40,10 +43,23 @@ enum TextKitLabelLayout {
         return result
     }
 
-    /// TextKit 2で描くラベルで、行より広いカスタム絵文字を縮めて置く段落の行の高さを、`width`の幅で付け直した文字列（`RichTextRenderer.fittingWideEmojis`）。
-    /// UILabelで描くラベルでは付け直さない。UILabelは縮める前の行の高さで描くので、位置を求める並びも同じにする。
-    static func fittingWideEmojis(_ text: NSAttributedString, width: CGFloat, style: Style) -> NSAttributedString {
-        style.overlaysGlyphs ? RichTextRenderer.fittingWideEmojis(in: text, width: width) : text
+    /// TextKit 2で描くラベルで、絵文字に合わせて付けた行の高さ（`minimumLineHeight`）を外した文字列。
+    /// 行の高さは段落のどの行にも同じものが付くため、絵文字のある段落では、折り返した絵文字のない行まで高くなる。
+    /// TextKit 2は、行の高さを行ごとに、その行の文字と添付から決める。大きくした絵文字は絵の枠の大きさの場所取り（`placingOverlaidGlyphs(_:)`）に、
+    /// 行より広いカスタム絵文字は縮めて置く大きさ（`LineFittingAttachment`）にしてあるので、外せば絵文字のある行だけが絵文字の高さになる。
+    /// UILabelで描くラベルでは外さない。UILabelは付けた行の高さで描くので、位置を求める並びも同じにする。
+    static func lineHeightsFromContent(_ text: NSAttributedString, style: Style) -> NSAttributedString {
+        guard style.overlaysGlyphs else { return text }
+        var result: NSMutableAttributedString?
+        text.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: text.length)) { value, range, _ in
+            guard let style = value as? NSParagraphStyle, style.minimumLineHeight > 0,
+                  let unlimited = style.mutableCopy() as? NSMutableParagraphStyle
+            else { return }
+            unlimited.minimumLineHeight = 0
+            if result == nil { result = NSMutableAttributedString(attributedString: text) }
+            result?.addAttribute(.paragraphStyle, value: unlimited, range: range)
+        }
+        return result ?? text
     }
 
     /// `filled(_:style:)`で埋めた文字列を、`width`の幅に`maximumLines`行まで並べる。0なら行数を限らない。
@@ -58,7 +74,7 @@ enum TextKitLabelLayout {
         // 段落は折り返しにして、コンテナで最後の行だけを「…」で切る。最後の行に入りきらない単語も、UILabelと同じく「…」の前まで途中を並べる。
         container.lineBreakMode = truncationMode(of: attributedText, lineBreakMode: style.lineBreakMode) ?? style.lineBreakMode
         layoutManager.textContainer = container
-        let fitted = fittingWideEmojis(attributedText, width: width, style: style)
+        let fitted = lineHeightsFromContent(attributedText, style: style)
         let placed = style.overlaysGlyphs ? placingOverlaidGlyphs(fitted) : fitted
         contentStorage.attributedString = wrappingInsteadOfTruncating(aligned(placed, direction: style.direction))
         layoutManager.ensureLayout(for: layoutManager.documentRange)
@@ -206,27 +222,33 @@ enum TextKitLabelLayout {
     static func metrics(of layout: TextLayout, displayScale scale: CGFloat) -> Metrics? {
         var lineCount = 0
         var maxX: CGFloat = 0
-        var firstBaseline: CGFloat?
-        var last: (baseline: CGFloat, line: NSTextLineFragment)?
-        layout.layoutManager.enumerateTextLayoutFragments(from: layout.layoutManager.documentRange.location, options: [.ensuresLayout]) { fragment in
+        var first: (baseline: CGFloat, range: NSRange)?
+        var last: (baseline: CGFloat, line: NSTextLineFragment, range: NSRange)?
+        let start = layout.layoutManager.documentRange.location
+        layout.layoutManager.enumerateTextLayoutFragments(from: start, options: [.ensuresLayout]) { fragment in
             let origin = fragment.layoutFragmentFrame.origin
+            // 行の文字の範囲は段落の中での位置なので、段落の頭の位置を足す。
+            let paragraphStart = layout.contentStorage.offset(from: start, to: fragment.rangeInElement.location)
             for line in fragment.textLineFragments {
                 let bounds = line.typographicBounds.offsetBy(dx: origin.x, dy: origin.y)
                 let baseline = bounds.minY + line.glyphOrigin.y
+                let range = NSRange(location: paragraphStart + line.characterRange.location, length: line.characterRange.length)
                 lineCount += 1
                 maxX = max(maxX, bounds.maxX)
-                if firstBaseline == nil { firstBaseline = baseline }
-                last = (baseline, line)
+                if first == nil { first = (baseline, range) }
+                last = (baseline, line, range)
             }
             return true
         }
-        guard let firstBaseline, let last else { return nil }
+        guard let first, let last else { return nil }
         let height = ceil((last.baseline + descent(of: last.line)) * scale) / scale
         return Metrics(
             size: CGSize(width: ceil(maxX * scale) / scale, height: height),
             lineCount: lineCount,
-            firstBaseline: firstBaseline,
-            lastBaselineFromBottom: height - last.baseline
+            firstBaseline: first.baseline,
+            lastBaselineFromBottom: height - last.baseline,
+            firstLineRange: first.range,
+            lastLineRange: last.range
         )
     }
 

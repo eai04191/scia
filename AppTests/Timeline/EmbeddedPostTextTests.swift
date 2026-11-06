@@ -76,4 +76,33 @@ struct EmbeddedPostTextTests {
 
         #expect(abs(grid.frame.minY - (padding + firstBaseline - PostBodyView.textTopInset(of: text))) < 0.5)
     }
+
+    /// 大きくした絵文字が、最初の段落の折り返したあとの行にだけあれば、サムネイルの上端は、絵文字のない1行目の字面の上端にそろえる。
+    /// TextKit 2は行ごとに高さを決めるので、1行目は絵文字に合わせて高くならない。
+    @Test func besideMediaTopIgnoresLargeEmojiInWrappedLine() throws {
+        let attachment = MediaAttachment(
+            id: "1",
+            type: .image,
+            url: URL(string: "https://files.example.social/original/1.png"),
+            previewUrl: URL(string: "https://files.example.social/small/1.png"),
+            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 400, height: 300)),
+            blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+        )
+        var media = MediaGridView.Content(attachments: [attachment], cover: nil, tallestAspectRatio: 0.75, thumbnailPolicy: .offline, spacing: 4)
+        media.arrangement = .stack(side: 64)
+        var renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: .offline, language: "ja")
+        renderer.unicodeEmojiScale = 2
+        let text = renderer.render(.plain(String(repeating: "文", count: 60) + "😀", emojis: []))
+
+        let view = laidOut(embed(text: text, media: media))
+        let grid = try #require(view.mediaGrid)
+        let padding: CGFloat = 10
+        let textWidth = view.bounds.width - padding * 2 - grid.bounds.width - 8
+        let style = TextKitLabelLayout.Style(font: font, textColor: .label, lineBreakMode: .byWordWrapping, direction: .leftToRight, displayScale: view.traitCollection.displayScale, overlaysGlyphs: true)
+        let layout = TextKitLabelLayout.layout(of: TextKitLabelLayout.filled(text, style: style), width: textWidth, maximumLines: 0, style: style)
+        let metrics = try #require(TextKitLabelLayout.metrics(of: layout, displayScale: view.traitCollection.displayScale))
+
+        try #require(metrics.lineCount > 1)
+        #expect(abs(grid.frame.minY - (padding + metrics.firstBaseline - font.pointSize * PostBodyView.emBoxAscent)) < 0.5)
+    }
 }

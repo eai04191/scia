@@ -423,7 +423,8 @@ struct RichTextRenderer: Sendable {
     /// 段落スタイルを付ける。行の高さは段落のどの行にも同じものが付くため、段落の中の改行（U+2028）で区切った行の高さが違えば、
     /// 改行を段落の区切りにして、行ごとに高さを付ける。区切らないと、絵文字のある行に合わせた高さが、絵文字のない行にも付いて行間が開く。
     /// 区切った行は、段落の間隔を最後の行にだけ付け、2行目からの字下げを折り返した行と揃えて、同じ段落の行と同じに並べる。
-    /// 改行で区切らずに折り返した行は、同じ段落なので、絵文字のある行に合わせた高さのまま並ぶ。
+    /// 改行で区切らずに折り返した行は、同じ段落なので、UILabelで描くラベルでは絵文字のある行に合わせた高さのまま並ぶ。
+    /// TextKit 2で描くラベルは、この高さを外して行ごとに高さを決める（`TextKitLabelLayout.lineHeightsFromContent(_:style:)`）。
     private func applyLineHeights(for block: RichText.Block, to result: NSMutableAttributedString, range: NSRange) {
         let lines = Self.lineRanges(in: result.string as NSString, range: range)
         let extents = lines.map { Self.emojiExtent(in: result, range: $0) }
@@ -551,32 +552,6 @@ struct RichTextRenderer: Sendable {
     private static func placedBounds(of attachment: NSTextAttachment, at location: Int, in text: NSAttributedString, width: CGFloat?) -> CGRect {
         guard let width, let fitting = attachment as? LineFittingAttachment else { return attachment.bounds }
         return fitting.placedBounds(lineWidth: width, paragraphStyle: text.attribute(.paragraphStyle, at: location, effectiveRange: nil) as? NSParagraphStyle)
-    }
-
-    /// `text`を幅`width`で並べるときに、行より広いカスタム絵文字を縮めて置く段落の行の高さ（`minimumLineHeight`）を、縮めた大きさで付け直した文字列。
-    /// 行の高さは文字列を作るときに縮める前の大きさで決めるので、付け直さないと、縮めた絵文字の上が縮めた分だけ空く。
-    /// TextKit 2で自分で描くラベルが並べる直前に使う。UILabelで描くラベルには使えない。UILabelは並べ方を自分で決め、幅ごとに文字列を差し替える入口がないため、
-    /// 行の高さは縮める前のまま描く。行の高さが付くのは絵文字を文字の行より大きくしたときだけで、UILabelで描く名前の行では、「名前の行」のカスタム絵文字の倍率を上げたときに当たる。
-    /// 縮める絵文字がなければ、`text`をそのまま返す。ふつうの本文は、添付の幅を比べるだけで済む。
-    static func fittingWideEmojis(in text: NSAttributedString, width: CGFloat) -> NSAttributedString {
-        guard width > 0, width.isFinite, text.length > 0 else { return text }
-        let string = text.string as NSString
-        var paragraphs: [(range: NSRange, font: UIFont)] = []
-        text.enumerateAttribute(.attachment, in: NSRange(location: 0, length: text.length)) { value, range, _ in
-            guard let attachment = value as? LineFittingAttachment,
-                  placedBounds(of: attachment, at: range.location, in: text, width: width).width < attachment.bounds.width
-            else { return }
-            let paragraph = string.paragraphRange(for: range)
-            if paragraphs.last?.range != paragraph { paragraphs.append((paragraph, attachment.lineFont)) }
-        }
-        guard !paragraphs.isEmpty else { return text }
-        let result = NSMutableAttributedString(attributedString: text)
-        for paragraph in paragraphs {
-            guard let style = (text.attribute(.paragraphStyle, at: paragraph.range.location, effectiveRange: nil) as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle else { continue }
-            style.minimumLineHeight = lineHeight(font: paragraph.font, emojiExtent: emojiExtent(in: text, range: paragraph.range, width: width)) ?? 0
-            result.addAttribute(.paragraphStyle, value: style, range: paragraph.range)
-        }
-        return result
     }
 
     /// 1行目の上端から、文字と絵文字の上端までの空き。ふだんは0。

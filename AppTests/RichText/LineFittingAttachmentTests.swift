@@ -78,13 +78,6 @@ struct LineFittingAttachmentTests {
         #expect(frame.minY >= -0.01, "\(frame)")
     }
 
-    /// 行に収まる絵文字の本文は、付け直さず、作った文字列をそのまま並べる。
-    @Test func textWithoutWideEmojiIsLaidOutAsIs() async throws {
-        let text = try await render(aspect: 1, emojiOnly: true) { [.init(inlines: [.emoji($0)])] }
-
-        #expect(RichTextRenderer.fittingWideEmojis(in: text, width: width) === text)
-    }
-
     /// 本文の字面の上下は、縮めて置いた絵文字の大きさで測る。縮める前の大きさで測ると、上下の部品とのあいだが縮めた分だけ空く。
     @Test func glyphInsetsAreMeasuredFromTheFittedEmoji() async throws {
         let text = try await render(aspect: 16, emojiOnly: true) { [.init(inlines: [.emoji($0)])] }
