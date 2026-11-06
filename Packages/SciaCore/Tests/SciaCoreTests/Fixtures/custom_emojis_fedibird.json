@@ -1,0 +1,25 @@
+[
+  {
+    "shortcode": "wide_word",
+    "url": "https://media.example.social/custom_emojis/images/000/000/301/original/wide_word.png",
+    "static_url": "https://media.example.social/custom_emojis/images/000/000/301/static/wide_word.webp",
+    "visible_in_picker": true,
+    "category": "単語（横長）",
+    "width": 1426,
+    "height": 256
+  },
+  {
+    "shortcode": "zero_height",
+    "url": "https://media.example.social/custom_emojis/images/000/000/302/original/zero_height.png",
+    "static_url": "https://media.example.social/custom_emojis/images/000/000/302/static/zero_height.webp",
+    "visible_in_picker": true,
+    "width": 128,
+    "height": 0
+  },
+  {
+    "shortcode": "no_size",
+    "url": "https://media.example.social/custom_emojis/images/000/000/303/original/no_size.png",
+    "static_url": "https://media.example.social/custom_emojis/images/000/000/303/static/no_size.webp",
+    "visible_in_picker": true
+  }
+]

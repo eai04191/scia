@@ -1468,6 +1468,24 @@ public enum TuningCatalog {
         defaultValue: 48
     )
 
+    /// 絵文字のパレットで、横長のカスタム絵文字に横に使わせるマスの数の上限。
+    public static let composeEmojiPaletteMaxSpan = NumberTuning(
+        id: "compose.emojiPalette.maxSpan",
+        title: "絵文字のパレットの横長の絵文字のマスの上限",
+        range: 1...6,
+        step: 1,
+        defaultValue: 3
+    )
+
+    /// 絵文字のパレットで、横長のカスタム絵文字を1マスの高さのどこまで縮めて描いてよいか。これより縮むなら、マスを横に足す。
+    public static let composeEmojiPaletteMinimumHeightFraction = NumberTuning(
+        id: "compose.emojiPalette.minimumHeightFraction",
+        title: "絵文字のパレットの横長の絵文字を縮めてよい高さ（割合）",
+        range: 0.3...1,
+        step: 0.05,
+        defaultValue: 0.7
+    )
+
     /// 絵文字のパレットの先頭に出す、最近使った絵文字の数。
     public static let composeEmojiPaletteRecentLimit = NumberTuning(
         id: "compose.emojiPalette.recentLimit",
@@ -1849,6 +1867,8 @@ public enum TuningCatalog {
             .number(composeEmojiPaletteBarHeight),
             .number(composeEmojiPaletteBarBottomInset),
             .number(composeEmojiPaletteCellSize),
+            .number(composeEmojiPaletteMaxSpan),
+            .number(composeEmojiPaletteMinimumHeightFraction),
             .number(composeEmojiPaletteRecentLimit),
             .number(completionDebounce),
             .number(completionLimit),

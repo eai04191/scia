@@ -960,6 +960,17 @@ struct MastodonClientTests {
         #expect(emojis.first { $0.shortcode == "no_picker_flag" }?.visibleInPicker == true)
     }
 
+    /// Fedibirdが返す画像の幅と高さから、縦横比を読む。幅か高さが0のものと、大きさを返さないものは分からないものとする。
+    @Test func customEmojisReadFedibirdSize() async throws {
+        let transport = StubTransport([try .fixture("custom_emojis_fedibird")])
+
+        let emojis = try await makeClient(transport).customEmojis()
+
+        #expect(emojis.first { $0.shortcode == "wide_word" }?.aspectRatio == 1426.0 / 256.0)
+        #expect(emojis.first { $0.shortcode == "zero_height" }?.aspectRatio == nil)
+        #expect(emojis.first { $0.shortcode == "no_size" }?.aspectRatio == nil)
+    }
+
     /// 同じショートコードの絵文字を返すサーバーでは、Mastodonのwebと同じく、後に来た1件だけを残す。
     /// 残すと、絵文字のパレットが同じ項目を2つ並べようとして落ちる。
     @Test func customEmojisKeepLastOfSameShortcode() async throws {

@@ -85,6 +85,56 @@ public enum EmojiPalette {
     }
 }
 
+/// パレットのマスに絵文字を並べる。横長のカスタム絵文字は、高さをあまり縮めずに描けるだけのマスを横に使う。
+/// 絵を描く枠の余白はマスの高さから決めるので、マスの数は縦横比だけで決まり、マスの大きさによらない。
+public enum EmojiPaletteGrid {
+    /// 絵を描く枠の上下左右の余白の、マスの高さに対する割合。
+    public static let imageInsetFraction = 0.15
+
+    /// 絵文字1つを置く場所。`span`は横に使うマスの数。
+    public struct Placement: Equatable, Sendable {
+        public let row: Int
+        public let column: Int
+        public let span: Int
+
+        public init(row: Int, column: Int, span: Int) {
+            self.row = row
+            self.column = column
+            self.span = span
+        }
+    }
+
+    /// 縦横比（幅/高さ）の絵を、枠の高さの`minimumHeightFraction`以上で描ける一番少ないマスの数。
+    /// `maxSpan`マスでも足りなければ`maxSpan`マスにし、縮めて描く。縦横比が分からないか、1マスで足りるなら1マス。
+    public static func span(aspectRatio: Double?, maxSpan: Int, minimumHeightFraction: Double) -> Int {
+        let limit = max(maxSpan, 1)
+        guard let aspectRatio, aspectRatio.isFinite, aspectRatio > 0 else { return 1 }
+        return (1...limit).first { frameAspectRatio(span: $0) / aspectRatio >= minimumHeightFraction } ?? limit
+    }
+
+    /// `span`マスの、絵を描く枠の縦横比。
+    static func frameAspectRatio(span: Int) -> Double {
+        (Double(span) - imageInsetFraction * 2) / (1 - imageInsetFraction * 2)
+    }
+
+    /// 左から右、上から下へ詰める。行の残りに入らない絵文字は、次の行の先頭に送る。並びの順は変えない。
+    /// `columns`より多いマスの絵文字は、`columns`マスにする。
+    public static func place(spans: [Int], columns: Int) -> [Placement] {
+        let columns = max(columns, 1)
+        var row = 0
+        var column = 0
+        return spans.map { requested in
+            let span = min(max(requested, 1), columns)
+            if column + span > columns {
+                row += 1
+                column = 0
+            }
+            defer { column += span }
+            return Placement(row: row, column: column, span: span)
+        }
+    }
+}
+
 /// 最近使った絵文字を、サーバーごとに新しい順で覚える。カスタム絵文字はショートコード、Unicodeの絵文字は絵文字そのもので覚える（`PaletteEmoji.recentKey`）。
 /// パレットと補完のどちらで入れても覚える。ショートコードはサーバーごとに違う絵文字を指すので、サーバーをまたいで混ぜない。
 /// 同じサーバーを複数のウィンドウで開くと、ウィンドウごとに作られるので、手元に持たずに毎回UserDefaultsを読み書きする。

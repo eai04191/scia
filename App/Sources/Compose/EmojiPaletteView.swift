@@ -67,6 +67,22 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         }
     }
 
+    /// 横長のカスタム絵文字に横に使わせるマスの数の上限。
+    var maxSpan = Int(TuningCatalog.composeEmojiPaletteMaxSpan.defaultValue) {
+        didSet {
+            guard maxSpan != oldValue else { return }
+            collectionView.collectionViewLayout.invalidateLayout()
+        }
+    }
+
+    /// 横長のカスタム絵文字を、1マスの高さのどこまで縮めて描いてよいか。これより縮むなら、マスを横に足す。
+    var minimumHeightFraction = TuningCatalog.composeEmojiPaletteMinimumHeightFraction.defaultValue {
+        didSet {
+            guard minimumHeightFraction != oldValue else { return }
+            collectionView.collectionViewLayout.invalidateLayout()
+        }
+    }
+
     /// Unicodeの絵文字を描く絵。本文と同じく、設定に合わせる。
     var emojiStyle: EmojiStyle = .system {
         didSet {
@@ -385,15 +401,18 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
                 section.boundarySupplementaryItems = [header]
                 return section
             }
-            // 幅に入るだけの列に、左から右、上から下へ詰める。
+            // 幅に入るだけの列に、左から右、上から下へ詰める。横長のカスタム絵文字は、縦横比に合わせてマスを横に足す。
             let columns = max(1, Int((environment.container.effectiveContentSize.width - 16) / size))
-            let item = NSCollectionLayoutItem(layoutSize: NSCollectionLayoutSize(widthDimension: .absolute(size), heightDimension: .absolute(size)))
-            let row = NSCollectionLayoutGroup.horizontal(
-                layoutSize: NSCollectionLayoutSize(widthDimension: .absolute(size * CGFloat(columns)), heightDimension: .absolute(size)),
-                repeatingSubitem: item,
-                count: columns
-            )
-            let section = NSCollectionLayoutSection(group: row)
+            let placements = EmojiPaletteGrid.place(spans: self?.spans(inSection: index) ?? [], columns: columns)
+            let rows = max((placements.last?.row ?? 0) + 1, 1)
+            let group = NSCollectionLayoutGroup.custom(
+                layoutSize: NSCollectionLayoutSize(widthDimension: .absolute(size * CGFloat(columns)), heightDimension: .absolute(size * CGFloat(rows)))
+            ) { _ in
+                placements.map { placement in
+                    NSCollectionLayoutGroupCustomItem(frame: CGRect(x: CGFloat(placement.column) * size, y: CGFloat(placement.row) * size, width: CGFloat(placement.span) * size, height: size))
+                }
+            }
+            let section = NSCollectionLayoutSection(group: group)
             section.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8)
             section.boundarySupplementaryItems = [header]
             return section
@@ -438,6 +457,15 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
             snapshot.appendItems(section.emojis.map { Item(section: section.kind, key: $0.recentKey) }, toSection: section.kind)
         }
         dataSource.apply(snapshot, animatingDifferences: false)
+    }
+
+    /// まとまりの絵文字ごとに、横に使うマスの数。Unicodeの絵文字と、縦横比の分からないカスタム絵文字は1マス。
+    private func spans(inSection index: Int) -> [Int] {
+        guard sections.indices.contains(index) else { return [] }
+        return sections[index].emojis.map { emoji in
+            guard case .custom(let custom) = emoji else { return 1 }
+            return EmojiPaletteGrid.span(aspectRatio: custom.aspectRatio, maxSpan: maxSpan, minimumHeightFraction: minimumHeightFraction)
+        }
     }
 
     private func emoji(at indexPath: IndexPath) -> PaletteEmoji? {
@@ -659,8 +687,9 @@ final class EmojiPaletteCell: UICollectionViewCell {
         didSet { highlight.isHidden = !isHighlighted }
     }
 
+    /// 横長の絵文字はマスを横に足して幅が変わるので、余白は高さから決める。
     private static func imageInset(in size: CGSize) -> CGFloat {
-        round(size.width * 0.15)
+        round(size.height * EmojiPaletteGrid.imageInsetFraction)
     }
 
     /// 絵を描く枠の高さ。
@@ -687,7 +716,7 @@ final class EmojiPaletteCell: UICollectionViewCell {
             // 絵文字の文字の大きさは、枠いっぱいの画像と同じくらいに見えるよう、枠の高さの少し下にする。
             // 文字ではなく、カスタム絵文字の画像と並べる絵として描くため、端末の文字の大きさではなく枠の大きさで決める。
             // scialint:disable:next fixed_font_size
-            label.font = EmojiFont.font(.systemFont(ofSize: max(bounds.width, 32) * 0.58), style: emojiStyle)
+            label.font = EmojiFont.font(.systemFont(ofSize: max(bounds.height, 32) * 0.58), style: emojiStyle)
             label.text = standard.emoji
             accessibilityLabel = standard.name
         }

@@ -174,6 +174,8 @@ final class TextInputCompletion {
     /// 検索語があれば、補完と同じ順で並べた結果を出す。なければまとまりごとに並べる。
     func updatePalette(_ palette: EmojiPaletteView, recentKeys: [String]) {
         palette.cellSize = tuning.value(of: TuningCatalog.composeEmojiPaletteCellSize)
+        palette.maxSpan = Int(tuning.value(of: TuningCatalog.composeEmojiPaletteMaxSpan))
+        palette.minimumHeightFraction = tuning.value(of: TuningCatalog.composeEmojiPaletteMinimumHeightFraction)
         palette.hardEdgeEffect = tuning.value(of: TuningCatalog.composeEmojiPaletteHardEdgeEffect)
         palette.barHeight = tuning.value(of: TuningCatalog.composeEmojiPaletteBarHeight)
         palette.barBottomInset = tuning.value(of: TuningCatalog.composeEmojiPaletteBarBottomInset)

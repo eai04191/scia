@@ -269,4 +269,45 @@ struct EmojiPaletteTests {
         let results = EmojiPalette.searchResults(matching: "ｂｌｏｂ", emojis: [try emoji("blobcat")], standardGroups: [], limit: 10)
         #expect(results.map(\.recentKey) == ["blobcat"])
     }
+
+    // MARK: - マス
+
+    /// 高さを`minimumHeightFraction`より縮めずに描ける、一番少ないマスの数を使う。
+    /// 余白はマスの高さの15%なので、nマスの枠の縦横比は(n − 0.3) / 0.7。高さの6割まで縮めてよいなら、1マスで1.67:1まで、2マスで4.05:1まで、3マスで6.43:1まで入る。
+    @Test(arguments: [
+        (1.0, 1), (1.6, 1), (1.7, 2), (4.0, 2), (4.1, 3), (6.4, 3),
+    ])
+    func spanFitsHeight(aspectRatio: Double, expected: Int) {
+        #expect(EmojiPaletteGrid.span(aspectRatio: aspectRatio, maxSpan: 3, minimumHeightFraction: 0.6) == expected)
+    }
+
+    /// 上限のマスに入りきらない横長の絵文字は、上限のマスで縮めて描く。縦長と、縦横比の分からないものは1マス。
+    @Test func spanIsLimited() {
+        #expect(EmojiPaletteGrid.span(aspectRatio: 17, maxSpan: 3, minimumHeightFraction: 0.6) == 3)
+        #expect(EmojiPaletteGrid.span(aspectRatio: 17, maxSpan: 1, minimumHeightFraction: 0.6) == 1)
+        #expect(EmojiPaletteGrid.span(aspectRatio: 0.4, maxSpan: 3, minimumHeightFraction: 0.6) == 1)
+        #expect(EmojiPaletteGrid.span(aspectRatio: nil, maxSpan: 3, minimumHeightFraction: 0.6) == 1)
+        #expect(EmojiPaletteGrid.span(aspectRatio: .infinity, maxSpan: 3, minimumHeightFraction: 0.6) == 1)
+    }
+
+    /// 左から右、上から下へ詰め、行の残りに入らない絵文字は次の行の先頭に送る。並びの順は変えない。
+    @Test func placesSpansInRows() {
+        let placements = EmojiPaletteGrid.place(spans: [1, 1, 3, 2, 1, 1], columns: 4)
+        #expect(placements == [
+            .init(row: 0, column: 0, span: 1),
+            .init(row: 0, column: 1, span: 1),
+            .init(row: 1, column: 0, span: 3),
+            .init(row: 2, column: 0, span: 2),
+            .init(row: 2, column: 2, span: 1),
+            .init(row: 2, column: 3, span: 1),
+        ])
+    }
+
+    /// 列が上限のマスより少ないときは、列の数に縮める。
+    @Test func placesWideSpanInNarrowRow() {
+        #expect(EmojiPaletteGrid.place(spans: [3, 1], columns: 2) == [
+            .init(row: 0, column: 0, span: 2),
+            .init(row: 1, column: 0, span: 1),
+        ])
+    }
 }

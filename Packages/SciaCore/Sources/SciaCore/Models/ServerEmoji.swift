@@ -9,17 +9,20 @@ public struct ServerEmoji: Decodable, Hashable, Sendable {
     /// 管理者が一覧に出さないと決めた絵文字はfalse。web UIの絵文字の選択と同じく、補完の候補にも出さない。
     public let visibleInPicker: Bool
     public let category: String?
+    /// 画像の縦横比（幅/高さ）。Fedibirdが`width`と`height`で返す。Mastodonは返さないのでnil。
+    public let aspectRatio: Double?
 
-    public init(shortcode: String, url: URL, staticUrl: URL, visibleInPicker: Bool = true, category: String? = nil) {
+    public init(shortcode: String, url: URL, staticUrl: URL, visibleInPicker: Bool = true, category: String? = nil, aspectRatio: Double? = nil) {
         self.shortcode = shortcode
         self.url = url
         self.staticUrl = staticUrl
         self.visibleInPicker = visibleInPicker
         self.category = category
+        self.aspectRatio = aspectRatio
     }
 
     private enum CodingKeys: String, CodingKey {
-        case shortcode, url, staticUrl, visibleInPicker, category
+        case shortcode, url, staticUrl, visibleInPicker, category, width, height
     }
 
     /// 選択に出すかを返さないサーバーでは、出すものとして扱う。
@@ -30,6 +33,10 @@ public struct ServerEmoji: Decodable, Hashable, Sendable {
         staticUrl = try container.decodeRequiredURL(.media, forKey: .staticUrl)
         visibleInPicker = (try? container.decodeIfPresent(Bool.self, forKey: .visibleInPicker)) ?? true
         category = try? container.decodeIfPresent(String.self, forKey: .category)
+        // 幅か高さが0か、読めなければ、縦横比は分からないものとする。
+        let width = (try? container.decodeCountIfPresent(forKey: .width)) ?? nil
+        let height = (try? container.decodeCountIfPresent(forKey: .height)) ?? nil
+        aspectRatio = if let width, let height, width > 0, height > 0 { Double(width) / Double(height) } else { nil }
     }
 
     /// 同じショートコードの絵文字のうち、後に来た1件だけを、その位置に残す。Mastodonのwebも、ショートコードをキーに応答の順で保存するので、後に来たものが残る。
