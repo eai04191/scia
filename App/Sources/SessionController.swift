@@ -2059,8 +2059,21 @@ final class SessionController {
             (action, visibility) = (.bookmark, .accountDefault)
             done = shown.bookmarked ? "ブックマークを外しました" : "ブックマークしました"
             failure = "ブックマークを変更できませんでした"
-        case .reply, .quote, .muteConversation, .pin, .editHistory, .openFavouritedBy, .openRebloggedBy, .edit, .delete, .redraft, .viewAPIResponse:
-            // 「別のアカウントで」には、そのアカウントのサーバーへ送るだけで済む操作しか出さない（`StatusMenuTree.otherAccountItems`）。
+        case .muteConversation:
+            UserAction.toggleConversationMute.record()
+            (action, visibility) = (.muteConversation, .accountDefault)
+            done = shown.muted ? "会話のミュートを解除しました" : "会話をミュートしました"
+            failure = "会話のミュートを変更できませんでした"
+        case .pin:
+            UserAction.togglePin.record()
+            (action, visibility) = (.pin, .accountDefault)
+            done = shown.pinned ? "プロフィールの固定を外しました" : "プロフィールに固定しました"
+            failure = "プロフィールの固定を変更できませんでした"
+        case .delete:
+            confirmDeleting(status, as: account, original: original)
+            return
+        case .reply, .quote, .edit, .redraft, .editHistory, .openFavouritedBy, .openRebloggedBy, .viewAPIResponse:
+            // 「別のアカウントで」の並びから除いているので来ない（`StatusMenuTree.sameForEveryAccountItems`と`notYetOtherAccountItems`）。
             return
         }
         let handle = account.credential.handle
@@ -2072,6 +2085,36 @@ final class SessionController {
             } catch {
                 guard let self else { return }
                 logger.error("other account toggle \(String(describing: action), privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
+                let reason = ErrorPresentation(error)
+                operationStatus.recordFailure(title: failureTitle, reason: reason, subject: OperationStatus.Subject(original))
+                showFailureNotice(.interactionFailure(title: failureTitle) { [weak self] in
+                    self?.presentAlert(title: failureTitle, message: reason.text)
+                })
+            }
+        }
+    }
+
+    /// ほかのアカウントとして投稿を削除する。今のアカウントで削除するときと同じく、元に戻せないので確かめてから送る。
+    private func confirmDeleting(_ status: Status, as account: OtherAccount, original: Status) {
+        topViewController.present(UIAlertController(Confirmation.deleting(actor: "@\(account.credential.username)"), preferredStyle: .alert) { [weak self] _ in
+            self?.delete(status, as: account, original: original)
+        }, animated: true)
+    }
+
+    /// 今のアカウントの一覧には、ほかのアカウントの投稿として残るので、どのアカウントで消したかを知らせる。
+    /// 失敗は、ほかの操作と同じく、このセッションのログインし直しの案内につなげずに知らせる。
+    private func delete(_ status: Status, as account: OtherAccount, original: Status) {
+        UserAction.deleteStatus.record()
+        let handle = account.credential.handle
+        let failureTitle = "\(handle)で投稿を削除できませんでした"
+        // 送り終える前に確かめ直して押しても、同じ削除を重ねて送らない。
+        tasks.run(key: "otherAccountDelete:\(account.credential.id):\(status.id)", .skippingWhileRunning, .action) { [weak self] in
+            do {
+                try await account.delete(status)
+                self?.showToggledNotice("\(handle)で投稿を削除しました")
+            } catch {
+                guard let self else { return }
+                logger.error("other account delete failed: \(SciaLog.describe(error), privacy: .public)")
                 let reason = ErrorPresentation(error)
                 operationStatus.recordFailure(title: failureTitle, reason: reason, subject: OperationStatus.Subject(original))
                 showFailureNotice(.interactionFailure(title: failureTitle) { [weak self] in

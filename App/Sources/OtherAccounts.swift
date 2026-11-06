@@ -42,10 +42,12 @@ final class OtherAccounts {
     }
 
     /// 前に見つけた`status`と、それに出る人の関係を、見つけたアカウントで読み直す。「別のアカウントで」を組んだメニューを出すときに呼び、次に開いたときから使う。
-    /// - Parameter relationIDs: 見つかった投稿で、関係の項目を出す人のID。組んだメニューの`otherAccountRelationIDs`を渡す。
-    func refresh(_ status: Status, relationIDs: @escaping @MainActor (Status, OtherAccount) -> [String]) {
+    /// - Parameters:
+    ///   - people: 投稿のほかにメニューに出る人。組んだメニューの`otherAccountPeople`を渡す。
+    ///   - relationIDs: 見つかった投稿で、関係の項目を出す人のID。組んだメニューの`otherAccountRelationIDs`を渡す。
+    func refresh(_ status: Status, people: [Account], relationIDs: @escaping @MainActor (Status, OtherAccount) -> [String]) {
         for account in accounts.values where account.known(status) != nil {
-            tasks.run(.action) { await account.refresh(status, relationIDs: relationIDs) }
+            tasks.run(.action) { await account.refresh(status, people: people, relationIDs: relationIDs) }
         }
     }
 

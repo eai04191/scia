@@ -122,6 +122,12 @@ public struct StatusMenuTree {
     var userAvatar: (MenuUser) -> MenuAvatar? = { .user($0) }
     /// 自分のユーザーのメニューを出さないか。「別のアカウントで」の中身では、そのアカウント自身に出せる項目がないため出さない。
     var hidesMyself = false
+    /// 「ブーストした人」に出す人。ブーストでなければnil。
+    /// 「別のアカウントで」の中身では、見つけた投稿がブーストの元の投稿なので、そのサーバーで探した人を入れる。
+    var booster: Account?
+    /// 「通知した人」に出す人。まとめた通知では並べた人をみな出す。
+    /// 「別のアカウントで」の中身では、そのサーバーで探した人を入れる。
+    var notifyingAccounts: [Account]
 
     public init(status: Status?, notification: MastodonNotification?, now: Date, linkBrowser: LinkBrowser) {
         self.status = status
@@ -129,6 +135,8 @@ public struct StatusMenuTree {
         rowStatus = status
         self.now = now
         self.linkBrowser = linkBrowser
+        booster = status?.reblog != nil ? status?.account : nil
+        notifyingAccounts = notification?.sampleAccounts ?? []
     }
 
     /// 組んだメニュー。出す項目がなければ`root`はnil。
@@ -140,6 +148,8 @@ public struct StatusMenuTree {
         public let showsOtherAccounts: Bool
         /// 「別のアカウントで」の中で、そのアカウントから見た投稿に、関係の項目を出す人のID。探し直したあとに、関係をまとめて読み直す。
         public let otherAccountRelationIDs: @MainActor (_ found: Status, OtherAccount) -> [String]
+        /// 「別のアカウントで」の中で、見つけた投稿のほかに出す人（ブーストした人、通知した人）。探し直すときに、まだ見つけていない人をそのサーバーで探す。
+        public let otherAccountPeople: [Account]
     }
 
     /// 投稿のメニュー。フォローリクエストの通知では、設定の並びの前に、承認と却下を設定によらず置く。
@@ -166,9 +176,13 @@ public struct StatusMenuTree {
                 .action("却下", icon: .symbol("xmark"), isDestructive: true, .followRequest(.reject)),
             ]), at: 0)
         }
-        return Built(root: children.isEmpty ? nil : .submenu("", children), shownUserIDs: shownUserIDs, showsOtherAccounts: showsOtherAccounts) { [self] found, account in
-            otherAccountRelationIDs(in: found, as: account)
-        }
+        return Built(
+            root: children.isEmpty ? nil : .submenu("", children),
+            shownUserIDs: shownUserIDs,
+            showsOtherAccounts: showsOtherAccounts,
+            otherAccountRelationIDs: { [self] found, account in otherAccountRelationIDs(in: found, as: account) },
+            otherAccountPeople: otherAccountPeople
+        )
     }
 
     /// 保留中の通知の行のメニュー。「受け入れる」と「無視」を1つのまとまりで置き、その下にその人のユーザーのメニューを並べる。
@@ -186,8 +200,7 @@ public struct StatusMenuTree {
     private func nodes(for item: StatusMenuItem, users: ([MenuUser]) -> [MenuNode<StatusMenuCommand>]) -> [MenuNode<StatusMenuCommand>] {
         switch item {
         case .notifyingUser:
-            // まとめた通知では、並べた人をみな出す。
-            return users(notification.map { $0.sampleAccounts.map(MenuUser.account) } ?? [])
+            return users(notifyingAccounts.map(MenuUser.account))
         case .reblogWithVisibility:
             guard let status else { return [] }
             return reblogWithVisibilityMenu(for: status, item: item).map { [$0] } ?? []
@@ -207,8 +220,7 @@ public struct StatusMenuTree {
         case .author:
             return users(status.map { [.account($0.displayed.account)] } ?? [])
         case .booster:
-            guard let status, status.reblog != nil else { return [] }
-            return users([.account(status.account)])
+            return users(booster.map { [.account($0)] } ?? [])
         case .mentionedUsers:
             return users(status?.displayed.mentions.map(MenuUser.mention) ?? [])
         case .customEmojis:
@@ -353,10 +365,17 @@ public struct StatusMenuTree {
         })
     }
 
-    /// 「別のアカウントで」の中に出す項目。そのアカウントのサーバーへ送るだけで済む操作と、投稿に出る人のユーザーのメニューに限る。
-    public static let otherAccountItems: Set<StatusMenuItem> = [.favourite, .reblog, .reblogWithVisibility, .bookmark, .author, .mentionedUsers]
-    /// 「別のアカウントで」のユーザーのメニューに出す項目。そのアカウントのサーバーへ送るだけで済む関係の変更に限る。
-    public static let otherAccountUserItems: Set<UserMenuItem> = [.follow, .showReblogs, .notify, .endorse, .mute, .block]
+    /// 「別のアカウントで」の中に出さない項目。どのアカウントで行っても同じ結果になるもの（コピー、共有、今のアカウントで画面を開くもの、この一覧の表示を変えるもの）。
+    static let sameForEveryAccountItems: Set<StatusMenuItem> = [
+        .openThread, .select, .copyLink, .copyText, .selectText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari,
+        .editHistory, .favouritedBy, .rebloggedBy, .dismissNotification, .hideMedia, .systemTranslate, .customEmojis, .apiResponse, .otherAccounts, .customize,
+    ]
+    /// 「別のアカウントで」の中に、まだ出していない項目。返信、引用、編集、削除して書き直すはそのアカウントの投稿欄が、ハッシュタグはそのアカウントでのフォローやミュートの状態の読み込みが要り、まだ作っていない。
+    static let notYetOtherAccountItems: Set<StatusMenuItem> = [.reply, .quote, .edit, .redraft, .hashtags]
+    /// 「別のアカウントで」のユーザーのメニューに出さない項目。どのアカウントで行っても同じ結果になるもの。
+    static let sameForEveryAccountUserItems: Set<UserMenuItem> = [.profile, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .customize]
+    /// 「別のアカウントで」のユーザーのメニューに、まだ出していない項目。メンションはそのアカウントの投稿欄が、メモ、通報、リストに追加はそのアカウントのシートが要り、まだ作っていない。
+    static let notYetOtherAccountUserItems: Set<UserMenuItem> = [.mention, .note, .report, .addToList]
 
     /// 「別のアカウントで」のサブメニュー。ほかのアカウントが1つなら「@usernameで」を直に置き、2つ以上ならアカウントごとの`@username`のサブメニューを並べる。
     /// サーバー名は、ユーザーのメニューの見出しと同じくサブタイトルに出す。名前に`@username@server`をそのまま置くと、長いサーバー名で途中から折り返されて読みにくいため。
@@ -379,11 +398,15 @@ public struct StatusMenuTree {
 
     /// `account`から見た投稿のメニュー。覚えている投稿があればすぐ組み、なければ開いてから探す。
     private func otherAccountNodes(for status: Status, as account: OtherAccount) -> [MenuNode<StatusMenuCommand>] {
-        if let known = account.known(status) {
+        // まだ探していない人がいれば、その人を出せるよう、開いてから探す。
+        if let known = account.known(status), !otherAccountPeople.contains(where: account.needsResolving) {
             return otherAccountItems(for: known, original: status, as: account)
         }
         return [.deferred { [self] in
-            switch await account.lookup(status) {
+            // 投稿と、投稿のほかに出る人を、そのサーバーで同時に探す。
+            async let lookedUp = account.lookup(status)
+            await account.resolve(otherAccountPeople)
+            switch await lookedUp {
             case .found(let found):
                 // 出る人の関係を、人ごとに送らずまとめて1回で読む。関係の項目は、この読み込みを待って中身を渡す。
                 account.reloadRelations(otherAccountRelationIDs(in: found, as: account))
@@ -402,7 +425,7 @@ public struct StatusMenuTree {
         let root = otherAccountTree(for: found, original: status, as: account).menu(groups: otherAccountStatusGroups, includesFollowRequest: false).root
         return root?.children.map { node in
             node.map { command in
-                // 組む項目を`otherAccountItems`と`otherAccountUserItems`に限っているので、投稿への操作と関係の変更のほかは来ない。
+                // 組む並びから、ここで包まない命令を出す項目を除いているので、投稿への操作と関係の変更のほかは来ない。
                 switch command {
                 case .status(let action):
                     .otherAccount(OtherAccountCommand(account: account, original: status, action: .status(found, action)))
@@ -423,10 +446,25 @@ public struct StatusMenuTree {
         return tree.menu(groups: otherAccountStatusGroups, includesFollowRequest: false).shownUserIDs
     }
 
-    /// 「別のアカウントで」の中の投稿のメニューの並び。中身が数個しかないので、「その他」に入れた項目もまとめずに続けて並べる。
+    /// 「別のアカウントで」の中の投稿のメニューの並び。投稿のメニューの並びから、出さない項目を除く。
     private var otherAccountStatusGroups: MenuLayout<StatusMenuItem>.Groups {
-        let groups = otherAccountGroups.excluding(Set(StatusMenuItem.allCases).subtracting(Self.otherAccountItems))
-        return MenuLayout<StatusMenuItem>.Groups(main: groups.main + groups.more, more: [])
+        otherAccountGroups.excluding(Self.sameForEveryAccountItems.union(Self.notYetOtherAccountItems))
+    }
+
+    /// 見つけた投稿のほかに「別のアカウントで」の中に出す人。そのサーバーでのIDが分からないため、プロフィールのURLで探す。
+    /// 並びで出さない人は探さない。探す通信を省き、初めて開いたメニューで待たせないため。
+    private var otherAccountPeople: [Account] {
+        let groups = otherAccountStatusGroups
+        let items = Set((groups.main + groups.more).flatMap(\.items))
+        let userGroups = otherAccountUserGroups
+        guard !(userGroups.main + userGroups.more).isEmpty else { return [] }
+        let boosters = items.contains(.booster) ? (booster.map { [$0] } ?? []) : []
+        return boosters + (items.contains(.notifyingUser) ? notifyingAccounts : [])
+    }
+
+    /// 「別のアカウントで」の中のユーザーのメニューの並び。ユーザーのメニューの並びから、出さない項目を除く。
+    private var otherAccountUserGroups: MenuLayout<UserMenuItem>.Groups {
+        userMenu.excluding(Self.sameForEveryAccountUserItems.union(Self.notYetOtherAccountUserItems))
     }
 
     /// `account`から見た投稿`found`のメニューを、そのアカウントとして組むもの。
@@ -436,12 +474,12 @@ public struct StatusMenuTree {
         tree.myAccountID = account.credential.accountID
         tree.hidesMyself = true
         tree.userActions = account.userActions
-        // 中身が数個しかないので、ユーザーのメニューも「その他」にまとめずに続けて並べる。
-        let userGroups = userMenu.excluding(Set(UserMenuItem.allCases).subtracting(Self.otherAccountUserItems))
-        tree.userMenu = MenuLayout<UserMenuItem>.Groups(main: userGroups.main + userGroups.more, more: [])
+        tree.userMenu = otherAccountUserGroups
+        tree.booster = booster.flatMap(account.person)
+        tree.notifyingAccounts = notifyingAccounts.compactMap(account.person)
         // IDはそのアカウントのサーバーのものなので、今のアカウントで同じ人をプロフィールのURLで探してアイコンを付ける。
         // IDで探すと、今のアカウントのサーバーで同じIDの別の人のアイコンを出しうる。見つからないメンションにはアイコンを付けない。
-        let originalUsers = [MenuUser.account(status.displayed.account)] + status.displayed.mentions.map(MenuUser.mention)
+        let originalUsers = [MenuUser.account(status.displayed.account)] + status.displayed.mentions.map(MenuUser.mention) + otherAccountPeople.map(MenuUser.account)
         tree.userAvatar = { user in
             if let url = user.url, let same = originalUsers.first(where: { $0.url == url }) { return .user(same) }
             if case .account = user { return .user(user) }

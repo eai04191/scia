@@ -1,3 +1,5 @@
+public import Foundation
+
 /// 投稿のメニューの「別のアカウントで」で、ログインしているほかのアカウント1つとして、投稿と、投稿に出る人を操作する。決まりはdocs/menus.mdにある。
 ///
 /// 投稿のIDはサーバーごとに違うため、そのアカウントのサーバーで、投稿のURIを探して引き直す。見つけた投稿はURIごとに覚え、
@@ -16,19 +18,27 @@ public final class OtherAccount {
         public var relationships: RelationshipCache.Fetch
         /// 関係の変更を、そのサーバーでのIDの相手へ送る。
         public var changeRelation: @Sendable (UserRelationChange, String) async throws -> Relationship
+        /// プロフィールのURLで人を探す。そのサーバーが知らない人も、相手のサーバーに問い合わせて探す。見つからなければnil。
+        public var resolveAccount: @Sendable (URL) async throws -> Account?
+        /// そのアカウントの投稿を、添付ごと削除する。
+        public var deleteStatus: @Sendable (Status.ID) async throws -> Void
 
         public init(
             search: @escaping @Sendable (String) async throws -> [Status],
             interactions: StatusInteractions.Operations,
             profile: @escaping @Sendable () async throws -> Account,
             relationships: @escaping RelationshipCache.Fetch,
-            changeRelation: @escaping @Sendable (UserRelationChange, String) async throws -> Relationship
+            changeRelation: @escaping @Sendable (UserRelationChange, String) async throws -> Relationship,
+            resolveAccount: @escaping @Sendable (URL) async throws -> Account?,
+            deleteStatus: @escaping @Sendable (Status.ID) async throws -> Void
         ) {
             self.search = search
             self.interactions = interactions
             self.profile = profile
             self.relationships = relationships
             self.changeRelation = changeRelation
+            self.resolveAccount = resolveAccount
+            self.deleteStatus = deleteStatus
         }
 
         public init(client: MastodonClient) {
@@ -38,7 +48,10 @@ public final class OtherAccount {
                 interactions: StatusInteractions.Operations(client: client),
                 profile: { try await client.account(accountID) },
                 relationships: { try await client.relationships($0) },
-                changeRelation: { try await client.send($0, to: $1) }
+                changeRelation: { try await client.send($0, to: $1) },
+                resolveAccount: { try await client.resolveAccount(at: $0) },
+                // web UIと同じく、添付もすぐ消す。今のアカウントで削除するときと同じ。
+                deleteStatus: { try await client.deleteStatus($0, deleteMedia: true) }
             )
         }
     }
@@ -69,6 +82,12 @@ public final class OtherAccount {
     }
     /// そのアカウントと、そのサーバーでのIDの相手との関係。
     private let relationships: RelationshipCache
+    /// プロフィールのURLごとの、そのサーバーで見つけた人。見つからなかった人は入れない。
+    private var people: [URL: Account] = [:]
+    /// 探せたが見つからなかった人のプロフィールのURL。開いたメニューで探すのを待たないために使う。探し直しは続け、見つかったら除く。
+    private var peopleNotFound: Set<URL> = []
+    /// プロフィールのURLごとの、走っている人の検索。同じ人を探しているときは、送り直さずに待つ。
+    private var peopleSearches: [URL: Task<Void, Never>] = [:]
     /// そのアカウント自身のプロフィール。読めるまでnil。
     public private(set) var profile: Account?
     private var profileLoad: Task<Void, Never>?
@@ -145,10 +164,57 @@ public final class OtherAccount {
     }
 
     /// 前に見つけた`status`を探し直し、見つかった投稿でメニューに出る人の関係も読み直す。「別のアカウントで」を出したメニューを開くときに呼び、次に開いたときから使う。
-    /// - Parameter relationIDs: 見つかった投稿で、関係の項目を出す人のID。組んだメニューの`otherAccountRelationIDs`を渡す。
-    public func refresh(_ status: Status, relationIDs: @MainActor (_ found: Status, OtherAccount) -> [String]) async {
-        guard case .found(let found) = await lookup(status) else { return }
+    /// - Parameters:
+    ///   - people: 投稿のほかにメニューに出る人（ブーストした人、通知した人）。まだ見つけていない人を探す。
+    ///   - relationIDs: 見つかった投稿で、関係の項目を出す人のID。組んだメニューの`otherAccountRelationIDs`を渡す。
+    public func refresh(_ status: Status, people: [Account], relationIDs: @MainActor (_ found: Status, OtherAccount) -> [String]) async {
+        async let lookedUp = lookup(status)
+        await resolve(people)
+        guard case .found(let found) = await lookedUp else { return }
         reloadRelations(relationIDs(found, self))
+    }
+
+    /// 覚えている、そのサーバーで見つけた`account`と同じ人。プロフィールのURLで探す。まだ探していないか、見つからなければnil。
+    public func person(_ account: Account) -> Account? {
+        account.url.flatMap { people[$0] }
+    }
+
+    /// `account`を、まだそのサーバーで探していないか。探せなかった人も含む。見つからなかった人は含まない。
+    public func needsResolving(_ account: Account) -> Bool {
+        guard let url = account.url else { return false }
+        return people[url] == nil && !peopleNotFound.contains(url)
+    }
+
+    /// `accounts`のうちまだ見つけていない人を、そのサーバーでプロフィールのURLで探して覚える。
+    /// 人のIDはサーバーごとに違い、見つけた投稿には投稿者とメンションのほかの人のIDが入っていないため。
+    /// URLが同じ人だけを使う。違う人を操作しないため。見つからない、探せない人は、次に呼ばれたときに探し直す。
+    public func resolve(_ accounts: [Account]) async {
+        let urls = Set(accounts.compactMap(\.url)).filter { people[$0] == nil }
+        let searches = urls.compactMap { url -> Task<Void, Never>? in
+            if let running = peopleSearches[url] { return running }
+            // 始めた検索は、このあとの代入を終えてから走るので、走り終えたときに自分で除ける。
+            let started = tasks.run(.action) { [weak self, operations] in
+                defer { self?.peopleSearches[url] = nil }
+                let resolved: Account?
+                do {
+                    resolved = try await operations.resolveAccount(url)
+                } catch {
+                    // 探せなかったときは、見つからなかったとは決めずに、次に開いたメニューでも待って探す。
+                    return
+                }
+                if let found = resolved, found.url == url {
+                    self?.people[url] = found
+                    self?.peopleNotFound.remove(url)
+                } else {
+                    self?.peopleNotFound.insert(url)
+                }
+            }
+            peopleSearches[url] = started
+            return started
+        }
+        for running in searches {
+            await running.value
+        }
     }
 
     /// そのアカウントと`ids`の人の関係を、まとめて1回で読み直す。
@@ -204,6 +270,15 @@ public final class OtherAccount {
     @discardableResult
     public func toggle(_ action: StatusInteractions.Action, on status: Status, reblogVisibility: ReblogVisibility = .accountDefault) async throws -> Bool {
         try await interactions.toggle(action, on: status, reblogVisibility: reblogVisibility)
+    }
+
+    /// そのアカウントの投稿`status`を削除し、覚えている投稿からも除く。
+    public func delete(_ status: Status) async throws {
+        try await operations.deleteStatus(status.id)
+        for (uri, known) in statuses where known.id == status.id {
+            statuses[uri] = nil
+            revisions[uri, default: 0] += 1
+        }
     }
 
     private func update(_ id: Status.ID, _ transform: (Status) -> Status) {

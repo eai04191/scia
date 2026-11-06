@@ -105,7 +105,7 @@ extension TimelineViewController {
         reloadRelations(built.shownUserIDs, groups: tree.userMenu)
         // 前に別のアカウントで見つけた投稿は、組んだメニューでは覚えていた状態で出し、探し直した状態は次に開いたときから使う。
         if built.showsOtherAccounts, let status {
-            otherAccounts?.refresh(status, relationIDs: built.otherAccountRelationIDs)
+            otherAccounts?.refresh(status, people: built.otherAccountPeople, relationIDs: built.otherAccountRelationIDs)
         }
         // 描きながら集めた、アイコンのまだない人をまとめて読む。
         return built.root.map { BuiltMenu(root: $0, renderer: renderer) { [weak self] in self?.loadPendingMenuIcons() } }

@@ -21,6 +21,11 @@ struct OtherAccountMenuTests {
         Mention(id: id, username: username, url: URL(string: "https://remote.example/@\(username)"), acct: "\(username)@remote.example")
     }
 
+    /// `booster`が`status`をブーストした、今のアカウントのサーバーでの投稿。
+    private func boost(of status: Status, by booster: Account) -> Status {
+        Status(id: "200", createdAt: Date(timeIntervalSince1970: 100), account: booster, content: "", spoilerText: "", url: nil, reblog: status)
+    }
+
     /// `title`で始まる名前のサブメニュー。
     private func submenu(_ title: String, in nodes: [MenuNode<StatusMenuCommand>]) -> MenuNode<StatusMenuCommand>? {
         nodes.flatMap { node -> [MenuNode<StatusMenuCommand>] in
@@ -44,7 +49,9 @@ struct OtherAccountMenuTests {
         favourite: @escaping @Sendable (Status.ID) async throws -> Status = { _ in throw Failure() },
         profile: @escaping @Sendable () async throws -> Account = { throw Failure() },
         relationships: @escaping RelationshipCache.Fetch = { _ in throw Failure() },
-        changeRelation: @escaping @Sendable (UserRelationChange, String) async throws -> Relationship = { _, _ in throw Failure() }
+        changeRelation: @escaping @Sendable (UserRelationChange, String) async throws -> Relationship = { _, _ in throw Failure() },
+        resolveAccount: @escaping @Sendable (URL) async throws -> Account? = { _ in nil },
+        deleteStatus: @escaping @Sendable (Status.ID) async throws -> Void = { _ in throw Failure() }
     ) -> OtherAccount.Operations {
         OtherAccount.Operations(search: search, interactions: StatusInteractions.Operations(
             favourite: favourite,
@@ -57,7 +64,7 @@ struct OtherAccountMenuTests {
             unmuteConversation: { _ in throw Failure() },
             pin: { _ in throw Failure() },
             unpin: { _ in throw Failure() }
-        ), profile: profile, relationships: relationships, changeRelation: changeRelation)
+        ), profile: profile, relationships: relationships, changeRelation: changeRelation, resolveAccount: resolveAccount, deleteStatus: deleteStatus)
     }
 
     private func account(_ username: String, server: String = "other.example", accountID: String = "50", _ operations: OtherAccount.Operations) throws -> OtherAccount {
@@ -71,6 +78,9 @@ struct OtherAccountMenuTests {
         tree.otherAccountGroups = groups
         return tree
     }
+
+    /// ブーストとお気に入りを横に並べ、ブックマークを続けた並び。そのアカウントから見た状態を確かめるテストで、項目を絞るのに使う。
+    private let interactionGroups = MenuLayout<StatusMenuItem>.Groups(main: [.init([.reblog, .favourite], isRow: true), .init([.bookmark])], more: [])
 
     /// 「別のアカウントで」の項目だけを組んだもの。
     private func node(_ tree: StatusMenuTree) -> MenuNode<StatusMenuCommand>? {
@@ -118,12 +128,13 @@ struct OtherAccountMenuTests {
             queries.withLock { $0.append(query) }
             return [near, other]
         })
-        let menu = try #require(node(tree(status(uri: uri), accounts: [bob])))
+        let groups = MenuLayout<StatusMenuItem>.Groups(main: interactionGroups.main + [.init([.author])], more: [])
+        let menu = try #require(node(tree(status(uri: uri), accounts: [bob], groups: groups)))
 
         #expect(await loaded(menu.children) == "=ブースト,お気に入りを取り消す|ブックマーク|@alice[…,…,…,…,…,…]")
         #expect(queries.withLock { $0 } == [uri])
 
-        let reopened = try #require(node(tree(status(uri: uri), accounts: [bob])))
+        let reopened = try #require(node(tree(status(uri: uri), accounts: [bob], groups: groups)))
         #expect(MenuNodeTests.describe(reopened.children) == "=ブースト,お気に入りを取り消す|ブックマーク|@alice[…,…,…,…,…,…]")
         let favourite = try #require(reopened.flattenedChildren.first { $0.title == "お気に入りを取り消す" })
         guard case .otherAccount(let command) = favourite.command else {
@@ -138,8 +149,8 @@ struct OtherAccountMenuTests {
         #expect(target.id == "7000")
     }
 
-    /// 中身は渡した並びに従い、そのアカウントで送るだけで済む項目だけを出す。「その他」に入れた項目も、まとめずに続けて並べる。
-    @Test func followsGivenLayoutWithoutMoreSubmenu() async throws {
+    /// 中身は渡した並びに従い、「その他」もそのまま出す。どのアカウントでも同じ結果になる項目（カスタマイズ）と、そのアカウントが書いていない投稿の削除は出さない。
+    @Test func followsGivenLayoutIncludingMore() async throws {
         let found = status(id: "7000", uri: uri)
         let bob = try account("bob", operations { _ in [found] })
         let groups = MenuLayout<StatusMenuItem>.Groups(
@@ -149,8 +160,98 @@ struct OtherAccountMenuTests {
         let menu = try #require(node(tree(status(uri: uri), accounts: [bob], groups: groups)))
 
         let items = await loaded(menu.children)
-        #expect(items == "お気に入り,公開範囲を選んでブースト[公開,ひかえめな公開,フォロワーのみ]|ブックマーク")
-        // 渡した並びにない投稿者のユーザーのメニューは出さない。
+        #expect(items == "お気に入り,公開範囲を選んでブースト[公開,ひかえめな公開,フォロワーのみ]|その他[ブックマーク]")
+    }
+
+    /// どのアカウントでも同じ結果になる項目（コピー、共有、今のアカウントで開く画面）は出さない。
+    /// そのアカウントが書いた投稿なら、固定と削除をそのアカウントとして出す。
+    @Test func excludesItemsSameForEveryAccount() async throws {
+        let me = Account(id: "50", username: "bob", acct: "bob", displayName: "Bob", avatar: nil)
+        let found = status(id: "7000", uri: uri, account: me)
+        let bob = try account("bob", operations { _ in [found] })
+        let groups = MenuLayout<StatusMenuItem>.Groups(
+            main: [.init([.openThread, .copyLink, .copyText, .share, .openInBrowser, .favouritedBy, .apiResponse, .customize]), .init([.pin, .delete])],
+            more: []
+        )
+
+        let items = await loaded(try #require(node(tree(status(uri: uri, account: me), accounts: [bob], groups: groups))).children)
+        #expect(items == "プロフィールに固定,削除!")
+        let menu = try #require(node(tree(status(uri: uri, account: me), accounts: [bob], groups: groups)))
+        let delete = try #require(menu.flattenedChildren.first { $0.title == "削除" })
+        guard case .otherAccount(let command) = delete.command, case .status(let target, .delete) = command.action else {
+            Issue.record("ほかのアカウントの削除になっていません")
+            return
+        }
+        #expect(target.id == "7000")
+    }
+
+    /// ブーストした人は、見つけた投稿に入っていないので、そのサーバーでプロフィールのURLで探し、そのサーバーでのIDで出す。
+    /// URLが違う人は使わない。見つけた人は覚え、次は探さない。見つからない人は出さず、次に開いたメニューでは待たない。
+    @Test func resolvesBoosterOnOtherServer() async throws {
+        let carl = Account(id: "3", username: "carl", acct: "carl@third.example", displayName: "Carl", avatar: nil, url: URL(string: "https://third.example/@carl"))
+        let dan = Account(id: "4", username: "dan", acct: "dan@third.example", displayName: "Dan", avatar: nil, url: URL(string: "https://third.example/@dan"))
+        let otherCarl = Account(id: "600", username: "carl", acct: "carl@third.example", displayName: "Carl", avatar: nil, url: carl.url)
+        let found = status(id: "7000", uri: uri)
+        let queries = Mutex<[URL]>([])
+        let bob = try account("bob", operations(search: { _ in [found] }, resolveAccount: { url in
+            queries.withLock { $0.append(url) }
+            // URLの違う人が返ることもある。
+            return url == carl.url ? otherCarl : Account(id: "601", username: "dan2", acct: "dan2@third.example", displayName: "Dan", avatar: nil, url: URL(string: "https://third.example/@dan2"))
+        }))
+        let groups = MenuLayout<StatusMenuItem>.Groups(main: [.init([.booster])], more: [])
+
+        let built = await loaded(try #require(node(tree(boost(of: status(uri: uri), by: carl), accounts: [bob], groups: groups))).children)
+        #expect(built.hasPrefix("@carl["))
+        let reopened = tree(boost(of: status(uri: uri), by: carl), accounts: [bob], groups: groups)
+        #expect(submenu("@carl", in: try #require(node(reopened)).children) != nil)
+        #expect(reopened.menu(groups: .single(.otherAccounts), includesFollowRequest: false).otherAccountRelationIDs(found, bob) == ["600"])
+
+        #expect(await loaded(try #require(node(tree(boost(of: status(uri: uri), by: dan), accounts: [bob], groups: groups))).children) == "")
+        // 見つからなかった人を待たずに、覚えている投稿ですぐ組む。
+        #expect(MenuNodeTests.describe(try #require(node(tree(boost(of: status(uri: uri), by: dan), accounts: [bob], groups: groups))).children) == "")
+        #expect(queries.withLock { $0 } == [carl.url, dan.url].compactMap(\.self))
+    }
+
+    /// 投稿を覚えていても、まだ探していない人がブーストしたものなら、開いてから探してその人を出す。
+    @Test func resolvesNewBoosterOfKnownStatus() async throws {
+        let carl = Account(id: "3", username: "carl", acct: "carl@third.example", displayName: "Carl", avatar: nil, url: URL(string: "https://third.example/@carl"))
+        let otherCarl = Account(id: "600", username: "carl", acct: "carl@third.example", displayName: "Carl", avatar: nil, url: carl.url)
+        let found = status(id: "7000", uri: uri)
+        let bob = try account("bob", operations(search: { _ in [found] }, resolveAccount: { $0 == carl.url ? otherCarl : nil }))
+        let groups = MenuLayout<StatusMenuItem>.Groups(main: [.init([.favourite]), .init([.booster])], more: [])
+        _ = await bob.lookup(status(uri: uri))
+
+        let children = try #require(node(tree(boost(of: status(uri: uri), by: carl), accounts: [bob], groups: groups))).children
+        #expect(MenuNodeTests.describe(children) == "…")
+        #expect(await loaded(children).contains("|@carl["))
+    }
+
+    /// 並びでブーストした人を出さなければ、その人を探さない。
+    @Test func doesNotResolveHiddenBooster() async throws {
+        let carl = Account(id: "3", username: "carl", acct: "carl@third.example", displayName: "Carl", avatar: nil, url: URL(string: "https://third.example/@carl"))
+        let found = status(id: "7000", uri: uri)
+        let queries = Mutex(0)
+        let bob = try account("bob", operations(search: { _ in [found] }, resolveAccount: { _ in
+            queries.withLock { $0 += 1 }
+            return nil
+        }))
+
+        _ = await loaded(try #require(node(tree(boost(of: status(uri: uri), by: carl), accounts: [bob], groups: interactionGroups))).children)
+        #expect(queries.withLock { $0 } == 0)
+    }
+
+    /// 削除したら、覚えている投稿からも除き、次に開いたときは探し直す。
+    @Test func deleteForgetsStatus() async throws {
+        let found = status(id: "7000", uri: uri)
+        let deleted = Mutex<[String]>([])
+        let bob = try account("bob", operations(search: { _ in [found] }, deleteStatus: { id in deleted.withLock { $0.append(id) } }))
+        let shown = status(uri: uri)
+        _ = await bob.lookup(shown)
+
+        try await bob.delete(found)
+
+        #expect(deleted.withLock { $0 } == ["7000"])
+        #expect(bob.known(shown) == nil)
     }
 
     /// そのアカウントから見られない投稿と、探せなかったときは、押せない行で知らせる。URIのない投稿は探さない。
@@ -203,7 +304,7 @@ struct OtherAccountMenuTests {
     @Test func decidesReblogAsOtherAccount() async throws {
         let found = status(id: "7000", uri: uri, visibility: .private)
         let author = try account("alice", accountID: "1", operations { _ in [found] })
-        let menu = try #require(node(tree(status(uri: uri, visibility: .private), accounts: [author])))
+        let menu = try #require(node(tree(status(uri: uri, visibility: .private), accounts: [author], groups: interactionGroups)))
 
         #expect(await loaded(menu.children) == "=ブースト,お気に入り|ブックマーク")
     }
@@ -346,7 +447,8 @@ struct OtherAccountMenuTests {
         let found = status(id: "7000", uri: uri, account: me, mentions: [mention("50", "bob")])
         let bob = try account("bob", operations(search: { _ in [found] }, relationships: { ids in ids.map { Relationship(id: $0) } }))
 
-        #expect(await loaded(try #require(node(tree(status(uri: uri), accounts: [bob]))).children) == "=ブースト,お気に入り|ブックマーク")
+        let groups = MenuLayout<StatusMenuItem>.Groups(main: interactionGroups.main + [.init([.author, .mentionedUsers])], more: [])
+        #expect(await loaded(try #require(node(tree(status(uri: uri), accounts: [bob], groups: groups))).children) == "=ブースト,お気に入り|ブックマーク")
     }
 
     /// アカウントの行のアイコンは、プロフィールを読む前からそのアカウント自身を指す。描く側が読み終えるのを待って差し替える。
@@ -396,7 +498,7 @@ struct OtherAccountMenuTests {
 
         _ = await loaded(try #require(node(tree(status(uri: uri), accounts: [bob], groups: noUsers))).children)
         let built = tree(status(uri: uri), accounts: [bob], groups: authorOnly).menu(groups: .single(.otherAccounts), includesFollowRequest: false)
-        await bob.refresh(status(uri: uri), relationIDs: built.otherAccountRelationIDs)
+        await bob.refresh(status(uri: uri), people: [], relationIDs: built.otherAccountRelationIDs)
         try await waitUntil { !fetched.withLock { $0 }.isEmpty }
 
         #expect(fetched.withLock { $0 } == [["500"]])

@@ -63,6 +63,19 @@ struct MenuLayoutTests {
         #expect(groups.more.map(\.items) == [[.delete]])
     }
 
+    /// 除いたせいで「その他」の外が空になったら、「その他」の中身をそのまま並べる。除く前から外が空なら、「その他」に残す。
+    @Test func excludingLiftsMoreWhenMainBecomesEmpty() {
+        let groups = TestMenuItem.defaultLayout.groups
+
+        let lifted = groups.excluding([.a, .b, .c])
+        #expect(lifted.main.map(\.items) == [[.delete]])
+        #expect(lifted.more.isEmpty)
+
+        let kept = MenuLayout<TestMenuItem>.Groups(main: [], more: [.init([.a, .delete])]).excluding([.a])
+        #expect(kept.main.isEmpty)
+        #expect(kept.more.map(\.items) == [[.delete]])
+    }
+
     /// 非表示の項目を除いた結果、空になったまとまりは出さない。区切り線が続いても空のまとまりを作らない。
     @Test func emptyGroupsAreDropped() {
         let layout = MenuLayout<TestMenuItem>(elements: [

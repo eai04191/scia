@@ -103,7 +103,12 @@ extension Confirmation where Choice == Proceed {
 
     /// 削除は元に戻せないので確かめる。
     public static var deleting: Confirmation {
-        .destructive(title: "投稿を削除しますか？", message: "削除した投稿は元に戻せません。", action: "削除")
+        deleting(actor: nil)
+    }
+
+    /// - Parameter actor: ほかのアカウントとして削除するときの、そのアカウントの`@username`。見出しの初めに「〜で」と入れる。
+    public static func deleting(actor: String?) -> Confirmation {
+        .destructive(title: "\(actor.map { "\($0)で" } ?? "")投稿を削除しますか？", message: "削除した投稿は元に戻せません。", action: "削除")
     }
 
     /// 予約の取り消しは元に戻せないので確かめる。

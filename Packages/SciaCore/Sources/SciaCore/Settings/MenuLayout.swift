@@ -48,6 +48,8 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
 
         /// `items`を除いた並び。項目がなくなったまとまりは含めない。出す場所で意味のない項目（ハッシュタグのタイムラインの「すべての投稿」など）を除くのに使う。
         /// 並び（`MenuLayout`）から除くと、足りない項目として既定の位置に差し込み直されるため、まとまりにしてから除く。
+        /// 除いたせいで「その他」の外が空になったら、「その他」の中身をそのまま並べる。「その他」1つだけのメニューを開かせないため。
+        /// 使う人が「その他」の外をみな隠した並びは、除く前から外が空なので、そのまま「その他」に残す。
         public func excluding(_ items: Set<Item>) -> Groups {
             func filtered(_ groups: [Group]) -> [Group] {
                 groups.compactMap { group in
@@ -55,7 +57,12 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
                     return kept.isEmpty ? nil : Group(kept, isRow: group.isRow)
                 }
             }
-            return Groups(main: filtered(main), more: filtered(more))
+            let keptMain = filtered(main)
+            let keptMore = filtered(more)
+            if keptMain.isEmpty, !main.isEmpty {
+                return Groups(main: keptMore, more: [])
+            }
+            return Groups(main: keptMain, more: keptMore)
         }
     }
 
