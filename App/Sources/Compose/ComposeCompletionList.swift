@@ -20,7 +20,7 @@ final class ComposeCompletionList: UIView {
         case candidate(CompletionCandidate)
         case loading
         case empty(CompletionKind)
-        case failed(String)
+        case failed(ErrorPresentation)
     }
 
     var onSelect: (CompletionCandidate) -> Void = { _ in }
@@ -354,10 +354,8 @@ private struct CompletionRowView: View {
                     candidateLabel(candidate)
                 }
                 .buttonStyle(RowButtonStyle(isSelected: CompletionRowID(row: row, index: index) == model.selectedID))
-            case .failed(let message):
-                Button {
-                    model.onRetry()
-                } label: {
+            case .failed(let reason):
+                FailureRowButton(reason: reason, retry: { model.onRetry() }, style: RowButtonStyle(isSelected: false)) { message, logsIn in
                     RowLayout(subtitleLines: 3) {
                         Image(systemName: "exclamationmark.triangle").foregroundStyle(.secondary)
                     } title: {
@@ -365,12 +363,11 @@ private struct CompletionRowView: View {
                     } subtitle: {
                         Text(message)
                     } trailing: {
-                        Image(systemName: "arrow.clockwise").foregroundStyle(.secondary)
+                        Image(systemName: logsIn ? "person.crop.circle.badge.exclamationmark" : "arrow.clockwise").foregroundStyle(.secondary)
                     }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("候補を読み込めませんでした。\(message)")
                 }
-                .buttonStyle(RowButtonStyle(isSelected: false))
-                .accessibilityLabel("候補を読み込めませんでした。\(message)")
-                .accessibilityHint("押すと読み込み直します")
             case .loading:
                 RowLayout {
                     ProgressView()

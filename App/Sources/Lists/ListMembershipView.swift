@@ -53,7 +53,7 @@ struct ListMembershipView: View {
             ContentUnavailableView {
                 Label("読み込めませんでした", systemImage: "exclamationmark.triangle")
             } description: {
-                Text(presentation.text)
+                FailureReason(reason: presentation)
             } actions: {
                 Button("再読み込み") { model.load() }
             }

@@ -48,20 +48,20 @@ enum CompletionListCatalog {
             CatalogState(title: "カスタム絵文字の候補（長いショートコード）") { list(.candidates(emojis), kind: .emoji) },
             CatalogState(title: "カスタム絵文字とUnicodeの絵文字の候補（Unicodeの絵文字の長い名前）") { list(.candidates(Array(emojis.prefix(1)) + standardEmojis), kind: .emoji) },
             CatalogState(title: "カスタム絵文字のリストを読み込めなかったが、Unicodeの絵文字は出せる") {
-                list(.candidatesWithFailure(Array(standardEmojis.prefix(2)), ComposeCompletion.failureMessage(for: MastodonAPIError(statusCode: 502, message: "Bad Gateway"))), kind: .emoji)
+                list(.candidatesWithFailure(Array(standardEmojis.prefix(2)), ComposeCompletion.failure(for: MastodonAPIError(statusCode: 502, message: "Bad Gateway"))), kind: .emoji)
             },
             CatalogState(title: "候補を探している") { list(.loading, kind: .mention) },
             CatalogState(title: "一致するアカウントがない") { list(.empty, kind: .mention) },
             CatalogState(title: "一致するハッシュタグがない") { list(.empty, kind: .hashtag) },
             CatalogState(title: "一致する絵文字がない") { list(.empty, kind: .emoji) },
             CatalogState(title: "読み込めなかった（押すと読み込み直す）") {
-                list(.failed(ComposeCompletion.failureMessage(for: MastodonAPIError(statusCode: 502, message: "Bad Gateway"))), kind: .mention)
+                list(.failed(ComposeCompletion.failure(for: MastodonAPIError(statusCode: 502, message: "Bad Gateway"))), kind: .mention)
             },
             CatalogState(title: "検索は読み込めなかったが、自分のタグは出せる") {
-                list(.candidatesWithFailure(Array(hashtags.prefix(2)), ComposeCompletion.failureMessage(for: MastodonAPIError(statusCode: 502, message: "Bad Gateway"))), kind: .hashtag)
+                list(.candidatesWithFailure(Array(hashtags.prefix(2)), ComposeCompletion.failure(for: MastodonAPIError(statusCode: 502, message: "Bad Gateway"))), kind: .hashtag)
             },
             CatalogState(title: "読み込めなかった（制限中の長い理由）") {
-                list(.failed(ComposeCompletion.failureMessage(for: AutomaticRequestsPaused(until: Date(timeIntervalSinceNow: 300)))), kind: .hashtag)
+                list(.failed(ComposeCompletion.failure(for: AutomaticRequestsPaused(until: Date(timeIntervalSinceNow: 300)))), kind: .hashtag)
             },
         ]
     }

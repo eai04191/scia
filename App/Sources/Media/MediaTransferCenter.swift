@@ -238,9 +238,7 @@ final class MediaTransferCenter {
             let isCurrent = context.viewer?.currentURL == transfer.target.url
             let title = isCurrent ? Notice.currentTransferFailureTitle(failure) : Notice.transferFailureTitle(of: transfer.target.kind, purpose: purpose)
             return Notice.transferFailure(title: title) { [weak self] in
-                let alert = UIAlertController(title: title, message: reason.text, preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: "OK", style: .cancel))
-                self?.present(alert, onTopOf: context.presenter)
+                self?.present(UIAlertController.failure(title: title, reason: reason), onTopOf: context.presenter)
             }
         }
     }

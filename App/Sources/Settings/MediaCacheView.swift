@@ -19,7 +19,7 @@ struct MediaCacheView: View {
     let actions: Actions
     @State private var entries: [MediaFileCache.Entry]?
     @State private var previewing: URL?
-    @State private var openError: String?
+    @State private var openError: ErrorPresentation?
 
     init(category: StorageBreakdown.Category, actions: Actions) {
         self.category = category
@@ -60,15 +60,7 @@ struct MediaCacheView: View {
             entries = await actions.entries()
         }
         .quickLookPreview($previewing)
-        .alert(
-            "開けませんでした",
-            isPresented: Binding { openError != nil } set: { if !$0 { openError = nil } },
-            presenting: openError
-        ) { _ in
-            Button("OK") {}
-        } message: { message in
-            Text(message)
-        }
+        .failureAlert("開けませんでした", reason: $openError)
     }
 
     private func open(_ entry: MediaFileCache.Entry) {
@@ -77,11 +69,11 @@ struct MediaCacheView: View {
                 if let copy = try await actions.open(entry.id) {
                     previewing = copy
                 } else {
-                    openError = "キャッシュから消えていました。"
+                    openError = ErrorPresentation(message: "キャッシュから消えていました。", code: nil)
                     entries = await actions.entries()
                 }
             } catch {
-                openError = ErrorPresentation(error).text
+                openError = ErrorPresentation(error)
             }
         }
     }

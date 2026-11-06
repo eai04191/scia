@@ -14,7 +14,7 @@ enum StorageCatalog {
         [
             state("測っている途中", measure: { try? await Task.sleep(for: .seconds(3_600)); return small }),
             state("消している途中（キャッシュ）", removing: .caches),
-            state("消せなかった", removeError: ErrorPresentation(Failure()).text),
+            state("消せなかった", removeError: ErrorPresentation(Failure())),
             state("消せるものがない", breakdown: empty),
             state("測れない項目がある（実機のアプリ内のSafari）", breakdown: unmeasured),
             state("GBの大きさ", breakdown: large),
@@ -128,7 +128,7 @@ enum StorageCatalog {
         breakdown: StorageBreakdown = small,
         measure: (@Sendable () async -> StorageBreakdown)? = nil,
         removing: StorageView.RemoveTarget? = nil,
-        removeError: String? = nil
+        removeError: ErrorPresentation? = nil
     ) -> CatalogState {
         CatalogState(title: title) {
             let actions = StorageView.Actions(measure: measure ?? { breakdown }, remove: { _ in }, mediaFiles: mediaCacheActions(entries: { [] }), mediaPrefetch: mediaCacheActions(entries: { [] }))

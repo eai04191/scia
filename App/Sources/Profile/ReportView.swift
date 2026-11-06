@@ -26,8 +26,6 @@ struct ReportView: View {
     @Bindable var draft: ReportDraft
     /// 送れたあと、シートを閉じてから呼ぶ。
     let onSubmitted: @MainActor () -> Void
-    /// 失敗の理由の「ログインし直す」で、そのアカウントにログインし直す。
-    let logIn: @MainActor (RequestAccount) -> Void
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -68,7 +66,7 @@ struct ReportView: View {
                 }
                 if let error = draft.submitError {
                     Section {
-                        FailureReasonView(reason: ErrorPresentation(error), logIn: logIn)
+                        FailureReason(reason: ErrorPresentation(error), includesCode: false)
                             .foregroundStyle(.red)
                     }
                 }
@@ -137,7 +135,7 @@ struct ReportView: View {
             case .failed(let error):
                 VStack(alignment: .leading, spacing: 4) {
                     Text("ルールを読み込めませんでした")
-                    FailureReasonView(reason: ErrorPresentation(error), logIn: logIn)
+                    FailureReason(reason: ErrorPresentation(error), includesCode: false)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -192,7 +190,7 @@ struct ReportView: View {
 
 extension ReportView {
     /// UIKitの画面から出すシート。
-    static func sheet(draft: ReportDraft, logIn: @escaping @MainActor (RequestAccount) -> Void, onSubmitted: @escaping @MainActor () -> Void) -> UIViewController {
-        UIHostingController(rootView: ReportView(draft: draft, onSubmitted: onSubmitted, logIn: logIn))
+    static func sheet(draft: ReportDraft, onSubmitted: @escaping @MainActor () -> Void) -> UIViewController {
+        UIHostingController(rootView: ReportView(draft: draft, onSubmitted: onSubmitted))
     }
 }

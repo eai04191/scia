@@ -12,7 +12,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     enum CustomEmojiStatus: Equatable {
         case loading
         /// 理由の文言を持つ。押すと読み直す。
-        case failed(String)
+        case failed(ErrorPresentation)
     }
 
     enum Content: Equatable {
@@ -450,7 +450,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
             snapshot.appendSections([section.kind])
             if section.kind == .customEmojiStatus {
                 // 読み込み中と失敗でキーを変え、状態が変わったら描き直させる。
-                let key = switch customStatus { case .failed(let message): "failed:\(message)"; case .loading, nil: "loading" }
+                let key = switch customStatus { case .failed(let reason): "failed:\(FailureText.withoutLogIn(reason))"; case .loading, nil: "loading" }
                 snapshot.appendItems([Item(section: section.kind, key: key)], toSection: section.kind)
                 continue
             }
@@ -817,10 +817,11 @@ private final class EmojiPaletteStatusCell: UICollectionViewCell {
             spinner.isHidden = false
             label.text = "カスタム絵文字を読み込んでいます"
             retryButton.isHidden = true
-        case .failed(let message):
+        case .failed(let reason):
             spinner.stopAnimating()
             spinner.isHidden = true
-            label.text = message
+            // カスタム絵文字のリスト（`api/v1/custom_emojis`）はログインなしで読めるので、401にはならない。
+            label.text = FailureText.withoutLogIn(reason)
             retryButton.isHidden = false
         }
     }

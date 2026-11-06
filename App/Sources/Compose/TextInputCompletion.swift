@@ -186,8 +186,8 @@ final class TextInputCompletion {
         let emojis = completion.emojis ?? []
         let customStatus: EmojiPaletteView.CustomEmojiStatus? = if completion.emojis != nil {
             nil
-        } else if let message = completion.emojiFailureMessage {
-            .failed(message)
+        } else if let reason = completion.emojiFailure {
+            .failed(reason)
         } else {
             .loading
         }

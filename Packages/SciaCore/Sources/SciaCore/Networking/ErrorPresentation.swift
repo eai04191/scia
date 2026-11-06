@@ -4,10 +4,12 @@ import Foundation
 ///
 /// HTMLのエラーページの本文や`DecodingError`の文は、使う人には意味がないため出さない。
 /// アプリが自分で作った`LocalizedError`（「見つかりませんでした」など）は、その文言をそのまま出す。
+///
+/// 文言は、アプリの失敗を出す部品（`FailureDisplay`）だけが読めるよう、SPIにする。部品を通さずに文言だけを出すと、ログアウトされたときのログインし直すボタンが付かないため。
 public struct ErrorPresentation: Hashable, Sendable {
-    public let message: String
+    @_spi(FailureDisplay) public let message: String
     /// 小さく添える補足。「HTTP 503」「URLError -1009」など。
-    public let code: String?
+    @_spi(FailureDisplay) public let code: String?
     /// ログアウトされたアカウント。理由を見せるところは、そのアカウントでログインし直すボタンを添える。
     public let loggedOutAccount: RequestAccount?
 
@@ -36,8 +38,13 @@ public struct ErrorPresentation: Hashable, Sendable {
         }
     }
 
+    /// 何が起きたかの一文を、理由の前に置いたもの。ログアウトされたアカウントは残す。
+    public func leading(_ lead: String) -> ErrorPresentation {
+        ErrorPresentation(message: "\(lead)\n\(text)", code: nil, loggedOutAccount: loggedOutAccount)
+    }
+
     /// 補足を括弧で添えて1行にしたもの。アラートなど、補足だけを小さく出せないところで使う。
-    public var text: String {
+    @_spi(FailureDisplay) public var text: String {
         code.map { "\(message)（\($0)）" } ?? message
     }
 

@@ -25,8 +25,8 @@ final class ScheduledStatusesController {
         model.display = viewController
         model.onFailure = { [weak self] operation, error in
             switch operation {
-            case .reschedule: self?.presentFailure(title: "日時を変えられませんでした", message: error.text)
-            case .cancel: self?.presentFailure(title: "予約を取り消せませんでした", message: error.text)
+            case .reschedule: self?.presentFailure(title: "日時を変えられませんでした", reason: error)
+            case .cancel: self?.presentFailure(title: "予約を取り消せませんでした", reason: error)
             }
         }
         viewController.onAppearing = { [weak model] in model?.appear() }
@@ -76,7 +76,7 @@ final class ScheduledStatusesController {
         guard date != scheduled.scheduledAt else { return }
         // 選んでから決めるまでの間に5分を切ったら、送らずに知らせる。サーバーが断るため。
         guard ScheduledPosting.accepts(date, now: now()) else {
-            presentFailure(title: "日時を変えられませんでした", message: "予約の日時は今から5分より後にしてください。")
+            presentFailure(title: "日時を変えられませんでした", reason: ErrorPresentation(message: "予約の日時は今から5分より後にしてください。", code: nil))
             return
         }
         model.reschedule(scheduled, to: date)
@@ -91,10 +91,8 @@ final class ScheduledStatusesController {
         viewController.present(alert, animated: true)
     }
 
-    private func presentFailure(title: String, message: String) {
-        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .cancel))
-        viewController.frontmostPresented.present(alert, animated: true)
+    private func presentFailure(title: String, reason: ErrorPresentation) {
+        viewController.frontmostPresented.present(UIAlertController.failure(title: title, reason: reason), animated: true)
     }
 }
 

@@ -128,3 +128,12 @@ private final class MediaWindowRootController: UIViewController {
         )
     }
 }
+
+extension MediaWindowSceneDelegate: AccountReauthenticating {
+    /// メディアのウインドウには、アカウントのセッションがない。失敗の理由の「ログインし直す」は、タイムラインのウインドウに渡す。
+    /// どのタイムラインのウインドウのセッションでも、今のアカウントでなければ、使うアカウントを替えずにログインし直すため、どれに渡しても同じになる。
+    func reauthenticate(_ account: RequestAccount) {
+        let timeline = UIApplication.shared.connectedScenes.compactMap { $0.delegate as? SceneDelegate }.first
+        timeline?.reauthenticate(account)
+    }
+}

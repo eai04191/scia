@@ -70,7 +70,7 @@ enum ReportSheetCatalog {
         CatalogState(title: title) {
             let draft = ReportDraft(accountID: "2", acct: acct, statusID: statusID, api: ReportDraft.API(rules: rules, submit: submit))
             fill(draft)
-            let controller = UIHostingController(rootView: ReportView(draft: draft, onSubmitted: {}, logIn: { _ in }))
+            let controller = UIHostingController(rootView: ReportView(draft: draft, onSubmitted: {}))
             return CatalogControllerHost(controller, height: 640)
         }
     }

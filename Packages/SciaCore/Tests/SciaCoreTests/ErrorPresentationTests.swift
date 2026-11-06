@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import SciaCore
+@_spi(FailureDisplay) @testable import SciaCore
 
 /// 失敗を種類に分け、種類ごとの文言と小さく添える補足にする。HTMLの本文やDecodingErrorの文は出さない。
 struct ErrorPresentationTests {

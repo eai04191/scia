@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import SciaCore
+@_spi(FailureDisplay) @testable import SciaCore
 
 /// 引用の囲みから行ったお気に入りやブックマークの結果を、引用元を出している囲みにも反映することを確かめる。
 /// 反映しないと、囲みは操作の前の状態のままになり、もう一度行うと取り消しではなく同じ操作をもう一度送る。

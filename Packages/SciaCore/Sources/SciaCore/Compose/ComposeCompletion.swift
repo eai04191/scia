@@ -185,9 +185,9 @@ public final class ComposeCompletion {
         /// 探したが、合うものがなかった。
         case empty
         /// 探せなかった。理由の文言を持つ。押すと問い合わせ直す。
-        case failed(String)
+        case failed(ErrorPresentation)
         /// 検索は失敗したが、合う自分のタグは出せる。自分のタグの下に失敗を出す。
-        case candidatesWithFailure([CompletionCandidate], String)
+        case candidatesWithFailure([CompletionCandidate], ErrorPresentation)
     }
 
     /// 今の語。閉じていても持ち、語が変わったかを見分けるのに使う。
@@ -196,7 +196,7 @@ public final class ComposeCompletion {
     public private(set) var isDismissed = false
     public private(set) var candidates: [CompletionCandidate] = []
     public private(set) var isLoading = false
-    private var failureMessage: String?
+    private var failure: ErrorPresentation?
     /// ハードウェアキーボードで選んでいる候補。
     private var storedSelectedIndex = 0
     /// 出す候補の中での位置。出さない候補を除いた数に収める。
@@ -213,12 +213,12 @@ public final class ComposeCompletion {
         let candidates = candidates.filter { !hidesCandidate($0) }
         // 出さない候補しかなければ、「一致しない」と出さずに閉じておく。すでに足したものを打ったときに、ないように見せないため。
         // 失敗と読み込み中は、押して読み直せるよう、候補の場所で知らせ続ける。
-        if candidates.isEmpty, !self.candidates.isEmpty, failureMessage == nil, !isLoading { return nil }
+        if candidates.isEmpty, !self.candidates.isEmpty, failure == nil, !isLoading { return nil }
         // 手元の候補だけを出す間は、合うものがなければ何も出さない。「一致しない」と出すと、記号を打つたびに候補のリストが出るため。
         // 日本語の文の`：`かもしれない語も、合うものがなければ、読み込み中や失敗も含めて何も出さない。文を書くたびに候補のリストが出るため。
         if !searchesServer(token) || token.mayBeProse, candidates.isEmpty { return nil }
-        if let failureMessage {
-            return candidates.isEmpty ? .failed(failureMessage) : .candidatesWithFailure(candidates, failureMessage)
+        if let failure {
+            return candidates.isEmpty ? .failed(failure) : .candidatesWithFailure(candidates, failure)
         }
         if !candidates.isEmpty { return .candidates(candidates) }
         return isLoading ? .loading : .empty
@@ -252,7 +252,7 @@ public final class ComposeCompletion {
     /// 候補に出す絵文字。読み終えるまではnil。絵文字のパレットも、このリストを並べる。
     public private(set) var emojis: [ServerEmoji]?
     /// 絵文字のリストを読めなかった理由の文言。パレットに出す。読み直し始めたらnilに戻す。
-    public private(set) var emojiFailureMessage: String?
+    public private(set) var emojiFailure: ErrorPresentation?
     /// プロフィールに載せているタグ、よく使うタグ、最近の投稿のタグ。読めるまではnilで、次に書き始めたときに読み直す。
     @ObservationIgnored private var featuredTags: [FeaturedTag]?
     @ObservationIgnored private var recentTags: [Hashtag]?
@@ -366,7 +366,7 @@ public final class ComposeCompletion {
     /// 失敗の表示を押したら、問い合わせ直す。
     public func retry() {
         guard token != nil else { return }
-        failureMessage = nil
+        failure = nil
         load()
     }
 
@@ -409,7 +409,7 @@ public final class ComposeCompletion {
         emojiTask?.cancel()
         emojiTask = nil
         emojis = nil
-        emojiFailureMessage = nil
+        emojiFailure = nil
         forgetOwnTags()
         statusTags = nil
         usedTags = []
@@ -425,7 +425,7 @@ public final class ComposeCompletion {
         isDismissed = false
         candidates = []
         isLoading = false
-        failureMessage = nil
+        failure = nil
         storedSelectedIndex = 0
     }
 
@@ -433,7 +433,7 @@ public final class ComposeCompletion {
         guard let token else { return }
         searchTask?.cancel()
         searchTask = nil
-        failureMessage = nil
+        failure = nil
         switch token.kind {
         case .emoji:
             // カスタム絵文字のリストを読む間も、Unicodeの絵文字は手元にあるので先に出す。
@@ -566,15 +566,15 @@ public final class ComposeCompletion {
         candidates = Array(localCandidates().prefix(settings.limit))
         storedSelectedIndex = min(selectedIndex, max(candidates.count - 1, 0))
         isLoading = false
-        failureMessage = Self.failureMessage(for: error)
+        failure = Self.failure(for: error)
     }
 
     /// 候補の場所に出す、失敗の理由。止められている間の文言は、補完では自動で読み込み直さないため、押せば読み込めることを伝える。
-    public nonisolated static func failureMessage(for error: any Error) -> String {
+    public nonisolated static func failure(for error: any Error) -> ErrorPresentation {
         if let paused = error as? AutomaticRequestsPaused {
-            return "短い間にリクエストが多すぎたため、サーバーに一時的に止められています。\(paused.until.formatted(date: .omitted, time: .shortened))を過ぎたら押すと読み込み直せます。"
+            return ErrorPresentation(message: "短い間にリクエストが多すぎたため、サーバーに一時的に止められています。\(paused.until.formatted(date: .omitted, time: .shortened))を過ぎたら押すと読み込み直せます。", code: nil)
         }
-        return ErrorPresentation(error).text
+        return ErrorPresentation(error)
     }
 
     /// 絵文字のパレットを開いたときに呼ぶ。まだ読めていなければ読む。失敗していたら読み直す。
@@ -585,7 +585,7 @@ public final class ComposeCompletion {
 
     private func loadEmojis() {
         guard emojiTask == nil else { return }
-        emojiFailureMessage = nil
+        emojiFailure = nil
         let generation = serverGeneration
         emojiTask = Task { [weak self, sources] in
             do {
@@ -605,20 +605,20 @@ public final class ComposeCompletion {
         emojiTask = nil
         emojis = loaded.filter(\.visibleInPicker)
         logger.info("completion: loaded \(loaded.count, privacy: .public) custom emojis")
-        guard token?.kind == .emoji, failureMessage == nil else { return }
+        guard token?.kind == .emoji, failure == nil else { return }
         load()
     }
 
     private func didFailEmojis(_ error: any Error) {
         emojiTask = nil
         logger.info("completion: custom emojis failed: \(ErrorPresentation(error).code ?? "unknown", privacy: .public)")
-        emojiFailureMessage = Self.failureMessage(for: error)
+        emojiFailure = Self.failure(for: error)
         guard let token, token.kind == .emoji else { return }
         // Unicodeの絵文字の候補は、失敗の上に残して選べるようにする。
         candidates = emojiCandidates(for: token)
         storedSelectedIndex = min(selectedIndex, max(candidates.count - 1, 0))
         isLoading = false
-        failureMessage = Self.failureMessage(for: error)
+        failure = Self.failure(for: error)
     }
 
     /// まだ持っていないものを並べて読み、届いたものから持って候補に混ぜる。最近の投稿のタグは投稿を読むので遅く、ほかを待たせないため。
@@ -678,7 +678,7 @@ public final class ComposeCompletion {
         }
         // 打っているタグの候補に、読めた自分のタグを混ぜ直す。
         guard let token, token.kind == .hashtag else { return }
-        if failureMessage != nil {
+        if failure != nil {
             showWhileLoading(ownCandidates())
         } else if let cached = cache[SearchKey(token, limit: settings.limit)] {
             show(merged(cached))
@@ -715,7 +715,7 @@ public final class ComposeCompletion {
         guard let token, token.kind == .mention, !isDismissed else { return }
         if !searchesServer(token) {
             show(Array(localCandidates().prefix(settings.limit)))
-        } else if failureMessage == nil, let cached = cache[SearchKey(token, limit: settings.limit)] {
+        } else if failure == nil, let cached = cache[SearchKey(token, limit: settings.limit)] {
             show(merged(cached))
         } else {
             showWhileLoading(localCandidates())

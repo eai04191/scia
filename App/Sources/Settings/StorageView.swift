@@ -18,14 +18,14 @@ struct StorageView: View {
     @State private var breakdown: StorageBreakdown?
     /// 消している途中のボタン。消し終えて測り直すまで、ほかのボタンも押せないようにする。
     @State private var removing: RemoveTarget?
-    @State private var removeError: String?
+    @State private var removeError: ErrorPresentation?
     /// 消す前に確かめているボタン。キャッシュと違い、消すと困ることがあるものだけ確かめる。
     @State private var confirming: RemoveTarget?
 
     /// - Parameters:
     ///   - removing: 消している途中のボタン。部品カタログで、消している途中の見た目を作るために渡す。
     ///   - removeError: 消せなかったときの説明。部品カタログで、失敗の見た目を作るために渡す。
-    init(actions: Actions = .app, removing: RemoveTarget? = nil, removeError: String? = nil) {
+    init(actions: Actions = .app, removing: RemoveTarget? = nil, removeError: ErrorPresentation? = nil) {
         self.actions = actions
         _removing = State(initialValue: removing)
         _removeError = State(initialValue: removeError)
@@ -113,7 +113,7 @@ struct StorageView: View {
                     }
                 } footer: {
                     if let removeError {
-                        Text("消せませんでした。\(removeError)")
+                        FailureReason(reason: removeError, lead: "消せませんでした。")
                             .foregroundStyle(.red)
                     }
                 }
@@ -203,7 +203,7 @@ struct StorageView: View {
                 do {
                     try await actions.remove(category)
                 } catch {
-                    if removeError == nil { removeError = ErrorPresentation(error).text }
+                    if removeError == nil { removeError = ErrorPresentation(error) }
                 }
             }
             breakdown = await actions.measure()

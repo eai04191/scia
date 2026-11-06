@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import SciaCore
+@_spi(FailureDisplay) @testable import SciaCore
 
 /// 返信のラベルを投稿の情報だけで決められることと、隣り合う返信の行を線でつなぐ判定を確かめる。
 struct ReplyLabelTests {

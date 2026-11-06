@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import SciaCore
+@_spi(FailureDisplay) @testable import SciaCore
 
 @MainActor
 struct ReportDraftTests {

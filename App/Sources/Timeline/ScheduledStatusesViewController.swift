@@ -171,7 +171,8 @@ final class ScheduledStatusesViewController: UICollectionViewController {
             var configuration = UIContentUnavailableConfiguration.empty()
             configuration.image = UIImage(systemName: "exclamationmark.triangle")
             configuration.text = "読み込めませんでした"
-            configuration.secondaryText = presentation.text
+            // 1つしか置けないボタンは「再読み込み」に使う。予約投稿は今のアカウントのものなので、401ならログインし直しの段から行える。
+            configuration.secondaryText = FailureText.withoutLogIn(presentation)
             var button = UIButton.Configuration.borderless()
             button.title = "再読み込み"
             configuration.button = button

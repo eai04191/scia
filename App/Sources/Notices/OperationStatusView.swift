@@ -189,7 +189,7 @@ private struct FailureRow: View {
                     .foregroundStyle(.secondary)
                     .fixedSize()
             }
-            Text(failure.reason.text)
+            FailureReason(reason: failure.reason)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .lineLimit(4)

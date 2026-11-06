@@ -20,7 +20,7 @@ enum EmojiPaletteCatalog {
         }
         let standard = StandardEmojiCatalog.groups
         let sections = EmojiPalette.sections(emojis: emojis, standardGroups: standard, recentKeys: ["emoji_3", "🐈", "emoji_20", "👍", "emoji_30"], recentLimit: 24)
-        let failure = ComposeCompletion.failureMessage(for: MastodonAPIError(statusCode: 502, message: "Bad Gateway"))
+        let failure = ComposeCompletion.failure(for: MastodonAPIError(statusCode: 502, message: "Bad Gateway"))
         // カスタム絵文字のリストがまだないときは、最近使ったもののうちUnicodeの絵文字だけが並ぶ。
         let withoutCustom = EmojiPalette.sections(emojis: [], standardGroups: standard, recentKeys: ["emoji_3", "🐈", "emoji_20", "👍"], recentLimit: 24)
         return [

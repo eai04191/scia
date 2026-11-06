@@ -165,6 +165,8 @@ extension TimelineViewController {
                 emojis.perform(command, on: emoji)
             case .otherAccount(let command):
                 self?.onOtherAccountAction?(command)
+            case .logIn(let account):
+                FailureRecovery.logIn(account, from: self?.view)
             case .customize:
                 self?.openMenuSettings(.statusMenu)
             }

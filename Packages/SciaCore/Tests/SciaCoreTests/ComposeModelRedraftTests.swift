@@ -1,5 +1,5 @@
 import Foundation
-@testable import SciaCore
+@_spi(FailureDisplay) @testable import SciaCore
 import SciaTesting
 import Synchronization
 import Testing

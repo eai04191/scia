@@ -116,12 +116,8 @@ final class BatchActionCenter {
     }
 
     private func presentReblogFailure(_ run: BatchReblog, title: String, reason: ErrorPresentation) {
-        let alert = UIAlertController(title: title, message: reason.text, preferredStyle: .alert)
-        if reblog === run {
-            alert.addAction(UIAlertAction(title: "続きからブースト", style: .default) { [weak self] _ in self?.resumeReblog(run) })
-        }
-        alert.addAction(UIAlertAction(title: "閉じる", style: .cancel))
-        present(alert)
+        let resume = reblog === run ? [UIAlertAction(title: "続きからブースト", style: .default) { [weak self] _ in self?.resumeReblog(run) }] : []
+        present(UIAlertController.failure(title: title, reason: reason, actions: resume, cancelTitle: "閉じる"))
     }
 
     private func confirmStoppingReblog() {
@@ -174,7 +170,7 @@ final class BatchActionCenter {
                 let reason = await describe(error)
                 operationStatus.recordFailure(title: title, reason: reason)
                 notices.showTransient(.interactionFailure(title: title) { [weak self] in
-                    self?.presentAlert(title: title, message: reason.text)
+                    self?.present(UIAlertController.failure(title: title, reason: reason))
                 }, duration: AppDependencies.tuning.value(of: TuningCatalog.noticeFailureChipDuration))
             }
         }
@@ -243,12 +239,6 @@ final class BatchActionCenter {
             popover.permittedArrowDirections = []
         }
         presenter.present(activity, animated: true)
-    }
-
-    private func presentAlert(title: String, message: String) {
-        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .cancel))
-        present(alert)
     }
 
     private func present(_ alert: UIAlertController) {

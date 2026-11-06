@@ -1,6 +1,6 @@
 import Foundation
 import ImageIO
-@testable import SciaCore
+@_spi(FailureDisplay) @testable import SciaCore
 import SciaTesting
 import UniformTypeIdentifiers
 import Testing

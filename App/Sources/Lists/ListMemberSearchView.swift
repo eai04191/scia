@@ -23,7 +23,7 @@ struct ListMemberSearchView: View {
         NavigationStack {
             List {
                 if let searchFailure {
-                    Text(searchFailure.text)
+                    FailureReason(reason: searchFailure)
                         .foregroundStyle(.secondary)
                 } else if trimmedQuery.isEmpty {
                     Text("フォローしている人を名前かハンドルで探します。")

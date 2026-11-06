@@ -180,7 +180,8 @@ final class StreamingStatusPullView: UIView {
                 tint: .systemOrange,
                 text: "待機中",
                 detail: loadedUntil,
-                note: ErrorPresentation(AutomaticRequestsPaused(until: until)).text
+                // 引っぱる間だけ出す表示で、ボタンを置けない。止めた理由は、時間を過ぎると自動で読み直す旨で、ログアウトにはならない。
+                note: FailureText.withoutLogIn(ErrorPresentation(AutomaticRequestsPaused(until: until)))
             )
         case .failed(let presentation):
             return Content(
@@ -188,7 +189,8 @@ final class StreamingStatusPullView: UIView {
                 tint: .systemOrange,
                 text: "失敗",
                 detail: loadedUntil,
-                note: "\(presentation.text)次につながったときに読み直します。"
+                // 引っぱる間だけ出す表示で、ボタンを置けない。今のアカウントの通信なので、401ならログインし直しの段から行える。
+                note: "\(FailureText.withoutLogIn(presentation))次につながったときに読み直します。"
             )
         }
     }

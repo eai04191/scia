@@ -1,6 +1,6 @@
 import Foundation
 import Photos
-import SciaCore
+@_spi(FailureDisplay) import SciaCore
 import Testing
 import SciaTesting
 import UIKit

@@ -56,7 +56,7 @@ struct NotificationPolicyView: View {
             ContentUnavailableView {
                 Label("読み込めませんでした", systemImage: "exclamationmark.triangle")
             } description: {
-                Text(failure.text)
+                FailureReason(reason: failure)
             } actions: {
                 Button("再読み込み") { model.reload(purpose: .action) }
             }

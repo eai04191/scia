@@ -1,7 +1,7 @@
 import Foundation
 import SciaTesting
 import Testing
-@testable import SciaCore
+@_spi(FailureDisplay) @testable import SciaCore
 
 @Suite(.scratch)
 @MainActor
@@ -428,9 +428,16 @@ struct ComposeCompletionTests {
 
     /// 止められている間は、補完では自動で読み込み直さないので、押せば読み込めると伝える。
     @Test func pausedMessageSaysTapToRetry() {
-        let message = ComposeCompletion.failureMessage(for: AutomaticRequestsPaused(until: Date(timeIntervalSince1970: 1_800_000_000)))
+        let message = ComposeCompletion.failure(for: AutomaticRequestsPaused(until: Date(timeIntervalSince1970: 1_800_000_000))).text
         #expect(message.contains("押すと読み込み直せます"))
         #expect(!message.contains("自動で"))
+    }
+
+    /// 送ったアカウントがログアウトされていたら、その理由のまま、ログインし直すアカウントを持つ。
+    @Test func failureKeepsLoggedOutAccount() {
+        let sender = RequestAccount(id: "https://fedibird.com#9004", handle: "@Eai@fedibird.com")
+
+        #expect(ComposeCompletion.failure(for: MastodonAPIError(statusCode: 401, message: "", account: sender)).loggedOutAccount == sender)
     }
 
     private func hashtag(_ query: String) -> CompletionToken {

@@ -773,11 +773,6 @@ public final class ComposeModel<Thumbnail: Sendable> {
         }
     }
 
-    /// 何が起きたかの一文を、失敗の理由の前に置く。ログアウトされたアカウントは残す。
-    private static func prefixing(_ lead: String, to reason: ErrorPresentation) -> ErrorPresentation {
-        ErrorPresentation(message: "\(lead)\n\(reason.text)", code: nil, loggedOutAccount: reason.loggedOutAccount)
-    }
-
     /// 添付の準備が済むのを待ち、送れるならtrueを返す。失敗したら知らせ、待つのをやめたら何も知らせない。
     private func waitForMediaToPost() async -> Bool {
         switch await waitForMedia() {
@@ -791,7 +786,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
             let release = attachments.lazy.compactMap { [localMedia] attachment in
                 attachment.isHeldByRedraftedStatus ? localMedia[attachment.id]?.failure : nil
             }.first
-            postError = release.map { Self.prefixing("元の投稿を削除しましたが、投稿しませんでした。", to: ErrorPresentation($0)) }
+            postError = release.map { ErrorPresentation($0).leading("元の投稿を削除しましたが、投稿しませんでした。") }
                 ?? ErrorPresentation(message: "メディアを送信できなかったため、投稿しませんでした。", code: nil)
             return false
         }
@@ -824,7 +819,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
             logger.info("compose: redrafted status already gone")
         } catch let error as MastodonAPIError where error.statusCode < 500 {
             logger.error("compose: redrafted status delete refused: \(SciaLog.describe(error), privacy: .public)")
-            postError = Self.prefixing("元の投稿を削除できなかったため、投稿しませんでした。", to: ErrorPresentation(error))
+            postError = ErrorPresentation(error).leading("元の投稿を削除できなかったため、投稿しませんでした。")
             return false
         } catch {
             // 5xxは、届いたか分からないものとして扱う。Mastodonは投稿を消してから応答を返すので、プロキシの502や504でも消えていることがあるため。
@@ -834,7 +829,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
                 redraft?.deletion = .uncertain
             }
             guard !(error is CancellationError) else { return false }
-            postError = Self.prefixing("元の投稿を削除できたか分からないため、投稿しませんでした。送り直すと削除から送り直します。", to: ErrorPresentation(error))
+            postError = ErrorPresentation(error).leading("元の投稿を削除できたか分からないため、投稿しませんでした。送り直すと削除から送り直します。")
             return false
         }
         redraft?.deletion = .done

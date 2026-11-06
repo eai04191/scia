@@ -60,6 +60,8 @@ public enum StatusMenuCommand {
     indirect case customEmoji(CustomEmoji, MediaMenuCommand)
     /// 「別のアカウントで」の、ほかのアカウントとしての操作。
     case otherAccount(OtherAccountCommand)
+    /// ログアウトされたアカウントにログインし直す。「別のアカウントで」で、そのアカウントで投稿を探せなかったときに出す。
+    case logIn(RequestAccount)
     /// このメニューの並びの設定の画面を開く。
     case customize
 }
@@ -420,7 +422,10 @@ public struct StatusMenuTree {
             case .notFound:
                 return [.action("このアカウントからは見られない投稿です", nil)]
             case .failed(let error):
-                return [.action("投稿を探せませんでした", subtitle: ErrorPresentation(error).text, nil)]
+                let reason = ErrorPresentation(error)
+                // メニューの行には理由の文字しか置けないので、ログアウトされていれば、ログインし直す項目を続けて置く。失敗の理由を出す部品と同じく、どこで失敗してもその場でログインし直せるようにするため。
+                let logIn = reason.loggedOutAccount.map { [MenuNode<StatusMenuCommand>.action("ログインし直す", icon: .symbol("person.crop.circle.badge.exclamationmark"), .logIn($0))] } ?? []
+                return [.action("投稿を探せませんでした", subtitle: reason.text, nil)] + logIn
             }
         }]
     }

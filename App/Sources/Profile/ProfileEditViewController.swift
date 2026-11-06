@@ -28,7 +28,7 @@ final class ProfileEditViewController: UIViewController {
     private let tableView = UITableView(frame: .zero, style: .insetGrouped)
     private let loadingView = UIActivityIndicatorView(style: .medium)
     private let failureView = UIStackView()
-    private let failureLabel = UILabel()
+    private let failureReason = FailureReasonStackView()
     private let completionList = ComposeCompletionList()
     private var completionListTop: NSLayoutConstraint?
     private var completionListHeight: NSLayoutConstraint?
@@ -220,7 +220,7 @@ final class ProfileEditViewController: UIViewController {
         let source = switch editor.source {
         case .loading: "loading"
         case .loaded: "loaded"
-        case .failed(let error): "failed(\(ErrorPresentation(error).code ?? "unknown"))"
+        case .failed(let error): "failed(\(SciaLog.describe(error)))"
         }
         let draft = editor.draft
         return """
@@ -236,7 +236,7 @@ final class ProfileEditViewController: UIViewController {
         switch source {
         case .loading: "loading"
         case .loaded: "loaded"
-        case .failed(let error): "failed(\(ErrorPresentation(error).code ?? "unknown"))"
+        case .failed(let error): "failed(\(SciaLog.describe(error)))"
         }
     }
 
@@ -272,7 +272,7 @@ final class ProfileEditViewController: UIViewController {
             failureView.isHidden = true
         case .failed(let error) where !isLoaded:
             loadingView.stopAnimating()
-            failureLabel.text = "プロフィールを読み込めませんでした\n\(ErrorPresentation(error).text)"
+            failureReason.show(ErrorPresentation(error), lead: "プロフィールを読み込めませんでした")
             failureView.isHidden = false
         default:
             if !isLoaded {
@@ -478,11 +478,10 @@ final class ProfileEditViewController: UIViewController {
         loadingView.translatesAutoresizingMaskIntoConstraints = false
         loadingView.hidesWhenStopped = true
         view.addSubview(loadingView)
-        failureLabel.numberOfLines = 0
-        failureLabel.textAlignment = .center
-        failureLabel.font = .preferredFont(forTextStyle: .body)
-        failureLabel.adjustsFontForContentSizeCategory = true
-        failureLabel.textColor = .secondaryLabel
+        failureReason.label.textAlignment = .center
+        failureReason.label.font = .preferredFont(forTextStyle: .body)
+        failureReason.label.adjustsFontForContentSizeCategory = true
+        failureReason.label.textColor = .secondaryLabel
         var retry = UIButton.Configuration.gray()
         retry.title = "再試行"
         retry.cornerStyle = .capsule
@@ -493,7 +492,7 @@ final class ProfileEditViewController: UIViewController {
         failureView.axis = .vertical
         failureView.alignment = .center
         failureView.spacing = 12
-        failureView.addArrangedSubview(failureLabel)
+        failureView.addArrangedSubview(failureReason)
         failureView.addArrangedSubview(retryButton)
         failureView.translatesAutoresizingMaskIntoConstraints = false
         failureView.isHidden = true
@@ -788,7 +787,8 @@ final class ProfileEditViewController: UIViewController {
         var content = UIListContentConfiguration.subtitleCell()
         content.text = "再読み込み"
         content.textProperties.color = .tintColor
-        content.secondaryText = "読み込めませんでした。\(ErrorPresentation(error).text)"
+        // 行を押すと読み直すので、ボタンは並べられない。自分のプロフィールの読み込みなので、401ならログインし直しの段から行える。
+        content.secondaryText = "読み込めませんでした。\(FailureText.withoutLogIn(ErrorPresentation(error)))"
         content.secondaryTextProperties.color = .secondaryLabel
         content.secondaryTextProperties.font = .preferredFont(forTextStyle: .footnote)
         cell.contentConfiguration = content

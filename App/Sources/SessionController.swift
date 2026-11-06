@@ -599,7 +599,6 @@ final class SessionController {
         composer.onSwitchToHomeAccount = { [weak self] in self?.composer.model.switchAccount(to: nil) }
         composer.writingAccountChoices = { [weak self] in self?.writingAccountChoices() ?? [] }
         composer.hasOtherWritingAccounts = { [weak self] in self?.otherAccounts.hasOthers ?? false }
-        composer.onLogInAgain = { [weak self] account in self?.reauthenticate(account) }
         composer.onChooseWritingAccount = { [weak self] id in self?.chooseWritingAccount(id) }
         session.onCredentialsInvalid = { [weak self] in self?.credentialsDidBecomeInvalid() }
         session.onCapabilitiesLoad = { [weak self] capabilities in
@@ -2127,7 +2126,7 @@ final class SessionController {
         } completion: { [weak self] result in
             guard let self, case .success(let lookup) = result else { return }
             let title = "投稿するアカウントを替えられませんでした"
-            let reason: String
+            let reason: ErrorPresentation
             switch lookup {
             case .found(let found):
                 // 引用に対応していないサーバー（`quote_approval`がない）でも、引用できないものとして替えない。
@@ -2135,14 +2134,14 @@ final class SessionController {
                     composer.switchWritingAccount(to: writing, replyTo: isReply ? found : nil, quoteTarget: isReply ? nil : found)
                     return
                 }
-                reason = "@\(username)では引用元の投稿を引用できません。"
+                reason = ErrorPresentation(message: "@\(username)では引用元の投稿を引用できません。", code: nil)
             case .notFound:
-                reason = "@\(username)からは\(isReply ? "返信先" : "引用元")の投稿が見られません。"
+                reason = ErrorPresentation(message: "@\(username)からは\(isReply ? "返信先" : "引用元")の投稿が見られません。", code: nil)
             case .failed(let error):
-                reason = ErrorPresentation(error).text
+                reason = ErrorPresentation(error)
             }
             showFailureNotice(.interactionFailure(title: title) { [weak self] in
-                self?.presentAlert(title: title, message: reason)
+                self?.presentAlert(title: title, reason: reason)
             })
         }
     }
@@ -2923,7 +2922,7 @@ final class SessionController {
             submit: { try await client().report($0) }
         ))
         logger.info("report sheet opened (status: \(statusID != nil, privacy: .public))")
-        let sheet = ReportView.sheet(draft: draft, logIn: { [weak self] account in self?.reauthenticate(account) }) { [weak self] in
+        let sheet = ReportView.sheet(draft: draft) { [weak self] in
             self?.logger.info("report submitted")
             self?.notices.showTransient(Notice(id: "user.reported", kind: .success, title: actor + "通報しました"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
         }
@@ -3321,10 +3320,9 @@ final class SessionController {
                 if let error = error as? MastodonAPIError, error.isUnauthorized {
                     reportUnauthorized()
                 }
-                let alert = UIAlertController(title: "元の予約を取り消せませんでした", message: "書き直した投稿は送りましたが、元の予約が残っています。両方投稿されないよう、予約投稿の画面から取り消してください。\n\(ErrorPresentation(error).text)", preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: "予約投稿を開く", style: .default) { [weak self] _ in self?.showScheduledStatuses() })
-                alert.addAction(UIAlertAction(title: "閉じる", style: .cancel))
-                topViewController.present(alert, animated: true)
+                let reason = ErrorPresentation(error).leading("書き直した投稿は送りましたが、元の予約が残っています。両方投稿されないよう、予約投稿の画面から取り消してください。")
+                let openList = UIAlertAction(title: "予約投稿を開く", style: .default) { [weak self] _ in self?.showScheduledStatuses() }
+                topViewController.present(UIAlertController.failure(title: "元の予約を取り消せませんでした", reason: reason, actions: [openList], cancelTitle: "閉じる"), animated: true)
                 return
             }
             self?.logger.info("rewritten schedule cancel done")
@@ -3659,22 +3657,17 @@ final class SessionController {
         }
     }
 
-    /// 失敗の理由。401なら、ログアウトされたとして、ログインし直しのボタンを出し、そこからログインし直すよう知らせる。
+    /// 失敗の理由。401なら、ログアウトされたとして、ログインし直しの段も出す。理由にはログインし直すボタンが付く。
     private func failureReason(for error: any Error) async -> ErrorPresentation {
-        guard let apiError = error as? MastodonAPIError, apiError.isUnauthorized else {
-            return ErrorPresentation(error)
+        if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
+            authorization.reportUnauthorized()
         }
-        authorization.reportUnauthorized()
-        return ErrorPresentation(message: Self.reauthenticationMessage, code: nil)
+        return ErrorPresentation(error)
     }
 
-    private static let reauthenticationMessage = "ログアウトされています。上のボタンからログインし直してください。"
-
-    /// 失敗の理由を出す。ログアウトされたアカウントがあれば、そのアカウントでログインし直すボタンを添える。
+    /// 失敗の理由を出す。ログアウトされたアカウントがあれば、そのアカウントでログインし直すボタンが付く。
     private func presentAlert(title: String, reason: ErrorPresentation) {
-        topViewController.present(UIAlertController.failure(title: title, reason: reason) { [weak self] account in
-            self?.reauthenticate(account)
-        }, animated: true)
+        topViewController.present(UIAlertController.failure(title: title, reason: reason), animated: true)
     }
 
     private func presentAlert(title: String, message: String) {
@@ -3793,7 +3786,7 @@ final class SessionController {
     private static let reauthenticationListMessage = ErrorPresentation(message: "ログインし直すと読み込めます。", code: nil)
 
     /// 失敗の理由のボタンから、そのアカウントにログインし直す。このセッションのアカウントなら、ログインし直しの段と同じ流れにする。
-    private func reauthenticate(_ account: RequestAccount) {
+    func reauthenticate(_ account: RequestAccount) {
         if account.id == credential.id {
             reauthenticate()
             return

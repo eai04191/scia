@@ -201,10 +201,9 @@ final class ListEditor {
                     guard let self, let host, !(error is CancellationError) else { return }
                     logger.error("list name submit failed: \(SciaLog.describe(error), privacy: .public)")
                     let reason = isOwnAccount ? await host.listFailureReason(for: error) : ErrorPresentation(error)
-                    let failure = UIAlertController(title: failureTitle, message: reason.text, preferredStyle: .alert)
-                    failure.addAction(UIAlertAction(title: "OK", style: .cancel) { [weak self] _ in
+                    let failure = UIAlertController.failure(title: failureTitle, reason: reason) { [weak self] in
                         self?.presentNameInput(title: title, text: entered, actionTitle: actionTitle, failureTitle: failureTitle, isOwnAccount: isOwnAccount, submit: submit)
-                    })
+                    }
                     host.listPresenter.present(failure, animated: true)
                 }
             }

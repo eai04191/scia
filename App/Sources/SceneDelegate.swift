@@ -444,9 +444,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             logger.info("reauthentication cancelled with session")
         } catch {
             logger.error("reauthentication failed: \(SciaLog.describe(error), privacy: .public)")
-            let alert = UIAlertController(title: "ログインし直せませんでした", message: ErrorPresentation(error).text, preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "OK", style: .cancel))
-            window.rootViewController?.frontmostPresented.present(alert, animated: true)
+            window.rootViewController?.frontmostPresented.present(UIAlertController.failure(title: "ログインし直せませんでした", reason: ErrorPresentation(error)), animated: true)
         }
     }
 
@@ -505,9 +503,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             // 消せなければ、アカウントはアカウントのリストにも端末にも残っているので、今の画面のまま知らせる。
             // ログイン画面に替えると、残っているほかのアカウントにも、起動し直すまで戻れなくなるため。
             logger.error("account removal failed: \(SciaLog.describe(error), privacy: .public)")
-            let alert = UIAlertController(title: "ログアウトできませんでした", message: ErrorPresentation(error).text, preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "OK", style: .cancel))
-            window?.rootViewController?.frontmostPresented.present(alert, animated: true)
+            window?.rootViewController?.frontmostPresented.present(UIAlertController.failure(title: "ログアウトできませんでした", reason: ErrorPresentation(error)), animated: true)
             return
         }
         logger.info("account removed")
@@ -576,5 +572,12 @@ private struct DifferentAccountLoggedIn: LocalizedError {
 private struct AccountsUnavailable: LocalizedError {
     var errorDescription: String? {
         "アカウントの情報を読み書きできません。アプリを起動し直してください。"
+    }
+}
+
+extension SceneDelegate: AccountReauthenticating {
+    /// 失敗の理由の「ログインし直す」から、そのアカウントにログインし直す。今のアカウントかほかのアカウントかは、セッションが分ける。
+    func reauthenticate(_ account: RequestAccount) {
+        session?.reauthenticate(account)
     }
 }

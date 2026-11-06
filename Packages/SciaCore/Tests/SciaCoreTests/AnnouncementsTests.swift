@@ -2,7 +2,7 @@ import Foundation
 import SciaTesting
 import Synchronization
 import Testing
-@testable import SciaCore
+@_spi(FailureDisplay) @testable import SciaCore
 
 @Suite(.requestPurpose(.action))
 struct AnnouncementDecodingTests {

@@ -95,6 +95,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - ログに何を`privacy: .public`で出してよいかは[docs/logging.md](docs/logging.md)に従う。ハンドル、本文、URL、応答の本文、`localizedDescription`を公開扱いで出す書き方は、`make lint`の`log_private_value`で止める。違和感レポートの状態ダンプも同じ決まりで書く
 - サーバーの上限のうち、APIで返らないもの（メモや通報のコメントの文字数など）は、Mastodonのソースにある値でも手元で固定しない。Mastodonはソースを変えて動かせるので、上限を変えたサーバーで、書ける長さを手元で止めたり、断られる長さを通したりするため。手元では止めず、サーバーが断って返す理由を、送れなかったときの表示で出す。文字数のような目安は、上限を付けずに出してよい
 - 通信は`HTTPClient`を通す（APIの外は`AppDependencies.http`、ストリーミングは`StreamingClient`）。再開の時刻で止める、一時的な失敗で送り直す、応答の大きさの上限、httpとhttps以外を開かない決まりを、すべての経路で守らせるため。URLSessionを`URLSessionTransport`の外で使う書き方は、`make lint`の`url_session_outside_network_layer`で止める。決まりは[docs/network.md](docs/network.md)にある
+- 失敗の理由（`ErrorPresentation`）は、`App/Sources/Notices/FailureDisplay.swift`の部品で出す。ログアウトされたアカウントがあれば、部品が「ログインし直す」を付けるため。文言はSciaCoreでSPI（`FailureDisplay`）にしてあり、部品のファイルのほかでそのSPIをimportする書き方は、`make lint`の`failure_reason_outside_display`で止める
 - Swift 6のstrict concurrencyを有効にしている。`@unchecked Sendable`や`nonisolated(unsafe)`で警告を消さず、設計で解決する
 
 ## 文言

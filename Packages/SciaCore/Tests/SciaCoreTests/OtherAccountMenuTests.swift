@@ -388,6 +388,34 @@ struct OtherAccountMenuTests {
         #expect(await loaded(try #require(node(tree(status(uri: uri), accounts: [failing]))).children) == "投稿を探せませんでした(押せない)")
     }
 
+    /// そのアカウントがログアウトされていて探せなければ、理由の行に続けて、そのアカウントでログインし直す項目を出す。
+    @Test func offersLogInWhenOtherAccountIsLoggedOut() async throws {
+        let sender = RequestAccount(id: "https://other.example#50", handle: "@bob@other.example")
+        let bob = try account("bob", operations { _ in throw MastodonAPIError(statusCode: 401, message: "The access token is invalid", account: sender) })
+
+        let children = await loadedNodes(try #require(node(tree(status(uri: uri), accounts: [bob]))).children)
+
+        #expect(MenuNodeTests.describe(children) == "投稿を探せませんでした(押せない)|ログインし直す")
+        guard case .logIn(let account) = children.last?.command else {
+            Issue.record("ログインし直す項目になっていません")
+            return
+        }
+        #expect(account == sender)
+    }
+
+    /// 開いてから読む中身を読んで並べる。
+    private func loadedNodes(_ nodes: [MenuNode<StatusMenuCommand>]) async -> [MenuNode<StatusMenuCommand>] {
+        var loaded: [MenuNode<StatusMenuCommand>] = []
+        for node in nodes {
+            if case .deferred(let load) = node.content {
+                loaded += await load()
+            } else {
+                loaded.append(node)
+            }
+        }
+        return loaded
+    }
+
     /// 見つけたあとに見られなくなった投稿は忘れ、次に開いたときは探し直す。
     @Test func forgetsStatusThatIsNoLongerFound() async throws {
         let found = status(id: "7000", uri: uri)

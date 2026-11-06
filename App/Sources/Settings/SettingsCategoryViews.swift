@@ -221,7 +221,7 @@ struct LinkLoadingSettingsView: View {
 
 /// アプリのアイコンを選ぶ画面。
 struct AppIconSettingsView: View {
-    @State private var appIconError: String?
+    @State private var appIconError: ErrorPresentation?
 
     /// 選択の表示は共有のAppIconSelectionから読む。設定を複数のウィンドウで開いていても、どれも同じ選択を表示する。
     private var appIconBinding: Binding<AppIconChoice> {
@@ -233,7 +233,7 @@ struct AppIconSettingsView: View {
                 do {
                     try await AppDependencies.appIcon.select(choice)
                 } catch {
-                    appIconError = ErrorPresentation(error).text
+                    appIconError = ErrorPresentation(error)
                 }
             }
         }
@@ -252,7 +252,7 @@ struct AppIconSettingsView: View {
                 .labelsHidden()
             } footer: {
                 if let appIconError {
-                    Text("アイコンを変えられませんでした。\(appIconError)")
+                    FailureReason(reason: appIconError, lead: "アイコンを変えられませんでした。")
                 }
             }
         }

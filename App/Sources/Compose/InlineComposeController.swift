@@ -61,8 +61,6 @@ final class InlineComposeController: NSObject {
     }
     /// 書いているアカウントの行の×で、今のアカウントに戻す。
     var onSwitchToHomeAccount: () -> Void = {}
-    /// 送れなかった理由のアラートの「ログインし直す」で、そのアカウントにログインし直す。
-    var onLogInAgain: (RequestAccount) -> Void = { _ in }
 
     /// ＋のメニューの「投稿するアカウント」で選べるアカウント。
     struct AccountChoice {
@@ -3000,9 +2998,7 @@ final class InlineComposeController: NSObject {
     private func presentErrorIfNeeded() {
         guard let reason = model.postError, !isPresentingAlert, let presenter = presenterForErrors, presenter.presentedViewController == nil else { return }
         logger.info("compose: presenting post error (focused=\(self.isInputFocused) editing=\(self.isEditing) picker=\(self.mediaPicker != nil))")
-        let alert = UIAlertController.failure(title: model.scheduledAt != nil ? "予約できませんでした" : "投稿できませんでした", reason: reason) { [weak self] account in
-            self?.onLogInAgain(account)
-        } onClose: { [weak self] in
+        let alert = UIAlertController.failure(title: model.scheduledAt != nil ? "予約できませんでした" : "投稿できませんでした", reason: reason) { [weak self] in
             self?.model.postError = nil
             self?.alertDidClose()
         }
@@ -3186,11 +3182,19 @@ final class InlineComposeController: NSObject {
         let local = model.localMedia[id]
         let failure = status == .failed ? local?.failure : local?.descriptionFailure
         let title = status == .failed ? "アップロードできませんでした" : "代替テキストを送信できませんでした"
-        let alert = UIAlertController(title: title, message: failure.map { ErrorPresentation($0).text }, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "再試行", style: .default) { [weak self] _ in self?.model.retryAttachment(id) })
-        alert.addAction(UIAlertAction(title: "削除", style: .destructive) { [weak self] _ in self?.removeAttachment(id) })
-        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
-        presenter.present(alert, animated: true)
+        let actions = [
+            UIAlertAction(title: "再試行", style: .default) { [weak self] _ in self?.model.retryAttachment(id) },
+            UIAlertAction(title: "削除", style: .destructive) { [weak self] _ in self?.removeAttachment(id) },
+        ]
+        guard let failure else {
+            // 理由が残っていない（失敗を覚える前に消えた）ときは、操作だけを出す。
+            let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)
+            actions.forEach(alert.addAction)
+            alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+            presenter.present(alert, animated: true)
+            return
+        }
+        presenter.present(UIAlertController.failure(title: title, reason: ErrorPresentation(failure), actions: actions, cancelTitle: "キャンセル"), animated: true)
     }
 
     /// 添付を外す。ピッカーを出していれば、その選択からも外す。
