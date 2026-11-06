@@ -2304,6 +2304,26 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// プレビューの見本で、本文やリンクカードのリンクを押す操作だけを残す。見本の写真のクレジットのリンクを開けるようにするため。
     /// ほかの操作（サムネイル、投票、注意書きの開閉、名前やアイコンなど）は、見本を変えたり別の画面を開いたりするので外す。
+    #if DEBUG
+    /// 一番上に見えている投稿の行の投稿と、その行の画面（ウインドウ）での上端。デバッグのURLで、対象の投稿を選ぶのに使う。
+    func topmostVisibleStatus() -> (status: Status, minY: CGFloat)? {
+        guard let window = view.window else { return nil }
+        let visibleTop = collectionView.convert(CGPoint(x: 0, y: collectionView.contentOffset.y + collectionView.adjustedContentInset.top), to: window).y
+        return collectionView.visibleCells.compactMap { cell -> (Status, CGFloat)? in
+            guard let id = collectionView.indexPath(for: cell).flatMap({ dataSource.itemIdentifier(for: $0) }), let status = entries[id].flatMap(Self.statusOfRow) else { return nil }
+            let frame = cell.convert(cell.bounds, to: window)
+            return frame.maxY > visibleTop ? (status, frame.minY) : nil
+        }
+        .min { $0.1 < $1.1 }
+        .map { (status: $0.0, minY: $0.1) }
+    }
+
+    /// 並べている投稿のうち、IDの投稿。ブーストなら、元の投稿のIDでも探す。
+    func loadedStatus(id: Status.ID) -> Status? {
+        entries.values.lazy.compactMap(Self.statusOfRow).first { $0.id == id || $0.reblog?.id == id }
+    }
+    #endif
+
     /// 投稿の行の投稿。リアクションの列を出すのは、投稿と固定された投稿の行だけ。
     private static func statusOfRow(_ entry: TimelineEntry) -> Status? {
         switch entry {

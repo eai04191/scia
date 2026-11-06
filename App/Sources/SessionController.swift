@@ -3818,6 +3818,8 @@ final class SessionController {
             SheetKeyboardExperiment.present(from: rootViewController.frontmostPresented, lowHeight: AppDependencies.tuning.value(of: TuningCatalog.composePickerHeight) - (rootViewController.view.window?.safeAreaInsets.bottom ?? 0))
         case .viewer(let index):
             openTopmostMedia(at: index)
+        case .emojiReaction(let statusID, let name, let count, let me):
+            applyDebugEmojiReaction(statusID: statusID, name: name, count: count, me: me)
         case .autoScroll(let distance, let speed):
             autoScroll(distance: distance, speed: speed)
         case .createList(let title):
@@ -3877,6 +3879,29 @@ final class SessionController {
     }
 
     /// 選んでいるタブで、画面のいちばん上に見えている添付ファイル付きの投稿を、サムネイルをタップしたのと同じ経路でビューアに開く。
+    /// ストリーミングの`emoji_reaction`のイベントと同じ経路で、リアクションの数を当てる。
+    /// 絵文字は、対象の投稿にすでに同じ名前のリアクションがあれば、その画像のURLごと使う。なければUnicodeの絵文字か、画像のないカスタム絵文字になる。
+    private func applyDebugEmojiReaction(statusID: String?, name: String, count: Int, me: Bool) {
+        guard let target = statusID.map({ id in timelines.allObjects.lazy.compactMap { $0.loadedStatus(id: id) }.first }) ?? topmostVisibleStatus() else {
+            logger.error("debug emoji reaction: no target status")
+            return
+        }
+        let shown = target.displayed
+        let emoji = shown.emojiReactions.first { $0.emoji.name == name }?.emoji ?? ReactionEmoji(name: name)
+        let update = EmojiReactionUpdate(statusID: shown.id, emoji: emoji, count: count, accountIDs: me ? [credential.accountID] : [])
+        interactions.apply(update, myAccountID: credential.accountID)
+    }
+
+    /// 選んでいるタブで、一番上に見えている投稿。
+    private func topmostVisibleStatus() -> Status? {
+        guard let view = (rootViewController as? UITabBarController)?.selectedViewController?.view, let window = view.window else { return nil }
+        return timelines.allObjects
+            .filter { $0.isViewLoaded && $0.view.window === window && $0.view.isDescendant(of: view) }
+            .compactMap { $0.topmostVisibleStatus() }
+            .min { $0.minY < $1.minY }?
+            .status
+    }
+
     private func openTopmostMedia(at index: Int) {
         guard let view = (rootViewController as? UITabBarController)?.selectedViewController?.view, let window = view.window else { return }
         let grids = Self.mediaGrids(in: view)

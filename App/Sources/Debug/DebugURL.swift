@@ -22,6 +22,10 @@ enum DebugURL: Equatable {
     /// `scia-debug://account?acct=<ハンドル>`で、保存してあるアカウントに切り替える。メニューを触らずに、ほかのサーバーのアカウントで確かめるため。
     /// ハンドルは`user@server`で、先頭の`@`はあってもなくてもよい。セッションがなくても受け付ける。
     case account(acct: String)
+    /// `scia-debug://emoji-reaction?name=<絵文字>&count=<数>`で、絵文字のリアクションの数の変化を、ストリーミングの`emoji_reaction`のイベントと同じ経路で当てる。
+    /// 対象は、`id=<投稿のID>`がなければ、選んでいるタブで一番上に見えている投稿。`me=1`で自分がしたものにする。`count=0`で、自分もしていなければなくなる。
+    /// ほかの人のリアクションが付く、なくなる、数が変わるときの動きを、ほかのアカウントを使わずに確かめるため。サーバーには送らない。
+    case emojiReaction(statusID: String?, name: String, count: Int, me: Bool)
     /// `scia-debug://dummy-session`で、通信しないダミーのデータでホームと通知の画面に入る（`DummyServer`）。ログイン画面でも、ログイン済みでも受け付ける。
     case dummySession
     /// `scia-debug://unreadable`。以後のホームと通知の応答の一部を読めない形に壊し、読み込み直す。
@@ -174,6 +178,7 @@ enum DebugURL: Equatable {
         let parsed: DebugURL? = switch host {
         case "dummy": DebugDummyPost(rawValue: last).map { .dummy($0) }
         case "account": Self.query("acct", in: url).map { .account(acct: $0) }
+        case "emoji-reaction": Self.emojiReaction(url)
         case "scenario": .scenario(last)
         case "unsupported": OptionalFeature(rawValue: last).map { .unsupported($0) }
         case "catalog": CatalogComponent(rawValue: last).map { .catalog($0) }
@@ -303,6 +308,11 @@ enum DebugURL: Equatable {
               let speed = Double(query("speed", in: url) ?? "2000"), speed > 0
         else { return nil }
         return .autoScroll(distance: distance, speed: speed)
+    }
+
+    private static func emojiReaction(_ url: URL) -> DebugURL? {
+        guard let name = query("name", in: url), !name.isEmpty, let count = Int(query("count", in: url) ?? ""), count >= 0 else { return nil }
+        return .emojiReaction(statusID: query("id", in: url), name: name, count: count, me: query("me", in: url) == "1")
     }
 
     private static func viewer(_ url: URL) -> DebugURL? {
