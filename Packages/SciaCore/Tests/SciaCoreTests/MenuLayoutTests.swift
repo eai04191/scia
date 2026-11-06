@@ -325,6 +325,21 @@ struct MenuLayoutTests {
         #expect(restored.hashtagMenuLayout == hashtag)
     }
 
+    @Test func appSettingsPersistsReactionMenuLayoutAndActions() throws {
+        let defaults = try makeDefaults()
+        #expect(AppSettings(defaults: defaults).reactionMenuLayout == ReactionMenuItem.defaultLayout)
+
+        let layout = MenuLayout<ReactionMenuItem>(elements: [.item(.reactedBy, isVisible: true), .more, .item(.toggle, isVisible: false), .item(.open, isVisible: true), .item(.customize, isVisible: true)])
+        let actions = ObjectActions<ReactionMenuItem>(tap: .item(.reactedBy), longPress: .item(.toggle))
+        let settings = AppSettings(defaults: defaults)
+        settings.reactionMenuLayout = layout
+        settings.reactionActions = actions
+
+        let restored = AppSettings(defaults: defaults)
+        #expect(restored.reactionMenuLayout == layout)
+        #expect(restored.reactionActions == actions)
+    }
+
     @Test func appSettingsPersistsProfileTextMenuLayout() throws {
         let defaults = try makeDefaults()
         #expect(AppSettings(defaults: defaults).profileTextMenuLayout == ProfileTextMenuItem.defaultLayout)

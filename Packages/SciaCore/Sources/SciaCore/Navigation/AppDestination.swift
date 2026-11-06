@@ -27,6 +27,7 @@ public enum AppDestination: Equatable, Sendable {
     case apiResponse(statusID: String)
     /// `accounts/<followers|following>`で自分の、`?id=<アカウントのID>`でその人のフォロワーかフォローの一覧を開く。
     /// `accounts/<favourited|reblogged>?id=<投稿のID>`で、その投稿をお気に入りした人、ブーストした人の一覧を開く。
+    /// `accounts/emoji-reactioned?id=<投稿のID>&name=<絵文字>`で、その投稿にその絵文字でリアクションした人の一覧を開く。
     case accounts(AccountList)
     /// `hashtag?name=<名前>`。選んでいるタブに、そのハッシュタグの投稿の一覧を開く。
     case hashtag(name: String)
@@ -86,6 +87,8 @@ public enum AppDestination: Equatable, Sendable {
         case followers(accountID: String?)
         case following(accountID: String?)
         case favourited(statusID: String)
+        /// その投稿にその絵文字でリアクションした人。`name`は絵文字の名前（Unicodeの絵文字か、カスタム絵文字のショートコード）。
+        case emojiReactioned(statusID: String, name: String)
         case reblogged(statusID: String)
     }
 
@@ -187,6 +190,7 @@ public enum AppDestination: Equatable, Sendable {
         case ("accounts", "followers"): .accounts(.followers(accountID: query("id")))
         case ("accounts", "following"): .accounts(.following(accountID: query("id")))
         case ("accounts", "favourited"): query("id").map { .accounts(.favourited(statusID: $0)) }
+        case ("accounts", "emoji-reactioned"): query("id").flatMap { id in query("name").map { .accounts(.emojiReactioned(statusID: id, name: $0)) } }
         case ("accounts", "reblogged"): query("id").map { .accounts(.reblogged(statusID: $0)) }
         case ("hashtag", ""): query("name").map { .hashtag(name: $0) }
         case ("account-hashtag", ""): query("acct").flatMap { acct in query("name").map { .accountHashtag(acct: acct, name: $0) } }
@@ -240,6 +244,7 @@ public enum AppDestination: Equatable, Sendable {
         case .accounts(.followers(let accountID)): ("accounts", "followers", accountID.map { [("id", $0)] } ?? [])
         case .accounts(.following(let accountID)): ("accounts", "following", accountID.map { [("id", $0)] } ?? [])
         case .accounts(.favourited(let statusID)): ("accounts", "favourited", [("id", statusID)])
+        case .accounts(.emojiReactioned(let statusID, let name)): ("accounts", "emoji-reactioned", [("id", statusID), ("name", name)])
         case .accounts(.reblogged(let statusID)): ("accounts", "reblogged", [("id", statusID)])
         case .hashtag(let name): ("hashtag", nil, [("name", name)])
         case .accountHashtag(let acct, let name): ("account-hashtag", nil, [("acct", acct), ("name", name)])
@@ -316,6 +321,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     case externalPostActions = "external-post-actions"
     case hashtagActions = "hashtag-actions"
     case mediaActions = "media-actions"
+    case reactionActions = "reaction-actions"
     case statusMenu = "status-menu"
     case userMenu = "user-menu"
     case linkMenu = "link-menu"
@@ -323,6 +329,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     case profileTextMenu = "profile-text-menu"
     case hashtagMenu = "hashtag-menu"
     case mediaMenu = "media-menu"
+    case reactionMenu = "reaction-menu"
     case composeTools = "compose-tools"
     case connection
     case storage
@@ -338,7 +345,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
         switch self {
         case .appearance, .notificationAppearance, .linkLoading: [.display, self]
         case .statusActions, .notificationActions, .userActions, .linkActions, .externalPostActions, .hashtagActions, .mediaActions,
-             .profileTextMenu:
+             .reactionActions, .profileTextMenu:
             [.interaction, self]
         case .statusMenu: [.interaction, .statusActions, self]
         case .userMenu: [.interaction, .userActions, self]
@@ -346,6 +353,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
         case .externalPostMenu: [.interaction, .externalPostActions, self]
         case .hashtagMenu: [.interaction, .hashtagActions, self]
         case .mediaMenu: [.interaction, .mediaActions, self]
+        case .reactionMenu: [.interaction, .reactionActions, self]
         case .composeTools: [.compose, self]
         case .connection, .licenses, .acknowledgments: [.about, self]
         case .viewedMediaCache, .prefetchedMediaCache: [.storage, self]

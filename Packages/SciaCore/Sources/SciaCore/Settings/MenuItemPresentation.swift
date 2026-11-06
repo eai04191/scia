@@ -346,6 +346,17 @@ extension ComposeToolItem: MenuItemPresentable {
     public static var supportsRowSeparators: Bool { false }
 }
 
+extension ReactionMenuItem: MenuItemContentProviding {
+    public var content: MenuItemContent {
+        switch self {
+        case .toggle: .own(title: "リアクションする・外す", symbolName: "face.smiling")
+        case .reactedBy: .own(title: "リアクションした人", symbolName: "person.2")
+        case .open: .own(title: "開く", symbolName: "arrow.up.left.and.arrow.down.right")
+        case .customize: .own(title: "カスタマイズ", symbolName: "slider.horizontal.3")
+        }
+    }
+}
+
 extension MediaMenuItem: MenuItemContentProviding {
     public var content: MenuItemContent {
         switch self {

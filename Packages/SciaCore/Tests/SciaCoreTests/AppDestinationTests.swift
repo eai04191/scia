@@ -99,7 +99,7 @@ struct AppDestinationTests {
         + [.profile(acct: "bob@example.com"), .profile(acct: "bob"), .myProfile, .profileEdit]
         + [.thread(statusID: "123"), .editHistory(statusID: "123"), .apiResponse(statusID: "123")]
         + [.accounts(.followers(accountID: nil)), .accounts(.followers(accountID: "9")), .accounts(.following(accountID: nil)), .accounts(.following(accountID: "9"))]
-        + [.accounts(.favourited(statusID: "123")), .accounts(.reblogged(statusID: "123"))]
+        + [.accounts(.favourited(statusID: "123")), .accounts(.reblogged(statusID: "123")), .accounts(.emojiReactioned(statusID: "123", name: "👍")), .accounts(.emojiReactioned(statusID: "123", name: "blob_cat"))]
         + [.hashtag(name: "日本語 & tag"), .accountHashtag(acct: "bob@example.com", name: "scia"), .search(query: nil), .search(query: "https://example.com/@bob/1"), .scheduled, .operationStatus]
         + [.notificationRequests, .notificationRequest(id: "7"), .notificationPolicy, .announcements, .inAppBrowserHeight(returningTo: nil), .inAppBrowserHeight(returningTo: .interaction)]
         + [.note(acct: "bob@example.com"), .report(acct: "bob+1@example.com")]
@@ -134,7 +134,7 @@ struct AppDestinationTests {
 
     enum Kind: CaseIterable {
         case tab, userTabList, userTabHashtag, userTabProfile, userTabAccountHashtag, settings, appearanceGroup, notificationAppearanceGroup, profile, myProfile, profileEdit
-        case thread, editHistory, apiResponse, followers, following, favourited, reblogged, hashtag, accountHashtag, search, scheduled, operationStatus
+        case thread, editHistory, apiResponse, followers, following, favourited, reblogged, emojiReactioned, hashtag, accountHashtag, search, scheduled, operationStatus
         case notificationRequests, notificationRequest, notificationPolicy, announcements, inAppBrowserHeight
         case note, report, composeTools, composeLanguage, composeSchedule, composeEmoji, composeMediaPicker, composeAttachment, composeAltText, composeCrop
     }
@@ -159,6 +159,7 @@ struct AppDestinationTests {
         case .accounts(.following): .following
         case .accounts(.favourited): .favourited
         case .accounts(.reblogged): .reblogged
+        case .accounts(.emojiReactioned): .emojiReactioned
         case .hashtag: .hashtag
         case .accountHashtag: .accountHashtag
         case .search: .search

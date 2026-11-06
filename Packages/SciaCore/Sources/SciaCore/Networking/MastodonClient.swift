@@ -862,7 +862,11 @@ public struct MastodonClient: Sendable {
     /// https://docs.joinmastodon.org/methods/lists/#accounts
     /// https://docs.joinmastodon.org/methods/accounts/#endorsements
     public func accounts(in list: AccountListKind, maxID: String?, limit: Int) async throws -> AccountListPage {
+        if case .emojiReactionedBy(let statusID, let name) = list {
+            return try await emojiReactionedBy(statusID, name: name, maxID: maxID, limit: limit)
+        }
         let path = switch list {
+        case .emojiReactionedBy: preconditionFailure("上で返している")
         case .favouritedBy(let statusID): "api/v1/statuses/\(statusID)/favourited_by"
         case .rebloggedBy(let statusID): "api/v1/statuses/\(statusID)/reblogged_by"
         case .followers(let accountID): "api/v1/accounts/\(accountID)/followers"
@@ -874,6 +878,31 @@ public struct MastodonClient: Sendable {
         let (accounts, response) = try await get(ElementList<Account>.self, path: path, query: query)
         let link = response.value(forHTTPHeaderField: "Link").map(LinkHeader.init)
         return AccountListPage(accounts: accounts.elements, nextMaxID: link?.queryValue("max_id", of: "next"))
+    }
+
+    /// 投稿にその絵文字でリアクションした人。Fedibirdの`emoji_reactioned_by`は絵文字で絞れず、どの絵文字のリアクションも、人と絵文字の組でページに分けて返すので、
+    /// `name`のものだけを手元で絞る。同じ絵文字かは、ほかと同じく名前だけで見分ける（docs/emoji-reaction.mdの「リアクションした人」）。
+    /// 絞ったページに人がいなければ、合う人が見つかるか最後のページに着くまで、続けて読む。人の一覧は、最初のページが空なら続きを読まないため。
+    private func emojiReactionedBy(_ statusID: Status.ID, name: String, maxID: String?, limit: Int) async throws -> AccountListPage {
+        struct Reacted: Decodable {
+            let name: String
+            let account: Account
+        }
+        var maxID = maxID
+        var readMaxIDs: Set<String> = []
+        while true {
+            let query = [URLQueryItem(name: "limit", value: String(limit))] + (maxID.map { [URLQueryItem(name: "max_id", value: $0)] } ?? [])
+            let (reactions, response) = try await get(ElementList<Reacted>.self, path: "api/v1/statuses/\(statusID)/emoji_reactioned_by", query: query)
+            let link = response.value(forHTTPHeaderField: "Link").map(LinkHeader.init)?.queryValue("max_id", of: "next")
+            // `allPages`と同じく、読んだ位置を返すサーバー（同じ位置を返し続ける、位置が循環する）で、同じページを読み続けないよう止める。
+            if let maxID { readMaxIDs.insert(maxID) }
+            let next = link.flatMap { readMaxIDs.contains($0) || reactions.elements.isEmpty ? nil : $0 }
+            let accounts = reactions.elements.filter { $0.name == name }.map(\.account)
+            guard accounts.isEmpty, let next else {
+                return AccountListPage(accounts: accounts, nextMaxID: next)
+            }
+            maxID = next
+        }
     }
 
     /// `max_id`は投稿のIDではない内部のIDで、`Link`ヘッダーの`next`のURLにだけ書かれている。
@@ -1486,6 +1515,8 @@ public enum AccountListKind: Hashable, Sendable {
     case favouritedBy(Status.ID)
     /// 投稿をブーストした人。
     case rebloggedBy(Status.ID)
+    /// 投稿にその絵文字でリアクションした人。Fedibirdの拡張。`name`は絵文字の名前（Unicodeの絵文字か、カスタム絵文字のショートコード）。
+    case emojiReactionedBy(Status.ID, name: String)
     /// アカウントのフォロワー。
     case followers(accountID: String)
     /// アカウントがプロフィールで紹介している人。Mastodon 4.4から。

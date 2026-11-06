@@ -179,6 +179,26 @@ struct StatusMenuTreeTests {
         #expect(!outline(tree(status())).contains(":"))
     }
 
+    /// 投稿の行に出しているリアクションのカスタム絵文字も、「カスタム絵文字」に並べる。サーバーがリアクションに対応していなければ、列を出さないので並べない。
+    @Test func reactionCustomEmojisAreListedWhenSupported() throws {
+        let emojiURL = try #require(URL(string: "https://example.social/emoji/blobcat.png"))
+        let emoji = CustomEmoji(shortcode: "blobcat", url: emojiURL, staticUrl: emojiURL)
+        let post = status().settingEmojiReaction(ReactionEmoji(customEmoji: emoji), true)
+        func menu(supports: Bool) -> String {
+            var reacted = tree(post)
+            reacted.supportsEmojiReactions = supports
+            reacted.customEmoji = { (emoji: CustomEmoji) in
+                var media = MediaMenuTree(kind: .image, attachment: emoji.attachment)
+                media.open = true
+                return media.customEmojiSubmenu(emoji, groups: MenuFixture.media.groups)
+            }
+            return outline(reacted)
+        }
+
+        #expect(menu(supports: true).contains(":blobcat:[開く"))
+        #expect(!menu(supports: false).contains(":blobcat:"))
+    }
+
     /// ハッシュタグは、関係するユーザーの後ろにタグごとの`#名前`のサブメニューで並ぶ。サーバーと同じ決まりでそろえた名前が同じタグは、1度だけ出す。
     @Test func hashtagsListHashtagMenuPerTagAfterUsers() throws {
         let tagURL = try #require(URL(string: "https://example.social/tags/cat"))

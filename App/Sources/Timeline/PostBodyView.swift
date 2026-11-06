@@ -138,6 +138,8 @@ final class PostBodyView: UIView {
     /// リアクションのボタンが押されたときに、その絵文字の`Reaction.name`を渡して呼ぶ。
     var onToggleReaction: ((String) -> Void)?
     /// リアクションの列の「＋」が押されたときに呼ぶ。nilなら「＋」を出さない。
+    /// リアクションのボタンのタップと長押しの対象。絵文字の名前を渡して受け取る。
+    var reactionTarget: ((String) -> (any ObjectActionTarget)?)?
     var onAddReaction: (() -> Void)? {
         didSet { reactionsView?.showsAddButton = onAddReaction != nil }
     }
@@ -503,6 +505,7 @@ final class PostBodyView: UIView {
         view.showsAddButton = onAddReaction != nil
         view.onToggle = { [weak self] name in self?.onToggleReaction?(name) }
         view.onAdd = { [weak self] in self?.onAddReaction?() }
+        view.target = { [weak self] name in self?.reactionTarget?(name) }
         view.onHeightChange = { [weak self] in self?.invalidateRowHeight() }
         reactionsView = view
         return view

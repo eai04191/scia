@@ -122,6 +122,11 @@ extension HashtagMenuItem: ObjectActionItem {
     public static var primaryItem: Self { .timeline }
 }
 
+/// 付け外しする。ボタンをタップしたときの今の動き。
+extension ReactionMenuItem: ObjectActionItem {
+    public static var primaryItem: Self { .toggle }
+}
+
 extension MediaMenuItem: ObjectActionItem {
     public static var primaryItem: Self { .open }
 }

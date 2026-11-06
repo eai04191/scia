@@ -32,6 +32,9 @@ final class ReactionChipsView: UIView {
     var onToggle: ((String) -> Void)?
     /// 「＋」を押したときに呼ぶ。
     var onAdd: (() -> Void)?
+    /// リアクションのボタンのタップと長押しの対象。絵文字の名前を渡して受け取る。nilなら、タップで`onToggle`を呼び、長押しのメニューは出さない（サーバーのお知らせ）。
+    /// 決まりはdocs/emoji-reaction.mdの「リアクションのボタンのメニュー」にある。
+    var target: ((String) -> (any ObjectActionTarget)?)?
     /// 動くカスタム絵文字を動かすときのストア。nilなら動かさない。
     var animatedEmojis: EmojiImageStore<UIImage>?
     /// まだ幅が決まっていないときに、高さを測る幅。一覧の行は、幅が決まる前に高さを測ることがあり、0の幅で測るとボタンが1つずつ折り返して高く測られるため。
@@ -287,12 +290,24 @@ final class ReactionChipsView: UIView {
     private func makeButton(name: String) -> ReactionChipButton {
         let button = ReactionChipButton()
         applyStyle(to: button)
-        button.addAction(UIAction { [weak self] _ in self?.onToggle?(name) }, for: .touchUpInside)
+        button.addAction(UIAction { [weak self, weak button] _ in
+            // 対象があれば、タップに割り当てた操作を行う。なければ付け外しする。
+            if let interaction = button?.interaction, interaction.target != nil {
+                interaction.handleTap()
+            } else {
+                self?.onToggle?(name)
+            }
+        }, for: .touchUpInside)
         return button
     }
 
     private func configure(_ button: ReactionChipButton, with reaction: Reaction, animated: Bool) {
         applyStyle(to: button)
+        if let target = target?(reaction.name) {
+            button.objectInteraction().target = target
+        } else {
+            button.interaction?.target = nil
+        }
         button.label.emojiImages = animatedEmojis
         button.label.attributedText = reaction.emoji
         button.setCount(reaction.count, isMine: reaction.isMine, animation: animated ? transitionDuration : nil)
@@ -324,6 +339,8 @@ final class ReactionChipsView: UIView {
 /// 数は絵文字と別に、SwiftUIの`Text`で描き、数が変わったときに、変わった桁だけを入れ替える（`numericText`）。「＋」は数を出さない。
 final class ReactionChipButton: UIControl {
     let label = EmojiLabel()
+    /// タップと長押しの対象を付けたもの。対象を渡されたときに作る。長押しでは、ボタンをカプセルの形のまま持ち上げる。
+    private(set) var interaction: ObjectInteraction?
     private let countModel = ReactionCountModel()
     private lazy var countHosting = UIHostingController(rootView: ReactionCountView(model: countModel))
     /// 数の文字。数字の幅を揃えたもの。
@@ -352,6 +369,13 @@ final class ReactionChipButton: UIControl {
     private static let minimumHitHeight: CGFloat = 44
 
     private(set) var isMine = false
+
+    func objectInteraction() -> ObjectInteraction {
+        if let interaction { return interaction }
+        let made = ObjectInteraction(on: self, tapsSelf: false, lift: .shape)
+        interaction = made
+        return made
+    }
 
     override var isHighlighted: Bool {
         didSet { alpha = isHighlighted ? 0.6 : 1 }

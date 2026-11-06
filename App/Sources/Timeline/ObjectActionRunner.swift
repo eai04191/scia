@@ -52,6 +52,11 @@ extension ObjectEntity where Item == HashtagMenuItem {
 }
 
 @MainActor
+extension ObjectEntity where Item == ReactionMenuItem {
+    static var reaction: Self { ObjectEntity(title: "リアクション", actions: \.reactionActions) }
+}
+
+@MainActor
 extension ObjectEntity where Item == MediaMenuItem {
     static var media: Self { ObjectEntity(title: "メディア", actions: \.mediaActions) }
 }

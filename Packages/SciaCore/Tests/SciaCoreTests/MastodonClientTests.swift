@@ -277,6 +277,49 @@ struct MastodonClientTests {
         #expect(request.url?.path() == "/api/v2/notifications/favourite-113000000000000001-489000/dismiss")
     }
 
+    /// 絵文字でリアクションした人は、Fedibirdの`emoji_reactioned_by`を読み、その絵文字の名前のものだけに絞る。
+    /// 絞ったページに人がいなければ、合う人が見つかるまで続けて読み、見つかったページの`max_id`を続きにする。
+    @Test func emojiReactionedByFiltersByNameAndSkipsEmptyPages() async throws {
+        func account(_ id: String) -> String {
+            #"{"id":"\#(id)","username":"u\#(id)","acct":"u\#(id)","display_name":"","avatar":"https://example.social/a.png","avatar_static":"https://example.social/a.png","header":"https://example.social/h.png","header_static":"https://example.social/h.png","note":"","url":"https://example.social/@u\#(id)","fields":[],"locked":false,"bot":false,"followers_count":0,"following_count":0,"statuses_count":0,"emojis":[]}"#
+        }
+        func link(_ maxID: String) -> [String: String] {
+            ["Link": "<https://example.social/api/v1/statuses/1/emoji_reactioned_by?max_id=\(maxID)>; rel=\"next\""]
+        }
+        let transport = StubTransport([
+            .json(#"[{"name":"🎉","account":\#(account("1"))}]"#, statusCode: 200, headers: link("50")),
+            .json(#"[{"name":"👍","account":\#(account("2"))},{"name":"🎉","account":\#(account("3"))},{"name":"👍","account":\#(account("4"))}]"#, statusCode: 200, headers: link("40")),
+            .json("[]", statusCode: 200),
+        ])
+        let client = try makeClient(transport)
+
+        let first = try await client.accounts(in: .emojiReactionedBy("1", name: "👍"), maxID: nil, limit: 40)
+        let last = try await client.accounts(in: .emojiReactionedBy("1", name: "👍"), maxID: first.nextMaxID, limit: 40)
+
+        #expect(first.accounts.map(\.id) == ["2", "4"])
+        #expect(first.nextMaxID == "40")
+        #expect(last.accounts.isEmpty)
+        #expect(last.nextMaxID == nil)
+        let requests = await transport.requests
+        #expect(requests.map { $0.url?.path() } == Array(repeating: "/api/v1/statuses/1/emoji_reactioned_by", count: 3))
+        #expect(requests.map { request in request.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }?.queryItems?.first { $0.name == "max_id" }?.value } == [nil, "50", "40"])
+    }
+
+    /// 絞ったページが空のまま`max_id`が循環しても、同じページを読み続けずに終わる。
+    @Test func emojiReactionedByStopsOnCyclingCursor() async throws {
+        func page(next: String) -> StubTransport.Response {
+            .json(#"[{"name":"🎉","account":{"id":"1","username":"u","acct":"u","display_name":"","avatar":"https://example.social/a.png","avatar_static":"https://example.social/a.png","header":"https://example.social/h.png","header_static":"https://example.social/h.png","note":"","url":"https://example.social/@u","fields":[],"locked":false,"bot":false,"followers_count":0,"following_count":0,"statuses_count":0,"emojis":[]}}]"#, statusCode: 200, headers: ["Link": "<https://example.social/api/v1/statuses/1/emoji_reactioned_by?max_id=\(next)>; rel=\"next\""])
+        }
+        let transport = StubTransport([page(next: "50"), page(next: "40"), page(next: "50"), page(next: "40")])
+        let client = try makeClient(transport)
+
+        let result = try await client.accounts(in: .emojiReactionedBy("1", name: "👍"), maxID: nil, limit: 40)
+
+        #expect(result.accounts.isEmpty)
+        #expect(result.nextMaxID == nil)
+        #expect(await transport.requests.count == 3)
+    }
+
     /// 人の一覧は、種類ごとのパスで読み、続きを`Link`ヘッダーの`max_id`で読む。
     @Test func accountListsUseTheirPathsAndLinkHeader() async throws {
         let account = #"{"id":"3","username":"carol","acct":"carol@remote.example","display_name":"Carol","avatar":"https://example.social/avatars/carol.png","avatar_static":"https://example.social/avatars/carol.png","header":"https://example.social/headers/original/missing.png","header_static":"https://example.social/headers/original/missing.png","note":"","url":"https://remote.example/@carol","fields":[],"locked":false,"bot":false,"followers_count":0,"following_count":0,"statuses_count":0,"emojis":[]}"#

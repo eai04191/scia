@@ -16,6 +16,7 @@ struct ObjectActionTests {
         #expect(settings.externalPostActions == ObjectActions(tap: .item(.openInBrowser), longPress: .menu))
         #expect(settings.hashtagActions == ObjectActions(tap: .item(.timeline), longPress: .menu))
         #expect(settings.mediaActions == ObjectActions(tap: .item(.open), longPress: .menu))
+        #expect(settings.reactionActions == ObjectActions(tap: .item(.toggle), longPress: .menu))
     }
 
     @Test func persistsActions() {

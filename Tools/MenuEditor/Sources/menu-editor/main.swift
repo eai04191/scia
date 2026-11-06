@@ -44,6 +44,7 @@ let catalog = Catalog(menus: [
     menu(ExternalPostMenuItem.self, title: "ほかのサービスの投稿のメニュー"),
     menu(ProfileTextMenuItem.self, title: "プロフィールの文章のメニュー"),
     menu(HashtagMenuItem.self, title: "ハッシュタグのメニュー"),
+    menu(ReactionMenuItem.self, title: "リアクションのメニュー"),
     menu(MediaMenuItem.self, title: "メディアのメニュー"),
 ])
 

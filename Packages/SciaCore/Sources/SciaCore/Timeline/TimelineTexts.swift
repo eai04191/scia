@@ -58,10 +58,16 @@ public struct TimelineTexts: Sendable {
     public static let notifications = TimelineTexts(dumpName: "notifications", title: "通知", empty: "通知はありません", reachedEnd: "これより前の通知はありません", unreadable: "表示できない通知")
     public static let profile = TimelineTexts(dumpName: "profile", title: "", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
     public static let thread = TimelineTexts(dumpName: "thread", title: "スレッド", empty: "投稿がありません", reachedEnd: "", unreadable: "表示できない投稿")
+    /// 絵文字の名前を題に入れる形。カスタム絵文字のショートコードは`:`で囲む。
+    private static func reactionTitle(_ name: String) -> String {
+        ReactionEmoji(name: name).isCustom ? ":\(name):" : name
+    }
+
     public static func accountList(_ kind: AccountListKind) -> TimelineTexts {
         let (title, empty) = switch kind {
         case .favouritedBy: ("お気に入りした人", "お気に入りした人はいません")
         case .rebloggedBy: ("ブーストした人", "ブーストした人はいません")
+        case .emojiReactionedBy(_, let name): ("\(Self.reactionTitle(name))でリアクションした人", "リアクションした人はいません")
         case .followers: ("フォロワー", "フォロワーはいません")
         case .following: ("フォロー", "フォローしている人はいません")
         case .listMembers: ("メンバー", "メンバーはいません")

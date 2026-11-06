@@ -251,6 +251,11 @@ public final class AppSettings {
         didSet { defaults.set(hashtagMenuLayout.tokens, forKey: Keys.hashtagMenuLayout) }
     }
 
+    /// 投稿の絵文字のリアクションのボタンを長押しして出すメニューの並び。
+    public var reactionMenuLayout: MenuLayout<ReactionMenuItem> {
+        didSet { defaults.set(reactionMenuLayout.tokens, forKey: Keys.reactionMenuLayout) }
+    }
+
     /// メディアを長押ししたときと、ビューアのメニューの並び。
     public var mediaMenuLayout: MenuLayout<MediaMenuItem> {
         didSet { defaults.set(mediaMenuLayout.tokens, forKey: Keys.mediaMenuLayout) }
@@ -284,6 +289,11 @@ public final class AppSettings {
     /// ハッシュタグをタップ、長押ししたときの操作。
     public var hashtagActions: ObjectActions<HashtagMenuItem> {
         didSet { defaults.set(hashtagActions.tokens, forKey: Keys.hashtagActions) }
+    }
+
+    /// 投稿の絵文字のリアクションのボタンをタップ、長押ししたときの操作。
+    public var reactionActions: ObjectActions<ReactionMenuItem> {
+        didSet { defaults.set(reactionActions.tokens, forKey: Keys.reactionActions) }
     }
 
     /// サムネイル、リンクカードの画像、プロフィールの画像をタップ、長押ししたときの操作。ビューアの中は含めない。
@@ -361,6 +371,7 @@ public final class AppSettings {
         static let externalPostMenuLayout = "settings.externalPostMenuLayout"
         static let profileTextMenuLayout = "settings.profileTextMenuLayout"
         static let hashtagMenuLayout = "settings.hashtagMenuLayout"
+        static let reactionMenuLayout = "settings.reactionMenuLayout"
         static let mediaMenuLayout = "settings.mediaMenuLayout"
         static let composeToolLayout = "settings.composeToolLayout"
         static let statusActions = "settings.objectActions.status"
@@ -369,6 +380,7 @@ public final class AppSettings {
         static let linkActions = "settings.objectActions.link"
         static let externalPostActions = "settings.objectActions.externalPost"
         static let hashtagActions = "settings.objectActions.hashtag"
+        static let reactionActions = "settings.objectActions.reaction"
         static let mediaActions = "settings.objectActions.media"
         /// `AccountScopedDefaults`で、アカウントごとのキーにする名前。
         static let tabLayout = "tabLayout"
@@ -408,6 +420,7 @@ public final class AppSettings {
         externalPostMenuLayout = defaults.stringArray(forKey: Keys.externalPostMenuLayout).map(MenuLayout.init(tokens:)) ?? ExternalPostMenuItem.defaultLayout
         profileTextMenuLayout = defaults.stringArray(forKey: Keys.profileTextMenuLayout).map(MenuLayout.init(tokens:)) ?? ProfileTextMenuItem.defaultLayout
         hashtagMenuLayout = defaults.stringArray(forKey: Keys.hashtagMenuLayout).map(MenuLayout.init(tokens:)) ?? HashtagMenuItem.defaultLayout
+        reactionMenuLayout = defaults.stringArray(forKey: Keys.reactionMenuLayout).map(MenuLayout.init(tokens:)) ?? ReactionMenuItem.defaultLayout
         mediaMenuLayout = defaults.stringArray(forKey: Keys.mediaMenuLayout).map(MenuLayout.init(tokens:)) ?? MediaMenuItem.defaultLayout
         composeToolLayout = defaults.stringArray(forKey: Keys.composeToolLayout).map(MenuLayout.init(tokens:)) ?? ComposeToolItem.defaultLayout
         statusActions = defaults.stringArray(forKey: Keys.statusActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
@@ -416,6 +429,7 @@ public final class AppSettings {
         linkActions = defaults.stringArray(forKey: Keys.linkActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
         externalPostActions = defaults.stringArray(forKey: Keys.externalPostActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
         hashtagActions = defaults.stringArray(forKey: Keys.hashtagActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
+        reactionActions = defaults.stringArray(forKey: Keys.reactionActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
         mediaActions = defaults.stringArray(forKey: Keys.mediaActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
         tabLayouts = AccountScopedDefaults.accountValues(named: Keys.tabLayout, in: defaults).compactMapValues { ($0 as? [String]).map(MenuLayout.init(tokens:)) }
         switchTabItems = AccountScopedDefaults.accountValues(named: Keys.switchTabItem, in: defaults).compactMapValues { ($0 as? String).flatMap(TabItem.init(rawValue:)) }

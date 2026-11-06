@@ -301,6 +301,7 @@ struct InteractionSettingsView: View {
                 NavigationLink(ObjectEntity.externalPost.title, value: SettingsPage.externalPostActions)
                 NavigationLink(ObjectEntity.hashtag.title, value: SettingsPage.hashtagActions)
                 NavigationLink(ObjectEntity.media.title, value: SettingsPage.mediaActions)
+                NavigationLink(ObjectEntity.reaction.title, value: SettingsPage.reactionActions)
                 NavigationLink("プロフィールの文章", value: SettingsPage.profileTextMenu)
             }
             Section {

@@ -127,6 +127,13 @@
     "separator",
     "item:customize"
   ],
+  "reaction": [
+    "hidden:toggle",
+    "item:reactedBy",
+    "item:open",
+    "more",
+    "item:customize"
+  ],
   "media": [
     "hidden:open",
     "item:saveToPhotos",

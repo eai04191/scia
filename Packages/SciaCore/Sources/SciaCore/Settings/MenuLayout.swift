@@ -460,6 +460,23 @@ public enum HashtagMenuItem: String, BundledMenuDefaults {
     public static let defaultLayout = MenuLayout<HashtagMenuItem>.bundledDefault()
 }
 
+/// 投稿の絵文字のリアクションのボタンを長押ししたときのメニューの項目。決まりはdocs/emoji-reaction.mdの「リアクションのボタンのメニュー」にある。
+public enum ReactionMenuItem: String, BundledMenuDefaults {
+    /// その絵文字で付け外しする。ボタンをタップしたときと同じ。
+    case toggle
+    /// その絵文字でリアクションした人の一覧を開く。
+    case reactedBy
+    /// カスタム絵文字の画像をビューアで開く。画像のあるカスタム絵文字でだけ出る。
+    case open
+
+    /// このメニューの並びの設定の画面を開く。決まりはdocs/menus.mdの「並びの設定」にある。
+    case customize
+    public static var customizeItem: Self? { .customize }
+
+    public static let defaultsKey = "reaction"
+    public static let defaultLayout = MenuLayout<ReactionMenuItem>.bundledDefault()
+}
+
 /// 一覧のサムネイル、リンクカードの画像、プロフィールの画像を長押ししたときと、ビューアのメニューの項目。決まりはdocs/menus.mdの「メディアのメニュー」にある。
 public enum MediaMenuItem: String, BundledMenuDefaults {
     /// ビューアで開く。ビューアでは出ない。

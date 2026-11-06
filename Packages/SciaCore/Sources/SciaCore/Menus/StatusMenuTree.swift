@@ -174,7 +174,10 @@ public struct StatusMenuTree {
         case .mentionedUsers:
             return users(status?.displayed.mentions.map(MenuUser.mention) ?? [])
         case .customEmojis:
-            let emojis = notification?.emojisInRow ?? status?.emojisInRow ?? []
+            // 投稿の行に出しているリアクションのカスタム絵文字も含める。行に見えている絵文字をどれでも調べられるようにするため（docs/emoji-reaction.md）。
+            let reactionEmojis = notification == nil && supportsEmojiReactions ? status?.displayed.emojiReactions.compactMap(\.emoji.customEmoji) ?? [] : []
+            var seen: Set<URL> = []
+            let emojis = ((notification?.emojisInRow ?? status?.emojisInRow ?? []) + reactionEmojis).filter { seen.insert($0.url).inserted }
             return emojis.compactMap { emoji in customEmoji(emoji)?.map { .customEmoji(emoji, $0) } }
         case .hashtags:
             guard let shown = status?.displayed else { return [] }

@@ -1104,6 +1104,10 @@ final class SessionController {
             guard let viewController else { return }
             self?.chooseEmojiReaction(for: status, from: viewController)
         }
+        viewController.onOpenEmojiReactionedBy = { [weak self, weak viewController] status, emoji in
+            guard let viewController else { return }
+            self?.openAccountList(.emojiReactionedBy(status.displayed.id, name: emoji.name), from: viewController)
+        }
         viewController.mediaCovers = mediaCovers
         viewController.quoteSourceChanges = quoteSources
         viewController.xPosts = xPosts
@@ -3583,6 +3587,8 @@ final class SessionController {
                 openAccountList(.favouritedBy(statusID), from: source)
             case .reblogged(let statusID):
                 openAccountList(.rebloggedBy(statusID), from: source)
+            case .emojiReactioned(let statusID, let name):
+                openAccountList(.emojiReactionedBy(statusID, name: name), from: source)
             }
         case .hashtag(let name):
             if let source = tabs.selectedNavigation?.topViewController {

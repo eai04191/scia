@@ -111,6 +111,43 @@ extension TimelineViewController {
         )
     }
 
+    /// 投稿の絵文字のリアクションのボタン。主な操作は付け外し（今のタップの処理）。決まりはdocs/emoji-reaction.mdの「リアクションのボタンのメニュー」にある。
+    func reactionTarget(for status: Status, reaction: EmojiReaction) -> ObjectTarget<ReactionMenuItem, ReactionMenuCommand> {
+        ObjectTarget(
+            entity: .reaction,
+            settings: settings,
+            primaryIsAvailable: onToggleEmojiReaction != nil,
+            primary: { [weak self] _ in self?.onToggleEmojiReaction?(status, reaction.emoji) },
+            buildMenu: { [weak self] groups in self?.builtReactionMenu(for: status, reaction: reaction, groups: groups) },
+            lifecycle: rowMenuLifecycle,
+            notify: { [weak self] in self?.showNotice($0) }
+        )
+    }
+
+    /// リアクションのボタンを長押ししたときに出すメニュー。出す項目がなければnil。
+    /// - Parameter groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
+    func builtReactionMenu(for status: Status, reaction: EmojiReaction, groups: MenuLayout<ReactionMenuItem>.Groups? = nil) -> BuiltMenu<ReactionMenuCommand>? {
+        let tree = ReactionMenuTree(reaction: reaction)
+        let subject = OperationStatus.Subject(status.displayed)
+        return tree.menu(groups: groups ?? settings.reactionMenuLayout.groups).map { root in
+            BuiltMenu(root: root, renderer: MenuRenderer { [weak self] command in
+                guard let self else { return }
+                switch command {
+                case .toggle:
+                    onToggleEmojiReaction?(status, reaction.emoji)
+                case .openReactedBy:
+                    onOpenEmojiReactionedBy?(status, reaction.emoji)
+                case .open:
+                    // 絵文字は文字の中に描いていて1つずつのビューがないため、投稿のメニューの「カスタム絵文字」と同じく、画像を動かさずに薄くして開く。
+                    guard let attachment = reaction.emoji.customEmoji?.attachment else { return }
+                    openMedia([attachment], at: 0, subject: subject) { _ in nil }
+                case .customize:
+                    openMenuSettings(.reactionMenu)
+                }
+            })
+        }
+    }
+
     /// 行の中から出したメニューを開いている間と閉じたあと。長押しのメニューと同じく、開いている間は一覧を動かさず、メニューに出る人のアイコンを読む。
     var rowMenuLifecycle: MenuLifecycle {
         MenuLifecycle(

@@ -281,6 +281,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onToggleEmojiReaction: ((Status, ReactionEmoji) -> Void)?
     /// リアクションの列の「＋」が押されたときに、押した投稿を渡して呼ぶ。nilなら「＋」を出さない。
     var onAddEmojiReaction: ((Status) -> Void)?
+    /// リアクションのボタンのメニューの「リアクションした人」で、その投稿にその絵文字でリアクションした人の一覧を開く。
+    var onOpenEmojiReactionedBy: ((Status, ReactionEmoji) -> Void)?
     /// 注意書きのある投稿の本文を開いているか。サーバーの設定が読めたら、セッションが既定を入れる。
     var spoilerExpansion = SpoilerExpansion() {
         didSet {
@@ -2298,12 +2300,14 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             if onAddEmojiReaction != nil {
                 configuration.onAddReaction = { [weak self] in self?.onAddEmojiReaction?(status) }
             }
+            configuration.reactionTarget = { [weak self] name in
+                guard let reaction = shown.emojiReactions.first(where: { $0.emoji.name == name }) else { return nil }
+                return self?.reactionTarget(for: status, reaction: reaction)
+            }
         }
         return isAppearancePreview ? Self.keepingOnlyLinks(configuration) : configuration
     }
 
-    /// プレビューの見本で、本文やリンクカードのリンクを押す操作だけを残す。見本の写真のクレジットのリンクを開けるようにするため。
-    /// ほかの操作（サムネイル、投票、注意書きの開閉、名前やアイコンなど）は、見本を変えたり別の画面を開いたりするので外す。
     #if DEBUG
     /// 一番上に見えている投稿の行の投稿と、その行の画面（ウインドウ）での上端。デバッグのURLで、対象の投稿を選ぶのに使う。
     func topmostVisibleStatus() -> (status: Status, minY: CGFloat)? {
@@ -2324,6 +2328,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
     #endif
 
+
     /// 投稿の行の投稿。リアクションの列を出すのは、投稿と固定された投稿の行だけ。
     private static func statusOfRow(_ entry: TimelineEntry) -> Status? {
         switch entry {
@@ -2332,6 +2337,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
+    /// プレビューの見本で、本文やリンクカードのリンクを押す操作だけを残す。見本の写真のクレジットのリンクを開けるようにするため。
+    /// ほかの操作（サムネイル、投票、注意書きの開閉、名前やアイコンなど）は、見本を変えたり別の画面を開いたりするので外す。
     static func keepingOnlyLinks(_ configuration: PostContentConfiguration) -> PostContentConfiguration {
         var kept = configuration
         kept.onSelectMedia = nil
@@ -2347,6 +2354,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         kept.linkCardTarget = nil
         kept.onPollAction = nil
         kept.onToggleReaction = nil
+        kept.reactionTarget = nil
         // 「＋」は渡すかどうかで出すかが決まるので、出すものは押しても何もしない処理にして残す。
         kept.onAddReaction = configuration.onAddReaction.map { _ in {} }
         kept.embedActions = EmbedActions(openLink: configuration.embedActions.openLink)

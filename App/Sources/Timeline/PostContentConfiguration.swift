@@ -119,6 +119,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var reactions: [ReactionChipsView.Reaction]?
     /// リアクションが付いた、なくなった、数が変わったときに動かす時間。0なら切り替える。
     var reactionTransitionDuration: TimeInterval = 0
+    /// リアクションのボタンのタップと長押しの対象。絵文字の名前を渡して受け取る。nilなら、タップで`onToggleReaction`を呼ぶ。
+    var reactionTarget: ((String) -> (any ObjectActionTarget)?)?
     /// リアクションのボタンが押されたときに、その絵文字の`Reaction.name`を渡して呼ぶ。
     var onToggleReaction: ((String) -> Void)?
     /// リアクションの列の「＋」が押されたときに呼ぶ。nilなら「＋」を出さない。
@@ -475,6 +477,8 @@ final class PostContentView: UIView, UIContentView {
         bodyView.cardTarget = configuration.linkCardTarget
         // 「＋」を出すかは渡すかどうかで決まるので、適用のたびに渡し直す。押したときは今の構成を読むので、使い回しても古くならない。
         bodyView.onAddReaction = configuration.onAddReaction == nil ? nil : { [weak self] in self?.current.onAddReaction?() }
+        // 押したときに今の構成を読むので、使い回しても古くならない。
+        bodyView.reactionTarget = configuration.reactionTarget == nil ? nil : { [weak self] name in self?.current.reactionTarget?(name) }
         bodyView.apply(PostBodyContent(
             spoiler: configuration.spoiler,
             text: configuration.body,

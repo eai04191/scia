@@ -219,4 +219,28 @@ struct ReactionMotionTests {
         let button = view.subviews.compactMap { $0 as? ReactionChipButton }.first { $0.count != nil }
         #expect(button.map { $0.countFrame.maxX <= $0.bounds.width + 0.5 } == true, "前の広い枠のまま、数がボタンからはみ出しています")
     }
+
+    /// リアクションのボタンは、タップで付け外しし（主な操作）、長押しでリアクションのメニューを出す。
+    @Test func chipTapTogglesAndLongPressShowsReactionMenu() throws {
+        var (harness, statuses, id) = try harness(reactions: [EmojiReaction(emoji: thumbsUp, count: 1, me: false)])
+        defer { harness.tearDown() }
+        var toggled: [String] = []
+        harness.viewController.onToggleEmojiReaction = { _, emoji in toggled.append(emoji.name) }
+        harness.viewController.onOpenEmojiReactionedBy = { _, _ in }
+        // 受け口を渡したあとで描き直す。
+        statuses[10] = Self.replacing(statuses[10], reactions: [EmojiReaction(emoji: thumbsUp, count: 2, me: false)])
+        harness.setStatuses(statuses)
+        let cell = try #require(harness.visibleCell(of: id))
+        let button = try #require(reactionButtons(in: cell).first { $0.label.attributedText?.string == "👍" })
+
+        button.sendActions(for: .touchUpInside)
+        let menu = try #require(button.interaction?.target?.menu())
+
+        #expect(toggled == ["👍"])
+        #expect(menu.title == "👍 2")
+        let titles = menu.children.flatMap { ($0 as? UIMenu)?.children ?? [$0] }.map(\.title)
+        #expect(titles.contains("リアクションする"))
+        #expect(titles.contains("リアクションした人"))
+        #expect(!titles.contains("開く"), "Unicodeの絵文字は画像がないので「開く」を出しません")
+    }
 }

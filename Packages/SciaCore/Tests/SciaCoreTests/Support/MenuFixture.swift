@@ -135,6 +135,14 @@ enum MenuFixture {
         "item:customize",
     ])
 
+    static let reaction = MenuLayout<ReactionMenuItem>(tokens: [
+        "item:toggle",
+        "item:reactedBy",
+        "item:open",
+        "more",
+        "item:customize",
+    ])
+
     static let media = MenuLayout<MediaMenuItem>(tokens: [
         "item:open",
         "item:share",
@@ -165,6 +173,7 @@ extension AppSettings {
         externalPostMenuLayout = MenuFixture.externalPost
         profileTextMenuLayout = MenuFixture.profileText
         hashtagMenuLayout = MenuFixture.hashtag
+        reactionMenuLayout = MenuFixture.reaction
         mediaMenuLayout = MenuFixture.media
     }
 }
