@@ -1477,6 +1477,86 @@ final class InlineComposeControllerTests {
         #expect(buttons(in: window).contains { $0.accessibilityLabel == "広げて書く" }, "5行に収まる共有の本文で広げています\n\(composer.stateDump())")
     }
 
+    /// 5行に収まらない本文を共有で入れると、広げた形で開き、本文の文字を動かすかたまりは、広げた欄の本物の文字の位置に着地する。
+    /// 開き始めてから広げていたので、下書きを捨てて書き始めると、このテストでは広げないまま終わり、シミュレーターではかたまりが広げる前の欄の行に着地して、動き終えるまで本物と別の位置に行が重なって描かれた。
+    @Test func sharedTextPastFiveLinesOpensExpanded() async throws {
+        defer { window.isHidden = true }
+        settings.appearance.glyphLanguage = .japanese
+        useDefaultAnimationDurations()
+        let bar = try composerBar()
+        let lines = (1...8).map { "\($0)行目" }
+        let firstLine = lines[0]
+        let shown = {
+            self.textLines(in: self.window)
+                .filter { $0.overhang > 0 && $0.attributedText.string.hasPrefix(firstLine) }
+                .max { ($0.layer.presentation()?.opacity ?? 0) < ($1.layer.presentation()?.opacity ?? 0) }
+        }
+
+        // 共有で、書きかけの下書きを捨てて新しく書くときと同じく、カプセルに下書きを出してから捨てる。
+        composer.model.text = "下書き"
+        try await waitUntilSettled()
+        composer.discardDraft()
+        composer.beginEditing(appendingShared: lines.joined(separator: "\n") + "\n")
+        try await clock.advance(by: 0)
+        // かたまりを外す直前のコマの、最初の行の位置。
+        var landing: CGPoint?
+        while let line = shown() {
+            #expect(clock.now < 5, "動き終えても、かたまりが残っています")
+            guard clock.now < 5 else { break }
+            landing = try glyphInk(of: line, in: bar)
+            try await clock.advance(by: LayerClock.frame)
+        }
+        try await waitUntilSettled()
+
+        // 広げていなければ、最初の行は欄の外にあって測れないので、ここで止める。
+        try #require(buttons(in: window).contains { $0.accessibilityLabel == "元の大きさに戻す" }, "5行に収まらない共有の本文で広げていません\n\(composer.stateDump())")
+        let textView = try #require(textViews(in: window).first)
+        let range = try #require(textView.textRange(from: textView.beginningOfDocument, to: textView.position(from: textView.beginningOfDocument, offset: 1) ?? textView.beginningOfDocument))
+        let field = try ink(of: textView, glyphs: textView.firstRect(for: range), in: bar)
+        expectClose(try #require(landing, "最初の行を動かすかたまりがありません"), field, "着地のコマのかたまりが、広げた欄の本物の文字と同じ画素にありません")
+    }
+
+    /// 広げた投稿欄を閉じる途中に、5行に収まらない本文を共有で入れても、本文の文字を動かすかたまりは、広げた欄の本物の文字の位置に着地する。
+    /// 開く動きの中で広げるときに、戻す途中の印を消していなかったため、開く間は本文の高さを5行の上限のまま決め、かたまりはその欄の行に着地した。
+    @Test func sharedTextPastFiveLinesWhileCollapsingLandsOnExpandedField() async throws {
+        defer { window.isHidden = true }
+        settings.appearance.glyphLanguage = .japanese
+        composer.beginEditing()
+        try await waitUntilSettled()
+        let expand = try #require(buttons(in: window).first { $0.accessibilityLabel == "広げて書く" })
+        expand.sendActions(for: .primaryActionTriggered)
+        try await waitUntilSettled()
+        useDefaultAnimationDurations()
+        let bar = try composerBar()
+        let lines = (1...8).map { "\($0)行目" }
+        let firstLine = lines[0]
+        let shown = {
+            self.textLines(in: self.window)
+                .filter { $0.overhang > 0 && $0.attributedText.string.hasPrefix(firstLine) }
+                .max { ($0.layer.presentation()?.opacity ?? 0) < ($1.layer.presentation()?.opacity ?? 0) }
+        }
+
+        composer.endEditing()
+        try await clock.advance(by: LayerClock.frame * 3)
+        composer.beginEditing(appendingShared: lines.joined(separator: "\n") + "\n")
+        try await clock.advance(by: 0)
+        // かたまりを外す直前のコマの、最初の行の位置。
+        var landing: CGPoint?
+        while let line = shown() {
+            #expect(clock.now < 5, "動き終えても、かたまりが残っています")
+            guard clock.now < 5 else { break }
+            landing = try glyphInk(of: line, in: bar)
+            try await clock.advance(by: LayerClock.frame)
+        }
+        try await waitUntilSettled()
+
+        let textView = try #require(textViews(in: window).first)
+        try #require(textView.bounds.height >= textView.contentSize.height - 1, "広げた欄に本文が収まっていません\n\(composer.stateDump())")
+        let range = try #require(textView.textRange(from: textView.beginningOfDocument, to: textView.position(from: textView.beginningOfDocument, offset: 1) ?? textView.beginningOfDocument))
+        let field = try ink(of: textView, glyphs: textView.firstRect(for: range), in: bar)
+        expectClose(try #require(landing, "最初の行を動かすかたまりがありません"), field, "着地のコマのかたまりが、広げた欄の本物の文字と同じ画素にありません")
+    }
+
     /// 入力欄の中でスクロールするほど書き、末尾にカーソルを置いたまま閉じて開き直すと、本文の文字を動かすかたまりは、カーソルの行までスクロールした本物の文字の位置に着地する。
     /// かたまりの着地点を、カーソルの行へスクロールする前の位置（先頭）で測っていたため、動き終えてから本文が1コマで飛んだ。
     @Test func reopeningLandsTextMorphOnCaretLine() async throws {

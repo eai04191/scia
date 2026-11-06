@@ -242,6 +242,9 @@ final class InlineComposeController: NSObject {
     private var expandedTop: NSLayoutConstraint?
     /// 広げた状態から戻す動きの間はtrue。この間は本文をスクロールできるままにし、高さだけを本文に合わせる。
     private var isCollapsingFromExpanded = false
+    /// 次にカプセルから開くときに、広げた形で開く。共有で5行に収まらない本文を入れたときに立てる。
+    /// 開いてから広げると、本文の文字を動かすかたまりが広げる前の欄の行へ着地し、本物と別の位置に行が重なって描かれたため、開く動きの中で広げる。
+    private var opensExpanded = false
     /// 広げる・戻すたびに増やす。前の動きの終わりで、次の戻す動きの途中に本文のスクロールを切り替えないようにする。
     private var expansionGeneration = 0
     private let remainingLabel = UILabel()
@@ -718,10 +721,13 @@ final class InlineComposeController: NSObject {
         model.noteInsertedText(shared)
         // モデルの変更が画面に届くのは少しあとなので、本文の高さを測る前に、本文をここで入れておく。
         update()
+        let overflows = !isExpanded && textView.bounds.width > 0
+            && textView.sizeThatFits(CGSize(width: textView.bounds.width, height: .greatestFiniteMagnitude)).height > maxTextHeight
+        // カプセルから開くなら、開く動きの中で広げる。書いている途中や、隠したバーを出すときのように、開く動きを通らなければ、開いてから広げる。
+        opensExpanded = overflows
         beginEditing()
-        guard !isExpanded, textView.bounds.width > 0 else { return }
-        let fitting = textView.sizeThatFits(CGSize(width: textView.bounds.width, height: .greatestFiniteMagnitude)).height
-        if fitting > maxTextHeight {
+        if opensExpanded {
+            opensExpanded = false
             toggleExpanded(byUser: false)
         }
     }
@@ -2161,10 +2167,18 @@ final class InlineComposeController: NSObject {
         let editing = isOpen
         guard editing != isLayoutOpen else { return }
         let collapses = !editing && isExpanded
+        let expands = editing && opensExpanded && !isExpanded
+        opensExpanded = false
         var generation: Int?
         if collapses {
             isExpanded = false
             generation = beginExpansionChange()
+        }
+        if expands {
+            isExpanded = true
+            // 広げた欄を閉じる途中なら、戻す途中の印を消し、戻す動きの終わりの処理も効かなくする。残すと、開く間の本文の高さを5行の上限のまま決める。
+            _ = beginExpansionChange()
+            logger.info("compose: open expanded")
         }
         // 視差効果を減らす設定では、写真とラベルを飛ばさず、行を薄くしながら入れ替えるだけにする。
         let animatesFlights = bar.window != nil && !UIAccessibility.isReduceMotionEnabled
@@ -2185,7 +2199,7 @@ final class InlineComposeController: NSObject {
         // SwiftUIの`.smooth`と同じスプリングで動かす。複製を見えている形で止めて向かい直すため、Core Animationで動くUIKitの書き方にする。
         // UIKitがスプリングを打ち切って、動き終わりのコマでバーと中身が残りの分だけ飛ばないよう、止まるところまで動かす。
         UIView.animateSpringToRest(duration: morphDuration, options: [.allowUserInteraction, .beginFromCurrentState], in: bar) {
-            if collapses {
+            if collapses || expands {
                 self.applyExpandedLayout()
             }
             self.applyEditingLayout()
