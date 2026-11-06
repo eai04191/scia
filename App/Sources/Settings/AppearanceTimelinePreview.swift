@@ -131,6 +131,9 @@ extension TimelineViewController {
     static func appearancePreview(texts: Texts, filterContext: FilterResult.Context, myAccountID: String, tuning: TuningStore, settings: AppSettings) -> TimelineViewController {
         let timeline = TimelineViewController(texts: texts, refresh: {}, tuning: tuning, settings: settings)
         timeline.isAppearancePreview = true
+        // 見本の絵文字のリアクションと「＋」を、ログインしているサーバーによらず出す。押しても何もしない。
+        timeline.supportsEmojiReactions = true
+        timeline.onAddEmojiReaction = { _ in }
         timeline.onOpenLink = { destination, _ in
             guard case .url(let url) = destination else { return }
             UIApplication.shared.open(url)

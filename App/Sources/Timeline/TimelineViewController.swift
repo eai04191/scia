@@ -2310,7 +2310,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         kept.linkCardTarget = nil
         kept.onPollAction = nil
         kept.onToggleReaction = nil
-        kept.onAddReaction = nil
+        // 「＋」は渡すかどうかで出すかが決まるので、出すものは押しても何もしない処理にして残す。
+        kept.onAddReaction = configuration.onAddReaction.map { _ in {} }
         kept.embedActions = EmbedActions(openLink: configuration.embedActions.openLink)
         // リンクのタップと長押しの設定によらず、タップで開く。
         kept.opensLinksOnTapOnly = true

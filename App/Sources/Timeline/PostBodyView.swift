@@ -66,6 +66,7 @@ struct PostBodyContent {
     var reactions: [ReactionChipsView.Reaction]?
     /// 上の部品と、リアクションの列のあいだ。
     var reactionsSpacing: CGFloat = 0
+    var reactionsStyle = ReactionChipsView.Style.standard
     /// 一番下に置く補足の1行。自分の投稿が自分のフィルターに一致していることか、通知で再掲する投稿に引用があることを示す。なければnil。
     var filterNote: NSAttributedString?
     /// 上の部品と、フィルターの注記のあいだ。
@@ -245,6 +246,7 @@ final class PostBodyView: UIView {
             frames[.pollSummary] = summary
         }
         frames.merge(mediaPreviewFrames(in: space)) { $1 }
+        frames.merge(reactionPreviewFrames(in: space)) { $1 }
         if let options = poll?.optionPreviewFrames(in: space), !options.isEmpty {
             if options.count > 1 {
                 frames[.pollOptionGaps] = AppearanceHighlight.gaps(between: options.map(\.option))
@@ -418,6 +420,34 @@ final class PostBodyView: UIView {
         view.onAction = { [weak self] action in self?.onPollAction?(action) }
         pollView = view
         return view
+    }
+
+    /// リアクションの列と、ボタンの中の余白とボタンのあいだの枠。
+    private func reactionPreviewFrames(in space: UIView) -> AppearancePreviewFrames {
+        guard let view = reactions else { return [:] }
+        let chips = view.chipPreviewFrames(in: space)
+        let padding = view.style.padding
+        let thickness = AppearanceHighlight.minimumGapThickness
+        var frames: AppearancePreviewFrames = [
+            .reactions: [view.convert(view.bounds, to: space)],
+            .reactionChips: chips,
+            .reactionPaddingBands: chips.flatMap { chip in
+                [
+                    CGRect(x: chip.minX, y: chip.minY, width: chip.width, height: max(padding.top, thickness)),
+                    CGRect(x: chip.minX, y: chip.maxY - max(padding.bottom, thickness), width: chip.width, height: max(padding.bottom, thickness)),
+                ]
+            },
+            .reactionSidePaddingBands: chips.flatMap { chip in
+                [
+                    CGRect(x: chip.minX, y: chip.minY, width: max(padding.leading, thickness), height: chip.height),
+                    CGRect(x: chip.maxX - max(padding.trailing, thickness), y: chip.minY, width: max(padding.trailing, thickness), height: chip.height),
+                ]
+            },
+        ]
+        if chips.count > 1 {
+            frames[.reactionGaps] = AppearanceHighlight.gaps(between: chips)
+        }
+        return frames
     }
 
     private func loadedReactionsView() -> ReactionChipsView {
@@ -682,14 +712,14 @@ final class PostBodyView: UIView {
             .view(textLabel)
         }
         let textBottomInset = Self.textBottomInset(of: content.text, isTruncated: content.maximumLines > 0)
-        let bottom = applyReactions(content.reactions, below: last, spacing: content.reactionsSpacing, textBottomInset: textBottomInset)
+        let bottom = applyReactions(content.reactions, style: content.reactionsStyle, below: last, spacing: content.reactionsSpacing, textBottomInset: textBottomInset)
         applyFilterNote(content.filterNote, below: bottom, spacing: content.filterNoteSpacing, textBottomInset: textBottomInset)
         NSLayoutConstraint.activate(variableConstraints)
     }
 
     /// リアクションの列を一番下の部品の下に置き、新しい一番下を返す。注意書きで折りたたんでいても出す。リアクションは投稿に付くもので、中身を開かなくても見られるため。
     /// - Parameter textBottomInset: 一番下が本文のときの、最後の文字のベースラインから字面の下端まで。
-    private func applyReactions(_ reactions: [ReactionChipsView.Reaction]?, below bottom: Bottom, spacing: CGFloat, textBottomInset: CGFloat) -> Bottom {
+    private func applyReactions(_ reactions: [ReactionChipsView.Reaction]?, style: ReactionChipsView.Style, below bottom: Bottom, spacing: CGFloat, textBottomInset: CGFloat) -> Bottom {
         guard let reactions, !reactions.isEmpty else {
             reactionsView?.isHidden = true
             return bottom
@@ -699,7 +729,7 @@ final class PostBodyView: UIView {
         view.animatedEmojis = emojiImages
         // 幅が決まる前に高さを測るときは、本文と同じく、先に並べた幅か十分に広い幅で測る。
         view.widthHint = bounds.width > 0 ? bounds.width : textLabel.preparedLayoutWidth ?? Self.unknownTextWidth
-        view.apply(reactions)
+        view.apply(reactions, style: style)
         let lastBottom = switch bottom {
         case .view(let last) where last === textLabel: (anchor: textLastBaselineGuide.topAnchor, inset: textBottomInset)
         case .view(let last): (anchor: last.bottomAnchor, inset: CGFloat(0))

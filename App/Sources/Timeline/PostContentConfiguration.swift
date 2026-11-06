@@ -172,6 +172,10 @@ struct PostContentConfiguration: UIContentConfiguration {
         var showsContextSymbol = true
         /// 本文か添付ファイルと、囲みのあいだ。
         var bodyEmbedSpacing: CGFloat = 10
+        /// 上の部品と、絵文字のリアクションの列のあいだ。
+        var reactionsSpacing: CGFloat = 10
+        /// 絵文字のリアクションのボタンの文字と大きさ。
+        var reactionStyle = ReactionChipsView.Style.standard
     }
 
     func makeContentView() -> any UIView & UIContentView {
@@ -485,7 +489,8 @@ final class PostContentView: UIView, UIContentView {
             statusID: configuration.statusID,
             hashtagAccount: configuration.hashtagAccount,
             reactions: configuration.reactions,
-            reactionsSpacing: Self.reactionsSpacing,
+            reactionsSpacing: metrics.reactionsSpacing,
+            reactionsStyle: metrics.reactionStyle,
             filterNote: configuration.filterNote,
             // リンクカードと同じく、本文から少し離した補足として置く。
             filterNoteSpacing: metrics.filterNoteSpacing
@@ -919,9 +924,6 @@ final class PostContentView: UIView, UIContentView {
         // 「テキストを選択」で本文を選んでいる間は、選べるテキストビューを本文の要素の後ろに置き、読み上げでも選べるようにする。
         accessibilityElements = [textAccessibilityElement] + [bodyView.selectionTextView].compactMap(\.self) + (bodyView.poll?.accessibilityParts ?? []) + [bodyView.mediaGrid, bodyView.linkCard, bodyView.embed, bodyView.reactions, bodyView.filterNote].compactMap(\.self)
     }
-
-    /// 上の部品とリアクションの列のあいだ。サーバーのお知らせのリアクションと同じく、決まった値にしている。
-    private static let reactionsSpacing: CGFloat = 10
 
     private lazy var textAccessibilityElement = UIAccessibilityElement(accessibilityContainer: self)
     /// 読み上げの要素を作ったときに、本文を切っていたか。

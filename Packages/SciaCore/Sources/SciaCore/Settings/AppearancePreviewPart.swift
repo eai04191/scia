@@ -150,6 +150,16 @@ public enum AppearancePreviewPart: Hashable, CaseIterable, Sendable {
     case pollFooter
     /// 自分のフィルターに一致したことを示す注記。
     case filterNote
+    /// 絵文字のリアクションの列。
+    case reactions
+    /// 絵文字のリアクションのボタン。「＋」も含める。
+    case reactionChips
+    /// 隣り合うリアクションのボタンのあいだ。
+    case reactionGaps
+    /// リアクションのボタンの、文字の上と下の余白の帯。
+    case reactionPaddingBands
+    /// リアクションのボタンの、文字の左と右の余白の帯。
+    case reactionSidePaddingBands
     /// お気に入りとブーストの光の全体。
     case reactionGlow
     /// お気に入りとブーストの片方だけをした投稿の光。
@@ -202,7 +212,7 @@ extension AppearancePreviewPart {
     public var isArea: Bool {
         switch self {
         case .rowPaddingTop, .rowPaddingBottom, .rowPaddingLeading, .rowPaddingTrailing,
-             .mediaTileGaps, .pollOptionGaps, .pollOptionPadding, .pollOptionSidePadding, .pollOptionCorners,
+             .mediaTileGaps, .pollOptionGaps, .reactionGaps, .reactionPaddingBands, .reactionSidePaddingBands, .pollOptionPadding, .pollOptionSidePadding, .pollOptionCorners,
              .cardLineGaps, .cardPaddingBands, .xPostPaddingBands, .spoilerPaddingBands, .spoilerCorners,
              .bodyLineGaps, .bodyParagraphGaps, .quoteIndent, .visibilitySymbolGap, .editedMarkGap,
              .nameFade, .nameTimeMinGap, .avatarCorners,

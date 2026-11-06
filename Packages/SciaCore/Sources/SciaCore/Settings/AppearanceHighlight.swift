@@ -80,7 +80,7 @@ public enum AppearanceHighlight: Equatable, Sendable {
             (C.bodyTruncationThreshold, .part(.truncatedBody)),
             (C.bodyTruncatedLines, .part(.truncatedBody)),
             (C.filterNoteText, .part(.filterNote)),
-            (C.filterNoteSpacing, .verticalGap(above: [.card, .poll, .media, .bodyGlyphs], below: [.filterNote])),
+            (C.filterNoteSpacing, .verticalGap(above: [.reactions, .card, .poll, .media, .bodyGlyphs], below: [.filterNote])),
 
             (C.spoilerButtonText, .part(.spoilerButton)),
             (C.spoilerButtonSpacing, .verticalGap(above: [.spoilerText], below: [.spoilerButton])),
@@ -122,6 +122,12 @@ public enum AppearanceHighlight: Equatable, Sendable {
             (C.pollOptionHorizontalPadding, .part(.pollOptionSidePadding)),
             (C.pollOptionCornerRadius, .part(.pollOptionCorners)),
             (C.pollFooterSpacing, .verticalGap(above: [.pollOptions], below: [.pollFooter])),
+
+            (C.reactionText, .part(.reactionChips)),
+            (C.bodyReactionsSpacing, .verticalGap(above: [.card, .xPost, .poll, .media, .bodyGlyphs, .spoiler], below: [.reactions])),
+            (C.reactionSpacing, .part(.reactionGaps)),
+            (C.reactionPadding, .part(.reactionPaddingBands)),
+            (C.reactionHorizontalPadding, .part(.reactionSidePaddingBands)),
 
             (C.reactionGlowHeight, .part(.reactionGlow)),
             (C.reactionGlowDarkOpacity, .part(.reactionGlow)),

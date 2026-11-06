@@ -48,7 +48,9 @@ struct PostContentBuilder {
             editedMarkSpacing: settings.value(of: AppearanceCatalog.editedMarkSpacing),
             filterNoteSpacing: settings.value(of: AppearanceCatalog.filterNoteSpacing),
             showsContextSymbol: settings.appearance.showsContextSymbol,
-            bodyEmbedSpacing: settings.value(of: AppearanceCatalog.bodyXPostSpacing)
+            bodyEmbedSpacing: settings.value(of: AppearanceCatalog.bodyXPostSpacing),
+            reactionsSpacing: settings.value(of: AppearanceCatalog.bodyReactionsSpacing),
+            reactionStyle: reactionStyle(typography: typography)
         )
         let language = settings.glyphLanguageIdentifier()
         let primaryRenderer = RichTextRenderer(font: metrics.nameFont, textColor: base.textProperties.color, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, emojiImages: emojiImages, language: language)
@@ -134,7 +136,7 @@ struct PostContentBuilder {
     /// ボタンは、絵文字の名前で見分ける。Fedibirdは名前でまとめるため、同じ名前のリアクションは1つしか並ばない。
     func reactionChips(for shown: Status) -> [ReactionChipsView.Reaction]? {
         guard !shown.emojiReactions.isEmpty else { return nil }
-        let renderer = RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
+        let renderer = RichTextRenderer(font: PostTypography(settings: settings).font(.reaction), textColor: .label, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
         return shown.emojiReactions.map { reaction in
             let emoji = reaction.emoji
             // 画像のないカスタム絵文字（URLが読めなかったもの）は、ショートコードを文字で出す。
@@ -148,6 +150,17 @@ struct PostContentBuilder {
                 spokenName: shortcode ?? emoji.name
             )
         }
+    }
+
+    /// 絵文字のリアクションのボタンの文字と大きさ。
+    private func reactionStyle(typography: PostTypography) -> ReactionChipsView.Style {
+        let vertical = settings.value(of: AppearanceCatalog.reactionPadding)
+        let horizontal = settings.value(of: AppearanceCatalog.reactionHorizontalPadding)
+        return ReactionChipsView.Style(
+            font: typography.font(.reaction),
+            spacing: settings.value(of: AppearanceCatalog.reactionSpacing),
+            padding: NSDirectionalEdgeInsets(top: vertical, leading: horizontal, bottom: vertical, trailing: horizontal)
+        )
     }
 
     /// 返信のラベル。自分への返信は、一覧の中で気づけるよう、記号と文字をアプリの色で描く。

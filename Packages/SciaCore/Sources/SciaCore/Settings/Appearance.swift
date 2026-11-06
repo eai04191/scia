@@ -71,6 +71,8 @@ public enum AppearanceCatalog {
     public static let linkCardDetailText = AppearanceValue(id: "text.linkCardDetail", title: "サイト名と説明の文字", range: -40...40, step: 1, defaultValue: -3, unit: .textOffset)
     /// 投票の票数や締め切りと、その横のボタンの文字。
     public static let pollFooterText = AppearanceValue(id: "text.pollFooter", title: "票数と締め切りの文字", range: -40...40, step: 1, defaultValue: -2, unit: .textOffset)
+    /// 絵文字のリアクションのボタンの、絵文字と数の文字。
+    public static let reactionText = AppearanceValue(id: "text.reaction", title: "絵文字と数の文字", range: -40...40, step: 1, defaultValue: 0, unit: .textOffset)
 
     /// 自分の投稿が自分のフィルターに一致したことを示す、本文の下の注記の文字。
     public static let filterNoteText = AppearanceValue(id: "text.filterNote", title: "注記の文字", range: -40...40, step: 1, defaultValue: -2, unit: .textOffset)
@@ -211,6 +213,15 @@ public enum AppearanceCatalog {
     /// 投票の選択肢の、文字の上下の余白。
     public static let pollOptionPadding = AppearanceValue(id: "timeline.pollOptionPadding", title: "選択肢の上下の余白", range: 0...100, step: 1, defaultValue: 8)
 
+    /// 本文などと、絵文字のリアクションの列のあいだ。
+    public static let bodyReactionsSpacing = AppearanceValue(id: "timeline.bodyReactionsSpacing", title: "本文とのあいだ", range: 0...100, step: 1, defaultValue: 10)
+    /// 絵文字のリアクションのボタンどうしのあいだ。折り返した行のあいだも同じにする。
+    public static let reactionSpacing = AppearanceValue(id: "timeline.reactionSpacing", title: "ボタンのあいだ", range: 0...100, step: 1, defaultValue: 6)
+    /// 絵文字のリアクションのボタンの、文字の上下の余白。
+    public static let reactionPadding = AppearanceValue(id: "timeline.reactionPadding", title: "ボタンの上下の余白", range: 0...100, step: 1, defaultValue: 5)
+    /// 絵文字のリアクションのボタンの、文字の左右の余白。
+    public static let reactionHorizontalPadding = AppearanceValue(id: "timeline.reactionHorizontalPadding", title: "ボタンの左右の余白", range: 0...100, step: 1, defaultValue: 10)
+
     // MARK: お気に入りとブーストの光
 
     /// 下の端から照らす光の高さ。光は行の中にだけ伸ばす。ライトでHDRを使わずに描くときは、`ReactionGlow.Style`でこの高さを縮める。
@@ -238,6 +249,8 @@ public enum AppearanceCatalog {
         // Xの投稿の囲みも同じ値を使うが、Xの投稿は設定でオンにしたときだけ出すため、名前には書かない。
         AppearanceGroup(id: Self.xPostGroupID, title: "引用", values: [xPostNameText, xPostBodyText, xPostAvatarSize, xPostAvatarNameSpacing, xPostHeaderSpacing, xPostMediaSpacing, xPostPadding, bodyXPostSpacing]),
         AppearanceGroup(id: "poll", title: "投票", values: [pollFooterText, bodyPollSpacing, pollOptionSpacing, pollOptionPadding, pollOptionHorizontalPadding, pollOptionCornerRadius, pollFooterSpacing]),
+        // 列はサーバーが絵文字のリアクションに対応しているときだけ出るが、設定はアカウントによらないので、いつも並べる。
+        AppearanceGroup(id: "reactions", title: "絵文字のリアクション", values: [reactionText, bodyReactionsSpacing, reactionSpacing, reactionPadding, reactionHorizontalPadding]),
         AppearanceGroup(id: "reactionGlow", title: "お気に入りとブーストの光", values: [reactionGlowHeight, reactionGlowDarkOpacity, reactionGlowLightOpacity, reactionGlowBlendWidth, reactionGlowIconSize, reactionGlowIconOpacity]),
     ]
 

@@ -13,6 +13,20 @@ final class ReactionChipsView: UIView {
         var spokenName: String
     }
 
+    /// ボタンの文字と大きさ。投稿では「投稿の見た目」の値で決め、サーバーのお知らせでは`standard`を使う。
+    struct Style: Equatable {
+        /// 絵文字と数の文字。数は、この文字で数字の幅を揃えて描く。
+        var font: UIFont
+        /// ボタンどうしのあいだ。折り返した行のあいだも同じにする。
+        var spacing: CGFloat
+        /// ボタンの文字の上下と左右の余白。
+        var padding: NSDirectionalEdgeInsets
+
+        static var standard: Style {
+            Style(font: .preferredFont(forTextStyle: .subheadline), spacing: 6, padding: NSDirectionalEdgeInsets(top: 5, leading: 10, bottom: 5, trailing: 10))
+        }
+    }
+
     /// リアクションを押したときに、その絵文字の名前を渡して呼ぶ。
     var onToggle: ((String) -> Void)?
     /// 「＋」を押したときに呼ぶ。
@@ -31,17 +45,22 @@ final class ReactionChipsView: UIView {
         }
     }
     private var reactionOrder: [String] = []
+    private(set) var style = Style.standard
 
     /// 並べている順のボタン。最後は「＋」。
     private var buttons: [UIControl] = []
     /// 絵文字の名前ごとのボタン。描き直しでも同じリアクションのボタンは使い回し、押している途中のボタンを作り替えてタップを取り消さない。
     private var reactionButtons: [String: ReactionChipButton] = [:]
     private lazy var addButton = makeAddButton()
-    private static let spacing: CGFloat = 6
     /// 最後に知らせた高さ。置かれた幅で並べた高さと違えば、測り直させる。
     private var reportedHeight: CGFloat?
 
-    func apply(_ reactions: [Reaction]) {
+    func apply(_ reactions: [Reaction], style: Style = .standard) {
+        if style != self.style {
+            self.style = style
+            applyStyle(to: addButton)
+            addButton.label.attributedText = addSymbol()
+        }
         var used: [String: ReactionChipButton] = [:]
         for reaction in reactions {
             let button = reactionButtons[reaction.name] ?? makeButton(name: reaction.name)
@@ -102,18 +121,30 @@ final class ReactionChipsView: UIView {
             let fitted = CGSize(width: min(size.width, max(width, 1)), height: size.height)
             if x > 0, x + fitted.width > width {
                 x = 0
-                y += rowHeight + Self.spacing
+                y += rowHeight + style.spacing
                 rowHeight = 0
             }
             frames.append(CGRect(origin: CGPoint(x: x, y: y), size: fitted))
-            x += fitted.width + Self.spacing
+            x += fitted.width + style.spacing
             rowHeight = max(rowHeight, fitted.height)
         }
         return (frames, y + rowHeight)
     }
 
+    /// 「投稿の見た目」のプレビューで、ボタンの場所を示すための枠。`space`の座標で、並べた順に返す。
+    func chipPreviewFrames(in space: UIView) -> [CGRect] {
+        buttons.map { convert($0.frame, to: space) }
+    }
+
+    private func applyStyle(to button: ReactionChipButton) {
+        button.label.font = style.font
+        button.padding = style.padding
+        button.setNeedsLayout()
+    }
+
     private func makeButton(name: String) -> ReactionChipButton {
         let button = ReactionChipButton()
+        applyStyle(to: button)
         button.addAction(UIAction { [weak self] _ in self?.onToggle?(name) }, for: .touchUpInside)
         return button
     }
@@ -121,9 +152,10 @@ final class ReactionChipsView: UIView {
     private func configure(_ button: ReactionChipButton, with reaction: Reaction) {
         let text = NSMutableAttributedString(attributedString: reaction.emoji)
         text.append(NSAttributedString(string: " \(reaction.count.formatted())", attributes: [
-            .font: UIFont.monospacedDigitFont(forTextStyle: .subheadline),
+            .font: style.font.withMonospacedDigits,
             .foregroundColor: reaction.isMine ? UIColor.tintColor : UIColor.label,
         ]))
+        applyStyle(to: button)
         button.label.emojiImages = animatedEmojis
         button.label.attributedText = text
         button.isMine = reaction.isMine
@@ -133,22 +165,30 @@ final class ReactionChipsView: UIView {
         button.setNeedsLayout()
     }
 
-    private func makeAddButton() -> UIControl {
+    private func makeAddButton() -> ReactionChipButton {
         let button = ReactionChipButton()
-        let symbol = NSTextAttachment(image: UIImage(systemName: "plus", withConfiguration: UIImage.SymbolConfiguration(textStyle: .subheadline)) ?? UIImage())
-        button.label.attributedText = NSAttributedString(attachment: symbol)
+        applyStyle(to: button)
+        button.label.attributedText = addSymbol()
         button.label.textColor = .secondaryLabel
         button.accessibilityLabel = "リアクションを追加"
         button.accessibilityTraits = .button
         button.addAction(UIAction { [weak self] _ in self?.onAdd?() }, for: .touchUpInside)
         return button
     }
+
+    /// 「＋」の記号。絵文字と数の文字の大きさで描く。
+    private func addSymbol() -> NSAttributedString {
+        let configuration = UIImage.SymbolConfiguration(font: style.font)
+        return NSAttributedString(attachment: NSTextAttachment(image: UIImage(systemName: "plus", withConfiguration: configuration) ?? UIImage()))
+    }
 }
 
 /// リアクションのボタン。カスタム絵文字を本文と同じく動かすため、`UIButton`ではなく`EmojiLabel`を載せる。自分がしたものはアプリの色で塗る。
-private final class ReactionChipButton: UIControl {
+final class ReactionChipButton: UIControl {
     let label = EmojiLabel()
-    private static let padding = NSDirectionalEdgeInsets(top: 5, leading: 10, bottom: 5, trailing: 10)
+    var padding = ReactionChipsView.Style.standard.padding {
+        didSet { setNeedsLayout() }
+    }
     /// 押せる範囲の高さ。見た目は小さくても、押せる範囲は44pt取る。
     private static let minimumHitHeight: CGFloat = 44
 
@@ -181,20 +221,30 @@ private final class ReactionChipButton: UIControl {
 
     /// 高さは中身ではなく文字の行の高さで決める。カスタム絵文字の画像はUnicodeの絵文字より行を少し高くするため、中身で決めると並んだボタンの高さが揃わない。
     override func sizeThatFits(_ size: CGSize) -> CGSize {
-        let padding = Self.padding
-        let labelSize = label.sizeThatFits(CGSize(width: size.width - padding.leading - padding.trailing, height: .greatestFiniteMagnitude))
+        let side = sidePadding(within: size.width)
+        let labelSize = label.sizeThatFits(CGSize(width: size.width - side.leading - side.trailing, height: .greatestFiniteMagnitude))
         let lineHeight = ceil(label.font.lineHeight)
-        return CGSize(width: max(ceil(labelSize.width) + padding.leading + padding.trailing, 44), height: lineHeight + padding.top + padding.bottom)
+        return CGSize(width: max(ceil(labelSize.width) + side.leading + side.trailing, 44), height: lineHeight + padding.top + padding.bottom)
+    }
+
+    /// 幅`width`に置くときの左右の余白。余白で幅の半分より多くを取らないよう、左右の比を保って縮める。
+    /// 「投稿の見た目」で余白を大きくし、列が狭いとき（アイコンを大きくして下を空けるときなど）に、文字の幅が負にならないようにするため。
+    func sidePadding(within width: CGFloat) -> (leading: CGFloat, trailing: CGFloat) {
+        let total = padding.leading + padding.trailing
+        let limit = max(width, 0) / 2
+        guard total > limit, total > 0 else { return (padding.leading, padding.trailing) }
+        let scale = limit / total
+        return (padding.leading * scale, padding.trailing * scale)
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         layer.cornerRadius = bounds.height / 2
-        let padding = Self.padding
         // 中身の高さのまま縦の真ん中に置く。行より高い中身も、切らずにはみ出させる。
-        let width = bounds.width - padding.leading - padding.trailing
+        let side = sidePadding(within: bounds.width)
+        let width = bounds.width - side.leading - side.trailing
         let height = ceil(label.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height)
-        label.frame = CGRect(x: padding.leading, y: (bounds.height - height) / 2, width: width, height: height)
+        label.frame = CGRect(x: side.leading, y: (bounds.height - height) / 2, width: width, height: height)
         label.textAlignment = .center
     }
 

@@ -16,6 +16,8 @@ struct PostTypography: Equatable {
         case linkCardTitle
         case linkCardDetail
         case pollFooter
+        /// 絵文字のリアクションのボタンの、絵文字と数。
+        case reaction
         case filterNote
         case xPostName
         case xPostBody
@@ -43,6 +45,7 @@ struct PostTypography: Equatable {
             case .linkCardTitle: AppearanceCatalog.linkCardTitleText
             case .linkCardDetail: AppearanceCatalog.linkCardDetailText
             case .pollFooter: AppearanceCatalog.pollFooterText
+            case .reaction: AppearanceCatalog.reactionText
             case .filterNote: AppearanceCatalog.filterNoteText
             case .xPostName: AppearanceCatalog.xPostNameText
             case .xPostBody: AppearanceCatalog.xPostBodyText

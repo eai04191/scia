@@ -576,6 +576,7 @@ struct AppearanceSamples {
         "linkCard": ["boost"],
         AppearanceCatalog.xPostGroupID: ["quote"],
         "poll": ["poll"],
+        "reactions": ["reactions"],
         "reactionGlow": ["boost-plain", "wide"],
     ]
 
@@ -677,7 +678,11 @@ struct AppearanceSamples {
                 image: cardImage
             )
         }
-        func status(_ id: String, minutes: Double, account: Account, content: String, spoiler: String = "", media: [MediaAttachment] = [], poll: Poll? = nil, card: PreviewCard? = nil, replyingTo: Account? = nil, inReplyTo: Status.ID = "preview-thread", visibility: Status.Visibility = .public, edited: Bool = false, emojis: [CustomEmoji] = [], filtered: [FilterResult] = [], favourited: Bool = false, reblogged: Bool = false) -> Status {
+        // 絵文字のリアクションのボタンのあいだと折り返しを見せるため、Unicodeの絵文字とカスタム絵文字のリアクションを、見本の枠で2行に折り返す数だけ付ける。
+        let reactions = [("👍", 12, true), ("🎉", 5, false)].map { EmojiReaction(emoji: ReactionEmoji(name: $0.0), count: $0.1, me: $0.2) }
+            + emojis.map { EmojiReaction(emoji: ReactionEmoji(customEmoji: $0), count: 3, me: false) }
+            + [("😂", 2), ("🙏", 1), ("❤️", 128), ("👀", 1)].map { EmojiReaction(emoji: ReactionEmoji(name: $0.0), count: $0.1, me: false) }
+        func status(_ id: String, minutes: Double, account: Account, content: String, spoiler: String = "", media: [MediaAttachment] = [], poll: Poll? = nil, card: PreviewCard? = nil, replyingTo: Account? = nil, inReplyTo: Status.ID = "preview-thread", visibility: Status.Visibility = .public, edited: Bool = false, emojis: [CustomEmoji] = [], filtered: [FilterResult] = [], favourited: Bool = false, reblogged: Bool = false, emojiReactions: [EmojiReaction] = []) -> Status {
             Status(
                 id: "preview-\(id)",
                 createdAt: now.addingTimeInterval(-minutes * 60),
@@ -696,7 +701,8 @@ struct AppearanceSamples {
                 filtered: filtered,
                 editedAt: edited ? now : nil,
                 favourited: favourited,
-                reblogged: reblogged
+                reblogged: reblogged,
+                emojiReactions: emojiReactions
             )
         }
         // お気に入りとブーストの光を見せるため、ブーストした投稿は、お気に入りとブーストをした投稿にする。
@@ -730,6 +736,7 @@ struct AppearanceSamples {
             // 片方だけのときの光の幅を見せるため、お気に入りだけをした投稿にする。
             status("wide", minutes: 7, account: friend, content: PreviewPhoto.credit([.wide]), media: [wideImage], favourited: true),
             status("poll", minutes: 5, account: longNamed, content: "<p>アイコンの形はどちらが好きですか？</p>", poll: poll),
+            status("reactions", minutes: 4, account: friend, content: "<p>絵文字のリアクションが付いた投稿です。</p>", emojiReactions: reactions),
             status("filtered", minutes: 2, account: scia, content: "<p>自分のフィルターに一致した自分の投稿です。</p>", filtered: [ownFilter]),
             // 名前の行の部品を1件で見せる投稿。入りきらない名前、公開範囲の記号、編集済みの「*」を出し、名前と画像のあいだを見せるため本文を付けないので、写真のクレジットは書かない。
             // 画像は、見本の枠に収まるよう横長にする。
