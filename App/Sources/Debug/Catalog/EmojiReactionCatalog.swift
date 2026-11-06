@@ -37,7 +37,7 @@ enum EmojiReactionCatalog {
                     url: nil,
                     emojiReactions: reactions
                 )
-                return CatalogFrame.bordered(PostContentView(configuration: timeline.contentConfiguration(for: status, base: .cell())))
+                return CatalogFrame.post { timeline.contentConfiguration(for: status, base: .cell()) }
             }
         }
         return [

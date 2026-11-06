@@ -33,9 +33,11 @@ enum PostRowCatalog {
                 let timeline = isMine ? mine : home
                 if expandsSpoiler { timeline.toggleSpoiler(of: status) }
                 if expandsBody { timeline.longBodyExpansion.expand(.status(status.displayed.id)) }
-                var configuration = timeline.contentConfiguration(for: status, isPinned: isPinned, base: .cell())
-                configuration.replyConnection = connection
-                return CatalogFrame.bordered(PostContentView(configuration: configuration))
+                return CatalogFrame.post {
+                    var configuration = timeline.contentConfiguration(for: status, isPinned: isPinned, base: .cell())
+                    configuration.replyConnection = connection
+                    return configuration
+                }
             }
         }
         let longHandleAccount = Fixtures.account(displayName: "長いハンドルの人", acct: "a-very-long-account-name-for-replies@subdomain.example.com")
@@ -191,7 +193,7 @@ enum PostRowCatalog {
             CatalogState(title: title) {
                 let timeline = isEmbedsBelow ? embedsBelow : isEmbedsOnly ? embedsOnly : isStraight ? straight : isMine ? mine : home
                 if expandsSpoiler { timeline.toggleSpoiler(of: status) }
-                return CatalogFrame.bordered(PostContentView(configuration: timeline.contentConfiguration(for: status, base: .cell())))
+                return CatalogFrame.post { timeline.contentConfiguration(for: status, base: .cell()) }
             }
         }
         let colors: [UIColor] = [.systemBlue, .systemGreen, .systemOrange, .systemPurple, .systemPink]
@@ -264,7 +266,7 @@ enum PostRowCatalog {
             CatalogState(title: title) {
                 if revealsMedia { home.mediaCovers.reveal(status) }
                 if expandsSpoiler { home.toggleSpoiler(of: status) }
-                return CatalogFrame.bordered(PostContentView(configuration: home.contentConfiguration(for: status, base: .cell())))
+                return CatalogFrame.post { home.contentConfiguration(for: status, base: .cell()) }
             }
         }
         let link = "https://news.example/articles/2026/10/link-card"
@@ -434,7 +436,7 @@ enum PostRowCatalog {
                 let status = status(content: content, spoilerText: spoilerText, quote: quote)
                 if expandsQuotedSpoiler, let quoted = quote.quotedStatus { home.toggleSpoiler(of: quoted) }
                 if revealsQuote { home.quoteReveals.reveal(status) }
-                return CatalogFrame.bordered(PostContentView(configuration: home.contentConfiguration(for: status, base: .cell())))
+                return CatalogFrame.post { home.contentConfiguration(for: status, base: .cell()) }
             }
         }
         func quoted(content: String = "<p>引用元の本文。</p>", account: Account = booster, spoilerText: String = "", media: [MediaAttachment] = [], sensitive: Bool = false, poll: Poll? = nil, filtered: [FilterResult] = [], quote: Quote? = nil) -> Status {

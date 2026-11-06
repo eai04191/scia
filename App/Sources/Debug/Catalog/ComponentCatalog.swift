@@ -246,6 +246,17 @@ enum CatalogFrame {
         ] + (height.map { [frame.heightAnchor.constraint(equalToConstant: $0)] } ?? []))
         return frame
     }
+
+    /// 一覧の投稿の行の中身を枠に置く。カスタム絵文字の画像は後から届くので、一覧と同じく、届いたら組み立て直す。
+    /// 組み立てを1回で済ませると、名前や本文、リアクションのカスタム絵文字が空いたままになるため。
+    @MainActor
+    static func post(_ configuration: @escaping @MainActor () -> PostContentConfiguration) -> UIView {
+        let view = PostContentView(configuration: configuration())
+        AppDependencies.emojiImages.addListener(owner: view) { [weak view] _ in
+            view?.configuration = configuration()
+        }
+        return bordered(view)
+    }
 }
 
 extension UIViewController {

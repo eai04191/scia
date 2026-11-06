@@ -40,7 +40,7 @@ enum PollCatalog {
                     poll: poll,
                     card: card
                 )
-                return CatalogFrame.bordered(PostContentView(configuration: timeline.contentConfiguration(for: status, base: .cell())))
+                return CatalogFrame.post { timeline.contentConfiguration(for: status, base: .cell()) }
             }
         }
         return [
