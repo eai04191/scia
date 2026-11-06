@@ -440,16 +440,7 @@ final class SessionController {
             // 版を読めていないときは、版の分からないサーバーとして覚える。版を読めたあとは、もう一度試す。
             unprocessableImageTypes: { mediaFormats.mimeTypes(serverVersion: diagnostics.serverVersion) },
             recordUnprocessableImageType: { mimeType in mediaFormats.record(mimeType, serverVersion: diagnostics.serverVersion) },
-            preparation: {
-                let settings = AppDependencies.settings
-                return MediaPreparationSettings(
-                    imageSize: settings.imageUploadSize,
-                    videoSize: settings.videoUploadSize,
-                    imageQuality: tuning.value(of: TuningCatalog.mediaImageQuality),
-                    videoQuality: TuningCatalog.videoQuality(in: tuning),
-                    exportProgressShare: tuning.value(of: TuningCatalog.mediaExportProgressShare)
-                )
-            }
+            preparation: { Self.mediaPreparation() }
         )
         let redraft = ComposeRedraftService(
             // 新しい投稿に付け直すので、添付は残して削除する。
@@ -593,6 +584,8 @@ final class SessionController {
         }
         composer.onLinkTitleLoadingChange = { [weak self] in self?.linkTitleActivityDidChange() }
         composer.onLinkTitleFailed = { [weak self] failure in self?.linkTitleDidFail(failure) }
+        composer.model.onAccountChange = { [weak self] account in self?.composeAccountDidChange(account) }
+        composer.onSwitchToHomeAccount = { [weak self] in self?.composer.model.switchAccount(to: nil) }
         session.onCredentialsInvalid = { [weak self] in self?.credentialsDidBecomeInvalid() }
         session.onCapabilitiesLoad = { [weak self] capabilities in
             for timeline in self?.timelines.allObjects ?? [] {
@@ -2040,7 +2033,119 @@ final class SessionController {
             presentListMembership(accountID: accountID, acct: acct, as: command.account)
         case .hashtag(let tag, let hashtagCommand):
             perform(hashtagCommand, on: tag.name, as: command.account)
+        case .mention(let acct):
+            UserAction.mention.record()
+            write(as: command.account, starting: "メンション") { [weak self] writing in self?.composer.mention(acct, as: writing) }
         }
+    }
+
+    // MARK: - ほかのアカウントで書く
+
+    /// 投稿欄で`account`として書き始める。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
+    /// 編集や書き直しの途中なら、今のアカウントで返信を始めるときと同じく、やめてよいか聞く。書くアカウントは、`proceed`に渡したものを投稿欄の入り口が替える。
+    private func write(as account: OtherAccount, starting: String, _ proceed: @escaping (ComposeAccount<UIImage>) -> Void) {
+        confirmLeavingEdit(starting: starting) { [weak self] in
+            guard let self else { return }
+            proceed(composeAccount(for: account))
+        }
+    }
+
+    /// `account`として書くときの送り先。今のアカウントの一覧には入れず、送れたら、どのアカウントで送ったかを知らせる。
+    /// 失敗は投稿欄に出し、このセッションのログインし直しの案内にはつなげない。
+    private func composeAccount(for account: OtherAccount) -> ComposeAccount<UIImage> {
+        let client = otherAccounts.client(for: account)
+        let handle = account.credential.handle
+        let media = ComposeMediaService<UIImage>(
+            upload: { try await client.uploadMedia($0) },
+            waitUntilProcessed: { try await client.waitUntilProcessed($0) },
+            updateDescription: { try await client.updateMediaDescription($0, description: $1) },
+            makeThumbnail: { file in await LocalMediaThumbnail.make(for: file, maxPixelSize: ComposeAttachmentStrip.thumbnailPixelSize) },
+            // 処理できない画像の形式は、今のアカウントのサーバーの版ごとに覚えている。ほかのアカウントのサーバーの版は読まないので覚えず、
+            // 処理できなかったときにJPEGで送り直すのを、送るたびに行う。
+            unprocessableImageTypes: { [] },
+            recordUnprocessableImageType: { _ in },
+            preparation: { Self.mediaPreparation() }
+        )
+        return ComposeAccount(id: account.credential.id, myAccountID: account.credential.accountID, media: media) { [weak self] draft in
+            if let scheduledAt = draft.scheduledAt {
+                _ = try await client.scheduleStatus(draft, at: scheduledAt)
+                self?.showToggledNotice("\(handle)で予約しました")
+            } else {
+                _ = try await client.postStatus(draft)
+                self?.showToggledNotice("\(handle)で投稿しました")
+            }
+        }
+    }
+
+    /// 書くアカウントを替えたら、補完と絵文字をそのアカウントのサーバーで探すようにし、投稿欄に書いているアカウントを出して、上限と既定値を読む。
+    private func composeAccountDidChange(_ writing: ComposeAccount<UIImage>?) {
+        guard let writing, let account = otherAccounts.account(id: writing.id) else {
+            composer.writingAccount = nil
+            composer.completion.switchSources(completionSources, recentMentions: RecentMentions(defaults: .standard, account: credential.handle))
+            composer.completion.prefetch()
+            applyComposeDefaults()
+            return
+        }
+        let client = otherAccounts.client(for: account)
+        composer.completion.switchSources(ComposeCompletion.Sources(client: client), recentMentions: RecentMentions(defaults: .standard, account: account.credential.handle))
+        // 開いている絵文字のパレットや補完が、替えた先のサーバーの絵文字とタグを読み直すよう、書き始めたときと同じく読み始める。
+        composer.completion.prefetch()
+        composer.writingAccount = InlineComposeController.WritingAccount(username: account.credential.username, avatar: nil)
+        loadWritingAccountAvatar(of: account)
+        applyComposeDefaults(of: writing)
+    }
+
+    /// 投稿欄の、書いているアカウントの行のアイコンを読む。読めなければ記号のままにする。
+    private func loadWritingAccountAvatar(of account: OtherAccount) {
+        let scale = tabs.tabBarController.traitCollection.displayScale
+        let side = UIFontMetrics(forTextStyle: .footnote).scaledValue(for: 18)
+        tasks.run(.display) { [weak self] in
+            guard let url = await account.loadedProfile()?.avatarStatic else { return }
+            do {
+                let image = try await AppDependencies.avatarImages.image(for: AvatarView.key(url: url, animates: false, side: side, scale: scale))
+                guard let self, composer.model.otherAccount?.id == account.credential.id else { return }
+                let icon = AvatarIcon.image(image, side: side, shape: AppDependencies.settings.appearance.avatarShape)
+                composer.writingAccount = InlineComposeController.WritingAccount(username: account.credential.username, avatar: icon)
+            } catch {
+                self?.logger.error("writing account avatar load failed: \(SciaLog.describe(error), privacy: .public)")
+            }
+        }
+    }
+
+    /// 書いているほかのアカウントのサーバーの上限と、そのアカウントの既定の公開範囲、閲覧注意、言語を読み、投稿欄に反映する。
+    /// 読み終える前に書くアカウントを替えていたら、投稿欄が使わない（`ComposeModel.apply`の`accountID`）。
+    private func applyComposeDefaults(of writing: ComposeAccount<UIImage>) {
+        guard let account = otherAccounts.account(id: writing.id) else { return }
+        let defaults = otherAccounts.composeDefaults(of: account)
+        composeDefaultsTask = tasks.run(.action) { [weak self] in
+            let loaded = await defaults()
+            #if DEBUG
+            let configuration = DebugFaults.applyingMediaLimits(to: loaded.configuration)
+            #else
+            let configuration = loaded.configuration
+            #endif
+            let preferences = loaded.preferences
+            self?.composer.model.apply(
+                configuration: configuration,
+                defaultVisibility: preferences?.defaultVisibility,
+                defaultSensitive: preferences?.defaultSensitive,
+                defaultLanguage: preferences.map(\.defaultLanguage),
+                accountID: writing.id
+            )
+        }
+    }
+
+    /// 投稿欄で送る前に縮める大きさと、作り直すときの好みの値。どのアカウントで書いても同じ設定を使う。
+    private static func mediaPreparation() -> MediaPreparationSettings {
+        let settings = AppDependencies.settings
+        let tuning = AppDependencies.tuning
+        return MediaPreparationSettings(
+            imageSize: settings.imageUploadSize,
+            videoSize: settings.videoUploadSize,
+            imageQuality: tuning.value(of: TuningCatalog.mediaImageQuality),
+            videoQuality: TuningCatalog.videoQuality(in: tuning),
+            exportProgressShare: tuning.value(of: TuningCatalog.mediaExportProgressShare)
+        )
     }
 
     /// ほかのアカウントとして、ハッシュタグをフォロー、ミュート、プロフィールで紹介する。済んだことと失敗は`otherAccounts`の知らせで出す。
@@ -2096,7 +2201,16 @@ final class SessionController {
         case .delete:
             confirmDeleting(status, as: account, original: original)
             return
-        case .reply, .quote, .edit, .redraft, .editHistory, .openFavouritedBy, .openRebloggedBy, .viewAPIResponse:
+        case .reply:
+            UserAction.reply.record()
+            write(as: account, starting: "返信") { [weak self] writing in self?.composer.reply(to: status, as: writing) }
+            return
+        case .quote:
+            UserAction.quote.record()
+            // そのアカウントのサーバーで探した投稿なので、引用できるかはログインしている人向けの形で分かっている。
+            write(as: account, starting: "引用") { [weak self] writing in self?.confirmQuoting(status, as: writing) }
+            return
+        case .edit, .redraft, .editHistory, .openFavouritedBy, .openRebloggedBy, .viewAPIResponse:
             // 「別のアカウントで」の並びから除いているので来ない（`StatusMenuTree.sameForEveryAccountItems`と`notYetOtherAccountItems`）。
             return
         }
@@ -2905,13 +3019,14 @@ final class SessionController {
 
     /// 下書きに添付か投票があれば、外してよいか聞いてから引用を始める。なければすぐ始める。
     /// Mastodonは引用に添付と投票を付けられないため。本文は残す。
-    private func confirmQuoting(_ status: Status) {
+    /// - Parameter account: 書くアカウント。nilなら今のアカウントで書く。
+    private func confirmQuoting(_ status: Status, as account: ComposeAccount<UIImage>? = nil) {
         guard let confirmation = Confirmation.quoting(draft: composer.model) else {
-            composer.quote(status)
+            composer.quote(status, as: account)
             return
         }
         topViewController.present(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
-            self?.composer.quote(status)
+            self?.composer.quote(status, as: account)
         }, animated: true)
     }
 
@@ -3378,6 +3493,10 @@ final class SessionController {
 
     /// 既定の公開範囲などを読めたら、投稿欄に反映する。読めなかったら、次に書き始めたときに読み直す。
     private func applyComposeDefaults() {
+        if let writing = composer.model.otherAccount {
+            applyComposeDefaults(of: writing)
+            return
+        }
         composeDefaultsTask = tasks.run(.action) { [weak self] in
             guard let self else { return }
             #if DEBUG

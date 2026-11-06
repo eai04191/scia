@@ -76,6 +76,49 @@ final class OtherAccounts {
         }
     }
 
+    /// ログインしているほかのアカウントのうち、`Credential.id`が`id`のもの。ログアウトしていればnil。
+    func account(id: String) -> OtherAccount? {
+        accounts[id]
+    }
+
+    /// アカウントごとの、投稿欄で使うサーバーの上限とアカウントの設定。読めたものを覚え、読めなかったものは次に呼ばれたときに読み直す。
+    private var configurations: [Credential.ID: InstanceConfiguration] = [:]
+    private var preferences: [Credential.ID: ServerPreferences] = [:]
+
+    /// アカウントごとの、走っている上限と設定の読み込み。書き始めたときと書くアカウントを替えたときに重ねて呼ばれても、送り直さずに待つ。
+    private var composeDefaultsLoads: [Credential.ID: Task<Void, Never>] = [:]
+
+    /// `account`で書くときの、サーバーの上限とアカウントの設定を読むもの。今のアカウントと同じく、一度読めたら使い回す。
+    func composeDefaults(of account: OtherAccount) -> @MainActor () async -> (configuration: InstanceConfiguration?, preferences: ServerPreferences?) {
+        let id = account.credential.id
+        let client = client(for: account)
+        return { [weak self] in
+            guard let self else { return (nil, nil) }
+            if configurations[id] == nil || preferences[id] == nil {
+                let load = composeDefaultsLoads[id] ?? startLoadingComposeDefaults(id: id, client: client)
+                await load?.value
+            }
+            return (configurations[id], preferences[id])
+        }
+    }
+
+    private func startLoadingComposeDefaults(id: Credential.ID, client: MastodonClient) -> Task<Void, Never>? {
+        let needsConfiguration = configurations[id] == nil
+        let needsPreferences = preferences[id] == nil
+        // 始めた読み込みは、このあとの代入を終えてから走るので、走り終えたときに自分で除ける。
+        let load = tasks.run(.action) { [weak self] in
+            async let fetchedConfiguration = needsConfiguration ? try? client.instanceConfiguration() : nil
+            async let fetchedPreferences = needsPreferences ? try? client.preferences() : nil
+            let (loadedConfiguration, loadedPreferences) = await (fetchedConfiguration, fetchedPreferences)
+            guard let self else { return }
+            if let loadedConfiguration { configurations[id] = loadedConfiguration }
+            if let loadedPreferences { preferences[id] = loadedPreferences }
+            composeDefaultsLoads[id] = nil
+        }
+        composeDefaultsLoads[id] = load
+        return load
+    }
+
     /// `account`としてAPIを呼ぶクライアント。そのアカウントのシートに渡す。
     func client(for account: OtherAccount) -> MastodonClient {
         makeClient(account.credential)

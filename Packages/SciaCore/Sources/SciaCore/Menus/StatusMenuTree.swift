@@ -84,6 +84,8 @@ public struct OtherAccountCommand {
         case addToList(accountID: String, acct: String)
         /// 投稿のハッシュタグを、そのアカウントでフォロー、ミュート、プロフィールで紹介する。
         case hashtag(Tag, HashtagMenuCommand)
+        /// 投稿欄をそのアカウントに切り替えて、`@acct`を入れる。`acct`はそのアカウントのサーバーから見たもの。
+        case mention(acct: String)
     }
 }
 
@@ -376,14 +378,14 @@ public struct StatusMenuTree {
         .openThread, .select, .copyLink, .copyText, .selectText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari,
         .editHistory, .favouritedBy, .rebloggedBy, .dismissNotification, .hideMedia, .systemTranslate, .customEmojis, .apiResponse, .otherAccounts, .customize,
     ]
-    /// 「別のアカウントで」の中に、まだ出していない項目。返信、引用、編集、削除して書き直すはそのアカウントの投稿欄が要り、まだ作っていない。
-    static let notYetOtherAccountItems: Set<StatusMenuItem> = [.reply, .quote, .edit, .redraft]
+    /// 「別のアカウントで」の中に、まだ出していない項目。編集と削除して書き直すは、投稿欄をそのアカウントに切り替えて、そのアカウントの投稿を書き直す作りが要り、まだ作っていない。
+    static let notYetOtherAccountItems: Set<StatusMenuItem> = [.edit, .redraft]
     /// 「別のアカウントで」のハッシュタグのメニューに出さない項目。どのアカウントで行っても同じ結果になるもの。
     static let sameForEveryAccountHashtagItems: Set<HashtagMenuItem> = [.timeline, .accountStatuses, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .copyLink, .share, .customize]
     /// 「別のアカウントで」のユーザーのメニューに出さない項目。どのアカウントで行っても同じ結果になるもの。
     static let sameForEveryAccountUserItems: Set<UserMenuItem> = [.profile, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .customize]
-    /// 「別のアカウントで」のユーザーのメニューに、まだ出していない項目。メンションはそのアカウントの投稿欄が要り、まだ作っていない。
-    static let notYetOtherAccountUserItems: Set<UserMenuItem> = [.mention]
+    /// 「別のアカウントで」のユーザーのメニューに、まだ出していない項目。
+    static let notYetOtherAccountUserItems: Set<UserMenuItem> = []
 
     /// 「別のアカウントで」のサブメニュー。ほかのアカウントが1つなら「@usernameで」を直に置き、2つ以上ならアカウントごとの`@username`のサブメニューを並べる。
     /// サーバー名は、ユーザーのメニューの見出しと同じくサブタイトルに出す。名前に`@username@server`をそのまま置くと、長いサーバー名で途中から折り返されて読みにくいため。
@@ -445,6 +447,8 @@ public struct StatusMenuTree {
                     .otherAccount(OtherAccountCommand(account: account, original: status, action: .report(accountID: accountID, acct: acct, statusID: statusID)))
                 case .user(let user, .addToList):
                     .otherAccount(OtherAccountCommand(account: account, original: status, action: .addToList(accountID: user.id, acct: user.acct)))
+                case .user(let user, .mention):
+                    .otherAccount(OtherAccountCommand(account: account, original: status, action: .mention(acct: user.acct)))
                 case .hashtag(let tag, let hashtagCommand):
                     .otherAccount(OtherAccountCommand(account: account, original: status, action: .hashtag(tag, hashtagCommand)))
                 default:

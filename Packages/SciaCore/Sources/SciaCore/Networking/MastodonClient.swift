@@ -1409,6 +1409,11 @@ public struct InstanceConfiguration: Sendable, Equatable {
     /// 投票の上限。
     public let pollLimits: PollLimits
 
+    /// サーバーの値を読む前に使う上限。Mastodonの既定値にし、メディアの大きさの上限は分からないものとする。
+    public static var beforeLoading: InstanceConfiguration {
+        InstanceConfiguration(maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 4, mediaDescriptionLimit: 1500, supportedMediaTypes: nil, mediaLimits: .unknown)
+    }
+
     public init(
         maxCharacters: Int,
         charactersReservedPerURL: Int,

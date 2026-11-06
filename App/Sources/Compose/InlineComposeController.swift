@@ -44,6 +44,23 @@ final class InlineComposeController: NSObject {
     var onPosted: () -> Void = {}
     /// 予約の書き直しのラベルを押したときに呼ぶ。予約の一覧を見せる。
     var onShowScheduledStatuses: () -> Void = {}
+    /// 書いているほかのアカウントの、投稿欄に出す名前とアイコン。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
+    struct WritingAccount: Equatable {
+        /// `@`を付けない`username`。
+        let username: String
+        /// アイコン。読めるまではnilで、記号を出す。
+        let avatar: UIImage?
+    }
+
+    /// 書いているほかのアカウント。今のアカウントで書いていればnil。
+    var writingAccount: WritingAccount? {
+        didSet {
+            guard writingAccount != oldValue else { return }
+            applyWritingAccount()
+        }
+    }
+    /// 書いているアカウントの行の×で、今のアカウントに戻す。
+    var onSwitchToHomeAccount: () -> Void = {}
     /// 画面の下端から、投稿欄（書いているときはキーボードも）が覆っている高さが変わったときに呼ぶ。
     var onObscuredHeightChange: (CGFloat) -> Void = { _ in }
     /// リンクに付けるタイトルを読み始めたときと、付け終えたときに呼ぶ。読んでいる途中かは`isLoadingLinkTitle`で見る。
@@ -71,7 +88,7 @@ final class InlineComposeController: NSObject {
     private lazy var textMorph: ComposeTextMorph = {
         let morph = ComposeTextMorph(container: bar.contentView)
         // 本文の上に並ぶ、文字のある行。ラベルのアイコンは写真と同じく別に動かすので、行ごと隠しても構わない。
-        morph.rowsAboveText = { [unowned self] in [replyRow, scheduleRow, spoilerRow] }
+        morph.rowsAboveText = { [unowned self] in [accountRow, replyRow, scheduleRow, spoilerRow] }
         return morph
     }()
     /// 本文を動かし始めたときの入力欄の本文。動いている途中に打ったとき、末尾に打ち足しただけかを見分ける。
@@ -123,6 +140,10 @@ final class InlineComposeController: NSObject {
             }
         })
     }()
+    /// 書いているほかのアカウントの行。ほかのアカウントで書いているときだけ、返信や編集のラベルの上に出す。
+    private lazy var accountRow = makeAccountRow()
+    private let accountAvatarView = UIImageView()
+    private let accountLabel = UILabel()
     /// 予約の行。＋のメニューから足したときと、予約を書き直しているときだけ、返信や編集のラベルの下に出す。
     private lazy var scheduleRow = makeScheduleRow()
     /// 予約の行の時計。開閉では、カプセルの時計とのあいだで動かす。
@@ -577,7 +598,7 @@ final class InlineComposeController: NSObject {
     }
 
     private var rowStates: [(name: String, view: UIView)] {
-        [("rest", restRow), ("reply", replyRow), ("schedule", scheduleRow), ("spoiler", spoilerRow), ("attachments", attachmentStrip), ("text", textView), ("poll", pollEditor), ("tools", tools)]
+        [("rest", restRow), ("account", accountRow), ("reply", replyRow), ("schedule", scheduleRow), ("spoiler", spoilerRow), ("attachments", attachmentStrip), ("text", textView), ("poll", pollEditor), ("tools", tools)]
     }
 
     /// 表示しているのに高さを確保できていない行と、縦に重なっている行の組み。
@@ -666,7 +687,10 @@ final class InlineComposeController: NSObject {
     }
 
     /// 返信先を付けて書き始める。
-    func reply(to status: Status) {
+    /// - Parameter account: 書くアカウント。nilなら今のアカウントで書く。返信先は、そのアカウントのサーバーの投稿を渡す。
+    ///   ほかのアカウントで書いている途中に今のアカウントの投稿へ返信するときも、今のアカウントに戻す。返信先のIDがサーバーごとに違うため。
+    func reply(to status: Status, as account: ComposeAccount<UIImage>? = nil) {
+        guard model.switchAccount(to: account) else { return }
         model.setReplyTarget(status)
         // モデルの変更が画面に届くのは少しあとなので、ラベルの行を出す前に、ラベルの文字をここで入れておく。
         update()
@@ -675,7 +699,9 @@ final class InlineComposeController: NSObject {
 
     /// 引用元を付けて書き始める。添付と投票は外す。外してよいかは、呼ぶ側が先に聞く。
     /// 開いているピッカーは、外した添付をピッカーの選択から足し直されないよう、`discardDraft()`と同じく閉じる。
-    func quote(_ status: Status) {
+    /// - Parameter account: 書くアカウント。nilなら今のアカウントで書く。引用元は、そのアカウントのサーバーの投稿を渡す。
+    func quote(_ status: Status, as account: ComposeAccount<UIImage>? = nil) {
+        guard model.switchAccount(to: account) else { return }
         if model.hasQuoteConflicts {
             mediaPicker?.close(notifiesWillClose: true)
         }
@@ -1304,11 +1330,13 @@ final class InlineComposeController: NSObject {
 
     /// ユーザーのメニューの「メンション」。書き始めて、カーソルの位置に`@acct`を入れる。下書きと返信先はそのまま残す。
     /// 送っている間は本文を変えられないため、何もしない。
-    func mention(_ acct: String) {
+    /// - Parameter account: 書くアカウント。nilなら今のアカウントで書く。`acct`は、そのアカウントのサーバーから見たハンドルを渡す。
+    func mention(_ acct: String, as account: ComposeAccount<UIImage>? = nil) {
         guard !model.isPosting else {
             logger.info("compose: mention not inserted while posting")
             return
         }
+        guard model.switchAccount(to: account) else { return }
         beginEditing()
         let selection = textView.selectedRange
         let insertion = MentionInsertion.insertion(of: acct, in: textView.text, replacing: selection.location ..< selection.location + selection.length)
@@ -2327,6 +2355,9 @@ final class InlineComposeController: NSObject {
             setRowHidden(view, !isOpen)
             view.alpha = isOpen ? 1 : 0
         }
+        let showsAccount = isOpen && writingAccount != nil
+        setRowHidden(accountRow, !showsAccount)
+        accountRow.alpha = showsAccount ? 1 : 0
         let showsReply = isOpen && chip != nil
         setRowHidden(replyRow, !showsReply)
         replyRow.alpha = showsReply ? 1 : 0
@@ -2583,6 +2614,7 @@ final class InlineComposeController: NSObject {
             }
         }
         setRowShown(replyRow, isOpen && chip != nil)
+        setRowShown(accountRow, isOpen && writingAccount != nil)
 
         // 行を消すときは、薄くなる間も日時が残るよう、前の日時のままにする。
         if let scheduledAt = model.scheduledAt {
@@ -3277,6 +3309,58 @@ final class InlineComposeController: NSObject {
         return row
     }
 
+    /// 書いているほかのアカウントの行。アイコン、「@usernameで投稿」、今のアカウントに戻す×を並べる。
+    private func makeAccountRow() -> UIView {
+        let side = UIFontMetrics(forTextStyle: .footnote).scaledValue(for: 18)
+        accountAvatarView.contentMode = .scaleAspectFit
+        accountAvatarView.tintColor = .secondaryLabel
+        accountAvatarView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .footnote)
+        accountAvatarView.translatesAutoresizingMaskIntoConstraints = false
+        let avatarSize = [
+            accountAvatarView.widthAnchor.constraint(equalToConstant: side),
+            accountAvatarView.heightAnchor.constraint(equalToConstant: side),
+        ]
+        // 行を隠すと、スタックビューが高さ0の制約を付ける。それと競合しないよう、必須より1つ下げる。
+        // 必須のままだと、隠した行が高さを保ったまま本文の上にはみ出して並び、開閉で本文を動かす計算が行の位置を測り直し続けて、本文が出るのが遅れた。
+        for constraint in avatarSize {
+            constraint.priority = .required - 1
+        }
+        NSLayoutConstraint.activate(avatarSize)
+        accountAvatarView.isAccessibilityElement = false
+
+        accountLabel.font = .preferredFont(forTextStyle: .footnote)
+        accountLabel.adjustsFontForContentSizeCategory = true
+        accountLabel.textColor = .secondaryLabel
+        accountLabel.lineBreakMode = .byTruncatingTail
+        accountLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        var configuration = UIButton.Configuration.plain()
+        configuration.image = UIImage(systemName: "xmark.circle.fill")
+        configuration.baseForegroundColor = .secondaryLabel
+        configuration.contentInsets = .zero
+        let clear = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in self?.onSwitchToHomeAccount() })
+        clear.accessibilityLabel = "今のアカウントで投稿する"
+        clear.setContentHuggingPriority(.required, for: .horizontal)
+        clear.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        let spacer = UIView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let row = UIStackView(arrangedSubviews: [accountAvatarView, accountLabel, spacer, clear])
+        row.alignment = .center
+        row.spacing = 6
+        return row
+    }
+
+    /// 書いているアカウントの行を、今のアカウントに合わせる。行を消すときは、薄くなる間も名前が残るよう、前の名前のままにする。
+    private func applyWritingAccount() {
+        if let writingAccount {
+            accountLabel.text = "@\(writingAccount.username)で投稿"
+            accountAvatarView.image = writingAccount.avatar ?? UIImage(systemName: "person.crop.circle")
+            accountRow.accessibilityLabel = accountLabel.text
+        }
+        setRowShown(accountRow, isOpen && writingAccount != nil)
+    }
+
     /// 予約の行。時計、日時、「に投稿」、外すボタンを並べる。日時は返信先のラベルと同じ形で、押すと日時を選ぶシートを出す。
     private func makeScheduleRow() -> UIView {
         scheduleIcon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .footnote)
@@ -3514,7 +3598,7 @@ final class InlineComposeController: NSObject {
         attachmentStrip.onContextMenuWillShow = { [weak self] in self?.holdBarForContextMenu() }
         attachmentStrip.onContextMenuWillEnd = { [weak self] in self?.contextMenuWillEnd() }
         configurePollEditor()
-        for view in [restRow, replyRow, scheduleRow, spoilerRow, attachmentStrip, textView, pollEditor, tools] {
+        for view in [restRow, accountRow, replyRow, scheduleRow, spoilerRow, attachmentStrip, textView, pollEditor, tools] {
             stack.addArrangedSubview(view)
         }
         stack.axis = .vertical

@@ -243,7 +243,9 @@ public final class ComposeCompletion {
     /// https://docs.joinmastodon.org/methods/search/#v2
     public static let hashtagSearchLimit = 40
 
-    @ObservationIgnored private let sources: Sources
+    @ObservationIgnored private var sources: Sources
+    /// 探すサーバーを替えた回数。替える前に読み始めた絵文字や人の応答で、替えた先の一覧を上書きしないため。
+    @ObservationIgnored private var serverGeneration = 0
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var emojiTask: Task<Void, Never>?
@@ -268,7 +270,7 @@ public final class ComposeCompletion {
     @ObservationIgnored public var standardEmojiGroups: () -> [StandardEmojiGroup] = { [] }
     /// 返信先の人。書いている途中で返信先が変わることがあるので、候補を出すたびに読む。返信でなければ空。
     @ObservationIgnored public var replyParticipants: () -> [LocalMention] = { [] }
-    @ObservationIgnored private let recentMentions: RecentMentions?
+    @ObservationIgnored private var recentMentions: RecentMentions?
     /// 返信先でメンションされた人のうち、読んだアカウント。
     @ObservationIgnored private var participantAccounts: [String: Account] = [:]
     /// 読み始めた人。失敗しても読み直さない。アイコンと表示名がなくても、ハンドルで選べるため。
@@ -394,6 +396,26 @@ public final class ComposeCompletion {
         ownTagsTask = nil
         featuredTags = nil
         recentTags = nil
+    }
+
+    /// 投稿欄で書くアカウントを替えたときに、替えた先のサーバーで探すようにする。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
+    /// 前のサーバーで読んだ絵文字、自分のタグ、返信先の人、検索の結果は、そのサーバーのものなので捨て、読んでいる途中の応答も使わない。
+    /// - Parameter recentMentions: そのアカウントで補完で選んだアカウントを覚える場所。
+    public func switchSources(_ sources: Sources, recentMentions: RecentMentions?) {
+        self.sources = sources
+        self.recentMentions = recentMentions
+        serverGeneration += 1
+        clear()
+        emojiTask?.cancel()
+        emojiTask = nil
+        emojis = nil
+        emojiFailureMessage = nil
+        forgetOwnTags()
+        statusTags = nil
+        usedTags = []
+        participantAccounts = [:]
+        requestedParticipantIDs = []
+        cache = [:]
     }
 
     private func clear() {
@@ -564,14 +586,17 @@ public final class ComposeCompletion {
     private func loadEmojis() {
         guard emojiTask == nil else { return }
         emojiFailureMessage = nil
+        let generation = serverGeneration
         emojiTask = Task { [weak self, sources] in
             do {
                 let emojis = try await RequestPurpose.$current.withValue(.display) {
                     try await sources.customEmojis()
                 }
-                self?.didLoadEmojis(emojis)
+                guard let self, generation == serverGeneration else { return }
+                didLoadEmojis(emojis)
             } catch {
-                self?.didFailEmojis(error)
+                guard let self, generation == serverGeneration else { return }
+                didFailEmojis(error)
             }
         }
     }
@@ -668,12 +693,14 @@ public final class ComposeCompletion {
         guard !ids.isEmpty else { return }
         requestedParticipantIDs.formUnion(ids)
         replyParticipantLoadCount += 1
+        let generation = serverGeneration
         Task { [weak self, sources] in
             do {
                 let accounts = try await RequestPurpose.$current.withValue(.display) {
                     try await sources.accounts(ids)
                 }
-                self?.didLoadParticipants(accounts)
+                guard let self, generation == serverGeneration else { return }
+                didLoadParticipants(accounts)
             } catch {
                 self?.logger.info("completion: reply participants failed: \(ErrorPresentation(error).code ?? "unknown", privacy: .public)")
             }

@@ -160,7 +160,7 @@ struct OtherAccountMenuTests {
         let menu = try #require(node(tree(status(uri: uri), accounts: [bob], groups: groups)))
 
         let items = await loaded(menu.children)
-        #expect(items == "お気に入り,公開範囲を選んでブースト[公開,ひかえめな公開,フォロワーのみ]|その他[ブックマーク]")
+        #expect(items == "お気に入り,返信,公開範囲を選んでブースト[公開,ひかえめな公開,フォロワーのみ]|その他[ブックマーク]")
     }
 
     /// どのアカウントでも同じ結果になる項目（コピー、共有、今のアカウントで開く画面）は出さない。
@@ -241,6 +241,7 @@ struct OtherAccountMenuTests {
     }
 
     /// メモ、通報、リストに追加は、そのアカウントのサーバーでの相手と投稿のIDで、そのアカウントのシートを開く命令にする。
+    /// メンションは、そのアカウントのサーバーから見たハンドルで、投稿欄をそのアカウントに切り替えて入れる命令にする。
     @Test func opensSheetsAsOtherAccount() async throws {
         let otherAlice = Account(id: "500", username: "alice", acct: "alice@remote.example", displayName: "Alice", avatar: nil, url: alice.url)
         let found = status(id: "7000", uri: uri, account: otherAlice)
@@ -275,6 +276,11 @@ struct OtherAccountMenuTests {
         }
         #expect(listedID == "500")
         #expect(acct == "alice@remote.example")
+        guard case .mention(let mentioned) = try action("メンション") else {
+            Issue.record("投稿欄でメンションする命令になっていません")
+            return
+        }
+        #expect(mentioned == "alice@remote.example")
     }
 
     /// ハッシュタグは、そのアカウントでのフォローなどの状態で項目を出し、そのアカウントとして行う命令にする。どのアカウントでも同じ結果になる項目は出さない。
@@ -486,7 +492,7 @@ struct OtherAccountMenuTests {
 
         let items = try #require(node(tree(shown, accounts: [bob], groups: groups))).children
         let aliceMenu = try #require(submenu("@alice", in: items))
-        #expect(MenuNodeTests.describe(aliceMenu.children).hasPrefix("フォローを外す,"))
+        #expect(MenuNodeTests.describe(aliceMenu.children).hasPrefix("メンション|フォローを外す,"))
         // どのアカウントでも同じ結果になるコピーやプロフィールは出さない。
         #expect(!MenuNodeTests.describe(aliceMenu.children).contains("コピー"))
         #expect(!MenuNodeTests.describe(aliceMenu.children).contains("プロフィール,"))
@@ -494,7 +500,7 @@ struct OtherAccountMenuTests {
         #expect(avatarUserID(submenu("@carol", in: items)) == "2")
         let dave = try #require(submenu("@dave", in: items))
         #expect(dave.icon == nil)
-        #expect(MenuNodeTests.describe(dave.children).hasPrefix("フォロー,"))
+        #expect(MenuNodeTests.describe(dave.children).hasPrefix("メンション|フォロー,"))
 
         let unfollow = try #require(aliceMenu.flattenedChildren.first { $0.title == "フォローを外す" })
         guard case .otherAccount(let command) = unfollow.command, case .relation(.unfollow, let relation) = command.action else {

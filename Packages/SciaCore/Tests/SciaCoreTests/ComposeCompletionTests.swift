@@ -853,6 +853,25 @@ struct ComposeCompletionTests {
         clock.advance(by: .milliseconds(30))
         #expect(await server.queries.isEmpty)
     }
+
+    /// 書くアカウントを替えたら、替えた先のサーバーの絵文字を読み直す。替える前に読み始めた応答は使わない。
+    @Test func switchingSourcesForgetsEmojisOfPreviousServer() async throws {
+        let gate = Gate()
+        let home = ComposeCompletion.Sources(searchAccounts: { _, _ in [] }, searchHashtags: { _, _ in [] }, customEmojis: {
+            try await gate.wait()
+            return [.stub("home")]
+        })
+        let other = ComposeCompletion.Sources(searchAccounts: { _, _ in [] }, searchHashtags: { _, _ in [] }, customEmojis: { [.stub("other")] })
+        let completion = ComposeCompletion(sources: home, settings: ComposeCompletion.Settings(debounce: .milliseconds(30), limit: 5))
+
+        completion.loadEmojisIfNeeded()
+        completion.switchSources(other, recentMentions: nil)
+        gate.open()
+        completion.loadEmojisIfNeeded()
+        try await waitUntil { completion.emojis != nil }
+
+        #expect(completion.emojis?.map { $0.shortcode } == ["other"])
+    }
 }
 
 private extension Account {

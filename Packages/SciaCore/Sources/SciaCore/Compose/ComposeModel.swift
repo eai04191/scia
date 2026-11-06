@@ -19,13 +19,13 @@ public final class ComposeModel<Thumbnail: Sendable> {
     public private(set) var quoteTarget: Status?
     /// 編集している自分の投稿。編集でなければnil。公開範囲と返信先は変えられない。
     public private(set) var editedStatus: Status?
-    public private(set) var maxCharacters = 500
-    public private(set) var charactersReservedPerURL = 23
-    public private(set) var maxMediaAttachments = 4
+    public private(set) var maxCharacters = InstanceConfiguration.beforeLoading.maxCharacters
+    public private(set) var charactersReservedPerURL = InstanceConfiguration.beforeLoading.charactersReservedPerURL
+    public private(set) var maxMediaAttachments = InstanceConfiguration.beforeLoading.maxMediaAttachments
     /// 代替テキストの文字数の上限。
-    public private(set) var mediaDescriptionLimit = 1500
+    public private(set) var mediaDescriptionLimit = InstanceConfiguration.beforeLoading.mediaDescriptionLimit
     /// サーバーが受け付けるメディアの大きさの上限。読めるまでは分からないものとして、縮めない。
-    @ObservationIgnored private var mediaLimits = MediaLimits.unknown
+    @ObservationIgnored private var mediaLimits = InstanceConfiguration.beforeLoading.mediaLimits
     /// サーバーが受け付けると返した形式。返さないサーバーではnil。
     @ObservationIgnored private var supportedMediaTypes: [String]?
     /// 投稿ボタンを押してから、送り終えるか、送るのをやめるまで。添付の準備を待っている間も含む。
@@ -40,7 +40,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     /// 付ける投票。投票の欄を出していなければnil。添付とは一緒に付けられないため、添付があるときは足せない。
     public var poll: PollDraft?
     /// サーバーが受け付ける投票の上限。読めるまではMastodonの既定値にする。
-    public private(set) var pollLimits = PollLimits.mastodonDefault
+    public private(set) var pollLimits = InstanceConfiguration.beforeLoading.pollLimits
     /// 添付したメディアごとの、端末の側だけで持つもの。
     public private(set) var localMedia: [DraftAttachment.ID: LocalMedia<Thumbnail>] = [:] {
         didSet { settleMediaWait() }
@@ -76,13 +76,25 @@ public final class ComposeModel<Thumbnail: Sendable> {
     /// 最後に送った内容。同じ内容を送り直すときだけ同じIdempotency-Keyを使い、変えたら別の投稿として新しいキーにする。
     /// 応答だけが失われていた場合に、変えた内容が投稿されないまま成功扱いにならないようにするため。
     @ObservationIgnored private var lastSubmitted: StatusDraft?
-    @ObservationIgnored public let myAccountID: String
+    /// 書いているほかのアカウント。今のアカウントで書いていればnil。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
+    public private(set) var otherAccount: ComposeAccount<Thumbnail>?
+    /// 今のアカウントの、自分のアカウントのID。
+    @ObservationIgnored private let homeAccountID: String
+    /// 書いているアカウントの、そのサーバーでの自分のアカウントのID。
+    public var myAccountID: String { otherAccount?.myAccountID ?? homeAccountID }
+    /// 書くアカウントを替えたあと、新しいサーバーの上限を読むまで、アップロードし直すのを待っている添付。上限に合わせて縮め直すため。
+    @ObservationIgnored private var awaitingReupload: Set<DraftAttachment.ID> = []
+    /// 書くアカウントを替えた回数。替える前に始めたアップロードが、前のサーバーの結果を書き戻さないようにする。
+    @ObservationIgnored private var accountGeneration = 0
     /// 予約の日時を決める今の日付。テストでは決まった日付に差し替える。
     @ObservationIgnored public var now: () -> Date = SystemTime.now
     /// 予約の日時を区切る暦。テストでは決まったタイムゾーンの暦に差し替える。
     @ObservationIgnored public var calendar = Calendar.autoupdatingCurrent
-    @ObservationIgnored private let post: (StatusDraft) async throws -> Void
-    @ObservationIgnored private let media: ComposeMediaService<Thumbnail>
+    @ObservationIgnored private let homePost: (StatusDraft) async throws -> Void
+    @ObservationIgnored private let homeMedia: ComposeMediaService<Thumbnail>
+    /// 書いているアカウントのサーバーへ送る口。
+    private var post: (StatusDraft) async throws -> Void { otherAccount?.post ?? homePost }
+    private var media: ComposeMediaService<Thumbnail> { otherAccount?.media ?? homeMedia }
     /// 下書きの送信とアップロードの持ち主。セッションの持ち主の子で、ログアウトやアカウントの切り替えで閉じると、送っている途中のものも止める。
     @ObservationIgnored public let tasks: TaskScope
     /// 送っている途中にバックグラウンドへ移っても、送り終えるまでアプリを止めないよう頼む。終えるときに呼ぶものを返す。
@@ -115,6 +127,8 @@ public final class ComposeModel<Thumbnail: Sendable> {
     @ObservationIgnored public var onMediaReduced: (MediaAttachment.Kind) -> Void = { _ in }
     /// ペーストしたメディアのうち、添付の上限を超えて足さなかったものの種類。
     @ObservationIgnored public var onPastedMediaSkipped: ([MediaAttachment.Kind]) -> Void = { _ in }
+    /// 書くアカウントを替えたあとに呼ぶ。今のアカウントに戻ったらnil。呼ぶ側は、そのアカウントのサーバーの上限と既定値を`apply`で入れる。
+    @ObservationIgnored public var onAccountChange: (ComposeAccount<Thumbnail>?) -> Void = { _ in }
 
     public init(
         tasks: TaskScope,
@@ -134,9 +148,9 @@ public final class ComposeModel<Thumbnail: Sendable> {
         showsSpoiler = !draft.spoilerText.isEmpty
         visibility = draft.visibility
         self.replyTo = replyTo
-        self.myAccountID = myAccountID
-        self.post = post
-        self.media = media
+        homeAccountID = myAccountID
+        homePost = post
+        homeMedia = media
         self.redraftService = redraftService
     }
 
@@ -287,8 +301,12 @@ public final class ComposeModel<Thumbnail: Sendable> {
     /// インスタンスの上限と、ユーザーの既定の公開範囲、閲覧注意、言語を反映する。公開範囲と言語は、自分で選んでいたら変えない。
     /// 既定の閲覧注意は、この後に最初の添付を足したときから使う。
     /// - Parameter defaultLanguage: 既定の言語。読めなければnilで、今のままにする。既定を決めていなければ`.some(nil)`。
-    public func apply(configuration: InstanceConfiguration?, defaultVisibility: Status.Visibility?, defaultSensitive: Bool?, defaultLanguage: String?? = nil) {
+    /// - Parameter accountID: 値を読んだアカウントの`ComposeAccount.id`。今のアカウントならnil。読んでいる間に書くアカウントを替えていたら、何もしない。
+    ///   前のアカウントのサーバーの上限や既定値で、替えたアカウントの下書きを決めないため。
+    public func apply(configuration: InstanceConfiguration?, defaultVisibility: Status.Visibility?, defaultSensitive: Bool?, defaultLanguage: String?? = nil, accountID: String? = nil) {
+        guard accountID == otherAccount?.id else { return }
         hasResolvedDefaults = true
+        defer { startAwaitingReuploads() }
         if let defaultLanguage {
             self.defaultLanguage = defaultLanguage
             if !hasChosenLanguage {
@@ -296,13 +314,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
             }
         }
         if let configuration {
-            maxCharacters = configuration.maxCharacters
-            charactersReservedPerURL = configuration.charactersReservedPerURL
-            maxMediaAttachments = configuration.maxMediaAttachments
-            mediaDescriptionLimit = configuration.mediaDescriptionLimit
-            mediaLimits = configuration.mediaLimits
-            pollLimits = configuration.pollLimits
-            supportedMediaTypes = configuration.supportedMediaTypes
+            applyLimits(configuration)
             hasLoadedConfiguration = true
         }
         if let defaultSensitive {
@@ -312,6 +324,16 @@ public final class ComposeModel<Thumbnail: Sendable> {
         self.defaultVisibility = defaultVisibility
         guard !hasChosenVisibility, editedStatus == nil else { return }
         visibility = resolvedVisibility
+    }
+
+    private func applyLimits(_ configuration: InstanceConfiguration) {
+        maxCharacters = configuration.maxCharacters
+        charactersReservedPerURL = configuration.charactersReservedPerURL
+        maxMediaAttachments = configuration.maxMediaAttachments
+        mediaDescriptionLimit = configuration.mediaDescriptionLimit
+        mediaLimits = configuration.mediaLimits
+        pollLimits = configuration.pollLimits
+        supportedMediaTypes = configuration.supportedMediaTypes
     }
 
     /// 編集では公開範囲を変えられないため、選んでも変えない。引用元より広い範囲も変えない。
@@ -477,6 +499,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     @discardableResult
     public func beginEditing(_ status: Status, source: StatusSource, now: Date = SystemTime.now()) -> Bool {
         guard !isPosting, let draft = StatusDraft.edit(of: status, source: source, now: now) else { return false }
+        leaveOtherAccount()
         removeAllAttachments()
         initialDraft = draft
         editedStatus = status
@@ -504,6 +527,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     @discardableResult
     public func beginRewriting(_ scheduled: ScheduledStatus) -> Bool {
         guard !isPosting else { return false }
+        leaveOtherAccount()
         // 公開範囲を送っていない予約は、既定の公開範囲にする。まだ届いていなければ、届いたときに`apply`が入れ直す。
         let draft = StatusDraft.rewrite(of: scheduled, defaultVisibility: defaultVisibility ?? .public)
         removeAllAttachments()
@@ -540,6 +564,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     @discardableResult
     public func beginRedrafting(_ status: Status, source: StatusSource) -> Bool {
         guard !isPosting else { return false }
+        leaveOtherAccount()
         let draft = StatusDraft.redraft(of: status, source: source, pollLimits: pollLimits)
         removeAllAttachments()
         initialDraft = draft
@@ -569,7 +594,9 @@ public final class ComposeModel<Thumbnail: Sendable> {
     }
 
     /// 下書きを空にして、返信先のない新しい投稿に戻す。編集していれば、編集をやめる。
+    /// ほかのアカウントで書いていれば、今のアカウントに戻す。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
     public func reset() {
+        leaveOtherAccount()
         initialDraft = StatusDraft()
         replyTo = nil
         quoteTarget = nil
@@ -589,6 +616,86 @@ public final class ComposeModel<Thumbnail: Sendable> {
         // 選んだ言語を次の投稿に残さない。たまに英語で書いたあとの投稿まで、英語として送らないため。
         hasChosenLanguage = false
         language = defaultLanguage
+    }
+
+    /// 書くアカウントを替える。nilなら今のアカウントに戻す。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
+    /// 書いた本文、注意書き、投票、予約、言語は残す。返信先と引用元は、前のアカウントのサーバーでのIDなので外す。
+    /// 添付は、新しいサーバーの上限を`apply`で読んでから、そのサーバーへアップロードし直す。
+    /// 送っている間と、編集、削除して書き直す、予約の書き直しの間は替えずにfalseを返す。どれも前のアカウントのサーバーの投稿を指すため。
+    @discardableResult
+    public func switchAccount(to account: ComposeAccount<Thumbnail>?) -> Bool {
+        guard !isPosting, editedStatus == nil, redraft == nil, rewritingSchedule == nil else { return false }
+        guard account?.id != otherAccount?.id else { return true }
+        // 添付はみな、端末のファイルから選んだかペーストしたもの。編集や書き直しの添付は、上で替えないので来ない。
+        guard attachments.allSatisfy({ localMedia[$0.id] != nil }) else { return false }
+        otherAccount = account
+        if replyTo != nil || quoteTarget != nil {
+            retarget(to: StatusDraft(), replyTo: nil, quoteTarget: nil)
+        }
+        lastSubmitted = nil
+        forgetServerDefaults()
+        for attachment in attachments {
+            prepareReupload(attachment.id)
+        }
+        onAccountChange(account)
+        return true
+    }
+
+    /// ほかのアカウントで書いていれば、今のアカウントに戻す。下書きを空にするときと、今のアカウントの投稿の編集や書き直しを始めるときに呼ぶ。
+    /// どちらも添付を捨てるので、アップロードし直さない。
+    private func leaveOtherAccount() {
+        guard otherAccount != nil else { return }
+        otherAccount = nil
+        forgetServerDefaults()
+        onAccountChange(nil)
+    }
+
+    /// 前のアカウントのサーバーの上限と既定値を忘れ、読む前の値に戻す。新しいアカウントの値を`apply`で読むまで、既定より広い範囲で投稿させず、メディアを選ばせない。
+    /// 読めなかったときも、前のサーバーの上限で本文の長さや添付の大きさを決めないため。
+    private func forgetServerDefaults() {
+        accountGeneration += 1
+        hasResolvedDefaults = false
+        hasLoadedConfiguration = false
+        defaultVisibility = nil
+        applyLimits(.beforeLoading)
+    }
+
+    /// 新しいサーバーの上限で縮め直してアップロードし直すまで待たせる。前のサーバーへのアップロードは止めずに、送る前と応答を受けたところで抜けさせる（`upload`）。
+    /// 止めると、読み込んでいる途中のファイルや書き出している途中の動画を、止めた処理が消し、同じ読み込みや書き出し先を使う送り直しまで失敗するため。
+    private func prepareReupload(_ id: DraftAttachment.ID) {
+        descriptionTasks.removeValue(forKey: id)?.cancel()
+        localMedia[id]?.failure = nil
+        localMedia[id]?.descriptionFailure = nil
+        localMedia[id]?.progress = 0
+        setState(.uploading, of: id)
+        awaitingReupload.insert(id)
+    }
+
+    /// 書くアカウントを替えたあと、新しいサーバーの上限を読んだら、待たせていた添付をアップロードし直す。読めなかったときも、読む前の上限のまま送る。
+    /// 前のサーバーへの処理が抜けるのを待ってから、前の上限で作り直したファイルを捨てて、作り直す。
+    private func startAwaitingReuploads() {
+        let waiting = awaitingReupload
+        awaitingReupload = []
+        for attachment in attachments where waiting.contains(attachment.id) {
+            let id = attachment.id
+            let previous = uploadTasks[id]
+            uploadTasks[id] = tasks.run(.action) { [weak self] in
+                await previous?.value
+                guard let self, !Task.isCancelled else { return }
+                discardPreparedFile(of: id)
+                await upload(id)
+            }
+        }
+    }
+
+    /// 前のサーバーの上限に合わせて作り直したファイルを捨てる。読み込んだファイルはそのまま使う。
+    private func discardPreparedFile(of id: DraftAttachment.ID) {
+        if let local = localMedia[id], let sending = local.sending, sending.url != local.file?.url {
+            try? FileManager.default.removeItem(at: sending.url)
+        }
+        localMedia[id]?.sending = nil
+        localMedia[id]?.sendingIsReencoded = false
+        localMedia[id]?.reduction = nil
     }
 
     /// 編集には`Idempotency-Key`を付けないため、そのまま送る。同じ編集を送り直しても、サーバーは変化がなければ編集として残さない。
@@ -1215,6 +1322,9 @@ extension ComposeModel {
         guard let local = localMedia[id], attachments.contains(where: { $0.id == id }) else { return }
         let endBackgroundTime = backgroundTime("upload attachment")
         defer { endBackgroundTime() }
+        // 書くアカウントを替えたら、送る前と応答を受けたところで抜ける。送り直しは`startAwaitingReuploads`が、この処理が抜けるのを待って始める。
+        let generation = accountGeneration
+        let isStale = { [unowned self] in generation != accountGeneration }
         localMedia[id]?.failure = nil
         localMedia[id]?.descriptionFailure = nil
         var sentDescription: String?
@@ -1224,6 +1334,7 @@ extension ComposeModel {
             let file = try await loadFile(id, local: local)
             // GIFとして送るかは、始めた時点の値で決める。待っている間に切り替わると、止めたこの処理が新しい処理と同じファイルに書くため。
             let sending = try await prepare(file, of: id, audio: local.audioChoice)
+            guard !isStale() else { return }
             let accepted: MediaAttachment
             do {
                 accepted = try await send(sending, of: id, sentDescription: &sentDescription)
@@ -1255,6 +1366,7 @@ extension ComposeModel {
                 accepted = try await send(replacement, of: id, sentDescription: &sentDescription)
             }
             try Task.checkCancellation()
+            guard !isStale() else { return }
             if accepted.url == nil {
                 setState(.processing(serverID: accepted.id), of: id)
                 processed = try await media.waitUntilProcessed(accepted.id)
@@ -1262,13 +1374,14 @@ extension ComposeModel {
                 processed = accepted
             }
             try Task.checkCancellation()
+            guard !isStale() else { return }
             setState(.uploaded(processed), of: id)
             if let sentDescription {
                 acceptServerDescription(of: id, sent: sentDescription, returned: processed)
             }
             sendDescriptionIfNeeded(id)
         } catch {
-            guard !Task.isCancelled, localMedia[id] != nil else { return }
+            guard !Task.isCancelled, localMedia[id] != nil, !isStale() else { return }
             logger.info("attachment upload failed error=\(SciaLog.describe(error), privacy: .public)")
             localMedia[id]?.failure = error
             setState(.failed(serverID: attachments.first { $0.id == id }?.serverID), of: id)
