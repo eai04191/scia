@@ -1451,6 +1451,32 @@ final class InlineComposeControllerTests {
         #expect(textView.isScrollEnabled && textView.clipsToBounds, "スクロールしているのに、本文を枠で切っていません\n\(composer.stateDump())")
     }
 
+    /// 上限の5行ちょうどの本文は、中でスクロールさせずに全部見せる。
+    /// 日本語の字形では、TextKitが行を書体の`lineHeight`より高く並べる。上限を`lineHeight`の5倍で決めていたため、5行目でスクロールに切り替わり、1行目の上が欄の外に隠れた。
+    @Test func fiveLinesFitWithoutScrolling() async throws {
+        defer { window.isHidden = true }
+        settings.appearance.glyphLanguage = .japanese
+        composer.beginEditing()
+        try await waitUntilSettled()
+        let textView = try #require(textViews(in: window).first)
+        textView.becomeFirstResponder()
+        textView.insertText((1...5).map { "\($0)行目" }.joined(separator: "\n"))
+        try await waitUntilSettled()
+
+        #expect(!textView.isScrollEnabled && textView.contentOffset.y == 0, "5行の本文が欄に収まっていません\n\(composer.stateDump())")
+    }
+
+    /// 共有で入れた本文が5行に収まれば、広げずに書き始める。
+    /// 共有した本文は最後に改行を付けるので、4行の本文とカーソルの行で5行になる。上限を低く見積もっていたため、収まるのに広げ、開く動きと広げる動きが重なって行が重なった。
+    @Test func sharedTextFittingFiveLinesDoesNotExpand() async throws {
+        defer { window.isHidden = true }
+        settings.appearance.glyphLanguage = .japanese
+        composer.beginEditing(appendingShared: (1...4).map { "\($0)行目" }.joined(separator: "\n") + "\n")
+        try await waitUntilSettled()
+
+        #expect(buttons(in: window).contains { $0.accessibilityLabel == "広げて書く" }, "5行に収まる共有の本文で広げています\n\(composer.stateDump())")
+    }
+
     /// 入力欄の中でスクロールするほど書き、末尾にカーソルを置いたまま閉じて開き直すと、本文の文字を動かすかたまりは、カーソルの行までスクロールした本物の文字の位置に着地する。
     /// かたまりの着地点を、カーソルの行へスクロールする前の位置（先頭）で測っていたため、動き終えてから本文が1コマで飛んだ。
     @Test func reopeningLandsTextMorphOnCaretLine() async throws {

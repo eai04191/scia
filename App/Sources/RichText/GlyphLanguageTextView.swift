@@ -22,6 +22,43 @@ class GlyphLanguageTextView: UITextView, NSTextStorageDelegate {
         }
     }
 
+    /// `lines`行の文字を並べたときの、上下の余白を含めた入力欄の高さ。
+    /// 日本語の字形では、TextKitが行を書体の`lineHeight`より高く並べるため、書体の値から計算すると、上限の行数ちょうどの本文が収まらず中でスクロールする。
+    /// 同じ書体、字形の言語、余白で文字を並べて測る。
+    func height(ofLines lines: Int) -> CGFloat {
+        let key = LineHeightKey(
+            lines: lines,
+            font: font ?? .preferredFont(forTextStyle: .body),
+            language: settings?.glyphLanguageIdentifier(),
+            insetTop: textContainerInset.top,
+            insetBottom: textContainerInset.bottom
+        )
+        if let height = measuredLineHeights[key] {
+            return height
+        }
+        var attributes: [NSAttributedString.Key: Any] = [.font: key.font]
+        if let language = key.language {
+            attributes[.languageIdentifier] = language
+        }
+        lineMeasurer.textContainerInset = textContainerInset
+        lineMeasurer.textContainer.lineFragmentPadding = 0
+        lineMeasurer.attributedText = NSAttributedString(string: Array(repeating: "A", count: max(lines, 1)).joined(separator: "\n"), attributes: attributes)
+        let height = lineMeasurer.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)).height
+        measuredLineHeights[key] = height
+        return height
+    }
+
+    private struct LineHeightKey: Hashable {
+        let lines: Int
+        let font: UIFont
+        let language: String?
+        let insetTop: CGFloat
+        let insetBottom: CGFloat
+    }
+
+    private lazy var lineMeasurer = UITextView()
+    private var measuredLineHeights: [LineHeightKey: CGFloat] = [:]
+
     // 入力欄の文字列は、入力欄と同じメインスレッドで書き換わる。
     nonisolated func textStorage(_: NSTextStorage, willProcessEditing editedMask: NSTextStorage.EditActions, range editedRange: NSRange, changeInLength delta: Int) {
         guard editedMask.contains(.editedCharacters) else { return }

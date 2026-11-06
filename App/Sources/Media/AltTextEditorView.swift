@@ -34,7 +34,7 @@ final class AltTextEditorView: UIView {
 
     /// 入力欄がこれより高くなったら、伸ばさずに中でスクロールする。
     private var maxTextHeight: CGFloat {
-        (textView.font ?? .preferredFont(forTextStyle: .body)).lineHeight * CGFloat(maxLines) + textView.textContainerInset.top + textView.textContainerInset.bottom
+        textView.height(ofLines: maxLines)
     }
 
     init(settings: AppSettings = AppDependencies.settings) {

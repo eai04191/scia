@@ -397,7 +397,7 @@ final class InlineComposeController: NSObject {
     }
 
     private func textHeight(lines: Double) -> CGFloat {
-        UIFont.preferredFont(forTextStyle: .body).lineHeight * lines + textView.textContainerInset.top + textView.textContainerInset.bottom
+        textView.height(ofLines: Int(lines.rounded()))
     }
 
     isolated deinit {
