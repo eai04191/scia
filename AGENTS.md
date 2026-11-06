@@ -43,6 +43,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - 動作確認とテストには、`Scia 1`、`Scia 2`、`Scia 3`、`Scia 4`のどれかのシミュレーターを使う。どれもログイン済みの端末の複製で、ログイン情報が端末のKeychainに残っているため、ログインし直さずに済む
 - `Scia Scenario`は`make scenario-*`の専用の端末で、`Tools/sim.sh`では貸し借りしない。ほかの確かめには使わない
 - 端末は4台なので、シミュレーターを触る間だけ借りる。触る直前に`sim`のskillで`Tools/sim.sh acquire`を走らせて借り（空きがなければ空くまで待つ）、触り終えたら`Tools/sim.sh release`で返す。借りた端末をほかのworktreeが使ったあとなら、`Tools/sim.sh reset '<使う端末>'`でアプリの設定を既定に戻し、自分のビルドを入れ直す
+- 端末のクリップボードには、自分が`xcrun simctl pbcopy`で入れたもの以外をペーストしない。DeviceHubの「Use Shared Clipboard」がオンだと、Macのクリップボードが端末へ書き込まれ、Universal Clipboardで届いたユーザーのiPhoneのコピーも入るため、投稿欄に貼ると仕事の内容が投稿される。`Tools/sim.sh acquire`は、借りた端末の同期を切ってクリップボードを空にする。投稿欄の本文と添付は、ペーストではなく`scia-debug://compose`の`text`と`media`で入れる。ペーストそのものを確かめるときは、貼る直前に`pbcopy`で中身を入れる
 - 端末の設定は、ほかのスレッドが変えたり、借りるときに既定に戻したりする。確かめに要る設定（チューニング、タップや長押しの操作、見た目など）は、前に入れたものが残っている前提にせず、確かめる直前に入れる
 - シミュレーターのツールでは、決まった端末を毎回`device`で指定する。省略すると、他のスレッドが使っている端末を操作してしまうことがある
 - 並行して作業するスレッドは、worktreeも分ける。`make build`・`make test`はworktree直下の`DerivedData`、`make test-core`は`Packages/SciaCore/.build`を使うため、同じworktreeで同時に走らせると、ロック待ちで失敗したり成果物を上書きし合ったりする

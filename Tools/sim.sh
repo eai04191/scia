@@ -433,6 +433,29 @@ require_lease() {
     [ "$holder" = "$(borrower)" ] || fail "$simを借りていない（借りているもの: ${holder:-なし}）。先にTools/sim.sh acquireで借りる"
 }
 
+# 端末のクリップボードを、Macのクリップボードから切り離して空にする。
+# DeviceHub（Xcode 27でSimulator.appに代わったアプリ）は、端末の画面を開いている間、Macのクリップボードを端末へ書き込む。
+# Macのクリップボードには、Universal Clipboardで届いたiPhoneのコピーも入るため、agentが投稿欄でペーストすると、ユーザーが仕事でコピーしたものが投稿される。
+# 同期は端末ごとの設定（DeviceHubの「Use Shared Clipboard」）なので、クローンで作り直した端末でも切れるよう、借りるたびに書く。
+isolate_pasteboard() {
+    local sim=$1 udid
+    udid=$(xcrun simctl list devices -j | /usr/bin/python3 -I -c '
+import json, sys
+for devices in json.load(sys.stdin)["devices"].values():
+    for d in devices:
+        if d["name"] == sys.argv[1] or d["udid"] == sys.argv[1]:
+            print(d["udid"]); sys.exit()
+' "$sim")
+    [ -n "$udid" ] || fail "端末が見つからない: $sim"
+    # -dict-addは端末ごとの辞書を丸ごと置き換える。いまDeviceHubがこの辞書に持つのはこの項目だけなので、ほかの端末ごとの設定は消えない。
+    # DeviceHubがここにほかの項目を持つようになると、借りるたびにそれが既定に戻る。そうなったら、辞書を読んで足す形にする。
+    defaults write "$HOME/Library/Containers/com.apple.dt.Devices/Data/Library/Preferences/com.apple.dt.Devices" \
+        DevicePreferences -dict-add "$udid" '<dict><key>pasteboardSyncEnabled</key><false/></dict>' \
+        || fail "$simのクリップボードの同期を切れない"
+    # 切る前に同期で入ったものを残さない。
+    printf '' | xcrun simctl pbcopy "$udid" || fail "$simのクリップボードを空にできない"
+}
+
 command_acquire() {
     local wait=540 want='' me out status deadline
     while [ $# -gt 0 ]; do
@@ -455,6 +478,11 @@ command_acquire() {
             if ! xcrun simctl bootstatus "${out% *}" -b > /dev/null; then
                 guarded __release "$me"
                 fail "${out% *}を起動できない"
+            fi
+            # 切れなければ、ユーザーのコピーが入りうる端末を貸さず、30分ふさがないよう返してから失敗する。
+            if ! (isolate_pasteboard "${out% *}"); then
+                guarded __release "$me"
+                fail "${out% *}のクリップボードをMacから切り離せない"
             fi
             echo "$out"
             return
