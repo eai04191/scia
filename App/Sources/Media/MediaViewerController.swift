@@ -405,6 +405,7 @@ final class MediaViewerController: UIViewController {
         morph: hidden=\(morph.isHidden) frame=\(morph.frame) image=\(morph.image.map { "\($0.size)" } ?? "nil")
         contentFrame: \(contentFrame(in: view))
         page: \(page.map { "\($0.view.bounds.size)" } ?? "nil")
+        animatingPages: \(pages.filter { ($0.value as? ImagePageController)?.isAnimating == true }.keys.sorted())
         \(page?.stateDump() ?? "")
         """
     }
@@ -2141,6 +2142,9 @@ final class ImagePageController: MediaPageController {
             self.hasFinishedAnalysis = true
         }
     }
+
+    /// コマを送っている。違和感レポートで、開いていないページが動き続けていないかを見る。
+    var isAnimating: Bool { zoomView.animation != nil }
 
     private func stopAnimation() {
         animationTask?.cancel()
