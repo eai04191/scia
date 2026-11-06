@@ -128,11 +128,6 @@ final class OtherAccounts {
         return load
     }
 
-    /// `error`を受けたアカウントがログアウトされているか。MastodonのREST APIは、トークンが無効なときだけ401を返す（`AuthorizationCheck`）。
-    static func isLoggedOut(after error: any Error) -> Bool {
-        (error as? MastodonAPIError)?.isUnauthorized == true
-    }
-
     /// `account`としてAPIを呼ぶクライアントを、呼ぶたびにそのアカウントの今の認証情報で作るもの。
     /// 投稿欄のように長く持つ送り先に渡す。持っている間にログインし直しても、新しいトークンで送るため。
     /// ログアウトしていれば、渡したときの認証情報で作る。この関数を足す前から、持っている送り先はログアウトしたあとも渡したときのクライアントで送っており、その挙動は変えない。

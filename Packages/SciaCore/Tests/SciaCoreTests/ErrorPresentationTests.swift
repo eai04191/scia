@@ -64,6 +64,24 @@ struct ErrorPresentationTests {
         #expect(presentation.code == "HTTP 401")
     }
 
+    /// どのアカウントの通信かが分かれば、そのアカウントがログアウトされていると出し、そのアカウントでログインし直せるようにする。
+    @Test func unauthorizedNamesLoggedOutAccount() {
+        let account = RequestAccount(id: "https://fedibird.com#9004", handle: "@Eai@fedibird.com")
+        let presentation = ErrorPresentation(MastodonAPIError(statusCode: 401, message: "The access token is invalid", account: account))
+
+        #expect(presentation.message == "@Eai@fedibird.comはログアウトされています。")
+        #expect(presentation.code == "HTTP 401")
+        #expect(presentation.loggedOutAccount == account)
+    }
+
+    /// 401のほかの失敗では、ログインし直すアカウントを持たない。
+    @Test func otherFailuresHaveNoLoggedOutAccount() {
+        let account = RequestAccount(id: "https://fedibird.com#9004", handle: "@Eai@fedibird.com")
+
+        #expect(ErrorPresentation(MastodonAPIError(statusCode: 403, message: "", account: account)).loggedOutAccount == nil)
+        #expect(ErrorPresentation(MastodonAPIError.from(statusCode: 401, body: Data())).loggedOutAccount == nil)
+    }
+
     @Test func forbidden() {
         #expect(ErrorPresentation(MastodonAPIError.from(statusCode: 403, body: Data())).message == "サーバーがこの操作を許可しませんでした。")
     }

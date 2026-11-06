@@ -65,7 +65,7 @@ struct ComposeModelScheduleTests {
         await model.submit()
 
         #expect(sent.isEmpty)
-        #expect(model.errorMessage == "予約の日時は今から5分より後にしてください。")
+        #expect(model.postError?.text == "予約の日時は今から5分より後にしてください。")
         #expect(model.text == "おはよう")
         #expect(model.scheduledAt != nil)
     }

@@ -5,6 +5,9 @@ import Testing
 
 @Suite(.requestPurpose(.action))
 struct MediaUploadTests {
+    /// `makeClient`のアカウント。断られた通信は、送ったアカウントを持つ。
+    private static let sender = RequestAccount(id: "https://example.social#1", handle: "@alice@example.social")
+
     private func makeClient(_ transport: StubTransport) throws -> MastodonClient {
         MastodonClient(
             credential: Credential(
@@ -110,7 +113,7 @@ struct MediaUploadTests {
     func refusedFileIsRejected(statusCode: Int) async throws {
         let transport = StubTransport([.json(#"{"error":"Validation failed: File content type is invalid, File is invalid"}"#, statusCode: statusCode)])
 
-        await #expect(throws: MediaUploadError.rejected(MastodonAPIError(statusCode: statusCode, message: "Validation failed: File content type is invalid, File is invalid", serverMessage: "Validation failed: File content type is invalid, File is invalid"))) {
+        await #expect(throws: MediaUploadError.rejected(MastodonAPIError(statusCode: statusCode, message: "Validation failed: File content type is invalid, File is invalid", serverMessage: "Validation failed: File content type is invalid, File is invalid", account: Self.sender))) {
             _ = try await makeClient(transport).uploadMedia(upload)
         }
     }
@@ -128,7 +131,7 @@ struct MediaUploadTests {
     @Test func serverErrorOnUploadIsProcessingFailure() async throws {
         let transport = StubTransport([.json(#"{"error":"Error processing thumbnail for uploaded media"}"#, statusCode: 500)])
 
-        await #expect(throws: MediaUploadError.processingFailed(MastodonAPIError(statusCode: 500, message: "Error processing thumbnail for uploaded media", serverMessage: "Error processing thumbnail for uploaded media"))) {
+        await #expect(throws: MediaUploadError.processingFailed(MastodonAPIError(statusCode: 500, message: "Error processing thumbnail for uploaded media", serverMessage: "Error processing thumbnail for uploaded media", account: Self.sender))) {
             _ = try await makeClient(transport).uploadMedia(upload)
         }
     }
@@ -165,7 +168,7 @@ struct MediaUploadTests {
             .json(#"{"error":"Error processing thumbnail for uploaded media"}"#, statusCode: 422),
         ])
 
-        await #expect(throws: MediaUploadError.processingFailed(MastodonAPIError(statusCode: 422, message: "Error processing thumbnail for uploaded media", serverMessage: "Error processing thumbnail for uploaded media"))) {
+        await #expect(throws: MediaUploadError.processingFailed(MastodonAPIError(statusCode: 422, message: "Error processing thumbnail for uploaded media", serverMessage: "Error processing thumbnail for uploaded media", account: Self.sender))) {
             _ = try await makeClient(transport).waitUntilProcessed("113000000000000101", clock: ManualClock())
         }
     }

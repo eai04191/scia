@@ -8,16 +8,20 @@ public struct ErrorPresentation: Hashable, Sendable {
     public let message: String
     /// 小さく添える補足。「HTTP 503」「URLError -1009」など。
     public let code: String?
+    /// ログアウトされたアカウント。理由を見せるところは、そのアカウントでログインし直すボタンを添える。
+    public let loggedOutAccount: RequestAccount?
 
-    public init(message: String, code: String?) {
+    public init(message: String, code: String?, loggedOutAccount: RequestAccount? = nil) {
         self.message = message
         self.code = code
+        self.loggedOutAccount = loggedOutAccount
     }
 
     public init(_ error: any Error) {
         switch error {
         case let error as any HTTPStatusFailure:
-            self = Self.presentation(statusCode: error.statusCode, serverMessage: (error as? MastodonAPIError)?.serverMessage)
+            let apiError = error as? MastodonAPIError
+            self = Self.presentation(statusCode: error.statusCode, serverMessage: apiError?.serverMessage, account: apiError?.account)
         case is ResponseTooLarge:
             self.init(message: "サーバーから届いた内容が大きすぎるため、読むのをやめました。", code: nil)
         case let error as URLError:
@@ -38,9 +42,14 @@ public struct ErrorPresentation: Hashable, Sendable {
     }
 
     /// - Parameter serverMessage: REST APIがJSONで返した理由。API以外の通信ではnil。
-    private static func presentation(statusCode: Int, serverMessage: String?) -> Self {
+    /// - Parameter account: 通信を送ったアカウント。分かれば、401でそのアカウントがログアウトされていると出す。
+    private static func presentation(statusCode: Int, serverMessage: String?, account: RequestAccount?) -> Self {
+        if statusCode == 401 {
+            // MastodonのREST APIは、トークンが無効なときだけ401を返す（`AuthorizationCheck`）。
+            let message = account.map { "\($0.handle)はログアウトされています。" } ?? "ログアウトされています。"
+            return Self(message: message, code: "HTTP 401", loggedOutAccount: account)
+        }
         let message = switch statusCode {
-        case 401: "ログアウトされています。"
         case 403: "サーバーがこの操作を許可しませんでした。"
         case 404, 410, 501: "見つからないか、このサーバーでは使えません。"
         case 429: "短い間にリクエストが多すぎたため、サーバーに一時的に止められています。しばらく待ってからやり直してください。"

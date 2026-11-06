@@ -1384,7 +1384,8 @@ public struct MastodonClient: Sendable {
             await features.disable(feature, statusCode: response.statusCode)
             throw FeatureUnavailable(feature: feature)
         }
-        let failure = MastodonAPIError.from(statusCode: response.statusCode, body: data, retryAfter: RateLimitGate.retryAfter(of: response, now: now()))
+        var failure = MastodonAPIError.from(statusCode: response.statusCode, body: data, retryAfter: RateLimitGate.retryAfter(of: response, now: now()))
+        failure.account = RequestAccount(credential)
         requestLog.record(request, statusCode: response.statusCode, error: failure, body: data)
         throw failure
     }

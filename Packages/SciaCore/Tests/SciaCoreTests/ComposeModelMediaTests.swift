@@ -585,7 +585,7 @@ struct ComposeModelMediaTests {
         await posting.value
 
         #expect(sent.isEmpty)
-        #expect(model.errorMessage == "メディアを送信できなかったため、投稿しませんでした。")
+        #expect(model.postError?.text == "メディアを送信できなかったため、投稿しませんでした。")
         #expect(model.text == "見て")
         #expect(model.attachments.first?.state == .failed(serverID: nil))
         #expect(!model.isPosting)
@@ -610,7 +610,7 @@ struct ComposeModelMediaTests {
         await posting.value
 
         #expect(sent.isEmpty)
-        #expect(model.errorMessage == "メディアを送信できなかったため、投稿しませんでした。")
+        #expect(model.postError?.text == "メディアを送信できなかったため、投稿しませんでした。")
         #expect(model.attachmentStatus(of: id) == .descriptionFailed)
     }
 
@@ -629,7 +629,7 @@ struct ComposeModelMediaTests {
         model.cancelWaitingForMedia()
         await posting.value
         #expect(!model.isPosting)
-        #expect(model.errorMessage == nil)
+        #expect(model.postError == nil)
 
         server.finishNextUpload(with: .success(Self.attachment(id: "1", processed: true)))
         try await settle { isSettled(model) }
@@ -735,7 +735,7 @@ struct ComposeModelMediaTests {
         await posting.value
 
         #expect(sent.isEmpty)
-        #expect(model.errorMessage == "予約の日時は今から5分より後にしてください。")
+        #expect(model.postError?.text == "予約の日時は今から5分より後にしてください。")
     }
 
     /// 待っている間にセッションを閉じたら、送らずに待つのをやめる。

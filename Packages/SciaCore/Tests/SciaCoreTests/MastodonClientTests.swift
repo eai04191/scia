@@ -127,6 +127,8 @@ struct MastodonClientTests {
         }
         #expect(error?.isUnauthorized == true)
         #expect(error?.message == "The access token is invalid")
+        // どのアカウントの通信が断られたかを持ち、そのアカウントでログインし直すボタンを出せるようにする。
+        #expect(error?.account == RequestAccount(id: "https://example.social#1", handle: "@alice@example.social"))
     }
 
     /// アカウントの他の項目が読めないサーバーでも確かめられるよう、IDだけを読む。
@@ -498,7 +500,7 @@ struct MastodonClientTests {
         let message = "Validation failed: Cannot attach files that have not finished processing. Try again in a moment!"
         let transport = StubTransport([.json(#"{"error":"\#(message)"}"#, statusCode: 422)])
 
-        await #expect(throws: MastodonAPIError(statusCode: 422, message: message, serverMessage: message)) {
+        await #expect(throws: MastodonAPIError(statusCode: 422, message: message, serverMessage: message, account: RequestAccount(id: "https://example.social#1", handle: "@alice@example.social"))) {
             _ = try await makeClient(transport).postStatus(StatusDraft(text: "見て"))
         }
     }

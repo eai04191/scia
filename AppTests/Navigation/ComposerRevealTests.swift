@@ -137,7 +137,7 @@ struct ComposerRevealTests {
         let root = harness.viewController
         let draft = ReportDraft(accountID: "2", acct: "bob", statusID: nil, api: ReportDraft.API(rules: { [] }, submit: { _ in }))
         draft.comment = "spam"
-        let sheet = ReportView.sheet(draft: draft) {}
+        let sheet = ReportView.sheet(draft: draft, logIn: { _ in }) {}
         try await root.presentForTesting(sheet)
         defer { sheet.dismiss(animated: false) }
         try await waitUntil { sheet.isModalInPresentation }

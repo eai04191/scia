@@ -178,7 +178,7 @@ struct ComposeModelRedraftTests {
 
         #expect(events.all == ["delete 10"])
         #expect(model.redraft?.deletion == .pending)
-        #expect(model.errorMessage?.hasPrefix("元の投稿を削除できなかったため") == true)
+        #expect(model.postError?.text.hasPrefix("元の投稿を削除できなかったため") == true)
         #expect(Confirmation.discardingRedraft(draft: model) == nil)
     }
 
@@ -196,11 +196,11 @@ struct ComposeModelRedraftTests {
 
         await model.submit()
         #expect(model.redraft?.deletion == .uncertain)
-        #expect(model.errorMessage?.hasPrefix("元の投稿を削除できたか分からないため") == true)
+        #expect(model.postError?.text.hasPrefix("元の投稿を削除できたか分からないため") == true)
         #expect(Confirmation.discardingRedraft(draft: model) != nil)
         #expect(events.all == ["delete 10"])
 
-        model.errorMessage = nil
+        model.postError = nil
         await model.submit()
         #expect(events.all == ["delete 10", "delete 10", "post"])
         #expect(model.redraft == nil)
@@ -290,7 +290,7 @@ struct ComposeModelRedraftTests {
         #expect(model.attachments.first?.isHeldByRedraftedStatus == false)
 
         fails = false
-        model.errorMessage = nil
+        model.postError = nil
         await model.submit()
         #expect(events.all == ["delete 10", "release 100", "post", "post"])
         // 同じ下書きなので、届いていた投稿をサーバーに返させるよう、同じキーで送り直す。
@@ -313,10 +313,10 @@ struct ComposeModelRedraftTests {
 
         await model.submit()
         #expect(model.attachmentStatus(of: id) == .failed)
-        #expect(model.errorMessage?.hasPrefix("元の投稿を削除しましたが、投稿しませんでした。") == true)
+        #expect(model.postError?.text.hasPrefix("元の投稿を削除しましたが、投稿しませんでした。") == true)
         #expect(events.all == ["delete 10", "release 100"])
 
-        model.errorMessage = nil
+        model.postError = nil
         await model.submit()
         #expect(events.all == ["delete 10", "release 100", "release 100", "post"])
     }

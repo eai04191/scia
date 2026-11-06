@@ -61,6 +61,8 @@ final class InlineComposeController: NSObject {
     }
     /// 書いているアカウントの行の×で、今のアカウントに戻す。
     var onSwitchToHomeAccount: () -> Void = {}
+    /// 送れなかった理由のアラートの「ログインし直す」で、そのアカウントにログインし直す。
+    var onLogInAgain: (RequestAccount) -> Void = { _ in }
 
     /// ＋のメニューの「投稿するアカウント」で選べるアカウント。
     struct AccountChoice {
@@ -2996,13 +2998,14 @@ final class InlineComposeController: NSObject {
 
     /// 画面を出し入れしている途中で出せなければ、出し入れを終えたときに呼び直して知らせる。
     private func presentErrorIfNeeded() {
-        guard let message = model.errorMessage, !isPresentingAlert, let presenter = presenterForErrors, presenter.presentedViewController == nil else { return }
+        guard let reason = model.postError, !isPresentingAlert, let presenter = presenterForErrors, presenter.presentedViewController == nil else { return }
         logger.info("compose: presenting post error (focused=\(self.isInputFocused) editing=\(self.isEditing) picker=\(self.mediaPicker != nil))")
-        let alert = UIAlertController(title: model.scheduledAt != nil ? "予約できませんでした" : "投稿できませんでした", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .cancel) { [weak self] _ in
-            self?.model.errorMessage = nil
+        let alert = UIAlertController.failure(title: model.scheduledAt != nil ? "予約できませんでした" : "投稿できませんでした", reason: reason) { [weak self] account in
+            self?.onLogInAgain(account)
+        } onClose: { [weak self] in
+            self?.model.postError = nil
             self?.alertDidClose()
-        })
+        }
         presentKeepingInput(alert, from: presenter)
     }
 

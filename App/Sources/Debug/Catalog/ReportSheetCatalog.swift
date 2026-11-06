@@ -3,7 +3,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 通報のシート。サーバーに通報を送らずに、ルールの読み込み中や失敗、長いルール、長いコメント、送れなかったとき、サーバーが断ったときを並べる。送信を押しても何も送らない。
+/// 通報のシート。サーバーに通報を送らずに、ルールの読み込み中や失敗、長いルール、長いコメント、送れなかったとき、通報するアカウントがログアウトされているとき、サーバーが断ったときを並べる。送信を押しても何も送らない。
 enum ReportSheetCatalog {
     private struct Failure: LocalizedError {
         var errorDescription: String? { "サーバーに接続できませんでした。" }
@@ -35,6 +35,12 @@ enum ReportSheetCatalog {
                 draft.comment = "宣伝のリンクを繰り返し送ってきます。"
                 Task { _ = await draft.submit() }
             },
+            state("通報するアカウントがログアウトされている", submit: { _ in
+                throw MastodonAPIError(statusCode: 401, message: "The access token is invalid", account: RequestAccount(id: "https://fedibird.com#9004", handle: "@Eai@fedibird.com"))
+            }) { draft in
+                draft.category = .spam
+                Task { _ = await draft.submit() }
+            },
             state("サーバーが断った", submit: { _ in
                 let reason = "Validation failed: Comment is too long (maximum is 1000 characters)"
                 throw MastodonAPIError(statusCode: 422, message: reason, serverMessage: reason)
@@ -64,7 +70,7 @@ enum ReportSheetCatalog {
         CatalogState(title: title) {
             let draft = ReportDraft(accountID: "2", acct: acct, statusID: statusID, api: ReportDraft.API(rules: rules, submit: submit))
             fill(draft)
-            let controller = UIHostingController(rootView: ReportView(draft: draft) {})
+            let controller = UIHostingController(rootView: ReportView(draft: draft, onSubmitted: {}, logIn: { _ in }))
             return CatalogControllerHost(controller, height: 640)
         }
     }

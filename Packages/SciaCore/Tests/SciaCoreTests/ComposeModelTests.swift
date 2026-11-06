@@ -141,6 +141,21 @@ struct ComposeModelTests {
         #expect(model.canPost)
     }
 
+    /// 送ったアカウントがログアウトされていたら、その理由と、そのアカウントでログインし直すボタンのためのアカウントを持つ。
+    @Test func postingRejectedAsLoggedOutKeepsAccountToLogInAgain() async {
+        let account = RequestAccount(id: "https://fedibird.com#9004", handle: "@Eai@fedibird.com")
+        let model = ComposeModel(tasks: TaskScope(), replyTo: nil, myAccountID: "1") { _ in
+            throw MastodonAPIError(statusCode: 401, message: "The access token is invalid", account: account)
+        }
+        model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
+        model.text = "こんにちは"
+
+        await model.submit()
+
+        #expect(model.postError?.message == "@Eai@fedibird.comはログアウトされています。")
+        #expect(model.postError?.loggedOutAccount == account)
+    }
+
     @Test func keepsDraftAndKeyWhenPostingFails() async {
         var sent: [StatusDraft] = []
         var posted = false
@@ -155,7 +170,7 @@ struct ComposeModelTests {
         model.spoilerText = "隠した注意書き"
 
         await model.submit()
-        #expect(model.errorMessage == "失敗しました")
+        #expect(model.postError?.text == "失敗しました")
         #expect(!posted)
         #expect(model.text == "こんにちは")
 
