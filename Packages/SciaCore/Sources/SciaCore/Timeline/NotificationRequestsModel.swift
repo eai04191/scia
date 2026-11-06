@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-/// 保留中の通知の一覧の読み込みと、受け入れと無視の通信を受け持ち、結果を一覧の画面（`TimelineDisplay`）へ命令として伝える。決まりはdocs/notification-filter.mdにある。
+/// 保留中の通知のリストの読み込みと、受け入れと無視の通信を受け持ち、結果を画面（`TimelineDisplay`）へ命令として伝える。決まりはdocs/notification-filter.mdにある。
 ///
 /// ストリームがないため購読せず、開いたときと、引っぱって読み直したときに読む。
 @MainActor
@@ -9,7 +9,7 @@ public final class NotificationRequestsModel {
     /// 1回に読む件数。APIの上限は80件。
     private static let pageSize = 40
 
-    /// 結果を伝える一覧の画面。
+    /// 結果を伝える画面。
     public weak var display: (any TimelineDisplay)?
     /// 受け入れか無視に失敗したときに呼ぶ。知らせ方は作る側が決める。
     public var onFailure: (NotificationRequestDecision, ErrorPresentation) -> Void = { _, _ in }
@@ -25,7 +25,7 @@ public final class NotificationRequestsModel {
     /// 答えたまとまり。答える前に送った読み込みの応答に入っていても、並べ直さない。
     private var answeredIDs: Set<String> = []
     private let client: MastodonClient
-    /// この一覧が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
+    /// このリストが始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
     private let tasks: TaskScope
     /// APIが401を返したときに呼ぶ。ログアウトされたとして止め、ログインし直しを促すのはセッションに任せる。
     private let onUnauthorized: () -> Void
@@ -54,7 +54,7 @@ public final class NotificationRequestsModel {
         }
     }
 
-    /// 引っぱって離したときに、最初のページから読み直して置き換える。読めなかったら前の一覧のまま残す。
+    /// 引っぱって離したときに、最初のページから読み直して置き換える。読めなかったら前のリストのまま残す。
     public func refresh() async {
         if requests.isEmpty {
             await start(purpose: .action)?.value
@@ -178,7 +178,7 @@ public final class NotificationRequestsModel {
     }
 }
 
-/// 保留中の通知の1人分の、その人からの通知の一覧。通知のタブと同じまとめ方で、保留していない通知も並べる。決まりはdocs/notification-filter.mdにある。
+/// 保留中の通知の1人分の、その人からの通知のタイムライン。通知のタブと同じまとめ方で、保留していない通知も並べる。決まりはdocs/notification-filter.mdにある。
 /// ストリーミング、既読位置、未読の数は持たない。
 @MainActor
 public final class AccountNotificationsModel {
@@ -216,7 +216,7 @@ public final class AccountNotificationsModel {
         }
     }
 
-    /// 引っぱって離したときに、最新のページから読み直して置き換える。読めなかったら前の一覧のまま残す。
+    /// 引っぱって離したときに、最新のページから読み直して置き換える。読めなかったら前の通知のまま残す。
     public func refresh() async {
         if store.isEmpty {
             await start(purpose: .action)?.value
@@ -279,7 +279,7 @@ public final class AccountNotificationsModel {
         display?.show(store.entries, animatesRemoval: true)
     }
 
-    /// ミュートしたハッシュタグの付いた投稿の通知を除く。通知の一覧と同じく、解除しても読み込み直すまで戻さない。
+    /// ミュートしたハッシュタグの付いた投稿の通知を除く。通知のタイムラインと同じく、解除しても読み込み直すまで戻さない。
     public func setTag(_ name: String, excluded: Bool) {
         guard excluded else {
             store.includeTag(name)
@@ -289,7 +289,7 @@ public final class AccountNotificationsModel {
         display?.show(store.entries, animatesRemoval: true)
     }
 
-    /// 通知を隠すミュートか、ブロックをした相手からの通知を除く。通知の一覧と同じく、解除しても読み込み直すまで戻さない。
+    /// 通知を隠すミュートか、ブロックをした相手からの通知を除く。通知のタイムラインと同じく、解除しても読み込み直すまで戻さない。
     public func setAccount(_ id: String, excluded: Bool) {
         guard excluded else {
             store.includeAccount(id)

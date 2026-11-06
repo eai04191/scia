@@ -312,7 +312,7 @@ struct OtherAccountMenuTests {
         #expect(command.account === bob)
     }
 
-    /// 関係を読む人を集めるときは、ハッシュタグを組まず、ハッシュタグの一覧の読み直しを重ねて送らない。
+    /// 関係を読む人を集めるときは、ハッシュタグを組まず、ハッシュタグの読み直しを重ねて送らない。
     @Test func collectingRelationIDsDoesNotRefreshHashtags() async throws {
         let found = Status(id: "7000", createdAt: Date(timeIntervalSince1970: 100), account: alice, content: "", spoilerText: "", uri: uri, url: nil, tags: [Tag(name: "swift", url: nil)])
         let bob = try account("bob", operations { _ in [found] })

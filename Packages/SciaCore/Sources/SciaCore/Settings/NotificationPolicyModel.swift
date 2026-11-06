@@ -41,7 +41,7 @@ public final class NotificationPolicyModel {
     }
 
     /// 読み直す。読んでいる途中なら、その読み込みに任せる。
-    /// - Parameter purpose: 通知の一覧を読み込んだときやアプリに戻ったときは`.display`。
+    /// - Parameter purpose: 通知のタイムラインを読み込んだときやアプリに戻ったときは`.display`。
     @discardableResult
     public func reload(purpose: RequestPurpose) -> Task<Void, Never>? {
         if let loading { return loading }

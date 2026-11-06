@@ -4,7 +4,7 @@ import SciaCore
 import UIKit
 
 /// ホームや公開タイムラインの画面を組み立て、読み込みとストリーミングを受け持つ`FeedTimelineModel`とTimelineViewControllerをつなぐ。
-/// タブの一覧のほか、開いた一覧に積むハッシュタグの一覧にも使う。
+/// タブのタイムラインのほか、開いたタイムラインに積むハッシュタグのタイムラインにも使う。
 @MainActor
 final class FeedTimelineController {
     private(set) lazy var viewController = TimelineViewController(texts: texts) { [weak model] in await model?.refresh() }
@@ -17,12 +17,12 @@ final class FeedTimelineController {
     private let logger = SciaLog.logger(category: "timeline")
     /// 走り終えていない読み込みなどの処理の数。止めたものも、取り消しを受けて戻り切るまで数える。止めたあとに何も起きないことを、テストが確かめるのに使う。
     var runningTaskCount: Int { model.runningTaskCount }
-    /// 一覧のストリームを購読している。
+    /// タイムラインのストリームを購読している。
     var isSubscribedToStreaming: Bool { model.isSubscribedToStreaming }
-    /// 一覧を最上部からさらに引っぱったときに見せる、ストリーミングの状態。
+    /// タイムラインを最上部からさらに引っぱったときに見せる、ストリーミングの状態。
     private let streamingStatusView = StreamingStatusPullView()
     #if DEBUG
-    /// ダミー投稿の「ステータスバーの通知」が選ばれたとき。通知はホームの一覧ではなく、ステータスバーに流す。
+    /// ダミー投稿の「ステータスバーの通知」が選ばれたとき。通知はホームのタイムラインではなく、ステータスバーに流す。
     var onDummyNotifications: (() -> Void)?
     /// デバッグメニューの「ステータスバーの通知を出し続ける」を切り替えたとき。渡す値は切り替えたあとの状態。
     var onSetStatusBarTickerLooping: ((Bool) -> Void)?
@@ -64,7 +64,7 @@ final class FeedTimelineController {
         viewController.debugActions = makeDebugActions()
         #endif
         model.onStop { [weak viewController] in
-            // 積んで開いた一覧は、画面がこのコントローラーを生かしているため、持ち合いを解いて捨てられるようにする。
+            // 積んで開いたタイムラインは、画面がこのコントローラーを生かしているため、持ち合いを解いて捨てられるようにする。
             viewController?.lifetimeOwner = nil
         }
     }
@@ -87,13 +87,13 @@ final class FeedTimelineController {
         }
     }
 
-    /// まだ始めていなければ始める。開くまで読まない一覧を、初めて開いたときに始めるのに使う。
+    /// まだ始めていなければ始める。開くまで読まないタイムラインを、初めて開いたときに始めるのに使う。
     func startIfNeeded() {
         model.startIfNeeded()
     }
 
     #if DEBUG
-    /// 始めている一覧だけ読み込み直す。障害を起こすデバッグURLで、開いたことのない一覧まで読み始めないようにする。
+    /// 始めているタイムラインだけ読み込み直す。障害を起こすデバッグURLで、開いたことのないタイムラインまで読み始めないようにする。
     func reloadIfStarted() {
         model.reloadIfStarted()
     }
@@ -104,12 +104,12 @@ final class FeedTimelineController {
         model.setEnabled(isEnabled)
     }
 
-    /// サーバーがこの一覧を読ませないと分かったときに呼ぶ（docs/tabs.md）。
+    /// サーバーがこのタイムラインを読ませないと分かったときに呼ぶ（docs/tabs.md）。
     func markUnavailableOnServer() {
         model.markUnavailableOnServer()
     }
 
-    /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときと、積んで開いた一覧がナビゲーションから外されたときに呼ぶ。
+    /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときと、積んで開いたタイムラインがナビゲーションから外されたときに呼ぶ。
     /// セッションを閉じたときは、呼ばなくても持ち主が閉じて止まる。
     func stop() {
         model.stop()
@@ -254,7 +254,7 @@ extension FeedTimelineController {
     }
 
     /// サーバーのフィルターに一致したダミーの投稿を、新着と同じ経路で流す。警告、警告と注意書き、添付ファイルのぼかし、隠すの4件。
-    /// 隠す投稿は一覧に出ないので、3件だけ並べば合っている。実際にフィルターを作らずに、何度でも同じ条件で確かめるため。
+    /// 隠す投稿はタイムラインに出ないので、3件だけ並べば合っている。実際にフィルターを作らずに、何度でも同じ条件で確かめるため。
     private func streamDummyFiltered() {
         let avatar = model.debugStore.statuses.first?.account.avatar ?? client.credential.instance
         func filter(_ title: String, _ action: FilterResult.Action) -> [FilterResult] {
@@ -264,7 +264,7 @@ extension FeedTimelineController {
             ("警告のフィルターに一致したダミーの投稿", "", filter("ダミーの警告", .warn), false),
             ("警告のフィルターと注意書きのあるダミーの投稿", "ダミーの注意書き", filter("ダミーの警告", .warn), false),
             ("添付ファイルをぼかすフィルターに一致したダミーの投稿", "", filter("ダミーのぼかし", .blur), true),
-            ("隠すフィルターに一致したダミーの投稿。一覧に出たら誤り", "", filter("ダミーの非表示", .hide), false),
+            ("隠すフィルターに一致したダミーの投稿。タイムラインに出たら誤り", "", filter("ダミーの非表示", .hide), false),
         ]
         model.debugRun { model in
             for (index, post) in posts.enumerated() {
@@ -288,7 +288,7 @@ extension FeedTimelineController {
 
     /// 絵文字のリアクションの付いたダミーの投稿を、新着と同じ経路で流す。1つだけ、折り返すほど多い、このサーバーとほかのサーバーのカスタム絵文字、数の大きいものの4件。
     /// 列は、サーバーが絵文字のリアクションに対応しているときだけ出る（docs/emoji-reaction.md）。投稿はサーバーにないので、付け外しは失敗して戻る。
-    /// カスタム絵文字の画像には、一覧の投稿のアイコンを使う。
+    /// カスタム絵文字の画像には、タイムラインの投稿のアイコンを使う。
     private func streamDummyReactions() {
         let avatar = model.debugStore.statuses.first?.account.avatar ?? client.credential.instance
         let local = ReactionEmoji(name: "dummy_custom", url: avatar, staticUrl: avatar)
@@ -644,7 +644,7 @@ enum DebugDummyPost: String, CaseIterable {
         }
     }
 
-    /// デバッグメニューで区切る分類。ステータスバーの通知は、出し続ける項目と並べるため、ダミー投稿の一覧には出さない。
+    /// デバッグメニューで区切る分類。ステータスバーの通知は、出し続ける項目と並べるため、ダミー投稿の項目には出さない。
     enum MenuGroup: CaseIterable {
         case timeline
         case media
@@ -653,7 +653,7 @@ enum DebugDummyPost: String, CaseIterable {
 
         var title: String {
             switch self {
-            case .timeline: "一覧"
+            case .timeline: "タイムライン"
             case .media: "添付ファイル"
             case .delayed: "後から届く"
             case .content: "投稿の中身"

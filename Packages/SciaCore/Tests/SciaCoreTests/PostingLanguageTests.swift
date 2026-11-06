@@ -55,7 +55,7 @@ struct PostingLanguageTests {
         #expect(result.first?.rows.map(\.code) == ["fr"])
     }
 
-    /// 一覧を読んでいる間と読めなかったときも、既定と最近選んだ言語は選べ、すべての言語のまとまりは空のまま残して、状態を出す場所にする。
+    /// 言語のリストを読んでいる間と読めなかったときも、既定と最近選んだ言語は選べ、すべての言語のまとまりは空のまま残して、状態を出す場所にする。
     @Test func keepsDefaultAndRecentWithoutLanguageList() {
         let result = sections(recentCodes: ["en"], languages: nil)
 

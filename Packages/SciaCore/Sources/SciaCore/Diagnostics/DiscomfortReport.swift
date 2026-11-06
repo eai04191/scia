@@ -5,7 +5,7 @@ public struct DiscomfortReport: Codable, Sendable, Equatable {
     /// 状態とログを確保した時刻。メモを書き終えた時刻ではない。
     public let capturedAt: Date
     public var memo: String
-    /// 直前の操作の一覧のうち、特定の操作に付けたコメント。全体のことは`memo`に書く。
+    /// 直前の操作のリストのうち、特定の操作に付けたコメント。全体のことは`memo`に書く。
     public var operationComments: [OperationComment]
     public let stateDumps: [StateDump]
     public let logs: [LogLine]
@@ -22,7 +22,7 @@ public struct DiscomfortReport: Codable, Sendable, Equatable {
 public struct OperationComment: Codable, Sendable, Equatable {
     /// コメントを付けた操作のログの時刻。`logs`と突き合わせる手がかりにする。
     public let date: Date
-    /// コメントを付けたときに一覧に出ていた操作の説明。
+    /// コメントを付けたときにリストに出ていた操作の説明。
     public let operation: String
     public let text: String
 

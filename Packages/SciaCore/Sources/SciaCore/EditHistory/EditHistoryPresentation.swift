@@ -42,8 +42,8 @@ public enum EditHistoryPresentation {
 
     /// 今の投稿の版から順に並べる。
     /// - Parameters:
-    ///   - latestCover: 今の投稿の版の添付ファイルをぼかす理由。一覧と同じく、使う人が開いた・隠した選択に従う。ぼかさなければnil。
-    ///   - isHidden: 使う人が一覧で添付ファイルを隠した。過去の版と外した添付ファイルも、閲覧注意がなくてもぼかす。
+    ///   - latestCover: 今の投稿の版の添付ファイルをぼかす理由。タイムラインと同じく、使う人が開いた・隠した選択に従う。ぼかさなければnil。
+    ///   - isHidden: 使う人がタイムラインで添付ファイルを隠した。過去の版と外した添付ファイルも、閲覧注意がなくてもぼかす。
     ///     開いた選択は今の投稿の版だけに当てる。過去の版には、開いた今の版にない画像があるため。
     ///   - filterTitles: 添付ファイルをぼかすフィルターのうち、一致したものの名前。フィルターは今の内容に一致したものだが、
     ///     ぼかしたいのはこの投稿の添付ファイルなので、版ごとに判定し直さず、過去の版と外した添付ファイルにも当てる。
@@ -83,7 +83,7 @@ public enum EditHistoryPresentation {
     ) -> Entry {
         let revision = entry.revision
         // 過去の版は、閲覧注意か注意書きがあるか、使う人が隠したか、フィルターに一致していれば、タップするまで添付ファイルをぼかす。
-        // 理由は一覧と同じく、フィルター、閲覧注意、隠した、の順に出す。
+        // 理由はタイムラインと同じく、フィルター、閲覧注意、隠した、の順に出す。
         func cover(of revision: StatusRevision?) -> MediaCover? {
             guard let revision, !isRevealed else { return nil }
             let isSensitive = revision.sensitive || !revision.spoilerText.isEmpty

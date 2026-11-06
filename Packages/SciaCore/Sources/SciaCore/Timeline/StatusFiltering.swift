@@ -1,19 +1,19 @@
 public import Foundation
 
-/// 投稿に一致したサーバーのフィルターを、一覧の場所で絞り、どう出すかを決める。
+/// 投稿に一致したサーバーのフィルターを、タイムラインの場所で絞り、どう出すかを決める。
 /// https://docs.joinmastodon.org/api/guidelines/#server-filtered
 ///
 /// 自分の投稿には当てない。ドキュメントにはないが、公式のWebクライアントに合わせる。サーバーは自分の投稿にも一致したフィルターを付けるが、
-/// 投稿した直後の自分の投稿が一覧から消えると、投稿に失敗したように見えるため。
+/// 投稿した直後の自分の投稿がタイムラインから消えると、投稿に失敗したように見えるため。
 /// 代わりに、一致したフィルターの名前を返し、注記だけを出す。昔作ったフィルターに一致する話題を自分が書くと、それに触れた人の投稿が黙って隠れるため、
 /// フィルターがあることに気づけるようにする。
 public struct StatusFiltering: Sendable, Equatable {
-    /// この一覧の場所。フィルターは、使う場所にこれを含むものだけを当てる。
+    /// このタイムラインの場所。フィルターは、使う場所にこれを含むものだけを当てる。
     public let context: FilterResult.Context
     /// 自分のアカウントのID。
     public let myAccountID: String?
     /// 「隠す」のフィルターに一致した投稿を隠すか。falseなら隠さずに警告で折りたたむ。
-    /// ブックマークやお気に入りのように、自分で残した投稿を並べる一覧で使う。公式のWebクライアントと同じ（`warnInsteadOfHide`）。
+    /// ブックマークやお気に入りのように、自分で残した投稿を並べるタイムラインで使う。公式のWebクライアントと同じ（`warnInsteadOfHide`）。
     public let hidesMatches: Bool
 
     public init(context: FilterResult.Context, myAccountID: String?, hidesMatches: Bool = true) {
@@ -54,7 +54,7 @@ public struct StatusFiltering: Sendable, Equatable {
 
 /// 投稿をフィルターでどう出すか。
 public struct FilterVerdict: Sendable, Equatable {
-    /// 一覧に出さない。
+    /// タイムラインに出さない。
     public let isHidden: Bool
     /// 警告で投稿を折りたたむフィルターの名前。折りたたまなければ空。
     public let warningTitles: [String]
@@ -66,13 +66,13 @@ public struct FilterVerdict: Sendable, Equatable {
     public static let none = FilterVerdict(isHidden: false, warningTitles: [], mediaTitles: [], ownMatchTitles: [])
 }
 
-/// 一覧で、フィルターの警告で折りたたんだ投稿のうち、開いたもの。
+/// タイムラインで、フィルターの警告で折りたたんだ投稿のうち、開いたもの。
 ///
 /// 開いたら閉じ直さない。公式のWebクライアントと同じく、警告は本文を読むかを一度だけ尋ねるもので、
 /// 注意書き（CW）のように読み返すたびに開閉するものではないため。
 /// 開いたかは元の投稿のIDで覚え、同じ投稿のブーストの行もそろえる。覚えるのはアプリを起動している間だけ。
 public struct FilterWarnings: Sendable, Equatable {
-    /// この一覧で当てるフィルター。nilなら当てない。
+    /// このタイムラインで当てるフィルター。nilなら当てない。
     public var filtering: StatusFiltering?
     private var revealed: Set<Status.ID> = []
 

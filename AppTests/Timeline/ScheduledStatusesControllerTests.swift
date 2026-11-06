@@ -6,7 +6,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// 予約の一覧の読み込み。決まりはdocs/tabs.mdの「予約投稿」にある。
+/// 予約投稿のタイムラインの読み込み。決まりはdocs/tabs.mdの「予約投稿」にある。
 @MainActor
 struct ScheduledStatusesControllerTests {
     nonisolated private static func body(_ ids: [String]) -> Data {
@@ -58,7 +58,7 @@ struct ScheduledStatusesControllerTests {
         #expect(calls.withLock { $0 } == 3)
     }
 
-    /// 引っぱって読み直す読み込みも、一覧の持ち主の子で走らせる。ログアウトで閉じたら止まる。
+    /// 引っぱって読み直す読み込みも、タイムラインの持ち主の子で走らせる。ログアウトで閉じたら止まる。
     @Test func refreshRunsInsideScope() async throws {
         let gate = Gate()
         let transport = ScriptedTransport { _ in

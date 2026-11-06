@@ -1,6 +1,6 @@
 import UIKit
 
-/// 一覧の頭に、外から渡されたビューを1つ置く入れ物。中のビューの制約で高さが決まる。
+/// タイムラインの頭に、外から渡されたビューを1つ置く入れ物。中のビューの制約で高さが決まる。
 final class TimelineHeaderContainerView: UICollectionReusableView {
     private weak var hosted: UIView?
 
@@ -22,7 +22,7 @@ final class TimelineHeaderContainerView: UICollectionReusableView {
         ])
     }
 
-    /// 一覧はこの入れ物を測るため、載せたビューが幅に合わせて中身を決め直す測り方（`systemLayoutSizeFitting`の上書き）を持っていても、そのままでは呼ばれない。
+    /// タイムラインはこの入れ物を測るため、載せたビューが幅に合わせて中身を決め直す測り方（`systemLayoutSizeFitting`の上書き）を持っていても、そのままでは呼ばれない。
     /// 入れ物は載せたビューの四辺に合わせているだけなので、測るのは載せたビューに任せる。
     override func systemLayoutSizeFitting(
         _ targetSize: CGSize,

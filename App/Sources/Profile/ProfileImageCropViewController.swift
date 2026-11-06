@@ -187,7 +187,7 @@ final class ProfileImageCropViewController: UIViewController, StaysForSharedCont
         )
     }
 
-    /// 枠の外を暗くし、枠を細い線で示す。アイコンは、一覧で見せる形（丸か角の丸い四角）で示す。
+    /// 枠の外を暗くし、枠を細い線で示す。アイコンは、タイムラインで見せる形（丸か角の丸い四角）で示す。
     private func updateMask() {
         let frame = scrollView.frame
         let hole: UIBezierPath = switch (kind, avatarShape) {

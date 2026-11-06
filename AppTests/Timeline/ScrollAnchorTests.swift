@@ -176,7 +176,7 @@ struct ScrollAnchorTests {
     }
 
     /// アニメーションで挿入するときは、行を足した瞬間はいままで最上部にあった投稿を同じ位置に残し、そこから最上部へ動く。
-    /// 行が先に動いてから一覧が戻る2段の動きにしない。
+    /// 行が先に動いてからタイムラインが戻る2段の動きにしない。
     @Test(arguments: [1, 20])
     func animatedPrependAtTopStartsFromPreviousTopAndMovesUp(insertCount: Int) async throws {
         let harness = try TimelineHarness()
@@ -230,7 +230,7 @@ struct ScrollAnchorTests {
         #expect(!harness.viewController.isAtTop)
     }
 
-    /// 最上部や投稿へ動かしている途中に触れて止めた指は、離すまで一覧が受け持つ。認識したままでいないと、
+    /// 最上部や投稿へ動かしている途中に触れて止めた指は、離すまでタイムラインが受け持つ。認識したままでいないと、
     /// タッチが中身に渡り、止めたつもりの指で下の投稿や画像が開く。
     @Test(arguments: [true, false])
     func touchStoppingSpringScrollIsHeldUntilLifted(towardTop: Bool) throws {
@@ -368,7 +368,7 @@ struct ScrollAnchorTests {
     }
 
     /// 投稿欄のキーボードで下端を覆ったり外したりしても、読んでいる位置は動かない。
-    /// 一覧の末尾までスクロールしているときは、下端を覆うものがなくなると末尾が下端に合わせて下がるため、ここでは確かめない。
+    /// タイムラインの末尾までスクロールしているときは、下端を覆うものがなくなると末尾が下端に合わせて下がるため、ここでは確かめない。
     @Test(arguments: [0.0, 0.4])
     func coveringBottomKeepsAnchorPosition(scrollFraction: CGFloat) throws {
         let harness = try TimelineHarness()
@@ -416,7 +416,7 @@ struct ScrollAnchorTests {
         #expect(reported.count < uncovered.count, "覆われた投稿も表示中として報告しました")
     }
 
-    /// 返信先のラベルから、一覧にある返信先の投稿を、入力欄のすぐ上に出す。
+    /// 返信先のラベルから、タイムラインにある返信先の投稿を、入力欄のすぐ上に出す。
     @Test func scrollingToStatusShowsItAboveCoveredBottom() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -500,7 +500,7 @@ struct ScrollAnchorTests {
         #expect(abs(frame.maxY - visibleBottom) <= 1, "選んだ方ではない投稿へ移りました")
     }
 
-    /// ブーストから返信を選んでも、そのブーストが一覧になければ、元の投稿へ移る。
+    /// ブーストから返信を選んでも、そのブーストがタイムラインになければ、元の投稿へ移る。
     @Test func scrollingToStatusFallsBackToDisplayedStatus() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

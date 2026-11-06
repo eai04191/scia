@@ -152,7 +152,7 @@ struct InAppBrowserHeightChoices: View {
                 }
             }
             // アプリ内のSafariのシートと同じく、後ろのホームを透かさない。透けると、シートの上に見える量が分かりにくい。
-            // シートの背景は塗り替えず、中身を塗る。背景を塗り替えると、シートのフチと影まで消え、白い一覧に溶けてシートに見えないため。
+            // シートの背景は塗り替えず、中身を塗る。背景を塗り替えると、シートのフチと影まで消え、白いリストに溶けてシートに見えないため。
             .background(Color(uiColor: .systemBackground))
             // アプリ内のSafariのシートと同じく、上の帯と中身のあいだに区切り線を引く。
             .safeAreaInset(edge: .top, spacing: 0) { Divider() }

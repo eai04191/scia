@@ -9,7 +9,7 @@
 #     慣性を残さずに止まるドラッグの点の並びを、シミュレーターのツールのtouch_pathのpointsに渡せるJSONで出す。
 #     ツールのtouch_pathは同じ座標の点を「動いた」として送らないため、最後に同じ点を並べても離した瞬間の速さが残り、慣性で流れる。
 #     そこで、終点で0.5ptずつ揺らして速さを0にしてから離す。最初の一歩（20pt）は、スクロールが始まるまでの遊びに吸われるので、
-#     一覧をDだけ動かしたいときは、指をD+20pt動かす。
+#     Dだけスクロールしたいときは、指をD+20pt動かす。
 #   Tools/sim.sh dump '<端末>'
 #     起動済みのアプリに`scia-debug://dump`を送り、画面にある要素の名前と枠（ポイント）を出す。
 #     アプリの中で、アニメーションとスクロールの慣性が止まるのを待ってから書き出すので、操作の直後に呼んでよい。
@@ -250,12 +250,12 @@ for line in sys.stdin:
     pid, ppid, command = line.strip().split(None, 2)
     procs[int(pid)] = (int(ppid), command)
 def ancestors(pid):
-    # psが一覧を取ったあとに親が終わると、親の行がない。そこで止める。
+    # psがプロセスのリストを取ったあとに親が終わると、親の行がない。そこで止める。
     while pid in procs and procs[pid][0] in procs and pid > 1:
         pid = procs[pid][0]
         yield pid
 # 呼び出したスレッドのシェルも端末の名前を含むので、このスクリプトと、その祖先と子孫は数えない。
-# psがPythonより先に一覧を取ると、Python自身は一覧にないので、スクリプトのシェルのPIDを渡してもらう。
+# psがPythonより先にプロセスのリストを取ると、Python自身はリストにないので、スクリプトのシェルのPIDを渡してもらう。
 mine = {caller, *ancestors(caller)}
 mine |= {pid for pid in procs if caller in ancestors(pid)}
 pattern = re.compile(re.escape(name) + r"(?![0-9])|" + re.escape(udid))
@@ -326,7 +326,7 @@ print(json.dumps(points, separators=(",", ":")))
 }
 
 # 端末の貸し借りの記録。worktreeどうしで共有するgitのディレクトリに置く。
-# 並行するスレッドはworktreeを分けるので、借り手はworktreeのパスで表す。スレッドの一覧を読まずに、シェルだけで判断できるようにするため。
+# 並行するスレッドはworktreeを分けるので、借り手はworktreeのパスで表す。スレッドのリストを読まずに、シェルだけで判断できるようにするため。
 lock_root() {
     local common
     common=$(git rev-parse --path-format=absolute --git-common-dir) || fail "gitのリポジトリの外で走らせている"
@@ -510,8 +510,8 @@ command_ready() {
 
 command_leased() {
     local sim=${1:-} me candidate sims
-    # 一覧を読めないときに、貸し借りする端末を貸し借りしない端末と取り違えて素通りさせないよう、止める。
-    sims=$(pool) || fail "端末の一覧を読めない"
+    # 端末のリストを読めないときに、貸し借りする端末を貸し借りしない端末と取り違えて素通りさせないよう、止める。
+    sims=$(pool) || fail "端末のリストを読めない"
     if [ -z "$sim" ]; then
         me=$(borrower)
         while IFS= read -r candidate; do

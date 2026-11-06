@@ -1,7 +1,7 @@
 import Foundation
 
 /// Unicodeの絵文字1つ。投稿欄の絵文字のシートで、カスタム絵文字の後ろに並べ、補完でも出す。
-/// データは`Tools/build-emoji-data.py`で、Unicodeの絵文字の一覧（emoji-test.txt）、CLDRの絵文字の注釈、gemojiの短縮名から作る。
+/// データは`Tools/build-emoji-data.py`で、Unicodeの絵文字のリスト（emoji-test.txt）、CLDRの絵文字の注釈、gemojiの短縮名から作る。
 public struct StandardEmoji: Hashable, Sendable, Decodable {
     /// 絵文字そのもの。本文にはこの文字をそのまま入れる。
     public let emoji: String
@@ -67,13 +67,13 @@ public struct StandardEmojiGroup: Hashable, Sendable, Decodable {
     }
 }
 
-/// アプリに入れたUnicodeの絵文字の一覧。
+/// アプリに入れたUnicodeの絵文字のリスト。
 public enum StandardEmojiCatalog {
     private struct File: Decodable {
         let groups: [StandardEmojiGroup]
     }
 
-    /// 一覧。読めなければ空にする。データはアプリに入れたものなので、読めないのは作りの誤りで、テストで確かめる。
+    /// 絵文字のリスト。読めなければ空にする。データはアプリに入れたものなので、読めないのは作りの誤りで、テストで確かめる。
     public static let groups: [StandardEmojiGroup] = {
         guard let url = Bundle.module.url(forResource: "standard-emoji", withExtension: "json"),
               let data = try? Data(contentsOf: url),
@@ -88,7 +88,7 @@ public enum StandardEmojiCatalog {
 /// ひらがなとカタカナ、全角と半角、大文字と小文字は区別しない。「ねこ」で「ネコ」や「猫」の言葉を持つ絵文字が見つかるよう、言葉ごとに比べる。
 /// 名前と一致するもの、言葉と一致するもの、名前（英語は名前の中の単語）が語で始まるもの、言葉が語で始まるもの、名前か言葉が語を含むものの順に並べる。
 /// 名前を言葉より先にするのは、補完では候補が数件しか出ないため。データの順のままだと、「fire」で🔥より❤️‍🔥や🧑‍🚒が、「heart」で❤️より🥰が先に出る。
-/// 語で始まるものの中は、一致した語の短い順にし、ほかは一覧の順のままにする。
+/// 語で始まるものの中は、一致した語の短い順にし、ほかはリストの順のままにする。
 /// 語を含むものは、語に英数字以外が入るときだけ探す。英語で途中の一致まで拾うと、「cat」で「education」や「location」が当たるため。
 /// 日本語は単語の区切りがないので、「ねこ」で「黒ねこ」のような途中の一致も拾う。
 /// 補完の語には空白を打てないので、英語は名前と言葉の単語を空白なしでつなげて打っても探す（`newy`で`new`と`york`を持つ🗽）。`_`は単語の区切りとして読み飛ばす。

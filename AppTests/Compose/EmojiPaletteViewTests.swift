@@ -34,8 +34,8 @@ struct EmojiPaletteViewTests {
         palette.layoutIfNeeded()
         let collectionView = try #require(Self.descendants(of: palette).compactMap { $0 as? UICollectionView }.first)
 
-        // 画像が届く前にスクロールし、一覧に画面の下のセルを先に組み立てさせる。
-        // 一覧は、スクロールが動いている間に、画面に入りそうなセルを先に組み立てる。
+        // 画像が届く前にスクロールし、パレットに画面の下のセルを先に組み立てさせる。
+        // パレットはスクロールが動いている間に、画面に入りそうなセルを先に組み立てる。
         let target = collectionView.contentOffset.y + 600
         collectionView.setContentOffset(CGPoint(x: 0, y: target), animated: true)
         try await waitUntil { collectionView.contentOffset.y == target }

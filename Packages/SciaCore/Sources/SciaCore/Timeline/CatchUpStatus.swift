@@ -1,6 +1,6 @@
 public import Foundation
 
-/// ストリーミングが切れていた間の投稿や通知を読む補完の、直近の状態。一覧を引っぱったときに見せる。
+/// ストリーミングが切れていた間の投稿や通知を読む補完の、直近の状態。タイムラインを引っぱったときに見せる。
 /// つながっていても、補完がまだ終わっていなければ新着は出てこないため、ストリーミングの状態とは別に持つ。
 public struct CatchUpStatus: Sendable, Equatable {
     public enum Phase: Sendable, Equatable {

@@ -2,7 +2,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 通知のフィルタリングの設定。サーバー上のアカウントの設定なので、アプリの設定の一覧には置かず、アカウントのメニューと保留中の通知の一覧から開く。
+/// 通知のフィルタリングの設定。サーバー上のアカウントの設定なので、アプリの設定には置かず、アカウントのメニューと保留中の通知のリストから開く。
 /// 決まりはdocs/notification-filter.mdの「通知のフィルタリングの設定」にある。
 struct NotificationPolicyView: View {
     let model: NotificationPolicyModel

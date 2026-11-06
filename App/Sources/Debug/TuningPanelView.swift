@@ -113,7 +113,7 @@ extension UIViewController {
             sheet.detents = [.medium(), .large()]
             sheet.largestUndimmedDetentIdentifier = .medium
             sheet.prefersGrabberVisible = true
-            // 値を調整しながら一覧を見るため、中身をドラッグしてもシートを広げず、中身だけをスクロールする。広げるのは、つまみと見出しをドラッグしたときだけ。
+            // 値を調整しながらタイムラインを見るため、中身をドラッグしてもシートを広げず、中身だけをスクロールする。広げるのは、つまみと見出しをドラッグしたときだけ。
             sheet.prefersScrollingExpandsWhenScrolledToEdge = false
         }
         present(controller, animated: true)

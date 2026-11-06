@@ -28,7 +28,7 @@ public enum OperationTimeline {
         }
     }
 
-    /// 違和感を覚えるきっかけになった操作は直前にあるはずで、古い操作まで含めると一覧が長くなり読みにくいため、既定では2分前までにする。
+    /// 違和感を覚えるきっかけになった操作は直前にあるはずで、古い操作まで含めると操作のリストが長くなり読みにくいため、既定では2分前までにする。
     public static let defaultWindow: TimeInterval = 2 * 60
 
     public static func steps(from logs: [LogLine], capturedAt: Date, window: TimeInterval = defaultWindow) -> [Step] {
@@ -45,7 +45,7 @@ public enum OperationTimeline {
         return steps
     }
 
-    /// - Returns: 一覧の文、アプリの失敗か、続けて同じ文になったら1行にまとめるか。
+    /// - Returns: 操作のリストの文、アプリの失敗か、続けて同じ文になったら1行にまとめるか。
     private static func describe(_ log: LogLine) -> (String, Bool, Bool)? {
         if log.category == UserAction.logCategory, let action = UserAction(logMessage: log.message) {
             // スクロールは、量や時間を丸めた文が同じでも別々の1回で、コメントを付けたい1回を選べるよう、まとめない。

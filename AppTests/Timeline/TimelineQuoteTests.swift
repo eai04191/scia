@@ -190,7 +190,7 @@ struct TimelineQuoteTests {
         #expect(abs(body.frame.width - (inner - grid.frame.width - content.mediaSpacing)) < 0.5, "本文がサムネイルの分だけをあけていません")
     }
 
-    /// 引用元に画像を1つ付けた投稿を一覧の一番上に流す。
+    /// 引用元に画像を1つ付けた投稿をタイムラインの一番上に流す。
     private func quotingImage(in harness: TimelineHarness) -> Status {
         let statuses = StatusFactory.make(count: 10, startingAt: 1_000)
         let image = MediaAttachment(
@@ -240,7 +240,7 @@ struct TimelineQuoteTests {
         #expect(TimelineViewController.emojiURLs(of: status, quoteSources: changes).contains(added.staticUrl))
     }
 
-    /// 承認待ちだった引用を取り直して、承認された引用元の囲みに替わるときは、docs/vision.mdの「一覧の動き」のとおり伸ばす。
+    /// 承認待ちだった引用を取り直して、承認された引用元の囲みに替わるときは、docs/vision.mdの「タイムラインの動き」のとおり伸ばす。
     /// 上端が表示領域より上にある行は画面上の位置を保ち、下の行は元の位置から新しい位置へ動かす。
     @Test func refreshedQuoteGrowsRowWithMotion() throws {
         let harness = try TimelineHarness()

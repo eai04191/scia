@@ -31,7 +31,7 @@ struct PersistentNoticesTests {
         #expect(chip.id == "upload")
         #expect(chip.additionalCount == 1)
         guard case .disclosure(_, let handler) = chip.action else {
-            Issue.record("押すと一覧が開くはず")
+            Issue.record("押すと操作の状況が開くはず")
             return
         }
         handler()

@@ -2,7 +2,7 @@ public import Foundation
 
 /// 動画の最初のフレームを作るのに要る、ファイルの先頭の部分を読む。
 ///
-/// サーバーが動画から作るプレビュー画像は小さく（Mastodonは長い辺640ピクセルまで）、一覧で引き伸ばすとぼやける。
+/// サーバーが動画から作るプレビュー画像は小さく（Mastodonは長い辺640ピクセルまで）、タイムラインで引き伸ばすとぼやける。
 /// 元の動画の先頭だけを読めば、元の解像度の最初のフレームを作れる。要るのは、目次（moov）と最初のキーフレームの終わりまで。
 /// Mastodonは動画を処理するとき`movflags faststart`で目次を先頭に置くので、先頭から順に読めば足りる。
 /// https://github.com/mastodon/mastodon/blob/main/app/models/media_attachment.rb

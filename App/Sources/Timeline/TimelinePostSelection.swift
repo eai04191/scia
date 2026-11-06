@@ -10,11 +10,11 @@ struct PostSelectionNavigationItems {
     let hidesBackButton: Bool
 }
 
-/// まとめて行う操作のために、一覧で投稿を順番を付けて選ぶ。決まりはdocs/batch-actions.mdにある。
+/// まとめて行う操作のために、タイムラインで投稿を順番を付けて選ぶ。決まりはdocs/batch-actions.mdにある。
 extension TimelineViewController {
     var isSelectingPosts: Bool { postSelection != nil }
 
-    /// `id`の行を選べるか。投稿の行と投稿の付いた通知の行で、まとめて行う操作を受ける一覧でだけ選べる。
+    /// `id`の行を選べるか。投稿の行と投稿の付いた通知の行で、まとめて行う操作を受けるタイムラインでだけ選べる。
     func canSelectPost(_ id: ItemID) -> Bool {
         guard onBatchReblog != nil, onBatchShare != nil, let entry = entry(for: id) else { return false }
         switch entry {
@@ -82,7 +82,7 @@ extension TimelineViewController {
         updatePostSelectionDisplay()
     }
 
-    /// 一覧から消えた行を選択から外す。並びを変えるたびに呼ぶ。
+    /// タイムラインから消えた行を選択から外す。並びを変えるたびに呼ぶ。
     func prunePostSelection() {
         guard postSelection?.keep(where: canSelectPost) == true else { return }
         updatePostSelectionDisplay()

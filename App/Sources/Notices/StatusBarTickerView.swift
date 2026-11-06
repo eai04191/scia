@@ -826,7 +826,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
             let appearance = NotificationAppearance(item.kind)
             let name = item.account.displayNameOrUsername
             let action = if let emoji = item.reactionEmoji {
-                // 通知の一覧の行と同じく、何の絵文字かまで読む。カスタム絵文字はショートコードで読む。
+                // 通知のタイムラインの行と同じく、何の絵文字かまで読む。カスタム絵文字はショートコードで読む。
                 "\(name)が\(emoji.isCustom ? ":\(emoji.name):" : emoji.name)でリアクションしました"
             } else {
                 appearance.phrase.includesName ? "\(appearance.phrase.before)\(name)\(appearance.phrase.after)" : appearance.phrase.before
@@ -853,7 +853,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
                 image.tintColor = appearance.color
                 return image
             }
-            // 付けた絵文字は、通知の一覧の行と同じく記号の代わりに描く。中身は`render()`で入れる。
+            // 付けた絵文字は、通知のタイムラインの行と同じく記号の代わりに描く。中身は`render()`で入れる。
             // カスタム絵文字は、決まった四角の枠に縮めて描き、画像のURLがないときと読めなかったときは記号にする。
             // ショートコードの文字や横長の画像は、狭い左側で名前の入る幅を奪い、アイコンに重ねる丸からもはみ出すため。読み上げではショートコードを読む。
             let symbol: UIView
@@ -1042,7 +1042,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
             ])
             let store = AppDependencies.mediaImages
             if isSensitive {
-                // 閲覧注意の画像は、一覧と同じく中身を見せず、ぼかしの下地に目のアイコンを重ねる。
+                // 閲覧注意の画像は、タイムラインと同じく中身を見せず、ぼかしの下地に目のアイコンを重ねる。
                 imageView.image = attachment.blurhash.flatMap { store.placeholder(for: $0, aspectRatio: 1) }
                 let eye = UIImageView(image: UIImage(systemName: "eye.slash.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: side * 0.4, weight: .semibold)))
                 eye.tintColor = .white
@@ -1062,7 +1062,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
             }
             Task(.display) { [weak imageView] in
                 guard let image = await store.shownThumbnail(for: request, while: { [weak imageView] in imageView != nil }, visible: { [weak imageView] in imageView?.isInVisibleHierarchy ?? false }), let imageView else { return }
-                // 下地から1コマで替えず、一覧のサムネイルと同じく薄く重ねて入れる。
+                // 下地から1コマで替えず、タイムラインのサムネイルと同じく薄く重ねて入れる。
                 UIView.transition(with: imageView, duration: 0.15, options: [.transitionCrossDissolve, .allowUserInteraction]) {
                     imageView.image = image
                 }

@@ -7,7 +7,7 @@ import UIKit
 ///
 /// 文言は前に出ている画面の様子で決める。ビューアでは、落としている途中のチップにはいま見ている添付ファイルのものを出し、ほかは件数で添える。
 /// ビューアでなければ、1件なら進み具合を、2件以上なら件数を出す。済んだことや失敗は、いま見ている添付ファイルなら何ができなかったかだけを、ほかは種類で示す。
-/// 落としている途中のものは「操作の状況」の一覧の「進行中」にも並べ、行から止められるようにする。
+/// 落としている途中のものは「操作の状況」の画面の「進行中」にも並べ、行から止められるようにする。
 @MainActor
 final class MediaTransferCenter {
     let transfers: MediaTransfers
@@ -18,16 +18,16 @@ final class MediaTransferCenter {
     private let tuning: TuningStore
     /// 開いているビューア。Macではビューアを別々のウィンドウで開くため、いくつも開いていることがある。
     private let openViewers = NSHashTable<MediaViewerController>.weakObjects()
-    /// 落としているものごとの、最後にその操作を始めたビューアか、一覧のメニューを出したサムネイル。
+    /// 落としているものごとの、最後にその操作を始めたビューアか、タイムラインのメニューを出したサムネイル。
     /// ビューアが開いている間は、共有のシートと理由のアラートをそのビューアに出す。サムネイルなら、共有のシートをそこから出す。
     private var requesters: [MediaTransfers.Transfer.ID: Requester] = [:]
 
     private struct Requester {
         weak var viewer: MediaViewerController?
-        /// 一覧のメニューから始めた。起点のサムネイルが先に解放されても、ビューアのものと取り違えずに共有のシートを出すため、起点とは別に持つ。
+        /// タイムラインのメニューから始めた。起点のサムネイルが先に解放されても、ビューアのものと取り違えずに共有のシートを出すため、起点とは別に持つ。
         var isFromMenu = false
         weak var source: (any MediaViewerSource)?
-        /// 一覧のメニューから共有を始めたときに、サムネイルが描いていた画像。落としている間にセルが別の投稿に使い回されても、
+        /// タイムラインのメニューから共有を始めたときに、サムネイルが描いていた画像。落としている間にセルが別の投稿に使い回されても、
         /// 共有シートには始めたときの画像を添え、別の画像を出しているサムネイルを起点にしないために持つ。
         var preview: UIImage?
     }
@@ -78,7 +78,7 @@ final class MediaTransferCenter {
         requesters[id] = Requester(viewer: viewer)
     }
 
-    /// 一覧のメディアのメニューから始めた。ビューアを開いていないので、共有のシートは前に出ている画面から、`source`を起点に出す。
+    /// タイムラインのメディアのメニューから始めた。ビューアを開いていないので、共有のシートは前に出ている画面から、`source`を起点に出す。
     /// ビューアと違い、閉じて共有をやめる操作がないため、共有のためのものも済むまで続ける。
     /// - Parameters:
     ///   - source: 長押ししたサムネイル。カスタム絵文字のように、起点にできるビューがなければnil。
@@ -114,7 +114,7 @@ final class MediaTransferCenter {
         return chip.map { notice(for: $0) { context.presenter } }
     }
 
-    /// 1件だけなら、押すと止めるかの確認を出す。2件以上なら、押すと「操作の状況」の一覧を開く。
+    /// 1件だけなら、押すと止めるかの確認を出す。2件以上なら、押すと「操作の状況」の画面を開く。
     private func notice(for chip: MediaTransferChip, presenter: @escaping @MainActor () -> UIViewController?) -> Notice {
         var showAll: (@MainActor () -> Void)?
         if let show = notices.showOperationStatus {
@@ -261,7 +261,7 @@ final class MediaTransferCenter {
         return alert
     }
 
-    /// 一覧のメニューから共有するファイルの、共有のシート。見出しのプレビューに、共有を始めたときのサムネイルの画像を添える。
+    /// タイムラインのメニューから共有するファイルの、共有のシート。見出しのプレビューに、共有を始めたときのサムネイルの画像を添える。
     /// 起点にできるサムネイルがなければ、出す画面の真ん中を起点にする。iPadとMacではポップオーバーで出て、起点がないと例外になるため。
     private func presentShareSheet(for file: URL, from source: (any MediaViewerSource)?, startedWith preview: UIImage?) {
         let content = Self.menuShareSheet(file: file, startedWith: preview, source: source)
@@ -281,7 +281,7 @@ final class MediaTransferCenter {
         presenter.present(activity, animated: true)
     }
 
-    /// 一覧のメニューから共有するときの、共有シートに渡すものと、ポップオーバーの起点。起点にできなければnil。
+    /// タイムラインのメニューから共有するときの、共有シートに渡すものと、ポップオーバーの起点。起点にできなければnil。
     /// 落としている間に行が流れて画面から外れたり、セルが別の投稿に使い回されて別の画像を描いていたりすれば、サムネイルを起点にしない。
     /// 使い回されたかは、始めたときと同じ画像を描いているかで見分ける。
     /// - Parameter preview: 共有を始めたときにサムネイルが描いていた画像。共有シートの見出しにはこれを添える。

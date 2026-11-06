@@ -4,8 +4,8 @@ import SciaCore
 import Synchronization
 
 /// 文字の言語から推し量った、書く方向。言語の分からない文字（リンク先のページのタイトルなど）を、その言語の書く方向に寄せるのに使う。
-/// 言語の判定は、呼ぶたびに判定のモデルを作り直すため重く、一覧の行を組み立てるたびに呼ぶとフレームが落ちた。
-/// 結果を覚えておき、一覧では画面に入る前にメインスレッドの外で判定しておく（`BodyTextPreparer`）。
+/// 言語の判定は、呼ぶたびに判定のモデルを作り直すため重く、タイムラインの行を組み立てるたびに呼ぶとフレームが落ちた。
+/// 結果を覚えておき、タイムラインでは画面に入る前にメインスレッドの外で判定しておく（`BodyTextPreparer`）。
 enum GuessedWritingDirection {
     /// 判定した結果。キーの文字列の長さ（UTF-16の数）を重さにして上限を付け、投稿から読んだ文字列を持ち続けないようにする。
     private static let cache = Mutex(CostLimitedCache<String, Bool>(totalCostLimit: 256 * 1024))

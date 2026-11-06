@@ -160,7 +160,7 @@ struct TimelineMediaTests {
         #expect(mediaGrid(in: harness, of: statuses[1].id) == nil)
     }
 
-    /// Macでウインドウの幅を変えると、一覧は幅の変化を動きの中で並べ直す。そのとき初めて画面に入った行の写真まで動きに乗ると、
+    /// Macでウインドウの幅を変えると、タイムラインは幅の変化を動きの中で並べ直す。そのとき初めて画面に入った行の写真まで動きに乗ると、
     /// 大きさ0の左上から、まっすぐ滑ってきて見えていた。初めて並べる行の中身は、動きに乗せずに置く。
     /// 写真の高さは幅に比例するので、狭めると行が低くなり、下から新しい行が画面に入る。
     @Test func rowsAppearingWhileWidthAnimatesPlaceMediaWithoutAnimation() throws {
@@ -303,8 +303,8 @@ struct TimelineMediaTests {
         }
     }
 
-    /// ビューアの開閉で画像を切り抜く範囲は、サムネイルの入れ物ではなく、行を並べている一覧の表示範囲にする。
-    /// サムネイルを横にスクロールする入れ物に載せたとき、入れ物を一覧と取り違えて、閉じる途中に行が前に浮いて見えたことがある。
+    /// ビューアの開閉で画像を切り抜く範囲は、サムネイルの入れ物ではなく、行を並べているタイムラインの表示範囲にする。
+    /// サムネイルを横にスクロールする入れ物に載せたとき、入れ物をタイムラインと取り違えて、閉じる途中に行が前に浮いて見えたことがある。
     @Test func viewerClipsToListNotThumbnailContainer() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -321,7 +321,7 @@ struct TimelineMediaTests {
     }
 
     /// サムネイルの横スクロールの入れ物は、ステータスバーのタップで先頭へ戻る対象にしない。
-    /// 画面に対象が複数あるとUIKitはどれも動かさないため、一覧を新着へ戻す操作が効かなくなる。
+    /// 画面に対象が複数あるとUIKitはどれも動かさないため、タイムラインを新着へ戻す操作が効かなくなる。
     @Test func thumbnailContainerDoesNotTakeScrollToTop() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

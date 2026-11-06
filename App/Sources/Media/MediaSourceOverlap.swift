@@ -2,10 +2,10 @@ import UIKit
 
 /// 開閉の起点の上に重なっているビュー（ヘッダー画像にかかるアイコンなど）の複製。画像の複製のさらに手前に置く。
 ///
-/// 画像の複製は一覧より手前に描くため、そのままでは起点に重なっているビューまで覆い、開き始めに消え、閉じ終わりに急に現れて見える。
+/// 画像の複製はタイムラインより手前に描くため、そのままでは起点に重なっているビューまで覆い、開き始めに消え、閉じ終わりに急に現れて見える。
 /// 複製を重ねて、起点の大きさの近くでは元のビューが残って見えるようにし、サムネイルに重ねた表示と同じ濃さで出し入れする。
-/// 一覧のバーの手前に描かないよう、起点を含む一覧のバーに隠れない範囲で切り抜く。
-/// 閉じる途中に一覧をスクロールされても元のビューと重なるよう、起点が動いた分だけ複製も動かす。
+/// タイムラインのバーの手前に描かないよう、起点を含むタイムラインのバーに隠れない範囲で切り抜く。
+/// 閉じる途中にタイムラインをスクロールされても元のビューと重なるよう、起点が動いた分だけ複製も動かす。
 @MainActor
 final class MediaSourceOverlap {
     /// 切り抜く範囲の枠。複製を載せる層に置く。
@@ -23,7 +23,7 @@ final class MediaSourceOverlap {
             guard overlapping.window === window, !overlapping.isHidden, overlapping.alpha > 0,
                   let snapshot = overlapping.snapshotView(afterScreenUpdates: false)
             else { return nil }
-            // 回したり縮めたりしたビュー（一覧で重ねた写真）も同じ形に重なるよう、元の大きさで写し、同じ中心に置いてから同じ角度と倍率にする。
+            // 回したり縮めたりしたビュー（タイムラインで重ねた写真）も同じ形に重なるよう、元の大きさで写し、同じ中心に置いてから同じ角度と倍率にする。
             let frame = overlapping.unrotatedFrame(in: window)
             let scale = overlapping.scale(in: window)
             snapshot.bounds.size = overlapping.bounds.size

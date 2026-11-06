@@ -1,23 +1,23 @@
 public import Foundation
 import os
 
-/// 通知の読み込み、ストリーミング、既読位置、補完、新着の挿入の予約を受け持ち、結果を一覧の画面（`TimelineDisplay`）へ命令として伝える。
+/// 通知の読み込み、ストリーミング、既読位置、補完、新着の挿入の予約を受け持ち、結果を通知のタイムラインの画面（`TimelineDisplay`）へ命令として伝える。
 @MainActor
 public final class NotificationsModel {
     /// 1回に読む件数。ホームと揃える。
     private static let pageSize = 40
 
-    /// 結果を伝える一覧の画面。
+    /// 結果を伝えるタイムラインの画面。
     public weak var display: (any TimelineDisplay)?
-    /// 一覧を最上部からさらに引っぱったときに見せる、ストリーミングの状態の表示。
+    /// タイムラインを最上部からさらに引っぱったときに見せる、ストリーミングの状態の表示。
     public weak var streamingStatus: (any StreamingStatusDisplay)?
     /// 未読の数が変わったときに呼ぶ。タブのバッジに出す。2つめの値は、実際はもっと多いかもしれないこと。
     public var onUnreadCountChange: ((Int, Bool) -> Void)?
     /// ストリーミングで新しい通知が届いたときに呼ぶ。ステータスバーに流す。2つめの値は、通知の投稿に当てたサーバーのフィルターの判定。
     public var onArrival: ((MastodonNotification, FilterVerdict) -> Void)?
-    /// 一覧を最初から読み込んだとき、引っぱって読み直したときに呼ぶ。保留中の通知の人数を読み直すのに使う。
+    /// タイムラインを最初から読み込んだとき、引っぱって読み直したときに呼ぶ。保留中の通知の人数を読み直すのに使う。
     public var onReload: () -> Void = {}
-    /// 通知の投稿に当てるサーバーのフィルター。ステータスバーに流す通知にも、一覧と同じく当てる。
+    /// 通知の投稿に当てるサーバーのフィルター。ステータスバーに流す通知にも、タイムラインと同じく当てる。
     public let filtering: StatusFiltering
     private let store: NotificationStore
     private let client: MastodonClient
@@ -28,12 +28,12 @@ public final class NotificationsModel {
     /// バックグラウンドで既読位置を保存し終えるまで、アプリを止めないよう頼む。頼んで、終えるときに呼ぶものを返す。OSが与えた時間が尽きたら、頼みを終えて`onExpire`を呼ぶ。
     private let backgroundTime: @MainActor (String, _ onExpire: @escaping @MainActor () -> Void) -> @MainActor () -> Void
     private let logger = SciaLog.logger(category: "notifications")
-    /// この一覧が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
+    /// このタイムラインが始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
     private let tasks: TaskScope
     private var isStopped: Bool { tasks.isClosed }
     /// 走り終えていない処理の数。止めたあとに何も起きないことを、テストが確かめるのに使う。
     public var runningTaskCount: Int { tasks.runningCount }
-    /// 一覧全体の状態。失敗したままなら、電波の回復や引っぱった読み直しでやり直す。
+    /// タイムライン全体の状態。失敗したままなら、電波の回復や引っぱった読み直しでやり直す。
     public private(set) var contentState = TimelineContentState.loaded
     /// 末尾の読み込みの状態。失敗したままなら、電波の回復でやり直す。
     public private(set) var footerState = TimelineFooterState.idle
@@ -68,7 +68,7 @@ public final class NotificationsModel {
     /// 走っている補完の数と、すべて終わるのを待っている引っぱった読み直し。
     private var activeFills = 0
     /// バックグラウンドから戻ってから、切れていた間の補完を終えるまで。最上部にいても追従せず、一番上に見えていた行の位置を保つ。
-    /// 戻ってから始めた補完があり、走っている補完がすべて終わり、その間に届いた新着も挿入し終えたら解く。決まりはdocs/vision.mdの「一覧の動き」にある。
+    /// 戻ってから始めた補完があり、走っている補完がすべて終わり、その間に届いた新着も挿入し終えたら解く。決まりはdocs/vision.mdの「タイムラインの動き」にある。
     private var keepsPositionAfterResume = false
     private var hasStartedFillAfterResume = false
     private var fillWaiters: [CheckedContinuation<Void, Never>] = []
@@ -182,7 +182,7 @@ public final class NotificationsModel {
         display?.setFooterState(state)
     }
 
-    /// 一覧を引っぱって離したときに、最新の通知を読んで上に足す。足すのは一番新しい通知より新しいものだけで、読んでいる位置は動かさない。
+    /// タイムラインを引っぱって離したときに、最新の通知を読んで上に足す。足すのは一番新しい通知より新しいものだけで、読んでいる位置は動かさない。
     /// 最初の読み込みに失敗したままなら、それをやり直す。溜めている新着は、間隔を待たずに入れる。
     public func refresh() async {
         guard !isStopped, hasStarted, !isDisabled else { return }
@@ -331,7 +331,7 @@ public final class NotificationsModel {
 
     // MARK: - 受け入れた保留中の通知の取り込み
 
-    /// 保留中の通知を受け入れた。サーバーが取り込み終えたら一覧を読み直す。決まりはdocs/notification-filter.mdの「受け入れた通知の取り込み」にある。
+    /// 保留中の通知を受け入れた。サーバーが取り込み終えたらタイムラインを読み直す。決まりはdocs/notification-filter.mdの「受け入れた通知の取り込み」にある。
     /// つながっていれば`notifications_merged`を待ち、つながっていなければ間をあけて問い合わせる。待つ間に切れてつなぎ直したときも、知らせを逃したかもしれないので問い合わせる。
     public func didAcceptRequest() {
         guard !isStopped, hasLoadedInitial else { return }
@@ -382,7 +382,7 @@ public final class NotificationsModel {
         reloadAfterMerge()
     }
 
-    /// 取り込まれた通知は古い日時のものもあり、一覧の途中に入るため、一番上から読み直して置き換え、一番上に置く。読んでいた位置は保たない。
+    /// 取り込まれた通知は古い日時のものもあり、タイムラインの途中に入るため、一番上から読み直して置き換え、一番上に置く。読んでいた位置は保たない。
     /// ほかの読み込みの途中なら、それが終わってから読み直す。
     private func reloadAfterMerge() {
         guard !isStopped, hasLoadedInitial else { return }
@@ -403,7 +403,7 @@ public final class NotificationsModel {
                 model.setFooterState(model.store.reachedEnd ? .reachedEnd : .idle)
                 model.onReload()
             } catch {
-                // 読めなければ今の一覧を残す。次に引っぱったときや起動し直したときに出る。
+                // 読めなければ今のタイムラインを残す。次に引っぱったときや起動し直したときに出る。
                 model.handle(error, during: "reloadAfterMerge") { _ in }
             }
         }
@@ -492,7 +492,7 @@ public final class NotificationsModel {
     private func fillFromLatest(purpose: RequestPurpose) {
         #if DEBUG
         // 補完で読んだ新着はストアへ直接合流し、insertPendingの保留を通らないため、保留中は補完を始めない。
-        // 保留を送る前に始まった補完は止めない。その結果は、保留中でも一覧に入る。
+        // 保留を送る前に始まった補完は止めない。その結果は、保留中でもタイムラインに入る。
         if isHoldingArrivals() {
             isFillHeld = true
             logger.info("notifications fill held")
@@ -533,7 +533,7 @@ public final class NotificationsModel {
         }
     }
 
-    /// 補完で一覧が変わっていれば画面に出す。
+    /// 補完でタイムラインが変わっていれば画面に出す。
     private func showFilledEntries(since before: [TimelineEntry]) {
         // 待っている間に同じ通知がストリーミングで挿入されていても、ギャップを置いていることがある。
         // 読めなかった通知だけが増えたときも描き直すよう、表示する並びで比べる。

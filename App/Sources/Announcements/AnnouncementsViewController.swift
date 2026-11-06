@@ -1,7 +1,7 @@
 import SciaCore
 import UIKit
 
-/// サーバーのお知らせの一覧。アカウントのメニューから開くシートの中身。決まりはdocs/announcements.mdにある。
+/// サーバーのお知らせのリスト。アカウントのメニューから開くシートの中身。決まりはdocs/announcements.mdにある。
 ///
 /// お知らせは多くても数件なので、編集履歴と同じく、スクロールビューに行を縦に積む。
 final class AnnouncementsViewController: UIViewController {
@@ -197,7 +197,7 @@ final class AnnouncementsViewController: UIViewController {
         return (id, frame.minY - scrollView.contentOffset.y)
     }
 
-    /// 上でお知らせが増えたり消えたり高さが変わったりしても、読んでいる行を画面の同じ位置に保つ。操作によらない変化で、読んでいる行を動かさないため（docs/vision.mdの「一覧の動き」）。
+    /// 上でお知らせが増えたり消えたり高さが変わったりしても、読んでいる行を画面の同じ位置に保つ。操作によらない変化で、読んでいる行を動かさないため（docs/vision.mdの「タイムラインの動き」）。
     private func restore(_ anchor: (id: Announcement.ID, y: CGFloat)?) {
         guard let anchor, let entry = entryViews[anchor.id], entry.superview != nil else { return }
         scrollView.layoutIfNeeded()
@@ -252,7 +252,7 @@ final class AnnouncementsViewController: UIViewController {
         return padded(label)
     }
 
-    /// 読めていた行を残したまま、シートで開いたときか引っぱったときの失敗を、一覧の上に出す。
+    /// 読めていた行を残したまま、シートで開いたときか引っぱったときの失敗を、お知らせのリストの上に出す。
     private func failureRow(_ reason: ErrorPresentation) -> UIView {
         let title = UILabel()
         title.font = .preferredFont(forTextStyle: .subheadline).bold
@@ -427,7 +427,7 @@ extension AnnouncementsViewController: LinkMenuHost {
         }
     }
 
-    /// お知らせのメンションは、一覧の投稿のメンションと結び付けていないため、メニューにアイコンを出さない。
+    /// お知らせのメンションは、タイムラインの投稿のメンションと結び付けていないため、メニューにアイコンを出さない。
     func mentionMenuIcon(for url: URL) -> UIImage? { nil }
 
     func showLinkCopiedNotice() {

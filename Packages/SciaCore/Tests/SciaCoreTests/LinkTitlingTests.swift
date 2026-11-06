@@ -3,7 +3,7 @@ import Testing
 @testable import SciaCore
 
 struct LinkTitlingTests {
-    // MARK: - URLの一覧
+    // MARK: - URLのリスト
 
     @Test func listsURLsInOrderOfAppearance() {
         let text = "見て https://b.example/2 と https://a.example/1"

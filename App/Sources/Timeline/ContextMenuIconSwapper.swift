@@ -71,7 +71,7 @@ final class ContextMenuIconSwapper: NSObject {
         guard let window, icons.values.contains(where: { $0.icon != nil }) else { return }
         let start = mediaTime()
         var visited = 0
-        // メニューはアプリの画面（タブとその中の一覧）の外に重ねて出すため、アプリの画面を包むビューはたどらず、毎コマの手間を減らす。
+        // メニューはアプリの画面（タブとその中のタイムライン）の外に重ねて出すため、アプリの画面を包むビューはたどらず、毎コマの手間を減らす。
         let root = window.rootViewController?.view
         for subview in window.subviews where root.map({ !$0.isDescendant(of: subview) }) ?? true {
             swapIcons(in: subview, visited: &visited)
@@ -93,7 +93,7 @@ final class ContextMenuIconSwapper: NSObject {
             if entry.hasArrived {
                 imageView.image = icon
             } else {
-                // 届いたときは、一覧のアイコン（`AvatarView`）と同じ長さで浮かび上がらせる。
+                // 届いたときは、タイムラインのアイコン（`AvatarView`）と同じ長さで浮かび上がらせる。
                 // 届いたあとにスクロールやサブメニューの開閉で作り直された行は、出てくるたびに揺らがないよう、すぐ替える。
                 UIView.transition(with: imageView, duration: 0.15, options: [.transitionCrossDissolve, .allowUserInteraction]) {
                     imageView.image = icon

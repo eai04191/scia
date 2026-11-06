@@ -148,7 +148,7 @@ struct XPostTests {
         #expect(links.map(\.1) == [.url(try url("https://x.com/DeepSeekHarness"))])
     }
 
-    /// Xの縮小版（`name=small`）は、長い辺を680pxに収める。一覧で元の画像を選べるよう、縮小版の大きさを実際の大きさにする。
+    /// Xの縮小版（`name=small`）は、長い辺を680pxに収める。タイムラインで元の画像を選べるよう、縮小版の大きさを実際の大きさにする。
     @Test func photoPreviewHasSmallSize() throws {
         let item = FxTwitterResponse.Item(
             id: "1", type: "photo", url: try url("https://pbs.twimg.com/media/a.jpg?name=orig"),

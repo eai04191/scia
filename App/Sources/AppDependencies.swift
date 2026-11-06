@@ -76,7 +76,7 @@ enum AppDependencies {
     /// 添付ファイルの元のファイルを置くディスクキャッシュ。ビューアで開いた画像の元のファイルと、共有や保存のために落とした動画などを置く。
     static let mediaFiles = MediaFileCache()
 
-    /// ビューアで開く画像を先読みして置く場所。開いていない画像で、ビューアで開いた画像を押し出したり、ストレージの一覧に並べたりしないよう分ける。
+    /// ビューアで開く画像を先読みして置く場所。開いていない画像で、ビューアで開いた画像を押し出したり、ストレージの画面に並べたりしないよう分ける。
     static let mediaPrefetchFiles = MediaFileCache(
         directory: .cachesDirectory.appending(path: "MediaPrefetch"),
         sharingDirectory: .temporaryDirectory.appending(path: "MediaPrefetchSharing"),
@@ -111,7 +111,7 @@ enum AppDependencies {
         directory: URL.documentsDirectory.appending(path: "DiscomfortReports")
     )
 
-    /// ログインしたアカウントの一覧。シーンをまたいで同じものを使う。Keychainを読めなかったときは、その失敗を返し、次に使うときに読み直す。
+    /// ログインしたアカウントのリスト。シーンをまたいで同じものを使う。Keychainを読めなかったときは、その失敗を返し、次に使うときに読み直す。
     static var accounts: Result<AccountRegistry, any Error> { accountsLoad.get() }
 
     private static let accountsLoad = LoadUntilSucceeded {

@@ -4,7 +4,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// 一覧が最初の読み込みで、読み込み中の表示から最初の行を出すときの見え方。アカウントを切り替えたときと起動したときに通る。
+/// タイムラインが最初の読み込みで、読み込み中の表示から最初の行を出すときの見え方。アカウントを切り替えたときと起動したときに通る。
 @Suite(.scratch)
 @MainActor
 struct FirstEntriesRevealTests {

@@ -37,7 +37,7 @@ import UIKit
         #expect(field.isFirstResponder)
     }
 
-    /// 検索欄にフォーカスがある間に行とボタンのないところを押すと、キーボードだけを閉じ、検索欄と打った語は残す。ボタンや一覧にない行を押したときと、フォーカスがないときは閉じない。見出しの行はUIで確かめる。
+    /// 検索欄にフォーカスがある間に行とボタンのないところを押すと、キーボードだけを閉じ、検索欄と打った語は残す。ボタンや結果のリストにない行を押したときと、フォーカスがないときは閉じない。見出しの行はUIで確かめる。
     @Test func tappingEmptySpaceDismissesOnlyKeyboard() async throws {
         let search = SearchViewController()
         let window = try Self.window(showing: search)

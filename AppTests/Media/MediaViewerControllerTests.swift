@@ -77,7 +77,7 @@ struct MediaViewerControllerTests {
         }.pngData())
     }
 
-    /// 元の画像を読み込むビューアを、一覧の上に開いて出し終えるまで待つ。共有や保存で元のファイルが整理で消えていたときは、`download`で落とし直す。
+    /// 元の画像を読み込むビューアを、タイムラインの上に開いて出し終えるまで待つ。共有や保存で元のファイルが整理で消えていたときは、`download`で落とし直す。
     /// - Parameter arrival: 開くまで元の画像を届けない。届く前の状態を確かめるテストは、閉じた門を渡して自分で開く。
     private func presentLoadingViewer(
         on harness: TimelineHarness,
@@ -202,7 +202,7 @@ struct MediaViewerControllerTests {
         #expect(try Data(contentsOf: file) == data)
     }
 
-    /// アプリ全体のチップは、ビューアを開くとメニューボタンの行の下へ動き、閉じると一覧の位置へ戻る。消えずに同じチップのまま残る。
+    /// アプリ全体のチップは、ビューアを開くとメニューボタンの行の下へ動き、閉じるとタイムラインの位置へ戻る。消えずに同じチップのまま残る。
     @Test func appWideChipMovesBetweenListAndViewer() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -918,7 +918,7 @@ struct MediaViewerControllerTests {
         MediaTransferCenter(operationStatus: operationStatus, notices: notices, downloads: downloads, photoSaver: photoSaver)
     }
 
-    /// 動画のビューアを、落とし方を差し替えて一覧の上に開く。
+    /// 動画のビューアを、落とし方を差し替えてタイムラインの上に開く。
     private func presentVideoViewer(
         on harness: TimelineHarness,
         type: MediaAttachment.Kind = .video,
@@ -1161,7 +1161,7 @@ struct MediaViewerControllerTests {
         try await waitUntil { viewer.downloadProgressText == nil }
     }
 
-    /// 見ている添付ファイルのものを落としている途中に、ほかのものも落としていれば、件数を添え、押すと「操作の状況」の一覧を開く。
+    /// 見ている添付ファイルのものを落としている途中に、ほかのものも落としていれば、件数を添え、押すと「操作の状況」の画面を開く。
     @Test func chipWithOtherDownloadsOpensOperationStatus() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -1188,7 +1188,7 @@ struct MediaViewerControllerTests {
         #expect(opened.presenters.first === viewer)
     }
 
-    /// ビューアを閉じても保存のためのダウンロードは続け、済んだら一覧の知らせの場所で、落としている途中のチップと入れ替えて知らせる。
+    /// ビューアを閉じても保存のためのダウンロードは続け、済んだらタイムラインの知らせの場所で、落としている途中のチップと入れ替えて知らせる。
     @Test func closingViewerKeepsSavingAndReportsOnTimeline() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -1202,7 +1202,7 @@ struct MediaViewerControllerTests {
         try await waitUntil { stack.persistentNotice?.text == "ダウンロード中 50%" }
         let chip = try #require(stack.chips.first)
         viewer.dismiss(animated: false)
-        // 閉じたあとも、同じチップがそのまま一覧の位置に残る。
+        // 閉じたあとも、同じチップがそのままタイムラインの位置に残る。
         #expect(stack.chips.first === chip)
         #expect(stack.persistentNotice?.text == "ダウンロード中 50%")
 
@@ -1213,7 +1213,7 @@ struct MediaViewerControllerTests {
         #expect(stack.persistentNotice == nil)
     }
 
-    /// 共有のために落としている途中でビューアを閉じたら止め、止めたことを一覧に数秒出す。保存のためのものは続ける。
+    /// 共有のために落としている途中でビューアを閉じたら止め、止めたことをタイムラインに数秒出す。保存のためのものは続ける。
     @Test func closingViewerStopsSharingAndReportsOnTimeline() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -1344,7 +1344,7 @@ struct MediaViewerControllerTests {
         #expect(unavailable.attributes.contains(.disabled))
     }
 
-    /// ビューアは一覧を残したまま覆うため、開いている間は一覧の投稿を見たと報告せず、閉じ終わったら報告する。
+    /// ビューアはタイムラインを残したまま覆うため、開いている間はタイムラインの投稿を見たと報告せず、閉じ終わったら報告する。
     @Test func timelineReportsVisibleStatusesOnlyAfterViewerCloses() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -1373,7 +1373,7 @@ struct MediaViewerControllerTests {
         #expect(reported.contains(statuses[0].id), "閉じたあとに報告しませんでした")
     }
 
-    /// 開閉の間はサムネイルとビューアの画像を隠して複製を動かし、開ききったら両方とも元どおり見せる。閉じる動きの間も一覧を操作でき、戻り終えたらサムネイルを見せる。
+    /// 開閉の間はサムネイルとビューアの画像を隠して複製を動かし、開ききったら両方とも元どおり見せる。閉じる動きの間もタイムラインを操作でき、戻り終えたらサムネイルを見せる。
     @Test func transitionRestoresThumbnailAndContentAfterOpeningAndClosing() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -1413,7 +1413,7 @@ struct MediaViewerControllerTests {
 
         viewer.close()
 
-        // 閉じると決めた時点でビューアを閉じ、サムネイルへ戻る動きの途中でも一覧を操作できるようにする。
+        // 閉じると決めた時点でビューアを閉じ、サムネイルへ戻る動きの途中でもタイムラインを操作できるようにする。
         // ビューアを残したまま動かすと、閉じた直後に別の画像をタップしても届かない。
         // ビューアを外すのは次の描画の機会になるため、それを待つ。複製が戻り終えるより先に外れていなければ失敗する。
         try await waitUntil { harness.viewController.presentedViewController == nil }
@@ -1429,7 +1429,7 @@ struct MediaViewerControllerTests {
     }
 
     /// 閉じる動きの途中に同じサムネイルを押して開き直したら、前の閉じる動きが着地しても、開き直したビューアが開き終えるまでサムネイルを隠したままにする。
-    /// 見せると、開く途中の複製と一覧のサムネイルが二重に見える。
+    /// 見せると、開く途中の複製とタイムラインのサムネイルが二重に見える。
     @Test func reopeningSameTileWhileClosingKeepsTileConcealedUntilOpened() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -1482,7 +1482,7 @@ struct MediaViewerControllerTests {
         #expect(!tile.isConcealedForViewer)
     }
 
-    /// 一覧で重ねた写真のように回して置いた起点からは、同じ角度と大きさから回しながら開き、開ききったらまっすぐにする。
+    /// タイムラインで重ねた写真のように回して置いた起点からは、同じ角度と大きさから回しながら開き、開ききったらまっすぐにする。
     /// 閉じるときは、起点の角度と大きさまで回しながら戻す。外側に接する四角へ戻すと、閉じ終わりにまっすぐな四角から回した写真へ切り替わって見えるため。
     /// 写真の白いフチも、フチを含めた写真の枠から始めて開くにつれて細くしてなくし、閉じるときは元の太さに戻す。
     /// 写真が落とす影も、開き始めは同じ濃さから薄くしてなくし、閉じ終わりには同じ濃さに戻す。
@@ -1655,7 +1655,7 @@ struct MediaViewerControllerTests {
         harness.frames.runUntilStopped()
     }
 
-    /// 起点がほかの添付ファイルを描いていても（一覧で重ねた3枚目の写真が4枚目の起点になるとき）、起点の上に重なっている写真は複製の手前に重ねる。
+    /// 起点がほかの添付ファイルを描いていても（タイムラインで重ねた3枚目の写真が4枚目の起点になるとき）、起点の上に重なっている写真は複製の手前に重ねる。
     /// 画像を使わないことと、重なっているビューを重ねないことは別で、重ねないと戻る画像が手前の写真を覆う。
     @Test func sourceOverlapIsKeptWhenSourceShowsOtherAttachment() async throws {
         let harness = try TimelineHarness(notices: notices)
@@ -1697,7 +1697,7 @@ struct MediaViewerControllerTests {
         viewer.dismiss(animated: false)
     }
 
-    /// 縮めて置いた起点（一覧で傾けずに重ねた奥の写真）へは、縮めた大きさと、同じ倍率で細くしたフチへ閉じる。
+    /// 縮めて置いた起点（タイムラインで傾けずに重ねた奥の写真）へは、縮めた大きさと、同じ倍率で細くしたフチへ閉じる。
     /// 起点が中身を描かず暗くしていれば、着くまでにその見え方へ移す。着いたところで画像の帯が急に紙に替わらないようにする。
     @Test func closingFollowsScaleOfSource() async throws {
         let harness = try TimelineHarness(notices: notices)
@@ -1747,11 +1747,11 @@ struct MediaViewerControllerTests {
         #expect(abs(closed.dimming - 0.12) < 0.01, "閉じ終わりの暗さが起点と違います: \(closed.dimming)")
     }
 
-    /// 開く途中は、バーの下のサムネイルと同じ見え方から始めるため、サムネイルを含む一覧の行の中にも複製を置く。開ききったら外し、最前面の複製のマスクも外す。
+    /// 開く途中は、バーの下のサムネイルと同じ見え方から始めるため、サムネイルを含むタイムラインの行の中にも複製を置く。開ききったら外し、最前面の複製のマスクも外す。
     @Test func openingDrawsUnderBarsUntilOpened() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
-        // 下端をバーに見立てた一覧。サムネイルの下半分がバーに隠れる。
+        // 下端をバーに見立てたタイムライン。サムネイルの下半分がバーに隠れる。
         let list = UIScrollView(frame: harness.viewController.view.bounds)
         list.contentInsetAdjustmentBehavior = .never
         list.contentInset.bottom = 100
@@ -1785,14 +1785,14 @@ struct MediaViewerControllerTests {
         )
         let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
         try await waitUntil { viewer.isContentHiddenForTransition }
-        #expect(row.subviews.contains { $0 !== tile }, "開く途中に一覧の行の中へ複製を置いていません")
+        #expect(row.subviews.contains { $0 !== tile }, "開く途中にタイムラインの行の中へ複製を置いていません")
         // バーの奥に描き分ける間は動かす複製を薄くするが、影は起点と同じ濃さで残す。
         harness.frames.step()
         #expect(viewer.morphPlacement.shadowOpacity > 0.15, "バーの奥に描き分ける開き始めに影が消えています: \(viewer.morphPlacement.shadowOpacity)")
 
         harness.frames.runUntilStopped()
         #expect(!viewer.isMoving)
-        #expect(row.subviews.allSatisfy { $0 === tile }, "開ききったあとも一覧の行の中に複製が残っています")
+        #expect(row.subviews.allSatisfy { $0 === tile }, "開ききったあともタイムラインの行の中に複製が残っています")
         viewer.dismiss(animated: false)
     }
 
@@ -1856,7 +1856,7 @@ struct MediaViewerControllerTests {
         harness.frames.runUntilStopped()
     }
 
-    /// 一覧のサムネイルが読めずにblurhashのぼかしから開いた画像は、元の画像が届いたら、ページも開く途中の複製も、ぼかしから薄くして入れ替える。
+    /// タイムラインのサムネイルが読めずにblurhashのぼかしから開いた画像は、元の画像が届いたら、ページも開く途中の複製も、ぼかしから薄くして入れ替える。
     @Test func originalReplacesBlurhashWithCrossfade() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -1908,7 +1908,7 @@ struct MediaViewerControllerTests {
         harness.frames.runUntilStopped()
     }
 
-    /// ビューアは一覧を残したまま上に重ねるため、開いている間も閉じたあとも、一覧の読んでいる位置を動かさない。
+    /// ビューアはタイムラインを残したまま上に重ねるため、開いている間も閉じたあとも、タイムラインの読んでいる位置を動かさない。
     @Test func timelineKeepsPositionWhileViewerOpensAndCloses() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -1947,7 +1947,7 @@ struct MediaViewerControllerTests {
         #expect(!viewer.isMoving)
         harness.viewController.view.window?.layoutIfNeeded()
 
-        #expect(harness.collectionView.contentOffset == offset, "開いている間に一覧が動きました")
+        #expect(harness.collectionView.contentOffset == offset, "開いている間にタイムラインが動きました")
         #expect(harness.windowMinY(of: anchor) == anchorY)
 
         viewer.close()
@@ -1956,7 +1956,7 @@ struct MediaViewerControllerTests {
         #expect(!tile.isConcealedForViewer)
         harness.viewController.view.window?.layoutIfNeeded()
 
-        #expect(harness.collectionView.contentOffset == offset, "閉じたあとに一覧が動きました")
+        #expect(harness.collectionView.contentOffset == offset, "閉じたあとにタイムラインが動きました")
         #expect(harness.windowMinY(of: anchor) == anchorY)
     }
 }

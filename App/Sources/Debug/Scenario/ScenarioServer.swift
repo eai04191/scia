@@ -5,9 +5,9 @@ import SciaCore
 import Synchronization
 import UIKit
 
-/// 撮影モードのシナリオ。サーバーが返す一覧と、URLで起こすイベントを持つ。
+/// 撮影モードのシナリオ。サーバーが返す応答と、URLで起こすイベントを持つ。
 struct ScenarioScript: Sendable {
-    /// ページを分けて返す一覧の1件。IDの新しい順に並べる。
+    /// ページを分けて返す並びの1件。IDの新しい順に並べる。
     struct Item: Sendable {
         let id: String
         let json: Data
@@ -16,7 +16,7 @@ struct ScenarioScript: Sendable {
     let credential: Credential
     /// GETで、そのまま返すJSON。キーは`api/v1/accounts/verify_credentials`のようなパス。
     let responses: [String: Data]
-    /// `max_id`などで区切って返す一覧。キーはパス。
+    /// `max_id`などで区切って返す並び。キーはパス。
     let lists: [String: [Item]]
     /// `scia-debug://scenario/<名前>`で流す、ストリーミングのメッセージ。流した時刻を受け取って作り、`interval`おきに1つずつ流す。
     let events: [String: @Sendable (Date) -> [String]]

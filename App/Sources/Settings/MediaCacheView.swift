@@ -43,7 +43,7 @@ struct MediaCacheView: View {
                             .accessibilityLabel(entry.file.lastPathComponent)
                         }
                     }
-                    // 写真アプリの一覧の下と同じく、件数だけを出す。
+                    // 写真アプリのグリッドの下と同じく、件数だけを出す。
                     Text("\(entries.count)件")
                         .font(.footnote)
                         .foregroundStyle(.secondary)

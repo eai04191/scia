@@ -7,7 +7,7 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct SavedStatusesModelTests {
-    /// ブックマークの一覧を、呼ばれた順に`pages`のページで返す。足りなければ最後のページを返す。
+    /// ブックマークを、呼ばれた順に`pages`のページで返す。足りなければ最後のページを返す。
     private static func transport(_ pages: [[Status]], failsFirst: Bool = false) -> RoutedTransport {
         let index = Mutex(failsFirst ? -1 : 0)
         return RoutedTransport { _ in
@@ -47,7 +47,7 @@ struct SavedStatusesModelTests {
         #expect(display.footerState == model.footerState)
     }
 
-    /// 見ていない間に外したら、すぐ一覧から消す。見ている間は、付け直せるよう残す。
+    /// 見ていない間に外したら、すぐタイムラインから消す。見ている間は、付け直せるよう残す。
     @Test func unsavingPrunesOnlyWhileHidden() async throws {
         let (model, display) = makeModel(transport: Self.transport([try Self.saved([2, 1])]))
         defer { model.stop() }

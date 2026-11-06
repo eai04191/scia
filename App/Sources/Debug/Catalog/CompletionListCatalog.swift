@@ -2,8 +2,8 @@
 import SciaCore
 import UIKit
 
-/// 投稿欄の補完の候補の一覧（`ComposeCompletionList`）の状態。ガラスの効果を見られるよう、画像の上に置く。
-/// 押しても何も起きない。一覧が欄の上や打っている行の下に重なる見え方は、実物で確かめる。
+/// 投稿欄の補完の候補のリスト（`ComposeCompletionList`）の状態。ガラスの効果を見られるよう、画像の上に置く。
+/// 押しても何も起きない。候補のリストが欄の上や打っている行の下に重なる見え方は、実物で確かめる。
 /// ふだんの出方に合わせて、いちばん優先する候補を一番下に置く（欄の上に出すとき）。上に置く出方は1つだけ並べる。
 enum CompletionListCatalog {
     @MainActor
@@ -12,7 +12,7 @@ enum CompletionListCatalog {
         let accounts: [CompletionCandidate] = [
             .account(CatalogFixtures.account(displayName: "カタログ", acct: "catalog")),
             .account(CatalogFixtures.account(
-                displayName: "とても長い表示名のアカウントで、一覧の幅に収まらないときに末尾が切れることを確かめる",
+                displayName: "とても長い表示名のアカウントで、候補のリストの幅に収まらないときに末尾が切れることを確かめる",
                 acct: "a_very_long_username_for_checking_truncation@an.extremely.long.domain.example"
             )),
             .account(CatalogFixtures.account(displayName: "", acct: "no_display_name@example.com", avatar: nil)),
@@ -29,13 +29,13 @@ enum CompletionListCatalog {
             .ownHashtag(OwnHashtag(name: "猫写真", source: .featured(statusesCount: 12_345))),
             .ownHashtag(OwnHashtag(name: "猫鍋", source: .recent)),
             .hashtag(Hashtag(name: "猫", history: [Hashtag.History(uses: 1_178, accounts: 406), Hashtag.History(uses: 56, accounts: 22)])),
-            .hashtag(Hashtag(name: "猫のいる暮らしと日々の写真と長いタグの名前が一覧の幅に収まらないとき")),
+            .hashtag(Hashtag(name: "猫のいる暮らしと日々の写真と長いタグの名前が候補のリストの幅に収まらないとき")),
         ]
         let emojis: [CompletionCandidate] = [
             .emoji(ServerEmoji(shortcode: "blobcat", url: emojiURL, staticUrl: emojiURL)),
             .emoji(ServerEmoji(shortcode: "a_very_long_shortcode_for_a_custom_emoji_that_does_not_fit_in_the_list", url: emojiURL, staticUrl: emojiURL)),
         ]
-        // 実際の一覧から、名前の短いものと、日本語と英語の名前が一覧の幅に収まらない長いもの。
+        // 実際の絵文字から、名前の短いものと、日本語と英語の名前が候補のリストの幅に収まらない長いもの。
         let standardEmojis: [CompletionCandidate] = ["🐈", "👍", "🧑‍🦼‍➡️", "🇬🇸"].compactMap { character in
             StandardEmojiCatalog.groups.lazy.flatMap(\.emojis).first { $0.emoji == character }.map(CompletionCandidate.standardEmoji)
         }
@@ -47,7 +47,7 @@ enum CompletionListCatalog {
             CatalogState(title: "ハッシュタグの候補（プロフィールのタグ、最近使ったタグ、最近の投稿の件数、長い名前）") { list(.candidates(hashtags), kind: .hashtag) },
             CatalogState(title: "カスタム絵文字の候補（長いショートコード）") { list(.candidates(emojis), kind: .emoji) },
             CatalogState(title: "カスタム絵文字とUnicodeの絵文字の候補（Unicodeの絵文字の長い名前）") { list(.candidates(Array(emojis.prefix(1)) + standardEmojis), kind: .emoji) },
-            CatalogState(title: "カスタム絵文字の一覧を読み込めなかったが、Unicodeの絵文字は出せる") {
+            CatalogState(title: "カスタム絵文字のリストを読み込めなかったが、Unicodeの絵文字は出せる") {
                 list(.candidatesWithFailure(Array(standardEmojis.prefix(2)), ComposeCompletion.failureMessage(for: MastodonAPIError(statusCode: 502, message: "Bad Gateway"))), kind: .emoji)
             },
             CatalogState(title: "候補を探している") { list(.loading, kind: .mention) },

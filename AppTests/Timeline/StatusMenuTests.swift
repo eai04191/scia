@@ -65,7 +65,7 @@ struct StatusMenuTests {
     }
 
     /// 並びの区切り線で分けたまとまりを、そのまとまりごとに出す。
-    /// 自分のアカウントが分からない一覧では、会話のミュート、固定、公開範囲を選んでブーストは出ない。
+    /// 自分のアカウントが分からないタイムラインでは、会話のミュート、固定、公開範囲を選んでブーストは出ない。
     @Test func defaultMenuGroupsItemsByPurpose() throws {
         let post = try status(url: URL(string: "https://example.social/@alice/100"))
 
@@ -89,7 +89,7 @@ struct StatusMenuTests {
         #expect(outline.dropLast().last == ["@alice[プロフィール,メンション,…,リストに追加,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,…,…,通報,その他[ユーザー名をコピー,サーバーをコピー,…,…,…,…,カスタマイズ]]"])
     }
 
-    /// 人の一覧の行の長押しでは、その人のサブメニュー1つだけのメニューにせず、項目を直接並べる。
+    /// 人のリストの行の長押しでは、その人のサブメニュー1つだけのメニューにせず、項目を直接並べる。
     @Test func accountRowMenuListsItemsDirectly() throws {
         let menu = try menu(for: .account(account("3", "carol")), userMenuActions: userMenuActions())
 
@@ -132,7 +132,7 @@ struct StatusMenuTests {
         var requests: [[String]] = []
     }
 
-    /// メンションされたユーザーのアイコンは、一覧のほかの行にいるその人のアカウントから取る。ブーストされた投稿を書いた人と、通知した人からも探す。
+    /// メンションされたユーザーのアイコンは、タイムラインのほかの行にいるその人のアカウントから取る。ブーストされた投稿を書いた人と、通知した人からも探す。
     @Test func mentionedAccountIsFoundInOtherRows() throws {
         let boost = try status(url: nil, reblog: try status(url: nil, account: try account("3", "carol")))
         let notification = MastodonNotification(id: "1", type: .follow, createdAt: Date(timeIntervalSince1970: 0), account: try account("4", "dave"))
@@ -143,7 +143,7 @@ struct StatusMenuTests {
         #expect(TimelineViewController.account(withID: "5", in: entries) == nil)
     }
 
-    /// 本文のメンションのリンクにはIDがないため、一覧の投稿のメンションからリンク先で引く。ブーストされた投稿と、通知の対象の投稿からも探す。
+    /// 本文のメンションのリンクにはIDがないため、タイムラインの投稿のメンションからリンク先で引く。ブーストされた投稿と、通知の対象の投稿からも探す。
     @Test func mentionIsFoundByURLInRows() throws {
         let carol = Mention(id: "3", username: "carol", url: URL(string: "https://example.social/@carol"), acct: "carol")
         let dave = Mention(id: "4", username: "dave", url: URL(string: "https://remote.example/@dave"), acct: "dave@remote.example")

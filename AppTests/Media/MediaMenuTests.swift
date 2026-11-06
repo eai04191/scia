@@ -20,7 +20,7 @@ struct MediaMenuTests {
         return UIWindow(windowScene: scene)
     }
 
-    /// 一覧から共有を始めたあと、落としている間にサムネイルが別の投稿に使い回されても、共有シートには始めたときの画像を添え、
+    /// タイムラインから共有を始めたあと、落としている間にサムネイルが別の投稿に使い回されても、共有シートには始めたときの画像を添え、
     /// 別の画像を出しているサムネイルを起点にしない。
     @Test func sharingFromMenuKeepsStartingPreviewWhenThumbnailIsReused() throws {
         let original = image(.red)

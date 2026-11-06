@@ -1,7 +1,7 @@
 import SciaCore
 import UIKit
 
-/// 人の一覧の行の中身。左にアイコン、右に表示名とハンドルを2行で並べる。アイコンと文字の列は、投稿のセルと同じ位置に置く。
+/// 人のリストの行の中身。左にアイコン、右に表示名とハンドルを2行で並べる。アイコンと文字の列は、投稿のセルと同じ位置に置く。
 /// 保留中の通知の行では、ハンドルの下に、保留している通知の件数を3行目に足す。
 struct AccountRowConfiguration: UIContentConfiguration {
     var avatar: AvatarView.Content
@@ -86,7 +86,7 @@ final class AccountRowView: UIView, UIContentView {
         NSLayoutConstraint.deactivate(variableConstraints)
         let margins = configuration.margins
         let textLeading = margins.leading + configuration.avatarSize + configuration.avatarSpacing
-        // 一覧は行の高さを画素に丸めるため、下の余白は少し縮められるようにしておく。
+        // 人のリストは行の高さを画素に丸めるため、下の余白は少し縮められるようにしておく。
         let bottom = bottomAnchor.constraint(greaterThanOrEqualTo: avatarView.bottomAnchor, constant: margins.bottom)
         // 3行目があれば、文字の列の下端は3行目にする。
         let lastLabel = configuration.detail == nil ? handleLabel : detailLabel
@@ -122,7 +122,7 @@ final class AccountRowView: UIView, UIContentView {
 }
 
 extension TimelineViewController {
-    /// 人の一覧の行。名前は、投稿のセルの名前と同じ太さと絵文字で描く。
+    /// 人のリストの行。名前は、投稿のセルの名前と同じ太さと絵文字で描く。
     func accountConfiguration(for account: Account, base: UIListContentConfiguration) -> AccountRowConfiguration {
         let language = settings.glyphLanguageIdentifier()
         let nameFont = base.textProperties.font.fontDescriptor.withSymbolicTraits(.traitBold).map { UIFont(descriptor: $0, size: 0) } ?? base.textProperties.font
@@ -144,7 +144,7 @@ extension TimelineViewController {
         )
     }
 
-    /// 保留中の通知の行。人の一覧の行に、保留している通知の件数を足す。
+    /// 保留中の通知の行。人のリストの行に、保留している通知の件数を足す。
     func notificationRequestConfiguration(for request: NotificationRequest, base: UIListContentConfiguration) -> AccountRowConfiguration {
         var configuration = accountConfiguration(for: request.account, base: base)
         configuration.detail = NSAttributedString(string: "通知\(request.notificationsCount.formatted())件", attributes: [

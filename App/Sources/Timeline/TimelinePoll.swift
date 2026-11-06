@@ -25,7 +25,7 @@ extension TimelineViewController {
         )
     }
 
-    /// 投票の選択肢やボタンが押されたときの処理。選んだ状態はこの一覧で覚え、同じ投票の行をまとめて描き直す。
+    /// 投票の選択肢やボタンが押されたときの処理。選んだ状態はこのタイムラインで覚え、同じ投票の行をまとめて描き直す。
     /// - Parameter anchorID: 押した行。描き直しても、この行の画面上の位置を保つ。
     func handlePollAction(_ action: PollView.Action, on status: Status, keeping anchorID: ItemID?) {
         guard let poll = status.displayed.poll else { return }
@@ -49,13 +49,13 @@ extension TimelineViewController {
         reconfigurePoll(poll.id, keeping: anchorID)
     }
 
-    /// 投票を送り終えた。投票の結果は、送った側がすべての一覧の投稿に反映する。
+    /// 投票を送り終えた。投票の結果は、送った側がすべてのタイムラインの投稿に反映する。
     func finishVoting(_ pollID: Poll.ID, succeeded: Bool) {
         pollChoices.endSubmitting(pollID, succeeded: succeeded)
         reconfigurePoll(pollID)
     }
 
-    /// 投票を読み直し終えた。読み直した結果は、読んだ側がすべての一覧の投稿に反映する。
+    /// 投票を読み直し終えた。読み直した結果は、読んだ側がすべてのタイムラインの投稿に反映する。
     func finishRefreshingPoll(_ pollID: Poll.ID) {
         pollChoices.endRefreshing(pollID)
         reconfigurePoll(pollID)

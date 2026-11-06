@@ -122,10 +122,10 @@ struct NotificationAppearanceGroupEditorView: View {
 }
 
 /// 「通知の見た目」のプレビューに並べる見本の通知。調整できる部品がどれかの行に出るように組む。決まりはdocs/appearance.mdの「プレビュー」にある。
-/// 一覧（`TimelineViewController`）に並べて描き、画像は通信しないよう、アプリのアイコンから作ったものと同梱した写真を使う。
+/// タイムライン（`TimelineViewController`）に並べて描き、画像は通信しないよう、アプリのアイコンから作ったものと同梱した写真を使う。
 @MainActor
 struct NotificationAppearanceSamples {
-    /// 見本を並べる一覧。見本を組むのにも、プレビューに置いて見せるのにも使う。1つの画面に1つずつ置く。
+    /// 見本を並べるタイムライン。見本を組むのにも、プレビューに置いて見せるのにも使う。1つの画面に1つずつ置く。
     let timeline: TimelineViewController
     private let notifications: [MastodonNotification]
 
@@ -134,7 +134,7 @@ struct NotificationAppearanceSamples {
         notifications = Self.notifications(date: now.addingTimeInterval(-600))
     }
 
-    /// プレビューの一覧に並べる見本。
+    /// プレビューのタイムラインに並べる見本。
     /// - Parameters:
     ///   - groups: 見本を出す分類。渡すと、その分類の見本（`sampleIDs(for:focus:)`）だけを返す。nilならすべての見本を返す。
     ///   - focus: 触っている項目。`groups`を渡したとき、その項目にしか要らない見本を足す。
@@ -153,7 +153,7 @@ struct NotificationAppearanceSamples {
         }
     }
 
-    /// 分類の見本の通知のID。分類ごとの見本に、触っている項目にしか要らない見本を足す。分類が空なら、分類の一覧の画面に出す部品の少ない通知を1件だけにする。
+    /// 分類の見本の通知のID。分類ごとの見本に、触っている項目にしか要らない見本を足す。分類が空なら、分類を並べた画面に出す部品の少ない通知を1件だけにする。
     static func sampleIDs(for groups: Set<AppearanceGroup.ID>, focus: AppearanceValue?) -> Set<String> {
         let names = groups.isEmpty ? ["follow"] : groups.flatMap { groupSamples[$0] ?? [] } + focusSamples(focus)
         return Set(names.map { "preview-\($0)" })
@@ -225,7 +225,7 @@ struct NotificationAppearanceSamples {
             mentions: [Mention(id: scia.id, username: scia.username, url: nil, acct: scia.acct)]
         )
         return [
-            // 分類の一覧の画面に出す、部品の少ない通知。誰が何をしたかの行と、種類の記号と、ハンドルを見せる。
+            // 分類を並べた画面に出す、部品の少ない通知。誰が何をしたかの行と、種類の記号と、ハンドルを見せる。
             MastodonNotification(id: "preview-follow", type: .follow, createdAt: date, account: friend),
             // まとめた通知のアイコンを見せる、誰が何をしたかの行だけのまとめた通知。
             MastodonNotification(

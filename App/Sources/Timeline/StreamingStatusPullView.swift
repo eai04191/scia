@@ -1,14 +1,14 @@
 import SciaCore
 import UIKit
 
-/// 一覧を最上部からさらに引っぱったときだけ見える、新着が届く2つの経路の状態の表示。
+/// タイムラインを最上部からさらに引っぱったときだけ見える、新着が届く2つの経路の状態の表示。
 /// 左にストリーミング、右にRESTでの補完（切れていた間を読む）を並べる。つながっていても補完が終わるまでは新着が出ないため、
 /// 「つながっているのに新着が出ない」ときに、どちらで止まっているかを使う人が自分で確かめられるようにする。
 /// 切れているときにタイトルの下へ出す表示とは別に、いつでも見られる場所に置く。
 ///
-/// 一覧の内容の上端より上（引っぱると現れる余白）に置く。`contentInset`や内容の大きさは変えないため、スクロール位置を保つ処理に関わらない。
-/// 引っぱって離したときの読み直しは一覧の更新コントロールが受け持ち、読んでいる間はこの表示を出さない。
-/// 更新コントロールは読んでいる間、一覧のすぐ上に止まり、位置を変えられないため、この表示を間に挟めない。
+/// タイムラインの内容の上端より上（引っぱると現れる余白）に置く。`contentInset`や内容の大きさは変えないため、スクロール位置を保つ処理に関わらない。
+/// 引っぱって離したときの読み直しはタイムラインの更新コントロールが受け持ち、読んでいる間はこの表示を出さない。
+/// 更新コントロールは読んでいる間、タイムラインのすぐ上に止まり、位置を変えられないため、この表示を間に挟めない。
 final class StreamingStatusPullView: UIView {
     /// 今の日付。テストでは決まった日付に差し替える。
     var now: () -> Date = AppDependencies.now
@@ -37,7 +37,7 @@ final class StreamingStatusPullView: UIView {
         stack.spacing = 6
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
-        // 左寄せなので、すぐ下に並ぶ一覧の行と左端をそろえる。
+        // 左寄せなので、すぐ下に並ぶタイムラインの行と左端をそろえる。
         directionalLayoutMargins = NSDirectionalEdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16)
         NSLayoutConstraint.activate([
             stack.topAnchor.constraint(equalTo: topAnchor, constant: 12),
@@ -88,10 +88,10 @@ final class StreamingStatusPullView: UIView {
             .joined(separator: "、")
     }
 
-    /// 一覧の内容の上端の上に置き、引っぱった分だけ見えるようにする。
+    /// タイムラインの内容の上端の上に置き、引っぱった分だけ見えるようにする。
     func install(in scrollView: UIScrollView) {
         scrollView.addSubview(self)
-        // 一覧が画面の高さに満たないときも引っぱれるよう、一覧の側で縦にバウンスするようにしてある。
+        // タイムラインが画面の高さに満たないときも引っぱれるよう、タイムラインの側で縦にバウンスするようにしてある。
         // ナビゲーションバーの後ろが透けるため、引っぱっていないときは見えないよう、引っぱった量で濃さを変える。
         observations = [
             scrollView.observe(\.contentOffset) { [weak self] _, _ in
@@ -155,7 +155,7 @@ final class StreamingStatusPullView: UIView {
     }
 
     private static func restContent(for catchUp: CatchUpStatus, now: Date) -> Content {
-        // 止まっている間は、一覧がいつまでの投稿を出しているかを添える。
+        // 止まっている間は、タイムラインがいつまでの投稿を出しているかを添える。
         let loadedUntil = catchUp.lastLoadedAt.map { "\(time($0, now: now))まで" }
         switch catchUp.phase {
         case .idle:

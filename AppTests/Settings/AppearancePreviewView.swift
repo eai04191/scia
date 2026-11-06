@@ -4,7 +4,7 @@ import UIKit
 
 /// 「投稿の見た目」と「通知の見た目」の見本の行の中身。
 protocol AppearancePreviewConfiguration: UIContentConfiguration {
-    /// 一覧と同じく、この行の下に区切り線を引くか。
+    /// タイムラインと同じく、この行の下に区切り線を引くか。
     var drawsPreviewSeparatorBelow: Bool { get }
     @MainActor func makePreviewRow() -> any AppearancePreviewRow
 }
@@ -15,8 +15,8 @@ protocol AppearancePreviewRow: UIView, UIContentView {
     func previewFrames() -> AppearancePreviewFrames
 }
 
-/// 見本の行を、一覧と同じ部品で縦に並べるビュー。テストで、見本の部品の位置と見本の高さを測り、行を画像にするのに使う。
-/// アプリのプレビューは見本をタイムラインの一覧（`AppearanceTimelinePreviewController`）に並べるが、
+/// 見本の行を、タイムラインと同じ部品で縦に並べるビュー。テストで、見本の部品の位置と見本の高さを測り、行を画像にするのに使う。
+/// アプリのプレビューは見本をタイムライン（`AppearanceTimelinePreviewController`）に並べるが、
 /// テストでは行ごとの部品の枠を行の座標で読めるよう、行のビューを直接並べる。
 final class AppearancePreviewView: UIView {
     private let stack = UIStackView()
@@ -40,7 +40,7 @@ final class AppearancePreviewView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// - Parameter showsSeparators: 一覧と同じく、行のあいだに区切り線を引く。引かないときも、行の位置が変わらないよう、線を透明にして残す。
+    /// - Parameter showsSeparators: タイムラインと同じく、行のあいだに区切り線を引く。引かないときも、行の位置が変わらないよう、線を透明にして残す。
     func apply(_ configurations: [any AppearancePreviewConfiguration], showsSeparators: Bool = true) {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         rows = configurations.map { $0.makePreviewRow() }

@@ -1,7 +1,7 @@
 import SciaCore
 import UIKit
 
-/// 予約した投稿の一覧。予約の日時が近い順に、タイムラインの投稿の行と同じ見た目で並べる。決まりはdocs/tabs.mdの「予約投稿」にある。
+/// 予約した投稿のタイムライン。予約の日時が近い順に、ほかのタイムラインの投稿の行と同じ見た目で並べる。決まりはdocs/tabs.mdの「予約投稿」にある。
 /// 行のタップで日時を変え、長押しのメニューに、日時を変える、投稿欄に戻して書き直す、取り消すを置き、取り消すは左へのスワイプでもできる。
 @MainActor
 final class ScheduledStatusesViewController: UICollectionViewController {
@@ -216,7 +216,7 @@ final class ScheduledStatusesViewController: UICollectionViewController {
     // MARK: - 行の中身
 
     /// タイムラインの投稿の行と同じ部品で、投稿されたときの見た目に組み立てる。時刻の場所には、予約の日時を「日時」の書き方で出す。
-    /// アイコンと名前は押せないようにする。予約の一覧から自分のプロフィールを開く理由がないため。
+    /// アイコンと名前は押せないようにする。予約投稿のタイムラインから自分のプロフィールを開く理由がないため。
     private func contentConfiguration(for scheduled: ScheduledStatus, account: Account, base: UIListContentConfiguration) -> PostContentConfiguration {
         let params = scheduled.params
         let preview = Status(

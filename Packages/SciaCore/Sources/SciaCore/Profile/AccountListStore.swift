@@ -1,6 +1,6 @@
 import Foundation
 
-/// 人の一覧（お気に入りした人、ブーストした人、フォロワー、フォロー）を、サーバーが返す順に持つ。
+/// 人のリスト（お気に入りした人、ブーストした人、フォロワー、フォロー）を、サーバーが返す順に持つ。
 /// 続きは、応答の`Link`ヘッダーの`next`にある`max_id`から読む。
 @MainActor
 public final class AccountListStore {
@@ -53,13 +53,13 @@ public final class AccountListStore {
         return added
     }
 
-    /// 一覧の先頭に足す。リストのメンバーの画面で、足した人を出すのに使う。もう並んでいれば何もしない。
+    /// リストの先頭に足す。リストのメンバーの画面で、足した人を出すのに使う。もう並んでいれば何もしない。
     public func prepend(_ account: Account) {
         if isLoading { changesDuringLoad.append(.prepend(account)) }
         insert(account)
     }
 
-    /// 一覧から除く。リストのメンバーの画面で、外した人を消すのに使う。
+    /// リストから除く。リストのメンバーの画面で、外した人を消すのに使う。
     public func remove(accountID: String) {
         if isLoading { changesDuringLoad.append(.remove(accountID)) }
         accounts.removeAll { $0.id == accountID }

@@ -173,7 +173,7 @@ struct AppearanceEditorTests {
         "reactionGlow": [.drawsReactionGlowInHDR, .reactionGlowIcons, .reactionGlowFillsWidthWhenAlone, .reactionGlowLightFavouriteColor],
     ]
 
-    /// 分類ごとの選んで決める項目の一覧に、漏れがない。
+    /// 分類ごとの選んで決める項目のリストに、漏れがない。
     @Test func groupChoicesCoverEveryChoice() {
         #expect(Set(Self.choices.values.joined()) == Set(AppearanceChoice.allCases))
     }
@@ -326,7 +326,7 @@ struct AppearanceEditorTests {
         #expect(row[.reactionGlowIcons] != nil)
     }
 
-    /// 光っている行には、一覧と同じく区切り線を引かないので、区切り線の場所も示さない。
+    /// 光っている行には、タイムラインと同じく区切り線を引かないので、区切り線の場所も示さない。
     @Test func litRowHasNoSeparator() throws {
         let rows = layOutSamples(try makeSettings())
         let lit = try #require(rows.first { $0[.reactionGlow] != nil })
@@ -344,7 +344,7 @@ struct AppearanceEditorTests {
     }
 
     /// 既定値と範囲の両端で、見本の投稿を並べて落ちず、行の高さが有限になる。投稿は起動してすぐ描くため、ある値で落ちると、起動するたびに落ちて設定まで戻れない。
-    /// 高さは一覧のセルと同じく、大きな高さを目安に、高さを譲れる優先度で測る。高さの決まらない制約があると、目安の高さまで伸びる。
+    /// 高さはタイムラインのセルと同じく、大きな高さを目安に、高さを譲れる優先度で測る。高さの決まらない制約があると、目安の高さまで伸びる。
     /// - Parameter extreme: 全項目を最小にするならfalse、最大にするならtrue、既定値のままならnil。
     @Test(arguments: [nil, false, true] as [Bool?])
     func extremesLayOutWithFiniteHeights(extreme: Bool?) throws {

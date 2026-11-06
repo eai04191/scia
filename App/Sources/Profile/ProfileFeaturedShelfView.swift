@@ -17,7 +17,7 @@ class ProfileShelfView: UIView {
         titleLabel.accessibilityTraits = .header
 
         scrollView.showsHorizontalScrollIndicator = false
-        // ステータスバーのタップで、プロフィールの一覧が先頭へ戻れるようにする。iPhoneでは、対象のスクロールビューが2つ以上あるとどれも動かない。
+        // ステータスバーのタップで、プロフィールのタイムラインが先頭へ戻れるようにする。iPhoneでは、対象のスクロールビューが2つ以上あるとどれも動かない。
         scrollView.scrollsToTop = false
         scrollView.alwaysBounceVertical = false
         // 長押しで持ち上げたカプセルやカードの影が、列の上下で切れないようにする。
@@ -287,7 +287,7 @@ final class ProfileEndorsedCard: UIControl {
         ])
         isAccessibilityElement = true
         accessibilityTraits = .button
-        // 人の一覧の行と同じく、描いた名前を読ませる。カスタム絵文字の`:shortcode:`を読ませないため。
+        // 人のリストの行と同じく、描いた名前を読ませる。カスタム絵文字の`:shortcode:`を読ませないため。
         accessibilityLabel = "\(nameLabel.attributedText?.string ?? account.displayNameOrUsername)、@\(account.acct)"
     }
 

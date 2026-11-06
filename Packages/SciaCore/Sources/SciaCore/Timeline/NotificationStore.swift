@@ -36,7 +36,7 @@ public final class NotificationStore {
     private var excludedAccountIDs: Set<String> = []
     /// ミュートしたハッシュタグの、`HashtagMute.matchingKey(for:)`の値。
     private var excludedTagKeys: Set<String> = []
-    /// 使う人の操作で一覧から除いた通知のID（承認か却下で片づけたフォローリクエストなど）。サーバーは除いた通知を消すが、その前に読み始めたページで戻さない。
+    /// 使う人の操作でタイムラインから除いた通知のID（承認か却下で片づけたフォローリクエストなど）。サーバーは除いた通知を消すが、その前に読み始めたページで戻さない。
     /// 同じ通知がそのページで読めなかったときも、読めなかった行として戻さない。
     private var removedNotificationIDs: Set<MastodonNotification.ID> = []
     /// 使う人が削除したまとまりのキーと、削除したときのまとまりの最も新しい通知のID、削除した順番（`removalCount`の値）。
@@ -69,7 +69,7 @@ public final class NotificationStore {
         self.fetch = fetch
     }
 
-    /// 一覧に並べる通知と読めなかった通知とギャップ。新しい順。フィルターで出さない投稿についての通知は含まない。
+    /// 通知のタイムラインに並べる通知と読めなかった通知とギャップ。新しい順。フィルターで出さない投稿についての通知は含まない。
     /// ギャップは、新しい側の端と同じIDの通知の下に置く。
     public var entries: [TimelineEntry] {
         let now = now()
@@ -138,9 +138,9 @@ public final class NotificationStore {
         return try await fetchOlder(than: oldestID)
     }
 
-    /// `oldestID`より古いページを読み、足した通知のうち一覧に並べたものを返す。
+    /// `oldestID`より古いページを読み、足した通知のうちタイムラインに並べたものを返す。
     /// 読んだ通知が全部フィルターで隠れたら、並べる通知か読めなかった通知が出るか、終わりに着くまで続けて読む。
-    /// 一覧の末尾の行が画面に出ることが続きを読むきっかけなので、行が増えないと、そこで止まってしまうため。
+    /// タイムラインの末尾の行が画面に出ることが続きを読むきっかけなので、行が増えないと、そこで止まってしまうため。
     private func fetchOlder(than oldestID: String) async throws -> [MastodonNotification] {
         var maxID = oldestID
         while true {
@@ -150,7 +150,7 @@ public final class NotificationStore {
                 reachedEnd = true
             }
             let added = merge(page, fetchedAfter: removals)
-            // 削除済みの投稿についての通知や、ミュートかブロックした相手の通知しかなかったときは、一覧に残らないため、ページの一番古い通知の先へ進む。
+            // 削除済みの投稿についての通知や、ミュートかブロックした相手の通知しかなかったときは、タイムラインに残らないため、ページの一番古い通知の先へ進む。
             // それでも続きを読む位置が進まなければ、同じページを読み続けないよう止める。
             let pageOldestID = page.ids.reduce(itemIDs.last) { oldest, id in oldest.map { Self.older($0, id) } ?? id }
             guard added.isEmpty, !page.isEmpty, page.unreadable.isEmpty, let next = pageOldestID, next != maxID else {
@@ -320,7 +320,7 @@ public final class NotificationStore {
     // MARK: - ストリーミング
 
     /// 届いた通知を保留に溜める。保留が空のところへ届いたらtrueを返す。挿入のタイミングをはかり始めるきっかけにする。
-    /// フィルターで出さない投稿についての通知は溜めない。挿入しても一覧が変わらないため。
+    /// フィルターで出さない投稿についての通知は溜めない。挿入してもタイムラインが変わらないため。
     public func receive(_ notification: MastodonNotification) -> Bool {
         guard !isDiscarded(notification), !isFilteredOut(notification, now: now()), !notifications.contains(where: { $0.id == notification.id }), !pending.contains(where: { $0.id == notification.id }) else {
             return false
@@ -360,7 +360,7 @@ public final class NotificationStore {
         }
         notifications = Self.sorted(Array(current.values))
         unreadable = Self.sorted(unreadable, excluding: notifications)
-        // 一覧から外れたまとまりの分は、足し直す先がないので捨てる。
+        // タイムラインから外れたまとまりの分は、足し直す先がないので捨てる。
         streamedArrivals = streamedArrivals.filter { current[$0.key] != nil }
         return Self.sorted(Array(changed.values)).filter { !isFilteredOut($0, now: now()) }
     }
@@ -420,7 +420,7 @@ public final class NotificationStore {
     }
 
     /// 承認か却下で片づけたフォローリクエストの通知と、同じユーザーからのほかのフォローリクエストの通知を除く。表示に関わる変化があればtrueを返す。
-    /// 片づけた通知は、応答を待つ間に補完で一覧から外れていても、IDを覚えて戻さない。
+    /// 片づけた通知は、応答を待つ間に補完でタイムラインから外れていても、IDを覚えて戻さない。
     @discardableResult
     public func removeFollowRequests(answering request: MastodonNotification) -> Bool {
         let isResolved = { (notification: MastodonNotification) in notification.type == .followRequest && notification.account.id == request.account.id }
@@ -434,7 +434,7 @@ public final class NotificationStore {
     }
 
     /// 使う人が削除した通知を除く。表示に関わる変化があればtrueを返す。
-    /// 削除した通知は、応答を待つ間に補完で一覧から外れていても、IDを覚えて戻さない。
+    /// 削除した通知は、応答を待つ間に補完でタイムラインから外れていても、IDを覚えて戻さない。
     /// 応答を待つ間に読んだページで、同じ通知が読めなかった行として入っていれば、それも除く。
     /// - Parameter groupKey: 削除したまとまりのキー。メニューを開いてから応答が届くまでに新着が足されて、まとまりのIDが変わっていても、キーで除く。
     @discardableResult
@@ -546,7 +546,7 @@ public final class NotificationStore {
         admitted(notification) == nil
     }
 
-    /// 一覧に入れる形にする。除く通知ならnil。まとまりからは、除いた人だけを外す。
+    /// タイムラインに入れる形にする。除く通知ならnil。まとまりからは、除いた人だけを外す。
     /// - Parameter removals: ページから読んだ通知なら、ページを読み始めたときの`removalCount`。それより後に削除したまとまりは、IDによらず戻さない。
     private func admitted(_ notification: MastodonNotification, fetchedAfter removals: Int? = nil) -> MastodonNotification? {
         guard !removedNotificationIDs.contains(notification.id), !isAboutDeletedStatus(notification) else { return nil }
@@ -568,7 +568,7 @@ public final class NotificationStore {
         return deletedStatusIDs.contains(status.id) || status.reblog.map { deletedStatusIDs.contains($0.id) } ?? false
     }
 
-    /// まだない通知と読めなかった通知を足し、足した通知のうち一覧に並べたものを新しい順に返す。読めなかった通知と同じIDの通知は、読めなかった行と置き換える。
+    /// まだない通知と読めなかった通知を足し、足した通知のうちタイムラインに並べたものを新しい順に返す。読めなかった通知と同じIDの通知は、読めなかった行と置き換える。
     /// 手元と同じまとまりは、最も新しい通知が新しいほうの値を使い、新しくなったものを足した通知として返す。
     /// サーバーは、読んだ範囲の上限より古い、そのまとまりの通知を全部数えて返すため、新しいほうの値が古いほうを含む。
     /// - Parameter removals: ページを読み始めたときの`removalCount`。

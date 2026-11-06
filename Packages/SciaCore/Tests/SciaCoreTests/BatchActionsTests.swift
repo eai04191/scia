@@ -53,7 +53,7 @@ struct BatchActionsTests {
         #expect(selection.number(of: "a") == nil)
     }
 
-    /// 一覧から消えた行を外し、残りの番号を詰める。
+    /// タイムラインから消えた行を外し、残りの番号を詰める。
     @Test func selectionDropsRemovedRows() {
         var selection = OrderedSelection(["a", "b", "c"])
 
@@ -175,7 +175,7 @@ struct BatchActionsTests {
         #expect(log.sent == ["unreblog 1", "reblog 1 reblogged=false", "reblog 1 reblogged=false", "reblog 1 reblogged=false"])
     }
 
-    /// 選んでから送るまでの間にほかの一覧でブーストした投稿も、送る直前の状態で、取り消してから付け直す。
+    /// 選んでから送るまでの間にほかのタイムラインでブーストした投稿も、送る直前の状態で、取り消してから付け直す。
     /// 選んだときの投稿のままブーストすると、Mastodonが前のブーストを返し、選んだ順に並ばないため。
     @Test func postBoostedAfterPlanningIsRebloggedAgain() async throws {
         let log = Log()
@@ -185,7 +185,7 @@ struct BatchActionsTests {
             log.sent.append("unreblog \(status.id)")
         } reblog: { status in
             log.sent.append("reblog \(status.id)")
-            // 1件目を送っている間に、2件目をほかの一覧でブーストした。
+            // 1件目を送っている間に、2件目をほかのタイムラインでブーストした。
             if status.id == "1" { boostedElsewhere.insert("2") }
         }
 

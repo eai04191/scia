@@ -2,7 +2,7 @@ import SciaCore
 import UIKit
 
 /// プロフィールのヘッダーの下に置く、固定された投稿を横に並べた棚。
-/// 一覧の頭に並べると、固定された投稿が多いときに投稿の一覧が下へ押し出されるため、何件あっても高さの変わらない横の列にする。
+/// タイムラインの頭に並べると、固定された投稿が多いときに投稿のタイムラインが下へ押し出されるため、何件あっても高さの変わらない横の列にする。
 /// ほかのサーバーのアカウントでは、固定できる数に上限がないこともある。
 final class ProfilePinnedShelfView: UIView, UIScrollViewDelegate {
     /// カードが押されたときに、その投稿と、ウインドウの座標でのカードの枠を渡して呼ぶ。
@@ -48,7 +48,7 @@ final class ProfilePinnedShelfView: UIView, UIScrollViewDelegate {
         titleLabel.accessibilityTraits = .header
 
         scrollView.showsHorizontalScrollIndicator = false
-        // ステータスバーのタップで、プロフィールの一覧が先頭へ戻れるようにする。iPhoneでは、対象のスクロールビューが2つ以上あるとどれも動かない。
+        // ステータスバーのタップで、プロフィールのタイムラインが先頭へ戻れるようにする。iPhoneでは、対象のスクロールビューが2つ以上あるとどれも動かない。
         scrollView.scrollsToTop = false
         scrollView.alwaysBounceVertical = false
         scrollView.clipsToBounds = false
@@ -166,7 +166,7 @@ private final class ProfilePinnedCard: UIControl {
         let hasFilterWarning = !verdict.warningTitles.isEmpty
         let hasWarning = hasFilterWarning || !status.spoilerText.isEmpty
         // 警告のフィルターに一致した投稿と、注意書きのある投稿は、警告の文だけを出し、本文と添付ファイルを出さない。開いた先で、いつもどおり読むかを選ぶ。
-        // フィルターの警告は、一覧の行（`PostContentBuilder.filterWarning`）と同じ文言にする。
+        // フィルターの警告は、タイムラインの行（`PostContentBuilder.filterWarning`）と同じ文言にする。
         if hasFilterWarning {
             let text = NSMutableAttributedString(string: "フィルター: ", attributes: [.font: font, .foregroundColor: UIColor.secondaryLabel])
             text.append(NSAttributedString(string: verdict.warningTitles.joined(separator: "、"), attributes: [.font: font, .foregroundColor: UIColor.label]))
@@ -272,7 +272,7 @@ private final class ProfilePinnedCard: UIControl {
     }
 }
 
-/// 固定された投稿の棚に並べる投稿と、それに当てたサーバーのフィルターの判定。棚でも、一覧の行と同じく警告とぼかしを当てる。
+/// 固定された投稿の棚に並べる投稿と、それに当てたサーバーのフィルターの判定。棚でも、タイムラインの行と同じく警告とぼかしを当てる。
 struct ProfileShelfItem: Equatable {
     let status: Status
     let verdict: FilterVerdict

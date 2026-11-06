@@ -3,7 +3,7 @@ public enum SearchRow: Hashable, Sendable {
     /// 種類の見出し。
     case heading(SearchCategory)
     case hashtag(Hashtag)
-    /// その種類だけの一覧を開く。
+    /// その種類だけの結果を開く。
     case showAll(SearchCategory)
     /// その種類を読めなかった。押すと読み直す。
     case failed(SearchCategory, ErrorPresentation)

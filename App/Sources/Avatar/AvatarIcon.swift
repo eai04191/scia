@@ -8,7 +8,7 @@ enum AvatarIcon {
         UIFontMetrics(forTextStyle: .body).scaledValue(for: 22)
     }
 
-    /// アイコンを、一辺`side`の正方形で一覧と同じ形に切り抜き、元の色のまま描く。動くアイコンは先頭のコマで止める。
+    /// アイコンを、一辺`side`の正方形でタイムラインと同じ形に切り抜き、元の色のまま描く。動くアイコンは先頭のコマで止める。
     static func image(_ avatar: UIImage, side: CGFloat, shape: AvatarShape) -> UIImage? {
         let image = avatar.images?.first ?? avatar
         guard image.size.width > 0, image.size.height > 0 else { return nil }
@@ -24,7 +24,7 @@ enum AvatarIcon {
         }.withRenderingMode(.alwaysOriginal)
     }
 
-    /// 一覧のアイコンと同じ形の輪郭。
+    /// タイムラインのアイコンと同じ形の輪郭。
     static func path(in bounds: CGRect, shape: AvatarShape) -> UIBezierPath {
         switch shape {
         case .roundedSquare: UIBezierPath(roundedRect: bounds, cornerRadius: bounds.width * 0.2)

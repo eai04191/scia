@@ -103,7 +103,7 @@ struct NotificationsModelTests {
         #expect(display.entries.map(\.id) == ["34975864", "34975863", "34975862", "34975861"].map { .notification($0) })
     }
 
-    /// 届いた通知は、すぐステータスバーへ流し、一覧へは間隔をおいて挿入する。
+    /// 届いた通知は、すぐステータスバーへ流し、通知のタイムラインへは間隔をおいて挿入する。
     @Test func arrivalIsReportedAtOnceAndInsertedAfterInterval() async throws {
         let firstMessage = Gate()
         let connector = ScriptedConnector([.init(messages: [try TimelineModelFixtures.notificationMessage(Self.reblogPayload)], firstMessageGate: firstMessage)])

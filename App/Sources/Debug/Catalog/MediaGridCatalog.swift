@@ -3,8 +3,8 @@ import Foundation
 import SciaCore
 import UIKit
 
-/// 一覧の行に並べる添付ファイルのサムネイル（`MediaGridView`）の状態。
-/// 並べ方とぼかしは、一覧と同じく`TimelineViewController.mediaContent(for:)`で投稿から組み立てる。説明にならない代替テキストを除くかは、アプリの設定に従う。
+/// タイムラインの行に並べる添付ファイルのサムネイル（`MediaGridView`）の状態。
+/// 並べ方とぼかしは、タイムラインと同じく`TimelineViewController.mediaContent(for:)`で投稿から組み立てる。説明にならない代替テキストを除くかは、アプリの設定に従う。
 enum MediaGridCatalog {
     private typealias Fixtures = CatalogFixtures
 
@@ -77,7 +77,7 @@ enum MediaGridCatalog {
         }
     }
 
-    /// 同じ添付ファイルのタイルを、幅を変えて並べる。一覧の並べ方では狭いタイルが出にくいため、バッジが幅に入らないときの形を直接見る。
+    /// 同じ添付ファイルのタイルを、幅を変えて並べる。タイムラインでの並べ方では狭いタイルが出にくいため、バッジが幅に入らないときの形を直接見る。
     /// - Parameters:
     ///   - contentSize: 文字の大きさの設定。nilなら端末の設定に従う。
     ///   - square: 高さを幅と同じにする。falseなら高さは64pt。
@@ -133,7 +133,7 @@ enum MediaGridCatalog {
         }
         guard let content = timeline.mediaContent(for: status), let aspectRatio = content.aspectRatio else { return grid }
         grid.apply(content)
-        // ぼかしを押したら外す。一覧と同じく、ぼかしと中身は同じ大きさのため高さは変わらない。
+        // ぼかしを押したら外す。タイムラインと同じく、ぼかしと中身は同じ大きさのため高さは変わらない。
         grid.onReveal = { [weak grid] in
             grid?.apply(MediaGridView.Content(
                 attachments: content.attachments,

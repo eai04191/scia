@@ -37,7 +37,7 @@ public enum QuoteDisplay: Equatable, Sendable {
     /// `status`の引用の出し方。引用がなければnil。ブーストなら、ブーストされた投稿を渡す。
     /// - Parameters:
     ///   - isRevealed: ブロックかミュートしている人の引用元を、押して開いた。
-    ///   - verdict: 引用元の投稿にフィルターをどう当てるか。外側の投稿と同じ一覧の場所で決める。
+    ///   - verdict: 引用元の投稿にフィルターをどう当てるか。外側の投稿と同じタイムラインの場所で決める。
     public init?(quoting status: Status, isRevealed: Bool, verdict: (Status) -> FilterVerdict) {
         guard let quote = status.quote else { return nil }
         let reason = Reason(quote.state)
@@ -86,7 +86,7 @@ public enum NestedQuote: Equatable, Sendable {
     }
 }
 
-/// 一覧で、ブロックかミュートしている人の引用元のうち、押して開いたもの。
+/// タイムラインで、ブロックかミュートしている人の引用元のうち、押して開いたもの。
 /// 引用した投稿のIDで覚え、同じ投稿のブーストや通知の行もそろえる。覚えるのはアプリを起動している間だけ。
 public struct QuoteReveals: Sendable, Equatable {
     private var revealed: Set<Status.ID> = []
@@ -103,8 +103,8 @@ public struct QuoteReveals: Sendable, Equatable {
     }
 }
 
-/// 引用元の、受け取ったあとの変化。編集と削除の知らせ、読み込んだあとのミュートとブロックを、どの一覧の囲みにも当てるためにセッションで1つ持つ。
-/// 一覧が持つ投稿の中の引用元は書き換えず、囲みを出すときに当てる。ミュートやブロックを解除したときに、元の引用元に戻せるようにするため。
+/// 引用元の、受け取ったあとの変化。編集と削除の知らせ、読み込んだあとのミュートとブロックを、どのタイムラインの囲みにも当てるためにセッションで1つ持つ。
+/// タイムラインが持つ投稿の中の引用元は書き換えず、囲みを出すときに当てる。ミュートやブロックを解除したときに、元の引用元に戻せるようにするため。
 /// 覚えるのはアプリを起動している間だけ。
 public struct QuoteSourceChanges: Sendable, Equatable {
     /// 編集の知らせで届いた投稿。どの投稿が引用されているかは知らせからは分からないため、届いた編集をすべて覚える。編集の知らせは少ないので、捨てない。

@@ -1,6 +1,6 @@
 public import Foundation
 
-/// 予約の日時の表記。投稿欄の予約の行、予約できたときのチップ、予約の一覧で同じ書き方にする。
+/// 予約の日時の表記。投稿欄の予約の行、予約できたときのチップ、予約投稿のタイムラインで同じ書き方にする。
 public enum ScheduleDateText {
     /// 「10月28日(火) 9:00」のように、月日、曜日、時刻を書く。今年でなければ年も書く。
     public static func title(for date: Date, now: Date, calendar: Calendar) -> String {

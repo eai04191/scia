@@ -5,15 +5,15 @@ public enum TimelineEntry: Hashable, Sendable, Identifiable {
     case status(Status)
     /// まだ読み込んでいない投稿がある区間。
     case gap(TimelineGap)
-    /// 通知の一覧に並ぶ通知。
+    /// 通知のタイムラインに並ぶ通知。
     case notification(MastodonNotification)
-    /// プロフィールの一覧の上に置く、固定された投稿。同じ投稿が下の一覧にも並ぶため、IDを分ける。
+    /// プロフィールのタイムラインの上に置く、固定された投稿。同じ投稿が下のタイムラインにも並ぶため、IDを分ける。
     case pinned(Status)
     /// 読めなかった投稿や通知。
     case unreadable(UnreadableItem)
-    /// 人の一覧に並ぶアカウント。
+    /// 人のリストに並ぶアカウント。
     case account(Account)
-    /// 保留中の通知の一覧に並ぶ、1人分のまとまり。
+    /// 保留中の通知のリストに並ぶ、1人分のまとまり。
     case notificationRequest(NotificationRequest)
     /// 検索の結果に並ぶ、投稿と人のほかの行。
     case search(SearchRow)
@@ -42,13 +42,13 @@ public enum TimelineEntry: Hashable, Sendable, Identifiable {
         }
     }
 
-    /// 一覧に並ぶ投稿。固定された投稿は含まない。読み込みの境目や既読位置の判定に使うため。
+    /// タイムラインに並ぶ投稿。固定された投稿は含まない。読み込みの境目や既読位置の判定に使うため。
     public var status: Status? {
         if case .status(let status) = self { status } else { nil }
     }
 }
 
-/// サーバーから届いたが、読めなかった投稿や通知。IDが読めたものだけを一覧に並べ、並びと、続きを読む位置に使う。
+/// サーバーから届いたが、読めなかった投稿や通知。IDが読めたものだけをタイムラインに並べ、並びと、続きを読む位置に使う。
 /// 読めなかったことを隠さず、ブラウザで開けるようにするため。
 public struct UnreadableItem: Hashable, Sendable, Identifiable {
     public let id: String

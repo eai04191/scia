@@ -162,7 +162,7 @@ struct StreamingHubTests {
     }
 
     /// `connected`を待っている間に届いたイベントは、`connected`の後に渡す。
-    /// 受け取った側は`connected`で補完を始めるので、先に新着を一覧に入れると補完の基準が進み、その手前を読み飛ばすため。
+    /// 受け取った側は`connected`で補完を始めるので、先に新着をタイムラインに入れると補完の基準が進み、その手前を読み飛ばすため。
     @Test func eventsArrivingBeforeDelayedConnectedFollowIt() async throws {
         let messageGate = Gate()
         let sendGate = Gate()

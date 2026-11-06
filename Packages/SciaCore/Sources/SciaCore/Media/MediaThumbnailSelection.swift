@@ -1,7 +1,7 @@
 public import CoreGraphics
 public import Foundation
 
-/// 一覧のサムネイルに読む画像と、展開する大きさ。
+/// タイムラインのサムネイルに読む画像と、展開する大きさ。
 public struct MediaThumbnailRequest: Equatable, Sendable {
     /// 読むファイル。`source`が`videoFrame`なら動画。
     public let url: URL
@@ -49,7 +49,7 @@ public struct MediaThumbnailPolicy: Equatable, Sendable {
     }
 }
 
-/// 一覧のサムネイルに、サーバーが縮めたプレビュー画像と元の画像のどちらを読むかを決める。
+/// タイムラインのサムネイルに、サーバーが縮めたプレビュー画像と元の画像のどちらを読むかを決める。
 ///
 /// Mastodonのプレビュー画像は面積230,400ピクセル（16:9で640×360）まで縮めてある。
 /// 3倍の画面で幅いっぱいに出すと約1,000ピクセル要り、引き伸ばしてぼやけるため、足りなければ元の画像を読む。

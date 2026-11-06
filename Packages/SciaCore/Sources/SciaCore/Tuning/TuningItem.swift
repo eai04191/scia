@@ -58,7 +58,7 @@ public struct ToggleTuning: Sendable, Identifiable {
     }
 }
 
-/// アプリで使うチューニング項目の一覧。値を足すときは、ここに定義を追加してTuningStoreから読む。
+/// アプリで使うチューニング項目のリスト。値を足すときは、ここに定義を追加してTuningStoreから読む。
 public enum TuningCatalog {
 
     /// 投票したときに、結果の棒が伸びるスプリングの時間。投票する形と結果の形を入れ替えるクロスフェードは、この半分の時間。0なら動かさない。
@@ -107,7 +107,7 @@ public enum TuningCatalog {
     )
 
     /// アカウントを切り替えたとき、前のアカウントの画面から新しいアカウントの画面へのクロスフェードの時間。
-    /// 一覧が最初の読み込みで、読み込み中の表示から行を出すとき（起動したときも）のフェードにも使う。0なら切り替える。
+    /// タイムラインが最初の読み込みで、読み込み中の表示から行を出すとき（起動したときも）のフェードにも使う。0なら切り替える。
     public static let accountSwitchDuration = NumberTuning(
         id: "timeline.accountSwitchDuration",
         title: "アカウントを切り替えたときのフェードの時間（秒）",
@@ -145,7 +145,7 @@ public enum TuningCatalog {
         defaultValue: 10
     )
 
-    /// サムネイルの中央に置くアイコンの大きさの上限。一覧の大きなサムネイルで効く。
+    /// サムネイルの中央に置くアイコンの大きさの上限。タイムラインの大きなサムネイルで効く。
     public static let mediaSymbolMaxSize = NumberTuning(
         id: "timeline.mediaSymbolMaxSize",
         title: "サムネイルの再生アイコンの最大（pt）",
@@ -154,7 +154,7 @@ public enum TuningCatalog {
         defaultValue: 36
     )
 
-    /// 本文の右に重ねた写真のうち、手前の1枚目を回す角度（度）。正の値で右回り。一覧の投稿は残り続けるので、投稿欄のカプセルより控えめにする。
+    /// 本文の右に重ねた写真のうち、手前の1枚目を回す角度（度）。正の値で右回り。タイムラインの投稿は残り続けるので、投稿欄のカプセルより控えめにする。
     /// 写真は画面の中心より右にあるので、中心から外へ傾くよう、カプセルの重なりを左右反転させた向きにする。
     /// 0にすると、投稿ごとにばらつかせても、まっすぐのままになる。
     public static let mediaStackFrontRotation = NumberTuning(
@@ -219,7 +219,7 @@ public enum TuningCatalog {
         defaultValue: -0.04
     )
 
-    /// 本文の右に重ねた写真のスタックが、一覧の背景に落とす影の濃さ。
+    /// 本文の右に重ねた写真のスタックが、タイムラインの背景に落とす影の濃さ。
     public static let mediaStackShadowOpacity = NumberTuning(
         id: "timeline.stackShadowOpacity",
         title: "本文の右の重ねた写真が背景に落とす影の濃さ",
@@ -282,7 +282,7 @@ public enum TuningCatalog {
         defaultValue: 0.03
     )
 
-    /// プロフィールを開いたあと、フォローのボタンの文字と最初の投稿の一覧を、読み込みが届いたときにフェードで入れる時間。フォローしたり外したりしてボタンが替わるときのクロスフェードにも使う。
+    /// プロフィールを開いたあと、フォローのボタンの文字と最初の投稿のタイムラインを、読み込みが届いたときにフェードで入れる時間。フォローしたり外したりしてボタンが替わるときのクロスフェードにも使う。
     /// プロフィールの編集で、読み込み中の表示から入力欄を出すときと、アイコンやヘッダー画像が後から届いたときのフェードにも使う。0なら切り替える。
     public static let profileRevealDuration = NumberTuning(
         id: "profile.revealDuration",
@@ -292,7 +292,7 @@ public enum TuningCatalog {
         defaultValue: 0.2
     )
 
-    /// スレッドを開くとき、一覧の上に重ねて薄く出していく時間。押した行は一覧で見えていた位置に置くので、ほかの行だけが入れ替わって見える。
+    /// スレッドを開くとき、タイムラインの上に重ねて薄く出していく時間。押した行はタイムラインで見えていた位置に置くので、ほかの行だけが入れ替わって見える。
     public static let threadOpenDuration = NumberTuning(
         id: "thread.openDuration",
         title: "開くときのフェード（秒）",
@@ -433,7 +433,7 @@ public enum TuningCatalog {
         defaultValue: true
     )
 
-    /// プロフィールの最初の投稿の一覧を出す前に、行のアイコンが読み込み終わるのを待つ上限。読み込み終われば上限を待たずに出す。0なら待たない。
+    /// プロフィールの最初の投稿のタイムラインを出す前に、行のアイコンが読み込み終わるのを待つ上限。読み込み終われば上限を待たずに出す。0なら待たない。
     public static let profileAvatarWait = NumberTuning(
         id: "profile.avatarWait",
         title: "最初の投稿のアイコンを待つ上限（秒）",
@@ -534,19 +534,19 @@ public enum TuningCatalog {
         defaultValue: 0.2
     )
 
-    /// 返信先のラベルや、アプリ内通知から、一覧の投稿へ動く時間。どれだけ離れていても、この時間で動く。
+    /// 返信先のラベルや、アプリ内通知から、タイムラインの投稿へ動く時間。どれだけ離れていても、この時間で動く。
     public static let scrollToStatusDuration = NumberTuning(
         id: "timeline.scrollToStatusDuration",
-        title: "一覧の投稿へ動く時間（秒）",
+        title: "タイムラインの投稿へ動く時間（秒）",
         range: 0.1...1.5,
         step: 0.05,
         defaultValue: 0.3
     )
 
-    /// 一覧の投稿へ動くときのバウンス。0で行き過ぎずに止まる。
+    /// タイムラインの投稿へ動くときのバウンス。0で行き過ぎずに止まる。
     public static let scrollToStatusBounce = NumberTuning(
         id: "timeline.scrollToStatusBounce",
-        title: "一覧の投稿へ動くバウンス",
+        title: "タイムラインの投稿へ動くバウンス",
         range: 0...0.4,
         step: 0.05,
         defaultValue: 0
@@ -562,7 +562,7 @@ public enum TuningCatalog {
         defaultValue: 5
     )
 
-    /// ユーザーのハッシュタグの一覧と、タブに置いたプロフィールを前に出している間、新着をRESTで読む間隔。
+    /// ユーザーのハッシュタグのタイムラインと、タブに置いたプロフィールを前に出している間、新着をRESTで読む間隔。
     /// 決まりはdocs/tabs.mdの「ユーザーのハッシュタグ」と「プロフィール」にある。ハッシュタグのストリームは公開の投稿しか運ばず、アカウントの投稿のストリームはないため。
     /// `id`は前に保存した値を読むため、ユーザーのハッシュタグだけに使っていたころのまま残す。
     public static let shownFeedPollingInterval = NumberTuning(
@@ -610,7 +610,7 @@ public enum TuningCatalog {
         defaultValue: 1
     )
 
-    /// 一覧のサムネイルで、サーバーが縮めたプレビュー画像を何倍まで引き伸ばして出してよいか。超えるなら元の画像を読む。
+    /// タイムラインのサムネイルで、サーバーが縮めたプレビュー画像を何倍まで引き伸ばして出してよいか。超えるなら元の画像を読む。
     /// 大きくするほど通信量は減るが、ぼやける。
     public static let mediaThumbnailUpscaleTolerance = NumberTuning(
         id: "timeline.mediaThumbnailUpscaleTolerance",
@@ -674,7 +674,7 @@ public enum TuningCatalog {
         defaultValue: 0.2
     )
 
-    /// 一覧で重ねた写真とビューアの開閉で、写真の白いフチを細くしきる（閉じるときは太くし始める）動きの進み具合。0から1。
+    /// タイムラインで重ねた写真とビューアの開閉で、写真の白いフチを細くしきる（閉じるときは太くし始める）動きの進み具合。0から1。
     /// 動き全体で細くすると、広がった画像を細い線が囲んだまま残り、開ききったところで一度に消えて見えるため、前半で細くしきる。
     public static let mediaPaperBorderPortion = NumberTuning(
         id: "media.paperBorderPortion",
@@ -730,7 +730,7 @@ public enum TuningCatalog {
         defaultValue: 0.3
     )
 
-    /// ビューアでblurhashのぼかしを出していたところへ元の画像が届いたときに、薄くして入れ替える時間。一覧のサムネイルは0.15秒で入れ替えている。
+    /// ビューアでblurhashのぼかしを出していたところへ元の画像が届いたときに、薄くして入れ替える時間。タイムラインのサムネイルは0.15秒で入れ替えている。
     public static let mediaPlaceholderFadeDuration = NumberTuning(
         id: "media.placeholderFadeDuration",
         title: "ぼかしから元の画像へ入れ替える時間（秒）",
@@ -757,16 +757,16 @@ public enum TuningCatalog {
         defaultValue: true
     )
 
-    /// バーの奥にも描くとき、一覧の中の複製から最前面の複製へ受け渡し終える、開く動きの進み具合。0なら開き始めから最前面の複製にする。
+    /// バーの奥にも描くとき、タイムラインの中の複製から最前面の複製へ受け渡し終える、開く動きの進み具合。0なら開き始めから最前面の複製にする。
     public static let mediaOpenHandoffEnd = NumberTuning(
         id: "media.openHandoffEnd",
-        title: "開くとき、一覧の中の複製から受け渡し終える進み具合",
+        title: "開くとき、タイムラインの中の複製から受け渡し終える進み具合",
         range: 0...1,
         step: 0.05,
         defaultValue: 0.3
     )
 
-    /// バーの奥にも描くとき、バーと重なる部分を一覧の中の複製からバーより手前の複製へ入れ替え始める、開く動きの進み具合。
+    /// バーの奥にも描くとき、バーと重なる部分をタイムラインの中の複製からバーより手前の複製へ入れ替え始める、開く動きの進み具合。
     /// 小さいほど早くバーの手前の見え方になり、大きいほど画像がバーの奥に長く残る。
     public static let mediaOpenBarOverlapFadeStart = NumberTuning(
         id: "media.openBarOverlapFadeStart",
@@ -776,18 +776,18 @@ public enum TuningCatalog {
         defaultValue: 0.7
     )
 
-    /// バーの奥にも描くとき、最前面の複製を薄くして一覧の中の複製へ受け渡し始める、閉じる動きの進み具合。1なら着地の瞬間に切り替える。
-    /// 一覧の中の複製には、バーの下のぼかしや一覧に重なるボタンが正しくかかる。受け渡しが遅いほど、着地でそれらが急に現れる。
+    /// バーの奥にも描くとき、最前面の複製を薄くしてタイムラインの中の複製へ受け渡し始める、閉じる動きの進み具合。1なら着地の瞬間に切り替える。
+    /// タイムラインの中の複製には、バーの下のぼかしやタイムラインに重なるボタンが正しくかかる。受け渡しが遅いほど、着地でそれらが急に現れる。
     public static let mediaCloseHandoffStart = NumberTuning(
         id: "media.closeHandoffStart",
-        title: "閉じるとき、一覧の中の複製へ受け渡し始める進み具合",
+        title: "閉じるとき、タイムラインの中の複製へ受け渡し始める進み具合",
         range: 0...1,
         step: 0.05,
         defaultValue: 0.7
     )
 
     /// バーの奥にも描くとき、閉じ始めにバーと重なっていた部分（縦長の画像や、下へスワイプしてタブバーにかかった画像）を、
-    /// バーより手前の複製から一覧の中の複製へ入れ替え終える、閉じる動きの進み具合。
+    /// バーより手前の複製からタイムラインの中の複製へ入れ替え終える、閉じる動きの進み具合。
     /// 小さいほど早くバーの奥の見え方になり、大きいほど閉じ始めの画像の端がバーの位置で長く手前に残る。
     public static let mediaCloseBarOverlapFadeEnd = NumberTuning(
         id: "media.closeBarOverlapFadeEnd",
@@ -1040,7 +1040,7 @@ public enum TuningCatalog {
         defaultValue: 0.35
     )
 
-    /// 書いていないときの投稿欄の高さ（pt）。細いほど一覧の閲覧を邪魔しない。
+    /// 書いていないときの投稿欄の高さ（pt）。細いほどタイムラインの閲覧を邪魔しない。
     public static let composeRestingHeight = NumberTuning(
         id: "compose.restingHeight",
         title: "書いていないときの投稿欄の高さ（pt）",
@@ -1050,7 +1050,7 @@ public enum TuningCatalog {
     )
 
     /// アプリ内のSafariのシートをいちばん下げたときの高さ（pt、下の安全領域を除く）。投稿欄で書いている間はこの高さまで下げる。
-    /// 一時的に伏せておくために、つまみで下げることもできる。中くらいの高さで一覧をスクロールする指がシートを引き下ろしても、
+    /// 一時的に伏せておくために、つまみで下げることもできる。中くらいの高さでタイムラインをスクロールする指がシートを引き下ろしても、
     /// いったんこの高さで止まるため、閉じにくくする役も持つ。
     public static let inAppBrowserCollapsedHeight = NumberTuning(
         id: "browser.collapsedHeight",
@@ -1431,15 +1431,15 @@ public enum TuningCatalog {
         defaultValue: 336
     )
 
-    /// 絵文字のシートの一覧の上下の端の効果を、検索欄の下端と下の段の上端ではっきり区切る（`.hard`）。切ると、やわらかくぼかす（`.soft`）。
+    /// 絵文字のシートで、絵文字を並べた部分の上下の端の効果を、検索欄の下端と下の段の上端ではっきり区切る（`.hard`）。切ると、やわらかくぼかす（`.soft`）。
     /// 実機で見比べて、既定は`.soft`にした。
     public static let composeEmojiPaletteHardEdgeEffect = ToggleTuning(
         id: "compose.emojiPalette.hardEdgeEffect",
-        title: "絵文字のシートの一覧の上下の端をはっきり区切る",
+        title: "絵文字のシートの絵文字の並びの上下の端をはっきり区切る",
         defaultValue: false
     )
 
-    /// 絵文字のシートの下の段（まとまりのボタンと削除キー）の高さ（pt）。HIGの勧める44ptに届かなくても、押せなくて困る操作ではないため、絵文字の一覧の広さと見比べて選ぶ。
+    /// 絵文字のシートの下の段（まとまりのボタンと削除キー）の高さ（pt）。HIGの勧める44ptに届かなくても、押せなくて困る操作ではないため、絵文字を並べた部分の広さと見比べて選ぶ。
     public static let composeEmojiPaletteBarHeight = NumberTuning(
         id: "compose.emojiPalette.barHeight",
         title: "絵文字のシートの下の段の高さ（pt）",
@@ -1580,8 +1580,8 @@ public enum TuningCatalog {
         defaultValue: 2
     )
 
-    /// カスタム絵文字で、`:`のあとに何文字打ったら候補を出すか。一覧は手元にあり問い合わせないので、少なくてよい。
-    /// 0にすると、「例:」のように日本語のすぐ後に`:`を打つたびに一覧が出るため、既定は1にする。
+    /// カスタム絵文字で、`:`のあとに何文字打ったら候補を出すか。絵文字のリストは手元にあり問い合わせないので、少なくてよい。
+    /// 0にすると、「例:」のように日本語のすぐ後に`:`を打つたびに候補が出るため、既定は1にする。
     public static let completionEmojiMinimumQuery = NumberTuning(
         id: "compose.completion.emojiMinimumQuery",
         title: "補完：絵文字を出す文字数",
@@ -1590,19 +1590,19 @@ public enum TuningCatalog {
         defaultValue: 1
     )
 
-    /// 補完の候補の一覧を出し入れする時間（秒）。
+    /// 補完の候補のリストを出し入れする時間（秒）。
     public static let completionFadeDuration = NumberTuning(
         id: "compose.completion.fadeDuration",
-        title: "補完：一覧の出入りの時間（秒）",
+        title: "補完：候補のリストの出入りの時間（秒）",
         range: 0...0.6,
         step: 0.02,
         defaultValue: 0.12
     )
 
-    /// 出ている補完の候補の一覧で、候補の数が変わったときに、一覧の高さを変えて中身を入れ替える時間（秒）。
+    /// 出ている補完の候補のリストで、候補の数が変わったときに、リストの高さを変えて中身を入れ替える時間（秒）。
     public static let completionResizeDuration = NumberTuning(
         id: "compose.completion.resizeDuration",
-        title: "補完：候補の数が変わったときに一覧の高さを変える時間（秒）",
+        title: "補完：候補の数が変わったときにリストの高さを変える時間（秒）",
         range: 0...0.6,
         step: 0.02,
         defaultValue: 0.25

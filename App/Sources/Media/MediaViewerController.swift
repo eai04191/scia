@@ -9,7 +9,7 @@ import VisionKit
 
 /// 投稿の添付ファイルを全画面で見る。左右のスワイプで切り替え、画像はピンチとダブルタップで拡大する。
 ///
-/// 開くとき、閉じるとき、下へのスワイプで閉じる操作の間は、画像の複製を一覧のサムネイルとのあいだで動かす。
+/// 開くとき、閉じるとき、下へのスワイプで閉じる操作の間は、画像の複製をタイムラインのサムネイルとのあいだで動かす。
 ///
 /// UIKitの遷移（標準のズームや、遷移を自前で描く仕組み）は使わない。標準のズームは画面全体に角丸と影を付けて変形するため画面の形の枠が見え、
 /// 遷移を自前で描く仕組みは動いている間の操作を受け付けないため、開く途中で下へスワイプしても閉じられない。
@@ -82,9 +82,9 @@ final class MediaViewerController: UIViewController {
     private var motion = Motion.idle
     private let timing: Timing
     private let sourceTile: @MainActor (String) -> (any MediaViewerSource)?
-    /// 複製を動かしている間、一覧のサムネイルを隠している取り分。画像がそこへ戻っていく途中で消えて見えないよう、動かし始めから隠す。
+    /// 複製を動かしている間、タイムラインのサムネイルを隠している取り分。画像がそこへ戻っていく途中で消えて見えないよう、動かし始めから隠す。
     private var hiddenTile: ViewerConcealment?
-    /// 開く途中と、開く途中でつかんでから複製を手前へ寄せ終えるまで、複製を一覧のバーの手前と奥に描き分ける。
+    /// 開く途中と、開く途中でつかんでから複製を手前へ寄せ終えるまで、複製をタイムラインのバーの手前と奥に描き分ける。
     private var barLayering: MediaBarLayering?
     /// `barLayering`で、複製をバーの手前と奥のどちらに見せているか。
     private var barSwap = MediaBarSwap.front
@@ -103,15 +103,15 @@ final class MediaViewerController: UIViewController {
         /// 下へスワイプして閉じるときのバウンス。0でバウンスせずに止まり、大きいほど行き過ぎてから戻る。
         /// 指で力を加えたときだけバウンスさせ、タップで開くときや、ボタンで閉じるときはバウンスさせない。
         let dragCloseBounce: CGFloat
-        /// 開閉するとき、画像のうちバーにかかる部分を、一覧の中に置いた複製でバーの奥に描く。
+        /// 開閉するとき、画像のうちバーにかかる部分を、タイムラインの中に置いた複製でバーの奥に描く。
         let drawsUnderBars: Bool
-        /// バーの奥にも描くとき、一覧の中の複製から最前面の複製へ受け渡し終える、開く動きの進み具合。0から1。
+        /// バーの奥にも描くとき、タイムラインの中の複製から最前面の複製へ受け渡し終える、開く動きの進み具合。0から1。
         let openHandoffEnd: Double
         /// バーの奥にも描くとき、バーと重なる部分を最前面の複製へ入れ替え始める、開く動きの進み具合。0から1。
         let openBarOverlapFadeStart: Double
-        /// バーの奥にも描くとき、最前面の複製を一覧の中の複製へ受け渡し始める進み具合。0から1。
+        /// バーの奥にも描くとき、最前面の複製をタイムラインの中の複製へ受け渡し始める進み具合。0から1。
         let handoffStart: Double
-        /// バーの奥にも描くとき、閉じ始めにバーと重なっていた部分を一覧の中の複製へ入れ替え終える進み具合。0から1。
+        /// バーの奥にも描くとき、閉じ始めにバーと重なっていた部分をタイムラインの中の複製へ入れ替え終える進み具合。0から1。
         let barOverlapFadeEnd: Double
         /// 写真に保存したことを知らせる表示を出しておく時間。
         let savedChipDuration: TimeInterval
@@ -121,7 +121,7 @@ final class MediaViewerController: UIViewController {
         let videoSkipEffectDuration: TimeInterval
         /// 画像をダブルタップして拡大するときと、戻すときの時間。
         let doubleTapZoomDuration: TimeInterval
-        /// 一覧で重ねた写真とのあいだの開閉で、写真の白いフチを細くしきる（閉じるときは太くし始める）動きの進み具合。0から1。
+        /// タイムラインで重ねた写真とのあいだの開閉で、写真の白いフチを細くしきる（閉じるときは太くし始める）動きの進み具合。0から1。
         var paperBorderPortion: Double = 1
         /// 開く途中で左右にめくったときに、途中の見え方を薄くして、開ききった見え方へ移す時間。
         var interruptedOpenFadeDuration: TimeInterval = 0.2
@@ -153,7 +153,7 @@ final class MediaViewerController: UIViewController {
         var canEditDescription: @MainActor () -> Bool = { true }
     }
 
-    /// - Parameter sourceTile: `MediaViewerItem.id`のサムネイルを返す。開閉のたびに呼ぶため、閉じるまでに一覧の行が再利用されても今の位置を返せる。
+    /// - Parameter sourceTile: `MediaViewerItem.id`のサムネイルを返す。開閉のたびに呼ぶため、閉じるまでにタイムラインの行が再利用されても今の位置を返せる。
     ///   見つからなければnilを返し、画像を動かさずに薄くして開閉する。
     init(
         items: [MediaViewerItem],
@@ -179,7 +179,7 @@ final class MediaViewerController: UIViewController {
         self.sourceTile = sourceTile
         currentIndex = startIndex
         super.init(nibName: nil, bundle: nil)
-        // 閉じる操作の間に背景を薄くして一覧を透かすため、開いている間も一覧を残す。
+        // 閉じる操作の間に背景を薄くしてタイムラインを透かすため、開いている間もタイムラインを残す。
         modalPresentationStyle = .overFullScreen
         // 開閉はビューアの中で描き、出し入れはアニメーションなしで行う。ほかの経路でアニメーションつきで閉じられたときは、下から滑らせずに薄くする。
         modalTransitionStyle = .crossDissolve
@@ -369,7 +369,7 @@ final class MediaViewerController: UIViewController {
         MediaDynamicRangeTraits.follow(self, settings: settings, { $0.viewerMediaDynamicRange }) { viewer, range in
             viewer.traitOverrides.imageDynamicRange = range
         }
-        // 下に一覧を残しているため、VoiceOverがそちらを読まないようにする。
+        // 下にタイムラインを残しているため、VoiceOverがそちらを読まないようにする。
         view.accessibilityViewIsModal = true
         addChild(pageController)
         pageController.view.frame = view.bounds
@@ -732,7 +732,7 @@ final class MediaViewerController: UIViewController {
         return attachment.url ?? attachment.remoteUrl
     }
 
-    /// 共有シートに渡すもの。見出しのプレビューに、`index`の添付ファイルの描いている画像（動画は再生しているコマ）か一覧のサムネイルを添える。
+    /// 共有シートに渡すもの。見出しのプレビューに、`index`の添付ファイルの描いている画像（動画は再生しているコマ）かタイムラインのサムネイルを添える。
     /// 落としている間にページを替えられるため、表示中のページではなく、共有を選んだときのページから取る。
     private func shareSheetItem(for file: URL, at index: Int) -> Any {
         guard let preview = pages[index]?.transitionImage ?? imageSource(of: items[index].id)?.loadedThumbnail else { return file }
@@ -953,7 +953,7 @@ final class MediaViewerController: UIViewController {
         overlay?.update()
     }
 
-    /// 表示中の添付ファイルを写真に保存する。手元になければ落としてから保存する。ビューアを閉じても続け、済んだら閉じた先の一覧で知らせる。
+    /// 表示中の添付ファイルを写真に保存する。手元になければ落としてから保存する。ビューアを閉じても続け、済んだら閉じた先のタイムラインで知らせる。
     func saveToPhotos() {
         guard let target = currentTransferTarget else { return }
         transfers?.start(.save, target, from: self)
@@ -1156,12 +1156,12 @@ extension MediaViewerController {
         sourceTile(id).flatMap { $0.showsAttachment(id) ? $0 : nil }
     }
 
-    /// 回転を戻したときの起点の枠。一覧で重ねた写真のように回した起点では、`rotation(in:)`の角度から回しながら動かす。
+    /// 回転を戻したときの起点の枠。タイムラインで重ねた写真のように回した起点では、`rotation(in:)`の角度から回しながら動かす。
     private func tileFrame(of tile: any MediaViewerSource) -> CGRect {
         tile.unrotatedFrame(in: view)
     }
 
-    /// 複製を見せ、ページの画像と一覧のサムネイルを隠す。複製の画像は、ページが描いている画像か、まだ描いていなければサムネイルの画像。
+    /// 複製を見せ、ページの画像とタイムラインのサムネイルを隠す。複製の画像は、ページが描いている画像か、まだ描いていなければサムネイルの画像。
     /// どちらもなければ（アプリで表示できないファイルなど）、ページを描き写した画像を使う。
     /// 画像を描くページなら、最初に画像がなくても、届いた時点で複製を差し替える。
     /// - Parameter decorationAlpha: サムネイルに重ねた表示の濃さ。サムネイルの位置から始めるなら1、ビューアの画像の位置から始めるなら0。
@@ -1181,7 +1181,7 @@ extension MediaViewerController {
             morph.setImage(image, crossfadeDuration: fading.remaining, from: fading.alpha)
         }
         // 重ねた表示はフチの内側に置くので、先に枠とフチを決める。
-        // 紙の色は、ビューア（常にダーク）ではなく起点の写真の外観で決める。ライトテーマの一覧の白いフチから、グレーに替わって見えないようにする。
+        // 紙の色は、ビューア（常にダーク）ではなく起点の写真の外観で決める。ライトテーマのタイムラインの白いフチから、グレーに替わって見えないようにする。
         morph.paperColor = PhotoPaper.color.resolvedColor(with: tile?.traitCollection ?? traitCollection)
         morph.paperBorder = border
         // 起点の近くから始めるときは、起点の見え方（中身を描かない、暗くする）から始める。
@@ -1294,7 +1294,7 @@ extension MediaViewerController {
         case .idle, .dragging, .closing:
             return
         }
-        // 開く途中は、複製の一部を一覧の中にも描いているため、ビューアではなくウインドウごと描き写す。
+        // 開く途中は、複製の一部をタイムラインの中にも描いているため、ビューアではなくウインドウごと描き写す。
         // チップの列は、開ききった位置へ本物を動かすので、写し込まない。隠して描き直してから描き写す。
         let interrupted = view.window.flatMap { window in
             let column = overlay.flatMap { $0.superview === window && !$0.isHidden ? $0 : nil }
@@ -1366,8 +1366,8 @@ extension MediaViewerController {
         view.layoutIfNeeded()
         let update: @MainActor (CGFloat) -> Void
         if movesImage, let tile = currentTile {
-            // 白いフチの付いた起点（一覧で重ねた写真）からは、フチを含めた写真の枠と角の丸みから始める。
-            // 縮めて置いた起点（一覧で傾けずに重ねた奥の写真）では、フチと角の丸みも同じ倍率で細くなっている。
+            // 白いフチの付いた起点（タイムラインで重ねた写真）からは、フチを含めた写真の枠と角の丸みから始める。
+            // 縮めて置いた起点（タイムラインで傾けずに重ねた奥の写真）では、フチと角の丸みも同じ倍率で細くなっている。
             let paper = tile.paperBorder
             let tileScale = tile.scale(in: view)
             let startBorder = (paper?.width ?? 0) * tileScale
@@ -1441,7 +1441,7 @@ extension MediaViewerController {
         }
     }
 
-    /// 複製をバーの手前と奥に描き分ける準備をする。バーの奥に描かない設定や、サムネイルを含む一覧の行が見つからなければnil。
+    /// 複製をバーの手前と奥に描き分ける準備をする。バーの奥に描かない設定や、サムネイルを含むタイムラインの行が見つからなければnil。
     private func makeBarLayering(tile: any MediaViewerSource) -> MediaBarLayering? {
         guard timing.drawsUnderBars, let window = view.window else { return nil }
         let layering = MediaBarLayering(
@@ -1623,7 +1623,7 @@ extension MediaViewerController {
             break
         }
         // 開く途中から閉じるときは、バーと重なる部分をそのときの濃さから奥へ入れ替える。
-        // 一覧のバーに隠れない範囲での受け渡しは、閉じる動きでは手前から始めるため、開き始めのごく短い間に閉じると、新着ボタンなどに重なる部分が手前に切り替わる。
+        // タイムラインのバーに隠れない範囲での受け渡しは、閉じる動きでは手前から始めるため、開き始めのごく短い間に閉じると、新着ボタンなどに重なる部分が手前に切り替わる。
         // Escやメニューから閉じたときに限られ、下へスワイプして閉じるときはつかんだ時点で手前へ寄せ始めているため受け入れる。
         let startOverlapOpacity = barLayering == nil ? 1 : barSwap.overlapOpacity
         endBarLayering()
@@ -1787,8 +1787,8 @@ extension MediaViewerController: UIPageViewControllerDataSource, UIPageViewContr
 }
 
 extension MediaViewerController {
-    /// 一覧のサムネイルからビューアを開く。`sourceTile`は、添付ファイルのサムネイルを返す。
-    /// 閉じる前に一覧のセルが再利用されるなどして見つからなければnilを返し、画像を動かさずに薄くして閉じる。
+    /// タイムラインのサムネイルからビューアを開く。`sourceTile`は、添付ファイルのサムネイルを返す。
+    /// 閉じる前にタイムラインのセルが再利用されるなどして見つからなければnilを返し、画像を動かさずに薄くして閉じる。
     static func present(
         attachments: [MediaAttachment],
         startIndex: Int,
@@ -1939,7 +1939,7 @@ extension MediaPageController: UIContextMenuInteractionDelegate {
     }
 }
 
-/// 画像のページ。一覧のサムネイルをすぐに出し、元の大きさの画像が届いたら差し替える。
+/// 画像のページ。タイムラインのサムネイルをすぐに出し、元の大きさの画像が届いたら差し替える。
 final class ImagePageController: MediaPageController {
     private let store: MediaImageStore<UIImage>
     private let zoomView = ZoomingImageView()
@@ -1963,7 +1963,7 @@ final class ImagePageController: MediaPageController {
         }
     }
     private var detailsTask: Task<Void, Never>?
-    /// 一覧で読み込んだサムネイル。
+    /// タイムラインで読み込んだサムネイル。
     private let preview: UIImage?
     /// 出している画像の取得元。違和感レポートに残す。
     private var imageSource = "none"
@@ -1987,7 +1987,7 @@ final class ImagePageController: MediaPageController {
     /// 隣のページはめくった後も`UIPageViewController`のスクロールの中に残り、windowを持ったままなので、windowでは決めない。
     private var isShown = false
 
-    /// - Parameter preview: 一覧で読み込んだサムネイル。元の画像が届くまでの下地にする。
+    /// - Parameter preview: タイムラインで読み込んだサムネイル。元の画像が届くまでの下地にする。
     init(item: MediaViewerItem, store: MediaImageStore<UIImage>, preview: UIImage?) {
         self.store = store
         self.preview = preview
@@ -2078,7 +2078,7 @@ final class ImagePageController: MediaPageController {
         statusView.frame = view.bounds
         statusView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(statusView)
-        // 一覧のサムネイルが手元にあればそれを、なければblurhashのぼかしを、元の画像が届くまでの下地にする。
+        // タイムラインのサムネイルが手元にあればそれを、なければblurhashのぼかしを、元の画像が届くまでの下地にする。
         let attachment = item.serverAttachment
         let placeholder = preview == nil ? attachment?.blurhash.flatMap { store.placeholder(for: $0, aspectRatio: attachment?.aspectRatio) } : nil
         imageSource = preview != nil ? "thumbnail" : placeholder != nil ? "blurhash" : "none"
@@ -2270,7 +2270,7 @@ final class ImagePageController: MediaPageController {
                 self.originalURL = await store.hasOriginal(for: url) ? url : nil
                 let replacesPlaceholder = self.imageSource == "blurhash"
                 self.imageSource = "full"
-                // ぼかしからは、一覧のサムネイルが届いたときと同じく、薄くして入れ替える。中身の分かるサムネイルからは、細部が増えるだけなので差し替える。
+                // ぼかしからは、タイムラインのサムネイルが届いたときと同じく、薄くして入れ替える。中身の分かるサムネイルからは、細部が増えるだけなので差し替える。
                 let crossfadeDuration = replacesPlaceholder ? self.placeholderFadeDuration : 0
                 self.zoomView.setImage(image, crossfadeDuration: crossfadeDuration)
                 // サーバーが元の大きさを返さなければ、届いた画像の大きさを等倍にする。サムネイルを出していた間は画面に収めていたため、ここで大きさが変わる。
@@ -2397,7 +2397,7 @@ final class PlayerPageController: MediaPageController {
     private var wasPlayingBeforeFastForward: Bool?
     /// このページがNow Playingに再生の情報を出しているか。
     private var holdsNowPlaying = false
-    /// 一覧で読み込んだサムネイル。動画とGIFの最初のコマを描けるまで、映像の下に出す。
+    /// タイムラインで読み込んだサムネイル。動画とGIFの最初のコマを描けるまで、映像の下に出す。
     private let preview: UIImage?
     /// 最初のコマを描けるまで出すサムネイル。開く動きの複製を消したあとに、黒い背景だけが見えないようにする。
     /// 複製と同じく、映像の枠に焦点で切り抜いて描く。投稿者が付けたサムネイルは、動画と縦横比が違うことがあるため。
@@ -2424,7 +2424,7 @@ final class PlayerPageController: MediaPageController {
     /// 最初のコマを描けるまで、映像の下にサムネイルを出している。
     var isShowingPoster: Bool { !posterView.isHidden && posterView.image != nil }
 
-    /// - Parameter preview: 一覧で読み込んだサムネイル。動画とGIFの最初のコマを描けるまでの下地にする。
+    /// - Parameter preview: タイムラインで読み込んだサムネイル。動画とGIFの最初のコマを描けるまでの下地にする。
     init(item: MediaViewerItem, preview: UIImage? = nil) {
         self.preview = preview
         super.init(item: item)

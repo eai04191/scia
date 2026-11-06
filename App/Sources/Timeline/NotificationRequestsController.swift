@@ -2,8 +2,8 @@ import Foundation
 import SciaCore
 import UIKit
 
-/// 保留中の通知の一覧を組み立て、読み込みと受け入れ・無視を受け持つ`NotificationRequestsModel`とTimelineViewControllerをつなぐ。
-/// 画面は人の一覧と同じくpushで開く。決まりはdocs/notification-filter.mdにある。
+/// 保留中の通知のリストを組み立て、読み込みと受け入れ・無視を受け持つ`NotificationRequestsModel`とTimelineViewControllerをつなぐ。
+/// 画面は人のリストと同じくpushで開く。決まりはdocs/notification-filter.mdにある。
 /// 画面がこのコントローラーを持ち、閉じて画面が捨てられたら、このコントローラーも捨てられる。
 @MainActor
 final class NotificationRequestsController {
@@ -32,7 +32,7 @@ final class NotificationRequestsController {
     }
 }
 
-/// 保留中の通知の1人分の、その人からの通知を組み立てる。右上に「受け入れる」と「無視」を置き、済んだら一覧の画面に戻る。
+/// 保留中の通知の1人分の、その人からの通知を組み立てる。右上に「受け入れる」と「無視」を置き、済んだら保留中の通知の画面に戻る。
 /// 画面がこのコントローラーを持つ。
 @MainActor
 final class AccountNotificationsController {

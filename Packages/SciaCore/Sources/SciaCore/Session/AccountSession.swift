@@ -6,16 +6,16 @@ import os
 /// 部品どうしの次の決まりを、ここでまとめて守る。アプリは、通信の実体（`HTTPTransport`、`WebSocketConnector`）と、
 /// OSから来るもの（電波が戻った回数）と、画面だけを渡す。
 /// - RESTとストリーミングで、429や503で自動の通信を止める門（`RateLimitGate`）を共有する。別々だと、ストリーミングが断られてもRESTの自動の通信が止まらない
-/// - 一覧とストリーミングが受けた401を`AuthorizationCheck`へ流し、トークンが無効と決まったら、ストリーミングと一覧の自動の通信を止める
-/// - レート制限が明けたときと、電波が戻ったときに、ストリーミングと一覧の失敗したままの読み込みをすぐやり直させる
+/// - タイムラインとストリーミングが受けた401を`AuthorizationCheck`へ流し、トークンが無効と決まったら、ストリーミングとタイムラインの自動の通信を止める
+/// - レート制限が明けたときと、電波が戻ったときに、ストリーミングとタイムラインの失敗したままの読み込みをすぐやり直させる
 /// - 閉じたら、申し込みが残っていてもストリーミングを切り、セッションで始めた処理を止める
 ///
-/// 一覧のモデルは、`init(…session:…)`で作ると、ここに登録され、やり直しと止めるのをまとめて受け取る。
+/// タイムラインのモデルは、`init(…session:…)`で作ると、ここに登録され、やり直しと止めるのをまとめて受け取る。
 @MainActor
 public final class AccountSession {
     public let credential: Credential
     public let client: MastodonClient
-    /// 各一覧で共有する、ストリーミングの接続。
+    /// 各タイムラインで共有する、ストリーミングの接続。
     public let streamingHub: StreamingHub
     /// 429や503で止められたときに、自動の通信を控える。RESTとストリーミングで共有する。
     public let rateLimit: RateLimitGate
@@ -24,9 +24,9 @@ public final class AccountSession {
     public let requestLog: RequestLog
     /// 401を受けたときに、トークンが無効になったかを決める。
     public let authorization: AuthorizationCheck
-    /// セッションの持ち主。一覧、開いた画面、投稿欄の処理は、この子で始める。
+    /// セッションの持ち主。タイムライン、開いた画面、投稿欄の処理は、この子で始める。
     public let tasks: TaskScope
-    /// トークンが無効になり、ストリーミングと登録した一覧を止めたあとに呼ぶ。ログインし直しを促す表示はアプリが出す。
+    /// トークンが無効になり、ストリーミングと登録したタイムラインを止めたあとに呼ぶ。ログインし直しを促す表示はアプリが出す。
     public var onCredentialsInvalid: () -> Void = {}
     /// アカウントの設定を初めて読めたときに呼ぶ。
     public var onPreferencesLoad: (ServerPreferences) -> Void = { _ in }
@@ -111,8 +111,8 @@ public final class AccountSession {
         tasks.run(.display) { _ = await authorization.reportStreamingUnauthorized() }
     }
 
-    /// 一覧を登録し、やり直しと止めるのを受け取らせる。弱く持つので、外す必要はない。
-    /// トークンが無効と分かったあとに登録した一覧は、その場で止める。無効になったときに止めた一覧と同じく、ログインし直すまで読まないようにするため。
+    /// タイムラインを登録し、やり直しと止めるのを受け取らせる。弱く持つので、外す必要はない。
+    /// トークンが無効と分かったあとに登録したタイムラインは、その場で止める。無効になったときに止めたタイムラインと同じく、ログインし直すまで読まないようにするため。
     public func register(_ list: some SessionList) {
         lists.removeAll { $0.list == nil }
         lists.append(WeakList(list: list))
@@ -216,7 +216,7 @@ public final class AccountSession {
     }
 }
 
-/// `AccountSession`が、レート制限が明けたときや電波が戻ったとき、トークンが無効と分かったときに、まとめて動かす一覧。
+/// `AccountSession`が、レート制限が明けたときや電波が戻ったとき、トークンが無効と分かったときに、まとめて動かすタイムライン。
 @MainActor
 public protocol SessionList: AnyObject {
     /// 電波が戻ったときや、レート制限が明けたときに呼ぶ。失敗したままの読み込みをすぐやり直す。

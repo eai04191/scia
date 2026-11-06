@@ -2,7 +2,7 @@ import SciaCore
 import UIKit
 
 /// RichTextを、UILabelに渡せるNSAttributedStringにする。
-/// メインスレッドで作り、一覧の本文を先に作るときは、カスタム絵文字の画像を写し取ったもの（`withEmojiSnapshot`）をメインスレッドの外で使う。
+/// メインスレッドで作り、タイムラインの本文を先に作るときは、カスタム絵文字の画像を写し取ったもの（`withEmojiSnapshot`）をメインスレッドの外で使う。
 struct RichTextRenderer: Sendable {
     var font: UIFont
     var textColor: UIColor

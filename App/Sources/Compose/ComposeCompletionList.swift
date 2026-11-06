@@ -3,7 +3,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 投稿欄の補完の候補の一覧。投稿欄の上に重ね、広げているときは打っている行のすぐ下に重ねる。
+/// 投稿欄の補完の候補のリスト。投稿欄の上に重ね、広げているときは打っている行のすぐ下に重ねる。
 ///
 /// 押しても入力欄のフォーカスは動かさない。候補を押したら`onSelect`、失敗の行を押したら`onRetry`を呼ぶ。
 /// ハードウェアキーボードで選んでいる候補は、行の背景で示す。
@@ -11,8 +11,8 @@ import UIKit
 /// いちばん優先する候補を、打っている文字にいちばん近い端に置く。UIKitのメニューの`priority`の並び順と同じ考え方。
 /// 入力の上に出すときは下から積み、指と目の動きを短くし、あとから候補が足されても押そうとしている候補を動かさない。
 ///
-/// 中身はSwiftUIで描く。選んでいる行の背景を、一覧の角と同心に丸めるため（`ConcentricRectangle`）。
-/// UIKitの`containerConcentric`は、一覧をスクロールしても丸めが付け替わらなかったが、SwiftUIでは追従した。
+/// 中身はSwiftUIで描く。選んでいる行の背景を、候補のリストの角と同心に丸めるため（`ConcentricRectangle`）。
+/// UIKitの`containerConcentric`は、候補のリストをスクロールしても丸めが付け替わらなかったが、SwiftUIでは追従した。
 /// 置き場所の計算とハードウェアキーボードの操作は、投稿欄（UIKit）が受け持つ。
 @MainActor
 final class ComposeCompletionList: UIView {
@@ -83,7 +83,7 @@ final class ComposeCompletionList: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// ガラスの枠の外の透明な部分では触れたものを受けず、下の入力欄や一覧へ通す。一覧の枠は、出してよい場所いっぱいに広げているため。
+    /// ガラスの枠の外の透明な部分では触れたものを受けず、下の入力欄やタイムラインへ通す。候補のリストの枠は、出してよい場所いっぱいに広げているため。
     /// 入れ替えの途中は、まだ並べている前の行も押せるよう、前と後の大きいほうの高さで受ける。
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
         let height = min(max(contentHeight, Self.contentHeight(of: model.displayedRows)), bounds.height)
@@ -99,7 +99,7 @@ final class ComposeCompletionList: UIView {
         set { model.rowFadeDuration = newValue }
     }
 
-    /// - Parameter animation: 出ている一覧で候補を入れ替えるときの動き。nilなら、すぐ入れ替える。
+    /// - Parameter animation: 出ている候補のリストで候補を入れ替えるときの動き。nilなら、すぐ入れ替える。
     ///   前にも後にも同じ場所にある候補はその場に残し、消える候補を薄くしきってから、ガラスの枠を伸び縮みさせて、増えた候補を浮かび上がらせる。
     func update(_ content: ComposeCompletion.Content, kind: CompletionKind, selectedIndex: Int, animation: Animation? = nil) {
         let rows: [Row] = switch content {
@@ -309,7 +309,7 @@ private struct CompletionListView: View {
                     rowStack(items, rowCount: rows.count)
                 }
                 .scrollBounceBehavior(.basedOnSize)
-                // 一覧を引いても、入力欄のキーボードを閉じない。閉じると書き終えたことになり、一覧も消える。
+                // 候補のリストを引いても、入力欄のキーボードを閉じない。閉じると書き終えたことになり、候補のリストも消える。
                 .scrollDismissesKeyboard(.never)
                 .defaultScrollAnchor(anchor, for: .initialOffset)
                 .defaultScrollAnchor(anchor, for: .sizeChanges)
@@ -536,7 +536,7 @@ extension View {
         let isRightToLeft = FadingLabel.isRightToLeft(text)
         return ViewThatFits(in: .horizontal) {
             self
-            // 大きさは、ふつうに1行で切った見えない文字で決め、全文は重ねて描くだけにする。全文の幅を大きさにすると、一覧の幅まで広がるため。
+            // 大きさは、ふつうに1行で切った見えない文字で決め、全文は重ねて描くだけにする。全文の幅を大きさにすると、候補のリストの幅まで広がるため。
             self
                 .hidden()
                 .frame(maxWidth: .infinity, alignment: isRightToLeft ? .trailing : .leading)
@@ -557,7 +557,7 @@ extension View {
     }
 }
 
-/// 選んでいる行と押している行に背景を付ける。一覧の端に接する角は一覧の角と同心に、離れた角は12ptに丸める。
+/// 選んでいる行と押している行に背景を付ける。候補のリストの端に接する角はリストの角と同心に、離れた角は12ptに丸める。
 private struct RowButtonStyle: ButtonStyle {
     let isSelected: Bool
 

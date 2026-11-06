@@ -132,7 +132,7 @@ final class EmojiArrivalTransition {
                 layer.add(fade, forKey: "fadeIn")
             }
             if piece.offset != .zero {
-                // 下の行を動かす一覧の動き（`TimelineViewController.reconfigureShiftingRowsBelow`）と同じスプリングにし、行と文字の動きをそろえる。
+                // 下の行を動かすタイムラインの動き（`TimelineViewController.reconfigureShiftingRowsBelow`）と同じスプリングにし、行と文字の動きをそろえる。
                 let move = TimelineViewController.rowSpring(keyPath: "position", duration: duration)
                 move.fromValue = CGPoint(x: layer.position.x - piece.offset.x, y: layer.position.y - piece.offset.y)
                 move.toValue = layer.position

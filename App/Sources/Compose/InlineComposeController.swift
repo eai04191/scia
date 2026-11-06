@@ -8,7 +8,7 @@ import UniformTypeIdentifiers
 
 /// タブバーの上に常に出しておく投稿欄。タイムラインを見たまま短い投稿や返信を書けるようにする。
 ///
-/// 書いていないときは、一覧の閲覧を邪魔しないよう、タブバーのすぐ上に細いカプセルで下書きの1行だけを見せる。
+/// 書いていないときは、タイムラインの閲覧を邪魔しないよう、タブバーのすぐ上に細いカプセルで下書きの1行だけを見せる。
 /// 書くときは同じバーが広がり、キーボードの上へ上がる。タブバーのアクセサリー（`bottomAccessory`）は高さをシステムが決めていて細くできず、
 /// キーボードにも隠れるため使わない。
 @MainActor
@@ -42,7 +42,7 @@ final class InlineComposeController: NSObject {
     var onShowReplyTarget: (Status) -> Void = { _ in }
     /// 投稿できたあとに呼ぶ。
     var onPosted: () -> Void = {}
-    /// 予約の書き直しのラベルを押したときに呼ぶ。予約の一覧を見せる。
+    /// 予約の書き直しのラベルを押したときに呼ぶ。予約投稿のタイムラインを見せる。
     var onShowScheduledStatuses: () -> Void = {}
     /// 書いているほかのアカウントの、投稿欄に出す名前とアイコン。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
     struct WritingAccount: Equatable {
@@ -278,7 +278,7 @@ final class InlineComposeController: NSObject {
     }
     /// 最後に並べたバーの形が、入力欄とボタンを出した形か。
     private var isLayoutOpen = false
-    /// 設定で空の投稿欄を隠していて、今は隠している。画面の下の外に出し、触れず、一覧の下の余白にも数えない。
+    /// 設定で空の投稿欄を隠していて、今は隠している。画面の下の外に出し、触れず、タイムラインの下の余白にも数えない。
     private(set) var isBarHidden = false
     /// バーの下端をタブバーの上で止める制約。隠すときと、隠す設定でキーボードに付いて下まで動かすときは外す。
     private var restingFloor: NSLayoutConstraint?
@@ -370,18 +370,18 @@ final class InlineComposeController: NSObject {
     private var mediaViewerGeneration = 0
     /// 出しているアラートを閉じたら、入力欄にキーボードを戻す。シートやビューアの上に出したときはfalse。
     private var alertReturnsFocus = true
-    /// 補完の候補の一覧。タイムラインに重ねて欄の上に出し、広げて欄の上に場所がなければ打っている行のすぐ下に重ねる。
+    /// 補完の候補のリスト。タイムラインに重ねて欄の上に出し、広げて欄の上に場所がなければ打っている行のすぐ下に重ねる。
     private let completionList = ComposeCompletionList()
-    /// 欄の上に出すときの、一覧の下端を欄の上端に付ける制約。
+    /// 欄の上に出すときの、候補のリストの下端を欄の上端に付ける制約。
     private var completionListAboveBar: NSLayoutConstraint?
-    /// 本文に重ねるときの、一覧の上端の位置。打っている行に合わせて決める。
+    /// 本文に重ねるときの、候補のリストの上端の位置。打っている行に合わせて決める。
     private var completionListTop: NSLayoutConstraint?
     private var completionListHeight: NSLayoutConstraint?
-    /// 一覧を出している（消える動きの途中はfalse）。
+    /// 候補のリストを出している（消える動きの途中はfalse）。
     private var isCompletionListShown = false
     /// 補完している入力欄。本文か注意書き。
     private var completionInput: (any UITextInput)? { textCompletion.input }
-    /// 一覧と欄や打っている行との間。
+    /// 候補のリストと欄や打っている行との間。
     private let completionListSpacing: CGFloat = 6
 
     /// 触れるとわずかに膨らんで明るくなるガラス。押せるものだと指に伝える。
@@ -773,11 +773,11 @@ final class InlineComposeController: NSObject {
             self.host?.view.layoutIfNeeded()
             // 5行の高さに戻すと、本文が先頭に戻ってカーソルが隠れることがあるため、カーソルの行を見せる。
             self.textView.scrollRangeToVisible(self.textView.selectedRange)
-            // 補完の一覧も、同じ動きで、動いたあとの欄と打っている行の位置へ動かす（広げて欄の上に場所がなくなれば打っている行の下へ、戻すと欄の上へ）。
+            // 補完の候補のリストも、同じ動きで、動いたあとの欄と打っている行の位置へ動かす（広げて欄の上に場所がなくなれば打っている行の下へ、戻すと欄の上へ）。
             // 動き終わってから置き直すと、動きの間、広げるときは欄の上端に付いて画面の外へ押し出され、戻すときは上端に取り残された。
             // 上で並べ直した時点で、欄と打っている行の位置は動いたあとの値になっている。
-            // 一覧の指定は、上の並べ直しの途中（欄が動いた知らせ）で切り替わることがあり、その回の並べ直しには反映されない。
-            // 決め直したうえで並べ直しをはっきり求め、この動きの中で一覧を動かす。
+            // 候補のリストの指定は、上の並べ直しの途中（欄が動いた知らせ）で切り替わることがあり、その回の並べ直しには反映されない。
+            // 決め直したうえで並べ直しをはっきり求め、この動きの中で候補のリストを動かす。
             self.layoutCompletionListIfShown()
             self.host?.view.setNeedsLayout()
             self.host?.view.layoutIfNeeded()
@@ -1445,7 +1445,7 @@ final class InlineComposeController: NSObject {
             }
         })
         if item == .account {
-            // 押すと、＋のメニューの中と同じアカウントの一覧を出す。開いている間に届いたアイコンを差し替える。
+            // 押すと、＋のメニューの中と同じアカウントのリストを出す。開いている間に届いたアイコンを差し替える。
             watchMenuIcons(of: button)
             button.showsMenuAsPrimaryAction = true
             button.menu = UIMenu(title: item.title, children: [UIDeferredMenuElement.uncached { [weak self] completion in
@@ -1505,7 +1505,7 @@ final class InlineComposeController: NSObject {
         }
     }
 
-    /// 「投稿するアカウント」の行のアイコン。読み込み済みならそのアカウントのアイコンを、一覧と同じ形に切り抜いて出す。
+    /// 「投稿するアカウント」の行のアイコン。読み込み済みならそのアカウントのアイコンを、タイムラインと同じ形に切り抜いて出す。
     /// まだなら記号のプレースホルダーを出し、プロフィールと画像を読み終えたら、開いているメニューのまま差し替える。
     private func accountIcon(for choice: AccountChoice) -> UIImage {
         let side = AvatarIcon.menuSide
@@ -2122,7 +2122,7 @@ final class InlineComposeController: NSObject {
     }
 
     /// バーの上端から画面の下端までを覆っている。書いていればキーボードも含む。バーが動くたびに測り直す。
-    /// 広げても本文に合わせた高さまでしか伸ばさず一覧が見えたままのことがあるので、広げている間も知らせ、一覧の末尾が欄に隠れないようにする。
+    /// 広げても本文に合わせた高さまでしか伸ばさずタイムラインが見えたままのことがあるので、広げている間も知らせ、タイムラインの末尾が欄に隠れないようにする。
     private func reportObscuredHeight() {
         guard let host else { return }
         let height = isBarHidden ? 0 : max(0, host.view.bounds.maxY - bar.frame.minY + barSpacing)
@@ -2553,7 +2553,7 @@ final class InlineComposeController: NSObject {
         yieldsToToolbar || sinksWhenDone && !isEditing
     }
 
-    /// 一覧で投稿を選んでいる間、まとめて行う操作のツールバーに場所を譲って隠す。書いている途中なら書くのをやめてから隠し、下書きは残す。
+    /// タイムラインで投稿を選んでいる間、まとめて行う操作のツールバーに場所を譲って隠す。書いている途中なら書くのをやめてから隠し、下書きは残す。
     /// 決まりはdocs/batch-actions.mdの「選んでいる間」にある。
     var yieldsToToolbar = false {
         didSet {
@@ -2573,7 +2573,7 @@ final class InlineComposeController: NSObject {
     }
 
     /// バーを、キーボードが去る方へ下げて画面の外に出す。出すときは、画面の下からキーボードと一緒に上げる。
-    /// 隠し始めた時点で触れなくし、一覧の下の余白からも外す。
+    /// 隠し始めた時点で触れなくし、タイムラインの下の余白からも外す。
     private func applyBarVisibility() {
         let hidden = hidesBar
         applyBarPlacement()
@@ -3095,7 +3095,7 @@ final class InlineComposeController: NSObject {
             startIndex: index,
             store: AppDependencies.mediaImages,
             dragToDismiss: TuningCatalog.dragToDismiss(in: tuning),
-            // バーの奥と手前の描き分けは、タイムラインの一覧のバーのためのもので、投稿欄のサムネイルには使わない。
+            // バーの奥と手前の描き分けは、タイムラインのバーのためのもので、投稿欄のサムネイルには使わない。
             timing: MediaViewerController.Timing(tuning: tuning, drawsUnderBars: false),
             editing: MediaViewerController.Editing(
                 descriptionLimit: model.mediaDescriptionLimit,
@@ -3335,12 +3335,12 @@ final class InlineComposeController: NSObject {
         )
     }
 
-    /// 補完の状態を一覧に映す。書いていて、補完している入力欄がキーボードを出しているときだけ出す。
+    /// 補完の状態を候補のリストに映す。書いていて、補完している入力欄がキーボードを出しているときだけ出す。
     private func updateCompletionList() {
         let content = completion.content
         let shows = content != nil && isEditing && (completionInput as? UIResponder)?.isFirstResponder == true
         // 出たまま候補が入れ替わるときは、ガラスの枠を1つのまま候補の数に合わせて伸び縮みさせ、増えた候補と消えた候補だけを薄くして出し入れする。
-        // 一覧の枠は出してよい場所いっぱいに置き、ガラスの高さはSwiftUIが決めるので、続けて打って途中で向きが変わっても、見えている高さから続ける。
+        // 候補のリストの枠は出してよい場所いっぱいに置き、ガラスの高さはSwiftUIが決めるので、続けて打って途中で向きが変わっても、見えている高さから続ける。
         let duration = tuning.value(of: TuningCatalog.completionResizeDuration)
         let animation: Animation? = isCompletionListShown && shows && duration > 0 && !UIAccessibility.isReduceMotionEnabled ? .smooth(duration: duration) : nil
         completionList.rowFadeDuration = duration
@@ -3359,8 +3359,8 @@ final class InlineComposeController: NSObject {
     }
 
     /// 欄の上に置く。欄の上に2行ぶんの場所も残っていなければ（広げたときや、小さい画面で欄が上端まで伸びたとき）、打っている行のすぐ下（入りきらなければ行の上）に欄の中身に重ねる。
-    /// 一覧の枠は、選んだ場所いっぱいにする。ガラスの枠は、その中で候補の数に合わせ、打っている文字に近い端に寄せる。
-    /// 入りきらない高さは、一覧の中でスクロールする。
+    /// 候補のリストの枠は、選んだ場所いっぱいにする。ガラスの枠は、その中で候補の数に合わせ、打っている文字に近い端に寄せる。
+    /// 入りきらない高さは、候補のリストの中でスクロールする。
     private func layoutCompletionList() {
         guard let host, let completionListHeight, let completionListAboveBar, let completionListTop else { return }
         let wanted = completionList.contentHeight
@@ -3403,7 +3403,7 @@ final class InlineComposeController: NSObject {
         constraint.constant = value
     }
 
-    /// 出し入れは薄くするだけにする。動きの途中でも、一覧を押せるようにする。
+    /// 出し入れは薄くするだけにする。動きの途中でも、候補のリストを押せるようにする。
     private func setCompletionListShown(_ shown: Bool) {
         guard shown != isCompletionListShown else { return }
         isCompletionListShown = shown
@@ -3832,7 +3832,7 @@ extension InlineComposeController: UITextViewDelegate {
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        // 一覧を欄に重ねている間に本文をスクロールしたら、打っている行に付けた一覧も動かす。
+        // 候補のリストを欄に重ねている間に本文をスクロールしたら、打っている行に付けた候補のリストも動かす。
         if scrollView === textView {
             layoutCompletionListIfShown()
             return
@@ -4228,7 +4228,7 @@ final class ComposeLineField: GlyphLanguageTextField {
 struct CompletionKeys {
     /// 確定できる候補を出している。
     var hasCandidate: () -> Bool = { false }
-    /// 一覧を出している（候補がなくても、読み込み中や失敗の行を出している）。
+    /// 候補のリストを出している（候補がなくても、読み込み中や失敗の行を出している）。
     var isShown: () -> Bool = { false }
     var move: (Int) -> Void = { _ in }
     var confirm: () -> Void = {}

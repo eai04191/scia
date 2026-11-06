@@ -1,7 +1,7 @@
 import SciaCore
 import UIKit
 
-/// 一覧の行に、投稿の添付ファイルのサムネイルを並べる。
+/// タイムラインの行に、投稿の添付ファイルのサムネイルを並べる。
 ///
 /// 高さは添付ファイルの情報から決め、画像が届いても変えない。高さの制約を張るのは、置く側の役目。
 final class MediaGridView: UIView {
@@ -75,7 +75,7 @@ final class MediaGridView: UIView {
     /// サムネイルとぼかしを載せる。1列に並べるときだけ横にスクロールでき、ほかでは自分と同じ大きさで動かない。
     private let tileContainer = RowContentScrollView()
     private var tiles: [MediaTileView] = []
-    /// 閲覧注意のぼかし。ぼかしの素材と設定付きのボタンを作るのは重く、一覧の行はどれも添付ファイルの欄を持つため、初めてぼかすときに作る。
+    /// 閲覧注意のぼかし。ぼかしの素材と設定付きのボタンを作るのは重く、タイムラインの行はどれも添付ファイルの欄を持つため、初めてぼかすときに作る。
     private var cover: UIView?
     private var coverButton: UIButton?
     /// 本文の右に重ねて出す写真。サムネイルを並べる入れ物とは別に、初めて重ねるときに作る。
@@ -89,7 +89,7 @@ final class MediaGridView: UIView {
         tileContainer.showsVerticalScrollIndicator = false
         tileContainer.alwaysBounceVertical = false
         tileContainer.contentInsetAdjustmentBehavior = .never
-        // ステータスバーのタップで先頭へ戻る対象は一覧だけにする。画面に対象が複数あると、UIKitはどれも動かさない。
+        // ステータスバーのタップで先頭へ戻る対象はタイムラインだけにする。画面に対象が複数あると、UIKitはどれも動かさない。
         tileContainer.scrollsToTop = false
         addSubview(tileContainer)
     }
@@ -291,7 +291,7 @@ final class MediaGridView: UIView {
     }
 }
 
-/// 一覧の行の中で、横にだけスクロールする入れ物。行の一部なので、ビューアが開閉の動きで一覧と行を探すときは飛ばす。
+/// タイムラインの行の中で、横にだけスクロールする入れ物。行の一部なので、ビューアが開閉の動きでタイムラインと行を探すときは飛ばす。
 final class RowContentScrollView: UIScrollView {}
 
 /// 添付ファイル1つ分のサムネイル。
@@ -306,14 +306,14 @@ final class MediaTileView: UIButton, MediaViewerSource {
     private let tuning: TuningStore
     private let thumbnailView = FocusCroppedImageView()
     private let symbolView = UIImageView()
-    /// 動画の再生アイコン。バッジと同じ下地の丸に三角を載せ、一覧のバッジとも、ビューアの丸い再生ボタンとも揃える。
+    /// 動画の再生アイコン。バッジと同じ下地の丸に三角を載せ、タイムラインのバッジとも、ビューアの丸い再生ボタンとも揃える。
     private let playView = UIView()
     private let playGlyphView = UIImageView(image: UIImage(systemName: "play.fill"))
     private let badge = MediaBadgeView()
     private let moreLabel = UILabel()
     private var loadTask: Task<Void, Never>?
     private var attachment: MediaAttachment?
-    /// 長押しのメディアのメニュー。サムネイルはボタンで、一覧の行の長押しのメニューが届かないため、自分で受ける。
+    /// 長押しのメディアのメニュー。サムネイルはボタンで、タイムラインの行の長押しのメニューが届かないため、自分で受ける。
     private var menuInteraction: MediaMenuInteraction?
     private var isCovered = false
     private var policy: MediaThumbnailPolicy?
@@ -515,7 +515,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         didSet { updateBadge() }
     }
 
-    /// 開くと一覧より明るくなる設定か。サムネイルがHDRなら、HDRのバッジを出す。
+    /// 開くとタイムラインより明るくなる設定か。サムネイルがHDRなら、HDRのバッジを出す。
     private var marksHDR = false {
         didSet { updateBadge() }
     }
@@ -553,26 +553,26 @@ final class MediaTileView: UIButton, MediaViewerSource {
         }
     }
 
-    /// 隠したときと出したときに呼ぶ。一覧で重ねた写真が、サムネイルだけでなく写真のフチごと隠すのに使う。
+    /// 隠したときと出したときに呼ぶ。タイムラインで重ねた写真が、サムネイルだけでなく写真のフチごと隠すのに使う。
     var onConcealedForViewerChange: ((Bool) -> Void)?
 
-    /// 上に重なっているビュー。一覧で重ねた奥の写真では、それより手前の写真。
+    /// 上に重なっているビュー。タイムラインで重ねた奥の写真では、それより手前の写真。
     var overlappingViews: [UIView] = []
 
-    /// 囲んでいる白いフチ。一覧で重ねた写真の中のサムネイルでは、その写真のフチ。
+    /// 囲んでいる白いフチ。タイムラインで重ねた写真の中のサムネイルでは、その写真のフチ。
     var paperBorder: (width: CGFloat, cornerRadius: CGFloat)?
 
-    /// 見え方。一覧で重ねた写真の中のサムネイルでは、その写真が中身を描くかと暗さ。
+    /// 見え方。タイムラインで重ねた写真の中のサムネイルでは、その写真が中身を描くかと暗さ。
     var viewerAppearance: (contentOpacity: CGFloat, dimming: CGFloat) = (1, 0)
 
-    /// 下の面に落としている影の濃さ。一覧で重ねた写真の中のサムネイルでは、スタックの影の濃さ。
+    /// 下の面に落としている影の濃さ。タイムラインで重ねた写真の中のサムネイルでは、スタックの影の濃さ。
     var viewerShadowOpacity: Float = 0
 
     override var isHighlighted: Bool {
         didSet { alpha = isHighlighted ? 0.7 : 1 }
     }
 
-    /// 一覧で重ねた写真の3枚目のサムネイルのように、ほかの添付ファイルを開いたときも開閉の起点にする。
+    /// タイムラインで重ねた写真の3枚目のサムネイルのように、ほかの添付ファイルを開いたときも開閉の起点にする。
     /// そのときだけ、描いている添付ファイルかを確かめる。ほかでは、ビューアが探すID（投稿欄では下書きの添付のID）と描いている添付ファイルのIDが一致しないことがあり、いつもその添付ファイルを描いている。
     var standsInForOtherAttachments = false
 
@@ -724,7 +724,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
     /// 再生アイコンの三角を右へずらす量の、丸の直径に対する比。
     private static let playGlyphOffsetRatio: CGFloat = 0.04
 
-    /// 一覧に画像を出せるか。音声と種類の分からないファイルは、プレビューのURLが画像とは限らないため読まない。
+    /// タイムラインに画像を出せるか。音声と種類の分からないファイルは、プレビューのURLが画像とは限らないため読まない。
     private static func hasThumbnail(_ attachment: MediaAttachment) -> Bool {
         switch attachment.type {
         case .image: attachment.previewUrl != nil || attachment.url != nil

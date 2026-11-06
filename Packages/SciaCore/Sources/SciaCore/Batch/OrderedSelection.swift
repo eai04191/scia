@@ -1,4 +1,4 @@
-/// 一覧で順番を付けて選んだもの。選んだ順に持ち、外したら後ろの番号を詰める。決まりはdocs/batch-actions.mdの「選んでいる間」にある。
+/// タイムラインで順番を付けて選んだもの。選んだ順に持ち、外したら後ろの番号を詰める。決まりはdocs/batch-actions.mdの「選んでいる間」にある。
 public struct OrderedSelection<ID: Hashable & Sendable>: Sendable, Equatable {
     /// 選んだ順。
     public private(set) var ids: [ID] = []
@@ -29,7 +29,7 @@ public struct OrderedSelection<ID: Hashable & Sendable>: Sendable, Equatable {
         }
     }
 
-    /// `isKept`に当たるものだけを残す。一覧から消えた行を外すのに使う。外したものがあればtrue。
+    /// `isKept`に当たるものだけを残す。タイムラインから消えた行を外すのに使う。外したものがあればtrue。
     @discardableResult
     public mutating func keep(where isKept: (ID) -> Bool) -> Bool {
         let before = ids.count

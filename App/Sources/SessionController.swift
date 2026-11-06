@@ -23,9 +23,9 @@ final class SessionController {
     private weak var presentedAnnouncements: UIViewController?
     private let bookmarks: SavedStatusesController
     private let favourites: SavedStatusesController
-    /// 予約した投稿の一覧のタブ。
+    /// 予約した投稿のタブ。
     private let scheduled: ScheduledStatusesController
-    /// タブを無効にしているときに、手前に重ねて開いた予約の一覧。閉じたあとも、次に開くまで持つ。
+    /// タブを無効にしているときに、手前に重ねて開いた予約した投稿のタイムライン。閉じたあとも、次に開くまで持つ。
     private var presentedScheduled: ScheduledStatusesController?
     /// リストとハッシュタグのタイムラインのタブ。並びに出たときに作る。
     private let serverFeeds: ServerFeedRegistry
@@ -33,26 +33,26 @@ final class SessionController {
     private let profileTabs: ProfileTabRegistry
     /// タブに置いたプロフィールで、記号の代わりに出すその人のアイコン。設定の並びにも出す。
     let profileTabIcons: ProfileTabIcons
-    /// ハッシュタグのメニューやタップで、開いた一覧に積んだハッシュタグの一覧。
+    /// ハッシュタグのメニューやタップで、開いたタイムラインに積んだハッシュタグのタイムライン。
     private let pushedFeeds: PushedFeedRegistry
-    /// 投稿の一覧のタブ。ホーム、ローカル、連合と、作ったリストとハッシュタグ。
+    /// タイムラインのタブ。ホーム、ローカル、連合と、作ったリストとハッシュタグ。
     private var tabFeeds: [FeedTimelineController] { [home, local, federated] + serverFeeds.controllers }
-    /// タブの一覧と、積んで開いているハッシュタグの一覧。
+    /// タブのタイムラインと、積んで開いているハッシュタグのタイムライン。
     private var feeds: [FeedTimelineController] { tabFeeds + pushedFeeds.controllers }
     /// 直近に読んだ自分のリスト。並びを最初の並びに戻したときに、リストを足し直すのに使う。
     /// リストの右上のメニューで、今の設定を出すのにも使う。アプリの中で作ったり変えたりしたら、読み直さずに入れる。
     private var loadedLists: [MastodonList]?
-    /// アプリの中でリストを作ったり、変えたり、消したりした回数。読み始める前と読み終えたときで違えば、読んだ一覧はその変更より古いので使わない。
+    /// アプリの中でリストを作ったり、変えたり、消したりした回数。読み始める前と読み終えたときで違えば、読んだ結果はその変更より古いので使わない。
     private var listChangeCount = 0
     /// 「タブに追加」で足した項目のアイコンを飛ばす処理。並びはタブバーへ後から反映するので、反映し終えてから行き先の切り替えタブを探す。
     private var pendingTabAddFlight: (() -> Void)?
     /// リストを作る、変える、消す。
     private lazy var listEditor = ListEditor(client: client, tasks: tasks.child(), host: self)
-    /// 読んでいる一覧（`lists`）。起動したときは、始めたときと前面に出たときの両方で読みに来るため、重ねて読まない。
+    /// 読んでいる最中のもの（`lists`）。起動したときは、始めたときと前面に出たときの両方で読みに来るため、重ねて読まない。
     private var loadingTabSources: Set<String> = []
     /// アカウントの切り替えなどのメニュー。開くたびに呼んで組み立て直す。
     private let accountMenu: @MainActor () -> UIMenu
-    /// 自分で残した投稿の一覧のタブ。ブックマーク、お気に入り。
+    /// 自分で残した投稿のタブ。ブックマーク、お気に入り。
     private var savedLists: [SavedStatusesController] { [bookmarks, favourites] }
     /// アカウント1つ分の部品（通信、ストリーミング、401の確かめ、電波の回復などのやり直し）と、その決まり。
     private let session: AccountSession
@@ -65,13 +65,13 @@ final class SessionController {
     var clock: any Clock<Duration> = AppDependencies.clock
     /// 編集できるかやミュートの期限を決める今の日付。テストでは決まった日付に差し替える。
     var now: () -> Date = AppDependencies.now
-    /// このセッションで始めた処理の持ち主。各一覧、開いた画面、投稿欄は、この子の持ち主で処理を始める。
+    /// このセッションで始めた処理の持ち主。各タイムライン、開いた画面、投稿欄は、この子の持ち主で処理を始める。
     /// `stop()`で閉じると、開いている画面の数や種類によらず、どれも止まる。
     private let tasks: TaskScope
     #if DEBUG
     /// `scia-debug://notice/progress`で出している、確かめるための処理中のチップを進める。
     private var debugProgressTask: Task<Void, Never>?
-    /// `scia-debug://autoscroll`で一覧を動かしている。
+    /// `scia-debug://autoscroll`でタイムラインを動かしている。
     private var debugScrollTicker: FrameTicker?
     /// `scia-debug://autoscroll`で動かしている間に、落ちたフレームを数える。
     private let debugScrollHitches = ScrollHitchMonitor()
@@ -110,7 +110,7 @@ final class SessionController {
     }()
     /// 「接続の状態」画面に出す、このセッションの接続の状態。
     let diagnostics: ConnectionDiagnostics
-    /// 投稿のIDと変換を受け取り、表示しているすべての一覧で、その投稿とそれをブーストした投稿を変える。
+    /// 投稿のIDと変換を受け取り、表示しているすべてのタイムラインで、その投稿とそれをブーストした投稿を変える。
     private let updateStatusEverywhere: StatusInteractions.Update
     private let interactions: StatusInteractions
     /// 投稿にリアクションする絵文字を選ぶシート。開くときに、カスタム絵文字と最近使った絵文字を読む。
@@ -121,7 +121,7 @@ final class SessionController {
     private let polls: PollVoting
     /// カードが付く前に受け取った投稿を、見えている間に取り直す。
     private let statusRefresher: StatusRefresher
-    /// 「操作の状況」の一覧に並べる、処理の途中と最近の失敗。
+    /// 「操作の状況」の画面に並べる、処理の途中と最近の失敗。
     let operationStatus = OperationStatus()
     /// アプリ全体のアプリ内通知。ウインドウごとのチップの列に配る。
     let notices = NoticeCenter()
@@ -129,7 +129,7 @@ final class SessionController {
     private let statusBarTicker = StatusBarTicker()
     /// 添付ファイルのビューアで、共有や保存のために落とす処理。ビューアを閉じても保存を続ける。
     private lazy var mediaTransfers = MediaTransferCenter(operationStatus: operationStatus, notices: notices)
-    /// 一覧で選んだ投稿に、まとめてブーストや共有をする。選んだ一覧を離れても続ける。
+    /// タイムラインで選んだ投稿に、まとめてブーストや共有をする。選んだタイムラインを離れても続ける。
     private lazy var batchActions = BatchActionCenter(
         interactions: interactions,
         notices: notices,
@@ -179,7 +179,7 @@ final class SessionController {
     private let followedTagsList: FollowedTagsController
     /// 補完の候補を読む口。投稿欄とプロフィールの編集で使う。
     private let completionSources: ComposeCompletion.Sources
-    /// 補完で読めたカスタム絵文字の一覧。開くたびに補完を作るプロフィールの編集に渡し、読み直さずに並べる。
+    /// 補完で読めたカスタム絵文字のリスト。開くたびに補完を作るプロフィールの編集に渡し、読み直さずに並べる。
     private let customEmojis: CustomEmojiCache
     /// タブバーの上の投稿欄。ホームと通知のどちらでも同じ下書きを使う。
     private let composer: InlineComposeController
@@ -189,20 +189,20 @@ final class SessionController {
     private var composeDefaultsTask: Task<Void, Never>?
     /// 画面のどこにドロップした画像や動画でも、投稿欄に添付する受け口。
     private let mediaDrop = MediaDropTarget()
-    /// 状態や設定をそろえる一覧。ホームと通知に加え、開いているプロフィールの一覧も入る。閉じたものは自然に消える。
+    /// 状態や設定をそろえるタイムライン。ホームと通知に加え、開いているプロフィールのタイムラインも入る。閉じたものは自然に消える。
     private let timelines = NSHashTable<TimelineViewController>.weakObjects()
     /// タブごとの画面を積むナビゲーション。投稿欄のカプセルなどが覆う高さを配る。
     private let contentNavigations = NSHashTable<ContentNavigationController>.weakObjects()
-    /// 開いている編集履歴。添付ファイルを開いた・隠した選択を一覧とそろえるために持つ。閉じたものは自然に消える。
+    /// 開いている編集履歴。添付ファイルを開いた・隠した選択をタイムラインとそろえるために持つ。閉じたものは自然に消える。
     private let editHistories = NSHashTable<EditHistoryViewController>.weakObjects()
     /// 添付ファイルを覆うか。ホームと通知とプロフィールでそろえ、閉じて開き直したプロフィールにも引き継ぐ。
     private var mediaCovers = MediaCovers()
-    /// 「続きを読む」で広げた本文。どの一覧で広げても、開いている一覧と、あとで開く一覧にそろえる。
+    /// 「続きを読む」で広げた本文。どのタイムラインで広げても、開いているタイムラインと、あとで開くタイムラインにそろえる。
     private var longBodyExpansion = LongBodyExpansion()
-    /// 引用元の、受け取ったあとの編集、削除、ミュート、ブロック。どの一覧の囲みにも当て、開き直した画面にも引き継ぐ。
+    /// 引用元の、受け取ったあとの編集、削除、ミュート、ブロック。どのタイムラインの囲みにも当て、開き直した画面にも引き継ぐ。
     private var quoteSources = QuoteSourceChanges()
     /// fxtwitterから読んだXの投稿。ホームと通知とプロフィールで同じ投稿を1回だけ読む。
-    /// 一覧で見えている画像の先読み。ログアウトしたら、セッションの持ち主と一緒に止める。
+    /// タイムラインで見えている画像の先読み。ログアウトしたら、セッションの持ち主と一緒に止める。
     private lazy var mediaPrefetcher = MediaPrefetcher(scope: tasks, store: AppDependencies.mediaImages, network: AppDependencies.network, settings: AppDependencies.settings)
     private let xPosts = XPostStore(client: XPostClient(client: AppDependencies.http), retryPolicy: { TuningCatalog.imageRetry(in: AppDependencies.tuning) })
     private var composerObscuredHeight: CGFloat = 0
@@ -344,7 +344,7 @@ final class SessionController {
         }
         self.updateStatusEverywhere = updateStatusEverywhere
         interactions = StatusInteractions(operations: .init(client: client), update: updateStatusEverywhere)
-        // 付けた投稿は、サーバーが受け付けたところでブックマークやお気に入りの一覧の先頭に入れる。外したときは行を残す。
+        // 付けた投稿は、サーバーが受け付けたところでブックマークやお気に入りのタイムラインの先頭に入れる。外したときは行を残す。
         interactions.onSettle = { action, status in
             bookmarks.statusDidSettle(action, status)
             favourites.statusDidSettle(action, status)
@@ -555,7 +555,7 @@ final class SessionController {
             model: ComposeModel<UIImage>(tasks: tasks.child(), myAccountID: credential.accountID, media: media, redraft: redraft, backgroundTime: BackgroundTime.request) { draft in
                 do {
                     if let editing = draft.editing {
-                        // ストリーミングの編集の知らせを待たずに、どの一覧にも編集したあとの投稿を出す。切れている間も直るようにするため。
+                        // ストリーミングの編集の知らせを待たずに、どのタイムラインにも編集したあとの投稿を出す。切れている間も直るようにするため。
                         let edited = try await client.editStatus(editing, to: draft)
                         for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, serverFeeds.updateStatus, pushedFeeds.updateStatus, profiles.updateStatus, threads.updateStatus, searches.updateStatus] {
                             update(edited.id) { _ in edited }
@@ -644,7 +644,7 @@ final class SessionController {
             return top === tabBarController || top is SFSafariViewController ? top : nil
         }
         composer.onShowReplyTarget = { [weak tabs] status in
-            // 今見えている一覧（ホーム、通知、開いているプロフィール）に返信先があれば、そこへ戻る。なければ動かさない。
+            // 今見えているタイムライン（ホーム、通知、開いているプロフィール）に返信先があれば、そこへ戻る。なければ動かさない。
             let navigation = tabs?.selectedNavigation
             TimelineViewController.shown(in: navigation?.topViewController)?.scrollToStatus(status.id, displayedID: status.displayed.id)
         }
@@ -709,7 +709,7 @@ final class SessionController {
         applyEnabledItems(tabs.placement)
         observeTabLayout()
         observeHidesEmptyComposeBar()
-        // 投稿欄を置くとタブバーの画面を読み込むため、各一覧の設定を終えてから置く。
+        // 投稿欄を置くとタブバーの画面を読み込むため、各タイムラインの設定を終えてから置く。
         composer.install(in: tabBarController)
     }
 
@@ -726,7 +726,7 @@ final class SessionController {
                 // 最初の並びに戻したら、リストが消えるので足し直す。足し直した変更は、もう一度ここへ来て反映する。
                 addMissingServerItemsToTabLayout()
                 let layout = AppDependencies.settings.tabLayout(for: handle)
-                // ハッシュタグ、ユーザーのハッシュタグ、プロフィールは、「タブから外す」で並びから外したら、一覧を止めて捨てる。
+                // ハッシュタグ、ユーザーのハッシュタグ、プロフィールは、「タブから外す」で並びから外したら、タイムラインを止めて捨てる。
                 let userAdded = Set(Self.userAddedItems(in: layout))
                 tabs.forget(serverFeeds.removeAll(where: \.isUserAdded, except: userAdded))
                 tabs.forget(profileTabs.removeAll(except: userAdded))
@@ -750,7 +750,7 @@ final class SessionController {
             feed.setEnabled(placement.location(of: TabItem(feed.feed)) != .disabled)
         }
         notifications.setEnabled(placement.location(of: .notifications) != .disabled)
-        // 見せていた一覧を無効にしたら、UIKitが選んだ先頭のタブへ移り、見せなくなる。
+        // 見せていたタイムラインを無効にしたら、UIKitが選んだ先頭のタブへ移り、見せなくなる。
         applyShownSavedLists()
         guard hasStarted else { return }
         loadProfileTabIcons(placement)
@@ -762,7 +762,7 @@ final class SessionController {
         }
     }
 
-    /// ブックマークとお気に入りの一覧に、タブで見せているかを伝える。見せ始めたら最新の分を読み、見せなくなったら外した行を消す。
+    /// ブックマークとお気に入りのタイムラインに、タブで見せているかを伝える。見せ始めたら最新の分を読み、見せなくなったら外した行を消す。
     /// 上にスレッドやビューアを重ねても、タブで見せていることは変わらないので、消さない。
     private func applyShownSavedLists() {
         for list in savedLists {
@@ -893,7 +893,7 @@ final class SessionController {
         }
     }
 
-    /// タブの一番下の画面の一覧に、アカウントのボタンを置き、投稿への操作とプロフィールを開けるようにする。
+    /// タブの一番下の画面のタイムラインに、アカウントのボタンを置き、投稿への操作とプロフィールを開けるようにする。
     private func configureTabRoot(_ viewController: TimelineViewController) {
         installAccountButton(on: viewController)
         #if DEBUG
@@ -945,20 +945,20 @@ final class SessionController {
         item.accessibilityHint = unread > 0 ? "未読のお知らせが\(unread)件あります。" : nil
     }
 
-    /// タブのナビゲーションで、チップの列を画面の移り変わりに合わせ、Macでバーの空いたところを押したら一覧を最上部へ動かす。
+    /// タブのナビゲーションで、チップの列を画面の移り変わりに合わせ、Macでバーの空いたところを押したらタイムラインを最上部へ動かす。
     /// 積んだどの画面でも、投稿欄のカプセルなどが覆う下端を空ける。
     private func configure(_ navigation: ContentNavigationController, scrollToTop: @escaping (UINavigationController) -> Void) {
         navigation.delegate = navigationDelegate
         contentNavigations.add(navigation)
         navigation.coveredBottomHeight = obscuredBottomHeight
-        // 奥の画面を開いているときは、その画面の上のバーなので、一覧は動かさない。
+        // 奥の画面を開いているときは、その画面の上のバーなので、タイムラインは動かさない。
         navigation.onEmptyBarClickOnMac = { [weak navigation] in
             guard let navigation, navigation.viewControllers.count == 1 else { return }
             scrollToTop(navigation)
         }
     }
 
-    /// 並びに出たリストやハッシュタグの一覧を、ホームやローカルと同じように整える。ローカルと同じく、初めて開いたときに読み始める。
+    /// 並びに出たリストやハッシュタグのタイムラインを、ホームやローカルと同じように整える。ローカルと同じく、初めて開いたときに読み始める。
     private func configureServerFeed(_ controller: FeedTimelineController, for item: TabItem, in navigation: ContentNavigationController) {
         configureTabRoot(controller.viewController)
         if item.isAccountHashtag {
@@ -1031,12 +1031,12 @@ final class SessionController {
     }
 
     /// 自分のリストを読み、タブの並びに反映する。決まりはdocs/tabs.mdの「リスト」にある。
-    /// 読めなかった一覧は、並びを変えない。
+    /// 読めなかったときは、並びを変えない。
     private func loadTabSources() {
         let listChangeCount = listChangeCount
         loadTabSource("lists", fetch: { try await $0.lists() }) { session, lists in
-            // 読んでいる間にアプリの中で作ったり消したりしていたら、読んだ一覧にはその変更が入っていないことがあり、作ったリストを外したり、消したリストを戻したりしてしまう。
-            // 手元はもう変更を入れてあるので、この一覧は使わず、次に起動したときかアプリに戻ったときに読み直す。
+            // 読んでいる間にアプリの中で作ったり消したりしていたら、読んだ結果にはその変更が入っていないことがあり、作ったリストを外したり、消したリストを戻したりしてしまう。
+            // 手元はもう変更を入れてあるので、この結果は使わず、次に起動したときかアプリに戻ったときに読み直す。
             guard session.listChangeCount == listChangeCount else {
                 session.logger.info("lists load discarded after local change")
                 return
@@ -1067,7 +1067,7 @@ final class SessionController {
         }
     }
 
-    /// 読んだリストを並びに反映し、もうないリストの一覧を止める。
+    /// 読んだリストを並びに反映し、もうないリストのタイムラインを止める。
     private func apply(lists: [MastodonList]) {
         loadedLists = lists
         logger.info("lists loaded count=\(lists.count, privacy: .public)")
@@ -1097,13 +1097,13 @@ final class SessionController {
         return true
     }
 
-    /// 一覧から投稿への操作とプロフィールを開けるようにする。プロフィール画面の一覧にも使う。
+    /// タイムラインから投稿への操作とプロフィールを開けるようにする。プロフィール画面のタイムラインにも使う。
     private func configure(_ viewController: TimelineViewController) {
         timelines.add(viewController)
         viewController.notices = notices
         if authorization.state == .invalid {
             showReauthenticationPrompt(on: viewController)
-            // トークンが無効と分かったあとに作った一覧は、セッションが止めていて読み込まないので、空のまま残さず、ログインし直しを促す。
+            // トークンが無効と分かったあとに作ったタイムラインは、セッションが止めていて読み込まないので、空のまま残さず、ログインし直しを促す。
             viewController.setContentState(.failed(Self.reauthenticationListMessage))
         }
         viewController.setCoveredByInAppBrowser(browserCoversTimelines)
@@ -1204,7 +1204,7 @@ final class SessionController {
         }
     }
 
-    /// 一覧や編集履歴で開いたり隠したりした結果を、ほかの一覧と編集履歴にもそろえる。
+    /// タイムラインや編集履歴で開いたり隠したりした結果を、ほかのタイムラインと編集履歴にもそろえる。
     private func shareMediaCovers(_ covers: MediaCovers, changed status: Status, from source: AnyObject?) {
         mediaCovers = covers
         for timeline in timelines.allObjects where timeline !== source {
@@ -1215,7 +1215,7 @@ final class SessionController {
         }
     }
 
-    /// 一覧で「続きを読む」で広げた本文を、ほかの一覧にもそろえる。
+    /// タイムラインで「続きを読む」で広げた本文を、ほかのタイムラインにもそろえる。
     private func shareLongBodyExpansion(_ expansion: LongBodyExpansion, changed key: LongBodyExpansion.Key, from source: AnyObject?) {
         longBodyExpansion = expansion
         for timeline in timelines.allObjects where timeline !== source {
@@ -1223,7 +1223,7 @@ final class SessionController {
         }
     }
 
-    /// 引用元の変化を覚え、変わったときだけ、開いている一覧に配る。
+    /// 引用元の変化を覚え、変わったときだけ、開いているタイムラインに配る。
     private func changeQuoteSources(_ change: QuoteSourceChange, _ apply: (inout QuoteSourceChanges) -> Void) {
         var changed = quoteSources
         apply(&changed)
@@ -1234,13 +1234,13 @@ final class SessionController {
         }
     }
 
-    /// 本文のリンクを開く。URLは設定に応じて既定のブラウザかアプリ内のSafariで、メンションはその人のプロフィールを、ハッシュタグはそのタイムラインを、開いた一覧に積む。
+    /// 本文のリンクを開く。URLは設定に応じて既定のブラウザかアプリ内のSafariで、メンションはその人のプロフィールを、ハッシュタグはそのタイムラインを、開いたタイムラインに積む。
     private func open(_ destination: RichText.LinkDestination, in status: Status, from source: UIViewController) {
         switch destination {
         case .url(let url):
             open(url, in: AppDependencies.settings.linkBrowser.browser(for: url))
         case .mention(let acct, let url):
-            // ローカルのacctはドメインを含まず、検索では完全一致にならないため、投稿のメンションの一覧にあるIDで引く。
+            // ローカルのacctはドメインを含まず、検索では完全一致にならないため、投稿のメンションのリストにあるIDで引く。
             guard let mention = status.mentions.first(where: { $0.url == url || $0.acct == acct }) else {
                 logger.error("mention not in status acct=\(acct, privacy: .private(mask: .hash))")
                 handle(ProfileNotFound(acct: acct), title: "プロフィールを開けませんでした")
@@ -1253,7 +1253,7 @@ final class SessionController {
     }
 
     /// プロフィールの自己紹介や補足情報のリンクを開く。ハッシュタグは、投稿の本文と同じくそのタイムラインを開く。
-    /// 自己紹介には投稿のようなメンションの一覧がなく、IDが分からないため、メンションはプロフィールのURLから探す。
+    /// 自己紹介には投稿のようなメンションのリストがなく、IDが分からないため、メンションはプロフィールのURLから探す。
     private func open(_ destination: RichText.LinkDestination, inProfileFrom source: UIViewController) {
         switch destination {
         case .url(let url):
@@ -1267,7 +1267,7 @@ final class SessionController {
 
     // MARK: - ハッシュタグ
 
-    /// ハッシュタグのメニューの「ユーザーの投稿」で、`account`の投稿のうち、ハッシュタグ`name`の付いたものを開いた一覧に積む。
+    /// ハッシュタグのメニューの「ユーザーの投稿」で、`account`の投稿のうち、ハッシュタグ`name`の付いたものを開いたタイムラインに積む。
     private func openAccountHashtag(_ name: String, of account: Account, from source: UIViewController) {
         let item = TabItem.accountHashtag(accountID: account.id, acct: account.acct, name: name)
         openFeed(.accountHashtag(accountID: account.id, name: name), texts: .accountHashtag(name: name, acct: account.acct), barItems: [tabToggleItem(for: item)], from: source)
@@ -1279,7 +1279,7 @@ final class SessionController {
         [viewController.makeHashtagMenuItem(name: name, url: client.tagPageURL(name)), tabToggleItem(for: .hashtag(name: name))]
     }
 
-    /// ユーザーのハッシュタグの一覧とプロフィール画面の右上に置く、タブの並びに足すか外すボタン。並びは開いている間にも変わるので、メニューを開くたびに並びを見て中身を決める。
+    /// ユーザーのハッシュタグのタイムラインとプロフィール画面の右上に置く、タブの並びに足すか外すボタン。並びは開いている間にも変わるので、メニューを開くたびに並びを見て中身を決める。
     /// 決まりはdocs/tabs.mdの「ユーザーのハッシュタグ」と「プロフィール」にある。
     private func tabToggleItem(for item: TabItem, avatarURL: URL? = nil) -> UIBarButtonItem {
         let handle = credential.handle
@@ -1362,7 +1362,7 @@ final class SessionController {
         notices.showTransient(Notice(id: "tabs.layoutChanged", kind: .success, title: title), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
     }
 
-    /// 一覧を開いた画面に積み、すぐ読み始めてストリームを購読する。ナビゲーションから外されたら止める。
+    /// タイムラインを開いた画面に積み、すぐ読み始めてストリームを購読する。ナビゲーションから外されたら止める。
     private func openFeed(_ feed: TimelineFeed, texts: TimelineViewController.Texts? = nil, barItems: [UIBarButtonItem] = [], from source: UIViewController) {
         guard let navigation = source.navigationController else { return }
         let controller = FeedTimelineController(feed: feed, texts: texts, session: session)
@@ -1516,10 +1516,10 @@ final class SessionController {
         return (controller, viewController)
     }
 
-    // MARK: - 人の一覧
+    // MARK: - 人のリスト
 
-    /// まとめた通知を送った人の一覧を開く。お気に入りとブーストは対象の投稿の、フォローは自分のフォロワーの全員の一覧にする。
-    /// まとまりに入った人だけの一覧ではない。Mastodonのwebと同じ。
+    /// まとめた通知を送った人のリストを開く。お気に入りとブーストは対象の投稿の、フォローは自分のフォロワーの全員のリストにする。
+    /// まとまりに入った人だけのリストではない。Mastodonのwebと同じ。
     private func openAccountList(of notification: MastodonNotification, from source: UIViewController) {
         let kind: AccountListKind? = switch notification.type {
         case .favourite: notification.status.map { .favouritedBy($0.id) }
@@ -1531,7 +1531,7 @@ final class SessionController {
         openAccountList(kind, ownerAcct: notification.type == .follow ? credential.username : nil, from: source)
     }
 
-    /// - Parameter ownerAcct: フォローとフォロワーの一覧なら、誰の一覧かを示すハンドル。見出しの下に出す。
+    /// - Parameter ownerAcct: フォローとフォロワーのリストなら、誰のリストかを示すハンドル。見出しの下に出す。
     private func openAccountList(_ kind: AccountListKind, ownerAcct: String? = nil, from source: UIViewController) {
         let (controller, viewController) = AccountListController.make(kind: kind, client: client, tasks: tasks.child()) { [weak self] in
             self?.reportUnauthorized()
@@ -1583,7 +1583,7 @@ final class SessionController {
         }
     }
 
-    /// 通知のタブを選んで、保留中の通知の一覧を開く。通知のタブを並べていなければ何もしない。
+    /// 通知のタブを選んで、保留中の通知のリストを開く。通知のタブを並べていなければ何もしない。
     @discardableResult
     private func openNotificationRequestsInTab() -> (NotificationRequestsController, TimelineViewController)? {
         guard tabs.placement.location(of: .notifications) != .disabled else { return nil }
@@ -1591,7 +1591,7 @@ final class SessionController {
         return openNotificationRequests(from: notifications.viewController)
     }
 
-    /// 保留中の通知の一覧を開く。
+    /// 保留中の通知のリストを開く。
     @discardableResult
     private func openNotificationRequests(from source: UIViewController) -> (NotificationRequestsController, TimelineViewController) {
         let (controller, viewController) = NotificationRequestsController.make(client: client, tasks: tasks.child(), openPolicy: { [weak self] in
@@ -1627,7 +1627,7 @@ final class SessionController {
         return (controller, viewController)
     }
 
-    /// 保留中の通知の1人分の、その人からの通知を開く。受け入れるか無視が済んだら、一覧の画面に戻る。
+    /// 保留中の通知の1人分の、その人からの通知を開く。受け入れるか無視が済んだら、保留中の通知の画面に戻る。
     private func openAccountNotifications(of request: NotificationRequest, in requests: NotificationRequestsModel, from source: UIViewController) {
         let (controller, viewController) = AccountNotificationsController.make(request: request, client: client, tasks: tasks.child(), answer: { [weak requests] decision in
             guard let requests else { return false }
@@ -1642,7 +1642,7 @@ final class SessionController {
         controller.model.start(purpose: .action)
     }
 
-    /// サーバーのお知らせの一覧をシートで開く。リンクを押したら、シートを閉じてから、選んでいるタブの画面に開く。「操作の状況」と同じ。
+    /// サーバーのお知らせをシートで開く。リンクを押したら、シートを閉じてから、選んでいるタブの画面に開く。「操作の状況」と同じ。
     func showAnnouncements(from presenter: UIViewController? = nil) {
         // シートは1つのモデルを画面として受け持つので、開いているときに重ねて開かない。重ねると、閉じて戻ったシートに変化が届かなくなる。
         if let presentedAnnouncements, presentedAnnouncements.presentingViewController != nil, !presentedAnnouncements.isBeingDismissed { return }
@@ -1675,7 +1675,7 @@ final class SessionController {
         (presenter ?? topViewController).present(navigation, animated: true)
     }
 
-    /// お知らせの本文のリンクを開く。メンションはお知らせのメンションの一覧にあるIDで、投稿へのリンクはお知らせがリンクした投稿のIDで開く。
+    /// お知らせの本文のリンクを開く。メンションはお知らせのメンションのリストにあるIDで、投稿へのリンクはお知らせがリンクした投稿のIDで開く。
     private func open(_ destination: RichText.LinkDestination, inAnnouncement announcement: Announcement) {
         guard let source = tabs.selectedNavigation?.topViewController else { return }
         switch destination {
@@ -1716,7 +1716,7 @@ final class SessionController {
 
     // MARK: - 検索
 
-    /// 検索の画面に、候補と結果を並べる一覧と、確定した語の結果を読むモデルを作らせる。
+    /// 検索の画面に、候補と結果を並べるリストと、確定した語の結果を読むモデルを作らせる。
     private func prepare(_ search: SearchViewController) {
         search.makeResults = { [weak self] input, carried, list in
             self?.makeSearchModel(input, scope: .all, carried: carried, presenter: list)
@@ -1755,7 +1755,7 @@ final class SessionController {
         navigation.pushViewController(search, animated: true)
     }
 
-    /// 確定した語の結果の一覧を作り、探し始める。「すべて見る」で積む、1つの種類だけの一覧に使う。決まりはdocs/search.mdにある。
+    /// 確定した語の結果のリストを作り、探し始める。「すべて見る」で積む、1つの種類だけの結果に使う。決まりはdocs/search.mdにある。
     private func makeSearchResults(_ input: SearchInput, scope: SearchModel.Scope) -> TimelineViewController {
         weak var owner: SearchModel?
         let viewController = TimelineViewController(texts: .search(scope, query: input.query)) { await owner?.refresh() }
@@ -1764,7 +1764,7 @@ final class SessionController {
         model.display = viewController
         viewController.lifetimeOwner = model
         // 画面を外したら、読み込みをやめる。走っている読み込みがモデルを持ち続け、通信が終わるまで残るため。
-        // 別の語を確定して結果を差し替えたときと、「すべて見る」の一覧から戻ったときに外れる。
+        // 別の語を確定して結果を差し替えたときと、「すべて見る」の画面から戻ったときに外れる。
         viewController.onRemovedFromParent = { [weak model] in model?.stop() }
         viewController.onApproachingEnd = { [weak model] in model?.approachEnd() }
         viewController.onRetry = { [weak model] in model?.retry() }
@@ -1777,7 +1777,7 @@ final class SessionController {
         return viewController
     }
 
-    /// 検索の結果のハッシュタグ、「すべて見る」、失敗の行を押したときの扱い。検索の画面と「すべて見る」で積む一覧で共有する。
+    /// 検索の結果のハッシュタグ、「すべて見る」、失敗の行を押したときの扱い。検索の画面と「すべて見る」で積む画面で共有する。
     /// - Parameter model: 行を並べた結果。打っている途中の候補のハッシュタグを押したときはnil。
     private func selectSearchResultRow(_ row: SearchRow, of model: SearchModel?, from source: UIViewController) {
         switch row {
@@ -1794,15 +1794,15 @@ final class SessionController {
         }
     }
 
-    /// 確定した語の結果を読むモデルを作る。結果を伝える一覧と読み始めは、呼び出し側が決める。
+    /// 確定した語の結果を読むモデルを作る。結果を伝える画面と読み始めは、呼び出し側が決める。
     /// - Parameters:
     ///   - carried: 打っている途中の候補。そのユーザーとハッシュタグを、結果が届くまで引き継ぐ。
-    ///   - presenter: 結果を並べる一覧。URLやハンドルが1つに決まったときに、この上に開く。
+    ///   - presenter: 結果を並べるリスト。URLやハンドルが1つに決まったときに、この上に開く。
     private func makeSearchModel(_ input: SearchInput, scope: SearchModel.Scope, carried: SearchSuggestions.Content?, presenter viewController: TimelineViewController) -> SearchModel {
         let model = SearchModel(input: input, scope: scope, carriedAccounts: carried?.accounts ?? [], carriedHashtags: carried?.hashtags ?? [], client: client, tasks: tasks.child()) { [weak self] in
             self?.reportUnauthorized()
         }
-        // URLやハンドルが1つに決まったら、結果の一覧の上に開く。待つ間にタブを移ったり、ほかの画面を開いたりしていたら開かない。
+        // URLやハンドルが1つに決まったら、結果のタイムラインの上に開く。待つ間にタブを移ったり、ほかの画面を開いたりしていたら開かない。
         model.onFound = { [weak self, weak viewController] found in
             // 添付ファイルのビューアのように元の画面をウインドウに残したまま重ねる画面は、ナビゲーションの外にあるため、重ねている画面で見る。検索欄（`UISearchController`）は除く。
             guard let self, let viewController, viewController.view.window != nil,
@@ -1813,7 +1813,7 @@ final class SessionController {
             if let search = viewController.parent as? SearchViewController, !search.isShowingResults { return }
             switch found {
             case .status(let status):
-                // 押した行がないため、一覧の安全領域の上端に置いて開く。
+                // 押した行がないため、タイムラインの安全領域の上端に置いて開く。
                 openThread(of: status, rowFrame: viewController.view.convert(viewController.view.safeAreaLayoutGuide.layoutFrame, to: nil), from: viewController)
             case .account(let account):
                 openProfile(account, from: viewController)
@@ -1948,8 +1948,8 @@ final class SessionController {
 
     // MARK: - 操作の状況
 
-    /// 「操作の状況」の一覧をシートで開く。行の投稿を選んだら、シートを閉じてから開く。
-    /// ビューアのチップから開いたときは、投稿が裏の一覧で動いても見えないため、ビューアも閉じ終えてから開く。
+    /// 「操作の状況」の画面をシートで開く。行の投稿を選んだら、シートを閉じてから開く。
+    /// ビューアのチップから開いたときは、投稿が裏のタイムラインで動いても見えないため、ビューアも閉じ終えてから開く。
     /// - Parameter presenter: シートを出す画面。nilならいちばん手前の画面。
     func showOperationStatus(from presenter: UIViewController? = nil) {
         weak var sheet: UIViewController?
@@ -1967,7 +1967,7 @@ final class SessionController {
         (presenter ?? topViewController).present(controller, animated: true)
     }
 
-    /// 投稿の詳細の画面はまだないため、今見えている一覧（ホーム、通知、開いているプロフィール）にあればそこへ動かし、なければ投稿のページを開く。
+    /// 投稿の詳細の画面はまだないため、今見えているタイムライン（ホーム、通知、開いているプロフィール）にあればそこへ動かし、なければ投稿のページを開く。
     private func open(_ subject: OperationStatus.Subject) {
         if let timeline = TimelineViewController.shown(in: tabs.selectedNavigation?.topViewController),
            timeline.scrollToStatus(subject.statusID, displayedID: subject.displayedID, at: .centeredVertically) {
@@ -1980,7 +1980,7 @@ final class SessionController {
 
     // MARK: - 投稿への操作
 
-    /// - Parameter timeline: 操作した一覧。編集履歴は、この一覧の上に重ねて開く。
+    /// - Parameter timeline: 操作したタイムライン。編集履歴は、このタイムラインの上に重ねて開く。
     private func perform(_ action: StatusAction, on status: Status, from timeline: TimelineViewController?) {
         switch action {
         case .reply:
@@ -2047,7 +2047,7 @@ final class SessionController {
         }
     }
 
-    /// 「別のアカウントで」で選んだ操作を、そのアカウントとして行う。今のアカウントの一覧は変わらないので、どのアカウントで何をしたかを知らせる。
+    /// 「別のアカウントで」で選んだ操作を、そのアカウントとして行う。今のアカウントのタイムラインは変わらないので、どのアカウントで何をしたかを知らせる。
     /// 失敗の理由は、このセッションのログインし直しの案内につなげず、そのまま出す。そのアカウントのトークンが無効でも、このセッションのものではないため。
     private func perform(_ command: OtherAccountCommand) {
         switch command.action {
@@ -2159,7 +2159,7 @@ final class SessionController {
         }
     }
 
-    /// `account`として書くときの送り先。今のアカウントの一覧には入れず、送れたら、どのアカウントで送ったかを知らせる。
+    /// `account`として書くときの送り先。今のアカウントのタイムラインには入れず、送れたら、どのアカウントで送ったかを知らせる。
     /// 失敗は投稿欄に出し、このセッションのログインし直しの案内にはつなげない。
     /// 書いている間にそのアカウントにログインし直しても新しいトークンで送るよう、送るたびにそのアカウントの今の認証情報でクライアントを作る。
     private func composeAccount(for account: OtherAccount) -> ComposeAccount<UIImage> {
@@ -2372,7 +2372,7 @@ final class SessionController {
         }, animated: true)
     }
 
-    /// 今のアカウントの一覧には、ほかのアカウントの投稿として残るので、どのアカウントで消したかを知らせる。
+    /// 今のアカウントのタイムラインには、ほかのアカウントの投稿として残るので、どのアカウントで消したかを知らせる。
     /// 失敗は、ほかの操作と同じく、このセッションのログインし直しの案内につなげずに知らせる。
     private func delete(_ status: Status, as account: OtherAccount, original: Status) {
         UserAction.deleteStatus.record()
@@ -2413,7 +2413,7 @@ final class SessionController {
         }, animated: true)
     }
 
-    /// ほかのアカウントとして関係の変更を送る。今のアカウントの一覧やプロフィール、覚えている関係は変えないので、どのアカウントで何をしたかを知らせる。
+    /// ほかのアカウントとして関係の変更を送る。今のアカウントのタイムラインやプロフィール、覚えている関係は変えないので、どのアカウントで何をしたかを知らせる。
     /// 失敗は、投稿への操作と同じく、このセッションのログインし直しの案内につなげずに知らせる。
     private func send(_ change: UserRelationChange, to relation: UserRelation, as account: OtherAccount) {
         let handle = account.credential.handle
@@ -2445,8 +2445,8 @@ final class SessionController {
         source?.navigationController?.pushViewController(viewController, animated: true)
     }
 
-    /// 編集履歴を、操作した一覧の上に重ねて開く。履歴は開いた画面が読む。
-    /// - Parameter filterTitles: 添付ファイルをぼかすフィルターのうち、操作した一覧で一致したものの名前。
+    /// 編集履歴を、操作したタイムラインの上に重ねて開く。履歴は開いた画面が読む。
+    /// - Parameter filterTitles: 添付ファイルをぼかすフィルターのうち、操作したタイムラインで一致したものの名前。
     private func openEditHistory(of status: Status, filterTitles: [String], from source: UIViewController?) {
         let client = client
         // トークンが無効なら、理由はチップの列の一番上のログインし直しの段へ案内する。ログインし直したあとは、再試行で読める。
@@ -2476,7 +2476,7 @@ final class SessionController {
         viewController.hashtagMenuActions = hashtagMenuActions
         viewController.onOpenLink = { [weak self, weak viewController] destination in
             guard let self, let viewController else { return }
-            // 編集で消したメンションは、今の投稿のメンションの一覧にないため、一覧と同じ引き方ではIDが分からない。プロフィールのURLから探す。
+            // 編集で消したメンションは、今の投稿のメンションのリストにないため、タイムラインと同じ引き方ではIDが分からない。プロフィールのURLから探す。
             if case .mention(let acct, let url) = destination, !status.mentions.contains(where: { $0.url == url || $0.acct == acct }) {
                 openProfile(resolving: url, acct: acct, from: viewController)
             } else {
@@ -2504,7 +2504,7 @@ final class SessionController {
         )
     }
 
-    /// ハッシュタグをフォローし、「フォロー中のハッシュタグ」の一覧に反映する。決まりはdocs/menus.mdの「ハッシュタグのメニュー」にある。
+    /// ハッシュタグをフォローし、「フォロー中のハッシュタグ」の画面に反映する。決まりはdocs/menus.mdの「ハッシュタグのメニュー」にある。
     private func followHashtag(_ name: String) {
         let client = client
         logger.info("hashtag follow")
@@ -2524,7 +2524,7 @@ final class SessionController {
         }
     }
 
-    /// ハッシュタグのフォローを外し、「フォロー中のハッシュタグ」の一覧から除く。タブの並びには触れない。タブはフォローと関係なく置くため。
+    /// ハッシュタグのフォローを外し、「フォロー中のハッシュタグ」の画面から除く。タブの並びには触れない。タブはフォローと関係なく置くため。
     private func unfollowHashtag(_ name: String) {
         let client = client
         logger.info("hashtag unfollow")
@@ -2542,13 +2542,13 @@ final class SessionController {
         }
     }
 
-    /// フォローしたハッシュタグを、読み直すのを待たずに「フォロー中のハッシュタグ」の一覧に入れ、メニューが使う一覧を読み直す。
+    /// フォローしたハッシュタグを、読み直すのを待たずに「フォロー中のハッシュタグ」の画面に入れ、メニューが使うフォロー中のハッシュタグを読み直す。
     private func hashtagDidFollow(_ name: String) {
         followedTagsList.didFollow(Hashtag(name: name, url: client.tagPageURL(name)))
         followedTags.reload(purpose: .action)
     }
 
-    /// フォローを外したハッシュタグを、読み直すのを待たずに「フォロー中のハッシュタグ」の一覧から除き、メニューが使う一覧を読み直す。
+    /// フォローを外したハッシュタグを、読み直すのを待たずに「フォロー中のハッシュタグ」の画面から除き、メニューが使うフォロー中のハッシュタグを読み直す。
     private func hashtagDidUnfollow(_ name: String) {
         followedTagsList.didUnfollow(name)
         followedTags.reload(purpose: .action)
@@ -2587,7 +2587,7 @@ final class SessionController {
         }
     }
 
-    /// ハッシュタグを自分のプロフィールの注目のハッシュタグから外す。外すIDは、外すときに読み直した一覧で決める。
+    /// ハッシュタグを自分のプロフィールの注目のハッシュタグから外す。外すIDは、外すときに読み直した注目のハッシュタグで決める。
     /// 別の端末やwebで消したり足し直したりしたタグを、メニューを組んだときに覚えていた古いIDで消さないため。もう載っていなければ、外れているとして知らせる。
     private func unfeatureHashtag(_ name: String) {
         let client = client
@@ -2609,7 +2609,7 @@ final class SessionController {
         }
     }
 
-    /// 自分の注目のハッシュタグを変えたあとに、覚えている一覧、投稿欄の補完の自分のタグ、開いている自分のプロフィールの棚を読み直す。
+    /// 自分の注目のハッシュタグを変えたあとに、覚えている注目のハッシュタグ、投稿欄の補完の自分のタグ、開いている自分のプロフィールの棚を読み直す。
     private func ownFeaturedTagsDidChange() {
         ownFeaturedTags.reload(purpose: .action)
         composer.completion.forgetOwnTags()
@@ -2831,7 +2831,7 @@ final class SessionController {
         }, animated: true)
     }
 
-    /// 関係の変更を送り、結果を開いているプロフィールに反映する。ミュートとブロックは、Mastodonのドキュメントに従い、ホームと通知の一覧からも相手を除く。
+    /// 関係の変更を送り、結果を開いているプロフィールに反映する。ミュートとブロックは、Mastodonのドキュメントに従い、ホームと通知のタイムラインからも相手を除く。
     private func send(_ change: UserRelationChange, to relation: UserRelation) {
         let client = client
         let id = relation.accountID
@@ -2974,7 +2974,7 @@ final class SessionController {
         model.load()
     }
 
-    /// リストのメンバーの画面を開いた一覧に積む。決まりはdocs/lists.mdの「メンバー」にある。
+    /// リストのメンバーの画面を開いたタイムラインに積む。決まりはdocs/lists.mdの「メンバー」にある。
     private func openListMembers(listID: String, title: String, from source: UIViewController) {
         let (controller, viewController) = AccountListController.make(kind: .listMembers(listID: listID), client: client, tasks: tasks.child()) { [weak self] in
             self?.reportUnauthorized()
@@ -3029,7 +3029,7 @@ final class SessionController {
         )
     }
 
-    /// 設定の画面が1枚でも出ている間は、一覧が設定の変更で描き直すのを溜め、すべて閉じたときにまとめて描き直させる。
+    /// 設定の画面が1枚でも出ている間は、タイムラインが設定の変更で描き直すのを溜め、すべて閉じたときにまとめて描き直させる。
     /// 設定の画面ごとに、出たときと消えたときに1回ずつ呼ぶ。
     func settingsShownChanged(_ isShown: Bool) {
         shownSettingsCount = max(shownSettingsCount + (isShown ? 1 : -1), 0)
@@ -3038,10 +3038,10 @@ final class SessionController {
         }
     }
 
-    /// 重ねた画面を閉じてホームのタブの一覧を出し、本物のタイムラインの上に、アプリ内のSafariの高さを選ぶシートを出す。
+    /// 重ねた画面を閉じてホームのタブのタイムラインを出し、その本物のタイムラインの上に、アプリ内のSafariの高さを選ぶシートを出す。
     /// 選んだ高さの段にシートを置くので、シートの上にホームがどのくらい見えるかを、実物のまま見比べられる。
-    /// ホームに積んだ画面（スレッドやプロフィール）は閉じて一覧まで戻す。積んだ画面の上では、一覧がどのくらい見えるかを比べられないため。
-    /// ホームのタブを無効にしていれば、選んでいるタブの一覧の上に出す。
+    /// ホームに積んだ画面（スレッドやプロフィール）は閉じてタイムラインまで戻す。積んだ画面の上では、タイムラインがどのくらい見えるかを比べられないため。
+    /// ホームのタブを無効にしていれば、選んでいるタブのタイムラインの上に出す。
     /// - Parameter page: 閉じたときに開き直す設定の画面。nilなら開き直さない。
     private func showInAppBrowserHeight(returningTo page: SettingsPage?) {
         closeScreensForDestination { [weak self] in
@@ -3054,7 +3054,7 @@ final class SessionController {
                     if let page { self?.open(.settings(page)) }
                 }
             }
-            // アプリ内のSafariと同じく、覆う高さを一覧の下の余白と見えた投稿の判定に使わせる。
+            // アプリ内のSafariと同じく、覆う高さをタイムラインの下の余白と見えた投稿の判定に使わせる。
             sheet.onObscuredHeightChange = { [weak self] height in
                 self?.heightPickerObscuredHeight = height
                 self?.applyObscuredBottomHeight()
@@ -3072,12 +3072,12 @@ final class SessionController {
         }
     }
 
-    /// ミュートかブロックしている相手を、投稿と通知の一覧から除く。どちらでもなくなったら、また足すようにする。
+    /// ミュートかブロックしている相手を、投稿と通知のタイムラインから除く。どちらでもなくなったら、また足すようにする。
     private func excludeInLists(_ relationship: Relationship) {
-        // 引用元は一覧から除かず、届いたときからミュートかブロックしていたのと同じく、押して開くまで隠す。
+        // 引用元はタイムラインから除かず、届いたときからミュートかブロックしていたのと同じく、押して開くまで隠す。
         let concealedAs: Quote.State? = relationship.blocking ? .blockedAccount : relationship.muting ? .mutedAccount : nil
         changeQuoteSources(.account(relationship.id)) { $0.setAccount(relationship.id, concealedAs: concealedAs) }
-        // ユーザーのハッシュタグの一覧は、その人の投稿だけを並べるため、プロフィール画面の一覧と同じく除かない。
+        // ユーザーのハッシュタグのタイムラインは、その人の投稿だけを並べるため、プロフィール画面のタイムラインと同じく除かない。
         for feed in feeds where !feed.feed.isAccountHashtag {
             feed.setAccount(relationship.id, excluded: relationship.blocking || relationship.muting)
         }
@@ -3090,7 +3090,7 @@ final class SessionController {
         }
     }
 
-    /// 期間を決めたミュートは、期限が来たら関係を読み直し、ミュートが明けていれば、一覧から除くのをやめる。
+    /// 期間を決めたミュートは、期限が来たら関係を読み直し、ミュートが明けていれば、タイムラインから除くのをやめる。
     /// 読み直すのは、その間にブロックしたり、期間を選び直したりしていることがあるため。読めなければ、起動し直すまで除いたままにする。
     /// Mastodonは期限の時刻に予約したジョブ（`DeleteMuteWorker`）でミュートを消すため、ちょうどの時刻ではまだ残っていることがある。1分おいてから読む。
     private func includeAfterMuteExpires(_ accountID: String, duration: Duration) {
@@ -3256,7 +3256,7 @@ final class SessionController {
 
     // MARK: - 予約投稿
 
-    /// 予約できた。予約はタイムラインに何も出ず、うまくいったことが画面の変化で見えないため、チップで知らせる。押すと予約の一覧を開く。
+    /// 予約できた。予約はタイムラインに何も出ず、うまくいったことが画面の変化で見えないため、チップで知らせる。押すと予約投稿の画面を開く。
     fileprivate func didSchedule(_ status: ScheduledStatus) {
         scheduled.didSchedule(status)
         let title = "\(ScheduleDateText.shortTitle(for: status.scheduledAt, now: now(), calendar: .autoupdatingCurrent))に予約しました"
@@ -3266,7 +3266,7 @@ final class SessionController {
         notices.showTransient(notice, duration: AppDependencies.tuning.value(of: TuningCatalog.noticeFailureChipDuration))
     }
 
-    /// 予約した投稿の一覧を開く。タブに並べていればそのタブを開き、無効にしていれば、閉じるボタンを付けて手前に重ねる。
+    /// 予約投稿の画面を開く。タブに並べていればそのタブを開き、無効にしていれば、閉じるボタンを付けて手前に重ねる。
     private func showScheduledStatuses() {
         if tabs.placement.location(of: .scheduled) != .disabled {
             tabs.show(.scheduled)
@@ -3279,7 +3279,7 @@ final class SessionController {
         list.viewController.mediaTransfers = mediaTransfers
         list.viewController.notices = notices
         list.onRewrite = { [weak self, weak list] status in
-            // 投稿欄は一覧の下にあるので、書き直すときは一覧を閉じてから聞く。
+            // 投稿欄は予約投稿の画面の下にあるので、書き直すときはその画面を閉じてから聞く。
             list?.viewController.dismiss(animated: true) {
                 self?.confirmRewriting(status)
             }
@@ -3303,7 +3303,7 @@ final class SessionController {
         }, animated: true)
     }
 
-    /// 書き直した投稿を送れたので、元の予約を取り消す。取り消せなければ、両方投稿されないよう知らせて一覧を開く。
+    /// 書き直した投稿を送れたので、元の予約を取り消す。取り消せなければ、両方投稿されないよう知らせて予約投稿の画面を開く。
     /// もう投稿されていたら（404）、取り消すものはないので何もしない。
     private func cancelRewrittenSchedule(_ id: ScheduledStatus.ID) {
         logger.info("rewritten schedule cancel start")
@@ -3365,7 +3365,7 @@ final class SessionController {
         }, animated: true)
     }
 
-    /// 消えたらどの一覧からも除く。編集か削除して書き直している投稿を消したら、編集と書き直しもやめる。
+    /// 消えたらどのタイムラインからも除く。編集か削除して書き直している投稿を消したら、編集と書き直しもやめる。
     /// 書き直しをやめるのは、添付も消え、書き直した投稿に付けられなくなるため。
     /// 失敗は押し直せば済むので、お気に入りの失敗と同じく、チップの列に出す。
     private func delete(_ status: Status) {
@@ -3400,7 +3400,7 @@ final class SessionController {
         }
     }
 
-    /// 削除した自分の投稿を、どの一覧からも除く。
+    /// 削除した自分の投稿を、どのタイムラインからも除く。
     private func removeDeletedStatus(_ id: Status.ID) {
         for feed in feeds {
             feed.removeStatus(id)
@@ -3415,7 +3415,7 @@ final class SessionController {
         changeQuoteSources(.status(id)) { $0.delete(id) }
     }
 
-    /// 承認か却下が済んだら、サーバーと同じく、そのユーザーからのリクエストの通知を一覧から除く。
+    /// 承認か却下が済んだら、サーバーと同じく、そのユーザーからのリクエストの通知を通知のタイムラインから除く。
     /// 404は、承認を待っているリクエストがもうないこと（相手が取り消した、ほかの端末で片づけたなど）なので、済んだときと同じく除く。
     /// 失敗は押し直せば済むので、お気に入りの失敗と同じく、チップの列に出す。
     private func answerFollowRequest(_ decision: FollowRequestDecision, to request: MastodonNotification) {
@@ -3448,7 +3448,7 @@ final class SessionController {
         }
     }
 
-    /// 通知を削除し、済んだら一覧から除く。404は、通知がもうないこと（ほかの端末で削除したなど）なので、済んだときと同じく除く。
+    /// 通知を削除し、済んだら通知のタイムラインから除く。404は、通知がもうないこと（ほかの端末で削除したなど）なので、済んだときと同じく除く。
     /// 失敗は押し直せば済むので、お気に入りの失敗と同じく、チップの列に出す。
     private func dismissNotification(_ notification: MastodonNotification) {
         UserAction.dismissNotification.record()
@@ -3558,7 +3558,7 @@ final class SessionController {
 
     /// 絵文字のシートを開き、選んだ絵文字で`status`にリアクションする。自分がすでにしている絵文字を選んだら、付けたままにする。
     /// 「別のアカウントで」のリアクション。そのアカウントのサーバーの絵文字のシートを開き、選んだ絵文字でそのアカウントとしてリアクションする。
-    /// 今のアカウントの一覧の投稿は変えないので、どのアカウントでリアクションしたかを知らせる。
+    /// 今のアカウントのタイムラインの投稿は変えないので、どのアカウントでリアクションしたかを知らせる。
     private func chooseEmojiReaction(for status: Status, as account: OtherAccount, original: Status) {
         let handle = account.credential.handle
         let host = topViewController
@@ -3599,7 +3599,7 @@ final class SessionController {
         #endif
     }
 
-    /// 投票する。投票は取り消せないため、サーバーの結果を待ってから、すべての一覧に反映する。
+    /// 投票する。投票は取り消せないため、サーバーの結果を待ってから、すべてのタイムラインに反映する。
     /// 失敗したら、選んだ選択肢を残したまま、お気に入りの失敗と同じチップで知らせる。
     private func vote(_ choices: Set<Int>, on status: Status, from timeline: TimelineViewController) {
         guard let pollID = status.displayed.poll?.id else { return }
@@ -3608,7 +3608,7 @@ final class SessionController {
         let title = "投票できませんでした"
         tasks.run(.action) { [weak self, weak timeline] in
             do {
-                // ほかの一覧から送った同じ投票の結果を待っているときは送らない。その結果は、送った側がすべての一覧に反映する。
+                // ほかのタイムラインから送った同じ投票の結果を待っているときは送らない。その結果は、送った側がすべてのタイムラインに反映する。
                 let sent = try await polls.vote(choices, on: status)
                 timeline?.finishVoting(pollID, succeeded: sent)
             } catch {
@@ -3624,7 +3624,7 @@ final class SessionController {
         }
     }
 
-    /// 投票の結果を読み直し、すべての一覧に反映する。
+    /// 投票の結果を読み直し、すべてのタイムラインに反映する。
     private func refreshPoll(of status: Status, from timeline: TimelineViewController) {
         guard let pollID = status.displayed.poll?.id else { return }
         UserAction.refreshPoll.record()
@@ -3741,7 +3741,7 @@ final class SessionController {
         announcements.start()
         // アニメーションを再生するかは、読み直すまで、前に読めたサーバーの値で描く。
         AppDependencies.settings.followServerAnimations(of: credential.handle)
-        // 注意書きを最初から開いておくかと、アニメーションを再生するかを一覧に反映する。読めなければ前の値のままにし、次に投稿欄で書き始めたときに読み直す。
+        // 注意書きを最初から開いておくかと、アニメーションを再生するかをタイムラインに反映する。読めなければ前の値のままにし、次に投稿欄で書き始めたときに読み直す。
         tasks.run(.display) { [session] in await session.loadPreferences() }
         session.loadCapabilities()
     }
@@ -3778,10 +3778,10 @@ final class SessionController {
         }
     }
 
-    /// 一覧の再試行ボタンも、ログインし直しにする。止めた後の再試行は何も読まず、ログインし直すまで読み込めないため。
+    /// タイムラインの再試行ボタンも、ログインし直しにする。止めた後の再試行は何も読まず、ログインし直すまで読み込めないため。
     private func showReauthenticationPrompt(on viewController: TimelineViewController) {
         viewController.onRetry = { [weak self] in self?.reauthenticate() }
-        // 読み込みの途中で止めた一覧が、読み込み中のまま残らないようにする。
+        // 読み込みの途中で止めたタイムラインが、読み込み中のまま残らないようにする。
         if viewController.contentState == .loading {
             viewController.setContentState(.failed(Self.reauthenticationListMessage))
         }
@@ -3829,7 +3829,7 @@ final class SessionController {
     }
 
     /// このセッションで始めた処理を全部止め、以後の結果を捨てる。ログアウト、アカウントの切り替え、窓を閉じたときなど、画面を捨てるときに呼ぶ。
-    /// 一覧、開いている画面、投稿欄の送信とアップロード、ストリーミングは、どれも持ち主の子で始めているので、ここで並べなくても止まる。
+    /// タイムライン、開いている画面、投稿欄の送信とアップロード、ストリーミングは、どれも持ち主の子で始めているので、ここで並べなくても止まる。
     func stop() {
         statusBarTicker.clear()
         session.close()
@@ -3855,7 +3855,7 @@ final class SessionController {
     }
 
     /// 共有拡張が作った本文（Safariのページのタイトル、URL、選んだ文の引用）で書き始める。書きかけの下書きがあれば、後ろに足すか、捨てて新しく書くかを聞く。
-    /// 一覧の上に重ねた画面を閉じる範囲は、`receiveSharedMedia(id:unreadableCount:)`と同じ。
+    /// タイムラインの上に重ねた画面を閉じる範囲は、`receiveSharedMedia(id:unreadableCount:)`と同じ。
     private func receiveSharedText(_ text: String) {
         logger.info("shared text received length=\(text.count, privacy: .public)")
         switch Confirmation.shared(.text, draft: composer.model) {
@@ -3892,7 +3892,7 @@ final class SessionController {
     }
 
     /// 共有拡張が受け取ったメディアを、投稿欄に添付して書き始める。書きかけの下書きがあれば、足すか、捨てて新しく書くかを聞く。
-    /// 一覧の上に重ねた画面は、呼ぶ前に閉じて、投稿欄を見せる（`closeScreensForSharedContent(completion:)`）。
+    /// タイムラインの上に重ねた画面は、呼ぶ前に閉じて、投稿欄を見せる（`closeScreensForSharedContent(completion:)`）。
     /// 閉じると失うものがある画面（`StaysForSharedContent`や、書きかけのある画面）は閉じずにその上で聞き、投稿欄は重ねた画面の下で開く。
     /// - Parameter unreadableCount: 共有拡張が受け取れなかった件数。1件も受け取れなかったときは、受け渡しのフォルダーを作らずに開かれる。
     private func receiveSharedMedia(id: UUID, unreadableCount: Int) {
@@ -4239,7 +4239,7 @@ final class SessionController {
         }
     }
 
-    /// Documents/DebugInjectの`file`をAPIの応答と同じ形のJSONとして読み、`tab`の一覧に新着として流す。読めなければ流さずにログに残す。
+    /// Documents/DebugInjectの`file`をAPIの応答と同じ形のJSONとして読み、`tab`のタイムラインに新着として流す。読めなければ流さずにログに残す。
     private func replyForDebug(to file: String) {
         let url = URL.documentsDirectory.appending(path: "DebugInject").appending(fileName: SafeFileName(file))
         do {
@@ -4267,7 +4267,7 @@ final class SessionController {
                     announcements.apply(.announcement(announcement))
                 }
             case .bookmarks, .favourites, .scheduled:
-                // ストリームのない一覧なので、新着と同じ経路がない。
+                // ストリームのないタイムラインなので、新着と同じ経路がない。
                 logger.error("debug inject unsupported tab=\(tab.rawValue, privacy: .public)")
             }
         } catch {
@@ -4464,8 +4464,8 @@ final class SessionController {
         grid.onSelect?(index)
     }
 
-    /// 選んでいるタブの一覧を、一定の速さで動かす。端に着いたら止める。
-    /// タブの中には隠れたままの一覧もあるので、中身のいちばん長いコレクションビューを一覧とみなす。
+    /// 選んでいるタブのタイムラインを、一定の速さで動かす。端に着いたら止める。
+    /// タブの中には隠れたままのタイムラインもあるので、中身のいちばん長いコレクションビューをタイムラインとみなす。
     /// 動かしている間の落ちたフレームを指のスクロールと同じ仕組みで数え、Documents/DebugAutoscroll.logに1行ずつ書き足す。
     /// 指で操作できない実機ではログを読めないので、`devicectl device copy from`でファイルを取り出して読む。
     private func autoScroll(distance: CGFloat, speed: CGFloat) {
@@ -4484,8 +4484,8 @@ final class SessionController {
         var remaining = abs(distance)
         let direction: CGFloat = distance < 0 ? -1 : 1
         let ticker = FrameTicker(source: DisplayLinkFrameSource.shared, longestElapsed: nil) { [weak list, weak self] elapsed in
-            // 画面を閉じたり、タブを切り替えたりして一覧が画面から外れたら、動かすのも数えるのもやめる。記録は残さない。
-            // 選ばれていないタブの一覧はウィンドウから外れるので、ウィンドウにあるかで両方を見分ける。
+            // 画面を閉じたり、タブを切り替えたりしてタイムラインが画面から外れたら、動かすのも数えるのもやめる。記録は残さない。
+            // 選ばれていないタブのタイムラインはウィンドウから外れるので、ウィンドウにあるかで両方を見分ける。
             guard let list, list.window != nil else {
                 _ = self?.debugScrollHitches.stop()
                 return false
@@ -4590,7 +4590,7 @@ private struct LinkProfileNotFound: LocalizedError {
     var errorDescription: String? { "リンク先のプロフィールが見つかりませんでした。" }
 }
 
-/// リストとハッシュタグのタイムラインの一覧と、そのナビゲーション。使う人ごとに数が違うため、タブの並びに出たときに作る。
+/// リストとハッシュタグのタイムラインと、そのナビゲーション。使う人ごとに数が違うため、タブの並びに出たときに作る。
 @MainActor
 private final class ServerFeedRegistry {
     private let make: (TabItem) -> FeedTimelineController?
@@ -4610,7 +4610,7 @@ private final class ServerFeedRegistry {
 
     var controllers: [FeedTimelineController] { entries.values.map(\.controller) }
 
-    /// 作ってある項目の一覧。まだ作っていなければnil。
+    /// 作ってある項目のタイムライン。まだ作っていなければnil。
     func controller(for item: TabItem) -> FeedTimelineController? {
         entries[item]?.controller
     }
@@ -4631,7 +4631,7 @@ private final class ServerFeedRegistry {
         }
     }
 
-    /// `belongs`に当てはまる項目のうち、`items`にないもの（サーバーにもうないリスト、フォローを外したハッシュタグ）の一覧を止めて捨て、捨てた項目を返す。
+    /// `belongs`に当てはまる項目のうち、`items`にないもの（サーバーにもうないリスト、フォローを外したハッシュタグ）のタイムラインを止めて捨て、捨てた項目を返す。
     @discardableResult
     func removeAll(where belongs: (TabItem) -> Bool, except items: Set<TabItem>) -> [TabItem] {
         var removed: [TabItem] = []
@@ -4728,7 +4728,7 @@ private final class ProfileTabRegistry {
     }
 }
 
-/// 開いた一覧に積んだハッシュタグの一覧を弱く持つ。一覧は、積んだ画面が生かしている。
+/// 開いたタイムラインに積んだハッシュタグのタイムラインを弱く持つ。タイムラインは、積んだ画面が生かしている。
 @MainActor
 private final class PushedFeedRegistry {
     private struct Entry {
@@ -4956,14 +4956,14 @@ final class TabReselectionDelegate: NSObject, UITabBarControllerDelegate {
             UserAction.reselectTab(Self.logName(of: tab)).record()
             return false
         }
-        // 慣性で動いている途中なら、最上部へ動かす時点でそれまでのスクロールが記録される。一覧で押した操作がその後に並ぶよう、後で記録する。
+        // 慣性で動いている途中なら、最上部へ動かす時点でそれまでのスクロールが記録される。タイムラインで押した操作がその後に並ぶよう、後で記録する。
         reselectRoot(navigation)
         UserAction.reselectTab(Self.logName(of: tab)).record()
         return false
     }
 
-    /// 最初の画面にいるタブをもう一度押したときの既定の動き。一覧を最上部へ動かす。
-    /// 検索の画面では、見えている一覧が最上部にあるか一覧がなければ、検索欄にフォーカスを入れる。
+    /// 最初の画面にいるタブをもう一度押したときの既定の動き。タイムラインを最上部へ動かす。
+    /// 検索の画面では、見えているタイムラインが最上部にあるかタイムラインがなければ、検索欄にフォーカスを入れる。
     static func reselectRoot(of navigation: UINavigationController) {
         let root = navigation.viewControllers.first
         let list = TimelineViewController.shown(in: root)
@@ -4990,14 +4990,14 @@ extension SessionController: ListEditorHost {
         loadedLists?.first { $0.id == id }
     }
 
-    /// 作ったリストは、「タブに追加」と同じく、有効にして切り替えタブの末尾に入れる。リストの一覧を読み直すのは待たない。
+    /// 作ったリストは、「タブに追加」と同じく、有効にして切り替えタブの末尾に入れる。自分のリストを読み直すのは待たない。
     func listDidCreate(_ list: MastodonList) {
         listChangeCount += 1
         loadedLists = (loadedLists ?? []).filter { $0.id != list.id } + [list]
         setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).adding(.list(id: list.id, title: list.title)))
     }
 
-    /// 変えたリストを覚え、名前が変わっていれば、並びの名前と、タブバーと一覧の見出しの名前をすぐ変える。
+    /// 変えたリストを覚え、名前が変わっていれば、並びの名前と、タブバーとタイムラインの見出しの名前をすぐ変える。
     func listDidUpdate(_ list: MastodonList) {
         listChangeCount += 1
         let previous = knownList(list.id)
@@ -5009,7 +5009,7 @@ extension SessionController: ListEditorHost {
         setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).replacing(item))
     }
 
-    /// 消したリストを、リストの一覧を読み直すのを待たずに並びから外し、一覧を止める。開いていたら、UIKitが選んだ先頭のタブへ移る。
+    /// 消したリストを、自分のリストを読み直すのを待たずに並びから外し、タイムラインを止める。開いていたら、UIKitが選んだ先頭のタブへ移る。
     func listDidDelete(_ id: String) {
         listChangeCount += 1
         loadedLists = loadedLists?.filter { $0.id != id }

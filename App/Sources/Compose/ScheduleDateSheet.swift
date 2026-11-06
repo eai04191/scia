@@ -1,7 +1,7 @@
 import SciaCore
 import UIKit
 
-/// 予約の日時を選ぶシート。投稿欄の予約の行と、予約の一覧の「日時を変える」から出す。決まりはdocs/compose.mdの「予約投稿」にある。
+/// 予約の日時を選ぶシート。投稿欄の予約の行と、予約投稿のタイムラインの「日時を変える」から出す。決まりはdocs/compose.mdの「予約投稿」にある。
 /// 日時は標準の`UIDatePicker`のカレンダーと時刻で選ぶ。選べるのは、サーバーが受け付ける今から5分より後だけ。
 /// 決めても、キャンセルしても、下へスワイプしても、出した側から`dismissPresentedScreens`で閉じられても、閉じたら`onClose`を1回呼ぶ。決めたときは、閉じ終えてから、`onClose`の前に`onConfirm`を呼ぶ。
 final class ScheduleDateSheet: UINavigationController {

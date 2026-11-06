@@ -322,7 +322,7 @@ struct MastodonClientTests {
         #expect(await transport.requests.count == 3)
     }
 
-    /// 人の一覧は、種類ごとのパスで読み、続きを`Link`ヘッダーの`max_id`で読む。
+    /// 人のリストは、種類ごとのパスで読み、続きを`Link`ヘッダーの`max_id`で読む。
     @Test func accountListsUseTheirPathsAndLinkHeader() async throws {
         let account = #"{"id":"3","username":"carol","acct":"carol@remote.example","display_name":"Carol","avatar":"https://example.social/avatars/carol.png","avatar_static":"https://example.social/avatars/carol.png","header":"https://example.social/headers/original/missing.png","header_static":"https://example.social/headers/original/missing.png","note":"","url":"https://remote.example/@carol","fields":[],"locked":false,"bot":false,"followers_count":0,"following_count":0,"statuses_count":0,"emojis":[]}"#
         let transport = StubTransport([

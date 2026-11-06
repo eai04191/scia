@@ -5,7 +5,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// 通知の一覧で、切れていた間の補完が手元とつながらなかったときのギャップを確かめる。
+/// 通知のタイムラインで、切れていた間の補完が手元とつながらなかったときのギャップを確かめる。
 @MainActor
 @Suite(.serialized)
 struct NotificationsControllerTests {

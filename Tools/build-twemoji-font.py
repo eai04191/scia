@@ -4,7 +4,7 @@
 # ///
 """twemojiのSVGから、本文の絵文字をtwemojiで描くための書体（COLRv0）を作る。
 
-jdecked/twemojiの指定した版のSVGを取り、Unicodeの絵文字の一覧（emoji-test.txt）にある並びを、
+jdecked/twemojiの指定した版のSVGを取り、Unicodeの絵文字のリスト（emoji-test.txt）にある並びを、
 異体字セレクター（U+FE0F）の有無を問わず同じ絵に当てる。twemojiのファイル名は、ZWJを含まない並びからU+FE0Fを除き、
 ZWJを含む並びでは絵ごとにU+FE0Fを残したり除いたりしているが、投稿の本文にはどちらの並び（「❤️」と「❤」、「🏃‍♀️」と「🏃‍♀」）も来るため、
 U+FE0Fをすべて除いた並びで絵を探し、本文に来うる並びをすべて合字で引けるようにする。

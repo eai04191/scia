@@ -1,10 +1,10 @@
 public import CoreGraphics
 
-/// 投稿の添付ファイルを、一覧の行の中に並べる枠。
+/// 投稿の添付ファイルを、タイムラインの行の中に並べる枠。
 ///
 /// 高さは添付ファイルの情報だけで決め、画像が届いても変えない。行の高さが後から変わると、読んでいる位置がずれるため。
 public struct MediaGridLayout: Equatable, Sendable {
-    /// 一覧に並べる最大の数。超えた分は最後の枠に残りの数として出す。
+    /// 行に並べる最大の数。超えた分は最後の枠に残りの数として出す。
     public static let maxTiles = 4
     /// 2つ以上を並べるときの、全体の幅と高さの比。
     static let gridAspectRatio = 16.0 / 9.0

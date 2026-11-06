@@ -36,7 +36,7 @@ public final class PollVoting {
         self.update = update
     }
 
-    /// `status`（ブーストなら元の投稿）の投票に、`choices`の選択肢で投票し、結果をすべての一覧に反映する。
+    /// `status`（ブーストなら元の投稿）の投票に、`choices`の選択肢で投票し、結果をすべてのタイムラインに反映する。
     /// 同じ投票の結果を待っている間と、選択肢が空のときは、何もせずfalseを返す。
     @discardableResult
     public func vote(_ choices: Set<Int>, on status: Status) async throws -> Bool {
@@ -49,7 +49,7 @@ public final class PollVoting {
         return true
     }
 
-    /// `status`（ブーストなら元の投稿）の投票を読み直し、すべての一覧に反映する。
+    /// `status`（ブーストなら元の投稿）の投票を読み直し、すべてのタイムラインに反映する。
     /// 投票を送っている間と、同じ投票を読み直している間は、何もせずfalseを返す。送っている投票は、その結果で反映する。
     @discardableResult
     public func refresh(_ status: Status) async throws -> Bool {

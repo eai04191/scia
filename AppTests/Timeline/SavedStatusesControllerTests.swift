@@ -6,17 +6,17 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// ブックマークやお気に入りの一覧で、先頭に足しても読んでいる行が動かないことを確かめる。決まりはdocs/tabs.mdの「ブックマークとお気に入り」にある。
+/// ブックマークやお気に入りのタイムラインで、先頭に足しても読んでいる行が動かないことを確かめる。決まりはdocs/tabs.mdの「ブックマークとお気に入り」にある。
 @MainActor
 @Suite(.serialized)
 struct SavedStatusesControllerTests {
     private let sessions = TestAccountSessions()
     private var tolerance: CGFloat { 1 / max(UITraitCollection.current.displayScale, 1) }
 
-    /// 一覧に載せる60件。ブックマークした状態にする。
+    /// タイムラインに載せる60件。ブックマークした状態にする。
     private static let saved = StatusFactory.make(count: 60, startingAt: 1_000).map { $0.settingBookmarked(true) }
 
-    /// サーバーに加わった、一覧の先頭に入る投稿。
+    /// サーバーに加わった、タイムラインの先頭に入る投稿。
     private static let newest = StatusFactory.make(count: 1, startingAt: 2_000).map { $0.settingBookmarked(true) }
 
     /// - Parameter next: ページごとの、`Link`ヘッダーの`next`に入れる`max_id`。足りない分と`nil`は、続きがないことにする。
@@ -37,7 +37,7 @@ struct SavedStatusesControllerTests {
         return SavedStatusesController(kind: .bookmarks, session: try sessions.make(transport: transport))
     }
 
-    /// 一覧をウィンドウに載せて読み込み、最上部にいる状態にする。
+    /// タイムラインをウィンドウに載せて読み込み、最上部にいる状態にする。
     private func show(_ controller: SavedStatusesController) async throws -> UIWindow {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
@@ -93,7 +93,7 @@ struct SavedStatusesControllerTests {
         #expect(abs(after - before) <= tolerance, "読んでいた行が\(after - before)pt動きました")
     }
 
-    /// 見ている間に外して受け付けられた行は残し、見ていない一覧で外して受け付けられた行はその場で消す。
+    /// 見ている間に外して受け付けられた行は残し、見ていないタイムラインで外して受け付けられた行はその場で消す。
     @Test func unsavedRowStaysOnlyWhileShown() async throws {
         let controller = try makeController(pages: [Self.saved, Self.saved])
         let window = try await show(controller)

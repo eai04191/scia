@@ -296,7 +296,7 @@ final class PostContentView: UIView, UIContentView {
     }
 
     /// 名前の行の上に置いた、ブーストした人や返信先の行の分の高さ。置いていなければ0。
-    /// スレッドを開くとき、一覧の行とスレッドの行で、この行の有無が違っても投稿の中身の位置を合わせるのに使う。
+    /// スレッドを開くとき、タイムラインの行とスレッドの行で、この行の有無が違っても投稿の中身の位置を合わせるのに使う。
     var contextHeight: CGFloat {
         guard current.context != nil else { return 0 }
         layoutIfNeeded()
@@ -626,7 +626,7 @@ final class PostContentView: UIView, UIContentView {
         if current.replyConnection.below {
             frames[.replyLineSlot] = replyLineBelow.isHidden ? line(x: avatarView.frame.midX, y: avatarView.frame.maxY, height: bounds.maxY - avatarView.frame.maxY) : [replyLineBelow.frame]
         }
-        // 返信でつながった行と光っている行には、一覧で区切り線を引かないので、示さない。
+        // 返信でつながった行と光っている行には、タイムラインで区切り線を引かないので、示さない。
         if !current.replyConnection.below, current.reactionGlow?.isLit != true {
             frames[.separatorLine] = bar(x: 0, y: bounds.maxY - 1, width: bounds.width)
         }
@@ -843,7 +843,7 @@ final class PostContentView: UIView, UIContentView {
         // UILabelは伸ばされた枠の上下中央に文字を描くため、伸ばすと本文が名前の行から下にずれる。
         let fitsContent = bottomAnchor.constraint(equalTo: contentBottom, constant: margins.bottom)
         fitsContent.priority = .defaultLow - 1
-        // 一覧は行の高さを画素に丸め、求める高さより1画素未満だけ低くすることがある。足りない分は文字のラベルではなく下の余白から削る。
+        // タイムラインは行の高さを画素に丸め、求める高さより1画素未満だけ低くすることがある。足りない分は文字のラベルではなく下の余白から削る。
         // ラベルから削ると、UILabelは収まらない行を描かないため、本文の最後の行が消える。
         let belowContent = bottomAnchor.constraint(greaterThanOrEqualTo: contentBottom, constant: margins.bottom)
         belowContent.priority = .defaultHigh - 1

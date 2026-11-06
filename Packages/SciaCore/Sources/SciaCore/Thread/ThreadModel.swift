@@ -1,13 +1,13 @@
 import Foundation
 import os
 
-/// スレッドの読み込みとストリーミングを受け持ち、ThreadStoreの並びを一覧の画面（`TimelineDisplay`）へ命令として伝える。
+/// スレッドの読み込みとストリーミングを受け持ち、ThreadStoreの並びをタイムラインの画面（`TimelineDisplay`）へ命令として伝える。
 ///
 /// 押した投稿だけを並べて開き、会話を読んだら、押した投稿の位置を保ったまま、祖先を上に、返信を下に足す。
 /// 開いている間は、ホームのストリームに届いた投稿から、スレッドへの返信と、スレッドの中の投稿の編集と削除を拾う。
 @MainActor
 public final class ThreadModel {
-    /// 結果を伝える一覧の画面。
+    /// 結果を伝えるタイムラインの画面。
     public weak var display: (any TimelineDisplay)?
     /// スレッドで当てるサーバーのフィルター。画面の警告の折りたたみにも同じものを使う。
     public let filtering: StatusFiltering
@@ -63,7 +63,7 @@ public final class ThreadModel {
         startStreaming()
     }
 
-    /// 一覧を引っぱって離したときに、会話と押した投稿を読み直す。スレッドは上に新しい投稿が来る並びではないため、全体を読み直す。
+    /// タイムラインを引っぱって離したときに、会話と押した投稿を読み直す。スレッドは上に新しい投稿が来る並びではないため、全体を読み直す。
     public func refresh() async {
         logger.info("thread refresh")
         load(purpose: .action)

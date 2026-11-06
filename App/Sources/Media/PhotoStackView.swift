@@ -1,7 +1,7 @@
 import SciaCore
 import UIKit
 
-/// 添付ファイルを、白いフチを付けた紙焼きの写真に見立てて、1枚目を手前にして重ねる。投稿欄のカプセルと、一覧で本文の右に出す添付ファイルで使う。
+/// 添付ファイルを、白いフチを付けた紙焼きの写真に見立てて、1枚目を手前にして重ねる。投稿欄のカプセルと、タイムラインで本文の右に出す添付ファイルで使う。
 /// アイコンのように見えないよう写真に見立て、2枚目より後ろは1枚目の下に重ねる。重ねる枚数は使う側が決め、それより後ろはいちばん奥の写真の下に隠れているものとし、枚数のバッジは付けない。
 /// 回す角度とずらす量、影の濃さは、使う側が決めて渡す。
 ///
@@ -222,7 +222,7 @@ final class StackedPhotoView: UIView {
     private let betweenShadowClip = UIView()
     private let betweenShadow = CALayer()
     private let failureMark = UIImageView(image: UIImage(systemName: "exclamationmark.circle.fill"))
-    /// 写真全体を暗くする。一覧で傾けずに重ねるとき、奥の写真ほど暗くする。
+    /// 写真全体を暗くする。タイムラインで傾けずに重ねるとき、奥の写真ほど暗くする。
     private let dimView = UIView()
 
     /// 写真全体を暗くする度合い。0で暗くしない。
@@ -233,7 +233,7 @@ final class StackedPhotoView: UIView {
         }
     }
 
-    /// 中の画像を描く。falseなら紙（白い縁）だけを描く。一覧で傾けずに重ねるとき、下からのぞく奥の写真に、中身の色の帯を並べないため。
+    /// 中の画像を描く。falseなら紙（白い縁）だけを描く。タイムラインで傾けずに重ねるとき、下からのぞく奥の写真に、中身の色の帯を並べないため。
     /// 写真としてはそこにあり、ビューアの開閉の起点にもなるので、サムネイルは消さずに見えなくするだけにする。
     var showsContent = true {
         didSet {
@@ -242,7 +242,7 @@ final class StackedPhotoView: UIView {
         }
     }
 
-    /// フチごと隠している。ビューアが一覧の写真とのあいだで画像を動かしている間に使う。
+    /// フチごと隠している。ビューアがタイムラインの写真とのあいだで画像を動かしている間に使う。
     /// 透明にすると触れても反応しなくなるため、サムネイルと同じく空のマスクで隠す。
     var isConcealed = false {
         didSet {

@@ -36,7 +36,7 @@ struct MediaImageStoreTests {
         #expect(try Data(contentsOf: file) == data)
     }
 
-    /// 一覧のサムネイルのように元のファイルが要らない読み込みでは、ファイルを残さない。
+    /// タイムラインのサムネイルのように元のファイルが要らない読み込みでは、ファイルを残さない。
     @Test func doesNotKeepOriginalUnlessAsked() async throws {
         let data = try pngData()
         let store = MediaImageStore(files: .temporary()) { _, _ in data }
@@ -88,7 +88,7 @@ struct MediaImageStoreTests {
         #expect(try Data(contentsOf: file) == data)
     }
 
-    /// 一覧のサムネイルのように元のファイルを残さない読み込みは、キャッシュを見ずに通信する。キャッシュはビューアで開いた元の画像のためのもの。
+    /// タイムラインのサムネイルのように元のファイルを残さない読み込みは、キャッシュを見ずに通信する。キャッシュはビューアで開いた元の画像のためのもの。
     @Test func thumbnailsDoNotReadCache() async throws {
         let data = try pngData()
         let files = MediaFileCache.temporary()
@@ -173,7 +173,7 @@ struct MediaImageStoreTests {
         #expect(rangeReads.withLock { $0 } == 2, "一時的な失敗のあとに作り直しませんでした")
     }
 
-    /// 一覧に描くための読み込みは自動の通信として送り、止められている間は送らない。ビューアで開くときは、使う人の通信として送る。
+    /// タイムラインに描くための読み込みは自動の通信として送り、止められている間は送らない。ビューアで開くときは、使う人の通信として送る。
     @Test func loadsAreSentWithTheirOrigin() async throws {
         let png = try pngData()
         let origins = Mutex<[RequestPurpose?]>([])
@@ -437,7 +437,7 @@ struct MediaImageStoreTests {
     }
 }
 
-/// 読めなかった画像は、一覧に描いたときは間隔をおいてから読み直し、ビューアを開いたときはすぐ読み直す。
+/// 読めなかった画像は、タイムラインに描いたときは間隔をおいてから読み直し、ビューアを開いたときはすぐ読み直す。
 @Suite(.scratch)
 @MainActor
 struct MediaImageStoreRetryTests {

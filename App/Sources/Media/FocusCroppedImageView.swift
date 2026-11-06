@@ -12,7 +12,7 @@ final class FocusCroppedImageView: UIView {
     /// 全体を暗くする。
     private let dimView = UIView()
 
-    /// 中の画像の濃さ。下げたぶん、紙の白を見せる。一覧で中身を描かずに紙だけを見せる写真へ、ビューアの複製を着かせるときに使う。
+    /// 中の画像の濃さ。下げたぶん、紙の白を見せる。タイムラインで中身を描かずに紙だけを見せる写真へ、ビューアの複製を着かせるときに使う。
     var contentOpacity: CGFloat = 1 {
         didSet {
             imageView.alpha = contentOpacity
@@ -20,7 +20,7 @@ final class FocusCroppedImageView: UIView {
         }
     }
 
-    /// 全体を暗くする度合い。一覧で暗くした写真へ、ビューアの複製を着かせるときに使う。
+    /// 全体を暗くする度合い。タイムラインで暗くした写真へ、ビューアの複製を着かせるときに使う。
     var dimming: CGFloat = 0 {
         didSet { dimView.alpha = dimming }
     }
@@ -31,7 +31,7 @@ final class FocusCroppedImageView: UIView {
     }
 
     /// 最後に画像を差し替えたときに、前の画像から薄く入れ替えた時間。0なら1コマで差し替えた。
-    /// 同じ見た目の複製（ビューアの開閉で一覧の中に置く複製）を、同じ入れ替え方でそろえるのに使う。
+    /// 同じ見た目の複製（ビューアの開閉でタイムラインの中に置く複製）を、同じ入れ替え方でそろえるのに使う。
     private(set) var lastCrossfadeDuration: TimeInterval = 0
 
     /// 画像を差し替える。`crossfadeDuration`が0より大きければ、前の画像をその時間で薄くして入れ替える。
@@ -51,7 +51,7 @@ final class FocusCroppedImageView: UIView {
         }
     }
 
-    /// 縁に描く白いフチの幅。画像はフチの内側に収める。一覧で重ねた写真の紙を、ビューアの開閉の複製でも描くのに使う。
+    /// 縁に描く白いフチの幅。画像はフチの内側に収める。タイムラインで重ねた写真の紙を、ビューアの開閉の複製でも描くのに使う。
     /// フチはレイヤーの縁取りで、画像より手前に描かれるので、内側からはみ出た画像の端はフチに隠れる。
     var paperBorder: CGFloat = 0 {
         didSet {
@@ -81,8 +81,8 @@ final class FocusCroppedImageView: UIView {
         isUserInteractionEnabled = false
         // 届いた画像の縦横比が添付ファイルの大きさと違っても、枠に画像のない部分を作らない。
         imageView.contentMode = .scaleAspectFill
-        // 元の大きさの画像を一覧の写真ほどに縮めて描くと、既定の線形の縮小では細い線が間引かれて模様が乱れる。
-        // ビューアの開閉では、縮めた複製から一覧のサムネイルへ着地の一コマで替わるため、乱れが消える瞬間が見える。
+        // 元の大きさの画像をタイムラインの写真ほどに縮めて描くと、既定の線形の縮小では細い線が間引かれて模様が乱れる。
+        // ビューアの開閉では、縮めた複製からタイムラインのサムネイルへ着地の一コマで替わるため、乱れが消える瞬間が見える。
         imageView.layer.minificationFilter = .trilinear
         paperView.backgroundColor = paperColor
         paperView.alpha = 0

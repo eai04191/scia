@@ -10,10 +10,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     private let logger = SciaLog.logger(category: "timeline")
 
-    /// 一覧ごとに変わる文言。
+    /// タイムラインごとに変わる文言。
     typealias Texts = TimelineTexts
 
-    /// 一覧全体の状態。投稿がないときの表示に使う。
+    /// タイムライン全体の状態。投稿がないときの表示に使う。
     typealias ContentState = TimelineContentState
 
     /// 末尾の読み込みの状態。フッターに出す。
@@ -44,7 +44,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onOpenNotificationRequest: ((NotificationRequest) -> Void)?
     /// 通知のメニューで、通知の削除が選ばれたときに、その通知を渡して呼ぶ。
     var onDismissNotification: ((MastodonNotification) -> Void)?
-    /// まとめた通知の「ほか3人」が押されたときに呼ぶ。通知を送った人の一覧を開く。
+    /// まとめた通知の「ほか3人」が押されたときに呼ぶ。通知を送った人のリストを開く。
     var onOpenGroupAccounts: ((MastodonNotification) -> Void)?
     /// 右上に出す、投稿欄で書き始めるボタンが押されたときに呼ぶ。
     /// アプリ内のSafariのシートの裏に隠れているときや、設定で空の投稿欄を隠しているときに、投稿欄に触れられないため、その入口にする。
@@ -69,7 +69,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onOpenStatusID: ((Status.ID, CGRect) -> Void)?
     /// スレッドの画面で押した投稿。押してもスレッドを開き直さない。
     var threadFocusID: Status.ID?
-    /// スレッドを開くときに、押した行を一覧で見えていた位置に置くため、上の余白に足している高さ。
+    /// スレッドを開くときに、押した行をタイムラインで見えていた位置に置くため、上の余白に足している高さ。
     private var openingInset: CGFloat = 0
     /// 画面に出るときに、この行の上端をウインドウのこの高さに置く。
     private var pendingOpening: (id: ItemID, windowY: CGFloat)?
@@ -95,9 +95,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onRemoveAllRecentSearches: (() -> Void)?
     /// 最近の検索の行を左へスワイプして消したときに呼ぶ。
     var onRemoveRecentSearch: ((String) -> Void)?
-    /// ナビゲーションから外された。積んで開いた一覧が、読み込みと購読をやめるのに使う。
+    /// ナビゲーションから外された。積んで開いたタイムラインが、読み込みと購読をやめるのに使う。
     var onRemovedFromParent: (() -> Void)?
-    /// 画面に出始めたとき（true）と、見えなくなったとき（false）。前に出ている間だけ新着を読む一覧が使う。
+    /// 画面に出始めたとき（true）と、見えなくなったとき（false）。前に出ている間だけ新着を読むタイムラインが使う。
     var onVisibilityChange: ((Bool) -> Void)?
     /// ユーザーのメニューのメンションとハンドルをコピーを組むもの。nilなら2つの項目を出さない。
     var userMenuActions: UserMenuActions?
@@ -106,15 +106,15 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// この画面が表示されている間、生かしておくもの。画面を組み立てたコントローラーを、ナビゲーションから外されるまで残すのに使う。
     /// 外されたら手放す。コントローラーが画面を強く持つ持ち合いを、コントローラーの止め方によらず解くため。
     var lifetimeOwner: AnyObject?
-    /// 一覧の頭に置き、一緒にスクロールするビュー。プロフィールのヘッダーに使う。表示より前に設定する。
+    /// タイムラインの頭に置き、一緒にスクロールするビュー。プロフィールのヘッダーに使う。表示より前に設定する。
     /// 置くと、投稿がないときの全面の表示は出さず、読み込みの状態はフッターだけで示す。ヘッダーを覆わないようにするため。
     var headerView: UIView?
-    /// 画面に出るたびに呼ぶ。開くまで読まない一覧が、初めて開いたときに読み始めるのに使う。
+    /// 画面に出るたびに呼ぶ。開くまで読まないタイムラインが、初めて開いたときに読み始めるのに使う。
     var onAppearing: (() -> Void)?
-    /// 一覧がスクロールしたときと、安全領域やバーの高さが変わったときに呼ぶ。ヘッダーを置いた画面が、ヘッダーやバーの見た目を位置に合わせるのに使う。
+    /// タイムラインがスクロールしたときと、安全領域やバーの高さが変わったときに呼ぶ。ヘッダーを置いた画面が、ヘッダーやバーの見た目を位置に合わせるのに使う。
     var onScroll: ((UIScrollView) -> Void)?
     /// ステータスバーの文字の色。ヘッダーを置いた画面が、ステータスバーの下に見えているものに合わせて変える。
-    /// ナビゲーションバーのボタンのない場所のタップを、一覧に通す。ヘッダーを置いた画面が、バーの下に入れたヘッダー画像を押せるようにする。
+    /// ナビゲーションバーのボタンのない場所のタップを、タイムラインに通す。ヘッダーを置いた画面が、バーの下に入れたヘッダー画像を押せるようにする。
     var passesEmptyNavigationBarTaps = false
     var statusBarStyle: UIStatusBarStyle = .default {
         didSet {
@@ -147,8 +147,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private var appliedEntries: [TimelineEntry] = []
     /// 隣の行とアイコン同士を線でつなぐ行。並びが変わるたびに決め直す。
     private var replyConnections: [ItemID: ReplyConnection] = [:]
-    /// すぐ上の行が返信先なら、返信のラベルを出さない。スレッドのように古い順に並べる一覧で、線で返信先が分かるため。
-    /// ただし、スレッドで押した投稿（`threadFocusID`）にはラベルを残す。新しい順に並べる一覧では、返信先は下の行になるため使わない。
+    /// すぐ上の行が返信先なら、返信のラベルを出さない。スレッドのように古い順に並べるタイムラインで、線で返信先が分かるため。
+    /// ただし、スレッドで押した投稿（`threadFocusID`）にはラベルを残す。新しい順に並べるタイムラインでは、返信先は下の行になるため使わない。
     var hidesReplyLabelBelowParent = false
     private var loadingGapIDs: Set<String> = []
     /// 直近の読み込みに失敗したギャップと、その理由。行の中で読めなかったことを知らせる。
@@ -191,14 +191,14 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// スプリングで動かしている行き先。
     private var springScrollDestination = SpringScrollDestination.top
     /// スプリングで動かしている間だけ有効にし、指が触れた時点で止める。触れたタッチは、指が離れるまで中身に渡さない。
-    /// UIKitのスクロールと同じく、動いている一覧に触れて止めたつもりで、指の下の画像やリンクが開かないようにするため。
+    /// UIKitのスクロールと同じく、動いているタイムラインに触れて止めたつもりで、指の下の画像やリンクが開かないようにするため。
     private(set) lazy var springScrollInterruption = makeSpringScrollInterruption()
     /// 指で動かしているスクロールの始まり。止まったら違和感レポート用に記録する。
     private var scrollStart: (offset: CGFloat, time: CFTimeInterval)?
     private let scrollHitches = ScrollHitchMonitor()
     /// 投稿のメニューの、システムの翻訳で出す翻訳シート。
     let translation = SystemTranslation()
-    /// 「テキストを選択」で選べる状態にしている本文。一覧の行をタップしたときと、画面を離れたときにやめる。
+    /// 「テキストを選択」で選べる状態にしている本文。タイムラインの行をタップしたときと、画面を離れたときにやめる。
     private weak var textSelectionBody: PostBodyView?
     /// 投稿のメニューで「テキストを選択」を選んだ本文と、その投稿。メニューが閉じ終えてから選び始める。閉じる途中に選ぶと、編集メニューが出ないため。
     private var pendingTextSelection: (body: PostBodyView, statusID: Status.ID)?
@@ -222,7 +222,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 使う人の操作（新着ボタン、タブの選び直し、ステータスバーのタップ）で最上部へ戻している。戻る間は新着ボタンを隠す。
     /// 新着に追従して戻る間は、出ているボタンをそのまま出しておく。
     private var isScrollingToNewestByUser = false
-    /// 一覧の最上部から引っぱって、浮かべた新着のボタンを下げている量。
+    /// タイムラインの最上部から引っぱって、浮かべた新着のボタンを下げている量。
     private var pulledDistance: CGFloat = 0
     /// アプリ全体のアプリ内通知。お気に入りやブーストの失敗、リンクのコピーを出す。セッションが入れる。
     var notices: NoticeCenter?
@@ -242,8 +242,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 時間をおく処理の時計。テストでは手で進める時計に差し替える。
     var clock: any Clock<Duration> = AppDependencies.clock
     private let texts: Texts
-    /// 一覧を一番上から引っぱって離したときに、最新の状態を読む。読み終えるまで更新コントロールを出し続ける。
-    /// どの一覧でも同じ操作で読み直せるよう、一覧を持つ側に必ず決めさせる。
+    /// タイムラインを一番上から引っぱって離したときに、最新の状態を読む。読み終えるまで更新コントロールを出し続ける。
+    /// どのタイムラインでも同じ操作で読み直せるよう、タイムラインを持つ側に必ず決めさせる。
     private let refresh: @MainActor () async -> Void
     private let refreshControl = UIRefreshControl()
     private var refreshTask: Task<Void, Never>?
@@ -261,7 +261,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onChangeMediaCovers: ((MediaCovers, Status) -> Void)?
     /// fxtwitterから読んだXの投稿。セッションの中で1つを共有する。
     var xPosts: XPostStore?
-    /// この一覧で当てるサーバーのフィルターと、警告で折りたたんだ投稿のうち開いたもの。一覧を持つ側が、一覧の場所に合わせて入れる。
+    /// このタイムラインで当てるサーバーのフィルターと、警告で折りたたんだ投稿のうち開いたもの。タイムラインを持つ側が、タイムラインの場所に合わせて入れる。
     var filterWarnings = FilterWarnings()
     /// ブロックかミュートしている人の引用元のうち、押して開いたもの。
     var quoteReveals = QuoteReveals()
@@ -285,7 +285,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onToggleEmojiReaction: ((Status, ReactionEmoji) -> Void)?
     /// リアクションの列の「＋」が押されたときに、押した投稿を渡して呼ぶ。nilなら「＋」を出さない。
     var onAddEmojiReaction: ((Status) -> Void)?
-    /// リアクションのボタンのメニューの「リアクションした人」で、その投稿にその絵文字でリアクションした人の一覧を開く。
+    /// リアクションのボタンのメニューの「リアクションした人」で、その投稿にその絵文字でリアクションした人のリストを開く。
     var onOpenEmojiReactionedBy: ((Status, ReactionEmoji) -> Void)?
     /// 注意書きのある投稿の本文を開いているか。サーバーの設定が読めたら、セッションが既定を入れる。
     var spoilerExpansion = SpoilerExpansion() {
@@ -295,12 +295,12 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
-    /// 「続きを読む」で広げた本文。決まりはdocs/long-post.mdにある。セッションが持ち、開いている一覧にそろえて配る。
+    /// 「続きを読む」で広げた本文。決まりはdocs/long-post.mdにある。セッションが持ち、開いているタイムラインにそろえて配る。
     var longBodyExpansion = LongBodyExpansion()
-    /// 「続きを読む」で本文を広げたときに、広げたあとの状態と広げたものを渡して呼ぶ。セッションが、ほかの一覧にもそろえる。
+    /// 「続きを読む」で本文を広げたときに、広げたあとの状態と広げたものを渡して呼ぶ。セッションが、ほかのタイムラインにもそろえる。
     var onChangeLongBodyExpansion: ((LongBodyExpansion, LongBodyExpansion.Key) -> Void)?
 
-    /// 「投稿の見た目」と「通知の見た目」のプレビューに置く一覧。見本の投稿と通知を並べて見せるだけで、リンクを開くほかは、押す、長押し、スワイプ、引っぱって読み直す操作と、末尾の表示を出さない。
+    /// 「投稿の見た目」と「通知の見た目」のプレビューに置くタイムライン。見本の投稿と通知を並べて見せるだけで、リンクを開くほかは、押す、長押し、スワイプ、引っぱって読み直す操作と、末尾の表示を出さない。
     /// 設定の値を変えたときは、行の部品を新しい位置まで動かして見せる。決まりはdocs/appearance.mdの「プレビュー」にある。画面を読み込む前に決める。
     var isAppearancePreview = false
 
@@ -355,7 +355,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        // 画面を組み立てる側が先に入れたサブタイトル（人の一覧のハンドル）を消さないよう、文言にあるときだけ入れる。
+        // 画面を組み立てる側が先に入れたサブタイトル（人のリストのハンドル）を消さないよう、文言にあるときだけ入れる。
         if let subtitle = texts.subtitle {
             navigationItem.subtitle = subtitle
         }
@@ -388,10 +388,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             refreshControl.addAction(UIAction { [weak self] _ in self?.beginRefresh() }, for: .valueChanged)
             collectionView.refreshControl = refreshControl
         }
-        // 一覧が画面の高さに満たないときも、引っぱって読み直せるようにする。
+        // タイムラインが画面の高さに満たないときも、引っぱって読み直せるようにする。
         collectionView.alwaysBounceVertical = true
         view.addSubview(collectionView)
-        // 新着のボタンは、この一覧の部品として画面と一緒に流れる。一番上の投稿の名前や本文を隠さないよう、時刻のある右上に置く。
+        // 新着のボタンは、このタイムラインの部品として画面と一緒に流れる。一番上の投稿の名前や本文を隠さないよう、時刻のある右上に置く。
         // チップの列はウインドウに重ね、このボタンが出ていてもずらさずに上に重ねる。
         view.addSubview(newArrivalsButton)
         NSLayoutConstraint.activate([
@@ -403,7 +403,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         avatarImages.addListener(owner: self) { [weak self] key in self?.avatarImageDidLoad(key) }
         observeTuning()
         // 行の文字は、組むときのアプリの文字の大きさで決めるため、端末の文字の大きさが変わったら組み直す。
-        // アプリへの通知は、一覧に特性が伝わる前に届くので、そこで読んでいる位置を覚える。一覧に特性が伝わると、UIKitが画面の外の行の高さを
+        // アプリへの通知は、タイムラインに特性が伝わる前に届くので、そこで読んでいる位置を覚える。タイムラインに特性が伝わると、UIKitが画面の外の行の高さを
         // 見積もりに戻して測り直し、読んでいる位置がずれるため、伝わったあとに組み直して、覚えた位置へ戻す。
         contentSizeObserver = NotificationCenter.default.addObserver(forName: UIContentSizeCategory.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
@@ -425,7 +425,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         windowActivationObservers.forEach(NotificationCenter.default.removeObserver)
     }
 
-    /// 一覧を置いたウィンドウが前面を離れたり戻ったりしたら、覆われたときと同じく、見たと報告するかを切り替える。
+    /// タイムラインを置いたウィンドウが前面を離れたり戻ったりしたら、覆われたときと同じく、見たと報告するかを切り替える。
     /// Macでは、ほかのアプリが手前にあってもシーンは`foregroundActive`のままなので、Sciaが手前のアプリかの知らせも受ける。
     private func observeWindowActivation() {
         // シーンの`willDeactivate`は状態が変わる前に届くため、シーンの知らせでは、知らせの種類から前面かを決める。
@@ -580,7 +580,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             Task(.withoutRequests) { @MainActor in
                 guard let self else { return }
                 self.observeTuning()
-                // 見えていない間は描き直さず、見えたときに1回だけ描き直す。設定の+−を押すたびに、見えない一覧のすべての行を組み直すと、押してから数字が変わるまでが遅れるため。
+                // 見えていない間は描き直さず、見えたときに1回だけ描き直す。設定の+−を押すたびに、見えないタイムラインのすべての行を組み直すと、押してから数字が変わるまでが遅れるため。
                 guard !self.holdsSettingsChanges, self.view.window != nil else {
                     self.hasHeldSettingsChange = true
                     return
@@ -591,7 +591,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// 設定の画面が手前にある間は、設定やチューニングが変わっても描き直さずに溜める。画面を閉じて外したときに、溜めた変更を1回で描き直す。
-    /// 設定の画面のシートは一覧をほぼ覆うので、上の端に見えている一覧は、閉じるまで前の見た目のまま残る。
+    /// 設定の画面のシートはタイムラインをほぼ覆うので、上の端に見えているタイムラインは、閉じるまで前の見た目のまま残る。
     var holdsSettingsChanges = false {
         didSet {
             guard !holdsSettingsChanges, oldValue else { return }
@@ -675,7 +675,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 文字が横へずれたり次の行へ移ったりする動きは、ラベルが付ける（`EmojiArrivalTransition`）。
     /// 折り返しが変わって見えている行の高さが変わるときは、下の行ごと動かしてつなぐ（`reconfigureShiftingRowsBelow`）。
     /// リンクカードと同じ描き直し（`reconfigureAnimatingHeight`）にしないのは、1つの投稿の絵文字は続けて届き、
-    /// 動いている途中に次の描き直しが重なると、一覧が行のセルを入れ替え、動かしているラベルが窓から外れて動きが止まるため（シミュレーターで確かめた）。
+    /// 動いている途中に次の描き直しが重なると、タイムラインが行のセルを入れ替え、動かしているラベルが窓から外れて動きが止まるため（シミュレーターで確かめた）。
     /// 画面に出ていれば`redraw`で描き直し、出ていなければ画面に出るまで溜める。
     /// 絵文字とXの投稿のストアは、読めなかったものを読み直してよくなったときにも知らせ、描き直した行が求めると読みに行く。
     /// 隠れたまま描き直すと、見えていない行の分まで読みに行くため（docs/network.md）。
@@ -708,13 +708,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// 行の中身を、同じセルのまま動かさずに描き直し、高さが変わって位置がずれた見えている行と区切り線を、元の位置から新しい位置へ動かしてつなぐ。
-    /// 上端が表示領域の上端より上にある行の高さが変わるときも、その行の位置は保ったまま、下の行を動かす（docs/vision.mdの「一覧の動き」）。
+    /// 上端が表示領域の上端より上にある行の高さが変わるときも、その行の位置は保ったまま、下の行を動かす（docs/vision.mdの「タイムラインの動き」）。
     /// 押し下げられて表示領域の外へ出る行は、描き直す前に取っておいた像を動かして外へ送る。
     ///
     /// 動きは、層の位置に足し合わせる形（additive）で付ける。描き直しを続けて重ねても、前の動きの途中の位置から次の動きがつながり、
-    /// スクロールで一覧が行の位置を置き直しても、動きは外れない。差分を動きつきで当てる描き直しと違い、一覧がセルを入れ替えないので、
+    /// スクロールでタイムラインが行の位置を置き直しても、動きは外れない。差分を動きつきで当てる描き直しと違い、タイムラインがセルを入れ替えないので、
     /// セルの中で続いている動き（絵文字が入る文字の動きなど）も止まらない。
-    /// 区切り線は、行のセルとは別のビューとして一覧に並ぶため、セルと一緒に動かす。動かさないと、伸びた行の下の線だけが1コマで下がる。
+    /// 区切り線は、行のセルとは別のビューとしてタイムラインに並ぶため、セルと一緒に動かす。動かさないと、伸びた行の下の線だけが1コマで下がる。
     /// - Parameter anchorID: 画面上の位置を保つ行。なければ、表示領域の上端にかかっている行を基準にする。
     func reconfigureShiftingRowsBelow(_ ids: Set<ItemID>, keeping anchorID: ItemID? = nil, duration: TimeInterval) {
         guard !ids.isEmpty else { return }
@@ -742,7 +742,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                     moved.append(row.cell)
                 }
             } else if let indexPath = dataSource.indexPath(for: id), let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame {
-                // 押し下げられて表示領域の外へ出た行は、一覧がセルを外すので、描き直す前に取っておいた像を動かして外へ送る。
+                // 押し下げられて表示領域の外へ出た行は、タイムラインがセルを外すので、描き直す前に取っておいた像を動かして外へ送る。
                 let minY = collectionView.convert(frame, to: nil).minY
                 sendOut(old.snapshot, from: old.minY, to: minY, duration: duration)
             }
@@ -758,7 +758,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
-    /// 一覧に並ぶ区切り線のビューと、その画面（ウインドウ）での上端。区切り線はUIKitの非公開のビューなので、行のセルでも背景でもない、高さが細い線のビューとして見分ける。
+    /// タイムラインに並ぶ区切り線のビューと、その画面（ウインドウ）での上端。区切り線はUIKitの非公開のビューなので、行のセルでも背景でもない、高さが細い線のビューとして見分ける。
     private func visibleSeparators() -> [ObjectIdentifier: (view: UIView, minY: CGFloat)] {
         collectionView.subviews.reduce(into: [:]) { result, view in
             guard !(view is UICollectionViewCell), !view.isHidden, view.bounds.height <= 2, view.bounds.width > 0 else { return }
@@ -793,7 +793,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// 伸びた行のセルを、下の行の動きと同じスプリングで、前の高さから新しい高さまで切り抜いて見せる。
     /// 伸びた行の中身は一度に新しい高さで並ぶため、切り抜かないと、不透明なセルの背景と中身が、下がってくる途中の下の行と、押し出される行の像を覆う。
-    /// 像は一覧に足すが、一覧が並べ直すときにセルを手前へ戻すので、重なり順では避けられない。
+    /// 像はタイムラインに足すが、タイムラインが並べ直すときにセルを手前へ戻すので、重なり順では避けられない。
     /// 伸びている途中にまた伸びたら（広げている途中に絵文字が届いて折り返しが増えたなど）、同じ切り抜きを、今見えている高さから新しい高さへ動かし直す。
     private func revealGrowth(of cell: UICollectionViewCell, from oldHeight: CGFloat, duration: TimeInterval) {
         let newHeight = cell.bounds.height
@@ -954,16 +954,16 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 読んでいる位置の要素が画面上で動かないようにする。基準は表示領域の上端にかかっている要素で、`anchorID`を渡せばその要素にする。
     /// ただし最上部にいて追従が有効なら、最上部に留まって新着を見せる。ビューアや全画面のアプリ内のSafariで覆っている間は追従しない。
     /// `topID`を渡すと、その要素を表示領域の上端に置く。既読位置から読み始めるときに使う。
-    /// - Parameter keepsOffset: 一覧の中身を取り替える。要素を基準にせず、スクロール位置をそのまま保つ。
+    /// - Parameter keepsOffset: タイムラインの中身を取り替える。要素を基準にせず、スクロール位置をそのまま保つ。
     ///   プロフィールのタブの切り替えのように、ヘッダーを押した場所に残し、その下の中身だけを入れ替えたいときに使う。
-    ///   新しい一覧が短くていまの位置までスクロールできなければ、末尾までスクロールしたところで止める。
+    ///   新しいタイムラインが短くていまの位置までスクロールできなければ、末尾までスクロールしたところで止める。
     /// - Parameter animatesRemoval: 使う人の操作（フォローリクエストの承認、投稿の削除など）で行を消す。
     ///   操作の結果が分かるよう、消える行を閉じ、下の行を詰める動きで消す。消せないときは、ほかの更新と同じく動かさずに位置を保つ。
     /// - Parameter base: `newEntries`は、この並びに行を足すか除くかしただけで、残る行の中身を変えていない。
-    ///   前回並べた配列と同じものなら、描き直す行を探すために行の中身を比べるのを省く。一覧が長いと、比べるだけで重くなるため。
+    ///   前回並べた配列と同じものなら、描き直す行を探すために行の中身を比べるのを省く。タイムラインが長いと、比べるだけで重くなるため。
     /// サーバーから取り直した中身を反映している間の投稿。この投稿の行を描き直すときは、高さが変わる分を下の行ごと動かしてつなぐ。
-    /// 承認された引用のように、あとから届いた中身で見えている行の高さが変わるため（docs/vision.mdの「一覧の動き」）。
-    /// 取り直した投稿は各一覧の`updateStatus`から並びの置き換えを通って届くので、置き換えの間だけ立てる。
+    /// 承認された引用のように、あとから届いた中身で見えている行の高さが変わるため（docs/vision.mdの「タイムラインの動き」）。
+    /// 取り直した投稿は各タイムラインの`updateStatus`から並びの置き換えを通って届くので、置き換えの間だけ立てる。
     var refreshedStatusID: Status.ID?
 
     func setEntries(_ newEntries: [TimelineEntry], keeping anchorID: ItemID? = nil, placingAtTop topID: ItemID? = nil, keepsOffset: Bool = false, animatesRemoval: Bool = false, keepingRowContentsOf base: [TimelineEntry]? = nil) {
@@ -1133,7 +1133,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// 画面に見えている行を、透明からフェードで出す。行を入れた直後に呼ぶ。
-    /// 一覧全体をクロスフェードすると、途中でスクロールしたときに前の見た目が残像として重なるため、行だけを動かす。
+    /// タイムライン全体をクロスフェードすると、途中でスクロールしたときに前の見た目が残像として重なるため、行だけを動かす。
     /// フェードの途中にスクロールで入ってきた行は、フェードせずにそのまま出す。0秒か、画面に出ていなければ何もしない。
     func fadeInVisibleItems(duration: TimeInterval) {
         guard duration > 0, view.window != nil else { return }
@@ -1193,7 +1193,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let animatesChanges: Bool
     }
 
-    /// 長押しのメニューを出した。メニューの元になった行が動かないよう、閉じるまで一覧の並びの更新と描き直しを溜めておく。
+    /// 長押しのメニューを出した。メニューの元になった行が動かないよう、閉じるまでタイムラインの並びの更新と描き直しを溜めておく。
     func menuWillShow() {
         isShowingMenu = true
     }
@@ -1367,7 +1367,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         contentUnavailableConfiguration = contentUnavailableConfiguration(for: contentState)
     }
 
-    /// 投稿が1件もないときに、一覧の全面に出す表示。
+    /// 投稿が1件もないときに、タイムラインの全面に出す表示。
     func contentUnavailableConfiguration(for state: ContentState) -> UIContentUnavailableConfiguration {
         switch state {
         case .loading:
@@ -1459,7 +1459,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         entries[id]
     }
 
-    /// 一覧の位置にある要素。
+    /// タイムラインの位置にある要素。
     func itemID(at indexPath: IndexPath) -> ItemID? {
         dataSource.itemIdentifier(for: indexPath)
     }
@@ -1469,12 +1469,12 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         texts.dumpName
     }
 
-    /// 一覧の行にいる、そのIDのアカウント。いなければnil。
+    /// タイムラインの行にいる、そのIDのアカウント。いなければnil。
     func account(withID id: String) -> Account? {
         Self.account(withID: id, in: entries.values)
     }
 
-    /// 一覧の投稿のメンションのうち、リンク先が`url`の人。本文のメンションのリンクにはIDがないため、投稿のメンションの一覧から引く。
+    /// タイムラインの投稿のメンションのうち、リンク先が`url`の人。本文のメンションのリンクにはIDがないため、投稿のメンションから引く。
     func mention(withURL url: URL) -> Mention? {
         Self.mention(withURL: url, in: entries.values)
     }
@@ -1496,7 +1496,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         return nil
     }
 
-    /// 行の投稿した人、ブーストした人、通知した人（まとめた通知なら並べた人）、人の一覧の人から、そのIDのアカウントを探す。
+    /// 行の投稿した人、ブーストした人、通知した人（まとめた通知なら並べた人）、人のリストの人から、そのIDのアカウントを探す。
     static func account(withID id: String, in entries: some Sequence<TimelineEntry>) -> Account? {
         for entry in entries {
             let accounts: [Account] = switch entry {
@@ -1550,16 +1550,16 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         return button
     }
 
-    /// 投稿が一覧にあれば、覆われていない表示領域の下端に来るまでスクロールする。返信先のラベルから、書いている入力欄のすぐ上に返信先を出すために使う。
+    /// 投稿がタイムラインにあれば、覆われていない表示領域の下端に来るまでスクロールする。返信先のラベルから、書いている入力欄のすぐ上に返信先を出すために使う。
     /// 同じ投稿が元の投稿とブースト、通知などで何か所にも並ぶことがあるため、まず返信を選んだ要素そのもの（ブーストならブーストのID）を探し、
-    /// なければ中身が同じ投稿（`displayedID`、ブーストなら元の投稿のID）を探す。一覧になければ動かさずにfalseを返す。
+    /// なければ中身が同じ投稿（`displayedID`、ブーストなら元の投稿のID）を探す。タイムラインになければ動かさずにfalseを返す。
     @discardableResult
     func scrollToStatus(_ statusID: Status.ID, displayedID: Status.ID? = nil, at position: UICollectionView.ScrollPosition = .bottom, animated: Bool = true) -> Bool {
         let displayedID = displayedID ?? statusID
         let ids = displayedItemIDs
         let chosen = ids.first { id in
             switch entries[id] {
-            // 固定投稿は、同じ投稿が下の一覧にも並ぶことがあり、IDでは見分けられない。上にある固定投稿の方へ移る。
+            // 固定投稿は、同じ投稿が下のタイムラインにも並ぶことがあり、IDでは見分けられない。上にある固定投稿の方へ移る。
             case .status(let status), .pinned(let status): status.id == statusID
             case .notification(let notification): notification.status?.id == statusID
             case .gap, .unreadable, .account, .notificationRequest, .search, nil: false
@@ -1588,10 +1588,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         return true
     }
 
-    /// アプリ内のSafariを全画面に広げて、一覧を覆っている。
+    /// アプリ内のSafariを全画面に広げて、タイムラインを覆っている。
     private var isCoveredByInAppBrowser = false
 
-    /// アプリ内のSafariは後ろに一覧を残したまま全画面に広がるため、広げている間は一覧の投稿を見たと報告しない。
+    /// アプリ内のSafariは後ろにタイムラインを残したまま全画面に広がるため、広げている間はタイムラインの投稿を見たと報告しない。
     /// 中くらいの高さに戻したら、そこで見えている投稿を報告し直す。
     func setCoveredByInAppBrowser(_ covered: Bool) {
         guard isCoveredByInAppBrowser != covered else { return }
@@ -1603,13 +1603,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
-    /// 表示中の要素を報告し直すかを決めるために最後に見た、一覧の下端の余白。投稿欄のカプセルなどが覆う分も入る。
+    /// 表示中の要素を報告し直すかを決めるために最後に見た、タイムラインの下端の余白。投稿欄のカプセルなどが覆う分も入る。
     private var reportedBottomInset: CGFloat = 0
 
-    /// 一覧を置いたウィンドウが前面にない。Macでほかのアプリを使っている間や、iPhoneでコントロールセンターを開いている間など。
+    /// タイムラインを置いたウィンドウが前面にない。Macでほかのアプリを使っている間や、iPhoneでコントロールセンターを開いている間など。
     private(set) var isWindowInactive = false
 
-    /// ウィンドウが前面にない間は、一覧が画面に出ていても見ているとは限らないため、使う人がスクロールしたときのほかは、投稿を見たと報告しない。
+    /// ウィンドウが前面にない間は、タイムラインが画面に出ていても見ているとは限らないため、使う人がスクロールしたときのほかは、投稿を見たと報告しない。
     /// 既読位置はほかの端末と同期するため、前面にないMacで見たことにすると、iPhoneで開いたときに読んでいない新着まで既読になる。
     /// Macでは前面にないウィンドウもスクロールでき、スクロールしたなら見ているので報告する。前面に戻ったら、そこで見えている投稿を報告し直す。
     func setWindowInactive(_ inactive: Bool) {
@@ -1623,7 +1623,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
-    /// スレッドでは、押した投稿を表示領域の上端まで上げられるだけの余白を、一覧の下に足す。
+    /// スレッドでは、押した投稿を表示領域の上端まで上げられるだけの余白を、タイムラインの下に足す。
     /// 投稿欄のカプセルなどが下端を覆う分は、ナビゲーションがsafe areaに入れるので、ここでは足さない。
     /// 投稿を選んでいる間は、投稿欄がカプセルを隠して覆う高さを0と知らせるので、ここで分けない。
     private func updateBottomInset() {
@@ -1633,7 +1633,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         collectionView.contentInset.bottom = fill
     }
 
-    /// 押した投稿から下の行が表示領域の高さに足りない分。足りないと、押した投稿を押した位置に置いたままにできず、一覧が端まで戻ってしまうため。
+    /// 押した投稿から下の行が表示領域の高さに足りない分。足りないと、押した投稿を押した位置に置いたままにできず、タイムラインが端まで戻ってしまうため。
     private func threadFocusBottomFill() -> CGFloat {
         guard let threadFocusID, let indexPath = dataSource.indexPath(for: .status(threadFocusID)) else { return 0 }
         collectionView.layoutIfNeeded()
@@ -1703,7 +1703,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     private func stepSpringScroll(elapsed: CFTimeInterval) {
         // 指が触れた時点で止める。ドラッグが始まるのを待つと、触れてから指が動くまでの間も動き続け、指の下で中身がずれる。
-        // 行き先の行が一覧からなくなったときも止める。
+        // 行き先の行がタイムラインからなくなったときも止める。
         guard !collectionView.isTracking, var scroll = springScroll, let target = springScrollTarget() else {
             stopSpringScroll()
             return
@@ -1805,7 +1805,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// スクロールが止まったときに、レイアウトを確定させてから表示中の要素を報告し直す。
-    /// スクロールの通知の時点では表示中のセルの一覧が前のフレームのままで、遠くから一気に動くと、
+    /// スクロールの通知の時点では表示中のセルが前のフレームのままで、遠くから一気に動くと、
     /// 最後の通知に止まった位置の要素が入らないため。
     private func reportVisibleItemsAfterLayout(byUser: Bool = false) {
         collectionView.layoutIfNeeded()
@@ -1928,7 +1928,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
         return UICollectionViewCompositionalLayout { _, environment in
             let section = NSCollectionLayoutSection.list(using: configuration, layoutEnvironment: environment)
-            // plainのリストはフッターを表示範囲の下端に貼り付ける。貼り付いたフッターは、中身がなくてもタブバーのすぐ上を覆ってタップを吸うため、一覧の末尾に置く。
+            // plainのリストはフッターを表示範囲の下端に貼り付ける。貼り付いたフッターは、中身がなくてもタブバーのすぐ上を覆ってタップを吸うため、タイムラインの末尾に置く。
             for item in section.boundarySupplementaryItems {
                 item.pinToVisibleBounds = false
             }
@@ -2039,7 +2039,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private func makeDataSource() -> UICollectionViewDiffableDataSource<Section, ItemID> {
         let registration = UICollectionView.CellRegistration<TimelineCell, ItemID> { [weak self] cell, _, id in
             guard let self, let entry = self.entries[id] else { return }
-            // 別の行を出し始めたセルは、中身を動きの外で並べる。Macでウインドウの幅を変えたときのように、一覧が動きの中で並べ直すと、
+            // 別の行を出し始めたセルは、中身を動きの外で並べる。Macでウインドウの幅を変えたときのように、タイムラインが動きの中で並べ直すと、
             // 初めて画面に入った行の写真やボタンまで動きに乗り、大きさ0の左上から滑ってきて見えるため。
             // 同じ行の描き直し（リンクカードが届いたときなど）は、これまでどおり呼んだ側の動きに任せる。
             let startsNewRow = cell.itemID != id
@@ -2082,7 +2082,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     private func configure(_ footer: TimelineFooterView) {
-        // ヘッダーのある一覧では、投稿がないことも全面の表示ではなくフッターで示す。ヘッダーのない一覧では全面の表示が示すので、フッターには出さない。
+        // ヘッダーのあるタイムラインでは、投稿がないことも全面の表示ではなくフッターで示す。ヘッダーのないタイムラインでは全面の表示が示すので、フッターには出さない。
         // データソースを作る途中でも呼ばれるため、データソースではなく表示中の要素から数える。
         let reachedEndText = entries.isEmpty ? (headerView == nil ? "" : texts.empty) : texts.reachedEnd
         footer.apply(footerState, reachedEndText: reachedEndText)
@@ -2391,7 +2391,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         reconfigureShiftingRowsBelow(Set(itemIDs(expanding: key)), keeping: anchorID, duration: tuning.value(of: TuningCatalog.longBodyExpandDuration))
     }
 
-    /// ほかの一覧で広げた本文を、この一覧にもそろえる。使う人がこの一覧で行った操作ではないので、動かさずに描き直し、読んでいる行の位置を保つ。
+    /// ほかのタイムラインで広げた本文を、このタイムラインにもそろえる。使う人がこのタイムラインで行った操作ではないので、動かさずに描き直し、読んでいる行の位置を保つ。
     func applyLongBodyExpansion(_ expansion: LongBodyExpansion, changed key: LongBodyExpansion.Key) {
         longBodyExpansion = expansion
         // まだ開いていない画面は、開いたときにこの状態で描く。描き直しのために画面を読み込ませない。
@@ -2441,7 +2441,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         postContentBuilder.body(of: status, base: base, color: color)
     }
 
-    /// 注意書き。開いているかは、この一覧で覚えている状態を当てる。ブーストなら元の投稿の注意書きにする。
+    /// 注意書き。開いているかは、このタイムラインで覚えている状態を当てる。ブーストなら元の投稿の注意書きにする。
     /// フィルターの警告で折りたたんでいれば、注意書きの代わりに警告を出す。警告を開くと、注意書きのある投稿は注意書きで折りたたんだ形に戻る。
     /// - Parameter font: 注意書きの文字の書体。nilなら本文の文字で描く。フィルターの警告には使わない。
     func spoiler(of status: Status, base: UIListContentConfiguration, color: UIColor = .label, font: UIFont? = nil) -> PostBodyContent.Spoiler? {
@@ -2492,7 +2492,7 @@ extension TimelineViewController: UICollectionViewDelegate {
     }
 
     /// 下端の覆われた部分はsafe areaから外れ、表示領域が変わるので、そこに隠れた要素を表示中として報告しないよう、報告し直す。
-    /// safe areaが変わった知らせの時点では、一覧の余白はまだ変わっていないため、ここで報告する。
+    /// safe areaが変わった知らせの時点では、タイムラインの余白はまだ変わっていないため、ここで報告する。
     func scrollViewDidChangeAdjustedContentInset(_ scrollView: UIScrollView) {
         guard scrollView.adjustedContentInset.bottom != reportedBottomInset else { return }
         reportedBottomInset = scrollView.adjustedContentInset.bottom
@@ -2516,7 +2516,7 @@ extension TimelineViewController: UICollectionViewDelegate {
         }
         reportApproachingGaps()
         onScroll?(scrollView)
-        // 最上部からさらに引っぱっている間は、浮かぶ新着のボタンも一覧と一緒に下げる。上に現れるストリーミングの状態を覆わないようにする。
+        // 最上部からさらに引っぱっている間は、浮かぶ新着のボタンもタイムラインと一緒に下げる。上に現れるストリーミングの状態を覆わないようにする。
         // チップの列は下げない。十分に引っぱれば、一番上の投稿とストリーミングの状態が列の下に見えるため。
         let pulled = max(-(scrollView.contentOffset.y + scrollView.adjustedContentInset.top), 0)
         if pulled != pulledDistance {
@@ -2634,7 +2634,7 @@ extension TimelineViewController: UICollectionViewDelegate {
         return UITargetedPreview(view: anchor, parameters: parameters, target: UIPreviewTarget(container: collectionView, center: point))
     }
 
-    /// 選べるのはギャップと、ブラウザで開ける読めなかった要素と、スレッドを開ける投稿と、投稿を含む通知と、人の一覧の人にする。
+    /// 選べるのはギャップと、ブラウザで開ける読めなかった要素と、スレッドを開ける投稿と、投稿を含む通知と、人のリストの人にする。
     /// 本文のリンクや添付ファイルなど、行の中の部品が押下を先に受けるため、投稿の行を選ぶのは、どの部品も受けなかったときだけになる。
     func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
         if isAppearancePreview { return false }
@@ -2647,7 +2647,7 @@ extension TimelineViewController: UICollectionViewDelegate {
         case (.gap, _): true
         case (_, .unreadable(let item)): item.url != nil
         case (_, .search(let row)): !row.isHeading
-        // 投稿、通知、人の一覧の行は、タップに選んだ操作を行う。既定の操作が行えない行（スレッドの中心の投稿、投稿のない通知）は、今どおり押せないままにする。
+        // 投稿、通知、人のリストの行は、タップに選んだ操作を行う。既定の操作が行えない行（スレッドの中心の投稿、投稿のない通知）は、今どおり押せないままにする。
         case (_, .status), (_, .pinned), (_, .notification), (_, .account), (_, .notificationRequest): rowTarget(at: indexPath)?.acceptsTap ?? false
         default: false
         }
@@ -2864,7 +2864,7 @@ extension TimelineViewController {
             context.invalidateSupplementaryElements(ofKind: UICollectionView.elementKindSectionHeader, at: [header])
             self.collectionView.collectionViewLayout.invalidateLayout(with: context)
             self.collectionView.layoutIfNeeded()
-            // ヘッダーの上端が表示領域の上端より上にあると、一覧は下の行の位置を保とうとして、伸びた分だけスクロール位置を足す。
+            // ヘッダーの上端が表示領域の上端より上にあると、タイムラインは下の行の位置を保とうとして、伸びた分だけスクロール位置を足す。
             // それではヘッダーが上へ伸びて見えるため、`headerDidChangeSize()`と同じく、ヘッダーを動かさず下の行を動かす位置に戻す。
             let top = -self.collectionView.adjustedContentInset.top
             let bottom = self.collectionView.contentSize.height + self.collectionView.adjustedContentInset.bottom - self.collectionView.bounds.height
@@ -2872,7 +2872,7 @@ extension TimelineViewController {
         }
     }
 
-    /// 画面に出るときに、`id`の行の上端を、ウインドウの`windowY`の高さに置く。スレッドを、押した行を一覧で見えていた位置に置いて開くのに使う。
+    /// 画面に出るときに、`id`の行の上端を、ウインドウの`windowY`の高さに置く。スレッドを、押した行をタイムラインで見えていた位置に置いて開くのに使う。
     /// 画面に出るまでは、安全領域とバーの高さが分からないため、出るときに置く。
     func placeOnAppearing(_ id: ItemID, atWindowY windowY: CGFloat) {
         pendingOpening = (id, windowY)
@@ -2887,7 +2887,7 @@ extension TimelineViewController {
               var frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame
         else { return }
         // 押した行と同じく、ブーストした人や返信先の行を除いた投稿の中身の上端を、押した位置に合わせる。
-        // 一覧ではブーストの行でも、スレッドではブーストした人の行がないため、行の上端で合わせると中身が1行分ずれて重なって見える。
+        // タイムラインではブーストの行でも、スレッドではブーストした人の行がないため、行の上端で合わせると中身が1行分ずれて重なって見える。
         if let cell = collectionView.cellForItem(at: indexPath) {
             frame.origin.y += Self.contextHeight(of: cell)
         }
@@ -2900,7 +2900,7 @@ extension TimelineViewController {
         openingInset = extra
         collectionView.contentInset.top += extra
         updateBottomInset()
-        // 余白を足すと、最上部にいる一覧はUIKitが位置を合わせ直すため、ずらす量ではなく位置そのものを置く。
+        // 余白を足すと、最上部にいるタイムラインはUIKitが位置を合わせ直すため、ずらす量ではなく位置そのものを置く。
         collectionView.contentOffset.y = frame.minY - targetInView
     }
 
@@ -3005,9 +3005,9 @@ extension TimelineViewController: NoticeScreen {
     }
 }
 
-/// タイムラインの一覧。本文のリンクを押して少し止めてから引いても、スクロールできるようにする。
+/// タイムラインのコレクションビュー。本文のリンクを押して少し止めてから引いても、スクロールできるようにする。
 final class TimelineCollectionView: UICollectionView {
-    /// ほかのアプリからのドロップを一覧では受けず、画面全体の受け口（`MediaDropTarget`）に回して添付する。
+    /// ほかのアプリからのドロップをタイムラインでは受けず、画面全体の受け口（`MediaDropTarget`）に回して添付する。
     /// コレクションビューは、ドロップのデリゲートがなくても、Macではファイルのドロップを受け付けて何もせずに終える（Macでログを見て確かめた）。
     private let dropDecliner = DropDecliner()
 

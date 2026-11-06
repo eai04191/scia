@@ -53,7 +53,7 @@ public final class StreamingHub {
     /// 接続が401で断られたときに呼ぶ。ストリーミングは有効なトークンでも401を返すことがあるので、トークンが無効かは呼び出し側が確かめる。断られても、つなぎ直しは続ける。
     public var onUnauthorized: (() -> Void)?
     /// 申し込んだどれかのストリームのイベントが届いたときに、ストリームによらず呼ぶ。同じ投稿の編集や削除は、ストリームごとに何度か届く。
-    /// 引用の囲みのように、どの一覧にも並ぶとは限らない投稿の変化を、セッションで受け取るために使う。
+    /// 引用の囲みのように、どのタイムラインにも並ぶとは限らない投稿の変化を、セッションで受け取るために使う。
     public var onEvent: ((StreamingEvent) -> Void)?
 
     private let open: @Sendable () async throws -> StreamingConnection
@@ -77,7 +77,7 @@ public final class StreamingHub {
     /// 相手ごとに、届けた`connected`の`connectedCount`。
     private var reportedConnections: [Int: Int] = [:]
     /// `connected`を届ける前に届いたイベント。相手ごとに届いた順に溜め、`connected`の直後に渡す。
-    /// 受け取った側は`connected`で補完を始めるので、先に新着を一覧に入れると補完の基準が進み、その手前を読み飛ばすため。
+    /// 受け取った側は`connected`で補完を始めるので、先に新着をタイムラインに入れると補完の基準が進み、その手前を読み飛ばすため。
     /// 待っている間に切れても捨てず、つなぎ直した`connected`の後に渡す。削除や編集は、補完では読み直せないため。
     private var heldEvents: [Int: [StreamingEvent]] = [:]
     /// 購読と解除を、申し込みの順に1つずつ送る。テストで、積んだ送信が終わるまで待つ。

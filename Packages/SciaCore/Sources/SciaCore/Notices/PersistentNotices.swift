@@ -10,7 +10,7 @@ public struct PersistentNotices {
         case download
         /// リンクのメニューの「プロフィールとして開く」で、リンク先を探している途中。見つかると別の画面に移るため、アプリ全体のもの。
         case profileLookup
-        /// まとめてブーストの途中。選んだ一覧を離れても続くため、アプリ全体のもの。
+        /// まとめてブーストの途中。選んだタイムラインを離れても続くため、アプリ全体のもの。
         case batchReblog
         /// まとめて共有するメディアを落としている途中。まとめてブーストと同時に進むことがあるため、別に持つ。
         case batchShare
@@ -54,8 +54,8 @@ public struct PersistentNotices {
     }
 
     /// チップに出す1件。失敗を優先し、次に処理の途中、その中では新しいものを選ぶ。
-    /// 2件以上なら残りの件数を、選んだアプリ内通知が添えていた件数に足して添え、押すと`showAll`で「操作の状況」の一覧を開く。
-    /// - Parameter showAll: nilなら一覧を開けないので、選んだアプリ内通知の続きを出す。
+    /// 2件以上なら残りの件数を、選んだアプリ内通知が添えていた件数に足して添え、押すと`showAll`で「操作の状況」の画面を開く。
+    /// - Parameter showAll: nilなら「操作の状況」を開けないので、選んだアプリ内通知の続きを出す。
     public func chipNotice(showAll: (@MainActor () -> Void)?) -> Notice? {
         guard let (chosen, others) = PersistentNoticeChoice.choose(entries.map(\.notice), isFailure: { $0.kind == .failure }) else { return nil }
         var notice = chosen

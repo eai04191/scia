@@ -2,7 +2,7 @@ import Foundation
 import os
 import SciaCore
 
-/// 人の一覧（お気に入りした人、ブーストした人、フォロワー、フォロー、リストのメンバー）の読み込みを、TimelineViewControllerの表示へつなぐ。
+/// 人のリスト（お気に入りした人、ブーストした人、フォロワー、フォロー、リストのメンバー）の読み込みを、TimelineViewControllerの表示へつなぐ。
 /// 画面はプロフィールやスレッドと同じくpushで開く。決まりはdocs/account-list.mdにある。リストのメンバーでは、外したり足したりもできる（docs/lists.mdの「メンバー」）。
 @MainActor
 final class AccountListController {
@@ -17,13 +17,13 @@ final class AccountListController {
     /// この画面が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときと、画面を閉じてこのコントローラーが捨てられたときに閉じる。
     private let tasks: TaskScope
     private let client: MastodonClient
-    /// リストのメンバーの一覧なら、そのリスト。
+    /// リストのメンバーを並べているなら、そのリスト。
     private let listID: String?
     /// リストのメンバーを外したり足したりできなかったときに呼ぶ。知らせ方はセッションが決める。
     var onMemberFailure: ((_ title: String, _ error: any Error) -> Void)?
-    /// 一覧に並んでいる人。リストのメンバーの画面で、足す人を探す画面に、もう入っているかを出すのに使う。
+    /// 人のリストに並んでいる人。リストのメンバーの画面で、足す人を探す画面に、もう入っているかを出すのに使う。
     var accountIDs: Set<String> { Set(store.accounts.map(\.id)) }
-    /// 一覧を読めたかが変わったときに呼ぶ。リストのメンバーの画面では、読めるまで足す人を探す画面を開かせない。
+    /// 人のリストを読めたかが変わったときに呼ぶ。リストのメンバーの画面では、読めるまで足す人を探す画面を開かせない。
     /// 読む前に開くと、もう入っている人を入っていないものとして出し、押すと足し直してしまうため。
     var onLoadedChange: ((Bool) -> Void)?
 
@@ -65,7 +65,7 @@ final class AccountListController {
         changeMember(account, adds: false) { _ in }
     }
 
-    /// リストに足して一覧の先頭に出すか、外して一覧から除く。足す人を探す画面からも使う。
+    /// リストに足して人のリストの先頭に出すか、外して人のリストから除く。足す人を探す画面からも使う。
     /// 画面の持ち主の子で始めるので、ログアウトやアカウントの切り替えで止まる。できなければ`onMemberFailure`で知らせる。
     /// - Parameter completion: サーバーが受け付けたかを渡す。
     func changeMember(_ account: Account, adds: Bool, completion: @escaping @MainActor (Bool) -> Void) {
@@ -111,8 +111,8 @@ final class AccountListController {
         }
     }
 
-    /// 一覧を引っぱって離したときに、最初のページから読み直して置き換える。人の一覧は新しい人が上に来るとは限らず、上に足せないため。
-    /// 読めなかったら、前の一覧のまま残す。最初の読み込みに失敗したままなら、それをやり直す。
+    /// 人のリストを引っぱって離したときに、最初のページから読み直して置き換える。人のリストは新しい人が上に来るとは限らず、上に足せないため。
+    /// 読めなかったら、前の人のリストのまま残す。最初の読み込みに失敗したままなら、それをやり直す。
     private func refresh() async {
         logger.info("accountList refresh")
         if case .failed = viewController?.contentState {

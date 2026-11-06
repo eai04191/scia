@@ -4,7 +4,7 @@ import os
 /// タイムラインの投稿を新しい順に持つ。RESTで読んだページと、ストリーミングで届いたイベントを合わせる。
 ///
 /// 投稿はIDの順に並べる。RESTのページングがIDを境に読むため、表示の順もIDに揃えておくと、境目で読み飛ばしや重複が起きない。
-/// ただし、ストリーミングで届いた投稿のうち、一覧で最も新しい投稿よりIDが古いものは、届いた順に一番上へ積む。
+/// ただし、ストリーミングで届いた投稿のうち、タイムラインで最も新しい投稿よりIDが古いものは、届いた順に一番上へ積む。
 /// ほかのサーバーの投稿は名乗る日時でIDが付くため、配送が遅れた投稿をIDの順に入れると、読み終えた行の間に入って読み逃すため。
 /// 補完や古いページを読む境目は、表示の順ではなくIDで決める。
 @MainActor
@@ -24,7 +24,7 @@ public final class TimelineStore {
     public private(set) var pending: [Status] = []
     /// 見た中で最も新しい投稿のID。サーバーに保存する既読位置に使う。
     public private(set) var lastReadID: String?
-    /// 見た中で一覧の最も上にある位置。これより上の投稿を未読として数える。
+    /// 見た中でタイムラインの最も上にある位置。これより上の投稿を未読として数える。
     /// 遅れて届いて一番上に積んだ投稿は、IDが`lastReadID`より古くても上にあるため、IDとは別に持つ。
     private var lastReadPosition: DisplayPosition?
     /// サーバーのmarkerに保存されている既読位置。
@@ -39,15 +39,15 @@ public final class TimelineStore {
     private var isFilling = false
     /// 補完の最中に再び補完を求められたときの基準のID。今の補完が終わったら、ここからもう一度読む。
     private var refillSinceID: String?
-    /// 一覧が空のときに始めた補完が、まだ成功していない。成功するまで、一覧に新着が入っても、次の補完は最新のページから読む。
-    /// 新着の下にある、切れていた間の投稿を読む基準が、一覧にはないため。
+    /// タイムラインが空のときに始めた補完が、まだ成功していない。成功するまで、タイムラインに新着が入っても、次の補完は最新のページから読む。
+    /// 新着の下にある、切れていた間の投稿を読む基準が、タイムラインにはないため。
     private var fillsFromLatestPage = false
-    /// 一覧が空のときに始めた補完の最中に、再び補完を求められた。今の補完が終わったら、読んだページより新しい投稿を読む。
+    /// タイムラインが空のときに始めた補完の最中に、再び補完を求められた。今の補完が終わったら、読んだページより新しい投稿を読む。
     private var refillsAfterLatestPage = false
     /// 読み込んだ中で最も古い投稿のID。その投稿が消えても上げない。続きを古い方へ読む位置と、届いた新着を捨てる境目に使う。
-    /// 消えるたびに上げると、一覧が空になったときに遅れて届いた古い投稿が末尾になり、その上を読み飛ばすため。
+    /// 消えるたびに上げると、タイムラインが空になったときに遅れて届いた古い投稿が末尾になり、その上を読み飛ばすため。
     private var oldestLoadedID: String?
-    /// ストリーミングで届いた、一覧の末尾より古い投稿。古い方を読んで末尾がそれより下がったら一覧に入れる。
+    /// ストリーミングで届いた、タイムラインの末尾より古い投稿。古い方を読んで末尾がそれより下がったらタイムラインに入れる。
     /// 古い方のページを読んでいる間に届くと、サーバーが作ったページに入っておらず、捨てるとどこからも読めないため。
     private var olderArrivals: [Status] = []
     /// 削除のイベントで消した投稿のID。削除の前に読み始めたRESTの結果に含まれていても、表示に戻さない。
@@ -58,8 +58,8 @@ public final class TimelineStore {
     private var excludedTagKeys: Set<String> = []
     /// 読めなかった投稿。同じIDの投稿が読めたら外す。
     private var unreadableItems: [UnreadableItem] = []
-    /// フィルターで出さない投稿。一覧には並べないが、読めなかった投稿と同じく、続きを読む位置には使う。
-    /// 1ページの全部が隠れても、その先へ進めるようにするため。編集でフィルターに一致しなくなれば、一覧に戻す。
+    /// フィルターで出さない投稿。タイムラインには並べないが、読めなかった投稿と同じく、続きを読む位置には使う。
+    /// 1ページの全部が隠れても、その先へ進めるようにするため。編集でフィルターに一致しなくなれば、タイムラインに戻す。
     private var hiddenStatuses: [Status] = [] {
         didSet { forgetDerivedIDs() }
     }
@@ -67,7 +67,7 @@ public final class TimelineStore {
     private var lateArrivalPositions: [String: DisplayPosition] = [:] {
         didSet { forgetDerivedIDs() }
     }
-    /// `loadedIDs`と`itemIDs`を、並びが変わるまで使い回す。流れの速い一覧では、届くたびに全件から作り直すと重くなるため。
+    /// `loadedIDs`と`itemIDs`を、並びが変わるまで使い回す。流れの速いタイムラインでは、届くたびに全件から作り直すと重くなるため。
     private var cachedLoadedIDs: Set<String>?
     private var cachedItemIDs: [String]?
     /// 遅れて届いた投稿に振った番号の最後。後に届いた投稿ほど大きい。
@@ -82,7 +82,7 @@ public final class TimelineStore {
     private let logger = SciaLog.logger(category: "timeline")
 
     /// - Parameters:
-    ///   - filtering: この一覧で当てるサーバーのフィルター。nilなら当てない。
+    ///   - filtering: このタイムラインで当てるサーバーのフィルター。nilなら当てない。
     ///   - now: 今の時刻を返す。フィルターの期限が切れたかを決めるのに使う。
     public init(pageSize: Int, filtering: StatusFiltering? = nil, now: @escaping @MainActor () -> Date = SystemTime.now, fetch: @escaping Fetch) {
         self.pageSize = pageSize
@@ -91,7 +91,7 @@ public final class TimelineStore {
         self.fetch = fetch
     }
 
-    /// 一覧に並べる投稿。新しい順。フィルターで出さない投稿は含まない。
+    /// タイムラインに並べる投稿。新しい順。フィルターで出さない投稿は含まない。
     public var statuses: [Status] { entries.compactMap(\.status) }
 
     /// フィルターで出さない投稿も含めた、読み込んだ投稿。
@@ -201,12 +201,12 @@ public final class TimelineStore {
         }
         let unique = Dictionary(loaded.flatMap(\.statuses).filter { !isDeleted($0) }.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         unreadableItems = Self.unique(loaded.flatMap(\.unreadable).filter { !deletedIDs.contains($0.id) })
-        // 読み直した一覧はIDの順に並べる。
+        // 読み直したタイムラインはIDの順に並べる。
         lateArrivalPositions = [:]
         rebuild(statuses: Array(unique.values), gaps: loadedGaps)
         oldestLoadedID = Self.oldest(unique.keys.map(Optional.some) + unreadableItems.map(\.id))
         olderArrivals = []
-        // 前の一覧で埋まらなかった基準は、読み直した一覧の範囲の外にあり、そこから読むと読み込み済みの区間にギャップを置いてしまう。
+        // 前のタイムラインで埋まらなかった基準は、読み直したタイムラインの範囲の外にあり、そこから読むと読み込み済みの区間にギャップを置いてしまう。
         // 再生成中なら、最も新しい投稿より上は、そのあと新着が入っても、次の補完がその投稿から読む。1件も返らなければ最新のページから読む。
         unfilledSinceID = latest.isRegenerating ? Self.newestID(of: latest) : nil
         fillsFromLatestPage = latest.isRegenerating && latest.isEmpty
@@ -243,7 +243,7 @@ public final class TimelineStore {
         return added + mergeOlderArrivals()
     }
 
-    /// 取っておいた末尾より古い新着のうち、末尾が下がって一覧の範囲に入ったものを入れ、並べたものを返す。終わりに着いていれば全部入れる。
+    /// 取っておいた末尾より古い新着のうち、末尾が下がってタイムラインの範囲に入ったものを入れ、並べたものを返す。終わりに着いていれば全部入れる。
     private func mergeOlderArrivals() -> [Status] {
         let tailID = tailID
         let reached = olderArrivals.filter { arrival in reachedEnd || tailID.map { !StatusID.isNewer($0, than: arrival.id) } ?? true }
@@ -253,9 +253,9 @@ public final class TimelineStore {
         return merge(reached)
     }
 
-    /// `oldestID`より古いページを読み、足した投稿のうち一覧に並べたものを返す。
+    /// `oldestID`より古いページを読み、足した投稿のうちタイムラインに並べたものを返す。
     /// 読んだ投稿が全部フィルターで隠れたら、並べる投稿か読めなかった投稿が出るか、終わりに着くまで続けて読む。
-    /// 一覧の末尾の行が画面に出ることが続きを読むきっかけなので、行が増えないと、そこで止まってしまうため。
+    /// タイムラインの末尾の行が画面に出ることが続きを読むきっかけなので、行が増えないと、そこで止まってしまうため。
     private func fetchOlder(than oldestID: String) async throws -> [Status] {
         var maxID = oldestID
         while true {
@@ -269,7 +269,7 @@ public final class TimelineStore {
             if page.isEmpty && !page.isRegenerating {
                 reachedEnd = true
             }
-            // 削除済みの投稿やミュートかブロックした相手の投稿しかなかったときは、一覧に残らないため、ページの一番古い投稿の先へ進む。
+            // 削除済みの投稿やミュートかブロックした相手の投稿しかなかったときは、タイムラインに残らないため、ページの一番古い投稿の先へ進む。
             // それでも続きを読む位置が進まなければ、同じページを読み続けないよう止める。
             let pageOldestID = (page.statuses.map(\.id) + page.unreadable.map(\.id)).reduce(tailID) { oldest, id in oldest.map { Self.older($0, id) } ?? id }
             guard added.isEmpty, !page.isEmpty, page.unreadable.isEmpty, !page.isRegenerating, let next = pageOldestID, next != maxID else {
@@ -283,7 +283,7 @@ public final class TimelineStore {
 
     /// ストリーミングが切れていた間の投稿を読み、新たに加わった投稿を新しい順に返す。
     /// まだ1件もなければ最新のページを読む。ストリーミングにつながらないサーバーでは、ポーリングの補完だけが空のホームに新着を届けるため。
-    /// そのページを読めるまでは、一覧に新着が入っても、最新のページから読む。`fillLatestPage`を参照。
+    /// そのページを読めるまでは、タイムラインに新着が入っても、最新のページから読む。`fillLatestPage`を参照。
     ///
     /// 読み込んだ中で最も新しい投稿より新しいものを、最新の側から1ページ読む。読めた投稿と手元の投稿の間にはギャップを置き、
     /// 0件が返るまで読み切ったとは判断しない。求めた件数より少なく返すサーバーでは、満杯でないページの下にも投稿が残っているため。
@@ -305,7 +305,7 @@ public final class TimelineStore {
             if fillsFromLatestPage {
                 refillsAfterLatestPage = true
             } else if let newest = fillBaseID ?? unfilledSinceID {
-                // 削除で一覧が空になっていれば、今の補完が読んでいる基準から読み直す。
+                // 削除でタイムラインが空になっていれば、今の補完が読んでいる基準から読み直す。
                 refillSinceID = refillSinceID.map { Self.older($0, newest) } ?? newest
             }
             return nil
@@ -363,7 +363,7 @@ public final class TimelineStore {
         return added.sorted { StatusID.isNewer($0.id, than: $1.id) }
     }
 
-    /// 一覧が空のときの補完で、最新のページを読む。成功するまで、一覧に新着が入っても、次の補完もここから読む。
+    /// タイムラインが空のときの補完で、最新のページを読む。成功するまで、タイムラインに新着が入っても、次の補完もここから読む。
     /// 読んでいる間に補完を求められたら、読んだページより新しい投稿を続けて読む基準を返す。ページが空なら、もう一度最新のページを読む。
     private func fillLatestPage(progress: ((Int) -> Void)?) async throws -> (added: [Status], continuationSinceID: String?) {
         var added: [Status] = []
@@ -389,7 +389,7 @@ public final class TimelineStore {
             if page.isRegenerating, let newest = Self.newestID(of: page), let oldest = Self.oldestID(of: page), newest != oldest {
                 newGaps.append(TimelineGap(newerID: newest, olderID: oldest))
             }
-            // 読んでいる間や前の失敗の後に一覧に入った新着のうち、ページより古いものは、遅れて届いた投稿でつながりが分からず、
+            // 読んでいる間や前の失敗の後にタイムラインに入った新着のうち、ページより古いものは、遅れて届いた投稿でつながりが分からず、
             // その間にまだ読んでいない投稿が残りうる。ページから続きを古い方へ読む位置までをギャップにする。
             if let oldest = Self.oldestID(of: page), let bottom = tailID, StatusID.isNewer(oldest, than: bottom) {
                 newGaps.append(TimelineGap(newerID: oldest, olderID: bottom))
@@ -548,14 +548,14 @@ public final class TimelineStore {
         }
     }
 
-    /// 投稿の応答で返った自分の投稿を、新着と同じく保留に溜める。ストリーミングで届くのを待たずに一覧に出すため。
+    /// 投稿の応答で返った自分の投稿を、新着と同じく保留に溜める。ストリーミングで届くのを待たずにタイムラインに出すため。
     ///
     /// ストリーミングで届くか、補完で読めるまでは、補完の基準にしない。サーバーは投稿を配信の順に流すので、
     /// 自分の投稿より少し前に他の人が投稿し、まだ届いていない投稿がありうる。届く前に切れて補完すると、それを読み飛ばすため。
     /// 既読位置には、ほかの投稿と同じく使う。自分の投稿より古い投稿があとから届いたら、ほかの遅れた投稿と同じく上に積み、未読に数える。
     ///
-    /// 補完の基準にできる投稿が1件もない一覧（最初の読み込みの前や失敗した後、空のホーム）には入れず、ストリーミングを待つ。
-    /// 入れると一覧が空でなくなり、読み込み直す代わりに続きを読むようになって、最新のページと応答の投稿の間を読まなくなるため。
+    /// 補完の基準にできる投稿が1件もないタイムライン（最初の読み込みの前や失敗した後、空のホーム）には入れず、ストリーミングを待つ。
+    /// 入れるとタイムラインが空でなくなり、読み込み直す代わりに続きを読むようになって、最新のページと応答の投稿の間を読まなくなるため。
     public func receivePosted(_ status: Status) -> EventResult {
         guard fillBaseID != nil else { return .none }
         let result = receive(.update(status))
@@ -633,7 +633,7 @@ public final class TimelineStore {
     }
 
     /// 同じIDの投稿と、それをブーストした投稿の中身を`transform`で変える。表示に関わる変化があればtrueを返す。
-    /// 編集でフィルターに一致するようになった投稿は一覧から外し、一致しなくなった投稿は一覧に戻す。
+    /// 編集でフィルターに一致するようになった投稿はタイムラインから外し、一致しなくなった投稿はタイムラインに戻す。
     @discardableResult
     public func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) -> Bool {
         updateStatus(id, adoptsFilterResults: false, transform)
@@ -652,7 +652,7 @@ public final class TimelineStore {
 
     /// 保留していた投稿を届いた順に一番上へ合流させ、新たに加わった投稿を並べた順に返す。
     ///
-    /// 一覧で最も新しい投稿よりIDが新しい投稿は、そのままIDの位置に入るので一番上になる。古い投稿は、その時点で一番上の投稿の上に積む。
+    /// タイムラインで最も新しい投稿よりIDが新しい投稿は、そのままIDの位置に入るので一番上になる。古い投稿は、その時点で一番上の投稿の上に積む。
     /// 一番上の基準には、積んだ投稿と既読位置の基準のIDも含める。積んだときに一番上だった投稿が消えても、次に届いた投稿を積んである投稿や既読位置より下に入れないため。
     /// 読み込んだ末尾より古い投稿は、まだ並べずに取っておき、古い方を読んで末尾が下がったら並べる。
     /// 末尾に足すと、次に古いページを読むときの`max_id`がずれて、間の投稿を読み飛ばすため。
@@ -685,7 +685,7 @@ public final class TimelineStore {
     // MARK: - 未読
 
     /// 画面に表示された投稿を既読にする。既読の位置は新しい方へだけ進む。
-    /// - Returns: 一覧の既読の位置が進んだ。進まなければ、未読の数も変わらない。
+    /// - Returns: タイムラインの既読の位置が進んだ。進まなければ、未読の数も変わらない。
     @discardableResult
     public func markRead(_ ids: some Sequence<String>) -> Bool {
         let ids = Array(ids)
@@ -787,7 +787,7 @@ public final class TimelineStore {
         return added
     }
 
-    /// まだない投稿を足し、足した投稿のうち一覧に並べたものを並べた順に返す。
+    /// まだない投稿を足し、足した投稿のうちタイムラインに並べたものを並べた順に返す。
     /// - Parameter insertsIntoEntries: 今の並びに差し込む。並べ直す前に、読めなかった投稿やギャップを変えていないときだけ使える。
     private func merge(_ incoming: [Status], insertsIntoEntries: Bool = false) -> [Status] {
         let known = loadedIDs
@@ -804,9 +804,9 @@ public final class TimelineStore {
     }
 
     /// `rebuild`と同じ並びになるよう、並べた順の`added`を今の並びに差し込む。差し込めなければfalseを返す。
-    /// 流れの速い一覧で、挿入のたびに全件を並べ直すと重くなるため。
+    /// 流れの速いタイムラインで、挿入のたびに全件を並べ直すと重くなるため。
     /// 今の並びは、`rebuild`で並べたあと行を除くことしかしていないので、`rebuild`の並びのままになっている。
-    /// フィルターで出さない投稿は、フィルターの期限が切れると一覧に戻る。`rebuild`は並べ直すたびにフィルターを当て直すので、
+    /// フィルターで出さない投稿は、フィルターの期限が切れるとタイムラインに戻る。`rebuild`は並べ直すたびにフィルターを当て直すので、
     /// 戻る投稿があれば全件を並べ直す。出していた投稿が、あとからフィルターに一致するようになることはない。
     private func insert(_ added: [Status]) -> Bool {
         let now = self.now()
@@ -949,7 +949,7 @@ public final class TimelineStore {
         return items.filter { seen.insert($0.id).inserted }
     }
 
-    /// 一覧の中の位置。IDの位置に並べる投稿は、自分のIDと0。遅れて届いて積んだ投稿は、積んだときに一番上だった投稿のIDと、届いた順の番号。
+    /// タイムラインの中の位置。IDの位置に並べる投稿は、自分のIDと0。遅れて届いて積んだ投稿は、積んだときに一番上だった投稿のIDと、届いた順の番号。
     /// 同じIDの上では、番号の大きいものほど上に並ぶ。
     private struct DisplayPosition {
         let anchorID: String

@@ -5,7 +5,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// 一覧の投稿の本文を、メインスレッドの外で先に作って並べておく部品。
+/// タイムラインの投稿の本文を、メインスレッドの外で先に作って並べておく部品。
 @Suite(.scratch)
 @MainActor
 struct BodyTextPreparerTests {
@@ -45,7 +45,7 @@ struct BodyTextPreparerTests {
         BodyTextPreparer.Geometry(style: label.textKitStyle, width: width)
     }
 
-    /// 先に作るのを頼んで、作り終えるまで待つ。作っている間にカスタム絵文字の画像の状態が変われば、一覧と同じく頼み直す。
+    /// 先に作るのを頼んで、作り終えるまで待つ。作っている間にカスタム絵文字の画像の状態が変われば、タイムラインと同じく頼み直す。
     private func prepare(_ status: Status, builder: PostContentBuilder, preparer: BodyTextPreparer, geometry: BodyTextPreparer.Geometry?) async throws -> BodyTextPreparer.Prepared {
         try await waitUntil {
             preparer.prepare([status], renderer: builder.postBodyRenderer(of:), geometry: geometry, truncation: { _ in nil }, guessesLinkCardDirections: false)

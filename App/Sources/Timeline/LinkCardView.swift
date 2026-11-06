@@ -47,14 +47,14 @@ final class LinkCardView: UIButton {
 
     private let store: MediaImageStore<UIImage>
     private let thumbnailView = LinkCardThumbnailView()
-    /// 画像を長押ししたときのメディアのメニュー。カードはボタンで、一覧の行の長押しのメニューが届かないため、画像が自分で受ける。
+    /// 画像を長押ししたときのメディアのメニュー。カードはボタンで、タイムラインの行の長押しのメニューが届かないため、画像が自分で受ける。
     private var imageMenuInteraction: MediaMenuInteraction?
     /// サムネイルの画像がタップされたときに、ビューアを開閉する起点として、サムネイルを渡して呼ぶ。
     /// 画像のあるカードでは、読み込む前（blurhashのぼかしのうち）も受け付ける。それ以外の場所や画像のないカードのタップは、リンクを開く。
     var onOpenImage: ((LinkCardThumbnailView) -> Void)?
     /// 閲覧注意でぼかした画像がタップされたときに呼ぶ。ぼかしを外すのは置く側で、適用し直すまで見た目は変わらない。リンクは開かない。
     var onRevealImage: (() -> Void)?
-    /// 閲覧注意のぼかし。ぼかしの素材を作るのは重く、一覧の行はどれもリンクカードを持つため、初めてぼかすときに作る。
+    /// 閲覧注意のぼかし。ぼかしの素材を作るのは重く、タイムラインの行はどれもリンクカードを持つため、初めてぼかすときに作る。
     private var coverView: UIView?
     private let symbolView = UIImageView(image: UIImage(systemName: "link"))
     private let siteLabel = UILabel()
@@ -150,7 +150,7 @@ final class LinkCardView: UIButton {
             laysOutThumbnail = content.showsThumbnail
             return
         }
-        // 一覧は動きを止めて描き直し（animatingDifferences: false）、その中ではUIView.animateが動かないため、描き直しを終えてから動かす。
+        // タイムラインは動きを止めて描き直し（animatingDifferences: false）、その中ではUIView.animateが動かないため、描き直しを終えてから動かす。
         // サムネイルも、それまで前の中身のまま残し、動きの中で入れ替える。
         DispatchQueue.main.async { [weak self] in
             guard let self, self.content == content else { return }

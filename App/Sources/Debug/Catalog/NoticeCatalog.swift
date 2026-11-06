@@ -4,7 +4,7 @@ import UIKit
 
 /// アプリ内通知のチップの列（`NoticeColumnView`）の状態。ガラスの効果を見られるよう、ビューアのように画像の上に置く。
 /// 本物の数秒で消えるチップはすぐ消えるため、カタログでは1時間出したままにする。押しても何も起きない。
-/// 一覧の新着のボタンとの重なりは、「一覧の上に重ねる表示」に並べる。
+/// タイムラインの新着のボタンとの重なりは、「タイムラインの上に重ねる表示」に並べる。
 enum NoticeCatalog {
     private static let url = URL(string: "https://x.example/video.mp4") ?? URL(filePath: "/")
 
@@ -16,7 +16,7 @@ enum NoticeCatalog {
             CatalogState(title: "ダウンロード中（大きさが分かる前）") { stack(persistent: .download(of: url, fraction: 0) {}) },
             CatalogState(title: "ダウンロード中（押すと止めるかの確認）") { stack(persistent: .download(of: url, fraction: 0.42) {}) },
             CatalogState(title: "ダウンロードを終えて保存している間（押せない）") { stack(persistent: .download(of: url, fraction: 1, onStop: nil)) },
-            CatalogState(title: "ダウンロード中（ほかの添付ファイルも落としている。押すと操作の状況の一覧）") {
+            CatalogState(title: "ダウンロード中（ほかの添付ファイルも落としている。押すと操作の状況のリスト）") {
                 var notice = Notice.download(of: url, fraction: 0.42) {}
                 notice.additionalCount = 2
                 notice.action = disclosure
@@ -78,7 +78,7 @@ enum NoticeCatalog {
             CatalogState(title: "代替テキストを送信中") { stack(persistent: draft(.sendingDescription)) },
             CatalogState(title: "アップロードできませんでした（押すと理由）") { stack(persistent: draft(.failed)) },
             CatalogState(title: "代替テキストを送信できませんでした（押すと理由）") { stack(persistent: draft(.descriptionFailed)) },
-            CatalogState(title: "出たままの知らせが2件（処理の途中、押すと操作の状況の一覧）") {
+            CatalogState(title: "出たままの知らせが2件（処理の途中、押すと操作の状況のリスト）") {
                 var notices = PersistentNotices()
                 notices.set(.download(of: url, fraction: 0.42) {}, in: .download)
                 notices.set(Notice(id: "other", kind: .progress, title: "アップロード中"), in: .screen)
@@ -131,7 +131,7 @@ enum NoticeCatalog {
             CatalogState(title: "画面をタップしてボタン類を隠したとき（失敗は場所を空けて薄くする）") {
                 stack(persistent: draft(.failed), transient: .savedToPhotos, chromeHidden: true)
             },
-            CatalogState(title: "画面だけのチップ（アップロード中）とアプリ全体のダウンロード中が重なる（押すと操作の状況の一覧）") {
+            CatalogState(title: "画面だけのチップ（アップロード中）とアプリ全体のダウンロード中が重なる（押すと操作の状況のリスト）") {
                 var notices = PersistentNotices()
                 notices.set(.download(of: url, fraction: 0.42) {}, in: .download)
                 notices.set(draft(.uploading), in: .screen)

@@ -4,11 +4,11 @@ import UIKit
 /// 投稿欄のカスタム絵文字のパレット。シート（`EmojiPaletteSheet`）の中身にする。
 ///
 /// 上に検索欄、真ん中に絵文字、下の段にまとまりへ飛ぶボタンと削除キーを置く。下の段は、検索欄にキーボードを出している間だけキーボードに沿う枠に付け、キーボードの上に来る。
-/// 一覧は検索欄と下の段の裏まで伸ばし、重なった上下の端をシステムにぼかさせる。
+/// 絵文字のリストは検索欄と下の段の裏まで伸ばし、重なった上下の端をシステムにぼかさせる。
 /// キーボードを出していないときは、iOSのキーボードの地球儀の段と同じく、ホームインジケーターの場所まで下げる。
 /// 絵文字は、幅に入るだけの列に左から右、上から下へ並べて縦にスクロールし、まとまり（最近使ったもの、カテゴリー）ごとに見出しを付ける。
 final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
-    /// カスタム絵文字の一覧の状態。読み終えるまでと読めなかったときは、カスタム絵文字の場所にこの段を置き、Unicodeの絵文字はそのまま並べる。
+    /// カスタム絵文字のリストの状態。読み終えるまでと読めなかったときは、カスタム絵文字の場所にこの段を置き、Unicodeの絵文字はそのまま並べる。
     enum CustomEmojiStatus: Equatable {
         case loading
         /// 理由の文言を持つ。押すと読み直す。
@@ -17,7 +17,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
 
     enum Content: Equatable {
         case sections([EmojiPaletteSection], customStatus: CustomEmojiStatus?)
-        /// 検索の結果。空なら見つからないことを出す。カスタム絵文字の一覧がまだなければ、先頭に状態の段を置く。
+        /// 検索の結果。空なら見つからないことを出す。カスタム絵文字のリストがまだなければ、先頭に状態の段を置く。
         case searchResults([PaletteEmoji], customStatus: CustomEmojiStatus?)
     }
 
@@ -33,12 +33,12 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     /// 検索欄でReturnを押した。
     var onSearchSubmit: () -> Void = {}
 
-    /// 一覧の上下の端の効果を、検索欄の下端と下の段の上端ではっきり区切る（`.hard`）か、やわらかくぼかす（`.soft`）か。
+    /// 絵文字のリストの上下の端の効果を、検索欄の下端と下の段の上端ではっきり区切る（`.hard`）か、やわらかくぼかす（`.soft`）か。
     var hardEdgeEffect = false {
         didSet { updateEdgeEffectStyle() }
     }
 
-    /// 下の段の高さ。HIGの勧める44ptに届かなくても、押せなくて困る操作ではないため、絵文字の一覧の広さと見比べて決める。
+    /// 下の段の高さ。HIGの勧める44ptに届かなくても、押せなくて困る操作ではないため、絵文字のリストの広さと見比べて決める。
     var barHeight: CGFloat = 38 {
         didSet {
             guard barHeight != oldValue else { return }
@@ -104,9 +104,9 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     private let emojiImages: EmojiImageStore<UIImage>
     private lazy var collectionView = UICollectionView(frame: .zero, collectionViewLayout: makeLayout())
     private lazy var dataSource = makeDataSource()
-    /// 検索欄の入れ物。一覧の上端に重ね、一覧の端の効果を、検索欄の形に合わせて描かせる。
+    /// 検索欄の入れ物。絵文字のリストの上端に重ね、リストの端の効果を、検索欄の形に合わせて描かせる。
     private let topBar = UIView()
-    /// 下の段の入れ物。一覧の下端に重ね、一覧の端の効果を、この中のボタンの形に合わせて描かせる。
+    /// 下の段の入れ物。絵文字のリストの下端に重ね、リストの端の効果を、この中のボタンの形に合わせて描かせる。
     private let bottomBar = UIView()
     private let sectionBar = UIScrollView()
     private let sectionStack = UIStackView()
@@ -118,8 +118,8 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     /// 角の丸みに合わせて左右を内側に寄せた枠。
     private lazy var cornerAdaptedGuide = layoutGuide(for: .safeArea(cornerAdaptation: .horizontal))
     private lazy var sectionBarBottom = sectionBar.bottomAnchor.constraint(equalTo: keyboardEdge.topAnchor, constant: -barBottomInset)
-    /// 下の段と一覧の下端を付ける枠。ふだんはシートの下端に置き、検索欄にキーボードを出している間だけキーボードに沿わせる。
-    /// いつもキーボードに沿わせると、プロフィールの編集で入力欄のキーボードを下げながらシートを出したとき、キーボードに沿う枠の上端がシートの上がる間ずっと下端から約40pt上に残り、下がりきってから一度に下端へ移るので、下の段が一覧に重なってから落ちて見えた。
+    /// 下の段と絵文字のリストの下端を付ける枠。ふだんはシートの下端に置き、検索欄にキーボードを出している間だけキーボードに沿わせる。
+    /// いつもキーボードに沿わせると、プロフィールの編集で入力欄のキーボードを下げながらシートを出したとき、キーボードに沿う枠の上端がシートの上がる間ずっと下端から約40pt上に残り、下がりきってから一度に下端へ移るので、下の段が絵文字のリストに重なってから落ちて見えた。
     private let keyboardEdge = UILayoutGuide()
     private lazy var keyboardEdgeAtBottom = keyboardEdge.topAnchor.constraint(equalTo: bottomAnchor)
     private lazy var keyboardEdgeAtKeyboard = keyboardEdge.topAnchor.constraint(equalTo: keyboardLayoutGuide.topAnchor)
@@ -154,7 +154,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     /// 押したときに、システムのキーボードと同じクリック音を鳴らす。
     var enableInputClicksWhenVisible: Bool { true }
 
-    /// 一覧の上に、検索欄の分の余白を足す。いちばん上の見出しが検索欄の下から始まるようにするため。
+    /// 絵文字のリストの上に、検索欄の分の余白を足す。いちばん上の見出しが検索欄の下から始まるようにするため。
     private static let topContentInset = topInset + searchRowHeight + gridSpacing
 
     private func updateEdgeEffectStyle() {
@@ -163,13 +163,13 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         collectionView.bottomEdgeEffect.style = style
     }
 
-    /// 一覧の下に、下の段の分の余白を足す。いちばん下の絵文字も下の段より上まで送れるようにするため。
+    /// 絵文字のリストの下に、下の段の分の余白を足す。いちばん下の絵文字も下の段より上まで送れるようにするため。
     private func updateBottomInset() {
         collectionView.contentInset.bottom = barHeight + barBottomInset
         collectionView.verticalScrollIndicatorInsets.bottom = barHeight + barBottomInset
     }
 
-    /// 検索語を消して、まとまりごとの一覧に戻す。
+    /// 検索語を消して、まとまりごとの並びに戻す。
     func clearQuery() {
         searchField.text = ""
     }
@@ -199,7 +199,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         }
         applySnapshot()
         rebuildSectionButtons()
-        // 打つたびに結果が変わるので、先頭に戻す。検索をやめて一覧に戻ったときも先頭から見せる。
+        // 打つたびに結果が変わるので、先頭に戻す。検索をやめてまとまりごとの並びに戻ったときも先頭から見せる。
         if case .searchResults = content {
             scrollToTop()
         } else if wasSearchResults {
@@ -270,7 +270,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         collectionView.register(EmojiPaletteStatusCell.self, forCellWithReuseIdentifier: EmojiPaletteStatusCell.reuseIdentifier)
         collectionView.register(EmojiPaletteHeader.self, forSupplementaryViewOfKind: UICollectionView.elementKindSectionHeader, withReuseIdentifier: EmojiPaletteHeader.reuseIdentifier)
         addSubview(collectionView)
-        // 一覧を検索欄の裏まで伸ばし、下の段と同じく、重なった端をシステムにぼかさせる。
+        // 絵文字のリストを検索欄の裏まで伸ばし、下の段と同じく、重なった端をシステムにぼかさせる。
         let topEdgeInteraction = UIScrollEdgeElementContainerInteraction()
         topEdgeInteraction.scrollView = collectionView
         topEdgeInteraction.edge = .top
@@ -285,7 +285,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         sectionBar.addSubview(sectionStack)
         bottomBar.translatesAutoresizingMaskIntoConstraints = false
         bottomBar.addSubview(sectionBar)
-        // 一覧を下の段の裏まで伸ばし、重なった端をシステムにぼかさせる。iOS 26のバーの下を一覧が流れるときと同じ見え方にするため。
+        // 絵文字のリストを下の段の裏まで伸ばし、重なった端をシステムにぼかさせる。iOS 26のバーの下をタイムラインが流れるときと同じ見え方にするため。
         let edgeInteraction = UIScrollEdgeElementContainerInteraction()
         edgeInteraction.scrollView = collectionView
         edgeInteraction.edge = .bottom
@@ -327,7 +327,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         updateBottomInset()
         // 下の段はシートの角の丸みに近いので、角の丸みに合わせて左右を内側に寄せた枠に付ける。
         let cornerAdapted = cornerAdaptedGuide
-        // 検索欄と下の段の間。一覧の中身が見える場所で、空や見つからないことの文言をこの真ん中に置く。
+        // 検索欄と下の段の間。絵文字のリストの中身が見える場所で、空や見つからないことの文言をこの真ん中に置く。
         let visibleArea = UILayoutGuide()
         addLayoutGuide(visibleArea)
         addLayoutGuide(keyboardEdge)
@@ -347,8 +347,8 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
             collectionView.topAnchor.constraint(equalTo: topAnchor),
             collectionView.leadingAnchor.constraint(equalTo: leadingAnchor),
             collectionView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            // 一覧と下の段の間は空けない。空けると、どちらにも当たらずに押しても反応しない帯ができる。
-            // 一覧は下の段の裏まで伸ばす。下の段の分の余白を足し、いちばん下の絵文字も下の段より上まで送れるようにする。
+            // 絵文字のリストと下の段の間は空けない。空けると、どちらにも当たらずに押しても反応しない帯ができる。
+            // 絵文字のリストは下の段の裏まで伸ばす。下の段の分の余白を足し、いちばん下の絵文字も下の段より上まで送れるようにする。
             collectionView.bottomAnchor.constraint(equalTo: keyboardEdge.topAnchor),
             bottomBar.leadingAnchor.constraint(equalTo: leadingAnchor),
             bottomBar.trailingAnchor.constraint(equalTo: trailingAnchor),
@@ -508,7 +508,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     // MARK: - まとまりのボタン
 
     /// まとまりのボタン。最近使ったものは時計、検索の結果は虫めがね、カテゴリーはその先頭の絵文字の画像をアイコンにする。
-    /// 名前の文字にすると、一覧の端の効果（`.soft`）でぼけた絵文字の上に重なって読みにくかった。iOSの絵文字キーボードの下の段もアイコンで並べる。
+    /// 名前の文字にすると、絵文字のリストの端の効果（`.soft`）でぼけた絵文字の上に重なって読みにくかった。iOSの絵文字キーボードの下の段もアイコンで並べる。
     /// 名前は、VoiceOverと、長押しの拡大表示で出す。
     private func rebuildSectionButtons() {
         sectionButtons.forEach { $0.removeFromSuperview() }
@@ -594,7 +594,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         collectionView.setContentOffset(CGPoint(x: 0, y: -collectionView.adjustedContentInset.top), animated: false)
     }
 
-    /// まとまりの見出しが一覧の上端に来るまでスクロールする。下の端を越える分は、いちばん下までにする。
+    /// まとまりの見出しが絵文字のリストの上端に来るまでスクロールする。下の端を越える分は、いちばん下までにする。
     private func scrollToSection(_ index: Int) {
         guard sections.indices.contains(index), !sections[index].emojis.isEmpty || sections[index].kind == .customEmojiStatus else { return }
         UIDevice.current.playInputClick()
@@ -767,7 +767,7 @@ private final class EmojiPaletteHeader: UICollectionReusableView {
     }
 }
 
-/// カスタム絵文字の一覧を読んでいる間か、読めなかったときに、カスタム絵文字の場所に置く段。読めなかったときは、文言の下に、押すと読み直すボタンを添える。
+/// カスタム絵文字のリストを読んでいる間か、読めなかったときに、カスタム絵文字の場所に置く段。読めなかったときは、文言の下に、押すと読み直すボタンを添える。
 private final class EmojiPaletteStatusCell: UICollectionViewCell {
     static let reuseIdentifier = "EmojiPaletteStatusCell"
     private let spinner = UIActivityIndicatorView(style: .medium)
@@ -784,7 +784,7 @@ private final class EmojiPaletteStatusCell: UICollectionViewCell {
         label.textAlignment = .center
         retryButton.configuration?.title = "読み直す"
         retryButton.addAction(UIAction { [weak self] _ in self?.onRetry() }, for: .primaryActionTriggered)
-        // 読み込み中はインジケーターと文言を横に、失敗は文言の下に読み直すボタンを置く。カスタム絵文字の中身の代わりに出すので、一覧が空のときやタイムラインの失敗と同じく中央にそろえる。
+        // 読み込み中はインジケーターと文言を横に、失敗は文言の下に読み直すボタンを置く。カスタム絵文字の中身の代わりに出すので、タイムラインが空のときやタイムラインの失敗と同じく中央にそろえる。
         let message = UIStackView(arrangedSubviews: [spinner, label])
         message.alignment = .center
         message.spacing = 8

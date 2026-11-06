@@ -51,7 +51,7 @@ public enum XPostLink {
     /// `status`のリンクカードの代わりに囲みで出す、Xの投稿のID。ブーストなら、ブーストされた投稿を渡す。
     /// 本文のカードを付けうるリンクのうち、t.coを飛ばした最初のリンクで決める（docs/link-card.md）。
     /// そのリンクがXの投稿でなくても、ほかの短縮URLからたどった先のように、サーバーのカードのURLがXの投稿なら、そのID。
-    /// 行を描くたびと、Xの投稿が届くたびに一覧の全件で呼ぶため、Xの投稿へのリンクがありえない本文は解析しない。
+    /// 行を描くたびと、Xの投稿が届くたびにタイムラインの全件で呼ぶため、Xの投稿へのリンクがありえない本文は解析しない。
     public static func postID(of status: Status) -> String? {
         bodyPostID(of: status) ?? status.card.flatMap { postID(in: $0.url) }
     }
@@ -165,14 +165,14 @@ extension XPost {
 
 extension MediaAttachment {
     /// fxtwitterの添付ファイル。知らない種類は出さない。
-    /// IDは一覧とビューアの中で添付ファイルを見分けるのに使うため、Mastodonの添付ファイルと重ならないよう、`x:`を付ける。
+    /// IDはタイムラインとビューアの中で添付ファイルを見分けるのに使うため、Mastodonの添付ファイルと重ならないよう、`x:`を付ける。
     init?(_ item: FxTwitterResponse.Item, postID: String, index: Int) {
         // fxtwitterの応答もサーバーから来る値なので、Mastodonの添付ファイルと同じく、読み込むURLのスキームを確かめる。
         guard ServerURLKind.media.accepts(item.url) else { return nil }
         let kind: Kind
         let preview: URL?
         let size = Size(width: item.width, height: item.height)
-        // 一覧が元の画像を読むかを決めるのに使うため、プレビュー画像の実際の大きさを入れる。動画とGIFの静止画は元の大きさで返る。
+        // タイムラインが元の画像を読むかを決めるのに使うため、プレビュー画像の実際の大きさを入れる。動画とGIFの静止画は元の大きさで返る。
         let previewSize: Size
         switch item.type {
         case "photo":
@@ -210,7 +210,7 @@ extension MediaAttachment {
         return Size(width: Int((Double(width) * scale).rounded()), height: Int((Double(height) * scale).rounded()))
     }
 
-    /// Xの画像は、`name`で縮小した版を選べる。fxtwitterは元の大きさ（`orig`）のURLを返すため、一覧には縮小した版を使う。
+    /// Xの画像は、`name`で縮小した版を選べる。fxtwitterは元の大きさ（`orig`）のURLを返すため、タイムラインには縮小した版を使う。
     private static func smallPhotoURL(_ url: URL) -> URL {
         guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
         var items = (components.queryItems ?? []).filter { $0.name != "name" }

@@ -158,7 +158,7 @@ public struct NotificationRequest: Decodable, Hashable, Sendable, Identifiable {
     }
 }
 
-/// 保留中の通知の一覧の1ページ。
+/// 保留中の通知のリストの1ページ。
 public struct NotificationRequestPage: Sendable, Equatable {
     /// サーバーが返す順。
     public let requests: [NotificationRequest]
@@ -173,7 +173,7 @@ public struct NotificationRequestPage: Sendable, Equatable {
 
 /// 保留中の通知への答え。
 public enum NotificationRequestDecision: Sendable, Equatable {
-    /// 保留していた通知を通知の一覧に戻し、以後その人の通知を受け入れる。
+    /// 保留していた通知を通知のタイムラインに戻し、以後その人の通知を受け入れる。
     case accept
     /// 保留中の通知から外し、数えないようにする。
     case dismiss

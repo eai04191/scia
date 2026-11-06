@@ -13,7 +13,7 @@ public enum StreamingEvent: Sendable, Equatable {
     case notification(MastodonNotification)
     /// キーワードフィルターが変わった。
     case filtersChanged
-    /// 受け入れた保留中の通知を、サーバーが通知の一覧に戻し終えた。
+    /// 受け入れた保留中の通知を、サーバーが通知のタイムラインに戻し終えた。
     case notificationsMerged
     /// サーバーのお知らせが出た、または編集された。中身には、自分が既読にしたかと、自分がどのリアクションをしたかが入っていない。
     case announcement(Announcement)

@@ -221,7 +221,7 @@ struct CompletionTokenTests {
         #expect(token.range == 0 ..< 7)
     }
 
-    /// 実際の一覧の短縮名は、どれも打って語にできる。
+    /// アプリに入れた絵文字のリストの短縮名は、どれも打って語にできる。
     @Test func bundledShortcodesAreTokenizable() {
         let shortcodes = StandardEmojiCatalog.groups.flatMap(\.emojis).flatMap(\.shortcodes)
         #expect(!shortcodes.isEmpty)

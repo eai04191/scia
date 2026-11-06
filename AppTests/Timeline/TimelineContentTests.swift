@@ -226,7 +226,7 @@ struct TimelineContentTests {
         #expect(content.spoiler?.isCollapsed == true)
     }
 
-    /// 末尾のフッターは一覧の最後に置き、表示範囲の下端に貼り付けない。
+    /// 末尾のフッターはタイムラインの最後に置き、表示範囲の下端に貼り付けない。
     /// 貼り付くと、中身のない透明なフッターがタブバーのすぐ上を覆い、そこにある画像などをタップできなかった。
     @Test func footerStaysAtEndOfListInsteadOfPinningToVisibleBounds() throws {
         let harness = try TimelineHarness()
@@ -237,11 +237,11 @@ struct TimelineContentTests {
         let collectionView = harness.collectionView
         let footers = collectionView.visibleSupplementaryViews(ofKind: UICollectionView.elementKindSectionFooter)
         for footer in footers {
-            #expect(abs(footer.frame.maxY - collectionView.contentSize.height) < 0.5, "フッターが一覧の途中に出ています: \(footer.frame)")
+            #expect(abs(footer.frame.maxY - collectionView.contentSize.height) < 0.5, "フッターがタイムラインの途中に出ています: \(footer.frame)")
         }
     }
 
-    /// ヘッダーのない一覧では、投稿がないことを全面の表示で示すので、末尾まで読んでもフッターに同じ文言を重ねない。
+    /// ヘッダーのないタイムラインでは、投稿がないことを全面の表示で示すので、末尾まで読んでもフッターに同じ文言を重ねない。
     @Test func emptyListWithoutHeaderShowsEmptyTextOnlyInFullScreen() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

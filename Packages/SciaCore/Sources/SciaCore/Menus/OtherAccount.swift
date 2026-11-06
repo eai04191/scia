@@ -4,7 +4,7 @@ public import Foundation
 ///
 /// 投稿のIDはサーバーごとに違うため、そのアカウントのサーバーで、投稿のURIを探して引き直す。見つけた投稿はURIごとに覚え、
 /// 操作の結果もその投稿に反映する。人は、見つけた投稿の投稿者とメンションの、そのサーバーでのIDで扱い、関係はこのアカウントで覚える。
-/// 今のアカウントの一覧の投稿や、覚えている関係は変えない。
+/// 今のアカウントのタイムラインの投稿や、覚えている関係は変えない。
 @MainActor
 public final class OtherAccount {
     /// APIを呼ぶ口。テストでは差し替える。
@@ -94,7 +94,7 @@ public final class OtherAccount {
     /// プロフィールのURLごとの、走っている人の検索。同じ人を探しているときは、送り直さずに待つ。
     private var peopleSearches: [URL: Task<Void, Never>] = [:]
     /// そのアカウントのハッシュタグのフォロー、ミュート、プロフィールでの紹介を読んで変えるもの。nilなら、それらの項目を出さない。
-    /// そのアカウントのクライアントで読む一覧が要るので、アプリが作って入れる。
+    /// そのアカウントのクライアントで読むハッシュタグのリストが要るので、アプリが作って入れる。
     public var hashtagActions: HashtagMenuActions?
     /// そのアカウント自身のプロフィール。読めるまでnil。
     public private(set) var profile: Account?

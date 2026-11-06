@@ -21,21 +21,21 @@ enum EmojiPaletteCatalog {
         let standard = StandardEmojiCatalog.groups
         let sections = EmojiPalette.sections(emojis: emojis, standardGroups: standard, recentKeys: ["emoji_3", "🐈", "emoji_20", "👍", "emoji_30"], recentLimit: 24)
         let failure = ComposeCompletion.failureMessage(for: MastodonAPIError(statusCode: 502, message: "Bad Gateway"))
-        // カスタム絵文字の一覧がまだないときは、最近使ったもののうちUnicodeの絵文字だけが並ぶ。
+        // カスタム絵文字のリストがまだないときは、最近使ったもののうちUnicodeの絵文字だけが並ぶ。
         let withoutCustom = EmojiPalette.sections(emojis: [], standardGroups: standard, recentKeys: ["emoji_3", "🐈", "emoji_20", "👍"], recentLimit: 24)
         return [
             CatalogState(title: "横長と縦長のカスタム絵文字（Fedibirdが返す縦横比で、マスを横に足す）") { palette(.sections(EmojiPalette.sections(emojis: shapedEmojis(), standardGroups: [], recentKeys: [], recentLimit: 0), customStatus: nil)) },
             CatalogState(title: "最近使ったもの（カスタム絵文字とUnicodeの絵文字）、カテゴリーのないもの、長い名前のカテゴリー") { palette(.sections(sections, customStatus: nil)) },
             CatalogState(title: "最近使ったものがない") { palette(.sections(EmojiPalette.sections(emojis: emojis, standardGroups: standard, recentKeys: [], recentLimit: 24), customStatus: nil)) },
             CatalogState(title: "サーバーにカスタム絵文字がなく、Unicodeの絵文字だけ") { palette(.sections(EmojiPalette.sections(emojis: [], standardGroups: standard, recentKeys: [], recentLimit: 24), customStatus: nil)) },
-            CatalogState(title: "カスタム絵文字の一覧を読んでいる（Unicodeの絵文字は並ぶ）") { palette(.sections(withoutCustom, customStatus: .loading)) },
-            CatalogState(title: "カスタム絵文字の一覧を読めなかった（押すと読み込み直す）") { palette(.sections(withoutCustom, customStatus: .failed(failure))) },
+            CatalogState(title: "カスタム絵文字のリストを読んでいる（Unicodeの絵文字は並ぶ）") { palette(.sections(withoutCustom, customStatus: .loading)) },
+            CatalogState(title: "カスタム絵文字のリストを読めなかった（押すと読み込み直す）") { palette(.sections(withoutCustom, customStatus: .failed(failure))) },
             CatalogState(title: "並べる絵文字がない") { palette(.sections([], customStatus: nil)) },
             CatalogState(title: "検索の結果（カスタム絵文字）") { palette(.searchResults(Array(emojis.prefix(12)).map(PaletteEmoji.custom), customStatus: nil), query: "emoji") },
             CatalogState(title: "検索の結果（日本語で探したUnicodeの絵文字）") {
                 palette(.searchResults(EmojiPalette.searchResults(matching: "ねこ", emojis: emojis, standardGroups: standard, limit: 200), customStatus: nil), query: "ねこ")
             },
-            CatalogState(title: "カスタム絵文字の一覧を読めないまま探した") {
+            CatalogState(title: "カスタム絵文字のリストを読めないまま探した") {
                 palette(.searchResults(EmojiPalette.searchResults(matching: "ねこ", emojis: [], standardGroups: standard, limit: 200), customStatus: .failed(failure)), query: "ねこ")
             },
             CatalogState(title: "検索で見つからない") { palette(.searchResults([], customStatus: nil), query: "nothing") },

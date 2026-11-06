@@ -40,7 +40,7 @@ enum MacApplication {
               let application = applicationClass.perform(sharedApplication)?.takeUnretainedValue() as? NSObject,
               selectors.allSatisfy({ application.responds(to: NSSelectorFromString($0)) })
         else {
-            // 一覧は画面を出すたびに調べるため、呼べないことは1回だけ残す。
+            // タイムラインは画面を出すたびに調べるため、呼べないことは1回だけ残す。
             if !hasReportedUnavailable {
                 hasReportedUnavailable = true
                 logger.error("NSApplication not available")

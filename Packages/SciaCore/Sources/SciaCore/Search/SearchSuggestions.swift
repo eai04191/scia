@@ -48,7 +48,7 @@ public final class SearchSuggestions {
         case openURL(URL)
         /// ハンドルの人のプロフィールを開く。`acct`は先頭の`@`を除いたもの。
         case openHandle(acct: String)
-        /// ハッシュタグの一覧を開く。`name`は`#`を除いた名前。
+        /// ハッシュタグのタイムラインを開く。`name`は`#`を除いた名前。
         case openHashtag(name: String)
     }
 
@@ -66,7 +66,7 @@ public final class SearchSuggestions {
             self.recents = recents
         }
 
-        /// 一覧に並べる行。打った語に応じた行、ユーザー、ハッシュタグ、最近の検索の順にし、ユーザーとハッシュタグと最近の検索には見出しを付ける。
+        /// 候補のリストに並べる行。打った語に応じた行、ユーザー、ハッシュタグ、最近の検索の順にし、ユーザーとハッシュタグと最近の検索には見出しを付ける。
         /// ユーザーとハッシュタグは、確定した結果と同じ行で描くため、結果と同じ見出しと行を使う。
         public var entries: [TimelineEntry] {
             var entries = actions.map { TimelineEntry.search(.action($0)) }
@@ -113,7 +113,7 @@ public final class SearchSuggestions {
         }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         var next = Content(actions: Self.actions(for: input, text: trimmed))
-        // 前の語の候補は、新しい語の候補が届くまで残す。打つたびに一覧が空になってちらつかないため。
+        // 前の語の候補は、新しい語の候補が届くまで残す。打つたびに候補のリストが空になってちらつかないため。
         next.accounts = content.accounts
         next.hashtags = content.hashtags
         let lookup = Self.lookup(for: input)

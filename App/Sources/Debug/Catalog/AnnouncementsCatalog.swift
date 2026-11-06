@@ -87,7 +87,7 @@ enum AnnouncementsCatalog {
     }
 
     /// 未読のお知らせは、開いている間に点が消えないよう、既読を送らずに止める。
-    /// - Parameter fails: 一覧の読み込みを失敗させる。行は、ストリーミングで届いたものとして入れる。
+    /// - Parameter fails: お知らせの読み込みを失敗させる。行は、ストリーミングで届いたものとして入れる。
     @MainActor
     private static func state(_ title: String, rows: [Announcement], unreadable: [UnreadableItem] = [], fails: Bool = false) -> CatalogState {
         CatalogState(title: title) {

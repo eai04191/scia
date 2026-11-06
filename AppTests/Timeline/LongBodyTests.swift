@@ -120,7 +120,7 @@ struct LongBodyTests {
         #expect(abs(try #require(harness.windowMinY(of: .status(original.id))) - y) < 0.01)
     }
 
-    /// 広げると、ほかの一覧にそろえるために、広げたあとの状態を知らせる。ほかの一覧から受け取ると、動かさずに全文にする。
+    /// 広げると、ほかのタイムラインにそろえるために、広げたあとの状態を知らせる。ほかのタイムラインから受け取ると、動かさずに全文にする。
     @Test func sharesExpansionWithOtherTimelines() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

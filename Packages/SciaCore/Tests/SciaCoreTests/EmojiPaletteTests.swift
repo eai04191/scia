@@ -33,7 +33,7 @@ struct EmojiPaletteTests {
         #expect(sections.map { $0.emojis.map(\.recentKey) } == [["blobcat", "apple"], ["aaa", "Blob", "blobcat"], ["Ant", "zebra"], ["apple"]])
     }
 
-    /// 一覧に出さない絵文字と、サーバーからなくなった最近の絵文字は出さない。空のまとまりは作らない。
+    /// ピッカーに出さない絵文字と、サーバーからなくなった最近の絵文字は出さない。空のまとまりは作らない。
     @Test func dropsHiddenAndRemovedEmojis() throws {
         let emojis = [try emoji("shown"), try emoji("hidden", visible: false)]
         let sections = EmojiPalette.sections(emojis: emojis, standardGroups: [], recentKeys: ["removed", "hidden"], recentLimit: 10)
@@ -147,7 +147,7 @@ struct EmojiPaletteTests {
         StandardEmoji(emoji: emoji, name: name, keywords: keywords, version: "1.0")
     }
 
-    /// アプリに入れた一覧が読め、まとまりごとに並ぶ。
+    /// アプリに入れた絵文字のリストが読め、まとまりごとに並ぶ。
     @Test func loadsBundledStandardEmoji() throws {
         let groups = StandardEmojiCatalog.groups
         #expect(groups.map(\.title) == ["顔と感情", "人と体", "動物と自然", "食べ物と飲み物", "旅行と場所", "活動", "物", "記号", "旗"])
@@ -236,7 +236,7 @@ struct EmojiPaletteTests {
         #expect(results.map(\.completion) == [":catfish:", ":blobcatface:", "🐱"])
     }
 
-    /// 実際の一覧で、補完に出る数件のうちに、名前どおりの絵文字が先に来る。短縮名でも探せる。
+    /// アプリに入れた絵文字のリストで、補完に出る数件のうちに、名前どおりの絵文字が先に来る。短縮名でも探せる。
     @Test func ranksBundledStandardEmojiByName() {
         let first = { (query: String) in StandardEmojiSearch.candidates(matching: query, in: StandardEmojiCatalog.groups, limit: 5).map(\.emoji) }
         #expect(first("fire").first == "🔥")
@@ -250,7 +250,7 @@ struct EmojiPaletteTests {
         #expect(first("ferriswh").contains("🎡"))
     }
 
-    /// 実際の一覧で、日本語の言葉から探せる。
+    /// アプリに入れた絵文字のリストで、日本語の言葉から探せる。
     @Test func searchesBundledStandardEmojiInJapanese() {
         let results = StandardEmojiSearch.candidates(matching: "ねこ", in: StandardEmojiCatalog.groups, limit: 20).map(\.emoji)
         #expect(results.contains("🐈"))

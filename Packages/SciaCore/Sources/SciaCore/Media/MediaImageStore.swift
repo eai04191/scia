@@ -26,7 +26,7 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
     private let prefetchedFiles: MediaFileCache?
     /// 先頭から最初のフレームを作れなかった動画。サーバーのプレビューを出し、読み直さない。通信の失敗や429、5xxは、待てば作れるため含めない。
     private var failedVideoFrames: Set<URL> = []
-    /// 読めなかった画像と動画の最初のフレームを、一覧に描いたときにいつ読み直すか。
+    /// 読めなかった画像と動画の最初のフレームを、タイムラインに描いたときにいつ読み直すか。
     private var retry: RetrySchedule
     /// 画面に描いている画像を読み直すまで待つ時計。
     private let clock: any Clock<Duration>
@@ -83,7 +83,7 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
         cache.value(forKey: Key(url: url, maxPixelSize: maxPixelSize).cacheKey)
     }
 
-    /// 一覧のサムネイルを、読み込み済みならすぐ返す。
+    /// タイムラインのサムネイルを、読み込み済みならすぐ返す。
     public func cachedThumbnail(for request: MediaThumbnailRequest) -> Image? {
         switch request.source {
         case .image:
@@ -101,7 +101,7 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
     /// 展開しないのは、1枚で数十MBのメモリを使うため。展開はビューアで開いたときに行う。
     /// 先読みの途中にビューアで同じ画像を開くと、ビューアは先読みを待たずに自分で読み、同じ画像を2回読む。Wi-Fiでだけ起き、
     /// 待ち合わせのために先読みの置き場とビューアの読み込みを結ぶ手間に見合わないため、そのままにしている（docs/image-loading.md）。
-    /// Wi-Fiでは一覧のサムネイルにも元の画像を読むことがあるので、同じ画像をサムネイルとして読んでいる途中なら、それを待つ。
+    /// Wi-Fiではタイムラインのサムネイルにも元の画像を読むことがあるので、同じ画像をサムネイルとして読んでいる途中なら、それを待つ。
     /// サムネイルで読んだ元の画像も先読みの置き場に置くため、同じファイルを2回読まずに済む。
     public func prefetchOriginal(_ url: URL, purpose: RequestPurpose) async {
         guard let prefetchedFiles else { return }
@@ -129,7 +129,7 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
         }
     }
 
-    /// 一覧のサムネイルを読み込む。動画の最初のフレームを作れなければ、サーバーのプレビューを読む。
+    /// タイムラインのサムネイルを読み込む。動画の最初のフレームを作れなければ、サーバーのプレビューを読む。
     /// 前に読めなかったものは、読み直してよくなるまで読まない（`image(for:maxPixelSize:keepsOriginal:retriesNow:)`）。
     public func thumbnail(for request: MediaThumbnailRequest) async throws -> Image {
         switch request.source {
@@ -159,7 +159,7 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
         }
     }
 
-    /// 一覧に描くサムネイルを読み込む。待てば直る失敗なら、`isWanted`の間、見えていれば読み直してよくなった時刻に読み直す（`RetrySchedule.loadWhileShown`）。
+    /// タイムラインに描くサムネイルを読み込む。待てば直る失敗なら、`isWanted`の間、見えていれば読み直してよくなった時刻に読み直す（`RetrySchedule.loadWhileShown`）。
     public func shownThumbnail(for request: MediaThumbnailRequest, while isWanted: @MainActor () -> Bool, visible isVisible: @MainActor () -> Bool) async -> Image? {
         // 動画の最初のフレームを作れなくてもプレビューで描くので、失敗として返るのはプレビューが読めなかったときだけ。
         let failing = switch request.source {
@@ -209,7 +209,7 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
         }
         let fetch = fetch
         let maker = maker
-        // 一覧に描くための読み込みなので、呼び出し側の目的（質を上げる通信）で送り、止められている間と、その回線では送らない（docs/network.md）。
+        // タイムラインに描くための読み込みなので、呼び出し側の目的（質を上げる通信）で送り、止められている間と、その回線では送らない（docs/network.md）。
         let task = RequestPurpose.$current.withValue(purpose) {
             Task<Loaded, any Error> {
                 let prefix = try await VideoFirstFrame.readPrefix { range in try await fetch(url, range) }
@@ -259,8 +259,8 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
     ///   ビューアは常に残すよう求めるため、この組み合わせは起きない。
     /// 前に読めなかった画像は、読み直してよくなるまで`ImageLoadDeferred`を投げる。
     /// - Parameter retriesNow: 使う人が自分で見に行った操作（ビューアを開く、長押しするなど）で、間隔を待たずに読み直す。
-    /// - Parameter purpose: `retriesNow`でないときに送る目的。一覧のサムネイルの元の画像は、質を上げる通信として送る。
-    /// - Parameter sharesWithPrefetch: ビューアで開くのと同じ元の画像を、一覧のサムネイルとして読む。読んだファイルを先読みの置き場にも置く。
+    /// - Parameter purpose: `retriesNow`でないときに送る目的。タイムラインのサムネイルの元の画像は、質を上げる通信として送る。
+    /// - Parameter sharesWithPrefetch: ビューアで開くのと同じ元の画像を、タイムラインのサムネイルとして読む。読んだファイルを先読みの置き場にも置く。
     public func image(
         for url: URL,
         maxPixelSize: Int,
@@ -308,7 +308,7 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
         let prefetchedForViewer = keepsOriginal ? prefetchedFiles : nil
         // サムネイルに読んだ元の画像は、ビューアで開く画像と同じなので、先読みの置き場にも置く。先読みで同じファイルを読み直さないため。
         let prefetchedFromThumbnail = sharesWithPrefetch && !keepsOriginal ? prefetchedFiles : nil
-        // 一覧に描くための読み込みは自動の通信として送り、止められている間は送らない（docs/network.md）。
+        // タイムラインに描くための読み込みは自動の通信として送り、止められている間は送らない（docs/network.md）。
         let task = RequestPurpose.$current.withValue(purpose) { Task<Loaded, any Error> {
             let generation = await files?.generation
             let thumbnailGeneration = await prefetchedFromThumbnail?.generation

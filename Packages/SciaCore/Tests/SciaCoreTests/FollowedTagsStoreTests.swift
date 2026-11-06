@@ -3,7 +3,7 @@ import SciaCore
 import SciaTesting
 import Testing
 
-/// 「フォロー中のハッシュタグ」の一覧の持ち方を確かめる。決まりはdocs/tabs.mdの「フォロー中のハッシュタグ」にある。
+/// 「フォロー中のハッシュタグ」の持ち方を確かめる。決まりはdocs/tabs.mdの「フォロー中のハッシュタグ」にある。
 @MainActor
 struct FollowedTagsStoreTests {
     @MainActor
@@ -20,7 +20,7 @@ struct FollowedTagsStoreTests {
         }
     }
 
-    /// 読んだ一覧で置き換え、そろえた名前が同じタグは1度だけ並べる。
+    /// 読んだハッシュタグで置き換え、そろえた名前が同じタグは1度だけ並べる。
     @Test func loadReplacesAndDeduplicates() async throws {
         let server = Server()
         server.tags = [Hashtag(name: "Cat"), Hashtag(name: "dog"), Hashtag(name: "cat")]
@@ -67,7 +67,7 @@ struct FollowedTagsStoreTests {
         #expect(store.tags.map(\.name) == ["cat", "dog"])
     }
 
-    /// ほかで読み直した一覧（ハッシュタグのメニューが読んだもの）を受け取って置き換える。読み込み中は、その読み込みに任せて受け取らない。
+    /// ほかで読み直したハッシュタグ（ハッシュタグのメニューが読んだもの）を受け取って置き換える。読み込み中は、その読み込みに任せて受け取らない。
     @Test func receiveReplacesUnlessLoading() async throws {
         let server = Server()
         server.tags = [Hashtag(name: "dog")]
@@ -86,7 +86,7 @@ struct FollowedTagsStoreTests {
         #expect(store.tags.map(\.name) == ["cat"])
     }
 
-    /// 読めなければ投げ、前の一覧を残す。
+    /// 読めなければ投げ、前のハッシュタグを残す。
     @Test func failureKeepsPreviousTags() async throws {
         let server = Server()
         server.tags = [Hashtag(name: "dog")]

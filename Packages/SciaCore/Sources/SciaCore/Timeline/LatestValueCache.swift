@@ -1,10 +1,10 @@
 import os
 
-/// 読んだ自分のフィルターの一覧。ハッシュタグのメニューの「ミュート」を、覚えている一覧でその場で組むために使う。
-/// 一覧は1回のリクエストで全部読めるので、読み直しも1回で済む。
+/// 読んだ自分のフィルターのリスト。ハッシュタグのメニューの「ミュート」を、覚えているリストでその場で組むために使う。
+/// フィルターは1回のリクエストで全部読めるので、読み直しも1回で済む。
 public typealias ServerFilterCache = LatestValueCache<[ServerFilter]>
 
-/// サーバーから読んだ自分の設定（フィルターの一覧など）を覚えておく。ログインしている間だけ持つ。
+/// サーバーから読んだ自分の設定（フィルターのリストなど）を覚えておく。ログインしている間だけ持つ。
 /// メニューを、覚えている値でその場で組むために使う。読み込み中の行を出してから中身を差し替えると、開く途中のサブメニューの動きが崩れるため。
 @MainActor
 public final class LatestValueCache<Value: Sendable> {
@@ -15,12 +15,12 @@ public final class LatestValueCache<Value: Sendable> {
     private let label: String
     /// 覚えている値。まだ読めていなければnil。
     public private(set) var value: Value?
-    /// 読めて`value`が変わったときに呼ぶ。同じ値を画面にも出しているとき（「フォロー中のハッシュタグ」の一覧）に、メニューを開いたときの読み直しも届けるために使う。
+    /// 読めて`value`が変わったときに呼ぶ。同じ値を画面にも出しているとき（「フォロー中のハッシュタグ」の画面）に、メニューを開いたときの読み直しも届けるために使う。
     /// 後から始めた読み直しに追い越された応答と、読めなかったときは呼ばない。
     public var onValueChange: ((Value) -> Void)?
     /// いちばん新しく始めた読み直し。読み終えたら外す。
     private var task: Task<Void, Never>?
-    /// 読み直しを始めた回数。後から始めた読み直しがあれば、先に始めた読み直しの応答で古い一覧に戻さない。
+    /// 読み直しを始めた回数。後から始めた読み直しがあれば、先に始めた読み直しの応答で古い値に戻さない。
     private var generation = 0
     /// いちばん新しく始めた読み直しの結果。待っている側は、自分より後に始めた読み直しの結果を受け取る。
     private var latestResult: (generation: Int, result: Result<Value, any Error>)?

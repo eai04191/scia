@@ -60,7 +60,7 @@ final class ProfileTextMenuInteraction: NSObject, UIContextMenuInteractionDelega
     private let lifecycle: MenuLifecycle
     /// メニューを出している間、閉じ終えるまで自分とビューを持っておく。
     /// 絵文字の画像が届くとヘッダーが補足情報の行を作り直し、持ち主がこの部品を手放す。`UIContextMenuInteraction`の`delegate`は弱参照なので、
-    /// そのままでは閉じたことを受け取れず、一覧の更新が溜まったままになるため。
+    /// そのままでは閉じたことを受け取れず、タイムラインの更新が溜まったままになるため。
     private var shown: (interaction: ProfileTextMenuInteraction, view: UIView)?
 
     init(
@@ -108,7 +108,7 @@ final class ProfileTextMenuInteraction: NSObject, UIContextMenuInteractionDelega
         lifecycle.willShow()
     }
 
-    /// 閉じるアニメーションの間も一覧を動かさない。
+    /// 閉じるアニメーションの間もタイムラインを動かさない。
     func contextMenuInteraction(
         _ interaction: UIContextMenuInteraction,
         willEndFor configuration: UIContextMenuConfiguration,

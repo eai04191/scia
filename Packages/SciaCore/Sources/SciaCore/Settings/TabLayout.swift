@@ -9,11 +9,11 @@ public enum TabItem: MenuItemKind {
     case search
     case bookmarks
     case favourites
-    /// 予約した投稿の一覧。決まりはdocs/tabs.mdの「予約投稿」にある。
+    /// 予約した投稿のタイムライン。決まりはdocs/tabs.mdの「予約投稿」にある。
     case scheduled
-    /// フォローしているハッシュタグの一覧。決まりはdocs/tabs.mdの「フォロー中のハッシュタグ」にある。
+    /// フォローしているハッシュタグのリスト。決まりはdocs/tabs.mdの「フォロー中のハッシュタグ」にある。
     case followedTags
-    /// 自分のリスト。`title`は、リストの一覧を読む前からタブの名前を出せるよう、並びと一緒に保存する。
+    /// 自分のリスト。`title`は、自分のリストを読む前からタブの名前を出せるよう、並びと一緒に保存する。
     /// 同じ項目かどうかはIDだけで見る。名前が変わっても、並びの中の同じ場所の同じリストとして扱うため。
     case list(id: String, title: String)
     /// ハッシュタグのタイムライン。フォローしているかに関わらず、使う人がこの端末の並びに足す。決まりはdocs/tabs.mdの「ハッシュタグ」にある。
@@ -21,7 +21,7 @@ public enum TabItem: MenuItemKind {
     /// 同じ項目かどうかは、サーバーと同じ決まりでそろえた名前（`Hashtag.normalizedName`）で見る。サーバーは大文字と小文字などを区別しないため。
     case hashtag(name: String, title: String = "")
     /// あるユーザーの、ハッシュタグの付いた投稿。サーバーには覚える仕組みがないため、使う人がこの端末の並びに足す。`name`は`#`を除いた名前。
-    /// `acct`は、タブと一覧の見出しにハンドルを出すため、並びと一緒に保存する。`title`は使う人が付けたタブの名前で、空なら`#名前`を出す。
+    /// `acct`は、タブとタイムラインの見出しにハンドルを出すため、並びと一緒に保存する。`title`は使う人が付けたタブの名前で、空なら`#名前`を出す。
     /// 同じ項目かどうかは、アカウントのIDと、ハッシュタグのそろえた名前で見る。
     case accountHashtag(accountID: String, acct: String, name: String, title: String = "")
     /// あるユーザーのプロフィール。ユーザーのハッシュタグと同じく、使う人がこの端末の並びに足す。決まりはdocs/tabs.mdの「プロフィール」にある。
@@ -187,7 +187,7 @@ public enum TabItem: MenuItemKind {
 }
 
 extension MenuLayout where Item == TabItem {
-    /// サーバーのリストの一覧を並びに反映する。決まりはdocs/tabs.mdの「リスト」にある。
+    /// サーバーにあるリストを並びに反映する。決まりはdocs/tabs.mdの「リスト」にある。
     /// まだないリストは無効にして最後のリストの後ろに足し、もうないリストは外し、名前が変わったリストは名前を書き換える。ほかの項目の並びと表示は変えない。
     public func syncingLists(_ lists: [MastodonList]) -> MenuLayout<TabItem> {
         syncing(lists.map { .list(id: $0.id, title: $0.title) }, where: \.isList)
@@ -237,7 +237,7 @@ extension MenuLayout where Item == TabItem {
     }
 
     /// 並びにない項目だけを、無効にして末尾に足す。並びにある項目は、外すことも名前を書き換えることもしない。
-    /// 最初の並びに戻したときに、リストやハッシュタグを足し直すのに使う。同じアカウントをいくつものウインドウで開いていると、ウインドウごとに読んだ一覧が違うことがあり、
+    /// 最初の並びに戻したときに、リストやハッシュタグを足し直すのに使う。同じアカウントをいくつものウインドウで開いていると、ウインドウごとに読んだリストやハッシュタグが違うことがあり、
     /// 並びが変わるたびに外したり書き換えたりすると、ほかのウインドウの書き換えを打ち消し合い続けるため。
     public func addingMissing(_ items: [TabItem]) -> MenuLayout<TabItem> {
         let known = Set(elements.compactMap { element -> TabItem? in

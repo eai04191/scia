@@ -81,7 +81,7 @@ struct SavedStatusesClientTests {
         #expect(queries == [[URLQueryItem(name: "limit", value: "200")], [URLQueryItem(name: "limit", value: "200"), URLQueryItem(name: "max_id", value: "7")]])
     }
 
-    /// 読めない要素があれば、捨てずに投げる。欠けた一覧で並びを書き換えると、読めなかったハッシュタグを並びから外してしまうため。
+    /// 読めない要素があれば、捨てずに投げる。欠けた結果で並びを書き換えると、読めなかったハッシュタグを並びから外してしまうため。
     @Test func followedTagsFailOnUnreadableTag() async throws {
         let transport = StubTransport([
             .json(#"[{"id":"9","name":"scia","url":"https://example.social/tags/scia","history":[{"day":"1668556800","accounts":"1","uses":"2"}]},{"id":"8","url":"https://example.social/tags/broken"}]"#, statusCode: 200),
@@ -226,7 +226,7 @@ struct SavedStatusesStoreTests {
         #expect(ids(store).last == .status("3"))
     }
 
-    /// 最新のページの先がなければ、手元の行はもうサーバーの一覧にないので、読んだページで置き換える。
+    /// 最新のページの先がなければ、手元の行はもうサーバーのタイムラインにないので、読んだページで置き換える。
     @Test func refreshReplacesWhenNoOverlapAndNoMore() async throws {
         let store = makeStore(Pages([Self.page(["5", "4"], next: "c1"), Self.page(["9", "8"], next: nil)]))
 
@@ -391,7 +391,7 @@ struct SavedStatusesStoreTests {
         #expect(ids(store) == [.status("8"), .status("5")])
     }
 
-    /// 外した行は残し、外すのをサーバーが受け付けたあとに離れたら消す。お気に入りの一覧はお気に入りにしているかで見る。
+    /// 外した行は残し、外すのをサーバーが受け付けたあとに離れたら消す。お気に入りのタイムラインはお気に入りにしているかで見る。
     @Test func unsavedRowsStayUntilPruned() async throws {
         let store = makeStore(Pages([SavedStatusesPage(statuses: [Self.status("5", bookmarked: false, favourited: true), Self.status("4", bookmarked: false, favourited: true)], nextMaxID: nil)]), kind: .favourites)
         try await store.loadInitial()

@@ -17,7 +17,7 @@ final class DiscomfortReportDraft {
     private(set) var logs: Result<[LogLine], any Error>?
     /// ログから機械的に組み立てた、確保した時刻の直前の操作。
     private(set) var operations: [OperationTimeline.Step] = []
-    /// 一覧の何番目の操作に付けたコメントか。
+    /// 操作のリストの何番目の操作に付けたコメントか。
     private(set) var comments: [Int: String] = [:]
 
     init(capturedAt: Date, logMarker: String, stateDumps: [StateDump]) {
@@ -64,7 +64,7 @@ struct DiscomfortReportView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var saveError: String?
     @FocusState private var memoFocused: Bool
-    /// コメントを書いている操作の、一覧での位置。
+    /// コメントを書いている操作の、操作のリストでの位置。
     @State private var commentingIndex: Int?
     @State private var commentText = ""
 

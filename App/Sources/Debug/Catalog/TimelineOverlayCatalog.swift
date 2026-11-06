@@ -3,9 +3,9 @@ import Foundation
 import SciaCore
 import UIKit
 
-/// 一覧の上に重ねて出す表示。ストリーミングが止まったときのナビゲーションバーの小見出し、新着のボタンと、
+/// タイムラインの上に重ねて出す表示。ストリーミングが止まったときのナビゲーションバーの小見出し、新着のボタンと、
 /// ウインドウに重ねるチップの列（ログインし直しの段、お気に入りやブーストの失敗、ダウンロード中）。
-/// 本物の一覧の画面をナビゲーションバーごと置き、一覧が外から受け取る操作で状態を作る。チップの列は、本物と同じく一覧が伝える位置に重ねる。
+/// 本物のタイムラインの画面をナビゲーションバーごと置き、タイムラインが外から受け取る操作で状態を作る。チップの列は、本物と同じくタイムラインが伝える位置に重ねる。
 /// 数秒で消えるチップは、カタログでは1時間出したままにする。
 enum TimelineOverlayCatalog {
     @MainActor
@@ -78,7 +78,7 @@ enum TimelineOverlayCatalog {
                 unreadable: TimelineViewController.Texts.home.unreadable
             ), refresh: {})
             timeline.loadViewIfNeeded()
-            // 中の一覧がスクロールすると、カタログのページを上下に送れなくなるため止める。
+            // 中のタイムラインがスクロールすると、カタログのページを上下に送れなくなるため止める。
             timeline.collectionView.isScrollEnabled = false
             timeline.setContentState(.loaded)
             timeline.setEntries(statuses())
@@ -94,7 +94,7 @@ enum TimelineOverlayCatalog {
         }
     }
 
-    /// ボタンが投稿に重なった見え方を確かめるため、一覧に投稿を並べておく。
+    /// ボタンが投稿に重なった見え方を確かめるため、タイムラインに投稿を並べておく。
     private static func statuses() -> [TimelineEntry] {
         let account = CatalogFixtures.account(displayName: "カタログのアカウント", acct: "catalog@example.com")
         return (1...4).map { index in
@@ -102,7 +102,7 @@ enum TimelineOverlayCatalog {
                 id: "catalog-overlay-\(index)",
                 createdAt: .now.addingTimeInterval(TimeInterval(-600 * index)),
                 account: account,
-                content: "<p>一覧の上に重ねる表示を確かめるための投稿 \(index)。</p>",
+                content: "<p>タイムラインの上に重ねる表示を確かめるための投稿 \(index)。</p>",
                 spoilerText: "",
                 url: nil
             ))

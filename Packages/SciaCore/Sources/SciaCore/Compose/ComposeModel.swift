@@ -124,7 +124,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     @ObservationIgnored public var onPosted: () -> Void = {}
     /// 予約を書き直した投稿を送れて、`onPosted`を呼んだあとに、元の予約のIDを渡して呼ぶ。元の予約を取り消すのは呼ぶ側。
     @ObservationIgnored public var onScheduleRewritten: (ScheduledStatus.ID) -> Void = { _ in }
-    /// 削除して書き直す元の投稿を削除できたら（もう消えていたときを含む）、そのIDを渡して呼ぶ。一覧から除くのは呼ぶ側。
+    /// 削除して書き直す元の投稿を削除できたら（もう消えていたときを含む）、そのIDを渡して呼ぶ。タイムラインから除くのは呼ぶ側。
     @ObservationIgnored public var onRedraftDeleted: (Status.ID) -> Void = { _ in }
     /// サーバーの上限のために、設定で選んだより小さく、または低い画質にした。使う人が選んでいない画質の変化なので、知らせる。
     @ObservationIgnored public var onMediaReduced: (MediaAttachment.Kind) -> Void = { _ in }

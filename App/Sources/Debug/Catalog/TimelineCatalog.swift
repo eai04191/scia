@@ -9,7 +9,7 @@ enum TimelineCatalog {
     private static let badGateway = ErrorPresentation(MastodonAPIError(statusCode: 502, message: "Bad Gateway"))
     private static let tooManyRequests = ErrorPresentation(MastodonAPIError(statusCode: 429, message: "Too Many Requests"))
 
-    /// 投稿が1件もないときに一覧の全面に出す表示。
+    /// 投稿が1件もないときにタイムラインの全面に出す表示。
     @MainActor
     static func emptyStates() -> [CatalogState] {
         let home = TimelineViewController(texts: .home, refresh: {})
@@ -30,7 +30,7 @@ enum TimelineCatalog {
         ]
     }
 
-    /// 一覧の末尾で、古い投稿や通知の読み込みの状態を出す表示。
+    /// タイムラインの末尾で、古い投稿や通知の読み込みの状態を出す表示。
     @MainActor
     static func footerStates() -> [CatalogState] {
         func state(_ title: String, _ state: TimelineViewController.FooterState, reachedEndText: String = TimelineViewController.Texts.home.reachedEnd) -> CatalogState {
@@ -47,7 +47,7 @@ enum TimelineCatalog {
             state("リクエストが多すぎて止められた（HTTP 429）", .failed(tooManyRequests)),
             state("ホームの末尾まで読んだ", .reachedEnd),
             state("通知の末尾まで読んだ", .reachedEnd, reachedEndText: TimelineViewController.Texts.notifications.reachedEnd),
-            state("ヘッダーのある一覧（プロフィール）に投稿がない", .reachedEnd, reachedEndText: TimelineViewController.Texts.profile.empty),
+            state("ヘッダーのあるタイムライン（プロフィール）に投稿がない", .reachedEnd, reachedEndText: TimelineViewController.Texts.profile.empty),
         ]
     }
 

@@ -2,16 +2,16 @@ import QuartzCore
 import SciaCore
 import UIKit
 
-/// 閉じたビューアの複製を、一覧のサムネイルへ戻す動き。ビューアを閉じたあと、操作を素通しする最前面の層で描く。
+/// 閉じたビューアの複製を、タイムラインのサムネイルへ戻す動き。ビューアを閉じたあと、操作を素通しする最前面の層で描く。
 ///
-/// 戻る途中に一覧をスクロールされるとサムネイルが動くため、UIKitのアニメーションで行き先を決めると、古い位置へ戻ってから消えて見える。
+/// 戻る途中にタイムラインをスクロールされるとサムネイルが動くため、UIKitのアニメーションで行き先を決めると、古い位置へ戻ってから消えて見える。
 /// 毎フレーム今のサムネイルを探し直し、始点とその位置のあいだをスプリングの進み具合で補う。
 /// 途中で行が再利用されたら、隠すサムネイルも探し直したものに替える。見つからなくなったら、最後の位置へ向かいながら薄くする。
 ///
 /// 複製をバーの手前と奥に描き分ける仕組みは`MediaBarLayering`にある。閉じ始めにバーと重なっていた部分（縦長の画像や、下へスワイプしてタブバーにかかった画像）は、
-/// それまでバーより手前に描いていたため、急に奥へ移すと切り替わって見える。そこだけは閉じ始めの早いうちに薄くして、一覧の中の複製へ入れ替える。
-/// 着地の手前からは最前面の複製全体を薄くして、一覧の中の複製へ受け渡す。
-/// 一覧の中の複製がないときは、見せる範囲を画面全体から一覧のバーに隠れない範囲へ、着地へ近づくにつれて絞る。
+/// それまでバーより手前に描いていたため、急に奥へ移すと切り替わって見える。そこだけは閉じ始めの早いうちに薄くして、タイムラインの中の複製へ入れ替える。
+/// 着地の手前からは最前面の複製全体を薄くして、タイムラインの中の複製へ受け渡す。
+/// タイムラインの中の複製がないときは、見せる範囲を画面全体からタイムラインのバーに隠れない範囲へ、着地へ近づくにつれて絞る。
 @MainActor
 final class MediaClosingFlight {
     struct Parts {
@@ -26,10 +26,10 @@ final class MediaClosingFlight {
         let overlap: MediaSourceOverlap?
         /// 複製に敷く、サムネイルの背景の色。重ねた表示と同じ濃さで出し入れする。
         let placeholderColor: UIColor?
-        /// 一覧を暗くする下地。`fadingViews`にも含め、閉じながら薄くする。
+        /// タイムラインを暗くする下地。`fadingViews`にも含め、閉じながら薄くする。
         let backdrop: UIView
         let fadingViews: [UIView]
-        /// 複製をバーの手前と奥に描き分ける。一覧の中の複製を持たなければ、バーにかかる部分を切り落とすだけにする。
+        /// 複製をバーの手前と奥に描き分ける。タイムラインの中の複製を持たなければ、バーにかかる部分を切り落とすだけにする。
         let layering: MediaBarLayering
     }
 
@@ -63,7 +63,7 @@ final class MediaClosingFlight {
     private let startDecorationAlpha: CGFloat
     private let startFadingAlphas: [CGFloat]
     private var concealedTile: ViewerConcealment?
-    /// 戻り先の、回転を戻したときの枠、角度、角の丸み。回した起点（一覧で重ねた写真）へは、その角度まで回しながら戻す。
+    /// 戻り先の、回転を戻したときの枠、角度、角の丸み。回した起点（タイムラインで重ねた写真）へは、その角度まで回しながら戻す。
     private var lastTarget: (frame: CGRect, rotation: CGFloat, radius: CGFloat, border: CGFloat, appearance: (contentOpacity: CGFloat, dimming: CGFloat), shadowOpacity: Float)?
     private let source: any FrameSource
     /// 戻り始めてからの時間。
@@ -74,11 +74,11 @@ final class MediaClosingFlight {
 
     /// - Parameters:
     ///   - concealedTile: 戻り先のサムネイルを隠している取り分。戻り終えたら返す。
-    ///   - handoffStart: 一覧の中の複製へ受け渡し始める進み具合。一覧の中の複製がなければ使わない。
-    ///   - barOverlapFadeEnd: 閉じ始めにバーと重なっていた部分を、一覧の中の複製へ入れ替え終える進み具合。一覧の中の複製がなければ使わない。
+    ///   - handoffStart: タイムラインの中の複製へ受け渡し始める進み具合。タイムラインの中の複製がなければ使わない。
+    ///   - barOverlapFadeEnd: 閉じ始めにバーと重なっていた部分を、タイムラインの中の複製へ入れ替え終える進み具合。タイムラインの中の複製がなければ使わない。
     ///   - startOverlapOpacity: 閉じ始めに、バーと重なっていた部分を手前に見せていた濃さ。開く途中から閉じるときは1未満になる。
     ///   - movesImage: falseなら複製を動かさず、その場で薄くする。
-    ///   - paperBorderPortion: 写真の白いフチ（一覧で重ねた写真）を、着く手前のこの進み具合の幅で太くする。
+    ///   - paperBorderPortion: 写真の白いフチ（タイムラインで重ねた写真）を、着く手前のこの進み具合の幅で太くする。
     ///   - source: 経過時間を送る元。テストでは、実際の時間に頼らずに動きを進めるため、手で送る元を渡す。
     init(
         parts: Parts,
@@ -145,8 +145,8 @@ final class MediaClosingFlight {
             concealedTile = tileToConceal.map(ViewerConcealment.init)
         }
         if let tile {
-            // 白いフチの付いた起点（一覧で重ねた写真）へは、フチを含めた写真の枠と角の丸みへ、フチを太くしながら戻す。
-            // 縮めて置いた起点（一覧で傾けずに重ねた奥の写真）へは、フチと角の丸みも同じ倍率で細くして戻す。
+            // 白いフチの付いた起点（タイムラインで重ねた写真）へは、フチを含めた写真の枠と角の丸みへ、フチを太くしながら戻す。
+            // 縮めて置いた起点（タイムラインで傾けずに重ねた奥の写真）へは、フチと角の丸みも同じ倍率で細くして戻す。
             let paper = tile.paperBorder
             let scale = tile.scale(in: window)
             let border = (paper?.width ?? 0) * scale
@@ -173,7 +173,7 @@ final class MediaClosingFlight {
                 // 戻り先が画面から外れたら、最後の位置へ向かいながら薄くする。
                 visibility = min(visibility, 1 - clamped)
             }
-            // 一覧の中の複製へ受け渡す間も、受け渡した複製の手前に重なって見えるよう、複製の濃さとは別に出す。
+            // タイムラインの中の複製へ受け渡す間も、受け渡した複製の手前に重なって見えるよう、複製の濃さとは別に出す。
             parts.overlap?.view.alpha = decorationAlpha * visibility
         } else {
             visibility = 1 - clamped
@@ -183,7 +183,7 @@ final class MediaClosingFlight {
         parts.shadow.follow(parts.morph, alpha: visibility)
         let layering = parts.layering
         if layering.drawsUnderBars {
-            // バーの位置は一覧の中の複製が埋めるため、最前面の複製を見せるのは一覧のバーに隠れない範囲と、閉じ始めにすでに描いていた枠だけにする。
+            // バーの位置はタイムラインの中の複製が埋めるため、最前面の複製を見せるのはタイムラインのバーに隠れない範囲と、閉じ始めにすでに描いていた枠だけにする。
             let swap = MediaBarSwap.closing(
                 progress: clamped,
                 handoffStart: handoffStart,

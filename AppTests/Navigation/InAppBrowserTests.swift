@@ -35,7 +35,7 @@ struct InAppBrowserTests {
     }
 
     /// シートの高さを決める間は、覆う高さを知らせず、決め終えてから知らせる。
-    /// 知らせを受けた一覧が安全領域を変えると、UIKitが高さを決めている途中のシートに位置を聞き直し、入れ子になって落ちるため。
+    /// 知らせを受けたタイムラインが安全領域を変えると、UIKitが高さを決めている途中のシートに位置を聞き直し、入れ子になって落ちるため。
     @Test func reportsObscuredHeightAfterResolvingDetents() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }

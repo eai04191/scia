@@ -354,7 +354,7 @@ struct ProfileStoreTests {
         #expect(store.followState == .following)
     }
 
-    /// 固定された投稿を読み終えたかは、読めたときも読めなかったときも分かる。一覧は、これを待ってから固定された投稿と一緒に出す。
+    /// 固定された投稿を読み終えたかは、読めたときも読めなかったときも分かる。タイムラインは、これを待ってから固定された投稿と一緒に出す。
     @Test(arguments: [false, true])
     func pinnedSettlesWhetherLoadedOrFailed(failsPinned: Bool) async throws {
         let known = try account()
@@ -393,7 +393,7 @@ struct ProfileStoreTests {
         #expect(pageSizes.withLock { $0 } == [ProfileStore.endorsementsPageSize])
     }
 
-    /// 注目のハッシュタグや紹介している人を読めなくても、棚を出さずに一覧を出せるよう、読み終えたことにする。
+    /// 注目のハッシュタグや紹介している人を読めなくても、棚を出さずにタイムラインを出せるよう、読み終えたことにする。
     /// 4.4より前のサーバーでは、ほかの人の紹介している人を読めない。
     @Test(arguments: [(true, false), (false, true), (true, true)])
     func shelvesSettleWhenFeaturedFails(failsTags: Bool, failsEndorsements: Bool) async throws {
@@ -745,7 +745,7 @@ struct ProfileStoreTests {
         _ = try await withReplies.loadInitial()
         let media = try #require(store.select(.media))
         _ = try await media.loadInitial()
-        // メディアの一覧では、投稿の絞り込みを変えても読み直さない。
+        // メディアのタイムラインでは、投稿の絞り込みを変えても読み直さない。
         #expect(store.setPostsFilter(.standard) == nil)
         #expect(store.select(.media) == nil)
 

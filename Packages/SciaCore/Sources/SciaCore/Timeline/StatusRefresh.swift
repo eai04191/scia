@@ -161,11 +161,11 @@ public struct StatusRefreshSchedule: Sendable {
 }
 
 /// サーバーが仕上げ終える前に受け取った投稿を、見えている間だけ、予定どおりにまとめて取り直し、表示へ反映する。
-/// セッションの中で1つ持ち、ホーム、通知、プロフィールの一覧が、見えている投稿を知らせる。
+/// セッションの中で1つ持ち、ホーム、通知、プロフィールのタイムラインが、見えている投稿を知らせる。
 @MainActor
 public final class StatusRefresher {
     public typealias Fetch = @Sendable ([Status.ID]) async throws -> [Status]
-    /// 取り直した投稿を渡す。表示しているすべての一覧で、その投稿とそれをブーストした投稿に、取り直した中身を反映する。
+    /// 取り直した投稿を渡す。表示しているすべてのタイムラインで、その投稿とそれをブーストした投稿に、取り直した中身を反映する。
     public typealias Apply = @MainActor (Status) -> Void
 
     private let fetch: Fetch
@@ -173,7 +173,7 @@ public final class StatusRefresher {
     private let now: @MainActor () -> Date
     private let sleep: @Sendable (Duration) async throws -> Void
     private var schedule = StatusRefreshSchedule()
-    /// 一覧ごとの、見えていて、取り直す理由のある投稿。
+    /// タイムラインごとの、見えていて、取り直す理由のある投稿。
     private var visible: [ObjectIdentifier: [Status]] = [:]
     private var loop: Task<Void, Never>?
     /// 取り直しの結果を待っている。待っている間に見える投稿が変わっても、結果を捨てないよう、ループを作り直さない。
@@ -200,7 +200,7 @@ public final class StatusRefresher {
         self.init(fetch: { try await client.statuses($0) }, apply: apply)
     }
 
-    /// `source`の一覧で見えていて、取り直す理由のある投稿を知らせる。画面から消えたら空で知らせる。
+    /// `source`のタイムラインで見えていて、取り直す理由のある投稿を知らせる。画面から消えたら空で知らせる。
     public func setVisible(_ statuses: [Status], from source: AnyObject) {
         guard !isUnsupported, !isStopped else { return }
         visible[ObjectIdentifier(source)] = statuses

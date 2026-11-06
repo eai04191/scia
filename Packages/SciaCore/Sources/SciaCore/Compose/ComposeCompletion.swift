@@ -52,7 +52,7 @@ public enum LocalMentionSource: Hashable, Sendable {
     case recent
 }
 
-/// カスタム絵文字とUnicodeの絵文字の一覧から、打った語に合うものを選ぶ。
+/// カスタム絵文字とUnicodeの絵文字のリストから、打った語に合うものを選ぶ。
 public enum EmojiCompletion {
     /// カスタム絵文字とUnicodeの絵文字を、合ったところの強さで混ぜて並べる。
     /// ショートコードと一致するカスタム絵文字、名前と一致するUnicodeの絵文字、語で始まるカスタム絵文字、言葉と一致するか名前か言葉が語で始まるUnicodeの絵文字、
@@ -79,7 +79,7 @@ public enum EmojiCompletion {
     }
 
     /// 大文字小文字を区別せず、語で始まるものを先に、語を含むものを後に並べる。それぞれ短い順、同じ長さなら名前の順。
-    /// 一覧に出さない絵文字は除く。
+    /// ピッカーに出さない絵文字は除く。
     public static func candidates(matching query: String, in emojis: [ServerEmoji], limit: Int) -> [ServerEmoji] {
         let query = query.lowercased()
         var prefixed: [ServerEmoji] = []
@@ -103,7 +103,7 @@ public enum EmojiCompletion {
 ///
 /// メンションとハッシュタグは、打つのが止まるまで少し待ってから問い合わせ、語が変わったら前の問い合わせを取り消す。
 /// 取り消しが間に合わず届いた古い応答は捨てる。一度引いた語は覚えておき、消して打ち直したときに問い合わせ直さない。
-/// カスタム絵文字は一覧をまとめて一度だけ取り、手元で絞る。
+/// カスタム絵文字はリストをまとめて一度だけ取り、手元で絞る。
 /// ハッシュタグは、プロフィールに載せているタグと最近使ったタグも一度だけ取り、打った語に合うものを検索結果より上に出す。
 /// 最近使ったタグは、投稿や編集で使ったタグ、最近の投稿のタグ、よく使うタグの順に並べる。投稿で使ったタグは、読み直さずに応答から足す。
 /// メンションは、返信先の人と補完で選んだことのある人を、同じく検索結果より上に出す。
@@ -214,8 +214,8 @@ public final class ComposeCompletion {
         // 出さない候補しかなければ、「一致しない」と出さずに閉じておく。すでに足したものを打ったときに、ないように見せないため。
         // 失敗と読み込み中は、押して読み直せるよう、候補の場所で知らせ続ける。
         if candidates.isEmpty, !self.candidates.isEmpty, failureMessage == nil, !isLoading { return nil }
-        // 手元の候補だけを出す間は、合うものがなければ何も出さない。「一致しない」と出すと、記号を打つたびに一覧が出るため。
-        // 日本語の文の`：`かもしれない語も、合うものがなければ、読み込み中や失敗も含めて何も出さない。文を書くたびに一覧が出るため。
+        // 手元の候補だけを出す間は、合うものがなければ何も出さない。「一致しない」と出すと、記号を打つたびに候補のリストが出るため。
+        // 日本語の文の`：`かもしれない語も、合うものがなければ、読み込み中や失敗も含めて何も出さない。文を書くたびに候補のリストが出るため。
         if !searchesServer(token) || token.mayBeProse, candidates.isEmpty { return nil }
         if let failureMessage {
             return candidates.isEmpty ? .failed(failureMessage) : .candidatesWithFailure(candidates, failureMessage)
@@ -244,14 +244,14 @@ public final class ComposeCompletion {
     public static let hashtagSearchLimit = 40
 
     @ObservationIgnored private var sources: Sources
-    /// 探すサーバーを替えた回数。替える前に読み始めた絵文字や人の応答で、替えた先の一覧を上書きしないため。
+    /// 探すサーバーを替えた回数。替える前に読み始めた絵文字や人の応答で、替えた先の候補を上書きしないため。
     @ObservationIgnored private var serverGeneration = 0
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var emojiTask: Task<Void, Never>?
-    /// 一覧に出す絵文字。読み終えるまではnil。絵文字のパレットも、この一覧を並べる。
+    /// 候補に出す絵文字。読み終えるまではnil。絵文字のパレットも、このリストを並べる。
     public private(set) var emojis: [ServerEmoji]?
-    /// 絵文字の一覧を読めなかった理由の文言。パレットに出す。読み直し始めたらnilに戻す。
+    /// 絵文字のリストを読めなかった理由の文言。パレットに出す。読み直し始めたらnilに戻す。
     public private(set) var emojiFailureMessage: String?
     /// プロフィールに載せているタグ、よく使うタグ、最近の投稿のタグ。読めるまではnilで、次に書き始めたときに読み直す。
     @ObservationIgnored private var featuredTags: [FeaturedTag]?
@@ -296,7 +296,7 @@ public final class ComposeCompletion {
     }
 
     /// - Parameter recentMentions: 補完で選んだアカウントを覚える場所。なければ覚えず、出さない。
-    /// - Parameter emojis: 別の画面で読み終えたカスタム絵文字の一覧。渡せば読み直さず、絵文字のパレットを開いたときに読み込み中の段を挟まずに並べる。
+    /// - Parameter emojis: 別の画面で読み終えたカスタム絵文字のリスト。渡せば読み直さず、絵文字のパレットを開いたときに読み込み中の段を挟まずに並べる。
     public init(sources: Sources, settings: Settings, recentMentions: RecentMentions? = nil, emojis: [ServerEmoji]? = nil, sleep: @escaping @Sendable (Duration) async throws -> Void = { try await SystemTime.clock.sleep(for: $0) }) {
         self.sources = sources
         self.settings = settings
@@ -370,8 +370,8 @@ public final class ComposeCompletion {
         load()
     }
 
-    /// 書き始めたときに、絵文字の一覧と自分のタグを先に読んでおく。打ったときに待たずに出せるようにするため。
-    /// 絵文字の一覧が読めなかったら、絵文字の語を打ったときに読み直す。
+    /// 書き始めたときに、絵文字のリストと自分のタグを先に読んでおく。打ったときに待たずに出せるようにするため。
+    /// 絵文字のリストが読めなかったら、絵文字の語を打ったときに読み直す。
     /// 自分のタグは補助なので、読めなくても知らせず、次に書き始めたときに読み直す。
     public func prefetch() {
         if emojis == nil {
@@ -436,7 +436,7 @@ public final class ComposeCompletion {
         failureMessage = nil
         switch token.kind {
         case .emoji:
-            // カスタム絵文字の一覧を読む間も、Unicodeの絵文字は手元にあるので先に出す。
+            // カスタム絵文字のリストを読む間も、Unicodeの絵文字は手元にあるので先に出す。
             show(emojiCandidates(for: token))
             if emojis == nil {
                 isLoading = true
@@ -457,7 +457,7 @@ public final class ComposeCompletion {
                 return
             }
             // 合う手元の候補があれば、検索を待たずに出す。なければ前の語の候補を、届くまで出したままにする。
-            // 打つたびに一覧が消えて出る点滅を避けるため。
+            // 打つたびに候補のリストが消えて出る点滅を避けるため。
             showWhileLoading(localCandidates())
             isLoading = true
             searchTask = Task { [weak self, sources, sleep, settings] in
@@ -495,7 +495,7 @@ public final class ComposeCompletion {
         EmojiCompletion.candidates(matching: token.query, custom: emojis ?? [], standard: standardEmojiGroups(), limit: settings.limit)
     }
 
-    /// 語の文字数が、サーバーで探す文字数に届いているか。絵文字は手元の一覧で絞るので、いつも届いている扱いにする。
+    /// 語の文字数が、サーバーで探す文字数に届いているか。絵文字は手元のリストで絞るので、いつも届いている扱いにする。
     private func searchesServer(_ token: CompletionToken) -> Bool {
         token.kind == .emoji || CompletionTokenizer.queryLength(token.query) >= settings.minimumSearchQueryLength
     }

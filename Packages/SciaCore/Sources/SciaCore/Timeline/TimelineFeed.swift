@@ -1,4 +1,4 @@
-/// 投稿の一覧の種類。読み込み先、購読するストリーム、当てるフィルターの文脈、既読位置の保存先を決める。
+/// タイムラインの種類。読み込み先、購読するストリーム、当てるフィルターの文脈、既読位置の保存先を決める。
 /// タブに並べるもののほか、ハッシュタグのメニューから積んで開くものがある。
 public enum TimelineFeed: Hashable, Sendable {
     case home
@@ -45,14 +45,14 @@ public enum TimelineFeed: Hashable, Sendable {
     public enum StreamedStatusHandling: Sendable, Equatable {
         /// 新着として入れる。
         case insert
-        /// この一覧の投稿ではないので捨てる。
+        /// このタイムラインの投稿ではないので捨てる。
         case ignore
-        /// 届いた投稿は入れず、最新から補う。ストリームがこの一覧の投稿の一部しか運ばないとき、届いた投稿を入れると補完の基準が先へ進み、
+        /// 届いた投稿は入れず、最新から補う。ストリームがこのタイムラインの投稿の一部しか運ばないとき、届いた投稿を入れると補完の基準が先へ進み、
         /// その前のストリームに来なかった投稿を読まなくなるため。
         case fetchLatest
     }
 
-    /// ストリームで届いた投稿を、この一覧でどう扱うか。
+    /// ストリームで届いた投稿を、このタイムラインでどう扱うか。
     /// アカウントのハッシュタグは、ハッシュタグのストリームを購読し、そのアカウントの投稿だけを扱う。Mastodonはハッシュタグのストリームに公開の投稿しか流さないが、
     /// アカウントの投稿のAPIは、ひかえめな公開や、見る権限のあるフォロワーのみの投稿も返すため、届いたら補う。
     public func handling(ofStreamed status: Status) -> StreamedStatusHandling {
@@ -64,7 +64,7 @@ public enum TimelineFeed: Hashable, Sendable {
 
     /// https://docs.joinmastodon.org/entities/Filter/#context
     /// `home`の文脈は、ホームとリストに当てる。ハッシュタグは、公式のWebクライアントと同じく`public`の文脈で当てる。
-    /// アカウントのハッシュタグは、公式のWebクライアントと同じく、プロフィールの一覧と同じ`account`の文脈で当てる。
+    /// アカウントのハッシュタグは、公式のWebクライアントと同じく、プロフィールのタイムラインと同じ`account`の文脈で当てる。
     public var filterContext: FilterResult.Context {
         switch self {
         case .home, .list: .home
@@ -73,7 +73,7 @@ public enum TimelineFeed: Hashable, Sendable {
         }
     }
 
-    /// サーバーに既読位置を保存する先。markerはホームと通知にしかないため、ほかの一覧ではnil。
+    /// サーバーに既読位置を保存する先。markerはホームと通知にしかないため、ほかのタイムラインではnil。
     public var marker: MarkerTimeline? {
         switch self {
         case .home: .home

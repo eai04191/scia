@@ -1,7 +1,7 @@
 import SciaCore
 import UIKit
 
-/// 一覧の投稿の本文を、画面に入る前に、メインスレッドの外で文字列にしてTextKit 2で並べておく。
+/// タイムラインの投稿の本文を、画面に入る前に、メインスレッドの外で文字列にしてTextKit 2で並べておく。
 /// 初めて画面に入る行で、本文のHTMLを読んで文字列にし、並べる処理が、長い本文ではフレームを落としていたため。
 /// リンクカードの文字の書く方向の判定（`GuessedWritingDirection`）も、重いので一緒に先に済ませる。
 /// 行を組み立てるときは、作っておいた文字列と並びを、今の描き方と同じときだけ使い、違えばその場で作る。
@@ -172,7 +172,7 @@ final class BodyTextPreparer {
 
     private func startWorkerIfNeeded() {
         guard worker == nil else { return }
-        // 作っている間は持ち主を持たない。一覧が閉じられたら、作り終えたものは捨てて止まる。
+        // 作っている間は持ち主を持たない。タイムラインが閉じられたら、作り終えたものは捨てて止まる。
         worker = Task(.withoutRequests) { [weak self] in
             work: while !Task.isCancelled, let work = self?.nextWork() {
                 switch work {

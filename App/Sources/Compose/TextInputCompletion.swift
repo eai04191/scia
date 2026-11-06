@@ -4,7 +4,7 @@ import UIKit
 
 /// 入力欄に、補完の候補と絵文字のパレットで選んだものを入れる。投稿欄とプロフィールの編集で使う。
 ///
-/// 候補の一覧やパレットのシートをどこに置き、いつ出すかは、使う側が決める。ここでは、カーソルの位置の語を読んで補完の状態に渡すことと、
+/// 候補のリストやパレットのシートをどこに置き、いつ出すかは、使う側が決める。ここでは、カーソルの位置の語を読んで補完の状態に渡すことと、
 /// 選んだものを入力欄に入れることだけを受け持つ。
 @MainActor
 final class TextInputCompletion {
@@ -140,8 +140,8 @@ final class TextInputCompletion {
 
     /// ハードウェアキーボードで候補を選ぶ操作。
     /// - Parameters:
-    ///   - isShown: 候補の一覧を出しているか。
-    ///   - growsUpward: 一覧を下から積んでいるか。↑↓は見た目の向きに動かすので、下から積んでいるときは↑で優先度の低い候補へ移る。
+    ///   - isShown: 候補のリストを出しているか。
+    ///   - growsUpward: 候補のリストを下から積んでいるか。↑↓は見た目の向きに動かすので、下から積んでいるときは↑で優先度の低い候補へ移る。
     func keys(isShown: @escaping () -> Bool, growsUpward: @escaping () -> Bool) -> CompletionKeys {
         CompletionKeys(
             hasCandidate: { [weak self] in isShown() && self?.completion.selectedCandidate != nil },
@@ -182,7 +182,7 @@ final class TextInputCompletion {
         palette.emojiStyle = settings.appearance.emojiStyle
         let query = palette.query
         let standardGroups = StandardEmojiAvailability.groups(for: settings.appearance.emojiStyle)
-        // カスタム絵文字の一覧がまだないか読めなかったときも、Unicodeの絵文字は通信なしで並べられるので出し、カスタム絵文字の場所に状態を出す。
+        // カスタム絵文字のリストがまだないか読めなかったときも、Unicodeの絵文字は通信なしで並べられるので出し、カスタム絵文字の場所に状態を出す。
         let emojis = completion.emojis ?? []
         let customStatus: EmojiPaletteView.CustomEmojiStatus? = if completion.emojis != nil {
             nil

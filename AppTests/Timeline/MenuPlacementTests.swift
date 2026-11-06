@@ -119,7 +119,7 @@ struct MenuPlacementTests {
         #expect(submenu.image != nil)
     }
 
-    /// 一覧に載せた本文の、リンクを長押ししたときのメニュー。
+    /// タイムラインに載せた本文の、リンクを長押ししたときのメニュー。
     /// - Parameter hashtagAccount: ハッシュタグのメニューの「投稿したユーザーの投稿」で開くユーザー。
     private func bodyLinkMenu(for destination: RichText.LinkDestination, in viewController: TimelineViewController, settings: AppSettings, hashtagAccount: Account? = nil) throws -> UIMenu? {
         let renderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, emojiImages: .offline, language: "ja")

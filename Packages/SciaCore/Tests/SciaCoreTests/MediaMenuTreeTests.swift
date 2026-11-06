@@ -16,7 +16,7 @@ struct MediaMenuTreeTests {
         )
     }
 
-    /// 一覧で長押ししたときのように、すべての項目を行えるメニュー。
+    /// タイムラインで長押ししたときのように、すべての項目を行えるメニュー。
     private func timelineMenu(for attachment: MediaAttachment) -> MediaMenuTree {
         var menu = MediaMenuTree(kind: attachment.type, attachment: attachment)
         menu.open = true

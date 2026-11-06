@@ -10,7 +10,7 @@ public struct ComposeAccount<Thumbnail> {
     public let media: ComposeMediaService<Thumbnail>
     /// そのアカウントの投稿を削除して書き直すときに、元の投稿を消して添付が外れるのを待つ口。
     public let redraft: ComposeRedraftService
-    /// 削除して書き直す元の投稿を消せたときに、そのサーバーでのIDを渡して呼ぶ。今のアカウントの一覧からは除かない。IDがサーバーごとに違うため。
+    /// 削除して書き直す元の投稿を消せたときに、そのサーバーでのIDを渡して呼ぶ。今のアカウントのタイムラインからは除かない。IDがサーバーごとに違うため。
     public let onRedraftDeleted: (Status.ID) -> Void
 
     public init(

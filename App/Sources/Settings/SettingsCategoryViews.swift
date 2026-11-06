@@ -2,7 +2,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 設定の一覧の、分類の画面へ入る行のラベル。iPhoneの設定アプリと同じアイコンを名前に添える。
+/// 設定のトップの画面の、分類の画面へ入る行のラベル。iPhoneの設定アプリと同じアイコンを名前に添える。
 struct SettingsCategoryLabel: View {
     let title: String
     let systemImage: String
@@ -262,7 +262,7 @@ struct AppIconSettingsView: View {
     }
 }
 
-/// 設定の一覧の、アプリのアイコンの画面へ入る行のラベル。分類の行の色付きの四角の代わりに、いま選んでいるアイコンを同じ大きさで添える。
+/// 設定のトップの画面の、アプリのアイコンの画面へ入る行のラベル。分類の行の色付きの四角の代わりに、いま選んでいるアイコンを同じ大きさで添える。
 struct AppIconSettingsLabel: View {
     @ScaledMetric(relativeTo: .body) private var side: CGFloat = 28
 
@@ -275,7 +275,7 @@ struct AppIconSettingsLabel: View {
                     .resizable()
                     .frame(width: side, height: side)
                     .clipShape(RoundedRectangle(cornerRadius: side * 0.22, style: .continuous))
-                    // 白地のアイコンが行の背景に溶けないよう、選ぶ一覧と同じく縁を引く
+                    // 白地のアイコンが行の背景に溶けないよう、選ぶリストと同じく縁を引く
                     .overlay {
                         RoundedRectangle(cornerRadius: side * 0.22, style: .continuous)
                             .strokeBorder(Color(uiColor: .separator), lineWidth: 0.5)

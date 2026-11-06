@@ -1,13 +1,13 @@
 import SciaCore
 import UIKit
 
-/// 一覧のサムネイル、リンクカードの画像、プロフィールの画像を長押ししたときと、投稿のメニューのカスタム絵文字の、メディアのメニュー。決まりはdocs/menus.mdの「メディアのメニュー」にある。
+/// タイムラインのサムネイル、リンクカードの画像、プロフィールの画像を長押ししたときと、投稿のメニューのカスタム絵文字の、メディアのメニュー。決まりはdocs/menus.mdの「メディアのメニュー」にある。
 extension TimelineViewController {
     /// 長押しした場所にあるメディア。
     struct MediaMenuTarget {
         let attachment: MediaAttachment
         /// 持ち上げて見せるビュー。共有のシートの起点と、見出しのプレビューにも使う。
-        /// 投稿のメニューから選ぶカスタム絵文字は、画面に1つのビューとして描いていないためnilにし、共有のシートは画面の真ん中か一覧から出す。
+        /// 投稿のメニューから選ぶカスタム絵文字は、画面に1つのビューとして描いていないためnilにし、共有のシートは画面の真ん中かタイムラインから出す。
         let source: (any MediaViewerSource)?
         /// `source`がないときに、共有のシートの見出しに添える画像。
         var preview: UIImage?
@@ -22,7 +22,7 @@ extension TimelineViewController {
         }
     }
 
-    /// `point`（一覧の座標）にある、ぼかしていないサムネイルかリンクカードの画像。なければnil。
+    /// `point`（タイムラインの座標）にある、ぼかしていないサムネイルかリンクカードの画像。なければnil。
     /// リンクカードの画像は、開ける状態のときだけ触れられるため、触れたビューをたどった中に画像があるときだけ返す。
     func mediaMenuTarget(at point: CGPoint, in cell: UICollectionViewCell) -> MediaMenuTarget? {
         var view = cell.hitTest(collectionView.convert(point, to: cell), with: nil)
@@ -153,12 +153,12 @@ extension TimelineViewController {
         case .customize:
             openMenuSettings(.mediaMenu)
         case .translateText, .status:
-            // 一覧のメディアのメニューは、画像の文字の翻訳を出さない。「投稿」の中の項目は、投稿のメニューが行う。
+            // タイムラインのメディアのメニューは、画像の文字の翻訳を出さない。「投稿」の中の項目は、投稿のメニューが行う。
             break
         }
     }
 
-    /// メディアのメニューのURLの項目。共有のシートは、長押ししたサムネイルから出す。サムネイルがなければ一覧から出す。
+    /// メディアのメニューのURLの項目。共有のシートは、長押ししたサムネイルから出す。サムネイルがなければタイムラインから出す。
     private func mediaURLHandlers(source: (any MediaViewerSource)?) -> URLMenuHandlers {
         URLMenuHandlers(
             linkBrowser: settings.linkBrowser,

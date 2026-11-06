@@ -76,7 +76,7 @@ struct HashtagMenuTreeTests {
         #expect(recorder.refreshes == 3)
     }
 
-    /// 読んでから決めるときは、読んだ一覧で載せているかを決める。読めなかったら、押せない行で知らせる。
+    /// 読んでから決めるときは、読んだ結果で載せているかを決める。読めなかったら、押せない行で知らせる。
     @Test func featureDecidesAfterLoadingOrShowsFailure() async throws {
         func loaded(_ load: @escaping @MainActor (String) async throws -> Bool) async throws -> String {
             let tree = HashtagMenuTree(name: "cat", url: nil, account: nil, linkBrowser: .inApp, actions: featureActions(known: nil, load: load))

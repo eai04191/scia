@@ -20,7 +20,7 @@ struct SettingsView: View {
     /// 謝辞の画面で、設定の画面を閉じて、ハンドルの人のプロフィールを開く。
     let openProfile: @MainActor (_ acct: String) -> Void
     @Environment(\.dismiss) private var dismiss
-    /// 一覧から重ねて開いた画面。
+    /// 設定のトップの画面から重ねて開いた画面。
     @State private var path: [SettingsPage]
     /// 開いたときに「投稿の見た目」か「通知の見た目」の上に重ねておく分類の画面。一度重ねたら、戻ってまた開いても重ねないよう、消す。
     @State private var appearanceGroup: AppearanceGroup.ID?
@@ -194,7 +194,7 @@ extension UIViewController {
     ///   - tabSources: タブの並びでリストを作る、消す。
     ///   - openInAppBrowserHeight: 設定を閉じ、ホームの上でアプリ内のSafariの高さを選ぶシートを出す。
     ///   - openProfile: 謝辞の画面で、設定の画面を閉じて、ハンドルの人のプロフィールを開く。
-    ///   - page: 一覧から重ねて開いておく画面。
+    ///   - page: 設定のトップの画面から重ねて開いておく画面。
     ///   - appearanceGroup: `page`が「投稿の見た目」か「通知の見た目」のとき、その上に重ねておく分類の画面。
     ///   - onShownChange: 設定の画面が出たときにtrue、消えたときにfalseで呼ぶ。
     func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, tabSources: SettingsTabSourceActions, openInAppBrowserHeight: @escaping @MainActor () -> Void, openProfile: @escaping @MainActor (_ acct: String) -> Void, opening page: SettingsPage? = nil, appearanceGroup: AppearanceGroup.ID? = nil, onShownChange: @escaping (Bool) -> Void) {
@@ -202,7 +202,7 @@ extension UIViewController {
         present(SettingsHostingController(rootView: view, onShownChange: onShownChange), animated: true)
     }
 
-    /// メニューの「カスタマイズ」から、その並びの設定の画面を、設定の一覧に重ねて開く。決まりはdocs/menus.mdの「並びの設定」にある。
+    /// メニューの「カスタマイズ」から、その並びの設定の画面を、設定のトップの画面に重ねて開く。決まりはdocs/menus.mdの「並びの設定」にある。
     /// `scia://settings/<画面>`と同じ入り口を通し、この画面を出している窓のセッションで開く。
     /// Macでメディアを別のウインドウに開いたビューアは、窓にセッションを持たない（`MediaWindowSceneDelegate`）ため、押しても開かずにerrorのログだけ残す。
     /// Macでしか起きず、別の窓のセッションへ届ける経路を足す手間に見合わないため、扱わない。

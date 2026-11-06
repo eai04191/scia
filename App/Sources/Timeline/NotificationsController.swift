@@ -20,14 +20,14 @@ final class NotificationsController {
     }
     /// 走り終えていない処理の数。止めたあとに何も起きないことを、テストが確かめるのに使う。
     var runningTaskCount: Int { model.runningTaskCount }
-    /// 一覧を最初から読み込んだとき、引っぱって読み直したときに呼ぶ。保留中の通知の人数を読み直すのに使う。
+    /// 通知のタイムラインを最初から読み込んだとき、引っぱって読み直したときに呼ぶ。保留中の通知の人数を読み直すのに使う。
     var onReload: () -> Void {
         get { model.onReload }
         set { model.onReload = newValue }
     }
-    /// 一覧を最上部からさらに引っぱったときに見せる、ストリーミングの状態。
+    /// 通知のタイムラインを最上部からさらに引っぱったときに見せる、ストリーミングの状態。
     private let streamingStatusView = StreamingStatusPullView()
-    /// 開いている、保留中の通知の1人分の画面。通知の一覧と同じく、投稿の操作や削除を反映する。
+    /// 開いている、保留中の通知の1人分の画面。通知のタイムラインと同じく、投稿の操作や削除を反映する。
     private let accountScreens = NSHashTable<AccountNotificationsController>.weakObjects()
 
     init(
@@ -103,7 +103,7 @@ final class NotificationsController {
         accountScreens.add(screen)
     }
 
-    /// 保留中の通知を受け入れた。サーバーが取り込み終えたら一覧を読み直す。
+    /// 保留中の通知を受け入れた。サーバーが取り込み終えたら通知のタイムラインを読み直す。
     func didAcceptRequest() {
         model.didAcceptRequest()
     }

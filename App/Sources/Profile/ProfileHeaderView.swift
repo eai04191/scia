@@ -2,7 +2,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// プロフィールの一覧の頭に置く、アカウントの情報と、一覧の切り替え。
+/// プロフィールのタイムラインの頭に置く、アカウントの情報と、タイムラインの切り替え。
 final class ProfileHeaderView: UIView {
     struct Content {
         let account: Account
@@ -38,7 +38,7 @@ final class ProfileHeaderView: UIView {
         get { privateNoteView.onTap }
         set { privateNoteView.onTap = newValue }
     }
-    /// フォローかフォロワーの数が押されたときに、どちらの一覧かを渡して呼ぶ。
+    /// フォローかフォロワーの数が押されたときに、どちらの人のリストかを渡して呼ぶ。
     var onOpenCountList: ((ProfileCountList) -> Void)?
     /// フォローの関係を読めなかったときに、フォローのボタンの場所に出す再試行が押された。
     var onRetryRelationship: (() -> Void)?
@@ -128,7 +128,7 @@ final class ProfileHeaderView: UIView {
     var topExtension: CGFloat = 0 {
         didSet { applyTopExtension() }
     }
-    /// 一覧の一番上からさらに引っぱっている長さ。ヘッダー画像はその分だけ上へずらして画面に止め、下の内容だけを下げる。
+    /// タイムラインの一番上からさらに引っぱっている長さ。ヘッダー画像はその分だけ上へずらして画面に止め、下の内容だけを下げる。
     /// 画像を拡大して隙間を埋めることはしない。
     var pulledDistance: CGFloat = 0 {
         didSet {
@@ -228,7 +228,7 @@ final class ProfileHeaderView: UIView {
     private let featuredTagsShelf = ProfileFeaturedTagsShelfView()
     private let endorsementsShelf: ProfileEndorsementsShelfView
     /// 投稿、フォロー、フォロワーの数。補足情報のカードの一番下に小さく出す。
-    /// フォローとフォロワーは、押すとその一覧を開く。押した文字で見分けるため、文字の位置を探せるラベルにする。
+    /// フォローとフォロワーは、押すとその人のリストを開く。押した文字で見分けるため、文字の位置を探せるラベルにする。
     private let countsLabel = EmojiLabel()
     /// 補足情報と数の間の区切り線。補足情報がなければ出さない。
     private let fieldsDivider = UIView()
@@ -254,14 +254,14 @@ final class ProfileHeaderView: UIView {
     /// 自己紹介を全文に広げた。別のアカウントを出したら切った状態に戻す。
     private var isNoteExpanded = false
     /// 自己紹介が切った行数に収まるかを最後に測った幅。自己紹介を替えたらnilに戻す。
-    /// 一覧はスクロールのたびにヘッダーを並べ直すので、自己紹介と幅が同じ間は測り直さない。カスタム絵文字の多い自己紹介では、測るのが重い。
+    /// タイムラインはスクロールのたびにヘッダーを並べ直すので、自己紹介と幅が同じ間は測り直さない。カスタム絵文字の多い自己紹介では、測るのが重い。
     private var noteMeasuredWidth: CGFloat?
     /// 自己紹介が切った行数に収まるかを測った回数。テストで、測り直していないことを確かめる。
     private(set) var noteMeasurementCount = 0
     /// 自己紹介を切るときの行数。
     private static let collapsedNoteLines = 3
-    /// 固定された投稿の棚より下（タブ）。一覧を出すまで隠し、一覧と一緒に出す。
-    /// 先に出すと、一覧と一緒に届く棚が後から差し込まれ、タブが下へずれるため。
+    /// 固定された投稿の棚より下（タブ）。タイムラインを出すまで隠し、タイムラインと一緒に出す。
+    /// 先に出すと、タイムラインと一緒に届く棚が後から差し込まれ、タブが下へずれるため。
     private var sections: [UIView] = []
     private var isSectionsRevealed = false
     /// 自己紹介を余白付きで包んだもの。自己紹介がなければ、余白ごと隠す。
@@ -506,13 +506,13 @@ final class ProfileHeaderView: UIView {
         endorsementsShelf.isHidden = true
         let tabs = inset([tabRow])
         let contentStack = UIStackView()
-        // 固定された投稿は投稿の一覧に近いところに残し、注目のハッシュタグと紹介しているユーザーはその上に置く。
+        // 固定された投稿は投稿のタイムラインに近いところに残し、注目のハッシュタグと紹介しているユーザーはその上に置く。
         for view in [identity, note, privateNote, about, featuredTagsShelf, endorsementsShelf, pinnedShelf, tabs] as [UIView] {
             contentStack.addArrangedSubview(view)
         }
         noteContainer = note
         privateNoteContainer = privateNote
-        // 固定された投稿の棚は一覧と一緒に出すので、その下のタブも一緒に出す。上の自己紹介とカードは、棚が出ても動かないので先に出す。
+        // 固定された投稿の棚はタイムラインと一緒に出すので、その下のタブも一緒に出す。上の自己紹介とカードは、棚が出ても動かないので先に出す。
         sections = [tabs]
         applySectionsVisibility()
         contentStack.axis = .vertical
@@ -599,7 +599,7 @@ final class ProfileHeaderView: UIView {
         bannerReflectionClip.isHidden = !hasBannerImage
     }
 
-    /// 一覧はヘッダーの大きさを、幅を決めてから測る。画像の高さは幅で決まるため、測る前に幅に合わせて置き直す。
+    /// タイムラインはヘッダーの大きさを、幅を決めてから測る。画像の高さは幅で決まるため、測る前に幅に合わせて置き直す。
     override func systemLayoutSizeFitting(
         _ targetSize: CGSize,
         withHorizontalFittingPriority horizontalFittingPriority: UILayoutPriority,
@@ -625,7 +625,7 @@ final class ProfileHeaderView: UIView {
         super.point(inside: point, with: event) || bannerView.frame.contains(point)
     }
 
-    /// 並べる前（幅が0）に置き場所を決め直すときは、一覧が最後に測った幅を使う。幅0で決めると画像の高さが0になり、その高さで測られるため。
+    /// 並べる前（幅が0）に置き場所を決め直すときは、タイムラインが最後に測った幅を使う。幅0で決めると画像の高さが0になり、その高さで測られるため。
     private func applyBannerLayout() {
         applyBannerLayout(width: bounds.width > 0 ? bounds.width : measuredWidth, notifies: true)
     }
@@ -800,7 +800,7 @@ final class ProfileHeaderView: UIView {
             applyFollowedByBadge(content)
         }
         tabControl.selectedSegmentIndex = content.tab == .media ? 1 : 0
-        // メディアの一覧では使えないが、消すとタブの幅が変わって動くため、場所を残したまま押せなくする。
+        // メディアのタイムラインでは使えないが、消すとタブの幅が変わって動くため、場所を残したまま押せなくする。
         filterButton.isEnabled = content.tab == .posts
         applyFilterButton(content.postsFilter)
         applyAccent()
@@ -842,7 +842,7 @@ final class ProfileHeaderView: UIView {
         moreButton.configuration?.attributedTitle = moreTitle
         pinnedShelf.accent = appearance
         // 本文と色で見分けられるティントカラーだけを、画面全体に当てる。見分けられないときは、下線を引けるヘッダーの中だけに当て、
-        // 投稿の一覧はシステムの色のままにする。投稿の本文のリンクは、タイムラインの行と同じ描き方で、下線を引けないため。
+        // 投稿のタイムラインはシステムの色のままにする。投稿の本文のリンクは、タイムラインの行と同じ描き方で、下線を引けないため。
         if let appearance, appearance.underlinesScreenLinks {
             tintColor = appearance.screenTint
             onChangeScreenTint?(nil)
@@ -1106,7 +1106,7 @@ final class ProfileHeaderView: UIView {
         onExpandNote?(duration)
     }
 
-    /// 自己紹介が切った行数に収まらないときだけ、「さらに表示」を出す。測る幅は、一覧がヘッダーを測る幅から、左右の余白を引いたもの。
+    /// 自己紹介が切った行数に収まらないときだけ、「さらに表示」を出す。測る幅は、タイムラインがヘッダーを測る幅から、左右の余白を引いたもの。
     private func updateMoreButton(width: CGFloat) {
         guard !isNoteExpanded, !noteLabel.isHidden, width > 0 else {
             if !moreButton.isHidden {
@@ -1171,7 +1171,7 @@ final class ProfileHeaderView: UIView {
         return true
     }
 
-    /// 固定された投稿の棚より下を出す。一覧と一緒に出すまでは隠す。変わったらtrue。
+    /// 固定された投稿の棚より下を出す。タイムラインと一緒に出すまでは隠す。変わったらtrue。
     @discardableResult
     func setSectionsRevealed(_ revealed: Bool) -> Bool {
         guard revealed != isSectionsRevealed else { return false }
@@ -1186,7 +1186,7 @@ final class ProfileHeaderView: UIView {
         }
     }
 
-    /// 投稿、フォロー、フォロワーの数。フォローとフォロワーは、数と名前に、押すと開く一覧を付ける。
+    /// 投稿、フォロー、フォロワーの数。フォローとフォロワーは、数と名前に、押すと開く人のリストを付ける。
     static func countsText(of account: Account) -> NSAttributedString {
         let font = UIFont.preferredFont(forTextStyle: .footnote)
         let bold = font.fontDescriptor.withSymbolicTraits(.traitBold).map { UIFont(descriptor: $0, size: 0) } ?? font
@@ -1216,7 +1216,7 @@ final class ProfileHeaderView: UIView {
         onOpenCountList?(list)
     }
 
-    /// 固定された投稿の棚と、その下を、一覧の行と一緒にフェードで出す。
+    /// 固定された投稿の棚と、その下を、タイムラインの行と一緒にフェードで出す。
     func fadeInSections(duration: TimeInterval) {
         guard duration > 0 else { return }
         for shelf in [pinnedShelf] + sections where !shelf.isHidden {
@@ -1279,7 +1279,7 @@ private final class PaddedLabel: UILabel {
     }
 }
 
-/// プロフィールの数から開く人の一覧。
+/// プロフィールの数から開く人のリスト。
 enum ProfileCountList: String, CaseIterable {
     case following
     case followers
@@ -1293,6 +1293,6 @@ enum ProfileCountList: String, CaseIterable {
 }
 
 extension NSAttributedString.Key {
-    /// プロフィールの数の文字で、押すと開く人の一覧（`ProfileCountList`の`rawValue`）。
+    /// プロフィールの数の文字で、押すと開く人のリスト（`ProfileCountList`の`rawValue`）。
     static let profileCountList = NSAttributedString.Key("net.mizle.scia.profileCountList")
 }

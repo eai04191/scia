@@ -351,7 +351,7 @@ enum LinkMenuGroups {
 /// 本文のリンクの長押しのメニューを出す画面。ラベルはレスポンダーチェーンをさかのぼって、いちばん近いものに知らせる。
 @MainActor
 protocol LinkMenuHost: AnyObject {
-    /// メニューを出した。メニューの元になった行が動かないよう、閉じるまで一覧の更新を溜めておく。
+    /// メニューを出した。メニューの元になった行が動かないよう、閉じるまでタイムラインの更新を溜めておく。
     func linkMenuWillShow()
     /// メニューが閉じるアニメーションまで終わった。
     func linkMenuDidHide()

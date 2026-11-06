@@ -26,7 +26,7 @@ extension TimelineViewController {
         return keys
     }
 
-    /// 人の一覧の行と保留中の通知の行に出す、その人のアイコン。
+    /// 人のリストの行と保留中の通知の行に出す、その人のアイコン。
     private func rowAvatarKeys(of account: Account) -> Set<AvatarImageKey> {
         let content = avatarContent(of: account)
         guard let url = content.url else { return [] }

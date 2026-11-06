@@ -7,12 +7,12 @@ public struct ServerSuggestions: Sendable {
         case missingResource
     }
 
-    /// ログイン済みのアカウントのサーバーを先に、同梱の一覧を後に、重複なく並べたもの。
+    /// ログイン済みのアカウントのサーバーを先に、同梱のサーバーのリストを後に、重複なく並べたもの。
     private let domains: [String]
 
     /// - Parameters:
     ///   - accountDomains: ログイン済みのアカウントのサーバー。同じサーバーにもう1つのアカウントを足すときに、上に出す。
-    ///   - knownDomains: 同梱の一覧。月間アクティブ数の多い順に並んでいる。
+    ///   - knownDomains: 同梱のサーバーのリスト。月間アクティブ数の多い順に並んでいる。
     public init(accountDomains: [String], knownDomains: [String]) {
         var seen = Set<String>()
         domains = (accountDomains.map { $0.lowercased() } + knownDomains).filter { seen.insert($0).inserted }
@@ -25,7 +25,7 @@ public struct ServerSuggestions: Sendable {
         return instance.port.map { "\(host):\($0)" } ?? host
     }
 
-    /// FediDBのデータセットから`Tools/update-known-servers.sh`で作った一覧を読む。
+    /// FediDBのデータセットから`Tools/update-known-servers.sh`で作ったサーバーのリストを読む。
     public static func loadKnownDomains() throws -> [String] {
         guard let url = Bundle.module.url(forResource: "known-servers", withExtension: "txt") else {
             throw LoadError.missingResource

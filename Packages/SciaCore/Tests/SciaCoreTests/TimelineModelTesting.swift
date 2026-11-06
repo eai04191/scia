@@ -4,7 +4,7 @@ import Synchronization
 import Testing
 @testable import SciaCore
 
-/// 一覧のモデルが送った命令を記録する、偽の一覧の画面。
+/// タイムラインのモデルが送った命令を記録する、偽のタイムラインの画面。
 @MainActor
 final class RecordingTimelineDisplay: TimelineDisplay, StreamingStatusDisplay {
     struct EntriesCall {
@@ -108,7 +108,7 @@ final class RoutedTransport: HTTPTransport {
     }
 }
 
-/// 一覧のモデルのテストで使う、決まった投稿と接続。
+/// タイムラインのモデルのテストで使う、決まった投稿と接続。
 enum TimelineModelFixtures {
     static func credential() -> Credential {
         Credential(

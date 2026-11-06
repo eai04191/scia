@@ -1,7 +1,7 @@
 import SciaCore
 import UIKit
 
-/// 一覧の行と、行の中の部品のタップと長押し。決まりはdocs/object-actions.mdにある。
+/// タイムラインの行と、行の中の部品のタップと長押し。決まりはdocs/object-actions.mdにある。
 extension TimelineViewController {
     func installRowObjectActions() {
         touchRecorder.cancelsTouchesInView = false
@@ -17,7 +17,7 @@ extension TimelineViewController {
         })
     }
 
-    /// 行の対象。投稿、通知、人の一覧の行で、ほかの行（ギャップ、読めなかった行）ではnil。
+    /// 行の対象。投稿、通知、人のリストの行で、ほかの行（ギャップ、読めなかった行）ではnil。
     func rowTarget(at indexPath: IndexPath) -> (any ObjectActionTarget)? {
         guard let id = itemID(at: indexPath), let entry = entry(for: id) else { return nil }
         switch entry {
@@ -55,7 +55,7 @@ extension TimelineViewController {
         )
     }
 
-    /// ユーザー。人の一覧の行と、行の中のアイコンや「〜がブースト」の行。長押しの既定は、その人のユーザーのメニュー。
+    /// ユーザー。人のリストの行と、行の中のアイコンや「〜がブースト」の行。長押しの既定は、その人のユーザーのメニュー。
     func userTarget(for account: Account, id: ItemID) -> ObjectTarget<UserMenuItem, UserMenuCommand> {
         ObjectTarget(
             entity: .user,
@@ -148,7 +148,7 @@ extension TimelineViewController {
         }
     }
 
-    /// 行の中から出したメニューを開いている間と閉じたあと。長押しのメニューと同じく、開いている間は一覧を動かさず、メニューに出る人のアイコンを読む。
+    /// 行の中から出したメニューを開いている間と閉じたあと。長押しのメニューと同じく、開いている間はタイムラインを動かさず、メニューに出る人のアイコンを読む。
     var rowMenuLifecycle: MenuLifecycle {
         MenuLifecycle(
             willShow: { [weak self] in
@@ -177,7 +177,7 @@ private struct NotificationRequestTarget: ObjectActionTarget {
 
     var acceptsTap: Bool { true }
 
-    /// 長押しは、一覧の長押しのメニューで出す。
+    /// 長押しは、タイムラインの長押しのメニューで出す。
     func performsLongPress() -> Bool { false }
 
     func perform(_ trigger: ObjectTrigger, in view: UIView, at point: CGPoint) {

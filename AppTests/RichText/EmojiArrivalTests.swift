@@ -184,7 +184,7 @@ struct EmojiArrivalTests {
         #expect(separators.contains { $0.layer.animationKeys()?.contains { $0.hasPrefix("rowShift") } == true }, "区切り線を動かしていません")
     }
 
-    /// `index`番目の行に、届くと折り返しが増える横長の絵文字を並べた一覧。絵文字は`gate`を開けるまで届かない。
+    /// `index`番目の行に、届くと折り返しが増える横長の絵文字を並べたタイムライン。絵文字は`gate`を開けるまで届かない。
     private func widePostHarness(at index: Int) throws -> (harness: TimelineHarness, gate: Gate, statuses: [Status]) {
         let wide = try (1...6).map { try emoji("wide\($0)") }
         let png = try widePNG()

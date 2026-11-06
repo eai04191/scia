@@ -5,7 +5,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// 絵文字のリアクションが付いた、なくなった、数が変わったときの一覧の動き。決まりはdocs/emoji-reaction.mdの「動き」にある。
+/// 絵文字のリアクションが付いた、なくなった、数が変わったときのタイムラインの動き。決まりはdocs/emoji-reaction.mdの「動き」にある。
 @MainActor
 @Suite(.scratch)
 struct ReactionMotionTests {

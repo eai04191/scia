@@ -1,7 +1,7 @@
 public import Foundation
 public import Observation
 
-/// 投稿に付けられる言語。サーバーが受け付ける言語の一覧（`GET /api/v1/instance/languages`）の1件。決まりはdocs/compose.mdの「投稿の言語」にある。
+/// 投稿に付けられる言語。サーバーが受け付ける言語のリスト（`GET /api/v1/instance/languages`）の1件。決まりはdocs/compose.mdの「投稿の言語」にある。
 public struct PostingLanguage: Decodable, Hashable, Sendable, Identifiable {
     /// ISO 639-1か639-3のコード。地域を付けたもの（`zh-TW`など）もある。
     public let code: String

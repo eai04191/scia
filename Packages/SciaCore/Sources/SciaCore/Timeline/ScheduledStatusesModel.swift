@@ -1,14 +1,14 @@
 public import Foundation
 import os
 
-/// 予約した投稿の一覧の状態。投稿がないときの表示に使う。
+/// 予約した投稿のタイムラインの状態。投稿がないときの表示に使う。
 public enum ScheduledStatusesContentState: Equatable, Sendable {
     case loading
     case loaded
     case failed(ErrorPresentation)
 }
 
-/// 予約した投稿の一覧の画面への命令。iOSでは`ScheduledStatusesViewController`が従う。
+/// 予約した投稿のタイムラインの画面への命令。iOSでは`ScheduledStatusesViewController`が従う。
 @MainActor
 public protocol ScheduledStatusesDisplay: AnyObject {
     /// 行に出す自分のアカウント。予約を投稿するのは自分なので、投稿されたときと同じく自分のアイコンと名前を出す。
@@ -19,7 +19,7 @@ public protocol ScheduledStatusesDisplay: AnyObject {
     func setContentState(_ state: ScheduledStatusesContentState)
 }
 
-/// 予約した投稿の一覧の読み込みと、日時の変更や取り消しの通信を受け持ち、結果を一覧の画面（`ScheduledStatusesDisplay`）へ命令として伝える。決まりはdocs/tabs.mdの「予約投稿」にある。
+/// 予約した投稿のタイムラインの読み込みと、日時の変更や取り消しの通信を受け持ち、結果をタイムラインの画面（`ScheduledStatusesDisplay`）へ命令として伝える。決まりはdocs/tabs.mdの「予約投稿」にある。
 ///
 /// ストリームがないため購読せず、開くたびと、開いたままアプリに戻ったときに読み直す。
 @MainActor
@@ -30,7 +30,7 @@ public final class ScheduledStatusesModel {
         case cancel
     }
 
-    /// 結果を伝える一覧の画面。
+    /// 結果を伝えるタイムラインの画面。
     public weak var display: (any ScheduledStatusesDisplay)?
     /// 日時の変更や取り消しに失敗したときに呼ぶ。知らせ方は作る側が決める。
     public var onFailure: (Operation, ErrorPresentation) -> Void = { _, _ in }
@@ -39,7 +39,7 @@ public final class ScheduledStatusesModel {
     private let client: MastodonClient
     /// 行に出す自分のアカウントを返す。セッションが一度読んだものを使い回す。
     private let myAccount: () async throws -> Account
-    /// この一覧が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
+    /// このタイムラインが始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
     private let tasks: TaskScope
     /// APIが401を返したときに呼ぶ。ログアウトされたとして止め、ログインし直しを促すのはセッションに任せる。
     private let onUnauthorized: () -> Void
@@ -48,7 +48,7 @@ public final class ScheduledStatusesModel {
     private var loading: Task<Void, Never>?
     /// 一度でも読み終えた。読み終える前に予約したものは、読み直しで入るので足さない。
     private var hasLoaded = false
-    /// 一覧の中身を手元で変えた回数。読んでいる間に予約、日時の変更、取り消しが済んだら、その前に送った読み込みの応答は古いので使わず、読み直す。
+    /// タイムラインの中身を手元で変えた回数。読んでいる間に予約、日時の変更、取り消しが済んだら、その前に送った読み込みの応答は古いので使わず、読み直す。
     private var changeCount = 0
     /// 開いて見せている。見せている間にアプリに戻ったら読み直す。
     private var isShown = false
@@ -65,7 +65,7 @@ public final class ScheduledStatusesModel {
     /// 画面に出るたびに呼ぶ。
     public func appear() {
         isShown = true
-        // 初めて開いたときは使う人の操作として読む。読み終えた一覧を開き直したときは、一覧を新しく保つための読み込みにする。
+        // 初めて開いたときは使う人の操作として読む。読み終えたタイムラインを開き直したときは、タイムラインを新しく保つための読み込みにする。
         reload(purpose: hasLoaded ? .display : .action)
     }
 
@@ -91,7 +91,7 @@ public final class ScheduledStatusesModel {
         reload(purpose: .display)
     }
 
-    /// 投稿欄で予約できた。読み終えた一覧なら、読み直さずにその場で入れる。
+    /// 投稿欄で予約できた。読み終えたタイムラインなら、読み直さずにその場で入れる。
     public func didSchedule(_ scheduled: ScheduledStatus) {
         // 読んでいる途中なら、その応答は予約する前のものなので読み直させる。
         changeCount += 1
@@ -117,7 +117,7 @@ public final class ScheduledStatusesModel {
         }
         logger.info("scheduled load start")
         do {
-            // 行は自分のアイコンと名前で描くので、読めなければ一覧ごと読めなかったことにする。
+            // 行は自分のアイコンと名前で描くので、読めなければタイムラインごと読めなかったことにする。
             let account = try await myAccount()
             guard !tasks.isClosed else { return }
             display?.account = account
@@ -139,7 +139,7 @@ public final class ScheduledStatusesModel {
             guard !tasks.isClosed, !(error is CancellationError) else { return }
             logger.error("scheduled load failed: \(SciaLog.describe(error), privacy: .public)")
             reportIfUnauthorized(error)
-            // 読めた一覧は消さず、読み直しの失敗はログだけにする。まだ何も読めていなければ、理由を一覧の場所に出す。
+            // 読めたタイムラインは消さず、読み直しの失敗はログだけにする。まだ何も読めていなければ、理由をタイムラインの場所に出す。
             if !hasLoaded {
                 display?.setContentState(.failed(ErrorPresentation(error)))
             }

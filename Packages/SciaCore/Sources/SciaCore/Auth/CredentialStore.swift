@@ -34,7 +34,7 @@ public struct KeychainCredentialStore: CredentialStorage {
 
     public func loadAll() throws -> [Credential] {
         try migrateLegacyItem()
-        // macOSの従来のKeychainは、データを返す検索で複数件を求めるとerrSecParamを返すため、名前を一覧してから1件ずつ読む。
+        // macOSの従来のKeychainは、データを返す検索で複数件を求めるとerrSecParamを返すため、名前のリストを取ってから1件ずつ読む。
         var query = baseQuery
         query[kSecReturnAttributes as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitAll

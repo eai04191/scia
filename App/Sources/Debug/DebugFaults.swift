@@ -191,7 +191,7 @@ enum DebugFaults {
         )
     }
 
-    /// 立てると、ホームと通知のタブは、届いた新着を一覧に挿入せずに溜める。agentが一覧の行をタップする間に、新着で行がずれないようにする。
+    /// 立てると、ホームと通知のタブは、届いた新着をタイムラインに挿入せずに溜める。agentがタイムラインの行をタップする間に、新着で行がずれないようにする。
     private static let holdsArrivals = Mutex(false)
 
     static var isHoldingArrivals: Bool { holdsArrivals.withLock { $0 } }

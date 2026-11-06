@@ -56,7 +56,7 @@ struct NotificationPolicyTests {
         #expect(policy.pendingNotificationsCount == ServerCount.clamped(99_999_999_999))
     }
 
-    /// 件数は文字列で届く。読めない件数のまとまりは、一覧から外して読めないものとして数える。
+    /// 件数は文字列で届く。読めない件数のまとまりは、結果から外して読めないものとして数える。
     @Test func decodesRequestsWithStringCounts() async throws {
         let transport = StubTransport([
             .json(try fixture("notification_requests"), statusCode: 200, headers: ["Link": #"<https://example.social/api/v1/notifications/requests?max_id=112456967201894200>; rel="next""#]),

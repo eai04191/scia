@@ -1,4 +1,4 @@
-/// 一覧ごとに変わる文言。
+/// 画面ごとに変わる文言。
 public struct TimelineTexts: Sendable {
     /// 違和感レポートの状態ダンプに使う名前。
     public let dumpName: String
@@ -13,7 +13,7 @@ public struct TimelineTexts: Sendable {
     public let reachedEnd: String
     /// サーバーから届いたが、読めなかった要素の行。
     public let unreadable: String
-    /// サーバーがこの一覧を読ませないとき（docs/tabs.md）。
+    /// サーバーがこのタイムラインを読ませないとき（docs/tabs.md）。
     public let unavailable: String
 
     public init(dumpName: String, title: String, subtitle: String? = nil, empty: String, emptyDetail: String? = nil, reachedEnd: String, unreadable: String, unavailable: String = "このサーバーではこのタイムラインを読めません") {
@@ -48,7 +48,7 @@ public struct TimelineTexts: Sendable {
     public static func accountNotifications(name: String) -> TimelineTexts {
         TimelineTexts(dumpName: "accountNotifications", title: "\(name)からの通知", empty: "通知はありません", reachedEnd: "これより前の通知はありません", unreadable: "表示できない通知")
     }
-    /// 検索の画面の一覧と、検索の結果。3つの種類を並べる一覧は、打っている途中の候補も並べるので、語を渡さない。1つの種類だけの一覧では、題に種類を、題の下に探した語を出す。
+    /// 検索の画面と、検索の結果。3つの種類を並べる画面は、打っている途中の候補も並べるので、語を渡さない。1つの種類だけの画面では、題に種類を、題の下に探した語を出す。
     public static func search(_ scope: SearchModel.Scope, query: String) -> TimelineTexts {
         switch scope {
         case .all:

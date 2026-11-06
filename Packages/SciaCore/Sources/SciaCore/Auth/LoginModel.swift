@@ -25,7 +25,7 @@ public final class LoginModel {
         do {
             knownDomains = try ServerSuggestions.loadKnownDomains()
         } catch {
-            // 一覧はアプリに同梱していて、読めないのはビルドの誤りに限る。ログインは打てばできるので、候補をログイン済みのサーバーだけにして続ける。
+            // サーバーのリストはアプリに同梱していて、読めないのはビルドの誤りに限る。ログインは打てばできるので、候補をログイン済みのサーバーだけにして続ける。
             logger.error("known servers unavailable: \(SciaLog.describe(error), privacy: .public)")
             knownDomains = []
         }

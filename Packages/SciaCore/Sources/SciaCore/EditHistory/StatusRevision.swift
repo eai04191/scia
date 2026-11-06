@@ -2,7 +2,7 @@ public import Foundation
 
 /// 編集された投稿の、ある時点の版。最初の投稿と今の投稿も1つの版として返る。
 ///
-/// リンクカード、公開範囲、メンションとハッシュタグの一覧は、版ごとには返らない。
+/// リンクカード、公開範囲、メンションとハッシュタグのリストは、版ごとには返らない。
 /// https://docs.joinmastodon.org/entities/StatusEdit/
 public struct StatusRevision: Decodable, Equatable, Sendable {
     /// 本文のHTML。

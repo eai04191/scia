@@ -86,7 +86,7 @@ public final class StatusInteractions {
         }
     }
 
-    /// 投稿のIDと変換を受け取り、表示しているすべての一覧で、その投稿とそれをブーストした投稿を変える。
+    /// 投稿のIDと変換を受け取り、表示しているすべてのタイムラインで、その投稿とそれをブーストした投稿を変える。
     public typealias Update = @MainActor (Status.ID, (Status) -> Status) -> Void
 
     private let operations: Operations
@@ -100,7 +100,7 @@ public final class StatusInteractions {
     }
 
     /// サーバーが操作を受け付けたとき。操作と、結果を反映した投稿（ブーストなら元の投稿）を渡す。
-    /// ブックマークやお気に入りの一覧に、付けた投稿を入れるのに使う。失敗して戻したときは呼ばない。
+    /// ブックマークやお気に入りのタイムラインに、付けた投稿を入れるのに使う。失敗して戻したときは呼ばない。
     /// 同じ投稿へのほかの操作の結果を待っている間に押した操作の状態も、渡す投稿に含める。
     public var onSettle: (@MainActor (Action, Status) -> Void)?
     /// 結果を待っている操作がある投稿の、いちばん新しい状態。あとから押した操作には、先に押した操作の見込みの状態が入っているため、押したときの投稿で置き換え、受け付けた結果と戻した状態を重ねる。
@@ -168,7 +168,7 @@ public final class StatusInteractions {
         return true
     }
 
-    /// ストリーミングで届いた絵文字のリアクションの数を、表示しているすべての一覧に当てる。
+    /// ストリーミングで届いた絵文字のリアクションの数を、表示しているすべてのタイムラインに当てる。
     /// 自分がしたかは、リアクションした人に`myAccountID`があるかで決める。その絵文字の結果を待っている間は、押した状態を残す。
     public func apply(_ reactionUpdate: EmojiReactionUpdate, myAccountID: Account.ID) {
         let key = Key(statusID: reactionUpdate.statusID, action: .emojiReaction(reactionUpdate.emoji))

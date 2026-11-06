@@ -1,6 +1,6 @@
 import Foundation
 
-/// 指で一覧を動かし始めてから止まるまでの1回のスクロール。違和感レポートで、どのスクロールのことかを見分けられるようにする。
+/// 指でタイムラインを動かし始めてから止まるまでの1回のスクロール。違和感レポートで、どのスクロールのことかを見分けられるようにする。
 public struct ScrollRecord: Sendable, Equatable {
     public enum Direction: String, Sendable {
         /// 下の内容へ進む向き。

@@ -5,7 +5,7 @@ import UIKit
 @testable import Scia
 
 /// 表示している間に端末の文字の大きさが変わったとき、読んでいる位置へ戻し終えるまで、通り過ぎた投稿を表示中として報告しない。
-/// 端末の文字の大きさが変わると、UIKitは画面の外の行の高さを見積もりに戻して測り直し、一覧が一時的に別の場所を見せる。
+/// 端末の文字の大きさが変わると、UIKitは画面の外の行の高さを見積もりに戻して測り直し、タイムラインが一時的に別の場所を見せる。
 /// そのときに見えた投稿を報告すると、読んでいない投稿まで既読になり、位置を戻しても既読は戻らない。
 @MainActor
 @Suite(.scratch, .serialized)
@@ -20,7 +20,7 @@ struct ContentSizeChangeTests {
         harness.viewController.onVisibleStatusesChange = { reported.append($0) }
 
         NotificationCenter.default.post(name: UIContentSizeCategory.didChangeNotification, object: nil)
-        // 測り直しで一覧が一時的に先へ動いたときに見える投稿は、報告しない。
+        // 測り直しでタイムラインが一時的に先へ動いたときに見える投稿は、報告しない。
         harness.scroll(toFraction: 0.8)
         harness.viewController.reportVisibleItems()
         #expect(reported.isEmpty)

@@ -3,15 +3,15 @@ import SafariServices
 import SciaCore
 import UIKit
 
-/// 本文のリンクを、アプリ内のSafariで開く。中くらいの高さのシートで出し、後ろを暗くせず、上に見える一覧を触れるままにする。
+/// 本文のリンクを、アプリ内のSafariで開く。中くらいの高さのシートで出し、後ろを暗くせず、上に見えるタイムラインを触れるままにする。
 /// アプリは手前にいたままなので、読んでいる間もストリーミングが流れ続ける。
 ///
 /// シートの高さは、伏せた高さ（URLのバーだけ見える）、中くらいの高さ、全画面の3段。投稿欄で書いている間は伏せた高さまで下げ、書き終えたら戻す。
 @MainActor
 final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, UISheetPresentationControllerDelegate {
-    /// シートが画面の下から覆っている高さが変わったときに呼ぶ。閉じたら0を渡す。一覧の下に、シートより上へ出せるだけの余白を取るために使う。
+    /// シートが画面の下から覆っている高さが変わったときに呼ぶ。閉じたら0を渡す。タイムラインの下に、シートより上へ出せるだけの余白を取るために使う。
     var onObscuredHeightChange: ((CGFloat) -> Void)?
-    /// シートを全画面に広げて一覧を覆ったか、覆うのをやめたときに呼ぶ。覆っている間は、一覧の投稿を見たと報告させない。
+    /// シートを全画面に広げてタイムラインを覆ったか、覆うのをやめたときに呼ぶ。覆っている間は、タイムラインの投稿を見たと報告させない。
     var onCoverageChange: ((Bool) -> Void)?
     /// シートを出したか、閉じたときに呼ぶ。中身を差し替えるときは呼ばない。
     var onPresenceChange: ((Bool) -> Void)?
@@ -54,7 +54,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         safari.modalPresentationStyle = .pageSheet
         if let sheet = safari.sheetPresentationController {
             sheet.detents = [detent(Self.collapsedIdentifier, for: safari), detent(Self.mediumIdentifier, for: safari), .large()]
-            // 中くらいの高さまでは後ろを暗くせず、一覧を触れるままにする。
+            // 中くらいの高さまでは後ろを暗くせず、タイムラインを触れるままにする。
             sheet.largestUndimmedDetentIdentifier = Self.mediumIdentifier
             // 選んでいなければいちばん低い段で出るため、設定の高さの段を選んでおく。
             sheet.selectedDetentIdentifier = openingIdentifier
@@ -89,7 +89,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
                 guard sheet.selectedDetentIdentifier == Self.collapsedIdentifier else { return }
                 self.select(opening, on: sheet)
             } else {
-                // 全画面で開いたときに、一覧を覆ったことを知らせる。
+                // 全画面で開いたときに、タイムラインを覆ったことを知らせる。
                 self.selectionDidChange(sheet)
             }
         }
@@ -131,7 +131,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
     private static let mediumIdentifier = UISheetPresentationController.Detent.Identifier("net.mizle.scia.inAppBrowser.medium")
 
     /// 中くらいの高さは設定から、伏せた高さはチューニングから読む。中くらいの高さは伏せた高さより低くしない。値は安全領域の中の高さで、下端に付くシートでは、これに下の安全領域が足される。
-    /// 一覧の余白も安全領域の外から数えるので、知らせるときに足す。設定やチューニングを変えたら、次にシートの高さを決め直すとき（開き直す、段を変える）に効く。
+    /// タイムラインの余白も安全領域の外から数えるので、知らせるときに足す。設定やチューニングを変えたら、次にシートの高さを決め直すとき（開き直す、段を変える）に効く。
     /// 高さの狭い画面（iPhoneの横向き）では、中くらいの高さの段を出さず、シートは全画面になる。
     /// 段は低い順に並べる決まりがあるため、伏せた高さは中くらいの高さより低く抑える。チューニングの組み合わせによっては、伏せた高さが設定より低くなる。
     private func detent(_ identifier: UISheetPresentationController.Detent.Identifier, for safari: SFSafariViewController) -> UISheetPresentationController.Detent {
@@ -151,7 +151,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         }
     }
 
-    /// 高さを決めている間は、知らせも安全領域の読み出しもしない。知らせを受けた一覧が安全領域を変えると、UIKitが高さを決めている途中のシートに
+    /// 高さを決めている間は、知らせも安全領域の読み出しもしない。知らせを受けたタイムラインが安全領域を変えると、UIKitが高さを決めている途中のシートに
     /// 位置を聞き直し、入れ子になって落ちるため。次のメインループで、決め終えた高さを知らせる。
     private func reportObscuredHeightAfterResolving() {
         guard !reportsObscuredHeightAfterResolving else { return }
@@ -171,7 +171,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         return min(CGFloat(settings.inAppBrowserHeight.sheetHeight(available: Double(window.safeAreaHeight), minimum: minimum)), context.maximumDetentValue)
     }
 
-    /// 全画面に広げている間は一覧が見えないため、中くらいの高さの値を使い続ける。
+    /// 全画面に広げている間はタイムラインが見えないため、中くらいの高さの値を使い続ける。
     private func reportObscuredHeight(of sheet: UISheetPresentationController) {
         let selected = sheet.selectedDetentIdentifier == Self.collapsedIdentifier ? Self.collapsedIdentifier : Self.mediumIdentifier
         let bottomInset = sheet.presentedViewController.view.safeAreaInsets.bottom

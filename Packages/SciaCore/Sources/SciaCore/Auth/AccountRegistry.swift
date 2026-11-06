@@ -1,8 +1,8 @@
 public import Foundation
 
-/// ログインしたアカウントの一覧と、いま使っているアカウント。
+/// ログインしたアカウントのリストと、いま使っているアカウント。
 ///
-/// 一度に使うのは1アカウントだけで、切り替えて使う。一覧と選択を分けて持つのは、将来は複数のアカウントを同時に使えるようにするため。
+/// 一度に使うのは1アカウントだけで、切り替えて使う。リストと選択を分けて持つのは、将来は複数のアカウントを同時に使えるようにするため。
 @MainActor
 public final class AccountRegistry {
     /// 追加した順。
@@ -49,7 +49,7 @@ public final class AccountRegistry {
 
     /// ログインし直したアカウントの認証情報を新しくする。使うアカウントは替えない。
     /// ほかのアカウントにログインし直したときに、今のアカウントのまま使い続けるため。
-    /// - Returns: 一覧にあって新しくしたか。ログインし直している間にログアウトしたアカウントは、戻さずにfalseを返す。
+    /// - Returns: リストにあって新しくしたか。ログインし直している間にログアウトしたアカウントは、戻さずにfalseを返す。
     @discardableResult
     public func renew(_ credential: Credential) throws -> Bool {
         guard let index = accounts.firstIndex(where: { $0.id == credential.id }) else { return false }
@@ -62,7 +62,7 @@ public final class AccountRegistry {
         return true
     }
 
-    /// 使うアカウントを切り替える。一覧にないアカウントなら何もしない。
+    /// 使うアカウントを切り替える。リストにないアカウントなら何もしない。
     public func select(_ id: Credential.ID) {
         guard let account = accounts.first(where: { $0.id == id }) else { return }
         current = account

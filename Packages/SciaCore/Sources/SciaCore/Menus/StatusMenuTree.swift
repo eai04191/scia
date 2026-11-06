@@ -1,6 +1,6 @@
 public import Foundation
 
-/// 投稿に対する操作。一覧では長押しのメニューから選ぶ。
+/// 投稿に対する操作。タイムラインでは長押しのメニューから選ぶ。
 public enum StatusAction: Sendable {
     case reply
     case favourite
@@ -15,9 +15,9 @@ public enum StatusAction: Sendable {
     case muteConversation
     case pin
     case editHistory
-    /// 投稿をお気に入りした人の一覧を開く。
+    /// 投稿をお気に入りした人のリストを開く。
     case openFavouritedBy
-    /// 投稿をブーストした人の一覧を開く。
+    /// 投稿をブーストした人のリストを開く。
     case openRebloggedBy
     case edit
     case delete
@@ -45,7 +45,7 @@ public enum StatusMenuCommand {
     case translate(String)
     /// 本文の文字を選び始める。
     case selectText
-    /// 一覧で、この投稿を1番目にして投稿を選び始める。
+    /// タイムラインで、この投稿を1番目にして投稿を選び始める。
     case select
     case url(URLMenuCommand)
     /// フォローリクエストの通知の、承認と却下。
@@ -67,7 +67,7 @@ public enum StatusMenuCommand {
 /// 「別のアカウントで」で選んだ、ほかのアカウントとしての操作。
 public struct OtherAccountCommand {
     public let account: OtherAccount
-    /// メニューを出した、今のアカウントでの投稿。失敗を記録するときに、今のアカウントの一覧の投稿を指すのに使う。
+    /// メニューを出した、今のアカウントでの投稿。失敗を記録するときに、今のアカウントのタイムラインの投稿を指すのに使う。
     public let original: Status
     public let action: Action
 
@@ -99,7 +99,7 @@ public struct StatusMenuTree {
     public let notification: MastodonNotification?
     /// メニューを出した行の投稿。通報に添える投稿を、この投稿から決める。引用の囲みのメニューでは、囲みの投稿ではなく行の投稿になる。
     public var rowStatus: Status?
-    /// 自分のアカウントのID。分からない一覧ではnilで、自分の投稿でだけ出る項目と、ブーストに関わる項目を出さない。
+    /// 自分のアカウントのID。分からないタイムラインではnilで、自分の投稿でだけ出る項目と、ブーストに関わる項目を出さない。
     public var myAccountID: String?
     /// 今の時刻。締め切りの近い投票を編集できないかを決める。
     public var now: Date
@@ -111,7 +111,7 @@ public struct StatusMenuTree {
     public var mediaIsCovered = false
     /// 本文の文字を選べるか。本文を表示している行でだけ選べる。
     public var canSelectText = false
-    /// 一覧で投稿を選び始められるか。投稿を選べる一覧の行でだけ選べる。
+    /// タイムラインで投稿を選び始められるか。投稿を選べるタイムラインの行でだけ選べる。
     public var canSelectPosts = false
     /// サーバーが投稿への絵文字のリアクションに対応しているか。対応していなければ「リアクション」を出さない。
     public var supportsEmojiReactions = false
@@ -289,7 +289,7 @@ public struct StatusMenuTree {
             guard shown.editedAt != nil else { return nil }
             return .action(item.title, icon: icon, .status(.editHistory))
         case .favouritedBy:
-            // サーバーの数は、このサーバーが知っている分で、一覧もこのサーバーが知っている人だけを返すため、数が0なら出さない。
+            // サーバーの数は、このサーバーが知っている分で、人のリストもこのサーバーが知っている人だけを返すため、数が0なら出さない。
             guard shown.favouritesCount > 0 else { return nil }
             return .action(item.title, subtitle: "\(shown.favouritesCount.formatted())人", icon: icon, .status(.openFavouritedBy))
         case .rebloggedBy:
@@ -373,7 +373,7 @@ public struct StatusMenuTree {
         })
     }
 
-    /// 「別のアカウントで」の中に出さない項目。どのアカウントで行っても同じ結果になるもの（コピー、共有、今のアカウントで画面を開くもの、この一覧の表示を変えるもの）。
+    /// 「別のアカウントで」の中に出さない項目。どのアカウントで行っても同じ結果になるもの（コピー、共有、今のアカウントで画面を開くもの、このタイムラインの表示を変えるもの）。
     static let sameForEveryAccountItems: Set<StatusMenuItem> = [
         .openThread, .select, .copyLink, .copyText, .selectText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari,
         .editHistory, .favouritedBy, .rebloggedBy, .dismissNotification, .hideMedia, .systemTranslate, .customEmojis, .apiResponse, .otherAccounts, .customize,
@@ -459,7 +459,7 @@ public struct StatusMenuTree {
         guard let status else { return [] }
         let tree = otherAccountTree(for: found, original: status, as: account)
         guard tree.userMenu.needsRelationship else { return [] }
-        // 人を集めるだけなので、ハッシュタグは組まない。組むと、ハッシュタグの一覧の読み直しを、メニューを組んだときと重ねて送るため。
+        // 人を集めるだけなので、ハッシュタグは組まない。組むと、ハッシュタグのリストの読み直しを、メニューを組んだときと重ねて送るため。
         return tree.menu(groups: otherAccountStatusGroups.excluding([.hashtags]), includesFollowRequest: false).shownUserIDs
     }
 

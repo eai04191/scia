@@ -198,7 +198,7 @@ extension HashtagMenuItem: MenuItemContentProviding {
 }
 
 /// 投稿、ユーザー、リンク、ハッシュタグのメニューに共通の、ページのURLに対する項目。
-/// どのメニューに置くかはメニューごとの項目の一覧で決め、ここでは名前とアイコンと、押せる状態かどうかと、開く項目がどこで開くかをそろえる。
+/// どのメニューに置くかはメニューごとの項目のリストで決め、ここでは名前とアイコンと、押せる状態かどうかと、開く項目がどこで開くかをそろえる。
 public enum URLMenuAction {
     case copyLink
     case share

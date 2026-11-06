@@ -12,7 +12,7 @@ enum CatalogFixtures {
         return URL(string: "data:image/jpeg;base64,\(data.base64EncodedString())")
     }
 
-    /// HLGのHDRの画像。読み込むと、一覧のサムネイルがHDRと判定する。
+    /// HLGのHDRの画像。読み込むと、タイムラインのサムネイルがHDRと判定する。
     static func hdrImageURL(width: Int, height: Int, color: UIColor, label: String = "") -> URL? {
         let image = DummyMedia.image(size: CGSize(width: width, height: height), color: color, label: label)
         guard let source = CIImage(image: image),

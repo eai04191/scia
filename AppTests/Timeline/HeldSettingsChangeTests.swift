@@ -4,7 +4,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// 見えていない一覧と、設定の画面が手前にある間の一覧は、設定が変わっても描き直さずに溜め、見えたときに1回だけ描き直す。
+/// 見えていないタイムラインと、設定の画面が手前にある間のタイムラインは、設定が変わっても描き直さずに溜め、見えたときに1回だけ描き直す。
 @MainActor
 @Suite(.scratch, .serialized)
 struct HeldSettingsChangeTests {
@@ -55,7 +55,7 @@ struct HeldSettingsChangeTests {
 
         harness.settings.setValue(3, for: AppearanceCatalog.bodyText)
         try await waitUntil { harness.viewController.hasHeldSettingsChange }
-        #expect(bodyPointSize(harness, statuses[0].id) == before, "見えていない一覧を描き直しました")
+        #expect(bodyPointSize(harness, statuses[0].id) == before, "見えていないタイムラインを描き直しました")
 
         harness.navigation.popViewController(animated: false)
         harness.window.layoutIfNeeded()

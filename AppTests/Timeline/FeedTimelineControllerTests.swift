@@ -32,7 +32,7 @@ struct FeedTimelineControllerTests {
         return String(decoding: envelope, as: UTF8.self)
     }
 
-    /// 積んで開いた一覧を外したら、画面とコントローラーの持ち合いを解く。持ち合いを作る前にコントローラーが止まっていても（トークンが無効と分かったあとに開いた一覧）解く。
+    /// 積んで開いたタイムラインを外したら、画面とコントローラーの持ち合いを解く。持ち合いを作る前にコントローラーが止まっていても（トークンが無効と分かったあとに開いたタイムライン）解く。
     @Test func removingStackedFeedReleasesStoppedController() throws {
         let viewController: TimelineViewController
         weak var released: FeedTimelineController?
@@ -60,7 +60,7 @@ struct FeedTimelineControllerTests {
         #expect(controller.viewController.contentState == .regenerating)
     }
 
-    /// 作り直し中の読み直しを予約したあとに無効にしたら、読み直しをやめる。使わない一覧に通信し続けないため。
+    /// 作り直し中の読み直しを予約したあとに無効にしたら、読み直しをやめる。使わないタイムラインに通信し続けないため。
     @Test func disablingStopsRegeneratingRetries() async throws {
         let homeRequests = Mutex(0)
         let transport = ScriptedTransport { request in
@@ -94,7 +94,7 @@ struct FeedTimelineControllerTests {
         #expect(homeRequests.withLock { $0 } == countWhenDisabled)
     }
 
-    /// 止めた一覧の401は、セッションに知らせない。知らせると、ログアウトされたとして止まるため。
+    /// 止めたタイムラインの401は、セッションに知らせない。知らせると、ログアウトされたとして止まるため。
     @Test func stoppedControllerDoesNotReportUnauthorized() async throws {
         let gate = ResponseGate()
         let transport = ScriptedTransport { _ in
@@ -115,7 +115,7 @@ struct FeedTimelineControllerTests {
         #expect(session.authorization.state == .valid, "止めた読み込みの401を、セッションに知らせました")
     }
 
-    /// ログアウトなどでセッションを閉じたら、一覧の`stop()`を呼ばなくても、走っている読み込みを止めて結果を使わない。
+    /// ログアウトなどでセッションを閉じたら、タイムラインの`stop()`を呼ばなくても、走っている読み込みを止めて結果を使わない。
     @Test func closingSessionStopsLoadsWithoutStop() async throws {
         let gate = ResponseGate()
         let transport = ScriptedTransport { _ in
@@ -245,7 +245,7 @@ struct FeedTimelineControllerTests {
         try await waitUntil { connector.connectionCount == 1 }
     }
 
-    /// 更新コントロールは、ウインドウに載っていないと読んでいる状態にならないため、一覧を載せる。
+    /// 更新コントロールは、ウインドウに載っていないと読んでいる状態にならないため、タイムラインを載せる。
     private func show(_ controller: FeedTimelineController) throws -> UIWindow {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
@@ -404,7 +404,7 @@ private actor ResponseGate {
 private final class HomeTransport: HTTPTransport {
     let homeBody: Data
     let markerBody: Data
-    /// falseなら、markerを読み書きしたときにテストを失敗させる。markerのない一覧のテストに使う。
+    /// falseなら、markerを読み書きしたときにテストを失敗させる。markerのないタイムラインのテストに使う。
     let servesMarkers: Bool
     private let recordedPublicQueries = Mutex<[[URLQueryItem]]>([])
     /// 公開タイムラインを読んだときのクエリ。
@@ -432,7 +432,7 @@ private final class HomeTransport: HTTPTransport {
             body = homeBody
         case "/api/v1/markers":
             if !servesMarkers {
-                Issue.record("markerのない一覧でmarkerを読み書きしました: \(url)")
+                Issue.record("markerのないタイムラインでmarkerを読み書きしました: \(url)")
             }
             body = markerBody
         case "/api/v2/instance":

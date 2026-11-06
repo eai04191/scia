@@ -3,7 +3,7 @@ import os
 import SciaCore
 import UIKit
 
-/// プロフィール画面。ProfileStoreの状態を、ヘッダーと投稿の一覧へつなぐ。
+/// プロフィール画面。ProfileStoreの状態を、ヘッダーと投稿のタイムラインへつなぐ。
 ///
 /// 画面はナビゲーションに積まれて閉じられるまで生きるため、画面の方がこのコントローラーを持つ。
 /// コントローラーから画面へは弱く持ち、互いに持ち合って残り続けないようにする。
@@ -24,19 +24,19 @@ final class ProfileController {
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
     /// 自分のプロフィールで「プロフィールを編集」を押した。
     var onEditProfile: (() -> Void)?
-    /// フォローかフォロワーの数が押されたときに、開く人の一覧を渡して呼ぶ。
+    /// フォローかフォロワーの数が押されたときに、開く人のリストを渡して呼ぶ。
     var onOpenAccountList: ((AccountListKind) -> Void)?
     /// フォローのボタンで、紹介している相手のフォローを外した。サーバーは紹介も消すので、自分のプロフィールの棚を読み直すのに使う。
     var onEndorsementRemoved: (() -> Void)?
     /// この画面が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときと、画面を閉じてこのコントローラーが捨てられたときに閉じる。
     private let tasks: TaskScope
-    /// 表示している一覧と、その一覧のタブ。切り替えた一覧が届くまでは、前の一覧を出し続ける。
+    /// 表示しているタイムラインと、そのタイムラインのタブ。切り替えたタイムラインが届くまでは、前のタイムラインを出し続ける。
     private var shownTimeline: TimelineStore
     private var shownTab: ProfileTab
-    /// 開いて最初の一覧を出したか。最初の一覧は、投稿の一覧と固定された投稿の両方が届き、見える行のアイコンを読むのを待ってから、フェードで一度に出す。
+    /// 開いて最初のタイムラインを出したか。最初のタイムラインは、投稿のタイムラインと固定された投稿の両方が届き、見える行のアイコンを読むのを待ってから、フェードで一度に出す。
     /// 別々に出すと、投稿が2回に分けて現れたり、アイコンが行より遅れて入ったりする。
     private var listReveal = ListReveal.waiting
-    /// 最初の一覧に使う投稿の一覧を読み終えた。
+    /// 最初のタイムラインに使う投稿を読み終えた。
     private var isInitialListLoaded = false
     /// フォローの関係を待つのが長引いている。フォローのボタンの中にアクティビティインジケータを出す。
     private var isRelationshipSlow = false
@@ -183,7 +183,7 @@ final class ProfileController {
         observeHeaderContent()
         // ヘッダー画像をバーの下に見せる間はタイトルを出さない。最初に出してから消すと、開いた直後にちらつくため、最初から決める。
         viewController.navigationItem.title = header.extendsUnderBars ? nil : "@\(account.acct)"
-        // 名前や自己紹介の絵文字が届いたら、ヘッダーを描き直す。投稿の絵文字は一覧が描き直す。
+        // 名前や自己紹介の絵文字が届いたら、ヘッダーを描き直す。投稿の絵文字はタイムラインが描き直す。
         // 画面に出ていない間に届いた知らせは、出たときに描き直す（`addListener(whileShownIn:onLoad:)`）。
         viewController.emojiImages.addListener(whileShownIn: header) { [weak self] urls in
             self?.emojiImagesDidLoad(urls)
@@ -191,7 +191,7 @@ final class ProfileController {
     }
 
     private func emojiImagesDidLoad(_ urls: Set<URL>) {
-        // 固定された投稿は一覧の行ではなく棚に並べるので、一覧の描き直しでは描き直されない。棚のカードもここで描き直す。
+        // 固定された投稿はタイムラインの行ではなく棚に並べるので、タイムラインの描き直しでは描き直されない。棚のカードもここで描き直す。
         if header.redrawPinned(ifUsing: urls) {
             viewController?.headerDidChangeSize()
         }
@@ -252,7 +252,7 @@ final class ProfileController {
         }
     }
 
-    /// 画面を移る動きの最中なら、移り終わってから行う。ヘッダーを描き直したり一覧の行を作ったりすると、メインスレッドが100msほど止まる。
+    /// 画面を移る動きの最中なら、移り終わってから行う。ヘッダーを描き直したりタイムラインの行を作ったりすると、メインスレッドが100msほど止まる。
     /// 止まっている間も、移り変わりに相乗りする動き（チップの列）は時計どおりに進むため、移り変わりとずれて跳んで見える。
     private func afterTransition(_ work: @escaping @MainActor (ProfileController) -> Void) {
         // 戻り値は相乗りの動きを登録できたかで、completionは登録できなくても呼ばれるため、戻り値で分けない。
@@ -267,7 +267,7 @@ final class ProfileController {
     }
 
     func start() {
-        // ヘッダーは一覧の区切りに載るため、空の一覧を入れて区切りを作り、画面が移り始める前から出しておく。
+        // ヘッダーはタイムラインの区切りに載るため、空のタイムラインを入れて区切りを作り、画面が移り始める前から出しておく。
         // 読み込みの結果は移り終わるまで待たせるので、ここで入れないと、移る間は何もない画面が流れてくる。
         showEntries()
         loadProfile()
@@ -288,13 +288,13 @@ final class ProfileController {
         }
     }
 
-    /// 投稿への操作の結果を、固定された投稿と一覧に反映する。
+    /// 投稿への操作の結果を、固定された投稿とタイムラインに反映する。
     func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
         guard store.updateStatus(id, transform) else { return }
         showEntries()
     }
 
-    /// 削除した投稿を、固定された投稿と一覧から除く。
+    /// 削除した投稿を、固定された投稿とタイムラインから除く。
     func removeStatus(_ id: Status.ID) {
         guard store.removeStatus(id) else { return }
         showEntries(animatesRemoval: true)
@@ -363,12 +363,12 @@ final class ProfileController {
         }
     }
 
-    /// 見ている一覧の、一番新しい投稿より後の投稿を読んで足す。空の一覧なら、最新のページを読む。最初の一覧を出す前は、その読み込みに任せる。
+    /// 見ているタイムラインの、一番新しい投稿より後の投稿を読んで足す。空のタイムラインなら、最新のページを読む。最初のタイムラインを出す前は、その読み込みに任せる。
     /// 読めなかったことは画面に出さない。次の読み直しか、引っぱって読み直したときに読む。
     private func readNew() async {
         let timeline = store.timeline
         guard listReveal == .revealed, timeline === shownTimeline, let viewController else { return }
-        // 最初の一覧を読めていなければ、フッターのやり直しに任せる。
+        // 最初のタイムラインを読めていなければ、フッターのやり直しに任せる。
         if timeline.isEmpty, case .failed = viewController.footerState { return }
         let wasEmpty = timeline.isEmpty
         do {
@@ -463,14 +463,14 @@ final class ProfileController {
         viewController?.headerDidChangeSize()
     }
 
-    /// - Parameter replacing: 一覧を切り替えた。タブを押した場所に残し、その下の中身だけを差し替える。
+    /// - Parameter replacing: タイムラインを切り替えた。タブを押した場所に残し、その下の中身だけを差し替える。
     /// - Parameter animatesRemoval: 使う人の操作で行を消した。消える行を閉じる動きで消す。
     private func showEntries(replacing: Bool = false, animatesRemoval: Bool = false) {
-        // 固定された投稿の棚とその下のタブは、一覧と一緒に出す。棚はタブより上にあるので、どちらのタブでも出す。
+        // 固定された投稿の棚とその下のタブは、タイムラインと一緒に出す。棚はタブより上にあるので、どちらのタブでも出す。
         let isRevealed = listReveal == .revealed
-        // 一度出したら隠し直さない。最初の一覧を読めなかったときは、一覧より先にタブを出している（`showListFailure`）。
+        // 一度出したら隠し直さない。最初のタイムラインを読めなかったときは、タイムラインより先にタブを出している（`showListFailure`）。
         let changesSections = isRevealed && header.setSectionsRevealed(true)
-        // 棚にも、一覧の行と同じサーバーのフィルターの警告とぼかしを当てる。
+        // 棚にも、タイムラインの行と同じサーバーのフィルターの警告とぼかしを当てる。
         let items = { (statuses: [Status]) in statuses.map { ProfileShelfItem(status: $0, verdict: self.store.filtering.verdict(for: $0)) } }
         let changesPinned = header.setPinned(isRevealed ? items(store.pinned) : [], glyphLanguage: settings.glyphLanguageIdentifier())
         let changesFeatured = header.setFeatured(
@@ -494,8 +494,8 @@ final class ProfileController {
         shownTimeline.entries
     }
 
-    /// 最初の一覧を出せるようになっていたら、見える行のアイコンを上限まで待ってから、フェードで出す。
-    /// 「メディア」の一覧には固定された投稿を置かないので、固定された投稿を待たない。
+    /// 最初のタイムラインを出せるようになっていたら、見える行のアイコンを上限まで待ってから、フェードで出す。
+    /// 「メディア」のタイムラインには固定された投稿を置かないので、固定された投稿を待たない。
     private func revealListIfReady() {
         guard listReveal == .waiting, isReadyToRevealList else { return }
         listReveal = .revealing
@@ -512,7 +512,7 @@ final class ProfileController {
                 }
                 controller.listReveal = .revealed
                 controller.showEntries(replacing: true)
-                // 待つ間に別の一覧へ切り替えていたら、フッターはその一覧の読み込み中や失敗の表示のまま残す。
+                // 待つ間に別のタイムラインへ切り替えていたら、フッターはそのタイムラインの読み込み中や失敗の表示のまま残す。
                 if controller.shownTimeline === controller.store.timeline {
                     controller.viewController?.setFooterState(controller.shownTimeline.reachedEnd ? .reachedEnd : .idle)
                 }
@@ -522,7 +522,7 @@ final class ProfileController {
         }
     }
 
-    /// 最初の一覧の投稿と、ヘッダーの棚を読み終えた。棚が後から現れて、タブと一覧を押し下げないようにするため。
+    /// 最初のタイムラインの投稿と、ヘッダーの棚を読み終えた。棚が後から現れて、タブとタイムラインを押し下げないようにするため。
     private var isReadyToRevealList: Bool {
         isInitialListLoaded && store.isShelvesSettled
     }
@@ -555,7 +555,7 @@ final class ProfileController {
         }
     }
 
-    /// 説明にならない代替テキストは、一覧の添付ファイルと同じく、ビューアにもメニューにも出さないよう除いておく。
+    /// 説明にならない代替テキストは、タイムラインの添付ファイルと同じく、ビューアにもメニューにも出さないよう除いておく。
     private func attachment(of image: ProfileImage) -> MediaAttachment? {
         store.account.attachment(of: image)?.filteringAltText(ignoresUseless: settings.ignoresUselessAltText)
     }
@@ -619,12 +619,12 @@ final class ProfileController {
             do {
                 guard try await timeline.loadInitial() != nil, timeline === controller.store.timeline else { return }
                 controller.afterTransition { controller in
-                    // 待つ間に別のタブへ切り替えていたら、その一覧の読み込みに任せる。
+                    // 待つ間に別のタブへ切り替えていたら、そのタイムラインの読み込みに任せる。
                     guard timeline === controller.store.timeline else { return }
                     controller.shownTimeline = timeline
                     controller.shownTab = controller.store.tab
                     guard controller.listReveal == .revealed else {
-                        // 最初の一覧は、出すときにフッターもまとめて切り替える。
+                        // 最初のタイムラインは、出すときにフッターもまとめて切り替える。
                         controller.isInitialListLoaded = true
                         controller.revealListIfReady()
                         return
@@ -657,18 +657,18 @@ final class ProfileController {
         }
     }
 
-    /// 一覧を引っぱって離したときに、アカウントと固定された投稿を読み直し、一番新しい投稿より後の投稿を上に足す。
-    /// 一覧をまだ読めていなければ、最初の読み込みをやり直す。読めた一覧が空なら、最新のページを読む。
+    /// タイムラインを引っぱって離したときに、アカウントと固定された投稿を読み直し、一番新しい投稿より後の投稿を上に足す。
+    /// タイムラインをまだ読めていなければ、最初の読み込みをやり直す。読めたタイムラインが空なら、最新のページを読む。
     private func refresh() async {
         guard let viewController else { return }
         logger.info("profile refresh")
         let timeline = store.timeline
         if timeline.isEmpty, case .failed = viewController.footerState {
-            // 最初の一覧を読めていないと、一覧を出す前なので、ほかは読み直さずに最初の読み込みをやり直す。
+            // 最初のタイムラインを読めていないと、タイムラインを出す前なので、ほかは読み直さずに最初の読み込みをやり直す。
             await loadInitial()?.value
             return
         }
-        // 最初の一覧を出している途中は、その読み込みに任せる。
+        // 最初のタイムラインを出している途中は、その読み込みに任せる。
         guard listReveal == .revealed else { return }
         async let profile: Void = refreshProfile()
         let wasEmpty = timeline.isEmpty
@@ -681,7 +681,7 @@ final class ProfileController {
                 }
             }
         } catch {
-            // 読めなかったことは、一覧の上の読み直しなので画面に出さない。前の一覧のまま残す。
+            // 読めなかったことは、タイムラインの上の読み直しなので画面に出さない。前のタイムラインのまま残す。
             logger.error("profile refresh failed: \(SciaLog.describe(error), privacy: .public)")
             handleUnauthorized(error)
         }
@@ -729,7 +729,7 @@ final class ProfileController {
     private func showListFailure(_ error: any Error) {
         handleUnauthorized(error)
         viewController?.setFooterState(.failed(ErrorPresentation(error)))
-        // タブは一覧と一緒に出すが、最初の一覧を読めなかったときも出し、ほかのタブへ切り替えられるようにする。
+        // タブはタイムラインと一緒に出すが、最初のタイムラインを読めなかったときも出し、ほかのタブへ切り替えられるようにする。
         if header.setSectionsRevealed(true) {
             viewController?.headerDidChangeSize()
         }
@@ -749,9 +749,9 @@ final class ProfileController {
         }
     }
 
-    // MARK: - 一覧の切り替え
+    // MARK: - タイムラインの切り替え
 
-    /// 切り替えた一覧を読む。前の一覧は、新しい一覧が届くまで消さずに残す。
+    /// 切り替えたタイムラインを読む。前のタイムラインは、新しいタイムラインが届くまで消さずに残す。
     private func select(_ tab: ProfileTab) {
         guard store.select(tab) != nil else { return }
         loadInitial()

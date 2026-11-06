@@ -4,11 +4,11 @@ import Synchronization
 import Testing
 @testable import SciaCore
 
-/// 予約の一覧の読み込みと操作。決まりはdocs/tabs.mdの「予約投稿」にある。
+/// 予約投稿のタイムラインの読み込みと操作。決まりはdocs/tabs.mdの「予約投稿」にある。
 @MainActor
 @Suite(.serialized)
 struct ScheduledStatusesModelTests {
-    /// 予約の一覧の画面の偽物。送られた並びと状態を記録する。
+    /// 予約投稿のタイムラインの画面の偽物。送られた並びと状態を記録する。
     private final class RecordingDisplay: ScheduledStatusesDisplay {
         var account: Account?
         private(set) var statusesCalls: [(ids: [String], animatingChanges: Bool)] = []
@@ -114,7 +114,7 @@ struct ScheduledStatusesModelTests {
         #expect(display.statusesCalls.count == callsBefore)
     }
 
-    /// 読めた一覧は、読み直しに失敗しても消さない。まだ何も読めていなければ、理由を一覧の場所に出す。
+    /// 読めた予約投稿は、読み直しに失敗しても消さない。まだ何も読めていなければ、理由をタイムラインの場所に出す。
     @Test func reloadFailureKeepsLoadedList() async throws {
         let fails = Mutex(true)
         let transport = RoutedTransport { _ in

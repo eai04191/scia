@@ -2,7 +2,7 @@ import Testing
 @testable import SciaCore
 
 struct PhotoStackVariationTests {
-    /// 一覧の既定の置き方（ずらす量は写真の一辺に対する割合）。
+    /// タイムラインの既定の置き方（ずらす量は写真の一辺に対する割合）。
     private let base = [
         PhotoStackPlacement(rotation: -1),
         PhotoStackPlacement(rotation: 3, offsetX: 0.155, offsetY: 0.04),

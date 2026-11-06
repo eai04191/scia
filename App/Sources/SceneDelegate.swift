@@ -275,7 +275,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         try? AppDependencies.accounts.get()
     }
 
-    /// アカウントの一覧、追加、ログアウトのメニュー。開くたびに今のアカウントで組み立て直す。
+    /// アカウントのリスト、追加、ログアウトのメニュー。開くたびに今のアカウントで組み立て直す。
     private func makeAccountMenu() -> UIMenu {
         guard let accounts else { return UIMenu() }
         let add = UIAction(title: "アカウントを追加", image: UIImage(systemName: "person.badge.plus")) { [weak self] _ in
@@ -502,7 +502,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         do {
             try accounts.remove(credential.id)
         } catch {
-            // 消せなければ、アカウントは一覧にも端末にも残っているので、今の画面のまま知らせる。
+            // 消せなければ、アカウントはアカウントのリストにも端末にも残っているので、今の画面のまま知らせる。
             // ログイン画面に替えると、残っているほかのアカウントにも、起動し直すまで戻れなくなるため。
             logger.error("account removal failed: \(SciaLog.describe(error), privacy: .public)")
             let alert = UIAlertController(title: "ログアウトできませんでした", message: ErrorPresentation(error).text, preferredStyle: .alert)

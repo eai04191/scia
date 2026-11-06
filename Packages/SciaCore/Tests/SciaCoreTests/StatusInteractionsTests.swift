@@ -212,7 +212,7 @@ struct StatusInteractionsTests {
         #expect(settled.isEmpty)
     }
 
-    /// サーバーが受け付けたら、結果を反映した元の投稿を知らせる。お気に入りの一覧に入れるのに使う。
+    /// サーバーが受け付けたら、結果を反映した元の投稿を知らせる。お気に入りのタイムラインに入れるのに使う。
     @Test func reportsSettledOriginalStatus() async throws {
         let original = try status(favourites: 3)
         let boost = Status(id: "99", createdAt: original.createdAt, account: original.account, content: "", spoilerText: "", url: nil, reblog: original)
@@ -230,7 +230,7 @@ struct StatusInteractionsTests {
     }
 
     /// お気に入りの結果を待っている間にブックマークしたら、お気に入りを受け付けたときに知らせる投稿にも、ブックマークを含める。
-    /// 押したときの古い状態で、お気に入りの一覧にブックマークしていない行として入れないため。
+    /// 押したときの古い状態で、お気に入りのタイムラインにブックマークしていない行として入れないため。
     @Test func settledStatusIncludesActionPressedWhileWaiting() async throws {
         let shown = Shown(try status())
         let gate = FetchGate()

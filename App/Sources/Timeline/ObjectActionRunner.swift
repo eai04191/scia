@@ -25,7 +25,7 @@ struct ObjectEntity<Item: ObjectActionItem & MenuItemPresentable> {
 
 @MainActor
 extension ObjectEntity where Item == StatusMenuItem {
-    /// 一覧の投稿の行と、引用の囲み。
+    /// タイムラインの投稿の行と、引用の囲み。
     static var status: Self { ObjectEntity(title: "投稿", actions: \.statusActions) }
     static var notification: Self { ObjectEntity(title: "通知", actions: \.notificationActions) }
 }
@@ -279,7 +279,7 @@ final class ObjectLongPress: NSObject, UIGestureRecognizerDelegate {
 
 /// 長押しのメニューを出すときに、部品をどう持ち上げるか。決まりはdocs/menus.mdの「持ち上げ方」にある。
 enum ObjectLift {
-    /// 持ち上げず、一覧の行と同じく指の位置にメニューだけを出す。
+    /// 持ち上げず、タイムラインの行と同じく指の位置にメニューだけを出す。
     /// 文字の行（通知の見出し、「〜がブースト」の行）も、行と同じく閉じるときに文字がゆがむため、持ち上げない。
     case none
     /// 部品を今の角丸の形のまま持ち上げる（アイコン）。
@@ -383,7 +383,7 @@ final class ObjectInteraction: NSObject, UIContextMenuInteractionDelegate {
     }
 }
 
-/// 触れた位置を覚えるだけで、認識しない。一覧の行のタップのように、タップの処理が押した位置を受け取らないときに、メニューを出す位置にする。
+/// 触れた位置を覚えるだけで、認識しない。タイムラインの行のタップのように、タップの処理が押した位置を受け取らないときに、メニューを出す位置にする。
 final class TouchLocationRecorder: UIGestureRecognizer {
     private(set) var lastLocation: CGPoint?
 

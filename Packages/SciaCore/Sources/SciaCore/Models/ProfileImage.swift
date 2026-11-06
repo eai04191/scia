@@ -8,7 +8,7 @@ public enum ProfileImage: String, Hashable, Sendable, CaseIterable {
 
 extension Account {
     /// 画像を、ビューアで開く添付ファイルとして表す。元の画像とアニメーションしない版のどちらのURLもなければnil。
-    /// 元の画像はアニメーションするGIFのことがあるため、共有と保存ではそのまま渡し、一覧で読み込んだ静止画を届くまでの下地にする。
+    /// 元の画像はアニメーションするGIFのことがあるため、共有と保存ではそのまま渡し、タイムラインで読み込んだ静止画を届くまでの下地にする。
     /// 代替テキストは、投稿の添付ファイルと同じく、空でもそのまま渡す。説明にならないものを除くのは表示する側。
     /// IDは添付ファイルのIDと混ざらないよう、アカウントと画像の種類から作る。
     public func attachment(of image: ProfileImage) -> MediaAttachment? {

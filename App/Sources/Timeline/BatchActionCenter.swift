@@ -1,7 +1,7 @@
 import SciaCore
 import UIKit
 
-/// 一覧で選んだ投稿に、まとめてブーストや共有をする。選んだ一覧を離れても続くよう、セッションで持つ。決まりはdocs/batch-actions.mdにある。
+/// タイムラインで選んだ投稿に、まとめてブーストや共有をする。選んだタイムラインを離れても続くよう、セッションで持つ。決まりはdocs/batch-actions.mdにある。
 @MainActor
 final class BatchActionCenter {
     /// 同じ操作の結果を待っている投稿だったので送らなかった。押した操作の結果を待ってから続きを送れば済む。

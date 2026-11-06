@@ -24,9 +24,9 @@ extension KeyedDecodingContainer {
     }
 }
 
-/// 一覧を要素ごとに読む。読めない要素は、IDが読めれば`UnreadableItem`として残し、IDも読めなければ外して記録する。
+/// 配列を要素ごとに読む。読めない要素は、IDが読めれば`UnreadableItem`として残し、IDも読めなければ外して記録する。
 ///
-/// IDも読めない要素は、一覧に場所を取れず、続きを読む位置にも使えない。1ページの全部がIDも読めない要素だと、空のページと同じに見えて
+/// IDも読めない要素は、タイムラインに場所を取れず、続きを読む位置にも使えない。1ページの全部がIDも読めない要素だと、空のページと同じに見えて
 /// 読み切ったと判断してしまう。それを避けるには`Link`ヘッダーで続きをたどる必要があるが、IDすら返さないサーバーは考えにくいため、そこまではしない。
 struct ElementList<Element: Decodable>: Decodable {
     let elements: [Element]
@@ -48,7 +48,7 @@ struct ElementList<Element: Decodable>: Decodable {
     }
 }
 
-/// 一覧の要素1つ。読めなくても投げず、読めたところまでを返す。投げると、その後ろの要素へ進めないため。
+/// 配列の要素1つ。読めなくても投げず、読めたところまでを返す。投げると、その後ろの要素へ進めないため。
 private enum ListElement<Element: Decodable>: Decodable {
     case readable(Element)
     case unreadable(UnreadableItem)
@@ -67,7 +67,7 @@ private enum ListElement<Element: Decodable>: Decodable {
         }
     }
 
-    /// 読めなかった要素から、一覧に並べるのに要るものだけを読む。
+    /// 読めなかった要素から、タイムラインに並べるのに要るものだけを読む。
     private struct Identity: Decodable {
         let id: String
         let url: URL?
@@ -108,7 +108,7 @@ enum DecodingLog {
     /// この起動の間に、読めずに外したり、表示できない行にしたりした項目の数。
     static var droppedCount: Int { dropCount.withLock { $0 } }
 
-    /// 読んでいる応答。一覧の中の要素が読めなかったとき、どのAPIの応答の、どの項目にどんな形の値があったかを書くのに使う。
+    /// 読んでいる応答。配列の中の要素が読めなかったとき、どのAPIの応答の、どの項目にどんな形の値があったかを書くのに使う。
     struct Context: Sendable {
         /// メソッドと、IDを伏せたパス。
         let request: String

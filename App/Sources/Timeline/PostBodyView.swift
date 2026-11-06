@@ -457,8 +457,8 @@ final class PostBodyView: UIView {
     }
 
     /// リアクションがすべてなくなったときに、列の像をその場に残して、ボタンが消えるのと同じく縮めながら薄くして外す。
-    /// 列は並びから外れて行が縮むので、像は行の下へはみ出し、一覧が下の行を上へ動かして覆う（`reconfigureShiftingRowsBelow`）。
-    /// 動きは、次に並べるときに始める。一覧は行の中身を動きを止めた描き直しの中で当てるため、`apply`の中で始めた`UIView.animate`は効かない。
+    /// 列は並びから外れて行が縮むので、像は行の下へはみ出し、タイムラインが下の行を上へ動かして覆う（`reconfigureShiftingRowsBelow`）。
+    /// 動きは、次に並べるときに始める。タイムラインは行の中身を動きを止めた描き直しの中で当てるため、`apply`の中で始めた`UIView.animate`は効かない。
     private func fadeOutReactions(_ view: ReactionChipsView, duration: TimeInterval) {
         guard duration > 0, !UIAccessibility.isReduceMotionEnabled, let snapshot = view.snapshotView(afterScreenUpdates: false) else { return }
         snapshot.frame = view.frame
@@ -668,7 +668,7 @@ final class PostBodyView: UIView {
         invalidateRowHeight()
     }
 
-    /// 本文の高さが変わったので、置いている一覧の行に高さを測り直させる。行の上端は動かさず、下の行を動かす。
+    /// 本文の高さが変わったので、置いているタイムラインの行に高さを測り直させる。行の上端は動かさず、下の行を動かす。
     private func invalidateRowHeight() {
         var view: UIView? = self
         while let current = view, !(current is UICollectionViewCell) {
@@ -833,7 +833,7 @@ final class PostBodyView: UIView {
     private func updateTextKitBaselines(width: CGFloat) {
         // 初めて中身を入れるときは、まだ幅が決まっていない。十分に広い幅で並べて決め、高さを測る前にベースラインを置いておく。
         // 0のままにすると、ベースラインがラベルの上端に重なり、並べ直すまで本文が上へずれた高さで測られる。
-        // 先に並べてあれば、並べた幅で決める。一覧の本文は、ふつうその幅に並ぶ。
+        // 先に並べてあれば、並べた幅で決める。タイムラインの本文は、ふつうその幅に並ぶ。
         let baselines = textLabel.textKitBaselines(width: width > 0 ? width : textLabel.preparedLayoutWidth ?? Self.unknownTextWidth)
         if textKitFirstBaseline.constant != baselines.first {
             textKitFirstBaseline.constant = baselines.first
@@ -944,7 +944,7 @@ final class PostBodyView: UIView {
 
     /// 出した囲みを返す。
     /// - Parameter fadesIn: 同じ投稿のリンクカードから替わった（Xの投稿を読み終えた）。このときだけ、カードの像を薄くしながら囲みを浮かび上がらせる。
-    ///   行が伸びる動きは一覧が付ける。使い回された行で別の投稿に替わったときは、動かさずに出す。
+    ///   行が伸びる動きはタイムラインが付ける。使い回された行で別の投稿に替わったときは、動かさずに出す。
     /// - Parameter keepsFade: 同じ投稿の囲みを描き直すだけ。浮かび上がらせている途中なら、その濃さのまま動かし続ける。
     private func applyEmbed(_ embed: EmbeddedPostView.Content?, fadesIn: Bool, keepsFade: Bool, leavingCard: UIView?, below shownAbove: UIView?, spacing: CGFloat, placement: Placement) -> EmbeddedPostView? {
         guard let embed else {
@@ -954,7 +954,7 @@ final class PostBodyView: UIView {
         let embedView = loadedEmbedView()
         embedView.isHidden = false
         embedView.apply(embed)
-        // 一覧は行の高さを動かす動きの中で描き直すため、その動きに乗せず、すぐ消す。乗せると、濃い状態から薄くなる途中で
+        // タイムラインは行の高さを動かす動きの中で描き直すため、その動きに乗せず、すぐ消す。乗せると、濃い状態から薄くなる途中で
         // 濃くし始め、1コマで囲みが出て見える。濃くしている途中の行が別の投稿に使い回されたときも、その動きを止める。
         if fadesIn {
             embedView.stopFading(at: 0)
@@ -963,7 +963,7 @@ final class PostBodyView: UIView {
         }
         if fadesIn {
             let statusID = content?.statusID
-            // 一覧は動きを止めて描き直すことがあり、その中ではUIView.animateが動かないため、描き直しを終えてから動かす。
+            // タイムラインは動きを止めて描き直すことがあり、その中ではUIView.animateが動かないため、描き直しを終えてから動かす。
             DispatchQueue.main.async { [weak self] in
                 guard let self, let embedView = self.embedView else { return }
                 // 待つ間に同じ投稿の囲みが描き直された（絵文字が届いたなど）だけなら、そのまま浮かび上がらせる。
@@ -983,7 +983,7 @@ final class PostBodyView: UIView {
     private func leaveCard() -> UIView? {
         removeLeavingCardSnapshot()
         guard let cardView = Self.shown(cardView), let snapshot = cardView.snapshotView(afterScreenUpdates: false) else { return nil }
-        // 一覧は行の高さを動かす動きの中で描き直すため、像の置き場所がその動きに乗って左上から動かないよう、動きの外で置く。
+        // タイムラインは行の高さを動かす動きの中で描き直すため、像の置き場所がその動きに乗って左上から動かないよう、動きの外で置く。
         UIView.performWithoutAnimation {
             snapshot.frame = cardView.frame
             snapshot.isUserInteractionEnabled = false
@@ -1073,7 +1073,7 @@ final class PostBodyView: UIView {
     ///   長い本文を切る決まり（`PostBodyContent.truncation`）では、falseのまま最後の段落で測る。切るかどうかは並べる幅で決まるため、
     ///   全体で測ると、切っていないほとんどの投稿でも途中の段落の絵文字の分だけ下の部品とのあいだが広がる。切ったときは、見える最後の行に、
     ///   最後の段落より下へ伸びる大きい絵文字があると、その差の分だけ下の部品に近づく。幅が分かるのは並べるときで、あいだの制約を作る中身の適用では分からず、
-    ///   並べるときに制約を変えると、行の高さが一覧の測った高さと食い違うため、対応しない。
+    ///   並べるときに制約を変えると、行の高さがタイムラインの測った高さと食い違うため、対応しない。
     static func textBottomInset(of text: NSAttributedString, isTruncated: Bool = false) -> CGFloat {
         guard text.length > 0 else { return 0 }
         let paragraph = isTruncated

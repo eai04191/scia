@@ -19,7 +19,7 @@ final class SavedStatusesController {
         viewController.onApproachingEnd = { [weak model] in model?.approachEnd() }
         viewController.onRetry = { [weak model] in model?.retry() }
         viewController.onGapSelect = { [weak model] id, direction in model?.selectGap(id, from: direction) }
-        // 開くまで読まない。開いたことのない一覧のために、起動のたびに通信しないため。
+        // 開くまで読まない。開いたことのないタイムラインのために、起動のたびに通信しないため。
         viewController.onAppearing = { [weak model] in model?.startIfNeeded() }
     }
 
@@ -35,7 +35,7 @@ final class SavedStatusesController {
     }
 
     #if DEBUG
-    /// 始めている一覧だけ読み込み直す。障害を起こすデバッグURLで、開いたことのない一覧まで読み始めないようにする。
+    /// 始めているタイムラインだけ読み込み直す。障害を起こすデバッグURLで、開いたことのないタイムラインまで読み始めないようにする。
     func reloadIfStarted() {
         model.reloadIfStarted()
     }

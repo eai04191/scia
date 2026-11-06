@@ -1,7 +1,7 @@
 import SciaCore
 import UIKit
 
-/// 投稿のセルの中身を、今のチューニングと設定から組み立てる。一覧と、設定画面の見本の投稿で同じ見た目にするために分けている。
+/// 投稿のセルの中身を、今のチューニングと設定から組み立てる。タイムラインと、設定画面の見本の投稿で同じ見た目にするために分けている。
 @MainActor
 struct PostContentBuilder {
     let tuning: TuningStore
@@ -9,10 +9,10 @@ struct PostContentBuilder {
     let emojiImages: EmojiImageStore<UIImage>
     let mediaImages: MediaImageStore<UIImage>
     let avatarImages: AvatarImageStore<UIImage>
-    /// 一覧の投稿の本文を先に作っておく部品。あれば、作っておいた本文を使う。
+    /// タイムラインの投稿の本文を先に作っておく部品。あれば、作っておいた本文を使う。
     var preparedBodies: BodyTextPreparer?
 
-    /// タップしたときの処理と添付ファイルは含めない。一覧では呼び出し側が足す。
+    /// タップしたときの処理と添付ファイルは含めない。タイムラインでは呼び出し側が足す。
     /// - Parameter isPinned: プロフィールの上に置く、固定された投稿。名前の上に固定されていることを示す行を出す。
     /// - Parameter replyLabel: 名前の上に出す返信のラベル。固定された投稿とブーストでは、そのことを示す行を優先し、ラベルは出さない。
     func configuration(for status: Status, isPinned: Bool = false, replyLabel: ReplyLabel? = nil, base: UIListContentConfiguration) -> PostContentConfiguration {
@@ -163,7 +163,7 @@ struct PostContentBuilder {
         )
     }
 
-    /// 返信のラベル。自分への返信は、一覧の中で気づけるよう、記号と文字をアプリの色で描く。
+    /// 返信のラベル。自分への返信は、タイムラインの中で気づけるよう、記号と文字をアプリの色で描く。
     private func replyContext(_ label: ReplyLabel, font: UIFont, language: String) -> PostContentConfiguration.Context {
         let text = switch label {
         case .continuation: "続き"
@@ -216,7 +216,7 @@ struct PostContentBuilder {
     /// 文字の大きさは「投稿の見た目」の本文の文字にし、色は読むものなのでいちばん濃い色を既定にする。
     /// 引用ブロックは、RichTextRendererがこれより一段薄く描く。
     /// - Parameter font: 本文の文字と違う大きさで描くときの書体。通知で再掲する投稿は「通知の見た目」の文字で描く。
-    /// - Parameter enlargesEmojiOnly: 本文が絵文字だけなら、絵文字を大きく描く。一覧の投稿の本文だけで使い、縮めた見た目の再掲では使わない。
+    /// - Parameter enlargesEmojiOnly: 本文が絵文字だけなら、絵文字を大きく描く。タイムラインの投稿の本文だけで使い、縮めた見た目の再掲では使わない。
     /// - Parameter joinsLines: 段落と改行を詰めて1続きに描く。通知で再掲する投稿で使う（docs/notification-display.mdの「再掲する投稿の本文」）。
     func body(of status: Status, base: UIListContentConfiguration, color: UIColor = .label, font: UIFont? = nil, enlargesEmojiOnly: Bool = false, joinsLines: Bool = false) -> NSAttributedString {
         var renderer = bodyRenderer(of: status, font: font ?? PostTypography(settings: settings).font(.body), color: color)
@@ -227,7 +227,7 @@ struct PostContentBuilder {
         return renderer.render(joinsLines ? text.joiningLines() : text)
     }
 
-    /// 一覧の投稿の本文（`configuration(for:isPinned:replyLabel:base:)`の本文）の描き手。本文を先に作るときも、同じ描き手で作る。
+    /// タイムラインの投稿の本文（`configuration(for:isPinned:replyLabel:base:)`の本文）の描き手。本文を先に作るときも、同じ描き手で作る。
     func postBodyRenderer(of status: Status) -> RichTextRenderer {
         var renderer = bodyRenderer(of: status, font: PostTypography(settings: settings).font(.body), color: .label)
         renderer.emojiOnly = emojiOnlyEnlargement
@@ -289,8 +289,8 @@ struct PostContentBuilder {
 
     /// 引用元の投稿の囲み。作者の行は名前だけを太くし、本文は引用元の投稿の言語で描く。
     /// - Parameters:
-    ///   - spoiler: 引用元の注意書きかフィルターの警告。開いているかは一覧が覚えているため、置く側が決めて渡す。
-    ///   - media: 引用元の添付ファイル。ぼかすかは一覧が覚えているため、置く側が決めて渡す。
+    ///   - spoiler: 引用元の注意書きかフィルターの警告。開いているかはタイムラインが覚えているため、置く側が決めて渡す。
+    ///   - media: 引用元の添付ファイル。ぼかすかはタイムラインが覚えているため、置く側が決めて渡す。
     func quote(_ quoted: Status, spoiler: PostBodyContent.Spoiler?, media: MediaGridView.Content?, base: UIListContentConfiguration) -> EmbeddedPostView.Content {
         let font = PostTypography(settings: settings).font(.xPostBody)
         var notes: [EmbeddedPostView.Content.Note] = []
@@ -405,7 +405,7 @@ struct PostContentBuilder {
         return text
     }
 
-    /// 投稿の注意書き。注意書きがなければnil。開いているかは一覧が覚えているため、ここでは折りたたんだ形で返す。
+    /// 投稿の注意書き。注意書きがなければnil。開いているかはタイムラインが覚えているため、ここでは折りたたんだ形で返す。
     /// - Parameter font: 注意書きの文字の書体。nilなら本文の文字で描く。
     func spoiler(of status: Status, base: UIListContentConfiguration, color: UIColor = .label, font: UIFont? = nil) -> PostBodyContent.Spoiler? {
         guard !status.spoilerText.isEmpty else { return nil }

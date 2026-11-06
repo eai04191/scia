@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-/// ブックマークやお気に入りの一覧の読み込みを受け持ち、結果を一覧の画面（`TimelineDisplay`）へ命令として伝える。決まりはdocs/tabs.mdの「ブックマークとお気に入り」にある。
+/// ブックマークやお気に入りのタイムラインの読み込みを受け持ち、結果をタイムラインの画面（`TimelineDisplay`）へ命令として伝える。決まりはdocs/tabs.mdの「ブックマークとお気に入り」にある。
 ///
 /// ストリームがないため購読せず、タブで開くたびと、開いたままアプリに戻ったときに、最新のページを読んで先頭に足す。
 @MainActor
@@ -10,20 +10,20 @@ public final class SavedStatusesModel {
     private static let pageSize = 40
 
     public let kind: SavedStatusesKind
-    /// 結果を伝える一覧の画面。
+    /// 結果を伝えるタイムラインの画面。
     public weak var display: (any TimelineDisplay)?
-    /// この一覧で当てるサーバーのフィルター。公式のWebクライアントと同じく、ホームの文脈のフィルターを当て、「隠す」に一致した投稿も隠さずに警告で折りたたむ。自分で残した投稿だから。
+    /// このタイムラインで当てるサーバーのフィルター。公式のWebクライアントと同じく、ホームの文脈のフィルターを当て、「隠す」に一致した投稿も隠さずに警告で折りたたむ。自分で残した投稿だから。
     public let filtering: StatusFiltering
     private let store: SavedStatusesStore
     /// APIが401を返したときに呼ぶ。ログアウトされたとして止め、ログインし直しを促すのはセッションに任せる。
     private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "timeline")
-    /// この一覧が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
+    /// このタイムラインが始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
     private let tasks: TaskScope
     private var isStopped: Bool { tasks.isClosed }
     /// 走り終えていない処理の数。止めたあとに何も起きないことを、テストが確かめるのに使う。
     public var runningTaskCount: Int { tasks.runningCount }
-    /// 一覧全体の状態。失敗したままなら、電波の回復や引っぱった読み直しでやり直す。
+    /// タイムライン全体の状態。失敗したままなら、電波の回復や引っぱった読み直しでやり直す。
     public private(set) var contentState = TimelineContentState.loaded
     /// 末尾の読み込みの状態。失敗したままなら、電波の回復でやり直す。
     public private(set) var footerState = TimelineFooterState.idle
@@ -47,7 +47,7 @@ public final class SavedStatusesModel {
 
     private var name: String { kind.rawValue }
 
-    /// まだ始めていなければ始める。開くまで読まない。開いたことのない一覧のために、起動のたびに通信しないため。
+    /// まだ始めていなければ始める。開くまで読まない。開いたことのないタイムラインのために、起動のたびに通信しないため。
     public func startIfNeeded() {
         guard !hasStarted else { return }
         start(purpose: .action)
@@ -74,7 +74,7 @@ public final class SavedStatusesModel {
     }
 
     #if DEBUG
-    /// 始めている一覧だけ読み込み直す。障害を起こすデバッグURLで、開いたことのない一覧まで読み始めないようにする。
+    /// 始めているタイムラインだけ読み込み直す。障害を起こすデバッグURLで、開いたことのないタイムラインまで読み始めないようにする。
     public func reloadIfStarted() {
         guard hasStarted else { return }
         start(purpose: .action)
@@ -141,7 +141,7 @@ public final class SavedStatusesModel {
         display?.setFooterState(state)
     }
 
-    /// 一覧を引っぱって離したときに、最新のページを読んで、一番上の投稿より後に付けた分を上に足す。
+    /// タイムラインを引っぱって離したときに、最新のページを読んで、一番上の投稿より後に付けた分を上に足す。
     /// 最初の読み込みに失敗したままなら、それをやり直す。
     public func refresh() async {
         guard !isStopped, hasStarted else { return }
@@ -185,7 +185,7 @@ public final class SavedStatusesModel {
         }
     }
 
-    /// 最新のページを読み、手元より新しい分を先頭に足す。失敗しても、一覧はそのまま見せ、次に開いたときに読み直す。
+    /// 最新のページを読み、手元より新しい分を先頭に足す。失敗しても、タイムラインはそのまま見せ、次に開いたときに読み直す。
     @discardableResult
     /// - Parameter purpose: 引っぱって読み込み直したときは`.action`。タブを見せ始めたときやアプリに戻ったときは`.display`。
     private func refreshNewest(purpose: RequestPurpose) -> Task<Void, Never>? {
@@ -244,7 +244,7 @@ public final class SavedStatusesModel {
         }
     }
 
-    /// 投稿の中身を変える。ブックマークやお気に入りを外しても行は残し、外すのをサーバーが受け付けて一覧から離れたときに消す。
+    /// 投稿の中身を変える。ブックマークやお気に入りを外しても行は残し、外すのをサーバーが受け付けてタイムラインから離れたときに消す。
     public func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
         guard !isStopped, store.updateStatus(id, transform) else { return }
         showEntries()

@@ -74,7 +74,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     var onChange: (MenuLayout<Item>) -> Void
 
     /// 区切り線は同じ値が並ぶため、リストで見分けるIDを行ごとに振る。
-    /// 「その他」の境目も行として持つが、一覧には出さず、節の分かれ目にする。
+    /// 「その他」の境目も行として持つが、リストには出さず、節の分かれ目にする。
     private struct Row: Identifiable {
         let id = UUID()
         var element: MenuLayout<Item>.Element
@@ -259,8 +259,8 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         rows.firstIndex { $0.element == .more } ?? rows.endIndex
     }
 
-    /// 一覧の位置にある行の、`rows`の中の位置。並びの2つの節の外ならnil。
-    /// 並べ替えている間、一覧は途中の並びの位置で聞くが、`rows`は指を離すまで元の並びなので、ほかの行の位置になることがある。
+    /// リストの位置にある行の、`rows`の中の位置。並びの2つの節の外ならnil。
+    /// 並べ替えている間、リストは途中の並びの位置で聞くが、`rows`は指を離すまで元の並びなので、ほかの行の位置になることがある。
     private func rowIndex(at indexPath: IndexPath) -> Int? {
         let index = switch dataSource?.sectionIdentifier(for: indexPath.section) {
         case .main: indexPath.item
@@ -439,9 +439,9 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     }
 
     /// 横並びの字下げと行どうしの線は、ほかの行の並びや表示で変わるため、並びが変わるたびに描き直す。
-    /// 線は、すべての行に大きさを測り直させて引き直す。並べ替えている間、一覧は途中の並びの位置で線の出方を聞くが、`rows`は指を離すまで元の並びなので、ほかの行の出方で引いてしまう。
+    /// 線は、すべての行に大きさを測り直させて引き直す。並べ替えている間、リストは途中の並びの位置で線の出方を聞くが、`rows`は指を離すまで元の並びなので、ほかの行の出方で引いてしまう。
     /// 区切り線の行が動くと、その行は前後とも上下に線を引かないままなのに、下の行の出方で線を引いて残るため、出方が変わった行に絞らない。
-    /// レイアウトを無効にすると、無効にする行を絞っても画面の外の行の測った高さが見積もりの高さに戻って一覧の高さが縮み、
+    /// レイアウトを無効にすると、無効にする行を絞っても画面の外の行の測った高さが見積もりの高さに戻ってリストの高さが縮み、
     /// 下のほうまでスクロールしていると、指を離した直後に持ち上げていた行が離れた位置に描かれ、そこから跳ねて戻るため、行に測り直させる。
     /// 画面の外の行はセルがなく測り直させられないので、画面に入るときに測り直させる。
     private func refreshDependentRows() {
@@ -474,7 +474,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     /// 見えていない行は、出てくるときに今の行から作られる。
     private func refreshRowGroups() {
         let members = rowGroupIndices
-        // 視差効果を減らす設定では動かさない（docs/vision.mdの「一覧の動き」）。
+        // 視差効果を減らす設定では動かさない（docs/vision.mdの「タイムラインの動き」）。
         let duration = UIAccessibility.isReduceMotionEnabled ? 0 : AppDependencies.tuning.value(of: TuningCatalog.menuLayoutIndentDuration)
         UIView.animateSmoothly(duration: duration) { [self] in
             for (index, row) in rows.enumerated() {

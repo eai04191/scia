@@ -1,7 +1,7 @@
 import Foundation
 
-/// 「フォロー中のハッシュタグ」の一覧を、サーバーが返す順に持つ。決まりはdocs/tabs.mdの「フォロー中のハッシュタグ」にある。
-/// 一覧は続きを最後まで読み切ってから入れる。ハッシュタグのメニューがフォローしているかを決めるのと同じ一覧を使うため。
+/// フォローしているハッシュタグを、サーバーが返す順に持つ。決まりはdocs/tabs.mdの「フォロー中のハッシュタグ」にある。
+/// ハッシュタグは続きを最後まで読み切ってから入れる。ハッシュタグのメニューがフォローしているかを決めるのと同じものを使うため。
 @MainActor
 public final class FollowedTagsStore {
     public typealias Fetch = @MainActor () async throws -> [Hashtag]
@@ -24,7 +24,7 @@ public final class FollowedTagsStore {
         self.fetch = fetch
     }
 
-    /// 読み直して置き換える。読み込み中なら何もせずfalseを返す。読めなければ投げ、前の一覧を残す。
+    /// 読み直して置き換える。読み込み中なら何もせずfalseを返す。読めなければ投げ、前に読んだものを残す。
     public func load() async throws -> Bool {
         guard !isLoading else { return false }
         isLoading = true
@@ -39,7 +39,7 @@ public final class FollowedTagsStore {
         return true
     }
 
-    /// ほかで読み直した一覧で置き換える。ハッシュタグのメニューを開いたときの読み直しも、一覧に効かせるため。
+    /// ほかで読み直したもので置き換える。ハッシュタグのメニューを開いたときの読み直しも、「フォロー中のハッシュタグ」に効かせるため。
     /// 読み込み中なら、その読み込みに任せて受け取らずfalseを返す。読み込みの応答も同じ読み直しの結果になるため。
     public func receive(_ loaded: [Hashtag]) -> Bool {
         guard !isLoading else { return false }

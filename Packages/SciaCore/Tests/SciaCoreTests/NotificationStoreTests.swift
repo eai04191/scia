@@ -550,7 +550,7 @@ struct NotificationStoreTests {
         #expect(ids(store) == ["29", "28"])
     }
 
-    /// 削除した通知は一覧から除き、削除の前に読み始めた補完やストリーミングでも戻さない。
+    /// 削除した通知は通知のタイムラインから除き、削除の前に読み始めた補完やストリーミングでも戻さない。
     @Test func removedNotificationDoesNotReturn() async throws {
         let all = try notifications([30, 29, 28])
         let queue = PageQueue([.success(all), .success([all[1]]), .success([])])

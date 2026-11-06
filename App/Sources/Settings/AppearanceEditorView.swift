@@ -507,10 +507,10 @@ struct AppearanceValueRow: View {
 }
 
 /// プレビューに並べる見本の投稿。調整できる部品がどれかの投稿に出るように組む。決まりはdocs/appearance.mdの「プレビュー」にある。
-/// 一覧（`TimelineViewController`）に並べて描き、画像は通信しないよう、アプリのアイコンから作ったものと同梱した写真を使う。
+/// タイムライン（`TimelineViewController`）に並べて描き、画像は通信しないよう、アプリのアイコンから作ったものと同梱した写真を使う。
 @MainActor
 struct AppearanceSamples {
-    /// 見本を並べる一覧。見本を組むのにも、プレビューに置いて見せるのにも使う。1つの画面に1つずつ置く。
+    /// 見本を並べるタイムライン。見本を組むのにも、プレビューに置いて見せるのにも使う。1つの画面に1つずつ置く。
     let timeline: TimelineViewController
     private let settings: AppSettings
     private let tuning: TuningStore
@@ -533,7 +533,7 @@ struct AppearanceSamples {
         }
     }
 
-    /// プレビューの一覧に並べる見本。引用の囲みを出した投稿は、いつも最後に並べる。Xの投稿の囲みも同じ値で描くが、Xの投稿は設定でオンにしたときだけ出すため、見本には出さない。
+    /// プレビューのタイムラインに並べる見本。引用の囲みを出した投稿は、いつも最後に並べる。Xの投稿の囲みも同じ値で描くが、Xの投稿は設定でオンにしたときだけ出すため、見本には出さない。
     /// - Parameters:
     ///   - groups: 見本を出す分類。渡すと、その分類の見本（`sampleIDs(for:focus:)`）だけを返す。nilならすべての見本を返す。
     ///   - focus: 触っている項目。`groups`を渡したとき、その項目にしか要らない見本を足す。
@@ -544,7 +544,7 @@ struct AppearanceSamples {
             .map { .status($0) }
     }
 
-    /// 見本の行の中身。一覧に並べたときと同じく、返信でつながった隣の行と線でつなぐ。テストで、見本の部品の位置を測るのに使う。
+    /// 見本の行の中身。タイムラインに並べたときと同じく、返信でつながった隣の行と線でつなぐ。テストで、見本の部品の位置を測るのに使う。
     /// - Parameter revision: 描き直しのきっかけ。中身は使わない。
     func configurations(colorScheme: ColorScheme, revision _: Int, groups: Set<AppearanceGroup.ID>? = nil, focus: AppearanceFocus? = nil) -> [PostContentConfiguration] {
         let entries = entries(colorScheme: colorScheme, groups: groups, focus: focus)
@@ -557,7 +557,7 @@ struct AppearanceSamples {
         }
     }
 
-    /// 分類の見本の投稿のID。分類ごとの見本に、触っている項目にしか要らない見本を足す。分類が空なら、分類の一覧の画面に出す部品の少ない投稿を1件だけにする。
+    /// 分類の見本の投稿のID。分類ごとの見本に、触っている項目にしか要らない見本を足す。分類が空なら、分類を並べた画面に出す部品の少ない投稿を1件だけにする。
     static func sampleIDs(for groups: Set<AppearanceGroup.ID>, focus: AppearanceFocus?, appearance: AppearanceChoices) -> Set<String> {
         let names = groups.isEmpty ? ["basic"] : groups.flatMap { groupSamples[$0] ?? [] } + focusSamples(focus, appearance: appearance)
         return Set(names.map { "preview-\($0)" })
@@ -720,7 +720,7 @@ struct AppearanceSamples {
             options: [Poll.Option(title: "円", votesCount: nil), Poll.Option(title: "角丸の四角", votesCount: nil)]
         )
         return [
-            // 分類の一覧の画面に出す、部品の少ない投稿。
+            // 分類を並べた画面に出す、部品の少ない投稿。
             status("basic", minutes: 1, account: scia, content: "<p>設定を変えるとタイムラインの投稿がこのように表示されます。</p>"),
             boost,
             // 注意書きのある投稿の画像はぼかされ、サムネイル同士のすき間が見えないため、画像は注意書きのない投稿に付ける。
@@ -746,7 +746,7 @@ struct AppearanceSamples {
             plainBoost,
             // 行の余白と区切り線を見せる、部品の少ない投稿の次に並べる1行の投稿。
             status("next", minutes: 0.5, account: scia, content: "<p>次の投稿です。</p>"),
-            // 返信をつなぐ線を見せる、本文だけの2件。一覧と同じく、すぐ上の投稿への返信は線でつなぎ、返信のラベルを出さない。
+            // 返信をつなぐ線を見せる、本文だけの2件。タイムラインと同じく、すぐ上の投稿への返信は線でつなぎ、返信のラベルを出さない。
             status("parent", minutes: 1.1, account: scia, content: "<p>返信でつながった投稿の最初の投稿です。</p>"),
             status("child", minutes: 1, account: friend, content: "<p>返信です。</p>", replyingTo: scia, inReplyTo: "preview-parent"),
         ]

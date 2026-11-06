@@ -6,7 +6,7 @@ import SciaTesting
 import UIKit
 @testable import Scia
 
-/// 文字列に言語がないと、システムは端末の言語の一覧から漢字とかなの書体を選ぶ。英語の設定では、日本語の文も中国語の書体で描かれていた。
+/// 文字列に言語がないと、システムは端末の言語のリストから漢字とかなの書体を選ぶ。英語の設定では、日本語の文も中国語の書体で描かれていた。
 /// 端末の言語の設定に左右されないことを確かめるため、英語の設定（`-testLanguage en`）でも通す。
 @Suite(.scratch)
 @MainActor
@@ -43,7 +43,7 @@ struct GlyphLanguageTests {
     }
 
     /// 日本語の投稿は、言語がなくても、英語が付いていても、ヒラギノで描く。
-    /// 「自動」は端末の言語の一覧で決まり、テストを走らせる端末で結果が変わるため、日本語を選んで確かめる。「自動」の決め方はSciaCoreで確かめる。
+    /// 「自動」は端末の言語のリストで決まり、テストを走らせる端末で結果が変わるため、日本語を選んで確かめる。「自動」の決め方はSciaCoreで確かめる。
     @Test(arguments: [nil, "ja", "en"] as [String?])
     func japaneseBodyUsesJapaneseFont(_ language: String?) throws {
         let configuration = try controller(glyphLanguage: .japanese).contentConfiguration(for: status("本文と画像のあいだを見る。", language: language), base: .cell())

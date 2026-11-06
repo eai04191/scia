@@ -13,7 +13,7 @@ struct EditHistoryContentBuilder {
     /// - Parameters:
     ///   - language: 投稿の言語。本文と注意書きを、その言語の書体で描く。
     ///   - latestCover: 今の投稿の版の添付ファイルをぼかす理由。ぼかさなければnil。
-    ///   - isHidden: 使う人が一覧で添付ファイルを隠した。
+    ///   - isHidden: 使う人がタイムラインで添付ファイルを隠した。
     ///   - filterTitles: 添付ファイルをぼかすフィルターのうち、一致したものの名前。
     ///   - revealedEditNumbers: ぼかしを外した版。
     func contents(

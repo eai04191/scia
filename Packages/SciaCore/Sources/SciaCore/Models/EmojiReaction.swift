@@ -46,7 +46,7 @@ public struct EmojiReaction: Codable, Hashable, Sendable {
 /// リアクションに使う絵文字。Unicodeの絵文字か、カスタム絵文字。
 /// 同じ絵文字かは、名前だけで見分ける。Fedibirdは投稿のリアクションを名前でまとめ（`Status#generate_grouped_emoji_reactions`）、取り消しも名前で照合するため、
 /// 同じショートコードのカスタム絵文字は、サーバーが違っても1つのリアクションになる。まとめたものの`domain`は、先に使われたカスタム絵文字のものになる。
-/// 画像のURLも、投稿のリアクションと絵文字の一覧のように、取り方で変わりうるため比べない。
+/// 画像のURLも、投稿のリアクションと絵文字のリストのように、取り方で変わりうるため比べない。
 public struct ReactionEmoji: Codable, Hashable, Sendable {
     /// Unicodeの絵文字か、カスタム絵文字のショートコード。ショートコードにはサーバーを含まない。
     public let name: String
@@ -209,7 +209,7 @@ extension Status {
     }
 
     /// `other`と、表示している投稿の絵文字のリアクションのほかは同じか。リアクションが同じならfalse。
-    /// 一覧で、リアクションだけが変わった行を、ボタンの出入りと行の高さを動かして描き直すために使う（docs/emoji-reaction.md）。
+    /// タイムラインで、リアクションだけが変わった行を、ボタンの出入りと行の高さを動かして描き直すために使う（docs/emoji-reaction.md）。
     public func differsOnlyInEmojiReactions(from other: Status) -> Bool {
         guard displayed.emojiReactions != other.displayed.emojiReactions else { return false }
         return adoptingDisplayedEmojiReactions(of: other) == other

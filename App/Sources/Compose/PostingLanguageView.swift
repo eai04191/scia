@@ -115,11 +115,11 @@ struct PostingLanguageSource {
     /// サーバーが受け付ける言語を読む。
     var load: @Sendable () async throws -> [PostingLanguage]
 
-    /// 言語の一覧を読めない投稿欄。テストで使う。
+    /// 言語のリストを読めない投稿欄。テストで使う。
     static let unavailable = PostingLanguageSource(recent: nil) { throw CancellationError() }
 }
 
-/// サーバーが受け付ける言語を、読めたら覚えておく。言語の一覧はサーバーの版でしか変わらないので、シートを開くたびに読み直さない。
+/// サーバーが受け付ける言語を、読めたら覚えておく。言語のリストはサーバーの版でしか変わらないので、シートを開くたびに読み直さない。
 /// 読めなかったときは覚えず、次に開いたときに読み直す。
 @MainActor
 final class PostingLanguageCache {

@@ -84,10 +84,10 @@ guard let context = sharedContext(contextClass, sharedSelector, developerDir() a
     fail("SimServiceContextを作れない: \(String(describing: error))")
 }
 guard let deviceSet = defaultDeviceSet(context, deviceSetSelector, &error) else {
-    fail("端末の一覧を読めない: \(String(describing: error))")
+    fail("端末のリストを読めない: \(String(describing: error))")
 }
 guard let devices = deviceSet.value(forKey: "devices") as? [NSObject] else {
-    fail("端末の一覧の形が想定と違う")
+    fail("端末のリストの形が想定と違う")
 }
 let matches = devices.filter { device in
     let name = device.value(forKey: "name") as? String

@@ -192,7 +192,7 @@ extension TimelineViewController {
             header: header,
             body: body,
             metrics: NotificationContentConfiguration.Metrics(
-                // 行の余白とアイコンの列は、同じ一覧に並ぶメンションなどの投稿の行と文字の列を揃えるため、「投稿の見た目」に従う。
+                // 行の余白とアイコンの列は、同じタイムラインに並ぶメンションなどの投稿の行と文字の列を揃えるため、「投稿の見た目」に従う。
                 margins: settings.rowMargins,
                 avatarSize: settings.value(of: AppearanceCatalog.avatarSize),
                 headerFont: font,

@@ -504,7 +504,7 @@ struct TimelineGapTests {
         #expect(ids(store) == Array((8...21).reversed()))
     }
 
-    /// 補完に失敗した後に最新のページで読み直したら、次の補完は読み直した一覧の最新から読む。
+    /// 補完に失敗した後に最新のページで読み直したら、次の補完は読み直したタイムラインの最新から読む。
     @Test func reloadAfterFailedFillDropsStaleBaseline() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let failing = FailOnce()
@@ -776,7 +776,7 @@ struct TimelineGapTests {
         #expect(ids(store) == Array((2...20).reversed()))
     }
 
-    /// 一覧が空のときの補完が再生成中で一部の投稿だけを返しても、返った投稿の間をギャップにする。
+    /// タイムラインが空のときの補完が再生成中で一部の投稿だけを返しても、返った投稿の間をギャップにする。
     @Test func regeneratingFillIntoEmptyListKeepsGapBetweenReturnedStatuses() async throws {
         let server = FakeHomeServer(ids: 1...20)
         let latestLoads = Mutex(0)
@@ -803,7 +803,7 @@ struct TimelineGapTests {
 
     // MARK: - 末尾より古い新着
 
-    /// 古いページを読んでいる間に、末尾より古いIDの投稿が遅れて届いても、読んでいたページに入っていなければ、末尾が下がったところで一覧に入れる。
+    /// 古いページを読んでいる間に、末尾より古いIDの投稿が遅れて届いても、読んでいたページに入っていなければ、末尾が下がったところでタイムラインに入れる。
     /// ページはその投稿が届く前にサーバーが作ったので入っておらず、捨てるとどこからも読めないため。
     @Test func lateArrivalOlderThanTailDuringLoadOlderIsKept() async throws {
         let server = FakeHomeServer(ids: (1...20).map { $0 * 10 })
@@ -829,9 +829,9 @@ struct TimelineGapTests {
         #expect(ids(store) == [200, 190, 180, 170, 160, 155, 150], "遅れて届いた投稿が抜けました: \(store.entries.map(\.debugLabel))")
     }
 
-    // MARK: - 一覧が空のときの補完
+    // MARK: - タイムラインが空のときの補完
 
-    /// 最初の読み込みが空で、一覧が空のときの補完に失敗したあとで新着が入っても、次の補完は最新のページから読み、失敗した間を読み飛ばさない。
+    /// 最初の読み込みが空で、タイムラインが空のときの補完に失敗したあとで新着が入っても、次の補完は最新のページから読み、失敗した間を読み飛ばさない。
     @Test func failedFillIntoEmptyListIsRetriedFromLatestPage() async throws {
         let server = FakeHomeServer(ids: [Int]())
         let failing = FailOnce()
@@ -859,7 +859,7 @@ struct TimelineGapTests {
         #expect(ids(store) == [3, 2, 1], "失敗した補完の間を読み飛ばしました: \(store.entries.map(\.debugLabel))")
     }
 
-    /// 一覧が空のときの補完が最新のページを読んでいる間に、古いIDの新着が入っても、最新のページとその間をギャップにする。
+    /// タイムラインが空のときの補完が最新のページを読んでいる間に、古いIDの新着が入っても、最新のページとその間をギャップにする。
     @Test func arrivalsDuringFillIntoEmptyListKeepGapBelowLatestPage() async throws {
         let server = FakeHomeServer(ids: [Int]())
         let gate = FetchGate()
@@ -893,7 +893,7 @@ struct TimelineGapTests {
         #expect(Set(ids(store)) == [10, 15, 20, 30, 40, 50, 60], "最新のページと新着の間を読み飛ばしました: \(store.entries.map(\.debugLabel))")
     }
 
-    /// 一覧が空のときの補完が最新のページを読んでいる間に、また補完を求められたら、読み終えた後に続けて読む。
+    /// タイムラインが空のときの補完が最新のページを読んでいる間に、また補完を求められたら、読み終えた後に続けて読む。
     @Test func fillRequestedDuringFillIntoEmptyListRunsAfterIt() async throws {
         let server = FakeHomeServer(ids: [Int]())
         let gate = FetchGate()
@@ -918,7 +918,7 @@ struct TimelineGapTests {
         #expect(ids(store) == [3, 2, 1], "読んでいる間に求められた補完を読みませんでした: \(store.entries.map(\.debugLabel))")
     }
 
-    /// 一覧が空のときの補完が再生成中で1件も返らなければ、そのあと新着が入っても、次の補完も最新のページから読む。
+    /// タイムラインが空のときの補完が再生成中で1件も返らなければ、そのあと新着が入っても、次の補完も最新のページから読む。
     @Test func emptyRegeneratingFillIntoEmptyListIsRetriedFromLatestPage() async throws {
         let server = FakeHomeServer(ids: [Int]())
         let regenerating = FailOnce()
@@ -940,7 +940,7 @@ struct TimelineGapTests {
         #expect(ids(store) == [3, 2, 1], "再生成中で読めなかった間を読み飛ばしました: \(store.entries.map(\.debugLabel))")
     }
 
-    /// 一覧が空のときの補完が再生成中で一部の投稿だけを返したら、そのあと新着が入っても、次の補完は返った中で最も新しい投稿から読む。
+    /// タイムラインが空のときの補完が再生成中で一部の投稿だけを返したら、そのあと新着が入っても、次の補完は返った中で最も新しい投稿から読む。
     @Test func regeneratingFillIntoEmptyListReadsAboveNewestReturnedStatusNext() async throws {
         let server = FakeHomeServer(ids: [Int]())
         let regenerating = FailOnce()
@@ -987,7 +987,7 @@ struct TimelineGapTests {
         #expect(Set(ids(store)) == Set(3...22), "最新のページより新しい投稿の間を読み飛ばしました: \(store.entries.map(\.debugLabel))")
     }
 
-    /// 削除で一覧が空になったまま補完が読んでいる間に、また補完を求められたら、読み終えた後に同じ基準から読み直す。
+    /// 削除でタイムラインが空になったまま補完が読んでいる間に、また補完を求められたら、読み終えた後に同じ基準から読み直す。
     @Test func fillRequestedDuringFillAfterDeletingEveryStatusRunsAfterIt() async throws {
         let server = FakeHomeServer(ids: [10])
         let gate = FetchGate()
@@ -1012,7 +1012,7 @@ struct TimelineGapTests {
         #expect(ids(store) == [20], "読んでいる間に求められた補完を読みませんでした: \(store.entries.map(\.debugLabel))")
     }
 
-    /// 削除で一覧が空になっても、末尾の位置を残す。古いIDの新着が末尾にならず、その上の投稿を読み飛ばさない。
+    /// 削除でタイムラインが空になっても、末尾の位置を残す。古いIDの新着が末尾にならず、その上の投稿を読み飛ばさない。
     @Test func deletingEveryStatusKeepsTailPosition() async throws {
         let server = FakeHomeServer(ids: (1...5).map { $0 * 10 })
         let store = makeStore(server)
@@ -1055,7 +1055,7 @@ struct TimelineGapTests {
         #expect(!hasOverlappingGaps(store), "範囲の重なるギャップがあります: \(store.entries.map(\.debugLabel))")
     }
 
-    /// 空の一覧の補完と古い方の読み込みが並行して、どちらも作り直し中の応答を受けても、範囲の一部が重なるギャップを残さない。
+    /// 空のタイムラインの補完と古い方の読み込みが並行して、どちらも作り直し中の応答を受けても、範囲の一部が重なるギャップを残さない。
     @Test func latestPageAndOlderPageDuringRegenerationDoNotOverlapGaps() async throws {
         let server = FakeHomeServer(ids: (1...20).map { $0 * 10 })
         let latestCount = Mutex(0)
@@ -1328,8 +1328,8 @@ struct TimelineGapTests {
         #expect(server.queries.last == TimelineQuery(sinceID: "11", limit: Self.pageSize))
     }
 
-    /// 確かめた投稿が1件もない一覧には、応答の投稿を入れずにストリーミングを待つ。
-    /// 入れると、補完の基準がないのに一覧が空でなくなり、切れていた間の投稿と応答の投稿の間を読まなくなるため。
+    /// 確かめた投稿が1件もないタイムラインには、応答の投稿を入れずにストリーミングを待つ。
+    /// 入れると、補完の基準がないのにタイムラインが空でなくなり、切れていた間の投稿と応答の投稿の間を読まなくなるため。
     @Test func postedStatusIntoEmptyTimelineDoesNotLoseRangeOnReconnect() async throws {
         let server = FakeHomeServer(ids: [])
         let store = makeStore(server)
@@ -1350,7 +1350,7 @@ struct TimelineGapTests {
         #expect(ids(store) == Array((1...10).reversed()))
     }
 
-    /// 最初の読み込みに失敗した一覧に入れると、空でなくなり、読み込み直す代わりに続きを読むようになるため、入れない。
+    /// 最初の読み込みに失敗したタイムラインに入れると、空でなくなり、読み込み直す代わりに続きを読むようになるため、入れない。
     @Test func postedStatusIsNotInsertedBeforeInitialLoad() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = TimelineStore(pageSize: Self.pageSize) { _ in throw URLError(.networkConnectionLost) }

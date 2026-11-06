@@ -2,8 +2,8 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 「投稿の見た目」と「通知の見た目」のプレビュー。見本を並べたタイムラインの一覧（`TimelineViewController.appearancePreview`）を子に置く。
-/// 区切り線、返信の線、光のように一覧が決める見た目も、タイムラインと同じになる。決まりはdocs/appearance.mdの「プレビュー」にある。
+/// 「投稿の見た目」と「通知の見た目」のプレビュー。見本を並べたタイムライン（`TimelineViewController.appearancePreview`）を子に置く。
+/// 区切り線、返信の線、光のようにタイムラインが決める見た目も、タイムラインと同じになる。決まりはdocs/appearance.mdの「プレビュー」にある。
 final class AppearanceTimelinePreviewController: UIViewController {
     let timeline: TimelineViewController
     /// `fitRevision`が変わったときと幅が変わったときに、並べた見本の高さを渡す。値を変えて見本の高さが変わっても呼ばない。
@@ -93,7 +93,7 @@ struct AppearanceTimelinePreview: UIViewControllerRepresentable {
 
 /// 見本が収まる高さにし、収まらなければ上限の高さの中でスクロールさせるプレビュー。
 /// 高さは、画面に出たときと`fitRevision`が変わったときだけ合わせ直し、値を変えている間は変えない。
-/// 変えると下の項目の一覧が動き、スライダーなどの操作している部品が指の下から動いてしまうため。
+/// 変えると下の項目のリストが動き、スライダーなどの操作している部品が指の下から動いてしまうため。
 struct FittedAppearancePreview: View {
     let timeline: TimelineViewController
     let entries: [TimelineEntry]
@@ -124,7 +124,7 @@ struct FittedAppearancePreview: View {
 }
 
 extension TimelineViewController {
-    /// 見た目の設定のプレビューに置く、見本を並べる一覧。1つの画面に1つずつ置く。
+    /// 見た目の設定のプレビューに置く、見本を並べるタイムライン。1つの画面に1つずつ置く。
     /// 設定の画面からはアプリ内のSafariを開けないので、見本のリンク（写真のクレジットなど）は、設定によらず既定のブラウザで開く。
     /// 見本のメンションやハッシュタグの行き先は実在しないので、開かない。
     /// 自分のフィルターに一致した自分の投稿の注記や、自分の投稿への通知を見せるため、見本の`myAccountID`のアカウントを自分として組む。

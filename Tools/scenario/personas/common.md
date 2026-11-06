@@ -11,7 +11,7 @@
 端末のUDIDは {{UDID}} です。画面の大きさは幅402、高さ874（ポイント）で、座標はこの単位です。使えるのは次のコマンドだけです。
 
 - 画面を撮る: `axe screenshot --udid {{UDID}} --output {{SHOTS}}/<2桁の番号>-<何の画面か>.png`。撮ったらReadで画像を見る
-- 画面の要素を読む: `axe describe-ui --udid {{UDID}}`。位置だけを読むときは`--point <x>,<y>`を足す。画面の一番手前にあるダイアログやシートは、全体の一覧に出ないことがあるので、そのときは位置で読む
+- 画面の要素を読む: `axe describe-ui --udid {{UDID}}`。位置だけを読むときは`--point <x>,<y>`を足す。画面の一番手前にあるダイアログやシートは、全体のリストに出ないことがあるので、そのときは位置で読む
 - タップ: `axe tap -x <x> -y <y> --tap-style physical --udid {{UDID}}`。`--tap-style physical`を付けないと届かない。名前で押すなら`axe tap --label <名前> --tap-style physical --udid {{UDID}}`
 - 長押し: `axe touch -x <x> -y <y> --down --up --delay 1 --udid {{UDID}}`
 - スワイプ・スクロール: `axe swipe --start-x <x> --start-y <y> --end-x <x> --end-y <y> --udid {{UDID}}`

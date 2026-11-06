@@ -1,7 +1,7 @@
 public import Foundation
 public import Observation
 
-/// 「操作の状況」の一覧に並べる、処理の途中と最近の失敗。出方の決まりはdocs/notices.mdの「操作の状況」にある。セッションごとに1つ持つ。
+/// 「操作の状況」に並べる、処理の途中と最近の失敗。出方の決まりはdocs/notices.mdの「操作の状況」にある。セッションごとに1つ持つ。
 ///
 /// 起動している間だけメモリに持ち、ログには書かない。どの投稿の失敗かを持つため、IDを伏せた「接続の状態」の記録とは分ける。
 @MainActor
@@ -13,11 +13,11 @@ public final class OperationStatus {
         public let statusID: Status.ID
         /// 中身の投稿のID。ブーストなら元の投稿のID。
         public let displayedID: Status.ID
-        /// 一覧になかったときに開く、投稿のページ。
+        /// タイムラインになかったときに開く、投稿のページ。
         public let url: URL?
         public let authorName: String
-        /// 本文を1行にしたもの。注意書きつきの投稿は、一覧と同じく注意書きだけにする。
-        /// 一覧の行では画像を描かないため、名前と本文のカスタム絵文字は省く。
+        /// 本文を1行にしたもの。注意書きつきの投稿は、タイムラインと同じく注意書きだけにする。
+        /// 「操作の状況」の行では画像を描かないため、名前と本文のカスタム絵文字は省く。
         public let excerpt: String
 
         public init(statusID: Status.ID, displayedID: Status.ID, url: URL?, authorName: String, excerpt: String) {

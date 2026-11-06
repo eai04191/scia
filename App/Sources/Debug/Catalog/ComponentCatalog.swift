@@ -65,25 +65,25 @@ enum CatalogComponent: String, CaseIterable {
         case .caption: "ビューアの説明"
         case .notices: "アプリ内通知のチップの列"
         case .statusBarTicker: "ステータスバーの通知"
-        case .operationStatus: "操作の状況の一覧"
+        case .operationStatus: "操作の状況のリスト"
         case .videoControls: "動画の再生の操作"
         case .mediaStatus: "ビューアの読み込み中と見せられないとき"
         case .timelineEmpty: "タイムラインが空のときの表示"
         case .timelineFooter: "タイムラインの末尾"
         case .timelineRows: "読めない行とギャップの行"
-        case .timelineOverlays: "一覧の上に重ねる表示"
+        case .timelineOverlays: "タイムラインの上に重ねる表示"
         case .streamingStatus: "引っぱると見える新着の経路"
-        case .mediaGrid: "一覧の添付ファイルのサムネイル"
+        case .mediaGrid: "タイムラインの添付ファイルのサムネイル"
         case .profileHeader: "プロフィールのヘッダー"
         case .profileAccent: "プロフィールのカードの色"
-        case .posts: "一覧の投稿"
-        case .postsMediaBeside: "一覧の投稿（添付ファイルを本文の右に小さく）"
+        case .posts: "タイムラインの投稿"
+        case .postsMediaBeside: "タイムラインの投稿（添付ファイルを本文の右に小さく）"
         case .linkCards: "リンクカード"
         case .quotes: "投稿の中の引用"
         case .polls: "投稿の投票"
         case .emojiReactions: "投稿の絵文字のリアクション"
         case .notifications: "通知の種類"
-        case .accounts: "人の一覧と保留中の通知の行"
+        case .accounts: "人のリストと保留中の通知の行"
         case .editHistory: "編集履歴の版"
         case .announcements: "サーバーのお知らせ"
         case .hdrEmoji: "HDRのカスタム絵文字"
@@ -227,9 +227,9 @@ final class CatalogControllerHost: UIView {
     }
 }
 
-/// 一覧の中に出す部品を置く枠。
+/// タイムラインの中に出す部品を置く枠。
 enum CatalogFrame {
-    /// 一覧の中の表示と同じく背景の上に置き、範囲が分かるよう枠を付ける。`height`を渡すと、その高さにする。
+    /// タイムラインの中の表示と同じく背景の上に置き、範囲が分かるよう枠を付ける。`height`を渡すと、その高さにする。
     @MainActor
     static func bordered(_ content: UIView, height: CGFloat? = nil) -> UIView {
         let frame = UIView()
@@ -247,7 +247,7 @@ enum CatalogFrame {
         return frame
     }
 
-    /// 一覧の投稿の行の中身を枠に置く。カスタム絵文字の画像は後から届くので、一覧と同じく、届いたら組み立て直す。
+    /// タイムラインの投稿の行の中身を枠に置く。カスタム絵文字の画像は後から届くので、タイムラインと同じく、届いたら組み立て直す。
     /// 組み立てを1回で済ませると、名前や本文、リアクションのカスタム絵文字が空いたままになるため。
     @MainActor
     static func post(_ configuration: @escaping @MainActor () -> PostContentConfiguration) -> UIView {
@@ -275,7 +275,7 @@ extension UIViewController {
     }
 }
 
-/// カタログに載せた部品の一覧。
+/// カタログに載せた部品のリスト。
 final class ComponentCatalogViewController: UIViewController {
     private lazy var collectionView = UICollectionView(
         frame: .zero,

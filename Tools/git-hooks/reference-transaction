@@ -16,7 +16,7 @@ set -euo pipefail
 
 stamp="$(git rev-parse --path-format=absolute --git-common-dir)/../Tools/check-stamp.sh"
 review="$(git rev-parse --path-format=absolute --git-common-dir)/../Tools/human-review.sh"
-# 今のmainの中身で通っていて、違いがMarkdownとサーバーの一覧だけなら、通ったものとして扱う（Tools/check-stamp.shのmissing）
+# 今のmainの中身で通っていて、違いがMarkdownとサーバーのリストだけなら、通ったものとして扱う（Tools/check-stamp.shのmissing）
 main=$(git rev-parse -q --verify refs/heads/main || true)
 
 checked() {

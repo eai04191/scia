@@ -7,7 +7,7 @@ public import Observation
 public final class AppSettings {
     @ObservationIgnored private let defaults: UserDefaults
 
-    /// モバイル通信とインターネット共有でも、一覧のサムネイルに元の画像を読む。
+    /// モバイル通信とインターネット共有でも、タイムラインのサムネイルに元の画像を読む。
     /// オフなら、サーバーが縮めたプレビュー画像を読む。
     public var usesOriginalThumbnailsOnExpensiveNetwork: Bool {
         didSet { defaults.set(usesOriginalThumbnailsOnExpensiveNetwork, forKey: Keys.usesOriginalThumbnailsOnExpensiveNetwork) }
@@ -271,7 +271,7 @@ public final class AppSettings {
         didSet { defaults.set(notificationActions.tokens, forKey: Keys.notificationActions) }
     }
 
-    /// アイコン、「〜がブースト」の行、人の一覧の行、メンションをタップ、長押ししたときの操作。
+    /// アイコン、「〜がブースト」の行、人のリストの行、メンションをタップ、長押ししたときの操作。
     public var userActions: ObjectActions<UserMenuItem> {
         didSet { defaults.set(userActions.tokens, forKey: Keys.userActions) }
     }
@@ -312,14 +312,14 @@ public final class AppSettings {
         didSet { defaults.set(showsTabMenuCustomize, forKey: Keys.showsTabMenuCustomize) }
     }
 
-    /// 書いていないときに、空の投稿欄を隠す。書くときは、一覧の右上のボタンで出す。
+    /// 書いていないときに、空の投稿欄を隠す。書くときは、タイムラインの右上のボタンで出す。
     /// 下書きや返信先があるときは、残っていると分かるよう隠さない。
     public var hidesEmptyComposeBar: Bool {
         didSet { defaults.set(hidesEmptyComposeBar, forKey: Keys.hidesEmptyComposeBar) }
     }
 
     /// 書いていないときも投稿欄を細いカプセルに畳まず、書いているときの形で出しておく。
-    /// 畳むのは一覧を広く使うためで、画面の広いMacやiPadでは、押した投稿欄が広がって、押した位置にボタンが来てしまうのを避けたいため。
+    /// 畳むのはタイムラインを広く使うためで、画面の広いMacやiPadでは、押した投稿欄が広がって、押した位置にボタンが来てしまうのを避けたいため。
     /// 既定は初期化子で渡す。Macでは、書き始めても欄がその場で広がるので、既定で畳まない。
     public var keepsComposeBarOpen: Bool {
         didSet { defaults.set(keepsComposeBarOpen, forKey: Keys.keepsComposeBarOpen) }
@@ -335,7 +335,7 @@ public final class AppSettings {
         didSet { defaults.set(videoUploadSize.rawValue, forKey: Keys.videoUploadSize) }
     }
 
-    /// ビューアの外（一覧、プロフィール、リンクカード、投稿欄のサムネイルなど）で、HDRのメディアを描く明るさ。
+    /// ビューアの外（タイムライン、プロフィール、リンクカード、投稿欄のサムネイルなど）で、HDRのメディアを描く明るさ。
     public var mediaDynamicRange: MediaDynamicRange {
         didSet { defaults.set(mediaDynamicRange.rawValue, forKey: Keys.mediaDynamicRange) }
     }

@@ -45,12 +45,12 @@ struct StatusMenuTreeTests {
     }
 
     /// 既定の並びは、何のための操作かでまとまりを分ける。横並びの区切り線の下の返信・ブースト・お気に入りは横に並べる。
-    /// 自分のアカウントが分からない一覧では、会話のミュート、固定、公開範囲を選んでブーストは出ない。
+    /// 自分のアカウントが分からないタイムラインでは、会話のミュート、固定、公開範囲を選んでブーストは出ない。
     @Test func defaultMenuGroupsItemsByPurpose() {
         #expect(outline(tree(status(url: URL(string: "https://example.social/@alice/100")))) == "=返信,ブースト(押せない),お気に入り|ブックマーク|共有,リンクをコピー,テキストをコピー,ブラウザで開く|翻訳|@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]|その他[カスタマイズ]")
     }
 
-    /// 投稿を選べる一覧の行でだけ「選択」を出し、既定では「その他」の先頭に置く。投稿のない通知では出さない。
+    /// 投稿を選べるタイムラインの行でだけ「選択」を出し、既定では「その他」の先頭に置く。投稿のない通知では出さない。
     @Test func selectItemAppearsOnlyWhereRowsCanBeSelected() {
         var selectable = tree(status())
         selectable.canSelectPosts = true
@@ -249,7 +249,7 @@ struct StatusMenuTreeTests {
         #expect(favourite.title == "お気に入りを取り消す")
         #expect(favourite.icon?.symbolName == "star.slash")
 
-        // 自分のアカウントが分からない一覧では、ブーストできるかを決められないので押せない。
+        // 自分のアカウントが分からないタイムラインでは、ブーストできるかを決められないので押せない。
         guard case .unavailable(let reason) = MenuItemOutcome(singleItemMenu: tree(status()).menu(groups: .single(.reblog), includesFollowRequest: false).root) else {
             Issue.record("ブーストできない投稿で押せてしまいます")
             return

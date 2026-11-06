@@ -38,7 +38,7 @@ struct PostHeaderLayoutTests {
         return timeline.contentConfiguration(for: try status(displayName: displayName, media: media), base: .cell())
     }
 
-    /// 一覧のセルと同じく高さを測って並べ、部品の枠を返す。
+    /// タイムラインのセルと同じく高さを測って並べ、部品の枠を返す。
     private func frames(of configuration: PostContentConfiguration) -> (view: PostContentView, frames: AppearancePreviewFrames) {
         let view = PostContentView(configuration: configuration)
         let size = view.systemLayoutSizeFitting(CGSize(width: 402, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)

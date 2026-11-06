@@ -116,7 +116,7 @@ struct RequestLogTests {
         #expect(DecodingLog.shape(in: data, at: path) == "number")
     }
 
-    /// 一覧の中の読めなかった要素も、どのAPIの応答の、どの項目にどんな形の値があったかを書く。
+    /// 配列の中の読めなかった要素も、どのAPIの応答の、どの項目にどんな形の値があったかを書く。
     @Test func droppedElementMessageIncludesRequestAndShape() throws {
         let data = Data(#"[{"id":"1","created_at":12345}]"#.utf8)
         let error = DecodingError.typeMismatch(String.self, .init(codingPath: [AnyKey(index: 0), AnyKey("createdAt")], debugDescription: "12345"))

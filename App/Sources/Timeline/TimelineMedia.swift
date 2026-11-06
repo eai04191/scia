@@ -82,7 +82,7 @@ extension TimelineViewController {
         reconfigure(Set(itemIDs(showing: status)))
     }
 
-    /// 添付ファイルのビューアで覆っている。ビューアは閉じる操作の間に一覧を透かすため、開いている間も一覧を画面に残す。
+    /// 添付ファイルのビューアで覆っている。ビューアは閉じる操作の間にタイムラインを透かすため、開いている間もタイムラインを画面に残す。
     /// 閉じ終わりに報告し直せるよう、閉じている途中のビューアは数えない。
     /// ビューアはアプリ内のSafariのシートの上に重ねていることがあるため、重ねている画面をたどって探す。
     var isCoveredByMediaViewer: Bool {
@@ -107,7 +107,7 @@ extension TimelineViewController {
     ///   - subject: 添付ファイルの投稿。プロフィールの画像ならnil。
     ///   - sourceTile: 開閉の起点にするビューを返す。見つからなければnilを返し、画像を動かさずに薄くして開閉する。
     func openMedia(_ attachments: [MediaAttachment], at index: Int, subject: OperationStatus.Subject?, sourceTile: @escaping @MainActor (MediaAttachment.ID) -> (any MediaViewerSource)?) {
-        // ビューアは一覧を残したまま覆うため、覆っている間は、取り直す投稿として見えていないことにする。閉じたら報告し直す。
+        // ビューアはタイムラインを残したまま覆うため、覆っている間は、取り直す投稿として見えていないことにする。閉じたら報告し直す。
         onVisibleUnsettledStatusesChange?([])
         MediaViewerOpener(store: mediaImages, tuning: tuning, transfers: mediaTransfers, notices: notices).open(
             attachments,
@@ -116,7 +116,7 @@ extension TimelineViewController {
             // アプリ内のSafariのシートを出していれば、その上に重ねる。
             from: self,
             sourceTile: sourceTile,
-            // 一覧は残したままなので表示し直しの通知が来ない。開いている間に届いた新着を、閉じたところで報告する。
+            // タイムラインは残したままなので表示し直しの通知が来ない。開いている間に届いた新着を、閉じたところで報告する。
             onDismiss: { [weak self] in self?.reportVisibleItems() },
             openURL: { [weak self] url, browser in self?.openURL(url, in: browser) }
         )
@@ -145,7 +145,7 @@ extension MediaGridView.Content {
         tiltsStack = settings.appearance.tiltsStackedPhotos
     }
 
-    /// `attachments`を、今の設定とチューニングで並べる中身。添付ファイルがなければnil。一覧の外（編集履歴など）でも同じ見た目にする。
+    /// `attachments`を、今の設定とチューニングで並べる中身。添付ファイルがなければnil。タイムラインの外（編集履歴など）でも同じ見た目にする。
     /// 説明にならない代替テキストは、ALTの目印にもビューアにも読み上げにも出さないよう、ここで除いておく。
     @MainActor
     static func make(of attachments: [MediaAttachment], cover: MediaCover?, settings: AppSettings, tuning: TuningStore, network: NetworkConditionsMonitor) -> Self? {

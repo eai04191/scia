@@ -2,7 +2,7 @@
 import SciaCore
 import UIKit
 
-/// 一覧を最上部からさらに引っぱったときに見せる、ストリーミングとRESTの状態（`StreamingStatusPullView`）。
+/// タイムラインを最上部からさらに引っぱったときに見せる、ストリーミングとRESTの状態（`StreamingStatusPullView`）。
 /// 本物は引っぱった分だけ薄く出るため、カタログでは濃さを変えずに置く。
 enum StreamingStatusCatalog {
     @MainActor

@@ -632,7 +632,7 @@ final class ProfileEditAccountCell: UITableViewCell {
             .render(.plain(account.displayNameOrUsername, emojis: account.emojis))
             .truncatingTail(alignment: .natural)
         handleLabel.text = "@\(account.acct)"
-        // 人の一覧の行と同じく、描いた名前を読ませる。カスタム絵文字の`:shortcode:`を読ませないため。
+        // 人のリストの行と同じく、描いた名前を読ませる。カスタム絵文字の`:shortcode:`を読ませないため。
         accessibilityLabel = "\(nameLabel.attributedText?.string ?? account.displayNameOrUsername)、@\(account.acct)"
     }
 }

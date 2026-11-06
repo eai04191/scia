@@ -49,7 +49,7 @@ final class ObjectInteractionTests {
         }
     }
 
-    /// 文字の行は、一覧の行と同じく持ち上げず、押した位置に置いた見えない目印からメニューだけを出す。
+    /// 文字の行は、タイムラインの行と同じく持ち上げず、押した位置に置いた見えない目印からメニューだけを出す。
     @Test func noneShowsMenuAtTouchWithoutLifting() throws {
         defer { window.isHidden = true }
         let header = UILabel(frame: CGRect(x: 60, y: 100, width: 300, height: 20))

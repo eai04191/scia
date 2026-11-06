@@ -20,7 +20,7 @@ struct GlyphLanguageTests {
         #expect(GlyphLanguage.korean.identifier(textLanguage: textLanguage, preferredLanguages: ["ja-JP"]) == "ko")
     }
 
-    /// 自動では、端末の言語の一覧で最初の日本語・中国語・韓国語に従い、どれもなければ日本語にする。
+    /// 自動では、端末の言語のリストで最初の日本語・中国語・韓国語に従い、どれもなければ日本語にする。
     @Test func automaticFollowsFirstCJKPreferredLanguage() {
         #expect(GlyphLanguage.automatic.identifier(textLanguage: nil, preferredLanguages: ["en-US"]) == "ja")
         #expect(GlyphLanguage.automatic.identifier(textLanguage: "en", preferredLanguages: []) == "ja")

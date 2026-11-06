@@ -1,20 +1,20 @@
 import SciaCore
 import UIKit
 
-/// 検索の画面。上に検索欄を置き、打っている途中の候補と最近の検索、確定した語の結果を、1つの一覧に入れ替えて並べる。決まりはdocs/search.mdにある。
+/// 検索の画面。上に検索欄を置き、打っている途中の候補と最近の検索、確定した語の結果を、1つのリストに入れ替えて並べる。決まりはdocs/search.mdにある。
 /// 検索のタブの一番下の画面にするほか、検索を無効にしているときは、開いているタブに積んで開く。
 ///
-/// 候補と結果は同じ一覧に並べる。両方にある行（同じ人、同じハッシュタグ、見出し）は、確定したときも打ち直したときも、その場に残す。
+/// 候補と結果は同じリストに並べる。両方にある行（同じ人、同じハッシュタグ、見出し）は、確定したときも打ち直したときも、その場に残す。
 /// `UISearchController`の結果の画面には載せない。結果の画面はナビゲーションの外に出るため、候補からプロフィールなどを積めないため。
 @MainActor
 final class SearchViewController: UIViewController, UISearchBarDelegate, UISearchControllerDelegate, UISearchResultsUpdating, UIGestureRecognizerDelegate {
-    /// 確定した語の結果を読むモデルを作る。今の候補と、結果を並べる一覧を渡す。一覧に伝え始めるのと読み始めるのは、この画面が行う。
+    /// 確定した語の結果を読むモデルを作る。今の候補と、結果を並べるリストを渡す。リストに伝え始めるのと読み始めるのは、この画面が行う。
     var makeResults: ((SearchInput, SearchSuggestions.Content, TimelineViewController) -> SearchModel?)?
-    /// 候補と結果を並べる一覧を作る。画面を読み込むときに1度だけ呼ぶ。
+    /// 候補と結果を並べるリストを作る。画面を読み込むときに1度だけ呼ぶ。
     var makeList: (() -> TimelineViewController)?
     /// 候補のハッシュタグと「#名前を開く」を押したときに呼ぶ。
     var onOpenHashtag: ((String, UIViewController) -> Void)?
-    /// ハッシュタグ、「すべて見る」、失敗の行を押したときに、確定した語の結果（まだなければnil）を添えて呼ぶ。「すべて見る」で積む一覧と同じ扱いにする。
+    /// ハッシュタグ、「すべて見る」、失敗の行を押したときに、確定した語の結果（まだなければnil）を添えて呼ぶ。「すべて見る」で積む結果のリストと同じ扱いにする。
     var onResultRowSelect: ((SearchRow, SearchModel?, UIViewController) -> Void)?
     /// 打っている途中の候補と最近の検索。セッションが入れる。
     var suggestions: SearchSuggestions? {
@@ -24,7 +24,7 @@ final class SearchViewController: UIViewController, UISearchBarDelegate, UISearc
         }
     }
     private let searchController = UISearchController(searchResultsController: nil)
-    /// 候補と結果を並べる一覧。
+    /// 候補と結果を並べるリスト。
     private var list: TimelineViewController?
     /// 確定した語の結果。まだ確定していなければnil。
     private(set) var results: SearchModel?
@@ -35,7 +35,7 @@ final class SearchViewController: UIViewController, UISearchBarDelegate, UISearc
     /// 開いたときに検索欄へフォーカスを入れるか。最初に見せるときだけにし、語を渡して開いたときは入れない。
     var focusesOnAppear = true
 
-    /// 見えている一覧。候補も結果もなく一覧を隠していればnil。
+    /// 見えているリスト。候補も結果もなくリストを隠していればnil。
     var shownList: TimelineViewController? {
         list.flatMap { $0.view.isHidden ? nil : $0 }
     }
@@ -65,7 +65,7 @@ final class SearchViewController: UIViewController, UISearchBarDelegate, UISearc
         searchController.delegate = self
         searchController.searchResultsUpdater = self
         searchController.obscuresBackgroundDuringPresentation = false
-        // 一覧をスクロールしても、見出しを隠さず、検索欄を残す。
+        // リストをスクロールしても、見出しを隠さず、検索欄を残す。
         searchController.hidesNavigationBarDuringPresentation = false
         searchController.searchBar.delegate = self
         searchController.searchBar.placeholder = "ユーザー、ハッシュタグ、投稿、URL"
@@ -85,7 +85,7 @@ final class SearchViewController: UIViewController, UISearchBarDelegate, UISearc
             list.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             view.addSubview(list.view)
             list.didMove(toParent: self)
-            // 見出しのバーと検索欄の下を流れる一覧として、端の効果と大きな題の縮みを一覧に合わせる。
+            // 見出しのバーと検索欄の下を流れるリストとして、端の効果と大きな題の縮みをリストに合わせる。
             setContentScrollView(list.collectionView)
             self.list = list
         }
@@ -171,7 +171,7 @@ final class SearchViewController: UIViewController, UISearchBarDelegate, UISearc
         submit(searchBar.text ?? "")
     }
 
-    /// 一覧を引っぱったときに、結果を並べていれば同じ語でもう一度探す。候補を並べている間は何もしない。
+    /// リストを引っぱったときに、結果を並べていれば同じ語でもう一度探す。候補を並べている間は何もしない。
     func refreshResults() async {
         await shownResults?.refresh()
     }
@@ -257,7 +257,7 @@ final class SearchViewController: UIViewController, UISearchBarDelegate, UISearc
         updateListVisibility()
     }
 
-    /// 候補を並べていて、出す候補が1つもなければ一覧を隠す。行のない一覧に、見つからなかったことと読み込み直すボタンが出るため。
+    /// 候補を並べていて、出す候補が1つもなければリストを隠す。行のないリストに、見つからなかったことと読み込み直すボタンが出るため。
     private func updateListVisibility() {
         guard let list else { return }
         list.view.isHidden = showsSuggestions && (suggestions?.content.entries.isEmpty ?? true)
@@ -274,7 +274,7 @@ final class SearchViewController: UIViewController, UISearchBarDelegate, UISearc
 }
 
 extension TimelineViewController {
-    /// 画面に見えている一覧。検索の画面では、候補か結果を並べている一覧。一覧のない画面ではnil。
+    /// 画面に見えているタイムライン。検索の画面では、候補か結果を並べているリスト。タイムラインのない画面ではnil。
     static func shown(in viewController: UIViewController?) -> TimelineViewController? {
         (viewController as? TimelineViewController) ?? (viewController as? SearchViewController)?.shownList
     }

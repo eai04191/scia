@@ -4,7 +4,7 @@ import UIKit
 
 /// ステータスバーに流す通知を、通信せずに続けざまに届ける。`scia-debug://dummy/notifications`で呼ぶ。
 /// 1件ずつのときの長さと、溜まったときに速く流れるところを1回で見られるよう、まとめて届けたあと、間をおいて1件ずつ届ける。
-/// 通知タブの一覧と読んだ位置を乱さないよう、通知の一覧には入れない。
+/// 通知のタイムラインと読んだ位置を乱さないよう、そこには入れない。
 @MainActor
 enum DummyNotifications {
     static func stream(into ticker: StatusBarTicker) {

@@ -11,7 +11,7 @@ struct PostContentViewTests {
         TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: .isolated())
     }
 
-    /// 一覧のセルと同じく、大きな高さを目安に、高さを譲れる優先度で測る。
+    /// タイムラインのセルと同じく、大きな高さを目安に、高さを譲れる優先度で測る。
     private func fittingHeight(of configuration: PostContentConfiguration) -> CGFloat {
         configuration.makeContentView().systemLayoutSizeFitting(
             CGSize(width: 402, height: CGFloat.greatestFiniteMagnitude),
@@ -70,7 +70,7 @@ struct PostContentViewTests {
         case plain, boost, media, spoiler
     }
 
-    /// 一覧は行の高さを画素に丸めるため、行が求める高さより1画素未満だけ低くなることがある。
+    /// タイムラインは行の高さを画素に丸めるため、行が求める高さより1画素未満だけ低くなることがある。
     /// 足りない分を文字のラベルから削ると、UILabelは収まらない行を描かず、本文の最後の行が消える。
     /// 足りない分は本文の下の余白で吸い、どの形でも文字のラベルは求める高さを保つ。
     @Test(arguments: ShortRowShape.allCases)

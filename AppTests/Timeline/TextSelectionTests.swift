@@ -257,7 +257,7 @@ struct TextSelectionTests {
         #expect(textView.text(in: firstTwo) == "前\u{FFFC}")
     }
 
-    /// 一覧の行と同じく、幅を決めて測った高さ。
+    /// タイムラインの行と同じく、幅を決めて測った高さ。
     private func fittingHeight(of view: UIView) -> CGFloat {
         view.systemLayoutSizeFitting(CGSize(width: 328, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel).height
     }

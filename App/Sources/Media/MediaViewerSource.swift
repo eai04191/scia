@@ -21,16 +21,16 @@ protocol MediaViewerSource: UIView {
     var isConcealedForViewer: Bool { get set }
     /// このビューの上に重なっているビュー。手前にあるものほど後ろに並べる。ビューアは画像の複製のさらに手前に、これらの複製を重ねる。
     var overlappingViews: [UIView] { get }
-    /// `id`の添付ファイルを描いているか。一覧で重ねた写真は、何番目の添付ファイルでも手前の写真を開閉の起点にするため、起点が別の添付ファイルを描いていることがある。
+    /// `id`の添付ファイルを描いているか。タイムラインで重ねた写真は、何番目の添付ファイルでも手前の写真を開閉の起点にするため、起点が別の添付ファイルを描いていることがある。
     /// 描いていなければ、ビューアは起点の枠と角の丸みだけを使い、画像、焦点、重ねた表示は使わない。
     func showsAttachment(_ id: MediaAttachment.ID) -> Bool
-    /// 起点を囲む白いフチ（一覧で重ねた写真の紙）の幅と、フチの外側の角の丸み。フチがなければnil。
+    /// 起点を囲む白いフチ（タイムラインで重ねた写真の紙）の幅と、フチの外側の角の丸み。フチがなければnil。
     /// ビューアは開閉で動かす画像にもこのフチを付け、ビューアの画像の位置へ向かうにつれて細くしてなくす。
     var paperBorder: (width: CGFloat, cornerRadius: CGFloat)? { get }
-    /// 起点の見え方。中身の濃さ（0なら紙だけを見せる）と、暗くする度合い。一覧で傾けずに重ねた奥の写真は、中身を描かず暗くしている。
+    /// 起点の見え方。中身の濃さ（0なら紙だけを見せる）と、暗くする度合い。タイムラインで傾けずに重ねた奥の写真は、中身を描かず暗くしている。
     /// ビューアは開閉で動かす画像を、起点の近くではこの見え方に近づける。
     var viewerAppearance: (contentOpacity: CGFloat, dimming: CGFloat) { get }
-    /// 起点が下の面に落としている影の濃さ。影を落とさなければ0。一覧で重ねた写真は、スタックの影を落としている。
+    /// 起点が下の面に落としている影の濃さ。影を落とさなければ0。タイムラインで重ねた写真は、スタックの影を落としている。
     /// ビューアは開閉で動かす画像に同じ形の影を付け、起点の近くではこの濃さにする。
     var viewerShadowOpacity: Float { get }
 }
@@ -98,7 +98,7 @@ final class ViewerConcealment {
 
 extension UIView {
     /// `space`から見た、このビューの回転の角度（ラジアン）。祖先のビューの回転も含める。
-    /// 一覧で重ねた写真のように回して置いた起点から、ビューアが画像を回しながら動かすときに使う。
+    /// タイムラインで重ねた写真のように回して置いた起点から、ビューアが画像を回しながら動かすときに使う。
     func rotation(in space: UIView) -> CGFloat {
         let origin = convert(CGPoint.zero, to: space)
         let unitX = convert(CGPoint(x: 1, y: 0), to: space)
@@ -106,7 +106,7 @@ extension UIView {
     }
 
     /// `space`から見た、このビューの大きさの倍率。祖先のビューの縮小も含める。縦横は同じ倍率で縮めているものとする。
-    /// 一覧で傾けずに重ねた奥の写真のように、縮めて置いた起点へビューアが画像を戻すときに使う。
+    /// タイムラインで傾けずに重ねた奥の写真のように、縮めて置いた起点へビューアが画像を戻すときに使う。
     func scale(in space: UIView) -> CGFloat {
         let origin = convert(CGPoint.zero, to: space)
         let unitX = convert(CGPoint(x: 1, y: 0), to: space)

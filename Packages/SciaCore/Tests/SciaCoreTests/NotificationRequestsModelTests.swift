@@ -4,7 +4,7 @@ import Synchronization
 import Testing
 @testable import SciaCore
 
-/// 保留中の通知の一覧と、通知のフィルタリングの設定と、受け入れた通知の取り込み。決まりはdocs/notification-filter.mdにある。
+/// 保留中の通知のリストと、通知のフィルタリングの設定と、受け入れた通知の取り込み。決まりはdocs/notification-filter.mdにある。
 @MainActor
 @Suite(.serialized)
 struct NotificationRequestsModelTests {
@@ -36,7 +36,7 @@ struct NotificationRequestsModelTests {
         }
     }
 
-    // MARK: - 保留中の通知の一覧
+    // MARK: - 保留中の通知のリスト
 
     /// 受け入れたら、行を閉じる動きで消し、済んだことを知らせる。
     @Test func acceptingRemovesTheRowWithAnimation() async throws {
@@ -145,7 +145,7 @@ struct NotificationRequestsModelTests {
         #expect(query.contains("account_id=2"))
     }
 
-    /// 通知の一覧と同じく、ブロックした相手の通知を閉じる動きで除く。
+    /// 通知のタイムラインと同じく、ブロックした相手の通知を閉じる動きで除く。
     @Test func accountNotificationsDropBlockedAccount() async throws {
         let transport = RoutedTransport { _ in (200, Self.accountNotificationsBody) }
         let model = AccountNotificationsModel(accountID: "2", client: client(transport), tasks: TaskScope()) {}

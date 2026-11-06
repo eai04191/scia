@@ -16,7 +16,7 @@ public enum MediaMenuCommand {
     case customize
 }
 
-/// メディアのメニュー。一覧とビューアで、設定の同じ並びから組む。決まりはdocs/menus.mdの「メディアのメニュー」にある。
+/// メディアのメニュー。タイムラインとビューアで、設定の同じ並びから組む。決まりはdocs/menus.mdの「メディアのメニュー」にある。
 /// 項目ごとの動きは置く側が持ち、ここでは置く側が行えると言った項目だけを出す。
 public struct MediaMenuTree {
     public let kind: MediaAttachment.Kind
@@ -34,7 +34,7 @@ public struct MediaMenuTree {
     public var linkBrowser: LinkBrowser?
     /// 開く項目を出すか。開く先のないビューア（Macの別のウィンドウや編集履歴から開いたとき）では、リンクのコピーだけを出す。
     public var opensURLs = true
-    /// ビューアでファイルの中身から読んだ値。メディアの情報を詳しくする。一覧ではnil。
+    /// ビューアでファイルの中身から読んだ値。メディアの情報を詳しくする。タイムラインではnil。
     public var details: MediaFileDetails?
     /// 投稿の投稿のメニューの中身。「投稿」のサブメニューにして出す。
     public var statusMenu: [MenuNode<StatusMenuCommand>]?

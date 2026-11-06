@@ -1,8 +1,8 @@
 import UIKit
 
-/// スレッドを開く動き。スレッドの画面を、一覧の上に重ねて薄く出していく。
+/// スレッドを開く動き。スレッドの画面を、タイムラインの上に重ねて薄く出していく。
 ///
-/// スレッドの画面は押した行を一覧で見えていた位置に置くため、押した行はそのまま残り、ほかの行だけが入れ替わって見える。
+/// スレッドの画面は押した行をタイムラインで見えていた位置に置くため、押した行はそのまま残り、ほかの行だけが入れ替わって見える。
 /// 横に滑らせる標準の動きでは、押した行も一緒に流れてしまう。閉じる動きは標準のままにし、端からの引き戻しで閉じられるようにする。
 @MainActor
 final class ThreadOpenTransition: NSObject, UIViewControllerAnimatedTransitioning {
@@ -54,7 +54,7 @@ final class ThreadPushDelegate: NSObject, UINavigationControllerDelegate {
         self.duration = duration
     }
 
-    /// `viewController`を、一覧の上に重ねて薄く出す動きで積む。
+    /// `viewController`を、タイムラインの上に重ねて薄く出す動きで積む。
     static func push(_ viewController: UIViewController, on navigation: UINavigationController, duration: TimeInterval) {
         let delegate = ThreadPushDelegate(base: navigation.delegate, duration: duration)
         delegate.pushed = viewController

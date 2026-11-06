@@ -2,7 +2,7 @@ public import Foundation
 
 /// 0から1へ向かうスプリングの進み具合。UIKitの`UISpringTimingParameters(duration:bounce:initialVelocity:)`と同じ定義。
 ///
-/// 動いている途中で行き先が変わる動き（閉じる途中に一覧をスクロールされ、戻り先のサムネイルが動くなど）は、
+/// 動いている途中で行き先が変わる動き（閉じる途中にタイムラインをスクロールされ、戻り先のサムネイルが動くなど）は、
 /// UIKitのアニメーションでは行き先を決め直せないため、毎フレームこの進み具合で始点と今の行き先のあいだを補う。
 public struct SpringCurve: Sendable, Equatable {
     /// バウンスしない場合に、おおむね行き着くまでの時間。

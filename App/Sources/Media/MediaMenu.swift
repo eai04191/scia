@@ -2,7 +2,7 @@ import SciaCore
 import UIKit
 
 /// サムネイルやリンクカードの画像を長押ししたときに、メディアのメニューを組む画面。
-/// どちらもボタンの中にあり、一覧の行の長押しのメニューが届かないため、長押しされたビューが自分で受け、応答の連鎖をたどって見つけた画面に問い合わせる。
+/// どちらもボタンの中にあり、タイムラインの行の長押しのメニューが届かないため、長押しされたビューが自分で受け、応答の連鎖をたどって見つけた画面に問い合わせる。
 /// 見つからない画面（編集履歴など）では、メニューを出さない。
 @MainActor
 protocol MediaMenuHost: AnyObject {
@@ -43,7 +43,7 @@ final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
     private let wholeImage: (@MainActor () -> UIImage?)?
     /// 持ち上げた画像をタップしたときに、タップしたときと同じくビューアで開く。
     private let open: @MainActor () -> Void
-    /// メニューを組む。並びがnilなら設定の並びで組む。nilなら、応答の連鎖で見つけた`MediaMenuHost`に問い合わせる（一覧の行の中のサムネイル）。
+    /// メニューを組む。並びがnilなら設定の並びで組む。nilなら、応答の連鎖で見つけた`MediaMenuHost`に問い合わせる（タイムラインの行の中のサムネイル）。
     private let menu: (@MainActor (MenuLayout<MediaMenuItem>.Groups?) -> BuiltMenu<MediaMenuCommand>?)?
     private var longPress: ObjectLongPress?
     /// 持ち上げた画像を、渡したピクセル数の長い辺で読み直す。読めなければnil。
@@ -54,7 +54,7 @@ final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
     /// 持ち上げた画像をタップしてビューアを開いたときも、閉じ終えたらfalseで呼ぶ。そのときはビューアが自分の分として隠しているので、外しても見えない。
     private let onLiftChange: (@MainActor (Bool) -> Void)?
 
-    /// - Parameter menu: 一覧の行の外にある画像（プロフィールの画像）のメニュー。
+    /// - Parameter menu: タイムラインの行の外にある画像（プロフィールの画像）のメニュー。
     init(
         on view: UIView,
         wholeImage: (@MainActor () -> UIImage?)?,
@@ -132,7 +132,7 @@ final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
         host?.mediaMenuWillShow()
     }
 
-    /// 閉じるアニメーションの間も、一覧の行を動かさない。
+    /// 閉じるアニメーションの間も、タイムラインの行を動かさない。
     func contextMenuInteraction(_ interaction: UIContextMenuInteraction, willEndFor configuration: UIContextMenuConfiguration, animator: (any UIContextMenuInteractionAnimating)?) {
         let host = host
         guard let animator else {

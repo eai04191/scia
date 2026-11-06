@@ -15,7 +15,7 @@ public enum MediaPrefetch {
 }
 
 /// 先読みするものを、並べた順に1つずつ読む。並びを差し替えると、並びから外れたものの読み込みを止め、残りを先頭から読む。
-/// まとめて読むと、サーバーの制限（Mastodonの`/media_proxy`はIPごと）に当たり、一覧に描く画像まで止まってしまうため、同時には1つしか読まない。
+/// まとめて読むと、サーバーの制限（Mastodonの`/media_proxy`はIPごと）に当たり、タイムラインに描く画像まで止まってしまうため、同時には1つしか読まない。
 /// 読む処理は持ち主（`TaskScope`）で始め、持ち主を閉じたら、読んでいる途中のものも残りも読まない。
 @MainActor
 public final class PrefetchQueue<Item: Hashable & Sendable> {

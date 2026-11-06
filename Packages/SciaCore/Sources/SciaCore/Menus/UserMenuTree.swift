@@ -115,7 +115,7 @@ public struct UserMenuActions {
     }
 }
 
-/// ユーザーのメニュー。投稿のメニューのサブメニュー、アイコンや人の一覧の行、本文や自己紹介のメンション、プロフィール画面の「…」で、同じ並びから組む。
+/// ユーザーのメニュー。投稿のメニューのサブメニュー、アイコンや人のリストの行、本文や自己紹介のメンション、プロフィール画面の「…」で、同じ並びから組む。
 /// 決まりはdocs/menus.mdの「ユーザーのメニュー」にある。項目の名前、並び、出す条件、見出しはここだけが知る。
 /// 押したときの動き（共有のシートを出す起点、プロフィールを開く先）と、人のアイコンの画像は、出す場所が決める。
 @MainActor
@@ -152,7 +152,7 @@ public struct UserMenuTree {
         return .submenu(heading.title, subtitle: heading.subtitle, icon: avatar.map { .avatar($0, fallbackSymbol: nil) }, children)
     }
 
-    /// 単独で出すメニュー（アイコンや人の一覧の行、本文や自己紹介のメンション）。サブメニューの項目がないので、「プロフィール」にその人のアイコンを付ける。
+    /// 単独で出すメニュー（アイコンや人のリストの行、本文や自己紹介のメンション）。サブメニューの項目がないので、「プロフィール」にその人のアイコンを付ける。
     /// 単独で出すメニューの見出しでは、UIKitがサブタイトルを描かないため、サーバー名を2行目に置く。出す項目がなければnil。
     /// - Parameter avatar: 「プロフィール」に付けるその人のアイコン。出せなければ記号を付ける。
     public func menu(groups: MenuLayout<UserMenuItem>.Groups, avatar: MenuAvatar?) -> MenuNode<UserMenuCommand>? {

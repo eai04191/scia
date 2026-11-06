@@ -96,7 +96,7 @@ struct AnnouncementsModelTests {
         let calls = Mutex<[String]>([])
         let hold = Gate()
         let held: Set<String>
-        /// 次の一覧の読み込みだけを`hold`で止める。
+        /// 次のお知らせのリストの読み込みだけを`hold`で止める。
         private let holdsNextList = Mutex(false)
         let failing: Set<String>
 

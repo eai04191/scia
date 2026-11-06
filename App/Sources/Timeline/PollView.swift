@@ -98,7 +98,7 @@ final class PollView: UIView {
             secondaryButton.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: 8),
         ]
         // 下の行は、ボタンと票数の文字が収まる最小の高さに寄せる。
-        // 一覧はセルの高さを、高さを譲れる優先度（fittingSizeLevel）で測るので、それより強くする。同じ強さだと高さが決まらず、セルが目安の高さまで伸びる。
+        // タイムラインはセルの高さを、高さを譲れる優先度（fittingSizeLevel）で測るので、それより強くする。同じ強さだと高さが決まらず、セルが目安の高さまで伸びる。
         let compactFooter = footer.heightAnchor.constraint(equalToConstant: 0)
         compactFooter.priority = .defaultLow
         compactFooter.isActive = true
@@ -154,7 +154,7 @@ final class PollView: UIView {
         // 同じ投票で割合も形も変わらない描き直し（送っている途中のインジケーターを外すときなど）では、伸ばしている途中の棒をそのままにする。
         let samePoll = previous?.pollID == content.pollID
         // 投票する形と結果の形が入れ替わるときは、フチ、記号、割合、ボタンが一度に替わるため、投票全体をクロスフェードする。
-        // 棒はクロスフェードの中でも伸ばす。一覧は動きを止めて描き直すことがあり、その中ではUIView.transitionが動かないため、レイヤーに直接足す。
+        // 棒はクロスフェードの中でも伸ばす。タイムラインは動きを止めて描き直すことがあり、その中ではUIView.transitionが動かないため、レイヤーに直接足す。
         if samePoll, previous?.display.mode != display.mode, window != nil, content.barDuration > 0, !UIAccessibility.isReduceMotionEnabled {
             let fade = CATransition()
             fade.type = .fade
@@ -191,7 +191,7 @@ final class PollView: UIView {
         }
         if animatesBars {
             let fractions = display.options.map(\.fraction)
-            // 一覧は動きを止めて描き直すことがあり、その中ではUIView.animateが動かないため、描き直しを終えてから動かす。
+            // タイムラインは動きを止めて描き直すことがあり、その中ではUIView.animateが動かないため、描き直しを終えてから動かす。
             DispatchQueue.main.async { [weak self] in
                 guard let self, let current = self.content, current.pollID == content.pollID, current.display.options.map(\.fraction) == fractions else { return }
                 UIView.animate(springDuration: content.barDuration, bounce: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {

@@ -3,7 +3,7 @@ import Foundation
 import SciaCore
 import UIKit
 
-/// プロフィールの頭に置く、アカウントの情報と一覧の切り替え（`ProfileHeaderView`）の状態。
+/// プロフィールの頭に置く、アカウントの情報とタイムラインの切り替え（`ProfileHeaderView`）の状態。
 /// フォローの操作は、押すと次の状態へ進めるだけにし、サーバーには送らない。
 enum ProfileHeaderCatalog {
     private typealias Fixtures = CatalogFixtures
@@ -341,7 +341,7 @@ enum ProfileHeaderCatalog {
             headerDescription: account.headerDescription
         )
         header.apply(content)
-        // カタログは読み込み終えた状態を見せるので、一覧と一緒に出す部分も出しておく。
+        // カタログは読み込み終えた状態を見せるので、タイムラインと一緒に出す部分も出しておく。
         header.setSectionsRevealed(true)
         // 実物と同じく、プロフィールの場所のサーバーのフィルターを当てる。
         let filtering = StatusFiltering(context: .account, myAccountID: nil)

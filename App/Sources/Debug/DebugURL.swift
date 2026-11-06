@@ -80,13 +80,13 @@ enum DebugURL: Equatable {
     /// `scia-debug://viewer?index=<n>`。選んでいるタブの、画面のいちばん上に見えている添付ファイル付きの投稿を、n番目（0から）の添付ファイルでビューアに開く。
     /// サムネイルをタップしたのと同じ経路で開く。
     case viewer(index: Int)
-    /// `scia-debug://arrivals/hold`で、以後に届いた新着を一覧に挿入せずに溜める。`scia-debug://arrivals/release`で、溜まった新着をまとめて挿入する。
-    /// ストリーミングはつないだままなので、切断の知らせやポーリングで一覧が動かない。
+    /// `scia-debug://arrivals/hold`で、以後に届いた新着をタイムラインに挿入せずに溜める。`scia-debug://arrivals/release`で、溜まった新着をまとめて挿入する。
+    /// ストリーミングはつないだままなので、切断の知らせやポーリングでタイムラインが動かない。
     case holdArrivals(Bool)
-    /// `scia-debug://autoscroll?distance=<pt>&speed=<pt/秒>`。選んでいるタブの一覧を、決まった速さで決まった距離だけ動かす。distanceが負なら上へ戻す。
+    /// `scia-debug://autoscroll?distance=<pt>&speed=<pt/秒>`。選んでいるタブのタイムラインを、決まった速さで決まった距離だけ動かす。distanceが負なら上へ戻す。
     /// 指で操作できない検証用の実機で、スクロールの重さ（hitch）を同じ条件で測るため。慣性のない一定の速さで動かすので、指のスクロールとは動きが違う。
     case autoScroll(distance: CGFloat, speed: CGFloat)
-    /// `scia-debug://inject/<home|local|federated|notifications|announcements>?file=<ファイル名>`。アプリのDocuments/DebugInjectに置いたJSONを読み、ストリーミングの新着と同じ経路で一覧に流す。
+    /// `scia-debug://inject/<home|local|federated|notifications|announcements>?file=<ファイル名>`。アプリのDocuments/DebugInjectに置いたJSONを読み、ストリーミングの新着と同じ経路で流す。
     /// ホーム、ローカル、連合は`Status`の配列、通知は`Notification`の配列、お知らせは`Announcement`の配列で、APIの応答と同じ形で書く。実データにない投稿や通知の見え方を、ログインした端末のまま確かめるため。
     case inject(Tab, file: String)
     /// `scia-debug://compose?text=<本文>&media=<枚数>`。インライン投稿欄で書き始め、本文を渡した文に置き換え、番号を描いた色違いの画像を添付に足す。
@@ -100,7 +100,7 @@ enum DebugURL: Equatable {
     /// `scia-debug://compose/open`。下書きを変えずに、カプセルを押したときと同じく書き始める。開閉の動きを確かめるため。
     case composeOpen
     /// `scia-debug://compose/reply?file=<ファイル名>`。`inject`と同じ置き場所のファイルにある最初の投稿へ、返信を始める。
-    /// 一覧で投稿を探して長押しせずに、長いハンドルの人への返信を作るため。
+    /// タイムラインで投稿を探して長押しせずに、長いハンドルの人への返信を作るため。
     case composeReply(file: String)
     /// `scia-debug://profile-edit?note=<自己紹介>&field=<補足情報の内容>&crop=<avatar|header>`。自分のプロフィールの編集を開く。`note`を渡すと、読み込んだあとに自己紹介をその文に置き換えて、
     /// 末尾にキーボードを出す。`field`を渡すと、その内容の補足情報を足して、内容の欄の末尾にキーボードを出す。どちらも、打ったときと同じく末尾の語の補完を出す。
@@ -119,7 +119,7 @@ enum DebugURL: Equatable {
     /// リストの作成と管理の画面がまだないため、リストのタブを実物で確かめるのに使う。サーバーのリストを書き換える。
     case createList(title: String)
     case deleteList(id: String)
-    /// `scia-debug://tags/follow?name=<名前>`でハッシュタグをフォローし、`scia-debug://tags/unfollow?name=<名前>`で外す。メニューから押したときと同じく、知らせを出し、「フォロー中のハッシュタグ」の一覧に反映する。
+    /// `scia-debug://tags/follow?name=<名前>`でハッシュタグをフォローし、`scia-debug://tags/unfollow?name=<名前>`で外す。メニューから押したときと同じく、知らせを出し、「フォロー中のハッシュタグ」の画面に反映する。
     /// ハッシュタグをフォローする操作がまだないため、ハッシュタグのタブを実物で確かめるのに使う。サーバーのフォローを書き換える。
     case followTag(name: String)
     case unfollowTag(name: String)

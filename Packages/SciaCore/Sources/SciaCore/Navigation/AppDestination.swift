@@ -7,7 +7,7 @@ public enum AppDestination: Equatable, Sendable {
     case tab(TabItem)
     /// `tab/list?id=<リストのID>`、`tab/hashtag?name=<名前>`、`tab/profile?acct=<ハンドル>`、`tab/account-hashtag?acct=<ハンドル>&name=<名前>`。足したタブを選ぶ。
     case userTab(UserTab)
-    /// `settings`で設定を、`settings/<SettingsPage.rawValue>`で設定の一覧から入るその画面まで重ねて開く。
+    /// `settings`で設定を、`settings/<SettingsPage.rawValue>`で設定のトップの画面から入るその画面まで重ねて開く。
     case settings(SettingsPage?)
     /// `settings/appearance/<分類のID>`。「投稿の見た目」の、その分類（`AppearanceCatalog.groups`）の画面まで重ねて開く。
     case appearanceGroup(AppearanceGroup.ID)
@@ -25,27 +25,27 @@ public enum AppDestination: Equatable, Sendable {
     case editHistory(statusID: String)
     /// `api-response?id=<投稿のID>`。その投稿をサーバーから読み直し、APIの応答のJSONを開く。
     case apiResponse(statusID: String)
-    /// `accounts/<followers|following>`で自分の、`?id=<アカウントのID>`でその人のフォロワーかフォローの一覧を開く。
-    /// `accounts/<favourited|reblogged>?id=<投稿のID>`で、その投稿をお気に入りした人、ブーストした人の一覧を開く。
-    /// `accounts/emoji-reactioned?id=<投稿のID>&name=<絵文字>`で、その投稿にその絵文字でリアクションした人の一覧を開く。
+    /// `accounts/<followers|following>`で自分の、`?id=<アカウントのID>`でその人のフォロワーかフォローしている人のリストを開く。
+    /// `accounts/<favourited|reblogged>?id=<投稿のID>`で、その投稿をお気に入りした人、ブーストした人のリストを開く。
+    /// `accounts/emoji-reactioned?id=<投稿のID>&name=<絵文字>`で、その投稿にその絵文字でリアクションした人のリストを開く。
     case accounts(AccountList)
-    /// `hashtag?name=<名前>`。選んでいるタブに、そのハッシュタグの投稿の一覧を開く。
+    /// `hashtag?name=<名前>`。選んでいるタブに、そのハッシュタグのタイムラインを開く。
     case hashtag(name: String)
-    /// `account-hashtag?acct=<ハンドル>&name=<名前>`。選んでいるタブに、その人のそのハッシュタグの投稿の一覧を開く。
+    /// `account-hashtag?acct=<ハンドル>&name=<名前>`。選んでいるタブに、その人のそのハッシュタグのタイムラインを開く。
     case accountHashtag(acct: String, name: String)
     /// `search?q=<語>`。検索のタブに語を入れて確定する。`q`がなければ、検索のタブを開くだけにする。検索を無効にしていれば、選んでいるタブに検索の画面を開く。
     case search(query: String?)
-    /// `scheduled`。予約した投稿の一覧を開く。タブに並べていればそのタブを、無効にしていれば手前に重ねて開く。
+    /// `scheduled`。予約投稿のタイムラインを開く。タブに並べていればそのタブを、無効にしていれば手前に重ねて開く。
     case scheduled
-    /// `operation-status`。「操作の状況」の一覧を開く。
+    /// `operation-status`。「操作の状況」の画面を開く。
     case operationStatus
-    /// `notification-requests`。通知のタブに、保留中の通知の一覧を開く。
+    /// `notification-requests`。通知のタブに、保留中の通知のリストを開く。
     case notificationRequests
-    /// `notification-request?id=<保留中の通知のID>`。通知のタブに、保留中の通知の一覧と、その人からの通知を重ねて開く。
+    /// `notification-request?id=<保留中の通知のID>`。通知のタブに、保留中の通知のリストと、その人からの通知を重ねて開く。
     case notificationRequest(id: String)
     /// `notification-policy`。通知のフィルタリングの設定を開く。
     case notificationPolicy
-    /// `announcements`。サーバーのお知らせの一覧を開く。
+    /// `announcements`。サーバーのお知らせのリストを開く。
     case announcements
     /// `in-app-browser-height`。重ねた画面を閉じてホームのタブを出し、その上にアプリ内のSafariの高さを選ぶシートを出す。
     /// `?return=<SettingsPage.rawValue>`で、シートを閉じたときにその設定の画面を開き直す。
@@ -295,7 +295,7 @@ public enum AppDestination: Equatable, Sendable {
     private static let fixedTabs: [TabItem] = [.home, .local, .federated, .notifications, .search, .bookmarks, .favourites, .scheduled, .followedTags]
 }
 
-/// 設定の一覧から重ねて開く画面。`rawValue`は、`scia://settings/<rawValue>`でその画面を直接開くときの名前。
+/// 設定のトップの画面から重ねて開く画面。`rawValue`は、`scia://settings/<rawValue>`でその画面を直接開くときの名前。
 public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     /// 表示の分類。投稿と通知の見た目、動き、ステータスバーの通知、リンク先の読み込みを並べる。
     case display
@@ -340,7 +340,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     case licenses
     case acknowledgments
 
-    /// 設定の一覧からこの画面までに重ねる画面。
+    /// 設定のトップの画面からこの画面までに重ねる画面。
     public var path: [SettingsPage] {
         switch self {
         case .appearance, .notificationAppearance, .linkLoading: [.display, self]

@@ -1,11 +1,11 @@
 import Foundation
 
-/// 自分で残した投稿の一覧の種類。
+/// 自分で残した投稿のタイムラインの種類。
 public enum SavedStatusesKind: String, Sendable, CaseIterable {
     case bookmarks
     case favourites
 
-    /// この一覧に入る状態（ブックマークやお気に入り）か。
+    /// このタイムラインに入る状態（ブックマークやお気に入り）か。
     public func isSaved(_ status: Status) -> Bool {
         switch self {
         case .bookmarks: status.bookmarked
@@ -13,7 +13,7 @@ public enum SavedStatusesKind: String, Sendable, CaseIterable {
         }
     }
 
-    /// この一覧に関わる操作。
+    /// このタイムラインに関わる操作。
     public var action: StatusInteractions.Action {
         switch self {
         case .bookmarks: .bookmark
@@ -22,7 +22,7 @@ public enum SavedStatusesKind: String, Sendable, CaseIterable {
     }
 }
 
-/// ブックマークやお気に入りした投稿の一覧を、サーバーが返す順のまま持つ。決まりはdocs/tabs.mdの「ブックマークとお気に入り」にある。
+/// ブックマークやお気に入りした投稿のタイムラインを、サーバーが返す順のまま持つ。決まりはdocs/tabs.mdの「ブックマークとお気に入り」にある。
 ///
 /// 並びはブックマークした順、お気に入りした順で、投稿のIDの順ではないため、`TimelineStore`のようにIDで並べ直さない。
 /// 続きは、前のページの応答の`Link`ヘッダーにある位置から読む。
@@ -120,8 +120,8 @@ public final class SavedStatusesStore {
     /// 重なりは、サーバーのページで読んだ手元の行で探す。その行がページに1つもなく、ページの先がまだあれば、手元との間が埋まらないので、
     /// 読んだページを先頭に足し、手元との間にギャップを置く。手元を置き換えると、下まで読んでいた位置を失うため。
     /// 手元の先頭にギャップが残っていれば（前の読み直しで、上に並べる行がなかった）、その間は新しいギャップに含まれるので、新しいギャップ1つにまとめる。
-    /// ページの先がなければ、手元の行はもうサーバーの一覧にないので、一覧を読んだページで置き換える。サーバーのページで読んだ行が手元に1つもないときも置き換える。
-    /// 先頭の行は外したまま残した行のことがあり、サーバーの一覧にはないため、先頭に限らず探す。
+    /// ページの先がなければ、手元の行はもうサーバーの並びにないので、タイムラインを読んだページで置き換える。サーバーのページで読んだ行が手元に1つもないときも置き換える。
+    /// 先頭の行は外したまま残した行のことがあり、サーバーの並びにはないため、先頭に限らず探す。
     /// 重なりより前にある、アプリの中で先頭に入れた行は、サーバーの順の位置へ移す。
     /// 読み込み中か、まだ読み込んでいなければ何もせずfalseを返す。
     @discardableResult
@@ -149,7 +149,7 @@ public final class SavedStatusesStore {
             entries = added + [.gap(gap)] + Array(rest)
             fromServerIDs.formUnion(addedIDs)
         } else {
-            // 外したまま残した行は、見ている間に付け直せるよう、置き換えても読んだページの下に残す。サーバーの一覧にはもうないため。
+            // 外したまま残した行は、見ている間に付け直せるよう、置き換えても読んだページの下に残す。サーバーの並びにはもうないため。
             let unsaved = entries.filter { $0.status.map { !kind.isSaved($0) } ?? false }
             replace(with: page)
             entries += newEntries(unsaved[...])
@@ -161,7 +161,7 @@ public final class SavedStatusesStore {
     /// ギャップを上から1ページ読み、並びが変わればtrueを返す。そのギャップがない、または読み込み中なら何もせずnilを返す。
     ///
     /// ギャップの下にある、サーバーのページで読んだ行に重なったら、その手前までを足してギャップを閉じる。重ならなければ読んだ分を足し、ギャップを次の位置へ進める。
-    /// ページの先がなければ、下の行はもうサーバーの一覧にないので、ギャップを閉じる。
+    /// ページの先がなければ、下の行はもうサーバーの並びにないので、ギャップを閉じる。
     /// 重なりより前にある、アプリの中で先頭に入れた行は、サーバーの順の位置へ移す。
     @discardableResult
     public func loadGap(_ id: String) async throws -> Bool? {
@@ -180,7 +180,7 @@ public final class SavedStatusesStore {
             }
             throw error
         }
-        // 読んでいる間に一覧を置き換えていたら、ギャップはもうない。
+        // 読んでいる間にタイムラインを置き換えていたら、ギャップはもうない。
         guard let index = entries.firstIndex(where: { $0.id == .gap(id) }) else { return false }
         let before = entries
         let above = entries[..<index]
@@ -225,7 +225,7 @@ public final class SavedStatusesStore {
         return insertAtTop(target)
     }
 
-    /// この一覧に入る状態で、削除も除きもしていない投稿を、まだなければ先頭に入れる。入れたらtrueを返す。
+    /// このタイムラインに入る状態で、削除も除きもしていない投稿を、まだなければ先頭に入れる。入れたらtrueを返す。
     @discardableResult
     private func insertAtTop(_ status: Status) -> Bool {
         guard kind.isSaved(status), !deletedIDs.contains(status.id), !isExcluded(status), !entries.contains(where: { $0.id == .status(status.id) }) else { return false }

@@ -4,7 +4,7 @@ import Foundation
 public enum ReactionMenuCommand: Equatable, Sendable {
     /// 付け外しする。trueなら付け、falseなら外す。
     case toggle(turningOn: Bool)
-    /// その絵文字でリアクションした人の一覧を開く。
+    /// その絵文字でリアクションした人のリストを開く。
     case openReactedBy
     /// カスタム絵文字の画像をビューアで開く。
     case open
@@ -13,7 +13,7 @@ public enum ReactionMenuCommand: Equatable, Sendable {
 }
 
 /// 投稿の絵文字のリアクションのボタンのメニュー。決まりはdocs/emoji-reaction.mdの「リアクションのボタンのメニュー」にある。
-/// 項目の名前、並び、出す条件、見出しはここだけが知る。押したときの動き（ビューアや一覧を開く先）は、出す場所が決める。
+/// 項目の名前、並び、出す条件、見出しはここだけが知る。押したときの動き（ビューアや人のリストを開く先）は、出す場所が決める。
 public struct ReactionMenuTree {
     public let reaction: EmojiReaction
 

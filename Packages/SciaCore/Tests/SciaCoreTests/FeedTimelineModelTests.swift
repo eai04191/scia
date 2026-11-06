@@ -99,7 +99,7 @@ struct FeedTimelineModelTests {
         #expect(display.statusIDs == ["1"])
     }
 
-    /// 無効にした一覧は、最初の読み込みに失敗していても、電波の回復や前面に戻ったときにやり直さない。使わない一覧への通信になるため。
+    /// 無効にしたタイムラインは、最初の読み込みに失敗していても、電波の回復や前面に戻ったときにやり直さない。使わないタイムラインへの通信になるため。
     /// 有効に戻したら、やり直す。
     @Test func disabledFeedDoesNotRetryFailedInitialLoad() async throws {
         let failsTimeline = Mutex(true)
@@ -130,13 +130,13 @@ struct FeedTimelineModelTests {
         model.recover()
         model.enterForeground()
         try await waitUntil { model.runningTaskCount == 0 }
-        #expect(timelineRequests.withLock { $0 } == 1, "無効にした一覧の読み込みをやり直しました")
+        #expect(timelineRequests.withLock { $0 } == 1, "無効にしたタイムラインの読み込みをやり直しました")
 
         model.setEnabled(true)
         try await waitUntil { display.contentState == .loaded }
     }
 
-    /// ローカルの一覧の読み込みを数える。返すのは空。
+    /// ローカルのタイムラインの読み込みを数える。返すのは空。
     private static func localTransport(gate: Gate? = nil, onRequest: @escaping @Sendable () -> Void) -> RoutedTransport {
         RoutedTransport { request in
             guard request.url?.path() == "/api/v1/timelines/public" else { return (200, Data("{}".utf8)) }
@@ -146,7 +146,7 @@ struct FeedTimelineModelTests {
         }
     }
 
-    /// サーバーが読ませない一覧は、読めないと伝え、購読をやめ、引っぱった読み直し、電波の回復、前面に戻ったとき、再試行でも読まない。
+    /// サーバーが読ませないタイムラインは、読めないと伝え、購読をやめ、引っぱった読み直し、電波の回復、前面に戻ったとき、再試行でも読まない。
     /// Fedibirdは、ローカルのタイムラインを空で返し、購読を断るため（docs/tabs.md）。
     @Test func unavailableFeedStopsLoadingAndStreaming() async throws {
         let requests = Mutex(0)
@@ -169,12 +169,12 @@ struct FeedTimelineModelTests {
         model.setEnabled(false)
         model.setEnabled(true)
         try await waitUntil { model.runningTaskCount == 0 }
-        #expect(requests.withLock { $0 } == before, "読めない一覧を読み直しました")
+        #expect(requests.withLock { $0 } == before, "読めないタイムラインを読み直しました")
         #expect(!model.isSubscribedToStreaming)
         #expect(display.contentState == .unavailable)
     }
 
-    /// 始める前に読めないと分かった一覧は、開いても読まない。
+    /// 始める前に読めないと分かったタイムラインは、開いても読まない。
     @Test func unavailableFeedDoesNotStart() async throws {
         let requests = Mutex(0)
         let (model, display) = makeModel(feed: .local, transport: Self.localTransport { requests.withLock { $0 += 1 } })

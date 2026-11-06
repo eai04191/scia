@@ -1,4 +1,4 @@
-# ログイン画面の補完に使うサーバーの一覧を、FediDBのデータセットから作り直してPRにする。
+# ログイン画面の補完に使うサーバーのリストを、FediDBのデータセットから作り直してPRにする。
 # FediDBは週1回（日曜）出力するので、月曜に取る。変わっていなければPRを作らず、前のPRの枝を消して閉じる。前のPRが開いたままなら同じPRを更新する。
 name: Update known servers
 
@@ -17,7 +17,7 @@ jobs:
     name: Update known servers
     runs-on: ubuntu-latest
     permissions:
-      contents: write # 一覧を変えたcommitを枝にpushし、変わっていないときは枝を消す
+      contents: write # リストを変えたcommitを枝にpushし、変わっていないときは枝を消す
       pull-requests: write # PRを作る
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -44,11 +44,11 @@ jobs:
           git switch -c "$BRANCH"
           git add -A
           git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-            commit -m 'chore: ログイン画面の補完に使うサーバーの一覧をFediDBの最新の出力に合わせる'
+            commit -m 'chore: ログイン画面の補完に使うサーバーのリストをFediDBの最新の出力に合わせる'
           git push --force origin "$BRANCH"
           if [ -z "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
             # 元にしたactionと同じく、checkoutした枝に向けてPRを作る
             gh pr create --head "$BRANCH" --base "$GITHUB_REF_NAME" \
-              --title 'chore: ログイン画面の補完に使うサーバーの一覧を更新する' \
+              --title 'chore: ログイン画面の補完に使うサーバーのリストを更新する' \
               --body 'FediDBのデータセット（https://fedidb.com/datasets 、CC BY 4.0）から、`Tools/update-known-servers.sh`で作り直しました。FediDBに載らないサーバーは、`Tools/known-servers-extra.txt`のものをNodeInfoから足しています。'
           fi

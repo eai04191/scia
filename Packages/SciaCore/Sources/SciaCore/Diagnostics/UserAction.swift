@@ -7,7 +7,7 @@ public enum UserAction: Sendable, Equatable {
     case selectTab(String)
     /// 選んでいるタブをもう一度押した。
     case reselectTab(String)
-    /// 指で一覧を動かし、止まった。
+    /// 指でタイムラインを動かし、止まった。
     case scroll(ScrollRecord)
     /// ステータスバーを押して最上部へ動かした。
     case scrollToTop(screen: String)
@@ -18,7 +18,7 @@ public enum UserAction: Sendable, Equatable {
     case openViewer(count: Int, index: Int)
     case closeViewer(ViewerClose)
     case openProfile
-    /// 人の一覧（お気に入りした人、ブーストした人、フォロー、フォロワー）を開いた。
+    /// 人のリスト（お気に入りした人、ブーストした人、フォロー、フォロワー）を開いた。
     case openAccountList
     /// 投稿の行を押して、スレッドを開いた。
     case openThread(screen: String)
@@ -33,7 +33,7 @@ public enum UserAction: Sendable, Equatable {
     case togglePin
     case toggleConversationMute
     case toggleBookmark
-    /// まとめて行う操作のために、一覧で投稿を選び始めた。
+    /// まとめて行う操作のために、タイムラインで投稿を選び始めた。
     case beginPostSelection(screen: String)
     /// 選んだ投稿のまとめてブーストを始めた。
     case batchReblog
@@ -163,7 +163,7 @@ public enum UserAction: Sendable, Equatable {
         Logger(subsystem: SciaLog.subsystem, category: Self.logCategory).info("\(logMessage, privacy: .public)")
     }
 
-    /// 違和感レポートの一覧に出す、人が読む説明。
+    /// 違和感レポートの操作のリストに出す、人が読む説明。
     public var summary: String {
         switch self {
         case .selectTab(let tab): "\(Self.screenName(tab))のタブを選んだ"
@@ -177,7 +177,7 @@ public enum UserAction: Sendable, Equatable {
         case .closeViewer(.drag): "ビューアをドラッグして閉じた"
         case .closeViewer(.button): "ビューアを閉じた"
         case .openProfile: "プロフィールを開いた"
-        case .openAccountList: "人の一覧を開いた"
+        case .openAccountList: "人のリストを開いた"
         case .openThread(let screen): "\(Self.screenName(screen))で投稿を押してスレッドを開いた"
         case .reply: "投稿への返信を書き始めた"
         case .quote: "投稿を引用して書き始めた"

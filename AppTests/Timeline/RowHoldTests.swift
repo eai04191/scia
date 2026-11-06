@@ -4,7 +4,7 @@ import SciaTesting
 import UIKit
 @testable import Scia
 
-/// 長押しのメニューを出している間は、一覧の並びを変えず、閉じてから反映することを確かめる。
+/// 長押しのメニューを出している間は、タイムラインの並びを変えず、閉じてから反映することを確かめる。
 /// メニューの元になった行が動くと、メニューと表示がずれるため。
 @MainActor
 @Suite(.scratch, .serialized)

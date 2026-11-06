@@ -3,7 +3,7 @@ import Foundation
 import SciaCore
 import UIKit
 
-/// 一覧の投稿の投票。一覧と同じく`TimelineViewController`の組み立てを通し、選んでいる状態や送っている途中は`PollChoices`で直接渡す。
+/// タイムラインの投稿の投票。タイムラインと同じく`TimelineViewController`の組み立てを通し、選んでいる状態や送っている途中は`PollChoices`で直接渡す。
 /// 投票したときの棒の動きと、投票前と結果で行の高さが変わらないことは、`scia-debug://dummy/polls`の実物で確かめる。
 enum PollCatalog {
     private typealias Fixtures = CatalogFixtures
@@ -24,7 +24,7 @@ enum PollCatalog {
         ])
         let emojiURL = Fixtures.imageURL(width: 64, height: 64, color: .systemOrange)
         let emojiTitles = poll(options: [(":square: 四角", 3), (":square::square: 2つ", 1)], emojis: emojiURL.map { [CustomEmoji(shortcode: "square", url: $0, staticUrl: $0)] } ?? [])
-        /// - Parameter choices: 一覧で覚えている、選んでいる選択肢などの状態を、組み立てる前に当てる。
+        /// - Parameter choices: タイムラインで覚えている、選んでいる選択肢などの状態を、組み立てる前に当てる。
         func post(_ title: String, _ poll: Poll, account: Account = other, content: String = "<p>投票の付いた投稿。</p>", spoilerText: String = "", card: PreviewCard? = nil, choices: @escaping (inout PollChoices, Poll.ID) -> Void = { _, _ in }) -> CatalogState {
             CatalogState(title: title) {
                 let timeline = TimelineViewController(texts: .home, refresh: {})

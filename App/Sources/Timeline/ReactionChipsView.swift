@@ -37,9 +37,9 @@ final class ReactionChipsView: UIView {
     var target: ((String) -> (any ObjectActionTarget)?)?
     /// 動くカスタム絵文字を動かすときのストア。nilなら動かさない。
     var animatedEmojis: EmojiImageStore<UIImage>?
-    /// まだ幅が決まっていないときに、高さを測る幅。一覧の行は、幅が決まる前に高さを測ることがあり、0の幅で測るとボタンが1つずつ折り返して高く測られるため。
+    /// まだ幅が決まっていないときに、高さを測る幅。タイムラインの行は、幅が決まる前に高さを測ることがあり、0の幅で測るとボタンが1つずつ折り返して高く測られるため。
     var widthHint: CGFloat?
-    /// 幅が決まって、測った高さが変わったときに呼ぶ。置いている一覧の行に高さを測り直させる。
+    /// 幅が決まって、測った高さが変わったときに呼ぶ。置いているタイムラインの行に高さを測り直させる。
     var onHeightChange: (() -> Void)?
     /// 付いた、なくなった、数が変わったときに動かす時間。0なら切り替える。投稿では、チューニングの値を入れる。
     var transitionDuration: TimeInterval = 0
@@ -61,7 +61,7 @@ final class ReactionChipsView: UIView {
     /// 最後に知らせた高さ。置かれた幅で並べた高さと違えば、測り直させる。
     private var reportedHeight: CGFloat?
     /// 次に並べるときに、前の位置から動かすか。動かす描き直しの`apply`で立て、並べたら下ろす。
-    /// 動きはどれも`apply`では始めず、並べるときに始める。一覧は行の中身を動きを止めた描き直し（`apply(_:animatingDifferences: false)`）の中で当てるため、その中で始めた`UIView.animate`は効かない。
+    /// 動きはどれも`apply`では始めず、並べるときに始める。タイムラインは行の中身を動きを止めた描き直し（`apply(_:animatingDifferences: false)`）の中で当てるため、その中で始めた`UIView.animate`は効かない。
     private var animatesNextLayout = false
     /// 次に並べるときに、その場で浮かび上がらせるボタン。新しく付いたリアクションと、列ごと出てきたときの「＋」。
     private var enteringButtons: Set<ObjectIdentifier> = []
@@ -485,7 +485,7 @@ final class ReactionChipButton: UIControl {
     }
 
     /// `setCount`で決めた動きを始める。並べ終えてから呼ぶ。
-    /// 一覧は行の中身を動きを止めた描き直しの中で当てるため、`setCount`の中では始めない。
+    /// タイムラインは行の中身を動きを止めた描き直しの中で当てるため、`setCount`の中では始めない。
     func startPendingAnimations() {
         if let change = pendingColorChange {
             pendingColorChange = nil

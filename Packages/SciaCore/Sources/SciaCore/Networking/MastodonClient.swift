@@ -120,7 +120,7 @@ public struct MastodonClient: Sendable {
         return try await get(NotificationRequest.self, path: "api/v1/notifications/requests/\(key)", query: []).0
     }
 
-    /// 保留中の通知に答える。受け入れると、サーバーはあとで保留していた通知を通知の一覧に戻し、終えたらストリーミングの`notifications_merged`で知らせる。
+    /// 保留中の通知に答える。受け入れると、サーバーはあとで保留していた通知を通知のタイムラインに戻し、終えたらストリーミングの`notifications_merged`で知らせる。
     /// 応答の中身は使わない。
     /// https://docs.joinmastodon.org/methods/notifications/#accept-request
     /// https://docs.joinmastodon.org/methods/notifications/#dismiss-request
@@ -133,7 +133,7 @@ public struct MastodonClient: Sendable {
         _ = try await send(formRequest(method: "POST", path: "api/v1/notifications/requests/\(key)/\(action)", form: []))
     }
 
-    /// 受け入れた保留中の通知を、サーバーが通知の一覧に戻し終えたか。
+    /// 受け入れた保留中の通知を、サーバーが通知のタイムラインに戻し終えたか。
     /// https://docs.joinmastodon.org/methods/notifications/#requests-merged
     public func notificationRequestsMerged() async throws -> Bool {
         try await get(MergedState.self, path: "api/v1/notifications/requests/merged", query: [], feature: .notificationFilter).0.merged
@@ -830,7 +830,7 @@ public struct MastodonClient: Sendable {
     }
 
     /// フォローしているハッシュタグをすべて返す。続きを`Link`ヘッダーで読み、最後まで読み切ってから返す。途中で読めなければ投げる。
-    /// 読めない要素を捨てずに投げるのは、欠けた一覧で並びを書き換えると、読めなかったハッシュタグを並びから外してしまうため。
+    /// 読めない要素を捨てずに投げるのは、欠けたリストで並びを書き換えると、読めなかったハッシュタグを並びから外してしまうため。
     /// 1回に読める件数の上限は200件。
     /// https://docs.joinmastodon.org/methods/followed_tags/#get
     public func followedTags() async throws -> [Hashtag] {
@@ -853,7 +853,7 @@ public struct MastodonClient: Sendable {
         try await savedStatuses(path: "api/v1/favourites", maxID: maxID, limit: limit)
     }
 
-    /// 人の一覧を、サーバーが返す順に返す。1回に読める件数の上限は80件。
+    /// 人のリストを、サーバーが返す順に返す。1回に読める件数の上限は80件。
     /// - Parameter maxID: 前のページの`AccountListPage.nextMaxID`。nilなら最初のページ。
     /// https://docs.joinmastodon.org/methods/statuses/#favourited_by
     /// https://docs.joinmastodon.org/methods/statuses/#reblogged_by
@@ -882,7 +882,7 @@ public struct MastodonClient: Sendable {
 
     /// 投稿にその絵文字でリアクションした人。Fedibirdの`emoji_reactioned_by`は絵文字で絞れず、どの絵文字のリアクションも、人と絵文字の組でページに分けて返すので、
     /// `name`のものだけを手元で絞る。同じ絵文字かは、ほかと同じく名前だけで見分ける（docs/emoji-reaction.mdの「リアクションした人」）。
-    /// 絞ったページに人がいなければ、合う人が見つかるか最後のページに着くまで、続けて読む。人の一覧は、最初のページが空なら続きを読まないため。
+    /// 絞ったページに人がいなければ、合う人が見つかるか最後のページに着くまで、続けて読む。人のリストは、最初のページが空なら続きを読まないため。
     private func emojiReactionedBy(_ statusID: Status.ID, name: String, maxID: String?, limit: Int) async throws -> AccountListPage {
         struct Reacted: Decodable {
             let name: String
@@ -1070,7 +1070,7 @@ public struct MastodonClient: Sendable {
         return Hashtag.used(in: page.statuses)
     }
 
-    /// サーバーで使えるカスタム絵文字の一覧。補完ではまとめて一度だけ取り、手元で絞る。
+    /// サーバーで使えるカスタム絵文字のリスト。補完ではまとめて一度だけ取り、手元で絞る。
     /// 同じショートコードの絵文字は、後に来た1件だけを残す（`ServerEmoji.lastOfEachShortcode`）。
     /// https://docs.joinmastodon.org/methods/custom_emojis/
     public func customEmojis() async throws -> [ServerEmoji] {
@@ -1531,7 +1531,7 @@ public struct TimelineQuery: Sendable, Equatable {
     }
 }
 
-/// 人の一覧の種類。
+/// 人のリストの種類。
 public enum AccountListKind: Hashable, Sendable {
     /// 投稿をお気に入りした人。
     case favouritedBy(Status.ID)
@@ -1555,7 +1555,7 @@ public enum SearchCategory: String, CaseIterable, Hashable, Sendable {
     case hashtags
     case statuses
 
-    /// 結果の見出しと、その種類だけの一覧の題。
+    /// 結果の見出しと、その種類だけの画面の題。
     public var title: String {
         switch self {
         case .accounts: "ユーザー"
@@ -1605,7 +1605,7 @@ public struct SearchResults: Decodable, Sendable {
     }
 }
 
-/// 人の一覧の1ページ分。
+/// 人のリストの1ページ分。
 public struct AccountListPage: Sendable, Equatable {
     /// サーバーが返す順。
     public let accounts: [Account]
@@ -1677,7 +1677,7 @@ extension MastodonAPIError {
     public var isUnauthorized: Bool { statusCode == 401 }
 }
 
-/// お知らせの一覧。読めなかったお知らせは、IDが読めれば`unreadable`に入る。
+/// お知らせのリスト。読めなかったお知らせは、IDが読めれば`unreadable`に入る。
 public struct AnnouncementList: Sendable, Equatable {
     public let announcements: [Announcement]
     public let unreadable: [UnreadableItem]

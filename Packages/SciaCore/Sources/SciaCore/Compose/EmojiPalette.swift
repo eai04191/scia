@@ -26,7 +26,7 @@ public struct EmojiPaletteSection: Equatable, Sendable, Identifiable {
         case standard(String)
         /// 検索の結果。パレットで検索している間だけ、ほかのまとまりの代わりに出す。
         case searchResults
-        /// カスタム絵文字の一覧を読んでいる間か、読めなかったとき、カスタム絵文字のまとまりの場所に置く状態の段。絵文字は持たない。
+        /// カスタム絵文字のリストを読んでいる間か、読めなかったとき、カスタム絵文字のまとまりの場所に置く状態の段。絵文字は持たない。
         case customEmojiStatus
     }
 
@@ -44,7 +44,7 @@ public struct EmojiPaletteSection: Equatable, Sendable, Identifiable {
 public enum EmojiPalette {
     /// 最近使ったもの、カテゴリーのないもの、カテゴリーごと（名前の順）、Unicodeの絵文字のまとまりの順に分ける。
     /// 最近使ったものは新しい順、カスタム絵文字のまとまりの中はショートコードを小文字にそろえて比べた順、Unicodeの絵文字はデータの順。
-    /// 一覧に出さないカスタム絵文字は除く。最近使ったもののうち、サーバーの一覧やUnicodeの絵文字の一覧にないものも除く。空のまとまりは作らない。
+    /// ピッカーに出さないカスタム絵文字は除く。最近使ったもののうち、サーバーの絵文字のリストやUnicodeの絵文字のリストにないものも除く。空のまとまりは作らない。
     /// カスタム絵文字を先に置くのは、サーバーにしかない絵文字を探しに来ることが多いため。カテゴリーのないものを先にすることと、まとまりの中の順は、Mastodonのweb UIと同じ。
     public static func sections(emojis: [ServerEmoji], standardGroups: [StandardEmojiGroup], recentKeys: [String], recentLimit: Int) -> [EmojiPaletteSection] {
         let visible = emojis.filter(\.visibleInPicker).sorted { $0.shortcode.lowercased() < $1.shortcode.lowercased() }

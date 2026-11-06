@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-/// お知らせの一覧の状態。行がないときの表示と、読み込みの失敗の表示に使う。
+/// お知らせのリストの状態。行がないときの表示と、読み込みの失敗の表示に使う。
 public enum AnnouncementsContentState: Equatable, Sendable {
     case loading
     case loaded
@@ -9,7 +9,7 @@ public enum AnnouncementsContentState: Equatable, Sendable {
     case failed(ErrorPresentation)
 }
 
-/// お知らせの一覧に並べる行。
+/// お知らせのリストに並べる行。
 public enum AnnouncementListItem: Hashable, Sendable, Identifiable {
     /// - Parameter showsUnreadMark: 未読の点を付けるか。シートを開いている間は、既読にしたあとも付けておく。
     case announcement(Announcement, showsUnreadMark: Bool)
@@ -23,7 +23,7 @@ public enum AnnouncementListItem: Hashable, Sendable, Identifiable {
     }
 }
 
-/// お知らせの一覧の画面への命令。iOSでは`AnnouncementsViewController`が従う。
+/// お知らせのリストの画面への命令。iOSでは`AnnouncementsViewController`が従う。
 @MainActor
 public protocol AnnouncementsDisplay: AnyObject {
     /// 行を並べ直す。並びはこのモデルが決める。行が消えたり増えたりしても、どれも操作によらない変化か、行の中の変化なので動かさない。
@@ -31,9 +31,9 @@ public protocol AnnouncementsDisplay: AnyObject {
     func setContentState(_ state: AnnouncementsContentState)
 }
 
-/// サーバーのお知らせの一覧を持ち、読み込み、既読、リアクションの通信を受け持つ。決まりはdocs/announcements.mdにある。
+/// サーバーのお知らせのリストを持ち、読み込み、既読、リアクションの通信を受け持つ。決まりはdocs/announcements.mdにある。
 ///
-/// セッションの間ずっと`user`のストリームを購読し、つながるたびに一覧を読み直す。シートを開いていない間も、アカウントのボタンに未読の数を出すため。
+/// セッションの間ずっと`user`のストリームを購読し、つながるたびにお知らせを読み直す。シートを開いていない間も、アカウントのボタンに未読の数を出すため。
 @MainActor
 public final class AnnouncementsModel {
     /// APIを呼ぶ口。テストでは差し替える。
@@ -82,7 +82,7 @@ public final class AnnouncementsModel {
         var countIncludesChange = true
     }
 
-    /// 結果を伝える一覧の画面。開いている間だけ付く。
+    /// 結果を伝えるお知らせのリストの画面。開いている間だけ付く。
     public weak var display: (any AnnouncementsDisplay)? {
         didSet { showItems() }
     }
@@ -111,7 +111,7 @@ public final class AnnouncementsModel {
     /// 今の読み込みを、シートで開いたときか引っぱったときに始めたか。失敗をシートに出すかを決める。
     private var loadingIsVisible = false
     private var hasLoaded = false
-    /// 一覧の中身を手元で変えた回数。読んでいる間にストリーミングで届いた変化を、古い応答で戻さないよう、変わっていたら読み直す。
+    /// お知らせのリストの中身を手元で変えた回数。読んでいる間にストリーミングで届いた変化を、古い応答で戻さないよう、変わっていたら読み直す。
     private var changeCount = 0
     /// 既読を送っていて、結果を待っているお知らせ。読み直しで未読に戻さない。
     private var dismissing: Set<Announcement.ID> = []
@@ -130,7 +130,7 @@ public final class AnnouncementsModel {
         self.onUnauthorized = onUnauthorized
     }
 
-    /// セッションを始めたときに呼ぶ。購読を始め、一覧を読む。
+    /// セッションを始めたときに呼ぶ。購読を始め、お知らせを読む。
     public func start() {
         startStreaming()
         reload(purpose: .display)
@@ -315,7 +315,7 @@ public final class AnnouncementsModel {
                 return reaction
             }
         }
-        // 一覧で読めなかったお知らせが、読める形で届いたら差し替える。
+        // お知らせのリストを読んだときに読めなかったお知らせが、読める形で届いたら差し替える。
         unreadable.removeAll { $0.id == incoming.id }
         setAnnouncements(announcements.filter { $0.id != incoming.id } + [applyingLocalChanges(announcement)])
     }

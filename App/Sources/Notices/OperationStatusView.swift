@@ -2,11 +2,11 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 「操作の状況」の一覧。処理の途中と、消えたチップの失敗をあとから確かめる。決まりはdocs/notices.mdの「操作の状況」にある。
+/// 「操作の状況」の画面。処理の途中と、消えたチップの失敗をあとから確かめる。決まりはdocs/notices.mdの「操作の状況」にある。
 /// タブの「通知」（Mastodonの通知）と紛れないよう、「通知」という言葉は使わない。
 struct OperationStatusView: View {
     let notices: OperationStatus
-    /// 行の投稿を開く。一覧を閉じてから開くのは呼ぶ側で行う。
+    /// 行の投稿を開く。「操作の状況」を閉じてから開くのは呼ぶ側で行う。
     let onOpen: (OperationStatus.Subject) -> Void
     @Environment(\.dismiss) private var dismiss
 

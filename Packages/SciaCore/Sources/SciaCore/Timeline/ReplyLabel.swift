@@ -25,7 +25,7 @@ public enum ReplyLabel: Hashable, Sendable {
     }
 }
 
-/// 一覧で隣り合う行が、返信と返信先の関係にあるか。アイコン同士を線でつなぐのに使う。
+/// タイムラインで隣り合う行が、返信と返信先の関係にあるか。アイコン同士を線でつなぐのに使う。
 public struct ReplyConnection: Hashable, Sendable {
     /// すぐ上の行とつながる。
     public var above = false

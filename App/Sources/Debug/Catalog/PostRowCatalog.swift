@@ -3,7 +3,7 @@ import Foundation
 import SciaCore
 import UIKit
 
-/// 一覧の投稿と通知の行。一覧と同じく`TimelineViewController`の組み立てを通すので、名前の並べ方やアイコンの形、時刻の表記はアプリの設定に従う。
+/// タイムラインの投稿と通知の行。タイムラインと同じく`TimelineViewController`の組み立てを通すので、名前の並べ方やアイコンの形、時刻の表記はアプリの設定に従う。
 enum PostRowCatalog {
     private typealias Fixtures = CatalogFixtures
 
@@ -19,7 +19,7 @@ enum PostRowCatalog {
     static func postStates() -> [CatalogState] {
         let home = TimelineViewController(texts: .home, refresh: {})
         home.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
-        // カタログのアカウントを自分として組む一覧。自分の投稿は、フィルターに一致しても折りたたまずに注記を出す。
+        // カタログのアカウントを自分として組むタイムライン。自分の投稿は、フィルターに一致しても折りたたまずに注記を出す。
         let mine = TimelineViewController(texts: .home, refresh: {})
         mine.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: author.id))
         mine.myAccountID = author.id
@@ -162,7 +162,7 @@ enum PostRowCatalog {
         let mine = TimelineViewController(texts: .home, refresh: {}, settings: settings)
         mine.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: author.id))
         mine.myAccountID = author.id
-        // 「写真を傾ける」をオフにした設定の一覧。
+        // 「写真を傾ける」をオフにした設定のタイムライン。
         let straightSuiteName = "net.mizle.scia.catalog.mediaBeside.straight"
         guard let straightDefaults = UserDefaults(suiteName: straightSuiteName) else {
             preconditionFailure("カタログのUserDefaultsを作れない")
@@ -173,7 +173,7 @@ enum PostRowCatalog {
         straightSettings.appearance.tiltsStackedPhotos = false
         let straight = TimelineViewController(texts: .home, refresh: {}, settings: straightSettings)
         straight.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
-        // 投稿と、引用とXの投稿の並べ方を分けた設定の一覧。
+        // 投稿と、引用とXの投稿の並べ方を分けた設定のタイムライン。
         func timeline(suffix: String, post: MediaArrangement, embed: EmbedMediaArrangement) -> TimelineViewController {
             let suiteName = "net.mizle.scia.catalog.mediaBeside.\(suffix)"
             guard let defaults = UserDefaults(suiteName: suiteName) else {
@@ -345,7 +345,7 @@ enum PostRowCatalog {
                     notifications.contentConfiguration(for: notification, base: .cell())
                 }
                 let view = configuration().makeContentView()
-                // 名前の前のアイコンは、届くまで灰色の枠で出す。一覧と同じく、届いたら組み立て直す。
+                // 名前の前のアイコンは、届くまで灰色の枠で出す。タイムラインと同じく、届いたら組み立て直す。
                 AppDependencies.avatarImages.addListener(owner: view) { [weak view] _ in
                     view?.configuration = configuration()
                 }
@@ -482,7 +482,7 @@ enum PostRowCatalog {
         ]
     }
 
-    /// お気に入りした人などの一覧の行。名前とハンドルの長さで崩れないかを見る。
+    /// お気に入りした人などを並べた人のリストの行。名前とハンドルの長さで崩れないかを見る。
     @MainActor
     static func accountStates() -> [CatalogState] {
         let list = TimelineViewController(texts: .accountList(.favouritedBy("catalog")), refresh: {})
@@ -501,7 +501,7 @@ enum PostRowCatalog {
         ] + notificationRequestStates()
     }
 
-    /// 保留中の通知の一覧の行。人の一覧の行に、保留している通知の件数を3行目に足す。
+    /// 保留中の通知のリストの行。人のリストの行に、保留している通知の件数を3行目に足す。
     @MainActor
     private static func notificationRequestStates() -> [CatalogState] {
         let list = TimelineViewController(texts: .notificationRequests, refresh: {})

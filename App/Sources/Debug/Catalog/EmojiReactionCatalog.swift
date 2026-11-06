@@ -3,7 +3,7 @@ import Foundation
 import SciaCore
 import UIKit
 
-/// 投稿の絵文字のリアクションの列。一覧と同じく`TimelineViewController`の組み立てを通し、サーバーが対応している一覧として描く。
+/// 投稿の絵文字のリアクションの列。タイムラインと同じく`TimelineViewController`の組み立てを通し、サーバーが対応しているタイムラインとして描く。
 /// 付け外しの動きと失敗、ストリーミングで数が変わるところは、Fedibirdのアカウントと`scia-debug://dummy/reactions`の実物で確かめる。
 enum EmojiReactionCatalog {
     private typealias Fixtures = CatalogFixtures

@@ -312,7 +312,7 @@ struct TabArrangementTests {
         #expect(harness.made.made.filter { $0 == Self.friends }.count == 1)
     }
 
-    /// サーバーから消えた項目は、並びから外れたら作ったナビゲーションを捨てる。同じ項目がまた並びに出たら作り直し、止めた一覧を使い回さない。
+    /// サーバーから消えた項目は、並びから外れたら作ったナビゲーションを捨てる。同じ項目がまた並びに出たら作り直し、止めたタイムラインを使い回さない。
     @Test func forgottenItemIsMadeAgainWhenPlacedAgain() throws {
         let harness = try Harness(Self.layout(tabs: [.home, Self.friends], switchable: [.local]))
         #expect(harness.made.made.filter { $0 == Self.friends }.count == 1)

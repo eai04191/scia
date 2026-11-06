@@ -2,7 +2,7 @@ import Foundation
 import SciaCore
 import Testing
 
-/// テストで作るセッション。一覧はセッションを持たず、セッションを捨てると一覧も止まるため、テストの間はここで持つ。
+/// テストで作るセッション。タイムラインはセッションを持たず、セッションを捨てるとタイムラインも止まるため、テストの間はここで持つ。
 @MainActor
 final class TestAccountSessions {
     private(set) var sessions: [AccountSession] = []

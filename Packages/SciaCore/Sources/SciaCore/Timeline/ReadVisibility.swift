@@ -1,12 +1,12 @@
 public import CoreGraphics
 
-/// 一覧のどの行を、表示中として既読の報告（`FeedTimelineModel.markRead(_:)`など）に渡すかを決める。
+/// タイムラインのどの行を、表示中として既読の報告（`FeedTimelineModel.markRead(_:)`など）に渡すかを決める。
 /// 未読の数とサーバーに保存する既読位置がこれで決まるので、iOSとmacOSで同じ決まりを使う。
 public enum ReadVisibility {
     /// 報告するか。見ていない間（ほかのタブにいる、添付ファイルのビューアやアプリ内のSafariで覆っている）は報告しない。
     /// 窓が前面にない間は、使う人がスクロールしたときだけ報告する。
     /// - Parameters:
-    ///   - isShown: 一覧が窓に出ていて、ほかの画面で覆われていない。
+    ///   - isShown: タイムラインが窓に出ていて、ほかの画面で覆われていない。
     ///   - isWindowActive: 窓が前面にある。
     ///   - byUser: 使う人のスクロールで表示が変わった。
     public static func shouldReport(isShown: Bool, isWindowActive: Bool, byUser: Bool) -> Bool {

@@ -22,7 +22,7 @@ struct ProfileRelationshipActivityTests {
 
         var delay: Duration { .seconds(viewController.tuning.value(of: TuningCatalog.profileRelationshipActivityDelay)) }
 
-        /// インジケータを出すまでの待ち。一覧の相対時刻を1秒ごとに書き直す待ちも同じ時計を使うため、待つ時間の内に締め切りが来るものだけを数える。
+        /// インジケータを出すまでの待ち。タイムラインの相対時刻を1秒ごとに書き直す待ちも同じ時計を使うため、待つ時間の内に締め切りが来るものだけを数える。
         var relationshipWaits: Int { clock.sleeperCount(dueWithin: delay) }
 
         /// フォローのボタンに関係が届いて、「フォロー中」になった。

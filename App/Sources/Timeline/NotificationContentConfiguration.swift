@@ -42,7 +42,7 @@ struct NotificationContentConfiguration: UIContentConfiguration {
     var groupAccountTargets: [any ObjectActionTarget] = []
     /// まとめた行で、並べたアイコンがタップされたときに、何番目かを渡して呼ぶ。その人のプロフィールを開く。
     var onOpenGroupAccount: ((Int) -> Void)?
-    /// まとめた行で、誰が何をしたかの行の`groupAccountsLink`の文字（「ほか3人」）がタップされたときに呼ぶ。人の一覧を開く。
+    /// まとめた行で、誰が何をしたかの行の`groupAccountsLink`の文字（「ほか3人」）がタップされたときに呼ぶ。人のリストを開く。
     var onOpenGroupAccounts: (() -> Void)?
     /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
@@ -86,7 +86,7 @@ struct NotificationContentConfiguration: UIContentConfiguration {
 }
 
 extension NSAttributedString.Key {
-    /// まとめた通知の、誰が何をしたかの行で、押すと人の一覧を開く文字（「ほか3人」）。
+    /// まとめた通知の、誰が何をしたかの行で、押すと人のリストを開く文字（「ほか3人」）。
     static let groupAccountsLink = NSAttributedString.Key("net.mizle.scia.groupAccountsLink")
 }
 
@@ -181,7 +181,7 @@ final class NotificationContentView: UIView, UIContentView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// 「ほか3人」の文字なら人の一覧を、ほかの場所なら通知のもとになる操作をした人のプロフィールを開く。
+    /// 「ほか3人」の文字なら人のリストを、ほかの場所なら通知のもとになる操作をした人のプロフィールを開く。
     @objc private func headerTapped(_ gesture: UITapGestureRecognizer) {
         if let index = headerLabel.characterIndex(at: gesture.location(in: headerLabel)),
            headerLabel.attributedText?.attribute(.groupAccountsLink, at: index, effectiveRange: nil) != nil {
@@ -244,7 +244,7 @@ final class NotificationContentView: UIView, UIContentView {
         NSLayoutConstraint.deactivate(variableConstraints)
         let margins = metrics.margins
         let textLeading = margins.leading + metrics.avatarSize + metrics.avatarSpacing
-        // 一覧は行の高さを画素に丸め、求める高さより1画素未満だけ低くすることがある。足りない分は文字のラベルではなく下の余白から削る。
+        // タイムラインは行の高さを画素に丸め、求める高さより1画素未満だけ低くすることがある。足りない分は文字のラベルではなく下の余白から削る。
         // ラベルから削ると、UILabelは収まらない行を描かないため、2行の本文が1行で切れる。
         let bottom = bottomAnchor.constraint(equalTo: bodyView.bottomAnchor, constant: margins.bottom)
         bottom.priority = UILayoutPriority(UILayoutPriority.defaultHigh.rawValue - 1)

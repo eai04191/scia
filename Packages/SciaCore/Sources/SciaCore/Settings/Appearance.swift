@@ -47,7 +47,7 @@ public struct AppearanceGroup: Sendable, Identifiable {
     }
 }
 
-/// 投稿の見た目の項目の一覧。
+/// 投稿の見た目の項目のリスト。
 ///
 /// 範囲は好みで狭めず、見た目として意味がある限り選べるようにする。長さと大きさは0から（0なら描かない）、上限は余白が100pt、大きさが200pt。
 /// 文字は標準の文字サイズで1〜72ptほどになる範囲にする。0ptはUIKitでは書体の標準の大きさの意味になるため、文字だけは1ptを下限にする。
@@ -87,7 +87,7 @@ public enum AppearanceCatalog {
 
     // MARK: 大きさと余白
 
-    // 行の余白の既定値は、一覧のセルの標準の余白（`defaultContentConfiguration()`、iPhone）に合わせる。
+    // 行の余白の既定値は、リストのセルの標準の余白（`defaultContentConfiguration()`、iPhone）に合わせる。
     public static let rowPaddingTop = AppearanceValue(id: "timeline.rowPaddingTop", title: "上の余白", range: 0...100, step: 1, defaultValue: 15)
     public static let rowPaddingBottom = AppearanceValue(id: "timeline.rowPaddingBottom", title: "下の余白", range: 0...100, step: 1, defaultValue: 15)
     public static let rowPaddingLeading = AppearanceValue(id: "timeline.rowPaddingLeading", title: "左の余白", range: 0...100, step: 1, defaultValue: 16)

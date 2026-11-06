@@ -1,7 +1,7 @@
 public import Foundation
 public import Observation
 
-/// プロフィール画面の一覧の切り替え。
+/// プロフィール画面のタイムラインの切り替え。
 public enum ProfileTab: String, CaseIterable, Sendable {
     case posts
     case media
@@ -127,7 +127,7 @@ public final class ProfileStore {
     /// 注目のハッシュタグと紹介している人を読み終えた。読めなかったときも含む。
     private var isFeaturedSettled = false
     /// ヘッダーの棚（固定された投稿、注目のハッシュタグ、紹介している人）を読み終えた。読めなかったときも含む。
-    /// 棚が後から現れて一覧を押し下げないよう、一覧はこれを待って出す。
+    /// 棚が後から現れてタイムラインを押し下げないよう、タイムラインはこれを待って出す。
     public var isShelvesSettled: Bool {
         isPinnedSettled && isFeaturedSettled
     }
@@ -139,7 +139,7 @@ public final class ProfileStore {
     public private(set) var isChangingFollow = false
     public private(set) var tab: ProfileTab
     public private(set) var postsFilter: ProfilePostsFilter
-    /// 今の一覧。切り替えるたびに作り直す。
+    /// 今のタイムライン。切り替えるたびに作り直す。
     @ObservationIgnored public private(set) var timeline: TimelineStore
 
     /// フォローを変えた回数。前に読んだ関係から始めると、関係を読み直している途中でもフォローを送れるため、
@@ -155,7 +155,7 @@ public final class ProfileStore {
     /// 削除した投稿のID。削除の前に読み始めた固定された投稿の応答で、戻さないようにする。
     private var deletedIDs: Set<Status.ID> = []
     private let isMyself: Bool
-    /// プロフィールの一覧に当てるサーバーのフィルター。
+    /// プロフィールのタイムラインに当てるサーバーのフィルター。
     public let filtering: StatusFiltering
     private let api: API
     private let pageSize: Int
@@ -222,13 +222,13 @@ public final class ProfileStore {
         let pinnedLoad = pinnedLoads
         featuredLoads += 1
         let featuredLoad = featuredLoads
-        // 注目のハッシュタグと紹介している人は、両方が届いてから一覧を出す。
+        // 注目のハッシュタグと紹介している人は、両方が届いてからタイムラインを出す。
         var featuredPending = 2
         return await withTaskGroup(of: (Part, Result<Loaded, any Error>).self) { group -> ProfileLoadFailures in
             group.addTask { (.account, await Result { .account(try await api.account(id)) }) }
             // 自分のプロフィールでも読む。自分に書いたメモが関係に入って返るため。
             group.addTask { (.relationship, await Result { .relationship(try await api.relationship(id)) }) }
-            // 固定された投稿は一覧の補足なので、読めなかったものは並べない。読めなかったことはデコードの記録に残る。
+            // 固定された投稿はタイムラインの補足なので、読めなかったものは並べない。読めなかったことはデコードの記録に残る。
             group.addTask { (.pinned, await Result { .pinned(try await api.statuses(id, AccountStatusFilter(pinned: true), TimelineQuery(limit: pageSize)).statuses) }) }
             group.addTask { (.featuredTags, await Result { .featuredTags(try await api.featuredTags(id)) }) }
             // 4.4より前のサーバーは、ほかの人の紹介している人を返さない。読めなかったものとして、棚を出さない。
@@ -244,7 +244,7 @@ public final class ProfileStore {
                     self.relationship = relationship
                     relationshipFailed = false
                 case .success(.pinned(let pinned)):
-                    // あとから読み始めた読み直しがあれば、その結果に任せる。一覧を出すのは待たせない。
+                    // あとから読み始めた読み直しがあれば、その結果に任せる。タイムラインを出すのは待たせない。
                     if pinnedLoad == pinnedLoads {
                         loadedPinned = pinned.filter { !deletedIDs.contains($0.id) }
                     }
@@ -322,7 +322,7 @@ public final class ProfileStore {
         _ = try loadedPage.get()
     }
 
-    /// 紹介している人の棚に並べる数。続きは人の一覧で読む。
+    /// 紹介している人の棚に並べる数。続きは人のリストで読む。
     public static let endorsementsPageSize = 40
 
     /// 読めなかった関係を読み直す。失敗したら、読めなかったままにして投げる。読み直している途中なら何もしない。
@@ -337,14 +337,14 @@ public final class ProfileStore {
         relationshipFailed = false
     }
 
-    /// 一覧を切り替え、新しい一覧を返す。同じなら作り直さずnilを返す。
+    /// タイムラインを切り替え、新しいタイムラインを返す。同じなら作り直さずnilを返す。
     public func select(_ tab: ProfileTab) -> TimelineStore? {
         guard tab != self.tab else { return nil }
         self.tab = tab
         return rebuildTimeline()
     }
 
-    /// 「投稿」の絞り込みを変え、新しい一覧を返す。同じなら作り直さずnilを返す。
+    /// 「投稿」の絞り込みを変え、新しいタイムラインを返す。同じなら作り直さずnilを返す。
     public func setPostsFilter(_ filter: ProfilePostsFilter) -> TimelineStore? {
         guard filter != postsFilter else { return nil }
         postsFilter = filter
@@ -398,7 +398,7 @@ public final class ProfileStore {
         account = reloaded
     }
 
-    /// 固定された投稿と今の一覧の、IDが一致する投稿を書き換える。一覧のブーストは、中の元の投稿のIDでも一致させる。
+    /// 固定された投稿と今のタイムラインの、IDが一致する投稿を書き換える。タイムラインのブーストは、中の元の投稿のIDでも一致させる。
     /// 固定できるのは本人の投稿だけで、ブーストは固定されないため、固定された投稿はIDだけで比べる。書き換えたものがあればtrue。
     @discardableResult
     public func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) -> Bool {
@@ -411,7 +411,7 @@ public final class ProfileStore {
         return changed
     }
 
-    /// 削除された投稿を、固定された投稿と今の一覧から除く。除いたものがあればtrue。
+    /// 削除された投稿を、固定された投稿と今のタイムラインから除く。除いたものがあればtrue。
     @discardableResult
     public func removeStatus(_ id: Status.ID) -> Bool {
         deletedIDs.insert(id)

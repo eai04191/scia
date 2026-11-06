@@ -2,7 +2,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// UIKitのメニューと同じ並び（ウィンドウと同じ大きさの入れ物の中に、項目の一覧を持つメニュー全体）を組んで、位置を直す決まりを確かめる。
+/// UIKitのメニューと同じ並び（ウィンドウと同じ大きさの入れ物の中に、項目のリストを持つメニュー全体）を組んで、位置を直す決まりを確かめる。
 /// UIKitの作りそのものが変わったことは、ここでは確かめられない。
 @MainActor
 struct ContextMenuPositionerTests {
@@ -25,7 +25,7 @@ struct ContextMenuPositionerTests {
             window.addSubview(overlay)
         }
 
-        /// 項目の一覧を持つメニューを、`frame`（ウィンドウの座標）に置く。
+        /// 項目のリストを持つメニューを、`frame`（ウィンドウの座標）に置く。
         @discardableResult
         func addMenu(frame: CGRect) -> UIView {
             let menu = UIView(frame: frame)
@@ -77,7 +77,7 @@ struct ContextMenuPositionerTests {
         positioner.menuWillEnd()
     }
 
-    /// メニューを組む前から重なっていた一覧は、メニューとみなさず動かさない。
+    /// メニューを組む前から重なっていた項目のリストは、メニューとみなさず動かさない。
     @Test func ignoresListsThatExistedBeforeMenu() throws {
         let harness = try Harness()
         let positioner = ContextMenuPositioner()
@@ -89,7 +89,7 @@ struct ContextMenuPositionerTests {
         positioner.menuWillEnd()
     }
 
-    /// 新しく現れた一覧が2つあれば、どちらがメニューか決められないので、どちらも動かさない。
+    /// 新しく現れた項目のリストが2つあれば、どちらがメニューか決められないので、どちらも動かさない。
     @Test func leavesMenusWhenAmbiguous() throws {
         let harness = try Harness()
         let positioner = ContextMenuPositioner()

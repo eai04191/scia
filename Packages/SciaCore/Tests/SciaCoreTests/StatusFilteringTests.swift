@@ -28,7 +28,7 @@ struct StatusFilteringTests {
         #expect(verdict.isHidden)
     }
 
-    /// ブックマークやお気に入りの一覧では、「隠す」に一致しても隠さず、警告で折りたたむ。公式のWebクライアントの`warnInsteadOfHide`と同じ。
+    /// ブックマークやお気に入りのタイムラインでは、「隠す」に一致しても隠さず、警告で折りたたむ。公式のWebクライアントの`warnInsteadOfHide`と同じ。
     @Test func warnsInsteadOfHidingWhenAsked() {
         let saved = StatusFiltering(context: .home, myAccountID: me.id, hidesMatches: false)
         let verdict = saved.verdict(for: status("10", filtered: [filter("a", .warn), filter("b", .hide), filter("c", .blur)]), now: now)
@@ -173,7 +173,7 @@ struct FilteredTimelineTests {
         #expect(store.pending.isEmpty)
     }
 
-    /// 隠していた投稿は、フィルターの期限が切れたら、次に新着を挿入したときに一覧に戻る。
+    /// 隠していた投稿は、フィルターの期限が切れたら、次に新着を挿入したときにタイムラインに戻る。
     @Test func hiddenStatusReturnsOnInsertionAfterFilterExpires() async throws {
         let clock = FakeClock(now: now)
         let expiresAt = now.addingTimeInterval(60)
@@ -188,7 +188,7 @@ struct FilteredTimelineTests {
         #expect(store.statuses.map(\.id) == ["31", "30", "29"])
     }
 
-    /// 最新のページが全部隠れると一覧に行がなく、続きを読むきっかけがない。並べる投稿が出るまで古いページを続けて読む。
+    /// 最新のページが全部隠れるとタイムラインに行がなく、続きを読むきっかけがない。並べる投稿が出るまで古いページを続けて読む。
     @Test func initialPageOfOnlyHiddenStatusesReadsOn() async throws {
         let hide = [filter("x", .hide)]
         let (store, queries) = store(pages: [
@@ -200,7 +200,7 @@ struct FilteredTimelineTests {
         #expect(queries().map(\.maxID) == [nil, "28"])
     }
 
-    /// 古いページが全部隠れても、一覧の末尾が伸びるまで続けて読む。終わりに着いたらそこで止める。
+    /// 古いページが全部隠れても、タイムラインの末尾が伸びるまで続けて読む。終わりに着いたらそこで止める。
     @Test func olderPageOfOnlyHiddenStatusesReadsOn() async throws {
         let hide = [filter("x", .hide)]
         let (store, queries) = store(pages: [
@@ -216,7 +216,7 @@ struct FilteredTimelineTests {
         #expect(queries().map(\.maxID) == [nil, "30", "27", "26"])
     }
 
-    /// サーバーはブーストにも元の投稿にも結果を付ける。元の投稿が編集でフィルターに一致しなくなれば、ブーストも一覧に戻す。
+    /// サーバーはブーストにも元の投稿にも結果を付ける。元の投稿が編集でフィルターに一致しなくなれば、ブーストもタイムラインに戻す。
     @Test func editedOriginalUnhidesItsBoost() async throws {
         let hide = [filter("x", .hide)]
         let (store, _) = store(pages: [[status("20", filtered: hide, reblog: status("10", filtered: hide))], []])
@@ -266,7 +266,7 @@ struct FilteredTimelineTests {
     }
 
     /// 削除された投稿は、隠していても忘れる。あとで同じIDの投稿が届いても戻さない。
-    /// 続きを古い方へ読む位置は、その投稿のIDのまま残す。上げると、その間を読み直すうえ、一覧が空になったときに末尾の位置を失うため。
+    /// 続きを古い方へ読む位置は、その投稿のIDのまま残す。上げると、その間を読み直すうえ、タイムラインが空になったときに末尾の位置を失うため。
     @Test func deletingHiddenStatusForgetsIt() async throws {
         let (store, queries) = store(pages: [[status("30"), status("29", filtered: [filter("x", .hide)])], [status("29")]])
         _ = try await store.loadInitial()
@@ -306,7 +306,7 @@ struct FilteredNotificationTests {
         #expect(store.pending.isEmpty)
     }
 
-    /// 1ページの通知が全部隠れると一覧に行がなく、続きを読むきっかけがない。並べる通知が出るまで古いページを続けて読む。
+    /// 1ページの通知が全部隠れると通知のタイムラインに行がなく、続きを読むきっかけがない。並べる通知が出るまで古いページを続けて読む。
     @Test func readsPastPagesOfOnlyHiddenNotifications() async throws {
         let hide = [filter("x", .hide)]
         let recorder = NotificationRecorder(pages: [

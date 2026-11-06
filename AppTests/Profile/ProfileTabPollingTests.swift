@@ -23,7 +23,7 @@ struct ProfileTabPollingTests {
 
         var interval: Duration { .seconds(viewController.tuning.value(of: TuningCatalog.shownFeedPollingInterval)) }
 
-        /// 新着を読む待ち。一覧の相対時刻を1秒ごとに書き直す待ちも同じ時計を使うため、間隔のうちに締め切りが来るものから、それを除いて数える。
+        /// 新着を読む待ち。タイムラインの相対時刻を1秒ごとに書き直す待ちも同じ時計を使うため、間隔のうちに締め切りが来るものから、それを除いて数える。
         var pollWaits: Int { clock.sleeperCount(dueWithin: interval) - clock.sleeperCount(dueWithin: .seconds(1)) }
 
         var statusIDs: [String] {
@@ -69,7 +69,7 @@ struct ProfileTabPollingTests {
         window.layoutIfNeeded()
         controller.start()
         let opened = Opened(controller: controller, viewController: viewController, window: window, transport: transport, tasks: tasks, clock: clock)
-        // 最初の一覧は、見える行のアイコンを待ってから出す。アイコンはないので、待つ上限まで時計を進める。
+        // タイムラインを最初に出すときは、見える行のアイコンを待ってから出す。アイコンはないので、待つ上限まで時計を進める。
         try await waitUntil {
             clock.advance(by: .seconds(1))
             return opened.statusIDs == latest && opened.viewController.footerState != .loading
@@ -94,7 +94,7 @@ struct ProfileTabPollingTests {
         #expect(opened.transport.sincePurposes.allSatisfy { $0 == .display })
     }
 
-    /// 投稿のなかった一覧も読み直し、最初の投稿が届いたら出す。
+    /// 投稿のなかったタイムラインも読み直し、最初の投稿が届いたら出す。
     @Test func readsFirstPostIntoEmptyList() async throws {
         let clock = TestClock()
         let opened = try await open(clock: clock, latest: [])
@@ -173,7 +173,7 @@ private final class StatusesTransport: HTTPTransport {
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let url = try #require(request.url)
-        // 注目のハッシュタグと紹介しているユーザーは、一覧を出す前に読み終える。一時的な失敗は時計で待って送り直すので、空の一覧を返す。
+        // 注目のハッシュタグと紹介しているユーザーは、タイムラインを出す前に読み終える。一時的な失敗は時計で待って送り直すので、空の結果を返す。
         if ["/api/v1/accounts/2/featured_tags", "/api/v1/accounts/2/endorsements"].contains(url.path()) {
             return (Data("[]".utf8), try #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)))
         }

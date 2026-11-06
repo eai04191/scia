@@ -150,7 +150,7 @@ readme-icons:
 	cwebp -quiet -lossless -z 9 $$tmp/dark.png -o docs/images/icon-dark.webp && \
 	rm -r $$tmp
 
-## ログイン画面の補完に使うサーバーの一覧を、FediDBのデータセットから作り直す。GitHub Actionsが週1回走らせてPRにする
+## ログイン画面の補完に使うサーバーのリストを、FediDBのデータセットから作り直す。GitHub Actionsが週1回走らせてPRにする
 update-known-servers:
 	Tools/update-known-servers.sh
 

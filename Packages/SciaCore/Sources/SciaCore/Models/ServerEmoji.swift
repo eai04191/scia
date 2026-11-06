@@ -1,12 +1,12 @@
 public import Foundation
 
-/// サーバーで使えるカスタム絵文字の一覧の1つ。投稿に付いて届く`CustomEmoji`と違い、絵文字の選択に出すかを持つ。
+/// サーバーで使えるカスタム絵文字のリストの1つ。投稿に付いて届く`CustomEmoji`と違い、絵文字の選択に出すかを持つ。
 /// https://docs.joinmastodon.org/methods/custom_emojis/
 public struct ServerEmoji: Decodable, Hashable, Sendable {
     public let shortcode: String
     public let url: URL
     public let staticUrl: URL
-    /// 管理者が一覧に出さないと決めた絵文字はfalse。web UIの絵文字の選択と同じく、補完の候補にも出さない。
+    /// 管理者がピッカーに出さないと決めた絵文字はfalse。web UIの絵文字の選択と同じく、補完の候補にも出さない。
     public let visibleInPicker: Bool
     public let category: String?
     /// 画像の縦横比（幅/高さ）。Fedibirdが`width`と`height`で返す。Mastodonは返さないのでnil。

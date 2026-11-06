@@ -2,7 +2,7 @@ import os
 import SciaCore
 import UIKit
 
-/// 添付ファイルのビューアを、今のチューニングで開く。一覧と編集履歴の画面で同じ開き方にする。
+/// 添付ファイルのビューアを、今のチューニングで開く。タイムラインと編集履歴の画面で同じ開き方にする。
 /// Macでは別のウィンドウで、iPhoneでは同じウィンドウの全画面に重ねて開く。
 @MainActor
 struct MediaViewerOpener {

@@ -146,7 +146,7 @@ struct TimelineStoreInterleavingTests {
         }
         let missing = server.ids.subtracting(loaded)
         if !missing.isEmpty {
-            return failure("読み切っても、サーバーの投稿\(missing.sorted(by: >))が一覧にありません")
+            return failure("読み切っても、サーバーの投稿\(missing.sorted(by: >))がタイムラインにありません")
         }
         return nil
     }
@@ -228,7 +228,7 @@ struct TimelineStoreInterleavingTests {
         case full
         /// 求めた件数より少なく返す。件数を丸めるサーバーと同じく、返すのは正しい端からの一部。
         case short
-        /// ホームを再生成中で、投稿の一部だけを持つ一覧から返す。
+        /// ホームを再生成中で、投稿の一部だけを持つタイムラインから返す。
         case regenerating
         case failure
 

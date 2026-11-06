@@ -898,7 +898,7 @@ final class ProfileEditViewController: UIViewController {
         layoutCompletionList()
     }
 
-    /// 打っている行のすぐ下に置く。キーボードまでに入りきらなければ、行の上の広い方に置き、入りきらない分は一覧の中でスクロールする。
+    /// 打っている行のすぐ下に置く。キーボードまでに入りきらなければ、行の上の広い方に置き、入りきらない分は候補のリストの中でスクロールする。
     private func layoutCompletionList() {
         guard let completionListTop, let completionListHeight, let caret = activeCompletion.caretRect(in: view) else { return }
         let spacing: CGFloat = 6

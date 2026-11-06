@@ -3,13 +3,13 @@ import SwiftUI
 
 /// 1つの対象の操作の画面。タップと長押しの操作を選び、その対象のメニューの並びの画面を開く。決まりはdocs/object-actions.mdの「設定画面」にある。
 /// 選択は、先頭の欄に既定の「メニューを開く」とタップの既定の項目を、次の欄に残りのメニューの項目を、既定の並びの順で、メニューと同じ名前とアイコンで並べる。
-/// 項目が多いため、選ぶときは別の画面の一覧で選ぶ。
+/// 項目が多いため、選ぶときは別のリストで選ぶ。
 struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
     let title: String
     @Binding var actions: ObjectActions<Item>
     /// この対象のメニューの並びの画面。通知は投稿のメニューを出し、自分のメニューを持たないのでnil。
     let menu: SettingsPage?
-    /// タップの既定の項目。長い一覧に埋もれないよう、「メニューを開く」と並べて先頭の欄に出す。
+    /// タップの既定の項目。長いリストに埋もれないよう、「メニューを開く」と並べて先頭の欄に出す。
     let primary: Item
 
     var body: some View {
@@ -32,7 +32,7 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    /// 行の右端の今の値は、iPhoneの設定アプリと同じく、アイコンを付けない灰色の名前だけにする。アイコンは選ぶ一覧にだけ出す。
+    /// 行の右端の今の値は、iPhoneの設定アプリと同じく、アイコンを付けない灰色の名前だけにする。アイコンは選ぶリストにだけ出す。
     private func picker(_ label: String, selection: Binding<ObjectAction<Item>>) -> some View {
         Picker(selection: selection) {
             Section {

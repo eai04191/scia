@@ -250,7 +250,7 @@ public enum StatusMenuItem: String, BundledMenuDefaults {
     /// 行の本文を、その場で文字を選べる状態にする。本文を表示している投稿でだけ出る。
     case selectText
     case share
-    /// 一覧で投稿を順番を付けて選び始める。選んだ投稿は、まとめてブーストや共有ができる。決まりはdocs/batch-actions.mdにある。
+    /// タイムラインで投稿を順番を付けて選び始める。選んだ投稿は、まとめてブーストや共有ができる。決まりはdocs/batch-actions.mdにある。
     case select
     /// 開く場所の設定に従って開く。
     case openInBrowser
@@ -260,9 +260,9 @@ public enum StatusMenuItem: String, BundledMenuDefaults {
     case openInAppSafari
     /// 投稿の編集履歴を開く。編集された投稿でだけ出る。
     case editHistory
-    /// 投稿をお気に入りした人の一覧を開く。お気に入りされた投稿でだけ出る。
+    /// 投稿をお気に入りした人のリストを開く。お気に入りされた投稿でだけ出る。
     case favouritedBy
-    /// 投稿をブーストした人の一覧を開く。ブーストされた投稿でだけ出る。
+    /// 投稿をブーストした人のリストを開く。ブーストされた投稿でだけ出る。
     case rebloggedBy
     /// 自分の投稿を投稿欄で編集する。自分の投稿でだけ出る。
     case edit
@@ -272,7 +272,7 @@ public enum StatusMenuItem: String, BundledMenuDefaults {
     case redraft
     /// 通知を削除する。通知でだけ出る。
     case dismissNotification
-    /// 一覧で添付ファイルをぼかす。添付ファイルがあり、ぼかしていない投稿でだけ出る。開くときはぼかしをタップする。
+    /// タイムラインで添付ファイルをぼかす。添付ファイルがあり、ぼかしていない投稿でだけ出る。開くときはぼかしをタップする。
     case hideMedia
     /// 本文をプレーンテキストにして、システムの翻訳シートで訳す。本文のある投稿でだけ出る。MastodonのAPIで訳す翻訳とは別の項目。
     case systemTranslate
@@ -473,7 +473,7 @@ public enum HashtagMenuItem: String, BundledMenuDefaults {
 public enum ReactionMenuItem: String, BundledMenuDefaults {
     /// その絵文字で付け外しする。ボタンをタップしたときと同じ。
     case toggle
-    /// その絵文字でリアクションした人の一覧を開く。
+    /// その絵文字でリアクションした人のリストを開く。
     case reactedBy
     /// カスタム絵文字の画像をビューアで開く。画像のあるカスタム絵文字でだけ出る。
     case open
@@ -486,7 +486,7 @@ public enum ReactionMenuItem: String, BundledMenuDefaults {
     public static let defaultLayout = MenuLayout<ReactionMenuItem>.bundledDefault()
 }
 
-/// 一覧のサムネイル、リンクカードの画像、プロフィールの画像を長押ししたときと、ビューアのメニューの項目。決まりはdocs/menus.mdの「メディアのメニュー」にある。
+/// タイムラインのサムネイル、リンクカードの画像、プロフィールの画像を長押ししたときと、ビューアのメニューの項目。決まりはdocs/menus.mdの「メディアのメニュー」にある。
 public enum MediaMenuItem: String, BundledMenuDefaults {
     /// ビューアで開く。ビューアでは出ない。
     case open

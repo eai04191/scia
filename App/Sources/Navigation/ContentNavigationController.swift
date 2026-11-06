@@ -5,7 +5,7 @@ import UIKit
 /// プロフィールのように、ヘッダー画像をステータスバーの下まで伸ばす画面が、画像の明るさで色を変えられるようにするため。
 final class ContentNavigationController: UINavigationController, UIGestureRecognizerDelegate {
     /// Macで、ナビゲーションバーのボタンのない場所をクリックしたとき。
-    /// iPhoneでは、UIKitがそこへのタップをステータスバーのタップと同じく扱い、一覧を最上部へ戻すが、MacのDesigned for iPadではしないため。
+    /// iPhoneでは、UIKitがそこへのタップをステータスバーのタップと同じく扱い、タイムラインを最上部へ戻すが、MacのDesigned for iPadではしないため。
     var onEmptyBarClickOnMac: (() -> Void)?
 
     /// 画面の下端から、投稿欄のカプセルとキーボード、アプリ内のSafariのシートが覆っている高さ。

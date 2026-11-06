@@ -13,7 +13,7 @@ struct NoticeContext {
     /// チップを出したウインドウ。
     weak var window: UIWindow?
 
-    /// チップを押して出すアラートや一覧を、この上に出す。押した時点のウインドウのいちばん手前の画面。
+    /// チップを押して出すアラートや「操作の状況」の画面を、この上に出す。押した時点のウインドウのいちばん手前の画面。
     /// チップを出した時点の画面で決めると、その画面（止めるかの確認など）が閉じたあとに押しても、何も出せないため。
     @MainActor var presenter: UIViewController? {
         window?.rootViewController?.frontmostPresented
@@ -68,7 +68,7 @@ final class NoticeCenter {
             }
         }
     }
-    /// 「操作の状況」の一覧を、渡した画面の上に開く。出たままのアプリ内通知が2件以上のときに、チップから開く。nilなら開けない。
+    /// 「操作の状況」の画面を、渡した画面の上に開く。出たままのアプリ内通知が2件以上のときに、チップから開く。nilなら開けない。
     var showOperationStatus: (@MainActor (UIViewController) -> Void)?
     private var persistent: [PersistentNotices.Slot: Content] = [:]
     private let overlays = NSHashTable<NoticeOverlay>.weakObjects()

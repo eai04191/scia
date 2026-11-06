@@ -50,7 +50,7 @@ struct AccountSessionTests {
         try await waitUntil { await session.client.automaticRequestsPausedUntil() == Self.now.addingTimeInterval(30) }
     }
 
-    /// REST APIの401を受けたら、ストリーミングと登録した一覧を止め、そのあとにアプリへ知らせる。
+    /// REST APIの401を受けたら、ストリーミングと登録したタイムラインを止め、そのあとにアプリへ知らせる。
     @Test func invalidCredentialsStopStreamingAndLists() async throws {
         let transport = RoutedTransport { _ in Self.unauthorized() }
         let session = makeSession(transport: transport)
@@ -108,7 +108,7 @@ struct AccountSessionTests {
         #expect(!notified)
     }
 
-    /// セッションから作った一覧は、登録されていて、トークンが無効と分かったら止まる。止まった一覧は始め直しても読まない。
+    /// セッションから作ったタイムラインは、登録されていて、トークンが無効と分かったら止まる。止まったタイムラインは始め直しても読まない。
     @Test func listsMadeFromSessionStopWhenCredentialsBecomeInvalid() async throws {
         let transport = RoutedTransport { _ in Self.unauthorized() }
         let session = makeSession(transport: transport)
@@ -125,7 +125,7 @@ struct AccountSessionTests {
         #expect(transport.requests(to: "/api/v1/timelines/home").isEmpty)
     }
 
-    /// トークンが無効と分かったあとにセッションから作った一覧（あとから開いたハッシュタグやリスト）も、止まっていて、始めても読まない。
+    /// トークンが無効と分かったあとにセッションから作ったタイムライン（あとから開いたハッシュタグやリスト）も、止まっていて、始めても読まない。
     @Test func listsMadeAfterCredentialsBecameInvalidAreStopped() async throws {
         let transport = RoutedTransport { _ in Self.unauthorized() }
         let session = makeSession(transport: transport)
@@ -139,10 +139,10 @@ struct AccountSessionTests {
         model.start(purpose: .action)
 
         #expect(model.runningTaskCount == 0)
-        #expect(transport.requests(to: "/api/v1/timelines/tag/scia").isEmpty, "トークンが無効と分かったあとに作った一覧が読み込みました")
+        #expect(transport.requests(to: "/api/v1/timelines/tag/scia").isEmpty, "トークンが無効と分かったあとに作ったタイムラインが読み込みました")
     }
 
-    /// 電波が戻るたびに、登録した一覧にやり直させる。
+    /// 電波が戻るたびに、登録したタイムラインにやり直させる。
     @Test func networkRecoveryRecoversLists() async throws {
         let session = makeSession(transport: RoutedTransport { _ in (404, Data()) })
         defer { session.close() }
@@ -163,7 +163,7 @@ struct AccountSessionTests {
         try await waitUntil { list.recoverCount == recovered + 1 }
     }
 
-    /// レート制限が明けたら、登録した一覧にやり直させる。
+    /// レート制限が明けたら、登録したタイムラインにやり直させる。
     @Test func rateLimitResumptionRecoversLists() async throws {
         let clock = TestClock()
         let session = makeSession(transport: RoutedTransport { _ in (404, Data()) }, clock: clock)

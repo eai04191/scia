@@ -29,11 +29,11 @@ enum EditHistoryCatalog {
                 revision("<p>写真</p>", sensitive: true, media: [blue, green]),
                 revision("<p>写真</p>", media: [green]),
             ]),
-            state("今の投稿を一覧で開いた（今の版だけ外れ、過去の版は閲覧注意でぼかす）", choice: .revealed, [
+            state("今の投稿をタイムラインで開いた（今の版だけ外れ、過去の版は閲覧注意でぼかす）", choice: .revealed, [
                 revision("<p>写真を撮った</p>", sensitive: true, media: [blue]),
                 revision("<p>写真を撮った。もう1枚</p>", sensitive: true, media: [blue, green]),
             ]),
-            state("今の投稿を一覧で隠した（閲覧注意のない過去の版と外した画像もぼかす）", choice: .hidden, [
+            state("今の投稿をタイムラインで隠した（閲覧注意のない過去の版と外した画像もぼかす）", choice: .hidden, [
                 revision("<p>写真を撮った</p>", media: [blue, green]),
                 revision("<p>写真を撮った。1枚にした</p>", media: [blue]),
             ]),
@@ -41,7 +41,7 @@ enum EditHistoryCatalog {
                 revision("<p>映画を観た</p>", sensitive: true, media: [blue, green]),
                 revision("<p>映画を観た。最後が良かった</p>", media: [blue]),
             ]),
-            state("フィルターに一致し、一覧で開いた（今の版だけ外れる）", choice: .revealed, filterTitles: ["ネタバレ"], [
+            state("フィルターに一致し、タイムラインで開いた（今の版だけ外れる）", choice: .revealed, filterTitles: ["ネタバレ"], [
                 revision("<p>映画を観た</p>", media: [blue]),
                 revision("<p>映画を観た。最後が良かった</p>", media: [blue, green]),
             ]),
@@ -78,7 +78,7 @@ enum EditHistoryCatalog {
         ]
     }
 
-    /// 一覧で、今の投稿の添付ファイルを開いたか隠したか。
+    /// タイムラインで、今の投稿の添付ファイルを開いたか隠したか。
     private enum Choice {
         case revealed
         case hidden
@@ -101,7 +101,7 @@ enum EditHistoryCatalog {
                 emojiImages: AppDependencies.emojiImages,
                 network: AppDependencies.network
             )
-            // 画面と同じく、今の投稿のぼかしは一覧の選択で決める。
+            // 画面と同じく、今の投稿のぼかしはタイムラインでの選択で決める。
             var covers = MediaCovers()
             let latest = latestStatus(of: revisions)
             switch choice {

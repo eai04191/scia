@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-/// 確定した語で探し、結果を一覧の画面（`TimelineDisplay`）へ伝える。決まりはdocs/search.mdにある。
+/// 確定した語で探し、結果を並べる画面（`TimelineDisplay`）へ伝える。決まりはdocs/search.mdにある。
 ///
 /// 3つの種類を並行に読み、届いたものから見せる。ストリームも既読位置もない。
 @MainActor
@@ -10,11 +10,11 @@ public final class SearchModel {
     public enum Scope: Hashable, Sendable {
         /// 3つの種類を、ユーザー、ハッシュタグ、投稿の順に見出しを付けて並べる。
         case all
-        /// 1つの種類だけを、見出しなしで並べ、スクロールで続きを読む。「すべて見る」で開く一覧。
+        /// 1つの種類だけを、見出しなしで並べ、スクロールで続きを読む。「すべて見る」で開く画面。
         case only(SearchCategory)
     }
 
-    /// URLやハンドルが1つに決まったもの。結果の一覧の上に開く。
+    /// URLやハンドルが1つに決まったもの。結果のリストの上に開く。
     public enum Found: Equatable, Sendable {
         case status(Status)
         case account(Account)
@@ -24,12 +24,12 @@ public final class SearchModel {
     public static let previewCount = 5
     /// 投稿を1回に読む件数。
     private static let statusPageSize = 20
-    /// 1つの種類だけの一覧で、ユーザーとハッシュタグを1回に読む件数。APIの上限が40件。
+    /// 1つの種類だけの画面で、ユーザーとハッシュタグを1回に読む件数。APIの上限が40件。
     private static let listPageSize = 40
 
     public let input: SearchInput
     public let scope: Scope
-    /// 結果を伝える一覧の画面。
+    /// 結果を伝える画面。
     public weak var display: (any TimelineDisplay)?
     /// URLやハンドルが1つに決まったときに呼ぶ。最初の読み込みでだけ呼び、引っぱって読み直したときは呼ばない。
     public var onFound: ((Found) -> Void)?
@@ -39,14 +39,14 @@ public final class SearchModel {
     private var states: [SearchCategory: SectionState] = [:]
     /// 確定してから、最初の結果がそろうまでの間か。この間に届いた結果は、確定した操作の結果として動きで見せる。確定から間をおかずに届くため、動かさずに入れると、確定の動きの途中で行が跳ねて見えるため。
     private var isSettlingSubmission = false
-    /// 打っている途中の候補から引き継いだ行。その種類の結果が届くまで、見出しの下に出す。確定した直後に一覧が空にならず、同じ行がその場に残るようにするため。
+    /// 打っている途中の候補から引き継いだ行。その種類の結果が届くまで、見出しの下に出す。確定した直後にリストが空にならず、同じ行がその場に残るようにするため。
     private var carried: [SearchCategory: [TimelineEntry]] = [:]
     /// 最後に始めた読み込み。古い読み込みの結果を捨てるのに使う。
     private var generation = 0
     /// APIが401を返したときに呼ぶ。ログアウトされたとして止め、ログインし直しを促すのはセッションに任せる。
     private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "search")
-    /// この一覧が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときと、画面を閉じたときに閉じる。
+    /// この検索が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときと、画面を閉じたときに閉じる。
     private let tasks: TaskScope
     private var isStopped: Bool { tasks.isClosed }
     /// 走り終えていない処理の数。止めたあとに何も起きないことを、テストが確かめるのに使う。
@@ -99,7 +99,7 @@ public final class SearchModel {
 
     private var categories: [SearchCategory] { Self.categories(of: scope) }
 
-    /// 探し始める。一覧に残っていた候補の行を最初の結果に置き換えるまでを、確定した操作の結果として動きで見せる。
+    /// 探し始める。リストに残っていた候補の行を最初の結果に置き換えるまでを、確定した操作の結果として動きで見せる。
     public func start() {
         guard !isStopped else { return }
         isSettlingSubmission = true
@@ -107,14 +107,14 @@ public final class SearchModel {
         load(isRefresh: false, purpose: .action)
     }
 
-    /// 結果を伝える一覧を付け替え、今の結果を並べ直す。検索欄で打ち直してから閉じ、候補から結果に戻すときに使う。
+    /// 結果を伝える画面を付け替え、今の結果を並べ直す。検索欄で打ち直してから閉じ、候補から結果に戻すときに使う。
     public func attach(_ display: any TimelineDisplay) {
         self.display = display
         guard !isStopped else { return }
         render(arrived: true)
     }
 
-    /// 一覧を引っぱって離したときに、同じ語でもう一度探す。読めるまでは、前の結果を残す。
+    /// 結果のリストを引っぱって離したときに、同じ語でもう一度探す。読めるまでは、前の結果を残す。
     public func refresh() async {
         guard !isStopped else { return }
         logger.info("refresh")
@@ -230,7 +230,7 @@ public final class SearchModel {
         if case .url = input, scope == .all { true } else { false }
     }
 
-    /// 続きを読む種類。3つを並べるときは投稿だけ、1つだけの一覧ではその種類。URLを読み込ませたときは、続きを読まない。
+    /// 続きを読む種類。3つを並べるときは投稿だけ、1つだけの画面ではその種類。URLを読み込ませたときは、続きを読まない。
     private var pagedCategory: SearchCategory? {
         switch scope {
         case .all: isResolvingURL ? nil : .statuses
@@ -291,7 +291,7 @@ public final class SearchModel {
         render(animatesRemoval: true)
     }
 
-    /// 今の状態から並びと、一覧全体とフッターの状態を作って伝える。
+    /// 今の状態から並びと、リスト全体とフッターの状態を作って伝える。
     /// - Parameter arrived: 種類の結果が届いた。届いた種類はほかの種類の上に入ることがあり、行を基準に保つと、最上部にいても先に届いた種類の位置に留まって、上に入った結果が画面の外に出るため、スクロール位置をそのまま保つ。
     private func render(arrived: Bool = false, animatesRemoval: Bool = false) {
         var entries: [TimelineEntry] = []
@@ -300,7 +300,7 @@ public final class SearchModel {
             switch states[category] {
             case .failed(let presentation):
                 // 投稿の失敗はフッターに出す。ほかの種類は、見出しの下に失敗の行を出す。
-                // URLは1回の問い合わせなので、種類ごとに出さず、一覧全体の失敗にする。
+                // URLは1回の問い合わせなので、種類ごとに出さず、リスト全体の失敗にする。
                 if scope == .all, category != .statuses, !isResolvingURL {
                     entries += [.search(.heading(category)), .search(.failed(category, presentation))]
                 }
@@ -328,7 +328,7 @@ public final class SearchModel {
             display?.show(entries, keeping: display?.currentAnchorID())
         }
         display?.setContentState(contentState(isEmpty: entries.isEmpty))
-        // 行がないときは、見つからなかったことを一覧の全面に出す。フッターの終わりの文にも同じ文が出て重なるため、終わりを出さない。
+        // 行がないときは、見つからなかったことをリストの全面に出す。フッターの終わりの文にも同じ文が出て重なるため、終わりを出さない。
         display?.setFooterState(entries.isEmpty && footerState == .reachedEnd ? .idle : footerState)
     }
 

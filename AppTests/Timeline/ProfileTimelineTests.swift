@@ -123,10 +123,10 @@ struct ProfileTimelineTests {
         let firstAfter = try #require(harness.windowMinY(of: first))
         #expect(abs(firstAfter - firstBefore - 100) <= tolerance, "先頭の投稿が\(firstAfter - firstBefore)pt動きました")
         let attributes = harness.collectionView.layoutAttributesForSupplementaryElement(ofKind: UICollectionView.elementKindSectionHeader, at: IndexPath(item: 0, section: 0))
-        #expect(abs((attributes?.frame.height ?? 0) - height.constant) <= tolerance, "一覧のヘッダーの高さが\(attributes?.frame.height ?? 0)ptでした")
+        #expect(abs((attributes?.frame.height ?? 0) - height.constant) <= tolerance, "タイムラインのヘッダーの高さが\(attributes?.frame.height ?? 0)ptでした")
     }
 
-    /// ヘッダーが画面の途中にあるときにタブを切り替えると、両方の一覧にある投稿を基準に位置を保ってしまい、
+    /// ヘッダーが画面の途中にあるときにタブを切り替えると、両方のタイムラインにある投稿を基準に位置を保ってしまい、
     /// 上に足された固定された投稿の分だけヘッダーとタブが押し上げられていた。タブは押した場所に残し、中身だけを差し替える。
     @Test func switchingTabKeepsHeaderPosition() throws {
         let header = UIView()
@@ -150,7 +150,7 @@ struct ProfileTimelineTests {
         #expect(abs(after - before) <= tolerance, "ヘッダーが\(after - before)pt動きました")
     }
 
-    /// 固定された投稿の棚はタブの下にあり、「投稿」の一覧でだけ出す。タブを切り替えて棚が出たり消えたりしても、ヘッダーとタブは押した場所に残す。
+    /// 固定された投稿の棚はタブの下にあり、「投稿」のタイムラインでだけ出す。タブを切り替えて棚が出たり消えたりしても、ヘッダーとタブは押した場所に残す。
     @Test(arguments: [200.0, -200.0])
     func pinnedShelfChangingWithTabKeepsHeaderPosition(heightChange: CGFloat) throws {
         let header = UIView()
@@ -166,7 +166,7 @@ struct ProfileTimelineTests {
         harness.collectionView.layoutIfNeeded()
         let before = header.convert(header.bounds, to: nil).minY
 
-        // プロフィールは、棚を変えてヘッダーの高さを測り直してから、切り替えた一覧を入れる。
+        // プロフィールは、棚を変えてヘッダーの高さを測り直してから、切り替えたタイムラインを入れる。
         height.constant += heightChange
         harness.viewController.headerDidChangeSize()
         let middle = header.convert(header.bounds, to: nil).minY
@@ -176,9 +176,9 @@ struct ProfileTimelineTests {
 
         let after = header.convert(header.bounds, to: nil).minY
         #expect(abs(after - before) <= tolerance, "ヘッダーが\(after - before)pt動きました")
-        // 一覧が持つヘッダーの高さが、測り直した高さになっている。見積もりの高さに戻ったままだと、ヘッダーが画面外と見なされて消える。
+        // タイムラインが持つヘッダーの高さが、測り直した高さになっている。見積もりの高さに戻ったままだと、ヘッダーが画面外と見なされて消える。
         let attributes = harness.collectionView.layoutAttributesForSupplementaryElement(ofKind: UICollectionView.elementKindSectionHeader, at: IndexPath(item: 0, section: 0))
-        #expect(abs((attributes?.frame.height ?? 0) - height.constant) <= tolerance, "一覧のヘッダーの高さが\(attributes?.frame.height ?? 0)ptでした")
+        #expect(abs((attributes?.frame.height ?? 0) - height.constant) <= tolerance, "タイムラインのヘッダーの高さが\(attributes?.frame.height ?? 0)ptでした")
     }
 
     /// 一番上から引っぱっている間に、画像やアカウントが届いてヘッダーの高さが変わっても、引っぱった分を保つ。上端に詰めると、指を離す前にヘッダーが跳ぶ。

@@ -37,7 +37,7 @@ public struct StatusBarTickerItem: Sendable, Equatable, Identifiable {
     }
 
     /// 種類を知らない通知は、何をされたかを出せないため流さない。
-    /// - Parameter verdict: 通知の投稿に当てたサーバーのフィルターの判定。通知の一覧と同じく、警告なら本文を見せずにフィルターの名前を出し、ぼかしならサムネイルをぼかす。
+    /// - Parameter verdict: 通知の投稿に当てたサーバーのフィルターの判定。通知のタイムラインと同じく、警告なら本文を見せずにフィルターの名前を出し、ぼかしならサムネイルをぼかす。
     public init?(_ notification: MastodonNotification, verdict: FilterVerdict = .none) {
         if case .other = notification.type { return nil }
         self.init(id: notification.id, kind: notification.type, account: notification.account, subject: Self.subject(of: notification, verdict: verdict), reactionEmoji: notification.reactionEmoji)

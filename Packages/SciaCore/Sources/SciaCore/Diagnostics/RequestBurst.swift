@@ -11,7 +11,7 @@ public struct RequestBurstCounter: Sendable {
     public static let window: Duration = .seconds(1)
     /// `window`の間にこの数を送ったら、異常とみなす。
     /// ログを止められたMac版では、キャッシュに当たるリクエストを毎秒400〜700回送っていた。
-    /// 一覧を速く流しても、画像は行ごとに数枚で、読んだものはメモリのキャッシュから出すため、その数分の1に収まる。
+    /// タイムラインを速く流しても、画像は行ごとに数枚で、読んだものはメモリのキャッシュから出すため、その数分の1に収まる。
     public static let threshold = 200
     /// 一度残したら、続いている間もこの長さは残さない。続いた長さが、残した行の数で分かる。
     public static let cooldown: Duration = .seconds(10)

@@ -1,6 +1,6 @@
 public import Foundation
 
-/// ストリーミングで一覧に届いた新着の流れの速さ。直近1分に届いた数で表す。一覧を引っぱったときに見せる。
+/// ストリーミングでタイムラインに届いた新着の流れの速さ。直近1分に届いた数で表す。タイムラインを引っぱったときに見せる。
 public struct ArrivalRate: Sendable, Equatable {
     private static let window: TimeInterval = 60
     /// 届いた時刻。古い順。1分より前のものは、次に届いたときに捨てる。

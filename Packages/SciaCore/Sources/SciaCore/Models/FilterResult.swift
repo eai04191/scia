@@ -15,7 +15,7 @@ public struct FilterResult: Codable, Hashable, Sendable {
         self.statusMatches = statusMatches
     }
 
-    /// 一致したフィルター。投稿に付くときは、キーワードと投稿の一覧を含まない。
+    /// 一致したフィルター。投稿に付くときは、キーワードと投稿のリストを含まない。
     /// https://docs.joinmastodon.org/entities/Filter/
     public struct Filter: Codable, Hashable, Sendable, Identifiable {
         public let id: String

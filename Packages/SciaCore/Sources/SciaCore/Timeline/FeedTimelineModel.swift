@@ -1,19 +1,19 @@
 public import Foundation
 import os
 
-/// ホームや公開タイムラインの読み込み、ストリーミング、既読位置、ポーリング、補完、新着の挿入の予約を受け持ち、結果を一覧の画面（`TimelineDisplay`）へ命令として伝える。
-/// タブの一覧のほか、開いた一覧に積むハッシュタグの一覧にも使う。
+/// ホームや公開タイムラインの読み込み、ストリーミング、既読位置、ポーリング、補完、新着の挿入の予約を受け持ち、結果をタイムラインの画面（`TimelineDisplay`）へ命令として伝える。
+/// タブのタイムラインのほか、開いたタイムラインに積むハッシュタグのタイムラインにも使う。
 @MainActor
 public final class FeedTimelineModel {
     /// 1回に読む件数。APIの上限が40件。
     public static let pageSize = 40
 
     public let feed: TimelineFeed
-    /// この一覧で当てるサーバーのフィルター。画面の警告の折りたたみにも同じものを使う。
+    /// このタイムラインで当てるサーバーのフィルター。画面の警告の折りたたみにも同じものを使う。
     public let filtering: StatusFiltering
-    /// 結果を伝える一覧の画面。
+    /// 結果を伝えるタイムラインの画面。
     public weak var display: (any TimelineDisplay)?
-    /// 一覧を最上部からさらに引っぱったときに見せる、ストリーミングの状態の表示。
+    /// タイムラインを最上部からさらに引っぱったときに見せる、ストリーミングの状態の表示。
     public weak var streamingStatus: (any StreamingStatusDisplay)?
     private let store: TimelineStore
     private let client: MastodonClient
@@ -24,7 +24,7 @@ public final class FeedTimelineModel {
     /// バックグラウンドで既読位置を保存し終えるまで、アプリを止めないよう頼む。頼んで、終えるときに呼ぶものを返す。OSが与えた時間が尽きたら、頼みを終えて`onExpire`を呼ぶ。
     private let backgroundTime: @MainActor (String, _ onExpire: @escaping @MainActor () -> Void) -> @MainActor () -> Void
     private let logger = SciaLog.logger(category: "timeline")
-    /// この一覧が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
+    /// このタイムラインが始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
     private let tasks: TaskScope
     /// 走り終えていない読み込みなどの処理の数。止めたものも、取り消しを受けて戻り切るまで数える。止めたあとに何も起きないことを、テストが確かめるのに使う。
     public var runningTaskCount: Int { tasks.runningCount }
@@ -33,7 +33,7 @@ public final class FeedTimelineModel {
     /// 補完を終えた日時、新着の届いた日時、ダミーの投稿の日時に使う今の日付。テストでは決まった日付に替える。
     public let now: () -> Date
     public var isStopped: Bool { tasks.isClosed }
-    /// 一覧全体の状態。失敗したままなら、電波の回復や引っぱった読み直しでやり直す。
+    /// タイムライン全体の状態。失敗したままなら、電波の回復や引っぱった読み直しでやり直す。
     public private(set) var contentState = TimelineContentState.loaded
     /// 末尾の読み込みの状態。失敗したままなら、電波の回復でやり直す。
     public private(set) var footerState = TimelineFooterState.idle
@@ -41,12 +41,12 @@ public final class FeedTimelineModel {
     private var isDisabled: Bool { isDisabledInSettings || isUnavailable }
     /// 設定で無効にしている。
     private var isDisabledInSettings = false
-    /// サーバーがこの一覧を読ませない。読まず、購読もせず、読めないと出す（docs/tabs.md）。
+    /// サーバーがこのタイムラインを読ませない。読まず、購読もせず、読めないと出す（docs/tabs.md）。
     private var isUnavailable = false
     private var hasStarted = false
-    /// 一覧のストリームの購読。読み込みが済んでから申し込み、止めるときやバックグラウンドではやめる。
+    /// タイムラインのストリームの購読。読み込みが済んでから申し込み、止めるときやバックグラウンドではやめる。
     private var streamingSubscription: StreamingHub.Subscription?
-    /// 一覧のストリームを購読している。
+    /// タイムラインのストリームを購読している。
     public var isSubscribedToStreaming: Bool { streamingSubscription != nil }
     /// 切れていた間の投稿を読む補完の状態。ストリーミングの状態と並べて、引っぱったときに見せる。
     private var catchUp = CatchUpStatus()
@@ -71,14 +71,14 @@ public final class FeedTimelineModel {
     #endif
     /// サーバーがホームを作り直している最中だったので、時間をおいて補完を読み直す。読み直すまで次は予約しない。
     private var regeneratingRetryTask: Task<Void, Never>?
-    /// 画面が前に出ている。ストリームでは足りない一覧は、前に出ている間だけ新着を読み直す。
+    /// 画面が前に出ている。ストリームでは足りないタイムラインは、前に出ている間だけ新着を読み直す。
     private var isShown = false
     /// 前に出ている間に新着を読み直す繰り返し。
     private var pollingTask: Task<Void, Never>?
     /// 走っている補完の数と、すべて終わるのを待っている引っぱった読み直し。
     private var activeFills = 0
     /// バックグラウンドから戻ってから、切れていた間の補完を終えるまで。最上部にいても追従せず、一番上に見えていた行の位置を保つ。
-    /// 戻ってから始めた補完があり、走っている補完がすべて終わり、その間に届いた新着も挿入し終えたら解く。決まりはdocs/vision.mdの「一覧の動き」にある。
+    /// 戻ってから始めた補完があり、走っている補完がすべて終わり、その間に届いた新着も挿入し終えたら解く。決まりはdocs/vision.mdの「タイムラインの動き」にある。
     private var keepsPositionAfterResume = false
     private var hasStartedFillAfterResume = false
     private var fillWaiters: [CheckedContinuation<Void, Never>] = []
@@ -126,14 +126,14 @@ public final class FeedTimelineModel {
         run(purpose) { await $0.loadInitial() }
     }
 
-    /// まだ始めていなければ始める。開くまで読まない一覧を、初めて開いたときに始めるのに使う。
+    /// まだ始めていなければ始める。開くまで読まないタイムラインを、初めて開いたときに始めるのに使う。
     public func startIfNeeded() {
         guard !hasStarted else { return }
         start(purpose: .action)
     }
 
     #if DEBUG
-    /// 始めている一覧だけ読み込み直す。障害を起こすデバッグURLで、開いたことのない一覧まで読み始めないようにする。
+    /// 始めているタイムラインだけ読み込み直す。障害を起こすデバッグURLで、開いたことのないタイムラインまで読み始めないようにする。
     public func reloadIfStarted() {
         guard hasStarted else { return }
         start(purpose: .action)
@@ -156,7 +156,7 @@ public final class FeedTimelineModel {
         }
     }
 
-    /// サーバーがこの一覧を読ませないと分かったときに呼ぶ。購読をやめ、以後は読まず、読めないと出す。戻すことはない。
+    /// サーバーがこのタイムラインを読ませないと分かったときに呼ぶ。購読をやめ、以後は読まず、読めないと出す。戻すことはない。
     /// 走っている読み込みは止めないが、終わっても読み込み済みとは出さず、購読もしない。
     public func markUnavailableOnServer() {
         guard !isUnavailable else { return }
@@ -171,12 +171,12 @@ public final class FeedTimelineModel {
     /// 購読と、時間をおいた読み直しをやめる。
     private func stopReading() {
         stopStreaming()
-        // 作り直し中の読み直しも、使わない一覧への通信なのでやめる。有効に戻したら、つないだところで補完する。
+        // 作り直し中の読み直しも、使わないタイムラインへの通信なのでやめる。有効に戻したら、つないだところで補完する。
         cancelRegeneratingRetry()
         stopPolling()
     }
 
-    /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときと、積んで開いた一覧がナビゲーションから外されたときに呼ぶ。
+    /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときと、積んで開いたタイムラインがナビゲーションから外されたときに呼ぶ。
     /// セッションを閉じたときは、呼ばなくても持ち主が閉じて止まる。
     public func stop() {
         tasks.close()
@@ -215,7 +215,7 @@ public final class FeedTimelineModel {
         keepsPositionAfterResume = true
         hasStartedFillAfterResume = false
         startStreaming()
-        // ストリームにつながらない環境でも、見ている一覧はすぐ読む。つながったときの補完と重なれば、ストアが1つにまとめる。
+        // ストリームにつながらない環境でも、見ているタイムラインはすぐ読む。つながったときの補完と重なれば、ストアが1つにまとめる。
         if feed.isAccountHashtag, isShown, !isDisabled {
             fillFromLatest(purpose: .display)
         }
@@ -226,8 +226,8 @@ public final class FeedTimelineModel {
     // MARK: - 前に出ている間の読み直し
 
     /// 画面が前に出たら、見ていなかった間の新着を読み、前に出ている間は間隔をおいて読み直す。見えなくなったらやめる。
-    /// ユーザーのハッシュタグの一覧で使う。ハッシュタグのストリームは公開の投稿しか運ばず、フォロワーのみなどの投稿は読まないと分からないため。
-    /// 見ていない間は読まず、通信を前に出ている1つの一覧の分に抑える。決まりはdocs/tabs.mdの「ユーザーのハッシュタグ」にある。
+    /// ユーザーのハッシュタグのタイムラインで使う。ハッシュタグのストリームは公開の投稿しか運ばず、フォロワーのみなどの投稿は読まないと分からないため。
+    /// 見ていない間は読まず、通信を前に出ている1つのタイムラインの分に抑える。決まりはdocs/tabs.mdの「ユーザーのハッシュタグ」にある。
     public func setShown(_ isShown: Bool) {
         guard self.isShown != isShown else { return }
         self.isShown = isShown
@@ -284,7 +284,7 @@ public final class FeedTimelineModel {
 
     /// 失敗したままの最初の読み込みか、末尾の読み込みをやり直す。最初の読み込みが済めば、そこでつなぐ。
     /// ユーザーのハッシュタグは、見ていない間は読まない。見えたときに`setShown`でやり直す。
-    /// 無効にした一覧も、使わない一覧への通信になるので読まない。有効に戻したときに`setEnabled`でやり直す。
+    /// 無効にしたタイムラインも、使わないタイムラインへの通信になるので読まない。有効に戻したときに`setEnabled`でやり直す。
     private func retryFailedLoads() {
         guard !isDisabled, !feed.isAccountHashtag || isShown else { return }
         if case .failed = contentState {
@@ -296,7 +296,7 @@ public final class FeedTimelineModel {
 
     /// ストリーミングの接続の状態を、引っぱったときに見せる表示へ伝える。
     public func showStreamingState(_ state: ConnectionDiagnostics.StreamingState?) {
-        // 読めない一覧は購読しないので、つながっていても未接続と出す。
+        // 読めないタイムラインは購読しないので、つながっていても未接続と出す。
         streamingStatus?.setState(isUnavailable ? nil : state)
     }
 
@@ -343,7 +343,7 @@ public final class FeedTimelineModel {
         }
     }
 
-    /// 一覧を引っぱって離したときに、最新の投稿を読んで上に足す。足すのは一番新しい投稿より新しいものだけで、読んでいる位置は動かさない。
+    /// タイムラインを引っぱって離したときに、最新の投稿を読んで上に足す。足すのは一番新しい投稿より新しいものだけで、読んでいる位置は動かさない。
     /// 最初の読み込みに失敗したままなら、それをやり直す。溜めている新着は、間隔を待たずに入れる。
     public func refresh() async {
         guard !isStopped, hasStarted, !isDisabled else { return }
@@ -447,7 +447,7 @@ public final class FeedTimelineModel {
     private func fillFromLatest(purpose: RequestPurpose) {
         #if DEBUG
         // 補完で読んだ新着はストアへ直接合流し、insertPendingの保留を通らないため、保留中は補完を始めない。
-        // 保留を送る前に始まった補完は止めない。その結果は、保留中でも一覧に入る。
+        // 保留を送る前に始まった補完は止めない。その結果は、保留中でもタイムラインに入る。
         if isHoldingArrivals() {
             isFillHeld = true
             logger.info("\(self.feed.name, privacy: .public) fill held")
@@ -499,7 +499,7 @@ public final class FeedTimelineModel {
         }
     }
 
-    /// 補完で一覧が変わっていれば画面に出す。
+    /// 補完でタイムラインが変わっていれば画面に出す。
     private func showFilledEntries(since before: [TimelineEntry]) {
         // 待っている間に同じ投稿がストリーミングで挿入されていても、ギャップだけが増えていることがある。
         guard store.entries != before else { return }
@@ -806,7 +806,7 @@ public final class FeedTimelineModel {
 
     /// 自動の補完の中でギャップを読めなかったときも、並びと一緒に読めなかった表示にする。
     /// - Parameter animatesRemoval: 使う人の操作で行を消した。消える行を閉じる動きで消す。
-    /// - Parameter base: 一覧はこの並びに行を足すか除くかしただけで、残る行の中身を変えていない。
+    /// - Parameter base: タイムラインはこの並びに行を足すか除くかしただけで、残る行の中身を変えていない。
     private func showEntries(animatesRemoval: Bool = false, keepingRowContentsOf base: [TimelineEntry]? = nil) {
         showGapStates()
         display?.show(store.entries, keeping: resumeAnchorID, animatesRemoval: animatesRemoval, keepingRowContentsOf: base)
@@ -852,7 +852,7 @@ extension FeedTimelineModel {
         receive(event)
     }
 
-    /// この一覧の処理の持ち主の中で、使う人の操作として走らせる。
+    /// このタイムラインの処理の持ち主の中で、使う人の操作として走らせる。
     @discardableResult
     public func debugRun(_ operation: @escaping @MainActor (FeedTimelineModel) async -> Void) -> Task<Void, Never>? {
         run(.action, operation)

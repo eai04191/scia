@@ -42,7 +42,7 @@ public final class MediaTransfers {
         public var isStoppable: Bool { !isFinishing }
     }
 
-    /// 済んだこと、失敗したこと。受けた側が、開いているビューアか一覧に知らせる。
+    /// 済んだこと、失敗したこと。受けた側が、開いているビューアかタイムラインに知らせる。
     public enum Event {
         /// 写真に保存した。
         case saved(Transfer)
@@ -218,7 +218,7 @@ public enum MediaTransferChip: Equatable {
         return .count(visible.count)
     }
 
-    /// ビューアを閉じたあとの一覧のチップ。1つなら進み具合を、2つ以上なら件数を出す。
+    /// ビューアを閉じたあとのタイムラインのチップ。1つなら進み具合を、2つ以上なら件数を出す。
     public static func timeline(_ transfers: [MediaTransfers.Transfer]) -> MediaTransferChip? {
         let visible = transfers.filter(\.isVisible)
         switch visible.count {

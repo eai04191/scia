@@ -2,7 +2,7 @@ import Foundation
 import os
 import SciaCore
 
-/// 「フォロー中のハッシュタグ」の一覧の読み込みを、TimelineViewControllerの表示へつなぐ。決まりはdocs/tabs.mdの「フォロー中のハッシュタグ」にある。
+/// 「フォロー中のハッシュタグ」の読み込みを、TimelineViewControllerの表示へつなぐ。決まりはdocs/tabs.mdの「フォロー中のハッシュタグ」にある。
 /// 行は検索の結果のハッシュタグの行と同じもので、押したときと長押ししたときの動きは、画面を組むセッションが決める。
 @MainActor
 final class FollowedTagsController {
@@ -11,14 +11,14 @@ final class FollowedTagsController {
     private let followedTags: LatestValueCache<[Hashtag]>
     /// APIが401を返したときに呼ぶ。ログアウトされたとして止め、ログインし直しを促すのはセッションに任せる。
     private let onUnauthorized: () -> Void
-    /// この一覧が始めた処理の持ち主。セッションの持ち主の子で、ログアウトやアカウントの切り替えで止まる。
+    /// この画面が始めた処理の持ち主。セッションの持ち主の子で、ログアウトやアカウントの切り替えで止まる。
     private let tasks: TaskScope
     private let logger = SciaLog.logger(category: "followedTags")
     /// タブで見せているか。見せ始めたときに読み直す。
     private var isShown = false
 
     /// `session`の部品で作り、`session`に登録する。電波の回復などのやり直しと、トークンが無効と分かったときに止めるのを`session`から受け取る。
-    /// - Parameter followedTags: ハッシュタグのメニューがフォローしているかを決めるのと同じ一覧。どちらで読み直しても、もう一方に効く。
+    /// - Parameter followedTags: ハッシュタグのメニューがフォローしているかを決めるのと同じ、フォロー中のハッシュタグ。どちらで読み直しても、もう一方に効く。
     init(followedTags: LatestValueCache<[Hashtag]>, session: AccountSession) {
         tasks = session.tasks.child()
         onUnauthorized = { [weak session] in session?.reportUnauthorized() }
@@ -30,7 +30,7 @@ final class FollowedTagsController {
         session.register(self)
     }
 
-    /// メニューを開いたときなど、ほかで読み直した一覧を出す。読み込み中なら、その読み込みが出す。
+    /// メニューを開いたときなど、ほかで読み直したハッシュタグを出す。読み込み中なら、その読み込みが出す。
     private func cacheDidLoad(_ tags: [Hashtag]) {
         guard store.receive(tags) else { return }
         show()
@@ -61,7 +61,7 @@ final class FollowedTagsController {
         if store.isLoaded { show(animatesRemoval: true) }
     }
 
-    /// まだ読めていなければ読み込み中の表示を出して読む。読めていれば、前の一覧を出したまま読み直す。
+    /// まだ読めていなければ読み込み中の表示を出して読む。読めていれば、前に読んだハッシュタグを出したまま読み直す。
     private func load(purpose: RequestPurpose) {
         if !store.isLoaded {
             viewController.setContentState(.loading)
@@ -71,14 +71,14 @@ final class FollowedTagsController {
         }
     }
 
-    /// 一覧を引っぱって離したときに読み直す。読めなければ前の一覧を残す。
+    /// 画面を引っぱって離したときに読み直す。読めなければ前に読んだものを残す。
     private func refresh() async {
         logger.info("followedTags refresh")
         await loadNow(purpose: .action, during: "refresh")
     }
 
     private func loadNow(purpose: RequestPurpose, during operation: String) async {
-        // 読み込み中なら、走っている読み込みに任せる。重ねて読み直すと、同じ一覧を2回読むため。
+        // 読み込み中なら、走っている読み込みに任せる。重ねて読み直すと、同じものを2回読むため。
         guard !store.isLoading else { return }
         followedTags.reload(purpose: purpose)
         do {
@@ -91,7 +91,7 @@ final class FollowedTagsController {
             if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
                 onUnauthorized()
             }
-            // 読めている一覧は残す。まだ読めていなければ、失敗の表示とやり直すボタンを出す。
+            // 読めているハッシュタグは残す。まだ読めていなければ、失敗の表示とやり直すボタンを出す。
             if !store.isLoaded {
                 viewController.setContentState(.failed(ErrorPresentation(error)))
             }
@@ -107,7 +107,7 @@ final class FollowedTagsController {
 }
 
 extension FollowedTagsController: SessionList {
-    /// 電波が戻ったときや、レート制限が明けたときに、読めないままの一覧を読み直す。
+    /// 電波が戻ったときや、レート制限が明けたときに、読めないままのハッシュタグを読み直す。
     func recover() {
         guard case .failed = viewController.contentState else { return }
         load(purpose: .display)

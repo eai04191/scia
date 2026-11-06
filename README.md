@@ -29,7 +29,7 @@ TestFlight: https://testflight.apple.com/join/6g69MEf8
 - アニメーションの途中でも操作を受け付けどこで止めても破綻しない
 - 必要なリクエストだけを送りスペックの低いサーバーでも快適に使える
 
-[すべての機能一覧](FEATURES.md)
+[すべての機能のリスト](FEATURES.md)
 
 ## 動作環境
 

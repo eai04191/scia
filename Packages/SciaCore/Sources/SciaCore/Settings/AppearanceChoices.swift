@@ -15,7 +15,7 @@ public struct AppearanceChoices: Codable, Hashable, Sendable {
     public var avatarShape: AvatarShape = .roundedSquare
     /// リンクカードのサムネイルを置く端。
     public var linkCardThumbnailSide: LinkCardThumbnailSide = .left
-    /// 一覧の投稿の添付ファイルを、本文の下に並べるか、本文の右に小さく出すか。
+    /// タイムラインの投稿の添付ファイルを、本文の下に並べるか、本文の右に小さく出すか。
     public var mediaArrangement: MediaArrangement = .belowBody
     /// 本文の右に重ねた写真を傾ける。オフなら、どの写真もまっすぐに置き、投稿ごとに角度をばらつかせない。
     public var tiltsStackedPhotos = true
@@ -39,7 +39,7 @@ public struct AppearanceChoices: Codable, Hashable, Sendable {
     public var showsLinkCard = true
     /// リンクカードのタイトルを太字にする。
     public var boldsLinkCardTitle = true
-    /// 一覧の投稿と投稿のあいだに区切り線を引く。
+    /// タイムラインの投稿と投稿のあいだに区切り線を引く。
     public var showsSeparators = true
     /// 名前の上の行に、ブーストした人のアイコンを出す。
     public var showsBoosterAvatar = true
@@ -55,7 +55,7 @@ public struct AppearanceChoices: Codable, Hashable, Sendable {
     public var showsTime = true
     /// リンクカードに画像を出す。
     public var showsLinkCardImage = true
-    /// 一覧で、GIFなどのアニメーションするアイコンを動かす。オフなら最初のコマで止めた版を読む。
+    /// タイムラインで、GIFなどのアニメーションするアイコンを動かす。オフなら最初のコマで止めた版を読む。
     /// 選んでいなければnilで、サーバーの設定に従う（`AppSettings.animatesAvatars`）。
     public var animatesAvatars: Bool?
     /// GIFやAPNGのアニメーションするカスタム絵文字を動かす。オフなら最初のコマで止めた版を描く。

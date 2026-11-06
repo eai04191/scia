@@ -167,7 +167,7 @@ let groupID = id(onlyResource(
     "外部グループ「\(groupName)」"
 ))
 
-// アップロードしてすぐは一覧に出ず、出てからも処理が終わるまでグループに足せない。処理はふつう数分から十数分で終わる
+// アップロードしてすぐはビルドのリストに出ず、出てからも処理が終わるまでグループに足せない。処理はふつう数分から十数分で終わる
 func processedBuild() async -> (id: String, version: String) {
     let deadline = ContinuousClock.now + .seconds(40 * 60)
     while ContinuousClock.now < deadline {
@@ -188,10 +188,10 @@ func processedBuild() async -> (id: String, version: String) {
             case "FAILED", "INVALID":
                 fail("ビルド\(application.buildNumber)の処理が\(attribute(build, "processingState") ?? "")で終わった")
             default:
-                log("ビルド\(application.buildNumber)の処理を待っている（\(attribute(build, "processingState") ?? "一覧に出ていない")）")
+                log("ビルド\(application.buildNumber)の処理を待っている（\(attribute(build, "processingState") ?? "ビルドのリストに出ていない")）")
             }
         } else {
-            log("ビルド\(application.buildNumber)が一覧に出るのを待っている")
+            log("ビルド\(application.buildNumber)がビルドのリストに出るのを待っている")
         }
         try? await Task.sleep(for: .seconds(30))
     }

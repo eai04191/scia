@@ -3,8 +3,8 @@ import os
 import SciaCore
 
 /// 「別のアカウントで」のハッシュタグのメニューで、ほかのアカウントのフォロー、ミュート、プロフィールでの紹介を読んで変える。決まりはdocs/menus.mdにある。
-/// 状態は今のアカウントと同じく、そのアカウントの一覧を覚えてメニューを組み、開くたびに読み直す。
-/// 今のアカウントの一覧やタブ、投稿欄の補完、プロフィールは変えない。失敗は、このセッションのログインし直しの案内につなげずに知らせる。
+/// 状態は今のアカウントと同じく、そのアカウントのハッシュタグを覚えてメニューを組み、開くたびに読み直す。
+/// 今のアカウントのハッシュタグやタブ、投稿欄の補完、プロフィールは変えない。失敗は、このセッションのログインし直しの案内につなげずに知らせる。
 @MainActor
 final class OtherAccountHashtags {
     private let client: MastodonClient
@@ -86,7 +86,7 @@ final class OtherAccountHashtags {
         }
     }
 
-    /// 外すIDは、外すときに読み直した一覧で決める。今のアカウントで外すときと同じく、別の端末で足し直したタグを古いIDで消さないため。
+    /// 外すIDは、外すときに読み直したハッシュタグで決める。今のアカウントで外すときと同じく、別の端末で足し直したタグを古いIDで消さないため。
     private func unfeature(_ name: String) {
         let featured = featured
         send(key: "feature:\(name)", done: "#\(name)をプロフィールから外しました", failure: "プロフィールでの紹介を変更できませんでした", reloading: featured) { client in
@@ -115,7 +115,7 @@ final class OtherAccountHashtags {
         }
     }
 
-    /// 送り終える前にメニューを開き直して押しても、同じ要求を重ねて送らない。済んでも失敗しても、覚えている一覧を読み直す。
+    /// 送り終える前にメニューを開き直して押しても、同じ要求を重ねて送らない。済んでも失敗しても、覚えているハッシュタグを読み直す。
     /// 失敗しても、応答が届かなかっただけで変わっていることがあるため。
     private func send<Value>(key: String, done: String, failure: String, reloading cache: LatestValueCache<Value>, _ operation: @escaping @MainActor (MastodonClient) async throws -> Void) {
         let client = client

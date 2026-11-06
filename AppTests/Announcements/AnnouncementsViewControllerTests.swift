@@ -6,7 +6,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// お知らせのシートの一覧。決まりはdocs/announcements.mdにある。
+/// お知らせのシートのリスト。決まりはdocs/announcements.mdにある。
 @MainActor
 struct AnnouncementsViewControllerTests {
     nonisolated private static func announcement(_ id: String, at offset: TimeInterval, read: Bool = true) -> Announcement {
@@ -14,7 +14,7 @@ struct AnnouncementsViewControllerTests {
         return Announcement(id: id, content: "<p>\(body)</p>", publishedAt: Date(timeIntervalSince1970: 1_800_000_000 + offset), read: read)
     }
 
-    /// 一覧を出したウィンドウ。
+    /// お知らせのリストを出したウィンドウ。
     private func show(_ model: AnnouncementsModel) throws -> (UIWindow, AnnouncementsViewController) {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
@@ -91,7 +91,7 @@ struct AnnouncementsViewControllerTests {
         #expect(view.subviews.first { $0.accessibilityLabel == "👍 2件" } === first)
     }
 
-    /// 既読の送信が失敗して未読に戻り、一覧を描き直しても、行が画面の外から入ってくるまで送り直さない。
+    /// 既読の送信が失敗して未読に戻り、リストを描き直しても、行が画面の外から入ってくるまで送り直さない。
     @Test func doesNotResendDismissOnRedraw() async throws {
         let dismissals = Mutex(0)
         let operations = AnnouncementsModel.Operations(

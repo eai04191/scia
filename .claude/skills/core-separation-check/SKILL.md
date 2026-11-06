@@ -82,7 +82,7 @@ XとYは、起動のたびに新しく作る。前の回のsessionに頼まな�
 
 次を入れる。
 
-- やること: Mac版を作る。画面の骨格、一覧、入力はAppKitで作る。中に入力もスクロール位置の精密な制御も持たない表示の部品は、SwiftUIで作って載せてよい。UIKitとMac Catalystは使わない（UIKitのコードがそのまま動き、分け方を確かめられないため）。今回作る動線をユーザーの言葉で書く。続きから始めるなら、今あるMac版のどこから何を足すか
+- やること: Mac版を作る。画面の骨格、タイムライン、入力はAppKitで作る。中に入力もスクロール位置の精密な制御も持たない表示の部品は、SwiftUIで作って載せてよい。UIKitとMac Catalystは使わない（UIKitのコードがそのまま動き、分け方を確かめられないため）。今回作る動線をユーザーの言葉で書く。続きから始めるなら、今あるMac版のどこから何を足すか
 - 読んでよいもの: SciaCoreのソース、公開API、テスト、`docs/`、`AGENTS.md`、自分のbranchのMac版のコードと記録。App/Sourcesは、grep、ファイルを開く、subagentに読ませる、のどれもしない。App側を見ないと分からなかったことは、それ自体を記録する
 - SciaCoreは変えない。変えたくなった箇所は記録にとどめる
 - ターゲットは`project.yml`に足し、`make generate`で作る。署名とbundle IDは`macos-app-dev`のskillに従う。`Config/Local.xcconfig`は元のcheckoutからコピーする

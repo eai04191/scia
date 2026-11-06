@@ -38,7 +38,7 @@ enum URLSharing {
         if let popover = activity.popoverPresentationController {
             anchor(popover)
         }
-        // アプリ内のSafariのシートを出したまま上の一覧から共有することがあるため、いちばん手前の画面から出す。
+        // アプリ内のSafariのシートを出したまま上のタイムラインから共有することがあるため、いちばん手前の画面から出す。
         presenter.frontmostPresented.present(activity, animated: true)
     }
 }

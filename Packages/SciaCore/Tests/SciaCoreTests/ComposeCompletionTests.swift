@@ -227,7 +227,7 @@ struct ComposeCompletionTests {
         #expect(await server.queries == ["bob", "bob"])
     }
 
-    /// 絵文字は一覧を一度だけ取り、手元で絞る。一覧に出さない絵文字は除く。
+    /// 絵文字はリストを一度だけ取り、手元で絞る。ピッカーに出さない絵文字は除く。
     @Test func filtersEmojisLocally() async throws {
         let completion = makeCompletion()
         completion.prefetch()
@@ -245,7 +245,7 @@ struct ComposeCompletionTests {
         #expect(await server.emojiRequests == 1)
     }
 
-    /// 一覧を読む前に打ったら、読み終えたところで出す。読めなければ失敗を出し、再試行で読み直す。
+    /// 絵文字のリストを読む前に打ったら、読み終えたところで出す。読めなければ失敗を出し、再試行で読み直す。
     @Test func loadsEmojisOnDemandAndRetries() async throws {
         let completion = makeCompletion()
         await server.setFailsEmojis(true)
@@ -262,7 +262,7 @@ struct ComposeCompletionTests {
         #expect(accts(completion.content).first == ":blobcat:")
     }
 
-    /// 別の画面で読み終えた一覧を渡せば、作ったときから持ち、読み直さない。一覧に出さない絵文字は除く。
+    /// 別の画面で読み終えた絵文字のリストを渡せば、作ったときから持ち、読み直さない。ピッカーに出さない絵文字は除く。
     /// 絵文字のパレットを開いたときに、読み込み中の段を挟まずに並べるため。
     @Test func startsWithEmojisLoadedElsewhere() async throws {
         let server = server
@@ -281,7 +281,7 @@ struct ComposeCompletionTests {
         #expect(await server.emojiRequests == 1)
     }
 
-    /// 取得元に覚えさせると、読めた一覧を覚え、次の画面の補完に渡せる。読めなかったときは、前に読めた一覧を残す。
+    /// 取得元に覚えさせると、読めた絵文字のリストを覚え、次の画面の補完に渡せる。読めなかったときは、前に読めたリストを残す。
     @Test func remembersLoadedEmojisInCache() async throws {
         let server = server
         let cache = CustomEmojiCache()
@@ -321,7 +321,7 @@ struct ComposeCompletionTests {
         #expect(accts(completion.content) == ["👍"])
     }
 
-    /// カスタム絵文字の一覧を読む間も、読めなかったときも、Unicodeの絵文字は出す。
+    /// カスタム絵文字のリストを読む間も、読めなかったときも、Unicodeの絵文字は出す。
     @Test func showsStandardEmojisWithoutCustomEmojis() async throws {
         let completion = makeCompletion()
         completion.standardEmojiGroups = { [standardGroups] in standardGroups }
@@ -532,7 +532,7 @@ struct ComposeCompletionTests {
         #expect(completion.selectedCandidate?.id == "hashtag:猫")
     }
 
-    /// 出さない候補しかなければ、「一致しない」を出さずに一覧を出さない。選んでいる位置は、出す候補の中に収める。
+    /// 出さない候補しかなければ、「一致しない」を出さずに候補のリストを出さない。選んでいる位置は、出す候補の中に収める。
     @Test func hiddenOnlyCandidatesShowNothingAndSelectionStaysInside() async throws {
         let completion = makeCompletion()
         completion.textDidChange(hashtag("猫"))

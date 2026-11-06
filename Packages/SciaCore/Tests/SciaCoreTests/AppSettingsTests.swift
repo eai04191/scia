@@ -34,7 +34,7 @@ struct AppSettingsTests {
         #expect(relaunched.videoUploadSize == .p720)
     }
 
-    /// 一覧ではたくさんのメディアが文字と並ぶのでSDRに収め、ビューアでは眩しすぎないよう抑えたHDRで描くのを既定にする。
+    /// タイムラインではたくさんのメディアが文字と並ぶのでSDRに収め、ビューアでは眩しすぎないよう抑えたHDRで描くのを既定にする。
     @Test func mediaDynamicRangeDefaults() throws {
         let settings = AppSettings(defaults: try makeDefaults())
         #expect(settings.mediaDynamicRange == .standard)
@@ -117,7 +117,7 @@ struct AppSettingsTests {
         #expect(AppSettings(defaults: defaults).hidesEmptyComposeBar)
     }
 
-    /// 畳んでも一覧を広く使えるので、既定では畳む。
+    /// 畳んでもタイムラインを広く使えるので、既定では畳む。
     @Test func foldsComposeBarByDefault() throws {
         let settings = AppSettings(defaults: try makeDefaults())
         #expect(!settings.keepsComposeBarOpen)

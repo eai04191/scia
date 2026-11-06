@@ -44,7 +44,7 @@ public enum LinkCardThumbnailSide: String, Codable, CaseIterable, Sendable {
     case right
 }
 
-/// 一覧の投稿の添付ファイルの並べ方。
+/// タイムラインの投稿の添付ファイルの並べ方。
 public enum MediaArrangement: String, Codable, CaseIterable, Sendable {
     /// 本文の下に、行の幅いっぱいで並べる。
     case belowBody

@@ -138,7 +138,7 @@ struct SearchModelTests {
         #expect(display.footerState == .reachedEnd)
     }
 
-    /// 3つとも0件なら、行のない一覧を読み終えた状態にし、見つからなかったことを出す。
+    /// 3つとも0件なら、行のない結果を読み終えた状態にし、見つからなかったことを出す。
     @Test func nothingFound() async throws {
         let (model, display) = try makeModel("猫", transport: Self.transport { _ in try Self.body() })
         defer { model.stop() }
@@ -212,7 +212,7 @@ struct SearchModelTests {
         #expect(found == ["a1"])
     }
 
-    /// 「すべて見る」の一覧は、見出しを付けずにその種類だけを並べ、続きを読む。
+    /// 「すべて見る」の画面は、見出しを付けずにその種類だけを並べ、続きを読む。
     @Test func onlyScopeListsOneCategory() async throws {
         let transport = Self.transport { query in
             guard query.type == "hashtags" else { return nil }
@@ -342,7 +342,7 @@ struct SearchModelTests {
     }
 
     /// 確定した直後は、打っている途中の候補のユーザーとハッシュタグを、その種類の結果が届くまで見出しの下に出す。
-    /// 候補の一覧に残っていた行のうち、引き継がない行（「“語”を検索」など）は閉じる動きで消す。
+    /// 候補のリストに残っていた行のうち、引き継がない行（「“語”を検索」など）は閉じる動きで消す。
     @Test func carriedRowsStayUntilTheirCategoryArrives() async throws {
         let gate = Gate()
         let transport = RoutedTransport { request in
@@ -368,7 +368,7 @@ struct SearchModelTests {
         #expect(Self.rows(display) == ["[accounts]", "@a1"])
     }
 
-    /// 一覧を付け替えたら、今の結果をその一覧に並べ直す。
+    /// 画面を付け替えたら、今の結果をその画面に並べ直す。
     @Test func attachRendersCurrentResults() async throws {
         let transport = Self.transport { query in
             query.type == "statuses" ? try Self.body(statuses: [2, 1]) : try Self.body()

@@ -7,7 +7,7 @@ struct PendingMenuIcon {
     enum Source {
         /// 分かっているアカウント。
         case account(Account)
-        /// 一覧にも読み込み済みのものにもいない、メンションされた人のID。まとめて読む。
+        /// タイムラインにも読み込み済みのものにもいない、メンションされた人のID。まとめて読む。
         case mention(id: String)
         /// 「別のアカウントで」のアカウント自身。プロフィールを読み終えるのを待つ。
         case otherAccount(OtherAccount)
@@ -68,7 +68,7 @@ extension TimelineViewController {
         let body = status.flatMap { selectableBody(for: id, statusID: $0.displayed.id) }
         let request: NotificationRequest? = if case .notificationRequest(let request) = entry { request } else { nil }
         let renderer = statusMenuRenderer(status: status, notification: notification, request: request, id: id, selectableBody: body, emojis: emojis)
-        // 人の一覧の行では、その人へのユーザーのメニューを、単独で出す形で出す。投稿のメニューに入れるサブメニューの形のままだと、項目がそのサブメニュー1つだけのメニューになるため。
+        // 人のリストの行では、その人へのユーザーのメニューを、単独で出す形で出す。投稿のメニューに入れるサブメニューの形のままだと、項目がそのサブメニュー1つだけのメニューになるため。
         if case .account(let account) = entry {
             let userGroups = settings.userMenuLayout.groups
             defer { reloadRelations([account.id], groups: userGroups) }
@@ -297,7 +297,7 @@ extension TimelineViewController {
         }
     }
 
-    /// アイコンや人の一覧の行を長押ししたときに出す、その人のユーザーのメニュー。出す項目がなければnil。
+    /// アイコンや人のリストの行を長押ししたときに出す、その人のユーザーのメニュー。出す項目がなければnil。
     /// - Parameter groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
     func userMenu(for user: MenuUser, id: ItemID, groups: MenuLayout<UserMenuItem>.Groups? = nil) -> UIMenu? {
         builtUserMenu(for: user, id: id, groups: groups)?.menu
@@ -313,7 +313,7 @@ extension TimelineViewController {
         }
     }
 
-    /// この一覧の行から出すユーザーのメニュー。共有のシートはその行から出す。
+    /// このタイムラインの行から出すユーザーのメニュー。共有のシートはその行から出す。
     func makeUserMenu(for user: MenuUser, id: ItemID) -> UserMenu {
         // Mastodonは通報する相手の投稿しか添えられないため、長押しした投稿をその人が書いたときだけ添える。
         let shown = status(for: id)?.displayed
@@ -330,8 +330,8 @@ extension TimelineViewController {
         }
     }
 
-    /// ユーザーのメニューのアイコンにする、その人のアイコン。読み込み済みの画像を、一覧と同じ形に切り抜く。
-    /// メンションされたユーザーは、APIの`Mention`にアイコンのURLがないため、一覧の行か前に読んだアカウントから探す。
+    /// ユーザーのメニューのアイコンにする、その人のアイコン。読み込み済みの画像を、タイムラインと同じ形に切り抜く。
+    /// メンションされたユーザーは、APIの`Mention`にアイコンのURLがないため、タイムラインの行か前に読んだアカウントから探す。
     /// まだアイコンを出せなければ記号のプレースホルダーを返し、アカウントとアイコンを読み終えたら、開いているメニューのプレースホルダーを差し替える。
     /// - Parameter id: メニューを出した行。行に描いた大きさのアイコンも探す。本文のメンションのメニューのように、行が決まらなければnil。
     func userMenuIcon(for user: MenuUser, id: ItemID?) -> UIImage {
@@ -358,7 +358,7 @@ extension TimelineViewController {
         return placeholder
     }
 
-    /// 本文のメンションのメニューの「プロフィール」のアイコン。一覧の投稿のメンションから誰かを引き、投稿のメニューのユーザーの項目と同じアイコンを出す。
+    /// 本文のメンションのメニューの「プロフィール」のアイコン。タイムラインの投稿のメンションから誰かを引き、投稿のメニューのユーザーの項目と同じアイコンを出す。
     func mentionMenuIcon(for url: URL) -> UIImage? {
         guard let mention = mention(withURL: url) else { return nil }
         defer { loadPendingMenuIcons() }
@@ -428,7 +428,7 @@ extension TimelineViewController {
         }
     }
 
-    /// アイコンを、メニューのアイコンの大きさで一覧と同じ形に切り抜き、元の色のまま描く。動くアイコンは先頭のコマで止める。
+    /// アイコンを、メニューのアイコンの大きさでタイムラインと同じ形に切り抜き、元の色のまま描く。動くアイコンは先頭のコマで止める。
     private static func userMenuIcon(_ avatar: UIImage, shape: AvatarShape) -> UIImage? {
         AvatarIcon.image(avatar, side: menuIconSide, shape: shape)
     }
@@ -528,7 +528,7 @@ extension TimelineViewController {
         )
     }
 
-    /// メニューを出した行を起点にする。行が画面の外へ流れていれば一覧を起点にする。
+    /// メニューを出した行を起点にする。行が画面の外へ流れていればタイムラインを起点にする。
     private func presentShareSheet(for url: URL, from id: ItemID) {
         let source = cell(for: id) ?? collectionView
         URLSharing.presentShareSheet(for: url, from: self) { $0.sourceItem = source }

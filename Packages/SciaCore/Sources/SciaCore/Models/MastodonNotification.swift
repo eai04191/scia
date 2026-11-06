@@ -2,7 +2,7 @@ public import Foundation
 
 /// 自分に関わる出来事の通知。FoundationのNotificationと名前がぶつかるため、Mastodonを付ける。
 ///
-/// 通知の一覧では、同じ投稿へのお気に入りやブーストのように、サーバーがまとめた通知を1行に出す。
+/// 通知のタイムラインでは、同じ投稿へのお気に入りやブーストのように、サーバーがまとめた通知を1行に出す。
 /// まとまりも、その中で最も新しい通知として持ち、まとまりの人数と、並べるアカウントを添える。まとめない通知は、1人のまとまりになる。
 /// https://docs.joinmastodon.org/entities/Notification/
 /// https://docs.joinmastodon.org/methods/grouped_notifications/#NotificationGroup

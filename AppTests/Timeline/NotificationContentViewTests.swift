@@ -24,7 +24,7 @@ struct NotificationContentViewTests {
         }
     }
 
-    /// 一覧は行の高さを画素に丸めるため、行が求める高さより1画素未満だけ低くなることがある。
+    /// 通知のタイムラインは行の高さを画素に丸めるため、行が求める高さより1画素未満だけ低くなることがある。
     /// 足りない分を文字のラベルから削ると、UILabelは収まらない行を描かず、2行の本文が1行で切れて見えた。
     /// 足りない分は行の下の余白で吸い、文字のラベルは求める高さを保つ。
     @Test(arguments: [false, true])
@@ -189,7 +189,7 @@ struct NotificationAppearanceTests {
         ]
     }
 
-    /// 既定値と範囲の両端で、通知の行を組んで落ちず、行の高さが有限になる。通知の一覧は起動してすぐ描くため、ある値で落ちると設定まで戻れない。
+    /// 既定値と範囲の両端で、通知の行を組んで落ちず、行の高さが有限になる。通知のタイムラインは起動してすぐ描くため、ある値で落ちると設定まで戻れない。
     /// - Parameter extreme: 全項目を最小にするならfalse、最大にするならtrue、既定値のままならnil。
     @Test(arguments: [nil, false, true] as [Bool?])
     func extremesLayOutWithFiniteHeights(extreme: Bool?) throws {

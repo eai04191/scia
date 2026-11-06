@@ -1,13 +1,13 @@
 import Foundation
 
-/// 一覧全体の状態。投稿がないときの表示に使う。
+/// タイムライン全体の状態。投稿がないときの表示に使う。
 public enum TimelineContentState: Equatable, Sendable {
     case loading
     case loaded
     /// サーバーがホームを再生成中で、まだ投稿が返ってこない。
     case regenerating
     case failed(ErrorPresentation)
-    /// サーバーがこの一覧を読ませない。読まず、購読もしない（docs/tabs.md）。
+    /// サーバーがこのタイムラインを読ませない。読まず、購読もしない（docs/tabs.md）。
     case unavailable
 }
 
@@ -19,7 +19,7 @@ public enum TimelineFooterState: Equatable, Sendable {
     case reachedEnd
 }
 
-/// 一覧の画面への命令。読み込み、ストリーミング、既読位置を受け持つ側（`FeedTimelineModel`など）が、結果を画面へ伝えるのに使う。
+/// タイムラインの画面への命令。読み込み、ストリーミング、既読位置を受け持つ側（`FeedTimelineModel`など）が、結果を画面へ伝えるのに使う。
 /// iOSでは`TimelineViewController`が従う。スクロール位置の指定は一度きりの命令なので、状態として渡さず、並びを渡す命令に添える。
 @MainActor
 public protocol TimelineDisplay: AnyObject {
@@ -52,7 +52,7 @@ public protocol TimelineDisplay: AnyObject {
     func currentAnchorID() -> TimelineEntry.ID?
 }
 
-/// 一覧を最上部からさらに引っぱったときに見せる、ストリーミングの状態の表示への命令。
+/// タイムラインを最上部からさらに引っぱったときに見せる、ストリーミングの状態の表示への命令。
 @MainActor
 public protocol StreamingStatusDisplay: AnyObject {
     func setState(_ state: ConnectionDiagnostics.StreamingState?)

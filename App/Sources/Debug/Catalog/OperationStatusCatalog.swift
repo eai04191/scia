@@ -4,7 +4,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 「操作の状況」の一覧のシート。失敗を起こさずに、空のとき、件数が多いとき、文言が長いときを並べる。行を押しても何も起きない。
+/// 「操作の状況」のシート。失敗を起こさずに、空のとき、件数が多いとき、文言が長いときを並べる。行を押しても何も起きない。
 enum OperationStatusCatalog {
     @MainActor
     static func states() -> [CatalogState] {
@@ -62,7 +62,7 @@ enum OperationStatusCatalog {
         ]
     }
 
-    /// 10秒で0%から100%まで進め、2秒止められない間をはさんで、また0%から繰り返す。一覧が消えたら止める。
+    /// 10秒で0%から100%まで進め、2秒止められない間をはさんで、また0%から繰り返す。操作の状況が消えたら止める。
     @MainActor
     private static func advance(_ notices: OperationStatus, subject: OperationStatus.Subject) {
         Task { @MainActor [weak notices] in
@@ -94,7 +94,7 @@ enum OperationStatusCatalog {
             displayedID: "catalog-\(index)",
             url: nil,
             authorName: "カタログのアカウント",
-            excerpt: "「操作の状況」の一覧を確かめるための投稿 \(index)。"
+            excerpt: "「操作の状況」のリストを確かめるための投稿 \(index)。"
         )
     }
 

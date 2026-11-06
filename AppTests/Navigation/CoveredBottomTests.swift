@@ -3,11 +3,11 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// 投稿欄のカプセルなどが覆う下端を、一覧以外の積んだ画面でも空ける。
+/// 投稿欄のカプセルなどが覆う下端を、タイムライン以外の積んだ画面でも空ける。
 @MainActor
 @Suite(.scratch, .serialized)
 struct CoveredBottomTests {
-    /// 一覧以外の画面を積んでも、末尾までスクロールした最後の行が、覆われた下端より上に出る。
+    /// タイムライン以外の画面を積んでも、末尾までスクロールした最後の行が、覆われた下端より上に出る。
     @Test func pushedScrollViewEndsAboveCoveredBottom() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

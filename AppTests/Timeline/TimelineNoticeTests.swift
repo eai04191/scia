@@ -16,7 +16,7 @@ struct TimelineNoticeTests {
         return chip.convert(chip.bounds, to: nil).minY
     }
 
-    /// 一覧ではナビゲーションバーのすぐ下に置く。
+    /// タイムラインではナビゲーションバーのすぐ下に置く。
     @Test func chipSitsBelowNavigationBar() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -317,7 +317,7 @@ struct TimelineNoticeTests {
         #expect(!(button.gestureRecognizers ?? []).contains { $0 is UIPanGestureRecognizer })
     }
 
-    /// チップのない場所に触れたら、下の一覧へ通す。
+    /// チップのない場所に触れたら、下のタイムラインへ通す。
     @Test func touchesOutsideChipsReachList() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -361,7 +361,7 @@ struct TimelineNoticeTests {
         #expect(try abs(chipMinY(in: harness) - (pushed.view.safeAreaInsets.top + 8)) < 1)
     }
 
-    /// 一覧より100pt下にチップを置く画面を、動きなしで重ねる。チップを動かすきっかけに使う。
+    /// タイムラインより100pt下にチップを置く画面を、動きなしで重ねる。チップを動かすきっかけに使う。
     @discardableResult
     private func pushLowerScreen(on harness: TimelineHarness, below top: CGFloat) throws -> LowerNoticeScreen {
         let navigation = try #require(harness.viewController.navigationController)

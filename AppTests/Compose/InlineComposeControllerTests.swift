@@ -1080,7 +1080,7 @@ final class InlineComposeControllerTests {
         #expect(button.bounds.width >= label.frame.maxX, "ラベルが文字より狭くなりました\n\(composer.stateDump())", sourceLocation: sourceLocation)
     }
 
-    /// 設定で隠すと、空の投稿欄は書いていない間だけ隠れ、一覧の下の余白にも数えない。書き始めると出て、空のまま閉じるとまた隠れる。
+    /// 設定で隠すと、空の投稿欄は書いていない間だけ隠れ、タイムラインの下の余白にも数えない。書き始めると出て、空のまま閉じるとまた隠れる。
     @Test func hidesEmptyBarOnlyWhileNotEditing() async throws {
         defer { window.isHidden = true }
         useDefaultAnimationDurations()
@@ -1089,7 +1089,7 @@ final class InlineComposeControllerTests {
         settings.hidesEmptyComposeBar = true
         try await clock.advance(by: 0.10)
         #expect(composer.isBarHidden, "設定で隠しても、空の投稿欄が隠れません\n\(composer.stateDump())")
-        #expect(obscured == 0, "隠しているのに、一覧の下の余白に数えています: \(obscured)")
+        #expect(obscured == 0, "隠しているのに、タイムラインの下の余白に数えています: \(obscured)")
 
         composer.beginEditing()
         try await clock.advance(by: 0.10)
