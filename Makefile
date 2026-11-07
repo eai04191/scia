@@ -68,10 +68,10 @@ else
 	@# SciaTestsでは、アプリのログを出力に流さない。キーボードの描画のログ（UIKBRenderingLog）が10万行ほど出て、出さないと投稿欄とビューアのsuiteが49秒から44秒になったため。ONLYで走らせるときは、調べる手がかりとして流す
 	@# 止められたら、どちらのxcodebuildも止めて終わるのを待つ。前で走らせると、シェルはそれが終わるまで止める合図を扱わないので、どちらも後ろで走らせて待つ
 	@# 結果のファイルの名前は始めた秒で決まり、同時に始めると重なるので、SciaCoreTestsの分は名前を決めて書く。出力は混ざらないよう、ファイルに書いて落ちたときだけ出す
-	@core_log=$(DERIVED_DATA)/core-tests.log; \
-	stop() { kill $$core $$app 2>/dev/null; wait; exit $$1; }; \
+	@stamp=$$(date +%Y.%m.%d_%H-%M-%S); mkdir -p $(DERIVED_DATA)/test-logs; core_log=$(DERIVED_DATA)/test-logs/SciaCore-$$stamp.log; \
+	stop() { kill $$core $$app 2>/dev/null; wait; echo "SciaCoreTestsとTextKit2LabelTestsの出力は$$core_log"; exit $$1; }; \
 	trap 'stop 129' HUP; trap 'stop 130' INT; trap 'stop 143' TERM; \
-	xcodebuild $(TEST_ARGS) -resultBundlePath "$(DERIVED_DATA)/Logs/Test/SciaCore-$$(date +%Y.%m.%d_%H-%M-%S).xcresult" -only-testing:SciaCoreTests -only-testing:TextKit2LabelTests test-without-building > "$$core_log" 2>&1 & core=$$!; \
+	xcodebuild $(TEST_ARGS) -resultBundlePath "$(DERIVED_DATA)/Logs/Test/SciaCore-$$stamp.xcresult" -only-testing:SciaCoreTests -only-testing:TextKit2LabelTests test-without-building > "$$core_log" 2>&1 & core=$$!; \
 	TEST_RUNNER_OS_ACTIVITY_MODE=disable xcodebuild $(TEST_ARGS) -only-testing:SciaTests test-without-building & app=$$!; \
 	wait $$app; app=$$?; wait $$core; core_status=$$?; \
 	if [ $$core_status -ne 0 ]; then grep -aE '✘|error:' "$$core_log" | tail -40; echo "SciaCoreTestsかTextKit2LabelTestsが落ちました。出力は$$core_log"; else grep -a 'Test run with' "$$core_log"; fi; \
