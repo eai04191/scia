@@ -37,6 +37,14 @@ final class InAppBrowserSheet: UIViewController {
         area.didMove(toParent: self)
     }
 
+    /// シートの段が変わったら、Safariを載せている枠いっぱいに広げる。Safariのビューは大きさの追従（autoresizing）を持たず、
+    /// 出したときの大きさのまま残って、広げたシートの下が空くため。
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        guard safari.presentingViewController != nil, let container = safari.viewIfLoaded?.superview else { return }
+        safari.view.frame = container.bounds
+    }
+
     /// シートを出し始めたあとに呼んで、帯の下にSafariを重ねる。シートと一緒に上がってくるよう、Safariは動かさずに出す。
     func presentSafari() {
         area.present(safari, animated: false)

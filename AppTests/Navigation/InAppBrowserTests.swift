@@ -51,6 +51,29 @@ struct InAppBrowserTests {
         try await waitUntil { root.presentedViewController == nil }
     }
 
+    /// シートの段を変えると、Safariも帯の下の範囲いっぱいに広がる。出したときの大きさのまま残ると、広げたシートの下が空く。
+    @Test func safariFollowsSheetSize() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let browser = InAppBrowser()
+        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
+        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
+        let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
+        let presentation = try #require(sheet.sheetPresentationController)
+        try await waitUntil { sheet.safari.viewIfLoaded?.window != nil }
+        let before = sheet.view.bounds.height
+
+        presentation.selectedDetentIdentifier = presentation.selectedDetentIdentifier == .large ? nil : .large
+        sheet.view.window?.layoutIfNeeded()
+
+        try await waitUntil { sheet.view.bounds.height != before }
+        sheet.view.layoutIfNeeded()
+        let safariFrame = sheet.safari.view.convert(sheet.safari.view.bounds, to: sheet.view)
+        #expect(safariFrame.maxY == sheet.view.bounds.maxY)
+        root.dismiss(animated: false)
+    }
+
     /// シートの高さを決める間は、覆う高さを知らせず、決め終えてから知らせる。
     /// 知らせを受けたタイムラインが安全領域を変えると、UIKitが高さを決めている途中のシートに位置を聞き直し、入れ子になって落ちるため。
     @Test func reportsObscuredHeightAfterResolvingDetents() async throws {
