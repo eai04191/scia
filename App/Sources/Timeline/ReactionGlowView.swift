@@ -240,17 +240,19 @@ final class ReactionGlowView: UIView {
         render()
     }
 
-    /// 「投稿の見た目」のプレビューで場所を示すための、光の全体（片方だけをした投稿なら、その別にも）、真ん中で2色を混ぜる幅、出ているアイコンの枠。`space`の座標で返す。光っていなければ空。
+    /// 「投稿の見た目」のプレビューで場所を示すための、光の全体（片方だけをした投稿なら、その別にも）、真ん中で2色を混ぜる幅（その幅が効く投稿だけ）、出ているアイコンの枠。`space`の座標で返す。光っていなければ空。
     func previewFrames(in space: UIView) -> AppearancePreviewFrames {
         // 高さを0にしたときも、光があった下の端を示せるよう、高さのない枠を返す。
         guard !glow.isHidden, let style = current?.style else { return [:] }
         let blendWidth = min(style.blendWidth, bounds.width)
-        var frames: AppearancePreviewFrames = [
-            .reactionGlow: [convert(bounds, to: space)],
-            .reactionGlowBlend: [convert(CGRect(x: bounds.midX - blendWidth / 2, y: 0, width: blendWidth, height: bounds.height), to: space)],
-        ]
-        if current?.isReblogged != current?.isFavourited {
+        var frames: AppearancePreviewFrames = [.reactionGlow: [convert(bounds, to: space)]]
+        let isAlone = current?.isReblogged != current?.isFavourited
+        if isAlone {
             frames[.reactionGlowAlone] = frames[.reactionGlow]
+        }
+        // 真ん中で2色を混ぜる幅は、両方をした投稿と、片方だけを半分だけ光らせる投稿でだけ効く。片方だけで全幅を光らせると、真ん中に境目がない。
+        if !isAlone || !style.fillsWidthWhenAlone {
+            frames[.reactionGlowBlend] = [convert(CGRect(x: bounds.midX - blendWidth / 2, y: 0, width: blendWidth, height: bounds.height), to: space)]
         }
         let shownIcons = icons.filter { $0.alpha > 0 }.map { $0.convert($0.bounds, to: space) }
         if !shownIcons.isEmpty {
