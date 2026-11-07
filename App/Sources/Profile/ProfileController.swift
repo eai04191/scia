@@ -785,3 +785,6 @@ final class ProfileController {
         }
     }
 }
+
+/// プロフィールの投稿はSciaCoreのモデルを持たず、ここで`ProfileStore`を描くので、このコントローラーを一覧として登録する。
+extension ProfileController: SessionStatusList {}

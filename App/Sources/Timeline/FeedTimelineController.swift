@@ -140,16 +140,6 @@ final class FeedTimelineController {
     }
     #endif
 
-    /// お気に入りなどの操作の結果を反映する。
-    func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
-        model.updateStatus(id, transform)
-    }
-
-    /// 削除した投稿と、それをブーストした投稿を除く。
-    func removeStatus(_ id: Status.ID) {
-        model.removeStatus(id)
-    }
-
     /// ミュートしたハッシュタグの付いた投稿とブーストを除く。
     func setTag(_ name: String, excluded: Bool) {
         model.setTag(name, excluded: excluded)

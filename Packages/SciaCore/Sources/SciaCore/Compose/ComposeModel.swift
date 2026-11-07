@@ -802,6 +802,22 @@ public final class ComposeModel<Thumbnail: Sendable> {
         }
     }
 
+    /// この端末の「削除」で自分の投稿を消せたときに呼ぶ。今のアカウントで消したなら`StatusDeletion`が呼ぶ。
+    /// 編集している投稿なら、編集をやめて空に戻す。送っている間は、送り直せるよう下書きを残す。
+    /// 削除して書き直している元の投稿なら、添付も消え、書き直した投稿に付けられないので、書き直しをやめる（`redraftedStatusWasDeleted(_:stopsRedrafting:accountID:)`）。
+    /// - Parameters:
+    ///   - accountID: 消えた投稿のアカウントの`ComposeAccount.id`。今のアカウントならnil。書いているアカウントと違えば、IDが同じでも別の投稿なので何もしない。
+    ///   - willReset: 空に戻す直前に呼ぶ。開いているピッカーを閉じるなど、画面の側の片づけをする。
+    public func statusWasDeleted(_ id: Status.ID, accountID: String? = nil, willReset: () -> Void = {}) {
+        guard accountID == otherAccount?.id, editedStatus?.id == id || redraft?.status.id == id else { return }
+        guard isPosting else {
+            willReset()
+            reset()
+            return
+        }
+        redraftedStatusWasDeleted(id, stopsRedrafting: true, accountID: accountID)
+    }
+
     /// 書き直している元の投稿が、書き直しの外で削除されたと分かったときに呼ぶ（ストリーミングで知った、この端末の「削除」で消したなど）。
     /// 元の投稿はもうないので、やめる前に確かめ、送るときは削除せずに続ける。
     /// - Parameter stopsRedrafting: この端末の「削除」で消したならtrue。添付も消え、書き直した投稿に付けられないので、書き直しをやめる。

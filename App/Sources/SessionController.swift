@@ -76,6 +76,10 @@ final class SessionController {
     /// `scia-debug://autoscroll`で動かしている間に、落ちたフレームを数える。
     private let debugScrollHitches = ScrollHitchMonitor()
     #endif
+    /// 今のアカウントでの投稿の削除。消せたら、どの一覧からも除き、投稿欄の編集や書き直しもやめる。
+    private lazy var deletion = StatusDeletion(session: session, composer: composer.model, tasks: tasks) { [weak composer] in
+        composer?.willResetForDeletedStatus()
+    }
     /// プロフィールを開く操作の入口。メンション、リンク、自分のプロフィール、ほかのアプリからのURLのどれで開くときも通し、後から押したものだけを開く。
     /// 探すのが長引いたら「取得中」のチップを出す。すぐ見つかったときにチップが一瞬だけ出入りしないよう、出すのは少し待ってから。
     private lazy var profileOpening: LatestLookup = {
@@ -199,8 +203,6 @@ final class SessionController {
     private var mediaCovers = MediaCovers()
     /// 「続きを読む」で広げた本文。どのタイムラインで広げても、開いているタイムラインと、あとで開くタイムラインにそろえる。
     private var longBodyExpansion = LongBodyExpansion()
-    /// 引用元の、受け取ったあとの編集、削除、ミュート、ブロック。どのタイムラインの囲みにも当て、開き直した画面にも引き継ぐ。
-    private var quoteSources = QuoteSourceChanges()
     /// fxtwitterから読んだXの投稿。ホームと通知とプロフィールで同じ投稿を1回だけ読む。
     /// タイムラインで見えている画像の先読み。ログアウトしたら、セッションの持ち主と一緒に止める。
     private lazy var mediaPrefetcher = MediaPrefetcher(scope: tasks, store: AppDependencies.mediaImages, network: AppDependencies.network, settings: AppDependencies.settings)
@@ -328,18 +330,9 @@ final class SessionController {
         let searches = SearchRegistry()
         self.searches = searches
         // 同じ投稿がいくつものタブと開いているプロフィールやスレッドにあることがあるため、どれにも反映する。
+        let statuses = session.statuses
         let updateStatusEverywhere: StatusInteractions.Update = { id, transform in
-            home.updateStatus(id, transform)
-            local.updateStatus(id, transform)
-            federated.updateStatus(id, transform)
-            notifications.updateStatus(id, transform)
-            bookmarks.updateStatus(id, transform)
-            favourites.updateStatus(id, transform)
-            serverFeeds.updateStatus(id, transform)
-            pushedFeeds.updateStatus(id, transform)
-            profiles.updateStatus(id, transform)
-            threads.updateStatus(id, transform)
-            searches.updateStatus(id, transform)
+            statuses.updateStatus(id, transform)
         }
         self.updateStatusEverywhere = updateStatusEverywhere
         interactions = StatusInteractions(operations: .init(client: client), update: updateStatusEverywhere)
@@ -558,7 +551,8 @@ final class SessionController {
         scheduled.viewController.mediaTransfers = mediaTransfers
         scheduled.viewController.notices = notices
         composer.model.onScheduleRewritten = { [weak self] id in self?.cancelRewrittenSchedule(id) }
-        composer.model.onRedraftDeleted = { [weak self] id in self?.removeDeletedStatus(id) }
+        composer.model.onRedraftDeleted = { [weak statuses = session.statuses] id in statuses?.removeStatus(id) }
+        session.statuses.onQuoteSourcesChange = { [weak self] changes, change in self?.applyQuoteSourceChanges(changes, affecting: change) }
         composer.onShowScheduledStatuses = { [weak self] in self?.showScheduledStatuses() }
         scheduled.onRewrite = { [weak self] status in self?.confirmRewriting(status) }
         installAccountButton(on: scheduled.viewController)
@@ -568,9 +562,9 @@ final class SessionController {
         announcements.onReactionFailure = { [weak self] error in self?.reportAnnouncementReactionFailure(error) }
         streamingHub.onEvent = { [weak self] event in
             switch event {
-            case .statusUpdate(let edited): self?.changeQuoteSources(.status(edited.id)) { $0.edit(edited) }
+            case .statusUpdate(let edited): self?.session.statuses.changeQuoteSources(.status(edited.id)) { $0.edit(edited) }
             case .delete(let id):
-                self?.changeQuoteSources(.status(id)) { $0.delete(id) }
+                self?.session.statuses.changeQuoteSources(.status(id)) { $0.delete(id) }
                 // 書き直している元の投稿がほかの端末で消えたら、やめる前に確かめるようにする。
                 self?.composer.model.redraftedStatusWasDeleted(id, stopsRedrafting: false)
             case .emojiReaction(let update):
@@ -1007,7 +1001,7 @@ final class SessionController {
             self?.openAccountList(.emojiReactionedBy(status.displayed.id, name: emoji.name), from: viewController)
         }
         viewController.mediaCovers = mediaCovers
-        viewController.quoteSourceChanges = quoteSources
+        viewController.quoteSourceChanges = session.statuses.quoteSources
         viewController.xPosts = xPosts
         viewController.mediaPrefetcher = mediaPrefetcher
         viewController.onChangeMediaCovers = { [weak self, weak viewController] covers, status in
@@ -1105,14 +1099,10 @@ final class SessionController {
         }
     }
 
-    /// 引用元の変化を覚え、変わったときだけ、開いているタイムラインに配る。
-    private func changeQuoteSources(_ change: QuoteSourceChange, _ apply: (inout QuoteSourceChanges) -> Void) {
-        var changed = quoteSources
-        apply(&changed)
-        guard changed != quoteSources else { return }
-        quoteSources = changed
+    /// 引用元の変化が変わったら、開いているタイムラインに配る。
+    private func applyQuoteSourceChanges(_ changes: QuoteSourceChanges, affecting change: QuoteSourceChange) {
         for timeline in timelines.allObjects {
-            timeline.applyQuoteSourceChanges(changed, affecting: change)
+            timeline.applyQuoteSourceChanges(changes, affecting: change)
         }
     }
 
@@ -1395,6 +1385,7 @@ final class SessionController {
             self?.open(destination, inProfileFrom: viewController)
         }
         profiles.add(controller)
+        session.statuses.register(controller)
         return (controller, viewController)
     }
 
@@ -1513,6 +1504,7 @@ final class SessionController {
             return requests.isAnswered(request.id)
         })
         notifications.track(controller)
+        session.statuses.register(controller.model)
         configure(viewController)
         source.navigationController?.pushViewController(viewController, animated: true)
         controller.model.start(purpose: .action)
@@ -1694,6 +1686,7 @@ final class SessionController {
             }
         }
         searches.add(model)
+        session.statuses.register(model)
         return model
     }
 
@@ -1706,6 +1699,7 @@ final class SessionController {
         let (controller, viewController) = ThreadController.make(focus: focus, client: client, streamingHub: streamingHub, tasks: tasks.child())
         configure(viewController)
         threads.add(controller)
+        session.statuses.register(controller.model)
         controller.start()
         viewController.placeOnAppearing(.status(focus.id), atWindowY: rowFrame.minY)
         guard let navigation = source.navigationController else { return }
@@ -2258,14 +2252,7 @@ final class SessionController {
                 guard let self else { return }
                 showToggledNotice("\(handle)で投稿を削除しました")
                 // そのアカウントで編集か書き直しをしている投稿なら、今のアカウントで消したときと同じくやめる。
-                if composer.model.otherAccount?.id == account.credential.id {
-                    if composer.model.editedStatus?.id == status.id {
-                        composer.cancelStatusEdit()
-                    }
-                    if composer.model.redraft?.status.id == status.id, !composer.cancelStatusEdit() {
-                        composer.model.redraftedStatusWasDeleted(status.id, stopsRedrafting: true, accountID: account.credential.id)
-                    }
-                }
+                composer.model.statusWasDeleted(status.id, accountID: account.credential.id) { [weak composer] in composer?.willResetForDeletedStatus() }
             } catch {
                 guard let self else { return }
                 logger.error("other account delete failed: \(SciaLog.describe(error), privacy: .public)")
@@ -2944,7 +2931,7 @@ final class SessionController {
     private func excludeInLists(_ relationship: Relationship) {
         // 引用元はタイムラインから除かず、届いたときからミュートかブロックしていたのと同じく、押して開くまで隠す。
         let concealedAs: Quote.State? = relationship.blocking ? .blockedAccount : relationship.muting ? .mutedAccount : nil
-        changeQuoteSources(.account(relationship.id)) { $0.setAccount(relationship.id, concealedAs: concealedAs) }
+        session.statuses.changeQuoteSources(.account(relationship.id)) { $0.setAccount(relationship.id, concealedAs: concealedAs) }
         // ユーザーのハッシュタグのタイムラインは、その人の投稿だけを並べるため、プロフィール画面のタイムラインと同じく除かない。
         for feed in feeds where !feed.feed.isAccountHashtag {
             feed.setAccount(relationship.id, excluded: relationship.blocking || relationship.muting)
@@ -3133,7 +3120,7 @@ final class SessionController {
             didSchedule(scheduled)
         case .edited(let edited):
             updateStatusEverywhere(edited.id) { _ in edited }
-            changeQuoteSources(.status(edited.id)) { $0.edit(edited) }
+            session.statuses.changeQuoteSources(.status(edited.id)) { $0.edit(edited) }
             composer.completion.didUse(edited.tags)
         }
     }
@@ -3245,54 +3232,20 @@ final class SessionController {
         }, animated: true)
     }
 
-    /// 消えたらどのタイムラインからも除く。編集か削除して書き直している投稿を消したら、編集と書き直しもやめる。
-    /// 書き直しをやめるのは、添付も消え、書き直した投稿に付けられなくなるため。
+    /// 消えたらどの一覧からも除き、編集か削除して書き直している投稿なら、それもやめる（`StatusDeletion`）。
     /// 失敗は押し直せば済むので、お気に入りの失敗と同じく、チップの列に出す。
     private func delete(_ status: Status) {
         UserAction.deleteStatus.record()
-        let target = status.displayed
-        let client = client
-        // 送り終える前に確かめ直して押しても、同じ削除を重ねて送らない。
-        tasks.run(key: "delete:\(target.id)", .skippingWhileRunning, .action) { [weak self] in
-            do {
-                // web UIと同じく、添付もすぐ消す。送らないと、削除して書き直すために、サーバーが添付を1日ほど残すため。
-                try await client.deleteStatus(target.id, deleteMedia: true)
-                guard let self else { return }
-                removeDeletedStatus(target.id)
-                // ほかのアカウントの投稿を編集や書き直ししているときは、IDが同じでも別の投稿なのでやめない。
-                if composer.model.otherAccount == nil, composer.model.editedStatus?.id == target.id {
-                    composer.cancelStatusEdit()
-                }
-                // 送っている間はやめられないので、送るのをやめられるところでやめさせる。
-                if composer.model.otherAccount == nil, composer.model.redraft?.status.id == target.id, !composer.cancelStatusEdit() {
-                    composer.model.redraftedStatusWasDeleted(target.id, stopsRedrafting: true)
-                }
-            } catch {
-                guard let self else { return }
-                let title = "投稿を削除できませんでした"
-                logger.error("delete failed: \(SciaLog.describe(error), privacy: .public)")
-                let reason = await failureReason(for: error)
-                operationStatus.recordFailure(title: title, reason: reason, subject: OperationStatus.Subject(status))
-                showFailureNotice(.interactionFailure(title: title) { [weak self] in
-                    self?.presentAlert(title: title, reason: reason)
-                })
-            }
+        deletion.delete(status) { [weak self] error in
+            guard let self else { return }
+            let title = "投稿を削除できませんでした"
+            logger.error("delete failed: \(SciaLog.describe(error), privacy: .public)")
+            let reason = await failureReason(for: error)
+            operationStatus.recordFailure(title: title, reason: reason, subject: OperationStatus.Subject(status))
+            showFailureNotice(.interactionFailure(title: title) { [weak self] in
+                self?.presentAlert(title: title, reason: reason)
+            })
         }
-    }
-
-    /// 削除した自分の投稿を、どのタイムラインからも除く。
-    private func removeDeletedStatus(_ id: Status.ID) {
-        for feed in feeds {
-            feed.removeStatus(id)
-        }
-        notifications.removeStatus(id)
-        for list in savedLists {
-            list.removeStatus(id)
-        }
-        profiles.removeStatus(id)
-        threads.removeStatus(id)
-        searches.removeStatus(id)
-        changeQuoteSources(.status(id)) { $0.delete(id) }
     }
 
     /// 承認か却下が済んだら、サーバーと同じく、そのユーザーからのリクエストの通知を通知のタイムラインから除く。
@@ -4500,12 +4453,6 @@ private final class ServerFeedRegistry {
         return navigation
     }
 
-    func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
-        for controller in controllers {
-            controller.updateStatus(id, transform)
-        }
-    }
-
     /// `belongs`に当てはまる項目のうち、`items`にないもの（サーバーにもうないリスト、フォローを外したハッシュタグ）のタイムラインを止めて捨て、捨てた項目を返す。
     @discardableResult
     func removeAll(where belongs: (TabItem) -> Bool, except items: Set<TabItem>) -> [TabItem] {
@@ -4622,11 +4569,6 @@ private final class PushedFeedRegistry {
         return entries.compactMap(\.controller)
     }
 
-    func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
-        for controller in controllers {
-            controller.updateStatus(id, transform)
-        }
-    }
 }
 
 /// 開いているスレッドの画面を弱く持つ。
@@ -4647,18 +4589,6 @@ private final class SearchRegistry {
     private var models: [SearchModel] {
         entries.removeAll { $0.model == nil }
         return entries.compactMap(\.model)
-    }
-
-    func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
-        for model in models {
-            model.updateStatus(id, transform)
-        }
-    }
-
-    func removeStatus(_ id: Status.ID) {
-        for model in models {
-            model.removeStatus(id)
-        }
     }
 
     func excludeAccount(_ id: String) {
@@ -4684,18 +4614,6 @@ private final class ThreadRegistry {
     private var controllers: [ThreadController] {
         entries.removeAll { $0.controller == nil }
         return entries.compactMap(\.controller)
-    }
-
-    func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
-        for controller in controllers {
-            controller.updateStatus(id, transform)
-        }
-    }
-
-    func removeStatus(_ id: Status.ID) {
-        for controller in controllers {
-            controller.removeStatus(id)
-        }
     }
 
     func receivePosted(_ status: Status) {
@@ -4741,20 +4659,6 @@ private final class ProfileRegistry {
     func add(_ controller: ProfileController) {
         entries.removeAll { $0.controller == nil }
         entries.append(Entry(controller: controller))
-    }
-
-    func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
-        entries.removeAll { $0.controller == nil }
-        for entry in entries {
-            entry.controller?.updateStatus(id, transform)
-        }
-    }
-
-    func removeStatus(_ id: Status.ID) {
-        entries.removeAll { $0.controller == nil }
-        for entry in entries {
-            entry.controller?.removeStatus(id)
-        }
     }
 
     /// ユーザーのメニューで変えた関係を、開いている相手のプロフィールに反映して覚える。

@@ -103,14 +103,14 @@ struct SavedStatusesControllerTests {
         let second = Self.saved[1].settingBookmarked(false)
 
         // 押したときにブックマークを外し、サーバーが受け付けたら知らせる。StatusInteractionsと同じ順に送る。
-        controller.updateStatus(first.id) { $0.settingBookmarked(false) }
+        controller.model.updateStatus(first.id) { $0.settingBookmarked(false) }
         controller.statusDidSettle(.bookmark, first)
         #expect(controller.viewController.displayedItemIDs.contains(.status(first.id)))
 
         controller.setShown(false)
         #expect(!controller.viewController.displayedItemIDs.contains(.status(first.id)))
 
-        controller.updateStatus(second.id) { $0.settingBookmarked(false) }
+        controller.model.updateStatus(second.id) { $0.settingBookmarked(false) }
         controller.statusDidSettle(.bookmark, second)
         #expect(!controller.viewController.displayedItemIDs.contains(.status(second.id)))
     }

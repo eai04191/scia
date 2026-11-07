@@ -310,3 +310,5 @@ public final class AccountNotificationsModel {
         show(ErrorPresentation(error))
     }
 }
+
+extension AccountNotificationsModel: SessionStatusList {}

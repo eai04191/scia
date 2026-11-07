@@ -91,11 +91,3 @@ extension TimelineViewController {
         reconfigureAnimatingHeight(Set(ids), duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration))
     }
 }
-
-/// 引用元の変化の対象。
-enum QuoteSourceChange {
-    /// 投稿が編集されたか、削除された。
-    case status(Status.ID)
-    /// アカウントをミュートかブロックしたか、解除した。
-    case account(String)
-}

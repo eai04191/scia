@@ -92,14 +92,6 @@ final class AccountNotificationsController {
         }
     }
 
-    func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
-        model.updateStatus(id, transform)
-    }
-
-    func removeStatus(_ id: Status.ID) {
-        model.removeStatus(id)
-    }
-
     func removeNotification(_ notification: MastodonNotification) {
         model.removeNotification(notification)
     }

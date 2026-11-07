@@ -12,6 +12,7 @@ import os
 /// - 閉じたら、申し込みが残っていてもストリーミングを切り、セッションで始めた処理を止める
 ///
 /// タイムラインのモデルは、`init(…session:…)`で作ると、ここに登録され、やり直しと止めるのをまとめて受け取る。
+/// 投稿を並べる一覧は`statuses`にも登録され、自分の操作で変わった投稿（削除、編集、お気に入りなど）を受け取る。
 @MainActor
 public final class AccountSession {
     public let credential: Credential
@@ -27,6 +28,8 @@ public final class AccountSession {
     public let authorization: AuthorizationCheck
     /// セッションの持ち主。タイムライン、開いた画面、投稿欄の処理は、この子で始める。
     public let tasks: TaskScope
+    /// 投稿を並べる一覧へ、自分の操作で変わった投稿を配る。
+    public let statuses = SessionStatuses()
     /// トークンが無効になり、ストリーミングと登録したタイムラインを止めたあとに呼ぶ。ログインし直しを促す表示はアプリが出す。
     public var onCredentialsInvalid: () -> Void = {}
     /// アカウントの設定を初めて読めたときに呼ぶ。

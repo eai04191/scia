@@ -61,16 +61,6 @@ final class ThreadController {
         model.start()
     }
 
-    /// 投稿への操作の結果を反映する。
-    func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
-        model.updateStatus(id, transform)
-    }
-
-    /// 削除した投稿を除く。
-    func removeStatus(_ id: Status.ID) {
-        model.removeStatus(id)
-    }
-
     /// 投稿欄から送った投稿を、ストリーミングで届くのを待たずに足す。
     func receivePosted(_ status: Status) {
         model.receivePosted(status)

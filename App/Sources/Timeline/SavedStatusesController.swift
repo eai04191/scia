@@ -56,16 +56,6 @@ final class SavedStatusesController {
         model.statusDidSettle(action, status)
     }
 
-    /// 投稿の中身を変える。
-    func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
-        model.updateStatus(id, transform)
-    }
-
-    /// 削除した投稿を除く。
-    func removeStatus(_ id: Status.ID) {
-        model.removeStatus(id)
-    }
-
     /// ミュートかブロックした相手の投稿を除く。
     func setAccount(_ id: String, excluded: Bool) {
         model.setAccount(id, excluded: excluded)

@@ -108,22 +108,6 @@ final class NotificationsController {
         model.didAcceptRequest()
     }
 
-    /// お気に入りなどの操作の結果を反映する。
-    func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
-        model.updateStatus(id, transform)
-        for screen in accountScreens.allObjects {
-            screen.updateStatus(id, transform)
-        }
-    }
-
-    /// 削除した投稿についての通知を除く。
-    func removeStatus(_ id: Status.ID) {
-        model.removeStatus(id)
-        for screen in accountScreens.allObjects {
-            screen.removeStatus(id)
-        }
-    }
-
     /// ミュートしたハッシュタグの付いた投稿の通知を除く。
     func setTag(_ name: String, excluded: Bool) {
         model.setTag(name, excluded: excluded)

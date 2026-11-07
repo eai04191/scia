@@ -703,6 +703,12 @@ final class InlineComposeController: NSObject {
         return true
     }
 
+    /// 消した投稿の編集や書き直しをやめて空に戻す直前に呼ぶ（`ComposeModel.statusWasDeleted(_:accountID:willReset:)`）。
+    /// 開いているピッカーは、`edit(_:source:)`と同じ理由で閉じる。
+    func willResetForDeletedStatus() {
+        mediaPicker?.close(notifiesWillClose: true)
+    }
+
     /// 下書きを捨てて、空の投稿欄に戻す。送っている間は捨てず、falseを返す。失敗したときに送り直せるよう、下書きを残すため。
     /// 開いているピッカーは、`edit(_:source:)`と同じ理由で閉じる。
     @discardableResult

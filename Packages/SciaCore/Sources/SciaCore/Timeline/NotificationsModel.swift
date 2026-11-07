@@ -727,7 +727,7 @@ public final class NotificationsModel {
 }
 
 extension NotificationsModel: SessionList {
-    /// `session`の部品で作り、`session`に登録する。401は`session`へ流し、電波の回復などのやり直しと、トークンが無効と分かったときに止めるのを`session`から受け取る。
+    /// `session`の部品で作り、`session`と`session.statuses`に登録する。401は`session`へ流し、電波の回復などのやり直しと、トークンが無効と分かったときに止めるのを`session`から受け取る。
     public convenience init(
         session: AccountSession,
         tuning: TuningStore,
@@ -745,5 +745,8 @@ extension NotificationsModel: SessionList {
             tasks: session.tasks.child()
         )
         session.register(self)
+        session.statuses.register(self)
     }
 }
+
+extension NotificationsModel: SessionStatusList {}

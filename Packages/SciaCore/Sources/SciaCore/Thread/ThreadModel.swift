@@ -177,3 +177,5 @@ public final class ThreadModel {
         }
     }
 }
+
+extension ThreadModel: SessionStatusList {}

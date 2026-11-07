@@ -398,3 +398,5 @@ public final class SearchModel {
         show(ErrorPresentation(error))
     }
 }
+
+extension SearchModel: SessionStatusList {}
