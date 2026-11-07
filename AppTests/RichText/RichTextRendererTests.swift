@@ -4,6 +4,7 @@ import SciaCore
 import SciaTesting
 import Synchronization
 import Testing
+import TextKit2Label
 import UIKit
 @testable import Scia
 

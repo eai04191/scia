@@ -1,4 +1,5 @@
 import SciaCore
+import TextKit2Label
 import UIKit
 
 /// RichTextRendererで描いた本文の、リンクの部分をタップできるラベル。リンクの外のタップは受けず、セルなど後ろのビューに渡す。

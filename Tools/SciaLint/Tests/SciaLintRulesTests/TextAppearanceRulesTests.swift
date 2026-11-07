@@ -47,6 +47,11 @@ import Testing
     func skipsDebugAndTests(_ path: String) {
         #expect(violations("label.font = .systemFont(ofSize: 14)", path: path) == 0)
     }
+
+    /// アプリから分けたラベルのパッケージも、アプリの文字として描くので同じく止める。
+    @Test func appliesToLabelPackage() {
+        #expect(violations("label.font = .systemFont(ofSize: 14)", path: "Packages/TextKit2Label/Sources/TextKit2Label/Foo.swift") == 1)
+    }
 }
 
 @Suite struct DimmedWhiteTextTests {

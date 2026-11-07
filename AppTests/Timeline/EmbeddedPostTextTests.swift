@@ -1,6 +1,7 @@
 import SciaCore
 import SciaTesting
 import Testing
+import TextKit2Label
 import UIKit
 @testable import Scia
 

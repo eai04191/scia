@@ -38,6 +38,8 @@ packages:
     path: Packages/SciaCore
   MemoryCache:
     path: Packages/MemoryCache
+  TextKit2Label:
+    path: Packages/TextKit2Label
 targets:
   Scia:
     type: application
@@ -49,6 +51,7 @@ targets:
     dependencies:
       - package: SciaCore
       - package: MemoryCache
+      - package: TextKit2Label
       - target: SciaShareExtension
     postBuildScripts:
       - name: Embed Build Info
@@ -246,4 +249,5 @@ schemes:
     test:
       targets:
         - package: SciaCore/SciaCoreTests
+        - package: TextKit2Label/TextKit2LabelTests
         - SciaTests

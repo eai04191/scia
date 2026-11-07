@@ -1,4 +1,5 @@
 import SciaCore
+import TextKit2Label
 import UIKit
 
 /// `LinkLabel`の文字に埋め込んだカスタム絵文字のうち、アニメーションするものを動かす。

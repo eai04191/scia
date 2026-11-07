@@ -1,4 +1,5 @@
 import SciaCore
+import TextKit2Label
 import UIKit
 
 /// RichTextを、UILabelに渡せるNSAttributedStringにする。

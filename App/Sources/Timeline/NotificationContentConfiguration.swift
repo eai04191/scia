@@ -1,4 +1,5 @@
 import SciaCore
+import TextKit2Label
 import UIKit
 
 /// 誰が何をしたかの行を主役にする通知のセルの中身。左のアイコンの列の右端に種類の記号を置き、本文の列に、誰が何をしたかの行と、

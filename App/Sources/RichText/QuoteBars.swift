@@ -1,3 +1,4 @@
+import TextKit2Label
 import UIKit
 
 /// 引用の段落の頭に引く縦線。`RichTextRenderer`が引用の段落に属性（`.quoteBars`）として付け、`EmojiLabel`が文字と一緒に描く。

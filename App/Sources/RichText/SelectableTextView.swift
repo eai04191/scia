@@ -1,4 +1,5 @@
 import SciaCore
+import TextKit2Label
 import UIKit
 
 /// 「テキストを選択」で、本文のラベルの代わりに同じ位置に出す、選べるだけのテキストビュー。決まりはdocs/menus.mdの「本文の文字を選ぶ」にある。

@@ -1,4 +1,5 @@
 import SciaCore
+import TextKit2Label
 import UIKit
 
 /// タイムラインの投稿の本文を、画面に入る前に、メインスレッドの外で文字列にしてTextKit 2で並べておく。

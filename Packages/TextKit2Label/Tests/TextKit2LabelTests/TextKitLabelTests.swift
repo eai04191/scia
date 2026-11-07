@@ -1,8 +1,8 @@
 import Testing
 import UIKit
-@testable import Scia
+@testable import TextKit2Label
 
-/// 絵文字やリンクを持たない`TextKitLabel`だけで、TextKit 2で測って文字の位置を求められる。ほかのアプリへコピーしても、この形で使えることを確かめる。
+/// 絵文字やリンクを持たない`TextKitLabel`だけで、TextKit 2で測って文字の位置を求められる。Sciaの型なしで、この形で使えることを確かめる。
 @MainActor
 struct TextKitLabelTests {
     private let width: CGFloat = 300

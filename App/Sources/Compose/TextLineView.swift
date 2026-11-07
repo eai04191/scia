@@ -1,3 +1,4 @@
+import TextKit2Label
 import UIKit
 
 /// 1行の文字を、入力欄（UITextView）と同じTextKit 2で描くビュー。

@@ -1,5 +1,6 @@
 import SciaCore
 import SwiftUI
+import TextKit2Label
 import UIKit
 
 /// プロフィールのタイムラインの頭に置く、アカウントの情報と、タイムラインの切り替え。

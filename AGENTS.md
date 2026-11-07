@@ -8,6 +8,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `Config/Local.xcconfig`: 署名のチーム（`DEVELOPMENT_TEAM = <チームID>`）など、人ごとに違うビルド設定を書く。コミットしないので、worktreeを作ったら元のcheckoutからコピーする。なくてもシミュレーター向けにはビルドできる
 - `Packages/SciaCore`: UIに依存しないロジック（モデル、APIクライアント、ストリーミング、タイムラインの状態管理）。iOSとmacOSで共有するため、UIKit／AppKit／SwiftUIをimportしない
 - `Packages/MemoryCache`: Sciaに依存しない、メモリに持つキャッシュ（`CostLimitedCache`）。SciaCoreとアプリが使う。SciaCoreに依存しないことを、パッケージを分けてコンパイラーで守る
+- `Packages/TextKit2Label`: Sciaに依存しない、TextKit 2で文字を並べて描くラベル（`TextKitLabel`、`TextKitLabelLayout`、`LineFittingAttachment`）。アプリが使い、絵文字やリンクを扱うラベルはアプリで派生させる。Sciaの型を使わないことを、パッケージを分けてコンパイラーで守る。UIKitに依存するので、テストは`make test`でシミュレーターで走る
 - `App/Sources`: iOSアプリ（UIKitライフサイクル）
 
 ## 文書の使い分け

@@ -5,7 +5,7 @@ import Synchronization
 // 使い方: scia-lint <リポジトリのルート>
 // 違反を`パス:行:列: error: 文言 (規則)`の形で出し、1つでもあれば1で終わる
 let root = URL(filePath: CommandLine.arguments.dropFirst().first ?? FileManager.default.currentDirectoryPath).standardizedFileURL
-let directories = ["App", "AppTests", "ShareExtension", "Packages/SciaCore/Sources"]
+let directories = ["App", "AppTests", "ShareExtension", "Packages/SciaCore/Sources", "Packages/TextKit2Label/Sources"]
 
 // 読めないフォルダーがあると、そこのファイルを調べないまま通ってしまうので、失敗させる
 var paths: [String] = []

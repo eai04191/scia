@@ -1,3 +1,4 @@
+import TextKit2Label
 import UIKit
 
 /// カスタム絵文字の画像が、読み込み中に空けていた場所に入るときの動き。

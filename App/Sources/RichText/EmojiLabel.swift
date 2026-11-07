@@ -1,5 +1,6 @@
 import CoreText
 import SciaCore
+import TextKit2Label
 import UIKit
 
 /// RichTextRendererで描いた文字列を出すラベルの土台。文字の中のアニメーションするカスタム絵文字を動かす。

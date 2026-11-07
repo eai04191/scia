@@ -2,6 +2,7 @@ import Foundation
 import SciaCore
 import Testing
 import SciaTesting
+import TextKit2Label
 import UIKit
 @testable import Scia
 

@@ -28,7 +28,7 @@ extension Rule {
     )
 
     private static let isReleaseAppFile: @Sendable (String) -> Bool = { path in
-        (path.hasPrefix("App/Sources/") || path.hasPrefix("ShareExtension/")) && !path.hasPrefix("App/Sources/Debug/")
+        ["App/Sources/", "ShareExtension/", "Packages/TextKit2Label/Sources/"].contains { path.hasPrefix($0) } && !path.hasPrefix("App/Sources/Debug/")
     }
 }
 
