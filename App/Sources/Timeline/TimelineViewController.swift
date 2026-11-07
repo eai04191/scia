@@ -707,7 +707,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// セルの中で続いている動き（絵文字が入る文字の動きなど）も止まらない。
     /// 区切り線は、行のセルとは別のビューとしてタイムラインに並ぶため、セルと一緒に動かす。動かさないと、伸びた行の下の線だけが1コマで下がる。
     /// - Parameter anchorID: 画面上の位置を保つ行。なければ、表示領域の上端にかかっている行を基準にする。
-    /// - Parameter shiftLimit: 描き直した行が伸び縮みする長さの上限。分かっていれば、上下のどちらかの端から一覧の外へ出うる行の像だけを取る。像を取るのは重く、押した直後のコマが遅れて、動きの始まりが飛んで見えるため。nilなら、描き直す行より下のすべての行の像を取る。
+    /// - Parameter shiftLimit: 描き直した行が伸び縮みする長さの上限。分かっていれば、上下のどちらかの端からタイムラインの外へ出うる行の像だけを取る。像を取るのは重く、押した直後のコマが遅れて、動きの始まりが飛んで見えるため。nilなら、描き直す行より下のすべての行の像を取る。
     func reconfigureShiftingRowsBelow(_ ids: Set<ItemID>, keeping anchorID: ItemID? = nil, duration: TimeInterval, shiftLimit: CGFloat? = nil) {
         guard !ids.isEmpty else { return }
         guard duration > 0, view.window != nil, !isShowingMenu, !UIAccessibility.isReduceMotionEnabled else {
@@ -835,7 +835,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 画面の座標で比べるのは、読んでいる位置を保つためにスクロール位置を補正した分を、行の動きに数えないため。
     /// 動きの途中の行も、動きを足す前の位置で測る。前の動きは足し合わせたまま続くので、次の動きはずれた分だけを足せばつながる。
     /// - Parameter changed: 描き直す行。像は、そのうち一番上の見えている行より下の行だけ取る。行が大きく伸びると、その下の何行もが外へ押し出されるため。
-    /// - Parameter shiftLimit: 行が動く長さの上限。渡すと、その長さだけ上か下へ動いたら一覧の外へ出る行の像だけを取る。
+    /// - Parameter shiftLimit: 行が動く長さの上限。渡すと、その長さだけ上か下へ動いたらタイムラインの外へ出る行の像だけを取る。
     /// 行が伸びれば下の行は下へ、縮めば上へ動き、どちらの端から出るかは、位置を保つ行がどこにあるかで変わるため、両方の端で決める。
     private func visibleRows(snapshottingBelow changed: Set<ItemID>, within shiftLimit: CGFloat? = nil) -> [ItemID: (cell: UICollectionViewCell, minY: CGFloat, snapshot: UIView?)] {
         let rows: [(id: ItemID, cell: UICollectionViewCell, frame: CGRect)] = collectionView.visibleCells.compactMap { cell in
@@ -963,7 +963,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 取り直した投稿は各タイムラインの`updateStatus`から並びの置き換えを通って届くので、置き換えの間だけ立てる。
     var refreshedStatusID: Status.ID?
 
-    /// アクションバーの引き出しを開いている投稿。同時に1つだけ開く。一覧を閉じるか起動し直すと閉じた状態に戻る（docs/post-action-bar.mdの「引き出し」）。
+    /// アクションバーの引き出しを開いている投稿。同時に1つだけ開く。タイムラインを閉じるか起動し直すと閉じた状態に戻る（docs/post-action-bar.mdの「引き出し」）。
     var openActionBarItemID: ItemID?
     /// 「投稿の見た目」のプレビューで、いつも出す設定でなくてもアクションバーを出す。アクションバーの分類の見本で立てる。
     var showsActionBarInPreview = false
@@ -2389,7 +2389,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// 投稿にアクションバーを出すか。いつも出す設定か、引き出しを開いている投稿で出す。
-    /// 「投稿の見た目」のプレビューと、アイテムのIDを渡さずに組む見本では、いつも出す設定のときだけ出す。見本の投稿は一覧のアイテムとして並ばないため、アイテムのIDでは決めない。
+    /// 「投稿の見た目」のプレビューと、アイテムのIDを渡さずに組む見本では、いつも出す設定のときだけ出す。見本の投稿はタイムラインのアイテムとして並ばないため、アイテムのIDでは決めない。
     func showsActionBar(itemID: ItemID?, shown: Status) -> Bool {
         guard !isAppearancePreview, let itemID else { return settings.appearance.showsActionBar || showsActionBarInPreview }
         guard let entry = entries[itemID], canShowActionBar(in: entry) else { return false }
@@ -2422,7 +2422,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// 投稿の下のアクションバーの引き出しを開閉する。開いている投稿で押せば閉じ、別の投稿で開けば前の投稿のアクションバーは閉じる。
-    /// 押した投稿の画面上の位置を保ち、まわりのアイテムごと動かしてつなぐ（docs/vision.mdの「一覧の動き」）。いつも出す設定では、アクションバーがもう出ているので何もしない。
+    /// 押した投稿の画面上の位置を保ち、まわりのアイテムごと動かしてつなぐ（docs/vision.mdの「タイムラインの動き」）。いつも出す設定では、アクションバーがもう出ているので何もしない。
     func toggleActionBar(for id: ItemID) {
         guard !settings.appearance.showsActionBar else { return }
         let previous = openActionBarItemID
@@ -2442,7 +2442,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 引き出しのアクションバーを、初めて開く前に1つ組んでおいたか。
     private var hasPreparedActionBar = false
 
-    /// タップか長押しに「アクションバーを開く」を割り当てていれば、一覧を出したあとに、見えている投稿のアクションバーを1つ組んで捨てる。
+    /// タップか長押しに「アクションバーを開く」を割り当てていれば、タイムラインを出したあとに、見えている投稿のアクションバーを1つ組んで捨てる。
     /// 起動して初めて開くときは、アクションバーの部品と記号の画像を初めて作り、投稿のメニューの木も初めて組むので、押してから最初のコマまでが2回目より大きく遅れ、
     /// 動き始めのコマが飛んで見えた（シミュレーターで、初めては73ミリ秒、2回目は6ミリ秒）。先に組んでおけば、初めて開くときも2回目と同じになる。
     /// いつも出す設定では、投稿を組むときにアクションバーも組むので、ここでは組まない。
@@ -2476,7 +2476,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// アクションバーを開閉して投稿が伸び縮みする長さの上限。本文とのあいだ、上下の余白、アイコンの大きさから、件数の文字の高さを見込んで大きめに決める。
-    /// 一覧の外へ出うるアイテムの像を取るのに使う。少なく見込むと、外へ出るアイテムが像なしで一度に消えるため、大きめにする。
+    /// タイムラインの外へ出うるアイテムの像を取るのに使う。少なく見込むと、外へ出るアイテムが像なしで一度に消えるため、大きめにする。
     private var actionBarHeightUpperBound: CGFloat {
         let icon = settings.value(of: AppearanceCatalog.actionBarIconSize)
         let lineHeight = max(icon * 2, PostTypography(settings: settings).font(.time).lineHeight * 2)

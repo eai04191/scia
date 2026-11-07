@@ -4,7 +4,7 @@ public enum ObjectAction<Item: MenuItemKind>: Hashable, Sendable {
     case menu
     /// その対象のメニューの項目を、メニューを出さずに行う。
     case item(Item)
-    /// 一覧の投稿の下に、アクションバーを開閉する。投稿でだけ選べる。決まりはdocs/post-action-bar.mdにある。
+    /// タイムラインの投稿の下に、アクションバーを開閉する。投稿でだけ選べる。決まりはdocs/post-action-bar.mdにある。
     case actionBar
 
     /// 設定に保存する形。メニューは`menu`、項目は`item:<rawValue>`、アクションバーは`actionBar`。

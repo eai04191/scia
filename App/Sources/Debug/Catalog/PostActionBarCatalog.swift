@@ -3,7 +3,7 @@ import Foundation
 import SciaCore
 import UIKit
 
-/// 投稿のアクションバー（docs/post-action-bar.md）。一覧と同じく`TimelineViewController`の組み立てを通し、アクションバーの中身だけを状態ごとに渡す。
+/// 投稿のアクションバー（docs/post-action-bar.md）。タイムラインと同じく`TimelineViewController`の組み立てを通し、アクションバーの中身だけを状態ごとに渡す。
 /// 引き出しの開閉の動き、ボタンを押したときの動き、件数が変わるところは、実物で確かめる。
 enum PostActionBarCatalog {
     private typealias Fixtures = CatalogFixtures

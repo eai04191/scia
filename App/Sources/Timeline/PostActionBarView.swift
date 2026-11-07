@@ -2,7 +2,7 @@ import SciaCore
 import UIKit
 
 /// 投稿の一番下に置く、返信やお気に入りなどのボタンを横に並べたアクションバー。決まりはdocs/post-action-bar.mdにある。
-/// 一覧の投稿は自分で大きさを測るセルの中にあり、投稿ごとに`UIHostingController`を載せるとスクロールのたびに組み立てが重くなるため、UIKitで作る。
+/// タイムラインの投稿は自分で大きさを測るセルの中にあり、投稿ごとに`UIHostingController`を載せるとスクロールのたびに組み立てが重くなるため、UIKitで作る。
 struct PostActionBarContent: Equatable {
     var buttons: [PostActionBarButton]
     var iconSize: CGFloat

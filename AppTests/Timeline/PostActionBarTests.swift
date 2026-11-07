@@ -27,7 +27,7 @@ struct PostActionBarTests {
         view.layer.animationKeys()?.contains { $0.hasPrefix("rowShift") } == true
     }
 
-    /// いつも出す設定でなければどの投稿にも出さず、いつも出す設定にすると、一覧の投稿に出す。
+    /// いつも出す設定でなければどの投稿にも出さず、いつも出す設定にすると、タイムラインの投稿に出す。
     @Test func showsOnlyWhenTurnedOnOrOpened() throws {
         let (harness, statuses) = try harness()
         defer { harness.tearDown() }
@@ -192,7 +192,7 @@ struct PostActionBarTests {
         #expect(harness.viewController.openActionBarItemID == nil)
     }
 
-    /// 開くのは一覧の投稿だけで、通知には出せない。
+    /// 開くのはタイムラインの投稿だけで、通知には出せない。
     @Test func cannotShowOnNotifications() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -206,7 +206,7 @@ struct PostActionBarTests {
         bar(in: harness, of: id)?.content?.buttons ?? []
     }
 
-    /// 投稿の本文を置き換えた一覧。投稿の位置は同じ。
+    /// 投稿の本文を置き換えたタイムライン。投稿の位置は同じ。
     private func harness(replacing index: Int, with make: (Status) -> Status, items: [PostActionBarItem]) throws -> (harness: TimelineHarness, statuses: [Status]) {
         let harness = try TimelineHarness()
         harness.settings.appearance.showsActionBar = true
