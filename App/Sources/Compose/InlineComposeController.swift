@@ -1391,9 +1391,24 @@ final class InlineComposeController: NSObject {
             return
         }
         guard model.switchAccount(to: account) else { return }
+        insert("@\(acct)")
+    }
+
+    /// ハッシュタグのメニューの「投稿欄に追加」。書き始めて、カーソルの位置に`#名前`を入れる。
+    /// `#名前`はどのアカウントでも同じなので、ほかのアカウントで書いていても替えず、返信先や引用元も外さない。送っている間は何もしない。
+    func addHashtag(_ name: String) {
+        guard !model.isPosting else {
+            logger.info("compose: hashtag not inserted while posting")
+            return
+        }
+        insert("#\(name)")
+    }
+
+    /// 書き始めて、カーソルの位置に`word`（`@acct`や`#名前`）を入れる。下書き、返信先、編集中の本文はそのまま残す。
+    private func insert(_ word: String) {
         beginEditing()
         let selection = textView.selectedRange
-        let insertion = WordInsertion.insertion(of: "@\(acct)", in: textView.text, replacing: selection.location ..< selection.location + selection.length)
+        let insertion = WordInsertion.insertion(of: word, in: textView.text, replacing: selection.location ..< selection.location + selection.length)
         let begin = textView.beginningOfDocument
         guard let start = textView.position(from: begin, offset: insertion.range.lowerBound),
               let end = textView.position(from: begin, offset: insertion.range.upperBound),
@@ -1401,7 +1416,7 @@ final class InlineComposeController: NSObject {
         else { return }
         textView.replace(range, withText: insertion.text)
         textView.selectedRange = NSRange(location: insertion.cursor, length: 0)
-        logger.info("compose: mention inserted")
+        logger.info("compose: word inserted")
         // 入力欄の知らせが来なくても、下書きを入力欄に合わせる。
         model.text = textView.text
         textDidChange()

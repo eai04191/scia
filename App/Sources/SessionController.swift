@@ -2159,7 +2159,7 @@ final class SessionController {
         case .unfollow: actions?.follow?.turnOff(name)
         case .feature: actions?.feature?.turnOn(name)
         case .unfeature: actions?.feature?.turnOff(name)
-        case .url, .openTimeline, .openAccountStatuses, .customize:
+        case .url, .openTimeline, .openAccountStatuses, .addToCompose, .customize:
             // 「別のアカウントで」の並びから除いているので来ない（`StatusMenuTree.sameForEveryAccountHashtagItems`）。
             break
         }
@@ -2354,9 +2354,12 @@ final class SessionController {
         source?.navigationController?.pushViewController(viewController, animated: true)
     }
 
-    /// ハッシュタグのメニューの、自分の状態を読んで変える項目。
+    /// ハッシュタグのメニューの、自分の状態を読んで変える項目と「投稿欄に追加」。投稿欄に入れるのは、編集の途中なら編集中の本文に入れ、ほかのアカウントで書いていればそのアカウントの下書きに入れる。
     private var hashtagMenuActions: HashtagMenuActions {
-        HashtagMenuActions(mute: hashtagMuteActions, follow: hashtagFollowActions, feature: hashtagFeatureActions)
+        HashtagMenuActions(mute: hashtagMuteActions, follow: hashtagFollowActions, feature: hashtagFeatureActions, addToCompose: { [weak self] name in
+            UserAction.addHashtagToCompose.record()
+            self?.composer.addHashtag(name)
+        })
     }
 
     /// ハッシュタグのメニューの「フォロー」。覚えているフォローしているハッシュタグでフォローしているかを決め、メニューを開くたびに読み直す。

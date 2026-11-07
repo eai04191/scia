@@ -27,6 +27,8 @@ public enum UserAction: Sendable, Equatable {
     case quote
     /// ユーザーのメニューで、投稿欄にメンションを入れた。
     case mention
+    /// ハッシュタグのメニューで、投稿欄にハッシュタグを入れた。
+    case addHashtagToCompose
     case toggleFavourite
     case toggleReblog
     case dismissNotification
@@ -75,6 +77,7 @@ public enum UserAction: Sendable, Equatable {
         case .reply: "status.reply"
         case .quote: "status.quote"
         case .mention: "user.mention"
+        case .addHashtagToCompose: "hashtag.addToCompose"
         case .toggleFavourite: "status.favourite"
         case .toggleReblog: "status.reblog"
         case .dismissNotification: "notification.dismiss"
@@ -135,6 +138,7 @@ public enum UserAction: Sendable, Equatable {
         case ("status.reply", 0): self = .reply
         case ("status.quote", 0): self = .quote
         case ("user.mention", 0): self = .mention
+        case ("hashtag.addToCompose", 0): self = .addHashtagToCompose
         case ("status.favourite", 0): self = .toggleFavourite
         case ("status.reblog", 0): self = .toggleReblog
         case ("notification.dismiss", 0): self = .dismissNotification
@@ -182,6 +186,7 @@ public enum UserAction: Sendable, Equatable {
         case .reply: "投稿への返信を書き始めた"
         case .quote: "投稿を引用して書き始めた"
         case .mention: "投稿欄にメンションを入れた"
+        case .addHashtagToCompose: "投稿欄にハッシュタグを入れた"
         // 投稿への操作と投稿は通信の前に記録するため、失敗した場合や応答を待つ間もあるので、成功したとは書かない。
         case .toggleFavourite: "投稿のお気に入りを押した"
         case .toggleReblog: "投稿のブーストを押した"

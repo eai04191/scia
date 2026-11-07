@@ -57,6 +57,17 @@ struct HashtagMenuTreeTests {
         #expect(MenuNodeTests.describe(await load()) == "ミュートを読み込めませんでした(押せない)")
     }
 
+    /// 「投稿欄に追加」は、投稿欄に入れる手段を渡したときだけ出す。「別のアカウントで」のハッシュタグのメニューでは渡さない。
+    @Test func addToComposeNeedsAction() throws {
+        let without = HashtagMenuTree(name: "cat", url: nil, account: nil, linkBrowser: .inApp, actions: HashtagMenuActions(mute: nil))
+        #expect(without.menu(groups: .single(.addToCompose)) == nil)
+
+        let with = HashtagMenuTree(name: "cat", url: nil, account: nil, linkBrowser: .inApp, actions: HashtagMenuActions(mute: nil, addToCompose: { _ in }))
+        let item = try #require(with.menu(groups: .single(.addToCompose))?.flattenedChildren.first)
+        #expect(item.title == "投稿欄に追加")
+        #expect(item.command == .addToCompose)
+    }
+
     private func featureActions(known: Bool?, recorder: Recorder = Recorder(), load: @escaping @MainActor (String) async throws -> Bool = { _ in false }) -> HashtagMenuActions {
         HashtagMenuActions(mute: nil, feature: HashtagToggleActions(known: { _ in known }, refresh: { recorder.refreshes += 1 }, load: load, turnOn: { _ in }, turnOff: { _ in }))
     }

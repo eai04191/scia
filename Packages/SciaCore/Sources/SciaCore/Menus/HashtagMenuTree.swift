@@ -7,6 +7,8 @@ public enum HashtagMenuCommand: Equatable, Sendable {
     case openTimeline
     /// 「投稿したユーザーの投稿」で、そのユーザーのハッシュタグの付いた投稿を開く。
     case openAccountStatuses(Account)
+    /// 投稿欄に`#名前`を入れる。
+    case addToCompose
     /// ミュートする。nilなら解除するまで続ける。
     case mute(Duration?)
     case unmute
@@ -68,6 +70,9 @@ public struct HashtagMenuTree {
                 guard let account else { return [] }
                 // ほかのサーバーのユーザーなら、ユーザーのメニューの見出しと同じく、サーバー名をサブタイトルに出す。
                 return [.action("@\(account.username)の投稿", subtitle: UserHeading(acct: account.acct).subtitle, icon: .symbol(item.symbolName), .openAccountStatuses(account))]
+            case .addToCompose:
+                guard actions?.addToCompose != nil else { return [] }
+                return [.action(item.title, icon: .symbol(item.symbolName), .addToCompose)]
             case .mute:
                 guard let muteActions = actions?.mute else { return [] }
                 return muteNodes(muteActions, item: item)
@@ -169,11 +174,14 @@ public struct HashtagMenuActions {
     public var follow: HashtagToggleActions?
     /// nilなら「プロフィールで紹介する」を出さない。
     public var feature: HashtagToggleActions?
+    /// 投稿欄に、`#`を除いた名前のタグを入れる。nilなら「投稿欄に追加」を出さない。
+    public var addToCompose: (@MainActor (String) -> Void)?
 
-    public init(mute: HashtagMuteActions?, follow: HashtagToggleActions? = nil, feature: HashtagToggleActions? = nil) {
+    public init(mute: HashtagMuteActions?, follow: HashtagToggleActions? = nil, feature: HashtagToggleActions? = nil, addToCompose: (@MainActor (String) -> Void)? = nil) {
         self.mute = mute
         self.follow = follow
         self.feature = feature
+        self.addToCompose = addToCompose
     }
 
     /// 組んでも読み直さない形。メニューを開かずに組むとき（アクションバーのボタンを押せるかを決めるとき）に使う。
@@ -182,7 +190,8 @@ public struct HashtagMenuActions {
         HashtagMenuActions(
             mute: mute.map { HashtagMuteActions(known: $0.known, refresh: {}, load: $0.load, mute: $0.mute, unmute: $0.unmute) },
             follow: follow?.withoutRefresh,
-            feature: feature?.withoutRefresh
+            feature: feature?.withoutRefresh,
+            addToCompose: addToCompose
         )
     }
 }

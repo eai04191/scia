@@ -52,6 +52,7 @@ struct HashtagMenu {
         case .url(let command): handlers.perform(command)
         case .openTimeline: openTimeline()
         case .openAccountStatuses(let account): openAccountStatuses(account)
+        case .addToCompose: actions?.addToCompose?(name)
         case .mute(let duration): actions?.mute?.mute(name, duration)
         case .unmute: actions?.mute?.unmute(name)
         case .follow: actions?.follow?.turnOn(name)

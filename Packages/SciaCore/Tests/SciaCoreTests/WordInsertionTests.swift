@@ -47,4 +47,10 @@ struct WordInsertionTests {
         let insertion = WordInsertion.insertion(of: "@bob", in: "a", replacing: 5 ..< 9)
         #expect(insertion.range == 1 ..< 1)
     }
+
+    /// ハッシュタグも、メンションと同じく前後の文字から離して入れる。
+    @Test func insertsHashtag() {
+        let insertion = WordInsertion.insertion(of: "#cat", in: "猫", replacing: 1 ..< 1)
+        #expect(insertion == TextInsertion(range: 1 ..< 1, text: " #cat ", cursor: 7))
+    }
 }

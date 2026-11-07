@@ -454,6 +454,8 @@ public enum HashtagMenuItem: String, BundledMenuDefaults {
     case timeline
     /// 投稿の本文なら投稿した人、プロフィールならその人の、このハッシュタグの付いた投稿を開く。
     case accountStatuses
+    /// 投稿欄で、カーソルの位置に`#名前`を入れる。
+    case addToCompose
     /// フォローする。フォローしていれば外す。
     case follow
     /// このハッシュタグの付いた投稿を、サーバーのフィルターで隠す。ミュート中なら解除する。

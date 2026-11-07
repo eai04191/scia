@@ -191,6 +191,7 @@ extension HashtagMenuItem: MenuItemContentProviding {
         case .mute: .own(title: "ミュート", symbolName: "speaker.slash")
         case .feature: .own(title: "プロフィールで紹介", symbolName: "person.text.rectangle")
         case .accountStatuses: .own(title: "投稿したユーザーの投稿", symbolName: "person.crop.square")
+        case .addToCompose: .own(title: "投稿欄に追加", symbolName: "square.and.pencil")
         case .openInBrowser: .url(.openInBrowser)
         case .openInDefaultBrowser: .url(.openInDefaultBrowser)
         case .openInAppSafari: .url(.openInAppSafari)
