@@ -100,17 +100,17 @@ struct PostActionBarTests {
         #expect(layout.itemsRemovedFromMenu(barItems: false, longPressItems: true) == [.favouritedBy])
     }
 
-    /// 既定ではアクションバーの項目を除き、長押しの項目は除かない。変えた値は保存する。
+    /// 既定ではアクションバーの項目も長押しの項目もメニューに出さない。変えた値は保存する。
     @Test func persistsMenuRemovalSettings() {
         let defaults = TestScratch.defaults("PostActionBarMenuRemoval")
         let settings = AppSettings(defaults: defaults)
-        #expect(settings.removesActionBarItemsFromMenu)
-        #expect(!settings.removesActionBarLongPressItemsFromMenu)
-        settings.removesActionBarItemsFromMenu = false
-        settings.removesActionBarLongPressItemsFromMenu = true
+        #expect(!settings.showsActionBarItemsInMenu)
+        #expect(!settings.showsActionBarLongPressItemsInMenu)
+        settings.showsActionBarItemsInMenu = true
+        settings.showsActionBarLongPressItemsInMenu = true
         let reloaded = AppSettings(defaults: defaults)
-        #expect(!reloaded.removesActionBarItemsFromMenu)
-        #expect(reloaded.removesActionBarLongPressItemsFromMenu)
+        #expect(reloaded.showsActionBarItemsInMenu)
+        #expect(reloaded.showsActionBarLongPressItemsInMenu)
     }
 
     /// 読み直しを外したハッシュタグの操作でメニューを組んでも、読み直さない。ミュートの項目は同じく出す。

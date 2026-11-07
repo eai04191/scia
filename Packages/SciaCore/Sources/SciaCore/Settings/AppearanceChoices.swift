@@ -70,7 +70,7 @@ public struct AppearanceChoices: Codable, Hashable, Sendable {
     public var reactionGlowFillsWidthWhenAlone = false
     public var reactionGlowLightFavouriteColor: ReactionGlowLightFavouriteColor = .orange
     /// 一覧の投稿に、アクションバーをいつも出す。オフでも、タップや長押しに選べば開ける。決まりはdocs/post-action-bar.mdにある。
-    public var showsActionBar = false
+    public var showsActionBar = true
     /// アクションバーの返信、ブースト、お気に入りのボタンに件数を添える。
     public var showsActionBarCounts = true
 

@@ -13,6 +13,8 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
     let primary: Item
     /// アクションバーのボタンの並びの画面。アクションバーを出せる対象（投稿）でだけ渡し、渡すと「アクションバーを開く」も選べる。
     var actionBar: SettingsPage?
+    /// メニューとアクションバーの入り口の下に置くスイッチの節。投稿では、アクションバーを出している投稿のメニューに何を出すかを置く。
+    var toggles: SettingsToggleSection?
 
     var body: some View {
         Form {
@@ -32,6 +34,15 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
                     if let actionBar {
                         NavigationLink("アクションバー", value: actionBar)
                     }
+                }
+            }
+            if let toggles {
+                Section {
+                    ForEach(toggles.toggles.indices, id: \.self) { index in
+                        Toggle(toggles.toggles[index].title, isOn: toggles.toggles[index].isOn)
+                    }
+                } header: {
+                    Text(toggles.header)
                 }
             }
         }
@@ -93,7 +104,18 @@ extension ObjectEntity {
 }
 
 extension ObjectActionsSettingsView where Item: ObjectActionItem {
-    init(entity: ObjectEntity<Item>, settings: AppSettings, menu: SettingsPage?, actionBar: SettingsPage? = nil) {
-        self.init(title: entity.title, actions: entity.actions(in: settings), menu: menu, primary: Item.primaryItem, actionBar: actionBar)
+    init(entity: ObjectEntity<Item>, settings: AppSettings, menu: SettingsPage?, actionBar: SettingsPage? = nil, toggles: SettingsToggleSection? = nil) {
+        self.init(title: entity.title, actions: entity.actions(in: settings), menu: menu, primary: Item.primaryItem, actionBar: actionBar, toggles: toggles)
     }
+}
+
+/// 見出しを共有する、スイッチを並べた節。
+struct SettingsToggleSection {
+    struct Toggle {
+        let title: String
+        let isOn: Binding<Bool>
+    }
+
+    let header: String
+    let toggles: [Toggle]
 }

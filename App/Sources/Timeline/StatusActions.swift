@@ -107,8 +107,8 @@ extension TimelineViewController {
         let groups = settings.statusMenuLayout.groups
         guard let status, self.status(for: id)?.id == status.id, showsActionBar(itemID: id, shown: status.displayed) else { return groups }
         let removed = settings.postActionBarLayout.itemsRemovedFromMenu(
-            barItems: settings.removesActionBarItemsFromMenu,
-            longPressItems: settings.removesActionBarLongPressItemsFromMenu
+            barItems: !settings.showsActionBarItemsInMenu,
+            longPressItems: !settings.showsActionBarLongPressItemsInMenu
         )
         return groups.excluding(removed)
     }

@@ -11,6 +11,8 @@ import UIKit
 struct PostActionBarTests {
     private func harness() throws -> (harness: TimelineHarness, statuses: [Status]) {
         let harness = try TimelineHarness()
+        // 引き出しの開閉を確かめるため、いつも出す設定を外す。
+        harness.settings.appearance.showsActionBar = false
         let statuses = StatusFactory.make(count: 30, startingAt: 1_000)
         harness.setStatuses(statuses)
         try harness.scroll(to: .status(statuses[10].id), at: .centeredVertically)
@@ -25,7 +27,7 @@ struct PostActionBarTests {
         view.layer.animationKeys()?.contains { $0.hasPrefix("rowShift") } == true
     }
 
-    /// 既定ではどの投稿にも出さず、いつも出す設定にすると、一覧の投稿に出す。
+    /// いつも出す設定でなければどの投稿にも出さず、いつも出す設定にすると、一覧の投稿に出す。
     @Test func showsOnlyWhenTurnedOnOrOpened() throws {
         let (harness, statuses) = try harness()
         defer { harness.tearDown() }
@@ -276,19 +278,23 @@ struct PostActionBarTests {
         #expect(titles.contains("ブースト"))
     }
 
-    /// メニューから除くのは設定に従う。アクションバーの項目を除かない設定なら残し、長押しの項目を除く設定なら、並べたボタンの長押しの項目を除く。
+    /// メニューに出すかは設定に従う。アクションバーの項目を表示する設定なら残し、長押しの項目を表示しない設定なら、並べたボタンの長押しの項目を除く。
     @Test func menuRemovalFollowsSettings() throws {
         // 「お気に入りした人」と「ブーストした人」は、数が1以上の投稿のメニューにだけ出る。
         let (harness, statuses) = try harness(replacing: 10, with: { base in
             Status(id: base.id, createdAt: base.createdAt, account: base.account, content: base.content, spoilerText: "", url: nil, favouritesCount: 1, reblogsCount: 1)
         }, items: [.status(.reply), .status(.favourite), .menu])
         defer { harness.tearDown() }
-        let before = allMenuTitles(in: harness, of: statuses[10])
-        #expect(before.contains("お気に入りした人"))
-        #expect(before.contains("ブーストした人"))
+        // 既定では、並べたお気に入りのボタンの長押しの項目を出さない。
+        #expect(!allMenuTitles(in: harness, of: statuses[10]).contains("お気に入りした人"))
 
-        harness.settings.removesActionBarItemsFromMenu = false
-        harness.settings.removesActionBarLongPressItemsFromMenu = true
+        harness.settings.showsActionBarLongPressItemsInMenu = true
+        let shown = allMenuTitles(in: harness, of: statuses[10])
+        #expect(shown.contains("お気に入りした人"))
+        #expect(!shown.contains("返信"))
+
+        harness.settings.showsActionBarItemsInMenu = true
+        harness.settings.showsActionBarLongPressItemsInMenu = false
         let titles = allMenuTitles(in: harness, of: statuses[10])
         #expect(titles.contains("返信"))
         #expect(!titles.contains("お気に入りした人"))

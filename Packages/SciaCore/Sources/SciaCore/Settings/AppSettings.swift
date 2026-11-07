@@ -306,14 +306,14 @@ public final class AppSettings {
         didSet { defaults.set(postActionBarLayout.tokens, forKey: Keys.postActionBarLayout) }
     }
 
-    /// アクションバーを出している投稿のメニューから、アクションバーに並べた項目を除くか。決まりはdocs/post-action-bar.mdにある。
-    public var removesActionBarItemsFromMenu: Bool {
-        didSet { defaults.set(removesActionBarItemsFromMenu, forKey: Keys.removesActionBarItemsFromMenu) }
+    /// アクションバーを出している投稿のメニューに、アクションバーに並べた項目も出すか。決まりはdocs/post-action-bar.mdにある。
+    public var showsActionBarItemsInMenu: Bool {
+        didSet { defaults.set(showsActionBarItemsInMenu, forKey: Keys.showsActionBarItemsInMenu) }
     }
 
-    /// アクションバーを出している投稿のメニューから、アクションバーのボタンの長押しで出す項目を除くか。
-    public var removesActionBarLongPressItemsFromMenu: Bool {
-        didSet { defaults.set(removesActionBarLongPressItemsFromMenu, forKey: Keys.removesActionBarLongPressItemsFromMenu) }
+    /// アクションバーを出している投稿のメニューに、アクションバーのボタンの長押しで出す項目も出すか。
+    public var showsActionBarLongPressItemsInMenu: Bool {
+        didSet { defaults.set(showsActionBarLongPressItemsInMenu, forKey: Keys.showsActionBarLongPressItemsInMenu) }
     }
 
     /// 投稿欄の部品を足す項目の並び。どれをツールバーに常に出し、どれを＋のメニューに入れるか。
@@ -390,8 +390,8 @@ public final class AppSettings {
         static let mediaMenuLayout = "settings.mediaMenuLayout"
         static let composeToolLayout = "settings.composeToolLayout"
         static let postActionBarLayout = "settings.postActionBarLayout"
-        static let removesActionBarItemsFromMenu = "settings.removesActionBarItemsFromMenu"
-        static let removesActionBarLongPressItemsFromMenu = "settings.removesActionBarLongPressItemsFromMenu"
+        static let showsActionBarItemsInMenu = "settings.showsActionBarItemsInMenu"
+        static let showsActionBarLongPressItemsInMenu = "settings.showsActionBarLongPressItemsInMenu"
         static let statusActions = "settings.objectActions.status"
         static let notificationActions = "settings.objectActions.notification"
         static let userActions = "settings.objectActions.user"
@@ -442,8 +442,8 @@ public final class AppSettings {
         mediaMenuLayout = defaults.stringArray(forKey: Keys.mediaMenuLayout).map(MenuLayout.init(tokens:)) ?? MediaMenuItem.defaultLayout
         composeToolLayout = defaults.stringArray(forKey: Keys.composeToolLayout).map(MenuLayout.init(tokens:)) ?? ComposeToolItem.defaultLayout
         postActionBarLayout = defaults.stringArray(forKey: Keys.postActionBarLayout).map(MenuLayout.init(tokens:)) ?? PostActionBarItem.defaultLayout
-        removesActionBarItemsFromMenu = defaults.object(forKey: Keys.removesActionBarItemsFromMenu) as? Bool ?? true
-        removesActionBarLongPressItemsFromMenu = defaults.bool(forKey: Keys.removesActionBarLongPressItemsFromMenu)
+        showsActionBarItemsInMenu = defaults.bool(forKey: Keys.showsActionBarItemsInMenu)
+        showsActionBarLongPressItemsInMenu = defaults.bool(forKey: Keys.showsActionBarLongPressItemsInMenu)
         statusActions = defaults.stringArray(forKey: Keys.statusActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
         notificationActions = defaults.stringArray(forKey: Keys.notificationActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
         userActions = defaults.stringArray(forKey: Keys.userActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
