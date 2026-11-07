@@ -4,7 +4,7 @@ import Synchronization
 import Testing
 @testable import SciaCore
 
-/// 投稿のメニューの「別のアカウントで」を確かめる。決まりはdocs/menus.mdにある。
+/// 投稿のメニューの「別のアカウントで」を確かめる。決まりはdocs/other-accounts.mdにある。
 @MainActor
 struct OtherAccountMenuTests {
     private struct Failure: Error {}
