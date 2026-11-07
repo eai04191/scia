@@ -2773,7 +2773,7 @@ final class SessionController {
             } else {
                 profiles.apply(relationship, reloadsAccount: false)
             }
-            let title = relationship.note.isEmpty ? "メモを消しました" : "メモを保存しました"
+            let title = relationship.note.isEmpty ? "メモを削除しました" : "メモを保存しました"
             notices.showTransient(Notice(id: "user.noteSaved", kind: .success, title: actor + title), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
         }
         controller.onError = { [weak self] error, title in

@@ -137,7 +137,7 @@ struct SettingsView: View {
                 imageRevision: { [tabIcons] in tabIcons.revision },
                 options: [MenuLayoutOption(
                     title: "メニューに「カスタマイズ」を表示",
-                    footer: "タブバーの最後のタブにまとめた項目を切り替えるメニューに、この画面を開く「カスタマイズ」を出します。",
+                    footer: "タブバーの最後のタブにまとめた項目を切り替えるメニューに、この画面を開く「カスタマイズ」を表示します。",
                     isOn: $settings.showsTabMenuCustomize
                 )],
                 actions: [MenuLayoutAction(title: "リストを作成", symbolName: "plus", handler: tabSources.createList)],

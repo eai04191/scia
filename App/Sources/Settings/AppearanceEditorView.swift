@@ -173,16 +173,16 @@ struct AppearanceGroupEditorView: View {
             TitledToggleRow(title: "投稿のあいだに区切り線を引く", isOn: $settings.appearance.showsSeparators) { toggleFocus(.choice(.showsSeparators)) }
         case "context":
             PopUpChoiceRow(title: "ブーストした人の表記", selection: $settings.appearance.contextNameStyle, options: Self.nameStyles, onOpen: { focus(.contextNameStyle) }, onTapTitle: { toggleFocus(.choice(.contextNameStyle)) })
-            TitledToggleRow(title: "ブーストや返信の記号を出す", isOn: $settings.appearance.showsContextSymbol) { toggleFocus(.choice(.showsContextSymbol)) }
-            TitledToggleRow(title: "ブーストした人のアイコンを出す", isOn: $settings.appearance.showsBoosterAvatar) { toggleFocus(.choice(.showsBoosterAvatar)) }
-            TitledToggleRow(title: "返信のラベルを出す", isOn: $settings.appearance.showsReplyLabel) { toggleFocus(.choice(.showsReplyLabel)) }
+            TitledToggleRow(title: "ブーストや返信の記号を表示", isOn: $settings.appearance.showsContextSymbol) { toggleFocus(.choice(.showsContextSymbol)) }
+            TitledToggleRow(title: "ブーストした人のアイコンを表示", isOn: $settings.appearance.showsBoosterAvatar) { toggleFocus(.choice(.showsBoosterAvatar)) }
+            TitledToggleRow(title: "返信のラベルを表示", isOn: $settings.appearance.showsReplyLabel) { toggleFocus(.choice(.showsReplyLabel)) }
         case "avatar":
             PopUpChoiceRow(title: "形", selection: $settings.appearance.avatarShape, options: [(.circle, "円"), (.roundedSquare, "角丸の四角")], onOpen: { focus(.avatarShape) }, onTapTitle: { toggleFocus(.choice(.avatarShape)) })
-            TitledToggleRow(title: "縁取りを出す", isOn: $settings.appearance.showsAvatarBorder) { toggleFocus(.choice(.showsAvatarBorder)) }
+            TitledToggleRow(title: "縁取りを表示", isOn: $settings.appearance.showsAvatarBorder) { toggleFocus(.choice(.showsAvatarBorder)) }
             TitledToggleRow(title: "アニメーションを再生する", isOn: $settings.animatesAvatars) { toggleFocus(.choice(.animatesAvatars)) }
             TitledToggleRow(title: "アイコンの下を空けない", isOn: $settings.appearance.wrapsBelowAvatar) { toggleFocus(.choice(.wrapsBelowAvatar)) }
             // アイコンの下を空けないときは、線の通る場所に本文などが入るので、線を出さない。
-            TitledToggleRow(title: "返信をつなぐ線を出す", isOn: $settings.appearance.showsReplyLines) { toggleFocus(.choice(.showsReplyLines)) }
+            TitledToggleRow(title: "返信をつなぐ線を表示", isOn: $settings.appearance.showsReplyLines) { toggleFocus(.choice(.showsReplyLines)) }
                 .disabled(settings.appearance.wrapsBelowAvatar)
         case "name":
             PopUpChoiceRow(title: "名前の表記", selection: $settings.appearance.statusNameStyle, options: Self.nameStyles, onOpen: { focus(.nameStyle) }, onTapTitle: { toggleFocus(.choice(.nameStyle)) })
@@ -190,9 +190,9 @@ struct AppearanceGroupEditorView: View {
                 .disabled(settings.appearance.statusNameStyle.parts.count < 2)
             PopUpChoiceRow(title: "時刻の表記", selection: $settings.appearance.statusTimeStyle, options: [(.relative, "相対時刻"), (.absolute, "日時")], onOpen: { focus(.timeStyle) }, onTapTitle: { toggleFocus(.choice(.timeStyle)) })
             TitledToggleRow(title: "名前を太字にする", isOn: $settings.appearance.boldsName) { toggleFocus(.choice(.boldsName)) }
-            TitledToggleRow(title: "時刻を出す", isOn: $settings.appearance.showsTime) { toggleFocus(.choice(.showsTime)) }
-            TitledToggleRow(title: "公開範囲の記号を出す", isOn: $settings.appearance.showsVisibilitySymbol) { toggleFocus(.choice(.showsVisibilitySymbol)) }
-            TitledToggleRow(title: "編集済みの「*」を出す", isOn: $settings.appearance.showsEditedMark) { toggleFocus(.choice(.showsEditedMark)) }
+            TitledToggleRow(title: "時刻を表示", isOn: $settings.appearance.showsTime) { toggleFocus(.choice(.showsTime)) }
+            TitledToggleRow(title: "公開範囲の記号を表示", isOn: $settings.appearance.showsVisibilitySymbol) { toggleFocus(.choice(.showsVisibilitySymbol)) }
+            TitledToggleRow(title: "編集済みの「*」を表示", isOn: $settings.appearance.showsEditedMark) { toggleFocus(.choice(.showsEditedMark)) }
         case "body":
             PopUpChoiceRow(
                 title: "漢字の字形",
@@ -206,14 +206,14 @@ struct AppearanceGroupEditorView: View {
             PopUpChoiceRow(title: "引用", selection: $settings.appearance.embedMediaArrangement, options: [(.sameAsPost, "投稿と同じ"), (.besideBody, "本文の右に小さく"), (.belowBody, "本文の下に大きく")], onOpen: { focus(.embedMediaArrangement) }, onTapTitle: { toggleFocus(.choice(.embedMediaArrangement)) })
             TitledToggleRow(title: "写真を傾ける", isOn: $settings.appearance.tiltsStackedPhotos) { toggleFocus(.choice(.tiltsStackedPhotos)) }
                 .disabled(!settings.appearance.stacksMediaBesideBody)
-            TitledToggleRow(title: "ALTやGIFのバッジを出す", isOn: $settings.appearance.showsMediaBadges) { toggleFocus(.choice(.showsMediaBadges)) }
+            TitledToggleRow(title: "ALTやGIFのバッジを表示", isOn: $settings.appearance.showsMediaBadges) { toggleFocus(.choice(.showsMediaBadges)) }
         case "linkCard":
-            TitledToggleRow(title: "リンクカードを出す", isOn: $settings.appearance.showsLinkCard) { toggleFocus(.choice(.showsLinkCard)) }
+            TitledToggleRow(title: "リンクカードを表示", isOn: $settings.appearance.showsLinkCard) { toggleFocus(.choice(.showsLinkCard)) }
             TitledToggleRow(title: "タイトルを太字にする", isOn: $settings.appearance.boldsLinkCardTitle) { toggleFocus(.choice(.boldsLinkCardTitle)) }
-            TitledToggleRow(title: "画像を出す", isOn: $settings.appearance.showsLinkCardImage) { toggleFocus(.choice(.showsLinkCardImage)) }
+            TitledToggleRow(title: "画像を表示", isOn: $settings.appearance.showsLinkCardImage) { toggleFocus(.choice(.showsLinkCardImage)) }
             PopUpChoiceRow(title: "画像の位置", selection: $settings.appearance.linkCardThumbnailSide, options: [(.left, "左"), (.right, "右")], onOpen: { focus(.linkCardThumbnailSide) }, onTapTitle: { toggleFocus(.choice(.linkCardThumbnailSide)) })
                 .disabled(!settings.appearance.showsLinkCardImage)
-            TitledToggleRow(title: "サイト名を出す", isOn: $settings.appearance.showsLinkCardSite) { toggleFocus(.choice(.showsLinkCardSite)) }
+            TitledToggleRow(title: "サイト名を表示", isOn: $settings.appearance.showsLinkCardSite) { toggleFocus(.choice(.showsLinkCardSite)) }
         case "reactionGlow":
             // HDRのメディアの明るさの設定はメディアに対するものなので、光はそれに従わせず、ここで別に選ぶ。
             if ReactionGlowView.mayDrawInHDR {
