@@ -573,6 +573,16 @@ public enum TuningCatalog {
         defaultValue: 30
     )
 
+    /// 読み進めて既読位置が進んでから、操作が止まってこの時間だけ進まなければ、サーバーに保存する。
+    /// 指のスクロールが止まったとき（`interactionDidSettle`）とバックグラウンドに入るときにも保存するので、それを知らせない読み進め方（マウスのホイール、新着のボタンで先頭へ戻るなど）のためのもの。
+    public static let readPositionSaveDelay = NumberTuning(
+        id: "streaming.readPositionSaveDelay",
+        title: "読み進めてから既読位置を保存するまでの時間（秒）",
+        range: 0.5...30,
+        step: 0.5,
+        defaultValue: 2
+    )
+
     /// ストリーミングにつながらない間、切れていた間の新着をRESTで読む間隔。つなぎ直しはその間も続ける。
     public static let pollingInterval = NumberTuning(
         id: "streaming.pollingInterval",
@@ -1816,6 +1826,7 @@ public enum TuningCatalog {
             .number(gapAutoLoadDistance),
             .number(pollingInterval),
             .number(shownFeedPollingInterval),
+            .number(readPositionSaveDelay),
             .number(regeneratingRetryInterval),
             .number(outageNoticeDelay),
             .number(imageRetryInitialDelay),

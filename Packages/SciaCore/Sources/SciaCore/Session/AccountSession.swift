@@ -130,6 +130,15 @@ public final class AccountSession {
         }
     }
 
+    /// 登録したタイムライン（`register(_:)`）の既読位置を待たずに保存し、全部保存し終えるまで待つ。
+    /// アプリを終了する前など、保存を待ってから進みたいときに呼ぶ。ストリーミングは切らない。失敗しても投げず、次の機会に保存し直す。
+    /// 既読位置は、読み進めてから決まった時間が経ったときと、各タイムラインの`enterBackground()`でも保存するので、ふだんは呼ばなくてよい。
+    public func saveReadPositions() async {
+        for list in lists.compactMap(\.list) {
+            await list.saveReadPosition()
+        }
+    }
+
     /// 閉じる。ストリーミングを切り、セッションで始めた処理を全部止める。
     public func close() {
         tasks.close()
@@ -232,6 +241,12 @@ public protocol SessionList: AnyObject {
     func recover()
     /// トークンが無効と分かったときに呼ぶ。読み込みを打ち切り、以後の結果を捨てる。
     func stop()
+    /// `AccountSession.saveReadPositions()`で呼ぶ。既読位置があれば待たずに保存し、保存し終えるまで待つ。既読位置のない一覧は何もしない。
+    func saveReadPosition() async
+}
+
+extension SessionList {
+    public func saveReadPosition() async {}
 }
 
 /// `MastodonClient`が受けた401を、あとで作る`AuthorizationCheck`へ届ける。

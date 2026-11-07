@@ -172,22 +172,48 @@ struct NotificationsModelTests {
     /// 既読位置は、スクロールが止まるのを待たずに保存する。指で操作している間は、操作が終わってから保存する。
     @Test func markReadSavesUnlessInteracting() async throws {
         let transport = try Self.transport()
-        let (model, display) = makeModel(transport: transport)
+        let clock = TestClock()
+        let (model, display) = makeModel(transport: transport, clock: clock)
         defer { model.stop() }
-        func saves() -> [String] {
-            transport.requests(to: "/api/v1/markers").filter { $0.httpMethod == "POST" }.map { String(decoding: $0.httpBody ?? Data(), as: UTF8.self) }
-        }
 
         model.start(purpose: .action)
         try await waitUntil { display.contentState == .loaded && model.runningTaskCount == 0 }
         display.isUserInteracting = true
         model.markRead(["34975862"])
-        try await waitUntil { model.runningTaskCount == 0 }
-        #expect(saves().isEmpty, "操作の途中に保存しました")
+        try await waitUntil { clock.sleeperCount == 1 }
+        #expect(Self.markerSaves(transport).isEmpty, "操作の途中に保存しました")
 
         display.isUserInteracting = false
         model.interactionDidSettle()
+        try await waitUntil { Self.markerSaves(transport).count == 1 }
+        #expect(Self.markerSaves(transport) == ["notifications%5Blast_read_id%5D=34975862"])
+    }
+
+    /// 操作の途中に読み進めたあと、操作の終わりを知らされなくても、操作をやめて決まった時間が経てば保存する。
+    @Test func markReadDuringInteractionSavesAfterDelayWithoutSettle() async throws {
+        let transport = try Self.transport()
+        let clock = TestClock()
+        let (model, display) = makeModel(transport: transport, clock: clock)
+        defer { model.stop() }
+        let delay = Duration.seconds(TuningCatalog.readPositionSaveDelay.defaultValue)
+
+        model.start(purpose: .action)
+        try await waitUntil { display.contentState == .loaded && model.runningTaskCount == 0 }
+        display.isUserInteracting = true
+        model.markRead(["34975862"])
+        try await waitUntil { clock.sleeperCount == 1 }
+        // 操作の最中は、決まった時間が経っても保存せず、待ち直す。
+        clock.advance(by: delay)
+        try await waitUntil { clock.sleeperCount == 1 && clock.sleeperCount(dueWithin: delay) == 1 && clock.sleeperCount(dueWithin: delay - .milliseconds(1)) == 0 }
+        #expect(Self.markerSaves(transport).isEmpty, "操作の途中に保存しました")
+
+        display.isUserInteracting = false
+        clock.advance(by: delay)
         try await waitUntil { model.runningTaskCount == 0 }
-        #expect(saves() == ["notifications%5Blast_read_id%5D=34975862"])
+        #expect(Self.markerSaves(transport) == ["notifications%5Blast_read_id%5D=34975862"])
+    }
+
+    private static func markerSaves(_ transport: RoutedTransport) -> [String] {
+        transport.requests(to: "/api/v1/markers").filter { $0.httpMethod == "POST" }.map { String(decoding: $0.httpBody ?? Data(), as: UTF8.self) }
     }
 }

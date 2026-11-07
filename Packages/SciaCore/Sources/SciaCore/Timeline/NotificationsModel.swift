@@ -45,9 +45,8 @@ public final class NotificationsModel {
     private var arrivalRate = ArrivalRate()
     private var hasLoadedInitial = false
     private var isInForeground = true
-    private var isSavingReadPosition = false
-    /// バックグラウンドで既読位置の保存を終えるまで、アプリを止めないよう頼んでいる。終えるときに呼ぶ。
-    private var endReadPositionBackgroundTime: (@MainActor () -> Void)?
+    /// 既読位置を保存する。
+    private var readPosition: ReadPositionSaver?
     private var isWaitingForInteractionToSettle = false
     #if DEBUG
     /// 新着の挿入を保留しているか。デバッグURL（`scia-debug://arrivals/hold`）で切り替える。
@@ -100,6 +99,18 @@ public final class NotificationsModel {
         self.streamingHub = streamingHub
         self.tuning = tuning
         self.backgroundTime = backgroundTime
+        readPosition = ReadPositionSaver(
+            name: "notifications",
+            tasks: tasks,
+            clock: clock,
+            tuning: tuning,
+            backgroundTime: backgroundTime,
+            readIDToSave: { [weak self] in self?.store.readIDToSave },
+            save: { id in try await client.saveMarker(for: .notifications, lastReadID: id) },
+            markSaved: { [weak self] id in self?.store.markSaved(id) },
+            isUserInteracting: { [weak self] in self?.display?.isUserInteracting == true },
+            onFailure: { [weak self] error in self?.handle(error, during: "marker save") { _ in } }
+        )
         tasks.onClose { [weak self] in self?.stopStreaming() }
     }
 
@@ -139,7 +150,8 @@ public final class NotificationsModel {
     public func enterBackground() {
         isInForeground = false
         stopStreaming()
-        saveReadPosition(inBackground: true)
+        readPosition?.cancelWaiting()
+        readPosition?.saveNow(inBackground: true)
     }
 
     /// バックグラウンドから戻ったときに呼ぶ。つなぎ直して切れていた間の通知を補い、他の端末で読み進めた位置を取り込む。
@@ -571,9 +583,10 @@ public final class NotificationsModel {
     }
     #endif
 
-    /// 指によるスクロールが止まったとき、または長押しのメニューが閉じたときに呼ぶ。
+    /// 指によるスクロールが止まったとき、または長押しのメニューが閉じたときに呼ぶ。待っている新着を挿入し、既読位置を待たずに保存する。
+    /// 呼ばなくても、既読位置は読み進めてから決まった時間が経てば保存する（`markRead(_:)`）。
     public func interactionDidSettle() {
-        saveReadPosition(inBackground: false)
+        readPosition?.saveNow()
         guard isWaitingForInteractionToSettle else { return }
         isWaitingForInteractionToSettle = false
         insertPending()
@@ -671,50 +684,24 @@ public final class NotificationsModel {
         }
     }
 
-    /// 既読位置が保存済みより進んでいれば保存する。保存している間に読み進めた分も、続けて保存する。
-    private func saveReadPosition(inBackground: Bool) {
-        guard !isStopped, store.readIDToSave != nil || isSavingReadPosition else { return }
-        if inBackground, endReadPositionBackgroundTime == nil {
-            endReadPositionBackgroundTime = backgroundTime("save notifications marker") { [weak self] in
-                // 尽きたら、次にバックグラウンドへ入ったときに頼み直す。
-                self?.endReadPositionBackgroundTask()
-            }
-        }
-        guard !isSavingReadPosition else { return }
-        isSavingReadPosition = true
-        let client = client
-        // 既読位置の保存は、スクロールやバックグラウンドへの移行で自動で送る。
-        tasks.run(.display) { [weak self] in
-            while let self, !self.isStopped, let id = self.store.readIDToSave {
-                do {
-                    try await client.saveMarker(for: .notifications, lastReadID: id)
-                    self.store.markSaved(id)
-                    self.logger.info("notifications marker saved id=\(id, privacy: .public)")
-                } catch {
-                    self.handle(error, during: "marker save") { _ in }
-                    break
-                }
-            }
-            self?.isSavingReadPosition = false
-            self?.endReadPositionBackgroundTask()
-        }
-    }
-
-    private func endReadPositionBackgroundTask() {
-        guard let end = endReadPositionBackgroundTime else { return }
-        endReadPositionBackgroundTime = nil
-        end()
-    }
-
-    /// 画面に表示されている通知が変わったときに呼ぶ。
-    /// 通知はタブを開いて見るだけのことが多いため、スクロールが止まるのを待たずに既読位置を保存する。
-    /// スクロール中は止まったときに保存する。
+    /// 画面に表示されている通知が変わったときに呼ぶ。どんな読み進め方でも呼ぶ。
+    /// 通知はタブを開いて見るだけのことが多いため、一覧を操作していなければ（`TimelineDisplay.isUserInteracting`）、待たずに既読位置を保存する。
+    /// 操作の最中は、`interactionDidSettle()`で保存するか、操作が止まってから`TuningCatalog.readPositionSaveDelay`が経ったら保存する。
     public func markRead(_ ids: [MastodonNotification.ID]) {
         store.markRead(ids)
         updateUnreadCount()
-        if display?.isUserInteracting != true {
-            saveReadPosition(inBackground: false)
+        if display?.isUserInteracting == true {
+            readPosition?.didAdvance()
+        } else {
+            readPosition?.saveNow()
         }
+    }
+
+    /// 既読位置を待たずに保存し、保存し終えるまで待つ。保存している途中なら、その分と続けて読み進めた分を保存し終えるまで待つ。
+    /// アプリを終了する前など、保存を待ってから進みたいときに呼ぶ。ストリーミングは切らない。保存するものがなければすぐ返る。
+    /// 失敗しても投げない。失敗は表示に出さず、次に読み進めたときに保存し直す。バックグラウンドに入るときは、`enterBackground()`が保存する。
+    public func saveReadPosition() async {
+        await readPosition?.saveAndWait()
     }
 
     /// - Parameter animatesRemoval: 使う人の操作で行を消した。消える行を閉じる動きで消す。

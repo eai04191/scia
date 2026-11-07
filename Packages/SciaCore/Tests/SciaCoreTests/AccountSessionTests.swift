@@ -108,6 +108,21 @@ struct AccountSessionTests {
         #expect(session.authorization.state == .valid)
     }
 
+    /// `saveReadPositions()`は、登録した一覧の既読位置を保存し終えるまで待つ。
+    @Test func saveReadPositionsWaitsForRegisteredLists() async throws {
+        let session = makeSession(transport: RoutedTransport { _ in (404, Data()) })
+        defer { session.close() }
+        let first = RecordingList()
+        let second = RecordingList()
+        session.register(first)
+        session.register(second)
+
+        await session.saveReadPositions()
+
+        #expect(first.savedReadPositionCount == 1)
+        #expect(second.savedReadPositionCount == 1)
+    }
+
     /// REST APIの401では、確かめずに止める。MastodonのREST APIは、トークンが無効なときだけ401を返すため。
     @Test func restUnauthorizedStopsWithoutVerification() async throws {
         let transport = RoutedTransport { request in
@@ -295,6 +310,12 @@ private final class RecordingList: SessionList {
 
     func stop() {
         stopCount += 1
+    }
+
+    private(set) var savedReadPositionCount = 0
+
+    func saveReadPosition() async {
+        savedReadPositionCount += 1
     }
 }
 

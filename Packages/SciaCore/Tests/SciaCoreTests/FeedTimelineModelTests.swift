@@ -448,6 +448,109 @@ struct FeedTimelineModelTests {
         #expect(backgroundTime.heldCount == 0)
     }
 
+    private static func markerSaves(_ transport: RoutedTransport) -> [String] {
+        transport.requests(to: "/api/v1/markers").filter { $0.httpMethod == "POST" }.map { String(decoding: $0.httpBody ?? Data(), as: UTF8.self) }
+    }
+
+    /// 操作の終わりを知らされなくても（マウスのホイールや新着のボタンで読み進めたとき）、読み進めなくなって決まった時間が経てば既読位置を保存する。
+    /// 読み進めている間は待ち直し、まとめて1回だけ保存する。
+    @Test func readPositionIsSavedAfterDelayWithoutSettle() async throws {
+        let transport = Self.homeTransport([3, 2, 1])
+        let clock = TestClock()
+        let (model, display) = makeModel(transport: transport, clock: clock)
+        defer { model.stop() }
+        let delay = Duration.seconds(TuningCatalog.readPositionSaveDelay.defaultValue)
+
+        model.start(purpose: .action)
+        try await waitUntil { display.contentState == .loaded && model.runningTaskCount == 0 }
+        model.markRead(["1"])
+        try await waitUntil { clock.sleeperCount == 1 }
+        clock.advance(by: delay / 2)
+        model.markRead(["2"])
+        clock.advance(by: delay / 2)
+        // 2つめに読み進めてからは、まだ決まった時間が経っていない。
+        try await waitUntil { clock.sleeperCount(dueWithin: delay / 2) == 1 }
+        #expect(Self.markerSaves(transport).isEmpty, "読み進めている途中に保存しました")
+
+        clock.advance(by: delay / 2)
+        try await waitUntil { model.runningTaskCount == 0 }
+        #expect(Self.markerSaves(transport) == ["home%5Blast_read_id%5D=2"])
+    }
+
+    /// 遅れて届いた古い投稿が一番上にあり、その下のより新しい投稿を読んだときは、画面の既読の位置は進まないが、保存する既読位置は進む。
+    /// そのときも、操作の終わりを知らされなくても、決まった時間が経てば保存する。
+    @Test func readPositionIsSavedWhenOnlySavedIDAdvances() async throws {
+        let transport = Self.homeTransport([14, 12, 10])
+        let clock = TestClock()
+        let (model, display) = makeModel(transport: transport, clock: clock)
+        defer { model.stop() }
+        let delay = Duration.seconds(TuningCatalog.readPositionSaveDelay.defaultValue)
+
+        model.start(purpose: .action)
+        try await waitUntil { display.contentState == .loaded && model.runningTaskCount == 0 }
+        model.receivePosted(try TimelineModelFixtures.status(11))
+        try await waitUntil { display.statusIDs == ["11", "14", "12", "10"] && model.runningTaskCount == 0 }
+        model.markRead(["11"])
+        try await waitUntil { clock.sleeperCount == 1 }
+        clock.advance(by: delay)
+        try await waitUntil { Self.markerSaves(transport).count == 1 && model.runningTaskCount == 0 }
+
+        model.markRead(["14"])
+        try await waitUntil { clock.sleeperCount == 1 }
+        clock.advance(by: delay)
+        try await waitUntil { model.runningTaskCount == 0 }
+        #expect(Self.markerSaves(transport) == ["home%5Blast_read_id%5D=11", "home%5Blast_read_id%5D=14"])
+    }
+
+    /// 指のスクロールが止まったと知らされたら、待たずに保存し、待っていた保存はもう送らない。
+    @Test func settleSavesWithoutWaitingAndOnlyOnce() async throws {
+        let transport = Self.homeTransport([2, 1])
+        let clock = TestClock()
+        let (model, display) = makeModel(transport: transport, clock: clock)
+        defer { model.stop() }
+
+        model.start(purpose: .action)
+        try await waitUntil { display.contentState == .loaded && model.runningTaskCount == 0 }
+        model.markRead(["2"])
+        model.interactionDidSettle()
+        try await waitUntil { Self.markerSaves(transport).count == 1 && clock.sleeperCount == 1 }
+        clock.advance(by: .seconds(TuningCatalog.readPositionSaveDelay.defaultValue))
+        try await waitUntil { model.runningTaskCount == 0 }
+
+        #expect(Self.markerSaves(transport) == ["home%5Blast_read_id%5D=2"])
+    }
+
+    /// `saveReadPosition()`は待たずに保存を始め、送り終えるまで返らない。ストリーミングは切らない。
+    @Test func saveReadPositionWaitsUntilSaved() async throws {
+        let gate = Gate()
+        let home = Self.homeTransport([2, 1])
+        let transport = RoutedTransport { request in
+            if request.url?.path() == "/api/v1/markers", request.httpMethod == "POST" {
+                try await gate.wait()
+            }
+            let response = try await home.send(request)
+            return (response.1.statusCode, response.0)
+        }
+        let (model, display) = makeModel(transport: transport)
+        defer { model.stop() }
+        model.start(purpose: .action)
+        try await waitUntil { display.contentState == .loaded && model.runningTaskCount == 0 }
+        model.markRead(["2"])
+
+        let finished = Mutex(false)
+        let saving = Task {
+            await model.saveReadPosition()
+            finished.withLock { $0 = true }
+        }
+        try await waitUntil { gate.waiterCount == 1 }
+        #expect(!finished.withLock { $0 }, "送り終える前に返りました")
+        gate.open()
+        await saving.value
+
+        #expect(Self.markerSaves(transport) == ["home%5Blast_read_id%5D=2"])
+        #expect(model.isSubscribedToStreaming)
+    }
+
     /// ストリーミングで新着を受け取るタイムラインでは、`setShown`を呼んでも間隔をおいて読み直さない。
     @Test func setShownDoesNotPollStreamedFeeds() async throws {
         let transport = Self.homeTransport([2, 1])

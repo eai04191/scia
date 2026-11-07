@@ -56,9 +56,8 @@ public final class FeedTimelineModel {
     private var isInForeground = true
     /// 近づいたときの自動の読み込みに失敗した、または進まなかったギャップ。読み直し続けないよう、タップされるまで自動では読まない。
     private var autoLoadFailedGapIDs: Set<String> = []
-    private var isSavingReadPosition = false
-    /// バックグラウンドで既読位置の保存を終えるまで、アプリを止めないよう頼んでいる。終えるときに呼ぶ。
-    private var endReadPositionBackgroundTime: (@MainActor () -> Void)?
+    /// 既読位置を保存する。既読位置のないタイムラインではnil。
+    private var readPosition: ReadPositionSaver?
     /// 新着を挿入するタイミングが来たが、スクロールや長押しのメニューなどの操作中なので、終わるのを待っている。
     private var isWaitingForInteractionToSettle = false
     #if DEBUG
@@ -107,6 +106,20 @@ public final class FeedTimelineModel {
         self.streamingHub = streamingHub
         self.tuning = tuning
         self.backgroundTime = backgroundTime
+        readPosition = feed.marker.map { marker in
+            ReadPositionSaver(
+                name: marker.rawValue,
+                tasks: tasks,
+                clock: clock,
+                tuning: tuning,
+                backgroundTime: backgroundTime,
+                readIDToSave: { [weak self] in self?.store.readIDToSave },
+                save: { id in try await client.saveMarker(for: marker, lastReadID: id) },
+                markSaved: { [weak self] id in self?.store.markSaved(id) },
+                isUserInteracting: { [weak self] in self?.display?.isUserInteracting == true },
+                onFailure: { [weak self] error in self?.handle(error, during: "marker save") { _ in } }
+            )
+        }
         tasks.onClose { [weak self] in self?.didStop() }
     }
 
@@ -197,7 +210,8 @@ public final class FeedTimelineModel {
         // 戻ったときは、つなぎ直したところで補完する。
         cancelRegeneratingRetry()
         stopPolling()
-        saveReadPosition(inBackground: true)
+        readPosition?.cancelWaiting()
+        readPosition?.saveNow(inBackground: true)
     }
 
     /// バックグラウンドから戻ったときに呼ぶ。つなぎ直して切れていた間の投稿を補い、他の端末で読み進めた位置を取り込む。
@@ -668,9 +682,10 @@ public final class FeedTimelineModel {
     }
     #endif
 
-    /// 指によるスクロールが止まったとき、または長押しのメニューが閉じたときに呼ぶ。
+    /// 指によるスクロールが止まったとき、または長押しのメニューが閉じたときに呼ぶ。待っている新着を挿入し、既読位置を待たずに保存する。
+    /// 呼ばなくても、既読位置は読み進めてから決まった時間が経てば保存する（`markRead(_:)`）。
     public func interactionDidSettle() {
-        saveReadPosition(inBackground: false)
+        readPosition?.saveNow()
         guard isWaitingForInteractionToSettle else { return }
         isWaitingForInteractionToSettle = false
         insertPending()
@@ -705,43 +720,6 @@ public final class FeedTimelineModel {
                 model.handle(error, during: "marker sync") { _ in }
             }
         }
-    }
-
-    /// 既読位置が保存済みより進んでいれば保存する。保存している間に読み進めた分も、続けて保存する。
-    /// 競合などで失敗したら、次にスクロールが止まったときに保存し直す。
-    private func saveReadPosition(inBackground: Bool) {
-        guard !isStopped, let marker = feed.marker, store.readIDToSave != nil || isSavingReadPosition else { return }
-        if inBackground, endReadPositionBackgroundTime == nil {
-            // バックグラウンドに入るときは、保存し終えるまでアプリを止めないよう頼んでおく。保存中の分も含める。
-            endReadPositionBackgroundTime = backgroundTime("save \(marker.rawValue) marker") { [weak self] in
-                // 尽きたら、次にバックグラウンドへ入ったときに頼み直す。
-                self?.endReadPositionBackgroundTask()
-            }
-        }
-        guard !isSavingReadPosition else { return }
-        isSavingReadPosition = true
-        let client = client
-        // 既読位置の保存は、スクロールやバックグラウンドへの移行で自動で送る。
-        tasks.run(.display) { [weak self] in
-            while let self, !self.isStopped, let id = self.store.readIDToSave {
-                do {
-                    try await client.saveMarker(for: marker, lastReadID: id)
-                    self.store.markSaved(id)
-                    self.logger.info("\(self.feed.name, privacy: .public) marker saved id=\(id, privacy: .public)")
-                } catch {
-                    self.handle(error, during: "marker save") { _ in }
-                    break
-                }
-            }
-            self?.isSavingReadPosition = false
-            self?.endReadPositionBackgroundTask()
-        }
-    }
-
-    private func endReadPositionBackgroundTask() {
-        guard let end = endReadPositionBackgroundTime else { return }
-        endReadPositionBackgroundTime = nil
-        end()
     }
 
     /// 投稿とそれをブーストした投稿の中身を変え、表示に関わる変化があれば描き直す。お気に入りなどの操作の結果を反映する。
@@ -815,9 +793,24 @@ public final class FeedTimelineModel {
     }
 
     /// 画面に表示されている投稿が変わったときに呼ぶ。スクロールの毎コマで呼ばれるため、既読の位置が進んだときだけ未読を数え直す。
+    /// どんな読み進め方（スクロール、新着のボタンで先頭へ戻るなど）でも呼ぶ。進んだ既読位置は、進まなくなって`TuningCatalog.readPositionSaveDelay`が経ち、
+    /// 一覧を操作していなければ（`TimelineDisplay.isUserInteracting`）サーバーに保存する。
     public func markRead(_ ids: [Status.ID]) {
-        guard store.markRead(ids) else { return }
-        updateUnreadCount()
+        let readIDToSave = store.readIDToSave
+        if store.markRead(ids) {
+            updateUnreadCount()
+        }
+        // 保存する既読位置は、画面の既読の位置と別に進む。遅れて届いた古い投稿が一番上にあり、その下のより新しい投稿を読んだときなど。
+        if store.readIDToSave != readIDToSave {
+            readPosition?.didAdvance()
+        }
+    }
+
+    /// 既読位置を待たずに保存し、保存し終えるまで待つ。保存している途中なら、その分と続けて読み進めた分を保存し終えるまで待つ。
+    /// アプリを終了する前など、保存を待ってから進みたいときに呼ぶ。ストリーミングは切らない。保存するものがなければすぐ返る。
+    /// 失敗しても投げない。失敗は表示に出さず、次に読み進めたときに保存し直す。バックグラウンドに入るときは、`enterBackground()`が保存する。
+    public func saveReadPosition() async {
+        await readPosition?.saveAndWait()
     }
 
     private func updateUnreadCount() {
