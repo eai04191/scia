@@ -10,11 +10,7 @@ struct OAuthClientTests {
     }
 
     private func makeConfiguration() throws -> OAuthClient.Configuration {
-        OAuthClient.Configuration(
-            clientName: "Scia",
-            redirectURI: try #require(URL(string: "net.mizle.scia://oauth")),
-            scopes: "read write"
-        )
+        OAuthClient.Configuration(redirectURI: try #require(URL(string: "net.mizle.scia://oauth")))
     }
 
     private func queryItems(_ url: URL?) -> [String: String] {

@@ -120,7 +120,7 @@ enum AppDependencies {
     }
 
     static let oauth = OAuthClient(
-        configuration: OAuthClient.Configuration(clientName: "Scia", redirectURI: oauthRedirectURI, scopes: "read write"),
+        configuration: OAuthClient.Configuration(redirectURI: oauthRedirectURI),
         client: http
     )
 

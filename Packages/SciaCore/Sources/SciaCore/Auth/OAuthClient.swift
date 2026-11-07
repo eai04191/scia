@@ -2,15 +2,23 @@ public import Foundation
 
 /// Mastodonのアプリ登録からアクセストークンの取得、アカウントの確認までを行う。
 public struct OAuthClient: Sendable {
+    /// サーバーに登録するアプリの名前と、認可のあとに戻る先と、求めるスコープ。
+    /// 名前とスコープはSciaCoreが決める。スコープは、SciaCoreの機能が使うAPIに要るものなので、UIごとに変えない。
+    /// 戻る先はUIごとに違う（URLスキームや、使う認可の画面が違う）ので、アプリが渡す。
     public struct Configuration: Sendable {
+        /// サーバーの「認可したアプリ」の一覧に出る名前。どのUIでもSciaとして登録する。
+        public static let clientName = "Scia"
+        /// 読むこと（`read`）と、投稿や操作（`write`）。https://docs.joinmastodon.org/api/oauth-scopes/
+        public static let scopes = "read write"
+
         public let clientName: String
         public let redirectURI: URL
         public let scopes: String
 
-        public init(clientName: String, redirectURI: URL, scopes: String) {
-            self.clientName = clientName
+        public init(redirectURI: URL) {
+            clientName = Self.clientName
             self.redirectURI = redirectURI
-            self.scopes = scopes
+            scopes = Self.scopes
         }
     }
 
