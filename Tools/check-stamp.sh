@@ -1,7 +1,7 @@
 #!/bin/bash
 # `make check`と`make test`が通った中身を覚え、ローカルのmainに入れてよいかを調べる。Tools/git-hooks/reference-transactionもこれで調べる。
 # 覚えるのはcommitではなくtree（ファイルの中身の組）。commitする前の作業ツリーで通しても、commitしたtreeが同じなら、通ったものとして扱える。
-# 作業ツリーのtreeは、indexの写しにgit add -Aして作るので、まだcommitしていない変更も含む。.gitignoreにあるもの（生成するxcodeprojやDerivedData）は含めない。
+# 作業ツリーのtreeは、indexのコピーにgit add -Aして作るので、まだcommitしていない変更も含む。.gitignoreにあるもの（生成するxcodeprojやDerivedData）は含めない。
 # 覚えたtreeは、worktreeどうしで共有する.gitの共通ディレクトリのscia-check/<check|test>/に、treeのハッシュを名前にした空のファイルで置く。
 # 使い方:
 #   Tools/check-stamp.sh tree                        今の作業ツリーのtreeを出す

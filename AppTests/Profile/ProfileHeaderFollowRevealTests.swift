@@ -117,7 +117,7 @@ struct ProfileHeaderFollowRevealTests {
         header.apply(content(followState: .unknown, showsRelationshipActivity: true))
         #expect(button.state?.showsActivity == true)
 
-        // 長引いている印が残っていても、関係が届いたら出さない。
+        // 長引いていることを示す`showsRelationshipActivity`が残っていても、関係が届いたら出さない。
         header.apply(content(followState: .following, showsRelationshipActivity: true))
         #expect(button.state?.showsActivity == false)
         #expect(button.state?.title == "フォロー中")
