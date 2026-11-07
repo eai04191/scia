@@ -65,6 +65,14 @@ extension UIColor {
     static func filledForeground(on tint: UIColor, traits: UITraitCollection) -> UIColor {
         isMonochromeTint(tint, traits: traits) ? .systemBackground : .white
     }
+
+    /// 白い文字を載せる地に塗るティントカラー。「コントラストを上げる」では、設定アプリのアイコンの四角と同じく地を濃くして、白い文字との差を広げる。ダークモードの高コントラスト版のシステムカラーは暗い背景との差を広げるために明るくなり、白い文字が見えにくくなるので、ライトモードの高コントラスト版の濃い色を使う。
+    static func whiteForegroundFill(_ tint: UIColor) -> UIColor {
+        UIColor { traits in
+            guard traits.accessibilityContrast == .high else { return tint.resolvedColor(with: traits) }
+            return tint.resolvedColor(with: traits.modifyingTraits { $0.userInterfaceStyle = .light })
+        }
+    }
 }
 
 /// ティントカラーが変わったら、設定（`configurationUpdateHandler`）を決め直すボタン。UIButtonはティントカラーが変わっても決め直さないので、
@@ -78,6 +86,8 @@ class TintFollowingButton: UIButton {
     /// ティントカラーで塗りつぶすボタンの文字の色を、ティントカラーに合わせて決め直し続ける。`filledForeground(on:traits:)`の決まりで塗る。
     func followsFilledForeground() {
         configurationUpdateHandler = { button in
+            let monochrome = UIColor.isMonochromeTint(button.tintColor, traits: button.traitCollection)
+            button.configuration?.baseBackgroundColor = monochrome ? nil : .whiteForegroundFill(button.tintColor)
             button.configuration?.baseForegroundColor = .filledForeground(on: button.tintColor, traits: button.traitCollection)
         }
     }
@@ -87,7 +97,7 @@ class TintFollowingButton: UIButton {
     /// - Parameter monochromeFill: `prominentGlass`なら`.clear`で色を付けないガラスに、塗りつぶしなら淡い地にする。
     func appliesGlassAccent(monochromeFill: UIColor = .clear) {
         let monochrome = UIColor.isMonochromeTint(tintColor, traits: traitCollection)
-        configuration?.baseBackgroundColor = monochrome ? monochromeFill : nil
+        configuration?.baseBackgroundColor = monochrome ? monochromeFill : .whiteForegroundFill(tintColor)
         configuration?.baseForegroundColor = monochrome ? .label : .white
     }
 

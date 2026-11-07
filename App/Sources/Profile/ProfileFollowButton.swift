@@ -150,8 +150,12 @@ final class ProfileFollowButton: UIView {
         case .tinted: .tinted()
         case .gray: .gray()
         }
-        if style == .filled, let filledColors {
-            configuration.baseBackgroundColor = filledColors.fill
+        if style == .filled {
+            if let filledColors {
+                configuration.baseBackgroundColor = filledColors.fill
+            } else if !UIColor.isMonochromeTint(tintColor, traits: traitCollection) {
+                configuration.baseBackgroundColor = .whiteForegroundFill(tintColor)
+            }
         }
         colorSource.tintColor = tintColor
         colorSource.traitOverrides.userInterfaceStyle = traitCollection.userInterfaceStyle
