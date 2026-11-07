@@ -657,6 +657,14 @@ public final class ComposeModel<Thumbnail: Sendable> {
         return true
     }
 
+    /// ユーザーのメニューの「メンション」で、本文に語を入れる前に、投稿するアカウントを`account`にする。入れてよければtrue。
+    /// 同じアカウントのままなら替えないので、編集や書き直しの途中でも入れられる。送っている間はfalse。ほかのアカウントへ替えられるかは`switchAccount`の決まりに従う。
+    public func prepareInsertion(as account: ComposeAccount<Thumbnail>?) -> Bool {
+        guard !isPosting else { return false }
+        guard account?.id != otherAccount?.id else { return true }
+        return switchAccount(to: account)
+    }
+
     /// ほかのアカウントで書いていれば、今のアカウントに戻す。下書きを空にするときに呼ぶ。
     private func leaveOtherAccount() {
         enterAccount(nil)

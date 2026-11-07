@@ -128,6 +128,21 @@ struct ComposeModelAccountTests {
         #expect(model.otherAccount == nil)
     }
 
+    /// メンションを入れる前の準備は、同じアカウントのままなら替えないので、編集と書き直しの途中でも通す。ほかのアカウントへは替えない。
+    @Test func preparesInsertionWhileEditingOrRedraftingWithSameAccount() throws {
+        let posted = Posted()
+        let editing = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }
+        #expect(editing.beginEditing(status(id: "10", accountID: "1"), source: StatusSource(id: "10", text: "前の本文", spoilerText: "")))
+        #expect(editing.prepareInsertion(as: nil))
+        #expect(editing.editedStatus?.id == "10")
+        #expect(!editing.prepareInsertion(as: other(Uploads(), posted: posted)))
+        #expect(editing.otherAccount == nil)
+
+        let redrafting = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }
+        #expect(redrafting.beginRedrafting(status(id: "10", accountID: "1"), source: StatusSource(id: "10", text: "前の本文", spoilerText: "")))
+        #expect(redrafting.prepareInsertion(as: nil))
+    }
+
     /// 替えた先のサーバーの値を読めなくても、前のサーバーの上限は使わず、読む前の上限にする。
     @Test func forgetsLimitsOfPreviousServer() {
         let model = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }

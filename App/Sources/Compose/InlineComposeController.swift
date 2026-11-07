@@ -1386,11 +1386,10 @@ final class InlineComposeController: NSObject {
     /// 送っている間は本文を変えられないため、何もしない。
     /// - Parameter account: 投稿するアカウント。nilなら今のアカウントで書く。`acct`は、そのアカウントのサーバーから見たハンドルを渡す。
     func mention(_ acct: String, as account: ComposeAccount<UIImage>? = nil) {
-        guard !model.isPosting else {
-            logger.info("compose: mention not inserted while posting")
+        guard model.prepareInsertion(as: account) else {
+            logger.info("compose: mention not inserted")
             return
         }
-        guard model.switchAccount(to: account) else { return }
         insert("@\(acct)")
     }
 
