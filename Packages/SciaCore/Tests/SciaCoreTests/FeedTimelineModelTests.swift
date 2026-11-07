@@ -447,4 +447,44 @@ struct FeedTimelineModelTests {
         try await waitUntil { model.runningTaskCount == 0 }
         #expect(backgroundTime.heldCount == 0)
     }
+
+    /// ストリーミングで新着を受け取るタイムラインでは、`setShown`を呼んでも間隔をおいて読み直さない。
+    @Test func setShownDoesNotPollStreamedFeeds() async throws {
+        let transport = Self.homeTransport([2, 1])
+        let clock = TestClock()
+        let (model, display) = makeModel(transport: transport, clock: clock)
+        defer { model.stop() }
+        model.start(purpose: .action)
+        try await waitUntil { display.contentState == .loaded && model.runningTaskCount == 0 }
+        let loads = transport.requests(to: "/api/v1/timelines/home").count
+
+        model.setShown(true)
+
+        #expect(model.runningTaskCount == 0)
+        #expect(clock.sleeperCount == 0)
+        #expect(transport.requests(to: "/api/v1/timelines/home").count == loads)
+    }
+
+    /// ユーザーのハッシュタグのタイムラインは、画面に出たら新着を読み、出ている間は間隔をおいて読み直す。見えなくなったらやめる。
+    @Test func setShownPollsAccountHashtag() async throws {
+        let transport = RoutedTransport { request in
+            guard request.url?.path() == "/api/v1/accounts/2/statuses" else { return (404, Data(#"{"error":"Not found"}"#.utf8)) }
+            return (200, Data("[]".utf8))
+        }
+        let clock = TestClock()
+        let (model, display) = makeModel(feed: .accountHashtag(accountID: "2", name: "scia"), transport: transport, clock: clock)
+        defer { model.stop() }
+        model.start(purpose: .action)
+        try await waitUntil { display.contentState == .loaded && model.runningTaskCount == 0 }
+        let loads = transport.requests(to: "/api/v1/accounts/2/statuses").count
+
+        model.setShown(true)
+        try await waitUntil { transport.requests(to: "/api/v1/accounts/2/statuses").count == loads + 1 && clock.sleeperCount == 1 }
+        clock.advance(by: .seconds(TuningCatalog.shownFeedPollingInterval.defaultValue))
+        try await waitUntil { transport.requests(to: "/api/v1/accounts/2/statuses").count == loads + 2 }
+
+        model.setShown(false)
+        try await waitUntil { model.runningTaskCount == 0 }
+        #expect(clock.sleeperCount == 0)
+    }
 }

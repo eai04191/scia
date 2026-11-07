@@ -41,6 +41,10 @@ public enum TimelineFeed: Hashable, Sendable {
         if case .accountHashtag = self { true } else { false }
     }
 
+    /// ストリーミングでは新着を取りこぼすので、画面に出ている間だけ間隔をおいて読み直し、出ていない間は読まない。ユーザーのハッシュタグのタイムライン。
+    /// ハッシュタグのストリームは公開の投稿しか運ばず、フォロワーのみなどの投稿は読まないと分からないため。決まりはdocs/tabs.mdの「ユーザーのハッシュタグ」にある。
+    public var readsWhileShown: Bool { isAccountHashtag }
+
     /// ストリームで届いた投稿の扱い。
     public enum StreamedStatusHandling: Sendable, Equatable {
         /// 新着として入れる。

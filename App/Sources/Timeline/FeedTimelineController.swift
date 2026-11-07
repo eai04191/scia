@@ -57,9 +57,7 @@ final class FeedTimelineController {
         streamingStatusView.install(in: viewController.collectionView)
         viewController.onGapSelect = { [weak model] id, direction in model?.selectGap(id, from: direction) }
         viewController.onGapApproach = { [weak model] id, direction in model?.approachGap(id, from: direction) }
-        if feed.isAccountHashtag {
-            viewController.onVisibilityChange = { [weak model] isShown in model?.setShown(isShown) }
-        }
+        viewController.onVisibilityChange = { [weak model] isShown in model?.setShown(isShown) }
         #if DEBUG
         viewController.debugActions = makeDebugActions()
         #endif

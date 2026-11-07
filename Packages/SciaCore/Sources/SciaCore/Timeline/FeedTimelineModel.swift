@@ -212,7 +212,7 @@ public final class FeedTimelineModel {
         hasStartedFillAfterResume = false
         startStreaming()
         // ストリームにつながらない環境でも、見ているタイムラインはすぐ読む。つながったときの補完と重なれば、ストアが1つにまとめる。
-        if feed.isAccountHashtag, isShown, !isDisabled {
+        if feed.readsWhileShown, isShown, !isDisabled {
             fillFromLatest(purpose: .display)
         }
         startPolling()
@@ -221,11 +221,12 @@ public final class FeedTimelineModel {
 
     // MARK: - 前に出ている間の読み直し
 
-    /// 画面が前に出たら、見ていなかった間の新着を読み、前に出ている間は間隔をおいて読み直す。見えなくなったらやめる。
-    /// ユーザーのハッシュタグのタイムラインで使う。ハッシュタグのストリームは公開の投稿しか運ばず、フォロワーのみなどの投稿は読まないと分からないため。
-    /// 見ていない間は読まず、通信を前に出ている1つのタイムラインの分に抑える。決まりはdocs/tabs.mdの「ユーザーのハッシュタグ」にある。
+    /// 画面に出たか、見えなくなったかを伝える。どのタイムラインで、何度呼んでもよい。
+    /// 読み直しが要るタイムライン（`TimelineFeed.readsWhileShown`。ユーザーのハッシュタグ）だけが、画面に出たら見ていなかった間の新着を読み、
+    /// 出ている間は間隔をおいて読み直し、見えなくなったらやめる。見ていない間は読まず、通信を前に出ている1つのタイムラインの分に抑える。
+    /// ほかのタイムラインはストリーミングで新着を受け取るので、呼んでも読まない。
     public func setShown(_ isShown: Bool) {
-        guard self.isShown != isShown else { return }
+        guard feed.readsWhileShown, self.isShown != isShown else { return }
         self.isShown = isShown
         guard isShown else {
             stopPolling()
@@ -244,7 +245,7 @@ public final class FeedTimelineModel {
     /// ストリームから来る補完のきっかけ（つながったとき、切れている間のポーリング、届いた投稿）で読む。
     /// ユーザーのハッシュタグは、見ていない間は読まない。見えたときに`setShown`で読むので、見ていない間の新着は取りこぼさない。
     private func fillFromLatestIfShownWhenNeeded() {
-        guard !feed.isAccountHashtag || isShown else { return }
+        guard !feed.readsWhileShown || isShown else { return }
         fillFromLatest(purpose: .display)
     }
 
@@ -282,7 +283,7 @@ public final class FeedTimelineModel {
     /// ユーザーのハッシュタグは、見ていない間は読まない。見えたときに`setShown`でやり直す。
     /// 無効にしたタイムラインも、使わないタイムラインへの通信になるので読まない。有効に戻したときに`setEnabled`でやり直す。
     private func retryFailedLoads() {
-        guard !isDisabled, !feed.isAccountHashtag || isShown else { return }
+        guard !isDisabled, !feed.readsWhileShown || isShown else { return }
         if case .failed = contentState {
             start(purpose: .display)
         } else if case .failed = footerState {
