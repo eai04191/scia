@@ -31,13 +31,6 @@ struct TimelineStoreTests {
 
     private struct Failure: Error {}
 
-    /// 最初の読み込みは、読んだ投稿を辞書で重複を除いてから並べるため、隠す投稿の並びが走らせるたびに変わる。
-    /// 並びはタイムラインに出ないので、中身が同じなら実際の並びに合わせ、違えば書いた値のまま比べて違いを出す。
-    private func inActualOrder(_ expected: [Status], _ actual: [Status]) -> [Status] {
-        let byID: (Status, Status) -> Bool = { $0.id < $1.id }
-        return expected.sorted(by: byID) == actual.sorted(by: byID) ? actual : expected
-    }
-
     private func statuses(_ ids: [Int]) throws -> [Status] {
         let avatar = try #require(URL(string: "https://example.social/avatars/alice.png"))
         return ids.map { id in
@@ -477,7 +470,7 @@ struct TimelineStoreTests {
 
         try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
             $0.entries = try entries([30])
-            $0.hiddenStatuses = inActualOrder(muted, store.state.hiddenStatuses)
+            $0.hiddenStatuses = muted
             $0.oldestLoadedID = "30"
         }
 

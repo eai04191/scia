@@ -153,7 +153,8 @@ public final class TimelineStore {
         state.unreadableItems = Self.unique(loaded.flatMap(\.unreadable).filter { !state.deletedIDs.contains($0.id) })
         // 読み直したタイムラインはIDの順に並べる。
         state.lateArrivalPositions = [:]
-        rebuild(statuses: Array(unique.values), gaps: loadedGaps)
+        // 辞書の取り出し順は走らせるたびに変わるため、IDの順にしてから渡す。フィルターで出さない投稿は、渡した順のまま持つため。
+        rebuild(statuses: unique.values.sorted { StatusID.isNewer($0.id, than: $1.id) }, gaps: loadedGaps)
         state.oldestLoadedID = Self.oldest(unique.keys.map(Optional.some) + state.unreadableItems.map(\.id))
         state.olderArrivals = []
         // 前のタイムラインで埋まらなかった基準は、読み直したタイムラインの範囲の外にあり、そこから読むと読み込み済みの区間にギャップを置いてしまう。

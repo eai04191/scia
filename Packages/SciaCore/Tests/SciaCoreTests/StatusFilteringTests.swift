@@ -130,13 +130,6 @@ struct FilteredTimelineTests {
         return (store, { recorder.queries })
     }
 
-    /// 最初の読み込みは、読んだ投稿を辞書で重複を除いてから並べるため、隠す投稿の並びが走らせるたびに変わる。
-    /// 並びはタイムラインに出ないので、中身が同じなら実際の並びに合わせ、違えば書いた値のまま比べて違いを出す。
-    private func inActualOrder(_ expected: [Status], _ actual: [Status]) -> [Status] {
-        let byID: (Status, Status) -> Bool = { $0.id < $1.id }
-        return expected.sorted(by: byID) == actual.sorted(by: byID) ? actual : expected
-    }
-
     /// 隠した投稿は並べないが、続きを読む位置には使う。1ページの全部が隠れても、その先へ進める。
     @Test func hiddenStatusesAreNotShownButStillPage() async throws {
         let hide = [filter("x", .hide)]
@@ -145,7 +138,7 @@ struct FilteredTimelineTests {
         let (store, queries) = store(pages: [firstPage, hiddenPage, [status("24")]])
         let initial = try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
             $0.entries = [.status(firstPage[0])]
-            $0.hiddenStatuses = inActualOrder(Array(firstPage[1...]), store.state.hiddenStatuses)
+            $0.hiddenStatuses = Array(firstPage[1...])
             $0.oldestLoadedID = "28"
         }
         #expect(initial?.map(\.id) == ["30"])
@@ -242,7 +235,7 @@ struct FilteredTimelineTests {
         let (store, queries) = store(pages: [firstPage, [status("27", filtered: hide), status("26")]])
         let initial = try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
             $0.entries = [.status(status("26"))]
-            $0.hiddenStatuses = inActualOrder(firstPage + [status("27", filtered: hide)], store.state.hiddenStatuses)
+            $0.hiddenStatuses = firstPage + [status("27", filtered: hide)]
             $0.oldestLoadedID = "26"
         }
         #expect(initial?.map(\.id) == ["26"])
