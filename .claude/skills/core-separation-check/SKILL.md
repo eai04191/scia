@@ -27,6 +27,10 @@ XとYは、起動のたびに新しく作る。前の回のsessionに頼まな�
 - Yのbranchをmainへ入れるのは、ユーザーがYのsessionで`/merge-to-main`を起動したときだけ
 - Mac版のbranchはmainへ入れない
 
+### 名前
+
+- `start_session`の`title`は「X: 」か「Y: 」で始め、続けて中身を書く（「X: Mac版に通知とスレッドを足す」）。`name`と`branch_name`は`x-`か`y-`で始める（`x-mac-notifications`）。サイドバーやbranchの名前から、どちらのsessionかを見分けられるようにするため
+
 ### 伝えること
 
 - Xへは、SciaCore、docs、AGENTS.md、X自身のMac版のコードと記録から分かることしか伝えない。App/Sourcesのパス、iOS版の型や関数の名前、iOS版がどう作っているか、Yがなぜそう直したかのApp側の事情は、どれも伝えない
