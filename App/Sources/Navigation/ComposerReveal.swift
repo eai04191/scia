@@ -1,4 +1,3 @@
-import SafariServices
 import UIKit
 
 /// 共有で投稿欄に入れるときに、閉じずに残す画面。
@@ -10,7 +9,7 @@ protocol StaysForSharedContent: UIViewController {}
 extension UIAlertController: StaysForSharedContent {}
 
 /// アプリ内のSafariは、投稿欄で書き始めると自分で伏せた高さまで下がって投稿欄を見せる（`InAppBrowser.lowerForCompose()`）。閉じると読んでいたページを失う。
-extension SFSafariViewController: StaysForSharedContent {}
+extension InAppBrowserSheet: StaysForSharedContent {}
 
 /// 重ねた画面をまとめて閉じるときに、出した側からまとめて閉じさせず、自分の閉じ方で閉じる画面。
 /// 下の画面からまとめて閉じられると閉じる動きを通らず、閉じ終えた知らせ（`MediaViewerController.onCloseFinish`）を待つ側が待ち続けるため。

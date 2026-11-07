@@ -7,6 +7,7 @@ import UIKit
 /// アプリは手前にいたままなので、読んでいる間もストリーミングが流れ続ける。
 ///
 /// シートの高さは、伏せた高さ（URLのバーだけ見える）、中くらいの高さ、全画面の3段。投稿欄で書いている間は伏せた高さまで下げ、書き終えたら戻す。
+/// シートはSafariではなく入れ物（`InAppBrowserSheet`）で出し、高さを変えるのは上端の帯を引いたときだけにする。ページのスワイプでシートが下がらないようにするため。
 @MainActor
 final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, UISheetPresentationControllerDelegate {
     /// シートが画面の下から覆っている高さが変わったときに呼ぶ。閉じたら0を渡す。タイムラインの下に、シートより上へ出せるだけの余白を取るために使う。
@@ -22,7 +23,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
     /// 窓の安全領域は窓とシーンで決まり、シートの並べ方に左右されないので、段の計算の中で読んでも、
     /// シート自身の安全領域を読んだときのような入れ子（`reportObscuredHeightAfterResolving`）にならない。
     private weak var window: UIWindow?
-    private weak var current: SFSafariViewController?
+    private weak var current: InAppBrowserSheet?
     /// 段ごとに解決した高さ（安全領域の中の高さ）。シートの見た目の位置はビューの枠に出ず（シートのビューの枠は画面全体のまま）、
     /// 出したあとに測れないため、高さを決めるところで受け取って覚えておく。
     private var resolvedHeights: [UISheetPresentationController.Detent.Identifier: CGFloat] = [:]
@@ -51,40 +52,40 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         self.window = window
         let safari = SFSafariViewController(url: url)
         safari.delegate = self
-        safari.modalPresentationStyle = .pageSheet
-        if let sheet = safari.sheetPresentationController {
-            sheet.detents = [detent(Self.collapsedIdentifier, for: safari), detent(Self.mediumIdentifier, for: safari), .large()]
+        let browserSheet = InAppBrowserSheet(safari: safari, handleHeight: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserHandleHeight)))
+        browserSheet.modalPresentationStyle = .pageSheet
+        if let sheet = browserSheet.sheetPresentationController {
+            sheet.detents = [detent(Self.collapsedIdentifier, for: browserSheet), detent(Self.mediumIdentifier, for: browserSheet), .large()]
             // 中くらいの高さまでは後ろを暗くせず、タイムラインを触れるままにする。
             sheet.largestUndimmedDetentIdentifier = Self.mediumIdentifier
             // 選んでいなければいちばん低い段で出るため、設定の高さの段を選んでおく。
             sheet.selectedDetentIdentifier = openingIdentifier
             sheet.prefersGrabberVisible = true
-            // ページのスクロールでシートを広げない。広げるのはつまみを引いたときだけ。
-            sheet.prefersScrollingExpandsWhenScrolledToEdge = false
             sheet.delegate = self
         }
         if let current, let presenter = current.presentingViewController, !current.isBeingDismissed {
-            safari.sheetPresentationController?.selectedDetentIdentifier = current.sheetPresentationController?.selectedDetentIdentifier
-            self.current = safari
+            browserSheet.sheetPresentationController?.selectedDetentIdentifier = current.sheetPresentationController?.selectedDetentIdentifier
+            self.current = browserSheet
             logger.info("in-app browser replace")
             // 同じ位置に同じ大きさで出し直すので、動かさずに入れ替える。
             // 上に重ねた画面（投稿欄のシートなど）があれば一緒に閉じ、閉じたことを知らせる。`current`の`dismiss`では、上の画面だけが閉じてシートが残る。
             presenter.dismissPresentedScreens(animated: false) {
-                presenter.present(safari, animated: false)
+                presenter.present(browserSheet, animated: false)
+                browserSheet.presentSafari()
             }
             return
         }
-        current = safari
+        current = browserSheet
         detentBeforeCompose = nil
         let grows = tuning.value(of: TuningCatalog.inAppBrowserGrowsFromCollapsed)
         if grows {
-            safari.sheetPresentationController?.selectedDetentIdentifier = Self.collapsedIdentifier
+            browserSheet.sheetPresentationController?.selectedDetentIdentifier = Self.collapsedIdentifier
         }
         logger.info("in-app browser open grows=\(grows, privacy: .public)")
         onPresenceChange?(true)
         let opening = openingIdentifier
-        root.frontmostPresented.present(safari, animated: true) { [weak self, weak safari] in
-            guard let self, let safari, self.current === safari, let sheet = safari.sheetPresentationController else { return }
+        root.frontmostPresented.present(browserSheet, animated: true) { [weak self, weak browserSheet] in
+            guard let self, let browserSheet, self.current === browserSheet, let sheet = browserSheet.sheetPresentationController else { return }
             if grows {
                 guard sheet.selectedDetentIdentifier == Self.collapsedIdentifier else { return }
                 self.select(opening, on: sheet)
@@ -93,6 +94,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
                 self.selectionDidChange(sheet)
             }
         }
+        browserSheet.presentSafari()
     }
 
     /// 投稿欄で書き始めたときに呼ぶ。シートは投稿欄より手前に出るため、伏せた高さまで下げてキーボードの裏へ逃がす。
@@ -134,8 +136,8 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
     /// タイムラインの余白も安全領域の外から数えるので、知らせるときに足す。設定やチューニングを変えたら、次にシートの高さを決め直すとき（開き直す、段を変える）に効く。
     /// 高さの狭い画面（iPhoneの横向き）では、中くらいの高さの段を出さず、シートは全画面になる。
     /// 段は低い順に並べる決まりがあるため、伏せた高さは中くらいの高さより低く抑える。チューニングの組み合わせによっては、伏せた高さが設定より低くなる。
-    private func detent(_ identifier: UISheetPresentationController.Detent.Identifier, for safari: SFSafariViewController) -> UISheetPresentationController.Detent {
-        .custom(identifier: identifier) { [weak self, weak safari] context in
+    private func detent(_ identifier: UISheetPresentationController.Detent.Identifier, for browserSheet: InAppBrowserSheet) -> UISheetPresentationController.Detent {
+        .custom(identifier: identifier) { [weak self, weak browserSheet] context in
             guard let self else { return nil }
             let value: CGFloat? = switch identifier {
             case Self.collapsedIdentifier:
@@ -143,7 +145,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
             default:
                 self.mediumHeight(in: context)
             }
-            if let safari, self.current === safari {
+            if let browserSheet, self.current === browserSheet {
                 self.resolvedHeights[identifier] = value
                 self.reportObscuredHeightAfterResolving()
             }
@@ -183,8 +185,8 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         onCoverageChange?(sheet.selectedDetentIdentifier == .large)
     }
 
-    private func didClose(_ safari: SFSafariViewController) {
-        guard current === safari || current == nil else { return }
+    private func didClose(_ browserSheet: InAppBrowserSheet?) {
+        guard current === browserSheet || current == nil else { return }
         current = nil
         detentBeforeCompose = nil
         resolvedHeights = [:]
@@ -196,10 +198,11 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
 
     // MARK: - SFSafariViewControllerDelegate
 
-    /// 左上の×で閉じたとき。
+    /// 左上の×で閉じたとき。シートごと閉じる（`InAppBrowserSheet`）。
     func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
         logger.info("in-app browser finished by close button")
-        didClose(controller)
+        guard current?.safari === controller else { return }
+        didClose(current)
     }
 
     // MARK: - UISheetPresentationControllerDelegate
@@ -214,9 +217,9 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
 
     /// 下へのスワイプで閉じたとき。
     func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
-        guard let safari = presentationController.presentedViewController as? SFSafariViewController else { return }
+        guard let browserSheet = presentationController.presentedViewController as? InAppBrowserSheet else { return }
         logger.info("in-app browser dismissed by swipe")
-        didClose(safari)
+        didClose(browserSheet)
     }
 }
 

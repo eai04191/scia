@@ -17,7 +17,7 @@ struct InAppBrowserTests {
         let root = harness.viewController
         let browser = InAppBrowser()
         browser.open(try #require(URL(string: "https://example.com/1")), from: root)
-        try await waitUntil { root.presentedViewController is SFSafariViewController && root.presentedViewController?.isBeingPresented == false }
+        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
         let first = try #require(root.presentedViewController)
         var closed = 0
         let sheet = ScheduleDateSheet(title: "予約の日時", date: Date(timeIntervalSince1970: 1_800_000_000), minimumDate: Date(timeIntervalSince1970: 1_700_000_000), confirmTitle: "完了") { _ in } onClose: {
@@ -27,11 +27,28 @@ struct InAppBrowserTests {
 
         browser.open(try #require(URL(string: "https://example.com/2")), from: root)
 
-        try await waitUntil { root.presentedViewController is SFSafariViewController && root.presentedViewController !== first }
+        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController !== first }
         #expect(root.presentedViewController?.presentedViewController == nil)
         #expect(closed == 1)
         #expect(browser.isPresented)
         root.dismiss(animated: false)
+    }
+
+    /// Safariはシートの帯の下にモーダルで重ね、Safariを閉じたら（×）、帯だけの空のシートを残さず、シートごと閉じる。
+    @Test func closingSafariClosesTheSheet() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let browser = InAppBrowser()
+        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
+        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
+        let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
+        #expect(sheet.presentedViewController == nil)
+        #expect(sheet.safari.presentingViewController?.parent === sheet)
+
+        sheet.safari.dismiss(animated: true)
+
+        try await waitUntil { root.presentedViewController == nil }
     }
 
     /// シートの高さを決める間は、覆う高さを知らせず、決め終えてから知らせる。
@@ -49,7 +66,7 @@ struct InAppBrowserTests {
             reported.append(height)
         }
         browser.open(try #require(URL(string: "https://example.com/1")), from: root)
-        try await waitUntil { root.presentedViewController is SFSafariViewController && root.presentedViewController?.isBeingPresented == false }
+        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
         let sheet = try #require(root.presentedViewController?.sheetPresentationController)
         reported.removeAll()
 

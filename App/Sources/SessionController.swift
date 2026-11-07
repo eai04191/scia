@@ -1,5 +1,4 @@
 import os
-import SafariServices
 import SciaCore
 import UIKit
 
@@ -521,7 +520,7 @@ final class SessionController {
             // 投稿欄より手前にあるのは、アプリ内のSafariのシートだけのとき。ほかの画面を出していれば、その上には重ねない。
             guard let tabBarController else { return nil }
             let top = tabBarController.frontmostPresented
-            return top === tabBarController || top is SFSafariViewController ? top : nil
+            return top === tabBarController || top is InAppBrowserSheet ? top : nil
         }
         composer.onShowReplyTarget = { [weak tabs] status in
             // 今見えているタイムライン（ホーム、通知、開いているプロフィール）に返信先があれば、そこへ戻る。なければ動かさない。
