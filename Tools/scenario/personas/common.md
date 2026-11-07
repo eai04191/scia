@@ -17,9 +17,13 @@
 - スワイプ・スクロール: `axe swipe --start-x <x> --start-y <y> --end-x <x> --end-y <y> --udid {{UDID}}`
 - 文字を入れる: `axe type '<英数字>' --udid {{UDID}}`。先に入力欄をタップする
 - キー: `axe key <コード> --udid {{UDID}}`（40がReturn、42が削除）
+- 続けて操作する: `axe batch --udid {{UDID}} --tap-style physical --step '<操作>' --step 'sleep <秒>' --step '<操作>'`。`<操作>`には、tap、touch、swipe、type、keyを、上のコマンドから`axe`と`--udid`を除いた形で書く（例: `--step 'tap --label ホーム'`）。1つずつコマンドを送ると、次の操作までに数秒空き、画面の動きは終わってしまう。動いている途中に次を押すには、batchにまとめる
+  - 名前で押すtapは、batchを始めたときの画面の要素の位置を押すので、0.3秒ほどの間で続けて押せる。batchの途中で出てきた要素は名前で押せず、動いた要素は元の位置を押す
+  - 座標で押すtapやswipeは、batchの中でも1つに1秒ほどかかる
+  - 終わった直後の画面を見るには、`&&`でつないで同じ呼び出しで`axe screenshot`を撮る
 - Sciaが閉じてしまったら: `xcrun simctl launch {{UDID}} net.mizle.scia`
 
-操作のあとは、画面を撮るか読み直してから次へ進んでください。思った画面でなければ、同じ座標を押し直さず、読み直して座標を取り直してください。
+操作のあと（batchなら、batchのあと）は、画面を撮るか読み直してから次へ進んでください。思った画面でなければ、同じ座標を押し直さず、読み直して座標を取り直してください。
 
 ## やること
 
