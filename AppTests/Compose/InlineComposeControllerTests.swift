@@ -332,6 +332,27 @@ final class InlineComposeControllerTests {
     }
 
     /// 投票の欄を出して本文を書いているとき、欄を全部出すと本文に最低の行数も残らないなら、選択肢の欄を1行に折りたたむ。
+    /// 英字の後ろに記号をペーストしても、本文と注意書きの欄が間に空白を足さない。UIKitのスマート挿入は、「abc」の後ろに「─」を貼ると「abc ─」にしていた。
+    @Test func pasteKeepsTextAsCopied() async throws {
+        defer { window.isHidden = true }
+        composer.beginEditing()
+        composer.model.showsSpoiler = true
+        try await waitUntilSettled()
+        let textView = try #require(textViews(in: window).first)
+        textView.becomeFirstResponder()
+        textView.insertText("abc")
+        textView.paste(itemProviders: [NSItemProvider(object: "─" as NSString)])
+        try await waitUntil { textView.text != "abc" }
+        #expect(textView.text == "abc─")
+
+        let spoilerField = try #require(textFields(in: window).first { $0.placeholder?.hasPrefix("注意書き") == true })
+        spoilerField.becomeFirstResponder()
+        spoilerField.insertText("abc")
+        spoilerField.paste(itemProviders: [NSItemProvider(object: "─" as NSString)])
+        try await waitUntil { spoilerField.text != "abc" }
+        #expect(spoilerField.text == "abc─")
+    }
+
     /// 1行を押すと開いて選択肢に書き始め、本文に戻るとまた折りたたむ。場所が足りていれば、本文を書いていても開いたままにする。
     @Test func pollFoldsWhileWritingTextOnlyWhenItDoesNotFit() async throws {
         defer { window.isHidden = true }

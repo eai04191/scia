@@ -212,6 +212,8 @@ final class ListEditor {
             field.text = text
             field.placeholder = "リストの名前"
             field.clearButtonMode = .whileEditing
+            // ペーストした文字を、コピーしたとおりに入れる。理由は`GlyphLanguageTextView`の`smartInsertDeleteType`と同じ。
+            field.smartInsertDeleteType = .no
             field.addAction(UIAction { [weak action, weak field] _ in
                 action?.isEnabled = !(field?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             }, for: .editingChanged)

@@ -20,6 +20,8 @@ struct InstanceTextField: UIViewRepresentable {
         field.autocapitalizationType = .none
         field.autocorrectionType = .no
         field.spellCheckingType = .no
+        // ペーストした文字を、コピーしたとおりに入れる。理由は`GlyphLanguageTextView`の`smartInsertDeleteType`と同じ。
+        field.smartInsertDeleteType = .no
         field.returnKeyType = .go
         field.delegate = context.coordinator
         field.addTarget(context.coordinator, action: #selector(Coordinator.editingChanged(_:)), for: .editingChanged)

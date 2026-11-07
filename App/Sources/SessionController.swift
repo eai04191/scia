@@ -1347,6 +1347,8 @@ final class SessionController {
             field.text = item.title == defaultTitle ? "" : item.title
             field.placeholder = defaultTitle
             field.clearButtonMode = .whileEditing
+            // ペーストした文字を、コピーしたとおりに入れる。理由は`GlyphLanguageTextView`の`smartInsertDeleteType`と同じ。
+            field.smartInsertDeleteType = .no
         }
         alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
         alert.addAction(UIAlertAction(title: "保存", style: .default) { [weak self, weak alert] _ in
