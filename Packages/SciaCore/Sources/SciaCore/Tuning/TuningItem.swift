@@ -61,13 +61,23 @@ public struct ToggleTuning: Sendable, Identifiable {
 /// アプリで使うチューニング項目のリスト。値を足すときは、ここに定義を追加してTuningStoreから読む。
 public enum TuningCatalog {
 
-    /// 投票したときに、結果の棒が伸びるスプリングの時間。投票する形と結果の形を入れ替えるクロスフェードは、この半分の時間。0なら動かさない。
+    /// 投票したときに、結果の棒が伸びるスプリングの時間。割合と人数の数字も、この時間で入れ替える。0なら動かさない。
     public static let pollBarDuration = NumberTuning(
         id: "timeline.pollBarDuration",
         title: "投票の結果の棒が伸びる時間（秒）",
         range: 0...1.5,
         step: 0.05,
         defaultValue: 0.5
+    )
+
+    /// 投票する形と結果の形を入れ替えるときの、割合を浮かび上がらせる時間と、選んだ選択肢のフチを移す時間。
+    /// 割合は、この半分だけ待って、先頭の記号が消えかけてから出す。下の行のボタンは、この半分で前のボタンを消し、続く半分で新しいボタンを出す。0なら動かさない。
+    public static let pollModeChangeDuration = NumberTuning(
+        id: "timeline.pollModeChangeDuration",
+        title: "投票の形を入れ替える時間（秒）",
+        range: 0...1.5,
+        step: 0.05,
+        defaultValue: 0.3
     )
 
     /// リンク先だけのカードに、サーバーのカードが届いたときの、差し替えのスプリングの時間。画像のないカードでは、サムネイルの枠を縮めて消す。
@@ -1757,6 +1767,7 @@ public enum TuningCatalog {
     public static let sections: [TuningSection] = [
         TuningSection(id: "timeline", title: "タイムラインの見た目", items: [
             .number(pollBarDuration),
+            .number(pollModeChangeDuration),
             .number(linkCardTransitionDuration),
             .number(longBodyExpandDuration),
             .number(actionBarDrawerDuration),

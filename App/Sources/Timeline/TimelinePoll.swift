@@ -21,7 +21,8 @@ extension TimelineViewController {
             optionPadding: settings.value(of: AppearanceCatalog.pollOptionPadding),
             optionHorizontalPadding: settings.value(of: AppearanceCatalog.pollOptionHorizontalPadding),
             optionCornerRadius: settings.value(of: AppearanceCatalog.pollOptionCornerRadius),
-            barDuration: tuning.value(of: TuningCatalog.pollBarDuration)
+            barDuration: tuning.value(of: TuningCatalog.pollBarDuration),
+            modeChangeDuration: tuning.value(of: TuningCatalog.pollModeChangeDuration)
         )
     }
 

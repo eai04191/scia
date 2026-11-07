@@ -43,6 +43,8 @@ public struct PollDisplay: Equatable, Sendable {
     public let isRefreshing: Bool
     /// 選択肢の下に出す、人数か票数と、締め切り。
     public let summary: String
+    /// `summary`に出す人数か票数。表示が数字を入れ替えるときに、増えたか減ったかで入れ替わる向きを決める。
+    public let count: Int
 
     /// - Parameter allowsVoting: 投票する形にしてよい。投票の終了の通知のように、結果を知るために出す場所ではfalseにする。
     /// - Parameter locale: 人数と票数の区切り方を決める、端末の地域。
@@ -81,6 +83,7 @@ public struct PollDisplay: Equatable, Sendable {
             parts.append("結果は締め切り後")
         }
         summary = parts.joined(separator: "・")
+        count = total
     }
 
     /// 人数と票数。桁が多くても読めるよう、端末の地域の区切り方で区切る。

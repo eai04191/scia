@@ -119,6 +119,12 @@ struct PollDisplayTests {
         #expect(PollDisplay(poll: poll(multiple: true, votes: [123_456, 2], votersCount: 120_000), choices: PollChoices(), now: now, locale: Locale(identifier: "ja_JP")).summary == "120,000人・残り1日")
     }
 
+    /// 下の行の数は、書いているものと同じく、複数選べる投票では投票した人の数、複数選べない投票では票の数にする。
+    @Test func countMatchesSummary() {
+        #expect(PollDisplay(poll: poll(multiple: true, votes: [5, 4], votersCount: 7), choices: PollChoices(), now: now).count == 7)
+        #expect(PollDisplay(poll: poll(votes: [5, 4]), choices: PollChoices(), now: now).count == 9)
+    }
+
     /// 票数を隠す投票では、結果を見ても割合が出ないため、投票せずに結果を見られないようにする。
     @Test func cannotRevealHiddenTotals() {
         #expect(PollDisplay(poll: poll(), choices: PollChoices(), now: now).canRevealResults)

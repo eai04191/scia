@@ -7,6 +7,8 @@ import UIKit
 /// 投票すると形が替わるが、行の高さは変えない。先頭の記号と割合、末尾のチェックマークの場所はどちらの形でも同じ幅を取り、選択肢の文字の折り返しをそろえる。
 /// 下の行の高さも、「投票」のボタンの高さに固定する。
 /// 結果の形の選択肢は押下を受けず、行の押下（スレッドを開く）に渡す。
+///
+/// 形を入れ替えるときは、投票全体を重ねて切り替えず、要素ごとに動かす。全体を重ねると、先頭の記号と割合、下の行の2つのボタンの文字が、同じ場所に重なって見えるため。
 final class PollView: UIView {
     struct Content: Equatable {
         var pollID: Poll.ID
@@ -26,8 +28,10 @@ final class PollView: UIView {
         var optionHorizontalPadding: CGFloat = 10
         /// 選択肢の枠の角の丸み。
         var optionCornerRadius: CGFloat = 8
-        /// 投票したときや読み直したときに、結果の棒が伸びる時間。
+        /// 投票したときや読み直したときに、結果の棒が伸びる時間。割合と人数の数字も、この時間で入れ替える。
         var barDuration: TimeInterval
+        /// 投票する形と結果の形を入れ替えるときの、割合を浮かび上がらせる時間と、下の行のボタンを入れ替える時間。
+        var modeChangeDuration: TimeInterval = 0
     }
 
     enum Action {
@@ -52,12 +56,25 @@ final class PollView: UIView {
     private var optionViews: [PollOptionView] = []
     private let optionsStack = UIStackView()
     private let footer = UIView()
+    /// 票数と締め切り。大きさと読み上げのために置き、文字は`summaryText`が描く。
     private let summaryLabel = UILabel()
+    private let summaryText = NumericTextOverlay(alignment: .leading)
     private let secondaryButton = UIButton(configuration: .plain())
     private let voteButton = TintFollowingButton(configuration: .filled())
     private var secondaryTrailing: [NSLayoutConstraint] = []
     private lazy var footerTop = footer.topAnchor.constraint(equalTo: optionsStack.bottomAnchor)
     private var secondaryAction: Action?
+
+    /// 次に始める棒の動きの時間。タイムラインは行の中身を動きを止めた描き直しの中で当てるため、`apply`の中では始めない。
+    private var pendingBarDuration: TimeInterval?
+    /// 次に始める下の行のボタンの入れ替え。替える前のボタンの複製と、時間。
+    private var pendingFooterSwap: (leaving: [UIView], duration: TimeInterval)?
+    /// 消している途中の、替える前のボタンの複製。
+    private var leavingButtons: [UIView] = []
+    /// 動きを始める処理を積んだ。描き直しが続いても、1回だけ始める。
+    private var transitionsScheduled = false
+    /// 前に止めてから、同じ投票を描き直して動かしたことがある。止める処理が要るかを決める。
+    private var mayHaveTransitions = false
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -93,6 +110,7 @@ final class PollView: UIView {
             view.translatesAutoresizingMaskIntoConstraints = false
             footer.addSubview(view)
         }
+        summaryText.overlay(on: summaryLabel)
         secondaryTrailing = [
             secondaryButton.trailingAnchor.constraint(equalTo: voteButton.leadingAnchor, constant: -4),
             secondaryButton.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: 8),
@@ -150,33 +168,33 @@ final class PollView: UIView {
             optionViews.append(option)
             optionsStack.addArrangedSubview(option)
         }
-        // 同じ投票で割合が変わったときだけ、棒を前の長さから伸ばす。使い回された行で別の投票に替わったときは、動かさずに出す。
-        // 同じ投票で割合も形も変わらない描き直し（送っている途中のインジケーターを外すときなど）では、伸ばしている途中の棒をそのままにする。
+        // 動かすのは、同じ投票を描き直したときだけ。使い回された行で別の投票に替わったときは、続いている動きをやめて、動かさずに出す。
         let samePoll = previous?.pollID == content.pollID
-        // 投票する形と結果の形が入れ替わるときは、フチ、記号、割合、ボタンが一度に替わるため、投票全体をクロスフェードする。
-        // 棒はクロスフェードの中でも伸ばす。タイムラインは動きを止めて描き直すことがあり、その中ではUIView.transitionが動かないため、レイヤーに直接足す。
-        if samePoll, previous?.display.mode != display.mode, window != nil, content.barDuration > 0, !UIAccessibility.isReduceMotionEnabled {
-            let fade = CATransition()
-            fade.type = .fade
-            fade.duration = content.barDuration * 0.5
-            layer.add(fade, forKey: "modeChange")
+        let animates = samePoll && window != nil && !UIAccessibility.isReduceMotionEnabled
+        if animates {
+            mayHaveTransitions = true
+        } else {
+            cancelTransitions()
         }
+        let modeChange: PollOptionView.ModeChange? = if animates, content.modeChangeDuration > 0, let previous, previous.display.mode != display.mode {
+            display.mode == .results ? .toResults : .toVoting
+        } else {
+            nil
+        }
+        // 同じ投票で割合も形も変わらない描き直し（送っている途中のインジケーターを外すときなど）では、伸ばしている途中の棒をそのままにする。
         let keepsBars = samePoll && previous?.display.mode == display.mode && previous?.display.options.map(\.fraction) == display.options.map(\.fraction)
-        let animatesBars = samePoll && !keepsBars && display.mode == .results
-            && window != nil && content.barDuration > 0 && !UIAccessibility.isReduceMotionEnabled
+        // 結果の形で割合が変わったら、棒を今の長さから伸ばす。投票する形に戻るときは、棒を縮めてから隠す。
+        let animatesBars = animates && !keepsBars && content.barDuration > 0 && (display.mode == .results || modeChange == .toVoting)
+        let transition = PollOptionView.Transition(
+            animates: animates,
+            modeChange: modeChange,
+            animatesBars: animatesBars,
+            numberDuration: content.barDuration,
+            modeChangeDuration: content.modeChangeDuration
+        )
         for (index, option) in optionViews.enumerated() {
             option.isHidden = index >= display.options.count
             guard index < display.options.count else { continue }
-            let start: PollOptionView.BarStart
-            if keepsBars {
-                start = .keep
-            } else if animatesBars, let previous {
-                // 投票する形から替わったときは、棒のない状態から伸ばす。
-                let fraction = previous.display.mode == .results && previous.display.options.indices.contains(index) ? previous.display.options[index].fraction ?? 0 : 0
-                start = .from(CGFloat(fraction))
-            } else {
-                start = .target
-            }
             option.apply(
                 display.options[index],
                 title: content.titles.indices.contains(index) ? content.titles[index] : NSAttributedString(),
@@ -186,20 +204,12 @@ final class PollView: UIView {
                 padding: content.optionPadding,
                 horizontalPadding: content.optionHorizontalPadding,
                 cornerRadius: content.optionCornerRadius,
-                barStart: start
+                barStart: keepsBars ? .keep : animatesBars ? .onScreen : .target,
+                transition: transition
             )
         }
         if animatesBars {
-            let fractions = display.options.map(\.fraction)
-            // タイムラインは動きを止めて描き直すことがあり、その中ではUIView.animateが動かないため、描き直しを終えてから動かす。
-            DispatchQueue.main.async { [weak self] in
-                guard let self, let current = self.content, current.pollID == content.pollID, current.display.options.map(\.fraction) == fractions else { return }
-                UIView.animate(springDuration: content.barDuration, bounce: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
-                    for option in self.optionViews where !option.isHidden {
-                        option.showTargetFraction()
-                    }
-                }
-            }
+            pendingBarDuration = content.barDuration
         }
 
         if content.footerFont != previous?.footerFont || content.titleFont != previous?.titleFont {
@@ -208,6 +218,15 @@ final class PollView: UIView {
             voteButton.configuration?.titleTextAttributesTransformer = Self.fontTransformer(content.titleFont.withWeight(.semibold))
         }
         summaryLabel.text = display.summary
+        summaryText.setStyle(font: content.footerFont, color: .secondaryLabel)
+        // 人数や残りの時間が変わったら、変わった数字だけを入れ替える。文全体を入れ替えると、どこが変わったのかが読めないため。
+        summaryText.setText(
+            display.summary,
+            value: Double(display.count),
+            animation: animates && content.barDuration > 0 ? (content.barDuration, 0) : nil
+        )
+        // 形を入れ替えるときは、替える前のボタンの複製を残してから、ボタンを新しい形にする。
+        let leaving = modeChange == nil ? [] : snapshotsOfVisibleButtons()
         voteButton.isHidden = display.mode == .results
         voteButton.isEnabled = display.canSubmit
         voteButton.configuration?.showsActivityIndicator = display.isSubmitting
@@ -224,6 +243,113 @@ final class PollView: UIView {
         secondaryButton.isEnabled = secondary?.enabled ?? false
         NSLayoutConstraint.deactivate(secondaryTrailing)
         secondaryTrailing[voteButton.isHidden ? 1 : 0].isActive = true
+        if modeChange != nil {
+            // 新しいボタンは、替える前のボタンを消し終えてから浮かび上がらせる。重ねると、2つのボタンの文字が重なって見えるため。
+            secondaryButton.alpha = 0
+            voteButton.alpha = 0
+            // 前の入れ替えをまだ始めていなければ、その複製も一緒に消す。上書きすると、消す動きが始まらずに複製が残るため。
+            pendingFooterSwap = ((pendingFooterSwap?.leaving ?? []) + leaving, content.modeChangeDuration)
+        }
+        scheduleTransitions()
+    }
+
+    /// 見えているボタンの複製を、今の見え方のまま下の行に置く。替える前のボタンを、新しいボタンと別に消すため。
+    private func snapshotsOfVisibleButtons() -> [UIView] {
+        [secondaryButton, voteButton].compactMap { button -> UIView? in
+            guard !button.isHidden, let snapshot = button.snapshotView(afterScreenUpdates: false) else { return nil }
+            snapshot.frame = button.frame
+            snapshot.alpha = CGFloat(button.layer.presentation()?.opacity ?? Float(button.alpha))
+            snapshot.isUserInteractionEnabled = false
+            footer.addSubview(snapshot)
+            leavingButtons.append(snapshot)
+            return snapshot
+        }
+    }
+
+    private func scheduleTransitions() {
+        guard !transitionsScheduled else { return }
+        transitionsScheduled = true
+        // タイムラインは動きを止めて描き直すことがあり、その中ではUIView.animateが動かないため、描き直しを終えてから動かす。
+        DispatchQueue.main.async { [weak self] in
+            self?.startPendingTransitions()
+        }
+    }
+
+    /// `apply`で決めた動きを始める。
+    private func startPendingTransitions() {
+        transitionsScheduled = false
+        if let duration = pendingBarDuration {
+            pendingBarDuration = nil
+            UIView.animate(springDuration: duration, bounce: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+                for option in self.optionViews where !option.isHidden {
+                    option.showTargetFraction()
+                }
+            } completion: { finished in
+                // 次の描き直しで取り消された動きの終わりでは、何もしない。取り消した側が、縮める棒を今の長さから動かし直しているため。
+                guard finished else { return }
+                for option in self.optionViews {
+                    option.finishBarTransition()
+                }
+            }
+        }
+        for option in optionViews where !option.isHidden {
+            option.startPendingTransition()
+        }
+        summaryText.startPendingTransition()
+        if let swap = pendingFooterSwap {
+            pendingFooterSwap = nil
+            let half = swap.duration / 2
+            UIView.animate(springDuration: half, bounce: 0, options: [.allowUserInteraction]) {
+                for view in swap.leaving {
+                    view.alpha = 0
+                    view.transform = CGAffineTransform(scaleX: Self.leavingButtonScale, y: Self.leavingButtonScale)
+                }
+            } completion: { _ in
+                for view in swap.leaving {
+                    view.removeFromSuperview()
+                }
+                self.leavingButtons.removeAll { swap.leaving.contains($0) }
+            }
+            UIView.animate(springDuration: half, bounce: 0, initialSpringVelocity: 0, delay: half, options: [.allowUserInteraction, .beginFromCurrentState]) {
+                self.secondaryButton.alpha = 1
+                self.voteButton.alpha = 1
+            }
+        }
+    }
+
+    /// 浮かび上がる前の透明なボタンにも、触れたものを渡す。UIKitは透明なビューに触れたものを渡さないため、
+    /// そのままでは「結果を見る」を押した直後に「投票に戻る」を押しても効かず、動きの途中の操作が止まる。
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        for button in [voteButton, secondaryButton] where !button.isHidden && button.isEnabled && button.alpha < Self.hitTestAlphaThreshold {
+            if button.point(inside: convert(point, to: button), with: event) {
+                return button
+            }
+        }
+        return super.hitTest(point, with: event)
+    }
+
+    /// UIKitが触れたものを渡さない透明さ。これより薄いビューは、`hitTest`で飛ばされる。
+    private static let hitTestAlphaThreshold: CGFloat = 0.01
+
+    /// 替える前のボタンを消すときに縮める割合。
+    private static let leavingButtonScale: CGFloat = 0.9
+
+    /// 続いている動きをやめ、今の形のまま止める。
+    /// 何も動かしていなければ何もしない。スクロールで行を使い回すたびに呼ばれ、動きを外す処理を毎回走らせると、流したときに落ちるフレームが増えたため（シミュレーターで測った）。
+    private func cancelTransitions() {
+        guard mayHaveTransitions else { return }
+        mayHaveTransitions = false
+        pendingBarDuration = nil
+        pendingFooterSwap = nil
+        for view in leavingButtons {
+            view.removeFromSuperview()
+        }
+        leavingButtons.removeAll()
+        for button in [secondaryButton, voteButton] {
+            button.layer.removeAllAnimations()
+            button.alpha = 1
+        }
+        summaryText.cancelTransition()
     }
 
     /// 表示中の選択肢ごとの、枠と文字の枠。「投稿の見た目」のプレビューで、選択肢のあいだと上下の余白を示すときに使う。
@@ -253,19 +379,68 @@ final class PollView: UIView {
     var accessibilityParts: [Any] {
         optionViews.filter { !$0.isHidden } + [summaryLabel, secondaryButton, voteButton].filter { !$0.isHidden }
     }
+
+    /// 消している途中の、替える前のボタンの数。テストで、ボタンを入れ替えているかを確かめるために使う。
+    var leavingButtonCount: Int { leavingButtons.count }
+    /// 下の行の人数と締め切りの文字。テストで、数字を入れ替えたかを確かめるために使う。
+    var summaryTextView: NumericTextOverlay { summaryText }
+    /// 選択肢の行。テストで使う。
+    var optionRows: [PollOptionView] { optionViews.filter { !$0.isHidden } }
+    /// 下の行のボタン。テストで使う。
+    var footerButtons: (secondary: UIButton, vote: UIButton) { (secondaryButton, voteButton) }
 }
 
 /// 投票の選択肢の1行。投票する形では押して選び、結果の形では後ろに割合の棒を敷く。
 final class PollOptionView: UIControl {
+    /// 投票する形と結果の形の入れ替わり。
+    enum ModeChange {
+        case toResults
+        case toVoting
+    }
+
+    /// 描き直すときの動き。
+    struct Transition {
+        /// 同じ投票を描き直していて、動かしてよい。falseなら、続いている動きをやめて、動かさずに出す。
+        var animates: Bool
+        var modeChange: ModeChange?
+        /// 棒を前の長さから動かす。動かすのは置く側が`showTargetFraction()`で行う。
+        var animatesBars: Bool
+        /// 割合の数字を入れ替える時間。棒が伸びる時間と同じ。
+        var numberDuration: TimeInterval
+        /// 形を入れ替えるときの、割合を浮かび上がらせる時間と、フチを移す時間。
+        var modeChangeDuration: TimeInterval
+
+        static let none = Transition(animates: false, modeChange: nil, animatesBars: false, numberDuration: 0, modeChangeDuration: 0)
+    }
+
     let titleLabel = EmojiLabel()
     private let barView = UIView()
     private let indicatorView = UIImageView()
+    /// 割合。大きさを決めるために置き、文字は`percentText`が描く。
     private let percentLabel = UILabel()
+    private let percentText = NumericTextOverlay(alignment: .trailing)
     private let ownVoteView = UIImageView(image: UIImage(systemName: "checkmark"))
     private var variableConstraints: [NSLayoutConstraint] = []
     /// 棒の長さの割合。描いている長さと、伸ばした先の長さ。
     private var drawnFraction: CGFloat = 0
     private var targetFraction: CGFloat = 0
+    private var mode: PollDisplay.Mode = .voting
+    /// 次に始める形の入れ替わりと、その時間。
+    private var pendingModeChange: (change: ModeChange, duration: TimeInterval)?
+    /// 結果の形で、消える動きにかけた先頭の記号。隠すと動きが途中で消えるため、消えた見た目のまま出しておく。
+    private var indicatorDisappeared = false
+    /// 投票する形に戻るときに、割合を消し終えてから現す先頭の記号。
+    private var indicatorAppearing = false
+    /// 消える途中で投票する形に戻したので、その場から元に戻す先頭の記号。
+    private var indicatorRestoring = false
+    /// 投票する形に戻るときに、消している途中の割合。
+    private var percentLeaving = false
+    /// 結果の形へ替わるときに、現す動きにかけるチェックマーク。
+    private var ownVoteAppearing = false
+    /// 投票する形に戻るときに、縮めている途中の棒。縮め終えたら隠す。
+    private var barShrinking = false
+    /// 前に止めてから、同じ投票を描き直して動かしたことがある。止める処理が要るかを決める。
+    private var mayHaveTransitions = false
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -283,7 +458,6 @@ final class PollOptionView: UIControl {
         indicatorView.tintColor = .secondaryLabel
         // 割合の桁がそろうよう、先頭の場所の中で後ろに寄せる。
         percentLabel.textAlignment = .right
-        percentLabel.textColor = .secondaryLabel
         ownVoteView.contentMode = .center
         ownVoteView.tintColor = .tintColor
         for view in [titleLabel, indicatorView, percentLabel, ownVoteView] as [UIView] {
@@ -291,6 +465,7 @@ final class PollOptionView: UIControl {
             view.isUserInteractionEnabled = false
             addSubview(view)
         }
+        percentText.overlay(on: percentLabel)
         // 枠の色はCGColorで、外観やティントカラーが変わっても描き直されないため、変わったら当て直す。
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: Self, _) in
             self.layer.borderColor = UIColor.tintColor.cgColor
@@ -309,45 +484,39 @@ final class PollOptionView: UIControl {
 
     /// 棒をどの長さから描くか。
     enum BarStart {
-        /// 伸ばさずに、目の長さで描く。
+        /// 動かさずに、目の長さで描く。
         case target
-        /// この長さから伸ばす。伸ばすのは置く側が`showTargetFraction()`で行う。
-        case from(CGFloat)
+        /// 画面に見えている長さから動かす。棒が出ていなければ、棒のない状態から。動かすのは置く側が`showTargetFraction()`で行う。
+        case onScreen
         /// 描いている長さのまま。伸ばしている途中なら、そのまま伸ばし続ける。
         case keep
     }
 
-    func apply(_ option: PollDisplay.Option, title: NSAttributedString, font: UIFont, mode: PollDisplay.Mode, multiple: Bool, padding: CGFloat, horizontalPadding: CGFloat, cornerRadius: CGFloat, barStart: BarStart) {
+    func apply(_ option: PollDisplay.Option, title: NSAttributedString, font: UIFont, mode: PollDisplay.Mode, multiple: Bool, padding: CGFloat, horizontalPadding: CGFloat, cornerRadius: CGFloat, barStart: BarStart, transition: Transition = .none) {
+        // 形が替わったのに入れ替わりの動きがないとき（時間を0にしたとき）も、続いている動きをやめる。消える動きにかけた記号が、そのまま消えて残るため。
+        if !transition.animates || mode != self.mode && transition.modeChange == nil {
+            cancelTransitions()
+        }
+        if transition.animates {
+            mayHaveTransitions = true
+        }
+        let change = transition.modeChange
+        self.mode = mode
         layer.cornerRadius = cornerRadius
         barView.layer.cornerRadius = cornerRadius
         titleLabel.attributedText = title
         let showsResults = mode == .results
         isUserInteractionEnabled = !showsResults
-        indicatorView.isHidden = showsResults
-        let symbol = switch (multiple, option.isSelected) {
-        case (false, false): "circle"
-        case (false, true): "checkmark.circle.fill"
-        case (true, false): "square"
-        case (true, true): "checkmark.square.fill"
-        }
-        indicatorView.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(font: font))
-        indicatorView.tintColor = option.isSelected ? .tintColor : .secondaryLabel
-        layer.borderWidth = !showsResults && option.isSelected ? 1.5 : 0
-        layer.borderColor = UIColor.tintColor.cgColor
+
+        // 先頭の記号を戻す動きは、割合を消すのを待つかで変わるので、割合を先に決める。
         let percentFont = font.withWeight(option.isLeading ? .semibold : .regular)
-        percentLabel.font = percentFont
-        percentLabel.isHidden = !showsResults || option.fraction == nil
-        percentLabel.text = option.fraction.map { "\(Int(($0 * 100).rounded()))%" }
-        percentLabel.textColor = option.isLeading ? .label : .secondaryLabel
-        ownVoteView.isHidden = !showsResults || !option.isOwnVote
-        ownVoteView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(font: font.withWeight(.semibold), scale: .small)
-        barView.isHidden = !showsResults || option.fraction == nil
-        barView.backgroundColor = option.isLeading ? UIColor.tintColor.withAlphaComponent(0.25) : .systemFill
-        targetFraction = showsResults ? CGFloat(option.fraction ?? 0) : 0
-        switch barStart {
-        case .target: drawnFraction = targetFraction
-        case .from(let fraction): drawnFraction = fraction
-        case .keep: break
+        applyPercent(option, font: percentFont, showsResults: showsResults, transition: transition)
+        applyIndicator(option, font: font, multiple: multiple, showsResults: showsResults, change: change)
+        applyBorder(selected: !showsResults && option.isSelected, change: change, duration: transition.modeChangeDuration)
+        applyOwnVote(option, font: font, showsResults: showsResults, change: change)
+        applyBar(option, showsResults: showsResults, start: barStart, transition: transition)
+        if let change {
+            pendingModeChange = (change, transition.modeChangeDuration)
         }
 
         // 先頭の場所は、どちらの形でも「100%」が入る幅を取る。投票すると形が替わっても、選択肢の文字の折り返しを変えないため。
@@ -378,8 +547,225 @@ final class PollOptionView: UIControl {
             accessibilityValue = nil
         case .results:
             accessibilityTraits = .staticText
-            accessibilityValue = [option.fraction.map { "\(Int(($0 * 100).rounded()))%" }, option.isOwnVote ? "投票済み" : nil].compactMap(\.self).joined(separator: "、")
+            accessibilityValue = [option.fraction.map { Self.percentText($0) }, option.isOwnVote ? "投票済み" : nil].compactMap(\.self).joined(separator: "、")
         }
+    }
+
+    private static func percentText(_ fraction: Double) -> String {
+        "\(percent(fraction))%"
+    }
+
+    private static func percent(_ fraction: Double) -> Int {
+        Int((fraction * 100).rounded())
+    }
+
+    /// 先頭の記号。結果の形へ替わるときは消える動きで消し、投票する形に戻るときは、割合を消し終えてから現す。
+    private func applyIndicator(_ option: PollDisplay.Option, font: UIFont, multiple: Bool, showsResults: Bool, change: ModeChange?) {
+        switch change {
+        case .toResults:
+            // 記号の画像は替えない。消える動きの途中で画像が替わると、動きが消えて一コマで消えるため。
+            indicatorDisappeared = !indicatorView.isHidden
+            indicatorAppearing = false
+        case .toVoting:
+            if indicatorDisappeared, !percentLeaving {
+                // 割合が見える前に戻したら、消える途中の記号を、その場から元に戻す。
+                indicatorRestoring = true
+                indicatorAppearing = false
+            } else if indicatorView.isHidden || indicatorDisappeared {
+                indicatorView.removeAllSymbolEffects(animated: false)
+                indicatorView.addSymbolEffect(.disappear, options: .nonRepeating, animated: false)
+                indicatorAppearing = true
+            }
+            indicatorDisappeared = false
+        case nil:
+            break
+        }
+        if !showsResults {
+            let symbol = switch (multiple, option.isSelected) {
+            case (false, false): "circle"
+            case (false, true): "checkmark.circle.fill"
+            case (true, false): "square"
+            case (true, true): "checkmark.square.fill"
+            }
+            indicatorView.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(font: font))
+            indicatorView.tintColor = option.isSelected ? .tintColor : .secondaryLabel
+        }
+        indicatorView.isHidden = showsResults && !indicatorDisappeared
+    }
+
+    /// 選んだ選択肢のフチ。形を入れ替えるときは、今見えている太さから移す。
+    private func applyBorder(selected: Bool, change: ModeChange?, duration: TimeInterval) {
+        let oldWidth = change == nil ? layer.borderWidth : layer.presentation()?.borderWidth ?? layer.borderWidth
+        layer.borderWidth = selected ? 1.5 : 0
+        layer.borderColor = UIColor.tintColor.cgColor
+        guard change != nil, oldWidth != layer.borderWidth else { return }
+        let border = CASpringAnimation(perceptualDuration: duration, bounce: 0)
+        border.keyPath = "borderWidth"
+        border.fromValue = oldWidth
+        border.toValue = layer.borderWidth
+        border.duration = border.settlingDuration
+        layer.add(border, forKey: Self.borderAnimationKey)
+    }
+
+    private static let borderAnimationKey = "pollBorder"
+    /// これより薄い割合は、見えていないものとして扱う。
+    private static let invisibleAlpha: CGFloat = 0.01
+
+    /// 割合。結果の形へ替わるときは、先頭の記号が消えかけてから浮かび上がらせ、棒と一緒に0%から数字を入れ替える。投票する形に戻るときは消す。
+    private func applyPercent(_ option: PollDisplay.Option, font: UIFont, showsResults: Bool, transition: Transition) {
+        let color: UIColor = option.isLeading ? .label : .secondaryLabel
+        percentText.setStyle(font: font, color: color)
+        let shown = showsResults && option.fraction != nil
+        let text = option.fraction.map { Self.percentText($0) } ?? ""
+        let value = Double(option.fraction.map { Self.percent($0) } ?? 0)
+        switch transition.modeChange {
+        case .toResults where shown:
+            percentLeaving = false
+            percentText.setText(Self.percentText(0), value: 0, animation: nil)
+            percentAlpha = 0
+            percentText.setText(text, value: value, animation: (transition.numberDuration, transition.modeChangeDuration / 2))
+        case .toVoting where percentShown:
+            // 浮かび上がる前に戻したときは、見えていないので、消すのを待たずに隠す。
+            let opacity = percentLabel.layer.presentation()?.opacity ?? Float(percentLabel.alpha)
+            percentLeaving = opacity >= Float(Self.invisibleAlpha)
+            if !percentLeaving {
+                removePercentAnimations()
+                percentAlpha = 1
+            }
+        default:
+            if shown {
+                percentLeaving = false
+                percentText.setText(text, value: value, animation: transition.animates && transition.numberDuration > 0 ? (transition.numberDuration, 0) : nil)
+            }
+        }
+        percentShown = shown || percentLeaving
+    }
+
+    /// 割合の濃さ。ふだん文字を描くラベルと、数字を入れ替える間だけ描く重ねた文字の両方に当てる。動きの中で当てると、両方が一緒に動く。
+    private var percentAlpha: CGFloat {
+        get { percentLabel.alpha }
+        set {
+            percentLabel.alpha = newValue
+            percentText.alpha = newValue
+        }
+    }
+
+    /// 割合を出している。ラベルと重ねた文字の両方を出し入れする。
+    private var percentShown: Bool {
+        get { !percentLabel.isHidden }
+        set {
+            percentLabel.isHidden = !newValue
+            percentText.isHidden = !newValue
+        }
+    }
+
+    private func removePercentAnimations() {
+        percentLabel.layer.removeAllAnimations()
+        percentText.layer.removeAllAnimations()
+    }
+
+    /// 自分が票を入れたチェックマーク。結果の形へ替わるときは、現す動きで出す。
+    private func applyOwnVote(_ option: PollDisplay.Option, font: UIFont, showsResults: Bool, change: ModeChange?) {
+        ownVoteView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(font: font.withWeight(.semibold), scale: .small)
+        let shown = showsResults && option.isOwnVote
+        if change == .toResults, shown, ownVoteView.isHidden {
+            ownVoteView.removeAllSymbolEffects(animated: false)
+            ownVoteView.addSymbolEffect(.disappear, options: .nonRepeating, animated: false)
+            ownVoteAppearing = true
+        }
+        ownVoteView.isHidden = !shown
+    }
+
+    private func applyBar(_ option: PollDisplay.Option, showsResults: Bool, start: BarStart, transition: Transition) {
+        barView.backgroundColor = option.isLeading ? UIColor.tintColor.withAlphaComponent(0.25) : .systemFill
+        let onScreen = start != .onScreen || barView.isHidden ? 0 : (barView.layer.presentation()?.bounds.width ?? barView.bounds.width) / max(bounds.width, 1)
+        barShrinking = transition.modeChange == .toVoting && transition.animatesBars && !barView.isHidden || barShrinking && !showsResults
+        barView.isHidden = option.fraction == nil || !showsResults && !barShrinking
+        targetFraction = showsResults ? CGFloat(option.fraction ?? 0) : 0
+        switch start {
+        case .target: drawnFraction = targetFraction
+        case .onScreen: drawnFraction = onScreen
+        case .keep: break
+        }
+        if start != .keep, barView.layer.animationKeys() != nil {
+            barView.layer.removeAllAnimations()
+        }
+    }
+
+    /// `apply`で決めた形の入れ替わりを始める。並べ終えてから呼ぶ。
+    func startPendingTransition() {
+        percentText.startPendingTransition()
+        guard let pending = pendingModeChange else { return }
+        pendingModeChange = nil
+        switch pending.change {
+        case .toResults:
+            if indicatorDisappeared {
+                indicatorView.addSymbolEffect(.disappear, options: .nonRepeating, animated: true)
+            }
+            if ownVoteAppearing {
+                ownVoteAppearing = false
+                ownVoteView.addSymbolEffect(.appear, options: .nonRepeating, animated: true)
+            }
+            // 消える途中の記号と重ならないよう、記号が消えかけてから浮かび上がらせる。
+            UIView.animate(springDuration: pending.duration, bounce: 0, initialSpringVelocity: 0, delay: pending.duration / 2, options: [.allowUserInteraction, .beginFromCurrentState]) {
+                self.percentAlpha = 1
+            }
+        case .toVoting:
+            if indicatorRestoring {
+                indicatorRestoring = false
+                indicatorView.removeAllSymbolEffects(animated: true)
+            }
+            guard percentLeaving else {
+                showAppearingIndicator()
+                return
+            }
+            // 消す時間は、今見えている濃さに合わせて縮める。結果を見た直後に戻したときは割合がまだほとんど見えておらず、
+            // 決まった時間だけ待つと、記号も割合もない選択肢が続くため（時間を伸ばした録画で、記号を出すまで空のままだった）。
+            let opacity = CGFloat(percentLabel.layer.presentation()?.opacity ?? Float(percentLabel.alpha))
+            UIView.animate(springDuration: pending.duration / 2 * opacity, bounce: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+                self.percentAlpha = 0
+            } completion: { _ in
+                // 消している間に結果の形へ戻っていたら、そちらに任せる。
+                guard self.percentLeaving, self.mode == .voting else { return }
+                self.percentLeaving = false
+                self.percentShown = false
+                self.percentAlpha = 1
+                self.showAppearingIndicator()
+            }
+        }
+    }
+
+    private func showAppearingIndicator() {
+        guard indicatorAppearing else { return }
+        indicatorAppearing = false
+        indicatorView.addSymbolEffect(.appear, options: .nonRepeating, animated: true)
+    }
+
+    /// 棒を動かし終えた。投票する形に戻って縮め終えた棒を隠す。
+    func finishBarTransition() {
+        guard barShrinking, mode == .voting else { return }
+        barShrinking = false
+        barView.isHidden = true
+    }
+
+    /// 続いている動きをやめ、今の形のまま止める。
+    /// 何も動かしていなければ何もしない。スクロールで行を使い回すたびに選択肢ごとに呼ばれ、SF Symbolsの動きや層の動きを外す処理を毎回走らせると、流したときに落ちるフレームが増えたため（シミュレーターで測った）。
+    private func cancelTransitions() {
+        guard mayHaveTransitions else { return }
+        mayHaveTransitions = false
+        pendingModeChange = nil
+        indicatorDisappeared = false
+        indicatorAppearing = false
+        indicatorRestoring = false
+        percentLeaving = false
+        ownVoteAppearing = false
+        barShrinking = false
+        indicatorView.removeAllSymbolEffects(animated: false)
+        ownVoteView.removeAllSymbolEffects(animated: false)
+        layer.removeAnimation(forKey: Self.borderAnimationKey)
+        removePercentAnimations()
+        percentAlpha = 1
+        percentText.cancelTransition()
     }
 
     /// 棒を伸ばした先の長さにする。アニメーションの中で呼ぶ。
@@ -402,6 +788,14 @@ final class PollOptionView: UIControl {
         }
     }
 
+    /// 先頭の記号を出している。消える動きにかけて、消えた見た目のまま出しているときも含む。テストで使う。
+    var showsIndicator: Bool { !indicatorView.isHidden }
+    /// 先頭の記号を、消える動きにかけたまま出している。テストで使う。
+    var indicatorIsDisappeared: Bool { indicatorDisappeared }
+    /// 割合の文字。テストで使う。
+    var percentTextView: NumericTextOverlay { percentText }
+    /// 割合の棒を出している。テストで使う。
+    var showsBar: Bool { !barView.isHidden }
 }
 
 private extension UIFont {
