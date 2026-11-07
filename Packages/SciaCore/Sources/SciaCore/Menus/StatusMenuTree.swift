@@ -76,18 +76,10 @@ public struct OtherAccountCommand {
     public enum Action {
         /// そのアカウントから見た投稿への操作。投稿のIDはそのアカウントのサーバーのもの。
         case status(Status, StatusAction)
-        /// 投稿に出る人との関係の変更。相手のIDはそのアカウントのサーバーのもの。
-        case relation(UserRelationChange, UserRelation)
-        /// 投稿に出る人へのメモのシートを開く。相手のIDはそのアカウントのサーバーのもの。
-        case note(UserRelation)
-        /// 投稿に出る人の通報のシートを開く。相手と投稿のIDはそのアカウントのサーバーのもの。
-        case report(accountID: String, acct: String, statusID: String?)
-        /// 投稿に出る人を、そのアカウントのリストに入れるシートを開く。相手のIDと`acct`はそのアカウントのサーバーのもの。
-        case addToList(accountID: String, acct: String)
+        /// 投稿に出る人への操作。
+        case user(OtherAccountUserAction)
         /// 投稿のハッシュタグを、そのアカウントでフォロー、ミュート、プロフィールで紹介する。
         case hashtag(Tag, HashtagMenuCommand)
-        /// 投稿欄をそのアカウントに切り替えて、`@acct`を入れる。`acct`はそのアカウントのサーバーから見たもの。
-        case mention(acct: String)
     }
 }
 
@@ -385,23 +377,11 @@ public struct StatusMenuTree {
     /// 「別のアカウントで」のユーザーのメニューに出さない項目。どのアカウントで行っても同じ結果になるもの。
     static let sameForEveryAccountUserItems: Set<UserMenuItem> = [.profile, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .customize]
 
-    /// 「別のアカウントで」のサブメニュー。ほかのアカウントが1つなら「@usernameで」を直に置き、2つ以上ならアカウントごとの`@username`のサブメニューを並べる。
-    /// サーバー名は、ユーザーのメニューの見出しと同じくサブタイトルに出す。名前に`@username@server`をそのまま置くと、長いサーバー名で途中から折り返されて読みにくいため。
+    /// 「別のアカウントで」のサブメニュー。
     private func otherAccountsMenu(for status: Status, item: StatusMenuItem) -> MenuNode<StatusMenuCommand>? {
-        guard !otherAccounts.isEmpty else { return nil }
-        if otherAccounts.count == 1, let account = otherAccounts.first {
-            let credential = account.credential
-            return .submenu("@\(credential.username)で", subtitle: credential.server, icon: Self.icon(of: account, fallbackSymbol: item.symbolName), otherAccountNodes(for: status, as: account))
+        OtherAccount.accountsMenu(otherAccounts, title: item.title, symbolName: item.symbolName) { account in
+            otherAccountNodes(for: status, as: account)
         }
-        return .submenu(item.title, icon: .symbol(item.symbolName), otherAccounts.map { account in
-            let credential = account.credential
-            return .submenu("@\(credential.username)", subtitle: credential.server, icon: Self.icon(of: account, fallbackSymbol: "person.crop.circle"), otherAccountNodes(for: status, as: account))
-        })
-    }
-
-    /// アカウントの行のアイコン。そのアカウント自身のアイコンにし、描けなければ`fallbackSymbol`の記号を出す。
-    private static func icon(of account: OtherAccount, fallbackSymbol: String) -> MenuIcon {
-        .avatar(.otherAccount(account), fallbackSymbol: fallbackSymbol)
     }
 
     /// `account`から見た投稿のメニュー。覚えている投稿があればすぐ組み、なければ開いてから探す。
@@ -422,10 +402,7 @@ public struct StatusMenuTree {
             case .notFound:
                 return [.action("このアカウントからは見られない投稿です", nil)]
             case .failed(let error):
-                let reason = ErrorPresentation(error)
-                // メニューの行には理由の文字しか置けないので、ログアウトされていれば、ログインし直す項目を続けて置く。失敗の理由を出す部品と同じく、どこで失敗してもその場でログインし直せるようにするため。
-                let logIn = reason.loggedOutAccount.map { [MenuNode<StatusMenuCommand>.action("ログインし直す", icon: .symbol("person.crop.circle.badge.exclamationmark"), .logIn($0))] } ?? []
-                return [.action("投稿を探せませんでした", subtitle: reason.text, nil)] + logIn
+                return OtherAccount.lookupFailureNodes(title: "投稿を探せませんでした", error: error, logIn: StatusMenuCommand.logIn)
             }
         }]
     }
@@ -440,16 +417,10 @@ public struct StatusMenuTree {
                 switch command {
                 case .status(let action):
                     .otherAccount(OtherAccountCommand(account: account, original: status, action: .status(found, action)))
-                case .user(_, .changeRelation(let change, let relation)):
-                    .otherAccount(OtherAccountCommand(account: account, original: status, action: .relation(change, relation)))
-                case .user(_, .editNote(let relation)):
-                    .otherAccount(OtherAccountCommand(account: account, original: status, action: .note(relation)))
-                case .user(_, .report(let accountID, let acct, let statusID)):
-                    .otherAccount(OtherAccountCommand(account: account, original: status, action: .report(accountID: accountID, acct: acct, statusID: statusID)))
-                case .user(let user, .addToList):
-                    .otherAccount(OtherAccountCommand(account: account, original: status, action: .addToList(accountID: user.id, acct: user.acct)))
-                case .user(let user, .mention):
-                    .otherAccount(OtherAccountCommand(account: account, original: status, action: .mention(acct: user.acct)))
+                case .user(let user, let userCommand):
+                    OtherAccountUserAction(userCommand, id: user.id, acct: user.acct).map {
+                        .otherAccount(OtherAccountCommand(account: account, original: status, action: .user($0)))
+                    } ?? command
                 case .hashtag(let tag, let hashtagCommand):
                     .otherAccount(OtherAccountCommand(account: account, original: status, action: .hashtag(tag, hashtagCommand)))
                 default:

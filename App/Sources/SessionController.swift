@@ -1919,19 +1919,27 @@ final class SessionController {
         switch command.action {
         case .status(let status, let action):
             perform(action, on: status, as: command.account, original: command.original)
-        case .relation(let change, let relation):
-            confirmChanging(change, of: relation, as: command.account)
-        case .note(let relation):
-            presentNoteEditor(for: relation, as: command.account)
-        case .report(let accountID, let acct, let statusID):
-            presentReport(accountID: accountID, acct: acct, statusID: statusID, as: command.account)
-        case .addToList(let accountID, let acct):
-            presentListMembership(accountID: accountID, acct: acct, as: command.account)
+        case .user(let action):
+            perform(action, as: command.account)
         case .hashtag(let tag, let hashtagCommand):
             perform(hashtagCommand, on: tag.name, as: command.account)
+        }
+    }
+
+    /// 「別のアカウントで」で選んだ人への操作を、そのアカウントとして行う。
+    private func perform(_ action: OtherAccountUserAction, as account: OtherAccount) {
+        switch action {
+        case .relation(let change, let relation):
+            confirmChanging(change, of: relation, as: account)
+        case .note(let relation):
+            presentNoteEditor(for: relation, as: account)
+        case .report(let accountID, let acct, let statusID):
+            presentReport(accountID: accountID, acct: acct, statusID: statusID, as: account)
+        case .addToList(let accountID, let acct):
+            presentListMembership(accountID: accountID, acct: acct, as: account)
         case .mention(let acct):
             UserAction.mention.record()
-            write(as: command.account, starting: "メンション") { [weak self] writing in self?.composer.mention(acct, as: writing) }
+            write(as: account, starting: "メンション") { [weak self] writing in self?.composer.mention(acct, as: writing) }
         }
     }
 

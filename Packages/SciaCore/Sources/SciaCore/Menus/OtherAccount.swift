@@ -342,3 +342,61 @@ public final class OtherAccount {
         }
     }
 }
+
+// MARK: - メニュー
+
+extension OtherAccount {
+    /// 「別のアカウントで」のサブメニュー。ほかのアカウントが1つなら「@usernameで」を直に置き、2つ以上なら`title`の中にアカウントごとの`@username`のサブメニューを並べる。ほかのアカウントがなければnil。
+    /// サーバー名は、ユーザーのメニューの見出しと同じくサブタイトルに出す。名前に`@username@server`をそのまま置くと、長いサーバー名で途中から折り返されて読みにくいため。
+    /// アカウントの行には、そのアカウント自身のアイコンを付ける。
+    /// - Parameter children: そのアカウントとしての中身。
+    static func accountsMenu<Command>(_ accounts: [OtherAccount], title: String, symbolName: String, children: (OtherAccount) -> [MenuNode<Command>]) -> MenuNode<Command>? {
+        guard !accounts.isEmpty else { return nil }
+        if accounts.count == 1, let account = accounts.first {
+            let credential = account.credential
+            return .submenu("@\(credential.username)で", subtitle: credential.server, icon: .avatar(.otherAccount(account), fallbackSymbol: symbolName), children(account))
+        }
+        return .submenu(title, icon: .symbol(symbolName), accounts.map { account in
+            let credential = account.credential
+            return .submenu("@\(credential.username)", subtitle: credential.server, icon: .avatar(.otherAccount(account), fallbackSymbol: "person.crop.circle"), children(account))
+        })
+    }
+
+    /// そのアカウントのサーバーで探せなかったことを知らせる、押せない行。
+    /// メニューの行には理由の文字しか置けないので、ログアウトされていれば、ログインし直す項目を続けて置く。失敗の理由を出す部品と同じく、どこで失敗してもその場でログインし直せるようにするため。
+    static func lookupFailureNodes<Command>(title: String, error: any Error, logIn: (RequestAccount) -> Command) -> [MenuNode<Command>] {
+        let reason = ErrorPresentation(error)
+        let logInNode = reason.loggedOutAccount.map { [MenuNode<Command>.action("ログインし直す", icon: .symbol("person.crop.circle.badge.exclamationmark"), logIn($0))] } ?? []
+        return [.action(title, subtitle: reason.text, nil)] + logInNode
+    }
+}
+
+/// 「別のアカウントで」の、ほかのアカウントとしての人への操作。相手のIDと`acct`は、そのアカウントのサーバーのもの。
+public enum OtherAccountUserAction {
+    /// 関係の変更。
+    case relation(UserRelationChange, UserRelation)
+    /// 自分にしか見えないメモのシートを開く。
+    case note(UserRelation)
+    /// 通報のシートを開く。添える投稿のIDも、そのアカウントのサーバーのもの。
+    case report(accountID: String, acct: String, statusID: String?)
+    /// そのアカウントのリストに入れるシートを開く。
+    case addToList(accountID: String, acct: String)
+    /// 投稿欄をそのアカウントに切り替えて、`@acct`を入れる。
+    case mention(acct: String)
+
+    /// そのアカウントとして組んだユーザーのメニューの命令を、ほかのアカウントとしての操作にする。ほかのアカウントでは行わない命令はnil。
+    /// - Parameters:
+    ///   - id: メニューを組んだ相手の、そのアカウントのサーバーでのID。
+    ///   - acct: メニューを組んだ相手の、そのアカウントのサーバーから見た`acct`。
+    init?(_ command: UserMenuCommand, id: String, acct: String) {
+        switch command {
+        case .changeRelation(let change, let relation): self = .relation(change, relation)
+        case .editNote(let relation): self = .note(relation)
+        case .report(let accountID, let acct, let statusID): self = .report(accountID: accountID, acct: acct, statusID: statusID)
+        case .addToList: self = .addToList(accountID: id, acct: acct)
+        case .mention: self = .mention(acct: acct)
+        // 「別のアカウントで」の中には、どのアカウントでも同じ結果になる項目を組まない。
+        case .url, .openProfile, .copy, .customize: return nil
+        }
+    }
+}

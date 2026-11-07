@@ -257,11 +257,11 @@ struct OtherAccountMenuTests {
 
         let menu = try #require(node(tree(status(uri: uri), accounts: [bob], groups: groups)))
         let aliceMenu = try #require(submenu("@alice", in: menu.children))
-        func action(_ title: String) throws -> OtherAccountCommand.Action {
+        func action(_ title: String) throws -> OtherAccountUserAction {
             let item = try #require(aliceMenu.flattenedChildren.first { $0.title.hasPrefix(title) })
-            guard case .otherAccount(let command) = item.command else { throw Failure() }
+            guard case .otherAccount(let command) = item.command, case .user(let action) = command.action else { throw Failure() }
             #expect(command.account === bob)
-            return command.action
+            return action
         }
         guard case .note(let relation) = try action("メモ") else {
             Issue.record("メモのシートの命令になっていません")
@@ -624,7 +624,7 @@ struct OtherAccountMenuTests {
         #expect(MenuNodeTests.describe(dave.children).hasPrefix("メンション|フォロー,"))
 
         let unfollow = try #require(aliceMenu.flattenedChildren.first { $0.title == "フォローを外す" })
-        guard case .otherAccount(let command) = unfollow.command, case .relation(.unfollow, let relation) = command.action else {
+        guard case .otherAccount(let command) = unfollow.command, case .user(.relation(.unfollow, let relation)) = command.action else {
             Issue.record("ほかのアカウントの関係の変更になっていません")
             return
         }
