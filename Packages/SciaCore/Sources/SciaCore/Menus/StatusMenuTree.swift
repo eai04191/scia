@@ -152,6 +152,8 @@ public struct StatusMenuTree {
         public let otherAccountRelationIDs: @MainActor (_ found: Status, OtherAccount) -> [String]
         /// 「別のアカウントで」の中で、見つけた投稿のほかに出す人（ブーストした人、通知した人）。探し直すときに、まだ見つけていない人をそのサーバーで探す。
         public let otherAccountPeople: [Account]
+        /// ユーザーのメニューの「別のアカウントで」の、ほかのアカウントのアイコンと、前に見つけた人との関係を読み直す。メニューを開くときに呼ぶ。
+        public let refreshOtherAccountUsers: @MainActor () -> Void
     }
 
     /// 投稿のメニュー。フォローリクエストの通知では、設定の並びの前に、承認と却下を設定によらず置く。
@@ -159,6 +161,7 @@ public struct StatusMenuTree {
     /// - Parameter includesFollowRequest: 承認と却下を置くか。設定の並びで組むときだけtrueにする。
     public func menu(groups: MenuLayout<StatusMenuItem>.Groups, includesFollowRequest: Bool) -> Built {
         var shownUserIDs: [String] = []
+        var shownUsers: [MenuUser] = []
         var seenUserIDs: Set<String> = []
         var showsOtherAccounts = false
         var children = groups.nodes { item in
@@ -166,6 +169,7 @@ public struct StatusMenuTree {
                 // 同じユーザーが2つの項目に当たるときは、先に出る項目で1度だけ出す。
                 users.filter { seenUserIDs.insert($0.id).inserted }.compactMap { user in
                     shownUserIDs.append(user.id)
+                    shownUsers.append(user)
                     return userNode(for: user)
                 }
             }
@@ -183,7 +187,11 @@ public struct StatusMenuTree {
             shownUserIDs: shownUserIDs,
             showsOtherAccounts: showsOtherAccounts,
             otherAccountRelationIDs: { [self] found, account in otherAccountRelationIDs(in: found, as: account) },
-            otherAccountPeople: otherAccountPeople
+            otherAccountPeople: otherAccountPeople,
+            refreshOtherAccountUsers: { [self, shownUsers] in
+                // 人ごとに送らず、ほかのアカウントごとにまとめて1回で読む。
+                UserMenuTree.refreshOtherAccounts(of: shownUsers.map(userTree(for:)), groups: userMenu)
+            }
         )
     }
 
@@ -325,9 +333,12 @@ public struct StatusMenuTree {
     /// 投稿のメニューに置く、ユーザーのメニューのサブメニュー。
     /// Mastodonは通報する相手の投稿しか添えられないため、長押しした投稿をその人が書いたときだけ添える。
     private func userNode(for user: MenuUser) -> MenuNode<StatusMenuCommand>? {
+        userTree(for: user).submenu(groups: userMenu, avatar: userAvatar(user))?.map { .user(user, $0) }
+    }
+
+    private func userTree(for user: MenuUser) -> UserMenuTree {
         let shown = rowStatus?.displayed
-        let tree = UserMenuTree(subject: UserMenuSubject(user), actions: userActions, linkBrowser: linkBrowser, reportableStatusID: shown?.account.id == user.id ? shown?.id : nil)
-        return tree.submenu(groups: userMenu, avatar: userAvatar(user))?.map { .user(user, $0) }
+        return UserMenuTree(subject: UserMenuSubject(user), actions: userActions, linkBrowser: linkBrowser, reportableStatusID: shown?.account.id == user.id ? shown?.id : nil)
     }
 
     /// 投稿のハッシュタグごとの、ハッシュタグのメニューのサブメニュー。中身は本文のハッシュタグを長押ししたときと同じ。
@@ -457,7 +468,7 @@ public struct StatusMenuTree {
 
     /// 「別のアカウントで」の中のユーザーのメニューの並び。ユーザーのメニューの並びから、出さない項目を除く。
     private var otherAccountUserGroups: MenuLayout<UserMenuItem>.Groups {
-        userMenu.excluding(Self.sameForEveryAccountUserItems)
+        userMenu.excluding(UserMenuTree.otherAccountExcludedItems)
     }
 
     /// `account`から見た投稿`found`のメニューを、そのアカウントとして組むもの。

@@ -71,18 +71,25 @@ extension TimelineViewController {
         // 人のリストの行では、その人へのユーザーのメニューを、単独で出す形で出す。投稿のメニューに入れるサブメニューの形のままだと、項目がそのサブメニュー1つだけのメニューになるため。
         if case .account(let account) = entry {
             let userGroups = settings.userMenuLayout.groups
-            defer { reloadRelations([account.id], groups: userGroups) }
             let user = MenuUser.account(account)
-            let tree = UserMenuTree(subject: UserMenuSubject(user), actions: userMenuActions, linkBrowser: settings.linkBrowser)
+            var tree = UserMenuTree(subject: UserMenuSubject(user), actions: userMenuActions, linkBrowser: settings.linkBrowser)
+            tree.otherAccountGroups = userMenuSubmenuGroups
+            defer {
+                reloadRelations([account.id], groups: userGroups)
+                tree.refreshOtherAccounts(groups: userGroups)
+            }
             guard let root = tree.menu(groups: userGroups, avatar: .user(user)) else { return nil }
             return BuiltMenu(root: root.map { .user(user, $0) }, renderer: renderer) { [weak self] in self?.loadPendingMenuIcons() }
         }
         // 保留中の通知の行では、受け入れると無視の下に、その人へのユーザーのメニューをサブメニューで出す。
         if let request {
-            let userGroups = settings.userMenuLayout.submenuGroups(actions: settings.userActions)
-            defer { reloadRelations([request.account.id], groups: userGroups) }
+            let userGroups = userMenuSubmenuGroups
             let user = MenuUser.account(request.account)
             let tree = UserMenuTree(subject: UserMenuSubject(user), actions: userMenuActions, linkBrowser: settings.linkBrowser)
+            defer {
+                reloadRelations([request.account.id], groups: userGroups)
+                tree.refreshOtherAccounts(groups: userGroups)
+            }
             let node = tree.submenu(groups: userGroups, avatar: .user(user))
             return BuiltMenu(root: StatusMenuTree.notificationRequestMenu(user: node?.map { .user(user, $0) }), renderer: renderer) { [weak self] in self?.loadPendingMenuIcons() }
         }
@@ -93,6 +100,7 @@ extension TimelineViewController {
         tree.otherAccounts = otherAccounts?.list() ?? []
         let built = tree.menu(groups: groups ?? defaultStatusMenuGroups(for: id, status: status), includesFollowRequest: groups == nil)
         reloadRelations(built.shownUserIDs, groups: tree.userMenu)
+        built.refreshOtherAccountUsers()
         // 前に別のアカウントで見つけた投稿は、組んだメニューでは覚えていた状態で出し、探し直した状態は次に開いたときから使う。
         if built.showsOtherAccounts, let status {
             otherAccounts?.refresh(status, people: built.otherAccountPeople, relationIDs: built.otherAccountRelationIDs)
@@ -124,13 +132,18 @@ extension TimelineViewController {
         tree.canSelectText = canSelectText
         tree.canSelectPosts = canSelectPost(id)
         tree.supportsEmojiReactions = supportsEmojiReactions
-        tree.userMenu = settings.userMenuLayout.submenuGroups(actions: settings.userActions)
+        tree.userMenu = userMenuSubmenuGroups
         tree.userActions = userMenuActions
         tree.hashtagMenu = settings.hashtagMenuLayout.submenuGroups(actions: settings.hashtagActions)
         tree.hashtagActions = hashtagMenuActions?.withoutRefresh
         tree.otherAccounts = otherAccounts?.list(loadsProfiles: false) ?? []
         tree.otherAccountGroups = settings.statusMenuLayout.submenuGroups(actions: settings.statusActions)
         return tree
+    }
+
+    /// ユーザーのメニューの、ほかのメニューの中に出すときの並び。ユーザーのメニューの「別のアカウントで」の中身も、この並びで組む。
+    var userMenuSubmenuGroups: MenuLayout<UserMenuItem>.Groups {
+        settings.userMenuLayout.submenuGroups(actions: settings.userActions)
     }
 
     /// メニューに出る人の関係を、まとめて1回で読み直す。組んだメニューは覚えていた関係のまま出し、読み直した関係は次に開いたときから使う。
@@ -328,8 +341,8 @@ extension TimelineViewController {
     }
 
     func builtUserMenu(for user: MenuUser, id: ItemID, groups: MenuLayout<UserMenuItem>.Groups? = nil) -> BuiltMenu<UserMenuCommand>? {
-        let built = makeUserMenu(for: user, id: id).built(groups: groups ?? settings.userMenuLayout.groups, openProfile: openProfile(of: user), avatar: .user(user)) { [weak self] _ in
-            self?.userMenuIcon(for: user, id: id)
+        let built = makeUserMenu(for: user, id: id).built(groups: groups ?? settings.userMenuLayout.groups, openProfile: openProfile(of: user), avatar: .user(user)) { [weak self] avatar in
+            self?.userMenuIcon(for: avatar, user: user, id: id)
         }
         // 描きながら集めた、アイコンのまだない人を読む。
         return built.map { built in
@@ -341,7 +354,17 @@ extension TimelineViewController {
     func makeUserMenu(for user: MenuUser, id: ItemID) -> UserMenu {
         // Mastodonは通報する相手の投稿しか添えられないため、長押しした投稿をその人が書いたときだけ添える。
         let shown = status(for: id)?.displayed
-        return UserMenu(subject: UserMenuSubject(user), actions: userMenuActions, handlers: urlHandlers(id: id), host: self, reportableStatusID: shown?.account.id == user.id ? shown?.id : nil)
+        var menu = UserMenu(subject: UserMenuSubject(user), actions: userMenuActions, handlers: urlHandlers(id: id), host: self, reportableStatusID: shown?.account.id == user.id ? shown?.id : nil)
+        menu.otherAccountGroups = userMenuSubmenuGroups
+        return menu
+    }
+
+    /// 単独で出すユーザーのメニューのアイコン。「プロフィール」には`user`のアイコンを、「別のアカウントで」のアカウントの行にはそのアカウントのアイコンを出す。
+    private func userMenuIcon(for avatar: MenuAvatar, user: MenuUser, id: ItemID?) -> UIImage? {
+        if case .otherAccount(let account) = avatar {
+            return otherAccountMenuIcon(for: account)
+        }
+        return userMenuIcon(for: user, id: id)
     }
 
     /// ユーザーのメニューの「プロフィール」で開く。メンションされたユーザーはアカウントの全体がないため、IDで開く。
@@ -373,6 +396,11 @@ extension TimelineViewController {
     func otherAccountMenuIcon(for account: OtherAccount) -> UIImage {
         guard let profile = account.profile else { return pendingMenuIcon(.otherAccount(account)) }
         return userMenuIcon(for: .account(profile), id: nil)
+    }
+
+    func menuIcon(ofOtherAccount account: OtherAccount) -> UIImage? {
+        defer { loadPendingMenuIcons() }
+        return otherAccountMenuIcon(for: account)
     }
 
     /// 記号のプレースホルダーを返し、`loadPendingMenuIcons()`で読んで差し替えるよう積む。
@@ -460,8 +488,15 @@ extension TimelineViewController {
     /// プロフィール画面のナビゲーションバーに出す、そのユーザーのユーザーのメニュー。出す項目がなければnil。
     /// - Parameter barButtonItem: 共有のシートを出す起点。
     func profileUserMenu(for account: Account, from barButtonItem: UIBarButtonItem) -> UIMenu? {
-        let menu = UserMenu(subject: UserMenuSubject(.account(account)), actions: userMenuActions, handlers: profileURLHandlers(shareFrom: barButtonItem), host: self)
-        return menu.profileScreenMenu(groups: settings.userMenuLayout.groups)
+        var menu = UserMenu(subject: UserMenuSubject(.account(account)), actions: userMenuActions, handlers: profileURLHandlers(shareFrom: barButtonItem), host: self)
+        menu.otherAccountGroups = userMenuSubmenuGroups
+        // ナビゲーションバーのボタンのメニューは、開いている間にアイコンを差し替える仕組み（`ContextMenuIconSwapper`）が働かない。
+        // 「別のアカウントで」のアカウントのプロフィールをまだ読めていなければ記号を出し、読んだアイコンは次に開いたときに出す。
+        defer { loadPendingMenuIcons() }
+        return menu.profileScreenMenu(groups: settings.userMenuLayout.groups) { [weak self] avatar in
+            guard case .otherAccount(let account) = avatar, let profile = account.profile else { return nil }
+            return self?.userMenuIcon(for: .account(profile), id: nil)
+        }
     }
 
     /// プロフィールのハンドルを押したときの、コピーのメニュー。決まりはdocs/profile.mdの「ハンドル」にある。
@@ -488,9 +523,10 @@ extension TimelineViewController {
     /// プロフィールの紹介しているユーザーのカードを長押ししたときの、その人のユーザーのメニュー。出す項目がなければnil。
     func profileEndorsedUserMenu(for account: Account, from view: UIView) -> UIMenu? {
         let user = MenuUser.account(account)
-        let menu = UserMenu(subject: UserMenuSubject(user), actions: userMenuActions, handlers: profileURLHandlers(shareFrom: view), host: self)
-        let built = menu.built(groups: settings.userMenuLayout.groups, openProfile: openProfile(of: user), avatar: .user(user)) { [weak self] _ in
-            self?.userMenuIcon(for: user, id: nil)
+        var menu = UserMenu(subject: UserMenuSubject(user), actions: userMenuActions, handlers: profileURLHandlers(shareFrom: view), host: self)
+        menu.otherAccountGroups = userMenuSubmenuGroups
+        let built = menu.built(groups: settings.userMenuLayout.groups, openProfile: openProfile(of: user), avatar: .user(user)) { [weak self] avatar in
+            self?.userMenuIcon(for: avatar, user: user, id: nil)
         }
         defer { loadPendingMenuIcons() }
         return built?.menu

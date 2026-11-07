@@ -3,7 +3,7 @@ extension UserMenuItem {
     public var isRelation: Bool {
         switch self {
         case .follow, .showReblogs, .notify, .endorse, .note, .mute, .block, .report: true
-        case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .addToList, .customize: false
+        case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .addToList, .otherAccounts, .customize: false
         }
     }
 }

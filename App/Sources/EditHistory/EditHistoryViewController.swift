@@ -256,6 +256,8 @@ extension EditHistoryViewController: LinkMenuHost {
     /// 編集履歴では、メンションのメニューにアイコンを出さない。編集履歴の版のメンションは、タイムラインの投稿のメンションと結び付けていないため。
     func mentionMenuIcon(for url: URL) -> UIImage? { nil }
 
+    func menuIcon(ofOtherAccount account: OtherAccount) -> UIImage? { nil }
+
     func showLinkCopiedNotice() {
         notices?.showTransient(.linkCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
     }

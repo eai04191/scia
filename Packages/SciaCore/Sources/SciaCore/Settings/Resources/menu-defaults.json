@@ -60,6 +60,7 @@
     "separator",
     "item:follow",
     "item:addToList",
+    "hidden:otherAccounts",
     "separator",
     "item:copyHandle",
     "hidden:copyUsername",

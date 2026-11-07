@@ -430,6 +430,8 @@ extension AnnouncementsViewController: LinkMenuHost {
     /// お知らせのメンションは、タイムラインの投稿のメンションと結び付けていないため、メニューにアイコンを出さない。
     func mentionMenuIcon(for url: URL) -> UIImage? { nil }
 
+    func menuIcon(ofOtherAccount account: OtherAccount) -> UIImage? { nil }
+
     func showLinkCopiedNotice() {
         notices?.showTransient(.linkCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
     }

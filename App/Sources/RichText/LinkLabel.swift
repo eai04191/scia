@@ -375,6 +375,9 @@ protocol LinkMenuHost: AnyObject {
     /// 本文のメンションのメニューの「プロフィール」に出す、その人のアイコン。`url`はメンションのリンク先。
     /// 誰か分からなければnilで、項目の記号のままにする。アイコンがまだなければプレースホルダーのアイコンを返し、届いたら開いているメニューで差し替える。
     func mentionMenuIcon(for url: URL) -> UIImage?
+    /// ユーザーのメニューの「別のアカウントで」の、アカウントの行に出すそのアカウントのアイコン。nilなら記号のままにする。
+    /// アイコンがまだなければプレースホルダーのアイコンを返し、届いたら開いているメニューで差し替える。
+    func menuIcon(ofOtherAccount account: OtherAccount) -> UIImage?
 }
 
 /// `LinkLabel`の上に重ねる、リンクの上だけを当たりにする部品。リンクの外では当たりにならず、押下はラベルの後ろのセルへ渡る。
@@ -527,9 +530,13 @@ final class LinkHitArea: UIControl {
         guard let label else { return nil }
         let settings = label.settings
         let host = nearest((any LinkMenuHost).self)
-        let menu = UserMenu(subject: UserMenuSubject(mentionLink: url, acct: acct), actions: host?.userMenuActions, handlers: urlHandlers(at: point, linkBrowser: settings.linkBrowser), host: host)
-        return menu.built(groups: groups ?? settings.userMenuLayout.groups, openProfile: { [weak self] in self?.label?.open(destination) }, avatar: .mentionLink(url)) { _ in
-            host?.mentionMenuIcon(for: url)
+        var menu = UserMenu(subject: UserMenuSubject(mentionLink: url, acct: acct), actions: host?.userMenuActions, handlers: urlHandlers(at: point, linkBrowser: settings.linkBrowser), host: host)
+        menu.otherAccountGroups = settings.userMenuLayout.submenuGroups(actions: settings.userActions)
+        return menu.built(groups: groups ?? settings.userMenuLayout.groups, openProfile: { [weak self] in self?.label?.open(destination) }, avatar: .mentionLink(url)) { avatar in
+            switch avatar {
+            case .otherAccount(let account): host?.menuIcon(ofOtherAccount: account)
+            case .mentionLink, .user: host?.mentionMenuIcon(for: url)
+            }
         }
     }
 

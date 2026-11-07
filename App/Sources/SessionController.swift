@@ -2620,7 +2620,15 @@ final class SessionController {
                     self?.presentListMembership(accountID: id, acct: acct)
                 }
             },
-            accounts: accounts
+            accounts: accounts,
+            // メニューを組むたびに呼ばれるので、アイコンを読まない。開いたときにメニューが読む。
+            otherAccounts: { [weak self] in self?.otherAccounts.list(loadsProfiles: false) ?? [] },
+            performAsOtherAccount: { [weak self] account, action in
+                self?.perform(action, as: account)
+            },
+            logIn: { [weak self] account in
+                FailureRecovery.logIn(account, from: self?.topViewController.view)
+            }
         )
     }
 

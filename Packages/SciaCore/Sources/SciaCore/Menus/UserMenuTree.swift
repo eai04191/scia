@@ -16,6 +16,10 @@ public enum UserMenuCommand: Sendable {
     case report(accountID: String, acct: String, statusID: String?)
     /// その人をどのリストに入れるかを選ぶシートを開く。
     case addToList
+    /// 「別のアカウントで」の、ほかのアカウントとしての操作。
+    case otherAccount(OtherAccount, OtherAccountUserAction)
+    /// ログアウトされたアカウントにログインし直す。「別のアカウントで」で、そのアカウントで人を探せなかったときに出す。
+    case logIn(RequestAccount)
     /// このメニューの並びの設定の画面を開く。
     case customize
 }
@@ -85,6 +89,12 @@ public struct UserMenuActions {
     public let addToList: @MainActor (UserMenuTarget) -> Void
     /// セッションで読んだアカウント。メンションされたユーザーのように、アイコンのURLが手元にない相手のアイコンを出すのに使う。
     public let accounts: AccountCache
+    /// 「別のアカウントで」に並べる、ログインしているほかのアカウント。メニューを組むたびに呼ぶので、通信を起こさない。
+    public let otherAccounts: @MainActor () -> [OtherAccount]
+    /// 「別のアカウントで」で選んだ操作を、そのアカウントとして行う。
+    public let performAsOtherAccount: @MainActor (OtherAccount, OtherAccountUserAction) -> Void
+    /// ログアウトされたアカウントにログインし直す。
+    public let logIn: @MainActor (RequestAccount) -> Void
 
     public init(
         mention: @escaping @MainActor (UserMenuTarget) -> Void,
@@ -98,7 +108,10 @@ public struct UserMenuActions {
         editNote: @escaping @MainActor (UserRelation) -> Void,
         report: @escaping @MainActor (_ accountID: String, _ acct: String, _ statusID: String?) -> Void,
         addToList: @escaping @MainActor (UserMenuTarget) -> Void,
-        accounts: AccountCache
+        accounts: AccountCache,
+        otherAccounts: @escaping @MainActor () -> [OtherAccount] = { [] },
+        performAsOtherAccount: @escaping @MainActor (OtherAccount, OtherAccountUserAction) -> Void = { _, _ in },
+        logIn: @escaping @MainActor (RequestAccount) -> Void = { _ in }
     ) {
         self.mention = mention
         self.copy = copy
@@ -112,6 +125,9 @@ public struct UserMenuActions {
         self.report = report
         self.addToList = addToList
         self.accounts = accounts
+        self.otherAccounts = otherAccounts
+        self.performAsOtherAccount = performAsOtherAccount
+        self.logIn = logIn
     }
 }
 
@@ -127,6 +143,8 @@ public struct UserMenuTree {
     public let linkBrowser: LinkBrowser
     /// 通報に添えられる投稿。Mastodonは通報する相手の投稿しか添えられないため、長押しした投稿を相手が書いたときだけ渡す。
     public var reportableStatusID: String?
+    /// 「別のアカウントで」の中の並び。ユーザーのメニューの、ほかのメニューの中に出すときの並び（`submenuGroups`）を渡す。nilなら、組む並びを使う。
+    public var otherAccountGroups: MenuLayout<UserMenuItem>.Groups?
 
     public init(subject: UserMenuSubject, actions: UserMenuActions?, linkBrowser: LinkBrowser, reportableStatusID: String? = nil) {
         self.subject = subject
@@ -142,7 +160,8 @@ public struct UserMenuTree {
     public func submenu(groups: MenuLayout<UserMenuItem>.Groups, avatar: MenuAvatar?) -> MenuNode<UserMenuCommand>? {
         // 関係の項目は読んでから中身が決まり、名前に相手を入れられないため、1つだけでもサブメニューにする。
         let others = groups.excludingCustomize
-        if others.more.isEmpty, others.main.count == 1, let only = others.main.first?.items, only.count == 1, !only[0].isRelation {
+        // 「別のアカウントで」も、名前に相手を入れられないため同じ。
+        if others.more.isEmpty, others.main.count == 1, let only = others.main.first?.items, only.count == 1, !only[0].isRelation, only[0] != .otherAccounts {
             // サブメニューの項目に付けるアイコンがないので、「プロフィール」にその人のアイコンを付ける。
             return Items(tree: self, groups: others, inSubmenu: false, offersProfile: true, profileAvatar: avatar).nodes(for: only[0]).first
         }
@@ -194,6 +213,8 @@ public struct UserMenuTree {
     @MainActor
     private struct Items {
         let tree: UserMenuTree
+        /// 組む並び。「別のアカウントで」の中の並びを決めるのに使う。
+        let groups: MenuLayout<UserMenuItem>.Groups
         /// 見出しのあるメニューに並べる。falseなら、投稿のメニューに直接並べるため、名前に相手を入れる。
         let inSubmenu: Bool
         let offersProfile: Bool
@@ -205,6 +226,7 @@ public struct UserMenuTree {
 
         init(tree: UserMenuTree, groups: MenuLayout<UserMenuItem>.Groups, inSubmenu: Bool, offersProfile: Bool, profileAvatar: MenuAvatar?) {
             self.tree = tree
+            self.groups = groups
             self.inSubmenu = inSubmenu
             self.offersProfile = offersProfile
             self.profileAvatar = profileAvatar
@@ -246,6 +268,9 @@ public struct UserMenuTree {
             case .follow, .showReblogs, .notify, .endorse, .note, .mute, .block, .report:
                 guard let actions = tree.actions, let load else { return [] }
                 return tree.relationNodes(item, actions: actions, load: load, failureSlots: failureSlots)
+            case .otherAccounts:
+                guard let actions = tree.actions else { return [] }
+                return tree.otherAccountsMenu(item, actions: actions, groups: groups).map { [$0] } ?? []
             case .customize:
                 return [.action(item.title, icon: .symbol(item.symbolName), .customize)]
             // 共通の項目は、上で中身から組んだ。
@@ -391,8 +416,86 @@ extension UserMenuTree {
             return [node(item.title, "hand.raised", isDestructive: true, .block)]
         case .report:
             return [.action(item.title, icon: .symbol(item.symbolName), .report(accountID: relation.accountID, acct: relation.acct, statusID: reportableStatusID))]
-        case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .addToList, .customize:
+        case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .addToList, .otherAccounts, .customize:
             return []
+        }
+    }
+}
+
+// MARK: - 別のアカウントで
+
+extension UserMenuTree {
+    /// 「別のアカウントで」の中に出さない項目。どのアカウントで行っても同じ結果になるものと、「別のアカウントで」そのもの。
+    static let otherAccountExcludedItems = StatusMenuTree.sameForEveryAccountUserItems.union([.otherAccounts])
+
+    /// 「別のアカウントで」の中の並び。
+    private func otherAccountInnerGroups(_ groups: MenuLayout<UserMenuItem>.Groups) -> MenuLayout<UserMenuItem>.Groups {
+        (otherAccountGroups ?? groups).excluding(Self.otherAccountExcludedItems)
+    }
+
+    /// 「別のアカウントで」のサブメニュー。アカウントを選んだ先に、そのアカウントから見たこの人のユーザーのメニューを出す。決まりはdocs/other-accounts.mdにある。
+    /// プロフィールのURLのない人は、ほかのサーバーで探せないので出さない。MastodonのAPIでは、アカウントの`url`はnullを取りうる。
+    fileprivate func otherAccountsMenu(_ item: UserMenuItem, actions: UserMenuActions, groups: MenuLayout<UserMenuItem>.Groups) -> MenuNode<UserMenuCommand>? {
+        guard let url = subject.url else { return nil }
+        let inner = otherAccountInnerGroups(groups)
+        guard !(inner.main + inner.more).isEmpty else { return nil }
+        return OtherAccount.accountsMenu(actions.otherAccounts(), title: item.title, symbolName: item.symbolName) { account in
+            otherAccountNodes(at: url, as: account, groups: inner)
+        }
+    }
+
+    /// `account`から見たこの人のユーザーのメニュー。前に見つけた人ならすぐ組み、まだなら開いてからそのサーバーでプロフィールのURLで探す。
+    private func otherAccountNodes(at url: URL, as account: OtherAccount, groups: MenuLayout<UserMenuItem>.Groups) -> [MenuNode<UserMenuCommand>] {
+        if let found = account.person(at: url) {
+            return otherAccountItems(for: found, as: account, groups: groups)
+        }
+        return [.deferred { [self] in
+            switch await account.lookUpPerson(at: url) {
+            case .found(let found):
+                // 関係の項目は、この読み込みを待って中身を渡す。
+                if groups.needsRelationship {
+                    account.reloadRelations([found.id])
+                }
+                return otherAccountItems(for: found, as: account, groups: groups)
+            case .notFound:
+                return [.action("このアカウントからは見つからないユーザーです", nil)]
+            case .failed(let error):
+                return OtherAccount.lookupFailureNodes(title: "ユーザーを探せませんでした", error: error, logIn: UserMenuCommand.logIn)
+            }
+        }]
+    }
+
+    /// そのサーバーで見つけた人`found`のユーザーのメニューを、`account`として組む。
+    /// 通報には投稿を添えない。添えられる投稿のIDは今のアカウントのサーバーのもので、そのアカウントのサーバーでは使えないため。
+    private func otherAccountItems(for found: Account, as account: OtherAccount, groups: MenuLayout<UserMenuItem>.Groups) -> [MenuNode<UserMenuCommand>] {
+        let tree = UserMenuTree(subject: UserMenuSubject(.account(found)), actions: account.userActions, linkBrowser: linkBrowser)
+        return tree.nodes(groups: groups, offersProfile: false, profileAvatar: nil).map { node in
+            node.map { command in
+                // 組む並びから、ほかのアカウントでは行わない項目を除いているので、ほかの命令は来ない。
+                OtherAccountUserAction(command, id: found.id, acct: found.acct).map { .otherAccount(account, $0) } ?? command
+            }
+        }
+    }
+
+    /// 「別のアカウントで」を出す並びなら、ほかのアカウントのアイコンを読み、前に見つけたこの人との関係を、そのアカウントで読み直す。
+    /// 組んだメニューは覚えていた関係のまま出し、読み直した関係は次に開いたときから使う。メニューを開くときだけ呼ぶ。組むたびに呼ぶと、スクロールで投稿を組むたびにほかのサーバーへ通信するため。
+    /// - Parameter groups: メニューを組んだ並び。
+    public func refreshOtherAccounts(groups: MenuLayout<UserMenuItem>.Groups) {
+        Self.refreshOtherAccounts(of: [self], groups: groups)
+    }
+
+    /// `trees`の人たちの「別のアカウントで」を、ほかのアカウントごとに、関係をまとめて1回で読み直す。投稿のメニューのように、1つのメニューに何人も出るときに使う。
+    /// - Parameter groups: メニューを組んだ並び。
+    static func refreshOtherAccounts(of trees: [UserMenuTree], groups: MenuLayout<UserMenuItem>.Groups) {
+        guard let actions = trees.lazy.compactMap(\.actions).first, (groups.main + groups.more).contains(where: { $0.items.contains(.otherAccounts) }) else { return }
+        let urls = trees.compactMap(\.subject.url)
+        guard !urls.isEmpty else { return }
+        let relationTrees = trees.filter { $0.otherAccountInnerGroups(groups).needsRelationship }
+        for account in actions.otherAccounts() {
+            account.loadProfile()
+            var seen: Set<String> = []
+            let ids = relationTrees.compactMap(\.subject.url).compactMap(account.person(at:)).map(\.id).filter { seen.insert($0).inserted }
+            account.reloadRelations(ids)
         }
     }
 }

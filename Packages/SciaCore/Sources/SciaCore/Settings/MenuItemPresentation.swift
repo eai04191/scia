@@ -135,6 +135,7 @@ extension UserMenuItem: MenuItemContentProviding {
         case .mute: .own(title: "ミュート", symbolName: "speaker.slash")
         case .block: .own(title: "ブロック", symbolName: "hand.raised")
         case .report: .own(title: "通報", symbolName: "flag")
+        case .otherAccounts: .own(title: "別のアカウントで", symbolName: "person.2")
         case .customize: .own(title: "カスタマイズ", symbolName: "slider.horizontal.3")
         }
     }

@@ -343,6 +343,8 @@ public enum UserMenuItem: String, BundledMenuDefaults {
     case block
     /// 通報のシートを開く。
     case report
+    /// ログインしているほかのアカウントとしてその人を操作するサブメニュー。ほかのアカウントでログインしているときだけ出る。決まりはdocs/other-accounts.mdにある。
+    case otherAccounts
 
     /// このメニューの並びの設定の画面を開く。決まりはdocs/menus.mdの「並びの設定」にある。
     case customize
@@ -368,7 +370,8 @@ public enum UserMenuItem: String, BundledMenuDefaults {
     public var dependsOnRelationship: Bool {
         switch self {
         case .follow, .showReblogs, .notify, .endorse, .note, .mute, .block: true
-        case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .addToList, .report, .customize: false
+        // 「別のアカウントで」の中の関係は、そのアカウントで読み直す（`UserMenuTree.refreshOtherAccounts(groups:)`）。
+        case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .addToList, .report, .otherAccounts, .customize: false
         }
     }
 }

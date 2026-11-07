@@ -15,6 +15,9 @@ struct UserMenu {
     weak var host: (any LinkMenuHost)?
     /// 通報に添えられる投稿。Mastodonは通報する相手の投稿しか添えられないため、長押しした投稿を相手が書いたときだけ渡す。
     var reportableStatusID: String?
+    /// 「別のアカウントで」の中の並び。設定のユーザーのメニューの、ほかのメニューの中に出すときの並びを渡す。
+    /// タップや長押しに「別のアカウントで」だけを割り当てて組んでも、中身をユーザーのメニューの並びで組むため。
+    var otherAccountGroups: MenuLayout<UserMenuItem>.Groups?
 
     init(subject: UserMenuSubject, actions: UserMenuActions?, handlers: URLMenuHandlers, host: (any LinkMenuHost)?, reportableStatusID: String? = nil) {
         self.subject = subject
@@ -25,7 +28,9 @@ struct UserMenu {
     }
 
     var tree: UserMenuTree {
-        UserMenuTree(subject: subject, actions: actions, linkBrowser: handlers.linkBrowser, reportableStatusID: reportableStatusID)
+        var tree = UserMenuTree(subject: subject, actions: actions, linkBrowser: handlers.linkBrowser, reportableStatusID: reportableStatusID)
+        tree.otherAccountGroups = otherAccountGroups
+        return tree
     }
 
     /// 単独で出すメニュー（アイコンや人のリストの行、本文や自己紹介のメンション）。開くたびに、その人の関係を読み直す。出す項目がなければnil。
@@ -39,10 +44,11 @@ struct UserMenu {
     }
 
     /// プロフィール画面のナビゲーションバーの「…」に出すメニュー。開くたびに、その人の関係を読み直す。出す項目がなければnil。
-    func profileScreenMenu(groups: MenuLayout<UserMenuItem>.Groups) -> UIMenu? {
+    /// - Parameter avatarImage: 「別のアカウントで」のアカウントの行のアイコンの画像。nilを返したら記号を付ける。
+    func profileScreenMenu(groups: MenuLayout<UserMenuItem>.Groups, avatarImage: @escaping @MainActor (MenuAvatar) -> UIImage?) -> UIMenu? {
         let root = tree.profileScreenMenu(groups: groups)
         reloadRelation(groups: groups)
-        return root.map { renderer(openProfile: nil) { _ in nil }.menu($0) }
+        return root.map { renderer(openProfile: nil, avatarImage: avatarImage).menu($0) }
     }
 
     /// プロフィールのハンドルを押したときのメニュー。コピーの項目を決まった順に出す。出す項目がなければnil。
@@ -50,8 +56,11 @@ struct UserMenu {
         tree.handleMenu().map { renderer(openProfile: nil) { _ in nil }.menu($0) }
     }
 
-    /// 関係で中身が変わる項目を出していれば、その人の関係を読み直す。組んだメニューは覚えていた関係のまま出し、読み直した関係は次に開いたときから使う。
+    /// 関係で中身が変わる項目を出していれば、その人の関係を読み直す。「別のアカウントで」を出していれば、ほかのアカウントでの関係も読み直す。
+    /// 組んだメニューは覚えていた関係のまま出し、読み直した関係は次に開いたときから使う。
     private func reloadRelation(groups: MenuLayout<UserMenuItem>.Groups) {
+        let tree = tree
+        tree.refreshOtherAccounts(groups: groups)
         guard let id = tree.relationReloadID(groups: groups) else { return }
         actions?.reloadRelations([id])
     }
@@ -86,6 +95,10 @@ struct UserMenu {
             actions?.report(accountID, acct, statusID)
         case .addToList:
             actions?.addToList(subject.target)
+        case .otherAccount(let account, let action):
+            actions?.performAsOtherAccount(account, action)
+        case .logIn(let account):
+            actions?.logIn(account)
         case .customize:
             handlers.openSettings(.userMenu)
         }

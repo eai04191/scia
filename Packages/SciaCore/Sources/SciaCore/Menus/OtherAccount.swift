@@ -91,6 +91,8 @@ public final class OtherAccount {
     private var people: [URL: Account] = [:]
     /// 探せたが見つからなかった人のプロフィールのURL。開いたメニューで探すのを待たないために使う。探し直しは続け、見つかったら除く。
     private var peopleNotFound: Set<URL> = []
+    /// プロフィールのURLごとの、最後に探せなかった理由。探せたら消す。
+    private var peopleFailures: [URL: any Error] = [:]
     /// プロフィールのURLごとの、走っている人の検索。同じ人を探しているときは、送り直さずに待つ。
     private var peopleSearches: [URL: Task<Void, Never>] = [:]
     /// そのアカウントのハッシュタグのフォロー、ミュート、プロフィールでの紹介を読んで変えるもの。nilなら、それらの項目を出さない。
@@ -207,7 +209,31 @@ public final class OtherAccount {
 
     /// 覚えている、そのサーバーで見つけた`account`と同じ人。プロフィールのURLで探す。まだ探していないか、見つからなければnil。
     public func person(_ account: Account) -> Account? {
-        account.url.flatMap { people[$0] }
+        account.url.flatMap(person(at:))
+    }
+
+    /// 覚えている、そのサーバーで見つけた、プロフィールのURLが`url`の人。まだ探していないか、見つからなければnil。
+    public func person(at url: URL) -> Account? {
+        people[url]
+    }
+
+    /// そのアカウントで人を探した結果。
+    public enum PersonLookup: Sendable {
+        /// そのサーバーでの、その人。
+        case found(Account)
+        /// 探せたが、そのサーバーでは見つからない。
+        case notFound
+        /// 探せなかった。
+        case failed(any Error)
+    }
+
+    /// そのアカウントのサーバーで、プロフィールのURLが`url`の人を探す。見つけた人は覚え、覚えていればそのまま返す。
+    /// ユーザーのメニューの「別のアカウントで」で使う。
+    public func lookUpPerson(at url: URL) async -> PersonLookup {
+        await resolve(urls: [url])
+        if let found = people[url] { return .found(found) }
+        if let failure = peopleFailures[url] { return .failed(failure) }
+        return .notFound
     }
 
     /// `account`を、まだそのサーバーで探していないか。探せなかった人も含む。見つからなかった人は含まない。
@@ -220,7 +246,11 @@ public final class OtherAccount {
     /// 人のIDはサーバーごとに違い、見つけた投稿には投稿者とメンションのほかの人のIDが入っていないため。
     /// URLが同じ人だけを使う。違う人を操作しないため。見つからない、探せない人は、次に呼ばれたときに探し直す。
     public func resolve(_ accounts: [Account]) async {
-        let urls = Set(accounts.compactMap(\.url)).filter { people[$0] == nil }
+        await resolve(urls: Set(accounts.compactMap(\.url)))
+    }
+
+    private func resolve(urls: Set<URL>) async {
+        let urls = urls.filter { people[$0] == nil }
         let searches = urls.compactMap { url -> Task<Void, Never>? in
             if let running = peopleSearches[url] { return running }
             // 始めた検索は、このあとの代入を終えてから走るので、走り終えたときに自分で除ける。
@@ -231,8 +261,10 @@ public final class OtherAccount {
                     resolved = try await operations.resolveAccount(url)
                 } catch {
                     // 探せなかったときは、見つからなかったとは決めずに、次に開いたメニューでも待って探す。
+                    self?.peopleFailures[url] = error
                     return
                 }
+                self?.peopleFailures[url] = nil
                 if let found = resolved, found.url == url {
                     self?.people[url] = found
                     self?.peopleNotFound.remove(url)
@@ -372,7 +404,7 @@ extension OtherAccount {
 }
 
 /// 「別のアカウントで」の、ほかのアカウントとしての人への操作。相手のIDと`acct`は、そのアカウントのサーバーのもの。
-public enum OtherAccountUserAction {
+public enum OtherAccountUserAction: Sendable {
     /// 関係の変更。
     case relation(UserRelationChange, UserRelation)
     /// 自分にしか見えないメモのシートを開く。
@@ -396,7 +428,7 @@ public enum OtherAccountUserAction {
         case .addToList: self = .addToList(accountID: id, acct: acct)
         case .mention: self = .mention(acct: acct)
         // 「別のアカウントで」の中には、どのアカウントでも同じ結果になる項目を組まない。
-        case .url, .openProfile, .copy, .customize: return nil
+        case .url, .openProfile, .copy, .otherAccount, .logIn, .customize: return nil
         }
     }
 }
