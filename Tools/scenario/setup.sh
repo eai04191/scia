@@ -97,8 +97,8 @@ login_on_device() {
     axe tap --value mastodon.social --element-type TextField --tap-style physical --udid "$udid" >/dev/null
     axe type "$SCENARIO_HOST" --udid "$udid" >/dev/null
     axe tap --label ログイン --element-type PopUpButton --tap-style physical --udid "$udid" >/dev/null
-    wait_label "$udid" 続ける Button
-    axe tap --label 続ける --element-type Button --tap-style physical --udid "$udid" >/dev/null
+    # サインインのダイアログが出てくる途中に押すと、タップが効かずにダイアログが残ることがあった。消えるまで押し直す
+    tap_label_until_gone "$udid" 続ける Button
     wait_point "$udid" 201 544 メールアドレス
     tap_point "$udid" 201 544
     # キーボードが出るとページが動き、パスワードの欄の位置が変わる。Tabキーでは次の欄に移らなかったので、キーボードの上の「次へ」で移る

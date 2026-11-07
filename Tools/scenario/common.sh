@@ -111,6 +111,23 @@ wait_point() {
     done
 }
 
+# 要素が出るまで待って押し、消えなければ2秒おいて押し直す。30秒たっても消えなければ止める
+# 画面の木を読めなかったときは、消えたとみなさずに読み直す。読めた木に要素がないときだけ抜ける
+tap_label_until_gone() {
+    local udid="$1" label="$2" kind="$3" deadline=$((SECONDS + 30)) tree
+    wait_label "$udid" "$label" "$kind"
+    while true; do
+        [ $SECONDS -lt $deadline ] || fail "30秒押しても「$label」が消えなかった"
+        if ! tree="$(axe describe-ui --udid "$udid" 2>/dev/null)" || ! python3 -I -c 'import json, sys; json.load(sys.stdin)' <<< "$tree" 2>/dev/null; then
+            sleep 1
+            continue
+        fi
+        python3 -I "$SCENARIO_DIR/ui.py" has "$label" "$kind" <<< "$tree" || return 0
+        axe tap --label "$label" --element-type "$kind" --tap-style physical --udid "$udid" >/dev/null || true
+        sleep 2
+    done
+}
+
 # AXeの既定のタップはSciaのボタンにもキーボードにも届かなかった。押し下げと離しを送るphysicalにする
 tap_point() {
     axe tap -x "$2" -y "$3" --tap-style physical --udid "$1" >/dev/null
