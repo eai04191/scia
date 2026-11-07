@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # Merge to Main
 
-作業が落ち着いたところで、作業branchをローカルのdefault branch(以下target)へ入れるまでを、1回の依頼で済ませる。止まるのは、ユーザーに決めてもらうことがあるときと、安全に入れられないときだけにする。pushはしない。
+作業branchをローカルのdefault branch(以下target)へ入れるまでを、1回の依頼で済ませる。止まるのは、ユーザーに決めてもらうことがあるときと、安全に入れられないときだけにする。pushはしない。
 
 mainへ入れる処理（rebase、`make check`、`make test`、fast-forward）は、`Tools/merge-queue.sh`の列を通して、どのスレッドからでも1つずつ走らせる。順番は問わず、ユーザーが前提に指定したスレッドのbranchがmainに入るまでは、番を待つ。
 
@@ -88,6 +88,6 @@ targetは、指定がなければ`git symbolic-ref --short refs/remotes/origin/H
 
 「archiveしてよい」と書いたら、`mcp__ccd_session_mgmt__set_session_title`でthread名の先頭に✅を付ける。そのあと同じthreadで作業を始めたら、最初に✅を外す。
 
-- `session_id`は必須で、このthreadなら`"self"`を渡す。IDを調べる必要はない
+- `session_id`は必須で、このthreadなら`"self"`を渡す
 - `title`には新しい名前を丸ごと渡す。今の名前は`mcp__ccd_session_mgmt__get_session`に`"self"`を渡して引く
 - どちらも最初は名前しか分からないツールなので、`ToolSearch`で定義を読み込んでから呼ぶ

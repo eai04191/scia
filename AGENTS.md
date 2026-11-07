@@ -20,7 +20,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `docs/vision.md`: 何を作り、何を作らないかと、設計の判断の基準。作業が終わっても残す考え方を書く
 - `docs/roadmap.md`: これからの作業の単位と順序。1項目1行で、何をするかだけを書く。設計の判断や、作業を進めるための細かい合意・状態・調べて分かったことは書かない。済んだ項目は消す
 - docs、コメント、commit messageに書く理由は、ユーザーが示したもの、ドキュメントやコードや実際の動きで確かめた事実、技術的な制約に限る。agentが推測した理由（使う人がどう使うことが多いかの見込みなど）は、ユーザーが決めたように読めるので書かない。読めば推し量れる理由なら、書かずに済ませる。推測でも書いておきたいときは、推測だと分かる書き方にし、報告でユーザーに確かめる
-- 作業を別のthreadへ引き継ぐためのメモ（合意した細部、進み具合、検証の道具など）は、元のcheckoutの`.handoff/`に置く。`.git/info/exclude`で除いてあるのでcommitされない。worktreeは作業が終わると消えるため、worktreeの中には置かない。作業が終わったら消す。親子のセッションの間では使わない。始めるセッションへの依頼の文やメッセージで直接渡す。`.handoff/`は、つながりのないthreadの間で引き継がなければならないときだけに使う
+- 作業を別のthreadへ引き継ぐためのメモ（合意した細部、進み具合、検証の道具など）は、元のcheckoutの`.handoff/`に置く。`.git/info/exclude`で除いてあるのでcommitされない。worktreeは作業が終わると消えるため、worktreeの中には置かない。作業が終わったら消す。親子のセッションの間では使わない。始めるセッションへの依頼の文やメッセージで直接渡す
 
 ## コマンド
 
@@ -36,7 +36,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `make menu-editor`: メニューの既定の並びを並べ替えるページを、今の項目の名前と既定の並びを入れて`DerivedData/menu-editor.html`に書き出す
 - `make archive`: 実機向けのReleaseビルドをアーカイブする。ビルド番号はアーカイブしたUTCの日時になる
 - `make testflight`: アーカイブしてApp Store Connectへ上げる。mainは、GitHub Actions（`.github/workflows/testflight.yml`）が毎朝5時（JST）に、前に上げたときから変わっていれば上げる。上げたビルドは、`make testflight-external`で外部テストのグループ（リポジトリのvariablesの`TESTFLIGHT_EXTERNAL_GROUP`）に足し、TestFlight App Reviewに出す
-- `make hooks`: ローカルのmainを、`make check`と`make test`の両方が通った中身のcommitにしか動かさないhookを入れる。checkoutごとに1回で、worktreeにも効く。通った中身との違いがMarkdown（`*.md`）とログイン画面の補完に使うサーバーのリスト（`known-servers.txt`）だけなら、走らせ直さずに通ったものとして扱う。`README.md`と`FEATURES.md`がmainと違うcommitは、`Tools/human-review.sh`で人が承認するまで入れない
+- `make hooks`: ローカルのmainを、`make check`と`make test`の両方が通った中身のcommitにしか動かさないhookを入れる。checkoutごとに1回で、worktreeにも効く。通った中身との違いがMarkdown（`*.md`）とログイン画面の補完に使うサーバーのリスト（`known-servers.txt`）だけなら、走らせ直さずに通ったものとして扱う
 - `make scenario-run PERSONA=<役>`: 何も知らないエージェントを、`Tools/scenario/personas/`の役で初めて使う人としてSciaに触らせ、報告とスクリーンショットを`~/scia-scenario/runs/`に残す。外へ出ないMastodon（`mastodon.localhost`）と専用の端末`Scia Scenario`を使い、Release構成のSciaを入れる。先に`make scenario-setup`で準備する（何度走らせても同じ状態になる）。DockerとAXe（`brew install cameroncooke/axe/axe`）が要る。ユーザーが`/scenario`で起動したときは、`.claude/skills/scenario`の手順で走らせてまとめる
 
 ## シミュレーター
