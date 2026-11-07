@@ -1393,7 +1393,7 @@ final class InlineComposeController: NSObject {
         guard model.switchAccount(to: account) else { return }
         beginEditing()
         let selection = textView.selectedRange
-        let insertion = MentionInsertion.insertion(of: acct, in: textView.text, replacing: selection.location ..< selection.location + selection.length)
+        let insertion = WordInsertion.insertion(of: "@\(acct)", in: textView.text, replacing: selection.location ..< selection.location + selection.length)
         let begin = textView.beginningOfDocument
         guard let start = textView.position(from: begin, offset: insertion.range.lowerBound),
               let end = textView.position(from: begin, offset: insertion.range.upperBound),

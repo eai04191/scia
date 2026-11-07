@@ -1,10 +1,10 @@
-/// ユーザーのメニューの「メンション」で、投稿欄の本文に`@acct`を入れる。決まりはdocs/menus.mdの「ユーザーのメニュー」にある。
-public enum MentionInsertion {
-    /// 本文の`selection`を`@acct`で置き換えるもの。書いている途中の下書きを消さず、カーソルの位置に入れる。
-    /// 前の文字とつながってメンションとして読まれないよう、直前が空白でも本文の先頭でもなければ前に空白を入れる。
+/// ユーザーのメニューの「メンション」の`@acct`のような語を、投稿欄の本文に入れる。決まりはdocs/menus.mdの「ユーザーのメニュー」にある。
+public enum WordInsertion {
+    /// 本文の`selection`を`word`（`@acct`など）で置き換えるもの。書いている途中の下書きを消さず、カーソルの位置に入れる。
+    /// 前の文字とつながってメンションなどとして読まれないよう、直前が空白でも本文の先頭でもなければ前に空白を入れる。
     /// 続けて書けるよう、直後が空白でなければ後ろにも空白を入れ、カーソルはその空白の後ろに置く。
     /// - Parameter selection: 選んでいる範囲（UTF-16）。`UITextView`の位置と同じ数え方。本文の外にはみ出していれば、本文の中に収める。
-    public static func insertion(of acct: String, in text: String, replacing selection: Range<Int>) -> TextInsertion {
+    public static func insertion(of word: String, in text: String, replacing selection: Range<Int>) -> TextInsertion {
         let length = text.utf16.count
         let lower = min(max(selection.lowerBound, 0), length)
         let upper = min(max(selection.upperBound, lower), length)
@@ -12,7 +12,7 @@ public enum MentionInsertion {
         let after = text.utf16.dropFirst(upper)
         let leading = before.last.map { isWhitespace($0) } ?? true ? "" : " "
         let followsSpace = after.first.map { isWhitespace($0) } ?? false
-        let inserted = "\(leading)@\(acct)\(followsSpace ? "" : " ")"
+        let inserted = "\(leading)\(word)\(followsSpace ? "" : " ")"
         // 後ろにもとからある空白は、入れた文字に含めず、カーソルだけをその後ろへ動かす。
         let cursor = lower + inserted.utf16.count + (followsSpace ? 1 : 0)
         return TextInsertion(range: lower ..< upper, text: inserted, cursor: cursor)
