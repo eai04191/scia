@@ -91,10 +91,8 @@ public final class ComposeModel<Thumbnail: Sendable> {
     @ObservationIgnored public var now: () -> Date = SystemTime.now
     /// 予約の日時を区切る暦。テストでは決まったタイムゾーンの暦に差し替える。
     @ObservationIgnored public var calendar = Calendar.autoupdatingCurrent
-    @ObservationIgnored private let homePost: (StatusDraft) async throws -> Void
+    @ObservationIgnored private let homeSubmit: (StatusDraft) async throws -> SubmittedDraft
     @ObservationIgnored private let homeMedia: ComposeMediaService<Thumbnail>
-    /// 書いているアカウントのサーバーへ送る口。
-    private var post: (StatusDraft) async throws -> Void { otherAccount?.post ?? homePost }
     private var media: ComposeMediaService<Thumbnail> { otherAccount?.media ?? homeMedia }
     /// 下書きの送信とアップロードの持ち主。セッションの持ち主の子で、ログアウトやアカウントの切り替えで閉じると、送っている途中のものも止める。
     @ObservationIgnored public let tasks: TaskScope
@@ -120,7 +118,10 @@ public final class ComposeModel<Thumbnail: Sendable> {
     @ObservationIgnored private var mediaWait: CheckedContinuation<MediaWaitOutcome, Never>?
     @ObservationIgnored private var pickerSelection = MediaPickerSelection()
     @ObservationIgnored private let logger = SciaLog.logger(category: "compose")
-    /// 投稿できて、下書きを空に戻したあとに呼ぶ。
+    /// 今のアカウントで送れたとき、下書きを空に戻す前に、送った結果を渡して呼ぶ。投稿、予約、編集のどれだったかと、サーバーが返したものが入る。
+    /// 一覧へ反映するのは呼ぶ側で、何をどこへ反映するかは`SubmittedDraft`の各場合にある。ほかのアカウントで送ったときは呼ばず、`ComposeAccount.onSubmitted`を呼ぶ。
+    @ObservationIgnored public var onSubmitted: (SubmittedDraft) -> Void = { _ in }
+    /// 投稿できて、下書きを空に戻したあとに呼ぶ。どのアカウントで送ったときも呼ぶ。
     @ObservationIgnored public var onPosted: () -> Void = {}
     /// 予約を書き直した投稿を送れて、`onPosted`を呼んだあとに、元の予約のIDを渡して呼ぶ。元の予約を取り消すのは呼ぶ側。
     @ObservationIgnored public var onScheduleRewritten: (ScheduledStatus.ID) -> Void = { _ in }
@@ -133,6 +134,8 @@ public final class ComposeModel<Thumbnail: Sendable> {
     /// 投稿するアカウントを替えたあとに呼ぶ。今のアカウントに戻ったらnil。呼ぶ側は、そのアカウントのサーバーの上限と既定値を`apply`で入れる。
     @ObservationIgnored public var onAccountChange: (ComposeAccount<Thumbnail>?) -> Void = { _ in }
 
+    /// - Parameter submit: 下書きを今のアカウントのサーバーへ送る。ふつうは`AccountSession.client`の`MastodonClient.submit(_:)`を渡す。
+    ///   投稿、予約、編集のどれで送るかは下書きの中身で決まり、そのクライアントで受けた401はセッションへ知らせる。送れた結果は`onSubmitted`に渡る。
     public init(
         tasks: TaskScope,
         replyTo: Status? = nil,
@@ -140,7 +143,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
         media: ComposeMediaService<Thumbnail> = .unavailable,
         redraft redraftService: ComposeRedraftService = .unavailable,
         backgroundTime: @escaping @MainActor (String) -> @MainActor () -> Void,
-        post: @escaping (StatusDraft) async throws -> Void
+        submit: @escaping (StatusDraft) async throws -> SubmittedDraft
     ) {
         self.tasks = tasks
         self.backgroundTime = backgroundTime
@@ -152,7 +155,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
         visibility = draft.visibility
         self.replyTo = replyTo
         homeAccountID = myAccountID
-        homePost = post
+        homeSubmit = submit
         homeMedia = media
         homeRedraftService = redraftService
     }
@@ -755,8 +758,15 @@ public final class ComposeModel<Thumbnail: Sendable> {
         }
         let draft = submission(of: draftToPost)
         lastSubmitted = draft
+        // 送っている間は投稿するアカウントを替えさせないが、送り終えたときに知らせる先を、送ったアカウントに決めておく。
+        let account = otherAccount
         do {
-            try await post(draft)
+            let submitted = try await (account?.submit ?? homeSubmit)(draft)
+            if let account {
+                account.onSubmitted(submitted)
+            } else {
+                onSubmitted(submitted)
+            }
             let rewritten = rewritingSchedule?.id
             reset()
             onPosted()

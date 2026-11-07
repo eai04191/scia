@@ -5,8 +5,11 @@ public struct ComposeAccount<Thumbnail> {
     public let id: String
     /// そのサーバーでの自分のアカウントのID。返信の宛先から自分を除くのに使う。
     public let myAccountID: String
-    /// 新しい投稿、予約、編集を送る。編集なら`StatusDraft.editing`がある。
-    public let post: (StatusDraft) async throws -> Void
+    /// 下書きをそのアカウントのサーバーへ送る。ふつうはそのアカウントの`MastodonClient.submit(_:)`を渡す。
+    public let submit: (StatusDraft) async throws -> SubmittedDraft
+    /// そのアカウントで送れたとき、下書きを空に戻す前に呼ぶ。今のアカウントの一覧には反映しない。IDがサーバーごとに違うため。
+    /// 今のアカウントの`ComposeModel.onSubmitted`は、ほかのアカウントで送ったときは呼ばない。
+    public let onSubmitted: (SubmittedDraft) -> Void
     public let media: ComposeMediaService<Thumbnail>
     /// そのアカウントの投稿を削除して書き直すときに、元の投稿を消して添付が外れるのを待つ口。
     public let redraft: ComposeRedraftService
@@ -19,13 +22,15 @@ public struct ComposeAccount<Thumbnail> {
         media: ComposeMediaService<Thumbnail>,
         redraft: ComposeRedraftService = .unavailable,
         onRedraftDeleted: @escaping (Status.ID) -> Void = { _ in },
-        post: @escaping (StatusDraft) async throws -> Void
+        onSubmitted: @escaping (SubmittedDraft) -> Void = { _ in },
+        submit: @escaping (StatusDraft) async throws -> SubmittedDraft
     ) {
         self.id = id
         self.myAccountID = myAccountID
         self.media = media
         self.redraft = redraft
         self.onRedraftDeleted = onRedraftDeleted
-        self.post = post
+        self.onSubmitted = onSubmitted
+        self.submit = submit
     }
 }

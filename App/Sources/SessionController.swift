@@ -546,37 +546,9 @@ final class SessionController {
             // 読めなかった人は返らないだけで、失敗はAccountCacheがログに残す。
             accounts: { ids in await Array(accounts.load(ids).values) }
         ).remembering(customEmojisIn: customEmojis)
-        // 投稿欄は初期化の途中で作るため、編集した投稿を引用の囲みに当てる先は、初期化を終えてからつなぐ。
-        let editedStatuses = SessionReference()
-        // 予約できたことのチップを出す先も、初期化を終えてからつなぐ。
-        let schedules = SessionReference()
         let completion = ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, account: credential.handle))
         composer = InlineComposeController(
-            model: ComposeModel<UIImage>(tasks: tasks.child(), myAccountID: credential.accountID, media: media, redraft: redraft, backgroundTime: BackgroundTime.request) { draft in
-                do {
-                    if let editing = draft.editing {
-                        // ストリーミングの編集の知らせを待たずに、どのタイムラインにも編集したあとの投稿を出す。切れている間も直るようにするため。
-                        let edited = try await client.editStatus(editing, to: draft)
-                        for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, serverFeeds.updateStatus, pushedFeeds.updateStatus, profiles.updateStatus, threads.updateStatus, searches.updateStatus] {
-                            update(edited.id) { _ in edited }
-                        }
-                        editedStatuses.session?.changeQuoteSources(.status(edited.id)) { $0.edit(edited) }
-                        completion.didUse(edited.tags)
-                    } else if let scheduledAt = draft.scheduledAt {
-                        let scheduledStatus = try await client.scheduleStatus(draft, at: scheduledAt)
-                        schedules.session?.didSchedule(scheduledStatus)
-                    } else {
-                        // ストリーミングで届くまで数秒かかることがあるため、応答の投稿をすぐホームと、返信先を開いているスレッドに出す。
-                        let posted = try await client.postStatus(draft)
-                        home.receivePosted(posted)
-                        threads.receivePosted(posted)
-                        completion.didUse(posted.tags)
-                    }
-                } catch {
-                    reportIfUnauthorized(error)
-                    throw error
-                }
-            },
+            model: ComposeModel<UIImage>(tasks: tasks.child(), myAccountID: credential.accountID, media: media, redraft: redraft, backgroundTime: BackgroundTime.request, submit: client.submit),
             completion: completion,
             recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance),
             languages: PostingLanguageSource(recent: RecentPostingLanguages(defaults: .standard, account: credential.handle), load: PostingLanguageCache { try await client.postingLanguages() }.languages)
@@ -666,8 +638,7 @@ final class SessionController {
             }
         }
         notices.showOperationStatus = { [weak self] presenter in self?.showOperationStatus(from: presenter) }
-        editedStatuses.session = self
-        schedules.session = self
+        composer.model.onSubmitted = { [weak self] submitted in self?.didSubmit(submitted) }
         myAccountReference.session = self
         scheduled.viewController.mediaTransfers = mediaTransfers
         scheduled.viewController.notices = notices
@@ -2184,18 +2155,18 @@ final class SessionController {
         )
         return ComposeAccount(id: account.credential.id, myAccountID: account.credential.accountID, media: media, redraft: redraft, onRedraftDeleted: { [weak account] id in
             account?.didDelete(id)
-        }) { [weak self, weak account] draft in
-            if let editing = draft.editing {
-                let edited = try await client().editStatus(editing, to: draft)
+        }, onSubmitted: { [weak self, weak account] submitted in
+            switch submitted {
+            case .edited(let edited):
                 account?.didEdit(edited)
                 self?.showToggledNotice("\(handle)で編集しました")
-            } else if let scheduledAt = draft.scheduledAt {
-                _ = try await client().scheduleStatus(draft, at: scheduledAt)
+            case .scheduled:
                 self?.showToggledNotice("\(handle)で予約しました")
-            } else {
-                _ = try await client().postStatus(draft)
+            case .posted:
                 self?.showToggledNotice("\(handle)で投稿しました")
             }
+        }) { draft in
+            try await client().submit(draft)
         }
     }
 
@@ -3256,10 +3227,26 @@ final class SessionController {
         }, animated: true)
     }
 
+    /// 投稿欄から今のアカウントで送れた結果を、ストリーミングの知らせを待たずに一覧へ反映する。何をどこへ反映するかは`SubmittedDraft`にある。
+    private func didSubmit(_ submitted: SubmittedDraft) {
+        switch submitted {
+        case .posted(let posted):
+            home.receivePosted(posted)
+            threads.receivePosted(posted)
+            composer.completion.didUse(posted.tags)
+        case .scheduled(let scheduled):
+            didSchedule(scheduled)
+        case .edited(let edited):
+            updateStatusEverywhere(edited.id) { _ in edited }
+            changeQuoteSources(.status(edited.id)) { $0.edit(edited) }
+            composer.completion.didUse(edited.tags)
+        }
+    }
+
     // MARK: - 予約投稿
 
     /// 予約できた。予約はタイムラインに何も出ず、うまくいったことが画面の変化で見えないため、チップで知らせる。押すと予約投稿の画面を開く。
-    fileprivate func didSchedule(_ status: ScheduledStatus) {
+    private func didSchedule(_ status: ScheduledStatus) {
         scheduled.didSchedule(status)
         let title = "\(ScheduleDateText.shortTitle(for: status.scheduledAt, now: now(), calendar: .autoupdatingCurrent))に予約しました"
         let notice = Notice(id: "compose.scheduled", kind: .success, title: title, action: .disclosure(hint: "予約投稿を表示します。") { [weak self] in

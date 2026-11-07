@@ -533,6 +533,20 @@ public struct MastodonClient: Sendable {
         try await get([StatusRevision].self, path: "api/v1/statuses/\(statusID)/history", query: []).0
     }
 
+    /// 下書きを、中身に合ったAPIで送る。編集の対象（`StatusDraft.editing`）があれば編集し、予約の日時（`StatusDraft.scheduledAt`）があれば予約し、どちらもなければすぐ投稿する。
+    /// Mastodonは編集の予約を受け付けないので、両方あっても編集する（`ComposeModel`は編集の間に予約させない）。
+    /// 投票の付いた投稿の編集では、残りの時間をこのクライアントの今の日付（`init`の`now`）から数える。
+    /// `ComposeModel`と`ComposeAccount`の`submit`に渡す。
+    public func submit(_ draft: StatusDraft) async throws -> SubmittedDraft {
+        if let editing = draft.editing {
+            return .edited(try await editStatus(editing, to: draft, now: now()))
+        }
+        if let scheduledAt = draft.scheduledAt {
+            return .scheduled(try await scheduleStatus(draft, at: scheduledAt))
+        }
+        return .posted(try await postStatus(draft))
+    }
+
     /// 自分の投稿を`draft`の内容に編集し、編集したあとの投稿を返す。`target`は`draft.editing`。
     /// 添付ファイルが済んでいなければ送らずに`StatusPostError.attachmentsNotReady`を投げる。
     /// https://docs.joinmastodon.org/methods/statuses/#edit
