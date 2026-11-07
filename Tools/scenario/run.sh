@@ -2,7 +2,7 @@
 # 1人分を走らせる。リセットしてからSciaを起動し、何も知らないエージェントを役のとおりに「初めて使う人」として触らせ、報告を残す。
 # エージェントは、リポジトリの外の実行ごとのフォルダーで、CLAUDE.md、メモリ、設定、MCPを読まずに起動する（--setting-sources ""と--strict-mcp-config）。
 # 使えるのは、AXe、Sciaの起動し直し、撮った画像を見るReadだけで、ほかのコマンドは聞かずに断る（--permission-mode dontAsk）。
-# 報告は$SCENARIO_RUNS/<日時>-<役>/report.md、スクリーンショットはその中のshots/に残る。終わったら端末を止める。
+# 報告は$SCENARIO_RUNS/<日時>-<役>/report.md、スクリーンショットはその中のshots/、送ったコマンドはcommands.txtに残る。終わったら端末を止める。
 # 使い方: Tools/scenario/run.sh <Scia.appのパス> <役>（役はpersonas/の、common以外のファイルの名前）
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
@@ -35,9 +35,28 @@ status=0
         --tools Bash Read \
         --allowedTools "Bash(axe *)" "Bash(xcrun simctl launch $udid net.mizle.scia)" Read \
         --permission-mode dontAsk \
-        --output-format json \
-        < prompt.md > result.json
+        --output-format stream-json \
+        --verbose \
+        < prompt.md > events.jsonl
 ) || status=$?
+# エージェントが送ったコマンドを、送った順にcommands.txtに残す。batchで続けて送ったかなど、報告に書かれない操作のしかたを確かめるため
+python3 -I -c '
+import json, sys
+with open(sys.argv[1]) as events, open(sys.argv[2], "w") as commands, open(sys.argv[3], "w") as result:
+    for line in events:
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("type") == "result":
+            json.dump(event, result)
+        message = event.get("message")
+        if not isinstance(message, dict) or not isinstance(message.get("content"), list):
+            continue
+        for block in message["content"]:
+            if isinstance(block, dict) and block.get("type") == "tool_use" and block.get("name") == "Bash":
+                commands.write(block.get("input", {}).get("command", "").replace("\n", " ") + "\n")
+' "$run_dir/events.jsonl" "$run_dir/commands.txt" "$run_dir/result.json" || status=1
 # 終了コードが0でも、JSONでエラーと返ることがある。どちらかが失敗なら、報告を残せた分は残してから失敗で終わる
 python3 -I -c '
 import json, sys
