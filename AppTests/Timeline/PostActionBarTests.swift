@@ -40,15 +40,15 @@ struct PostActionBarTests {
         #expect(shown.content?.buttons.map(\.item) == PostActionBarItem.defaultLayout.actionBarItems)
     }
 
-    /// スレッドの中心の投稿には出さない。
-    @Test func hidesOnThreadFocus() throws {
+    /// スレッドの中心の投稿にも、ほかの投稿と同じく出す。
+    @Test func showsOnThreadFocus() throws {
         let (harness, statuses) = try harness()
         defer { harness.tearDown() }
         harness.viewController.threadFocusID = statuses[10].id
         harness.settings.appearance.showsActionBar = true
         harness.viewController.reconfigure(Set(statuses.map { .status($0.id) }))
 
-        #expect(bar(in: harness, of: statuses[10].id) == nil)
+        #expect(bar(in: harness, of: statuses[10].id) != nil)
         #expect(bar(in: harness, of: statuses[11].id) != nil)
     }
 

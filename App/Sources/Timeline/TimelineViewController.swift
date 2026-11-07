@@ -2382,10 +2382,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         return kept
     }
 
-    /// リストのアイテムにアクションバーを出せるか。出すのは投稿だけで、スレッドの中心の投稿と通知には出さない（docs/post-action-bar.mdの「出し方」）。
+    /// リストのアイテムにアクションバーを出せるか。出すのは投稿だけで、通知には出さない（docs/post-action-bar.mdの「出し方」）。
     func canShowActionBar(in entry: TimelineEntry) -> Bool {
-        guard !isAppearancePreview, let status = Self.statusOfRow(entry) else { return false }
-        return status.displayed.id != threadFocusID
+        !isAppearancePreview && Self.statusOfRow(entry) != nil
     }
 
     /// 投稿にアクションバーを出すか。いつも出す設定か、引き出しを開いている投稿で出す。

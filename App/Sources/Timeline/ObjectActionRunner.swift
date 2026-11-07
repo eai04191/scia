@@ -90,7 +90,7 @@ struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable, Command>: Obje
     let lifecycle: MenuLifecycle
     /// 使えない項目を選んだことを、数秒で消えるチップで知らせる。
     let notify: (Notice) -> Void
-    /// 「アクションバーを開く」で、投稿の下のアクションバーを開閉する。押した部品を渡す。アクションバーを出せない部品（引用の囲み、スレッドの中心の投稿、通知）ではnil。
+    /// 「アクションバーを開く」で、投稿の下のアクションバーを開閉する。押した部品を渡す。アクションバーを出せない部品（引用の囲み、通知）ではnil。
     var openActionBar: ((UIView) -> Void)?
 
     private var actions: ObjectActions<Item> {
