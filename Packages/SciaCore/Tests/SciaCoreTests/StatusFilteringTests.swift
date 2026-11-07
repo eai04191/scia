@@ -1,4 +1,5 @@
 import Foundation
+import SciaTesting
 import Synchronization
 import Testing
 @testable import SciaCore
@@ -129,19 +130,33 @@ struct FilteredTimelineTests {
         return (store, { recorder.queries })
     }
 
+    /// 最初の読み込みは、読んだ投稿を辞書で重複を除いてから並べるため、隠す投稿の並びが走らせるたびに変わる。
+    /// 並びはタイムラインに出ないので、中身が同じなら実際の並びに合わせ、違えば書いた値のまま比べて違いを出す。
+    private func inActualOrder(_ expected: [Status], _ actual: [Status]) -> [Status] {
+        let byID: (Status, Status) -> Bool = { $0.id < $1.id }
+        return expected.sorted(by: byID) == actual.sorted(by: byID) ? actual : expected
+    }
+
     /// 隠した投稿は並べないが、続きを読む位置には使う。1ページの全部が隠れても、その先へ進める。
     @Test func hiddenStatusesAreNotShownButStillPage() async throws {
         let hide = [filter("x", .hide)]
-        let (store, queries) = store(pages: [
-            [status("30"), status("29", filtered: hide), status("28", filtered: hide)],
-            [status("27", filtered: hide), status("26", filtered: hide), status("25", filtered: hide)],
-            [status("24")],
-        ])
-        let initial = try await store.loadInitial()
+        let firstPage = [status("30"), status("29", filtered: hide), status("28", filtered: hide)]
+        let hiddenPage = [status("27", filtered: hide), status("26", filtered: hide), status("25", filtered: hide)]
+        let (store, queries) = store(pages: [firstPage, hiddenPage, [status("24")]])
+        let initial = try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = [.status(firstPage[0])]
+            $0.hiddenStatuses = inActualOrder(Array(firstPage[1...]), store.state.hiddenStatuses)
+            $0.oldestLoadedID = "28"
+        }
         #expect(initial?.map(\.id) == ["30"])
 
         // 全部隠れたページでは止まらず、並べる投稿が出るまで続けて読む。
-        let older = try await store.loadOlder()
+        let hiddenBefore = store.state.hiddenStatuses
+        let older = try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) {
+            $0.entries.append(.status(status("24")))
+            $0.hiddenStatuses = hiddenBefore + hiddenPage
+            $0.oldestLoadedID = "24"
+        }
         #expect(older?.map(\.id) == ["24"])
         #expect(queries().map(\.maxID) == [nil, "28", "25"])
         #expect(store.statuses.map(\.id) == ["30", "24"])
@@ -150,40 +165,72 @@ struct FilteredTimelineTests {
     /// 編集でフィルターに一致するようになれば外し、一致しなくなれば戻す。
     @Test func editsMoveStatusesInAndOutOfTheList() async throws {
         let (store, _) = store(pages: [[status("30"), status("29")]])
-        _ = try await store.loadInitial()
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = [.status(status("30")), .status(status("29"))]
+            $0.oldestLoadedID = "29"
+        }
 
-        #expect(store.receive(.statusUpdate(status("29", filtered: [filter("x", .hide)]))) == .entriesChanged)
+        let hidden = status("29", filtered: [filter("x", .hide)])
+        let hiding = try await expectChanges(of: { store.state }, during: { store.receive(.statusUpdate(hidden)) }) {
+            $0.entries = [.status(status("30"))]
+            $0.hiddenStatuses = [hidden]
+        }
+        #expect(hiding == .entriesChanged)
         #expect(store.statuses.map(\.id) == ["30"])
 
-        #expect(store.receive(.statusUpdate(status("29"))) == .entriesChanged)
+        let showing = try await expectChanges(of: { store.state }, during: { store.receive(.statusUpdate(status("29"))) }) {
+            $0.entries = [.status(status("30")), .status(status("29"))]
+            $0.hiddenStatuses = []
+        }
+        #expect(showing == .entriesChanged)
         #expect(store.statuses.map(\.id) == ["30", "29"])
     }
 
     /// ストリーミングで届いた隠す投稿は挿入しても並べず、加わった投稿にも数えない。同じ投稿がもう一度届いても溜めない。
     @Test func hiddenArrivalsAreNotInserted() async throws {
         let (store, _) = store(pages: [[status("30")]])
-        _ = try await store.loadInitial()
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = [.status(status("30"))]
+            $0.oldestLoadedID = "30"
+        }
 
         let hidden = status("31", filtered: [filter("x", .hide)])
-        _ = store.receive(.update(hidden))
-        #expect(store.flushPending().isEmpty)
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(hidden)) }) {
+            $0.pending = [hidden]
+        }
+        let flushed = try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.hiddenStatuses = [hidden]
+        }
+        #expect(flushed.isEmpty)
         #expect(store.statuses.map(\.id) == ["30"])
 
-        #expect(store.receive(.update(hidden)) == .none)
-        #expect(store.pending.isEmpty)
+        let again = try await expectChanges(of: { store.state }, during: { store.receive(.update(hidden)) }) { _ in }
+        #expect(again == .none)
     }
 
     /// 隠していた投稿は、フィルターの期限が切れたら、次に新着を挿入したときにタイムラインに戻る。
     @Test func hiddenStatusReturnsOnInsertionAfterFilterExpires() async throws {
         let clock = FakeClock(now: now)
         let expiresAt = now.addingTimeInterval(60)
-        let (store, _) = store(pages: [[status("30"), status("29", filtered: [filter("x", .hide, expiresAt: expiresAt)])]], now: { clock.now })
-        _ = try await store.loadInitial()
+        let expiring = status("29", filtered: [filter("x", .hide, expiresAt: expiresAt)])
+        let (store, _) = store(pages: [[status("30"), expiring]], now: { clock.now })
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = [.status(status("30"))]
+            $0.hiddenStatuses = [expiring]
+            $0.oldestLoadedID = "29"
+        }
         #expect(store.statuses.map(\.id) == ["30"])
 
         clock.now = expiresAt.addingTimeInterval(1)
-        _ = store.receive(.update(status("31")))
-        _ = store.flushPending()
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(status("31"))) }) {
+            $0.pending = [status("31")]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.hiddenStatuses = []
+            $0.entries = [.status(status("31")), .status(status("30")), .status(expiring)]
+        }
 
         #expect(store.statuses.map(\.id) == ["31", "30", "29"])
     }
@@ -191,11 +238,13 @@ struct FilteredTimelineTests {
     /// 最新のページが全部隠れるとタイムラインに行がなく、続きを読むきっかけがない。並べる投稿が出るまで古いページを続けて読む。
     @Test func initialPageOfOnlyHiddenStatusesReadsOn() async throws {
         let hide = [filter("x", .hide)]
-        let (store, queries) = store(pages: [
-            [status("30", filtered: hide), status("29", filtered: hide), status("28", filtered: hide)],
-            [status("27", filtered: hide), status("26")],
-        ])
-        let initial = try await store.loadInitial()
+        let firstPage = [status("30", filtered: hide), status("29", filtered: hide), status("28", filtered: hide)]
+        let (store, queries) = store(pages: [firstPage, [status("27", filtered: hide), status("26")]])
+        let initial = try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = [.status(status("26"))]
+            $0.hiddenStatuses = inActualOrder(firstPage + [status("27", filtered: hide)], store.state.hiddenStatuses)
+            $0.oldestLoadedID = "26"
+        }
         #expect(initial?.map(\.id) == ["26"])
         #expect(queries().map(\.maxID) == [nil, "28"])
     }
@@ -203,37 +252,62 @@ struct FilteredTimelineTests {
     /// 古いページが全部隠れても、タイムラインの末尾が伸びるまで続けて読む。終わりに着いたらそこで止める。
     @Test func olderPageOfOnlyHiddenStatusesReadsOn() async throws {
         let hide = [filter("x", .hide)]
+        let hiddenPage = [status("29", filtered: hide), status("28", filtered: hide), status("27", filtered: hide)]
         let (store, queries) = store(pages: [
             [status("30")],
-            [status("29", filtered: hide), status("28", filtered: hide), status("27", filtered: hide)],
+            hiddenPage,
             [status("26", filtered: hide)],
             [],
         ])
-        _ = try await store.loadInitial()
-        let older = try await store.loadOlder()
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = [.status(status("30"))]
+            $0.oldestLoadedID = "30"
+        }
+        let older = try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) {
+            $0.hiddenStatuses = hiddenPage + [status("26", filtered: hide)]
+            $0.oldestLoadedID = "26"
+            $0.reachedEnd = true
+        }
         #expect(older?.isEmpty == true)
-        #expect(store.reachedEnd)
         #expect(queries().map(\.maxID) == [nil, "30", "27", "26"])
     }
 
     /// サーバーはブーストにも元の投稿にも結果を付ける。元の投稿が編集でフィルターに一致しなくなれば、ブーストもタイムラインに戻す。
     @Test func editedOriginalUnhidesItsBoost() async throws {
         let hide = [filter("x", .hide)]
-        let (store, _) = store(pages: [[status("20", filtered: hide, reblog: status("10", filtered: hide))], []])
-        _ = try await store.loadInitial()
+        let boost = status("20", filtered: hide, reblog: status("10", filtered: hide))
+        let (store, _) = store(pages: [[boost], []])
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.hiddenStatuses = [boost]
+            $0.oldestLoadedID = "20"
+            // 並べる投稿がないので続けて古い方を読み、空のページで終わりに着く。
+            $0.reachedEnd = true
+        }
         #expect(store.statuses.isEmpty)
 
-        #expect(store.receive(.statusUpdate(status("10"))) == .entriesChanged)
+        let result = try await expectChanges(of: { store.state }, during: { store.receive(.statusUpdate(status("10"))) }) {
+            $0.hiddenStatuses = []
+            // サーバーが結果を付け直した投稿なので、ブーストの結果も元の投稿の空の結果にそろう。
+            $0.entries = [.status(status("20", reblog: status("10")))]
+        }
+        #expect(result == .entriesChanged)
         #expect(store.statuses.map(\.id) == ["20"])
     }
 
     /// ストリーミングのブーストでは、結果がブーストの外側にだけ付くことがある。お気に入りなどの部分的な更新では、その結果を消さない。
     @Test func partialUpdateKeepsResultsOnlyOnBoost() async throws {
-        let (store, _) = store(pages: [[status("20", filtered: [filter("x", .warn)], reblog: status("10"))]])
-        _ = try await store.loadInitial()
+        let warn = [filter("x", .warn)]
+        let (store, _) = store(pages: [[status("20", filtered: warn, reblog: status("10"))]])
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = [.status(status("20", filtered: warn, reblog: status("10")))]
+            $0.oldestLoadedID = "20"
+        }
 
-        store.updateStatus("10") { original in
+        func favourite(_ original: Status) -> Status {
             Status(id: original.id, createdAt: original.createdAt, account: original.account, content: "<p>お気に入りした</p>", spoilerText: "", url: nil, favourited: true)
+        }
+        try await expectChanges(of: { store.state }, during: { store.updateStatus("10", favourite) }) {
+            $0.entries = [.status(status("20", filtered: warn, reblog: favourite(status("10"))))]
         }
         let boost = try #require(store.statuses.first)
         #expect(filtering.verdict(for: boost, now: now).warningTitles == ["x"])
@@ -247,34 +321,53 @@ struct FilteredTimelineTests {
             .failure(Failure()),
         ])
         let store = TimelineStore(pageSize: 3, filtering: filtering) { query in try recorder.next(query) }
-        await #expect(throws: Failure.self) { try await store.loadInitial() }
+        try await expectChanges(of: { store.state }, during: {
+            await #expect(throws: Failure.self) { try await store.loadInitial() }
+        }) { _ in }
         #expect(store.isEmpty)
-        #expect(!store.reachedEnd)
     }
 
     /// 読めなかった投稿が、読めたら隠す投稿だったときは、読めなかった行を消したことを知らせる。
     @Test func unreadableRowReplacedByHiddenStatusIsReported() async throws {
+        let unreadable = UnreadableItem(id: "29", url: nil)
         let recorder = QueryRecorder(timelinePages: [
-            TimelinePage(statuses: [status("30")], unreadable: [UnreadableItem(id: "29", url: nil)], isRegenerating: false),
+            TimelinePage(statuses: [status("30")], unreadable: [unreadable], isRegenerating: false),
         ])
         let store = TimelineStore(pageSize: 3, filtering: filtering) { query in try recorder.next(query) }
-        _ = try await store.loadInitial()
-        #expect(store.entries.count == 2)
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.unreadableItems = [unreadable]
+            $0.entries = [.status(status("30")), .unreadable(unreadable)]
+            $0.oldestLoadedID = "29"
+        }
 
-        #expect(store.receive(.statusUpdate(status("29", filtered: [filter("x", .hide)]))) == .entriesChanged)
-        #expect(store.entries.map(\.id) == [.status("30")])
+        let hidden = status("29", filtered: [filter("x", .hide)])
+        let result = try await expectChanges(of: { store.state }, during: { store.receive(.statusUpdate(hidden)) }) {
+            $0.unreadableItems = []
+            $0.entries = [.status(status("30"))]
+            $0.hiddenStatuses = [hidden]
+        }
+        #expect(result == .entriesChanged)
     }
 
     /// 削除された投稿は、隠していても忘れる。あとで同じIDの投稿が届いても戻さない。
     /// 続きを古い方へ読む位置は、その投稿のIDのまま残す。上げると、その間を読み直すうえ、タイムラインが空になったときに末尾の位置を失うため。
     @Test func deletingHiddenStatusForgetsIt() async throws {
-        let (store, queries) = store(pages: [[status("30"), status("29", filtered: [filter("x", .hide)])], [status("29")]])
-        _ = try await store.loadInitial()
+        let hidden = status("29", filtered: [filter("x", .hide)])
+        let (store, queries) = store(pages: [[status("30"), hidden], [status("29")]])
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = [.status(status("30"))]
+            $0.hiddenStatuses = [hidden]
+            $0.oldestLoadedID = "29"
+        }
 
-        store.removeStatus("29")
-        _ = try await store.loadOlder()
+        let removed = try await expectChanges(of: { store.state }, during: { store.removeStatus("29") }) {
+            $0.deletedIDs = ["29"]
+            $0.hiddenStatuses = []
+        }
+        // 隠していた投稿なので、並びは変わらない。
+        #expect(!removed)
+        try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) { _ in }
         #expect(queries().last?.maxID == "29")
-        #expect(store.entries.map(\.id) == [.status("30")])
     }
 }
 

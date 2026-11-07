@@ -1,4 +1,5 @@
 import Foundation
+import SciaTesting
 import Testing
 @_spi(FailureDisplay) @testable import SciaCore
 
@@ -19,17 +20,32 @@ struct QuotedStatusUpdateTests {
     @Test func timelineUpdatesQuotedStatus() async throws {
         let outer = quoting(quoted())
         let store = TimelineStore(pageSize: 20) { _ in TimelinePage(statuses: [outer], isRegenerating: false) }
-        _ = try await store.loadInitial()
-        #expect(store.updateStatus("10") { $0.settingBookmarked(true) })
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = [.status(outer)]
+            $0.oldestLoadedID = "20"
+        }
+        let changed = try await expectChanges(of: { store.state }, during: { store.updateStatus("10") { $0.settingBookmarked(true) } }) {
+            $0.entries = [.status(quoting(quoted().settingBookmarked(true)))]
+        }
+        #expect(changed)
         #expect(store.statuses.first?.quote?.quotedStatus?.bookmarked == true)
     }
 
     /// ブーストした投稿の引用元も反映する。
     @Test func timelineUpdatesQuotedStatusInsideReblog() async throws {
-        let reblog = Status(id: "30", createdAt: Date(timeIntervalSince1970: 30), account: bob, content: "", spoilerText: "", url: nil, reblog: quoting(quoted()))
+        func reblogging(_ status: Status) -> Status {
+            Status(id: "30", createdAt: Date(timeIntervalSince1970: 30), account: bob, content: "", spoilerText: "", url: nil, reblog: status)
+        }
+        let reblog = reblogging(quoting(quoted()))
         let store = TimelineStore(pageSize: 20) { _ in TimelinePage(statuses: [reblog], isRegenerating: false) }
-        _ = try await store.loadInitial()
-        #expect(store.updateStatus("10") { $0.settingBookmarked(true) })
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = [.status(reblog)]
+            $0.oldestLoadedID = "30"
+        }
+        let changed = try await expectChanges(of: { store.state }, during: { store.updateStatus("10") { $0.settingBookmarked(true) } }) {
+            $0.entries = [.status(reblogging(quoting(quoted().settingBookmarked(true))))]
+        }
+        #expect(changed)
         #expect(store.statuses.first?.reblog?.quote?.quotedStatus?.bookmarked == true)
     }
 

@@ -44,13 +44,12 @@ struct BrokenResponseTests {
         #expect(DecodingLog.droppedCount >= droppedBefore + 3)
 
         let store = TimelineStore(pageSize: 40) { _ in page }
-        _ = try await store.loadInitial()
-        #expect(store.entries.map(\.id) == [
-            .status("113000000000000105"),
-            .unreadable("113000000000000104"),
-            .status("113000000000000102"),
-            .status("113000000000000101"),
-        ])
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.unreadableItems = page.unreadable
+            // 読めなかった投稿も、IDの位置に並べる。
+            $0.entries = [.status(page.statuses[0]), .unreadable(page.unreadable[0]), .status(page.statuses[1]), .status(page.statuses[2])]
+            $0.oldestLoadedID = "113000000000000101"
+        }
     }
 
     /// 知らない種類の通知は読み、読めない通知は「表示できない」行にする。

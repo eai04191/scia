@@ -1,4 +1,5 @@
 import Foundation
+import SciaTesting
 import Synchronization
 import Testing
 @testable import SciaCore
@@ -8,37 +9,91 @@ import Testing
 struct TimelineGapTests {
     private static let pageSize = 3
 
+    // MARK: - 状態を丸ごと比べるための道具
+
+    /// 状態に書く投稿の行。`FakeHomeServer.status`はIDだけで決まるので、テストのサーバーで作ったものと同じになる。渡した順に並べる。
+    private func entryRows(_ ids: [Int]) -> [TimelineEntry] {
+        let source = FakeHomeServer(ids: [Int]())
+        return ids.map { .status(source.status($0)) }
+    }
+
+    /// 状態に書く投稿の行。範囲のIDを新しい順に並べる。
+    private func entryRows(_ ids: ClosedRange<Int>) -> [TimelineEntry] {
+        entryRows(Array(ids.reversed()))
+    }
+
+    /// 状態に書くギャップの行。読んで縮んだギャップは、作ったときの端を`createdAs`に渡す。IDは作ったときの端で決まり、縮んでも変わらないため。
+    private func gapEntry(_ newer: Int, _ older: Int, createdAs created: (newer: Int, older: Int)? = nil) -> TimelineEntry {
+        let original = TimelineGap(newerID: String(created?.newer ?? newer), olderID: String(created?.older ?? older))
+        return .gap(original.narrowed(newerID: String(newer), olderID: String(older)))
+    }
+
+    /// 準備の最初の読み込み。最新のページの投稿が並び、続きを古い方へ読む位置が決まるほかは、何も変わらないことを確かめる。
+    private func loadFirstPage(_ store: TimelineStore, _ server: FakeHomeServer, showing ids: [Int], sourceLocation: SourceLocation = #_sourceLocation) async throws {
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }, sourceLocation: sourceLocation) {
+            $0.entries = entryRows(ids)
+            $0.oldestLoadedID = ids.last.map(String.init)
+        }
+    }
+
+    /// 準備の補完。`11...20`を投稿してから1ページだけ読み、最新の3件と手元の投稿の間にギャップを置く。
+    private func fillTenMissed(_ store: TimelineStore, _ server: FakeHomeServer, sourceLocation: SourceLocation = #_sourceLocation) async throws {
+        server.post(11...20)
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }, sourceLocation: sourceLocation) {
+            $0.entries = entryRows([20, 19, 18]) + [gapEntry(18, 10)] + entryRows([10, 9, 8])
+        }
+    }
+
     // MARK: - 読めない投稿
 
     /// 1ページの全部が読めなくても、読めなかった投稿のIDから続きを読む。
     @Test func pageOfOnlyUnreadableStatusesDoesNotStopLoadingOlder() async throws {
         let server = FakeHomeServer(ids: 1...10, unreadableIDs: [8, 9, 10])
         let store = makeStore(server)
-        _ = try await store.loadInitial()
+        let unreadable = [10, 9, 8].map { UnreadableItem(id: String($0), url: nil) }
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = unreadable.map(TimelineEntry.unreadable)
+            $0.unreadableItems = unreadable
+            $0.oldestLoadedID = "8"
+        }
 
-        #expect(store.entries.map(\.debugLabel) == ["unreadable(10)", "unreadable(9)", "unreadable(8)"])
-        #expect(!store.reachedEnd)
-
-        #expect(try await store.loadOlder()?.map(\.id) == ["7", "6", "5"])
+        let older = try await expectChanges(of: { store.state }, during: { try await store.loadOlder()?.map(\.id) }) {
+            $0.entries += entryRows([7, 6, 5])
+            $0.oldestLoadedID = "5"
+        }
+        #expect(older == ["7", "6", "5"])
         #expect(server.queries.last == TimelineQuery(maxID: "8", limit: Self.pageSize))
     }
 
     @Test func readableStatusReplacesUnreadableWithSameID() async throws {
         let server = FakeHomeServer(ids: 1...10, unreadableIDs: [9])
         let store = makeStore(server)
-        _ = try await store.loadInitial()
-        #expect(store.entries.map(\.debugLabel) == ["10", "unreadable(9)", "8"])
+        let unreadable = UnreadableItem(id: "9", url: nil)
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = entryRows([10]) + [.unreadable(unreadable)] + entryRows([8])
+            $0.unreadableItems = [unreadable]
+            $0.oldestLoadedID = "8"
+        }
 
-        _ = store.receive(.update(server.status(9)))
-        _ = store.flushPending()
-
-        #expect(store.entries.map(\.debugLabel) == ["10", "9", "8"])
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(server.status(9))) }) {
+            $0.pending = [server.status(9)]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.entries = entryRows([10, 9, 8])
+            $0.unreadableItems = []
+        }
     }
 
     @Test func storeWithOnlyUnreadableStatusesIsNotEmpty() async throws {
         let server = FakeHomeServer(ids: 8...10, unreadableIDs: [8, 9, 10])
         let store = makeStore(server)
-        _ = try await store.loadInitial()
+        let unreadable = [10, 9, 8].map { UnreadableItem(id: String($0), url: nil) }
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = unreadable.map(TimelineEntry.unreadable)
+            $0.unreadableItems = unreadable
+            $0.oldestLoadedID = "8"
+        }
 
         #expect(store.statuses.isEmpty)
         #expect(!store.isEmpty, "読めなかった投稿しかないと、画面が空とみなして続きを読みません")
@@ -48,33 +103,56 @@ struct TimelineGapTests {
     @Test func readableStatusReplacesUnreadableAtTail() async throws {
         let server = FakeHomeServer(ids: 1...10, unreadableIDs: [8])
         let store = makeStore(server)
-        _ = try await store.loadInitial()
-        #expect(store.entries.map(\.debugLabel) == ["10", "9", "unreadable(8)"])
+        let unreadable = UnreadableItem(id: "8", url: nil)
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = entryRows([10, 9]) + [.unreadable(unreadable)]
+            $0.unreadableItems = [unreadable]
+            $0.oldestLoadedID = "8"
+        }
 
-        _ = store.receive(.update(server.status(8)))
-        _ = store.flushPending()
-
-        #expect(store.entries.map(\.debugLabel) == ["10", "9", "8"])
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(server.status(8))) }) {
+            $0.pending = [server.status(8)]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.entries = entryRows([10, 9, 8])
+            $0.unreadableItems = []
+        }
     }
 
     @Test func editedStatusReplacesUnreadable() async throws {
         let server = FakeHomeServer(ids: 1...10, unreadableIDs: [9])
         let store = makeStore(server)
-        _ = try await store.loadInitial()
+        let unreadable = UnreadableItem(id: "9", url: nil)
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = entryRows([10]) + [.unreadable(unreadable)] + entryRows([8])
+            $0.unreadableItems = [unreadable]
+            $0.oldestLoadedID = "8"
+        }
 
-        #expect(store.receive(.statusUpdate(server.status(9))) == .entriesChanged)
-
-        #expect(store.entries.map(\.debugLabel) == ["10", "9", "8"])
+        let result = try await expectChanges(of: { store.state }, during: { store.receive(.statusUpdate(server.status(9))) }) {
+            $0.entries = entryRows([10, 9, 8])
+            $0.unreadableItems = []
+        }
+        #expect(result == .entriesChanged)
     }
 
     @Test func deletingUnreadableStatusRemovesIt() async throws {
         let server = FakeHomeServer(ids: 1...10, unreadableIDs: [9])
         let store = makeStore(server)
-        _ = try await store.loadInitial()
+        let unreadable = UnreadableItem(id: "9", url: nil)
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = entryRows([10]) + [.unreadable(unreadable)] + entryRows([8])
+            $0.unreadableItems = [unreadable]
+            $0.oldestLoadedID = "8"
+        }
 
-        #expect(store.receive(.delete(statusID: "9")) == .entriesChanged)
-
-        #expect(store.entries.map(\.debugLabel) == ["10", "8"])
+        let result = try await expectChanges(of: { store.state }, during: { store.receive(.delete(statusID: "9")) }) {
+            $0.deletedIDs = ["9"]
+            $0.entries = entryRows([10, 8])
+            $0.unreadableItems = []
+        }
+        #expect(result == .entriesChanged)
     }
 
     // MARK: - 求めた件数より少なく返すサーバー
@@ -83,28 +161,42 @@ struct TimelineGapTests {
     @Test func fillDoesNotSkipStatusesWhenServerReturnsFewerThanRequested() async throws {
         let server = FakeHomeServer(ids: 1...10, maxLimit: 2)
         let store = makeStore(server)
-        _ = try await store.loadInitial()
+        try await loadFirstPage(store, server, showing: [10, 9])
         server.post(11...14)
 
-        _ = try await store.fillFromLatest()
-
-        #expect(store.entries.map(\.debugLabel) == ["14", "13", "12", "11", "10", "9"])
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.entries = entryRows(9...14)
+        }
     }
 
     @Test(arguments: [TimelineStore.GapDirection.fromNewer, .fromOlder])
     func gapIsNotClosedByShortPageFromCappingServer(direction: TimelineStore.GapDirection) async throws {
         let server = FakeHomeServer(ids: 1...10, maxLimit: 2)
         let store = makeStore(server)
-        _ = try await store.loadInitial()
+        try await loadFirstPage(store, server, showing: [10, 9])
         server.post(11...30)
-        _ = try await store.fillFromLatest()
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            // 満杯でないページの下のギャップを、続けて2回読んで縮める。
+            $0.entries = entryRows(25...30) + [gapEntry(25, 10, createdAs: (29, 10))] + entryRows([10, 9])
+        }
         let gap = try #require(store.gaps.first)
 
-        _ = try await store.loadGap(gap.id, from: direction)
+        try await expectChanges(of: { store.state }, during: { try await store.loadGap(gap.id, from: direction) }) {
+            switch direction {
+            case .fromNewer:
+                $0.entries = entryRows(21...30) + [gapEntry(21, 10, createdAs: (29, 10))] + entryRows([10, 9])
+            case .fromOlder:
+                $0.entries = entryRows(25...30) + [gapEntry(25, 14, createdAs: (29, 10))] + entryRows(9...14)
+            }
+        }
 
         #expect(store.gaps.map(\.id) == [gap.id], "読み切っていないギャップが閉じました")
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: direction)
+        try await expectChanges(of: { store.state }, during: {
+            while let gap = store.gaps.first {
+                _ = try await store.loadGap(gap.id, from: direction)
+            }
+        }) {
+            $0.entries = entryRows(9...30)
         }
         #expect(ids(store) == Array((9...30).reversed()))
     }
@@ -113,18 +205,28 @@ struct TimelineGapTests {
         let server = FakeHomeServer(ids: 1...20, maxLimit: 2)
         let store = makeStore(server)
 
-        _ = try await store.loadInitial(around: "5")
-
-        #expect(store.entries.map(\.debugLabel) == ["20", "19", "gap(19...7)", "7", "6", "5", "4"])
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial(around: "5") }) {
+            $0.entries = entryRows([20, 19]) + [gapEntry(19, 7)] + entryRows([7, 6, 5, 4])
+            $0.oldestLoadedID = "4"
+            $0.lastReadID = "5"
+            #if DEBUG
+            $0.lastSavableReadID = "5"
+            #endif
+            $0.lastReadPosition = TimelineStore.DisplayPosition(anchorID: "5", sequence: 0)
+            $0.savedReadID = "5"
+        }
     }
 
     @Test func fillWithinOnePageLeavesNoGap() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)
-        _ = try await store.loadInitial()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
         server.post(11...12)
 
-        #expect(try await store.fillFromLatest()?.map(\.id) == ["12", "11"])
+        let filled = try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest()?.map(\.id) }) {
+            $0.entries = entryRows(8...12)
+        }
+        #expect(filled == ["12", "11"])
 
         #expect(store.gaps.isEmpty)
         #expect(ids(store) == [12, 11, 10, 9, 8])
@@ -138,20 +240,21 @@ struct TimelineGapTests {
     @Test func fillLeavesGapWhenMoreThanOnePageWasMissed() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)
-        _ = try await store.loadInitial()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
         server.post(11...20)
 
-        _ = try await store.fillFromLatest()
-
-        #expect(store.entries.map(\.debugLabel) == ["20", "19", "18", "gap(18...10)", "10", "9", "8"])
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.entries = entryRows([20, 19, 18]) + [gapEntry(18, 10)] + entryRows([10, 9, 8])
+        }
     }
 
     @Test func nothingMissedChangesNothing() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)
-        _ = try await store.loadInitial()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
 
-        #expect(try await store.fillFromLatest() == [])
+        let filled = try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) { _ in }
+        #expect(filled == [])
         #expect(ids(store) == [10, 9, 8])
         #expect(store.gaps.isEmpty)
     }
@@ -159,10 +262,12 @@ struct TimelineGapTests {
     @Test func fillReadsUpToPageLimitUntilConnected() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)
-        _ = try await store.loadInitial()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
         server.post(11...17)
 
-        _ = try await store.fillFromLatest(maxPages: 3)
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest(maxPages: 3) }) {
+            $0.entries = entryRows(8...17)
+        }
 
         #expect(store.gaps.isEmpty)
         #expect(ids(store) == Array((8...17).reversed()))
@@ -172,11 +277,13 @@ struct TimelineGapTests {
     @Test func fillReportsAddedCountPerPage() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)
-        _ = try await store.loadInitial()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
         server.post(11...17)
         var reported: [Int] = []
 
-        _ = try await store.fillFromLatest(maxPages: 3) { reported.append($0) }
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest(maxPages: 3) { reported.append($0) } }) {
+            $0.entries = entryRows(8...17)
+        }
 
         #expect(reported == [3, 6, 7])
     }
@@ -193,10 +300,14 @@ struct TimelineGapTests {
             }
             return page
         }
-        _ = try await store.loadInitial()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
         server.post(11...17)
 
-        _ = try await store.fillFromLatest(maxPages: 3) { count in reported.withLock { $0.append(count) } }
+        try await expectChanges(of: { store.state }, during: {
+            try await store.fillFromLatest(maxPages: 3) { count in reported.withLock { $0.append(count) } }
+        }) {
+            $0.entries = entryRows(8...17)
+        }
 
         #expect(reportedAtConfirmation.withLock { $0 } == [3, 6, 7])
     }
@@ -204,12 +315,12 @@ struct TimelineGapTests {
     @Test func fillLeavesGapBeyondPageLimit() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)
-        _ = try await store.loadInitial()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
         server.post(11...30)
 
-        _ = try await store.fillFromLatest(maxPages: 2)
-
-        #expect(store.entries.map(\.debugLabel) == ["30", "29", "28", "27", "26", "25", "gap(25...10)", "10", "9", "8"])
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest(maxPages: 2) }) {
+            $0.entries = entryRows(25...30) + [gapEntry(25, 10, createdAs: (28, 10))] + entryRows([10, 9, 8])
+        }
     }
 
     @Test func failureOnLaterFillPageKeepsGap() async throws {
@@ -220,12 +331,15 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
         server.post(11...20)
 
-        #expect(try await store.fillFromLatest(maxPages: 3)?.map(\.id) == ["20", "19", "18"])
-
-        #expect(store.entries.map(\.debugLabel) == ["20", "19", "18", "gap(18...10)", "10", "9", "8"])
+        let filled = try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest(maxPages: 3)?.map(\.id) }) {
+            $0.entries = entryRows([20, 19, 18]) + [gapEntry(18, 10)] + entryRows([10, 9, 8])
+            // 補完の中で続けて読んだギャップの失敗も、ギャップを読んだときと同じく、行の中で知らせるために覚える。
+            $0.failedGaps = [TimelineGap(newerID: "18", olderID: "10").id: ErrorPresentation(URLError(.networkConnectionLost))]
+        }
+        #expect(filled == ["20", "19", "18"])
     }
 
     /// ギャップを読めなかったら、行の中で知らせられるよう、どのギャップがなぜ読めなかったかを残す。読み直せたら消す。
@@ -238,18 +352,24 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
-        server.post(11...20)
-        _ = try await store.fillFromLatest(maxPages: 1)
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
+        try await fillTenMissed(store, server)
         let gap = try #require(store.gaps.first)
         #expect(store.gapFailures.isEmpty)
 
         failsGap.store(true, ordering: .relaxed)
-        await #expect(throws: URLError.self) { try await store.loadGap(gap.id, from: .fromNewer) }
+        try await expectChanges(of: { store.state }, during: {
+            await #expect(throws: URLError.self) { try await store.loadGap(gap.id, from: .fromNewer) }
+        }) {
+            $0.failedGaps[gap.id] = ErrorPresentation(URLError(.networkConnectionLost))
+        }
         #expect(store.gapFailures == [gap.id: ErrorPresentation(URLError(.networkConnectionLost))])
 
         failsGap.store(false, ordering: .relaxed)
-        _ = try await store.loadGap(gap.id, from: .fromNewer)
+        try await expectChanges(of: { store.state }, during: { try await store.loadGap(gap.id, from: .fromNewer) }) {
+            $0.entries = entryRows(15...20) + [gapEntry(15, 10, createdAs: (18, 10))] + entryRows([10, 9, 8])
+            $0.failedGaps[gap.id] = nil
+        }
         #expect(store.gapFailures.isEmpty)
     }
 
@@ -257,20 +377,27 @@ struct TimelineGapTests {
     @Test func failedConfirmationKeepsLoadedStatusesAndRemembersFailure() async throws {
         // 求めた件数より少なく返すサーバーで、確かめる読み込みを起こす。
         let server = FakeHomeServer(ids: 1...10, maxLimit: 2)
-        let gapLoads = Atomic(0)
+        // 準備の補完の中のギャップの読み込みでは失敗させない。補完の確かめる読み込みが失敗すると、同じギャップの失敗が先に残り、
+        // あとのギャップの読み込みが失敗を残したかを見分けられないため。
+        let gapLoads = Atomic(-100)
         let store = TimelineStore(pageSize: Self.pageSize) { query in
             if query.maxID != nil, query.sinceID != nil, gapLoads.add(1, ordering: .relaxed).newValue == 2 {
                 throw URLError(.timedOut)
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
+        try await loadFirstPage(store, server, showing: [10, 9])
         server.post(11...30)
-        _ = try await store.fillFromLatest(maxPages: 1)
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest(maxPages: 1) }) {
+            $0.entries = entryRows(25...30) + [gapEntry(25, 10, createdAs: (29, 10))] + entryRows([10, 9])
+        }
         let gap = try #require(store.gaps.first)
         gapLoads.store(0, ordering: .relaxed)
 
-        let added = try await store.loadGap(gap.id, from: .fromNewer)
+        let added = try await expectChanges(of: { store.state }, during: { try await store.loadGap(gap.id, from: .fromNewer) }) {
+            $0.entries = entryRows(23...30) + [gapEntry(23, 10, createdAs: (29, 10))] + entryRows([10, 9])
+            $0.failedGaps[gap.id] = ErrorPresentation(URLError(.timedOut))
+        }
 
         #expect(added?.count == 2)
         #expect(store.gaps.map(\.id) == [gap.id])
@@ -287,13 +414,14 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
-        server.post(11...20)
-        _ = try await store.fillFromLatest(maxPages: 1)
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
+        try await fillTenMissed(store, server)
         let gap = try #require(store.gaps.first)
 
         cancels.store(true, ordering: .relaxed)
-        await #expect(throws: CancellationError.self) { try await store.loadGap(gap.id, from: .fromNewer) }
+        try await expectChanges(of: { store.state }, during: {
+            await #expect(throws: CancellationError.self) { try await store.loadGap(gap.id, from: .fromNewer) }
+        }) { _ in }
         #expect(store.gapFailures.isEmpty)
     }
 
@@ -301,14 +429,17 @@ struct TimelineGapTests {
     func loadingGapRepeatedlyClosesItWithoutDuplicatesOrOmissions(direction: TimelineStore.GapDirection) async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)
-        _ = try await store.loadInitial()
-        server.post(11...20)
-        _ = try await store.fillFromLatest()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
+        try await fillTenMissed(store, server)
 
-        var loads = 0
-        while let gap = store.gaps.first, loads < 10 {
-            _ = try await store.loadGap(gap.id, from: direction)
-            loads += 1
+        try await expectChanges(of: { store.state }, during: {
+            var loads = 0
+            while let gap = store.gaps.first, loads < 10 {
+                _ = try await store.loadGap(gap.id, from: direction)
+                loads += 1
+            }
+        }) {
+            $0.entries = entryRows(8...20)
         }
 
         #expect(store.gaps.isEmpty)
@@ -318,14 +449,15 @@ struct TimelineGapTests {
     @Test func loadingFromOlderKeepsGapAboveLoadedStatuses() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)
-        _ = try await store.loadInitial()
-        server.post(11...20)
-        _ = try await store.fillFromLatest()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
+        try await fillTenMissed(store, server)
         let gap = try #require(store.gaps.first)
 
-        #expect(try await store.loadGap(gap.id, from: .fromOlder)?.map(\.id) == ["13", "12", "11"])
+        let loaded = try await expectChanges(of: { store.state }, during: { try await store.loadGap(gap.id, from: .fromOlder)?.map(\.id) }) {
+            $0.entries = entryRows([20, 19, 18]) + [gapEntry(18, 13, createdAs: (18, 10))] + entryRows(8...13)
+        }
+        #expect(loaded == ["13", "12", "11"])
 
-        #expect(store.entries.map(\.debugLabel) == ["20", "19", "18", "gap(18...13)", "13", "12", "11", "10", "9", "8"])
         #expect(store.gaps.first?.id == gap.id, "縮んだギャップが別のものとして扱われました")
         #expect(server.queries.last == TimelineQuery(maxID: "18", minID: "10", limit: Self.pageSize))
     }
@@ -333,14 +465,15 @@ struct TimelineGapTests {
     @Test func loadingFromNewerKeepsGapBelowLoadedStatuses() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)
-        _ = try await store.loadInitial()
-        server.post(11...20)
-        _ = try await store.fillFromLatest()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
+        try await fillTenMissed(store, server)
         let gap = try #require(store.gaps.first)
 
-        #expect(try await store.loadGap(gap.id, from: .fromNewer)?.map(\.id) == ["17", "16", "15"])
+        let loaded = try await expectChanges(of: { store.state }, during: { try await store.loadGap(gap.id, from: .fromNewer)?.map(\.id) }) {
+            $0.entries = entryRows(15...20) + [gapEntry(15, 10, createdAs: (18, 10))] + entryRows([10, 9, 8])
+        }
+        #expect(loaded == ["17", "16", "15"])
 
-        #expect(store.entries.map(\.debugLabel) == ["20", "19", "18", "17", "16", "15", "gap(15...10)", "10", "9", "8"])
         #expect(server.queries.last == TimelineQuery(maxID: "18", sinceID: "10", limit: Self.pageSize))
     }
 
@@ -355,19 +488,40 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
         server.post(11...20)
 
-        let fill = Task { try await store.fillFromLatest() }
-        await gate.waitUntilWaiting()
+        let fill = try await expectChanges(of: { store.state }, during: {
+            let fill = Task { try await store.fillFromLatest() }
+            await gate.waitUntilWaiting()
+            return fill
+        }) {
+            $0.isFilling = true
+            $0.unfilledSinceID = "10"
+        }
         server.post(21...21)
-        _ = store.receive(.update(server.status(21)))
-        _ = store.flushPending()
-        await gate.open()
-        _ = try await fill.value
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(server.status(21))) }) {
+            $0.pending = [server.status(21)]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.entries.insert(.status(server.status(21)), at: 0)
+        }
+        try await expectChanges(of: { store.state }, during: {
+            await gate.open()
+            _ = try await fill.value
+        }) {
+            $0.entries = entryRows([21, 20, 19]) + [gapEntry(19, 10)] + entryRows([10, 9, 8])
+            $0.isFilling = false
+            $0.unfilledSinceID = nil
+        }
 
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        try await expectChanges(of: { store.state }, during: {
+            while let gap = store.gaps.first {
+                _ = try await store.loadGap(gap.id, from: .fromNewer)
+            }
+        }) {
+            $0.entries = entryRows(8...21)
         }
         #expect(ids(store) == Array((8...21).reversed()))
     }
@@ -382,14 +536,27 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
         server.post(11...12)
 
-        await #expect(throws: URLError.self) { _ = try await store.fillFromLatest() }
+        try await expectChanges(of: { store.state }, during: {
+            await #expect(throws: URLError.self) { _ = try await store.fillFromLatest() }
+        }) {
+            $0.unfilledSinceID = "10"
+        }
         server.post(13...13)
-        _ = store.receive(.update(server.status(13)))
-        _ = store.flushPending()
-        _ = try await store.fillFromLatest()
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(server.status(13))) }) {
+            $0.pending = [server.status(13)]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.entries.insert(.status(server.status(13)), at: 0)
+        }
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            // 満杯のページが返ったので、その下が空かはまだ確かめず、ギャップを残す。
+            $0.entries = entryRows([13, 12, 11]) + [gapEntry(11, 10)] + entryRows([10, 9, 8])
+            $0.unfilledSinceID = nil
+        }
 
         #expect(server.queries.last?.sinceID == "10")
         #expect(ids(store) == Array((8...13).reversed()))
@@ -399,16 +566,22 @@ struct TimelineGapTests {
     @Test func fillOnEmptyTimelineLoadsLatestPage() async throws {
         let server = FakeHomeServer(ids: [])
         let store = TimelineStore(pageSize: Self.pageSize) { server.page($0) }
-        _ = try await store.loadInitial()
-        #expect(store.isEmpty && store.reachedEnd)
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.reachedEnd = true
+        }
+        #expect(store.isEmpty)
         server.post(1...3)
 
-        let added = try await store.fillFromLatest()
+        let added = try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.entries = entryRows(1...3)
+            $0.oldestLoadedID = "1"
+            // 古い投稿が残っているかもしれないので、終端としない。
+            $0.reachedEnd = false
+        }
 
         #expect(added?.map(\.id) == ["3", "2", "1"])
         #expect(store.statuses.map(\.id) == ["3", "2", "1"])
         #expect(store.gaps.isEmpty)
-        #expect(!store.reachedEnd, "古い投稿が残っているかもしれないのに、終端としています")
     }
 
     /// 補完の最中に接続し直しても、同じギャップを2つ作らず、後の要求も終わった後に読む。
@@ -422,20 +595,41 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
         server.post(11...20)
 
-        let first = Task { try await store.fillFromLatest() }
-        await gate.waitUntilWaiting()
-        #expect(try await store.fillFromLatest() == nil)
+        let first = try await expectChanges(of: { store.state }, during: {
+            let first = Task { try await store.fillFromLatest() }
+            await gate.waitUntilWaiting()
+            return first
+        }) {
+            $0.isFilling = true
+            $0.unfilledSinceID = "10"
+        }
+        let second = try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.refillSinceID = "10"
+        }
+        #expect(second == nil)
         server.post(21...21)
-        await gate.open()
-        _ = try await first.value
+        try await expectChanges(of: { store.state }, during: {
+            await gate.open()
+            _ = try await first.value
+        }) {
+            // 1回目は止めている間に投稿された21まで読み、2回目は21より新しい投稿を読む。
+            $0.entries = entryRows([21, 20, 19]) + [gapEntry(19, 10)] + entryRows([10, 9, 8])
+            $0.isFilling = false
+            $0.unfilledSinceID = nil
+            $0.refillSinceID = nil
+        }
 
         #expect(Set(store.gaps.map(\.id)).count == store.gaps.count, "同じギャップが重複しています")
         #expect(server.queries.filter { $0.sinceID != nil && $0.maxID == nil }.count == 2)
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        try await expectChanges(of: { store.state }, during: {
+            while let gap = store.gaps.first {
+                _ = try await store.loadGap(gap.id, from: .fromNewer)
+            }
+        }) {
+            $0.entries = entryRows(8...21)
         }
         #expect(ids(store) == Array((8...21).reversed()))
     }
@@ -452,24 +646,53 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
         server.post(11...12)
 
-        let first = Task { try await store.fillFromLatest() }
-        await gate.waitUntilWaiting()
+        let first = try await expectChanges(of: { store.state }, during: {
+            let first = Task { try await store.fillFromLatest() }
+            await gate.waitUntilWaiting()
+            return first
+        }) {
+            $0.isFilling = true
+            $0.unfilledSinceID = "10"
+        }
         server.post(13...13)
-        _ = store.receive(.update(server.status(13)))
-        _ = store.flushPending()
-        #expect(try await store.fillFromLatest() == nil)
-        await gate.open()
-        _ = try await first.value
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(server.status(13))) }) {
+            $0.pending = [server.status(13)]
         }
-        _ = try await store.fillFromLatest()
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.entries.insert(.status(server.status(13)), at: 0)
         }
+        let second = try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.refillSinceID = "13"
+        }
+        #expect(second == nil)
+        try await expectChanges(of: { store.state }, during: {
+            await gate.open()
+            _ = try await first.value
+        }) {
+            // 1回目が再生成中で空だったので、2回目は13からではなく、読めなかった10から読み直す。
+            // 再生成中だったことは、2回目が揃った結果を読んだので残らない。
+            $0.entries = entryRows([13, 12, 11]) + [gapEntry(11, 10)] + entryRows([10, 9, 8])
+            $0.isFilling = false
+            $0.unfilledSinceID = nil
+            $0.refillSinceID = nil
+        }
+        try await expectChanges(of: { store.state }, during: {
+            while let gap = store.gaps.first {
+                _ = try await store.loadGap(gap.id, from: .fromNewer)
+            }
+        }) {
+            $0.entries = entryRows(8...13)
+        }
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) { _ in }
+        try await expectChanges(of: { store.state }, during: {
+            while let gap = store.gaps.first {
+                _ = try await store.loadGap(gap.id, from: .fromNewer)
+            }
+        }) { _ in }
 
         #expect(ids(store) == Array((8...13).reversed()))
     }
@@ -488,18 +711,39 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
         server.post(11...20)
 
-        let first = Task { try await store.fillFromLatest() }
-        await gate.waitUntilWaiting()
-        #expect(try await store.fillFromLatest() == nil)
-        await gate.open()
-        _ = try await first.value
+        let first = try await expectChanges(of: { store.state }, during: {
+            let first = Task { try await store.fillFromLatest() }
+            await gate.waitUntilWaiting()
+            return first
+        }) {
+            $0.isFilling = true
+            $0.unfilledSinceID = "10"
+        }
+        let second = try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.refillSinceID = "10"
+        }
+        #expect(second == nil)
+        try await expectChanges(of: { store.state }, during: {
+            await gate.open()
+            _ = try await first.value
+        }) {
+            // 2回目は1回目が読んだ20より新しい21を読み、20との間のギャップは、満杯でないので確かめて閉じる。
+            $0.entries = entryRows([21, 20, 19, 18]) + [gapEntry(18, 10)] + entryRows([10, 9, 8])
+            $0.isFilling = false
+            $0.unfilledSinceID = nil
+            $0.refillSinceID = nil
+        }
 
         #expect(store.gaps.count == 1, "範囲の重なるギャップがあります: \(store.entries.map(\.debugLabel))")
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        try await expectChanges(of: { store.state }, during: {
+            while let gap = store.gaps.first {
+                _ = try await store.loadGap(gap.id, from: .fromNewer)
+            }
+        }) {
+            $0.entries = entryRows(8...21)
         }
         #expect(ids(store) == Array((8...21).reversed()))
     }
@@ -514,13 +758,23 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
         server.post(11...20)
-        await #expect(throws: URLError.self) { try await store.fillFromLatest() }
+        try await expectChanges(of: { store.state }, during: {
+            await #expect(throws: URLError.self) { try await store.fillFromLatest() }
+        }) {
+            $0.unfilledSinceID = "10"
+        }
 
-        _ = try await store.loadInitial()
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = entryRows([20, 19, 18])
+            $0.oldestLoadedID = "18"
+            $0.unfilledSinceID = nil
+        }
         server.post(21...22)
-        _ = try await store.fillFromLatest()
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.entries = entryRows(18...22)
+        }
 
         #expect(store.gaps.isEmpty, "読み込み済みの区間に重なるギャップがあります: \(store.entries.map(\.debugLabel))")
         #expect(ids(store) == Array((18...22).reversed()))
@@ -531,24 +785,30 @@ struct TimelineGapTests {
     func regeneratingPageDoesNotNarrowGap(direction: TimelineStore.GapDirection) async throws {
         let server = FakeHomeServer(ids: 1...10)
         let regenerating = FailOnce()
+        let partial = direction == .fromNewer ? [17, 15] : [13, 11]
         let store = TimelineStore(pageSize: Self.pageSize) { query in
             if query.maxID != nil, regenerating.shouldFail() {
-                let partial = direction == .fromNewer ? [17, 15] : [13, 11]
                 return TimelinePage(statuses: partial.map(server.status), isRegenerating: true)
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
-        server.post(11...20)
-        _ = try await store.fillFromLatest()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
+        try await fillTenMissed(store, server)
         let gap = try #require(store.gaps.first)
         #expect((gap.newerID, gap.olderID) == ("18", "10"))
 
-        _ = try await store.loadGap(gap.id, from: direction)
+        try await expectChanges(of: { store.state }, during: { try await store.loadGap(gap.id, from: direction) }) {
+            // ギャップの読み込みは、再生成中だったことを残さない。残すのは最初の読み込み、古い方の読み込み、補完で、画面はその直後にだけ読む。
+            $0.entries = entryRows([20, 19, 18]) + [gapEntry(18, 10)] + entryRows(partial) + entryRows([10, 9, 8])
+        }
         let kept = try #require(store.gaps.first)
         #expect((kept.newerID, kept.olderID) == ("18", "10"), "再生成中のページでギャップの端が進みました")
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: direction)
+        try await expectChanges(of: { store.state }, during: {
+            while let gap = store.gaps.first {
+                _ = try await store.loadGap(gap.id, from: direction)
+            }
+        }) {
+            $0.entries = entryRows(8...20)
         }
         #expect(ids(store) == Array((8...20).reversed()))
     }
@@ -564,16 +824,29 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
         server.post(11...20)
 
-        _ = try await store.fillFromLatest()
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            // 13から下に置いたギャップは、満杯でないので続けて読んで閉じる。
+            $0.entries = entryRows(8...13)
+            $0.isRegenerating = true
+            $0.unfilledSinceID = "13"
+        }
         #expect(ids(store) == Array((8...13).reversed()), "再生成中の結果の間の投稿を読み飛ばしました: \(store.entries.map(\.debugLabel))")
 
-        _ = try await store.fillFromLatest()
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.entries = entryRows([20, 19, 18]) + [gapEntry(18, 13)] + entryRows(8...13)
+            $0.isRegenerating = false
+            $0.unfilledSinceID = nil
+        }
         #expect(store.gaps.count <= 1, "範囲の重なるギャップがあります: \(store.entries.map(\.debugLabel))")
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        try await expectChanges(of: { store.state }, during: {
+            while let gap = store.gaps.first {
+                _ = try await store.loadGap(gap.id, from: .fromNewer)
+            }
+        }) {
+            $0.entries = entryRows(8...20)
         }
         #expect(ids(store) == Array((8...20).reversed()))
     }
@@ -582,17 +855,30 @@ struct TimelineGapTests {
     @Test func readInsideGapStillHasUnloadedUnread() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = TimelineStore(pageSize: Self.pageSize) { server.page($0) }
-        _ = try await store.loadInitial()
-        server.post(11...20)
-        _ = try await store.fillFromLatest()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
+        try await fillTenMissed(store, server)
         let gap = try #require(store.gaps.first)
         #expect((gap.newerID, gap.olderID) == ("18", "10"))
 
-        _ = try await store.loadGap(gap.id, from: .fromOlder)
-        store.markRead(["13"])
+        try await expectChanges(of: { store.state }, during: { try await store.loadGap(gap.id, from: .fromOlder) }) {
+            $0.entries = entryRows([20, 19, 18]) + [gapEntry(18, 13, createdAs: (18, 10))] + entryRows(8...13)
+        }
+        try await expectChanges(of: { store.state }, during: { store.markRead(["13"]) }) {
+            $0.lastReadID = "13"
+            #if DEBUG
+            $0.lastSavableReadID = "13"
+            #endif
+            $0.lastReadPosition = TimelineStore.DisplayPosition(anchorID: "13", sequence: 0)
+        }
 
         #expect(store.hasUnloadedUnread, "14から17を読み込んでいないのに未読なしになりました")
-        store.markRead(["18"])
+        try await expectChanges(of: { store.state }, during: { store.markRead(["18"]) }) {
+            $0.lastReadID = "18"
+            #if DEBUG
+            $0.lastSavableReadID = "18"
+            #endif
+            $0.lastReadPosition = TimelineStore.DisplayPosition(anchorID: "18", sequence: 0)
+        }
         #expect(!store.hasUnloadedUnread)
     }
 
@@ -608,22 +894,49 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
         server.post(11...12)
 
-        let first = Task { try await store.fillFromLatest() }
-        await gate.waitUntilWaiting()
+        let first = try await expectChanges(of: { store.state }, during: {
+            let first = Task { try await store.fillFromLatest() }
+            await gate.waitUntilWaiting()
+            return first
+        }) {
+            $0.isFilling = true
+            $0.unfilledSinceID = "10"
+        }
         server.post(13...13)
-        _ = store.receive(.update(server.status(13)))
-        _ = store.flushPending()
-        #expect(try await store.fillFromLatest() == nil)
-        await gate.open()
-        await #expect(throws: URLError.self) { try await first.value }
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(server.status(13))) }) {
+            $0.pending = [server.status(13)]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.entries.insert(.status(server.status(13)), at: 0)
+        }
+        let second = try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.refillSinceID = "13"
+        }
+        #expect(second == nil)
+        try await expectChanges(of: { store.state }, during: {
+            await gate.open()
+            await #expect(throws: URLError.self) { try await first.value }
+        }) {
+            // 受け付けた13と読めなかった10の古い方の10を、次の補完の基準に残す。
+            $0.isFilling = false
+            $0.refillSinceID = nil
+        }
         server.post(14...14)
 
-        _ = try await store.fillFromLatest()
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.entries = entryRows([14, 13, 12]) + [gapEntry(12, 10)] + entryRows([10, 9, 8])
+            $0.unfilledSinceID = nil
+        }
+        try await expectChanges(of: { store.state }, during: {
+            while let gap = store.gaps.first {
+                _ = try await store.loadGap(gap.id, from: .fromNewer)
+            }
+        }) {
+            $0.entries = entryRows(8...14)
         }
         #expect(ids(store) == Array((8...14).reversed()))
     }
@@ -645,16 +958,40 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
         server.post(11...20)
 
-        let first = Task { try await store.fillFromLatest() }
-        await gate.waitUntilWaiting()
-        _ = store.receive(.update(server.status(13)))
-        _ = store.flushPending()
-        #expect(try await store.fillFromLatest() == nil)
-        await gate.open()
-        _ = try await first.value
+        let first = try await expectChanges(of: { store.state }, during: {
+            let first = Task { try await store.fillFromLatest() }
+            await gate.waitUntilWaiting()
+            return first
+        }) {
+            $0.isFilling = true
+            $0.unfilledSinceID = "10"
+        }
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(server.status(13))) }) {
+            $0.pending = [server.status(13)]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.entries.insert(.status(server.status(13)), at: 0)
+        }
+        let second = try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.refillSinceID = "13"
+        }
+        #expect(second == nil)
+        try await expectChanges(of: { store.state }, during: {
+            await gate.open()
+            _ = try await first.value
+        }) {
+            // 2回目は、1回目が返した最も新しい16から読む。16から下のギャップは、読んでも再生成中だったので端を動かさない。
+            // 再生成中だったことは、2回目が揃った結果を読んだので残らない。
+            $0.entries = entryRows([20, 19, 18]) + [gapEntry(18, 16)] + entryRows([16]) + [gapEntry(16, 10)]
+                + entryRows([13, 11, 10, 9, 8])
+            $0.isFilling = false
+            $0.unfilledSinceID = nil
+            $0.refillSinceID = nil
+        }
 
         let gaps = store.gaps
         let overlapping = gaps.indices.contains { i in
@@ -663,8 +1000,12 @@ struct TimelineGapTests {
             }
         }
         #expect(!overlapping, "範囲の重なるギャップがあります: \(store.entries.map(\.debugLabel))")
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        try await expectChanges(of: { store.state }, during: {
+            while let gap = store.gaps.first {
+                _ = try await store.loadGap(gap.id, from: .fromNewer)
+            }
+        }) {
+            $0.entries = entryRows(8...20)
         }
         #expect(ids(store) == Array((8...20).reversed()))
     }
@@ -685,17 +1026,36 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
+        try await loadFirstPage(store, server, showing: [10, 9, 8])
         server.post(11...20)
-        await #expect(throws: URLError.self) { try await store.fillFromLatest() }
-
-        _ = try await store.loadInitial()
-        #expect(store.isRegenerating)
-        _ = try await store.fillFromLatest()
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        try await expectChanges(of: { store.state }, during: {
+            await #expect(throws: URLError.self) { try await store.fillFromLatest() }
+        }) {
+            $0.unfilledSinceID = "10"
         }
-        _ = try await store.loadOlder()
+
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = entryRows([20]) + [gapEntry(20, 11)] + entryRows([11])
+            $0.oldestLoadedID = "11"
+            // 読めなかった10は捨て、20より上を次の補完で読む。
+            $0.unfilledSinceID = "20"
+            $0.isRegenerating = true
+        }
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.unfilledSinceID = nil
+            $0.isRegenerating = false
+        }
+        try await expectChanges(of: { store.state }, during: {
+            while let gap = store.gaps.first {
+                _ = try await store.loadGap(gap.id, from: .fromNewer)
+            }
+        }) {
+            $0.entries = entryRows(11...20)
+        }
+        try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) {
+            $0.entries = entryRows(8...20)
+            $0.oldestLoadedID = "8"
+        }
 
         #expect(ids(store) == Array((8...20).reversed()), "再生成中の結果の間の投稿を読み飛ばしました: \(store.entries.map(\.debugLabel))")
     }
@@ -710,12 +1070,22 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = entryRows([20]) + [gapEntry(20, 11)] + entryRows([11])
+            $0.oldestLoadedID = "11"
+            $0.unfilledSinceID = "20"
+            $0.isRegenerating = true
+        }
         let gap = try #require(store.gaps.first, "再生成中の結果の間にギャップがありません: \(store.entries.map(\.debugLabel))")
         #expect((gap.newerID, gap.olderID) == ("20", "11"))
 
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        try await expectChanges(of: { store.state }, during: {
+            while let gap = store.gaps.first {
+                _ = try await store.loadGap(gap.id, from: .fromNewer)
+            }
+        }) {
+            // ギャップの読み込みは、再生成中だったことを変えない。次の補完か読み込みで改める。
+            $0.entries = entryRows(11...20)
         }
         #expect(ids(store) == Array((11...20).reversed()))
     }
@@ -730,12 +1100,20 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
-        _ = try await store.loadOlder()
+        try await loadFirstPage(store, server, showing: [20, 19, 18])
+        try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) {
+            $0.entries = entryRows([20, 19, 18]) + [gapEntry(18, 12)] + entryRows([17, 12])
+            $0.oldestLoadedID = "12"
+            $0.isRegenerating = true
+        }
 
         #expect(store.gaps.map { [$0.newerID, $0.olderID] } == [["18", "12"]], "再生成中の結果の間にギャップがありません: \(store.entries.map(\.debugLabel))")
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        try await expectChanges(of: { store.state }, during: {
+            while let gap = store.gaps.first {
+                _ = try await store.loadGap(gap.id, from: .fromNewer)
+            }
+        }) {
+            $0.entries = entryRows(12...20)
         }
         #expect(ids(store) == Array((12...20).reversed()))
     }
@@ -749,11 +1127,25 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial(around: "5")
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial(around: "5") }) {
+            // 再生成中だったかは、最新のページで決める。既読位置の周りのページが再生成中でも、間はギャップに残してある。
+            $0.entries = entryRows([20, 19, 18]) + [gapEntry(18, 6)] + entryRows([9, 6, 5, 4, 3])
+            $0.oldestLoadedID = "3"
+            $0.lastReadID = "5"
+            #if DEBUG
+            $0.lastSavableReadID = "5"
+            #endif
+            $0.lastReadPosition = TimelineStore.DisplayPosition(anchorID: "5", sequence: 0)
+            $0.savedReadID = "5"
+        }
 
         #expect(store.gaps.map { [$0.newerID, $0.olderID] } == [["18", "6"]], "再生成中の結果の間にギャップがありません: \(store.entries.map(\.debugLabel))")
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        try await expectChanges(of: { store.state }, during: {
+            while let gap = store.gaps.first {
+                _ = try await store.loadGap(gap.id, from: .fromNewer)
+            }
+        }) {
+            $0.entries = entryRows(3...20)
         }
         #expect(ids(store) == Array((3...20).reversed()))
     }
@@ -767,11 +1159,26 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial(around: "5")
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial(around: "5") }) {
+            // 再生成中だったかは、最新のページで決める。既読位置の周りのページが再生成中でも、間はギャップに残してある。
+            $0.entries = entryRows([20, 19, 18]) + [gapEntry(18, 8)] + entryRows([8, 7, 6]) + [gapEntry(6, 2)]
+                + entryRows([5, 2])
+            $0.oldestLoadedID = "2"
+            $0.lastReadID = "5"
+            #if DEBUG
+            $0.lastSavableReadID = "5"
+            #endif
+            $0.lastReadPosition = TimelineStore.DisplayPosition(anchorID: "5", sequence: 0)
+            $0.savedReadID = "5"
+        }
 
         #expect(store.gaps.map { [$0.newerID, $0.olderID] } == [["18", "8"], ["6", "2"]], "再生成中の結果の間にギャップがありません: \(store.entries.map(\.debugLabel))")
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        try await expectChanges(of: { store.state }, during: {
+            while let gap = store.gaps.first {
+                _ = try await store.loadGap(gap.id, from: .fromNewer)
+            }
+        }) {
+            $0.entries = entryRows(2...20)
         }
         #expect(ids(store) == Array((2...20).reversed()))
     }
@@ -791,12 +1198,24 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
-        _ = try await store.fillFromLatest()
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.isRegenerating = true
+            $0.fillsFromLatestPage = true
+        }
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.entries = entryRows([20]) + [gapEntry(20, 11)] + entryRows([11])
+            $0.oldestLoadedID = "11"
+            $0.unfilledSinceID = "20"
+            $0.fillsFromLatestPage = false
+        }
 
         #expect(store.gaps.map { [$0.newerID, $0.olderID] } == [["20", "11"]], "再生成中の結果の間にギャップがありません: \(store.entries.map(\.debugLabel))")
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        try await expectChanges(of: { store.state }, during: {
+            while let gap = store.gaps.first {
+                _ = try await store.loadGap(gap.id, from: .fromNewer)
+            }
+        }) {
+            $0.entries = entryRows(11...20)
         }
         #expect(ids(store) == Array((11...20).reversed()))
     }
@@ -817,14 +1236,32 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
-        let older = Task { try await store.loadOlder() }
-        await gate.waitUntilWaiting()
+        try await loadFirstPage(store, server, showing: [200, 190, 180])
+        let older = try await expectChanges(of: { store.state }, during: {
+            let older = Task { try await store.loadOlder() }
+            await gate.waitUntilWaiting()
+            return older
+        }) {
+            $0.isLoading = true
+        }
         server.post(155...155)
-        _ = store.receive(.update(server.status(155)))
-        _ = store.flushPending()
-        await gate.open()
-        _ = try await older.value
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(server.status(155))) }) {
+            $0.pending = [server.status(155)]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            // 末尾の180より古いので、まだ並べずに取っておく。
+            $0.olderArrivals = [server.status(155)]
+        }
+        try await expectChanges(of: { store.state }, during: {
+            await gate.open()
+            _ = try await older.value
+        }) {
+            $0.entries = entryRows([200, 190, 180, 170, 160, 155, 150])
+            $0.oldestLoadedID = "150"
+            $0.olderArrivals = []
+            $0.isLoading = false
+        }
 
         #expect(ids(store) == [200, 190, 180, 170, 160, 155, 150], "遅れて届いた投稿が抜けました: \(store.entries.map(\.debugLabel))")
     }
@@ -841,19 +1278,35 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
-        server.post(1...2)
-        await #expect(throws: URLError.self) { try await store.fillFromLatest() }
-        server.post(3...3)
-        _ = store.receive(.update(server.status(3)))
-        _ = store.flushPending()
-
-        _ = try await store.fillFromLatest()
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.reachedEnd = true
         }
-        for _ in 0..<10 where !store.reachedEnd {
-            _ = try await store.loadOlder()
+        server.post(1...2)
+        try await expectChanges(of: { store.state }, during: {
+            await #expect(throws: URLError.self) { try await store.fillFromLatest() }
+        }) {
+            $0.fillsFromLatestPage = true
+        }
+        server.post(3...3)
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(server.status(3))) }) {
+            $0.pending = [server.status(3)]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            // 古い方の終わりに着いているので、末尾より古くても取っておかずに並べる。
+            $0.pending = []
+            $0.entries = entryRows([3])
+            $0.oldestLoadedID = "3"
+        }
+
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.fillsFromLatestPage = false
+            $0.entries = entryRows([3, 2, 1])
+            $0.oldestLoadedID = "1"
+            // 最新のページに投稿があったので、終わりに着いた扱いをやめる。
+            $0.reachedEnd = false
+        }
+        try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) {
+            $0.reachedEnd = true
         }
 
         #expect(ids(store) == [3, 2, 1], "失敗した補完の間を読み飛ばしました: \(store.entries.map(\.debugLabel))")
@@ -872,23 +1325,51 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.reachedEnd = true
+        }
         for id in [10, 20, 30, 40, 50, 60] {
             server.post(id...id)
         }
-        let fill = Task { try await store.fillFromLatest() }
-        await gate.waitUntilWaiting()
-        server.post(15...15)
-        _ = store.receive(.update(server.status(15)))
-        _ = store.flushPending()
-        await gate.open()
-        _ = try await fill.value
-
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        let fill = try await expectChanges(of: { store.state }, during: {
+            let fill = Task { try await store.fillFromLatest() }
+            await gate.waitUntilWaiting()
+            return fill
+        }) {
+            $0.isFilling = true
+            $0.fillsFromLatestPage = true
         }
-        for _ in 0..<10 where !store.reachedEnd {
-            _ = try await store.loadOlder()
+        server.post(15...15)
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(server.status(15))) }) {
+            $0.pending = [server.status(15)]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.entries = entryRows([15])
+            $0.oldestLoadedID = "15"
+        }
+        try await expectChanges(of: { store.state }, during: {
+            await gate.open()
+            _ = try await fill.value
+        }) {
+            $0.isFilling = false
+            $0.fillsFromLatestPage = false
+            $0.entries = entryRows([60, 50, 40]) + [gapEntry(40, 15)] + entryRows([15])
+            $0.reachedEnd = false
+        }
+
+        try await expectChanges(of: { store.state }, during: {
+            _ = try await store.loadGap(TimelineGap(newerID: "40", olderID: "15").id, from: .fromNewer)
+        }) {
+            // 満杯でないページだったので、もう1回読んで0件を確かめ、ギャップを閉じる。
+            $0.entries = entryRows([60, 50, 40, 30, 20, 15])
+        }
+        try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) {
+            $0.entries += entryRows([10])
+            $0.oldestLoadedID = "10"
+        }
+        try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) {
+            $0.reachedEnd = true
         }
         #expect(Set(ids(store)) == [10, 15, 20, 30, 40, 50, 60], "最新のページと新着の間を読み飛ばしました: \(store.entries.map(\.debugLabel))")
     }
@@ -906,14 +1387,34 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.reachedEnd = true
+        }
         server.post(1...2)
-        let fill = Task { try await store.fillFromLatest() }
-        await gate.waitUntilWaiting()
+        let fill = try await expectChanges(of: { store.state }, during: {
+            let fill = Task { try await store.fillFromLatest() }
+            await gate.waitUntilWaiting()
+            return fill
+        }) {
+            $0.isFilling = true
+            $0.fillsFromLatestPage = true
+        }
         server.post(3...3)
-        #expect(try await store.fillFromLatest() == nil)
-        await gate.open()
-        _ = try await fill.value
+        let requested = try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.refillsAfterLatestPage = true
+        }
+        #expect(requested == nil)
+        try await expectChanges(of: { store.state }, during: {
+            await gate.open()
+            _ = try await fill.value
+        }) {
+            $0.isFilling = false
+            $0.fillsFromLatestPage = false
+            $0.refillsAfterLatestPage = false
+            $0.entries = entryRows([3, 2, 1])
+            $0.oldestLoadedID = "1"
+            $0.reachedEnd = false
+        }
 
         #expect(ids(store) == [3, 2, 1], "読んでいる間に求められた補完を読みませんでした: \(store.entries.map(\.debugLabel))")
     }
@@ -928,14 +1429,32 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.reachedEnd = true
+        }
         server.post(1...2)
-        _ = try await store.fillFromLatest()
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.fillsFromLatestPage = true
+            $0.isRegenerating = true
+            // 再生成中の空のページは、終わりに着いたことにならない。
+            $0.reachedEnd = false
+        }
         server.post(3...3)
-        _ = store.receive(.update(server.status(3)))
-        _ = store.flushPending()
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(server.status(3))) }) {
+            $0.pending = [server.status(3)]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.entries = entryRows([3])
+            $0.oldestLoadedID = "3"
+        }
 
-        _ = try await store.fillFromLatest()
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.fillsFromLatestPage = false
+            $0.isRegenerating = false
+            $0.entries = entryRows([3, 2, 1])
+            $0.oldestLoadedID = "1"
+        }
 
         #expect(ids(store) == [3, 2, 1], "再生成中で読めなかった間を読み飛ばしました: \(store.entries.map(\.debugLabel))")
     }
@@ -950,18 +1469,37 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.reachedEnd = true
+        }
         for id in [10, 20, 30, 40] {
             server.post(id...id)
         }
-        _ = try await store.fillFromLatest()
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.unfilledSinceID = "30"
+            $0.isRegenerating = true
+            $0.entries = entryRows([30]) + [gapEntry(30, 10)] + entryRows([10])
+            $0.oldestLoadedID = "10"
+            $0.reachedEnd = false
+        }
         server.post(50...50)
-        _ = store.receive(.update(server.status(50)))
-        _ = store.flushPending()
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(server.status(50))) }) {
+            $0.pending = [server.status(50)]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.entries.insert(contentsOf: entryRows([50]), at: 0)
+        }
 
-        _ = try await store.fillFromLatest()
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.unfilledSinceID = nil
+            $0.isRegenerating = false
+            $0.entries = entryRows([50, 40, 30]) + [gapEntry(30, 10)] + entryRows([10])
+        }
+        try await expectChanges(of: { store.state }, during: {
+            _ = try await store.loadGap(TimelineGap(newerID: "30", olderID: "10").id, from: .fromNewer)
+        }) {
+            $0.entries = entryRows([50, 40, 30, 20, 10])
         }
 
         #expect(Set(ids(store)) == [10, 20, 30, 40, 50], "返った投稿より上を読み飛ばしました: \(store.entries.map(\.debugLabel))")
@@ -977,11 +1515,30 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial(around: "5")
+        let gap = TimelineGap(newerID: "22", olderID: "6")
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial(around: "5") }) {
+            // ギャップは22のすぐ下に並び、読み込み済みの20〜18もギャップの範囲に入る。
+            $0.entries = entryRows([22]) + [.gap(gap)] + entryRows([20, 19, 18, 6, 5, 4, 3])
+            $0.oldestLoadedID = "3"
+            $0.lastReadID = "5"
+            #if DEBUG
+            $0.lastSavableReadID = "5"
+            #endif
+            $0.lastReadPosition = readPosition(5)
+            $0.savedReadID = "5"
+        }
 
-        _ = try await store.fillFromLatest()
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        // ギャップの新しい側の端の22から読み、22より新しい投稿はないので何も変わらない。
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) { _ in }
+        try await expectChanges(of: { store.state }, during: { try await store.loadGap(gap.id, from: .fromNewer) }) {
+            $0.entries = entryRows([22, 21, 20, 19]) + [.gap(gap.narrowed(newerID: "19"))] + entryRows([18, 6, 5, 4, 3])
+        }
+        try await expectChanges(of: { store.state }, during: {
+            while let gap = store.gaps.first {
+                _ = try await store.loadGap(gap.id, from: .fromNewer)
+            }
+        }) {
+            $0.entries = entryRows(Array((3...22).reversed()))
         }
 
         #expect(Set(ids(store)) == Set(3...22), "最新のページより新しい投稿の間を読み飛ばしました: \(store.entries.map(\.debugLabel))")
@@ -1000,14 +1557,37 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
-        let fill = Task { try await store.fillFromLatest() }
-        await gate.waitUntilWaiting()
-        _ = store.receive(.delete(statusID: "10"))
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = entryRows([10])
+            $0.oldestLoadedID = "10"
+        }
+        let fill = try await expectChanges(of: { store.state }, during: {
+            let fill = Task { try await store.fillFromLatest() }
+            await gate.waitUntilWaiting()
+            return fill
+        }) {
+            $0.isFilling = true
+            $0.unfilledSinceID = "10"
+        }
+        try await expectChanges(of: { store.state }, during: { store.receive(.delete(statusID: "10")) }) {
+            $0.deletedIDs.insert("10")
+            $0.entries = []
+        }
         server.post(20...20)
-        #expect(try await store.fillFromLatest() == nil)
-        await gate.open()
-        _ = try await fill.value
+        let requested = try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            // タイムラインが空なので、今の補完が読んでいる基準から読み直す。
+            $0.refillSinceID = "10"
+        }
+        #expect(requested == nil)
+        try await expectChanges(of: { store.state }, during: {
+            await gate.open()
+            _ = try await fill.value
+        }) {
+            $0.isFilling = false
+            $0.unfilledSinceID = nil
+            $0.refillSinceID = nil
+            $0.entries = entryRows([20])
+        }
 
         #expect(ids(store) == [20], "読んでいる間に求められた補完を読みませんでした: \(store.entries.map(\.debugLabel))")
     }
@@ -1016,19 +1596,44 @@ struct TimelineGapTests {
     @Test func deletingEveryStatusKeepsTailPosition() async throws {
         let server = FakeHomeServer(ids: (1...5).map { $0 * 10 })
         let store = makeStore(server)
-        _ = try await store.loadInitial()
-        for id in ["50", "40", "30"] {
-            _ = store.receive(.delete(statusID: id))
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = entryRows([50, 40, 30])
+            $0.oldestLoadedID = "30"
+        }
+        try await expectChanges(of: { store.state }, during: {
+            for id in ["50", "40", "30"] {
+                _ = store.receive(.delete(statusID: id))
+            }
+        }) {
+            $0.deletedIDs = ["50", "40", "30"]
+            $0.entries = []
         }
         server.post(5...5)
-        _ = store.receive(.update(server.status(5)))
-        _ = store.flushPending()
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(server.status(5))) }) {
+            $0.pending = [server.status(5)]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            // 消した投稿も含めた末尾の30より古いので、まだ並べずに取っておく。
+            $0.pending = []
+            $0.olderArrivals = [server.status(5)]
+        }
         server.post(60...60)
-        _ = store.receive(.update(server.status(60)))
-        _ = store.flushPending()
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(server.status(60))) }) {
+            $0.pending = [server.status(60)]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.entries = entryRows([60])
+        }
 
-        for _ in 0..<10 where !store.reachedEnd {
-            _ = try await store.loadOlder()
+        try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) {
+            // 古い方のページで読んだ5まで末尾が下がり、取っておいた5は読み込み済みになる。
+            $0.entries += entryRows([20, 10, 5])
+            $0.oldestLoadedID = "5"
+            $0.olderArrivals = []
+        }
+        try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) {
+            $0.reachedEnd = true
         }
 
         #expect(Set(ids(store)) == [60, 20, 10, 5], "削除した投稿より古い投稿を読み飛ばしました: \(store.entries.map(\.debugLabel))")
@@ -1046,11 +1651,23 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
-        _ = store.receive(.delete(statusID: "20"))
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = entryRows([20]) + [gapEntry(20, 11)] + entryRows([11])
+            $0.oldestLoadedID = "11"
+            $0.unfilledSinceID = "20"
+            $0.isRegenerating = true
+        }
+        try await expectChanges(of: { store.state }, during: { store.receive(.delete(statusID: "20")) }) {
+            $0.deletedIDs.insert("20")
+            $0.entries.removeFirst()
+        }
         server.post(21...21)
 
-        _ = try await store.fillFromLatest()
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.unfilledSinceID = nil
+            $0.isRegenerating = false
+            $0.entries = entryRows([21]) + [gapEntry(20, 11)] + entryRows([11])
+        }
 
         #expect(!hasOverlappingGaps(store), "範囲の重なるギャップがあります: \(store.entries.map(\.debugLabel))")
     }
@@ -1077,14 +1694,39 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
-        let fill = Task { try await store.fillFromLatest() }
-        await gate.waitUntilWaiting()
-        _ = store.receive(.update(server.status(100)))
-        _ = store.flushPending()
-        _ = try await store.loadOlder()
-        await gate.open()
-        _ = try await fill.value
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.fillsFromLatestPage = true
+            $0.isRegenerating = true
+        }
+        let fill = try await expectChanges(of: { store.state }, during: {
+            let fill = Task { try await store.fillFromLatest() }
+            await gate.waitUntilWaiting()
+            return fill
+        }) {
+            $0.isFilling = true
+        }
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(server.status(100))) }) {
+            $0.pending = [server.status(100)]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.entries = entryRows([100])
+            $0.oldestLoadedID = "100"
+        }
+        try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) {
+            $0.entries = entryRows([100]) + [gapEntry(100, 10)] + entryRows([90, 50, 10])
+            $0.oldestLoadedID = "10"
+        }
+        try await expectChanges(of: { store.state }, during: {
+            await gate.open()
+            _ = try await fill.value
+        }) {
+            $0.isFilling = false
+            $0.fillsFromLatestPage = false
+            $0.unfilledSinceID = "200"
+            // 最新のページの200〜50と、50から末尾の10までのギャップが、100〜10のギャップとまとまる。IDは新しい側の端が最も新しいものを引き継ぐ。
+            $0.entries = entryRows([200]) + [.gap(TimelineGap(newerID: "200", olderID: "50").widened(olderID: "10"))] + entryRows([100, 90, 50, 10])
+        }
 
         #expect(!hasOverlappingGaps(store), "範囲の重なるギャップがあります: \(store.entries.map(\.debugLabel))")
     }
@@ -1117,27 +1759,70 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
-        let fill = Task { try await store.fillFromLatest() }
-        await latestGate.waitUntilWaiting()
-        _ = store.receive(.update(server.status(200)))
-        _ = store.flushPending()
-        _ = try await store.loadOlder()
-        let gap = try #require(store.gaps.first)
-        // 200から100までのギャップを古い側から読み始め、その応答を待つ間に、最新のページのギャップとまとまって50まで広がる。
-        let loading = Task { try await store.loadGap(gap.id, from: .fromOlder) }
-        await gapGate.waitUntilWaiting()
-        await latestGate.open()
-        _ = try await fill.value
-        await gapGate.open()
-        _ = try await loading.value
-
-        for _ in 0..<10 {
-            guard let gap = store.gaps.first else { break }
-            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.fillsFromLatestPage = true
+            $0.isRegenerating = true
         }
-        for _ in 0..<10 where !store.reachedEnd {
-            _ = try await store.loadOlder()
+        let fill = try await expectChanges(of: { store.state }, during: {
+            let fill = Task { try await store.fillFromLatest() }
+            await latestGate.waitUntilWaiting()
+            return fill
+        }) {
+            $0.isFilling = true
+        }
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(server.status(200))) }) {
+            $0.pending = [server.status(200)]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.entries = entryRows([200])
+            $0.oldestLoadedID = "200"
+        }
+        let gap = TimelineGap(newerID: "200", olderID: "100")
+        try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) {
+            $0.entries = entryRows([200]) + [.gap(gap)] + entryRows([100])
+            $0.oldestLoadedID = "100"
+        }
+        // 200から100までのギャップを古い側から読み始め、その応答を待つ間に、最新のページのギャップとまとまって50まで広がる。
+        let loading = try await expectChanges(of: { store.state }, during: {
+            let loading = Task { try await store.loadGap(gap.id, from: .fromOlder) }
+            await gapGate.waitUntilWaiting()
+            return loading
+        }) {
+            $0.loadingGapIDs = [gap.id]
+        }
+        let widened = gap.widened(olderID: "50")
+        try await expectChanges(of: { store.state }, during: {
+            await latestGate.open()
+            _ = try await fill.value
+        }) {
+            $0.isFilling = false
+            $0.fillsFromLatestPage = false
+            $0.unfilledSinceID = "150"
+            $0.entries = entryRows([200]) + [.gap(widened)] + entryRows([150, 100, 50])
+            $0.oldestLoadedID = "50"
+        }
+        try await expectChanges(of: { store.state }, during: {
+            await gapGate.open()
+            _ = try await loading.value
+        }) {
+            $0.loadingGapIDs = []
+            // 読み始めたときより広がったギャップは、端を動かさない。
+            $0.entries = entryRows([200]) + [.gap(widened)] + entryRows([150, 130, 120, 110, 100, 50])
+        }
+
+        try await expectChanges(of: { store.state }, during: {
+            for _ in 0..<10 {
+                guard let gap = store.gaps.first else { break }
+                _ = try await store.loadGap(gap.id, from: .fromNewer)
+            }
+        }) {
+            $0.entries = entryRows(server.ids.sorted(by: >))
+        }
+        try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) {
+            // ギャップの読み込みは再生成中かを書き換えないので、古い方を読んだここで戻る。
+            $0.isRegenerating = false
+            $0.reachedEnd = true
         }
         #expect(ids(store) == server.ids.sorted(by: >))
     }
@@ -1157,16 +1842,31 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
-        _ = store.receive(.delete(statusID: "11"))
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = entryRows([20]) + [gapEntry(20, 11)] + entryRows([11])
+            $0.oldestLoadedID = "11"
+            $0.unfilledSinceID = "20"
+            $0.isRegenerating = true
+        }
+        try await expectChanges(of: { store.state }, during: { store.receive(.delete(statusID: "11")) }) {
+            $0.deletedIDs.insert("11")
+            $0.entries.removeLast()
+        }
 
-        _ = try await store.loadOlder()
+        try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) {
+            // 消えた11から読み、11から8までをギャップにする。20から11までのギャップとは端が接するだけで、まとめない。
+            $0.entries = entryRows([20]) + [gapEntry(20, 11), gapEntry(11, 8)] + entryRows([10, 8])
+            $0.oldestLoadedID = "8"
+        }
 
         #expect(!hasOverlappingGaps(store), "範囲の重なるギャップがあります: \(store.entries.map(\.debugLabel))")
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        try await expectChanges(of: { store.state }, during: {
+            while let gap = store.gaps.first {
+                _ = try await store.loadGap(gap.id, from: .fromNewer)
+            }
+        }) {
+            $0.entries = entryRows(Array((8...20).reversed()).filter { $0 != 11 })
         }
-        #expect(ids(store) == Array((8...20).reversed()).filter { $0 != 11 })
     }
 
     @Test func regeneratingShortPageKeepsGap() async throws {
@@ -1180,12 +1880,19 @@ struct TimelineGapTests {
             }
             return page
         }
-        _ = try await store.loadInitial()
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = entryRows([10, 9, 8])
+            $0.oldestLoadedID = "8"
+        }
         server.post(11...20)
-        _ = try await store.fillFromLatest()
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            // 満杯のページなので、続きはギャップの読み込みに任せる。
+            $0.entries = entryRows([20, 19, 18]) + [gapEntry(18, 10)] + entryRows([10, 9, 8])
+        }
         let gap = try #require(store.gaps.first)
 
-        #expect(try await store.loadGap(gap.id, from: .fromNewer) == [])
+        let loaded = try await expectChanges(of: { store.state }, during: { try await store.loadGap(gap.id, from: .fromNewer) }) { _ in }
+        #expect(loaded == [])
         #expect(store.gaps.map(\.id) == [gap.id], "再生成中の空の結果でギャップが閉じました")
     }
 
@@ -1198,17 +1905,32 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = entryRows([10, 9, 8])
+            $0.oldestLoadedID = "8"
+        }
         server.post(11...12)
 
-        #expect(try await store.fillFromLatest() == [])
-        #expect(store.isRegenerating, "補完が再生成中の結果を受けたことが残っていません")
+        let filled = try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.isRegenerating = true
+            $0.unfilledSinceID = "10"
+        }
+        #expect(filled == [])
         server.post(13...13)
-        _ = store.receive(.update(server.status(13)))
-        _ = store.flushPending()
-        _ = try await store.fillFromLatest()
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(server.status(13))) }) {
+            $0.pending = [server.status(13)]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.entries.insert(contentsOf: entryRows([13]), at: 0)
+        }
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.isRegenerating = false
+            $0.unfilledSinceID = nil
+            // 満杯のページなので、11と10の間が空かは、ギャップを読むまで分からない。
+            $0.entries = entryRows([13, 12, 11]) + [gapEntry(11, 10)] + entryRows([10, 9, 8])
+        }
 
-        #expect(!store.isRegenerating)
         #expect(ids(store) == Array((8...13).reversed()))
     }
 
@@ -1221,16 +1943,31 @@ struct TimelineGapTests {
             }
             return server.page(query)
         }
-        _ = try await store.loadInitial()
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = entryRows([10, 9, 8])
+            $0.oldestLoadedID = "8"
+        }
         server.post(11...12)
 
-        let fill = Task { try await store.fillFromLatest() }
-        await gate.waitUntilWaiting()
-        _ = store.receive(.delete(statusID: "12"))
-        await gate.open()
-        _ = try await fill.value
-
-        #expect(ids(store) == [11, 10, 9, 8])
+        let fill = try await expectChanges(of: { store.state }, during: {
+            let fill = Task { try await store.fillFromLatest() }
+            await gate.waitUntilWaiting()
+            return fill
+        }) {
+            $0.isFilling = true
+            $0.unfilledSinceID = "10"
+        }
+        try await expectChanges(of: { store.state }, during: { store.receive(.delete(statusID: "12")) }) {
+            $0.deletedIDs.insert("12")
+        }
+        try await expectChanges(of: { store.state }, during: {
+            await gate.open()
+            _ = try await fill.value
+        }) {
+            $0.isFilling = false
+            $0.unfilledSinceID = nil
+            $0.entries = entryRows([11, 10, 9, 8])
+        }
     }
 
     #if DEBUG
@@ -1238,14 +1975,26 @@ struct TimelineGapTests {
     @Test func localOnlyStatusesAreNotSavedAsReadPosition() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)
-        _ = try await store.loadInitial()
-        store.debugLocalOnlyIDs = ["100"]
-        _ = store.receive(.update(server.status(100)))
-        _ = store.flushPending()
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = entryRows([10, 9, 8])
+            $0.oldestLoadedID = "8"
+        }
+        // 検証用のIDは状態の外に持つので、状態は変わらない。
+        try await expectChanges(of: { store.state }, during: { store.debugLocalOnlyIDs = ["100"] }) { _ in }
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(server.status(100))) }) {
+            $0.pending = [server.status(100)]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.entries.insert(contentsOf: entryRows([100]), at: 0)
+        }
 
-        store.markRead(["100", "10", "9"])
+        try await expectChanges(of: { store.state }, during: { store.markRead(["100", "10", "9"]) }) {
+            $0.lastReadID = "100"
+            $0.lastSavableReadID = "10"
+            $0.lastReadPosition = readPosition(100)
+        }
 
-        #expect(store.lastReadID == "100")
         #expect(store.unreadCount == 0)
         #expect(store.readIDToSave == "10")
     }
@@ -1254,15 +2003,23 @@ struct TimelineGapTests {
     @Test func forgettingNewestIsRecoveredByFill() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)
-        _ = try await store.loadInitial()
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = entryRows([10, 9, 8])
+            $0.oldestLoadedID = "8"
+        }
         server.post(11...20)
-        _ = try await store.fillFromLatest()
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.entries = entryRows([20, 19, 18]) + [gapEntry(18, 10)] + entryRows([10, 9, 8])
+        }
 
-        store.debugForgetNewest(3)
-        #expect(store.entries.map(\.debugLabel) == ["10", "9", "8"], "忘れた範囲のギャップが残っています")
+        try await expectChanges(of: { store.state }, during: { store.debugForgetNewest(3) }) {
+            // 忘れた範囲のギャップも消す。
+            $0.entries = entryRows([10, 9, 8])
+        }
 
-        _ = try await store.fillFromLatest()
-        #expect(store.entries.map(\.debugLabel) == ["20", "19", "18", "gap(18...10)", "10", "9", "8"])
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.entries = entryRows([20, 19, 18]) + [gapEntry(18, 10)] + entryRows([10, 9, 8])
+        }
     }
     #endif
 
@@ -1272,14 +2029,26 @@ struct TimelineGapTests {
     @Test func postedStatusIsNotDuplicatedByStreaming() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)
-        _ = try await store.loadInitial()
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = entryRows([10, 9, 8])
+            $0.oldestLoadedID = "8"
+        }
         server.post(11...11)
 
-        #expect(store.receivePosted(server.status(11)) == .pendingStarted)
-        _ = store.flushPending()
-        #expect(store.receive(.update(server.status(11))) == .none)
-
-        #expect(ids(store) == [11, 10, 9, 8])
+        let posted = try await expectChanges(of: { store.state }, during: { store.receivePosted(server.status(11)) }) {
+            $0.pending = [server.status(11)]
+            $0.unconfirmedPostedIDs = ["11"]
+        }
+        #expect(posted == .pendingStarted)
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.entries.insert(contentsOf: entryRows([11]), at: 0)
+        }
+        let streamed = try await expectChanges(of: { store.state }, during: { store.receive(.update(server.status(11))) }) {
+            // 並びは変わらないが、ストリーミングで届いたことは確かめた。
+            $0.unconfirmedPostedIDs = []
+        }
+        #expect(streamed == .none)
     }
 
     /// ストリーミングで届く前の自分の投稿を、補完の基準にしない。
@@ -1287,28 +2056,49 @@ struct TimelineGapTests {
     @Test func fillDoesNotSkipStatusesOlderThanUnconfirmedPostedStatus() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)
-        _ = try await store.loadInitial()
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = entryRows([10, 9, 8])
+            $0.oldestLoadedID = "8"
+        }
         server.post(11...12)
-        _ = store.receivePosted(server.status(12))
-        _ = store.flushPending()
+        try await expectChanges(of: { store.state }, during: { store.receivePosted(server.status(12)) }) {
+            $0.pending = [server.status(12)]
+            $0.unconfirmedPostedIDs = ["12"]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.entries.insert(contentsOf: entryRows([12]), at: 0)
+        }
 
-        _ = try await store.fillFromLatest()
-
-        #expect(ids(store) == [12, 11, 10, 9, 8])
-        #expect(store.gaps.isEmpty)
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            // 補完で読めたので、届いたと確かめたことにする。
+            $0.unconfirmedPostedIDs = []
+            $0.entries = entryRows([12, 11, 10, 9, 8])
+        }
     }
 
     /// ストリーミングで届いたら、ほかの投稿と同じく補完の基準にする。
     @Test func postedStatusConfirmedByStreamingBecomesFillBase() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)
-        _ = try await store.loadInitial()
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = entryRows([10, 9, 8])
+            $0.oldestLoadedID = "8"
+        }
         server.post(11...11)
-        _ = store.receivePosted(server.status(11))
-        _ = store.flushPending()
-        _ = store.receive(.update(server.status(11)))
+        try await expectChanges(of: { store.state }, during: { store.receivePosted(server.status(11)) }) {
+            $0.pending = [server.status(11)]
+            $0.unconfirmedPostedIDs = ["11"]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.entries.insert(contentsOf: entryRows([11]), at: 0)
+        }
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(server.status(11))) }) {
+            $0.unconfirmedPostedIDs = []
+        }
 
-        _ = try await store.fillFromLatest()
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) { _ in }
 
         #expect(server.queries.last == TimelineQuery(sinceID: "11", limit: Self.pageSize))
     }
@@ -1317,13 +2107,24 @@ struct TimelineGapTests {
     @Test func postedStatusLoadedByFillBecomesFillBase() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)
-        _ = try await store.loadInitial()
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = entryRows([10, 9, 8])
+            $0.oldestLoadedID = "8"
+        }
         server.post(11...11)
-        _ = store.receivePosted(server.status(11))
-        _ = store.flushPending()
-        _ = try await store.fillFromLatest()
+        try await expectChanges(of: { store.state }, during: { store.receivePosted(server.status(11)) }) {
+            $0.pending = [server.status(11)]
+            $0.unconfirmedPostedIDs = ["11"]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.entries.insert(contentsOf: entryRows([11]), at: 0)
+        }
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.unconfirmedPostedIDs = []
+        }
 
-        _ = try await store.fillFromLatest()
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) { _ in }
 
         #expect(server.queries.last == TimelineQuery(sinceID: "11", limit: Self.pageSize))
     }
@@ -1333,30 +2134,39 @@ struct TimelineGapTests {
     @Test func postedStatusIntoEmptyTimelineDoesNotLoseRangeOnReconnect() async throws {
         let server = FakeHomeServer(ids: [])
         let store = makeStore(server)
-        _ = try await store.loadInitial()
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.reachedEnd = true
+        }
         server.post(1...1)
-        _ = store.receivePosted(server.status(1))
-        _ = store.flushPending()
+        let posted = try await expectChanges(of: { store.state }, during: { store.receivePosted(server.status(1)) }) { _ in }
+        #expect(posted == .none)
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) { _ in }
         server.post(2...10)
 
-        _ = try await store.fillFromLatest()
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.entries = entryRows([10, 9, 8])
+            $0.oldestLoadedID = "8"
+            $0.reachedEnd = false
         }
-        while !store.reachedEnd {
-            _ = try await store.loadOlder()
+        try await expectChanges(of: { store.state }, during: {
+            while !store.reachedEnd {
+                _ = try await store.loadOlder()
+            }
+        }) {
+            $0.entries = entryRows(Array((1...10).reversed()))
+            $0.oldestLoadedID = "1"
+            $0.reachedEnd = true
         }
-
-        #expect(ids(store) == Array((1...10).reversed()))
     }
 
     /// 最初の読み込みに失敗したタイムラインに入れると、空でなくなり、読み込み直す代わりに続きを読むようになるため、入れない。
     @Test func postedStatusIsNotInsertedBeforeInitialLoad() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = TimelineStore(pageSize: Self.pageSize) { _ in throw URLError(.networkConnectionLost) }
-        _ = try? await store.loadInitial()
+        try await expectChanges(of: { store.state }, during: { _ = try? await store.loadInitial() }) { _ in }
 
-        #expect(store.receivePosted(server.status(11)) == .none)
+        let posted = try await expectChanges(of: { store.state }, during: { store.receivePosted(server.status(11)) }) { _ in }
+        #expect(posted == .none)
         #expect(store.isEmpty)
     }
 
@@ -1366,11 +2176,18 @@ struct TimelineGapTests {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)
 
-        _ = try await store.loadInitial(around: "9")
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial(around: "9") }) {
+            $0.entries = entryRows([10, 9, 8])
+            $0.oldestLoadedID = "8"
+            $0.lastReadID = "9"
+            #if DEBUG
+            $0.lastSavableReadID = "9"
+            #endif
+            $0.lastReadPosition = readPosition(9)
+            $0.savedReadID = "9"
+        }
 
-        #expect(ids(store) == [10, 9, 8])
         #expect(server.queries.count == 1)
-        #expect(store.lastReadID == "9")
         #expect(store.unreadCount == 1)
         #expect(store.readIDToSave == nil, "サーバーにある位置をもう一度保存しようとしています")
     }
@@ -1379,9 +2196,16 @@ struct TimelineGapTests {
         let server = FakeHomeServer(ids: 1...20)
         let store = makeStore(server)
 
-        _ = try await store.loadInitial(around: "5")
-
-        #expect(store.entries.map(\.debugLabel) == ["20", "19", "18", "gap(18...8)", "8", "7", "6", "5", "4", "3"])
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial(around: "5") }) {
+            $0.entries = entryRows([20, 19, 18]) + [gapEntry(18, 8)] + entryRows([8, 7, 6, 5, 4, 3])
+            $0.oldestLoadedID = "3"
+            $0.lastReadID = "5"
+            #if DEBUG
+            $0.lastSavableReadID = "5"
+            #endif
+            $0.lastReadPosition = readPosition(5)
+            $0.savedReadID = "5"
+        }
         #expect(server.queries == [
             TimelineQuery(limit: Self.pageSize),
             TimelineQuery(minID: "5", limit: Self.pageSize),
@@ -1390,10 +2214,13 @@ struct TimelineGapTests {
         #expect(store.unreadCount == 6)
         #expect(store.hasUnloadedUnread)
 
-        while let gap = store.gaps.first {
-            _ = try await store.loadGap(gap.id, from: .fromOlder)
+        try await expectChanges(of: { store.state }, during: {
+            while let gap = store.gaps.first {
+                _ = try await store.loadGap(gap.id, from: .fromOlder)
+            }
+        }) {
+            $0.entries = entryRows(Array((3...20).reversed()))
         }
-        #expect(ids(store) == Array((3...20).reversed()))
         #expect(!store.hasUnloadedUnread)
     }
 
@@ -1401,48 +2228,96 @@ struct TimelineGapTests {
     @Test func insertedArrivalsMatchFullReorder() async throws {
         let server = FakeHomeServer(ids: 1...20, unreadableIDs: [4])
         let store = makeStore(server)
-        _ = try await store.loadInitial(around: "5")
-        #expect(store.entries.map(\.debugLabel) == ["20", "19", "18", "gap(18...8)", "8", "7", "6", "5", "unreadable(4)", "3"])
-
-        for id in [22, 10, 4, 12] {
-            _ = store.receive(.update(server.status(id)))
+        let unreadable = UnreadableItem(id: "4", url: nil)
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial(around: "5") }) {
+            $0.entries = entryRows([20, 19, 18]) + [gapEntry(18, 8)] + entryRows([8, 7, 6, 5]) + [.unreadable(unreadable)] + entryRows([3])
+            $0.unreadableItems = [unreadable]
+            $0.oldestLoadedID = "3"
+            $0.lastReadID = "5"
+            #if DEBUG
+            $0.lastSavableReadID = "5"
+            #endif
+            $0.lastReadPosition = readPosition(5)
+            $0.savedReadID = "5"
         }
-        let before = Dictionary(uniqueKeysWithValues: store.entries.map { ($0.id, $0) })
-        _ = store.flushPending()
-        #expect(store.entries.allSatisfy { entry in before[entry.id].map { $0 == entry } ?? true }, "残る行の中身は変わりません")
-        let inserted = store.entries.map(\.debugLabel)
-        #expect(inserted == ["12", "10", "22", "20", "19", "18", "gap(18...8)", "8", "7", "6", "5", "4", "3"])
+
+        try await expectChanges(of: { store.state }, during: {
+            for id in [22, 10, 4, 12] {
+                _ = store.receive(.update(server.status(id)))
+            }
+        }) {
+            $0.pending = [22, 10, 4, 12].map(server.status)
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            // 10と12は一番上の22の上に届いた順に積み、4は読めなかった行の位置に入れる。
+            $0.entries = entryRows([12, 10, 22, 20, 19, 18]) + [gapEntry(18, 8)] + entryRows([8, 7, 6, 5, 4, 3])
+            $0.unreadableItems = []
+            $0.lateArrivalSequence = 2
+            $0.lateArrivalPositions = ["10": readPosition(22, 1), "12": readPosition(22, 2)]
+        }
 
         let edited = Status(id: "19", createdAt: Date(timeIntervalSince1970: 19), account: server.status(19).account, content: "<p>edited</p>", spoilerText: "", url: nil)
-        #expect(store.receive(.statusUpdate(edited)) == .entriesChanged)
-        #expect(store.entries.map(\.debugLabel) == inserted)
+        let result = try await expectChanges(of: { store.state }, during: { store.receive(.statusUpdate(edited)) }) {
+            $0.entries[4] = .status(edited)
+        }
+        #expect(result == .entriesChanged)
     }
 
     @Test func markerJustBelowLatestPageLeavesNoGap() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)
 
-        _ = try await store.loadInitial(around: "5")
-
-        #expect(store.entries.map(\.debugLabel) == ["10", "9", "8", "7", "6", "5", "4", "3"])
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial(around: "5") }) {
+            $0.entries = entryRows([10, 9, 8, 7, 6, 5, 4, 3])
+            $0.oldestLoadedID = "3"
+            $0.lastReadID = "5"
+            #if DEBUG
+            $0.lastSavableReadID = "5"
+            #endif
+            $0.lastReadPosition = readPosition(5)
+            $0.savedReadID = "5"
+        }
     }
 
     @Test func readPositionIsSavedOnlyWhenItAdvances() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)
-        _ = try await store.loadInitial(around: "8")
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial(around: "8") }) {
+            $0.entries = entryRows([10, 9, 8])
+            $0.oldestLoadedID = "8"
+            $0.lastReadID = "8"
+            #if DEBUG
+            $0.lastSavableReadID = "8"
+            #endif
+            $0.lastReadPosition = readPosition(8)
+            $0.savedReadID = "8"
+        }
 
-        store.markRead(["9"])
+        try await expectChanges(of: { store.state }, during: { store.markRead(["9"]) }) {
+            $0.lastReadID = "9"
+            #if DEBUG
+            $0.lastSavableReadID = "9"
+            #endif
+            $0.lastReadPosition = readPosition(9)
+        }
         #expect(store.readIDToSave == "9")
-        store.markSaved("9")
+        try await expectChanges(of: { store.state }, during: { store.markSaved("9") }) {
+            $0.savedReadID = "9"
+        }
         #expect(store.readIDToSave == nil)
 
         // 他の端末で先へ読み進めていたら、その位置まで既読にする。
-        store.applySavedMarker("10")
-        #expect(store.lastReadID == "10")
+        try await expectChanges(of: { store.state }, during: { store.applySavedMarker("10") }) {
+            $0.lastReadID = "10"
+            #if DEBUG
+            $0.lastSavableReadID = "10"
+            #endif
+            $0.lastReadPosition = readPosition(10)
+            $0.savedReadID = "10"
+        }
         #expect(store.readIDToSave == nil)
-        store.applySavedMarker("7")
-        #expect(store.lastReadID == "10")
+        try await expectChanges(of: { store.state }, during: { store.applySavedMarker("7") }) { _ in }
     }
 
     /// 切断と補完、ギャップの読み込み、古いページの読み込みを、決まった乱数で混ぜても、サーバーと同じ並びになる。
@@ -1498,35 +2373,61 @@ struct TimelineGapTests {
     @Test func lateArrivalOnTopDoesNotShiftPagingBaselines() async throws {
         let server = FakeHomeServer(ids: Array(1...7) + [10, 12, 14])
         let store = makeStore(server)
-        _ = try await store.loadInitial()
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = entryRows([14, 12, 10])
+            $0.oldestLoadedID = "10"
+        }
         server.post(11...11)
-        _ = store.receive(.update(server.status(11)))
-        _ = store.flushPending()
-        #expect(ids(store) == [11, 14, 12, 10])
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(server.status(11))) }) {
+            $0.pending = [server.status(11)]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.entries.insert(contentsOf: entryRows([11]), at: 0)
+            $0.lateArrivalSequence = 1
+            $0.lateArrivalPositions = ["11": readPosition(14, 1)]
+        }
 
         server.post(15...15)
-        _ = try await store.fillFromLatest()
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.entries.insert(contentsOf: entryRows([15]), at: 0)
+        }
         #expect(server.queries.last?.sinceID == "14")
-        #expect(ids(store) == [15, 11, 14, 12, 10])
 
-        _ = try await store.loadOlder()
+        try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) {
+            $0.entries += entryRows([7, 6, 5])
+            $0.oldestLoadedID = "5"
+        }
         #expect(server.queries.last?.maxID == "10")
-        #expect(ids(store) == [15, 11, 14, 12, 10, 7, 6, 5])
     }
 
     /// ギャップの範囲のIDの投稿が遅れて届いても一番上に積み、ギャップは新しい側の端の投稿のすぐ下に残す。
     @Test func lateArrivalInsideGapRangeStacksOnTopAndKeepsGap() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)
-        _ = try await store.loadInitial()
+        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.entries = entryRows([10, 9, 8])
+            $0.oldestLoadedID = "8"
+        }
         server.post(11...20)
-        _ = try await store.fillFromLatest()
-        let gap = try #require(store.gaps.first)
+        try await expectChanges(of: { store.state }, during: { try await store.fillFromLatest() }) {
+            $0.entries = entryRows([20, 19, 18]) + [gapEntry(18, 10)] + entryRows([10, 9, 8])
+        }
 
-        _ = store.receive(.update(server.status(15)))
-        _ = store.flushPending()
+        try await expectChanges(of: { store.state }, during: { store.receive(.update(server.status(15))) }) {
+            $0.pending = [server.status(15)]
+        }
+        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+            $0.pending = []
+            $0.entries.insert(contentsOf: entryRows([15]), at: 0)
+            $0.lateArrivalSequence = 1
+            $0.lateArrivalPositions = ["15": readPosition(20, 1)]
+        }
+    }
 
-        #expect(store.entries.map(\.debugLabel) == ["15", "20", "19", "18", TimelineEntry.gap(gap).debugLabel, "10", "9", "8"])
+    /// 状態に書く既読位置や遅れて届いた投稿の位置。
+    private func readPosition(_ anchorID: Int, _ sequence: Int = 0) -> TimelineStore.DisplayPosition {
+        TimelineStore.DisplayPosition(anchorID: String(anchorID), sequence: sequence)
     }
 
     private func makeStore(_ server: FakeHomeServer) -> TimelineStore {
