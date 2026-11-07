@@ -93,8 +93,8 @@ login_on_device() {
     xcrun simctl keychain "$udid" reset
     reinstall_app "$udid" "$app"
     xcrun simctl launch "$udid" "$SCIA_BUNDLE_ID" >/dev/null
-    wait_label "$udid" stellaria.network TextField
-    axe tap --value stellaria.network --element-type TextField --tap-style physical --udid "$udid" >/dev/null
+    wait_label "$udid" mastodon.social TextField
+    axe tap --value mastodon.social --element-type TextField --tap-style physical --udid "$udid" >/dev/null
     axe type "$SCENARIO_HOST" --udid "$udid" >/dev/null
     axe tap --label ログイン --element-type PopUpButton --tap-style physical --udid "$udid" >/dev/null
     wait_label "$udid" 続ける Button

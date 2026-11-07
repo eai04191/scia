@@ -82,7 +82,7 @@ app_logged_in() {
             xcrun simctl terminate "$udid" "$SCIA_BUNDLE_ID"
             return 0
         fi
-        python3 -I "$SCENARIO_DIR/ui.py" has stellaria.network TextField <<< "$tree" && break
+        python3 -I "$SCENARIO_DIR/ui.py" has mastodon.social TextField <<< "$tree" && break
         sleep 1
     done
     xcrun simctl terminate "$udid" "$SCIA_BUNDLE_ID"
