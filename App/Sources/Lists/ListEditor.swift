@@ -77,7 +77,7 @@ final class ListEditor {
     /// 返信の表示かホームに出さないを変える。押し直せば済むので、失敗はチップで知らせる。
     func update(_ list: MastodonList, repliesPolicy: ListRepliesPolicy? = nil, exclusive: Bool? = nil) {
         let client = client
-        let failureTitle = repliesPolicy != nil ? "返信の表示を変えられませんでした" : "ホームに出さないを切り替えられませんでした"
+        let failureTitle = repliesPolicy != nil ? "返信の表示を変えられませんでした" : "「ホームに表示しない」を切り替えられませんでした"
         tasks.run(.action) { [weak self] in
             do {
                 try await self?.enqueue(list.id) { [weak self] in
@@ -173,7 +173,7 @@ final class ListEditor {
             }))
             // 返さないサーバー（Mastodon 4.2より前）には、この設定がない。
             if let exclusive = list.exclusive {
-                main.append(UIAction(title: "ホームに出さない", image: UIImage(systemName: "house.slash"), state: exclusive ? .on : .off) { [weak self] _ in
+                main.append(UIAction(title: "ホームに表示しない", image: UIImage(systemName: "house.slash"), state: exclusive ? .on : .off) { [weak self] _ in
                     self?.update(list, exclusive: !exclusive)
                 })
             }

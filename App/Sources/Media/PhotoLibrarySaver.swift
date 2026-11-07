@@ -27,7 +27,7 @@ struct PhotoLibrarySaver: Sendable {
         }
         if let error = error as? PHPhotosError {
             let message = switch error.code {
-            case .notEnoughSpace: "端末の空き容量が足りません。"
+            case .notEnoughSpace: "ストレージの空き容量が足りません。"
             case .invalidResource: "写真に入らない形式のファイルです。"
             case .accessRestricted, .accessUserDenied: "写真への追加が許可されていません。"
             default: "写真に追加できませんでした。"

@@ -616,7 +616,7 @@ final class InlineComposeControllerTests {
     @Test func scheduleSheetConfirmsBeforeClosing() async throws {
         defer { window.isHidden = true }
         var events: [String] = []
-        let sheet = ScheduleDateSheet(title: "予約の日時", date: Date(timeIntervalSince1970: 1_800_000_000), minimumDate: Date(timeIntervalSince1970: 1_700_000_000), confirmTitle: "決定") { _ in
+        let sheet = ScheduleDateSheet(title: "予約の日時", date: Date(timeIntervalSince1970: 1_800_000_000), minimumDate: Date(timeIntervalSince1970: 1_700_000_000), confirmTitle: "完了") { _ in
             events.append("confirm")
         } onClose: {
             events.append("close")

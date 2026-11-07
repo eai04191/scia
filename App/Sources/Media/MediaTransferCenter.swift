@@ -145,7 +145,7 @@ final class MediaTransferCenter {
             if count > 1, let showAll {
                 action = .disclosure(hint: "操作の状況を開きます。", handler: showAll)
             } else if let transfer = only.last, transfer.isStoppable {
-                action = .disclosure(hint: "ダウンロードを止めるか選べます。") { [weak self] in
+                action = .disclosure(hint: "ダウンロードを中止するか選べます。") { [weak self] in
                     guard let presenter = presenter() else { return }
                     self?.confirmStopping(transfer.id, from: presenter)
                 }
@@ -305,8 +305,8 @@ final class MediaTransferCenter {
     func confirmStopping(_ id: MediaTransfers.Transfer.ID, from presenter: UIViewController) {
         guard transfers.transfer(id)?.isStoppable == true, stopConfirmation == nil else { return }
         // チップから吹き出すシートでは「続ける」が省かれ、外をタップして続けることになるため、両方を並べるアラートにする。
-        let alert = UIAlertController(title: "ダウンロードを止めますか？", message: nil, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "止める", style: .destructive) { [weak self] _ in self?.transfers.stop(id) })
+        let alert = UIAlertController(title: "ダウンロードを中止しますか？", message: nil, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "中止", style: .destructive) { [weak self] _ in self?.transfers.stop(id) })
         alert.addAction(UIAlertAction(title: "続ける", style: .cancel))
         stopConfirmation = alert
         stopConfirmationTarget = id

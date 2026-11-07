@@ -208,7 +208,7 @@ struct NoticeStackViewTests {
     }
 
     private func dismissAction(of chip: NoticeChip) throws -> UIAccessibilityCustomAction {
-        try #require(chip.accessibilityCustomActions?.first { $0.name == "しまう" })
+        try #require(chip.accessibilityCustomActions?.first { $0.name == "閉じる" })
     }
 
     /// 数秒で消えるチップは、新しいものが来たら同じチップで差し替え、時間が来たら消す。
@@ -303,14 +303,14 @@ struct NoticeStackViewTests {
     /// VoiceOverでは「›」を読ませず、件数と、押すと何が起きるかを伝える。
     @Test func accessibilityDescribesCountAndAction() throws {
         let stack = makeStack()
-        var notice = Notice(id: "download", kind: .progress, title: "ダウンロード中", value: "42%", action: .disclosure(hint: "ダウンロードを止めるか選べます。", handler: {}))
+        var notice = Notice(id: "download", kind: .progress, title: "ダウンロード中", value: "42%", action: .disclosure(hint: "ダウンロードを中止するか選べます。", handler: {}))
         notice.additionalCount = 1
         stack.setPersistent(notice)
         let chip = try #require(stack.chips.first)
 
         #expect(chip.accessibilityLabel == "ダウンロード中、ほかに1件")
         #expect(chip.accessibilityValue == "42%")
-        #expect(chip.accessibilityHint == "ダウンロードを止めるか選べます。")
+        #expect(chip.accessibilityHint == "ダウンロードを中止するか選べます。")
         #expect(chip.accessibilityTraits.contains(.button))
     }
 }

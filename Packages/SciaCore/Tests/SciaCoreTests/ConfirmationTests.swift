@@ -51,17 +51,17 @@ struct ConfirmationTests {
     @Test func rewritingConfirmsOnlyWithWrittenDraft() {
         #expect(Confirmation.rewriting(draft: draft()) == nil)
         let confirmation = Confirmation.rewriting(draft: draft(text: "書きかけ"))
-        #expect(confirmation?.title == "下書きを捨てて書き直しますか？")
-        #expect(confirmation?.message == "書きかけの下書きは消えます。")
+        #expect(confirmation?.title == "下書きを破棄して書き直しますか？")
+        #expect(confirmation?.message == "書きかけの下書きは破棄されます。")
     }
 
     /// ＋の「下書きを捨てる」は、書いたものがあるときだけ確かめ、予約の書き直しの途中ならそれをやめることを聞く。
     @Test func discardingDraftConfirmsOnlyWithWrittenDraft() {
         #expect(Confirmation.discardingDraft(draft: draft(poll: true)) == nil)
         let confirmation = Confirmation.discardingDraft(draft: draft(text: "書きかけ"))
-        #expect(confirmation?.title == "下書きを捨てますか？")
-        #expect(confirmation?.message == "書きかけの下書きは消えます。")
-        #expect(confirmation?.buttons == [.cancel, .init("捨てる", role: .destructive, choice: .proceed)])
+        #expect(confirmation?.title == "下書きを破棄しますか？")
+        #expect(confirmation?.message == "書きかけの下書きは破棄されます。")
+        #expect(confirmation?.buttons == [.cancel, .init("破棄", role: .destructive, choice: .proceed)])
 
         let rewriting = draft()
         rewriting.beginRewriting(ScheduledStatus(
@@ -69,7 +69,7 @@ struct ConfirmationTests {
             params: ScheduledStatus.Params(text: "予約した本文", visibility: .unlisted)
         ))
         #expect(Confirmation.discardingDraft(draft: rewriting)?.title == "予約の書き直しをやめますか？")
-        #expect(Confirmation.discardingDraft(draft: rewriting)?.message == "書き直し中の内容は消えます。元の予約は残ります。")
+        #expect(Confirmation.discardingDraft(draft: rewriting)?.message == "書き直し中の内容は破棄されます。元の予約は残ります。")
     }
 
     /// 引用付きの予約投稿を書き直している間は、引用の投稿を読み直していないので`quoteTarget`がない。それでも引用を理由に断る。
@@ -93,9 +93,9 @@ struct ConfirmationTests {
             return
         }
         #expect(text.title == "書きかけの下書きがあります")
-        #expect(text.message == "共有された文を下書きの後ろに足すか、下書きを捨てて新しく書くかを選んでください。")
-        #expect(images.message == "共有された画像を下書きに足すか、下書きを捨てて新しく書くかを選んでください。")
+        #expect(text.message == "共有された文を下書きの後ろに追加するか、下書きを破棄して新しく書くかを選んでください。")
+        #expect(images.message == "共有された画像を下書きに追加するか、下書きを破棄して新しく書くかを選んでください。")
         #expect(text.buttons.map(\.choice) == [.append, .discardAndWrite, .cancel])
-        #expect(text.buttons.map(\.title) == ["下書きに足す", "下書きを捨てて新しく書く", "キャンセル"])
+        #expect(text.buttons.map(\.title) == ["下書きに追加", "下書きを破棄して新しく書く", "キャンセル"])
     }
 }

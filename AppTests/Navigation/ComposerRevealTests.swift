@@ -83,7 +83,7 @@ struct ComposerRevealTests {
         let viewer = makeViewer()
         try await root.presentForTesting(viewer)
         var closed = 0
-        let sheet = ScheduleDateSheet(title: "予約の日時", date: Date(timeIntervalSince1970: 1_800_000_000), minimumDate: Date(timeIntervalSince1970: 1_700_000_000), confirmTitle: "決定") { _ in } onClose: {
+        let sheet = ScheduleDateSheet(title: "予約の日時", date: Date(timeIntervalSince1970: 1_800_000_000), minimumDate: Date(timeIntervalSince1970: 1_700_000_000), confirmTitle: "完了") { _ in } onClose: {
             closed += 1
         }
         try await viewer.presentForTesting(sheet)
@@ -157,7 +157,7 @@ struct ComposerRevealTests {
         let viewer = makeViewer()
         try await root.presentForTesting(viewer)
         defer { viewer.dismiss(animated: false) }
-        let confirmation = UIAlertController(title: "下書きを捨てますか？", message: nil, preferredStyle: .alert)
+        let confirmation = UIAlertController(title: "下書きを破棄しますか？", message: nil, preferredStyle: .alert)
         confirmation.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
         try await viewer.presentForTesting(confirmation)
         defer { confirmation.dismiss(animated: false) }
@@ -181,7 +181,7 @@ struct ComposerRevealTests {
         var finishedClosing = false
         viewer.onCloseFinish = { finishedClosing = true }
         try await editor.presentForTesting(viewer)
-        let confirmation = UIAlertController(title: "下書きを捨てますか？", message: nil, preferredStyle: .alert)
+        let confirmation = UIAlertController(title: "下書きを破棄しますか？", message: nil, preferredStyle: .alert)
         confirmation.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
         try await viewer.presentForTesting(confirmation)
 
@@ -213,7 +213,7 @@ struct ComposerRevealTests {
         defer { viewer.dismiss(animated: false) }
         #expect(!root.isShowingAlert)
 
-        let confirmation = UIAlertController(title: "下書きを捨てますか？", message: nil, preferredStyle: .alert)
+        let confirmation = UIAlertController(title: "下書きを破棄しますか？", message: nil, preferredStyle: .alert)
         confirmation.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
         try await viewer.presentForTesting(confirmation)
         defer { confirmation.dismiss(animated: false) }

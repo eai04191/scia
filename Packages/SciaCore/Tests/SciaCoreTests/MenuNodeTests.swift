@@ -26,7 +26,7 @@ struct MenuNodeTests {
         ])
         let nodes = layout.groups.nodes { item -> [MenuNode<Int>] in item == .copyLink ? [] : [.action(item.title, 1)] }
 
-        #expect(Self.describe(nodes) == "=ブラウザで開く,共有|その他[プロフィールとして開く,既定のブラウザで開く,アプリ内のSafariで開く,カスタマイズ]")
+        #expect(Self.describe(nodes) == "=ブラウザで開く,共有|その他[プロフィールとして開く,デフォルトのブラウザで開く,アプリ内のSafariで開く,カスタマイズ]")
 
         let mainOnly = layout.groups.nodes { item -> [MenuNode<Int>] in [.openInBrowser].contains(item) ? [.action(item.title, 1)] : [] }
         #expect(Self.describe(mainOnly) == "=ブラウザで開く")

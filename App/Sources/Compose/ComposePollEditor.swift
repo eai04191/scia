@@ -17,7 +17,7 @@ enum SettingsLabelLength: CaseIterable {
     }
 
     static func hidesTotalsLabels(short: Bool) -> (off: Label, on: Label) {
-        short ? (("見せる", "eye"), ("隠す", "eye.slash")) : (("結果を見せる", "eye"), ("結果を隠す", "eye.slash"))
+        short ? (("表示", "eye"), ("隠す", "eye.slash")) : (("結果を表示", "eye"), ("結果を隠す", "eye.slash"))
     }
 }
 
@@ -238,7 +238,7 @@ final class ComposePollEditor: UIView {
         labelLengthWidth = nil
         setNeedsLayout()
         updateSummary(poll)
-        hidesTotalsButton.accessibilityHint = poll.hidesTotals ? "締め切るまで票数を見せません。押すと投票した人に票数を見せます" : "投票した人に票数を見せます。押すと締め切るまで隠します"
+        hidesTotalsButton.accessibilityHint = poll.hidesTotals ? "投票した人に票数を表示します" : "締め切るまで票数を隠します"
         return optionRows.count != rowCount
     }
 
@@ -263,7 +263,7 @@ final class ComposePollEditor: UIView {
         Self.setValue(multipleButton, title: poll.multiple ? multiple.on.title : multiple.off.title, symbolName: poll.multiple ? multiple.on.symbolName : multiple.off.symbolName)
         Self.setValue(hidesTotalsButton, title: poll.hidesTotals ? hidesTotals.on.title : hidesTotals.off.title, symbolName: poll.hidesTotals ? hidesTotals.on.symbolName : hidesTotals.off.symbolName)
         multipleButton.accessibilityValue = poll.multiple ? "複数選ぶ" : "1つ選ぶ"
-        hidesTotalsButton.accessibilityValue = poll.hidesTotals ? "結果を隠す" : "結果を見せる"
+        hidesTotalsButton.accessibilityValue = poll.hidesTotals ? "結果を隠す" : "結果を表示"
         // 押すとラベルの長さが変わり、右隣の結果のボタンがずれるため、2つの値の長いほうに幅を合わせる。
         multipleWidth.constant = Self.widestFit(of: multipleButton, values: [multiple.off, multiple.on])
     }

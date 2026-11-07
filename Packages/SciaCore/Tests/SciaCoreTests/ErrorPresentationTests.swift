@@ -38,7 +38,7 @@ struct ErrorPresentationTests {
         let error = MastodonAPIError.from(statusCode: 502, body: Data("<html><body><h1>502 Bad Gateway</h1></body></html>".utf8))
         let presentation = ErrorPresentation(error)
 
-        #expect(presentation.message == "サーバーが一時的に応答できません。しばらく待ってからやり直してください。")
+        #expect(presentation.message == "サーバーが一時的に応答できません。しばらくしてからもう一度お試しください。")
         #expect(presentation.code == "HTTP 502")
         #expect(!presentation.text.contains("<html>"))
     }
@@ -46,7 +46,7 @@ struct ErrorPresentationTests {
     @Test func rateLimited() {
         let presentation = ErrorPresentation(MastodonAPIError.from(statusCode: 429, body: Data(#"{"error":"Too many requests"}"#.utf8)))
 
-        #expect(presentation.message == "短い間にリクエストが多すぎたため、サーバーに一時的に止められています。しばらく待ってからやり直してください。")
+        #expect(presentation.message == "短い間にリクエストが多すぎたため、サーバーに一時的に止められています。しばらくしてからもう一度お試しください。")
         #expect(presentation.code == "HTTP 429")
     }
 
@@ -135,7 +135,7 @@ struct ErrorPresentationTests {
     /// API以外の通信（共有と保存のダウンロードなど）の2xx以外も、REST APIと同じ文言とステータスで見せる。
     @Test func presentsStatusOfOtherRequests() {
         let presentation = ErrorPresentation(HTTPStatusError(statusCode: 429))
-        #expect(presentation.message == "短い間にリクエストが多すぎたため、サーバーに一時的に止められています。しばらく待ってからやり直してください。")
+        #expect(presentation.message == "短い間にリクエストが多すぎたため、サーバーに一時的に止められています。しばらくしてからもう一度お試しください。")
         #expect(presentation.code == "HTTP 429")
         #expect(ErrorPresentation(HTTPStatusError(statusCode: 503)).code == "HTTP 503")
     }

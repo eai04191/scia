@@ -61,8 +61,8 @@ struct StorageView: View {
         var confirmationMessage: String? {
             switch self {
             case .caches: nil
-            case .inAppSafari: "アプリ内のSafariで開いたサイトのキャッシュとCookieを消します。サイトからログアウトします。"
-            case .discomfortReports: "保存した違和感レポートを全部消します。消したレポートは戻せません。"
+            case .inAppSafari: "アプリ内のSafariで開いたサイトのキャッシュとCookieを消去します。サイトからログアウトします。"
+            case .discomfortReports: "保存した違和感レポートをすべて消去します。消去したレポートは元に戻せません。"
             }
         }
 
@@ -113,7 +113,7 @@ struct StorageView: View {
                     }
                 } footer: {
                     if let removeError {
-                        FailureReason(reason: removeError, lead: "消せませんでした。")
+                        FailureReason(reason: removeError, lead: "消去できませんでした。")
                             .foregroundStyle(.red)
                     }
                 }
@@ -136,12 +136,12 @@ struct StorageView: View {
             breakdown = await actions.measure()
         }
         .confirmationDialog(
-            confirming.map { "\($0.name)を消しますか？" } ?? "",
+            confirming.map { "\($0.name)を消去しますか？" } ?? "",
             isPresented: Binding { confirming != nil } set: { if !$0 { confirming = nil } },
             titleVisibility: .visible,
             presenting: confirming
         ) { target in
-            Button("消す", role: .destructive) { remove(target) }
+            Button("消去", role: .destructive) { remove(target) }
         } message: { target in
             Text(target.confirmationMessage ?? "")
         }
@@ -184,7 +184,7 @@ struct StorageView: View {
             }
         } label: {
             HStack {
-                Text("\(target.name)を消す")
+                Text("\(target.name)を消去")
                 Spacer()
                 if removing == target {
                     ProgressView()

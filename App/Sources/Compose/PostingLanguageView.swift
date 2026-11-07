@@ -45,7 +45,7 @@ struct PostingLanguageView: View {
 
     private static func title(of kind: PostingLanguageSection.Kind) -> String {
         switch kind {
-        case .defaultLanguage: "アカウントの既定"
+        case .defaultLanguage: "アカウントのデフォルト"
         case .recent: "最近選んだ言語"
         case .all: "すべての言語"
         }
@@ -65,7 +65,7 @@ struct PostingLanguageView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-            Button("読み直す") {
+            Button("再試行") {
                 loadGeneration += 1
             }
         case .loaded:
@@ -83,7 +83,7 @@ struct PostingLanguageView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.code == nil ? "サーバーに任せる" : row.name)
                     if row.code == nil {
-                        Text("既定の言語を決めていないため、送らずにサーバーが決めます")
+                        Text("デフォルトの言語が設定されていないため、サーバーが決めます")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }

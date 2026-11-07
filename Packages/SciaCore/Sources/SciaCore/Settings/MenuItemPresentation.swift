@@ -214,7 +214,7 @@ public enum URLMenuAction {
         case .copyLink: "リンクをコピー"
         case .share: "共有"
         case .openInBrowser: "ブラウザで開く"
-        case .openInDefaultBrowser: "既定のブラウザで開く"
+        case .openInDefaultBrowser: "デフォルトのブラウザで開く"
         case .openInAppSafari: "アプリ内のSafariで開く"
         }
     }
@@ -318,7 +318,7 @@ extension ComposeToolItem: MenuItemPresentable {
         case .customize: "カスタマイズ"
         case .mention: "メンション"
         case .hashtag: "ハッシュタグ"
-        case .discardDraft: "下書きを捨てる"
+        case .discardDraft: "下書きを破棄"
         case .account: "投稿するアカウント"
         }
     }

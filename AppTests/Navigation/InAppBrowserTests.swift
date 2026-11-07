@@ -20,7 +20,7 @@ struct InAppBrowserTests {
         try await waitUntil { root.presentedViewController is SFSafariViewController && root.presentedViewController?.isBeingPresented == false }
         let first = try #require(root.presentedViewController)
         var closed = 0
-        let sheet = ScheduleDateSheet(title: "予約の日時", date: Date(timeIntervalSince1970: 1_800_000_000), minimumDate: Date(timeIntervalSince1970: 1_700_000_000), confirmTitle: "決定") { _ in } onClose: {
+        let sheet = ScheduleDateSheet(title: "予約の日時", date: Date(timeIntervalSince1970: 1_800_000_000), minimumDate: Date(timeIntervalSince1970: 1_700_000_000), confirmTitle: "完了") { _ in } onClose: {
             closed += 1
         }
         try await first.presentForTesting(sheet)

@@ -9,7 +9,7 @@ public enum SearchRow: Hashable, Sendable {
     case failed(SearchCategory, ErrorPresentation)
     /// 打っている途中に、語の形に応じて候補の上に出す行。押すと確定と同じことをする。
     case action(SearchSuggestions.Action)
-    /// 最近の検索の見出し。「すべて消す」を添える。
+    /// 最近の検索の見出し。「消去」を添える。
     case recentsHeading
     /// 最近の検索の1つ。押すとその語で確定する。
     case recent(String)

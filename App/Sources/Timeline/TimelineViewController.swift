@@ -91,7 +91,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onOpenHashtag: ((String) -> Void)?
     /// 検索の結果のうち、投稿と人のほかの行（ハッシュタグ、「すべて見る」、失敗の行）が押されたときに呼ぶ。
     var onSearchRowSelect: ((SearchRow) -> Void)?
-    /// 最近の検索の見出しの「すべて消す」を押したときに呼ぶ。
+    /// 最近の検索の見出しの「消去」を押したときに呼ぶ。
     var onRemoveAllRecentSearches: (() -> Void)?
     /// 最近の検索の行を左へスワイプして消したときに呼ぶ。
     var onRemoveRecentSearch: ((String) -> Void)?
@@ -1980,7 +1980,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 最近の検索の行のスワイプ。ほかの行ではnil。
     private func recentSearchSwipe(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         guard let id = dataSource.itemIdentifier(for: indexPath), case .search(.recent(let query)) = entries[id], let onRemove = onRemoveRecentSearch else { return nil }
-        let action = UIContextualAction(style: .destructive, title: "消す") { _, _, completion in
+        let action = UIContextualAction(style: .destructive, title: "削除") { _, _, completion in
             onRemove(query)
             completion(true)
         }
@@ -2144,10 +2144,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         return content
     }
 
-    /// 最近の検索の見出しに添える「すべて消す」。
+    /// 最近の検索の見出しに添える「消去」。
     private func removeAllRecentSearchesButton() -> UIButton {
         var configuration = UIButton.Configuration.plain()
-        configuration.title = "すべて消す"
+        configuration.title = "消去"
         configuration.contentInsets = .zero
         configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
             var attributes = attributes

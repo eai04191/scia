@@ -996,12 +996,12 @@ struct MediaViewerControllerTests {
         try await waitUntil { viewer.downloadProgressText == "ダウンロード中 50%" }
         let chip = try #require(viewer.noticeStack?.chips.first)
         #expect(chip.isUserInteractionEnabled)
-        #expect(chip.accessibilityHint == "ダウンロードを止めるか選べます。")
+        #expect(chip.accessibilityHint == "ダウンロードを中止するか選べます。")
         chip.sendActions(for: .primaryActionTriggered)
 
         let alert = try #require(viewer.presentedViewController as? UIAlertController)
-        #expect(alert.title == "ダウンロードを止めますか？")
-        #expect(alert.actions.map(\.title) == ["止める", "続ける"])
+        #expect(alert.title == "ダウンロードを中止しますか？")
+        #expect(alert.actions.map(\.title) == ["中止", "続ける"])
         try await waitUntil { !alert.isBeingPresented }
         #expect(saved.files.isEmpty)
 
@@ -1227,7 +1227,7 @@ struct MediaViewerControllerTests {
         viewer.dismiss(animated: false)
 
         try await waitUntil { stopped.isSet }
-        #expect(stack.transientNotice?.text == "共有を止めました")
+        #expect(stack.transientNotice?.text == "共有を中止しました")
         #expect(stack.persistentNotice == nil)
         #expect(transfers.transfers.transfers.isEmpty)
     }

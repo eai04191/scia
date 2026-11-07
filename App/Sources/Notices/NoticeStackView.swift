@@ -141,7 +141,7 @@ final class NoticeStackView: UIView {
         let pan = UIPanGestureRecognizer(target: self, action: #selector(handleDismissPan(_:)))
         pan.delegate = self
         chip.addGestureRecognizer(pan)
-        chip.accessibilityCustomActions = [UIAccessibilityCustomAction(name: "しまう") { [weak self, weak chip] _ in
+        chip.accessibilityCustomActions = [UIAccessibilityCustomAction(name: "閉じる") { [weak self, weak chip] _ in
             guard let self, let chip else { return false }
             return self.dismiss(chip)
         }]

@@ -33,7 +33,7 @@ enum NoticeCatalog {
             CatalogState(title: "ほかの添付ファイルの失敗（種類で示す）") {
                 stack(persistent: .download(of: url, fraction: 0.42) {}, transient: .transferFailure(title: Notice.transferFailureTitle(of: .gifv, purpose: .share)) {})
             },
-            CatalogState(title: "共有を止めました（数秒で消える）") { stack(transient: .shareStopped) },
+            CatalogState(title: "共有を中止しました（数秒で消える）") { stack(transient: .shareStopped) },
             // タップや長押しに選んだ項目が使えない。文言は項目の名前で長くなり、押せない理由はその状態の投稿がないと出せない。
             CatalogState(title: "タップに選んだ項目が使えない、名前が長い（数秒で消える）") {
                 stack(transient: .objectActionUnavailable(itemTitle: StatusMenuItem.mentionedUsers.title, reason: nil))

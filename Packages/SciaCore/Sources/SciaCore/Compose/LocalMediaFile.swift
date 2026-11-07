@@ -63,7 +63,7 @@ public enum LocalMediaError: Error, LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .unsupportedType: "このメディアの形式は添付できません。"
-        case .loadFailed: "端末からメディアを読み込めませんでした。"
+        case .loadFailed: "デバイスからメディアを読み込めませんでした。"
         }
     }
 }

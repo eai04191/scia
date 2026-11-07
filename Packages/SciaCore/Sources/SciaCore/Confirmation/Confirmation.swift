@@ -149,9 +149,9 @@ extension Confirmation where Choice == Proceed {
             return .destructive(title: "書き直しをやめますか？", message: discardedDraftMessage(draft), action: "書き直しをやめる")
         }
         if draft.rewritingSchedule != nil {
-            return .destructive(title: "予約の書き直しをやめますか？", message: "書き直し中の内容は消えます。元の予約は残ります。", action: "書き直しをやめる")
+            return .destructive(title: "予約の書き直しをやめますか？", message: "書き直し中の内容は破棄されます。元の予約は残ります。", action: "書き直しをやめる")
         }
-        return .destructive(title: "下書きを捨てますか？", message: discardedDraftMessage(draft), action: "捨てる")
+        return .destructive(title: "下書きを破棄しますか？", message: discardedDraftMessage(draft), action: "破棄")
     }
 
     /// 送ると元の投稿を削除することを、書きかけの下書きがあれば捨ててよいかも、確かめてから削除して書き直し始める。
@@ -170,9 +170,9 @@ extension Confirmation where Choice == Proceed {
             lines.append("プロフィールへの固定も外れます。")
         }
         return .destructive(
-            title: "\(actor.map { "\($0)で" } ?? "")\(discards ? "下書きを捨てて書き直しますか？" : "削除して書き直しますか？")",
+            title: "\(actor.map { "\($0)で" } ?? "")\(discards ? "下書きを破棄して書き直しますか？" : "削除して書き直しますか？")",
             message: lines.joined(separator: "\n"),
-            action: discards ? "捨てて書き直す" : "書き直す"
+            action: discards ? "破棄して書き直す" : "書き直す"
         )
     }
 
@@ -189,7 +189,7 @@ extension Confirmation where Choice == Proceed {
     @MainActor
     public static func rewriting<Thumbnail>(draft: ComposeModel<Thumbnail>) -> Confirmation? {
         guard draft.hasWrittenContent else { return nil }
-        return .destructive(title: "下書きを捨てて書き直しますか？", message: discardedDraftMessage(draft), action: "捨てて書き直す")
+        return .destructive(title: "下書きを破棄して書き直しますか？", message: discardedDraftMessage(draft), action: "破棄して書き直す")
     }
 
     /// 書きかけの下書きがあれば捨ててよいかを、投票の付いた投稿なら締め切りがずれることを、確かめてから編集を始める。
@@ -210,20 +210,20 @@ extension Confirmation where Choice == Proceed {
             lines.append("投票はそのまま残りますが、締め切りは送った時点から数え直すため少しずれます。")
         }
         return .confirm(Confirmation(
-            title: "\(actor.map { "\($0)で" } ?? "")\(discards ? "下書きを捨てて編集しますか？" : "投票の付いた投稿を編集しますか？")",
+            title: "\(actor.map { "\($0)で" } ?? "")\(discards ? "下書きを破棄して編集しますか？" : "投票の付いた投稿を編集しますか？")",
             message: lines.joined(separator: "\n"),
-            buttons: [.cancel, Button(discards ? "捨てて編集" : "編集", role: discards ? .destructive : .default, choice: .proceed)]
+            buttons: [.cancel, Button(discards ? "破棄して編集" : "編集", role: discards ? .destructive : .default, choice: .proceed)]
         ))
     }
 
     @MainActor
     private static func discardedDraftMessage<Thumbnail>(_ draft: ComposeModel<Thumbnail>) -> String {
-        if draft.editedStatus != nil { return "編集中の内容は消えます。" }
+        if draft.editedStatus != nil { return "編集中の内容は破棄されます。" }
         switch draft.redraft?.deletion {
-        case .pending: return "書き直し中の内容は消えます。元の投稿は残ります。"
-        case .uncertain: return "書き直し中の内容は消えます。元の投稿は削除したかもしれず、その場合は戻せません。"
-        case .done: return "書き直し中の内容は消えます。元の投稿は削除したため戻せません。"
-        case nil: return "書きかけの下書きは消えます。"
+        case .pending: return "書き直し中の内容は破棄されます。元の投稿は残ります。"
+        case .uncertain: return "書き直し中の内容は破棄されます。元の投稿は削除したかもしれず、その場合は戻せません。"
+        case .done: return "書き直し中の内容は破棄されます。元の投稿は削除したため戻せません。"
+        case nil: return "書きかけの下書きは破棄されます。"
         }
     }
 }
@@ -255,15 +255,15 @@ extension Confirmation where Choice == SharedContentChoice {
         guard draft.hasWrittenContent else { return .proceed }
         let isEditing = draft.editedStatus != nil
         let destination = switch content {
-        case .text: "共有された文を\(isEditing ? "編集中の投稿" : "下書き")の後ろに足すか"
-        case .media(let allImages): "共有された\(allImages ? "画像" : "メディア")を\(isEditing ? "編集中の投稿" : "下書き")に足すか"
+        case .text: "共有された文を\(isEditing ? "編集中の投稿" : "下書き")の後ろに追加するか"
+        case .media(let allImages): "共有された\(allImages ? "画像" : "メディア")を\(isEditing ? "編集中の投稿" : "下書き")に追加するか"
         }
         return .confirm(Confirmation(
             title: isEditing ? "編集中の投稿があります" : "書きかけの下書きがあります",
-            message: "\(destination)、\(isEditing ? "編集をやめて" : "下書きを捨てて")新しく書くかを選んでください。",
+            message: "\(destination)、\(isEditing ? "編集をやめて" : "下書きを破棄して")新しく書くかを選んでください。",
             buttons: [
-                Button(isEditing ? "編集中の投稿に足す" : "下書きに足す", role: .default, choice: .append),
-                Button(isEditing ? "編集をやめて新しく書く" : "下書きを捨てて新しく書く", role: .destructive, choice: .discardAndWrite),
+                Button(isEditing ? "編集中の投稿に追加" : "下書きに追加", role: .default, choice: .append),
+                Button(isEditing ? "編集をやめて新しく書く" : "下書きを破棄して新しく書く", role: .destructive, choice: .discardAndWrite),
                 Button("キャンセル", role: .cancel, choice: .cancel),
             ]
         ))

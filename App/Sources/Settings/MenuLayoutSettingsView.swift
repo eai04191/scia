@@ -285,10 +285,10 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
                 content.image = UIImage(systemName: action.symbolName)
                 content.textProperties.color = .tintColor
             case .addSeparator:
-                content.text = "区切り線を足す"
+                content.text = "区切り線を追加"
                 content.textProperties.color = .tintColor
             case .addRowSeparator:
-                content.text = "横並びを足す"
+                content.text = "横並びを追加"
                 content.textProperties.color = .tintColor
             case .reset:
                 content.text = "最初の並びに戻す"

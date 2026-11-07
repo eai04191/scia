@@ -74,7 +74,7 @@ extension Notice {
             kind: .progress,
             title: "ダウンロード中",
             value: percentText(of: fraction),
-            action: onStop.map { .disclosure(hint: "ダウンロードを止めるか選べます。", handler: $0) } ?? .none,
+            action: onStop.map { .disclosure(hint: "ダウンロードを中止するか選べます。", handler: $0) } ?? .none,
             valueIsProgress: true
         )
     }
@@ -91,7 +91,7 @@ extension Notice {
     }
 
     /// ビューアを閉じたため、共有のために落としている途中のものを止めた。数秒で消える。
-    public static let shareStopped = Notice(id: "media.shareStopped", kind: .info, title: "共有を止めました")
+    public static let shareStopped = Notice(id: "media.shareStopped", kind: .info, title: "共有を中止しました")
 
     /// 共有や保存の失敗。数秒で消え、押すと理由が出る。
     public static func transferFailure(title: String, showReason: @escaping @MainActor () -> Void) -> Notice {

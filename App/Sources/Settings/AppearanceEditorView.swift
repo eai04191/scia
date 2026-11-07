@@ -42,7 +42,7 @@ struct AppearanceEditorView: View {
                         }
                     }
                     Section {
-                        Button("すべて既定に戻す", role: .destructive) { confirmsReset = true }
+                        Button("すべてデフォルトに戻す", role: .destructive) { confirmsReset = true }
                             .disabled(!settings.isAppearanceModified)
                     } footer: {
                         Text("文字の大きさはiPhoneの文字サイズが標準のときの大きさです。本文はiPhoneの文字サイズに合わせて伸び縮みし、ほかの文字は本文との差を保ちます。")
@@ -57,8 +57,8 @@ struct AppearanceEditorView: View {
         }
         .navigationTitle("投稿")
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog("投稿の見た目をすべて既定に戻しますか？", isPresented: $confirmsReset, titleVisibility: .visible) {
-            Button("既定に戻す", role: .destructive) {
+        .confirmationDialog("投稿の見た目をすべてデフォルトに戻しますか？", isPresented: $confirmsReset, titleVisibility: .visible) {
+            Button("デフォルトに戻す", role: .destructive) {
                 settings.resetAppearance()
                 resets += 1
             }
@@ -219,7 +219,7 @@ struct AppearanceGroupEditorView: View {
             if ReactionGlowView.mayDrawInHDR {
                 TitledToggleRow(title: "HDRに対応した画面では白より明るく光らせる", isOn: $settings.appearance.drawsReactionGlowInHDR) { toggleFocus(.choice(.drawsReactionGlowInHDR)) }
             }
-            PopUpChoiceRow(title: "アイコン", selection: $settings.appearance.reactionGlowIcons, options: [(.none, "出さない"), (.atBottom, "下の端に1つずつ"), (.scattered, "散らす")], onOpen: { focus(.reactionGlowIcons) }, onTapTitle: { toggleFocus(.choice(.reactionGlowIcons)) })
+            PopUpChoiceRow(title: "アイコン", selection: $settings.appearance.reactionGlowIcons, options: [(.none, "表示しない"), (.atBottom, "下の端に1つずつ"), (.scattered, "散らす")], onOpen: { focus(.reactionGlowIcons) }, onTapTitle: { toggleFocus(.choice(.reactionGlowIcons)) })
             TitledToggleRow(title: "片方だけのときは全幅を光らせる", isOn: $settings.appearance.reactionGlowFillsWidthWhenAlone) { toggleFocus(.choice(.reactionGlowFillsWidthWhenAlone)) }
             PopUpChoiceRow(title: "ライトモードのお気に入りの色", selection: $settings.appearance.reactionGlowLightFavouriteColor, options: [(.orange, "橙"), (.yellow, "黄色")], onOpen: { focus(.reactionGlowLightFavouriteColor) }, onTapTitle: { toggleFocus(.choice(.reactionGlowLightFavouriteColor)) })
         default:
@@ -413,7 +413,7 @@ struct AppearanceValueRow: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: onToggleFocus)
         .contextMenu {
-            Button("既定に戻す", systemImage: "arrow.uturn.backward") {
+            Button("デフォルトに戻す", systemImage: "arrow.uturn.backward") {
                 settings.reset([item])
                 onFocus()
             }
@@ -485,7 +485,7 @@ struct AppearanceValueRow: View {
         let offset = settings.value(of: item)
         switch item.unit {
         case .point: return nil
-        case .lines: return offset == 0 ? (item == AppearanceCatalog.bodyTruncationThreshold ? "切らない" : "出さない") : nil
+        case .lines: return offset == 0 ? (item == AppearanceCatalog.bodyTruncationThreshold ? "切らない" : "表示しない") : nil
         case .count: return item == AppearanceCatalog.emojiOnlyLimit && offset == 0 ? "大きくしない" : nil
         case .ratio: return Self.ratioNote(for: item)
         case .bodyTextOffset: return offset == 0 ? "標準" : "標準\(Self.signed(offset))"

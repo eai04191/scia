@@ -16,7 +16,7 @@ extension ReportCategory {
         case .spam: "宣伝のリンク、同じ内容の繰り返しなど"
         case .violation: "違反したルールを選びます"
         case .legal: "法律に反する内容"
-        case .other: "ほかの理由"
+        case .other: "その他"
         }
     }
 }

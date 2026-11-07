@@ -74,7 +74,7 @@ struct BrokenResponseTests {
 
         #expect(await transport.requests.count == 3)
         let presentation = ErrorPresentation(try #require(error))
-        #expect(presentation.message == "サーバーが一時的に応答できません。しばらく待ってからやり直してください。")
+        #expect(presentation.message == "サーバーが一時的に応答できません。しばらくしてからもう一度お試しください。")
         #expect(presentation.code == "HTTP 502")
         #expect(log.recentFailures.map(\.logMessage) == ["GET /api/v1/timelines/home HTTP 502"])
     }

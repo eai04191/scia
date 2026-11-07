@@ -4,7 +4,7 @@ import Testing
 /// 出たままの知らせが重なったときに、チップに出す1件。決まりはdocs/notices.mdの「チップ」にある。
 @MainActor
 struct PersistentNoticesTests {
-    private let download = Notice(id: "download", kind: .progress, title: "ダウンロード中", value: "42%", action: .disclosure(hint: "ダウンロードを止めるか選べます。") {})
+    private let download = Notice(id: "download", kind: .progress, title: "ダウンロード中", value: "42%", action: .disclosure(hint: "ダウンロードを中止するか選べます。") {})
     private let uploadFailure = Notice(id: "upload", kind: .failure, title: "アップロードできませんでした", action: .disclosure(hint: "理由と、再試行か削除を選べます。") {})
 
     @Test func singleNoticeKeepsItsOwnAction() throws {
@@ -18,7 +18,7 @@ struct PersistentNoticesTests {
             Issue.record("押すと続きが出るはず")
             return
         }
-        #expect(hint == "ダウンロードを止めるか選べます。")
+        #expect(hint == "ダウンロードを中止するか選べます。")
     }
 
     @Test func failureWinsAndTappingOpensTheList() throws {

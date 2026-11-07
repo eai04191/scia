@@ -479,7 +479,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let alert = UIAlertController(
             title: "\(current.handle)からログアウトしますか？",
             // 使っているアカウントを消すと、画面ごと作り直して下書きも消えるため、書きかけがあれば添える。
-            message: "この端末からアカウントの情報を消します。もう一度使うにはログインし直します。"
+            message: "このデバイスからアカウントの情報を削除します。もう一度使うにはログインし直す必要があります。"
                 + (Self.hasWrittenDraftInAnyScene ? "書きかけの投稿も破棄されます。" : ""),
             preferredStyle: .alert
         )
@@ -576,7 +576,7 @@ private struct DifferentAccountLoggedIn: LocalizedError {
 /// 起動時にKeychainを読めず、アカウントを保存できない。
 private struct AccountsUnavailable: LocalizedError {
     var errorDescription: String? {
-        "アカウントの情報を読み書きできません。アプリを起動し直してください。"
+        "アカウントの情報を読み書きできません。アプリを再起動してください。"
     }
 }
 

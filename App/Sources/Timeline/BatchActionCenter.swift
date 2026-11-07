@@ -123,8 +123,8 @@ final class BatchActionCenter {
     private func confirmStoppingReblog() {
         guard reblog != nil, reblogStopConfirmation == nil else { return }
         // チップから吹き出すシートでは「続ける」が省かれ、外をタップして続けることになるため、両方を並べるアラートにする。
-        let alert = UIAlertController(title: "まとめてブーストを止めますか？", message: "ブーストし終えた投稿はそのまま残ります。", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "止める", style: .destructive) { [weak self] _ in
+        let alert = UIAlertController(title: "まとめてブーストを中止しますか？", message: "ブーストし終えた投稿はそのまま残ります。", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "中止", style: .destructive) { [weak self] _ in
             self?.reblogStopConfirmation = nil
             self?.reblog?.stop()
         })
@@ -217,8 +217,8 @@ final class BatchActionCenter {
 
     private func confirmStoppingShare() {
         guard shareTask != nil, shareStopConfirmation == nil else { return }
-        let alert = UIAlertController(title: "ダウンロードを止めますか？", message: nil, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "止める", style: .destructive) { [weak self] _ in
+        let alert = UIAlertController(title: "ダウンロードを中止しますか？", message: nil, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "中止", style: .destructive) { [weak self] _ in
             self?.shareStopConfirmation = nil
             self?.stopSharing()
         })

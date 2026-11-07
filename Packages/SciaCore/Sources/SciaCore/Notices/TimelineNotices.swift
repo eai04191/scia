@@ -11,7 +11,7 @@ extension Notice {
 
     /// まとめてブーストの途中。済んだ件数と全体の件数を出し、押すと止めるかの確認を出す。決まりはdocs/batch-actions.mdの「ブースト」にある。
     public static func batchReblog(completed: Int, total: Int, onStop: @escaping @MainActor () -> Void) -> Notice {
-        Notice(id: "timeline.batchReblog", kind: .progress, title: "ブースト中", value: "\(completed)/\(total)", action: .disclosure(hint: "まとめてブーストを止めるか選べます。", handler: onStop), valueIsProgress: true)
+        Notice(id: "timeline.batchReblog", kind: .progress, title: "ブースト中", value: "\(completed)/\(total)", action: .disclosure(hint: "まとめてブーストを中止するか選べます。", handler: onStop), valueIsProgress: true)
     }
 
     /// まとめてブーストが`index`番目（0から数える）の投稿で失敗して止まったときの文言。
@@ -21,7 +21,7 @@ extension Notice {
 
     /// まとめて共有するメディアを落としている途中。落とし終えた数と全体の数を出し、押すと止めるかの確認を出す。決まりはdocs/batch-actions.mdの「共有」にある。
     public static func batchDownload(completed: Int, total: Int, onStop: @escaping @MainActor () -> Void) -> Notice {
-        Notice(id: "timeline.batchDownload", kind: .progress, title: "ダウンロード中", value: "\(completed)/\(total)", action: .disclosure(hint: "ダウンロードを止めるか選べます。", handler: onStop), valueIsProgress: true)
+        Notice(id: "timeline.batchDownload", kind: .progress, title: "ダウンロード中", value: "\(completed)/\(total)", action: .disclosure(hint: "ダウンロードを中止するか選べます。", handler: onStop), valueIsProgress: true)
     }
 
     /// まとめて共有するメディアを落とせなかった。

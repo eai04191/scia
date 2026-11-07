@@ -46,7 +46,7 @@ struct PhotoLibrarySaverTests {
     @Test func failureIsPresentedByKind() {
         #expect(PhotoLibrarySaver.failurePresentation(of: PhotoLibrarySaver.UnsupportedFile()) == ErrorPresentation(message: "写真に入らない形式のファイルです。", code: nil))
         #expect(PhotoLibrarySaver.failurePresentation(of: PHPhotosError(.notEnoughSpace)) == ErrorPresentation(
-            message: "端末の空き容量が足りません。",
+            message: "ストレージの空き容量が足りません。",
             code: "PHPhotosError \(PHPhotosError.Code.notEnoughSpace.rawValue)"
         ))
         #expect(PhotoLibrarySaver.failurePresentation(of: PHPhotosError(.invalidResource)).message == "写真に入らない形式のファイルです。")

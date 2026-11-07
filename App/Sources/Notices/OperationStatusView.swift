@@ -112,7 +112,7 @@ private struct ProgressRingStopButton: View {
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("止める")
+            .accessibilityLabel("中止")
         } else {
             ring
                 .frame(width: 44, height: 44)

@@ -1050,7 +1050,7 @@ final class InlineComposeController: NSObject {
         logger.info("compose: present schedule date picker (editing=\(resumesEditing))")
         isShowingScheduleDatePicker = resumesEditing
         resignInput()
-        let sheet = ScheduleDateSheet(title: "予約の日時", date: scheduledAt, minimumDate: model.earliestScheduleDate, confirmTitle: "決定") { [weak self] date in
+        let sheet = ScheduleDateSheet(title: "予約の日時", date: scheduledAt, minimumDate: model.earliestScheduleDate, confirmTitle: "完了") { [weak self] date in
             self?.model.setScheduledDate(date)
         } onClose: { [weak self] in
             self?.scheduleDatePickerDidClose(resumesEditing: resumesEditing)

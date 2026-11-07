@@ -262,7 +262,7 @@ public struct UserMenuTree {
         case .copyLink: "@\(acct)のリンクをコピー"
         case .share: "@\(acct)を共有"
         case .openInBrowser: "@\(acct)をブラウザで開く"
-        case .openInDefaultBrowser: "@\(acct)を既定のブラウザで開く"
+        case .openInDefaultBrowser: "@\(acct)をデフォルトのブラウザで開く"
         case .openInAppSafari: "@\(acct)をアプリ内のSafariで開く"
         }
     }

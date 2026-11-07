@@ -302,7 +302,7 @@ struct TimelineNoticeTests {
     }
 
     private func dismiss(_ chip: NoticeChip) throws {
-        let action = try #require(chip.accessibilityCustomActions?.first { $0.name == "しまう" })
+        let action = try #require(chip.accessibilityCustomActions?.first { $0.name == "閉じる" })
         #expect(action.actionHandler?(action) == true)
     }
 

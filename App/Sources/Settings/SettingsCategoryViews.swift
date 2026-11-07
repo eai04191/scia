@@ -174,11 +174,11 @@ struct DisplaySettingsView: View {
             Section {
                 Picker("最上部での新着の挿入", selection: $settings.insertionMotion) {
                     Text("自動").tag(InsertionMotion.followsSystem)
-                    Text("動かして見せる").tag(InsertionMotion.animated)
-                    Text("動かさない").tag(InsertionMotion.instant)
+                    Text("アニメーションあり").tag(InsertionMotion.animated)
+                    Text("アニメーションなし").tag(InsertionMotion.instant)
                 }
             } footer: {
-                Text("「自動」では「視差効果を減らす」がオンのときは動かしません。")
+                Text("「自動」では「視差効果を減らす」がオンのときはアニメーションしません。")
             }
             StatusBarTickerSettingsSection(isOn: $settings.showsStatusBarTicker, isAvailable: StatusBarCutout.isAvailable)
             Section {
@@ -306,7 +306,7 @@ struct InteractionSettingsView: View {
             }
             Section {
                 Picker("開く場所", selection: $settings.linkBrowser) {
-                    Text("既定のブラウザ").tag(LinkBrowser.external)
+                    Text("デフォルトのブラウザ").tag(LinkBrowser.external)
                     Text("アプリ内のSafari").tag(LinkBrowser.inApp)
                 }
                 // 本物のホームの上で選ぶので、設定の画面を重ねずに外へ出る。行の見た目は、ほかの画面へ入る行に揃え、シェブロンを付ける。
@@ -325,7 +325,7 @@ struct InteractionSettingsView: View {
             }
             Section {
                 Picker("公開範囲", selection: $settings.reblogVisibility) {
-                    Text("アカウントの既定").tag(ReblogVisibility.accountDefault)
+                    Text("アカウントのデフォルト").tag(ReblogVisibility.accountDefault)
                     ForEach([(ReblogVisibility.public, Status.Visibility.public), (.unlisted, .unlisted), (.private, .private)], id: \.0) { reblogVisibility, visibility in
                         Text(VisibilityOption(visibility).title).tag(reblogVisibility)
                     }

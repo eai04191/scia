@@ -397,8 +397,8 @@ struct ComposeModelRedraftTests {
 
         model.text = "書きかけ"
         let full = Confirmation.redrafting(status(poll: poll, pinned: true), draft: model)
-        #expect(full.title == "下書きを捨てて書き直しますか？")
-        #expect(full.message == "書きかけの下書きは消えます。\n書き直した投稿を送ると元の投稿を削除します。お気に入り、ブースト、投票の票はなくなり、元の投稿への返信はつながりを失います。\nプロフィールへの固定も外れます。")
+        #expect(full.title == "下書きを破棄して書き直しますか？")
+        #expect(full.message == "書きかけの下書きは破棄されます。\n書き直した投稿を送ると元の投稿を削除します。お気に入り、ブースト、投票の票はなくなり、元の投稿への返信はつながりを失います。\nプロフィールへの固定も外れます。")
     }
 
     /// 書き直している途中で返信か引用を選んだら、書き直しをやめてよいか確かめる。返信先と引用元は変えられないため。
@@ -411,6 +411,6 @@ struct ComposeModelRedraftTests {
 
         let confirmation = Confirmation.leavingEdit(starting: "返信", draft: model)
         #expect(confirmation?.title == "書き直しをやめて返信しますか？")
-        #expect(confirmation?.message == "書き直し中の内容は消えます。元の投稿は残ります。")
+        #expect(confirmation?.message == "書き直し中の内容は破棄されます。元の投稿は残ります。")
     }
 }

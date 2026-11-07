@@ -24,7 +24,7 @@ struct HashtagMenuTreeTests {
 
         #expect(menu.title == "#cat")
         #expect(menu.icon == nil)
-        #expect(MenuNodeTests.describe(menu.children) == "すべての投稿,@aliceの投稿,ブラウザで開く(押せない),既定のブラウザで開く(押せない),アプリ内のSafariで開く(押せない),リンクをコピー(押せない),共有(押せない),カスタマイズ")
+        #expect(MenuNodeTests.describe(menu.children) == "すべての投稿,@aliceの投稿,ブラウザで開く(押せない),デフォルトのブラウザで開く(押せない),アプリ内のSafariで開く(押せない),リンクをコピー(押せない),共有(押せない),カスタマイズ")
         #expect(menu.children.first?.children[1].subtitle == "remote.example")
         // 投稿のメニューの中に置くときは、「ハッシュタグ」のアイコンを付ける。
         #expect(tree.submenu(groups: all)?.icon?.symbolName == "number")

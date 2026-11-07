@@ -784,7 +784,7 @@ private final class EmojiPaletteStatusCell: UICollectionViewCell {
         label.textColor = .secondaryLabel
         label.numberOfLines = 0
         label.textAlignment = .center
-        retryButton.configuration?.title = "読み直す"
+        retryButton.configuration?.title = "再試行"
         retryButton.addAction(UIAction { [weak self] _ in self?.onRetry() }, for: .primaryActionTriggered)
         // 読み込み中はインジケーターと文言を横に、失敗は文言の下に読み直すボタンを置く。カスタム絵文字の中身の代わりに出すので、タイムラインが空のときやタイムラインの失敗と同じく中央にそろえる。
         let message = UIStackView(arrangedSubviews: [spinner, label])
