@@ -133,7 +133,7 @@ custom_rules:
   # 回線を経路ごとに読み分けると、モバイル通信で控える経路と控えない経路が混ざり、新しく足した経路が決まりから漏れる（docs/network.mdの「通信の目的」）
   network_conditions_outside_policy:
     included: "(App/Sources|ShareExtension|Packages/SciaCore/Sources/SciaCore)/.*\\.swift"
-    excluded: "(App/Sources/Media/NetworkConditionsMonitor\\.swift|Packages/SciaCore/Sources/SciaCore/Networking/(NetworkUsePolicy|NetworkPathTracker|RequestPurpose|HTTPClient)\\.swift)"
+    excluded: "Packages/SciaCore/Sources/SciaCore/Networking/(NetworkConditionsMonitor|NetworkUsePolicy|NetworkPathTracker|RequestPurpose|HTTPClient)\\.swift"
     regex: "\\b(isExpensive|isConstrained|allowsExpensiveNetworkAccess|allowsConstrainedNetworkAccess)\\b|\\bNWPathMonitor\\b|\\bnetwork\\.conditions\\b"
     excluded_match_kinds:
       - comment

@@ -49,6 +49,20 @@ public struct MediaThumbnailPolicy: Equatable, Sendable {
     }
 }
 
+extension MediaThumbnailPolicy {
+    /// タイムラインのサムネイルの条件。元の画像を読むかと先読みするかは今の回線と設定の決まり（`NetworkUsePolicy`）で、
+    /// プレビュー画像を引き伸ばしてよい倍率は`TuningCatalog.mediaThumbnailUpscaleTolerance`で決める。
+    /// 回線の見張りがあれば、`NetworkConditionsMonitor.thumbnailPolicy(settings:tuning:)`で作れる。
+    @MainActor
+    public init(usePolicy: NetworkUsePolicy, tuning: TuningStore) {
+        self.init(
+            enhancement: usePolicy.enhancement,
+            upscaleTolerance: tuning.value(of: TuningCatalog.mediaThumbnailUpscaleTolerance),
+            prefetch: usePolicy.prefetch
+        )
+    }
+}
+
 /// タイムラインのサムネイルに、サーバーが縮めたプレビュー画像と元の画像のどちらを読むかを決める。
 ///
 /// Mastodonのプレビュー画像は面積230,400ピクセル（16:9で640×360）まで縮めてある。

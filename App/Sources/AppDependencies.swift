@@ -78,26 +78,18 @@ enum AppDependencies {
     /// サーバーごとのカスタム絵文字のリスト。端末に残し、絵文字のパレットを開いたときに読み込み中を挟まずに並べる。
     static let customEmojis = CustomEmojiCaches()
 
-    static let avatarImages = AvatarImageStore { url in
-        try await imageData(from: url)
+    /// アイコンと添付ファイルの画像のストア。設定の見本の画像は端末で作ったものなので、通信せずに返す。
+    static let images = ImageStores(http: http, tuning: tuning, maker: .uiKit, clock: clock) { url in
+        await PreviewImages.data(for: url)
     }
 
-    /// 添付ファイルの元のファイルを置くディスクキャッシュ。ビューアで開いた画像の元のファイルと、共有や保存のために落とした動画などを置く。
-    static let mediaFiles = MediaFileCache()
+    static var avatarImages: AvatarImageStore<UIImage> { images.avatars }
 
-    /// ビューアで開く画像を先読みして置く場所。開いていない画像で、ビューアで開いた画像を押し出したり、ストレージの画面に並べたりしないよう分ける。
-    static let mediaPrefetchFiles = MediaFileCache(
-        directory: .cachesDirectory.appending(path: "MediaPrefetch"),
-        sharingDirectory: .temporaryDirectory.appending(path: "MediaPrefetchSharing"),
-        sizeLimit: 100 * 1_024 * 1_024
-    )
+    static var mediaFiles: MediaFileCache { images.mediaFiles }
 
-    static let mediaImages = MediaImageStore(files: mediaFiles, prefetchedFiles: mediaPrefetchFiles) { url, range in
-        if range == nil, let data = await PreviewImages.data(for: url) {
-            return data
-        }
-        return try await MediaRangeDownload.data(from: url, range: range, remoteFetch: remoteFetch, http: http)
-    }
+    static var mediaPrefetchFiles: MediaFileCache { images.mediaPrefetchFiles }
+
+    static var mediaImages: MediaImageStore<UIImage> { images.media }
 
     static let mediaDownloads = MediaDownloads(files: mediaFiles)
 
