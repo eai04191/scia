@@ -19,41 +19,44 @@ struct MediaPreparationTests {
         mimeType: String = "image/heic",
         setting: ImageUploadSize = .long4096,
         limits: MediaLimits? = nil,
-        unprocessable: Set<String> = []
-    ) -> ImagePlan? {
-        ImagePlan.make(
+        supported: [String]?? = nil,
+        unprocessable: Set<String> = [],
+        writable: Set<String> = ["image/jpeg", "image/png", "image/heic", "image/avif"]
+    ) throws -> ImagePlan? {
+        try ImagePlan.make(
             size: PixelSize(width: width, height: height),
             byteCount: bytes,
             mimeType: mimeType,
             setting: setting,
             limits: limits ?? mastodonLimits,
-            supportedMIMETypes: supported,
-            unprocessableMIMETypes: unprocessable
+            supportedMIMETypes: supported ?? self.supported,
+            unprocessableMIMETypes: unprocessable,
+            writableMIMETypes: writable
         )
     }
 
     // MARK: - 画像
 
     /// iPhoneの標準の写真（12MP）は長辺4096pxに収まるので、作り直さずに元のまま送る。
-    @Test func sendsTypicalPhotoAsIs() {
-        #expect(imagePlan(4032, 3024) == nil)
+    @Test func sendsTypicalPhotoAsIs() throws {
+        #expect(try imagePlan(4032, 3024) == nil)
     }
 
     /// 縮めないを選んでいて、上限にも収まれば、大きな写真も元のまま送る。
-    @Test func originalSettingKeepsLargePhoto() {
-        #expect(imagePlan(5712, 4284, setting: .original) == nil)
+    @Test func originalSettingKeepsLargePhoto() throws {
+        #expect(try imagePlan(5712, 4284, setting: .original) == nil)
     }
 
     /// 縮めないを選んでいても、サーバーの画素数の上限（33MP）を超える48MPの写真は縮める。
     @Test func originalSettingStillFitsTheMatrixLimit() throws {
-        let plan = try #require(imagePlan(8064, 6048, setting: .original))
+        let plan = try #require(try imagePlan(8064, 6048, setting: .original))
         #expect(plan.size.pixels <= 33_177_600)
         #expect(plan.sizeBySetting == PixelSize(width: 8064, height: 6048))
     }
 
     /// 48MPの写真は、縦横比を保って長辺4096pxに縮め、サーバーが受け付けるHEICで作り直す。
     @Test func shrinksLargePhotoToTheChosenLongSide() throws {
-        let plan = try #require(imagePlan(8064, 6048))
+        let plan = try #require(try imagePlan(8064, 6048))
         #expect(plan.size == PixelSize(width: 4096, height: 3072))
         #expect(plan.sizeBySetting == plan.size)
         #expect(plan.mimeType == "image/heic")
@@ -63,46 +66,85 @@ struct MediaPreparationTests {
     @Test func fitsTheServerMatrixLimit() throws {
         var limits = mastodonLimits
         limits.imageMatrixLimit = 4_000_000
-        let plan = try #require(imagePlan(4032, 3024, limits: limits))
+        let plan = try #require(try imagePlan(4032, 3024, limits: limits))
         #expect(plan.size.pixels <= 4_000_000)
         #expect(plan.sizeBySetting == PixelSize(width: 4032, height: 3024))
     }
 
     /// 解像度は収まっていて容量だけが超えるときも、作り直す。
     @Test func reencodesWhenOnlyTheByteCountExceeds() throws {
-        let plan = try #require(imagePlan(4032, 3024, bytes: 20_000_000))
+        let plan = try #require(try imagePlan(4032, 3024, bytes: 20_000_000))
         #expect(plan.exceedsSizeLimit)
         #expect(plan.size == PixelSize(width: 4032, height: 3024))
     }
 
     /// 上限を返さないサーバーでは、推測で縮めない。
-    @Test func unknownLimitsDoNotShrink() {
-        #expect(imagePlan(4032, 3024, bytes: 50_000_000, setting: .original, limits: .unknown) == nil)
+    @Test func unknownLimitsDoNotShrink() throws {
+        #expect(try imagePlan(4032, 3024, bytes: 50_000_000, setting: .original, limits: .unknown) == nil)
     }
 
     @Test func keepsPNGAsPNG() throws {
-        let plan = try #require(imagePlan(6000, 3000, mimeType: "image/png"))
+        let plan = try #require(try imagePlan(6000, 3000, mimeType: "image/png"))
         #expect(plan.mimeType == "image/png")
     }
 
     /// 処理できないと分かったHEICは使わず、JPEGで作り直す。
     @Test func avoidsUnprocessableHEIC() throws {
-        let plan = try #require(imagePlan(8064, 6048, unprocessable: ["image/heic"]))
+        let plan = try #require(try imagePlan(8064, 6048, unprocessable: ["image/heic"]))
         #expect(plan.mimeType == "image/jpeg")
     }
 
     /// 処理できないと分かった形式は、大きさが収まっていても、同じ大きさのJPEGで作り直す。
     /// ペーストしたものは、ピッカーのように同じ写真のJPEGを受け取り直せないため。
     @Test func reencodesUnprocessableFormatEvenWhenItFits() throws {
-        let plan = try #require(imagePlan(4032, 3024, unprocessable: ["image/heic"]))
+        let plan = try #require(try imagePlan(4032, 3024, unprocessable: ["image/heic"]))
         #expect(plan.mimeType == "image/jpeg")
         #expect(plan.size == PixelSize(width: 4032, height: 3024))
         #expect(plan.sizeBySetting == plan.size)
     }
 
+    /// サーバーが対応形式に載せていない形式は、大きさが収まっていても、同じ大きさのJPEGで作り直す。
+    /// HEICを載せないサーバー（mstdn.maud.io）は、元のまま送ったHEICを422で断った。
+    @Test func reencodesFormatTheServerDoesNotList() throws {
+        let plan = try #require(try imagePlan(4032, 3024, supported: ["image/jpeg", "image/png", "image/gif", "image/webp"]))
+        #expect(plan.mimeType == "image/jpeg")
+        #expect(plan.size == PixelSize(width: 4032, height: 3024))
+        #expect(plan.sizeBySetting == plan.size)
+    }
+
+    /// 対応形式を返さないサーバーでは、受け付けるか分からないので、元のまま送る。
+    @Test func sendsAsIsWhenTheServerDoesNotListFormats() throws {
+        #expect(try imagePlan(4032, 3024, supported: .some(nil)) == nil)
+    }
+
+    /// HEICもJPEGも対応形式になければ、AVIFで作り直す。
+    @Test func fallsBackToAVIF() throws {
+        let plan = try #require(try imagePlan(4032, 3024, supported: ["image/png", "image/avif", "image/webp"]))
+        #expect(plan.mimeType == "image/avif")
+    }
+
+    /// 端末が書き出せない形式は選ばない。AVIFを書き出せなければ、PNGで作り直す。
+    @Test func skipsFormatsTheDeviceCannotWrite() throws {
+        let plan = try #require(try imagePlan(4032, 3024, supported: ["image/png", "image/avif"], writable: ["image/jpeg", "image/png"]))
+        #expect(plan.mimeType == "image/png")
+    }
+
+    /// 元がPNGでも、サーバーがPNGを載せていなければ、受け付ける形式で作り直す。
+    @Test func reencodesPNGTheServerDoesNotList() throws {
+        let plan = try #require(try imagePlan(1000, 1000, mimeType: "image/png", supported: ["image/jpeg"]))
+        #expect(plan.mimeType == "image/jpeg")
+    }
+
+    /// サーバーが受け付けて端末が書き出せる形式がなければ、送る前に失敗する。
+    @Test func failsWhenNoFormatCanBeSent() {
+        #expect(throws: MediaReencodingError.noSupportedFormat) {
+            try imagePlan(4032, 3024, supported: ["image/webp", "image/gif"])
+        }
+    }
+
     /// アニメーションを保ったまま縮められないので、GIFは作り直さない。
-    @Test func leavesGIFAlone() {
-        #expect(imagePlan(8000, 8000, mimeType: "image/gif") == nil)
+    @Test func leavesGIFAlone() throws {
+        #expect(try imagePlan(8000, 8000, mimeType: "image/gif") == nil)
     }
 
     // MARK: - 動画

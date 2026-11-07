@@ -1472,7 +1472,7 @@ extension ComposeModel {
             let crop = localMedia[id]?.crop
             // 切り抜くなら、切り抜いた大きさに設定とサーバーの上限を当てはめ、縮めるのと1回で作り直す。
             let size = crop?.outputSize(of: originalSize) ?? originalSize
-            let plan = ImagePlan.make(
+            let plan = try ImagePlan.make(
                 size: size, byteCount: byteCount, mimeType: file.mimeType, setting: settings.imageSize, limits: mediaLimits,
                 supportedMIMETypes: supportedMediaTypes,
                 unprocessableMIMETypes: media.unprocessableImageTypes().union(forcingJPEG ? UnprocessableMediaFormats.replaceableMIMETypes : []),

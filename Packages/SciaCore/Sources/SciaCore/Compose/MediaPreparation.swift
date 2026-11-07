@@ -127,12 +127,15 @@ public struct ImagePlan: Sendable, Equatable {
     /// 元の画像から作り直す必要があるか。決めるには、元の大きさ、容量、形式が要る。
     /// 選んだ大きさに収まり、サーバーの上限にも収まる画像は、作り直さず元のまま送る。iPhoneのHEICは作り直してもほとんど小さくならず、画質だけが落ちるため。
     /// ただし処理できないと分かった形式は、収まっていても同じ大きさで作り直す。ペーストしたものは、ピッカーのように同じ写真のJPEGを受け取り直せないため。
+    /// サーバーが対応形式に載せていない形式も、収まっていても同じ大きさで作り直す。HEICを載せないサーバーは、元のまま送ったHEICを422で断るため。
     /// - Parameters:
     ///   - supportedMIMETypes: サーバーが受け付けると返した形式。返さないサーバーではnil。
     ///   - unprocessableMIMETypes: 受け付けると返しながら、処理できなかった形式。
     ///   - cropping: 切り抜いて送る。中身が変わるので、収まっていても作り直す。`size`には切り抜いたあとの大きさを、`byteCount`には元の容量を渡す。
     ///     切り抜いたあとの容量は作り直すまで分からないため、容量の上限は作り直しながら確かめ、`exceedsSizeLimit`にはしない。
+    ///   - writableMIMETypes: この端末のImageIOが書き出せる形式。
     /// - Returns: 元のまま送るならnil。
+    /// - Throws: 作り直す必要があるのに、サーバーが受け付けて端末が書き出せる形式がないとき、`MediaReencodingError.noSupportedFormat`。
     public static func make(
         size: PixelSize,
         byteCount: Int,
@@ -141,30 +144,36 @@ public struct ImagePlan: Sendable, Equatable {
         limits: MediaLimits,
         supportedMIMETypes: [String]?,
         unprocessableMIMETypes: Set<String>,
+        writableMIMETypes: Set<String> = ImageReencoder.writableMIMETypes,
         cropping: Bool = false
-    ) -> ImagePlan? {
+    ) throws -> ImagePlan? {
         // アニメーションを保ったまま縮められないので、GIFは作り直さない。
         guard mimeType != "image/gif" else { return nil }
         let bySetting = setting.maxLongSide.map { size.scaled(by: Double($0) / Double(size.longSide)) } ?? size
         let target = bySetting.fitting(pixels: limits.imageMatrixLimit)
         let exceedsSizeLimit = !cropping && (limits.imageSizeLimit.map { byteCount > $0 } ?? false)
-        guard cropping || target != size || exceedsSizeLimit || unprocessableMIMETypes.contains(mimeType) else { return nil }
+        let unsupported = supportedMIMETypes.map { !$0.contains(mimeType) } ?? false
+        guard cropping || target != size || exceedsSizeLimit || unsupported || unprocessableMIMETypes.contains(mimeType) else { return nil }
+        guard let output = outputMIMEType(for: mimeType, supported: supportedMIMETypes, unprocessable: unprocessableMIMETypes, writable: writableMIMETypes) else {
+            throw MediaReencodingError.noSupportedFormat
+        }
         return ImagePlan(
-            mimeType: outputMIMEType(for: mimeType, supported: supportedMIMETypes, unprocessable: unprocessableMIMETypes),
+            mimeType: output,
             size: target,
             sizeBySetting: bySetting,
             exceedsSizeLimit: exceedsSizeLimit
         )
     }
 
-    /// 作り直す形式。元がPNGならPNGのまま縮める。JPEGにすると、スクリーンショットの文字がにじみ、透過も消えるため。
-    /// それ以外は、サーバーが受け付けると返していて、処理できないと分かっていなければHEIC、そうでなければJPEGにする。
-    /// AVIFは、iOSの書き出しではHEICとほぼ同じ大きさにしかならず、時間は数倍かかるので使わない。
-    static func outputMIMEType(for mimeType: String, supported: [String]?, unprocessable: Set<String>) -> String {
-        if mimeType == "image/png" { return "image/png" }
-        let heic = "image/heic"
-        if supported?.contains(heic) == true, !unprocessable.contains(heic) { return heic }
-        return "image/jpeg"
+    /// 作り直す形式。元がPNGならPNGを先に試す。JPEGにすると、スクリーンショットの文字がにじみ、透過も消えるため。
+    /// AVIFはiOSの書き出しでHEICとほぼ同じ大きさにしかならず時間は数倍かかるので、HEICとJPEGより後にする。
+    static func outputMIMEType(for mimeType: String, supported: [String]?, unprocessable: Set<String>, writable: Set<String>) -> String? {
+        let order = ["image/heic", "image/jpeg", "image/avif", "image/png"]
+        let candidates = mimeType == "image/png" ? ["image/png"] + order : order
+        return candidates.first { type in
+            let accepted = supported.map { $0.contains(type) } ?? ["image/jpeg", "image/png"].contains(type)
+            return accepted && !unprocessable.contains(type) && writable.contains(type)
+        }
     }
 }
 

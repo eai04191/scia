@@ -226,9 +226,9 @@ struct ImageCropEncodingTests {
     }
 
     /// 切り抜くときは、収まっていても作り直す計画にし、元の容量で上限を超えたことにはしない。
-    @Test func planReencodesWhenCropping() {
+    @Test func planReencodesWhenCropping() throws {
         let limits = MediaLimits(imageSizeLimit: 1000, imageMatrixLimit: nil, videoSizeLimit: nil, videoMatrixLimit: nil, videoFrameRateLimit: nil)
-        let plan = ImagePlan.make(
+        let plan = try ImagePlan.make(
             size: PixelSize(width: 100, height: 100), byteCount: 5000, mimeType: "image/png", setting: .original, limits: limits,
             supportedMIMETypes: nil, unprocessableMIMETypes: [], cropping: true
         )

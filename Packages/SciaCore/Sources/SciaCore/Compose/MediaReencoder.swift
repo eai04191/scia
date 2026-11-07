@@ -43,6 +43,8 @@ public enum MediaReencodingError: Error, Equatable, LocalizedError {
     case videoTooLong
     /// 動画を読めなかった、または書き出せなかった。
     case videoFailed
+    /// サーバーが受け付けて端末が書き出せる画像の形式がない。
+    case noSupportedFormat
 
     public var errorDescription: String? {
         switch self {
@@ -50,6 +52,7 @@ public enum MediaReencodingError: Error, Equatable, LocalizedError {
         case .cannotFitSizeLimit: "サーバーの上限に収まるよう縮められませんでした。"
         case .videoTooLong: "動画が長すぎてサーバーの上限に収められません。"
         case .videoFailed: "動画を書き出せませんでした。"
+        case .noSupportedFormat: "サーバーが受け付ける形式に画像を作り直せませんでした。"
         }
     }
 }
@@ -111,6 +114,11 @@ public enum ImageReencoder {
             size = smaller
         }
     }
+
+    /// この端末のImageIOが書き出せる画像の形式。OSや機種で変わりうるので実行時に調べる。
+    public static let writableMIMETypes: Set<String> = Set(
+        (CGImageDestinationCopyTypeIdentifiers() as? [String] ?? []).compactMap { UTType($0)?.preferredMIMEType }
+    )
 
     /// これより小さくしないと容量の上限に収まらないなら、収められないとする。
     static let minimumLongSide = 256
