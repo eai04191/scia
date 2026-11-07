@@ -27,6 +27,7 @@ public enum Linter {
         .fixedFontSize,
         .dimmedWhiteText,
         .timelineStoreWithoutTester,
+        .iosWording,
     ]
 
     /// `path`（リポジトリのルートからの相対パス）の`source`を、当てはまる規則で調べる。
