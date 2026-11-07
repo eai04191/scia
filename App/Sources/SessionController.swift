@@ -4106,7 +4106,7 @@ final class SessionController {
         switch url {
         case .dummy(let post):
             home.streamDummy(post)
-        case .dummySession, .account:
+        case .dummySession, .account, .hitAreas:
             // SceneDelegateが、セッションの有無にかかわらず先に受けるため、ここには来ない。
             break
         case .scenario(let event):

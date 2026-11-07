@@ -114,6 +114,9 @@ enum DebugURL: Equatable {
     case sheetKeyboard
     /// `scia-debug://ticker-loop/on`で、ステータスバーの通知を、出る、出ている、消えるを繰り返して出し続ける。`scia-debug://ticker-loop/off`で止める。
     case statusBarTickerLoop(Bool)
+    /// `scia-debug://hit-areas/on`で、指を受けるビューの範囲を、すべての画面の上に重ねて出す（`HitAreaOverlay`）。`scia-debug://hit-areas/off`で消す。
+    /// セッションがなくても受け付け、ログイン画面にも出す。起動し直すと消える。
+    case hitAreas(Bool)
 
     /// `scia-debug://lists/create?title=<名前>`でリストを作り、`scia-debug://lists/delete?id=<ID>`で消して、リストを読み直す。
     /// リストの作成と管理の画面がまだないため、リストのタブを実物で確かめるのに使う。サーバーのリストを書き換える。
@@ -163,6 +166,8 @@ enum DebugURL: Equatable {
         "sheet-keyboard": .sheetKeyboard,
         "ticker-loop/on": .statusBarTickerLoop(true),
         "ticker-loop/off": .statusBarTickerLoop(false),
+        "hit-areas/on": .hitAreas(true),
+        "hit-areas/off": .hitAreas(false),
         "arrivals/hold": .holdArrivals(true),
         "arrivals/release": .holdArrivals(false),
     ]

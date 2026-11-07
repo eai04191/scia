@@ -127,6 +127,13 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 openDummySession()
                 continue
             }
+            if case .hitAreas(let isShown) = url {
+                logger.info("debug url: \(context.url.absoluteString, privacy: .public)")
+                if let scene = window?.windowScene {
+                    HitAreaOverlay.setShown(isShown, in: scene)
+                }
+                continue
+            }
             if case .account(let acct) = url {
                 logger.info("debug url: \(context.url.absoluteString, privacy: .public)")
                 switchAccount(toHandle: acct)
@@ -177,6 +184,12 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func sceneDidDisconnect(_ scene: UIScene) {
         logger.info("scene didDisconnect")
         session = nil
+        #if DEBUG
+        // 出したまま窓を閉じると、重ねたウィンドウと毎フレームの処理が残るため。
+        if let scene = scene as? UIWindowScene {
+            HitAreaOverlay.setShown(false, in: scene)
+        }
+        #endif
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {

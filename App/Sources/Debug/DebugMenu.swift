@@ -30,6 +30,24 @@ extension UIViewController {
                 guard let window = self?.view.window else { return }
                 DiscomfortReportPresenter.present(in: window)
             },
+            // オンとオフのチェックマークを、開くたびに今の状態で出す。
+            UIDeferredMenuElement.uncached { [weak self] completion in
+                guard let scene = self?.view.window?.windowScene else {
+                    completion([])
+                    return
+                }
+                let isShown = HitAreaOverlay.isShown(in: scene)
+                completion([
+                    UIAction(
+                        title: "当たり判定を表示",
+                        subtitle: "すべての画面の上に重ねる",
+                        image: UIImage(systemName: "hand.tap"),
+                        state: isShown ? .on : .off
+                    ) { _ in
+                        HitAreaOverlay.setShown(!isShown, in: scene)
+                    },
+                ])
+            },
         ]
         let appWide: [UIMenuElement] = (handle.map { handle in
             [
