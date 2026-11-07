@@ -78,13 +78,14 @@ public final class NotificationsModel {
     private let now: () -> Date
 
     /// - Parameter backgroundTime: バックグラウンドで既読位置を保存し終えるまで、アプリを止めないよう頼む。頼んで、終えるときに呼ぶものを返す。OSが与えた時間が尽きたら、頼みを終えて`onExpire`を呼ぶ。
+    ///   OSがバックグラウンドでアプリを止めるUI（iOS）が渡す。止めないUI（macOS）では省き、頼まない。
     public init(
         client: MastodonClient,
         streamingHub: StreamingHub,
         tuning: TuningStore,
         clock: any Clock<Duration>,
         now: @escaping () -> Date,
-        backgroundTime: @escaping @MainActor (String, _ onExpire: @escaping @MainActor () -> Void) -> @MainActor () -> Void,
+        backgroundTime: @escaping @MainActor (String, _ onExpire: @escaping @MainActor () -> Void) -> @MainActor () -> Void = { _, _ in {} },
         tasks: TaskScope
     ) {
         self.tasks = tasks
@@ -147,6 +148,7 @@ public final class NotificationsModel {
     }
 
     /// バックグラウンドに入るときに呼ぶ。接続を切り、既読位置を保存する。
+    /// OSがバックグラウンドで接続を止めるUI（iOS）が呼ぶ。止めないUI（macOS）では呼ばなくてよい。既読位置は、読み進めてから決まった時間が経てば保存する。
     public func enterBackground() {
         isInForeground = false
         stopStreaming()
@@ -733,7 +735,7 @@ extension NotificationsModel: SessionList {
         tuning: TuningStore,
         clock: any Clock<Duration>,
         now: @escaping () -> Date,
-        backgroundTime: @escaping @MainActor (String, _ onExpire: @escaping @MainActor () -> Void) -> @MainActor () -> Void
+        backgroundTime: @escaping @MainActor (String, _ onExpire: @escaping @MainActor () -> Void) -> @MainActor () -> Void = { _, _ in {} }
     ) {
         self.init(
             client: session.client,
