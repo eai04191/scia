@@ -1211,12 +1211,14 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// コンテキストメニューを出した。メニューの元になった行が動かないよう、閉じるまでタイムラインの並びの更新と描き直しを溜めておく。
     func menuWillShow() {
         isShowingMenu = true
+        logger.info("menu will show: holding updates")
     }
 
     /// メニューが閉じた。溜めていた更新を反映する。
     func menuDidHide() {
         guard isShowingMenu else { return }
         isShowingMenu = false
+        logger.info("menu did hide: applying held updates entries=\(self.heldEntries != nil, privacy: .public) reconfigure=\(self.heldReconfigureIDs.count, privacy: .public)")
         if let held = heldEntries {
             heldEntries = nil
             updateEntries(held.entries, keeping: held.anchorID, placingAtTop: held.topID, keepsOffset: held.keepsOffset, animatesRemoval: held.animatesRemoval, animatesChanges: held.animatesChanges, keepingRowContentsOf: nil)
@@ -1437,6 +1439,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         unreadCount: \(unreadCount)
         loadingGaps: \(loadingGapIDs.sorted().joined(separator: ", "))
         failedGaps: \(gapFailures.keys.sorted().joined(separator: ", "))
+        showingMenu: \(isShowingMenu) heldEntries: \(heldEntries.map { "\($0.entries.count)" } ?? "nil") heldReconfigure: \(heldReconfigureIDs.count)
         """
     }
 

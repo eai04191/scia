@@ -1,3 +1,4 @@
+import os
 import SciaCore
 import UIKit
 import UIKit.UIGestureRecognizerSubclass
@@ -308,6 +309,7 @@ enum ObjectLift {
 /// 自分ではタップも長押しも受けない部品（アイコン、引用の囲みなど）に、対象のタップと長押しを付ける。
 @MainActor
 final class ObjectInteraction: NSObject, UIContextMenuInteractionDelegate {
+    private static let logger = SciaLog.logger(category: "menu")
     private weak var view: UIView?
     private let lift: ObjectLift
     var target: (any ObjectActionTarget)?
@@ -371,7 +373,11 @@ final class ObjectInteraction: NSObject, UIContextMenuInteractionDelegate {
 
     func contextMenuInteraction(_ interaction: UIContextMenuInteraction, willEndFor configuration: UIContextMenuConfiguration, animator: (any UIContextMenuInteractionAnimating)?) {
         // 閉じ終わる前に部品が別の対象に使い回されても、閉じたほうの知らせを取り違えないよう、閉じ始めに決めておく。
-        guard let lifecycle = target?.lifecycle else { return }
+        guard let lifecycle = target?.lifecycle else {
+            // 出したときの対象に閉じたことを知らせられないので、出した側は開いたままと見なし続ける。
+            Self.logger.notice("context menu ended without target: willShow is not paired with didHide")
+            return
+        }
         lifecycle.willEnd()
         guard let animator else {
             lifecycle.didHide()

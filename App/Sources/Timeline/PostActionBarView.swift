@@ -1,3 +1,4 @@
+import os
 import SciaCore
 import UIKit
 
@@ -56,7 +57,12 @@ final class PostActionBarView: UIView {
             let view = PostActionBarButtonView()
             view.addAction(UIAction { [weak self, weak view] _ in
                 guard let self, let view, let item = view.button?.item else { return }
+                let start = AppDependencies.mediaTime()
                 onPress?(item, view)
+                let end = AppDependencies.mediaTime()
+                // 指を離してから押した処理が動くまでと、処理にかかった時間。押しても変わらないと感じたときに、メインスレッドが詰まっていたかを見る。
+                let sinceTouchUp = view.consumeTouchEnd().map { start - $0 } ?? -1
+                PostActionBarButtonView.logger.info("action bar press item=\(item.rawValue, privacy: .public) sinceTouchUp=\(sinceTouchUp, privacy: .public) work=\(end - start, privacy: .public)")
             }, for: .touchUpInside)
             buttonViews.append(view)
             stack.addArrangedSubview(view)
@@ -118,6 +124,7 @@ final class PostActionBarView: UIView {
 
 /// アクションバーの1つのボタン。アイコンを左に寄せ、件数を右に添える。
 final class PostActionBarButtonView: UIControl {
+    static let logger = SciaLog.logger(category: "actionBar")
     private let iconView = UIImageView()
     private let countLabel = UILabel()
     private var iconTop: NSLayoutConstraint?
@@ -185,6 +192,50 @@ final class PostActionBarButtonView: UIControl {
     override func accessibilityActivate() -> Bool {
         sendActions(for: .touchUpInside)
         return true
+    }
+
+    private var touchBeganAt: TimeInterval?
+    /// 指を離した時刻（`UITouch.timestamp`と同じ、起動からの秒）。押した処理が1回だけ読む。
+    /// VoiceOverの実行はタッチを通らないので、前のタップの時刻を読まないよう、読んだら消す。
+    private var touchEndedAt: TimeInterval?
+
+    func consumeTouchEnd() -> TimeInterval? {
+        defer { touchEndedAt = nil }
+        return touchEndedAt
+    }
+    private var lastDeceleratingTouch: TimeInterval?
+
+    /// 慣性で流れているタイムラインに触れると、UIKitはスクロールを止めるだけで、ボタンにタッチを渡さないことがある。押しても何も起きなかったときに、このあとに押した記録が続くかで見分ける。
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let hit = super.hitTest(point, with: event)
+        if hit === self, let event, event.type == .touches, event.timestamp != lastDeceleratingTouch, enclosingScrollView?.isDecelerating == true {
+            lastDeceleratingTouch = event.timestamp
+            Self.logger.notice("action bar touch landed while scrolling decelerates item=\(self.button?.item.rawValue ?? "nil", privacy: .public)")
+        }
+        return hit
+    }
+
+    override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
+        touchBeganAt = touch.timestamp
+        return super.beginTracking(touch, with: event)
+    }
+
+    override func endTracking(_ touch: UITouch?, with event: UIEvent?) {
+        touchEndedAt = touch?.timestamp
+        super.endTracking(touch, with: event)
+    }
+
+    /// スクロールや長押しにタッチを取られると、指を離しても押したことにならない。どれに取られたかを残す。
+    override func cancelTracking(with event: UIEvent?) {
+        super.cancelTracking(with: event)
+        let heldFor = touchBeganAt.map { AppDependencies.mediaTime() - $0 } ?? -1
+        let active: Set<UIGestureRecognizer.State> = [.began, .changed, .ended]
+        let gestures = (gestureRecognizers ?? []).filter { active.contains($0.state) }.map { String(describing: type(of: $0)) }
+        Self.logger.notice("action bar touch cancelled item=\(self.button?.item.rawValue ?? "nil", privacy: .public) heldFor=\(heldFor, privacy: .public) scrolling=\(self.enclosingScrollView?.isDragging == true, privacy: .public) gestures=\(gestures.joined(separator: ","), privacy: .public)")
+    }
+
+    private var enclosingScrollView: UIScrollView? {
+        sequence(first: superview, next: { $0?.superview }).lazy.compactMap { $0 as? UIScrollView }.first
     }
 
     override var isHighlighted: Bool {
