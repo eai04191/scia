@@ -1271,7 +1271,6 @@ public enum TuningCatalog {
         defaultValue: 0.04
     )
 
-    /// 投稿欄を展開ボタンで本文に合わせた高さまで広げる時間と、5行の高さに戻す時間（秒）。
     /// リンクにタイトルを付けるとき、URLを次の行の位置へ動かし、タイトルを浮かび上がらせる動きの時間。0なら動かさずに置き換える。
     public static let linkTitleMorphDuration = NumberTuning(
         id: "compose.linkTitleMorphDuration",
@@ -1389,6 +1388,7 @@ public enum TuningCatalog {
         defaultValue: 0.25
     )
 
+    /// 投稿欄を展開ボタンで本文に合わせた高さまで広げる時間と、5行の高さに戻す時間（秒）。
     public static let composeExpandDuration = NumberTuning(
         id: "compose.expandDuration",
         title: "投稿欄を広げる・戻す時間（秒）",

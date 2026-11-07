@@ -31,7 +31,6 @@ public final class TimelineStore {
     public var loadingGapIDs: Set<String> { state.loadingGapIDs }
     private let pageSize: Int
     private let filtering: StatusFiltering?
-    /// フィルターの期限が切れたかを決める、今の時刻。
     private let now: @MainActor () -> Date
     private let fetch: Fetch
     private let logger = SciaLog.logger(category: "timeline")
@@ -52,7 +51,6 @@ public final class TimelineStore {
     /// フィルターで出さない投稿も含めた、読み込んだ投稿。
     private var allStatuses: [Status] { statuses + state.hiddenStatuses }
 
-    /// `allStatuses`のID。
     private var loadedIDs: Set<String> {
         if let cached = state.derived.loadedIDs { return cached }
         var ids = Set(state.entries.lazy.compactMap(\.status?.id))
@@ -90,7 +88,7 @@ public final class TimelineStore {
     }
 
     /// 続きを古い方へ読む位置。読み込んだ中で最も古い投稿で、ギャップの古い側の端も数える。
-    /// 端の投稿が消えても、そこまでは読み込み済みかギャップに含めてあり、その上から読むと、同じ範囲にギャップがもう1つできるため。
+    /// 端を数える理由は`fillBaseID`と同じ。
     private var tailID: String? {
         Self.oldest([itemIDs.last, state.oldestLoadedID] + gaps.map(\.olderID))
     }

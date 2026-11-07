@@ -57,7 +57,6 @@ public final class NotificationStore {
     private let pageSize: Int
     private let filtering: StatusFiltering?
     private let fetch: Fetch
-    /// フィルターの期限と比べる今の日付。
     private let now: @MainActor () -> Date
 
     /// - Parameter filtering: 通知の投稿に当てるサーバーのフィルター。nilなら当てない。

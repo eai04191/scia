@@ -40,7 +40,7 @@ final class VideoControlsView: UIView {
     /// シークバーを指で動かしている。この間は、届いた再生位置でつまみを動かさない。
     private(set) var isScrubbing = false
 
-    /// 再生速度のメニューを開いている。この間は、隠す時間を数えない。
+    /// 再生速度のメニューを開いている。
     var isMenuOpen: Bool { speedButton.isMenuOpen }
 
     /// シークバーを動かしているか、メニューを開いている。この間は、隠す時間を数えない。
@@ -382,7 +382,7 @@ final class MenuButton: UIButton {
 /// 10秒戻る・進むの記号。数字を回さずに矢印だけを回せるよう、矢印と数字を分けて描く。10秒のボタンと、ダブルタップの表示で使う。
 /// ガラスのボタンが記号を置くのと同じ大きさ・位置に描き、ボタンの記号と見た目をそろえる。
 private final class SkipGlyphView: UIView {
-    /// 数字を除いた、円の矢印。数字を回さずに矢印だけを回すため、数字とは分けて描く。
+    /// 数字を除いた、円の矢印。
     private let arrow: UIImageView
     /// 10秒のボタンの記号から、矢印の部分を消した「10」。
     private let number: UIImageView
@@ -485,7 +485,7 @@ private final class SkipGlyphView: UIView {
 
     /// 矢印を、戻るなら左回り、進むなら右回りに、`duration`秒で1回転させる。
     func spin(duration: TimeInterval) {
-        // 矢印だけを、戻るなら左回り、進むなら右回りに1回まわし、出している間に回り終えて、消え始める前に止まって見えるようにする。
+        // 出している間に回り終えて、消え始める前に止まって見えるようにする。
         // SF Symbolsの回転の効果は速さを上げても1回転に約0.5秒かかり、短い知らせでは回りきらずに消えたため、矢印の絵を自分で回す。
         // 素早く回り始めて、消える前にゆっくり止まるよう、ease-out-cubicにする。
         // より急なexpo-outでは最初の0.1秒足らずで回りきってしまい、回ったと分からなかった。

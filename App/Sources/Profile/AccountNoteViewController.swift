@@ -98,7 +98,6 @@ final class AccountNoteViewController: UIViewController {
         navigationItem.rightBarButtonItem?.isEnabled = editor.canSave
         navigationItem.leftBarButtonItem?.isEnabled = !saving
         textView.isEditable = !saving
-        // 保存している間は、ボタンの場所にインジケーターを出す。
         if saving, !(navigationItem.rightBarButtonItem?.customView is UIActivityIndicatorView) {
             let indicator = UIActivityIndicatorView(style: .medium)
             indicator.startAnimating()

@@ -4,7 +4,7 @@ import Testing
 struct BlurHashTests {
     private static let alphabet = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz#$%*+,-.:;=?@[]^_{|}~")
 
-    /// `value`を`length`桁の83進数にする。テスト用の文字列を組み立てるために使う。
+    /// `value`を`length`桁の83進数にする。
     private func base83(_ value: Int, length: Int) -> String {
         var digits: [Character] = []
         var rest = value

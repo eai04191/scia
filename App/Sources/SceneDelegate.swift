@@ -211,14 +211,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         session?.enterBackground()
     }
 
-    /// Keychainに保存したアカウントのタイムラインを出す。なければログイン画面を出す。
-    /// ダミーを選んでいる間に開いたシーンは、ほかのシーンに揃えてダミーにする。
     #if DEBUG
     /// ユニットテストのホストとして起動されたか。XCTestがホストのプロセスに渡す、テストの設定のファイルの場所で見分ける。
     /// UIテストでは、アプリはテストと別のプロセスで起動され、これを受け取らないため、ふだんどおりに始める。
     private static let isHostingUnitTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
     #endif
 
+    /// Keychainに保存したアカウントのタイムラインを出す。なければログイン画面を出す。
+    /// ダミーを選んでいる間に開いたシーンは、ほかのシーンに揃えてダミーにする。
     private func showSavedAccount() {
         #if DEBUG
         if Self.showsDummySession {

@@ -113,9 +113,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onAppearing: (() -> Void)?
     /// タイムラインがスクロールしたときと、安全領域やバーの高さが変わったときに呼ぶ。ヘッダーを置いた画面が、ヘッダーやバーの見た目を位置に合わせるのに使う。
     var onScroll: ((UIScrollView) -> Void)?
-    /// ステータスバーの文字の色。ヘッダーを置いた画面が、ステータスバーの下に見えているものに合わせて変える。
     /// ナビゲーションバーのボタンのない場所のタップを、タイムラインに通す。ヘッダーを置いた画面が、バーの下に入れたヘッダー画像を押せるようにする。
     var passesEmptyNavigationBarTaps = false
+    /// ステータスバーの文字の色。ヘッダーを置いた画面が、ステータスバーの下に見えているものに合わせて変える。
     var statusBarStyle: UIStatusBarStyle = .default {
         didSet {
             guard statusBarStyle != oldValue else { return }
@@ -946,6 +946,16 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
+    /// サーバーから取り直した中身を反映している間の投稿。この投稿の行を描き直すときは、高さが変わる分を下の行ごと動かしてつなぐ。
+    /// 承認された引用のように、あとから届いた中身で見えている行の高さが変わるため（docs/vision.mdの「タイムラインの動き」）。
+    /// 取り直した投稿は各タイムラインの`updateStatus`から並びの置き換えを通って届くので、置き換えの間だけ立てる。
+    var refreshedStatusID: Status.ID?
+
+    /// アクションバーの引き出しを開いている投稿。同時に1つだけ開く。タイムラインを閉じるか起動し直すと閉じた状態に戻る（docs/post-action-bar.mdの「引き出し」）。
+    var openActionBarItemID: ItemID?
+    /// 「投稿の見た目」のプレビューで、いつも出す設定でなくてもアクションバーを出す。アクションバーの分類の見本で立てる。
+    var showsActionBarInPreview = false
+
     /// 表示中の要素を、新しい順に並んだ`newEntries`で置き換える。
     ///
     /// 読んでいる位置の要素が画面上で動かないようにする。基準は表示領域の上端にかかっている要素で、`anchorID`を渡せばその要素にする。
@@ -958,16 +968,6 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     ///   操作の結果が分かるよう、消える行を閉じ、下の行を詰める動きで消す。消せないときは、ほかの更新と同じく動かさずに位置を保つ。
     /// - Parameter base: `newEntries`は、この並びに行を足すか除くかしただけで、残る行の中身を変えていない。
     ///   前回並べた配列と同じものなら、描き直す行を探すために行の中身を比べるのを省く。タイムラインが長いと、比べるだけで重くなるため。
-    /// サーバーから取り直した中身を反映している間の投稿。この投稿の行を描き直すときは、高さが変わる分を下の行ごと動かしてつなぐ。
-    /// 承認された引用のように、あとから届いた中身で見えている行の高さが変わるため（docs/vision.mdの「タイムラインの動き」）。
-    /// 取り直した投稿は各タイムラインの`updateStatus`から並びの置き換えを通って届くので、置き換えの間だけ立てる。
-    var refreshedStatusID: Status.ID?
-
-    /// アクションバーの引き出しを開いている投稿。同時に1つだけ開く。タイムラインを閉じるか起動し直すと閉じた状態に戻る（docs/post-action-bar.mdの「引き出し」）。
-    var openActionBarItemID: ItemID?
-    /// 「投稿の見た目」のプレビューで、いつも出す設定でなくてもアクションバーを出す。アクションバーの分類の見本で立てる。
-    var showsActionBarInPreview = false
-
     func setEntries(_ newEntries: [TimelineEntry], keeping anchorID: ItemID? = nil, placingAtTop topID: ItemID? = nil, keepsOffset: Bool = false, animatesRemoval: Bool = false, keepingRowContentsOf base: [TimelineEntry]? = nil) {
         updateEntries(newEntries, keeping: anchorID, placingAtTop: topID, keepsOffset: keepsOffset, animatesRemoval: animatesRemoval, animatesChanges: false, keepingRowContentsOf: base)
         // 画面を出したときに、まだ並べる投稿がなかったら、並べたときに組んでおく。

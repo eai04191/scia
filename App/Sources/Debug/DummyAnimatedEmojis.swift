@@ -49,9 +49,7 @@ enum DummyAnimatedEmojis {
         "https://media.misskeyusercontent.jp/io/4619ab81-3db1-4e3a-964f-bbace4a4004c.webp",
     ]
 
-    /// 投稿の数。
     static let postCount = 40
-    /// 1件の投稿に入れる絵文字の数。
     static let emojisPerPost = 8
 
     /// 投稿`number`（0から）の本文と絵文字。どの投稿にも、40種類から8種類を、投稿ごとにずらして選ぶ。

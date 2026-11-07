@@ -487,9 +487,7 @@ final class PostContentView: UIView, UIContentView {
         bodyView.cardTarget = configuration.linkCardTarget
         // 「＋」を出すかは渡すかどうかで決まるので、適用のたびに渡し直す。押したときは今の構成を読むので、使い回しても古くならない。
         bodyView.onAddReaction = configuration.onAddReaction == nil ? nil : { [weak self] in self?.current.onAddReaction?() }
-        // 押したときに今の構成を読むので、使い回しても古くならない。
         bodyView.reactionTarget = configuration.reactionTarget == nil ? nil : { [weak self] name in self?.current.reactionTarget?(name) }
-        // 長押ししたときに今の構成を読むので、使い回しても古くならない。
         bodyView.actionBarLongPressTarget = configuration.actionBarLongPressTarget == nil ? nil : { [weak self] item in self?.current.actionBarLongPressTarget?(item) }
         bodyView.apply(PostBodyContent(
             spoiler: configuration.spoiler,

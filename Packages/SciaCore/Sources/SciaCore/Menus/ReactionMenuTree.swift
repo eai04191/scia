@@ -40,7 +40,6 @@ public struct ReactionMenuTree {
         groups.nodes { item -> [MenuNode<ReactionMenuCommand>] in
             switch item {
             case .toggle:
-                // 自分がしたかで名前を替える。
                 return reaction.me
                     ? [.action("リアクションを外す", icon: .symbol("face.dashed"), .toggle(turningOn: false))]
                     : [.action("リアクションする", icon: .symbol(item.symbolName), .toggle(turningOn: true))]

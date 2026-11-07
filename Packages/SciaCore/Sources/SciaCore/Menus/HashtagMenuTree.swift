@@ -10,9 +10,7 @@ public enum HashtagMenuCommand: Equatable, Sendable {
     /// ミュートする。nilなら解除するまで続ける。
     case mute(Duration?)
     case unmute
-    /// フォローする。
     case follow
-    /// フォローを外す。
     case unfollow
     /// 自分のプロフィールの注目のハッシュタグに載せる。
     case feature

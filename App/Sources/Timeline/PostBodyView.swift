@@ -142,9 +142,9 @@ final class PostBodyView: UIView {
     var onPollAction: ((PollView.Action) -> Void)?
     /// リアクションのボタンが押されたときに、その絵文字の`Reaction.name`を渡して呼ぶ。
     var onToggleReaction: ((String) -> Void)?
-    /// リアクションの列の「＋」が押されたときに呼ぶ。nilなら「＋」を出さない。
     /// リアクションのボタンのタップと長押しの対象。絵文字の名前を渡して受け取る。
     var reactionTarget: ((String) -> (any ObjectActionTarget)?)?
+    /// リアクションの列の「＋」が押されたときに呼ぶ。nilなら「＋」を出さない。
     var onAddReaction: (() -> Void)? {
         didSet { reactionsView?.showsAddButton = onAddReaction != nil }
     }

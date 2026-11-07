@@ -653,7 +653,7 @@ final class ProfileController {
         logger.info("profile refresh")
         let timeline = store.timeline
         if timeline.isEmpty, case .failed = viewController.footerState {
-            // 最初のタイムラインを読めていないと、タイムラインを出す前なので、ほかは読み直さずに最初の読み込みをやり直す。
+            // タイムラインを出す前なので、ほかは読み直さない。
             await loadInitial()?.value
             return
         }

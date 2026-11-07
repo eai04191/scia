@@ -113,7 +113,6 @@ extension RichText {
         RichText(blocks: [Block(inlines: CustomEmojiSplitter(emojis: emojis).split(.text(text, [])))])
     }
 
-    /// 投稿本文のHTMLを、メンション、ハッシュタグ、カスタム絵文字を解決して変換する。
     /// プロフィールの自己紹介や補足情報のような、投稿の本文以外のHTML。メンションのリストがないため、メンションはリンクとして読む。
     public static func html(_ html: String, emojis: [CustomEmoji]) -> RichText {
         MastodonHTMLParser(mentions: [], tags: [], emojis: emojis).parse(html)

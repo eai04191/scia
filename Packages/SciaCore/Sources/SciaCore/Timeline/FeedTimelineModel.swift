@@ -19,7 +19,6 @@ public final class FeedTimelineModel {
     private let client: MastodonClient
     private let streamingHub: StreamingHub
     private let tuning: TuningStore
-    /// バックグラウンドで既読位置を保存し終えるまで、アプリを止めないよう頼む。頼んで、終えるときに呼ぶものを返す。OSが与えた時間が尽きたら、頼みを終えて`onExpire`を呼ぶ。
     private let backgroundTime: @MainActor (String, _ onExpire: @escaping @MainActor () -> Void) -> @MainActor () -> Void
     private let logger = SciaLog.logger(category: "timeline")
     /// このタイムラインが始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
@@ -37,14 +36,12 @@ public final class FeedTimelineModel {
     public private(set) var footerState = TimelineFooterState.idle
     /// 設定で無効にしているか、サーバーが読ませない。購読せず、有効に戻したらつなぎ直して、無効だった間を補う。
     private var isDisabled: Bool { isDisabledInSettings || isUnavailable }
-    /// 設定で無効にしている。
     private var isDisabledInSettings = false
     /// サーバーがこのタイムラインを読ませない。読まず、購読もせず、読めないと出す（docs/tabs.md）。
     private var isUnavailable = false
     private var hasStarted = false
     /// タイムラインのストリームの購読。読み込みが済んでから申し込み、止めるときやバックグラウンドではやめる。
     private var streamingSubscription: StreamingHub.Subscription?
-    /// タイムラインのストリームを購読している。
     public var isSubscribedToStreaming: Bool { streamingSubscription != nil }
     /// 切れていた間の投稿を読む補完の状態。ストリーミングの状態と並べて、引っぱったときに見せる。
     private var catchUp = CatchUpStatus()

@@ -67,7 +67,7 @@ public struct MemoryCache<Key: Hashable, Value: AnyObject> {
         removeReleasedReferences()
     }
 
-    /// 値が解放された表の行を消す。消すたびに全体を見るので、行が前に消したあとに残った数の倍を超えたときだけ消す。
+    /// 値が解放された表の行を消す。消すたびに全体を見るので、行が`referenceCleanupThreshold`を超えたときだけ消す。
     /// 上限に数えている値の数で決めると、使用中の値がそれより多いとき、消しても減らないまま、入れるたびに全体を見直すため。
     private mutating func removeReleasedReferences() {
         guard references.count > referenceCleanupThreshold else { return }

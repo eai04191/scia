@@ -113,7 +113,6 @@ extension ObjectActions where Item: ObjectActionItem {
     }
 }
 
-/// 投稿と通知はどちらも、スレッドを開く。
 extension StatusMenuItem: ObjectActionItem {
     public static var primaryItem: Self { .openThread }
 }
@@ -122,12 +121,10 @@ extension UserMenuItem: ObjectActionItem {
     public static var primaryItem: Self { .profile }
 }
 
-/// 開く場所の設定に従って開く。
 extension LinkMenuItem: ObjectActionItem {
     public static var primaryItem: Self { .openInBrowser }
 }
 
-/// 開く場所の設定に従って、元の投稿を開く。
 extension ExternalPostMenuItem: ObjectActionItem {
     public static var primaryItem: Self { .openInBrowser }
 }
@@ -136,7 +133,6 @@ extension HashtagMenuItem: ObjectActionItem {
     public static var primaryItem: Self { .timeline }
 }
 
-/// 付け外しする。ボタンをタップしたときの今の動き。
 extension ReactionMenuItem: ObjectActionItem {
     public static var primaryItem: Self { .toggle }
 }

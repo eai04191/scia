@@ -13,7 +13,6 @@ struct TabArrangementTests {
     private static let bob = TabItem.profile(accountID: "2", acct: "bob")
     private static let carol = TabItem.profile(accountID: "3", acct: "carol")
 
-    /// 項目ごとのナビゲーション。作るように頼まれた項目を記録する。
     /// 項目ごとのナビゲーション。リストは、アプリと同じく頼まれるたびに新しく作る。作るように頼まれた項目を記録する。
     @MainActor
     private final class Navigations {

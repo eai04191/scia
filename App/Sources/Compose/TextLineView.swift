@@ -102,7 +102,6 @@ final class TextLineView: UIView {
 
     private var line: NSTextLineFragment? { fragment?.textLineFragments.first }
 
-    /// 文字の幅。
     var textWidth: CGFloat { line?.typographicBounds.width ?? 0 }
 
     private var lineHeight: CGFloat { line?.typographicBounds.height ?? 0 }

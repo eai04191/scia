@@ -13,7 +13,7 @@ public final class NotificationPolicyModel {
     public private(set) var loadFailure: ErrorPresentation?
     /// サーバーに通知のフィルタリングがあるか。ないと分かったら（Mastodon 4.2以前）、そのセッションの間はfalseにし、入口を出さない。
     public private(set) var isSupported = true
-    /// 保留中の通知を送った人の数。サーバーは100で止める。
+    /// 保留中の通知を送った人の数。
     public var pendingRequestsCount: Int { policy?.pendingRequestsCount ?? 0 }
     /// サーバーが止める人数。これと同じなら、実際はもっと多いことがある。
     public static let pendingRequestsCap = 100

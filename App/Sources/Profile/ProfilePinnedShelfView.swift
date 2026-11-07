@@ -277,7 +277,7 @@ struct ProfileShelfItem: Equatable {
     let status: Status
     let verdict: FilterVerdict
 
-    /// 棚の小さなサムネイルに読む画像。既存の選び方で、サーバーが縮めたプレビュー画像だけを読む。棚のサムネイルはプレビュー画像で足り、
+    /// 棚の小さなサムネイルに読む画像。サーバーが縮めたプレビュー画像だけを読む。棚のサムネイルはプレビュー画像で足り、
     /// 元のファイル（動画や音声の本体）を読まないため。読める画像がない種類（音声など）ならnil。
     static func thumbnailRequest(for attachment: MediaAttachment, size: CGFloat) -> MediaThumbnailRequest? {
         MediaThumbnailSelection.request(

@@ -8,7 +8,6 @@ import UIKit
 @MainActor
 final class ThreadController {
     private(set) weak var viewController: TimelineViewController?
-    /// 読み込みとストリーミングを受け持つ。
     let model: ThreadModel
 
     static func make(
@@ -61,12 +60,10 @@ final class ThreadController {
         model.start()
     }
 
-    /// バックグラウンドに入るときに呼ぶ。
     func enterBackground() {
         model.enterBackground()
     }
 
-    /// バックグラウンドから戻ったときに呼ぶ。
     func enterForeground() {
         model.enterForeground()
     }

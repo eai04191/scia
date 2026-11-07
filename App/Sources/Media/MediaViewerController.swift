@@ -3110,7 +3110,6 @@ extension PlayerPageController: UIGestureRecognizerDelegate {
     }
 }
 
-/// アプリで開けない種類のファイルのページ。ブラウザで開く操作を出す。
 /// アプリで表示できない種類のファイルのページ。画像や動画を読み込めなかったときと同じ表示で、ブラウザで開けるようにする。
 final class UnsupportedPageController: MediaPageController {
     private let statusView = MediaStatusView()
@@ -3127,7 +3126,7 @@ final class UnsupportedPageController: MediaPageController {
     override var transitionOverlay: UIView? { statusView }
 }
 
-/// 画面の下に出す代替テキスト。長ければスクロールして読む。
+/// 画面の下に出す代替テキスト。
 /// 添付ファイルの説明を、画像を覆わないよう1行で見せる。全文は、タップするか上へスワイプするかVoiceOverで実行して、シートで読む。
 final class CaptionView: UIView {
     private let label = UILabel()

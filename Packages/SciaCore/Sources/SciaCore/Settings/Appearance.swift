@@ -94,9 +94,9 @@ public enum AppearanceCatalog {
     public static let rowPaddingTrailing = AppearanceValue(id: "timeline.rowPaddingTrailing", title: "右の余白", range: 0...100, step: 1, defaultValue: 8)
     /// 名前の行で、太字の部分と、後ろに添える部分のすき間。
     public static let namePartsSpacing = AppearanceValue(id: "timeline.namePartsSpacing", title: "太字と添える部分のすき間", range: 0...100, step: 1, defaultValue: 4)
-    /// 名前と時刻のあいだの、最も狭いすき間。時刻は右端に寄せるので、名前が短ければもっと空く。
     /// 名前とハンドルを2段に分けるとき、1段目の字面の下端から2段目の字面の上端まで。
     public static let nameStackSpacing = AppearanceValue(id: "timeline.nameStackSpacing", title: "1段目と2段目のあいだ", range: 0...100, step: 1, defaultValue: 2)
+    /// 名前と時刻のあいだの、最も狭いすき間。時刻は右端に寄せるので、名前が短ければもっと空く。
     public static let nameTimeSpacing = AppearanceValue(id: "timeline.nameTimeSpacing", title: "名前と時刻の最小のすき間", range: 0...100, step: 1, defaultValue: 8)
     /// 本文の行と行のあいだに足す余白。
     public static let bodyLineSpacing = AppearanceValue(id: "timeline.bodyLineSpacing", title: "行間", range: 0...100, step: 1, defaultValue: 0)

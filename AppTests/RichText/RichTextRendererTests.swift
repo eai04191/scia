@@ -535,7 +535,6 @@ extension RichTextRendererTests {
 }
 
 extension RichTextRendererTests {
-    /// ラベルに描いた色のある画素の、上端と下端の行。文字は黒で描くので、色のある画素は絵文字だけになる。
     /// TextKit 2で描くラベルに描いた、色のある画素の数。
     private func coloredPixelCount(of text: NSAttributedString, width: CGFloat, numberOfLines: Int) throws -> Int {
         let label = EmojiLabel()
@@ -564,6 +563,7 @@ extension RichTextRendererTests {
         }
     }
 
+    /// ラベルに描いた色のある画素の、上端と下端の行。文字は黒で描くので、色のある画素は絵文字だけになる。
     /// - Parameter drawsWithTextKit: TextKit 2で描くラベルで描く。
     private func coloredRows(of text: NSAttributedString, width: CGFloat = 400, drawsWithTextKit: Bool = false, numberOfLines: Int = 0) throws -> ClosedRange<Int>? {
         let label = EmojiLabel()

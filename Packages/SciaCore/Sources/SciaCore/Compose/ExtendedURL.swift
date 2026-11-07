@@ -58,7 +58,7 @@ public enum ExtendedURLChoice: Hashable, Sendable {
     case postAsIs
 }
 
-/// URLの後ろに文字が続いていることを知らせるシートの中身。決まりはdocs/compose.mdの「URLの後ろに続いた文字」にある。
+/// URLの後ろに文字が続いていることを知らせるシートの中身。
 public struct ExtendedURLPrompt: Equatable, Sendable {
     /// 動きで見せる1つのURLと、その後ろに続いた文字。どちらも「…」で縮めず、見本の枠の端まで本物を出してフェードで消す。
     public struct Line: Equatable, Sendable, Identifiable {

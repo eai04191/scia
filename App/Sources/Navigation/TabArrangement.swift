@@ -30,7 +30,7 @@ final class TabArrangement {
     /// リストの名前が変わっても作り直さないため、タブの名前は起動し直すまで前の名前のまま残る。docs/tabs.mdの「リスト」を参照。
     /// 作り直すときは、入れ物も一緒に作り直し、ナビゲーションを新しい入れ物へ移す。UIKitは、1つの画面を2つのタブに渡すとアサーションで落ちるため。
     private var itemTabs: [TabItem: (tab: UITab, container: TabContainerViewController)] = [:]
-    /// 切り替えタブの中身と、そのタブ。作り直すときは2つ一緒に作り直す。UIKitは、1つの画面を2つのタブに渡すとアサーションで落ちるため。
+    /// 切り替えタブの中身と、そのタブ。作り直すときは2つ一緒に作り直す。
     private var switchContainer = TabContainerViewController()
     private var switchTab: UITab
     /// 切り替えタブで開いている項目。
@@ -96,12 +96,12 @@ final class TabArrangement {
     /// 作ったすべての項目のナビゲーション。並びから外した項目のものも含む。
     var allNavigations: [UINavigationController] { Array(navigations.values) }
 
-    /// サーバーから消えた項目の、作ったナビゲーションとタブを捨てる。まだ並びにあれば、並びから外れたときに捨てる。
     /// 次に並びを反映するときに、項目のタブを今の名前で作り直す。アプリの中でリストの名前を変えたときに、並びを書く前に呼ぶ。
     func retitle(_ item: TabItem) {
         retitled.insert(item)
     }
 
+    /// サーバーから消えた項目の、作ったナビゲーションとタブを捨てる。まだ並びにあれば、並びから外れたときに捨てる。
     func forget(_ items: some Sequence<TabItem>) {
         forgotten.formUnion(items)
         discardForgotten()
@@ -249,7 +249,7 @@ final class TabArrangement {
 
     /// 押したときに何が開くかが分かるよう、開いている項目の名前とアイコンで、切り替えタブを作り直す。
     /// 同じタブの`title`を変えると、タブバーの読み上げの名前が前の名前のまま残ることがあり、UITabには読み上げの名前を渡す口がないため。
-    /// 中身の入れ物も一緒に作り直す。UIKitは、1つの画面を2つのタブに渡すとアサーションで落ちるため。
+    /// 中身の入れ物も一緒に作り直す。
     private func renewSwitchTab(for item: TabItem) {
         switchContainer.show(nil)
         switchContainer = TabContainerViewController()

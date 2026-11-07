@@ -69,17 +69,14 @@ public final class TuningStore {
         section.items.contains(where: isModified)
     }
 
-    /// 項目を既定値へ戻す。
     public func reset(_ item: TuningItem) {
         reset([item])
     }
 
-    /// カテゴリの項目を既定値へ戻す。
     public func reset(_ section: TuningSection) {
         reset(section.items)
     }
 
-    /// すべての項目を既定値へ戻す。
     public func resetAll() {
         reset(items)
     }

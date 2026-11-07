@@ -307,7 +307,6 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     case media
     /// 情報。アプリのビルドと、接続の状態、ライセンス、謝辞を並べる。
     case about
-    /// アプリのアイコン。
     case appIcon = "app-icon"
     case appearance
     case notificationAppearance = "notification-appearance"

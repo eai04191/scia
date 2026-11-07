@@ -23,7 +23,6 @@ public final class NotificationsModel {
     private let client: MastodonClient
     private let streamingHub: StreamingHub
     private let tuning: TuningStore
-    /// バックグラウンドで既読位置を保存し終えるまで、アプリを止めないよう頼む。頼んで、終えるときに呼ぶものを返す。OSが与えた時間が尽きたら、頼みを終えて`onExpire`を呼ぶ。
     private let backgroundTime: @MainActor (String, _ onExpire: @escaping @MainActor () -> Void) -> @MainActor () -> Void
     private let logger = SciaLog.logger(category: "notifications")
     /// このタイムラインが始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
@@ -45,7 +44,6 @@ public final class NotificationsModel {
     private var arrivalRate = ArrivalRate()
     private var hasLoadedInitial = false
     private var isInForeground = true
-    /// 既読位置を保存する。
     private var readPosition: ReadPositionSaver?
     private var isWaitingForInteractionToSettle = false
     #if DEBUG

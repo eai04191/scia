@@ -224,7 +224,6 @@ public enum TextKitLabelLayout {
         return result
     }
 
-    /// `location`の文字が並ぶ行。
     private static func line(at location: any NSTextLocation, in fragment: NSTextLayoutFragment, contentStorage: NSTextContentStorage) -> NSTextLineFragment? {
         guard let paragraphStart = fragment.textElement?.elementRange?.location else { return nil }
         let index = contentStorage.offset(from: paragraphStart, to: location)
@@ -324,7 +323,6 @@ public enum TextKitLabelLayout {
 /// メインスレッドの外で先に並べた、ラベルの文字列の並び。並べ終えたらメインスレッドへ渡し、以後はメインスレッドだけが触る。
 /// 置く側は、並べた文字列（`source`）をそのままラベルに入れ、`TextKitLabel.usePreparedLayout`で渡す。
 public final class PreparedTextLayout {
-    /// 並べた文字列。置く側がラベルに入れる文字列と同じもの。
     public let source: NSAttributedString
     public let style: TextKitLabelLayout.Style
     public let width: CGFloat

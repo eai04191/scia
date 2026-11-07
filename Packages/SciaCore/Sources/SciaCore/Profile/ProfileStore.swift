@@ -196,7 +196,7 @@ public final class ProfileStore {
     }
 
     /// アカウント、関係、ヘッダーの棚を並行して読み、届いたものから差し替える。どれかが失敗しても、他の結果は反映する。
-    /// 失敗したものを、どれが失敗したか分けて返す。
+    /// 失敗したものは分けて返す。
     public func loadProfile() async -> ProfileLoadFailures {
         enum Part: Sendable {
             case account

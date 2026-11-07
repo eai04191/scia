@@ -63,7 +63,7 @@ open class TextKitLabel: UILabel {
     /// 並べ直した結果。文字を探すたびや、並べ直すたびに作らないよう、文字列と幅が変わるまで使い回す。
     private var layoutCache: TextLayout? {
         didSet {
-            // 並べ直すときは、測った大きさも捨てる。並べ直すのは、文字列や行数、改行の仕方が変わったとき。
+            // 並べ直すときは、測った大きさも捨てる。
             if layoutCache == nil { textKitMetrics = [:] }
         }
     }

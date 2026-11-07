@@ -13,7 +13,6 @@ public struct MastodonClient: Sendable {
     private let now: @Sendable () -> Date
     /// 再試行までと、メディアの処理が終わるまでの待ちを数える。テストでは手で進める時計を渡す。
     private let clock: any Clock<Duration>
-    /// REST APIが401を返したときに、失敗を投げる前に待って呼ぶ。
     private let onUnauthorized: (@Sendable () async -> Void)?
     private static let logger = SciaLog.logger(category: "network")
 
@@ -340,7 +339,6 @@ public struct MastodonClient: Sendable {
 
     // MARK: - 投稿への操作
 
-    /// お気に入りに登録し、登録後の投稿を返す。
     /// 一度に読める投稿の数。Mastodonは、これより多く求めると422を返す。
     public static let multipleStatusesLimit = 20
 
@@ -789,7 +787,6 @@ public struct MastodonClient: Sendable {
         return try await send(formRequest(method: "PUT", path: "api/v1/lists/\(listID)", form: form), decoding: MastodonList.self).0
     }
 
-    /// リストを消す。
     /// https://docs.joinmastodon.org/methods/lists/#delete
     public func deleteList(_ listID: String) async throws {
         var request = URLRequest(url: credential.instance.appending(path: "api/v1/lists/\(listID)"))
@@ -920,7 +917,7 @@ public struct MastodonClient: Sendable {
             let query = [URLQueryItem(name: "limit", value: String(limit))] + (maxID.map { [URLQueryItem(name: "max_id", value: $0)] } ?? [])
             let (reactions, response) = try await get(ElementList<Reacted>.self, path: "api/v1/statuses/\(statusID)/emoji_reactioned_by", query: query)
             let link = response.value(forHTTPHeaderField: "Link").map(LinkHeader.init)?.queryValue("max_id", of: "next")
-            // `allPages`と同じく、読んだ位置を返すサーバー（同じ位置を返し続ける、位置が循環する）で、同じページを読み続けないよう止める。
+            // `allPages`と同じく、同じページを読み続けないよう止める。
             if let maxID { readMaxIDs.insert(maxID) }
             let next = link.flatMap { readMaxIDs.contains($0) || reactions.elements.isEmpty ? nil : $0 }
             let accounts = reactions.elements.filter { $0.name == name }.map(\.account)
@@ -1194,7 +1191,6 @@ public struct MastodonClient: Sendable {
         try await get([ServerFilter].self, path: "api/v2/filters", query: []).0
     }
 
-    /// フィルターを作る。
     /// - Parameter expiresIn: 期限までの時間。nilなら期限を付けない。
     /// https://docs.joinmastodon.org/methods/filters/#create
     public func createFilter(title: String, context: [FilterResult.Context], action: FilterResult.Action, expiresIn: Duration?, keywords: [ServerFilter.KeywordDraft]) async throws -> ServerFilter {
@@ -1210,7 +1206,6 @@ public struct MastodonClient: Sendable {
         return try await post(ServerFilter.self, path: "api/v2/filters", form: form).0
     }
 
-    /// フィルターを消す。
     /// https://docs.joinmastodon.org/methods/filters/#delete
     public func deleteFilter(_ id: String) async throws {
         var request = URLRequest(url: credential.instance.appending(path: "api/v2/filters/\(id)"))
@@ -1436,7 +1431,6 @@ public struct InstanceConfiguration: Sendable, Equatable {
     public let profileLimits: ProfileLimits
     /// アップロードできるメディアの大きさの上限。
     public let mediaLimits: MediaLimits
-    /// 投票の上限。
     public let pollLimits: PollLimits
 
     /// サーバーの値を読む前に使う上限。Mastodonの既定値にし、メディアの大きさの上限は分からないものとする。

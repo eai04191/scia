@@ -200,7 +200,6 @@ extension MenuLayout where Item == TabItem {
         return MenuLayout(elements: elements + [.item(item, isVisible: true)])
     }
 
-    /// 項目を並びから外す。
     public func removing(_ item: TabItem) -> MenuLayout<TabItem> {
         MenuLayout(elements: elements.filter { element in
             if case .item(let current, _) = element { current != item } else { true }

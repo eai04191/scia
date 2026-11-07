@@ -49,7 +49,6 @@ struct AccountCacheTests {
             waiters.forEach { $0.resume() }
         }
 
-        /// リクエストが`count`回届くまで待つ。
         func waitForRequests(_ count: Int) async {
             while state.withLock({ $0.requests.count }) < count {
                 await withCheckedContinuation { continuation in

@@ -151,7 +151,6 @@ final class InlineComposeControllerTests {
         #expect(composer.overlappingRows.isEmpty, "行が重なりました\n\(composer.stateDump())")
     }
 
-    /// ラベルの文字が省略も切り取りもされずに収まっている。UILabelが本来の幅を確保し、ボタンがその文字を囲んでいる。
     /// 添付の長押しでメニューを出すと、iOSがソフトウェアキーボードを隠す。その間もバーを今の位置に留め、キーボードが戻ったら外す。
     @Test func contextMenuHoldsBarUntilKeyboardReturns() async throws {
         defer { window.isHidden = true }
@@ -331,7 +330,6 @@ final class InlineComposeControllerTests {
         #expect(composer.overlappingRows.isEmpty, "行が重なりました\n\(composer.stateDump())")
     }
 
-    /// 投票の欄を出して本文を書いているとき、欄を全部出すと本文に最低の行数も残らないなら、選択肢の欄を1行に折りたたむ。
     /// 英字の後ろに記号をペーストしても、本文と注意書きの欄が間に空白を足さない。UIKitのスマート挿入は、「abc」の後ろに「─」を貼ると「abc ─」にしていた。
     @Test func pasteKeepsTextAsCopied() async throws {
         defer { window.isHidden = true }
@@ -353,6 +351,7 @@ final class InlineComposeControllerTests {
         #expect(spoilerField.text == "abc─")
     }
 
+    /// 投票の欄を出して本文を書いているとき、欄を全部出すと本文に最低の行数も残らないなら、選択肢の欄を1行に折りたたむ。
     /// 1行を押すと開いて選択肢に書き始め、本文に戻るとまた折りたたむ。場所が足りていれば、本文を書いていても開いたままにする。
     @Test func pollFoldsWhileWritingTextOnlyWhenItDoesNotFit() async throws {
         defer { window.isHidden = true }
@@ -1092,6 +1091,7 @@ final class InlineComposeControllerTests {
         center.post(name: UIResponder.keyboardWillChangeFrameNotification, object: nil, userInfo: [UIResponder.keyboardFrameEndUserInfoKey: frame])
     }
 
+    /// ラベルの文字が省略も切り取りもされずに収まっている。UILabelが本来の幅を確保し、ボタンがその文字を囲んでいる。
     private func expectChipFitsTitle(_ button: UIButton, sourceLocation: SourceLocation = #_sourceLocation) {
         guard let label = button.titleLabel else {
             Issue.record("ラベルのボタンにUILabelがありません", sourceLocation: sourceLocation)

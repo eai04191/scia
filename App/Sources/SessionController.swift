@@ -202,9 +202,9 @@ final class SessionController {
     private var mediaCovers = MediaCovers()
     /// 「続きを読む」で広げた本文。どのタイムラインで広げても、開いているタイムラインと、あとで開くタイムラインにそろえる。
     private var longBodyExpansion = LongBodyExpansion()
-    /// fxtwitterから読んだXの投稿。ホームと通知とプロフィールで同じ投稿を1回だけ読む。
     /// タイムラインで見えている画像の先読み。ログアウトしたら、セッションの持ち主と一緒に止める。
     private lazy var mediaPrefetcher = MediaPrefetcher(scope: tasks, store: AppDependencies.mediaImages, network: AppDependencies.network, settings: AppDependencies.settings)
+    /// fxtwitterから読んだXの投稿。ホームと通知とプロフィールで同じ投稿を1回だけ読む。
     private let xPosts = XPostStore(client: XPostClient(client: AppDependencies.http), retryPolicy: { TuningCatalog.imageRetry(in: AppDependencies.tuning) })
     private var composerObscuredHeight: CGFloat = 0
     /// 本文のリンクを開くアプリ内のSafari。シートが覆っている高さも、投稿欄と同じく積んだ画面の下の余白にする。
@@ -592,8 +592,6 @@ final class SessionController {
         composer.install(in: tabBarController)
     }
 
-    /// 設定でオフにしている間、この機種で使えない間、通知タブを見ている間、ビューアのように画面全体を覆う画面を出している間は流さない。
-    /// 押すと通知タブを開く。投稿を1件だけ開く画面がまだないため。
     /// 設定でタブの並びを変えたら、タブバーを組み直し、無効にした項目の購読をやめ、有効にした項目の購読を戻す。
     private func observeTabLayout() {
         let handle = credential.handle
@@ -656,6 +654,8 @@ final class SessionController {
         AppDependencies.settings.setShownTabItem(item, for: credential.handle)
     }
 
+    /// 設定でオフにしている間、この機種で使えない間、通知タブを見ている間、ビューアのように画面全体を覆う画面を出している間は流さない。
+    /// 押すと通知タブを開く。投稿を1件だけ開く画面がまだないため。
     private func configureStatusBarTicker(tabBarController: UITabBarController) {
         let ticker = statusBarTicker
         ticker.scene = { [weak tabBarController] in tabBarController?.view.window?.windowScene }
@@ -1184,12 +1184,12 @@ final class SessionController {
         return button
     }
 
-    /// 足した項目のアイコンを、「タブ」ボタンから切り替えタブへ飛ばす。決まりはdocs/tabs.mdの「ユーザーのハッシュタグ」にある。
-    /// 切り替えタブのボタンを見分けられないときと、「視差効果を減らす」がオンのときは飛ばさない。
-    /// プロフィールは、その人のアイコンを決まった長さだけ待って読み、読めなければ記号で飛ばす。押してから飛び出すまでが遅れて、別の画面で飛ばないようにするため。
     /// プロフィールを足したとき、飛ばすその人のアイコンを読み込むのを待つ長さ。過ぎたら記号で飛ばす。
     private static let tabAddFlightIconWait: Duration = .milliseconds(200)
 
+    /// 足した項目のアイコンを、「タブ」ボタンから切り替えタブへ飛ばす。決まりはdocs/tabs.mdの「ユーザーのハッシュタグ」にある。
+    /// 切り替えタブのボタンを見分けられないときと、「視差効果を減らす」がオンのときは飛ばさない。
+    /// プロフィールは、その人のアイコンを決まった長さだけ待って読み、読めなければ記号で飛ばす。押してから飛び出すまでが遅れて、別の画面で飛ばないようにするため。
     private func flyAddedTab(_ item: TabItem, avatarURL: URL?, from barItem: UIBarButtonItem?) {
         guard !UIAccessibility.isReduceMotionEnabled, let barItem, let window = tabs.tabBarController.view.window,
               let destination = tabs.switchTabButton, destination.window === window,
@@ -2732,9 +2732,6 @@ final class SessionController {
         notices.showTransient(Notice(id: "user.relationChanged", kind: .success, title: change.doneTitle(relationship)), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
     }
 
-    /// 相手のプロフィールに書く、自分にしか見えないメモのシートを開く。保存したら、シートを閉じて知らせ、開いているその人のプロフィールにも反映する。
-    /// - Parameter otherAccount: 「別のアカウントで」から開いたときの、そのアカウント。そのアカウントとして書き、どのアカウントで書いたかを知らせる。
-    ///   今のアカウントのプロフィールや関係は変えず、失敗はこのセッションのログインし直しの案内につなげない。
     /// 「別のアカウントで」開けるシートが送るときのクライアント。ほかのアカウントなら、送るたびにそのアカウントの今の認証情報で作る。
     /// 失敗の理由の「ログインし直す」でログインし直したあと、同じシートで送り直しても、新しいトークンで送るため。
     private func sheetClient(as otherAccount: OtherAccount?) -> @MainActor @Sendable () -> MastodonClient {
@@ -2745,6 +2742,9 @@ final class SessionController {
         return { client }
     }
 
+    /// 相手のプロフィールに書く、自分にしか見えないメモのシートを開く。保存したら、シートを閉じて知らせ、開いているその人のプロフィールにも反映する。
+    /// - Parameter otherAccount: 「別のアカウントで」から開いたときの、そのアカウント。そのアカウントとして書き、どのアカウントで書いたかを知らせる。
+    ///   今のアカウントのプロフィールや関係は変えず、失敗はこのセッションのログインし直しの案内につなげない。
     private func presentNoteEditor(for relation: UserRelation, as otherAccount: OtherAccount? = nil) {
         let client = sheetClient(as: otherAccount)
         let actor = otherAccount.map { "\($0.credential.handle)で" } ?? ""
@@ -3343,16 +3343,16 @@ final class SessionController {
         notices.showTransient(notice, duration: AppDependencies.tuning.value(of: TuningCatalog.noticeFailureChipDuration))
     }
 
-    /// 押し直せば済む失敗なので、操作を止めるアラートにせず、チップの列に数秒で消えるチップを出し、押すと理由を出す。
-    /// 消えたあとも確かめられるよう、「最近の失敗」に残す。
-    /// - Parameter onSuccess: サーバーが受け付けたら呼ぶ。同じ操作の結果を待っている間に押されて送らなかったときは呼ばない。
     /// 行に見える変化がない操作（ブックマーク、会話のミュート、固定）が済んだことを知らせる。メニューを閉じると、変わったことが見えないため。
     /// お気に入りとブーストは、行の光の動きで分かるので知らせない。決まりはdocs/object-actions.mdの「結果の知らせ」にある。
     private func showToggledNotice(_ title: String) {
         notices.showTransient(Notice(id: "status.toggled", kind: .success, title: title), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
     }
 
+    /// 押し直せば済む失敗なので、操作を止めるアラートにせず、チップの列に数秒で消えるチップを出し、押すと理由を出す。
+    /// 消えたあとも確かめられるよう、「最近の失敗」に残す。
     /// - Parameter turningOn: 今の状態によらず、その向きにする。nilなら反転する。
+    /// - Parameter onSuccess: サーバーが受け付けたら呼ぶ。同じ操作の結果を待っている間に押されて送らなかったときは呼ばない。
     private func toggle(_ action: StatusInteractions.Action, on status: Status, turningOn: Bool? = nil, reblogVisibility: ReblogVisibility = .accountDefault, failureTitle: String, onSuccess: (() -> Void)? = nil) {
         let interactions = interactions
         tasks.run(.action) { [weak self] in
@@ -3380,7 +3380,6 @@ final class SessionController {
 
     private static let emojiReactionFailureTitle = "リアクションを変更できませんでした"
 
-    /// 絵文字のシートを開き、選んだ絵文字で`status`にリアクションする。自分がすでにしている絵文字を選んだら、付けたままにする。
     /// 「別のアカウントで」のリアクション。そのアカウントのサーバーの絵文字のシートを開き、選んだ絵文字でそのアカウントとしてリアクションする。
     /// 今のアカウントのタイムラインの投稿は変えないので、どのアカウントでリアクションしたかを知らせる。
     private func chooseEmojiReaction(for status: Status, as account: OtherAccount, original: Status) {
@@ -3400,6 +3399,7 @@ final class SessionController {
         }
     }
 
+    /// 絵文字のシートを開き、選んだ絵文字で`status`にリアクションする。自分がすでにしている絵文字を選んだら、付けたままにする。
     func chooseEmojiReaction(for status: Status, from viewController: UIViewController) {
         guard session.supportsEmojiReactions else { return }
         emojiReactionPicker.present(from: viewController.navigationController ?? viewController) { [weak self] emoji in
@@ -3543,13 +3543,13 @@ final class SessionController {
             notifications.start(purpose: .action)
         }
         loadProfileTabIcons(tabs.placement)
-        // 「別のアカウントで」の行に出す、ほかのアカウントのアイコン。
         otherAccounts.onHashtagDone = { [weak self] account, title in
             self?.notices.showTransient(Notice(id: "hashtag.otherAccountChanged", kind: .success, title: "\(account.credential.handle)で\(title)"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
         }
         otherAccounts.onHashtagFailure = { [weak self] account, title, error in
             self?.showOtherAccountFailure(title: "\(account.credential.handle)で\(title)", error: error)
         }
+        // 「別のアカウントで」の行に出す、ほかのアカウントのアイコン。
         otherAccounts.loadProfiles()
         // 投稿欄の「投稿するアカウント」の行に出す、このアカウント自身のアイコン。
         tasks.run(.display) { [weak self] in _ = try? await self?.myAccount(purpose: .display) }
@@ -4058,7 +4058,6 @@ final class SessionController {
         }
     }
 
-    /// Documents/DebugInjectの`file`をAPIの応答と同じ形のJSONとして読み、`tab`のタイムラインに新着として流す。読めなければ流さずにログに残す。
     private func replyForDebug(to file: String) {
         let url = URL.documentsDirectory.appending(path: "DebugInject").appending(fileName: SafeFileName(file))
         do {
@@ -4071,6 +4070,7 @@ final class SessionController {
         }
     }
 
+    /// Documents/DebugInjectの`file`をAPIの応答と同じ形のJSONとして読み、`tab`のタイムラインに新着として流す。読めなければ流さずにログに残す。
     private func inject(_ file: String, into tab: DebugURL.Tab) {
         let url = URL.documentsDirectory.appending(path: "DebugInject").appending(fileName: SafeFileName(file))
         do {
@@ -4246,7 +4246,6 @@ final class SessionController {
         }
     }
 
-    /// 選んでいるタブで、画面のいちばん上に見えている添付ファイル付きの投稿を、サムネイルをタップしたのと同じ経路でビューアに開く。
     /// ストリーミングの`emoji_reaction`のイベントと同じ経路で、リアクションの数を当てる。
     /// 絵文字は、対象の投稿にすでに同じ名前のリアクションがあれば、その画像のURLごと使う。なければUnicodeの絵文字か、画像のないカスタム絵文字になる。
     private func applyDebugEmojiReaction(statusID: String?, name: String, count: Int, me: Bool) {
@@ -4270,6 +4269,7 @@ final class SessionController {
             .status
     }
 
+    /// 選んでいるタブで、画面のいちばん上に見えている添付ファイル付きの投稿を、サムネイルをタップしたのと同じ経路でビューアに開く。
     private func openTopmostMedia(at index: Int) {
         guard let view = (rootViewController as? UITabBarController)?.selectedViewController?.view, let window = view.window else { return }
         let grids = Self.mediaGrids(in: view)
@@ -4585,7 +4585,6 @@ private final class PushedFeedRegistry {
 
 }
 
-/// 開いているスレッドの画面を弱く持つ。
 /// 開いている検索の結果。投稿への操作の結果を、開いているものすべてに反映する。閉じたものは自然に消える。
 @MainActor
 private final class SearchRegistry {
@@ -4612,6 +4611,7 @@ private final class SearchRegistry {
     }
 }
 
+/// 開いているスレッドの画面を弱く持つ。
 @MainActor
 private final class ThreadRegistry {
     private struct Entry {

@@ -17,7 +17,6 @@ struct ComposeModelRedraftTests {
         func append(_ event: String) { state.withLock { $0.append(event) } }
     }
 
-    /// 呼ばれた回数を数える。
     private final class Counter: Sendable {
         private let state = Mutex(0)
         func next() -> Int {

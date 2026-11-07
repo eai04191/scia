@@ -4,7 +4,6 @@ import UIKit
 extension TimelineViewController {
     /// 閲覧注意の投稿と、注意書きのある投稿と、添付ファイルをぼかすフィルターに一致した投稿は、タップするまで添付ファイルをぼかす。
     /// メニューから隠した投稿もぼかす。ブーストなら元の投稿の添付ファイルを並べる。
-    /// 説明にならない代替テキストは、ALTの目印にもビューアにも読み上げにも出さないよう、ここで除いておく。
     /// 本文の右に小さく出す設定なら、重ねて出す。
     func mediaContent(for status: Status) -> MediaGridView.Content? {
         var content = mediaContent(of: status.displayed.mediaAttachments, cover: mediaCover(for: status))

@@ -96,7 +96,6 @@ public final class ComposeModel<Thumbnail: Sendable> {
     private var media: ComposeMediaService<Thumbnail> { otherAccount?.media ?? homeMedia }
     /// 下書きの送信とアップロードの持ち主。セッションの持ち主の子で、ログアウトやアカウントの切り替えで閉じると、送っている途中のものも止める。
     @ObservationIgnored public let tasks: TaskScope
-    /// 送っている途中にバックグラウンドへ移っても、送り終えるまでアプリを止めないよう頼む。終えるときに呼ぶものを返す。
     @ObservationIgnored private let backgroundTime: @MainActor (String) -> @MainActor () -> Void
     @ObservationIgnored private var uploadTasks: [DraftAttachment.ID: Task<Void, Never>] = [:]
     @ObservationIgnored private var thumbnailTasks: [DraftAttachment.ID: Task<Void, Never>] = [:]
@@ -1090,7 +1089,6 @@ public struct ComposeMediaService<Thumbnail> {
     public var unprocessableImageTypes: @MainActor () -> Set<String>
     /// 画像の形式を、接続しているサーバーの今の版では処理できないと覚える。
     public var recordUnprocessableImageType: @MainActor (String) -> Void
-    /// 送る前に縮める大きさと、作り直すときの好みの値。
     public var preparation: @MainActor () -> MediaPreparationSettings
 
     public init(
@@ -1190,7 +1188,6 @@ extension ComposeModel {
         onPastedMediaSkipped(skipped.map(\.kind))
     }
 
-    /// ピッカーを閉じた。
     public func mediaPickerDidClose() {
         pickerSelection.pickerDidClose()
     }
@@ -1280,8 +1277,7 @@ extension ComposeModel {
         uploadTasks.removeValue(forKey: id)?.cancel()
         thumbnailTasks.removeValue(forKey: id)?.cancel()
         descriptionTasks.removeValue(forKey: id)?.cancel()
-        // 作り直したファイルは、読み込んだファイルと同じディレクトリにあるので、添付を外せば一緒に消える。ここでは消さない。
-        // 止めたアップロードが、まだ読んでいることがあるため。
+        // `setRemovesAudio`と同じ理由で、作り直したファイルはここでは消さない。
         localMedia[id]?.crop = crop
         localMedia[id]?.cropCount += 1
         localMedia[id]?.sending = nil

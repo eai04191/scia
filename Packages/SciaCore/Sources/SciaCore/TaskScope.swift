@@ -96,7 +96,6 @@ public final class TaskScope {
         keys[key] != nil
     }
 
-    /// `key`の処理を取り消す。
     public func cancel(key: String) {
         guard let id = keys.removeValue(forKey: key) else { return }
         tasks[id]?.cancel()

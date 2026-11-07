@@ -37,7 +37,7 @@ public struct APIResponseText: Equatable, Sendable {
         // `JSONSerialization`はUTF-16とUTF-32も読むが、字句に分けるのはUTF-8だけ。読めたJSONのUTF-8には、0x00（制御文字は文字列の中でもエスケープが要る）も、
         // 0xFEと0xFF（UTF-8に現れない）もないため、どれかがあればほかの符号化として投げる。Mastodonの応答はUTF-8なので、ほかの符号化は出さない。
         guard !data.contains(where: { $0 == 0x00 || $0 >= 0xFE }) else { throw NotUTF8() }
-        // 先頭のBOMは`JSONSerialization`が読み飛ばすので、こちらでも外す。UTF-8のほかの符号化はMastodonが返さないため扱わない。
+        // 先頭のBOMは`JSONSerialization`が読み飛ばすので、こちらでも外す。
         let bom: [UInt8] = [0xEF, 0xBB, 0xBF]
         var writer = Writer(bytes: data.starts(with: bom) ? Array(data.dropFirst(bom.count)) : Array(data))
         try writer.run()

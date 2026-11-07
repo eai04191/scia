@@ -196,7 +196,6 @@ public struct UserMenuTree {
         let tree: UserMenuTree
         /// 見出しのあるメニューに並べる。falseなら、投稿のメニューに直接並べるため、名前に相手を入れる。
         let inSubmenu: Bool
-        /// 「プロフィール」を出すか。
         let offersProfile: Bool
         /// 「プロフィール」に付けるアイコン。nilなら記号を付ける。
         let profileAvatar: MenuAvatar?

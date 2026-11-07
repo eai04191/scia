@@ -475,7 +475,6 @@ struct AppearanceValueRow: View {
         onFocus()
     }
 
-    /// 文字の大きさの決まり方。本文は標準との差、ほかは本文との差。
     /// 割合の項目の、値の向きの説明。割合の意味は項目ごとに違うので、単位ではなく項目で決める。
     static func ratioNote(for item: AppearanceValue) -> String? {
         switch item.id {

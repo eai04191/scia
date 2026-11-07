@@ -132,7 +132,7 @@ final class OtherAccounts {
 
     /// `account`としてAPIを呼ぶクライアントを、呼ぶたびにそのアカウントの今の認証情報で作るもの。
     /// 投稿欄のように長く持つ送り先に渡す。持っている間にログインし直しても、新しいトークンで送るため。
-    /// ログアウトしていれば、渡したときの認証情報で作る。この関数を足す前から、持っている送り先はログアウトしたあとも渡したときのクライアントで送っており、その挙動は変えない。
+    /// ログアウトしていれば、渡したときの認証情報で作る。
     func latestClient(for account: OtherAccount) -> @MainActor @Sendable () -> MastodonClient {
         let given = account.credential
         let makeClient = makeClient

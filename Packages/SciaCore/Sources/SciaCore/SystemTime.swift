@@ -6,7 +6,6 @@ public enum SystemTime {
     /// 時間をおく処理に渡す、実際の時計。
     public static let clock: any Clock<Duration> = ContinuousClock()
 
-    /// 今の日付。
     public static func now() -> Date {
         Date()
     }

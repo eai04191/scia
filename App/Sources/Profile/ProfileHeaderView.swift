@@ -482,7 +482,6 @@ final class ProfileHeaderView: UIView {
 
         // 自己紹介はカードにせず、名前の下にそのまま置く。
         let note = inset([noteView])
-        // 自分にしか見えないメモは、自己紹介の下に置く。
         let privateNote = inset([privateNoteView])
         // 補足情報は、数とほかのサーバーのアカウントであることと一緒に、角の丸いカードにまとめる。
         // 補足情報と数の間にも、補足情報の行どうしと同じ区切り線を引く。

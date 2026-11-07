@@ -229,8 +229,6 @@ final class ProfileEditFieldCell: UITableViewCell, UITextFieldDelegate {
     }
 }
 
-/// 区切りの下に出す文字数と、問題の文言。右に寄せ、上限を超えたら赤くする。
-/// 余白は表が決める`contentView`の余白に合わせる。ただの`UIView`で余白を決めると、表が高さを測るときと置いたときで幅が変わり、折り返した文言が切れた。
 /// 区切りの見出し。小さい文字で出す。
 final class ProfileEditHeader: UITableViewHeaderFooterView {
     static let reuseIdentifier = "ProfileEditHeader"
@@ -264,6 +262,8 @@ final class ProfileEditHeader: UITableViewHeaderFooterView {
     }
 }
 
+/// 区切りの下に出す文字数と、問題の文言。右に寄せ、上限を超えたら赤くする。
+/// 余白は表が決める`contentView`の余白に合わせる。ただの`UIView`で余白を決めると、表が高さを測るときと置いたときで幅が変わり、折り返した文言が切れた。
 final class ProfileEditFooter: UITableViewHeaderFooterView {
     private let label = UILabel()
 

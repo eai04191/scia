@@ -4203,7 +4203,6 @@ private final class ComposeToolsView: UIStackView {
     }
 }
 
-/// 注意書きの入力欄。本文と同じく、ハードウェアキーボードの⌘Returnで送信し、補完の候補を出している間はキーで選べる。
 /// 投稿欄の1行の入力欄（注意書き、投票の選択肢）。本文と同じく、⌘Returnで投稿し、補完の候補をキーボードで選べる。
 final class ComposeLineField: GlyphLanguageTextField {
     var onSubmit: () -> Void = {}

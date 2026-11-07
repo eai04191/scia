@@ -577,7 +577,6 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
         layer.add(animation, forKey: Self.animationKeyPrefix + keyPath)
     }
 
-    /// 背景と中身の、今の見た目の位置で止める。中身の動き（上へ送る途中のUIKitのアニメーションを含む）も、背景に沿わせ直すので外す。
     /// 背景と中身の、背景に合わせた動きを、今の見た目の位置で止める。
     /// 中身を上へ送って入れ替えている途中のUIKitの動きは残す。中身は横の位置だけを背景に沿わせるので、送る動きとぶつからない。
     /// 外して見えている高さから動かし直すと、描くまでにメインスレッドが止まったとき（押して通知タブへ移るときなど）、止まっている間に進んだ分だけ、1コマで高さが戻る。

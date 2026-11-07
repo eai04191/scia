@@ -9,7 +9,7 @@ extension UIButton {
     /// そこで押した見た目が戻ってから替える。戻るのは指を離したときに限らない。メニューを出すボタンは、メニューを開いている間押した見た目のままで、
     /// 閉じても指を離したイベントは届かない（メニューから絞り込みを選んで確かめた）。そのため、状態が変わるたびに呼ばれる`configurationUpdateHandler`で戻るのを待つ。
     /// 待つ間に替える先が変わったら、最後のものだけを替える。押していないときに替えたら、待っていたものは捨てる。
-    /// 待つ間は`configurationUpdateHandler`を使うので、ほかの用途で`configurationUpdateHandler`を持つボタンには使えない。
+    /// ほかの用途で`configurationUpdateHandler`を持つボタンには使えない。
     func replaceSymbol(with image: UIImage?) {
         guard isHighlighted else {
             if configurationUpdateHandler != nil { configurationUpdateHandler = nil }

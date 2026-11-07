@@ -90,7 +90,7 @@ class PhotoStackView: UIView {
     }
 
     /// 隠していた写真を見せ直した。その写真と、その下の写真の写真同士の影は、隠している間は描いていなかったので、一度に現れないよう浮かび上がらせる。
-    /// ビューアの開閉で動かす画像は写真同士の影を落とさないため、着いて写真を見せ直したところで影が一度に現れて見えないようにする。
+    /// ビューアの開閉で動かす画像も、写真同士の影を落とさない。
     func photoDidReappear(_ photo: StackedPhotoView) {
         guard let index = photos.firstIndex(where: { $0 === photo }) else { return }
         layoutIfNeeded()
