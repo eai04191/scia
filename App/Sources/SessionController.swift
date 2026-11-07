@@ -4187,6 +4187,8 @@ final class SessionController {
             openTopmostMedia(at: index)
         case .emojiReaction(let statusID, let name, let count, let me):
             applyDebugEmojiReaction(statusID: statusID, name: name, count: count, me: me)
+        case .appearance(let json):
+            overrideAppearanceChoices(json: json)
         case .autoScroll(let distance, let speed):
             autoScroll(distance: distance, speed: speed)
         case .createList(let title):
@@ -4282,6 +4284,27 @@ final class SessionController {
             return
         }
         grid.onSelect?(index)
+    }
+
+    /// 「投稿の見た目」の選ぶ項目のうち、JSONに書いた項目だけを上書きする（`DebugURL.appearance`）。
+    /// 読めないJSONや、型の違う値（`"false"`のような文字列、知らない選択肢、`null`）を渡したら、設定を変えない。
+    /// 保存した値を読む`AppearanceChoices(stored:)`は、読めない項目を既定値に戻すので使わない。使うと、渡し間違えた項目の今の値が既定値で上書きされるため。
+    private func overrideAppearanceChoices(json: String) {
+        let settings = AppDependencies.settings
+        guard let overrides = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any],
+              var choices = (try? JSONSerialization.jsonObject(with: settings.appearance.storedData)) as? [String: Any]
+        else {
+            logger.error("debug appearance: unreadable json")
+            return
+        }
+        choices.merge(overrides) { $1 }
+        guard let data = try? JSONSerialization.data(withJSONObject: choices),
+              let appearance = try? JSONDecoder().decode(AppearanceChoices.self, from: data)
+        else {
+            logger.error("debug appearance: value of a wrong type")
+            return
+        }
+        settings.appearance = appearance
     }
 
     /// 選んでいるタブのタイムラインを、一定の速さで動かす。端に着いたら止める。

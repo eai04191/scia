@@ -86,6 +86,9 @@ enum DebugURL: Equatable {
     /// `scia-debug://autoscroll?distance=<pt>&speed=<pt/秒>`。選んでいるタブのタイムラインを、決まった速さで決まった距離だけ動かす。distanceが負なら上へ戻す。
     /// 指で操作できない検証用の実機で、スクロールの重さ（hitch）を同じ条件で測るため。慣性のない一定の速さで動かすので、指のスクロールとは動きが違う。
     case autoScroll(distance: CGFloat, speed: CGFloat)
+    /// `scia-debug://appearance?json=<パーセントエンコードしたJSON>`。「投稿の見た目」の選ぶ項目（`AppearanceChoices`）のうち、JSONに書いた項目だけを上書きする。
+    /// 例は`{"showsActionBar":false}`。設定のファイルを書き換えられない検証用の実機で、設定を変えて測り比べるため。`scia-debug://appearance?json={}`では何も変わらない。
+    case appearance(json: String)
     /// `scia-debug://inject/<home|local|federated|notifications|announcements>?file=<ファイル名>`。アプリのDocuments/DebugInjectに置いたJSONを読み、ストリーミングの新着と同じ経路で流す。
     /// ホーム、ローカル、連合は`Status`の配列、通知は`Notification`の配列、お知らせは`Announcement`の配列で、APIの応答と同じ形で書く。実データにない投稿や通知の見え方を、ログインした端末のまま確かめるため。
     case inject(Tab, file: String)
@@ -196,6 +199,7 @@ enum DebugURL: Equatable {
         case "media-limits": Self.mediaLimits(url)
         case "viewer": Self.viewer(url)
         case "autoscroll": Self.autoScroll(url)
+        case "appearance": Self.query("json", in: url).map { .appearance(json: $0) }
         case "inject": Self.inject(url)
         case "lists": Self.lists(url)
         case "tags": Self.tags(url)
