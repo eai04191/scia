@@ -574,7 +574,7 @@ struct AppearanceSamples {
         return Set(names.map { "preview-\($0)" })
     }
 
-    /// 分類ごとに出す見本。その分類の項目の場所を示せる、なるべく小さい投稿を選び、既定の設定では見本の枠に収まるようにする。
+    /// 分類ごとに出す見本。その分類の項目の場所を示せる、なるべく小さい投稿を選ぶ。どの見本も、その分類のどれかの項目に要るものにする。
     /// 行の余白と区切り線は投稿のあいだの見た目なので、行には2件を出す。
     private static let groupSamples: [AppearanceGroup.ID: [String]] = [
         "row": ["basic", "next"],

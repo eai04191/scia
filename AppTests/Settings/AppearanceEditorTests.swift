@@ -152,16 +152,58 @@ struct AppearanceEditorTests {
         #expect(showsBesideMedia(.choice(.tiltsStackedPhotos)))
     }
 
-    /// 既定の設定では、どの分類の画面の見本も、見本の枠に収まる。
-    /// 枠の高さは、幅402ptのiPhone 17 Proで、分類の画面の見本の枠の上限（画面の高さの42%）が約300ptになるのに合わせる。
+    /// 分類の画面の見本に、要らない見本がない。どの見本も、除くとその分類のどれかの項目の場所を示せなくなる。
+    /// 既定の設定のほか、その分類の選ぶ項目を1つずつ変えた設定でも確かめる。設定によって、その見本にしか出ない部品があるため（片方だけの光を全幅にすると、真ん中の境目は両方をした投稿にしか出ない、など）。
+    /// 場所は、項目が効く本来の部品で確かめる（`primary`）。投稿のあいだに出る項目は、隣り合う投稿があるときだけ示せたことにする（`betweenPosts`）。
+    /// 確かめるのは、どの見本もどれかの項目に要ることだけで、見本の中身が小さいかは確かめられない。触っている間だけ足す見本は、その項目のための見本なので見ない。
     @Test(arguments: AppearanceCatalog.groups.map(\.id))
-    func groupSamplesFitPreview(group: AppearanceGroup.ID) throws {
-        let samples = AppearanceSamples(settings: try makeSettings(), tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
-        let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: 400))
-        preview.apply(samples.configurations(colorScheme: .light, revision: 0, groups: [group]))
-        preview.layoutIfNeeded()
-        #expect(preview.contentHeight <= 300, "\(group)の見本の高さが\(preview.contentHeight)ptあります")
+    func groupSamplesAreAllNeeded(group: AppearanceGroup.ID) throws {
+        let values = try #require(AppearanceCatalog.groups.first { $0.id == group }).values
+        let choices = Self.choices[group] ?? []
+        let focuses = values.map { AppearanceFocus.value($0) } + choices.map { AppearanceFocus.choice($0) }
+        var variants = [AppSettings(defaults: TestScratch.defaults("AppearanceEditorTests-needed"))]
+        for choice in choices {
+            let settings = AppSettings(defaults: TestScratch.defaults("AppearanceEditorTests-needed-\(choice)"))
+            _ = AppearanceSheets.change(choice, in: settings)
+            variants.append(settings)
+        }
+        let sampleIDs = AppearanceSamples.sampleIDs(for: [group], focus: nil, appearance: try #require(variants.first).appearance)
+        for sampleID in sampleIDs.sorted() {
+            let needed = variants.contains { settings in
+                focuses.contains { focus in
+                    Self.locates(focus, in: layOutSamples(settings, groups: [group], focus: focus))
+                        && !Self.locates(focus, in: layOutSamples(settings, groups: [group], focus: focus, excluding: sampleID))
+                }
+            }
+            #expect(needed, "\(group)の見本\(sampleID)は、除いてもその分類のすべての項目の場所を示せます")
+        }
     }
+
+    /// 項目の場所を、本来の部品で示せるか。
+    private static func locates(_ focus: AppearanceFocus, in rows: [AppearancePreviewFrames]) -> Bool {
+        if betweenPosts.contains(focus), rows.count < 2 { return false }
+        let highlight: AppearanceHighlight? = switch focus {
+        case .value(let item): AppearanceHighlight(item)
+        case .choice(let choice): choice.highlight
+        }
+        return highlight.map { primary($0).locate(in: rows) != nil } ?? false
+    }
+
+    /// 項目が効く本来の部品。プレビューでは、本来の部品が見本にないとき（件数を表示しない設定で件数がない、など）に代わりの場所を示すが、その場所には項目が効かないので数えない。
+    private static func primary(_ highlight: AppearanceHighlight) -> AppearanceHighlight {
+        switch highlight {
+        case .firstOf(let candidates): candidates.first.map(primary) ?? highlight
+        case .firstPart(let parts): parts.first.map { .part($0) } ?? highlight
+        default: highlight
+        }
+    }
+
+    /// 投稿の中ではなく、上下の投稿とのあいだの見た目を決める項目。投稿が1件だけでは、隣の投稿とどう並ぶかが分からない。
+    private static let betweenPosts: Set<AppearanceFocus> = [
+        .value(AppearanceCatalog.rowPaddingTop),
+        .value(AppearanceCatalog.rowPaddingBottom),
+        .choice(.showsSeparators),
+    ]
 
     /// 分類ごとの、選んで決める項目。`AppearanceEditorView.choices(of:)`に並べたものと同じにする。
     private static let choices: [AppearanceGroup.ID: [AppearanceChoice]] = [
@@ -432,10 +474,24 @@ struct AppearanceEditorTests {
     }
 
     /// 見本の行を幅402で並べ、行ごとの部品の枠を返す。
-    private func layOutSamples(_ settings: AppSettings, groups: Set<AppearanceGroup.ID>? = nil, focus: AppearanceFocus? = nil) -> [AppearancePreviewFrames] {
+    /// - Parameter excluding: 除く見本の投稿のID。
+    private func layOutSamples(_ settings: AppSettings, groups: Set<AppearanceGroup.ID>? = nil, focus: AppearanceFocus? = nil, excluding excluded: String? = nil) -> [AppearancePreviewFrames] {
         let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: 6_000))
         let samples = AppearanceSamples(settings: settings, tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
-        preview.apply(samples.configurations(colorScheme: .light, revision: 0, groups: groups, focus: focus))
+        // 見本の中身は、見本の投稿と同じ順に並ぶ。
+        let entries = samples.entries(colorScheme: .light, groups: groups, focus: focus)
+        let configurations = samples.configurations(colorScheme: .light, revision: 0, groups: groups, focus: focus)
+        let kept = zip(entries, configurations).filter { entry, _ in
+            guard let excluded, case .status(let status) = entry else { return true }
+            return status.id != excluded
+        }
+        // 返信でつながった隣の投稿を除いたら線を引かないよう、残した見本だけでつながりを決め直す。
+        let connections = ReplyConnection.connections(in: kept.map(\.0))
+        preview.apply(kept.map { entry, configuration in
+            var configuration = configuration
+            configuration.replyConnection = connections[entry.id] ?? ReplyConnection()
+            return configuration
+        })
         preview.layoutIfNeeded()
         return preview.rowFrames()
     }

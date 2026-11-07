@@ -147,7 +147,8 @@ struct AppearanceSheets {
     }
 
     /// 選択肢を変え、何から何に変えたかを返す。選択肢を足したら、ここにも足さないとコンパイルできない。
-    private static func change(_ choice: AppearanceChoice, in settings: AppSettings) -> String {
+    /// 選ぶ項目を、既定と違う値に変える。変えた値の説明を返す。
+    static func change(_ choice: AppearanceChoice, in settings: AppSettings) -> String {
         func flip(_ keyPath: ReferenceWritableKeyPath<AppSettings, Bool>) -> String {
             settings[keyPath: keyPath].toggle()
             return "→ \(settings[keyPath: keyPath])"
