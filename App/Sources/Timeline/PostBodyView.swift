@@ -184,7 +184,7 @@ final class PostBodyView: UIView {
     private var actionBarView: PostActionBarView?
     /// アクションバーのボタンが押されたときに、その項目と、押したボタンを渡して呼ぶ。
     var onActionBarPress: ((PostActionBarItem, UIView) -> Void)?
-    /// アクションバーのボタンの長押しのメニューの対象。
+    /// アクションバーのボタンを長押しして出すメニューの対象。
     var actionBarLongPressTarget: ((PostActionBarItem) -> (any ObjectActionTarget)?)? {
         didSet { actionBarView?.longPressTarget = actionBarLongPressTarget }
     }

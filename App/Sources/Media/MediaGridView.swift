@@ -313,7 +313,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
     private let moreLabel = UILabel()
     private var loadTask: Task<Void, Never>?
     private var attachment: MediaAttachment?
-    /// 長押しのメディアのメニュー。サムネイルはボタンで、タイムラインの行の長押しのメニューが届かないため、自分で受ける。
+    /// メディアのメニュー。サムネイルはボタンで、タイムラインの行のコンテキストメニューが届かないため、自分で受ける。
     private var menuInteraction: MediaMenuInteraction?
     private var isCovered = false
     private var policy: MediaThumbnailPolicy?

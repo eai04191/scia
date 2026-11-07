@@ -130,7 +130,7 @@ struct PostContentConfiguration: UIContentConfiguration {
     var actionBar: PostActionBarContent?
     /// アクションバーのボタンが押されたときに、その項目と、押したボタンを渡して呼ぶ。
     var onActionBarPress: ((PostActionBarItem, UIView) -> Void)?
-    /// アクションバーのボタンの長押しのメニューの対象。項目を渡して受け取る。nilならメニューを出さない。
+    /// アクションバーのボタンを長押しして出すメニューの対象。項目を渡して受け取る。nilならメニューを出さない。
     var actionBarLongPressTarget: ((PostActionBarItem) -> (any ObjectActionTarget)?)?
 
     /// 大きさと文字の見た目。
@@ -241,7 +241,7 @@ final class PostContentView: UIView, UIContentView {
     private let contextIcon = UIImageView()
     private let contextAvatarView: AvatarView
     private let contextLabel = FadingLabel()
-    /// アイコンと名前の上の行の、長押しのメニューと長押しの操作。
+    /// アイコンと名前の上の行の、メニューと長押しの操作。
     private var authorInteraction: ObjectInteraction?
     private var contextInteractions: [ObjectInteraction] = []
     private let nameLabels = [FadingLabel(), FadingLabel()]

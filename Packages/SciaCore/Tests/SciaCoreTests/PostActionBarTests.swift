@@ -78,7 +78,7 @@ struct PostActionBarTests {
         #expect(PostActionBarButton.countText(count) == text)
     }
 
-    /// 長押しのメニューは、ブーストとお気に入りのボタンにだけある。
+    /// 長押しして出すメニューは、ブーストとお気に入りのボタンにだけある。
     /// メニューから除く項目は、設定ごとに、並べたボタンの項目と、並べたボタンの長押しの項目を足し合わせる。
     @Test func itemsRemovedFromMenuFollowSettings() {
         let layout = PostActionBarItem.defaultLayout

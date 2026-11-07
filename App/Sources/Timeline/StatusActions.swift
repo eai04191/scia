@@ -31,7 +31,7 @@ extension TimelineViewController {
         }
     }
 
-    /// 長押しのメニュー。出す項目がなければnil。
+    /// メニュー。出す項目がなければnil。
     /// - Parameter id: メニューを出した要素。共有のシートを、その行から出す。
     /// - Parameter groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
     func contextMenu(for entry: TimelineEntry, id: ItemID, groups: MenuLayout<StatusMenuItem>.Groups? = nil) -> UIMenu? {
@@ -55,7 +55,7 @@ extension TimelineViewController {
         ).built(groups: settings.hashtagMenuLayout.groups)?.menu
     }
 
-    /// 長押しのメニューの木と描き方。並びは設定の投稿のメニューに従い、関係するユーザーはユーザーのメニューのサブメニューにする。決まりはdocs/menus.mdにある。
+    /// メニューの木と描き方。並びは設定の投稿のメニューに従い、関係するユーザーはユーザーのメニューのサブメニューにする。決まりはdocs/menus.mdにある。
     /// 項目の出し分けはSciaCoreの`StatusMenuTree`が決め、ここでは画面の状態（スレッドを開けるか、ぼかしているか、本文を選べるか）を渡し、押された操作を行う。
     /// 出す項目がなければnil。
     /// - Parameter id: メニューを出した要素。共有のシートを、その行から出す。

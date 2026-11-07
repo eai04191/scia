@@ -462,7 +462,7 @@ public enum TuningCatalog {
     )
 
     /// ストリーミングで届いた新着を、まとめてタイムラインに挿入する間隔。最初の新着が届いてからこの時間待つ。
-    /// 0なら届いたらすぐ挿入する。指で触っている間や長押しのメニューを出している間は、この値によらず操作が終わるまで待つ。
+    /// 0なら届いたらすぐ挿入する。指で触っている間やコンテキストメニューを出している間は、この値によらず操作が終わるまで待つ。
     public static let insertionInterval = NumberTuning(
         id: "streaming.insertionInterval",
         title: "新着をまとめて挿入する間隔（秒）",

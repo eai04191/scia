@@ -4,7 +4,7 @@ import SciaTesting
 import UIKit
 @testable import Scia
 
-/// 長押しのメニューを出している間は、タイムラインの並びを変えず、閉じてから反映することを確かめる。
+/// コンテキストメニューを出している間は、タイムラインの並びを変えず、閉じてから反映することを確かめる。
 /// メニューの元になった行が動くと、メニューと表示がずれるため。
 @MainActor
 @Suite(.scratch, .serialized)
@@ -34,7 +34,7 @@ struct RowHoldTests {
         #expect(settled == 1)
     }
 
-    /// 本文のリンクの長押しのメニューは、セルのメニューと別の部品が出すため、同じように溜めることを確かめる。
+    /// 本文のリンクのメニューは、セルのメニューと別の部品が出すため、同じように溜めることを確かめる。
     @Test func entriesAreAppliedAfterLinkMenuHides() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

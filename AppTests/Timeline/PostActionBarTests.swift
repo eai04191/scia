@@ -387,7 +387,7 @@ struct PostActionBarTests {
         #expect(!cell.isShowingShrinkSnapshot)
     }
 
-    /// 長押しのメニューは、ブーストとお気に入りのボタンにだけ付け、投稿のメニューと同じ組み方で組む。
+    /// 長押しして出すメニューは、ブーストとお気に入りのボタンにだけ付け、投稿のメニューと同じ組み方で組む。
     @Test func longPressMenusOnlyOnReblogAndFavourite() throws {
         let (harness, statuses) = try harness(replacing: 10, with: { base in
             Status(id: base.id, createdAt: base.createdAt, account: base.account, content: base.content, spoilerText: "", url: nil, favouritesCount: 3)

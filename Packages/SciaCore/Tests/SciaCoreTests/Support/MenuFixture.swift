@@ -165,7 +165,7 @@ enum MenuFixture {
 }
 
 extension AppSettings {
-    /// 長押しのメニューの並びを、すべて`MenuFixture`にする。
+    /// メニューの並びを、すべて`MenuFixture`にする。
     func useMenuFixtures() {
         statusMenuLayout = MenuFixture.status
         userMenuLayout = MenuFixture.user

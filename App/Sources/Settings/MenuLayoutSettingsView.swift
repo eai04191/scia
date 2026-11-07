@@ -2,7 +2,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 長押しのメニューや投稿欄の＋の並びを変える画面。項目と区切り線を「その他」の境目の前と後ろの2つの節に分けて並べ替え、項目ごとに表示を切り替える。決まりはdocs/menus.mdにある。
+/// 投稿などのメニューや投稿欄の＋の並びを変える画面。項目と区切り線を「その他」の境目の前と後ろの2つの節に分けて並べ替え、項目ごとに表示を切り替える。決まりはdocs/menus.mdにある。
 /// 中身は`MenuLayoutViewController`で、UIKitのリストで作る。SwiftUIの`List`では、つまみは編集モードでしか出ず、編集モードでは行のスイッチが押せなくなるため、
 /// スイッチを押せたまま、つまみをつかんですぐ並べ替えられる形にできない。
 struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {

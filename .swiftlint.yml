@@ -142,8 +142,8 @@ custom_rules:
     message: "回線の状態を読んで送るかを分けない。目的（RequestPurpose）を名乗り、送ってよいかはNetworkUsePolicyに聞く"
     severity: error
 
-  # コントロールに組み込まれた長押しのメニューは、開いても触覚フィードバックが出ず、ボタンはメニューに変形する形で出る。サムネイルで直したあとに足した本文のリンクで、同じ抜けがまた起きた。
-  # 長押しのメニューは、別に付けたUIContextMenuInteractionで出す（MediaMenuInteraction、ObjectInteraction、LinkHitAreaのLinkMenuInteraction）
+  # コントロールに組み込まれたコンテキストメニューは、開いても触覚フィードバックが出ず、ボタンはメニューに変形する形で出る。サムネイルで直したあとに足した本文のリンクで、同じ抜けがまた起きた。
+  # コンテキストメニューは、別に付けたUIContextMenuInteractionで出す（MediaMenuInteraction、ObjectInteraction、LinkHitAreaのLinkMenuInteraction）
   built_in_context_menu:
     included: "(App/Sources|ShareExtension)/.*\\.swift"
     regex: "\\bisContextMenuInteractionEnabled\\s*=\\s*true\\b"
@@ -151,7 +151,7 @@ custom_rules:
       - comment
       - doccomment
       - string
-    message: "長押しのメニューは、コントロールに組み込まれたメニューではなく、別に付けたUIContextMenuInteractionで出す。組み込まれたメニューでは触覚フィードバックが出ない"
+    message: "コンテキストメニューは、コントロールに組み込まれたメニューではなく、別に付けたUIContextMenuInteractionで出す。組み込まれたメニューでは触覚フィードバックが出ない"
     severity: error
 
   # URLSessionは、通信の層のURLSessionTransport.swiftでだけ使う。ほかの場所で直接使うと、HTTPClientの決まり（再開の時刻で止める、送り直す、大きさの上限、httpとhttps以外を開かない）を通らない経路ができる。

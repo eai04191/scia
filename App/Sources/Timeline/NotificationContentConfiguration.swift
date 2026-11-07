@@ -99,9 +99,9 @@ final class NotificationContentView: UIView, UIContentView {
     /// 並べたアイコンが行の幅に収まらないとき、行の右の余白の手前で切る枠。アイコンの大きさは設定どおりに保つ。
     private let groupAvatarClip = UIView()
     private var groupAvatarViews: [AvatarView] = []
-    /// 並べたアイコンの、長押しのメニューと長押しの操作。`groupAvatarViews`と同じ順に並べる。
+    /// 並べたアイコンの、メニューと長押しの操作。`groupAvatarViews`と同じ順に並べる。
     private var groupAvatarInteractions: [ObjectInteraction] = []
-    /// 誰が何をしたかの行の、長押しのメニューと長押しの操作。
+    /// 誰が何をしたかの行の、メニューと長押しの操作。
     private var headerInteraction: ObjectInteraction?
     private let headerLabel = EmojiLabel()
     private let bodyView: PostBodyView

@@ -6,7 +6,7 @@ import UIKit
 /// 上限が4枚より多いサーバーでも1段のまま並べ、収まらない分は横にスクロールする。
 ///
 /// 並べ替えはドラッグ&ドロップで行う。iOS 15からはiPhoneでもコレクションビューのドラッグが既定で有効になっている。
-/// VoiceOverとキーボードのために、同じ操作を「先頭へ移動」「前へ移動」「後ろへ移動」「末尾へ移動」として、セルのカスタムアクションと長押しのメニューにも置く。
+/// VoiceOverとキーボードのために、同じ操作を「先頭へ移動」「前へ移動」「後ろへ移動」「末尾へ移動」として、セルのカスタムアクションとコンテキストメニューにも置く。
 /// 同じ場所に、添付を外す「削除」も置く。
 @MainActor
 final class ComposeAttachmentStrip: UIView {
@@ -25,7 +25,7 @@ final class ComposeAttachmentStrip: UIView {
     var onMove: (DraftAttachment.ID, Int) -> Void = { _, _ in }
     /// 削除を選んだときに、外す添付を渡して呼ぶ。
     var onRemove: (DraftAttachment.ID) -> Void = { _ in }
-    /// 長押しのメニューを出す直前と、閉じ始めたときに呼ぶ。メニューの間、iOSはソフトウェアキーボードを隠す。
+    /// コンテキストメニューを出す直前と、閉じ始めたときに呼ぶ。メニューの間、iOSはソフトウェアキーボードを隠す。
     var onContextMenuWillShow: () -> Void = {}
     var onContextMenuWillEnd: () -> Void = {}
 
@@ -67,7 +67,7 @@ final class ComposeAttachmentStrip: UIView {
         collectionView.dragDelegate = self
         collectionView.dropDelegate = self
         // Mac（Designed for iPad）では、ここで始めたドラッグがボタンを離しても終わらず、持ち上げたサムネイルが画面に浮いたまま残り、アプリを強制終了するまで消えない。
-        // アイテムに型を持たせても、アプリの中に限る指定を外しても直らなかったので、Macではドラッグでの並べ替えをせず、長押しのメニューの移動の項目で並べ替える。
+        // アイテムに型を持たせても、アプリの中に限る指定を外しても直らなかったので、Macではドラッグでの並べ替えをせず、コンテキストメニューの移動の項目で並べ替える。
         collectionView.dragInteractionEnabled = !ProcessInfo.processInfo.isiOSAppOnMac
         addSubview(collectionView)
         NSLayoutConstraint.activate([
@@ -170,7 +170,7 @@ final class ComposeAttachmentStrip: UIView {
     }
 }
 
-/// 移動と削除の操作。セルのカスタムアクションと長押しのメニューで同じものを出す。
+/// 移動と削除の操作。セルのカスタムアクションとコンテキストメニューで同じものを出す。
 private struct AttachmentAction {
     let title: String
     let systemImage: String

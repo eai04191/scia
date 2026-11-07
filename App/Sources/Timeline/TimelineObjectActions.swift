@@ -73,7 +73,7 @@ extension TimelineViewController {
         }
     }
 
-    /// アクションバーのボタンの長押しのメニュー。項目（`PostActionBarItem.longPressItems`）は、投稿のメニューと同じ組み方で組む。
+    /// アクションバーのボタンを長押しして出すメニュー。項目（`PostActionBarItem.longPressItems`）は、投稿のメニューと同じ組み方で組む。
     func actionBarLongPressTarget(for item: PostActionBarItem, id: ItemID) -> (any ObjectActionTarget)? {
         let items = item.longPressItems
         guard !items.isEmpty else { return nil }
@@ -179,7 +179,7 @@ extension TimelineViewController {
         }
     }
 
-    /// 行の中から出したメニューを開いている間と閉じたあと。長押しのメニューと同じく、開いている間はタイムラインを動かさず、メニューに出る人のアイコンを読む。
+    /// 行の中から出したメニューを開いている間と閉じたあと。コンテキストメニューと同じく、開いている間はタイムラインを動かさず、メニューに出る人のアイコンを読む。
     var rowMenuLifecycle: MenuLifecycle {
         MenuLifecycle(
             willShow: { [weak self] in
@@ -208,7 +208,7 @@ private struct NotificationRequestTarget: ObjectActionTarget {
 
     var acceptsTap: Bool { true }
 
-    /// 長押しは、タイムラインの長押しのメニューで出す。
+    /// 長押しは、タイムラインのコンテキストメニューで出す。
     func performsLongPress() -> Bool { false }
 
     func perform(_ trigger: ObjectTrigger, in view: UIView, at point: CGPoint) {
@@ -222,7 +222,7 @@ private struct NotificationRequestTarget: ObjectActionTarget {
     }
 }
 
-/// アクションバーのボタンの長押しのメニューだけを持つ対象。タップはボタンが自分で受けるので、ここでは行わない。
+/// アクションバーのボタンを長押しして出すメニューだけを持つ対象。タップはボタンが自分で受けるので、ここでは行わない。
 @MainActor
 private struct ActionBarMenuTarget: ObjectActionTarget {
     let buildMenu: () -> UIMenu?

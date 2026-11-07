@@ -47,7 +47,7 @@ final class LinkCardView: UIButton {
 
     private let store: MediaImageStore<UIImage>
     private let thumbnailView = LinkCardThumbnailView()
-    /// 画像を長押ししたときのメディアのメニュー。カードはボタンで、タイムラインの行の長押しのメニューが届かないため、画像が自分で受ける。
+    /// 画像のメディアのメニュー。カードはボタンで、タイムラインの行のコンテキストメニューが届かないため、画像が自分で受ける。
     private var imageMenuInteraction: MediaMenuInteraction?
     /// サムネイルの画像がタップされたときに、ビューアを開閉する起点として、サムネイルを渡して呼ぶ。
     /// 画像のあるカードでは、読み込む前（blurhashのぼかしのうち）も受け付ける。それ以外の場所や画像のないカードのタップは、リンクを開く。

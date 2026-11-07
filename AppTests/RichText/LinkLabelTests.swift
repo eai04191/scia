@@ -224,7 +224,7 @@ struct LinkLabelTests {
         return settings
     }
 
-    /// 本文のリンクの長押しのメニューの、見出しと項目の名前。区切り線のまとまりは`|`で、サブメニューは`名前[中身]`で表す。
+    /// 本文のリンクのメニューの、見出しと項目の名前。区切り線のまとまりは`|`で、サブメニューは`名前[中身]`で表す。
     private func menuOutline(of destination: RichText.LinkDestination, settings: AppSettings, hashtagAccount: Account? = nil) throws -> String? {
         let label = label(for: RichText(blocks: [.init(inlines: [.link("x", destination, [])])]))
         label.settings = settings
@@ -317,7 +317,7 @@ struct LinkLabelTests {
         #expect(URLMenuAction.openInAppSafari.browser(for: magnet, following: .inApp) == nil)
     }
 
-    /// 長押しのメニューは、コントロールに組み込まれたメニューではなく、別に付けたコンテキストメニューで出す。組み込まれたメニューでは触覚フィードバックが出ないため。
+    /// リンクのメニューは、コントロールに組み込まれたメニューではなく、別に付けたコンテキストメニューで出す。組み込まれたメニューでは触覚フィードバックが出ないため。
     @Test func longPressMenuUsesSeparateInteraction() throws {
         let url = try #require(URL(string: "https://example.com/a"))
         let label = label(for: RichText(blocks: [.init(inlines: [.text("見て ", []), .link("example.com/a", .url(url), [])])]))

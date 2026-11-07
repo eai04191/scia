@@ -82,7 +82,7 @@ extension MenuLayout where Item == PostActionBarItem {
         (groups.main + groups.more).flatMap(\.items)
     }
 
-    /// アクションバーを出している投稿の長押しのメニューから除く項目。
+    /// アクションバーを出している投稿のメニューから除く項目。
     /// - Parameters:
     ///   - barItems: アクションバーに並べた項目を除くか。
     ///   - longPressItems: アクションバーに並べたボタンの、長押しで出す項目を除くか。

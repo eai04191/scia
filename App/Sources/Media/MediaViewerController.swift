@@ -1899,7 +1899,7 @@ class MediaPageController: UIViewController {
     /// ビューアで代替テキストを書いている。
     var isEditingDescription = false
 
-    /// 長押しのメニューを指の位置に出すための、見えない小さな目印。
+    /// 長押ししたときに、メニューを指の位置に出すための、見えない小さな目印。
     private let menuAnchor = UIView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
 
     /// `target`の長押しで、`menuElements`のメニューを指の位置に出す。

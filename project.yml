@@ -187,7 +187,7 @@ targets:
     platform: iOS
     sources:
       - AppTests
-      # 長押しのメニューのテスト用の並びは、SciaCoreのテストと共有する
+      # メニューのテスト用の並びは、SciaCoreのテストと共有する
       - Packages/SciaCore/Tests/SciaCoreTests/Support/MenuFixture.swift
     dependencies:
       - target: Scia

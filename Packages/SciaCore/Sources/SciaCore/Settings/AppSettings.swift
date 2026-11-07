@@ -306,12 +306,12 @@ public final class AppSettings {
         didSet { defaults.set(postActionBarLayout.tokens, forKey: Keys.postActionBarLayout) }
     }
 
-    /// アクションバーを出している投稿の長押しのメニューから、アクションバーに並べた項目を除くか。決まりはdocs/post-action-bar.mdにある。
+    /// アクションバーを出している投稿のメニューから、アクションバーに並べた項目を除くか。決まりはdocs/post-action-bar.mdにある。
     public var removesActionBarItemsFromMenu: Bool {
         didSet { defaults.set(removesActionBarItemsFromMenu, forKey: Keys.removesActionBarItemsFromMenu) }
     }
 
-    /// アクションバーを出している投稿の長押しのメニューから、アクションバーのボタンの長押しで出す項目を除くか。
+    /// アクションバーを出している投稿のメニューから、アクションバーのボタンの長押しで出す項目を除くか。
     public var removesActionBarLongPressItemsFromMenu: Bool {
         didSet { defaults.set(removesActionBarLongPressItemsFromMenu, forKey: Keys.removesActionBarLongPressItemsFromMenu) }
     }

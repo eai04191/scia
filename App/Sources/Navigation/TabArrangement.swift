@@ -284,7 +284,7 @@ final class TabArrangement {
         }
     }
 
-    /// 切り替えタブの長押しのメニューの下端（ウィンドウの座標）。投稿欄の下端とそろえる。投稿欄と同じく、タブバーの上の領域の下端から余白を空けた位置。
+    /// 切り替えタブを長押しして出すメニューの下端（ウィンドウの座標）。投稿欄の下端とそろえる。投稿欄と同じく、タブバーの上の領域の下端から余白を空けた位置。
     private var switchMenuBottom: CGFloat? {
         guard let view = tabBarController.view, let window = view.window else { return nil }
         let frame = tabBarController.contentLayoutGuide.layoutFrame

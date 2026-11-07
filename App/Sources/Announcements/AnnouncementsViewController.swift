@@ -7,11 +7,11 @@ import UIKit
 final class AnnouncementsViewController: UIViewController {
     /// 本文のリンクがタップされたときに、その行き先と、リンクのあったお知らせを渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination, Announcement) -> Void)?
-    /// 本文のリンクの長押しのメニューの開く項目で、開く場所を決めてURLを開く。
+    /// 本文のリンクのメニューの開く項目で、開く場所を決めてURLを開く。
     var onOpenURL: ((URL, LinkBrowser) -> Void)?
     /// リンクのメニューの「プロフィールとして開く」で、リンク先をプロフィールとして探して開く。
     var onOpenProfileURL: ((URL) -> Void)?
-    /// メンションの長押しのメニューの、メンションとハンドルをコピーを組むもの。nilなら2つの項目を出さない。
+    /// メンションのメニューの、メンションとハンドルをコピーを組むもの。nilなら2つの項目を出さない。
     var userMenuActions: UserMenuActions?
     /// ハッシュタグのメニューの、自分の状態を読んで変える項目を組むもの。nilなら、それらの項目を出さない。
     var hashtagMenuActions: HashtagMenuActions?

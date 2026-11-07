@@ -32,7 +32,7 @@ final class ReactionChipsView: UIView {
     var onToggle: ((String) -> Void)?
     /// 「＋」を押したときに呼ぶ。
     var onAdd: (() -> Void)?
-    /// リアクションのボタンのタップと長押しの対象。絵文字の名前を渡して受け取る。nilなら、タップで`onToggle`を呼び、長押しのメニューは出さない（サーバーのお知らせ）。
+    /// リアクションのボタンのタップと長押しの対象。絵文字の名前を渡して受け取る。nilなら、タップで`onToggle`を呼び、メニューは出さない（サーバーのお知らせ）。
     /// 決まりはdocs/emoji-reaction.mdの「リアクションのボタンのメニュー」にある。
     var target: ((String) -> (any ObjectActionTarget)?)?
     /// 動くカスタム絵文字を動かすときのストア。nilなら動かさない。

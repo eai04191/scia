@@ -82,7 +82,7 @@ final class InlineComposeController: NSObject {
     var writingAccountChoices: () -> [AccountChoice] = { [] }
     /// ほかのアカウントでログインしているか。いなければ「投稿するアカウント」を出さない。ボタンを並べ直すたびに読むので、通信を起こさないものを渡す。
     var hasOtherWritingAccounts: () -> Bool = { false }
-    /// 「投稿するアカウント」の行に、開いている間に届いたアイコンを差し替える。投稿の長押しのメニューの人のアイコンと同じ仕組み。
+    /// 「投稿するアカウント」の行に、開いている間に届いたアイコンを差し替える。投稿のメニューの人のアイコンと同じ仕組み。
     private let menuIcons = ContextMenuIconSwapper()
     /// アカウントのアイコンの画像を読む先。
     var avatarImages: AvatarImageStore<UIImage> = AppDependencies.avatarImages
@@ -258,7 +258,7 @@ final class InlineComposeController: NSObject {
         }
     })
     private var isPresentingAlert = false
-    /// 入力バーと、その下のタブバーやキーボードとの間の余白。切り替えタブの長押しのメニューも、下端を入力バーとそろえるのに使う。
+    /// 入力バーと、その下のタブバーやキーボードとの間の余白。切り替えタブを長押しして出すメニューも、下端を入力バーとそろえるのに使う。
     static let barSpacing: CGFloat = 8
     private var barSpacing: CGFloat { Self.barSpacing }
     /// ＋と部品のボタンの幅。記号の幅で決めると、記号ごとに幅が揃わず、公開範囲を切り替えるだけで幅が変わるので、HIGの推奨の当たり判定の44ptに揃え、間を空けずに並べる。
@@ -337,13 +337,13 @@ final class InlineComposeController: NSObject {
     private var currentKeyboardHeight: CGFloat = 0
     /// キーボードの高さがこれ以下なら、ソフトウェアキーボードは出ていない。ハードウェアキーボードでは候補の段だけになる。
     private static let softwareKeyboardMinimumHeight: CGFloat = 100
-    /// 添付の長押しのメニューを出したときのキーボードの高さ。メニューの間はiOSがソフトウェアキーボードを隠すため、
+    /// 添付のコンテキストメニューを出したときのキーボードの高さ。メニューの間はiOSがソフトウェアキーボードを隠すため、
     /// キーボードがこの高さまで戻るまでバーを今の位置に留める。留めていなければnil。
     private var keyboardHeightBeforeContextMenu: CGFloat?
     /// メニューを出してから、キーボードが隠れた知らせを受けたか。メディアを選ぶシートを閉じたあとは、メニューを出すとすぐ、
     /// iOSが高さの変わらないキーボードの枠を知らせてくる。隠れる前のこの知らせを、キーボードが戻ったと受け取らないために使う。
     private var didKeyboardHideForContextMenu = false
-    /// 長押しのメニューを出したときの、キーボードに沿う枠（`keyboardLayoutGuide`）の高さ。
+    /// コンテキストメニューを出したときの、キーボードに沿う枠（`keyboardLayoutGuide`）の高さ。
     /// メニューの間にキーボードが隠れても知らせが届かないことがあり、知らせから覚えた高さでは、閉じ始めたときにキーボードが戻っているか分からないため、枠でも比べる。
     private var keyboardGuideHeightBeforeContextMenu: CGFloat = 0
     /// 画面に出ているキーボードに沿う枠の高さを測る。テストの窓では枠がキーボードの知らせに追従しないので、テストから差し替える。
@@ -2065,7 +2065,7 @@ final class InlineComposeController: NSObject {
         lastKeyboardHeight = height
     }
 
-    /// 添付の長押しのメニューを出すと、iOSは入力欄のフォーカスを残したままソフトウェアキーボードを隠す。
+    /// 添付のコンテキストメニューを出すと、iOSは入力欄のフォーカスを残したままソフトウェアキーボードを隠す。
     /// バーがキーボードについてタブバーの上まで下がり、メニューを閉じるかドラッグに移ると上がり直すため、メニューの間は今の位置に留める。
     private func holdBarForContextMenu() {
         guard let host, isInputFocused, bottomSheet == nil, !isShowingMediaViewer else { return }

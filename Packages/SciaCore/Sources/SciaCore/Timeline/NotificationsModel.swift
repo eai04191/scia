@@ -585,7 +585,7 @@ public final class NotificationsModel {
     }
     #endif
 
-    /// 指によるスクロールが止まったとき、または長押しのメニューが閉じたときに呼ぶ。待っている新着を挿入し、既読位置を待たずに保存する。
+    /// 指によるスクロールが止まったとき、またはコンテキストメニューが閉じたときに呼ぶ。待っている新着を挿入し、既読位置を待たずに保存する。
     /// 呼ばなくても、既読位置は読み進めてから決まった時間が経てば保存する（`markRead(_:)`）。
     public func interactionDidSettle() {
         readPosition?.saveNow()

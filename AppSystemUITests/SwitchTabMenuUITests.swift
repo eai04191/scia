@@ -7,9 +7,9 @@ import XCTest
 final class SwitchTabMenuUITests: XCTestCase {
     @MainActor
     func testMenuSitsAboveComposer() throws {
-        // 切り替えタブを切り離して長押しのメニューを出すのは、iOS 27以降だけ。
+        // 切り替えタブを切り離して、長押しでメニューを出すのは、iOS 27以降だけ。
         guard #available(iOS 27.0, *) else {
-            throw XCTSkip("切り替えタブの長押しのメニューは、iOS 27以降にしかない")
+            throw XCTSkip("切り替えタブを長押しして出すメニューは、iOS 27以降にしかない")
         }
         let app = XCUIApplication()
         // 設定は起動の引数でも渡せる。ダミーのセッションのアカウントの並びを、ホームと通知をタブに、ローカルと連合を切り替えタブにする。

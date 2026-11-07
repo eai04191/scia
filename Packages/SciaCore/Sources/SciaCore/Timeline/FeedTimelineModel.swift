@@ -58,7 +58,7 @@ public final class FeedTimelineModel {
     private var autoLoadFailedGapIDs: Set<String> = []
     /// 既読位置を保存する。既読位置のないタイムラインではnil。
     private var readPosition: ReadPositionSaver?
-    /// 新着を挿入するタイミングが来たが、スクロールや長押しのメニューなどの操作中なので、終わるのを待っている。
+    /// 新着を挿入するタイミングが来たが、スクロールやコンテキストメニューなどの操作中なので、終わるのを待っている。
     private var isWaitingForInteractionToSettle = false
     #if DEBUG
     /// 新着の挿入を保留しているか。デバッグURL（`scia-debug://arrivals/hold`）で切り替える。
@@ -663,7 +663,7 @@ public final class FeedTimelineModel {
             await model.display?.waitForAvatars(of: { model.store.pending.map(TimelineEntry.status) }, within: wait)
             guard !Task.isCancelled else { return }
             if model.display?.isUserInteracting == true {
-                // 指の動きと関係なく画面が動かないよう、スクロールや長押しのメニューなどの操作が終わってから挿入する。
+                // 指の動きと関係なく画面が動かないよう、スクロールやコンテキストメニューなどの操作が終わってから挿入する。
                 model.isWaitingForInteractionToSettle = true
             } else {
                 model.insertPending()
@@ -686,7 +686,7 @@ public final class FeedTimelineModel {
     }
     #endif
 
-    /// 指によるスクロールが止まったとき、または長押しのメニューが閉じたときに呼ぶ。待っている新着を挿入し、既読位置を待たずに保存する。
+    /// 指によるスクロールが止まったとき、またはコンテキストメニューが閉じたときに呼ぶ。待っている新着を挿入し、既読位置を待たずに保存する。
     /// 呼ばなくても、既読位置は読み進めてから決まった時間が経てば保存する（`markRead(_:)`）。
     public func interactionDidSettle() {
         readPosition?.saveNow()

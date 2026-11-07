@@ -1,6 +1,6 @@
 public import Foundation
 
-/// プラットフォームに依存しないメニューの木。長押しのメニューの項目の名前、アイコン、押せるか、押したときの操作を、UIKitやAppKitに頼らずに表す。
+/// プラットフォームに依存しないメニューの木。メニューの項目の名前、アイコン、押せるか、押したときの操作を、UIKitやAppKitに頼らずに表す。
 /// 何をどの順に出すかはSciaCoreでこの木に組み、UIKit（`UIMenu`）やAppKit（`NSMenu`）はこの木を描くだけにする。押された項目の`Command`を受け取って、今の処理を呼ぶ。
 /// 決まりはdocs/menus.mdにある。
 public struct MenuNode<Command> {

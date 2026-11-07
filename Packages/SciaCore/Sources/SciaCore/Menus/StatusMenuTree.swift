@@ -1,6 +1,6 @@
 public import Foundation
 
-/// 投稿に対する操作。タイムラインでは長押しのメニューから選ぶ。
+/// 投稿に対する操作。タイムラインではメニューから選ぶ。
 public enum StatusAction: Sendable {
     case reply
     case favourite
@@ -91,7 +91,7 @@ public struct OtherAccountCommand {
     }
 }
 
-/// 投稿の長押しのメニュー。並びは設定の投稿のメニューに従い、関係するユーザーはユーザーのメニューのサブメニューにする。決まりはdocs/menus.mdにある。
+/// 投稿のメニュー。並びは設定の投稿のメニューに従い、関係するユーザーはユーザーのメニューのサブメニューにする。決まりはdocs/menus.mdにある。
 /// 項目ごとの出す条件、名前とアイコンの切り替え、押せない理由はここだけが知る。画面の状態に頼る条件（スレッドを開けるか、ぼかしているか、本文を選べるか）は、メニューを出す場所が渡す。
 @MainActor
 public struct StatusMenuTree {

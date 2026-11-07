@@ -2,7 +2,7 @@ import SciaCore
 import UIKit
 import UIKit.UIGestureRecognizerSubclass
 
-/// メニューを開いている間と閉じたあとに、メニューを出した画面に知らせること。長押しのメニューと同じものを呼ぶ。
+/// メニューを開いている間と閉じたあとに、メニューを出した画面に知らせること。コンテキストメニューと同じものを呼ぶ。
 @MainActor
 struct MenuLifecycle {
     var willShow: () -> Void = {}
@@ -64,11 +64,11 @@ extension ObjectEntity where Item == MediaMenuItem {
 /// 押された対象。部品は、タップと長押しをこれに渡す。項目の種類の違う対象を同じ部品で扱えるよう、型を消して持つ。
 @MainActor
 protocol ObjectActionTarget {
-    /// 長押しのメニュー。設定の並びで組む。出す項目がなければnil。
+    /// メニュー。設定の並びで組む。出す項目がなければnil。
     func menu() -> UIMenu?
     /// タップを受けるか。主な操作がいま行えない部品（スレッドの中心の投稿、投稿のない通知）は、タップに主な操作を選んでいれば、今どおり押せないままにする。
     var acceptsTap: Bool { get }
-    /// 長押しにメニュー以外を選び、この部品で行えるか。行えなければ、長押しのメニューを出す。決まりはdocs/object-actions.mdの「長押しで項目を行う」にある。
+    /// 長押しにメニュー以外を選び、この部品で行えるか。行えなければ、メニューを出す。決まりはdocs/object-actions.mdの「長押しで項目を行う」にある。
     func performsLongPress() -> Bool
     /// `trigger`に選んだ操作を行う。`view`は押した部品、`point`はその座標で、メニューはそこに出す。
     func perform(_ trigger: ObjectTrigger, in view: UIView, at point: CGPoint)
@@ -177,7 +177,7 @@ final class TapMenuPresenter {
     private init() {
         button.showsMenuAsPrimaryAction = true
         button.isUserInteractionEnabled = false
-        // ボタンのメニューは、上へ開くと項目の順を逆にする。長押しのメニューと同じ順に並べる。
+        // ボタンのメニューは、上へ開くと項目の順を逆にする。コンテキストメニューと同じ順に並べる。
         button.preferredMenuElementOrder = .fixed
     }
 
@@ -284,7 +284,7 @@ final class ObjectLongPress: NSObject, UIGestureRecognizerDelegate {
         return accepts(gestureRecognizer.location(in: view))
     }
 
-    /// 触れた先から`view`までの間に、自分でタップや長押しを受ける部品（`UIControl`か、長押しのメニューを持つもの）があれば受けない。
+    /// 触れた先から`view`までの間に、自分でタップや長押しを受ける部品（`UIControl`か、コンテキストメニューを持つもの）があれば受けない。
     /// `view`そのものは数えないので、リンクやサムネイルのような部品そのものに付けても、その部品の上で受ける。
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         var view = touch.view
@@ -296,7 +296,7 @@ final class ObjectLongPress: NSObject, UIGestureRecognizerDelegate {
     }
 }
 
-/// 長押しのメニューを出すときに、部品をどう持ち上げるか。決まりはdocs/menus.mdの「持ち上げ方」にある。
+/// コンテキストメニューを出すときに、部品をどう持ち上げるか。決まりはdocs/menus.mdの「持ち上げ方」にある。
 enum ObjectLift {
     /// 持ち上げず、タイムラインの行と同じく指の位置にメニューだけを出す。
     /// 文字の行（通知の見出し、「〜がブースト」の行）も、行と同じく閉じるときに文字がゆがむため、持ち上げない。

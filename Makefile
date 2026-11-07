@@ -173,7 +173,7 @@ check-steps: lint
 hooks:
 	ln -sfn ../../Tools/git-hooks/reference-transaction "$$(git rev-parse --git-common-dir)/hooks/reference-transaction"
 
-## 長押しのメニューの既定の並びを編集するページを、今の項目の名前と既定の並びを入れてDerivedData/menu-editor.htmlに書き出す。書き出したJSONはPackages/SciaCore/Sources/SciaCore/Settings/Resources/menu-defaults.jsonに置く
+## メニューの既定の並びを編集するページを、今の項目の名前と既定の並びを入れてDerivedData/menu-editor.htmlに書き出す。書き出したJSONはPackages/SciaCore/Sources/SciaCore/Settings/Resources/menu-defaults.jsonに置く
 menu-editor:
 	swift run --package-path Tools/MenuEditor --quiet menu-editor Tools/MenuEditor/editor.html $(DERIVED_DATA)/menu-editor.html
 

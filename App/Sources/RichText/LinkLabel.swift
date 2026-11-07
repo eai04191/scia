@@ -4,12 +4,12 @@ import UIKit
 
 /// RichTextRendererで描いた本文の、リンクの部分をタップできるラベル。リンクの外のタップは受けず、セルなど後ろのビューに渡す。
 final class LinkLabel: EmojiLabel {
-    /// 長押しのメニューの並び。
+    /// メニューの並び。
     var settings: AppSettings = AppDependencies.settings
-    /// リンクのタップで、タップと長押しの設定によらず、いつも開く。長押しのメニューも出さない。「投稿の見た目」のプレビューの見本で使う。
+    /// リンクのタップで、タップと長押しの設定によらず、いつも開く。メニューも出さない。「投稿の見た目」のプレビューの見本で使う。
     var opensLinksOnTapOnly = false
 
-    /// リンクがタップされたときと、メンションの長押しのメニューでプロフィールを、ハッシュタグの長押しのメニューでタイムラインを選んだときに、その行き先を渡して呼ぶ。
+    /// リンクがタップされたときと、メンションのメニューでプロフィールを、ハッシュタグのメニューでタイムラインを選んだときに、その行き先を渡して呼ぶ。
     var onTapLink: ((RichText.LinkDestination) -> Void)?
     /// ハッシュタグのメニューの「ユーザーの投稿」で開くユーザー。投稿の本文なら投稿した人、プロフィールならその人。nilなら項目を出さない。
     var hashtagAccount: Account?
@@ -300,7 +300,7 @@ final class ReadMoreButton: UIControl {
     }
 }
 
-/// `LinkHitArea`の長押しのメニューを出す。コントロール自身を委譲先にすると、組み込まれたメニューの処理と混ざるため、別のものにする。
+/// `LinkHitArea`のコンテキストメニューを出す。コントロール自身を委譲先にすると、組み込まれたメニューの処理と混ざるため、別のものにする。
 @MainActor
 private final class LinkMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
     private weak var hitArea: LinkHitArea?
@@ -349,7 +349,7 @@ enum LinkMenuGroups {
     }
 }
 
-/// 本文のリンクの長押しのメニューを出す画面。ラベルはレスポンダーチェーンをさかのぼって、いちばん近いものに知らせる。
+/// 本文のリンクのメニューを出す画面。ラベルはレスポンダーチェーンをさかのぼって、いちばん近いものに知らせる。
 @MainActor
 protocol LinkMenuHost: AnyObject {
     /// メニューを出した。メニューの元になった行が動かないよう、閉じるまでタイムラインの更新を溜めておく。
@@ -451,7 +451,7 @@ final class LinkHitArea: UIControl {
         })
     }
 
-    /// 長押しのメニューの構成。リンクの外か、出す項目をすべて隠していればnil。
+    /// コンテキストメニューの構成。リンクの外か、出す項目をすべて隠していればnil。
     fileprivate func menuConfiguration(at location: CGPoint) -> UIContextMenuConfiguration? {
         guard let label, !label.opensLinksOnTapOnly, target(at: location)?.performsLongPress() != true else { return nil }
         let point = convert(location, to: label)

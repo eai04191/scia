@@ -57,7 +57,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private var showsFocusInlineCompose = false
     /// ログイン中のアカウントのID。ブーストできる投稿かの判定に使う。
     var myAccountID: String?
-    /// 指によるスクロールが止まったとき、または長押しのメニューが閉じたときに呼ぶ。
+    /// 指によるスクロールが止まったとき、またはコンテキストメニューが閉じたときに呼ぶ。
     var onInteractionSettle: (() -> Void)?
     /// ギャップがタップされたときに、どちらの端から読むかを添えて呼ぶ。
     var onGapSelect: ((String, TimelineStore.GapDirection) -> Void)?
@@ -73,7 +73,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private var openingInset: CGFloat = 0
     /// 画面に出るときに、この行の上端をウインドウのこの高さに置く。
     private var pendingOpening: (id: ItemID, windowY: CGFloat)?
-    /// 投稿のアイコンやブーストした人の行がタップされたとき、または長押しのメニューで選ばれたときに、そのアカウントを渡して呼ぶ。
+    /// 投稿のアイコンやブーストした人の行がタップされたとき、またはメニューで選ばれたときに、そのアカウントを渡して呼ぶ。
     var onOpenProfile: ((Account) -> Void)?
     /// 人の行を左へスワイプして「外す」を押した。リストのメンバーの画面でだけ渡す。
     var onRemoveAccount: ((Account) -> Void)?
@@ -81,7 +81,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onOpenProfileID: ((String) -> Void)?
     /// 投稿の本文のリンクがタップされたときに、行き先と、本文を描いた投稿（ブーストなら元の投稿）を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination, Status) -> Void)?
-    /// 長押しのメニューの開く項目で、開く場所を決めてURLを開く。
+    /// メニューの開く項目で、開く場所を決めてURLを開く。
     var onOpenURL: ((URL, LinkBrowser) -> Void)?
     /// リンクのメニューの「プロフィールとして開く」で、リンク先をプロフィールとして探して開く。
     var onOpenProfileURL: ((URL) -> Void)?
@@ -132,7 +132,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private(set) lazy var collectionView: UICollectionView = TimelineCollectionView(frame: .zero, collectionViewLayout: makeLayout())
     private lazy var dataSource = makeDataSource()
     private var entries: [ItemID: TimelineEntry] = [:]
-    /// 長押しのメニューを開いている間に届いたアイコンを、メニューを組み直さずに差し替える。
+    /// メニューを開いている間に届いたアイコンを、メニューを組み直さずに差し替える。
     let contextMenuIcons = ContextMenuIconSwapper()
     /// 行を触れた位置。行のタップの処理は押した位置を受け取らないため、タップでメニューを出す位置にする。
     let touchRecorder = TouchLocationRecorder()
@@ -1175,7 +1175,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         collectionView.isTracking || collectionView.isDragging || collectionView.isDecelerating
     }
 
-    /// スクロールしている、長押しのメニューを出している、またはまとめて行う操作のために投稿を選んでいる。新着を挿入するのは、これが終わってからにする。
+    /// スクロールしている、コンテキストメニューを出している、またはまとめて行う操作のために投稿を選んでいる。新着を挿入するのは、これが終わってからにする。
     /// 選んでいる間に新着で行がずれると、押そうとした行を押し損なうため。
     var isUserInteracting: Bool {
         isUserScrolling || isShowingMenu || isSelectingPosts
@@ -1199,7 +1199,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let animatesChanges: Bool
     }
 
-    /// 長押しのメニューを出した。メニューの元になった行が動かないよう、閉じるまでタイムラインの並びの更新と描き直しを溜めておく。
+    /// コンテキストメニューを出した。メニューの元になった行が動かないよう、閉じるまでタイムラインの並びの更新と描き直しを溜めておく。
     func menuWillShow() {
         isShowingMenu = true
     }
@@ -2785,7 +2785,7 @@ extension TimelineViewController: UICollectionViewDelegate {
         if isAppearancePreview { return nil }
         // 選んでいる本文の上の長押しは、テキストビューが単語を選ぶのに使う。
         if let body = textSelectionBody, let frame = body.textSelectionFrame, body.convert(frame, to: collectionView).contains(point) { return nil }
-        // 投稿を選んでいる間は、行の長押しのメニューを出さない。
+        // 投稿を選んでいる間は、行のコンテキストメニューを出さない。
         if isSelectingPosts { return nil }
         if indexPaths.count == 1, let indexPath = indexPaths.first, rowTarget(at: indexPath)?.performsLongPress() == true { return nil }
         guard indexPaths.count == 1, let indexPath = indexPaths.first, let id = dataSource.itemIdentifier(for: indexPath), let entry = entry(for: id),

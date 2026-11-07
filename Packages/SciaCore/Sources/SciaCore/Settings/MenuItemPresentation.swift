@@ -22,7 +22,7 @@ public protocol MenuItemPresentable {
     static var hasMoreSection: Bool { get }
 }
 
-/// 長押しのメニューでは、境目より下の項目は「その他」のサブメニューに入る。
+/// 対象のメニューでは、境目より下の項目は「その他」のサブメニューに入る。
 extension MenuItemPresentable {
     public var detail: String? { nil }
     public static var mainSectionTitle: String { "メニュー" }
@@ -35,7 +35,7 @@ extension MenuItemPresentable {
     public static var hasMoreSection: Bool { true }
 }
 
-/// 長押しのメニューの項目の中身。名前とアイコンはここから決める。
+/// メニューの項目の中身。名前とアイコンはここから決める。
 public enum MenuItemContent {
     /// URLに対する共通の項目。名前、アイコン、押したときの動きは共通の項目のものを使う。
     case url(URLMenuAction)

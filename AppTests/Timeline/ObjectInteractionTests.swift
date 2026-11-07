@@ -2,7 +2,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// 対象のタップと長押しを付けた部品で、長押しのメニューを出すときに何を持ち上げるかを確かめる。決まりはdocs/menus.mdの「持ち上げ方」にある。
+/// 対象のタップと長押しを付けた部品で、コンテキストメニューを出すときに何を持ち上げるかを確かめる。決まりはdocs/menus.mdの「持ち上げ方」にある。
 @MainActor
 final class ObjectInteractionTests {
     private let window: UIWindow

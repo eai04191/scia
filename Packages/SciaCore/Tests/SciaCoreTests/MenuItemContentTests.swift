@@ -1,7 +1,7 @@
 @testable import SciaCore
 import Testing
 
-/// 長押しのメニューの項目が、共通の項目と正しくつながっていることを確かめる。
+/// メニューの項目が、共通の項目と正しくつながっていることを確かめる。
 @MainActor
 struct MenuItemContentTests {
     /// 共通の項目につないだ項目の、保存に使う名前と、つないだ共通の項目の名前。取り違えてつなぐと、2つが食い違う。

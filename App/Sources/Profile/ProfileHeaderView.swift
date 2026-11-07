@@ -69,7 +69,7 @@ final class ProfileHeaderView: UIView {
     private var fieldMenuInteractions: [ProfileTextMenuInteraction] = []
     /// 関係が届いて、フォローのボタンの場所取りから本物の文字に変わるときのフェードの時間。0なら切り替える。
     var followRevealDuration: TimeInterval = 0
-    /// 自己紹介か補足情報の値のリンクがタップされたときと、メンションの長押しのメニューでプロフィールを選んだときに、その行き先を渡して呼ぶ。
+    /// 自己紹介か補足情報の値のリンクがタップされたときと、メンションのメニューでプロフィールを選んだときに、その行き先を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
     /// 固定された投稿のカードが押されたときに、その投稿と、ウインドウの座標でのカードの枠を渡して呼ぶ。
     var onOpenPinned: ((Status, CGRect) -> Void)? {
@@ -467,7 +467,7 @@ final class ProfileHeaderView: UIView {
             return stack
         }
         // ハンドルのボタンは文字の幅に縮め、メニューをハンドルのそばに出す。`@_`のような短いハンドルでも押せるよう、幅は44pt以上にする。
-        // 高さは1行のまま広げない。上下に広げると、上の名前の長押しのメニューと押す範囲が重なるため。
+        // 高さは1行のまま広げない。上下に広げると、上の名前のメニューと押す範囲が重なるため。
         let acctRow = UIView()
         acctButton.translatesAutoresizingMaskIntoConstraints = false
         acctRow.addSubview(acctButton)

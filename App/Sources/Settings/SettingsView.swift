@@ -167,12 +167,12 @@ struct SettingsView: View {
                 options: [
                     MenuLayoutOption(
                         title: "ボタンの項目をメニューから除く",
-                        footer: "アクションバーを出している投稿の長押しのメニューに、アクションバーに並べた項目を出しません。",
+                        footer: "アクションバーを出している投稿のメニューに、アクションバーに並べた項目を出しません。",
                         isOn: $settings.removesActionBarItemsFromMenu
                     ),
                     MenuLayoutOption(
                         title: "ボタンの長押しの項目をメニューから除く",
-                        footer: "アクションバーを出している投稿の長押しのメニューに、アクションバーのブーストとお気に入りのボタンを長押しして出す項目（公開範囲を選んでブースト、引用、ブーストした人、お気に入りした人）を出しません。",
+                        footer: "アクションバーを出している投稿のメニューに、アクションバーのブーストとお気に入りのボタンを長押しして出す項目（公開範囲を選んでブースト、引用、ブーストした人、お気に入りした人）を出しません。",
                         isOn: $settings.removesActionBarLongPressItemsFromMenu
                     ),
                 ]

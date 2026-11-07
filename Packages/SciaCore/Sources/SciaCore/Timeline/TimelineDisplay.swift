@@ -47,7 +47,7 @@ public protocol TimelineDisplay: AnyObject {
     func prefetchAvatars(of entries: [TimelineEntry])
     /// `entries`が返す行のアイコンを読み込み終えるまで、`timeout`を上限に待つ。
     func waitForAvatars(of entries: () -> [TimelineEntry], within timeout: Duration) async
-    /// スクロールしている、または長押しのメニューを出している。新着を挿入するのは、これが終わってからにする。
+    /// スクロールしている、またはコンテキストメニューを出している。新着を挿入するのは、これが終わってからにする。
     var isUserInteracting: Bool { get }
     /// 表示領域の上端にかかっている、最も上の行。
     func currentAnchorID() -> TimelineEntry.ID?

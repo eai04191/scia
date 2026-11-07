@@ -18,7 +18,7 @@ struct PostActionBarContent: Equatable {
 final class PostActionBarView: UIView {
     /// ボタンが押されたときに、その項目と、押したボタンを渡して呼ぶ。
     var onPress: ((PostActionBarItem, UIView) -> Void)?
-    /// ボタンの長押しのメニューの対象。長押しのメニューを持つ項目（`PostActionBarItem.longPressItems`）でだけ呼ぶ。nilならメニューを出さない。
+    /// ボタンを長押しして出すメニューの対象。長押しでメニューを出す項目（`PostActionBarItem.longPressItems`）でだけ呼ぶ。nilならメニューを出さない。
     var longPressTarget: ((PostActionBarItem) -> (any ObjectActionTarget)?)? {
         didSet { applyLongPressTargets() }
     }
@@ -74,7 +74,7 @@ final class PostActionBarView: UIView {
         applyLongPressTargets()
     }
 
-    /// 長押しのメニューを持つボタンにだけ、その対象を付ける。ボタンは持ち上げず、押した位置にメニューだけを出す（docs/menus.mdの「持ち上げ方」）。
+    /// 長押しでメニューを出すボタンにだけ、その対象を付ける。ボタンは持ち上げず、押した位置にメニューだけを出す（docs/menus.mdの「持ち上げ方」）。
     private func applyLongPressTargets() {
         for view in buttonViews {
             guard let item = view.button?.item, !view.isHidden, !item.longPressItems.isEmpty, let target = longPressTarget?(item) else {
@@ -124,7 +124,7 @@ final class PostActionBarButtonView: UIControl {
     private var iconBottom: NSLayoutConstraint?
     private(set) var button: PostActionBarButton?
     private var lightFavouriteIsYellow = false
-    /// 長押しのメニュー。長押しのメニューを持つ項目のボタンにだけ付ける。
+    /// ボタンを長押しして出すメニュー。長押しでメニューを出す項目のボタンにだけ付ける。
     var longPressInteraction: ObjectInteraction?
 
     override init(frame: CGRect) {

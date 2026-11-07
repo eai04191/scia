@@ -1,4 +1,4 @@
-/// 長押しのメニューの項目の種類。対象（投稿、ユーザー）ごとに1つ作る。
+/// メニューの項目の種類。対象（投稿、ユーザー）ごとに1つ作る。
 /// `rawValue`は設定に保存するため、一度使った値は変えない。
 public protocol MenuItemKind: RawRepresentable<String>, CaseIterable, Hashable, Sendable {
     /// 既定の並び。項目を足すときは、ここにも足す（`BundledMenuDefaults`ならmenu-defaults.jsonに足す）。足した項目を保存済みの並びのどこに入れるかも、この並びで決まる。
@@ -11,7 +11,7 @@ extension MenuItemKind {
     public static var customizeItem: Self? { nil }
 }
 
-/// 長押しのメニューの並び。項目、区切り線、「その他」の境目を1本に並べる。決まりはdocs/menus.mdにある。
+/// メニューの並び。項目、区切り線、「その他」の境目を1本に並べる。決まりはdocs/menus.mdにある。
 public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
     public enum Element: Hashable, Sendable {
         /// 非表示にした項目も、同じ場所に残す。
@@ -41,7 +41,7 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
         /// 「その他」のサブメニューの中身。空なら「その他」を出さない。
         public var more: [Group]
 
-        /// 1つのまとまりだけの並び。アクションバーのボタンの長押しのメニューのように、決まった項目だけを、メニューと同じ組み方で組むために使う。
+        /// 1つのまとまりだけの並び。アクションバーのボタンを長押しして出すメニューのように、決まった項目だけを、メニューと同じ組み方で組むために使う。
         public static func items(_ items: [Item]) -> Groups {
             Groups(main: [Group(items)], more: [])
         }

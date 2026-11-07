@@ -13,13 +13,13 @@ final class EditHistoryViewController: UIViewController {
 
     /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
-    /// 本文のリンクの長押しのメニューの開く項目で、開く場所を決めてURLを開く。
+    /// 本文のリンクのメニューの開く項目で、開く場所を決めてURLを開く。
     var onOpenURL: ((URL, LinkBrowser) -> Void)?
     /// リンクのメニューの「プロフィールとして開く」で、リンク先をプロフィールとして探して開く。
     var onOpenProfileURL: ((URL) -> Void)?
     /// ハッシュタグのメニューの「ユーザーの投稿」で、そのユーザーのハッシュタグの付いた投稿を開く。
     var onOpenAccountHashtag: ((String, Account) -> Void)?
-    /// メンションの長押しのメニューの、メンションとハンドルをコピーを組むもの。nilなら2つの項目を出さない。
+    /// メンションのメニューの、メンションとハンドルをコピーを組むもの。nilなら2つの項目を出さない。
     var userMenuActions: UserMenuActions?
     /// ハッシュタグのメニューのミュートを組むもの。nilなら項目を出さない。
     var hashtagMenuActions: HashtagMenuActions?

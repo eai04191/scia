@@ -2,7 +2,7 @@ import SciaCore
 import UIKit
 
 /// 予約した投稿のタイムライン。予約の日時が近い順に、ほかのタイムラインの投稿の行と同じ見た目で並べる。決まりはdocs/tabs.mdの「予約投稿」にある。
-/// 行のタップで日時を変え、長押しのメニューに、日時を変える、投稿欄に戻して書き直す、取り消すを置き、取り消すは左へのスワイプでもできる。
+/// 行のタップで日時を変え、長押しして出すメニューに、日時を変える、投稿欄に戻して書き直す、取り消すを置き、取り消すは左へのスワイプでもできる。
 @MainActor
 final class ScheduledStatusesViewController: UICollectionViewController {
     typealias ContentState = ScheduledStatusesContentState
