@@ -164,6 +164,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - バグ修正では、先に失敗するテストを書いてから直す
 - テストで作る一時ファイルと設定の保存先（`UserDefaults(suiteName:)`）は、`SciaTesting`の`TestScratch`で作り、テストかスイートに`.scratch`を付ける。テストの終わりと次に走らせたときに消すので、走らせるたびに溜まらない（`make lint`の`test_file_without_scratch`で止める）
 - テストは実際の時間や今の時刻に頼らせない（`make lint`の`time_dependent_test`で止める）。時間をおく処理には`SciaTesting`の手で進める`Clock`（`TestClock`）を渡し、アニメーションは層の時計（`LayerClock`）、毎フレーム進める動きは手で送るコマ（`ManualFrameSource`）で進める。ほかの処理は門（`Gate`）か条件（`waitUntil`）で待ち（`Task.yield`で譲って待たない。`make lint`の`yield_based_waiting`で止める）、日時は決まった値で作る。止めたあとに何も起きないことは、時間を待たずに、走り終えていない処理の数や予約が残っていないことで確かめる
+- `TimelineStore`のテストは、`TimelineStoreTester`を通し、操作を`expectChanges`に起きる変化と一緒に渡して、状態を丸ごと比べる。確かめたい値だけを見ると、書いていない変化を見逃すため（テストで直接作ったり持ったりするのは`make lint`の`timeline_store_without_tester`で止める）。状態を足すときは、ストアのプロパティではなく`TimelineStore.State`に足す。ストアに直接持つと、比べる対象から漏れるため
 
 ## Git
 

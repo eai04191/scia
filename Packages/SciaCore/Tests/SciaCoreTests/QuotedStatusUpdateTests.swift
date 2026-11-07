@@ -19,12 +19,12 @@ struct QuotedStatusUpdateTests {
 
     @Test func timelineUpdatesQuotedStatus() async throws {
         let outer = quoting(quoted())
-        let store = TimelineStore(pageSize: 20) { _ in TimelinePage(statuses: [outer], isRegenerating: false) }
-        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        let store = TimelineStoreTester(pageSize: 20) { _ in TimelinePage(statuses: [outer], isRegenerating: false) }
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.entries = [.status(outer)]
             $0.oldestLoadedID = "20"
         }
-        let changed = try await expectChanges(of: { store.state }, during: { store.updateStatus("10") { $0.settingBookmarked(true) } }) {
+        let changed = try await store.expectChanges(during: { store in store.updateStatus("10") { $0.settingBookmarked(true) } }) {
             $0.entries = [.status(quoting(quoted().settingBookmarked(true)))]
         }
         #expect(changed)
@@ -37,12 +37,12 @@ struct QuotedStatusUpdateTests {
             Status(id: "30", createdAt: Date(timeIntervalSince1970: 30), account: bob, content: "", spoilerText: "", url: nil, reblog: status)
         }
         let reblog = reblogging(quoting(quoted()))
-        let store = TimelineStore(pageSize: 20) { _ in TimelinePage(statuses: [reblog], isRegenerating: false) }
-        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        let store = TimelineStoreTester(pageSize: 20) { _ in TimelinePage(statuses: [reblog], isRegenerating: false) }
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.entries = [.status(reblog)]
             $0.oldestLoadedID = "30"
         }
-        let changed = try await expectChanges(of: { store.state }, during: { store.updateStatus("10") { $0.settingBookmarked(true) } }) {
+        let changed = try await store.expectChanges(during: { store in store.updateStatus("10") { $0.settingBookmarked(true) } }) {
             $0.entries = [.status(reblogging(quoting(quoted().settingBookmarked(true))))]
         }
         #expect(changed)

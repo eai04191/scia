@@ -43,8 +43,8 @@ struct BrokenResponseTests {
         // 読めない投稿、IDのない要素、IDのない添付ファイル。数はプロセス全体で数えるため、並行する他のテストでも増える。
         #expect(DecodingLog.droppedCount >= droppedBefore + 3)
 
-        let store = TimelineStore(pageSize: 40) { _ in page }
-        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        let store = TimelineStoreTester(pageSize: 40) { _ in page }
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.unreadableItems = page.unreadable
             // 読めなかった投稿も、IDの位置に並べる。
             $0.entries = [.status(page.statuses[0]), .unreadable(page.unreadable[0]), .status(page.statuses[1]), .status(page.statuses[2])]

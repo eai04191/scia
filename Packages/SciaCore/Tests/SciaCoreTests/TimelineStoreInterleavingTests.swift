@@ -1,3 +1,5 @@
+// 手が乱数で決まり、変化を前もって書けないため、このファイルは包みを通さずにストアを作って持つ。確かめるのは、1手ごとに成り立つ性質と、最後に揃うこと。
+// scialint:disable timeline_store_without_tester
 import Foundation
 import Testing
 @testable import SciaCore

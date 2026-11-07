@@ -52,8 +52,8 @@ struct TimelineStoreTests {
     /// テストで扱いやすいよう、1ページを3件にする。
     private static let pageSize = 3
 
-    private func makeStore(_ queue: PageQueue) -> TimelineStore {
-        TimelineStore(pageSize: Self.pageSize) { query in try queue.next(query) }
+    private func makeStore(_ queue: PageQueue) -> TimelineStoreTester {
+        TimelineStoreTester(pageSize: Self.pageSize) { query in try queue.next(query) }
     }
 
     /// 並びの`entries`に入る、`statuses(_:)`の投稿。
@@ -65,12 +65,12 @@ struct TimelineStoreTests {
         let queue = PageQueue([try page([30, 29, 28]), try page([27, 26])])
         let store = makeStore(queue)
 
-        let initial = try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        let initial = try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.entries = try entries([30, 29, 28])
             $0.oldestLoadedID = "28"
         }
         #expect(initial?.map(\.id) == ["30", "29", "28"])
-        let older = try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) {
+        let older = try await store.expectChanges(during: { store in try await store.loadOlder() }) {
             $0.entries += try entries([27, 26])
             $0.oldestLoadedID = "26"
         }
@@ -84,11 +84,11 @@ struct TimelineStoreTests {
         let queue = PageQueue([try page([30, 29]), try page([29, 28])])
         let store = makeStore(queue)
 
-        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.entries = try entries([30, 29])
             $0.oldestLoadedID = "29"
         }
-        let older = try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) {
+        let older = try await store.expectChanges(during: { store in try await store.loadOlder() }) {
             $0.entries += try entries([28])
             $0.oldestLoadedID = "28"
         }
@@ -100,15 +100,15 @@ struct TimelineStoreTests {
         let queue = PageQueue([try page([30]), try page([])])
         let store = makeStore(queue)
 
-        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.entries = try entries([30])
             $0.oldestLoadedID = "30"
         }
-        let older = try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) {
+        let older = try await store.expectChanges(during: { store in try await store.loadOlder() }) {
             $0.reachedEnd = true
         }
         #expect(older == [])
-        let again = try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) { _ in }
+        let again = try await store.expectChanges(during: { store in try await store.loadOlder() }) { _ in }
         #expect(again == nil)
         #expect(queue.maxIDs == [nil, "30"])
     }
@@ -117,7 +117,7 @@ struct TimelineStoreTests {
         let queue = PageQueue([try page([], regenerating: true)])
         let store = makeStore(queue)
 
-        let loaded = try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        let loaded = try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.isRegenerating = true
             // 空のまま再生成中なので、次の補完も最新のページから読む。
             $0.fillsFromLatestPage = true
@@ -129,7 +129,7 @@ struct TimelineStoreTests {
         let queue = PageQueue([])
         let store = makeStore(queue)
 
-        let older = try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) { _ in }
+        let older = try await store.expectChanges(during: { store in try await store.loadOlder() }) { _ in }
         #expect(older == nil)
         #expect(queue.maxIDs.isEmpty)
     }
@@ -140,15 +140,15 @@ struct TimelineStoreTests {
 
         let older = try status(29)
 
-        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.entries = try entries([30])
             $0.oldestLoadedID = "30"
         }
-        try await expectChanges(of: { store.state }, during: {
+        try await store.expectChanges(during: { store in
             await #expect(throws: Failure.self) { _ = try await store.loadOlder() }
         }) { _ in }
 
-        let retried = try await expectChanges(of: { store.state }, during: { try await store.loadOlder()?.map(\.id) }) {
+        let retried = try await store.expectChanges(during: { store in try await store.loadOlder()?.map(\.id) }) {
             $0.entries.append(.status(older))
             $0.oldestLoadedID = "29"
         }
@@ -158,22 +158,22 @@ struct TimelineStoreTests {
 
     @Test func concurrentLoadIsSkipped() async throws {
         let gate = AsyncGate()
-        let store = TimelineStore(pageSize: Self.pageSize) { _ in
+        let store = TimelineStoreTester(pageSize: Self.pageSize) { _ in
             await gate.wait()
             return TimelinePage(statuses: [], isRegenerating: false)
         }
 
-        let first = try await expectChanges(of: { store.state }, during: { () -> Task<[Status]?, any Error> in
+        let first = try await store.expectChanges(during: { store -> Task<[Status]?, any Error> in
             let first = Task { try await store.loadInitial() }
             await gate.waitUntilWaiting()
             return first
         }) {
             $0.isLoading = true
         }
-        let second = try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) { _ in }
+        let second = try await store.expectChanges(during: { store in try await store.loadInitial() }) { _ in }
         #expect(second == nil)
 
-        let loaded = try await expectChanges(of: { store.state }, during: {
+        let loaded = try await store.expectChanges(during: { store in
             await gate.open()
             return try await first.value
         }) {
@@ -187,15 +187,15 @@ struct TimelineStoreTests {
     // MARK: - ストリーミング
 
     /// `ids`を読み込んだストア。`ids`は1件以上で、新しい順に渡す。
-    private func loadedStore(_ ids: [Int], reachedEnd: Bool = false) async throws -> TimelineStore {
+    private func loadedStore(_ ids: [Int], reachedEnd: Bool = false) async throws -> TimelineStoreTester {
         let pages = reachedEnd ? [try page(ids), try page([])] : [try page(ids)]
         let store = makeStore(PageQueue(pages))
-        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.entries = try entries(ids)
             $0.oldestLoadedID = ids.last.map(String.init)
         }
         if reachedEnd {
-            try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) {
+            try await store.expectChanges(during: { store in try await store.loadOlder() }) {
                 $0.reachedEnd = true
             }
         }
@@ -220,21 +220,21 @@ struct TimelineStoreTests {
         let first = try status(31)
         let second = try status(32)
 
-        let firstResult = try await expectChanges(of: { store.state }, during: { store.receive(.update(first)) }) {
+        let firstResult = try await store.expectChanges(during: { store in store.receive(.update(first)) }) {
             $0.pending = [first]
         }
         #expect(firstResult == .pendingStarted)
-        let secondResult = try await expectChanges(of: { store.state }, during: { store.receive(.update(second)) }) {
+        let secondResult = try await store.expectChanges(during: { store in store.receive(.update(second)) }) {
             $0.pending.append(second)
         }
         #expect(secondResult == .none)
-        let flushed = try await expectChanges(of: { store.state }, during: { store.flushPending().map(\.id) }) {
+        let flushed = try await store.expectChanges(during: { store in store.flushPending().map(\.id) }) {
             $0.pending = []
             $0.entries.insert(contentsOf: [.status(second), .status(first)], at: 0)
         }
         #expect(flushed == ["32", "31"])
         let third = try status(33)
-        let thirdResult = try await expectChanges(of: { store.state }, during: { store.receive(.update(third)) }) {
+        let thirdResult = try await store.expectChanges(during: { store in store.receive(.update(third)) }) {
             $0.pending = [third]
         }
         #expect(thirdResult == .pendingStarted)
@@ -244,19 +244,19 @@ struct TimelineStoreTests {
     @Test func flushStacksArrivalsInArrivalOrderAndDropsDuplicates() async throws {
         let store = try await loadedStore([30, 28])
 
-        try await expectChanges(of: { store.state }, during: {
+        try await store.expectChanges(during: { store in
             _ = store.receive(.update(try status(31)))
             _ = store.receive(.update(try status(29)))
         }) {
             $0.pending = [try status(31), try status(29)]
         }
         // 保留中の投稿と、並べてある投稿は溜めない。
-        try await expectChanges(of: { store.state }, during: {
+        try await store.expectChanges(during: { store in
             _ = store.receive(.update(try status(31)))
             _ = store.receive(.update(try status(30)))
         }) { _ in }
 
-        let flushed = try await expectChanges(of: { store.state }, during: { store.flushPending().map(\.id) }) {
+        let flushed = try await store.expectChanges(during: { store in store.flushPending().map(\.id) }) {
             $0.pending = []
             $0.entries.insert(contentsOf: [.status(try status(29)), .status(try status(31))], at: 0)
             // 29は、そのとき一番上だった31の上に積む。
@@ -265,7 +265,7 @@ struct TimelineStoreTests {
         }
         #expect(flushed == ["29", "31"])
 
-        try await expectChanges(of: { store.state }, during: {
+        try await store.expectChanges(during: { store in
             _ = store.receive(.update(try status(32)))
             _ = store.flushPending()
         }) {
@@ -279,11 +279,11 @@ struct TimelineStoreTests {
         let store = try await loadedStore([99])
 
         let new = try status(100)
-        try await expectChanges(of: { store.state }, during: { store.receive(.update(new)) }) {
+        try await store.expectChanges(during: { store in store.receive(.update(new)) }) {
             $0.pending = [new]
         }
 
-        let flushed = try await expectChanges(of: { store.state }, during: { store.flushPending().map(\.id) }) {
+        let flushed = try await store.expectChanges(during: { store in store.flushPending().map(\.id) }) {
             $0.pending = []
             $0.entries.insert(.status(new), at: 0)
         }
@@ -294,10 +294,10 @@ struct TimelineStoreTests {
     @Test func dropsPendingOlderThanLoadedTailUnlessEndReached() async throws {
         let store = try await loadedStore([30, 29])
         let old = try status(10)
-        try await expectChanges(of: { store.state }, during: { store.receive(.update(old)) }) {
+        try await store.expectChanges(during: { store in store.receive(.update(old)) }) {
             $0.pending = [old]
         }
-        let flushed = try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+        let flushed = try await store.expectChanges(during: { store in store.flushPending() }) {
             $0.pending = []
             // 捨てずに取っておき、古い方を読んで末尾がそれより下がったら並べる。
             $0.olderArrivals = [old]
@@ -306,10 +306,10 @@ struct TimelineStoreTests {
         #expect(store.statuses.map(\.id) == ["30", "29"])
 
         let ended = try await loadedStore([30, 29], reachedEnd: true)
-        try await expectChanges(of: { ended.state }, during: { ended.receive(.update(old)) }) {
+        try await ended.expectChanges(during: { ended in ended.receive(.update(old)) }) {
             $0.pending = [old]
         }
-        let endedFlushed = try await expectChanges(of: { ended.state }, during: { ended.flushPending().map(\.id) }) {
+        let endedFlushed = try await ended.expectChanges(during: { ended in ended.flushPending().map(\.id) }) {
             $0.pending = []
             // 一番上の30より古いので、遅れて届いた投稿として一番上に積む。末尾には足さない。
             $0.entries.insert(.status(old), at: 0)
@@ -327,22 +327,22 @@ struct TimelineStoreTests {
             statuses: [boost, try status(29)],
             isRegenerating: false
         ))]))
-        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.entries = [.status(boost), .status(try status(29))]
             $0.oldestLoadedID = "29"
         }
         let pendingBoost = try status(31, reblog: original)
-        try await expectChanges(of: { store.state }, during: { store.receive(.update(pendingBoost)) }) {
+        try await store.expectChanges(during: { store in store.receive(.update(pendingBoost)) }) {
             $0.pending = [pendingBoost]
         }
 
-        let deleted = try await expectChanges(of: { store.state }, during: { store.receive(.delete(statusID: "10")) }) {
+        let deleted = try await store.expectChanges(during: { store in store.receive(.delete(statusID: "10")) }) {
             $0.deletedIDs.insert("10")
             $0.pending = []
             $0.entries.removeFirst()
         }
         #expect(deleted == .entriesChanged)
-        let unknown = try await expectChanges(of: { store.state }, during: { store.receive(.delete(statusID: "999")) }) {
+        let unknown = try await store.expectChanges(during: { store in store.receive(.delete(statusID: "999")) }) {
             // 表示に関わる変化はなくても、あとから届いたときに足さないよう覚える。
             $0.deletedIDs.insert("999")
         }
@@ -359,35 +359,35 @@ struct TimelineStoreTests {
         }
         let loaded = [try bobs(30), try status(29, reblog: try bobs(5)), try bobs(28, reblog: try status(6)), try status(27)]
         let store = makeStore(PageQueue([.success(TimelinePage(statuses: loaded, isRegenerating: false))]))
-        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.entries = loaded.map(TimelineEntry.status)
             $0.oldestLoadedID = "27"
         }
-        try await expectChanges(of: { store.state }, during: { store.receive(.update(try bobs(31))) }) {
+        try await store.expectChanges(during: { store in store.receive(.update(try bobs(31))) }) {
             $0.pending = [try bobs(31)]
         }
 
-        let excluded = try await expectChanges(of: { store.state }, during: { store.excludeAccount("2") }) {
+        let excluded = try await store.expectChanges(during: { store in store.excludeAccount("2") }) {
             $0.excludedAccountIDs = ["2"]
             $0.pending = []
             $0.entries = [.status(try status(27))]
         }
         #expect(excluded)
         #expect(store.statuses.map(\.id) == ["27"])
-        let again = try await expectChanges(of: { store.state }, during: { store.excludeAccount("2") }) { _ in }
+        let again = try await store.expectChanges(during: { store in store.excludeAccount("2") }) { _ in }
         #expect(!again)
 
-        try await expectChanges(of: { store.state }, during: { store.receive(.update(try bobs(32))) }) { _ in }
-        let flushedWhileExcluded = try await expectChanges(of: { store.state }, during: { store.flushPending() }) { _ in }
+        try await store.expectChanges(during: { store in store.receive(.update(try bobs(32))) }) { _ in }
+        let flushedWhileExcluded = try await store.expectChanges(during: { store in store.flushPending() }) { _ in }
         #expect(flushedWhileExcluded.isEmpty)
 
-        try await expectChanges(of: { store.state }, during: { store.includeAccount("2") }) {
+        try await store.expectChanges(during: { store in store.includeAccount("2") }) {
             $0.excludedAccountIDs = []
         }
-        try await expectChanges(of: { store.state }, during: { store.receive(.update(try bobs(33))) }) {
+        try await store.expectChanges(during: { store in store.receive(.update(try bobs(33))) }) {
             $0.pending = [try bobs(33)]
         }
-        let flushed = try await expectChanges(of: { store.state }, during: { store.flushPending().map(\.id) }) {
+        let flushed = try await store.expectChanges(during: { store in store.flushPending().map(\.id) }) {
             $0.pending = []
             $0.entries.insert(.status(try bobs(33)), at: 0)
         }
@@ -408,18 +408,18 @@ struct TimelineStoreTests {
         let upperCat = try tagged(31, "CAT")
         let fullWidthCat = try tagged(32, "ｃａｔ")
         let store = makeStore(PageQueue([.success(TimelinePage(statuses: [cat, catBoost, dog, plain], isRegenerating: false))]))
-        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.entries = [cat, catBoost, dog, plain].map(TimelineEntry.status)
             $0.oldestLoadedID = "27"
         }
-        try await expectChanges(of: { store.state }, during: {
+        try await store.expectChanges(during: { store in
             _ = store.receive(.update(upperCat))
             _ = store.receive(.update(fullWidthCat))
         }) {
             $0.pending = [upperCat, fullWidthCat]
         }
 
-        let excluded = try await expectChanges(of: { store.state }, during: { store.excludeTag("cat") }) {
+        let excluded = try await store.expectChanges(during: { store in store.excludeTag("cat") }) {
             $0.excludedTagKeys = ["#cat"]
             $0.entries = [.status(dog), .status(plain)]
             // 捨てずに、続きを読む位置に数えるため別に持つ。保留中の投稿は、並べるときに分ける。
@@ -427,10 +427,10 @@ struct TimelineStoreTests {
         }
         #expect(excluded)
         #expect(store.statuses.map(\.id) == ["28", "27"])
-        let again = try await expectChanges(of: { store.state }, during: { store.excludeTag("cat") }) { _ in }
+        let again = try await store.expectChanges(during: { store in store.excludeTag("cat") }) { _ in }
         #expect(!again)
         // ミュートの前に始まった読み込みの結果のように、フィルターの結果の付いていない投稿があとから届いても出さない。全角の表記はサーバーも隠さない。
-        let flushedWhileExcluded = try await expectChanges(of: { store.state }, during: { store.flushPending().map(\.id) }) {
+        let flushedWhileExcluded = try await store.expectChanges(during: { store in store.flushPending().map(\.id) }) {
             $0.pending = []
             $0.entries.insert(.status(fullWidthCat), at: 0)
             $0.hiddenStatuses.append(upperCat)
@@ -438,14 +438,14 @@ struct TimelineStoreTests {
         #expect(flushedWhileExcluded == ["32"])
 
         // 解除しただけでは並べ直さない。
-        try await expectChanges(of: { store.state }, during: { store.includeTag("Cat") }) {
+        try await store.expectChanges(during: { store in store.includeTag("Cat") }) {
             $0.excludedTagKeys = []
         }
         let newCat = try tagged(33, "cat")
-        try await expectChanges(of: { store.state }, during: { store.receive(.update(newCat)) }) {
+        try await store.expectChanges(during: { store in store.receive(.update(newCat)) }) {
             $0.pending = [newCat]
         }
-        let flushed = try await expectChanges(of: { store.state }, during: { store.flushPending().map(\.id) }) {
+        let flushed = try await store.expectChanges(during: { store in store.flushPending().map(\.id) }) {
             $0.pending = []
             $0.hiddenStatuses = []
             $0.entries = [newCat, fullWidthCat, upperCat, cat, catBoost, dog, plain].map(TimelineEntry.status)
@@ -464,11 +464,11 @@ struct TimelineStoreTests {
         let muted = [try tagged(32), try tagged(31)]
         let queue = PageQueue([.success(TimelinePage(statuses: muted, isRegenerating: false)), try page([30])])
         let store = makeStore(queue)
-        try await expectChanges(of: { store.state }, during: { store.excludeTag("cat") }) {
+        try await store.expectChanges(during: { store in store.excludeTag("cat") }) {
             $0.excludedTagKeys = ["#cat"]
         }
 
-        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.entries = try entries([30])
             $0.hiddenStatuses = muted
             $0.oldestLoadedID = "30"
@@ -483,18 +483,18 @@ struct TimelineStoreTests {
         let avatar = try #require(URL(string: "https://example.social/avatars/bob.png"))
         let bob = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: avatar)
         let store = try await loadedStore([30])
-        try await expectChanges(of: { store.state }, during: { store.excludeAccount("2") }) {
+        try await store.expectChanges(during: { store in store.excludeAccount("2") }) {
             $0.excludedAccountIDs = ["2"]
         }
 
-        try await expectChanges(of: { store.state }, during: {
+        try await store.expectChanges(during: { store in
             store.receive(.update(Status(id: "31", createdAt: Date(timeIntervalSince1970: 0), account: bob, content: "", spoilerText: "", url: nil)))
         }) { _ in }
-        try await expectChanges(of: { store.state }, during: { store.includeAccount("2") }) {
+        try await store.expectChanges(during: { store in store.includeAccount("2") }) {
             $0.excludedAccountIDs = []
         }
 
-        let flushed = try await expectChanges(of: { store.state }, during: { store.flushPending() }) { _ in }
+        let flushed = try await store.expectChanges(during: { store in store.flushPending() }) { _ in }
         #expect(flushed.isEmpty)
     }
 
@@ -507,7 +507,7 @@ struct TimelineStoreTests {
         let queries = Mutex<[String?]>([])
         let initial = try statuses([30])
         let older = try statuses([26])
-        let store = TimelineStore(pageSize: Self.pageSize) { query in
+        let store = TimelineStoreTester(pageSize: Self.pageSize) { query in
             queries.withLock { $0.append(query.maxID) }
             switch query.maxID {
             case nil: return TimelinePage(statuses: initial, isRegenerating: false)
@@ -516,12 +516,12 @@ struct TimelineStoreTests {
             default: return TimelinePage(statuses: [], isRegenerating: false)
             }
         }
-        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.entries = initial.map(TimelineEntry.status)
             $0.oldestLoadedID = "30"
         }
         await gate.hold()
-        let read = try await expectChanges(of: { store.state }, during: { () -> Task<[Status]?, any Error> in
+        let read = try await store.expectChanges(during: { store -> Task<[Status]?, any Error> in
             let read = Task { try await store.loadOlder() }
             await gate.waitForRequest()
             return read
@@ -529,10 +529,10 @@ struct TimelineStoreTests {
             $0.isLoading = true
         }
 
-        try await expectChanges(of: { store.state }, during: { store.excludeAccount("2") }) {
+        try await store.expectChanges(during: { store in store.excludeAccount("2") }) {
             $0.excludedAccountIDs = ["2"]
         }
-        let added = try await expectChanges(of: { store.state }, during: {
+        let added = try await store.expectChanges(during: { store in
             await gate.release()
             return try await read.value
         }) {
@@ -552,20 +552,20 @@ struct TimelineStoreTests {
             statuses: [try status(30, reblog: original), original],
             isRegenerating: false
         ))]))
-        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.entries = [.status(try status(30, reblog: original)), .status(original)]
             $0.oldestLoadedID = "10"
         }
 
         let edited = try status(10, content: "編集後")
-        let result = try await expectChanges(of: { store.state }, during: { store.receive(.statusUpdate(edited)) }) {
+        let result = try await store.expectChanges(during: { store in store.receive(.statusUpdate(edited)) }) {
             $0.entries = [.status(try status(30, reblog: edited)), .status(edited)]
         }
         #expect(result == .entriesChanged)
 
         #expect(store.statuses.map(\.displayed.content) == ["編集後", "編集後"])
         #expect(store.statuses.first?.id == "30")
-        let unknown = try await expectChanges(of: { store.state }, during: { store.receive(.statusUpdate(try status(999))) }) { _ in }
+        let unknown = try await store.expectChanges(during: { store in store.receive(.statusUpdate(try status(999))) }) { _ in }
         #expect(unknown == .none)
     }
 
@@ -573,7 +573,7 @@ struct TimelineStoreTests {
         let store = try await loadedStore([30, 29, 28])
         #expect(store.unreadCount == 0)
 
-        try await expectChanges(of: { store.state }, during: { #expect(store.markRead(["29", "28"])) }) {
+        try await store.expectChanges(during: { store in #expect(store.markRead(["29", "28"])) }) {
             $0.lastReadID = "29"
             #if DEBUG
             $0.lastSavableReadID = "29"
@@ -582,7 +582,7 @@ struct TimelineStoreTests {
         }
         #expect(store.unreadCount == 1)
 
-        try await expectChanges(of: { store.state }, during: {
+        try await store.expectChanges(during: { store in
             _ = store.receive(.update(try status(31)))
             _ = store.flushPending()
         }) {
@@ -590,11 +590,11 @@ struct TimelineStoreTests {
         }
         #expect(store.unreadCount == 2)
 
-        try await expectChanges(of: { store.state }, during: {
+        try await store.expectChanges(during: { store in
             #expect(!store.markRead(["28"]), "既読の位置より下の投稿を見ても、未読の数は変わりません")
         }) { _ in }
 
-        try await expectChanges(of: { store.state }, during: { #expect(store.markRead(["31"])) }) {
+        try await store.expectChanges(during: { store in #expect(store.markRead(["31"])) }) {
             $0.lastReadID = "31"
             #if DEBUG
             $0.lastSavableReadID = "31"
@@ -607,7 +607,7 @@ struct TimelineStoreTests {
     /// 遅れて届いて一番上に積んだ投稿は、IDが既読の位置より古くても未読に数える。サーバーに保存する既読位置は戻さない。
     @Test func lateArrivalOnTopCountsAsUnread() async throws {
         let store = try await loadedStore([30, 28])
-        try await expectChanges(of: { store.state }, during: { store.markRead(["30"]) }) {
+        try await store.expectChanges(during: { store in store.markRead(["30"]) }) {
             $0.lastReadID = "30"
             #if DEBUG
             $0.lastSavableReadID = "30"
@@ -615,7 +615,7 @@ struct TimelineStoreTests {
             $0.lastReadPosition = TimelineStore.DisplayPosition(anchorID: "30", sequence: 0)
         }
 
-        try await expectChanges(of: { store.state }, during: {
+        try await store.expectChanges(during: { store in
             _ = store.receive(.update(try status(29)))
             _ = store.flushPending()
         }) {
@@ -625,7 +625,7 @@ struct TimelineStoreTests {
         }
         #expect(store.unreadCount == 1)
 
-        try await expectChanges(of: { store.state }, during: {
+        try await store.expectChanges(during: { store in
             #expect(store.markRead(["29"]), "IDが既読より古くても、上に積んだ投稿を見れば既読の位置は進みます")
         }) {
             // サーバーに保存するIDは戻さず、位置だけ積んだ投稿まで進める。
@@ -637,7 +637,7 @@ struct TimelineStoreTests {
     /// 積んだときの一番上の投稿が消えても、次に遅れて届いた投稿は、積んである投稿よりさらに上に積む。
     @Test func lateArrivalStaysOnTopAfterAnchorIsDeleted() async throws {
         let store = try await loadedStore([30, 20])
-        try await expectChanges(of: { store.state }, during: {
+        try await store.expectChanges(during: { store in
             _ = store.receive(.update(try status(25)))
             _ = store.flushPending()
         }) {
@@ -645,20 +645,20 @@ struct TimelineStoreTests {
             $0.lateArrivalSequence = 1
             $0.lateArrivalPositions["25"] = TimelineStore.DisplayPosition(anchorID: "30", sequence: 1)
         }
-        try await expectChanges(of: { store.state }, during: { store.markRead(["25"]) }) {
+        try await store.expectChanges(during: { store in store.markRead(["25"]) }) {
             $0.lastReadID = "25"
             #if DEBUG
             $0.lastSavableReadID = "25"
             #endif
             $0.lastReadPosition = TimelineStore.DisplayPosition(anchorID: "30", sequence: 1)
         }
-        try await expectChanges(of: { store.state }, during: { store.receive(.delete(statusID: "30")) }) {
+        try await store.expectChanges(during: { store in store.receive(.delete(statusID: "30")) }) {
             $0.deletedIDs = ["30"]
             // 積んだ投稿の位置は、基準の30が消えても30のまま持つ。
             $0.entries.remove(at: 1)
         }
 
-        try await expectChanges(of: { store.state }, during: {
+        try await store.expectChanges(during: { store in
             _ = store.receive(.update(try status(24)))
             _ = store.flushPending()
         }) {
@@ -674,7 +674,7 @@ struct TimelineStoreTests {
     /// サーバーの既読位置はIDで取り込む。同じIDの投稿が遅れて届いて一番上に積んであっても、その下の投稿まで既読にしない。
     @Test func savedMarkerMatchingLateArrivalDoesNotReadStatusesBelowIt() async throws {
         let store = try await loadedStore([30, 20])
-        try await expectChanges(of: { store.state }, during: { store.applySavedMarker("20") }) {
+        try await store.expectChanges(during: { store in store.applySavedMarker("20") }) {
             $0.lastReadID = "20"
             #if DEBUG
             $0.lastSavableReadID = "20"
@@ -682,7 +682,7 @@ struct TimelineStoreTests {
             $0.lastReadPosition = TimelineStore.DisplayPosition(anchorID: "20", sequence: 0)
             $0.savedReadID = "20"
         }
-        try await expectChanges(of: { store.state }, during: {
+        try await store.expectChanges(during: { store in
             _ = store.receive(.update(try status(25)))
             _ = store.flushPending()
         }) {
@@ -692,7 +692,7 @@ struct TimelineStoreTests {
         }
         #expect(store.unreadCount == 2)
 
-        try await expectChanges(of: { store.state }, during: { store.applySavedMarker("25") }) {
+        try await store.expectChanges(during: { store in store.applySavedMarker("25") }) {
             $0.lastReadID = "25"
             #if DEBUG
             $0.lastSavableReadID = "25"

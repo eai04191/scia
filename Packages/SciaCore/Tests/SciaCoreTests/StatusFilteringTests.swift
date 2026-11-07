@@ -124,9 +124,9 @@ struct FilteredMediaCoverTests {
 struct FilteredTimelineTests {
     private let filtering = StatusFiltering(context: .home, myAccountID: me.id)
 
-    private func store(pages: [[Status]], now: @escaping @MainActor () -> Date = { now }) -> (TimelineStore, @Sendable () -> [TimelineQuery]) {
+    private func store(pages: [[Status]], now: @escaping @MainActor () -> Date = { now }) -> (TimelineStoreTester, @Sendable () -> [TimelineQuery]) {
         let recorder = QueryRecorder(pages: pages)
-        let store = TimelineStore(pageSize: 3, filtering: filtering, now: now) { query in try recorder.next(query) }
+        let store = TimelineStoreTester(pageSize: 3, filtering: filtering, now: now) { query in try recorder.next(query) }
         return (store, { recorder.queries })
     }
 
@@ -136,7 +136,7 @@ struct FilteredTimelineTests {
         let firstPage = [status("30"), status("29", filtered: hide), status("28", filtered: hide)]
         let hiddenPage = [status("27", filtered: hide), status("26", filtered: hide), status("25", filtered: hide)]
         let (store, queries) = store(pages: [firstPage, hiddenPage, [status("24")]])
-        let initial = try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        let initial = try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.entries = [.status(firstPage[0])]
             $0.hiddenStatuses = Array(firstPage[1...])
             $0.oldestLoadedID = "28"
@@ -145,7 +145,7 @@ struct FilteredTimelineTests {
 
         // 全部隠れたページでは止まらず、並べる投稿が出るまで続けて読む。
         let hiddenBefore = store.state.hiddenStatuses
-        let older = try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) {
+        let older = try await store.expectChanges(during: { store in try await store.loadOlder() }) {
             $0.entries.append(.status(status("24")))
             $0.hiddenStatuses = hiddenBefore + hiddenPage
             $0.oldestLoadedID = "24"
@@ -158,20 +158,20 @@ struct FilteredTimelineTests {
     /// 編集でフィルターに一致するようになれば外し、一致しなくなれば戻す。
     @Test func editsMoveStatusesInAndOutOfTheList() async throws {
         let (store, _) = store(pages: [[status("30"), status("29")]])
-        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.entries = [.status(status("30")), .status(status("29"))]
             $0.oldestLoadedID = "29"
         }
 
         let hidden = status("29", filtered: [filter("x", .hide)])
-        let hiding = try await expectChanges(of: { store.state }, during: { store.receive(.statusUpdate(hidden)) }) {
+        let hiding = try await store.expectChanges(during: { store in store.receive(.statusUpdate(hidden)) }) {
             $0.entries = [.status(status("30"))]
             $0.hiddenStatuses = [hidden]
         }
         #expect(hiding == .entriesChanged)
         #expect(store.statuses.map(\.id) == ["30"])
 
-        let showing = try await expectChanges(of: { store.state }, during: { store.receive(.statusUpdate(status("29"))) }) {
+        let showing = try await store.expectChanges(during: { store in store.receive(.statusUpdate(status("29"))) }) {
             $0.entries = [.status(status("30")), .status(status("29"))]
             $0.hiddenStatuses = []
         }
@@ -182,23 +182,23 @@ struct FilteredTimelineTests {
     /// ストリーミングで届いた隠す投稿は挿入しても並べず、加わった投稿にも数えない。同じ投稿がもう一度届いても溜めない。
     @Test func hiddenArrivalsAreNotInserted() async throws {
         let (store, _) = store(pages: [[status("30")]])
-        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.entries = [.status(status("30"))]
             $0.oldestLoadedID = "30"
         }
 
         let hidden = status("31", filtered: [filter("x", .hide)])
-        try await expectChanges(of: { store.state }, during: { store.receive(.update(hidden)) }) {
+        try await store.expectChanges(during: { store in store.receive(.update(hidden)) }) {
             $0.pending = [hidden]
         }
-        let flushed = try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+        let flushed = try await store.expectChanges(during: { store in store.flushPending() }) {
             $0.pending = []
             $0.hiddenStatuses = [hidden]
         }
         #expect(flushed.isEmpty)
         #expect(store.statuses.map(\.id) == ["30"])
 
-        let again = try await expectChanges(of: { store.state }, during: { store.receive(.update(hidden)) }) { _ in }
+        let again = try await store.expectChanges(during: { store in store.receive(.update(hidden)) }) { _ in }
         #expect(again == .none)
     }
 
@@ -208,7 +208,7 @@ struct FilteredTimelineTests {
         let expiresAt = now.addingTimeInterval(60)
         let expiring = status("29", filtered: [filter("x", .hide, expiresAt: expiresAt)])
         let (store, _) = store(pages: [[status("30"), expiring]], now: { clock.now })
-        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.entries = [.status(status("30"))]
             $0.hiddenStatuses = [expiring]
             $0.oldestLoadedID = "29"
@@ -216,10 +216,10 @@ struct FilteredTimelineTests {
         #expect(store.statuses.map(\.id) == ["30"])
 
         clock.now = expiresAt.addingTimeInterval(1)
-        try await expectChanges(of: { store.state }, during: { store.receive(.update(status("31"))) }) {
+        try await store.expectChanges(during: { store in store.receive(.update(status("31"))) }) {
             $0.pending = [status("31")]
         }
-        try await expectChanges(of: { store.state }, during: { store.flushPending() }) {
+        try await store.expectChanges(during: { store in store.flushPending() }) {
             $0.pending = []
             $0.hiddenStatuses = []
             $0.entries = [.status(status("31")), .status(status("30")), .status(expiring)]
@@ -233,7 +233,7 @@ struct FilteredTimelineTests {
         let hide = [filter("x", .hide)]
         let firstPage = [status("30", filtered: hide), status("29", filtered: hide), status("28", filtered: hide)]
         let (store, queries) = store(pages: [firstPage, [status("27", filtered: hide), status("26")]])
-        let initial = try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        let initial = try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.entries = [.status(status("26"))]
             $0.hiddenStatuses = firstPage + [status("27", filtered: hide)]
             $0.oldestLoadedID = "26"
@@ -252,11 +252,11 @@ struct FilteredTimelineTests {
             [status("26", filtered: hide)],
             [],
         ])
-        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.entries = [.status(status("30"))]
             $0.oldestLoadedID = "30"
         }
-        let older = try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) {
+        let older = try await store.expectChanges(during: { store in try await store.loadOlder() }) {
             $0.hiddenStatuses = hiddenPage + [status("26", filtered: hide)]
             $0.oldestLoadedID = "26"
             $0.reachedEnd = true
@@ -270,7 +270,7 @@ struct FilteredTimelineTests {
         let hide = [filter("x", .hide)]
         let boost = status("20", filtered: hide, reblog: status("10", filtered: hide))
         let (store, _) = store(pages: [[boost], []])
-        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.hiddenStatuses = [boost]
             $0.oldestLoadedID = "20"
             // 並べる投稿がないので続けて古い方を読み、空のページで終わりに着く。
@@ -278,7 +278,7 @@ struct FilteredTimelineTests {
         }
         #expect(store.statuses.isEmpty)
 
-        let result = try await expectChanges(of: { store.state }, during: { store.receive(.statusUpdate(status("10"))) }) {
+        let result = try await store.expectChanges(during: { store in store.receive(.statusUpdate(status("10"))) }) {
             $0.hiddenStatuses = []
             // サーバーが結果を付け直した投稿なので、ブーストの結果も元の投稿の空の結果にそろう。
             $0.entries = [.status(status("20", reblog: status("10")))]
@@ -291,7 +291,7 @@ struct FilteredTimelineTests {
     @Test func partialUpdateKeepsResultsOnlyOnBoost() async throws {
         let warn = [filter("x", .warn)]
         let (store, _) = store(pages: [[status("20", filtered: warn, reblog: status("10"))]])
-        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.entries = [.status(status("20", filtered: warn, reblog: status("10")))]
             $0.oldestLoadedID = "20"
         }
@@ -299,7 +299,7 @@ struct FilteredTimelineTests {
         func favourite(_ original: Status) -> Status {
             Status(id: original.id, createdAt: original.createdAt, account: original.account, content: "<p>お気に入りした</p>", spoilerText: "", url: nil, favourited: true)
         }
-        try await expectChanges(of: { store.state }, during: { store.updateStatus("10", favourite) }) {
+        try await store.expectChanges(during: { store in store.updateStatus("10", favourite) }) {
             $0.entries = [.status(status("20", filtered: warn, reblog: favourite(status("10"))))]
         }
         let boost = try #require(store.statuses.first)
@@ -313,8 +313,8 @@ struct FilteredTimelineTests {
             .success(TimelinePage(statuses: [status("30", filtered: hide)], isRegenerating: false)),
             .failure(Failure()),
         ])
-        let store = TimelineStore(pageSize: 3, filtering: filtering) { query in try recorder.next(query) }
-        try await expectChanges(of: { store.state }, during: {
+        let store = TimelineStoreTester(pageSize: 3, filtering: filtering) { query in try recorder.next(query) }
+        try await store.expectChanges(during: { store in
             await #expect(throws: Failure.self) { try await store.loadInitial() }
         }) { _ in }
         #expect(store.isEmpty)
@@ -326,15 +326,15 @@ struct FilteredTimelineTests {
         let recorder = QueryRecorder(timelinePages: [
             TimelinePage(statuses: [status("30")], unreadable: [unreadable], isRegenerating: false),
         ])
-        let store = TimelineStore(pageSize: 3, filtering: filtering) { query in try recorder.next(query) }
-        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        let store = TimelineStoreTester(pageSize: 3, filtering: filtering) { query in try recorder.next(query) }
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.unreadableItems = [unreadable]
             $0.entries = [.status(status("30")), .unreadable(unreadable)]
             $0.oldestLoadedID = "29"
         }
 
         let hidden = status("29", filtered: [filter("x", .hide)])
-        let result = try await expectChanges(of: { store.state }, during: { store.receive(.statusUpdate(hidden)) }) {
+        let result = try await store.expectChanges(during: { store in store.receive(.statusUpdate(hidden)) }) {
             $0.unreadableItems = []
             $0.entries = [.status(status("30"))]
             $0.hiddenStatuses = [hidden]
@@ -347,19 +347,19 @@ struct FilteredTimelineTests {
     @Test func deletingHiddenStatusForgetsIt() async throws {
         let hidden = status("29", filtered: [filter("x", .hide)])
         let (store, queries) = store(pages: [[status("30"), hidden], [status("29")]])
-        try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
             $0.entries = [.status(status("30"))]
             $0.hiddenStatuses = [hidden]
             $0.oldestLoadedID = "29"
         }
 
-        let removed = try await expectChanges(of: { store.state }, during: { store.removeStatus("29") }) {
+        let removed = try await store.expectChanges(during: { store in store.removeStatus("29") }) {
             $0.deletedIDs = ["29"]
             $0.hiddenStatuses = []
         }
         // 隠していた投稿なので、並びは変わらない。
         #expect(!removed)
-        try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) { _ in }
+        try await store.expectChanges(during: { store in try await store.loadOlder() }) { _ in }
         #expect(queries().last?.maxID == "29")
     }
 }
