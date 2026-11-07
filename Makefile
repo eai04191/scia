@@ -11,7 +11,7 @@ SIM_ARCH ?= $(shell uname -m)
 generate:
 	xcodegen generate
 
-## 実行時クラッシュにつながる書き方（強制アンラップ、try!、IUO）と、テストで画面を出し終えるのを待たない書き方、テストで実際の時間や今の時刻に頼る書き方、テストでTask.yieldで譲って待つ書き方、本番のコードで実際の時間に直接触れる書き方、セッションの持ち物で持ち主を通さずに処理を始める書き方、ログにハンドルや本文、URL、失敗の文を公開扱いで出す書き方を検出する。swiftlintはbrew install swiftlintで入れる
+## 実行時クラッシュにつながる書き方（強制アンラップ、try!、IUO）と、.swiftlint.ymlとTools/SciaLintの規則に反する書き方を検出する。swiftlintはbrew install swiftlintで入れる
 ## 設定を明示しないと、worktreeでは親のディレクトリにある元のcheckoutの.swiftlint.ymlも重ねて読み、そちらにない規則が外れる
 ## 呼び出しや文字列の補間の形で決まる規則（持ち主を通さない処理、目的を名乗らない処理、ログに公開扱いで出す値、テストで出し終えるのを待たない画面、決め打ちの文字の大きさ、半透明の白い文字）は、構文木で調べるTools/SciaLintで検出する
 lint:
@@ -42,7 +42,7 @@ warnings: build
 ## 貸し借りする端末（Scia 1〜）をSIMで指定するときは、このworktreeが借りている端末だけを受け付ける（Tools/sim.sh leased）
 ## テストはハードウェアキーボードがつながった状態を前提にしているので、先につなぐ。sim-keyboardで外したままだと、投稿欄のテストが落ちる
 ## 端末のiOSの版で初めて走らせたときは、UIKitの公開されていない作りに頼る部分のUIテスト（SciaSystemUITests）も走らせる（Tools/system-ui-check.sh）
-## 通ったら、確かめた作業ツリーの中身を覚える。make hooksを入れたcheckoutでは、make checkとmake testの両方が通った中身のcommitしかmainに入れられない
+## 通ったら、確かめた作業ツリーの中身を覚える
 ## ONLYにテストの識別子（空白区切りで複数）を渡すと、それだけを走らせる。全部は走らせていないので、SciaSystemUITestsも走らせず、通っても中身を覚えない
 ## 失敗時の診断の収集は止める。集めると、simctl diagnoseが応答を待って600秒のタイムアウトまで止まるため
 ## 例: make test
@@ -155,8 +155,7 @@ update-known-servers:
 	Tools/update-known-servers.sh
 
 ## 変更を報告する前に通すべき検証
-## 端末のiOSの版で初めて走らせたときは、UIKitの公開されていない作りに頼る部分のUIテスト（SciaSystemUITests）も走らせる（Tools/system-ui-check.sh）
-## 通ったら、確かめた作業ツリーの中身を覚える。make hooksを入れたcheckoutでは、make checkとmake testの両方が通った中身のcommitしかmainに入れられない
+## 通ったら、確かめた作業ツリーの中身を覚える
 ## $(MAKE)を含む行はmake -nでも走るので、覚える処理はその行に入れない。入れると、何も確かめないmake -n checkで中身を覚えてしまう
 ## make -i checkは失敗を無視して最後まで進むので、通っていない中身も覚えてしまう。失敗の無視はわざと保証を外す操作で、ふだんの手順では使わないので止めない
 CHECK_TREE := $(DERIVED_DATA)/check-tree

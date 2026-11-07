@@ -28,8 +28,7 @@ included:
   - Packages/TextKit2Label/Tests
 
 custom_rules:
-  # 時間の長さで順を作ったり、今の時刻で結果が変わったりするテストは、負荷や実行の時刻によってときどきだけ落ちる。
-  # 待つ処理には手で進める時計（SciaTestingのTestClock）を渡し、ほかの処理を待つときは門（Gate）か条件（waitUntil）で待つ。日時は決まった値で作る
+  # 時間の長さで順を作ったり、今の時刻で結果が変わったりするテストは、負荷や実行の時刻によってときどきだけ落ちる
   time_dependent_test:
     included: "(AppTests|Packages/SciaCore/Tests|Packages/MemoryCache/Tests|Packages/TextKit2Label/Tests)/.*\\.swift"
     regex: "\\b(Task\\.sleep|Thread\\.sleep|usleep|DispatchTime\\.now|CACurrentMediaTime|CFAbsoluteTimeGetCurrent|ContinuousClock|SuspendingClock|asyncAfter)\\b|\\bTimer(\\(|\\.scheduledTimer\\b|\\.publish\\b)|\\bDate\\(\\)|\\bDate\\.init\\b(?!\\([^)])|\\bDate\\.now\\b|\\bDate\\(timeIntervalSinceNow|(?<![\\w.)\\]])\\.now\\b|\\bsystemUptime\\b"
@@ -53,8 +52,7 @@ custom_rules:
     severity: error
 
   # 譲る回数で待つテストは、相手がどこまで進んだかを実行の順の都合に任せる。1回譲っただけでは相手が走ったとは限らず、
-  # 「何も起きない」ことを確かめる前に、起きるはずの処理がまだ始まっていないことがある。譲り続ける待ちは、固まっても止まらない。
-  # 条件で待つ（waitUntil）か、止めた相手が着いたことを門（Gate）で確かめる
+  # 「何も起きない」ことを確かめる前に、起きるはずの処理がまだ始まっていないことがある。譲り続ける待ちは、固まっても止まらない
   yield_based_waiting:
     included: "(AppTests|Packages/SciaCore/Tests|Packages/MemoryCache/Tests|Packages/TextKit2Label/Tests)/.*\\.swift"
     regex: "\\bTask\\.yield\\b"
@@ -66,7 +64,7 @@ custom_rules:
     severity: error
 
   # 画像の縮め方と展開の仕方を、ストアごとに書かない。コピーするうちに、HDRの指定や縮める大きさが場所ごとにずれ、
-  # 絵文字の静止画だけ原寸のまま描くたびにメインスレッドで展開する、ということが起きていた。ImageDecoderで読む
+  # 絵文字の静止画だけ原寸のまま描くたびにメインスレッドで展開する、ということが起きていた
   image_decoding_outside_decoder:
     included: "(App/Sources|ShareExtension|Packages/SciaCore/Sources/SciaCore)/.*\\.swift"
     excluded: "(App/Sources/Debug/|Packages/SciaCore/Sources/SciaCore/Media/ImageDecoder\\.swift)"
@@ -91,7 +89,7 @@ custom_rules:
     severity: error
 
   # ファイルやフォルダーの名前は、URLやサーバーの応答、ほかのアプリから受け取ったファイルから作ることが多く、そのままつなげると`/`や`..`で置く場所がフォルダーの外へ出る。
-  # 文字列の決まった名前でなければ、SafeFileNameで作ってappending(fileName:)でつなげる。通信のURLを組み立てる場所（Networking、Auth、Streaming、XPosts）は、ファイルを扱わないので対象外にする
+  # 通信のURLを組み立てる場所（Networking、Auth、Streaming、XPosts）は、ファイルを扱わないので対象外にする
   unsafe_file_name:
     included: "(App/Sources|ShareExtension|Packages/SciaCore/Sources/SciaCore)/.*\\.swift"
     excluded: "(App/Sources/Debug/|Packages/SciaCore/Sources/SciaCore/(Networking|Auth|Streaming|XPosts)/|Packages/SciaCore/Sources/SciaCore/SafeFileName\\.swift)"
@@ -103,8 +101,7 @@ custom_rules:
     message: "文字列の決まった名前でなければ、SafeFileNameで作ってappending(fileName:)でつなげる"
     severity: error
 
-  # 実際の時間に、ロジックの中から直接触れない。時間をおく処理はClockで、今の日付は日付を返す関数で、Core Animationの時間は時間を返す関数で受け取り、
-  # 既定値はSciaCoreのSystemTimeかアプリのAppDependenciesを参照する。実物を作ってよいのはその2つのファイルだけにする。
+  # 実際の時間に、ロジックの中から直接触れない。実物を作ってよいのは、既定値として参照されるSciaCoreのSystemTimeとアプリのAppDependenciesのファイルだけにする。
   # デバッグ用のコード（ダミーのサーバーや部品カタログ）は、人が見るためにわざと遅らせるもので、テストで確かめるロジックではないため対象外にする
   direct_time_access:
     included: "(App/Sources|ShareExtension|Packages/SciaCore/Sources/SciaCore|Packages/MemoryCache/Sources|Packages/TextKit2Label/Sources)/.*\\.swift"
@@ -117,7 +114,7 @@ custom_rules:
     message: "実際の時間に直接触れない。時間をおく処理はClockで、今の日付は日付を返す関数で受け取り、既定値はSystemTimeかAppDependenciesを参照する"
     severity: error
 
-  # 失敗の理由の文言を部品を通さずに出すと、ログアウトされたときの「ログインし直す」が付かない。今回、場所ごとに付けて回り、投稿欄、リスト、通報で漏れた。
+  # 失敗の理由の文言を部品を通さずに出すと、ログアウトされたときの「ログインし直す」が付かない。場所ごとに付けて回り、投稿欄、リスト、通報で漏れた。
   # 文言はSciaCoreでSPI（FailureDisplay）にしてあるので、それを読むimportを、部品のファイル（App/Sources/Notices/FailureDisplay.swift）だけに限る
   failure_reason_outside_display:
     included: "(App/Sources|ShareExtension)/.*\\.swift"
@@ -155,7 +152,7 @@ custom_rules:
     severity: error
 
   # URLSessionは、通信の層のURLSessionTransport.swiftでだけ使う。ほかの場所で直接使うと、HTTPClientの決まり（再開の時刻で止める、送り直す、大きさの上限、httpとhttps以外を開かない）を通らない経路ができる。
-  # 429への対応をREST APIのクライアントにだけ作ったため、ストリーミングや動画の最初のコマやXの投稿が再開の時刻を守らなかった。通信はHTTPClient（APIの外はAppDependencies.http）を、WebSocketはStreamingClientを通す（docs/network.md）。
+  # 429への対応をREST APIのクライアントにだけ作ったため、ストリーミングや動画の最初のコマやXの投稿が再開の時刻を守らなかった。
   # 動画の再生（AVPlayerItem(url:)）はAVFoundationが範囲と先読みを自分で決めて読むため、層に載せない例外にしている
   url_session_outside_network_layer:
     included: "(App/Sources|ShareExtension|Packages/SciaCore/Sources/SciaCore)/.*\\.swift"

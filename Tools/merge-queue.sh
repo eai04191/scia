@@ -11,7 +11,7 @@
 #   Tools/merge-queue.sh run [<前提のbranch>...]   今のbranchを列に並べ、番が来たら入れる。make testの端末は、走らせる直前にTools/sim.sh acquireで借りる
 #   Tools/merge-queue.sh status                         並んでいるbranchを順に出す
 # runを止めると（SIGTERM、SIGINT、SIGHUP）、mainへ入れている途中なら、走らせているrebaseやmakeを止め、rebaseを取りやめて端末を返してから終わる。
-#   fast-forwardを始めたあとは、mainを中途半端にしないよう、入れ終えてから終わる。終了コードは、入れたら0、止めたらシグナルの番号に128を足したもの
+#   fast-forwardを始めたあとは、mainを中途半端にしないよう、入れ終えてから終わる。止めたときの終了コードは、シグナルの番号に128を足したもの
 # runの終了コード: 0 入れた、1 使い方の誤りや想定外の失敗、2 未commitの変更がある、3 rebaseがconflictした、4 make checkかmake testが落ちた、
 #   5 前提のbranchが、列にもmainにもないまま10分経った、6 FEATURES.mdかREADME.mdの変更を人が承認していない（Tools/human-review.sh）
 # 段階ごとにかかった時間は、列のディレクトリのtiming.logに1行ずつ足す。列は「始めた時刻 branch 段階 秒 結果」のタブ区切りで、結果はokか終了コード。

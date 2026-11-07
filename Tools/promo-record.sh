@@ -84,7 +84,7 @@ record_simulator() {
     xcrun simctl terminate "$device" "$BUNDLE_ID" 2>/dev/null || true
     xcrun simctl io "$device" recordVideo --codec=h264 --force "$raw" 2>"$recorder_log" &
     recorder=$!
-    # 録画が始まるのを待つ。始まると、simctlが「Recording started」と書く。素材の範囲は目印で決めるので、ここでは始まったことだけを確かめる。
+    # simctlが「Recording started」と書くまで待つ。素材の範囲は目印で決めるので、ここでは始まったことだけを確かめる。
     for _ in $(seq 1 100); do
         grep -q "Recording started" "$recorder_log" && break
         sleep 0.05

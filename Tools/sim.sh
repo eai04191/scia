@@ -203,7 +203,7 @@ command_reset() {
     local sim=$1 container domain keys key
     require_lease "$sim"
     container=$(xcrun simctl get_app_container "$sim" "$BUNDLE_ID" data 2>/dev/null) || fail "アプリが入っていない: $sim"
-    # 動いているアプリは、覚えている値を書き戻すことがあるので、先に終了する。起動していなければ失敗するが、構わない。
+    # 動いているアプリは、覚えている値を書き戻すことがあるので、先に終了する。
     xcrun simctl terminate "$sim" "$BUNDLE_ID" >/dev/null 2>&1 || true
     domain="$container/Library/Preferences/$BUNDLE_ID"
     if [ ! -f "$domain.plist" ]; then
@@ -318,7 +318,7 @@ steps = max(1, math.ceil(math.hypot(x2 - x1, y2 - y1) / 20))
 points = [{"x": x1, "y": y1, "dt_ms": 0}]
 for i in range(1, steps + 1):
     points.append({"x": round(x1 + (x2 - x1) * i / steps, 1), "y": round(y1 + (y2 - y1) * i / steps, 1), "dt_ms": 32})
-# 終点で16ms ごとに0.5pt揺らし、約250ms止める。
+# 終点で16msごとに0.5pt揺らし、約250ms止める。
 for i in range(16):
     points.append({"x": x2, "y": y2 + (0.5 if i % 2 == 0 else 0), "dt_ms": 16})
 print(json.dumps(points, separators=(",", ":")))
@@ -347,7 +347,7 @@ print("\n".join(sorted(set(names), key=lambda n: int(n.split()[1]))))
 '
 }
 
-# 借りたまま返さずに止まったスレッドのため、この秒数より古い貸し出しは返されたものとして扱う。長く使うときは、acquireし直して延ばす。
+# 借りたまま返さずに止まったスレッドのため、この秒数より古い貸し出しは返されたものとして扱う。
 LEASE_SECONDS=${LEASE_SECONDS:-1800}
 
 # 貸し出しの記録を読んで書き換える処理は、.guardをlockfで持って1つずつ走らせる。

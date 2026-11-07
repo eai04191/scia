@@ -10,9 +10,8 @@ set -euo pipefail
 
 [[ "${1:-}" == prepared ]] || exit 0
 
-# main checkoutのスクリプトで調べる。worktreeのbranchにある古い版ではなく、mainの決まりで調べるため
-# hookもスクリプトもmain checkoutの作業ファイルなので、mainを動かす時点のmainの版で調べる。記録の置き場所や形を変えるcommitをmainに入れるときは、
-# 古い版が新しい置き場所を読めず拒否するので、その1回だけ、古い置き場所にも同じ記録を置いてから入れる
+# main checkoutのスクリプト（mainを動かす時点のmainの版）で調べる。worktreeのbranchにある古い版ではなく、mainの決まりで調べるため
+# 記録の置き場所や形を変えるcommitをmainに入れるときは、古い版が新しい置き場所を読めず拒否するので、その1回だけ、古い置き場所にも同じ記録を置いてから入れる
 
 stamp="$(git rev-parse --path-format=absolute --git-common-dir)/../Tools/check-stamp.sh"
 review="$(git rev-parse --path-format=absolute --git-common-dir)/../Tools/human-review.sh"
