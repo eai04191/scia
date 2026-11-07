@@ -1,4 +1,5 @@
 import Foundation
+import SciaTesting
 import Synchronization
 import Testing
 @testable import SciaCore
@@ -80,9 +81,12 @@ struct TimelineStoreTests {
         let store = makeStore(queue)
 
         _ = try await store.loadInitial()
-        #expect(try await store.loadOlder() == [])
-        #expect(store.reachedEnd)
-        #expect(try await store.loadOlder() == nil)
+        let older = try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) {
+            $0.reachedEnd = true
+        }
+        #expect(older == [])
+        let again = try await expectChanges(of: { store.state }, during: { try await store.loadOlder() }) { _ in }
+        #expect(again == nil)
         #expect(queue.maxIDs == [nil, "30"])
     }
 
@@ -90,9 +94,12 @@ struct TimelineStoreTests {
         let queue = PageQueue([try page([], regenerating: true)])
         let store = makeStore(queue)
 
-        #expect(try await store.loadInitial() == [])
-        #expect(!store.reachedEnd)
-        #expect(store.isRegenerating)
+        let loaded = try await expectChanges(of: { store.state }, during: { try await store.loadInitial() }) {
+            $0.isRegenerating = true
+            // 空のまま再生成中なので、次の補完も最新のページから読む。
+            $0.fillsFromLatestPage = true
+        }
+        #expect(loaded == [])
     }
 
     @Test func loadOlderBeforeInitialDoesNothing() async throws {
@@ -107,12 +114,18 @@ struct TimelineStoreTests {
         let queue = PageQueue([try page([30]), .failure(Failure()), try page([29])])
         let store = makeStore(queue)
 
-        _ = try await store.loadInitial()
-        await #expect(throws: Failure.self) { _ = try await store.loadOlder() }
-        #expect(!store.isLoading)
-        #expect(store.statuses.map(\.id) == ["30"])
+        let older = try status(29)
 
-        #expect(try await store.loadOlder()?.map(\.id) == ["29"])
+        _ = try await store.loadInitial()
+        try await expectChanges(of: { store.state }, during: {
+            await #expect(throws: Failure.self) { _ = try await store.loadOlder() }
+        }) { _ in }
+
+        let retried = try await expectChanges(of: { store.state }, during: { try await store.loadOlder()?.map(\.id) }) {
+            $0.entries.append(.status(older))
+            $0.oldestLoadedID = "29"
+        }
+        #expect(retried == ["29"])
         #expect(queue.maxIDs == [nil, "30", "30"])
     }
 
@@ -159,14 +172,22 @@ struct TimelineStoreTests {
 
     @Test func updatesArePendingUntilFlushed() async throws {
         let store = try await loadedStore([30, 29])
+        let first = try status(31)
+        let second = try status(32)
 
-        #expect(store.receive(.update(try status(31))) == .pendingStarted)
-        #expect(store.receive(.update(try status(32))) == .none)
-        #expect(store.statuses.map(\.id) == ["30", "29"])
-
-        #expect(store.flushPending().map(\.id) == ["32", "31"])
-        #expect(store.statuses.map(\.id) == ["32", "31", "30", "29"])
-        #expect(store.pending.isEmpty)
+        let firstResult = try await expectChanges(of: { store.state }, during: { store.receive(.update(first)) }) {
+            $0.pending = [first]
+        }
+        #expect(firstResult == .pendingStarted)
+        let secondResult = try await expectChanges(of: { store.state }, during: { store.receive(.update(second)) }) {
+            $0.pending.append(second)
+        }
+        #expect(secondResult == .none)
+        let flushed = try await expectChanges(of: { store.state }, during: { store.flushPending().map(\.id) }) {
+            $0.pending = []
+            $0.entries.insert(contentsOf: [.status(second), .status(first)], at: 0)
+        }
+        #expect(flushed == ["32", "31"])
         #expect(store.receive(.update(try status(33))) == .pendingStarted)
     }
 
@@ -179,8 +200,14 @@ struct TimelineStoreTests {
         _ = store.receive(.update(try status(31)))
         _ = store.receive(.update(try status(30)))
 
-        #expect(store.flushPending().map(\.id) == ["29", "31"])
-        #expect(store.statuses.map(\.id) == ["29", "31", "30", "28"])
+        let flushed = try await expectChanges(of: { store.state }, during: { store.flushPending().map(\.id) }) {
+            $0.pending = []
+            $0.entries.insert(contentsOf: [.status(try status(29)), .status(try status(31))], at: 0)
+            // 29は、そのとき一番上だった31の上に積む。
+            $0.lateArrivalSequence = 1
+            $0.lateArrivalPositions["29"] = TimelineStore.DisplayPosition(anchorID: "31", sequence: 1)
+        }
+        #expect(flushed == ["29", "31"])
 
         _ = store.receive(.update(try status(32)))
         _ = store.flushPending()
@@ -216,10 +243,17 @@ struct TimelineStoreTests {
         _ = try await store.loadInitial()
         _ = store.receive(.update(try status(31, reblog: original)))
 
-        #expect(store.receive(.delete(statusID: "10")) == .entriesChanged)
-        #expect(store.statuses.map(\.id) == ["29"])
-        #expect(store.pending.isEmpty)
-        #expect(store.receive(.delete(statusID: "999")) == .none)
+        let deleted = try await expectChanges(of: { store.state }, during: { store.receive(.delete(statusID: "10")) }) {
+            $0.deletedIDs.insert("10")
+            $0.pending = []
+            $0.entries.removeFirst()
+        }
+        #expect(deleted == .entriesChanged)
+        let unknown = try await expectChanges(of: { store.state }, during: { store.receive(.delete(statusID: "999")) }) {
+            // 表示に関わる変化はなくても、あとから届いたときに足さないよう覚える。
+            $0.deletedIDs.insert("999")
+        }
+        #expect(unknown == .none)
     }
 
     /// ミュートかブロックした相手の投稿、その人のブースト、その人の投稿のブーストを除き、ほかの投稿は残す。
@@ -358,8 +392,13 @@ struct TimelineStoreTests {
         let store = try await loadedStore([30, 29, 28])
         #expect(store.unreadCount == 0)
 
-        #expect(store.markRead(["29", "28"]))
-        #expect(store.lastReadID == "29")
+        try await expectChanges(of: { store.state }, during: { #expect(store.markRead(["29", "28"])) }) {
+            $0.lastReadID = "29"
+            #if DEBUG
+            $0.lastSavableReadID = "29"
+            #endif
+            $0.lastReadPosition = TimelineStore.DisplayPosition(anchorID: "29", sequence: 0)
+        }
         #expect(store.unreadCount == 1)
 
         _ = store.receive(.update(try status(31)))

@@ -74,11 +74,14 @@ extension TimelineStore {
 
     /// `loadedIDs`と`itemIDs`を、並びが変わるまで使い回す。流れの速いタイムラインでは、届くたびに全件から作り直すと重くなるため。
     /// 並びから作り直せる値なので、状態を比べるときは見ない。比べると、同じ並びでも、使い回しを作ったかどうかでテストが落ちるため。
-    struct DerivedIDs: Equatable {
+    struct DerivedIDs: Equatable, CustomReflectable {
         var loadedIDs: Set<String>?
         var itemIDs: [String]?
 
         static func == (_: DerivedIDs, _: DerivedIDs) -> Bool { true }
+
+        /// テストが状態の違いを`dump`で並べるときに、比べない値を出さない。
+        var customMirror: Mirror { Mirror(self, children: [:]) }
     }
 
     /// タイムラインの中の位置。IDの位置に並べる投稿は、自分のIDと0。遅れて届いて積んだ投稿は、積んだときに一番上だった投稿のIDと、届いた順の番号。
