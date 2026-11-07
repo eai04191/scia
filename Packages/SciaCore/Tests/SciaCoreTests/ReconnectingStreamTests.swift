@@ -241,9 +241,17 @@ final class ScriptedConnector: WebSocketConnector {
     }
 
     private let state: Mutex<(scripts: [Script], connectCount: Int, closedCount: Int, sent: [[String]], unansweredPings: Int)>
+    private let rest: Script
 
-    init(_ scripts: [Script]) {
+    /// - Parameter rest: `scripts`を使い切ったあとの接続の台本。
+    init(_ scripts: [Script], rest: Script = Script()) {
         state = Mutex((scripts, 0, 0, [], 0))
+        self.rest = rest
+    }
+
+    /// 何度つないでも、つながったと判断されない接続。つながったかは最初のpingの応答か最初のメッセージで決まるので、どちらも返さない。
+    static func neverConnecting() -> ScriptedConnector {
+        ScriptedConnector([], rest: Script(answeredPings: 0))
     }
 
     var connectCount: Int { state.withLock { $0.connectCount } }
@@ -257,7 +265,7 @@ final class ScriptedConnector: WebSocketConnector {
         let (script, index) = state.withLock { state in
             state.connectCount += 1
             state.sent.append([])
-            return (state.scripts.isEmpty ? Script() : state.scripts.removeFirst(), state.sent.count - 1)
+            return (state.scripts.isEmpty ? rest : state.scripts.removeFirst(), state.sent.count - 1)
         }
         return ScriptedConnection(script: script) { [weak self] in
             self?.state.withLock { $0.closedCount += 1 }

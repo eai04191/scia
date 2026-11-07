@@ -230,7 +230,8 @@ struct FeedTimelineModelTests {
             try await latestGate.wait()
             return (200, try TimelineModelFixtures.body([2, 1]))
         }
-        let (model, display) = makeModel(transport: transport)
+        // 最新のページを読む補完は、つながったときの補完。
+        let (model, display) = makeModel(transport: transport, hub: TimelineModelFixtures.hub(ScriptedConnector([])))
         defer { model.stop() }
 
         model.start(purpose: .action)

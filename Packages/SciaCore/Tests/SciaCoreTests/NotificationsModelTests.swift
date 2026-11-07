@@ -87,7 +87,8 @@ struct NotificationsModelTests {
                 return (200, empty)
             }
         }
-        let (model, display) = makeModel(transport: transport)
+        // 1回目の補完は、つながったときの補完。
+        let (model, display) = makeModel(transport: transport, hub: TimelineModelFixtures.hub(ScriptedConnector([])))
         defer { model.stop() }
 
         model.start(purpose: .action)

@@ -163,8 +163,10 @@ enum TimelineModelFixtures {
     }
 
     /// 決まった接続につなぐハブ。再接続、ポーリング、切断の知らせは、渡した時計を進めない限り起きない。
+    /// 既定ではつながらない。つながるのはモデルの処理の外で非同期に進むので、つながったときの補完がテストの数える読み込みに、いつ混ざるか決まらないため。
+    /// つながったあとの振る舞いを確かめるテストは、`ScriptedConnector`を渡し、`hub.isConnected`を待つ。
     @MainActor
-    static func hub(_ connector: ScriptedConnector = ScriptedConnector([]), clock: TestClock = TestClock()) -> StreamingHub {
+    static func hub(_ connector: ScriptedConnector = .neverConnecting(), clock: TestClock = TestClock()) -> StreamingHub {
         let client = StreamingClient(credential: credential(), connector: connector)
         let policy = ReconnectingStream.Policy(initialRetryDelay: .seconds(3600), maxRetryDelay: .seconds(3600), pingInterval: .seconds(3600), pingTimeout: .seconds(5))
         let live = LiveUpdates.Policy(pollingInterval: .seconds(3600), outageNoticeDelay: .seconds(3600))
