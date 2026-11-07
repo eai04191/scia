@@ -50,7 +50,7 @@ struct ScheduledStatusesControllerTests {
 
         let loading = controller.reload(purpose: .display)
         try await waitUntil { gate.waiterCount == 1 }
-        controller.didSchedule(ScheduledStatus(id: "70", scheduledAt: Date(timeIntervalSince1970: 1_900_000_000), params: ScheduledStatus.Params(text: "予約70")))
+        controller.model.didSchedule(ScheduledStatus(id: "70", scheduledAt: Date(timeIntervalSince1970: 1_900_000_000), params: ScheduledStatus.Params(text: "予約70")))
         gate.open()
         await loading?.value
 

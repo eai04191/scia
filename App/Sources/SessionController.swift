@@ -296,6 +296,7 @@ final class SessionController {
         self.bookmarks = bookmarks
         self.favourites = favourites
         self.scheduled = scheduled
+        session.statuses.register(scheduled.model)
         self.home = home
         self.local = local
         self.federated = federated
@@ -3109,27 +3110,18 @@ final class SessionController {
         }, animated: true)
     }
 
-    /// 投稿欄から今のアカウントで送れた結果を、ストリーミングの知らせを待たずに一覧へ反映する。何をどこへ反映するかは`SubmittedDraft`にある。
+    /// 投稿欄から今のアカウントで送れた結果を、ストリーミングの知らせを待たずに一覧へ反映する。何をどこへ反映するかは`SessionStatuses.reflect(_:usingTagsIn:)`にある。
     private func didSubmit(_ submitted: SubmittedDraft) {
-        switch submitted {
-        case .posted(let posted):
-            home.receivePosted(posted)
-            threads.receivePosted(posted)
-            composer.completion.didUse(posted.tags)
-        case .scheduled(let scheduled):
-            didSchedule(scheduled)
-        case .edited(let edited):
-            updateStatusEverywhere(edited.id) { _ in edited }
-            session.statuses.changeQuoteSources(.status(edited.id)) { $0.edit(edited) }
-            composer.completion.didUse(edited.tags)
+        session.statuses.reflect(submitted, usingTagsIn: composer.completion)
+        if case .scheduled(let scheduled) = submitted {
+            showScheduledNotice(scheduled)
         }
     }
 
     // MARK: - 予約投稿
 
     /// 予約できた。予約はタイムラインに何も出ず、うまくいったことが画面の変化で見えないため、チップで知らせる。押すと予約投稿の画面を開く。
-    private func didSchedule(_ status: ScheduledStatus) {
-        scheduled.didSchedule(status)
+    private func showScheduledNotice(_ status: ScheduledStatus) {
         let title = "\(ScheduleDateText.shortTitle(for: status.scheduledAt, now: now(), calendar: .autoupdatingCurrent))に予約しました"
         let notice = Notice(id: "compose.scheduled", kind: .success, title: title, action: .disclosure(hint: "予約投稿を表示します。") { [weak self] in
             self?.showScheduledStatuses()
@@ -4614,12 +4606,6 @@ private final class ThreadRegistry {
     private var controllers: [ThreadController] {
         entries.removeAll { $0.controller == nil }
         return entries.compactMap(\.controller)
-    }
-
-    func receivePosted(_ status: Status) {
-        for controller in controllers {
-            controller.receivePosted(status)
-        }
     }
 
     func enterForeground() {

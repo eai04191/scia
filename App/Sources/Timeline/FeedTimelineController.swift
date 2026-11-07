@@ -128,11 +128,6 @@ final class FeedTimelineController {
         model.showStreamingState(state)
     }
 
-    /// 投稿の応答で返った自分の投稿を、ストリーミングで届くのを待たずに新着と同じ経路で流す。
-    func receivePosted(_ status: Status) {
-        model.receivePosted(status)
-    }
-
     #if DEBUG
     /// `scia-debug://arrivals/release`で保留を解いたとき。
     func releaseHeldArrivals() {

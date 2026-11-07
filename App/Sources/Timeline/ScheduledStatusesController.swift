@@ -48,11 +48,6 @@ final class ScheduledStatusesController {
         model.enterForeground()
     }
 
-    /// 投稿欄で予約できた。
-    func didSchedule(_ scheduled: ScheduledStatus) {
-        model.didSchedule(scheduled)
-    }
-
     /// 書き直した投稿を送れて、元の予約を取り消した。
     func didCancel(_ id: ScheduledStatus.ID) {
         model.didCancel(id)

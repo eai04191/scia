@@ -612,8 +612,9 @@ public final class FeedTimelineModel {
     }
 
     /// 投稿の応答で返った自分の投稿を、ストリーミングで届くのを待たずに新着と同じ経路で流す。
+    /// ホームのほかは何もせず、ストリーミングで届くのを待つ。
     public func receivePosted(_ status: Status) {
-        guard !isStopped else { return }
+        guard !isStopped, feed == .home else { return }
         logger.info("\(self.feed.name, privacy: .public) posted status=\(status.id, privacy: .public)")
         apply(store.receivePosted(status))
     }

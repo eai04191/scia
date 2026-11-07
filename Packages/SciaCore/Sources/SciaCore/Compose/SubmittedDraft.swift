@@ -1,6 +1,7 @@
 /// 下書きを送った結果。どのAPIで送ったか（すぐ投稿、予約、編集）と、サーバーが返したもの。
 /// 送るのは`MastodonClient.submit(_:)`で、送れたら`ComposeModel.onSubmitted`（ほかのアカウントで書いていれば`ComposeAccount.onSubmitted`）に渡る。
 /// どの場合も、ストリーミングの知らせを待たずに一覧へ反映する。ストリーミングで届くまで数秒かかることがあり、切れている間は届かないため。
+/// 今のアカウントで送った結果は、`SessionStatuses.reflect(_:usingTagsIn:)`に渡せば、下の配り先へ配る。
 public enum SubmittedDraft: Sendable {
     /// すぐ投稿した。サーバーが返した投稿。
     /// ホームのタイムラインと、返信先を開いているスレッドに、`FeedTimelineModel.receivePosted(_:)`と`ThreadModel.receivePosted(_:)`で出す。

@@ -61,11 +61,6 @@ final class ThreadController {
         model.start()
     }
 
-    /// 投稿欄から送った投稿を、ストリーミングで届くのを待たずに足す。
-    func receivePosted(_ status: Status) {
-        model.receivePosted(status)
-    }
-
     /// バックグラウンドに入るときに呼ぶ。
     func enterBackground() {
         model.enterBackground()
