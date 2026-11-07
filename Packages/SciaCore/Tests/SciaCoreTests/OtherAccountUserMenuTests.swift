@@ -54,8 +54,9 @@ struct OtherAccountUserMenuTests {
     private let groups = MenuLayout<UserMenuItem>.Groups(main: [.init([.profile, .copyHandle, .mention, .addToList]), .init([.follow, .mute]), .init([.otherAccounts])], more: [])
 
     /// `user`のユーザーのメニューの「別のアカウントで」の項目。
-    private func otherAccountsNode(_ user: Account? = nil, accounts: [OtherAccount]) -> MenuNode<UserMenuCommand>? {
+    private func otherAccountsNode(_ user: Account? = nil, accounts: [OtherAccount], loadsRowsBeforeShowing: Bool = false) -> MenuNode<UserMenuCommand>? {
         var tree = UserMenuTree(subject: UserMenuSubject(.account(user ?? alice)), actions: actions(accounts), linkBrowser: .inApp)
+        tree.loadsOtherAccountRowsBeforeShowing = loadsRowsBeforeShowing
         // タップや長押しに割り当てたときのように「別のアカウントで」だけを組んでも、中身はユーザーのメニューの並びで組む。
         tree.otherAccountGroups = groups
         return tree.menu(groups: .single(.otherAccounts), avatar: nil)?.flattenedChildren.first
@@ -176,6 +177,60 @@ struct OtherAccountUserMenuTests {
         tree.refreshOtherAccounts(groups: MenuLayout<UserMenuItem>.Groups(main: [.init([.follow])], more: []))
         tree.refreshOtherAccounts(groups: groups)
         try await waitUntil { fetched.withLock { $0 } == [["500"]] }
+    }
+
+    /// ナビゲーションバーから出すメニューでは、アカウントの行そのものを、相手を探して関係も読み終えてから、中身の入った1行で出す。
+    /// UIKitは、ナビゲーションバーから出したメニューでは、開いたサブメニューの中身があとから替わっても高さを合わせ直さないため。
+    @Test func barMenuLoadsAccountRowBeforeShowing() async throws {
+        let otherAlice = otherAlice
+        let resolved = Mutex(0)
+        let bob = try account(resolveAccount: { _ in
+            resolved.withLock { $0 += 1 }
+            return otherAlice
+        }, relationships: { ids in ids.map { Relationship(id: $0, following: true) } })
+        let row = try #require(otherAccountsNode(accounts: [bob], loadsRowsBeforeShowing: true))
+        guard case .deferred(let load) = row.content else {
+            Issue.record("アカウントの行を、読み終えてから出していません")
+            return
+        }
+        let loaded = await load()
+        #expect(loaded.count == 1)
+        let bobMenu = try #require(loaded.first)
+        #expect(bobMenu.title == "@bobで")
+        #expect(bobMenu.subtitle == "other.example")
+        #expect(MenuNodeTests.describe(bobMenu.children) == "メンション,リストに追加|フォローを外す,ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日]")
+
+        // 見つけた相手と関係を覚えているので、次は読み込み中の行にせず、すぐ中身の入った行を出す。
+        let again = try #require(otherAccountsNode(accounts: [bob], loadsRowsBeforeShowing: true))
+        #expect(MenuNodeTests.describe([again]).hasPrefix("@bobで[メンション"))
+        #expect(resolved.withLock { $0 } == 1)
+    }
+
+    /// ナビゲーションバーから出すメニューで、アカウントが2つ以上なら、アカウントごとの行をそれぞれ読み終えてから出す。
+    /// 見つからないときも、探せなかったときも、行の数を変えずにアカウントの行1つにする。探せなかった理由は、その行を開いた中に置く。
+    @Test func barMenuKeepsOneRowPerAccount() async throws {
+        let otherAlice = otherAlice
+        let bob = try account("bob", resolveAccount: { _ in otherAlice })
+        let carol = try account("carol", resolveAccount: { _ in nil })
+        let dave = try account("dave", resolveAccount: { _ in throw URLError(.notConnectedToInternet) })
+        let menu = try #require(otherAccountsNode(accounts: [bob, carol, dave], loadsRowsBeforeShowing: true))
+        #expect(menu.title == "別のアカウントで")
+        var rows: [MenuNode<UserMenuCommand>] = []
+        for child in menu.children {
+            guard case .deferred(let load) = child.content else {
+                Issue.record("アカウントの行を、読み終えてから出していません")
+                return
+            }
+            let loaded = await load()
+            #expect(loaded.count == 1)
+            rows += loaded
+        }
+        #expect(rows.map(\.title) == ["@bob", "@carol", "@dave"])
+        #expect(rows[0].subtitle == "other.example")
+        #expect(MenuNodeTests.describe([rows[1]]) == "@carol(押せない)")
+        #expect(rows[1].subtitle == "このアカウントからは見つからないユーザーです")
+        #expect(rows[2].subtitle == "ユーザーを探せませんでした")
+        #expect(MenuNodeTests.describe(rows[2].children) == "ユーザーを探せませんでした(押せない)")
     }
 
     /// 投稿のメニューに何人も出るときは、前に見つけた人たちとの関係を、ほかのアカウントごとにまとめて1回で読み直す。

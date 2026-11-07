@@ -383,18 +383,32 @@ extension OtherAccount {
     /// アカウントの行には、そのアカウント自身のアイコンを付ける。
     /// - Parameter children: そのアカウントとしての中身。
     static func accountsMenu<Command>(_ accounts: [OtherAccount], title: String, symbolName: String, children: (OtherAccount) -> [MenuNode<Command>]) -> MenuNode<Command>? {
+        accountsMenu(accounts, title: title, symbolName: symbolName) { account, row in
+            .submenu(row.title, subtitle: row.subtitle, icon: row.icon, children(account))
+        }
+    }
+
+    /// アカウントの行の名前、サブタイトル、アイコン。
+    struct AccountRow {
+        let title: String
+        let subtitle: String
+        let icon: MenuIcon
+    }
+
+    /// `accountsMenu(_:title:symbolName:children:)`と同じ並べ方で、アカウントの行そのものを`row`で組む。
+    static func accountsMenu<Command>(_ accounts: [OtherAccount], title: String, symbolName: String, row: (OtherAccount, AccountRow) -> MenuNode<Command>) -> MenuNode<Command>? {
         guard !accounts.isEmpty else { return nil }
         if accounts.count == 1, let account = accounts.first {
             let credential = account.credential
-            return .submenu("@\(credential.username)で", subtitle: credential.server, icon: .avatar(.otherAccount(account), fallbackSymbol: symbolName), children(account))
+            return row(account, AccountRow(title: "@\(credential.username)で", subtitle: credential.server, icon: .avatar(.otherAccount(account), fallbackSymbol: symbolName)))
         }
         return .submenu(title, icon: .symbol(symbolName), accounts.map { account in
             let credential = account.credential
-            return .submenu("@\(credential.username)", subtitle: credential.server, icon: .avatar(.otherAccount(account), fallbackSymbol: "person.crop.circle"), children(account))
+            return row(account, AccountRow(title: "@\(credential.username)", subtitle: credential.server, icon: .avatar(.otherAccount(account), fallbackSymbol: "person.crop.circle")))
         })
     }
 
-    /// そのアカウントのサーバーで探せなかったことを知らせる、押せない行。
+    /// そのアカウントのサーバーで探せなかったことを、理由を添えて出す押せない行。
     /// メニューの行には理由の文字しか置けないので、ログアウトされていれば、ログインし直す項目を続けて置く。失敗の理由を出す部品と同じく、どこで失敗してもその場でログインし直せるようにするため。
     static func lookupFailureNodes<Command>(title: String, error: any Error, logIn: (RequestAccount) -> Command) -> [MenuNode<Command>] {
         let reason = ErrorPresentation(error)

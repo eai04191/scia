@@ -496,6 +496,9 @@ extension TimelineViewController {
         return menu.profileScreenMenu(groups: settings.userMenuLayout.groups) { [weak self] avatar in
             guard case .otherAccount(let account) = avatar, let profile = account.profile else { return nil }
             return self?.userMenuIcon(for: .account(profile), id: nil)
+        } didRenderDeferred: { [weak self] in
+            // 「別のアカウントで」のアカウントの行は、相手を探してからあとで描くので、そのときに集めたアイコンも読む。
+            self?.loadPendingMenuIcons()
         }
     }
 
