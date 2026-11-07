@@ -124,4 +124,25 @@ struct ThreadOpeningTests {
         let other = try #require(harness.visibleCell(of: .status(replyToFocus.id)))
         #expect((other.contentConfiguration as? PostContentConfiguration)?.context == nil, "押した投稿でない返信にラベルが出ました")
     }
+    /// 押した投稿の下に返信がなく、押した投稿を上端まで上げられるだけの余白を足しているときに、押した投稿の高さが変わっても、上端まで上げられる。
+    /// 余白を会話を読んだときにしか測り直していないと、アクションバーを開いたまま読み終えてから閉じたときに、閉じた分だけ余白が足りなくなる。
+    @Test func focusReachesTopAfterHeightChanges() throws {
+        let harness = try openThread(atWindowY: 500)
+        defer { harness.tearDown() }
+        harness.settings.appearance.showsActionBar = false
+        harness.viewController.reconfigure([focusID])
+        harness.viewController.toggleActionBar(for: focusID)
+        let ancestors = StatusFactory.make(count: 30, startingAt: 900).reversed()
+        harness.viewController.setEntries((ancestors + [focus]).map(TimelineEntry.status), keeping: focusID)
+        harness.viewController.releaseOpeningInset()
+
+        harness.viewController.toggleActionBar(for: focusID)
+        harness.collectionView.layoutIfNeeded()
+
+        let collectionView = harness.collectionView
+        let frame = try #require(harness.visibleCell(of: focusID)).frame
+        let maxOffset = collectionView.contentSize.height + collectionView.adjustedContentInset.bottom - collectionView.bounds.height
+        let focusAtTop = frame.minY - collectionView.adjustedContentInset.top
+        #expect(maxOffset >= focusAtTop - tolerance, "押した投稿を上端まで上げられず、\(focusAtTop - maxOffset)pt足りません")
+    }
 }

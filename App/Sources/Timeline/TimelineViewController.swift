@@ -130,7 +130,16 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     #endif
 
     private(set) lazy var collectionView: UICollectionView = TimelineCollectionView(frame: .zero, collectionViewLayout: makeLayout())
-    private lazy var dataSource = makeDataSource()
+    /// 作り終えてから、並べ直すたびに下の余白を測る処理をつなぐ。作る途中に当てる最初のsnapshotでも並べ直すので、先につなぐと、測る処理が作り終えていない`dataSource`を読みに行き、作り直しが入れ子になって止まらない。
+    private lazy var dataSource = {
+        let dataSource = makeDataSource()
+        // 中身の高さが変わらなくても、押した投稿より上の行の高さが変わると、押した投稿から下の高さが変わるので、並べ直すたびに測る。
+        (collectionView as? TimelineCollectionView)?.onLayout = { [weak self] in
+            guard let self, threadFocusID != nil else { return }
+            updateBottomInset(layingOut: false)
+        }
+        return dataSource
+    }()
     private var entries: [ItemID: TimelineEntry] = [:]
     /// メニューを開いている間に届いたアイコンを、メニューを組み直さずに差し替える。
     let contextMenuIcons = ContextMenuIconSwapper()
@@ -1632,17 +1641,21 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// スレッドでは、押した投稿を表示領域の上端まで上げられるだけの余白を、タイムラインの下に足す。
     /// 投稿欄のカプセルなどが下端を覆う分は、ナビゲーションがsafe areaに入れるので、ここでは足さない。
     /// 投稿を選んでいる間は、投稿欄がカプセルを隠して覆う高さを0と知らせるので、ここで分けない。
-    private func updateBottomInset() {
+    /// スレッドでは並べ直すたびに測り直すので、アクションバーの開閉、注意書きの開閉、長い本文の展開などの経路ごとには呼ばない。
+    /// 並べ終えたあとに呼ぶときは、`layingOut`をfalseにして、並べ直さずに測る。
+    private func updateBottomInset(layingOut: Bool = true) {
         guard isViewLoaded else { return }
-        let fill = threadFocusBottomFill()
+        let fill = threadFocusBottomFill(layingOut: layingOut)
         guard collectionView.contentInset.bottom != fill else { return }
         collectionView.contentInset.bottom = fill
     }
 
     /// 押した投稿から下の行が表示領域の高さに足りない分。足りないと、押した投稿を押した位置に置いたままにできず、タイムラインが端まで戻ってしまうため。
-    private func threadFocusBottomFill() -> CGFloat {
+    private func threadFocusBottomFill(layingOut: Bool) -> CGFloat {
         guard let threadFocusID, let indexPath = dataSource.indexPath(for: .status(threadFocusID)) else { return 0 }
-        collectionView.layoutIfNeeded()
+        if layingOut {
+            collectionView.layoutIfNeeded()
+        }
         guard let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else { return 0 }
         let visibleHeight = collectionView.bounds.height - collectionView.adjustedContentInset.top - view.safeAreaInsets.bottom
         return max(visibleHeight - (collectionView.contentSize.height - frame.minY), 0)
@@ -3197,8 +3210,12 @@ final class TimelineCollectionView: UICollectionView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    /// 並べ直すたびに、並べ終えたあとで呼ぶ。中で並べ直さずに行の枠を読める。
+    var onLayout: (() -> Void)?
+
     override func layoutSubviews() {
         FrameWork.measure("TimelineCollectionView.layoutSubviews") { super.layoutSubviews() }
+        onLayout?()
     }
 
     override func touchesShouldCancel(in view: UIView) -> Bool {
