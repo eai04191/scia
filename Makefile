@@ -7,7 +7,7 @@ SIM_ARCH ?= $(shell uname -m)
 # 同じDerivedDataを使うDebugのビルドには、すべてコンパイルキャッシュの設定を渡す（Config/Cache.xcconfig）。Tools/system-ui-check.shも同じものを渡す
 CACHE_XCCONFIG := -xcconfig Config/Cache.xcconfig
 
-.PHONY: generate lint test-lint test-core test-memory-cache build warnings test test-on-sim sim-keyboard scenario-build scenario-setup scenario-reset scenario-run archive testflight testflight-external promo readme-screenshots readme-icons update-known-servers check check-steps hooks menu-editor clean
+.PHONY: generate lint test-lint test-core test-memory-cache build warnings test test-on-sim sim-keyboard scenario-build scenario-setup scenario-reset scenario-run archive testflight testflight-external promo readme-screenshots readme-icons update-known-servers check check-steps check-test hooks menu-editor clean
 
 ## project.ymlからXcodeプロジェクトを生成する
 generate:
@@ -167,8 +167,32 @@ check:
 	@Tools/check-stamp.sh record check "$$(cat $(CHECK_TREE))"
 
 ## SciaCoreのテスト、キャッシュのパッケージのテスト、lintの規則のテスト、アプリのビルドは互いを待たないので、並べて走らせる。出力が混ざるので、失敗はmakeが最後に出すターゲット名から追う
+CHECK_TESTS := test-core test-memory-cache test-lint
 check-steps: lint
-	@$(MAKE) --no-print-directory -j4 test-core test-memory-cache test-lint warnings
+	@$(MAKE) --no-print-directory -j4 $(CHECK_TESTS) warnings
+
+## make checkとmake testを両方走らせる。アプリのビルドと警告の検査を済ませてから、checkの残り（lintとmacOSのテスト）をmake testと同時に走らせる。
+## 同時に走らせるとmake testは1割ほど遅くなるが、checkの残りの40〜50秒がmake testの裏に隠れるので、続けて走らせるより30秒ほど早く終わる。
+## 端末の選び方はmake testと同じ。通ったものだけ、確かめた作業ツリーの中身を覚える（make testの分はmake testが覚える）。
+## checkの残りの出力は、make testの出力と混ざらないようファイルに書き、落ちたときだけ、指摘と失敗の行を出す。同時に走るテストの経過の後ろに埋もれるので、末尾ではなく行を選んで出す。
+## 止められたら、どちらも止めて終わるのを待つ。前で走らせると、シェルはそれが終わるまで止める合図を扱わないので、どちらも後ろで走らせて待つ。
+## makeは止める合図を子に回さないので、どちらもset -mで別のプロセスグループにして起動し、グループごと止める。子のmakeだけを止めると、その先のmake test-on-simやxcodebuildが残る
+CHECK_REST_LOG := $(DERIVED_DATA)/check-rest.log
+CHECK_REST_STATUS := $(DERIVED_DATA)/check-rest-status
+TEST_STATUS := $(DERIVED_DATA)/test-status
+check-test: generate
+	@mkdir -p $(DERIVED_DATA) && Tools/check-stamp.sh tree > $(CHECK_TREE)
+	@$(MAKE) --no-print-directory warnings
+	@rm -f $(CHECK_REST_STATUS) $(TEST_STATUS); \
+	stop() { kill -TERM -- -$$rest -$$tests 2>/dev/null; wait; exit $$1; }; \
+	trap 'stop 129' HUP; trap 'stop 130' INT; trap 'stop 143' TERM; \
+	set -m; \
+	$(MAKE) --no-print-directory -j4 lint $(CHECK_TESTS) > $(CHECK_REST_LOG) 2>&1 & rest=$$!; \
+	$(MAKE) --no-print-directory test SIM='$(SIM)' & tests=$$!; \
+	set +m; \
+	wait $$tests; echo $$? > $(TEST_STATUS); wait $$rest; echo $$? > $(CHECK_REST_STATUS)
+	@if [ "$$(cat $(CHECK_REST_STATUS))" = 0 ]; then Tools/check-stamp.sh record check "$$(cat $(CHECK_TREE))"; else grep -aE ': error: |\*\*\*|recorded an issue|failed after' $(CHECK_REST_LOG) | tail -40; echo "make checkのlintかmacOSのテストが落ちました。出力は$(CHECK_REST_LOG)"; fi
+	@[ "$$(cat $(CHECK_REST_STATUS))" = 0 ] && [ "$$(cat $(TEST_STATUS))" = 0 ]
 
 ## ローカルのmainを、make checkとmake testの両方が通った中身のcommitにしか動かさないhookを入れる。worktreeにも効く
 hooks:

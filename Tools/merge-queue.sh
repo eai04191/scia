@@ -16,6 +16,7 @@
 #   5 前提のbranchが、列にもmainにもないまま10分経った、6 FEATURES.mdかREADME.mdの変更を人が承認していない（Tools/human-review.sh）
 # 段階ごとにかかった時間は、列のディレクトリのtiming.logに1行ずつ足す。列は「始めた時刻 branch 段階 秒 結果」のタブ区切りで、結果はokか終了コード。
 #   段階は、wait（並んでから番が来るまで）、rebase、check、sim-acquire（make testの端末を借りるまで）、sim-reset、test、total（並んでから終わるまで）。
+#   checkとtestの両方を走らせるときは、checkとtestの代わりに、build（端末を借りる前のアプリのビルド）とcheck-test（make check-test）が並ぶ。
 #   mainが動いて載せ直すと、rebaseからの段階がもう一度並ぶ
 set -euo pipefail
 
@@ -278,30 +279,50 @@ require_human_review() {
 # landが端末を借りたか。止められたときに返す
 lent_sim=''
 
+# make testの端末を借りて、呼び出し元のsimに入れる。ほかのworktreeが使ったあとの端末は、既定に戻してから渡す
+lend_test_sim() {
+    local acquired lent
+    # 並んで待つ間は端末を持たない。ほかのスレッドが使えるよう、走らせる直前に借りて、終わったら返す。
+    # 借り終えてから記録するまでの間に止められても返せるよう、借り始める前に記録する。借りていないときのreleaseは何もしない
+    lent_sim=1
+    acquired=$(mktemp)
+    timed sim-acquire Tools/sim.sh acquire --wait 0 > "$acquired" || { rm -f "$acquired"; echo "error: make test の端末を借りられませんでした" >&2; exit 1; }
+    lent=$(tail -1 "$acquired")
+    rm -f "$acquired"
+    sim=${lent% *}
+    # ほかのworktreeが使ったあとの端末は、その設定やチューニングを持ち込まないよう、既定に戻してからテストする。
+    if [[ "${lent##* }" != ready ]]; then
+        timed sim-reset Tools/sim.sh reset "$sim" || { Tools/sim.sh release >/dev/null; echo "error: $sim の設定を戻せませんでした" >&2; exit 1; }
+    fi
+}
+
+return_test_sim() {
+    Tools/sim.sh release >/dev/null
+    lent_sim=''
+}
+
 run_missing_steps() {
-    local missing steps step sim lent acquired
+    local missing steps step sim
     # 調べられなかったときに、出力が空なのを通ったものと取り違えないよう、失敗したら止める
     missing=$(Tools/check-stamp.sh missing HEAD "$TARGET") || { echo "error: 通っていないものを調べられませんでした" >&2; exit 1; }
-    steps=$(awk '{ print $2 }' <<< "$missing")
+    steps=" $(awk '{ print $2 }' <<< "$missing" | tr '\n' ' ')"
+    if [[ "$steps" == *" check "* && "$steps" == *" test "* ]]; then
+        # 両方なら、make check-testで、checkの残りをmake testと同時に走らせる。
+        # 端末を借りている間にアプリのコンパイルを待たないよう、借りる前にビルドしておく。make check-testの中のビルドは、そのあとでは差分がないので数秒で済む
+        timed build make build || { echo "error: make build が落ちました" >&2; exit 4; }
+        lend_test_sim
+        echo "make check と make test を $sim で同時に走らせます"
+        timed check-test make check-test SIM="$sim" || { return_test_sim; echo "error: make check か make test が落ちました" >&2; exit 4; }
+        return_test_sim
+        return
+    fi
     for step in $steps; do
         echo "make $step を走らせます"
         if [[ "$step" == test ]]; then
-            # 並んで待つ間は端末を持たない。ほかのスレッドが使えるよう、走らせる直前に借りて、終わったら返す。
-            # 借り終えてから記録するまでの間に止められても返せるよう、借り始める前に記録する。借りていないときのreleaseは何もしない
-            lent_sim=1
-            acquired=$(mktemp)
-            timed sim-acquire Tools/sim.sh acquire --wait 0 > "$acquired" || { rm -f "$acquired"; echo "error: make test の端末を借りられませんでした" >&2; exit 1; }
-            lent=$(tail -1 "$acquired")
-            rm -f "$acquired"
-            sim=${lent% *}
-            # ほかのworktreeが使ったあとの端末は、その設定やチューニングを持ち込まないよう、既定に戻してからテストする。
-            if [[ "${lent##* }" != ready ]]; then
-                timed sim-reset Tools/sim.sh reset "$sim" || { Tools/sim.sh release >/dev/null; echo "error: $sim の設定を戻せませんでした" >&2; exit 1; }
-            fi
+            lend_test_sim
             echo "make test を $sim で走らせます"
-            timed test make test SIM="$sim" || { Tools/sim.sh release >/dev/null; echo "error: make test が落ちました" >&2; exit 4; }
-            Tools/sim.sh release >/dev/null
-            lent_sim=''
+            timed test make test SIM="$sim" || { return_test_sim; echo "error: make test が落ちました" >&2; exit 4; }
+            return_test_sim
         else
             timed "$step" make "$step" || { echo "error: make $step が落ちました" >&2; exit 4; }
         fi
