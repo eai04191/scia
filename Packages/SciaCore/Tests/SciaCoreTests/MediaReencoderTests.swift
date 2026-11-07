@@ -7,7 +7,9 @@ import Testing
 import UniformTypeIdentifiers
 @testable import SciaCore
 
-@Suite(.scratch)
+/// 画像と動画を、AVFoundationとImageIOで実際に書き出して確かめる。
+/// 固まったら、テストの実行を止めずに失敗させる。上限は待つ長さの見積もりではなく、固まったとみなす長さ。
+@Suite(.scratch, .timeLimit(.minutes(1)))
 struct MediaReencoderTests {
     private func makeDirectory() throws -> URL {
         let directory = TestScratch.url("MediaReencoderTests")
