@@ -43,7 +43,7 @@ public enum AppearanceHighlight: Equatable, Sendable {
             (C.boosterAvatarSize, .firstOf([.part(.contextAvatar), .part(.boosterAvatarSlot)])),
             (C.contextSymbolSpacing, .horizontalGap(leading: [.contextSymbol], trailing: [.contextAvatar, .contextText])),
             (C.contextAvatarTextSpacing, .firstOf([.horizontalGap(leading: [.contextAvatar], trailing: [.contextText]), .part(.boosterAvatarSlot)])),
-            (C.contextSpacing, .verticalGap(above: [.contextLine], below: [.nameRow])),
+            (C.contextSpacing, .verticalGap(above: [.contextLine], below: [.avatar])),
 
             (C.avatarSize, .part(.avatar)),
             (C.avatarCornerRatio, .part(.avatarCorners)),
@@ -172,7 +172,7 @@ public enum AppearanceHighlight: Equatable, Sendable {
             (N.quotedNoteSpacing, .verticalGap(above: [.quotedPoll, .quotedMedia, .quotedBodyGlyphs], below: [.quotedNote])),
 
             (N.contextText, .part(.contextLine)),
-            (N.contextSpacing, .verticalGap(above: [.contextLine], below: [.nameRow])),
+            (N.contextSpacing, .verticalGap(above: [.contextLine], below: [.avatar])),
         ]
         return Dictionary(uniqueKeysWithValues: (pairs + notificationPairs).map { ($0.0.id, $0.1) })
     }()

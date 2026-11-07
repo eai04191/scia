@@ -555,21 +555,6 @@ struct RichTextRenderer: Sendable {
         return fitting.placedBounds(lineWidth: width, paragraphStyle: text.attribute(.paragraphStyle, at: location, effectiveRange: nil) as? NSParagraphStyle)
     }
 
-    /// 1行目の上端から、文字と絵文字の上端までの空き。ふだんは0。
-    /// 大きくしたUnicodeの絵文字を下げて描くと、ラベルは下げる前の書体のascenderまでを行の上に取るため、下げた分が1行目の上に空く。
-    static func lineTopGap(in text: NSAttributedString) -> CGFloat {
-        guard text.length > 0 else { return 0 }
-        let paragraph = (text.string as NSString).paragraphRange(for: NSRange(location: 0, length: 0))
-        guard let font = textFont(in: text, range: paragraph) else { return 0 }
-        let visible = max(font.ascender, emojiExtent(in: text, range: paragraph).above)
-        var reserved = visible
-        text.enumerateAttributes(in: paragraph) { attributes, _, _ in
-            guard attributes[.scaledUnicodeEmoji] != nil, let emojiFont = attributes[.font] as? UIFont else { return }
-            reserved = max(reserved, emojiFont.ascender)
-        }
-        return reserved - visible
-    }
-
     /// 範囲の文字の書体。大きさを変えたUnicodeの絵文字は、大きさを変える前の書体にする。`fromEnd`なら最後の文字の書体。
     static func textFont(in text: NSAttributedString, range: NSRange, fromEnd: Bool = false) -> UIFont? {
         guard range.length > 0 else { return nil }

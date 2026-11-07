@@ -20,7 +20,7 @@ public enum AppearancePreviewPart: Hashable, CaseIterable, Sendable {
     /// アイコンから下の行へ伸ばす、返信をつなぐ線。
     case replyLineBelow
     case nameRow
-    /// 名前の字面。ベースラインからem枠で測った上端と下端。2段に分けていれば、1段目の上端から2段目の下端まで。
+    /// 名前の字面。ベースラインからem枠で測った上端と下端。大きくした絵文字が上や下へ伸びていれば、その端。2段に分けていれば、1段目の上端から2段目の下端まで。
     case nameGlyphs
     /// 2段に分けた名前の、1段目の字面。
     case nameFirstLineGlyphs

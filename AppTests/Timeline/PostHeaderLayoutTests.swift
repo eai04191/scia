@@ -113,6 +113,57 @@ struct PostHeaderLayoutTests {
     }
 
     /// アイコンの下を空けないと、本文は行の左の余白から始まる。
+    /// アイコンの上端は、名前の1段目の字面（em枠）の上端に揃う。ラベルの行の上端（書体のascender）に揃えると、字面がアイコンより下がる。
+    /// 文脈の行がなければ、アイコンの上端は行の上の余白の位置にある。
+    @Test(arguments: [false, true])
+    func avatarTopMatchesNameGlyphTop(stacked: Bool) throws {
+        let configuration = try configuration(displayName: "とても長い名前のアカウント") { $0.appearance.stacksNameParts = stacked }
+        let frames = frames(of: configuration).frames
+        let avatar = try #require(frames[.avatar]?.first)
+        let name = try #require(frames[.nameGlyphs]?.first)
+
+        #expect(abs(avatar.minY - name.minY) < 0.5, "アイコン \(avatar.minY) 名前 \(name.minY)")
+        #expect(abs(avatar.minY - configuration.metrics.margins.top) < 0.5)
+    }
+
+    /// ブーストした人の行があると、アイコンの上端はその行から決まった間隔の位置にあり、名前の文字の大きさや絵文字では動かない。名前の字面の上端はアイコンの上端に揃う。
+    /// 時刻を大きくしたときの、アイコンを名前に揃えて時刻を上へはみ出させる決まりは、`EmojiDrawingTests`で確かめる。
+    @Test func boostedAvatarStaysBelowContextLine() throws {
+        func frames(displayName: String, _ change: (AppSettings) -> Void) throws -> AppearancePreviewFrames {
+            let settings = AppSettings.isolated()
+            change(settings)
+            let timeline = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: settings)
+            let original = try status(displayName: displayName)
+            let booster = try #require(StatusFactory.make(count: 1, startingAt: 200).first)
+            let boost = Status(id: booster.id, createdAt: booster.createdAt, account: booster.account, content: "", spoilerText: "", url: nil, reblog: original)
+            return self.frames(of: timeline.contentConfiguration(for: boost, base: .cell())).frames
+        }
+        let plain = try frames(displayName: "名前") { _ in }
+        // 大きくした絵文字と大きな時刻は、名前の行のラベルの上の空きと字面の上端を、名前だけのときと違う高さにする。
+        let large = try frames(displayName: "名前😀") {
+            $0.setValue(2, for: AppearanceCatalog.nameUnicodeEmojiScale)
+            $0.setValue(30, for: AppearanceCatalog.timeText)
+        }
+
+        for frames in [plain, large] {
+            let context = try #require(frames[.contextLine]?.first)
+            let avatar = try #require(frames[.avatar]?.first)
+            #expect(avatar.minY > context.maxY)
+        }
+        let avatar = try #require(plain[.avatar]?.first)
+        let name = try #require(plain[.nameGlyphs]?.first)
+        #expect(abs(avatar.minY - name.minY) < 0.5, "アイコン \(avatar.minY) 名前 \(name.minY)")
+        // 「名前の行とのあいだ」の帯は、時刻を大きくしても、並べた間隔と同じ太さになる。
+        for frames in [plain, large] {
+            let band = try #require(AppearanceHighlight(AppearanceCatalog.contextSpacing)?.locate(in: [frames])?.rects.first)
+            let gap = try #require(frames[.avatar]?.first).minY - #require(frames[.contextLine]?.first).maxY
+            #expect(abs(band.height - gap) < 0.5, "帯 \(band.height) 間隔 \(gap)")
+        }
+        let plainGap = try #require(plain[.avatar]?.first).minY - #require(plain[.contextLine]?.first).maxY
+        let largeGap = try #require(large[.avatar]?.first).minY - #require(large[.contextLine]?.first).maxY
+        #expect(abs(plainGap - largeGap) < 0.5, "名前だけ \(plainGap) 絵文字と時刻 \(largeGap)")
+    }
+
     @Test func wrappedBodyStartsAtRowMargin() throws {
         let configuration = try configuration { $0.appearance.wrapsBelowAvatar = true }
         let frames = frames(of: configuration).frames

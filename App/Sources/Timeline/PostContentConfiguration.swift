@@ -688,7 +688,7 @@ final class PostContentView: UIView, UIContentView {
         return frames
     }
 
-    /// 名前の段の字面の枠。上端と下端は、ベースラインからem枠で測る。下端は、大きくした絵文字が下へ伸びていればその下端にする。並びも同じ測り方で、本文やメディアとのすき間を取っている。
+    /// 名前の段の字面の枠。上端と下端は、ベースラインからem枠で測る。大きくした絵文字が上や下へ伸びていれば、その端にする。並びも同じ測り方で、アイコンの上端を揃え、本文やメディアとのすき間を取っている。
     /// 2段に分けていれば、1段目の上端から2段目の下端まで。
     private func nameGlyphsFrame() -> [CGRect]? {
         guard let row = nameRow.previewFrame(in: self)?.first, let top = nameFirstLineGlyphs()?.minY else { return nil }
@@ -700,7 +700,7 @@ final class PostContentView: UIView, UIContentView {
     private func nameFirstLineGlyphs() -> CGRect? {
         guard let row = nameRow.previewFrame(in: self)?.first else { return nil }
         let baseline = nameBaselineGuide.layoutFrame.minY
-        let top = baseline - Self.largestNamePointSize(of: current) * PostBodyView.emBoxAscent
+        let top = baseline - Self.firstLineTopInset(of: current)
         return CGRect(x: row.minX, y: top, width: row.width, height: baseline + Self.firstLineBottomInset(of: current) - top)
     }
 
@@ -776,14 +776,18 @@ final class PostContentView: UIView, UIContentView {
         NSLayoutConstraint.deactivate(variableConstraints)
         let metrics = configuration.metrics
         let margins = metrics.margins
-        let nameTopGap = configuration.firstLineNameParts.map(RichTextRenderer.lineTopGap).max() ?? 0
         let bodySpacing = bodyView.startsWithMedia ? metrics.nameMediaSpacing : metrics.nameBodySpacing
+        // アイコンの上端から名前のベースラインまでを、UILabelのベースラインと同じく画素にそろえる。
+        // そろえないと、名前の行から下の部品が画素の途中に置かれ、正方形のサムネイルの上下の端が別々に丸められて、高さが幅と1画素ずれる。
+        let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 1
+        let nameBaselineOffset = (Self.avatarAlignedTopInset(of: configuration) * scale).rounded() / scale
         // 本文の左右の端。アイコンの下を空けないときは、行の左右の余白の内側いっぱいにする。
         let bodyLeading = configuration.wrapsBelowAvatar ? leadingAnchor : textGuide.leadingAnchor
         var constraints = [
             avatarView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: margins.leading),
-            // 名前の行は、ラベルが1行目の上に取る空きの分だけ上に置き、字面の上端を、アイコンの上端と同じ位置にそろえる。
-            avatarView.topAnchor.constraint(equalTo: nameRow.topAnchor, constant: nameTopGap),
+            // 名前の1段目の最初の部分の字面（em枠）の上端を、アイコンの上端にそろえる。ラベルの行の上端は書体のascenderの高さにあり、和文の字面より上に出るので使わない。
+            // 時刻やハンドルを最初の部分より大きくしても、アイコンは最初の部分に揃え、大きい部分は上へはみ出させる。
+            avatarView.topAnchor.constraint(equalTo: nameBaselineGuide.topAnchor, constant: -nameBaselineOffset),
             avatarView.widthAnchor.constraint(equalToConstant: metrics.avatarSize),
             avatarView.heightAnchor.constraint(equalToConstant: metrics.avatarSize),
             textGuide.leadingAnchor.constraint(equalTo: avatarView.trailingAnchor, constant: metrics.avatarSpacing),
@@ -812,7 +816,7 @@ final class PostContentView: UIView, UIContentView {
                 // アイコンの列の右端に揃えると、細い記号では文字とのあいだが間延びして見えるため。
                 contextIcon.trailingAnchor.constraint(equalTo: textGuide.leadingAnchor, constant: -metrics.contextSymbolSpacing),
                 Self.symbolVerticalConstraint(contextIcon, beside: contextLabel, onBaseline: context.notificationSymbolFont != nil),
-                nameRow.topAnchor.constraint(equalTo: contextGuide.bottomAnchor, constant: metrics.contextSpacing - nameTopGap),
+                avatarView.topAnchor.constraint(equalTo: contextGuide.bottomAnchor, constant: metrics.contextSpacing),
             ]
             if context.avatar != nil {
                 constraints += [
@@ -828,7 +832,7 @@ final class PostContentView: UIView, UIContentView {
                 constraints.append(contextLabel.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor))
             }
         } else {
-            constraints.append(nameRow.topAnchor.constraint(equalTo: topAnchor, constant: margins.top - nameTopGap))
+            constraints.append(avatarView.topAnchor.constraint(equalTo: topAnchor, constant: margins.top))
         }
         constraints += nameStackConstraints(for: configuration)
         // 2つ目の名前は名前の行に出し入れするので、そのラベルにつなぐ制約は適用のたびに作り直す。
@@ -886,6 +890,17 @@ final class PostContentView: UIView, UIContentView {
         guard configuration.isNameStacked else { return firstLineBottomInset(of: configuration) }
         let second = configuration.nameParts[1]
         return max(PostBodyView.textBottomInset(of: second), pointSize(of: second) * PostBodyView.emBoxDescent)
+    }
+
+    /// 名前の1段目の最初の部分（既定では名前）の、ベースラインから字面の上端まで。大きくした絵文字が字面より上へ伸びていれば、その上端まで。アイコンの上端をここに揃える。
+    static func avatarAlignedTopInset(of configuration: PostContentConfiguration) -> CGFloat {
+        guard let first = configuration.firstLineNameParts.first else { return configuration.metrics.nameFont.pointSize * PostBodyView.emBoxAscent }
+        return PostBodyView.textTopInset(of: first)
+    }
+
+    /// 名前の1段目のベースラインから、字面の上端まで。大きくした絵文字が字面より上へ伸びていれば、その上端まで。
+    static func firstLineTopInset(of configuration: PostContentConfiguration) -> CGFloat {
+        configuration.firstLineNameParts.map { PostBodyView.textTopInset(of: $0) }.reduce(largestNamePointSize(of: configuration) * PostBodyView.emBoxAscent, max)
     }
 
     /// 名前の1段目のベースラインから、字面の下端まで。
