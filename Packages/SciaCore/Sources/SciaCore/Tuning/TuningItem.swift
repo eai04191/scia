@@ -1089,6 +1089,16 @@ public enum TuningCatalog {
         defaultValue: 120
     )
 
+    /// アプリ内のSafariのシートの上端に置く、引いて高さを変える帯の高さ（pt）。Safariはこの帯の下に出す。
+    /// Safariのバーとページは別のプロセスが描いていて、その上からはシートを引けないため、引けるのはこの帯だけになる。
+    public static let inAppBrowserHandleHeight = NumberTuning(
+        id: "browser.handleHeight",
+        title: "アプリ内のSafariの上の、引く帯の高さ（pt）",
+        range: 8...40,
+        step: 2,
+        defaultValue: 12
+    )
+
     /// アプリ内のSafariを、伏せた高さで出してから中くらいの高さへ広げる。
     /// 実機では、中くらいの高さで直接出すと、ページを描く前の面が上がってきて、手前で本物のシートに跳んで止まって見える。
     /// 小さく出して上がりきってから広げると、広げる動きはページを描いたシートで動き、跳ぶ動きが目立ちにくくなる。実機で比べて、こちらを既定にした。
@@ -1924,6 +1934,7 @@ public enum TuningCatalog {
         ]),
         TuningSection(id: "browser", title: "アプリ内のSafari", items: [
             .number(inAppBrowserCollapsedHeight),
+            .number(inAppBrowserHandleHeight),
             .toggle(inAppBrowserGrowsFromCollapsed),
         ]),
         TuningSection(id: "media.dismiss", title: "ビューア：閉じる操作", items: [
