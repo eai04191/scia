@@ -94,7 +94,7 @@ extension StatusMenuItem: MenuItemContentProviding {
         case .openInAppSafari: .url(.openInAppSafari)
         case .editHistory: .own(title: "編集履歴", symbolName: "clock.arrow.circlepath")
         case .favouritedBy: .own(title: "お気に入りした人", symbolName: "star.circle")
-        case .rebloggedBy: .own(title: "ブーストした人", symbolName: "arrow.2.squarepath.circle")
+        case .rebloggedBy: .own(title: "ブーストした人", symbolName: "arrow.2.circlepath.circle")
         case .edit: .own(title: "編集", symbolName: "pencil")
         case .delete: .own(title: "削除", symbolName: "trash")
         case .redraft: .own(title: "削除して書き直す", symbolName: "square.and.pencil")
