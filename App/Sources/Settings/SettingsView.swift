@@ -235,6 +235,8 @@ private let settingsLogger = SciaLog.logger(category: "settings")
 /// スワイプして閉じるのを途中でやめると、消えないまま`viewWillAppear`がもう一度呼ばれるので、出ているかを持って、変わったときだけ知らせる。
 private final class SettingsHostingController: UIHostingController<SettingsView> {
     private let onShownChange: (Bool) -> Void
+    /// 最後に指を置いた位置（このビューの座標）。下へのスワイプで閉じてよいかを、指を置いた場所で決める。
+    private var touchDownLocation: CGPoint?
     private var isShown = false {
         didSet {
             guard isShown != oldValue else { return }
@@ -245,11 +247,19 @@ private final class SettingsHostingController: UIHostingController<SettingsView>
     init(rootView: SettingsView, onShownChange: @escaping (Bool) -> Void) {
         self.onShownChange = onShownChange
         super.init(rootView: rootView)
+        presentationController?.delegate = self
     }
 
     @available(*, unavailable)
     @MainActor required dynamic init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        let touchObserver = UITapGestureRecognizer()
+        touchObserver.delegate = self
+        view.addGestureRecognizer(touchObserver)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -260,5 +270,32 @@ private final class SettingsHostingController: UIHostingController<SettingsView>
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         isShown = false
+    }
+}
+
+extension SettingsHostingController: UIAdaptivePresentationControllerDelegate {
+    /// 本文から下へスワイプしても閉じず、ナビゲーションバーから下へスワイプしたときだけ閉じる。一覧を上へ戻すスクロールの勢いで閉じてしまうため。
+    /// スクロールビューのない画面（読み込み中や空の表示）でも同じにするため、指を置いた位置で見分ける。
+    func presentationControllerShouldDismiss(_ presentationController: UIPresentationController) -> Bool {
+        guard let touchDownLocation, let bar = view.visibleNavigationBar else { return false }
+        return touchDownLocation.y <= bar.convert(bar.bounds, to: view).maxY
+    }
+}
+
+extension SettingsHostingController: UIGestureRecognizerDelegate {
+    /// 指を置いた位置を覚えるだけで、ほかの操作の邪魔をしないよう、ジェスチャーには触れたものを渡さない。
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        touchDownLocation = touch.location(in: view)
+        return false
+    }
+}
+
+private extension UIView {
+    /// 窓にある、隠していないナビゲーションバー。
+    var visibleNavigationBar: UINavigationBar? {
+        if let bar = self as? UINavigationBar, bar.window != nil, !bar.isHidden {
+            return bar
+        }
+        return subviews.lazy.compactMap(\.visibleNavigationBar).first
     }
 }
