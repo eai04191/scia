@@ -2,6 +2,9 @@ public import Foundation
 public import Observation
 
 /// チューニング項目の現在値を持つ。値の変更はObservationで購読できる。
+///
+/// 値を変えるパネルはデバッグ版だけにあるが、値はReleaseでも読む。ストリーミングの新着の扱い、読み直しの間隔、サムネイルのプレビュー画像を引き伸ばしてよい倍率などを、
+/// `AccountSession`や各モデルがここから読むため。どのUIもアプリで1つ作って渡す。パネルを持たないビルドでは`defaults`をnilにして、既定値を使う。
 @MainActor
 @Observable
 public final class TuningStore {
