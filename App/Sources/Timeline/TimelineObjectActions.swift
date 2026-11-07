@@ -40,7 +40,7 @@ extension TimelineViewController {
 
     /// 投稿と通知の行。主な操作は、行のスレッドを開く。開けない行（スレッドの中心の投稿、投稿のない通知）では行えない。
     private func rowStatusTarget(_ entity: ObjectEntity<StatusMenuItem>, entry: TimelineEntry, id: ItemID, opening status: Status?) -> ObjectTarget<StatusMenuItem, StatusMenuCommand> {
-        ObjectTarget(
+        var target = ObjectTarget(
             entity: entity,
             settings: settings,
             primaryIsAvailable: status.map(canOpenThread(of:)) ?? false,
@@ -52,6 +52,37 @@ extension TimelineViewController {
             buildMenu: { [weak self] groups in self?.statusMenu(for: entry, id: id, groups: groups) },
             lifecycle: rowMenuLifecycle,
             notify: { [weak self] in self?.showNotice($0) }
+        )
+        if canShowActionBar(in: entry) {
+            target.openActionBar = { [weak self] _ in self?.toggleActionBar(for: id) }
+        }
+        return target
+    }
+
+    /// アクションバーのボタンを押したときに、その項目を行う。投稿のメニューの項目は、タップに割り当てた1項目と同じ組み方で行い、「メニュー」は行の投稿のメニューをボタンから出す。
+    /// 決まりはdocs/post-action-bar.mdの「ボタン」にある。
+    func performActionBarItem(_ item: PostActionBarItem, id: ItemID, from button: UIView) {
+        guard let entry = entry(for: id) else { return }
+        let point = CGPoint(x: button.bounds.midX, y: button.bounds.midY)
+        switch item {
+        case .menu:
+            guard let menu = contextMenu(for: entry, id: id) else { return }
+            TapMenuPresenter.shared.present(menu, in: button, at: point, lifecycle: rowMenuLifecycle)
+        case .status(let statusItem):
+            rowStatusTarget(.status, entry: entry, id: id, opening: Self.status(of: entry)).perform(statusItem, in: button, at: point)
+        }
+    }
+
+    /// アクションバーのボタンの長押しのメニュー。項目（`PostActionBarItem.longPressItems`）は、投稿のメニューと同じ組み方で組む。
+    func actionBarLongPressTarget(for item: PostActionBarItem, id: ItemID) -> (any ObjectActionTarget)? {
+        let items = item.longPressItems
+        guard !items.isEmpty else { return nil }
+        return ActionBarMenuTarget(
+            buildMenu: { [weak self] in
+                guard let self, let entry = entry(for: id) else { return nil }
+                return statusMenu(for: entry, id: id, groups: .items(items))?.menu
+            },
+            lifecycle: rowMenuLifecycle
         )
     }
 
@@ -189,4 +220,23 @@ private struct NotificationRequestTarget: ObjectActionTarget {
             TapMenuPresenter.shared.present(menu, in: view, at: point, lifecycle: lifecycle)
         }
     }
+}
+
+/// アクションバーのボタンの長押しのメニューだけを持つ対象。タップはボタンが自分で受けるので、ここでは行わない。
+@MainActor
+private struct ActionBarMenuTarget: ObjectActionTarget {
+    let buildMenu: () -> UIMenu?
+    let lifecycle: MenuLifecycle
+
+    func menu() -> UIMenu? {
+        buildMenu()
+    }
+
+    var acceptsTap: Bool { false }
+
+    func performsLongPress() -> Bool {
+        false
+    }
+
+    func perform(_ trigger: ObjectTrigger, in view: UIView, at point: CGPoint) {}
 }

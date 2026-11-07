@@ -86,22 +86,12 @@ extension TimelineViewController {
             let node = tree.submenu(groups: userGroups, avatar: .user(user))
             return BuiltMenu(root: StatusMenuTree.notificationRequestMenu(user: node?.map { .user(user, $0) }), renderer: renderer) { [weak self] in self?.loadPendingMenuIcons() }
         }
-        var tree = StatusMenuTree(status: status, notification: notification, now: now(), linkBrowser: settings.linkBrowser)
-        tree.rowStatus = self.status(for: id)
-        tree.myAccountID = myAccountID
-        tree.canOpenThread = status.map(canOpenThread(of:)) ?? false
-        tree.mediaIsCovered = status.map { mediaCover(for: $0) != nil } ?? false
-        tree.canSelectText = body != nil
-        tree.canSelectPosts = canSelectPost(id)
-        tree.supportsEmojiReactions = supportsEmojiReactions
-        tree.userMenu = settings.userMenuLayout.submenuGroups(actions: settings.userActions)
-        tree.userActions = userMenuActions
-        tree.hashtagMenu = settings.hashtagMenuLayout.submenuGroups(actions: settings.hashtagActions)
-        tree.hashtagActions = hashtagMenuActions
+        var tree = statusMenuTree(status: status, notification: notification, id: id, canSelectText: body != nil)
         tree.customEmoji = { emojis.node(for: $0) }
+        // メニューを開くので、ハッシュタグの状態と、ほかのアカウントのアイコンを、次に開くときのために読み直す。
+        tree.hashtagActions = hashtagMenuActions
         tree.otherAccounts = otherAccounts?.list() ?? []
-        tree.otherAccountGroups = settings.statusMenuLayout.submenuGroups(actions: settings.statusActions)
-        let built = tree.menu(groups: groups ?? settings.statusMenuLayout.groups, includesFollowRequest: groups == nil)
+        let built = tree.menu(groups: groups ?? defaultStatusMenuGroups(for: id, status: status), includesFollowRequest: groups == nil)
         reloadRelations(built.shownUserIDs, groups: tree.userMenu)
         // 前に別のアカウントで見つけた投稿は、組んだメニューでは覚えていた状態で出し、探し直した状態は次に開いたときから使う。
         if built.showsOtherAccounts, let status {
@@ -109,6 +99,38 @@ extension TimelineViewController {
         }
         // 描きながら集めた、アイコンのまだない人をまとめて読む。
         return built.root.map { BuiltMenu(root: $0, renderer: renderer) { [weak self] in self?.loadPendingMenuIcons() } }
+    }
+
+    /// 設定の並びで組む投稿のメニューの並び。アクションバーを出している投稿のメニューでは、設定に従って、アクションバーに並べた項目とボタンの長押しで出す項目を、押せないものも含めて除く（docs/post-action-bar.mdの「ボタン」）。並びを渡して組むメニュー（ほかのメニューの中のサブメニュー、割り当てた1項目）は、ここを通らないので除かない。
+    /// 引用の囲みのメニューは、囲みのある投稿の`id`で引用元の投稿について組むので、メニューの投稿がその投稿そのものでなければ除かない。アクションバーは引用元への操作ではないため。
+    private func defaultStatusMenuGroups(for id: ItemID, status: Status?) -> MenuLayout<StatusMenuItem>.Groups {
+        let groups = settings.statusMenuLayout.groups
+        guard let status, self.status(for: id)?.id == status.id, showsActionBar(itemID: id, shown: status.displayed) else { return groups }
+        let removed = settings.postActionBarLayout.itemsRemovedFromMenu(
+            barItems: settings.removesActionBarItemsFromMenu,
+            longPressItems: settings.removesActionBarLongPressItemsFromMenu
+        )
+        return groups.excluding(removed)
+    }
+
+    /// 投稿のメニューの木。項目の出し分けに要る画面の状態を渡す。カスタム絵文字のメディアのメニューは、組む側が足す。
+    /// 組むだけでは通信しない。メニューに出る人の関係を読み直すのは、メニューを出す側が行う。
+    func statusMenuTree(status: Status?, notification: MastodonNotification?, id: ItemID, canSelectText: Bool) -> StatusMenuTree {
+        var tree = StatusMenuTree(status: status, notification: notification, now: now(), linkBrowser: settings.linkBrowser)
+        tree.rowStatus = self.status(for: id)
+        tree.myAccountID = myAccountID
+        tree.canOpenThread = status.map(canOpenThread(of:)) ?? false
+        tree.mediaIsCovered = status.map { mediaCover(for: $0) != nil } ?? false
+        tree.canSelectText = canSelectText
+        tree.canSelectPosts = canSelectPost(id)
+        tree.supportsEmojiReactions = supportsEmojiReactions
+        tree.userMenu = settings.userMenuLayout.submenuGroups(actions: settings.userActions)
+        tree.userActions = userMenuActions
+        tree.hashtagMenu = settings.hashtagMenuLayout.submenuGroups(actions: settings.hashtagActions)
+        tree.hashtagActions = hashtagMenuActions?.withoutRefresh
+        tree.otherAccounts = otherAccounts?.list(loadsProfiles: false) ?? []
+        tree.otherAccountGroups = settings.statusMenuLayout.submenuGroups(actions: settings.statusActions)
+        return tree
     }
 
     /// メニューに出る人の関係を、まとめて1回で読み直す。組んだメニューは覚えていた関係のまま出し、読み直した関係は次に開いたときから使う。

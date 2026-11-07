@@ -74,6 +74,10 @@ struct PostBodyContent {
     var filterNote: NSAttributedString?
     /// 上の部品と、フィルターの注記のあいだ。
     var filterNoteSpacing: CGFloat = 0
+    /// 一番下に置くアクションバー。出さなければnil（docs/post-action-bar.md）。
+    var actionBar: PostActionBarContent?
+    /// 上の部品と、アクションバーのあいだ。
+    var actionBarSpacing: CGFloat = 0
 }
 
 /// 囲みの押下と、囲みの中の部品の押下で呼ぶ処理。引用とXの投稿で開く先が違うため、置く側が決める。
@@ -177,6 +181,13 @@ final class PostBodyView: UIView {
     private(set) var leavingCardSnapshot: UIView?
     private var filterNoteLabel: UILabel?
     private var reactionsView: ReactionChipsView?
+    private var actionBarView: PostActionBarView?
+    /// アクションバーのボタンが押されたときに、その項目と、押したボタンを渡して呼ぶ。
+    var onActionBarPress: ((PostActionBarItem, UIView) -> Void)?
+    /// アクションバーのボタンの長押しのメニューの対象。
+    var actionBarLongPressTarget: ((PostActionBarItem) -> (any ObjectActionTarget)?)? {
+        didSet { actionBarView?.longPressTarget = actionBarLongPressTarget }
+    }
     /// 今の`apply`で、リアクションの変化を動かすか。
     private var animatesReactionChange = false
     /// 「テキストを選択」で、本文のラベルの代わりに同じ位置に出している選べるテキストビュー。選んでいなければnil。
@@ -217,6 +228,11 @@ final class PostBodyView: UIView {
     /// 表示中のリアクションの列。読み上げの要素に加える。
     var reactions: ReactionChipsView? {
         Self.shown(reactionsView)
+    }
+
+    /// 表示中のアクションバー。読み上げの要素に加える。
+    var actionBar: PostActionBarView? {
+        Self.shown(actionBarView)
     }
 
     /// 表示中のフィルターの注記。添付ファイルやリンクカードより下にあるため、読み上げでは本文と分け、それらの後の要素にする。
@@ -262,6 +278,13 @@ final class PostBodyView: UIView {
         }
         frames.merge(mediaPreviewFrames(in: space)) { $1 }
         frames.merge(reactionPreviewFrames(in: space)) { $1 }
+        if let bar = actionBar {
+            frames[.actionBar] = [bar.convert(bar.bounds, to: space)]
+            frames[.actionBarIcons] = bar.iconFrames(in: space)
+            frames[.actionBarPaddingBands] = bar.paddingBands(in: space)
+            let counts = bar.countFrames(in: space)
+            frames[.actionBarCounts] = counts.isEmpty ? nil : counts
+        }
         if let options = poll?.optionPreviewFrames(in: space), !options.isEmpty {
             if options.count > 1 {
                 frames[.pollOptionGaps] = AppearanceHighlight.gaps(between: options.map(\.option))
@@ -590,6 +613,16 @@ final class PostBodyView: UIView {
         return view
     }
 
+    private func loadedActionBarView() -> PostActionBarView {
+        if let actionBarView { return actionBarView }
+        let view = PostActionBarView()
+        view.onPress = { [weak self] item, button in self?.onActionBarPress?(item, button) }
+        view.longPressTarget = actionBarLongPressTarget
+        install(view)
+        actionBarView = view
+        return view
+    }
+
     private func loadedFilterNoteLabel() -> UILabel {
         if let filterNoteLabel { return filterNoteLabel }
         let label = UILabel()
@@ -780,7 +813,8 @@ final class PostBodyView: UIView {
             .view(textLabel)
         }
         let bottom = applyReactions(content.reactions, style: content.reactionsStyle, below: last, spacing: content.reactionsSpacing)
-        applyFilterNote(content.filterNote, below: bottom, spacing: content.filterNoteSpacing)
+        let noteBottom = applyFilterNote(content.filterNote, below: bottom, spacing: content.filterNoteSpacing)
+        applyActionBar(content.actionBar, below: noteBottom, spacing: content.actionBarSpacing)
         NSLayoutConstraint.activate(variableConstraints)
     }
 
@@ -805,12 +839,8 @@ final class PostBodyView: UIView {
         // 幅が決まる前に高さを測るときは、本文と同じく、先に並べた幅か十分に広い幅で測る。
         view.widthHint = bounds.width > 0 ? bounds.width : textLabel.preparedLayoutWidth ?? Self.unknownTextWidth
         view.apply(reactions, style: style, animated: animatesReactionChange)
-        let lastBottom = switch bottom {
-        case .view(let last) where last === textLabel: textGlyphsBottomGuide.topAnchor
-        case .view(let last): last.bottomAnchor
-        case .beside(let parts, _): parts
-        }
-        variableConstraints.append(view.topAnchor.constraint(equalTo: lastBottom, constant: spacing))
+        let lastBottom = bottomEdge(of: bottom)
+        variableConstraints.append(view.topAnchor.constraint(equalTo: lastBottom.anchor, constant: lastBottom.inset + spacing))
         return .view(view)
     }
 
@@ -1053,34 +1083,58 @@ final class PostBodyView: UIView {
         case view(UIView)
         /// 本文の右に添付ファイルを出し、その下に何もない。`parts`は本文の字面とサムネイルの、`end`は本文のラベルとサムネイルの、下にあるほうの下端。
         case beside(parts: NSLayoutYAxisAnchor, end: NSLayoutYAxisAnchor)
+        /// 文字の1行（フィルターの注記）。下端は、最後のベースラインから`bottomInset`だけ下の字面の下端。
+        case text(UILabel, bottomInset: CGFloat)
     }
 
-    /// フィルターの注記を一番下の部品の下に置き、自分の下端を決める。
-    private func applyFilterNote(_ note: NSAttributedString?, below bottom: Bottom, spacing: CGFloat) {
+    /// フィルターの注記を一番下の部品の下に置き、新しい一番下を返す。
+    private func applyFilterNote(_ note: NSAttributedString?, below bottom: Bottom, spacing: CGFloat) -> Bottom {
         guard let note else {
             filterNoteLabel?.isHidden = true
-            let end = switch bottom {
-            case .view(let last): last.bottomAnchor
-            case .beside(_, let end): end
-            }
-            variableConstraints.append(bottomAnchor.constraint(equalTo: end))
-            return
+            return bottom
         }
         let filterNoteLabel = loadedFilterNoteLabel()
         filterNoteLabel.isHidden = false
         filterNoteLabel.attributedText = note
         // 先頭の記号は画像の文字なので、読み上げでは除く。
         filterNoteLabel.accessibilityLabel = note.string.trimmingCharacters(in: CharacterSet(charactersIn: "\u{FFFC}").union(.whitespaces))
-        // 本文の下なら、ほかの部品と同じく字面の下端から測る。
-        let lastBottom = switch bottom {
-        case .view(let last) where last === textLabel: textGlyphsBottomGuide.topAnchor
-        case .view(let last): last.bottomAnchor
-        case .beside(let parts, _): parts
+        let lastBottom = bottomEdge(of: bottom)
+        variableConstraints.append(filterNoteLabel.firstBaselineAnchor.constraint(equalTo: lastBottom.anchor, constant: lastBottom.inset + spacing + Self.textTopInset(of: note)))
+        return .text(filterNoteLabel, bottomInset: Self.textBottomInset(of: note))
+    }
+
+    /// アクションバーを一番下の部品の下に置き、自分の下端を決める。注意書きで折りたたんでいても出す。投稿への操作で、中身を開かなくても使えるため。
+    private func applyActionBar(_ bar: PostActionBarContent?, below bottom: Bottom, spacing: CGFloat) {
+        let lastBottom = bottomEdge(of: bottom)
+        guard let bar else {
+            actionBarView?.isHidden = true
+            // 本文の右に添付ファイルがあれば、本文のラベルとサムネイルの下にあるほうを下端にする。
+            let end: NSLayoutYAxisAnchor = switch bottom {
+            case .view(let last): last.bottomAnchor
+            case .beside(_, let end): end
+            case .text(let label, _): label.lastBaselineAnchor
+            }
+            let inset: CGFloat = if case .text(_, let inset) = bottom { inset } else { 0 }
+            variableConstraints.append(bottomAnchor.constraint(equalTo: end, constant: inset))
+            return
         }
+        let view = loadedActionBarView()
+        view.isHidden = false
+        view.apply(bar)
         variableConstraints += [
-            filterNoteLabel.firstBaselineAnchor.constraint(equalTo: lastBottom, constant: spacing + Self.textTopInset(of: note)),
-            bottomAnchor.constraint(equalTo: filterNoteLabel.lastBaselineAnchor, constant: Self.textBottomInset(of: note)),
+            view.topAnchor.constraint(equalTo: lastBottom.anchor, constant: lastBottom.inset + spacing),
+            bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ]
+    }
+
+    /// 一番下の部品の下端。本文の下なら、ほかの部品と同じく字面の下端から測る。
+    private func bottomEdge(of bottom: Bottom) -> (anchor: NSLayoutYAxisAnchor, inset: CGFloat) {
+        switch bottom {
+        case .view(let last) where last === textLabel: (anchor: textGlyphsBottomGuide.topAnchor, inset: 0)
+        case .view(let last): (anchor: last.bottomAnchor, inset: 0)
+        case .beside(let parts, _): (anchor: parts, inset: 0)
+        case .text(let label, let inset): (anchor: label.lastBaselineAnchor, inset: inset)
+        }
     }
 
     /// 和文の字面の枠（em枠）の、ベースラインから上端と下端までの距離。日本語の字面はcapHeightより上に出るため、em枠で測る。

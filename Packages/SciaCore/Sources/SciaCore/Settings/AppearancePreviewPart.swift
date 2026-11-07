@@ -160,6 +160,14 @@ public enum AppearancePreviewPart: Hashable, CaseIterable, Sendable {
     case reactionPaddingBands
     /// リアクションのボタンの、文字の左と右の余白の帯。
     case reactionSidePaddingBands
+    /// アクションバー。
+    case actionBar
+    /// アクションバーのボタンのアイコン。
+    case actionBarIcons
+    /// アクションバーのボタンの、アイコンの上と下の余白の帯。
+    case actionBarPaddingBands
+    /// アクションバーのボタンに添えた件数。
+    case actionBarCounts
     /// お気に入りとブーストの光の全体。
     case reactionGlow
     /// お気に入りとブーストの片方だけをした投稿の光。

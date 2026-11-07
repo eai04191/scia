@@ -323,6 +323,8 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     case mediaActions = "media-actions"
     case reactionActions = "reaction-actions"
     case statusMenu = "status-menu"
+    /// 投稿のアクションバーのボタンの並び。決まりはdocs/post-action-bar.mdにある。
+    case statusActionBar = "status-action-bar"
     case userMenu = "user-menu"
     case linkMenu = "link-menu"
     case externalPostMenu = "external-post-menu"
@@ -347,7 +349,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
         case .statusActions, .notificationActions, .userActions, .linkActions, .externalPostActions, .hashtagActions, .mediaActions,
              .reactionActions, .profileTextMenu:
             [.interaction, self]
-        case .statusMenu: [.interaction, .statusActions, self]
+        case .statusMenu, .statusActionBar: [.interaction, .statusActions, self]
         case .userMenu: [.interaction, .userActions, self]
         case .linkMenu: [.interaction, .linkActions, self]
         case .externalPostMenu: [.interaction, .externalPostActions, self]

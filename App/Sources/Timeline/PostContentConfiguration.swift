@@ -126,6 +126,12 @@ struct PostContentConfiguration: UIContentConfiguration {
     var onToggleReaction: ((String) -> Void)?
     /// リアクションの列の「＋」が押されたときに呼ぶ。nilなら「＋」を出さない。
     var onAddReaction: (() -> Void)?
+    /// 投稿の一番下に置くアクションバー。出さなければnil（docs/post-action-bar.md）。
+    var actionBar: PostActionBarContent?
+    /// アクションバーのボタンが押されたときに、その項目と、押したボタンを渡して呼ぶ。
+    var onActionBarPress: ((PostActionBarItem, UIView) -> Void)?
+    /// アクションバーのボタンの長押しのメニューの対象。項目を渡して受け取る。nilならメニューを出さない。
+    var actionBarLongPressTarget: ((PostActionBarItem) -> (any ObjectActionTarget)?)?
 
     /// 大きさと文字の見た目。
     struct Metrics {
@@ -181,6 +187,8 @@ struct PostContentConfiguration: UIContentConfiguration {
         var reactionsSpacing: CGFloat = 10
         /// 絵文字のリアクションのボタンの文字と大きさ。
         var reactionStyle = ReactionChipsView.Style.standard
+        /// 上の部品と、アクションバーのあいだ。
+        var actionBarSpacing: CGFloat = 8
     }
 
     func makeContentView() -> any UIView & UIContentView {
@@ -331,6 +339,7 @@ final class PostContentView: UIView, UIContentView {
         bodyView.onOpenLinkCardImage = { [weak self] thumbnail in self?.current.onOpenLinkCardImage?(thumbnail) }
         bodyView.onPollAction = { [weak self] action in self?.current.onPollAction?(action) }
         bodyView.onToggleReaction = { [weak self] name in self?.current.onToggleReaction?(name) }
+        bodyView.onActionBarPress = { [weak self] item, button in self?.current.onActionBarPress?(item, button) }
         // 名前の行は押下を受けず、行全体の押下に渡す。受けると、1行の投稿では行を押せる場所が本文の1行ほどしか残らない。
         avatarView.isUserInteractionEnabled = true
         avatarView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(avatarTapped)))
@@ -480,6 +489,8 @@ final class PostContentView: UIView, UIContentView {
         bodyView.onAddReaction = configuration.onAddReaction == nil ? nil : { [weak self] in self?.current.onAddReaction?() }
         // 押したときに今の構成を読むので、使い回しても古くならない。
         bodyView.reactionTarget = configuration.reactionTarget == nil ? nil : { [weak self] name in self?.current.reactionTarget?(name) }
+        // 長押ししたときに今の構成を読むので、使い回しても古くならない。
+        bodyView.actionBarLongPressTarget = configuration.actionBarLongPressTarget == nil ? nil : { [weak self] item in self?.current.actionBarLongPressTarget?(item) }
         bodyView.apply(PostBodyContent(
             spoiler: configuration.spoiler,
             text: configuration.body,
@@ -501,7 +512,9 @@ final class PostContentView: UIView, UIContentView {
             reactionsTransitionDuration: configuration.reactionTransitionDuration,
             filterNote: configuration.filterNote,
             // リンクカードと同じく、本文から少し離した補足として置く。
-            filterNoteSpacing: metrics.filterNoteSpacing
+            filterNoteSpacing: metrics.filterNoteSpacing,
+            actionBar: configuration.actionBar,
+            actionBarSpacing: metrics.actionBarSpacing
         ))
         reactionGlowView.apply(configuration.reactionGlow)
         // アイコンの下を空けないときは、線の通る場所に本文などが入るので、線を出さない。
@@ -931,6 +944,7 @@ final class PostContentView: UIView, UIContentView {
         setNeedsLayout()
         // 「テキストを選択」で本文を選んでいる間は、選べるテキストビューを本文の要素の後ろに置き、読み上げでも選べるようにする。
         accessibilityElements = [textAccessibilityElement] + [bodyView.selectionTextView].compactMap(\.self) + (bodyView.poll?.accessibilityParts ?? []) + [bodyView.mediaGrid, bodyView.linkCard, bodyView.embed, bodyView.reactions, bodyView.filterNote].compactMap(\.self)
+            + (bodyView.actionBar?.shownButtons ?? [])
     }
 
     private lazy var textAccessibilityElement = UIAccessibilityElement(accessibilityContainer: self)

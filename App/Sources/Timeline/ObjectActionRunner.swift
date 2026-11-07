@@ -90,6 +90,8 @@ struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable, Command>: Obje
     let lifecycle: MenuLifecycle
     /// 使えない項目を選んだことを、数秒で消えるチップで知らせる。
     let notify: (Notice) -> Void
+    /// 「アクションバーを開く」で、投稿の下のアクションバーを開閉する。押した部品を渡す。アクションバーを出せない部品（引用の囲み、スレッドの中心の投稿、通知）ではnil。
+    var openActionBar: ((UIView) -> Void)?
 
     private var actions: ObjectActions<Item> {
         settings[keyPath: entity.actions]
@@ -104,9 +106,15 @@ struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable, Command>: Obje
     }
 
     func performsLongPress() -> Bool {
-        guard case .item(let item) = actions.longPress else { return false }
-        if item == Item.primaryItem { return primaryIsAvailable }
-        return MenuItemOutcome(singleItemMenu: buildMenu(.single(item))?.root).isAvailable
+        switch actions.longPress {
+        case .menu:
+            return false
+        case .actionBar:
+            return openActionBar != nil
+        case .item(let item):
+            if item == Item.primaryItem { return primaryIsAvailable }
+            return MenuItemOutcome(singleItemMenu: buildMenu(.single(item))?.root).isAvailable
+        }
     }
 
     func perform(_ trigger: ObjectTrigger, in view: UIView, at point: CGPoint) {
@@ -114,27 +122,38 @@ struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable, Command>: Obje
         case .menu:
             guard let menu = menu() else { return }
             TapMenuPresenter.shared.present(menu, in: view, at: point, lifecycle: lifecycle)
-        case .item(let item):
-            if item == Item.primaryItem {
-                // 主な操作がいま行えない部品では何もしない。呼ぶ側の処理が、行えるかを確かめる。
-                primary(view)
+        case .actionBar:
+            guard let openActionBar else {
+                notify(.objectActionUnavailable(itemTitle: ObjectAction<Item>.openActionBarTitle, reason: nil))
                 return
             }
-            // その対象のメニューと同じ組み方で、`item`だけを組む。
-            let built = buildMenu(.single(item))
-            switch MenuItemOutcome(singleItemMenu: built?.root) {
-            case .perform(let command):
-                TapMenuPresenter.shared.perform(in: view, at: point) { built?.renderer.perform(command) }
-            case .unavailable(let reason):
-                notify(unavailable(item, reason: reason))
-            case .submenu(let submenu):
-                // サブメニューの名前だけの1行のメニューを出すと、もう1回押さないと中身に届かないため、中身を出す。
-                guard let built else { return }
-                TapMenuPresenter.shared.present(UIMenu(title: submenu.title, subtitle: submenu.subtitle, children: built.elements(submenu.children)), in: view, at: point, lifecycle: lifecycle)
-            case .menu(let nodes):
-                guard let built else { return }
-                TapMenuPresenter.shared.present(UIMenu(children: built.elements(nodes)), in: view, at: point, lifecycle: lifecycle)
-            }
+            openActionBar(view)
+        case .item(let item):
+            perform(item, in: view, at: point)
+        }
+    }
+
+    /// 対象のメニューの項目を1つ、メニューを出さずに行う。タップや長押しに割り当てた項目と、アクションバーのボタンで使う。
+    func perform(_ item: Item, in view: UIView, at point: CGPoint) {
+        if item == Item.primaryItem {
+            // 主な操作がいま行えない部品では何もしない。呼ぶ側の処理が、行えるかを確かめる。
+            primary(view)
+            return
+        }
+        // その対象のメニューと同じ組み方で、`item`だけを組む。
+        let built = buildMenu(.single(item))
+        switch MenuItemOutcome(singleItemMenu: built?.root) {
+        case .perform(let command):
+            TapMenuPresenter.shared.perform(in: view, at: point) { built?.renderer.perform(command) }
+        case .unavailable(let reason):
+            notify(unavailable(item, reason: reason))
+        case .submenu(let submenu):
+            // サブメニューの名前だけの1行のメニューを出すと、もう1回押さないと中身に届かないため、中身を出す。
+            guard let built else { return }
+            TapMenuPresenter.shared.present(UIMenu(title: submenu.title, subtitle: submenu.subtitle, children: built.elements(submenu.children)), in: view, at: point, lifecycle: lifecycle)
+        case .menu(let nodes):
+            guard let built else { return }
+            TapMenuPresenter.shared.present(UIMenu(children: built.elements(nodes)), in: view, at: point, lifecycle: lifecycle)
         }
     }
 

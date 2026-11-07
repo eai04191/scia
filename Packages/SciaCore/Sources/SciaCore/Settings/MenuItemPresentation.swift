@@ -18,6 +18,8 @@ public protocol MenuItemPresentable {
     static var supportsRowSeparators: Bool { get }
     /// 表示する項目を1つは残すか。残すなら、最後の1つのスイッチを切れなくする。
     static var requiresVisibleItem: Bool { get }
+    /// 並びの画面に、「その他」の境目の後ろの節を出すか。境目を持たない並び（アクションバー）では出さない。
+    static var hasMoreSection: Bool { get }
 }
 
 /// 長押しのメニューでは、境目より下の項目は「その他」のサブメニューに入る。
@@ -30,6 +32,7 @@ extension MenuItemPresentable {
     public static var supportsSeparators: Bool { true }
     public static var supportsRowSeparators: Bool { true }
     public static var requiresVisibleItem: Bool { false }
+    public static var hasMoreSection: Bool { true }
 }
 
 /// 長押しのメニューの項目の中身。名前とアイコンはここから決める。

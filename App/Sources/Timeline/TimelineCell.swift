@@ -9,6 +9,41 @@ final class TimelineCell: UICollectionViewListCell {
     /// 出している行。別の行を出し始めたかを見分ける。
     var itemID: TimelineViewController.ItemID?
 
+    /// 縮む途中に重ねている、縮む前の像。アクションバーを閉じるときに使う（`TimelineViewController.concealShrink`）。
+    private var shrinkSnapshot: UIView?
+
+    /// 縮む前の像を重ねているか。テストで、閉じる動きを見るのに使う。
+    var isShowingShrinkSnapshot: Bool {
+        shrinkSnapshot != nil
+    }
+
+    /// 縮む前の像を重ねる。前に重ねていた像は外す。
+    func showShrinkSnapshot(_ snapshot: UIView) {
+        shrinkSnapshot?.removeFromSuperview()
+        shrinkSnapshot = snapshot
+        addSubview(snapshot)
+    }
+
+    /// 縮み終えたら像を外す。途中で別の像に替わっていたら、そちらは外さない。
+    func removeShrinkSnapshot(_ snapshot: UIView) {
+        guard shrinkSnapshot === snapshot else { return }
+        snapshot.removeFromSuperview()
+        shrinkSnapshot = nil
+    }
+
+    /// 縮む途中に中身を入れ直したら、像を外す。像は縮む前の中身なので、残すと新しい中身の手前に古い中身が見える。
+    /// 縮む動きの途中で外れるので、まわりのアイテムがまだ動いていても、アクションバーはそのコマで消える。
+    func discardShrinkSnapshot() {
+        shrinkSnapshot?.removeFromSuperview()
+        shrinkSnapshot = nil
+    }
+
+    /// 縮む途中に別の投稿に使い回されたら、前の投稿の像を残さない。
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        discardShrinkSnapshot()
+    }
+
     override func preferredLayoutAttributesFitting(_ layoutAttributes: UICollectionViewLayoutAttributes) -> UICollectionViewLayoutAttributes {
         FrameWork.measure("\(workName).sizing") { super.preferredLayoutAttributesFitting(layoutAttributes) }
     }

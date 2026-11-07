@@ -25,6 +25,11 @@ struct AppearanceSheets {
         for item in AppearanceCatalog.values {
             let before = try Self.makeSettings()
             let after = try Self.makeSettings()
+            // アクションバーは、いつも出す設定のときだけ見本に出るので、その項目はオンにして比べる。
+            if Self.actionBarItems.contains(item) {
+                before.appearance.showsActionBar = true
+                after.appearance.showsActionBar = true
+            }
             let value = Self.changedValue(of: item)
             after.setValue(value, for: item)
             let highlight = AppearanceHighlight(item)
@@ -90,6 +95,11 @@ struct AppearanceSheets {
                 before.appearance.mediaArrangement = .besideBody
                 after.appearance.mediaArrangement = .besideBody
             }
+            // アクションバーにだけ効く選択肢は、アクションバーを出して比べる。
+            if choice == .showsActionBarCounts {
+                before.appearance.showsActionBar = true
+                after.appearance.showsActionBar = true
+            }
             let description = Self.change(choice, in: after)
             pairs.append((
                 "選択肢 \(choice) \(description)",
@@ -108,6 +118,8 @@ struct AppearanceSheets {
         ("名前を2段", \.appearance.stacksNameParts, [AppearanceCatalog.nameStackSpacing, AppearanceCatalog.namePrimaryText, AppearanceCatalog.nameSecondaryText, AppearanceCatalog.nameBodySpacing, AppearanceCatalog.nameMediaSpacing]),
         ("アイコンの下を空けない", \.appearance.wrapsBelowAvatar, [AppearanceCatalog.avatarSize, AppearanceCatalog.nameBodySpacing, AppearanceCatalog.nameMediaSpacing, AppearanceCatalog.rowPaddingLeading]),
     ]
+
+    private static let actionBarItems = AppearanceCatalog.groups.first { $0.id == AppearanceCatalog.actionBarGroupID }?.values ?? []
 
     private static let besideEmbedItems = [AppearanceCatalog.mediaBesideSide, AppearanceCatalog.xPostMediaSpacing, AppearanceCatalog.xPostPadding]
 
@@ -197,6 +209,8 @@ struct AppearanceSheets {
         case .reactionGlowLightFavouriteColor:
             settings.appearance.reactionGlowLightFavouriteColor = .yellow
             return "→ 黄色"
+        case .showsActionBar: return flip(\.appearance.showsActionBar)
+        case .showsActionBarCounts: return flip(\.appearance.showsActionBarCounts)
         }
     }
 

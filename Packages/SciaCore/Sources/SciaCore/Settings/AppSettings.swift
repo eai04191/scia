@@ -301,6 +301,21 @@ public final class AppSettings {
         didSet { defaults.set(mediaActions.tokens, forKey: Keys.mediaActions) }
     }
 
+    /// アクションバーに並べるボタンの並び。決まりはdocs/post-action-bar.mdにある。
+    public var postActionBarLayout: MenuLayout<PostActionBarItem> {
+        didSet { defaults.set(postActionBarLayout.tokens, forKey: Keys.postActionBarLayout) }
+    }
+
+    /// アクションバーを出している投稿の長押しのメニューから、アクションバーに並べた項目を除くか。決まりはdocs/post-action-bar.mdにある。
+    public var removesActionBarItemsFromMenu: Bool {
+        didSet { defaults.set(removesActionBarItemsFromMenu, forKey: Keys.removesActionBarItemsFromMenu) }
+    }
+
+    /// アクションバーを出している投稿の長押しのメニューから、アクションバーのボタンの長押しで出す項目を除くか。
+    public var removesActionBarLongPressItemsFromMenu: Bool {
+        didSet { defaults.set(removesActionBarLongPressItemsFromMenu, forKey: Keys.removesActionBarLongPressItemsFromMenu) }
+    }
+
     /// 投稿欄の部品を足す項目の並び。どれをツールバーに常に出し、どれを＋のメニューに入れるか。
     public var composeToolLayout: MenuLayout<ComposeToolItem> {
         didSet { defaults.set(composeToolLayout.tokens, forKey: Keys.composeToolLayout) }
@@ -374,6 +389,9 @@ public final class AppSettings {
         static let reactionMenuLayout = "settings.reactionMenuLayout"
         static let mediaMenuLayout = "settings.mediaMenuLayout"
         static let composeToolLayout = "settings.composeToolLayout"
+        static let postActionBarLayout = "settings.postActionBarLayout"
+        static let removesActionBarItemsFromMenu = "settings.removesActionBarItemsFromMenu"
+        static let removesActionBarLongPressItemsFromMenu = "settings.removesActionBarLongPressItemsFromMenu"
         static let statusActions = "settings.objectActions.status"
         static let notificationActions = "settings.objectActions.notification"
         static let userActions = "settings.objectActions.user"
@@ -423,6 +441,9 @@ public final class AppSettings {
         reactionMenuLayout = defaults.stringArray(forKey: Keys.reactionMenuLayout).map(MenuLayout.init(tokens:)) ?? ReactionMenuItem.defaultLayout
         mediaMenuLayout = defaults.stringArray(forKey: Keys.mediaMenuLayout).map(MenuLayout.init(tokens:)) ?? MediaMenuItem.defaultLayout
         composeToolLayout = defaults.stringArray(forKey: Keys.composeToolLayout).map(MenuLayout.init(tokens:)) ?? ComposeToolItem.defaultLayout
+        postActionBarLayout = defaults.stringArray(forKey: Keys.postActionBarLayout).map(MenuLayout.init(tokens:)) ?? PostActionBarItem.defaultLayout
+        removesActionBarItemsFromMenu = defaults.object(forKey: Keys.removesActionBarItemsFromMenu) as? Bool ?? true
+        removesActionBarLongPressItemsFromMenu = defaults.bool(forKey: Keys.removesActionBarLongPressItemsFromMenu)
         statusActions = defaults.stringArray(forKey: Keys.statusActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
         notificationActions = defaults.stringArray(forKey: Keys.notificationActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
         userActions = defaults.stringArray(forKey: Keys.userActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard

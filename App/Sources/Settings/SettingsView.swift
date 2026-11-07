@@ -151,7 +151,7 @@ struct SettingsView: View {
                     }
                 }
             )
-        case .statusActions: ObjectActionsSettingsView(entity: .status, settings: settings, menu: .statusMenu)
+        case .statusActions: ObjectActionsSettingsView(entity: .status, settings: settings, menu: .statusMenu, actionBar: .statusActionBar)
         case .notificationActions: ObjectActionsSettingsView(entity: .notification, settings: settings, menu: nil)
         case .userActions: ObjectActionsSettingsView(entity: .user, settings: settings, menu: .userMenu)
         case .linkActions: ObjectActionsSettingsView(entity: .link, settings: settings, menu: .linkMenu)
@@ -160,6 +160,23 @@ struct SettingsView: View {
         case .reactionActions: ObjectActionsSettingsView(entity: .reaction, settings: settings, menu: .reactionMenu)
         case .mediaActions: ObjectActionsSettingsView(entity: .media, settings: settings, menu: .mediaMenu)
         case .statusMenu: MenuLayoutSettingsView(title: "投稿のメニュー", layout: $settings.statusMenuLayout)
+        case .statusActionBar:
+            MenuLayoutSettingsView(
+                title: "アクションバー",
+                layout: $settings.postActionBarLayout,
+                options: [
+                    MenuLayoutOption(
+                        title: "ボタンの項目をメニューから除く",
+                        footer: "アクションバーを出している投稿の長押しのメニューに、アクションバーに並べた項目を出しません。",
+                        isOn: $settings.removesActionBarItemsFromMenu
+                    ),
+                    MenuLayoutOption(
+                        title: "ボタンの長押しの項目をメニューから除く",
+                        footer: "アクションバーを出している投稿の長押しのメニューに、アクションバーのブーストとお気に入りのボタンを長押しして出す項目（公開範囲を選んでブースト、引用、ブーストした人、お気に入りした人）を出しません。",
+                        isOn: $settings.removesActionBarLongPressItemsFromMenu
+                    ),
+                ]
+            )
         case .userMenu: MenuLayoutSettingsView(title: "ユーザーのメニュー", layout: $settings.userMenuLayout)
         case .linkMenu: MenuLayoutSettingsView(title: "リンクのメニュー", layout: $settings.linkMenuLayout)
         case .externalPostMenu: MenuLayoutSettingsView(title: "ほかのサービスの投稿のメニュー", layout: $settings.externalPostMenuLayout)

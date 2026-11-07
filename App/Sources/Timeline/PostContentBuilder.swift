@@ -50,7 +50,8 @@ struct PostContentBuilder {
             showsContextSymbol: settings.appearance.showsContextSymbol,
             bodyEmbedSpacing: settings.value(of: AppearanceCatalog.bodyXPostSpacing),
             reactionsSpacing: settings.value(of: AppearanceCatalog.bodyReactionsSpacing),
-            reactionStyle: reactionStyle(typography: typography)
+            reactionStyle: reactionStyle(typography: typography),
+            actionBarSpacing: settings.value(of: AppearanceCatalog.actionBarSpacing)
         )
         let language = settings.glyphLanguageIdentifier()
         let primaryRenderer = RichTextRenderer(font: metrics.nameFont, textColor: base.textProperties.color, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, emojiImages: emojiImages, language: language)
@@ -130,6 +131,20 @@ struct PostContentBuilder {
     /// `shown`は表示している投稿。ブーストなら、ブーストされた投稿。
     func reactionGlow(for shown: Status) -> ReactionGlow {
         ReactionGlow(statusID: shown.id, isReblogged: shown.reblogged, isFavourited: shown.favourited, style: ReactionGlow.Style(tuning: tuning, settings: settings))
+    }
+
+    /// アクションバーの中身。ボタンの並びと件数は設定から、した状態は投稿から決める。
+    /// - Parameter countFont: 件数の文字。時刻と同じ文字で描くので、投稿を組んだときの時刻の文字を渡す。書体を組み直すと重いため。
+    /// - Parameter isAvailable: 投稿のメニューの項目を、いま押して行えるか。
+    func actionBar(for shown: Status, countFont: UIFont, isAvailable: (StatusMenuItem) -> Bool) -> PostActionBarContent {
+        PostActionBarContent(
+            buttons: PostActionBarButton.buttons(for: shown, items: settings.postActionBarLayout.actionBarItems, showsCounts: settings.appearance.showsActionBarCounts, isAvailable: isAvailable),
+            iconSize: settings.value(of: AppearanceCatalog.actionBarIconSize),
+            padding: settings.value(of: AppearanceCatalog.actionBarPadding),
+            countFont: countFont,
+            lightFavouriteIsYellow: settings.appearance.reactionGlowLightFavouriteColor == .yellow,
+            statusID: shown.id
+        )
     }
 
     /// 投稿の絵文字のリアクションを、リアクションの列のボタンにする。リアクションがなければnil。

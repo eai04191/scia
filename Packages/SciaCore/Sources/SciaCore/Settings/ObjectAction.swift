@@ -4,25 +4,39 @@ public enum ObjectAction<Item: MenuItemKind>: Hashable, Sendable {
     case menu
     /// その対象のメニューの項目を、メニューを出さずに行う。
     case item(Item)
+    /// 一覧の投稿の下に、アクションバーを開閉する。投稿でだけ選べる。決まりはdocs/post-action-bar.mdにある。
+    case actionBar
 
-    /// 設定に保存する形。メニューは`menu`、項目は`item:<rawValue>`。
+    /// 設定に保存する形。メニューは`menu`、項目は`item:<rawValue>`、アクションバーは`actionBar`。
     public var token: String {
         switch self {
         case .menu: "menu"
         case .item(let item): "item:\(item.rawValue)"
+        case .actionBar: "actionBar"
         }
     }
 
     /// 保存した形から読む。知らない形と、なくなった項目ならnil。
     public init?(token: String) {
-        if token == "menu" {
+        switch token {
+        case "menu":
             self = .menu
             return
+        case "actionBar":
+            self = .actionBar
+            return
+        default:
+            break
         }
         let parts = token.split(separator: ":", maxSplits: 1).map(String.init)
         guard parts.count == 2, parts[0] == "item", let item = Item(rawValue: parts[1]) else { return nil }
         self = .item(item)
     }
+}
+
+extension ObjectAction {
+    /// 「アクションバーを開く」の名前。設定の選択と、行えないことの知らせで使う。
+    public static var openActionBarTitle: String { "アクションバーを開く" }
 }
 
 /// 操作を選べる手つき。

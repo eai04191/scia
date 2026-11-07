@@ -41,6 +41,11 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
         /// 「その他」のサブメニューの中身。空なら「その他」を出さない。
         public var more: [Group]
 
+        /// 1つのまとまりだけの並び。アクションバーのボタンの長押しのメニューのように、決まった項目だけを、メニューと同じ組み方で組むために使う。
+        public static func items(_ items: [Item]) -> Groups {
+            Groups(main: [Group(items)], more: [])
+        }
+
         /// 1つの項目だけの並び。タップや長押しに割り当てた項目を、メニューと同じ組み方で組むために使う。
         public static func single(_ item: Item) -> Groups {
             Groups(main: [Group([item])], more: [])

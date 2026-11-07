@@ -107,6 +107,8 @@ struct AppearanceEditorTests {
     /// プレビューの見本だけで、どの項目も場所を示せる。引用の区画は、いつも見本へ足す引用の囲みで示す。
     @Test func samplesShowEveryItem() throws {
         let settings = try makeSettings()
+        // アクションバーは、いつも出す設定のときだけすべての見本に出る。
+        settings.appearance.showsActionBar = true
         let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: 2_000))
         let samples = AppearanceSamples(settings: settings, tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
         preview.apply(samples.configurations(colorScheme: .light, revision: 0))
@@ -170,6 +172,7 @@ struct AppearanceEditorTests {
         "body": [.glyphLanguage, .emojiStyle, .animatesCustomEmojis],
         "media": [.mediaArrangement, .embedMediaArrangement, .tiltsStackedPhotos, .showsMediaBadges],
         "linkCard": [.showsLinkCard, .boldsLinkCardTitle, .showsLinkCardImage, .linkCardThumbnailSide, .showsLinkCardSite],
+        AppearanceCatalog.actionBarGroupID: [.showsActionBar, .showsActionBarCounts],
         "reactionGlow": [.drawsReactionGlowInHDR, .reactionGlowIcons, .reactionGlowFillsWidthWhenAlone, .reactionGlowLightFavouriteColor],
     ]
 
@@ -386,6 +389,8 @@ struct AppearanceEditorTests {
         settings.appearance.contextNameStyle = .nameAndAcct
         // 1段目と2段目のあいだは、2段に分けないと示せない。
         settings.appearance.stacksNameParts = item == AppearanceCatalog.nameStackSpacing
+        // アクションバーは、いつも出す設定のときだけすべての見本に出る。
+        settings.appearance.showsActionBar = item == AppearanceCatalog.actionBarSpacing
         let value = item.defaultValue + 3
         settings.setValue(value, for: item)
         let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: 4_000))

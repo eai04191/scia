@@ -88,6 +88,15 @@ public enum TuningCatalog {
         defaultValue: 0.4
     )
 
+    /// アクションバーの引き出しを開閉するときに、投稿が伸び縮みしてまわりのアイテムが動く時間。0なら動かさない。決まりはdocs/post-action-bar.mdの「引き出し」にある。
+    public static let actionBarDrawerDuration = NumberTuning(
+        id: "timeline.actionBarDrawerDuration",
+        title: "アクションバーを開閉する時間（秒）",
+        range: 0...1.5,
+        step: 0.05,
+        defaultValue: 0.1
+    )
+
     /// カスタム絵文字の画像が届いたとき、同じ行のあとの文字を前の位置から新しい位置へ動かし、絵文字を薄い状態から濃くする時間。0なら切り替える。
     public static let customEmojiArrivalDuration = NumberTuning(
         id: "timeline.customEmojiArrivalDuration",
@@ -1750,6 +1759,7 @@ public enum TuningCatalog {
             .number(pollBarDuration),
             .number(linkCardTransitionDuration),
             .number(longBodyExpandDuration),
+            .number(actionBarDrawerDuration),
             .number(customEmojiArrivalDuration),
             .number(reactionTransitionDuration),
             .number(mediaSymbolRatio),

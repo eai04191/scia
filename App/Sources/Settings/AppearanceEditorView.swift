@@ -137,6 +137,8 @@ struct AppearanceGroupEditorView: View {
                 .onChange(of: settings.appearance.animatesCustomEmojis) { focused = .choice(.animatesCustomEmojis) }
                 .onChange(of: settings.appearance.drawsReactionGlowInHDR) { focused = .choice(.drawsReactionGlowInHDR) }
                 .onChange(of: settings.appearance.reactionGlowFillsWidthWhenAlone) { focused = .choice(.reactionGlowFillsWidthWhenAlone) }
+                .onChange(of: settings.appearance.showsActionBar) { focused = .choice(.showsActionBar) }
+                .onChange(of: settings.appearance.showsActionBarCounts) { focused = .choice(.showsActionBarCounts) }
             }
         }
         .toolbar {
@@ -214,6 +216,9 @@ struct AppearanceGroupEditorView: View {
             PopUpChoiceRow(title: "画像の位置", selection: $settings.appearance.linkCardThumbnailSide, options: [(.left, "左"), (.right, "右")], onOpen: { focus(.linkCardThumbnailSide) }, onTapTitle: { toggleFocus(.choice(.linkCardThumbnailSide)) })
                 .disabled(!settings.appearance.showsLinkCardImage)
             TitledToggleRow(title: "サイト名を表示", isOn: $settings.appearance.showsLinkCardSite) { toggleFocus(.choice(.showsLinkCardSite)) }
+        case AppearanceCatalog.actionBarGroupID:
+            TitledToggleRow(title: "アクションバーを常に表示", isOn: $settings.appearance.showsActionBar) { toggleFocus(.choice(.showsActionBar)) }
+            TitledToggleRow(title: "件数を表示", isOn: $settings.appearance.showsActionBarCounts) { toggleFocus(.choice(.showsActionBarCounts)) }
         case "reactionGlow":
             // HDRのメディアの明るさの設定はメディアに対するものなので、光はそれに従わせず、ここで別に選ぶ。
             if ReactionGlowView.mayDrawInHDR {
@@ -295,6 +300,8 @@ enum AppearanceChoice: Hashable, CaseIterable {
     case reactionGlowIcons
     case reactionGlowFillsWidthWhenAlone
     case reactionGlowLightFavouriteColor
+    case showsActionBar
+    case showsActionBarCounts
 
     var highlight: AppearanceHighlight {
         switch self {
@@ -330,6 +337,8 @@ enum AppearanceChoice: Hashable, CaseIterable {
         case .drawsReactionGlowInHDR, .reactionGlowLightFavouriteColor: .part(.reactionGlow)
         case .reactionGlowFillsWidthWhenAlone: .firstOf([.part(.reactionGlowAlone), .part(.reactionGlow)])
         case .reactionGlowIcons: .firstOf([.part(.reactionGlowIcons), .part(.reactionGlow)])
+        case .showsActionBar: .part(.actionBar)
+        case .showsActionBarCounts: .firstOf([.part(.actionBarCounts), .part(.actionBar)])
         }
     }
 }
@@ -538,6 +547,8 @@ struct AppearanceSamples {
     ///   - groups: 見本を出す分類。渡すと、その分類の見本（`sampleIDs(for:focus:)`）だけを返す。nilならすべての見本を返す。
     ///   - focus: 触っている項目。`groups`を渡したとき、その項目にしか要らない見本を足す。
     func entries(colorScheme: ColorScheme, groups: Set<AppearanceGroup.ID>? = nil, focus: AppearanceFocus? = nil) -> [TimelineEntry] {
+        // アクションバーの分類では、いつも出す設定でなくても、見本にアクションバーを出す。
+        timeline.showsActionBarInPreview = groups?.contains(AppearanceCatalog.actionBarGroupID) == true
         let shown = groups.map { Self.sampleIDs(for: $0, focus: focus, appearance: settings.appearance) }
         return ((colorScheme == .dark ? posts : lightPosts) + [quote])
             .filter { shown?.contains($0.id) ?? true }
@@ -578,6 +589,8 @@ struct AppearanceSamples {
         "poll": ["poll"],
         "reactions": ["reactions"],
         "reactionGlow": ["boost-plain", "wide"],
+        // 件数を表示する項目があるので、件数の付いた見本にする。
+        AppearanceCatalog.actionBarGroupID: ["boost-plain"],
     ]
 
     /// 分類のうち一部の項目にしか要らない見本。上限を見せる大きい見本などは、ふだん出すと見本の枠からはみ出すので、その項目を触っている間だけ出す。
@@ -682,7 +695,7 @@ struct AppearanceSamples {
         let reactions = [("👍", 12, true), ("🎉", 5, false)].map { EmojiReaction(emoji: ReactionEmoji(name: $0.0), count: $0.1, me: $0.2) }
             + emojis.map { EmojiReaction(emoji: ReactionEmoji(customEmoji: $0), count: 3, me: false) }
             + [("😂", 2), ("🙏", 1), ("❤️", 128), ("👀", 1)].map { EmojiReaction(emoji: ReactionEmoji(name: $0.0), count: $0.1, me: false) }
-        func status(_ id: String, minutes: Double, account: Account, content: String, spoiler: String = "", media: [MediaAttachment] = [], poll: Poll? = nil, card: PreviewCard? = nil, replyingTo: Account? = nil, inReplyTo: Status.ID = "preview-thread", visibility: Status.Visibility = .public, edited: Bool = false, emojis: [CustomEmoji] = [], filtered: [FilterResult] = [], favourited: Bool = false, reblogged: Bool = false, emojiReactions: [EmojiReaction] = []) -> Status {
+        func status(_ id: String, minutes: Double, account: Account, content: String, spoiler: String = "", media: [MediaAttachment] = [], poll: Poll? = nil, card: PreviewCard? = nil, replyingTo: Account? = nil, inReplyTo: Status.ID = "preview-thread", visibility: Status.Visibility = .public, edited: Bool = false, emojis: [CustomEmoji] = [], filtered: [FilterResult] = [], favourited: Bool = false, reblogged: Bool = false, emojiReactions: [EmojiReaction] = [], counts: (replies: Int, reblogs: Int, favourites: Int) = (0, 0, 0)) -> Status {
             Status(
                 id: "preview-\(id)",
                 createdAt: now.addingTimeInterval(-minutes * 60),
@@ -702,14 +715,17 @@ struct AppearanceSamples {
                 editedAt: edited ? now : nil,
                 favourited: favourited,
                 reblogged: reblogged,
-                emojiReactions: emojiReactions
+                favouritesCount: counts.favourites,
+                reblogsCount: counts.reblogs,
+                emojiReactions: emojiReactions,
+                repliesCount: counts.replies
             )
         }
         // お気に入りとブーストの光を見せるため、ブーストした投稿は、お気に入りとブーストをした投稿にする。
         let boosted = status("boosted", minutes: 30, account: friend, content: #"<p>段落の1つ目です。設定を変えるとタイムラインの投稿がこのように表示されます🎉:scia:</p><p>段落の2つ目です。<a href="https://github.com/eai04191/scia">github.com/eai04191/scia</a></p>"#, card: card, emojis: emojis, favourited: true, reblogged: true)
         let boost = Status(id: "preview-boost", createdAt: now.addingTimeInterval(-180), account: scia, content: "", spoilerText: "", url: nil, reblog: boosted)
-        // 名前の上の行と光の分類の画面に出す、リンクカードのないブースト。
-        let plainBoosted = status("boosted-plain", minutes: 40, account: friend, content: "<p>ブーストされた投稿です。</p>", emojis: emojis, favourited: true, reblogged: true)
+        // 名前の上の行と光の分類の画面に出す、リンクカードのないブースト。アクションバーの分類の画面にも出すので、件数を付ける。
+        let plainBoosted = status("boosted-plain", minutes: 40, account: friend, content: "<p>ブーストされた投稿です。</p>", emojis: emojis, favourited: true, reblogged: true, counts: (2, 12, 34))
         let plainBoost = Status(id: "preview-boost-plain", createdAt: now.addingTimeInterval(-240), account: scia, content: "", spoilerText: "", url: nil, reblog: plainBoosted)
         let poll = Poll(
             id: "preview-poll",

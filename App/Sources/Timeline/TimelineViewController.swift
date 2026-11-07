@@ -479,6 +479,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         super.viewDidAppear(animated)
         reportVisibleItems()
         startRefreshingTimes()
+        prepareActionBarIfNeeded()
     }
 
     /// ハードウェアキーボードのnで、投稿欄で書き始める。入力欄に書いている間は、文字の入力が先に受けるため効かない。
@@ -561,6 +562,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             _ = network.usePolicy(settings: settings)
             _ = settings.ignoresUselessAltText
             _ = settings.appearance
+            _ = settings.postActionBarLayout
             // アニメーションを再生するかは、選ぶまでサーバーの値に従うため、読めた値が変わったときも描き直す。
             _ = settings.serverAutoplaysAnimations
             _ = settings.accentColor.underlinesLinks
@@ -632,6 +634,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                 guard let indexPath = self.collectionView.indexPath(for: cell), let id = self.dataSource.itemIdentifier(for: indexPath), let entry = self.entries[id] else { continue }
                 // セルの`contentConfiguration`に入れ直すと、セルが動きの外で中を並べ直すため、投稿と通知の行は、行のビューに中身を直接渡す。
                 // 通知の組み方が変わって行のビューの種類が変わるときは、行のビューが受け付けないので、セルに入れ直す。
+                cell.discardShrinkSnapshot()
                 if let content = cell.contentView as? any UIContentView,
                    let configuration = self.previewContentConfiguration(for: entry, id: id, base: cell.defaultContentConfiguration()),
                    type(of: content.configuration) == type(of: configuration) {
@@ -704,13 +707,14 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// セルの中で続いている動き（絵文字が入る文字の動きなど）も止まらない。
     /// 区切り線は、行のセルとは別のビューとしてタイムラインに並ぶため、セルと一緒に動かす。動かさないと、伸びた行の下の線だけが1コマで下がる。
     /// - Parameter anchorID: 画面上の位置を保つ行。なければ、表示領域の上端にかかっている行を基準にする。
-    func reconfigureShiftingRowsBelow(_ ids: Set<ItemID>, keeping anchorID: ItemID? = nil, duration: TimeInterval) {
+    /// - Parameter shiftLimit: 描き直した行が伸び縮みする長さの上限。分かっていれば、上下のどちらかの端から一覧の外へ出うる行の像だけを取る。像を取るのは重く、押した直後のコマが遅れて、動きの始まりが飛んで見えるため。nilなら、描き直す行より下のすべての行の像を取る。
+    func reconfigureShiftingRowsBelow(_ ids: Set<ItemID>, keeping anchorID: ItemID? = nil, duration: TimeInterval, shiftLimit: CGFloat? = nil) {
         guard !ids.isEmpty else { return }
         guard duration > 0, view.window != nil, !isShowingMenu, !UIAccessibility.isReduceMotionEnabled else {
             reconfigure(ids, keeping: anchorID)
             return
         }
-        let before = visibleRows(snapshottingBelow: ids)
+        let before = visibleRows(snapshottingBelow: ids, within: shiftLimit)
         let separatorsBefore = visibleSeparators()
         let heightsBefore = ids.compactMap { id in cell(for: id).map { (id, $0.bounds.height) } }
         reconfigure(ids, keeping: anchorID)
@@ -831,16 +835,21 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 画面の座標で比べるのは、読んでいる位置を保つためにスクロール位置を補正した分を、行の動きに数えないため。
     /// 動きの途中の行も、動きを足す前の位置で測る。前の動きは足し合わせたまま続くので、次の動きはずれた分だけを足せばつながる。
     /// - Parameter changed: 描き直す行。像は、そのうち一番上の見えている行より下の行だけ取る。行が大きく伸びると、その下の何行もが外へ押し出されるため。
-    private func visibleRows(snapshottingBelow changed: Set<ItemID>) -> [ItemID: (cell: UICollectionViewCell, minY: CGFloat, snapshot: UIView?)] {
-        let rows: [(id: ItemID, cell: UICollectionViewCell, minY: CGFloat)] = collectionView.visibleCells.compactMap { cell in
+    /// - Parameter shiftLimit: 行が動く長さの上限。渡すと、その長さだけ上か下へ動いたら一覧の外へ出る行の像だけを取る。
+    /// 行が伸びれば下の行は下へ、縮めば上へ動き、どちらの端から出るかは、位置を保つ行がどこにあるかで変わるため、両方の端で決める。
+    private func visibleRows(snapshottingBelow changed: Set<ItemID>, within shiftLimit: CGFloat? = nil) -> [ItemID: (cell: UICollectionViewCell, minY: CGFloat, snapshot: UIView?)] {
+        let rows: [(id: ItemID, cell: UICollectionViewCell, frame: CGRect)] = collectionView.visibleCells.compactMap { cell in
             guard let id = collectionView.indexPath(for: cell).flatMap({ dataSource.itemIdentifier(for: $0) }) else { return nil }
-            return (id, cell, cell.convert(cell.bounds, to: nil).minY)
+            return (id, cell, cell.convert(cell.bounds, to: nil))
         }
-        let changedTop = rows.filter { changed.contains($0.id) }.map(\.minY).min()
+        let changedTop = rows.filter { changed.contains($0.id) }.map(\.frame.minY).min()
+        let bounds = collectionView.convert(collectionView.bounds, to: nil)
         return rows.reduce(into: [:]) { result, row in
-            let snapshot = changedTop.map { row.minY > $0 } == true ? row.cell.snapshotView(afterScreenUpdates: false) : nil
+            let isBelow = changedTop.map { row.frame.minY > $0 } == true
+            let mayLeave = shiftLimit.map { row.frame.minY + $0 > bounds.maxY || row.frame.maxY - $0 < bounds.minY } ?? true
+            let snapshot = isBelow && mayLeave ? row.cell.snapshotView(afterScreenUpdates: false) : nil
             snapshot?.frame = row.cell.frame
-            result[row.id] = (row.cell, row.minY, snapshot)
+            result[row.id] = (row.cell, row.frame.minY, snapshot)
         }
     }
 
@@ -954,8 +963,17 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 取り直した投稿は各タイムラインの`updateStatus`から並びの置き換えを通って届くので、置き換えの間だけ立てる。
     var refreshedStatusID: Status.ID?
 
+    /// アクションバーの引き出しを開いている投稿。同時に1つだけ開く。一覧を閉じるか起動し直すと閉じた状態に戻る（docs/post-action-bar.mdの「引き出し」）。
+    var openActionBarItemID: ItemID?
+    /// 「投稿の見た目」のプレビューで、いつも出す設定でなくてもアクションバーを出す。アクションバーの分類の見本で立てる。
+    var showsActionBarInPreview = false
+
     func setEntries(_ newEntries: [TimelineEntry], keeping anchorID: ItemID? = nil, placingAtTop topID: ItemID? = nil, keepsOffset: Bool = false, animatesRemoval: Bool = false, keepingRowContentsOf base: [TimelineEntry]? = nil) {
         updateEntries(newEntries, keeping: anchorID, placingAtTop: topID, keepsOffset: keepsOffset, animatesRemoval: animatesRemoval, animatesChanges: false, keepingRowContentsOf: base)
+        // 画面を出したときに、まだ並べる投稿がなかったら、並べたときに組んでおく。
+        if viewIfLoaded?.window != nil {
+            prepareActionBarIfNeeded()
+        }
     }
 
     func transition(to newEntries: [TimelineEntry]) {
@@ -1990,6 +2008,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     private func configure(_ cell: TimelineCell, for entry: TimelineEntry, id: ItemID) {
+        cell.discardShrinkSnapshot()
         switch entry {
         case .status(let status):
             cell.contentConfiguration = contentConfiguration(for: status, itemID: id, base: cell.defaultContentConfiguration())
@@ -2281,6 +2300,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         if supportsEmojiReactions {
             configuration.reactionTransitionDuration = tuning.value(of: TuningCatalog.reactionTransitionDuration)
         }
+        if showsActionBar(itemID: itemID, shown: shown) {
+            configuration.actionBar = actionBarContent(for: status, itemID: itemID, countFont: configuration.metrics.timeFont, canSelectText: Self.showsSelectableBody(configuration))
+            if let itemID {
+                configuration.onActionBarPress = { [weak self] item, button in self?.performActionBarItem(item, id: itemID, from: button) }
+                configuration.actionBarLongPressTarget = { [weak self] item in self?.actionBarLongPressTarget(for: item, id: itemID) }
+            }
+        }
         if supportsEmojiReactions, let reactions = postContentBuilder.reactionChips(for: shown) {
             configuration.reactions = reactions
             configuration.onToggleReaction = { [weak self] name in
@@ -2345,12 +2371,184 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         kept.onPollAction = nil
         kept.onToggleReaction = nil
         kept.reactionTarget = nil
+        // アクションバーのボタンは、見本では押しても何もしない。
+        kept.onActionBarPress = nil
+        kept.actionBarLongPressTarget = nil
         // 「＋」は渡すかどうかで出すかが決まるので、出すものは押しても何もしない処理にして残す。
         kept.onAddReaction = configuration.onAddReaction.map { _ in {} }
         kept.embedActions = EmbedActions(openLink: configuration.embedActions.openLink)
         // リンクのタップと長押しの設定によらず、タップで開く。
         kept.opensLinksOnTapOnly = true
         return kept
+    }
+
+    /// リストのアイテムにアクションバーを出せるか。出すのは投稿だけで、スレッドの中心の投稿と通知には出さない（docs/post-action-bar.mdの「出し方」）。
+    func canShowActionBar(in entry: TimelineEntry) -> Bool {
+        guard !isAppearancePreview, let status = Self.statusOfRow(entry) else { return false }
+        return status.displayed.id != threadFocusID
+    }
+
+    /// 投稿にアクションバーを出すか。いつも出す設定か、引き出しを開いている投稿で出す。
+    /// 「投稿の見た目」のプレビューと、アイテムのIDを渡さずに組む見本では、いつも出す設定のときだけ出す。見本の投稿は一覧のアイテムとして並ばないため、アイテムのIDでは決めない。
+    func showsActionBar(itemID: ItemID?, shown: Status) -> Bool {
+        guard !isAppearancePreview, let itemID else { return settings.appearance.showsActionBar || showsActionBarInPreview }
+        guard let entry = entries[itemID], canShowActionBar(in: entry) else { return false }
+        return settings.appearance.showsActionBar || openActionBarItemID == itemID
+    }
+
+    /// アクションバーの中身。押せない項目は、メニューと同じ組み方で決めて薄く描く。
+    /// 組むだけで通信しない投稿のメニューの木で決める。メニューを出すときと違い、メニューに出る人の関係は読み直さず、カスタム絵文字の画像も読まない。
+    /// - Parameter canSelectText: これから置く本文を選べるか。投稿のセルはまだこの中身を置いていないので、置いてある本文からは決めない。
+    private func actionBarContent(for status: Status, itemID: ItemID?, countFont: UIFont, canSelectText: Bool) -> PostActionBarContent {
+        let shown = status.displayed
+        guard let itemID else { return postContentBuilder.actionBar(for: shown, countFont: countFont) { _ in true } }
+        return FrameWork.measure("actionBar") {
+            var tree = statusMenuTree(status: status, notification: nil, id: itemID, canSelectText: canSelectText)
+            let emojiGroups = settings.mediaMenuLayout.submenuGroups(actions: settings.mediaActions)
+            tree.customEmoji = { [weak self] emoji in
+                self?.mediaMenuTree(for: MediaMenuTarget(attachment: emoji.attachment, source: nil) {}, statusMenu: nil).customEmojiSubmenu(emoji, groups: emojiGroups)
+            }
+            return postContentBuilder.actionBar(for: shown, countFont: countFont) { item in
+                MenuItemOutcome(singleItemMenu: tree.menu(groups: .single(item), includesFollowRequest: false).root).isAvailable
+            }
+        }
+    }
+
+    /// 中身を置いたときに、本文を「テキストを選択」で選べるか。本文があり、注意書きで折りたたんでいないときに選べる。
+    /// 長い本文を切るかは、並べた幅で決まるので、ここでは分からない。切った本文では、押すと選べないことをチップで知らせる（docs/object-actions.mdの「項目を行う」）。
+    /// 切ったかを並べたあとに読んでボタンを描き直すには、投稿を組み直す経路が要り、それに見合わないため、切る本文でも押せる色で描く。
+    private static func showsSelectableBody(_ configuration: PostContentConfiguration) -> Bool {
+        configuration.spoiler?.isCollapsed != true && !configuration.body.string.allSatisfy(\.isWhitespace)
+    }
+
+    /// 投稿の下のアクションバーの引き出しを開閉する。開いている投稿で押せば閉じ、別の投稿で開けば前の投稿のアクションバーは閉じる。
+    /// 押した投稿の画面上の位置を保ち、まわりのアイテムごと動かしてつなぐ（docs/vision.mdの「一覧の動き」）。いつも出す設定では、アクションバーがもう出ているので何もしない。
+    func toggleActionBar(for id: ItemID) {
+        guard !settings.appearance.showsActionBar else { return }
+        let previous = openActionBarItemID
+        openActionBarItemID = previous == id ? nil : id
+        let ids = Set([previous, id].compactMap(\.self)).intersection(dataSource.snapshot().itemIdentifiers)
+        let duration = tuning.value(of: TuningCatalog.actionBarDrawerDuration)
+        let closing = previous.flatMap { $0 == openActionBarItemID ? nil : closingPostSnapshot(of: $0, duration: duration) }
+        reconfigureShiftingRowsBelow(ids, keeping: id, duration: duration, shiftLimit: actionBarHeightUpperBound)
+        if let opened = openActionBarItemID {
+            revealActionBarFromItsTop(of: opened, duration: duration)
+        }
+        if let closing {
+            concealShrink(of: closing.cell, with: closing.snapshot, from: closing.height, to: closing.barTop, duration: duration)
+        }
+    }
+
+    /// 引き出しのアクションバーを、初めて開く前に1つ組んでおいたか。
+    private var hasPreparedActionBar = false
+
+    /// タップか長押しに「アクションバーを開く」を割り当てていれば、一覧を出したあとに、見えている投稿のアクションバーを1つ組んで捨てる。
+    /// 起動して初めて開くときは、アクションバーの部品と記号の画像を初めて作り、投稿のメニューの木も初めて組むので、押してから最初のコマまでが2回目より大きく遅れ、
+    /// 動き始めのコマが飛んで見えた（シミュレーターで、初めては73ミリ秒、2回目は6ミリ秒）。先に組んでおけば、初めて開くときも2回目と同じになる。
+    /// いつも出す設定では、投稿を組むときにアクションバーも組むので、ここでは組まない。
+    private func prepareActionBarIfNeeded() {
+        let actions = settings.statusActions
+        guard !hasPreparedActionBar, !isAppearancePreview, !settings.appearance.showsActionBar,
+              actions.tap == .actionBar || actions.longPress == .actionBar
+        else { return }
+        hasPreparedActionBar = true
+        Task(.withoutRequests) { @MainActor [weak self] in
+            guard let self else { return }
+            guard let (id, status) = collectionView.indexPathsForVisibleItems.lazy.compactMap({ indexPath -> (ItemID, Status)? in
+                      guard let id = self.dataSource.itemIdentifier(for: indexPath), let entry = self.entries[id], self.canShowActionBar(in: entry), let status = Self.statusOfRow(entry) else { return nil }
+                      return (id, status)
+                  }).first
+            else {
+                hasPreparedActionBar = false
+                return
+            }
+            let content = actionBarContent(for: status, itemID: id, countFont: PostTypography(settings: settings).font(.time), canSelectText: false)
+            let width = collectionView.bounds.width
+            let bar = PostActionBarView(frame: CGRect(x: 0, y: 0, width: width, height: 0))
+            bar.apply(content)
+            // 親のない部品は自分の高さを決めないので、中身に合う高さを測ってから並べて描く。
+            let height = bar.systemLayoutSizeFitting(CGSize(width: width, height: UIView.layoutFittingCompressedSize.height), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel).height
+            bar.frame.size.height = height
+            bar.layoutIfNeeded()
+            // 画面に出していない部品は描かれないので、記号の画像は別に一度描いておく。初めて描くときの重さが、初めて開いたコマに残るため。
+            bar.drawForPreparation()
+        }
+    }
+
+    /// アクションバーを開閉して投稿が伸び縮みする長さの上限。本文とのあいだ、上下の余白、アイコンの大きさから、件数の文字の高さを見込んで大きめに決める。
+    /// 一覧の外へ出うるアイテムの像を取るのに使う。少なく見込むと、外へ出るアイテムが像なしで一度に消えるため、大きめにする。
+    private var actionBarHeightUpperBound: CGFloat {
+        let icon = settings.value(of: AppearanceCatalog.actionBarIconSize)
+        let lineHeight = max(icon * 2, PostTypography(settings: settings).font(.time).lineHeight * 2)
+        return settings.value(of: AppearanceCatalog.actionBarSpacing) + settings.value(of: AppearanceCatalog.actionBarPadding) * 2 + lineHeight
+    }
+
+    /// 開いたアクションバーを、上の端から下へ、まわりのアイテムと同じスプリングで切り抜いて現す。
+    /// 開く前の投稿の下の余白は、開いたあとのアクションバーの上の部分に重なるので、投稿の切り抜き（`revealGrowth`）だけでは、その部分が最初のコマで一度に見えた。
+    /// 投稿全体の切り抜きをアクションバーの上の端から広げ直すと、アイコンの下の端がアクションバーの上の端より下に出る短い投稿で、開く前から見えていたアイコンまで一度消えるため、アクションバーだけを切り抜く。
+    private func revealActionBarFromItsTop(of id: ItemID, duration: TimeInterval) {
+        guard duration > 0, view.window != nil, !isShowingMenu, !UIAccessibility.isReduceMotionEnabled,
+              let bar = (cell(for: id)?.contentView as? PostContentView)?.postBody.actionBar
+        else { return }
+        let mask = CALayer()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        mask.backgroundColor = UIColor.black.cgColor
+        mask.anchorPoint = .zero
+        mask.frame = bar.layer.bounds
+        CATransaction.commit()
+        let grow = Self.rowSpring(keyPath: "bounds.size.height", duration: duration)
+        grow.fromValue = 0
+        grow.toValue = bar.bounds.height
+        grow.delegate = RowShiftCompletion { [weak bar, weak mask] in
+            guard let bar, let mask, bar.layer.mask === mask else { return }
+            bar.layer.mask = nil
+        }
+        mask.add(grow, forKey: Self.actionBarRevealName)
+        bar.layer.mask = mask
+    }
+
+    /// アクションバーを現す切り抜きの動きの名前。
+    static let actionBarRevealName = "actionBarReveal"
+
+    /// アクションバーを閉じる投稿の、閉じる前の像と高さと、アクションバーの上の端（投稿のセルの座標）。動かさないときはnil。
+    private func closingPostSnapshot(of id: ItemID, duration: TimeInterval) -> (cell: TimelineCell, snapshot: UIView, height: CGFloat, barTop: CGFloat)? {
+        guard duration > 0, view.window != nil, !isShowingMenu, !UIAccessibility.isReduceMotionEnabled,
+              let cell = cell(for: id) as? TimelineCell,
+              let bar = (cell.contentView as? PostContentView)?.postBody.actionBar,
+              let snapshot = cell.snapshotView(afterScreenUpdates: false)
+        else { return nil }
+        return (cell, snapshot, cell.bounds.height, bar.convert(bar.bounds, to: cell).minY)
+    }
+
+    /// アクションバーを閉じて縮んだ投稿に、閉じる前の像を重ね、下の端から上へ、まわりのアイテムと同じスプリングで切り抜いて縮める。開くときの切り抜き（`revealGrowth`）を逆にしたもの。
+    /// 投稿の中身は一度に新しい高さで並ぶので、像を重ねないと、まわりのアイテムが詰めてくる前にアクションバーが消える。
+    /// 像を投稿の後ろに残す作りでは、縮んだ投稿の下の余白がアクションバーの上の部分を隠し、半分に欠けて見えた。
+    /// 像は投稿のセルに載せるので、押した投稿の位置を保つために投稿が動くときも一緒に動く。
+    /// 切り抜きは、縮んだ投稿の下端ではなくアクションバーの上の端まで縮める。縮んだ投稿の下の余白はアクションバーの上の部分に重なるので、
+    /// 下端までにすると、縮み終えたときにアイコンの上の部分が残り、像を外したコマで消えて見えた。アクションバーの上の端より上は、縮んだ投稿と同じ中身になる。
+    private func concealShrink(of cell: TimelineCell, with snapshot: UIView, from oldHeight: CGFloat, to barTop: CGFloat, duration: TimeInterval) {
+        let newHeight = min(cell.bounds.height, barTop)
+        guard oldHeight - newHeight > 0.5 else { return }
+        snapshot.isUserInteractionEnabled = false
+        snapshot.frame = CGRect(x: 0, y: 0, width: cell.bounds.width, height: oldHeight)
+        cell.showShrinkSnapshot(snapshot)
+        let mask = CALayer()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        mask.backgroundColor = UIColor.black.cgColor
+        mask.anchorPoint = .zero
+        mask.frame = CGRect(x: 0, y: 0, width: cell.bounds.width, height: newHeight)
+        CATransaction.commit()
+        let shrink = Self.rowSpring(keyPath: "bounds.size.height", duration: duration)
+        shrink.fromValue = oldHeight
+        shrink.toValue = newHeight
+        shrink.delegate = RowShiftCompletion { [weak cell, weak snapshot] in
+            guard let cell, let snapshot else { return }
+            cell.removeShrinkSnapshot(snapshot)
+        }
+        mask.add(shrink, forKey: "actionBarShrink")
+        snapshot.layer.mask = mask
     }
 
     /// 長い本文を切る行数。「投稿の見た目」の値で決める。
@@ -3046,3 +3244,4 @@ extension TimelineViewController: MediaMenuHost {
         !isAppearancePreview
     }
 }
+

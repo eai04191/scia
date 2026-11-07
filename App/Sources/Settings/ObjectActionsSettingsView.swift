@@ -11,6 +11,8 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
     let menu: SettingsPage?
     /// タップの既定の項目。長いリストに埋もれないよう、「メニューを開く」と並べて先頭の欄に出す。
     let primary: Item
+    /// アクションバーのボタンの並びの画面。アクションバーを出せる対象（投稿）でだけ渡し、渡すと「アクションバーを開く」も選べる。
+    var actionBar: SettingsPage?
 
     var body: some View {
         Form {
@@ -22,9 +24,14 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
                     Text("タップでも長押しでもメニューを開かないため、\(title)のメニューにしかない操作は使えません。")
                 }
             }
-            if let menu {
+            if menu != nil || actionBar != nil {
                 Section {
-                    NavigationLink("メニュー", value: menu)
+                    if let menu {
+                        NavigationLink("メニュー", value: menu)
+                    }
+                    if let actionBar {
+                        NavigationLink("アクションバー", value: actionBar)
+                    }
                 }
             }
         }
@@ -38,6 +45,9 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
             Section {
                 Label("メニューを開く", systemImage: "contextualmenu.and.cursorarrow").tag(ObjectAction<Item>.menu)
                 option(primary)
+                if actionBar != nil {
+                    Label(ObjectAction<Item>.openActionBarTitle, systemImage: "rectangle.bottomhalf.inset.filled").tag(ObjectAction<Item>.actionBar)
+                }
             }
             Section {
                 ForEach(items.filter { $0 != primary }, id: \.self) { item in
@@ -61,6 +71,7 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
         switch action {
         case .menu: "メニューを開く"
         case .item(let item): item.title
+        case .actionBar: ObjectAction<Item>.openActionBarTitle
         }
     }
 
@@ -82,7 +93,7 @@ extension ObjectEntity {
 }
 
 extension ObjectActionsSettingsView where Item: ObjectActionItem {
-    init(entity: ObjectEntity<Item>, settings: AppSettings, menu: SettingsPage?) {
-        self.init(title: entity.title, actions: entity.actions(in: settings), menu: menu, primary: Item.primaryItem)
+    init(entity: ObjectEntity<Item>, settings: AppSettings, menu: SettingsPage?, actionBar: SettingsPage? = nil) {
+        self.init(title: entity.title, actions: entity.actions(in: settings), menu: menu, primary: Item.primaryItem, actionBar: actionBar)
     }
 }

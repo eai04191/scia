@@ -69,6 +69,10 @@ public struct AppearanceChoices: Codable, Hashable, Sendable {
     /// お気に入りとブーストの片方だけをしたときに、その色で全幅を光らせる。オフなら、その半分だけを光らせる。
     public var reactionGlowFillsWidthWhenAlone = false
     public var reactionGlowLightFavouriteColor: ReactionGlowLightFavouriteColor = .orange
+    /// 一覧の投稿に、アクションバーをいつも出す。オフでも、タップや長押しに選べば開ける。決まりはdocs/post-action-bar.mdにある。
+    public var showsActionBar = false
+    /// アクションバーの返信、ブースト、お気に入りのボタンに件数を添える。
+    public var showsActionBarCounts = true
 
     public init() {}
 

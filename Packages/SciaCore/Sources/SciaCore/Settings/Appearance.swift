@@ -222,6 +222,15 @@ public enum AppearanceCatalog {
     /// 絵文字のリアクションのボタンの、文字の左右の余白。
     public static let reactionHorizontalPadding = AppearanceValue(id: "timeline.reactionHorizontalPadding", title: "ボタンの左右の余白", range: 0...100, step: 1, defaultValue: 10)
 
+    // MARK: アクションバー
+
+    /// 本文などと、アクションバーのあいだ。
+    public static let actionBarSpacing = AppearanceValue(id: "actionBar.spacing", title: "本文とのあいだ", range: 0...100, step: 1, defaultValue: 8)
+    /// アクションバーのボタンのアイコンの大きさ。0ptの記号は書体の標準の大きさで描かれるため、1ptを下限にする。
+    public static let actionBarIconSize = AppearanceValue(id: "actionBar.iconSize", title: "アイコンの大きさ", range: 1...100, step: 1, defaultValue: 14)
+    /// アクションバーのボタンの、アイコンの上下の余白。ボタンの押せる高さは、アイコンにこの余白を足したものになる。
+    public static let actionBarPadding = AppearanceValue(id: "actionBar.padding", title: "ボタンの上下の余白", range: 0...100, step: 1, defaultValue: 0)
+
     // MARK: お気に入りとブーストの光
 
     /// 下の端から照らす光の高さ。光は行の中にだけ伸ばす。ライトでHDRを使わずに描くときは、`ReactionGlow.Style`でこの高さを縮める。
@@ -251,6 +260,7 @@ public enum AppearanceCatalog {
         AppearanceGroup(id: "poll", title: "投票", values: [pollFooterText, bodyPollSpacing, pollOptionSpacing, pollOptionPadding, pollOptionHorizontalPadding, pollOptionCornerRadius, pollFooterSpacing]),
         // 列はサーバーが絵文字のリアクションに対応しているときだけ出るが、設定はアカウントによらないので、いつも並べる。
         AppearanceGroup(id: "reactions", title: "絵文字のリアクション", values: [reactionText, bodyReactionsSpacing, reactionSpacing, reactionPadding, reactionHorizontalPadding]),
+        AppearanceGroup(id: Self.actionBarGroupID, title: "アクションバー", values: [actionBarSpacing, actionBarIconSize, actionBarPadding]),
         AppearanceGroup(id: "reactionGlow", title: "お気に入りとブーストの光", values: [reactionGlowHeight, reactionGlowDarkOpacity, reactionGlowLightOpacity, reactionGlowBlendWidth, reactionGlowIconSize, reactionGlowIconOpacity]),
     ]
 
@@ -258,4 +268,7 @@ public enum AppearanceCatalog {
 
     /// 引用とXの投稿の囲みの部品の区画。
     public static let xPostGroupID = "xPost"
+
+    /// アクションバーの区画。見本では、いつも出す設定でなくてもアクションバーを出す。
+    public static let actionBarGroupID = "actionBar"
 }

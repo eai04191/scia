@@ -29,7 +29,8 @@ final class OtherAccounts {
     }
 
     /// 今ログインしているほかのアカウント。アカウントの切り替えのメニューと同じ順。開くたびに読み、追加やログアウトに追いつく。
-    func list() -> [OtherAccount] {
+    /// - Parameter loadsProfiles: 読めていないアイコンと、サーバーの対応を読み直すか。メニューを開くときだけ読む。メニューを開かずに組むとき（アクションバーのボタンを押せるかを決めるとき）は読まず、スクロールで投稿を組むたびにほかのサーバーへ通信しないようにする。
+    func list(loadsProfiles: Bool = true) -> [OtherAccount] {
         guard let registry = try? AppDependencies.accounts.get() else { return [] }
         let credentials = registry.accounts.filter { $0.id != current.id }
         var kept: [Credential.ID: OtherAccount] = [:]
@@ -60,6 +61,7 @@ final class OtherAccounts {
         }
         accounts = kept
         hashtags = keptHashtags
+        guard loadsProfiles else { return listed }
         // 読めていないアイコンは、次に開いたときに出せるよう読み直す。
         for account in listed {
             account.loadProfile()

@@ -366,10 +366,11 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
                     if case .row(let id) = cell { rowsByID[id] } else { nil }
                 }
             }
-            rows = rowsIn(.main) + rows.filter { $0.element == .more } + rowsIn(.more)
+            // 境目を持たない並びには、境目の後ろの節がない。
+            rows = rowsIn(.main) + rows.filter { $0.element == .more } + (Item.hasMoreSection ? rowsIn(.more) : [])
             save()
             // 節が空になったり空でなくなったりしたら、「なし」の行を出し入れする。並べ替えを当てている最中には当てられないので、終えてから当てる。
-            let placeholdersChanged = [Section.main, .more].contains { section in
+            let placeholdersChanged = ([Section.main] + (Item.hasMoreSection ? [.more] : [])).contains { section in
                 rowsIn(section).isEmpty != transaction.finalSnapshot.itemIdentifiers(inSection: section).contains(.empty(section))
             }
             if placeholdersChanged {
@@ -419,8 +420,10 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     /// 横並びの字下げは、行を足したり消したりし終わってから付け直す。
     private func applySnapshot(animated: Bool) {
         var snapshot = NSDiffableDataSourceSnapshot<Section, Cell>()
-        snapshot.appendSections([.main, .more, .actions])
-        for (section, rows) in [(Section.main, rows[..<moreIndex]), (.more, rows[min(moreIndex + 1, rows.endIndex)...])] {
+        // 境目を持たない並びでは、境目の後ろの節を出さない。
+        let sections: [(Section, ArraySlice<Row>)] = [(.main, rows[..<moreIndex])] + (Item.hasMoreSection ? [(.more, rows[min(moreIndex + 1, rows.endIndex)...])] : [])
+        snapshot.appendSections(sections.map(\.0) + [.actions])
+        for (section, rows) in sections {
             snapshot.appendItems(rows.isEmpty ? [.empty(section)] : rows.map { .row($0.id) }, toSection: section)
         }
         let buttons: [Cell] = if !Item.supportsSeparators {

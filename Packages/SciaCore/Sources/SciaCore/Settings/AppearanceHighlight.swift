@@ -129,6 +129,10 @@ public enum AppearanceHighlight: Equatable, Sendable {
             (C.reactionPadding, .part(.reactionPaddingBands)),
             (C.reactionHorizontalPadding, .part(.reactionSidePaddingBands)),
 
+            (C.actionBarSpacing, .verticalGap(above: [.filterNote, .reactions, .card, .xPost, .poll, .media, .bodyGlyphs, .spoiler], below: [.actionBar])),
+            (C.actionBarIconSize, .part(.actionBarIcons)),
+            (C.actionBarPadding, .part(.actionBarPaddingBands)),
+
             (C.reactionGlowHeight, .part(.reactionGlow)),
             (C.reactionGlowDarkOpacity, .part(.reactionGlow)),
             (C.reactionGlowLightOpacity, .part(.reactionGlow)),

@@ -177,6 +177,16 @@ public struct HashtagMenuActions {
         self.follow = follow
         self.feature = feature
     }
+
+    /// 組んでも読み直さない形。メニューを開かずに組むとき（アクションバーのボタンを押せるかを決めるとき）に使う。
+    /// 読み直しは、メニューを開いたときに次に開くときのために行うもので、開かないなら要らない。スクロールで投稿を組むたびに通信しないようにする。
+    public var withoutRefresh: HashtagMenuActions {
+        HashtagMenuActions(
+            mute: mute.map { HashtagMuteActions(known: $0.known, refresh: {}, load: $0.load, mute: $0.mute, unmute: $0.unmute) },
+            follow: follow?.withoutRefresh,
+            feature: feature?.withoutRefresh
+        )
+    }
 }
 
 /// ハッシュタグのメニューの、タグごとに当てはまるかどうかを持つ項目（「プロフィールで紹介する」など）で、当てはまるかを読み、変える。項目は`HashtagMenuTree`が組む。
@@ -205,6 +215,10 @@ public struct HashtagToggleActions {
         self.load = load
         self.turnOn = turnOn
         self.turnOff = turnOff
+    }
+
+    fileprivate var withoutRefresh: HashtagToggleActions {
+        HashtagToggleActions(known: known, refresh: {}, load: load, turnOn: turnOn, turnOff: turnOff)
     }
 }
 
