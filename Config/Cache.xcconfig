@@ -1,0 +1,17 @@
+// makeが走らせるDebugのビルドに、xcodebuildの-xcconfigで渡す、コンパイルキャッシュの設定。
+// コンパイルの結果をCAS（COMPILATION_CACHE_CAS_PATH）に溜め、同じ中身のコンパイルは、どのworktreeのビルドでも溜めたものを使う。
+// rebaseしてmainの変更を取り込んだworktreeでも、ほかのworktreeがビルドした中身なら、コンパイルし直さずに済む。
+// project.ymlに書くと、SwiftPMのパッケージのターゲット（SciaCoreなど）がプロジェクトの設定を受け継がず、キャッシュが効かない。-xcconfigの設定はパッケージのターゲットにも効く。
+// 同じDerivedDataを使うビルドには、すべてこのファイルを渡す。渡さないビルドが混ざると、設定の違いで作り直しになる。
+// worktreeとDerivedDataの場所が違っても当たるよう、ソースとビルドの場所を置き換えてからキーを作る（PROJECT_PREFIX_MAPPING）。
+// キャッシュから戻したコンパイルも診断ファイル（.dia）を残すので、Tools/check-warnings.shは警告を拾える。
+// 置き場所は、人ごとのConfig/CacheLocal.xcconfigに`COMPILATION_CACHE_CAS_PATH = <フォルダー>`で書く。なければXcodeの既定（~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex）に置く。
+// Config/Local.xcconfigには書かない。Local.xcconfigはXcodeで開いたときのビルドやReleaseのビルドも読み、キャッシュを使わないビルドでも置き場所のフォルダーを作ろうとするため、外付けのディスクを外していると、それらのビルドも止まる。
+// 大きさは、指定しなければディスクの空きの50%までで、超えるとXcodeが古いものから消す。
+// 置き場所のボリュームがつながっていなければ、ビルドの初めのValidateCASで失敗する。
+COMPILATION_CACHE_ENABLE_CACHING[config=Debug] = YES
+SWIFT_ENABLE_PREFIX_MAPPING[config=Debug] = YES
+CLANG_ENABLE_PREFIX_MAPPING[config=Debug] = YES
+SWIFT_ENABLE_PROJECT_PREFIX_MAPPING[config=Debug] = YES
+CLANG_ENABLE_PROJECT_PREFIX_MAPPING[config=Debug] = YES
+#include? "CacheLocal.xcconfig"

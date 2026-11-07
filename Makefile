@@ -4,6 +4,8 @@ DERIVED_DATA := DerivedData
 SIM_DESTINATION ?= generic/platform=iOS Simulator
 # 端末を決めないビルドは、既定ではシミュレーターの全アーキテクチャ（arm64とx86_64）を作る。このMacで動く分だけにして、コンパイルを半分にする
 SIM_ARCH ?= $(shell uname -m)
+# 同じDerivedDataを使うDebugのビルドには、すべてコンパイルキャッシュの設定を渡す（Config/Cache.xcconfig）。Tools/system-ui-check.shも同じものを渡す
+CACHE_XCCONFIG := -xcconfig Config/Cache.xcconfig
 
 .PHONY: generate lint test-lint test-core test-memory-cache build warnings test test-on-sim sim-keyboard scenario-build scenario-setup scenario-reset scenario-run archive testflight testflight-external promo readme-screenshots readme-icons update-known-servers check check-steps hooks menu-editor clean
 
@@ -32,7 +34,7 @@ test-memory-cache:
 
 ## アプリをシミュレーター向けにビルドする
 build: generate
-	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination '$(SIM_DESTINATION)' -derivedDataPath $(DERIVED_DATA) ARCHS=$(SIM_ARCH) build
+	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination '$(SIM_DESTINATION)' -derivedDataPath $(DERIVED_DATA) $(CACHE_XCCONFIG) ARCHS=$(SIM_ARCH) build
 
 ## make buildのあとに残ったアプリのSwiftの警告を、差分ビルドで作り直さなかったファイルの分も含めて検出する
 warnings: build
@@ -49,7 +51,7 @@ warnings: build
 ## 例: make test ONLY='SciaTests/LinkLabelTests SciaTests/TimelineNoticeTests/progressGainingDigitWidensWithAnimation()'
 ## 例: make test SIM='iPhone 16 Pro'
 TEST_TREE := $(DERIVED_DATA)/test-tree
-TEST_ARGS = -project $(PROJECT) -scheme $(SCHEME) -destination 'platform=iOS Simulator,name=$(SIM)' -derivedDataPath $(DERIVED_DATA) -collect-test-diagnostics never
+TEST_ARGS = -project $(PROJECT) -scheme $(SCHEME) -destination 'platform=iOS Simulator,name=$(SIM)' -derivedDataPath $(DERIVED_DATA) $(CACHE_XCCONFIG) -collect-test-diagnostics never
 ## 決めた端末をSIMに入れて呼び直す。テストの間ずっと、処理の引数に端末の名前が残り、Tools/sim.sh busyが使っている処理として見つけられるようにするため
 test: generate
 	@sim=$$(Tools/sim.sh leased '$(SIM)') && $(MAKE) --no-print-directory test-on-sim SIM="$$sim"

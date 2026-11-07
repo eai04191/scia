@@ -23,6 +23,6 @@ fi
 
 # 変数のすぐ後ろに全角の文字を置くと、macOSのBash 3.2が変数名の切れ目を読み違えるので、波括弧で区切る
 echo "シミュレーターのiOS ${version}（${build}）と今のコードでは、まだSciaSystemUITestsを通していないので走らせます"
-xcodebuild -project Scia.xcodeproj -scheme SciaSystemUITests -destination "platform=iOS Simulator,name=$sim" -derivedDataPath "$derived_data" -collect-test-diagnostics never test
+xcodebuild -project Scia.xcodeproj -scheme SciaSystemUITests -destination "platform=iOS Simulator,name=$sim" -derivedDataPath "$derived_data" -xcconfig Config/Cache.xcconfig -collect-test-diagnostics never test
 mkdir -p "$stamp_dir"
 touch "$stamp_dir/$stamp"

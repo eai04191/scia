@@ -11,3 +11,5 @@ DerivedData/
 .swiftpm/
 # 人ごとのビルド設定（Config/Base.xcconfigから読み込む）
 Config/Local.xcconfig
+# 人ごとのコンパイルキャッシュの置き場所（Config/Cache.xcconfigから読み込む）
+Config/CacheLocal.xcconfig
