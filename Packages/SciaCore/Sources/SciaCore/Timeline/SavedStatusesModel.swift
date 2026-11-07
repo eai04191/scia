@@ -161,7 +161,7 @@ public final class SavedStatusesModel {
         }
     }
 
-    /// 末尾が近づいたときに呼ぶ。古い投稿を自動で読む。
+    /// 末尾が近づいたときに呼ぶ（どこまで近づいたらかは`TimelineLoadTrigger.isApproachingEnd(displaying:count:)`）。古い投稿を自動で読む。
     public func approachEnd() {
         loadOlder(purpose: .display)
     }

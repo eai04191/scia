@@ -405,7 +405,7 @@ public final class FeedTimelineModel {
         }
     }
 
-    /// 末尾が近づいたときに呼ぶ。古い投稿を自動で読む。
+    /// 末尾が近づいたときに呼ぶ（どこまで近づいたらかは`TimelineLoadTrigger.isApproachingEnd(displaying:count:)`）。古い投稿を自動で読む。
     public func approachEnd() {
         loadOlder(purpose: .display)
     }
@@ -568,6 +568,7 @@ public final class FeedTimelineModel {
     }
 
     /// 読み込み中でないギャップが表示領域に近づいたときに呼ぶ。スクロールするたびに呼ばれることがある。
+    /// どこまで近づいたらと、どちらの端から読むかは`TimelineLoadTrigger.approachingGaps(_:in:scrollDirection:tuning:)`で決める。
     public func approachGap(_ id: String, from direction: TimelineStore.GapDirection) {
         loadGap(id, from: direction, isAutomatic: true)
     }
@@ -793,6 +794,7 @@ public final class FeedTimelineModel {
     }
 
     /// 画面に表示されている投稿が変わったときに呼ぶ。スクロールの毎コマで呼ばれるため、既読の位置が進んだときだけ未読を数え直す。
+    /// どの行を渡すかと、どんな間は呼ばないかは`ReadVisibility`で決める。
     /// どんな読み進め方（スクロール、新着のボタンで先頭へ戻るなど）でも呼ぶ。進んだ既読位置は、進まなくなって`TuningCatalog.readPositionSaveDelay`が経ち、
     /// 一覧を操作していなければ（`TimelineDisplay.isUserInteracting`）サーバーに保存する。
     public func markRead(_ ids: [Status.ID]) {

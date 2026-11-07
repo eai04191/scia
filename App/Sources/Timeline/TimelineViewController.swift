@@ -129,9 +129,6 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onDebugURL: (@MainActor (DebugURL) -> Void)?
     #endif
 
-    /// 末尾から何件手前で古い投稿の読み込みを始めるか。
-    private let prefetchThreshold = 10
-
     private(set) lazy var collectionView: UICollectionView = TimelineCollectionView(frame: .zero, collectionViewLayout: makeLayout())
     private lazy var dataSource = makeDataSource()
     private var entries: [ItemID: TimelineEntry] = [:]
@@ -166,17 +163,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private var contentSizeAnchor: ScrollAnchor?
     /// 表示中のギャップのID。スクロールのたびに全要素を調べないよう、別に持つ。
     private var gapIDs: [String] = []
-    /// 指で最後に動かした向き。ギャップをどちらの端から読むかに使う。
-    ///
-    /// スクロール位置の増減からは取らない。上へ戻ると、見積もりから実寸へ変わったセルの分をUICollectionViewが位置で補正し、
-    /// 位置が逆向きにも動くため。
-    private var lastScrollDirection: ScrollDirection?
-
-    private enum ScrollDirection {
-        /// 上へ戻っている。新しい投稿の方へ向かっている。
-        case towardNewer
-        case towardOlder
-    }
+    /// 指で最後に動かした向き。ギャップをどちらの端から読むかに使う（`TimelineLoadTrigger.approachingGaps`）。
+    private var lastScrollDirection: TimelineLoadTrigger.ScrollDirection?
     private(set) var contentState = ContentState.loaded
     private(set) var footerState = FooterState.idle
     private(set) var unreadCount = 0
@@ -1781,26 +1769,19 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         return recognizer
     }
 
-    /// 表示領域から一定の距離に入ったギャップを報告する。指で動かしている間と慣性で動いている間は、上へ戻っているなら
-    /// 下の投稿に続く古い側から、下へ読み進めているなら上の投稿に続く新しい側から読ませる。止まっているときは、画面上の位置で決める。
-    /// 止まった後の再接続などでできたギャップに、前の操作の向きを当てると、読んでいる投稿の反対側を基準にしてしまうため。
+    /// 表示領域に近づいたギャップを報告する。どこまで近づいたら、どちらの端から読ませるかは`TimelineLoadTrigger`が決める。
     private func reportApproachingGaps() {
         guard let onGapApproach, !isRestoringAnchor, !isScrollingToTop, !gapIDs.isEmpty else { return }
         let visibleRect = collectionView.bounds.inset(by: collectionView.adjustedContentInset)
-        let distance = tuning.value(of: TuningCatalog.gapAutoLoadDistance) * visibleRect.height
-        let zone = visibleRect.insetBy(dx: 0, dy: -distance)
-        for gapID in gapIDs where !loadingGapIDs.contains(gapID) {
+        let gaps = gapIDs.filter { !loadingGapIDs.contains($0) }.compactMap { gapID -> (id: String, frame: CGRect)? in
             guard let indexPath = dataSource.indexPath(for: .gap(gapID)),
-                  let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame,
-                  frame.intersects(zone)
-            else { continue }
-            let isScrolling = collectionView.isTracking || collectionView.isDecelerating
-            let direction: TimelineStore.GapDirection = switch isScrolling ? lastScrollDirection : nil {
-            case .towardNewer: .fromOlder
-            case .towardOlder: .fromNewer
-            case nil: frame.midY < visibleRect.midY ? .fromOlder : .fromNewer
-            }
-            onGapApproach(gapID, direction)
+                  let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame
+            else { return nil }
+            return (gapID, frame)
+        }
+        let isScrolling = collectionView.isTracking || collectionView.isDecelerating
+        for gap in TimelineLoadTrigger.approachingGaps(gaps, in: visibleRect, scrollDirection: isScrolling ? lastScrollDirection : nil, tuning: tuning) {
+            onGapApproach(gap.id, gap.direction)
         }
     }
 
@@ -2750,8 +2731,7 @@ extension TimelineViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
         // 最初にスクロールする前にも、画面の前後の本文を先に作っておく。スクロールのたびに頼むだけでは、起動して最初に流した数行に間に合わない。
         prepareBodiesAroundVisibleRows()
-        let count = dataSource.snapshot().numberOfItems
-        if indexPath.item >= count - prefetchThreshold {
+        if TimelineLoadTrigger.isApproachingEnd(displaying: indexPath.item, count: dataSource.snapshot().numberOfItems) {
             onApproachingEnd?()
         }
     }

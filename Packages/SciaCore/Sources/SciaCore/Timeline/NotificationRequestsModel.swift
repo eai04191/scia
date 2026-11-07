@@ -67,7 +67,7 @@ public final class NotificationRequestsModel {
         }?.value
     }
 
-    /// 末尾が近づいたときに呼ぶ。
+    /// 末尾が近づいたときに呼ぶ（どこまで近づいたらかは`TimelineLoadTrigger.isApproachingEnd(displaying:count:)`）。
     public func approachEnd() {
         loadOlder(purpose: .display)
     }
@@ -224,6 +224,7 @@ public final class AccountNotificationsModel {
         }?.value
     }
 
+    /// 末尾が近づいたときに呼ぶ（どこまで近づいたらかは`TimelineLoadTrigger.isApproachingEnd(displaying:count:)`）。
     public func approachEnd() {
         loadOlder(purpose: .display)
     }

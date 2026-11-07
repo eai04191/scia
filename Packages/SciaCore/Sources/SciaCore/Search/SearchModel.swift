@@ -143,7 +143,7 @@ public final class SearchModel {
         render(arrived: true)
     }
 
-    /// 末尾が近づいたときに呼ぶ。続きを読む。
+    /// 末尾が近づいたときに呼ぶ（どこまで近づいたらかは`TimelineLoadTrigger.isApproachingEnd(displaying:count:)`）。続きを読む。
     public func approachEnd() {
         loadNext(purpose: .display)
     }

@@ -260,7 +260,7 @@ public final class NotificationsModel {
         }
     }
 
-    /// 末尾が近づいたときに呼ぶ。古い通知を自動で読む。
+    /// 末尾が近づいたときに呼ぶ（どこまで近づいたらかは`TimelineLoadTrigger.isApproachingEnd(displaying:count:)`）。古い通知を自動で読む。
     public func approachEnd() {
         loadOlder(purpose: .display)
     }
@@ -685,6 +685,7 @@ public final class NotificationsModel {
     }
 
     /// 画面に表示されている通知が変わったときに呼ぶ。どんな読み進め方でも呼ぶ。
+    /// どの行を渡すかと、どんな間は呼ばないかは`ReadVisibility`で決める。
     /// 通知はタブを開いて見るだけのことが多いため、一覧を操作していなければ（`TimelineDisplay.isUserInteracting`）、待たずに既読位置を保存する。
     /// 操作の最中は、`interactionDidSettle()`で保存するか、操作が止まってから`TuningCatalog.readPositionSaveDelay`が経ったら保存する。
     public func markRead(_ ids: [MastodonNotification.ID]) {
