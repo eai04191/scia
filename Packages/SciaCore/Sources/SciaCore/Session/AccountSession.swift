@@ -13,6 +13,7 @@ import os
 ///
 /// タイムラインのモデルは、`init(…session:…)`で作ると、ここに登録され、やり直しと止めるのをまとめて受け取る。
 /// 投稿を並べる一覧は`statuses`にも登録され、自分の操作で変わった投稿（削除、編集、お気に入りなど）を受け取る。
+/// iOSのアプリとは別のUIから使うときの入口は、docs/other-ui.mdにある。
 @MainActor
 public final class AccountSession {
     public let credential: Credential

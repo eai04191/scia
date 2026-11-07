@@ -21,6 +21,7 @@ public enum TimelineFooterState: Equatable, Sendable {
 
 /// タイムラインの画面への命令。読み込み、ストリーミング、既読位置を受け持つ側（`FeedTimelineModel`など）が、結果を画面へ伝えるのに使う。
 /// iOSでは`TimelineViewController`が従う。スクロール位置の指定は一度きりの命令なので、状態として渡さず、並びを渡す命令に添える。
+/// 画面の側からモデルへ知らせるときの決まりは、既読の行が`ReadVisibility`、続きとギャップを読み始めるきっかけが`TimelineLoadTrigger`にある。
 @MainActor
 public protocol TimelineDisplay: AnyObject {
     /// 表示中の行を、新しい順に並んだ`entries`で置き換える。読んでいる位置の行は、画面上で動かさない。
