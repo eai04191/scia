@@ -124,7 +124,8 @@ struct ProfileTabLoadingTests {
         let opened = Opened(fetcher: fetcher)
         defer { opened.close() }
         opened.loading.loadAccount()
-        try await waitUntil { opened.accounts.count == 1 }
+        try await waitUntil { opened.accounts.count >= 1 }
+        #expect(opened.accounts.count == 1)
 
         var given: [Account] = []
         opened.loading.onAccount = { given.append($0) }

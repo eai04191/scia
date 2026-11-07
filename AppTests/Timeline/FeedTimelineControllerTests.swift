@@ -160,7 +160,8 @@ struct FeedTimelineControllerTests {
         #expect(clock.sleeperCount == 1, "間隔を待たずに挿入を始めました")
         clock.advance(by: .milliseconds(1))
 
-        try await waitUntil { controller.viewController.displayedStatusIDs.count == 4 }
+        try await waitUntil { controller.viewController.displayedStatusIDs.count >= 4 }
+        #expect(controller.viewController.displayedStatusIDs.count == 4)
         #expect(controller.viewController.displayedStatusIDs == (arriving + existing).map(\.id))
     }
 
@@ -182,7 +183,8 @@ struct FeedTimelineControllerTests {
         connector.send(try updateMessage(try #require(arriving.first), stream: ["public:local"]))
         try await waitUntil { clock.sleeperCount == 1 }
         clock.advance(by: .milliseconds(200))
-        try await waitUntil { controller.viewController.displayedStatusIDs.count == 4 }
+        try await waitUntil { controller.viewController.displayedStatusIDs.count >= 4 }
+        #expect(controller.viewController.displayedStatusIDs.count == 4)
         controller.enterBackground()
 
         #expect(controller.viewController.displayedStatusIDs == (arriving + existing).map(\.id))

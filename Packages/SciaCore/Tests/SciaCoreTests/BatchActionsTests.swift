@@ -107,7 +107,8 @@ struct BatchActionsTests {
         #expect(run.completedCount == 1)
 
         clock.advance(by: .seconds(1))
-        try await waitUntil { clock.sleeperCount == 1 && sent.count == 3 }
+        try await waitUntil { clock.sleeperCount == 1 && sent.count >= 3 }
+        #expect(sent.count == 3)
         #expect(sent == ["reblog 1", "unreblog 2", "reblog 2"])
 
         clock.advance(by: .seconds(1))
@@ -166,7 +167,8 @@ struct BatchActionsTests {
         let outcome = Task { await run.run() }
         try await waitUntil { clock.sleeperCount == 1 }
         clock.advance(by: .seconds(1))
-        try await waitUntil { clock.sleeperCount == 1 && log.sent.count == 3 }
+        try await waitUntil { clock.sleeperCount == 1 && log.sent.count >= 3 }
+        #expect(log.sent.count == 3)
         clock.advance(by: .seconds(2))
         guard case .finished = await outcome.value else {
             Issue.record("送り直して済んでいない")

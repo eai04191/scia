@@ -47,7 +47,8 @@ struct ThreadModelTests {
         model.start()
         #expect(display.statusIDs == ["2"])
         #expect(display.footerState == .loading)
-        try await waitUntil { deferred.count == 1 }
+        try await waitUntil { deferred.count >= 1 }
+        #expect(deferred.count == 1)
         #expect(display.statusIDs == ["2"], "画面を移り終える前に並べました")
 
         deferred.removeFirst()()

@@ -186,7 +186,8 @@ struct NotificationsModelTests {
 
         display.isUserInteracting = false
         model.interactionDidSettle()
-        try await waitUntil { Self.markerSaves(transport).count == 1 }
+        try await waitUntil { Self.markerSaves(transport).count >= 1 }
+        #expect(Self.markerSaves(transport).count == 1)
         #expect(Self.markerSaves(transport) == ["notifications%5Blast_read_id%5D=34975862"])
     }
 

@@ -231,7 +231,8 @@ struct AnnouncementsModelTests {
         try await waitUntil { model.unreadCount == 1 && model.runningTaskCount == 0 }
         model.didShow("1")
 
-        try await waitUntil { server.recorded.filter { $0.hasPrefix("dismiss") }.count == 2 }
+        try await waitUntil { server.recorded.filter { $0.hasPrefix("dismiss") }.count >= 2 }
+        #expect(server.recorded.filter { $0.hasPrefix("dismiss") }.count == 2)
     }
 
     /// 押したらすぐ表示を変え、失敗したら戻して知らせる。結果を待つ間に同じリアクションを押しても送らない。
@@ -289,7 +290,8 @@ struct AnnouncementsModelTests {
         let (model, _) = makeModel(server)
 
         model.start()
-        try await waitUntil { server.recorded.count == 1 }
+        try await waitUntil { server.recorded.count >= 1 }
+        #expect(server.recorded.count == 1)
         model.streamingDidChange(.event(.announcement(Self.announcement("1", read: nil))))
         server.hold.open()
         try await waitUntil { model.contentState == .loaded }
@@ -307,7 +309,8 @@ struct AnnouncementsModelTests {
 
         server.holdNextList()
         let reload = model.refresh()
-        try await waitUntil { server.recorded.count == 2 }
+        try await waitUntil { server.recorded.count >= 2 }
+        #expect(server.recorded.count == 2)
         model.didShow("1")
         try await waitUntil { server.recorded.contains("dismiss 1") && model.runningTaskCount == 1 }
         server.hold.open()
@@ -422,7 +425,8 @@ struct AnnouncementsModelTests {
         let (model, _) = makeModel(server)
 
         model.start()
-        try await waitUntil { server.recorded.count == 1 }
+        try await waitUntil { server.recorded.count >= 1 }
+        #expect(server.recorded.count == 1)
         model.streamingDidChange(.connected)
         server.hold.open()
         try await waitUntil { model.contentState == .loaded }

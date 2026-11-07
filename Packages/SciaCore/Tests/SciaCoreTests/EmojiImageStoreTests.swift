@@ -151,7 +151,8 @@ struct EmojiImageStoreTests {
         store.addListener(owner: clock) { notified.append($0) }
         _ = store.image(for: url)
         // 読めなかったときにも1回知らせる。
-        try await waitUntil { store.hasFailed(url) && clock.sleeperCount == 1 && notified.count == 1 }
+        try await waitUntil { store.hasFailed(url) && clock.sleeperCount == 1 && notified.count >= 1 }
+        #expect(notified.count == 1)
         clock.advance(by: .seconds(5))
         try await waitUntil { notified == [[url], [url]] }
         #expect(clock.sleeperCount == 0)

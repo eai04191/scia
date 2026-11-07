@@ -45,7 +45,8 @@ struct SavedStatusesControllerTests {
         window.rootViewController = UINavigationController(rootViewController: controller.viewController)
         window.makeKeyAndVisible()
         controller.startIfNeeded()
-        try await waitUntil { controller.viewController.displayedItemIDs.count == Self.saved.count }
+        try await waitUntil { controller.viewController.displayedItemIDs.count >= Self.saved.count }
+        #expect(controller.viewController.displayedItemIDs.count == Self.saved.count)
         controller.viewController.collectionView.layoutIfNeeded()
         return window
     }
@@ -84,7 +85,8 @@ struct SavedStatusesControllerTests {
         let before = try windowMinY(of: top, in: controller, window: window)
 
         controller.setShown(true)
-        try await waitUntil { controller.viewController.displayedItemIDs.count == Self.saved.count + 1 }
+        try await waitUntil { controller.viewController.displayedItemIDs.count >= Self.saved.count + 1 }
+        #expect(controller.viewController.displayedItemIDs.count == Self.saved.count + 1)
 
         #expect(controller.viewController.displayedItemIDs.first == .status(Self.newest[0].id))
         // 最上部での追従は、足した直後は位置を保ち、そのあと最上部へ動かすため、動き終わるまで待ってから測る。
@@ -126,7 +128,8 @@ struct SavedStatusesControllerTests {
         defer { window.isHidden = true }
 
         controller.setShown(true)
-        try await waitUntil { controller.viewController.displayedItemIDs.count == Self.saved.count + others.count + 1 }
+        try await waitUntil { controller.viewController.displayedItemIDs.count >= Self.saved.count + others.count + 1 }
+        #expect(controller.viewController.displayedItemIDs.count == Self.saved.count + others.count + 1)
         try await waitUntil { !controller.viewController.isScrollingToTop }
         let ids = controller.viewController.displayedItemIDs
         let gapIndex = try #require(ids.firstIndex { if case .gap = $0 { true } else { false } })
@@ -140,7 +143,8 @@ struct SavedStatusesControllerTests {
         let before = try windowMinY(of: kept, in: controller, window: window)
 
         controller.viewController.onGapSelect?(try #require(ids[gapIndex].gapID), direction)
-        try await waitUntil { controller.viewController.displayedItemIDs.count == Self.saved.count + others.count + inGap.count }
+        try await waitUntil { controller.viewController.displayedItemIDs.count >= Self.saved.count + others.count + inGap.count }
+        #expect(controller.viewController.displayedItemIDs.count == Self.saved.count + others.count + inGap.count)
 
         let after = try windowMinY(of: kept, in: controller, window: window)
         #expect(abs(after - before) <= tolerance, "読んでいた行が\(after - before)pt動きました")

@@ -240,7 +240,8 @@ struct SearchModelTests {
         let (model, display) = try makeModel("https://remote.example/@bob/1", transport: transport)
         defer { model.stop() }
         model.start()
-        try await waitUntil { transport.requests.count == 1 }
+        try await waitUntil { transport.requests.count >= 1 }
+        #expect(transport.requests.count == 1)
         #expect(display.contentState == .loading)
         // フッターの終わりの文は、行がなければ見つからなかったことを出すため、読み終えるまで出さない。
         #expect(display.footerState == .idle)
@@ -260,7 +261,8 @@ struct SearchModelTests {
         let (model, display) = try makeModel("猫", transport: transport)
         defer { model.stop() }
         model.start()
-        try await waitUntil { transport.requests.count == 3 }
+        try await waitUntil { transport.requests.count >= 3 }
+        #expect(transport.requests.count == 3)
 
         let refreshing = Task { await model.refresh() }
         gate.open()
@@ -361,7 +363,8 @@ struct SearchModelTests {
         #expect(display.entriesCalls.first?.isTransition == true)
         #expect(display.contentState == .loaded)
         // ハッシュタグは0件で届いたので、引き継いだ行も見出しごと消す。ユーザーは届くまで残す。
-        try await waitUntil { transport.requests.count == 3 && Self.rows(display) == ["[accounts]", "@\(account.id)"] }
+        try await waitUntil { transport.requests.count >= 3 && Self.rows(display) == ["[accounts]", "@\(account.id)"] }
+        #expect(transport.requests.count == 3)
 
         gate.open()
         try await waitUntil { model.runningTaskCount == 0 }

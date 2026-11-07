@@ -44,10 +44,12 @@ struct LiveUpdatesTests {
         // つなぎ直し（10ms後）、ポーリング（15ms後）、知らせ（30ms後）を待ち始めてから、30msまで進める。
         try await waitUntil { await log.labels == ["disconnected"] && clock.sleeperCount(dueWithin: .milliseconds(30)) == 3 }
         clock.advance(by: .milliseconds(10))
-        try await waitUntil { await log.labels.count == 2 && clock.sleeperCount(dueWithin: .milliseconds(20)) == 3 }
+        try await waitUntil { await log.labels.count >= 2 && clock.sleeperCount(dueWithin: .milliseconds(20)) == 3 }
+        #expect(await log.labels.count == 2)
         clock.advance(by: .milliseconds(20))
         // つながるのは、まだ進めていない4回目のつなぎ直しの後なので、ポーリングと知らせは必ずその前に届く。
-        try await log.waitUntil { $0.contains("poll") && $0.contains("outage started") && $0.filter { $0 == "disconnected" }.count == 3 }
+        try await log.waitUntil { $0.contains("poll") && $0.contains("outage started") && $0.filter { $0 == "disconnected" }.count >= 3 }
+        #expect(await log.labels.filter { $0 == "disconnected" }.count == 3)
         try await waitUntil(advancing: clock, by: .milliseconds(10)) { await log.labels.contains("outage ended") }
         // つながったら、ポーリングと知らせの待ちを取り消している。
         #expect(clock.sleeperCount(dueWithin: .seconds(1)) == 0)
@@ -91,10 +93,12 @@ struct LiveUpdatesTests {
 
         let task = Task { try await updates.run { await log.append($0) } }
         // 切れてつなぎ直しを待ち始めたら、つなぎ直す10msだけ進める。
-        try await waitUntil { await log.labels.count == 3 && clock.sleeperCount(dueWithin: .milliseconds(10)) == 1 }
+        try await waitUntil { await log.labels.count >= 3 && clock.sleeperCount(dueWithin: .milliseconds(10)) == 1 }
+        #expect(await log.labels.count == 3)
         clock.advance(by: .milliseconds(10))
         // つなぎ直して、ポーリングと知らせの待ちを取り消してから、その締め切りより先まで進める。
-        try await waitUntil { await log.labels.filter { $0 == "connected" }.count == 2 && clock.sleeperCount(dueWithin: .seconds(1)) == 0 }
+        try await waitUntil { await log.labels.filter { $0 == "connected" }.count >= 2 && clock.sleeperCount(dueWithin: .seconds(1)) == 0 }
+        #expect(await log.labels.filter { $0 == "connected" }.count == 2)
         clock.advance(by: .milliseconds(100))
         task.cancel()
         _ = await task.result

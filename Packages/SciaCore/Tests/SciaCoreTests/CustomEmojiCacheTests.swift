@@ -123,7 +123,8 @@ struct CustomEmojiCacheTests {
         try await waitUntil { loads.withLock { $0 } == 1 }
         #expect(completion.emojis?.map(\.shortcode) == ["wide"], "読み直す間も、残したリストを出す")
         gate.open()
-        try await waitUntil { completion.emojis?.count == 2 }
+        try await waitUntil { (completion.emojis?.count ?? 0) >= 2 }
+        #expect(completion.emojis?.count == 2)
         #expect(completion.emojisForPalette()?.map(\.aspectRatio) == [4, nil])
 
         let next = ComposeCompletion(sources: sources, settings: ComposeCompletion.Settings(debounce: .milliseconds(30), limit: 5))

@@ -71,7 +71,8 @@ struct StreamingHubTests {
 
         let userSubscription = hub.subscribe(.user, user.record)
         let publicSubscription = hub.subscribe(Self.publicStream, publicTimeline.record)
-        try await waitUntil { deleted.count == 2 }
+        try await waitUntil { deleted.count >= 2 }
+        #expect(deleted.count == 2)
 
         #expect(deleted == ["1", "2"])
         userSubscription.cancel()
@@ -190,7 +191,8 @@ struct StreamingHubTests {
         #expect(local.labels.isEmpty, "購読を送り終える前に、ローカルへ渡しました")
 
         sendGate.open()
-        try await waitUntil { local.labels.count == 2 }
+        try await waitUntil { local.labels.count >= 2 }
+        #expect(local.labels.count == 2)
 
         #expect(local.labels == ["connected", "delete 1"])
         homeSubscription.cancel()
@@ -235,7 +237,8 @@ struct StreamingHubTests {
         dropGate.open()
         try await waitUntil { clock.sleeperCount(dueWithin: .milliseconds(10)) == 1 }
         clock.advance(by: .milliseconds(10))
-        try await waitUntil { connector.connectCount == 2 && local.labels.count == 2 }
+        try await waitUntil { connector.connectCount == 2 && local.labels.count >= 2 }
+        #expect(local.labels.count == 2)
 
         #expect(local.labels == ["connected", "delete 29"])
         homeSubscription.cancel()
@@ -289,14 +292,16 @@ struct StreamingHubTests {
         let home = hub.subscribe(.user) { _ in }
         let notifications = hub.subscribe(.user) { _ in }
         let publicTimeline = hub.subscribe(Self.publicStream) { _ in }
-        try await waitUntil { hub.isConnected && connector.sent.first?.count == 2 }
+        try await waitUntil { hub.isConnected && (connector.sent.first?.count ?? 0) >= 2 }
+        #expect(connector.sent.first?.count == 2)
 
         home.cancel()
         await hub.sending?.value
         #expect(connector.sent.first?.count == 2, "まだ通知が購読しているのに解除しました")
 
         notifications.cancel()
-        try await waitUntil { connector.sent.first?.count == 3 }
+        try await waitUntil { (connector.sent.first?.count ?? 0) >= 3 }
+        #expect(connector.sent.first?.count == 3)
         #expect(connector.sent.first?.last == #"{"stream":"user","type":"unsubscribe"}"#)
         #expect(hub.subscriptions == [Self.publicStream])
 

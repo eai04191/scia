@@ -1006,7 +1006,8 @@ struct MediaViewerControllerTests {
         #expect(saved.files.isEmpty)
 
         release.open()
-        try await waitUntil { saved.files.count == 1 }
+        try await waitUntil { saved.files.count >= 1 }
+        #expect(saved.files.count == 1)
         try await waitUntil { viewer.presentedViewController == nil }
         try await waitUntil { viewer.statusChipText == "写真に保存しました" }
         // ダウンロード中のチップがあった場所で、保存したことに入れ替える。
@@ -1156,7 +1157,8 @@ struct MediaViewerControllerTests {
         #expect(viewer.downloadProgressText == "ダウンロード中 25%")
 
         release.open()
-        try await waitUntil { saved.files.count == 2 }
+        try await waitUntil { saved.files.count >= 2 }
+        #expect(saved.files.count == 2)
         #expect(saved.files.map(\.lastPathComponent) == ["fast.mp4", "slow.mp4"])
         try await waitUntil { viewer.downloadProgressText == nil }
     }
@@ -1207,7 +1209,8 @@ struct MediaViewerControllerTests {
         #expect(stack.persistentNotice?.text == "ダウンロード中 50%")
 
         release.open()
-        try await waitUntil { saved.files.count == 1 }
+        try await waitUntil { saved.files.count >= 1 }
+        #expect(saved.files.count == 1)
         try await waitUntil { stack.transientNotice?.text == "写真に保存しました" }
         #expect(stack.chips.first === chip)
         #expect(stack.persistentNotice == nil)

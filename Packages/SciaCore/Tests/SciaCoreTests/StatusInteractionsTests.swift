@@ -123,10 +123,12 @@ struct StatusInteractionsTests {
         }) { shown.update($0, $1) }
 
         let first = Task { try await interactions.toggle(.emojiReaction(thumbsUp), on: shown.status) }
-        try await waitUntil { interactions.inFlight.count == 1 }
+        try await waitUntil { interactions.inFlight.count >= 1 }
+        #expect(interactions.inFlight.count == 1)
         #expect(try await interactions.toggle(.emojiReaction(ReactionEmoji(name: "👍", url: nil)), on: shown.status) == false)
         let other = Task { try await interactions.toggle(.emojiReaction(ReactionEmoji(name: "🎉")), on: shown.status) }
-        try await waitUntil { interactions.inFlight.count == 2 }
+        try await waitUntil { interactions.inFlight.count >= 2 }
+        #expect(interactions.inFlight.count == 2)
         gate.open()
 
         #expect(try await first.value)
@@ -158,7 +160,8 @@ struct StatusInteractionsTests {
         }) { shown.update($0, $1) }
 
         let pressing = Task { try await interactions.toggle(.emojiReaction(emoji), on: shown.status) }
-        try await waitUntil { interactions.inFlight.count == 1 }
+        try await waitUntil { interactions.inFlight.count >= 1 }
+        #expect(interactions.inFlight.count == 1)
         interactions.apply(EmojiReactionUpdate(statusID: "10", emoji: emoji, count: 0, accountIDs: []), myAccountID: "me")
         #expect(shown.status.emojiReactions.map(\.displayedCount) == [1])
         #expect(shown.status.hasEmojiReaction(emoji))
@@ -179,7 +182,8 @@ struct StatusInteractionsTests {
         let interactions = StatusInteractions(operations: reactionOperations(add: failing, remove: failing)) { shown.update($0, $1) }
 
         let pressing = Task { try await interactions.toggle(.emojiReaction(emoji), on: shown.status) }
-        try await waitUntil { interactions.inFlight.count == 1 }
+        try await waitUntil { interactions.inFlight.count >= 1 }
+        #expect(interactions.inFlight.count == 1)
         interactions.apply(EmojiReactionUpdate(statusID: "10", emoji: emoji, count: 2, accountIDs: wasOn ? ["me", "1"] : ["1", "2"]), myAccountID: "me")
         gate.open()
         await #expect(throws: Failure.self) { try await pressing.value }

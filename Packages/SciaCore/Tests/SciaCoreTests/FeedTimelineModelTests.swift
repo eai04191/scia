@@ -494,7 +494,8 @@ struct FeedTimelineModelTests {
         model.markRead(["11"])
         try await waitUntil { clock.sleeperCount == 1 }
         clock.advance(by: delay)
-        try await waitUntil { Self.markerSaves(transport).count == 1 && model.runningTaskCount == 0 }
+        try await waitUntil { Self.markerSaves(transport).count >= 1 && model.runningTaskCount == 0 }
+        #expect(Self.markerSaves(transport).count == 1)
 
         model.markRead(["14"])
         try await waitUntil { clock.sleeperCount == 1 }
@@ -514,7 +515,8 @@ struct FeedTimelineModelTests {
         try await waitUntil { display.contentState == .loaded && model.runningTaskCount == 0 }
         model.markRead(["2"])
         model.interactionDidSettle()
-        try await waitUntil { Self.markerSaves(transport).count == 1 && clock.sleeperCount == 1 }
+        try await waitUntil { Self.markerSaves(transport).count >= 1 && clock.sleeperCount == 1 }
+        #expect(Self.markerSaves(transport).count == 1)
         clock.advance(by: .seconds(TuningCatalog.readPositionSaveDelay.defaultValue))
         try await waitUntil { model.runningTaskCount == 0 }
 
@@ -583,9 +585,11 @@ struct FeedTimelineModelTests {
         let loads = transport.requests(to: "/api/v1/accounts/2/statuses").count
 
         model.setShown(true)
-        try await waitUntil { transport.requests(to: "/api/v1/accounts/2/statuses").count == loads + 1 && clock.sleeperCount == 1 }
+        try await waitUntil { transport.requests(to: "/api/v1/accounts/2/statuses").count >= loads + 1 && clock.sleeperCount == 1 }
+        #expect(transport.requests(to: "/api/v1/accounts/2/statuses").count == loads + 1)
         clock.advance(by: .seconds(TuningCatalog.shownFeedPollingInterval.defaultValue))
-        try await waitUntil { transport.requests(to: "/api/v1/accounts/2/statuses").count == loads + 2 }
+        try await waitUntil { transport.requests(to: "/api/v1/accounts/2/statuses").count >= loads + 2 }
+        #expect(transport.requests(to: "/api/v1/accounts/2/statuses").count == loads + 2)
 
         model.setShown(false)
         try await waitUntil { model.runningTaskCount == 0 }

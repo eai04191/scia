@@ -29,9 +29,11 @@ struct ReconnectingStreamTests {
 
         let task = Task { try await stream.run { await log.append($0) } }
         // 切れたと知らせてから、つなぎ直すまで時計で待ち始めたのを確かめて、その分だけ進める。
-        try await waitUntil { await log.count == 3 && clock.sleeperCount(dueWithin: .milliseconds(10)) == 1 }
+        try await waitUntil { await log.count >= 3 && clock.sleeperCount(dueWithin: .milliseconds(10)) == 1 }
+        #expect(await log.count == 3)
         clock.advance(by: .milliseconds(10))
-        try await waitUntil { await log.count == 4 && clock.sleeperCount(dueWithin: .milliseconds(20)) == 1 }
+        try await waitUntil { await log.count >= 4 && clock.sleeperCount(dueWithin: .milliseconds(20)) == 1 }
+        #expect(await log.count == 4)
         clock.advance(by: .milliseconds(20))
         try await log.waitUntil(count: 6)
         task.cancel()
@@ -66,7 +68,8 @@ struct ReconnectingStreamTests {
         let stream = makeStream(connector, policy: Self.fastPolicy, clock: clock)
 
         let task = Task { try await stream.run { await log.append($0) } }
-        try await waitUntil { await log.count == 2 && clock.sleeperCount(dueWithin: .milliseconds(10)) == 1 }
+        try await waitUntil { await log.count >= 2 && clock.sleeperCount(dueWithin: .milliseconds(10)) == 1 }
+        #expect(await log.count == 2)
         clock.advance(by: .milliseconds(10))
         try await log.waitUntil(count: 4)
         task.cancel()
@@ -90,7 +93,8 @@ struct ReconnectingStreamTests {
         let stream = makeStream(connector, policy: Self.fastPolicy, clock: clock)
 
         let task = Task { try await stream.run { await log.append($0) } }
-        try await waitUntil { await log.count == 1 && clock.sleeperCount(dueWithin: .milliseconds(300)) == 1 }
+        try await waitUntil { await log.count >= 1 && clock.sleeperCount(dueWithin: .milliseconds(300)) == 1 }
+        #expect(await log.count == 1)
         #expect(clock.sleeperCount(dueWithin: .milliseconds(299)) == 0, "再開の時刻より前につなぎ直そうとしています")
         clock.advance(by: .milliseconds(300))
         try await log.waitUntil(count: 3)
@@ -113,12 +117,14 @@ struct ReconnectingStreamTests {
 
         let task = Task { try await stream.run { await log.append($0) } }
         // つながって次のpingを待ち始めたら、次のpingまで進める。
-        try await waitUntil { await log.count == 1 && clock.sleeperCount(dueWithin: .milliseconds(20)) == 1 }
+        try await waitUntil { await log.count >= 1 && clock.sleeperCount(dueWithin: .milliseconds(20)) == 1 }
+        #expect(await log.count == 1)
         clock.advance(by: .milliseconds(20))
         // 応答しないpingが時間切れを待ち始めたら、時間切れまで進める。応答するpingの時間切れは、応答すると取り消される。
         try await waitUntil { connector.unansweredPings == 1 && clock.sleeperCount(dueWithin: policy.pingTimeout) == 1 }
         clock.advance(by: policy.pingTimeout)
-        try await waitUntil { await log.count == 2 && clock.sleeperCount(dueWithin: .milliseconds(10)) == 1 }
+        try await waitUntil { await log.count >= 2 && clock.sleeperCount(dueWithin: .milliseconds(10)) == 1 }
+        #expect(await log.count == 2)
         clock.advance(by: .milliseconds(10))
         try await log.waitUntil(count: 3)
         task.cancel()

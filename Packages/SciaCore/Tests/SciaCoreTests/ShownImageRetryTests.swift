@@ -220,6 +220,8 @@ struct ShownImageRetryTests {
         fetcher.fail(image, with: HTTPStatusError(statusCode: 503))
 
         let loads = (0..<5).map { _ in Task { await store.shownThumbnail(for: thumbnail(image), while: { true }, visible: { true }) } }
+        // 待つのは増えも減りもする待ちの数で、`loads.count`は読み込みを始めた数（決まった値）。
+        // scialint:disable:next exact_count_wait
         try await waitUntil { clock.sleeperCount == loads.count }
         #expect(fetcher.count(of: image) == 1)
         clock.advance(by: .seconds(5))
@@ -236,6 +238,8 @@ struct ShownImageRetryTests {
         fetcher.fail(key.url, with: HTTPStatusError(statusCode: 503))
 
         let loads = (0..<5).map { _ in Task { await store.shownImage(for: key, while: { true }, visible: { true }) } }
+        // 待つのは増えも減りもする待ちの数で、`loads.count`は読み込みを始めた数（決まった値）。
+        // scialint:disable:next exact_count_wait
         try await waitUntil { clock.sleeperCount == loads.count }
         clock.advance(by: .seconds(5))
 

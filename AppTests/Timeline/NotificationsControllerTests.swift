@@ -50,7 +50,8 @@ struct NotificationsControllerTests {
 
         controller.start(purpose: .action)
         // 最初の読み込みのあと、つながったときの補完でギャップが入る。
-        try await waitUntil { controller.viewController.displayedItemIDs.count == Self.initialIDs.count + Self.latestIDs.count + 1 }
+        try await waitUntil { controller.viewController.displayedItemIDs.count >= Self.initialIDs.count + Self.latestIDs.count + 1 }
+        #expect(controller.viewController.displayedItemIDs.count == Self.initialIDs.count + Self.latestIDs.count + 1)
         try await waitUntil { !controller.viewController.isScrollingToTop }
         let ids = controller.viewController.displayedItemIDs
         let gapIndex = try #require(ids.firstIndex { if case .gap = $0 { true } else { false } })

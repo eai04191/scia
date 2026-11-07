@@ -108,9 +108,11 @@ struct MediaTransfersTests {
         #expect(transfers.transfers.count == 2)
 
         network.complete(url("b.mp4"))
-        try await waitUntil { events.all.count == 1 }
+        try await waitUntil { events.all.count >= 1 }
+        #expect(events.all.count == 1)
         network.complete(url("a.mp4"))
-        try await waitUntil { events.all.count == 2 }
+        try await waitUntil { events.all.count >= 2 }
+        #expect(events.all.count == 2)
 
         #expect(events.all == ["saved b.mp4", "saved a.mp4"])
         #expect(network.saved == [network.file(for: url("b.mp4")), network.file(for: url("a.mp4"))])
@@ -140,7 +142,8 @@ struct MediaTransfersTests {
         #expect(transfers.transfers.first?.purposes == [.save, .share])
 
         network.complete(url("a.mp4"))
-        try await waitUntil { events.all.count == 2 }
+        try await waitUntil { events.all.count >= 2 }
+        #expect(events.all.count == 2)
         #expect(events.all == ["share a.mp4", "saved a.mp4"])
     }
 
@@ -158,7 +161,8 @@ struct MediaTransfersTests {
         #expect(transfers.transfers.map(\.target.url.lastPathComponent) == ["saved.mp4", "both.mp4"])
         #expect(transfers.transfers.allSatisfy { $0.purposes == [.save] })
         network.complete(url("both.mp4"))
-        try await waitUntil { events.all.count == 2 }
+        try await waitUntil { events.all.count >= 2 }
+        #expect(events.all.count == 2)
         #expect(events.all.last == "saved both.mp4")
     }
 
@@ -203,10 +207,12 @@ struct MediaTransfersTests {
         try await waitUntilFetching("shared.mp4", "saved.mp4")
 
         network.fail(url("shared.mp4"))
-        try await waitUntil { events.all.count == 1 }
+        try await waitUntil { events.all.count >= 1 }
+        #expect(events.all.count == 1)
         network.saveError = CocoaError(.fileWriteOutOfSpace)
         network.complete(url("saved.mp4"))
-        try await waitUntil { events.all.count == 2 }
+        try await waitUntil { events.all.count >= 2 }
+        #expect(events.all.count == 2)
 
         #expect(events.all == ["download failed share shared.mp4", "save failed saved.mp4"])
         #expect(transfers.transfers.isEmpty)
