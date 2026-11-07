@@ -65,7 +65,7 @@ struct ListMembershipModelTests {
     }
 
     private func makeModel(_ server: Server, isMyself: Bool = false) async -> ListMembershipModel {
-        let model = ListMembershipModel(isMyself: isMyself, api: server.api, tasks: TaskScope()) {}
+        let model = ListMembershipModel(isMyself: isMyself, api: server.api, tasks: TaskScope())
         await model.load()?.value
         return model
     }
@@ -139,7 +139,7 @@ struct ListMembershipModelTests {
         let gate = Gate()
         let server = Server(addGate: gate)
         let parent = TaskScope()
-        var model: ListMembershipModel? = ListMembershipModel(isMyself: false, api: server.api, tasks: parent.child()) {}
+        var model: ListMembershipModel? = ListMembershipModel(isMyself: false, api: server.api, tasks: parent.child())
         await model?.load()?.value
         _ = model?.toggle("1")
         try await waitUntil { gate.waiterCount == 1 }

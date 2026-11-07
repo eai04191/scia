@@ -252,7 +252,6 @@ final class SessionController {
         let client = session.client
         otherAccounts = OtherAccounts(current: credential, tasks: tasks) { MastodonClient(credential: $0, transport: transport, isOtherAccount: true) }
         let streamingHub = session.streamingHub
-        let reportUnauthorizedToSession = { [weak session] in session?.reportUnauthorized() }
         let home = FeedTimelineController(feed: .home, session: session)
         let local = FeedTimelineController(feed: .local, session: session)
         let federated = FeedTimelineController(feed: .federated, session: session)
@@ -268,7 +267,7 @@ final class SessionController {
         let scheduled = ScheduledStatusesController(client: client, tasks: tasks.child(), myAccount: {
             guard let session = myAccountReference.session else { throw CancellationError() }
             return try await session.myAccount()
-        }) { reportUnauthorizedToSession() }
+        })
         let serverFeeds = ServerFeedRegistry { [weak session] item in
             guard let session else { return nil }
             return switch item {
@@ -305,8 +304,8 @@ final class SessionController {
         }
         notifications.viewController.onAppearing = { [weak notifications] in notifications?.startIfNeeded() }
         self.notifications = notifications
-        notificationPolicy = NotificationPolicyModel(client: client, tasks: tasks.child()) { reportUnauthorizedToSession() }
-        announcements = AnnouncementsModel(operations: AnnouncementsModel.Operations(client: client), streamingHub: streamingHub, tasks: tasks.child()) { reportUnauthorizedToSession() }
+        notificationPolicy = NotificationPolicyModel(client: client, tasks: tasks.child())
+        announcements = AnnouncementsModel(operations: AnnouncementsModel.Operations(client: client), streamingHub: streamingHub, tasks: tasks.child())
         let mediaFormats = UnprocessableMediaFormats(defaults: .standard, instance: credential.instance)
         let diagnostics = ConnectionDiagnostics(rateLimit: session.rateLimit, features: session.features, requestLog: session.requestLog, mediaFormats: mediaFormats)
         self.diagnostics = diagnostics
@@ -411,42 +410,17 @@ final class SessionController {
             tabBarController.noticeOverlay?.follow(nil)
         }
         tabBarController.delegate = tabBarDelegate
-        // トークンの失効は、どのAPIで分かっても同じくログインし直しを促す。
-        let reportIfUnauthorized = { (error: any Error) in
-            if let error = error as? MastodonAPIError, error.isUnauthorized {
-                reportUnauthorizedToSession()
-            }
-        }
         let media = ComposeMediaService<UIImage>(
             upload: { upload in
-                do {
-                    #if DEBUG
-                    if let delay = DebugFaults.slowUploadDelay {
-                        try await AppDependencies.clock.sleep(for: delay)
-                    }
-                    #endif
-                    return try await client.uploadMedia(upload)
-                } catch {
-                    reportIfUnauthorized(error)
-                    throw error
+                #if DEBUG
+                if let delay = DebugFaults.slowUploadDelay {
+                    try await AppDependencies.clock.sleep(for: delay)
                 }
+                #endif
+                return try await client.uploadMedia(upload)
             },
-            waitUntilProcessed: { id in
-                do {
-                    return try await client.waitUntilProcessed(id)
-                } catch {
-                    reportIfUnauthorized(error)
-                    throw error
-                }
-            },
-            updateDescription: { id, description in
-                do {
-                    return try await client.updateMediaDescription(id, description: description)
-                } catch {
-                    reportIfUnauthorized(error)
-                    throw error
-                }
-            },
+            waitUntilProcessed: { id in try await client.waitUntilProcessed(id) },
+            updateDescription: { id, description in try await client.updateMediaDescription(id, description: description) },
             makeThumbnail: { file in await LocalMediaThumbnail.make(for: file, maxPixelSize: ComposeAttachmentStrip.thumbnailPixelSize) },
             // 版を読めていないときは、版の分からないサーバーとして覚える。版を読めたあとは、もう一度試す。
             unprocessableImageTypes: { mediaFormats.mimeTypes(serverVersion: diagnostics.serverVersion) },
@@ -455,28 +429,9 @@ final class SessionController {
         )
         let redraft = ComposeRedraftService(
             // 新しい投稿に付け直すので、添付は残して削除する。
-            deleteStatus: { id in
-                do {
-                    try await client.deleteStatus(id, deleteMedia: false)
-                } catch {
-                    reportIfUnauthorized(error)
-                    throw error
-                }
-            },
-            waitUntilReleased: { id in
-                do {
-                    return try await client.waitUntilReleased(id)
-                } catch {
-                    reportIfUnauthorized(error)
-                    throw error
-                }
-            }
+            deleteStatus: { id in try await client.deleteStatus(id, deleteMedia: false) },
+            waitUntilReleased: { id in try await client.waitUntilReleased(id) }
         )
-        // 補完の検索は別のスレッドから呼ばれるため、ほかのAPIと同じ知らせ方を、隔離されたAuthorizationCheckに直接送る。
-        let reportCompletionFailure: @Sendable (any Error) async -> Void = { [authorization = session.authorization] error in
-            guard let error = error as? MastodonAPIError, error.isUnauthorized else { return }
-            await authorization.reportUnauthorized()
-        }
         let accounts = AccountCache { [client] ids in try await client.accounts(ids) }
         self.accounts = accounts
         serverFilters = ServerFilterCache(label: "filters") { [client] in try await client.filters() }
@@ -493,56 +448,16 @@ final class SessionController {
         let customEmojis = AppDependencies.customEmojis.cache(for: credential.instance)
         self.customEmojis = customEmojis
         completionSources = ComposeCompletion.Sources(
-            searchAccounts: { query, limit in
-                do {
-                    return try await client.searchAccountsForCompletion(query, limit: limit)
-                } catch {
-                    await reportCompletionFailure(error)
-                    throw error
-                }
-            },
-            searchHashtags: { query, limit in
-                do {
-                    return try await client.searchHashtagsForCompletion(query, limit: limit)
-                } catch {
-                    await reportCompletionFailure(error)
-                    throw error
-                }
-            },
-            customEmojis: {
-                do {
-                    return try await client.customEmojis()
-                } catch {
-                    await reportCompletionFailure(error)
-                    throw error
-                }
-            },
+            searchAccounts: { query, limit in try await client.searchAccountsForCompletion(query, limit: limit) },
+            searchHashtags: { query, limit in try await client.searchHashtagsForCompletion(query, limit: limit) },
+            customEmojis: { try await client.customEmojis() },
             featuredTags: {
-                do {
-                    // 補完が読むのは、まだ持っていないか、前に読めなかったときだけなので、そのたびに読み直す。
-                    await ownFeaturedTags.refresh(purpose: .display)
-                    return try await ownFeaturedTags.latest()
-                } catch {
-                    await reportCompletionFailure(error)
-                    throw error
-                }
+                // 補完が読むのは、まだ持っていないか、前に読めなかったときだけなので、そのたびに読み直す。
+                await ownFeaturedTags.refresh(purpose: .display)
+                return try await ownFeaturedTags.latest()
             },
-            recentTags: {
-                do {
-                    return try await client.featuredTagSuggestions()
-                } catch {
-                    await reportCompletionFailure(error)
-                    throw error
-                }
-            },
-            statusTags: { [accountID = credential.accountID] in
-                do {
-                    return try await client.recentStatusTags(of: accountID)
-                } catch {
-                    await reportCompletionFailure(error)
-                    throw error
-                }
-            },
+            recentTags: { try await client.featuredTagSuggestions() },
+            statusTags: { [accountID = credential.accountID] in try await client.recentStatusTags(of: accountID) },
             // 読めなかった人は返らないだけで、失敗はAccountCacheがログに残す。
             accounts: { ids in await Array(accounts.load(ids).values) }
         ).remembering(customEmojisIn: customEmojis)
@@ -1030,9 +945,6 @@ final class SessionController {
                 apply(self, value)
             } catch {
                 self?.logger.error("\(name, privacy: .public) load failed: \(SciaLog.describe(error), privacy: .public)")
-                if let error = error as? MastodonAPIError, error.isUnauthorized {
-                    self?.reportUnauthorized()
-                }
             }
         }
     }
@@ -1467,8 +1379,6 @@ final class SessionController {
     private func makeProfile(_ account: Account, tasks: TaskScope) -> (ProfileController, TimelineViewController) {
         let (controller, viewController) = ProfileController.make(account: account, client: client, relationshipCache: profiles.relationships, tasks: tasks) { [weak self] error, title in
             self?.handle(error, title: title)
-        } onUnauthorized: { [weak self] in
-            self?.reportUnauthorized()
         }
         configure(viewController)
         controller.onEditProfile = { [weak self] in self?.presentProfileEditor() }
@@ -1505,9 +1415,7 @@ final class SessionController {
 
     /// - Parameter ownerAcct: フォローとフォロワーのリストなら、誰のリストかを示すハンドル。見出しの下に出す。
     private func openAccountList(_ kind: AccountListKind, ownerAcct: String? = nil, from source: UIViewController) {
-        let (controller, viewController) = AccountListController.make(kind: kind, client: client, tasks: tasks.child()) { [weak self] in
-            self?.reportUnauthorized()
-        }
+        let (controller, viewController) = AccountListController.make(kind: kind, client: client, tasks: tasks.child())
         viewController.navigationItem.subtitle = ownerAcct.map { "@\($0)" }
         UserAction.openAccountList.record()
         configure(viewController)
@@ -1568,9 +1476,7 @@ final class SessionController {
     private func openNotificationRequests(from source: UIViewController) -> (NotificationRequestsController, TimelineViewController) {
         let (controller, viewController) = NotificationRequestsController.make(client: client, tasks: tasks.child(), openPolicy: { [weak self] in
             self?.showNotificationPolicy()
-        }) { [weak self] in
-            self?.reportUnauthorized()
-        }
+        })
         controller.model.onAnswered = { [weak self] decision in
             guard let self else { return }
             notificationPolicy.requestsDidChange()
@@ -1605,9 +1511,7 @@ final class SessionController {
             guard let requests else { return false }
             await requests.answer(request, decision)?.value
             return requests.isAnswered(request.id)
-        }) { [weak self] in
-            self?.reportUnauthorized()
-        }
+        })
         notifications.track(controller)
         configure(viewController)
         source.navigationController?.pushViewController(viewController, animated: true)
@@ -1771,9 +1675,7 @@ final class SessionController {
     ///   - carried: 打っている途中の候補。そのユーザーとハッシュタグを、結果が届くまで引き継ぐ。
     ///   - presenter: 結果を並べるリスト。URLやハンドルが1つに決まったときに、この上に開く。
     private func makeSearchModel(_ input: SearchInput, scope: SearchModel.Scope, carried: SearchSuggestions.Content?, presenter viewController: TimelineViewController) -> SearchModel {
-        let model = SearchModel(input: input, scope: scope, carriedAccounts: carried?.accounts ?? [], carriedHashtags: carried?.hashtags ?? [], client: client, tasks: tasks.child()) { [weak self] in
-            self?.reportUnauthorized()
-        }
+        let model = SearchModel(input: input, scope: scope, carriedAccounts: carried?.accounts ?? [], carriedHashtags: carried?.hashtags ?? [], client: client, tasks: tasks.child())
         // URLやハンドルが1つに決まったら、結果のタイムラインの上に開く。待つ間にタブを移ったり、ほかの画面を開いたりしていたら開かない。
         model.onFound = { [weak self, weak viewController] found in
             // 添付ファイルのビューアのように元の画面をウインドウに残したまま重ねる画面は、ナビゲーションの外にあるため、重ねている画面で見る。検索欄（`UISearchController`）は除く。
@@ -1801,9 +1703,7 @@ final class SessionController {
     /// - Parameter rowFrame: 押した行のウインドウ上の枠。スレッドでも、押した投稿をこの位置に置いて開く。
     private func openThread(of status: Status, rowFrame: CGRect, from source: UIViewController) {
         let focus = status.displayed
-        let (controller, viewController) = ThreadController.make(focus: focus, client: client, streamingHub: streamingHub, tasks: tasks.child()) { [weak self] in
-            self?.reportUnauthorized()
-        }
+        let (controller, viewController) = ThreadController.make(focus: focus, client: client, streamingHub: streamingHub, tasks: tasks.child())
         configure(viewController)
         threads.add(controller)
         controller.start()
@@ -2923,10 +2823,7 @@ final class SessionController {
             remove: { try await client().removeAccounts([accountID], fromList: $0) },
             follow: { try await client().follow(accountID) },
             create: { try await client().createList(title: $0) }
-        ), tasks: tasks.child()) { [weak self] in
-            guard otherAccount == nil else { return }
-            self?.reportUnauthorized()
-        }
+        ), tasks: tasks.child())
         model.onFailure = { [weak self] operation, reason in
             self?.reportListFailure(title: actor + operation.failureTitle, reason: reason)
         }
@@ -2949,9 +2846,7 @@ final class SessionController {
 
     /// リストのメンバーの画面を開いたタイムラインに積む。決まりはdocs/lists.mdの「メンバー」にある。
     private func openListMembers(listID: String, title: String, from source: UIViewController) {
-        let (controller, viewController) = AccountListController.make(kind: .listMembers(listID: listID), client: client, tasks: tasks.child()) { [weak self] in
-            self?.reportUnauthorized()
-        }
+        let (controller, viewController) = AccountListController.make(kind: .listMembers(listID: listID), client: client, tasks: tasks.child())
         viewController.navigationItem.subtitle = title
         controller.onMemberFailure = { [weak self] title, error in
             self?.tasks.run(.action) { [weak self] in
@@ -3264,7 +3159,7 @@ final class SessionController {
         let list = ScheduledStatusesController(client: client, tasks: tasks.child(), myAccount: { [weak self] in
             guard let self else { throw CancellationError() }
             return try await myAccount()
-        }) { [weak self] in self?.reportUnauthorized() }
+        })
         list.viewController.mediaTransfers = mediaTransfers
         list.viewController.notices = notices
         list.onRewrite = { [weak self, weak list] status in
@@ -3307,9 +3202,6 @@ final class SessionController {
             } catch {
                 guard let self, !(error is CancellationError) else { return }
                 logger.error("rewritten schedule cancel failed: \(SciaLog.describe(error), privacy: .public)")
-                if let error = error as? MastodonAPIError, error.isUnauthorized {
-                    reportUnauthorized()
-                }
                 let reason = ErrorPresentation(error).leading("書き直した投稿は送りましたが、元の予約が残っています。両方投稿されないよう、予約投稿の画面から取り消してください。")
                 let openList = UIAlertAction(title: "予約投稿を開く", style: .default) { [weak self] _ in self?.showScheduledStatuses() }
                 topViewController.present(UIAlertController.failure(title: "元の予約を取り消せませんでした", reason: reason, actions: [openList], cancelTitle: "閉じる"), animated: true)

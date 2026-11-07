@@ -56,8 +56,7 @@ struct ProfileTabPollingTests {
             relationshipCache: RelationshipCache { _ in [] },
             settings: .isolated(),
             tasks: tasks,
-            onError: { _, _ in },
-            onUnauthorized: {}
+            onError: { _, _ in }
         )
         viewController.clock = clock
         controller.readsNewWhileShown()

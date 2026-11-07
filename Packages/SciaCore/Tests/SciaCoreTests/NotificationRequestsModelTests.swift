@@ -24,7 +24,7 @@ struct NotificationRequestsModelTests {
     }
 
     private func makeRequests(_ transport: RoutedTransport) -> (NotificationRequestsModel, RecordingTimelineDisplay) {
-        let model = NotificationRequestsModel(client: client(transport), tasks: TaskScope()) {}
+        let model = NotificationRequestsModel(client: client(transport), tasks: TaskScope())
         let display = RecordingTimelineDisplay()
         model.display = display
         return (model, display)
@@ -133,7 +133,7 @@ struct NotificationRequestsModelTests {
         let transport = RoutedTransport { request in
             request.url?.path() == "/api/v1/notifications" ? (200, Self.accountNotificationsBody) : (404, Data("{}".utf8))
         }
-        let model = AccountNotificationsModel(accountID: "2", client: client(transport), tasks: TaskScope()) {}
+        let model = AccountNotificationsModel(accountID: "2", client: client(transport), tasks: TaskScope())
         let display = RecordingTimelineDisplay()
         model.display = display
 
@@ -148,7 +148,7 @@ struct NotificationRequestsModelTests {
     /// 通知のタイムラインと同じく、ブロックした相手の通知を閉じる動きで除く。
     @Test func accountNotificationsDropBlockedAccount() async throws {
         let transport = RoutedTransport { _ in (200, Self.accountNotificationsBody) }
-        let model = AccountNotificationsModel(accountID: "2", client: client(transport), tasks: TaskScope()) {}
+        let model = AccountNotificationsModel(accountID: "2", client: client(transport), tasks: TaskScope())
         let display = RecordingTimelineDisplay()
         model.display = display
         await model.start(purpose: .action)?.value
@@ -171,7 +171,7 @@ struct NotificationRequestsModelTests {
             }
             return (200, Self.policyBody(pending: 3))
         }
-        let model = NotificationPolicyModel(client: client(transport), tasks: TaskScope()) {}
+        let model = NotificationPolicyModel(client: client(transport), tasks: TaskScope())
         await model.reload(purpose: .action)?.value
         #expect(model.pendingRequestsCount == 3)
 
@@ -203,7 +203,7 @@ struct NotificationRequestsModelTests {
             }
             return (200, Self.policyBody(notFollowing: "drop"))
         }
-        let model = NotificationPolicyModel(client: client(transport), tasks: TaskScope()) {}
+        let model = NotificationPolicyModel(client: client(transport), tasks: TaskScope())
         await model.reload(purpose: .action)?.value
 
         model.select(.filter, for: .notFollowing)
@@ -229,7 +229,7 @@ struct NotificationRequestsModelTests {
             if count == 2 { try await staleGET.wait() }
             return (200, Self.policyBody(pending: count == 2 ? 5 : 0))
         }
-        let model = NotificationPolicyModel(client: client(transport), tasks: TaskScope()) {}
+        let model = NotificationPolicyModel(client: client(transport), tasks: TaskScope())
         await model.reload(purpose: .action)?.value
         let reload = model.reload(purpose: .action)
         try await waitUntil { staleGET.waiterCount == 1 }
@@ -245,7 +245,7 @@ struct NotificationRequestsModelTests {
     /// 通知のフィルタリングのAPIがないサーバーでは、使えないとして入口を隠させ、失敗の理由は出さない。
     @Test func unsupportedPolicyIsReportedWithoutFailure() async throws {
         let transport = RoutedTransport { _ in (404, Data("<html>Not Found</html>".utf8)) }
-        let model = NotificationPolicyModel(client: client(transport), tasks: TaskScope()) {}
+        let model = NotificationPolicyModel(client: client(transport), tasks: TaskScope())
         #expect(model.isSupported)
 
         await model.reload(purpose: .action)?.value
@@ -259,7 +259,7 @@ struct NotificationRequestsModelTests {
         let transport = RoutedTransport { request in
             request.httpMethod == "PATCH" ? (500, Data("{}".utf8)) : (200, Self.policyBody())
         }
-        let model = NotificationPolicyModel(client: client(transport), tasks: TaskScope()) {}
+        let model = NotificationPolicyModel(client: client(transport), tasks: TaskScope())
         let failures = Mutex(0)
         model.onFailure = { _ in failures.withLock { $0 += 1 } }
         await model.reload(purpose: .action)?.value
@@ -273,7 +273,7 @@ struct NotificationRequestsModelTests {
     /// 知らない値は選べず、送らない。
     @Test func unknownValueCannotBeSelected() async throws {
         let transport = RoutedTransport { _ in (200, Self.policyBody()) }
-        let model = NotificationPolicyModel(client: client(transport), tasks: TaskScope()) {}
+        let model = NotificationPolicyModel(client: client(transport), tasks: TaskScope())
         await model.reload(purpose: .action)?.value
 
         #expect(model.select(.unknown("quarantine"), for: .newAccounts) == nil)
@@ -310,7 +310,7 @@ struct NotificationRequestsModelTests {
             now: { Date(timeIntervalSince1970: 1_800_000_000) },
             backgroundTime: BackgroundTimeRecorder().request,
             tasks: TaskScope()
-        ) {}
+        )
         let display = RecordingTimelineDisplay()
         model.display = display
         return (model, display)

@@ -17,8 +17,6 @@ final class ProfileController {
     private let settings: AppSettings
     /// フォローの失敗をどう知らせるか。ログインし直しが要るなどの判断はセッションに任せる。
     private let onError: (any Error, String) -> Void
-    /// 読み込みが401で失敗したときに呼ぶ。読み込みの失敗はアラートを出さず画面の中に出すため、`onError`とは分ける。
-    private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "profile")
     /// 自己紹介か補足情報のリンクを開く。開き方はセッションが決める。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
@@ -62,8 +60,7 @@ final class ProfileController {
         relationshipCache: RelationshipCache,
         settings: AppSettings = AppDependencies.settings,
         tasks: TaskScope,
-        onError: @escaping (any Error, String) -> Void,
-        onUnauthorized: @escaping () -> Void
+        onError: @escaping (any Error, String) -> Void
     ) -> (ProfileController, TimelineViewController) {
         // 画面を作る時点ではコントローラーがまだないため、作ったあとに入れる。
         weak var owner: ProfileController?
@@ -75,8 +72,7 @@ final class ProfileController {
             settings: settings,
             viewController: viewController,
             tasks: tasks,
-            onError: onError,
-            onUnauthorized: onUnauthorized
+            onError: onError
         )
         viewController.lifetimeOwner = controller
         owner = controller
@@ -90,8 +86,7 @@ final class ProfileController {
         settings: AppSettings,
         viewController: TimelineViewController,
         tasks: TaskScope,
-        onError: @escaping (any Error, String) -> Void,
-        onUnauthorized: @escaping () -> Void
+        onError: @escaping (any Error, String) -> Void
     ) {
         self.tasks = tasks
         store = ProfileStore(
@@ -106,7 +101,6 @@ final class ProfileController {
         shownTab = store.tab
         self.settings = settings
         self.onError = onError
-        self.onUnauthorized = onUnauthorized
         self.viewController = viewController
         viewController.filterWarnings = FilterWarnings(filtering: store.filtering)
         viewController.headerView = header
@@ -381,7 +375,6 @@ final class ProfileController {
         } catch {
             guard !(error is CancellationError) else { return }
             logger.error("profile read new failed: \(SciaLog.describe(error), privacy: .public)")
-            handleUnauthorized(error)
         }
         showGapStates()
         showEntries()
@@ -396,7 +389,6 @@ final class ProfileController {
                 controller.afterTransition { $0.showEntries(animatesRemoval: true) }
             } catch {
                 controller.logger.error("profile pinned reload failed: \(SciaLog.describe(error), privacy: .public)")
-                controller.handleUnauthorized(error)
             }
         }
     }
@@ -410,7 +402,6 @@ final class ProfileController {
                 controller.afterTransition { $0.showEntries() }
             } catch {
                 controller.logger.error("profile featured reload failed: \(SciaLog.describe(error), privacy: .public)")
-                controller.handleUnauthorized(error)
             }
         }
     }
@@ -578,7 +569,6 @@ final class ProfileController {
             controller.finishWaitingForRelationship()
             for (part, error) in failures.all {
                 controller.logger.error("profile \(part, privacy: .public) load failed: \(SciaLog.describe(error), privacy: .public)")
-                controller.handleUnauthorized(error)
             }
         }
     }
@@ -606,7 +596,6 @@ final class ProfileController {
                 try await controller.store.reloadRelationship()
             } catch {
                 controller.logger.error("profile relationship reload failed: \(SciaLog.describe(error), privacy: .public)")
-                controller.handleUnauthorized(error)
             }
         }
     }
@@ -683,7 +672,6 @@ final class ProfileController {
         } catch {
             // 読めなかったことは、タイムラインの上の読み直しなので画面に出さない。前のタイムラインのまま残す。
             logger.error("profile refresh failed: \(SciaLog.describe(error), privacy: .public)")
-            handleUnauthorized(error)
         }
         await profile
         showGapStates()
@@ -694,7 +682,6 @@ final class ProfileController {
         let failures = await store.loadProfile()
         for (part, error) in failures.all {
             logger.error("profile refresh \(part, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
-            handleUnauthorized(error)
         }
     }
 
@@ -716,7 +703,6 @@ final class ProfileController {
             } catch {
                 guard timeline === controller.store.timeline else { return }
                 controller.logger.error("profile gap failed: \(SciaLog.describe(error), privacy: .public)")
-                controller.handleUnauthorized(error)
                 controller.showGapStates()
             }
         }
@@ -727,17 +713,10 @@ final class ProfileController {
     }
 
     private func showListFailure(_ error: any Error) {
-        handleUnauthorized(error)
         viewController?.setFooterState(.failed(ErrorPresentation(error)))
         // タブはタイムラインと一緒に出すが、最初のタイムラインを読めなかったときも出し、ほかのタブへ切り替えられるようにする。
         if header.setSectionsRevealed(true) {
             viewController?.headerDidChangeSize()
-        }
-    }
-
-    private func handleUnauthorized(_ error: any Error) {
-        if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
-            onUnauthorized()
         }
     }
 

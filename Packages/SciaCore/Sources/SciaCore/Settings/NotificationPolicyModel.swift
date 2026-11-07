@@ -30,14 +30,12 @@ public final class NotificationPolicyModel {
     @ObservationIgnored private var loading: Task<Void, Never>?
     @ObservationIgnored private let client: MastodonClient
     @ObservationIgnored private let tasks: TaskScope
-    @ObservationIgnored private let onUnauthorized: () -> Void
     @ObservationIgnored private let logger = SciaLog.logger(category: "notificationPolicy")
     public var runningTaskCount: Int { tasks.runningCount }
 
-    public init(client: MastodonClient, tasks: TaskScope, onUnauthorized: @escaping () -> Void) {
+    public init(client: MastodonClient, tasks: TaskScope) {
         self.client = client
         self.tasks = tasks
-        self.onUnauthorized = onUnauthorized
     }
 
     /// 読み直す。読んでいる途中なら、その読み込みに任せる。
@@ -128,9 +126,6 @@ public final class NotificationPolicyModel {
     private func handle(_ error: any Error, during operation: String) -> ErrorPresentation? {
         guard !(error is CancellationError), (error as? URLError)?.code != .cancelled, !tasks.isClosed else { return nil }
         logger.error("notificationPolicy \(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
-        if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
-            onUnauthorized()
-        }
         return ErrorPresentation(error)
     }
 }

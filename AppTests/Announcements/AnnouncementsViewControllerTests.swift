@@ -40,7 +40,7 @@ struct AnnouncementsViewControllerTests {
     @Test func keepsReadingRowWhenAnnouncementArrivesAbove() async throws {
         let rows = (0..<6).map { Self.announcement("\($0)", at: TimeInterval($0)) }
         let operations = AnnouncementsModel.Operations(list: { AnnouncementList(announcements: rows) }, dismiss: { _ in }, addReaction: { _, _ in }, removeReaction: { _, _ in })
-        let model = AnnouncementsModel(operations: operations, streamingHub: nil, tasks: TaskScope()) {}
+        let model = AnnouncementsModel(operations: operations, streamingHub: nil, tasks: TaskScope())
         let (window, controller) = try show(model)
         try await waitUntil { model.contentState == .loaded }
         controller.view.layoutIfNeeded()
@@ -60,7 +60,7 @@ struct AnnouncementsViewControllerTests {
     @Test func keepsReadingRowWhenTopRowIsDeleted() async throws {
         let rows = (0..<6).map { Self.announcement("\($0)", at: TimeInterval($0)) }
         let operations = AnnouncementsModel.Operations(list: { AnnouncementList(announcements: rows) }, dismiss: { _ in }, addReaction: { _, _ in }, removeReaction: { _, _ in })
-        let model = AnnouncementsModel(operations: operations, streamingHub: nil, tasks: TaskScope()) {}
+        let model = AnnouncementsModel(operations: operations, streamingHub: nil, tasks: TaskScope())
         let (window, controller) = try show(model)
         try await waitUntil { model.contentState == .loaded }
         controller.view.layoutIfNeeded()
@@ -103,7 +103,7 @@ struct AnnouncementsViewControllerTests {
             addReaction: { _, _ in },
             removeReaction: { _, _ in }
         )
-        let model = AnnouncementsModel(operations: operations, streamingHub: nil, tasks: TaskScope()) {}
+        let model = AnnouncementsModel(operations: operations, streamingHub: nil, tasks: TaskScope())
         let (window, controller) = try show(model)
         try await waitUntil { model.contentState == .loaded && dismissals.withLock { $0 } == 1 && model.unreadCount == 1 && model.runningTaskCount == 0 }
 

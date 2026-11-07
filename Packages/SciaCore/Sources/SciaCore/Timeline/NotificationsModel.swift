@@ -23,8 +23,6 @@ public final class NotificationsModel {
     private let client: MastodonClient
     private let streamingHub: StreamingHub
     private let tuning: TuningStore
-    /// APIが401を返したときに呼ぶ。ログアウトされたとして止め、ログインし直しを促すのはセッションに任せる。
-    private let onUnauthorized: () -> Void
     /// バックグラウンドで既読位置を保存し終えるまで、アプリを止めないよう頼む。頼んで、終えるときに呼ぶものを返す。OSが与えた時間が尽きたら、頼みを終えて`onExpire`を呼ぶ。
     private let backgroundTime: @MainActor (String, _ onExpire: @escaping @MainActor () -> Void) -> @MainActor () -> Void
     private let logger = SciaLog.logger(category: "notifications")
@@ -88,8 +86,7 @@ public final class NotificationsModel {
         clock: any Clock<Duration>,
         now: @escaping () -> Date,
         backgroundTime: @escaping @MainActor (String, _ onExpire: @escaping @MainActor () -> Void) -> @MainActor () -> Void,
-        tasks: TaskScope,
-        onUnauthorized: @escaping () -> Void
+        tasks: TaskScope
     ) {
         self.tasks = tasks
         self.clock = clock
@@ -103,7 +100,6 @@ public final class NotificationsModel {
         self.streamingHub = streamingHub
         self.tuning = tuning
         self.backgroundTime = backgroundTime
-        self.onUnauthorized = onUnauthorized
         tasks.onClose { [weak self] in self?.stopStreaming() }
     }
 
@@ -738,9 +734,6 @@ public final class NotificationsModel {
         // 既読位置の保存など、このサーバーでは使えないと分かって止めた機能。止めたことは記録してあり、使う人に見せることもない。
         guard !(error is FeatureUnavailable) else { return }
         logger.error("notifications \(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
-        if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
-            onUnauthorized()
-        }
         show(ErrorPresentation(error))
     }
 }
@@ -762,7 +755,7 @@ extension NotificationsModel: SessionList {
             now: now,
             backgroundTime: backgroundTime,
             tasks: session.tasks.child()
-        ) { [weak session] in session?.reportUnauthorized() }
+        )
         session.register(self)
     }
 }

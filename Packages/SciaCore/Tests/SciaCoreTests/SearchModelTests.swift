@@ -49,7 +49,7 @@ struct SearchModelTests {
 
     private func makeModel(_ text: String, scope: SearchModel.Scope = .all, carriedAccounts: [Account] = [], carriedHashtags: [Hashtag] = [], transport: RoutedTransport) throws -> (SearchModel, RecordingTimelineDisplay) {
         let input = try #require(SearchInput(text))
-        let model = SearchModel(input: input, scope: scope, carriedAccounts: carriedAccounts, carriedHashtags: carriedHashtags, client: MastodonClient(credential: TimelineModelFixtures.credential(), transport: transport), tasks: TaskScope()) {}
+        let model = SearchModel(input: input, scope: scope, carriedAccounts: carriedAccounts, carriedHashtags: carriedHashtags, client: MastodonClient(credential: TimelineModelFixtures.credential(), transport: transport), tasks: TaskScope())
         let display = RecordingTimelineDisplay()
         model.display = display
         return (model, display)

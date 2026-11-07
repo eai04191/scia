@@ -24,7 +24,7 @@ struct ScheduledStatusesControllerTests {
             username: "alice"
         )
         let account = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: URL(string: "https://example.social/a.png"))
-        return ScheduledStatusesController(client: MastodonClient(credential: credential, transport: transport), tasks: tasks, myAccount: { account }) {}
+        return ScheduledStatusesController(client: MastodonClient(credential: credential, transport: transport), tasks: tasks, myAccount: { account })
     }
 
     /// 読んでいる間に予約できたら、その前に送った読み込みの古い応答で、予約した行を消さない。読み直して、新しい応答を使う。

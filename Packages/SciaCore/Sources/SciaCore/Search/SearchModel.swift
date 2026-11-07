@@ -43,8 +43,6 @@ public final class SearchModel {
     private var carried: [SearchCategory: [TimelineEntry]] = [:]
     /// 最後に始めた読み込み。古い読み込みの結果を捨てるのに使う。
     private var generation = 0
-    /// APIが401を返したときに呼ぶ。ログアウトされたとして止め、ログインし直しを促すのはセッションに任せる。
-    private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "search")
     /// この検索が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときと、画面を閉じたときに閉じる。
     private let tasks: TaskScope
@@ -61,13 +59,12 @@ public final class SearchModel {
     /// - Parameters:
     ///   - carriedAccounts: 打っている途中の候補のユーザー。3つの種類を並べるときに、ユーザーの結果が届くまで出す。
     ///   - carriedHashtags: 打っている途中の候補のハッシュタグ。3つの種類を並べるときに、ハッシュタグの結果が届くまで出す。
-    public init(input: SearchInput, scope: Scope = .all, carriedAccounts: [Account] = [], carriedHashtags: [Hashtag] = [], client: MastodonClient, tasks: TaskScope, onUnauthorized: @escaping () -> Void) {
+    public init(input: SearchInput, scope: Scope = .all, carriedAccounts: [Account] = [], carriedHashtags: [Hashtag] = [], client: MastodonClient, tasks: TaskScope) {
         self.input = input
         self.scope = scope
         self.client = client
         credential = client.credential
         self.tasks = tasks
-        self.onUnauthorized = onUnauthorized
         let query = input.query
         var pagers: [SearchCategory: SearchPager] = [:]
         for category in Self.categories(of: scope) {
@@ -398,9 +395,6 @@ public final class SearchModel {
         // 止めた後に届いた結果や、止めたことによる取り消しは、もう画面に関係しない。
         guard !isStopped, !(error is CancellationError), (error as? URLError)?.code != .cancelled else { return }
         logger.error("\(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
-        if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
-            onUnauthorized()
-        }
         show(ErrorPresentation(error))
     }
 }

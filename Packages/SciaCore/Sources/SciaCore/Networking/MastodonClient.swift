@@ -13,6 +13,8 @@ public struct MastodonClient: Sendable {
     private let now: @Sendable () -> Date
     /// 再試行までと、メディアの処理が終わるまでの待ちを数える。テストでは手で進める時計を渡す。
     private let clock: any Clock<Duration>
+    /// REST APIが401を返したときに、失敗を投げる前に待って呼ぶ。
+    private let onUnauthorized: (@Sendable () async -> Void)?
     private static let logger = SciaLog.logger(category: "network")
 
     /// - Parameters:
@@ -21,6 +23,10 @@ public struct MastodonClient: Sendable {
     ///   - retry: 一時的な失敗で送り直す回数と間隔。
     ///   - requestLog: 失敗の記録。セッションの中で共有する。
     ///   - isOtherAccount: 「別のアカウントで」使う、今使っているアカウントとは別のアカウントのクライアントか。断られた通信の理由に、どのアカウントかを出すために使う。
+    ///   - onUnauthorized: どのAPIでも、401を受けたときに、失敗を投げる前に待って呼ぶ。呼び終えてから呼び出し側に401の`MastodonAPIError`が届く。
+    ///     `AccountSession`が作るクライアント（`AccountSession.client`）は、トークンが無効になったとセッションへ知らせるものを渡してあるので、
+    ///     そのクライアントで受けた401は、呼び出し側が拾わなくても、自動の通信を止めてログインし直しを促す（`AccountSession.onCredentialsInvalid`）。
+    ///     ほかのアカウントのクライアントには、今のセッションへ知らせるものを渡さない。
     public init(
         credential: Credential,
         transport: any HTTPTransport,
@@ -30,9 +36,11 @@ public struct MastodonClient: Sendable {
         requestLog: RequestLog = RequestLog(includesBody: false),
         clock: any Clock<Duration> = SystemTime.clock,
         now: @escaping @Sendable () -> Date = SystemTime.now,
-        isOtherAccount: Bool = false
+        isOtherAccount: Bool = false,
+        onUnauthorized: (@Sendable () async -> Void)? = nil
     ) {
         self.isOtherAccount = isOtherAccount
+        self.onUnauthorized = onUnauthorized
         self.clock = clock
         self.credential = credential
         http = HTTPClient(transport: transport, retry: retry, clock: clock, now: now)
@@ -1405,6 +1413,9 @@ public struct MastodonClient: Sendable {
         var failure = MastodonAPIError.from(statusCode: response.statusCode, body: data, retryAfter: RateLimitGate.retryAfter(of: response, now: now()))
         failure.account = RequestAccount(credential, isOtherAccount: isOtherAccount)
         requestLog.record(request, statusCode: response.statusCode, error: failure, body: data)
+        if failure.isUnauthorized, let onUnauthorized {
+            await onUnauthorized()
+        }
         throw failure
     }
 }

@@ -25,7 +25,7 @@ struct SavedStatusesModelTests {
     }
 
     private func makeModel(transport: RoutedTransport) -> (SavedStatusesModel, RecordingTimelineDisplay) {
-        let model = SavedStatusesModel(kind: .bookmarks, client: MastodonClient(credential: TimelineModelFixtures.credential(), transport: transport), tasks: TaskScope()) {}
+        let model = SavedStatusesModel(kind: .bookmarks, client: MastodonClient(credential: TimelineModelFixtures.credential(), transport: transport), tasks: TaskScope())
         let display = RecordingTimelineDisplay()
         model.display = display
         return (model, display)

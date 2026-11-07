@@ -23,14 +23,13 @@ struct ThreadModelTests {
         }
     }
 
-    private func makeModel(transport: RoutedTransport, onUnauthorized: @escaping () -> Void = {}) throws -> (ThreadModel, RecordingTimelineDisplay) {
+    private func makeModel(transport: RoutedTransport) throws -> (ThreadModel, RecordingTimelineDisplay) {
         let model = ThreadModel(
             focus: try TimelineModelFixtures.status(2),
             client: MastodonClient(credential: TimelineModelFixtures.credential(), transport: transport),
             // つながったときの読み直しが、確かめる読み込みと重ならないよう、つながらないハブにする。つなぎ直しは時計を進めない限り起きない。
             streamingHub: TimelineModelFixtures.hub(ScriptedConnector([.init(handshake: .fail(URLError(.notConnectedToInternet)))])),
-            tasks: TaskScope(),
-            onUnauthorized: onUnauthorized
+            tasks: TaskScope()
         )
         let display = RecordingTimelineDisplay()
         model.display = display

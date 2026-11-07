@@ -114,15 +114,13 @@ public final class ListMembershipModel {
     @ObservationIgnored private var sending: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private let api: API
     @ObservationIgnored private let tasks: TaskScope
-    @ObservationIgnored private let onUnauthorized: () -> Void
     @ObservationIgnored private let logger = SciaLog.logger(category: "listMembership")
     public var runningTaskCount: Int { tasks.runningCount }
 
-    public init(isMyself: Bool, api: API, tasks: TaskScope, onUnauthorized: @escaping () -> Void) {
+    public init(isMyself: Bool, api: API, tasks: TaskScope) {
         self.isMyself = isMyself
         self.api = api
         self.tasks = tasks
-        self.onUnauthorized = onUnauthorized
     }
 
     /// リストと、その人が入っているリストと、関係を読む。どれかが読めなければ、読めなかったことを出す。
@@ -270,9 +268,6 @@ public final class ListMembershipModel {
     private func handle(_ error: any Error, during operation: String) -> ErrorPresentation? {
         guard !(error is CancellationError), (error as? URLError)?.code != .cancelled, !tasks.isClosed else { return nil }
         logger.error("listMembership \(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
-        if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
-            onUnauthorized()
-        }
         return ErrorPresentation(error)
     }
 }

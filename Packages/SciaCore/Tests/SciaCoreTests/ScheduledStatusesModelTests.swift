@@ -32,7 +32,7 @@ struct ScheduledStatusesModelTests {
     private static let account = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: nil)
 
     private func makeModel(transport: RoutedTransport, tasks: TaskScope = TaskScope()) -> (ScheduledStatusesModel, RecordingDisplay) {
-        let model = ScheduledStatusesModel(client: MastodonClient(credential: TimelineModelFixtures.credential(), transport: transport), tasks: tasks, myAccount: { Self.account }) {}
+        let model = ScheduledStatusesModel(client: MastodonClient(credential: TimelineModelFixtures.credential(), transport: transport), tasks: tasks, myAccount: { Self.account })
         let display = RecordingDisplay()
         model.display = display
         return (model, display)

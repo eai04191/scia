@@ -27,16 +27,13 @@ public final class NotificationRequestsModel {
     private let client: MastodonClient
     /// このリストが始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
     private let tasks: TaskScope
-    /// APIが401を返したときに呼ぶ。ログアウトされたとして止め、ログインし直しを促すのはセッションに任せる。
-    private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "notificationRequests")
     /// 走り終えていない処理の数。止めたあとに何も起きないことを、テストが確かめるのに使う。
     public var runningTaskCount: Int { tasks.runningCount }
 
-    public init(client: MastodonClient, tasks: TaskScope, onUnauthorized: @escaping () -> Void) {
+    public init(client: MastodonClient, tasks: TaskScope) {
         self.client = client
         self.tasks = tasks
-        self.onUnauthorized = onUnauthorized
     }
 
     /// - Parameter purpose: 使う人が開いたり再試行を押したりしたときは`.action`。
@@ -171,9 +168,6 @@ public final class NotificationRequestsModel {
     private func handle(_ error: any Error, during operation: String, show: (ErrorPresentation) -> Void) {
         guard !(error is CancellationError), (error as? URLError)?.code != .cancelled, !tasks.isClosed else { return }
         logger.error("notificationRequests \(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
-        if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
-            onUnauthorized()
-        }
         show(ErrorPresentation(error))
     }
 }
@@ -188,18 +182,16 @@ public final class AccountNotificationsModel {
     public let filtering: StatusFiltering
     private let store: NotificationStore
     private let tasks: TaskScope
-    private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "accountNotifications")
     public var runningTaskCount: Int { tasks.runningCount }
 
-    public init(accountID: String, client: MastodonClient, tasks: TaskScope, onUnauthorized: @escaping () -> Void) {
+    public init(accountID: String, client: MastodonClient, tasks: TaskScope) {
         let filtering = StatusFiltering(context: .notifications, myAccountID: client.credential.accountID)
         self.filtering = filtering
         store = NotificationStore(pageSize: Self.pageSize, filtering: filtering) { query in
             try await client.notifications(query, from: accountID)
         }
         self.tasks = tasks
-        self.onUnauthorized = onUnauthorized
     }
 
     @discardableResult
@@ -314,9 +306,6 @@ public final class AccountNotificationsModel {
     private func handle(_ error: any Error, during operation: String, show: (ErrorPresentation) -> Void) {
         guard !(error is CancellationError), (error as? URLError)?.code != .cancelled, !tasks.isClosed else { return }
         logger.error("accountNotifications \(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
-        if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
-            onUnauthorized()
-        }
         show(ErrorPresentation(error))
     }
 }

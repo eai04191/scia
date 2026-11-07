@@ -66,8 +66,7 @@ struct ProfileRelationshipActivityTests {
             relationshipCache: cache,
             settings: .isolated(),
             tasks: tasks,
-            onError: { _, _ in },
-            onUnauthorized: {}
+            onError: { _, _ in }
         )
         viewController.clock = clock
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)

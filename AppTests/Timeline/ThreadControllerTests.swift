@@ -29,7 +29,7 @@ struct ThreadControllerTests {
         let streamingHub = StreamingHub(livePolicy: { TuningCatalog.liveUpdates(in: TuningStore(defaults: nil)) }) {
             try await streaming.open(baseURL: try await streamingEndpoint.url())
         }
-        let (controller, viewController) = ThreadController.make(focus: Self.focus, client: client, streamingHub: streamingHub, tasks: TaskScope()) {}
+        let (controller, viewController) = ThreadController.make(focus: Self.focus, client: client, streamingHub: streamingHub, tasks: TaskScope())
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
         window.frame = CGRect(x: 0, y: 0, width: 393, height: 852)
@@ -83,7 +83,7 @@ struct ThreadControllerTests {
             try await streaming.open(baseURL: try await streamingEndpoint.url())
         }
         let session = TaskScope()
-        let (controller, viewController) = ThreadController.make(focus: Self.focus, client: client, streamingHub: streamingHub, tasks: session.child()) {}
+        let (controller, viewController) = ThreadController.make(focus: Self.focus, client: client, streamingHub: streamingHub, tasks: session.child())
 
         controller.start()
         try await waitUntil { transport.context.waiterCount == 1 }

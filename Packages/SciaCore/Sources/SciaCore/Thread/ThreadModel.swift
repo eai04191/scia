@@ -27,20 +27,17 @@ public final class ThreadModel {
     private var isLoading = false
     /// 会話の読み込みの状態。フッターに出す。
     public private(set) var footerState = TimelineFooterState.idle
-    /// 読み込みが401で失敗したときに呼ぶ。
-    private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "thread")
     /// この画面が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときと、画面を閉じてこのモデルが捨てられたときに閉じる。
     private let tasks: TaskScope
 
-    public init(focus: Status, client: MastodonClient, streamingHub: StreamingHub, tasks: TaskScope, onUnauthorized: @escaping () -> Void) {
+    public init(focus: Status, client: MastodonClient, streamingHub: StreamingHub, tasks: TaskScope) {
         self.tasks = tasks
         let filtering = StatusFiltering(context: .thread, myAccountID: client.credential.accountID)
         self.filtering = filtering
         store = ThreadStore(focus: focus, filtering: filtering)
         self.client = client
         self.streamingHub = streamingHub
-        self.onUnauthorized = onUnauthorized
         tasks.onClose { [weak self] in
             self?.streamingSubscription?.cancel()
             self?.streamingSubscription = nil
@@ -110,9 +107,6 @@ public final class ThreadModel {
             } catch {
                 guard !Task.isCancelled else { return }
                 logger.error("thread context failed: \(SciaLog.describe(error), privacy: .public)")
-                if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
-                    onUnauthorized()
-                }
                 setFooterState(.failed(ErrorPresentation(error)))
             }
         }

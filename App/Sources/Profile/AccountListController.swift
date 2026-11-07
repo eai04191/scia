@@ -11,8 +11,6 @@ final class AccountListController {
 
     private weak var viewController: TimelineViewController?
     private let store: AccountListStore
-    /// APIが401を返したときに呼ぶ。ログアウトされたとして止め、ログインし直しを促すのはセッションに任せる。
-    private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "accountList")
     /// この画面が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときと、画面を閉じてこのコントローラーが捨てられたときに閉じる。
     private let tasks: TaskScope
@@ -27,17 +25,17 @@ final class AccountListController {
     /// 読む前に開くと、もう入っている人を入っていないものとして出し、押すと足し直してしまうため。
     var onLoadedChange: ((Bool) -> Void)?
 
-    static func make(kind: AccountListKind, client: MastodonClient, tasks: TaskScope, onUnauthorized: @escaping () -> Void) -> (AccountListController, TimelineViewController) {
+    static func make(kind: AccountListKind, client: MastodonClient, tasks: TaskScope) -> (AccountListController, TimelineViewController) {
         // 画面を作る時点ではコントローラーがまだないため、作ったあとに入れる。
         weak var owner: AccountListController?
         let viewController = TimelineViewController(texts: .accountList(kind)) { await owner?.refresh() }
-        let controller = AccountListController(kind: kind, client: client, viewController: viewController, tasks: tasks, onUnauthorized: onUnauthorized)
+        let controller = AccountListController(kind: kind, client: client, viewController: viewController, tasks: tasks)
         viewController.lifetimeOwner = controller
         owner = controller
         return (controller, viewController)
     }
 
-    private init(kind: AccountListKind, client: MastodonClient, viewController: TimelineViewController, tasks: TaskScope, onUnauthorized: @escaping () -> Void) {
+    private init(kind: AccountListKind, client: MastodonClient, viewController: TimelineViewController, tasks: TaskScope) {
         self.tasks = tasks
         self.client = client
         if case .listMembers(let listID) = kind {
@@ -52,7 +50,6 @@ final class AccountListController {
             try await client.accounts(in: kind, maxID: maxID, limit: pageSize)
         }
         self.viewController = viewController
-        self.onUnauthorized = onUnauthorized
         viewController.onApproachingEnd = { [weak self] in self?.loadOlder(purpose: .display) }
         viewController.onRetry = { [weak self] in self?.retry() }
         if listID != nil {
@@ -174,9 +171,6 @@ final class AccountListController {
     private func handle(_ error: any Error, during operation: String, show: (ErrorPresentation) -> Void) {
         guard !(error is CancellationError), (error as? URLError)?.code != .cancelled else { return }
         logger.error("accountList \(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
-        if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
-            onUnauthorized()
-        }
         show(ErrorPresentation(error))
     }
 }

@@ -101,7 +101,7 @@ enum AnnouncementsCatalog {
                 addReaction: { _, _ in },
                 removeReaction: { _, _ in }
             )
-            let model = AnnouncementsModel(operations: operations, streamingHub: nil, tasks: TaskScope()) {}
+            let model = AnnouncementsModel(operations: operations, streamingHub: nil, tasks: TaskScope())
             if fails {
                 for row in rows {
                     model.apply(.announcement(row))

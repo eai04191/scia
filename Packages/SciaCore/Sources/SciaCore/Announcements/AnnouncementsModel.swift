@@ -101,8 +101,6 @@ public final class AnnouncementsModel {
     private let streamingHub: StreamingHub?
     /// このモデルが始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
     private let tasks: TaskScope
-    /// APIが401を返したときに呼ぶ。ログアウトされたとして止め、ログインし直しを促すのはセッションに任せる。
-    private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "announcements")
     private var streamingSubscription: StreamingHub.Subscription?
     private var isInForeground = true
@@ -123,11 +121,10 @@ public final class AnnouncementsModel {
     public var runningTaskCount: Int { tasks.runningCount }
 
     /// - Parameter streamingHub: nilなら購読しない。ダミーのセッションとテストで使う。
-    public init(operations: Operations, streamingHub: StreamingHub?, tasks: TaskScope, onUnauthorized: @escaping () -> Void) {
+    public init(operations: Operations, streamingHub: StreamingHub?, tasks: TaskScope) {
         self.operations = operations
         self.streamingHub = streamingHub
         self.tasks = tasks
-        self.onUnauthorized = onUnauthorized
     }
 
     /// セッションを始めたときに呼ぶ。購読を始め、お知らせを読む。
@@ -227,7 +224,6 @@ public final class AnnouncementsModel {
                 guard let self, !tasks.isClosed, !(error is CancellationError) else { return }
                 // 使う人にできることがないので知らせない。未読に戻し、次に行が画面に出たときに送り直す。
                 logger.error("announcement dismiss failed: \(SciaLog.describe(error), privacy: .public)")
-                reportIfUnauthorized(error)
                 dismissing.remove(id)
                 update(id) { $0.read = false }
                 return
@@ -273,7 +269,6 @@ public final class AnnouncementsModel {
         } catch {
             guard !tasks.isClosed, !(error is CancellationError) else { return }
             logger.error("announcements load failed: \(SciaLog.describe(error), privacy: .public)")
-            reportIfUnauthorized(error)
             // 出しているお知らせは消さない。自動の読み込みの失敗はログだけにする。
             if loadingIsVisible {
                 setContentState(.failed(ErrorPresentation(error)))
@@ -380,7 +375,6 @@ public final class AnnouncementsModel {
             } catch {
                 guard let self, !tasks.isClosed, !(error is CancellationError) else { return }
                 logger.error("announcement reaction failed: \(SciaLog.describe(error), privacy: .public)")
-                reportIfUnauthorized(error)
                 let countIncludesChange = pendingReactions[key]?.countIncludesChange ?? true
                 pendingReactions[key] = nil
                 update(id) { $0.reactions = Self.reverting(name, isOn, in: $0.reactions, customEmoji: customEmoji, countIncludesChange: countIncludesChange) }
@@ -460,11 +454,5 @@ public final class AnnouncementsModel {
         let items = announcements.map { AnnouncementListItem.announcement($0, showsUnreadMark: marked.contains($0.id)) } + unreadable.map(AnnouncementListItem.unreadable)
         display.setItems(items)
         display.setContentState(contentState)
-    }
-
-    private func reportIfUnauthorized(_ error: any Error) {
-        if let error = error as? MastodonAPIError, error.isUnauthorized {
-            onUnauthorized()
-        }
     }
 }

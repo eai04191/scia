@@ -46,7 +46,7 @@ enum ListMembershipCatalog {
                 remove: { _ in },
                 follow: { try await Task.sleep(for: .seconds(3_600)); return relationship },
                 create: { MastodonList(id: "9", title: $0) }
-            ), tasks: TaskScope()) {}
+            ), tasks: TaskScope())
             let task = model.load()
             Task(.withoutRequests) {
                 await task?.value

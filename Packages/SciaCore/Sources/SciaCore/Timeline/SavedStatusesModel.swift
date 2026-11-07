@@ -15,8 +15,6 @@ public final class SavedStatusesModel {
     /// このタイムラインで当てるサーバーのフィルター。公式のWebクライアントと同じく、ホームの文脈のフィルターを当て、「隠す」に一致した投稿も隠さずに警告で折りたたむ。自分で残した投稿だから。
     public let filtering: StatusFiltering
     private let store: SavedStatusesStore
-    /// APIが401を返したときに呼ぶ。ログアウトされたとして止め、ログインし直しを促すのはセッションに任せる。
-    private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "timeline")
     /// このタイムラインが始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
     private let tasks: TaskScope
@@ -31,7 +29,7 @@ public final class SavedStatusesModel {
     /// タブで開いて見せている。見せ始めたら最新のページを読み、見せなくなったら外した行を消す。
     private var isShown = false
 
-    public init(kind: SavedStatusesKind, client: MastodonClient, tasks: TaskScope, onUnauthorized: @escaping () -> Void) {
+    public init(kind: SavedStatusesKind, client: MastodonClient, tasks: TaskScope) {
         self.tasks = tasks
         let pageSize = Self.pageSize
         store = SavedStatusesStore(kind: kind) { maxID in
@@ -41,7 +39,6 @@ public final class SavedStatusesModel {
             }
         }
         self.kind = kind
-        self.onUnauthorized = onUnauthorized
         filtering = StatusFiltering(context: .home, myAccountID: client.credential.accountID, hidesMatches: false)
     }
 
@@ -286,9 +283,6 @@ public final class SavedStatusesModel {
         // 止めた後に届いた結果や、止めたことによる取り消しは、もう画面に関係しない。
         guard !isStopped, !(error is CancellationError), (error as? URLError)?.code != .cancelled else { return }
         logger.error("\(self.name, privacy: .public) \(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
-        if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
-            onUnauthorized()
-        }
         show(ErrorPresentation(error))
     }
 }
@@ -296,7 +290,7 @@ public final class SavedStatusesModel {
 extension SavedStatusesModel: SessionList {
     /// `session`の部品で作り、`session`に登録する。401は`session`へ流し、電波の回復などのやり直しと、トークンが無効と分かったときに止めるのを`session`から受け取る。
     public convenience init(kind: SavedStatusesKind, session: AccountSession) {
-        self.init(kind: kind, client: session.client, tasks: session.tasks.child()) { [weak session] in session?.reportUnauthorized() }
+        self.init(kind: kind, client: session.client, tasks: session.tasks.child())
         session.register(self)
     }
 }

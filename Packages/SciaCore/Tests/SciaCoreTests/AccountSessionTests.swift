@@ -67,6 +67,47 @@ struct AccountSessionTests {
         #expect(session.streamingHub.state == .loginRequired)
     }
 
+    /// セッションのクライアントで受けたREST APIの401は、呼び出し側が拾わなくても、セッションがトークンを無効として止め、アプリへ知らせる。
+    /// 呼び出し側に401が届く前に、知らせ終えている。
+    @Test func clientUnauthorizedInvalidatesSessionWithoutCaller() async throws {
+        let session = makeSession(transport: RoutedTransport { _ in Self.unauthorized() })
+        defer { session.close() }
+        let list = RecordingList()
+        session.register(list)
+        var notified = 0
+        session.onCredentialsInvalid = { notified += 1 }
+
+        let error = await #expect(throws: MastodonAPIError.self) {
+            try await RequestPurpose.$current.withValue(.action) { try await session.client.bookmarks(maxID: nil, limit: 1) }
+        }
+
+        #expect(error?.isUnauthorized == true)
+        #expect(notified == 1)
+        #expect(list.stopCount == 1)
+        #expect(session.streamingHub.state == .loginRequired)
+    }
+
+    /// 閉じたあと（ログアウトやアカウントの切り替えのあと）に届いた401では、ログインし直しを促さない。
+    @Test func unauthorizedAfterCloseIsIgnored() async throws {
+        let gate = Gate()
+        let session = makeSession(transport: RoutedTransport { _ in
+            try await gate.wait()
+            return Self.unauthorized()
+        })
+        var notified = false
+        session.onCredentialsInvalid = { notified = true }
+        let client = session.client
+        let request = Task(.action) { try? await client.bookmarks(maxID: nil, limit: 1) }
+        try await waitUntil { gate.waiterCount == 1 }
+
+        session.close()
+        gate.open()
+        _ = await request.value
+
+        #expect(!notified)
+        #expect(session.authorization.state == .valid)
+    }
+
     /// REST APIの401では、確かめずに止める。MastodonのREST APIは、トークンが無効なときだけ401を返すため。
     @Test func restUnauthorizedStopsWithoutVerification() async throws {
         let transport = RoutedTransport { request in

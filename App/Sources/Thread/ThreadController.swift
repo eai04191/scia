@@ -15,10 +15,9 @@ final class ThreadController {
         focus: Status,
         client: MastodonClient,
         streamingHub: StreamingHub,
-        tasks: TaskScope,
-        onUnauthorized: @escaping () -> Void
+        tasks: TaskScope
     ) -> (ThreadController, TimelineViewController) {
-        let model = ThreadModel(focus: focus, client: client, streamingHub: streamingHub, tasks: tasks, onUnauthorized: onUnauthorized)
+        let model = ThreadModel(focus: focus, client: client, streamingHub: streamingHub, tasks: tasks)
         let viewController = TimelineViewController(texts: .thread) { [weak model] in await model?.refresh() }
         let controller = ThreadController(model: model, focusID: focus.id, viewController: viewController)
         viewController.lifetimeOwner = controller

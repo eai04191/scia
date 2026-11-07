@@ -14,8 +14,7 @@ struct FeedTimelineModelTests {
         tuning: TuningStore = TuningStore(defaults: nil),
         clock: TestClock = TestClock(),
         backgroundTime: BackgroundTimeRecorder = BackgroundTimeRecorder(),
-        tasks: TaskScope = TaskScope(),
-        onUnauthorized: @escaping () -> Void = {}
+        tasks: TaskScope = TaskScope()
     ) -> (FeedTimelineModel, RecordingTimelineDisplay) {
         let client = MastodonClient(credential: TimelineModelFixtures.credential(), transport: transport)
         let model = FeedTimelineModel(
@@ -26,8 +25,7 @@ struct FeedTimelineModelTests {
             clock: clock,
             now: { Date(timeIntervalSince1970: 1_800_000_000) },
             backgroundTime: backgroundTime.request,
-            tasks: tasks,
-            onUnauthorized: onUnauthorized
+            tasks: tasks
         )
         let display = RecordingTimelineDisplay()
         model.display = display
@@ -380,17 +378,14 @@ struct FeedTimelineModelTests {
         try await waitUntil { model.runningTaskCount == 0 }
     }
 
-    /// 止めたあとに届いた401は、ログインし直しを促さず、画面にも何も伝えない。
+    /// 止めたあとに届いた失敗は、画面に何も伝えない。401をセッションへ知らせるのはクライアントで、閉じたセッションは受けない（`AccountSessionTests`）。
     @Test func stoppedModelIgnoresLateResults() async throws {
         let gate = Gate()
         let transport = RoutedTransport { _ in
             try await gate.wait()
             return (401, Data(#"{"error":"The access token is invalid"}"#.utf8))
         }
-        let reported = Mutex(false)
-        let (model, display) = makeModel(transport: transport) {
-            reported.withLock { $0 = true }
-        }
+        let (model, display) = makeModel(transport: transport)
 
         model.start(purpose: .action)
         try await waitUntil { gate.waiterCount == 1 }
@@ -399,7 +394,6 @@ struct FeedTimelineModelTests {
         gate.open()
         try await waitUntil { model.runningTaskCount == 0 }
 
-        #expect(!reported.withLock { $0 })
         #expect(display.commandCount == commandsBeforeStop)
     }
 

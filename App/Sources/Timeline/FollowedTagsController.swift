@@ -9,8 +9,6 @@ final class FollowedTagsController {
     private(set) lazy var viewController = TimelineViewController(texts: .followedTags) { [weak self] in await self?.refresh() }
     private let store: FollowedTagsStore
     private let followedTags: LatestValueCache<[Hashtag]>
-    /// APIが401を返したときに呼ぶ。ログアウトされたとして止め、ログインし直しを促すのはセッションに任せる。
-    private let onUnauthorized: () -> Void
     /// この画面が始めた処理の持ち主。セッションの持ち主の子で、ログアウトやアカウントの切り替えで止まる。
     private let tasks: TaskScope
     private let logger = SciaLog.logger(category: "followedTags")
@@ -21,7 +19,6 @@ final class FollowedTagsController {
     /// - Parameter followedTags: ハッシュタグのメニューがフォローしているかを決めるのと同じ、フォロー中のハッシュタグ。どちらで読み直しても、もう一方に効く。
     init(followedTags: LatestValueCache<[Hashtag]>, session: AccountSession) {
         tasks = session.tasks.child()
-        onUnauthorized = { [weak session] in session?.reportUnauthorized() }
         self.followedTags = followedTags
         // 読み直しは、始める側が通信の目的を名乗って始める（`loadNow`）。ここでは、いちばん新しい読み直しの結果を受け取る。
         store = FollowedTagsStore { try await followedTags.latest() }
@@ -88,9 +85,6 @@ final class FollowedTagsController {
         } catch {
             guard !(error is CancellationError), (error as? URLError)?.code != .cancelled else { return }
             logger.error("followedTags \(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
-            if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
-                onUnauthorized()
-            }
             // 読めているハッシュタグは残す。まだ読めていなければ、失敗の表示とやり直すボタンを出す。
             if !store.isLoaded {
                 viewController.setContentState(.failed(ErrorPresentation(error)))

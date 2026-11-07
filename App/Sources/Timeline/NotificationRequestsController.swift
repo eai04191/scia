@@ -11,8 +11,8 @@ final class NotificationRequestsController {
     let model: NotificationRequestsModel
 
     /// - Parameter openPolicy: 右上のボタンで、通知のフィルタリングの設定を開く。
-    static func make(client: MastodonClient, tasks: TaskScope, openPolicy: @escaping () -> Void, onUnauthorized: @escaping () -> Void) -> (NotificationRequestsController, TimelineViewController) {
-        let model = NotificationRequestsModel(client: client, tasks: tasks, onUnauthorized: onUnauthorized)
+    static func make(client: MastodonClient, tasks: TaskScope, openPolicy: @escaping () -> Void) -> (NotificationRequestsController, TimelineViewController) {
+        let model = NotificationRequestsModel(client: client, tasks: tasks)
         let viewController = TimelineViewController(texts: .notificationRequests) { [weak model] in await model?.refresh() }
         let controller = NotificationRequestsController(model: model, viewController: viewController)
         viewController.lifetimeOwner = controller
@@ -44,10 +44,9 @@ final class AccountNotificationsController {
         request: NotificationRequest,
         client: MastodonClient,
         tasks: TaskScope,
-        answer: @escaping (NotificationRequestDecision) async -> Bool,
-        onUnauthorized: @escaping () -> Void
+        answer: @escaping (NotificationRequestDecision) async -> Bool
     ) -> (AccountNotificationsController, TimelineViewController) {
-        let model = AccountNotificationsModel(accountID: request.account.id, client: client, tasks: tasks, onUnauthorized: onUnauthorized)
+        let model = AccountNotificationsModel(accountID: request.account.id, client: client, tasks: tasks)
         let viewController = TimelineViewController(texts: .accountNotifications(name: request.account.displayNameOrUsername)) { [weak model] in await model?.refresh() }
         let controller = AccountNotificationsController(model: model, viewController: viewController)
         viewController.lifetimeOwner = controller

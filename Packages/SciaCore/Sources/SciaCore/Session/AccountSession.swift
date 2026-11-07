@@ -6,7 +6,8 @@ import os
 /// 部品どうしの次の決まりを、ここでまとめて守る。アプリは、通信の実体（`HTTPTransport`、`WebSocketConnector`）と、
 /// OSから来るもの（電波が戻った回数）と、画面だけを渡す。
 /// - RESTとストリーミングで、429や503で自動の通信を止める門（`RateLimitGate`）を共有する。別々だと、ストリーミングが断られてもRESTの自動の通信が止まらない
-/// - タイムラインとストリーミングが受けた401を`AuthorizationCheck`へ流し、トークンが無効と決まったら、ストリーミングとタイムラインの自動の通信を止める
+/// - `client`で受けたREST APIの401と、ストリーミングが受けた401を`AuthorizationCheck`へ流し、トークンが無効と決まったら、ストリーミングとタイムラインの自動の通信を止める。
+///   `client`の401は、モデルやアプリが拾わなくても流れる。`client`を通さずに受けた401だけを`reportUnauthorized()`で知らせる
 /// - レート制限が明けたときと、電波が戻ったときに、ストリーミングとタイムラインの失敗したままの読み込みをすぐやり直させる
 /// - 閉じたら、申し込みが残っていてもストリーミングを切り、セッションで始めた処理を止める
 ///
@@ -63,7 +64,11 @@ public final class AccountSession {
         self.rateLimit = rateLimit
         let features = FeatureAvailability()
         self.features = features
-        let client = MastodonClient(credential: credential, transport: transport, rateLimit: rateLimit, features: features, requestLog: requestLog, clock: clock, now: now)
+        // 401を知らせる先のAuthorizationCheckは、確かめるのにこのクライアントを使うので、作ったあとにつなぐ。
+        let unauthorized = UnauthorizedRelay()
+        let client = MastodonClient(credential: credential, transport: transport, rateLimit: rateLimit, features: features, requestLog: requestLog, clock: clock, now: now) {
+            await unauthorized.report()
+        }
         self.client = client
         let streaming = StreamingClient(credential: credential, connector: connector, rateLimit: rateLimit, now: now)
         let streamingEndpoint = StreamingEndpoint(client: client)
@@ -72,8 +77,11 @@ public final class AccountSession {
         }
         self.streamingHub = streamingHub
         authorization = AuthorizationCheck(clock: clock) { try await client.verifyCredentials() }
+        unauthorized.authorization = authorization
         let tasks = TaskScope()
         self.tasks = tasks
+        // 閉じたあと（ログアウトやアカウントの切り替えのあと）に届いた401では、ログインし直しを促さない。
+        tasks.onClose { unauthorized.authorization = nil }
         // 開いているスレッドなどの購読を、閉じる順に頼らずに止めるため、申し込みが残っていても切る。
         tasks.onClose { [weak streamingHub] in streamingHub?.shutDown() }
         streamingHub.onUnauthorized = { [weak self] in self?.reportStreamingUnauthorized() }
@@ -101,6 +109,7 @@ public final class AccountSession {
     }
 
     /// REST APIで受けた401を知らせる。確かめずにトークンが無効になったとし、`onCredentialsInvalid`を呼ぶ。理由は`AuthorizationCheck`にある。
+    /// `client`で受けた401は`client`が知らせるので、呼ばなくてよい。`client`を通さない通信で受けた401のためにある。
     public func reportUnauthorized() {
         authorization.reportUnauthorized()
     }
@@ -223,6 +232,16 @@ public protocol SessionList: AnyObject {
     func recover()
     /// トークンが無効と分かったときに呼ぶ。読み込みを打ち切り、以後の結果を捨てる。
     func stop()
+}
+
+/// `MastodonClient`が受けた401を、あとで作る`AuthorizationCheck`へ届ける。
+@MainActor
+private final class UnauthorizedRelay {
+    weak var authorization: AuthorizationCheck?
+
+    func report() {
+        authorization?.reportUnauthorized()
+    }
 }
 
 @MainActor

@@ -41,8 +41,6 @@ public final class ScheduledStatusesModel {
     private let myAccount: () async throws -> Account
     /// このタイムラインが始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
     private let tasks: TaskScope
-    /// APIが401を返したときに呼ぶ。ログアウトされたとして止め、ログインし直しを促すのはセッションに任せる。
-    private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "scheduled")
     /// 読み直している途中の読み込み。重ねて読まない。
     private var loading: Task<Void, Never>?
@@ -55,11 +53,10 @@ public final class ScheduledStatusesModel {
     /// 走り終えていない処理の数。止めたあとに何も起きないことを、テストが確かめるのに使う。
     public var runningTaskCount: Int { tasks.runningCount }
 
-    public init(client: MastodonClient, tasks: TaskScope, myAccount: @escaping () async throws -> Account, onUnauthorized: @escaping () -> Void) {
+    public init(client: MastodonClient, tasks: TaskScope, myAccount: @escaping () async throws -> Account) {
         self.client = client
         self.myAccount = myAccount
         self.tasks = tasks
-        self.onUnauthorized = onUnauthorized
     }
 
     /// 画面に出るたびに呼ぶ。
@@ -138,17 +135,10 @@ public final class ScheduledStatusesModel {
         } catch {
             guard !tasks.isClosed, !(error is CancellationError) else { return }
             logger.error("scheduled load failed: \(SciaLog.describe(error), privacy: .public)")
-            reportIfUnauthorized(error)
             // 読めたタイムラインは消さず、読み直しの失敗はログだけにする。まだ何も読めていなければ、理由をタイムラインの場所に出す。
             if !hasLoaded {
                 display?.setContentState(.failed(ErrorPresentation(error)))
             }
-        }
-    }
-
-    private func reportIfUnauthorized(_ error: any Error) {
-        if let error = error as? MastodonAPIError, error.isUnauthorized {
-            onUnauthorized()
         }
     }
 
@@ -168,7 +158,6 @@ public final class ScheduledStatusesModel {
             } catch {
                 guard let self, !tasks.isClosed, !(error is CancellationError) else { return }
                 logger.error("scheduled reschedule failed: \(SciaLog.describe(error), privacy: .public)")
-                reportIfUnauthorized(error)
                 onFailure(.reschedule, ErrorPresentation(error))
             }
         }
@@ -188,7 +177,6 @@ public final class ScheduledStatusesModel {
             } catch {
                 guard let self, !tasks.isClosed, !(error is CancellationError) else { return }
                 logger.error("scheduled cancel failed: \(SciaLog.describe(error), privacy: .public)")
-                reportIfUnauthorized(error)
                 onFailure(.cancel, ErrorPresentation(error))
                 return
             }

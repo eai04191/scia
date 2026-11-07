@@ -35,6 +35,10 @@ struct DraftSubmissionTests {
         try await RequestPurpose.$current.withValue(.action) { try await body() }
     }
 
+    private func makeSession(_ transport: RoutedTransport) -> AccountSession {
+        AccountSession(credential: TimelineModelFixtures.credential(), transport: transport, connector: StubWebSocketConnector(messages: []), tuning: TuningStore(defaults: nil), clock: TestClock(), now: { Self.now })
+    }
+
     private func makeModel(submit: @escaping (StatusDraft) async throws -> SubmittedDraft) -> ComposeModel {
         let model = ComposeModel(tasks: TaskScope(), myAccountID: "1", backgroundTime: { _ in {} }, submit: submit)
         model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
@@ -132,5 +136,22 @@ struct DraftSubmissionTests {
 
         #expect(homeSubmitted == 0)
         #expect(otherSubmitted.count == 1)
+    }
+
+    /// セッションのクライアントで送って401を受けたら、投稿欄に理由を出し、アプリが拾わなくてもセッションがトークンを無効とする。
+    @Test func unauthorizedSubmissionInvalidatesSession() async throws {
+        let session = makeSession(RoutedTransport { _ in (401, Data(#"{"error":"The access token is invalid"}"#.utf8)) })
+        defer { session.close() }
+        var invalidated = 0
+        session.onCredentialsInvalid = { invalidated += 1 }
+        let model = makeModel(submit: session.client.submit)
+        model.text = "こんにちは"
+
+        await asAction { await model.submit() }
+
+        #expect(invalidated == 1)
+        #expect(session.authorization.state == .invalid)
+        #expect(model.postError != nil)
+        #expect(model.text == "こんにちは")
     }
 }

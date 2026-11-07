@@ -19,8 +19,8 @@ final class ScheduledStatusesController {
     /// 走り終えていない処理の数。止めたあとに何も起きないことを、テストが確かめるのに使う。
     var runningTaskCount: Int { model.runningTaskCount }
 
-    init(client: MastodonClient, tasks: TaskScope, myAccount: @escaping () async throws -> Account, onUnauthorized: @escaping () -> Void) {
-        model = ScheduledStatusesModel(client: client, tasks: tasks, myAccount: myAccount, onUnauthorized: onUnauthorized)
+    init(client: MastodonClient, tasks: TaskScope, myAccount: @escaping () async throws -> Account) {
+        model = ScheduledStatusesModel(client: client, tasks: tasks, myAccount: myAccount)
         viewController = ScheduledStatusesViewController(now: AppDependencies.now, calendar: calendar)
         model.display = viewController
         model.onFailure = { [weak self] operation, error in

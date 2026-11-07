@@ -143,7 +143,7 @@ struct AnnouncementsModelTests {
     }
 
     private func makeModel(_ server: Server) -> (AnnouncementsModel, Display) {
-        let model = AnnouncementsModel(operations: server.operations, streamingHub: nil, tasks: TaskScope()) {}
+        let model = AnnouncementsModel(operations: server.operations, streamingHub: nil, tasks: TaskScope())
         let display = Display()
         model.display = display
         return (model, display)
