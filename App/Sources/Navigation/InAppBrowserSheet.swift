@@ -19,7 +19,6 @@ final class InAppBrowserSheet: UIViewController {
     private let barGrab: BarGrab
     private let clock: any Clock<Duration>
     private var narrowing: Task<Void, Never>?
-    private let resizesSafariOnRelease: Bool
     private let safariResizeDelay: Duration
     private var pendingResize: Task<Void, Never>?
     private lazy var fingerWatcher = FingerWatcher { [weak self] isDown in
@@ -44,11 +43,10 @@ final class InAppBrowserSheet: UIViewController {
         var isVisible: Bool
     }
 
-    init(safari: SFSafariViewController, handleHeight: CGFloat, barGrab: BarGrab, resizesSafariOnRelease: Bool, safariResizeDelay: Duration, clock: any Clock<Duration>) {
+    init(safari: SFSafariViewController, handleHeight: CGFloat, barGrab: BarGrab, safariResizeDelay: Duration, clock: any Clock<Duration>) {
         self.safari = safari
         self.handleHeight = handleHeight
         self.barGrab = barGrab
-        self.resizesSafariOnRelease = resizesSafariOnRelease
         self.safariResizeDelay = safariResizeDelay
         self.clock = clock
         area = UIViewController()
@@ -78,14 +76,11 @@ final class InAppBrowserSheet: UIViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         guard safari.presentingViewController != nil, let container = safari.viewIfLoaded?.superview else { return }
-        guard resizesSafariOnRelease else {
-            safari.view.frame = container.bounds
-            return
-        }
         scheduleSafariResize(toFit: container)
     }
 
     /// 指が触れている間は待ち、離したあとは少し待って、続けて変わるシートの大きさを1回の変更にまとめる。
+    /// 毎フレーム変えると、離してから0.7秒ほどSafariがタップを受けない（シミュレーターで確かめた）。代わりに、引いている途中はSafariがシートに付いてこない。
     private func scheduleSafariResize(toFit container: UIView) {
         pendingResize?.cancel()
         guard !isFingerDown, safari.view.frame != container.bounds else { return }
@@ -102,7 +97,7 @@ final class InAppBrowserSheet: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        guard resizesSafariOnRelease, fingerWatcher.view == nil else { return }
+        guard fingerWatcher.view == nil else { return }
         view.window?.addGestureRecognizer(fingerWatcher)
     }
 

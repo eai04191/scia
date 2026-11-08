@@ -64,7 +64,6 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
                 settlingDuration: .seconds(tuning.value(of: TuningCatalog.inAppBrowserBarGrabSettlingDuration)),
                 isVisible: tuning.value(of: TuningCatalog.inAppBrowserShowsBarGrabArea)
             ),
-            resizesSafariOnRelease: tuning.value(of: TuningCatalog.inAppBrowserResizesSafariOnRelease),
             safariResizeDelay: .seconds(tuning.value(of: TuningCatalog.inAppBrowserSafariResizeDelay)),
             clock: clock
         )

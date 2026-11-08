@@ -149,12 +149,10 @@ struct InAppBrowserTests {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let root = harness.viewController
-        let browser = InAppBrowser()
-        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
-        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
-        let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
+        let clock = TestClock()
+        let browser = InAppBrowser(tuning: TuningStore(defaults: nil), clock: clock)
+        let sheet = try await openSheet(with: browser, from: root)
         let presentation = try #require(sheet.sheetPresentationController)
-        try await waitUntil { sheet.safari.viewIfLoaded?.window != nil }
         let before = sheet.view.bounds.height
 
         presentation.selectedDetentIdentifier = presentation.selectedDetentIdentifier == .large ? nil : .large
@@ -162,18 +160,20 @@ struct InAppBrowserTests {
 
         try await waitUntil { sheet.view.bounds.height != before }
         sheet.view.layoutIfNeeded()
-        let safariFrame = sheet.safari.view.convert(sheet.safari.view.bounds, to: sheet.view)
-        #expect(safariFrame.maxY == sheet.view.bounds.maxY)
+        let delay = Duration.seconds(TuningCatalog.inAppBrowserSafariResizeDelay.defaultValue)
+        try await waitUntil { clock.sleeperCount(dueWithin: delay) >= 1 }
+        clock.advance(by: delay)
+        try await waitUntil { sheet.safari.view.convert(sheet.safari.view.bounds, to: sheet.view).maxY == sheet.view.bounds.maxY }
         root.dismiss(animated: false)
     }
 
-    /// 指を離してから大きさを変える設定では、指が触れている間はSafariの大きさを変えず、離したらシートに合わせる。
-    @Test func safariResizesAfterFingerLiftsWhenEnabled() async throws {
+    /// 指が触れている間はSafariの大きさを変えず、離したらシートに合わせる。
+    @Test func safariResizesAfterFingerLifts() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let root = harness.viewController
         let clock = TestClock()
-        let browser = makeBrowser(resizesOnRelease: true, clock: clock)
+        let browser = InAppBrowser(tuning: TuningStore(defaults: nil), clock: clock)
         let sheet = try await openSheet(with: browser, from: root)
         #expect(sheet.isWatchingFinger)
         let safariHeight = sheet.safari.view.frame.height
@@ -195,27 +195,6 @@ struct InAppBrowserTests {
         try await waitUntil { clock.sleeperCount(dueWithin: delay) >= 1 }
         clock.advance(by: delay)
         try await waitUntil { sheet.safari.view.frame.height != safariHeight }
-        let safariFrame = sheet.safari.view.convert(sheet.safari.view.bounds, to: sheet.view)
-        #expect(safariFrame.maxY == sheet.view.bounds.maxY)
-        root.dismiss(animated: false)
-    }
-
-    /// 既定では、指が触れている間もSafariの大きさをシートに合わせる。
-    @Test func safariFollowsSheetWhileFingerIsDownByDefault() async throws {
-        let harness = try TimelineHarness(notices: notices)
-        defer { harness.tearDown() }
-        let root = harness.viewController
-        let browser = makeBrowser(resizesOnRelease: false, clock: TestClock())
-        let sheet = try await openSheet(with: browser, from: root)
-        let before = sheet.view.bounds.height
-        let presentation = try #require(sheet.sheetPresentationController)
-
-        sheet.isFingerDown = true
-        presentation.selectedDetentIdentifier = .large
-        sheet.view.window?.layoutIfNeeded()
-        try await waitUntil { sheet.view.bounds.height != before }
-        sheet.view.layoutIfNeeded()
-
         let safariFrame = sheet.safari.view.convert(sheet.safari.view.bounds, to: sheet.view)
         #expect(safariFrame.maxY == sheet.view.bounds.maxY)
         root.dismiss(animated: false)
@@ -248,12 +227,6 @@ struct InAppBrowserTests {
         #expect(!reportedWhileResolving)
         try await waitUntil { !reported.isEmpty }
         root.dismiss(animated: false)
-    }
-
-    private func makeBrowser(resizesOnRelease: Bool, clock: TestClock) -> InAppBrowser {
-        let tuning = TuningStore(defaults: nil)
-        tuning.setValue(resizesOnRelease, for: TuningCatalog.inAppBrowserResizesSafariOnRelease)
-        return InAppBrowser(tuning: tuning, clock: clock)
     }
 
     private func openSheet(with browser: InAppBrowser, from root: UIViewController) async throws -> InAppBrowserSheet {
