@@ -42,6 +42,17 @@ private func status(id: String = "10", poll: Poll?, reblog: Status? = nil) -> St
 }
 
 struct PollDisplayTests {
+    /// 選択肢のない投票では、選ぶものも見る結果もないので、投票する形にせず、形を行き来させない。
+    @Test func pollWithoutOptionsCannotBeVotedOn() {
+        let display = PollDisplay(poll: poll(votes: []), choices: PollChoices(), now: now)
+
+        #expect(display.options.isEmpty)
+        #expect(display.mode == .results)
+        #expect(!display.canSubmit)
+        #expect(!display.canRevealResults)
+        #expect(!display.canReturnToVoting)
+    }
+
     @Test func votingBeforeVotingAndResultsAfterVoting() {
         #expect(PollDisplay(poll: poll(), choices: PollChoices(), now: now).mode == .voting)
         #expect(PollDisplay(poll: poll(voted: true, ownVotes: [0]), choices: PollChoices(), now: now).mode == .results)

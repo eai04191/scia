@@ -242,6 +242,18 @@ struct PollViewTests {
         #expect(!first.indicatorIsDisappeared, "先頭の記号が、消える動きにかけたままです")
     }
 
+    /// 選択肢のない投票は、投票があることと選択肢がないことを文字で示し、「投票」を出さない。
+    @Test func pollWithoutOptionsSaysSo() {
+        let view = PollView(frame: CGRect(x: 0, y: 0, width: 330, height: 300))
+
+        view.apply(Self.content(Self.poll(votes: [])))
+        #expect(view.emptyMessage == "選択肢がありません")
+        #expect(view.footerButtons.vote.isHidden)
+
+        view.apply(Self.content(Self.poll()))
+        #expect(view.emptyMessage == nil, "行を使い回して選択肢のある投票に替わったのに、文字が残っています")
+    }
+
     /// 形を入れ替えても、投票の高さは変えない。読んでいる位置を動かさないため。
     @Test func modeChangeKeepsHeight() throws {
         let poll = Self.poll()

@@ -68,6 +68,7 @@ enum PollCatalog {
             post("選択肢の文字が長い（投票前）", longTitles),
             post("選択肢の文字が長い（結果）", longTitles) { $0.reveal($1) },
             post("選択肢にカスタム絵文字", emojiTitles),
+            post("選択肢のない投票", poll(options: [])),
             post("本文のない投票", open, content: ""),
             post("投票とリンクカード", open, content: #"<p>投票とリンク <a href="https://news.example/articles/1">news.example/articles/1</a></p>"#),
             post("注意書き（閉じた、投票は隠れる）", open, spoilerText: "ネタバレ"),

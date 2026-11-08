@@ -50,7 +50,7 @@ public struct PollDisplay: Equatable, Sendable {
     /// - Parameter locale: 人数と票数の区切り方を決める、端末の地域。
     public init(poll: Poll, choices: PollChoices, now: Date, allowsVoting: Bool = true, locale: Locale = .autoupdatingCurrent) {
         let isExpired = poll.isExpired(at: now)
-        let showsResults = !allowsVoting || poll.voted || isExpired || choices.isRevealed(poll.id)
+        let showsResults = !allowsVoting || poll.voted || isExpired || choices.isRevealed(poll.id) || poll.options.isEmpty
         mode = showsResults ? .results : .voting
         multiple = poll.multiple
         isSubmitting = choices.isSubmitting(poll.id)
@@ -73,7 +73,7 @@ public struct PollDisplay: Equatable, Sendable {
         }
         canSubmit = !showsResults && !selection.isEmpty && !isSubmitting
         canRevealResults = !showsResults && !hidesTotals
-        canReturnToVoting = allowsVoting && showsResults && !poll.voted && !isExpired
+        canReturnToVoting = allowsVoting && showsResults && !poll.voted && !isExpired && !poll.options.isEmpty
         canRefresh = allowsVoting && showsResults && !poll.expired
         var parts = [poll.votersCount.map { "\(Self.countText($0, locale: locale))人" } ?? "\(Self.countText(poll.votesCount, locale: locale))票"]
         if let expiresAt = poll.expiresAt {

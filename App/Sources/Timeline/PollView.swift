@@ -55,6 +55,9 @@ final class PollView: UIView {
     private(set) var content: Content?
     private var optionViews: [PollOptionView] = []
     private let optionsStack = UIStackView()
+    /// 選択肢のない投票で、選択肢の場所に出す文字。
+    /// 並べるものがないと`optionsStack`の高さが決まらず、UIKitがセルを測るときの大きな目安の高さがそのまま返って、アプリが落ちる。
+    private let emptyLabel = UILabel()
     private let footer = UIView()
     /// 票数と締め切り。大きさと読み上げのために置き、文字は`summaryText`が描く。
     private let summaryLabel = UILabel()
@@ -79,6 +82,10 @@ final class PollView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         optionsStack.axis = .vertical
+        emptyLabel.text = "選択肢がありません"
+        emptyLabel.textColor = .secondaryLabel
+        emptyLabel.numberOfLines = 0
+        optionsStack.addArrangedSubview(emptyLabel)
         summaryLabel.textColor = .secondaryLabel
         // 文字を大きくして横に入りきらなくなったら、切り詰めずに折り返す。票数や締め切りが読めなくなるため。
         summaryLabel.numberOfLines = 0
@@ -160,6 +167,7 @@ final class PollView: UIView {
         let display = content.display
         optionsStack.spacing = content.optionSpacing
         footerTop.constant = content.footerSpacing
+        emptyLabel.isHidden = !display.options.isEmpty
         while optionViews.count < display.options.count {
             let option = PollOptionView()
             let index = optionViews.count
@@ -213,6 +221,7 @@ final class PollView: UIView {
         }
 
         if content.footerFont != previous?.footerFont || content.titleFont != previous?.titleFont {
+            emptyLabel.font = content.titleFont
             summaryLabel.font = content.footerFont
             secondaryButton.configuration?.titleTextAttributesTransformer = Self.fontTransformer(content.footerFont)
             voteButton.configuration?.titleTextAttributesTransformer = Self.fontTransformer(content.titleFont.withWeight(.semibold))
@@ -377,8 +386,11 @@ final class PollView: UIView {
 
     /// 読み上げの要素。選択肢、人数と締め切り、ボタンの順。
     var accessibilityParts: [Any] {
-        optionViews.filter { !$0.isHidden } + [summaryLabel, secondaryButton, voteButton].filter { !$0.isHidden }
+        optionViews.filter { !$0.isHidden } + [emptyLabel, summaryLabel, secondaryButton, voteButton].filter { !$0.isHidden }
     }
+
+    /// 選択肢がないときに出している文字。テストで使う。
+    var emptyMessage: String? { emptyLabel.isHidden ? nil : emptyLabel.text }
 
     /// 消している途中の、替える前のボタンの数。テストで、ボタンを入れ替えているかを確かめるために使う。
     var leavingButtonCount: Int { leavingButtons.count }
