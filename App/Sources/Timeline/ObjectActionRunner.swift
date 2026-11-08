@@ -119,7 +119,12 @@ struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable, Command>: Obje
     }
 
     func perform(_ trigger: ObjectTrigger, in view: UIView, at point: CGPoint) {
-        switch actions[trigger] {
+        perform(action: actions[trigger], in: view, at: point)
+    }
+
+    /// 選んだ操作を行う。
+    func perform(action: ObjectAction<Item>, in view: UIView, at point: CGPoint) {
+        switch action {
         case .menu:
             guard let menu = menu() else { return }
             TapMenuPresenter.shared.present(menu, in: view, at: point, lifecycle: lifecycle)

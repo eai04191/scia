@@ -2476,15 +2476,22 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let shown = status.displayed
         guard let itemID else { return postContentBuilder.actionBar(for: shown, countFont: countFont) { _ in true } }
         return FrameWork.measure("actionBar") {
-            var tree = statusMenuTree(status: status, notification: nil, id: itemID, canSelectText: canSelectText)
-            let emojiGroups = settings.mediaMenuLayout.submenuGroups(actions: settings.mediaActions)
-            tree.customEmoji = { [weak self] emoji in
-                self?.mediaMenuTree(for: MediaMenuTarget(attachment: emoji.attachment, source: nil) {}, statusMenu: nil).customEmojiSubmenu(emoji, groups: emojiGroups)
-            }
+            let tree = offlineStatusMenuTree(for: status, id: itemID, canSelectText: canSelectText)
             return postContentBuilder.actionBar(for: shown, countFont: countFont) { item in
                 MenuItemOutcome(singleItemMenu: tree.menu(groups: .single(item), includesFollowRequest: false).root).isAvailable
             }
         }
+    }
+
+    /// 項目を出せるかを決めるための、投稿のメニューの木。アクションバーのボタンで使う。
+    /// 組むだけで通信しない。メニューを出すときと違い、メニューに出る人の関係は読み直さず、カスタム絵文字の画像も読まない。
+    func offlineStatusMenuTree(for status: Status, id: ItemID, canSelectText: Bool) -> StatusMenuTree {
+        var tree = statusMenuTree(status: status, notification: nil, id: id, canSelectText: canSelectText)
+        let emojiGroups = settings.mediaMenuLayout.submenuGroups(actions: settings.mediaActions)
+        tree.customEmoji = { [weak self] emoji in
+            self?.mediaMenuTree(for: MediaMenuTarget(attachment: emoji.attachment, source: nil) {}, statusMenu: nil).customEmojiSubmenu(emoji, groups: emojiGroups)
+        }
+        return tree
     }
 
     /// 中身を置いたときに、本文を「テキストを選択」で選べるか。本文があり、注意書きで折りたたんでいないときに選べる。
