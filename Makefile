@@ -50,7 +50,6 @@ warnings: build
 
 ## シミュレーター上でschemeのテストを実行する。SIMを省くと、このworktreeが借りている端末（Tools/sim.sh acquire）で走らせる
 ## 貸し借りする端末（Scia 1〜）をSIMで指定するときは、このworktreeが借りている端末だけを受け付ける（Tools/sim.sh leased）
-## テストはハードウェアキーボードがつながった状態を前提にしているので、先につなぐ。sim-keyboardで外したままだと、投稿欄のテストが落ちる
 ## 端末のiOSの版で初めて走らせたときは、UIKitの公開されていない作りに頼る部分のUIテスト（SciaSystemUITests）も走らせる（Tools/system-ui-check.sh）
 ## 通ったら、確かめた作業ツリーの中身を覚える
 ## ONLYにテストの識別子（空白区切りで複数）を渡すと、それだけを走らせる。全部は走らせていないので、SciaSystemUITestsも走らせず、通っても中身を覚えない
@@ -67,7 +66,6 @@ test: generate
 ## make testから、走らせる端末を決めたあとに呼ぶ。直接は走らせない
 test-on-sim:
 	@mkdir -p $(DERIVED_DATA) && Tools/check-stamp.sh tree > $(TEST_TREE)
-	swift Tools/sim-keyboard.swift '$(SIM)' hardware
 	@# アクセシビリティの要素を作る設定（Tools/sim.sh dumpが入れる）を切る。アプリは起動時にこの設定を読むので、端末の前の状態でテストの結果が変わらないよう、テストのアプリを起動する前に揃える
 	xcrun simctl spawn '$(SIM)' defaults write com.apple.Accessibility ApplicationAccessibilityEnabled -bool false
 ifneq ($(strip $(ONLY)),)
