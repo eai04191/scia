@@ -10,7 +10,7 @@ public protocol StatusTranslating: Sendable {
 /// タイムラインの投稿の本文の自動翻訳。訳す順番と、訳文と、原文に戻した投稿を持つ。決まりはdocs/auto-translation.mdにある。
 @MainActor
 public final class StatusTranslationStore {
-    /// 訳文を届けたか、原文と訳文を切り替えた投稿を知らせる。
+    /// 訳文を届けたか、訳せないと分かったか、原文と訳文を切り替えた投稿を知らせる。
     public var onChange: ((Set<Status.ID>) -> Void)?
 
     private struct Entry {
@@ -31,6 +31,8 @@ public final class StatusTranslationStore {
     private var languages: Set<String> = []
     private var entries = CostLimitedCache<Status.ID, Entry>(totalCostLimit: StatusTranslationStore.cacheCostLimit)
     private var originals: Set<Status.ID> = []
+    /// 言語モデルが入っていないと分かった言語。訳せた時点で外す。
+    private var uninstalledLanguages: Set<String> = []
     /// 訳せなかった投稿と、そのときの本文。本文が変わるか、訳す言語が変わるまで、訳し直さない。
     private var skipped = CostLimitedCache<Status.ID, String>(totalCostLimit: StatusTranslationStore.cacheCostLimit)
     /// これから訳す投稿。先頭から訳す。
@@ -62,6 +64,7 @@ public final class StatusTranslationStore {
     public func setLanguages(_ codes: some Sequence<String>) {
         languages = Set(codes.compactMap(Self.languageCode))
         skipped = CostLimitedCache(totalCostLimit: Self.cacheCostLimit)
+        uninstalledLanguages = []
     }
 
     /// 翻訳先を置き換える。持っている訳文と訳せなかった投稿を忘れ、頼まれていた投稿を取り下げる。訳している途中の投稿の結果は捨てる。
@@ -71,6 +74,7 @@ public final class StatusTranslationStore {
         targetGeneration += 1
         entries = CostLimitedCache(totalCostLimit: Self.cacheCostLimit)
         skipped = CostLimitedCache(totalCostLimit: Self.cacheCostLimit)
+        uninstalledLanguages = []
         wanted = []
     }
 
@@ -92,6 +96,12 @@ public final class StatusTranslationStore {
     /// `status`の訳文を持っているか。原文に戻していても、持っていればtrue。
     public func hasTranslation(of status: Status) -> Bool {
         currentEntry(for: status) != nil
+    }
+
+    /// `status`の訳文を待っているか。本文のない投稿は、訳すものがないので待たない。ブーストなら元の投稿を渡す。
+    public func isTranslating(_ status: Status) -> Bool {
+        guard needsTranslation(status), !originals.contains(status.id), !status.content.isEmpty else { return false }
+        return !uninstalledLanguages.contains(status.language.flatMap(Self.languageCode) ?? "")
     }
 
     public func isShowingOriginal(_ status: Status) -> Bool {
@@ -132,8 +142,9 @@ public final class StatusTranslationStore {
                 guard !Task.isCancelled else { return }
                 guard generation == targetGeneration else { continue }
                 if let richText {
+                    if let code = Self.languageCode(language) { uninstalledLanguages.remove(code) }
                     _ = entries.setValue(Entry(content: status.content, richText: richText), forKey: status.id, cost: status.content.utf8.count)
-                    noteChange(status.id)
+                    noteChange([status.id])
                 } else {
                     skip(status)
                 }
@@ -141,7 +152,11 @@ public final class StatusTranslationStore {
                 guard generation == targetGeneration else { continue }
                 // 同じ言語の残りは試さない。ダウンロードがいつ終わっても訳せるよう、次に頼まれたときは試す。
                 let code = Self.languageCode(language)
+                let sameLanguage = wanted.filter { $0.language.flatMap(Self.languageCode) == code }
                 wanted.removeAll { $0.language.flatMap(Self.languageCode) == code }
+                if let code, uninstalledLanguages.insert(code).inserted {
+                    noteChange(Set(sameLanguage.map(\.id)).union([status.id]))
+                }
             } catch is CancellationError {
                 return
             } catch {
@@ -153,6 +168,7 @@ public final class StatusTranslationStore {
 
     private func skip(_ status: Status) {
         _ = skipped.setValue(status.content, forKey: status.id, cost: status.content.utf8.count)
+        noteChange([status.id])
     }
 
     private func nextWanted() -> Status? {
@@ -179,8 +195,8 @@ public final class StatusTranslationStore {
         return try plan.applying(translated)
     }
 
-    private func noteChange(_ id: Status.ID) {
-        changed.insert(id)
+    private func noteChange(_ ids: Set<Status.ID>) {
+        changed.formUnion(ids)
         let interval = applyInterval()
         scope.run(key: "apply", .skippingWhileRunning, .display) { [weak self, clock] in
             do {

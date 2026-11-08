@@ -56,6 +56,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var isEdited = false
     /// 本文を自動翻訳の訳文で出している。見出しの時刻の後ろにアイコンを出す。
     var isTranslated = false
+    /// 本文の訳文を待っている。
+    var isTranslating = false
     /// 同じ投稿で原文と訳文が替わるときに、文字をクロスフェードする時間。
     var translationFadeDuration: TimeInterval = 0
     /// 公開以外なら、時刻と編集済みのアイコンの前に、投稿欄で選ぶときと同じ記号を付ける。
@@ -232,6 +234,8 @@ struct PostContentConfiguration: UIContentConfiguration {
         }
         if isTranslated {
             text = "翻訳済み、\(text)"
+        } else if isTranslating {
+            text = "翻訳中、\(text)"
         }
         if visibility != .public {
             text = "\(VisibilityOption(visibility).title)、\(text)"
@@ -253,6 +257,8 @@ final class PostContentView: UIView, UIContentView {
     private var contextInteractions: [ObjectInteraction] = []
     private let nameLabels = [FadingLabel(), FadingLabel()]
     private let timeLabel = UILabel()
+    private let translationIcon = UIImageView()
+    private var translationIconPulses = false
     /// 描いている時刻の表記。記号を除いた文字で、書き直すかどうかを比べる。
     private var timeText = ""
     private let nameRow = UIStackView()
@@ -402,6 +408,10 @@ final class PostContentView: UIView, UIContentView {
         timeLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         timeLabel.setContentHuggingPriority(.required, for: .horizontal)
         nameRow.addArrangedSubview(timeLabel)
+        translationIcon.tintColor = .secondaryLabel
+        translationIcon.setContentCompressionResistancePriority(.required, for: .horizontal)
+        translationIcon.setContentHuggingPriority(.required, for: .horizontal)
+        nameRow.addArrangedSubview(translationIcon)
         nameRow.axis = .horizontal
         nameRow.alignment = .firstBaseline
         // すき間は、名前の表記と設定に合わせて、適用のたびに決める。時刻を右端に寄せるため、2つ目の名前が余りの幅を受け持つ。
@@ -429,7 +439,8 @@ final class PostContentView: UIView, UIContentView {
     }
 
     private func apply(_ configuration: PostContentConfiguration) {
-        let translationChanged = current.statusID == configuration.statusID && current.isTranslated != configuration.isTranslated
+        let isSameStatus = current.statusID == configuration.statusID
+        let translationChanged = isSameStatus && current.isTranslated != configuration.isTranslated
         current = configuration
         let metrics = configuration.metrics
 
@@ -488,6 +499,8 @@ final class PostContentView: UIView, UIContentView {
         timeText = configuration.timeText(now: now())
         timeLabel.attributedText = timeAttributedText(timeText, for: configuration)
         timeLabel.isHidden = !configuration.showsTime
+        nameRow.setCustomSpacing(metrics.visibilitySymbolSpacing, after: timeLabel)
+        updateTranslationIcon(for: configuration, isSameStatus: isSameStatus)
 
         bodyView.emojiImages = configuration.emojiImages
         bodyView.embedActions = configuration.embedActions
@@ -759,6 +772,23 @@ final class PostContentView: UIView, UIContentView {
         }
     }
 
+    /// 時刻の後ろの翻訳のアイコン。訳文を待つ間はパルスさせ、届いたら同じ場所で止める。
+    private func updateTranslationIcon(for configuration: PostContentConfiguration, isSameStatus: Bool) {
+        let shows = configuration.showsTime && (configuration.isTranslated || configuration.isTranslating)
+        translationIcon.isHidden = !shows
+        // ベースラインの位置を読むため、大きさの設定を画像そのものに当てておく。
+        translationIcon.image = shows ? UIImage(systemName: "translate", withConfiguration: UIImage.SymbolConfiguration(font: configuration.metrics.timeFont, scale: .small)) : nil
+        let pulses = shows && configuration.isTranslating
+        // 使い回したセルのパルスは止まっていることがあるので、投稿が替わったら付け直す。
+        if pulses, !(translationIconPulses && isSameStatus) {
+            translationIcon.removeAllSymbolEffects()
+            translationIcon.addSymbolEffect(.pulse, options: .repeat(.continuous))
+        } else if !pulses, translationIconPulses {
+            translationIcon.removeAllSymbolEffects()
+        }
+        translationIconPulses = pulses
+    }
+
     /// 時刻の表記に、公開範囲の記号を前置きする。記号は文字に添えるので、ベースラインに乗り、文字と同じ色で描かれる。
     private func timeAttributedText(_ text: String, for configuration: PostContentConfiguration) -> NSAttributedString {
         let font = configuration.metrics.timeFont
@@ -777,12 +807,6 @@ final class PostContentView: UIView, UIContentView {
             time.addAttribute(.kern, value: configuration.metrics.editedMarkSpacing, range: NSRange(location: 0, length: 1))
         }
         result.append(time)
-        if configuration.isTranslated,
-           let image = UIImage(systemName: "translate", withConfiguration: UIImage.SymbolConfiguration(font: font, scale: .small)) {
-            let spaceWidth = (" " as NSString).size(withAttributes: [.font: font]).width
-            result.append(NSAttributedString(string: " ", attributes: [.kern: configuration.metrics.visibilitySymbolSpacing - spaceWidth]))
-            result.append(NSAttributedString(attachment: NSTextAttachment(image: image)))
-        }
         result.addAttributes(attributes, range: NSRange(location: 0, length: result.length))
         return result
     }

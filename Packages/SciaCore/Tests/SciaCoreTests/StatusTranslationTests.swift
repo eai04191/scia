@@ -153,6 +153,14 @@ struct StatusTranslationStoreTests {
         }
     }
 
+    /// 翻訳と、まとめて知らせる待ち時間が終わるまで待つ。
+    private func waitUntilSettled(_ scope: TaskScope, clock: TestClock) async throws {
+        try await waitUntil {
+            clock.advance(by: .milliseconds(250))
+            return scope.runningCount == 0
+        }
+    }
+
     @Test func translatesAndDeliversBody() async throws {
         let scope = TaskScope()
         let clock = TestClock()
@@ -234,10 +242,11 @@ struct StatusTranslationStoreTests {
     @Test func retriesUninstalledLanguageOnNextRequest() async throws {
         let scope = TaskScope()
         let translator = FakeTranslator(notInstalledLanguages: ["en"])
-        let store = store(translator, clock: TestClock(), scope: scope)
+        let clock = TestClock()
+        let store = store(translator, clock: clock, scope: scope)
 
         store.request([status("1"), status("2")])
-        try await waitUntil { scope.runningCount == 0 }
+        try await waitUntilSettled(scope, clock: clock)
         #expect(translator.attempts == 1)
 
         translator.install()
@@ -248,11 +257,12 @@ struct StatusTranslationStoreTests {
     /// 訳せなかった投稿も、本文が編集されたら訳し直す。
     @Test func retriesSkippedStatusAfterEdit() async throws {
         let scope = TaskScope()
-        let store = store(FakeTranslator(), clock: TestClock(), scope: scope)
+        let clock = TestClock()
+        let store = store(FakeTranslator(), clock: clock, scope: scope)
         let codeOnly = status("1", content: "<pre><code>let a = 1</code></pre>")
 
         store.request([codeOnly])
-        try await waitUntil { scope.runningCount == 0 }
+        try await waitUntilSettled(scope, clock: clock)
         store.request([codeOnly])
         #expect(scope.runningCount == 0)
 
@@ -297,6 +307,68 @@ struct StatusTranslationStoreTests {
         store.toggleOriginal(of: post)
         #expect(store.translation(for: post) != nil)
         #expect(delivered == [["1"], ["1"]])
+    }
+
+    /// 訳文が届くまで待っている状態で、届いたら待っていない。
+    @Test func isTranslatingUntilTranslationArrives() async throws {
+        let scope = TaskScope()
+        let gate = Gate()
+        let store = store(FakeTranslator(gate: gate), clock: TestClock(), scope: scope)
+        let post = status("1")
+        #expect(store.isTranslating(post))
+
+        store.request([post])
+        try await waitUntil { gate.waiterCount >= 1 }
+        #expect(store.isTranslating(post))
+
+        gate.open()
+        try await waitUntil { store.hasTranslation(of: post) }
+        #expect(!store.isTranslating(post))
+    }
+
+    /// 選んでいない言語の投稿と本文のない投稿は、待っている状態にしない。
+    @Test func isNotTranslatingWhenNothingToTranslate() {
+        let store = store(FakeTranslator(), clock: TestClock(), scope: TaskScope())
+
+        #expect(!store.isTranslating(status("1", language: "de")))
+        #expect(!store.isTranslating(status("2", content: "")))
+    }
+
+    /// 言語モデルがないと分かったら、同じ言語の投稿を待っている状態から外して知らせる。入ったあとで訳せたら、その言語はまた待つ。
+    @Test func stopsTranslatingWhenLanguageIsNotInstalled() async throws {
+        let scope = TaskScope()
+        let translator = FakeTranslator(notInstalledLanguages: ["en"])
+        let clock = TestClock()
+        let store = store(translator, clock: clock, scope: scope)
+        var delivered: Set<Status.ID> = []
+        store.onChange = { delivered.formUnion($0) }
+
+        store.request([status("1"), status("2")])
+        try await waitForDelivery(of: ["1", "2"], clock: clock) { delivered }
+
+        #expect(delivered == ["1", "2"])
+        #expect(!store.isTranslating(status("1")))
+
+        translator.install()
+        store.request([status("1")])
+        try await waitUntil { store.hasTranslation(of: status("1")) }
+        #expect(store.isTranslating(status("2")))
+    }
+
+    /// 訳せなかった投稿は、待っている状態から外して知らせる。
+    @Test func stopsTranslatingSkippedStatus() async throws {
+        let scope = TaskScope()
+        let clock = TestClock()
+        let store = store(FakeTranslator(), clock: clock, scope: scope)
+        var delivered: Set<Status.ID> = []
+        store.onChange = { delivered.formUnion($0) }
+        let codeOnly = status("1", content: "<pre><code>let a = 1</code></pre>")
+
+        store.request([codeOnly])
+        try await waitForDelivery(of: ["1"], clock: clock) { delivered }
+
+        #expect(delivered == ["1"])
+        #expect(!store.isTranslating(codeOnly))
     }
 
     /// 翻訳先を変えると、持っている訳文を捨て、新しい翻訳先で訳し直す。

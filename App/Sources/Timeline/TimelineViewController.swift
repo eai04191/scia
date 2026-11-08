@@ -2294,6 +2294,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let hidesReplyLabel = hidesReplyLabelBelowParent && connection.parentIsAbove && shown.id != threadFocusID
         let replyLabel = hidesReplyLabel ? nil : ReplyLabel(status: shown, myAccountID: myAccountID)
         var configuration = postContentBuilder.configuration(for: status, isPinned: isPinned, replyLabel: replyLabel, translation: translatesBody ? translatedBody(of: status) : nil, base: base)
+        configuration.isTranslating = translatesBody && translations?.isTranslating(status.displayed) == true
         configuration.replyConnection = connection
         configuration.onOpenAccount = { [weak self] in self?.onOpenProfile?(shown.account) }
         configuration.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination, shown) }
