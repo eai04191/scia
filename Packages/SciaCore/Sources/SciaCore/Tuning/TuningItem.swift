@@ -1142,6 +1142,24 @@ public enum TuningCatalog {
         defaultValue: false
     )
 
+    /// シートを指で引いている間はSafariの大きさを変えず、指を離してからシートに合わせる。
+    /// 毎フレーム変えると、離してから0.7秒ほどSafariがタップを受けない（シミュレーターで確かめた）。代わりに、引いている途中はSafariがシートに付いてこない。
+    public static let inAppBrowserResizesSafariOnRelease = ToggleTuning(
+        id: "browser.resizesSafariOnRelease",
+        title: "アプリ内のSafariの大きさを、指を離してから変える",
+        defaultValue: false
+    )
+
+    /// 指を離してからSafariの大きさを変えるまでの時間（`inAppBrowserResizesSafariOnRelease`がオンのとき）。
+    /// 離した直後はシートの大きさが続けて変わり、そのたびにSafariの大きさを変えるとタップを受けなくなる（シミュレーターで確かめた）ので、この時間待って1回にまとめる。
+    public static let inAppBrowserSafariResizeDelay = NumberTuning(
+        id: "browser.safariResizeDelay",
+        title: "指を離してからアプリ内のSafariの大きさを変えるまでの時間（秒）",
+        range: 0...0.5,
+        step: 0.01,
+        defaultValue: 0.05
+    )
+
     /// アプリ内のSafariを、伏せた高さで出してから中くらいの高さへ広げる。
     /// 実機では、中くらいの高さで直接出すと、ページを描く前の面が上がってきて、手前で本物のシートに跳んで止まって見える。
     /// 小さく出して上がりきってから広げると、広げる動きはページを描いたシートで動き、跳ぶ動きが目立ちにくくなる。実機で比べて、こちらを既定にした。
@@ -1983,6 +2001,8 @@ public enum TuningCatalog {
             .number(inAppBrowserBarGrabSettlingHeight),
             .number(inAppBrowserBarGrabSettlingDuration),
             .toggle(inAppBrowserShowsBarGrabArea),
+            .toggle(inAppBrowserResizesSafariOnRelease),
+            .number(inAppBrowserSafariResizeDelay),
             .toggle(inAppBrowserGrowsFromCollapsed),
         ]),
         TuningSection(id: "media.dismiss", title: "ビューア：閉じる操作", items: [

@@ -19,6 +19,19 @@ final class InAppBrowserSheet: UIViewController {
     private let barGrab: BarGrab
     private let clock: any Clock<Duration>
     private var narrowing: Task<Void, Never>?
+    private let resizesSafariOnRelease: Bool
+    private let safariResizeDelay: Duration
+    private var pendingResize: Task<Void, Never>?
+    private lazy var fingerWatcher = FingerWatcher { [weak self] isDown in
+        self?.isFingerDown = isDown
+    }
+    var isWatchingFinger: Bool { fingerWatcher.view != nil }
+    /// アプリのウィンドウに指が触れている間。Safariの上の指はウィンドウに届かないので、シートを引く指はここに入るが、ページを触る指は入らない。
+    var isFingerDown = false {
+        didSet {
+            if oldValue, !isFingerDown { view.setNeedsLayout() }
+        }
+    }
 
     /// Safariのバーの上に重ねる、シートを引ける範囲の決まり。
     struct BarGrab {
@@ -31,10 +44,12 @@ final class InAppBrowserSheet: UIViewController {
         var isVisible: Bool
     }
 
-    init(safari: SFSafariViewController, handleHeight: CGFloat, barGrab: BarGrab, clock: any Clock<Duration>) {
+    init(safari: SFSafariViewController, handleHeight: CGFloat, barGrab: BarGrab, resizesSafariOnRelease: Bool, safariResizeDelay: Duration, clock: any Clock<Duration>) {
         self.safari = safari
         self.handleHeight = handleHeight
         self.barGrab = barGrab
+        self.resizesSafariOnRelease = resizesSafariOnRelease
+        self.safariResizeDelay = safariResizeDelay
         self.clock = clock
         area = UIViewController()
         super.init(nibName: nil, bundle: nil)
@@ -63,7 +78,38 @@ final class InAppBrowserSheet: UIViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         guard safari.presentingViewController != nil, let container = safari.viewIfLoaded?.superview else { return }
-        safari.view.frame = container.bounds
+        guard resizesSafariOnRelease else {
+            safari.view.frame = container.bounds
+            return
+        }
+        scheduleSafariResize(toFit: container)
+    }
+
+    /// 指が触れている間は待ち、離したあとは少し待って、続けて変わるシートの大きさを1回の変更にまとめる。
+    private func scheduleSafariResize(toFit container: UIView) {
+        pendingResize?.cancel()
+        guard !isFingerDown, safari.view.frame != container.bounds else { return }
+        pendingResize = Task(.withoutRequests) { [weak self, weak container, clock, safariResizeDelay] in
+            do {
+                try await clock.sleep(for: safariResizeDelay)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled, let self, !self.isFingerDown, let container else { return }
+            self.safari.view.frame = container.bounds
+        }
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        guard resizesSafariOnRelease, fingerWatcher.view == nil else { return }
+        view.window?.addGestureRecognizer(fingerWatcher)
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        fingerWatcher.view?.removeGestureRecognizer(fingerWatcher)
+        isFingerDown = false
     }
 
     /// シートを出し始めたあとに呼んで、帯の下にSafariを重ね、その上にSafariのバーの引ける範囲を重ねる。シートと一緒に上がってくるよう、Safariは動かさずに出す。
@@ -105,6 +151,44 @@ extension InAppBrowserSheet: UIViewControllerTransitioningDelegate {
     func animationController(forDismissed dismissed: UIViewController) -> (any UIViewControllerAnimatedTransitioning)? {
         guard dismissed === safari else { return nil }
         return SheetClosingTransition(sheet: self)
+    }
+}
+
+/// ウィンドウに指が触れているかだけを見るジェスチャー。何も認識せず、ほかのジェスチャーやビューの操作を邪魔しない。
+private final class FingerWatcher: UIGestureRecognizer {
+    private let onChange: (Bool) -> Void
+    private var activeTouches = 0
+
+    init(onChange: @escaping (Bool) -> Void) {
+        self.onChange = onChange
+        super.init(target: nil, action: nil)
+        cancelsTouchesInView = false
+        delaysTouchesBegan = false
+        delaysTouchesEnded = false
+    }
+
+    override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool { false }
+    override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool { false }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        if activeTouches == 0 { onChange(true) }
+        activeTouches += touches.count
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+        release(touches)
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+        release(touches)
+    }
+
+    private func release(_ touches: Set<UITouch>) {
+        activeTouches -= touches.count
+        guard activeTouches <= 0 else { return }
+        activeTouches = 0
+        onChange(false)
+        state = .failed
     }
 }
 

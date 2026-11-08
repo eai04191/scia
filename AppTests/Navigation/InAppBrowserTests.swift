@@ -167,6 +167,60 @@ struct InAppBrowserTests {
         root.dismiss(animated: false)
     }
 
+    /// 指を離してから大きさを変える設定では、指が触れている間はSafariの大きさを変えず、離したらシートに合わせる。
+    @Test func safariResizesAfterFingerLiftsWhenEnabled() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let clock = TestClock()
+        let browser = makeBrowser(resizesOnRelease: true, clock: clock)
+        let sheet = try await openSheet(with: browser, from: root)
+        #expect(sheet.isWatchingFinger)
+        let safariHeight = sheet.safari.view.frame.height
+        let before = sheet.view.bounds.height
+        let presentation = try #require(sheet.sheetPresentationController)
+
+        sheet.isFingerDown = true
+        presentation.selectedDetentIdentifier = .large
+        sheet.view.window?.layoutIfNeeded()
+        try await waitUntil { sheet.view.bounds.height != before }
+        sheet.view.layoutIfNeeded()
+        #expect(sheet.safari.view.frame.height == safariHeight)
+
+        sheet.isFingerDown = false
+        sheet.view.layoutIfNeeded()
+        // 離したあとも、待つ時間が過ぎるまでは大きさを変えない。続けて届くシートの大きさの変化を1回にまとめるため。
+        #expect(sheet.safari.view.frame.height == safariHeight)
+        let delay = Duration.seconds(TuningCatalog.inAppBrowserSafariResizeDelay.defaultValue)
+        try await waitUntil { clock.sleeperCount(dueWithin: delay) >= 1 }
+        clock.advance(by: delay)
+        try await waitUntil { sheet.safari.view.frame.height != safariHeight }
+        let safariFrame = sheet.safari.view.convert(sheet.safari.view.bounds, to: sheet.view)
+        #expect(safariFrame.maxY == sheet.view.bounds.maxY)
+        root.dismiss(animated: false)
+    }
+
+    /// 既定では、指が触れている間もSafariの大きさをシートに合わせる。
+    @Test func safariFollowsSheetWhileFingerIsDownByDefault() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let browser = makeBrowser(resizesOnRelease: false, clock: TestClock())
+        let sheet = try await openSheet(with: browser, from: root)
+        let before = sheet.view.bounds.height
+        let presentation = try #require(sheet.sheetPresentationController)
+
+        sheet.isFingerDown = true
+        presentation.selectedDetentIdentifier = .large
+        sheet.view.window?.layoutIfNeeded()
+        try await waitUntil { sheet.view.bounds.height != before }
+        sheet.view.layoutIfNeeded()
+
+        let safariFrame = sheet.safari.view.convert(sheet.safari.view.bounds, to: sheet.view)
+        #expect(safariFrame.maxY == sheet.view.bounds.maxY)
+        root.dismiss(animated: false)
+    }
+
     /// シートの高さを決める間は、覆う高さを知らせず、決め終えてから知らせる。
     /// 知らせを受けたタイムラインが安全領域を変えると、UIKitが高さを決めている途中のシートに位置を聞き直し、入れ子になって落ちるため。
     @Test func reportsObscuredHeightAfterResolvingDetents() async throws {
@@ -194,6 +248,20 @@ struct InAppBrowserTests {
         #expect(!reportedWhileResolving)
         try await waitUntil { !reported.isEmpty }
         root.dismiss(animated: false)
+    }
+
+    private func makeBrowser(resizesOnRelease: Bool, clock: TestClock) -> InAppBrowser {
+        let tuning = TuningStore(defaults: nil)
+        tuning.setValue(resizesOnRelease, for: TuningCatalog.inAppBrowserResizesSafariOnRelease)
+        return InAppBrowser(tuning: tuning, clock: clock)
+    }
+
+    private func openSheet(with browser: InAppBrowser, from root: UIViewController) async throws -> InAppBrowserSheet {
+        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
+        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
+        let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
+        try await waitUntil { sheet.safari.viewIfLoaded?.window != nil }
+        return sheet
     }
 }
 
