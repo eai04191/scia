@@ -27,6 +27,14 @@ final class PostActionBarView: UIView {
     private let stack = UIStackView()
     private var buttonViews: [PostActionBarButtonView] = []
     private(set) var content: PostActionBarContent?
+    /// バーの上と下にある、押せる範囲を広げてよい空きの高さ。
+    var hitSpace = PostActionBarButtonView.HitSpace() {
+        didSet {
+            for view in buttonViews {
+                view.hitSpace = hitSpace
+            }
+        }
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -64,6 +72,7 @@ final class PostActionBarView: UIView {
                 let sinceTouchUp = view.consumeTouchEnd().map { start - $0 } ?? -1
                 PostActionBarButtonView.logger.info("action bar press item=\(item.rawValue, privacy: .public) sinceTouchUp=\(sinceTouchUp, privacy: .public) work=\(end - start, privacy: .public)")
             }, for: .touchUpInside)
+            view.hitSpace = hitSpace
             buttonViews.append(view)
             stack.addArrangedSubview(view)
         }
@@ -119,6 +128,12 @@ final class PostActionBarView: UIView {
     /// 出しているボタン。読み上げの要素に使う。
     var shownButtons: [PostActionBarButtonView] {
         buttonViews.filter { !$0.isHidden }
+    }
+
+    /// バーの枠の外も含めて、`point`（`space`の座標）を受けるボタン。
+    /// バーの枠の外の点は、親からの`hitTest`がボタンまで降りてこないので、投稿の中身が空きを押されたときにこれで探す。
+    func button(at point: CGPoint, in space: UIView, with event: UIEvent?) -> UIView? {
+        shownButtons.lazy.compactMap { $0.hitTest(space.convert(point, to: $0), with: event) }.first
     }
 }
 
@@ -204,6 +219,24 @@ final class PostActionBarButtonView: UIControl {
         return touchEndedAt
     }
     private var lastDeceleratingTouch: TimeInterval?
+
+    /// ボタンの上と下にある、押せる範囲を広げてよい空きの高さ。
+    struct HitSpace: Equatable {
+        var above: CGFloat = 0
+        var below: CGFloat = 0
+    }
+
+    var hitSpace = HitSpace()
+    /// 押せる高さの上限。HIGの最小のタップ領域に合わせる。
+    private static let maximumHitHeight: CGFloat = 44
+
+    /// 指を離した位置の判定にも使うので、`hitTest`だけでなくここで広げる。アイコンはボタンの上下の中央にあるので、中央から同じ長さまで広げる。
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        let reach = max(Self.maximumHitHeight - bounds.height, 0) / 2
+        return bounds
+            .inset(by: UIEdgeInsets(top: -min(hitSpace.above, reach), left: 0, bottom: -min(hitSpace.below, reach), right: 0))
+            .contains(point)
+    }
 
     /// 慣性で流れているタイムラインに触れると、UIKitはスクロールを止めるだけで、ボタンにタッチを渡さないことがある。押しても何も起きなかったときに、このあとに押した記録が続くかで見分ける。
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {

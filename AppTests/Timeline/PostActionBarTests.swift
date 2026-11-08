@@ -371,6 +371,59 @@ struct PostActionBarTests {
         #expect(try hasRowShift(#require(harness.visibleCell(of: .status(statuses[11].id)))), "下のアイテムを動かしていません")
     }
 
+    /// アクションバーを出した投稿の中身と、1つ目のボタン。`spacing`と`bottom`は「本文とのあいだ」と「下の余白」。
+    private func laidOutBar(spacing: CGFloat, bottom: CGFloat) throws -> (harness: TimelineHarness, content: PostContentView, button: PostActionBarButtonView) {
+        let harness = try TimelineHarness()
+        harness.settings.appearance.showsActionBar = true
+        harness.settings.setValue(spacing, for: AppearanceCatalog.actionBarSpacing)
+        harness.settings.setValue(bottom, for: AppearanceCatalog.rowPaddingBottom)
+        let statuses = StatusFactory.make(count: 30, startingAt: 1_000)
+        harness.setStatuses(statuses)
+        try harness.scroll(to: .status(statuses[10].id), at: .centeredVertically)
+        let content = try #require(harness.visibleCell(of: .status(statuses[10].id))?.contentView as? PostContentView)
+        content.layoutIfNeeded()
+        let button = try #require(content.postBody.actionBar?.shownButtons.first)
+        return (harness, content, button)
+    }
+
+    /// `content`の座標で、ボタンの中央の列の高さ`y`を押すと受けるビュー。
+    private func hit(_ content: PostContentView, button: PostActionBarButtonView, y: CGFloat) -> UIView? {
+        content.hitTest(CGPoint(x: button.convert(button.bounds, to: content).midX, y: y), with: nil)
+    }
+
+    /// バーの上の「本文とのあいだ」と、下の「下の余白」も押せる。本文より上とアイテムの外は押せない。
+    @Test func blankAroundBarReachesButton() throws {
+        let (harness, content, button) = try laidOutBar(spacing: 8, bottom: 15)
+        defer { harness.tearDown() }
+        let frame = button.convert(button.bounds, to: content)
+
+        #expect(hit(content, button: button, y: frame.minY - 7) === button)
+        #expect(hit(content, button: button, y: frame.midY + 21) === button)
+        #expect(hit(content, button: button, y: frame.minY - 9) !== button)
+        #expect(hit(content, button: button, y: content.bounds.maxY + 1) !== button)
+        #expect(button.point(inside: button.convert(CGPoint(x: frame.midX, y: frame.midY + 21), from: content), with: nil), "指を離す位置をボタンの外と扱うと、押したことになりません")
+    }
+
+    /// ボタンの上で指を止めてから動かしても、スクロールに切り替わる。押せる範囲を空きまで広げたので、切り替わらないと、空きから始めたスクロールが効かない。
+    @Test func draggingFromButtonScrolls() throws {
+        let (harness, _, button) = try laidOutBar(spacing: 8, bottom: 15)
+        defer { harness.tearDown() }
+
+        #expect(harness.viewController.collectionView.touchesShouldCancel(in: button))
+    }
+
+    /// 余白が広くても、押せる高さはアイコンの中心から上下22ptまでにする。
+    @Test func reachStopsAtMinimumTapTarget() throws {
+        let (harness, content, button) = try laidOutBar(spacing: 40, bottom: 40)
+        defer { harness.tearDown() }
+        let frame = button.convert(button.bounds, to: content)
+
+        #expect(hit(content, button: button, y: frame.midY - 21) === button)
+        #expect(hit(content, button: button, y: frame.midY + 21) === button)
+        #expect(hit(content, button: button, y: frame.midY - 23) !== button)
+        #expect(hit(content, button: button, y: frame.midY + 23) !== button)
+    }
+
     /// 「投稿の見た目」のプレビューの見本のボタンは、押しても何もしない。
     @Test func previewButtonsDoNothing() throws {
         let configuration = PostContentConfiguration.withActionBarPress()

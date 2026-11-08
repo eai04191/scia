@@ -982,6 +982,13 @@ final class PostContentView: UIView, UIContentView {
         return actions
     }
 
+    /// アクションバーの上下の、何も受けない空きを押されたら、その列のボタンが受ける。部品が受ける場所は部品に渡す。
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let hit = super.hitTest(point, with: event)
+        guard hit === self || hit === bodyView else { return hit }
+        return bodyView.actionBar?.button(at: point, in: self, with: event) ?? hit
+    }
+
     override func layoutSubviews() {
         FrameWork.measure("PostContentView.layoutSubviews") { layoutContents() }
     }
@@ -992,6 +999,7 @@ final class PostContentView: UIView, UIContentView {
         layoutReplyLines()
         // 本文の枠は中身の部品の中で決まるため、先に並べておく。
         bodyView.layoutIfNeeded()
+        bodyView.actionBar?.hitSpace = .init(above: current.metrics.actionBarSpacing, below: bounds.maxY - bodyView.frame.maxY)
         if bodyView.isBodyTruncated != accessibilityReflectsTruncation {
             updateAccessibility(for: current)
         }

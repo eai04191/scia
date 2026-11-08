@@ -3225,7 +3225,7 @@ final class TimelineCollectionView: UICollectionView {
     }
 
     override func touchesShouldCancel(in view: UIView) -> Bool {
-        view is LinkHitArea || view is ReadMoreButton || super.touchesShouldCancel(in: view)
+        view is LinkHitArea || view is ReadMoreButton || view is PostActionBarButtonView || super.touchesShouldCancel(in: view)
     }
 }
 
