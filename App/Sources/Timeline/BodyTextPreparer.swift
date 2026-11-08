@@ -22,13 +22,16 @@ final class BodyTextPreparer {
         let tags: [Tag]
         let emojis: [CustomEmoji]
         let hasQuote: Bool
+        /// 自動翻訳の訳文。訳文で描かないならnil。
+        let translation: RichText?
 
-        init(_ status: Status) {
+        init(_ status: Status, translation: RichText?) {
             content = status.content
             mentions = status.mentions
             tags = status.tags
             emojis = status.emojis
             hasQuote = status.quote != nil
+            self.translation = translation
         }
     }
 
@@ -83,8 +86,8 @@ final class BodyTextPreparer {
         /// `status`の本文を`renderer`で描いたときと同じか。本文の中身、描き方、カスタム絵文字の画像の状態を比べる。
         /// 絵文字は描いた高さで求めるので、絵文字だけの本文のように大きく描く絵文字は、ここでその高さの読み直しが始まる。
         @MainActor
-        func isCurrent(for status: Status, renderer: RichTextRenderer) -> Bool {
-            source == Source(status) && self.renderer.hasSameStyle(as: renderer)
+        func isCurrent(for status: Status, translation: RichText?, renderer: RichTextRenderer) -> Bool {
+            source == Source(status, translation: translation) && self.renderer.hasSameStyle(as: renderer)
                 && emojiPixelHeights.allSatisfy { url, height in
                     renderer.emojiState(of: url, pixelHeight: height) == self.renderer.emojiState(of: url, pixelHeight: height)
                 }
@@ -118,8 +121,8 @@ final class BodyTextPreparer {
     }
 
     /// `status`の本文を、作っておいた文字列と並びで返す。作っていないか、`renderer`の描き方や、カスタム絵文字の画像の状態が作ったときと違えばnil。
-    func prepared(for status: Status, renderer: RichTextRenderer) -> Prepared? {
-        guard let entry = entries[status.id], entry.isCurrent(for: status, renderer: renderer) else { return nil }
+    func prepared(for status: Status, translation: RichText?, renderer: RichTextRenderer) -> Prepared? {
+        guard let entry = entries[status.id], entry.isCurrent(for: status, translation: translation, renderer: renderer) else { return nil }
         return Prepared(text: entry.text, layout: entry.layout)
     }
 
@@ -128,27 +131,30 @@ final class BodyTextPreparer {
     ///   - renderer: 投稿の本文の描き手を返す。行を組み立てるときと同じ描き手にする。
     ///   - geometry: 本文のラベルの値と幅。分からなければnilにし、文字列だけを作る。
     ///   - truncation: 投稿の長い本文を切る決まりを返す。
+    ///   - translation: 本文を訳文で描く投稿の、訳文を返す。
     ///   - guessesLinkCardDirections: リンクカードの文字の書く方向を判定しておく。カードを出さない設定ならfalse。
     func prepare(
         _ statuses: [Status],
-        renderer: (Status) -> RichTextRenderer,
+        renderer: (Status, RichText?) -> RichTextRenderer,
         geometry: Geometry?,
         truncation: (Status) -> BodyTruncation?,
+        translation: (Status) -> RichText?,
         guessesLinkCardDirections: Bool
     ) {
         var works: [Work] = []
         for status in statuses {
-            let made = renderer(status)
+            let translated = translation(status)
+            let made = renderer(status, translated)
             // カスタム絵文字の画像が届いたり読めなかったりして描き方が変わった本文は、作り直す。
             let isPrepared = entries[status.id].map { entry in
-                entry.isCurrent(for: status, renderer: made)
+                entry.isCurrent(for: status, translation: translated, renderer: made)
                     && entry.layout.map { $0.style == geometry?.style && $0.width == geometry?.width } ?? (geometry == nil)
             } ?? false
             if !isPrepared {
                 works.append(.body(Request(
                     id: status.id,
                     status: status,
-                    source: Source(status),
+                    source: Source(status, translation: translated),
                     renderer: made.withEmojiSnapshot(of: status.emojis.map(\.staticUrl)),
                     geometry: geometry,
                     truncation: truncation(status)
@@ -207,7 +213,7 @@ final class BodyTextPreparer {
     /// 本文を文字列にして並べる。メインスレッドの外で走らせ、作ったものは返したあとメインスレッドだけが触る。
     @concurrent
     private nonisolated static func make(_ request: Request) async -> sending Entry {
-        let richText = RichText.status(request.status)
+        let richText = request.source.translation ?? RichText.status(request.status)
         let text = request.renderer.render(richText)
         let layout = request.geometry.map {
             PreparedTextLayout(source: text, style: $0.style, width: $0.width, truncation: request.truncation)

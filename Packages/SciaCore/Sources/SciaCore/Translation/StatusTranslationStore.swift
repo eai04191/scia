@@ -29,10 +29,8 @@ public final class StatusTranslationStore {
     private var languages: Set<String> = []
     private var entries = CostLimitedCache<Status.ID, Entry>(totalCostLimit: StatusTranslationStore.cacheCostLimit)
     private var originals: Set<Status.ID> = []
-    /// 訳せなかった投稿。訳す言語が変わるまで、訳し直さない。
-    private var skipped: Set<Status.ID> = []
-    /// 言語モデルが入っていなかった言語。訳す言語が変わるまで、試さない。
-    private var unavailableLanguages: Set<String> = []
+    /// 訳せなかった投稿と、そのときの本文。本文が変わるか、訳す言語が変わるまで、訳し直さない。
+    private var skipped = CostLimitedCache<Status.ID, String>(totalCostLimit: StatusTranslationStore.cacheCostLimit)
     /// これから訳す投稿。先頭から訳す。
     private var wanted: [Status] = []
     private var changed: Set<Status.ID> = []
@@ -58,11 +56,10 @@ public final class StatusTranslationStore {
         self.applyInterval = applyInterval
     }
 
-    /// 訳す言語を置き換える。訳せなかった投稿と言語は、ダウンロードで訳せるようになるので忘れる。
+    /// 訳す言語を置き換える。訳せなかった投稿は、訳せるようになっているかもしれないので忘れる。
     public func setLanguages(_ codes: some Sequence<String>) {
         languages = Set(codes.compactMap(Self.languageCode))
-        skipped = []
-        unavailableLanguages = []
+        skipped = CostLimitedCache(totalCostLimit: Self.cacheCostLimit)
     }
 
     /// `statuses`を、この順で訳すよう頼む。前に頼んでまだ訳していないものは取り下げる。ブーストなら元の投稿を渡す。
@@ -108,8 +105,7 @@ public final class StatusTranslationStore {
     }
 
     private func needsTranslation(_ status: Status) -> Bool {
-        guard isTranslatable(status), currentEntry(for: status) == nil, !skipped.contains(status.id) else { return false }
-        return status.language.flatMap(Self.languageCode).map { !unavailableLanguages.contains($0) } ?? false
+        isTranslatable(status) && currentEntry(for: status) == nil && skipped.value(forKey: status.id) != status.content
     }
 
     private static func languageCode(_ identifier: String) -> String? {
@@ -125,18 +121,22 @@ public final class StatusTranslationStore {
                     _ = entries.setValue(Entry(content: status.content, richText: richText), forKey: status.id, cost: status.content.utf8.count)
                     noteChange(status.id)
                 } else {
-                    skipped.insert(status.id)
+                    skip(status)
                 }
             } catch StatusTranslationError.notInstalled {
-                if let code = Self.languageCode(language) {
-                    unavailableLanguages.insert(code)
-                }
+                // 同じ言語の残りは試さない。ダウンロードがいつ終わっても訳せるよう、次に頼まれたときは試す。
+                let code = Self.languageCode(language)
+                wanted.removeAll { $0.language.flatMap(Self.languageCode) == code }
             } catch is CancellationError {
                 return
             } catch {
-                skipped.insert(status.id)
+                skip(status)
             }
         }
+    }
+
+    private func skip(_ status: Status) {
+        _ = skipped.setValue(status.content, forKey: status.id, cost: status.content.utf8.count)
     }
 
     private func nextWanted() -> Status? {

@@ -126,6 +126,10 @@ struct SettingsView: View {
             NotificationAppearanceEditorView(settings: settings, opening: appearanceGroup)
                 .onAppear { appearanceGroup = nil }
         case .linkLoading: LinkLoadingSettingsView(settings: settings)
+        case .autoTranslation:
+            if #available(iOS 26.4, *) {
+                AutoTranslationSettingsView(settings: settings)
+            }
         case .tabs:
             MenuLayoutSettingsView(
                 title: "タブ",

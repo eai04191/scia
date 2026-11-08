@@ -47,7 +47,7 @@ extension TimelineViewController {
     /// 名前の上に足す、誰が何をしたかの行だけは、通知のための部品なので「通知の見た目」で描く。
     /// 投稿した人は通知を送った人と同じで、下の名前の行にアイコンが出るため、上の行にはアイコンを出さない。
     private func postConfiguration(for notification: MastodonNotification, status: Status, itemID: ItemID?, base: UIListContentConfiguration) -> PostContentConfiguration {
-        var configuration = contentConfiguration(for: status, itemID: itemID, base: base)
+        var configuration = contentConfiguration(for: status, itemID: itemID, translatesBody: false, base: base)
         let appearance = NotificationAppearance(notification.type)
         let typography = PostTypography(settings: settings)
         let renderer = RichTextRenderer(font: typography.font(.notificationContext), textColor: .secondaryLabel, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())

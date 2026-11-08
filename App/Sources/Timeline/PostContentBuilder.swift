@@ -15,7 +15,8 @@ struct PostContentBuilder {
     /// タップしたときの処理と添付ファイルは含めない。タイムラインでは呼び出し側が足す。
     /// - Parameter isPinned: プロフィールの上に置く、固定された投稿。名前の上に固定されていることを示す行を出す。
     /// - Parameter replyLabel: 名前の上に出す返信のラベル。固定された投稿とブーストでは、そのことを示す行を優先し、ラベルは出さない。
-    func configuration(for status: Status, isPinned: Bool = false, replyLabel: ReplyLabel? = nil, base: UIListContentConfiguration) -> PostContentConfiguration {
+    /// - Parameter translation: 本文を原文の代わりに描く訳文。
+    func configuration(for status: Status, isPinned: Bool = false, replyLabel: ReplyLabel? = nil, translation: RichText? = nil, base: UIListContentConfiguration) -> PostContentConfiguration {
         let shown = status.displayed
         let typography = PostTypography(settings: settings)
         // 名前の上の行も名前を描くので、名前の行と同じ割合で絵文字の大きさを変える。本文の絵文字は本文の割合で描く。
@@ -72,8 +73,8 @@ struct PostContentBuilder {
             case .acct: renderer.render(.plain("@\(shown.account.acct)", emojis: []))
             }
         }
-        let bodyRenderer = postBodyRenderer(of: shown)
-        let preparedBody = preparedBodies?.prepared(for: shown, renderer: bodyRenderer)
+        let bodyRenderer = postBodyRenderer(of: shown, translation: translation)
+        let preparedBody = preparedBodies?.prepared(for: shown, translation: translation, renderer: bodyRenderer)
         let context: PostContentConfiguration.Context? = if isPinned {
             PostContentConfiguration.Context(
                 symbolName: "pin.fill",
@@ -106,7 +107,7 @@ struct PostContentBuilder {
             showsVisibilitySymbol: settings.appearance.showsVisibilitySymbol,
             showsEditedMark: settings.appearance.showsEditedMark,
             timeStyle: settings.appearance.statusTimeStyle,
-            body: preparedBody?.text ?? bodyRenderer.render(.status(shown)),
+            body: preparedBody?.text ?? bodyRenderer.render(translation ?? .status(shown)),
             spoiler: spoiler(of: shown, base: base),
             metrics: metrics,
             card: linkCard(of: shown),
@@ -116,6 +117,8 @@ struct PostContentBuilder {
             emojiImages: settings.animatesCustomEmojis ? emojiImages : nil
         )
         configuration.preparedBodyLayout = preparedBody?.layout
+        configuration.isTranslated = translation != nil
+        configuration.translationFadeDuration = tuning.value(of: TuningCatalog.translationTransitionDuration)
         configuration.reactionGlow = reactionGlow(for: shown)
         configuration.showsReplyLines = settings.appearance.showsReplyLines
         configuration.showsTime = settings.appearance.showsTime
@@ -243,9 +246,13 @@ struct PostContentBuilder {
     }
 
     /// タイムラインの投稿の本文（`configuration(for:isPinned:replyLabel:base:)`の本文）の描き手。本文を先に作るときも、同じ描き手で作る。
-    func postBodyRenderer(of status: Status) -> RichTextRenderer {
+    /// - Parameter translation: 本文を原文の代わりに描く訳文。訳文は翻訳先の言語の字形で描く。
+    func postBodyRenderer(of status: Status, translation: RichText? = nil) -> RichTextRenderer {
         var renderer = bodyRenderer(of: status, font: PostTypography(settings: settings).font(.body), color: .label)
         renderer.emojiOnly = emojiOnlyEnlargement
+        if translation != nil {
+            renderer.language = settings.glyphLanguageIdentifier(for: settings.resolvedTranslationTarget.minimalIdentifier)
+        }
         return renderer
     }
 

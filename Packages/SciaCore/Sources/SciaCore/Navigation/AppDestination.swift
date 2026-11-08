@@ -312,6 +312,8 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     case notificationAppearance = "notification-appearance"
     /// 表示しただけで、Sciaと関係のない外のサービスへ通信する機能をまとめた画面。
     case linkLoading = "link-loading"
+    /// 自動で訳す投稿の言語を選ぶ画面。決まりはdocs/auto-translation.mdにある。
+    case autoTranslation = "auto-translation"
     case tabs
     case statusActions = "status-actions"
     case notificationActions = "notification-actions"
@@ -345,7 +347,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     /// 設定のトップの画面からこの画面までに重ねる画面。
     public var path: [SettingsPage] {
         switch self {
-        case .appearance, .notificationAppearance, .media, .linkLoading: [.display, self]
+        case .appearance, .notificationAppearance, .media, .linkLoading, .autoTranslation: [.display, self]
         case .statusActions, .notificationActions, .userActions, .linkActions, .externalPostActions, .hashtagActions, .mediaActions,
              .reactionActions, .profileTextMenu:
             [.interaction, self]

@@ -56,6 +56,26 @@ struct RichTextTranslationPlanTests {
         #expect(result.blocks[2] == RichText.Block(inlines: [.text("こんにちは", [])], quoteLevel: 1, listMarker: "• ", listLevel: 1))
     }
 
+    /// 残したインラインのコードの書式は、後ろの訳文に移らない。
+    @Test func keepsInlineCodeSeparateFromFollowingText() throws {
+        let plan = try #require(RichTextTranslationPlan(RichText(blocks: [block(.text("make", .code), .text(" now", []))])))
+
+        let result = try plan.applying([[.preserved("make", id: 0), .text("今すぐ")]])
+
+        #expect(result.blocks[0].inlines == [.text("make", .code), .text("今すぐ", [])])
+    }
+
+    /// 残す部分にもともとある空白は、翻訳器がそのまま返しても増やさない。翻訳器が足した分だけ受け取る。
+    @Test func doesNotDoubleOriginalWhitespace() throws {
+        let plan = try #require(RichTextTranslationPlan(RichText(blocks: [block(.text("Run", []), .text(" x ", .code), .text("now", []))])))
+
+        let unchanged = try plan.applying([[.text("Run"), .preserved(" x ", id: 0), .text("now")]])
+        let added = try plan.applying([[.text("Run"), .preserved("  x  ", id: 0), .text("now")]])
+
+        #expect(unchanged.plainText == "Run x now")
+        #expect(added.plainText == "Run  x  now")
+    }
+
     @Test func hasNoPlanWithoutWords() {
         #expect(RichTextTranslationPlan(RichText(blocks: [block(.emoji(emoji), .text(" !!", []))])) == nil)
     }
@@ -75,16 +95,18 @@ struct StatusTranslationStoreTests {
     /// 頼まれた段落を覚えて、先頭に「訳:」を付けて返す。`gate`が閉じている間は止まる。
     private final class FakeTranslator: StatusTranslating {
         let requests = Mutex<[String]>([])
-        let notInstalledLanguages: Set<String>
+        let notInstalledLanguages: Mutex<Set<String>>
+        let attemptCount = Mutex(0)
         let gate: Gate
 
         init(notInstalledLanguages: Set<String> = [], gate: Gate = Gate(isOpen: true)) {
-            self.notInstalledLanguages = notInstalledLanguages
+            self.notInstalledLanguages = Mutex(notInstalledLanguages)
             self.gate = gate
         }
 
         func translate(_ parts: [TranslationPart], from source: String, to target: String) async throws -> [TranslationPart] {
-            guard !notInstalledLanguages.contains(source) else { throw StatusTranslationError.notInstalled }
+            attemptCount.withLock { $0 += 1 }
+            guard !notInstalledLanguages.withLock({ $0.contains(source) }) else { throw StatusTranslationError.notInstalled }
             requests.withLock { $0.append(Self.text(of: parts)) }
             try await gate.wait()
             return parts.map { part in
@@ -102,6 +124,11 @@ struct StatusTranslationStoreTests {
         }
 
         var requested: [String] { requests.withLock { $0 } }
+        var attempts: Int { attemptCount.withLock { $0 } }
+
+        func install() {
+            notInstalledLanguages.withLock { $0 = [] }
+        }
     }
 
     private let account = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: URL(string: "https://example.social/a.png"))
@@ -200,21 +227,35 @@ struct StatusTranslationStoreTests {
         #expect(deliveries == [["1", "2"]])
     }
 
-    /// 言語モデルがなければ、その言語は試さない。言語を選び直すと試す。
-    @Test func stopsTryingUninstalledLanguageUntilLanguagesChange() async throws {
+    /// 言語モデルがなければ、同じ言語の残りは試さない。ダウンロードが終わったあとに頼まれたら、訳す。
+    @Test func retriesUninstalledLanguageOnNextRequest() async throws {
         let scope = TaskScope()
         let translator = FakeTranslator(notInstalledLanguages: ["en"])
         let store = store(translator, clock: TestClock(), scope: scope)
 
-        store.request([status("1")])
+        store.request([status("1"), status("2")])
         try await waitUntil { scope.runningCount == 0 }
-        store.request([status("2")])
+        #expect(translator.attempts == 1)
+
+        translator.install()
+        store.request([status("1")])
+        try await waitUntil { store.hasTranslation(of: status("1")) }
+    }
+
+    /// 訳せなかった投稿も、本文が編集されたら訳し直す。
+    @Test func retriesSkippedStatusAfterEdit() async throws {
+        let scope = TaskScope()
+        let store = store(FakeTranslator(), clock: TestClock(), scope: scope)
+        let codeOnly = status("1", content: "<pre><code>let a = 1</code></pre>")
+
+        store.request([codeOnly])
+        try await waitUntil { scope.runningCount == 0 }
+        store.request([codeOnly])
         #expect(scope.runningCount == 0)
 
-        store.setLanguages(["en"])
-        store.request([status("2")])
-        #expect(scope.runningCount == 1)
-        try await waitUntil { scope.runningCount == 0 }
+        let edited = status("1", content: "<p>Hello</p>")
+        store.request([edited])
+        try await waitUntil { store.hasTranslation(of: edited) }
     }
 
     /// 本文が編集されたら、前の訳文は使わずに訳し直す。

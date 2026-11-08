@@ -229,7 +229,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 画面の前後の投稿の本文を、先に作って並べておく。
     private let bodyTextPreparer = BodyTextPreparer()
     /// 本文を先に作った、画面に出ている行の範囲。同じ範囲では頼み直さない。
-    private var preparedBodyRange: ClosedRange<Int>?
+    var preparedBodyRange: ClosedRange<Int>?
     /// 最後に読めた、本文のラベルの値と幅。
     private var bodyTextGeometry: BodyTextPreparer.Geometry?
     /// 今の日付。テストでは決まった日付に差し替える。
@@ -258,6 +258,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onChangeMediaCovers: ((MediaCovers, Status) -> Void)?
     /// fxtwitterから読んだXの投稿。セッションの中で1つを共有する。
     var xPosts: XPostStore?
+    /// 投稿の本文の自動翻訳。使えないOSではnil。
+    var translations: StatusTranslationStore?
     /// このタイムラインで当てるサーバーのフィルターと、警告で折りたたんだ投稿のうち開いたもの。タイムラインを持つ側が、タイムラインの場所に合わせて入れる。
     var filterWarnings = FilterWarnings()
     /// ブロックかミュートしている人の引用元のうち、押して開いたもの。
@@ -503,6 +505,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         reportVisibleItems()
         startRefreshingTimes()
         prepareActionBarIfNeeded()
+        if translations != nil {
+            requestTranslationsAroundVisibleRows()
+        }
     }
 
     /// ハードウェアキーボードのnで、投稿欄で書き始める。入力欄に書いている間は、文字の入力が先に受けるため効かない。
@@ -1052,6 +1057,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         // 取り直した投稿の行は、並びを置き換えたあとで高さを動かして描き直す。
         let refreshedIDs = refreshedStatusID.map { refreshed in Set(changedIDs.filter { status(for: $0)?.displayed.id == refreshed }) } ?? []
         defer { reconfigureAnimatingHeight(refreshedIDs, duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration)) }
+        // 編集で本文が変わった投稿の訳文は使えないので、見えている範囲が変わらなくても訳し直しを頼む。
+        let bodyChanged = translations != nil && changedIDs.contains { id in
+            previous[id].flatMap(Self.statusOfRow)?.displayed.content != entries[id].flatMap(Self.statusOfRow)?.displayed.content
+        }
+        defer {
+            if bodyChanged { requestTranslationsAroundVisibleRows() }
+        }
         // 絵文字のリアクションだけが変わった行は、並びを置き換えたあとで、ボタンの出入りと数を動かし、高さが変わる分を下の行ごと動かして描き直す（docs/emoji-reaction.mdの「動き」）。
         let reactionChangedIDs = Set(changedIDs.filter { id in
             guard let old = previous[id].flatMap(Self.statusOfRow), let new = entries[id].flatMap(Self.statusOfRow) else { return false }
@@ -2216,7 +2228,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// 画面に出ている行の前後の投稿の本文を、先に作って並べておく。画面に出ている行の範囲が変わったときだけ頼む。
-    private func prepareBodiesAroundVisibleRows() {
+    func prepareBodiesAroundVisibleRows() {
         let visible = collectionView.indexPathsForVisibleItems.filter { $0.section == 0 }.map(\.item)
         guard let first = visible.min(), let last = visible.max() else { return }
         if let geometry = collectionView.visibleCells.lazy.compactMap({ ($0.contentView as? PostContentView)?.bodyTextGeometry }).first,
@@ -2244,14 +2256,27 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             truncations[shown.id] = longBodyExpansion.truncation(forBodyOf: status, isThreadFocus: shown.id == threadFocusID, rule: bodyTruncationRule)
             return shown
         }
+        if viewIfLoaded?.window != nil {
+            translations?.request((first...last).compactMap(shownStatus(atItem:)) + statuses)
+        }
         let builder = postContentBuilder
         bodyTextPreparer.prepare(
             statuses,
-            renderer: builder.postBodyRenderer(of:),
+            renderer: builder.postBodyRenderer(of:translation:),
             geometry: bodyTextGeometry,
             truncation: { truncations[$0.id] },
+            translation: { [translations] in translations?.translation(for: $0) },
             guessesLinkCardDirections: settings.appearance.showsLinkCard
         )
+    }
+
+    /// タイムラインの投稿の項目が見せている投稿。ブーストなら元の投稿。通知などの項目ではnil。
+    private func shownStatus(atItem item: Int) -> Status? {
+        guard let id = dataSource.itemIdentifier(for: IndexPath(item: item, section: 0)) else { return nil }
+        switch entries[id] {
+        case .status(let status), .pinned(let status): return status.displayed
+        default: return nil
+        }
     }
 
     /// 画面に出ている行の前と後ろそれぞれで、本文を先に作る行の数。
@@ -2260,14 +2285,15 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// - Parameters:
     ///   - isPinned: プロフィールの上に置く、固定された投稿。名前の上に固定されていることを示す行を出す。
     ///   - itemID: この中身を置く行。注意書きを開閉したときに、この行の画面上の位置を保つ。
-    func contentConfiguration(for status: Status, isPinned: Bool = false, itemID: ItemID? = nil, base: UIListContentConfiguration) -> PostContentConfiguration {
+    ///   - translatesBody: 本文を自動翻訳の訳文で出してよい。通知の中の投稿では訳さない。
+    func contentConfiguration(for status: Status, isPinned: Bool = false, itemID: ItemID? = nil, translatesBody: Bool = true, base: UIListContentConfiguration) -> PostContentConfiguration {
         let shown = status.displayed
         let connection = itemID.flatMap { replyConnections[$0] } ?? ReplyConnection()
         // スレッドで押した投稿は、開いた時点では返信先がまだ並んでおらずラベルを出しているため、返信先が並んでもラベルを残す。
         // 消すと、読み終えた瞬間に名前と本文がラベルの1行分だけ上へ跳ねる。
         let hidesReplyLabel = hidesReplyLabelBelowParent && connection.parentIsAbove && shown.id != threadFocusID
         let replyLabel = hidesReplyLabel ? nil : ReplyLabel(status: shown, myAccountID: myAccountID)
-        var configuration = postContentBuilder.configuration(for: status, isPinned: isPinned, replyLabel: replyLabel, base: base)
+        var configuration = postContentBuilder.configuration(for: status, isPinned: isPinned, replyLabel: replyLabel, translation: translatesBody ? translatedBody(of: status) : nil, base: base)
         configuration.replyConnection = connection
         configuration.onOpenAccount = { [weak self] in self?.onOpenProfile?(shown.account) }
         configuration.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination, shown) }

@@ -724,6 +724,15 @@ final class PostBodyView: UIView {
         view?.invalidateIntrinsicContentSize()
     }
 
+    /// 直前に入れ替えた本文の文字を、前の文字からクロスフェードする。原文と訳文を置き換えるときに使う。
+    func crossfadeText(duration: TimeInterval) {
+        guard duration > 0 else { return }
+        let fade = CATransition()
+        fade.type = .fade
+        fade.duration = duration
+        textLabel.layer.add(fade, forKey: "translationFade")
+    }
+
     func apply(_ content: PostBodyContent) {
         let previous = self.content
         defer {

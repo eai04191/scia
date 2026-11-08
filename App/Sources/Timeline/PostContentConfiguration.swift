@@ -54,6 +54,10 @@ struct PostContentConfiguration: UIContentConfiguration {
     var createdAt: Date
     /// 投稿が編集されていれば、時刻の前にアイコンを付ける。時刻は編集した時刻ではなく、投稿した時刻のまま。
     var isEdited = false
+    /// 本文を自動翻訳の訳文で出している。見出しの時刻の後ろにアイコンを出す。
+    var isTranslated = false
+    /// 同じ投稿で原文と訳文が替わるときに、文字をクロスフェードする時間。
+    var translationFadeDuration: TimeInterval = 0
     /// 公開以外なら、時刻と編集済みのアイコンの前に、投稿欄で選ぶときと同じ記号を付ける。
     var visibility: Status.Visibility = .public
     /// 公開範囲の記号と、編集済みの「*」を出すか。出さなくても、読み上げでは読む。
@@ -225,6 +229,9 @@ struct PostContentConfiguration: UIContentConfiguration {
         var text = StatusTimestamp.accessibilityText(for: createdAt, now: now, style: timeStyle)
         if isEdited {
             text = "編集済み、\(text)"
+        }
+        if isTranslated {
+            text = "翻訳済み、\(text)"
         }
         if visibility != .public {
             text = "\(VisibilityOption(visibility).title)、\(text)"
@@ -422,6 +429,7 @@ final class PostContentView: UIView, UIContentView {
     }
 
     private func apply(_ configuration: PostContentConfiguration) {
+        let translationChanged = current.statusID == configuration.statusID && current.isTranslated != configuration.isTranslated
         current = configuration
         let metrics = configuration.metrics
 
@@ -514,6 +522,9 @@ final class PostContentView: UIView, UIContentView {
             actionBar: configuration.actionBar,
             actionBarSpacing: metrics.actionBarSpacing
         ))
+        if translationChanged {
+            bodyView.crossfadeText(duration: configuration.translationFadeDuration)
+        }
         reactionGlowView.apply(configuration.reactionGlow)
         // アイコンの下を空けないときは、線の通る場所に本文などが入るので、線を出さない。
         let drawsReplyLines = configuration.showsReplyLines && !configuration.wrapsBelowAvatar
@@ -766,6 +777,12 @@ final class PostContentView: UIView, UIContentView {
             time.addAttribute(.kern, value: configuration.metrics.editedMarkSpacing, range: NSRange(location: 0, length: 1))
         }
         result.append(time)
+        if configuration.isTranslated,
+           let image = UIImage(systemName: "translate", withConfiguration: UIImage.SymbolConfiguration(font: font, scale: .small)) {
+            let spaceWidth = (" " as NSString).size(withAttributes: [.font: font]).width
+            result.append(NSAttributedString(string: " ", attributes: [.kern: configuration.metrics.visibilitySymbolSpacing - spaceWidth]))
+            result.append(NSAttributedString(attachment: NSTextAttachment(image: image)))
+        }
         result.addAttributes(attributes, range: NSRange(location: 0, length: result.length))
         return result
     }

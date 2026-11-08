@@ -71,6 +71,10 @@ enum DebugURL: Equatable {
     case storageProbe
     /// `scia-debug://translation-probe`。翻訳の言語の状態、速度、本文の保持を測り、アプリのDocuments/AgentDump/translation.txtに書き足す（`TranslationProbe`）。
     case translationProbe
+    /// `scia-debug://translation/fake`で、自動翻訳をダミーの訳文に替える。`?delay=<ミリ秒>`で訳すのにかける時間を変える（既定は70）。`scia-debug://translation/system`でOSの翻訳に戻す。
+    case fakeTranslation(delay: Duration?)
+    /// `scia-debug://translation/languages?set=<言語のコードを,で区切る>`で、自動翻訳で訳す言語を置き換える。
+    case translationLanguages([String])
     /// `scia-debug://text-benchmark`。画面に出ている本文を、UILabelとTextKit 2で並べる時間を、アプリのDocuments/AgentDump/text-benchmark.txtに書き出す（`TextLayoutBenchmark`）。
     case textBenchmark
     /// `scia-debug://browser?url=<URL>`。アプリ内のSafariでURLを開く。実機でアプリ内のSafariのデータを溜めるため。
@@ -163,6 +167,7 @@ enum DebugURL: Equatable {
         "dump": .dump,
         "storage-probe": .storageProbe,
         "translation-probe": .translationProbe,
+        "translation/system": .fakeTranslation(delay: nil),
         "text-benchmark": .textBenchmark,
         "reset": .reset,
         "compose/close": .composeClose,
@@ -197,6 +202,7 @@ enum DebugURL: Equatable {
         case "download": Self.slowDownload(url)
         case "menu-icons": Self.slowMenuIcons(url)
         case "lookup": Self.slowLookups(url)
+        case "translation": Self.translation(url)
         case "upload": Self.slowUploads(url)
         case "notice": Self.notice(url)
         case "media-limits": Self.mediaLimits(url)
@@ -256,6 +262,14 @@ enum DebugURL: Equatable {
     private static func slowMenuIcons(_ url: URL) -> DebugURL? {
         guard url.lastPathComponent == "slow" else { return nil }
         return .slowMenuIcons(seconds: query("seconds", in: url).flatMap { Double($0) } ?? 3)
+    }
+
+    private static func translation(_ url: URL) -> DebugURL? {
+        switch url.path() {
+        case "/fake": .fakeTranslation(delay: .milliseconds(query("delay", in: url).flatMap { Int($0) } ?? 70))
+        case "/languages": .translationLanguages((query("set", in: url) ?? "").split(separator: ",").map(String.init))
+        default: nil
+        }
     }
 
     private static func slowLookups(_ url: URL) -> DebugURL? {

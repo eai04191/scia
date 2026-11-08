@@ -184,6 +184,9 @@ struct DisplaySettingsView: View {
             StatusBarTickerSettingsSection(isOn: $settings.showsStatusBarTicker, isAvailable: StatusBarCutout.isAvailable)
             Section {
                 NavigationLink("リンク先の読み込み", value: SettingsPage.linkLoading)
+                if #available(iOS 26.4, *) {
+                    NavigationLink("自動翻訳", value: SettingsPage.autoTranslation)
+                }
             }
         }
         .topEdgeEffectHiddenOnMac()

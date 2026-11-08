@@ -26,7 +26,7 @@ struct RichTextRenderer: Sendable {
     var emojiOnly: EmojiOnlyEnlargement?
     private(set) var emojiImages: EmojiImageSource
     /// 文字列に付ける言語。付けないと、漢字とかなの書体が端末の言語の設定で決まり、英語の設定では日本語も中国語の書体で描かれる。
-    let language: String
+    var language: String
     /// Unicodeの絵文字を描く絵。描く場所ごとに渡さず、設定から読む。
     var emojiStyle: EmojiStyle
     /// カスタム絵文字を描く画面の、1ptあたりのピクセル数。読む画像の高さを決めるのに使う。

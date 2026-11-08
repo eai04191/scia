@@ -205,6 +205,8 @@ final class SessionController {
     /// タイムラインで見えている画像の先読み。ログアウトしたら、セッションの持ち主と一緒に止める。
     private lazy var mediaPrefetcher = MediaPrefetcher(scope: tasks, store: AppDependencies.mediaImages, network: AppDependencies.network, settings: AppDependencies.settings)
     /// fxtwitterから読んだXの投稿。ホームと通知とプロフィールで同じ投稿を1回だけ読む。
+    /// 投稿の本文の自動翻訳。iOS 26.4より前ではnil（docs/auto-translation.md）。
+    private lazy var translations: StatusTranslationStore? = makeTranslations()
     private let xPosts = XPostStore(client: XPostClient(client: AppDependencies.http), retryPolicy: { TuningCatalog.imageRetry(in: AppDependencies.tuning) })
     private var composerObscuredHeight: CGFloat = 0
     /// 本文のリンクを開くアプリ内のSafari。シートが覆っている高さも、投稿欄と同じく積んだ画面の下の余白にする。
@@ -574,6 +576,13 @@ final class SessionController {
             case .update, .notification, .filtersChanged, .notificationsMerged, .announcement, .announcementReaction, .announcementDelete, .unhandled: break
             }
         }
+        translations?.setLanguages(AppDependencies.settings.autoTranslationLanguages)
+        translations?.onChange = { [weak self] ids in
+            for timeline in self?.timelines.allObjects ?? [] {
+                timeline.applyTranslations(ids)
+            }
+        }
+        observeAutoTranslationSetting()
         xPosts.onChange = { [weak self] id in
             for timeline in self?.timelines.allObjects ?? [] {
                 timeline.applyXPost(id: id)
@@ -697,6 +706,39 @@ final class SessionController {
         #endif
     }
 
+
+    private func makeTranslations() -> StatusTranslationStore? {
+        var translator: (any StatusTranslating)?
+        if #available(iOS 26.4, *) {
+            translator = SystemStatusTranslator()
+        }
+        #if DEBUG
+        translator = DebugStatusTranslator(system: translator)
+        #endif
+        guard let translator else { return nil }
+        return StatusTranslationStore(
+            translator: translator,
+            targetLanguage: Locale.current.language.minimalIdentifier,
+            scope: tasks,
+            applyInterval: { .seconds(AppDependencies.tuning.value(of: TuningCatalog.translationApplyInterval)) }
+        )
+    }
+
+    /// 訳す言語が変わったら、訳せなかった言語を忘れ、タイムラインを描き直す。
+    private func observeAutoTranslationSetting() {
+        withObservationTracking {
+            _ = AppDependencies.settings.autoTranslationLanguages
+        } onChange: { [weak self] in
+            Task(.withoutRequests) { @MainActor in
+                guard let self, !self.tasks.isClosed else { return }
+                self.translations?.setLanguages(AppDependencies.settings.autoTranslationLanguages)
+                for timeline in self.timelines.allObjects {
+                    timeline.applyTranslationLanguages()
+                }
+                self.observeAutoTranslationSetting()
+            }
+        }
+    }
 
     /// 設定でXの投稿の展開をオフにしたら、読み込み中のfxtwitterへの通信と読み直しの待ちをやめる。オフのあいだ通信しないため（docs/link-card.md）。
     private func observeXPostSetting() {
@@ -1003,6 +1045,7 @@ final class SessionController {
         viewController.mediaCovers = mediaCovers
         viewController.quoteSourceChanges = session.statuses.quoteSources
         viewController.xPosts = xPosts
+        viewController.translations = translations
         viewController.mediaPrefetcher = mediaPrefetcher
         viewController.onChangeMediaCovers = { [weak self, weak viewController] covers, status in
             self?.shareMediaCovers(covers, changed: status, from: viewController)
@@ -4180,6 +4223,11 @@ final class SessionController {
             AgentScreenDump.write(scene: rootViewController.view.window?.windowScene)
         case .storageProbe:
             StorageProbe.write()
+        case .fakeTranslation(let delay):
+            DebugStatusTranslator.setFakeDelay(delay)
+            AppDependencies.settings.autoTranslationLanguages = AppDependencies.settings.autoTranslationLanguages
+        case .translationLanguages(let languages):
+            AppDependencies.settings.autoTranslationLanguages = languages
         case .translationProbe:
             if #available(iOS 26.4, *) {
                 TranslationProbe.start()

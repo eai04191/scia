@@ -21,18 +21,23 @@ struct RichTextTranslationPlan: Sendable {
     /// `paragraphs`のそれぞれが、`richText`の何番目の段落か。
     private let blockIndices: [Int]
     private let preserved: [Int: RichText.Inline]
+    /// 翻訳器へ渡した、残す部分の文字。
+    private let originalTexts: [Int: String]
 
     /// 訳す段落がなければnil。
     init?(_ richText: RichText) {
         var paragraphs: [[TranslationPart]] = []
         var blockIndices: [Int] = []
         var preserved: [Int: RichText.Inline] = [:]
+        var originalTexts: [Int: String] = [:]
         for (index, block) in richText.blocks.enumerated() where !block.isCode {
             var parts: [TranslationPart] = []
             var blockPreserved: [Int: RichText.Inline] = [:]
+            var blockTexts: [Int: String] = [:]
             func preserve(_ text: String, _ inline: RichText.Inline) {
                 let id = preserved.count + blockPreserved.count
                 blockPreserved[id] = inline
+                blockTexts[id] = text
                 parts.append(.preserved(text, id: id))
             }
             func appendText(_ text: String) {
@@ -58,11 +63,13 @@ struct RichTextTranslationPlan: Sendable {
             paragraphs.append(parts)
             blockIndices.append(index)
             preserved.merge(blockPreserved) { first, _ in first }
+            originalTexts.merge(blockTexts) { first, _ in first }
         }
         guard !paragraphs.isEmpty else { return nil }
         self.paragraphs = paragraphs
         self.blockIndices = blockIndices
         self.preserved = preserved
+        self.originalTexts = originalTexts
         self.richText = richText
     }
 
@@ -80,6 +87,16 @@ struct RichTextTranslationPlan: Sendable {
         return result
     }
 
+    private static func leadingWhitespace(_ text: String) -> Substring {
+        text.prefix(while: \.isWhitespace)
+    }
+
+    /// 文字がすべて空白なら、`leadingWhitespace`と二重に数えないよう、空にする。
+    private static func trailingWhitespace(_ text: String) -> Substring {
+        guard text.contains(where: { !$0.isWhitespace }) else { return "" }
+        return text[text.index(after: text.lastIndex(where: { !$0.isWhitespace }) ?? text.startIndex)...]
+    }
+
     private static func preservedID(_ part: TranslationPart) -> Int? {
         if case .preserved(_, let id) = part { id } else { nil }
     }
@@ -91,14 +108,13 @@ struct RichTextTranslationPlan: Sendable {
             case .text(let text):
                 builder.append(text: text)
             case .preserved(let text, let id):
-                // 翻訳器は、残す部分の文字の端に、訳文との境目の空白を含めて返すことがある。部分そのものは元のものに戻し、空白だけを受け取る。
-                builder.append(text: String(text.prefix(while: \.isWhitespace)))
+                // 翻訳器は、残す部分の文字の端に、訳文との境目の空白を足して返すことがある。部分そのものは元のものに戻し、足された空白だけを受け取る。
+                let original = originalTexts[id] ?? ""
+                builder.append(text: String(Self.leadingWhitespace(text).dropLast(Self.leadingWhitespace(original).count)))
                 if let inline = preserved[id] {
                     builder.append(inline)
                 }
-                if text.contains(where: { !$0.isWhitespace }) {
-                    builder.append(text: String(text.reversed().prefix(while: \.isWhitespace).reversed()))
-                }
+                builder.append(text: String(Self.trailingWhitespace(text).dropFirst(Self.trailingWhitespace(original).count)))
             }
         }
         return builder.inlines
@@ -132,8 +148,9 @@ private struct InlineBuilder {
     private mutating func appendLine(_ line: String) {
         guard !line.isEmpty else { return }
         flushLineBreak()
-        if case .text(let last, let style)? = inlines.last {
-            inlines[inlines.count - 1] = .text(last + line, style)
+        // 残したインラインのコードにはつながない。書式が後ろの訳文に移るため。
+        if case .text(let last, [])? = inlines.last {
+            inlines[inlines.count - 1] = .text(last + line, [])
         } else {
             inlines.append(.text(line, []))
         }

@@ -130,6 +130,9 @@ extension TimelineViewController {
         tree.canOpenThread = status.map(canOpenThread(of:)) ?? false
         tree.mediaIsCovered = status.map { mediaCover(for: $0) != nil } ?? false
         tree.canSelectText = canSelectText
+        if notification == nil, let shown = status?.displayed, translations?.hasTranslation(of: shown) == true {
+            tree.translationDisplay = translations?.isShowingOriginal(shown) == true ? .original : .translation
+        }
         tree.canSelectPosts = canSelectPost(id)
         tree.supportsEmojiReactions = supportsEmojiReactions
         tree.userMenu = userMenuSubmenuGroups
@@ -177,6 +180,9 @@ extension TimelineViewController {
                 self?.showTextCopiedNotice()
             case .translate(let text):
                 self?.translation.present(text)
+            case .toggleTranslation:
+                guard let status else { return }
+                self?.translations?.toggleOriginal(of: status.displayed)
             case .selectText:
                 guard let self, let selectableBody, let status else { return }
                 beginTextSelection(in: selectableBody, statusID: status.displayed.id)
