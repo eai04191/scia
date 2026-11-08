@@ -101,6 +101,7 @@ extension StatusMenuItem: MenuItemContentProviding {
         case .dismissNotification: .own(title: "通知を削除", symbolName: "xmark.bin")
         case .hideMedia: .own(title: "メディアを隠す", symbolName: "eye.slash")
         case .systemTranslate: .own(title: "翻訳", symbolName: "translate")
+        case .toggleTranslation: .own(title: "原文を表示", symbolName: "text.alignleft")
         case .notifyingUser: .own(title: "通知したユーザー", symbolName: "bell")
         case .author: .own(title: "投稿したユーザー", symbolName: "person.crop.circle")
         case .booster: .own(title: "ブーストしたユーザー", symbolName: "person.crop.circle.badge.plus")

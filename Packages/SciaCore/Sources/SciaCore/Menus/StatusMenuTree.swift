@@ -27,6 +27,12 @@ public enum StatusAction: Sendable {
     case viewAPIResponse
 }
 
+/// 自動翻訳の訳文を持っている投稿で、今出している本文。
+public enum TranslationDisplay: Sendable {
+    case translation
+    case original
+}
+
 /// フォローリクエストへの返事。
 public enum FollowRequestDecision: Sendable {
     case authorize
@@ -43,6 +49,8 @@ public enum StatusMenuCommand {
     case hideMedia
     case copyText(String)
     case translate(String)
+    /// 自動翻訳の原文と訳文を切り替える。
+    case toggleTranslation
     /// 本文の文字を選び始める。
     case selectText
     /// タイムラインで、この投稿を1番目にして投稿を選び始める。
@@ -105,6 +113,8 @@ public struct StatusMenuTree {
     public var mediaIsCovered = false
     /// 本文の文字を選べるか。本文を表示している行でだけ選べる。
     public var canSelectText = false
+    /// 自動翻訳の訳文を持っている投稿で、今どちらを出しているか。持っていなければnil。
+    public var translationDisplay: TranslationDisplay?
     /// タイムラインで投稿を選び始められるか。投稿を選べるタイムラインの行でだけ選べる。
     public var canSelectPosts = false
     /// サーバーが投稿への絵文字のリアクションに対応しているか。対応していなければ「リアクション」を出さない。
@@ -245,7 +255,7 @@ public struct StatusMenuTree {
         case .customize:
             // 投稿のない通知（フォローなど）でも出す。
             return [.action(item.title, icon: .symbol(item.symbolName), .customize)]
-        case .reply, .favourite, .reblog, .bookmark, .quote, .emojiReaction, .muteConversation, .pin, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .favouritedBy, .rebloggedBy, .hideMedia, .systemTranslate, .selectText, .edit, .delete, .redraft, .apiResponse:
+        case .reply, .favourite, .reblog, .bookmark, .quote, .emojiReaction, .muteConversation, .pin, .toggleTranslation, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .favouritedBy, .rebloggedBy, .hideMedia, .systemTranslate, .selectText, .edit, .delete, .redraft, .apiResponse:
             guard let status else { return [] }
             return statusNode(item, on: status).map { [$0] } ?? []
         }
@@ -320,6 +330,9 @@ public struct StatusMenuTree {
         case .systemTranslate:
             guard let text = Self.plainText(of: shown) else { return nil }
             return .action(item.title, icon: icon, .translate(text))
+        case .toggleTranslation:
+            guard let translationDisplay else { return nil }
+            return .action(translationDisplay == .original ? "訳文を表示" : item.title, icon: icon, .toggleTranslation)
         case .selectText:
             guard canSelectText else { return nil }
             return .action(item.title, icon: icon, .selectText)
@@ -381,7 +394,7 @@ public struct StatusMenuTree {
     /// 「別のアカウントで」の中に出さない項目。どのアカウントで行っても同じ結果になるもの（コピー、共有、今のアカウントで画面を開くもの、このタイムラインの表示を変えるもの）。
     static let sameForEveryAccountItems: Set<StatusMenuItem> = [
         .openThread, .select, .copyLink, .copyText, .selectText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari,
-        .editHistory, .favouritedBy, .rebloggedBy, .dismissNotification, .hideMedia, .systemTranslate, .customEmojis, .apiResponse, .otherAccounts, .customize,
+        .editHistory, .favouritedBy, .rebloggedBy, .dismissNotification, .hideMedia, .systemTranslate, .toggleTranslation, .customEmojis, .apiResponse, .otherAccounts, .customize,
     ]
     /// 「別のアカウントで」のハッシュタグのメニューに出さない項目。どのアカウントで行っても同じ結果になるもの。
     static let sameForEveryAccountHashtagItems: Set<HashtagMenuItem> = [.timeline, .accountStatuses, .addToCompose, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .copyLink, .share, .customize]

@@ -24,6 +24,11 @@ public final class AppSettings {
         didSet { defaults.set(expandsXPosts, forKey: Keys.expandsXPosts) }
     }
 
+    /// タイムラインの本文を自動で訳す投稿の言語。空なら訳さない（docs/auto-translation.md）。
+    public var autoTranslationLanguages: [String] {
+        didSet { defaults.set(autoTranslationLanguages, forKey: Keys.autoTranslationLanguages) }
+    }
+
     /// 届いた通知を、ステータスバーの場所に流す。
     public var showsStatusBarTicker: Bool {
         didSet { defaults.set(showsStatusBarTicker, forKey: Keys.showsStatusBarTicker) }
@@ -371,6 +376,7 @@ public final class AppSettings {
         static let ignoresUselessAltText = "settings.ignoresUselessAltText"
         static let showsStatusBarTicker = "settings.showsStatusBarTicker"
         static let expandsXPosts = "settings.expandsXPosts"
+        static let autoTranslationLanguages = "settings.autoTranslationLanguages"
         static let appearanceChoices = "settings.appearanceChoices"
         static let insertionMotion = "settings.insertionMotion"
         static let accentColor = "settings.accentColor"
@@ -425,6 +431,7 @@ public final class AppSettings {
         ignoresUselessAltText = defaults.object(forKey: Keys.ignoresUselessAltText) as? Bool ?? true
         showsStatusBarTicker = defaults.object(forKey: Keys.showsStatusBarTicker) as? Bool ?? true
         expandsXPosts = defaults.bool(forKey: Keys.expandsXPosts)
+        autoTranslationLanguages = defaults.stringArray(forKey: Keys.autoTranslationLanguages) ?? []
         appearance = AppearanceChoices(stored: defaults.data(forKey: Keys.appearanceChoices))
         insertionMotion = defaults.string(forKey: Keys.insertionMotion).flatMap(InsertionMotion.init(rawValue:)) ?? .followsSystem
         accentColor = defaults.string(forKey: Keys.accentColor).flatMap(AccentColorChoice.init(rawValue:)) ?? .blue

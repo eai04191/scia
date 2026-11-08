@@ -281,6 +281,8 @@ public enum StatusMenuItem: String, BundledMenuDefaults {
     case hideMedia
     /// 本文をプレーンテキストにして、システムの翻訳シートで訳す。本文のある投稿でだけ出る。MastodonのAPIで訳す翻訳とは別の項目。
     case systemTranslate
+    /// 自動翻訳の原文と訳文を切り替える。訳文を持っている投稿でだけ出る。
+    case toggleTranslation
     /// 通知した人のユーザーのメニュー。通知でだけ出る。
     case notifyingUser
     /// 投稿した人のユーザーのメニュー。ブーストなら元の投稿を書いた人。

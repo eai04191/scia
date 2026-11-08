@@ -89,6 +89,24 @@ public enum TuningCatalog {
         defaultValue: 0.4
     )
 
+    /// 自動翻訳の訳文で本文を置き換えるときの、高さの変わる分を動きでつなぐ時間。
+    public static let translationTransitionDuration = NumberTuning(
+        id: "timeline.translationTransitionDuration",
+        title: "自動翻訳の訳文に置き換える時間（秒）",
+        range: 0...1.5,
+        step: 0.05,
+        defaultValue: 0.4
+    )
+
+    /// 自動翻訳の訳文が届いてから、まとめて描き直すまでの間。
+    public static let translationApplyInterval = NumberTuning(
+        id: "timeline.translationApplyInterval",
+        title: "自動翻訳の訳文をまとめて描き直す間隔（秒）",
+        range: 0...2,
+        step: 0.05,
+        defaultValue: 0.25
+    )
+
     /// 切った本文を「続きを読む」で広げるときに、行が伸びて下の行が動く時間。0なら動かさない。
     public static let longBodyExpandDuration = NumberTuning(
         id: "timeline.longBodyExpandDuration",
@@ -1825,6 +1843,8 @@ public enum TuningCatalog {
             .number(pollBarDuration),
             .number(pollModeChangeDuration),
             .number(linkCardTransitionDuration),
+            .number(translationTransitionDuration),
+            .number(translationApplyInterval),
             .number(longBodyExpandDuration),
             .number(actionBarDrawerDuration),
             .number(customEmojiArrivalDuration),

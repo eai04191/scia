@@ -24,6 +24,7 @@ enum MenuFixture {
         "separator",
         "hidden:openThread",
         "item:systemTranslate",
+        "item:toggleTranslation",
         "separator",
         "item:notifyingUser",
         "item:author",
