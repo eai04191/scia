@@ -103,7 +103,7 @@ Sciaは次のクライアントから多くの影響を受けています
 - [DAWN](https://noppe.dev/dawn/)
 - [Mona](https://mastodon.social/@MonaApp)
 - twitcle plus
-- Hel1um
+- [Hel1um](https://www.tumblr.com/hel1um)
 
 <!-- /generated:acknowledgments -->
 

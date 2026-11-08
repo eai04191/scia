@@ -14,7 +14,7 @@ enum AppInfo {
             AcknowledgmentItem(name: "DAWN", site: URL(string: "https://noppe.dev/dawn/")),
             AcknowledgmentItem(name: "Mona", account: "MonaApp@mastodon.social"),
             AcknowledgmentItem(name: "twitcle plus"),
-            AcknowledgmentItem(name: "Hel1um"),
+            AcknowledgmentItem(name: "Hel1um", site: URL(string: "https://www.tumblr.com/hel1um")),
         ]),
         AcknowledgmentSection(header: "Sciaのコードはすべて次のエージェントが書いています", items: [
             AcknowledgmentItem(name: "Claude Code", site: URL(string: "https://claude.com/product/claude-code")),
