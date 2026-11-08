@@ -20,7 +20,9 @@ public final class StatusTranslationStore {
     }
 
     private let translator: any StatusTranslating
-    private let targetLanguage: String
+    private var targetLanguage: String
+    /// 翻訳先を変えるたびに増やす。訳している途中で変えたら、元の翻訳先に戻していても、その結果を捨てるため。
+    private var targetGeneration = 0
     private let scope: TaskScope
     private let clock: any Clock<Duration>
     private let applyInterval: () -> Duration
@@ -39,7 +41,7 @@ public final class StatusTranslationStore {
     private static let cacheCostLimit = 2_000_000
 
     /// - Parameters:
-    ///   - targetLanguage: 翻訳先の言語。端末の言語。
+    ///   - targetLanguage: 翻訳先の言語。
     ///   - scope: 翻訳の処理の持ち主。
     ///   - applyInterval: 訳文が届いてから画面へ知らせるまでの間。続けて届いた訳文を、まとめて描き直すため。
     public init(
@@ -60,6 +62,16 @@ public final class StatusTranslationStore {
     public func setLanguages(_ codes: some Sequence<String>) {
         languages = Set(codes.compactMap(Self.languageCode))
         skipped = CostLimitedCache(totalCostLimit: Self.cacheCostLimit)
+    }
+
+    /// 翻訳先を置き換える。持っている訳文と訳せなかった投稿を忘れ、頼まれていた投稿を取り下げる。訳している途中の投稿の結果は捨てる。
+    public func setTargetLanguage(_ language: String) {
+        guard language != targetLanguage else { return }
+        targetLanguage = language
+        targetGeneration += 1
+        entries = CostLimitedCache(totalCostLimit: Self.cacheCostLimit)
+        skipped = CostLimitedCache(totalCostLimit: Self.cacheCostLimit)
+        wanted = []
     }
 
     /// `statuses`を、この順で訳すよう頼む。前に頼んでまだ訳していないものは取り下げる。ブーストなら元の投稿を渡す。
@@ -114,9 +126,11 @@ public final class StatusTranslationStore {
 
     private func translateWanted() async {
         while !Task.isCancelled, let status = nextWanted(), let language = status.language {
+            let generation = targetGeneration
             do {
                 let richText = try await Self.translate(status, language: language, translator: translator, target: targetLanguage)
                 guard !Task.isCancelled else { return }
+                guard generation == targetGeneration else { continue }
                 if let richText {
                     _ = entries.setValue(Entry(content: status.content, richText: richText), forKey: status.id, cost: status.content.utf8.count)
                     noteChange(status.id)
@@ -124,12 +138,14 @@ public final class StatusTranslationStore {
                     skip(status)
                 }
             } catch StatusTranslationError.notInstalled {
+                guard generation == targetGeneration else { continue }
                 // 同じ言語の残りは試さない。ダウンロードがいつ終わっても訳せるよう、次に頼まれたときは試す。
                 let code = Self.languageCode(language)
                 wanted.removeAll { $0.language.flatMap(Self.languageCode) == code }
             } catch is CancellationError {
                 return
             } catch {
+                guard generation == targetGeneration else { continue }
                 skip(status)
             }
         }

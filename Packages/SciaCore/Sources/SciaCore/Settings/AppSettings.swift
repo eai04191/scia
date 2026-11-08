@@ -29,6 +29,11 @@ public final class AppSettings {
         didSet { defaults.set(autoTranslationLanguages, forKey: Keys.autoTranslationLanguages) }
     }
 
+    /// 自動翻訳の翻訳先の言語の識別子。nilならデバイスの言語（docs/auto-translation.md）。
+    public var autoTranslationTarget: String? {
+        didSet { defaults.set(autoTranslationTarget, forKey: Keys.autoTranslationTarget) }
+    }
+
     /// 届いた通知を、ステータスバーの場所に流す。
     public var showsStatusBarTicker: Bool {
         didSet { defaults.set(showsStatusBarTicker, forKey: Keys.showsStatusBarTicker) }
@@ -377,6 +382,7 @@ public final class AppSettings {
         static let showsStatusBarTicker = "settings.showsStatusBarTicker"
         static let expandsXPosts = "settings.expandsXPosts"
         static let autoTranslationLanguages = "settings.autoTranslationLanguages"
+        static let autoTranslationTarget = "settings.autoTranslationTarget"
         static let appearanceChoices = "settings.appearanceChoices"
         static let insertionMotion = "settings.insertionMotion"
         static let accentColor = "settings.accentColor"
@@ -432,6 +438,7 @@ public final class AppSettings {
         showsStatusBarTicker = defaults.object(forKey: Keys.showsStatusBarTicker) as? Bool ?? true
         expandsXPosts = defaults.bool(forKey: Keys.expandsXPosts)
         autoTranslationLanguages = defaults.stringArray(forKey: Keys.autoTranslationLanguages) ?? []
+        autoTranslationTarget = defaults.string(forKey: Keys.autoTranslationTarget)
         appearance = AppearanceChoices(stored: defaults.data(forKey: Keys.appearanceChoices))
         insertionMotion = defaults.string(forKey: Keys.insertionMotion).flatMap(InsertionMotion.init(rawValue:)) ?? .followsSystem
         accentColor = defaults.string(forKey: Keys.accentColor).flatMap(AccentColorChoice.init(rawValue:)) ?? .blue

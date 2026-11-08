@@ -23,7 +23,7 @@ struct DebugStatusTranslator: StatusTranslating {
         if let delay = Self.fakeDelay.withLock({ $0 }) {
             try await Task.sleep(for: delay)
             return parts.map { part in
-                if case .text(let text) = part, text.contains(where: \.isLetter) { .text("（訳文）\(text)\(text)") } else { part }
+                if case .text(let text) = part, text.contains(where: \.isLetter) { .text("（\(target)の訳文）\(text)\(text)") } else { part }
             }
         }
         guard let system else { throw StatusTranslationError.notInstalled }

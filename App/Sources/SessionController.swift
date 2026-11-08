@@ -718,19 +718,21 @@ final class SessionController {
         guard let translator else { return nil }
         return StatusTranslationStore(
             translator: translator,
-            targetLanguage: Locale.current.language.minimalIdentifier,
+            targetLanguage: AppDependencies.settings.resolvedTranslationTarget.minimalIdentifier,
             scope: tasks,
             applyInterval: { .seconds(AppDependencies.tuning.value(of: TuningCatalog.translationApplyInterval)) }
         )
     }
 
-    /// 訳す言語が変わったら、訳せなかった言語を忘れ、タイムラインを描き直す。
+    /// 訳す言語か翻訳先が変わったら、訳せなかった言語を忘れ、タイムラインを描き直す。
     private func observeAutoTranslationSetting() {
         withObservationTracking {
             _ = AppDependencies.settings.autoTranslationLanguages
+            _ = AppDependencies.settings.autoTranslationTarget
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor in
                 guard let self, !self.tasks.isClosed else { return }
+                self.translations?.setTargetLanguage(AppDependencies.settings.resolvedTranslationTarget.minimalIdentifier)
                 self.translations?.setLanguages(AppDependencies.settings.autoTranslationLanguages)
                 for timeline in self.timelines.allObjects {
                     timeline.applyTranslationLanguages()

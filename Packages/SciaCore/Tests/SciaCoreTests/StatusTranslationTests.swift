@@ -97,6 +97,7 @@ struct StatusTranslationStoreTests {
         let requests = Mutex<[String]>([])
         let notInstalledLanguages: Mutex<Set<String>>
         let attemptCount = Mutex(0)
+        let targetRequests = Mutex<[String]>([])
         let gate: Gate
 
         init(notInstalledLanguages: Set<String> = [], gate: Gate = Gate(isOpen: true)) {
@@ -108,6 +109,7 @@ struct StatusTranslationStoreTests {
             attemptCount.withLock { $0 += 1 }
             guard !notInstalledLanguages.withLock({ $0.contains(source) }) else { throw StatusTranslationError.notInstalled }
             requests.withLock { $0.append(Self.text(of: parts)) }
+            targetRequests.withLock { $0.append(target) }
             try await gate.wait()
             return parts.map { part in
                 if case .text(let text) = part { .text("訳:" + text) } else { part }
@@ -125,6 +127,7 @@ struct StatusTranslationStoreTests {
 
         var requested: [String] { requests.withLock { $0 } }
         var attempts: Int { attemptCount.withLock { $0 } }
+        var targets: [String] { targetRequests.withLock { $0 } }
 
         func install() {
             notInstalledLanguages.withLock { $0 = [] }
@@ -294,6 +297,69 @@ struct StatusTranslationStoreTests {
         store.toggleOriginal(of: post)
         #expect(store.translation(for: post) != nil)
         #expect(delivered == [["1"], ["1"]])
+    }
+
+    /// 翻訳先を変えると、持っている訳文を捨て、新しい翻訳先で訳し直す。
+    @Test func retranslatesAfterChangingTarget() async throws {
+        let scope = TaskScope()
+        let translator = FakeTranslator()
+        let store = store(translator, clock: TestClock(), scope: scope)
+        let post = status("1")
+        store.request([post])
+        try await waitUntil { store.hasTranslation(of: post) }
+
+        store.setTargetLanguage("ko")
+        #expect(store.translation(for: post) == nil)
+
+        store.request([post])
+        try await waitUntil { store.hasTranslation(of: post) }
+        #expect(translator.targets == ["ja", "ko"])
+    }
+
+    /// 翻訳先と同じ言語の投稿は訳さない。
+    @Test func skipsTargetLanguage() {
+        let scope = TaskScope()
+        let translator = FakeTranslator()
+        let store = store(translator, clock: TestClock(), scope: scope)
+
+        store.setTargetLanguage("en-GB")
+        store.request([status("1", language: "en")])
+
+        #expect(scope.runningCount == 0)
+        #expect(translator.requested.isEmpty)
+    }
+
+    /// 訳している途中で翻訳先を変えたら、前の翻訳先の訳文を持たない。
+    @Test func dropsTranslationFinishedAfterChangingTarget() async throws {
+        let scope = TaskScope()
+        let gate = Gate()
+        let store = store(FakeTranslator(gate: gate), clock: TestClock(), scope: scope)
+        let post = status("1")
+        store.request([post])
+        try await waitUntil { gate.waiterCount >= 1 }
+
+        store.setTargetLanguage("ko")
+        gate.open()
+        try await waitUntil { scope.runningCount == 0 }
+
+        #expect(!store.hasTranslation(of: post))
+    }
+
+    /// 訳している途中で翻訳先を変えて元に戻しても、変える前に始めた結果は持たない。
+    @Test func dropsTranslationFinishedAfterRoundTripOfTarget() async throws {
+        let scope = TaskScope()
+        let gate = Gate()
+        let store = store(FakeTranslator(gate: gate), clock: TestClock(), scope: scope)
+        let post = status("1")
+        store.request([post])
+        try await waitUntil { gate.waiterCount >= 1 }
+
+        store.setTargetLanguage("ko")
+        store.setTargetLanguage("ja")
+        gate.open()
+        try await waitUntil { scope.runningCount == 0 }
+
+        #expect(!store.hasTranslation(of: post))
     }
 
     /// 言語を外すと、持っている訳文を出さない。
