@@ -37,6 +37,7 @@ public enum ObjectAction<Item: MenuItemKind>: Hashable, Sendable {
 extension ObjectAction {
     /// 「アクションバーを開く」の名前。設定の選択と、行えないことの知らせで使う。
     public static var openActionBarTitle: String { "アクションバーを開く" }
+    public static var openActionBarSymbolName: String { "rectangle.bottomhalf.inset.filled" }
 }
 
 /// 操作を選べる手つき。

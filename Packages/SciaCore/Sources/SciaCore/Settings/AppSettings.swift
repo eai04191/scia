@@ -338,6 +338,16 @@ public final class AppSettings {
         didSet { defaults.set(postActionBarLayout.tokens, forKey: Keys.postActionBarLayout) }
     }
 
+    /// 投稿を右にスワイプして出すボタンの並び（行の先頭の側）。決まりはdocs/object-actions.mdの「投稿のスワイプ」にある。
+    public var postLeadingSwipeLayout: MenuLayout<PostSwipeItem> {
+        didSet { defaults.set(postLeadingSwipeLayout.tokens, forKey: Keys.postLeadingSwipeLayout) }
+    }
+
+    /// 投稿を左にスワイプして出すボタンの並び（行の末尾の側）。
+    public var postTrailingSwipeLayout: MenuLayout<PostSwipeItem> {
+        didSet { defaults.set(postTrailingSwipeLayout.tokens, forKey: Keys.postTrailingSwipeLayout) }
+    }
+
     /// アクションバーを出している投稿のメニューに、アクションバーに並べた項目も出すか。決まりはdocs/post-action-bar.mdにある。
     public var showsActionBarItemsInMenu: Bool {
         didSet { defaults.set(showsActionBarItemsInMenu, forKey: Keys.showsActionBarItemsInMenu) }
@@ -426,6 +436,8 @@ public final class AppSettings {
         static let mediaMenuLayout = "settings.mediaMenuLayout"
         static let composeToolLayout = "settings.composeToolLayout"
         static let postActionBarLayout = "settings.postActionBarLayout"
+        static let postLeadingSwipeLayout = "settings.postLeadingSwipeLayout"
+        static let postTrailingSwipeLayout = "settings.postTrailingSwipeLayout"
         static let showsActionBarItemsInMenu = "settings.showsActionBarItemsInMenu"
         static let showsActionBarLongPressItemsInMenu = "settings.showsActionBarLongPressItemsInMenu"
         static let statusActions = "settings.objectActions.status"
@@ -482,6 +494,8 @@ public final class AppSettings {
         mediaMenuLayout = defaults.stringArray(forKey: Keys.mediaMenuLayout).map(MenuLayout.init(tokens:)) ?? MediaMenuItem.defaultLayout
         composeToolLayout = defaults.stringArray(forKey: Keys.composeToolLayout).map(MenuLayout.init(tokens:)) ?? ComposeToolItem.defaultLayout
         postActionBarLayout = defaults.stringArray(forKey: Keys.postActionBarLayout).map(MenuLayout.init(tokens:)) ?? PostActionBarItem.defaultLayout
+        postLeadingSwipeLayout = defaults.stringArray(forKey: Keys.postLeadingSwipeLayout).map(MenuLayout.init(tokens:)) ?? PostSwipeItem.defaultLayout
+        postTrailingSwipeLayout = defaults.stringArray(forKey: Keys.postTrailingSwipeLayout).map(MenuLayout.init(tokens:)) ?? PostSwipeItem.defaultLayout
         showsActionBarItemsInMenu = defaults.bool(forKey: Keys.showsActionBarItemsInMenu)
         showsActionBarLongPressItemsInMenu = defaults.bool(forKey: Keys.showsActionBarLongPressItemsInMenu)
         statusActions = defaults.stringArray(forKey: Keys.statusActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard

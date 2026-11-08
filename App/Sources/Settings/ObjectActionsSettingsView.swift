@@ -57,7 +57,7 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
                 Label("メニューを開く", systemImage: "contextualmenu.and.cursorarrow").tag(ObjectAction<Item>.menu)
                 option(primary)
                 if actionBar != nil {
-                    Label(ObjectAction<Item>.openActionBarTitle, systemImage: "rectangle.bottomhalf.inset.filled").tag(ObjectAction<Item>.actionBar)
+                    Label(ObjectAction<Item>.openActionBarTitle, systemImage: ObjectAction<Item>.openActionBarSymbolName).tag(ObjectAction<Item>.actionBar)
                 }
             }
             Section {
