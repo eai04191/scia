@@ -12,7 +12,11 @@
 
 Scia（シア、/ˈʃi.a/）はストリーミングAPIに対応した、手触りの良いiOS向けMastodonクライアントです。
 
+<!-- generated:testflight -->
+
 TestFlight: https://testflight.apple.com/join/6g69MEf8
+
+<!-- /generated:testflight -->
 
 <p align="center">
   <img src="docs/images/screenshot-timeline.webp" width="260" alt="読んでいる途中に届いた新着が上に溜まっているホームのタイムライン">
@@ -89,22 +93,88 @@ make test SIM='iPhone 16 Pro'
 
 ## 謝辞
 
+<!-- generated:acknowledgments -->
+
 Sciaは次のクライアントから多くの影響を受けています
 
 - [SubwayTooter](https://github.com/tateisu/SubwayTooter)
-- [Metatext](https://github.com/metabolist/metatext)
-- [iMast](https://github.com/cinderella-project/iMast)
+- [Metatext](https://metabolist.org/)
+- [iMast](https://cinderella-project.github.io/iMast/)
 - [DAWN](https://noppe.dev/dawn/)
 - [Mona](https://mastodon.social/@MonaApp)
 - twitcle plus
+- Hel1um
+
+<!-- /generated:acknowledgments -->
 
 ## ライセンス
 
 ソースコードは[MIT No Attribution（MIT-0）](LICENSE)で公開しています。ただし、名称とアプリアイコン・ロゴは除きます。
 
-`App/Resources/Twemoji.ttf`は、[Twemoji](https://github.com/jdecked/twemoji)の絵（Copyright Twitter, Inc and other contributors、[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)）から`Tools/build-twemoji-font.py`で作った書体です。
+次のものには、それぞれのライセンスが適用されます。
 
-撮影用のシナリオのアイコンと写真の模様を描く`App/Sources/Debug/Scenario/ScenarioArtwork.swift`は、[Boring Avatars](https://github.com/boringdesigners/boring-avatars)（Copyright (c) 2021 boringdesigners）の描き方を移したもので、ファイルの頭に載せたMIT Licenseが適用されます。
+<!-- generated:licenses -->
+
+<details>
+<summary>Twemoji（CC BY 4.0）</summary>
+
+Copyright Twitter, Inc and other contributors
+
+設定で「Twemoji」を選んだときの絵文字の絵。SVGをカラーフォント（TrueType、COLR形式）に変換して使っています。
+
+- [配布元](https://github.com/jdecked/twemoji)
+- [ライセンス（CC BY 4.0）](https://creativecommons.org/licenses/by/4.0/)
+
+</details>
+
+<details>
+<summary>Unicode Emoji、Unicode CLDR（Unicode License v3）</summary>
+
+Copyright © 1991-2026 Unicode, Inc.
+
+投稿欄の絵文字のシートに並べるUnicodeの絵文字のリストとまとまり（emoji-test.txt）と、検索に使う日本語と英語の名前と言葉（CLDRの絵文字の注釈）。
+
+- [配布元](https://www.unicode.org/emoji/)
+- [ライセンス（Unicode License v3）](https://www.unicode.org/license.txt)
+
+</details>
+
+<details>
+<summary>gemoji（MIT）</summary>
+
+Copyright (c) 2019 GitHub, Inc.
+
+投稿欄の補完でUnicodeの絵文字を「:+1」や「:thumbsup」のように打って探すための短縮名。
+
+- [配布元](https://github.com/github/gemoji)
+- [ライセンス（MIT）](https://github.com/github/gemoji/blob/master/LICENSE)
+
+</details>
+
+<details>
+<summary>FediDB（CC BY 4.0）</summary>
+
+FediDB
+
+ログイン画面で出すサーバーの候補。FediDBのサーバーのデータセットからMastodonとその派生のサーバーを選び、月間のアクティブユーザーが多い順に並べて使っています。
+
+- [配布元](https://fedidb.com/datasets)
+- [ライセンス（CC BY 4.0）](https://creativecommons.org/licenses/by/4.0/)
+
+</details>
+
+<details>
+<summary>Boring Avatars（MIT）</summary>
+
+Copyright (c) 2021 boringdesigners
+
+撮影用のシナリオのアイコンと写真の模様を描く`App/Sources/Debug/Scenario/ScenarioArtwork.swift`は、Boring Avatarsの描き方を移したもので、ファイルの頭に載せたMIT Licenseが適用されます。
+
+- [配布元](https://github.com/boringdesigners/boring-avatars)
+
+</details>
+
+<!-- /generated:licenses -->
 
 ## 名称とアイコン・ロゴ
 

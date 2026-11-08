@@ -7,11 +7,19 @@ SIM_ARCH ?= $(shell uname -m)
 # 同じDerivedDataを使うDebugのビルドには、すべてコンパイルキャッシュの設定を渡す（Config/Cache.xcconfig）。Tools/system-ui-check.shも同じものを渡す
 CACHE_XCCONFIG := -xcconfig Config/Cache.xcconfig
 
-.PHONY: generate lint test-lint test-core test-memory-cache build warnings test test-on-sim sim-keyboard scenario-build scenario-setup scenario-reset scenario-run archive testflight testflight-external promo readme-screenshots readme-icons update-known-servers check check-steps check-test hooks menu-editor clean
+.PHONY: generate app-info check-app-info lint test-lint test-core test-memory-cache build warnings test test-on-sim sim-keyboard scenario-build scenario-setup scenario-reset scenario-run archive testflight testflight-external promo readme-screenshots readme-icons update-known-servers check check-steps check-test hooks menu-editor clean
 
 ## project.ymlからXcodeプロジェクトを生成する
 generate:
 	xcodegen generate
+
+## Config/app-info.jsonから、App/Sources/Settings/AppInfo.generated.swiftとREADME.mdの生成の節を書き出す
+app-info:
+	python3 Tools/generate-app-info.py
+
+## 書き出したものがConfig/app-info.jsonと合っているかを調べる
+check-app-info:
+	python3 Tools/generate-app-info.py --check
 
 ## 実行時クラッシュにつながる書き方（強制アンラップ、try!、IUO）と、.swiftlint.ymlとTools/SciaLintの規則に反する書き方を検出する。swiftlintはbrew install swiftlintで入れる
 ## 設定を明示しないと、worktreeでは親のディレクトリにある元のcheckoutの.swiftlint.ymlも重ねて読み、そちらにない規則が外れる
@@ -167,7 +175,7 @@ check:
 	@Tools/check-stamp.sh record check "$$(cat $(CHECK_TREE))"
 
 ## SciaCoreのテスト、キャッシュのパッケージのテスト、lintの規則のテスト、アプリのビルドは互いを待たないので、並べて走らせる。出力が混ざるので、失敗はmakeが最後に出すターゲット名から追う
-CHECK_TESTS := test-core test-memory-cache test-lint
+CHECK_TESTS := test-core test-memory-cache test-lint check-app-info
 check-steps: lint
 	@$(MAKE) --no-print-directory -j4 $(CHECK_TESTS) warnings
 

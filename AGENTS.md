@@ -7,6 +7,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `project.yml`: XcodeGenの定義。`Scia.xcodeproj`と`App/Info.plist`は生成物なのでコミットせず、直接編集しない。ターゲットや設定の変更は`project.yml`で行う
 - `Config/Local.xcconfig`: 署名のチーム（`DEVELOPMENT_TEAM = <チームID>`）など、人ごとに違うビルド設定を書く。コミットしないので、worktreeを作ったら元のcheckoutからコピーする。なくてもシミュレーター向けにはビルドできる
 - `Config/CacheLocal.xcconfig`: makeのDebugのビルドが使うコンパイルキャッシュの置き場所（`COMPILATION_CACHE_CAS_PATH = <フォルダー>`）を、人ごとに書く（`Config/Cache.xcconfig`が読む）。コミットしないので、worktreeを作ったら元のcheckoutからコピーする。なければXcodeの既定の場所に置く
+- `Config/app-info.json`: 謝辞、第三者のライセンス、Scia自身のリンク（プライバシーポリシーなど）の置き場所。ここだけを編集し、`make app-info`で`App/Sources/Settings/AppInfo.generated.swift`と`README.md`の`<!-- generated:... -->`の中を書き出す。書き出したものは直接編集せず、JSONと一緒にcommitする。合っているかは`make check`と`Tools/merge-queue.sh`で調べる
 - `Packages/SciaCore`: UIに依存しないロジック（モデル、APIクライアント、ストリーミング、タイムラインの状態管理）。iOSとmacOSで共有するため、UIKit／AppKit／SwiftUIをimportしない。別のUIから何を使うかの入口は[docs/other-ui.md](docs/other-ui.md)。別のUIも使う部品を足したり、決まりをUIからSciaCoreへ移したりしたら、そのdocsにも足す
 - `Packages/MemoryCache`: Sciaに依存しない、メモリに持つキャッシュ（`CostLimitedCache`）。SciaCoreとアプリが使う。SciaCoreに依存しないことを、パッケージを分けてコンパイラーで守る
 - `Packages/TextKit2Label`: Sciaに依存しない、TextKit 2で文字を並べて描くラベル（`TextKitLabel`、`TextKitLabelLayout`、`LineFittingAttachment`）。アプリが使い、絵文字やリンクを扱うラベルはアプリで派生させる。Sciaの型を使わないことを、パッケージを分けてコンパイラーで守る。UIKitに依存するので、テストは`make test`でシミュレーターで走る
@@ -15,7 +16,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 ## 文書の使い分け
 
 - `docs/`はagentが読む文書で、人は読まない。人が読むのは`README.md`と`FEATURES.md`で、`docs/`とは別物として扱う
-- `README.md`と`FEATURES.md`は、ユーザーが頼んだときだけ変える。機能を足した、roadmapの項目が済んだ、仕様のdocsを書いたといった作業のついでに書き足さない。載せたほうがよさそうなことは、書かずに報告でユーザーに聞く
+- `README.md`と`FEATURES.md`は、ユーザーが頼んだときだけ変える。機能を足した、roadmapの項目が済んだ、仕様のdocsを書いたといった作業のついでに書き足さない。載せたほうがよさそうなことは、書かずに報告でユーザーに聞く。`README.md`の生成の節は`Config/app-info.json`に合わせて変わるので、この決まりの対象外（mainに入れる前の承認は要る）
 - `README.md`と`FEATURES.md`の変更は、ユーザーが自分の端末で`Tools/human-review.sh approve <commit>`を走らせて承認するまで、mainに入らない（`make hooks`のhookと`Tools/merge-queue.sh`で止める）。agentは承認を走らせず、`script`などで端末を作って入力を流し込むこともしない
 - `FEATURES.md`: Sciaでできることのリスト。頼まれて書くときは、ファイルの先頭のコメントに従う
 - `docs/vision.md`: 何を作り、何を作らないかと、設計の判断の基準。作業が終わっても残す考え方を書く
@@ -26,6 +27,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 ## コマンド
 
 - `make generate`: Xcodeプロジェクトを生成する
+- `make app-info`: `Config/app-info.json`から、アプリの`AppInfo.generated.swift`と`README.md`の生成の節を書き出す
 - `make lint`: SwiftLintで強制アンラップ、`try!`、IUOを検出する（`brew install swiftlint`が必要）。呼び出しや文字列の補間の形で決まる規則は、構文木で調べる`Tools/SciaLint`で検出し、`// scialint:disable:next <規則>`で外す
 - `make test-lint`: `Tools/SciaLint`の規則のテスト
 - `make test-core`: SciaCoreのテスト（macOS上、シミュレーター不要）

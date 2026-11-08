@@ -4,51 +4,16 @@ import SwiftUI
 struct LicensesView: View {
     var body: some View {
         List {
-            ForEach(Self.items) { item in
+            ForEach(AppInfo.licenses) { item in
                 LicenseRow(item: item)
             }
         }
         .navigationTitle("ライセンス")
         .navigationBarTitleDisplayMode(.inline)
     }
-
-    private static let items: [LicenseItem] = [
-        LicenseItem(
-            name: "Twemoji",
-            license: "CC BY 4.0",
-            copyright: "Copyright Twitter, Inc and other contributors",
-            usage: "設定で「Twemoji」を選んだときの絵文字の絵。SVGをカラーフォント（TrueType、COLR形式）に変換して使っています。",
-            source: URL(string: "https://github.com/jdecked/twemoji"),
-            licenseURL: URL(string: "https://creativecommons.org/licenses/by/4.0/")
-        ),
-        LicenseItem(
-            name: "Unicode絵文字データ、CLDR",
-            license: "Unicode License v3",
-            copyright: "Copyright © 1991-2026 Unicode, Inc.",
-            usage: "投稿欄の絵文字のシートに並べるUnicodeの絵文字のリストとまとまり（emoji-test.txt）と、検索に使う日本語と英語の名前と言葉（CLDRの絵文字の注釈）。",
-            source: URL(string: "https://www.unicode.org/emoji/"),
-            licenseURL: URL(string: "https://www.unicode.org/license.txt")
-        ),
-        LicenseItem(
-            name: "gemoji",
-            license: "MIT",
-            copyright: "Copyright (c) 2019 GitHub, Inc.",
-            usage: "投稿欄の補完でUnicodeの絵文字を「:+1」や「:thumbsup」のように打って探すための短縮名。",
-            source: URL(string: "https://github.com/github/gemoji"),
-            licenseURL: URL(string: "https://github.com/github/gemoji/blob/master/LICENSE")
-        ),
-        LicenseItem(
-            name: "FediDB",
-            license: "CC BY 4.0",
-            copyright: "FediDB",
-            usage: "ログイン画面で出すサーバーの候補。FediDBのサーバーのデータセットからMastodonとその派生のサーバーを選び、月間のアクティブユーザーが多い順に並べて使っています。",
-            source: URL(string: "https://fedidb.com/datasets"),
-            licenseURL: URL(string: "https://creativecommons.org/licenses/by/4.0/")
-        ),
-    ]
 }
 
-private struct LicenseItem: Identifiable {
+struct LicenseItem: Identifiable {
     let name: String
     let license: String
     let copyright: String

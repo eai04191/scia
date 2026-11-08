@@ -21,7 +21,7 @@ struct AboutSettingsView: View {
                 NavigationLink("ライセンス", value: SettingsPage.licenses)
                 NavigationLink("謝辞", value: SettingsPage.acknowledgments)
             }
-            if let privacyPolicy = Self.privacyPolicy {
+            if let privacyPolicy = AppInfo.privacyPolicy {
                 Section {
                     Link("プライバシーポリシー", destination: privacyPolicy)
                 }
@@ -31,8 +31,6 @@ struct AboutSettingsView: View {
         .navigationTitle("情報")
         .navigationBarTitleDisplayMode(.inline)
     }
-
-    private static let privacyPolicy = URL(string: "https://github.com/eai04191/scia/blob/main/PRIVACY.md")
 
     private func buildRow(_ title: String, value: String) -> some View {
         LabeledContent(title, value: value)

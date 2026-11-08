@@ -303,6 +303,8 @@ return_test_sim() {
 
 run_missing_steps() {
     local missing steps step sim
+    # READMEだけが違うとmake checkを省くので、JSONと書き出したものが合っているかはここで必ず調べる
+    python3 Tools/generate-app-info.py --check || { echo "error: Config/app-info.jsonと書き出したものが合っていません" >&2; exit 4; }
     # 調べられなかったときに、出力が空なのを通ったものと取り違えないよう、失敗したら止める
     missing=$(Tools/check-stamp.sh missing HEAD "$TARGET") || { echo "error: 通っていないものを調べられませんでした" >&2; exit 1; }
     steps=" $(awk '{ print $2 }' <<< "$missing" | tr '\n' ' ')"

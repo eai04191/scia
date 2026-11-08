@@ -679,7 +679,7 @@ struct AppearanceSamples {
             filter: FilterResult.Filter(id: "preview-filter", title: "見本", context: [.home], filterAction: .warn),
             keywordMatches: ["見本"]
         )
-        let card = URL(string: "https://github.com/eai04191/scia").map {
+        let card = AppInfo.repository.map {
             PreviewCard(
                 url: $0,
                 // 行数を増やしたときの折り返しを見せるため、タイトルも説明も1行に入りきらない長さにする。
