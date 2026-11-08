@@ -66,6 +66,61 @@ struct PollViewTests {
         view.systemLayoutSizeFitting(CGSize(width: 330, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel).height
     }
 
+    /// 投票を幅だけ決めた入れ物に制約で置く。高さは中身で決まる。
+    private static func constrainedPoll(_ content: PollView.Content, width: CGFloat) throws -> (view: PollView, host: UIView, window: UIWindow) {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 600)
+        let host = UIView(frame: CGRect(x: 20, y: 100, width: width, height: 400))
+        let view = PollView()
+        view.translatesAutoresizingMaskIntoConstraints = false
+        host.addSubview(view)
+        NSLayoutConstraint.activate([
+            view.topAnchor.constraint(equalTo: host.topAnchor),
+            view.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+            view.trailingAnchor.constraint(equalTo: host.trailingAnchor),
+        ])
+        window.addSubview(host)
+        window.isHidden = false
+        view.apply(content)
+        host.layoutIfNeeded()
+        return (view, host, window)
+    }
+
+    /// 一度ボタンしか入らない幅で並べたあとに広がっても、「結果を見る」と「投票」が並ぶ形の票数と締め切りは1行に収まり、下の行の高さは「投票」のボタンの高さのまま。
+    @Test func summaryStaysOnOneLineAfterNarrowLayout() throws {
+        let content = Self.content(Self.poll())
+        let (view, host, window) = try Self.constrainedPoll(content, width: 170)
+        defer { window.isHidden = true }
+
+        host.frame.size.width = 330
+        host.layoutIfNeeded()
+
+        let summary = try #require(view.summaryPreviewFrame(in: view)?.first)
+        let footer = try #require(view.footerPreviewFrame(in: view)?.first)
+        #expect(summary.height <= ceil(content.footerFont.lineHeight), "票数と締め切りが1行に収まっていません")
+        let textWidth = ceil((content.display.summary as NSString).size(withAttributes: [.font: content.footerFont]).width)
+        #expect(abs(summary.width - textWidth) <= 1, "「投稿の見た目」の帯が文字の幅になっていません")
+        #expect(abs(footer.height - view.footerButtons.vote.bounds.height) < 0.5, "下の行が「投票」のボタンより高くなりました")
+    }
+
+    /// 横に入りきらない幅では、ボタンの左に余った幅いっぱいで折り返し、測った高さと並べた高さをそろえる。
+    @Test func summaryWrapsInRemainingWidthWhenNarrow() throws {
+        let content = Self.content(Self.poll())
+        let width: CGFloat = 190
+        let (view, _, window) = try Self.constrainedPoll(content, width: width)
+        defer { window.isHidden = true }
+
+        let measured = view.systemLayoutSizeFitting(CGSize(width: width, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel).height
+        let summary = try #require(view.summaryPreviewFrame(in: view)?.first)
+        let footer = try #require(view.footerPreviewFrame(in: view)?.first)
+        let oneLine = ceil(content.footerFont.lineHeight)
+        #expect(summary.height > oneLine, "この幅では折り返すはずです")
+        #expect(summary.height <= oneLine * 3, "1文字ずつ折り返しています")
+        #expect(footer.height >= summary.height)
+        #expect(abs(view.bounds.height - measured) < 0.5, "測った高さと並べた高さがずれています")
+    }
+
     /// 結果を見ると、投票全体を重ねて切り替えず、要素ごとに動かす。替える前のボタンは複製を消し終えてから新しいボタンを出し、
     /// 割合は0%から数字を入れ替え、先頭の記号は消える動きの間も隠さない。動き終えると、ボタンも割合もふつうに見える。
     @Test func revealingResultsMovesEachElement() async throws {

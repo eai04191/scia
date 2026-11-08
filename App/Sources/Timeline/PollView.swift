@@ -89,7 +89,8 @@ final class PollView: UIView {
         summaryLabel.textColor = .secondaryLabel
         // 文字を大きくして横に入りきらなくなったら、切り詰めずに折り返す。票数や締め切りが読めなくなるため。
         summaryLabel.numberOfLines = 0
-        summaryLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        // 文字の幅で置くと、狭い幅で一度折り返した幅が残り、広がっても1文字ずつ折り返したままになる。ボタンの左に余った幅いっぱいに置く。
+        summaryLabel.setContentHuggingPriority(.defaultLow - 1, for: .horizontal)
 
         var secondary = UIButton.Configuration.plain()
         secondary.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8)
@@ -143,7 +144,7 @@ final class PollView: UIView {
             voteButton.trailingAnchor.constraint(equalTo: footer.trailingAnchor),
             summaryLabel.leadingAnchor.constraint(equalTo: footer.leadingAnchor),
             summaryLabel.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
-            secondaryButton.leadingAnchor.constraint(greaterThanOrEqualTo: summaryLabel.trailingAnchor, constant: 4),
+            secondaryButton.leadingAnchor.constraint(equalTo: summaryLabel.trailingAnchor, constant: 4),
             secondaryButton.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
         ])
     }
@@ -369,9 +370,9 @@ final class PollView: UIView {
         }
     }
 
-    /// 票数と締め切りの文字の枠。
+    /// 票数と締め切りの文字の枠。ラベルは余った幅を受け持つので、文字のある幅だけを示す。
     func summaryPreviewFrame(in space: UIView) -> [CGRect]? {
-        summaryLabel.previewFrame(in: space)
+        summaryLabel.previewFrame(in: space)?.map { CGRect(x: $0.minX, y: $0.minY, width: min($0.width, ceil(summaryLabel.intrinsicContentSize.width)), height: $0.height) }
     }
 
     /// 選択肢を並べた枠。
