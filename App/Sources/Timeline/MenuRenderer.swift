@@ -91,6 +91,12 @@ struct BuiltMenu<Command> {
         return renderer.menu(root)
     }
 
+    /// ナビゲーションバーのボタンから出すメニュー。中身を読む項目を含むサブメニューは、読み終えてから出す。
+    var barMenu: UIMenu {
+        defer { didRender() }
+        return renderer.menu(root.loadingSubmenusBeforeShowing())
+    }
+
     /// 木の一部を描く。
     func elements(_ nodes: [MenuNode<Command>]) -> [UIMenuElement] {
         defer { didRender() }

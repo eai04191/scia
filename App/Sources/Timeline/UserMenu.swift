@@ -48,14 +48,12 @@ struct UserMenu {
     ///   - avatarImage: 「別のアカウントで」のアカウントの行のアイコンの画像。nilを返したら記号を付ける。
     ///   - didRenderDeferred: 開いてから読む中身を描き終えたあとに呼ぶ。描きながら集めた、まだ読んでいないアイコンを読み始める。
     func profileScreenMenu(groups: MenuLayout<UserMenuItem>.Groups, avatarImage: @escaping @MainActor (MenuAvatar) -> UIImage?, didRenderDeferred: @escaping @MainActor () -> Void) -> UIMenu? {
-        var tree = tree
-        // ナビゲーションバーのボタンから出すので、「別のアカウントで」のアカウントの行は、中身を読み終えてから出す。
-        tree.loadsOtherAccountRowsBeforeShowing = true
         let root = tree.profileScreenMenu(groups: groups)
         reloadRelation(groups: groups)
         var renderer = renderer(openProfile: nil, avatarImage: avatarImage)
         renderer.didRenderDeferred = didRenderDeferred
-        return root.map { renderer.menu($0) }
+        // ナビゲーションバーのボタンから出すので、中身を読む項目を含むサブメニューは、読み終えてから出す。
+        return root.map { renderer.menu($0.loadingSubmenusBeforeShowing()) }
     }
 
     /// プロフィールのハンドルを押したときのメニュー。コピーの項目を決まった順に出す。出す項目がなければnil。

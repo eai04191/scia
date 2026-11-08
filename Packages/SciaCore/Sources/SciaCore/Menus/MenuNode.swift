@@ -99,6 +99,102 @@ extension MenuNode {
     }
 }
 
+// MARK: - ナビゲーションバーのボタンから出すメニュー
+
+@MainActor
+extension MenuNode {
+    /// ナビゲーションバーのボタンから出すメニューの根にする。中身を読む項目を含むサブメニューは、サブメニューの行そのものを読み込み中の行にし、中の項目を全部読み終えてから、中身のそろったサブメニューにして出す。決まりはdocs/menus.mdの「メニューの単位」にある。
+    /// UIKitの不具合を避けるため。iOS 27.2のアイランドのあるiPhoneでは、ナビゲーションバーのボタンから出したメニューで、サブメニューの中の読み込み中の行が中身に替わっても、メニューの高さが替わる直前の高さのままになり、収まらない項目が切れる。最初の段の読み込み中の行なら、替わると高さが合う。
+    public func loadingSubmenusBeforeShowing() -> MenuNode {
+        var root = self
+        if case .submenu(let children) = content {
+            root.content = .submenu(Self.loadingSubmenusBeforeShowing(children))
+        }
+        return root
+    }
+
+    /// 最初の段に出す`nodes`の、中身を読む項目を含むサブメニューを、読み終えてから出す行にする。最初の段の読み込み中の行が読んだ中身も、同じように組み替える。
+    private static func loadingSubmenusBeforeShowing(_ nodes: [MenuNode]) -> [MenuNode] {
+        nodes.map { node in
+            switch node.content {
+            case .action:
+                return node
+            case .group(let children, let isRow):
+                var group = node
+                group.content = .group(loadingSubmenusBeforeShowing(children), isRow: isRow)
+                return group
+            case .deferred(let load):
+                return .deferred { loadingSubmenusBeforeShowing(await load()) }
+            case .submenu(let children):
+                guard containsDeferred(children) else { return node }
+                return .deferred {
+                    var submenu = node
+                    submenu.content = .submenu(await loaded(children))
+                    return [submenu]
+                }
+            }
+        }
+    }
+
+    /// `nodes`の中に、サブメニューの中も含めて、中身を読む項目があるか。
+    private static func containsDeferred(_ nodes: [MenuNode]) -> Bool {
+        nodes.contains { node in
+            switch node.content {
+            case .deferred: true
+            case .submenu(let children), .group(let children, _): containsDeferred(children)
+            case .action: false
+            }
+        }
+    }
+
+    /// `nodes`の中の、サブメニューの中も含めた中身を読む項目を、すべて読んだ中身に置き換える。中身が空になったまとまりは除く。
+    /// 読む項目どうしは同時に読み、いちばん遅いものを待つ。ほかのアカウントごとに相手を探す通信のように、順に待つと、待つ時間が足し上がるため。
+    private static func loaded(_ nodes: [MenuNode]) async -> [MenuNode] {
+        let slots = LoadedSlots(nodes)
+        let loads = nodes.indices.map { index in
+            Task { @MainActor in
+                slots.values[index] = await loaded(slots.nodes[index])
+            }
+        }
+        for load in loads {
+            await load.value
+        }
+        return slots.values.flatMap { $0 }
+    }
+
+    private static func loaded(_ node: MenuNode) async -> [MenuNode] {
+        switch node.content {
+        case .action:
+            return [node]
+        case .deferred(let load):
+            return await loaded(await load())
+        case .submenu(let children):
+            var submenu = node
+            submenu.content = .submenu(await loaded(children))
+            return [submenu]
+        case .group(let children, let isRow):
+            let children = await loaded(children)
+            guard !children.isEmpty else { return [] }
+            var group = node
+            group.content = .group(children, isRow: isRow)
+            return [group]
+        }
+    }
+}
+
+/// 同時に読む項目と、読んだ中身を、読み終えた順ではなく元の並びの位置に入れておく。
+/// メインアクターのクラスなので、同時に読む処理へ、項目をそのまま渡さずにこれを渡す。
+@MainActor
+private final class LoadedSlots<Element> {
+    let nodes: [Element]
+    var values: [[Element]]
+
+    init(_ nodes: [Element]) {
+        self.nodes = nodes
+        values = Array(repeating: [], count: nodes.count)
+    }
+}
+
 /// メニューの項目のアイコン。描く側が画像にする。
 public enum MenuIcon {
     /// SF Symbolsの名前。

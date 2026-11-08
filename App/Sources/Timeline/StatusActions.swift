@@ -556,7 +556,7 @@ extension TimelineViewController {
                 openTimeline: {},
                 openAccountStatuses: { _ in }
             )
-            completion(menu.built(groups: settings.hashtagMenuLayout.groups.excluding([.timeline]))?.menu.children ?? [])
+            completion(menu.built(groups: settings.hashtagMenuLayout.groups.excluding([.timeline]))?.barMenu.children ?? [])
         }])
         return item
     }

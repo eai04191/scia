@@ -383,28 +383,14 @@ extension OtherAccount {
     /// アカウントの行には、そのアカウント自身のアイコンを付ける。
     /// - Parameter children: そのアカウントとしての中身。
     static func accountsMenu<Command>(_ accounts: [OtherAccount], title: String, symbolName: String, children: (OtherAccount) -> [MenuNode<Command>]) -> MenuNode<Command>? {
-        accountsMenu(accounts, title: title, symbolName: symbolName) { account, row in
-            .submenu(row.title, subtitle: row.subtitle, icon: row.icon, children(account))
-        }
-    }
-
-    /// アカウントの行の名前、サブタイトル、アイコン。
-    struct AccountRow {
-        let title: String
-        let subtitle: String
-        let icon: MenuIcon
-    }
-
-    /// `accountsMenu(_:title:symbolName:children:)`と同じ並べ方で、アカウントの行そのものを`row`で組む。
-    static func accountsMenu<Command>(_ accounts: [OtherAccount], title: String, symbolName: String, row: (OtherAccount, AccountRow) -> MenuNode<Command>) -> MenuNode<Command>? {
         guard !accounts.isEmpty else { return nil }
         if accounts.count == 1, let account = accounts.first {
             let credential = account.credential
-            return row(account, AccountRow(title: "@\(credential.username)で", subtitle: credential.server, icon: .avatar(.otherAccount(account), fallbackSymbol: symbolName)))
+            return .submenu("@\(credential.username)で", subtitle: credential.server, icon: .avatar(.otherAccount(account), fallbackSymbol: symbolName), children(account))
         }
         return .submenu(title, icon: .symbol(symbolName), accounts.map { account in
             let credential = account.credential
-            return row(account, AccountRow(title: "@\(credential.username)", subtitle: credential.server, icon: .avatar(.otherAccount(account), fallbackSymbol: "person.crop.circle")))
+            return .submenu("@\(credential.username)", subtitle: credential.server, icon: .avatar(.otherAccount(account), fallbackSymbol: "person.crop.circle"), children(account))
         })
     }
 

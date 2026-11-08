@@ -145,9 +145,6 @@ public struct UserMenuTree {
     public var reportableStatusID: String?
     /// 「別のアカウントで」の中の並び。ユーザーのメニューの、ほかのメニューの中に出すときの並び（`submenuGroups`）を渡す。nilなら、組む並びを使う。
     public var otherAccountGroups: MenuLayout<UserMenuItem>.Groups?
-    /// 「別のアカウントで」のアカウントの行そのものを、相手を探して中身を読み終えてから出すか。ナビゲーションバーのボタンから出すメニューで使う。
-    /// UIKitは、ナビゲーションバーから出したメニューでは、開いたサブメニューの中身があとから替わっても高さを合わせ直さず、増えた分の行がスクロールしないと見えないため。
-    public var loadsOtherAccountRowsBeforeShowing = false
 
     public init(subject: UserMenuSubject, actions: UserMenuActions?, linkBrowser: LinkBrowser, reportableStatusID: String? = nil) {
         self.subject = subject
@@ -442,70 +439,9 @@ extension UserMenuTree {
         guard let url = subject.url else { return nil }
         let inner = otherAccountInnerGroups(groups)
         guard !(inner.main + inner.more).isEmpty else { return nil }
-        if loadsOtherAccountRowsBeforeShowing {
-            return OtherAccount.accountsMenu(actions.otherAccounts(), title: item.title, symbolName: item.symbolName) { account, row in
-                otherAccountRow(row, at: url, as: account, groups: inner)
-            }
-        }
         return OtherAccount.accountsMenu(actions.otherAccounts(), title: item.title, symbolName: item.symbolName) { account in
             otherAccountNodes(at: url, as: account, groups: inner)
         }
-    }
-
-    /// 相手を探して中身を読み終えてから出す、アカウントの行。中身をすぐ組めるときは、そのまま出す。
-    /// 読み込み中の行と差し替える行の数が変わると、ナビゲーションバーから出したメニューでは増えた分が切れるので、どの場合もアカウントの行1つで返す。
-    private func otherAccountRow(_ row: OtherAccount.AccountRow, at url: URL, as account: OtherAccount, groups: MenuLayout<UserMenuItem>.Groups) -> MenuNode<UserMenuCommand> {
-        if let found = account.person(at: url) {
-            let items = otherAccountItems(for: found, as: account, groups: groups)
-            if !Self.containsInlineDeferred(items) {
-                return .submenu(row.title, subtitle: row.subtitle, icon: row.icon, items)
-            }
-        }
-        return .deferred { [self] in
-            switch await account.lookUpPerson(at: url) {
-            case .found(let found):
-                // 関係の項目は、この読み込みを待って中身を渡す。
-                if groups.needsRelationship {
-                    account.reloadRelations([found.id])
-                }
-                return [.submenu(row.title, subtitle: row.subtitle, icon: row.icon, await Self.loadingInlineDeferred(otherAccountItems(for: found, as: account, groups: groups)))]
-            case .notFound:
-                return [.action(row.title, subtitle: "このアカウントからは見つからないユーザーです", icon: row.icon, nil)]
-            case .failed(let error):
-                let title = "ユーザーを探せませんでした"
-                return [.submenu(row.title, subtitle: title, icon: row.icon, OtherAccount.lookupFailureNodes(title: title, error: error, logIn: UserMenuCommand.logIn))]
-            }
-        }
-    }
-
-    /// `nodes`と、その中の区切り線で分けたまとまりに、開いてから読む項目があるか。サブメニューの中は、開いたときに読むので見ない。
-    private static func containsInlineDeferred(_ nodes: [MenuNode<UserMenuCommand>]) -> Bool {
-        nodes.contains { node in
-            switch node.content {
-            case .deferred: true
-            case .group(let children, _): containsInlineDeferred(children)
-            case .action, .submenu: false
-            }
-        }
-    }
-
-    /// `nodes`と、その中の区切り線で分けたまとまりにある、開いてから読む項目を読み終え、中身に置き換える。サブメニューの中は、開くまで読まないので置き換えない。
-    private static func loadingInlineDeferred(_ nodes: [MenuNode<UserMenuCommand>]) async -> [MenuNode<UserMenuCommand>] {
-        var loaded: [MenuNode<UserMenuCommand>] = []
-        for node in nodes {
-            switch node.content {
-            case .deferred(let load):
-                loaded += await loadingInlineDeferred(await load())
-            case .group(let children, let isRow):
-                let children = await loadingInlineDeferred(children)
-                if !children.isEmpty {
-                    loaded.append(.group(children, isRow: isRow))
-                }
-            case .action, .submenu:
-                loaded.append(node)
-            }
-        }
-        return loaded
     }
 
     /// `account`から見たこの人のユーザーのメニュー。前に見つけた人ならすぐ組み、まだなら開いてからそのサーバーでプロフィールのURLで探す。
