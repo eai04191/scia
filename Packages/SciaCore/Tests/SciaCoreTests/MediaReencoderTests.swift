@@ -430,20 +430,28 @@ struct MediaReencoderTests {
     /// VTPixelTransferSessionで出力の色をBT.709にしたときも同じ値になる。CIToneMapHeadroom（元のヘッドルーム4.93、目標1）は0.75、0.92、1.00で、参照白を明るく残す代わりに、ハイライトの差が小さくなる。
     /// 色を変えずにHLGの値を素通しすると、0.75、0.90、1.00がそのまま出て、全体が明るく白っぽくなる。
     @Test func tonemapsHLGVideoToSDR() async throws {
+        // 時間切れになったときに、どの段階で止まったかをログの時刻で読めるようにする。
+        func mark(_ step: String) { NSLog("tonemapsHLGVideoToSDR: %@", step) }
         let directory = try makeDirectory()
         let source = directory.appending(path: "hlg.mov")
+        mark("writing source")
         try await writeHLGVideo(width: 320, height: 180, to: source)
 
         let reference = directory.appending(path: "reference.mp4")
         let session = try #require(AVAssetExportSession(asset: AVURLAsset(url: source), presetName: AVAssetExportPreset1280x720))
+        mark("exporting reference")
         try await session.export(to: reference, as: .mp4)
+        mark("reading reference")
         let expected = try await bandLuma(of: reference)
         // 比べる基準が素通しになっていないこと。
         #expect(expected[2] < 0.7)
 
         let output = directory.appending(path: "sdr.mp4")
+        mark("exporting SDR")
         try await VideoReencoder.export(source, size: PixelSize(width: 320, height: 180), frameRate: nil, bitRate: 1_000_000, audioBitRate: 128_000, destination: output) { _ in }
+        mark("reading SDR")
         let actual = try await bandLuma(of: output)
+        mark("finished")
         for (actualLuma, expectedLuma) in zip(actual, expected) {
             #expect(abs(actualLuma - expectedLuma) < 0.03, "書き出した明るさ \(actual)、Appleの変換 \(expected)")
         }
