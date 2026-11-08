@@ -61,7 +61,8 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
                 height: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserBarGrabHeight)),
                 inset: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserBarGrabInset)),
                 settlingHeight: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserBarGrabSettlingHeight)),
-                settlingDuration: .seconds(tuning.value(of: TuningCatalog.inAppBrowserBarGrabSettlingDuration))
+                settlingDuration: .seconds(tuning.value(of: TuningCatalog.inAppBrowserBarGrabSettlingDuration)),
+                isVisible: tuning.value(of: TuningCatalog.inAppBrowserShowsBarGrabArea)
             ),
             clock: clock
         )

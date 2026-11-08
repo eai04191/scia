@@ -1135,6 +1135,13 @@ public enum TuningCatalog {
         defaultValue: 0.6
     )
 
+    /// アプリ内のSafariのバーの上に重ねる引ける範囲を、半透明の赤で塗って見えるようにする。範囲を確かめるためのもの。
+    public static let inAppBrowserShowsBarGrabArea = ToggleTuning(
+        id: "browser.showsBarGrabArea",
+        title: "アプリ内のSafariのバーの上の、引ける範囲に色を付ける",
+        defaultValue: false
+    )
+
     /// アプリ内のSafariを、伏せた高さで出してから中くらいの高さへ広げる。
     /// 実機では、中くらいの高さで直接出すと、ページを描く前の面が上がってきて、手前で本物のシートに跳んで止まって見える。
     /// 小さく出して上がりきってから広げると、広げる動きはページを描いたシートで動き、跳ぶ動きが目立ちにくくなる。実機で比べて、こちらを既定にした。
@@ -1975,6 +1982,7 @@ public enum TuningCatalog {
             .number(inAppBrowserBarGrabInset),
             .number(inAppBrowserBarGrabSettlingHeight),
             .number(inAppBrowserBarGrabSettlingDuration),
+            .toggle(inAppBrowserShowsBarGrabArea),
             .toggle(inAppBrowserGrowsFromCollapsed),
         ]),
         TuningSection(id: "media.dismiss", title: "ビューア：閉じる操作", items: [

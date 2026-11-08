@@ -27,6 +27,8 @@ final class InAppBrowserSheet: UIViewController {
         /// シートの段が変わった直後の高さと、その高さを保つ時間。
         var settlingHeight: CGFloat
         var settlingDuration: Duration
+        /// 範囲がどこにあるかを確かめるために、見える色で塗る。
+        var isVisible: Bool
     }
 
     init(safari: SFSafariViewController, handleHeight: CGFloat, barGrab: BarGrab, clock: any Clock<Duration>) {
@@ -68,7 +70,7 @@ final class InAppBrowserSheet: UIViewController {
     func presentSafari() {
         area.present(safari, animated: false)
         guard barGrab.height > 0 else { return }
-        barGrabArea.backgroundColor = UIColor.black.withAlphaComponent(0.01)
+        barGrabArea.backgroundColor = barGrab.isVisible ? UIColor.systemRed.withAlphaComponent(0.4) : UIColor.black.withAlphaComponent(0.01)
         barGrabArea.frame = CGRect(x: barGrab.inset, y: 0, width: max(0, view.bounds.width - barGrab.inset * 2), height: handleHeight + barGrab.height)
         barGrabArea.autoresizingMask = [.flexibleWidth]
         view.addSubview(barGrabArea)
