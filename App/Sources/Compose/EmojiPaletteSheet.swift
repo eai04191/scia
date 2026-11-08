@@ -3,12 +3,20 @@ import SciaCore
 import UIKit
 
 /// 投稿欄の下に出すシート。メディアを選ぶシートと絵文字のパレットのシートを、投稿欄のバーを留めておく間の扱いで同じに扱う。
+/// 開閉は、どちらも`ComposeSheetLifecycle`で追う。
 @MainActor
 protocol ComposeBottomSheet: AnyObject {
+    var lifecycle: ComposeSheetLifecycle { get }
+}
+
+extension ComposeBottomSheet {
     /// 閉じることが決まったあと。
-    var isClosing: Bool { get }
+    var isClosing: Bool { lifecycle.isClosing }
+
     /// プログラムから閉じる。`notifiesWillClose`なら、閉じることが決まった知らせ（キーボードを戻す）を出す。
-    func close(notifiesWillClose: Bool)
+    func close(notifiesWillClose: Bool) {
+        lifecycle.close(notifiesWillClose: notifiesWillClose)
+    }
 }
 
 extension MediaPickerSheet: ComposeBottomSheet {}
@@ -20,20 +28,17 @@ extension MediaPickerSheet: ComposeBottomSheet {}
 /// スクロールが端に届いても広げない。検索欄にキーボードを出すと、選んだ段にかかわらずUIKitがシートを全画面まで広げる（`scia-debug://sheet-keyboard`で確かめた）。
 @MainActor
 final class EmojiPaletteSheet: NSObject, ComposeBottomSheet {
-    /// 閉じることが決まった時点で呼ぶ。キーボードをシートが下がるのと同時に上げるために使う。
-    var onWillClose: () -> Void = {}
-    /// 閉じ終わったときに呼ぶ。
-    var onDidClose: () -> Void = {}
-    private(set) var isClosing = false
+    /// 開閉。閉じることが決まった知らせ、閉じ終わりの知らせもここで受ける。
+    let lifecycle: ComposeSheetLifecycle
 
     private let controller = UIViewController()
     private let palette: EmojiPaletteView
-    private let logger = SciaLog.logger(category: "compose")
     private static let lowDetent = UISheetPresentationController.Detent.Identifier("low")
 
     /// - Parameter lowHeight: 低いときのシートの高さ。画面の下の安全領域は含まない。
     init(palette: EmojiPaletteView, lowHeight: CGFloat) {
         self.palette = palette
+        lifecycle = ComposeSheetLifecycle(controller: controller, name: "emoji palette sheet")
         super.init()
         controller.view.backgroundColor = .clear
         palette.translatesAutoresizingMaskIntoConstraints = false
@@ -57,18 +62,7 @@ final class EmojiPaletteSheet: NSObject, ComposeBottomSheet {
     }
 
     func present(from host: UIViewController) {
-        host.present(controller, animated: true)
-    }
-
-    func close(notifiesWillClose: Bool) {
-        guard controller.presentingViewController != nil else { return }
-        if notifiesWillClose {
-            notifyWillClose()
-        } else {
-            isClosing = true
-        }
-        // プログラムから閉じたときは`presentationControllerDidDismiss`が呼ばれないので、閉じ終わりをここで知らせる。
-        controller.dismiss(animated: true) { [weak self] in self?.onDidClose() }
+        lifecycle.present(from: host)
     }
 
     /// 検索をやめて、キーボードを下げ、低い段に戻す。
@@ -78,29 +72,14 @@ final class EmojiPaletteSheet: NSObject, ComposeBottomSheet {
             controller.sheetPresentationController?.selectedDetentIdentifier = Self.lowDetent
         }
     }
-
-    private func notifyWillClose() {
-        guard !isClosing else { return }
-        isClosing = true
-        logger.info("emoji palette sheet: will close")
-        onWillClose()
-    }
 }
 
 extension EmojiPaletteSheet: UISheetPresentationControllerDelegate {
-    /// スワイプして閉じるとき、閉じ終わるのを待たず、指を離して閉じることが決まった時点で知らせる。
-    /// 閉じ終わってからキーボードを出すと、一拍遅れて上がってくる。
     func presentationControllerWillDismiss(_ presentationController: UIPresentationController) {
-        guard let coordinator = presentationController.presentedViewController.transitionCoordinator else { return }
-        coordinator.notifyWhenInteractionChanges { [weak self] context in
-            guard !context.isCancelled else { return }
-            self?.notifyWillClose()
-        }
+        lifecycle.presentationControllerWillDismiss(presentationController)
     }
 
-    /// 下へスワイプして閉じたときと、出した側から`dismissPresentedScreens`でまとめて閉じたとき。
     func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
-        isClosing = true
-        onDidClose()
+        lifecycle.presentationControllerDidDismiss()
     }
 }

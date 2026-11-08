@@ -1011,8 +1011,8 @@ final class ProfileEditViewController: UIViewController {
         tableAboveSheet?.isActive = true
         // 独自の高さはシートの下の安全領域を含まないので、その分を引く。
         let sheet = EmojiPaletteSheet(palette: emojiPalette, lowHeight: height - view.safeAreaInsets.bottom)
-        sheet.onWillClose = { [weak input] in input?.becomeFirstResponder() }
-        sheet.onDidClose = { [weak self] in self?.emojiPaletteDidClose() }
+        sheet.lifecycle.onWillClose = { [weak input] in input?.becomeFirstResponder() }
+        sheet.lifecycle.onDidClose = { [weak self] in self?.emojiPaletteDidClose() }
         emojiSheet = sheet
         logger.info("profile edit emoji palette: presenting (height=\(height))")
         input.resignFirstResponder()

@@ -10,10 +10,8 @@ import UIKit
 final class MediaPickerSheet: NSObject {
     /// 選択が変わるたびに、今の選択を順に渡す。
     var onSelectionChange: ([PHPickerResult]) -> Void = { _ in }
-    /// 閉じることが決まった時点で呼ぶ。キーボードをシートが下がるのと同時に上げるために使う。
-    var onWillClose: () -> Void = {}
-    /// 閉じ終わったときに呼ぶ。
-    var onDidClose: () -> Void = {}
+    /// 開閉。閉じることが決まった知らせ、閉じ終わりの知らせもここで受ける。
+    let lifecycle: ComposeSheetLifecycle
 
     private let picker: PHPickerViewController
     private var selectedIDs: [String]
@@ -24,8 +22,6 @@ final class MediaPickerSheet: NSObject {
     /// 選んだものを足し引きするために開き直したなら、選んだ写真の近くから離れない方を取る。
     private let resetsScrollOnDetentChange: Bool
     private static let lowDetent = UISheetPresentationController.Detent.Identifier("low")
-    /// 閉じることが決まったあと。キーボードを二度上げないよう、閉じる知らせは一度だけにする。
-    private(set) var isClosing = false
 
     /// - Parameters:
     ///   - selectedIDs: 前に選んだメディアのID。開き直したときに選んだ状態で出す。
@@ -47,6 +43,7 @@ final class MediaPickerSheet: NSObject {
         // 低いときは余白をなくしてバーを消す。最大に広げたら余白を戻してバーを出す。
         configuration.edgesWithoutContentMargins = .all
         picker = PHPickerViewController(configuration: configuration)
+        lifecycle = ComposeSheetLifecycle(controller: picker, name: "media picker")
         super.init()
         picker.delegate = self
         if let sheet = picker.sheetPresentationController {
@@ -61,19 +58,7 @@ final class MediaPickerSheet: NSObject {
     }
 
     func present(from host: UIViewController) {
-        host.present(picker, animated: true)
-    }
-
-    /// プログラムから閉じる。スワイプして閉じられなくなったときも、こちらは効く。
-    func close(notifiesWillClose: Bool) {
-        guard picker.presentingViewController != nil else { return }
-        if notifiesWillClose {
-            notifyWillClose()
-        } else {
-            isClosing = true
-        }
-        // プログラムから閉じたときは`presentationControllerDidDismiss`が呼ばれないので、閉じ終わりをここで知らせる。
-        picker.dismiss(animated: true) { [weak self] in self?.onDidClose() }
+        lifecycle.present(from: host)
     }
 
     /// 投稿欄で外したメディアを、ピッカーの選択からも外す。外さないと、ピッカーの枚数の上限に数えられたままになる。
@@ -81,16 +66,9 @@ final class MediaPickerSheet: NSObject {
     /// 外すとピッカーは新しい選択を送ってくる（観察した挙動で、ヘッダーには書かれていない）。それを受けて`selectedIDs`を更新するので、
     /// ここでは先に書き換えない。先に書き換えると、届いた選択が今の選択と同じになり、✓と見分けられずに閉じてしまう。
     func deselect(_ ids: [String]) {
-        guard !isClosing, !ids.isEmpty else { return }
+        guard !lifecycle.isClosing, !ids.isEmpty else { return }
         logger.info("media picker: deselect removed media (count=\(ids.count))")
         picker.deselectAssets(withIdentifiers: ids)
-    }
-
-    private func notifyWillClose() {
-        guard !isClosing else { return }
-        isClosing = true
-        logger.info("media picker: will close")
-        onWillClose()
     }
 }
 
@@ -136,19 +114,11 @@ extension MediaPickerSheet: UISheetPresentationControllerDelegate {
         }
     }
 
-    /// スワイプして閉じるとき、閉じ終わるのを待たず、指を離して閉じることが決まった時点で知らせる。
-    /// 閉じ終わってからキーボードを出すと、一拍遅れて上がってくる。
     func presentationControllerWillDismiss(_ presentationController: UIPresentationController) {
-        guard let coordinator = presentationController.presentedViewController.transitionCoordinator else { return }
-        coordinator.notifyWhenInteractionChanges { [weak self] context in
-            guard !context.isCancelled else { return }
-            self?.notifyWillClose()
-        }
+        lifecycle.presentationControllerWillDismiss(presentationController)
     }
 
-    /// 下へスワイプして閉じたときと、出した側から`dismissPresentedScreens`でまとめて閉じたとき。
     func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
-        isClosing = true
-        onDidClose()
+        lifecycle.presentationControllerDidDismiss()
     }
 }

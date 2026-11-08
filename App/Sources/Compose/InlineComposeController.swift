@@ -361,9 +361,12 @@ final class InlineComposeController: NSObject {
     private var isShowingMediaViewer = false
     /// 書いている途中に並びを変える画面を開いてから、閉じるまでtrue。この間は、キーボードを閉じても書いている状態を解かない。
     private var isShowingToolLayoutSettings = false
-    /// ビューアを閉じて入力欄にキーボードを戻してから、最初のキーボードの高さの知らせが届くまでtrue。
+    /// ビューアやメディアを選ぶシートを閉じて入力欄にキーボードを戻してから、最初のキーボードの高さの知らせが届くまでtrue。
     /// 届いた高さがソフトウェアキーボードのものでなければ（ハードウェアキーボードなら）、上がりきった知らせを待たずにバーを外す。
     private var isWaitingForKeyboardAfterClosing = false
+    /// シートを出している間に、キーボードが上がりきった知らせを見送った。キーボードを出したままシートを閉じると、閉じ始めに戻すフォーカスはもうあるので、
+    /// 上がりきった知らせがもう来ない。閉じ終わりで、キーボードに戻っていればその場でバーを外す。キーボードが下がれば、次に上がりきった知らせが来るので下ろす。
+    private var skippedKeyboardDidShowForSheet = false
     /// ビューアを開くたびに増やす。閉じる途中に別の添付を開いたら、前のビューアの閉じ終わりでキーボードを戻さないようにする。
     private var mediaViewerGeneration = 0
     /// 出しているアラートを閉じたら、入力欄にキーボードを戻す。シートやビューアの上に出したときはfalse。
@@ -1748,8 +1751,11 @@ final class InlineComposeController: NSObject {
     private enum PendingSheet { case media, emoji }
     private var pendingSheet: PendingSheet?
     /// 出しているシート。メディアを選ぶシートか、絵文字のパレットのシート。どちらも出している間は、投稿欄のバーをシートの上端に留め、書いている状態を保つ。
+    /// 閉じる途中のシートと、次に出したシートが同時にあるときは、閉じていないほうにする。閉じる途中のほうにすると、出したシートのバーの留めを外してしまう。
     private var bottomSheet: (any ComposeBottomSheet)? {
-        mediaPicker ?? emojiSheet
+        if let mediaPicker, !mediaPicker.isClosing { return mediaPicker }
+        if let emojiSheet, !emojiSheet.isClosing { return emojiSheet }
+        return mediaPicker ?? emojiSheet
     }
 
     /// 出していなければシートを出し、出していれば閉じてキーボードに戻る。
@@ -1797,8 +1803,8 @@ final class InlineComposeController: NSObject {
         setHoldAboveKeyboard(height: height)
         // 独自の高さはシートの下の安全領域を含まないので、その分を引く。
         let sheet = EmojiPaletteSheet(palette: emojiPalette, lowHeight: height - host.view.safeAreaInsets.bottom)
-        sheet.onWillClose = { [weak self] in self?.focusLastInput() }
-        sheet.onDidClose = { [weak self] in self?.emojiPaletteDidClose() }
+        sheet.lifecycle.onWillClose = { [weak self] in self?.focusLastInput() }
+        sheet.lifecycle.onDidClose = { [weak self] in self?.emojiPaletteDidClose() }
         emojiSheet = sheet
         updateToolButtons()
         logger.info("emoji palette sheet: presenting (height=\(height), keyboardHeight=\(self.lastKeyboardHeight ?? -1))")
@@ -1806,16 +1812,33 @@ final class InlineComposeController: NSObject {
         sheet.present(from: presenterAboveInlineCompose?() ?? host)
     }
 
-    /// キーボードに戻らずに閉じたとき（シートの上の投稿ボタンから送ったときなど）は、書き終えたときと同じくバーを細いカプセルに戻す。
     private func emojiPaletteDidClose() {
-        logger.info("emoji palette sheet: did close (firstResponder=\(self.isInputFocused))")
+        let disappearedWithoutDismissCallback = emojiSheet?.lifecycle.disappearedWithoutDismissCallback ?? false
+        logger.info("emoji palette sheet: did close (firstResponder=\(self.isInputFocused), keyboardHeight=\(self.currentKeyboardHeight), withoutDismissCallback=\(disappearedWithoutDismissCallback))")
         emojiSheet = nil
         updateToolButtons()
-        guard !presentPendingSheet() else { return }
+        bottomSheetDidClose(disappearedWithoutDismissCallback: disappearedWithoutDismissCallback)
+    }
+
+    /// メディアを選ぶシートと絵文字のパレットのシートの閉じ終わりで、バーと入力欄をどうするかを決める。
+    /// キーボードに戻らずに閉じたとき（シートの上の投稿ボタンから送ったときなど）は、書き終えたときと同じくバーを細いカプセルに戻す。
+    private func bottomSheetDidClose(disappearedWithoutDismissCallback: Bool) {
+        // 閉じ終わる前に、もう別のシートを出していれば、バーと入力欄はそのシートのものなので触らない。
+        guard bottomSheet == nil, !presentPendingSheet() else { return }
+        // シートを閉じる途中で知らせられなかった失敗は、ここで知らせる。知らせはキーボードに戻った入力欄を一度閉じるので、戻ったかは知らせる前に見る。
         let returnedToKeyboard = isInputFocused
         // ハードウェアキーボードではキーボードが上がらず、上がりきった知らせも来ないので、待たずにバーをシートの上端から外す。
-        if returnedToKeyboard, currentKeyboardHeight <= Self.softwareKeyboardMinimumHeight {
+        // 閉じた知らせが来ずにシートが消えたときは、キーボードを戻した直後に閉じ終わるので、まだどちらのキーボードかの知らせが届いていない。
+        // 届く前にハードウェアキーボードとみなしてバーを外すと、ソフトウェアキーボードが上がってくるまでの間、バーがタブバーの上へ落ちてから上がり直す（実機で起きた）。
+        // ビューアを閉じたときと同じく、次に届いた高さで決める（`keyboardWillChangeFrame`）。
+        if returnedToKeyboard, skippedKeyboardDidShowForSheet {
             releaseHoldAboveKeyboard()
+        } else if returnedToKeyboard, currentKeyboardHeight <= Self.softwareKeyboardMinimumHeight {
+            if disappearedWithoutDismissCallback {
+                isWaitingForKeyboardAfterClosing = isBarHeld
+            } else {
+                releaseHoldAboveKeyboard()
+            }
         }
         presentErrorIfNeeded()
         guard !returnedToKeyboard else { return }
@@ -1954,8 +1977,8 @@ final class InlineComposeController: NSObject {
                 result.assetIdentifier.map { LocalMediaLoader.picked(assetIdentifier: $0, provider: result.itemProvider) }
             })
         }
-        picker.onWillClose = { [weak self] in self?.focusLastInput() }
-        picker.onDidClose = { [weak self] in self?.mediaPickerDidClose() }
+        picker.lifecycle.onWillClose = { [weak self] in self?.focusLastInput() }
+        picker.lifecycle.onDidClose = { [weak self] in self?.mediaPickerDidClose() }
         mediaPicker = picker
         logger.info("media picker: presenting (height=\(height), keyboardHeight=\(self.lastKeyboardHeight ?? -1))")
         resignInput()
@@ -1997,22 +2020,12 @@ final class InlineComposeController: NSObject {
         picker.present(from: presenterAboveInlineCompose?() ?? host)
     }
 
-    /// キーボードに戻らずに閉じたとき（シートの上の投稿ボタンから送ったときなど）は、書き終えたときと同じくバーを細いカプセルに戻す。
     private func mediaPickerDidClose() {
-        logger.info("media picker: did close (firstResponder=\(self.isInputFocused))")
+        let disappearedWithoutDismissCallback = mediaPicker?.lifecycle.disappearedWithoutDismissCallback ?? false
+        logger.info("media picker: did close (firstResponder=\(self.isInputFocused), keyboardHeight=\(self.currentKeyboardHeight), withoutDismissCallback=\(disappearedWithoutDismissCallback))")
         mediaPicker = nil
         model.mediaPickerDidClose()
-        guard !presentPendingSheet() else { return }
-        // シートを閉じる途中で知らせられなかった失敗は、ここで知らせる。知らせはキーボードに戻った入力欄を一度閉じるので、戻ったかは知らせる前に見る。
-        let returnedToKeyboard = isInputFocused
-        // ハードウェアキーボードではキーボードが上がらず、上がりきった知らせも来ないので、待たずにバーをシートの上端から外す。
-        if returnedToKeyboard, currentKeyboardHeight <= Self.softwareKeyboardMinimumHeight {
-            releaseHoldAboveKeyboard()
-        }
-        presentErrorIfNeeded()
-        guard !returnedToKeyboard else { return }
-        releaseHoldAboveKeyboard()
-        setEditing(false)
+        bottomSheetDidClose(disappearedWithoutDismissCallback: disappearedWithoutDismissCallback)
     }
 
     private func setHoldAboveKeyboard(height: CGFloat) {
@@ -2025,6 +2038,7 @@ final class InlineComposeController: NSObject {
 
     private func releaseHoldAboveKeyboard() {
         isWaitingForKeyboardAfterClosing = false
+        skippedKeyboardDidShowForSheet = false
         guard let holdAboveKeyboard, holdAboveKeyboard.isActive else { return }
         holdAboveKeyboard.isActive = false
         animateBarPosition()
@@ -2046,6 +2060,9 @@ final class InlineComposeController: NSObject {
         let keyboardFrame = host.view.convert(window.convert(frame, from: nil), from: window)
         let height = host.view.bounds.intersection(keyboardFrame).height
         currentKeyboardHeight = height
+        if height <= Self.softwareKeyboardMinimumHeight {
+            skippedKeyboardDidShowForSheet = false
+        }
         if let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double, duration > 0,
            let curve = (notification.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? Int).flatMap(UIView.AnimationCurve.init(rawValue:)) {
             keyboardAnimation = (duration, curve)
@@ -2068,7 +2085,7 @@ final class InlineComposeController: NSObject {
         if isWaitingForKeyboardAfterClosing {
             isWaitingForKeyboardAfterClosing = false
             if height <= Self.softwareKeyboardMinimumHeight {
-                logger.info("attachment viewer: no software keyboard after closing, releasing bar (keyboardHeight=\(height))")
+                logger.info("compose: no software keyboard after closing, releasing bar (keyboardHeight=\(height))")
                 releaseHoldAboveKeyboard()
             }
         }
@@ -2135,6 +2152,15 @@ final class InlineComposeController: NSObject {
         // 投稿の失敗の知らせは、シートを閉じて戻したキーボードが上がりきる前に出ることがあり、その知らせが知らせを出したあとに届く。
         // 知らせを出している間はキーボードが下がるので、バーはキーボードの高さに留めたままにする。
         guard isInputFocused, !isPresentingAlert else { return }
+        // シートを閉じる途中に別のシートのボタンを押すと、閉じ始めに戻したキーボードが上がりきる前に、次のシートを出してバーをその上端に留め直す。
+        // キーボードが上がる途中だと、次のシートを出すときに入力欄のフォーカスを外しても外れず、そのあとに上がりきった知らせが届く。
+        // ここで外すと、バーが次のシートの裏に隠れたままになった（実機の違和感レポートで、出したシートが閉じていないまま外していた）。
+        // 閉じていないシートを出している間は外さない。
+        if let bottomSheet, !bottomSheet.isClosing {
+            logger.info("compose: keyboard did show while a sheet is shown, keeping bar held")
+            skippedKeyboardDidShowForSheet = true
+            return
+        }
         keyboardHeightBeforeContextMenu = nil
         releaseHoldAboveKeyboard()
     }

@@ -25,7 +25,7 @@ final class EmojiReactionPicker {
         updatePalette()
         observePalette()
         let sheet = EmojiPaletteSheet(palette: palette, lowHeight: 340)
-        sheet.onDidClose = { [weak self] in
+        sheet.lifecycle.onDidClose = { [weak self] in
             self?.sheet = nil
             self?.onChoose = nil
         }

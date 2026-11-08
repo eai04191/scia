@@ -350,7 +350,7 @@ final class AnnouncementsViewController: UIViewController {
         updateEmojiPalette()
         observeEmojiPalette()
         let sheet = EmojiPaletteSheet(palette: emojiPalette, lowHeight: 340)
-        sheet.onDidClose = { [weak self] in
+        sheet.lifecycle.onDidClose = { [weak self] in
             self?.emojiSheet = nil
             self?.reactingAnnouncementID = nil
         }

@@ -997,6 +997,72 @@ final class InlineComposeControllerTests {
         }
     }
 
+    /// 絵文字のシートが閉じた知らせなしに消えても、投稿欄はシートを閉じたものとして扱い、写真のボタンでメディアを選ぶシートを開ける。
+    /// 閉じた知らせを待つだけだと、シートを出しているつもりのまま、写真のボタンは絵文字のシートが閉じ終わるのを待ち続けた（実機で起きた）。
+    @Test func emojiSheetDisappearingWithoutCallbackLetsMediaPickerOpen() async throws {
+        defer {
+            window.rootViewController?.dismiss(animated: false)
+            window.isHidden = true
+        }
+        // 端末の本物のキーボードの知らせが混ざらないよう、送った知らせだけを受けさせる。
+        let keyboard = NotificationCenter()
+        let composer = try installComposer(keyboardNotifications: keyboard) { _ in }
+        composer.model.apply(configuration: InstanceConfiguration(maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 4, mediaDescriptionLimit: 1500, supportedMediaTypes: nil, mediaLimits: .unknown), defaultVisibility: .public, defaultSensitive: nil)
+        composer.beginEditing()
+        try await waitUntilSettled()
+        postKeyboardFrame(height: 300, to: keyboard)
+        window.layoutIfNeeded()
+        let emojiButton = try #require(buttons(in: window).first { $0.accessibilityLabel == ComposeToolItem.customEmoji.title })
+        let mediaButton = try #require(buttons(in: window).first { $0.accessibilityLabel == ComposeToolItem.media.title })
+        emojiButton.sendActions(for: .primaryActionTriggered)
+        try await clock.advance { window.rootViewController?.presentedViewController?.isBeingPresented == false }
+        let emojiSheet = try #require(window.rootViewController?.presentedViewController)
+
+        // プログラムから閉じると、UIKitは閉じた知らせを出さない。知らせなしに消える場合を、これで作る。
+        emojiSheet.dismiss(animated: false)
+        try await clock.advance { window.rootViewController?.presentedViewController == nil }
+        try await waitUntilSettled()
+
+        mediaButton.sendActions(for: .primaryActionTriggered)
+        try await clock.advance { window.rootViewController?.presentedViewController is PHPickerViewController }
+        #expect(window.rootViewController?.presentedViewController is PHPickerViewController, "メディアを選ぶシートが開きませんでした\n\(composer.stateDump())")
+        #expect(composer.isBarHeld, "メディアを選ぶシートを出しても、バーを留めていません\n\(composer.stateDump())")
+    }
+
+    /// 絵文字のシートが閉じた知らせなしに消えると、入力欄にキーボードを戻した直後に閉じ終わるので、まだどちらのキーボードかの知らせが届いていない。
+    /// 届く前にハードウェアキーボードとみなしてバーを外さず、届いた高さで決める。外すと、ソフトウェアキーボードが上がってくるまでの間、バーが下へ落ちてから上がり直す。
+    @Test func emojiSheetDisappearingWithoutCallbackWaitsForKeyboard() async throws {
+        defer {
+            window.rootViewController?.dismiss(animated: false)
+            window.isHidden = true
+        }
+        // 端末の本物のキーボードの知らせが混ざらないよう、送った知らせだけを受けさせる。
+        let keyboard = NotificationCenter()
+        let composer = try installComposer(keyboardNotifications: keyboard) { _ in }
+        composer.beginEditing()
+        try await waitUntilSettled()
+        postKeyboardFrame(height: 300, to: keyboard)
+        window.layoutIfNeeded()
+        let emojiButton = try #require(buttons(in: window).first { $0.accessibilityLabel == ComposeToolItem.customEmoji.title })
+        emojiButton.sendActions(for: .primaryActionTriggered)
+        try await clock.advance { window.rootViewController?.presentedViewController?.isBeingPresented == false }
+        let emojiSheet = try #require(window.rootViewController?.presentedViewController)
+        // シートを出すときに入力欄を閉じた知らせ。
+        postKeyboardFrame(height: 0, to: keyboard)
+
+        // プログラムから閉じると、UIKitは閉じた知らせを出さない。知らせなしに消える場合を、これで作る。
+        emojiSheet.dismiss(animated: false)
+        try await clock.advance { window.rootViewController?.presentedViewController == nil }
+        try await waitUntilSettled()
+        #expect(composer.stateDump().contains("firstResponder: text"), "入力欄にキーボードを戻していません\n\(composer.stateDump())")
+        #expect(composer.isBarHeld, "キーボードの知らせが届く前に、バーを外しました\n\(composer.stateDump())")
+
+        postKeyboardFrame(height: 300, to: keyboard)
+        #expect(composer.isBarHeld, "ソフトウェアキーボードが上がりきる前に、バーを外しました\n\(composer.stateDump())")
+        keyboard.post(name: UIResponder.keyboardDidShowNotification, object: nil)
+        #expect(!composer.isBarHeld, "キーボードが上がりきっても、バーを外していません\n\(composer.stateDump())")
+    }
+
     enum ViewerCloseFollowUp: CustomTestStringConvertible {
         /// ソフトウェアキーボードが上がってくる。
         case softwareKeyboard
