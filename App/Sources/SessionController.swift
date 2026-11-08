@@ -4180,6 +4180,10 @@ final class SessionController {
             AgentScreenDump.write(scene: rootViewController.view.window?.windowScene)
         case .storageProbe:
             StorageProbe.write()
+        case .translationProbe:
+            if #available(iOS 26.4, *) {
+                TranslationProbe.start()
+            }
         case .textBenchmark:
             TextLayoutBenchmark.write(in: rootViewController.view.window)
         case .browser(let url):
