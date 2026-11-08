@@ -1,4 +1,5 @@
 import SafariServices
+import SciaCore
 import SciaTesting
 import Testing
 import UIKit
@@ -49,6 +50,98 @@ struct InAppBrowserTests {
         sheet.safari.dismiss(animated: true)
 
         try await waitUntil { root.presentedViewController == nil }
+    }
+
+    /// シートの上端からSafariのバーの真ん中までには、シートを引ける範囲をSafariより手前に重ねる。左右のSafariのボタンの上には重ねない。
+    @Test func barGrabAreaSitsAboveSafariBar() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let browser = InAppBrowser(tuning: TuningStore(defaults: nil))
+        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
+        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
+        let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
+        try await waitUntil { sheet.safari.viewIfLoaded?.window != nil }
+        sheet.view.layoutIfNeeded()
+
+        let handle = CGFloat(TuningCatalog.inAppBrowserHandleHeight.defaultValue)
+        let inset = CGFloat(TuningCatalog.inAppBrowserBarGrabInset.defaultValue)
+        let height = CGFloat(TuningCatalog.inAppBrowserBarGrabHeight.defaultValue)
+
+        #expect(sheet.view.subviews.last === sheet.barGrabArea)
+        #expect(sheet.safari.view.isDescendant(of: sheet.view))
+        #expect(sheet.barGrabArea.frame == CGRect(x: inset, y: 0, width: sheet.view.bounds.width - inset * 2, height: handle + height))
+        root.dismiss(animated: false)
+    }
+
+    /// シートの段が変わった直後は、引ける範囲を広げ、シートが落ち着くころに元の高さへ戻す。動いている範囲から指が外れると、Safariへ行ってシートを引けないため。
+    @Test func barGrabAreaWidensWhileSheetSettles() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let clock = TestClock()
+        let browser = InAppBrowser(tuning: TuningStore(defaults: nil), clock: clock)
+        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
+        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
+        let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
+        try await waitUntil { sheet.barGrabArea.superview != nil }
+        let controller = try #require(sheet.sheetPresentationController)
+        let height = CGFloat(TuningCatalog.inAppBrowserBarGrabHeight.defaultValue)
+        let settlingHeight = CGFloat(TuningCatalog.inAppBrowserBarGrabSettlingHeight.defaultValue)
+        let duration = Duration.seconds(TuningCatalog.inAppBrowserBarGrabSettlingDuration.defaultValue)
+
+        browser.sheetPresentationControllerDidChangeSelectedDetentIdentifier(controller)
+        let handle = CGFloat(TuningCatalog.inAppBrowserHandleHeight.defaultValue)
+        #expect(sheet.barGrabArea.frame.minY == 0)
+        #expect(sheet.barGrabArea.frame.height == handle + settlingHeight)
+
+        try await waitUntil { clock.sleeperCount(dueWithin: duration) >= 1 }
+        clock.advance(by: duration)
+        try await waitUntil { sheet.barGrabArea.frame.height == handle + height }
+        #expect(sheet.barGrabArea.frame.minY == 0)
+        root.dismiss(animated: false)
+    }
+
+    /// 前の待ちが終わった直後に段が変わったら、前の待ちは広げ直した範囲を戻さない。
+    @Test func earlierWaitDoesNotNarrowWidenedAgainBarGrabArea() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let clock = TestClock()
+        let browser = InAppBrowser(tuning: TuningStore(defaults: nil), clock: clock)
+        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
+        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
+        let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
+        try await waitUntil { sheet.barGrabArea.superview != nil }
+        let duration = Duration.seconds(TuningCatalog.inAppBrowserBarGrabSettlingDuration.defaultValue)
+        let widened = CGFloat(TuningCatalog.inAppBrowserHandleHeight.defaultValue + TuningCatalog.inAppBrowserBarGrabSettlingHeight.defaultValue)
+
+        sheet.widenBarGrabAreaWhileSettling()
+        try await waitUntil { clock.sleeperCount(dueWithin: duration) >= 1 }
+        clock.advance(by: duration)
+        sheet.widenBarGrabAreaWhileSettling()
+        try await waitUntil { clock.sleeperCount(dueWithin: duration) >= 1 }
+        // 前の待ちの続きは、起こされた時点でメインアクターの列に入っているので、後ろに並んで終わるのを待つ。
+        await Task { @MainActor in }.value
+
+        #expect(sheet.barGrabArea.frame.height == widened)
+        root.dismiss(animated: false)
+    }
+
+    /// 引ける範囲の高さを0にすると、Safariのバーの上に何も重ねない。
+    @Test func zeroBarGrabHeightAddsNothing() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let tuning = TuningStore(defaults: nil)
+        tuning.setValue(0, for: TuningCatalog.inAppBrowserBarGrabHeight)
+        let browser = InAppBrowser(tuning: tuning)
+        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
+        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
+        let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
+
+        #expect(sheet.barGrabArea.superview == nil)
+        root.dismiss(animated: false)
     }
 
     /// シートの段を変えると、Safariも帯の下の範囲いっぱいに広がる。出したときの大きさのまま残ると、広げたシートの下が空く。

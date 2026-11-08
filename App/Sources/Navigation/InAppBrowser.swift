@@ -7,7 +7,7 @@ import UIKit
 /// アプリは手前にいたままなので、読んでいる間もストリーミングが流れ続ける。
 ///
 /// シートの高さは、伏せた高さ（URLのバーだけ見える）、中くらいの高さ、全画面の3段。投稿欄で書いている間は伏せた高さまで下げ、書き終えたら戻す。
-/// シートはSafariではなく入れ物（`InAppBrowserSheet`）で出し、高さを変えるのは上端の帯を引いたときだけにする。ページのスワイプでシートが下がらないようにするため。
+/// シートはSafariではなく入れ物（`InAppBrowserSheet`）で出し、高さを変えるのは上端の帯とSafariのバーの真ん中を引いたときだけにする。ページのスワイプでシートが下がらないようにするため。
 @MainActor
 final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, UISheetPresentationControllerDelegate {
     /// シートが画面の下から覆っている高さが変わったときに呼ぶ。閉じたら0を渡す。タイムラインの下に、シートより上へ出せるだけの余白を取るために使う。
@@ -19,6 +19,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
 
     private let tuning: TuningStore
     private let settings: AppSettings
+    private let clock: any Clock<Duration>
     /// シートを出した窓。中くらいの高さは、この窓の安全領域の中の高さから、段を決めるたびに決める（`InAppBrowserHeight`）。
     /// 窓の安全領域は窓とシーンで決まり、シートの並べ方に左右されないので、段の計算の中で読んでも、
     /// シート自身の安全領域を読んだときのような入れ子（`reportObscuredHeightAfterResolving`）にならない。
@@ -33,9 +34,10 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
     private var detentBeforeCompose: UISheetPresentationController.Detent.Identifier?
     private let logger = SciaLog.logger(category: "browser")
 
-    init(tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings) {
+    init(tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings, clock: any Clock<Duration> = AppDependencies.clock) {
         self.tuning = tuning
         self.settings = settings
+        self.clock = clock
     }
 
     /// シートを出している。中身を差し替える途中も含む。
@@ -52,7 +54,17 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         self.window = window
         let safari = SFSafariViewController(url: url)
         safari.delegate = self
-        let browserSheet = InAppBrowserSheet(safari: safari, handleHeight: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserHandleHeight)))
+        let browserSheet = InAppBrowserSheet(
+            safari: safari,
+            handleHeight: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserHandleHeight)),
+            barGrab: InAppBrowserSheet.BarGrab(
+                height: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserBarGrabHeight)),
+                inset: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserBarGrabInset)),
+                settlingHeight: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserBarGrabSettlingHeight)),
+                settlingDuration: .seconds(tuning.value(of: TuningCatalog.inAppBrowserBarGrabSettlingDuration))
+            ),
+            clock: clock
+        )
         browserSheet.modalPresentationStyle = .pageSheet
         if let sheet = browserSheet.sheetPresentationController {
             sheet.detents = [detent(Self.collapsedIdentifier, for: browserSheet), detent(Self.mediumIdentifier, for: browserSheet), .large()]
@@ -212,6 +224,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         guard sheet.presentedViewController === current else { return }
         logger.info("in-app browser detent \(sheet.selectedDetentIdentifier?.rawValue ?? "nil", privacy: .public)")
         detentBeforeCompose = nil
+        current?.widenBarGrabAreaWhileSettling()
         selectionDidChange(sheet)
     }
 

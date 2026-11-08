@@ -1089,14 +1089,50 @@ public enum TuningCatalog {
         defaultValue: 120
     )
 
-    /// アプリ内のSafariのシートの上端に置く、引いて高さを変える帯の高さ（pt）。Safariはこの帯の下に出す。
-    /// Safariのバーとページは別のプロセスが描いていて、その上からはシートを引けないため、引けるのはこの帯だけになる。
+    /// アプリ内のSafariのシートの上端の、引いて高さを変える帯の高さ（pt）。引ける範囲（`inAppBrowserBarGrabHeight`）の高さに足す。Safariのビューはシートの上端から広がるので、Safariの位置は変わらない。
     public static let inAppBrowserHandleHeight = NumberTuning(
         id: "browser.handleHeight",
         title: "アプリ内のSafariの上の、引く帯の高さ（pt）",
         range: 8...40,
         step: 2,
         defaultValue: 12
+    )
+
+    /// アプリ内のSafariのバーの上に重ねる、引いてシートの高さを変える範囲の高さ（pt）。上端の帯のすぐ下から数え、帯の高さの分も範囲に含める。0で重ねない。
+    /// Safariのバーはページをスクロールすると細くなり、アプリからは今の高さがわからない。細いバーより高くすると、そのときにページの上を覆い、覆ったところのリンクを押せなくなる。
+    public static let inAppBrowserBarGrabHeight = NumberTuning(
+        id: "browser.barGrabHeight",
+        title: "アプリ内のSafariのバーの上の、引ける範囲の高さ（pt）",
+        range: 0...60,
+        step: 2,
+        defaultValue: 16
+    )
+
+    /// アプリ内のSafariのバーの上に重ねる、引ける範囲の左右の空き（pt）。左右のSafariのボタン（×とメニュー）を押せるように空ける。
+    public static let inAppBrowserBarGrabInset = NumberTuning(
+        id: "browser.barGrabInset",
+        title: "アプリ内のSafariのバーの上の、引ける範囲の左右の空き（pt）",
+        range: 0...140,
+        step: 4,
+        defaultValue: 80
+    )
+
+    /// シートの段が変わった直後に、引ける範囲を広げる高さ（pt）。シートが動いている間は範囲も一緒に動くため、ふだんの高さのままだと、続けて触れた指が範囲を外れてSafariへ行き、シートを引けない。
+    public static let inAppBrowserBarGrabSettlingHeight = NumberTuning(
+        id: "browser.barGrabSettlingHeight",
+        title: "アプリ内のSafariの高さが変わった直後の、引ける範囲の高さ（pt）",
+        range: 0...80,
+        step: 2,
+        defaultValue: 44
+    )
+
+    /// シートの段が変わったあと、引ける範囲を広げておく時間（秒）。広げている間は、範囲に隠れたページの上を押せない。
+    public static let inAppBrowserBarGrabSettlingDuration = NumberTuning(
+        id: "browser.barGrabSettlingDuration",
+        title: "アプリ内のSafariの高さが変わったあと、引ける範囲を広げておく時間（秒）",
+        range: 0...2,
+        step: 0.1,
+        defaultValue: 0.6
     )
 
     /// アプリ内のSafariを、伏せた高さで出してから中くらいの高さへ広げる。
@@ -1935,6 +1971,10 @@ public enum TuningCatalog {
         TuningSection(id: "browser", title: "アプリ内のSafari", items: [
             .number(inAppBrowserCollapsedHeight),
             .number(inAppBrowserHandleHeight),
+            .number(inAppBrowserBarGrabHeight),
+            .number(inAppBrowserBarGrabInset),
+            .number(inAppBrowserBarGrabSettlingHeight),
+            .number(inAppBrowserBarGrabSettlingDuration),
             .toggle(inAppBrowserGrowsFromCollapsed),
         ]),
         TuningSection(id: "media.dismiss", title: "ビューア：閉じる操作", items: [
