@@ -3,9 +3,9 @@ import UIKit
 
 /// タイムラインの行。スクロールの間に、行の大きさを測るのにかかった時間を、行の種類ごとに`FrameWork`へ渡す。
 /// 行の大きさは、中身のビューではなくセルが測られるため、セルで測る。
-final class TimelineCell: UICollectionViewListCell {
-    /// 測った時間に付ける、行の種類の名前。
-    var workName = "row"
+final class TimelineCell: UICollectionViewListCell, SizingMeasurable {
+    /// 行の高さを測るときに、スタックに残す行の種類と部品。測った時間に付ける名前にも使う。
+    var sizingTrace = SizingTrace()
     /// 出している行。別の行を出し始めたかを見分ける。
     var itemID: TimelineViewController.ItemID?
 
@@ -45,7 +45,16 @@ final class TimelineCell: UICollectionViewListCell {
     }
 
     override func preferredLayoutAttributesFitting(_ layoutAttributes: UICollectionViewLayoutAttributes) -> UICollectionViewLayoutAttributes {
-        FrameWork.measure("\(workName).sizing") { super.preferredLayoutAttributesFitting(layoutAttributes) }
+        FrameWork.measure("\(sizingTrace.row.rawValue).sizing") { sizingTrace.run(on: self, layoutAttributes) }
+    }
+
+    func measureSizing(_ attributes: UICollectionViewLayoutAttributes) -> UICollectionViewLayoutAttributes {
+        super.preferredLayoutAttributesFitting(attributes)
+    }
+
+    /// 高さを測るときにスタックに残す部品を、今の中身に合わせる。
+    func updateSizingParts(from configuration: (any UIContentConfiguration)?) {
+        sizingTrace.parts = (configuration as? any SizingTraceable)?.sizingParts ?? []
     }
 
     /// まとめて行う操作のために投稿を選んでいる間に、行の右上に出す丸。決まりはdocs/batch-actions.mdの「選んでいる間」にある。
@@ -154,17 +163,17 @@ private final class SelectionMarkView: UIView {
 }
 
 extension TimelineEntry {
-    /// `FrameWork`で測った時間に付ける、行の種類の名前。
-    var workName: String {
+    /// `FrameWork`で測った時間に付ける名前と、高さを測るときにスタックに残す名前に使う、行の種類。
+    var rowKind: TimelineRowKind {
         switch self {
-        case .status: "status"
-        case .pinned: "pinned"
-        case .gap: "gap"
-        case .notification: "notification"
-        case .unreadable: "unreadable"
-        case .account: "account"
-        case .notificationRequest: "notificationRequest"
-        case .search: "search"
+        case .status: .status
+        case .pinned: .pinned
+        case .gap: .gap
+        case .notification: .notification
+        case .unreadable: .unreadable
+        case .account: .account
+        case .notificationRequest: .notificationRequest
+        case .search: .search
         }
     }
 }

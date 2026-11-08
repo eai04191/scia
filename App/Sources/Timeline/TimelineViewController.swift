@@ -648,8 +648,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                    let configuration = self.previewContentConfiguration(for: entry, id: id, base: cell.defaultContentConfiguration()),
                    type(of: content.configuration) == type(of: configuration) {
                     content.configuration = configuration
+                    cell.updateSizingParts(from: configuration)
                 } else {
                     self.configure(cell, for: entry, id: id)
+                    cell.updateSizingParts(from: cell.contentConfiguration)
                 }
                 // リストは行の高さを測るとき、動きの外でセルの中を並べ直すので、その前に、動きの中で中の部品を新しい位置へ動かしておく。
                 cell.layoutIfNeeded()
@@ -2060,12 +2062,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             // 同じ行の描き直し（リンクカードが届いたときなど）は、これまでどおり呼んだ側の動きに任せる。
             let startsNewRow = cell.itemID != id
             cell.itemID = id
-            cell.workName = entry.workName
             // 付属のボタンを置くのは最近の検索の見出しだけなので、ほかの行に使い回したセルに残さない。ふだんの行では触らない。
             if !cell.accessories.isEmpty {
                 cell.accessories = []
             }
-            FrameWork.measure("\(entry.workName).configure") { self.configure(cell, for: entry, id: id) }
+            FrameWork.measure("\(entry.rowKind.rawValue).configure") { self.configure(cell, for: entry, id: id) }
+            cell.sizingTrace.row = entry.rowKind
+            cell.updateSizingParts(from: cell.contentConfiguration)
             cell.setSelectionMark(self.selectionMark(for: id))
             if startsNewRow {
                 UIView.performWithoutAnimation { cell.layoutIfNeeded() }
