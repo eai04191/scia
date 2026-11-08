@@ -32,12 +32,20 @@ enum AppInfo {
             licenseURL: URL(string: "https://creativecommons.org/licenses/by/4.0/")
         ),
         LicenseItem(
-            name: "Unicode Emoji、Unicode CLDR",
+            name: "Unicode Emoji",
             license: "Unicode License v3",
             copyright: "Copyright © 1991-2026 Unicode, Inc.",
-            usage: "投稿欄の絵文字のシートに並べるUnicodeの絵文字のリストとまとまり（emoji-test.txt）と、検索に使う日本語と英語の名前と言葉（CLDRの絵文字の注釈）。",
+            usage: "投稿欄の絵文字のシートに並べるUnicodeの絵文字のリストとまとまり（emoji-test.txt）。",
             source: URL(string: "https://www.unicode.org/emoji/"),
             licenseURL: URL(string: "https://www.unicode.org/license.txt")
+        ),
+        LicenseItem(
+            name: "Unicode CLDR",
+            license: "Unicode License v3",
+            copyright: "Copyright © 2015-2024 Unicode, Inc.",
+            usage: "投稿欄の絵文字の検索に使う日本語と英語の名前と言葉（CLDRの絵文字の注釈）。",
+            source: URL(string: "https://github.com/unicode-org/cldr-json"),
+            licenseURL: URL(string: "https://github.com/unicode-org/cldr-json/blob/48.2.3/LICENSE")
         ),
         LicenseItem(
             name: "gemoji",

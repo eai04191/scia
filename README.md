@@ -128,14 +128,26 @@ Copyright Twitter, Inc and other contributors
 </details>
 
 <details>
-<summary>Unicode Emoji、Unicode CLDR（Unicode License v3）</summary>
+<summary>Unicode Emoji（Unicode License v3）</summary>
 
 Copyright © 1991-2026 Unicode, Inc.
 
-投稿欄の絵文字のシートに並べるUnicodeの絵文字のリストとまとまり（emoji-test.txt）と、検索に使う日本語と英語の名前と言葉（CLDRの絵文字の注釈）。
+投稿欄の絵文字のシートに並べるUnicodeの絵文字のリストとまとまり（emoji-test.txt）。
 
 - [配布元](https://www.unicode.org/emoji/)
 - [ライセンス（Unicode License v3）](https://www.unicode.org/license.txt)
+
+</details>
+
+<details>
+<summary>Unicode CLDR（Unicode License v3）</summary>
+
+Copyright © 2015-2024 Unicode, Inc.
+
+投稿欄の絵文字の検索に使う日本語と英語の名前と言葉（CLDRの絵文字の注釈）。
+
+- [配布元](https://github.com/unicode-org/cldr-json)
+- [ライセンス（Unicode License v3）](https://github.com/unicode-org/cldr-json/blob/48.2.3/LICENSE)
 
 </details>
 

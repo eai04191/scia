@@ -67,12 +67,21 @@
       "app": true
     },
     {
-      "name": "Unicode Emoji、Unicode CLDR",
+      "name": "Unicode Emoji",
       "license": "Unicode License v3",
       "copyright": "Copyright © 1991-2026 Unicode, Inc.",
-      "usage": "投稿欄の絵文字のシートに並べるUnicodeの絵文字のリストとまとまり（emoji-test.txt）と、検索に使う日本語と英語の名前と言葉（CLDRの絵文字の注釈）。",
+      "usage": "投稿欄の絵文字のシートに並べるUnicodeの絵文字のリストとまとまり（emoji-test.txt）。",
       "source": "https://www.unicode.org/emoji/",
       "licenseURL": "https://www.unicode.org/license.txt",
+      "app": true
+    },
+    {
+      "name": "Unicode CLDR",
+      "license": "Unicode License v3",
+      "copyright": "Copyright © 2015-2024 Unicode, Inc.",
+      "usage": "投稿欄の絵文字の検索に使う日本語と英語の名前と言葉（CLDRの絵文字の注釈）。",
+      "source": "https://github.com/unicode-org/cldr-json",
+      "licenseURL": "https://github.com/unicode-org/cldr-json/blob/48.2.3/LICENSE",
       "app": true
     },
     {
