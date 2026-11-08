@@ -59,30 +59,20 @@
   ],
   "licenses": [
     {
-      "name": "Twemoji",
+      "name": "Boring Avatars",
+      "license": "MIT",
+      "copyright": "Copyright (c) 2021 boringdesigners",
+      "usage": "撮影用のシナリオのアイコンと写真の模様を描く`App/Sources/Debug/Scenario/ScenarioArtwork.swift`は、Boring Avatarsの描き方を移したもので、ファイルの頭に載せたMIT Licenseが適用されます。",
+      "source": "https://github.com/boringdesigners/boring-avatars",
+      "app": false
+    },
+    {
+      "name": "FediDB",
       "license": "CC BY 4.0",
-      "copyright": "Copyright Twitter, Inc and other contributors",
-      "usage": "設定で「Twemoji」を選んだときの絵文字の絵。SVGをカラーフォント（TrueType、COLR形式）に変換して使っています。",
-      "source": "https://github.com/jdecked/twemoji",
+      "copyright": "FediDB",
+      "usage": "ログイン画面で出すサーバーの候補。FediDBのサーバーのデータセットからMastodonとその派生のサーバーを選び、月間のアクティブユーザーが多い順に並べて使っています。",
+      "source": "https://fedidb.com/datasets",
       "licenseURL": "https://creativecommons.org/licenses/by/4.0/",
-      "app": true
-    },
-    {
-      "name": "Unicode Emoji",
-      "license": "Unicode License v3",
-      "copyright": "Copyright © 1991-2026 Unicode, Inc.",
-      "usage": "投稿欄の絵文字のシートに並べるUnicodeの絵文字のリストとまとまり（emoji-test.txt）。",
-      "source": "https://www.unicode.org/emoji/",
-      "licenseURL": "https://www.unicode.org/license.txt",
-      "app": true
-    },
-    {
-      "name": "Unicode CLDR",
-      "license": "Unicode License v3",
-      "copyright": "Copyright © 2015-2024 Unicode, Inc.",
-      "usage": "投稿欄の絵文字の検索に使う日本語と英語の名前と言葉（CLDRの絵文字の注釈）。",
-      "source": "https://github.com/unicode-org/cldr-json",
-      "licenseURL": "https://github.com/unicode-org/cldr-json/blob/48.2.3/LICENSE",
       "app": true
     },
     {
@@ -95,21 +85,31 @@
       "app": true
     },
     {
-      "name": "FediDB",
+      "name": "Twemoji",
       "license": "CC BY 4.0",
-      "copyright": "FediDB",
-      "usage": "ログイン画面で出すサーバーの候補。FediDBのサーバーのデータセットからMastodonとその派生のサーバーを選び、月間のアクティブユーザーが多い順に並べて使っています。",
-      "source": "https://fedidb.com/datasets",
+      "copyright": "Copyright Twitter, Inc and other contributors",
+      "usage": "設定で「Twemoji」を選んだときの絵文字の絵。SVGをカラーフォント（TrueType、COLR形式）に変換して使っています。",
+      "source": "https://github.com/jdecked/twemoji",
       "licenseURL": "https://creativecommons.org/licenses/by/4.0/",
       "app": true
     },
     {
-      "name": "Boring Avatars",
-      "license": "MIT",
-      "copyright": "Copyright (c) 2021 boringdesigners",
-      "usage": "撮影用のシナリオのアイコンと写真の模様を描く`App/Sources/Debug/Scenario/ScenarioArtwork.swift`は、Boring Avatarsの描き方を移したもので、ファイルの頭に載せたMIT Licenseが適用されます。",
-      "source": "https://github.com/boringdesigners/boring-avatars",
-      "app": false
+      "name": "Unicode CLDR",
+      "license": "Unicode License v3",
+      "copyright": "Copyright © 2015-2024 Unicode, Inc.",
+      "usage": "投稿欄の絵文字の検索に使う日本語と英語の名前と言葉（CLDRの絵文字の注釈）。",
+      "source": "https://github.com/unicode-org/cldr-json",
+      "licenseURL": "https://github.com/unicode-org/cldr-json/blob/48.2.3/LICENSE",
+      "app": true
+    },
+    {
+      "name": "Unicode Emoji",
+      "license": "Unicode License v3",
+      "copyright": "Copyright © 1991-2026 Unicode, Inc.",
+      "usage": "投稿欄の絵文字のシートに並べるUnicodeの絵文字のリストとまとまり（emoji-test.txt）。",
+      "source": "https://www.unicode.org/emoji/",
+      "licenseURL": "https://www.unicode.org/license.txt",
+      "app": true
     }
   ]
 }

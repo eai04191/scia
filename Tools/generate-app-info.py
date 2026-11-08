@@ -195,6 +195,7 @@ def main():
         sys.exit("使い方: Tools/generate-app-info.py [--check]")
     info = json.loads(SOURCE.read_text(encoding="utf-8"))
     validate(info)
+    info["licenses"].sort(key=lambda item: item["name"].casefold())
     outputs = {SWIFT: render_swift(info), README: render_readme(info, README.read_text(encoding="utf-8"))}
     stale = [path for path, text in outputs.items() if read_text(path) != text]
     if mode and stale:

@@ -116,50 +116,13 @@ Sciaは次のクライアントから多くの影響を受けています
 <!-- generated:licenses -->
 
 <details>
-<summary>Twemoji（CC BY 4.0）</summary>
+<summary>Boring Avatars（MIT）</summary>
 
-Copyright Twitter, Inc and other contributors
+Copyright (c) 2021 boringdesigners
 
-設定で「Twemoji」を選んだときの絵文字の絵。SVGをカラーフォント（TrueType、COLR形式）に変換して使っています。
+撮影用のシナリオのアイコンと写真の模様を描く`App/Sources/Debug/Scenario/ScenarioArtwork.swift`は、Boring Avatarsの描き方を移したもので、ファイルの頭に載せたMIT Licenseが適用されます。
 
-- [配布元](https://github.com/jdecked/twemoji)
-- [ライセンス（CC BY 4.0）](https://creativecommons.org/licenses/by/4.0/)
-
-</details>
-
-<details>
-<summary>Unicode Emoji（Unicode License v3）</summary>
-
-Copyright © 1991-2026 Unicode, Inc.
-
-投稿欄の絵文字のシートに並べるUnicodeの絵文字のリストとまとまり（emoji-test.txt）。
-
-- [配布元](https://www.unicode.org/emoji/)
-- [ライセンス（Unicode License v3）](https://www.unicode.org/license.txt)
-
-</details>
-
-<details>
-<summary>Unicode CLDR（Unicode License v3）</summary>
-
-Copyright © 2015-2024 Unicode, Inc.
-
-投稿欄の絵文字の検索に使う日本語と英語の名前と言葉（CLDRの絵文字の注釈）。
-
-- [配布元](https://github.com/unicode-org/cldr-json)
-- [ライセンス（Unicode License v3）](https://github.com/unicode-org/cldr-json/blob/48.2.3/LICENSE)
-
-</details>
-
-<details>
-<summary>gemoji（MIT）</summary>
-
-Copyright (c) 2019 GitHub, Inc.
-
-投稿欄の補完でUnicodeの絵文字を「:+1」や「:thumbsup」のように打って探すための短縮名。
-
-- [配布元](https://github.com/github/gemoji)
-- [ライセンス（MIT）](https://github.com/github/gemoji/blob/master/LICENSE)
+- [配布元](https://github.com/boringdesigners/boring-avatars)
 
 </details>
 
@@ -176,13 +139,50 @@ FediDB
 </details>
 
 <details>
-<summary>Boring Avatars（MIT）</summary>
+<summary>gemoji（MIT）</summary>
 
-Copyright (c) 2021 boringdesigners
+Copyright (c) 2019 GitHub, Inc.
 
-撮影用のシナリオのアイコンと写真の模様を描く`App/Sources/Debug/Scenario/ScenarioArtwork.swift`は、Boring Avatarsの描き方を移したもので、ファイルの頭に載せたMIT Licenseが適用されます。
+投稿欄の補完でUnicodeの絵文字を「:+1」や「:thumbsup」のように打って探すための短縮名。
 
-- [配布元](https://github.com/boringdesigners/boring-avatars)
+- [配布元](https://github.com/github/gemoji)
+- [ライセンス（MIT）](https://github.com/github/gemoji/blob/master/LICENSE)
+
+</details>
+
+<details>
+<summary>Twemoji（CC BY 4.0）</summary>
+
+Copyright Twitter, Inc and other contributors
+
+設定で「Twemoji」を選んだときの絵文字の絵。SVGをカラーフォント（TrueType、COLR形式）に変換して使っています。
+
+- [配布元](https://github.com/jdecked/twemoji)
+- [ライセンス（CC BY 4.0）](https://creativecommons.org/licenses/by/4.0/)
+
+</details>
+
+<details>
+<summary>Unicode CLDR（Unicode License v3）</summary>
+
+Copyright © 2015-2024 Unicode, Inc.
+
+投稿欄の絵文字の検索に使う日本語と英語の名前と言葉（CLDRの絵文字の注釈）。
+
+- [配布元](https://github.com/unicode-org/cldr-json)
+- [ライセンス（Unicode License v3）](https://github.com/unicode-org/cldr-json/blob/48.2.3/LICENSE)
+
+</details>
+
+<details>
+<summary>Unicode Emoji（Unicode License v3）</summary>
+
+Copyright © 1991-2026 Unicode, Inc.
+
+投稿欄の絵文字のシートに並べるUnicodeの絵文字のリストとまとまり（emoji-test.txt）。
+
+- [配布元](https://www.unicode.org/emoji/)
+- [ライセンス（Unicode License v3）](https://www.unicode.org/license.txt)
 
 </details>
 
