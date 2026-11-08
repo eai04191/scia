@@ -21,8 +21,11 @@ struct AboutSettingsView: View {
                 NavigationLink("ライセンス", value: SettingsPage.licenses)
                 NavigationLink("謝辞", value: SettingsPage.acknowledgments)
             }
-            if let privacyPolicy = AppInfo.privacyPolicy {
-                Section {
+            Section {
+                if let repository = AppInfo.repository {
+                    Link("ソースコード", destination: repository)
+                }
+                if let privacyPolicy = AppInfo.privacyPolicy {
                     Link("プライバシーポリシー", destination: privacyPolicy)
                 }
             }
