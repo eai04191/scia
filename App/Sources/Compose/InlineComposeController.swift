@@ -1805,6 +1805,7 @@ final class InlineComposeController: NSObject {
         let sheet = EmojiPaletteSheet(palette: emojiPalette, lowHeight: height - host.view.safeAreaInsets.bottom)
         sheet.lifecycle.onWillClose = { [weak self] in self?.focusLastInput() }
         sheet.lifecycle.onDidClose = { [weak self] in self?.emojiPaletteDidClose() }
+        sheet.lifecycle.onDidAppear = { [weak self] in self?.checkSheetInvariants() }
         emojiSheet = sheet
         updateToolButtons()
         logger.info("emoji palette sheet: presenting (height=\(height), keyboardHeight=\(self.lastKeyboardHeight ?? -1))")
@@ -1823,6 +1824,7 @@ final class InlineComposeController: NSObject {
     /// メディアを選ぶシートと絵文字のパレットのシートの閉じ終わりで、バーと入力欄をどうするかを決める。
     /// キーボードに戻らずに閉じたとき（シートの上の投稿ボタンから送ったときなど）は、書き終えたときと同じくバーを細いカプセルに戻す。
     private func bottomSheetDidClose(disappearedWithoutDismissCallback: Bool) {
+        defer { checkSheetInvariants() }
         // 閉じ終わる前に、もう別のシートを出していれば、バーと入力欄はそのシートのものなので触らない。
         guard bottomSheet == nil, !presentPendingSheet() else { return }
         // シートを閉じる途中で知らせられなかった失敗は、ここで知らせる。知らせはキーボードに戻った入力欄を一度閉じるので、戻ったかは知らせる前に見る。
@@ -1979,6 +1981,7 @@ final class InlineComposeController: NSObject {
         }
         picker.lifecycle.onWillClose = { [weak self] in self?.focusLastInput() }
         picker.lifecycle.onDidClose = { [weak self] in self?.mediaPickerDidClose() }
+        picker.lifecycle.onDidAppear = { [weak self] in self?.checkSheetInvariants() }
         mediaPicker = picker
         logger.info("media picker: presenting (height=\(height), keyboardHeight=\(self.lastKeyboardHeight ?? -1))")
         resignInput()
@@ -2036,10 +2039,35 @@ final class InlineComposeController: NSObject {
         animateBarPosition()
     }
 
-    private func releaseHoldAboveKeyboard() {
+    /// 外した場所をログに残す。シートを出しているのにバーがシートの裏に隠れたままになったことがあり（実機）、どこで外したかがログから分からなかったため。
+    /// シートとバーの決まりを確かめ、破れていたらerrorのログに残す。状態が落ち着くはずの節目（シートを出し終えた、閉じ終えた、キーボードが上がりきった、下がりきった）で呼ぶ。
+    /// UIKitの開閉の知らせが来ない経路で、投稿欄の状態と画面がずれたことが何度もあったので、ずれたらその場で分かるようにする。デバッグ版だけで確かめる。
+    private func checkSheetInvariants(function: StaticString = #function) {
+        #if DEBUG
+        var violations: [String] = []
+        if let bottomSheet, !bottomSheet.isClosing {
+            if !bottomSheet.lifecycle.isPresentedOrPending {
+                violations.append("sheet is not presented")
+            }
+            if !isBarHeld {
+                violations.append("bar is not held above the sheet")
+            }
+        }
+        let keyboardHidden = currentKeyboardHeight <= Self.softwareKeyboardMinimumHeight
+        let hasReasonToHold = bottomSheet != nil || isShowingMediaViewer || isPresentingAlert || keyboardHeightBeforeContextMenu != nil || isWaitingForKeyboardAfterClosing
+        if isBarHeld, keyboardHidden, !hasReasonToHold {
+            violations.append("bar is held with nothing to hold it for")
+        }
+        guard !violations.isEmpty else { return }
+        logger.error("compose: sheet invariant violated at \(String(describing: function), privacy: .public): \(violations.joined(separator: ", "), privacy: .public) (focused=\(self.isInputFocused), keyboardHeight=\(self.currentKeyboardHeight))")
+        #endif
+    }
+
+    private func releaseHoldAboveKeyboard(function: StaticString = #function, line: UInt = #line) {
         isWaitingForKeyboardAfterClosing = false
         skippedKeyboardDidShowForSheet = false
         guard let holdAboveKeyboard, holdAboveKeyboard.isActive else { return }
+        logger.info("compose: release bar hold (from=\(String(describing: function), privacy: .public):\(line) sheet=\(self.bottomSheet.map { $0.isClosing ? "closing" : "shown" } ?? "nil", privacy: .public) focused=\(self.isInputFocused))")
         holdAboveKeyboard.isActive = false
         animateBarPosition()
     }
@@ -2142,6 +2170,7 @@ final class InlineComposeController: NSObject {
     }
 
     @objc private func keyboardDidChangeFrame(_ notification: Notification) {
+        defer { checkSheetInvariants() }
         guard isSoftwareKeyboardShown, currentKeyboardHeight <= Self.softwareKeyboardMinimumHeight else { return }
         isSoftwareKeyboardShown = false
         applyBarPlacement()
@@ -2149,6 +2178,7 @@ final class InlineComposeController: NSObject {
 
     /// シートを閉じてキーボードが上がりきったら、バーをキーボードに付ける。
     @objc private func keyboardDidShow(_ notification: Notification) {
+        defer { checkSheetInvariants() }
         // 投稿の失敗の知らせは、シートを閉じて戻したキーボードが上がりきる前に出ることがあり、その知らせが知らせを出したあとに届く。
         // 知らせを出している間はキーボードが下がるので、バーはキーボードの高さに留めたままにする。
         guard isInputFocused, !isPresentingAlert else { return }
