@@ -40,6 +40,8 @@ final class InlineComposeControllerTests {
         composer.install(in: tabBarController)
         window.layoutIfNeeded()
         clock = LayerClock(freezing: window.layer)
+        // 端末のハードウェアキーボードの設定で結果が変わらないよう、実物のキーボードを出さない。キーボードの動きはテストが通知で送る
+        for textView in textViews(in: window) { textView.inputView = UIView(frame: .zero) }
     }
 
     private func status(id: String) throws -> Status {
