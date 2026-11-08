@@ -34,6 +34,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `make test-memory-cache`: `Packages/MemoryCache`のテスト（macOS上、シミュレーター不要）
 - `make build`: シミュレーター向けにビルドする
 - `make test`: シミュレーターでテストする。このworktreeが借りている端末で走らせる。`SIM='<端末>'`で指定もできるが、貸し借りする端末（`Scia 1`〜`Scia 4`）は借りているものしか受け付けない。先に端末のハードウェアキーボードをつなぐ。端末のiOSの版で初めて走らせたときは、UIKitの公開されていない作りに頼る部分のUIテスト（`SciaSystemUITests`）も走らせる。通ると、確かめた作業ツリーの中身を覚える
+- `make test`の記録: 全部を走らせると、`DerivedData/test-logs/watch-<時刻>`に実行中の負荷（`load.log`）と、30秒たっても終わらないSciaCoreのテストのスタック（`<テストの名前>.sample.txt`）が残る。落ちた回の`.xcresult`は`DerivedData/test-logs/failed-<時刻>`に残る
 - `make test ONLY='SciaTests/LinkLabelTests'`: 一部のテストだけを走らせる。識別子は空白で区切って複数渡せる。通っても中身は覚えない。`xcodebuild ... test`を直接走らせるときは、`-collect-test-diagnostics never`を付ける。付けないと、テストが失敗したときにシミュレーターの診断を集め、応答を待って10分止まる
 - `make check`: 変更を報告する前に必ず通す。通ると、確かめた作業ツリーの中身（commitしていない変更も含む）を覚える
 - `make check-test`: `make check`と`make test`を両方走らせる。アプリをビルドしてから、checkの残りを`make test`と同時に走らせるので、続けて走らせるより早い。端末の選び方と、通ったものを覚えるのは、それぞれと同じ
