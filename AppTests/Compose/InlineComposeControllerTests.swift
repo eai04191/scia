@@ -40,7 +40,11 @@ final class InlineComposeControllerTests {
         composer.install(in: tabBarController)
         window.layoutIfNeeded()
         clock = LayerClock(freezing: window.layer)
-        // 端末のハードウェアキーボードの設定で結果が変わらないよう、実物のキーボードを出さない。キーボードの動きはテストが通知で送る
+        hideSoftwareKeyboard()
+    }
+
+    /// 実物のキーボードを出さない。シミュレーターのハードウェアキーボードが外れていても、結果が変わらないようにする。キーボードの動きは、テストが通知で送る。
+    private func hideSoftwareKeyboard() {
         for textView in textViews(in: window) { textView.inputView = UIView(frame: .zero) }
     }
 
@@ -1116,6 +1120,7 @@ final class InlineComposeControllerTests {
         let composer = InlineComposeController(model: ComposeModel<UIImage>(tasks: TaskScope(), myAccountID: "1", media: media, backgroundTime: { _ in {} }, post: post), tuning: tuning, settings: settings, keyboardNotifications: keyboardNotifications)
         composer.install(in: tabBarController)
         window.layoutIfNeeded()
+        hideSoftwareKeyboard()
         return composer
     }
 
