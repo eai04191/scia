@@ -77,7 +77,7 @@ final class ListEditor {
     /// 返信の表示かホームに出さないを変える。押し直せば済むので、失敗はチップで知らせる。
     func update(_ list: MastodonList, repliesPolicy: ListRepliesPolicy? = nil, exclusive: Bool? = nil) {
         let client = client
-        let failureTitle = repliesPolicy != nil ? "返信の表示を変えられませんでした" : "「ホームに表示しない」を切り替えられませんでした"
+        let failureTitle = repliesPolicy != nil ? "返信の表示を変えられませんでした" : "“ホームに表示しない”を切り替えられませんでした"
         tasks.run(.action) { [weak self] in
             do {
                 try await self?.enqueue(list.id) { [weak self] in

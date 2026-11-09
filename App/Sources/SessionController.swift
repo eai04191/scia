@@ -1215,7 +1215,7 @@ final class SessionController {
         guard item.isUserAdded else { return }
         let handle = credential.handle
         let defaultTitle = item.renamed("").title
-        let alert = UIAlertController(title: "タブの名前", message: "空にすると「\(defaultTitle)」に戻ります", preferredStyle: .alert)
+        let alert = UIAlertController(title: "タブの名前", message: "空にすると“\(defaultTitle)”に戻ります", preferredStyle: .alert)
         alert.addTextField { field in
             field.text = item.title == defaultTitle ? "" : item.title
             field.placeholder = defaultTitle

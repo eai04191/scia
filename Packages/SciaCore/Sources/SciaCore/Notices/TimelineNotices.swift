@@ -46,6 +46,6 @@ extension Notice {
     /// 押した直後で何に対してかは分かるため、対象の呼び名（「この投稿では」）は付けない。付けると項目の名前が長いときに2行に折り返すため、付けずに1行に収める。
     /// - Parameter reason: 項目が押せない理由（項目のサブタイトル）。あれば、それを文言にする。
     public static func objectActionUnavailable(itemTitle: String, reason: String?) -> Notice {
-        Notice(id: "objectAction.unavailable", kind: .info, title: reason ?? "「\(itemTitle)」を使えません")
+        Notice(id: "objectAction.unavailable", kind: .info, title: reason ?? "“\(itemTitle)”を使えません")
     }
 }

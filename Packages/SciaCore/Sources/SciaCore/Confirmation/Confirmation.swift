@@ -96,7 +96,7 @@ extension Confirmation where Choice == Proceed {
 
     /// リストを消すと、メンバーの設定も戻せないので確かめる。
     public static func deletingList(title: String) -> Confirmation {
-        .destructive(title: "リスト「\(title)」を削除しますか？", message: "メンバーの設定も削除され、元に戻せません。", action: "削除")
+        .destructive(title: "リスト“\(title)”を削除しますか？", message: "メンバーの設定も削除され、元に戻せません。", action: "削除")
     }
 
     // MARK: - 投稿

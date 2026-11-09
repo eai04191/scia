@@ -461,7 +461,7 @@ struct PostContentBuilder {
             text.append(NSAttributedString(attachment: NSTextAttachment(image: symbol.withRenderingMode(.alwaysTemplate))))
             text.append(NSAttributedString(string: " "))
         }
-        text.append(NSAttributedString(string: "フィルター" + titles.map { "「\($0)」" }.joined() + "に一致"))
+        text.append(NSAttributedString(string: "フィルター" + titles.map { "“\($0)”" }.joined() + "に一致"))
         text.addAttributes([.font: font, .foregroundColor: UIColor.secondaryLabel], range: NSRange(location: 0, length: text.length))
         return text
     }

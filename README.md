@@ -143,7 +143,7 @@ FediDB
 
 Copyright (c) 2019 GitHub, Inc.
 
-投稿欄の補完でUnicodeの絵文字を「:+1」や「:thumbsup」のように打って探すための短縮名。
+投稿欄の補完でUnicodeの絵文字を“:+1”や“:thumbsup”のように打って探すための短縮名。
 
 - [配布元](https://github.com/github/gemoji)
 - [ライセンス（MIT）](https://github.com/github/gemoji/blob/master/LICENSE)
@@ -155,7 +155,7 @@ Copyright (c) 2019 GitHub, Inc.
 
 Copyright Twitter, Inc and other contributors
 
-設定で「Twemoji」を選んだときの絵文字の絵。SVGをカラーフォント（TrueType、COLR形式）に変換して使っています。
+設定で“Twemoji”を選んだときの絵文字の絵。SVGをカラーフォント（TrueType、COLR形式）に変換して使っています。
 
 - [配布元](https://github.com/jdecked/twemoji)
 - [ライセンス（CC BY 4.0）](https://creativecommons.org/licenses/by/4.0/)

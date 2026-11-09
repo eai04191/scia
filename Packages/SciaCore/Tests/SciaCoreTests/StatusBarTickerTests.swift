@@ -93,7 +93,7 @@ struct StatusBarTickerItemTests {
         let item = StatusBarTickerItem(notification(.mention, status: status(content: "<p>犯人はヤス</p>")), verdict: verdict)
 
         // 通知のタイムラインと同じく、本文を見せずにフィルターの名前だけを出す。
-        #expect(text(of: item) == "フィルター「ネタバレ」「政治」に一致")
+        #expect(text(of: item) == "フィルター“ネタバレ”“政治”に一致")
     }
 
     @Test func coversAttachmentWhenBlurred() {

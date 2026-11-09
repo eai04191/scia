@@ -48,7 +48,7 @@ public struct StatusBarTickerItem: Sendable, Equatable, Identifiable {
             return .handle("@\(notification.account.acct)")
         }
         if !verdict.warningTitles.isEmpty {
-            return .text(RichText.plain("フィルター" + verdict.warningTitles.map { "「\($0)」" }.joined() + "に一致", emojis: []))
+            return .text(RichText.plain("フィルター" + verdict.warningTitles.map { "“\($0)”" }.joined() + "に一致", emojis: []))
         }
         if !status.spoilerText.isEmpty {
             return .text(RichText.plain(status.spoilerText, emojis: status.emojis))

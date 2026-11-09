@@ -89,10 +89,10 @@ public struct ExtendedURLPrompt: Equatable, Sendable {
             Line(id: index, url: item.insertedURL, continuation: String(item.continuation.prefix(Self.continuationLength)))
         }
         title = found.count == 1 && first.continuation.count <= Self.titleQuoteLength
-            ? "「\(first.continuation)」もリンクになります"
+            ? "“\(first.continuation)”もリンクになります"
             : "URLの後ろの文字もリンクになります"
         separateTitle = "改行を入れて\(action)"
         postAsIsTitle = "そのまま\(action)"
-        accessibilityDescription = lines.map { "改行を入れると、\($0.url)の次の行が「\($0.continuation)」になります。" }.joined()
+        accessibilityDescription = lines.map { "改行を入れると、\($0.url)の次の行が“\($0.continuation)”になります。" }.joined()
     }
 }

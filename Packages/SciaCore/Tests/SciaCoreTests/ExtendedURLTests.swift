@@ -118,7 +118,7 @@ struct ExtendedURLTests {
             scheduling: true
         ))
 
-        #expect(prompt.title == "「これ良い」もリンクになります")
+        #expect(prompt.title == "“これ良い”もリンクになります")
         #expect(prompt.lines.map(\.url) == ["https://example.com/a/b"])
         #expect(prompt.lines.map(\.continuation) == ["これ良い"])
         #expect([prompt.separateTitle, prompt.postAsIsTitle] == ["改行を入れて予約", "そのまま予約"])
@@ -143,7 +143,7 @@ struct ExtendedURLTests {
         let continuation = String(repeating: "あ", count: 20)
         let prompt = try #require(ExtendedURLPrompt([ExtendedURL(insertedURL: "https://example.com", continuation: continuation, offset: 19)], scheduling: false))
 
-        #expect(prompt.title == "「\(continuation)」もリンクになります")
+        #expect(prompt.title == "“\(continuation)”もリンクになります")
     }
 
     /// 2つ以上なら、題では文字を挙げず、すべての行を並べる。
