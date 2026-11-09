@@ -61,6 +61,24 @@ public struct ToggleTuning: Sendable, Identifiable {
 /// アプリで使うチューニング項目のリスト。値を足すときは、ここに定義を追加してTuningStoreから読む。
 public enum TuningCatalog {
 
+    /// 行を押している間の背景の色の強さ。UIKitの既定の押下の色に対する割合で、1なら既定のまま。
+    public static let rowHighlightBackgroundStrength = NumberTuning(
+        id: "timeline.rowHighlightBackgroundStrength",
+        title: "行を押している間の背景の色の強さ",
+        range: 0...1,
+        step: 0.05,
+        defaultValue: 0.5
+    )
+
+    /// 行を押している間に、行の中身に押下の色を混ぜる強さ。背景の色の強さより大きくすると、背景は重ねた分の色になる。
+    public static let rowHighlightContentStrength = NumberTuning(
+        id: "timeline.rowHighlightContentStrength",
+        title: "行を押している間の中身に混ぜる色の強さ",
+        range: 0...0.9,
+        step: 0.05,
+        defaultValue: 0.3
+    )
+
     /// 投票したときに、結果の棒が伸びるスプリングの時間。割合と人数の数字も、この時間で入れ替える。0なら動かさない。
     public static let pollBarDuration = NumberTuning(
         id: "timeline.pollBarDuration",
@@ -1893,6 +1911,8 @@ public enum TuningCatalog {
             .number(translationTransitionDuration),
         ]),
         TuningSection(id: "timeline", title: "タイムラインの見た目", items: [
+            .number(rowHighlightBackgroundStrength),
+            .number(rowHighlightContentStrength),
             .number(pollBarDuration),
             .number(pollModeChangeDuration),
             .number(linkCardTransitionDuration),
