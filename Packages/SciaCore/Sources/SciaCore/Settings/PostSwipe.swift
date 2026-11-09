@@ -83,6 +83,37 @@ public enum PostSwipeItem: Hashable, Sendable, MenuItemKind, MenuItemPresentable
     public static var hasMoreSection: Bool { false }
 }
 
+/// スワイプのボタンに出す名前を、投稿の行の高さで選ぶ。決まりはdocs/object-actions.mdの「投稿のスワイプ」にある。
+public enum PostSwipeLabel {
+    /// UIKitは、行が低いと名前をアイコンの横に並べるか消し、これを指定する公開APIがない。次の2つは、iOS 27のシミュレーターで12種類の文字サイズを測った、名前がアイコンの下に並ぶ高さの最大。iOSの更新で境目が上がると横に並ぶ。
+    static let twoLineMinimumRowHeight = 85.0
+    static let oneLineMinimumRowHeight = 63.0
+    /// カプセルの幅は最も長い行で決まり、全角5文字までなら並び全体が同じ幅に揃って、幅402ptの画面に5個入る。
+    private static let maximumLineLength = 5
+    private static let ellipsis = "…"
+
+    /// 行の高さがこの`rowHeight`のときに出す名前。名前を出さない高さではnil。
+    public static func text(for title: String, rowHeight: Double) -> String? {
+        if rowHeight >= twoLineMinimumRowHeight { return twoLines(title) }
+        if rowHeight >= oneLineMinimumRowHeight { return oneLine(title) }
+        return nil
+    }
+
+    private static func oneLine(_ title: String) -> String {
+        guard title.count > maximumLineLength else { return title }
+        return title.prefix(maximumLineLength - 1) + ellipsis
+    }
+
+    private static func twoLines(_ title: String) -> String {
+        guard title.count > maximumLineLength else { return title }
+        guard title.count > maximumLineLength * 2 else {
+            let firstLineLength = (title.count + 1) / 2
+            return title.prefix(firstLineLength) + "\n" + title.dropFirst(firstLineLength)
+        }
+        return title.prefix(maximumLineLength) + "\n" + title.dropFirst(maximumLineLength).prefix(maximumLineLength - 1) + ellipsis
+    }
+}
+
 extension MenuLayout where Item == PostSwipeItem {
     /// スワイプで出すボタン。画面の端の側から並べる順。
     public var swipeItems: [PostSwipeItem] {

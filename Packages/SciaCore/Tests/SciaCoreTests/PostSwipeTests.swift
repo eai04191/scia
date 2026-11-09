@@ -44,6 +44,37 @@ struct PostSwipeTests {
         #expect(relaunched.postTrailingSwipeLayout.swipeItems == [.menu, .status(.reply)])
     }
 
+    /// 行が高ければ2行に分け、1行5文字に収まらないほど長い名前だけ省略する。
+    @Test(arguments: [
+        ("返信", "返信"),
+        ("お気に入り", "お気に入り"),
+        ("ブックマーク", "ブック\nマーク"),
+        ("スレッドを開く", "スレッド\nを開く"),
+        ("お気に入りを取り消す", "お気に入り\nを取り消す"),
+        ("アクションバーを閉じる", "アクション\nバーを閉…"),
+        ("公開範囲を選んでブースト", "公開範囲を\n選んでブ…"),
+    ])
+    func twoLinesOnTallRows(title: String, expected: String) {
+        #expect(PostSwipeLabel.text(for: title, rowHeight: PostSwipeLabel.twoLineMinimumRowHeight) == expected)
+    }
+
+    /// 2行が縦に並ばない高さでは、1行で5文字に収める。
+    @Test(arguments: [
+        ("返信", "返信"),
+        ("お気に入り", "お気に入り"),
+        ("ブックマーク", "ブックマ…"),
+        ("公開範囲を選んでブースト", "公開範囲…"),
+    ])
+    func oneLineOnMiddleRows(title: String, expected: String) {
+        #expect(PostSwipeLabel.text(for: title, rowHeight: PostSwipeLabel.oneLineMinimumRowHeight) == expected)
+        #expect(PostSwipeLabel.text(for: title, rowHeight: PostSwipeLabel.twoLineMinimumRowHeight - 1) == expected)
+    }
+
+    /// 1行も縦に並ばない高さでは、名前を出さない。
+    @Test func noLabelOnLowRows() {
+        #expect(PostSwipeLabel.text(for: "返信", rowHeight: PostSwipeLabel.oneLineMinimumRowHeight - 1) == nil)
+    }
+
     /// タップ、長押し、どちらのスワイプでも、「アクションバーを開く」を割り当てていれば事前に準備する。
     @Test func actionBarGestureIncludesSwipes() {
         let settings = AppSettings(defaults: TestScratch.defaults("PostSwipeTests"))

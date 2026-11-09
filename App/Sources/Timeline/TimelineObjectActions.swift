@@ -206,16 +206,19 @@ extension TimelineViewController {
         case .leading: settings.postLeadingSwipeLayout.swipeItems
         case .trailing: settings.postTrailingSwipeLayout.swipeItems
         }
-        guard !items.isEmpty else { return nil }
+        guard !items.isEmpty, let rowHeight = collectionView.cellForItem(at: indexPath)?.bounds.height else { return nil }
         let tree = offlineStatusMenuTree(for: status, id: id, canSelectText: selectableBody(for: id, statusID: status.displayed.id) != nil)
         let actions = items.compactMap { item -> UIContextualAction? in
             guard let button = swipeButton(for: item, entry: entry, id: id, tree: tree) else { return nil }
-            let action = UIContextualAction(style: button.isDestructive ? .destructive : .normal, title: button.title) { [weak self] _, sourceView, completion in
+            let action = UIContextualAction(style: button.isDestructive ? .destructive : .normal, title: PostSwipeLabel.text(for: button.title, rowHeight: rowHeight)) { [weak self] _, sourceView, completion in
                 self?.performSwipeItem(item, id: id, from: sourceView)
                 // 削除のように行が消える操作も、確かめてからサーバーが受け付けて消すので、行はいったん元の位置に戻す。
                 completion(false)
             }
-            action.image = UIImage(systemName: button.symbolName)
+            let image = UIImage(systemName: button.symbolName)
+            // 名前を出さない高さの行でも、VoiceOverには省略しない名前を読ませる。
+            image?.accessibilityLabel = button.title
+            action.image = image
             return action
         }
         guard !actions.isEmpty else { return nil }
