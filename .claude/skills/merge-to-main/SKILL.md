@@ -39,7 +39,7 @@ targetは、指定がなければ`git symbolic-ref --short refs/remotes/origin/H
    - 入れたあとのmainで、使う人に見える挙動が中途半端にならない
 
    満たさなければ、mergeせずに止める。何が合わないかと、分け方や足りないものの推奨を書く
-5. `pr-readiness`の自己判定モードを通す。比較元はtargetのSHAにする。直前の自己判定から差分が変わっていなければ、その結果を使う。READYにならなければ、mergeせずに理由を報告する
+5. `git diff --quiet --no-renames <targetのSHA> HEAD -- . ':(exclude)Packages/SciaCore/Sources/SciaCore/Auth/Resources/known-servers.txt'`が成功する（targetとの違いがサーバーのリストだけ）なら、`pr-readiness`を省き、報告の判定欄に「対象外（サーバーのリストのみ）」と書く。それ以外は`pr-readiness`の自己判定モードを通す。比較元はtargetのSHAにする。直前の自己判定から差分が変わっていなければ、その結果を使う。READYにならなければ、mergeせずに理由を報告する
 6. 履歴を、変更目的ごとの論理単位に整理する。ユーザーには確認しない。整理が要らなければ飛ばす
    - targetにまだ入っていない機能への手直し(`fix:`など)は、その機能のcommitへまとめる。実装とリファクタリング、目的が別のcommitは、まとめない
    - まとめたcommitのmessageは、途中経過ではなく最終的な変更内容を、プロジェクトの言語とprefixで書き直す
