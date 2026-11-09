@@ -409,6 +409,8 @@ final class ProfileEditViewController: UIViewController {
         tableView.register(ProfileEditAccountCell.self, forCellReuseIdentifier: ProfileEditAccountCell.reuseIdentifier)
         tableView.register(ProfileEditHeader.self, forHeaderFooterViewReuseIdentifier: ProfileEditHeader.reuseIdentifier)
         view.addSubview(tableView)
+        // 既定のままだと、キーボードがないときにガイドの上端がセーフエリアの下端になり、表がホームインジケーターの手前で切れる。
+        view.keyboardLayoutGuide.usesBottomSafeArea = false
         let followsKeyboard = tableView.bottomAnchor.constraint(lessThanOrEqualTo: view.keyboardLayoutGuide.topAnchor)
         let fillsBottom = tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         fillsBottom.priority = .defaultHigh
@@ -902,7 +904,7 @@ final class ProfileEditViewController: UIViewController {
         guard let completionListTop, let completionListHeight, let caret = activeCompletion.caretRect(in: view) else { return }
         let spacing: CGFloat = 6
         let wanted = completionList.contentHeight
-        let lower = view.keyboardLayoutGuide.layoutFrame.minY - spacing
+        let lower = min(view.keyboardLayoutGuide.layoutFrame.minY, view.safeAreaLayoutGuide.layoutFrame.maxY) - spacing
         let upper = view.safeAreaLayoutGuide.layoutFrame.minY + spacing
         let below = lower - (caret.maxY + spacing)
         let above = caret.minY - spacing - upper

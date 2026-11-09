@@ -114,6 +114,19 @@ struct ProfileEditRevealTests {
         #expect(avatarView.layer.animation(forKey: kCATransition) === avatarFade, "ヘッダー画像が届いたときに、アイコンのクロスフェードをかけ直しました")
     }
 
+    /// キーボードがないとき、表は下のセーフエリアの手前で切れず、画面の下端まで届く。
+    @Test func tableReachesBottomWithoutKeyboard() throws {
+        let images = MediaImageStore<UIImage>(files: .temporary()) { _, _ in throw URLError(.timedOut) }
+        let (controller, window) = try makeController(images: images)
+        defer { close(window) }
+        let table = try tableView(of: controller)
+
+        controller.additionalSafeAreaInsets.bottom = 34
+        window.layoutIfNeeded()
+
+        #expect(table.frame.maxY == controller.view.bounds.maxY)
+    }
+
     /// アイコンが待つ上限までに届かなければ、待たずに入力欄を出す。
     @Test func showsFieldsAfterWaitLimit() async throws {
         let gate = Gate()
