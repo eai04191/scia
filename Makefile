@@ -27,6 +27,8 @@ check-app-info:
 lint:
 	swiftlint lint --quiet --config .swiftlint.yml
 	swift run --package-path Tools/SciaLint --quiet scia-lint .
+	@# macOSのbashは、UTF-8のロケールで変数名の直後の非ASCII文字を変数名の続きと読むので、${name}の形で区切る
+	@git ls-files -z -- '*.sh' Makefile Tools/git-hooks | xargs -0 perl -Mutf8 -CSD -ne 'next if /^\s*@?#/; if (/(?<![\\\$$])\$$\$$?[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7F]/) { print "$$ARGV:$$.: error: 変数名を波括弧で区切る: $$_"; $$bad = 1 } close ARGV if eof; END { exit($$bad // 0) }'
 
 ## Tools/SciaLintの規則のテストを実行する
 test-lint:
@@ -90,7 +92,7 @@ else
 	TEST_RUNNER_OS_ACTIVITY_MODE=disable xcodebuild $(TEST_ARGS) -resultBundlePath "$(DERIVED_DATA)/Logs/Test/Scia-$$stamp.xcresult" -only-testing:SciaTests test-without-building & app=$$!; \
 	wait $$app; app=$$?; wait $$core; core_status=$$?; \
 	kill $$watch 2>/dev/null; \
-	if [ $$app -ne 0 ] || [ $$core_status -ne 0 ]; then failed=$(DERIVED_DATA)/test-logs/failed-$$stamp; mkdir -p "$$failed"; cp -R "$(DERIVED_DATA)/Logs/Test/SciaCore-$$stamp.xcresult" "$(DERIVED_DATA)/Logs/Test/Scia-$$stamp.xcresult" "$$failed/" 2>/dev/null; echo "失敗した回のxcresultは$$failedに残しました"; fi; \
+	if [ $$app -ne 0 ] || [ $$core_status -ne 0 ]; then failed=$(DERIVED_DATA)/test-logs/failed-$$stamp; mkdir -p "$$failed"; cp -R "$(DERIVED_DATA)/Logs/Test/SciaCore-$$stamp.xcresult" "$(DERIVED_DATA)/Logs/Test/Scia-$$stamp.xcresult" "$$failed/" 2>/dev/null; echo "失敗した回のxcresultは$${failed}に残しました"; fi; \
 	if [ $$core_status -ne 0 ]; then grep -aE '✘|error:' "$$core_log" | tail -40; echo "SciaCoreTestsかTextKit2LabelTestsが落ちました。出力は$$core_log"; else grep -a 'Test run with' "$$core_log"; fi; \
 	[ $$app -eq 0 ] && [ $$core_status -eq 0 ]
 	Tools/system-ui-check.sh '$(SIM)' $(DERIVED_DATA)

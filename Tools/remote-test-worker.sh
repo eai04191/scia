@@ -68,7 +68,7 @@ if ! take_slot; then
     echo "テストを任せるMacの組はすべてふさがっています" >&2
     exit 75
 fi
-echo "組$slot（$sim）で走らせます"
+echo "組${slot}（${sim}）で走らせます"
 
 work=~/scia/tree-$slot
 mkdir -p "$work" || exit 1

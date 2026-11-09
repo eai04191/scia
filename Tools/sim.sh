@@ -169,7 +169,7 @@ command_shot() {
     ratio=$(/usr/bin/python3 -I -c "print(round($point_width / $width, 3))")
     elapsed=$(/usr/bin/python3 -I -c "import time; print(round(time.time() - $started, 1))")
     echo "$out"
-    echo "画面: $stable（${elapsed}秒） 画像: ${width}px幅 画像の1px = ${ratio}pt 左上 = (${origin})pt"
+    echo "画面: ${stable}（${elapsed}秒） 画像: ${width}px幅 画像の1px = ${ratio}pt 左上 = (${origin})pt"
     [ -z "$full" ] || echo "原寸: $full"
 }
 
@@ -398,7 +398,7 @@ command___acquire_try() {
         [ -n "$sim" ] && [ -z "$(lease_holder "$sim")" ] || continue
         # 返したあとも走り続けるバックグラウンドの処理（make test、録画など）が残っていれば、借りられない。
         # 調べられなかったときに、出力が空なのを空きと取り違えないよう、失敗したら止める。
-        procs=$(busy_procs "$sim" "$me") || fail "$simを使っている処理を調べられない"
+        procs=$(busy_procs "$sim" "$me") || fail "${sim}を使っている処理を調べられない"
         [ -z "$procs" ] || continue
         echo "$(date +%s) $me" > "$root/$sim.lease"
         if [ "$(build_state "$sim")" = "$me ready" ]; then
@@ -422,7 +422,7 @@ command___release() {
 
 command___ready() {
     local sim=$1 me=$2
-    [ "$(lease_holder "$sim")" = "$me" ] || fail "$simを借りていない（借りているもの: $(lease_holder "$sim" | sed 's/^$/なし/')）"
+    [ "$(lease_holder "$sim")" = "$me" ] || fail "${sim}を借りていない（借りているもの: $(lease_holder "$sim" | sed 's/^$/なし/')）"
     echo "$me ready" > "$(lock_root)/$sim.build"
 }
 
@@ -430,7 +430,7 @@ command___ready() {
 require_lease() {
     local sim=$1 holder
     holder=$(lease_holder "$sim")
-    [ "$holder" = "$(borrower)" ] || fail "$simを借りていない（借りているもの: ${holder:-なし}）。先にTools/sim.sh acquireで借りる"
+    [ "$holder" = "$(borrower)" ] || fail "${sim}を借りていない（借りているもの: ${holder:-なし}）。先にTools/sim.sh acquireで借りる"
 }
 
 # 端末のクリップボードを、Macのクリップボードから切り離して空にする。
@@ -451,9 +451,9 @@ for devices in json.load(sys.stdin)["devices"].values():
     # DeviceHubがここにほかの項目を持つようになると、借りるたびにそれが既定に戻る。そうなったら、辞書を読んで足す形にする。
     defaults write "$HOME/Library/Containers/com.apple.dt.Devices/Data/Library/Preferences/com.apple.dt.Devices" \
         DevicePreferences -dict-add "$udid" '<dict><key>pasteboardSyncEnabled</key><false/></dict>' \
-        || fail "$simのクリップボードの同期を切れない"
+        || fail "${sim}のクリップボードの同期を切れない"
     # 切る前に同期で入ったものを残さない。
-    printf '' | xcrun simctl pbcopy "$udid" || fail "$simのクリップボードを空にできない"
+    printf '' | xcrun simctl pbcopy "$udid" || fail "${sim}のクリップボードを空にできない"
 }
 
 command_acquire() {
@@ -487,7 +487,7 @@ command_acquire() {
             echo "$out"
             return
         fi
-        [ "$status" -eq 75 ] || fail "借りられない（終了コード $status）"
+        [ "$status" -eq 75 ] || fail "借りられない（終了コード ${status}）"
         if [ "$wait" -ne 0 ] && [ "$(date +%s)" -ge "$deadline" ]; then
             echo "sim.sh: 空いている端末がない。もう一度acquireして待つ" >&2
             command_status >&2

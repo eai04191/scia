@@ -98,7 +98,7 @@ use_software_keyboard() {
 wait_label() {
     local udid="$1" label="$2" kind="${3:-}" deadline=$((SECONDS + 30))
     until axe describe-ui --udid "$udid" 2>/dev/null | python3 -I "$SCENARIO_DIR/ui.py" has "$label" $kind; do
-        [ $SECONDS -lt $deadline ] || fail "30秒待っても「$label」が出なかった"
+        [ $SECONDS -lt $deadline ] || fail "30秒待っても「${label}」が出なかった"
         sleep 1
     done
 }
@@ -106,7 +106,7 @@ wait_label() {
 wait_point() {
     local udid="$1" x="$2" y="$3" label="$4" deadline=$((SECONDS + 30))
     until [ "$(axe describe-ui --point "$x,$y" --udid "$udid" 2>/dev/null | python3 -I "$SCENARIO_DIR/ui.py" label)" = "$label" ]; do
-        [ $SECONDS -lt $deadline ] || fail "30秒待っても($x,$y)に「$label」が出なかった"
+        [ $SECONDS -lt $deadline ] || fail "30秒待っても($x,$y)に「${label}」が出なかった"
         sleep 1
     done
 }
@@ -117,7 +117,7 @@ tap_label_until_gone() {
     local udid="$1" label="$2" kind="$3" deadline=$((SECONDS + 30)) tree
     wait_label "$udid" "$label" "$kind"
     while true; do
-        [ $SECONDS -lt $deadline ] || fail "30秒押しても「$label」が消えなかった"
+        [ $SECONDS -lt $deadline ] || fail "30秒押しても「${label}」が消えなかった"
         if ! tree="$(axe describe-ui --udid "$udid" 2>/dev/null)" || ! python3 -I -c 'import json, sys; json.load(sys.stdin)' <<< "$tree" 2>/dev/null; then
             sleep 1
             continue

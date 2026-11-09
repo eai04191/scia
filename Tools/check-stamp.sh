@@ -57,12 +57,12 @@ case "${1:-}" in
         [[ " $KINDS " == *" $kind "* ]] || { echo "error: checkかtestを渡してください: $kind" >&2; exit 1; }
         # 走らせている間にファイルを書き換えると、確かめた中身と覚える中身がずれるので、覚えない
         if [[ "$(worktree_tree)" != "$tree" ]]; then
-            echo "error: make $kindの途中で作業ツリーが変わったので、通ったものとして覚えません。もう一度make $kindを走らせてください" >&2
+            echo "error: make ${kind}の途中で作業ツリーが変わったので、通ったものとして覚えません。もう一度make ${kind}を走らせてください" >&2
             exit 1
         fi
         mkdir -p "$(stamp_dir "$kind")"
         touch "$(stamp_dir "$kind")/$tree"
-        echo "make $kindが通った中身（tree ${tree:0:12}）を覚えました"
+        echo "make ${kind}が通った中身（tree ${tree:0:12}）を覚えました"
         ;;
     record-remote)
         kind=${2:?checkかtestを渡す}
@@ -70,7 +70,7 @@ case "${1:-}" in
         [[ " $KINDS " == *" $kind "* ]] || { echo "error: checkかtestを渡してください: $kind" >&2; exit 1; }
         mkdir -p "$(stamp_dir "$kind")"
         touch "$(stamp_dir "$kind")/$tree"
-        echo "別のMacでmake $kindが通った中身（tree ${tree:0:12}）を覚えました"
+        echo "別のMacでmake ${kind}が通った中身（tree ${tree:0:12}）を覚えました"
         ;;
     missing)
         commit=${2:?commitを渡す}

@@ -10,7 +10,7 @@ source "$(dirname "$0")/common.sh"
 app="${1:?使い方: Tools/scenario/run.sh <Scia.appのパス> <役>}"
 persona="${2:?使い方: Tools/scenario/run.sh <Scia.appのパス> <役>}"
 persona_file="$SCENARIO_DIR/personas/$persona.md"
-[ "$persona" != common ] && [ -f "$persona_file" ] || fail "役がない: $persona（personas/にあるもの: $(cd "$SCENARIO_DIR/personas" && ls | sed 's/\.md$//' | grep -vx common | tr '\n' ' ')）"
+[ "$persona" != common ] && [ -f "$persona_file" ] || fail "役がない: ${persona}（personas/にあるもの: $(cd "$SCENARIO_DIR/personas" && ls | sed 's/\.md$//' | grep -vx common | tr '\n' ' ')）"
 command -v claude >/dev/null || fail "claude が見つからない"
 
 "$SCENARIO_DIR/reset.sh" "$app"
@@ -24,7 +24,7 @@ printf '\n' >> "$run_dir/prompt.md"
 cat "$persona_file" >> "$run_dir/prompt.md"
 
 xcrun simctl launch "$udid" "$SCIA_BUNDLE_ID" >/dev/null
-log "役「$persona」で触らせる: $run_dir"
+log "役「${persona}」で触らせる: $run_dir"
 status=0
 (
     cd "$run_dir"

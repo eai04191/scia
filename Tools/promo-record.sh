@@ -122,4 +122,4 @@ else
     [ -n "$udid" ] || fail "端末が見つからない: $device"
     record_device "$udid"
 fi
-echo "素材: $output（シナリオの記録は$test_log）"
+echo "素材: ${output}（シナリオの記録は${test_log}）"

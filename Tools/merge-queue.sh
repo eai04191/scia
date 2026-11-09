@@ -257,7 +257,7 @@ require_clean() {
 
 rebase_onto_target() {
     git merge-base --is-ancestor "$TARGET" HEAD && return
-    echo "$(git rev-parse --short HEAD) を $TARGET（$(git rev-parse --short "$TARGET")）へrebaseします"
+    echo "$(git rev-parse --short HEAD) を ${TARGET}（$(git rev-parse --short "$TARGET")）へrebaseします"
     if ! timed rebase git rebase "$TARGET"; then
         git rebase --abort
         echo "error: $TARGET へのrebaseがconflictしたので、取りやめて列を離れます。解決してから並び直してください" >&2
