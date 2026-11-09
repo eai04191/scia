@@ -33,6 +33,5 @@ filesystem+=",\"$user_cache\"=\"write\",\"$shared_objects\"=\"read\",\"/Applicat
         -c "shell_environment_policy.set.HOME=\"$work/home\"" \
         -c 'model="gpt-6.1-sol"' \
         -c 'model_reasoning_effort="high"' \
-        -c 'service_tier="priority"' \
         -
 ) <"$prompt" >"$out" 2>"$log"
