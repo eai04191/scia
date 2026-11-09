@@ -25,15 +25,13 @@ description: SciaCoreの変更を、Codexに使い捨ての複製で実際に動
    ```
 
    `make-copy.sh`は、HEADに未commitの変更と未追跡のファイルを足した状態を再現する。このリポジトリのbranchを書き換えないよう、remoteは外してある
-3. 下の「Codexへの指示」を一時ファイルに書き、複製の中でCodexを走らせる。証明のテストを書いて実行させるため、sandboxは`workspace-write`にする。`workspace-write`は既定でネットワークを止めるので、Mastodonのソースを読めるよう`network_access`を開ける。数分かかるので、バックグラウンドで走らせる
+3. 下の「Codexへの指示」を一時ファイルに書き、`run-codex.sh`で複製の中でCodexを走らせる。数分かかるので、バックグラウンドで走らせる
 
    ```bash
-   gh_empty="$(mktemp -d)"
-   (cd "$dir" && env -u GH_TOKEN -u GITHUB_TOKEN GH_CONFIG_DIR="$gh_empty" codex review -c sandbox_mode='"workspace-write"' -c sandbox_workspace_write.network_access=true -c model='"gpt-6.1-sol"' -c model_reasoning_effort='"high"' - < <prompt-file> > <out-file> 2> <log-file>)
-   rm -rf "$gh_empty"
+   .claude/skills/codex-proof-review/run-codex.sh "$dir" <prompt-file> <out-file> <log-file>
    ```
 
-   ネットワークを開けると、Codexはこのユーザーの資格情報で外部に届きうる。`workspace-write`はホームの読み取りを止めないので、remoteを外しても、`gh`のログイン情報などは読める。そこで`gh`の設定を空のディレクトリに向け、トークンの環境変数も外して、`gh`をログインしていない状態にする。ソースは認証の要らない`curl`で読ませる。これは、うっかり認証つきで読み書きするのを防ぐもので、隔離ではない。資格情報のファイルを直接読めば届くことは残る。外部に書き込まないことは、指示で縛る
+   `run-codex.sh`は、Codexの権限プロファイルでファイルシステムを既定で読めなくし、複製、一時ディレクトリ、Xcodeなどの必要な場所だけを開ける。これでホームの資格情報のファイルとKeychainに届かなくなる。ファイルの権限では止まらない環境変数は、`shell_environment_policy`で最小限に絞る。外への通信は先を絞らずに開ける。SciaはOSSで、環境の秘密情報を読めなければ持ち出されるものがないため。`gh`はコマンドごと使えないので、Mastodonのソースは`curl`で読ませる
 
    pr-readinessと同じく、結果はstdoutの`<out-file>`だけを読み、`<log-file>`は失敗したときだけ見る。`codex`が失敗したら、ほかの手段で代わりをせず、エラーを示して未確認とする
 4. 指摘を扱う。pr-readinessのCodexレビューの指摘とまとめて、重なるものは1つにする
@@ -54,13 +52,13 @@ Review the code changes against the base branch '<base>'. The merge base commit 
 
 ## レビューの進め方
 
-このディレクトリは使い捨ての複製で、何を書いてもよい。ネットワークは公開の情報を読むためだけに使い、外部には何も書き込まない（issue、PR、push、APIへの書き込みをしない）。`Packages/SciaCore`はSwiftPMのパッケージで、そのディレクトリで`swift test`（`--filter`で絞れる）が動く。本番のソースは書き換えない。証明のテストは`Packages/SciaCore/Tests/SciaCoreTests/`の下に、名前の先頭を`Proof`にしたファイルで置く。
+このディレクトリは使い捨ての複製で、何を書いてもよい。ネットワークは公開の情報を読むためだけに使い、外部には何も書き込まない（issue、PR、push、APIへの書き込みをしない）。`Packages/SciaCore`はSwiftPMのパッケージで、そのディレクトリで`swift test --disable-sandbox`（`--filter`で絞れる）が動く。このディレクトリはすでにsandboxの中にあり、`--disable-sandbox`がないとSwiftPMのsandboxが入れ子になって失敗する。本番のソースは書き換えない。証明のテストは`Packages/SciaCore/Tests/SciaCoreTests/`の下に、名前の先頭を`Proof`にしたファイルで置く。
 
 差分の外で、この変更が壊すものを探す。呼び出し元を並べることが目的ではない。grepで見えない壊れ方を探す。
 
 1. 変更を読む。差分、足した・変えた・消したシンボル、差分には書かれていないが変わった振る舞いまで含める
 2. 変更が安全だと言える前提の事実を見つける。危なそうに見える変更の多くは、1つの事実（たとえば「このAPIは、続きがないときだけlimitより少ない件数を返す」）に支えられている。その事実を見つけることに時間を使い、可能性を長く並べない
-3. grepが届かないところを見る。呼んでいるライブラリやOSのAPIの実際の振る舞い、Mastodonのサーバーの実装（`curl -sfL https://raw.githubusercontent.com/mastodon/mastodon/main/<path>`で読める。`gh`はログインしていない）、処理が走る順番と並行性、APIが返すJSONの形を確かめる
+3. grepが届かないところを見る。呼んでいるライブラリやOSのAPIの実際の振る舞い、Mastodonのサーバーの実装（`curl -sfL https://raw.githubusercontent.com/mastodon/mastodon/main/<path>`で読める。`gh`は使えない）、処理が走る順番と並行性、APIが返すJSONの形を確かめる
 4. 前提の事実を、実際のコードを呼ぶテストで確かめる。テストを走らせ、出力を貼る。反証できたら、それが指摘になる
 5. それぞれの事実をどこまで確かめたかを書く: 主張しただけ／行を示した／起こりえないことを順にたどって示した／テストで動かした
 
