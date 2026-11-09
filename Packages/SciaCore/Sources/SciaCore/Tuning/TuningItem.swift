@@ -1169,7 +1169,16 @@ public enum TuningCatalog {
         title: "アプリ内のSafariを伏せたときの高さ（pt）",
         range: 40...200,
         step: 4,
-        defaultValue: 120
+        defaultValue: 76
+    )
+
+    /// アプリ内のSafariを伏せた段でシートが止まってから、後ろの画面の高さを決めるまでの時間（秒）。シートが動いている間は待ち直す。
+    public static let inAppBrowserDockSettleDelay = NumberTuning(
+        id: "browser.dockSettleDelay",
+        title: "アプリ内のSafariを伏せて止まってから後ろの画面が縮むまでの時間（秒）",
+        range: 0...0.5,
+        step: 0.01,
+        defaultValue: 0.08
     )
 
     /// アプリ内のSafariを伏せたときに、縮めた後ろの画面とシートの間に空ける隙間（pt）。
@@ -2098,6 +2107,7 @@ public enum TuningCatalog {
         ]),
         TuningSection(id: "browser", title: "アプリ内のSafari", items: [
             .number(inAppBrowserCollapsedHeight),
+            .number(inAppBrowserDockSettleDelay),
             .number(inAppBrowserDockGap),
             .number(inAppBrowserDockCornerRadius),
             .number(inAppBrowserDockDuration),

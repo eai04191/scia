@@ -36,6 +36,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
     private var detentBeforeCompose: UISheetPresentationController.Detent.Identifier?
     /// 伏せた高さで出して、開く高さまで広げ終えるまでの間。この間は伏せた段にいても、後ろの画面を縮めない。
     private var isGrowingFromCollapsed = false
+    private var dockSettling: Task<Void, Never>?
     private let logger = SciaLog.logger(category: "browser")
 
     init(tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings, clock: any Clock<Duration> = AppDependencies.clock) {
@@ -71,6 +72,10 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
             safariResizeDelay: .seconds(tuning.value(of: TuningCatalog.inAppBrowserSafariResizeDelay)),
             clock: clock
         )
+        browserSheet.onLayout = { [weak self, weak browserSheet] in
+            guard let self, let browserSheet else { return }
+            self.sheetDidLayout(browserSheet)
+        }
         browserSheet.modalPresentationStyle = .pageSheet
         if let sheet = browserSheet.sheetPresentationController {
             sheet.detents = [detent(Self.collapsedIdentifier, for: browserSheet), detent(Self.mediumIdentifier, for: browserSheet), .large()]
@@ -170,6 +175,9 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
             }
             if let browserSheet, self.current === browserSheet {
                 self.resolvedHeights[identifier] = value
+                if identifier == Self.mediumIdentifier {
+                    browserSheet.minimumSafariHeight = value ?? 0
+                }
                 self.reportObscuredHeightAfterResolving()
             }
             return value
@@ -202,8 +210,36 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         let bottomInset = sheet.presentedViewController.view.safeAreaInsets.bottom
         let height = resolvedHeights[selected].map { $0 + bottomInset } ?? 0
         let docks = selected == Self.collapsedIdentifier && canDock(sheet)
-        onDockedHeightChange?(docks ? height : 0)
+        updateDock(docks, of: sheet)
         onObscuredHeightChange?(docks ? 0 : height)
+    }
+
+    /// 伏せた段では、UIKitがシートを縮めて下端から浮かせるので、段の高さからはシートの位置が分からない。シートが止まってからビューの窓の中の位置を読む。
+    private func updateDock(_ docks: Bool, of sheet: UISheetPresentationController) {
+        dockSettling?.cancel()
+        guard docks else {
+            onDockedHeightChange?(0)
+            return
+        }
+        let delay = tuning.value(of: TuningCatalog.inAppBrowserDockSettleDelay)
+        dockSettling = Task(.withoutRequests) { [weak self, weak sheet, clock] in
+            do {
+                try await clock.sleep(for: .seconds(delay))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled, let self, let sheet, let window = self.window else { return }
+            let view: UIView = sheet.presentedViewController.view
+            self.onDockedHeightChange?(window.bounds.height - view.convert(view.bounds, to: window).minY)
+        }
+    }
+
+    /// シートが動いている間はレイアウトが続くので、そのたびに待ち直す。指が触れている間は読まない。
+    private func sheetDidLayout(_ browserSheet: InAppBrowserSheet) {
+        guard browserSheet === current, !browserSheet.isFingerDown, !browserSheet.isBeingDismissed,
+              let sheet = browserSheet.sheetPresentationController,
+              sheet.selectedDetentIdentifier == Self.collapsedIdentifier, canDock(sheet) else { return }
+        updateDock(true, of: sheet)
     }
 
     /// 投稿欄のために下げている間は、キーボードの裏へ逃がしているだけなので縮めない。iPadの幅と横向きでは、シートが画面の下端に付かないので縮めない。
@@ -224,6 +260,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         resolvedHeights = [:]
         isGrowingFromCollapsed = false
         logger.info("in-app browser close")
+        dockSettling?.cancel()
         onDockedHeightChange?(0)
         onObscuredHeightChange?(0)
         onCoverageChange?(false)

@@ -1,3 +1,4 @@
+import SafariServices
 import SciaCore
 import SciaTesting
 import Testing
@@ -30,12 +31,29 @@ struct InAppBrowserDockTests {
         #expect(content.view.layer.cornerRadius == 0)
     }
 
+    /// 伏せた段でも、Safariのビューは下限より縮めない。ツールバーをシートの下へはみ出させるため。
+    @Test func safariKeepsMinimumHeight() throws {
+        let sheet = InAppBrowserSheet(
+            safari: SFSafariViewController(url: try #require(URL(string: "https://example.com"))),
+            handleHeight: 0,
+            barGrab: InAppBrowserSheet.BarGrab(height: 0, inset: 0, settlingHeight: 0, settlingDuration: .zero, isVisible: false),
+            safariResizeDelay: .zero,
+            clock: TestClock()
+        )
+        sheet.minimumSafariHeight = 500
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: 400, height: 90))
+        #expect(sheet.safariFrame(in: container) == CGRect(x: 0, y: 0, width: 400, height: 500))
+        container.frame.size.height = 700
+        #expect(sheet.safariFrame(in: container) == CGRect(x: 0, y: 0, width: 400, height: 700))
+    }
+
     /// 手で伏せた高さまで下げたときだけ後ろの画面を縮める。開く途中に伏せた高さを通るときと、投稿欄のために下げたときは縮めない。
     @Test func docksOnlyWhenLoweredByHand() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let root = harness.viewController
-        let browser = InAppBrowser()
+        let clock = TestClock()
+        let browser = InAppBrowser(clock: clock)
         var docked: [CGFloat] = []
         var obscured: CGFloat = 0
         browser.onDockedHeightChange = { docked.append($0) }
@@ -52,8 +70,9 @@ struct InAppBrowserDockTests {
 
         sheet.selectedDetentIdentifier = collapsed
         browser.sheetPresentationControllerDidChangeSelectedDetentIdentifier(sheet)
-        #expect((docked.last ?? 0) > 0)
         #expect(obscured == 0)
+        try await clock.advance(afterSleeping: .seconds(AppDependencies.tuning.value(of: TuningCatalog.inAppBrowserDockSettleDelay)))
+        try await waitUntil { (docked.last ?? 0) > 0 }
 
         sheet.selectedDetentIdentifier = .large
         browser.sheetPresentationControllerDidChangeSelectedDetentIdentifier(sheet)

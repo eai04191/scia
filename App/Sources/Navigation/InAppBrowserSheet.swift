@@ -21,6 +21,9 @@ final class InAppBrowserSheet: UIViewController {
     private var narrowing: Task<Void, Never>?
     private let safariResizeDelay: Duration
     private var pendingResize: Task<Void, Never>?
+    /// Safariのビューの高さの下限。伏せた段でも縮めず、Safariの下のツールバーをシートの下へはみ出させて、上のバーに重ならないようにする。
+    var minimumSafariHeight: CGFloat = 0
+    var onLayout: (() -> Void)?
     private lazy var fingerWatcher = FingerWatcher { [weak self] isDown in
         self?.isFingerDown = isDown
     }
@@ -75,6 +78,7 @@ final class InAppBrowserSheet: UIViewController {
     /// 出したときの大きさのまま残って、広げたシートの下が空くため。
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        onLayout?()
         guard safari.presentingViewController != nil, let container = safari.viewIfLoaded?.superview else { return }
         scheduleSafariResize(toFit: container)
     }
@@ -83,7 +87,7 @@ final class InAppBrowserSheet: UIViewController {
     /// 毎フレーム変えると、離してから0.7秒ほどSafariがタップを受けない（シミュレーターで確かめた）。代わりに、引いている途中はSafariがシートに付いてこない。
     private func scheduleSafariResize(toFit container: UIView) {
         pendingResize?.cancel()
-        guard !isFingerDown, safari.view.frame != container.bounds else { return }
+        guard !isFingerDown, safari.view.frame != safariFrame(in: container) else { return }
         pendingResize = Task(.withoutRequests) { [weak self, weak container, clock, safariResizeDelay] in
             do {
                 try await clock.sleep(for: safariResizeDelay)
@@ -91,8 +95,14 @@ final class InAppBrowserSheet: UIViewController {
                 return
             }
             guard !Task.isCancelled, let self, !self.isFingerDown, let container else { return }
-            self.safari.view.frame = container.bounds
+            self.safari.view.frame = self.safariFrame(in: container)
         }
+    }
+
+    func safariFrame(in container: UIView) -> CGRect {
+        var frame = container.bounds
+        frame.size.height = max(frame.height, minimumSafariHeight)
+        return frame
     }
 
     override func viewDidAppear(_ animated: Bool) {
