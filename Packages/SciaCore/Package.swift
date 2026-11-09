@@ -21,9 +21,12 @@ let package = Package(
         .package(path: "../MemoryCache"),
     ],
     targets: [
+        // シグナルハンドラーから触るクラッシュの記録。docs/crash-quarantine.md
+        .target(name: "CCrashMark"),
+        .target(name: "CCrashMarkTesting", dependencies: ["CCrashMark"]),
         .target(
             name: "SciaCore",
-            dependencies: ["MemoryCache"],
+            dependencies: ["MemoryCache", "CCrashMark"],
             resources: [.copy("Auth/Resources/known-servers.txt"), .copy("Compose/Resources/standard-emoji.json"), .copy("Settings/Resources/menu-defaults.json")],
             swiftSettings: swiftSettings
         ),
@@ -33,7 +36,7 @@ let package = Package(
         ),
         .testTarget(
             name: "SciaCoreTests",
-            dependencies: ["SciaCore", "SciaTesting"],
+            dependencies: ["SciaCore", "SciaTesting", "CCrashMarkTesting"],
             resources: [.copy("Fixtures")],
             swiftSettings: swiftSettings
         ),
