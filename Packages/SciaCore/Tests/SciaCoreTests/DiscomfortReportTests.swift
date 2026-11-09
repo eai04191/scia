@@ -108,6 +108,26 @@ struct DiscomfortReportStoreTests {
     }
 }
 
+struct RecentLogReaderDeduplicationTests {
+    private func line(_ seconds: TimeInterval, _ message: String) -> LogLine {
+        LogLine(date: Date(timeIntervalSince1970: seconds), category: "timeline", level: "notice", message: message)
+    }
+
+    /// iOS 27のシミュレーターで、OSLogStoreが同じログを2回返し、読み直すと1回になったことがある。
+    @Test func removesRepeatedEntriesKeepingOrder() {
+        let lines = [line(1, "a"), line(1, "a"), line(2, "b"), line(1, "a")]
+
+        #expect(RecentLogReader.removingRepeatedEntries(lines) == [line(1, "a"), line(2, "b")])
+    }
+
+    /// 時刻が違えば、本文が同じでも別のログとして残す。
+    @Test func keepsSameMessageWrittenAtDifferentTimes() {
+        let lines = [line(1, "a"), line(2, "a")]
+
+        #expect(RecentLogReader.removingRepeatedEntries(lines) == lines)
+    }
+}
+
 // macOSでは、OSLogStoreをプロセスで初めて読むときにMac全体のログを走査し、1回に10秒以上かかる。
 // 2件で`make test-core`の時間の半分を占めるため、iOSシミュレーター（`make test`）でだけ走らせる。
 #if os(iOS)

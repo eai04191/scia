@@ -48,10 +48,17 @@ public enum RecentLogReader {
             at: store.position(date: start),
             matching: NSPredicate(format: "subsystem == %@", subsystem)
         )
-        return entries.compactMap { entry -> LogLine? in
+        let lines = entries.compactMap { entry -> LogLine? in
             guard let log = entry as? OSLogEntryLog, log.date >= start, log.date <= end else { return nil }
             return LogLine(date: log.date, category: log.category, level: levelName(log.level), message: log.composedMessage)
         }
+        return removingRepeatedEntries(lines)
+    }
+
+    /// OSLogStoreは同じログを2回返すことがある。時刻まで同じものを1件にする。
+    static func removingRepeatedEntries(_ lines: [LogLine]) -> [LogLine] {
+        var seen = Set<LogLine>()
+        return lines.filter { seen.insert($0).inserted }
     }
 
     private static func levelName(_ level: OSLogEntryLog.Level) -> String {

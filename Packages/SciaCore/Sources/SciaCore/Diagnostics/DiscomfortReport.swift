@@ -43,7 +43,7 @@ public struct StateDump: Codable, Sendable, Equatable {
     }
 }
 
-public struct LogLine: Codable, Sendable, Equatable {
+public struct LogLine: Codable, Sendable, Hashable {
     public let date: Date
     public let category: String
     public let level: String
