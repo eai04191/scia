@@ -105,6 +105,7 @@ final class NoticeOverlay: UIView {
         case let navigation as UINavigationController: navigation.topViewController
         case let tabs as UITabBarController: tabs.selectedViewController
         case let container as TabContainerViewController: container.current
+        case let container as InAppBrowserDockContainer: container.content
         default: nil
         }
     }

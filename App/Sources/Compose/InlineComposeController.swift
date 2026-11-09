@@ -1812,9 +1812,9 @@ final class InlineComposeController: NSObject {
         updateEmojiPalette()
         observeEmojiPalette()
         let height = bottomSheetHeight
-        setHoldAboveKeyboard(height: height)
+        setHoldAboveKeyboard(height: height - screenBottomGap(of: host.view))
         // 独自の高さはシートの下の安全領域を含まないので、その分を引く。
-        let sheet = EmojiPaletteSheet(palette: emojiPalette, lowHeight: height - host.view.safeAreaInsets.bottom)
+        let sheet = EmojiPaletteSheet(palette: emojiPalette, lowHeight: height - (host.view.window?.safeAreaInsets.bottom ?? 0))
         sheet.lifecycle.onWillClose = { [weak self] in self?.focusLastInput() }
         sheet.lifecycle.onDidClose = { [weak self] in self?.emojiPaletteDidClose() }
         sheet.lifecycle.onDidAppear = { [weak self] in self?.checkSheetInvariants() }
@@ -1958,6 +1958,12 @@ final class InlineComposeController: NSObject {
         presentMediaPicker()
     }
 
+    /// 画面の下端から`view`の下端までの長さ。アプリ内のSafariを伏せている間は、画面が縮んだ分だけある。
+    private func screenBottomGap(of view: UIView) -> CGFloat {
+        guard let window = view.window else { return 0 }
+        return window.bounds.maxY - view.convert(view.bounds, to: window).maxY
+    }
+
     /// メディアを選ぶシートと絵文字のパレットのシートの、低いときの画面の下端からの高さ。最後に出ていたキーボードの高さにそろえる。
     /// 2つのシートを入れ替えたり、キーボードと切り替えたりしても、投稿欄のバーが上下に動かないようにするため。
     private var bottomSheetHeight: CGFloat {
@@ -1979,12 +1985,12 @@ final class InlineComposeController: NSObject {
             expandForEditing()
         }
         let height = bottomSheetHeight
-        setHoldAboveKeyboard(height: height)
+        setHoldAboveKeyboard(height: height - screenBottomGap(of: host.view))
         // 独自の高さはシートの下の安全領域を含まないので、その分を引く。
         let picker = MediaPickerSheet(
             selectedIDs: model.attachedAssetIdentifiers,
             selectionLimit: model.pickerSelectionLimit,
-            lowHeight: height - host.view.safeAreaInsets.bottom
+            lowHeight: height - (host.view.window?.safeAreaInsets.bottom ?? 0)
         )
         picker.onSelectionChange = { [weak self] results in
             self?.model.applyPickerSelection(results.compactMap { result in
@@ -2133,7 +2139,8 @@ final class InlineComposeController: NSObject {
         // シートが残っているかでは見分けない。閉じ始めに本文へ戻したキーボードは、シートが閉じ終わる前に上がるので、それまで捨てると、
         // 検索中にキーボードを切り替えて閉じたとき、本文のキーボードと違う高さでシートを出し直し、バーが上下に動いた。
         guard height > Self.softwareKeyboardMinimumHeight, !emojiPalette.searchField.isFirstResponder else { return }
-        lastKeyboardHeight = height
+        // シートは画面の下端から出るので、アプリ内のSafariを伏せて画面が縮んでいても、画面の下端から測る。
+        lastKeyboardHeight = window.bounds.intersection(window.convert(frame, from: nil)).height
     }
 
     /// 添付のコンテキストメニューを出すと、iOSは入力欄のフォーカスを残したままソフトウェアキーボードを隠す。

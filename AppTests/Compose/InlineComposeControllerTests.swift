@@ -226,6 +226,18 @@ final class InlineComposeControllerTests {
         #expect(composer.stateDump().contains("lastKeyboardHeight: nil"), "大きさのない枠を、キーボードの高さとして覚えました\n\(composer.stateDump())")
     }
 
+    /// アプリ内のSafariを伏せて画面が縮んでいても、メディアを選ぶシートに使うキーボードの高さは、画面の下端から測る。
+    /// 縮んだ画面と重なる分で測ると、シートがキーボードより低くなる。
+    @Test func rememberedKeyboardHeightIsMeasuredFromScreenBottom() async throws {
+        defer { window.isHidden = true }
+        composer.beginEditing()
+        let host = try #require(window.rootViewController)
+        host.view.frame.size.height = window.bounds.height - 100
+        let keyboard = CGRect(x: 0, y: window.bounds.height - 336, width: window.bounds.width, height: 336)
+        NotificationCenter.default.post(name: UIResponder.keyboardWillChangeFrameNotification, object: nil, userInfo: [UIResponder.keyboardFrameEndUserInfoKey: keyboard])
+        #expect(composer.stateDump().contains("lastKeyboardHeight: 336.0"), "\(composer.stateDump())")
+    }
+
     /// ハードウェアキーボードではキーボードが上がらず、上がりきった知らせも来ない。メディアを選ぶシートを閉じて入力欄に戻ったら、
     /// その時点でバーをシートの上端から外し、入力欄に付ける。
     @Test func closingMediaPickerWithoutSoftwareKeyboardReleasesBar() async throws {

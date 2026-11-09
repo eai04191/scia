@@ -6,6 +6,8 @@ import UIKit
 @MainActor
 final class SessionController {
     let rootViewController: UIViewController
+    /// ウィンドウの根に置く画面。`rootViewController`を中に持つ。
+    let windowRootViewController: InAppBrowserDockContainer
     /// このセッションで使っているアカウント。
     let credential: Credential
     let home: FeedTimelineController
@@ -465,6 +467,7 @@ final class SessionController {
             languages: PostingLanguageSource(recent: RecentPostingLanguages(defaults: .standard, account: credential.handle), load: PostingLanguageCache { try await client.postingLanguages() }.languages)
         )
         rootViewController = tabBarController
+        windowRootViewController = InAppBrowserDockContainer(content: tabBarController)
         prepare(searchRoot)
         tabBarController.view.addInteraction(UIDropInteraction(delegate: mediaDrop))
         // ペーストと同じく、書きかけの下書きがあっても聞かずに後ろに足す。
@@ -539,6 +542,13 @@ final class SessionController {
             guard let self else { return }
             browserObscuredHeight = height
             applyObscuredBottomHeight()
+        }
+        browser.onDockedHeightChange = { [weak self] height in
+            self?.windowRootViewController.setReservedHeight(
+                height > 0 ? height + CGFloat(tuning.value(of: TuningCatalog.inAppBrowserDockGap)) : 0,
+                cornerRadius: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserDockCornerRadius)),
+                duration: tuning.value(of: TuningCatalog.inAppBrowserDockDuration)
+            )
         }
         browser.onPresenceChange = { [weak self] _ in self?.applyShowsFocusInlineCompose() }
         browser.onCoverageChange = { [weak self] covered in

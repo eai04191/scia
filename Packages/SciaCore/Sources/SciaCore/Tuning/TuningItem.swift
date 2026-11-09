@@ -1172,6 +1172,33 @@ public enum TuningCatalog {
         defaultValue: 120
     )
 
+    /// アプリ内のSafariを伏せたときに、縮めた後ろの画面とシートの間に空ける隙間（pt）。
+    public static let inAppBrowserDockGap = NumberTuning(
+        id: "browser.dockGap",
+        title: "アプリ内のSafariを伏せたときの後ろの画面との隙間（pt）",
+        range: 0...24,
+        step: 1,
+        defaultValue: 4
+    )
+
+    /// アプリ内のSafariを伏せたときの、縮めた後ろの画面の下の角の丸み（pt）。
+    public static let inAppBrowserDockCornerRadius = NumberTuning(
+        id: "browser.dockCornerRadius",
+        title: "アプリ内のSafariを伏せたときの後ろの画面の角の丸み（pt）",
+        range: 0...80,
+        step: 1,
+        defaultValue: 44
+    )
+
+    /// アプリ内のSafariを伏せたときと戻したときに、後ろの画面の大きさを変える時間（秒）。
+    public static let inAppBrowserDockDuration = NumberTuning(
+        id: "browser.dockDuration",
+        title: "アプリ内のSafariを伏せたときの後ろの画面が縮む時間（秒）",
+        range: 0...2,
+        step: 0.05,
+        defaultValue: 0.35
+    )
+
     /// アプリ内のSafariのシートの上端の、引いて高さを変える帯の高さ（pt）。引ける範囲（`inAppBrowserBarGrabHeight`）の高さに足す。Safariのビューはシートの上端から広がるので、Safariの位置は変わらない。
     public static let inAppBrowserHandleHeight = NumberTuning(
         id: "browser.handleHeight",
@@ -2071,6 +2098,9 @@ public enum TuningCatalog {
         ]),
         TuningSection(id: "browser", title: "アプリ内のSafari", items: [
             .number(inAppBrowserCollapsedHeight),
+            .number(inAppBrowserDockGap),
+            .number(inAppBrowserDockCornerRadius),
+            .number(inAppBrowserDockDuration),
             .number(inAppBrowserHandleHeight),
             .number(inAppBrowserBarGrabHeight),
             .number(inAppBrowserBarGrabInset),

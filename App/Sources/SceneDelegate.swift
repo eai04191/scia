@@ -254,13 +254,13 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             UIView.transition(with: window, duration: duration, options: [.transitionCrossDissolve, .allowUserInteraction]) {
                 // 新しい画面の並べ方まで動きに乗ると、左上の小さな枠から広がって見えるため、差し替えは動かさずに行い、見え方だけを入れ替える。
                 UIView.performWithoutAnimation {
-                    window.rootViewController = session.rootViewController
+                    window.rootViewController = session.windowRootViewController
                     self.installNoticeOverlay()
                     window.layoutIfNeeded()
                 }
             }
         } else {
-            window?.rootViewController = session.rootViewController
+            window?.rootViewController = session.windowRootViewController
             installNoticeOverlay()
         }
         session.start()

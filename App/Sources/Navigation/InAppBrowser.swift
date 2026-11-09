@@ -12,6 +12,8 @@ import UIKit
 final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, UISheetPresentationControllerDelegate {
     /// シートが画面の下から覆っている高さが変わったときに呼ぶ。閉じたら0を渡す。タイムラインの下に、シートより上へ出せるだけの余白を取るために使う。
     var onObscuredHeightChange: ((CGFloat) -> Void)?
+    /// シートを手で伏せた高さまで下げて、後ろの画面をシートの上に縮めるときに、シートが画面の下から占める高さを渡す。縮めないときは0を渡す。
+    var onDockedHeightChange: ((CGFloat) -> Void)?
     /// シートを全画面に広げてタイムラインを覆ったか、覆うのをやめたときに呼ぶ。覆っている間は、タイムラインの投稿を見たと報告させない。
     var onCoverageChange: ((Bool) -> Void)?
     /// シートを出したか、閉じたときに呼ぶ。中身を差し替えるときは呼ばない。
@@ -32,6 +34,8 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
     private var reportsObscuredHeightAfterResolving = false
     /// 投稿欄で書き始めて伏せる前の高さ。書き終えたらここへ戻す。書いている間に手で高さを変えたら、手で選んだ高さを尊重して戻さない。
     private var detentBeforeCompose: UISheetPresentationController.Detent.Identifier?
+    /// 伏せた高さで出して、開く高さまで広げ終えるまでの間。この間は伏せた段にいても、後ろの画面を縮めない。
+    private var isGrowingFromCollapsed = false
     private let logger = SciaLog.logger(category: "browser")
 
     init(tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings, clock: any Clock<Duration> = AppDependencies.clock) {
@@ -95,13 +99,18 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         if grows {
             browserSheet.sheetPresentationController?.selectedDetentIdentifier = Self.collapsedIdentifier
         }
+        isGrowingFromCollapsed = grows
         logger.info("in-app browser open grows=\(grows, privacy: .public)")
         onPresenceChange?(true)
         let opening = openingIdentifier
         root.frontmostPresented.present(browserSheet, animated: true) { [weak self, weak browserSheet] in
             guard let self, let browserSheet, self.current === browserSheet, let sheet = browserSheet.sheetPresentationController else { return }
             if grows {
-                guard sheet.selectedDetentIdentifier == Self.collapsedIdentifier else { return }
+                self.isGrowingFromCollapsed = false
+                guard sheet.selectedDetentIdentifier == Self.collapsedIdentifier else {
+                    self.reportObscuredHeight(of: sheet)
+                    return
+                }
                 self.select(opening, on: sheet)
             } else {
                 // 全画面で開いたときに、タイムラインを覆ったことを知らせる。
@@ -191,7 +200,16 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
     private func reportObscuredHeight(of sheet: UISheetPresentationController) {
         let selected = sheet.selectedDetentIdentifier == Self.collapsedIdentifier ? Self.collapsedIdentifier : Self.mediumIdentifier
         let bottomInset = sheet.presentedViewController.view.safeAreaInsets.bottom
-        onObscuredHeightChange?(resolvedHeights[selected].map { $0 + bottomInset } ?? 0)
+        let height = resolvedHeights[selected].map { $0 + bottomInset } ?? 0
+        let docks = selected == Self.collapsedIdentifier && canDock(sheet)
+        onDockedHeightChange?(docks ? height : 0)
+        onObscuredHeightChange?(docks ? 0 : height)
+    }
+
+    /// 投稿欄のために下げている間は、キーボードの裏へ逃がしているだけなので縮めない。iPadの幅と横向きでは、シートが画面の下端に付かないので縮めない。
+    private func canDock(_ sheet: UISheetPresentationController) -> Bool {
+        let traits = sheet.traitCollection
+        return !isGrowingFromCollapsed && detentBeforeCompose == nil && traits.horizontalSizeClass == .compact && traits.verticalSizeClass == .regular
     }
 
     private func selectionDidChange(_ sheet: UISheetPresentationController) {
@@ -204,7 +222,9 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         current = nil
         detentBeforeCompose = nil
         resolvedHeights = [:]
+        isGrowingFromCollapsed = false
         logger.info("in-app browser close")
+        onDockedHeightChange?(0)
         onObscuredHeightChange?(0)
         onCoverageChange?(false)
         onPresenceChange?(false)
