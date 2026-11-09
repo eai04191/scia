@@ -163,9 +163,9 @@ struct DisplaySettingsView: View {
             Section {
                 NavigationLink("投稿", value: SettingsPage.appearance)
                 NavigationLink("通知", value: SettingsPage.notificationAppearance)
-            }
-            Section {
                 AccentColorPicker(selection: $settings.accentColor)
+            } header: {
+                Text("見た目")
             } footer: {
                 if settings.accentColor.obscuresSelectedTab {
                     Text("iOS 26.0ではこのカラーを使用すると選択中のタブがほかのタブと区別しにくくなります。iOS 26.1以降での使用を推奨します。")
