@@ -371,11 +371,11 @@ struct AppearanceEditorTests {
         #expect(row[.reactionGlowIcons] != nil)
     }
 
-    /// 光っている行には、タイムラインと同じく区切り線を引かないので、区切り線の場所も示さない。
-    @Test func litRowHasNoSeparator() throws {
+    /// 光っている投稿にも、タイムラインと同じく区切り線を引くので、区切り線の場所も示す。
+    @Test func litRowHasSeparator() throws {
         let rows = layOutSamples(try makeSettings())
         let lit = try #require(rows.first { $0[.reactionGlow] != nil })
-        #expect(lit[.separatorLine] == nil)
+        #expect(lit[.separatorLine] != nil)
         #expect(AppearanceChoice.showsSeparators.highlight.locate(in: rows) != nil)
     }
 

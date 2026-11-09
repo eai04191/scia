@@ -72,10 +72,10 @@ final class AppearancePreviewView: UIView {
     }
 }
 
-// 返信でつながった行は、線が切れて見えないよう区切り線を引かない。光っている行も、光の下の端を区切りにする。
+// 返信でつながった行は、線が切れて見えないよう区切り線を引かない。
 extension PostContentConfiguration: AppearancePreviewConfiguration {
     var drawsPreviewSeparatorBelow: Bool {
-        !replyConnection.below && reactionGlow?.isLit != true
+        !replyConnection.below
     }
 
     func makePreviewRow() -> any AppearancePreviewRow {
@@ -87,7 +87,7 @@ extension PostContentView: AppearancePreviewRow {}
 
 extension NotificationContentConfiguration: AppearancePreviewConfiguration {
     var drawsPreviewSeparatorBelow: Bool {
-        reactionGlow?.isLit != true
+        true
     }
 
     func makePreviewRow() -> any AppearancePreviewRow {

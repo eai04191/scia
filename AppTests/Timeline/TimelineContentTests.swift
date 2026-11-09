@@ -257,6 +257,59 @@ struct TimelineContentTests {
         #expect(!footerTexts.contains(empty), "フッターにも「\(empty)」が出ています")
     }
 
+    /// 光っている投稿の下の区切り線は、光の手前のUIKitの線ではなく、光の下に敷いた線で全幅に引く。
+    @Test(arguments: [(false, true), (true, false), (true, true)])
+    func litStatusDrawsSeparatorUnderGlow(reblogged: Bool, favourited: Bool) throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        var statuses = StatusFactory.make(count: 3, startingAt: 100)
+        statuses[0] = statuses[0].settingReblogged(reblogged).settingFavourited(favourited)
+        harness.setStatuses(statuses)
+        harness.window.layoutIfNeeded()
+
+        let collectionView = harness.collectionView
+        let row = try #require(collectionView.visibleCells.min { $0.frame.minY < $1.frame.minY })
+        #expect(!Self.hasUIKitSeparator(below: row, in: collectionView))
+        let content = try #require(row.contentView as? any ReactionGlowHosting)
+        let line = try #require(content.reactionGlowSeparatorFrame)
+        #expect(line.minX > 0)
+        #expect(abs(line.maxX - row.bounds.width) < 0.5)
+        #expect(abs(line.maxY - row.bounds.height) < 0.5)
+    }
+
+    /// 光を取り消しても、消えていく間は光の下の線のままにし、消え終わってからUIKitの線に戻す。
+    @Test func separatorReturnsToUIKitAfterGlowFadesOut() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let statuses = StatusFactory.make(count: 3, startingAt: 100)
+        var shown = statuses
+        shown[0] = statuses[0].settingFavourited(true)
+        harness.setStatuses(shown)
+        harness.window.layoutIfNeeded()
+        let collectionView = harness.collectionView
+        let row = try #require(collectionView.visibleCells.min { $0.frame.minY < $1.frame.minY })
+        let content = try #require(row.contentView as? PostContentView)
+        content.reactionGlowView.frameSource = harness.frames
+
+        harness.setStatuses(statuses)
+        harness.window.layoutIfNeeded()
+        harness.frames.advance(by: 0.1)
+        harness.window.layoutIfNeeded()
+        #expect(content.reactionGlowSeparatorFrame != nil)
+        #expect(!Self.hasUIKitSeparator(below: row, in: collectionView))
+
+        harness.frames.runUntilStopped()
+        harness.window.layoutIfNeeded()
+        #expect(Self.hasUIKitSeparator(below: row, in: collectionView))
+        #expect(content.reactionGlowSeparatorFrame == nil)
+    }
+
+    private static func hasUIKitSeparator(below row: UICollectionViewCell, in collectionView: UICollectionView) -> Bool {
+        collectionView.subviews.contains { view in
+            !(view is UICollectionViewCell) && !view.isHidden && view.bounds.height <= 2 && view.bounds.width > 0 && abs(view.frame.maxY - row.frame.maxY) <= 2
+        }
+    }
+
     private static func labelTexts(in view: UIView) -> [String] {
         ((view as? UILabel)?.text.map { [$0] } ?? []) + view.subviews.flatMap(labelTexts)
     }

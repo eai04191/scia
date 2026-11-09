@@ -58,7 +58,7 @@ struct ReactionGlow: Equatable {
         }
     }
 
-    /// お気に入りかブーストのどちらかをしていて、光っている。光っている行には、タイムラインの区切り線を引かない。
+    /// お気に入りかブーストのどちらかをしていて、光っている。
     var isLit: Bool { isReblogged || isFavourited }
 
     /// 読み上げで、名前や本文に続けて読む状態。
@@ -104,10 +104,50 @@ extension ReactionGlow.Style {
     }
 }
 
+/// 光を描いている行の中身。光っている間の区切り線は、光の下に敷いて行の中身が描く。
+@MainActor
+protocol ReactionGlowHosting {
+    var isShowingReactionGlow: Bool { get }
+    func setReactionGlowSeparator(leading: CGFloat?)
+    var reactionGlowSeparatorFrame: CGRect? { get }
+}
+
 /// 行の中身の後ろに敷いて、下の端に置く。行の大きさには関わらない。
 ///
 /// 左から右への色と濃さは、1本のグラデーション（`ReactionGlowGradient`）で描く。縦に上へ薄くなる形は、それにマスクで付ける。
 final class ReactionGlowView: UIView {
+    /// 光が出ているか。消えていく途中も含む。
+    var isShowing: Bool {
+        levels.boost > 0 || levels.favourite > 0 || current?.isLit == true
+    }
+
+    /// 光の下に敷く区切り線。UIKitの線と同じ見た目にする。光がある範囲では光が手前になり、光が薄れるところで線が見えてくる。
+    private let separatorLine = UIView()
+    private var separatorLeading: CGFloat?
+    /// UIKitのリストの区切り線と同じ太さ。
+    private static let separatorHeight: CGFloat = 1
+
+    /// 光の下に敷く区切り線の左端を決める。nilなら線を引かない。
+    func setSeparator(leading: CGFloat?) {
+        separatorLeading = leading
+        updateSeparatorLine()
+    }
+
+    private func updateSeparatorLine() {
+        guard let container = superview, let separatorLeading, isShowing else {
+            separatorLine.isHidden = true
+            return
+        }
+        separatorLine.isHidden = false
+        let height = Self.separatorHeight
+        separatorLine.frame = CGRect(x: separatorLeading, y: container.bounds.maxY - height, width: max(container.bounds.width - separatorLeading, 0), height: height)
+    }
+
+    /// テストで、光の下に敷いた線を見るのに使う。
+    var separatorLineFrame: CGRect? {
+        separatorLine.isHidden ? nil : separatorLine.frame
+    }
+
 
     private let glow = CAGradientLayer()
     /// 下の端から離れるほど早く暗くなるよう、なめらかに落とす。直線で落とすと、上の端に境目が見える。
@@ -122,8 +162,15 @@ final class ReactionGlowView: UIView {
     /// ブーストとお気に入りの、いま描いている明るさ。点けたり消したりする途中は、0と1のあいだ。
     private var levels = Levels(boost: 0, favourite: 0)
     private var fade: Fade?
-    private lazy var ticker = FrameTicker(source: DisplayLinkFrameSource.shared) { [weak self] elapsed in
-        self?.step(elapsed) ?? false
+    var frameSource: any FrameSource = DisplayLinkFrameSource.shared {
+        didSet { ticker = makeTicker() }
+    }
+    private lazy var ticker = makeTicker()
+
+    private func makeTicker() -> FrameTicker {
+        FrameTicker(source: frameSource) { [weak self] elapsed in
+            self?.step(elapsed) ?? false
+        }
     }
 
     private struct Levels: Equatable {
@@ -197,6 +244,8 @@ final class ReactionGlowView: UIView {
     /// 行の中身の一番後ろに置く。行の高さを測るときに加わらないよう、制約は付けず、`layout(in:)`で枠を決める。
     func install(in container: UIView) {
         container.insertSubview(self, at: 0)
+        separatorLine.backgroundColor = .separator
+        container.insertSubview(separatorLine, belowSubview: self)
     }
 
     /// 行の中身を並べ終えたあとに呼び、下の端に置く。行より高い光は、行の上の端で切る。
@@ -204,6 +253,7 @@ final class ReactionGlowView: UIView {
     func layout(in bounds: CGRect, bottomMargin: CGFloat) {
         let height = min(glowHeight, bounds.height)
         frame = CGRect(x: bounds.minX, y: bounds.maxY - height, width: bounds.width, height: height)
+        updateSeparatorLine()
         if iconAreaHeight != bottomMargin {
             iconAreaHeight = bottomMargin
             render()
@@ -238,6 +288,7 @@ final class ReactionGlowView: UIView {
             if !ticker.isRunning { ticker.start() }
         }
         render()
+        updateSeparatorLine()
     }
 
     /// 「投稿の見た目」のプレビューで場所を示すための、光の全体（片方だけをした投稿なら、その別にも）、真ん中で2色を混ぜる幅（その幅が効く投稿だけ）、出ているアイコンの枠。`space`の座標で返す。光っていなければ空。
@@ -261,6 +312,12 @@ final class ReactionGlowView: UIView {
         return frames
     }
 
+    /// 消え終わったらUIKitの区切り線に戻すよう、リストのレイアウトに線を引き直させる。
+    private func redrawSeparators() {
+        let list = sequence(first: self as UIView) { $0.superview }.lazy.compactMap { $0 as? UICollectionView }.first
+        list?.collectionViewLayout.invalidateLayout()
+    }
+
     private func step(_ elapsed: CFTimeInterval) -> Bool {
         guard var fade else { return false }
         fade.elapsed += elapsed
@@ -273,6 +330,10 @@ final class ReactionGlowView: UIView {
         )
         self.fade = t < 1 ? fade : nil
         render()
+        updateSeparatorLine()
+        if t >= 1, fade.to.boost < fade.from.boost || fade.to.favourite < fade.from.favourite {
+            redrawSeparators()
+        }
         return t < 1
     }
 

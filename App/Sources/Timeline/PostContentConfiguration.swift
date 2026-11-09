@@ -281,7 +281,7 @@ final class PostContentView: UIView, UIContentView {
     private let nameLastBaselineGuide = UILayoutGuide()
     /// 名前の上の行の高さ。文字とブーストした人のアイコンの高いほうにする。アイコンを大きくしても、名前の行に重ならないようにするため。
     private let contextGuide = UILayoutGuide()
-    private let reactionGlowView = ReactionGlowView()
+    let reactionGlowView = ReactionGlowView()
     /// アイコンから上の行へ伸ばす線と、下の行へ伸ばす線。高さに影響しないよう、制約を使わず並べるたびに枠を決める。
     private let replyLineAbove = UIView()
     private let replyLineBelow = UIView()
@@ -668,8 +668,8 @@ final class PostContentView: UIView, UIContentView {
         if current.replyConnection.below {
             frames[.replyLineSlot] = replyLineBelow.isHidden ? line(x: avatarView.frame.midX, y: avatarView.frame.maxY, height: bounds.maxY - avatarView.frame.maxY) : [replyLineBelow.frame]
         }
-        // 返信でつながった行と光っている行には、タイムラインで区切り線を引かないので、示さない。
-        if !current.replyConnection.below, current.reactionGlow?.isLit != true {
+        // 返信でつながった行には、タイムラインで区切り線を引かないので、示さない。
+        if !current.replyConnection.below {
             frames[.separatorLine] = bar(x: 0, y: bounds.maxY - 1, width: bounds.width)
         }
         if current.hasHiddenLinkCard {
@@ -1069,4 +1069,10 @@ final class PostContentView: UIView, UIContentView {
             line.layer.cornerRadius = metrics.replyLineWidth / 2
         }
     }
+}
+
+extension PostContentView: ReactionGlowHosting {
+    var isShowingReactionGlow: Bool { reactionGlowView.isShowing }
+    func setReactionGlowSeparator(leading: CGFloat?) { reactionGlowView.setSeparator(leading: leading) }
+    var reactionGlowSeparatorFrame: CGRect? { reactionGlowView.separatorLineFrame }
 }

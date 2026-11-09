@@ -105,7 +105,7 @@ final class NotificationContentView: UIView, UIContentView {
     private var headerInteraction: ObjectInteraction?
     private let headerLabel = EmojiLabel()
     private let bodyView: PostBodyView
-    private let reactionGlowView = ReactionGlowView()
+    let reactionGlowView = ReactionGlowView()
     /// 誰が何をしたかの行の最後のベースライン。プレビューで、行の字面の下端を測るのに使う。
     private let headerLastBaselineGuide = UILayoutGuide()
     private var current: NotificationContentConfiguration
@@ -432,4 +432,10 @@ extension NotificationContentView {
             CGRect(x: left.maxX, y: left.minY, width: max(right.minX - left.maxX, 0), height: left.height)
         }
     }
+}
+
+extension NotificationContentView: ReactionGlowHosting {
+    var isShowingReactionGlow: Bool { reactionGlowView.isShowing }
+    func setReactionGlowSeparator(leading: CGFloat?) { reactionGlowView.setSeparator(leading: leading) }
+    var reactionGlowSeparatorFrame: CGRect? { reactionGlowView.separatorLineFrame }
 }

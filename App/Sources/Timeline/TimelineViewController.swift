@@ -179,6 +179,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private var lastScrollDirection: TimelineLoadTrigger.ScrollDirection?
     private(set) var contentState = ContentState.loaded
     private(set) var footerState = FooterState.idle
+    /// 光の下に敷く区切り線の左端。線を決めるのはセルを作る前なので、作ったセルに渡すために取っておく。
+    private var reactionGlowSeparatorLeadings: [ItemID: CGFloat] = [:]
     private(set) var unreadCount = 0
     /// スクロール位置を補正している間は、途中の表示を既読として報告しない。
     private var isRestoringAnchor = false
@@ -1049,6 +1051,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let followsTop = anchorID == nil && topID == nil && isAtTop && !isCovered && tuning.value(of: TuningCatalog.followsNewArrivalsAtTop)
         let newIDs = newEntries.map(\.id)
         entries = Dictionary(zip(newIDs, newEntries), uniquingKeysWith: { _, new in new })
+        reactionGlowSeparatorLeadings = reactionGlowSeparatorLeadings.filter { entries[$0.key] != nil }
         prunePostSelection()
         gapIDs = newEntries.compactMap { entry in
             if case .gap(let gap) = entry { gap.id } else { nil }
@@ -1963,7 +1966,6 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         configuration.headerMode = headerView == nil ? .none : .supplementary
         // ヘッダー画像をナビゲーションバーのすぐ下から置く。
         configuration.headerTopPadding = 0
-        // お気に入りやブーストで下の端が光っている行は、光の線を区切りにする。区切り線が光の線に重なると、光源が灰色に濁って見えるため。
         // 線で下の行とつながっている行も、区切り線を出さない。つながった行を1つの会話として見せるため。
         configuration.itemSeparatorHandler = { [weak self] indexPath, separator in
             var separator = separator
@@ -1971,6 +1973,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             guard self.settings.appearance.showsSeparators else {
                 separator.topSeparatorVisibility = .hidden
                 separator.bottomSeparatorVisibility = .hidden
+                self.drawSeparatorUnderReactionGlow(&separator, id: id, at: indexPath)
                 return separator
             }
             // 区切り線は行と行のあいだにだけ引き、1件目の上と最後の行の下には引かない。決まりはdocs/post-header-layout.mdにある。
@@ -1978,9 +1981,6 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                 separator.topSeparatorVisibility = .hidden
             }
             if self.dataSource.itemIdentifier(for: IndexPath(item: indexPath.item + 1, section: indexPath.section)) == nil {
-                separator.bottomSeparatorVisibility = .hidden
-            }
-            if let shown = self.status(for: id)?.displayed, shown.favourited || shown.reblogged {
                 separator.bottomSeparatorVisibility = .hidden
             }
             if self.replyConnections[id]?.below == true {
@@ -2005,6 +2005,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             if let next = self.dataSource.itemIdentifier(for: IndexPath(item: indexPath.item + 1, section: indexPath.section)), self.isSearchHeading(next) {
                 separator.bottomSeparatorVisibility = .hidden
             }
+            self.drawSeparatorUnderReactionGlow(&separator, id: id, at: indexPath)
             return separator
         }
         // 保留中の通知の行は、右へスワイプで受け入れ、左へスワイプで無視する。決まりはdocs/notification-filter.mdにある。
@@ -2079,6 +2080,20 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         return UISwipeActionsConfiguration(actions: [action])
     }
 
+    /// 光っている投稿の下の区切り線は、UIKitの線の代わりに、光の下に敷く線で引く。UIKitの線は光の手前に描かれ、光源に重なると灰色に濁るため。決まりはdocs/reaction-glow.mdにある。
+    /// 取り消した光が消えていく間も、光の下に敷いた線のままにする。
+    private func drawSeparatorUnderReactionGlow(_ separator: inout UIListSeparatorConfiguration, id: ItemID, at indexPath: IndexPath) {
+        let content = collectionView.cellForItem(at: indexPath)?.contentView as? any ReactionGlowHosting
+        let shown = status(for: id)?.displayed
+        let isLit = shown?.favourited == true || shown?.reblogged == true || content?.isShowingReactionGlow == true
+        let leading = isLit && separator.bottomSeparatorVisibility != .hidden ? separator.bottomSeparatorInsets.leading : nil
+        reactionGlowSeparatorLeadings[id] = leading
+        content?.setReactionGlowSeparator(leading: leading)
+        if isLit {
+            separator.bottomSeparatorVisibility = .hidden
+        }
+    }
+
     /// 区切り線を引き始める、行の左端からの長さ。行の本文の左端にする。
     func separatorLeadingInset(for entry: TimelineEntry) -> CGFloat {
         let margin = settings.rowMargins.leading
@@ -2142,6 +2157,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                 cell.accessories = []
             }
             FrameWork.measure("\(entry.rowKind.rawValue).configure") { self.configure(cell, for: entry, id: id) }
+            (cell.contentView as? any ReactionGlowHosting)?.setReactionGlowSeparator(leading: self.reactionGlowSeparatorLeadings[id])
             cell.sizingTrace.row = entry.rowKind
             cell.updateSizingParts(from: cell.contentConfiguration)
             cell.setSelectionMark(self.selectionMark(for: id))
