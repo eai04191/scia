@@ -12,11 +12,13 @@ argument-hint: "[番号]"
 
 ## 1. 借りる
 
-シミュレーターを触る直前（確かめ、録画、`make test`、`Tools/sim.sh shot`・`dump`の前）に、`Tools/sim.sh acquire`を走らせる。番号を指定されたら`Tools/sim.sh acquire 'Scia <番号>'`にする。
+シミュレーターを触る直前（確かめ、録画、`ONLY`を付けた`make test`、`Tools/sim.sh shot`・`dump`の前）に、`Tools/sim.sh acquire`を走らせる。番号を指定されたら`Tools/sim.sh acquire 'Scia <番号>'`にする。
+
+`SIM`も`ONLY`も付けない`make test`、`make check`、`make check-test`では借りない。入口が別のMacか手元の枠を選び、手元の枠で走るときは入口が借りて返すため（docs/test-dispatch.md）。
 
 - 空きがなければ、空くまで待つ。ユーザーには聞かない。540秒待っても空かなければ終了コード75で終わるので、もう一度走らせて待ち続ける。Bashのtimeoutは600000にする
 - 返した端末でも、ほかのスレッドが残したバックグラウンドの処理（`make test`、録画など）が走っていれば貸さない
-- 出力の最後の行が、借りた端末と状態になる（例: `Scia 2 ready`）。以後、シミュレーターのツールの`device`と`Tools/sim.sh`には、この端末を渡す。`make test`と`make sim-keyboard`は、借りている端末を自分で選ぶので`SIM`を渡さない。`shot`、`dump`、`reset`、`make test`は、借りていない端末には使えない
+- 出力の最後の行が、借りた端末と状態になる（例: `Scia 2 ready`）。以後、シミュレーターのツールの`device`と`Tools/sim.sh`には、この端末を渡す。`ONLY`を付けた`make test`と`make sim-keyboard`は、借りている端末を自分で選ぶので`SIM`を渡さない。`shot`、`dump`、`reset`、`ONLY`か`SIM`を付けた`make test`は、借りていない端末には使えない
 
 ## 2. 状態で分ける
 

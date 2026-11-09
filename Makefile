@@ -48,11 +48,11 @@ build: generate
 warnings: build
 	Tools/check-warnings.sh $(DERIVED_DATA) $(SIM_ARCH)
 
-## シミュレーター上でschemeのテストを実行する。SIMを省くと、このworktreeが借りている端末（Tools/sim.sh acquire）で走らせる
+## シミュレーター上でschemeのテストを実行する
 ## 貸し借りする端末（Scia 1〜）をSIMで指定するときは、このworktreeが借りている端末だけを受け付ける（Tools/sim.sh leased）
 ## 端末のiOSの版で初めて走らせたときは、UIKitの公開されていない作りに頼る部分のUIテスト（SciaSystemUITests）も走らせる（Tools/system-ui-check.sh）
 ## 通ったら、確かめた作業ツリーの中身を覚える
-## ONLYにテストの識別子（空白区切りで複数）を渡すと、それだけを走らせる。全部は走らせていないので、SciaSystemUITestsも走らせず、通っても中身を覚えない
+## ONLYにテストの識別子（空白区切りで複数）を渡すと、それだけを走らせる。手元で走り、SIMを省くとこのworktreeが借りている端末（Tools/sim.sh acquire）を使うので、先に借りる。全部は走らせていないので、SciaSystemUITestsも走らせず、通っても中身を覚えない
 ## 失敗時の診断の収集は止める。集めると、simctl diagnoseが応答を待って600秒のタイムアウトまで止まるため
 ## 例: make test
 ## 例: make test ONLY='SciaTests/LinkLabelTests SciaTests/TimelineNoticeTests/progressGainingDigitWidensWithAnimation()'
@@ -60,7 +60,7 @@ warnings: build
 TEST_TREE := $(DERIVED_DATA)/test-tree
 TEST_ARGS = -project $(PROJECT) -scheme $(SCHEME) -destination 'platform=iOS Simulator,name=$(SIM)' -derivedDataPath $(DERIVED_DATA) $(CACHE_XCCONFIG) -collect-test-diagnostics never
 ## 決めた端末をSIMに入れて呼び直す。テストの間ずっと、処理の引数に端末の名前が残り、Tools/sim.sh busyが使っている処理として見つけられるようにするため
-## SIMもONLYもなければ、テストを任せる別のMacと手元の、空いている枠で走らせる（docs/test-dispatch.md）。手元ではtest-here
+## SIMもONLYもなければ、テストを任せる別のMacと手元の、空いている枠で走らせるので、端末は借りなくてよい（docs/test-dispatch.md）。手元ではtest-here
 test:
 	@Tools/test-dispatch.sh dispatch test '$(SIM)' '$(ONLY)'
 
@@ -98,7 +98,7 @@ else
 endif
 
 ## シミュレーターのハードウェアキーボードを外してソフトウェアキーボードを出す（KEYBOARD=hardwareでつなぎ直す）
-## SIMを省くと、このworktreeが借りている端末で行う。端末の選び方はmake testと同じ
+## SIMを省くと、このworktreeが借りている端末で行う。端末の選び方はONLYを付けたmake testと同じ
 ## 例: make sim-keyboard
 KEYBOARD ?= software
 sim-keyboard:
