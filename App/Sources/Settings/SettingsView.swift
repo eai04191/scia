@@ -20,6 +20,7 @@ struct SettingsView: View {
     /// 謝辞の画面で、設定の画面を閉じて、ハンドルの人のプロフィールを開く。
     let openProfile: @MainActor (_ acct: String) -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.layoutDirection) private var layoutDirection
     /// 設定のトップの画面から重ねて開いた画面。
     @State private var path: [SettingsPage]
     /// 開いたときに「投稿の見た目」か「通知の見た目」の上に重ねておく分類の画面。一度重ねたら、戻ってまた開いても重ねないよう、消す。
@@ -158,6 +159,7 @@ struct SettingsView: View {
                 settings: settings,
                 menu: .statusMenu,
                 actionBar: .statusActionBar,
+                swipes: PostSwipeSettingsSection(leading: settings.postLeadingSwipeLayout, trailing: settings.postTrailingSwipeLayout),
                 toggles: SettingsToggleSection(
                     header: "アクションバーを出している投稿のメニュー",
                     toggles: [
@@ -175,6 +177,8 @@ struct SettingsView: View {
         case .mediaActions: ObjectActionsSettingsView(entity: .media, settings: settings, menu: .mediaMenu)
         case .statusMenu: MenuLayoutSettingsView(title: "投稿のメニュー", layout: $settings.statusMenuLayout)
         case .statusActionBar: MenuLayoutSettingsView(title: "アクションバー", layout: $settings.postActionBarLayout)
+        case .statusLeadingSwipe: MenuLayoutSettingsView(title: PostSwipeSettingsSection.title(of: .leading, in: layoutDirection), layout: $settings.postLeadingSwipeLayout)
+        case .statusTrailingSwipe: MenuLayoutSettingsView(title: PostSwipeSettingsSection.title(of: .trailing, in: layoutDirection), layout: $settings.postTrailingSwipeLayout)
         case .userMenu: MenuLayoutSettingsView(title: "ユーザーのメニュー", layout: $settings.userMenuLayout)
         case .linkMenu: MenuLayoutSettingsView(title: "リンクのメニュー", layout: $settings.linkMenuLayout)
         case .externalPostMenu: MenuLayoutSettingsView(title: "ほかのサービスの投稿のメニュー", layout: $settings.externalPostMenuLayout)

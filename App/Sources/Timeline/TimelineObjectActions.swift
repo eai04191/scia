@@ -192,6 +192,82 @@ extension TimelineViewController {
             didHide: { [weak self] in self?.menuDidHide() }
         )
     }
+
+    /// 投稿の行のスワイプで出すボタン。投稿のほかの行と、出せるボタンがない行ではnil。決まりはdocs/object-actions.mdの「投稿のスワイプ」にある。
+    /// ボタンを出せるかと今の名前は、アクションバーのボタンと同じく、組むだけで通信しない投稿のメニューの木で決める。押したら、タップに割り当てた1項目と同じ組み方で行う。
+    func postSwipe(at indexPath: IndexPath, side: PostSwipeSide) -> UISwipeActionsConfiguration? {
+        guard !isSelectingPosts, let id = itemID(at: indexPath), let entry = entry(for: id) else { return nil }
+        let status: Status
+        switch entry {
+        case .status(let rowStatus), .pinned(let rowStatus): status = rowStatus
+        default: return nil
+        }
+        let items = switch side {
+        case .leading: settings.postLeadingSwipeLayout.swipeItems
+        case .trailing: settings.postTrailingSwipeLayout.swipeItems
+        }
+        guard !items.isEmpty else { return nil }
+        let tree = offlineStatusMenuTree(for: status, id: id, canSelectText: selectableBody(for: id, statusID: status.displayed.id) != nil)
+        let actions = items.compactMap { item -> UIContextualAction? in
+            guard let button = swipeButton(for: item, entry: entry, id: id, tree: tree) else { return nil }
+            let action = UIContextualAction(style: button.isDestructive ? .destructive : .normal, title: button.title) { [weak self] _, sourceView, completion in
+                self?.performSwipeItem(item, id: id, from: sourceView)
+                // 削除のように行が消える操作も、確かめてからサーバーが受け付けて消すので、行はいったん元の位置に戻す。
+                completion(false)
+            }
+            action.image = UIImage(systemName: button.symbolName)
+            return action
+        }
+        guard !actions.isEmpty else { return nil }
+        return UISwipeActionsConfiguration(actions: actions)
+    }
+
+    /// スワイプのボタンの名前とアイコン。その投稿で出ないか押せなければnil。
+    private func swipeButton(for item: PostSwipeItem, entry: TimelineEntry, id: ItemID, tree: StatusMenuTree) -> PostSwipeButton? {
+        switch item {
+        case .menu:
+            guard tree.menu(groups: defaultStatusMenuGroups(for: id, status: Self.status(of: entry)), includesFollowRequest: false).root != nil else { return nil }
+            return PostSwipeButton(title: "メニュー", symbolName: item.symbolName)
+        case .actionBar:
+            guard !settings.appearance.showsActionBar, canShowActionBar(in: entry) else { return nil }
+            let title = openActionBarItemID == id ? "アクションバーを閉じる" : item.title
+            return PostSwipeButton(title: title, symbolName: item.symbolName)
+        case .status(let statusItem):
+            let root = tree.menu(groups: .single(statusItem), includesFollowRequest: false).root
+            switch MenuItemOutcome(singleItemMenu: root) {
+            case .unavailable:
+                return nil
+            case .perform:
+                // 1つの操作なら、メニューに出す今の名前とアイコン（「お気に入りを取り消す」など）にする。
+                guard let node = root?.flattenedChildren.first else { return nil }
+                return PostSwipeButton(title: node.title, symbolName: node.icon?.symbolName ?? item.symbolName, isDestructive: node.isDestructive)
+            case .submenu(let node):
+                return PostSwipeButton(title: node.title, symbolName: node.icon?.symbolName ?? item.symbolName)
+            case .menu:
+                return PostSwipeButton(title: item.title, symbolName: item.symbolName)
+            }
+        }
+    }
+
+    /// スワイプのボタンを押したときに、その操作を行う。メニューを出すものは、押したボタンの位置に出す。
+    private func performSwipeItem(_ item: PostSwipeItem, id: ItemID, from button: UIView) {
+        guard let entry = entry(for: id) else { return }
+        let point = CGPoint(x: button.bounds.midX, y: button.bounds.midY)
+        rowStatusTarget(.status, entry: entry, id: id, opening: Self.status(of: entry)).perform(action: item.action, in: button, at: point)
+    }
+}
+
+/// 投稿の行のどちらの側のスワイプか。先頭の側は右にスワイプ、末尾の側は左にスワイプで出す（右から左へ書く言語では逆）。
+enum PostSwipeSide {
+    case leading
+    case trailing
+}
+
+/// 投稿のスワイプの1つのボタンの見え方。
+private struct PostSwipeButton {
+    let title: String
+    let symbolName: String
+    var isDestructive = false
 }
 
 /// 保留中の通知の行。タップでその人からの通知を開き、長押しで「受け入れる」「無視」とユーザーのメニューを出す。

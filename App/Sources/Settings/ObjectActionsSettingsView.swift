@@ -13,8 +13,12 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
     let primary: Item
     /// アクションバーのボタンの並びの画面。アクションバーを出せる対象（投稿）でだけ渡し、渡すと「アクションバーを開く」も選べる。
     var actionBar: SettingsPage?
+    /// 左右のスワイプの並びの画面の入り口。投稿でだけ渡す。
+    var swipes: PostSwipeSettingsSection?
     /// メニューとアクションバーの入り口の下に置くスイッチの節。投稿では、アクションバーを出している投稿のメニューに何を出すかを置く。
     var toggles: SettingsToggleSection?
+
+    @Environment(\.layoutDirection) private var layoutDirection
 
     var body: some View {
         Form {
@@ -34,6 +38,12 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
                     if let actionBar {
                         NavigationLink("アクションバー", value: actionBar)
                     }
+                }
+            }
+            if let swipes {
+                Section {
+                    swipeRow(.leading, swipes: swipes)
+                    swipeRow(.trailing, swipes: swipes)
                 }
             }
             if let toggles {
@@ -74,6 +84,21 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
         .pickerStyle(.navigationLink)
     }
 
+    /// iOSの設定アプリと同じく、名前と今の値を並べ、シェブロンで並びの画面へ入る。
+    private func swipeRow(_ side: PostSwipeSide, swipes: PostSwipeSettingsSection) -> some View {
+        NavigationLink(value: side == .leading ? SettingsPage.statusLeadingSwipe : SettingsPage.statusTrailingSwipe) {
+            // 値が長くても、名前の右の1行に収めて末尾を省く。`LabeledContent`は値が長いと名前の下へ回すため、並べて組む。
+            HStack {
+                Text(PostSwipeSettingsSection.title(of: side, in: layoutDirection))
+                    .layoutPriority(1)
+                Spacer()
+                Text(swipes.summary(of: side))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
     private func option(_ item: Item) -> some View {
         Label(item.title, systemImage: item.symbolName).tag(ObjectAction<Item>.item(item))
     }
@@ -104,8 +129,31 @@ extension ObjectEntity {
 }
 
 extension ObjectActionsSettingsView where Item: ObjectActionItem {
-    init(entity: ObjectEntity<Item>, settings: AppSettings, menu: SettingsPage?, actionBar: SettingsPage? = nil, toggles: SettingsToggleSection? = nil) {
-        self.init(title: entity.title, actions: entity.actions(in: settings), menu: menu, primary: Item.primaryItem, actionBar: actionBar, toggles: toggles)
+    init(entity: ObjectEntity<Item>, settings: AppSettings, menu: SettingsPage?, actionBar: SettingsPage? = nil, swipes: PostSwipeSettingsSection? = nil, toggles: SettingsToggleSection? = nil) {
+        self.init(title: entity.title, actions: entity.actions(in: settings), menu: menu, primary: Item.primaryItem, actionBar: actionBar, swipes: swipes, toggles: toggles)
+    }
+}
+
+/// 投稿の操作の画面の、左右のスワイプの行。決まりはdocs/object-actions.mdの「設定画面」にある。
+struct PostSwipeSettingsSection {
+    let leading: MenuLayout<PostSwipeItem>
+    let trailing: MenuLayout<PostSwipeItem>
+
+    /// iOSのメールの「スワイプオプション」と同じ名前。先頭の側は、左から右へ書く言語では右にスワイプして出す。
+    static func title(of side: PostSwipeSide, in direction: LayoutDirection) -> String {
+        switch (side, direction) {
+        case (.leading, .leftToRight), (.trailing, .rightToLeft): "右にスワイプ"
+        default: "左にスワイプ"
+        }
+    }
+
+    /// 行の値。割り当てた項目の名前を並べる。
+    func summary(of side: PostSwipeSide) -> String {
+        let items = switch side {
+        case .leading: leading.swipeItems
+        case .trailing: trailing.swipeItems
+        }
+        return items.isEmpty ? "なし" : items.map(\.title).formatted(.list(type: .and, width: .narrow))
     }
 }
 

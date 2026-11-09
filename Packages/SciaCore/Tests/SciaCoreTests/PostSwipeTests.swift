@@ -44,6 +44,22 @@ struct PostSwipeTests {
         #expect(relaunched.postTrailingSwipeLayout.swipeItems == [.menu, .status(.reply)])
     }
 
+    /// タップ、長押し、どちらのスワイプでも、「アクションバーを開く」を割り当てていれば事前に準備する。
+    @Test func actionBarGestureIncludesSwipes() {
+        let settings = AppSettings(defaults: TestScratch.defaults("PostSwipeTests"))
+        #expect(!settings.opensActionBarByGesture)
+        settings.postLeadingSwipeLayout = layout(showing: [.actionBar])
+        #expect(settings.opensActionBarByGesture)
+        settings.postLeadingSwipeLayout = PostSwipeItem.defaultLayout
+        settings.postTrailingSwipeLayout = layout(showing: [.actionBar])
+        #expect(settings.opensActionBarByGesture)
+        settings.postTrailingSwipeLayout = PostSwipeItem.defaultLayout
+        var actions = settings.statusActions
+        actions.longPress = .actionBar
+        settings.statusActions = actions
+        #expect(settings.opensActionBarByGesture)
+    }
+
     /// `shown`を、その順で並びの先頭に出す。残りは既定の順で隠したまま後ろに置く。
     private func layout(showing shown: [PostSwipeItem]) -> MenuLayout<PostSwipeItem> {
         let rest = PostSwipeItem.defaultLayout.elements.filter { element in

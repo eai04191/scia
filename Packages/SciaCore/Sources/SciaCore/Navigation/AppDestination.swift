@@ -326,6 +326,9 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     case statusMenu = "status-menu"
     /// 投稿のアクションバーのボタンの並び。決まりはdocs/post-action-bar.mdにある。
     case statusActionBar = "status-action-bar"
+    /// 投稿を右にスワイプ（行の先頭の側）と左にスワイプ（末尾の側）して出すボタンの並び。決まりはdocs/object-actions.mdの「投稿のスワイプ」にある。
+    case statusLeadingSwipe = "status-leading-swipe"
+    case statusTrailingSwipe = "status-trailing-swipe"
     case userMenu = "user-menu"
     case linkMenu = "link-menu"
     case externalPostMenu = "external-post-menu"
@@ -351,7 +354,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
         case .statusActions, .notificationActions, .userActions, .linkActions, .externalPostActions, .hashtagActions, .mediaActions,
              .reactionActions, .profileTextMenu:
             [.interaction, self]
-        case .statusMenu, .statusActionBar: [.interaction, .statusActions, self]
+        case .statusMenu, .statusActionBar, .statusLeadingSwipe, .statusTrailingSwipe: [.interaction, .statusActions, self]
         case .userMenu: [.interaction, .userActions, self]
         case .linkMenu: [.interaction, .linkActions, self]
         case .externalPostMenu: [.interaction, .externalPostActions, self]

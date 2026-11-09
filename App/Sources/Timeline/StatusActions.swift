@@ -111,7 +111,7 @@ extension TimelineViewController {
 
     /// 設定の並びで組む投稿のメニューの並び。アクションバーを出している投稿のメニューでは、設定に従って、アクションバーに並べた項目とボタンの長押しで出す項目を、押せないものも含めて除く（docs/post-action-bar.mdの「ボタン」）。並びを渡して組むメニュー（ほかのメニューの中のサブメニュー、割り当てた1項目）は、ここを通らないので除かない。
     /// 引用の囲みのメニューは、囲みのある投稿の`id`で引用元の投稿について組むので、メニューの投稿がその投稿そのものでなければ除かない。アクションバーは引用元への操作ではないため。
-    private func defaultStatusMenuGroups(for id: ItemID, status: Status?) -> MenuLayout<StatusMenuItem>.Groups {
+    func defaultStatusMenuGroups(for id: ItemID, status: Status?) -> MenuLayout<StatusMenuItem>.Groups {
         let groups = settings.statusMenuLayout.groups
         guard let status, self.status(for: id)?.id == status.id, showsActionBar(itemID: id, shown: status.displayed) else { return groups }
         let removed = settings.postActionBarLayout.itemsRemovedFromMenu(

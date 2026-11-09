@@ -160,6 +160,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 直近の読み込みに失敗したギャップと、その理由。行の中で読めなかったことを知らせる。
     private var gapFailures: [String: ErrorPresentation] = [:]
     private(set) var isShowingMenu = false
+    private var swipeCloseTicker: FrameTicker?
     /// メニューを出している間に届いた並びの更新。閉じたときに反映する。
     private var heldEntries: HeldEntries?
     /// メニューを出している間に求められた描き直し。
@@ -1020,8 +1021,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// - Parameter animatesChanges: 使う人の操作の結果として、足す、消す、並べ替えるをどれも動きで見せる。動かせなければ`keepsOffset`などの指定どおりに置き換える。
     private func updateEntries(_ newEntries: [TimelineEntry], keeping anchorID: ItemID?, placingAtTop topID: ItemID?, keepsOffset: Bool, animatesRemoval: Bool, animatesChanges: Bool, keepingRowContentsOf base: [TimelineEntry]?) {
-        guard !isShowingMenu else {
-            // 後の呼び出しの並びが新しい。基準は、メニューが閉じたときに最後に指定されたものを使う。
+        // 閉じ終えていても、溜めた分を反映する前は溜める。先に反映すると、あとで古い溜めた分で上書きするため。
+        guard !isShowingMenu, swipeCloseTicker == nil, !isRowClosingSwipe else {
+            // 後の呼び出しの並びが新しい。基準は、溜めるのをやめるときに最後に指定されたものを使う。
             heldEntries = HeldEntries(
                 entries: newEntries,
                 anchorID: anchorID ?? heldEntries?.anchorID,
@@ -1031,6 +1033,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                 animatesRemoval: heldEntries == nil && animatesRemoval,
                 animatesChanges: heldEntries == nil && animatesChanges
             )
+            waitForSwipeToClose()
             return
         }
         let previous = entries
@@ -1257,10 +1260,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         guard isShowingMenu else { return }
         isShowingMenu = false
         logger.info("menu did hide: applying held updates entries=\(self.heldEntries != nil, privacy: .public) reconfigure=\(self.heldReconfigureIDs.count, privacy: .public)")
-        if let held = heldEntries {
-            heldEntries = nil
-            updateEntries(held.entries, keeping: held.anchorID, placingAtTop: held.topID, keepsOffset: held.keepsOffset, animatesRemoval: held.animatesRemoval, animatesChanges: held.animatesChanges, keepingRowContentsOf: nil)
-        }
+        applyHeldEntries()
         let existing = Set(dataSource.snapshot().itemIdentifiers)
         let reconfigureIDs = heldReconfigureIDs.intersection(existing)
         heldReconfigureIDs.removeAll()
@@ -1277,6 +1277,39 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             }
         }
         reportInteractionSettled()
+    }
+
+    private func applyHeldEntries() {
+        guard let held = heldEntries else { return }
+        heldEntries = nil
+        updateEntries(held.entries, keeping: held.anchorID, placingAtTop: held.topID, keepsOffset: held.keepsOffset, animatesRemoval: held.animatesRemoval, animatesChanges: held.animatesChanges, keepingRowContentsOf: nil)
+    }
+
+    /// スワイプのボタンを閉じる途中の行があるか。閉じる途中の行は、並びが変わっても閉じ終えるまで前の縦の位置に描かれ、本来の位置に穴が開く。
+    /// UIKitはこの動きをレイヤーの`animationKeys`に出さないので、描かれている位置と本来の位置の横のずれで見分ける。
+    private var isRowClosingSwipe: Bool {
+        collectionView.visibleCells.contains { cell in
+            guard let shown = cell.layer.presentation() else { return false }
+            return abs(shown.position.x - cell.layer.position.x) > 0.001
+        }
+    }
+
+    /// スワイプのボタンを閉じ終えたら、溜めていた並びを反映する。メニューを出している間は、閉じたときに反映するので待たない。
+    private func waitForSwipeToClose() {
+        guard !isShowingMenu, swipeCloseTicker == nil else { return }
+        let ticker = FrameTicker(source: frameSource) { [weak self] _ in
+            guard let self else { return false }
+            guard isRowClosingSwipe, !isShowingMenu else {
+                swipeCloseTicker = nil
+                if !isShowingMenu {
+                    applyHeldEntries()
+                }
+                return false
+            }
+            return true
+        }
+        swipeCloseTicker = ticker
+        ticker.start()
     }
 
     /// スクロールやメニューの操作が終わったことを知らせる。溜めていた新着の挿入と、既読の位置の保存はここから始まる。
@@ -1975,13 +2008,15 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             return separator
         }
         // 保留中の通知の行は、右へスワイプで受け入れ、左へスワイプで無視する。決まりはdocs/notification-filter.mdにある。
+        // 投稿の行は、設定で割り当てた項目を出す。決まりはdocs/object-actions.mdの「投稿のスワイプ」にある。
         configuration.leadingSwipeActionsConfigurationProvider = { [weak self] indexPath in
             guard self?.isAppearancePreview == false else { return nil }
-            return self?.notificationRequestSwipe(at: indexPath, .accept)
+            return self?.notificationRequestSwipe(at: indexPath, .accept) ?? self?.postSwipe(at: indexPath, side: .leading)
         }
         configuration.trailingSwipeActionsConfigurationProvider = { [weak self] indexPath in
             guard self?.isAppearancePreview == false else { return nil }
             return self?.notificationRequestSwipe(at: indexPath, .dismiss) ?? self?.accountRemovalSwipe(at: indexPath) ?? self?.recentSearchSwipe(at: indexPath)
+                ?? self?.postSwipe(at: indexPath, side: .trailing)
         }
         return UICollectionViewCompositionalLayout { _, environment in
             let section = NSCollectionLayoutSection.list(using: configuration, layoutEnvironment: environment)
@@ -2483,7 +2518,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
-    /// 項目を出せるかを決めるための、投稿のメニューの木。アクションバーのボタンで使う。
+    /// 項目を出せるかや今の名前を決めるための、投稿のメニューの木。アクションバーのボタンと投稿のスワイプのボタンで使う。
     /// 組むだけで通信しない。メニューを出すときと違い、メニューに出る人の関係は読み直さず、カスタム絵文字の画像も読まない。
     func offlineStatusMenuTree(for status: Status, id: ItemID, canSelectText: Bool) -> StatusMenuTree {
         var tree = statusMenuTree(status: status, notification: nil, id: id, canSelectText: canSelectText)
@@ -2522,15 +2557,12 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 引き出しのアクションバーを、初めて開く前に1つ組んでおいたか。
     private var hasPreparedActionBar = false
 
-    /// タップか長押しに「アクションバーを開く」を割り当てていれば、タイムラインを出したあとに、見えている投稿のアクションバーを1つ組んで捨てる。
+    /// タップか長押しかスワイプに「アクションバーを開く」を割り当てていれば、タイムラインを出したあとに、見えている投稿のアクションバーを1つ組んで捨てる。
     /// 起動して初めて開くときは、アクションバーの部品と記号の画像を初めて作り、投稿のメニューの木も初めて組むので、押してから最初のコマまでが2回目より大きく遅れ、
     /// 動き始めのコマが飛んで見えた（シミュレーターで、初めては73ミリ秒、2回目は6ミリ秒）。先に組んでおけば、初めて開くときも2回目と同じになる。
     /// いつも出す設定では、投稿を組むときにアクションバーも組むので、ここでは組まない。
     private func prepareActionBarIfNeeded() {
-        let actions = settings.statusActions
-        guard !hasPreparedActionBar, !isAppearancePreview, !settings.appearance.showsActionBar,
-              actions.tap == .actionBar || actions.longPress == .actionBar
-        else { return }
+        guard !hasPreparedActionBar, !isAppearancePreview, !settings.appearance.showsActionBar, settings.opensActionBarByGesture else { return }
         hasPreparedActionBar = true
         Task(.withoutRequests) { @MainActor [weak self] in
             guard let self else { return }

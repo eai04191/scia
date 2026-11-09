@@ -66,6 +66,15 @@ public enum PostSwipeItem: Hashable, Sendable, MenuItemKind, MenuItemPresentable
         }
     }
 
+    /// ボタンを押したときに行う操作。タップや長押しに割り当てた操作と同じ組み方で行う。
+    public var action: ObjectAction<StatusMenuItem> {
+        switch self {
+        case .status(let item): .item(item)
+        case .menu: .menu
+        case .actionBar: .actionBar
+        }
+    }
+
     public static var mainSectionTitle: String { "ボタン" }
     public static var mainSectionNote: String? { "オンにした項目を、上から順に画面の端の側から並べます。" }
     /// スワイプの並びには、区切り線と「その他」の境目を置かない。

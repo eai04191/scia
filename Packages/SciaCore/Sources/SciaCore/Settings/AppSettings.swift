@@ -348,6 +348,12 @@ public final class AppSettings {
         didSet { defaults.set(postTrailingSwipeLayout.tokens, forKey: Keys.postTrailingSwipeLayout) }
     }
 
+    /// 投稿のタップ、長押し、スワイプのどれかに「アクションバーを開く」を割り当てているか。
+    public var opensActionBarByGesture: Bool {
+        statusActions.tap == .actionBar || statusActions.longPress == .actionBar
+            || postLeadingSwipeLayout.swipeItems.contains(.actionBar) || postTrailingSwipeLayout.swipeItems.contains(.actionBar)
+    }
+
     /// アクションバーを出している投稿のメニューに、アクションバーに並べた項目も出すか。決まりはdocs/post-action-bar.mdにある。
     public var showsActionBarItemsInMenu: Bool {
         didSet { defaults.set(showsActionBarItemsInMenu, forKey: Keys.showsActionBarItemsInMenu) }

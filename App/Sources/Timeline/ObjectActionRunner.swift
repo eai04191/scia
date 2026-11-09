@@ -122,7 +122,7 @@ struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable, Command>: Obje
         perform(action: actions[trigger], in: view, at: point)
     }
 
-    /// 選んだ操作を行う。
+    /// 選んだ操作を行う。タップと長押しに割り当てた操作と、投稿のスワイプのボタンで使う。
     func perform(action: ObjectAction<Item>, in view: UIView, at point: CGPoint) {
         switch action {
         case .menu:
