@@ -29,6 +29,7 @@ public enum Linter {
         .timelineStoreWithoutTester,
         .iosWording,
         .exactCountWait,
+        .advanceAfterSleeperCount,
     ]
 
     /// `path`（リポジトリのルートからの相対パス）の`source`を、当てはまる規則で調べる。

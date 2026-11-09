@@ -22,7 +22,7 @@ extension Rule {
     )
 }
 
-private extension FunctionCallExprSyntax {
+extension FunctionCallExprSyntax {
     /// 待つ条件を渡した閉包。失敗に添える状態（`state:`）は条件ではないので除く
     var conditionClosures: [ClosureExprSyntax] {
         let arguments = arguments.filter { $0.label?.text != "state" }.compactMap { $0.expression.as(ClosureExprSyntax.self) }
