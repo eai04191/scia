@@ -16,7 +16,7 @@ struct InAppBrowserTests {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let root = harness.viewController
-        let browser = InAppBrowser()
+        let browser = InAppBrowser(tuning: .withoutBrowserMotion())
         browser.open(try #require(URL(string: "https://example.com/1")), from: root)
         try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
         let first = try #require(root.presentedViewController)
@@ -40,7 +40,7 @@ struct InAppBrowserTests {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let root = harness.viewController
-        let browser = InAppBrowser()
+        let browser = InAppBrowser(tuning: .withoutBrowserMotion())
         browser.open(try #require(URL(string: "https://example.com/1")), from: root)
         try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
         let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
@@ -57,7 +57,7 @@ struct InAppBrowserTests {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let root = harness.viewController
-        let browser = InAppBrowser(tuning: TuningStore(defaults: nil))
+        let browser = InAppBrowser(tuning: .withoutBrowserMotion())
         browser.open(try #require(URL(string: "https://example.com/1")), from: root)
         try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
         let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
@@ -80,7 +80,7 @@ struct InAppBrowserTests {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let root = harness.viewController
-        let tuning = TuningStore(defaults: nil)
+        let tuning = TuningStore.withoutBrowserMotion()
         tuning.setValue(0, for: TuningCatalog.inAppBrowserBarGrabHeight)
         let browser = InAppBrowser(tuning: tuning)
         browser.open(try #require(URL(string: "https://example.com/1")), from: root)

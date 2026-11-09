@@ -1,3 +1,4 @@
+import SciaCore
 import SciaTesting
 import Testing
 import UIKit
@@ -28,5 +29,14 @@ extension UIViewController {
     func dismissForTesting(sourceLocation: SourceLocation = #_sourceLocation) async throws {
         dismiss(animated: false)
         try await waitUntil({ presentingViewController == nil && !isBeingDismissed }, sourceLocation: sourceLocation)
+    }
+}
+
+extension TuningStore {
+    /// アプリ内のSafariのシートを動かさずに出すチューニング。実際の時間で動かすと、動きの終わりを待つテストがテスト用のMacで終わらない。
+    static func withoutBrowserMotion() -> TuningStore {
+        let tuning = TuningStore(defaults: nil)
+        tuning.setValue(0, for: TuningCatalog.inAppBrowserDockDuration)
+        return tuning
     }
 }

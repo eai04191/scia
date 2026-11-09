@@ -163,12 +163,12 @@ extension InAppBrowserSheet: UIViewControllerTransitioningDelegate {
 
     /// Safariは動きなしで出すので、シートの動きだけを持つ（`presentSafari`）。
     func animationController(forPresented presented: UIViewController, presenting: UIViewController, source: UIViewController) -> (any UIViewControllerAnimatedTransitioning)? {
-        presented === self ? InAppBrowserSheetTransition(isPresenting: true, duration: configuration.duration) : nil
+        presented === self ? InAppBrowserSheetTransition(isPresenting: true, duration: configuration.duration()) : nil
     }
 
     /// Safariの×で閉じるときは、Safariだけを閉じず、シートごと閉じる。Safariだけを閉じると、帯だけの空のシートが残るため。
     func animationController(forDismissed dismissed: UIViewController) -> (any UIViewControllerAnimatedTransitioning)? {
-        if dismissed === self { return InAppBrowserSheetTransition(isPresenting: false, duration: configuration.duration) }
+        if dismissed === self { return InAppBrowserSheetTransition(isPresenting: false, duration: configuration.duration()) }
         guard dismissed === safari else { return nil }
         return SheetClosingTransition(sheet: self)
     }

@@ -95,7 +95,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
     private func makeSheet(safari: SFSafariViewController) -> InAppBrowserSheet {
         let configuration = InAppBrowserPresentationController.Configuration(
             cornerRadius: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserDockCornerRadius)),
-            duration: tuning.value(of: TuningCatalog.inAppBrowserDockDuration),
+            duration: { [tuning] in tuning.value(of: TuningCatalog.inAppBrowserDockDuration) },
             maximumWidth: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserSheetMaximumWidth)),
             maximumDimAlpha: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserSheetDimAlpha)),
             snapDwell: .seconds(tuning.value(of: TuningCatalog.inAppBrowserSnapDwell)),

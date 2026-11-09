@@ -8,7 +8,7 @@ import UIKit
 final class InAppBrowserPresentationController: UIPresentationController {
     struct Configuration {
         var cornerRadius: CGFloat
-        var duration: TimeInterval
+        var duration: @MainActor () -> TimeInterval
         var maximumWidth: CGFloat
         var maximumDimAlpha: CGFloat
         /// 指がこの秒数だけ`snapTolerance`の範囲にとどまったら、スナップ点を作る。
@@ -187,7 +187,8 @@ final class InAppBrowserPresentationController: UIPresentationController {
             isMoving = false
             settle()
         }
-        guard animated, configuration.duration > 0 else {
+        let duration = configuration.duration()
+        guard animated, duration > 0 else {
             isMoving = false
             UIView.performStoppingSmoothAnimations(changes)
             finish()
@@ -196,11 +197,11 @@ final class InAppBrowserPresentationController: UIPresentationController {
         isMoving = true
         let distance = target.minY - view.frame.minY
         guard velocity != 0, distance != 0 else {
-            UIView.animateSmoothly(duration: configuration.duration, changes: changes, completion: finish)
+            UIView.animateSmoothly(duration: duration, changes: changes, completion: finish)
             return
         }
         let unitVelocity = max(-20, min(20, velocity / distance))
-        UIView.animate(.interpolatingSpring(duration: configuration.duration, bounce: 0, initialVelocity: unitVelocity), changes: changes, completion: finish)
+        UIView.animate(.interpolatingSpring(duration: duration, bounce: 0, initialVelocity: unitVelocity), changes: changes, completion: finish)
     }
 
     /// シートが止まったら、Safariのビューの高さを決める。伏せた段では中くらいの高さのままにして、Safariの下のツールバーをシートの下へはみ出させる。
