@@ -109,7 +109,7 @@ final class TextReplacementTransition {
                 // 大きさは最初に決める。段落の文字も、アクションバーや下の投稿と同じ時刻に新しい位置へ動かす。
                 let offset = slot.oldTargetY - old.rect.minY
                 if abs(offset) > 0.5 {
-                    let move = TimelineViewController.rowSpring(keyPath: "position", duration: shiftDuration)
+                    let move = CASpringAnimation.rowSpring(keyPath: "position", duration: shiftDuration)
                     move.isAdditive = true
                     move.fromValue = CGPoint(x: 0, y: -offset)
                     move.toValue = CGPoint.zero
@@ -129,7 +129,7 @@ final class TextReplacementTransition {
                     appear.beginTime = begin
                     appear.fillMode = .backwards
                     layer.add(appear, forKey: "fade")
-                    let move = TimelineViewController.rowSpring(keyPath: "position.y", duration: wordDuration)
+                    let move = CASpringAnimation.rowSpring(keyPath: "position.y", duration: wordDuration)
                     move.fromValue = layer.position.y + rise
                     move.toValue = layer.position.y
                     move.beginTime = begin
@@ -141,11 +141,11 @@ final class TextReplacementTransition {
         }
         addBars(to: overlay, image: newImage, imageSize: newSize, scale: scale, label: label)
 
-        let settling = TimelineViewController.rowSpring(keyPath: "position", duration: shiftDuration).settlingDuration
+        let settling = CASpringAnimation.rowSpring(keyPath: "position", duration: shiftDuration).settlingDuration
         let timer = CABasicAnimation(keyPath: "opacity")
         timer.fromValue = 1
         timer.toValue = 1
-        let wordSettling = TimelineViewController.rowSpring(keyPath: "position.y", duration: wordDuration).settlingDuration
+        let wordSettling = CASpringAnimation.rowSpring(keyPath: "position.y", duration: wordDuration).settlingDuration
         timer.duration = max(Self.erasingEnd(duration: duration, fadeWidth: fadeWidth) + wordSettling, settling)
         timer.delegate = Completion { [weak self, weak overlay] in
             guard let self, let overlay, self.overlay === overlay else { return }
@@ -186,10 +186,10 @@ final class TextReplacementTransition {
             overlay.addSublayer(layer)
             guard oldBars.count == bars.count, oldBars[index] != bar else { continue }
             let from = oldBars[index]
-            let resize = TimelineViewController.rowSpring(keyPath: "bounds", duration: shiftDuration)
+            let resize = CASpringAnimation.rowSpring(keyPath: "bounds", duration: shiftDuration)
             resize.fromValue = CGRect(origin: .zero, size: from.size)
             resize.toValue = layer.bounds
-            let move = TimelineViewController.rowSpring(keyPath: "position", duration: shiftDuration)
+            let move = CASpringAnimation.rowSpring(keyPath: "position", duration: shiftDuration)
             move.fromValue = CGPoint(x: from.midX, y: from.midY)
             move.toValue = layer.position
             layer.add(resize, forKey: "resize")

@@ -805,20 +805,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 足し合わせる行の動きに付ける名前を、重ねても取り替えないよう分ける。
     private var rowShiftCount = 0
 
-    /// 行を動かすスプリング。SwiftUIの`.smooth(duration:)`と同じく、バウンスなしで`duration`を体感の長さにする。
-    /// 止まるまでは`duration`より長くかかるので、動きの長さ（`duration`）は止まるまでの時間にする。
-    static func rowSpring(keyPath: String, duration: TimeInterval) -> CASpringAnimation {
-        let spring = CASpringAnimation(perceptualDuration: duration, bounce: 0)
-        spring.keyPath = keyPath
-        spring.duration = spring.settlingDuration
-        return spring
-    }
-
     /// 層を、`shift`だけ前の位置から今の位置へ動かす。前の動きの途中なら、その動きは足し合わせたまま続く。動かしたらtrueを返す。
     @discardableResult
     private func shiftRow(_ layer: CALayer, by shift: CGFloat, duration: TimeInterval) -> Bool {
         guard abs(shift) > 0.5 else { return false }
-        let move = Self.rowSpring(keyPath: "position", duration: duration)
+        let move = CASpringAnimation.rowSpring(keyPath: "position", duration: duration)
         move.isAdditive = true
         move.fromValue = CGPoint(x: 0, y: -shift)
         move.toValue = CGPoint.zero
@@ -844,7 +835,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         mask.anchorPoint = .zero
         mask.frame = cell.layer.bounds
         CATransaction.commit()
-        let grow = Self.rowSpring(keyPath: "bounds.size.height", duration: duration)
+        let grow = CASpringAnimation.rowSpring(keyPath: "bounds.size.height", duration: duration)
         grow.fromValue = from
         grow.toValue = newHeight
         grow.delegate = RowShiftCompletion { [weak cell, weak mask] in
@@ -870,7 +861,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let remove = CABasicAnimation(keyPath: "opacity")
         remove.fromValue = 1
         remove.toValue = 1
-        remove.duration = Self.rowSpring(keyPath: "position", duration: duration).settlingDuration
+        remove.duration = CASpringAnimation.rowSpring(keyPath: "position", duration: duration).settlingDuration
         remove.delegate = RowShiftCompletion { snapshot.removeFromSuperview() }
         snapshot.layer.add(remove, forKey: "rowShiftEnd")
     }
@@ -2650,7 +2641,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         mask.anchorPoint = .zero
         mask.frame = bar.layer.bounds
         CATransaction.commit()
-        let grow = Self.rowSpring(keyPath: "bounds.size.height", duration: duration)
+        let grow = CASpringAnimation.rowSpring(keyPath: "bounds.size.height", duration: duration)
         grow.fromValue = 0
         grow.toValue = bar.bounds.height
         grow.delegate = RowShiftCompletion { [weak bar, weak mask] in
@@ -2693,7 +2684,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         mask.anchorPoint = .zero
         mask.frame = CGRect(x: 0, y: 0, width: cell.bounds.width, height: newHeight)
         CATransaction.commit()
-        let shrink = Self.rowSpring(keyPath: "bounds.size.height", duration: duration)
+        let shrink = CASpringAnimation.rowSpring(keyPath: "bounds.size.height", duration: duration)
         shrink.fromValue = oldHeight
         shrink.toValue = newHeight
         shrink.delegate = RowShiftCompletion { [weak cell, weak snapshot] in

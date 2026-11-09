@@ -742,7 +742,7 @@ final class PostBodyView: UIView {
         for (view, oldMinY) in views {
             let shift = view.frame.minY - oldMinY
             guard view.superview === self, abs(shift) > 0.5 else { continue }
-            let move = TimelineViewController.rowSpring(keyPath: "position", duration: duration)
+            let move = CASpringAnimation.rowSpring(keyPath: "position", duration: duration)
             move.isAdditive = true
             move.fromValue = CGPoint(x: 0, y: -shift)
             move.toValue = CGPoint.zero

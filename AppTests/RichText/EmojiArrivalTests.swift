@@ -70,7 +70,7 @@ struct EmojiArrivalTests {
         #expect(animated.isHidden, "動いている途中に出し直された層を隠していません")
 
         // 動きはスプリングなので、体感の長さ（0.25秒）より長く、止まるまで続く。
-        try await clock.advance(by: TimelineViewController.rowSpring(keyPath: "position", duration: 0.25).settlingDuration + 0.05)
+        try await clock.advance(by: CASpringAnimation.rowSpring(keyPath: "position", duration: 0.25).settlingDuration + 0.05)
         #expect(!animated.isHidden)
         #expect(!arrival.isRunning)
         #expect(label.layer.contentsRect == CGRect(x: 0, y: 0, width: 1, height: 1))

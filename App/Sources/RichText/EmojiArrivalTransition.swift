@@ -134,7 +134,7 @@ final class EmojiArrivalTransition {
             }
             if piece.offset != .zero {
                 // 下の行を動かすタイムラインの動き（`TimelineViewController.reconfigureShiftingRowsBelow`）と同じスプリングにし、行と文字の動きをそろえる。
-                let move = TimelineViewController.rowSpring(keyPath: "position", duration: duration)
+                let move = CASpringAnimation.rowSpring(keyPath: "position", duration: duration)
                 move.fromValue = CGPoint(x: layer.position.x - piece.offset.x, y: layer.position.y - piece.offset.y)
                 move.toValue = layer.position
                 layer.add(move, forKey: "move")
@@ -153,10 +153,10 @@ final class EmojiArrivalTransition {
             barLayers.append(layer)
             guard startBars.count == bars.count, startBars[index] != bar else { continue }
             let from = startBars[index]
-            let resize = TimelineViewController.rowSpring(keyPath: "bounds", duration: duration)
+            let resize = CASpringAnimation.rowSpring(keyPath: "bounds", duration: duration)
             resize.fromValue = CGRect(origin: .zero, size: from.size)
             resize.toValue = layer.bounds
-            let move = TimelineViewController.rowSpring(keyPath: "position", duration: duration)
+            let move = CASpringAnimation.rowSpring(keyPath: "position", duration: duration)
             move.fromValue = CGPoint(x: from.midX, y: from.midY)
             move.toValue = layer.position
             layer.add(resize, forKey: "resize")
@@ -167,7 +167,7 @@ final class EmojiArrivalTransition {
         let timer = CABasicAnimation(keyPath: "opacity")
         timer.fromValue = 1
         timer.toValue = 1
-        timer.duration = TimelineViewController.rowSpring(keyPath: "position", duration: duration).settlingDuration
+        timer.duration = CASpringAnimation.rowSpring(keyPath: "position", duration: duration).settlingDuration
         timer.delegate = Completion { [weak self, weak overlay] finished in
             guard let self, let overlay, self.overlay === overlay else { return }
             self.finish()
