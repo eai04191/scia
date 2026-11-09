@@ -103,6 +103,35 @@ struct InAppBrowserDockTests {
         root.dismiss(animated: false)
     }
 
+    /// 引ける範囲のタップで、伏せた高さ、中くらい、全画面の順に進み、全画面の次は伏せた高さに戻る。
+    @Test func tapCyclesThroughDetents() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let browser = InAppBrowser()
+        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
+        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
+        let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
+        let presentation = try #require(sheet.sheetPresentation)
+        #expect(sheet.barGrabArea.gestureRecognizers?.contains { $0 is UITapGestureRecognizer } == true)
+        presentation.select(.collapsed, animated: false)
+        var changes = 0
+        let forward = presentation.onSelectionChange
+        presentation.onSelectionChange = {
+            changes += 1
+            forward?()
+        }
+
+        presentation.selectNextDetent()
+        #expect(presentation.selected == .medium)
+        presentation.selectNextDetent()
+        #expect(presentation.selected == .large)
+        presentation.selectNextDetent()
+        #expect(presentation.selected == .collapsed)
+        #expect(changes == 3)
+        root.dismiss(animated: false)
+    }
+
     /// シートの外に触れたものは、中くらいの高さまでは後ろの画面へ通し、全画面では通さない。
     @Test func windowPassesTouchesOutsideSheet() async throws {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)

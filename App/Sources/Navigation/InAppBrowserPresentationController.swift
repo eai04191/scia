@@ -17,6 +17,7 @@ final class InAppBrowserPresentationController: UIPresentationController {
     private let configuration: Configuration
     private let dimming = UIView()
     private lazy var pan = UIPanGestureRecognizer(target: self, action: #selector(handlePan))
+    private lazy var tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
     private(set) var selected: InAppBrowserDetent
     /// 指で段を変えたとき。
     var onSelectionChange: (() -> Void)?
@@ -91,6 +92,7 @@ final class InAppBrowserPresentationController: UIPresentationController {
         view.layer.cornerRadius = configuration.cornerRadius
         view.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
         view.addGestureRecognizer(pan)
+        sheet?.barGrabArea.addGestureRecognizer(tap)
         (container.window as? ShakeDetectingWindow)?.browserPresentation = self
         lastLayout = layout
     }
@@ -231,7 +233,11 @@ final class InAppBrowserPresentationController: UIPresentationController {
         }
     }
 
-    /// VoiceOverのグラバーの操作。次の段へ順に動かす。
+    @objc private func handleTap() {
+        selectNextDetent()
+    }
+
+    /// 引ける範囲のタップと、VoiceOverのグラバーの操作。次の段へ順に動かす。
     func selectNextDetent() {
         let detents = layout.detents
         guard detents.count > 1, let index = detents.firstIndex(of: selected) else { return }
