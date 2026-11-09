@@ -1,4 +1,3 @@
-import SafariServices
 import SciaCore
 import SciaTesting
 import Testing
@@ -31,29 +30,12 @@ struct InAppBrowserDockTests {
         #expect(content.view.layer.cornerRadius == 0)
     }
 
-    /// 伏せた段でも、Safariのビューは下限より縮めない。ツールバーをシートの下へはみ出させるため。
-    @Test func safariKeepsMinimumHeight() throws {
-        let sheet = InAppBrowserSheet(
-            safari: SFSafariViewController(url: try #require(URL(string: "https://example.com"))),
-            handleHeight: 0,
-            barGrab: InAppBrowserSheet.BarGrab(height: 0, inset: 0, settlingHeight: 0, settlingDuration: .zero, isVisible: false),
-            safariResizeDelay: .zero,
-            clock: TestClock()
-        )
-        sheet.minimumSafariHeight = 500
-        let container = UIView(frame: CGRect(x: 0, y: 0, width: 400, height: 90))
-        #expect(sheet.safariFrame(in: container) == CGRect(x: 0, y: 0, width: 400, height: 500))
-        container.frame.size.height = 700
-        #expect(sheet.safariFrame(in: container) == CGRect(x: 0, y: 0, width: 400, height: 700))
-    }
-
     /// 手で伏せた高さまで下げたときだけ後ろの画面を縮める。開く途中に伏せた高さを通るときと、投稿欄のために下げたときは縮めない。
     @Test func docksOnlyWhenLoweredByHand() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let root = harness.viewController
-        let clock = TestClock()
-        let browser = InAppBrowser(clock: clock)
+        let browser = InAppBrowser()
         var docked: [CGFloat] = []
         var obscured: CGFloat = 0
         browser.onDockedHeightChange = { docked.append($0) }
@@ -61,22 +43,86 @@ struct InAppBrowserDockTests {
         browser.open(try #require(URL(string: "https://example.com/1")), from: root)
         try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false && obscured > 0 }
         #expect(docked.allSatisfy { $0 == 0 })
-        let sheet = try #require(root.presentedViewController?.sheetPresentationController)
-        let collapsed = sheet.detents[0].identifier
+        let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
+        let presentation = try #require(sheet.sheetPresentation)
 
         browser.lowerForCompose()
         #expect(docked.last == 0)
         browser.restoreAfterCompose()
 
-        sheet.selectedDetentIdentifier = collapsed
-        browser.sheetPresentationControllerDidChangeSelectedDetentIdentifier(sheet)
+        presentation.select(.collapsed, animated: false)
+        presentation.onSelectionChange?()
+        #expect(docked.last == CGFloat(try #require(presentation.layout.collapsed)))
         #expect(obscured == 0)
-        try await clock.advance(afterSleeping: .seconds(AppDependencies.tuning.value(of: TuningCatalog.inAppBrowserDockSettleDelay)))
-        try await waitUntil { (docked.last ?? 0) > 0 }
 
-        sheet.selectedDetentIdentifier = .large
-        browser.sheetPresentationControllerDidChangeSelectedDetentIdentifier(sheet)
+        presentation.select(.large, animated: false)
+        presentation.onSelectionChange?()
         #expect(docked.last == 0)
+        root.dismiss(animated: false)
+    }
+
+    /// シートは伏せた段でも画面の幅いっぱいに出す。
+    @Test func collapsedSheetSpansScreenWidth() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let browser = InAppBrowser()
+        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
+        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
+        let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
+        let presentation = try #require(sheet.sheetPresentation)
+
+        presentation.select(.collapsed, animated: false)
+
+        let container = try #require(presentation.containerView)
+        #expect(sheet.view.frame.width == container.bounds.width)
+        #expect(sheet.view.frame.minY == container.bounds.height - CGFloat(try #require(presentation.layout.collapsed)))
+        root.dismiss(animated: false)
+    }
+
+    /// 動いている途中は、ビューの行き先ではなく、画面に見えている引ける範囲に触れたものをシートで受ける。
+    @Test func grabsSheetAtVisiblePositionWhileMoving() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let tuning = TuningStore(defaults: nil)
+        tuning.setValue(2, for: TuningCatalog.inAppBrowserDockDuration)
+        let browser = InAppBrowser(tuning: tuning)
+        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
+        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
+        let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
+        let presentation = try #require(sheet.sheetPresentation)
+        let window = try #require(sheet.view.window)
+        #expect(presentation.moveGrabTarget(at: CGPoint(x: 200, y: sheet.view.frame.minY + 2), in: window) == nil)
+
+        presentation.select(.large, animated: true)
+
+        let visible = try #require(sheet.view.layer.presentation()?.frame)
+        let point = CGPoint(x: visible.midX, y: visible.minY + 2)
+        #expect(presentation.moveGrabTarget(at: point, in: window) === sheet.barGrabArea)
+        root.dismiss(animated: false)
+    }
+
+    /// シートの外に触れたものは、中くらいの高さまでは後ろの画面へ通し、全画面では通さない。
+    @Test func windowPassesTouchesOutsideSheet() async throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = ShakeDetectingWindow(windowScene: scene)
+        let root = UIViewController()
+        window.rootViewController = root
+        window.isHidden = false
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        let browser = InAppBrowser()
+        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
+        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
+        let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
+        let presentation = try #require(sheet.sheetPresentation)
+        presentation.select(.medium, animated: false)
+
+        #expect(window.hitTest(CGPoint(x: 100, y: 5), with: nil) === root.view)
+
+        presentation.select(.large, animated: false)
+        #expect(window.hitTest(CGPoint(x: 100, y: 5), with: nil) === presentation.containerView)
         root.dismiss(animated: false)
     }
 }

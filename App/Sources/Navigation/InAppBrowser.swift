@@ -7,9 +7,9 @@ import UIKit
 /// アプリは手前にいたままなので、読んでいる間もストリーミングが流れ続ける。
 ///
 /// シートの高さは、伏せた高さ（URLのバーだけ見える）、中くらいの高さ、全画面の3段。投稿欄で書いている間は伏せた高さまで下げ、書き終えたら戻す。
-/// シートはSafariではなく入れ物（`InAppBrowserSheet`）で出し、高さを変えるのは上端の帯とSafariのバーの真ん中を引いたときだけにする。ページのスワイプでシートが下がらないようにするため。
+/// シートは`InAppBrowserPresentationController`で動かし、高さを変えるのは上端の帯とSafariのバーの真ん中を引いたときだけにする。ページのスワイプでシートが下がらないようにするため。
 @MainActor
-final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, UISheetPresentationControllerDelegate {
+final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, UIAdaptivePresentationControllerDelegate {
     /// シートが画面の下から覆っている高さが変わったときに呼ぶ。閉じたら0を渡す。タイムラインの下に、シートより上へ出せるだけの余白を取るために使う。
     var onObscuredHeightChange: ((CGFloat) -> Void)?
     /// シートを手で伏せた高さまで下げて、後ろの画面をシートの上に縮めるときに、シートが画面の下から占める高さを渡す。縮めないときは0を渡す。
@@ -22,21 +22,11 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
     private let tuning: TuningStore
     private let settings: AppSettings
     private let clock: any Clock<Duration>
-    /// シートを出した窓。中くらいの高さは、この窓の安全領域の中の高さから、段を決めるたびに決める（`InAppBrowserHeight`）。
-    /// 窓の安全領域は窓とシーンで決まり、シートの並べ方に左右されないので、段の計算の中で読んでも、
-    /// シート自身の安全領域を読んだときのような入れ子（`reportObscuredHeightAfterResolving`）にならない。
-    private weak var window: UIWindow?
     private weak var current: InAppBrowserSheet?
-    /// 段ごとに解決した高さ（安全領域の中の高さ）。シートの見た目の位置はビューの枠に出ず（シートのビューの枠は画面全体のまま）、
-    /// 出したあとに測れないため、高さを決めるところで受け取って覚えておく。
-    private var resolvedHeights: [UISheetPresentationController.Detent.Identifier: CGFloat] = [:]
-    /// 高さを決め終えたあとに、覆う高さを知らせると決めてある。
-    private var reportsObscuredHeightAfterResolving = false
     /// 投稿欄で書き始めて伏せる前の高さ。書き終えたらここへ戻す。書いている間に手で高さを変えたら、手で選んだ高さを尊重して戻さない。
-    private var detentBeforeCompose: UISheetPresentationController.Detent.Identifier?
+    private var detentBeforeCompose: InAppBrowserDetent?
     /// 伏せた高さで出して、開く高さまで広げ終えるまでの間。この間は伏せた段にいても、後ろの画面を縮めない。
     private var isGrowingFromCollapsed = false
-    private var dockSettling: Task<Void, Never>?
     private let logger = SciaLog.logger(category: "browser")
 
     init(tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings, clock: any Clock<Duration> = AppDependencies.clock) {
@@ -48,46 +38,24 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
     /// シートを出している。中身を差し替える途中も含む。
     var isPresented: Bool { current != nil }
 
+    private var presentation: InAppBrowserPresentationController? {
+        guard let current, !current.isBeingDismissed else { return nil }
+        return current.sheetPresentation
+    }
+
     /// `url`はhttpかhttpsに限る。ほかのスキームを渡すとSFSafariViewControllerが例外で落ちるため、呼び出し側で`LinkBrowser`に振り分けさせる。
     /// シートを出している間に別のリンクが押されたら、高さを保ったまま中身を差し替える。
     func open(_ url: URL, from root: UIViewController) {
-        guard let window = root.viewIfLoaded?.window else {
+        guard root.viewIfLoaded?.window != nil else {
             // 窓にない画面からはシートを出せないので、開かない。
             logger.error("in-app browser open ignored without window")
             return
         }
-        self.window = window
         let safari = SFSafariViewController(url: url)
         safari.delegate = self
-        let browserSheet = InAppBrowserSheet(
-            safari: safari,
-            handleHeight: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserHandleHeight)),
-            barGrab: InAppBrowserSheet.BarGrab(
-                height: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserBarGrabHeight)),
-                inset: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserBarGrabInset)),
-                settlingHeight: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserBarGrabSettlingHeight)),
-                settlingDuration: .seconds(tuning.value(of: TuningCatalog.inAppBrowserBarGrabSettlingDuration)),
-                isVisible: tuning.value(of: TuningCatalog.inAppBrowserShowsBarGrabArea)
-            ),
-            safariResizeDelay: .seconds(tuning.value(of: TuningCatalog.inAppBrowserSafariResizeDelay)),
-            clock: clock
-        )
-        browserSheet.onLayout = { [weak self, weak browserSheet] in
-            guard let self, let browserSheet else { return }
-            self.sheetDidLayout(browserSheet)
-        }
-        browserSheet.modalPresentationStyle = .pageSheet
-        if let sheet = browserSheet.sheetPresentationController {
-            sheet.detents = [detent(Self.collapsedIdentifier, for: browserSheet), detent(Self.mediumIdentifier, for: browserSheet), .large()]
-            // 中くらいの高さまでは後ろを暗くせず、タイムラインを触れるままにする。
-            sheet.largestUndimmedDetentIdentifier = Self.mediumIdentifier
-            // 選んでいなければいちばん低い段で出るため、設定の高さの段を選んでおく。
-            sheet.selectedDetentIdentifier = openingIdentifier
-            sheet.prefersGrabberVisible = true
-            sheet.delegate = self
-        }
+        let browserSheet = makeSheet(safari: safari)
         if let current, let presenter = current.presentingViewController, !current.isBeingDismissed {
-            browserSheet.sheetPresentationController?.selectedDetentIdentifier = current.sheetPresentationController?.selectedDetentIdentifier
+            browserSheet.initialDetent = current.sheetPresentation?.selected ?? openingDetent
             self.current = browserSheet
             logger.info("in-app browser replace")
             // 同じ位置に同じ大きさで出し直すので、動かさずに入れ替える。
@@ -101,38 +69,71 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         current = browserSheet
         detentBeforeCompose = nil
         let grows = tuning.value(of: TuningCatalog.inAppBrowserGrowsFromCollapsed)
-        if grows {
-            browserSheet.sheetPresentationController?.selectedDetentIdentifier = Self.collapsedIdentifier
-        }
+        browserSheet.initialDetent = grows ? .collapsed : openingDetent
         isGrowingFromCollapsed = grows
         logger.info("in-app browser open grows=\(grows, privacy: .public)")
         onPresenceChange?(true)
-        let opening = openingIdentifier
+        let opening = openingDetent
         root.frontmostPresented.present(browserSheet, animated: true) { [weak self, weak browserSheet] in
-            guard let self, let browserSheet, self.current === browserSheet, let sheet = browserSheet.sheetPresentationController else { return }
-            if grows {
-                self.isGrowingFromCollapsed = false
-                guard sheet.selectedDetentIdentifier == Self.collapsedIdentifier else {
-                    self.reportObscuredHeight(of: sheet)
-                    return
-                }
-                self.select(opening, on: sheet)
-            } else {
+            guard let self, let browserSheet, self.current === browserSheet, let presentation = browserSheet.sheetPresentation else { return }
+            guard grows else {
                 // 全画面で開いたときに、タイムラインを覆ったことを知らせる。
-                self.selectionDidChange(sheet)
+                self.selectionDidChange(presentation)
+                return
             }
+            self.isGrowingFromCollapsed = false
+            guard presentation.selected == .collapsed else {
+                self.reportObscuredHeight(of: presentation)
+                return
+            }
+            self.select(opening, on: presentation)
         }
         browserSheet.presentSafari()
     }
 
+    private func makeSheet(safari: SFSafariViewController) -> InAppBrowserSheet {
+        let configuration = InAppBrowserPresentationController.Configuration(
+            cornerRadius: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserDockCornerRadius)),
+            duration: tuning.value(of: TuningCatalog.inAppBrowserDockDuration),
+            maximumWidth: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserSheetMaximumWidth)),
+            maximumDimAlpha: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserSheetDimAlpha)),
+            layout: { [weak self] window, traits in
+                self?.sheetLayout(in: window, traits: traits) ?? InAppBrowserSheetLayout(collapsed: nil, medium: nil, large: window.bounds.height)
+            }
+        )
+        let browserSheet = InAppBrowserSheet(
+            safari: safari,
+            handleHeight: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserHandleHeight)),
+            barGrab: InAppBrowserSheet.BarGrab(
+                height: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserBarGrabHeight)),
+                inset: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserBarGrabInset)),
+                isVisible: tuning.value(of: TuningCatalog.inAppBrowserShowsBarGrabArea)
+            ),
+            safariResizeDelay: .seconds(tuning.value(of: TuningCatalog.inAppBrowserSafariResizeDelay)),
+            safariTopInset: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserSafariTopInset)),
+            clock: clock,
+            configuration: configuration
+        )
+        browserSheet.presentationDelegate = self
+        browserSheet.onPresentationCreated = { [weak self] presentation in
+            presentation.onSelectionChange = { [weak self, weak presentation] in
+                guard let self, let presentation else { return }
+                self.userDidChangeSelection(presentation)
+            }
+            presentation.onLayoutChange = { [weak self, weak presentation] in
+                guard let self, let presentation else { return }
+                self.reportObscuredHeight(of: presentation)
+            }
+        }
+        return browserSheet
+    }
+
     /// 投稿欄で書き始めたときに呼ぶ。シートは投稿欄より手前に出るため、伏せた高さまで下げてキーボードの裏へ逃がす。
     func lowerForCompose() {
-        guard let sheet = current?.sheetPresentationController, !(current?.isBeingDismissed ?? true) else { return }
-        let selected = sheet.selectedDetentIdentifier ?? Self.collapsedIdentifier
-        guard selected != Self.collapsedIdentifier else { return }
-        detentBeforeCompose = selected
-        logger.info("in-app browser lower for compose from=\(selected.rawValue, privacy: .public)")
-        select(Self.collapsedIdentifier, on: sheet)
+        guard let presentation, presentation.selected != .collapsed else { return }
+        detentBeforeCompose = presentation.selected
+        logger.info("in-app browser lower for compose from=\(presentation.selected.rawValue, privacy: .public)")
+        select(.collapsed, on: presentation)
     }
 
     /// 投稿欄で書き終えたときに呼ぶ。書き始める前の高さへ戻す。
@@ -140,127 +141,70 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         logger.info("in-app browser compose ended")
         guard let previous = detentBeforeCompose else { return }
         detentBeforeCompose = nil
-        guard let sheet = current?.sheetPresentationController, !(current?.isBeingDismissed ?? true) else { return }
+        guard let presentation else { return }
         logger.info("in-app browser restore after compose to=\(previous.rawValue, privacy: .public)")
-        select(previous, on: sheet)
+        select(previous, on: presentation)
     }
 
-    private func select(_ identifier: UISheetPresentationController.Detent.Identifier, on sheet: UISheetPresentationController) {
-        sheet.animateChanges {
-            sheet.selectedDetentIdentifier = identifier
-        }
-        selectionDidChange(sheet)
+    private func select(_ detent: InAppBrowserDetent, on presentation: InAppBrowserPresentationController) {
+        presentation.select(detent, animated: true)
+        selectionDidChange(presentation)
     }
 
     /// 開くときの段。最初から全画面で開く設定なら全画面、そうでなければ中くらいの高さ。
-    private var openingIdentifier: UISheetPresentationController.Detent.Identifier {
-        settings.opensInAppBrowserFullScreen ? .large : Self.mediumIdentifier
+    private var openingDetent: InAppBrowserDetent {
+        settings.opensInAppBrowserFullScreen ? .large : .medium
     }
 
-    private static let collapsedIdentifier = UISheetPresentationController.Detent.Identifier("net.mizle.scia.inAppBrowser.collapsed")
-    private static let mediumIdentifier = UISheetPresentationController.Detent.Identifier("net.mizle.scia.inAppBrowser.medium")
-
-    /// 中くらいの高さは設定から、伏せた高さはチューニングから読む。中くらいの高さは伏せた高さより低くしない。値は安全領域の中の高さで、下端に付くシートでは、これに下の安全領域が足される。
-    /// タイムラインの余白も安全領域の外から数えるので、知らせるときに足す。設定やチューニングを変えたら、次にシートの高さを決め直すとき（開き直す、段を変える）に効く。
-    /// 高さの狭い画面（iPhoneの横向き）では、中くらいの高さの段を出さず、シートは全画面になる。
-    /// 段は低い順に並べる決まりがあるため、伏せた高さは中くらいの高さより低く抑える。チューニングの組み合わせによっては、伏せた高さが設定より低くなる。
-    private func detent(_ identifier: UISheetPresentationController.Detent.Identifier, for browserSheet: InAppBrowserSheet) -> UISheetPresentationController.Detent {
-        .custom(identifier: identifier) { [weak self, weak browserSheet] context in
-            guard let self else { return nil }
-            let value: CGFloat? = switch identifier {
-            case Self.collapsedIdentifier:
-                min(CGFloat(self.tuning.value(of: TuningCatalog.inAppBrowserCollapsedHeight)), (self.mediumHeight(in: context) ?? .greatestFiniteMagnitude) - 1)
-            default:
-                self.mediumHeight(in: context)
-            }
-            if let browserSheet, self.current === browserSheet {
-                self.resolvedHeights[identifier] = value
-                if identifier == Self.mediumIdentifier {
-                    browserSheet.minimumSafariHeight = value ?? 0
-                }
-                self.reportObscuredHeightAfterResolving()
-            }
-            return value
+    /// 伏せた高さはチューニングから、中くらいの高さは設定から読む。伏せた高さは画面の下端から数え、中くらいの高さは安全領域の中の高さに下の安全領域を足す。
+    /// 高さの狭い画面（iPhoneの横向き）では全画面だけにする。
+    private func sheetLayout(in window: UIWindow, traits: UITraitCollection) -> InAppBrowserSheetLayout {
+        let height = Double(window.bounds.height)
+        guard traits.verticalSizeClass != .compact else {
+            return InAppBrowserSheetLayout(collapsed: nil, medium: nil, large: height)
         }
-    }
-
-    /// 高さを決めている間は、知らせも安全領域の読み出しもしない。知らせを受けたタイムラインが安全領域を変えると、UIKitが高さを決めている途中のシートに
-    /// 位置を聞き直し、入れ子になって落ちるため。次のメインループで、決め終えた高さを知らせる。
-    private func reportObscuredHeightAfterResolving() {
-        guard !reportsObscuredHeightAfterResolving else { return }
-        reportsObscuredHeightAfterResolving = true
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            reportsObscuredHeightAfterResolving = false
-            guard let sheet = current?.sheetPresentationController, !(current?.isBeingDismissed ?? true) else { return }
-            reportObscuredHeight(of: sheet)
-        }
-    }
-
-    private func mediumHeight(in context: any UISheetPresentationControllerDetentResolutionContext) -> CGFloat? {
-        guard context.containerTraitCollection.verticalSizeClass != .compact else { return nil }
-        guard let window else { return nil }
-        let minimum = tuning.value(of: TuningCatalog.inAppBrowserCollapsedHeight)
-        return min(CGFloat(settings.inAppBrowserHeight.sheetHeight(available: Double(window.safeAreaHeight), minimum: minimum)), context.maximumDetentValue)
+        let large = height - Double(window.safeAreaInsets.top) - tuning.value(of: TuningCatalog.inAppBrowserSheetLargeTopGap)
+        let collapsedHeight = tuning.value(of: TuningCatalog.inAppBrowserCollapsedHeight)
+        let inner = settings.inAppBrowserHeight.sheetHeight(available: Double(window.safeAreaHeight), minimum: collapsedHeight)
+        let medium = min(inner + Double(window.safeAreaInsets.bottom), large)
+        return InAppBrowserSheetLayout(collapsed: min(collapsedHeight, medium - 1), medium: medium, large: large)
     }
 
     /// 全画面に広げている間はタイムラインが見えないため、中くらいの高さの値を使い続ける。
-    private func reportObscuredHeight(of sheet: UISheetPresentationController) {
-        let selected = sheet.selectedDetentIdentifier == Self.collapsedIdentifier ? Self.collapsedIdentifier : Self.mediumIdentifier
-        let bottomInset = sheet.presentedViewController.view.safeAreaInsets.bottom
-        let height = resolvedHeights[selected].map { $0 + bottomInset } ?? 0
-        let docks = selected == Self.collapsedIdentifier && canDock(sheet)
-        updateDock(docks, of: sheet)
+    private func reportObscuredHeight(of presentation: InAppBrowserPresentationController) {
+        let layout = presentation.layout
+        let isCollapsed = presentation.selected == .collapsed
+        let height = CGFloat(isCollapsed ? layout.collapsed ?? 0 : layout.medium ?? 0)
+        let docks = isCollapsed && canDock(presentation)
+        onDockedHeightChange?(docks ? height : 0)
         onObscuredHeightChange?(docks ? 0 : height)
     }
 
-    /// 伏せた段では、UIKitがシートを縮めて下端から浮かせるので、段の高さからはシートの位置が分からない。シートが止まってからビューの窓の中の位置を読む。
-    private func updateDock(_ docks: Bool, of sheet: UISheetPresentationController) {
-        dockSettling?.cancel()
-        guard docks else {
-            onDockedHeightChange?(0)
-            return
-        }
-        let delay = tuning.value(of: TuningCatalog.inAppBrowserDockSettleDelay)
-        dockSettling = Task(.withoutRequests) { [weak self, weak sheet, clock] in
-            do {
-                try await clock.sleep(for: .seconds(delay))
-            } catch {
-                return
-            }
-            guard !Task.isCancelled, let self, let sheet, let window = self.window else { return }
-            let view: UIView = sheet.presentedViewController.view
-            self.onDockedHeightChange?(window.bounds.height - view.convert(view.bounds, to: window).minY)
-        }
-    }
-
-    /// シートが動いている間はレイアウトが続くので、そのたびに待ち直す。指が触れている間は読まない。
-    private func sheetDidLayout(_ browserSheet: InAppBrowserSheet) {
-        guard browserSheet === current, !browserSheet.isFingerDown, !browserSheet.isBeingDismissed,
-              let sheet = browserSheet.sheetPresentationController,
-              sheet.selectedDetentIdentifier == Self.collapsedIdentifier, canDock(sheet) else { return }
-        updateDock(true, of: sheet)
-    }
-
-    /// 投稿欄のために下げている間は、キーボードの裏へ逃がしているだけなので縮めない。iPadの幅と横向きでは、シートが画面の下端に付かないので縮めない。
-    private func canDock(_ sheet: UISheetPresentationController) -> Bool {
-        let traits = sheet.traitCollection
+    /// 投稿欄のために下げている間は、キーボードの裏へ逃がしているだけなので縮めない。iPadの幅では、シートが画面の幅より狭いので縮めない。
+    private func canDock(_ presentation: InAppBrowserPresentationController) -> Bool {
+        let traits = presentation.traitCollection
         return !isGrowingFromCollapsed && detentBeforeCompose == nil && traits.horizontalSizeClass == .compact && traits.verticalSizeClass == .regular
     }
 
-    private func selectionDidChange(_ sheet: UISheetPresentationController) {
-        reportObscuredHeight(of: sheet)
-        onCoverageChange?(sheet.selectedDetentIdentifier == .large)
+    private func selectionDidChange(_ presentation: InAppBrowserPresentationController) {
+        reportObscuredHeight(of: presentation)
+        onCoverageChange?(presentation.selected == .large)
+    }
+
+    /// 指でシートの高さを変えたとき。コードから変えたときは呼ばれない。
+    private func userDidChangeSelection(_ presentation: InAppBrowserPresentationController) {
+        guard presentation === current?.sheetPresentation else { return }
+        logger.info("in-app browser detent \(presentation.selected.rawValue, privacy: .public)")
+        detentBeforeCompose = nil
+        selectionDidChange(presentation)
     }
 
     private func didClose(_ browserSheet: InAppBrowserSheet?) {
         guard current === browserSheet || current == nil else { return }
         current = nil
         detentBeforeCompose = nil
-        resolvedHeights = [:]
         isGrowingFromCollapsed = false
         logger.info("in-app browser close")
-        dockSettling?.cancel()
         onDockedHeightChange?(0)
         onObscuredHeightChange?(0)
         onCoverageChange?(false)
@@ -276,16 +220,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         didClose(current)
     }
 
-    // MARK: - UISheetPresentationControllerDelegate
-
-    /// つまみでシートの高さを変えたとき。コードから変えたときは呼ばれない。中身を差し替えるときは、高さを引き継ぐので覆い方は変わらない。
-    func sheetPresentationControllerDidChangeSelectedDetentIdentifier(_ sheet: UISheetPresentationController) {
-        guard sheet.presentedViewController === current else { return }
-        logger.info("in-app browser detent \(sheet.selectedDetentIdentifier?.rawValue ?? "nil", privacy: .public)")
-        detentBeforeCompose = nil
-        current?.widenBarGrabAreaWhileSettling()
-        selectionDidChange(sheet)
-    }
+    // MARK: - UIAdaptivePresentationControllerDelegate
 
     /// 下へのスワイプで閉じたとき。
     func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {

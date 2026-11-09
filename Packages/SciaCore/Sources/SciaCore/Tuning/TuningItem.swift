@@ -1168,17 +1168,44 @@ public enum TuningCatalog {
         id: "browser.collapsedHeight",
         title: "アプリ内のSafariを伏せたときの高さ（pt）",
         range: 40...200,
-        step: 4,
-        defaultValue: 76
+        step: 1,
+        defaultValue: 89
     )
 
-    /// アプリ内のSafariを伏せた段でシートが止まってから、後ろの画面の高さを決めるまでの時間（秒）。シートが動いている間は待ち直す。
-    public static let inAppBrowserDockSettleDelay = NumberTuning(
-        id: "browser.dockSettleDelay",
-        title: "アプリ内のSafariを伏せて止まってから後ろの画面が縮むまでの時間（秒）",
-        range: 0...0.5,
-        step: 0.01,
-        defaultValue: 0.08
+    /// アプリ内のSafariのビューを、シートの上端から下げる長さ（pt）。Safariの×ボタンの上の余白を左の余白と揃える。
+    public static let inAppBrowserSafariTopInset = NumberTuning(
+        id: "browser.safariTopInset",
+        title: "アプリ内のSafariのシートの上端からの空き（pt）",
+        range: 0...40,
+        step: 1,
+        defaultValue: 13
+    )
+
+    /// アプリ内のSafariのシートを全画面に広げたときの、安全領域の上端からの空き（pt）。
+    public static let inAppBrowserSheetLargeTopGap = NumberTuning(
+        id: "browser.sheetLargeTopGap",
+        title: "アプリ内のSafariを全画面に広げたときの上の空き（pt）",
+        range: 0...40,
+        step: 1,
+        defaultValue: 8
+    )
+
+    /// iPadの幅などでの、アプリ内のSafariのシートの幅の上限（pt）。
+    public static let inAppBrowserSheetMaximumWidth = NumberTuning(
+        id: "browser.sheetMaximumWidth",
+        title: "アプリ内のSafariのシートの幅の上限（pt）",
+        range: 320...1000,
+        step: 10,
+        defaultValue: 540
+    )
+
+    /// アプリ内のSafariのシートを全画面に広げたときの、後ろの暗さ。
+    public static let inAppBrowserSheetDimAlpha = NumberTuning(
+        id: "browser.sheetDimAlpha",
+        title: "アプリ内のSafariを全画面に広げたときの後ろの暗さ",
+        range: 0...1,
+        step: 0.05,
+        defaultValue: 0.3
     )
 
     /// アプリ内のSafariを伏せたときに、縮めた後ろの画面とシートの間に空ける隙間（pt）。
@@ -1193,16 +1220,16 @@ public enum TuningCatalog {
     /// アプリ内のSafariを伏せたときの、縮めた後ろの画面の下の角の丸み（pt）。
     public static let inAppBrowserDockCornerRadius = NumberTuning(
         id: "browser.dockCornerRadius",
-        title: "アプリ内のSafariを伏せたときの後ろの画面の角の丸み（pt）",
+        title: "アプリ内のSafariのシートと、縮めた後ろの画面の角の丸み（pt）",
         range: 0...80,
         step: 1,
-        defaultValue: 44
+        defaultValue: 38
     )
 
     /// アプリ内のSafariを伏せたときと戻したときに、後ろの画面の大きさを変える時間（秒）。
     public static let inAppBrowserDockDuration = NumberTuning(
         id: "browser.dockDuration",
-        title: "アプリ内のSafariを伏せたときの後ろの画面が縮む時間（秒）",
+        title: "アプリ内のSafariのシートと後ろの画面が動く時間（秒）",
         range: 0...2,
         step: 0.05,
         defaultValue: 0.35
@@ -1234,24 +1261,6 @@ public enum TuningCatalog {
         range: 0...140,
         step: 4,
         defaultValue: 80
-    )
-
-    /// シートの段が変わった直後に、引ける範囲を広げる高さ（pt）。シートが動いている間は範囲も一緒に動くため、ふだんの高さのままだと、続けて触れた指が範囲を外れてSafariへ行き、シートを引けない。
-    public static let inAppBrowserBarGrabSettlingHeight = NumberTuning(
-        id: "browser.barGrabSettlingHeight",
-        title: "アプリ内のSafariの高さが変わった直後の、引ける範囲の高さ（pt）",
-        range: 0...80,
-        step: 2,
-        defaultValue: 44
-    )
-
-    /// シートの段が変わったあと、引ける範囲を広げておく時間（秒）。広げている間は、範囲に隠れたページの上を押せない。
-    public static let inAppBrowserBarGrabSettlingDuration = NumberTuning(
-        id: "browser.barGrabSettlingDuration",
-        title: "アプリ内のSafariの高さが変わったあと、引ける範囲を広げておく時間（秒）",
-        range: 0...2,
-        step: 0.1,
-        defaultValue: 0.6
     )
 
     /// アプリ内のSafariのバーの上に重ねる引ける範囲を、半透明の赤で塗って見えるようにする。範囲を確かめるためのもの。
@@ -2107,15 +2116,16 @@ public enum TuningCatalog {
         ]),
         TuningSection(id: "browser", title: "アプリ内のSafari", items: [
             .number(inAppBrowserCollapsedHeight),
-            .number(inAppBrowserDockSettleDelay),
+            .number(inAppBrowserSafariTopInset),
+            .number(inAppBrowserSheetLargeTopGap),
+            .number(inAppBrowserSheetMaximumWidth),
+            .number(inAppBrowserSheetDimAlpha),
             .number(inAppBrowserDockGap),
             .number(inAppBrowserDockCornerRadius),
             .number(inAppBrowserDockDuration),
             .number(inAppBrowserHandleHeight),
             .number(inAppBrowserBarGrabHeight),
             .number(inAppBrowserBarGrabInset),
-            .number(inAppBrowserBarGrabSettlingHeight),
-            .number(inAppBrowserBarGrabSettlingDuration),
             .toggle(inAppBrowserShowsBarGrabArea),
             .number(inAppBrowserSafariResizeDelay),
             .toggle(inAppBrowserGrowsFromCollapsed),

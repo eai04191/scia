@@ -4,9 +4,7 @@ import UIKit
 
 /// アプリ内のSafariを載せるシート。Safariは帯の下を出す範囲（`area`）からモーダルで出す。実際のSafariのビューは、`area`の隣でシートの上端からいっぱいに広がる（シミュレーターで確かめた）。
 ///
-/// Safariをそのままシートで出すと、ページを下へスワイプしたときに、Safariのプロセスがシートを引き下げる。
-/// `prefersScrollingExpandsWhenScrolledToEdge`では止まらず、Safariを入れ物の子にするのはAppleのドキュメントが禁じている。
-/// シートを持つのをこの画面にして、Safariは帯の下を出す範囲（`area`）からモーダルで出すと、Safariからはシートを動かせなくなり、引けるのは帯だけになる。
+/// Safariを入れ物の子にするのはAppleのドキュメントが禁じている。Safariは帯の下を出す範囲（`area`）からモーダルで出し、シートを動かすのは引ける範囲を引いたときだけにする。ページのスワイプでシートが動かないようにするため。
 /// シートの上端からSafariのバーの真ん中までに、引ける範囲（`barGrabArea`）を重ねる。
 final class InAppBrowserSheet: UIViewController {
     let safari: SFSafariViewController
@@ -16,44 +14,40 @@ final class InAppBrowserSheet: UIViewController {
     /// 色のない（完全に透明な）ビューでは、触れたことが重ねたビューを通り抜けてSafariへ行き、シートを引けない（シミュレーターで確かめた）。そのため、見た目にはわからない濃さの色を付ける。
     /// Safariのバーとページは別のプロセスが描いていて、アプリからはどちらの上かを触れた場所で選び分けられないので、範囲の高さと左右の空きはチューニングで決める。
     let barGrabArea = UIView()
+    private let grabber = InAppBrowserGrabberView()
     private let barGrab: BarGrab
     private let clock: any Clock<Duration>
-    private var narrowing: Task<Void, Never>?
     private let safariResizeDelay: Duration
+    /// シートの上端からSafariのビューまでの空き。Safariの×ボタンの上の余白を、左の余白と揃える。
+    private let safariTopInset: CGFloat
     private var pendingResize: Task<Void, Never>?
-    /// Safariのビューの高さの下限。伏せた段でも縮めず、Safariの下のツールバーをシートの下へはみ出させて、上のバーに重ならないようにする。
-    var minimumSafariHeight: CGFloat = 0
-    var onLayout: (() -> Void)?
-    private lazy var fingerWatcher = FingerWatcher { [weak self] isDown in
-        self?.isFingerDown = isDown
-    }
-    var isWatchingFinger: Bool { fingerWatcher.view != nil }
-    /// アプリのウィンドウに指が触れている間。Safariの上の指はウィンドウに届かないので、シートを引く指はここに入るが、ページを触る指は入らない。
-    var isFingerDown = false {
-        didSet {
-            if oldValue, !isFingerDown { view.setNeedsLayout() }
-        }
-    }
+    private let configuration: InAppBrowserPresentationController.Configuration
+    /// 最初に止まる段。
+    var initialDetent: InAppBrowserDetent = .collapsed
+    weak var presentationDelegate: (any UIAdaptivePresentationControllerDelegate)?
+    private(set) weak var sheetPresentation: InAppBrowserPresentationController?
+    var onPresentationCreated: ((InAppBrowserPresentationController) -> Void)?
 
     /// Safariのバーの上に重ねる、シートを引ける範囲の決まり。
     struct BarGrab {
         var height: CGFloat
         var inset: CGFloat
-        /// シートの段が変わった直後の高さと、その高さを保つ時間。
-        var settlingHeight: CGFloat
-        var settlingDuration: Duration
         /// 範囲がどこにあるかを確かめるために、見える色で塗る。
         var isVisible: Bool
     }
 
-    init(safari: SFSafariViewController, handleHeight: CGFloat, barGrab: BarGrab, safariResizeDelay: Duration, clock: any Clock<Duration>) {
+    init(safari: SFSafariViewController, handleHeight: CGFloat, barGrab: BarGrab, safariResizeDelay: Duration, safariTopInset: CGFloat, clock: any Clock<Duration>, configuration: InAppBrowserPresentationController.Configuration) {
         self.safari = safari
         self.handleHeight = handleHeight
         self.barGrab = barGrab
         self.safariResizeDelay = safariResizeDelay
+        self.safariTopInset = safariTopInset
         self.clock = clock
+        self.configuration = configuration
         area = UIViewController()
         super.init(nibName: nil, bundle: nil)
+        modalPresentationStyle = .custom
+        transitioningDelegate = self
         safari.modalPresentationStyle = .overCurrentContext
         safari.transitioningDelegate = self
     }
@@ -65,7 +59,8 @@ final class InAppBrowserSheet: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        // Safariの上に空けた帯が、Safariのバーと続いて見える色にする。
+        view.backgroundColor = .secondarySystemBackground
         addChild(area)
         area.view.frame = CGRect(x: 0, y: handleHeight, width: view.bounds.width, height: max(0, view.bounds.height - handleHeight))
         area.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -74,126 +69,106 @@ final class InAppBrowserSheet: UIViewController {
         area.didMove(toParent: self)
     }
 
-    /// シートの段が変わったら、Safariを載せている枠いっぱいに広げる。Safariのビューは大きさの追従（autoresizing）を持たず、
-    /// 出したときの大きさのまま残って、広げたシートの下が空くため。
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        onLayout?()
-        guard safari.presentingViewController != nil, let container = safari.viewIfLoaded?.superview else { return }
-        scheduleSafariResize(toFit: container)
+    /// 後ろの画面を触れる状態か。全画面に広げているときと、シートの上に画面を重ねているときは触れない。
+    var leavesScreenBehindUsable: Bool {
+        guard sheetPresentation?.passesTouchesOutsideSheet == true else { return false }
+        let front = frontmostPresented
+        return front === self || front === safari
     }
 
-    /// 指が触れている間は待ち、離したあとは少し待って、続けて変わるシートの大きさを1回の変更にまとめる。
-    /// 毎フレーム変えると、離してから0.7秒ほどSafariがタップを受けない（シミュレーターで確かめた）。代わりに、引いている途中はSafariがシートに付いてこない。
-    private func scheduleSafariResize(toFit container: UIView) {
+    /// シートが止まったら呼ぶ。少し待って、続けて変わる行き先を1回の変更にまとめる。
+    func resizeSafari(toHeight height: CGFloat) {
         pendingResize?.cancel()
-        guard !isFingerDown, safari.view.frame != safariFrame(in: container) else { return }
-        pendingResize = Task(.withoutRequests) { [weak self, weak container, clock, safariResizeDelay] in
+        pendingResize = Task(.withoutRequests) { [weak self, clock, safariResizeDelay] in
             do {
                 try await clock.sleep(for: safariResizeDelay)
             } catch {
                 return
             }
-            guard !Task.isCancelled, let self, !self.isFingerDown, let container else { return }
-            self.safari.view.frame = self.safariFrame(in: container)
+            guard !Task.isCancelled, let self else { return }
+            self.placeSafari(sheetHeight: height)
         }
     }
 
-    func safariFrame(in container: UIView) -> CGRect {
-        var frame = container.bounds
-        frame.size.height = max(frame.height, minimumSafariHeight)
-        return frame
+    /// Safariの下端をシートの`sheetHeight`の位置に合わせ、上端を`safariTopInset`だけ下げる。
+    private func placeSafari(sheetHeight: CGFloat) {
+        guard let container = safari.viewIfLoaded?.superview else { return }
+        safari.view.frame = CGRect(x: container.bounds.minX, y: container.bounds.minY + safariTopInset, width: container.bounds.width, height: sheetHeight - safariTopInset)
     }
 
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        guard fingerWatcher.view == nil else { return }
-        view.window?.addGestureRecognizer(fingerWatcher)
-    }
-
-    override func viewDidDisappear(_ animated: Bool) {
-        super.viewDidDisappear(animated)
-        fingerWatcher.view?.removeGestureRecognizer(fingerWatcher)
-        isFingerDown = false
+    /// シートをつかんだら呼ぶ。引いている間はSafariの大きさを変えない。
+    func cancelSafariResize() {
+        pendingResize?.cancel()
     }
 
     /// シートを出し始めたあとに呼んで、帯の下にSafariを重ね、その上にSafariのバーの引ける範囲を重ねる。シートと一緒に上がってくるよう、Safariは動かさずに出す。
     func presentSafari() {
         area.present(safari, animated: false)
+        // 待ってから動かすと、出したあとにSafariが下がって見えるため、すぐ置く。
+        if let height = sheetPresentation?.safariSheetHeight { placeSafari(sheetHeight: height) }
+        let width = view.bounds.width
+        grabber.frame = CGRect(x: (width - 36) / 2, y: 5, width: 36, height: 5)
+        grabber.autoresizingMask = [.flexibleLeftMargin, .flexibleRightMargin]
+        grabber.presentation = sheetPresentation
+        view.addSubview(grabber)
         guard barGrab.height > 0 else { return }
         barGrabArea.backgroundColor = barGrab.isVisible ? UIColor.systemRed.withAlphaComponent(0.4) : UIColor.black.withAlphaComponent(0.01)
-        barGrabArea.frame = CGRect(x: barGrab.inset, y: 0, width: max(0, view.bounds.width - barGrab.inset * 2), height: handleHeight + barGrab.height)
+        barGrabArea.frame = CGRect(x: barGrab.inset, y: 0, width: max(0, width - barGrab.inset * 2), height: safariTopInset + handleHeight + barGrab.height)
         barGrabArea.autoresizingMask = [.flexibleWidth]
         view.addSubview(barGrabArea)
     }
+}
 
-    /// シートの段が変わったら呼んで、シートが動いている間だけ、引ける範囲を下へ広げる。動いている間は範囲も画面の上で動くので、続けて触れた指が範囲を外れると、触れたことはSafariへ行き、シートを引けない。
-    /// 引いたあとに同じ段へ戻ったときは、段の変化が届かないので広げない。そのときに続けて触れると範囲を外れることがあるが、知る手段はシートのジェスチャーを探すことになり、非公開の作りに頼るため対応しない。
-    func widenBarGrabAreaWhileSettling() {
-        guard barGrabArea.superview != nil else { return }
-        barGrabArea.frame.size.height = handleHeight + max(barGrab.height, barGrab.settlingHeight)
-        narrowing?.cancel()
-        narrowing = Task(.withoutRequests) { [weak self, clock, barGrab, handleHeight] in
-            do {
-                try await clock.sleep(for: barGrab.settlingDuration)
-            } catch {
-                return
-            }
-            // 待ち終えてから続きが走るまでに次の段の変化が届いても、広げ直した範囲を戻さない。
-            guard !Task.isCancelled else { return }
-            self?.barGrabArea.frame.size.height = handleHeight + barGrab.height
-        }
+/// シートのグラバー。VoiceOverでは押すと次の段へ動かす。
+private final class InAppBrowserGrabberView: UIView {
+    weak var presentation: InAppBrowserPresentationController?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .tertiaryLabel
+        layer.cornerRadius = 2.5
+        isUserInteractionEnabled = false
+        isAccessibilityElement = true
+        accessibilityLabel = "シートグラバー"
+        accessibilityTraits = .button
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var accessibilityValue: String? {
+        get { presentation?.selected == .collapsed ? "折りたたまれました" : "拡げられました" }
+        set { _ = newValue }
+    }
+
+    override func accessibilityActivate() -> Bool {
+        presentation?.selectNextDetent()
+        return presentation != nil
     }
 }
 
 extension InAppBrowserSheet: UIViewControllerTransitioningDelegate {
-    /// 出すときは動かさないので、UIKitに任せる（`presentSafari`は動きなしで出す）。
+    func presentationController(forPresented presented: UIViewController, presenting: UIViewController?, source: UIViewController) -> UIPresentationController? {
+        guard presented === self else { return nil }
+        let controller = InAppBrowserPresentationController(presented: self, presenting: presenting, selected: initialDetent, configuration: configuration)
+        controller.delegate = presentationDelegate
+        sheetPresentation = controller
+        onPresentationCreated?(controller)
+        return controller
+    }
+
+    /// Safariは動きなしで出すので、シートの動きだけを持つ（`presentSafari`）。
     func animationController(forPresented presented: UIViewController, presenting: UIViewController, source: UIViewController) -> (any UIViewControllerAnimatedTransitioning)? {
-        nil
+        presented === self ? InAppBrowserSheetTransition(isPresenting: true, duration: configuration.duration) : nil
     }
 
     /// Safariの×で閉じるときは、Safariだけを閉じず、シートごと閉じる。Safariだけを閉じると、帯だけの空のシートが残るため。
     func animationController(forDismissed dismissed: UIViewController) -> (any UIViewControllerAnimatedTransitioning)? {
+        if dismissed === self { return InAppBrowserSheetTransition(isPresenting: false, duration: configuration.duration) }
         guard dismissed === safari else { return nil }
         return SheetClosingTransition(sheet: self)
-    }
-}
-
-/// ウィンドウに指が触れているかだけを見るジェスチャー。何も認識せず、ほかのジェスチャーやビューの操作を邪魔しない。
-private final class FingerWatcher: UIGestureRecognizer {
-    private let onChange: (Bool) -> Void
-    private var activeTouches = 0
-
-    init(onChange: @escaping (Bool) -> Void) {
-        self.onChange = onChange
-        super.init(target: nil, action: nil)
-        cancelsTouchesInView = false
-        delaysTouchesBegan = false
-        delaysTouchesEnded = false
-    }
-
-    override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool { false }
-    override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool { false }
-
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
-        if activeTouches == 0 { onChange(true) }
-        activeTouches += touches.count
-    }
-
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
-        release(touches)
-    }
-
-    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
-        release(touches)
-    }
-
-    private func release(_ touches: Set<UITouch>) {
-        activeTouches -= touches.count
-        guard activeTouches <= 0 else { return }
-        activeTouches = 0
-        onChange(false)
-        state = .failed
     }
 }
 

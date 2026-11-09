@@ -14,8 +14,11 @@ struct PushAnchor {
 
     /// 押したときと同じ画面が、いちばん上に見えたままか。ほかのタブを選ぶと、そのタブのナビゲーションはウィンドウから外れる。
     /// 添付ファイルのビューアのように元の画面をウィンドウに残したまま重ねる画面は、`presentedViewController`で見る。祖先が出しているものも返る。
+    /// 下げたアプリ内のSafariのシートも`presentedViewController`に返るが、後ろの画面を触れるので、重ねた画面に数えない。
     var isStillShowing: Bool {
         guard let navigation, let top else { return false }
-        return navigation.topViewController === top && navigation.viewIfLoaded?.window != nil && navigation.presentedViewController == nil
+        guard navigation.topViewController === top, navigation.viewIfLoaded?.window != nil else { return false }
+        guard let presented = navigation.presentedViewController else { return true }
+        return (presented as? InAppBrowserSheet)?.leavesScreenBehindUsable == true
     }
 }

@@ -1,4 +1,5 @@
 import SciaCore
+import SciaTesting
 import Testing
 import UIKit
 @testable import Scia
@@ -93,6 +94,35 @@ struct PushAnchorTests {
 
         try await viewer.dismissForTesting()
         #expect(anchor.isStillShowing)
+    }
+
+    /// アプリ内のSafariを下げている間は後ろの画面を触れるので、積む。全画面に広げたときと、シートの上にさらに画面を重ねたときは積まない。
+    @Test func showingOnlyWhileBrowserSheetLeavesScreenBehindUsable() async throws {
+        let harness = try Harness()
+        let root = harness.arrangement.tabBarController
+        let anchor = PushAnchor(try harness.source(.home))
+        let browser = InAppBrowser()
+        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
+        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
+        let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
+        let presentation = try #require(sheet.sheetPresentation)
+
+        presentation.select(.collapsed, animated: false)
+        #expect(anchor.isStillShowing)
+        presentation.select(.medium, animated: false)
+        #expect(anchor.isStillShowing)
+        presentation.select(.large, animated: false)
+        #expect(!anchor.isStillShowing)
+
+        presentation.select(.collapsed, animated: false)
+        let screen = UIViewController()
+        screen.modalPresentationStyle = .overFullScreen
+        try await sheet.frontmostPresented.presentForTesting(screen)
+        #expect(!anchor.isStillShowing)
+        try await screen.dismissForTesting()
+        #expect(anchor.isStillShowing)
+
+        root.dismiss(animated: false)
     }
 
     @Test func notShowingAfterGoingBack() throws {

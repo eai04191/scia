@@ -70,59 +70,8 @@ struct InAppBrowserTests {
 
         #expect(sheet.view.subviews.last === sheet.barGrabArea)
         #expect(sheet.safari.view.isDescendant(of: sheet.view))
-        #expect(sheet.barGrabArea.frame == CGRect(x: inset, y: 0, width: sheet.view.bounds.width - inset * 2, height: handle + height))
-        root.dismiss(animated: false)
-    }
-
-    /// シートの段が変わった直後は、引ける範囲を広げ、シートが落ち着くころに元の高さへ戻す。動いている範囲から指が外れると、Safariへ行ってシートを引けないため。
-    @Test func barGrabAreaWidensWhileSheetSettles() async throws {
-        let harness = try TimelineHarness(notices: notices)
-        defer { harness.tearDown() }
-        let root = harness.viewController
-        let clock = TestClock()
-        let browser = InAppBrowser(tuning: TuningStore(defaults: nil), clock: clock)
-        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
-        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
-        let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
-        try await waitUntil { sheet.barGrabArea.superview != nil }
-        let controller = try #require(sheet.sheetPresentationController)
-        let height = CGFloat(TuningCatalog.inAppBrowserBarGrabHeight.defaultValue)
-        let settlingHeight = CGFloat(TuningCatalog.inAppBrowserBarGrabSettlingHeight.defaultValue)
-        let duration = Duration.seconds(TuningCatalog.inAppBrowserBarGrabSettlingDuration.defaultValue)
-
-        browser.sheetPresentationControllerDidChangeSelectedDetentIdentifier(controller)
-        let handle = CGFloat(TuningCatalog.inAppBrowserHandleHeight.defaultValue)
-        #expect(sheet.barGrabArea.frame.minY == 0)
-        #expect(sheet.barGrabArea.frame.height == handle + settlingHeight)
-
-        try await clock.advance(afterSleeping: duration)
-        try await waitUntil { sheet.barGrabArea.frame.height == handle + height }
-        #expect(sheet.barGrabArea.frame.minY == 0)
-        root.dismiss(animated: false)
-    }
-
-    /// 前の待ちが終わった直後に段が変わったら、前の待ちは広げ直した範囲を戻さない。
-    @Test func earlierWaitDoesNotNarrowWidenedAgainBarGrabArea() async throws {
-        let harness = try TimelineHarness(notices: notices)
-        defer { harness.tearDown() }
-        let root = harness.viewController
-        let clock = TestClock()
-        let browser = InAppBrowser(tuning: TuningStore(defaults: nil), clock: clock)
-        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
-        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
-        let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
-        try await waitUntil { sheet.barGrabArea.superview != nil }
-        let duration = Duration.seconds(TuningCatalog.inAppBrowserBarGrabSettlingDuration.defaultValue)
-        let widened = CGFloat(TuningCatalog.inAppBrowserHandleHeight.defaultValue + TuningCatalog.inAppBrowserBarGrabSettlingHeight.defaultValue)
-
-        sheet.widenBarGrabAreaWhileSettling()
-        try await clock.advance(afterSleeping: duration)
-        sheet.widenBarGrabAreaWhileSettling()
-        try await waitUntil { clock.sleeperCount(remaining: duration) >= 1 }
-        // 前の待ちの続きは、起こされた時点でメインアクターの列に入っているので、後ろに並んで終わるのを待つ。
-        await Task { @MainActor in }.value
-
-        #expect(sheet.barGrabArea.frame.height == widened)
+        let safariInset = CGFloat(TuningCatalog.inAppBrowserSafariTopInset.defaultValue)
+        #expect(sheet.barGrabArea.frame == CGRect(x: inset, y: 0, width: sheet.view.bounds.width - inset * 2, height: safariInset + handle + height))
         root.dismiss(animated: false)
     }
 
@@ -142,86 +91,43 @@ struct InAppBrowserTests {
         root.dismiss(animated: false)
     }
 
-    /// シートの段を変えると、Safariも帯の下の範囲いっぱいに広がる。出したときの大きさのまま残ると、広げたシートの下が空く。
+    /// シートが止まったら、Safariをシートの見えている高さに合わせる。出したときの大きさのまま残ると、広げたシートの下が空く。
     @Test func safariFollowsSheetSize() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let root = harness.viewController
         let clock = TestClock()
-        let browser = InAppBrowser(tuning: TuningStore(defaults: nil), clock: clock)
+        let tuning = TuningStore(defaults: nil)
+        tuning.setValue(0, for: TuningCatalog.inAppBrowserDockDuration)
+        let browser = InAppBrowser(tuning: tuning, clock: clock)
         let sheet = try await openSheet(with: browser, from: root)
-        let presentation = try #require(sheet.sheetPresentationController)
-        let before = sheet.view.bounds.height
+        let presentation = try #require(sheet.sheetPresentation)
 
-        presentation.selectedDetentIdentifier = presentation.selectedDetentIdentifier == .large ? nil : .large
-        sheet.view.window?.layoutIfNeeded()
-
-        try await waitUntil { sheet.view.bounds.height != before }
-        sheet.view.layoutIfNeeded()
+        presentation.select(.large, animated: false)
         let delay = Duration.seconds(TuningCatalog.inAppBrowserSafariResizeDelay.defaultValue)
         try await clock.advance(afterSleeping: delay)
-        try await waitUntil { sheet.safari.view.convert(sheet.safari.view.bounds, to: sheet.view).maxY == sheet.view.bounds.maxY }
+        let large = CGFloat(presentation.layout.large)
+        try await waitUntil { sheet.safari.view.frame.maxY == large }
         root.dismiss(animated: false)
     }
 
-    /// 指が触れている間はSafariの大きさを変えず、離したらシートに合わせる。
-    @Test func safariResizesAfterFingerLifts() async throws {
+    /// 伏せた段ではSafariを中くらいの高さのままにして、下のツールバーをシートの下へはみ出させる。
+    @Test func safariKeepsMediumHeightWhenCollapsed() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let root = harness.viewController
         let clock = TestClock()
-        let browser = InAppBrowser(tuning: TuningStore(defaults: nil), clock: clock)
+        let tuning = TuningStore(defaults: nil)
+        tuning.setValue(0, for: TuningCatalog.inAppBrowserDockDuration)
+        let browser = InAppBrowser(tuning: tuning, clock: clock)
         let sheet = try await openSheet(with: browser, from: root)
-        #expect(sheet.isWatchingFinger)
-        let safariHeight = sheet.safari.view.frame.height
-        let before = sheet.view.bounds.height
-        let presentation = try #require(sheet.sheetPresentationController)
+        let presentation = try #require(sheet.sheetPresentation)
 
-        sheet.isFingerDown = true
-        presentation.selectedDetentIdentifier = .large
-        sheet.view.window?.layoutIfNeeded()
-        try await waitUntil { sheet.view.bounds.height != before }
-        sheet.view.layoutIfNeeded()
-        #expect(sheet.safari.view.frame.height == safariHeight)
-
-        sheet.isFingerDown = false
-        sheet.view.layoutIfNeeded()
-        // 離したあとも、待つ時間が過ぎるまでは大きさを変えない。続けて届くシートの大きさの変化を1回にまとめるため。
-        #expect(sheet.safari.view.frame.height == safariHeight)
+        presentation.select(.collapsed, animated: false)
         let delay = Duration.seconds(TuningCatalog.inAppBrowserSafariResizeDelay.defaultValue)
         try await clock.advance(afterSleeping: delay)
-        try await waitUntil { sheet.safari.view.frame.height != safariHeight }
-        let safariFrame = sheet.safari.view.convert(sheet.safari.view.bounds, to: sheet.view)
-        #expect(safariFrame.maxY == sheet.view.bounds.maxY)
-        root.dismiss(animated: false)
-    }
-
-    /// シートの高さを決める間は、覆う高さを知らせず、決め終えてから知らせる。
-    /// 知らせを受けたタイムラインが安全領域を変えると、UIKitが高さを決めている途中のシートに位置を聞き直し、入れ子になって落ちるため。
-    @Test func reportsObscuredHeightAfterResolvingDetents() async throws {
-        let harness = try TimelineHarness(notices: notices)
-        defer { harness.tearDown() }
-        let root = harness.viewController
-        let browser = InAppBrowser()
-        var resolving = false
-        var reportedWhileResolving = false
-        var reported: [CGFloat] = []
-        browser.onObscuredHeightChange = { height in
-            if resolving { reportedWhileResolving = true }
-            reported.append(height)
-        }
-        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
-        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
-        let sheet = try #require(root.presentedViewController?.sheetPresentationController)
-        reported.removeAll()
-
-        resolving = true
-        let values = sheet.detents.map { $0.resolvedValue(in: DetentResolutionContext(maximumDetentValue: 1000)) }
-        resolving = false
-
-        #expect(values.contains { $0 != nil })
-        #expect(!reportedWhileResolving)
-        try await waitUntil { !reported.isEmpty }
+        let medium = try #require(presentation.layout.medium)
+        try await waitUntil { sheet.safari.view.frame.maxY == CGFloat(medium) }
         root.dismiss(animated: false)
     }
 
@@ -231,14 +137,5 @@ struct InAppBrowserTests {
         let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
         try await waitUntil { sheet.safari.viewIfLoaded?.window != nil }
         return sheet
-    }
-}
-
-private final class DetentResolutionContext: NSObject, UISheetPresentationControllerDetentResolutionContext {
-    let containerTraitCollection = UITraitCollection(verticalSizeClass: .regular)
-    let maximumDetentValue: CGFloat
-
-    init(maximumDetentValue: CGFloat) {
-        self.maximumDetentValue = maximumDetentValue
     }
 }
