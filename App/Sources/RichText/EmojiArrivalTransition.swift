@@ -248,7 +248,7 @@ final class EmojiArrivalTransition {
     }
 
     /// 文字ごとの、`label`の幅で並べたときの枠。
-    private static func characterFrames(of text: NSAttributedString, in label: EmojiLabel) -> [Int: CGRect] {
+    static func characterFrames(of text: NSAttributedString, in label: EmojiLabel) -> [Int: CGRect] {
         let layout = label.textLayout(of: text)
         let string = text.string as NSString
         var frames: [Int: CGRect] = [:]

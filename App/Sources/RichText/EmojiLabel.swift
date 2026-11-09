@@ -131,6 +131,7 @@ class EmojiLabel: TextKitLabel {
 
     /// 文字列を入れ替える前に、動き始めるときの文字の見え方を測る。動いている途中なら、いま見えている位置と濃さから動かし直す。
     private func prepareEmojiArrival(filling filled: Set<Int>) {
+        cancelTextReplacement()
         let running = emojiArrival?.isRunning == true ? emojiArrival : nil
         let duration = emojiArrivalDuration()
         guard duration > 0, window != nil, bounds.width > 0, let shown = attributedText else {
@@ -160,6 +161,27 @@ class EmojiLabel: TextKitLabel {
         pendingEmojiArrival = false
         emojiArrival?.finish()
         emojiArrival = nil
+    }
+
+    /// 本文を別の文章へ置き換える動き。文字列を入れ替える前に前の描画を残し、並べ終えた`layoutSubviews`で動かし始める。
+    private(set) var textReplacement: TextReplacementTransition?
+    private var pendingTextReplacement = false
+
+    /// 文字列を入れ替える前に呼ぶ。`shiftDuration`は、まだ順番が来ていない段落を新しい位置へ動かす時間。
+    func prepareTextReplacement(duration: TimeInterval, shiftDuration: TimeInterval, wordDuration: TimeInterval, fadeWidth: Double) {
+        // 動いている途中なら、まだ出ていない語が一度に見えないよう、今見えている描画から始める。
+        let currentImage = textReplacement?.currentImage()
+        cancelTextReplacement()
+        guard duration > 0, window != nil, bounds.width > 0, !UIAccessibility.isReduceMotionEnabled, let shown = attributedText else { return }
+        textReplacement = TextReplacementTransition(label: self, text: shown, currentImage: currentImage, duration: duration, shiftDuration: shiftDuration, wordDuration: wordDuration, fadeWidth: fadeWidth)
+        pendingTextReplacement = textReplacement != nil
+        setNeedsLayout()
+    }
+
+    func cancelTextReplacement() {
+        pendingTextReplacement = false
+        textReplacement?.finish()
+        textReplacement = nil
     }
 
     /// 置く側が渡した文字列。アニメーションする絵文字を透明な画像に差し替える前のもの。
@@ -193,6 +215,12 @@ class EmojiLabel: TextKitLabel {
     override func layoutSubviews() {
         super.layoutSubviews()
         layoutAnimatedEmojis()
+        if pendingTextReplacement, let attributedText {
+            pendingTextReplacement = false
+            textReplacement?.start(newText: attributedText)
+        } else if textReplacement?.isRunning == true {
+            textReplacement?.hideLabelLayers()
+        }
         if pendingEmojiArrival, let attributedText {
             pendingEmojiArrival = false
             emojiArrival?.start(newText: attributedText)

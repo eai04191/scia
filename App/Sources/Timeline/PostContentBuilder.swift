@@ -119,6 +119,9 @@ struct PostContentBuilder {
         configuration.preparedBodyLayout = preparedBody?.layout
         configuration.isTranslated = translation != nil
         configuration.translationFadeDuration = tuning.value(of: TuningCatalog.translationTransitionDuration)
+        configuration.translationWipeDuration = tuning.value(of: TuningCatalog.translationWipeDuration)
+        configuration.translationWordDuration = tuning.value(of: TuningCatalog.translationWordDuration)
+        configuration.translationFadeWidth = tuning.value(of: TuningCatalog.translationFadeWidth)
         configuration.reactionGlow = reactionGlow(for: shown)
         configuration.showsReplyLines = settings.appearance.showsReplyLines
         configuration.showsTime = settings.appearance.showsTime

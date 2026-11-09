@@ -179,6 +179,8 @@ final class PostBodyView: UIView {
     private var embedView: EmbeddedPostView?
     /// 囲みに替わったリンクカードの像。囲みを濃くする間、カードのあった位置に重ねて薄くする。
     private(set) var leavingCardSnapshot: UIView?
+    /// 次に並べるときに動かす、本文より下の部品と前の上端、動きの時間。
+    private var pendingBelowTextShift: (views: [(UIView, CGFloat)], duration: TimeInterval)?
     private var filterNoteLabel: UILabel?
     private var reactionsView: ReactionChipsView?
     private var actionBarView: PostActionBarView?
@@ -724,13 +726,28 @@ final class PostBodyView: UIView {
         view?.invalidateIntrinsicContentSize()
     }
 
-    /// 直前に入れ替えた本文の文字を、前の文字からクロスフェードする。原文と訳文を置き換えるときに使う。
-    func crossfadeText(duration: TimeInterval) {
-        guard duration > 0 else { return }
-        let fade = CATransition()
-        fade.type = .fade
-        fade.duration = duration
-        textLabel.layer.add(fade, forKey: "translationFade")
+    /// 本文の文字を別の文章へ入れ替える前に呼ぶ。文字の動きはラベルが付ける。本文より下の部品は、次に並べるときに、前の位置から新しい位置へ動かす。
+    func prepareTextReplacement(duration: TimeInterval, shiftDuration: TimeInterval, wordDuration: TimeInterval, fadeWidth: Double) {
+        textLabel.prepareTextReplacement(duration: duration, shiftDuration: shiftDuration, wordDuration: wordDuration, fadeWidth: fadeWidth)
+        guard window != nil, shiftDuration > 0, !UIAccessibility.isReduceMotionEnabled else { return }
+        let below = subviews.filter { $0 !== textLabel && $0.frame.minY >= textLabel.frame.maxY - 1 }
+        pendingBelowTextShift = (below.map { ($0, $0.frame.minY) }, shiftDuration)
+        setNeedsLayout()
+    }
+
+    /// 本文より下の部品を、前の位置から今の位置へ動かす。段落の文字と、タイムラインの下の行と、同じ時刻に同じスプリングで動かす。
+    private func startPendingBelowTextShift() {
+        guard let (views, duration) = pendingBelowTextShift else { return }
+        pendingBelowTextShift = nil
+        for (view, oldMinY) in views {
+            let shift = view.frame.minY - oldMinY
+            guard view.superview === self, abs(shift) > 0.5 else { continue }
+            let move = TimelineViewController.rowSpring(keyPath: "position", duration: duration)
+            move.isAdditive = true
+            move.fromValue = CGPoint(x: 0, y: -shift)
+            move.toValue = CGPoint.zero
+            view.layer.add(move, forKey: "belowTextShift")
+        }
     }
 
     func apply(_ content: PostBodyContent) {
@@ -756,6 +773,8 @@ final class PostBodyView: UIView {
         animatesReactionChange = previous?.statusID != nil && previous?.statusID == content.statusID && window != nil
         if previous?.statusID != content.statusID {
             cancelReactionTransitions()
+            textLabel.cancelTextReplacement()
+            pendingBelowTextShift = nil
         }
         textLabel.attributedText = Self.truncatingTail(content.text, when: content.maximumLines > 0)
         textLabel.hashtagAccount = content.hashtagAccount
@@ -924,6 +943,7 @@ final class PostBodyView: UIView {
             invalidateRowHeight()
         }
         startPendingReactionsFadeOut()
+        startPendingBelowTextShift()
     }
 
     /// 出した注意書きのボックスを返す。

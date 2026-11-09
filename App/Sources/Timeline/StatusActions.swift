@@ -130,7 +130,7 @@ extension TimelineViewController {
         tree.canOpenThread = status.map(canOpenThread(of:)) ?? false
         tree.mediaIsCovered = status.map { mediaCover(for: $0) != nil } ?? false
         tree.canSelectText = canSelectText
-        if notification == nil, let shown = status?.displayed, translations?.hasTranslation(of: shown) == true {
+        if notification == nil, let shown = status?.displayed, self.status(for: id)?.displayed.id == shown.id, translations?.hasTranslation(of: shown) == true {
             tree.translationDisplay = translations?.isShowingOriginal(shown) == true ? .original : .translation
         }
         tree.canSelectPosts = canSelectPost(id)

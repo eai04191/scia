@@ -89,13 +89,40 @@ public enum TuningCatalog {
         defaultValue: 0.4
     )
 
-    /// 自動翻訳の訳文で本文を置き換えるときの、高さの変わる分を動きでつなぐ時間。
+    /// 自動翻訳の訳文で本文を置き換えるときの、高さの変わる分を下の投稿ごと動かしてつなぐ時間。
     public static let translationTransitionDuration = NumberTuning(
         id: "timeline.translationTransitionDuration",
         title: "自動翻訳の訳文に置き換える時間（秒）",
         range: 0...1.5,
         step: 0.05,
         defaultValue: 0.4
+    )
+
+    /// 自動翻訳で、本文の文字を先頭から置き換える時間。
+    public static let translationWipeDuration = NumberTuning(
+        id: "timeline.translationWipeDuration",
+        title: "自動翻訳の文字を先頭から置き換える時間（秒）",
+        range: 0...3,
+        step: 0.05,
+        defaultValue: 0.8
+    )
+
+    /// 自動翻訳で、文字の濃さを変える幅の、1行に対する割合。
+    public static let translationFadeWidth = NumberTuning(
+        id: "timeline.translationFadeWidth",
+        title: "自動翻訳の文字の濃さを変える幅（1行に対する割合）",
+        range: 0.1...1,
+        step: 0.05,
+        defaultValue: 0.5
+    )
+
+    /// 自動翻訳で、語が浮かび上がるスプリングの時間。
+    public static let translationWordDuration = NumberTuning(
+        id: "timeline.translationWordDuration",
+        title: "自動翻訳の語が浮かび上がるスプリングの時間（秒）",
+        range: 0.05...1,
+        step: 0.05,
+        defaultValue: 0.35
     )
 
     /// 自動翻訳の訳文が届いてから、まとめて描き直すまでの間。
@@ -1844,6 +1871,9 @@ public enum TuningCatalog {
             .number(pollModeChangeDuration),
             .number(linkCardTransitionDuration),
             .number(translationTransitionDuration),
+            .number(translationWipeDuration),
+            .number(translationWordDuration),
+            .number(translationFadeWidth),
             .number(translationApplyInterval),
             .number(longBodyExpandDuration),
             .number(actionBarDrawerDuration),

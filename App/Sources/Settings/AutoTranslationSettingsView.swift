@@ -40,9 +40,9 @@ private final class TranslationDownloadQueue {
         if current == nil { showNext() }
     }
 
-    /// まだ出していない求めを取り下げる。
-    func withdrawWaiting() {
-        waiting = []
+    /// まだ出していない求めを取り下げる。`source`を渡せば、その言語の求めだけを取り下げる。
+    func withdrawWaiting(source: String? = nil) {
+        waiting.removeAll { source == nil || $0.source == source }
     }
 
     /// シートの結果を受け取り、次を出す。
@@ -174,6 +174,7 @@ struct AutoTranslationSettingsView: View {
                 Task(.withoutRequests) { await requestDownloads(of: [language.code]) }
             } else {
                 settings.autoTranslationLanguages.removeAll { $0 == language.code }
+                downloads.withdrawWaiting(source: language.code)
             }
         }
     }
@@ -219,6 +220,6 @@ struct AutoTranslationSettingsView: View {
         }
         // 調べている間にオフにしたら求めない。翻訳先か方式が変わったら、新しい設定の分に任せる。
         guard settings.isAutoTranslationEnabled, target == self.target, strategy == settings.autoTranslationStrategy else { return }
-        downloads.enqueue(requests, target: target, strategy: strategy)
+        downloads.enqueue(requests.filter { settings.autoTranslationLanguages.contains($0.source) }, target: target, strategy: strategy)
     }
 }

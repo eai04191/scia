@@ -283,6 +283,35 @@ struct StatusTranslationStoreTests {
         try await waitUntil { store.hasTranslation(of: post) }
     }
 
+    /// 本文を変えずに言語だけを直した投稿は、前の言語の訳文を使わずに訳し直す。
+    @Test func retranslatesAfterLanguageOnlyEdit() async throws {
+        let scope = TaskScope()
+        let translator = FakeTranslator()
+        let store = store(translator, clock: TestClock(), scope: scope, languages: ["en", "de"])
+        let post = status("1", language: "en")
+        store.request([post])
+        try await waitUntil { store.hasTranslation(of: post) }
+
+        let edited = status("1", language: "de")
+        #expect(store.translation(for: edited) == nil)
+        store.request([edited])
+        try await waitUntil { store.hasTranslation(of: edited) }
+
+        #expect(translator.attempts == 2)
+    }
+
+    /// 本文のない投稿は頼まない。訳せなかった投稿の記録も増やさない。
+    @Test func doesNotRequestEmptyBody() {
+        let scope = TaskScope()
+        let translator = FakeTranslator()
+        let store = store(translator, clock: TestClock(), scope: scope)
+
+        store.request([status("1", content: "")])
+
+        #expect(scope.runningCount == 0)
+        #expect(translator.attempts == 0)
+    }
+
     /// モデルが入る前に始めた翻訳の失敗が、モデルが入って頼み直したあとに届いても、頼み直しを消さない。
     @Test func retriesAfterInstallWhileOldFailureIsPending() async throws {
         let scope = TaskScope()

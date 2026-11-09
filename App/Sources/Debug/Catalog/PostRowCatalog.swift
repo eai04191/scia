@@ -39,6 +39,17 @@ enum PostRowCatalog {
                 }
             }
         }
+        func translation(_ title: String, _ status: Status, isTranslating: Bool) -> CatalogState {
+            CatalogState(title: title) {
+                CatalogFrame.post {
+                    var configuration = home.contentConfiguration(for: status, isPinned: false, base: .cell())
+                    configuration.isTranslated = !isTranslating
+                    configuration.isTranslating = isTranslating
+                    return configuration
+                }
+            }
+        }
+        let longNameAccount = Fixtures.account(displayName: String(repeating: "とても長い表示名", count: 4), acct: "a-very-long-account-name@subdomain.example.com")
         let longHandleAccount = Fixtures.account(displayName: "長いハンドルの人", acct: "a-very-long-account-name-for-replies@subdomain.example.com")
         let longSpoiler = String(repeating: "注意書きが長く、何行にもわたるときの折り返しを確かめる。", count: 4)
         /// `count`個の段落を並べた本文。1段落は1行に収まる。既定の「投稿の見た目」では、32行を超えたら15行に切る。
@@ -63,6 +74,9 @@ enum PostRowCatalog {
             post("切った本文をブーストした投稿", status(content: lines(40), rebloggedBy: booster)),
             post("切った本文を広げた", status(content: lines(40)), expandsBody: true),
             post("注意書きを開いた長い本文（切らない）", status(content: lines(40), spoilerText: "ネタバレ"), expandsSpoiler: true),
+            translation("訳文の投稿（翻訳のアイコン）", status(content: "<p>訳文の本文。</p>"), isTranslating: false),
+            translation("訳文を待っている投稿（パルス）", status(content: "<p>原文の本文。</p>"), isTranslating: true),
+            translation("長い表示名とハンドルに翻訳のアイコン", status(content: "<p>訳文の本文。</p>", account: longNameAccount), isTranslating: false),
             post("ブーストされた投稿", status(content: "<p>ブーストされた投稿。</p>", rebloggedBy: booster)),
             post("固定された投稿", status(content: "<p>プロフィールの上に固定された投稿。</p>"), isPinned: true),
             post("ほかの人への返信", status(content: "<p>返信の本文。</p>", account: booster, replyingTo: author)),

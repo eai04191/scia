@@ -159,11 +159,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private var loadingGapIDs: Set<String> = []
     /// 直近の読み込みに失敗したギャップと、その理由。行の中で読めなかったことを知らせる。
     private var gapFailures: [String: ErrorPresentation] = [:]
-    private var isShowingMenu = false
+    private(set) var isShowingMenu = false
     /// メニューを出している間に届いた並びの更新。閉じたときに反映する。
     private var heldEntries: HeldEntries?
     /// メニューを出している間に求められた描き直し。
     private var heldReconfigureIDs: Set<ItemID> = []
+    /// メニューを出している間に原文と訳文が替わった行。閉じたあと、翻訳の動きで描き直す。
+    var heldTranslationItems: Set<ItemID> = []
     /// 画面に出ていない間（ほかのタブ、上に重ねた画面の下）に、絵文字やXの投稿が届いて求められた描き直し。画面に出るときに描き直す。
     private var hiddenReconfigureIDs: Set<ItemID> = []
     private var contentSizeObserver: (any NSObjectProtocol)?
@@ -1057,9 +1059,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         // 取り直した投稿の行は、並びを置き換えたあとで高さを動かして描き直す。
         let refreshedIDs = refreshedStatusID.map { refreshed in Set(changedIDs.filter { status(for: $0)?.displayed.id == refreshed }) } ?? []
         defer { reconfigureAnimatingHeight(refreshedIDs, duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration)) }
-        // 編集で本文が変わった投稿の訳文は使えないので、見えている範囲が変わらなくても訳し直しを頼む。
+        // 編集で本文か言語が変わった投稿の訳文は使えないので、見えている範囲が変わらなくても訳し直しを頼む。
         let bodyChanged = translations != nil && changedIDs.contains { id in
-            previous[id].flatMap(Self.statusOfRow)?.displayed.content != entries[id].flatMap(Self.statusOfRow)?.displayed.content
+            let old = previous[id].flatMap(Self.statusOfRow)?.displayed
+            let new = entries[id].flatMap(Self.statusOfRow)?.displayed
+            return old?.content != new?.content || old?.language != new?.language
         }
         defer {
             if bodyChanged { requestTranslationsAroundVisibleRows() }
@@ -1254,7 +1258,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let existing = Set(dataSource.snapshot().itemIdentifiers)
         let reconfigureIDs = heldReconfigureIDs.intersection(existing)
         heldReconfigureIDs.removeAll()
-        reconfigure(reconfigureIDs)
+        // 翻訳の描き直しは前の高さから動かすので、先に普通の描き直しで高さを変えない。
+        let translationItems = heldTranslationItems.intersection(existing)
+        heldTranslationItems.removeAll()
+        reconfigure(reconfigureIDs.subtracting(translationItems))
+        redrawTranslations(translationItems)
         if let pending = pendingTextSelection {
             pendingTextSelection = nil
             // 溜めていた更新で、行が別の投稿に使い回されていれば選ばない。

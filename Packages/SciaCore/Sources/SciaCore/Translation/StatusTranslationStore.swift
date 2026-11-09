@@ -15,8 +15,8 @@ public final class StatusTranslationStore {
     public var onChange: ((Set<Status.ID>) -> Void)?
 
     private struct Entry {
-        /// 訳した時点の本文。編集で変わったら、この訳文は使わない。
-        let content: String
+        /// 訳した時点の言語と本文。編集で変わったら、この訳文は使わない。
+        let source: String
         let richText: RichText
     }
 
@@ -136,7 +136,7 @@ public final class StatusTranslationStore {
     }
 
     private func currentEntry(for status: Status) -> Entry? {
-        guard isTranslatable(status), let entry = entries.value(forKey: status.id), entry.content == status.content else { return nil }
+        guard isTranslatable(status), let entry = entries.value(forKey: status.id), entry.source == Self.source(of: status) else { return nil }
         return entry
     }
 
@@ -146,12 +146,17 @@ public final class StatusTranslationStore {
     }
 
     private func needsTranslation(_ status: Status) -> Bool {
-        isTranslatable(status) && currentEntry(for: status) == nil && skipped.value(forKey: status.id) != status.content
+        !status.content.isEmpty && isTranslatable(status) && currentEntry(for: status) == nil && skipped.value(forKey: status.id) != Self.source(of: status)
     }
 
     /// 投稿の言語と訳す言語を比べるキー。`zh`と`zh-CN`のように同じ言語は同じキーになり、`zh`と`zh-TW`、`en`と`en-GB`は別のキーになる。
     private static func matchKey(_ identifier: String) -> String? {
         Locale.Language(identifier: identifier).maximalIdentifier
+    }
+
+    /// 訳した結果が使えるかを比べる値。言語か本文が変われば、別の値になる。
+    private static func source(of status: Status) -> String {
+        "\(status.language ?? "")\n\(status.content)"
     }
 
     private static func languageCode(_ identifier: String) -> String? {
@@ -167,7 +172,7 @@ public final class StatusTranslationStore {
                 guard generation == targetGeneration else { continue }
                 if let richText {
                     if let code = Self.matchKey(language) { uninstalledLanguages.remove(code) }
-                    _ = entries.setValue(Entry(content: status.content, richText: richText), forKey: status.id, cost: status.content.utf8.count)
+                    _ = entries.setValue(Entry(source: Self.source(of: status), richText: richText), forKey: status.id, cost: status.content.utf8.count)
                     noteChange([status.id])
                 } else {
                     skip(status)
@@ -192,7 +197,7 @@ public final class StatusTranslationStore {
     }
 
     private func skip(_ status: Status) {
-        _ = skipped.setValue(status.content, forKey: status.id, cost: status.content.utf8.count)
+        _ = skipped.setValue(Self.source(of: status), forKey: status.id, cost: status.content.utf8.count)
         noteChange([status.id])
     }
 

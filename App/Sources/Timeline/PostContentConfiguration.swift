@@ -60,6 +60,12 @@ struct PostContentConfiguration: UIContentConfiguration {
     var isTranslating = false
     /// 同じ投稿で原文と訳文が替わるときに、文字をクロスフェードする時間。
     var translationFadeDuration: TimeInterval = 0
+    /// 自動翻訳で、本文の文字を先頭から置き換える時間。
+    var translationWipeDuration: TimeInterval = 0
+    /// 自動翻訳で、語ごとに文字を入れ替える時間。
+    var translationWordDuration: TimeInterval = 0
+    /// 自動翻訳で、濃さを変える幅の、1行に対する割合。
+    var translationFadeWidth: Double = 0
     /// 公開以外なら、時刻と編集済みのアイコンの前に、投稿欄で選ぶときと同じ記号を付ける。
     var visibility: Status.Visibility = .public
     /// 公開範囲の記号と、編集済みの「*」を出すか。出さなくても、読み上げでは読む。
@@ -510,6 +516,9 @@ final class PostContentView: UIView, UIContentView {
         bodyView.onAddReaction = configuration.onAddReaction == nil ? nil : { [weak self] in self?.current.onAddReaction?() }
         bodyView.reactionTarget = configuration.reactionTarget == nil ? nil : { [weak self] name in self?.current.reactionTarget?(name) }
         bodyView.actionBarLongPressTarget = configuration.actionBarLongPressTarget == nil ? nil : { [weak self] item in self?.current.actionBarLongPressTarget?(item) }
+        if translationChanged {
+            bodyView.prepareTextReplacement(duration: configuration.translationWipeDuration, shiftDuration: configuration.translationFadeDuration, wordDuration: configuration.translationWordDuration, fadeWidth: configuration.translationFadeWidth)
+        }
         bodyView.apply(PostBodyContent(
             spoiler: configuration.spoiler,
             text: configuration.body,
@@ -535,9 +544,6 @@ final class PostContentView: UIView, UIContentView {
             actionBar: configuration.actionBar,
             actionBarSpacing: metrics.actionBarSpacing
         ))
-        if translationChanged {
-            bodyView.crossfadeText(duration: configuration.translationFadeDuration)
-        }
         reactionGlowView.apply(configuration.reactionGlow)
         // アイコンの下を空けないときは、線の通る場所に本文などが入るので、線を出さない。
         let drawsReplyLines = configuration.showsReplyLines && !configuration.wrapsBelowAvatar
