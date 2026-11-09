@@ -107,6 +107,8 @@ public enum TuningCatalog {
         defaultValue: 0.8
     )
 
+    public static let translationSectionID = "translation"
+
     /// 自動翻訳で、文字の濃さを変える幅の、1行に対する割合。
     public static let translationFadeWidth = NumberTuning(
         id: "timeline.translationFadeWidth",
@@ -1866,14 +1868,16 @@ public enum TuningCatalog {
     )
 
     public static let sections: [TuningSection] = [
+        TuningSection(id: translationSectionID, title: "自動翻訳の置き換え", items: [
+            .number(translationWipeDuration),
+            .number(translationFadeWidth),
+            .number(translationWordDuration),
+            .number(translationTransitionDuration),
+        ]),
         TuningSection(id: "timeline", title: "タイムラインの見た目", items: [
             .number(pollBarDuration),
             .number(pollModeChangeDuration),
             .number(linkCardTransitionDuration),
-            .number(translationTransitionDuration),
-            .number(translationWipeDuration),
-            .number(translationWordDuration),
-            .number(translationFadeWidth),
             .number(translationApplyInterval),
             .number(longBodyExpandDuration),
             .number(actionBarDrawerDuration),

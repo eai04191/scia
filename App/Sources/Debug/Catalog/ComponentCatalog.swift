@@ -34,6 +34,7 @@ enum CatalogComponent: String, CaseIterable {
     case mediaGrid = "media-grid"
     case profileHeader = "profile-header"
     case profileAccent = "profile-accent"
+    case translationTransition = "translation-transition"
     case posts
     case postsMediaBeside = "posts-media-beside"
     case linkCards = "link-cards"
@@ -63,6 +64,7 @@ enum CatalogComponent: String, CaseIterable {
         case .extendedURL: "URLの後ろに続いた文字のシート"
         case .altTextEditor: "代替テキストの入力欄"
         case .caption: "ビューアの説明"
+        case .translationTransition: "自動翻訳の置き換え（繰り返す）"
         case .notices: "アプリ内通知のチップの列"
         case .statusBarTicker: "ステータスバーの通知"
         case .operationStatus: "操作の状況のリスト"
@@ -108,6 +110,7 @@ enum CatalogComponent: String, CaseIterable {
         case .extendedURL: ExtendedURLCatalog.states()
         case .altTextEditor: AltTextEditorCatalog.states()
         case .caption: CaptionCatalog.states()
+        case .translationTransition: [CatalogState(title: "投稿") { CatalogFrame.bordered(TranslationTransitionLoopView(), height: 240) }]
         case .notices: NoticeCatalog.states()
         case .statusBarTicker: StatusBarTickerCatalog.states()
         case .operationStatus: OperationStatusCatalog.states()

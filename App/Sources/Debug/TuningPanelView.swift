@@ -34,6 +34,13 @@ struct TuningPanelView: View {
                         }
                     }
                     .listSectionSpacing(.compact)
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        // 値を動かしながら見られるよう、カテゴリを開いている間はスクロールしても見本を出したままにする。
+                        if expandedSectionIDs.split(separator: ",").contains(Substring(TuningCatalog.translationSectionID)) {
+                            TranslationTransitionPreview()
+                                .frame(height: 210)
+                        }
+                    }
                 }
             }
             .navigationTitle("チューニング")
