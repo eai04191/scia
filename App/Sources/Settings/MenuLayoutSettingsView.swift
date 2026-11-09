@@ -291,7 +291,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
                 content.text = "横並びを追加"
                 content.textProperties.color = .tintColor
             case .reset:
-                content.text = "最初の並びに戻す"
+                content.text = "デフォルトの並びに戻す"
                 content.textProperties.color = .systemRed
             case .empty:
                 content.text = "なし"
