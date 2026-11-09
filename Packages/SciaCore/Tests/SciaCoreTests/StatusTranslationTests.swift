@@ -98,18 +98,25 @@ struct StatusTranslationStoreTests {
         let notInstalledLanguages: Mutex<Set<String>>
         let attemptCount = Mutex(0)
         let targetRequests = Mutex<[String]>([])
+        let strategyRequests = Mutex<[TranslationStrategy]>([])
         let gate: Gate
+        let failureGate: Gate
 
-        init(notInstalledLanguages: Set<String> = [], gate: Gate = Gate(isOpen: true)) {
+        init(notInstalledLanguages: Set<String> = [], gate: Gate = Gate(isOpen: true), failureGate: Gate = Gate(isOpen: true)) {
             self.notInstalledLanguages = Mutex(notInstalledLanguages)
             self.gate = gate
+            self.failureGate = failureGate
         }
 
-        func translate(_ parts: [TranslationPart], from source: String, to target: String) async throws -> [TranslationPart] {
+        func translate(_ parts: [TranslationPart], from source: String, to target: String, strategy: TranslationStrategy) async throws -> [TranslationPart] {
             attemptCount.withLock { $0 += 1 }
-            guard !notInstalledLanguages.withLock({ $0.contains(source) }) else { throw StatusTranslationError.notInstalled }
+            guard !notInstalledLanguages.withLock({ $0.contains(source) }) else {
+                try await failureGate.wait()
+                throw StatusTranslationError.notInstalled
+            }
             requests.withLock { $0.append(Self.text(of: parts)) }
             targetRequests.withLock { $0.append(target) }
+            strategyRequests.withLock { $0.append(strategy) }
             try await gate.wait()
             return parts.map { part in
                 if case .text(let text) = part { .text("訳:" + text) } else { part }
@@ -128,6 +135,7 @@ struct StatusTranslationStoreTests {
         var requested: [String] { requests.withLock { $0 } }
         var attempts: Int { attemptCount.withLock { $0 } }
         var targets: [String] { targetRequests.withLock { $0 } }
+        var strategies: [TranslationStrategy] { strategyRequests.withLock { $0 } }
 
         func install() {
             notInstalledLanguages.withLock { $0 = [] }
@@ -141,7 +149,7 @@ struct StatusTranslationStoreTests {
     }
 
     private func store(_ translator: FakeTranslator, clock: TestClock, scope: TaskScope, languages: [String] = ["en"]) -> StatusTranslationStore {
-        let store = StatusTranslationStore(translator: translator, targetLanguage: "ja", scope: scope, clock: clock, applyInterval: { .milliseconds(250) })
+        let store = StatusTranslationStore(translator: translator, targetLanguage: "ja", strategy: .highFidelity, scope: scope, clock: clock, applyInterval: { .milliseconds(250) })
         store.setLanguages(languages)
         return store
     }
@@ -180,7 +188,7 @@ struct StatusTranslationStoreTests {
     @Test func comparesByLanguageCode() async throws {
         let scope = TaskScope()
         let clock = TestClock()
-        let store = store(FakeTranslator(), clock: clock, scope: scope)
+        let store = store(FakeTranslator(), clock: clock, scope: scope, languages: ["en-GB"])
         var delivered: Set<Status.ID> = []
         store.onChange = { delivered.formUnion($0) }
 
@@ -252,6 +260,45 @@ struct StatusTranslationStoreTests {
         translator.install()
         store.request([status("1")])
         try await waitUntil { store.hasTranslation(of: status("1")) }
+    }
+
+    /// 訳す言語は、地域と文字体系まで含めて比べる。`zh`と`zh-CN`は同じ言語として扱う。
+    @Test(arguments: [("zh-TW", "zh"), ("zh", "zh-TW"), ("en", "en-GB")])
+    func matchesLanguagesIncludingRegionAndScript(selected: String, other: String) async throws {
+        let scope = TaskScope()
+        let store = store(FakeTranslator(), clock: TestClock(), scope: scope, languages: [selected])
+        let matching = status("1", language: selected)
+        let different = status("2", language: other)
+        store.request([different, matching])
+        try await waitUntil { store.hasTranslation(of: matching) }
+
+        #expect(!store.hasTranslation(of: different))
+    }
+
+    @Test func treatsDefaultRegionAsSameLanguage() async throws {
+        let scope = TaskScope()
+        let store = store(FakeTranslator(), clock: TestClock(), scope: scope, languages: ["zh"])
+        let post = status("1", language: "zh-CN")
+        store.request([post])
+        try await waitUntil { store.hasTranslation(of: post) }
+    }
+
+    /// モデルが入る前に始めた翻訳の失敗が、モデルが入って頼み直したあとに届いても、頼み直しを消さない。
+    @Test func retriesAfterInstallWhileOldFailureIsPending() async throws {
+        let scope = TaskScope()
+        let failureGate = Gate()
+        let translator = FakeTranslator(notInstalledLanguages: ["en"], failureGate: failureGate)
+        let store = store(translator, clock: TestClock(), scope: scope)
+        let post = status("1")
+        store.request([post])
+        try await waitUntil { failureGate.waiterCount >= 1 }
+
+        translator.install()
+        store.setLanguages(["en"])
+        store.request([post])
+        failureGate.open()
+
+        try await waitUntil { store.hasTranslation(of: post) }
     }
 
     /// 訳せなかった投稿も、本文が編集されたら訳し直す。
@@ -386,6 +433,52 @@ struct StatusTranslationStoreTests {
         store.request([post])
         try await waitUntil { store.hasTranslation(of: post) }
         #expect(translator.targets == ["ja", "ko"])
+    }
+
+    /// 翻訳の方式を変えたら、持っている訳文を捨てて、新しい方式で訳し直す。
+    @Test func retranslatesAfterChangingStrategy() async throws {
+        let scope = TaskScope()
+        let translator = FakeTranslator()
+        let store = store(translator, clock: TestClock(), scope: scope)
+        let post = status("1")
+        store.request([post])
+        try await waitUntil { store.hasTranslation(of: post) }
+
+        store.setStrategy(.lowLatency)
+        #expect(store.translation(for: post) == nil)
+
+        store.request([post])
+        try await waitUntil { store.hasTranslation(of: post) }
+        #expect(translator.strategies == [.highFidelity, .lowLatency])
+    }
+
+    /// 訳している途中で翻訳の方式を変えたら、変える前に始めた結果は持たない。
+    @Test func dropsTranslationFinishedAfterChangingStrategy() async throws {
+        let scope = TaskScope()
+        let gate = Gate()
+        let store = store(FakeTranslator(gate: gate), clock: TestClock(), scope: scope)
+        let post = status("1")
+        store.request([post])
+        try await waitUntil { gate.waiterCount >= 1 }
+
+        store.setStrategy(.lowLatency)
+        gate.open()
+        try await waitUntil { scope.runningCount == 0 }
+
+        #expect(!store.hasTranslation(of: post))
+    }
+
+    /// 同じ方式を入れ直しても、持っている訳文は捨てない。
+    @Test func keepsTranslationWhenStrategyIsUnchanged() async throws {
+        let scope = TaskScope()
+        let store = store(FakeTranslator(), clock: TestClock(), scope: scope)
+        let post = status("1")
+        store.request([post])
+        try await waitUntil { store.hasTranslation(of: post) }
+
+        store.setStrategy(.highFidelity)
+
+        #expect(store.hasTranslation(of: post))
     }
 
     /// 翻訳先と同じ言語の投稿は訳さない。

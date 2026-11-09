@@ -19,15 +19,15 @@ struct DebugStatusTranslator: StatusTranslating {
 
     let system: (any StatusTranslating)?
 
-    func translate(_ parts: [TranslationPart], from source: String, to target: String) async throws -> [TranslationPart] {
+    func translate(_ parts: [TranslationPart], from source: String, to target: String, strategy: TranslationStrategy) async throws -> [TranslationPart] {
         if let delay = Self.fakeDelay.withLock({ $0 }) {
             try await Task.sleep(for: delay)
             return parts.map { part in
-                if case .text(let text) = part, text.contains(where: \.isLetter) { .text("（\(target)の訳文）\(text)\(text)") } else { part }
+                if case .text(let text) = part, text.contains(where: \.isLetter) { .text("（\(target)・\(strategy.rawValue)の訳文）\(text)\(text)") } else { part }
             }
         }
         guard let system else { throw StatusTranslationError.notInstalled }
-        return try await system.translate(parts, from: source, to: target)
+        return try await system.translate(parts, from: source, to: target, strategy: strategy)
     }
 }
 #endif

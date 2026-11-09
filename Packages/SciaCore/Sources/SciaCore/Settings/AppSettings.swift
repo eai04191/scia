@@ -24,6 +24,23 @@ public final class AppSettings {
         didSet { defaults.set(expandsXPosts, forKey: Keys.expandsXPosts) }
     }
 
+    /// タイムラインの本文を自動で訳す（docs/auto-translation.md）。
+    public var isAutoTranslationEnabled: Bool {
+        didSet { defaults.set(isAutoTranslationEnabled, forKey: Keys.isAutoTranslationEnabled) }
+    }
+
+    /// 自動翻訳がオンなら、訳す投稿の言語。オフなら空。
+    public var effectiveAutoTranslationLanguages: [String] {
+        isAutoTranslationEnabled ? autoTranslationLanguages : []
+    }
+
+    /// 翻訳の言語モデルが入るたびに増える。増えたら、モデルがなくて訳せなかった投稿を訳し直す。保存しない。
+    public private(set) var autoTranslationModelRevision = 0
+
+    public func noteAutoTranslationModelInstalled() {
+        autoTranslationModelRevision += 1
+    }
+
     /// タイムラインの本文を自動で訳す投稿の言語。空なら訳さない（docs/auto-translation.md）。
     public var autoTranslationLanguages: [String] {
         didSet { defaults.set(autoTranslationLanguages, forKey: Keys.autoTranslationLanguages) }
@@ -32,6 +49,11 @@ public final class AppSettings {
     /// 自動翻訳の翻訳先の言語の識別子。nilならデバイスの言語（docs/auto-translation.md）。
     public var autoTranslationTarget: String? {
         didSet { defaults.set(autoTranslationTarget, forKey: Keys.autoTranslationTarget) }
+    }
+
+    /// 自動翻訳の翻訳の方式（docs/auto-translation.md）。
+    public var autoTranslationStrategy: TranslationStrategy {
+        didSet { defaults.set(autoTranslationStrategy.rawValue, forKey: Keys.autoTranslationStrategy) }
     }
 
     /// 届いた通知を、ステータスバーの場所に流す。
@@ -381,8 +403,10 @@ public final class AppSettings {
         static let ignoresUselessAltText = "settings.ignoresUselessAltText"
         static let showsStatusBarTicker = "settings.showsStatusBarTicker"
         static let expandsXPosts = "settings.expandsXPosts"
+        static let isAutoTranslationEnabled = "settings.isAutoTranslationEnabled"
         static let autoTranslationLanguages = "settings.autoTranslationLanguages"
         static let autoTranslationTarget = "settings.autoTranslationTarget"
+        static let autoTranslationStrategy = "settings.autoTranslationStrategy"
         static let appearanceChoices = "settings.appearanceChoices"
         static let insertionMotion = "settings.insertionMotion"
         static let accentColor = "settings.accentColor"
@@ -437,8 +461,10 @@ public final class AppSettings {
         ignoresUselessAltText = defaults.object(forKey: Keys.ignoresUselessAltText) as? Bool ?? true
         showsStatusBarTicker = defaults.object(forKey: Keys.showsStatusBarTicker) as? Bool ?? true
         expandsXPosts = defaults.bool(forKey: Keys.expandsXPosts)
+        isAutoTranslationEnabled = defaults.bool(forKey: Keys.isAutoTranslationEnabled)
         autoTranslationLanguages = defaults.stringArray(forKey: Keys.autoTranslationLanguages) ?? []
         autoTranslationTarget = defaults.string(forKey: Keys.autoTranslationTarget)
+        autoTranslationStrategy = defaults.string(forKey: Keys.autoTranslationStrategy).flatMap(TranslationStrategy.init(rawValue:)) ?? .lowLatency
         appearance = AppearanceChoices(stored: defaults.data(forKey: Keys.appearanceChoices))
         insertionMotion = defaults.string(forKey: Keys.insertionMotion).flatMap(InsertionMotion.init(rawValue:)) ?? .followsSystem
         accentColor = defaults.string(forKey: Keys.accentColor).flatMap(AccentColorChoice.init(rawValue:)) ?? .blue

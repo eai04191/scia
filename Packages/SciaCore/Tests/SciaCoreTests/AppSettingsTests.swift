@@ -69,6 +69,29 @@ struct AppSettingsTests {
         #expect(!AppSettings(defaults: defaults).ignoresUselessAltText)
     }
 
+    /// オフのあいだは訳す言語を空として扱い、選んだ言語は残す。
+    @Test func autoTranslationSwitchControlsEffectiveLanguages() throws {
+        let defaults = try makeDefaults()
+        let settings = AppSettings(defaults: defaults)
+        settings.autoTranslationLanguages = ["en"]
+        #expect(!settings.isAutoTranslationEnabled)
+        #expect(settings.effectiveAutoTranslationLanguages.isEmpty)
+
+        settings.isAutoTranslationEnabled = true
+        #expect(settings.effectiveAutoTranslationLanguages == ["en"])
+        #expect(AppSettings(defaults: defaults).isAutoTranslationEnabled)
+    }
+
+    @Test func autoTranslationStrategyDefaultsToLowLatency() throws {
+        #expect(AppSettings(defaults: try makeDefaults()).autoTranslationStrategy == .lowLatency)
+    }
+
+    @Test func persistsAutoTranslationStrategy() throws {
+        let defaults = try makeDefaults()
+        AppSettings(defaults: defaults).autoTranslationStrategy = .highFidelity
+        #expect(AppSettings(defaults: defaults).autoTranslationStrategy == .highFidelity)
+    }
+
     /// 表示しただけでSciaと関係のないfxtwitterとXに通信するので、使う人がオンにするまで展開しない。
     @Test func doesNotExpandXPostsByDefault() throws {
         let settings = AppSettings(defaults: try makeDefaults())

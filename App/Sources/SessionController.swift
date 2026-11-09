@@ -576,7 +576,7 @@ final class SessionController {
             case .update, .notification, .filtersChanged, .notificationsMerged, .announcement, .announcementReaction, .announcementDelete, .unhandled: break
             }
         }
-        translations?.setLanguages(AppDependencies.settings.autoTranslationLanguages)
+        translations?.setLanguages(AppDependencies.settings.effectiveAutoTranslationLanguages)
         translations?.onChange = { [weak self] ids in
             for timeline in self?.timelines.allObjects ?? [] {
                 timeline.applyTranslations(ids)
@@ -719,21 +719,25 @@ final class SessionController {
         return StatusTranslationStore(
             translator: translator,
             targetLanguage: AppDependencies.settings.resolvedTranslationTarget.minimalIdentifier,
+            strategy: AppDependencies.settings.autoTranslationStrategy,
             scope: tasks,
             applyInterval: { .seconds(AppDependencies.tuning.value(of: TuningCatalog.translationApplyInterval)) }
         )
     }
 
-    /// 訳す言語か翻訳先が変わったら、訳せなかった言語を忘れ、タイムラインを描き直す。
+    /// 自動翻訳のオンオフ、訳す言語、翻訳先、翻訳の方式が変わるか、言語モデルが入ったら、訳せなかった言語を忘れ、タイムラインを描き直す。
     private func observeAutoTranslationSetting() {
         withObservationTracking {
-            _ = AppDependencies.settings.autoTranslationLanguages
+            _ = AppDependencies.settings.effectiveAutoTranslationLanguages
+            _ = AppDependencies.settings.autoTranslationModelRevision
             _ = AppDependencies.settings.autoTranslationTarget
+            _ = AppDependencies.settings.autoTranslationStrategy
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor in
                 guard let self, !self.tasks.isClosed else { return }
                 self.translations?.setTargetLanguage(AppDependencies.settings.resolvedTranslationTarget.minimalIdentifier)
-                self.translations?.setLanguages(AppDependencies.settings.autoTranslationLanguages)
+                self.translations?.setStrategy(AppDependencies.settings.autoTranslationStrategy)
+                self.translations?.setLanguages(AppDependencies.settings.effectiveAutoTranslationLanguages)
                 for timeline in self.timelines.allObjects {
                     timeline.applyTranslationLanguages()
                 }
@@ -4227,9 +4231,10 @@ final class SessionController {
             StorageProbe.write()
         case .fakeTranslation(let delay):
             DebugStatusTranslator.setFakeDelay(delay)
-            AppDependencies.settings.autoTranslationLanguages = AppDependencies.settings.autoTranslationLanguages
+            AppDependencies.settings.noteAutoTranslationModelInstalled()
         case .translationLanguages(let languages):
             AppDependencies.settings.autoTranslationLanguages = languages
+            AppDependencies.settings.isAutoTranslationEnabled = true
         case .translationProbe:
             if #available(iOS 26.4, *) {
                 TranslationProbe.start()
