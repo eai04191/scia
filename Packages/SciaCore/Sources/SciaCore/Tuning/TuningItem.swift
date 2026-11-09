@@ -1245,6 +1245,15 @@ public enum TuningCatalog {
         defaultValue: 4
     )
 
+    /// アプリ内のSafariを伏せたときに、タブバーとカプセルを下げる長さ（pt）。縮めた後ろの画面を、見せる範囲よりこの長さだけ下へはみ出させる。
+    public static let inAppBrowserDockContentOverhang = NumberTuning(
+        id: "browser.dockContentOverhang",
+        title: "アプリ内のSafariを伏せたときにタブバーを下げる長さ（pt）",
+        range: 0...22,
+        step: 1,
+        defaultValue: 14
+    )
+
     /// アプリ内のSafariを伏せたときの、縮めた後ろの画面の下の角の丸み（pt）。
     public static let inAppBrowserDockCornerRadius = NumberTuning(
         id: "browser.dockCornerRadius",
@@ -2152,6 +2161,7 @@ public enum TuningCatalog {
             .number(inAppBrowserSheetMaximumWidth),
             .number(inAppBrowserSheetDimAlpha),
             .number(inAppBrowserDockGap),
+            .number(inAppBrowserDockContentOverhang),
             .number(inAppBrowserDockCornerRadius),
             .number(inAppBrowserDockDuration),
             .number(inAppBrowserHandleHeight),

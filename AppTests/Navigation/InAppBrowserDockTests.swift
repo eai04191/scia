@@ -22,13 +22,17 @@ struct InAppBrowserDockTests {
         window.layoutIfNeeded()
         #expect(content.view.frame.height == 800)
 
-        container.setReservedHeight(160, cornerRadius: 44, duration: 0)
-        #expect(content.view.frame == CGRect(x: 0, y: 0, width: 400, height: 640))
-        #expect(content.view.layer.cornerRadius == 44)
+        let visibleArea = try #require(content.view.superview)
+        container.setReservedHeight(160, contentOverhang: 14, cornerRadius: 44, duration: 0)
+        #expect(visibleArea.frame == CGRect(x: 0, y: 0, width: 400, height: 640))
+        #expect(visibleArea.clipsToBounds)
+        #expect(visibleArea.layer.cornerRadius == 44)
+        #expect(content.view.frame == CGRect(x: 0, y: 0, width: 400, height: 654))
 
-        container.setReservedHeight(0, cornerRadius: 44, duration: 0)
+        container.setReservedHeight(0, contentOverhang: 14, cornerRadius: 44, duration: 0)
+        #expect(visibleArea.frame.height == 800)
+        #expect(visibleArea.layer.cornerRadius == 0)
         #expect(content.view.frame.height == 800)
-        #expect(content.view.layer.cornerRadius == 0)
     }
 
     /// 手で伏せた高さまで下げたときだけ後ろの画面を縮める。開く途中に伏せた高さを通るときと、投稿欄のために下げたときは縮めない。

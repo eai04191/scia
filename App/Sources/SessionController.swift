@@ -546,6 +546,7 @@ final class SessionController {
         browser.onDockedHeightChange = { [weak self] height in
             self?.windowRootViewController.setReservedHeight(
                 height > 0 ? height + CGFloat(tuning.value(of: TuningCatalog.inAppBrowserDockGap)) : 0,
+                contentOverhang: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserDockContentOverhang)),
                 cornerRadius: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserDockCornerRadius)),
                 duration: tuning.value(of: TuningCatalog.inAppBrowserDockDuration)
             )
