@@ -44,6 +44,7 @@ extension Rule {
 
     private static let sessionOwnedFiles: Set = [
         "App/Sources/SessionController.swift",
+        "App/Sources/Debug/SessionController+Debug.swift",
         "App/Sources/Timeline/FeedTimelineController.swift",
         "App/Sources/Debug/FeedTimelineController+Debug.swift",
         "App/Sources/Timeline/NotificationsController.swift",
