@@ -1168,6 +1168,8 @@ final class SessionController {
                 return
             }
             openProfile(accountID: mention.id, from: source)
+        case .handle(let acct):
+            openProfile(resolvingHandle: acct, from: source)
         case .hashtag(let name, _):
             openFeed(.hashtag(name: name), from: source)
         }
@@ -1181,6 +1183,8 @@ final class SessionController {
             open(url, in: AppDependencies.settings.linkBrowser.browser(for: url))
         case .mention(let acct, let url):
             openProfile(resolving: url, acct: acct, from: source)
+        case .handle(let acct):
+            openProfile(resolvingHandle: acct, from: source)
         case .hashtag(let name, _):
             openFeed(.hashtag(name: name), from: source)
         }
@@ -1328,6 +1332,27 @@ final class SessionController {
                 throw ProfileNotFound(acct: acct)
             }
             return account
+        }
+    }
+
+    /// プロフィールの文章に文字のまま書かれたハンドルでアカウントを探して開く。
+    private func openProfile(resolvingHandle acct: String, from source: UIViewController) {
+        openProfile(from: source, finding: accountFinder(handle: acct))
+    }
+
+    /// 文字のまま書かれたハンドルの人を探す処理。書かれたハンドルと一致する人だけを受け取る。見つからなければ`ProfileNotFound`を投げる。
+    private func accountFinder(handle acct: String) -> @Sendable () async throws -> Account {
+        let client = client
+        let accounts = accounts
+        let localServer = credential.server
+        let logger = logger
+        return {
+            let found = try await accounts.resolve(handle: acct, localServer: localServer) { try await client.resolveAccount(acct) }
+            guard let found else {
+                logger.info("profile not found for plain handle acct=\(acct, privacy: .private(mask: .hash))")
+                throw ProfileNotFound(acct: acct)
+            }
+            return found
         }
     }
 
@@ -1608,6 +1633,8 @@ final class SessionController {
             } else {
                 openProfile(resolving: url, acct: acct, from: source)
             }
+        case .handle(let acct):
+            openProfile(resolvingHandle: acct, from: source)
         case .hashtag(let name, _):
             openFeed(.hashtag(name: name), from: source)
         }
@@ -2680,11 +2707,21 @@ final class SessionController {
             },
             logIn: { [weak self] account in
                 FailureRecovery.logIn(account, from: self?.topViewController.view)
+            },
+            findProfileURL: { [weak self] target, proceed in
+                self?.resolveIdentity(of: target, failureTitle: "リンクを取得できませんでした") { id, acct in
+                    guard let self else { return }
+                    guard let url = self.accounts.account(id)?.url else {
+                        self.handle(ProfileNotFound(acct: acct), title: "リンクを取得できませんでした")
+                        return
+                    }
+                    proceed(url)
+                }
             }
         )
     }
 
-    /// ユーザーのメニューの相手のIDと`acct`。リンクから選んだ相手は、プロフィールのURLで引く。見つからなければ`ProfileNotFound`を投げる。
+    /// ユーザーのメニューの相手のIDと`acct`。リンクから選んだ相手は、プロフィールのURLかハンドルで引く。見つからなければ`ProfileNotFound`を投げる。
     private func identity(of target: UserMenuTarget) async throws -> (id: String, acct: String) {
         switch target {
         case .account(let id, let acct):
@@ -2695,6 +2732,9 @@ final class SessionController {
                 logger.error("user menu target not found host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash))")
                 throw ProfileNotFound(acct: shownAcct)
             }
+            return (account.id, account.acct)
+        case .handle(let acct):
+            let account = try await accountFinder(handle: acct)()
             return (account.id, account.acct)
         }
     }
@@ -2725,7 +2765,7 @@ final class SessionController {
     /// 読んだ関係は覚えておき、次にメニューを開いたときと、開き直したプロフィールで使う。
     private func relation(of target: UserMenuTarget, identity: UserIdentity) async throws -> UserRelation? {
         // リンクのメンションは、相手を探すまでIDが分からず、メニューを開いたときにまとめて読み直せないため、ここで読み直す。
-        if case .profileURL = target {
+        if case .account = target {} else {
             profiles.relationships.reload([identity.id], purpose: .action)
         }
         guard let relationship = try await profiles.relationships.relationship(identity.id) else {

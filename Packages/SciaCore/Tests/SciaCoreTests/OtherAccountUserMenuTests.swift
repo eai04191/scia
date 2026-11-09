@@ -19,7 +19,8 @@ struct OtherAccountUserMenuTests {
         _ username: String = "bob",
         search: @escaping @Sendable (String) async throws -> [Status] = { _ in [] },
         resolveAccount: @escaping @Sendable (URL) async throws -> Account? = { _ in nil },
-        relationships: @escaping RelationshipCache.Fetch = { ids in ids.map { Relationship(id: $0) } }
+        relationships: @escaping RelationshipCache.Fetch = { ids in ids.map { Relationship(id: $0) } },
+        resolveHandle: @escaping @Sendable (String) async throws -> Account? = { _ in nil }
     ) throws -> OtherAccount {
         let credential = Credential(instance: try #require(URL(string: "https://other.example")), accessToken: "token", clientID: "id", clientSecret: "secret", accountID: "50", username: username)
         let operations = OtherAccount.Operations(
@@ -37,7 +38,8 @@ struct OtherAccountUserMenuTests {
             changeRelation: { _, _ in throw Failure() },
             resolveAccount: resolveAccount,
             deleteStatus: { _ in throw Failure() },
-            capabilities: { throw Failure() }
+            capabilities: { throw Failure() },
+            resolveHandle: resolveHandle
         )
         return OtherAccount(credential: credential, operations: operations, tasks: TaskScope())
     }
@@ -152,6 +154,42 @@ struct OtherAccountUserMenuTests {
             return
         }
         #expect(mentioned == "alice@remote.example")
+    }
+
+    /// 文字のままのハンドルは、URLが分からないので、ほかのアカウントのサーバーでハンドルで探す。
+    @Test func findsPlainHandleAsOtherAccount() async throws {
+        let otherAlice = otherAlice
+        let asked = Mutex<[String]>([])
+        let bob = try account(resolveHandle: { handle in
+            asked.withLock { $0.append(handle) }
+            return otherAlice
+        })
+        let tree = UserMenuTree(subject: UserMenuSubject(handle: "Alice@Remote.example"), actions: actions([bob]), linkBrowser: .inApp)
+        let bobMenu = try #require(tree.menu(groups: groups, avatar: nil)?.flattenedChildren.first { $0.title == "@bobで" })
+
+        let items = await loaded(bobMenu.children)
+        let mention = try #require(items.flatMap(\.flattenedChildren).first { $0.title == "メンション" })
+        guard case .otherAccount(let actor, .mention(let acct)) = mention.command else {
+            Issue.record("ほかのアカウントとしてメンションする命令になっていません")
+            return
+        }
+        #expect(actor === bob)
+        #expect(acct == "alice@remote.example")
+        #expect(asked.withLock { $0 } == ["alice@remote.example"])
+
+        // 見つけた相手を覚えているので、大文字と小文字が違っても、次は探さない。
+        _ = await bob.lookUpPerson(.acct("ALICE@remote.example"))
+        #expect(asked.withLock { $0.count } == 1)
+    }
+
+    /// 書かれたハンドルと違う人が返ったら、その人を操作しないよう、見つからなかったことにする。
+    @Test func rejectsDifferentPersonForPlainHandle() async throws {
+        let other = Account(id: "9", username: "alice_backup", acct: "alice_backup@remote.example", displayName: "", avatar: nil)
+        let bob = try account(resolveHandle: { _ in other })
+        let tree = UserMenuTree(subject: UserMenuSubject(handle: "alice@remote.example"), actions: actions([bob]), linkBrowser: .inApp)
+        let bobMenu = try #require(tree.menu(groups: groups, avatar: nil)?.flattenedChildren.first { $0.title == "@bobで" })
+
+        #expect(MenuNodeTests.describe(await loaded(bobMenu.children)) == "このアカウントからは見つからないユーザーです(押せない)")
     }
 
     /// 見つからなければ押せない行で知らせ、探せなければ理由を添えて押せない行で知らせる。

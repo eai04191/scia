@@ -72,6 +72,8 @@ public struct RichText: Hashable, Sendable {
         case mention(acct: String, url: URL)
         /// `name`は`#`を除いた名前。
         case hashtag(name: String, url: URL)
+        /// 文字のまま書かれたハンドル。プロフィールのURLもIDも分からないので、押してから`acct`（`user@domain`）で探す。
+        case handle(acct: String)
     }
 
     /// 本文の表示する文字だけを、段落を改行でつないで返す。テストやログで使う。
@@ -120,7 +122,12 @@ extension RichText {
 
     /// プロフィールの補足情報のHTML。幅に余裕があるので、サーバーが縮めたURLも全体を出す。
     public static func profileField(_ html: String, emojis: [CustomEmoji]) -> RichText {
-        MastodonHTMLParser(mentions: [], tags: [], emojis: emojis, expandsShortenedURLs: true).parse(html)
+        MastodonHTMLParser(mentions: [], tags: [], emojis: emojis, expandsShortenedURLs: true, linksPlainHandles: true).parse(html)
+    }
+
+    /// プロフィールの自己紹介のHTML。
+    public static func profileNote(_ html: String, emojis: [CustomEmoji]) -> RichText {
+        MastodonHTMLParser(mentions: [], tags: [], emojis: emojis, linksPlainHandles: true).parse(html)
     }
 
     /// 引用のある投稿では、サーバーが互換のために足す`RE: <リンク>`の段落を除く。

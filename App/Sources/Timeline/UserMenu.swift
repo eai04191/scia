@@ -37,7 +37,7 @@ struct UserMenu {
     /// - Parameters:
     ///   - avatar: 「プロフィール」に付けるその人のアイコン。
     ///   - avatarImage: アイコンの画像。nilを返したら記号を付ける。
-    func built(groups: MenuLayout<UserMenuItem>.Groups, openProfile: @escaping @MainActor () -> Void, avatar: MenuAvatar, avatarImage: @escaping @MainActor (MenuAvatar) -> UIImage?) -> BuiltMenu<UserMenuCommand>? {
+    func built(groups: MenuLayout<UserMenuItem>.Groups, openProfile: @escaping @MainActor () -> Void, avatar: MenuAvatar?, avatarImage: @escaping @MainActor (MenuAvatar) -> UIImage?) -> BuiltMenu<UserMenuCommand>? {
         let root = tree.menu(groups: groups, avatar: avatar)
         reloadRelation(groups: groups)
         return root.map { BuiltMenu(root: $0, renderer: renderer(openProfile: openProfile, avatarImage: avatarImage)) }
@@ -86,6 +86,11 @@ struct UserMenu {
         switch command {
         case .url(let command):
             handlers.perform(command)
+        case .urlAfterFinding(let action):
+            let handlers = handlers
+            actions?.findProfileURL(subject.target) { url in
+                action.command(url: url, linkBrowser: handlers.linkBrowser).map(handlers.perform)
+            }
         case .openProfile:
             openProfile?()
         case .mention:

@@ -434,7 +434,11 @@ final class LinkHitArea: UIControl {
             }, lifecycle: lifecycle, notify: notify)
         case .mention(let acct, let url):
             return ObjectTarget(entity: .user, settings: label.settings, primary: open, buildMenu: { [weak self] in
-                self?.userMenu(for: destination, acct: acct, url: url, at: point, groups: $0)
+                self?.userMenu(for: destination, subject: UserMenuSubject(mentionLink: url, acct: acct), at: point, groups: $0)
+            }, lifecycle: lifecycle, notify: notify)
+        case .handle(let acct):
+            return ObjectTarget(entity: .user, settings: label.settings, primary: open, buildMenu: { [weak self] in
+                self?.userMenu(for: destination, subject: UserMenuSubject(handle: acct), at: point, groups: $0)
             }, lifecycle: lifecycle, notify: notify)
         case .hashtag(let name, let url):
             return ObjectTarget(entity: .hashtag, settings: label.settings, primary: open, buildMenu: { [weak self] in
@@ -511,7 +515,9 @@ final class LinkHitArea: UIControl {
         case .url(let url):
             linkMenu(for: url, at: point, groups: groups?.link)?.menu
         case .mention(let acct, let url):
-            userMenu(for: destination, acct: acct, url: url, at: point, groups: groups?.user)?.menu
+            userMenu(for: destination, subject: UserMenuSubject(mentionLink: url, acct: acct), at: point, groups: groups?.user)?.menu
+        case .handle(let acct):
+            userMenu(for: destination, subject: UserMenuSubject(handle: acct), at: point, groups: groups?.user)?.menu
         case .hashtag(let name, let url):
             hashtagMenu(for: destination, name: name, url: url, at: point, groups: groups?.hashtag)?.menu
         }
@@ -526,16 +532,17 @@ final class LinkHitArea: UIControl {
         return menu.built(groups: groups ?? settings.linkMenuLayout.groups)
     }
 
-    private func userMenu(for destination: RichText.LinkDestination, acct: String, url: URL, at point: CGPoint, groups: MenuLayout<UserMenuItem>.Groups?) -> BuiltMenu<UserMenuCommand>? {
+    private func userMenu(for destination: RichText.LinkDestination, subject: UserMenuSubject, at point: CGPoint, groups: MenuLayout<UserMenuItem>.Groups?) -> BuiltMenu<UserMenuCommand>? {
         guard let label else { return nil }
         let settings = label.settings
         let host = nearest((any LinkMenuHost).self)
-        var menu = UserMenu(subject: UserMenuSubject(mentionLink: url, acct: acct), actions: host?.userMenuActions, handlers: urlHandlers(at: point, linkBrowser: settings.linkBrowser), host: host)
+        var menu = UserMenu(subject: subject, actions: host?.userMenuActions, handlers: urlHandlers(at: point, linkBrowser: settings.linkBrowser), host: host)
         menu.otherAccountGroups = settings.userMenuLayout.submenuGroups(actions: settings.userActions)
-        return menu.built(groups: groups ?? settings.userMenuLayout.groups, openProfile: { [weak self] in self?.label?.open(destination) }, avatar: .mentionLink(url)) { avatar in
+        return menu.built(groups: groups ?? settings.userMenuLayout.groups, openProfile: { [weak self] in self?.label?.open(destination) }, avatar: subject.url.map(MenuAvatar.mentionLink)) { avatar in
             switch avatar {
             case .otherAccount(let account): host?.menuIcon(ofOtherAccount: account)
-            case .mentionLink, .user: host?.mentionMenuIcon(for: url)
+            case .mentionLink(let url): host?.mentionMenuIcon(for: url)
+            case .user: nil
             }
         }
     }

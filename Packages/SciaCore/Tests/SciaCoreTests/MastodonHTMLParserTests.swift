@@ -100,6 +100,72 @@ struct MastodonHTMLParserTests {
         #expect(account.profileText(.field(0))?.text == "https://example.com/a/very/long/path/to/some/page")
     }
 
+    /// サーバーが知らない相手のハンドルは文字のまま届く。補足情報と自己紹介では、押してプロフィールを開けるようにする。
+    @Test func profileTextLinksPlainHandle() {
+        let expected: [RichText.Inline] = [
+            .text("本垢は ", []),
+            .link("@alice@example.social", .handle(acct: "alice@example.social"), []),
+            .text(" です", []),
+        ]
+        #expect(RichText.profileField("本垢は @alice@example.social です", emojis: []).blocks.first?.inlines == expected)
+        #expect(RichText.profileNote("<p>本垢は @alice@example.social です</p>", emojis: []).blocks.first?.inlines == expected)
+    }
+
+    @Test(arguments: [
+        ("@alice@example.social", "alice@example.social", "@alice@example.social"),
+        ("@a.b-c_d@sub.example.co.jp。", "a.b-c_d@sub.example.co.jp", "@a.b-c_d@sub.example.co.jp"),
+        ("サブ@alice@example.social", "alice@example.social", "@alice@example.social"),
+        ("@alice@xn--vusz0j.artです", "alice@xn--vusz0j.art", "@alice@xn--vusz0j.art"),
+    ])
+    func findsPlainHandle(text: String, acct: String, shown: String) {
+        let links = RichText.profileField(text, emojis: []).blocks.flatMap(\.inlines).filter { if case .link = $0 { true } else { false } }
+        #expect(links == [.link(shown, .handle(acct: acct), [])])
+    }
+
+    /// どのサーバーの人か決まらない語、メールアドレス、URLの一部は、リンクにしない。
+    @Test(arguments: ["@alice", "alice@example.social", "mail.@alice@example.social", "a@alice@example.social", "https://example.social/@alice@example.social", "@alice@localhost", "@alice@example.social@other", "@alice@sub.example.social@other", "@alice@social.example.みんな"])
+    func ignoresWhatIsNotHandle(text: String) {
+        #expect(RichText.profileField(text, emojis: []).blocks.first?.inlines == [.text(text, [])])
+    }
+
+    /// 書式で分かれて続くハンドルの片方だけをリンクにすると、別のサーバーを指す。
+    @Test(arguments: ["<p><strong>@alice@example.social</strong>.other.org</p>", "<p>@alice@sub.example.<em>social</em></p>"])
+    func keepsHandleSplitByStyle(html: String) {
+        let links = RichText.profileNote(html, emojis: []).blocks.flatMap(\.inlines).filter { if case .link = $0 { true } else { false } }
+        #expect(links.isEmpty)
+    }
+
+    /// 1つの書式に収まるハンドルは、書式を保ってリンクにする。
+    @Test func linksHandleInsideStyle() {
+        #expect(RichText.profileNote("<p>本垢 <strong>@alice@example.social</strong> です</p>", emojis: []).blocks.first?.inlines == [
+            .text("本垢 ", []),
+            .link("@alice@example.social", .handle(acct: "alice@example.social"), .bold),
+            .text(" です", []),
+        ])
+    }
+
+    /// サーバーが付けたリンクの中の文字と、コードの中の文字は読まない。
+    @Test func keepsLinkAndCodeAsTheyAre() throws {
+        let linked = #"<a href="https://example.social/@alice" class="u-url mention">@alice@example.social</a>"#
+        #expect(RichText.profileField(linked, emojis: []).blocks.first?.inlines == [
+            .link("@alice@example.social", .mention(acct: "alice@example.social", url: try url("https://example.social/@alice")), []),
+        ])
+        #expect(RichText.profileNote("<p><code>@alice@example.social</code></p>", emojis: []).blocks.first?.inlines == [.text("@alice@example.social", .code)])
+        #expect(RichText.profileNote("<pre>@alice@example.social</pre>", emojis: []).blocks.first?.inlines == [.text("@alice@example.social", [])])
+    }
+
+    /// 投稿の本文は、Mastodonが投稿するときに相手を探してメンションにするので、文字のまま残ったものは読まない。
+    @Test func statusKeepsPlainHandle() {
+        #expect(parse("<p>@alice@example.social</p>").blocks.first?.inlines == [.text("@alice@example.social", [])])
+    }
+
+    /// 文字のままのハンドルにしたリンクも、コピーと翻訳には書かれた文字を渡す。
+    @Test func profileTextCopiesPlainHandleAsWritten() {
+        let account = Account(id: "1", username: "a", acct: "a", displayName: "A", avatar: nil, note: "<p>@alice@example.social</p>", fields: [Account.Field(name: "本垢", value: "@alice@example.social")])
+        #expect(account.profileText(.field(0))?.text == "@alice@example.social")
+        #expect(account.profileText(.note)?.text == "@alice@example.social")
+    }
+
     @Test func resolvesMentionFromStatusMentions() throws {
         let mention = Mention(id: "2", username: "bob", url: try url("https://remote.example/@bob"), acct: "bob@remote.example")
         let html = #"<p><span class="h-card" translate="no"><a href="https://remote.example/@bob" class="u-url mention">@<span>bob</span></a></span> こんにちは</p>"#

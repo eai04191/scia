@@ -77,6 +77,12 @@ public final class AccountCache {
         }
     }
 
+    /// 文字のままのハンドル`handle`（`user@domain`）の人を探す。覚えている人も含め、書かれたハンドルと同じ人だけを返す。ほかの経路が同じハンドルで覚えた、似た名前の人を受け取らないため。
+    public func resolve(handle: String, localServer: String, search: @escaping @Sendable () async throws -> Account?) async throws -> Account? {
+        guard let account = try await resolve(.acct(handle), search: search), account.hasHandle(handle, localServer: localServer) else { return nil }
+        return account
+    }
+
     /// `lookup`で探したアカウント。前に見つけていればそれを返し、探している途中ならその検索を待ち、どちらでもなければ`search`で探す。
     /// 見つからなかったときと、検索が失敗したときは覚えず、次に求められたときに探し直す。
     public func resolve(_ lookup: AccountLookup, search: @escaping @Sendable () async throws -> Account?) async throws -> Account? {

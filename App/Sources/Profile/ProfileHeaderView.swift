@@ -759,7 +759,7 @@ final class ProfileHeaderView: UIView {
         acctButton.configuration?.attributedTitle = AttributedString(acctText(of: account))
 
         let body = UIFont.preferredFont(forTextStyle: .body)
-        let note = RichTextRenderer(font: body, textColor: .label, paragraphSpacing: 6, emojiImages: emojiImages, language: content.glyphLanguage).render(.html(account.note, emojis: account.emojis))
+        let note = RichTextRenderer(font: body, textColor: .label, paragraphSpacing: 6, emojiImages: emojiImages, language: content.glyphLanguage).render(.profileNote(account.note, emojis: account.emojis))
         noteLabel.emojiImages = animatedEmojis
         noteLabel.attributedText = note
         noteMeasuredWidth = nil

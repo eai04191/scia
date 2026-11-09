@@ -46,7 +46,7 @@ extension Account {
             let name = RichText.plain(displayNameOrUsername, emojis: emojis)
             return ProfileText(text: name, emojiSources: [name])
         case .note:
-            let note = RichText.html(note, emojis: emojis)
+            let note = RichText.profileNote(note, emojis: emojis)
             return ProfileText(text: note, emojiSources: [note])
         case .field(let index):
             guard fields.indices.contains(index) else { return nil }

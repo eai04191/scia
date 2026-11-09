@@ -18,7 +18,7 @@ extension URLMenuAction {
     }
 
     /// 押したときの操作。押せなければnil。
-    private func command(url: URL?, linkBrowser: LinkBrowser) -> URLMenuCommand? {
+    public func command(url: URL?, linkBrowser: LinkBrowser) -> URLMenuCommand? {
         guard let url else { return nil }
         switch self {
         case .copyLink:

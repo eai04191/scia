@@ -211,4 +211,22 @@ struct AccountCacheTests {
             }
         }
     }
+
+    /// ほかの経路が同じハンドルで覚えた似た名前の人は、文字のままのハンドルからは受け取らない。
+    @Test func handleLookupRejectsRememberedDifferentPerson() async throws {
+        let cache = AccountCache { _ in [] }
+        let other = Account(id: "9", username: "alice_backup", acct: "alice_backup@example.social", displayName: "", avatar: nil)
+        _ = try await cache.resolve(.acct("alice@example.social")) { other }
+
+        let found = try await cache.resolve(handle: "alice@example.social", localServer: "local.example") { other }
+
+        #expect(found == nil)
+    }
+
+    @Test func handleLookupReturnsWrittenPerson() async throws {
+        let cache = AccountCache { _ in [] }
+        let alice = Account(id: "1", username: "alice", acct: "Alice@Example.social", displayName: "", avatar: nil)
+
+        #expect(try await cache.resolve(handle: "alice@example.social", localServer: "local.example") { alice }?.id == "1")
+    }
 }

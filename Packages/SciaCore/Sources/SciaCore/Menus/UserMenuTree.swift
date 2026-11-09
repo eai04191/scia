@@ -3,6 +3,8 @@ public import Foundation
 /// ユーザーのメニューの項目を押したときの操作。
 public enum UserMenuCommand: Sendable {
     case url(URLMenuCommand)
+    /// 文字のままのハンドルで、相手を探してプロフィールのURLを決めてから、URLの項目を行う。
+    case urlAfterFinding(URLMenuAction)
     case openProfile
     /// 投稿欄で、カーソルの位置に`@acct`を入れる。
     case mention
@@ -32,6 +34,8 @@ public enum UserMenuTarget: Sendable {
     /// Mastodonはほかのサーバーのユーザーでもリンクの文字列からサーバー名を省くため、そのままでは別のユーザーを指す。プロフィールのURLでアカウントを引いて`acct`を決める。
     /// - Parameter shownAcct: 見つからなかったときの知らせに出す、リンクの文字列から取った名前。
     case profileURL(URL, shownAcct: String)
+    /// 文字のまま書かれたハンドル（`user@domain`）。ハンドルでアカウントを引く。
+    case handle(String)
 }
 
 /// ユーザーのメニューを出す相手。
@@ -54,6 +58,19 @@ public struct UserMenuSubject: Sendable {
         self.acct = acct
         self.url = url
         target = .profileURL(url, shownAcct: acct)
+    }
+
+    /// プロフィールの文章に文字のまま書かれたハンドル。相手は、ハンドルで探す。URLは探すまで分からない。
+    public init(handle acct: String) {
+        self.acct = acct
+        url = nil
+        target = .handle(acct)
+    }
+
+    /// ほかのアカウントのサーバーでこの相手を探す値。プロフィールのURLがあればURLで、文字のままのハンドルならハンドルで探す。どちらもなければnil。
+    var personLookup: AccountLookup? {
+        if case .handle(let acct) = target { return .acct(acct) }
+        return url.map(AccountLookup.profileURL)
     }
 
     /// 相手のID。リンクのメンションでは、探すまで分からないのでnil。
@@ -95,6 +112,8 @@ public struct UserMenuActions {
     public let performAsOtherAccount: @MainActor (OtherAccount, OtherAccountUserAction) -> Void
     /// ログアウトされたアカウントにログインし直す。
     public let logIn: @MainActor (RequestAccount) -> Void
+    /// 相手を探してプロフィールのURLを決め、`proceed`に渡す。決められなければ知らせて、`proceed`を呼ばない。
+    public let findProfileURL: @MainActor (UserMenuTarget, _ proceed: @escaping @MainActor (URL) -> Void) -> Void
 
     public init(
         mention: @escaping @MainActor (UserMenuTarget) -> Void,
@@ -111,7 +130,8 @@ public struct UserMenuActions {
         accounts: AccountCache,
         otherAccounts: @escaping @MainActor () -> [OtherAccount] = { [] },
         performAsOtherAccount: @escaping @MainActor (OtherAccount, OtherAccountUserAction) -> Void = { _, _ in },
-        logIn: @escaping @MainActor (RequestAccount) -> Void = { _ in }
+        logIn: @escaping @MainActor (RequestAccount) -> Void = { _ in },
+        findProfileURL: @escaping @MainActor (UserMenuTarget, _ proceed: @escaping @MainActor (URL) -> Void) -> Void = { _, _ in }
     ) {
         self.mention = mention
         self.copy = copy
@@ -128,6 +148,7 @@ public struct UserMenuActions {
         self.otherAccounts = otherAccounts
         self.performAsOtherAccount = performAsOtherAccount
         self.logIn = logIn
+        self.findProfileURL = findProfileURL
     }
 }
 
@@ -239,6 +260,9 @@ public struct UserMenuTree {
         func nodes(for item: UserMenuItem) -> [MenuNode<UserMenuCommand>] {
             let subject = tree.subject
             if let action = item.urlAction {
+                if case .handle = subject.target, tree.actions != nil {
+                    return [.action(inSubmenu ? action.title : UserMenuTree.inlineTitle(of: action, acct: subject.acct), icon: .symbol(action.symbolName), .urlAfterFinding(action))]
+                }
                 var node = action.node(title: inSubmenu ? nil : UserMenuTree.inlineTitle(of: action, acct: subject.acct), url: subject.url, linkBrowser: tree.linkBrowser).map(UserMenuCommand.url)
                 // コピーされる文字を、選ぶ前に見えるようにする。
                 if action == .copyLink {
@@ -434,23 +458,23 @@ extension UserMenuTree {
     }
 
     /// 「別のアカウントで」のサブメニュー。アカウントを選んだ先に、そのアカウントから見たこの人のユーザーのメニューを出す。決まりはdocs/other-accounts.mdにある。
-    /// プロフィールのURLのない人は、ほかのサーバーで探せないので出さない。MastodonのAPIでは、アカウントの`url`はnullを取りうる。
+    /// 探す手がかり（プロフィールのURLかハンドル）のない人は、ほかのサーバーで探せないので出さない。MastodonのAPIでは、アカウントの`url`はnullを取りうる。
     fileprivate func otherAccountsMenu(_ item: UserMenuItem, actions: UserMenuActions, groups: MenuLayout<UserMenuItem>.Groups) -> MenuNode<UserMenuCommand>? {
-        guard let url = subject.url else { return nil }
+        guard let lookup = subject.personLookup else { return nil }
         let inner = otherAccountInnerGroups(groups)
         guard !(inner.main + inner.more).isEmpty else { return nil }
         return OtherAccount.accountsMenu(actions.otherAccounts(), title: item.title, symbolName: item.symbolName) { account in
-            otherAccountNodes(at: url, as: account, groups: inner)
+            otherAccountNodes(for: lookup, as: account, groups: inner)
         }
     }
 
-    /// `account`から見たこの人のユーザーのメニュー。前に見つけた人ならすぐ組み、まだなら開いてからそのサーバーでプロフィールのURLで探す。
-    private func otherAccountNodes(at url: URL, as account: OtherAccount, groups: MenuLayout<UserMenuItem>.Groups) -> [MenuNode<UserMenuCommand>] {
-        if let found = account.person(at: url) {
+    /// `account`から見たこの人のユーザーのメニュー。前に見つけた人ならすぐ組み、まだなら開いてからそのサーバーで探す。
+    private func otherAccountNodes(for lookup: AccountLookup, as account: OtherAccount, groups: MenuLayout<UserMenuItem>.Groups) -> [MenuNode<UserMenuCommand>] {
+        if let found = account.person(lookup) {
             return otherAccountItems(for: found, as: account, groups: groups)
         }
         return [.deferred { [self] in
-            switch await account.lookUpPerson(at: url) {
+            switch await account.lookUpPerson(lookup) {
             case .found(let found):
                 // 関係の項目は、この読み込みを待って中身を渡す。
                 if groups.needsRelationship {
@@ -488,13 +512,12 @@ extension UserMenuTree {
     /// - Parameter groups: メニューを組んだ並び。
     static func refreshOtherAccounts(of trees: [UserMenuTree], groups: MenuLayout<UserMenuItem>.Groups) {
         guard let actions = trees.lazy.compactMap(\.actions).first, (groups.main + groups.more).contains(where: { $0.items.contains(.otherAccounts) }) else { return }
-        let urls = trees.compactMap(\.subject.url)
-        guard !urls.isEmpty else { return }
+        guard trees.contains(where: { $0.subject.personLookup != nil }) else { return }
         let relationTrees = trees.filter { $0.otherAccountInnerGroups(groups).needsRelationship }
         for account in actions.otherAccounts() {
             account.loadProfile()
             var seen: Set<String> = []
-            let ids = relationTrees.compactMap(\.subject.url).compactMap(account.person(at:)).map(\.id).filter { seen.insert($0).inserted }
+            let ids = relationTrees.compactMap(\.subject.personLookup).compactMap(account.person).map(\.id).filter { seen.insert($0).inserted }
             account.reloadRelations(ids)
         }
     }

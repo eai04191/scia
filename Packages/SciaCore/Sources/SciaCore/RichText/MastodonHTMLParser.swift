@@ -10,22 +10,25 @@ public struct MastodonHTMLParser {
     private let emojiSplitter: CustomEmojiSplitter
     private let dropsQuoteInline: Bool
     private let expandsShortenedURLs: Bool
+    private let linksPlainHandles: Bool
 
     /// - Parameters:
     ///   - tags: 投稿のタグ。`class`も`rel`もないハッシュタグを、リンクの文字列で見分けるのに使う。
     ///   - dropsQuoteInline: `class`に`quote-inline`のある段落を除く。引用のある投稿で、サーバーが互換のために本文の頭に足す`RE: <リンク>`を出さないため。
     ///     引用のない投稿では、書いた人の本文なので除かない。
     ///   - expandsShortenedURLs: サーバーが30字で縮めたURLの、省いた後ろの部分も出し、「…」を付けない。先頭のスキームは省いたまま。
-    public init(mentions: [Mention], tags: [Tag], emojis: [CustomEmoji], dropsQuoteInline: Bool = false, expandsShortenedURLs: Bool = false) {
+    ///   - linksPlainHandles: 文字のままの`@user@domain`をリンクにする。
+    public init(mentions: [Mention], tags: [Tag], emojis: [CustomEmoji], dropsQuoteInline: Bool = false, expandsShortenedURLs: Bool = false, linksPlainHandles: Bool = false) {
         self.mentions = mentions
         tagNames = Hashtag.normalizedNames(of: tags)
         emojiSplitter = CustomEmojiSplitter(emojis: emojis)
         self.dropsQuoteInline = dropsQuoteInline
         self.expandsShortenedURLs = expandsShortenedURLs
+        self.linksPlainHandles = linksPlainHandles
     }
 
     public func parse(_ html: String) -> RichText {
-        var builder = Builder(mentions: mentions, tagNames: tagNames, emojiSplitter: emojiSplitter, dropsQuoteInline: dropsQuoteInline, expandsShortenedURLs: expandsShortenedURLs)
+        var builder = Builder(mentions: mentions, tagNames: tagNames, emojiSplitter: emojiSplitter, dropsQuoteInline: dropsQuoteInline, expandsShortenedURLs: expandsShortenedURLs, linksPlainHandles: linksPlainHandles)
         for token in HTMLTokenizer.tokenize(html) {
             builder.handle(token)
         }
@@ -76,6 +79,7 @@ private struct Builder {
     let emojiSplitter: CustomEmojiSplitter
     let dropsQuoteInline: Bool
     let expandsShortenedURLs: Bool
+    let linksPlainHandles: Bool
 
     private var blocks: [RichText.Block] = []
     private var inlines: [RichText.Inline] = []
@@ -91,12 +95,13 @@ private struct Builder {
     /// `quote-inline`の段落の中にいて、閉じるまで読み飛ばしている。段落は入れ子にならないため、最初の`</p>`で終える。
     private var isSkippingQuoteInline = false
 
-    init(mentions: [Mention], tagNames: Set<String>, emojiSplitter: CustomEmojiSplitter, dropsQuoteInline: Bool, expandsShortenedURLs: Bool) {
+    init(mentions: [Mention], tagNames: Set<String>, emojiSplitter: CustomEmojiSplitter, dropsQuoteInline: Bool, expandsShortenedURLs: Bool, linksPlainHandles: Bool) {
         self.mentions = mentions
         self.tagNames = tagNames
         self.emojiSplitter = emojiSplitter
         self.dropsQuoteInline = dropsQuoteInline
         self.expandsShortenedURLs = expandsShortenedURLs
+        self.linksPlainHandles = linksPlainHandles
     }
 
     mutating func finish() -> RichText {
@@ -314,6 +319,9 @@ private struct Builder {
     /// `keepsEmptyListItem`のとき（項目を閉じるとき）だけ記号だけのブロックとして出す。
     private mutating func flush(keepsEmptyListItem: Bool = false) {
         var content = preDepth > 0 ? inlines : Self.trimmed(inlines)
+        if linksPlainHandles, preDepth == 0 {
+            content = PlainHandleLinks.linked(content)
+        }
         content = content.flatMap(emojiSplitter.split)
         if content.isEmpty, listMarker != nil, !keepsEmptyListItem {
             return

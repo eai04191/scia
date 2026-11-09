@@ -20,6 +20,8 @@ public final class OtherAccount {
         public var changeRelation: @Sendable (UserRelationChange, String) async throws -> Relationship
         /// プロフィールのURLで人を探す。そのサーバーが知らない人も、相手のサーバーに問い合わせて探す。見つからなければnil。
         public var resolveAccount: @Sendable (URL) async throws -> Account?
+        /// `user@domain`の形のハンドルで人を探す。そのサーバーが知らない人も、相手のサーバーに問い合わせて探す。見つからなければnil。
+        public var resolveHandle: @Sendable (String) async throws -> Account?
         /// そのアカウントの投稿を、添付ごと削除する。
         public var deleteStatus: @Sendable (Status.ID) async throws -> Void
         /// そのアカウントのサーバーの、Mastodonにない機能の有無。絵文字のリアクションを出すかに使う。
@@ -33,7 +35,8 @@ public final class OtherAccount {
             changeRelation: @escaping @Sendable (UserRelationChange, String) async throws -> Relationship,
             resolveAccount: @escaping @Sendable (URL) async throws -> Account?,
             deleteStatus: @escaping @Sendable (Status.ID) async throws -> Void,
-            capabilities: @escaping @Sendable () async throws -> ServerCapabilities
+            capabilities: @escaping @Sendable () async throws -> ServerCapabilities,
+            resolveHandle: @escaping @Sendable (String) async throws -> Account? = { _ in nil }
         ) {
             self.search = search
             self.interactions = interactions
@@ -41,6 +44,7 @@ public final class OtherAccount {
             self.relationships = relationships
             self.changeRelation = changeRelation
             self.resolveAccount = resolveAccount
+            self.resolveHandle = resolveHandle
             self.deleteStatus = deleteStatus
             self.capabilities = capabilities
         }
@@ -56,7 +60,8 @@ public final class OtherAccount {
                 resolveAccount: { try await client.resolveAccount(at: $0) },
                 // web UIと同じく、添付もすぐ消す。今のアカウントで削除するときと同じ。
                 deleteStatus: { try await client.deleteStatus($0, deleteMedia: true) },
-                capabilities: { try await client.serverCapabilities() }
+                capabilities: { try await client.serverCapabilities() },
+                resolveHandle: { try await client.resolveAccount($0) }
             )
         }
     }
@@ -88,13 +93,13 @@ public final class OtherAccount {
     /// そのアカウントと、そのサーバーでのIDの相手との関係。
     private let relationships: RelationshipCache
     /// プロフィールのURLごとの、そのサーバーで見つけた人。見つからなかった人は入れない。
-    private var people: [URL: Account] = [:]
+    private var people: [AccountLookup: Account] = [:]
     /// 探せたが見つからなかった人のプロフィールのURL。開いたメニューで探すのを待たないために使う。探し直しは続け、見つかったら除く。
-    private var peopleNotFound: Set<URL> = []
+    private var peopleNotFound: Set<AccountLookup> = []
     /// プロフィールのURLごとの、最後に探せなかった理由。探せたら消す。
-    private var peopleFailures: [URL: any Error] = [:]
+    private var peopleFailures: [AccountLookup: any Error] = [:]
     /// プロフィールのURLごとの、走っている人の検索。同じ人を探しているときは、送り直さずに待つ。
-    private var peopleSearches: [URL: Task<Void, Never>] = [:]
+    private var peopleSearches: [AccountLookup: Task<Void, Never>] = [:]
     /// そのアカウントのハッシュタグのフォロー、ミュート、プロフィールでの紹介を読んで変えるもの。nilなら、それらの項目を出さない。
     /// そのアカウントのクライアントで読むハッシュタグのリストが要るので、アプリが作って入れる。
     public var hashtagActions: HashtagMenuActions?
@@ -214,7 +219,12 @@ public final class OtherAccount {
 
     /// 覚えている、そのサーバーで見つけた、プロフィールのURLが`url`の人。まだ探していないか、見つからなければnil。
     public func person(at url: URL) -> Account? {
-        people[url]
+        person(.profileURL(url))
+    }
+
+    /// 覚えている、そのサーバーで`lookup`で見つけた人。まだ探していないか、見つからなければnil。
+    public func person(_ lookup: AccountLookup) -> Account? {
+        people[lookup.normalized]
     }
 
     /// そのアカウントで人を探した結果。
@@ -230,53 +240,69 @@ public final class OtherAccount {
     /// そのアカウントのサーバーで、プロフィールのURLが`url`の人を探す。見つけた人は覚え、覚えていればそのまま返す。
     /// ユーザーのメニューの「別のアカウントで」で使う。
     public func lookUpPerson(at url: URL) async -> PersonLookup {
-        await resolve(urls: [url])
-        if let found = people[url] { return .found(found) }
-        if let failure = peopleFailures[url] { return .failed(failure) }
+        await lookUpPerson(.profileURL(url))
+    }
+
+    /// そのアカウントのサーバーで、`lookup`の人を探す。ハンドルで探すときは、書かれたハンドルと同じ人だけを使う。見つけた人は覚え、覚えていればそのまま返す。
+    public func lookUpPerson(_ lookup: AccountLookup) async -> PersonLookup {
+        let lookup = lookup.normalized
+        await resolve(lookups: [lookup])
+        if let found = people[lookup] { return .found(found) }
+        if let failure = peopleFailures[lookup] { return .failed(failure) }
         return .notFound
     }
 
     /// `account`を、まだそのサーバーで探していないか。探せなかった人も含む。見つからなかった人は含まない。
     public func needsResolving(_ account: Account) -> Bool {
         guard let url = account.url else { return false }
-        return people[url] == nil && !peopleNotFound.contains(url)
+        return people[.profileURL(url)] == nil && !peopleNotFound.contains(.profileURL(url))
     }
 
     /// `accounts`のうちまだ見つけていない人を、そのサーバーでプロフィールのURLで探して覚える。
     /// 人のIDはサーバーごとに違い、見つけた投稿には投稿者とメンションのほかの人のIDが入っていないため。
     /// URLが同じ人だけを使う。違う人を操作しないため。見つからない、探せない人は、次に呼ばれたときに探し直す。
     public func resolve(_ accounts: [Account]) async {
-        await resolve(urls: Set(accounts.compactMap(\.url)))
+        await resolve(lookups: Set(accounts.compactMap(\.url).map(AccountLookup.profileURL)))
     }
 
-    private func resolve(urls: Set<URL>) async {
-        let urls = urls.filter { people[$0] == nil }
-        let searches = urls.compactMap { url -> Task<Void, Never>? in
-            if let running = peopleSearches[url] { return running }
+    private func resolve(lookups: Set<AccountLookup>) async {
+        let lookups = lookups.filter { people[$0] == nil }
+        let searches = lookups.compactMap { lookup -> Task<Void, Never>? in
+            if let running = peopleSearches[lookup] { return running }
             // 始めた検索は、このあとの代入を終えてから走るので、走り終えたときに自分で除ける。
             let started = tasks.run(.action) { [weak self, operations] in
-                defer { self?.peopleSearches[url] = nil }
+                defer { self?.peopleSearches[lookup] = nil }
                 let resolved: Account?
                 do {
-                    resolved = try await operations.resolveAccount(url)
+                    resolved = switch lookup {
+                    case .profileURL(let url): try await operations.resolveAccount(url)
+                    case .acct(let handle): try await operations.resolveHandle(handle)
+                    }
                 } catch {
                     // 探せなかったときは、見つからなかったとは決めずに、次に開いたメニューでも待って探す。
-                    self?.peopleFailures[url] = error
+                    self?.peopleFailures[lookup] = error
                     return
                 }
-                self?.peopleFailures[url] = nil
-                if let found = resolved, found.url == url {
-                    self?.people[url] = found
-                    self?.peopleNotFound.remove(url)
+                self?.peopleFailures[lookup] = nil
+                if let self, let found = resolved, Self.isSamePerson(found, as: lookup, localServer: credential.server) {
+                    people[lookup] = found
+                    peopleNotFound.remove(lookup)
                 } else {
-                    self?.peopleNotFound.insert(url)
+                    self?.peopleNotFound.insert(lookup)
                 }
             }
-            peopleSearches[url] = started
+            peopleSearches[lookup] = started
             return started
         }
         for running in searches {
             await running.value
+        }
+    }
+
+    private static func isSamePerson(_ found: Account, as lookup: AccountLookup, localServer: String) -> Bool {
+        switch lookup {
+        case .profileURL(let url): found.url == url
+        case .acct(let handle): found.hasHandle(handle, localServer: localServer)
         }
     }
 
@@ -428,7 +454,7 @@ public enum OtherAccountUserAction: Sendable {
         case .addToList: self = .addToList(accountID: id, acct: acct)
         case .mention: self = .mention(acct: acct)
         // 「別のアカウントで」の中には、どのアカウントでも同じ結果になる項目を組まない。
-        case .url, .openProfile, .copy, .otherAccount, .logIn, .customize: return nil
+        case .url, .urlAfterFinding, .openProfile, .copy, .otherAccount, .logIn, .customize: return nil
         }
     }
 }

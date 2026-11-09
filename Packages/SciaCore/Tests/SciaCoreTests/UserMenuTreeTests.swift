@@ -254,6 +254,27 @@ struct UserMenuTreeTests {
         #expect(loaded == ["", "メモを追加", ""])
     }
 
+    /// 文字のままのハンドルは、プロフィールのURLが探すまで分からない。URLの項目は押せるまま並べ、押してから探す。ほかのサーバーで探すURLがないので「別のアカウントで」は出さない。
+    @Test func plainHandleFindsURLAfterChoosing() throws {
+        let tree = UserMenuTree(subject: UserMenuSubject(handle: "alice@example.social"), actions: actions(), linkBrowser: .inApp)
+        let menu = try #require(tree.menu(groups: layout(visible: [.profile, .copyLink, .openInBrowser, .copyHandle, .otherAccounts]), avatar: nil))
+
+        #expect(menu.flattenedChildren.map { MenuNodeTests.describe([$0]) } == ["プロフィール", "ハンドルをコピー", "リンクをコピー", "ブラウザで開く"])
+        let commands = menu.flattenedChildren.compactMap { node -> URLMenuAction? in
+            if case .action(.urlAfterFinding(let action)?) = node.content { action } else { nil }
+        }
+        #expect(commands == [.copyLink, .openInBrowser])
+    }
+
+    /// 検索の結果は、書かれたハンドルと同じ人だけを受け取る。同じサーバーの人の`acct`にはサーバー名がないので補って比べる。
+    @Test func handleMatchIgnoresCaseAndAddsLocalServer() {
+        func account(_ acct: String) -> Account { Account(id: "1", username: "alice", acct: acct, displayName: "", avatar: nil) }
+        #expect(account("Alice@Example.Social").hasHandle("alice@example.social", localServer: "local.example"))
+        #expect(account("alice").hasHandle("alice@local.example", localServer: "local.example"))
+        #expect(!account("alice@other.example").hasHandle("alice@example.social", localServer: "local.example"))
+        #expect(!account("alice").hasHandle("alice@example.social", localServer: "local.example"))
+    }
+
     /// 「その他」に何かあれば、1項目でもサブメニューにする。出す項目がなければ何も出さない。
     @Test func submenuWhenProfileIsInMoreAndNothingWhenEmpty() {
         #expect(submenu(MenuLayout(elements: [.more, .item(.profile, isVisible: true)] + UserMenuItem.allCases.filter { $0 != .profile }.map { .item($0, isVisible: false) }).groups) == "@alice[その他[プロフィール]]")
