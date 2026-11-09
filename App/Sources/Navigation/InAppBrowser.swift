@@ -56,6 +56,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         let browserSheet = makeSheet(safari: safari)
         if let current, let presenter = current.presentingViewController, !current.isBeingDismissed {
             browserSheet.initialDetent = current.sheetPresentation?.selected ?? openingDetent
+            browserSheet.initialTemporaryHeight = current.sheetPresentation?.temporaryHeight
             self.current = browserSheet
             logger.info("in-app browser replace")
             // 同じ位置に同じ大きさで出し直すので、動かさずに入れ替える。
@@ -97,6 +98,9 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
             duration: tuning.value(of: TuningCatalog.inAppBrowserDockDuration),
             maximumWidth: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserSheetMaximumWidth)),
             maximumDimAlpha: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserSheetDimAlpha)),
+            snapDwell: .seconds(tuning.value(of: TuningCatalog.inAppBrowserSnapDwell)),
+            snapTolerance: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserSnapTolerance)),
+            clock: clock,
             layout: { [weak self] window, traits in
                 self?.sheetLayout(in: window, traits: traits) ?? InAppBrowserSheetLayout(collapsed: nil, medium: nil, large: window.bounds.height)
             }
@@ -122,7 +126,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
             }
             presentation.onLayoutChange = { [weak self, weak presentation] in
                 guard let self, let presentation else { return }
-                self.reportObscuredHeight(of: presentation)
+                self.selectionDidChange(presentation)
             }
         }
         return browserSheet
@@ -133,7 +137,8 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         guard let presentation, presentation.selected != .collapsed else { return }
         detentBeforeCompose = presentation.selected
         logger.info("in-app browser lower for compose from=\(presentation.selected.rawValue, privacy: .public)")
-        select(.collapsed, on: presentation)
+        presentation.select(.collapsed, animated: true, keepingTemporary: true)
+        selectionDidChange(presentation)
     }
 
     /// 投稿欄で書き終えたときに呼ぶ。書き始める前の高さへ戻す。
@@ -174,7 +179,11 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
     private func reportObscuredHeight(of presentation: InAppBrowserPresentationController) {
         let layout = presentation.layout
         let isCollapsed = presentation.selected == .collapsed
-        let height = CGFloat(isCollapsed ? layout.collapsed ?? 0 : layout.medium ?? 0)
+        let height: CGFloat = switch presentation.selected {
+        case .collapsed: CGFloat(layout.collapsed ?? 0)
+        case .temporary: CGFloat(layout.temporary ?? 0)
+        case .medium, .large: CGFloat(layout.medium ?? 0)
+        }
         let docks = isCollapsed && canDock(presentation)
         onDockedHeightChange?(docks ? height : 0)
         onObscuredHeightChange?(docks ? 0 : height)
@@ -188,7 +197,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
 
     private func selectionDidChange(_ presentation: InAppBrowserPresentationController) {
         reportObscuredHeight(of: presentation)
-        onCoverageChange?(presentation.selected == .large)
+        onCoverageChange?(presentation.coversScreenBehind)
     }
 
     /// 指でシートの高さを変えたとき。コードから変えたときは呼ばれない。

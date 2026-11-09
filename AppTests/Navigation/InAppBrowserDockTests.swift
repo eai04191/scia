@@ -1,3 +1,4 @@
+import SafariServices
 import SciaCore
 import SciaTesting
 import Testing
@@ -129,6 +130,134 @@ struct InAppBrowserDockTests {
         presentation.selectNextDetent()
         #expect(presentation.selected == .collapsed)
         #expect(changes == 3)
+        root.dismiss(animated: false)
+    }
+
+    /// 指が止まったらスナップ点を作り、そこへ止められる。ほかの段へ動かすと消える。
+    @Test func dwellCreatesTemporaryDetentUntilLeaving() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let clock = TestClock()
+        let browser = InAppBrowser(clock: clock)
+        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
+        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
+        let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
+        let presentation = try #require(sheet.sheetPresentation)
+        let dwell = Duration.seconds(TuningCatalog.inAppBrowserSnapDwell.defaultValue)
+
+        presentation.updateDwell(height: 301)
+        try await clock.advance(afterSleeping: dwell)
+        try await waitUntil { presentation.layout.temporary != nil }
+        #expect(presentation.layout.temporary == 300)
+
+        presentation.select(.temporary, animated: false)
+        let container = try #require(presentation.containerView)
+        #expect(sheet.view.frame.minY == container.bounds.height - 300)
+
+        presentation.select(.large, animated: false)
+        #expect(presentation.layout.temporary == nil)
+        root.dismiss(animated: false)
+    }
+
+    private func openBrowser(_ browser: InAppBrowser, from root: UIViewController) async throws -> (InAppBrowserSheet, InAppBrowserPresentationController) {
+        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
+        try await waitUntil { root.frontmostPresented is InAppBrowserSheet || root.frontmostPresented is SFSafariViewController }
+        var current: UIViewController = root
+        while !(current is InAppBrowserSheet), let next = current.presentedViewController { current = next }
+        let sheet = try #require(current as? InAppBrowserSheet)
+        try await waitUntil { sheet.isBeingPresented == false }
+        return (sheet, try #require(sheet.sheetPresentation))
+    }
+
+    private func makeTemporaryDetent(_ presentation: InAppBrowserPresentationController, height: CGFloat, expected: Double, clock: TestClock) async throws {
+        presentation.updateDwell(height: height)
+        try await clock.advance(afterSleeping: .seconds(TuningCatalog.inAppBrowserSnapDwell.defaultValue))
+        try await waitUntil { presentation.layout.temporary == expected }
+    }
+
+    /// 一時スナップ点に止めたあと、別の高さのスナップ点へ移したら、高さの変化を知らせる。
+    @Test func movingBetweenTemporaryDetentsReportsHeight() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let clock = TestClock()
+        let browser = InAppBrowser(clock: clock)
+        var obscured: CGFloat = 0
+        browser.onObscuredHeightChange = { obscured = $0 }
+        let (_, presentation) = try await openBrowser(browser, from: root)
+        try await makeTemporaryDetent(presentation, height: 301, expected: 300, clock: clock)
+        presentation.finishDrag(height: 300, velocity: 0)
+        #expect(obscured == 300)
+        presentation.updateDwell(height: 500)
+        try await clock.advance(afterSleeping: .seconds(TuningCatalog.inAppBrowserSnapDwell.defaultValue))
+        try await waitUntil { presentation.layout.temporary == 500 }
+
+        presentation.finishDrag(height: 500, velocity: 0)
+
+        #expect(obscured == 500)
+        root.dismiss(animated: false)
+    }
+
+    /// 別のリンクで中身を差し替えても、一時スナップ点の高さを保つ。
+    @Test func replacingPageKeepsTemporaryHeight() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let clock = TestClock()
+        let browser = InAppBrowser(clock: clock)
+        let (first, presentation) = try await openBrowser(browser, from: root)
+        try await makeTemporaryDetent(presentation, height: 301, expected: 300, clock: clock)
+        presentation.select(.temporary, animated: false)
+
+        browser.open(try #require(URL(string: "https://example.com/2")), from: root)
+
+        try await waitUntil { (root.presentedViewController as? InAppBrowserSheet).map { $0 !== first && $0.sheetPresentation != nil } == true }
+        let replaced = try #require((root.presentedViewController as? InAppBrowserSheet)?.sheetPresentation)
+        #expect(replaced.selected == .temporary)
+        #expect(replaced.layout.height(of: .temporary) == 300)
+        root.dismiss(animated: false)
+    }
+
+    /// 高さの狭い画面では中くらいの高さが全画面になるので、後ろの画面を覆っていると知らせる。
+    @Test func reportsCoverageWhenLayoutBecomesFullScreenOnly() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let browser = InAppBrowser()
+        var covered = false
+        browser.onCoverageChange = { covered = $0 }
+        let (_, presentation) = try await openBrowser(browser, from: root)
+        presentation.select(.medium, animated: false)
+        #expect(presentation.passesTouchesOutsideSheet)
+
+        harness.window.traitOverrides.verticalSizeClass = .compact
+        let container = try #require(presentation.containerView)
+        container.setNeedsLayout()
+        container.layoutIfNeeded()
+
+        try await waitUntil { covered }
+        #expect(!presentation.passesTouchesOutsideSheet)
+        root.dismiss(animated: false)
+    }
+
+    /// Safariがほかの画面の上にあるときは、シートの外に触れたものをSafariのすぐ下の画面へ通す。
+    @Test func windowPassesTouchesToScreenUnderSheet() async throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = ShakeDetectingWindow(windowScene: scene)
+        let root = UIViewController()
+        window.rootViewController = root
+        window.isHidden = false
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        let overlay = UIViewController()
+        overlay.modalPresentationStyle = .overFullScreen
+        try await root.presentForTesting(overlay)
+        let browser = InAppBrowser()
+        let (_, presentation) = try await openBrowser(browser, from: root)
+        presentation.select(.medium, animated: false)
+
+        #expect(window.hitTest(CGPoint(x: 100, y: 5), with: nil) === overlay.view)
         root.dismiss(animated: false)
     }
 

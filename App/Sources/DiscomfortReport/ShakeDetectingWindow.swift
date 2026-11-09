@@ -9,8 +9,8 @@ final class ShakeDetectingWindow: UIWindow {
         guard let presentation = browserPresentation else { return super.hitTest(point, with: event) }
         if let grab = presentation.moveGrabTarget(at: point, in: self) { return grab }
         let hit = super.hitTest(point, with: event)
-        guard hit === presentation.containerView, presentation.passesTouchesOutsideSheet, let root = rootViewController?.viewIfLoaded else { return hit }
-        return root.hitTest(root.convert(point, from: self), with: event)
+        guard hit === presentation.containerView, presentation.passesTouchesOutsideSheet, let behind = presentation.presentingViewController.viewIfLoaded else { return hit }
+        return behind.hitTest(behind.convert(point, from: self), with: event)
     }
 
     override func motionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {

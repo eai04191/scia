@@ -11,6 +11,10 @@ final class InAppBrowserPresentationController: UIPresentationController {
         var duration: TimeInterval
         var maximumWidth: CGFloat
         var maximumDimAlpha: CGFloat
+        /// 指がこの秒数だけ`snapTolerance`の範囲にとどまったら、スナップ点を作る。
+        var snapDwell: Duration
+        var snapTolerance: CGFloat
+        var clock: any Clock<Duration>
         var layout: (UIWindow, UITraitCollection) -> InAppBrowserSheetLayout
     }
 
@@ -23,7 +27,11 @@ final class InAppBrowserPresentationController: UIPresentationController {
     var onSelectionChange: (() -> Void)?
     /// 画面の回転などで、段の高さが変わったとき。
     var onLayoutChange: (() -> Void)?
-    private var lastLayout: InAppBrowserSheetLayout?
+    private var lastBaseLayout: InAppBrowserSheetLayout?
+    /// 指を止めて作ったスナップ点。ほかの段へ動かすと消える。
+    private(set) var temporaryHeight: Double?
+    private var dwell: Task<Void, Never>?
+    private var dwellAnchorHeight: CGFloat?
     private var isTransitioning = false
     private var isDragging = false
     private var isMoving = false
@@ -31,21 +39,30 @@ final class InAppBrowserPresentationController: UIPresentationController {
     private var dragStartY: CGFloat = 0
     private var sheet: InAppBrowserSheet? { presentedViewController as? InAppBrowserSheet }
 
-    init(presented: InAppBrowserSheet, presenting: UIViewController?, selected: InAppBrowserDetent, configuration: Configuration) {
+    init(presented: InAppBrowserSheet, presenting: UIViewController?, selected: InAppBrowserDetent, temporaryHeight: Double?, configuration: Configuration) {
         self.selected = selected
+        self.temporaryHeight = temporaryHeight
         self.configuration = configuration
         super.init(presentedViewController: presented, presenting: presenting)
     }
 
-    var layout: InAppBrowserSheetLayout {
+    var layout: InAppBrowserSheetLayout { baseLayout.withTemporary(temporaryHeight) }
+
+    private var baseLayout: InAppBrowserSheetLayout {
         guard let window = containerView?.window ?? presentingViewController.viewIfLoaded?.window else {
             return InAppBrowserSheetLayout(collapsed: nil, medium: nil, large: 0)
         }
         return configuration.layout(window, traitCollection)
     }
 
+    /// 選んでいる段が、この画面では全画面の高さになるか。高さの狭い画面（iPhoneの横向き）では、どの段も全画面の高さになる。
+    var coversScreenBehind: Bool {
+        let layout = layout
+        return layout.height(of: selected) >= layout.large
+    }
+
     /// 伏せた段や中くらいの高さの間は、シートの外に触れたものを後ろの画面へ通す。
-    var passesTouchesOutsideSheet: Bool { selected != .large }
+    var passesTouchesOutsideSheet: Bool { !coversScreenBehind }
 
     /// 動いている途中は、画面に見えている引ける範囲に触れたものをシートで受ける。ビューの位置はすでに行き先になっていて、ふつうの判定では外れるため。
     func moveGrabTarget(at point: CGPoint, in window: UIWindow) -> UIView? {
@@ -57,8 +74,10 @@ final class InAppBrowserPresentationController: UIPresentationController {
         return grab.contains(point) ? sheet.barGrabArea : nil
     }
 
-    func select(_ detent: InAppBrowserDetent, animated: Bool) {
+    /// - Parameter keepingTemporary: 投稿欄のために下げるときのように、あとでスナップ点へ戻すなら`true`にする。
+    func select(_ detent: InAppBrowserDetent, animated: Bool, keepingTemporary: Bool = false) {
         selected = detent
+        if detent != .temporary, !keepingTemporary { temporaryHeight = nil }
         guard presentedView != nil, !isTransitioning else { return }
         move(to: detent, velocity: 0, animated: animated)
     }
@@ -94,7 +113,7 @@ final class InAppBrowserPresentationController: UIPresentationController {
         view.addGestureRecognizer(pan)
         sheet?.barGrabArea.addGestureRecognizer(tap)
         (container.window as? ShakeDetectingWindow)?.browserPresentation = self
-        lastLayout = layout
+        lastBaseLayout = baseLayout
     }
 
     override func presentationTransitionDidEnd(_ completed: Bool) {
@@ -122,9 +141,12 @@ final class InAppBrowserPresentationController: UIPresentationController {
         let target = sheetFrame(for: selected)
         if view.frame != target { view.frame = target }
         updateDimming(height: CGFloat(layout.height(of: selected)))
-        let current = layout
-        guard current != lastLayout else { return }
-        lastLayout = current
+        let current = baseLayout
+        guard current != lastBaseLayout else { return }
+        lastBaseLayout = current
+        // 画面の回転などで高さが変わると、作ったときの高さは意味を失うので消す。
+        temporaryHeight = nil
+        if selected == .temporary { selected = current.medium == nil ? .large : .medium }
         settle()
         onLayoutChange?()
     }
@@ -188,7 +210,7 @@ final class InAppBrowserPresentationController: UIPresentationController {
 
     var safariSheetHeight: CGFloat {
         let layout = layout
-        return CGFloat(max(layout.height(of: selected), layout.medium ?? 0))
+        return CGFloat(max(layout.height(of: selected), selected == .collapsed ? layout.medium ?? 0 : 0))
     }
 
     @objc private func handlePan(_ pan: UIPanGestureRecognizer) {
@@ -199,16 +221,46 @@ final class InAppBrowserPresentationController: UIPresentationController {
             isDragging = true
             dragStartY = view.frame.minY
             sheet?.cancelSafariResize()
+            updateDwell(height: container.bounds.height - dragStartY)
         case .changed:
             let y = rubberBanded(dragStartY + pan.translation(in: container).y, in: container)
             view.frame.origin.y = y
             updateDimming(height: container.bounds.height - y)
+            updateDwell(height: container.bounds.height - y)
         case .ended, .cancelled, .failed:
             isDragging = false
-            finishDrag(view: view, container: container, velocity: pan.velocity(in: container).y)
+            endDwell()
+            finishDrag(height: container.bounds.height - view.frame.minY, velocity: pan.velocity(in: container).y)
         default:
             break
         }
+    }
+
+    /// 指が`snapTolerance`の範囲を出たら待ち直し、とどまったままなら、その高さにスナップ点を作る。
+    func updateDwell(height: CGFloat) {
+        if let anchor = dwellAnchorHeight, abs(anchor - height) <= configuration.snapTolerance { return }
+        dwellAnchorHeight = height
+        dwell?.cancel()
+        dwell = Task(.withoutRequests) { [weak self, configuration] in
+            do {
+                try await configuration.clock.sleep(for: configuration.snapDwell)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled, let self else { return }
+            self.makeTemporaryDetent(near: height)
+        }
+    }
+
+    private func endDwell() {
+        dwell?.cancel()
+        dwellAnchorHeight = nil
+    }
+
+    private func makeTemporaryDetent(near height: CGFloat) {
+        guard let new = baseLayout.temporaryHeight(near: Double(height), step: InAppBrowserHeight.step), new != temporaryHeight else { return }
+        temporaryHeight = new
+        UIImpactFeedbackGenerator(style: .light, view: presentedViewController.view).impactOccurred()
     }
 
     /// 全画面の高さより上へは、指の動きの一部だけ付いていく。
@@ -217,8 +269,7 @@ final class InAppBrowserPresentationController: UIPresentationController {
         return y < top ? top - (top - y) * 0.2 : y
     }
 
-    private func finishDrag(view: UIView, container: UIView, velocity: CGFloat) {
-        let height = container.bounds.height - view.frame.minY
+    func finishDrag(height: CGFloat, velocity: CGFloat) {
         switch layout.release(height: Double(height), velocity: Double(-velocity), from: selected) {
         case .dismiss:
             presentedViewController.presentingViewController?.dismiss(animated: true) { [weak self] in
@@ -228,8 +279,10 @@ final class InAppBrowserPresentationController: UIPresentationController {
         case .detent(let detent):
             let changed = detent != selected
             selected = detent
+            if detent != .temporary { temporaryHeight = nil }
             move(to: detent, velocity: velocity, animated: true)
-            if changed { onSelectionChange?() }
+            // 一時スナップ点は、段が同じでも高さが変わっていることがある。
+            if changed || detent == .temporary { onSelectionChange?() }
         }
     }
 

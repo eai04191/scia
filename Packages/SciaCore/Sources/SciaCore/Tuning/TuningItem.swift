@@ -1172,6 +1172,24 @@ public enum TuningCatalog {
         defaultValue: 89
     )
 
+    /// アプリ内のSafariのシートを引いている途中に、指を止めてスナップ点を作るまでの時間（秒）。
+    public static let inAppBrowserSnapDwell = NumberTuning(
+        id: "browser.snapDwell",
+        title: "アプリ内のSafariのシートで指を止めてスナップ点を作るまでの時間（秒）",
+        range: 0.1...2,
+        step: 0.05,
+        defaultValue: 0.4
+    )
+
+    /// アプリ内のSafariのシートを引いている途中に、指を止めたと見なす動きの幅（pt）。
+    public static let inAppBrowserSnapTolerance = NumberTuning(
+        id: "browser.snapTolerance",
+        title: "アプリ内のSafariのシートで指を止めたと見なす動きの幅（pt）",
+        range: 1...20,
+        step: 1,
+        defaultValue: 4
+    )
+
     /// アプリ内のSafariのビューを、シートの上端から下げる長さ（pt）。Safariの×ボタンの上の余白を左の余白と揃える。
     public static let inAppBrowserSafariTopInset = NumberTuning(
         id: "browser.safariTopInset",
@@ -2116,6 +2134,8 @@ public enum TuningCatalog {
         ]),
         TuningSection(id: "browser", title: "アプリ内のSafari", items: [
             .number(inAppBrowserCollapsedHeight),
+            .number(inAppBrowserSnapDwell),
+            .number(inAppBrowserSnapTolerance),
             .number(inAppBrowserSafariTopInset),
             .number(inAppBrowserSheetLargeTopGap),
             .number(inAppBrowserSheetMaximumWidth),

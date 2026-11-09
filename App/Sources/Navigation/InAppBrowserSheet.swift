@@ -24,6 +24,8 @@ final class InAppBrowserSheet: UIViewController {
     private let configuration: InAppBrowserPresentationController.Configuration
     /// 最初に止まる段。
     var initialDetent: InAppBrowserDetent = .collapsed
+    /// 最初に持っておく一時スナップ点の高さ。
+    var initialTemporaryHeight: Double?
     weak var presentationDelegate: (any UIAdaptivePresentationControllerDelegate)?
     private(set) weak var sheetPresentation: InAppBrowserPresentationController?
     var onPresentationCreated: ((InAppBrowserPresentationController) -> Void)?
@@ -152,7 +154,7 @@ private final class InAppBrowserGrabberView: UIView {
 extension InAppBrowserSheet: UIViewControllerTransitioningDelegate {
     func presentationController(forPresented presented: UIViewController, presenting: UIViewController?, source: UIViewController) -> UIPresentationController? {
         guard presented === self else { return nil }
-        let controller = InAppBrowserPresentationController(presented: self, presenting: presenting, selected: initialDetent, configuration: configuration)
+        let controller = InAppBrowserPresentationController(presented: self, presenting: presenting, selected: initialDetent, temporaryHeight: initialTemporaryHeight, configuration: configuration)
         controller.delegate = presentationDelegate
         sheetPresentation = controller
         onPresentationCreated?(controller)

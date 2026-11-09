@@ -24,6 +24,21 @@ struct InAppBrowserSheetLayoutTests {
         #expect(layout.release(height: 200, velocity: -3000, from: .medium) == .detent(.collapsed))
     }
 
+    @Test func temporaryHeightRoundsToStepAwayFromOtherDetents() {
+        #expect(layout.temporaryHeight(near: 301.5, step: 4) == 300)
+        #expect(layout.temporaryHeight(near: 502, step: 4) == nil)
+        #expect(layout.temporaryHeight(near: 78, step: 4) == nil)
+        #expect(layout.temporaryHeight(near: 799, step: 4) == nil)
+        #expect(InAppBrowserSheetLayout(collapsed: nil, medium: nil, large: 400).temporaryHeight(near: 200, step: 4) == nil)
+    }
+
+    @Test func temporaryDetentJoinsInHeightOrder() {
+        let withPoint = layout.withTemporary(300)
+        #expect(withPoint.detents == [.collapsed, .temporary, .medium, .large])
+        #expect(withPoint.release(height: 305, velocity: 0, from: .medium) == .detent(.temporary))
+        #expect(InAppBrowserSheetLayout(collapsed: nil, medium: nil, large: 400).withTemporary(300).detents == [.large])
+    }
+
     @Test func fullScreenOnlyLayoutNeverDismisses() {
         let fullScreen = InAppBrowserSheetLayout(collapsed: nil, medium: nil, large: 400)
         #expect(fullScreen.detents == [.large])
