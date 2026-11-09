@@ -84,7 +84,7 @@ struct SettingsView: View {
                         SettingsCategoryLabel("操作", systemImage: "hand.tap.fill", color: .systemOrange)
                     }
                     NavigationLink(value: SettingsPage.compose) {
-                        SettingsCategoryLabel("投稿欄", systemImage: "square.and.pencil", color: .systemGreen)
+                        SettingsCategoryLabel("作成", systemImage: "square.and.pencil", color: .systemGreen)
                     }
                     NavigationLink(value: SettingsPage.appIcon) {
                         AppIconSettingsLabel()

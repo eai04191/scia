@@ -341,7 +341,7 @@ struct InteractionSettingsView: View {
     }
 }
 
-/// 投稿欄の分類。投稿欄の出し方、ボタンの並び、送る前にメディアを縮める大きさ。
+/// 作成の分類。投稿欄の出し方、ボタンの並び、送る前にメディアを縮める大きさ。
 struct ComposeSettingsView: View {
     @Bindable var settings: AppSettings
 
@@ -371,7 +371,7 @@ struct ComposeSettingsView: View {
             }
         }
         .topEdgeEffectHiddenOnMac()
-        .navigationTitle("投稿欄")
+        .navigationTitle("作成")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

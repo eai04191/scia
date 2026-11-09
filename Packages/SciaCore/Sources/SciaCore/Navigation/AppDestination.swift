@@ -301,7 +301,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     case display
     /// 操作の分類。対象ごとの画面（タップと長押しの操作と、その対象のメニューの並び）、リンクを開く場所、ブーストの公開範囲を並べる。
     case interaction
-    /// 投稿欄の分類。
+    /// 作成の分類。
     case compose
     /// 表示の中の、メディアの画面。HDRの明るさ、サムネイルの画質、代替テキストを並べる。
     case media
