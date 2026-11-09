@@ -1777,13 +1777,6 @@ public enum TuningCatalog {
         defaultValue: 1
     )
 
-    /// 開発用。画面がSDRの白の何倍まで明るく描けるか（今の余地と最大の余地）と、光をHDRとSDRのどちらで描くかを、画面の隅に出し続ける。
-    public static let debugShowsEDRHeadroom = ToggleTuning(
-        id: "debug.showsEDRHeadroom",
-        title: "画面のHDRの余地を表示する（開発用）",
-        defaultValue: false
-    )
-
     /// ライトモードでHDRで描くときの、下の端のにじみの強さ。照らす光の強さの何倍にするか。
     public static let reactionGlowLightBloomIntensityRatio = NumberTuning(
         id: "timeline.reactionGlowLightBloomIntensityRatio",
@@ -1860,7 +1853,6 @@ public enum TuningCatalog {
             .number(reactionGlowLightIntensity),
             .number(reactionGlowLightBloomIntensityRatio),
             .number(reactionGlowDarkGlowHDRExposure),
-            .toggle(debugShowsEDRHeadroom),
             .number(reactionGlowIconRiseDelay),
             .toggle(reactionGlowMixesInOKLab),
             .number(reactionGlowDuration),

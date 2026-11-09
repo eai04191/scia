@@ -1,4 +1,3 @@
-#if DEBUG
 import SciaCore
 import UIKit
 
@@ -7,14 +6,14 @@ import UIKit
 /// 晴れた屋外などで、余地がどこまで下がるか、HDRの内容がないと1に戻るかを、実機で確かめるために使う。
 @MainActor
 enum EDRHeadroomOverlay {
-    /// チューニングのスイッチに合わせて、`window`に出したり消したりする。
-    static func follow(_ window: UIWindow, tuning: TuningStore) {
+    /// デバッグメニューの項目に合わせて、`window`に出したり消したりする。
+    static func follow(_ window: UIWindow, developerMode: DeveloperMode) {
         withObservationTracking {
-            apply(tuning.value(of: TuningCatalog.debugShowsEDRHeadroom), to: window)
+            apply(developerMode.showsEDRHeadroom, to: window)
         } onChange: { [weak window] in
             Task { @MainActor in
                 guard let window else { return }
-                follow(window, tuning: tuning)
+                follow(window, developerMode: developerMode)
             }
         }
     }
@@ -92,4 +91,3 @@ private final class EDRHeadroomOverlayView: UIView {
         label.text = String(format: "EDRの余地 今 %.2f / 最大 %.2f\n光 %@", current, potential, glow)
     }
 }
-#endif

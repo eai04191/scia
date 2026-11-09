@@ -48,6 +48,27 @@ struct DeveloperModeTests {
         #expect(mode.isEnabled == false)
     }
 
+    @Test func turningItOffAlsoTurnsOffTheEDRHeadroom() {
+        let defaults = TestScratch.defaults("DeveloperModeTests")
+        let mode = DeveloperMode(defaults: defaults, isAlwaysEnabled: false)
+        _ = tap(mode, times: DeveloperMode.requiredTaps)
+        mode.showsEDRHeadroom = true
+        #expect(DeveloperMode(defaults: defaults, isAlwaysEnabled: false).showsEDRHeadroom)
+
+        _ = tap(mode, times: DeveloperMode.requiredTaps)
+
+        #expect(mode.showsEDRHeadroom == false)
+        #expect(DeveloperMode(defaults: defaults, isAlwaysEnabled: false).showsEDRHeadroom == false)
+    }
+
+    /// デバッグ版でオンにしたあと、同じデータのままReleaseを入れた状態。
+    @Test func edrHeadroomStaysOffWhileDisabled() {
+        let defaults = TestScratch.defaults("DeveloperModeTests")
+        DeveloperMode(defaults: defaults, isAlwaysEnabled: true).showsEDRHeadroom = true
+
+        #expect(DeveloperMode(defaults: defaults, isAlwaysEnabled: false).showsEDRHeadroom == false)
+    }
+
     @Test func alwaysEnabledIgnoresTaps() {
         let mode = DeveloperMode(defaults: TestScratch.defaults("DeveloperModeTests"), isAlwaysEnabled: true)
 

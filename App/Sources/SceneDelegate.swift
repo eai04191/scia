@@ -57,9 +57,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         #endif
         window.makeKeyAndVisible()
         installNoticeOverlay()
-        #if DEBUG
-        EDRHeadroomOverlay.follow(window, tuning: AppDependencies.tuning)
-        #endif
+        EDRHeadroomOverlay.follow(window, developerMode: AppDependencies.developerMode)
         // 閉じていたアプリをURLで開いたとき。プロフィールは最初の読み込みを待たずに開ける。
         for context in connectionOptions.urlContexts {
             guard let url = AppURL(context.url) else { continue }

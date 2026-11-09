@@ -43,6 +43,18 @@ extension UIViewController {
                     },
                 ])
             },
+            UIDeferredMenuElement.uncached { completion in
+                let developerMode = AppDependencies.developerMode
+                completion([
+                    UIAction(
+                        title: "HDRの余地を表示",
+                        image: UIImage(systemName: "sun.max"),
+                        state: developerMode.showsEDRHeadroom ? .on : .off
+                    ) { _ in
+                        developerMode.showsEDRHeadroom.toggle()
+                    },
+                ])
+            },
         ]
         let sections: [UIMenuElement] = [
             UIMenu(options: .displayInline, children: [buildInfo]),
