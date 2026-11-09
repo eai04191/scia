@@ -141,6 +141,16 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         selectionDidChange(presentation)
     }
 
+    /// 後ろの画面に別の画面を開くときに呼ぶ。伏せた高さまで下げて、開いた画面を見せる。伏せた高さのない画面（iPhoneの横向き）では下げられないのでfalseを返す。
+    func lowerToShowScreenBehind() -> Bool {
+        guard let presentation, presentation.layout.collapsed != nil else { return false }
+        if presentation.selected != .collapsed {
+            logger.info("in-app browser lower for destination from=\(presentation.selected.rawValue, privacy: .public)")
+            select(.collapsed, on: presentation)
+        }
+        return true
+    }
+
     /// 投稿欄で書き終えたときに呼ぶ。書き始める前の高さへ戻す。
     func restoreAfterCompose() {
         logger.info("in-app browser compose ended")

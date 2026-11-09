@@ -42,6 +42,11 @@ extension UIViewController {
         closeScreens(stoppingAt: { _ in false }, completion: completion)
     }
 
+    /// アプリ内のSafariのシートより手前に重ねた画面を閉じる。閉じ終えたら`completion`を呼ぶ。
+    func closeScreensAboveInAppBrowser(completion: @escaping () -> Void) {
+        closeScreens(stoppingAt: { $0 is InAppBrowserSheet }, completion: completion)
+    }
+
     /// 上に重ねた画面を手前から順に閉じ、`stays`が残すと決めた画面に当たったら、その上までで止める。閉じ終えたら`completion`を呼ぶ。
     /// 自分で閉じる画面（`ClosesItself`）があれば、先にその閉じ方で閉じてから、下の画面を閉じる。
     /// ほかの画面は、出した側から`dismissPresentedScreens`でまとめて閉じる。

@@ -193,6 +193,28 @@ struct ComposerRevealTests {
     }
 
     /// 何も重ねていなければ、閉じずにすぐ続きを呼ぶ。
+    /// 外から送られた行き先では、アプリ内のSafariのシートを残し、その上の画面だけを閉じる。
+    @Test func closesOnlyScreensAboveInAppBrowser() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let browser = InAppBrowser()
+        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
+        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
+        let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
+        let screen = UIViewController()
+        screen.modalPresentationStyle = .overFullScreen
+        try await sheet.frontmostPresented.presentForTesting(screen)
+
+        var finished = false
+        root.closeScreensAboveInAppBrowser { finished = true }
+
+        try await waitUntil { finished }
+        #expect(root.presentedViewController === sheet)
+        #expect(screen.presentingViewController == nil)
+        root.dismiss(animated: false)
+    }
+
     @Test func continuesAtOnceWithNothingToClose() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }

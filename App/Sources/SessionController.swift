@@ -4036,14 +4036,15 @@ final class SessionController {
             coordinator.animate(alongsideTransition: nil) { [weak self] _ in self?.open(destination) }
             return
         }
-        // タブを見せる行き先は、上に重ねた画面を、書きかけのある画面やアプリ内のSafariも含めてすべて閉じてから開く。重ねたままでは見えず、積むのもやめるため。
+        // タブを見せる行き先は、上に重ねた画面を、書きかけのある画面も含めてすべて閉じてから開く。重ねたままでは見えず、積むのもやめるため。
+        // アプリ内のSafariは伏せた高さへ下げて残す。伏せたシートの上に後ろの画面が見えるため。
         // 送られた行き先は使う人の新しい操作なので、出ていた画面より優先する。並びにないか無効にしているタブは開かないので、閉じずにやめる。
         if destination.showsTab, rootViewController.presentedViewController != nil {
             guard canShowTab(of: destination) else {
                 logger.error("open tab: no enabled tab in layout")
                 return
             }
-            closeScreensForDestination { [weak self] in self?.show(destination) }
+            closeScreensForDestination(keepingBrowser: true) { [weak self] in self?.show(destination) }
             return
         }
         show(destination)
@@ -4052,9 +4053,14 @@ final class SessionController {
     /// 送られた行き先のために、上に重ねた画面をすべて閉じてから`open`を呼ぶ。
     /// 確認のアラートが出ていれば、答えを待っている途中なので、閉じずにやめる。アラートは出した側から閉じると選んだときの処理が走らず、
     /// 後始末（投稿欄がアラートを出している扱いを解くなど）がされないため。アラートごとに選ばずに閉じたときの後始末を持たせる手間をかけない。
-    private func closeScreensForDestination(then open: @escaping () -> Void) {
+    /// - Parameter keepingBrowser: タブの直上にアプリ内のSafariがあれば、閉じずに伏せた高さへ下げ、その上の画面だけを閉じる。伏せた高さのない画面（iPhoneの横向き）では閉じる。
+    private func closeScreensForDestination(keepingBrowser: Bool = false, then open: @escaping () -> Void) {
         guard !rootViewController.isShowingAlert else {
             logger.error("open destination dropped: alert shown")
+            return
+        }
+        if keepingBrowser, rootViewController.presentedViewController is InAppBrowserSheet, browser.lowerToShowScreenBehind() {
+            rootViewController.closeScreensAboveInAppBrowser(completion: open)
             return
         }
         rootViewController.closeAllScreens(completion: open)

@@ -62,6 +62,27 @@ struct InAppBrowserDockTests {
         root.dismiss(animated: false)
     }
 
+    /// 後ろの画面に別の画面を開くときは、どの高さからでも伏せた高さへ下げ、後ろの画面を縮める。
+    @Test func lowersToCollapsedToShowScreenBehind() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let browser = InAppBrowser()
+        var docked: CGFloat = 0
+        browser.onDockedHeightChange = { docked = $0 }
+        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
+        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
+        let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
+        let presentation = try #require(sheet.sheetPresentation)
+        presentation.select(.large, animated: false)
+
+        #expect(browser.lowerToShowScreenBehind())
+
+        #expect(presentation.selected == .collapsed)
+        #expect(docked == CGFloat(try #require(presentation.layout.collapsed)))
+        root.dismiss(animated: false)
+    }
+
     /// シートは伏せた段でも画面の幅いっぱいに出す。
     @Test func collapsedSheetSpansScreenWidth() async throws {
         let harness = try TimelineHarness(notices: notices)
