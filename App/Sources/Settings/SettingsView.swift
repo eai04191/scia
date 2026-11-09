@@ -86,9 +86,6 @@ struct SettingsView: View {
                     NavigationLink(value: SettingsPage.compose) {
                         SettingsCategoryLabel("投稿欄", systemImage: "square.and.pencil", color: .systemGreen)
                     }
-                    NavigationLink(value: SettingsPage.media) {
-                        SettingsCategoryLabel("メディア", systemImage: "photo.fill", color: .systemRed)
-                    }
                     NavigationLink(value: SettingsPage.appIcon) {
                         AppIconSettingsLabel()
                     }

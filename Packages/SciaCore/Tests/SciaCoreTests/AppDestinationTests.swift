@@ -193,6 +193,7 @@ struct AppDestinationTests {
     @Test func pushesCategoryBeforeItsPages() {
         #expect(SettingsPage.appearance.path == [.display, .appearance])
         #expect(SettingsPage.linkLoading.path == [.display, .linkLoading])
+        #expect(SettingsPage.media.path == [.display, .media])
         #expect(SettingsPage.statusMenu.path == [.interaction, .statusActions, .statusMenu])
         #expect(SettingsPage.mediaMenu.path == [.interaction, .mediaActions, .mediaMenu])
         #expect(SettingsPage.profileTextMenu.path == [.interaction, .profileTextMenu])

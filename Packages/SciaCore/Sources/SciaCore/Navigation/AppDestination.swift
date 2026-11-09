@@ -297,13 +297,13 @@ public enum AppDestination: Equatable, Sendable {
 
 /// 設定のトップの画面から重ねて開く画面。`rawValue`は、`scia://settings/<rawValue>`でその画面を直接開くときの名前。
 public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
-    /// 表示の分類。投稿と通知の見た目、動き、ステータスバーの通知、リンク先の読み込みを並べる。
+    /// 表示の分類。投稿と通知とメディアの見た目、動き、ステータスバーの通知、リンク先の読み込みを並べる。
     case display
     /// 操作の分類。対象ごとの画面（タップと長押しの操作と、その対象のメニューの並び）、リンクを開く場所、ブーストの公開範囲を並べる。
     case interaction
     /// 投稿欄の分類。
     case compose
-    /// メディアの分類。HDRの明るさ、サムネイルの画質、代替テキストを並べる。
+    /// 表示の中の、メディアの画面。HDRの明るさ、サムネイルの画質、代替テキストを並べる。
     case media
     /// 情報。アプリのビルドと、接続の状態、ライセンス、謝辞を並べる。
     case about
@@ -344,7 +344,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     /// 設定のトップの画面からこの画面までに重ねる画面。
     public var path: [SettingsPage] {
         switch self {
-        case .appearance, .notificationAppearance, .linkLoading: [.display, self]
+        case .appearance, .notificationAppearance, .media, .linkLoading: [.display, self]
         case .statusActions, .notificationActions, .userActions, .linkActions, .externalPostActions, .hashtagActions, .mediaActions,
              .reactionActions, .profileTextMenu:
             [.interaction, self]
@@ -358,7 +358,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
         case .composeTools: [.compose, self]
         case .connection, .licenses, .acknowledgments: [.about, self]
         case .viewedMediaCache, .prefetchedMediaCache: [.storage, self]
-        case .display, .interaction, .compose, .media, .about, .appIcon, .tabs, .storage: [self]
+        case .display, .interaction, .compose, .about, .appIcon, .tabs, .storage: [self]
         }
     }
 }

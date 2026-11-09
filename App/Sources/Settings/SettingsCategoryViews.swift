@@ -155,7 +155,7 @@ struct SettingsIcon: View {
     }
 }
 
-/// 表示の分類。投稿と通知の見た目、アクセントカラー、新着の動き、ステータスバーの通知、リンク先の読み込み。
+/// 表示の分類。投稿と通知とメディアの見た目、アクセントカラー、新着の動き、ステータスバーの通知、リンク先の読み込み。
 struct DisplaySettingsView: View {
     @Bindable var settings: AppSettings
     var body: some View {
@@ -163,6 +163,7 @@ struct DisplaySettingsView: View {
             Section {
                 NavigationLink("投稿", value: SettingsPage.appearance)
                 NavigationLink("通知", value: SettingsPage.notificationAppearance)
+                NavigationLink("メディア", value: SettingsPage.media)
                 AccentColorPicker(selection: $settings.accentColor)
             } header: {
                 Text("見た目")
@@ -375,7 +376,7 @@ struct ComposeSettingsView: View {
     }
 }
 
-/// メディアの分類。HDRの明るさ、サムネイルの画質、代替テキストの扱い。
+/// 表示の中の、メディアの画面。HDRの明るさ、サムネイルの画質、代替テキストの扱い。
 struct MediaSettingsView: View {
     @Bindable var settings: AppSettings
 
