@@ -1161,15 +1161,25 @@ public enum TuningCatalog {
         defaultValue: 40
     )
 
-    /// アプリ内のSafariのシートをいちばん下げたときの高さ（pt、下の安全領域を除く）。投稿欄で書いている間はこの高さまで下げる。
+    /// アプリ内のSafariのシートをいちばん下げたときの、画面の下端からの高さ（pt）。投稿欄で書いている間はこの高さまで下げる。
     /// 一時的に伏せておくために、つまみで下げることもできる。中くらいの高さでタイムラインをスクロールする指がシートを引き下ろしても、
     /// いったんこの高さで止まるため、閉じにくくする役も持つ。
+    /// 既定値は、シートの上端からSafariのナビバーの下端（区切り線の手前）まで。Safariは別のプロセスが描いていて、バーの高さを読むAPIがないので、iPhone 16 Proのシミュレーターで測った。
     public static let inAppBrowserCollapsedHeight = NumberTuning(
         id: "browser.collapsedHeight",
         title: "アプリ内のSafariを伏せたときの高さ（pt）",
         range: 40...200,
         step: 1,
-        defaultValue: 89
+        defaultValue: 66
+    )
+
+    /// ホームバーのある機種で、アプリ内のSafariの伏せた高さに足す長さ（pt）。足さないと、Safariの×とメニューのボタンが画面の丸い角とホームバーに当たる。
+    public static let inAppBrowserCollapsedHomeIndicatorSpace = NumberTuning(
+        id: "browser.collapsedHomeIndicatorSpace",
+        title: "ホームバーのある機種でアプリ内のSafariの伏せた高さに足す長さ（pt）",
+        range: 0...40,
+        step: 1,
+        defaultValue: 13
     )
 
     /// アプリ内のSafariのシートを引いている途中に、指を止めてスナップ点を作るまでの時間（秒）。
@@ -2134,6 +2144,7 @@ public enum TuningCatalog {
         ]),
         TuningSection(id: "browser", title: "アプリ内のSafari", items: [
             .number(inAppBrowserCollapsedHeight),
+            .number(inAppBrowserCollapsedHomeIndicatorSpace),
             .number(inAppBrowserSnapDwell),
             .number(inAppBrowserSnapTolerance),
             .number(inAppBrowserSafariTopInset),

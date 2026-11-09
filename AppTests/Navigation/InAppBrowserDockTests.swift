@@ -102,6 +102,26 @@ struct InAppBrowserDockTests {
         root.dismiss(animated: false)
     }
 
+    /// ホームバーのある機種では、伏せた高さにSafariのボタンを画面の角から離す長さを足す。
+    @Test func collapsedHeightLeavesRoomForHomeIndicator() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let tuning = TuningStore(defaults: nil)
+        tuning.setValue(70, for: TuningCatalog.inAppBrowserCollapsedHeight)
+        tuning.setValue(20, for: TuningCatalog.inAppBrowserCollapsedHomeIndicatorSpace)
+        let browser = InAppBrowser(tuning: tuning)
+        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
+        try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
+        let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
+        let presentation = try #require(sheet.sheetPresentation)
+        let window = try #require(sheet.view.window)
+        try #require(window.safeAreaInsets.bottom > 0)
+
+        #expect(presentation.layout.collapsed == 90)
+        root.dismiss(animated: false)
+    }
+
     /// 動いている途中は、ビューの行き先ではなく、画面に見えている引ける範囲に触れたものをシートで受ける。
     @Test func grabsSheetAtVisiblePositionWhileMoving() async throws {
         let harness = try TimelineHarness(notices: notices)

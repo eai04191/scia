@@ -182,7 +182,8 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         let collapsedHeight = tuning.value(of: TuningCatalog.inAppBrowserCollapsedHeight)
         let inner = settings.inAppBrowserHeight.sheetHeight(available: Double(window.safeAreaHeight), minimum: collapsedHeight)
         let medium = min(inner + Double(window.safeAreaInsets.bottom), large)
-        return InAppBrowserSheetLayout(collapsed: min(collapsedHeight, medium - 1), medium: medium, large: large)
+        let homeIndicatorSpace = window.safeAreaInsets.bottom > 0 ? tuning.value(of: TuningCatalog.inAppBrowserCollapsedHomeIndicatorSpace) : 0
+        return InAppBrowserSheetLayout(collapsed: min(collapsedHeight + homeIndicatorSpace, medium - 1), medium: medium, large: large)
     }
 
     /// 全画面に広げている間はタイムラインが見えないため、中くらいの高さの値を使い続ける。
