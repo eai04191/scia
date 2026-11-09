@@ -337,6 +337,7 @@ final class SessionController {
             statuses.updateStatus(id, transform)
         }
         self.updateStatusEverywhere = updateStatusEverywhere
+        AppDependencies.postCrashGuard.activate(accountID: credential.id)
         interactions = StatusInteractions(operations: .init(client: client), update: updateStatusEverywhere)
         // 付けた投稿は、サーバーが受け付けたところでブックマークやお気に入りのタイムラインの先頭に入れる。外したときは行を残す。
         interactions.onSettle = { action, status in
@@ -2377,6 +2378,68 @@ final class SessionController {
         }
     }
 
+    /// 隔離した投稿の行とチップから、送る内容の画面を開けるようにし、起動後に一度だけチップを出す。決まりはdocs/crash-quarantine.mdにある。
+    private func startCrashQuarantine() {
+        let crashGuard = AppDependencies.postCrashGuard
+        let accountID = credential.id
+        notices.openCrashReport = { [weak self] statusID in self?.presentCrashReport(statusID: statusID) }
+        let tuning = AppDependencies.tuning
+        tasks.run(.display) { [weak self] in
+            try? await AppDependencies.clock.sleep(for: .seconds(tuning.value(of: TuningCatalog.crashQuarantineChipDelay)))
+            guard !Task.isCancelled, let statusID = crashGuard.takeUnnotified(accountID: accountID).first else { return }
+            self?.showCrashQuarantineChip(statusID: statusID)
+        }
+    }
+
+    private func showCrashQuarantineChip(statusID: Status.ID) {
+        let notice = Notice(
+            id: "crashQuarantine",
+            kind: .info,
+            title: "表示できない投稿がありました",
+            action: .disclosure(hint: "隠した投稿の詳細を表示します") { [weak self] in self?.presentCrashReport(statusID: statusID) }
+        )
+        notices.showTransient(notice, duration: AppDependencies.tuning.value(of: TuningCatalog.crashQuarantineChipDuration))
+    }
+
+    private func presentCrashReport(statusID: Status.ID) {
+        guard let presenter = notices.presenter else { return }
+        let client = client
+        let environment = "Scia \(BuildInfo.current.version) (\(BuildInfo.current.build))、\(DeviceModel.identifier)、iOS \(UIDevice.current.systemVersion)"
+        let controller = PostCrashReportView.makeController(fallbackURL: notices.quarantinedPageURLs[statusID]) {
+            try PostCrashReport(response: try await client.statusResponse(statusID), environment: environment)
+        } describe: { [weak self] error in
+            await self?.failureReason(for: error) ?? ErrorPresentation(error)
+        } sendByMail: { [weak self] text, host in
+            self?.sendCrashReportByMail(text, from: host)
+        } sendByMastodon: { [weak self] text, host in
+            self?.sendCrashReportByMastodon(text, from: host)
+        }
+        presenter.present(controller, animated: true)
+    }
+
+    private func sendCrashReportByMail(_ text: String, from host: UIViewController) {
+        guard let url = CrashReportMail.url(to: AppInfo.contactEmail, body: text) else { return }
+        UIApplication.shared.open(url) { [weak host] opened in
+            guard !opened, let host else { return }
+            Self.presentCrashReportAlert(title: "メールを開けませんでした", message: "メールアプリを設定するかMastodonで報告してください。", on: host)
+        }
+    }
+
+    /// 別のウインドウに出ないよう、報告の画面の上に出す。
+    private static func presentCrashReportAlert(title: String, message: String, on host: UIViewController) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .cancel))
+        host.present(alert, animated: true)
+    }
+
+    private func sendCrashReportByMastodon(_ text: String, from host: UIViewController) {
+        guard composer.startDirectMessage("@\(AppInfo.contactMastodon)\n\n\(text)") else {
+            Self.presentCrashReportAlert(title: "投稿欄を開けませんでした", message: "書きかけの投稿を投稿するか削除してください。", on: host)
+            return
+        }
+        host.dismiss(animated: true)
+    }
+
     /// 投稿をサーバーから読み直したAPIの応答を、操作した画面に積んで開く。
     private func openAPIResponse(statusID: Status.ID, from source: UIViewController?) {
         let client = client
@@ -3643,6 +3706,7 @@ final class SessionController {
 
     func start() {
         hasStarted = true
+        startCrashQuarantine()
         // 無効にしている項目は、有効にしたときか開いたときに始める。
         if tabs.placement.location(of: .home) != .disabled {
             home.start(purpose: .action)
@@ -4044,6 +4108,8 @@ final class SessionController {
             }
         case .apiResponse(let statusID):
             openAPIResponse(statusID: statusID, from: tabs.selectedNavigation?.topViewController)
+        case .crashReport(let statusID):
+            presentCrashReport(statusID: statusID)
         case .accounts(let list):
             guard let source = tabs.selectedNavigation?.topViewController else { return }
             switch list {
@@ -4320,6 +4386,12 @@ final class SessionController {
             statusBarTicker.setLooping(isOn, items: DummyNotifications.samples)
         case .inject(let tab, let file):
             inject(file, into: tab)
+        case .crash(let kind, let onNextRow):
+            if onNextRow {
+                DebugFaults.crashOnNextRow(kind)
+            } else {
+                DebugFaults.crash(kind)
+            }
         case .compose(let text, let mediaCount, let pollOptions):
             composer.beginEditing()
             if let text {

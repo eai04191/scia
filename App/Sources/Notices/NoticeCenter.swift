@@ -70,6 +70,10 @@ final class NoticeCenter {
     }
     /// 「操作の状況」の画面を、渡した画面の上に開く。出たままのアプリ内通知が2件以上のときに、チップから開く。nilなら開けない。
     var showOperationStatus: (@MainActor (UIViewController) -> Void)?
+    /// 隔離した投稿について、開発者に送る内容の画面を開く。ウィンドウごとに、その行のセッションで開くため、ここに持つ。
+    var openCrashReport: (@MainActor (Status.ID) -> Void)?
+    /// 隠した投稿のページ。報告の内容を読み込めなかったときも、ブラウザで開けるように覚える。IDはサーバーごとなので、セッションごとに持つ。
+    var quarantinedPageURLs: [Status.ID: URL] = [:]
     private var persistent: [PersistentNotices.Slot: Content] = [:]
     private let overlays = NSHashTable<NoticeOverlay>.weakObjects()
 

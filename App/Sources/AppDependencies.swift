@@ -25,6 +25,9 @@ enum AppDependencies {
 
     static let stateDumps = StateDumpRegistry()
 
+    /// 投稿の行の処理中のクラッシュを記録し、次の起動から隔離する（docs/crash-quarantine.md）。
+    static let postCrashGuard = PostCrashGuard(defaults: .standard, build: BuildInfo.current.build + BuildInfo.current.commit)
+
     /// 時間をおく処理に渡す、実際の時計。テストでは手で進める時計に差し替える。
     nonisolated static var clock: any Clock<Duration> { SystemTime.clock }
 

@@ -255,6 +255,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     let avatarImages: AvatarImageStore<UIImage>
     let network: NetworkConditionsMonitor
     let settings: AppSettings
+    private let crashGuard: PostCrashGuard
     /// スクロールが止まったときに見えている画像を、ビューアで開く元の画像で先読みする。セッションが入れる。nilなら先読みしない。
     var mediaPrefetcher: MediaPrefetcher?
     /// 添付ファイルをぼかすか。閲覧注意のぼかしを外した投稿と、メニューから隠した投稿を覚える。セッションがほかの画面とそろえる。
@@ -322,8 +323,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         mediaImages: MediaImageStore<UIImage> = AppDependencies.mediaImages,
         avatarImages: AvatarImageStore<UIImage> = AppDependencies.avatarImages,
         network: NetworkConditionsMonitor = AppDependencies.network,
-        settings: AppSettings = AppDependencies.settings
+        settings: AppSettings = AppDependencies.settings,
+        crashGuard: PostCrashGuard = AppDependencies.postCrashGuard
     ) {
+        self.crashGuard = crashGuard
         self.texts = texts
         self.refresh = refresh
         self.tuning = tuning
@@ -1050,7 +1053,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let isCovered = isCoveredByMediaViewer || isCoveredByInAppBrowser
         let followsTop = anchorID == nil && topID == nil && isAtTop && !isCovered && tuning.value(of: TuningCatalog.followsNewArrivalsAtTop)
         let newIDs = newEntries.map(\.id)
-        entries = Dictionary(zip(newIDs, newEntries), uniquingKeysWith: { _, new in new })
+        // IDは元のまま、中身だけを読めない行にする。ストアは変えないので、既読位置や未読の数は隔離の影響を受けない。
+        entries = Dictionary(zip(newIDs, newEntries.map(quarantined)), uniquingKeysWith: { _, new in new })
         reactionGlowSeparatorLeadings = reactionGlowSeparatorLeadings.filter { entries[$0.key] != nil }
         prunePostSelection()
         gapIDs = newEntries.compactMap { entry in
@@ -1060,7 +1064,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         snapshot.appendSections([.main])
         snapshot.appendItems(newIDs)
         // 差分はIDで取られるため、同じIDのまま内容が変わった要素は明示的にセルを再構成する。
-        let changedIDs = keepsRowContents ? [] : newEntries.filter { entry in previous[entry.id].map { $0 != entry } ?? false }.map(\.id)
+        let changedIDs = keepsRowContents ? [] : newEntries.filter { entry in previous[entry.id].map { $0 != quarantined(entry) } ?? false }.map(\.id)
         // 隣の行が変わって線のつながりだけが変わった行も描き直す。線は行の高さを変えないため、消す動きを止める理由にはしない。
         // 線のない行は前後とも線がないので、線のあった行と、ある行だけを比べる。
         let previousConnections = replyConnections
@@ -2115,6 +2119,16 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
+    /// クラッシュした投稿の行を、読めない行に差し替える。決まりはdocs/crash-quarantine.mdにある。
+    private func quarantined(_ entry: TimelineEntry) -> TimelineEntry {
+        guard let statusID = entry.quarantinableStatusID, crashGuard.isQuarantined(statusID) else { return entry }
+        let status: Status? = if case .notification(let notification) = entry { notification.status } else { Self.statusOfRow(entry) }
+        if let url = status?.displayed.url {
+            notices?.quarantinedPageURLs[statusID] = url
+        }
+        return .unreadable(UnreadableItem(id: statusID, url: nil, isCrashQuarantined: true))
+    }
+
     private func configure(_ cell: TimelineCell, for entry: TimelineEntry, id: ItemID) {
         cell.discardShrinkSnapshot()
         switch entry {
@@ -2152,6 +2166,12 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             // 同じ行の描き直し（リンクカードが届いたときなど）は、これまでどおり呼んだ側の動きに任せる。
             let startsNewRow = cell.itemID != id
             cell.itemID = id
+            cell.crashGuard = self.crashGuard
+            cell.crashMarkID = entry.quarantinableStatusID
+            self.crashGuard.mark(cell.crashMarkID)
+            #if DEBUG
+            if cell.crashMarkID != nil { DebugFaults.crashIfRequestedOnRow() }
+            #endif
             // 付属のボタンを置くのは最近の検索の見出しだけなので、ほかの行に使い回したセルに残さない。ふだんの行では触らない。
             if !cell.accessories.isEmpty {
                 cell.accessories = []
@@ -2205,9 +2225,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         content.imageProperties.tintColor = .secondaryLabel
         content.text = texts.unreadable
         content.textProperties.color = .secondaryLabel
-        content.secondaryText = item.url == nil
-            ? "サーバーから届いた内容を読めませんでした。"
-            : "サーバーから届いた内容を読めませんでした。タップするとブラウザで開きます。"
+        content.secondaryText = if item.isCrashQuarantined {
+            "表示中にSciaが終了したため隠しています。タップすると詳細を表示します。"
+        } else if item.url == nil {
+            "サーバーから届いた内容を読めませんでした。"
+        } else {
+            "サーバーから届いた内容を読めませんでした。タップするとブラウザで開きます。"
+        }
         content.secondaryTextProperties.color = .secondaryLabel
         return content
     }
@@ -2952,7 +2976,7 @@ extension TimelineViewController: UICollectionViewDelegate {
         if isSelectingPosts { return canSelectPost(id) }
         return switch (id, entries[id]) {
         case (.gap, _): true
-        case (_, .unreadable(let item)): item.url != nil
+        case (_, .unreadable(let item)): item.url != nil || item.isCrashQuarantined
         case (_, .search(let row)): !row.isHeading
         // 投稿、通知、人のリストの行は、タップに選んだ操作を行う。既定の操作が行えない行（スレッドの中心の投稿、投稿のない通知）は、今どおり押せないままにする。
         case (_, .status), (_, .pinned), (_, .notification), (_, .account), (_, .notificationRequest): rowTarget(at: indexPath)?.acceptsTap ?? false
@@ -3017,6 +3041,11 @@ extension TimelineViewController: UICollectionViewDelegate {
         if let id = dataSource.itemIdentifier(for: indexPath), case .search(let row) = entries[id] {
             collectionView.deselectItem(at: indexPath, animated: true)
             onSearchRowSelect?(row)
+            return
+        }
+        if let id = dataSource.itemIdentifier(for: indexPath), case .unreadable(let item) = entries[id], item.isCrashQuarantined {
+            collectionView.deselectItem(at: indexPath, animated: true)
+            notices?.openCrashReport?(item.id)
             return
         }
         if let id = dataSource.itemIdentifier(for: indexPath), case .unreadable(let item) = entries[id], let url = item.url {

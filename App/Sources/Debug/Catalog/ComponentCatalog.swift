@@ -48,6 +48,7 @@ enum CatalogComponent: String, CaseIterable {
     case announcements
     case hdrEmoji = "hdr-emoji"
     case reportSheet = "report-sheet"
+    case crashReport = "crash-report"
     case listMembership = "list-membership"
     case profileEdit = "profile-edit"
     case storage
@@ -91,6 +92,7 @@ enum CatalogComponent: String, CaseIterable {
         case .announcements: "サーバーのお知らせ"
         case .hdrEmoji: "HDRのカスタム絵文字"
         case .reportSheet: "通報のシート"
+        case .crashReport: "クラッシュした投稿の報告"
         case .listMembership: "リストに追加のシート"
         case .profileEdit: "プロフィールの編集"
         case .storage: "設定のストレージ"
@@ -137,6 +139,7 @@ enum CatalogComponent: String, CaseIterable {
         case .announcements: AnnouncementsCatalog.states()
         case .hdrEmoji: HDREmojiCatalog.states()
         case .reportSheet: ReportSheetCatalog.states()
+        case .crashReport: CrashReportCatalog.states()
         case .listMembership: ListMembershipCatalog.states()
         case .profileEdit: ProfileEditCatalog.states()
         case .storage: StorageCatalog.states()

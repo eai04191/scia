@@ -6,6 +6,27 @@ import Synchronization
 
 /// 検証のため、APIの応答をわざと失敗させる。起動し直すと戻る。
 enum DebugFaults {
+    /// 立てると、次に投稿の行を組み立てるときに落ちる。隔離の流れ（docs/crash-quarantine.md）を確かめるため。
+    private static let crashesOnNextRow = Mutex<DebugURL.CrashKind?>(nil)
+
+    static func crashOnNextRow(_ kind: DebugURL.CrashKind) {
+        crashesOnNextRow.withLock { $0 = kind }
+    }
+
+    static func crashIfRequestedOnRow() {
+        guard let kind = crashesOnNextRow.withLock({ $0 }) else { return }
+        crash(kind)
+    }
+
+    static func crash(_ kind: DebugURL.CrashKind) -> Never {
+        switch kind {
+        case .abort: abort()
+        case .trap: preconditionFailure("debug crash")
+        case .exception: NSException(name: .internalInconsistencyException, reason: "debug crash").raise()
+        }
+        abort()
+    }
+
     /// 立てると、以後のREST APIのリクエストに401を返す。トークンが無効になった状態を、ログインし直さずに再現する。
     private static let rejectsAsUnauthorized = Mutex(false)
 

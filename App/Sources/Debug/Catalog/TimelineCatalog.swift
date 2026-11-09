@@ -62,6 +62,7 @@ enum TimelineCatalog {
         return [
             row("読めない投稿（ブラウザで開ける）", home.unreadableContentConfiguration(for: UnreadableItem(id: "1", url: URL(string: "https://example.com/@user/1")), base: base)),
             row("読めない通知（開ける先がない）", notifications.unreadableContentConfiguration(for: UnreadableItem(id: "2", url: nil), base: base)),
+            row("表示中にクラッシュしたため隠した投稿", home.unreadableContentConfiguration(for: UnreadableItem(id: "3", url: nil, isCrashQuarantined: true), base: base)),
             row("読み込んでいない投稿がある", home.gapContentConfiguration(isLoading: false, base: base)),
             row("読み込んでいない投稿を読み込み中", home.gapContentConfiguration(isLoading: true, base: base)),
             row("読み込んでいない投稿を読み込めなかった（サーバーの失敗）", home.gapContentConfiguration(

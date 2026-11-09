@@ -25,6 +25,8 @@ struct AppDestinationTests {
             ("scia://edit-history?id=123", .editHistory(statusID: "123")),
             ("scia://api-response?id=123", .apiResponse(statusID: "123")),
             ("scia://api-response", nil),
+            ("scia://crash-report?id=123", .crashReport(statusID: "123")),
+            ("scia://crash-report", nil),
             ("scia://accounts/followers", .accounts(.followers(accountID: nil))),
             ("scia://accounts/following?id=9", .accounts(.following(accountID: "9"))),
             ("scia://accounts/favourited?id=123", .accounts(.favourited(statusID: "123"))),
@@ -97,7 +99,7 @@ struct AppDestinationTests {
         + [.userTab(.list(id: "12")), .userTab(.hashtag(name: "日本語")), .userTab(.profile(acct: "bob@example.com")), .userTab(.accountHashtag(acct: "bob", name: "scia"))]
         + [.settings(nil)] + SettingsPage.allCases.map { .settings($0) } + [.appearanceGroup("name"), .notificationAppearanceGroup("header")]
         + [.profile(acct: "bob@example.com"), .profile(acct: "bob"), .myProfile, .profileEdit]
-        + [.thread(statusID: "123"), .editHistory(statusID: "123"), .apiResponse(statusID: "123")]
+        + [.thread(statusID: "123"), .editHistory(statusID: "123"), .apiResponse(statusID: "123"), .crashReport(statusID: "123")]
         + [.accounts(.followers(accountID: nil)), .accounts(.followers(accountID: "9")), .accounts(.following(accountID: nil)), .accounts(.following(accountID: "9"))]
         + [.accounts(.favourited(statusID: "123")), .accounts(.reblogged(statusID: "123")), .accounts(.emojiReactioned(statusID: "123", name: "👍")), .accounts(.emojiReactioned(statusID: "123", name: "blob_cat"))]
         + [.hashtag(name: "日本語 & tag"), .accountHashtag(acct: "bob@example.com", name: "scia"), .search(query: nil), .search(query: "https://example.com/@bob/1"), .scheduled, .operationStatus]
@@ -134,7 +136,7 @@ struct AppDestinationTests {
 
     enum Kind: CaseIterable {
         case tab, userTabList, userTabHashtag, userTabProfile, userTabAccountHashtag, settings, appearanceGroup, notificationAppearanceGroup, profile, myProfile, profileEdit
-        case thread, editHistory, apiResponse, followers, following, favourited, reblogged, emojiReactioned, hashtag, accountHashtag, search, scheduled, operationStatus
+        case thread, editHistory, apiResponse, crashReport, followers, following, favourited, reblogged, emojiReactioned, hashtag, accountHashtag, search, scheduled, operationStatus
         case notificationRequests, notificationRequest, notificationPolicy, announcements, inAppBrowserHeight
         case note, report, composeTools, composeLanguage, composeSchedule, composeEmoji, composeMediaPicker, composeAttachment, composeAltText, composeCrop
     }
@@ -155,6 +157,7 @@ struct AppDestinationTests {
         case .thread: .thread
         case .editHistory: .editHistory
         case .apiResponse: .apiResponse
+        case .crashReport: .crashReport
         case .accounts(.followers): .followers
         case .accounts(.following): .following
         case .accounts(.favourited): .favourited
@@ -222,6 +225,7 @@ struct AppDestinationTests {
         #expect(AppDestination.thread(statusID: "1").showsTab)
         #expect(AppDestination.editHistory(statusID: "1").showsTab)
         #expect(AppDestination.apiResponse(statusID: "1").showsTab)
+        #expect(!AppDestination.crashReport(statusID: "1").showsTab)
         #expect(AppDestination.accounts(.followers(accountID: nil)).showsTab)
         #expect(AppDestination.hashtag(name: "a").showsTab)
         #expect(AppDestination.accountHashtag(acct: "bob", name: "a").showsTab)

@@ -13,6 +13,12 @@ enum DebugURL: Equatable {
         return scheme
     }()
 
+    enum CrashKind: String {
+        case abort, trap, exception
+    }
+
+    /// `scia-debug://crash/next-row?kind=<abort|trap|exception>`で、次に投稿の行を組み立てるときに落ちる。`scia-debug://crash/now?kind=<種類>`で、行と関係なくすぐ落ちる。
+    case crash(CrashKind, onNextRow: Bool)
     /// `scia-debug://dummy/<DebugDummyPost.rawValue>`
     case dummy(DebugDummyPost)
     /// `scia-debug://scenario/<イベント>`。撮影モード（`ScenarioMode`）のシナリオのイベントを、ストリーミングで流す。
@@ -199,6 +205,7 @@ enum DebugURL: Equatable {
         case "unsupported": OptionalFeature(rawValue: last).map { .unsupported($0) }
         case "catalog": CatalogComponent(rawValue: last).map { .catalog($0) }
         case "status": Self.status(url)
+        case "crash": Self.crash(url)
         case "download": Self.slowDownload(url)
         case "menu-icons": Self.slowMenuIcons(url)
         case "lookup": Self.slowLookups(url)
@@ -280,6 +287,15 @@ enum DebugURL: Equatable {
     private static func slowUploads(_ url: URL) -> DebugURL? {
         guard url.lastPathComponent == "slow" else { return nil }
         return .slowUploads(seconds: query("seconds", in: url).flatMap { Double($0) } ?? 5)
+    }
+
+    private static func crash(_ url: URL) -> DebugURL? {
+        guard let kind = CrashKind(rawValue: query("kind", in: url) ?? "abort") else { return nil }
+        switch url.lastPathComponent {
+        case "next-row": return .crash(kind, onNextRow: true)
+        case "now": return .crash(kind, onNextRow: false)
+        default: return nil
+        }
     }
 
     private static func notice(_ url: URL) -> DebugURL? {

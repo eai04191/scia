@@ -42,6 +42,15 @@ public enum TimelineEntry: Hashable, Sendable, Identifiable {
         }
     }
 
+    /// クラッシュの記録と隔離に使う、この行が描く投稿のID。ブーストは元の投稿のIDにする。同じ投稿を別の人がブーストした行も同じように落ちるため。
+    public var quarantinableStatusID: Status.ID? {
+        switch self {
+        case .status(let status), .pinned(let status): status.displayed.id
+        case .notification(let notification): notification.status?.displayed.id
+        case .gap, .unreadable, .account, .notificationRequest, .search: nil
+        }
+    }
+
     /// タイムラインに並ぶ投稿。固定された投稿は含まない。読み込みの境目や既読位置の判定に使うため。
     public var status: Status? {
         if case .status(let status) = self { status } else { nil }
@@ -56,11 +65,14 @@ public struct UnreadableItem: Hashable, Sendable, Identifiable {
     public let url: URL?
     /// 読めなかった通知のまとまりの、読んだ範囲の最も古い通知のID。続きを読む位置に使う。まとまりでなければnil。
     public let pageMinID: String?
+    /// 表示中にクラッシュしたため隠している投稿か。docs/crash-quarantine.md
+    public let isCrashQuarantined: Bool
 
-    public init(id: String, url: URL?, pageMinID: String? = nil) {
+    public init(id: String, url: URL?, pageMinID: String? = nil, isCrashQuarantined: Bool = false) {
         self.id = id
         self.url = url
         self.pageMinID = pageMinID
+        self.isCrashQuarantined = isCrashQuarantined
     }
 }
 

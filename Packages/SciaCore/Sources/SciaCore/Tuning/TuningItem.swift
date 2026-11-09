@@ -882,6 +882,24 @@ public enum TuningCatalog {
         defaultValue: 1.5
     )
 
+    /// 表示できない投稿があったことを伝えるチップを、起動してから出すまでの時間。
+    public static let crashQuarantineChipDelay = NumberTuning(
+        id: "notice.crashQuarantineChipDelay",
+        title: "表示できない投稿のチップを起動してから出すまでの時間（秒）",
+        range: 0...10,
+        step: 0.5,
+        defaultValue: 2
+    )
+
+    /// 表示できない投稿があったことを伝えるチップを出しておく時間。
+    public static let crashQuarantineChipDuration = NumberTuning(
+        id: "notice.crashQuarantineChipDuration",
+        title: "表示できない投稿のチップを出しておく時間（秒）",
+        range: 2...20,
+        step: 0.5,
+        defaultValue: 8
+    )
+
     /// 知らせのチップ（写真に保存しました、ダウンロード中など）が出入りし、並びを詰め直す時間。
     public static let noticeAnimationDuration = NumberTuning(
         id: "notice.animationDuration",
@@ -2077,6 +2095,8 @@ public enum TuningCatalog {
             .number(noticeAnimationDuration),
             .number(noticeFailureChipDuration),
             .number(profileLookupChipDelay),
+            .number(crashQuarantineChipDelay),
+            .number(crashQuarantineChipDuration),
             .number(noticeDismissDistance),
             .number(noticeDismissVelocity),
         ]),

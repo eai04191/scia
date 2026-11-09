@@ -25,6 +25,8 @@ public enum AppDestination: Equatable, Sendable {
     case editHistory(statusID: String)
     /// `api-response?id=<投稿のID>`。その投稿をサーバーから読み直し、APIの応答のJSONを開く。
     case apiResponse(statusID: String)
+    /// `crash-report?id=<投稿のID>`。隔離した投稿について、開発者に送る内容の画面を手前に重ねて開く。
+    case crashReport(statusID: String)
     /// `accounts/<followers|following>`で自分の、`?id=<アカウントのID>`でその人のフォロワーかフォローしている人のリストを開く。
     /// `accounts/<favourited|reblogged>?id=<投稿のID>`で、その投稿をお気に入りした人、ブーストした人のリストを開く。
     /// `accounts/emoji-reactioned?id=<投稿のID>&name=<絵文字>`で、その投稿にその絵文字でリアクションした人のリストを開く。
@@ -119,7 +121,7 @@ public enum AppDestination: Equatable, Sendable {
         case .tab, .userTab, .profile, .myProfile, .thread, .editHistory, .apiResponse, .accounts, .hashtag, .accountHashtag, .search, .scheduled,
              .notificationRequests, .notificationRequest:
             true
-        case .settings, .appearanceGroup, .notificationAppearanceGroup, .profileEdit, .operationStatus, .notificationPolicy, .announcements, .inAppBrowserHeight, .note, .report, .compose:
+        case .settings, .appearanceGroup, .notificationAppearanceGroup, .profileEdit, .operationStatus, .notificationPolicy, .announcements, .inAppBrowserHeight, .note, .report, .compose, .crashReport:
             false
         }
     }
@@ -138,6 +140,7 @@ public enum AppDestination: Equatable, Sendable {
         case .thread: "thread"
         case .editHistory: "edit history"
         case .apiResponse: "api response"
+        case .crashReport: "crash report"
         case .accounts: "accounts"
         case .hashtag: "hashtag"
         case .accountHashtag: "account hashtag"
@@ -187,6 +190,7 @@ public enum AppDestination: Equatable, Sendable {
         case ("thread", ""): query("id").map { .thread(statusID: $0) }
         case ("edit-history", ""): query("id").map { .editHistory(statusID: $0) }
         case ("api-response", ""): query("id").map { .apiResponse(statusID: $0) }
+        case ("crash-report", ""): query("id").map { .crashReport(statusID: $0) }
         case ("accounts", "followers"): .accounts(.followers(accountID: query("id")))
         case ("accounts", "following"): .accounts(.following(accountID: query("id")))
         case ("accounts", "favourited"): query("id").map { .accounts(.favourited(statusID: $0)) }
@@ -241,6 +245,7 @@ public enum AppDestination: Equatable, Sendable {
         case .thread(let statusID): ("thread", nil, [("id", statusID)])
         case .editHistory(let statusID): ("edit-history", nil, [("id", statusID)])
         case .apiResponse(let statusID): ("api-response", nil, [("id", statusID)])
+        case .crashReport(let statusID): ("crash-report", nil, [("id", statusID)])
         case .accounts(.followers(let accountID)): ("accounts", "followers", accountID.map { [("id", $0)] } ?? [])
         case .accounts(.following(let accountID)): ("accounts", "following", accountID.map { [("id", $0)] } ?? [])
         case .accounts(.favourited(let statusID)): ("accounts", "favourited", [("id", statusID)])

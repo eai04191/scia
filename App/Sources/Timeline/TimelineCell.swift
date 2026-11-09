@@ -8,6 +8,9 @@ final class TimelineCell: UICollectionViewListCell, SizingMeasurable {
     var sizingTrace = SizingTrace()
     /// 出している行。別の行を出し始めたかを見分ける。
     var itemID: TimelineViewController.ItemID?
+    /// クラッシュの記録に使う、この行が描く投稿のID。投稿の行でなければnil。
+    var crashMarkID: Status.ID?
+    var crashGuard: PostCrashGuard?
 
     /// 縮む途中に重ねている、縮む前の像。アクションバーを閉じるときに使う（`TimelineViewController.concealShrink`）。
     private var shrinkSnapshot: UIView?
@@ -44,8 +47,15 @@ final class TimelineCell: UICollectionViewListCell, SizingMeasurable {
         discardShrinkSnapshot()
     }
 
+    override func layoutSubviews() {
+        // 中身のビューのレイアウトは、このあとに続く。
+        crashGuard?.mark(crashMarkID)
+        super.layoutSubviews()
+    }
+
     override func preferredLayoutAttributesFitting(_ layoutAttributes: UICollectionViewLayoutAttributes) -> UICollectionViewLayoutAttributes {
-        FrameWork.measure("\(sizingTrace.row.rawValue).sizing") { sizingTrace.run(on: self, layoutAttributes) }
+        crashGuard?.mark(crashMarkID)
+        return FrameWork.measure("\(sizingTrace.row.rawValue).sizing") { sizingTrace.run(on: self, layoutAttributes) }
     }
 
     func measureSizing(_ attributes: UICollectionViewLayoutAttributes) -> UICollectionViewLayoutAttributes {

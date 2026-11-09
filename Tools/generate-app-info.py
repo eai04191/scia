@@ -40,6 +40,9 @@ def checked_keys(entry, allowed, required, where):
 
 
 def validate(info):
+    checked_keys(info["contact"], {"email", "mastodon"}, {"email", "mastodon"}, "contact")
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+", info["contact"]["mastodon"]):
+        fail(f"contact.mastodonがuser@domainの形ではありません: {info['contact']['mastodon']}")
     for key, url in info["links"].items():
         if not re.fullmatch(r"[a-z][A-Za-z0-9]*", key):
             fail(f"linksのキーがSwiftの名前にできません: {key}")
@@ -104,6 +107,10 @@ def render_swift(info):
         "enum AppInfo {",
     ]
     lines += [f"    static let {key} = {swift_url(url)}" for key, url in info["links"].items()]
+    lines += [
+        f"    static let contactEmail = {swift_string(info['contact']['email'])}",
+        f"    static let contactMastodon = {swift_string(info['contact']['mastodon'])}",
+    ]
     lines += ["", "    static let acknowledgmentSections: [AcknowledgmentSection] = ["]
     for section in info["acknowledgments"]:
         lines.append(f"        AcknowledgmentSection(header: {swift_string(section['header'])}, items: [")

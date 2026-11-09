@@ -8,6 +8,8 @@ public struct PostCrashReport: Equatable, Sendable {
         case unreadableResponse
     }
 
+    /// ブラウザで開くページ。送る文章には、誰でも読める投稿のときのほかは入れない。
+    public let postURL: URL?
     /// 既定で送る文章。誰でも読める投稿ならURL、それ以外なら本文を含まない構造の要約。
     public let text: String
     /// 本文の文字を置き換えたJSON。誰でも読める投稿ではURLで足りるのでnil。
@@ -19,12 +21,13 @@ public struct PostCrashReport: Equatable, Sendable {
             throw Failure.unreadableResponse
         }
         let status = root["reblog"] as? [String: Any] ?? root
+        postURL = Self.pageURL(of: status)
         if let url = Self.publicURL(of: status) {
             text = "\(url.absoluteString)\n\n\(environment)"
             maskedJSON = nil
             return
         }
-        text = (["本文は含まれていません。", ""] + PostStructureSummary.lines(of: status) + [environment]).joined(separator: "\n")
+        text = ([Self.withheldNotice(of: status), ""] + PostStructureSummary.lines(of: status) + [environment]).joined(separator: "\n")
         let masked = PostMasking.status(status)
         guard let data = try? JSONSerialization.data(withJSONObject: masked, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]) else {
             throw Failure.unreadableResponse
@@ -34,11 +37,19 @@ public struct PostCrashReport: Equatable, Sendable {
 
     /// 誰でも読める投稿のURL。公開範囲が分からない投稿は、誰でも読めるとは扱わない。
     private static func publicURL(of status: [String: Any]) -> URL? {
-        guard let visibility = status["visibility"] as? String, visibility == "public" || visibility == "unlisted",
-              let string = status["url"] as? String, let url = URL(string: string),
-              url.scheme == "https" || url.scheme == "http"
-        else { return nil }
-        return url
+        guard let visibility = status["visibility"] as? String, visibility == "public" || visibility == "unlisted" else { return nil }
+        return pageURL(of: status)
+    }
+
+    /// 公開範囲が分かっているときだけ、理由を書く。URLがない公開の投稿や、公開範囲が分からない投稿も要約になるため。
+    private static func withheldNotice(of status: [String: Any]) -> String {
+        let visibility = status["visibility"] as? String
+        return visibility == "private" || visibility == "direct" ? "公開投稿でないため本文は送信されません。" : "本文は送信されません。"
+    }
+
+    private static func pageURL(of status: [String: Any]) -> URL? {
+        guard let string = status["url"] as? String, let url = URL(string: string) else { return nil }
+        return ServerURLKind.destination.accepting(url)
     }
 }
 
@@ -88,17 +99,20 @@ enum PostStructureSummary {
         let text = PostHTML.collapsingEntities(tokens.compactMap { if case .text(let text) = $0 { text } else { nil } }.joined())
         let customEmojiCount = (status["emojis"] as? [Any])?.count ?? 0
         let breaks = lineBreaks(in: tokens)
-        return [
+        let combiningRun = longestCombiningRun(in: text)
+        // 該当しない項目は出さない。出ていなければ、その項目はない。
+        let lines: [String?] = [
             "本文: \(text.count)文字、改行\(breaks.total)回（連続は最大\(breaks.longestRun)回）",
-            "文字の種類: \(characterKinds(in: text, customEmojiCount: customEmojiCount))",
-            "結合文字の連続: 最大\(longestCombiningRun(in: text))文字",
-            "HTML: \(tagSummary(tokens))",
-            "注意書き: \(spoiler(status))",
-            "添付: \(attachments(status))",
-            "投票: \(poll(status))",
-            "引用: \(quoteDepth(status).map { "\($0)段" } ?? "なし")",
-            "リンクカード: \(status["card"] is [String: Any] ? "あり" : "なし")",
+            characterKinds(in: text, customEmojiCount: customEmojiCount).map { "文字の種類: \($0)" },
+            combiningRun > 0 ? "文字に重ねる記号: 最大\(combiningRun)個連続" : nil,
+            tagSummary(tokens).map { "書式: \($0)" },
+            spoiler(status).map { "注意書き: \($0)文字" },
+            attachments(status).map { "添付: \($0)" },
+            poll(status).map { "投票: \($0)" },
+            quoteDepth(status).map { "引用: \($0)段" },
+            status["card"] is [String: Any] ? "リンクカードあり" : nil,
         ]
+        return lines.compactMap(\.self)
     }
 
     private static func lineBreaks(in tokens: [PostHTML.Token]) -> (total: Int, longestRun: Int) {
@@ -129,7 +143,7 @@ enum PostStructureSummary {
         return (total, longest)
     }
 
-    private static func characterKinds(in text: String, customEmojiCount: Int) -> String {
+    private static func characterKinds(in text: String, customEmojiCount: Int) -> String? {
         var kinds: [String] = []
         let scalars = Array(text.unicodeScalars)
         let names: [(String, (Unicode.Scalar) -> Bool)] = [
@@ -139,6 +153,10 @@ enum PostStructureSummary {
             ("ハングル", { PostMasking.Script(of: $0) == .hangul }),
             ("アラビア文字", { PostMasking.Script(of: $0) == .arabic }),
             ("ヘブライ文字", { PostMasking.Script(of: $0) == .hebrew }),
+            ("そのほかの文字", { scalar in
+                let script = PostMasking.Script(of: scalar)
+                return script == .otherLetter || (script == .digit && !scalar.isASCII)
+            }),
         ]
         for (name, matches) in names where scalars.contains(where: matches) {
             kinds.append(name)
@@ -154,7 +172,12 @@ enum PostStructureSummary {
             let category = scalar.properties.generalCategory
             return (category == .control && !scalar.properties.isWhitespace) || category == .format
         }
-        kinds.append(controlCount > 0 ? "制御文字\(controlCount)個" : "制御文字なし")
+        if controlCount > 0 {
+            kinds.append("見えない制御文字\(controlCount)個")
+        }
+        if kinds.isEmpty {
+            return text.allSatisfy(\.isWhitespace) ? nil : "記号のみ"
+        }
         return kinds.joined(separator: "、")
     }
 
@@ -173,13 +196,14 @@ enum PostStructureSummary {
         return longest
     }
 
-    private static func tagSummary(_ tokens: [PostHTML.Token]) -> String {
+    private static func tagSummary(_ tokens: [PostHTML.Token]) -> String? {
         var counts: [String: Int] = [:]
-        for case .tag(let name, false, _) in tokens {
+        // 改行は本文の行で数えている。
+        for case .tag(let name, false, _) in tokens where name != "br" {
             counts[name, default: 0] += 1
         }
-        guard !counts.isEmpty else { return "なし" }
-        let known = [("p", "段落"), ("br", "改行"), ("a", "リンク")]
+        guard !counts.isEmpty else { return nil }
+        let known = [("p", "段落"), ("a", "リンク")]
         var parts = known.compactMap { tag, label in counts[tag].map { "\(label)\($0)個" } }
         let others = counts.filter { key, _ in !known.contains { $0.0 == key } }.values.reduce(0, +)
         if others > 0 {
@@ -188,14 +212,14 @@ enum PostStructureSummary {
         return parts.joined(separator: "、")
     }
 
-    private static func spoiler(_ status: [String: Any]) -> String {
+    private static func spoiler(_ status: [String: Any]) -> Int? {
         let text = status["spoiler_text"] as? String ?? ""
-        return text.isEmpty ? "なし" : "あり（\(text.count)文字）"
+        return text.isEmpty ? nil : text.count
     }
 
-    private static func attachments(_ status: [String: Any]) -> String {
+    private static func attachments(_ status: [String: Any]) -> String? {
         let items = status["media_attachments"] as? [[String: Any]] ?? []
-        guard !items.isEmpty else { return "なし" }
+        guard !items.isEmpty else { return nil }
         let names = [("image", "画像"), ("video", "動画"), ("gifv", "GIF"), ("audio", "音声")]
         var parts: [String] = []
         for (type, name) in names {
@@ -218,8 +242,8 @@ enum PostStructureSummary {
         return "\(width)×\(height)"
     }
 
-    private static func poll(_ status: [String: Any]) -> String {
-        guard let poll = status["poll"] as? [String: Any] else { return "なし" }
+    private static func poll(_ status: [String: Any]) -> String? {
+        guard let poll = status["poll"] as? [String: Any] else { return nil }
         return "選択肢\((poll["options"] as? [Any])?.count ?? 0)個"
     }
 
@@ -360,7 +384,8 @@ enum PostMasking {
             "emojis": ((status["emojis"] as? [[String: Any]]) ?? []).map(emoji),
             "media_attachments": ((status["media_attachments"] as? [[String: Any]]) ?? []).enumerated().map(attachment),
             "sensitive": status["sensitive"] as? Bool ?? false,
-            "visibility": "public",
+            // 表示に関わる値で、4種類のどれかを示すだけなので伏せない。知らない値は投稿した人が決めた文字列かもしれないので出さない。
+            "visibility": allowedValue(status["visibility"], in: ["public", "unlisted", "private", "direct"], otherwise: "private"),
             "favourites_count": 0,
             "reblogs_count": 0,
             "replies_count": 0,

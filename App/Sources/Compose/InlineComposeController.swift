@@ -765,6 +765,18 @@ final class InlineComposeController: NSObject {
         beginEditing()
     }
 
+    /// 公開範囲をダイレクトにして、`text`を本文に入れて書き始める。投稿するのは使う人が押す。
+    /// 書きかけを上書きしないよう、下書きを空に戻せる状態（書きかけがある）なら何もせずfalseを返す。
+    func startDirectMessage(_ text: String) -> Bool {
+        guard !model.isPosting, !model.canDiscardDraft, model.switchAccount(to: nil) else { return false }
+        model.choose(.direct)
+        textView.text = text
+        textViewDidChange(textView)
+        update()
+        beginEditing()
+        return true
+    }
+
     /// 本文の5行の上限を外して、本文に合わせた高さまで広げる。広げていれば、本文の5行の上限がある高さに戻す。
     /// 本文がチューニングの最低の行数より短ければ、その行数の高さまで広げ、書き足す行の場所を先に取る。
     /// - Parameter byUser: 使う人が押して広げたか。違和感レポートに残す操作の記録には、自動で広げたときを入れない。

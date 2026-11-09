@@ -5,6 +5,8 @@ enum AppInfo {
     static let privacyPolicy = URL(string: "https://github.com/eai04191/scia/blob/main/PRIVACY.md")
     static let repository = URL(string: "https://github.com/eai04191/scia")
     static let testFlight = URL(string: "https://testflight.apple.com/join/6g69MEf8")
+    static let contactEmail = "eai@mizle.net"
+    static let contactMastodon = "eai@stellaria.network"
 
     static let acknowledgmentSections: [AcknowledgmentSection] = [
         AcknowledgmentSection(header: "Sciaは次のクライアントから多くの影響を受けています", items: [

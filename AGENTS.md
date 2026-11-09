@@ -9,6 +9,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `Config/CacheLocal.xcconfig`: makeのDebugのビルドが使うコンパイルキャッシュの置き場所（`COMPILATION_CACHE_CAS_PATH = <フォルダー>`）を、人ごとに書く（`Config/Cache.xcconfig`が読む）。コミットしない。なければXcodeの既定の場所に置く
 - `Config/app-info.json`: 謝辞、第三者のライセンス、Scia自身のリンク（プライバシーポリシーなど）の置き場所。ここだけを編集し、`make app-info`で`App/Sources/Settings/AppInfo.generated.swift`と`README.md`の`<!-- generated:... -->`の中を書き出す。書き出したものは直接編集せず、JSONと一緒にcommitする。合っているかは`make check`と`Tools/merge-queue.sh`で調べる
 - `Packages/SciaCore`: UIに依存しないロジック（モデル、APIクライアント、ストリーミング、タイムラインの状態管理）。iOSとmacOSで共有するため、UIKit／AppKit／SwiftUIをimportしない。別のUIから何を使うかの入口は[docs/other-ui.md](docs/other-ui.md)。別のUIも使う部品を足したり、決まりをUIからSciaCoreへ移したりしたら、そのdocsにも足す
+- `Config/app-info.json`の`contact`: クラッシュした投稿の報告の宛先（メールとMastodonのハンドル）。`make app-info`で`AppInfo.generated.swift`に書き出す
 - `Packages/MemoryCache`: Sciaに依存しない、メモリに持つキャッシュ（`CostLimitedCache`）。SciaCoreとアプリが使う。SciaCoreに依存しないことを、パッケージを分けてコンパイラーで守る
 - `Packages/TextKit2Label`: Sciaに依存しない、TextKit 2で文字を並べて描くラベル（`TextKitLabel`、`TextKitLabelLayout`、`LineFittingAttachment`）。アプリが使い、絵文字やリンクを扱うラベルはアプリで派生させる。Sciaの型を使わないことを、パッケージを分けてコンパイラーで守る。UIKitに依存するので、テストは`make test`でシミュレーターで走る
 - `App/Sources`: iOSアプリ（UIKitライフサイクル）
@@ -71,7 +72,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
   - 投稿欄: `scia://compose/<tools|language|schedule|emoji|media-picker>`（書き始めて、ボタンの並び、言語、予約の日時、絵文字のパレット、メディアのピッカーを開く。予約していなければ予約を始める）、`scia://compose/<attachment|alt-text|crop>?index=<n>`（n番目の添付のビューア、その代替テキストの入力、切り抜き。先に`scia-debug://compose?media=<枚数>`で添付を足す）
   - サーバーのお知らせ: `scia://announcements`（お知らせのシート）
   - 保留中の通知: `scia://notification-requests`（通知のタブに保留中の通知を送ってきた人のリスト）、`scia://notification-request?id=<保留中の通知のID>`（その上にその人からの通知）、`scia://notification-policy`（通知のフィルタリングの設定）。IDは`api/v1/notifications/requests`で調べる。ダミーのセッションでは`dummy-request-1`〜`3`
-  - そのほか: `scia://operation-status`（操作の状況）、`scia://in-app-browser-height`（重ねた画面を閉じ、ホームの上にアプリ内のSafariの高さを選ぶシートを出す。`?return=<設定の画面>`で、閉じたときにその設定の画面を開き直す）
+  - そのほか: `scia://crash-report?id=<投稿のID>`（隔離した投稿について開発者に送る内容の画面。決まりはdocs/crash-quarantine.md）、`scia://operation-status`（操作の状況）、`scia://in-app-browser-height`（重ねた画面を閉じ、ホームの上にアプリ内のSafariの高さを選ぶシートを出す。`?return=<設定の画面>`で、閉じたときにその設定の画面を開き直す）
   - デバッグ版だけ: `scia-debug://viewer?index=<n>`（選んでいるタブで一番上に見えている画像付きの投稿を、n番目の添付ファイルでビューアに開く。代替テキストの全文はビューアの「代替テキスト」から開く）、`scia-debug://profile-edit?crop=<avatar|header>`（ダミーの画像でアイコンかヘッダー画像の切り抜きを開く）、`scia-debug://discomfort-report`（違和感レポート）、`scia-debug://tuning`（チューニング）、`scia-debug://catalog`（部品カタログ）
 - 絵文字のリアクション（Fedibirdの拡張、docs/emoji-reaction.md）の実物は、`Scia 4`に保存してあるFedibirdのアカウントで確かめる。`Tools/sim.sh acquire 'Scia 4'`で端末を指定して借り、`xcrun simctl openurl 'Scia 4' 'scia-debug://account?acct=<ハンドル>'`で、メニューを触らずに保存してあるアカウントに切り替える。付け外しは、ほかの人に通知が届かないよう、そのアカウントの自分の投稿で試し、確かめたら外す。リアクションの通知は`Tools/inject/notification-emoji-reaction.json`を流して見る
 - `xcrun simctl openurl '<使う端末>' 'scia-debug://dummy-session'`で、通信しないダミーの投稿と通知でホームと通知の画面に入れる。ログインしていない端末（機種ごとに作る一時的な端末など）でも、ログイン済みの端末でも入れる。ログイン画面のデバッグ用のボタン「ダミーのデータで入る」でも入れる。ログイン済みの端末では、アカウントのメニューにダミーのアカウントが並び、本物のアカウントを選ぶと戻る。Keychainには保存しないので、起動し直すと保存してあるアカウントかログイン画面に戻る。投稿への操作はサーバーに届かず失敗する。新しい端末では、最初にURLを送ったときに「“Scia”で開きますか？」が出るので、一度「開く」を押す必要がある
@@ -148,6 +149,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - カタログは状態を直接渡し、置き場所も実物をまねたものなので、その状態にたどり着くかと、置かれた場所での見え方（ほかの表示との重なり、安全領域、キーボード）は確かめられない。ふだん通る流れは実物で撮り、失敗の流れも`scia-debug://status/502`などで実物で一度は通す。カタログでは、実物で出しにくい状態と、文言や長さの違いを見比べる
 - 部品の見た目を変えた作業の報告には、カタログに足した状態か載せない理由と、どの状態を実物で見て、どの状態をカタログだけで見たかを書く
 - 「投稿の見た目」の項目や見本、投稿の行の描き方を変えたら、すべての項目と選択肢を変える前と後に並べた画像を作って、全部見る。`TEST_RUNNER_SCIA_APPEARANCE_SHEETS=1 make test ONLY='SciaTests/AppearanceSheets'`で、`xcrun simctl get_app_container '<使う端末>' net.mizle.scia data`のtmp/AppearanceSheetsに書く。示す帯（赤）が変わった部分と合っているか、変えて崩れないかを確かめる。いくつかをつまんで見るだけでは、ずれに気づけない
+- クラッシュした投稿の隔離（docs/crash-quarantine.md）の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://crash/next-row?kind=<abort|trap|exception>'`のあと、タブを移るなどで投稿の行を組み立てさせて落とし、`xcrun simctl launch`で起動し直す。`scia-debug://crash/now?kind=<種類>`は行と関係なくすぐ落ち、隔離されないことを確かめるのに使う。送る内容の画面の状態は`scia-debug://catalog/crash-report`で見る
 - トークンが無効になったときの表示の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://unauthorized'`で、以後のREST APIに401を返させる。資格情報は消えず、起動し直すと戻る
 - 読めなかった投稿や通知の行の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://unreadable'`で、以後のホームと通知の応答の3件に1件を読めない形に壊して読み込み直す。起動し直すと戻る
 - サーバーやプロキシの障害の表示の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://status/502'`のように、以後のREST APIにそのステータスのHTMLのエラーページを返させて読み込み直す。`?retry-after=<秒>`を付けると`Retry-After`ヘッダーも返し、429や503で自動の通信を止めて明けたら読み込み直すところを確かめられる。`&target=<経路>`を付けると、REST API（`api`、省略時）のほかの経路にも返させる。経路は`media-proxy`（サーバーが中継する画像）、`files`（そのほかの画像やファイル、リンク先のページ）、`x`（fxtwitter）、`streaming`（つなぐときの応答を断る。開いている接続も切る）、`all`。`scia-debug://status/ok`か起動し直すと戻る

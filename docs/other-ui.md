@@ -9,6 +9,7 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 - `HTTPClient`: APIの外の通信の口。決まりは[network.md](network.md)
 - `NetworkConditionsMonitor`: 回線の見張り。サムネイルの条件（`thumbnailPolicy(settings:tuning:)`）と、電波が戻った回数（`recoveryCount`）を出す
 - `ImageStores`: アイコンと添付ファイルの画像のストア。置き場所、読み方、読み直しの間隔まで組んである。UIは画像の型の作り方（`PlatformImageMaker`）だけを渡す
+- `CrashMark`と`PostQuarantine`、`PostCrashReport`: クラッシュした投稿の隔離と、開発者に送る文章（[crash-quarantine.md](crash-quarantine.md)）。行の処理の前に印を付け、隠すのと送る画面はUIで書く
 - `AccountRegistry`と`KeychainCredentialStore(service:)`: ログインしたアカウント。サービス名はUIで決める
 
 ## ログイン

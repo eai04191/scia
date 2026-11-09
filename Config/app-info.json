@@ -4,6 +4,10 @@
     "repository": "https://github.com/eai04191/scia",
     "testFlight": "https://testflight.apple.com/join/6g69MEf8"
   },
+  "contact": {
+    "email": "eai@mizle.net",
+    "mastodon": "eai@stellaria.network"
+  },
   "acknowledgments": [
     {
       "header": "Sciaは次のクライアントから多くの影響を受けています",
