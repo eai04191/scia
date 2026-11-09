@@ -41,16 +41,16 @@ struct NotificationPolicyView: View {
                 }
             }
             .confirmationDialog(
-                confirmingDrop.map { "本当に「\(Self.title(of: $0))」を無視するようにしますか？" } ?? "",
+                confirmingDrop.map { "本当に“\(Self.title(of: $0))”を無視するようにしますか？" } ?? "",
                 isPresented: Binding(get: { confirmingDrop != nil }, set: { if !$0 { confirmingDrop = nil } }),
                 titleVisibility: .visible,
                 presenting: confirmingDrop
             ) { item in
-                Button("「無視」に設定", role: .destructive) { model.select(.drop, for: item) }
-                Button("「保留」に設定") { model.select(.filter, for: item) }
+                Button("“無視”に設定", role: .destructive) { model.select(.drop, for: item) }
+                Button("“保留”に設定") { model.select(.filter, for: item) }
                 Button("キャンセル", role: .cancel) {}
             } message: { _ in
-                Text("無視した通知はサーバーが作らず、あとから見られません。「保留」にすると保留中の通知で個別に確認できます。")
+                Text("無視した通知はサーバーが作らず、あとから見られません。“保留”にすると保留中の通知で個別に確認できます。")
             }
         } else if let failure = model.loadFailure {
             ContentUnavailableView {

@@ -194,7 +194,7 @@ struct AppearanceGroupEditorView: View {
             TitledToggleRow(title: "名前を太字にする", isOn: $settings.appearance.boldsName) { toggleFocus(.choice(.boldsName)) }
             TitledToggleRow(title: "時刻を表示", isOn: $settings.appearance.showsTime) { toggleFocus(.choice(.showsTime)) }
             TitledToggleRow(title: "公開範囲の記号を表示", isOn: $settings.appearance.showsVisibilitySymbol) { toggleFocus(.choice(.showsVisibilitySymbol)) }
-            TitledToggleRow(title: "編集済みの「*」を表示", isOn: $settings.appearance.showsEditedMark) { toggleFocus(.choice(.showsEditedMark)) }
+            TitledToggleRow(title: "編集済みの“*”を表示", isOn: $settings.appearance.showsEditedMark) { toggleFocus(.choice(.showsEditedMark)) }
         case "body":
             PopUpChoiceRow(
                 title: "漢字の字形",

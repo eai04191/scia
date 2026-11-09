@@ -133,8 +133,8 @@ struct SettingsView: View {
                 image: { [tabIcons] in tabIcons.icon(for: $0)?.menu },
                 imageRevision: { [tabIcons] in tabIcons.revision },
                 options: [MenuLayoutOption(
-                    title: "メニューに「カスタマイズ」を表示",
-                    footer: "切り替えタブのメニューに、この画面を開く「カスタマイズ」を表示します。",
+                    title: "メニューに“カスタマイズ”を表示",
+                    footer: "切り替えタブのメニューに、この画面を開く“カスタマイズ”を表示します。",
                     isOn: $settings.showsTabMenuCustomize
                 )],
                 actions: [MenuLayoutAction(title: "リストを作成", symbolName: "plus", handler: tabSources.createList)],

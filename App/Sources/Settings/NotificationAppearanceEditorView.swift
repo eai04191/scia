@@ -45,7 +45,7 @@ struct NotificationAppearanceEditorView: View {
                         Button("すべてデフォルトに戻す", role: .destructive) { confirmsReset = true }
                             .disabled(!settings.isNotificationAppearanceModified)
                     } footer: {
-                        Text("メンションなどの投稿の見た目と行の余白やアイコンの列の幅は、「表示」の「投稿」に従います。文字の大きさは投稿の本文との差を保ちます。")
+                        Text("メンションなどの投稿の見た目と行の余白やアイコンの列の幅は、“表示”の“投稿”に従います。文字の大きさは投稿の本文との差を保ちます。")
                     }
                 }
             }

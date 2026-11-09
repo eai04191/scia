@@ -104,7 +104,7 @@ struct StorageView: View {
                     Text("書類とデータ")
                 } footer: {
                     if breakdown.hasUnmeasuredItems {
-                        Text("「不明」の項目は合計に入っていません。")
+                        Text("“不明”の項目は合計に入っていません。")
                     }
                 }
                 Section {
@@ -120,7 +120,7 @@ struct StorageView: View {
                 Section {
                     LabeledContent("アプリ本体", value: Self.text(breakdown.appBytes))
                 } footer: {
-                    Text("このiPhoneに入っているアプリのファイルを足した大きさです。iPhoneの設定の「Appのサイズ」とは数え方が違い、ずれることがあります。")
+                    Text("このiPhoneに入っているアプリのファイルを足した大きさです。iPhoneの設定の“Appのサイズ”とは数え方が違い、ずれることがあります。")
                 }
             } else {
                 HStack {

@@ -166,7 +166,7 @@ struct DisplaySettingsView: View {
                 NavigationLink("メディア", value: SettingsPage.media)
                 AccentColorPicker(selection: $settings.accentColor)
             } header: {
-                Text("見た目")
+                Text("外観")
             } footer: {
                 if settings.accentColor.obscuresSelectedTab {
                     Text("iOS 26.0ではこのカラーを使用すると選択中のタブがほかのタブと区別しにくくなります。iOS 26.1以降での使用を推奨します。")
@@ -179,7 +179,7 @@ struct DisplaySettingsView: View {
                     Text("アニメーションなし").tag(InsertionMotion.instant)
                 }
             } footer: {
-                Text("「自動」では「視差効果を減らす」がオンのときはアニメーションしません。")
+                Text("“自動”では“視差効果を減らす”がオンのときはアニメーションしません。")
             }
             StatusBarTickerSettingsSection(isOn: $settings.showsStatusBarTicker, isAvailable: StatusBarCutout.isAvailable)
             Section {
@@ -399,8 +399,6 @@ struct MediaSettingsView: View {
             }
             Section {
                 Toggle("仮の代替テキストを無視", isOn: $settings.ignoresUselessAltText)
-            } header: {
-                Text("代替テキスト")
             } footer: {
                 Text("投稿したアプリが自動で付けたと思われる説明にならない代替テキストをないものとして扱います。")
             }
