@@ -41,7 +41,7 @@ struct NotificationPolicyView: View {
                 }
             }
             .confirmationDialog(
-                confirmingDrop.map { "本当に“\(Self.title(of: $0))”を無視するようにしますか？" } ?? "",
+                confirmingDrop.map { "本当に“\(Self.confirmationName(of: $0))”を無視するようにしますか？" } ?? "",
                 isPresented: Binding(get: { confirmingDrop != nil }, set: { if !$0 { confirmingDrop = nil } }),
                 titleVisibility: .visible,
                 presenting: confirmingDrop
@@ -88,14 +88,19 @@ struct NotificationPolicyView: View {
         }
     }
 
-    /// 項目の名前。Mastodonのwebの日本語訳に揃える。
+    /// 無視するかを確かめるダイアログの、項目の名前。
+    private static func confirmationName(of item: NotificationPolicy.Item) -> String {
+        item == .privateMentions ? title(of: item) : "\(title(of: item))からの通知"
+    }
+
+    /// 項目の名前。Mastodonのwebの日本語訳から、画面の題と重なる「からの通知」を省く。
     static func title(of item: NotificationPolicy.Item) -> String {
         switch item {
-        case .notFollowing: "フォローしていないアカウントからの通知"
-        case .notFollowers: "フォローされていないアカウントからの通知"
-        case .newAccounts: "新しいアカウントからの通知"
+        case .notFollowing: "フォローしていないアカウント"
+        case .notFollowers: "フォローされていないアカウント"
+        case .newAccounts: "新しいアカウント"
         case .privateMentions: "外部からの非公開の返信"
-        case .limitedAccounts: "モデレーションされたアカウントからの通知"
+        case .limitedAccounts: "モデレーションされたアカウント"
         }
     }
 
