@@ -340,4 +340,27 @@ struct LinkLabelTests {
 
         #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings) == nil)
     }
+
+    /// 長押しで持ち上げるリンクの下地は、文字が載っている面の色にする。下地が既定のままだと、明るいカードの黒い文字がダークモードの黒い面に載って読めない。
+    @Test func linkPreviewBackdropIsNearestOpaqueBackground() {
+        let card = UIView()
+        card.backgroundColor = .systemYellow
+        let stack = UIView()
+        let translucent = UIView()
+        translucent.backgroundColor = UIColor.red.withAlphaComponent(0.2)
+        let label = UILabel()
+        card.addSubview(stack)
+        stack.addSubview(translucent)
+        translucent.addSubview(label)
+
+        #expect(label.nearestOpaqueBackgroundColor == .systemYellow)
+    }
+
+    @Test func linkPreviewBackdropIsNilWithoutOpaqueBackground() {
+        let parent = UIView()
+        let label = UILabel()
+        parent.addSubview(label)
+
+        #expect(label.nearestOpaqueBackgroundColor == nil)
+    }
 }

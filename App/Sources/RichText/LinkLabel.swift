@@ -504,7 +504,12 @@ final class LinkHitArea: UIControl {
         // UIKitは、浮かせる面（リンクの枠）の中央をtargetの中央に置く。ラベルの中央を渡すと、面がリンクの位置からずれて出る。
         let linkBounds = frames.reduce(CGRect.null) { $0.union($1) }
         let target = UIPreviewTarget(container: label, center: CGPoint(x: linkBounds.midX, y: linkBounds.midY))
-        return UITargetedPreview(view: linkOnly, parameters: UIPreviewParameters(textLineRects: frames.map { NSValue(cgRect: $0) }), target: target)
+        let parameters = UIPreviewParameters(textLineRects: frames.map { NSValue(cgRect: $0) })
+        // 既定の下地のままだと、色付きのカードの黒い文字がダークモードの黒い面に載って読めない。文字が載っている面の色を敷く。
+        if let backdrop = label.nearestOpaqueBackgroundColor {
+            parameters.backgroundColor = backdrop
+        }
+        return UITargetedPreview(view: linkOnly, parameters: parameters, target: target)
     }
 
     /// 並びは設定のリンクのメニューとハッシュタグのメニューに従う。メンションはユーザーなので、ユーザーのメニューで出す。出す項目がなければnil。
@@ -583,5 +588,15 @@ final class LinkHitArea: UIControl {
 
     private func nearest<T>(_ type: T.Type) -> T? {
         sequence(first: self as UIResponder, next: \.next).lazy.compactMap { $0 as? T }.first
+    }
+}
+
+extension UIView {
+    /// 自分か親のうち、いちばん近い不透明な背景色。なければnil。
+    var nearestOpaqueBackgroundColor: UIColor? {
+        sequence(first: self as UIView, next: \.superview).lazy.compactMap { view -> UIColor? in
+            guard let color = view.backgroundColor, color.resolvedColor(with: view.traitCollection).cgColor.alpha == 1 else { return nil }
+            return color
+        }.first
     }
 }
