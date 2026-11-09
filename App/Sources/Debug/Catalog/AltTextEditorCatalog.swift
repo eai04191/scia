@@ -1,4 +1,3 @@
-#if DEBUG
 import UIKit
 
 /// 代替テキストの入力欄（`AltTextEditorView`）の状態。ビューアと同じく、画像の上の下端に置く。
@@ -45,4 +44,3 @@ enum AltTextEditorCatalog {
         }
     }
 }
-#endif

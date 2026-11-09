@@ -1,4 +1,3 @@
-#if DEBUG
 import SciaCore
 import UIKit
 
@@ -119,4 +118,3 @@ enum ProfileEditCatalog {
         }
     }
 }
-#endif

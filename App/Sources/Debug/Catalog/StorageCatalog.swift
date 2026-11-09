@@ -1,4 +1,3 @@
-#if DEBUG
 import SciaCore
 import SwiftUI
 import UIKit
@@ -139,4 +138,3 @@ enum StorageCatalog {
         }
     }
 }
-#endif

@@ -1,4 +1,3 @@
-#if DEBUG
 import SciaCore
 import SwiftUI
 
@@ -119,4 +118,3 @@ extension UIViewController {
         present(controller, animated: true)
     }
 }
-#endif

@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 import SciaCore
 import UIKit
@@ -415,4 +414,3 @@ private extension ProfileHeaderView.Content {
         )
     }
 }
-#endif

@@ -1,4 +1,3 @@
-#if DEBUG
 import SciaCore
 import UIKit
 
@@ -84,4 +83,3 @@ enum CompletionListCatalog {
         }
     }
 }
-#endif

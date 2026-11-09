@@ -1,4 +1,3 @@
-#if DEBUG
 import SciaCore
 import UIKit
 
@@ -169,4 +168,3 @@ enum ComposeCapsuleCatalog {
         }
     }
 }
-#endif

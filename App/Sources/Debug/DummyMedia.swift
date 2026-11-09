@@ -1,4 +1,3 @@
-#if DEBUG
 import AVFoundation
 import SciaCore
 import UIKit
@@ -355,4 +354,3 @@ enum DummyMedia {
         case writeFailed
     }
 }
-#endif

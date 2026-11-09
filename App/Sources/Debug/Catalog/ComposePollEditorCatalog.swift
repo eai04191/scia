@@ -1,4 +1,3 @@
-#if DEBUG
 import SciaCore
 import UIKit
 
@@ -57,4 +56,3 @@ enum ComposePollEditorCatalog {
         }
     }
 }
-#endif

@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 import SciaCore
 import UIKit
@@ -155,4 +154,3 @@ enum EditHistoryCatalog {
         )
     }
 }
-#endif

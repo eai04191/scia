@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 import SciaCore
 import SwiftUI
@@ -109,4 +108,3 @@ enum OperationStatusCatalog {
         }
     }
 }
-#endif

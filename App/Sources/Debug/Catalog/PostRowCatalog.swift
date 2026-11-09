@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 import SciaCore
 import UIKit
@@ -577,4 +576,3 @@ enum PostRowCatalog {
         FilterResult(filter: FilterResult.Filter(id: title, title: title, context: context, filterAction: action), keywordMatches: [title])
     }
 }
-#endif

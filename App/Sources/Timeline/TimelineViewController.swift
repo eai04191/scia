@@ -344,6 +344,26 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// `rightBarButtonItems`は右から並ぶため、先頭に足したボタンがいちばん右に来る。
+    /// デバッグメニューのボタンを、`DeveloperMode`に合わせて出したり消したりする。読み込み済みの画面にも、切り替えた時点で反映する。
+    private func observeDeveloperMode() {
+        withObservationTracking {
+            baseBarItems = AppDependencies.developerMode.isEnabled ? [makeDebugMenuButton(extraSections: debugOnlyMenuSections())] : []
+        } onChange: { [weak self] in
+            Task(.withoutRequests) { @MainActor in
+                self?.observeDeveloperMode()
+            }
+        }
+        applyBarItems()
+    }
+
+    private func debugOnlyMenuSections() -> [UIMenuElement] {
+        #if DEBUG
+        makeDebugOnlyMenuSections(screenActions: debugActions, faults: onDebugURL.map { DebugFaultMenu.make(handle: $0) }, handle: onDebugURL)
+        #else
+        []
+        #endif
+    }
+
     func applyBarItems() {
         // 投稿を選んでいる間は、右上のボタンを出さない。選び終えたら並べ直す。
         guard !isSelectingPosts else { return }
@@ -359,13 +379,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         if !texts.title.isEmpty {
             title = texts.title
         }
-        #if DEBUG
-        // 撮影モードでは、宣伝の素材に開発用のボタンを映さない。
-        if ScenarioMode.server == nil {
-            baseBarItems = [makeDebugMenuButton(screenActions: debugActions, faults: onDebugURL.map { DebugFaultMenu.make(handle: $0) }, handle: onDebugURL)]
-        }
-        #endif
-        applyBarItems()
+        observeDeveloperMode()
         collectionView.frame = view.bounds
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         collectionView.hidesTopEdgeEffectOnMac()

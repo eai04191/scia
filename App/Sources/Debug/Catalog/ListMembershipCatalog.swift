@@ -1,4 +1,3 @@
-#if DEBUG
 import SciaCore
 import SwiftUI
 import UIKit
@@ -57,4 +56,3 @@ enum ListMembershipCatalog {
         }
     }
 }
-#endif

@@ -1,4 +1,3 @@
-#if DEBUG
 import CoreImage
 import SciaCore
 import UIKit
@@ -88,4 +87,3 @@ enum HDREmojiCatalog {
         return stack
     }
 }
-#endif

@@ -1,4 +1,3 @@
-#if DEBUG
 import SciaCore
 import UIKit
 
@@ -44,4 +43,3 @@ enum MediaStatusCatalog {
         }
     }
 }
-#endif

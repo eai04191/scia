@@ -1,4 +1,3 @@
-#if DEBUG
 import SciaCore
 import UIKit
 
@@ -383,4 +382,3 @@ final class ComponentStatesViewController: UIViewController {
         ])
     }
 }
-#endif

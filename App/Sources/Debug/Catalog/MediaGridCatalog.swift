@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 import SciaCore
 import UIKit
@@ -147,4 +146,3 @@ enum MediaGridCatalog {
         return grid
     }
 }
-#endif

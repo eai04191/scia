@@ -1,4 +1,3 @@
-#if DEBUG
 import UIKit
 
 /// ビューアの下に出す説明（`CaptionView`）の状態。ビューアと同じく、画像の上の下端に置く。
@@ -39,4 +38,3 @@ enum CaptionCatalog {
         }
     }
 }
-#endif

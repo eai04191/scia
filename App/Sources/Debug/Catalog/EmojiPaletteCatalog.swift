@@ -1,4 +1,3 @@
-#if DEBUG
 import SciaCore
 import UIKit
 
@@ -75,4 +74,3 @@ enum EmojiPaletteCatalog {
         }
     }
 }
-#endif

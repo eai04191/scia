@@ -1,4 +1,3 @@
-#if DEBUG
 import QuartzCore
 import UIKit
 
@@ -15,6 +14,15 @@ enum HitAreaOverlay {
 
     static func isShown(in scene: UIWindowScene) -> Bool {
         windows[ObjectIdentifier(scene)] != nil
+    }
+
+    /// すべてのシーンで消す。デバッグメニューがなくなると、オフにする項目もなくなるため。
+    static func hideAll() {
+        for window in windows.values {
+            window.stop()
+            window.isHidden = true
+        }
+        windows.removeAll()
     }
 
     static func setShown(_ isShown: Bool, in scene: UIWindowScene) {
@@ -581,4 +589,3 @@ private struct HitGrid {
         return views[index]
     }
 }
-#endif

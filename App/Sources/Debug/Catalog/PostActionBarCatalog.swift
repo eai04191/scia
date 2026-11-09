@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 import SciaCore
 import UIKit
@@ -71,4 +70,3 @@ enum PostActionBarCatalog {
         ]
     }
 }
-#endif

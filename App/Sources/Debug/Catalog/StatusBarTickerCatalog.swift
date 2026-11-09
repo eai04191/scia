@@ -1,4 +1,3 @@
-#if DEBUG
 import SciaCore
 import SwiftUI
 import UIKit
@@ -147,4 +146,3 @@ private final class ScaledCanvas: UIView {
         canvas.center = CGPoint(x: bounds.midX, y: bounds.midY)
     }
 }
-#endif

@@ -6,12 +6,20 @@ import UIKit
 /// シーンをまたいで共有する依存。
 @MainActor
 enum AppDependencies {
-    /// Releaseビルドではパネルを出さないため、値を保存せず常に既定値を使う。
     static let tuning: TuningStore = {
         #if DEBUG
         TuningStore(defaults: ScenarioMode.defaults ?? .standard)
         #else
-        TuningStore(defaults: nil)
+        TuningStore(defaults: .standard)
+        #endif
+    }()
+
+    /// デバッグ版では常に出す。撮影モードでは、宣伝の素材に開発用のボタンを映さない。
+    static let developerMode: DeveloperMode = {
+        #if DEBUG
+        DeveloperMode(defaults: ScenarioMode.defaults ?? .standard, isAlwaysEnabled: ScenarioMode.server == nil)
+        #else
+        DeveloperMode(defaults: .standard, isAlwaysEnabled: false)
         #endif
     }()
 
@@ -60,7 +68,7 @@ enum AppDependencies {
 
     /// 画像を、URLから取得する。設定の見本の画像は端末で作ったものなので、通信せずに返す。
     nonisolated static func imageData(from url: URL) async throws -> Data {
-        if let data = await PreviewImages.data(for: url) {
+        if let data = await localImageData(for: url) {
             return data
         }
         return try await remoteFetch.data(from: url)
@@ -80,7 +88,15 @@ enum AppDependencies {
 
     /// アイコンと添付ファイルの画像のストア。設定の見本の画像は端末で作ったものなので、通信せずに返す。
     static let images = ImageStores(http: http, tuning: tuning, maker: .uiKit, clock: clock) { url in
-        await PreviewImages.data(for: url)
+        await localImageData(for: url)
+    }
+
+    /// 通信せずに返せる画像。部品カタログの見本は`data:`のURLで渡すが、通信の層はhttpとhttps以外を送らない。
+    private static func localImageData(for url: URL) -> Data? {
+        if url.scheme == "data", developerMode.isEnabled {
+            return try? Data(contentsOf: url)
+        }
+        return PreviewImages.data(for: url)
     }
 
     static var avatarImages: AvatarImageStore<UIImage> { images.avatars }

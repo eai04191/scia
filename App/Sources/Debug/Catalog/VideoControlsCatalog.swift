@@ -1,4 +1,3 @@
-#if DEBUG
 import SciaCore
 import UIKit
 
@@ -56,4 +55,3 @@ enum VideoControlsCatalog {
         }
     }
 }
-#endif
