@@ -140,13 +140,13 @@ final class StreamingStatusPullView: UIView {
     private static func streamingContent(for state: ConnectionDiagnostics.StreamingState?, rate: ArrivalRate, now: Date) -> Content {
         switch state {
         case .connected:
-            Content(symbol: "checkmark.circle.fill", tint: .systemGreen, text: "接続中", detail: "\(rate.perMinute(at: now))件 / 分")
+            Content(symbol: "checkmark.circle.fill", tint: .systemGreen, text: "接続済み", detail: "\(rate.perMinute(at: now))件 / 分")
         case .connecting:
-            Content(symbol: "ellipsis.circle.fill", tint: .secondaryLabel, text: "接続待ち")
+            Content(symbol: "ellipsis.circle.fill", tint: .secondaryLabel, text: "接続中…")
         case .polling:
             Content(symbol: "exclamationmark.triangle.fill", tint: .systemOrange, text: "ポーリング中")
         case .stopped:
-            Content(symbol: "pause.circle.fill", tint: .secondaryLabel, text: "停止中")
+            Content(symbol: "pause.circle.fill", tint: .secondaryLabel, text: "未接続")
         case .loginRequired:
             Content(symbol: "pause.circle.fill", tint: .secondaryLabel, text: "ログインが必要")
         case nil:

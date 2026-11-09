@@ -7,14 +7,14 @@ enum StreamingStatusCatalog {
     @MainActor
     static func states() -> [CatalogState] {
         [
-            CatalogState(title: "ふだん（接続中・最新）") { status(.connected, catchUp: loaded(), arrivals: 12) },
+            CatalogState(title: "ふだん（接続済み・最新）") { status(.connected, catchUp: loaded(), arrivals: 12) },
             CatalogState(title: "流れが速い") { status(.connected, catchUp: loaded(), arrivals: 1_234) },
             CatalogState(title: "最新（今日より前に読んだ）") { status(.connected, catchUp: loaded(at: Date(timeIntervalSinceNow: -86_400))) },
             CatalogState(title: "最初の読み込みの前・未接続") { status(nil, catchUp: CatchUpStatus()) },
-            CatalogState(title: "接続待ち") { status(.connecting, catchUp: loaded()) },
+            CatalogState(title: "接続中…") { status(.connecting, catchUp: loaded()) },
             CatalogState(title: "つながって読み込み中") { status(.connected, catchUp: loading(readCount: 80)) },
             CatalogState(title: "ポーリングで読み込み中（読み始め）") { status(.polling, catchUp: loading(readCount: 0)) },
-            CatalogState(title: "停止中（バックグラウンドなど。画面には出ない）") { status(.stopped, catchUp: loaded()) },
+            CatalogState(title: "未接続（バックグラウンドなど。画面には出ない）") { status(.stopped, catchUp: loaded()) },
             CatalogState(title: "ログインが必要") { status(.loginRequired, catchUp: loaded()) },
             CatalogState(title: "サーバーがホームを作り直し中") {
                 var catchUp = loaded()
