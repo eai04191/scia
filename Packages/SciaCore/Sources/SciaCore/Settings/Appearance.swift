@@ -247,7 +247,7 @@ public enum AppearanceCatalog {
     public static let reactionGlowIconOpacity = AppearanceValue(id: "reactionGlow.iconOpacity", title: "アイコンの濃さ", range: 0...1, step: 0.05, defaultValue: 0.6, unit: .ratio)
 
     public static let groups: [AppearanceGroup] = [
-        AppearanceGroup(id: "row", title: "行", values: [rowPaddingTop, rowPaddingBottom, rowPaddingLeading, rowPaddingTrailing]),
+        AppearanceGroup(id: "row", title: "余白", values: [rowPaddingTop, rowPaddingBottom, rowPaddingLeading, rowPaddingTrailing]),
         AppearanceGroup(id: "context", title: "名前の上の行", values: [contextText, contextSecondaryText, contextPartsSpacing, contextLabelText, boosterAvatarSize, contextSymbolSpacing, contextAvatarTextSpacing, contextSpacing]),
         AppearanceGroup(id: "avatar", title: "アイコン", values: [avatarSize, avatarCornerRatio, avatarSpacing, replyLineWidth, replyLineGap]),
         AppearanceGroup(id: "name", title: "名前の行", values: [namePrimaryText, nameSecondaryText, timeText, namePartsSpacing, nameStackSpacing, nameTimeSpacing, visibilitySymbolSpacing, editedMarkSpacing, nameFadeWidth, nameUnicodeEmojiScale, nameCustomEmojiScale, nameBodySpacing, nameMediaSpacing]),
