@@ -13,7 +13,7 @@ mainへ入れる処理（rebase、`make check`、`make test`、fast-forward）�
 
 targetは、指定がなければ`git symbolic-ref --short refs/remotes/origin/HEAD`のbranch名(例: `main`)。比較にはremoteではなくローカルのtargetを使う。
 
-引数（`$ARGUMENTS`）には、前提のスレッドのセッションID（`after:local_…`、複数可）が入る。`make test`の端末は、列が走らせる直前に`Tools/sim.sh acquire`で借りる。
+引数（`$ARGUMENTS`）には、前提のスレッドのセッションID（`after:local_…`、複数可）が入る。`make check`と`make test`は、列が`Tools/test-dispatch.sh`を通して、空いている枠で走らせる。
 
 ## 1. 残タスクと、同意を取っていない項目を確かめる
 

@@ -6,6 +6,7 @@
 # 使い方:
 #   Tools/check-stamp.sh tree                        今の作業ツリーのtreeを出す
 #   Tools/check-stamp.sh record <check|test> <tree>  今の作業ツリーが<tree>のままなら、通ったものとして覚える
+#   Tools/check-stamp.sh record-remote <check|test> <tree>  別のMacが<tree>の中身で走らせて通ったものとして覚える。手元の作業ツリーとは比べない
 #   Tools/check-stamp.sh missing <commit> [<base>]   <commit>の中身でまだ通っていないもの（make check、make test）を1行ずつ出す
 # <base>を渡すと、<base>の中身で通っていて、<commit>との違いがMarkdown（*.md）とサーバーのリスト（known-servers.txt）だけなら、通ったものとして扱い、<commit>の中身も覚える。
 # 追跡しているMarkdownは、ルートの文書、docs/、.claude/にしかなく、ビルドにもlintにもテストにも入らないので、結果が変わらないため。
@@ -63,6 +64,14 @@ case "${1:-}" in
         touch "$(stamp_dir "$kind")/$tree"
         echo "make $kindが通った中身（tree ${tree:0:12}）を覚えました"
         ;;
+    record-remote)
+        kind=${2:?checkかtestを渡す}
+        tree=${3:?treeを渡す}
+        [[ " $KINDS " == *" $kind "* ]] || { echo "error: checkかtestを渡してください: $kind" >&2; exit 1; }
+        mkdir -p "$(stamp_dir "$kind")"
+        touch "$(stamp_dir "$kind")/$tree"
+        echo "別のMacでmake $kindが通った中身（tree ${tree:0:12}）を覚えました"
+        ;;
     missing)
         commit=${2:?commitを渡す}
         base=${3:-}
@@ -80,7 +89,7 @@ case "${1:-}" in
         done
         ;;
     *)
-        echo "使い方: Tools/check-stamp.sh tree | record <check|test> <tree> | missing <commit>" >&2
+        echo "使い方: Tools/check-stamp.sh tree | record <check|test> <tree> | record-remote <check|test> <tree> | missing <commit>" >&2
         exit 1
         ;;
 esac

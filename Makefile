@@ -7,7 +7,7 @@ SIM_ARCH ?= $(shell uname -m)
 # 同じDerivedDataを使うDebugのビルドには、すべてコンパイルキャッシュの設定を渡す（Config/Cache.xcconfig）。Tools/system-ui-check.shも同じものを渡す
 CACHE_XCCONFIG := -xcconfig Config/Cache.xcconfig
 
-.PHONY: generate app-info check-app-info lint test-lint test-core test-memory-cache build warnings test test-on-sim sim-keyboard scenario-build scenario-setup scenario-reset scenario-run archive testflight testflight-external promo readme-screenshots readme-icons update-known-servers check check-steps check-test hooks menu-editor clean
+.PHONY: generate app-info check-app-info lint test-lint test-core test-memory-cache build warnings test test-here test-on-sim sim-keyboard scenario-build scenario-setup scenario-reset scenario-run archive testflight testflight-external promo readme-screenshots readme-icons update-known-servers check check-here check-steps check-test check-test-here hooks menu-editor clean
 
 ## project.ymlからXcodeプロジェクトを生成する
 generate:
@@ -60,7 +60,12 @@ warnings: build
 TEST_TREE := $(DERIVED_DATA)/test-tree
 TEST_ARGS = -project $(PROJECT) -scheme $(SCHEME) -destination 'platform=iOS Simulator,name=$(SIM)' -derivedDataPath $(DERIVED_DATA) $(CACHE_XCCONFIG) -collect-test-diagnostics never
 ## 決めた端末をSIMに入れて呼び直す。テストの間ずっと、処理の引数に端末の名前が残り、Tools/sim.sh busyが使っている処理として見つけられるようにするため
-test: generate
+## SIMもONLYもなければ、テストを任せる別のMacと手元の、空いている枠で走らせる（docs/test-dispatch.md）。手元ではtest-here
+test:
+	@Tools/test-dispatch.sh dispatch test '$(SIM)' '$(ONLY)'
+
+## 手元の端末で走らせる
+test-here: generate
 	@sim=$$(Tools/sim.sh leased '$(SIM)') && $(MAKE) --no-print-directory test-on-sim SIM="$$sim"
 
 ## make testから、走らせる端末を決めたあとに呼ぶ。直接は走らせない
@@ -170,8 +175,12 @@ update-known-servers:
 ## 通ったら、確かめた作業ツリーの中身を覚える
 ## $(MAKE)を含む行はmake -nでも走るので、覚える処理はその行に入れない。入れると、何も確かめないmake -n checkで中身を覚えてしまう
 ## make -i checkは失敗を無視して最後まで進むので、通っていない中身も覚えてしまう。失敗の無視はわざと保証を外す操作で、ふだんの手順では使わないので止めない
+## テストを任せる別のMacと手元の、空いている枠で走らせる（docs/test-dispatch.md）。手元ではcheck-here
 CHECK_TREE := $(DERIVED_DATA)/check-tree
 check:
+	@Tools/test-dispatch.sh dispatch check '' ''
+
+check-here:
 	@mkdir -p $(DERIVED_DATA) && Tools/check-stamp.sh tree > $(CHECK_TREE)
 	@$(MAKE) --no-print-directory check-steps
 	@Tools/check-stamp.sh record check "$$(cat $(CHECK_TREE))"
@@ -190,7 +199,11 @@ check-steps: lint
 CHECK_REST_LOG := $(DERIVED_DATA)/check-rest.log
 CHECK_REST_STATUS := $(DERIVED_DATA)/check-rest-status
 TEST_STATUS := $(DERIVED_DATA)/test-status
-check-test: generate
+## SIMもONLYもなければ、テストを任せる別のMacと手元の、空いている枠で走らせる（docs/test-dispatch.md）。手元ではcheck-test-here
+check-test:
+	@Tools/test-dispatch.sh dispatch check-test '$(SIM)' '$(ONLY)'
+
+check-test-here: generate
 	@mkdir -p $(DERIVED_DATA) && Tools/check-stamp.sh tree > $(CHECK_TREE)
 	@$(MAKE) --no-print-directory warnings
 	@rm -f $(CHECK_REST_STATUS) $(TEST_STATUS); \
@@ -198,7 +211,7 @@ check-test: generate
 	trap 'stop 129' HUP; trap 'stop 130' INT; trap 'stop 143' TERM; \
 	set -m; \
 	$(MAKE) --no-print-directory -j4 lint $(CHECK_TESTS) > $(CHECK_REST_LOG) 2>&1 & rest=$$!; \
-	$(MAKE) --no-print-directory test SIM='$(SIM)' & tests=$$!; \
+	$(MAKE) --no-print-directory test-here SIM='$(SIM)' & tests=$$!; \
 	set +m; \
 	wait $$tests; echo $$? > $(TEST_STATUS); wait $$rest; echo $$? > $(CHECK_REST_STATUS)
 	@if [ "$$(cat $(CHECK_REST_STATUS))" = 0 ]; then Tools/check-stamp.sh record check "$$(cat $(CHECK_TREE))"; else grep -aE ': error: |\*\*\*|recorded an issue|failed after' $(CHECK_REST_LOG) | tail -40; echo "make checkのlintかmacOSのテストが落ちました。出力は$(CHECK_REST_LOG)"; fi

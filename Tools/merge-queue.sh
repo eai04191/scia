@@ -8,15 +8,14 @@
 # ロックはlockfのプロセスが持つので、処理から起動したmakeやxcodebuildが常駐のプロセスを残しても、ロックは残らない。
 # 並びを持つのはこのスクリプトのプロセス。止められたり落ちたりしてプロセスが消えた並びは、次に列を見たプロセスが消す。
 # 使い方:
-#   Tools/merge-queue.sh run [<前提のbranch>...]   今のbranchを列に並べ、番が来たら入れる。make testの端末は、走らせる直前にTools/sim.sh acquireで借りる
+#   Tools/merge-queue.sh run [<前提のbranch>...]   今のbranchを列に並べ、番が来たら入れる。make checkとmake testは、Tools/test-dispatch.shで空いている枠へ振り分けて走らせる
 #   Tools/merge-queue.sh status                         並んでいるbranchを順に出す
 # runを止めると（SIGTERM、SIGINT、SIGHUP）、mainへ入れている途中なら、走らせているrebaseやmakeを止め、rebaseを取りやめて端末を返してから終わる。
 #   fast-forwardを始めたあとは、mainを中途半端にしないよう、入れ終えてから終わる。止めたときの終了コードは、シグナルの番号に128を足したもの
 # runの終了コード: 0 入れた、1 使い方の誤りや想定外の失敗、2 未commitの変更がある、3 rebaseがconflictした、4 make checkかmake testが落ちた、
 #   5 前提のbranchが、列にもmainにもないまま10分経った、6 FEATURES.mdかREADME.mdの変更を人が承認していない（Tools/human-review.sh）
 # 段階ごとにかかった時間は、列のディレクトリのtiming.logに1行ずつ足す。列は「始めた時刻 branch 段階 秒 結果」のタブ区切りで、結果はokか終了コード。
-#   段階は、wait（並んでから番が来るまで）、rebase、check、sim-acquire（make testの端末を借りるまで）、sim-reset、test、total（並んでから終わるまで）。
-#   checkとtestの両方を走らせるときは、checkとtestの代わりに、build（端末を借りる前のアプリのビルド）とcheck-test（make check-test）が並ぶ。
+#   段階は、wait（並んでから番が来るまで）、rebase、check、test、check-test（checkとtestの両方を走らせるとき。枠を待つ時間も含む）、total（並んでから終わるまで）。
 #   mainが動いて載せ直すと、rebaseからの段階がもう一度並ぶ
 set -euo pipefail
 
@@ -276,59 +275,24 @@ require_human_review() {
     fi
 }
 
-# landが端末を借りたか。止められたときに返す
-lent_sim=''
-
-# make testの端末を借りて、呼び出し元のsimに入れる。ほかのworktreeが使ったあとの端末は、既定に戻してから渡す
-lend_test_sim() {
-    local acquired lent
-    # 並んで待つ間は端末を持たない。ほかのスレッドが使えるよう、走らせる直前に借りて、終わったら返す。
-    # 借り終えてから記録するまでの間に止められても返せるよう、借り始める前に記録する。借りていないときのreleaseは何もしない
-    lent_sim=1
-    acquired=$(mktemp)
-    timed sim-acquire Tools/sim.sh acquire --wait 0 > "$acquired" || { rm -f "$acquired"; echo "error: make test の端末を借りられませんでした" >&2; exit 1; }
-    lent=$(tail -1 "$acquired")
-    rm -f "$acquired"
-    sim=${lent% *}
-    # ほかのworktreeが使ったあとの端末は、その設定やチューニングを持ち込まないよう、既定に戻してからテストする。
-    if [[ "${lent##* }" != ready ]]; then
-        timed sim-reset Tools/sim.sh reset "$sim" || { Tools/sim.sh release >/dev/null; echo "error: $sim の設定を戻せませんでした" >&2; exit 1; }
-    fi
-}
-
-return_test_sim() {
-    Tools/sim.sh release >/dev/null
-    lent_sim=''
-}
-
 run_missing_steps() {
-    local missing steps step sim
+    local missing steps target
     # READMEだけが違うとmake checkを省くので、JSONと書き出したものが合っているかはここで必ず調べる
     python3 Tools/generate-app-info.py --check || { echo "error: Config/app-info.jsonと書き出したものが合っていません" >&2; exit 4; }
     # 調べられなかったときに、出力が空なのを通ったものと取り違えないよう、失敗したら止める
     missing=$(Tools/check-stamp.sh missing HEAD "$TARGET") || { echo "error: 通っていないものを調べられませんでした" >&2; exit 1; }
     steps=" $(awk '{ print $2 }' <<< "$missing" | tr '\n' ' ')"
     if [[ "$steps" == *" check "* && "$steps" == *" test "* ]]; then
-        # 両方なら、make check-testで、checkの残りをmake testと同時に走らせる。
-        # 端末を借りている間にアプリのコンパイルを待たないよう、借りる前にビルドしておく。make check-testの中のビルドは、そのあとでは差分がないので数秒で済む
-        timed build make build || { echo "error: make build が落ちました" >&2; exit 4; }
-        lend_test_sim
-        echo "make check と make test を $sim で同時に走らせます"
-        timed check-test make check-test SIM="$sim" || { return_test_sim; echo "error: make check か make test が落ちました" >&2; exit 4; }
-        return_test_sim
-        return
+        target=check-test
+    elif [[ "$steps" == *" check "* ]]; then
+        target=check
+    elif [[ "$steps" == *" test "* ]]; then
+        target=test
+    else
+        return 0
     fi
-    for step in $steps; do
-        echo "make $step を走らせます"
-        if [[ "$step" == test ]]; then
-            lend_test_sim
-            echo "make test を $sim で走らせます"
-            timed test make test SIM="$sim" || { return_test_sim; echo "error: make test が落ちました" >&2; exit 4; }
-            return_test_sim
-        else
-            timed "$step" make "$step" || { echo "error: make $step が落ちました" >&2; exit 4; }
-        fi
-    done
+    # 待たせるとmainへ入れる処理の全体が止まるので、列の先頭に並ぶ
+    timed "$target" Tools/test-dispatch.sh dispatch "$target" '' '' front || { echo "error: make $target が落ちました" >&2; exit 4; }
 }
 
 fast_forward() {
@@ -368,7 +332,6 @@ on_land_signal() {
     if [[ -d "$(git rev-parse --git-path rebase-merge)" || -d "$(git rev-parse --git-path rebase-apply)" ]]; then
         git rebase --abort
     fi
-    [[ -n "$lent_sim" ]] && Tools/sim.sh release >/dev/null
     echo "error: 止められたので、$TARGET へ入れずに終わります" >&2
     exit "$1"
 }
