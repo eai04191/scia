@@ -57,7 +57,7 @@ on_term() {
     exit 143
 }
 
-mkdir -p ~/scia/logs ~/scia/jobs
+mkdir -p ~/scia/logs ~/scia/jobs ~/scia/results
 echo "$$" > ~/scia/jobs/"$id".pid
 trap 'rm -rf "$incoming" ~/scia/jobs/"$id".pid' EXIT
 trap on_term TERM
@@ -111,10 +111,18 @@ wait "$job"
 result=$?
 limit 40 xcrun simctl shutdown "$sim"
 find ~/scia/logs -type f -mtime +7 -delete
+find ~/scia/results -mindepth 1 -maxdepth 1 -mtime +7 -exec rm -rf {} +
 
 if [ -n "$stopped" ]; then
     echo "貸し出しを止めたので、テストを中断しました"
     exit 75
+fi
+# 落ちた回のxcresultを、Tools/test-dispatch.shが依頼のIDで受け取れる場所へ移す。作業コピーに残っている前の依頼の分は、この依頼の始まりより古いので移さない
+if [ "$result" -ne 0 ]; then
+    results=~/scia/results/$id
+    mkdir -p "$results"
+    find "$work/DerivedData/test-logs" -mindepth 1 -maxdepth 1 -type d -name 'failed-*' -newer ~/scia/jobs/"$id".pid -exec mv {} "$results/" \; 2>/dev/null
+    rmdir "$results" 2>/dev/null
 fi
 grep -aE ': error: |\*\*\*|✘ Test|Test run with' "$log" | tail -30 | cut -c1-240
 exit "$result"

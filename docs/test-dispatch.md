@@ -35,6 +35,8 @@
 
 別のMacは、`SCIA_REMOTE_SIMS`の端末の数だけ、作業コピー（`~/scia/tree-<番号>`）と端末の組で同時に走らせる。
 
+落ちた回のxcresultは、別のMacの`~/scia/results/<依頼のID>`に移し、入口が手元の`DerivedData/test-logs/failed-<時刻>`へ受け取って別のMacの分を消す。受け取れなければ別のMacに7日残る。
+
 ## 手元の端末
 
 手元で走らせる`make test`の端末は、そのworktreeが借りていれば、貸し出しの期限を延ばしてそれを使い、終わっても返さない。借りていなければ入口が借りて、ほかのworktreeが使ったあとなら設定を既定に戻し、終わったら返す。
