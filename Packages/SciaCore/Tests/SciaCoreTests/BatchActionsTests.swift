@@ -102,12 +102,12 @@ struct BatchActionsTests {
         // 応答を待っている間は、次を送らない。
         #expect(clock.sleeperCount == 0)
         gate.open()
-        try await waitUntil { clock.sleeperCount == 1 }
+        try await waitUntil { clock.sleeperCount(remaining: .seconds(1)) >= 1 }
         #expect(sent == ["reblog 1"])
         #expect(run.completedCount == 1)
 
         clock.advance(by: .seconds(1))
-        try await waitUntil { clock.sleeperCount == 1 && sent.count >= 3 }
+        try await waitUntil { clock.sleeperCount(remaining: .seconds(1)) >= 1 && sent.count >= 3 }
         #expect(sent.count == 3)
         #expect(sent == ["reblog 1", "unreblog 2", "reblog 2"])
 
@@ -165,9 +165,8 @@ struct BatchActionsTests {
         }
 
         let outcome = Task { await run.run() }
-        try await waitUntil { clock.sleeperCount == 1 }
-        clock.advance(by: .seconds(1))
-        try await waitUntil { clock.sleeperCount == 1 && log.sent.count >= 3 }
+        try await clock.advance(afterSleeping: .seconds(1))
+        try await waitUntil { clock.sleeperCount(remaining: .seconds(2)) >= 1 && log.sent.count >= 3 }
         #expect(log.sent.count == 3)
         clock.advance(by: .seconds(2))
         guard case .finished = await outcome.value else {

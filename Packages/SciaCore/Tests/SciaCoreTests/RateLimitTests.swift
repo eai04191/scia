@@ -109,8 +109,7 @@ struct RateLimitTests {
         let clock = TestClock(origin: Self.now)
         let gate = RateLimitGate(now: { clock.date }, clock: clock)
         await gate.pause(until: Self.now.addingTimeInterval(60))
-        try await waitUntil { clock.sleeperCount == 1 }
-        clock.advance(by: .seconds(60))
+        try await clock.advance(afterSleeping: .seconds(60))
 
         var iterator = gate.resumptions.makeAsyncIterator()
         let resumed: Void? = await iterator.next()

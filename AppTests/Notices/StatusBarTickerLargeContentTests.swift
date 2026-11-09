@@ -37,9 +37,8 @@ struct StatusBarTickerLargeContentTests {
         let interaction = UILargeContentViewerInteraction(delegate: view)
 
         #expect(view.largeContentViewerInteraction(interaction, itemAt: point) != nil)
-        try await waitUntil { clock.sleeperCount > 0 }
-        clock.advance(by: .seconds(60))
-        try await waitUntil { clock.sleeperCount > 0 }
+        try await clock.advance(by: .seconds(60), afterSleeping: .milliseconds(200))
+        try await waitUntil { clock.sleeperCount(remaining: .milliseconds(200)) >= 1 }
 
         #expect(view.isExpanded)
 

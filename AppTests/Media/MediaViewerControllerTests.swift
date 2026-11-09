@@ -690,10 +690,9 @@ struct MediaViewerControllerTests {
         page.loadViewIfNeeded()
 
         #expect(page.isShowingPoster)
-        try await waitUntil { clock.sleeperCount == 1 }
-        clock.advance(by: .milliseconds(499))
+        try await clock.advance(by: .milliseconds(499), afterSleeping: .milliseconds(500))
         // 進めただけでは、起きた処理はまだ走っていない。早く回さないことは、待ちが残っていることで確かめる。
-        #expect(clock.sleeperCount == 1, "待つ時間より早くインジケーターを回しました")
+        #expect(clock.sleeperCount(remaining: .milliseconds(1)) >= 1, "待つ時間より早くインジケーターを回しました")
         #expect(!page.isShowingLoadingIndicator)
         clock.advance(by: .milliseconds(1))
         try await waitUntil { page.isShowingLoadingIndicator }
@@ -709,7 +708,7 @@ struct MediaViewerControllerTests {
         let page = PlayerPageController(item: MediaViewerItem(id: "g", kind: .gifv, description: "", file: nil, thumbnail: nil, status: .ready), preview: UIImage(systemName: "photo"))
         page.clock = clock
         page.loadViewIfNeeded()
-        try await waitUntil { clock.sleeperCount == 1 }
+        try await waitUntil { clock.sleeperCount(remaining: .seconds(0.5)) >= 1 }
 
         page.displayDidBecomeReady()
         clock.advance(by: .seconds(10))

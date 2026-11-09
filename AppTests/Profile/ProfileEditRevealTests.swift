@@ -95,8 +95,7 @@ struct ProfileEditRevealTests {
         let (controller, window) = try makeController(images: images)
         defer { close(window) }
         let table = try tableView(of: controller)
-        try await waitUntil { clock.sleeperCount > 0 }
-        clock.advance(by: .seconds(TuningCatalog.profileAvatarWait.defaultValue))
+        try await clock.advance(afterSleeping: .seconds(TuningCatalog.profileAvatarWait.defaultValue))
         try await waitUntil { !table.isHidden }
         table.layoutIfNeeded()
         let avatarView = try #require(table.descendants(of: UIImageView.self).first { $0.bounds.width == 80 })
@@ -128,7 +127,7 @@ struct ProfileEditRevealTests {
             close(window)
         }
         let table = try tableView(of: controller)
-        try await waitUntil { clock.sleeperCount > 0 }
+        try await waitUntil { clock.sleeperCount(remaining: .seconds(TuningCatalog.profileAvatarWait.defaultValue)) >= 1 }
         #expect(table.isHidden)
 
         clock.advance(by: .seconds(TuningCatalog.profileAvatarWait.defaultValue))

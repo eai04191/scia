@@ -159,7 +159,7 @@ struct ComposeCompletionTests {
         let completion = makeCompletion(sleep: clock.sleep)
         for query in ["b", "bo", "bob"] {
             completion.textDidChange(mention(query))
-            try await waitUntil { clock.sleeperCount == 1 }
+            try await waitUntil { clock.sleeperCount(remaining: .milliseconds(30)) >= 1 }
         }
         #expect(completion.content == .loading)
         clock.advance(by: .milliseconds(29))

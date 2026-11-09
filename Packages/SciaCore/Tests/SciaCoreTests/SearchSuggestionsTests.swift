@@ -53,8 +53,7 @@ struct SearchSuggestionsTests {
         suggestions.update("ne")
         try await waitUntil { clock.sleeperCount(dueWithin: .milliseconds(200)) == 1 }
         suggestions.update("nek")
-        try await waitUntil { clock.sleeperCount(dueWithin: .milliseconds(200)) == 1 }
-        clock.advance(by: .milliseconds(200))
+        try await clock.advance(afterSleeping: .milliseconds(200))
         try await waitUntil { suggestions.runningTaskCount == 0 }
 
         #expect(suggestions.content.accounts.map(\.id) == ["2"])

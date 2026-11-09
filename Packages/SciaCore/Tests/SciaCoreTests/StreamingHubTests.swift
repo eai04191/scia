@@ -87,7 +87,7 @@ struct StreamingHubTests {
 
         let subscription = hub.subscribe(.user, home.record)
         // 切れてつなぎ直しを待ち始めたら、つなぎ直す10msだけ進める。
-        try await waitUntil { home.labels.contains("delete 1") && clock.sleeperCount(dueWithin: .milliseconds(10)) == 1 }
+        try await waitUntil { home.labels.contains("delete 1") && clock.sleeperCount(remaining: .milliseconds(10)) >= 1 }
         clock.advance(by: .milliseconds(10))
         try await waitUntil { home.labels.contains("delete 2") }
 
@@ -235,8 +235,7 @@ struct StreamingHubTests {
 
         // 購読を送り終える前に切れて、つなぎ直す。
         dropGate.open()
-        try await waitUntil { clock.sleeperCount(dueWithin: .milliseconds(10)) == 1 }
-        clock.advance(by: .milliseconds(10))
+        try await clock.advance(afterSleeping: .milliseconds(10))
         try await waitUntil { connector.connectCount == 2 && local.labels.count >= 2 }
         #expect(local.labels.count == 2)
 
@@ -273,8 +272,7 @@ struct StreamingHubTests {
         // 購読を送り始めてから切る。
         try await waitUntil { sendGate.waiterCount > 0 }
         dropGate.open()
-        try await waitUntil { clock.sleeperCount(dueWithin: .milliseconds(10)) == 1 }
-        clock.advance(by: .milliseconds(10))
+        try await clock.advance(afterSleeping: .milliseconds(10))
         try await waitUntil { connector.connectCount == 2 && hub.isConnected && local.labels == ["connected"] }
 
         // 切れる前の送信を、つなぎ直した後に送り終えさせ、届けるか捨てるかが決まるまで待つ。
@@ -355,7 +353,7 @@ struct StreamingHubTests {
         let home = Recorder()
         let subscription = hub.subscribe(.user, home.record)
         // 1回目の接続に失敗して、つなぎ直しを3600秒待っている間に、知らせの10msだけ進める。
-        try await waitUntil { connector.connectCount == 1 && clock.sleeperCount(dueWithin: .milliseconds(10)) == 1 }
+        try await waitUntil { connector.connectCount == 1 && clock.sleeperCount(remaining: .milliseconds(10)) >= 1 }
         clock.advance(by: .milliseconds(10))
         try await waitUntil { home.labels.contains("outage true") }
 

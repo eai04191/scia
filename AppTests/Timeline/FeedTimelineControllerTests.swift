@@ -84,7 +84,7 @@ struct FeedTimelineControllerTests {
 
         controller.start(purpose: .action)
         // 最初の読み込みと、つながったときの補完。補完も206なので、読み直しを予約する。
-        try await waitUntil { homeRequests.withLock { $0 } >= 2 && clock.sleeperCount == 1 }
+        try await waitUntil { homeRequests.withLock { $0 } >= 2 && clock.sleeperCount(remaining: .seconds(5)) >= 1 }
         controller.setEnabled(false)
         let countWhenDisabled = homeRequests.withLock { $0 }
         #expect(clock.sleeperCount == 0, "無効にしても、読み直しの予約が残っています")
@@ -153,11 +153,11 @@ struct FeedTimelineControllerTests {
         try await waitUntil { connector.isConnected }
         connector.send(try updateMessage(try #require(arriving.first)))
         // 届いた新着は、間隔をおいてから挿入する。
-        try await waitUntil { clock.sleeperCount == 1 }
+        try await waitUntil { clock.sleeperCount(remaining: .milliseconds(200)) >= 1 }
         #expect(controller.viewController.displayedStatusIDs == existing.map(\.id), "間隔を待たずに挿入されました")
         clock.advance(by: .milliseconds(199))
         // 進めただけでは、起きた処理はまだ走っていない。早く起きていないことは、間隔の待ちが残っていることで確かめる。
-        #expect(clock.sleeperCount == 1, "間隔を待たずに挿入を始めました")
+        #expect(clock.sleeperCount(remaining: .milliseconds(1)) >= 1, "間隔を待たずに挿入を始めました")
         clock.advance(by: .milliseconds(1))
 
         try await waitUntil { controller.viewController.displayedStatusIDs.count >= 4 }
@@ -181,8 +181,7 @@ struct FeedTimelineControllerTests {
         try await waitUntil { connector.isConnected }
         #expect(controller.viewController.displayedStatusIDs == existing.map(\.id))
         connector.send(try updateMessage(try #require(arriving.first), stream: ["public:local"]))
-        try await waitUntil { clock.sleeperCount == 1 }
-        clock.advance(by: .milliseconds(200))
+        try await clock.advance(afterSleeping: .milliseconds(200))
         try await waitUntil { controller.viewController.displayedStatusIDs.count >= 4 }
         #expect(controller.viewController.displayedStatusIDs.count == 4)
         controller.enterBackground()

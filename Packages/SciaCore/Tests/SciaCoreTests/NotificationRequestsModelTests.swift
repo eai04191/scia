@@ -410,7 +410,7 @@ struct NotificationRequestsModelTests {
         model.start(purpose: .action)
         try await waitUntil { display.contentState == .loaded }
         model.didAcceptRequest()
-        try await waitUntil { clock.sleeperCount(dueWithin: .seconds(2)) == 1 }
+        try await waitUntil { clock.sleeperCount(remaining: .seconds(2)) >= 1 }
         #expect(transport.requests(to: "/api/v1/notifications/requests/merged").isEmpty)
 
         clock.advance(by: .seconds(2))

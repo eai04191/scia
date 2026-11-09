@@ -39,8 +39,7 @@ struct CustomEmojiCacheTests {
         let cache = makeCaches().cache(for: instance)
         cache.remember([emoji("wide"), emoji("square")], loadStartedAt: cache.generation)
         cache.learn(emoji("wide").staticUrl, width: 400, height: 100)
-        try await waitUntil { clock.sleeperCount == 1 }
-        clock.advance(by: CustomEmojiCache.saveDelay)
+        try await clock.advance(afterSleeping: CustomEmojiCache.saveDelay)
         try await waitUntil {
             (try? JSONDecoder().decode(StoredCustomEmojis.self, from: Data(contentsOf: file)))?.emojis.first?.aspectRatio == 4
         }
@@ -102,8 +101,7 @@ struct CustomEmojiCacheTests {
         let cache = makeCaches().cache(for: instance)
         cache.remember([emoji("wide")], loadStartedAt: cache.generation)
         cache.learn(emoji("wide").staticUrl, width: 400, height: 100)
-        try await waitUntil { clock.sleeperCount == 1 }
-        clock.advance(by: CustomEmojiCache.saveDelay)
+        try await clock.advance(afterSleeping: CustomEmojiCache.saveDelay)
         try await waitUntil {
             (try? JSONDecoder().decode(StoredCustomEmojis.self, from: Data(contentsOf: file)))?.emojis.first?.aspectRatio == 4
         }

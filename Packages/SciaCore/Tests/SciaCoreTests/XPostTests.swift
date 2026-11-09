@@ -234,7 +234,7 @@ struct XPostTests {
         store.onChange = { store.request(id: $0) }
 
         store.request(id: "1")
-        try await waitUntil { store.hasFailed(id: "1") && clock.sleeperCount == 1 }
+        try await waitUntil { store.hasFailed(id: "1") && clock.sleeperCount(remaining: .seconds(5)) >= 1 }
         clock.advance(by: .seconds(5))
         try await waitUntil { store.post(id: "1") != nil }
         #expect(await counter.count("1") == 2)
@@ -253,7 +253,7 @@ struct XPostTests {
 
         store.request(id: "1")
         store.request(id: "2")
-        try await waitUntil { store.hasFailed(id: "1") && store.hasFailed(id: "2") && clock.sleeperCount == 1 }
+        try await waitUntil { store.hasFailed(id: "1") && store.hasFailed(id: "2") && clock.sleeperCount(remaining: .seconds(5)) >= 1 }
         clock.advance(by: .seconds(5))
         try await waitUntil { changed == ["1"] }
         #expect(clock.sleeperCount == 0)

@@ -223,10 +223,10 @@ struct NoticeStackViewTests {
         #expect(stack.chips.first === chip)
         #expect(stack.transientNotice?.id == "other")
         // 入れ替えると、前のチップの時計は止め、入れ替えたチップの長さで数え直す。
-        try await waitUntil { clock.sleeperCount == 1 }
-        clock.advance(by: .milliseconds(99))
+        try await clock.advance(by: .milliseconds(99), afterSleeping: .milliseconds(100))
+        #expect(clock.sleeperCount == 1, "入れ替える前のチップの時計が残っています")
         // 進めただけでは、起きた処理はまだ走っていない。早く消さないことは、消すまでの待ちが残っていることで確かめる。
-        #expect(clock.sleeperCount == 1, "長さより早く消そうとしました")
+        #expect(clock.sleeperCount(remaining: .milliseconds(1)) >= 1, "長さより早く消そうとしました")
         clock.advance(by: .milliseconds(1))
         try await waitUntil { stack.transientNotice == nil }
     }
@@ -238,7 +238,7 @@ struct NoticeStackViewTests {
         let failure = Notice(id: "favourite", kind: .failure, title: "お気に入りにできませんでした", action: .disclosure(hint: "理由を見られます。", handler: {}))
         stack.showTransient(failure, duration: 0.1)
         let chip = try #require(stack.chips.first)
-        try await waitUntil { clock.sleeperCount == 1 }
+        try await waitUntil { clock.sleeperCount(remaining: .milliseconds(100)) >= 1 }
 
         chip.accessibilityElementDidBecomeFocused()
         #expect(clock.sleeperCount == 0, "読み上げ位置が乗っても、時計を止めていません")
@@ -247,8 +247,7 @@ struct NoticeStackViewTests {
         #expect(stack.transientNotice?.id == "favourite")
 
         chip.accessibilityElementDidLoseFocus()
-        try await waitUntil { clock.sleeperCount == 1 }
-        clock.advance(by: .milliseconds(100))
+        try await clock.advance(afterSleeping: .milliseconds(100))
         try await waitUntil { stack.transientNotice == nil }
     }
 

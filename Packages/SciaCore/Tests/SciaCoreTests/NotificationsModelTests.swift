@@ -119,7 +119,7 @@ struct NotificationsModelTests {
         model.start(purpose: .action)
         try await waitUntil { display.contentState == .loaded && display.catchUp?.attempt == 1 && display.catchUp?.phase == .idle && model.runningTaskCount == 0 }
         firstMessage.open()
-        try await waitUntil { clock.sleeperCount == 1 }
+        try await waitUntil { clock.sleeperCount(remaining: .seconds(2)) >= 1 }
 
         #expect(arrivals.withLock { $0 } == ["34975865"])
         #expect(display.entries.first?.id == .notification("34975864"), "間隔を待たずに挿入されました")
@@ -203,10 +203,10 @@ struct NotificationsModelTests {
         try await waitUntil { display.contentState == .loaded && model.runningTaskCount == 0 }
         display.isUserInteracting = true
         model.markRead(["34975862"])
-        try await waitUntil { clock.sleeperCount == 1 }
+        try await waitUntil { clock.sleeperCount(remaining: delay) >= 1 }
         // 操作の最中は、決まった時間が経っても保存せず、待ち直す。
         clock.advance(by: delay)
-        try await waitUntil { clock.sleeperCount == 1 && clock.sleeperCount(dueWithin: delay) == 1 && clock.sleeperCount(dueWithin: delay - .milliseconds(1)) == 0 }
+        try await waitUntil { clock.sleeperCount(remaining: delay) >= 1 }
         #expect(Self.markerSaves(transport).isEmpty, "操作の途中に保存しました")
 
         display.isUserInteracting = false

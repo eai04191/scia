@@ -106,7 +106,7 @@ struct AvatarImageStoreTests {
         let key = AvatarImageKey(url: url, maxPixelSize: 8, animates: false)
 
         let loading = Task { await store.load([key], within: .milliseconds(50)) }
-        try await waitUntil { clock.sleeperCount == 1 && arrival.waiterCount == 1 }
+        try await waitUntil { clock.sleeperCount(remaining: .milliseconds(50)) >= 1 && arrival.waiterCount == 1 }
         clock.advance(by: .milliseconds(50))
         await loading.value
 

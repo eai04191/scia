@@ -152,9 +152,7 @@ struct StatusBarTickerStatusBarTests {
         defer { ticker.clear() }
         ticker.receive(item("1"))
         let view = try #require(ticker.tickerView)
-        try await waitUntil { clock.sleeperCount > 0 }
-
-        clock.advance(by: .seconds(60))
+        try await clock.advance(by: .seconds(60), afterSleeping: .milliseconds(200))
         try await waitUntil { !view.isExpanded }
         #expect(ticker.isHidingStatusBar)
 
@@ -170,10 +168,9 @@ struct StatusBarTickerStatusBarTests {
         defer { ticker.clear() }
         ticker.receive(item("1"))
         let view = try #require(ticker.tickerView)
-        try await waitUntil { clock.sleeperCount > 0 }
-        clock.advance(by: .seconds(60))
+        try await clock.advance(by: .seconds(60), afterSleeping: .milliseconds(200))
         // 縮め終えたら、ステータスバーを出し直し、出し終えるまでを待つ。
-        try await waitUntil { !ticker.isHidingStatusBar && clock.sleeperCount > 0 }
+        try await waitUntil { !ticker.isHidingStatusBar && clock.sleeperCount(remaining: .seconds(0.05)) >= 1 }
 
         ticker.receive(item("2"))
         #expect(!view.isExpanded)
@@ -192,9 +189,8 @@ struct StatusBarTickerStatusBarTests {
         ticker.canShow = { canShow }
         ticker.receive(item("1"))
         let view = try #require(ticker.tickerView)
-        try await waitUntil { clock.sleeperCount > 0 }
-        clock.advance(by: .seconds(60))
-        try await waitUntil { !ticker.isHidingStatusBar && clock.sleeperCount > 0 }
+        try await clock.advance(by: .seconds(60), afterSleeping: .milliseconds(200))
+        try await waitUntil { !ticker.isHidingStatusBar && clock.sleeperCount(remaining: .seconds(0.05)) >= 1 }
         ticker.receive(item("2"))
 
         canShow = false

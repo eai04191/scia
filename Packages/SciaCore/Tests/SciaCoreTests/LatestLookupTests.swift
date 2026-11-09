@@ -89,8 +89,7 @@ struct LatestLookupTests {
         let gate = Gate()
 
         lookup.start(.action, Self.work("profile", after: gate), isStillWanted: { true }) { _ in }
-        try await waitUntil { clock.sleeperCount == 1 }
-        clock.advance(by: .milliseconds(999))
+        try await clock.advance(by: .milliseconds(999), afterSleeping: .seconds(1))
         #expect(!lookup.isSlow)
         clock.advance(by: .milliseconds(1))
         try await waitUntil { lookup.isSlow }
@@ -125,8 +124,7 @@ struct LatestLookupTests {
         let second = Gate()
 
         lookup.start(.action, Self.work("first", after: first), isStillWanted: { true }) { _ in }
-        try await waitUntil { clock.sleeperCount == 1 }
-        clock.advance(by: .seconds(1))
+        try await clock.advance(afterSleeping: .seconds(1))
         try await waitUntil { lookup.isSlow }
         lookup.start(.action, Self.work("second", after: second), isStillWanted: { true }) { _ in }
         try await waitUntil { first.waiterCount == 0 && second.waiterCount == 1 }
@@ -148,8 +146,7 @@ struct LatestLookupTests {
         let gate = Gate()
 
         lookup.start(.action, Self.work("profile", after: gate), isStillWanted: { true }) { recorder.results.append($0) }
-        try await waitUntil { clock.sleeperCount == 1 }
-        clock.advance(by: .seconds(1))
+        try await clock.advance(afterSleeping: .seconds(1))
         try await waitUntil { lookup.isSlow }
         lookup.cancel()
 

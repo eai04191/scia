@@ -90,7 +90,7 @@ struct ShownImageRetryTests {
         fetcher.fail(image, with: HTTPStatusError(statusCode: 503))
 
         let load = Task { await store.shownThumbnail(for: thumbnail(image), while: { true }, visible: { true }) }
-        try await waitUntil { clock.sleeperCount == 1 }
+        try await waitUntil { clock.sleeperCount(remaining: .seconds(5)) >= 1 }
         #expect(fetcher.count(of: image) == 1)
         clock.advance(by: .seconds(5))
 
@@ -107,7 +107,7 @@ struct ShownImageRetryTests {
         _ = try? await store.thumbnail(for: thumbnail(limited))
 
         let load = Task { await store.shownThumbnail(for: thumbnail(waiting), while: { true }, visible: { true }) }
-        try await waitUntil { clock.sleeperCount == 1 }
+        try await waitUntil { clock.sleeperCount(remaining: .seconds(600)) >= 1 }
         #expect(fetcher.count(of: waiting) == 0, "止まっている間は読まない")
         clock.advance(by: .seconds(599))
         #expect(fetcher.count(of: waiting) == 0)
@@ -136,7 +136,7 @@ struct ShownImageRetryTests {
         let shown = Flag()
 
         let load = Task { await store.shownThumbnail(for: thumbnail(image), while: { shown.value }, visible: { true }) }
-        try await waitUntil { clock.sleeperCount == 1 }
+        try await waitUntil { clock.sleeperCount(remaining: .seconds(5)) >= 1 }
         shown.value = false
         clock.advance(by: .seconds(5))
 
@@ -166,8 +166,7 @@ struct ShownImageRetryTests {
         fetcher.fail(image, with: URLError(.timedOut))
 
         let load = Task { await store.shownImage(for: image, maxPixelSize: 64, while: { true }, visible: { true }) }
-        try await waitUntil { clock.sleeperCount == 1 }
-        clock.advance(by: .seconds(5))
+        try await clock.advance(afterSleeping: .seconds(5))
 
         #expect(await load.value != nil)
         #expect(fetcher.count(of: image) == 2)
@@ -180,9 +179,8 @@ struct ShownImageRetryTests {
         fetcher.fail(key.url, with: HTTPStatusError(statusCode: 502), HTTPStatusError(statusCode: 502))
 
         let load = Task { await store.shownImage(for: key, while: { true }, visible: { true }) }
-        try await waitUntil { clock.sleeperCount == 1 }
-        clock.advance(by: .seconds(5))
-        try await waitUntil { clock.sleeperCount == 1 }
+        try await clock.advance(afterSleeping: .seconds(5))
+        try await waitUntil { clock.sleeperCount(remaining: .seconds(10)) >= 1 }
         #expect(fetcher.count(of: key.url) == 2)
         clock.advance(by: .seconds(10))
 
@@ -199,12 +197,11 @@ struct ShownImageRetryTests {
         visible.value = false
 
         let load = Task { await store.shownThumbnail(for: thumbnail(image), while: { true }, visible: { visible.value }) }
-        try await waitUntil { clock.sleeperCount == 1 }
+        try await waitUntil { clock.sleeperCount(remaining: .seconds(5)) >= 1 }
         #expect(fetcher.count(of: image) == 1, "最初の1回は隠れていても読む")
         clock.advance(by: .seconds(5))
-        try await waitUntil { clock.sleeperCount == 1 }
-        clock.advance(by: .seconds(30))
-        try await waitUntil { clock.sleeperCount == 1 }
+        try await clock.advance(by: .seconds(30), afterSleeping: .seconds(1))
+        try await waitUntil { clock.sleeperCount(remaining: .seconds(1)) >= 1 }
         #expect(fetcher.count(of: image) == 1, "隠れている間は読み直さない")
 
         visible.value = true
@@ -222,7 +219,7 @@ struct ShownImageRetryTests {
         let loads = (0..<5).map { _ in Task { await store.shownThumbnail(for: thumbnail(image), while: { true }, visible: { true }) } }
         // 待つのは増えも減りもする待ちの数で、`loads.count`は読み込みを始めた数（決まった値）。
         // scialint:disable:next exact_count_wait
-        try await waitUntil { clock.sleeperCount == loads.count }
+        try await waitUntil { clock.sleeperCount(remaining: .seconds(5)) >= loads.count }
         #expect(fetcher.count(of: image) == 1)
         clock.advance(by: .seconds(5))
 
@@ -240,8 +237,7 @@ struct ShownImageRetryTests {
         let loads = (0..<5).map { _ in Task { await store.shownImage(for: key, while: { true }, visible: { true }) } }
         // 待つのは増えも減りもする待ちの数で、`loads.count`は読み込みを始めた数（決まった値）。
         // scialint:disable:next exact_count_wait
-        try await waitUntil { clock.sleeperCount == loads.count }
-        clock.advance(by: .seconds(5))
+        try await clock.advance(afterSleeping: .seconds(5), count: loads.count)
 
         for load in loads {
             #expect(await load.value != nil)

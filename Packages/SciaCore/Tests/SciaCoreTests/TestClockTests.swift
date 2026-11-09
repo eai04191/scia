@@ -10,7 +10,7 @@ import Testing
         let clock = TestClock()
         let short = startSleeping(.milliseconds(50), on: clock)
         let long = startSleeping(.milliseconds(600), on: clock)
-        try await waitUntil { clock.sleeperCount >= 2 }
+        try await waitUntil { clock.sleeperCount(remaining: .milliseconds(50)) >= 1 && clock.sleeperCount(remaining: .milliseconds(600)) >= 1 }
 
         #expect(clock.sleeperCount(remaining: .milliseconds(50)) == 1)
         #expect(clock.sleeperCount(remaining: .milliseconds(600)) == 1)

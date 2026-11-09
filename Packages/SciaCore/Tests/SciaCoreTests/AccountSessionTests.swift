@@ -229,7 +229,7 @@ struct AccountSessionTests {
         session.observeRecoveries { 0 }
 
         await session.rateLimit.pause(until: Self.now.addingTimeInterval(30))
-        try await waitUntil { clock.sleeperCount == 1 }
+        try await waitUntil { clock.sleeperCount(remaining: .seconds(30)) >= 1 }
         #expect(list.recoverCount == 0)
         clock.advance(by: .seconds(30))
 

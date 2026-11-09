@@ -42,9 +42,9 @@ struct LiveUpdatesTests {
 
         let task = Task { try await updates.run { await log.append($0) } }
         // つなぎ直し（10ms後）、ポーリング（15ms後）、知らせ（30ms後）を待ち始めてから、30msまで進める。
-        try await waitUntil { await log.labels == ["disconnected"] && clock.sleeperCount(dueWithin: .milliseconds(30)) == 3 }
+        try await waitUntil { await log.labels == ["disconnected"] && clock.sleeperCount(remaining: .milliseconds(10)) >= 1 && clock.sleeperCount(remaining: .milliseconds(15)) >= 1 && clock.sleeperCount(remaining: .milliseconds(30)) >= 1 }
         clock.advance(by: .milliseconds(10))
-        try await waitUntil { await log.labels.count >= 2 && clock.sleeperCount(dueWithin: .milliseconds(20)) == 3 }
+        try await waitUntil { await log.labels.count >= 2 && clock.sleeperCount(remaining: .milliseconds(5)) >= 1 && clock.sleeperCount(remaining: .milliseconds(20)) >= 2 }
         #expect(await log.labels.count == 2)
         clock.advance(by: .milliseconds(20))
         // つながるのは、まだ進めていない4回目のつなぎ直しの後なので、ポーリングと知らせは必ずその前に届く。
@@ -73,6 +73,8 @@ struct LiveUpdatesTests {
         let task = Task { try await updates.run { await log.append($0) } }
         // つないだと知らせ、ポーリングと知らせの待ちを取り消してから、時計を進めて静かなままかを見る。
         try await waitUntil { await log.labels.contains("connected") && clock.sleeperCount(dueWithin: .seconds(1)) == 0 }
+        // 待ちが消えたことを確かめてから進め、何も起きないことを見るので、起こしたい待ちはない。
+        // scialint:disable:next advance_after_sleeper_count
         clock.advance(by: .milliseconds(150))
         task.cancel()
         _ = await task.result
@@ -93,12 +95,14 @@ struct LiveUpdatesTests {
 
         let task = Task { try await updates.run { await log.append($0) } }
         // 切れてつなぎ直しを待ち始めたら、つなぎ直す10msだけ進める。
-        try await waitUntil { await log.labels.count >= 3 && clock.sleeperCount(dueWithin: .milliseconds(10)) == 1 }
+        try await waitUntil { await log.labels.count >= 3 && clock.sleeperCount(remaining: .milliseconds(10)) >= 1 }
         #expect(await log.labels.count == 3)
         clock.advance(by: .milliseconds(10))
         // つなぎ直して、ポーリングと知らせの待ちを取り消してから、その締め切りより先まで進める。
         try await waitUntil { await log.labels.filter { $0 == "connected" }.count >= 2 && clock.sleeperCount(dueWithin: .seconds(1)) == 0 }
         #expect(await log.labels.filter { $0 == "connected" }.count == 2)
+        // 待ちが消えたことを確かめてから進め、何も起きないことを見るので、起こしたい待ちはない。
+        // scialint:disable:next advance_after_sleeper_count
         clock.advance(by: .milliseconds(100))
         task.cancel()
         _ = await task.result

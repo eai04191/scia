@@ -94,7 +94,7 @@ struct EmojiImageStoreTests {
             if urls.contains(url) { _ = store.image(for: url) }
         }
         #expect(store.image(for: url) == nil)
-        try await waitUntil { store.hasFailed(url) && clock.sleeperCount == 1 }
+        try await waitUntil { store.hasFailed(url) && clock.sleeperCount(remaining: .seconds(5)) >= 1 }
         clock.advance(by: .seconds(5))
         try await waitUntil { !store.hasFailed(url) && store.loading.isEmpty }
         #expect(store.image(for: url) != nil)
@@ -109,7 +109,7 @@ struct EmojiImageStoreTests {
             if urls.contains(url) { _ = store.animation(for: url) }
         }
         #expect(store.animation(for: url) == nil)
-        try await waitUntil(state: { await animationState(of: store, url) }) { store.hasFinishedLoadingAnimation(for: url) && clock.sleeperCount == 1 }
+        try await waitUntil(state: { await animationState(of: store, url) }) { store.hasFinishedLoadingAnimation(for: url) && clock.sleeperCount(remaining: .seconds(5)) >= 1 }
         clock.advance(by: .seconds(5))
         try await waitUntil(state: { await animationState(of: store, url) }) { store.animation(for: url) != nil }
         #expect(fetches.count.withLock { $0 } == 2)
@@ -151,7 +151,7 @@ struct EmojiImageStoreTests {
         store.addListener(owner: clock) { notified.append($0) }
         _ = store.image(for: url)
         // 読めなかったときにも1回知らせる。
-        try await waitUntil { store.hasFailed(url) && clock.sleeperCount == 1 && notified.count >= 1 }
+        try await waitUntil { store.hasFailed(url) && clock.sleeperCount(remaining: .seconds(5)) >= 1 && notified.count >= 1 }
         #expect(notified.count == 1)
         clock.advance(by: .seconds(5))
         try await waitUntil { notified == [[url], [url]] }

@@ -95,8 +95,7 @@ struct InAppBrowserTests {
         #expect(sheet.barGrabArea.frame.minY == 0)
         #expect(sheet.barGrabArea.frame.height == handle + settlingHeight)
 
-        try await waitUntil { clock.sleeperCount(dueWithin: duration) >= 1 }
-        clock.advance(by: duration)
+        try await clock.advance(afterSleeping: duration)
         try await waitUntil { sheet.barGrabArea.frame.height == handle + height }
         #expect(sheet.barGrabArea.frame.minY == 0)
         root.dismiss(animated: false)
@@ -117,10 +116,9 @@ struct InAppBrowserTests {
         let widened = CGFloat(TuningCatalog.inAppBrowserHandleHeight.defaultValue + TuningCatalog.inAppBrowserBarGrabSettlingHeight.defaultValue)
 
         sheet.widenBarGrabAreaWhileSettling()
-        try await waitUntil { clock.sleeperCount(dueWithin: duration) >= 1 }
-        clock.advance(by: duration)
+        try await clock.advance(afterSleeping: duration)
         sheet.widenBarGrabAreaWhileSettling()
-        try await waitUntil { clock.sleeperCount(dueWithin: duration) >= 1 }
+        try await waitUntil { clock.sleeperCount(remaining: duration) >= 1 }
         // 前の待ちの続きは、起こされた時点でメインアクターの列に入っているので、後ろに並んで終わるのを待つ。
         await Task { @MainActor in }.value
 
@@ -161,8 +159,7 @@ struct InAppBrowserTests {
         try await waitUntil { sheet.view.bounds.height != before }
         sheet.view.layoutIfNeeded()
         let delay = Duration.seconds(TuningCatalog.inAppBrowserSafariResizeDelay.defaultValue)
-        try await waitUntil { clock.sleeperCount(dueWithin: delay) >= 1 }
-        clock.advance(by: delay)
+        try await clock.advance(afterSleeping: delay)
         try await waitUntil { sheet.safari.view.convert(sheet.safari.view.bounds, to: sheet.view).maxY == sheet.view.bounds.maxY }
         root.dismiss(animated: false)
     }
@@ -192,8 +189,7 @@ struct InAppBrowserTests {
         // 離したあとも、待つ時間が過ぎるまでは大きさを変えない。続けて届くシートの大きさの変化を1回にまとめるため。
         #expect(sheet.safari.view.frame.height == safariHeight)
         let delay = Duration.seconds(TuningCatalog.inAppBrowserSafariResizeDelay.defaultValue)
-        try await waitUntil { clock.sleeperCount(dueWithin: delay) >= 1 }
-        clock.advance(by: delay)
+        try await clock.advance(afterSleeping: delay)
         try await waitUntil { sheet.safari.view.frame.height != safariHeight }
         let safariFrame = sheet.safari.view.convert(sheet.safari.view.bounds, to: sheet.view)
         #expect(safariFrame.maxY == sheet.view.bounds.maxY)

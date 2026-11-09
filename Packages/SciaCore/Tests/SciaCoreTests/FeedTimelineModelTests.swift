@@ -260,7 +260,7 @@ struct FeedTimelineModelTests {
         try await waitUntil { display.contentState == .loaded && model.isSubscribedToStreaming && display.catchUp?.attempt == 1 && display.catchUp?.phase == .idle && model.runningTaskCount == 0 }
         display.isUserInteracting = true
         firstMessage.open()
-        try await waitUntil { clock.sleeperCount == 1 }
+        try await waitUntil { clock.sleeperCount(remaining: .seconds(2)) >= 1 }
         #expect(display.statusIDs == ["1"], "間隔を待たずに挿入されました")
 
         clock.advance(by: .seconds(2))
@@ -301,8 +301,7 @@ struct FeedTimelineModelTests {
         #expect(display.entriesCalls.last?.anchorID == .status("2"), "補完で最上部に追従しました")
 
         laterMessage.open()
-        try await waitUntil { clock.sleeperCount == 1 }
-        clock.advance(by: .seconds(2))
+        try await clock.advance(afterSleeping: .seconds(2))
         try await waitUntil { display.statusIDs == ["4", "3", "2", "1"] }
         #expect(display.entriesCalls.last?.anchorID == nil, "補完を終えたあとも位置を保ち続けました")
     }
@@ -465,12 +464,11 @@ struct FeedTimelineModelTests {
         model.start(purpose: .action)
         try await waitUntil { display.contentState == .loaded && model.runningTaskCount == 0 }
         model.markRead(["1"])
-        try await waitUntil { clock.sleeperCount == 1 }
-        clock.advance(by: delay / 2)
+        try await clock.advance(by: delay / 2, afterSleeping: delay)
         model.markRead(["2"])
         clock.advance(by: delay / 2)
         // 2つめに読み進めてからは、まだ決まった時間が経っていない。
-        try await waitUntil { clock.sleeperCount(dueWithin: delay / 2) == 1 }
+        try await waitUntil { clock.sleeperCount(remaining: delay / 2) >= 1 }
         #expect(Self.markerSaves(transport).isEmpty, "読み進めている途中に保存しました")
 
         clock.advance(by: delay / 2)
@@ -492,14 +490,12 @@ struct FeedTimelineModelTests {
         model.receivePosted(try TimelineModelFixtures.status(11))
         try await waitUntil { display.statusIDs == ["11", "14", "12", "10"] && model.runningTaskCount == 0 }
         model.markRead(["11"])
-        try await waitUntil { clock.sleeperCount == 1 }
-        clock.advance(by: delay)
+        try await clock.advance(afterSleeping: delay)
         try await waitUntil { Self.markerSaves(transport).count >= 1 && model.runningTaskCount == 0 }
         #expect(Self.markerSaves(transport).count == 1)
 
         model.markRead(["14"])
-        try await waitUntil { clock.sleeperCount == 1 }
-        clock.advance(by: delay)
+        try await clock.advance(afterSleeping: delay)
         try await waitUntil { model.runningTaskCount == 0 }
         #expect(Self.markerSaves(transport) == ["home%5Blast_read_id%5D=11", "home%5Blast_read_id%5D=14"])
     }
@@ -515,7 +511,7 @@ struct FeedTimelineModelTests {
         try await waitUntil { display.contentState == .loaded && model.runningTaskCount == 0 }
         model.markRead(["2"])
         model.interactionDidSettle()
-        try await waitUntil { Self.markerSaves(transport).count >= 1 && clock.sleeperCount == 1 }
+        try await waitUntil { Self.markerSaves(transport).count >= 1 && clock.sleeperCount(remaining: .seconds(TuningCatalog.readPositionSaveDelay.defaultValue)) >= 1 }
         #expect(Self.markerSaves(transport).count == 1)
         clock.advance(by: .seconds(TuningCatalog.readPositionSaveDelay.defaultValue))
         try await waitUntil { model.runningTaskCount == 0 }
@@ -585,7 +581,7 @@ struct FeedTimelineModelTests {
         let loads = transport.requests(to: "/api/v1/accounts/2/statuses").count
 
         model.setShown(true)
-        try await waitUntil { transport.requests(to: "/api/v1/accounts/2/statuses").count >= loads + 1 && clock.sleeperCount == 1 }
+        try await waitUntil { transport.requests(to: "/api/v1/accounts/2/statuses").count >= loads + 1 && clock.sleeperCount(remaining: .seconds(TuningCatalog.shownFeedPollingInterval.defaultValue)) >= 1 }
         #expect(transport.requests(to: "/api/v1/accounts/2/statuses").count == loads + 1)
         clock.advance(by: .seconds(TuningCatalog.shownFeedPollingInterval.defaultValue))
         try await waitUntil { transport.requests(to: "/api/v1/accounts/2/statuses").count >= loads + 2 }
