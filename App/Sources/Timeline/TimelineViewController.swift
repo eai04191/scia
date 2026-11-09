@@ -2172,6 +2172,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             #if DEBUG
             if cell.crashMarkID != nil { DebugFaults.crashIfRequestedOnRow() }
             #endif
+            cell.tuning = self.tuning
             // 付属のボタンを置くのは最近の検索の見出しだけなので、ほかの行に使い回したセルに残さない。ふだんの行では触らない。
             if !cell.accessories.isEmpty {
                 cell.accessories = []

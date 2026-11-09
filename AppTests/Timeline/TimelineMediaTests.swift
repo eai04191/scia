@@ -341,6 +341,50 @@ struct TimelineMediaTests {
         #expect(MediaBarLayering.visibleRect(around: tile, in: window) == expected)
     }
 
+    /// 行を押している間は、行の中身の手前に押下の色を重ね、背景の色と合わせてUIKitの色の半分の強さにする。離したら外す。
+    @Test func highlightOverlayShowsWhileRowIsHighlighted() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let statuses = StatusFactory.make(count: 3, startingAt: 1_000)
+        harness.setStatuses(statuses)
+        let cell = try #require(harness.visibleCell(of: .status(statuses[0].id)) as? TimelineCell)
+        #expect(!cell.isShowingHighlightOverlay)
+
+        cell.isHighlighted = true
+        #expect(cell.isShowingHighlightOverlay)
+        let overlayAlpha = try #require(cell.highlightOverlay?.backgroundColor?.cgColor.alpha)
+        let backgroundAlpha = try #require(cell.backgroundConfiguration?.backgroundColor?.cgColor.alpha)
+        #expect(abs(1 - (1 - overlayAlpha) * (1 - backgroundAlpha) - 0.5) < 0.001, "手前\(overlayAlpha) 背景\(backgroundAlpha)")
+
+        cell.isHighlighted = false
+        #expect(!cell.isShowingHighlightOverlay)
+    }
+
+    /// アクションバーを閉じる途中は、複製がセルの下端より下にも出るので、押している間のオーバーレイを出さない。縮み終えて押したままなら出す。
+    @Test(arguments: [false, true])
+    func highlightOverlayHidesWhileShrinking(snapshotFirst: Bool) throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let statuses = StatusFactory.make(count: 3, startingAt: 1_000)
+        harness.setStatuses(statuses)
+        let cell = try #require(harness.visibleCell(of: .status(statuses[0].id)) as? TimelineCell)
+        let snapshot = UIView()
+        func highlight() {
+            cell.isHighlighted = true
+        }
+        if snapshotFirst {
+            cell.showShrinkSnapshot(snapshot)
+            highlight()
+        } else {
+            highlight()
+            cell.showShrinkSnapshot(snapshot)
+        }
+        #expect(!cell.isShowingHighlightOverlay)
+
+        cell.removeShrinkSnapshot(snapshot)
+        #expect(cell.isShowingHighlightOverlay)
+    }
+
     /// サムネイルの横スクロールの入れ物は、ステータスバーのタップで先頭へ戻る対象にしない。
     /// 画面に対象が複数あるとUIKitはどれも動かさないため、タイムラインを新着へ戻す操作が効かなくなる。
     @Test func thumbnailContainerDoesNotTakeScrollToTop() throws {

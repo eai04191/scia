@@ -12,6 +12,59 @@ final class TimelineCell: UICollectionViewListCell, SizingMeasurable {
     var crashMarkID: Status.ID?
     var crashGuard: PostCrashGuard?
 
+    /// 押している間の色の強さを読むのに使う。
+    var tuning = AppDependencies.tuning
+
+    /// 押している間に中身の手前へ重ねるビュー。UIKitの押下の色は背景に付くので、不透明な画像は元の色のまま残って目立つ。
+    private(set) var highlightOverlay: UIView?
+
+    var isShowingHighlightOverlay: Bool {
+        highlightOverlay?.isHidden == false
+    }
+
+    private var isShowingHighlightBackground = false
+
+    // `updateConfiguration(using:)`は上書きしない。上書きすると、中身が親を呼ぶだけでも、リアクションの数を入れ替える動きが始まらなくなる（`ReactionMotionTests`）。
+    override var isHighlighted: Bool {
+        didSet { updateHighlightAppearance() }
+    }
+
+    override var isSelected: Bool {
+        didSet { updateHighlightAppearance() }
+    }
+
+    private func updateHighlightAppearance() {
+        guard isHighlighted || isSelected else {
+            highlightOverlay?.isHidden = true
+            if isShowingHighlightBackground {
+                isShowingHighlightBackground = false
+                backgroundConfiguration = defaultBackgroundConfiguration().updated(for: configurationState)
+            }
+            return
+        }
+        var background = defaultBackgroundConfiguration().updated(for: configurationState)
+        let color = background.resolvedBackgroundColor(for: tintColor)
+        let contentAlpha = tuning.value(of: TuningCatalog.rowHighlightContentStrength)
+        // 背景には手前のビューの色も重なるので、合わせてUIKitの色を`rowHighlightBackgroundStrength`の強さで出す分だけ、背景に残す。
+        let backgroundAlpha = 1 - (1 - tuning.value(of: TuningCatalog.rowHighlightBackgroundStrength)) / (1 - contentAlpha)
+        background.backgroundColor = color.withAlphaComponent(max(backgroundAlpha, 0))
+        backgroundConfiguration = background
+        isShowingHighlightBackground = true
+        let overlay = highlightOverlay ?? makeHighlightOverlay()
+        overlay.backgroundColor = color.withAlphaComponent(contentAlpha)
+        // 縮む途中の複製はセルの下端より下にも描くので、セルの大きさのビューでは覆いきれない。
+        overlay.isHidden = shrinkSnapshot != nil
+    }
+
+    private func makeHighlightOverlay() -> UIView {
+        let overlay = UIView(frame: bounds)
+        overlay.isUserInteractionEnabled = false
+        overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        insertSubview(overlay, aboveSubview: contentView)
+        highlightOverlay = overlay
+        return overlay
+    }
+
     /// 縮む途中に重ねている、縮む前の像。アクションバーを閉じるときに使う（`TimelineViewController.concealShrink`）。
     private var shrinkSnapshot: UIView?
 
@@ -25,6 +78,7 @@ final class TimelineCell: UICollectionViewListCell, SizingMeasurable {
         shrinkSnapshot?.removeFromSuperview()
         shrinkSnapshot = snapshot
         addSubview(snapshot)
+        highlightOverlay?.isHidden = true
     }
 
     /// 縮み終えたら像を外す。途中で別の像に替わっていたら、そちらは外さない。
@@ -32,6 +86,7 @@ final class TimelineCell: UICollectionViewListCell, SizingMeasurable {
         guard shrinkSnapshot === snapshot else { return }
         snapshot.removeFromSuperview()
         shrinkSnapshot = nil
+        updateHighlightAppearance()
     }
 
     /// 縮む途中に中身を入れ直したら、像を外す。像は縮む前の中身なので、残すと新しい中身の手前に古い中身が見える。
@@ -39,6 +94,7 @@ final class TimelineCell: UICollectionViewListCell, SizingMeasurable {
     func discardShrinkSnapshot() {
         shrinkSnapshot?.removeFromSuperview()
         shrinkSnapshot = nil
+        updateHighlightAppearance()
     }
 
     /// 縮む途中に別の投稿に使い回されたら、前の投稿の像を残さない。
