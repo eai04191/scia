@@ -1,5 +1,6 @@
 public import Foundation
 import Synchronization
+public import Testing
 
 /// テストが手で進める時計。実際の時間がどれだけ過ぎても進まないので、負荷で遅れても待つ処理の順が変わらない。
 /// 待つ処理には`Clock`として渡すか、`sleep`と`date`を関数として渡す。
@@ -60,6 +61,14 @@ public final class TestClock: Clock, Sendable {
         }
     }
 
+    /// 締め切りまでちょうど`duration`残っている待ちの数。
+    public func sleeperCount(remaining duration: Duration) -> Int {
+        state.withLock { state in
+            let now = state.now
+            return state.sleepers.values.filter { now.duration(to: $0.deadline) == duration }.count
+        }
+    }
+
     public func sleep(until deadline: Instant, tolerance: Duration? = nil) async throws {
         let id = state.withLock { state in
             defer { state.nextID += 1 }
@@ -94,6 +103,26 @@ public final class TestClock: Clock, Sendable {
             return due.values.sorted { $0.deadline < $1.deadline }
         }
         due.forEach { $0.continuation.resume() }
+    }
+
+    /// 締め切りまでちょうど`duration`残っている待ちが`count`個眠り始めてから、時計を`amount`（省略すると`duration`）だけ進める。
+    /// 待つ処理は`Task`で始めるので、始める操作のあとでもまだ眠っていないことがある。眠る前に時計を進めると、その待ちはいつまでも起こされない。
+    /// 待ちの数だけを見ると、同じ時計を使う別の待ちで揃ったと読むので、起こしたい待ちを長さで指す。
+    nonisolated(nonsending) public func advance(
+        by amount: Duration? = nil,
+        afterSleeping duration: Duration,
+        count: Int = 1,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async throws {
+        try await waitUntil(state: { "眠っている待ちの残り: \(self.remainingDurations)" }, { self.sleeperCount(remaining: duration) >= count }, sourceLocation: sourceLocation)
+        advance(by: amount ?? duration)
+    }
+
+    private var remainingDurations: [Duration] {
+        state.withLock { state in
+            let now = state.now
+            return state.sleepers.values.map { now.duration(to: $0.deadline) }.sorted()
+        }
     }
 
     /// 待つ処理に関数として渡す、この時計で`duration`だけ待つ関数。

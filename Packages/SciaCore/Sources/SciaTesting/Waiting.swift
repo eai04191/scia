@@ -33,7 +33,7 @@ nonisolated(nonsending) public func waitUntil(
 }
 
 /// 条件を満たすまで、`clock`を`step`ずつ進めながら待つ。どの待ちがどの順に起きるかを確かめないテストで、実際の時間を待たずに時計を進める。
-/// 順を確かめるテストでは使わず、待ちが揃ったことを`sleeperCount`で確かめてから、締め切りまで進める。
+/// 順を確かめるテストでは使わず、`TestClock.advance(afterSleeping:)`で、起こしたい待ちが眠り始めてから締め切りまで進める。
 nonisolated(nonsending) public func waitUntil(
     advancing clock: TestClock,
     by step: Duration,
