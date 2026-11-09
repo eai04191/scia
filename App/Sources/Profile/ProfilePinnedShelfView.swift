@@ -114,7 +114,7 @@ final class ProfilePinnedShelfView: UIView, UIScrollViewDelegate {
         }
         for item in items {
             let status = item.status
-            let card = ProfilePinnedCard(status: status, verdict: item.verdict, emojiImages: emojiImages, mediaImages: mediaImages, glyphLanguage: glyphLanguage)
+            let card = ProfilePinnedCard(item: item, emojiImages: emojiImages, mediaImages: mediaImages, glyphLanguage: glyphLanguage)
             card.onTap = { [weak self, weak card] in
                 guard let card else { return }
                 self?.onOpen?(status, card.convert(card.bounds, to: nil))
@@ -155,7 +155,9 @@ private final class ProfilePinnedCard: UIControl {
 
     private static let thumbnailSize: CGFloat = 64
 
-    init(status: Status, verdict: FilterVerdict, emojiImages: EmojiImageStore<UIImage>, mediaImages: MediaImageStore<UIImage>, glyphLanguage: String) {
+    init(item: ProfileShelfItem, emojiImages: EmojiImageStore<UIImage>, mediaImages: MediaImageStore<UIImage>, glyphLanguage: String) {
+        let status = item.status
+        let verdict = item.verdict
         super.init(frame: .zero)
         backgroundColor = .secondarySystemFill
         layer.cornerRadius = 16
@@ -191,10 +193,15 @@ private final class ProfilePinnedCard: UIControl {
         thumbnailView.layer.cornerRadius = 8
         thumbnailView.layer.cornerCurve = .continuous
         thumbnailView.backgroundColor = .tertiarySystemFill
-        // 閲覧注意の添付ファイルと、ぼかすフィルターに一致した添付ファイルは、カードでは見せない。
-        let showsMedia = !hasWarning && !status.sensitive && verdict.mediaTitles.isEmpty
-        let thumbnail = showsMedia ? status.mediaAttachments.first.flatMap { ProfileShelfItem.thumbnailRequest(for: $0, size: Self.thumbnailSize) } : nil
+        let thumbnail = item.cardThumbnail(size: Self.thumbnailSize)
         thumbnailView.isHidden = thumbnail == nil
+        if case .covered(let blurhash) = thumbnail {
+            thumbnailView.image = blurhash.flatMap { mediaImages.placeholder(for: $0, aspectRatio: 1) }
+            let cover = LinkCardView.makeCover()
+            cover.frame = thumbnailView.bounds
+            cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            thumbnailView.addSubview(cover)
+        }
 
         let textStack = UIStackView(arrangedSubviews: [bodyLabel, UIView(), dateLabel])
         textStack.axis = .vertical
@@ -222,8 +229,8 @@ private final class ProfilePinnedCard: UIControl {
         accessibilityLabel = [bodyLabel.attributedText?.string, attachments, dateLabel.text].compactMap(\.self).joined(separator: "、")
 
         addAction(UIAction { [weak self] _ in self?.onTap?() }, for: .touchUpInside)
-        if let thumbnail {
-            loadThumbnail(thumbnail, from: mediaImages)
+        if case .image(let request) = thumbnail {
+            loadThumbnail(request, from: mediaImages)
         }
     }
 
@@ -276,6 +283,31 @@ private final class ProfilePinnedCard: UIControl {
 struct ProfileShelfItem: Equatable {
     let status: Status
     let verdict: FilterVerdict
+    /// 添付ファイルをぼかす理由。タイムラインの行と同じく、使う人が開いたり隠したりした選択に従う。ぼかさなければnil。
+    let mediaCover: MediaCover?
+
+    init(status: Status, verdict: FilterVerdict, covers: MediaCovers) {
+        self.status = status
+        self.verdict = verdict
+        mediaCover = covers.cover(for: status, filterTitles: verdict.mediaTitles)
+    }
+
+    /// カードのサムネイルの出し方。
+    enum CardThumbnail: Equatable {
+        case image(MediaThumbnailRequest)
+        /// ぼかしている添付ファイル。画像は読まず、blurhashのぼかしの上に目の記号を出す。
+        case covered(blurhash: String?)
+    }
+
+    /// カードに出すサムネイル。最初の添付ファイルで決める。出さないならnil。
+    /// 注意書きとフィルターの警告の投稿は、本文と同じく添付ファイルも出さない。
+    func cardThumbnail(size: CGFloat) -> CardThumbnail? {
+        guard let attachment = status.mediaAttachments.first, status.spoilerText.isEmpty, verdict.warningTitles.isEmpty else { return nil }
+        if mediaCover != nil {
+            return .covered(blurhash: attachment.blurhash)
+        }
+        return Self.thumbnailRequest(for: attachment, size: size).map(CardThumbnail.image)
+    }
 
     /// 棚の小さなサムネイルに読む画像。サーバーが縮めたプレビュー画像だけを読む。棚のサムネイルはプレビュー画像で足り、
     /// 元のファイル（動画や音声の本体）を読まないため。読める画像がない種類（音声など）ならnil。

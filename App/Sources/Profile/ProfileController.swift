@@ -105,6 +105,13 @@ final class ProfileController {
         viewController.filterWarnings = FilterWarnings(filtering: store.filtering)
         viewController.headerView = header
         viewController.myAccountID = client.credential.accountID
+        viewController.onUpdateMediaCovers = { [weak self] in
+            self?.afterTransition { controller in
+                if controller.showPinned() {
+                    controller.viewController?.headerDidChangeSize()
+                }
+            }
+        }
         viewController.onApproachingEnd = { [weak self] in self?.loadOlder(purpose: .display) }
         viewController.onRetry = { [weak self] in self?.retry() }
         // 引っぱって読み直した投稿が多く、手元の投稿との間が残ったときだけギャップの行が出る。読み直しの続きなので、押されたときだけ読む。
@@ -461,9 +468,7 @@ final class ProfileController {
         let isRevealed = listReveal == .revealed
         // 一度出したら隠し直さない。最初のタイムラインを読めなかったときは、タイムラインより先にタブを出している（`showListFailure`）。
         let changesSections = isRevealed && header.setSectionsRevealed(true)
-        // 棚にも、タイムラインの行と同じサーバーのフィルターの警告とぼかしを当てる。
-        let items = { (statuses: [Status]) in statuses.map { ProfileShelfItem(status: $0, verdict: self.store.filtering.verdict(for: $0)) } }
-        let changesPinned = header.setPinned(isRevealed ? items(store.pinned) : [], glyphLanguage: settings.glyphLanguageIdentifier())
+        let changesPinned = showPinned()
         let changesFeatured = header.setFeatured(
             tags: isRevealed ? store.featuredTags : [],
             endorsements: ProfileEndorsementsShelfView.Content(
@@ -479,6 +484,14 @@ final class ProfileController {
             viewController?.headerDidChangeSize()
         }
         viewController?.setEntries(listReveal == .revealed ? shownEntries() : [], keepsOffset: replacing, animatesRemoval: animatesRemoval)
+    }
+
+    /// 固定された投稿の棚を今の状態にする。棚にも、タイムラインの行と同じサーバーのフィルターの警告とぼかしを当てる。
+    /// - Returns: 棚の中身が変わった。
+    private func showPinned() -> Bool {
+        let covers = viewController?.mediaCovers ?? MediaCovers()
+        let items = listReveal == .revealed ? store.pinned.map { ProfileShelfItem(status: $0, verdict: store.filtering.verdict(for: $0), covers: covers) } : []
+        return header.setPinned(items, glyphLanguage: settings.glyphLanguageIdentifier())
     }
 
     private func shownEntries() -> [TimelineEntry] {

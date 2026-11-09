@@ -43,7 +43,7 @@ enum ProfileHeaderCatalog {
             status("long", "<p>固定された投稿の本文が長いときは、5行で切って末尾を省く。カードの高さは一番背の高いカードに揃うので、短い本文のカードも同じ高さになる。ここから先は省かれる部分の文。ここから先は省かれる部分の文。</p>", daysAgo: 1),
             status("media", "<p>添付ファイルのある投稿は、最初の1枚を右に小さく出す。<a href=\"https://example.com\">example.com</a></p>", media: [Fixtures.attachment("pinned-media", width: 1_200, height: 800, color: .systemOrange)], daysAgo: 30),
             status("warning", "<p>警告の下の本文。カードには出さない。</p>", spoilerText: "閲覧注意の警告の文", media: [Fixtures.attachment("pinned-warning", width: 800, height: 800)], daysAgo: 120),
-            status("sensitive", "<p>添付ファイルだけを閲覧注意にした投稿。カードでは添付ファイルを出さない。</p>", media: [Fixtures.attachment("pinned-sensitive", width: 800, height: 800, color: .systemRed)], sensitive: true, daysAgo: 400),
+            status("sensitive", "<p>添付ファイルだけを閲覧注意にした投稿。カードではぼかして目の記号を出す。</p>", media: [Fixtures.attachment("pinned-sensitive", width: 800, height: 800, color: .systemRed, blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj")], sensitive: true, daysAgo: 400),
             status("short", "<p>短い本文</p>", daysAgo: 800),
         ]
     }()
@@ -57,7 +57,7 @@ enum ProfileHeaderCatalog {
             id: "filtered-\(id)",
             createdAt: Date(timeIntervalSince1970: 1_790_000_000),
             account: fullAccount,
-            content: "<p>フィルターに一致した投稿の本文。棚には出さない。</p>",
+            content: "<p>フィルターに一致した投稿の本文。警告のときは棚に出さない。</p>",
             spoilerText: "",
             url: nil,
             mediaAttachments: [Fixtures.attachment("filtered-\(id)", width: 800, height: 800, color: color)],
@@ -345,7 +345,7 @@ enum ProfileHeaderCatalog {
         // 実物と同じく、プロフィールの場所のサーバーのフィルターを当てる。
         let filtering = StatusFiltering(context: .account, myAccountID: nil)
         func items(_ statuses: [Status]) -> [ProfileShelfItem] {
-            statuses.map { ProfileShelfItem(status: $0, verdict: filtering.verdict(for: $0)) }
+            statuses.map { ProfileShelfItem(status: $0, verdict: filtering.verdict(for: $0), covers: MediaCovers()) }
         }
         header.setPinned(items(pinned), glyphLanguage: content.glyphLanguage)
         _ = header.setFeatured(tags: featuredTags, endorsements: ProfileEndorsementsShelfView.Content(

@@ -264,6 +264,27 @@ struct TimelineMediaTests {
         #expect(harness.windowMinY(of: .status(below)) == belowY)
     }
 
+    /// 行の外でぼかしを描く部品へ、この画面の操作と、ほかの画面の操作のどちらでも変化を伝える。変わらなければ伝えない。
+    @Test func mediaCoverUpdatesAreReportedOnlyWhenChanged() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let plain = withMedia(StatusFactory.make(count: 1, startingAt: 1_000)[0], [image("1", width: 300, height: 400)])
+        harness.setStatuses([plain])
+        let vc = harness.viewController
+        var updates = 0
+        vc.onUpdateMediaCovers = { updates += 1 }
+
+        vc.hideMedia(of: plain)
+        #expect(updates == 1)
+        let hidden = vc.mediaCovers
+        vc.revealMedia(of: plain)
+        #expect(updates == 2)
+        vc.applyMediaCovers(hidden, changed: plain)
+        #expect(updates == 3)
+        vc.applyMediaCovers(hidden, changed: plain)
+        #expect(updates == 3)
+    }
+
     /// 新着を上に挿入しても、サムネイルのある投稿を読んでいる位置が動かない。
     @Test func insertingAboveMediaKeepsAnchor() throws {
         let harness = try TimelineHarness()

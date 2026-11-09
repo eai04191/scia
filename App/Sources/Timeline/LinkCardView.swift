@@ -285,7 +285,7 @@ final class LinkCardView: UIButton {
 
     /// 閲覧注意のぼかし。下のサムネイルは画像を読まずにblurhashで描くため、添付ファイルのぼかしと同じく、色が透けて見える薄い素材にする。
     /// サムネイルには文字が入りきらないため、添付ファイルを1列に並べるときと同じく、記号だけを出す。押されたらサムネイルが受ける。
-    private static func makeCover() -> UIView {
+    static func makeCover() -> UIView {
         let effect = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
         effect.isUserInteractionEnabled = false
         let symbol = UIImageView(image: UIImage(systemName: "eye.slash"))

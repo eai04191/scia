@@ -255,7 +255,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// スクロールが止まったときに見えている画像を、ビューアで開く元の画像で先読みする。セッションが入れる。nilなら先読みしない。
     var mediaPrefetcher: MediaPrefetcher?
     /// 添付ファイルをぼかすか。閲覧注意のぼかしを外した投稿と、メニューから隠した投稿を覚える。セッションがほかの画面とそろえる。
-    var mediaCovers = MediaCovers()
+    var mediaCovers = MediaCovers() {
+        didSet {
+            if mediaCovers != oldValue { onUpdateMediaCovers?() }
+        }
+    }
+    /// `mediaCovers`が変わったときに呼ぶ。行の外でぼかしを描く部品（プロフィールの固定された投稿のカード）が描き直すのに使う。
+    var onUpdateMediaCovers: (() -> Void)?
     /// この画面で開いたり隠したりしたときに、変えたあとの状態と、変えた投稿を渡して呼ぶ。
     var onChangeMediaCovers: ((MediaCovers, Status) -> Void)?
     /// fxtwitterから読んだXの投稿。セッションの中で1つを共有する。
