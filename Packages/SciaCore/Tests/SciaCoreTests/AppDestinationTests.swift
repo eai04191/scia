@@ -202,6 +202,7 @@ struct AppDestinationTests {
         #expect(SettingsPage.tabs.path == [.tabs])
         #expect(SettingsPage.appIcon.path == [.appIcon])
         #expect(SettingsPage.connection.path == [.about, .connection])
+        #expect(SettingsPage.connectionTimelines.path == [.about, .connection, .connectionTimelines])
     }
 
     /// ログには、誰の何を開いたかが分かるハンドルやIDを書かない。

@@ -5,36 +5,42 @@ import SwiftUI
 struct ConnectionStatusView: View {
     let instance: URL
     let diagnostics: ConnectionDiagnostics
-    /// リストのIDから、タブの並びに保存したリストの名前を引く。並びにないリストは名前を出さない。
-    var listTitles: [String: String] = [:]
     @State private var status: ConnectionDiagnostics.Status?
     /// 読み直す間隔を数える時計。
     var clock: any Clock<Duration> = AppDependencies.clock
 
     var body: some View {
         List {
-            Section("サーバー") {
-                LabeledContent("アドレス", value: instance.host() ?? instance.absoluteString)
+            Section {
+                LabeledContent("サーバー", value: instance.host() ?? instance.absoluteString)
                 LabeledContent("バージョン", value: diagnostics.serverVersion ?? "読み込めていません")
             }
-            Section("ストリーミング") {
-                LabeledContent("接続", value: Self.text(diagnostics.streaming))
-                ForEach(diagnostics.streamingSubscriptions, id: \.self) { subscription in
-                    Text(name(of: subscription))
+            Section {
+                LabeledContent("ストリーミング") {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(Self.text(diagnostics.streaming))
+                        if let note = Self.note(diagnostics.streaming) {
+                            Text(note)
+                                .font(.footnote)
+                        }
+                    }
+                }
+                if !diagnostics.streamingSubscriptions.isEmpty {
+                    NavigationLink(value: SettingsPage.connectionTimelines) {
+                        LabeledContent("受信中のタイムライン", value: "\(diagnostics.streamingSubscriptions.count)")
+                    }
                 }
             }
             if let status {
-                Section("レート制限") {
-                    if let pausedUntil = status.pausedUntil {
-                        LabeledContent("自動の読み込みを控えています", value: "\(pausedUntil.formatted(date: .omitted, time: .standard))まで")
-                    } else {
-                        Text("制限されていません")
+                Section {
+                    LabeledContent("レート制限", value: status.pausedUntil.map { "\($0.formatted(date: .omitted, time: .standard))まで" } ?? "なし")
+                } footer: {
+                    if status.pausedUntil != nil {
+                        Text("自動の読み込みを控えています。")
                     }
                 }
-                Section {
-                    if status.disabledFeatures.isEmpty && unprocessableFormats.isEmpty {
-                        Text("ありません")
-                    } else {
+                if !status.disabledFeatures.isEmpty || !unprocessableFormats.isEmpty {
+                    Section("使っていない機能") {
                         ForEach(status.disabledFeatures, id: \.feature) { disabled in
                             LabeledContent(Self.name(of: disabled.feature), value: "HTTP \(disabled.statusCode)・\(disabled.date.formatted(date: .omitted, time: .shortened))")
                         }
@@ -42,13 +48,9 @@ struct ConnectionStatusView: View {
                             LabeledContent(Self.name(ofImageType: entry.mimeType), value: "JPEGで送っています・\(entry.serverVersion.isEmpty ? "版が不明" : entry.serverVersion)")
                         }
                     }
-                } header: {
-                    Text("使っていない機能")
                 }
-                Section("最近のエラー") {
-                    if status.recentFailures.isEmpty {
-                        Text("ありません")
-                    } else {
+                if !status.recentFailures.isEmpty {
+                    Section("最近のエラー") {
                         ForEach(status.recentFailures) { failure in
                             FailureRow(failure: failure)
                         }
@@ -75,24 +77,17 @@ struct ConnectionStatusView: View {
 
     private static func text(_ state: ConnectionDiagnostics.StreamingState?) -> String {
         switch state {
-        case .connected: "接続中"
-        case .connecting: "接続待ち"
-        case .polling: "切断中・ポーリング中"
-        case .stopped: "停止中"
-        case .loginRequired: "停止中（ログインが必要）"
-        case nil: "未接続"
+        case .connected: "接続済み"
+        case .connecting, .polling: "接続中…"
+        case .stopped, .loginRequired, nil: "未接続"
         }
     }
 
-    /// タブの名前にそろえる。
-    private func name(of subscription: StreamingSubscription) -> String {
-        switch subscription.stream {
-        case "user": "ホームと通知"
-        case "public:local": "ローカル"
-        case "public": "連合"
-        case "list": subscription.list.flatMap { listTitles[$0] }.map { "リスト「\($0)」" } ?? "リスト"
-        case "hashtag": subscription.tag.map { "#\($0)" } ?? "ハッシュタグ"
-        default: subscription.stream
+    private static func note(_ state: ConnectionDiagnostics.StreamingState?) -> String? {
+        switch state {
+        case .polling: "ポーリング中"
+        case .loginRequired: "ログインが必要"
+        case .connected, .connecting, .stopped, nil: nil
         }
     }
 
@@ -145,6 +140,44 @@ private struct FailureRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(3)
             }
+        }
+    }
+}
+
+/// ストリーミングで受信しているタイムラインの一覧。
+struct StreamingTimelinesView: View {
+    let diagnostics: ConnectionDiagnostics
+    /// リストのIDから、タブの並びに保存したリストの名前を引く。並びにないリストは名前を出さない。
+    let listTitles: [String: String]
+
+    var body: some View {
+        List(diagnostics.streamingSubscriptions, id: \.self) { subscription in
+            LabeledContent {
+                Text(name(of: subscription))
+            } label: {
+                Text(streamValue(of: subscription))
+                    .font(.body.monospaced())
+            }
+        }
+        .topEdgeEffectHiddenOnMac()
+        .navigationTitle("受信中のタイムライン")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// サーバーへ申し込むストリームの値。
+    private func streamValue(of subscription: StreamingSubscription) -> String {
+        [subscription.stream, subscription.list ?? subscription.tag].compactMap(\.self).joined(separator: ":")
+    }
+
+    /// タブの名前にそろえる。
+    private func name(of subscription: StreamingSubscription) -> String {
+        switch subscription.stream {
+        case "user": "ホームと通知"
+        case "public:local": "ローカル"
+        case "public": "連合"
+        case "list": subscription.list.flatMap { listTitles[$0] }.map { "リスト“\($0)”" } ?? "リスト"
+        case "hashtag": subscription.tag.map { "#\($0)" } ?? "ハッシュタグ"
+        default: subscription.stream
         }
     }
 }

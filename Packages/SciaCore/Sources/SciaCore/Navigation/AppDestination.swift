@@ -333,6 +333,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     case reactionMenu = "reaction-menu"
     case composeTools = "compose-tools"
     case connection
+    case connectionTimelines = "connection-timelines"
     case storage
     /// ストレージの、メディアのキャッシュの表示済みの段。
     case viewedMediaCache = "storage-viewed"
@@ -357,6 +358,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
         case .reactionMenu: [.interaction, .reactionActions, self]
         case .composeTools: [.compose, self]
         case .connection, .licenses, .acknowledgments: [.about, self]
+        case .connectionTimelines: [.about, .connection, self]
         case .viewedMediaCache, .prefetchedMediaCache: [.storage, self]
         case .display, .interaction, .compose, .about, .appIcon, .tabs, .storage: [self]
         }
