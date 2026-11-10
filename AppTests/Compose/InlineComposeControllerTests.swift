@@ -655,9 +655,9 @@ final class InlineComposeControllerTests {
         #expect(events == ["confirm", "close"])
     }
 
-    /// ほかの画面が閉じていく途中にカスタマイズを押すと、その瞬間は画面を重ねられないので何もしない。
-    /// 開いた扱いだけが残ると、以後キーボードを閉じても欄がカプセルに戻らなくなる。
-    @Test func customizeWhileAnotherSheetClosingDoesNothing() async throws {
+    /// ほかの画面が閉じていく途中にカスタマイズを押すと、その瞬間は画面を重ねられないので、閉じ終えてから出す。押した操作を失わないため。
+    /// 出せないまま開いた扱いだけが残ると、以後キーボードを閉じても欄がカプセルに戻らなくなるので、出した画面を閉じたあとに戻ることも確かめる。
+    @Test func customizeWhileAnotherSheetClosingOpensAfterItCloses() async throws {
         defer { window.isHidden = true }
         settings.composeToolLayout = MenuLayout(elements: [.more, .item(.customize, isVisible: true)])
         composer.beginEditing()
@@ -668,10 +668,17 @@ final class InlineComposeControllerTests {
         host.dismiss(animated: true)
 
         let customize = try #require(buttons(in: window).first { $0.accessibilityLabel == "カスタマイズ" })
+        // 待っている間にもう一度押しても、同じ画面を2枚重ねない。
         customize.sendActions(for: .primaryActionTriggered)
-        try await waitUntilSettled()
+        customize.sendActions(for: .primaryActionTriggered)
         #expect(!(host.presentedViewController is ComposeToolLayoutSheet))
+        try await clock.advance { host.presentedViewController is ComposeToolLayoutSheet }
+        try await waitUntilSettled()
+        #expect(host.presentedViewController?.presentedViewController == nil)
 
+        host.dismissPresentedScreens(animated: true)
+        try await clock.advance { host.presentedViewController == nil }
+        try await waitUntilSettled()
         composer.endEditing()
         try await waitUntilSettled()
         #expect(composer.stateDump().contains("editing: false"), "キーボードを閉じても書いている状態のままです\n\(composer.stateDump())")

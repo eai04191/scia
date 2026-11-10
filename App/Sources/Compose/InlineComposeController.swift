@@ -262,6 +262,10 @@ final class InlineComposeController: NSObject {
         }
     })
     private var isPresentingAlert = false
+    /// ほかの画面が閉じ終えるのを待っている、やり直す操作（`canPresent(on:retrying:)`）。待っていなければnil。
+    private var pendingPresentation: (@MainActor (InlineComposeController) -> Void)?
+    /// 出し直す操作を待っている間に、閉じた画面がキーボードを戻すのを見送った。
+    private var deferredRefocus = false
     /// 入力バーと、その下のタブバーやキーボードとの間の余白。切り替えタブを長押しして出すメニューも、下端を入力バーとそろえるのに使う。
     static let barSpacing: CGFloat = 8
     private var barSpacing: CGFloat { Self.barSpacing }
@@ -857,7 +861,7 @@ final class InlineComposeController: NSObject {
             send()
             return
         }
-        guard !isPresentingAlert, let presenter = presenterForErrors, presenter.presentedViewController == nil else { return }
+        guard !isPresentingAlert, let presenter = presenterForErrors, canPresent(on: presenter, retrying: { $0.submit() }) else { return }
         logger.info("compose: asking about extended urls (count=\(prompt.lines.count))")
         let sheet = ExtendedURLSheet(prompt: prompt, timing: ExtendedURLTiming(tuning: tuning)) { [weak self] choice in
             guard let self else { return }
@@ -911,13 +915,9 @@ final class InlineComposeController: NSObject {
     private func presentToolLayoutSettings() {
         guard let host else { return }
         // ほかの画面が閉じていく途中は、その画面を出していた画面にまだ次の画面を重ねられず、出そうとしても出ない。
-        // 開いた扱いだけが残ると、以後キーボードを閉じても欄がカプセルに戻らなくなるため、何もしない。
-        // 閉じる動きが始まると、UIKitは閉じていく画面を重ねている画面として返さなくなるので、切り替えの最中かどうかで見分ける。
+        // 開いた扱いだけが残ると、以後キーボードを閉じても欄がカプセルに戻らなくなるため、閉じ終えてから、そのときの状態で出し直す。
         let presenter = topPresenter(from: host)
-        guard presenter.presentedViewController == nil, presenter.transitionCoordinator == nil else {
-            logger.info("compose: tool layout settings ignored while another sheet is closing")
-            return
-        }
+        guard canPresent(on: presenter, retrying: { $0.presentToolLayoutSettings() }) else { return }
         let resumesEditing = isEditing
         logger.info("compose: present tool layout settings (editing=\(resumesEditing))")
         isShowingToolLayoutSettings = resumesEditing
@@ -941,7 +941,7 @@ final class InlineComposeController: NSObject {
         // 開く途中や閉じる途中で、失敗を知らせられなかったら、ここで知らせる。
         defer { presentErrorIfNeeded() }
         guard resumesEditing, isEditing else { return }
-        focusLastInput()
+        refocusAfterClosing()
     }
 
     private func menuAction(for item: ComposeToolItem) -> UIMenuElement {
@@ -1065,12 +1065,9 @@ final class InlineComposeController: NSObject {
     /// 開いている間は、キーボードを閉じても書いている状態を解かない。並びを変える画面と同じ扱い。
     private func presentScheduleDatePicker() {
         guard let host, let scheduledAt = model.scheduledAt, !model.isPosting else { return }
-        // 並びを変える画面と同じく、ほかの画面が閉じていく途中は出せないので、何もしない。
+        // 並びを変える画面と同じく、ほかの画面が閉じていく途中は出せないので、閉じ終えてから出し直す。
         let presenter = topPresenter(from: host)
-        guard presenter.presentedViewController == nil, presenter.transitionCoordinator == nil else {
-            logger.info("compose: schedule date picker ignored while another sheet is closing")
-            return
-        }
+        guard canPresent(on: presenter, retrying: { $0.presentScheduleDatePicker() }) else { return }
         let resumesEditing = isEditing
         logger.info("compose: present schedule date picker (editing=\(resumesEditing))")
         isShowingScheduleDatePicker = resumesEditing
@@ -1093,17 +1090,14 @@ final class InlineComposeController: NSObject {
         logger.info("compose: schedule date picker closed")
         isShowingScheduleDatePicker = false
         guard resumesEditing, isEditing else { return }
-        focusLastInput()
+        refocusAfterClosing()
     }
 
     /// 言語を選ぶシートを重ねる。書いている途中なら、閉じたあとにキーボードを戻す。予約の日時のシートと同じ扱い。
     private func presentLanguagePicker() {
         guard let host, !model.isPosting else { return }
         let presenter = topPresenter(from: host)
-        guard presenter.presentedViewController == nil, presenter.transitionCoordinator == nil else {
-            logger.info("compose: language picker ignored while another sheet is closing")
-            return
-        }
+        guard canPresent(on: presenter, retrying: { $0.presentLanguagePicker() }) else { return }
         let resumesEditing = isEditing
         logger.info("compose: present language picker (editing=\(resumesEditing))")
         isShowingLanguagePicker = resumesEditing
@@ -1136,7 +1130,7 @@ final class InlineComposeController: NSObject {
         logger.info("compose: language picker closed")
         isShowingLanguagePicker = false
         guard resumesEditing, isEditing else { return }
-        focusLastInput()
+        refocusAfterClosing()
     }
 
     /// 投票の欄を出して最初の選択肢を書き始めるか、外して本文に戻る。外すと書いた選択肢も捨てる。
@@ -3110,7 +3104,7 @@ final class InlineComposeController: NSObject {
             cancelStatusEdit()
             return
         }
-        guard !isPresentingAlert, let presenter = presenterForErrors, presenter.presentedViewController == nil else { return }
+        guard !isPresentingAlert, let presenter = presenterForErrors, canPresent(on: presenter, retrying: { $0.cancelRedrafting() }) else { return }
         let alert = UIAlertController(confirmation, preferredStyle: .alert, onClose: { [weak self] in self?.alertDidClose() }) { [weak self] _ in
             self?.cancelStatusEdit()
         }
@@ -3126,7 +3120,7 @@ final class InlineComposeController: NSObject {
             discardDraft()
             return
         }
-        guard !isPresentingAlert, let presenter = presenterForErrors, presenter.presentedViewController == nil else { return }
+        guard !isPresentingAlert, let presenter = presenterForErrors, canPresent(on: presenter, retrying: { $0.confirmDiscardingDraft() }) else { return }
         let alert = UIAlertController(confirmation, preferredStyle: .alert, onClose: { [weak self] in self?.alertDidClose() }) { [weak self] _ in
             self?.logger.info("compose: discard draft confirmed")
             self?.discardDraft()
@@ -3156,7 +3150,7 @@ final class InlineComposeController: NSObject {
     private func alertDidClose() {
         isPresentingAlert = false
         guard alertReturnsFocus, bottomSheet == nil, isEditing else { return }
-        focusLastInput()
+        refocusAfterClosing()
     }
 
     // MARK: - 添付のビューア
@@ -3328,6 +3322,49 @@ final class InlineComposeController: NSObject {
                 reduction: local?.reduction
             )
         }
+    }
+
+    /// `presenter`（`topPresenter(from:)`で得た画面）に、今すぐ画面を重ねられるか。
+    /// ほかの画面が閉じていく途中は、まだ重ねられない。押した操作を失わないよう、閉じ終えてから`action`でやり直し、falseを返す。
+    /// やり直すときは、出すかどうかと書いている状態の扱いを、そのときの状態で決め直す。
+    /// 待っている間にまた押されたら、最後に押された操作だけをやり直す。押した数だけやり直すと、同じ画面を重ねて出すため。
+    /// ほかの画面を出している間と、閉じていく画面のない切り替えの最中（押した画面が開く途中など）は、やり直さずにfalseを返す。
+    private func canPresent(on presenter: UIViewController, retrying action: @escaping @MainActor (InlineComposeController) -> Void) -> Bool {
+        guard let closing = presenter.presentedViewController else {
+            return presenter.transitionCoordinator == nil
+        }
+        guard closing.isBeingDismissed else { return false }
+        guard pendingPresentation == nil else {
+            pendingPresentation = action
+            return false
+        }
+        logger.info("compose: waiting for a closing screen before presenting")
+        pendingPresentation = action
+        let waits = closing.transitionCoordinator?.animate(alongsideTransition: nil) { [weak self] _ in
+            guard let self, let action = pendingPresentation else { return }
+            pendingPresentation = nil
+            action(self)
+            // やり直した操作が画面を出していれば、その画面を閉じたときに戻すので、ここでは戻さない。戻すと、その画面の上にキーボードが出るため。
+            guard deferredRefocus else { return }
+            deferredRefocus = false
+            guard isEditing, bottomSheet == nil, let host, topPresenter(from: host) === (presenterAboveInlineCompose?() ?? host) else { return }
+            focusLastInput()
+        } ?? false
+        if !waits {
+            logger.error("compose: could not wait for a closing screen")
+            pendingPresentation = nil
+        }
+        return false
+    }
+
+    /// シートやアラートを閉じたあと、最後に書いていた入力欄にキーボードを戻す。
+    /// 閉じ終えるのを待って出し直す画面があれば、戻さずに見送る。戻すと、すぐ次の画面のために閉じ、キーボードが出かけて戻るため。
+    private func refocusAfterClosing() {
+        guard pendingPresentation == nil else {
+            deferredRefocus = true
+            return
+        }
+        focusLastInput()
     }
 
     /// いちばん手前に出している画面。閉じている途中のものは除く。
