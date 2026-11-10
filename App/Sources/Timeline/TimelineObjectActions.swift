@@ -69,7 +69,7 @@ extension TimelineViewController {
             guard let menu = contextMenu(for: entry, id: id) else { return }
             TapMenuPresenter.shared.present(menu, in: button, at: point, lifecycle: rowMenuLifecycle)
         case .status(let statusItem):
-            rowStatusTarget(.status, entry: entry, id: id, opening: Self.status(of: entry)).perform(statusItem, in: button, at: point)
+            rowStatusTarget(.status, entry: entry, id: id, opening: entry.targetStatus).perform(statusItem, in: button, at: point)
         }
     }
 
@@ -229,7 +229,7 @@ extension TimelineViewController {
     private func swipeButton(for item: PostSwipeItem, entry: TimelineEntry, id: ItemID, tree: StatusMenuTree) -> PostSwipeButton? {
         switch item {
         case .menu:
-            guard tree.menu(groups: defaultStatusMenuGroups(for: id, status: Self.status(of: entry)), includesFollowRequest: false).root != nil else { return nil }
+            guard tree.menu(groups: defaultStatusMenuGroups(for: id, status: entry.targetStatus), includesFollowRequest: false).root != nil else { return nil }
             return PostSwipeButton(title: "メニュー", symbolName: item.symbolName)
         case .actionBar:
             guard !settings.appearance.showsActionBar, canShowActionBar(in: entry) else { return nil }
@@ -256,7 +256,7 @@ extension TimelineViewController {
     private func performSwipeItem(_ item: PostSwipeItem, id: ItemID, from button: UIView) {
         guard let entry = entry(for: id) else { return }
         let point = CGPoint(x: button.bounds.midX, y: button.bounds.midY)
-        rowStatusTarget(.status, entry: entry, id: id, opening: Self.status(of: entry)).perform(action: item.action, in: button, at: point)
+        rowStatusTarget(.status, entry: entry, id: id, opening: entry.targetStatus).perform(action: item.action, in: button, at: point)
     }
 }
 

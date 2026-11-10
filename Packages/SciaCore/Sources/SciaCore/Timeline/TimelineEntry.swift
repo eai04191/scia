@@ -55,6 +55,49 @@ public enum TimelineEntry: Hashable, Sendable, Identifiable {
     public var status: Status? {
         if case .status(let status) = self { status } else { nil }
     }
+
+    /// 投稿として並ぶ項目の投稿。固定された投稿も含む。通知の対象の投稿は含まない。
+    public var postStatus: Status? {
+        switch self {
+        case .status(let status), .pinned(let status): status
+        case .gap, .notification, .unreadable, .account, .notificationRequest, .search: nil
+        }
+    }
+
+    /// 項目が指す投稿。投稿の項目ならその投稿、通知なら対象の投稿。ギャップやフォローの通知などではnil。
+    public var targetStatus: Status? {
+        switch self {
+        case .status(let status), .pinned(let status): status
+        case .notification(let notification): notification.status
+        case .gap, .unreadable, .account, .notificationRequest, .search: nil
+        }
+    }
+
+    /// 項目に出る人。投稿した人、ブーストした人、通知した人（まとめた通知なら並べた人）、通知の対象の投稿の人、人のリストの人、保留中の通知を送ってきた人。
+    public var accounts: [Account] {
+        switch self {
+        case .status(let status), .pinned(let status): [status.account, status.reblog?.account].compactMap(\.self)
+        case .notification(let notification): notification.sampleAccounts + [notification.status?.account, notification.status?.reblog?.account].compactMap(\.self)
+        case .account(let account): [account]
+        case .notificationRequest(let request): [request.account]
+        case .gap, .unreadable, .search: []
+        }
+    }
+}
+
+extension Sequence<TimelineEntry> {
+    /// 項目に出る人から、そのIDのアカウントを探す。
+    public func account(withID id: Account.ID) -> Account? {
+        lazy.flatMap(\.accounts).first { $0.id == id }
+    }
+
+    /// 項目が指す投稿（ブーストなら元の投稿も）のメンションから、リンク先が`url`の人を探す。
+    public func mention(withURL url: URL) -> Mention? {
+        lazy.compactMap(\.targetStatus)
+            .flatMap { [$0, $0.reblog].compactMap(\.self) }
+            .flatMap(\.mentions)
+            .first { $0.url == url }
+    }
 }
 
 /// サーバーから届いたが、読めなかった投稿や通知。IDが読めたものだけをタイムラインに並べ、並びと、続きを読む位置に使う。

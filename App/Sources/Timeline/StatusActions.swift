@@ -20,15 +20,7 @@ struct PendingMenuIcon {
 extension TimelineViewController {
     /// 要素が指す投稿。通知なら対象の投稿。ギャップやフォローの通知などではnil。
     func status(for id: ItemID) -> Status? {
-        entry(for: id).flatMap(Self.status(of:))
-    }
-
-    static func status(of entry: TimelineEntry) -> Status? {
-        switch entry {
-        case .status(let status), .pinned(let status): status
-        case .notification(let notification): notification.status
-        case .gap, .unreadable, .account, .notificationRequest, .search: nil
-        }
+        entry(for: id)?.targetStatus
     }
 
     /// メニュー。出す項目がなければnil。
@@ -61,7 +53,7 @@ extension TimelineViewController {
     /// - Parameter id: メニューを出した要素。共有のシートを、その行から出す。
     /// - Parameter groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときと、ほかの対象のメニューの中のサブメニューで組むときに渡す。渡したときは、フォローリクエストの承認と却下を置かない。
     func statusMenu(for entry: TimelineEntry, id: ItemID, groups: MenuLayout<StatusMenuItem>.Groups? = nil) -> BuiltMenu<StatusMenuCommand>? {
-        let status = Self.status(of: entry)
+        let status = entry.targetStatus
         let notification: MastodonNotification? = if case .notification(let notification) = entry { notification } else { nil }
         let subject = status.map { OperationStatus.Subject($0.displayed) }
         let emojis = CustomEmojiMenus(timeline: self, subject: subject)

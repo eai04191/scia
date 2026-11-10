@@ -1068,8 +1068,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         defer { reconfigureAnimatingHeight(refreshedIDs, duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration)) }
         // 編集で本文か言語が変わった投稿の訳文は使えないので、見えている範囲が変わらなくても訳し直しを頼む。
         let bodyChanged = translations != nil && changedIDs.contains { id in
-            let old = previous[id].flatMap(Self.statusOfRow)?.displayed
-            let new = entries[id].flatMap(Self.statusOfRow)?.displayed
+            let old = previous[id]?.postStatus?.displayed
+            let new = entries[id]?.postStatus?.displayed
             return old?.content != new?.content || old?.language != new?.language
         }
         defer {
@@ -1077,7 +1077,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
         // 絵文字のリアクションだけが変わった行は、並びを置き換えたあとで、ボタンの出入りと数を動かし、高さが変わる分を下の行ごと動かして描き直す（docs/emoji-reaction.mdの「動き」）。
         let reactionChangedIDs = Set(changedIDs.filter { id in
-            guard let old = previous[id].flatMap(Self.statusOfRow), let new = entries[id].flatMap(Self.statusOfRow) else { return false }
+            guard let old = previous[id]?.postStatus, let new = entries[id]?.postStatus else { return false }
             return new.differsOnlyInEmojiReactions(from: old)
         }).subtracting(refreshedIDs)
         defer { reconfigureShiftingRowsBelow(reactionChangedIDs, keeping: anchorID, duration: tuning.value(of: TuningCatalog.reactionTransitionDuration)) }
@@ -1562,46 +1562,12 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// タイムラインの行にいる、そのIDのアカウント。いなければnil。
     func account(withID id: String) -> Account? {
-        Self.account(withID: id, in: entries.values)
+        entries.values.account(withID: id)
     }
 
     /// タイムラインの投稿のメンションのうち、リンク先が`url`の人。本文のメンションのリンクにはIDがないため、投稿のメンションから引く。
     func mention(withURL url: URL) -> Mention? {
-        Self.mention(withURL: url, in: entries.values)
-    }
-
-    /// 行の投稿（ブーストなら元の投稿も、通知なら対象の投稿も）のメンションから、リンク先が`url`の人を探す。
-    static func mention(withURL url: URL, in entries: some Sequence<TimelineEntry>) -> Mention? {
-        for entry in entries {
-            let statuses: [Status] = switch entry {
-            case .status(let status), .pinned(let status): [status, status.reblog].compactMap(\.self)
-            case .notification(let notification): [notification.status, notification.status?.reblog].compactMap(\.self)
-            case .account, .notificationRequest, .gap, .unreadable, .search: []
-            }
-            for status in statuses {
-                if let mention = status.mentions.first(where: { $0.url == url }) {
-                    return mention
-                }
-            }
-        }
-        return nil
-    }
-
-    /// 行の投稿した人、ブーストした人、通知した人（まとめた通知なら並べた人）、人のリストの人から、そのIDのアカウントを探す。
-    static func account(withID id: String, in entries: some Sequence<TimelineEntry>) -> Account? {
-        for entry in entries {
-            let accounts: [Account] = switch entry {
-            case .status(let status), .pinned(let status): [status.account, status.reblog?.account].compactMap(\.self)
-            case .notification(let notification): notification.sampleAccounts + [notification.status?.account, notification.status?.reblog?.account].compactMap(\.self)
-            case .account(let account): [account]
-            case .notificationRequest(let request): [request.account]
-            case .gap, .unreadable, .search: []
-            }
-            if let account = accounts.first(where: { $0.id == id }) {
-                return account
-            }
-        }
-        return nil
+        entries.values.mention(withURL: url)
     }
 
     /// 要素の行。画面の外にあればnil。
@@ -1648,21 +1614,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     func scrollToStatus(_ statusID: Status.ID, displayedID: Status.ID? = nil, at position: UICollectionView.ScrollPosition = .bottom, animated: Bool = true) -> Bool {
         let displayedID = displayedID ?? statusID
         let ids = displayedItemIDs
-        let chosen = ids.first { id in
-            switch entries[id] {
-            // 固定投稿は、同じ投稿が下のタイムラインにも並ぶことがあり、IDでは見分けられない。上にある固定投稿の方へ移る。
-            case .status(let status), .pinned(let status): status.id == statusID
-            case .notification(let notification): notification.status?.id == statusID
-            case .gap, .unreadable, .account, .notificationRequest, .search, nil: false
-            }
-        }
-        let found = chosen ?? ids.first { id in
-            switch entries[id] {
-            case .status(let status), .pinned(let status): status.displayed.id == displayedID
-            case .notification(let notification): notification.status?.displayed.id == displayedID
-            case .gap, .unreadable, .account, .notificationRequest, .search, nil: false
-            }
-        }
+        // 固定投稿は、同じ投稿が下のタイムラインにも並ぶことがあり、IDでは見分けられない。上にある固定投稿の方へ移る。
+        let chosen = ids.first { entries[$0]?.targetStatus?.id == statusID }
+        let found = chosen ?? ids.first { entries[$0]?.targetStatus?.displayed.id == displayedID }
         guard let found, let indexPath = dataSource.indexPath(for: found) else { return false }
         if animated {
             // 最上部へ動かしている途中なら、速さを持ち越して行き先だけ替える。
@@ -2113,8 +2067,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// クラッシュした投稿の行を、読めない行に差し替える。決まりはdocs/crash-quarantine.mdにある。
     private func quarantined(_ entry: TimelineEntry) -> TimelineEntry {
         guard let statusID = entry.quarantinableStatusID, crashGuard.isQuarantined(statusID) else { return entry }
-        let status: Status? = if case .notification(let notification) = entry { notification.status } else { Self.statusOfRow(entry) }
-        if let url = status?.displayed.url {
+        if let url = entry.targetStatus?.displayed.url {
             notices?.quarantinedPageURLs[statusID] = url
         }
         return .unreadable(UnreadableItem(id: statusID, url: nil, isCrashQuarantined: true))
@@ -2327,12 +2280,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let rows = lastScrollDirection == .towardNewer ? Array(behind) + ahead : ahead + behind
         var truncations: [Status.ID: BodyTruncation] = [:]
         let statuses = rows.compactMap { item -> Status? in
-            guard let id = dataSource.itemIdentifier(for: IndexPath(item: item, section: 0)) else { return nil }
-            let status: Status
-            switch entries[id] {
-            case .status(let entry), .pinned(let entry): status = entry
-            default: return nil
-            }
+            guard let id = dataSource.itemIdentifier(for: IndexPath(item: item, section: 0)), let status = entries[id]?.postStatus else { return nil }
             let shown = status.displayed
             truncations[shown.id] = longBodyExpansion.truncation(forBodyOf: status, isThreadFocus: shown.id == threadFocusID, rule: bodyTruncationRule)
             return shown
@@ -2354,10 +2302,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// タイムラインの投稿の項目が見せている投稿。ブーストなら元の投稿。通知などの項目ではnil。
     private func shownStatus(atItem item: Int) -> Status? {
         guard let id = dataSource.itemIdentifier(for: IndexPath(item: item, section: 0)) else { return nil }
-        switch entries[id] {
-        case .status(let status), .pinned(let status): return status.displayed
-        default: return nil
-        }
+        return entries[id]?.postStatus?.displayed
     }
 
     /// 画面に出ている行の前と後ろそれぞれで、本文を先に作る行の数。
@@ -2471,7 +2416,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         guard let window = view.window else { return nil }
         let visibleTop = collectionView.convert(CGPoint(x: 0, y: collectionView.contentOffset.y + collectionView.adjustedContentInset.top), to: window).y
         return collectionView.visibleCells.compactMap { cell -> (Status, CGFloat)? in
-            guard let id = collectionView.indexPath(for: cell).flatMap({ dataSource.itemIdentifier(for: $0) }), let status = entries[id].flatMap(Self.statusOfRow) else { return nil }
+            guard let id = collectionView.indexPath(for: cell).flatMap({ dataSource.itemIdentifier(for: $0) }), let status = entries[id]?.postStatus else { return nil }
             let frame = cell.convert(cell.bounds, to: window)
             return frame.maxY > visibleTop ? (status, frame.minY) : nil
         }
@@ -2481,18 +2426,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// 並べている投稿のうち、IDの投稿。ブーストなら、元の投稿のIDでも探す。
     func loadedStatus(id: Status.ID) -> Status? {
-        entries.values.lazy.compactMap(Self.statusOfRow).first { $0.id == id || $0.reblog?.id == id }
+        entries.values.lazy.compactMap(\.postStatus).first { $0.id == id || $0.reblog?.id == id }
     }
     #endif
-
-
-    /// 投稿の行の投稿。リアクションの列を出すのは、投稿と固定された投稿の行だけ。
-    private static func statusOfRow(_ entry: TimelineEntry) -> Status? {
-        switch entry {
-        case .status(let status), .pinned(let status): status
-        default: nil
-        }
-    }
 
     /// プレビューの見本で、本文やリンクカードのリンクを押す操作だけを残す。見本の写真のクレジットのリンクを開けるようにするため。
     /// ほかの操作（サムネイル、投票、注意書きの開閉、名前やアイコンなど）は、見本を変えたり別の画面を開いたりするので外す。
@@ -2525,7 +2461,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// リストのアイテムにアクションバーを出せるか。出すのは投稿だけで、通知には出さない（docs/post-action-bar.mdの「出し方」）。
     func canShowActionBar(in entry: TimelineEntry) -> Bool {
-        !isAppearancePreview && Self.statusOfRow(entry) != nil
+        !isAppearancePreview && entry.postStatus != nil
     }
 
     /// 投稿にアクションバーを出すか。いつも出す設定か、引き出しを開いている投稿で出す。
@@ -2599,7 +2535,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         Task(.withoutRequests) { @MainActor [weak self] in
             guard let self else { return }
             guard let (id, status) = collectionView.indexPathsForVisibleItems.lazy.compactMap({ indexPath -> (ItemID, Status)? in
-                      guard let id = self.dataSource.itemIdentifier(for: indexPath), let entry = self.entries[id], self.canShowActionBar(in: entry), let status = Self.statusOfRow(entry) else { return nil }
+                      guard let id = self.dataSource.itemIdentifier(for: indexPath), let entry = self.entries[id], self.canShowActionBar(in: entry), let status = entry.postStatus else { return nil }
                       return (id, status)
                   }).first
             else {
