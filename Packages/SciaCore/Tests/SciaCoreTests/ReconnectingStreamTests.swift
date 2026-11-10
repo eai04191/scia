@@ -50,6 +50,39 @@ struct ReconnectingStreamTests {
         #expect(connector.closedCount == 3, "切れた接続か取り消した接続が閉じられていません")
     }
 
+    /// つながってすぐ切れる状態が続くサーバーへ、短い間隔でつなぎ直し続けない。つながるたびに補完のRESTも送られるため。
+    @Test func delayKeepsGrowingWhileConnectionsDropRightAway() async throws {
+        let dropGate = Gate()
+        let connector = ScriptedConnector([
+            .init(messages: [Self.deleteOne], afterMessages: .drop),
+            .init(messages: [Self.deleteOne], afterMessages: .drop),
+            .init(messages: [Self.deleteOne], afterMessages: .drop),
+            .init(messages: [Self.deleteOne], afterMessages: .drop, dropGate: dropGate),
+        ])
+        let log = ActivityLog()
+        let clock = TestClock()
+        let stream = makeStream(connector, policy: Self.fastPolicy, clock: clock)
+
+        let task = Task { try await stream.run { await log.append($0) } }
+        try await clock.advance(afterSleeping: .milliseconds(10))
+        try await clock.advance(afterSleeping: .milliseconds(20))
+        try await clock.advance(afterSleeping: .milliseconds(40))
+        // 4つ目の接続を、つなぎ直しの間隔の上限と同じ長さだけ続けてから切る。
+        try await log.waitUntil(count: 11)
+        clock.advance(by: Self.fastPolicy.maxRetryDelay)
+        dropGate.open()
+        try await log.waitUntil(count: 12)
+        task.cancel()
+        _ = await task.result
+
+        #expect(await log.labels == [
+            "connected", "event delete 1", "disconnected after 10ms",
+            "connected", "event delete 1", "disconnected after 20ms",
+            "connected", "event delete 1", "disconnected after 40ms",
+            "connected", "event delete 1", "disconnected after 10ms",
+        ])
+    }
+
     @Test func retryDelayDoublesUpToMaximum() {
         let policy = Self.fastPolicy
         #expect((1...5).map { policy.retryDelay(afterFailures: $0) } == [

@@ -17,6 +17,7 @@ public struct ReconnectingStream: Sendable {
     public struct Policy: Sendable {
         /// 1回目の失敗の後に待つ時間。続けて失敗するたびに倍にする。
         public var initialRetryDelay: Duration
+        /// 待つ時間の上限。接続がこの長さ以上続いたあとに切れたら、失敗の回数を数え直す。
         public var maxRetryDelay: Duration
         /// 接続が生きているかを確かめる間隔。サーバーからイベントが来ないだけなのか、経路が切れたのかを区別する。
         public var pingInterval: Duration
@@ -85,13 +86,15 @@ public struct ReconnectingStream: Sendable {
         var failures = 0
         while true {
             try Task.checkCancellation()
+            // つながってから続いた長さ。つながる前はnil。
+            var connectedFor: (@Sendable () -> Duration)?
             do {
                 let connection = try await connect()
                 defer { connection.close() }
                 try await withTaskCancellationHandler {
                     for try await activity in session(connection) {
                         if case .connected = activity {
-                            failures = 0
+                            connectedFor = stopwatch(on: clock)
                         }
                         await handle(activity)
                     }
@@ -105,6 +108,10 @@ public struct ReconnectingStream: Sendable {
                 let failure = HTTPFailure(error)
                 if failure == .unauthorized {
                     await handle(.unauthorized)
+                }
+                // つながっただけでは回数を戻さない。つながってすぐ切れる状態が続くと、毎回最初の間隔でつなぎ直し、そのたびに補完のRESTも送るため。
+                if let connectedFor, connectedFor() >= policy.maxRetryDelay {
+                    failures = 0
                 }
                 failures += 1
                 // 429や503が再開の時刻を示していたら、それより前にはつなぎ直さない。
