@@ -148,6 +148,41 @@ struct XPostTests {
         #expect(links.map(\.1) == [.url(try url("https://x.com/DeepSeekHarness"))])
     }
 
+    /// fxtwitterの応答もサーバーから来る値なので、押して開く先はhttpとhttpsだけを受け付ける。ほかのスキームの投稿のURLは、Xの投稿として読めないものにする。
+    @Test(arguments: ["tel:0123456789", "file:///etc/passwd", "sms:0123456789"])
+    func rejectsPostWithOtherSchemeURL(_ postURL: String) throws {
+        let json = """
+        {"code": 200, "tweet": {"id": "1", "url": "\(postURL)", "raw_text": {"text": "a", "facets": []}, "author": {"name": "A", "screen_name": "a"}}}
+        """
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+        #expect(throws: DecodingError.self) {
+            try decoder.decode(FxTwitterResponse.self, from: Data(json.utf8))
+        }
+    }
+
+    /// 本文のURLのfacetも、httpとhttps以外ならリンクにせず、文字のまま残す。
+    @Test(arguments: [
+        (nil, "tel:0123456789"),
+        ("tel:0123456789", "https://t.co/abc"),
+        ("file:///etc/passwd", nil),
+    ] as [(String?, String?)])
+    func leavesOtherSchemeFacetAsText(replacement: String?, original: String?) {
+        let facet = FxTwitterResponse.Facet(type: "url", indices: [5, 9], original: original, replacement: replacement, display: "example.com")
+        let text = RichText(xPost: FxTwitterResponse.RawText(text: "call here now", displayTextRange: nil, facets: [facet]))
+
+        #expect(links(of: text).isEmpty)
+        #expect(text.plainText == "call here now")
+    }
+
+    @Test func linksHTTPFacet() throws {
+        let facet = FxTwitterResponse.Facet(type: "url", indices: [5, 9], original: "https://t.co/abc", replacement: "http://example.com/", display: "example.com")
+        let text = RichText(xPost: FxTwitterResponse.RawText(text: "call here now", displayTextRange: nil, facets: [facet]))
+
+        #expect(links(of: text).map(\.1) == [.url(try url("http://example.com/"))])
+    }
+
     /// Xの縮小版（`name=small`）は、長い辺を680pxに収める。タイムラインで元の画像を選べるよう、縮小版の大きさを実際の大きさにする。
     @Test func photoPreviewHasSmallSize() throws {
         let item = FxTwitterResponse.Item(

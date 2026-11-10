@@ -41,7 +41,8 @@ extension RichText {
         let xPage = URL(string: "https://x.com")
         switch facet.type {
         case "url":
-            guard let url = (facet.replacement ?? facet.original).flatMap(URL.init(string:)) else { return nil }
+            // fxtwitterの応答もサーバーから来る値なので、押して開く先はhttpとhttpsだけを受け付ける。ほかのスキームは文字のまま残す。
+            guard let url = (facet.replacement ?? facet.original).flatMap(URL.init(string:)).flatMap(ServerURLKind.destination.accepting) else { return nil }
             return .link(facet.display ?? text, .url(url), [])
         case "hashtag":
             guard let name = facet.original, let url = xPage?.appending(path: "hashtag").appending(path: name) else { return nil }

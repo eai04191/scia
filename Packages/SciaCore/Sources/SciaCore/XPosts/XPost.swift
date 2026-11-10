@@ -102,6 +102,21 @@ struct FxTwitterResponse: Decodable {
         let createdTimestamp: Double?
         let author: Author
         let media: Media?
+
+        private enum CodingKeys: String, CodingKey {
+            case id, url, rawText, createdTimestamp, author, media
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(String.self, forKey: .id)
+            // 囲みを押すと開く先なので、Mastodonの投稿のURLと同じくhttpとhttpsだけを受け付ける。
+            url = try container.decodeRequiredURL(.destination, forKey: .url)
+            rawText = try container.decode(RawText.self, forKey: .rawText)
+            createdTimestamp = try container.decodeIfPresent(Double.self, forKey: .createdTimestamp)
+            author = try container.decode(Author.self, forKey: .author)
+            media = try container.decodeIfPresent(Media.self, forKey: .media)
+        }
     }
 
     /// Xの本文と、リンクの位置。`text`はXの元の本文で、`&`、`<`、`>`は文字参照のまま入っている。
