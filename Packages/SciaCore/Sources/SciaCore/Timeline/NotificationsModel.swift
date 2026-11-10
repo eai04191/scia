@@ -135,8 +135,12 @@ public final class NotificationsModel {
         isDisabled = !isEnabled
         if isDisabled {
             stopStreaming()
-        } else if hasLoadedInitial {
-            startStreaming()
+        } else {
+            // 無効の間は、失敗した読み込みのやり直しを見送っているので、ここでやり直す。
+            retryFailedLoads()
+            if hasLoadedInitial {
+                startStreaming()
+            }
         }
     }
 
@@ -329,7 +333,9 @@ public final class NotificationsModel {
     }
 
     /// 失敗したままの最初の読み込みか、末尾の読み込みをやり直す。最初の読み込みが済めば、そこでつなぐ。
+    /// 無効にした通知は、使わないタイムラインへの通信になるので読まない。有効に戻したときに`setEnabled`でやり直す。
     private func retryFailedLoads() {
+        guard !isDisabled else { return }
         if case .failed = contentState {
             start(purpose: .display)
         } else if case .failed = footerState {

@@ -60,6 +60,42 @@ struct NotificationsModelTests {
         #expect(display.footerState == model.footerState)
     }
 
+    /// 無効にした通知は、最初の読み込みに失敗していても、電波の回復や前面に戻ったときにやり直さない。使わないタイムラインへの通信になるため。
+    /// 有効に戻したら、やり直す。
+    @Test func disabledNotificationsDoNotRetryFailedInitialLoad() async throws {
+        let base = try Self.transport()
+        let failsNotifications = Mutex(true)
+        let notificationRequests = Mutex(0)
+        let transport = RoutedTransport { request in
+            if request.url?.path() == "/api/v2/notifications" {
+                notificationRequests.withLock { $0 += 1 }
+                if failsNotifications.withLock({ $0 }) {
+                    return (422, Data(#"{"error":"Unprocessable"}"#.utf8))
+                }
+            }
+            let (body, response) = try await base.send(request)
+            return (response.statusCode, body)
+        }
+        let (model, display) = makeModel(transport: transport)
+        defer { model.stop() }
+        model.start(purpose: .action)
+        try await waitUntil { model.runningTaskCount == 0 }
+        guard case .failed = model.contentState else {
+            Issue.record("最初の読み込みが失敗していません: \(model.contentState)")
+            return
+        }
+        failsNotifications.withLock { $0 = false }
+        model.setEnabled(false)
+
+        model.recover()
+        model.enterForeground()
+        try await waitUntil { model.runningTaskCount == 0 }
+        #expect(notificationRequests.withLock { $0 } == 1, "無効にした通知の読み込みをやり直しました")
+
+        model.setEnabled(true)
+        try await waitUntil { display.contentState == .loaded }
+    }
+
     /// 補完の最中に頼まれた補完を続けて読み、それが失敗しても、先に読めた通知を画面に出す。
     @Test func filledNotificationsAreShownWhenFollowingFillFails() async throws {
         let url = try #require(Bundle.module.url(forResource: "grouped_notifications", withExtension: "json", subdirectory: "Fixtures"))
