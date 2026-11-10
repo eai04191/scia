@@ -15,11 +15,14 @@ struct ComposeModelAccountTests {
     private final class Uploads: Sendable {
         let names = Mutex<[String]>([])
 
-        func service(server: String, gate: Gate? = nil) -> ComposeMediaService {
+        /// - Parameter gatedFilename: 渡すと、その名前のファイルだけを`gate`で待たせる。
+        func service(server: String, gate: Gate? = nil, gatedFilename: String? = nil) -> ComposeMediaService {
             ComposeMediaService(
                 upload: { [self] upload in
                     names.withLock { $0.append("\(server):\(upload.filename)") }
-                    try await gate?.wait()
+                    if gatedFilename == nil || gatedFilename == upload.filename {
+                        try await gate?.wait()
+                    }
                     return MediaAttachment(id: "\(server)-\(upload.filename)", type: .image, url: URL(string: "https://\(server)/m.jpg"), previewUrl: nil)
                 },
                 waitUntilProcessed: { id in MediaAttachment(id: id, type: .image, url: URL(string: "https://example/m.jpg"), previewUrl: nil) },
@@ -251,5 +254,163 @@ struct ComposeModelAccountTests {
 
         #expect(model.poll?.expiresIn == StatusDraft.redraft(of: original, source: source, pollLimits: limits).poll?.expiresIn)
         #expect(model.pollLimits == limits)
+    }
+
+    // MARK: - 同じアカウントにログインし直したあとの引き継ぎ
+
+    /// 同じアカウントにログインし直して画面を作り直しても、書いた本文、注意書き、返信先、選んだ公開範囲と言語を残し、新しい画面の送り先で送る。
+    /// 上限と既定値は新しい画面で読み直す。読み直しても、選んだ公開範囲と言語は上書きしない。
+    @Test func adoptsDraftAfterLoggingInAgain() async throws {
+        let posted = Posted()
+        let previous = ComposeModel(tasks: TaskScope(), myAccountID: "1") { draft in
+            posted.texts.withLock { $0.append("previous:\(draft.text)") }
+        }
+        previous.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
+        previous.setReplyTarget(status(id: "10"))
+        previous.text += "了解"
+        previous.showsSpoiler = true
+        previous.spoilerText = "注意"
+        previous.choose(.unlisted)
+        previous.choose(language: "en")
+        let text = previous.text
+
+        let renewed = ComposeModel(tasks: TaskScope(), myAccountID: "1") { draft in
+            posted.texts.withLock { $0.append("renewed:\(draft.text):\(draft.inReplyToID ?? "-")") }
+        }
+        renewed.adoptDraft(from: previous, otherAccount: nil)
+
+        #expect(renewed.text == text)
+        #expect(renewed.spoilerText == "注意")
+        #expect(renewed.showsSpoiler)
+        #expect(renewed.replyTo?.id == "10")
+        #expect(renewed.hasWrittenContent)
+
+        renewed.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil, defaultLanguage: "ja")
+        #expect(renewed.visibility == .unlisted)
+        #expect(renewed.language == "en")
+        await renewed.submit()
+        #expect(posted.texts.withLock { $0 } == ["renewed:\(text):10"])
+    }
+
+    /// アップロードが済んだ添付は、同じアカウントのメディアなので、送り直さずに使う。済んでいない添付は、新しい画面で上限を読んでから送り直す。
+    /// 前の画面の送りかけは、前の画面を止めたあとに応答が届いても、引き継いだ下書きを書き換えない。
+    @Test func keepsUploadedAttachmentsAndReuploadsUnfinishedOnesAfterLoggingInAgain() async throws {
+        let previousUploads = Uploads()
+        let renewedUploads = Uploads()
+        let gate = Gate()
+        let previousTasks = TaskScope()
+        let previous = ComposeModel(tasks: previousTasks, myAccountID: "1", media: previousUploads.service(server: "previous.example", gate: gate, gatedFilename: "b.jpg")) { _ in }
+        previous.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
+        previous.applyPickerSelection([try picked("a"), try picked("b")])
+        try await waitUntil {
+            previous.attachments.first?.serverID == "previous.example-a.jpg" && previousUploads.names.withLock { $0.contains("previous.example:b.jpg") }
+        }
+
+        let renewed = ComposeModel(tasks: TaskScope(), myAccountID: "1", media: renewedUploads.service(server: "renewed.example")) { _ in }
+        renewed.adoptDraft(from: previous, otherAccount: nil)
+        previousTasks.close()
+        gate.open()
+
+        #expect(renewed.attachments.map(\.serverID) == ["previous.example-a.jpg", nil])
+        #expect(previous.attachments.isEmpty)
+        renewed.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
+        try await waitUntil { renewed.attachments.last?.serverID == "renewed.example-b.jpg" }
+        #expect(renewed.attachments.first?.serverID == "previous.example-a.jpg")
+        #expect(renewedUploads.names.withLock { $0 } == ["renewed.example:b.jpg"])
+    }
+
+    /// 編集の途中でログインし直しても、編集している投稿を引き継ぐ。
+    @Test func adoptsEditAfterLoggingInAgain() throws {
+        let previous = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }
+        #expect(previous.beginEditing(status(id: "10", accountID: "1"), source: StatusSource(id: "10", text: "前の本文", spoilerText: "")))
+        previous.text = "直した本文"
+
+        let renewed = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }
+        renewed.adoptDraft(from: previous, otherAccount: nil)
+
+        #expect(renewed.editedStatus?.id == "10")
+        #expect(renewed.text == "直した本文")
+    }
+
+    /// ほかのアカウントで書いている途中にログインし直しても、そのアカウントで書いたままにする。
+    @Test func adoptsOtherAccountAfterLoggingInAgain() async throws {
+        let posted = Posted()
+        let previous = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }
+        previous.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
+        previous.switchAccount(to: other(Uploads(), posted: posted))
+        previous.text = "別のアカウントから"
+
+        let renewed = ComposeModel(tasks: TaskScope(), myAccountID: "1") { draft in
+            posted.texts.withLock { $0.append("home:\(draft.text)") }
+        }
+        var changes: [String?] = []
+        renewed.onAccountChange = { changes.append($0?.id) }
+        renewed.adoptDraft(from: previous, otherAccount: other(Uploads(), posted: posted))
+
+        #expect(renewed.myAccountID == "50")
+        #expect(changes == ["other"])
+        renewed.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil, accountID: "other")
+        await renewed.submit()
+        #expect(posted.texts.withLock { $0 } == ["other:別のアカウントから"])
+    }
+
+    /// 代替テキストを送っている途中にログインし直しても、新しい画面で送り直す。送り直さないと、送り終えるのを待つ投稿が進まなくなるため。
+    @Test func resendsPendingDescriptionAfterLoggingInAgain() async throws {
+        let media = MediaAttachment(id: "m1", type: .image, url: URL(string: "https://home.example/m.jpg"), previewUrl: nil)
+        let gate = Gate()
+        var previousService = ComposeMediaService.unavailable
+        previousService.updateDescription = { id, description in
+            try await gate.wait()
+            return MediaAttachment(id: id, type: .image, url: media.url, previewUrl: nil, description: description)
+        }
+        let previousTasks = TaskScope()
+        let previous = ComposeModel(tasks: previousTasks, myAccountID: "1", media: previousService) { _ in }
+        let scheduled = ScheduledStatus(id: "s1", scheduledAt: Date(timeIntervalSince1970: 2_000_000_000), params: .init(text: "予約", mediaIDs: ["m1"]), mediaAttachments: [media])
+        #expect(previous.beginRewriting(scheduled))
+        previous.setDescription("書いた代替テキスト", of: try #require(previous.attachments.first?.id))
+        try await waitUntil { gate.waiterCount == 1 }
+
+        let sent = Mutex<[String]>([])
+        var renewedService = ComposeMediaService.unavailable
+        renewedService.updateDescription = { id, description in
+            sent.withLock { $0.append(description) }
+            return MediaAttachment(id: id, type: .image, url: media.url, previewUrl: nil, description: description)
+        }
+        let renewed = ComposeModel(tasks: TaskScope(), myAccountID: "1", media: renewedService) { _ in }
+        renewed.adoptDraft(from: previous, otherAccount: nil)
+        previousTasks.close()
+
+        try await waitUntil { renewed.isMediaReady }
+        #expect(sent.withLock { $0 } == ["書いた代替テキスト"])
+    }
+
+    /// ペーストや共有で足したメディアを読み込んでいる途中にログインし直しても、読み込んだファイルを前の画面の処理が消さず、新しい画面で送る。
+    /// 読み込みは1回きりで、新しい画面も同じ読み込みの結果を使うため。
+    @Test func keepsFileStillLoadingWhenLoggingInAgain() async throws {
+        let file = try picked("pasted")
+        let loaded = try await file.load([])
+        let gate = Gate()
+        // アプリのペーストと共有の読み込みは、始めた1つの読み込みの結果を何度でも返す。
+        let loading = Task {
+            try await gate.wait()
+            return loaded
+        }
+        let previousTasks = TaskScope()
+        let previous = ComposeModel(tasks: previousTasks, myAccountID: "1") { _ in }
+        previous.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
+        previous.addPastedMedia([PastedMedia(kind: .image, load: { try await loading.value })])
+        try await waitUntil { gate.waiterCount == 1 }
+
+        let uploads = Uploads()
+        let renewed = ComposeModel(tasks: TaskScope(), myAccountID: "1", media: uploads.service(server: "renewed.example")) { _ in }
+        renewed.adoptDraft(from: previous, otherAccount: nil)
+        previousTasks.close()
+        gate.open()
+        await previousTasks.waitForRunning()
+
+        #expect(FileManager.default.fileExists(atPath: loaded.url.path))
+        renewed.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
+        try await waitUntil { renewed.isMediaReady }
+        #expect(uploads.names.withLock { $0 } == ["renewed.example:pasted.jpg"])
     }
 }

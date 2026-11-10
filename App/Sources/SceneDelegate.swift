@@ -238,7 +238,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
     }
 
-    func showTimeline(for credential: Credential) {
+    /// - Parameter previous: 同じアカウントにログインし直して作り直すときの、前の画面一式。書きかけの下書きを引き継ぐ。
+    func showTimeline(for credential: Credential, adoptingDraftFrom previous: SessionController? = nil) {
         isShowingAccountsLoadFailure = false
         let session = SessionController(credential: credential, accountMenu: { [weak self] in
             self?.makeAccountMenu() ?? UIMenu()
@@ -246,6 +247,10 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             guard let self, session === self.session else { return }
             await self.reauthenticate(credential, isCurrent: credential.id == session.credential.id)
         })
+        // 前の画面一式は、下の差し替えで止める。止めると送りかけの添付も止まるので、その前に移す。
+        if let previous {
+            session.adoptDraft(from: previous)
+        }
         let replacesSession = self.session != nil
         self.session = session
         // アカウントを切り替えたときは、前のアカウントの画面から薄くして入れ替える。起動したときは、ローンチ画面から切り替える。
@@ -415,7 +420,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
         guard session?.credential != current else { return }
-        showTimeline(for: current)
+        // 同じアカウントにログインし直したときは、切り替えと違って確かめずに作り直すので、下書きを引き継ぐ（docs/compose.mdの「アカウントを変えるとき」）。
+        showTimeline(for: current, adoptingDraftFrom: session?.credential.id == current.id ? session : nil)
     }
 
     /// トークンが無効になったアカウントに、ログインし直す。ログイン画面は挟まず、そのアカウントのサーバーの認可画面を出す。

@@ -98,6 +98,8 @@ public final class ComposeModel<Thumbnail: Sendable> {
     @ObservationIgnored public let tasks: TaskScope
     @ObservationIgnored private let backgroundTime: @MainActor (String) -> @MainActor () -> Void
     @ObservationIgnored private var uploadTasks: [DraftAttachment.ID: Task<Void, Never>] = [:]
+    /// `adoptDraft`でほかの下書きへ渡した添付。渡したあとに止まった読み込みが、渡した先の使うファイルを消さないようにする。
+    @ObservationIgnored private var handedOverAttachments: Set<DraftAttachment.ID> = []
     @ObservationIgnored private var thumbnailTasks: [DraftAttachment.ID: Task<Void, Never>] = [:]
     /// 削除した元の投稿から外れるのを待っている添付。投稿の可否が変わるので、変更を見張れるようにする。
     private var releaseTasks: [DraftAttachment.ID: Task<Void, Never>] = [:] {
@@ -663,6 +665,78 @@ public final class ComposeModel<Thumbnail: Sendable> {
         guard !isPosting else { return false }
         guard account?.id != otherAccount?.id else { return true }
         return switchAccount(to: account)
+    }
+
+    /// 同じアカウントにログインし直して画面を作り直すとき、前の画面の下書きを引き継ぐ。決まりはdocs/compose.mdの「アカウントを変えるとき」にある。
+    /// 作ったばかりの空の下書きに呼ぶ。`previous`の添付はこちらへ移すので、引き継いだあとの`previous`は使わない。
+    /// サーバーの上限と既定値は引き継がず、`apply`で読み直す。選んだ公開範囲と言語は、読み直しても上書きしない。
+    /// アップロードが済んだ添付は、同じアカウントのメディアなのでそのまま使う。済んでいない添付は、上限を読んでからアップロードし直す。
+    /// - Parameter otherAccount: `previous`がほかのアカウントで書いていたら、この画面で作り直したそのアカウント。今のアカウントで書いていたらnil。
+    public func adoptDraft(from previous: ComposeModel, otherAccount: ComposeAccount<Thumbnail>?) {
+        initialDraft = previous.initialDraft
+        text = previous.text
+        spoilerText = previous.spoilerText
+        showsSpoiler = previous.showsSpoiler
+        visibility = previous.visibility
+        hasChosenVisibility = previous.hasChosenVisibility
+        replyTo = previous.replyTo
+        quoteTarget = previous.quoteTarget
+        editedStatus = previous.editedStatus
+        poll = previous.poll
+        scheduledAt = previous.scheduledAt
+        rewritingSchedule = previous.rewritingSchedule
+        redraft = previous.redraft
+        language = previous.language
+        hasChosenLanguage = previous.hasChosenLanguage
+        insertedURLs = previous.insertedURLs
+        // 応答だけを受け取れなかった投稿を、ログインし直してから送り直しても、同じ投稿として送る。
+        lastSubmitted = previous.lastSubmitted
+        if let otherAccount {
+            self.otherAccount = otherAccount
+            forgetServerDefaults()
+            onAccountChange(otherAccount)
+        }
+        pickerSelection = previous.pickerSelection
+        let handedOver = previous.handOverAttachments()
+        attachments = handedOver.attachments
+        localMedia = handedOver.localMedia
+        // 前の画面の送りかけが抜けるのを待ってから送り直すよう、`startAwaitingReuploads`に渡す。
+        uploadTasks = handedOver.uploads
+        for attachment in attachments {
+            if case .uploaded = attachment.state {
+                // 前の画面で送りかけていた代替テキストは、止めて渡されるので、ここで送り直す。
+                sendDescriptionIfNeeded(attachment.id)
+            } else {
+                prepareReupload(attachment.id)
+            }
+        }
+        // 読み込んだファイルは使い回すので、作り終えていなかったサムネイルはここで作り直す。
+        for (id, local) in localMedia {
+            guard let file = local.file, local.thumbnail == nil else { continue }
+            thumbnailTasks[id] = tasks.run(.action) { [weak self, media] in
+                let thumbnail = await media.makeThumbnail(file)
+                guard !Task.isCancelled else { return }
+                self?.localMedia[id]?.thumbnail = thumbnail
+            }
+        }
+        startReleasingRedraftMedia()
+    }
+
+    /// 添付を、端末のファイルを消さずに手放す。送りかけは止めずに渡し、応答が届いてもこの下書きには書き戻らない。
+    private func handOverAttachments() -> (attachments: [DraftAttachment], localMedia: [DraftAttachment.ID: LocalMedia<Thumbnail>], uploads: [DraftAttachment.ID: Task<Void, Never>]) {
+        for task in [thumbnailTasks, descriptionTasks, releaseTasks].flatMap(\.values) {
+            task.cancel()
+        }
+        thumbnailTasks = [:]
+        descriptionTasks = [:]
+        releaseTasks = [:]
+        handedOverAttachments.formUnion(attachments.map(\.id))
+        let handedOver = (attachments, localMedia, uploadTasks)
+        uploadTasks = [:]
+        localMedia = [:]
+        attachments = []
+        pickerSelection = MediaPickerSelection()
+        return handedOver
     }
 
     /// ほかのアカウントで書いていれば、今のアカウントに戻す。下書きを空にするときに呼ぶ。
@@ -1591,11 +1665,17 @@ extension ComposeModel {
         localMedia[id]?.sending = nil
         let file = try await local.load(media.unprocessableImageTypes().union([rejected.mimeType]))
         guard localMedia[id] != nil, !Task.isCancelled else {
-            file.remove()
+            removeUnlessHandedOver(file, of: id)
             throw CancellationError()
         }
         localMedia[id]?.file = file
         return file
+    }
+
+    /// 添付を外したあとに読み込みが済んだファイルを消す。`adoptDraft`でほかの下書きへ渡した添付のファイルは、渡した先が同じ読み込みの結果を使うので消さない。
+    private func removeUnlessHandedOver(_ file: LocalMediaFile, of id: DraftAttachment.ID) {
+        guard !handedOverAttachments.contains(id) else { return }
+        file.remove()
     }
 
     /// 読み込み済みならそのファイルを使う。初めて読み込んだら、サムネイルも作り始める。
@@ -1603,7 +1683,7 @@ extension ComposeModel {
         if let file = local.file { return file }
         let file = try await local.load(media.unprocessableImageTypes())
         guard localMedia[id] != nil, !Task.isCancelled else {
-            file.remove()
+            removeUnlessHandedOver(file, of: id)
             throw CancellationError()
         }
         localMedia[id]?.file = file

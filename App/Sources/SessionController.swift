@@ -3699,6 +3699,27 @@ final class SessionController {
 
     // MARK: - 投稿
 
+    /// 同じアカウントにログインし直して作り直した画面に、前の画面の下書きを引き継ぐ。決まりはdocs/compose.mdの「アカウントを変えるとき」にある。
+    /// 投稿欄は、開いていても閉じたカプセルで始める。前の画面を止める前に呼ぶ。
+    func adoptDraft(from previous: SessionController) {
+        let draft = previous.composer.model
+        guard previous.credential.id == credential.id, draft.hasWrittenContent || draft.canDiscardDraft else { return }
+        var writing: ComposeAccount<UIImage>?
+        if let other = draft.otherAccount {
+            if let account = otherAccounts.list(loadsProfiles: false).first(where: { $0.credential.id == other.id }) {
+                writing = composeAccount(for: account)
+            } else {
+                // ログインし直している間に、書いていたほかのアカウントからログアウトしていた。今のアカウントの下書きに戻せなければ（そのアカウントの投稿の編集など）、引き継がない。
+                guard draft.switchAccount(to: nil) else { return }
+            }
+        }
+        composer.model.adoptDraft(from: draft, otherAccount: writing)
+        // ほかのアカウントで書いているときは、`onAccountChange`がそのサーバーの値を読む。
+        if writing == nil {
+            applyComposeDefaults()
+        }
+    }
+
     /// 既定の公開範囲などを読めたら、投稿欄に反映する。読めなかったら、次に書き始めたときに読み直す。
     private func applyComposeDefaults() {
         if let writing = composer.model.otherAccount {
