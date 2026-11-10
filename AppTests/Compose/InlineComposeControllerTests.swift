@@ -40,7 +40,14 @@ final class InlineComposeControllerTests {
         composer.install(in: tabBarController)
         window.layoutIfNeeded()
         clock = LayerClock(freezing: window.layer)
+        useLayerClock(in: composer)
         hideSoftwareKeyboard()
+    }
+
+    /// 開閉の動きは、次の実行ループで行き先を測り直し、残りの時間で向かい直す。残りを実際の時間で測ると、測り直すまでにかかった実際の時間の分だけ
+    /// 向かい直す動きが短くなり、途中のコマの位置が走らせるたびに変わる（10ミリ秒で、宛先のかたまりの位置が0.15ptほど変わった）。止めた層の時間で測らせる。
+    private func useLayerClock(in composer: InlineComposeController) {
+        composer.mediaTime = { [clock] in clock.now }
     }
 
     /// 実物のキーボードを出さない。シミュレーターのハードウェアキーボードが外れていても、結果が変わらないようにする。キーボードの動きは、テストが通知で送る。
@@ -1132,6 +1139,7 @@ final class InlineComposeControllerTests {
         let composer = InlineComposeController(model: ComposeModel<UIImage>(tasks: TaskScope(), myAccountID: "1", media: media, backgroundTime: { _ in {} }, post: post), tuning: tuning, settings: settings, keyboardNotifications: keyboardNotifications)
         composer.install(in: tabBarController)
         window.layoutIfNeeded()
+        useLayerClock(in: composer)
         hideSoftwareKeyboard()
         return composer
     }
@@ -1474,19 +1482,40 @@ final class InlineComposeControllerTests {
 
         composer.beginEditing()
         try await clock.advance(by: 0)
+        let start = clock.now
         var landing: CGPoint?
+        // かたまりを外すまでのコマごとの記録。落ちたときに、どのコマで何が起きてかたまりが外れたかを読む。
+        var frames: [String] = []
         while let line = chunk() {
             #expect(clock.now < 5, "動き終えても、かたまりが残っています")
             guard clock.now < 5 else { break }
-            if (line.layer.presentation()?.opacity ?? 0) > 0.5 {
-                landing = try glyphInk(of: line, in: bar)
+            let opacity = line.layer.presentation()?.opacity ?? 0
+            let ink = try glyphInk(of: line, in: bar)
+            if opacity > 0.5 {
+                landing = ink
             }
+            frames.append(String(format: "%.3f 濃さ%.2f y=%.3f ", clock.now - start, opacity, ink.y) + surroundings(of: textView))
             try await clock.advance(by: LayerClock.frame)
         }
+        let removed = "かたまりが外れたコマ: " + String(format: "%.3f ", clock.now - start) + surroundings(of: textView)
         try await waitUntilSettled()
         let last = try #require(landing, "宛先を浮かび上がらせるかたまりがありません\n\(composer.stateDump())")
         let range = try #require(textView.textRange(from: textView.beginningOfDocument, to: textView.position(from: textView.beginningOfDocument, offset: 1) ?? textView.beginningOfDocument))
-        expectClose(last, try ink(of: textView, glyphs: textView.firstRect(for: range).insetBy(dx: 0, dy: -8), in: bar), "着地のコマの宛先が、入力欄の本物の文字と同じ位置にありません")
+        expectClose(last, try ink(of: textView, glyphs: textView.firstRect(for: range).insetBy(dx: 0, dy: -8), in: bar), """
+        着地のコマの宛先が、入力欄の本物の文字と同じ位置にありません
+        \(removed)
+        \(frames.joined(separator: "\n"))
+        \(composer.stateDump())
+        """)
+    }
+
+    /// 動きの途中でかたまりが外れる理由を追うための、まわりの状態。残っている終わりのある動きの数、入力欄のフォーカス、ウィンドウとシーンとアプリの状態。
+    /// 2026-11-10に、開き始めてから0.3秒ほど（通常は0.87秒ほど）でかたまりが外れ、着地の0.87pt手前の位置を最後に読んで落ちた。
+    /// 途中でフォーカスを外すと着地の手前で止まるが、閉じる動きの分だけ長くかかり、短く終わった落ちた回と合わない。
+    /// ほかのウィンドウを手前に出す、キーボードの通知を送る、入力欄の変更を届ける、では着地は変わらなかった。
+    private func surroundings(of textView: UITextView) -> String {
+        let scene = window.windowScene
+        return "動き\(LayerClock.finiteAnimations(in: window.layer).count) フォーカス\(textView.isFirstResponder) キー\(window.isKeyWindow) 隠れ\(window.isHidden) シーン\(scene.map { "\($0.activationState.rawValue)" } ?? "なし") アプリ\(UIApplication.shared.applicationState.rawValue)"
     }
 
     /// 開閉で本文を動かす間、かたまりの文字は本物と同じ大きさのまま描く。

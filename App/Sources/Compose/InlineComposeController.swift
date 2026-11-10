@@ -110,7 +110,11 @@ final class InlineComposeController: NSObject {
     /// 最後にバーを下へ引いて離したときの、指の速さ（pt/秒、下向きが正）と時刻。
     private var barFling: (velocity: CGFloat, time: CFTimeInterval)?
     /// 開閉で、カプセルのラベルのアイコンとサムネイルを、書いているときの同じものの位置へ動かす。
-    private lazy var morphFlights = ComposeMorphFlights(container: bar.contentView)
+    private lazy var morphFlights: ComposeMorphFlights = {
+        let flights = ComposeMorphFlights(container: bar.contentView)
+        flights.mediaTime = { [unowned self] in mediaTime() }
+        return flights
+    }()
     /// 開閉で、本文の文字を、カプセルの1行と入力欄の同じ文字の位置のあいだで動かす。
     private lazy var textMorph: ComposeTextMorph = {
         let morph = ComposeTextMorph(container: bar.contentView)
