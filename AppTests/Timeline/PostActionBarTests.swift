@@ -347,6 +347,17 @@ struct PostActionBarTests {
         #expect(titles.contains("返信"))
     }
 
+    /// 投稿のタップに「アクションバーを開く」を選んでいても、引用の囲みは引用の投稿の操作に従い、タップで引用元のスレッドを開く。
+    @Test func quotedPostTapFollowsItsOwnActions() throws {
+        let (harness, statuses) = try harness()
+        defer { harness.tearDown() }
+        harness.settings.statusActions.tap = .actionBar
+        var opened = 0
+        let target = harness.viewController.statusTarget(for: statuses[20], id: .status(statuses[10].id)) { _ in opened += 1 }
+        target.perform(.tap, in: harness.viewController.view, at: .zero)
+        #expect(opened == 1)
+    }
+
     /// ほかのメニューの中から開く投稿のメニュー（並びを渡して組むもの）からは、除かない。
     @Test func submenuKeepsActionBarItems() throws {
         let (harness, statuses) = try harness(replacing: 10, with: { $0 }, items: [.status(.reply), .menu])

@@ -321,6 +321,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     case autoTranslation = "auto-translation"
     case tabs
     case statusActions = "status-actions"
+    case quotedStatusActions = "quoted-status-actions"
     case notificationActions = "notification-actions"
     case userActions = "user-actions"
     case linkActions = "link-actions"
@@ -356,7 +357,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     public var path: [SettingsPage] {
         switch self {
         case .appearance, .notificationAppearance, .media, .linkLoading, .autoTranslation: [.display, self]
-        case .statusActions, .notificationActions, .userActions, .linkActions, .externalPostActions, .hashtagActions, .mediaActions,
+        case .statusActions, .quotedStatusActions, .notificationActions, .userActions, .linkActions, .externalPostActions, .hashtagActions, .mediaActions,
              .reactionActions, .profileTextMenu:
             [.interaction, self]
         case .statusMenu, .statusActionBar, .statusLeadingSwipe, .statusTrailingSwipe: [.interaction, .statusActions, self]

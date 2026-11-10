@@ -202,6 +202,7 @@ struct AppDestinationTests {
         #expect(SettingsPage.mediaMenu.path == [.interaction, .mediaActions, .mediaMenu])
         #expect(SettingsPage.profileTextMenu.path == [.interaction, .profileTextMenu])
         #expect(SettingsPage.mediaActions.path == [.interaction, .mediaActions])
+        #expect(SettingsPage.quotedStatusActions.path == [.interaction, .quotedStatusActions])
         #expect(SettingsPage.composeTools.path == [.compose, .composeTools])
         #expect(SettingsPage.tabs.path == [.tabs])
         #expect(SettingsPage.appIcon.path == [.appIcon])

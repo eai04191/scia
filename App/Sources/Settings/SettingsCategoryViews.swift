@@ -299,6 +299,7 @@ struct InteractionSettingsView: View {
         Form {
             Section {
                 NavigationLink(ObjectEntity.status.title, value: SettingsPage.statusActions)
+                NavigationLink(ObjectEntity.quotedStatus.title, value: SettingsPage.quotedStatusActions)
                 NavigationLink(ObjectEntity.notification.title, value: SettingsPage.notificationActions)
                 NavigationLink(ObjectEntity.user.title, value: SettingsPage.userActions)
                 NavigationLink(ObjectEntity.link.title, value: SettingsPage.linkActions)

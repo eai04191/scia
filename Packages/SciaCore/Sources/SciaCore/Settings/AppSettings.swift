@@ -293,9 +293,14 @@ public final class AppSettings {
         didSet { defaults.set(mediaMenuLayout.tokens, forKey: Keys.mediaMenuLayout) }
     }
 
-    /// 投稿の行と引用の囲みをタップ、長押ししたときの操作。決まりはdocs/object-actions.mdにある。
+    /// 投稿の行をタップ、長押ししたときの操作。決まりはdocs/object-actions.mdにある。
     public var statusActions: ObjectActions<StatusMenuItem> {
         didSet { defaults.set(statusActions.tokens, forKey: Keys.statusActions) }
+    }
+
+    /// 引用の囲みをタップ、長押ししたときの操作。項目は投稿のメニューから選ぶ。
+    public var quotedStatusActions: ObjectActions<StatusMenuItem> {
+        didSet { defaults.set(quotedStatusActions.tokens, forKey: Keys.quotedStatusActions) }
     }
 
     /// 通知の行をタップ、長押ししたときの操作。項目は投稿のメニューから選ぶ。
@@ -447,6 +452,7 @@ public final class AppSettings {
         static let showsActionBarItemsInMenu = "settings.showsActionBarItemsInMenu"
         static let showsActionBarLongPressItemsInMenu = "settings.showsActionBarLongPressItemsInMenu"
         static let statusActions = "settings.objectActions.status"
+        static let quotedStatusActions = "settings.objectActions.quotedStatus"
         static let notificationActions = "settings.objectActions.notification"
         static let userActions = "settings.objectActions.user"
         static let linkActions = "settings.objectActions.link"
@@ -505,6 +511,7 @@ public final class AppSettings {
         showsActionBarItemsInMenu = defaults.bool(forKey: Keys.showsActionBarItemsInMenu)
         showsActionBarLongPressItemsInMenu = defaults.bool(forKey: Keys.showsActionBarLongPressItemsInMenu)
         statusActions = defaults.stringArray(forKey: Keys.statusActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
+        quotedStatusActions = defaults.stringArray(forKey: Keys.quotedStatusActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
         notificationActions = defaults.stringArray(forKey: Keys.notificationActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
         userActions = defaults.stringArray(forKey: Keys.userActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
         linkActions = defaults.stringArray(forKey: Keys.linkActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard

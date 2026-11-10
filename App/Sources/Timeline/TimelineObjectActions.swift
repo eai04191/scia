@@ -104,7 +104,7 @@ extension TimelineViewController {
     func statusTarget(for status: Status, id: ItemID, openThread: @escaping (UIView) -> Void) -> ObjectTarget<StatusMenuItem, StatusMenuCommand> {
         let entry = TimelineEntry.status(status)
         return ObjectTarget(
-            entity: .status,
+            entity: .quotedStatus,
             settings: settings,
             primary: openThread,
             buildMenu: { [weak self] groups in self?.statusMenu(for: entry, id: id, groups: groups) },

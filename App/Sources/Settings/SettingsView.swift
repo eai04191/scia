@@ -168,6 +168,7 @@ struct SettingsView: View {
                     ]
                 )
             )
+        case .quotedStatusActions: ObjectActionsSettingsView(entity: .quotedStatus, settings: settings, menu: nil)
         case .notificationActions: ObjectActionsSettingsView(entity: .notification, settings: settings, menu: nil)
         case .userActions: ObjectActionsSettingsView(entity: .user, settings: settings, menu: .userMenu)
         case .linkActions: ObjectActionsSettingsView(entity: .link, settings: settings, menu: .linkMenu)

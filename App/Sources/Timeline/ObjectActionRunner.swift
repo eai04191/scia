@@ -26,8 +26,10 @@ struct ObjectEntity<Item: ObjectActionItem & MenuItemPresentable> {
 
 @MainActor
 extension ObjectEntity where Item == StatusMenuItem {
-    /// タイムラインの投稿の行と、引用の囲み。
+    /// タイムラインの投稿の行。
     static var status: Self { ObjectEntity(title: "投稿", actions: \.statusActions) }
+    /// 引用の囲み。アクションバーを出さないので、投稿とは別に選ぶ。
+    static var quotedStatus: Self { ObjectEntity(title: "引用の投稿", actions: \.quotedStatusActions) }
     static var notification: Self { ObjectEntity(title: "通知", actions: \.notificationActions) }
 }
 

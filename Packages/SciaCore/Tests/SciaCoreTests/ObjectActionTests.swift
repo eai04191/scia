@@ -10,6 +10,7 @@ struct ObjectActionTests {
     @Test func defaultsKeepCurrentBehavior() {
         let settings = AppSettings(defaults: TestScratch.defaults("ObjectActionTests"))
         #expect(settings.statusActions == ObjectActions(tap: .item(.openThread), longPress: .menu))
+        #expect(settings.quotedStatusActions == ObjectActions(tap: .item(.openThread), longPress: .menu))
         #expect(settings.notificationActions == ObjectActions(tap: .item(.openThread), longPress: .menu))
         #expect(settings.userActions == ObjectActions(tap: .item(.profile), longPress: .menu))
         #expect(settings.linkActions == ObjectActions(tap: .item(.openInBrowser), longPress: .menu))
@@ -31,7 +32,8 @@ struct ObjectActionTests {
         #expect(relaunched.externalPostActions == ObjectActions(tap: .item(.openInBrowser), longPress: .item(.systemTranslate)))
         // リンクとほかのサービスの投稿は、どちらもブラウザで開くが、別の設定にする。
         #expect(relaunched.linkActions == .standard)
-        // 投稿と通知は同じ項目から選ぶが、別の設定にする。
+        // 投稿と引用の投稿と通知は同じ項目から選ぶが、別の設定にする。
+        #expect(relaunched.quotedStatusActions == .standard)
         #expect(relaunched.notificationActions == .standard)
     }
 
