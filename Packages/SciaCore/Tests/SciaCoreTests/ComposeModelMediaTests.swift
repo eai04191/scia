@@ -1079,6 +1079,49 @@ struct ComposeModelMediaTests {
         #expect(server.waits == ["v1"])
     }
 
+    /// 変換を待つ間の問い合わせが失敗しても、ファイルはサーバーに届いているので、再試行では送り直さずに同じ添付ファイルの変換を待ち直す。
+    @Test func retryAfterFailedProcessingCheckWaitsForSameMediaWithoutUploadingAgain() async throws {
+        let server = FakeServer()
+        server.uploadResult = { _ in Self.attachment(id: "v1", processed: false) }
+        server.waitResult = { _ in throw URLError(.networkConnectionLost) }
+        let model = makeModel(server)
+
+        model.applyPickerSelection([try picked("a")])
+        try await settle { isSettled(model) }
+        let id = try #require(model.attachments.first?.id)
+        #expect(model.attachments.first?.state == .failed(serverID: "v1"))
+
+        server.waitResult = { id in Self.attachment(id: id, processed: true) }
+        model.retryAttachment(id)
+        try await settle { model.attachments.first?.isReady == true }
+
+        #expect(server.uploads.count == 1, "サーバーに届いているファイルを送り直しました")
+        #expect(server.waits == ["v1", "v1"])
+        #expect(model.attachments.first?.serverID == "v1")
+        #expect(model.localMedia[id]?.failure == nil)
+    }
+
+    /// 待ち直そうとした添付ファイルがサーバーにもうなければ、ファイルを送り直す。
+    @Test func retryUploadsAgainWhenServerNoLongerHasTheMedia() async throws {
+        let server = FakeServer()
+        server.uploadResult = { _ in Self.attachment(id: "v1", processed: false) }
+        server.waitResult = { _ in throw URLError(.networkConnectionLost) }
+        let model = makeModel(server)
+
+        model.applyPickerSelection([try picked("a")])
+        try await settle { isSettled(model) }
+        let id = try #require(model.attachments.first?.id)
+
+        server.waitResult = { _ in throw MastodonAPIError(statusCode: 404, message: "Record not found") }
+        server.uploadResult = { _ in Self.attachment(id: "v2", processed: true) }
+        model.retryAttachment(id)
+        try await settle { model.attachments.first?.isReady == true }
+
+        #expect(server.uploads.count == 2)
+        #expect(server.waits == ["v1", "v1"])
+        #expect(model.attachments.first?.serverID == "v2")
+    }
+
     /// 投稿を待つ間にピッカーで外したものは、投稿に失敗した後の下書きからも外れている。
     @Test func selectionChangedWhilePostingIsKept() async throws {
         let server = FakeServer()

@@ -1285,7 +1285,8 @@ extension ComposeModel {
         discardAttachment(id)
     }
 
-    /// 失敗した添付を送り直す。処理の待ち時間切れなら、サーバーに残っている同じIDで待ち直す。
+    /// 失敗した添付を送り直す。サーバーが受け付けたあと、変換を待つ間の問い合わせが失敗したのなら、ファイルを送り直さずに、サーバーに残っている同じIDで待ち直す。
+    /// サーバーが変換に失敗したのなら、待ち直しても終わらないので、ファイルを送り直す。
     /// 代替テキストだけを送れなかったなら、代替テキストだけを送り直す。
     public func retryAttachment(_ id: DraftAttachment.ID) {
         guard let attachment = attachments.first(where: { $0.id == id }) else { return }
@@ -1295,8 +1296,12 @@ extension ComposeModel {
             return
         }
         switch attachment.state {
-        case .failed:
-            startUpload(id)
+        case .failed(let serverID):
+            if let serverID, !failedInProcessing(id) {
+                startAwaitingProcessing(id, serverID: serverID)
+            } else {
+                startUpload(id)
+            }
         case .uploaded:
             localMedia[id]?.descriptionFailure = nil
             sendDescriptionIfNeeded(id)
@@ -1443,6 +1448,42 @@ extension ComposeModel {
     private func startUpload(_ id: DraftAttachment.ID) {
         uploadTasks[id]?.cancel()
         uploadTasks[id] = tasks.run(.action) { [weak self] in await self?.upload(id) }
+    }
+
+    /// サーバーが変換そのものに失敗したか。
+    private func failedInProcessing(_ id: DraftAttachment.ID) -> Bool {
+        if case .processingFailed? = localMedia[id]?.failure as? MediaUploadError { true } else { false }
+    }
+
+    private func startAwaitingProcessing(_ id: DraftAttachment.ID, serverID: String) {
+        uploadTasks[id]?.cancel()
+        uploadTasks[id] = tasks.run(.action) { [weak self] in await self?.awaitProcessing(id, serverID: serverID) }
+    }
+
+    /// サーバーが受け付けた添付の変換を、同じIDで待ち直す。サーバーにもうなければ（404）、ファイルを送り直す。
+    private func awaitProcessing(_ id: DraftAttachment.ID, serverID: String) async {
+        guard localMedia[id] != nil, attachments.contains(where: { $0.id == id }) else { return }
+        let endBackgroundTime = backgroundTime("await attachment processing")
+        defer { endBackgroundTime() }
+        let generation = accountGeneration
+        localMedia[id]?.failure = nil
+        localMedia[id]?.descriptionFailure = nil
+        setState(.processing(serverID: serverID), of: id)
+        do {
+            let processed = try await media.waitUntilProcessed(serverID)
+            try Task.checkCancellation()
+            guard generation == accountGeneration else { return }
+            setState(.uploaded(processed), of: id)
+            sendDescriptionIfNeeded(id)
+        } catch let error as MastodonAPIError where error.statusCode == 404 {
+            guard !Task.isCancelled, generation == accountGeneration else { return }
+            await upload(id)
+        } catch {
+            guard !Task.isCancelled, localMedia[id] != nil, generation == accountGeneration else { return }
+            logger.info("attachment processing wait failed error=\(SciaLog.describe(error), privacy: .public)")
+            localMedia[id]?.failure = error
+            setState(.failed(serverID: serverID), of: id)
+        }
     }
 
     /// ファイルを読み込み、アップロードし、サーバーでの変換が済むまで待つ。途中で添付から外されたら、何も書き戻さない。
