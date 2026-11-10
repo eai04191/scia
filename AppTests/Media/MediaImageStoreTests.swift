@@ -414,10 +414,10 @@ struct MediaImageStoreTests {
             _ = try await store.image(for: url, maxPixelSize: 8, purpose: .display)
         }
 
-        NotificationCenter.default.post(name: UIApplication.didEnterBackgroundNotification, object: UIApplication.shared)
-
-        for url in urls {
-            #expect(store.cachedImage(for: url, maxPixelSize: 8) != nil, "裏に回ったときに画像を捨てました")
+        whileInBackground {
+            for url in urls {
+                #expect(store.cachedImage(for: url, maxPixelSize: 8) != nil, "裏に回ったときに画像を捨てました")
+            }
         }
     }
 

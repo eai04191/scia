@@ -148,12 +148,12 @@ struct EmojiImageStoreTests {
 
         for url in urls { _ = store.image(for: url) }
         try await waitUntil { urls.allSatisfy { store.image(for: $0) != nil } }
-        NotificationCenter.default.post(name: UIApplication.didEnterBackgroundNotification, object: UIApplication.shared)
-
-        for url in urls {
-            #expect(store.image(for: url) != nil, "裏に回ったときに静止画を捨てました")
+        whileInBackground {
+            for url in urls {
+                #expect(store.image(for: url) != nil, "裏に回ったときに静止画を捨てました")
+            }
+            #expect(reads.withLock { $0 } == 3)
         }
-        #expect(reads.withLock { $0 } == 3)
     }
 
     /// 動く絵文字も、裏に回っても読んだアニメーションを捨てない。読み終えてから行を描き直して層がつかむまでの間に捨てると、描き直しで読み直し、読み終えるとまた捨てられるため。
@@ -168,12 +168,12 @@ struct EmojiImageStoreTests {
 
         for url in urls { _ = store.animation(for: url) }
         try await waitUntil { urls.allSatisfy { store.hasFinishedLoadingAnimation(for: $0) } }
-        NotificationCenter.default.post(name: UIApplication.didEnterBackgroundNotification, object: UIApplication.shared)
-
-        for url in urls {
-            #expect(store.animation(for: url) != nil, "裏に回ったときにアニメーションを捨てました")
+        whileInBackground {
+            for url in urls {
+                #expect(store.animation(for: url) != nil, "裏に回ったときにアニメーションを捨てました")
+            }
+            #expect(reads.withLock { $0 } == 3)
         }
-        #expect(reads.withLock { $0 } == 3)
     }
 
     /// 2コマのGIF。

@@ -24,6 +24,7 @@ public enum Linter {
         .sessionTaskOutsideScope,
         .taskWithoutRequestPurpose,
         .presentWithoutWaiting,
+        .backgroundNotificationInTest,
         .fixedFontSize,
         .dimmedWhiteText,
         .timelineStoreWithoutTester,

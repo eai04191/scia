@@ -145,12 +145,12 @@ struct AvatarImageStoreTests {
 
         for key in keys { _ = store.requestImage(for: key) }
         try await waitUntil { keys.allSatisfy { store.cachedImage(for: $0) != nil } }
-        NotificationCenter.default.post(name: UIApplication.didEnterBackgroundNotification, object: UIApplication.shared)
-
-        for key in keys {
-            #expect(store.requestImage(for: key) != nil, "裏に回ったときにアイコンを捨てました")
+        whileInBackground {
+            for key in keys {
+                #expect(store.requestImage(for: key) != nil, "裏に回ったときにアイコンを捨てました")
+            }
+            #expect(reads.withLock { $0 } == 3)
         }
-        #expect(reads.withLock { $0 } == 3)
     }
 
     /// メモリ警告で手放すのは、使っていないアイコンだけ。描いているアイコンは、手放したあとも同じものを返す。
