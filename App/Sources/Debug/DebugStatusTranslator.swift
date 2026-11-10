@@ -9,6 +9,11 @@ struct DebugStatusTranslator: StatusTranslating {
     /// ダミーの訳文を返すまでの時間。nilならOSの翻訳を使う。
     private static let fakeDelay = Mutex<Duration?>(nil)
 
+    /// ダミーの翻訳で、設定の「自動翻訳」に並べる言語。
+    static let fakeLanguages = ["en", "ko", "de", "ja", "zh", "zh-TW"]
+    /// そのうち、翻訳モードが「標準」のときにモデルが入っていない扱いにする言語。「Apple Intelligence」では実物と同じく全部入っている扱いにする。
+    static let fakeMissingLanguages: Set<String> = ["de", "zh-TW"]
+
     static var isFake: Bool {
         fakeDelay.withLock { $0 != nil }
     }

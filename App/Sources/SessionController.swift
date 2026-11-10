@@ -731,7 +731,7 @@ final class SessionController {
         return StatusTranslationStore(
             translator: translator,
             targetLanguage: AppDependencies.settings.resolvedTranslationTarget.minimalIdentifier,
-            strategy: AppDependencies.settings.autoTranslationStrategy,
+            strategy: AppDependencies.settings.resolvedTranslationStrategy,
             scope: tasks,
             applyInterval: { .seconds(AppDependencies.tuning.value(of: TuningCatalog.translationApplyInterval)) }
         )
@@ -743,12 +743,13 @@ final class SessionController {
             _ = AppDependencies.settings.effectiveAutoTranslationLanguages
             _ = AppDependencies.settings.autoTranslationModelRevision
             _ = AppDependencies.settings.autoTranslationTarget
-            _ = AppDependencies.settings.autoTranslationStrategy
+            // 選んだ翻訳モードに加えて、Apple Intelligenceのモデルが使えるかの変化も追う。
+            _ = AppDependencies.settings.resolvedTranslationStrategy
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor in
                 guard let self, !self.tasks.isClosed else { return }
                 self.translations?.setTargetLanguage(AppDependencies.settings.resolvedTranslationTarget.minimalIdentifier)
-                self.translations?.setStrategy(AppDependencies.settings.autoTranslationStrategy)
+                self.translations?.setStrategy(AppDependencies.settings.resolvedTranslationStrategy)
                 self.translations?.setLanguages(AppDependencies.settings.effectiveAutoTranslationLanguages)
                 for timeline in self.timelines.allObjects {
                     timeline.applyTranslationLanguages()

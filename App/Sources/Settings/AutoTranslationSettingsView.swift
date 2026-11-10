@@ -10,90 +10,42 @@ extension AppSettings {
     }
 }
 
-/// ダウンロードの許可を、言語の組み合わせごとに順に求める。OSのシートは1つずつしか出せないため。
-@available(iOS 26.4, *)
-@MainActor
-@Observable
-private final class TranslationDownloadQueue {
-    struct Request: Equatable {
-        let source: String
-        let target: Locale.Language
-        let strategy: TranslationStrategy
-    }
-
-    /// 入れるとOSのシートを出す。
-    private(set) var configuration: TranslationSession.Configuration?
-    private var current: Request?
-    private var waiting: [Request] = []
-    private let onRefused: (Request) -> Void
-    private let onInstalled: () -> Void
-
-    init(onRefused: @escaping (Request) -> Void, onInstalled: @escaping () -> Void) {
-        self.onRefused = onRefused
-        self.onInstalled = onInstalled
-    }
-
-    /// `target`と`strategy`への求めを待ち行列に足す。ほかの翻訳先や方式への求めは、もう要らないので外す。シートを出していなければ、先頭を出す。
-    func enqueue(_ requests: [Request], target: Locale.Language, strategy: TranslationStrategy) {
-        waiting.removeAll { $0.target != target || $0.strategy != strategy }
-        waiting += requests.filter { !waiting.contains($0) && $0 != current }
-        if current == nil { showNext() }
-    }
-
-    /// まだ出していない求めを取り下げる。`source`を渡せば、その言語の求めだけを取り下げる。
-    func withdrawWaiting(source: String? = nil) {
-        waiting.removeAll { source == nil || $0.source == source }
-    }
-
-    /// シートの結果を受け取り、次を出す。
-    func finish(granted: Bool) {
-        if granted {
-            onInstalled()
-        } else if let current {
-            onRefused(current)
-        }
-        current = nil
-        showNext()
-    }
-
-    private func showNext() {
-        guard !waiting.isEmpty else { return }
-        let request = waiting.removeFirst()
-        current = request
-        let next = TranslationSession.Configuration(source: Locale.Language(identifier: request.source), target: request.target, preferredStrategy: TranslationSession.Strategy(request.strategy))
-        // 許可しなかった組み合わせをもう一度求めるときは同じ値になるので、無効にして求め直す。
-        if configuration == next {
-            configuration?.invalidate()
-        } else {
-            configuration = next
-        }
-    }
-}
-
 /// 自動翻訳の翻訳先と、訳す投稿の言語を選ぶ画面。決まりはdocs/auto-translation.mdの「言語のダウンロード」にある。
 @available(iOS 26.4, *)
 struct AutoTranslationSettingsView: View {
-    private struct Language: Identifiable {
+    private struct Language: Identifiable, Equatable {
         let code: String
         let name: String
         var id: String { code }
     }
 
-    @Bindable var settings: AppSettings
-    @State private var targets: [Language] = []
-    @State private var sources: [Language] = []
-    @State private var downloads: TranslationDownloadQueue
-
-    init(settings: AppSettings) {
-        self.settings = settings
-        // シートを閉じて許可しなかった言語は、訳せないのでオフに戻す。
-        _downloads = State(initialValue: TranslationDownloadQueue(onRefused: { request in
-            guard settings.isAutoTranslationEnabled, request.target == settings.resolvedTranslationTarget, request.strategy == settings.autoTranslationStrategy else { return }
-            settings.autoTranslationLanguages.removeAll { $0 == request.source }
-        }, onInstalled: {
-            settings.noteAutoTranslationModelInstalled()
-        }))
+    /// 今の翻訳先と翻訳モードで、OSが対応している言語をモデルの有無で分けたもの。
+    private struct Availability: Equatable {
+        var targets: [Language] = []
+        var installed: [Language] = []
+        var downloadable: [Language] = []
     }
+
+    /// 調べ直す対象。変わったら、前の対象の結果を待たずに調べ直す。
+    private struct Subject: Equatable {
+        let isEnabled: Bool
+        /// 変わると翻訳モードの項目の出し方が変わるので、調べ直しも始め直す。
+        let canUseAppleIntelligence: Bool
+        let target: Locale.Language
+        let strategy: TranslationStrategy
+    }
+
+    /// 開いている間にモデルの有無を調べ直す間隔。OSはダウンロードの完了を通知しないため。
+    private static let pollingInterval: Duration = .seconds(2)
+
+    @Bindable var settings: AppSettings
+    var clock: any Clock<Duration> = AppDependencies.clock
+    @State private var availability = Availability()
+    /// `availability`を調べたときの対象。今の対象と違う間は、前の翻訳先や翻訳モードの並びなので出さない。
+    @State private var loadedSubject: Subject?
+    /// 入れるとOSのシートを出す。
+    @State private var download: TranslationSession.Configuration?
+    @State private var canUseAppleIntelligence = AppleIntelligence.isAvailable
 
     var body: some View {
         Form {
@@ -107,32 +59,10 @@ struct AutoTranslationSettingsView: View {
         .topEdgeEffectHiddenOnMac()
         .navigationTitle("自動翻訳")
         .navigationBarTitleDisplayMode(.inline)
-        .task(.withoutRequests) { await loadLanguages() }
-        .onChange(of: settings.autoTranslationTarget) {
-            updateSources()
-            Task(.withoutRequests) { await requestDownloads(of: settings.autoTranslationLanguages) }
-        }
-        .onChange(of: settings.isAutoTranslationEnabled) {
-            guard settings.isAutoTranslationEnabled else {
-                downloads.withdrawWaiting()
-                return
-            }
-            Task(.withoutRequests) { await requestDownloads(of: settings.autoTranslationLanguages) }
-        }
-        .onChange(of: settings.autoTranslationStrategy) {
-            Task(.withoutRequests) {
-                await loadLanguages()
-                await requestDownloads(of: settings.autoTranslationLanguages)
-            }
-        }
-        .translationTask(downloads.configuration) { @concurrent [downloads] session in
-            var granted = true
-            do {
-                try await session.prepareTranslation()
-            } catch {
-                granted = false
-            }
-            await downloads.finish(granted: granted)
+        .task(.withoutRequests, id: subject) { await poll(subject) }
+        .translationTask(download) { @concurrent session in
+            // 許可してもしなくても同じに返るので、結果は見ない。入ったかは調べ直して知る。
+            try? await session.prepareTranslation()
         }
     }
 
@@ -140,28 +70,67 @@ struct AutoTranslationSettingsView: View {
         Section {
             Picker("翻訳先", selection: $settings.autoTranslationTarget) {
                 Text("デバイスの言語（\(Self.name(of: Locale.current.language))）").tag(String?.none)
-                ForEach(targets) { language in
+                ForEach(availability.targets) { language in
                     Text(language.name).tag(String?.some(language.code))
                 }
             }
             .pickerStyle(.navigationLink)
-            Picker("翻訳モード", selection: $settings.autoTranslationStrategy) {
-                Text(verbatim: "Apple Intelligence").tag(TranslationStrategy.highFidelity)
-                Text("標準").tag(TranslationStrategy.lowLatency)
+            if canUseAppleIntelligence {
+                Picker("翻訳モード", selection: $settings.autoTranslationStrategy) {
+                    Text(verbatim: "Apple Intelligence").tag(TranslationStrategy.highFidelity)
+                    Text("標準").tag(TranslationStrategy.lowLatency)
+                }
             }
         }
-        Section {
-            ForEach(sources) { language in
-                Toggle(language.name, isOn: isOn(language))
-            }
-        } header: {
-            Text("翻訳元")
+        if loadedSubject == subject {
+            languages
         }
     }
 
-    private var target: Locale.Language { settings.resolvedTranslationTarget }
+    @ViewBuilder private var languages: some View {
+        if !availability.installed.isEmpty {
+            Section {
+                ForEach(availability.installed) { language in
+                    Toggle(language.name, isOn: isOn(language))
+                }
+            } header: {
+                Text(usesSharedModel ? "翻訳元" : "ダウンロード済み")
+            } footer: {
+                if !usesSharedModel {
+                    Text("言語は“設定”>“アプリ”>“翻訳”>“言語”で削除できます。")
+                }
+            }
+        }
+        if !availability.downloadable.isEmpty {
+            Section {
+                ForEach(availability.downloadable) { language in
+                    Button {
+                        requestDownload(of: language)
+                    } label: {
+                        HStack {
+                            Text(language.name).foregroundStyle(Color.primary)
+                            Spacer()
+                            Image(systemName: "plus")
+                        }
+                    }
+                    .accessibilityLabel("\(language.name)をダウンロード")
+                }
+            } header: {
+                Text("ダウンロード可能な言語")
+            }
+        }
+    }
 
-    private static func name(of language: Locale.Language) -> String {
+    /// Apple Intelligenceのモデルで訳していて、言語ごとのダウンロードも削除もない。
+    private var usesSharedModel: Bool {
+        subject.strategy == .highFidelity
+    }
+
+    private var subject: Subject {
+        Subject(isEnabled: settings.isAutoTranslationEnabled, canUseAppleIntelligence: canUseAppleIntelligence, target: settings.resolvedTranslationTarget, strategy: settings.resolvedTranslationStrategy)
+    }
+
+    private nonisolated static func name(of language: Locale.Language) -> String {
         Locale.current.localizedString(forIdentifier: language.minimalIdentifier) ?? language.minimalIdentifier
     }
 
@@ -171,55 +140,84 @@ struct AutoTranslationSettingsView: View {
         } set: { isOn in
             if isOn {
                 settings.autoTranslationLanguages.append(language.code)
-                Task(.withoutRequests) { await requestDownloads(of: [language.code]) }
             } else {
                 settings.autoTranslationLanguages.removeAll { $0 == language.code }
-                downloads.withdrawWaiting(source: language.code)
             }
         }
     }
 
-    private func loadLanguages() async {
-        let supported = await Self.supportedLanguages(strategy: settings.autoTranslationStrategy)
-        targets = supported
-            .map { Language(code: $0.minimalIdentifier, name: Self.name(of: $0)) }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-        updateSources()
+    /// OSのシートでダウンロードの許可を求める。入ったらオンで並ぶよう、訳す言語に足しておく。
+    private func requestDownload(of language: Language) {
+        if !settings.autoTranslationLanguages.contains(language.code) {
+            settings.autoTranslationLanguages.append(language.code)
+        }
+        let next = TranslationSession.Configuration(source: Locale.Language(identifier: language.code), target: subject.target, preferredStrategy: TranslationSession.Strategy(subject.strategy))
+        // 同じ言語をもう一度求めるときは同じ値になるので、無効にして求め直す。
+        if download == next {
+            download?.invalidate()
+        } else {
+            download = next
+        }
     }
 
-    /// 翻訳先の言語は、訳す投稿の言語に選べない。
-    private func updateSources() {
-        sources = targets.filter { Locale.Language(identifier: $0.code).languageCode != target.languageCode }
+    /// 開いている間、モデルの有無を調べ直し続ける。
+    private func poll(_ subject: Subject) async {
+        guard subject.isEnabled else { return }
+        var isFirst = true
+        while !Task.isCancelled {
+            if canUseAppleIntelligence != AppleIntelligence.isAvailable {
+                // 対象が変わるので、調べ直しは始まり直す。
+                canUseAppleIntelligence.toggle()
+                return
+            }
+            let next = await Self.availability(target: subject.target, strategy: subject.strategy)
+            guard !Task.isCancelled else { return }
+            if next != availability || loadedSubject != subject {
+                let hasNewModel = !isFirst && next.installed.contains { !availability.installed.contains($0) }
+                withAnimation {
+                    availability = next
+                    loadedSubject = subject
+                }
+                if hasNewModel { settings.noteAutoTranslationModelInstalled() }
+            }
+            isFirst = false
+            try? await clock.sleep(for: Self.pollingInterval)
+        }
+    }
+
+    /// 翻訳先と同じ言語と、翻訳モードが対応していない言語は並べない。
+    @concurrent
+    private nonisolated static func availability(target: Locale.Language, strategy: TranslationStrategy) async -> Availability {
+        let supported = await supportedLanguages(strategy: strategy)
+            .map { (language: $0, item: Language(code: $0.minimalIdentifier, name: name(of: $0))) }
+            .sorted { $0.item.name.localizedStandardCompare($1.item.name) == .orderedAscending }
+        var result = Availability(targets: supported.map(\.item))
+        for (language, item) in supported where language.languageCode != target.languageCode {
+            switch await status(source: language, target: target, strategy: strategy) {
+            case .installed: result.installed.append(item)
+            case .supported: result.downloadable.append(item)
+            case .unsupported: break
+            @unknown default: break
+            }
+        }
+        return result
     }
 
     @concurrent
     private nonisolated static func supportedLanguages(strategy: TranslationStrategy) async -> [Locale.Language] {
         #if DEBUG
-        if DebugStatusTranslator.isFake { return ["en", "ko", "de", "ja", "zh", "zh-TW"].map { Locale.Language(identifier: $0) } }
+        if DebugStatusTranslator.isFake { return DebugStatusTranslator.fakeLanguages.map { Locale.Language(identifier: $0) } }
         #endif
         return await LanguageAvailability(preferredStrategy: TranslationSession.Strategy(strategy)).supportedLanguages
     }
 
     @concurrent
-    private nonisolated static func needsDownload(source: Locale.Language, target: Locale.Language, strategy: TranslationStrategy) async -> Bool {
+    private nonisolated static func status(source: Locale.Language, target: Locale.Language, strategy: TranslationStrategy) async -> LanguageAvailability.Status {
         #if DEBUG
-        if DebugStatusTranslator.isFake { return false }
-        #endif
-        return await LanguageAvailability(preferredStrategy: TranslationSession.Strategy(strategy)).status(from: source, to: target) == .supported
-    }
-
-    /// `codes`のうち、今の翻訳先と方式でダウンロードすれば訳せるものの許可を求める。方式が対応していない言語は求めない。
-    private func requestDownloads(of codes: [String]) async {
-        let target = target
-        let strategy = settings.autoTranslationStrategy
-        var requests: [TranslationDownloadQueue.Request] = []
-        for code in codes where Locale.Language(identifier: code).languageCode != target.languageCode {
-            if await Self.needsDownload(source: Locale.Language(identifier: code), target: target, strategy: strategy) {
-                requests.append(TranslationDownloadQueue.Request(source: code, target: target, strategy: strategy))
-            }
+        if DebugStatusTranslator.isFake {
+            return strategy == .lowLatency && DebugStatusTranslator.fakeMissingLanguages.contains(source.minimalIdentifier) ? .supported : .installed
         }
-        // 調べている間にオフにしたら求めない。翻訳先か方式が変わったら、新しい設定の分に任せる。
-        guard settings.isAutoTranslationEnabled, target == self.target, strategy == settings.autoTranslationStrategy else { return }
-        downloads.enqueue(requests.filter { settings.autoTranslationLanguages.contains($0.source) }, target: target, strategy: strategy)
+        #endif
+        return await LanguageAvailability(preferredStrategy: TranslationSession.Strategy(strategy)).status(from: source, to: target)
     }
 }
