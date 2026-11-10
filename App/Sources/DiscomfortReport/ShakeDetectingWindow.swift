@@ -1,6 +1,6 @@
 import UIKit
 
-/// シェイクで違和感レポートを開くウィンドウ。違和感レポートは開発のための機能なので、DEBUGでコンパイルしないビルド（TestFlightなど）では開かない。
+/// シェイクで違和感レポートを開くウィンドウ。シェイクで開くのはデバッグ版だけ。DEBUGでコンパイルしないビルド（TestFlightなど）では、デバッグメニューをオンにしたときに、メニューから開く。
 final class ShakeDetectingWindow: UIWindow {
     /// 表示中のアプリ内のSafariのシート。カスタムのプレゼンテーションでは、シートの外に触れたものをUIKitの入れ物のビューが受けて後ろへ通さないので、ここで通す。
     weak var browserPresentation: InAppBrowserPresentationController?
