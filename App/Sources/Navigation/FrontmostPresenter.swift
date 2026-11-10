@@ -25,4 +25,18 @@ extension UIViewController {
         }
         coordinator.animate(alongsideTransition: nil) { [weak self] _ in self?.afterOngoingDismissal(body) }
     }
+
+    /// いちばん手前の画面を`body`に渡す。重ねた画面のどれかを閉じている途中なら、閉じ終えてから、そのとき手前にある画面を渡す。
+    /// 手前の画面に何かを出すときは、ここか`presentOnFrontmost`を通す。
+    func withFrontmostPresented(_ body: @escaping @MainActor (UIViewController) -> Void) {
+        afterOngoingDismissal { [weak self] in
+            guard let self else { return }
+            body(frontmostPresented)
+        }
+    }
+
+    /// いちばん手前の画面に`viewController`を出す。重ねた画面のどれかを閉じている途中なら、閉じ終えてから、そのとき手前にある画面に出す。
+    func presentOnFrontmost(_ viewController: UIViewController, animated: Bool = true, completion: (() -> Void)? = nil) {
+        withFrontmostPresented { $0.present(viewController, animated: animated, completion: completion) }
+    }
 }

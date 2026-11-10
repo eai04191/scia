@@ -144,7 +144,7 @@ extension TimelineViewController {
             mediaTransfers?.start(.save, MediaTransfers.Target(url: fileURL, kind: attachment.type, subject: subject), from: source, preview: source?.loadedThumbnail ?? target.preview)
         case .showAltText:
             guard let description = attachment.description, !description.isEmpty else { return }
-            frontmostPresented.present(AltTextViewController.sheet(text: description), animated: true)
+            presentOnFrontmost(AltTextViewController.sheet(text: description))
         case .url(let command):
             mediaURLHandlers(source: source).perform(command)
         case .copyValue(let value):

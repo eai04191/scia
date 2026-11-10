@@ -5,7 +5,7 @@ import UIKit
 /// `ListEditor`が、セッションに頼むこと。
 @MainActor
 protocol ListEditorHost: AnyObject {
-    /// アラートやシートを出す、いちばん手前の画面。
+    /// アラートやシートを出す画面。この上に重ねた画面があれば、いちばん手前の画面に出す。
     var listPresenter: UIViewController { get }
     /// 手元で覚えているリスト。読んでいなければnil。
     func knownList(_ id: String) -> MastodonList?
@@ -122,7 +122,7 @@ final class ListEditor {
         let alert = UIAlertController(Confirmation.deletingList(title: title), preferredStyle: .alert) { [weak self] _ in
             self?.delete(listID: listID)
         }
-        host?.listPresenter.present(alert, animated: true)
+        host?.listPresenter.presentOnFrontmost(alert)
     }
 
     private func delete(listID: String) {
@@ -204,7 +204,7 @@ final class ListEditor {
                     let failure = UIAlertController.failure(title: failureTitle, reason: reason) { [weak self] in
                         self?.presentNameInput(title: title, text: entered, actionTitle: actionTitle, failureTitle: failureTitle, isOwnAccount: isOwnAccount, submit: submit)
                     }
-                    host.listPresenter.present(failure, animated: true)
+                    host.listPresenter.presentOnFrontmost(failure)
                 }
             }
         }
@@ -222,7 +222,7 @@ final class ListEditor {
         alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
         alert.addAction(action)
         alert.preferredAction = action
-        presenter.present(alert, animated: true)
+        presenter.presentOnFrontmost(alert)
     }
 
     private func reportFailure(_ error: any Error, title: String, during operation: String) async {

@@ -299,7 +299,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         let settings = UIAction(title: "設定", image: UIImage(systemName: "gearshape")) { [weak self] _ in
             guard let session = self?.session else { return }
-            self?.window?.rootViewController?.frontmostPresented.presentSettings(
+            self?.window?.rootViewController?.presentSettings(
                 instance: session.credential.instance,
                 account: session.credential.handle,
                 diagnostics: session.diagnostics,
@@ -346,7 +346,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// 切り替えるとすべてのシーンの画面を作り直すので、どのシーンの書きかけも数える。今の画面と同じアカウントを選んだときは、作り直さないので確かめない。
     private func confirmDiscardingDraft(switchingTo account: Credential, perform: @escaping @MainActor () -> Void) {
         guard account != session?.credential, Self.hasWrittenDraftInAnyScene,
-              let presenter = window?.rootViewController?.frontmostPresented
+              let root = window?.rootViewController
         else {
             perform()
             return
@@ -358,7 +358,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         )
         alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
         alert.addAction(UIAlertAction(title: "切り替える", style: .destructive) { _ in perform() })
-        presenter.present(alert, animated: true)
+        root.presentOnFrontmost(alert)
     }
 
     /// 書きかけの投稿があれば、ログインのシートを出す前に、追加すると破棄されることを確かめる。ログインできると追加したアカウントに切り替わり、画面ごと作り直すため。
@@ -366,7 +366,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// シートを出している間に、別の窓で書いたり、共有から本文が届いたりした下書きは、確かめないままログインできたときに消える。
     /// 確かめるのをシートを出す前にしたのは、作者の判断。ログインできたときに確かめると、サーバーでのログインは済んでいるので、やめたときにそのアカウントを加えるだけにするか捨てるかを決める必要があるため、ここでは扱わない。
     private func confirmAddingAccount() {
-        guard Self.hasWrittenDraftInAnyScene, let presenter = window?.rootViewController?.frontmostPresented else {
+        guard Self.hasWrittenDraftInAnyScene, let root = window?.rootViewController else {
             presentAddAccount()
             return
         }
@@ -377,7 +377,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         )
         alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
         alert.addAction(UIAlertAction(title: "追加する", style: .default) { [weak self] _ in self?.presentAddAccount() })
-        presenter.present(alert, animated: true)
+        root.presentOnFrontmost(alert)
     }
 
     private static var hasWrittenDraftInAnyScene: Bool {
@@ -461,14 +461,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             logger.info("reauthentication cancelled with session")
         } catch {
             logger.error("reauthentication failed: \(SciaLog.describe(error), privacy: .public)")
-            window.rootViewController?.frontmostPresented.present(UIAlertController.failure(title: "ログインし直せませんでした", reason: ErrorPresentation(error)), animated: true)
+            window.rootViewController?.presentOnFrontmost(UIAlertController.failure(title: "ログインし直せませんでした", reason: ErrorPresentation(error)))
         }
     }
 
     /// ログイン画面をシートで出し、ログインできたらそのアカウントに切り替える。
     /// キャンセルした後にログインの続きが終わっても、アカウントは加えない。閉じたのに別のアカウントへ切り替わらないようにするため。
     private func presentAddAccount() {
-        guard let presenter = window?.rootViewController?.frontmostPresented else { return }
+        guard let root = window?.rootViewController else { return }
         weak var sheet: UIViewController?
         let attempt = AddAccountAttempt()
         let model = LoginModel(oauth: AppDependencies.oauth, accountDomains: accountDomains) { [weak self] credential in
@@ -488,11 +488,11 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // 下へのスワイプで閉じると、キャンセルとして扱えないため、閉じるのはキャンセルボタンだけにする。
         hosting.isModalInPresentation = true
         sheet = hosting
-        presenter.present(hosting, animated: true)
+        root.presentOnFrontmost(hosting)
     }
 
     private func confirmLogOut() {
-        guard let presenter = window?.rootViewController?.frontmostPresented, let current = accounts?.current else { return }
+        guard let root = window?.rootViewController, let current = accounts?.current else { return }
         let alert = UIAlertController(
             title: "\(current.handle)からログアウトしますか？",
             // 使っているアカウントを消すと、画面ごと作り直して下書きも消えるため、書きかけがあれば添える。
@@ -504,7 +504,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         alert.addAction(UIAlertAction(title: "ログアウト", style: .destructive) { [weak self] _ in
             self?.logOut(current)
         })
-        presenter.present(alert, animated: true)
+        root.presentOnFrontmost(alert)
     }
 
     /// アカウントの情報を端末から消す。ほかにアカウントがあればそちらに切り替え、なければログイン画面に戻る。
@@ -520,7 +520,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             // 消せなければ、アカウントはアカウントのリストにも端末にも残っているので、今の画面のまま知らせる。
             // ログイン画面に替えると、残っているほかのアカウントにも、起動し直すまで戻れなくなるため。
             logger.error("account removal failed: \(SciaLog.describe(error), privacy: .public)")
-            window?.rootViewController?.frontmostPresented.present(UIAlertController.failure(title: "ログアウトできませんでした", reason: ErrorPresentation(error)), animated: true)
+            window?.rootViewController?.presentOnFrontmost(UIAlertController.failure(title: "ログアウトできませんでした", reason: ErrorPresentation(error)))
             return
         }
         logger.info("account removed")

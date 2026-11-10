@@ -773,7 +773,7 @@ final class ProfileController {
         if let button = source as? ProfileFollowButton {
             sheet.popoverPresentationController?.sourceRect = button.capsuleFrame
         }
-        viewController?.frontmostPresented.present(sheet, animated: true)
+        viewController?.presentOnFrontmost(sheet)
     }
 
     private func toggleFollow() {

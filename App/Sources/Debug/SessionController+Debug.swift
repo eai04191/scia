@@ -124,7 +124,7 @@ extension SessionController {
         case .mediaLimits(let limits):
             DebugFaults.overrideMediaLimits(limits)
         case .catalog(let component):
-            topViewController.presentComponentCatalog(opening: component)
+            rootViewController.frontmostPresented.presentComponentCatalog(opening: component)
         case .dump:
             AgentScreenDump.write(scene: rootViewController.view.window?.windowScene)
         case .storageProbe:

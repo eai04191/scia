@@ -39,6 +39,6 @@ enum URLSharing {
             anchor(popover)
         }
         // アプリ内のSafariのシートを出したまま上のタイムラインから共有することがあるため、いちばん手前の画面から出す。
-        presenter.frontmostPresented.present(activity, animated: true)
+        presenter.presentOnFrontmost(activity)
     }
 }

@@ -45,7 +45,12 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
 
     /// `url`はhttpかhttpsに限る。ほかのスキームを渡すとSFSafariViewControllerが例外で落ちるため、呼び出し側で`LinkBrowser`に振り分けさせる。
     /// シートを出している間に別のリンクが押されたら、高さを保ったまま中身を差し替える。
+    /// 重ねた画面のどれかを閉じている途中なら、閉じ終えてから開く。
     func open(_ url: URL, from root: UIViewController) {
+        root.afterOngoingDismissal { [weak self] in self?.openAfterDismissal(url, from: root) }
+    }
+
+    private func openAfterDismissal(_ url: URL, from root: UIViewController) {
         guard root.viewIfLoaded?.window != nil else {
             // 窓にない画面からはシートを出せないので、開かない。
             logger.error("in-app browser open ignored without window")

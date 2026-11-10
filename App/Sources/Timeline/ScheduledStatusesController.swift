@@ -87,7 +87,7 @@ final class ScheduledStatusesController {
     }
 
     private func presentFailure(title: String, reason: ErrorPresentation) {
-        viewController.frontmostPresented.present(UIAlertController.failure(title: title, reason: reason), animated: true)
+        viewController.presentOnFrontmost(UIAlertController.failure(title: title, reason: reason))
     }
 }
 

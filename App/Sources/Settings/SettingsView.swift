@@ -208,6 +208,7 @@ struct SettingsTabSourceActions {
 }
 
 extension UIViewController {
+    /// 設定の画面を、この画面から重ねた画面のうち、いちばん手前の画面に重ねて出す。
     /// - Parameters:
     ///   - instance: ログイン中のアカウントのサーバー。
     ///   - diagnostics: 「接続の状態」画面に出す、ログイン中のアカウントの接続の状態。
@@ -220,7 +221,7 @@ extension UIViewController {
     ///   - onShownChange: 設定の画面が出たときにtrue、消えたときにfalseで呼ぶ。
     func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, tabSources: SettingsTabSourceActions, openInAppBrowserHeight: @escaping @MainActor () -> Void, openProfile: @escaping @MainActor (_ acct: String) -> Void, opening page: SettingsPage? = nil, appearanceGroup: AppearanceGroup.ID? = nil, onShownChange: @escaping (Bool) -> Void) {
         let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, tabSources: tabSources, openInAppBrowserHeight: openInAppBrowserHeight, openProfile: openProfile, opening: page, appearanceGroup: appearanceGroup)
-        present(SettingsHostingController(rootView: view, onShownChange: onShownChange), animated: true)
+        presentOnFrontmost(SettingsHostingController(rootView: view, onShownChange: onShownChange))
     }
 
     /// メニューの「カスタマイズ」から、その並びの設定の画面を、設定のトップの画面に重ねて開く。決まりはdocs/menus.mdの「並びの設定」にある。

@@ -1294,7 +1294,7 @@ final class SessionController {
             let renamed = item.renamed(text.trimmingCharacters(in: .whitespacesAndNewlines))
             self?.setTabLayout(AppDependencies.settings.tabLayout(for: handle).replacing(renamed))
         })
-        topViewController.present(alert, animated: true)
+        presentOnTop(alert, animated: true)
     }
 
     private func showTabLayoutNotice(_ title: String) {
@@ -1626,7 +1626,7 @@ final class SessionController {
         }
         let navigation = AnnouncementsNavigationController(rootViewController: controller)
         presentedAnnouncements = navigation
-        (presenter ?? topViewController).present(navigation, animated: true)
+        (presenter ?? rootViewController).presentOnFrontmost(navigation, animated: true)
     }
 
     /// お知らせの本文のリンクを開く。メンションはお知らせのメンションのリストにあるIDで、投稿へのリンクはお知らせがリンクした投稿のIDで開く。
@@ -1667,7 +1667,7 @@ final class SessionController {
 
     /// 通知のフィルタリングの設定をシートで開く。
     func showNotificationPolicy(from presenter: UIViewController? = nil) {
-        (presenter ?? topViewController).present(NotificationPolicyView.makeSheet(model: notificationPolicy), animated: true)
+        (presenter ?? rootViewController).presentOnFrontmost(NotificationPolicyView.makeSheet(model: notificationPolicy), animated: true)
     }
 
     // MARK: - 検索
@@ -1847,7 +1847,7 @@ final class SessionController {
         controller.debugField = debugField
         controller.debugCrop = debugCrop
         #endif
-        rootViewController.frontmostPresented.present(controller.wrappedInNavigation(), animated: true)
+        rootViewController.presentOnFrontmost(controller.wrappedInNavigation())
     }
 
     /// ログイン中のアカウント。手元にはCredentialしかないため、一度読んだら使い回す。読んでいる途中なら、送り直さずにそれを待つ。
@@ -1918,7 +1918,7 @@ final class SessionController {
             }
         }
         sheet = controller
-        (presenter ?? topViewController).present(controller, animated: true)
+        (presenter ?? rootViewController).presentOnFrontmost(controller, animated: true)
     }
 
     /// 投稿の詳細の画面はまだないため、今見えているタイムライン（ホーム、通知、開いているプロフィール）にあればそこへ動かし、なければ投稿のページを開く。
@@ -2330,7 +2330,7 @@ final class SessionController {
 
     /// ほかのアカウントとして投稿を削除する。今のアカウントで削除するときと同じく、元に戻せないので確かめてから送る。
     private func confirmDeleting(_ status: Status, as account: OtherAccount, original: Status) {
-        topViewController.present(UIAlertController(Confirmation.deleting(actor: "@\(account.credential.username)"), preferredStyle: .alert) { [weak self] _ in
+        presentOnTop(UIAlertController(Confirmation.deleting(actor: "@\(account.credential.username)"), preferredStyle: .alert) { [weak self] _ in
             self?.delete(status, as: account, original: original)
         }, animated: true)
     }
@@ -2364,7 +2364,7 @@ final class SessionController {
             send(change, to: relation, as: account)
             return
         }
-        topViewController.present(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
+        presentOnTop(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
             self?.send(change, to: relation, as: account)
         }, animated: true)
     }
@@ -2425,7 +2425,7 @@ final class SessionController {
         } sendByMastodon: { [weak self] text, host in
             self?.sendCrashReportByMastodon(text, from: host)
         }
-        presenter.present(controller, animated: true)
+        presenter.presentOnFrontmost(controller)
     }
 
     private func sendCrashReportByMail(_ text: String, from host: UIViewController) {
@@ -2780,7 +2780,7 @@ final class SessionController {
                 self?.perform(action, as: account)
             },
             logIn: { [weak self] account in
-                FailureRecovery.logIn(account, from: self?.topViewController.view)
+                FailureRecovery.logIn(account, from: self?.rootViewController.view)
             },
             findProfileURL: { [weak self] target, proceed in
                 self?.resolveIdentity(of: target, failureTitle: "リンクを取得できませんでした") { id, acct in
@@ -2868,7 +2868,7 @@ final class SessionController {
             send(change, to: relation)
             return
         }
-        topViewController.present(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
+        presentOnTop(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
             self?.send(change, to: relation)
         }, animated: true)
     }
@@ -2952,7 +2952,7 @@ final class SessionController {
                 self?.handle(error, title: title)
             }
         }
-        topViewController.present(controller.wrappedInNavigation(), animated: true)
+        presentOnTop(controller.wrappedInNavigation(), animated: true)
     }
 
     /// 通報のシートを開く。送れたら、シートを閉じて知らせる。
@@ -2969,7 +2969,7 @@ final class SessionController {
             self?.logger.info("report submitted")
             self?.notices.showTransient(Notice(id: "user.reported", kind: .success, title: actor + "通報しました"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
         }
-        topViewController.present(sheet, animated: true)
+        presentOnTop(sheet, animated: true)
     }
 
     // MARK: - リスト
@@ -3009,7 +3009,7 @@ final class SessionController {
             guard let model else { return }
             self?.listEditor.presentCreate(create: { try await model.create(title: $0) }, otherAccount: otherAccount.map { "@\($0.credential.username)" }, onCreate: onCreate)
         }
-        topViewController.present(sheet, animated: true)
+        presentOnTop(sheet, animated: true)
         model.load()
     }
 
@@ -3046,13 +3046,13 @@ final class SessionController {
             guard let members else { return completion(false) }
             members.changeMember(account, adds: adds, completion: completion)
         }
-        topViewController.present(sheet, animated: true)
+        presentOnTop(sheet, animated: true)
     }
 
-    /// 設定の画面を出す。閉じる途中の画面には重ねられないため、閉じる途中の画面を飛ばして重ねる。
+    /// 設定の画面を、いちばん手前の画面に重ねて出す。
     /// - Parameter appearanceGroup: `page`が「投稿の見た目」か「通知の見た目」のとき、その上に重ねておく分類の画面。
     private func presentSettings(opening page: SettingsPage?, appearanceGroup: AppearanceGroup.ID? = nil) {
-        rootViewController.frontmostPresented.presentSettings(
+        rootViewController.presentSettings(
             instance: credential.instance,
             account: credential.handle,
             diagnostics: diagnostics,
@@ -3154,7 +3154,7 @@ final class SessionController {
             proceed()
             return
         }
-        topViewController.present(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
+        presentOnTop(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
             // 送っている間はやめず、返信も始めない。送り終えれば空に戻るので、返信はそのあと選び直してもらう。
             guard self?.composer.cancelStatusEdit() == true else { return }
             proceed()
@@ -3208,7 +3208,7 @@ final class SessionController {
             composer.quote(status, as: account)
             return
         }
-        topViewController.present(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
+        presentOnTop(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
             self?.composer.quote(status, as: account)
         }, animated: true)
     }
@@ -3286,7 +3286,7 @@ final class SessionController {
     /// - Parameter configuration: `writing`のサーバーの上限。
     /// - Parameter actor: ほかのアカウントとして書くときの、そのアカウントの`@username`。確かめる見出しの初めに入れる。
     private func confirmRedrafting(_ status: Status, source: StatusSource, as writing: ComposeAccount<UIImage>? = nil, configuration: InstanceConfiguration? = nil, actor: String? = nil) {
-        topViewController.present(UIAlertController(Confirmation.redrafting(status, draft: composer.model, actor: actor), preferredStyle: .alert) { [weak self] _ in
+        presentOnTop(UIAlertController(Confirmation.redrafting(status, draft: composer.model, actor: actor), preferredStyle: .alert) { [weak self] _ in
             self?.composer.redraft(status, source: source, as: writing, configuration: configuration)
         }, animated: true)
     }
@@ -3333,7 +3333,7 @@ final class SessionController {
         list.viewController.navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .close, primaryAction: UIAction { [weak navigation] _ in
             navigation?.dismiss(animated: true)
         })
-        topViewController.present(navigation, animated: true)
+        presentOnTop(navigation, animated: true)
     }
 
     /// 書きかけの下書きがあれば捨ててよいかを聞いてから、予約した投稿の書き直しを始める。
@@ -3342,7 +3342,7 @@ final class SessionController {
             composer.rewrite(status)
             return
         }
-        topViewController.present(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
+        presentOnTop(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
             self?.composer.rewrite(status)
         }, animated: true)
     }
@@ -3364,7 +3364,7 @@ final class SessionController {
                 logger.error("rewritten schedule cancel failed: \(SciaLog.describe(error), privacy: .public)")
                 let reason = ErrorPresentation(error).leading("書き直した投稿は送りましたが、元の予約が残っています。両方投稿されないよう、予約投稿の画面から取り消してください。")
                 let openList = UIAlertAction(title: "予約投稿を開く", style: .default) { [weak self] _ in self?.showScheduledStatuses() }
-                topViewController.present(UIAlertController.failure(title: "元の予約を取り消せませんでした", reason: reason, actions: [openList], cancelTitle: "閉じる"), animated: true)
+                presentOnTop(UIAlertController.failure(title: "元の予約を取り消せませんでした", reason: reason, actions: [openList], cancelTitle: "閉じる"), animated: true)
                 return
             }
             self?.logger.info("rewritten schedule cancel done")
@@ -3386,7 +3386,7 @@ final class SessionController {
         case .refuse(let text):
             presentRefusal(text)
         case .confirm(let confirmation):
-            topViewController.present(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
+            presentOnTop(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
                 guard let self else { return }
                 // 聞いている間に締め切りが近づいたら、投票なしで送って投票を消さないよう、編集を始めない。
                 if !status.canBeEdited(now: now()) {
@@ -3400,7 +3400,7 @@ final class SessionController {
 
     /// 削除は元に戻せないので、確かめてから送る。
     private func confirmDeleting(_ status: Status) {
-        topViewController.present(UIAlertController(Confirmation.deleting, preferredStyle: .alert) { [weak self] _ in
+        presentOnTop(UIAlertController(Confirmation.deleting, preferredStyle: .alert) { [weak self] _ in
             self?.delete(status)
         }, animated: true)
     }
@@ -3566,16 +3566,18 @@ final class SessionController {
     /// 今のアカウントのタイムラインの投稿は変えないので、どのアカウントでリアクションしたかを知らせる。
     private func chooseEmojiReaction(for status: Status, as account: OtherAccount, original: Status) {
         let handle = account.credential.handle
-        let host = topViewController
-        otherAccounts.emojiReactionPicker(for: account).present(from: host) { [weak self] emoji in
-            self?.tasks.run(.action) { [weak self] in
-                do {
-                    guard try await account.react(with: emoji, on: status) else { return }
-                    self?.showToggledNotice("\(handle)でリアクションしました")
-                } catch {
-                    guard let self else { return }
-                    logger.error("other account emoji reaction failed: \(SciaLog.describe(error), privacy: .public)")
-                    showOtherAccountFailure(title: "\(handle)でリアクションできませんでした", error: error, recording: OperationStatus.Subject(original))
+        let picker = otherAccounts.emojiReactionPicker(for: account)
+        rootViewController.withFrontmostPresented { [weak self] host in
+            picker.present(from: host) { [weak self] emoji in
+                self?.tasks.run(.action) { [weak self] in
+                    do {
+                        guard try await account.react(with: emoji, on: status) else { return }
+                        self?.showToggledNotice("\(handle)でリアクションしました")
+                    } catch {
+                        guard let self else { return }
+                        logger.error("other account emoji reaction failed: \(SciaLog.describe(error), privacy: .public)")
+                        showOtherAccountFailure(title: "\(handle)でリアクションできませんでした", error: error, recording: OperationStatus.Subject(original))
+                    }
                 }
             }
         }
@@ -3675,26 +3677,22 @@ final class SessionController {
 
     /// 失敗の理由を出す。ログアウトされたアカウントがあれば、そのアカウントでログインし直すボタンが付く。
     private func presentAlert(title: String, reason: ErrorPresentation) {
-        topViewController.present(UIAlertController.failure(title: title, reason: reason), animated: true)
+        presentOnTop(UIAlertController.failure(title: title, reason: reason), animated: true)
     }
 
     private func presentAlert(title: String, message: String) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .cancel))
-        topViewController.present(alert, animated: true)
+        presentOnTop(alert, animated: true)
     }
 
     private func presentRefusal(_ refusal: RefusalText) {
         presentAlert(title: refusal.title, message: refusal.message)
     }
 
-    /// いちばん手前に出ている画面。
-    var topViewController: UIViewController {
-        var top = rootViewController
-        while let presented = top.presentedViewController {
-            top = presented
-        }
-        return top
+    /// いちばん手前の画面に出す。重ねた画面を閉じている途中なら、閉じ終えてから、そのとき手前にある画面に出す。
+    private func presentOnTop(_ viewController: UIViewController, animated: Bool) {
+        rootViewController.presentOnFrontmost(viewController, animated: animated)
     }
 
     // MARK: - 投稿
@@ -3887,7 +3885,7 @@ final class SessionController {
         case .refuse(let refusal):
             presentRefusal(refusal)
         case .confirm(let confirmation):
-            topViewController.present(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] choice in
+            presentOnTop(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] choice in
                 guard let self else { return }
                 switch choice {
                 case .append:
@@ -3959,7 +3957,7 @@ final class SessionController {
             discardSharedMedia(media)
             presentRefusal(refusal)
         case .confirm(let confirmation):
-            topViewController.present(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] choice in
+            presentOnTop(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] choice in
                 guard let self else { return }
                 switch choice {
                 case .append:
@@ -4628,7 +4626,7 @@ final class TabReselectionDelegate: NSObject, UITabBarControllerDelegate {
 // MARK: - リストの編集
 
 extension SessionController: ListEditorHost {
-    var listPresenter: UIViewController { topViewController }
+    var listPresenter: UIViewController { rootViewController }
 
     func knownList(_ id: String) -> MastodonList? {
         loadedLists?.first { $0.id == id }

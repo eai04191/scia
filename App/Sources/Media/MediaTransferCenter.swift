@@ -266,17 +266,18 @@ final class MediaTransferCenter {
         let activity = UIActivityViewController(activityItems: [content.item], applicationActivities: nil)
         // 添付ファイルの画像を連絡先の写真にすることはまずないため、出さない。ビューアと同じ。
         activity.excludedActivityTypes = [.assignToContact]
-        guard let presenter = notices.presenter?.frontmostPresented else { return }
-        if let popover = activity.popoverPresentationController {
-            if let anchor = content.anchor {
-                popover.sourceItem = anchor
-            } else {
-                popover.sourceView = presenter.view
-                popover.sourceRect = CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 0, height: 0)
-                popover.permittedArrowDirections = []
+        notices.presenter?.withFrontmostPresented { presenter in
+            if let popover = activity.popoverPresentationController {
+                if let anchor = content.anchor {
+                    popover.sourceItem = anchor
+                } else {
+                    popover.sourceView = presenter.view
+                    popover.sourceRect = CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 0, height: 0)
+                    popover.permittedArrowDirections = []
+                }
             }
+            presenter.present(activity, animated: true)
         }
-        presenter.present(activity, animated: true)
     }
 
     /// タイムラインのメニューから共有するときの、共有シートに渡すものと、ポップオーバーの起点。起点にできなければnil。
@@ -296,7 +297,7 @@ final class MediaTransferCenter {
 
     /// `presenter`の上に代替テキストや共有のシートを開いていれば、その上に出す。
     private func present(_ viewController: UIViewController, onTopOf presenter: UIViewController?) {
-        presenter?.frontmostPresented.present(viewController, animated: true)
+        presenter?.presentOnFrontmost(viewController)
     }
 
     // MARK: 止めるかの確認
@@ -310,11 +311,11 @@ final class MediaTransferCenter {
         alert.addAction(UIAlertAction(title: "続ける", style: .cancel))
         stopConfirmation = alert
         stopConfirmationTarget = id
-        var top = presenter
-        while let presented = top.presentedViewController, !presented.isBeingDismissed {
-            top = presented
+        presenter.withFrontmostPresented { [weak self] top in
+            // 閉じ終えるのを待つ間に、対象が済んで確認を取り下げていたら、出さない。
+            guard self?.stopConfirmation === alert else { return }
+            top.present(alert, animated: true)
         }
-        top.present(alert, animated: true)
     }
 
     /// 確かめている対象が済むか止まったら、確認を閉じる。

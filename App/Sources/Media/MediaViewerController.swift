@@ -982,11 +982,7 @@ final class MediaViewerController: UIViewController {
 
     /// 保存やダウンロードを待つ間に、代替テキストや共有のシートを開いていることがある。ビューアから出すと拒否されるため、いちばん手前の画面から出す。
     private func presentOnTop(_ viewController: UIViewController) {
-        var presenter: UIViewController = self
-        while let presented = presenter.presentedViewController, !presented.isBeingDismissed {
-            presenter = presented
-        }
-        presenter.present(viewController, animated: true)
+        presentOnFrontmost(viewController)
     }
 
     private func share() {

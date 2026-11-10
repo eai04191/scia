@@ -229,19 +229,21 @@ final class BatchActionCenter {
 
     private func presentShareSheet(text: String?, files: [URL]) {
         let items: [Any] = (text.map { [$0] } ?? []) + files
-        guard !items.isEmpty, let presenter = notices.presenter?.frontmostPresented else { return }
+        guard !items.isEmpty else { return }
         let activity = UIActivityViewController(activityItems: items, applicationActivities: nil)
         // 添付ファイルの画像を連絡先の写真にすることはまずないため、出さない。メディアの共有と同じ。
         activity.excludedActivityTypes = [.assignToContact]
-        if let popover = activity.popoverPresentationController {
-            popover.sourceView = presenter.view
-            popover.sourceRect = CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 0, height: 0)
-            popover.permittedArrowDirections = []
+        notices.presenter?.withFrontmostPresented { presenter in
+            if let popover = activity.popoverPresentationController {
+                popover.sourceView = presenter.view
+                popover.sourceRect = CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 0, height: 0)
+                popover.permittedArrowDirections = []
+            }
+            presenter.present(activity, animated: true)
         }
-        presenter.present(activity, animated: true)
     }
 
     private func present(_ alert: UIAlertController) {
-        notices.presenter?.frontmostPresented.present(alert, animated: true)
+        notices.presenter?.presentOnFrontmost(alert)
     }
 }

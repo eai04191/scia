@@ -45,18 +45,20 @@ struct MediaViewerOpener {
             MediaWindow.open(request, from: presenter.view.window?.windowScene)
             return
         }
-        MediaViewerController.present(
-            attachments: attachments,
-            startIndex: index,
-            store: store,
-            dragToDismiss: dragToDismiss,
-            timing: timing,
-            from: presenter.frontmostPresented,
-            transfers: transfers,
-            subject: subject,
-            sourceTile: sourceTile,
-            onDismiss: onDismiss,
-            openURL: openURL
-        )
+        presenter.withFrontmostPresented { [store, transfers] front in
+            MediaViewerController.present(
+                attachments: attachments,
+                startIndex: index,
+                store: store,
+                dragToDismiss: dragToDismiss,
+                timing: timing,
+                from: front,
+                transfers: transfers,
+                subject: subject,
+                sourceTile: sourceTile,
+                onDismiss: onDismiss,
+                openURL: openURL
+            )
+        }
     }
 }
