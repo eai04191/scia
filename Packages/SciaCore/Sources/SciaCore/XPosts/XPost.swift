@@ -95,6 +95,16 @@ struct FxTwitterResponse: Decodable {
     let code: Int
     let tweet: Tweet?
 
+    private enum CodingKeys: String, CodingKey {
+        case code, tweet
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        code = try container.decodeCount(forKey: .code)
+        tweet = try container.decodeIfPresent(Tweet.self, forKey: .tweet)
+    }
+
     struct Tweet: Decodable {
         let id: String
         let url: URL
@@ -144,6 +154,17 @@ struct FxTwitterResponse: Decodable {
         let name: String
         let screenName: String
         let avatarUrl: URL?
+
+        private enum CodingKeys: String, CodingKey {
+            case name, screenName, avatarUrl
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            name = try container.decode(String.self, forKey: .name)
+            screenName = try container.decode(String.self, forKey: .screenName)
+            avatarUrl = container.decodeURL(.media, forKey: .avatarUrl)
+        }
     }
 
     struct Media: Decodable {
@@ -153,11 +174,29 @@ struct FxTwitterResponse: Decodable {
     struct Item: Decodable {
         let id: String?
         let type: String
-        let url: URL
+        /// 読み込めないスキームならnil。その添付ファイルだけを出さない。
+        let url: URL?
         let thumbnailUrl: URL?
         let width: Int?
         let height: Int?
         let altText: String?
+    }
+}
+
+extension FxTwitterResponse.Item {
+    private enum CodingKeys: String, CodingKey {
+        case id, type, url, thumbnailUrl, width, height, altText
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id)
+        type = try container.decode(String.self, forKey: .type)
+        url = container.decodeURL(.media, forKey: .url)
+        thumbnailUrl = container.decodeURL(.media, forKey: .thumbnailUrl)
+        width = try container.decodeCountIfPresent(forKey: .width)
+        height = try container.decodeCountIfPresent(forKey: .height)
+        altText = try container.decodeIfPresent(String.self, forKey: .altText)
     }
 }
 
@@ -168,7 +207,7 @@ extension XPost {
             url: tweet.url,
             authorName: tweet.author.name,
             authorScreenName: tweet.author.screenName,
-            authorAvatar: tweet.author.avatarUrl.flatMap(ServerURLKind.media.accepting),
+            authorAvatar: tweet.author.avatarUrl,
             text: RichText(xPost: tweet.rawText),
             createdAt: tweet.createdTimestamp.map { Date(timeIntervalSince1970: $0) },
             media: (tweet.media?.all ?? []).enumerated().compactMap { index, item in
@@ -182,8 +221,7 @@ extension MediaAttachment {
     /// fxtwitterの添付ファイル。知らない種類は出さない。
     /// IDはタイムラインとビューアの中で添付ファイルを見分けるのに使うため、Mastodonの添付ファイルと重ならないよう、`x:`を付ける。
     init?(_ item: FxTwitterResponse.Item, postID: String, index: Int) {
-        // fxtwitterの応答もサーバーから来る値なので、Mastodonの添付ファイルと同じく、読み込むURLのスキームを確かめる。
-        guard ServerURLKind.media.accepts(item.url) else { return nil }
+        guard let url = item.url else { return nil }
         let kind: Kind
         let preview: URL?
         let size = Size(width: item.width, height: item.height)
@@ -192,15 +230,15 @@ extension MediaAttachment {
         switch item.type {
         case "photo":
             kind = .image
-            preview = Self.smallPhotoURL(item.url)
+            preview = Self.smallPhotoURL(url)
             previewSize = Self.smallPhotoSize(of: size)
         case "video":
             kind = .video
-            preview = item.thumbnailUrl.flatMap(ServerURLKind.media.accepting)
+            preview = item.thumbnailUrl
             previewSize = size
         case "gif":
             kind = .gifv
-            preview = item.thumbnailUrl.flatMap(ServerURLKind.media.accepting)
+            preview = item.thumbnailUrl
             previewSize = size
         default:
             return nil
@@ -208,7 +246,7 @@ extension MediaAttachment {
         self.init(
             id: "x:\(postID):\(item.id ?? String(index))",
             type: kind,
-            url: item.url,
+            url: url,
             previewUrl: preview,
             description: item.altText,
             meta: Meta(original: size, small: previewSize)

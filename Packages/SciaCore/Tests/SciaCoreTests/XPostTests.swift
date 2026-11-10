@@ -183,6 +183,41 @@ struct XPostTests {
         #expect(links(of: text).map(\.1) == [.url(try url("http://example.com/"))])
     }
 
+    /// 添付ファイルの大きさと応答の`code`は、範囲の外の数でも、あとの計算であふれないよう読むところで収める。
+    @Test func clampsNumbersOutOfRange() throws {
+        let json = """
+        {"code": -5, "tweet": {"id": "1", "url": "https://x.com/a/status/1", "raw_text": {"text": "a", "facets": []}, "author": {"name": "A", "screen_name": "a"},
+        "media": {"all": [{"type": "photo", "url": "https://pbs.twimg.com/media/a.jpg", "width": 9223372036854775807, "height": -9223372036854775808}]}}}
+        """
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let response = try decoder.decode(FxTwitterResponse.self, from: Data(json.utf8))
+
+        #expect(response.code == 0)
+        let item = try #require(response.tweet?.media?.all?.first)
+        #expect(item.width == ServerCount.upperBound)
+        #expect(item.height == 0)
+    }
+
+    /// 読み込めないスキームの添付ファイルとアイコンは、投稿ごと読めなくせず、そのファイルだけ出さない。
+    @Test func dropsMediaWithOtherSchemeURL() throws {
+        let json = """
+        {"code": 200, "tweet": {"id": "1", "url": "https://x.com/a/status/1", "raw_text": {"text": "a", "facets": []},
+        "author": {"name": "A", "screen_name": "a", "avatar_url": "file:///tmp/a.png"},
+        "media": {"all": [
+            {"type": "photo", "url": "file:///tmp/a.jpg"},
+            {"type": "video", "url": "https://video.twimg.com/a.mp4", "thumbnail_url": "file:///tmp/b.jpg"}
+        ]}}}
+        """
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let post = XPost(try #require(try decoder.decode(FxTwitterResponse.self, from: Data(json.utf8)).tweet))
+
+        #expect(post.authorAvatar == nil)
+        #expect(post.media.map(\.type) == [.video])
+        #expect(post.media.first?.previewUrl == nil)
+    }
+
     /// Xの縮小版（`name=small`）は、長い辺を680pxに収める。タイムラインで元の画像を選べるよう、縮小版の大きさを実際の大きさにする。
     @Test func photoPreviewHasSmallSize() throws {
         let item = FxTwitterResponse.Item(

@@ -170,6 +170,14 @@ public struct MastodonClient: Sendable {
             struct Configuration: Decodable {
                 struct URLs: Decodable {
                     let streaming: URL
+
+                    private enum CodingKeys: String, CodingKey {
+                        case streaming
+                    }
+
+                    init(from decoder: any Decoder) throws {
+                        streaming = try decoder.container(keyedBy: CodingKeys.self).decodeRequiredURL(.streaming, forKey: .streaming)
+                    }
                 }
                 let urls: URLs
             }
@@ -184,6 +192,14 @@ public struct MastodonClient: Sendable {
         struct Instance: Decodable {
             struct URLs: Decodable {
                 let streamingApi: URL
+
+                private enum CodingKeys: String, CodingKey {
+                    case streamingApi
+                }
+
+                init(from decoder: any Decoder) throws {
+                    streamingApi = try decoder.container(keyedBy: CodingKeys.self).decodeRequiredURL(.streaming, forKey: .streamingApi)
+                }
             }
             let urls: URLs
         }

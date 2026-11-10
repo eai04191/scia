@@ -42,10 +42,13 @@ enum ServerURLKind {
     /// ほかのスキームは外のアプリに渡すことになり、サーバーが選んだアプリ（電話、メッセージなど）を起動できてしまう。
     /// 本文のリンクは、Mastodonがgeminiやmagnetなども通す決まりで、書いた人が見える形で置いたものなので、ここでは扱わない。
     case destination
+    /// ストリーミングAPIの接続先。WebSocketのwsとwssに加え、httpとhttpsを受け付ける。
+    case streaming
 
     func accepts(_ url: URL) -> Bool {
         switch url.scheme?.lowercased() {
         case "http", "https": url.host()?.isEmpty == false
+        case "ws", "wss": self == .streaming && url.host()?.isEmpty == false
         case "data": self == .media
         default: false
         }

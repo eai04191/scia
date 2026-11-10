@@ -58,6 +58,19 @@ public enum StreamingMessageDecoder {
         let payload: String?
         let error: String?
         let status: Int?
+
+        private enum CodingKeys: String, CodingKey {
+            case stream, event, payload, error, status
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            stream = try container.decodeIfPresent([String].self, forKey: .stream)
+            event = try container.decodeIfPresent(String.self, forKey: .event)
+            payload = try container.decodeIfPresent(String.self, forKey: .payload)
+            error = try container.decodeIfPresent(String.self, forKey: .error)
+            status = try container.decodeCountIfPresent(forKey: .status)
+        }
     }
 
     /// エラーの通知なら`StreamingServerError`を投げる。

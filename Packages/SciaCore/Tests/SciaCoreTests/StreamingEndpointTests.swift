@@ -31,6 +31,25 @@ struct StreamingEndpointTests {
         #expect(await transport.requests.map { $0.url?.path() } == ["/api/v2/instance"])
     }
 
+    /// 接続先もサーバーから来るURLなので、つなげるスキーム（ws、wss、http、https）だけを受け付ける。ほかのスキームは、接続先を読めなかったものとする。
+    @Test(arguments: ["file:///tmp/socket", "tel:0123456789", "wss:"])
+    func rejectsEndpointWithOtherScheme(_ endpointURL: String) async throws {
+        let transport = StubTransport([
+            .json(#"{"configuration":{"urls":{"streaming":"\#(endpointURL)"}}}"#, statusCode: 200),
+            .json(#"{"uri":"example.social","urls":{"streaming_api":"\#(endpointURL)"}}"#, statusCode: 200),
+        ])
+        let endpoint = try makeEndpoint(transport)
+
+        await #expect(throws: DecodingError.self) { try await endpoint.url() }
+    }
+
+    @Test(arguments: ["ws://example.social", "wss://example.social", "http://example.social", "https://example.social"])
+    func acceptsConnectableSchemes(_ endpointURL: String) async throws {
+        let transport = StubTransport([.json(#"{"configuration":{"urls":{"streaming":"\#(endpointURL)"}}}"#, statusCode: 200)])
+
+        #expect(try await makeEndpoint(transport).url().absoluteString == endpointURL)
+    }
+
     @Test func fallsBackToV1WhenV2IsMissing() async throws {
         let transport = StubTransport([
             .json("<html><body>Not Found</body></html>", statusCode: 404),
