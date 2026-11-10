@@ -4047,17 +4047,12 @@ final class SessionController {
     }
 
     /// 外から頼まれた画面を開く。アプリのURL（`scia://`）と、これから足すショートカットは、ここを通す。
+    /// 重ねた画面を閉じている途中に届いたら、閉じ終えてから開く。
     func open(_ destination: AppDestination) {
-        // 重ねた画面のどれかを閉じている途中に届くと、閉じていく画面を手前にあるものとして扱い、重ねたり積んだりできずに何もしないことがある。
-        // 手前の画面を閉じている途中にその下の画面を閉じ始めると、下の画面が閉じられずに残る。閉じ終えてから行う。
-        var screen = rootViewController.presentedViewController
-        while let current = screen, !current.isBeingDismissed {
-            screen = current.presentedViewController
-        }
-        if let dismissing = screen, let coordinator = dismissing.transitionCoordinator {
-            coordinator.animate(alongsideTransition: nil) { [weak self] _ in self?.open(destination) }
-            return
-        }
+        rootViewController.afterOngoingDismissal { [weak self] in self?.openAfterDismissal(destination) }
+    }
+
+    private func openAfterDismissal(_ destination: AppDestination) {
         // タブを見せる行き先は、上に重ねた画面を、書きかけのある画面も含めてすべて閉じてから開く。重ねたままでは見えず、積むのもやめるため。
         // アプリ内のSafariは伏せた高さへ下げて残す。伏せたシートの上に後ろの画面が見えるため。
         // 送られた行き先は使う人の新しい操作なので、出ていた画面より優先する。並びにないか無効にしているタブは開かないので、閉じずにやめる。

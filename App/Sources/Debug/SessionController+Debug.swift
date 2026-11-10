@@ -65,11 +65,11 @@ extension SessionController {
     }
 
     func handle(_ url: DebugURL) {
-        // `scia-debug://reset`の直後に送ったURLは、閉じている途中の画面を手前にあるものとして扱い、重ねたり積んだりできずに何もしないことがある。閉じ終えてから行う。
-        if let dismissing = rootViewController.presentedViewController, dismissing.isBeingDismissed, let coordinator = dismissing.transitionCoordinator {
-            coordinator.animate(alongsideTransition: nil) { [weak self] _ in self?.handle(url) }
-            return
-        }
+        // `scia-debug://reset`の直後に送ったURLは、画面を閉じ終えてから行う。
+        rootViewController.afterOngoingDismissal { [weak self] in self?.handleAfterDismissal(url) }
+    }
+
+    private func handleAfterDismissal(_ url: DebugURL) {
         switch url {
         case .dummy(let post):
             home.streamDummy(post)
