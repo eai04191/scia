@@ -31,6 +31,7 @@ public enum Linter {
         .iosWording,
         .exactCountWait,
         .advanceAfterSleeperCount,
+        .synthesizedServerValueDecoding,
     ]
 
     /// `path`（リポジトリのルートからの相対パス）の`source`を、当てはまる規則で調べる。

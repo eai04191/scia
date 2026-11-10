@@ -133,6 +133,8 @@ struct FxTwitterResponse: Decodable {
     struct RawText: Decodable {
         let text: String
         /// Xで本文として見せる範囲。末尾の添付ファイルのt.coのURLを除く。
+        // 位置は足したり掛けたりせず、本文の長さに収めてから使う（XPostText.swift）ので、読むところでは収めない。
+        // scialint:disable:next synthesized_server_value_decoding
         let displayTextRange: [Int]?
         let facets: [Facet]
     }
@@ -141,6 +143,8 @@ struct FxTwitterResponse: Decodable {
         /// `url`、`hashtag`、`mention`、`media`、`symbol`、長い投稿の`bold`など。
         let type: String
         /// `text`の中の位置。Unicodeのスカラー値で数える。
+        // 位置は足したり掛けたりせず、本文の見せる範囲に収まることを確かめてから使う（XPostText.swift）ので、読むところでは収めない。
+        // scialint:disable:next synthesized_server_value_decoding
         let indices: [Int]
         /// URLならt.coのURL、ハッシュタグなら`#`を除いた名前、メンションなら`@`を除いたユーザー名。
         let original: String?
