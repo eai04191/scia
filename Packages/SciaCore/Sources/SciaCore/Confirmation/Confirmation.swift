@@ -54,6 +54,52 @@ public struct RefusalText: Equatable, Sendable {
     }
 }
 
+/// 書きかけの投稿欄で、新しく始める操作。決め方は`Confirmation.starting(_:draft:now:)`にある。
+public enum ComposeStart: Sendable {
+    /// 返信先を付けて書く。
+    /// - Parameter switchesAccount: 投稿するアカウントを替えて始める（「別のアカウントで」）。
+    case reply(switchesAccount: Bool)
+    /// 引用元を付けて書く。
+    case quote(switchesAccount: Bool)
+    /// ほかのアカウントに替えて、メンションを入れて書く。今のアカウントのメンションは、本文に足すだけなので、ここを通さない。
+    case mention
+    /// 自分の投稿を編集する。
+    /// - Parameter actor: ほかのアカウントとして編集するときの、そのアカウントの`@username`。見出しの初めに「〜で」と入れる。
+    case edit(Status, actor: String?)
+    /// 自分の投稿を削除して書き直す。
+    case redraft(Status, actor: String?)
+    /// 予約した投稿を書き直す。
+    case rewrite
+
+    /// 「返信」「引用」のような、確かめる見出しに書く操作の名前。
+    var name: String {
+        switch self {
+        case .reply: "返信"
+        case .quote: "引用"
+        case .mention: "メンション"
+        case .edit: "編集"
+        case .redraft, .rewrite: "書き直し"
+        }
+    }
+}
+
+/// `ComposeStart`を始める前の決定。
+public struct ComposeStartDecision: Equatable, Sendable {
+    public let decision: ConfirmationDecision<Proceed>
+    /// 確かめたあと、始める前に、いまの編集や書き直しをやめて投稿欄を空に戻す。返信と引用は、編集や書き直しの本文を引き継がないため。
+    public let leavesCurrentWork: Bool
+
+    init(_ decision: ConfirmationDecision<Proceed>, leavesCurrentWork: Bool = false) {
+        self.decision = decision
+        self.leavesCurrentWork = leavesCurrentWork
+    }
+
+    /// 確かめるときの文言。確かめなければnil。
+    public var confirmation: Confirmation<Proceed>? {
+        if case .confirm(let confirmation) = decision { confirmation } else { nil }
+    }
+}
+
 /// 確かめずに進めるか、確かめるか、始められないことを知らせるか。
 public enum ConfirmationDecision<Choice: Hashable & Sendable>: Equatable, Sendable {
     case proceed
@@ -116,12 +162,37 @@ extension Confirmation where Choice == Proceed {
         .destructive(title: "予約を取り消しますか？", message: "取り消した予約は投稿されず、元に戻せません。", action: "取り消す")
     }
 
+    /// 書きかけの投稿欄で`start`を始める前に、そのまま進むか、確かめるか、断るかを決める。
+    /// 始める操作と下書きの状態の組み合わせは、ここだけで決める。画面は結果に従い、投稿欄のモデルの入口（`setReplyTarget`や`beginEditing`など）は、
+    /// ここで進むと決めたものを受け付ける。別々に決めると、確かめずに進めたのにモデルが受け付けず、押しても何も起きなくなるため。
+    /// 共有されたもので書き始めるときは、下書きに足すかも選ぶので、`shared(_:draft:)`で決める。
+    /// - Parameter now: 編集で、投票の締め切りまでの残りを見る今の日付。
+    @MainActor
+    public static func starting<Thumbnail>(_ start: ComposeStart, draft: ComposeModel<Thumbnail>, now: Date) -> ComposeStartDecision {
+        switch start {
+        case .reply, .mention:
+            return leavingEdit(starting: start.name, draft: draft).map { ComposeStartDecision(.confirm($0), leavesCurrentWork: true) } ?? ComposeStartDecision(.proceed)
+        case .quote:
+            if let leaving = leavingEdit(starting: start.name, draft: draft) {
+                // やめると投稿欄は空に戻るので、外す添付と投票は残らない。
+                return ComposeStartDecision(.confirm(leaving), leavesCurrentWork: true)
+            }
+            return ComposeStartDecision(quoting(draft: draft).map { .confirm($0) } ?? .proceed)
+        case .edit(let status, let actor):
+            return ComposeStartDecision(editing(status, draft: draft, now: now, actor: actor))
+        case .redraft(let status, let actor):
+            return ComposeStartDecision(.confirm(redrafting(status, draft: draft, actor: actor)))
+        case .rewrite:
+            return ComposeStartDecision(rewriting(draft: draft).map { .confirm($0) } ?? .proceed)
+        }
+    }
+
     /// 編集か削除して書き直している途中で返信か引用を選んだら、やめてよいか確かめる。どちらでもなければ確かめない（nil）。
     /// 返信と引用は書いた本文を残して返信先や引用元を付け替えるが、編集と書き直しの本文は元の投稿のもので、
     /// 書き直しでは返信先と引用元を変えられないため、引き継がない。
     /// - Parameter starting: 「返信」「引用」のような、始める操作の名前。
     @MainActor
-    public static func leavingEdit<Thumbnail>(starting: String, draft: ComposeModel<Thumbnail>) -> Confirmation? {
+    private static func leavingEdit<Thumbnail>(starting: String, draft: ComposeModel<Thumbnail>) -> Confirmation? {
         if draft.editedStatus != nil {
             return .destructive(title: "編集をやめて\(starting)しますか？", message: discardedDraftMessage(draft), action: "編集をやめる")
         }
@@ -158,7 +229,7 @@ extension Confirmation where Choice == Proceed {
     /// 投票の票は投票の付いた投稿でだけ、固定が外れることはプロフィールに固定している投稿でだけ書く。
     /// - Parameter actor: ほかのアカウントとして書き直すときの、そのアカウントの`@username`。見出しの初めに「〜で」と入れる。
     @MainActor
-    public static func redrafting<Thumbnail>(_ status: Status, draft: ComposeModel<Thumbnail>, actor: String? = nil) -> Confirmation {
+    private static func redrafting<Thumbnail>(_ status: Status, draft: ComposeModel<Thumbnail>, actor: String?) -> Confirmation {
         let discards = draft.hasWrittenContent
         let lost = ["お気に入り", "ブースト", status.poll == nil ? nil : "投票の票"].compactMap(\.self).joined(separator: "、")
         var lines: [String] = []
@@ -179,7 +250,7 @@ extension Confirmation where Choice == Proceed {
     /// 下書きに添付か投票があれば、外してよいか確かめる。なければ確かめない（nil）。
     /// Mastodonは引用に添付と投票を付けられないため。本文は残す。
     @MainActor
-    public static func quoting<Thumbnail>(draft: ComposeModel<Thumbnail>) -> Confirmation? {
+    private static func quoting<Thumbnail>(draft: ComposeModel<Thumbnail>) -> Confirmation? {
         guard draft.hasQuoteConflicts else { return nil }
         let removing = [draft.attachments.isEmpty ? nil : "添付ファイル", draft.poll == nil ? nil : "投票"].compactMap(\.self).joined(separator: "と")
         return .destructive(title: "\(removing)を外して引用しますか？", message: "引用する投稿には添付ファイルや投票を付けられません。書いた本文は残ります。", action: "外して引用")
@@ -187,7 +258,7 @@ extension Confirmation where Choice == Proceed {
 
     /// 書きかけの下書きがあれば、捨ててよいか確かめてから、予約した投稿の書き直しを始める。なければ確かめない（nil）。
     @MainActor
-    public static func rewriting<Thumbnail>(draft: ComposeModel<Thumbnail>) -> Confirmation? {
+    private static func rewriting<Thumbnail>(draft: ComposeModel<Thumbnail>) -> Confirmation? {
         guard draft.hasWrittenContent else { return nil }
         return .destructive(title: "下書きを破棄して書き直しますか？", message: discardedDraftMessage(draft), action: "破棄して書き直す")
     }
@@ -197,7 +268,7 @@ extension Confirmation where Choice == Proceed {
     /// 押されたあとも、聞いている間に締め切りが近づいていないかを`Status.canBeEdited(now:)`で確かめ直し、近づいていれば`RefusalText.cannotEdit`を知らせる。
     /// - Parameter actor: ほかのアカウントとして編集するときの、そのアカウントの`@username`。見出しの初めに「〜で」と入れる。
     @MainActor
-    public static func editing<Thumbnail>(_ status: Status, draft: ComposeModel<Thumbnail>, now: Date, actor: String? = nil) -> ConfirmationDecision<Proceed> {
+    private static func editing<Thumbnail>(_ status: Status, draft: ComposeModel<Thumbnail>, now: Date, actor: String?) -> ConfirmationDecision<Proceed> {
         if let obstacle = status.editObstacle(now: now) { return .refuse(.cannotEdit(obstacle)) }
         let discards = draft.hasWrittenContent
         let hasPoll = status.poll != nil

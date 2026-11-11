@@ -36,7 +36,7 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 
 - 投稿欄は`ComposeModel`。`AccountSession.applyComposeDefaults(to:)`が済むまで`canPost`はfalseのまま
 - 送れた結果（`onSubmitted`）は`session.statuses.reflect(_:usingTagsIn:)`に渡す。どの一覧へ配るかはそこで決まる
-- 編集を始める前の確認は`Confirmation.editing`、後から選んだ投稿の読み込みだけを使うのは`LatestLookup`
+- 書きかけの投稿欄で返信、引用、編集、書き直しを始める前に、進むか、確かめるか、断るかは`Confirmation.starting(_:draft:now:)`が決める（共有されたもので書き始めるときは`Confirmation.shared`）。後から選んだ投稿の読み込みだけを使うのは`LatestLookup`
 - 削除は、`Confirmation.deleting`で確かめてから`StatusDeletion.delete(_:onFailure:)`。どの一覧からも除き、投稿欄の編集や書き直しもやめる。ほかのアカウントの投稿を消したら、`ComposeModel.statusWasDeleted(_:accountID:willReset:)`をそのアカウントのIDで呼ぶ
 
 ## メニューと確認と失敗

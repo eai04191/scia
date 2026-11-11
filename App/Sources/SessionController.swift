@@ -1958,7 +1958,7 @@ final class SessionController {
         switch action {
         case .reply:
             UserAction.reply.record()
-            confirmLeavingEdit(starting: "返信") { [weak self] in self?.composer.reply(to: status) }
+            startComposing(.reply(switchesAccount: false)) { [weak self] in self?.composer.reply(to: status) }
         case .quote:
             UserAction.quote.record()
             startQuoting(status)
@@ -2046,7 +2046,7 @@ final class SessionController {
             presentListMembership(accountID: accountID, acct: acct, as: account)
         case .mention(let acct):
             UserAction.mention.record()
-            write(as: account, starting: "メンション") { [weak self] writing in self?.composer.mention(acct, as: writing) }
+            write(as: account, starting: .mention) { [weak self] writing in self?.composer.mention(acct, as: writing) }
         }
     }
 
@@ -2054,8 +2054,8 @@ final class SessionController {
 
     /// 投稿欄で`account`として書き始める。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
     /// 編集や書き直しの途中なら、今のアカウントで返信を始めるときと同じく、やめてよいか聞く。投稿するアカウントは、`proceed`に渡したものを投稿欄の入り口が替える。
-    private func write(as account: OtherAccount, starting: String, _ proceed: @escaping (ComposeAccount<UIImage>) -> Void) {
-        confirmLeavingEdit(starting: starting) { [weak self] in
+    private func write(as account: OtherAccount, starting: ComposeStart, _ proceed: @escaping (ComposeAccount<UIImage>) -> Void) {
+        startComposing(starting) { [weak self] in
             guard let self else { return }
             proceed(composeAccount(for: account))
         }
@@ -2311,12 +2311,12 @@ final class SessionController {
             return
         case .reply:
             UserAction.reply.record()
-            write(as: account, starting: "返信") { [weak self] writing in self?.composer.reply(to: status, as: writing) }
+            write(as: account, starting: .reply(switchesAccount: true)) { [weak self] writing in self?.composer.reply(to: status, as: writing) }
             return
         case .quote:
             UserAction.quote.record()
             // そのアカウントのサーバーで探した投稿なので、引用できるかはログインしている人向けの形で分かっている。
-            write(as: account, starting: "引用") { [weak self] writing in self?.confirmQuoting(status, as: writing) }
+            write(as: account, starting: .quote(switchesAccount: true)) { [weak self] writing in self?.composer.quote(status, as: writing) }
             return
         case .edit:
             UserAction.editStatus.record()
@@ -3260,18 +3260,24 @@ final class SessionController {
         }
     }
 
-    /// 編集か削除して書き直している途中で返信か引用を選んだら、やめてよいか聞いてから始める。どちらでもなければすぐ始める。
-    /// 返信と引用は書いた本文を残して返信先や引用元を付け替えるが、編集と書き直しの本文は元の投稿のものなので、引き継がない。
-    private func confirmLeavingEdit(starting: String, _ proceed: @escaping () -> Void) {
-        guard let confirmation = Confirmation.leavingEdit(starting: starting, draft: composer.model) else {
+    /// 書きかけの投稿欄で`start`を始める。そのまま始めるか、聞いてから始めるか、始められないと知らせるかは、`Confirmation.starting`が決める。
+    /// 返信、引用、編集、書き直しを始める入口は、どれもここを通す。
+    private func startComposing(_ start: ComposeStart, _ proceed: @escaping () -> Void) {
+        let decision = Confirmation.starting(start, draft: composer.model, now: now())
+        switch decision.decision {
+        case .proceed:
             proceed()
-            return
+        case .refuse(let text):
+            presentRefusal(text)
+        case .confirm(let confirmation):
+            presentOnTop(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
+                // 送っている間はやめず、始めもしない。送り終えれば空に戻るので、そのあと選び直してもらう。
+                if decision.leavesCurrentWork {
+                    guard self?.composer.cancelStatusEdit() == true else { return }
+                }
+                proceed()
+            }, animated: true)
         }
-        presentOnTop(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
-            // 送っている間はやめず、返信も始めない。送り終えれば空に戻るので、返信はそのあと選び直してもらう。
-            guard self?.composer.cancelStatusEdit() == true else { return }
-            proceed()
-        }, animated: true)
     }
 
     /// 自分が引用できるかが分かっていれば、すぐ引用を始める。公開とハッシュタグのストリーミングで届いた投稿は、
@@ -3309,21 +3315,9 @@ final class SessionController {
         }
     }
 
+    /// 編集や書き直しの途中ならやめてよいかを、下書きに添付か投票があれば外してよいかを、聞いてから引用を始める。
     private func beginQuoting(_ status: Status) {
-        confirmLeavingEdit(starting: "引用") { [weak self] in self?.confirmQuoting(status) }
-    }
-
-    /// 下書きに添付か投票があれば、外してよいか聞いてから引用を始める。なければすぐ始める。
-    /// Mastodonは引用に添付と投票を付けられないため。本文は残す。
-    /// - Parameter account: 投稿するアカウント。nilなら今のアカウントで書く。
-    private func confirmQuoting(_ status: Status, as account: ComposeAccount<UIImage>? = nil) {
-        guard let confirmation = Confirmation.quoting(draft: composer.model) else {
-            composer.quote(status, as: account)
-            return
-        }
-        presentOnTop(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
-            self?.composer.quote(status, as: account)
-        }, animated: true)
+        startComposing(.quote(switchesAccount: false)) { [weak self] in self?.composer.quote(status) }
     }
 
     /// 編集の元にする本文をサーバーから取得し、取得できたら投稿欄で編集を始める。同じ投稿を編集している途中なら、読み直さずに投稿欄を開く。
@@ -3399,9 +3393,9 @@ final class SessionController {
     /// - Parameter configuration: `writing`のサーバーの上限。
     /// - Parameter actor: ほかのアカウントとして書くときの、そのアカウントの`@username`。確かめる見出しの初めに入れる。
     private func confirmRedrafting(_ status: Status, source: StatusSource, as writing: ComposeAccount<UIImage>? = nil, configuration: InstanceConfiguration? = nil, actor: String? = nil) {
-        presentOnTop(UIAlertController(Confirmation.redrafting(status, draft: composer.model, actor: actor), preferredStyle: .alert) { [weak self] _ in
+        startComposing(.redraft(status, actor: actor)) { [weak self] in
             self?.composer.redraft(status, source: source, as: writing, configuration: configuration)
-        }, animated: true)
+        }
     }
 
     /// 投稿欄から今のアカウントで送れた結果を、ストリーミングの知らせを待たずに一覧へ反映する。何をどこへ反映するかは`SessionStatuses.reflect(_:usingTagsIn:)`にある。
@@ -3451,13 +3445,7 @@ final class SessionController {
 
     /// 書きかけの下書きがあれば捨ててよいかを聞いてから、予約した投稿の書き直しを始める。
     private func confirmRewriting(_ status: ScheduledStatus) {
-        guard let confirmation = Confirmation.rewriting(draft: composer.model) else {
-            composer.rewrite(status)
-            return
-        }
-        presentOnTop(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
-            self?.composer.rewrite(status)
-        }, animated: true)
+        startComposing(.rewrite) { [weak self] in self?.composer.rewrite(status) }
     }
 
     /// 書き直した投稿を送れたので、元の予約を取り消す。取り消せなければ、両方投稿されないよう知らせて予約投稿の画面を開く。
@@ -3493,21 +3481,14 @@ final class SessionController {
     /// - Parameter writing: 投稿を書いたほかのアカウントとして書くときの送り先。今のアカウントならnil。
     /// - Parameter actor: ほかのアカウントとして書くときの、そのアカウントの`@username`。確かめる見出しの初めに入れる。
     private func confirmEditing(_ status: Status, source: StatusSource, as writing: ComposeAccount<UIImage>? = nil, actor: String? = nil) {
-        switch Confirmation.editing(status, draft: composer.model, now: now(), actor: actor) {
-        case .proceed:
-            composer.edit(status, source: source, as: writing)
-        case .refuse(let text):
-            presentRefusal(text)
-        case .confirm(let confirmation):
-            presentOnTop(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
-                guard let self else { return }
-                // 聞いている間に締め切りが近づいたら、投票なしで送って投票を消さないよう、編集を始めない。
-                if let obstacle = status.editObstacle(now: now()) {
-                    presentRefusal(.cannotEdit(obstacle))
-                } else {
-                    composer.edit(status, source: source, as: writing)
-                }
-            }, animated: true)
+        startComposing(.edit(status, actor: actor)) { [weak self] in
+            guard let self else { return }
+            // 聞いている間に締め切りが近づいたら、投票なしで送って投票を消さないよう、編集を始めない。
+            if let obstacle = status.editObstacle(now: now()) {
+                presentRefusal(.cannotEdit(obstacle))
+            } else {
+                composer.edit(status, source: source, as: writing)
+            }
         }
     }
 

@@ -4,6 +4,8 @@ import Testing
 
 @MainActor
 struct ConfirmationTests {
+    private static let now = Date(timeIntervalSince1970: 1_800_000_000)
+
     private func draft(text: String = "", poll: Bool = false) -> ComposeModel {
         let model = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }
         model.text = text
@@ -38,19 +40,21 @@ struct ConfirmationTests {
     }
 
     @Test func quotingConfirmsOnlyWhenPollOrMediaWouldBeRemoved() {
-        #expect(Confirmation.quoting(draft: draft(text: "本文")) == nil)
-        let confirmation = Confirmation.quoting(draft: draft(poll: true))
+        #expect(Confirmation.starting(.quote(switchesAccount: false), draft: draft(text: "本文"), now: Self.now).decision == .proceed)
+        let decision = Confirmation.starting(.quote(switchesAccount: false), draft: draft(poll: true), now: Self.now)
+        let confirmation = decision.confirmation
+        #expect(!decision.leavesCurrentWork)
         #expect(confirmation?.title == "投票を外して引用しますか？")
         #expect(confirmation?.buttons.last == .init("外して引用", role: .destructive, choice: .proceed))
     }
 
     @Test func leavingEditConfirmsOnlyWhileEditing() {
-        #expect(Confirmation.leavingEdit(starting: "返信", draft: draft(text: "本文")) == nil)
+        #expect(Confirmation.starting(.reply(switchesAccount: false), draft: draft(text: "本文"), now: Self.now).decision == .proceed)
     }
 
     @Test func rewritingConfirmsOnlyWithWrittenDraft() {
-        #expect(Confirmation.rewriting(draft: draft()) == nil)
-        let confirmation = Confirmation.rewriting(draft: draft(text: "書きかけ"))
+        #expect(Confirmation.starting(.rewrite, draft: draft(), now: Self.now).decision == .proceed)
+        let confirmation = Confirmation.starting(.rewrite, draft: draft(text: "書きかけ"), now: Self.now).confirmation
         #expect(confirmation?.title == "下書きを破棄して書き直しますか？")
         #expect(confirmation?.message == "書きかけの下書きは破棄されます。")
     }

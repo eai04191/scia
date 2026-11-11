@@ -385,17 +385,17 @@ struct ComposeModelRedraftTests {
     }
 
     /// 始める前の確認には、送ると削除すること、なくなるものを書く。投票の票と固定は、当てはまるときだけ書く。
-    @Test func confirmationListsWhatIsLost() {
+    @Test func confirmationListsWhatIsLost() throws {
         let events = Events()
         let model = makeModel(events, redraft: redraftService(events) { Self.attachment($0) }) { _ in }
         let poll = Poll(id: "p", expiresAt: nil, expired: false, multiple: false, votesCount: 0, options: [])
 
-        let plain = Confirmation.redrafting(status(), draft: model)
+        let plain = try #require(Confirmation.starting(.redraft(status(), actor: nil), draft: model, now: Date(timeIntervalSince1970: 1_800_000_000)).confirmation)
         #expect(plain.title == "削除して書き直しますか？")
         #expect(plain.message == "書き直した投稿を送ると元の投稿を削除します。お気に入り、ブーストはなくなり、元の投稿への返信はつながりを失います。")
 
         model.text = "書きかけ"
-        let full = Confirmation.redrafting(status(poll: poll, pinned: true), draft: model)
+        let full = try #require(Confirmation.starting(.redraft(status(poll: poll, pinned: true), actor: nil), draft: model, now: Date(timeIntervalSince1970: 1_800_000_000)).confirmation)
         #expect(full.title == "下書きを破棄して書き直しますか？")
         #expect(full.message == "書きかけの下書きは破棄されます。\n書き直した投稿を送ると元の投稿を削除します。お気に入り、ブースト、投票の票はなくなり、元の投稿への返信はつながりを失います。\nプロフィールへの固定も外れます。")
     }
@@ -404,11 +404,14 @@ struct ComposeModelRedraftTests {
     @Test func leavingRedraftIsConfirmed() {
         let events = Events()
         let model = makeModel(events, redraft: redraftService(events) { Self.attachment($0) }) { _ in }
-        #expect(Confirmation.leavingEdit(starting: "返信", draft: model) == nil)
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        #expect(Confirmation.starting(.reply(switchesAccount: false), draft: model, now: now).decision == .proceed)
 
         model.beginRedrafting(status(), source: Self.source)
 
-        let confirmation = Confirmation.leavingEdit(starting: "返信", draft: model)
+        let decision = Confirmation.starting(.reply(switchesAccount: false), draft: model, now: now)
+        let confirmation = decision.confirmation
+        #expect(decision.leavesCurrentWork)
         #expect(confirmation?.title == "書き直しをやめて返信しますか？")
         #expect(confirmation?.message == "書き直し中の内容は破棄されます。元の投稿は残ります。")
     }
