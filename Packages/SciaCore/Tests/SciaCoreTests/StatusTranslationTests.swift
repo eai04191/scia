@@ -30,7 +30,7 @@ struct RichTextTranslationPlanTests {
 
         let result = try plan.applying([[.preserved("example.com ", id: 0), .text("を見て")]])
 
-        #expect(result.blocks[0].inlines == [.link("example.com", .url(url), [.bold]), .text(" を見て", [])])
+        #expect(result.blocks[0].inlines == [.link("example.com", .url(url), [.bold, .original]), .text(" を見て", [])])
     }
 
     /// 続けて返った改行は、1つの改行に戻す。
@@ -42,7 +42,7 @@ struct RichTextTranslationPlanTests {
         #expect(result.blocks[0].inlines == [.text("一", []), .lineBreak, .text("二", [])])
     }
 
-    /// コードブロックと文字のない段落は渡さず、そのまま残す。引用とリストの形も保つ。
+    /// コードブロックと文字のない段落は渡さず、原文の部分として残す。引用とリストの形も保つ。
     @Test func keepsCodeBlocksAndBlockShape() throws {
         let code = RichText.Block(inlines: [.text("let a", [])], isCode: true)
         let emojiOnly = block(.emoji(emoji))
@@ -51,7 +51,7 @@ struct RichTextTranslationPlanTests {
 
         let result = try plan.applying([[.text("こんにちは")]])
 
-        #expect(result.blocks[0] == code)
+        #expect(result.blocks[0] == RichText.Block(inlines: [.text("let a", .original)], isCode: true))
         #expect(result.blocks[1] == emojiOnly)
         #expect(result.blocks[2] == RichText.Block(inlines: [.text("こんにちは", [])], quoteLevel: 1, listMarker: "• ", listLevel: 1))
     }
@@ -62,7 +62,7 @@ struct RichTextTranslationPlanTests {
 
         let result = try plan.applying([[.preserved("make", id: 0), .text("今すぐ")]])
 
-        #expect(result.blocks[0].inlines == [.text("make", .code), .text("今すぐ", [])])
+        #expect(result.blocks[0].inlines == [.text("make", [.code, .original]), .text("今すぐ", [])])
     }
 
     /// 残す部分にもともとある空白は、翻訳器がそのまま返しても増やさない。翻訳器が足した分だけ受け取る。
@@ -89,15 +89,15 @@ struct RichTextTranslationPlanTests {
         #expect(plan.hashtags == ["hiking", "Cats"])
     }
 
-    /// 併記する訳は、訳した段落のハッシュタグにも、渡さなかった段落のハッシュタグにも足す。開く先は変えない。
+    /// 併記する訳は、訳した段落のハッシュタグにも、渡さなかった段落のハッシュタグにも、同じ開く先の別のインラインで足す。ハッシュタグは原文の部分、訳は訳文にする。
     @Test func appendsHashtagSuffixes() throws {
         let tag = RichText.Inline.link("#hiking", .hashtag(name: "hiking", url: url), [])
         let plan = try #require(RichTextTranslationPlan(RichText(blocks: [block(.text("Went ", []), tag), block(tag)])))
 
         let result = try plan.applying([[.preserved("#hiking", id: 0), .text("に行った")]], hashtagSuffixes: ["hiking": "（ハイキング）"])
 
-        let glossed = RichText.Inline.link("#hiking（ハイキング）", .hashtag(name: "hiking", url: url), [])
-        #expect(result.blocks.map(\.inlines) == [[glossed, .text("に行った", [])], [glossed]])
+        let glossed: [RichText.Inline] = [.link("#hiking", .hashtag(name: "hiking", url: url), .original), .link("（ハイキング）", .hashtag(name: "hiking", url: url), [])]
+        #expect(result.blocks.map(\.inlines) == [glossed + [.text("に行った", [])], glossed])
     }
 
     /// 書式で分かれた1つのハッシュタグには、最後にだけ足す。
@@ -119,7 +119,7 @@ struct RichTextTranslationPlanTests {
         let result = try plan.applying([[.text("実行 "), .preserved("#hiking", id: 0)]], hashtagSuffixes: ["hiking": "（ハイキング）"])
 
         #expect(plan.hashtags.isEmpty)
-        #expect(result.blocks[0].inlines == [.text("実行 ", []), code])
+        #expect(result.blocks[0].inlines == [.text("実行 ", []), .link("#hiking", .hashtag(name: "hiking", url: url), [.code, .original])])
     }
 
     @Test(arguments: [

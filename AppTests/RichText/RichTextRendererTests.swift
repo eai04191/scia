@@ -22,6 +22,22 @@ struct RichTextRendererTests {
         RichTextRenderer(font: font, textColor: .label, paragraphSpacing: paragraphSpacing, emojiImages: store, language: "ja")
     }
 
+    /// 訳文の中に残した原文の部分には原文の言語を付け、ほかには訳文の言語を付ける。原文の言語を渡さなければ、どれにも同じ言語を付ける。
+    @Test func originalPartsGetTheOriginalLanguage() throws {
+        let url = try #require(URL(string: "https://example.social/tags/a"))
+        let text = RichText(blocks: [.init(inlines: [
+            .text("訳", []), .link("#简", .hashtag(name: "简", url: url), .original), .link("（簡）", .hashtag(name: "简", url: url), []),
+        ])])
+        var renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: .offline, language: "ja")
+        func languages(_ rendered: NSAttributedString) -> [String?] {
+            (0..<rendered.length).map { rendered.attribute(.languageIdentifier, at: $0, effectiveRange: nil) as? String }
+        }
+
+        #expect(languages(renderer.render(text)) == Array(repeating: "ja", count: 6))
+        renderer.originalLanguage = "zh-Hans"
+        #expect(languages(renderer.render(text)) == ["ja", "zh-Hans", "zh-Hans", "ja", "ja", "ja"])
+    }
+
     /// 本文の絵文字が通信の失敗で読めなかったら文字で描き、間隔が過ぎてから描き直すと、描くことで読み直しが始まり、読めたら画像で描く。
     @Test func failedEmojiIsRetriedWhenTheTextIsDrawnAgain() async throws {
         let clock = TestClock()

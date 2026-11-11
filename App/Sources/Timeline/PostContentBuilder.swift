@@ -250,11 +250,12 @@ struct PostContentBuilder {
     }
 
     /// タイムラインの投稿の本文（`configuration(for:isPinned:replyLabel:base:)`の本文）の描き手。本文を先に作るときも、同じ描き手で作る。
-    /// - Parameter translation: 本文を原文の代わりに描く訳文。訳文は翻訳先の言語の字形で描く。
+    /// - Parameter translation: 本文を原文の代わりに描く訳文。訳文は翻訳先の言語の字形で描き、訳文の中に残した原文の部分は投稿の言語の字形で描く。
     func postBodyRenderer(of status: Status, translation: RichText? = nil) -> RichTextRenderer {
         var renderer = bodyRenderer(of: status, font: PostTypography(settings: settings).font(.body), color: .label)
         renderer.emojiOnly = emojiOnlyEnlargement
         if translation != nil {
+            renderer.originalLanguage = renderer.language
             renderer.language = settings.glyphLanguageIdentifier(for: settings.resolvedTranslationTarget.minimalIdentifier)
         }
         return renderer

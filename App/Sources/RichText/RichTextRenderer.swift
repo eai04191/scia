@@ -27,6 +27,8 @@ struct RichTextRenderer: Sendable {
     private(set) var emojiImages: EmojiImageSource
     /// 文字列に付ける言語。付けないと、漢字とかなの書体が端末の言語の設定で決まり、英語の設定では日本語も中国語の書体で描かれる。
     var language: String
+    /// 訳文の中に残した原文の部分（`RichText.Style.original`）に付ける言語。nilなら`language`を付ける。
+    var originalLanguage: String?
     /// Unicodeの絵文字を描く絵。描く場所ごとに渡さず、設定から読む。
     var emojiStyle: EmojiStyle
     /// カスタム絵文字を描く画面の、1ptあたりのピクセル数。読む画像の高さを決めるのに使う。
@@ -131,7 +133,7 @@ struct RichTextRenderer: Sendable {
         font == other.font && textColor == other.textColor && secondaryColor == other.secondaryColor && linkColor == other.linkColor
             && underlinesLinks == other.underlinesLinks && paragraphSpacing == other.paragraphSpacing && lineSpacing == other.lineSpacing
             && indentPerLevel == other.indentPerLevel && quoteBarWidth == other.quoteBarWidth && emojiScale == other.emojiScale && unicodeEmojiScale == other.unicodeEmojiScale
-            && emojiOnly == other.emojiOnly && language == other.language && emojiStyle == other.emojiStyle && displayScale == other.displayScale
+            && emojiOnly == other.emojiOnly && language == other.language && originalLanguage == other.originalLanguage && emojiStyle == other.emojiStyle && displayScale == other.displayScale
     }
 
     func render(_ text: RichText) -> NSAttributedString {
@@ -373,7 +375,7 @@ struct RichTextRenderer: Sendable {
         var attributes: [NSAttributedString.Key: Any] = [
             .font: font(for: style, block: block),
             .foregroundColor: block.quoteLevel > 0 ? secondaryColor : textColor,
-            .languageIdentifier: language,
+            .languageIdentifier: style.contains(.original) ? originalLanguage ?? language : language,
         ]
         if style.contains(.strikethrough) {
             attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue

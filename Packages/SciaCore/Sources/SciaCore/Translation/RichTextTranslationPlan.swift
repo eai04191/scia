@@ -84,6 +84,10 @@ struct RichTextTranslationPlan: Sendable {
     func applying(_ translated: [[TranslationPart]], hashtagSuffixes: [String: String] = [:]) throws -> RichText {
         guard translated.count == paragraphs.count else { throw StatusTranslationError.preservedPartsChanged }
         var result = richText
+        // 翻訳器へ渡さない段落は、すべて原文のまま残る。
+        for index in result.blocks.indices where !blockIndices.contains(index) {
+            result.blocks[index].inlines = result.blocks[index].inlines.map(Self.markingOriginal)
+        }
         for (position, blockIndex) in blockIndices.enumerated() {
             let expected = paragraphs[position].compactMap(Self.preservedID)
             guard translated[position].compactMap(Self.preservedID).sorted() == expected.sorted() else {
@@ -98,12 +102,21 @@ struct RichTextTranslationPlan: Sendable {
         return result
     }
 
-    /// 書式で分かれた1つのハッシュタグには、最後のインラインにだけ足す。インラインのコードの中のハッシュタグには足さない。
+    /// 併記する訳を、ハッシュタグの後ろに、同じ開く先の別のインラインで足す。訳は原文ではないので、翻訳先の言語の字形で描かせるため。
+    /// 書式で分かれた1つのハッシュタグには、最後のインラインの後ろにだけ足す。インラインのコードの中のハッシュタグには足さない。
     private static func appendingSuffixes(_ suffixes: [String: String], to inlines: [RichText.Inline]) -> [RichText.Inline] {
-        inlines.indices.map { index in
-            guard case .link(let text, .hashtag(let name, let url), let style, let copied) = inlines[index], !style.contains(.code), let suffix = suffixes[name] else { return inlines[index] }
-            if index + 1 < inlines.count, case .link(_, .hashtag(name, url), _, _) = inlines[index + 1] { return inlines[index] }
-            return .link(text + suffix, .hashtag(name: name, url: url), style, copied: copied)
+        inlines.indices.flatMap { index -> [RichText.Inline] in
+            guard case .link(_, .hashtag(let name, let url), let style, _) = inlines[index], !style.contains(.code), let suffix = suffixes[name] else { return [inlines[index]] }
+            if index + 1 < inlines.count, case .link(_, .hashtag(name, url), _, _) = inlines[index + 1] { return [inlines[index]] }
+            return [inlines[index], .link(suffix, .hashtag(name: name, url: url), style.subtracting(.original))]
+        }
+    }
+
+    private static func markingOriginal(_ inline: RichText.Inline) -> RichText.Inline {
+        switch inline {
+        case .text(let text, let style): .text(text, style.union(.original))
+        case .link(let text, let destination, let style, let copied): .link(text, destination, style.union(.original), copied: copied)
+        case .emoji, .lineBreak: inline
         }
     }
 
@@ -132,7 +145,7 @@ struct RichTextTranslationPlan: Sendable {
                 let original = originalTexts[id] ?? ""
                 builder.append(text: String(Self.leadingWhitespace(text).dropLast(Self.leadingWhitespace(original).count)))
                 if let inline = preserved[id] {
-                    builder.append(inline)
+                    builder.append(Self.markingOriginal(inline))
                 }
                 builder.append(text: String(Self.trailingWhitespace(text).dropFirst(Self.trailingWhitespace(original).count)))
             }
@@ -168,7 +181,7 @@ private struct InlineBuilder {
     private mutating func appendLine(_ line: String) {
         guard !line.isEmpty else { return }
         flushLineBreak()
-        // 残したインラインのコードにはつながない。書式が後ろの訳文に移るため。
+        // 残した部分にはつながない。書式が後ろの訳文に移るため。
         if case .text(let last, [])? = inlines.last {
             inlines[inlines.count - 1] = .text(last + line, [])
         } else {

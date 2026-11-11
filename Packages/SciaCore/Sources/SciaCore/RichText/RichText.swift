@@ -50,6 +50,8 @@ public struct RichText: Hashable, Sendable {
         public static let strikethrough = Style(rawValue: 1 << 2)
         public static let underline = Style(rawValue: 1 << 3)
         public static let code = Style(rawValue: 1 << 4)
+        /// 訳文の中に、訳さずに残した原文の部分。訳文とは別に、原文の言語の字形で描く（docs/auto-translation.md）。
+        public static let original = Style(rawValue: 1 << 5)
     }
 
     /// サーバーが縮めて見せるURLの、コピーや共有に渡す元の文字。Mastodonのwebで本文を選んでコピーしたときと同じく、
