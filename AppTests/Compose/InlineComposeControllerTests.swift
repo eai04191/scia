@@ -695,10 +695,30 @@ final class InlineComposeControllerTests {
         try await waitUntilSettled()
         let textView = try #require(textViews(in: window).first)
         textView.becomeFirstResponder()
+        // 全部のテストを走らせた回に一度だけ、ここで下書きが"本文"になって落ちた（2026-11-11、別のMacの端末）。入力欄の本文も、変換中の文字を消した呼び出し元も残っておらず、
+        // 原因は分かっていない。次に落ちたときに分かるよう、入力欄の本文が変わるたびに、そのときの状態と呼び出し元を残す。
+        var changes: [String] = []
+        let recorder = NotificationCenter.default.addObserver(forName: UITextView.textDidChangeNotification, object: textView, queue: nil) { _ in
+            let stack = Thread.callStackSymbols.dropFirst().prefix(16).joined(separator: "\n")
+            MainActor.assumeIsolated {
+                changes.append("\(Self.inputState(of: textView))\n\(stack)")
+            }
+        }
+        defer { NotificationCenter.default.removeObserver(recorder) }
         textView.insertText("本文")
         textView.setMarkedText("へんかん", selectedRange: NSRange(location: 4, length: 0))
+        let stateAfterMarking = Self.inputState(of: textView)
         try await waitUntilSettled()
-        #expect(composer.model.text == "本文へんかん")
+        #expect(
+            composer.model.text == "本文へんかん",
+            """
+            変換中の文字を置いた直後: \(stateAfterMarking)
+            いま: \(Self.inputState(of: textView))
+            入力の言語: \(textView.textInputMode?.primaryLanguage ?? "nil") / \(UITextInputMode.activeInputModes.map { $0.primaryLanguage ?? "nil" })
+            入力欄の本文が変わった\(changes.count)回の状態と呼び出し元:
+            \(changes.joined(separator: "\n---\n"))
+            """
+        )
         // ハードウェアキーボードの日本語入力は、キーボードを閉じると変換中の文字を取り消して、本文が変わったと知らせる。
         // テストの入力欄はキーボードを閉じても変換中の文字を扱わないので、閉じたときに知らせを送って同じ順にする。
         let observer = NotificationCenter.default.addObserver(forName: UITextView.textDidEndEditingNotification, object: textView, queue: nil) { _ in
@@ -750,6 +770,11 @@ final class InlineComposeControllerTests {
         #expect(composer.model.text.isEmpty)
         #expect(!textViewBeganEditing, "送り終えるときにフォーカスが本文へ移りました")
         #expect(composer.stateDump().contains("editing: false"), "投稿したのに書いている状態のままです\n\(composer.stateDump())")
+    }
+
+    /// 落ちたときに残す、入力欄の状態。
+    private static func inputState(of textView: UITextView) -> String {
+        "text=\(textView.text ?? "") marked=\(textView.markedTextRange != nil) firstResponder=\(textView.isFirstResponder) keyWindow=\(textView.window?.isKeyWindow ?? false) hidden=\(textView.window?.isHidden ?? true)"
     }
 
     private func expectShown(_ shown: [UIButton], hidden: [UIButton], sourceLocation: SourceLocation = #_sourceLocation) {
