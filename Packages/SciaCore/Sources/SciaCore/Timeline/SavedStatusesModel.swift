@@ -154,10 +154,12 @@ public final class SavedStatusesModel {
 
     /// 失敗の表示の再試行が押されたときに呼ぶ。
     public func retry() {
-        if store.isLoaded {
-            loadOlder(purpose: .action)
-        } else {
+        // 読み込みの最中なら、その結果を待つ。ストアは重ねて読まないので、ここで読み込み中の表示にすると、戻すものがなくなる。
+        guard !store.isLoading else { return }
+        if store.isEmpty {
             start(purpose: .action)
+        } else {
+            loadOlder(purpose: .action)
         }
     }
 

@@ -85,4 +85,49 @@ struct SavedStatusesModelTests {
         #expect(display.contentState == .loaded)
         #expect(display.statusIDs == ["1"])
     }
+
+    /// 1件もないときの「再読み込み」は、最初から読み直す。ほかの端末で付けた分を、タブを開き直さずに読めるようにする。
+    @Test func retryReloadsWhenEmpty() async throws {
+        let (model, display) = makeModel(transport: Self.transport([[], try Self.saved([1])]))
+        defer { model.stop() }
+
+        model.startIfNeeded()
+        try await waitUntil { display.contentState == .loaded }
+        #expect(display.statusIDs.isEmpty)
+
+        model.retry()
+        try await waitUntil { model.runningTaskCount == 0 }
+        #expect(display.contentState == .loaded)
+        #expect(display.statusIDs == ["1"])
+    }
+
+    /// 見せ始めたときの読み込みの最中に「再読み込み」を押しても、読み込み中の表示のまま残さない。
+    /// 重ねて読まないので、最初から読み直す処理は何も読まずに終わり、表示を戻すものがなくなる。
+    @Test func retryDuringRefreshDoesNotLeaveLoading() async throws {
+        let refreshing = Gate()
+        let calls = Mutex(0)
+        let later = try TimelineModelFixtures.body(try Self.saved([1]))
+        let transport = RoutedTransport { _ in
+            let call = calls.withLock { count in
+                defer { count += 1 }
+                return count
+            }
+            guard call > 0 else { return (200, try TimelineModelFixtures.body([Status]())) }
+            try await refreshing.wait()
+            return (200, later)
+        }
+        let (model, display) = makeModel(transport: transport)
+        defer { model.stop() }
+        model.startIfNeeded()
+        try await waitUntil { display.contentState == .loaded }
+        model.setShown(true)
+        try await waitUntil { refreshing.waiterCount == 1 }
+
+        model.retry()
+        refreshing.open()
+        try await waitUntil { model.runningTaskCount == 0 }
+
+        #expect(display.contentState == .loaded)
+        #expect(display.statusIDs == ["1"])
+    }
 }
