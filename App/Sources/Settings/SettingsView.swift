@@ -174,7 +174,7 @@ struct SettingsView: View {
                 actionBar: .statusActionBar,
                 swipes: PostSwipeSettingsSection(leading: settings.postLeadingSwipeLayout, trailing: settings.postTrailingSwipeLayout),
                 toggles: SettingsToggleSection(
-                    header: "アクションバーを出している投稿のメニュー",
+                    header: "アクションバーを表示している投稿のメニュー",
                     toggles: [
                         .init(title: "アクションバーにある項目を表示", isOn: $settings.showsActionBarItemsInMenu),
                         .init(title: "ブーストとお気に入りの長押しの項目を表示", isOn: $settings.showsActionBarLongPressItemsInMenu),

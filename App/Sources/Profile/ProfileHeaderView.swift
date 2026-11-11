@@ -421,7 +421,7 @@ final class ProfileHeaderView: UIView {
         remoteLabel.font = .preferredFont(forTextStyle: .footnote)
         remoteLabel.adjustsFontForContentSizeCategory = true
         remoteLabel.textColor = .secondaryLabel
-        remoteLabel.text = "他のサーバーのアカウント"
+        remoteLabel.text = "ほかのサーバーのアカウント"
         remoteLabel.setContentHuggingPriority(.required, for: .horizontal)
         let openOriginal = openOriginalButton
         openOriginal.configuration?.title = "元のサーバーで開く"

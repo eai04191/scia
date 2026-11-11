@@ -226,7 +226,7 @@ final class EditHistoryViewController: UIViewController {
             contentUnavailableConfiguration = UIContentUnavailableConfiguration.loading()
         case .failed(let reason):
             var configuration = UIContentUnavailableConfiguration.empty()
-            configuration.text = "編集履歴を読めませんでした"
+            configuration.text = "編集履歴を読み込めませんでした"
             configuration.secondaryAttributedText = reason.attributedText(textStyle: .body)
             configuration.button = .borderedTinted()
             configuration.button.title = "再試行"

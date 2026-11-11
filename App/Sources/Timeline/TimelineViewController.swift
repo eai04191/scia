@@ -1433,7 +1433,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// ストリーミングにつながらない状態が続いていることを、タイトルの下に控えめに出す。題の下に添える文字があれば、その後ろに並べる。
     func setOutageNotice(_ isShown: Bool) {
-        let parts = [texts.subtitle, isShown ? "ストリーミング切断中" : nil].compactMap(\.self)
+        let parts = [texts.subtitle, isShown ? "ストリーミング未接続" : nil].compactMap(\.self)
         navigationItem.subtitle = parts.isEmpty ? nil : parts.joined(separator: "・")
     }
 

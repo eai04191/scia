@@ -69,7 +69,7 @@ struct MediaCacheView: View {
                 if let copy = try await actions.open(entry.id) {
                     previewing = copy
                 } else {
-                    openError = ErrorPresentation(message: "キャッシュから消えていました。", code: nil)
+                    openError = ErrorPresentation(message: "キャッシュから削除されていました。", code: nil)
                     entries = await actions.entries()
                 }
             } catch {

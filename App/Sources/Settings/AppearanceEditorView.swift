@@ -478,8 +478,8 @@ struct AppearanceValueRow: View {
     /// 割合の項目の、値の向きの説明。割合の意味は項目ごとに違うので、単位ではなく項目で決める。
     static func ratioNote(for item: AppearanceValue) -> String? {
         switch item.id {
-        case AppearanceCatalog.mediaTallestAspectRatio.id: "小さいほど縦長のまま出す"
-        case AppearanceCatalog.mediaWidestAspectRatio.id: "大きいほど横長のまま出す"
+        case AppearanceCatalog.mediaTallestAspectRatio.id: "小さいほど縦長のまま表示"
+        case AppearanceCatalog.mediaWidestAspectRatio.id: "大きいほど横長のまま表示"
         case AppearanceCatalog.avatarCornerRatio.id: "0.5で円になる"
         case AppearanceCatalog.quoteIndent.id: "1で本文の1文字分"
         case AppearanceCatalog.linkCardImageWidthRatio.id: "画像はカードの高さの正方形より広くならない"

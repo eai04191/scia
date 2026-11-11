@@ -141,7 +141,7 @@ private final class InAppBrowserGrabberView: UIView {
     }
 
     override var accessibilityValue: String? {
-        get { presentation?.selected == .collapsed ? "折りたたまれました" : "拡げられました" }
+        get { presentation?.selected == .collapsed ? "折りたたまれました" : "広げられました" }
         set { _ = newValue }
     }
 

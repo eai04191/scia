@@ -460,7 +460,7 @@ struct AppearanceEditorTests {
 
     /// 割合の項目の説明は項目ごとに決まり、縦長の比率の説明がほかの割合の項目に出ない。
     @Test func ratioNotesBelongToTheirItems() {
-        #expect(AppearanceValueRow.ratioNote(for: AppearanceCatalog.mediaTallestAspectRatio) == "小さいほど縦長のまま出す")
+        #expect(AppearanceValueRow.ratioNote(for: AppearanceCatalog.mediaTallestAspectRatio) == "小さいほど縦長のまま表示")
         #expect(AppearanceValueRow.ratioNote(for: AppearanceCatalog.reactionGlowIconOpacity) == nil)
         // カスタム絵文字の倍率は、見出しに割合の基準を書かず、1がどの大きさかを説明に出す。名前の行と本文で同じ説明にする。
         for item in [AppearanceCatalog.customEmojiScale, AppearanceCatalog.nameCustomEmojiScale] {

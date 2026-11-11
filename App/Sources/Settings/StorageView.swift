@@ -120,7 +120,7 @@ struct StorageView: View {
                 Section {
                     LabeledContent("アプリ本体", value: Self.text(breakdown.appBytes))
                 } footer: {
-                    Text("このiPhoneに入っているアプリのファイルを足した大きさです。iPhoneの設定の“Appのサイズ”とは数え方が違い、ずれることがあります。")
+                    Text("このiPhoneに入っているアプリのファイルを合計した大きさです。iPhoneの設定の“Appのサイズ”とは数え方が違い、ずれることがあります。")
                 }
             } else {
                 HStack {

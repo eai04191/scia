@@ -42,7 +42,7 @@ public enum RedraftMediaError: Error, Equatable, Sendable, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .notReleased: "サーバーが元の投稿を消し終えていないため、元の投稿のメディアを付けられませんでした。しばらくしてから送り直すか、元の投稿のメディアを外してください。"
+        case .notReleased: "サーバーが元の投稿を削除し終えていないため、元の投稿のメディアを付けられませんでした。しばらくしてから送り直すか、元の投稿のメディアを外してください。"
         }
     }
 }

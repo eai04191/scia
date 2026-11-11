@@ -131,7 +131,7 @@ final class APIResponseViewController: UIViewController {
             contentUnavailableConfiguration = UIContentUnavailableConfiguration.loading()
         case .failed(let reason):
             var configuration = UIContentUnavailableConfiguration.empty()
-            configuration.text = "APIの応答を読めませんでした"
+            configuration.text = "APIの応答を読み込めませんでした"
             configuration.secondaryAttributedText = reason.attributedText(textStyle: .body)
             configuration.button = .borderedTinted()
             configuration.button.title = "再試行"
