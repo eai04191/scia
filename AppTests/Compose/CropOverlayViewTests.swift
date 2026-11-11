@@ -4,6 +4,7 @@ import UIKit
 
 /// トリミングの枠。回している間は、置かれているキャンバスごと縮めて回す。
 @MainActor
+@Suite(.failureState)
 struct CropOverlayViewTests {
     /// 四隅のハンドルと枠線。枠線は`dimViews`の後ろに足した5つ目の子で、ハンドルとグリッドの線はその子。ハンドルだけが白く塗られている。
     private func handles(of overlay: CropOverlayView) -> [UIView] {

@@ -4,6 +4,7 @@ import SciaCore
 import Testing
 @testable import Scia
 
+@Suite(.failureState)
 struct DebugURLTests {
     @Test(arguments: DebugDummyPost.allCases)
     func readsEveryDummyPost(_ post: DebugDummyPost) throws {

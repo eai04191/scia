@@ -5,7 +5,7 @@ import UIKit
 @testable import Scia
 
 @MainActor
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 struct TabArrangementTests {
     /// 確かめに使うリスト。
     private static let friends = TabItem.list(id: "1", title: "友だち")

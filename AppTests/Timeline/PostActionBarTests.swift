@@ -7,7 +7,7 @@ import UIKit
 
 /// 投稿のアクションバーと、その引き出しの開閉。決まりはdocs/post-action-bar.mdにある。
 @MainActor
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 struct PostActionBarTests {
     private func harness() throws -> (harness: TimelineHarness, statuses: [Status]) {
         let harness = try TimelineHarness()
@@ -546,7 +546,7 @@ private extension PostContentConfiguration {
 
 /// アクションバーのボタンに添える件数の出し方。
 @MainActor
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 struct PostActionBarCountFitTests {
     private func bar(width: CGFloat, items: [PostActionBarItem]) -> PostActionBarView {
         let status = Status(

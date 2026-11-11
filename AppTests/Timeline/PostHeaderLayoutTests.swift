@@ -5,7 +5,7 @@ import UIKit
 @testable import Scia
 
 /// 名前とハンドルを2段に分ける並べ方と、アイコンの下を空けない並べ方。決まりはdocs/post-header-layout.mdにある。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct PostHeaderLayoutTests {
     /// - Parameter displayName: 投稿した人の名前。nilなら作った投稿のまま。

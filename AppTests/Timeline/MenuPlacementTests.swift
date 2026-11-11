@@ -5,7 +5,7 @@ import UIKit
 @testable import Scia
 
 /// 同じ対象のメニューを、出す場所によらず同じ見出し、中身、並びで組むことを確かめる。決まりはdocs/menus.mdの「メニューの単位」にある。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct MenuPlacementTests {
     private let alice = Account(id: "2", username: "alice", acct: "alice@remote.example", displayName: "Alice", avatar: nil, url: URL(string: "https://remote.example/@alice"))

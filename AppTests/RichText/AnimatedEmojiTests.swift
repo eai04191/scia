@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
 
 /// `LinkLabel`の、アニメーションするカスタム絵文字。
 @MainActor
+@Suite(.failureState)
 struct AnimatedEmojiTests {
     private let font = UIFont.preferredFont(forTextStyle: .body)
 

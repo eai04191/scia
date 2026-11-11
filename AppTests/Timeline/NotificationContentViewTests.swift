@@ -5,7 +5,7 @@ import Synchronization
 import UIKit
 @testable import Scia
 
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct NotificationContentViewTests {
     private func image(_ id: String) -> MediaAttachment {
@@ -153,7 +153,7 @@ struct NotificationContentViewTests {
     }
 }
 
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct NotificationAppearanceTests {
     private func makeViewController(_ settings: AppSettings) -> TimelineViewController {

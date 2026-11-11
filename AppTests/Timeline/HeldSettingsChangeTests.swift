@@ -6,7 +6,7 @@ import UIKit
 
 /// 見えていないタイムラインと、設定の画面が手前にある間のタイムラインは、設定が変わっても描き直さずに溜め、見えたときに1回だけ描き直す。
 @MainActor
-@Suite(.scratch, .serialized)
+@Suite(.scratch, .serialized, .failureState)
 struct HeldSettingsChangeTests {
     private func bodyPointSize(_ harness: TimelineHarness, _ id: Status.ID) -> CGFloat? {
         let content = harness.visibleCell(of: .status(id))?.contentConfiguration as? PostContentConfiguration

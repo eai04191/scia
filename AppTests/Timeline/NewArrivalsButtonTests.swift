@@ -5,7 +5,7 @@ import UIKit
 @testable import Scia
 
 /// 新着ボタンの出し入れ。`isHidden`は動かないため、濃さで出し入れし、消え終えてから隠す。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct NewArrivalsButtonTests {
     private func button(in harness: TimelineHarness) throws -> UIButton {

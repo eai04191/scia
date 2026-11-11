@@ -6,6 +6,7 @@ import UIKit
 
 /// 投稿欄の絵文字のパレット。
 @MainActor
+@Suite(.failureState)
 struct EmojiPaletteViewTests {
     /// 画面に入る前に組み立てたセルも、画像が届いたら描き直し、画面に入ったときに画像で描く。
     /// 画面に見えているセルだけを描き直していたため、スクロールで先に組み立てたセルは、画像が届いても空のまま画面に出ていた。

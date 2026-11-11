@@ -6,7 +6,7 @@ import UIKit
 
 /// プロフィールを開いて戻る操作と、プロフィールのヘッダーの伸び縮みで、読んでいる位置が動かないことを確かめる。
 @MainActor
-@Suite(.scratch, .serialized)
+@Suite(.scratch, .serialized, .failureState)
 struct ProfileTimelineTests {
     private var tolerance: CGFloat { 1 / max(UITraitCollection.current.displayScale, 1) }
 

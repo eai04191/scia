@@ -9,6 +9,7 @@ import UIKit
 @testable import Scia
 
 @MainActor
+@Suite(.failureState)
 struct RichTextRendererTests {
     private let font = UIFont.preferredFont(forTextStyle: .body)
 

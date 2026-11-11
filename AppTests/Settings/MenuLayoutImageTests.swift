@@ -5,6 +5,7 @@ import UIKit
 
 /// 並びの画面で、項目の記号の代わりに出す画像。タブに置いたプロフィールのアイコンは、画面を開いたあとに届くことがある。
 @MainActor
+@Suite(.failureState)
 struct MenuLayoutImageTests {
     private static let bob = TabItem.profile(accountID: "2", acct: "bob")
 

@@ -181,6 +181,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - テストはSwift Testing（`import Testing`）で書く
 - APIレスポンスのfixtureは`Packages/SciaCore/Tests/SciaCoreTests/Fixtures/`に置く。実サーバーのレスポンスを使う場合は、個人を特定できる情報を置き換える
 - バグ修正では、先に失敗するテストを書いてから直す
+- アプリのテスト（`AppTests`）のsuiteには`@Suite(.failureState)`を付ける。落ちた時点のウィンドウ、フォーカスのある入力欄、画面の状態ダンプ（`AppDependencies.stateDumps`）を失敗のメッセージに添えるので、確認ごとに状態を出す文を書かなくてよい（`make lint`の`suite_without_failure_state`で止める）。落ちたときに要る状態がここに出ない画面は、状態ダンプを登録するか足す
 - テストで作る一時ファイルと設定の保存先（`UserDefaults(suiteName:)`）は、`SciaTesting`の`TestScratch`で作り、テストかスイートに`.scratch`を付ける。テストの終わりと次に走らせたときに消すので、走らせるたびに溜まらない（`make lint`の`test_file_without_scratch`で止める）
 - テストは実際の時間や今の時刻に頼らせない（`make lint`の`time_dependent_test`で止める）。時間をおく処理には`SciaTesting`の手で進める`Clock`（`TestClock`）を渡し、アニメーションは層の時計（`LayerClock`）、毎フレーム進める動きは手で送るコマ（`ManualFrameSource`）で進める。ほかの処理は門（`Gate`）か条件（`waitUntil`）で待ち（`Task.yield`で譲って待たない。`make lint`の`yield_based_waiting`で止める）、日時は決まった値で作る。止めたあとに何も起きないことは、時間を待たずに、走り終えていない処理の数や予約が残っていないことで確かめる
 - 手で進める`Clock`（`TestClock`）を進めるときは、`clock.advance(afterSleeping: 待ちの長さ)`で起こしたい待ちを長さで指す。ほかの条件と一緒に待つときは`sleeperCount(remaining:)`を使う。待ちの数だけを見ると、同じ時計を使う別の待ちで揃ったと読み、眠る前の待ちを起こせずに固まるため（`make lint`の`advance_after_sleeper_count`で止める）

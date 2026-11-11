@@ -7,7 +7,7 @@ import UIKit
 /// コンテキストメニューを出している間は、タイムラインの並びを変えず、閉じてから反映することを確かめる。
 /// メニューの元になった行が動くと、メニューと表示がずれるため。
 @MainActor
-@Suite(.scratch, .serialized)
+@Suite(.scratch, .serialized, .failureState)
 struct RowHoldTests {
     @Test func entriesAreAppliedAfterMenuHides() throws {
         let harness = try TimelineHarness()

@@ -4,7 +4,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct StatusMenuTests {
     private func makeSettings() throws -> AppSettings {

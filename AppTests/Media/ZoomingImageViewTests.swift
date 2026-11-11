@@ -4,6 +4,7 @@ import UIKit
 @testable import Scia
 
 @MainActor
+@Suite(.failureState)
 struct ZoomingImageViewTests {
     private func image(width: CGFloat, height: CGFloat) -> UIImage {
         let format = UIGraphicsImageRendererFormat()

@@ -7,6 +7,7 @@ import UIKit
 
 /// 行より広いカスタム絵文字を、行の幅まで縮めて置く（`LineFittingAttachment`、`RichTextRenderer.fittingWideEmojis`）。
 @MainActor
+@Suite(.failureState)
 struct LineFittingAttachmentTests {
     private let font = UIFont.preferredFont(forTextStyle: .body)
     private let width: CGFloat = 328

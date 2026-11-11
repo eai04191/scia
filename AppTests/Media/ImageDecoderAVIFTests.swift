@@ -6,6 +6,7 @@ import Testing
 /// AV1をハードウェアで読めない端末（シミュレーターなど）では、AVIFをソフトウェアのデコーダーが読む。
 /// 協調スレッドでたくさん同時に読むと止まっていたので、シミュレーターで走るアプリのテストで確かめる。Macのテストでは、ハードウェアで読む端末だと再現しない。
 /// 止まると、このテストは戻らない。協調スレッドがすべて埋まるので、Swift Testingの時間の上限（`.timeLimit`）も働かない。
+@Suite(.failureState)
 struct ImageDecoderAVIFTests {
     /// 同梱した見本の写真（AVIF）を、協調スレッドの数より多く同時に読んでも、止まらずにすべて読める。
     @Test func decodesManyAVIFsAtOnce() async throws {

@@ -6,7 +6,7 @@ import UIKit
 
 /// サーバーから来る極端な投稿で、セルの中身のビューが返す高さがUIKitの許す範囲に収まるかを測る。
 /// UIKitは2777777ptを超える高さかNaNを返すと`_UIContentViewAssertValidFittingSize`で落とす。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct PostHeightProbeTests {
     private static let limit: CGFloat = 2_777_777

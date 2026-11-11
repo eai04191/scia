@@ -10,6 +10,7 @@ import UniformTypeIdentifiers
 
 /// 読めなかった絵文字は、起動し直すまで文字のままにせず、間隔をおいて読み直す。
 @MainActor
+@Suite(.failureState)
 struct EmojiImageStoreTests {
     private let clock = TestClock()
     private let url = URL(filePath: "/").appending(path: "emoji.png")

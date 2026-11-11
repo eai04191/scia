@@ -4,6 +4,7 @@ import UIKit
 @testable import Scia
 
 @MainActor
+@Suite(.failureState)
 struct FocusCroppedImageViewTests {
     /// 触れたものを奥へ通す。ビューアの複製は開く途中もページより手前にあり、受けると左右のスワイプがページに届かない。
     @Test func passesTouchesThrough() {

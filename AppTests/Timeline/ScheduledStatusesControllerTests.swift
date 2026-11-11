@@ -8,6 +8,7 @@ import UIKit
 
 /// 予約投稿のタイムラインの読み込み。決まりはdocs/tabs.mdの「予約投稿」にある。
 @MainActor
+@Suite(.failureState)
 struct ScheduledStatusesControllerTests {
     nonisolated private static func body(_ ids: [String]) -> Data {
         let items = ids.map { #"{"id":"\#($0)","scheduled_at":"2026-10-28T00:00:00.000Z","params":{"text":"予約\#($0)"},"media_attachments":[]}"# }
@@ -80,6 +81,7 @@ struct ScheduledStatusesControllerTests {
 
 /// 予約の本文を、投稿の本文と同じ部品で描く。
 @MainActor
+@Suite(.failureState)
 struct ScheduledStatusBodyTests {
     /// 書いたときのソースの文字なので、HTMLとして読まず、連続する空白、字下げ、改行、記号を書いたまま残す。
     @Test func plainBodyKeepsSourceAsWritten() {

@@ -7,7 +7,7 @@ import UIKit
 @testable import Scia
 
 /// タイムラインの投稿の本文を、メインスレッドの外で先に作って並べておく部品。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct BodyTextPreparerTests {
     private let width: CGFloat = 300

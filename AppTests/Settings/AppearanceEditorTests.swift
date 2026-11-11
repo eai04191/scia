@@ -6,7 +6,7 @@ import SciaTesting
 import UIKit
 @testable import Scia
 
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct AppearanceEditorTests {
     private func makeSettings() throws -> AppSettings {

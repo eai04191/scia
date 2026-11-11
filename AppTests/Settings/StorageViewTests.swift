@@ -3,6 +3,7 @@ import Testing
 @testable import Scia
 
 @MainActor
+@Suite(.failureState)
 struct StorageViewTests {
     /// 違和感レポートは、残っていないときは内訳にも消すボタンにも出さない。
     @Test func hidesEmptyDiscomfortReports() {

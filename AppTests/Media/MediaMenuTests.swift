@@ -5,6 +5,7 @@ import UIKit
 
 /// メディアのメニューから始めた共有と、持ち上げた画像の読み直しを確かめる。メニューの組み方は、SciaCoreの`MediaMenuTreeTests`で確かめる。
 @MainActor
+@Suite(.failureState)
 struct MediaMenuTests {
     private func image(_ color: UIColor) -> UIImage {
         UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { context in

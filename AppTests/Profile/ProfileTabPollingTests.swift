@@ -7,7 +7,7 @@ import UIKit
 @testable import Scia
 
 /// タブに置いたプロフィールで、前に出ている間だけ新着を読む。決まりはdocs/tabs.mdの「プロフィール」にある。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct ProfileTabPollingTests {
     private static let account = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: nil)

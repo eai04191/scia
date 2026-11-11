@@ -5,7 +5,7 @@ import UIKit
 @testable import Scia
 
 @MainActor
-@Suite(.scratch, .serialized)
+@Suite(.scratch, .serialized, .failureState)
 struct TimelineContentTests {
     private func makeViewController() -> TimelineViewController {
         TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: .isolated())

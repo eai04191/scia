@@ -5,6 +5,7 @@ import UIKit
 /// UIKitのメニューと同じ並び（ウィンドウと同じ大きさの入れ物の中に、項目のリストを持つメニュー全体）を組んで、位置を直す決まりを確かめる。
 /// UIKitの作りそのものが変わったことは、ここでは確かめられない。
 @MainActor
+@Suite(.failureState)
 struct ContextMenuPositionerTests {
     @MainActor
     private struct Harness {

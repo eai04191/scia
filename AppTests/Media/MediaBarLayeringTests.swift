@@ -4,6 +4,7 @@ import UIKit
 
 /// 開閉の動きで下地に開ける穴の形を確かめる。
 @MainActor
+@Suite(.failureState)
 struct MediaBarLayeringTests {
     /// 左半分が不透明、右半分が透明な画像。
     private func halfTransparentImage() -> UIImage {

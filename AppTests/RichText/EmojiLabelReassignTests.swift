@@ -9,7 +9,7 @@ import UniformTypeIdentifiers
 
 /// 同じ中身の文字列を入れ直したときに、ラベルが文字列を入れ替えず、測った結果を使い回すこと。
 /// 行を組み直すたびに描き直す文字列は作り直され、絵文字の添付も毎回新しくなるので、渡されたもの同士の中身で比べる。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct EmojiLabelReassignTests {
     private let font = UIFont.preferredFont(forTextStyle: .body)

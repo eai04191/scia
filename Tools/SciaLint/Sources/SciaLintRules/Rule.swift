@@ -25,6 +25,7 @@ public enum Linter {
         .taskWithoutRequestPurpose,
         .presentWithoutWaiting,
         .backgroundNotificationInTest,
+        .suiteWithoutFailureState,
         .fixedFontSize,
         .dimmedWhiteText,
         .timelineStoreWithoutTester,

@@ -6,6 +6,7 @@ import UIKit
 
 /// 並びの画面で、「その他」の境目の前と後ろを2つの節に分けて出す。
 @MainActor
+@Suite(.failureState)
 struct MenuLayoutSectionTests {
     /// 境目は行として出さず、境目の前と後ろの項目を、見出しを付けた2つの節に並べる。
     @Test func splitsRowsAtMoreBoundaryIntoTitledSections() throws {

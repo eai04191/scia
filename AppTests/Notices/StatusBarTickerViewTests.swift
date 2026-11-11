@@ -6,6 +6,7 @@ import UIKit
 
 /// ステータスバーの通知の、出入りと入れ替えの見え方。
 @MainActor
+@Suite(.failureState)
 struct StatusBarTickerViewTests {
     private let account = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: nil)
 
@@ -128,7 +129,7 @@ extension StatusBarTickerViewTests {
 /// ステータスバーの通知を消してから、ステータスバーを出し直すまで。
 /// ステータスバーを出し直している途中に隠し直すと、システムは1コマで濃く出してから薄くするため、出し直すのは縮め終えてからにし、出し直している間は次を出さない。
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .failureState)
 struct StatusBarTickerStatusBarTests {
     private let account = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: nil)
 

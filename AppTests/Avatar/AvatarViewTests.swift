@@ -5,6 +5,7 @@ import UIKit
 @testable import Scia
 
 @MainActor
+@Suite(.failureState)
 struct AvatarViewTests {
     private let url = URL(string: "https://example.social/avatar.gif")
 

@@ -5,6 +5,7 @@ import Testing
 @testable import Scia
 
 /// 固定された投稿のカードのサムネイルの出し方を確かめる。
+@Suite(.failureState)
 struct ProfileShelfItemTests {
     private static let blurhash = "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
     private static let now = Date(timeIntervalSince1970: 1_790_000_000)

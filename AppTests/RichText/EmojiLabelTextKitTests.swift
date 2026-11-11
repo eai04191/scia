@@ -7,7 +7,7 @@ import UIKit
 @testable import Scia
 
 /// TextKit 2で描くときの、本文のラベルの大きさ。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct EmojiLabelTextKitTests {
     private let width: CGFloat = 300

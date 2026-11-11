@@ -4,6 +4,7 @@ import UIKit
 @testable import Scia
 
 @MainActor
+@Suite(.failureState)
 struct SpringDriverTests {
     /// 上限を付けると、ひっかかりで間が空いても、1フレームで上限までしか進めない。ビューアの開き始めのように、一度に大きく進んで見えないようにする。
     @Test func longestElapsedKeepsStallFromJumping() {

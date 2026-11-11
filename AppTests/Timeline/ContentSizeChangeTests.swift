@@ -8,7 +8,7 @@ import UIKit
 /// 端末の文字の大きさが変わると、UIKitは画面の外の行の高さを見積もりに戻して測り直し、タイムラインが一時的に別の場所を見せる。
 /// そのときに見えた投稿を報告すると、読んでいない投稿まで既読になり、位置を戻しても既読は戻らない。
 @MainActor
-@Suite(.scratch, .serialized)
+@Suite(.scratch, .serialized, .failureState)
 struct ContentSizeChangeTests {
     @Test func doesNotReportRowsPassedWhileRestoringThePosition() throws {
         let harness = try TimelineHarness()

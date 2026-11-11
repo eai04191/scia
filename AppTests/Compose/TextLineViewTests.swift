@@ -4,6 +4,7 @@ import UIKit
 
 /// 1行の文字を入力欄と同じTextKit 2で描くビューの、縦の置き方。
 @MainActor
+@Suite(.failureState)
 struct TextLineViewTests {
     /// カプセルのように上下の真ん中に置いたとき、UILabelを同じように置いたときと同じ高さにベースラインが来る。
     /// TextKit 2の行の高さには、フォントの行間がベースラインの下に足されている。行の高さで真ん中に置くと、その分だけ文字が上に寄る。

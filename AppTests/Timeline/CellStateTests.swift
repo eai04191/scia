@@ -6,7 +6,7 @@ import UIKit
 
 /// セルの状態と、表示中の投稿の報告を確かめる。
 @MainActor
-@Suite(.scratch, .serialized)
+@Suite(.scratch, .serialized, .failureState)
 struct CellStateTests {
     /// 遠くから最上部へ戻ったときも、止まった時点で最上部の投稿を見たと報告する。
     /// スクロールの通知の時点では表示中のセルのリストが前のフレームのままで、新着ボタンで遠くから戻ると、

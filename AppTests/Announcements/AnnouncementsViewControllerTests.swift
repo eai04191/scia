@@ -8,6 +8,7 @@ import UIKit
 
 /// お知らせのシートのリスト。決まりはdocs/announcements.mdにある。
 @MainActor
+@Suite(.failureState)
 struct AnnouncementsViewControllerTests {
     nonisolated private static func announcement(_ id: String, at offset: TimeInterval, read: Bool = true) -> Announcement {
         let body = String(repeating: "お知らせ\(id)の本文を何行にもわたって書く。", count: 6)

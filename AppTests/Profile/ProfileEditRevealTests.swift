@@ -5,7 +5,7 @@ import UIKit
 @testable import Scia
 
 /// プロフィールの編集を開いたとき、読み込み中の表示から入力欄を出すまで。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct ProfileEditRevealTests {
     private struct NotSaved: Error {}

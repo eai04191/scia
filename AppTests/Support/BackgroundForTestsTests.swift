@@ -5,6 +5,7 @@ import UIKit
 @testable import Scia
 
 @MainActor
+@Suite(.failureState)
 struct BackgroundForTestsTests {
     /// 裏に回った状態を作ったテストのあとも、SwiftUIのスプリングで動かす動きが終わる。
     @Test func springAnimationsFinishAfterBackground() async throws {

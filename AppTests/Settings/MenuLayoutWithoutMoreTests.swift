@@ -6,6 +6,7 @@ import UIKit
 
 /// 「その他」の境目を持たない並び（アクションバー）の並びの画面。境目の後ろの節は出さない。
 @MainActor
+@Suite(.failureState)
 struct MenuLayoutWithoutMoreTests {
     /// 並べ替えると、1つの節の中の順で並びを保存する。
     @Test func reorderingSavesOrder() throws {

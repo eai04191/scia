@@ -6,7 +6,7 @@ import UIKit
 
 /// 長い本文を切って「続きを読む」で広げる。決まりは`docs/long-post.md`。
 @MainActor
-@Suite(.scratch, .serialized)
+@Suite(.scratch, .serialized, .failureState)
 struct LongBodyTests {
     /// 1行ずつの段落を`lines`個並べた本文。既定の「投稿の見た目」では、32行を超えたら15行に切る。
     private static func content(lines: Int) -> String {

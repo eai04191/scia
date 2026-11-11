@@ -3,6 +3,7 @@ import UIKit
 @testable import Scia
 
 @MainActor
+@Suite(.failureState)
 struct MonospacedDigitFontTests {
     /// 数字の幅を揃えた文字も、端末の文字の大きさに合わせて、同じ書式の文字と同じ大きさになる。
     @Test(arguments: [UIContentSizeCategory.small, .large, .extraExtraExtraLarge, .accessibilityExtraExtraExtraLarge])

@@ -4,6 +4,7 @@ import UIKit
 
 /// UIKitのラベルの上にSwiftUIで描く、数字を入れ替える文字。
 @MainActor
+@Suite(.failureState)
 struct NumericTextOverlayTests {
     /// 文字が短くなって数字を入れ替える間は、入れ替わる前の文字の幅を保つ。下のラベルは先に新しい幅になるので、
     /// そのままでは、入れ替わる途中の前の文字（「残り10秒」の「10」）が切り詰められるため。

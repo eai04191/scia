@@ -5,7 +5,7 @@ import UIKit
 @testable import Scia
 
 /// 高さを測っている間のスタックに、行の種類と部品の名前が残る。クラッシュログから絞り込むために使う。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct SizingTraceTests {
     private final class Target: SizingMeasurable {

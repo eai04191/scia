@@ -6,7 +6,7 @@ import SciaTesting
 import UIKit
 @testable import Scia
 
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct PhotoLibrarySaverTests {
     /// 本物の写真ライブラリに保存する。写真ライブラリは変更のクロージャを自前のキューで呼ぶため、

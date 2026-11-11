@@ -8,7 +8,7 @@ import UIKit
 /// 「投稿の見た目」のすべての項目と選択肢について、変える前と後の見本の行を、示す場所の帯を重ねて画像に並べる。
 /// 示す場所が実際に変わった部分と合っているか、切り替えて表示が崩れないかを、人が目で確かめるためのもの。
 /// 確かめるときだけ、`TEST_RUNNER_SCIA_APPEARANCE_SHEETS=1`を付けて走らせる。画像はテストを走らせたアプリの一時フォルダーのAppearanceSheetsに書く。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct AppearanceSheets {
     private static let width: CGFloat = 402

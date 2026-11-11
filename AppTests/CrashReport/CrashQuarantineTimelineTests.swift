@@ -5,7 +5,7 @@ import UIKit
 @testable import Scia
 
 @MainActor
-@Suite(.scratch, .serialized)
+@Suite(.scratch, .serialized, .failureState)
 struct CrashQuarantineTimelineTests {
     private func makeGuard() -> PostCrashGuard {
         let crashGuard = PostCrashGuard(defaults: TestScratch.defaults("crash-guard"), build: "1")

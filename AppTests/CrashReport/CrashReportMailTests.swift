@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import Scia
 
+@Suite(.failureState)
 struct CrashReportMailTests {
     @Test func 本文の改行と記号を保ってメールのURLにする() throws {
         let body = "本文は含まれていません。\n\n{\"a\": \"b&c=d\"}"

@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
 @testable import Scia
 
 @MainActor
+@Suite(.failureState)
 struct AvatarImageStoreTests {
     /// 1コマずつ`delays`秒表示するGIF。
     private func gif(delays: [Double]) throws -> Data {

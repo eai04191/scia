@@ -3,6 +3,7 @@ import UIKit
 @testable import Scia
 
 @MainActor
+@Suite(.failureState)
 struct PreviewImagesTests {
     /// 見本の画像は通信の層を通さずに読む。通信の層はhttpとhttps以外を送らず、Releaseには`file:`を読む障害の差し込みもないため、
     /// ファイルのURLを渡すと、Releaseでだけ灰色の四角のまま出なかった。

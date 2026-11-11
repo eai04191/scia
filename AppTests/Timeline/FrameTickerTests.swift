@@ -6,6 +6,7 @@ import Testing
 
 /// 毎フレーム経過時間を渡す部品が、持ち主がいなくなったときに止まることを確かめる。
 @MainActor
+@Suite(.failureState)
 struct FrameTickerTests {
     private final class Counter {
         var count = 0

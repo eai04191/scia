@@ -3,6 +3,7 @@ import UIKit
 @testable import Scia
 
 @MainActor
+@Suite(.failureState)
 struct OverMediaTextColorTests {
     private func alpha(of color: UIColor, contrast: UIAccessibilityContrast) -> CGFloat {
         var alpha: CGFloat = 0

@@ -6,7 +6,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct MediaDownloadsTests {
     private func makeStaging() -> URL {

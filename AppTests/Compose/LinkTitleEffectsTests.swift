@@ -5,6 +5,7 @@ import UIKit
 
 /// 投稿欄でリンクにタイトルを付けるときに、本文の上に重ねる見た目。
 @MainActor
+@Suite(.failureState)
 struct LinkTitleEffectsTests {
     private func shimmers(in textView: UITextView) -> [UIView] {
         textView.subviews.filter { String(describing: type(of: $0)) == "ShimmerView" }

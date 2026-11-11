@@ -6,7 +6,7 @@ import UIKit
 
 /// 自己紹介が切った行数に収まるかを測るのは、自己紹介か幅が変わったときだけにする。
 /// タイムラインはスクロールのたびにヘッダーを並べ直す。そのたびに全文を測り直すと、カスタム絵文字の多い自己紹介でスクロールが引っかかっていた。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct ProfileHeaderNoteTests {
     private static let longNote = (1...30).map { "<p>自己紹介の\($0)行目</p>" }.joined()

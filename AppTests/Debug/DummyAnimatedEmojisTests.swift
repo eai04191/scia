@@ -3,6 +3,7 @@ import SciaCore
 import Testing
 @testable import Scia
 
+@Suite(.failureState)
 struct DummyAnimatedEmojisTests {
     /// どの投稿にも、重ならない8種類の絵文字を入れ、本文には入れた絵文字のショートコードを書く。
     @Test func eachPostHasDistinctEmojisWrittenInBody() {

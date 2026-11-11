@@ -6,7 +6,7 @@ import UIKit
 
 /// 投稿の中の引用の囲みを確かめる。決まりは`docs/quote.md`。
 @MainActor
-@Suite(.scratch, .serialized)
+@Suite(.scratch, .serialized, .failureState)
 struct TimelineQuoteTests {
     private let quotedAccount = Account(id: "9", username: "bob", acct: "bob@remote.example", displayName: "Bob", avatar: URL(string: "https://remote.example/a.png"))
 

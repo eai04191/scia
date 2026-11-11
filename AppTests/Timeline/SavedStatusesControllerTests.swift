@@ -8,7 +8,7 @@ import UIKit
 
 /// ブックマークやお気に入りのタイムラインで、先頭に足しても読んでいる行が動かないことを確かめる。決まりはdocs/tabs.mdの「ブックマークとお気に入り」にある。
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .failureState)
 struct SavedStatusesControllerTests {
     private let sessions = TestAccountSessions()
     private var tolerance: CGFloat { 1 / max(UITraitCollection.current.displayScale, 1) }

@@ -6,7 +6,7 @@ import UIKit
 
 /// 大きくした絵文字を、ラベルに実際に描かせて、描いた位置とレイアウトに使うベースラインを画素で比べる。
 /// 文字のレイアウトから計算した枠では、ラベルが描く位置との食い違いに気づけないため。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct EmojiDrawingTests {
     private let font = UIFont.preferredFont(forTextStyle: .body)

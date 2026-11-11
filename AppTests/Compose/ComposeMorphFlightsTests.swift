@@ -5,6 +5,7 @@ import UIKit
 
 /// 投稿欄の開閉で、カプセルと書いているときの行のあいだを動かす複製。
 @MainActor
+@Suite(.failureState)
 struct ComposeMorphFlightsTests {
     /// 行き先へ動かし始めたのと同じ回に行き先を測り直しても、複製は起点の形から動く。
     /// 書き終えたことが届いた直後に行が並べ直され、まだ一度も描いていない複製を止めると、

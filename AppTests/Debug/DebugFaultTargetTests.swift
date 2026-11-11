@@ -4,6 +4,7 @@ import Testing
 @testable import Scia
 
 /// `scia-debug://status/<ステータス>?target=<経路>`で、どの通信に障害を起こすか。
+@Suite(.failureState)
 struct DebugFaultTargetTests {
     @Test(arguments: [
         ("https://example.social/api/v1/timelines/home", DebugFaults.Target.api),

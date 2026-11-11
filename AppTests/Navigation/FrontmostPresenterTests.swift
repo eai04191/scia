@@ -6,7 +6,7 @@ import UIKit
 /// 重ねた画面を閉じている途中に出そうとした画面を、閉じ終えてから、そのとき手前にある画面に出す。
 /// 閉じる動きは、ウィンドウの層の時間を止めて手で進める。進めるまでは、閉じている途中のままになる。
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .failureState)
 struct FrontmostPresenterTests {
     private let window: UIWindow
     private let root = UIViewController()

@@ -8,6 +8,7 @@ import UniformTypeIdentifiers
 
 /// カードの色を付けても、ラベルの元の文字列（アニメーションする絵文字の静止画など）を壊さない。
 @MainActor
+@Suite(.failureState)
 struct ProfileAccentAppearanceTests {
     private let clock = TestClock()
     private let url = URL(filePath: "/").appending(path: "emoji.gif")

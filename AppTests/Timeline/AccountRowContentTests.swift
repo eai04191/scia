@@ -4,7 +4,7 @@ import SciaTesting
 import UIKit
 @testable import Scia
 
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct AccountRowContentTests {
     private func visibleLabels(in view: UIView) -> [UILabel] {

@@ -6,7 +6,7 @@ import UIKit
 @testable import Scia
 
 /// プロフィールを開いて、フォローの関係を待つ間のフォローのボタンの中のアクティビティインジケータ。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct ProfileRelationshipActivityTests {
     private static let account = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: nil)

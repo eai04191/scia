@@ -5,6 +5,7 @@ import UIKit
 
 /// 絵文字のリアクションの列。投稿では「投稿の見た目」の値で並べる。
 @MainActor
+@Suite(.failureState)
 struct ReactionChipsViewTests {
     private static func reaction(_ name: String) -> ReactionChipsView.Reaction {
         ReactionChipsView.Reaction(name: name, emoji: NSAttributedString(string: name), count: 1, isMine: false, spokenName: name)

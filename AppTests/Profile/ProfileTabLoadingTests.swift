@@ -9,6 +9,7 @@ import UIKit
 /// タブに置いたプロフィールの、アカウントを読むまでの画面。並びに出たときにアカウントを読み、開くまで画面を差し替えない。
 /// 決まりはdocs/tabs.mdの「プロフィール」にある。
 @MainActor
+@Suite(.failureState)
 struct ProfileTabLoadingTests {
     private static let account = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: nil)
 

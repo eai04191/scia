@@ -5,7 +5,7 @@ import UIKit
 @testable import Scia
 
 /// カスタム絵文字の画像が、空けていた場所に後から届くときの見え方。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct EmojiArrivalTests {
     private let font = UIFont.preferredFont(forTextStyle: .body)

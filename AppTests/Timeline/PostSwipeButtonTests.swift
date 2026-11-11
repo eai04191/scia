@@ -6,7 +6,7 @@ import UIKit
 
 /// 投稿のスワイプで出すボタン。決まりはdocs/object-actions.mdの「投稿のスワイプ」にある。
 @MainActor
-@Suite(.scratch, .serialized)
+@Suite(.scratch, .serialized, .failureState)
 struct PostSwipeButtonTests {
     /// 投稿のメニューが空になる投稿では、押しても何も起きないので「メニュー」のボタンを出さない。
     @Test func menuButtonIsHiddenWhenMenuIsEmpty() throws {

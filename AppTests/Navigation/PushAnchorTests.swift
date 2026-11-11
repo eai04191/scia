@@ -5,6 +5,7 @@ import UIKit
 @testable import Scia
 
 @MainActor
+@Suite(.failureState)
 struct PushAnchorTests {
     @MainActor
     private struct Harness {

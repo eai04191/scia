@@ -8,7 +8,7 @@ import VisionKit
 
 /// 閉じるボタンを置かないため、ほかの閉じ方とメニューが使えることを確かめる。
 @MainActor
-@Suite(.scratch, .serialized)
+@Suite(.scratch, .serialized, .failureState)
 struct MediaViewerControllerTests {
     /// アプリ全体のアプリ内通知。ハーネスのウインドウに重ねた列と、落とす処理の両方に渡す。
     private let notices = NoticeCenter()

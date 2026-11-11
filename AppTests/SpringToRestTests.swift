@@ -5,6 +5,7 @@ import UIKit
 
 /// UIKitのスプリングを、打ち切らずに止まるところまで動かす。
 @MainActor
+@Suite(.failureState)
 struct SpringToRestTests {
     /// ガラスのビューと、その中で逆向きに動く中身を、長い距離動かしても、動き終わりのコマで残りの分だけ飛ばない。
     /// UIKitのままでは、距離の約0.1%（300ptなら0.3pt）を残して打ち切り、最後のコマで目標へ飛ぶ。

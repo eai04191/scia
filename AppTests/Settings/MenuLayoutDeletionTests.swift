@@ -5,6 +5,7 @@ import UIKit
 
 /// 並びの画面で、項目を左へスワイプして削除したときの行。
 @MainActor
+@Suite(.failureState)
 struct MenuLayoutDeletionTests {
     private static let bob = TabItem.profile(accountID: "2", acct: "bob")
 

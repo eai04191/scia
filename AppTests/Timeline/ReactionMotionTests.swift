@@ -7,7 +7,7 @@ import UIKit
 
 /// 絵文字のリアクションが付いた、なくなった、数が変わったときのタイムラインの動き。決まりはdocs/emoji-reaction.mdの「動き」にある。
 @MainActor
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 struct ReactionMotionTests {
     private let thumbsUp = ReactionEmoji(name: "👍")
     private let party = ReactionEmoji(name: "🎉")

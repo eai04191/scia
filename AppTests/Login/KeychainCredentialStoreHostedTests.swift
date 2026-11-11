@@ -3,6 +3,7 @@ import SciaCore
 import Testing
 
 /// アプリの権限でKeychainに保存できることを、アプリをホストにして確かめる。
+@Suite(.failureState)
 struct KeychainCredentialStoreHostedTests {
     @Test func savesLoadsAndDeletesInApp() throws {
         let store = KeychainCredentialStore(service: "net.mizle.scia.tests.\(UUID().uuidString)")

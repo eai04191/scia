@@ -7,6 +7,7 @@ import UIKit
 
 /// 投票の形を入れ替えるときの動き。決まりはdocs/poll.mdの「動き」にある。
 @MainActor
+@Suite(.failureState)
 struct PollViewTests {
     private static let now = Date(timeIntervalSince1970: 1_000_000)
     private static let barDuration: TimeInterval = 0.5

@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 @testable import Scia
 
 /// ペーストしたファイルのURLの項目を、指す先のファイルで添付に回すか。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct LocalMediaPasteTests {
     /// MacのFinderでコピーしたファイルと同じく、ファイルのURL、ファイル名の文字、アイコンの画像を持つ項目を作る。

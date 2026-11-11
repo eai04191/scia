@@ -4,6 +4,7 @@ import Testing
 
 /// 並びの画面で、横並びの区切り線の下の、メニューで横に並ぶ項目を字下げする位置。
 @MainActor
+@Suite(.failureState)
 struct MenuLayoutRowGroupTests {
     private typealias Controller = MenuLayoutViewController<StatusMenuItem>
 

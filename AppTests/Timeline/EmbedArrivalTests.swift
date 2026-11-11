@@ -5,7 +5,7 @@ import UIKit
 @testable import Scia
 
 /// リンクカードから、読み終えたXの投稿の囲みに替わるときの見え方。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct EmbedArrivalTests {
     private func card() throws -> LinkCardView.Content {
@@ -126,7 +126,7 @@ struct EmbedArrivalTests {
 
 /// Xの投稿を読み終えて行が伸びるときの、タイムラインの行の位置。docs/vision.mdの「タイムラインの動き」のとおり、見えている行は下の行ごと動かして伸ばし、
 /// 上端が表示領域より上にある行は、伸びても画面上の位置を保つ。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct XPostArrivalScrollTests {
     private func linking(_ base: Status, to id: String) -> Status {

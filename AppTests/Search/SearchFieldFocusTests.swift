@@ -5,7 +5,7 @@ import UIKit
 
 /// 検索欄のフォーカス。検索のタブを開くとフォーカスを入れ、タブをもう一度押すと、検索欄を閉じていても入れ直す。空いたところを押すとキーボードを閉じる。
 @MainActor
-@Suite(.serialized) struct SearchFieldFocusTests {
+@Suite(.serialized, .failureState) struct SearchFieldFocusTests {
     /// 開いたときに、検索欄にフォーカスを入れる。
     @Test func openingFocusesSearchField() async throws {
         let search = SearchViewController()

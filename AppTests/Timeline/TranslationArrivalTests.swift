@@ -5,7 +5,7 @@ import UIKit
 @testable import Scia
 
 /// 自動翻訳の訳文が届いて本文を置き換えるときの見え方。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct TranslationArrivalTests {
     private struct ExpandingTranslator: StatusTranslating {

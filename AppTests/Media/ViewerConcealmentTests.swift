@@ -4,7 +4,7 @@ import UIKit
 @testable import Scia
 
 /// 起点を隠す取り分は、隠す側がすべて返したときだけ起点を見せる。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct ViewerConcealmentTests {
     /// 2つが隠していれば、片方が返しても隠したままにし、両方が返したら見せる。

@@ -5,7 +5,7 @@ import UIKit
 @testable import Scia
 
 /// プロフィールを開いたあと、フォローの関係が届いてフォローのボタンをクロスフェードするとき。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct ProfileHeaderFollowRevealTests {
     private static let account = Account(

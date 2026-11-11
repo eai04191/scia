@@ -5,7 +5,7 @@ import UIKit
 
 /// 投稿欄のサムネイルの列を、ドラッグできない人も並べ替えたり外したりできる。
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .failureState)
 final class ComposeAttachmentStripTests {
     private let window: UIWindow
     private let strip = ComposeAttachmentStrip()

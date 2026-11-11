@@ -7,7 +7,7 @@ import UIKit
 @testable import Scia
 
 /// 本文の引用の段落の頭に引く縦線の位置。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct QuoteBarsTests {
     private let width: CGFloat = 300

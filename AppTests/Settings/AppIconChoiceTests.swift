@@ -2,6 +2,7 @@ import Testing
 import UIKit
 @testable import Scia
 
+@Suite(.failureState)
 struct AppIconChoiceTests {
     /// 絵はビルドの手順で描き出すため、描き出しが抜けたり名前がずれたりすると、行に絵が出なくなる。
     @Test(arguments: AppIconChoice.allCases)

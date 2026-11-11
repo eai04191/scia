@@ -5,7 +5,7 @@ import UIKit
 @testable import Scia
 
 /// タブに置いたプロフィールで、記号の代わりに出すその人のアイコン。決まりはdocs/tabs.mdの「プロフィール」にある。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct ProfileTabIconsTests {
     private static let bob = TabItem.profile(accountID: "2", acct: "bob")

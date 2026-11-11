@@ -6,7 +6,7 @@ import UIKit
 @testable import Scia
 
 @MainActor
-@Suite(.scratch, .serialized)
+@Suite(.scratch, .serialized, .failureState)
 struct InAppBrowserTests {
     private let notices = NoticeCenter()
 

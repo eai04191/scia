@@ -5,6 +5,7 @@ import UIKit
 
 /// SciaCoreで組んだメニューの木を、UIKitのメニューに描くことを確かめる。何をどの順に出すかは、SciaCoreのテストで確かめる。
 @MainActor
+@Suite(.failureState)
 struct MenuRendererTests {
     /// まとまりは見出しのないメニューにし、横並びのまとまりは中くらいの大きさで並べる。押せない項目、取り消せない操作、選んでいる状態を印にし、押すと操作を渡す。
     @Test func rendersNodesAsUIKitMenu() throws {

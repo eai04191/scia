@@ -6,7 +6,7 @@ import UIKit
 
 /// 先頭に新着を挿入したとき、読んでいる位置の投稿が画面上で動かないことを確かめる。
 @MainActor
-@Suite(.scratch, .serialized)
+@Suite(.scratch, .serialized, .failureState)
 struct ScrollAnchorTests {
     /// 画面の1ピクセル未満のずれは許容する。
     private var tolerance: CGFloat { 1 / max(UITraitCollection.current.displayScale, 1) }

@@ -5,6 +5,7 @@ import UIKit
 
 /// 投稿欄の投票の欄。選択肢の欄の増減を、投稿欄の高さを変える動きの中で見せる。
 @MainActor
+@Suite(.failureState)
 struct ComposePollEditorTests {
     private func content(_ options: [String]) -> ComposePollEditor.Content {
         ComposePollEditor.Content(poll: PollDraft(options: options), expiryChoices: PollDraft.expiryChoices)

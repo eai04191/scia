@@ -6,7 +6,7 @@ import TextKit2Label
 import UIKit
 @testable import Scia
 
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct LinkLabelTests {
     private func label(for text: RichText, width: CGFloat = 300) -> LinkLabel {

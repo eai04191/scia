@@ -6,6 +6,7 @@ import UIKit
 
 /// 知らせのチップの並べ方と、消えるまでの時計。決まりはdocs/notices.mdの「チップ」にある。
 @MainActor
+@Suite(.failureState)
 struct NoticeStackViewTests {
     /// - Parameter clock: 数秒で消えるチップの時計。消えるまでを確かめるテストは、手で進める。
     private func makeStack(clock: TestClock = TestClock()) -> NoticeStackView {

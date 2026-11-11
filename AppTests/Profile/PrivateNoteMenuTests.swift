@@ -5,7 +5,7 @@ import UIKit
 @testable import Scia
 
 /// 自分にしか見えないメモの欄を長押ししたときのメニュー。決まりはdocs/menus.mdの「プロフィールの文章のメニュー」にある。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct PrivateNoteMenuTests {
     private func makeViewController() -> TimelineViewController {

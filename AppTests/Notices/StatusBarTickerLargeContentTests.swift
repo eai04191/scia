@@ -7,7 +7,7 @@ import UIKit
 /// 大きい文字の設定で、ステータスバーの通知を長押しの拡大表示で読んでいる間は、次の通知へ進めず、消さない。
 /// 読んでいる途中で消えると、指を離しても押したことにならず、通知タブを開けない。
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .failureState)
 struct StatusBarTickerLargeContentTests {
     private func tickerView(in scene: UIWindowScene) -> StatusBarTickerView? {
         func find(_ view: UIView) -> StatusBarTickerView? {

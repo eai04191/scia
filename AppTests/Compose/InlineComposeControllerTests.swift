@@ -7,7 +7,7 @@ import UIKit
 
 /// 投稿欄を実際のウィンドウに載せ、開閉や返信先の付け替えで行が崩れないことを確かめる。
 @MainActor
-@Suite(.scratch, .serialized)
+@Suite(.scratch, .serialized, .failureState)
 final class InlineComposeControllerTests {
     private let window: UIWindow
     private let composer: InlineComposeController
@@ -713,8 +713,6 @@ final class InlineComposeControllerTests {
             composer.model.text == "本文へんかん",
             """
             変換中の文字を置いた直後: \(stateAfterMarking)
-            いま: \(Self.inputState(of: textView))
-            入力の言語: \(textView.textInputMode?.primaryLanguage ?? "nil") / \(UITextInputMode.activeInputModes.map { $0.primaryLanguage ?? "nil" })
             入力欄の本文が変わった\(changes.count)回の状態と呼び出し元:
             \(changes.joined(separator: "\n---\n"))
             """

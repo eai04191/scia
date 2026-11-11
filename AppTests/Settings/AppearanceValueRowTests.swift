@@ -5,7 +5,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct AppearanceValueRowTests {
     /// 値を変えて変更ありの印が出ても、行の高さは変わらない。変わると、押しているステッパーが指の下から動き、続けて押すと行のタップになるため。

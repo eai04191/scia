@@ -5,7 +5,7 @@ import UIKit
 @testable import Scia
 
 /// タイムラインが最初の読み込みで、読み込み中の表示から最初の行を出すときの見え方。アカウントを切り替えたときと起動したときに通る。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct FirstEntriesRevealTests {
     private func fadingCells(in harness: TimelineHarness) -> [UICollectionViewCell] {

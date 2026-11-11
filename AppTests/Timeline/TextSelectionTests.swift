@@ -6,7 +6,7 @@ import UIKit
 @testable import Scia
 
 /// 投稿のメニューの「テキストを選択」で、行の本文をその場で選べる状態にするところ。決まりはdocs/menus.mdの「本文の文字を選ぶ」にある。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct TextSelectionTests {
     private let renderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, emojiImages: .offline, language: "ja")

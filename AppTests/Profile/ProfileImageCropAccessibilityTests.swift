@@ -4,6 +4,7 @@ import UIKit
 @testable import Scia
 
 @MainActor
+@Suite(.failureState)
 struct ProfileImageCropAccessibilityTests {
     private func cropElement(in view: UIView) -> CropAccessibilityElement? {
         if let element = view.accessibilityElements?.compactMap({ $0 as? CropAccessibilityElement }).first {

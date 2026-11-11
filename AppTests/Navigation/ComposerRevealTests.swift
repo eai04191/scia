@@ -7,7 +7,7 @@ import UIKit
 /// 共有で投稿欄に入れるときに、タイムラインの上に重ねた画面を閉じる。閉じると失うものがあると示した画面だけを残す。
 /// 外から送られた行き先でタブを見せるときは、残す画面も含めてすべて閉じる。
 @MainActor
-@Suite(.scratch, .serialized)
+@Suite(.scratch, .serialized, .failureState)
 struct ComposerRevealTests {
     private let notices = NoticeCenter()
     private let drag = DragToDismiss(distanceThreshold: 0.12, velocityThreshold: 0.8, smallestScale: 0.6, fadeDistance: 0.5, restoreDuration: 0.35)

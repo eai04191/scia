@@ -3,6 +3,7 @@ import UIKit
 @testable import Scia
 
 @MainActor
+@Suite(.failureState)
 struct SettingsIconTests {
     /// 2/3で描くと見た目が一辺の2/3を超える記号は、ちょうど2/3に収まるまで縮める。
     @Test(arguments: ["camera.fill", "photo.fill", "textformat.size", "externaldrive.fill"])

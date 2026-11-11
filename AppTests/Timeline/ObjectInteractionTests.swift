@@ -4,6 +4,7 @@ import UIKit
 
 /// 対象のタップと長押しを付けた部品で、コンテキストメニューを出すときに何を持ち上げるかを確かめる。決まりはdocs/menus.mdの「持ち上げ方」にある。
 @MainActor
+@Suite(.failureState)
 final class ObjectInteractionTests {
     private let window: UIWindow
 

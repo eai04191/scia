@@ -7,6 +7,7 @@ import UIKit
 @testable import Scia
 
 @MainActor
+@Suite(.failureState)
 struct ThreadControllerTests {
     private static let focus = StatusFactory.make(count: 1, startingAt: 100)[0]
 

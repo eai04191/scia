@@ -6,7 +6,7 @@ import UIKit
 
 /// スレッドを開くとき、押した投稿をタイムラインで見えていた画面上の位置に置き、会話を読んで前後に並べても、その位置から動かさないことを確かめる。
 @MainActor
-@Suite(.scratch, .serialized)
+@Suite(.scratch, .serialized, .failureState)
 struct ThreadOpeningTests {
     /// 画面の1ピクセル未満のずれは許容する。
     private var tolerance: CGFloat { 1 / max(UITraitCollection.current.displayScale, 1) }

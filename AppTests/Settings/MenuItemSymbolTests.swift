@@ -5,6 +5,7 @@ import UIKit
 /// メニューや並びの画面に出す項目の記号が、iOSにある記号であることを確かめる。
 /// `UIImage(systemName:)`は、ない名前を渡してもエラーにならずnilを返し、アイコンのない行を黙って描くため。
 @MainActor
+@Suite(.failureState)
 struct MenuItemSymbolTests {
     /// 項目の型のすべての項目のうち、記号を作れないもの。
     private func missingSymbols<Item: MenuItemKind & MenuItemPresentable>(_: Item.Type) -> [String] {

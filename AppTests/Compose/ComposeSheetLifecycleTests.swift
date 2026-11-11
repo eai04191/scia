@@ -5,6 +5,7 @@ import UIKit
 
 /// 投稿欄の下に出すシートが閉じたことを、UIKitの開閉の知らせが来ても来なくても、一度だけ知らせるか確かめる。
 @MainActor
+@Suite(.failureState)
 struct ComposeSheetLifecycleTests {
     private final class Recorder {
         var willClose = 0

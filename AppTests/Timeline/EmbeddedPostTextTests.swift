@@ -6,7 +6,7 @@ import UIKit
 @testable import Scia
 
 /// 引用の囲みの本文の並べ方。投稿の本文と同じくTextKit 2で描き、大きくした絵文字の行を絵の高さにする。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct EmbeddedPostTextTests {
     private let font = UIFont.preferredFont(forTextStyle: .body)

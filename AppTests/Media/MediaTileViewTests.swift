@@ -5,7 +5,7 @@ import UIKit
 @testable import Scia
 
 /// サムネイルに重ねた表示の複製。ビューアの開閉で動かす複製に載せ、サムネイルとのあいだで見え方がそろうことを確かめる。
-@Suite(.scratch)
+@Suite(.scratch, .failureState)
 @MainActor
 struct MediaTileViewTests {
     /// 動画の再生マークも複製に載せる。載せないと、開き始めに再生マークが消え、閉じる着地で急に現れる。

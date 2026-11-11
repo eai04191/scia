@@ -6,7 +6,7 @@ import UIKit
 
 /// 使う人の操作で行が消えるときは閉じる動きで消し、それ以外の更新では動かさずに読んでいる位置を保つことを確かめる。
 @MainActor
-@Suite(.scratch, .serialized)
+@Suite(.scratch, .serialized, .failureState)
 struct RemovalMotionTests {
     /// 画面の1ピクセル未満のずれは許容する。
     private var tolerance: CGFloat { 1 / max(UITraitCollection.current.displayScale, 1) }

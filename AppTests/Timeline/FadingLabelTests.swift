@@ -3,6 +3,7 @@ import UIKit
 @testable import Scia
 
 @MainActor
+@Suite(.failureState)
 struct FadingLabelTests {
     private func label(text: String, width: CGFloat) -> FadingLabel {
         let label = FadingLabel()
