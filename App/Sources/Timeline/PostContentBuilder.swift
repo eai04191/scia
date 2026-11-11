@@ -149,6 +149,7 @@ struct PostContentBuilder {
             padding: settings.value(of: AppearanceCatalog.actionBarPadding),
             countFont: countFont,
             lightFavouriteIsYellow: settings.appearance.reactionGlowLightFavouriteColor == .yellow,
+            leadingHitReach: settings.value(of: AppearanceCatalog.actionBarIconSize) * tuning.value(of: TuningCatalog.actionBarLeadingHitReach),
             statusID: shown.id
         )
     }

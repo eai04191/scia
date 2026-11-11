@@ -172,6 +172,15 @@ public enum TuningCatalog {
         defaultValue: 0.1
     )
 
+    /// アクションバーのボタンの押せる範囲を、アイコンの左端から左へ広げる長さ。アイコンの大きさに対する割合で、0なら広げない。決まりはdocs/post-action-bar.mdにある。
+    public static let actionBarLeadingHitReach = NumberTuning(
+        id: "timeline.actionBarLeadingHitReach",
+        title: "アクションバーのボタンを左へ押せる範囲（アイコンの大きさに対する割合）",
+        range: 0...1.5,
+        step: 0.1,
+        defaultValue: 0.5
+    )
+
     /// カスタム絵文字の画像が届いたとき、同じ行のあとの文字を前の位置から新しい位置へ動かし、絵文字を薄い状態から濃くする時間。0なら切り替える。
     public static let customEmojiArrivalDuration = NumberTuning(
         id: "timeline.customEmojiArrivalDuration",
@@ -2001,6 +2010,7 @@ public enum TuningCatalog {
             .number(translationApplyInterval),
             .number(longBodyExpandDuration),
             .number(actionBarDrawerDuration),
+            .number(actionBarLeadingHitReach),
             .number(customEmojiArrivalDuration),
             .number(reactionTransitionDuration),
             .number(mediaSymbolRatio),

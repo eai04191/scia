@@ -12,6 +12,8 @@ struct PostActionBarContent: Equatable {
     var countFont: UIFont
     /// ライトモードで、したお気に入りを黄色で描く。オフなら橙。光と同じ色にする。
     var lightFavouriteIsYellow: Bool
+    /// ボタンの押せる範囲を、アイコンの左端から左（右から左へ書く言語では右）へ広げる長さ。左隣のボタンと重なる部分は、このボタンが受ける。
+    var leadingHitReach: CGFloat
     /// ボタンを並べている投稿。同じ投稿のまま状態が変わったときだけ、記号を変形でつなぐ。
     var statusID: Status.ID?
 }
@@ -133,7 +135,8 @@ final class PostActionBarView: UIView {
     /// バーの枠の外も含めて、`point`（`space`の座標）を受けるボタン。
     /// バーの枠の外の点は、親からの`hitTest`がボタンまで降りてこないので、投稿の中身が空きを押されたときにこれで探す。
     func button(at point: CGPoint, in space: UIView, with event: UIEvent?) -> UIView? {
-        shownButtons.lazy.compactMap { $0.hitTest(space.convert(point, to: $0), with: event) }.first
+        // 左へ広げた範囲は左隣のボタンと重なる。親の`hitTest`と同じく、あとに並ぶボタンから探して、広げた側が受ける。
+        shownButtons.reversed().lazy.compactMap { $0.hitTest(space.convert(point, to: $0), with: event) }.first
     }
 }
 
@@ -146,6 +149,7 @@ final class PostActionBarButtonView: UIControl {
     private var iconBottom: NSLayoutConstraint?
     private(set) var button: PostActionBarButton?
     private var lightFavouriteIsYellow = false
+    private var leadingHitReach: CGFloat = 0
     /// ボタンを長押しして出すメニュー。長押しでメニューを出す項目のボタンにだけ付ける。
     var longPressInteraction: ObjectInteraction?
 
@@ -233,8 +237,16 @@ final class PostActionBarButtonView: UIControl {
     /// 指を離した位置の判定にも使うので、`hitTest`だけでなくここで広げる。アイコンはボタンの上下の中央にあるので、中央から同じ長さまで広げる。
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
         let reach = max(Self.maximumHitHeight - bounds.height, 0) / 2
+        // ボタンが多くて狭いときは、アイコンの横の空きの半分で止める。右隣のボタンも同じだけ広げてくるので、止めないとアイコンの右に押せる範囲が残らない。
+        let leadingReach = min(leadingHitReach, max(bounds.width - iconView.frame.width, 0) / 2)
+        let isRightToLeft = effectiveUserInterfaceLayoutDirection == .rightToLeft
         return bounds
-            .inset(by: UIEdgeInsets(top: -min(hitSpace.above, reach), left: 0, bottom: -min(hitSpace.below, reach), right: 0))
+            .inset(by: UIEdgeInsets(
+                top: -min(hitSpace.above, reach),
+                left: isRightToLeft ? 0 : -leadingReach,
+                bottom: -min(hitSpace.below, reach),
+                right: isRightToLeft ? -leadingReach : 0
+            ))
             .contains(point)
     }
 
@@ -279,6 +291,7 @@ final class PostActionBarButtonView: UIControl {
         let previous = self.button
         self.button = button
         lightFavouriteIsYellow = style.lightFavouriteIsYellow
+        leadingHitReach = style.leadingHitReach
         iconTop?.constant = style.padding
         iconBottom?.constant = style.padding
         let configuration = UIImage.SymbolConfiguration(pointSize: style.iconSize)

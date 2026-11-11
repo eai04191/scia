@@ -435,6 +435,67 @@ struct PostActionBarTests {
         #expect(hit(content, button: button, y: frame.midY + 23) !== button)
     }
 
+    /// ボタンは、アイコンの左も押せる。境目をアイコンの左端から左へずらし、アイコンの少し左を押して左隣の操作にならないようにする。
+    @Test func buttonReachesLeftOfIcon() throws {
+        let (harness, content, first) = try laidOutBar(spacing: 8, bottom: 15)
+        defer { harness.tearDown() }
+        let bar = try #require(content.postBody.actionBar)
+        let second = try #require(bar.shownButtons.dropFirst().first)
+        let reach = try #require(bar.content?.leadingHitReach)
+        let frame = second.convert(second.bounds, to: content)
+        #expect(reach > 2)
+
+        #expect(content.hitTest(CGPoint(x: frame.minX - reach + 1, y: frame.midY), with: nil) === second)
+        #expect(content.hitTest(CGPoint(x: frame.minX - reach - 1, y: frame.midY), with: nil) === first)
+        #expect(content.hitTest(CGPoint(x: frame.minX - reach + 1, y: frame.minY - 7), with: nil) === second, "上の空きでも同じ境目にします")
+    }
+
+    /// 先頭のボタンは、バーの外の余白へ同じだけ広げる。
+    @Test func firstButtonReachesOutsideBar() throws {
+        let (harness, content, first) = try laidOutBar(spacing: 8, bottom: 15)
+        defer { harness.tearDown() }
+        let reach = try #require(content.postBody.actionBar?.content?.leadingHitReach)
+        let frame = first.convert(first.bounds, to: content)
+
+        #expect(content.hitTest(CGPoint(x: frame.minX - reach + 1, y: frame.midY), with: nil) === first)
+        #expect(content.hitTest(CGPoint(x: frame.minX - reach - 1, y: frame.midY), with: nil) !== first)
+    }
+
+    /// 等分した枠は、浮動小数の誤差だけ離れることがある。その境目の点も、ボタンが受ける。
+    @Test func boundaryBetweenButtonsReachesButton() {
+        let items = StatusMenuItem.allCases.prefix(5)
+        let buttons = items.map { PostActionBarButton(item: .status($0), title: "", symbolName: "star", count: nil, isOn: false, tint: .none, isAvailable: true) }
+        let bar = PostActionBarView()
+        bar.apply(PostActionBarContent(buttons: buttons, iconSize: 18, padding: 6, countFont: .systemFont(ofSize: 13), lightFavouriteIsYellow: false, leadingHitReach: 9, statusID: nil))
+        // この幅で、2つ目の右端が113.0、3つ目の左端が113.00000000000001になる。
+        bar.frame = CGRect(x: 0, y: 0, width: 282.5, height: 30)
+        bar.layoutIfNeeded()
+
+        for button in bar.shownButtons.dropFirst() {
+            #expect(bar.hitTest(CGPoint(x: button.frame.minX.nextDown, y: 15), with: nil) is PostActionBarButtonView)
+            #expect(bar.hitTest(CGPoint(x: button.frame.minX.rounded(), y: 15), with: nil) is PostActionBarButtonView)
+        }
+    }
+
+    /// ボタンが多くて狭いときは、広げる長さを、アイコンの左右の空きの半分で止める。止めないと、アイコンの右がほとんど右隣のボタンのものになる。
+    @Test func reachStopsAtHalfOfBlankBesideIcon() throws {
+        let items = PostActionBarItem.allCases.prefix(10)
+        let buttons = items.map { PostActionBarButton(item: $0, title: "", symbolName: "star", count: nil, isOn: false, tint: .none, isAvailable: true) }
+        let bar = PostActionBarView()
+        bar.apply(PostActionBarContent(buttons: buttons, iconSize: 14, padding: 6, countFont: .systemFont(ofSize: 13), lightFavouriteIsYellow: false, leadingHitReach: 7, statusID: nil))
+        bar.frame = CGRect(x: 0, y: 0, width: 220, height: 26)
+        bar.layoutIfNeeded()
+        let shown = bar.shownButtons
+        try #require(shown.count == 10)
+        let icon = try #require(bar.iconFrames(in: bar).dropFirst().first)
+        let blank = shown[1].frame.maxX - icon.maxX
+        try #require(blank > 2 && blank < 14)
+
+        #expect(bar.hitTest(CGPoint(x: icon.minX - blank / 2 + 0.5, y: 13), with: nil) === shown[1])
+        #expect(bar.hitTest(CGPoint(x: icon.minX - blank / 2 - 0.5, y: 13), with: nil) === shown[0])
+        #expect(bar.hitTest(CGPoint(x: icon.maxX + blank / 2 - 0.5, y: 13), with: nil) === shown[1])
+    }
+
     /// 「投稿の見た目」のプレビューの見本のボタンは、押しても何もしない。
     @Test func previewButtonsDoNothing() throws {
         let configuration = PostContentConfiguration.withActionBarPress()
@@ -506,6 +567,7 @@ struct PostActionBarCountFitTests {
             padding: 8,
             countFont: .preferredFont(forTextStyle: .subheadline),
             lightFavouriteIsYellow: false,
+            leadingHitReach: 8,
             statusID: status.id
         ))
         view.layoutIfNeeded()
