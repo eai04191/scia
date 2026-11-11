@@ -21,6 +21,8 @@ struct SettingsView: View {
     let openInAppBrowserHeight: @MainActor () -> Void
     /// 謝辞の画面で、設定の画面を閉じて、ハンドルの人のプロフィールを開く。
     let openProfile: @MainActor (_ acct: String) -> Void
+    /// トップの画面にいるかを、載せている側（`SettingsHostingController`）へ伝える。
+    let navigation: SettingsNavigationState
     @Environment(\.dismiss) private var dismiss
     @Environment(\.layoutDirection) private var layoutDirection
     /// 設定のトップの画面から重ねて開いた画面。
@@ -38,6 +40,7 @@ struct SettingsView: View {
         accountScreen: AccountScreenContext,
         openInAppBrowserHeight: @escaping @MainActor () -> Void,
         openProfile: @escaping @MainActor (_ acct: String) -> Void,
+        navigation: SettingsNavigationState,
         opening page: SettingsPage? = nil,
         appearanceGroup: AppearanceGroup.ID? = nil
     ) {
@@ -50,6 +53,7 @@ struct SettingsView: View {
         self.accountScreen = accountScreen
         self.openInAppBrowserHeight = openInAppBrowserHeight
         self.openProfile = openProfile
+        self.navigation = navigation
         _path = State(initialValue: page?.path ?? [])
         _appearanceGroup = State(initialValue: page == .appearance || page == .notificationAppearance ? appearanceGroup : nil)
     }
@@ -116,6 +120,7 @@ struct SettingsView: View {
                 }
             }
         }
+        .onChange(of: path, initial: true) { navigation.isAtRoot = path.isEmpty }
     }
 
     @ViewBuilder
@@ -229,8 +234,9 @@ extension UIViewController {
     ///   - appearanceGroup: `page`が「投稿の見た目」か「通知の見た目」のとき、その上に重ねておく分類の画面。
     ///   - onShownChange: 設定の画面が出たときにtrue、消えたときにfalseで呼ぶ。
     func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, tabSources: SettingsTabSourceActions, accountScreen: AccountScreenContext, openInAppBrowserHeight: @escaping @MainActor () -> Void, openProfile: @escaping @MainActor (_ acct: String) -> Void, opening page: SettingsPage? = nil, appearanceGroup: AppearanceGroup.ID? = nil, onShownChange: @escaping (Bool) -> Void) {
-        let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, tabSources: tabSources, accountScreen: accountScreen, openInAppBrowserHeight: openInAppBrowserHeight, openProfile: openProfile, opening: page, appearanceGroup: appearanceGroup)
-        presentOnFrontmost(SettingsHostingController(rootView: view, onShownChange: onShownChange))
+        let navigation = SettingsNavigationState()
+        let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, tabSources: tabSources, accountScreen: accountScreen, openInAppBrowserHeight: openInAppBrowserHeight, openProfile: openProfile, navigation: navigation, opening: page, appearanceGroup: appearanceGroup)
+        presentOnFrontmost(SettingsHostingController(rootView: view, navigation: navigation, onShownChange: onShownChange))
     }
 
     /// メニューの「カスタマイズ」から、その並びの設定の画面を、設定のトップの画面に重ねて開く。決まりはdocs/menus.mdの「並びの設定」にある。
@@ -248,9 +254,16 @@ extension UIViewController {
 
 private let settingsLogger = SciaLog.logger(category: "settings")
 
+/// 設定がトップの画面にいるか。SwiftUIの画面が書き、載せている側がスワイプして閉じてよいかを決めるのに読む。
+@MainActor
+final class SettingsNavigationState {
+    var isAtRoot = true
+}
+
 /// 設定の画面を載せ、出たときと消えたときを1回ずつ知らせる。設定の画面の上に重ねたシートが出ている間は、まだ出ている扱いにする。
 /// スワイプして閉じるのを途中でやめると、消えないまま`viewWillAppear`がもう一度呼ばれるので、出ているかを持って、変わったときだけ知らせる。
 private final class SettingsHostingController: UIHostingController<SettingsView> {
+    private let navigation: SettingsNavigationState
     private let onShownChange: (Bool) -> Void
     /// 最後に指を置いた位置（このビューの座標）。下へのスワイプで閉じてよいかを、指を置いた場所で決める。
     private var touchDownLocation: CGPoint?
@@ -261,7 +274,8 @@ private final class SettingsHostingController: UIHostingController<SettingsView>
         }
     }
 
-    init(rootView: SettingsView, onShownChange: @escaping (Bool) -> Void) {
+    init(rootView: SettingsView, navigation: SettingsNavigationState, onShownChange: @escaping (Bool) -> Void) {
+        self.navigation = navigation
         self.onShownChange = onShownChange
         super.init(rootView: rootView)
         presentationController?.delegate = self
@@ -291,9 +305,11 @@ private final class SettingsHostingController: UIHostingController<SettingsView>
 }
 
 extension SettingsHostingController: UIAdaptivePresentationControllerDelegate {
-    /// 本文から下へスワイプしても閉じず、ナビゲーションバーから下へスワイプしたときだけ閉じる。一覧を上へ戻すスクロールの勢いで閉じてしまうため。
+    /// トップの画面では、本文から下へスワイプしても閉じる。閉じるために、画面の上まで指を伸ばさなくて済むようにするため。
+    /// 中の画面では、ナビゲーションバーから下へスワイプしたときだけ閉じる。一覧を上へ戻すスクロールの勢いで閉じてしまうため。
     /// スクロールビューのない画面（読み込み中や空の表示）でも同じにするため、指を置いた位置で見分ける。
     func presentationControllerShouldDismiss(_ presentationController: UIPresentationController) -> Bool {
+        if navigation.isAtRoot { return true }
         guard let touchDownLocation, let bar = view.visibleNavigationBar else { return false }
         return touchDownLocation.y <= bar.convert(bar.bounds, to: view).maxY
     }
