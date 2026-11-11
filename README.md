@@ -131,7 +131,7 @@ Copyright (c) 2021 boringdesigners
 
 FediDB
 
-ログイン画面で出すサーバーの候補。FediDBのサーバーのデータセットからMastodonとその派生のサーバーを選び、月間のアクティブユーザーが多い順に並べて使っています。
+ログイン画面で表示するサーバーの候補。FediDBのサーバーのデータセットからMastodonとその派生のサーバーを選び、月間のアクティブユーザーが多い順に並べて使っています。
 
 - [配布元](https://fedidb.com/datasets)
 - [ライセンス（CC BY 4.0）](https://creativecommons.org/licenses/by/4.0/)
