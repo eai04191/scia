@@ -80,6 +80,70 @@ struct RichTextTranslationPlanTests {
         #expect(RichTextTranslationPlan(RichText(blocks: [block(.emoji(emoji), .text(" !!", []))])) == nil)
     }
 
+    /// ハッシュタグは残す部分として渡し、名前を出てくる順に1回ずつ挙げる。
+    @Test func listsHashtagsOnce() throws {
+        let tag = RichText.Inline.link("#hiking", .hashtag(name: "hiking", url: url), [])
+        let plan = try #require(RichTextTranslationPlan(RichText(blocks: [block(.text("Went ", []), tag), block(tag, .text(" ", []), .link("#Cats", .hashtag(name: "Cats", url: url), []))])))
+
+        #expect(plan.paragraphs == [[.text("Went "), .preserved("#hiking", id: 0)]])
+        #expect(plan.hashtags == ["hiking", "Cats"])
+    }
+
+    /// 併記する訳は、訳した段落のハッシュタグにも、渡さなかった段落のハッシュタグにも足す。開く先は変えない。
+    @Test func appendsHashtagSuffixes() throws {
+        let tag = RichText.Inline.link("#hiking", .hashtag(name: "hiking", url: url), [])
+        let plan = try #require(RichTextTranslationPlan(RichText(blocks: [block(.text("Went ", []), tag), block(tag)])))
+
+        let result = try plan.applying([[.preserved("#hiking", id: 0), .text("に行った")]], hashtagSuffixes: ["hiking": "（ハイキング）"])
+
+        let glossed = RichText.Inline.link("#hiking（ハイキング）", .hashtag(name: "hiking", url: url), [])
+        #expect(result.blocks.map(\.inlines) == [[glossed, .text("に行った", [])], [glossed]])
+    }
+
+    /// 書式で分かれた1つのハッシュタグには、最後にだけ足す。
+    @Test func appendsSuffixOnceToSplitHashtag() throws {
+        let plan = try #require(RichTextTranslationPlan(RichText(blocks: [
+            block(.link("#", .hashtag(name: "hiking", url: url), []), .link("hiking", .hashtag(name: "hiking", url: url), [.bold])),
+        ])))
+
+        let result = try plan.applying([], hashtagSuffixes: ["hiking": " (x)"])
+
+        #expect(result.plainText == "#hiking (x)")
+    }
+
+    /// インラインのコードの中のハッシュタグは、訳す対象に挙げず、併記もしない。
+    @Test func leavesHashtagInInlineCode() throws {
+        let code = RichText.Inline.link("#hiking", .hashtag(name: "hiking", url: url), [.code])
+        let plan = try #require(RichTextTranslationPlan(RichText(blocks: [block(.text("Run ", []), code)])))
+
+        let result = try plan.applying([[.text("実行 "), .preserved("#hiking", id: 0)]], hashtagSuffixes: ["hiking": "（ハイキング）"])
+
+        #expect(plan.hashtags.isEmpty)
+        #expect(result.blocks[0].inlines == [.text("実行 ", []), code])
+    }
+
+    @Test(arguments: [
+        ("CatsOfMastodon", "Cats Of Mastodon"), ("hiking", "hiking"), ("HTMLParser", "HTML Parser"), ("snake_case_tag", "snake case tag"), ("Web3Summit", "Web3 Summit"),
+    ])
+    func splitsHashtagIntoWords(name: String, words: String) {
+        #expect(HashtagGloss.words(of: name) == words)
+    }
+
+    @Test func hasNoWordsWithoutLetters() {
+        #expect(HashtagGloss.words(of: "2024") == nil)
+    }
+
+    /// 訳が元の名前と同じ文字なら併記しない。大文字と小文字、空白の違いは見ない。
+    @Test(arguments: [("Fedi Art", "FediArt", String?.none), ("Photography", "photography", nil), ("  ", "x", nil), (" ハイキング\n", "hiking", "ハイキング")])
+    func glossesOnlyWhenTranslationDiffers(translated: String, name: String, gloss: String?) {
+        #expect(HashtagGloss.gloss(translated: translated, name: name) == gloss)
+    }
+
+    @Test(arguments: [("ja", "（猫）"), ("zh-TW", "（猫）"), ("en", " (猫)"), ("ko", " (猫)")])
+    func wrapsGlossForTarget(target: String, suffix: String) {
+        #expect(HashtagGloss.suffix("猫", target: target) == suffix)
+    }
+
     /// 残す部分が欠けたら、訳文を使わない。
     @Test func rejectsLostPreservedPart() throws {
         let plan = try #require(RichTextTranslationPlan(RichText(blocks: [block(.text("See ", []), .link("example.com", .url(url), []))])))
@@ -101,8 +165,13 @@ struct StatusTranslationStoreTests {
         let strategyRequests = Mutex<[TranslationStrategy]>([])
         let gate: Gate
         let failureGate: Gate
+        /// 訳すと失敗する段落の文字。
+        let failingTexts: Set<String>
 
-        init(notInstalledLanguages: Set<String> = [], gate: Gate = Gate(isOpen: true), failureGate: Gate = Gate(isOpen: true)) {
+        struct Failure: Error {}
+
+        init(notInstalledLanguages: Set<String> = [], failingTexts: Set<String> = [], gate: Gate = Gate(isOpen: true), failureGate: Gate = Gate(isOpen: true)) {
+            self.failingTexts = failingTexts
             self.notInstalledLanguages = Mutex(notInstalledLanguages)
             self.gate = gate
             self.failureGate = failureGate
@@ -118,6 +187,7 @@ struct StatusTranslationStoreTests {
             targetRequests.withLock { $0.append(target) }
             strategyRequests.withLock { $0.append(strategy) }
             try await gate.wait()
+            guard !failingTexts.contains(Self.text(of: parts)) else { throw Failure() }
             return parts.map { part in
                 if case .text(let text) = part { .text("訳:" + text) } else { part }
             }
@@ -182,6 +252,44 @@ struct StatusTranslationStoreTests {
 
         #expect(store.translation(for: post)?.plainText == "訳:post 1")
         #expect(store.hasTranslation(of: post))
+    }
+
+    /// ハッシュタグは語に分けて1つずつ訳し、後ろに併記する。同じハッシュタグは訳し直さない。
+    @Test func glossesHashtags() async throws {
+        let scope = TaskScope()
+        let clock = TestClock()
+        let translator = FakeTranslator()
+        let store = store(translator, clock: clock, scope: scope)
+        var delivered: Set<Status.ID> = []
+        store.onChange = { delivered.formUnion($0) }
+        let tag = #"<a href="https://example.social/tags/CatsOfMastodon" class="mention hashtag" rel="tag">#<span>CatsOfMastodon</span></a>"#
+        let post = status("1", content: "<p>Look \(tag)</p>")
+        let tagOnly = status("2", content: "<p>\(tag)</p>")
+
+        store.request([post, tagOnly])
+        try await waitForDelivery(of: ["1", "2"], clock: clock) { delivered }
+
+        #expect(translator.requested == ["Look #CatsOfMastodon", "Cats Of Mastodon"])
+        #expect(store.translation(for: post)?.plainText == "訳:Look #CatsOfMastodon（訳:Cats Of Mastodon）")
+        #expect(store.translation(for: tagOnly)?.plainText == "#CatsOfMastodon（訳:Cats Of Mastodon）")
+    }
+
+    /// ハッシュタグの訳だけが失敗したら、本文の訳は使い、そのハッシュタグには併記しない。次に出たときに訳し直す。
+    @Test func keepsBodyWhenHashtagGlossFails() async throws {
+        let scope = TaskScope()
+        let clock = TestClock()
+        let translator = FakeTranslator(failingTexts: ["hiking"])
+        let store = store(translator, clock: clock, scope: scope)
+        var delivered: Set<Status.ID> = []
+        store.onChange = { delivered.formUnion($0) }
+        let tag = #"<a href="https://example.social/tags/hiking" class="mention hashtag" rel="tag">#<span>hiking</span></a>"#
+        let post = status("1", content: "<p>Went \(tag)</p>")
+
+        store.request([post, status("2", content: "<p>Again \(tag)</p>")])
+        try await waitForDelivery(of: ["1", "2"], clock: clock) { delivered }
+
+        #expect(store.translation(for: post)?.plainText == "訳:Went #hiking")
+        #expect(translator.requested == ["Went #hiking", "hiking", "Again #hiking", "hiking"])
     }
 
     /// 地域の違う投稿も、言語が同じなら訳す。翻訳器には投稿の言語をそのまま渡す。

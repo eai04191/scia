@@ -37,13 +37,17 @@ public final class StatusTranslationStore {
     private var uninstalledLanguages: Set<String> = []
     /// 訳せなかった投稿と、そのときの本文。本文が変わるか、訳す言語が変わるまで、訳し直さない。
     private var skipped = CostLimitedCache<Status.ID, String>(totalCostLimit: StatusTranslationStore.cacheCostLimit)
+    /// 訳したハッシュタグと、併記する訳。併記しないものは空の文字。訳した言語ごとに持つ。
+    private var hashtagGlosses: [String: [String: String]] = [:]
     /// これから訳す投稿。先頭から訳す。
     private var wanted: [Status] = []
     private var changed: Set<Status.ID> = []
 
-    private static let logger = SciaLog.logger(category: "translation")
+    private nonisolated static let logger = SciaLog.logger(category: "translation")
     /// 持っておく訳文の文字数の合計。
     private static let cacheCostLimit = 2_000_000
+    /// 持っておくハッシュタグの訳の数。超えたら、すべて忘れて訳し直す。
+    private static let hashtagGlossLimit = 5_000
 
     /// - Parameters:
     ///   - targetLanguage: 翻訳先の言語。
@@ -94,6 +98,7 @@ public final class StatusTranslationStore {
         entries = CostLimitedCache(totalCostLimit: Self.cacheCostLimit)
         skipped = CostLimitedCache(totalCostLimit: Self.cacheCostLimit)
         uninstalledLanguages = []
+        hashtagGlosses = [:]
         wanted = []
     }
 
@@ -167,9 +172,11 @@ public final class StatusTranslationStore {
         while !Task.isCancelled, let status = nextWanted(), let language = status.language {
             let generation = targetGeneration
             do {
-                let richText = try await Self.translate(status, language: language, translator: translator, target: targetLanguage, strategy: strategy)
+                let known = hashtagGlosses[language] ?? [:]
+                let (richText, glosses) = try await Self.translate(status, language: language, translator: translator, target: targetLanguage, strategy: strategy, knownGlosses: known)
                 guard !Task.isCancelled else { return }
                 guard generation == targetGeneration else { continue }
+                rememberGlosses(glosses, language: language)
                 if let richText {
                     if let code = Self.matchKey(language) { uninstalledLanguages.remove(code) }
                     _ = entries.setValue(Entry(source: Self.source(of: status), richText: richText), forKey: status.id, cost: status.content.utf8.count)
@@ -209,21 +216,55 @@ public final class StatusTranslationStore {
         return nil
     }
 
-    /// 訳文を返す。訳す段落がなければnil。本文を読むのが重いので、メインスレッドの外で走らせる。
+    private func rememberGlosses(_ glosses: [String: String], language: String) {
+        guard !glosses.isEmpty else { return }
+        if hashtagGlosses.values.reduce(glosses.count, { $0 + $1.count }) > Self.hashtagGlossLimit {
+            hashtagGlosses = [:]
+        }
+        hashtagGlosses[language, default: [:]].merge(glosses) { _, new in new }
+    }
+
+    /// 訳文と、新しく訳したハッシュタグの訳を返す。訳す段落も併記する訳もなければ、訳文はnil。本文を読むのが重いので、メインスレッドの外で走らせる。
+    /// - Parameter knownGlosses: 前に訳したハッシュタグの訳。ここにあるものは訳し直さない。
     @concurrent
     private nonisolated static func translate(
         _ status: Status,
         language: String,
         translator: any StatusTranslating,
         target: String,
-        strategy: TranslationStrategy
-    ) async throws -> RichText? {
-        guard let plan = RichTextTranslationPlan(.status(status)) else { return nil }
+        strategy: TranslationStrategy,
+        knownGlosses: [String: String]
+    ) async throws -> (richText: RichText?, glosses: [String: String]) {
+        guard let plan = RichTextTranslationPlan(.status(status)) else { return (nil, [:]) }
         var translated: [[TranslationPart]] = []
         for paragraph in plan.paragraphs {
             translated.append(try await translator.translate(paragraph, from: language, to: target, strategy: strategy))
         }
-        return try plan.applying(translated)
+        var newGlosses: [String: String] = [:]
+        var suffixes: [String: String] = [:]
+        for name in plan.hashtags {
+            var gloss = knownGlosses[name]
+            if gloss == nil, let words = HashtagGloss.words(of: name) {
+                do {
+                    let parts = try await translator.translate([.text(words)], from: language, to: target, strategy: strategy)
+                    let text = parts.map { part in
+                        switch part {
+                        case .text(let text), .preserved(let text, _): text
+                        }
+                    }.joined()
+                    gloss = HashtagGloss.gloss(translated: text, name: name) ?? ""
+                    newGlosses[name] = gloss
+                } catch let error where !(error is CancellationError) && error as? StatusTranslationError != .notInstalled {
+                    // ハッシュタグの訳だけが失敗しても、本文の訳は使う。覚えないので、次にこのハッシュタグが出たら訳し直す。
+                    logger.error("hashtag gloss skipped id=\(status.id, privacy: .public): \(SciaLog.describe(error), privacy: .public)")
+                }
+            }
+            if let gloss, !gloss.isEmpty {
+                suffixes[name] = HashtagGloss.suffix(gloss, target: target)
+            }
+        }
+        guard !plan.paragraphs.isEmpty || !suffixes.isEmpty else { return (nil, newGlosses) }
+        return (try plan.applying(translated, hashtagSuffixes: suffixes), newGlosses)
     }
 
     private func noteChange(_ ids: Set<Status.ID>) {

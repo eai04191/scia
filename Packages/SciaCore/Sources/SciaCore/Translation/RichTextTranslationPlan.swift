@@ -16,6 +16,8 @@ public enum StatusTranslationError: Error, Equatable {
 struct RichTextTranslationPlan: Sendable {
     /// 訳す段落の部品。
     let paragraphs: [[TranslationPart]]
+    /// 訳を併記するハッシュタグの、`#`を除いた名前。出てくる順で、同じ名前は1回だけ。
+    let hashtags: [String]
 
     private let richText: RichText
     /// `paragraphs`のそれぞれが、`richText`の何番目の段落か。
@@ -24,8 +26,9 @@ struct RichTextTranslationPlan: Sendable {
     /// 翻訳器へ渡した、残す部分の文字。
     private let originalTexts: [Int: String]
 
-    /// 訳す段落がなければnil。
+    /// 訳す段落もハッシュタグもなければnil。
     init?(_ richText: RichText) {
+        var hashtags: [String] = []
         var paragraphs: [[TranslationPart]] = []
         var blockIndices: [Int] = []
         var preserved: [Int: RichText.Inline] = [:]
@@ -51,7 +54,9 @@ struct RichTextTranslationPlan: Sendable {
                 switch inline {
                 case .text(let text, let style) where style.contains(.code): preserve(text, inline)
                 case .text(let text, _): appendText(text)
-                case .link(let text, _, _, _): preserve(text, inline)
+                case .link(let text, let destination, let style, _):
+                    if case .hashtag(let name, _) = destination, !style.contains(.code), !hashtags.contains(name) { hashtags.append(name) }
+                    preserve(text, inline)
                 case .emoji(let emoji): preserve(":\(emoji.shortcode):", inline)
                 case .lineBreak: appendText("\n")
                 }
@@ -65,8 +70,9 @@ struct RichTextTranslationPlan: Sendable {
             preserved.merge(blockPreserved) { first, _ in first }
             originalTexts.merge(blockTexts) { first, _ in first }
         }
-        guard !paragraphs.isEmpty else { return nil }
+        guard !paragraphs.isEmpty || !hashtags.isEmpty else { return nil }
         self.paragraphs = paragraphs
+        self.hashtags = hashtags
         self.blockIndices = blockIndices
         self.preserved = preserved
         self.originalTexts = originalTexts
@@ -74,7 +80,8 @@ struct RichTextTranslationPlan: Sendable {
     }
 
     /// 訳文を当てた本文を返す。`translated`は`paragraphs`と同じ順と数。残す部分が欠けたり増えたりしていれば投げる。
-    func applying(_ translated: [[TranslationPart]]) throws -> RichText {
+    /// `hashtagSuffixes`は、ハッシュタグの名前ごとの、後ろに併記する文字。
+    func applying(_ translated: [[TranslationPart]], hashtagSuffixes: [String: String] = [:]) throws -> RichText {
         guard translated.count == paragraphs.count else { throw StatusTranslationError.preservedPartsChanged }
         var result = richText
         for (position, blockIndex) in blockIndices.enumerated() {
@@ -84,7 +91,20 @@ struct RichTextTranslationPlan: Sendable {
             }
             result.blocks[blockIndex].inlines = inlines(from: translated[position])
         }
+        guard !hashtagSuffixes.isEmpty else { return result }
+        for index in result.blocks.indices where !result.blocks[index].isCode {
+            result.blocks[index].inlines = Self.appendingSuffixes(hashtagSuffixes, to: result.blocks[index].inlines)
+        }
         return result
+    }
+
+    /// 書式で分かれた1つのハッシュタグには、最後のインラインにだけ足す。インラインのコードの中のハッシュタグには足さない。
+    private static func appendingSuffixes(_ suffixes: [String: String], to inlines: [RichText.Inline]) -> [RichText.Inline] {
+        inlines.indices.map { index in
+            guard case .link(let text, .hashtag(let name, let url), let style, let copied) = inlines[index], !style.contains(.code), let suffix = suffixes[name] else { return inlines[index] }
+            if index + 1 < inlines.count, case .link(_, .hashtag(name, url), _, _) = inlines[index + 1] { return inlines[index] }
+            return .link(text + suffix, .hashtag(name: name, url: url), style, copied: copied)
+        }
     }
 
     private static func leadingWhitespace(_ text: String) -> Substring {
