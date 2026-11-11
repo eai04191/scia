@@ -403,6 +403,7 @@ struct AppearanceValueRow: View {
                     .foregroundStyle(isFocused ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                     .frame(width: 52)
                     .focused($isEditing)
+                    .accessibilityLabel(item.title)
                     .onChange(of: isEditing) { _, editing in
                         if editing {
                             draft = numberText

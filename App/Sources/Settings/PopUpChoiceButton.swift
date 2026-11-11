@@ -55,8 +55,10 @@ struct PopUpChoiceRow<Value: Hashable>: View {
 
     var body: some View {
         HStack {
+            // 名前はボタンが読み上げるので、VoiceOverで同じ名前を2回たどらせない。
             Text(title)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityHidden(true)
             PopUpChoiceButton(selection: $selection, options: options, onOpen: onOpen)
                 .accessibilityLabel(title)
         }
@@ -74,8 +76,10 @@ struct TitledToggleRow: View {
 
     var body: some View {
         HStack {
+            // 名前はスイッチが読み上げるので、VoiceOverで同じ名前を2回たどらせない。
             Text(title)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityHidden(true)
             Toggle(title, isOn: $isOn)
                 .labelsHidden()
         }
