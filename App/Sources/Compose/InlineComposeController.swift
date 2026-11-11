@@ -3010,21 +3010,21 @@ final class InlineComposeController: NSObject {
         if let title = model.redraftChipTitle {
             // 削除したあとは、押しても見せる元の投稿がない。
             let deleted = model.redraft?.mayHaveDeleted == true
-            return Chip(title: title, symbolName: "square.and.pencil", hint: deleted ? "" : "タイムラインの元の投稿を表示します", clearLabel: "書き直しをやめる")
+            return Chip(title: title, symbolName: "square.and.pencil", hint: deleted ? "" : "タイムラインの元の投稿を表示します。", clearLabel: "書き直しをやめる")
         }
         if let title = model.rewriteChipTitle {
-            return Chip(title: title, symbolName: "pencil", hint: "予約投稿を表示します", clearLabel: "書き直しをやめる")
+            return Chip(title: title, symbolName: "pencil", hint: "予約投稿を表示します。", clearLabel: "書き直しをやめる")
         }
         if let title = model.editChipTitle {
-            return Chip(title: title, symbolName: "pencil", hint: "タイムラインの編集している投稿を表示します", clearLabel: "編集をやめる")
+            return Chip(title: title, symbolName: "pencil", hint: "タイムラインの編集している投稿を表示します。", clearLabel: "編集をやめる")
         }
         if let quoteTarget = model.quoteTarget {
             let acct = "@\(quoteTarget.displayed.account.acct)"
-            return Chip(title: "\(acct)の投稿を引用", symbolName: "quote.bubble.fill", hint: "タイムラインの引用元の投稿を表示します", clearLabel: "引用をやめる")
+            return Chip(title: "\(acct)の投稿を引用", symbolName: "quote.bubble.fill", hint: "タイムラインの引用元の投稿を表示します。", clearLabel: "引用をやめる")
         }
         guard let replyTo = model.replyTo else { return nil }
         let acct = "@\(replyTo.displayed.account.acct)"
-        return Chip(title: "\(acct)への返信", symbolName: "arrowshape.turn.up.left.fill", hint: "タイムラインの返信先の投稿を表示します", clearLabel: "返信をやめる")
+        return Chip(title: "\(acct)への返信", symbolName: "arrowshape.turn.up.left.fill", hint: "タイムラインの返信先の投稿を表示します。", clearLabel: "返信をやめる")
     }
 
     /// 書いていないときの1行に、ラベルのアイコンとサムネイルに続けて出す、自分で書いた本文。何も書いていなければ書き出しを促す。

@@ -176,7 +176,7 @@ struct FailureRowButton<Label: View, Style: ButtonStyle>: View {
         }
         .buttonStyle(style)
         .background(SceneTrackerView(box: box))
-        .accessibilityHint(logsIn ? "ログインし直します" : "再読み込みします")
+        .accessibilityHint(logsIn ? "ログインし直します。" : "再読み込みします。")
     }
 }
 

@@ -415,7 +415,7 @@ extension UserMenuTree {
         case .follow:
             guard !blocked else { return [] }
             if relationship.following { return [node("フォローを外す", "person.badge.minus", .unfollow)] }
-            if relationship.requested { return [node("フォローのリクエストを取り消す", "person.badge.clock", .cancelFollowRequest)] }
+            if relationship.requested { return [node("フォローリクエストを取り消す", "person.badge.clock", .cancelFollowRequest)] }
             return [node(item.title, "person.badge.plus", .follow)]
         case .showReblogs:
             guard !blocked, followsOrRequests else { return [] }

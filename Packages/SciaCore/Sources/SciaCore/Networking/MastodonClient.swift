@@ -1171,7 +1171,7 @@ public struct MastodonClient: Sendable {
         credential.instance.appending(path: "api/v1/statuses/\(statusID)/emoji_reactions").appending(component: emoji.requestName)
     }
 
-    /// 鍵のかかったアカウントには、フォローのリクエストを送る。
+    /// 鍵のかかったアカウントには、フォローリクエストを送る。
     /// フォローしている相手にもう一度送ると、ブーストを流すかと投稿の通知の設定だけを変えられる。nilの設定は送らず、サーバーの既定（新しいフォローなら流す・通知しない、フォロー済みなら今のまま）に任せる。
     /// https://docs.joinmastodon.org/methods/accounts/#follow
     public func follow(_ id: String, reblogs: Bool? = nil, notify: Bool? = nil) async throws -> Relationship {

@@ -493,7 +493,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     /// 横並びに入る項目は、字下げし、字下げの見えないVoiceOverでは横に並ぶことを読み上げる。
     private func setRowGroupMembership(_ isMember: Bool, of cell: UICollectionViewListCell) {
         cell.indentationLevel = isMember ? 1 : 0
-        cell.accessibilityHint = isMember ? "メニューで横に並びます" : nil
+        cell.accessibilityHint = isMember ? "メニューで横に並びます。" : nil
     }
 
     /// 横並びに入る項目の字下げの幅。既定の幅では、アイコンがずれて見えるだけで、まとまりに見えないため広げる。

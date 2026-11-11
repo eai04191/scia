@@ -79,7 +79,7 @@ extension Confirmation where Choice == Proceed {
         case .unfollow:
             .destructive(title: "\(by)@\(acct)のフォローを外しますか？", message: endorsed ? "プロフィールでの紹介も外れます。" : nil, action: "フォローを外す")
         case .cancelFollowRequest:
-            .destructive(title: "\(by)@\(acct)へのフォローのリクエストを取り消しますか？", message: nil, action: "リクエストを取り消す")
+            .destructive(title: "\(by)@\(acct)へのフォローリクエストを取り消しますか？", message: nil, action: "リクエストを取り消す")
         case .block:
             .destructive(title: "\(by)@\(acct)をブロックしますか？", message: "相手の投稿と通知が表示されなくなり、お互いのフォローが外れます。", action: "ブロック")
         case .follow, .showReblogs, .notify, .endorse, .mute, .unmute, .unblock:

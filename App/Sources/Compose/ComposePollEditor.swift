@@ -238,7 +238,7 @@ final class ComposePollEditor: UIView {
         labelLengthWidth = nil
         setNeedsLayout()
         updateSummary(poll)
-        hidesTotalsButton.accessibilityHint = poll.hidesTotals ? "投票した人に票数を表示します" : "締め切るまで票数を隠します"
+        hidesTotalsButton.accessibilityHint = poll.hidesTotals ? "投票した人に票数を表示します。" : "締め切るまで票数を隠します。"
         return optionRows.count != rowCount
     }
 
@@ -401,7 +401,7 @@ final class ComposePollEditor: UIView {
             summaryChevron.centerYAnchor.constraint(equalTo: summaryButton.centerYAnchor),
         ])
         summaryButton.accessibilityLabel = "投票の選択肢"
-        summaryButton.accessibilityHint = "開いて選択肢を書きます"
+        summaryButton.accessibilityHint = "開いて選択肢を書きます。"
         summaryButton.addAction(UIAction { [weak self] _ in self?.onUnfold() }, for: .primaryActionTriggered)
         // 1行の文字は大きさを決めて入れるので、文字の大きさの設定が変わったら入れ直す。設定の行の文言の段階も決め直す。
         summaryButton.registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { [weak self] (_: UIButton, _) in

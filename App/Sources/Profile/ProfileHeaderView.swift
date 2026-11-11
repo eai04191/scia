@@ -368,7 +368,7 @@ final class ProfileHeaderView: UIView {
         relationshipRetryButton.configuration?.image = UIImage(systemName: "arrow.clockwise")
         relationshipRetryButton.configuration?.imagePadding = 4
         relationshipRetryButton.configuration?.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .footnote)
-        relationshipRetryButton.accessibilityHint = "フォローの状態を読み込み直します"
+        relationshipRetryButton.accessibilityHint = "フォローの状態を読み込み直します。"
         relationshipRetryButton.setContentCompressionResistancePriority(.required, for: .horizontal)
         relationshipRetryButton.addAction(UIAction { [weak self] _ in self?.onRetryRelationship?() }, for: .primaryActionTriggered)
         relationshipFailureStack.axis = .horizontal

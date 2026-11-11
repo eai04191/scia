@@ -36,7 +36,7 @@ struct UserMenuTreeTests {
     @Test func followItemFollowsRelationship() {
         #expect(describe(.follow, Relationship(id: "2")) == "フォロー")
         #expect(describe(.follow, Relationship(id: "2", following: true)) == "フォローを外す")
-        #expect(describe(.follow, Relationship(id: "2", requested: true)) == "フォローのリクエストを取り消す")
+        #expect(describe(.follow, Relationship(id: "2", requested: true)) == "フォローリクエストを取り消す")
         #expect(describe(.follow, Relationship(id: "2", blocking: true)).isEmpty)
         #expect(describe(.follow, Relationship(id: "2", blockedBy: true)).isEmpty)
     }

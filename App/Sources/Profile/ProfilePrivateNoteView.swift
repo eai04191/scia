@@ -51,7 +51,7 @@ final class ProfilePrivateNoteView: UIView {
         addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
         isAccessibilityElement = true
         accessibilityTraits = .button
-        accessibilityHint = "メモを編集します"
+        accessibilityHint = "メモを編集します。"
     }
 
     @available(*, unavailable)

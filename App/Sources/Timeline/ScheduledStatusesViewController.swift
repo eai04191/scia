@@ -138,7 +138,7 @@ final class ScheduledStatusesViewController: UICollectionViewController {
         let registration = UICollectionView.CellRegistration<UICollectionViewListCell, ScheduledStatus.ID> { [weak self] cell, _, id in
             guard let self, let scheduled = statuses.first(where: { $0.id == id }), let account else { return }
             cell.contentConfiguration = contentConfiguration(for: scheduled, account: account, base: cell.defaultContentConfiguration())
-            cell.accessibilityHint = "日時を変えます"
+            cell.accessibilityHint = "日時を変えます。"
             cell.accessibilityCustomActions = [
                 UIAccessibilityCustomAction(name: "日時を変える") { [weak self] _ in
                     self?.onReschedule(scheduled)

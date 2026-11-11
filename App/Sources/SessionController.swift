@@ -2426,7 +2426,7 @@ final class SessionController {
             id: "crashQuarantine",
             kind: .info,
             title: "表示できない投稿がありました",
-            action: .disclosure(hint: "隠した投稿の詳細を表示します") { [weak self] in self?.presentCrashReport(statusID: statusID) }
+            action: .disclosure(hint: "隠した投稿の詳細を表示します。") { [weak self] in self?.presentCrashReport(statusID: statusID) }
         )
         notices.showTransient(notice, duration: AppDependencies.tuning.value(of: TuningCatalog.crashQuarantineChipDuration))
     }

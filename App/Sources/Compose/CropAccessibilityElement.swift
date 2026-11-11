@@ -17,7 +17,7 @@ final class CropAccessibilityElement: UIAccessibilityElement {
     override init(accessibilityContainer container: Any) {
         super.init(accessibilityContainer: container)
         accessibilityTraits = .adjustable
-        accessibilityHint = "上下にスワイプして拡大と縮小をします。範囲は操作で動かします"
+        accessibilityHint = "上下にスワイプして拡大と縮小をします。範囲は操作で動かします。"
         accessibilityCustomActions = CropViewport.Direction.allCases.map { direction in
             UIAccessibilityCustomAction(name: direction.actionName) { [weak self] _ in
                 guard let self, self.change({ $0.moved(direction) }) else { return false }

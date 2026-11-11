@@ -1154,7 +1154,7 @@ extension ProfileEditViewController: UITableViewDataSource, UITableViewDelegate 
             var content = UIListContentConfiguration.subtitleCell()
             let toggle = indexPath.row == 0 ? lockedSwitch : botSwitch
             content.text = indexPath.row == 0 ? "フォローを承認制にする" : "botのアカウントとして示す"
-            content.secondaryText = indexPath.row == 0 ? "フォローのリクエストを承認した人だけがフォローできます" : "自動で投稿するアカウントだとほかの人に伝わります"
+            content.secondaryText = indexPath.row == 0 ? "フォローリクエストを承認した人だけがフォローできます" : "自動で投稿するアカウントだとほかの人に伝わります"
             content.secondaryTextProperties.color = .secondaryLabel
             // 説明は、区切りの下の説明と同じ小さい文字にする。`subtitleCell`の既定はそれより一回り大きい。
             content.secondaryTextProperties.font = .preferredFont(forTextStyle: .footnote)

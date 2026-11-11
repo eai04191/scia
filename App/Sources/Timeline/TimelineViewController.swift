@@ -2241,7 +2241,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         var content = base
         content.textProperties.alignment = .center
         if isLoading {
-            content.text = "読み込み中…"
+            content.text = "読み込み中"
             content.textProperties.color = .secondaryLabel
         } else if let failure {
             // 押すと読み込み直すため、押せることを色で示す。理由は下に小さく添える。

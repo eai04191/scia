@@ -78,7 +78,7 @@ struct ConnectionStatusView: View {
     private static func text(_ state: ConnectionDiagnostics.StreamingState?) -> String {
         switch state {
         case .connected: "接続済み"
-        case .connecting, .polling: "接続中…"
+        case .connecting, .polling: "接続中"
         case .stopped, .loginRequired, nil: "未接続"
         }
     }

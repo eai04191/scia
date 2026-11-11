@@ -239,7 +239,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
         capsule.alpha = 0
         capsule.isAccessibilityElement = true
         capsule.accessibilityTraits = .button
-        capsule.accessibilityHint = "通知タブを開きます"
+        capsule.accessibilityHint = "通知タブを開きます。"
         capsule.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
         // 文字はステータスバーの高さに収めるため、端末の文字の大きさに合わせて大きくできない。タブバーと同じく、
         // 文字を大きくする設定では、長押しで拡大表示（Large Content Viewer）に出し、指を離すと押したことにする。

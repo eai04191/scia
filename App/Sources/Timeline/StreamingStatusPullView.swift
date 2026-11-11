@@ -142,7 +142,7 @@ final class StreamingStatusPullView: UIView {
         case .connected:
             Content(symbol: "checkmark.circle.fill", tint: .systemGreen, text: "接続済み", detail: "\(rate.perMinute(at: now))件 / 分")
         case .connecting:
-            Content(symbol: "ellipsis.circle.fill", tint: .secondaryLabel, text: "接続中…")
+            Content(symbol: "ellipsis.circle.fill", tint: .secondaryLabel, text: "接続中")
         case .polling:
             Content(symbol: "exclamationmark.triangle.fill", tint: .systemOrange, text: "ポーリング中")
         case .stopped:
