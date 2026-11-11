@@ -433,6 +433,7 @@ final class MediaViewerController: UIViewController {
         }
         captionView.isEditable = draftEditing != nil
         counterLabel.font = .preferredFont(forTextStyle: .subheadline)
+        counterLabel.adjustsFontForContentSizeCategory = true
         counterLabel.textColor = .white
         counterLabel.isHidden = items.count == 1
         setUpDescriptionEditing()
