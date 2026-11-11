@@ -46,9 +46,15 @@ sample_slow_tests() {
     done
 }
 
+# 止める合図（TERM）は、取っている途中のスタックを書き終えてから受ける。bashは、前で走っているコマンドが終わるまでtrapを走らせないので、
+# 待ちだけを後ろに回して、待ちの間に来た合図はすぐ受ける。起動した側は、止めたあとにこの処理の終わりを待ってから、書き出したフォルダーをコピーする
+sleeper=
+trap 'kill "$sleeper" 2>/dev/null; exit 0' TERM
+
 while :; do
     now=$(date +%s)
     echo "$(date '+%Y-%m-%d %H:%M:%S') $(sysctl -n vm.loadavg) xcodebuild=$(pgrep -x xcodebuild | wc -l | tr -d ' ') swift-frontend=$(pgrep -x swift-frontend | wc -l | tr -d ' ')" >> "$out/load.log"
     sample_slow_tests "$now"
-    sleep 5
+    sleep 5 & sleeper=$!
+    wait "$sleeper"
 done

@@ -75,24 +75,26 @@ test-on-sim:
 	@mkdir -p $(DERIVED_DATA) && Tools/check-stamp.sh tree > $(TEST_TREE)
 	@# アクセシビリティの要素を作る設定（Tools/sim.sh dumpが入れる）を切る。アプリは起動時にこの設定を読むので、端末の前の状態でテストの結果が変わらないよう、テストのアプリを起動する前に揃える
 	xcrun simctl spawn '$(SIM)' defaults write com.apple.Accessibility ApplicationAccessibilityEnabled -bool false
+	@# キーボードの描画のログ（UIKBRenderingLog）だけを切る。全体を走らせると10万行ほど出て、テストの出力を埋めるため。
+	@# アプリのログは切らない。落ちた回のxcresultに標準出力として残り、テストの失敗の前後に何が起きたかを読めるようにするため
+	xcrun simctl spawn '$(SIM)' log config --subsystem com.apple.UIKit --category UIKBRenderingLog --mode level:off
 ifneq ($(strip $(ONLY)),)
 	xcodebuild $(TEST_ARGS) test $(foreach t,$(ONLY),'-only-testing:$(t)')
 else
 	xcodebuild $(TEST_ARGS) build-for-testing
 	@# SciaCoreTestsとTextKit2LabelTestsはアプリの中で走らないので、まとめてSciaTestsと同じ端末で同時に走らせる。SciaTestsがアプリを入れて起動する15秒ほどの間に、ほぼ走り終える。
-	@# SciaTestsでは、アプリのログを出力に流さない。キーボードの描画のログ（UIKBRenderingLog）が10万行ほど出て、出さないと投稿欄とビューアのsuiteが49秒から44秒になったため。ONLYで走らせるときは、調べる手がかりとして流す
 	@# 止められたら、どちらのxcodebuildも止めて終わるのを待つ。前で走らせると、シェルはそれが終わるまで止める合図を扱わないので、どちらも後ろで走らせて待つ
-	@# Tools/watch-tests.shが、負荷と、なかなか終わらないSciaCoreのテストのスタックをtest-logs/watch-<時刻>に残す。Xcodeの結果のファイルは古いものから消えるので、落ちた回の分はtest-logs/failed-<時刻>にコピーする
+	@# Tools/watch-tests.shが、負荷と、なかなか終わらないSciaCoreのテストのスタックをtest-logs/watch-<時刻>に残す。Xcodeの結果のファイルは古いものから消えるので、落ちた回の分は、負荷の記録と一緒にtest-logs/failed-<時刻>にコピーする。取っている途中のスタックが欠けないよう、止めたあとに終わりを待ってからコピーする。別のMacで走った回は、このフォルダーだけが手元に届く
 	@# 結果のファイルの名前は始めた秒で決まり、同時に始めると重なるので、SciaCoreTestsの分は名前を決めて書く。出力は混ざらないよう、ファイルに書いて落ちたときだけ出す
 	@stamp=$$(date +%Y.%m.%d_%H-%M-%S); mkdir -p $(DERIVED_DATA)/test-logs; core_log=$(DERIVED_DATA)/test-logs/SciaCore-$$stamp.log; \
 	stop() { kill $$core $$app $$watch 2>/dev/null; wait; echo "SciaCoreTestsとTextKit2LabelTestsの出力は$$core_log"; exit $$1; }; \
 	trap 'stop 129' HUP; trap 'stop 130' INT; trap 'stop 143' TERM; \
 	xcodebuild $(TEST_ARGS) -resultBundlePath "$(DERIVED_DATA)/Logs/Test/SciaCore-$$stamp.xcresult" -only-testing:SciaCoreTests -only-testing:TextKit2LabelTests test-without-building > "$$core_log" 2>&1 & core=$$!; \
 	Tools/watch-tests.sh "$$core_log" "$(DERIVED_DATA)/test-logs/watch-$$stamp" '$(SIM)' & watch=$$!; \
-	TEST_RUNNER_OS_ACTIVITY_MODE=disable xcodebuild $(TEST_ARGS) -resultBundlePath "$(DERIVED_DATA)/Logs/Test/Scia-$$stamp.xcresult" -only-testing:SciaTests test-without-building & app=$$!; \
+	xcodebuild $(TEST_ARGS) -resultBundlePath "$(DERIVED_DATA)/Logs/Test/Scia-$$stamp.xcresult" -only-testing:SciaTests test-without-building & app=$$!; \
 	wait $$app; app=$$?; wait $$core; core_status=$$?; \
-	kill $$watch 2>/dev/null; \
-	if [ $$app -ne 0 ] || [ $$core_status -ne 0 ]; then failed=$(DERIVED_DATA)/test-logs/failed-$$stamp; mkdir -p "$$failed"; cp -R "$(DERIVED_DATA)/Logs/Test/SciaCore-$$stamp.xcresult" "$(DERIVED_DATA)/Logs/Test/Scia-$$stamp.xcresult" "$$failed/" 2>/dev/null; echo "失敗した回のxcresultは$${failed}に残しました"; fi; \
+	kill $$watch 2>/dev/null; wait $$watch 2>/dev/null; \
+	if [ $$app -ne 0 ] || [ $$core_status -ne 0 ]; then failed=$(DERIVED_DATA)/test-logs/failed-$$stamp; mkdir -p "$$failed"; cp -R "$(DERIVED_DATA)/Logs/Test/SciaCore-$$stamp.xcresult" "$(DERIVED_DATA)/Logs/Test/Scia-$$stamp.xcresult" "$(DERIVED_DATA)/test-logs/watch-$$stamp" "$$failed/" 2>/dev/null; echo "失敗した回のxcresultと実行中の負荷の記録は$${failed}に残しました"; fi; \
 	if [ $$core_status -ne 0 ]; then grep -aE '✘|error:' "$$core_log" | tail -40; echo "SciaCoreTestsかTextKit2LabelTestsが落ちました。出力は$$core_log"; else grep -a 'Test run with' "$$core_log"; fi; \
 	[ $$app -eq 0 ] && [ $$core_status -eq 0 ]
 	Tools/system-ui-check.sh '$(SIM)' $(DERIVED_DATA)
