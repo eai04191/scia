@@ -38,7 +38,7 @@ public struct StreamingClient: Sendable {
         // クエリのaccess_tokenはアクセスログに残りうるため使わない。
         request.setValue("Bearer \(credential.accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue(credential.accessToken, forHTTPHeaderField: "Sec-WebSocket-Protocol")
-        return StreamingConnection(connection: connector.connect(request), rateLimit: rateLimit, now: now)
+        return StreamingConnection(connection: connector.connect(request), account: RequestAccount(credential, isOtherAccount: false), rateLimit: rateLimit, now: now)
     }
 }
 
@@ -91,12 +91,15 @@ public struct StreamingSubscription: Sendable, Hashable {
 /// 開いたストリーミング接続。
 public struct StreamingConnection: Sendable {
     private let connection: any WebSocketConnection
+    /// つないだアカウント。断られた失敗に付け、401ならREST APIと同じくログアウトされたアカウントとして出せるようにする。
+    private let account: RequestAccount
     private let rateLimit: RateLimitGate
     private let now: @Sendable () -> Date
     private let logger = SciaLog.logger(category: "streaming")
 
-    init(connection: any WebSocketConnection, rateLimit: RateLimitGate, now: @escaping @Sendable () -> Date) {
+    init(connection: any WebSocketConnection, account: RequestAccount, rateLimit: RateLimitGate, now: @escaping @Sendable () -> Date) {
         self.connection = connection
+        self.account = account
         self.rateLimit = rateLimit
         self.now = now
     }
@@ -118,7 +121,8 @@ public struct StreamingConnection: Sendable {
             throw MastodonAPIError(
                 statusCode: rejection.statusCode,
                 message: HTTPURLResponse.localizedString(forStatusCode: rejection.statusCode),
-                retryAfter: retryAfter
+                retryAfter: retryAfter,
+                account: account
             )
         }
     }

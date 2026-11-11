@@ -57,11 +57,16 @@ struct ErrorPresentationTests {
         #expect(presentation.message == "見つからないか、このサーバーでは使えません。")
     }
 
-    @Test func unauthorized() {
-        let presentation = ErrorPresentation(MastodonAPIError.from(statusCode: 401, body: Data(#"{"error":"The access token is invalid"}"#.utf8)))
+    /// アカウントの付かない401（ログイン画面の通信や、画像やファイルのホスト）は、ログアウトではないので、403と同じ文にする。
+    /// 「ログアウトされています。」は、ログインしているアカウントで送った通信の401だけに出す。
+    @Test func unauthorizedWithoutAccountIsNotLoggedOut() {
+        let api = ErrorPresentation(MastodonAPIError.from(statusCode: 401, body: Data(#"{"error":"invalid_grant"}"#.utf8)))
+        let file = ErrorPresentation(HTTPStatusError(statusCode: 401))
 
-        #expect(presentation.message == "ログアウトされています。")
-        #expect(presentation.code == "HTTP 401")
+        #expect(api.message == "アクセスが拒否されました。")
+        #expect(api.code == "HTTP 401")
+        #expect(file.message == "アクセスが拒否されました。")
+        #expect(file.loggedOutAccount == nil)
     }
 
     /// 「別のアカウントで」使うほかのアカウントの通信なら、どのアカウントがログアウトされているかを出し、そのアカウントでログインし直せるようにする。
@@ -92,7 +97,7 @@ struct ErrorPresentationTests {
     }
 
     @Test func forbidden() {
-        #expect(ErrorPresentation(MastodonAPIError.from(statusCode: 403, body: Data())).message == "サーバーがこの操作を許可しませんでした。")
+        #expect(ErrorPresentation(MastodonAPIError.from(statusCode: 403, body: Data())).message == "アクセスが拒否されました。")
     }
 
     /// 文字数の超過など、サーバーが理由をJSONで返したら、その理由を出す。

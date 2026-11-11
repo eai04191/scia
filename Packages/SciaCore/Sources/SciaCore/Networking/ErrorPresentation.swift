@@ -52,13 +52,14 @@ public struct ErrorPresentation: Hashable, Sendable {
     /// - Parameter account: 通信を送ったアカウント。401なら、ログインし直すボタンのために持つ。「別のアカウントで」使うほかのアカウントなら、どのアカウントがログアウトされているかを出す。
     ///   今使っているアカウントなら、どのアカウントかは分かるので、ハンドルは出さない。
     private static func presentation(statusCode: Int, serverMessage: String?, account: RequestAccount?) -> Self {
-        if statusCode == 401 {
-            // MastodonのREST APIは、トークンが無効なときだけ401を返す（`AuthorizationCheck`）。
-            let message = account.flatMap { $0.isOtherAccount ? "\($0.handle)はログアウトされています。" : nil } ?? "ログアウトされています。"
+        // MastodonのREST APIは、トークンが無効なときだけ401を返す（`AuthorizationCheck`）。
+        // アカウントの付かない401（ログイン画面の通信、画像やファイルのホスト）は、ログアウトではないので、403と同じ文にする。
+        if statusCode == 401, let account {
+            let message = account.isOtherAccount ? "\(account.handle)はログアウトされています。" : "ログアウトされています。"
             return Self(message: message, code: "HTTP 401", loggedOutAccount: account)
         }
         let message = switch statusCode {
-        case 403: "サーバーがこの操作を許可しませんでした。"
+        case 401, 403: "アクセスが拒否されました。"
         case 404, 410, 501: "見つからないか、このサーバーでは使えません。"
         case 429: "短い間にリクエストが多すぎたため、サーバーに一時的に止められています。しばらくしてからもう一度お試しください。"
         case 500..<600: "サーバーが一時的に応答できません。しばらくしてからもう一度お試しください。"
