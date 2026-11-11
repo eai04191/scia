@@ -198,6 +198,13 @@ struct StatusEditTests {
         #expect(!status(poll: poll(expiresIn: 299)).canBeEdited(now: Self.now))
         #expect(!status(poll: poll(expiresIn: 3600, expired: true)).canBeEdited(now: Self.now))
         #expect(!status(poll: poll(expiresIn: nil)).canBeEdited(now: Self.now))
+        // 理由は、締め切りが近いのか、もう締め切ったのかで分ける。何日も前に締め切った投票に「5分を切った」と出さない。
+        #expect(status().editObstacle(now: Self.now) == nil)
+        #expect(status(poll: poll(expiresIn: 299)).editObstacle(now: Self.now) == .pollTooClose)
+        #expect(status(poll: poll(expiresIn: 3600, expired: true)).editObstacle(now: Self.now) == .pollClosed)
+        #expect(status(poll: poll(expiresIn: -3600)).editObstacle(now: Self.now) == .pollClosed)
+        #expect(Status.EditObstacle.pollClosed.menuReason == "投票を締め切った投稿は編集できません")
+        #expect(RefusalText.cannotEdit(.pollClosed).message == "投票を締め切ったため、この投稿は編集できません。")
     }
 }
 

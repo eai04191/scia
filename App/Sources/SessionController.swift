@@ -3502,8 +3502,8 @@ final class SessionController {
             presentOnTop(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
                 guard let self else { return }
                 // 聞いている間に締め切りが近づいたら、投票なしで送って投票を消さないよう、編集を始めない。
-                if !status.canBeEdited(now: now()) {
-                    presentRefusal(.pollTooClose)
+                if let obstacle = status.editObstacle(now: now()) {
+                    presentRefusal(.cannotEdit(obstacle))
                 } else {
                     composer.edit(status, source: source, as: writing)
                 }

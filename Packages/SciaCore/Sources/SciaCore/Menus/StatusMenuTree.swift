@@ -310,8 +310,8 @@ public struct StatusMenuTree {
         case .edit:
             guard let myAccountID, status.isAuthored(by: myAccountID) else { return nil }
             // 投票の締め切りが近い投稿は、送り直すとサーバーが拒むので、押せないまま理由を添える。
-            let canEdit = status.canBeEdited(now: now)
-            return .action(item.title, subtitle: canEdit ? nil : "締め切りまで5分を切った投票は編集できません", icon: icon, isEnabled: canEdit, .status(.edit))
+            let obstacle = status.editObstacle(now: now)
+            return .action(item.title, subtitle: obstacle?.menuReason, icon: icon, isEnabled: obstacle == nil, .status(.edit))
         case .delete:
             guard let myAccountID, status.isAuthored(by: myAccountID) else { return nil }
             return .action(item.title, icon: icon, isDestructive: true, .status(.delete))

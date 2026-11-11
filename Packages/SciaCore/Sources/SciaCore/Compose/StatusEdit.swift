@@ -63,12 +63,37 @@ extension Status {
         displayed.account.id == accountID
     }
 
+    /// 編集を送れない理由。
+    public enum EditObstacle: Sendable, Equatable {
+        /// 投票を締め切った。
+        case pollClosed
+        /// 投票の締め切りまで5分を切った。締め切りの分からない投票もここに入れる。
+        case pollTooClose
+
+        /// メニューの押せない「編集」に添える理由。
+        public var menuReason: String {
+            switch self {
+            case .pollClosed: "投票を締め切った投稿は編集できません"
+            case .pollTooClose: "締め切りまで5分を切った投票は編集できません"
+            }
+        }
+    }
+
     /// 編集を送れる。投票の締め切りまで5分を切った投稿と、締め切った投稿は、送り直すとサーバーが拒むため送れない。
     /// 自分の投稿かどうかは見ない。
     public func canBeEdited(now: Date) -> Bool {
-        guard let poll = displayed.poll else { return true }
-        guard let expiresAt = poll.expiresAt, !poll.expired else { return false }
-        return expiresAt.timeIntervalSince(now) >= Self.minimumPollDuration
+        editObstacle(now: now) == nil
+    }
+
+    /// 編集を送れない理由。送れるならnil。
+    /// サーバーは、投票を送らなければ投票を消し、送れば締め切りを設定し直して、5分より近いと拒む（`UpdateStatusService`、`PollExpirationValidator`）。
+    public func editObstacle(now: Date) -> EditObstacle? {
+        guard let poll = displayed.poll else { return nil }
+        guard !poll.expired else { return .pollClosed }
+        guard let expiresAt = poll.expiresAt else { return .pollTooClose }
+        let remaining = expiresAt.timeIntervalSince(now)
+        if remaining <= 0 { return .pollClosed }
+        return remaining >= Self.minimumPollDuration ? nil : .pollTooClose
     }
 }
 

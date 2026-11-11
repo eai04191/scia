@@ -194,11 +194,11 @@ extension Confirmation where Choice == Proceed {
 
     /// 書きかけの下書きがあれば捨ててよいかを、投票の付いた投稿なら締め切りがずれることを、確かめてから編集を始める。
     /// 投票の締め切りが近くて編集できなければ、そのことを知らせる。
-    /// 押されたあとも、聞いている間に締め切りが近づいていないかを`Status.canBeEdited(now:)`で確かめ直し、近づいていれば`RefusalText.pollTooClose`を知らせる。
+    /// 押されたあとも、聞いている間に締め切りが近づいていないかを`Status.canBeEdited(now:)`で確かめ直し、近づいていれば`RefusalText.cannotEdit`を知らせる。
     /// - Parameter actor: ほかのアカウントとして編集するときの、そのアカウントの`@username`。見出しの初めに「〜で」と入れる。
     @MainActor
     public static func editing<Thumbnail>(_ status: Status, draft: ComposeModel<Thumbnail>, now: Date, actor: String? = nil) -> ConfirmationDecision<Proceed> {
-        guard status.canBeEdited(now: now) else { return .refuse(.pollTooClose) }
+        if let obstacle = status.editObstacle(now: now) { return .refuse(.cannotEdit(obstacle)) }
         let discards = draft.hasWrittenContent
         let hasPoll = status.poll != nil
         guard discards || hasPoll else { return .proceed }
@@ -271,8 +271,13 @@ extension Confirmation where Choice == SharedContentChoice {
 }
 
 extension RefusalText {
-    /// メニューを出してから編集を始めるまでに、投票の締め切りまで5分を切ったとき。
-    public static let pollTooClose = RefusalText(title: "編集できません", message: "投票の締め切りまで5分を切ったため、この投稿は編集できません。")
+    /// メニューを出してから編集を始めるまでに、投票の締め切りまで5分を切ったか、締め切ったとき。
+    public static func cannotEdit(_ obstacle: Status.EditObstacle) -> RefusalText {
+        switch obstacle {
+        case .pollClosed: RefusalText(title: "編集できません", message: "投票を締め切ったため、この投稿は編集できません。")
+        case .pollTooClose: RefusalText(title: "編集できません", message: "投票の締め切りまで5分を切ったため、この投稿は編集できません。")
+        }
+    }
 
     /// 共有されたメディアを添付できなかったときの題。
     static let sharedMediaFailureTitle = "共有されたメディアを添付できませんでした"
