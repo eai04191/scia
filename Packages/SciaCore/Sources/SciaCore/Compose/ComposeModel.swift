@@ -290,7 +290,11 @@ public final class ComposeModel<Thumbnail: Sendable> {
 
     /// 返信先か引用元と、既定値から決まる公開範囲。
     private var resolvedVisibility: Status.Visibility {
-        let base = defaultVisibility ?? .public
+        resolvedVisibility(from: defaultVisibility ?? .public)
+    }
+
+    /// 返信先か引用元と`base`のうち、届く範囲が狭いほう。
+    private func resolvedVisibility(from base: Status.Visibility) -> Status.Visibility {
         if let replyTo {
             return StatusDraft.reply(to: replyTo, myAccountID: myAccountID, defaultVisibility: base).visibility
         }
@@ -411,9 +415,17 @@ public final class ComposeModel<Thumbnail: Sendable> {
     }
 
     /// 返信先と引用元を入れ替え、前の返信先から自動で入れた宛先と注意書きだけを入れ替える。
+    ///
+    /// 予約の書き直しの間は、書き直しを続けたまま付け替える（docs/compose.mdの「書き直す」）。本文と注意書きは予約したもので、自動で入れたものではないので、丸ごと残す。
+    /// 注意書きは、欄を隠していても、中身と出しているかを変えない。
+    /// 公開範囲は、既定ではなく、今の範囲と新しい返信先や引用元の狭いほうにし、今の範囲より広げない。予約で選んだ範囲を黙って広げないため。
+    /// 決まった範囲は選んだものとして扱い、あとから届く既定の公開範囲でも広げない。予約が公開範囲を送っておらず、既定もまだ届いていないときだけは、
+    /// 保つ範囲がないので、届いた既定と新しい相手から決める。
     private func retarget(to draft: StatusDraft, replyTo: Status?, quoteTarget: Status?) {
         let typed = typedText
-        let keepsSpoiler = showsSpoiler && (spoilerText != initialDraft.spoilerText || initialDraft.spoilerText.isEmpty)
+        let isRewriting = rewritingSchedule != nil
+        let keepsSpoiler = isRewriting || (showsSpoiler && (spoilerText != initialDraft.spoilerText || initialDraft.spoilerText.isEmpty))
+        let currentVisibility = visibility
         initialDraft = draft
         self.replyTo = replyTo
         self.quoteTarget = quoteTarget
@@ -423,13 +435,22 @@ public final class ComposeModel<Thumbnail: Sendable> {
             showsSpoiler = !spoilerText.isEmpty
         }
         lastSubmitted = nil
-        hasChosenVisibility = false
-        visibility = resolvedVisibility
+        if isRewriting {
+            guard hasChosenVisibility || hasResolvedDefaults else { return }
+            visibility = currentVisibility.narrower(resolvedVisibility(from: currentVisibility))
+            hasChosenVisibility = true
+        } else {
+            hasChosenVisibility = false
+            visibility = resolvedVisibility
+        }
     }
 
-    /// 書き直しのラベルの文字。返信か引用の予約なら、そう書く。返信先と引用元の投稿は持たないので、相手は書かない。
+    /// 書き直しのラベルの文字。返信か引用の予約なら、そう書く。予約から戻した返信先と引用元は投稿を持たないので、相手は書かない。
+    /// 書き直している間に付け替えた返信先と引用元は、投稿を持っているので、相手を書く。
     public var rewriteChipTitle: String? {
         guard rewritingSchedule != nil else { return nil }
+        if let quoteTarget { return "@\(quoteTarget.displayed.account.acct)の投稿の引用の予約を書き直し中" }
+        if let replyTo { return "@\(replyTo.displayed.account.acct)への返信の予約を書き直し中" }
         if initialDraft.quotedStatusID != nil { return "予約した引用を書き直し中" }
         if initialDraft.inReplyToID != nil { return "予約した返信を書き直し中" }
         return "予約を書き直し中"
@@ -639,11 +660,13 @@ public final class ComposeModel<Thumbnail: Sendable> {
     /// 書いた本文、注意書き、投票、予約、言語は残す。返信先と引用元は、前のアカウントのサーバーでのIDなので外す。
     /// 添付は、新しいサーバーの上限を`apply`で読んでから、そのサーバーへアップロードし直す。
     /// 送っている間と、編集、削除して書き直す、予約の書き直しの間は替えずにfalseを返す。どれも前のアカウントのサーバーの投稿を指すため。
+    /// 予約の書き直しの間でも、同じアカウントのままならtrueを返す。返信先と引用元は付け替えられるため（`setReplyTarget`）。
     /// 編集と書き直しを、そのアカウントの投稿で始めるときは、`beginEditing`と`beginRedrafting`にアカウントを渡す。
     @discardableResult
     public func switchAccount(to account: ComposeAccount<Thumbnail>?) -> Bool {
-        guard !isPosting, editedStatus == nil, redraft == nil, rewritingSchedule == nil else { return false }
+        guard !isPosting, editedStatus == nil, redraft == nil else { return false }
         guard account?.id != otherAccount?.id else { return true }
+        guard rewritingSchedule == nil else { return false }
         // 添付はみな、端末のファイルから選んだかペーストしたもの。編集や書き直しの添付は、上で替えないので来ない。
         guard attachments.allSatisfy({ localMedia[$0.id] != nil }) else { return false }
         otherAccount = account

@@ -314,6 +314,22 @@ final class InlineComposeControllerTests {
         #expect(sent.map(\.mediaIDs) == [["m-a.jpg"]])
     }
 
+    /// 予約の書き直し中に返信を選ぶと、何も起きないのではなく、書き直しを続けたまま返信先を付け替える。
+    @Test func replyingWhileRewritingScheduleSwapsTarget() async throws {
+        defer { window.isHidden = true }
+        let scheduled = ScheduledStatus(id: "70", scheduledAt: Date(timeIntervalSince1970: 2_000_000_000), params: ScheduledStatus.Params(text: "予約した本文"))
+        #expect(composer.model.beginRewriting(scheduled))
+        let target = try status(id: "9")
+
+        composer.reply(to: target)
+        try await waitUntilSettled()
+
+        #expect(composer.model.rewritingSchedule == scheduled)
+        #expect(composer.model.replyTo?.id == "9")
+        #expect(composer.model.rewriteChipTitle == "@\(target.account.acct)への返信の予約を書き直し中")
+        #expect(composer.stateDump().contains("editing: true"))
+    }
+
     /// メディアを選ぶシートを出したまま投稿ボタンで送ったら、シートが閉じたときに書き終えたことを知らせる。
     /// 知らせないと、書き始めたときに伏せたアプリ内のSafariが、次に書き終えるまで戻らない。
     @Test func postingFromAboveSheetReportsEndOfEditing() async throws {

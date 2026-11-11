@@ -143,6 +143,111 @@ struct ComposeModelScheduleTests {
         #expect(model.rewritingSchedule == nil)
     }
 
+    private func post(_ id: String, by acct: String, accountID: String, visibility: Status.Visibility = .public) -> Status {
+        Status(
+            id: id,
+            createdAt: Self.now,
+            account: Account(id: accountID, username: acct, acct: acct, displayName: acct, avatar: nil),
+            content: "",
+            spoilerText: "",
+            url: nil,
+            visibility: visibility
+        )
+    }
+
+    /// 予約の書き直し中に返信を選ぶと、書き直しを続けたまま、返信先を付け替える。Mastodonは新しい予約に返信先を自由に付けられるため。
+    /// 書いた本文は残し、新しい返信先の宛先を頭に足す。公開範囲は、今の範囲と返信先の狭いほうにする。ラベルには相手を書く。
+    @Test func replyingWhileRewritingSwapsReplyTarget() async {
+        var sent: [StatusDraft] = []
+        var rewritten: [ScheduledStatus.ID] = []
+        let model = makeModel { sent.append($0) }
+        model.onScheduleRewritten = { rewritten.append($0) }
+        let scheduled = scheduled(inReplyToID: "5")
+        model.beginRewriting(scheduled)
+
+        #expect(model.switchAccount(to: nil))
+        model.setReplyTarget(post("9", by: "bob", accountID: "2", visibility: .private))
+
+        #expect(model.rewritingSchedule == scheduled)
+        #expect(model.text == "@bob 予約した本文")
+        #expect(model.visibility == .private)
+        #expect(model.scheduledAt == scheduled.scheduledAt)
+        #expect(model.rewriteChipTitle == "@bobへの返信の予約を書き直し中")
+
+        await model.submit()
+        #expect(sent.last?.inReplyToID == "9")
+        #expect(sent.last?.quotedStatusID == nil)
+        #expect(rewritten == ["70"])
+    }
+
+    /// 返信先より狭い範囲を選んであれば、広げない。
+    @Test func replyingWhileRewritingKeepsNarrowerVisibility() {
+        let model = makeModel { _ in }
+        model.beginRewriting(scheduled())
+        model.choose(.direct)
+
+        model.setReplyTarget(post("9", by: "bob", accountID: "2"))
+
+        #expect(model.visibility == .direct)
+    }
+
+    /// サーバー独自の公開範囲の投稿への返信はフォロワー限定にするが、それより狭い範囲を選んであれば、広げない。
+    @Test func replyingWhileRewritingNeverWidensVisibility() {
+        let model = makeModel { _ in }
+        model.beginRewriting(scheduled())
+        model.choose(.direct)
+
+        model.setReplyTarget(post("9", by: "bob", accountID: "2", visibility: .other("limited")))
+
+        #expect(model.visibility == .direct)
+    }
+
+    /// 付け替えで決まった公開範囲は、あとから届いた既定の公開範囲で広げない。投稿欄は書き始めるたびに既定を読み直す。
+    @Test func laterDefaultsDoNotWidenRetargetedRewrite() {
+        let model = makeModel { _ in }
+        model.beginRewriting(ScheduledStatus(id: "71", scheduledAt: Self.now.addingTimeInterval(3 * 60 * 60), params: ScheduledStatus.Params(text: "既定の範囲")))
+
+        model.setReplyTarget(post("9", by: "bob", accountID: "2", visibility: .direct))
+        model.setReplyTarget(post("10", by: "carol", accountID: "3"))
+        model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
+
+        #expect(model.visibility == .direct)
+    }
+
+    /// 注意書きは、欄を隠していても、予約のものを中身ごと残す。返信先の注意書きに替えず、隠した欄も出し直さない。
+    @Test func replyingWhileRewritingKeepsHiddenSpoiler() {
+        let model = makeModel { _ in }
+        model.beginRewriting(ScheduledStatus(
+            id: "72",
+            scheduledAt: Self.now.addingTimeInterval(3 * 60 * 60),
+            params: ScheduledStatus.Params(text: "本文", spoilerText: "予約した注意書き", visibility: .unlisted)
+        ))
+        model.showsSpoiler = false
+        let base = post("9", by: "bob", accountID: "2")
+        let target = Status(id: base.id, createdAt: base.createdAt, account: base.account, content: "", spoilerText: "相手の注意書き", url: nil)
+
+        model.setReplyTarget(target)
+
+        #expect(!model.showsSpoiler)
+        #expect(model.spoilerText == "予約した注意書き")
+    }
+
+    /// 予約の書き直し中に引用を選ぶと、返信先を外して引用元を付け替える。
+    @Test func quotingWhileRewritingSwapsQuoteTarget() async {
+        var sent: [StatusDraft] = []
+        let model = makeModel { sent.append($0) }
+        model.beginRewriting(scheduled(inReplyToID: "5"))
+
+        model.setQuoteTarget(post("9", by: "bob", accountID: "2"))
+
+        #expect(model.rewritingSchedule != nil)
+        #expect(model.text == "予約した本文")
+        #expect(model.rewriteChipTitle == "@bobの投稿の引用の予約を書き直し中")
+        await model.submit()
+        #expect(sent.last?.quotedStatusID == "9")
+        #expect(sent.last?.inReplyToID == nil)
+    }
+
     /// 書き直しをやめたら、元の予約は取り消させない。
     @Test func resetStopsRewritingWithoutCancelling() async {
         var rewritten: [ScheduledStatus.ID] = []
