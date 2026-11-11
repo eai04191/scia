@@ -152,6 +152,7 @@ public final class ComposeCompletion {
                 customEmojis: { try await client.customEmojis() },
                 featuredTags: { try await client.featuredTags() },
                 recentTags: { try await client.featuredTagSuggestions() },
+                statusTags: { try await client.recentStatusTags(of: client.credential.accountID) },
                 accounts: { try await client.accounts($0) }
             )
         }

@@ -688,6 +688,16 @@ struct MastodonClientTests {
         ])
     }
 
+    /// クライアントから作る補完の読み先は、そのアカウントの最近の投稿のタグも読む。ほかのアカウントで書くときに使う。
+    @Test func completionSourcesReadStatusTagsOfClientAccount() async throws {
+        let transport = StubTransport([try .fixture("home_timeline")])
+        let client = try makeClient(transport)
+
+        _ = try await ComposeCompletion.Sources(client: client).statusTags()
+
+        #expect(await transport.requests.first?.url?.path() == "/api/v1/accounts/\(client.credential.accountID)/statuses")
+    }
+
     @Test func relationshipPicksRequestedAccount() async throws {
         let transport = StubTransport([try .fixture("relationships")])
 
