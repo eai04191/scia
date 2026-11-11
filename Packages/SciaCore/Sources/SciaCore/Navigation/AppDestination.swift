@@ -49,6 +49,8 @@ public enum AppDestination: Equatable, Sendable {
     case notificationPolicy
     /// `announcements`。サーバーのお知らせのリストを開く。
     case announcements
+    /// アカウントの画面。サーバーにあるものの入口を並べる。決まりはdocs/account-screen.mdにある。
+    case account
     /// `in-app-browser-height`。重ねた画面を閉じてホームのタブを出し、その上にアプリ内のSafariの高さを選ぶシートを出す。
     /// `?return=<SettingsPage.rawValue>`で、シートを閉じたときにその設定の画面を開き直す。
     case inAppBrowserHeight(returningTo: SettingsPage?)
@@ -121,7 +123,7 @@ public enum AppDestination: Equatable, Sendable {
         case .tab, .userTab, .profile, .myProfile, .thread, .editHistory, .apiResponse, .accounts, .hashtag, .accountHashtag, .search, .scheduled,
              .notificationRequests, .notificationRequest:
             true
-        case .settings, .appearanceGroup, .notificationAppearanceGroup, .profileEdit, .operationStatus, .notificationPolicy, .announcements, .inAppBrowserHeight, .note, .report, .compose, .crashReport:
+        case .settings, .appearanceGroup, .notificationAppearanceGroup, .profileEdit, .operationStatus, .notificationPolicy, .announcements, .account, .inAppBrowserHeight, .note, .report, .compose, .crashReport:
             false
         }
     }
@@ -151,6 +153,7 @@ public enum AppDestination: Equatable, Sendable {
         case .notificationRequest: "notification request"
         case .notificationPolicy: "notification policy"
         case .announcements: "announcements"
+        case .account: "account"
         case .inAppBrowserHeight: "in-app browser height"
         case .note: "note"
         case .report: "report"
@@ -205,6 +208,7 @@ public enum AppDestination: Equatable, Sendable {
         case ("notification-request", ""): query("id").map { .notificationRequest(id: $0) }
         case ("notification-policy", ""): .notificationPolicy
         case ("announcements", ""): .announcements
+        case ("account", ""): .account
         case ("in-app-browser-height", ""):
             if let page = query("return") {
                 SettingsPage(rawValue: page).map { .inAppBrowserHeight(returningTo: $0) }
@@ -260,6 +264,7 @@ public enum AppDestination: Equatable, Sendable {
         case .notificationRequest(let id): ("notification-request", nil, [("id", id)])
         case .notificationPolicy: ("notification-policy", nil, [])
         case .announcements: ("announcements", nil, [])
+        case .account: ("account", nil, [])
         case .inAppBrowserHeight(let page): ("in-app-browser-height", nil, page.map { [("return", $0.rawValue)] } ?? [])
         case .note(let acct): ("note", nil, [("acct", acct)])
         case .report(let acct): ("report", nil, [("acct", acct)])
@@ -320,6 +325,8 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     /// 自動で訳す投稿の言語を選ぶ画面。決まりはdocs/auto-translation.mdにある。
     case autoTranslation = "auto-translation"
     case tabs
+    /// アカウントの画面を、設定のトップの画面に重ねる。
+    case account
     case statusActions = "status-actions"
     case quotedStatusActions = "quoted-status-actions"
     case notificationActions = "notification-actions"
@@ -371,7 +378,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
         case .connection, .licenses, .acknowledgments: [.about, self]
         case .connectionTimelines: [.about, .connection, self]
         case .viewedMediaCache, .prefetchedMediaCache: [.storage, self]
-        case .display, .interaction, .compose, .about, .appIcon, .tabs, .storage: [self]
+        case .display, .interaction, .compose, .about, .appIcon, .tabs, .account, .storage: [self]
         }
     }
 }

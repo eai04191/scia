@@ -241,9 +241,13 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// - Parameter previous: 同じアカウントにログインし直して作り直すときの、前の画面一式。書きかけの下書きを引き継ぐ。
     func showTimeline(for credential: Credential, adoptingDraftFrom previous: SessionController? = nil) {
         isShowingAccountsLoadFailure = false
+        var logOut: (@MainActor () -> Void)?
+        if Self.canLogOut {
+            logOut = { [weak self] in self?.confirmLogOut() }
+        }
         let session = SessionController(credential: credential, accountMenu: { [weak self] in
             self?.makeAccountMenu() ?? UIMenu()
-        }, onReauthenticate: { [weak self] session, credential in
+        }, logOut: logOut, onReauthenticate: { [weak self] session, credential in
             guard let self, session === self.session else { return }
             await self.reauthenticate(credential, isCurrent: credential.id == session.credential.id)
         })
@@ -291,27 +295,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         try? AppDependencies.accounts.get()
     }
 
-    /// アカウントのリスト、追加、ログアウトのメニュー。開くたびに今のアカウントで組み立て直す。
+    /// アカウントのリスト、追加、設定のメニュー。開くたびに今のアカウントで組み立て直す。
     private func makeAccountMenu() -> UIMenu {
         guard let accounts else { return UIMenu() }
         let add = UIAction(title: "アカウントを追加", image: UIImage(systemName: "person.badge.plus")) { [weak self] _ in
             self?.confirmAddingAccount()
         }
         let settings = UIAction(title: "設定", image: UIImage(systemName: "gearshape")) { [weak self] _ in
-            guard let session = self?.session else { return }
-            self?.window?.rootViewController?.presentSettings(
-                instance: session.credential.instance,
-                account: session.credential.handle,
-                diagnostics: session.diagnostics,
-                tabIcons: session.profileTabIcons,
-                tabSources: session.settingsTabSourceActions,
-                openInAppBrowserHeight: { [weak session] in session?.open(.inAppBrowserHeight(returningTo: .interaction)) },
-                openProfile: { [weak session] in session?.open(.profile(acct: $0)) },
-                onShownChange: { [weak session] in session?.settingsShownChanged($0) }
-            )
-        }
-        let logOut = UIAction(title: "ログアウト", image: UIImage(systemName: "rectangle.portrait.and.arrow.right"), attributes: .destructive) { [weak self] _ in
-            self?.confirmLogOut()
+            self?.session?.open(.settings(nil))
         }
         #if DEBUG
         let isDummy = Self.showsDummySession
@@ -319,13 +310,11 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             guard let self else { return }
             confirmDiscardingDraft(switchingTo: DummyServer.credential) { [weak self] in self?.openDummySession() }
         }]
-        // ダミーを選んでいる間は、裏で選んだままの本物のアカウントにチェックマークを付けず、ログアウトも出さない。ログアウトすると、ダミーではなくその本物のアカウントが消えるため。
+        // ダミーを選んでいる間は、裏で選んだままの本物のアカウントにチェックマークを付けない。
         let checkedID = isDummy ? nil : accounts.current?.id
-        let logOutItems = isDummy ? [] : [logOut]
         #else
         let dummy: [UIAction] = []
         let checkedID = accounts.current?.id
-        let logOutItems = [logOut]
         #endif
         let switching = accounts.accounts.map { account in
             UIAction(title: account.handle, state: account.id == checkedID ? .on : .off) { [weak self] _ in
@@ -337,7 +326,6 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             UIMenu(options: .displayInline, children: switching),
             add,
             UIMenu(options: .displayInline, children: [settings]),
-            UIMenu(options: .displayInline, children: logOutItems),
         ])
     }
 
@@ -489,6 +477,15 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         hosting.isModalInPresentation = true
         sheet = hosting
         root.presentOnFrontmost(hosting)
+    }
+
+    /// ダミーを選んでいる間は、ログアウトさせない。ログアウトすると、ダミーではなく、裏で選んだままの本物のアカウントが消えるため。
+    private static var canLogOut: Bool {
+        #if DEBUG
+        !showsDummySession
+        #else
+        true
+        #endif
     }
 
     private func confirmLogOut() {

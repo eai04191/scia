@@ -23,12 +23,12 @@ final class FollowedTagsController {
         // 読み直しは、始める側が通信の目的を名乗って始める（`loadNow`）。ここでは、いちばん新しい読み直しの結果を受け取る。
         store = FollowedTagsStore { try await followedTags.latest() }
         viewController.onRetry = { [weak self] in self?.load(purpose: .action) }
-        followedTags.onValueChange = { [weak self] tags in self?.cacheDidLoad(tags) }
         session.register(self)
     }
 
     /// メニューを開いたときなど、ほかで読み直したハッシュタグを出す。読み込み中なら、その読み込みが出す。
-    private func cacheDidLoad(_ tags: [Hashtag]) {
+    /// 読み直した結果を受け取れるのは1つだけなので、画面を組むセッションが受け取って、開いている画面すべてに渡す。
+    func cacheDidLoad(_ tags: [Hashtag]) {
         guard store.receive(tags) else { return }
         show()
     }

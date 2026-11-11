@@ -53,8 +53,14 @@ final class SessionController {
     private var loadingTabSources: Set<String> = []
     /// アカウントの切り替えなどのメニュー。開くたびに呼んで組み立て直す。
     private let accountMenu: @MainActor () -> UIMenu
+    /// 確かめてからログアウトする。ログアウトさせないアカウント（ダミー）ではnil。
+    private let logOut: (@MainActor () -> Void)?
+    /// タブを無効にしていて、アカウントの画面から選んでいるタブに積んだ、ブックマークとお気に入りのタイムライン。
+    private let pushedSavedLists = NSHashTable<SavedStatusesController>.weakObjects()
+    /// 同じく積んだ、フォロー中のハッシュタグ。
+    private let pushedFollowedTags = NSHashTable<FollowedTagsController>.weakObjects()
     /// 自分で残した投稿のタブ。ブックマーク、お気に入り。
-    var savedLists: [SavedStatusesController] { [bookmarks, favourites] }
+    var savedLists: [SavedStatusesController] { [bookmarks, favourites] + pushedSavedLists.allObjects }
     /// アカウント1つ分の部品（通信、ストリーミング、401の確かめ、電波の回復などのやり直し）と、その決まり。
     private let session: AccountSession
     /// 各タブで共有する、ストリーミングの接続。
@@ -225,12 +231,14 @@ final class SessionController {
 
     /// - Parameters:
     ///   - accountMenu: アカウントの切り替えなどのメニュー。開くたびに呼んで組み立て直す。
+    ///   - logOut: 確かめてからログアウトする。ログアウトさせないアカウントではnil。
     ///   - onReauthenticate: トークンが無効なアカウントで、ログインし直しのボタンが押されたときに、そのアカウントを渡して呼ぶ。ログインし直しが終わるか、取り消されたら返る。
     ///     このセッションのアカウントのほか、「別のアカウントで」の操作で無効と分かったほかのアカウントも渡す。
-    init(credential: Credential, accountMenu: @escaping @MainActor () -> UIMenu, onReauthenticate: @escaping (SessionController, Credential) async -> Void) {
+    init(credential: Credential, accountMenu: @escaping @MainActor () -> UIMenu, logOut: (@MainActor () -> Void)?, onReauthenticate: @escaping (SessionController, Credential) async -> Void) {
         self.credential = credential
         self.onReauthenticate = onReauthenticate
         self.accountMenu = accountMenu
+        self.logOut = logOut
         let tuning = AppDependencies.tuning
         #if DEBUG
         let transport = BurstMonitoringTransport(base: FaultInjectingTransport(base: ScenarioMode.server?.transport ?? URLSessionTransport()), monitor: RequestBurstLog.monitor)
@@ -267,6 +275,12 @@ final class SessionController {
         let followedTagsList = FollowedTagsController(followedTags: followedTags, session: session)
         self.followedTags = followedTags
         self.followedTagsList = followedTagsList
+        followedTags.onValueChange = { [weak followedTagsList, pushedFollowedTags] tags in
+            followedTagsList?.cacheDidLoad(tags)
+            for list in pushedFollowedTags.allObjects {
+                list.cacheDidLoad(tags)
+            }
+        }
         // 自分のアカウントを読むのはselfなので、作り終えてからつなぐ。
         let myAccountReference = SessionReference()
         let scheduled = ScheduledStatusesController(client: client, tasks: tasks.child(), myAccount: {
@@ -342,9 +356,10 @@ final class SessionController {
         AppDependencies.postCrashGuard.activate(accountID: credential.id)
         interactions = StatusInteractions(operations: .init(client: client), update: updateStatusEverywhere)
         // 付けた投稿は、サーバーが受け付けたところでブックマークやお気に入りのタイムラインの先頭に入れる。外したときは行を残す。
-        interactions.onSettle = { action, status in
-            bookmarks.statusDidSettle(action, status)
-            favourites.statusDidSettle(action, status)
+        interactions.onSettle = { [pushedSavedLists] action, status in
+            for list in [bookmarks, favourites] + pushedSavedLists.allObjects {
+                list.statusDidSettle(action, status)
+            }
         }
         polls = PollVoting(operations: Self.pollOperations(client: client), update: updateStatusEverywhere)
         let timelines = timelines
@@ -663,10 +678,17 @@ final class SessionController {
     /// ブックマークとお気に入りのタイムラインに、タブで見せているかを伝える。見せ始めたら最新の分を読み、見せなくなったら外した行を消す。
     /// 上にスレッドやビューアを重ねても、タブで見せていることは変わらないので、消さない。
     private func applyShownSavedLists() {
-        for list in savedLists {
+        for list in [bookmarks, favourites] {
             list.setShown(tabs.isShowing(TabItem(list.kind)))
         }
         followedTagsList.setShown(tabs.isShowing(.followedTags))
+        // アカウントの画面から積んだものは、積んだ先のタブを選んでいる間、見せている扱いにする。
+        for list in pushedSavedLists.allObjects {
+            list.setShown(list.viewController.navigationController === tabs.selectedNavigation)
+        }
+        for list in pushedFollowedTags.allObjects {
+            list.setShown(list.viewController.navigationController === tabs.selectedNavigation)
+        }
     }
 
     /// 見ているタブの項目を、次に起動したときに開けるよう覚えておく。
@@ -845,26 +867,20 @@ final class SessionController {
     /// タブの根の画面の左上に、アカウントのボタンを置く。
     private func installAccountButton(on viewController: UIViewController) {
         let accountMenu = accountMenu
-        viewController.navigationItem.leftBarButtonItem = Self.accountButton(for: credential) { [weak self, weak viewController] in
-            let myProfile = UIAction(title: "自分のプロフィール", image: UIImage(systemName: "person.crop.circle")) { _ in
-                guard let viewController else { return }
-                self?.openMyProfile(from: viewController)
+        viewController.navigationItem.leftBarButtonItem = Self.accountButton(for: credential) { [weak self] in
+            let account = UIAction(title: "アカウント", image: UIImage(systemName: "person.text.rectangle")) { _ in
+                self?.open(.account)
             }
             let recent = UIAction(title: "操作の状況", image: UIImage(systemName: "list.bullet.clipboard")) { _ in
                 self?.showOperationStatus()
             }
-            // サーバー上のアカウントの設定なので、アプリの設定ではなく、アカウントのメニューから開く。
-            let policy = UIAction(title: "通知のフィルタリング", image: UIImage(systemName: "line.3.horizontal.decrease.circle")) { _ in
-                self?.showNotificationPolicy()
-            }
-            // お知らせもサーバーに属するものなので、通知のフィルタリングと同じ並びに置く。
+            // お知らせは、未読があるときだけ並べる。未読がなければ、アカウントの画面から開く。決まりはdocs/account-screen.mdにある。
             let unread = self?.announcements.unreadCount ?? 0
-            let announcements = UIAction(title: "お知らせ", subtitle: unread > 0 ? "未読\(unread)件" : nil, image: UIImage(systemName: "megaphone")) { _ in
+            let announcements = UIAction(title: "サーバーのお知らせ", subtitle: "未読\(unread)件", image: UIImage(systemName: "megaphone")) { _ in
                 self?.showAnnouncements()
             }
-            // サーバーに通知のフィルタリングがないと分かったら、入口を出さない。
-            let server = self?.notificationPolicy.isSupported == false ? [myProfile, recent, announcements] : [myProfile, recent, policy, announcements]
-            return UIMenu(children: [UIMenu(options: .displayInline, children: server)] + accountMenu().children)
+            let top = unread > 0 ? [account, recent, announcements] : [account, recent]
+            return UIMenu(children: [UIMenu(options: .displayInline, children: top)] + accountMenu().children)
         }
         if let item = viewController.navigationItem.leftBarButtonItem {
             accountButtons.add(item)
@@ -1303,8 +1319,9 @@ final class SessionController {
     }
 
     /// タイムラインを開いた画面に積み、すぐ読み始めてストリームを購読する。ナビゲーションから外されたら止める。
-    private func openFeed(_ feed: TimelineFeed, texts: TimelineViewController.Texts? = nil, barItems: [UIBarButtonItem] = [], from source: UIViewController) {
-        guard let navigation = source.navigationController else { return }
+    @discardableResult
+    private func openFeed(_ feed: TimelineFeed, texts: TimelineViewController.Texts? = nil, barItems: [UIBarButtonItem] = [], from source: UIViewController) -> UIViewController? {
+        guard let navigation = source.navigationController else { return nil }
         let controller = FeedTimelineController(feed: feed, texts: texts, session: session)
         let viewController = controller.viewController
         configure(viewController)
@@ -1319,6 +1336,7 @@ final class SessionController {
         pushedFeeds.add(controller)
         navigation.pushViewController(viewController, animated: true)
         controller.start(purpose: .action)
+        return viewController
     }
 
     /// `url`を`browser`で開く。アプリ内のSafariはhttpとhttps以外のURLで例外を出して落ちるため、呼ぶ側が`LinkBrowser.browser(for:)`などで確かめてから渡す。
@@ -2566,13 +2584,17 @@ final class SessionController {
 
     /// フォローしたハッシュタグを、読み直すのを待たずに「フォロー中のハッシュタグ」の画面に入れ、メニューが使うフォロー中のハッシュタグを読み直す。
     private func hashtagDidFollow(_ name: String) {
-        followedTagsList.didFollow(Hashtag(name: name, url: client.tagPageURL(name)))
+        for list in [followedTagsList] + pushedFollowedTags.allObjects {
+            list.didFollow(Hashtag(name: name, url: client.tagPageURL(name)))
+        }
         followedTags.reload(purpose: .action)
     }
 
     /// フォローを外したハッシュタグを、読み直すのを待たずに「フォロー中のハッシュタグ」の画面から除き、メニューが使うフォロー中のハッシュタグを読み直す。
     private func hashtagDidUnfollow(_ name: String) {
-        followedTagsList.didUnfollow(name)
+        for list in [followedTagsList] + pushedFollowedTags.allObjects {
+            list.didUnfollow(name)
+        }
         followedTags.reload(purpose: .action)
     }
 
@@ -3059,12 +3081,102 @@ final class SessionController {
             diagnostics: diagnostics,
             tabIcons: profileTabIcons,
             tabSources: settingsTabSourceActions,
+            accountScreen: accountScreenContext,
             openInAppBrowserHeight: { [weak self] in self?.open(.inAppBrowserHeight(returningTo: .interaction)) },
             openProfile: { [weak self] in self?.open(.profile(acct: $0)) },
             opening: page,
             appearanceGroup: appearanceGroup,
             onShownChange: { [weak self] in self?.settingsShownChanged($0) }
         )
+    }
+
+    // MARK: - アカウントの画面
+
+    /// アカウントの画面に出すものと、押したときの処理。決まりはdocs/account-screen.mdにある。
+    private var accountScreenContext: AccountScreenContext {
+        AccountScreenContext(
+            server: credential.server,
+            unreadAnnouncementCount: { [announcements] in announcements.unreadCount },
+            showsNotificationPolicy: { [notificationPolicy] in notificationPolicy.isSupported },
+            showsLogOut: logOut != nil,
+            open: { [weak self] in self?.openFromAccountScreen($0) },
+            createList: { [weak self] in self?.listEditor.presentCreate() },
+            deleteList: { [weak self] id, title in self?.listEditor.confirmDelete(listID: id, title: title) }
+        )
+    }
+
+    /// アカウントの画面で押した項目を、アカウントの画面（設定から開いていれば設定ごと）を閉じてから開く。
+    private func openFromAccountScreen(_ item: AccountScreenItem) {
+        closeScreensForDestination { [weak self] in
+            guard let self else { return }
+            switch item {
+            case .profile:
+                if let source = tabs.selectedNavigation?.topViewController { openMyProfile(from: source) }
+            case .announcements: showAnnouncements()
+            case .bookmarks: showSavedStatuses(.bookmarks)
+            case .favourites: showSavedStatuses(.favourites)
+            case .followedTags: showFollowedTags()
+            case .scheduled: showScheduledStatuses()
+            case .list(let id, let title): showList(id: id, title: title)
+            case .notificationPolicy: showNotificationPolicy()
+            case .logOut: logOut?()
+            }
+        }
+    }
+
+    /// タブに置ける項目を、タブに並べていればそのタブで開く。無効にしていればfalseを返す。
+    private func showTabIfEnabled(_ item: TabItem) -> Bool {
+        guard tabs.placement.location(of: item) != .disabled else { return false }
+        tabs.show(item)
+        return true
+    }
+
+    /// ブックマークかお気に入りを開く。タブを無効にしていれば、選んでいるタブに積む。積んだものは、ナビゲーションから外されたら止める。
+    private func showSavedStatuses(_ kind: SavedStatusesKind) {
+        guard !showTabIfEnabled(TabItem(kind)), let navigation = tabs.selectedNavigation else { return }
+        let controller = SavedStatusesController(kind: kind, session: session)
+        let viewController = controller.viewController
+        configure(viewController)
+        viewController.lifetimeOwner = controller
+        viewController.onRemovedFromParent = { [weak controller] in controller?.model.stop() }
+        releaseOnClose(viewController)
+        pushedSavedLists.add(controller)
+        navigation.pushViewController(viewController, animated: true)
+        controller.setShown(true)
+    }
+
+    /// 積んだ画面とコントローラーの持ち合いを、画面を閉じないままログアウトやアカウントの切り替えでセッションを閉じたときにも解く。
+    private func releaseOnClose(_ viewController: TimelineViewController) {
+        tasks.onClose { [weak viewController] in viewController?.lifetimeOwner = nil }
+    }
+
+    /// フォロー中のハッシュタグを開く。タブを無効にしていれば、選んでいるタブに積む。
+    private func showFollowedTags() {
+        guard !showTabIfEnabled(.followedTags), let navigation = tabs.selectedNavigation else { return }
+        let controller = FollowedTagsController(followedTags: followedTags, session: session)
+        let viewController = controller.viewController
+        configure(viewController)
+        viewController.onSearchRowSelect = { [weak self, weak viewController] row in
+            guard let self, let viewController else { return }
+            selectSearchResultRow(row, of: nil, from: viewController)
+        }
+        viewController.lifetimeOwner = controller
+        viewController.onRemovedFromParent = { [weak controller] in controller?.stop() }
+        releaseOnClose(viewController)
+        pushedFollowedTags.add(controller)
+        navigation.pushViewController(viewController, animated: true)
+        controller.setShown(true)
+    }
+
+    /// リストのタイムラインを開く。タブを無効にしていれば、タブのタイムラインと同じ右上のメニューを付けて、選んでいるタブに積む。
+    private func showList(id: String, title: String) {
+        guard !showTabIfEnabled(.list(id: id, title: title)), let source = tabs.selectedNavigation?.topViewController else { return }
+        weak var pushed: UIViewController?
+        let item = listEditor.barItem(listID: id, fallbackTitle: title) { [weak self] title in
+            guard let pushed else { return }
+            self?.openListMembers(listID: id, title: title, from: pushed)
+        }
+        pushed = openFeed(.list(id: id), texts: .list(title: title), barItems: [item], from: source)
     }
 
     /// 設定の画面が1枚でも出ている間は、タイムラインが設定の変更で描き直すのを溜め、すべて閉じたときにまとめて描き直させる。
@@ -4188,6 +4300,8 @@ final class SessionController {
             showNotificationPolicy()
         case .announcements:
             showAnnouncements()
+        case .account:
+            rootViewController.presentAccountScreen(settings: AppDependencies.settings, account: credential.handle, context: accountScreenContext)
         case .inAppBrowserHeight(let page):
             showInAppBrowserHeight(returningTo: page)
         case .note(let acct):
@@ -4253,7 +4367,9 @@ final class SessionController {
         for list in savedLists {
             list.enterForeground()
         }
-        followedTagsList.enterForeground()
+        for list in [followedTagsList] + pushedFollowedTags.allObjects {
+            list.enterForeground()
+        }
         scheduled.enterForeground()
         presentedScheduled?.enterForeground()
         announcements.enterForeground()
@@ -4648,6 +4764,9 @@ extension SessionController: ListEditorHost {
         guard previous?.title != list.title else { return }
         let item = TabItem.list(id: list.id, title: list.title)
         serverFeeds.controller(for: item)?.viewController.title = list.title
+        for feed in pushedFeeds.controllers where feed.feed == .list(id: list.id) {
+            feed.viewController.title = list.title
+        }
         tabs.retitle(item)
         setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).replacing(item))
     }
@@ -4659,6 +4778,11 @@ extension SessionController: ListEditorHost {
         let item = TabItem.list(id: id, title: "")
         setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).removing(item))
         tabs.forget(serverFeeds.removeAll(where: { $0 == item }, except: []))
+        // アカウントの画面から積んだ、消したリストのタイムラインは、その画面から閉じる。
+        for feed in pushedFeeds.controllers where feed.feed == .list(id: id) {
+            guard let navigation = feed.viewController.navigationController, let index = navigation.viewControllers.firstIndex(of: feed.viewController), index > 0 else { continue }
+            navigation.popToViewController(navigation.viewControllers[index - 1], animated: true)
+        }
     }
 
     func listFailureReason(for error: any Error) async -> ErrorPresentation {

@@ -15,6 +15,8 @@ struct SettingsView: View {
     let tabIcons: ProfileTabIcons
     /// タブの並びでリストを作る、消す。
     let tabSources: SettingsTabSourceActions
+    /// アカウントの画面に出すものと、押したときの処理。
+    let accountScreen: AccountScreenContext
     /// 設定を閉じ、ホームの上でアプリ内のSafariの高さを選ぶシートを出す。
     let openInAppBrowserHeight: @MainActor () -> Void
     /// 謝辞の画面で、設定の画面を閉じて、ハンドルの人のプロフィールを開く。
@@ -33,6 +35,7 @@ struct SettingsView: View {
         diagnostics: ConnectionDiagnostics,
         tabIcons: ProfileTabIcons,
         tabSources: SettingsTabSourceActions,
+        accountScreen: AccountScreenContext,
         openInAppBrowserHeight: @escaping @MainActor () -> Void,
         openProfile: @escaping @MainActor (_ acct: String) -> Void,
         opening page: SettingsPage? = nil,
@@ -44,6 +47,7 @@ struct SettingsView: View {
         self.diagnostics = diagnostics
         self.tabIcons = tabIcons
         self.tabSources = tabSources
+        self.accountScreen = accountScreen
         self.openInAppBrowserHeight = openInAppBrowserHeight
         self.openProfile = openProfile
         _path = State(initialValue: page?.path ?? [])
@@ -71,6 +75,9 @@ struct SettingsView: View {
         NavigationStack(path: $path) {
             Form {
                 Section {
+                    NavigationLink(value: SettingsPage.account) {
+                        SettingsCategoryLabel("アカウント", systemImage: "person.crop.circle.fill", color: .systemBlue)
+                    }
                     NavigationLink(value: SettingsPage.tabs) {
                         SettingsCategoryLabel("タブ", systemImage: "dock.rectangle", color: .systemBlue)
                     }
@@ -120,6 +127,7 @@ struct SettingsView: View {
         case .media: MediaSettingsView(settings: settings)
         case .about: AboutSettingsView()
         case .appIcon: AppIconSettingsView()
+        case .account: AccountView(settings: settings, account: account, context: accountScreen)
         case .appearance:
             AppearanceEditorView(settings: settings, opening: appearanceGroup)
                 .onAppear { appearanceGroup = nil }
@@ -214,13 +222,14 @@ extension UIViewController {
     ///   - diagnostics: 「接続の状態」画面に出す、ログイン中のアカウントの接続の状態。
     ///   - tabIcons: タブの並びで、タブに置いたプロフィールに出すその人のアイコン。
     ///   - tabSources: タブの並びでリストを作る、消す。
+    ///   - accountScreen: アカウントの画面に出すものと、押したときの処理。
     ///   - openInAppBrowserHeight: 設定を閉じ、ホームの上でアプリ内のSafariの高さを選ぶシートを出す。
     ///   - openProfile: 謝辞の画面で、設定の画面を閉じて、ハンドルの人のプロフィールを開く。
     ///   - page: 設定のトップの画面から重ねて開いておく画面。
     ///   - appearanceGroup: `page`が「投稿の見た目」か「通知の見た目」のとき、その上に重ねておく分類の画面。
     ///   - onShownChange: 設定の画面が出たときにtrue、消えたときにfalseで呼ぶ。
-    func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, tabSources: SettingsTabSourceActions, openInAppBrowserHeight: @escaping @MainActor () -> Void, openProfile: @escaping @MainActor (_ acct: String) -> Void, opening page: SettingsPage? = nil, appearanceGroup: AppearanceGroup.ID? = nil, onShownChange: @escaping (Bool) -> Void) {
-        let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, tabSources: tabSources, openInAppBrowserHeight: openInAppBrowserHeight, openProfile: openProfile, opening: page, appearanceGroup: appearanceGroup)
+    func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, tabSources: SettingsTabSourceActions, accountScreen: AccountScreenContext, openInAppBrowserHeight: @escaping @MainActor () -> Void, openProfile: @escaping @MainActor (_ acct: String) -> Void, opening page: SettingsPage? = nil, appearanceGroup: AppearanceGroup.ID? = nil, onShownChange: @escaping (Bool) -> Void) {
+        let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, tabSources: tabSources, accountScreen: accountScreen, openInAppBrowserHeight: openInAppBrowserHeight, openProfile: openProfile, opening: page, appearanceGroup: appearanceGroup)
         presentOnFrontmost(SettingsHostingController(rootView: view, onShownChange: onShownChange))
     }
 

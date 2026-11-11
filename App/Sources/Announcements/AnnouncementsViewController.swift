@@ -57,7 +57,7 @@ final class AnnouncementsViewController: UIViewController {
         self.tuning = tuning
         self.now = now
         super.init(nibName: nil, bundle: nil)
-        title = "お知らせ"
+        title = "サーバーのお知らせ"
     }
 
     @available(*, unavailable)
