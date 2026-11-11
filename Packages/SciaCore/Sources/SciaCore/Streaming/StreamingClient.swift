@@ -109,7 +109,7 @@ public struct StreamingConnection: Sendable {
         } catch let rejection as WebSocketHandshakeRejected {
             let now = now()
             var retryAfter: Duration?
-            if let date = RateLimitGate.resumeDate(header: rejection.header, now: now) {
+            if let date = RateLimitGate.resumeDate(statusCode: rejection.statusCode, header: rejection.header, now: now) {
                 retryAfter = .seconds(max(date.timeIntervalSince(now), 0))
                 if rejection.statusCode == 429 || rejection.statusCode == 503, date > now {
                     await rateLimit.pause(until: date)

@@ -65,11 +65,13 @@ public actor RateLimitGate {
         continuation.yield()
     }
 
-    /// 応答のヘッダーから再開の時刻を読む。`Retry-After`を優先する。
+    /// 応答のヘッダーから再開の時刻を読む。`Retry-After`を優先する。`X-RateLimit-Reset`は429のときだけ読む。
+    /// Mastodonは、制限の対象のAPIの応答すべてに、いまの制限の窓が終わる時刻としてこのヘッダーを付ける（`Api::RateLimitHeaders`）。
+    /// 再開の時刻の意味になるのは429だけで、ほかのステータスで読むと、制限と関係のない失敗で窓が終わるまで待つことになる。
     /// https://www.rfc-editor.org/rfc/rfc9110.html#name-retry-after
     /// https://docs.joinmastodon.org/api/rate-limits/
     static func resumeDate(of response: HTTPURLResponse, now: Date) -> Date? {
-        resumeDate(header: { response.value(forHTTPHeaderField: $0) }, now: now)
+        resumeDate(statusCode: response.statusCode, header: { response.value(forHTTPHeaderField: $0) }, now: now)
     }
 
     /// 応答が示した、再開までの長さ。時刻が過ぎていれば`.zero`、示していなければnil。
@@ -82,11 +84,11 @@ public actor RateLimitGate {
     static let longestPause: TimeInterval = 24 * 60 * 60
 
     /// - Parameter header: ヘッダーの名前から値を返す。WebSocketのハンドシェイクのように、応答の型を持たないものからも読めるようにする。
-    static func resumeDate(header: (String) -> String?, now: Date) -> Date? {
-        statedResumeDate(header: header, now: now).map { min($0, now.addingTimeInterval(longestPause)) }
+    static func resumeDate(statusCode: Int, header: (String) -> String?, now: Date) -> Date? {
+        statedResumeDate(statusCode: statusCode, header: header, now: now).map { min($0, now.addingTimeInterval(longestPause)) }
     }
 
-    private static func statedResumeDate(header: (String) -> String?, now: Date) -> Date? {
+    private static func statedResumeDate(statusCode: Int, header: (String) -> String?, now: Date) -> Date? {
         if let retryAfter = header("Retry-After") {
             if let seconds = Int(retryAfter), seconds >= 0 {
                 return now.addingTimeInterval(TimeInterval(seconds))
@@ -95,7 +97,7 @@ public actor RateLimitGate {
                 return date
             }
         }
-        if let reset = header("X-RateLimit-Reset") {
+        if statusCode == 429, let reset = header("X-RateLimit-Reset") {
             return (try? Date(reset, strategy: .iso8601.year().month().day().time(includingFractionalSeconds: true)))
                 ?? (try? Date(reset, strategy: .iso8601))
         }

@@ -56,6 +56,18 @@ struct RateLimitTests {
         #expect(date == Self.now.addingTimeInterval(RateLimitGate.longestPause))
     }
 
+    /// 429のほかの応答では、X-RateLimit-Resetを再開の時刻として読まない。Mastodonは制限の対象のAPIの応答すべてに、いまの窓が終わる時刻としてこのヘッダーを付けるため、
+    /// 制限と関係のない503（ほかのサーバーの情報を取れなかったなど）で読むと、窓が終わるまで自動の通信を止めてしまう。Retry-Afterは読む。
+    @Test func resumeDateIgnoresRateLimitResetUnlessTooManyRequests() throws {
+        let url = try #require(URL(string: "https://example.social"))
+        func unavailable(_ headers: [String: String]) throws -> HTTPURLResponse {
+            try #require(HTTPURLResponse(url: url, statusCode: 503, httpVersion: nil, headerFields: headers))
+        }
+
+        #expect(RateLimitGate.resumeDate(of: try unavailable(["X-RateLimit-Reset": "2027-01-15T08:05:00.000Z"]), now: Self.now) == nil)
+        #expect(RateLimitGate.resumeDate(of: try unavailable(["Retry-After": "120", "X-RateLimit-Reset": "2027-01-15T08:05:00.000Z"]), now: Self.now) == Self.now.addingTimeInterval(120))
+    }
+
     @Test func resumeDateIsNilWithoutHeaders() throws {
         #expect(RateLimitGate.resumeDate(of: try response([:]), now: Self.now) == nil)
         #expect(RateLimitGate.resumeDate(of: try response(["Retry-After": "そのうち"]), now: Self.now) == nil)
