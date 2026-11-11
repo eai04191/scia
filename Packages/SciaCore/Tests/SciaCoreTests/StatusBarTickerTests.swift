@@ -52,6 +52,13 @@ struct StatusBarTickerItemTests {
         #expect(text(of: item) == "一行目 二行目 次の段落")
     }
 
+    /// コードブロックの中の改行も空白にする。残すと、1行の表示が最初の改行で切れる。
+    @Test func joinsLinesInsideCodeBlock() {
+        let item = StatusBarTickerItem(notification(.favourite, status: status(content: "<pre><code>let a = 1\nlet b = 2</code></pre>")))
+
+        #expect(text(of: item) == "let a = 1 let b = 2")
+    }
+
     @Test func dropsLeadingMentionsOfReply() {
         // 照合に使うのはacctだけなので、URLはどれでもよい。
         let me = Mention(id: "1", username: "me", url: URL(filePath: "/@me"), acct: "me")

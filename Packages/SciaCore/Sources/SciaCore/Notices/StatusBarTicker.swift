@@ -72,19 +72,7 @@ extension RichText {
     /// 狭い場所に1行で出すための文頭。段落と改行を空白でつなぎ、先頭に並ぶメンションを省く。
     /// 返信は宛先のメンションから始まり、狭い場所がそれだけで埋まるため。
     public var singleLineExcerpt: RichText {
-        var inlines: [Inline] = []
-        for block in blocks {
-            if !inlines.isEmpty {
-                inlines.append(.text(" ", []))
-            }
-            if let marker = block.listMarker {
-                inlines.append(.text(marker, []))
-            }
-            inlines += block.inlines.map { inline in
-                if case .lineBreak = inline { return .text(" ", []) }
-                return inline
-            }
-        }
+        var inlines = joiningLines().blocks.first?.inlines ?? []
         while let first = inlines.first {
             switch first {
             case .link(_, .mention(_, _), _, _):
