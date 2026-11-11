@@ -405,13 +405,13 @@ struct ComposeModelRedraftTests {
         let events = Events()
         let model = makeModel(events, redraft: redraftService(events) { Self.attachment($0) }) { _ in }
         let now = Date(timeIntervalSince1970: 1_800_000_000)
-        #expect(Confirmation.starting(.reply(switchesAccount: false), draft: model, now: now).decision == .proceed)
+        #expect(Confirmation.starting(.reply(switchesAccount: false), draft: model, now: now) == .proceed)
 
         model.beginRedrafting(status(), source: Self.source)
 
         let decision = Confirmation.starting(.reply(switchesAccount: false), draft: model, now: now)
         let confirmation = decision.confirmation
-        #expect(decision.leavesCurrentWork)
+        #expect(decision == confirmation.map { .confirm($0, leavesCurrentWork: true) })
         #expect(confirmation?.title == "書き直しをやめて返信しますか？")
         #expect(confirmation?.message == "書き直し中の内容は破棄されます。元の投稿は残ります。")
     }

@@ -1,4 +1,5 @@
 import Foundation
+import SciaTesting
 import Testing
 @testable import SciaCore
 
@@ -40,20 +41,58 @@ struct ConfirmationTests {
     }
 
     @Test func quotingConfirmsOnlyWhenPollOrMediaWouldBeRemoved() {
-        #expect(Confirmation.starting(.quote(switchesAccount: false), draft: draft(text: "本文"), now: Self.now).decision == .proceed)
+        #expect(Confirmation.starting(.quote(switchesAccount: false), draft: draft(text: "本文"), now: Self.now) == .proceed)
         let decision = Confirmation.starting(.quote(switchesAccount: false), draft: draft(poll: true), now: Self.now)
         let confirmation = decision.confirmation
-        #expect(!decision.leavesCurrentWork)
+        #expect(decision == confirmation.map { .confirm($0, leavesCurrentWork: false) })
         #expect(confirmation?.title == "投票を外して引用しますか？")
         #expect(confirmation?.buttons.last == .init("外して引用", role: .destructive, choice: .proceed))
     }
 
     @Test func leavingEditConfirmsOnlyWhileEditing() {
-        #expect(Confirmation.starting(.reply(switchesAccount: false), draft: draft(text: "本文"), now: Self.now).decision == .proceed)
+        #expect(Confirmation.starting(.reply(switchesAccount: false), draft: draft(text: "本文"), now: Self.now) == .proceed)
+    }
+
+    private func scheduled() -> ScheduledStatus {
+        ScheduledStatus(id: "70", scheduledAt: Date(timeIntervalSince1970: 1_800_100_000), params: ScheduledStatus.Params(text: "予約した本文", visibility: .unlisted))
+    }
+
+    /// 予約の書き直し中の返信と引用は、返信先や引用元を付け替えて書き直しを続けるので、確かめずに進める。
+    /// 投稿するアカウントを替えて始めるときは、書き直しを続けられないので、やめてよいか確かめる。押しても何も起きないままにしない。
+    @Test func startingWhileRewritingScheduleAsksOnlyWhenSwitchingAccount() {
+        let model = draft()
+        model.beginRewriting(scheduled())
+
+        #expect(Confirmation.starting(.reply(switchesAccount: false), draft: model, now: Self.now) == .proceed)
+        #expect(Confirmation.starting(.quote(switchesAccount: false), draft: model, now: Self.now) == .proceed)
+
+        let reply = Confirmation.starting(.reply(switchesAccount: true), draft: model, now: Self.now)
+        #expect(reply == reply.confirmation.map { .confirm($0, leavesCurrentWork: true) })
+        #expect(reply.confirmation?.title == "予約の書き直しをやめて返信しますか？")
+        #expect(reply.confirmation?.message == "書き直し中の内容は破棄されます。元の予約は残ります。")
+        #expect(reply.confirmation?.buttons == [.cancel, .init("書き直しをやめる", role: .destructive, choice: .proceed)])
+        #expect(Confirmation.starting(.quote(switchesAccount: true), draft: model, now: Self.now).confirmation?.title == "予約の書き直しをやめて引用しますか？")
+        #expect(Confirmation.starting(.mention, draft: model, now: Self.now).confirmation?.title == "予約の書き直しをやめてメンションしますか？")
+    }
+
+    /// 投稿を送っている間は、どの操作も始めず、待ってもらう。待てば済むので、アラートではなくチップで伝える。
+    @Test(arguments: [ComposeStart.reply(switchesAccount: false), .quote(switchesAccount: true), .mention, .rewrite])
+    func startingWhilePostingWaits(start: ComposeStart) async throws {
+        let gate = Gate()
+        let model = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in try await gate.wait() }
+        model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
+        model.text = "本文"
+        let submitting = Task { await model.submit() }
+        try await waitUntil { model.isPosting }
+
+        #expect(Confirmation.starting(start, draft: model, now: Self.now) == .waitUntilPosted)
+        #expect(Notice.startWhilePosting.title == "投稿が完了するまでお待ちください")
+        gate.open()
+        await submitting.value
     }
 
     @Test func rewritingConfirmsOnlyWithWrittenDraft() {
-        #expect(Confirmation.starting(.rewrite, draft: draft(), now: Self.now).decision == .proceed)
+        #expect(Confirmation.starting(.rewrite, draft: draft(), now: Self.now) == .proceed)
         let confirmation = Confirmation.starting(.rewrite, draft: draft(text: "書きかけ"), now: Self.now).confirmation
         #expect(confirmation?.title == "下書きを破棄して書き直しますか？")
         #expect(confirmation?.message == "書きかけの下書きは破棄されます。")

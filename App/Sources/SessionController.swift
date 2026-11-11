@@ -3263,16 +3263,17 @@ final class SessionController {
     /// 書きかけの投稿欄で`start`を始める。そのまま始めるか、聞いてから始めるか、始められないと知らせるかは、`Confirmation.starting`が決める。
     /// 返信、引用、編集、書き直しを始める入口は、どれもここを通す。
     private func startComposing(_ start: ComposeStart, _ proceed: @escaping () -> Void) {
-        let decision = Confirmation.starting(start, draft: composer.model, now: now())
-        switch decision.decision {
+        switch Confirmation.starting(start, draft: composer.model, now: now()) {
         case .proceed:
             proceed()
         case .refuse(let text):
             presentRefusal(text)
-        case .confirm(let confirmation):
+        case .waitUntilPosted:
+            notices.showTransient(.startWhilePosting, duration: AppDependencies.tuning.value(of: TuningCatalog.noticeFailureChipDuration))
+        case .confirm(let confirmation, let leavesCurrentWork):
             presentOnTop(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
                 // 送っている間はやめず、始めもしない。送り終えれば空に戻るので、そのあと選び直してもらう。
-                if decision.leavesCurrentWork {
+                if leavesCurrentWork {
                     guard self?.composer.cancelStatusEdit() == true else { return }
                 }
                 proceed()

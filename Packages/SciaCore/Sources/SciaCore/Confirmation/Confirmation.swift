@@ -71,6 +71,15 @@ public enum ComposeStart: Sendable {
     /// 予約した投稿を書き直す。
     case rewrite
 
+    /// 投稿するアカウントを替えて始める。
+    var switchesAccount: Bool {
+        switch self {
+        case .reply(let switchesAccount), .quote(let switchesAccount): switchesAccount
+        case .mention: true
+        case .edit, .redraft, .rewrite: false
+        }
+    }
+
     /// 「返信」「引用」のような、確かめる見出しに書く操作の名前。
     var name: String {
         switch self {
@@ -84,19 +93,29 @@ public enum ComposeStart: Sendable {
 }
 
 /// `ComposeStart`を始める前の決定。
-public struct ComposeStartDecision: Equatable, Sendable {
-    public let decision: ConfirmationDecision<Proceed>
-    /// 確かめたあと、始める前に、いまの編集や書き直しをやめて投稿欄を空に戻す。返信と引用は、編集や書き直しの本文を引き継がないため。
-    public let leavesCurrentWork: Bool
+public enum ComposeStartDecision: Equatable, Sendable {
+    /// 確かめずに始める。
+    case proceed
+    /// 確かめてから始める。
+    /// - Parameter leavesCurrentWork: 確かめたあと、始める前に、いまの編集や書き直しをやめて投稿欄を空に戻す。返信と引用は、編集や書き直しの本文を引き継がないため。
+    case confirm(Confirmation<Proceed>, leavesCurrentWork: Bool)
+    /// 始められない。理由をアラートで伝える。
+    case refuse(RefusalText)
+    /// 投稿を送っている間で、いまは始められないが、送り終えれば始められる。
+    /// 待てば済むので、アラートで操作を止めずに、数秒で消えるチップ（`Notice.startWhilePosting`）で伝える（docs/vision.mdの「アプリ内通知」）。
+    case waitUntilPosted
 
     init(_ decision: ConfirmationDecision<Proceed>, leavesCurrentWork: Bool = false) {
-        self.decision = decision
-        self.leavesCurrentWork = leavesCurrentWork
+        self = switch decision {
+        case .proceed: .proceed
+        case .confirm(let confirmation): .confirm(confirmation, leavesCurrentWork: leavesCurrentWork)
+        case .refuse(let text): .refuse(text)
+        }
     }
 
     /// 確かめるときの文言。確かめなければnil。
     public var confirmation: Confirmation<Proceed>? {
-        if case .confirm(let confirmation) = decision { confirmation } else { nil }
+        if case .confirm(let confirmation, _) = self { confirmation } else { nil }
     }
 }
 
@@ -169,11 +188,14 @@ extension Confirmation where Choice == Proceed {
     /// - Parameter now: 編集で、投票の締め切りまでの残りを見る今の日付。
     @MainActor
     public static func starting<Thumbnail>(_ start: ComposeStart, draft: ComposeModel<Thumbnail>, now: Date) -> ComposeStartDecision {
+        // 送っている間は、失敗したときに送り直せるよう下書きを残すので、どれも始められない。
+        // 待てば済むので、アラートで操作を止めず、チップで伝える。
+        guard !draft.isPosting else { return .waitUntilPosted }
         switch start {
         case .reply, .mention:
-            return leavingEdit(starting: start.name, draft: draft).map { ComposeStartDecision(.confirm($0), leavesCurrentWork: true) } ?? ComposeStartDecision(.proceed)
+            return leaving(for: start, draft: draft).map { ComposeStartDecision(.confirm($0), leavesCurrentWork: true) } ?? ComposeStartDecision(.proceed)
         case .quote:
-            if let leaving = leavingEdit(starting: start.name, draft: draft) {
+            if let leaving = leaving(for: start, draft: draft) {
                 // やめると投稿欄は空に戻るので、外す添付と投票は残らない。
                 return ComposeStartDecision(.confirm(leaving), leavesCurrentWork: true)
             }
@@ -185,6 +207,16 @@ extension Confirmation where Choice == Proceed {
         case .rewrite:
             return ComposeStartDecision(rewriting(draft: draft).map { .confirm($0) } ?? .proceed)
         }
+    }
+
+    /// 返信、引用、メンションを始める前に、いましていることをやめてよいか確かめる。やめなくてよければ確かめない（nil）。
+    /// 予約の書き直しは、同じアカウントのままなら返信先や引用元を付け替えて続けられるので、投稿するアカウントを替えるときだけ確かめる。
+    /// 予約は書いたアカウントのサーバーにあり、ほかのアカウントでは書き直せないため。
+    @MainActor
+    private static func leaving<Thumbnail>(for start: ComposeStart, draft: ComposeModel<Thumbnail>) -> Confirmation? {
+        if let confirmation = leavingEdit(starting: start.name, draft: draft) { return confirmation }
+        guard draft.rewritingSchedule != nil, start.switchesAccount else { return nil }
+        return .destructive(title: "予約の書き直しをやめて\(start.name)しますか？", message: "書き直し中の内容は破棄されます。元の予約は残ります。", action: "書き直しをやめる")
     }
 
     /// 編集か削除して書き直している途中で返信か引用を選んだら、やめてよいか確かめる。どちらでもなければ確かめない（nil）。

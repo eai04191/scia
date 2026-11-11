@@ -708,7 +708,7 @@ final class InlineComposeController: NSObject {
     /// 開いているピッカーは、`edit(_:source:)`と同じ理由で閉じる。
     @discardableResult
     func cancelStatusEdit() -> Bool {
-        guard model.editedStatus != nil || model.redraft != nil, !model.isPosting else { return false }
+        guard model.editedStatus != nil || model.redraft != nil || model.rewritingSchedule != nil, !model.isPosting else { return false }
         mediaPicker?.close(notifiesWillClose: true)
         model.reset()
         return true
