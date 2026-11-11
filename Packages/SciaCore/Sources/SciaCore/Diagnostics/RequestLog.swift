@@ -55,10 +55,13 @@ public final class RequestLog: Sendable {
 
     /// パスのうち、IDらしいところを`:id`に伏せる。クエリはIDやacctを含むため残さない。
     /// `v1`のような版を除き、数字を含む部分をIDとみなす。Mastodonの数字のIDも、ULIDなど英数字のIDも伏せられる。
+    /// `tag`と`tags`の次はハッシュタグの名前なので、`:name`に伏せる。
     static func redactedPath(_ url: URL) -> String {
-        "/" + url.pathComponents
-            .filter { $0 != "/" }
-            .map { component in
+        let components = url.pathComponents.filter { $0 != "/" }
+        return "/" + components.indices
+            .map { index in
+                let component = components[index]
+                if index > 0, ["tag", "tags"].contains(components[index - 1]) { return ":name" }
                 let isVersion = component.wholeMatch(of: /v\d+/) != nil
                 return !isVersion && component.contains(where: \.isNumber) ? ":id" : component
             }

@@ -26,6 +26,8 @@ struct RequestLogTests {
         ("/api/v2/instance", "/api/v2/instance"),
         ("/api/v1/accounts/01HXYZABCDEF0123456789/statuses", "/api/v1/accounts/:id/statuses"),
         ("/api/v1/timelines/home", "/api/v1/timelines/home"),
+        ("/api/v1/timelines/tag/%E7%8C%AB", "/api/v1/timelines/tag/:name"),
+        ("/api/v1/tags/cats/follow", "/api/v1/tags/:name/follow"),
     ])
     func pathHidesIDs(path: String, expected: String) throws {
         #expect(RequestLog.redactedPath(try #require(URL(string: "https://example.social\(path)?max_id=1&acct=alice"))) == expected)
