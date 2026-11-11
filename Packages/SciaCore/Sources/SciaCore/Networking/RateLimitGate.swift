@@ -77,8 +77,16 @@ public actor RateLimitGate {
         resumeDate(of: response, now: now).map { .seconds(max($0.timeIntervalSince(now), 0)) }
     }
 
+    /// 再開の時刻として受け付ける、今からのいちばん長い長さ。
+    /// サーバーの値をそのまま待つと、遠すぎる時刻で、時計が待つ長さを整数に直すところであふれて落ちる。
+    static let longestPause: TimeInterval = 24 * 60 * 60
+
     /// - Parameter header: ヘッダーの名前から値を返す。WebSocketのハンドシェイクのように、応答の型を持たないものからも読めるようにする。
     static func resumeDate(header: (String) -> String?, now: Date) -> Date? {
+        statedResumeDate(header: header, now: now).map { min($0, now.addingTimeInterval(longestPause)) }
+    }
+
+    private static func statedResumeDate(header: (String) -> String?, now: Date) -> Date? {
         if let retryAfter = header("Retry-After") {
             if let seconds = Int(retryAfter), seconds >= 0 {
                 return now.addingTimeInterval(TimeInterval(seconds))

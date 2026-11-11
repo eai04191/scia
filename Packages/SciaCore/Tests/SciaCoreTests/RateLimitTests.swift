@@ -45,6 +45,17 @@ struct RateLimitTests {
         #expect(date == Self.now.addingTimeInterval(300))
     }
 
+    /// 遠すぎる再開の時刻は上限に収める。そのまま待つと、時計が待つ長さを整数に直すところであふれて落ちる。
+    @Test(arguments: [
+        ["Retry-After": "9223372036854775807"],
+        ["Retry-After": "Fri, 31 Dec 9999 23:59:59 GMT"],
+        ["X-RateLimit-Reset": "9999-12-31T23:59:59.000Z"],
+    ])
+    func resumeDateIsCappedWhenTooFar(headers: [String: String]) throws {
+        let date = RateLimitGate.resumeDate(of: try response(headers), now: Self.now)
+        #expect(date == Self.now.addingTimeInterval(RateLimitGate.longestPause))
+    }
+
     @Test func resumeDateIsNilWithoutHeaders() throws {
         #expect(RateLimitGate.resumeDate(of: try response([:]), now: Self.now) == nil)
         #expect(RateLimitGate.resumeDate(of: try response(["Retry-After": "そのうち"]), now: Self.now) == nil)
