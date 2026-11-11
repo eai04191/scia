@@ -4,8 +4,14 @@ public import Foundation
 ///
 /// 応答を`Status`に変換せず、JSONのまま読む。投稿の変換や本文の解析がクラッシュの原因かもしれないため。
 public struct PostCrashReport: Equatable, Sendable {
-    public enum Failure: Error, Equatable {
+    public enum Failure: LocalizedError, Equatable {
         case unreadableResponse
+
+        public var errorDescription: String? {
+            switch self {
+            case .unreadableResponse: "サーバーから届いた内容を読めませんでした。"
+            }
+        }
     }
 
     /// ブラウザで開くページ。送る文章には、誰でも読める投稿のときのほかは入れない。

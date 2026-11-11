@@ -143,4 +143,10 @@ struct ErrorPresentationTests {
     @Test func presentsTooLargeResponse() {
         #expect(ErrorPresentation(ResponseTooLarge(limit: 1)).message == "サーバーから届いた内容が大きすぎるため、読むのをやめました。")
     }
+
+    /// クラッシュした投稿の報告の内容を作れなかった理由は、英語の型の説明ではなく、読めなかったことを伝える文にする。
+    @Test func unreadableCrashReportIsDescribedInJapanese() {
+        let presentation = ErrorPresentation(PostCrashReport.Failure.unreadableResponse)
+        #expect(presentation.message == "サーバーから届いた内容を読めませんでした。")
+    }
 }
