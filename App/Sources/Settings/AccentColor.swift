@@ -28,6 +28,11 @@ extension AccentColorChoice {
         self == .gray || self == .monochrome
     }
 
+    /// ティントカラーが本文の色と同じで、色だけではオンとオフを見分けられないか。
+    var tintMatchesTextColor: Bool {
+        self == .monochrome
+    }
+
     /// 選んでいるタブが、ほかのタブと見分けにくくなるか。選んでいるときの画像を渡せるのはiOS 26.1からなので、
     /// 26.0では`drawsTabsInTextColors`の色で、選んでいるタブがほかのタブと同じ色かより薄い色になる。
     var obscuresSelectedTab: Bool {

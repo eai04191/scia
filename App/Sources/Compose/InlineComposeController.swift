@@ -1608,23 +1608,32 @@ final class InlineComposeController: NSObject {
         width.isActive = true
     }
 
-    /// ボタンの状態を下書きに合わせる。注意書きは付けている間だけ色を付ける。
+    /// オンとオフを切り替えるボタンの、オンの見た目。ティントカラーで描く。
+    /// アクセントカラーがモノトーンのときは、ティントカラーが本文の色と同じで、色だけではオフと見分けられないため、下地も付ける。
+    private func showToolButton(_ button: UIButton, isOn: Bool) {
+        let showsBackground = isOn && settings.accentColor.tintMatchesTextColor
+        button.configuration?.baseForegroundColor = isOn ? .tintColor : .label
+        button.configuration?.background.backgroundColor = showsBackground ? .tintColor.withAlphaComponent(0.22) : .clear
+        button.configuration?.background.cornerRadius = 8
+    }
+
+    /// ボタンの状態を下書きに合わせる。注意書き、投票、予約は、付けている間だけ色を付ける。
     private func updateToolButtons() {
         if let media = toolButtons[.media] {
             media.isEnabled = model.canAttachMedia || mediaPicker != nil
         }
         if let spoiler = toolButtons[.spoiler] {
-            spoiler.configuration?.baseForegroundColor = model.showsSpoiler ? .tintColor : .label
+            showToolButton(spoiler, isOn: model.showsSpoiler)
             spoiler.accessibilityTraits = model.showsSpoiler ? [.button, .selected] : .button
             spoiler.accessibilityValue = model.isSensitive ? "添付も閲覧注意" : nil
         }
         if let poll = toolButtons[.poll] {
-            poll.configuration?.baseForegroundColor = model.poll != nil ? .tintColor : .label
+            showToolButton(poll, isOn: model.poll != nil)
             poll.accessibilityTraits = model.poll != nil ? [.button, .selected] : .button
             poll.isEnabled = model.poll != nil || model.canAddPoll
         }
         if let schedule = toolButtons[.schedule] {
-            schedule.configuration?.baseForegroundColor = model.scheduledAt != nil ? .tintColor : .label
+            showToolButton(schedule, isOn: model.scheduledAt != nil)
             schedule.accessibilityTraits = model.scheduledAt != nil ? [.button, .selected] : .button
             schedule.isEnabled = model.scheduledAt != nil || model.canSchedule
         }
