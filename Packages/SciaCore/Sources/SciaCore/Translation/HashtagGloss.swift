@@ -2,7 +2,7 @@ import Foundation
 
 /// ハッシュタグの後ろに併記する訳。決まりはdocs/auto-translation.mdの「本文の扱い」にある。
 enum HashtagGloss {
-    /// 翻訳器へ渡す文字。`#`を除いた名前を、大文字の境目と`_`で語に分ける。訳す文字がなければnil。
+    /// Translationフレームワークへ渡す文字。`#`を除いた名前を、大文字の境目と`_`で語に分ける。訳す文字がなければnil。
     static func words(of name: String) -> String? {
         guard name.contains(where: \.isLetter) else { return nil }
         return name

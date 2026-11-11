@@ -4,7 +4,7 @@ import Synchronization
 import Testing
 @testable import SciaCore
 
-/// 本文と翻訳器のあいだの変換。決まりはdocs/auto-translation.mdの「本文の扱い」にある。
+/// 本文とTranslationフレームワークのあいだの変換。決まりはdocs/auto-translation.mdの「本文の扱い」にある。
 struct RichTextTranslationPlanTests {
     private let url = URL(string: "https://example.com/a")!  // swiftlint:disable:this force_unwrapping
     private let emoji = CustomEmoji(shortcode: "blob", url: URL(string: "https://example.com/e.png")!, staticUrl: URL(string: "https://example.com/e.png")!)  // swiftlint:disable:this force_unwrapping
@@ -65,7 +65,7 @@ struct RichTextTranslationPlanTests {
         #expect(result.blocks[0].inlines == [.text("make", [.code, .original]), .text("今すぐ", [])])
     }
 
-    /// 残す部分にもともとある空白は、翻訳器がそのまま返しても増やさない。翻訳器が足した分だけ受け取る。
+    /// 残す部分にもともとある空白は、Translationフレームワークがそのまま返しても増やさない。Translationフレームワークが足した分だけ受け取る。
     @Test func doesNotDoubleOriginalWhitespace() throws {
         let plan = try #require(RichTextTranslationPlan(RichText(blocks: [block(.text("Run", []), .text(" x ", .code), .text("now", []))])))
 
@@ -292,7 +292,7 @@ struct StatusTranslationStoreTests {
         #expect(translator.requested == ["Went #hiking", "hiking", "Again #hiking", "hiking"])
     }
 
-    /// 地域の違う投稿も、言語が同じなら訳す。翻訳器には投稿の言語をそのまま渡す。
+    /// 地域の違う投稿も、言語が同じなら訳す。Translationフレームワークには投稿の言語をそのまま渡す。
     @Test func comparesByLanguageCode() async throws {
         let scope = TaskScope()
         let clock = TestClock()

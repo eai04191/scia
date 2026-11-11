@@ -1,4 +1,4 @@
-/// 翻訳器へ渡す、また翻訳器から受け取る、段落の部品。
+/// Translationフレームワークへ渡す、またTranslationフレームワークから受け取る、段落の部品。
 public enum TranslationPart: Hashable, Sendable {
     case text(String)
     /// 訳さずに残す部分。`id`で、訳文の中のどの部分が元のどれかを見分ける。受け取るときの文字には、前後に空白が付くことがある。
@@ -23,7 +23,7 @@ struct RichTextTranslationPlan: Sendable {
     /// `paragraphs`のそれぞれが、`richText`の何番目の段落か。
     private let blockIndices: [Int]
     private let preserved: [Int: RichText.Inline]
-    /// 翻訳器へ渡した、残す部分の文字。
+    /// Translationフレームワークへ渡した、残す部分の文字。
     private let originalTexts: [Int: String]
 
     /// 訳す段落もハッシュタグもなければnil。
@@ -84,7 +84,7 @@ struct RichTextTranslationPlan: Sendable {
     func applying(_ translated: [[TranslationPart]], hashtagSuffixes: [String: String] = [:]) throws -> RichText {
         guard translated.count == paragraphs.count else { throw StatusTranslationError.preservedPartsChanged }
         var result = richText
-        // 翻訳器へ渡さない段落は、すべて原文のまま残る。
+        // Translationフレームワークへ渡さない段落は、すべて原文のまま残る。
         for index in result.blocks.indices where !blockIndices.contains(index) {
             result.blocks[index].inlines = result.blocks[index].inlines.map(Self.markingOriginal)
         }
@@ -141,7 +141,7 @@ struct RichTextTranslationPlan: Sendable {
             case .text(let text):
                 builder.append(text: text)
             case .preserved(let text, let id):
-                // 翻訳器は、残す部分の文字の端に、訳文との境目の空白を足して返すことがある。部分そのものは元のものに戻し、足された空白だけを受け取る。
+                // Translationフレームワークは、残す部分の文字の端に、訳文との境目の空白を足して返すことがある。部分そのものは元のものに戻し、足された空白だけを受け取る。
                 let original = originalTexts[id] ?? ""
                 builder.append(text: String(Self.leadingWhitespace(text).dropLast(Self.leadingWhitespace(original).count)))
                 if let inline = preserved[id] {
