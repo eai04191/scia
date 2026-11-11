@@ -314,6 +314,34 @@ final class InlineComposeControllerTests {
         #expect(sent.map(\.mediaIDs) == [["m-a.jpg"]])
     }
 
+    /// メディアを選ぶシートを出したまま投稿ボタンで送ったら、シートが閉じたときに書き終えたことを知らせる。
+    /// 知らせないと、書き始めたときに伏せたアプリ内のSafariが、次に書き終えるまで戻らない。
+    @Test func postingFromAboveSheetReportsEndOfEditing() async throws {
+        defer {
+            window.rootViewController?.dismiss(animated: false)
+            window.isHidden = true
+        }
+        var sent: [StatusDraft] = []
+        let composer = try installComposer { sent.append($0) }
+        var endedEditing = 0
+        composer.onEndEditing = { endedEditing += 1 }
+        composer.model.apply(configuration: InstanceConfiguration(maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 4, mediaDescriptionLimit: 1500, supportedMediaTypes: nil, mediaLimits: .unknown), defaultVisibility: .public, defaultSensitive: nil)
+        composer.beginEditing()
+        try await waitUntilSettled()
+        composer.model.text = "本文"
+        let mediaButton = try #require(buttons(in: window).first { $0.accessibilityLabel == ComposeToolItem.media.title })
+        mediaButton.sendActions(for: .primaryActionTriggered)
+        try await clock.advance { window.rootViewController?.presentedViewController is PHPickerViewController }
+
+        let send = try #require(buttons(in: window).first { $0.accessibilityLabel == "投稿" })
+        send.sendActions(for: .primaryActionTriggered)
+        try await waitUntil { sent.count >= 1 && !composer.model.isPosting }
+        try await clock.advance { composer.stateDump().contains("mediaPicker: nil") }
+
+        #expect(composer.stateDump().contains("editing: false"), "送っても書いている状態のままです\n\(composer.stateDump())")
+        #expect(endedEditing == 1)
+    }
+
     /// 入力欄の中でスクロールするほど書いてから行を消して収まる長さに戻すと、入力欄は書いた行の高さまで縮み、潰れない。
     @Test(arguments: [5, 6])
     func textViewKeepsHeightWhenShrinkingBelowScrollLimit(lines: Int) async throws {

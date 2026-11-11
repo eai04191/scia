@@ -1856,6 +1856,7 @@ final class InlineComposeController: NSObject {
         guard !returnedToKeyboard else { return }
         releaseHoldAboveKeyboard()
         setEditing(false)
+        onEndEditing()
     }
 
     /// 閉じ終わるのを待っていたシートを出す。出したらtrueを返す。出せなかったら（メディアを添付できなくなったなど）、最後に書いていた入力欄にキーボードを戻し、閉じたあとのふつうの扱いにさせる。
