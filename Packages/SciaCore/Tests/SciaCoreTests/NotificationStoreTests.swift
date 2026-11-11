@@ -417,6 +417,22 @@ struct NotificationStoreTests {
         #expect(store.receive(MastodonNotification(id: "32", type: .mention, createdAt: Date(timeIntervalSince1970: 32), account: carol, status: post)))
     }
 
+    /// ミュートしたハッシュタグの付いた投稿でも、自分の投稿についての通知（お気に入りなど）は除かない。
+    @Test func excludeTagKeepsNotificationsAboutOwnStatuses() async throws {
+        let avatar = try #require(URL(string: "https://example.social/avatars/carol.png"))
+        let carol = Account(id: "9", username: "carol", acct: "carol", displayName: "Carol", avatar: avatar)
+        let me = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: avatar)
+        let post = Status(id: "100", createdAt: Date(timeIntervalSince1970: 100), account: me, content: "", spoilerText: "", url: nil, tags: [Tag(name: "cat", url: nil)])
+        let favourite = MastodonNotification(id: "30", type: .favourite, createdAt: Date(timeIntervalSince1970: 30), account: carol, status: post)
+        let store = NotificationStore(pageSize: Self.pageSize, filtering: StatusFiltering(context: .notifications, myAccountID: "1")) { _ in
+            NotificationPage(notifications: [favourite])
+        }
+        _ = try await store.loadInitial()
+
+        #expect(!store.excludeTag("cat"))
+        #expect(store.notifications.map(\.id) == ["30"])
+    }
+
     /// 1ページの全部がミュートしたハッシュタグの投稿の通知でも、その先の通知を読める。出さない通知も手元に残し、続きを読む位置に数え、
     /// フィルターで隠れたページと同じく、最初の読み込みが続きを読むため。
     @Test func pageOfMutedTagStillReachesOlderNotifications() async throws {

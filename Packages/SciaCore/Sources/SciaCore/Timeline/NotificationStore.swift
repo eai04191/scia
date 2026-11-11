@@ -556,9 +556,9 @@ public final class NotificationStore {
         return notification.removingAccounts(excludedAccountIDs)
     }
 
-    /// ミュートしたハッシュタグの付いた投稿の通知か。
+    /// ミュートしたハッシュタグの付いた投稿の通知か。自分の投稿は、サーバーのフィルターと同じく除かない（docs/filters.md）。
     private func hasExcludedTag(_ notification: MastodonNotification) -> Bool {
-        guard let status = notification.status, !excludedTagKeys.isEmpty else { return false }
+        guard let status = notification.status, !excludedTagKeys.isEmpty, status.displayed.account.id != filtering?.myAccountID else { return false }
         return excludedTagKeys.contains { status.hasTag(matching: $0) }
     }
 

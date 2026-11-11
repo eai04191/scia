@@ -855,9 +855,10 @@ public final class TimelineStore {
         state.deletedIDs.contains(status.id) || status.reblog.map { state.deletedIDs.contains($0.id) } ?? false || isFromExcludedAccount(status)
     }
 
-    /// ミュートしたハッシュタグの付いた投稿か、そのブースト。
+    /// ミュートしたハッシュタグの付いた投稿か、そのブースト。自分の投稿は、サーバーのフィルターと同じく除かない（docs/filters.md）。
     private func hasExcludedTag(_ status: Status) -> Bool {
-        !state.excludedTagKeys.isEmpty && state.excludedTagKeys.contains { status.hasTag(matching: $0) }
+        guard !state.excludedTagKeys.isEmpty, status.displayed.account.id != filtering?.myAccountID else { return false }
+        return state.excludedTagKeys.contains { status.hasTag(matching: $0) }
     }
 
     /// ミュートかブロックした相手の投稿か、その人のブーストか、その人の投稿のブースト。

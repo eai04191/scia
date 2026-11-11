@@ -394,6 +394,24 @@ struct TimelineStoreTests {
         #expect(flushed == ["33"])
     }
 
+    /// ミュートしたハッシュタグの付いた投稿でも、自分の投稿は除かない。サーバーのフィルターを自分の投稿に当てないのと揃える（docs/filters.md）。
+    @Test func excludeTagKeepsOwnStatuses() async throws {
+        let base = try status(30)
+        let own = Status(id: base.id, createdAt: base.createdAt, account: base.account, content: "", spoilerText: "", url: nil, tags: [Tag(name: "cat", url: nil)])
+        let store = TimelineStoreTester(pageSize: Self.pageSize, filtering: StatusFiltering(context: .home, myAccountID: base.account.id)) { _ in
+            TimelinePage(statuses: [own], isRegenerating: false)
+        }
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
+            $0.entries = [.status(own)]
+            $0.oldestLoadedID = "30"
+        }
+
+        let excluded = try await store.expectChanges(during: { store in store.excludeTag("cat") }) {
+            $0.excludedTagKeys = ["#cat"]
+        }
+        #expect(!excluded)
+    }
+
     /// ミュートしたハッシュタグの付いた投稿とそのブーストを、保留中のものも含めて出さず、あとから届いても出さない。解除したら、次に並べ直したときに戻る。
     /// 同じタグかは、サーバーのフィルターと同じく、大文字と小文字だけをそろえて見る。全角の表記は別のタグとして扱う。
     @Test func excludeTagRemovesTaggedStatusesAndBoostsUntilIncluded() async throws {
