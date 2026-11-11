@@ -122,8 +122,10 @@ extension TimelineViewController {
         tree.canOpenThread = status.map(canOpenThread(of:)) ?? false
         tree.mediaIsCovered = status.map { mediaCover(for: $0) != nil } ?? false
         tree.canSelectText = canSelectText
-        if notification == nil, let shown = status?.displayed, self.status(for: id)?.displayed.id == shown.id, translations?.hasTranslation(of: shown) == true {
-            tree.translationDisplay = translations?.isShowingOriginal(shown) == true ? .original : .translation
+        // 訳文で出すのは、行の投稿の本文と、その行の引用の囲みの本文。通知の行では、どちらも訳文で出さない。
+        if notification == nil, let shown = status?.displayed, let row = entry(for: id)?.postStatus?.displayed,
+           translationSources(of: row).contains(where: { $0.id == .status(shown.id) }), translations?.hasTranslation(of: TranslationSource(shown)) == true {
+            tree.translationDisplay = translations?.isShowingOriginal(TranslationSource(shown)) == true ? .original : .translation
         }
         tree.canSelectPosts = canSelectPost(id)
         tree.supportsEmojiReactions = supportsEmojiReactions
@@ -174,7 +176,7 @@ extension TimelineViewController {
                 self?.translation.present(text)
             case .toggleTranslation:
                 guard let status else { return }
-                self?.translations?.toggleOriginal(of: status.displayed)
+                self?.translations?.toggleOriginal(of: TranslationSource(status.displayed))
             case .selectText:
                 guard let self, let selectableBody, let status else { return }
                 beginTextSelection(in: selectableBody, statusID: status.displayed.id)
@@ -315,9 +317,12 @@ extension TimelineViewController {
         builtExternalPostMenu(url: url, text: text, id: id, groups: groups)?.menu
     }
 
-    func builtExternalPostMenu(url: URL, text: String?, id: ItemID, groups: MenuLayout<ExternalPostMenuItem>.Groups? = nil) -> BuiltMenu<ExternalPostMenuCommand>? {
+    func builtExternalPostMenu(url: URL, text: String?, translation: TranslationSource? = nil, id: ItemID, groups: MenuLayout<ExternalPostMenuItem>.Groups? = nil) -> BuiltMenu<ExternalPostMenuCommand>? {
         let handlers = urlHandlers(id: id)
-        let tree = ExternalPostMenuTree(url: url, text: text, linkBrowser: handlers.linkBrowser)
+        var tree = ExternalPostMenuTree(url: url, text: text, linkBrowser: handlers.linkBrowser)
+        if let translation, translations?.hasTranslation(of: translation) == true {
+            tree.translationDisplay = translations?.isShowingOriginal(translation) == true ? .original : .translation
+        }
         return tree.menu(groups: groups ?? settings.externalPostMenuLayout.groups).map { root in
             BuiltMenu(root: root, renderer: MenuRenderer { [weak self] command in
                 switch command {
@@ -326,6 +331,9 @@ extension TimelineViewController {
                     UIPasteboard.general.string = text
                     self?.showTextCopiedNotice()
                 case .translate(let text): self?.translation.present(text)
+                case .toggleTranslation:
+                    guard let translation else { return }
+                    self?.translations?.toggleOriginal(of: translation)
                 case .customize: self?.openMenuSettings(.externalPostMenu)
                 }
             })

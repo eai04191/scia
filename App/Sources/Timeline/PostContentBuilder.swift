@@ -295,11 +295,12 @@ struct PostContentBuilder {
     }
 
     /// fxtwitterから読んだXの投稿の囲み。作者の行は名前だけを太くする。
-    /// 本文はXの投稿の言語が分からないため、使う人の言語で描く。
-    func xPost(_ post: XPost, media: MediaGridView.Content?, base: UIListContentConfiguration) -> EmbeddedPostView.Content {
+    /// 本文はXの投稿の言語で描く。言語が分からなければ、使う人の言語で描く。
+    /// - Parameter translation: 本文の自動翻訳の状態。訳さない投稿ではnil。
+    func xPost(_ post: XPost, translation: EmbedTranslation? = nil, media: MediaGridView.Content?, base: UIListContentConfiguration) -> EmbeddedPostView.Content {
         let typography = PostTypography(settings: settings)
-        let language = settings.glyphLanguageIdentifier()
-        let body = RichTextRenderer(font: typography.font(.xPostBody), textColor: .label, emojiImages: emojiImages, language: language)
+        let language = settings.glyphLanguageIdentifier(for: post.language)
+        let body = translated(RichTextRenderer(font: typography.font(.xPostBody), textColor: .label, emojiImages: emojiImages, language: language), by: translation)
         return embed(
             id: "x:\(post.id)",
             header: EmbeddedPostView.Content.Header(
@@ -308,7 +309,8 @@ struct PostContentBuilder {
                 name: embedName(.plain(post.authorName, emojis: []), handle: post.authorScreenName, base: base),
                 opensAccount: false
             ),
-            text: body.render(post.text),
+            text: body.render(translation?.text ?? post.text),
+            translation: embedTranslation(translation),
             media: media,
             openActionName: "Xの投稿を開く"
         )
@@ -318,7 +320,8 @@ struct PostContentBuilder {
     /// - Parameters:
     ///   - spoiler: 引用元の注意書きかフィルターの警告。開いているかはタイムラインが覚えているため、置く側が決めて渡す。
     ///   - media: 引用元の添付ファイル。ぼかすかはタイムラインが覚えているため、置く側が決めて渡す。
-    func quote(_ quoted: Status, spoiler: PostBodyContent.Spoiler?, media: MediaGridView.Content?, base: UIListContentConfiguration) -> EmbeddedPostView.Content {
+    ///   - translation: 本文の自動翻訳の状態。訳さない投稿ではnil。
+    func quote(_ quoted: Status, translation: EmbedTranslation? = nil, spoiler: PostBodyContent.Spoiler?, media: MediaGridView.Content?, base: UIListContentConfiguration) -> EmbeddedPostView.Content {
         let font = PostTypography(settings: settings).font(.xPostBody)
         var notes: [EmbeddedPostView.Content.Note] = []
         // 囲みが投稿1件分に近い重さにならないよう、投票は選択肢を並べず、あることだけを示す。
@@ -343,7 +346,8 @@ struct PostContentBuilder {
             spoiler: spoiler.map {
                 SpoilerView.Content(text: $0.text, isCollapsed: $0.isCollapsed, kind: $0.kind, padding: $0.padding, buttonFont: $0.buttonFont, buttonSpacing: $0.buttonSpacing, cornerRadius: $0.cornerRadius)
             },
-            text: bodyRenderer(of: quoted, font: font, color: .label).render(.status(quoted)),
+            text: translated(bodyRenderer(of: quoted, font: font, color: .label), by: translation).render(translation?.text ?? .status(quoted)),
+            translation: embedTranslation(translation),
             media: media,
             notes: notes,
             openActionName: "引用元の投稿を開く"
@@ -388,6 +392,7 @@ struct PostContentBuilder {
         header: EmbeddedPostView.Content.Header?,
         spoiler: SpoilerView.Content? = nil,
         text: NSAttributedString,
+        translation: EmbeddedPostView.Content.Translation? = nil,
         media: MediaGridView.Content?,
         notes: [EmbeddedPostView.Content.Note] = [],
         openActionName: String
@@ -398,6 +403,7 @@ struct PostContentBuilder {
             avatarSize: settings.value(of: AppearanceCatalog.xPostAvatarSize),
             spoiler: spoiler,
             text: text,
+            translation: translation,
             media: media,
             notes: notes,
             openActionName: openActionName,
@@ -407,6 +413,34 @@ struct PostContentBuilder {
             mediaSpacing: settings.value(of: AppearanceCatalog.xPostMediaSpacing),
             transitionDuration: tuning.value(of: TuningCatalog.linkCardTransitionDuration)
         )
+    }
+
+    /// 囲みの本文の自動翻訳の状態。
+    struct EmbedTranslation {
+        /// 本文を原文の代わりに描く訳文。訳文を待っている間はnil。
+        var text: RichText?
+    }
+
+    /// 訳文を描くなら、訳文は翻訳先の言語の字形で、訳文の中に残した原文の部分は元の言語の字形で描く描き手にする。
+    private func translated(_ renderer: RichTextRenderer, by translation: EmbedTranslation?) -> RichTextRenderer {
+        guard translation?.text != nil else { return renderer }
+        var renderer = renderer
+        renderer.originalLanguage = renderer.language
+        renderer.language = settings.glyphLanguageIdentifier(for: settings.resolvedTranslationTarget.minimalIdentifier)
+        return renderer
+    }
+
+    private func embedTranslation(_ translation: EmbedTranslation?) -> EmbeddedPostView.Content.Translation? {
+        translation.map {
+            EmbeddedPostView.Content.Translation(
+                isTranslated: $0.text != nil,
+                wipeDuration: tuning.value(of: TuningCatalog.translationWipeDuration),
+                shiftDuration: tuning.value(of: TuningCatalog.translationTransitionDuration),
+                wordDuration: tuning.value(of: TuningCatalog.translationWordDuration),
+                fadeWidth: tuning.value(of: TuningCatalog.translationFadeWidth),
+                markScale: settings.value(of: AppearanceCatalog.customEmojiScale)
+            )
+        }
     }
 
     /// 囲みの作者の行。名前だけを太くし、ハンドルを控えめに添える。

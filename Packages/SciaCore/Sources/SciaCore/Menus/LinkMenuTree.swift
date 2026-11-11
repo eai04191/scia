@@ -53,6 +53,7 @@ public enum ExternalPostMenuCommand: Equatable, Sendable {
     case url(URLMenuCommand)
     case copyText(String)
     case translate(String)
+    case toggleTranslation
     /// このメニューの並びの設定の画面を開く。
     case customize
 }
@@ -64,6 +65,8 @@ public struct ExternalPostMenuTree {
     /// コピーや翻訳に渡す本文。本文がなければnilで、本文を使う項目を出さない。
     public let text: String?
     public let linkBrowser: LinkBrowser
+    /// 自動翻訳の訳文を持っている投稿で、本文を訳文と原文のどちらで出しているか。訳文がなければnilで、切り替える項目を出さない。
+    public var translationDisplay: TranslationDisplay?
 
     public init(url: URL, text: String?, linkBrowser: LinkBrowser) {
         self.url = url
@@ -85,6 +88,9 @@ public struct ExternalPostMenuTree {
             case .systemTranslate:
                 guard let text else { return [] }
                 return [.action(item.title, icon: .symbol(item.symbolName), .translate(text))]
+            case .toggleTranslation:
+                guard let translationDisplay else { return [] }
+                return [.action(translationDisplay == .original ? "訳文を表示" : item.title, icon: .symbol(item.symbolName), .toggleTranslation)]
             case .customize:
                 return [.action(item.title, icon: .symbol(item.symbolName), .customize)]
             // 共通の項目は、上で中身から組んだ。

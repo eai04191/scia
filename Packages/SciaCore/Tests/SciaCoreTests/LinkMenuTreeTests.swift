@@ -45,4 +45,17 @@ struct LinkMenuTreeTests {
         #expect(!withoutText.flattenedChildren.map(\.title).contains("テキストをコピー"))
         #expect(!withoutText.flattenedChildren.map(\.title).contains("翻訳"))
     }
+
+    /// ほかのサービスの投稿は、自動翻訳の訳文を持っているときだけ、訳文と原文を切り替える項目を出す。
+    @Test func externalPostTogglesTranslationOnlyWhenTranslated() throws {
+        let url = try #require(URL(string: "https://x.com/alice/status/1"))
+        let groups = MenuLayout<ExternalPostMenuItem>(elements: ExternalPostMenuItem.allCases.map { .item($0, isVisible: true) } + [.more]).groups
+        var tree = ExternalPostMenuTree(url: url, text: "hello", linkBrowser: .inApp)
+
+        #expect(try !#require(tree.menu(groups: groups)).flattenedChildren.compactMap(\.command).contains(.toggleTranslation))
+        tree.translationDisplay = .translation
+        #expect(try #require(tree.menu(groups: groups)).flattenedChildren.map(\.title).contains("原文を表示"))
+        tree.translationDisplay = .original
+        #expect(try #require(tree.menu(groups: groups)).flattenedChildren.map(\.title).contains("訳文を表示"))
+    }
 }

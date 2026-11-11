@@ -12,6 +12,8 @@ public struct XPost: Hashable, Sendable {
     public let authorAvatar: URL?
     /// 本文。URL、ハッシュタグ、メンションはリンクにしてある。
     public let text: RichText
+    /// 本文の言語。Xが判定できなかった投稿ではnil。
+    public let language: String?
     public let createdAt: Date?
     /// 添付ファイル。ビューアで開けるよう、Mastodonの添付ファイルの形にしてある。
     public let media: [MediaAttachment]
@@ -23,6 +25,7 @@ public struct XPost: Hashable, Sendable {
         authorScreenName: String,
         authorAvatar: URL? = nil,
         text: RichText,
+        language: String? = nil,
         createdAt: Date? = nil,
         media: [MediaAttachment] = []
     ) {
@@ -32,6 +35,7 @@ public struct XPost: Hashable, Sendable {
         self.authorScreenName = authorScreenName
         self.authorAvatar = authorAvatar
         self.text = text
+        self.language = language
         self.createdAt = createdAt
         self.media = media
     }
@@ -109,12 +113,14 @@ struct FxTwitterResponse: Decodable {
         let id: String
         let url: URL
         let rawText: RawText
+        /// Xが判定した言語。判定できなかった投稿では`und`。
+        let lang: String?
         let createdTimestamp: Double?
         let author: Author
         let media: Media?
 
         private enum CodingKeys: String, CodingKey {
-            case id, url, rawText, createdTimestamp, author, media
+            case id, url, rawText, lang, createdTimestamp, author, media
         }
 
         init(from decoder: any Decoder) throws {
@@ -123,6 +129,7 @@ struct FxTwitterResponse: Decodable {
             // 囲みを押すと開く先なので、Mastodonの投稿のURLと同じくhttpとhttpsだけを受け付ける。
             url = try container.decodeRequiredURL(.destination, forKey: .url)
             rawText = try container.decode(RawText.self, forKey: .rawText)
+            lang = try container.decodeIfPresent(String.self, forKey: .lang)
             createdTimestamp = try container.decodeIfPresent(Double.self, forKey: .createdTimestamp)
             author = try container.decode(Author.self, forKey: .author)
             media = try container.decodeIfPresent(Media.self, forKey: .media)
@@ -213,6 +220,8 @@ extension XPost {
             authorScreenName: tweet.author.screenName,
             authorAvatar: tweet.author.avatarUrl,
             text: RichText(xPost: tweet.rawText),
+            // `und`をそのまま言語として読むと、`Locale.Language`が英語として扱う。
+            language: tweet.lang.flatMap { $0 == "und" ? nil : $0 },
             createdAt: tweet.createdTimestamp.map { Date(timeIntervalSince1970: $0) },
             media: (tweet.media?.all ?? []).enumerated().compactMap { index, item in
                 MediaAttachment(item, postID: tweet.id, index: index)

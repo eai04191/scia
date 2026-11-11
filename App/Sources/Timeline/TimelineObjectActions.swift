@@ -131,12 +131,13 @@ extension TimelineViewController {
     ///   - url: 元の投稿のURL。
     ///   - text: コピーや翻訳に渡す本文。本文がなければnil。
     ///   - open: 主な操作（ブラウザで開く）で行う、今のタップの処理。
-    func externalPostTarget(url: URL, text: String?, id: ItemID, open: @escaping () -> Void) -> ObjectTarget<ExternalPostMenuItem, ExternalPostMenuCommand> {
+    /// - Parameter translation: 自動翻訳で訳す本文。訳文を持っていれば、メニューで訳文と原文を切り替えられる。
+    func externalPostTarget(url: URL, text: String?, translation: TranslationSource? = nil, id: ItemID, open: @escaping () -> Void) -> ObjectTarget<ExternalPostMenuItem, ExternalPostMenuCommand> {
         ObjectTarget(
             entity: .externalPost,
             settings: settings,
             primary: { _ in open() },
-            buildMenu: { [weak self] groups in self?.builtExternalPostMenu(url: url, text: text, id: id, groups: groups) },
+            buildMenu: { [weak self] groups in self?.builtExternalPostMenu(url: url, text: text, translation: translation, id: id, groups: groups) },
             lifecycle: rowMenuLifecycle,
             notify: { [weak self] in self?.showNotice($0) }
         )

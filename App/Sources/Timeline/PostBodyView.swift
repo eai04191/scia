@@ -735,6 +735,14 @@ final class PostBodyView: UIView {
         setNeedsLayout()
     }
 
+    /// 囲みの本文を別の文章へ入れ替える前に呼ぶ。囲みの中の動きは囲みが付ける。囲みより下の部品は、次に並べるときに、前の位置から新しい位置へ動かす。
+    func prepareEmbedTextReplacement(shiftDuration: TimeInterval) {
+        guard window != nil, shiftDuration > 0, !UIAccessibility.isReduceMotionEnabled, let embedView, !embedView.isHidden else { return }
+        let below = subviews.filter { $0 !== embedView && $0.frame.minY >= embedView.frame.maxY - 1 }
+        pendingBelowTextShift = (below.map { ($0, $0.frame.minY) }, shiftDuration)
+        setNeedsLayout()
+    }
+
     /// 本文より下の部品を、前の位置から今の位置へ動かす。段落の文字と、タイムラインの下の行と、同じ時刻に同じスプリングで動かす。
     private func startPendingBelowTextShift() {
         guard let (views, duration) = pendingBelowTextShift else { return }

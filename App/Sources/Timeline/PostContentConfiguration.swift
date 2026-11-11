@@ -447,6 +447,8 @@ final class PostContentView: UIView, UIContentView {
     private func apply(_ configuration: PostContentConfiguration) {
         let isSameStatus = current.statusID == configuration.statusID
         let translationChanged = isSameStatus && current.isTranslated != configuration.isTranslated
+        let embedTranslationChanged = isSameStatus && current.embed?.id == configuration.embed?.id
+            && (current.embed?.translation?.isTranslated ?? false) != (configuration.embed?.translation?.isTranslated ?? false)
         current = configuration
         let metrics = configuration.metrics
 
@@ -518,6 +520,9 @@ final class PostContentView: UIView, UIContentView {
         bodyView.actionBarLongPressTarget = configuration.actionBarLongPressTarget == nil ? nil : { [weak self] item in self?.current.actionBarLongPressTarget?(item) }
         if translationChanged {
             bodyView.prepareTextReplacement(duration: configuration.translationWipeDuration, shiftDuration: configuration.translationFadeDuration, wordDuration: configuration.translationWordDuration, fadeWidth: configuration.translationFadeWidth)
+        } else if embedTranslationChanged {
+            // 本文も同時に替わるときは、本文より下の部品として囲みごと動かしている。
+            bodyView.prepareEmbedTextReplacement(shiftDuration: configuration.translationFadeDuration)
         }
         bodyView.apply(PostBodyContent(
             spoiler: configuration.spoiler,

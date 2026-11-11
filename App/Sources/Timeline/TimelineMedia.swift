@@ -61,11 +61,16 @@ extension TimelineViewController {
             self.status(for: itemID).flatMap { XPostLink.postID(of: $0.displayed) } == id
         }
         reconfigureWhenShown(Set(ids)) { reconfigureAnimatingHeight($0, duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration)) }
+        // 読み終えたXの投稿の本文を訳す。
+        if translations != nil, !ids.isEmpty, viewIfLoaded?.window != nil {
+            requestTranslationsAroundVisibleRows()
+        }
     }
 
     /// Xの投稿へのリンクを出す投稿なら、読み終えた投稿の囲みを返す。まだなら読みに行き、読み終えるまではnilを返してリンクカードを出す。
     /// `text`は、コピーや翻訳に渡す本文。本文が空白だけならnil。
-    func xPostContent(for status: Status, base: UIListContentConfiguration) -> (content: EmbeddedPostView.Content, media: [MediaAttachment], url: URL, text: String?)? {
+    /// - Parameter translatesBody: 本文を自動翻訳の訳文で出してよい。
+    func xPostContent(for status: Status, translatesBody: Bool = true, base: UIListContentConfiguration) -> (content: EmbeddedPostView.Content, post: XPost, media: [MediaAttachment], url: URL, text: String?)? {
         guard settings.expandsXPosts, let xPosts, let id = XPostLink.postID(of: status) else { return nil }
         guard let post = xPosts.post(id: id) else {
             xPosts.request(id: id)
@@ -74,7 +79,8 @@ extension TimelineViewController {
         // 投稿した人が閲覧注意を付けていれば、Xの添付ファイルもぼかす。ぼかしを外すと、投稿の添付ファイルと同じくそろって外れる。
         let media = embedMediaContent(of: post.media, cover: mediaCover(for: status), seed: post.id)
         let text = post.text.plainText
-        return (postContentBuilder.xPost(post, media: media, base: base), media?.attachments ?? [], post.url, text.allSatisfy(\.isWhitespace) ? nil : text)
+        let translation = translatesBody ? embedTranslation(of: TranslationSource(post)) : nil
+        return (postContentBuilder.xPost(post, translation: translation, media: media, base: base), post, media?.attachments ?? [], post.url, text.allSatisfy(\.isWhitespace) ? nil : text)
     }
 
     private func reconfigureRows(showing status: Status) {

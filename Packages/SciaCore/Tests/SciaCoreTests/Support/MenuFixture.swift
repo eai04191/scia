@@ -104,6 +104,7 @@ enum MenuFixture {
         "item:share",
         "separator",
         "item:systemTranslate",
+        "item:toggleTranslation",
         "more",
         "item:customize",
     ])

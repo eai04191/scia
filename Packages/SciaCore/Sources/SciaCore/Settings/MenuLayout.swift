@@ -422,6 +422,8 @@ public enum ExternalPostMenuItem: String, BundledMenuDefaults {
     case share
     /// 本文をプレーンテキストにして、システムの翻訳シートで訳す。本文のある投稿でだけ出る。
     case systemTranslate
+    /// 自動翻訳の訳文と原文を切り替える。訳文のある投稿でだけ出る。
+    case toggleTranslation
 
     /// このメニューの並びの設定の画面を開く。決まりはdocs/menus.mdの「並びの設定」にある。
     case customize

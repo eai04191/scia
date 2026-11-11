@@ -90,6 +90,7 @@ struct XPostTests {
         #expect(post.authorName == "【公式】beatmania IIDX")
         #expect(post.authorScreenName == "IIDX_OFFICIAL")
         #expect(post.text.plainText.hasPrefix("【WR】\n今週のWEEKLY RANKING"))
+        #expect(post.language == "ja")
         #expect(post.createdAt != nil)
         let photo = try #require(post.media.first)
         #expect(post.media.count == 1)
@@ -181,6 +182,19 @@ struct XPostTests {
         let text = RichText(xPost: FxTwitterResponse.RawText(text: "call here now", displayTextRange: nil, facets: [facet]))
 
         #expect(links(of: text).map(\.1) == [.url(try url("http://example.com/"))])
+    }
+
+    /// Xが言語を判定できなかった投稿（`und`）と、言語のない応答は、言語のない投稿として読む。
+    @Test(arguments: [(#""lang": "und","#, String?.none), ("", nil), (#""lang": "en","#, "en")])
+    func readsUndeterminedLanguageAsNone(field: String, language: String?) throws {
+        let json = """
+        {"code": 200, "tweet": {"id": "1", "url": "https://x.com/a/status/1", \(field) "raw_text": {"text": "a", "facets": []}, "author": {"name": "A", "screen_name": "a"}}}
+        """
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let tweet = try #require(try decoder.decode(FxTwitterResponse.self, from: Data(json.utf8)).tweet)
+
+        #expect(XPost(tweet).language == language)
     }
 
     /// 添付ファイルの大きさと応答の`code`は、範囲の外の数でも、あとの計算であふれないよう読むところで収める。

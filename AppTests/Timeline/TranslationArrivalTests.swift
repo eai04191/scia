@@ -47,13 +47,32 @@ struct TranslationArrivalTests {
         harness.collectionView.layoutIfNeeded()
         let before = try #require(harness.windowMinY(of: .status(target.id)))
 
-        store.request([target])
-        try await waitUntil { store.translation(for: target) != nil }
-        harness.viewController.applyTranslations([target.id])
+        store.request([TranslationSource(target)])
+        try await waitUntil { store.translation(for: TranslationSource(target)) != nil }
+        harness.viewController.applyTranslations([.status(target.id)])
 
         let after = try #require(harness.windowMinY(of: .status(target.id)))
         #expect(abs(after - before) <= 0.5)
         #expect(harness.secondaryText(of: target.id)?.hasPrefix("訳文") == true)
+    }
+
+    /// 囲みの本文の先頭に足す翻訳のマークの空きは、先頭の文字の書体と段落の形だけを引き継ぐ。リンクを引き継ぐと、マークを押して先頭のリンクが開く。
+    @Test func translationMarkDoesNotInheritLink() throws {
+        let url = try #require(URL(string: "https://example.com/a"))
+        let font = UIFont.systemFont(ofSize: 15)
+        let text = NSAttributedString(string: "example.com/a", attributes: [.font: font, .linkDestination: RichText.LinkDestination.url(url), .copiedLinkText: "https://example.com/a"])
+
+        let reserved = EmbeddedPostView.reservingTranslationMark(in: text, scale: 2)
+
+        #expect(reserved.string.hasSuffix(" example.com/a"))
+        #expect(reserved.length == text.length + 2)
+        let attributes = reserved.attributes(at: 0, effectiveRange: nil)
+        #expect(attributes[.linkDestination] == nil)
+        #expect(attributes[.copiedLinkText] == nil)
+        #expect(attributes[.font] as? UIFont == font)
+        let attachment = try #require(attributes[.attachment] as? NSTextAttachment)
+        #expect(attachment.bounds.height == EmojiFont.glyphHeight(of: font) * 2)
+        #expect(reserved.attribute(.linkDestination, at: 2, effectiveRange: nil) != nil)
     }
 
     private func line(_ y: CGFloat, width: CGFloat) -> TextReplacementTransition.Line {

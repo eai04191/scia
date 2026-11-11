@@ -167,6 +167,7 @@ extension ExternalPostMenuItem: MenuItemContentProviding {
         case .copyText: .own(title: "テキストをコピー", symbolName: "doc.on.doc")
         case .share: .url(.share)
         case .systemTranslate: .own(title: "翻訳", symbolName: "translate")
+        case .toggleTranslation: .own(title: "原文を表示", symbolName: "text.alignleft")
         case .customize: .own(title: "カスタマイズ", symbolName: "slider.horizontal.3")
         }
     }

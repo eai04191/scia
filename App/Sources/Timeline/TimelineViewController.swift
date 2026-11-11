@@ -2286,7 +2286,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             return shown
         }
         if viewIfLoaded?.window != nil {
-            translations?.request((first...last).compactMap(shownStatus(atItem:)) + statuses)
+            translations?.request(((first...last).compactMap(shownStatus(atItem:)) + statuses).flatMap(translationSources(of:)))
         }
         let builder = postContentBuilder
         bodyTextPreparer.prepare(
@@ -2294,7 +2294,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             renderer: builder.postBodyRenderer(of:translation:),
             geometry: bodyTextGeometry,
             truncation: { truncations[$0.id] },
-            translation: { [translations] in translations?.translation(for: $0) },
+            translation: { [translations] in translations?.translation(for: TranslationSource($0)) },
             guessesLinkCardDirections: settings.appearance.showsLinkCard
         )
     }
@@ -2320,7 +2320,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let hidesReplyLabel = hidesReplyLabelBelowParent && connection.parentIsAbove && shown.id != threadFocusID
         let replyLabel = hidesReplyLabel ? nil : ReplyLabel(status: shown, myAccountID: myAccountID)
         var configuration = postContentBuilder.configuration(for: status, isPinned: isPinned, replyLabel: replyLabel, translation: translatesBody ? translatedBody(of: status) : nil, base: base)
-        configuration.isTranslating = translatesBody && translations?.isTranslating(status.displayed) == true
+        configuration.isTranslating = translatesBody && translations?.isTranslating(TranslationSource(status.displayed)) == true
         configuration.replyConnection = connection
         configuration.onOpenAccount = { [weak self] in self?.onOpenProfile?(shown.account) }
         configuration.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination, shown) }
@@ -2349,10 +2349,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         if let itemID, let url = configuration.card?.card.url {
             configuration.linkCardTarget = linkTarget(for: url, id: itemID) { [weak self] in self?.onOpenLink?(.url(url), shown) }
         }
-        if let quote = quoteEmbed(for: status, itemID: itemID, base: base) {
+        if let quote = quoteEmbed(for: status, itemID: itemID, translatesBody: translatesBody, base: base) {
             configuration.embed = quote.content
             configuration.embedActions = quote.actions
-        } else if let xPost = xPostContent(for: shown, base: base) {
+        } else if let xPost = xPostContent(for: shown, translatesBody: translatesBody, base: base) {
             configuration.embed = xPost.content
             if let id = XPostLink.postID(of: shown) {
                 configuration.embed?.truncation = longBodyExpansion.truncation(forXPost: id, isThreadFocus: shown.id == threadFocusID, rule: bodyTruncationRule)
@@ -2360,7 +2360,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             }
             configuration.embedActions.open = { [weak self] _ in self?.onOpenLink?(.url(xPost.url), shown) }
             if let itemID {
-                configuration.embedActions.target = externalPostTarget(url: xPost.url, text: xPost.text, id: itemID) { [weak self] in self?.onOpenLink?(.url(xPost.url), shown) }
+                configuration.embedActions.target = externalPostTarget(url: xPost.url, text: xPost.text, translation: translatesBody ? TranslationSource(xPost.post) : nil, id: itemID) { [weak self] in self?.onOpenLink?(.url(xPost.url), shown) }
             }
             configuration.embedActions.selectMedia = { [weak self] index, grid in
                 self?.openMedia(xPost.media, at: index, of: shown, from: grid)

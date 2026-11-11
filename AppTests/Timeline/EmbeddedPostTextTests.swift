@@ -38,6 +38,52 @@ struct EmbeddedPostTextTests {
         return view
     }
 
+    /// 本文が訳文に替わって高さが変わるとき、本文より下の部品と囲みの下端は、一度に移らず、前の位置から動く。
+    @Test func partsBelowTextMoveWhenTranslationChangesHeight() throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.isHidden = false
+        let view = laidOut(translating("short", isTranslated: false))
+        window.addSubview(view)
+        let height = view.bounds.height
+
+        view.apply(translating(String(repeating: "訳文が長くなって行が増える。", count: 6), isTranslated: true))
+        view.frame.size = view.systemLayoutSizeFitting(CGSize(width: 328, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
+        view.layoutIfNeeded()
+
+        #expect(view.bounds.height > height + 10)
+        #expect(view.subviews.filter { shiftCount(of: $0.layer) > 0 }.count == 1)
+        #expect(shiftCount(of: view.layer) == 2)
+
+        // 動きの途中に原文へ戻すと、前の動きを消さずに足し合わせる。消すと、残っていた分だけ跳ねる。
+        view.apply(translating("short", isTranslated: false))
+        view.frame.size = view.systemLayoutSizeFitting(CGSize(width: 328, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
+        view.layoutIfNeeded()
+
+        #expect(view.subviews.map { shiftCount(of: $0.layer) }.max() == 2)
+        #expect(shiftCount(of: view.layer) == 4)
+
+        // 使い回されて別の囲みに替わったら、前の囲みの動きを残さない。
+        var other = translating("other", isTranslated: false)
+        other.id = "quote-2"
+        view.apply(other)
+
+        #expect(view.subviews.allSatisfy { shiftCount(of: $0.layer) == 0 })
+        #expect(shiftCount(of: view.layer) == 0)
+    }
+
+    private func shiftCount(of layer: CALayer) -> Int {
+        (layer.animationKeys() ?? []).filter { $0.hasPrefix("textReplacementShift") }.count
+    }
+
+    private func translating(_ string: String, isTranslated: Bool) -> EmbeddedPostView.Content {
+        let renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: .offline, language: "ja")
+        var content = embed(text: renderer.render(.plain(string, emojis: [])))
+        content.notes = [EmbeddedPostView.Content.Note(text: NSAttributedString(string: "投票", attributes: [.font: font]), isPressable: false)]
+        content.translation = EmbeddedPostView.Content.Translation(isTranslated: isTranslated, wipeDuration: 0.3, shiftDuration: 0.3, wordDuration: 0.1, fadeWidth: 10, markScale: 1)
+        return content
+    }
+
     /// 大きくしたUnicodeの絵文字の本文は、同じ大きさのカスタム絵文字の本文と同じ高さになる。
     @Test func largeUnicodeEmojiBodyIsAsTallAsCustomEmojiBody() throws {
         let url = try #require(URL(string: "https://example.social/emoji/a.png"))

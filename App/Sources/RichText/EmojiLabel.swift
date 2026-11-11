@@ -391,6 +391,12 @@ class EmojiLabel: TextKitLabel {
         return count
     }
 
+    /// 描いている文字列の`index`の文字に埋め込んだ画像を描く枠。ラベルの座標で返す。並べた範囲の外ならnil。
+    func attachmentFrame(at index: Int) -> CGRect? {
+        guard let attributedText, index < attributedText.length, bounds.width > 0 else { return nil }
+        return attachmentFrame(at: index, in: textLayout(of: attributedText))
+    }
+
     /// `index`の文字に埋め込んだ画像を描く枠。ラベルの座標で返す。並べた範囲の外ならnil。
     private func attachmentFrame(at index: Int, in layout: TextLayout) -> CGRect? {
         let contentStorage = layout.contentStorage

@@ -5,14 +5,16 @@ extension TimelineViewController {
     /// 投稿の中の引用の囲みと、その押下の処理。引用がなければnil。決まりは`docs/quote.md`。
     /// 引用元の注意書き、フィルターの警告、ぼかしは、引用元の投稿のIDで覚えている状態を当てる。
     /// - Parameter itemID: この中身を置く行。注意書きを開閉したり、ブロックした人の引用元を開いたりしたときに、この行の画面上の位置を保つ。
-    func quoteEmbed(for status: Status, itemID: ItemID?, base: UIListContentConfiguration) -> (content: EmbeddedPostView.Content, actions: EmbedActions)? {
+    /// - Parameter translatesBody: 引用元の本文を自動翻訳の訳文で出してよい。
+    func quoteEmbed(for status: Status, itemID: ItemID?, translatesBody: Bool = true, base: UIListContentConfiguration) -> (content: EmbeddedPostView.Content, actions: EmbedActions)? {
         let shown = quoteSourceChanges.applying(to: status.displayed)
         let filterWarnings = filterWarnings
         guard let display = QuoteDisplay(quoting: shown, isRevealed: quoteReveals.isRevealed(shown), verdict: { filterWarnings.verdict(for: $0) }) else { return nil }
         switch display {
         case .post(let quoted):
             let media = embedMediaContent(of: quoted.mediaAttachments, cover: mediaCover(for: quoted), seed: quoted.id)
-            var content = postContentBuilder.quote(quoted, spoiler: spoiler(of: quoted, base: base), media: media, base: base)
+            let translation = translatesBody ? embedTranslation(of: TranslationSource(quoted)) : nil
+            var content = postContentBuilder.quote(quoted, translation: translation, spoiler: spoiler(of: quoted, base: base), media: media, base: base)
             content.truncation = longBodyExpansion.truncation(forBodyOf: quoted, isThreadFocus: status.displayed.id == threadFocusID, rule: bodyTruncationRule)
             var actions = EmbedActions()
             actions.open = { [weak self] view in
@@ -73,6 +75,13 @@ extension TimelineViewController {
         let shownID = status.displayed.id
         let ids = displayedItemIDs.filter { self.status(for: $0)?.displayed.id == shownID }
         reconfigure(Set(ids), keeping: anchorID)
+        requestEmbedTranslations()
+    }
+
+    /// 囲みで出す引用元が替わったので、見えている範囲が変わらなくても、訳すものを頼み直す。
+    private func requestEmbedTranslations() {
+        guard translations != nil, viewIfLoaded?.window != nil else { return }
+        requestTranslationsAroundVisibleRows()
     }
 
     /// 引用元の、受け取ったあとの変化を受け取り、その引用元を出している行を描き直す。
@@ -89,5 +98,6 @@ extension TimelineViewController {
             }
         }
         reconfigureAnimatingHeight(Set(ids), duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration))
+        if !ids.isEmpty { requestEmbedTranslations() }
     }
 }

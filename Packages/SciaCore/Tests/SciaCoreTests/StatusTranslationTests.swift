@@ -224,10 +224,10 @@ struct StatusTranslationStoreTests {
         return store
     }
 
-    private func waitForDelivery(of ids: Set<Status.ID>, clock: TestClock, delivered: @escaping () -> Set<Status.ID>) async throws {
+    private func waitForDelivery(of ids: Set<Status.ID>, clock: TestClock, delivered: @escaping () -> Set<TranslationSource.ID>) async throws {
         try await waitUntil {
             clock.advance(by: .milliseconds(250))
-            return delivered().isSuperset(of: ids)
+            return delivered().isSuperset(of: ids.map(TranslationSource.ID.status))
         }
     }
 
@@ -239,11 +239,36 @@ struct StatusTranslationStoreTests {
         }
     }
 
+    /// Xの投稿も、言語が訳す言語に一致すれば訳す。投稿と同じIDでも、別のものとして持つ。
+    @Test func translatesXPost() async throws {
+        let scope = TaskScope()
+        let clock = TestClock()
+        let store = store(FakeTranslator(), clock: clock, scope: scope)
+        var delivered: Set<TranslationSource.ID> = []
+        store.onChange = { delivered.formUnion($0) }
+        let url = try #require(URL(string: "https://x.com/a/status/1"))
+        let post = TranslationSource(XPost(id: "1", url: url, authorName: "A", authorScreenName: "a", text: .plain("hello", emojis: []), language: "en"))
+        let unknown = TranslationSource(XPost(id: "2", url: url, authorName: "A", authorScreenName: "a", text: .plain("hello", emojis: [])))
+
+        store.request([post, unknown])
+        try await waitUntil {
+            clock.advance(by: .milliseconds(250))
+            return delivered.contains(.xPost("1"))
+        }
+
+        #expect(store.translation(for: post)?.plainText == "訳:hello")
+        #expect(store.translation(for: TranslationSource(status("1"))) == nil)
+        #expect(!store.isTranslating(unknown))
+        store.toggleOriginal(of: post)
+        #expect(store.translation(for: post) == nil)
+        #expect(store.isShowingOriginal(post))
+    }
+
     @Test func translatesAndDeliversBody() async throws {
         let scope = TaskScope()
         let clock = TestClock()
         let store = store(FakeTranslator(), clock: clock, scope: scope)
-        var delivered: Set<Status.ID> = []
+        var delivered: Set<TranslationSource.ID> = []
         store.onChange = { delivered.formUnion($0) }
         let post = status("1")
 
@@ -260,7 +285,7 @@ struct StatusTranslationStoreTests {
         let clock = TestClock()
         let translator = FakeTranslator()
         let store = store(translator, clock: clock, scope: scope)
-        var delivered: Set<Status.ID> = []
+        var delivered: Set<TranslationSource.ID> = []
         store.onChange = { delivered.formUnion($0) }
         let tag = #"<a href="https://example.social/tags/CatsOfMastodon" class="mention hashtag" rel="tag">#<span>CatsOfMastodon</span></a>"#
         let post = status("1", content: "<p>Look \(tag)</p>")
@@ -280,7 +305,7 @@ struct StatusTranslationStoreTests {
         let clock = TestClock()
         let translator = FakeTranslator(failingTexts: ["hiking"])
         let store = store(translator, clock: clock, scope: scope)
-        var delivered: Set<Status.ID> = []
+        var delivered: Set<TranslationSource.ID> = []
         store.onChange = { delivered.formUnion($0) }
         let tag = #"<a href="https://example.social/tags/hiking" class="mention hashtag" rel="tag">#<span>hiking</span></a>"#
         let post = status("1", content: "<p>Went \(tag)</p>")
@@ -297,7 +322,7 @@ struct StatusTranslationStoreTests {
         let scope = TaskScope()
         let clock = TestClock()
         let store = store(FakeTranslator(), clock: clock, scope: scope, languages: ["en-GB"])
-        var delivered: Set<Status.ID> = []
+        var delivered: Set<TranslationSource.ID> = []
         store.onChange = { delivered.formUnion($0) }
 
         store.request([status("1", language: "en-GB")])
@@ -324,7 +349,7 @@ struct StatusTranslationStoreTests {
         let gate = Gate()
         let translator = FakeTranslator(gate: gate)
         let store = store(translator, clock: clock, scope: scope)
-        var delivered: Set<Status.ID> = []
+        var delivered: Set<TranslationSource.ID> = []
         store.onChange = { delivered.formUnion($0) }
 
         store.request([status("1"), status("2")])
@@ -342,7 +367,7 @@ struct StatusTranslationStoreTests {
         let clock = TestClock()
         let translator = FakeTranslator()
         let store = store(translator, clock: clock, scope: scope)
-        var deliveries: [Set<Status.ID>] = []
+        var deliveries: [Set<TranslationSource.ID>] = []
         store.onChange = { deliveries.append($0) }
         let posts = [status("1"), status("2")]
 
@@ -351,7 +376,7 @@ struct StatusTranslationStoreTests {
         try await clock.advance(afterSleeping: .milliseconds(250))
         try await waitUntil { !deliveries.isEmpty }
 
-        #expect(deliveries == [["1", "2"]])
+        #expect(deliveries == [[.status("1"), .status("2")]])
     }
 
     /// 言語モデルがなければ、同じ言語の残りは試さない。ダウンロードが終わったあとに頼まれたら、訳す。
@@ -461,7 +486,7 @@ struct StatusTranslationStoreTests {
         let clock = TestClock()
         let translator = FakeTranslator()
         let store = store(translator, clock: clock, scope: scope)
-        var delivered: [Set<Status.ID>] = []
+        var delivered: [Set<TranslationSource.ID>] = []
         store.onChange = { delivered.append($0) }
 
         store.request([status("1")])
@@ -477,7 +502,7 @@ struct StatusTranslationStoreTests {
     @Test func togglesOriginal() async throws {
         let scope = TaskScope()
         let store = store(FakeTranslator(), clock: TestClock(), scope: scope)
-        var delivered: [Set<Status.ID>] = []
+        var delivered: [Set<TranslationSource.ID>] = []
         store.onChange = { delivered.append($0) }
         let post = status("1")
         store.request([post])
@@ -490,7 +515,7 @@ struct StatusTranslationStoreTests {
 
         store.toggleOriginal(of: post)
         #expect(store.translation(for: post) != nil)
-        #expect(delivered == [["1"], ["1"]])
+        #expect(delivered == [[.status("1")], [.status("1")]])
     }
 
     /// 訳文が届くまで待っている状態で、届いたら待っていない。
@@ -524,13 +549,13 @@ struct StatusTranslationStoreTests {
         let translator = FakeTranslator(notInstalledLanguages: ["en"])
         let clock = TestClock()
         let store = store(translator, clock: clock, scope: scope)
-        var delivered: Set<Status.ID> = []
+        var delivered: Set<TranslationSource.ID> = []
         store.onChange = { delivered.formUnion($0) }
 
         store.request([status("1"), status("2")])
         try await waitForDelivery(of: ["1", "2"], clock: clock) { delivered }
 
-        #expect(delivered == ["1", "2"])
+        #expect(delivered == [.status("1"), .status("2")])
         #expect(!store.isTranslating(status("1")))
 
         translator.install()
@@ -544,14 +569,14 @@ struct StatusTranslationStoreTests {
         let scope = TaskScope()
         let clock = TestClock()
         let store = store(FakeTranslator(), clock: clock, scope: scope)
-        var delivered: Set<Status.ID> = []
+        var delivered: Set<TranslationSource.ID> = []
         store.onChange = { delivered.formUnion($0) }
         let codeOnly = status("1", content: "<pre><code>let a = 1</code></pre>")
 
         store.request([codeOnly])
         try await waitForDelivery(of: ["1"], clock: clock) { delivered }
 
-        #expect(delivered == ["1"])
+        #expect(delivered == [.status("1")])
         #expect(!store.isTranslating(codeOnly))
     }
 
@@ -676,4 +701,14 @@ struct StatusTranslationStoreTests {
 
         #expect(store.translation(for: post) == nil)
     }
+}
+
+/// 投稿をそのまま渡す。
+private extension StatusTranslationStore {
+    func request(_ statuses: [Status]) { request(statuses.map(TranslationSource.init)) }
+    func translation(for status: Status) -> RichText? { translation(for: TranslationSource(status)) }
+    func hasTranslation(of status: Status) -> Bool { hasTranslation(of: TranslationSource(status)) }
+    func isTranslating(_ status: Status) -> Bool { isTranslating(TranslationSource(status)) }
+    func isShowingOriginal(_ status: Status) -> Bool { isShowingOriginal(TranslationSource(status)) }
+    func toggleOriginal(of status: Status) { toggleOriginal(of: TranslationSource(status)) }
 }
