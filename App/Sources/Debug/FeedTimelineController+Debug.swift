@@ -310,7 +310,9 @@ extension FeedTimelineController {
             authorName: "ダミーのXのアカウント",
             authorScreenName: "dummy",
             authorAvatar: avatar,
-            text: .plain("5秒後に届いたダミーのXの投稿。4枚の画像を添付している。", emojis: []),
+            // 自動翻訳も確かめられるよう、英語の本文にして言語を付ける。
+            text: .plain("A dummy X post delivered after five seconds, with four images attached.", emojis: []),
+            language: "en",
             createdAt: model.now(),
             media: DummyMedia.attachments(idPrefix: "x-\(base.id)")
         )
