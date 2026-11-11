@@ -365,9 +365,20 @@ final class ProfileEditViewController: UIViewController {
                 dismiss(animated: true)
             } catch {
                 logger.error("profile save failed: \(SciaLog.describe(error), privacy: .public)")
+                showPartiallySavedDraft()
                 onError(error, "プロフィールを保存できませんでした")
             }
         }
+    }
+
+    /// 途中で送れなかった保存のあと、表を下書きから作り直す。
+    /// 送れた項目を元の値に取り込むと、下書きは作り直され、補足情報の行のIDが替わり、選んだ画像は元の値になる。
+    /// 表が古いIDのままだと、そのあとの書き直しが下書きに入らない。
+    private func showPartiallySavedDraft() {
+        guard let draft = editor.draft else { return }
+        if draft.avatar == .keep { replacedImages[.avatar] = nil }
+        if draft.header == .keep { replacedImages[.header] = nil }
+        showDraft()
     }
 
     private func cancel() {
