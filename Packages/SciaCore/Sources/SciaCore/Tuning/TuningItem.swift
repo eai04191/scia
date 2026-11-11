@@ -539,7 +539,7 @@ public enum TuningCatalog {
     /// すぐ届いたときに、インジケータが一瞬だけ回らないようにする。
     public static let profileRelationshipActivityDelay = NumberTuning(
         id: "profile.relationshipActivityDelay",
-        title: "フォローの関係を待つ間のインジケータを出すまでの時間（秒）",
+        title: "フォローの関係を待つ間のインジケーターを出すまでの時間（秒）",
         range: 0...2,
         step: 0.1,
         defaultValue: 0.5
@@ -930,7 +930,7 @@ public enum TuningCatalog {
     /// 知らせのチップ（写真に保存しました、ダウンロード中など）が出入りし、並びを詰め直す時間。
     public static let noticeAnimationDuration = NumberTuning(
         id: "notice.animationDuration",
-        title: "知らせのチップの出入りの時間（秒）",
+        title: "アプリ内通知のチップの出入りの時間（秒）",
         range: 0.05...2,
         step: 0.05,
         defaultValue: 0.2
@@ -1101,7 +1101,7 @@ public enum TuningCatalog {
     /// 動画をダブルタップして10秒戻ったか進んだことを知らせる表示を、出しておく時間。
     public static let mediaVideoSkipEffectDuration = NumberTuning(
         id: "media.videoSkipEffectDuration",
-        title: "ダブルタップで飛んだ知らせを出しておく時間（秒）",
+        title: "ダブルタップで飛んだことの表示を出しておく時間（秒）",
         range: 0.1...1.5,
         step: 0.05,
         defaultValue: 0.3
@@ -2212,7 +2212,7 @@ public enum TuningCatalog {
         TuningSection(id: "media.menu", title: "ビューア：メニュー", items: [
             .number(mediaSavedChipDuration),
         ]),
-        TuningSection(id: "notice", title: "知らせ", items: [
+        TuningSection(id: "notice", title: "アプリ内通知", items: [
             .number(noticeAnimationDuration),
             .number(noticeFailureChipDuration),
             .number(profileLookupChipDelay),

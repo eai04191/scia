@@ -3,7 +3,7 @@ public import Foundation
 /// アプリの外から直接開ける画面。`scia://<host>/<path>?<query>`のURLで表し、アプリのURLと、これから足すショートカットは、この型を通して画面を開く。
 /// 画面を足したら、ここにも足して、外から開けるようにする（AGENTS.mdの「シミュレーター」）。
 public enum AppDestination: Equatable, Sendable {
-    /// `tab/<home|local|federated|notifications|search|bookmarks|favourites|scheduled>`。最初からあるタブを選ぶ。
+    /// `tab/<home|local|federated|notifications|search|bookmarks|favourites|scheduled|followed-tags>`。最初からあるタブを選ぶ。
     case tab(TabItem)
     /// `tab/list?id=<リストのID>`、`tab/hashtag?name=<名前>`、`tab/profile?acct=<ハンドル>`、`tab/account-hashtag?acct=<ハンドル>&name=<名前>`。足したタブを選ぶ。
     case userTab(UserTab)
