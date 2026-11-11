@@ -34,7 +34,14 @@
 #     make testなどが走らせる端末を出す。端末を省くと、このworktreeが借りている端末を出し、借りていなければ失敗する。
 #     貸し借りする端末（Scia 1〜）を渡したときは、このworktreeが借りていなければ失敗する。借りずに走らせると、ほかのスレッドが入れたビルドを入れ替えてしまうため。
 #     貸し借りしない端末（機種ごとに作った端末など）は、そのまま出す。
-#   shot、dump、resetは、このworktreeが借りている端末にしか使えない。
+#   Tools/sim.sh ctl '<端末>' <simctlの操作> [引数...]
+#     借りているかを確かめてから、`xcrun simctl <操作> '<端末>' <引数...>`を走らせる。端末に命令を送るsimctlは、直接呼ばずにここを通す。
+#     simctlは名前を渡せばどの端末にも届くので、借りた端末を確かめずに別の名前を書くと、ほかのスレッドの端末を触ってしまうため。
+#     端末は名前で書く。UDID、booted、allは、借りている端末かを確かめられないので受け付けない。貸し借りしない端末は、そのまま通す。
+#     端末は、いつも操作のすぐ後ろに置く。simctlが端末の前に受け取るオプション（`launch --console`、`launch -a arm64`など）は使えない。
+#     オプションの値を端末と取り違えて、確かめていない端末に届くのを避けるため。
+#     引数にほかの貸し借りの端末を書いたとき（`erase`や`delete`は端末をいくつも受け取る）は、それも借りていなければ止める。
+#   shot、dump、reset、ctlは、このworktreeが借りている端末にしか使えない。
 set -euo pipefail
 
 BUNDLE_ID=net.mizle.scia
@@ -527,6 +534,27 @@ command_leased() {
     echo "$sim"
 }
 
+command_ctl() {
+    [ $# -ge 2 ] || fail "使い方: Tools/sim.sh ctl '<端末>' <simctlの操作> [引数...]"
+    local sim=$1 operation=$2 sims
+    shift 2
+    # UDIDは名前と照らし合わせないと貸し借りする端末かが分からないので、名前だけを受け付ける。
+    # 端末のリストを読めないときに、貸し借りする端末を貸し借りしない端末と取り違えて素通りさせないよう、止める。
+    sims=$(pool) || fail "端末のリストを読めない"
+    # 端末をいくつも受け取る操作（erase、delete）や、オプションの値として端末を渡す書き方でも、引数に出てくる貸し借りの端末は全部確かめる。
+    local argument
+    for argument in "$sim" "$@"; do
+        case $argument in
+            booted|all) fail "${argument}は、ほかのスレッドが使っている端末にも届く。借りた端末の名前を書く" ;;
+        esac
+        [[ ! $argument =~ ^[0-9A-Fa-f]{8}(-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$ ]] || fail "端末は、UDIDではなく名前で書く"
+        if grep -qxF -- "$argument" <<< "$sims"; then
+            require_lease "$argument"
+        fi
+    done
+    exec xcrun simctl "$operation" "$sim" "$@"
+}
+
 command_status() {
     local sim holder build procs
     while IFS= read -r sim; do
@@ -538,7 +566,7 @@ command_status() {
     done <<< "$(pool)"
 }
 
-[ $# -ge 1 ] || fail "使い方: Tools/sim.sh shot|dump|reset|busy|ready '<端末>' [オプション]、Tools/sim.sh acquire [--wait <秒>] ['<端末>']、Tools/sim.sh release|status、Tools/sim.sh leased ['<端末>']、Tools/sim.sh drag <x1> <y1> <x2> <y2>"
+[ $# -ge 1 ] || fail "使い方: Tools/sim.sh shot|dump|reset|busy|ready '<端末>' [オプション]、Tools/sim.sh ctl '<端末>' <simctlの操作> [引数...]、Tools/sim.sh acquire [--wait <秒>] ['<端末>']、Tools/sim.sh release|status、Tools/sim.sh leased ['<端末>']、Tools/sim.sh drag <x1> <y1> <x2> <y2>"
 subcommand=$1
 shift
 case $subcommand in
@@ -552,6 +580,7 @@ case $subcommand in
     ready) command_ready "$@" ;;
     status) command_status "$@" ;;
     leased) command_leased "$@" ;;
+    ctl) command_ctl "$@" ;;
     __acquire_try) command___acquire_try "$@" ;;
     __release) command___release "$@" ;;
     __ready) command___ready "$@" ;;

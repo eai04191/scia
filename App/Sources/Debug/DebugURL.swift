@@ -2,7 +2,7 @@
 import Foundation
 import SciaCore
 
-/// デバッグメニューと同じ操作を、`xcrun simctl openurl '<端末>' 'scia-debug://dummy/images'`のようにURLで呼ぶ。
+/// デバッグメニューと同じ操作を、`Tools/sim.sh ctl '<端末>' openurl 'scia-debug://dummy/images'`のようにURLで呼ぶ。
 /// agentがメニューを開いてタップせずに、コマンドで確認の準備をするため。
 enum DebugURL: Equatable {
     /// いつものビルドは`scia-debug`、撮影用のビルドは`scia-promo-debug`。project.ymlの`SCIA_DEBUG_URL_SCHEME`を、Info.plistを通して読む。

@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|mcp__Claude_Code_iOS_Simulator__control",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PROJECT_DIR:-.}/Tools/sim-lease-guard.py\"",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}
