@@ -35,7 +35,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `make test-memory-cache`: `Packages/MemoryCache`のテスト（macOS上、シミュレーター不要）
 - `make build`: シミュレーター向けにビルドする
 - `make test`: シミュレーターでテストする。`SIM='<端末>'`で指定もできるが、貸し借りする端末（`Scia 1`〜`Scia 4`）は借りているものしか受け付けない。端末のiOSの版で初めて走らせたときは、UIKitの公開されていない作りに頼る部分のUIテスト（`SciaSystemUITests`）も走らせる。通ると、確かめた作業ツリーの中身を覚える
-- `make test`の記録: 全部を走らせると、`DerivedData/test-logs/watch-<時刻>`に実行中の負荷（`load.log`）と、30秒たっても終わらないSciaCoreのテストのスタック（`<テストの名前>.sample.txt`）が残る。落ちた回の`.xcresult`と、その回の`watch-<時刻>`のコピーは、`DerivedData/test-logs/failed-<時刻>`に残る
+- `make test`の記録: 全部を走らせると、`DerivedData/test-logs/watch-<時刻>`に実行中の負荷（`load.log`）と、30秒たっても終わらないSciaCoreのテストのスタック（`<テストの名前>-<ハッシュ>.sample.txt`。名前の英数字のほかは`_`になるので、どのテストかは末尾の`test:`の行で見る）が残る。落ちた回の`.xcresult`と、その回の`watch-<時刻>`のコピーは、`DerivedData/test-logs/failed-<時刻>`に残る
 - `make test ONLY='SciaTests/LinkLabelTests'`: 一部のテストだけを走らせる。手元で走り、このworktreeが借りている端末を使うので、先に借りる。識別子は空白で区切って複数渡せる。通っても中身は覚えない。`xcodebuild ... test`を直接走らせるときは、`-collect-test-diagnostics never`を付ける。付けないと、テストが失敗したときにシミュレーターの診断を集め、応答を待って10分止まる
 - `make check`: 変更を報告する前に必ず通す。通ると、確かめた作業ツリーの中身（commitしていない変更も含む）を覚える
 - テストが落ちたら、`DerivedData/test-logs/failed-<時刻>`のxcresultを`xcrun xcresulttool get test-results tests --path <xcresult>`で読む。別のMacで走った分も手元のここに届く。式の実際の値は`make test`の出力に残らず、ここにある。落ちたテストの前後のアプリのログ（`SciaLog`）は、`xcrun xcresulttool export diagnostics --path <xcresult> --output-path <フォルダー>`で取り出した`StandardOutputAndStandardError.txt`にある（`get log --type console`では出ない）
@@ -67,7 +67,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
   - プロフィール: `scia://profile/<user@domain>`（ホームのタブに開く）、`scia://my-profile`（選んでいるタブに自分のプロフィールを開く）、`scia://profile-edit`（自分のプロフィールの編集）、`scia://note?acct=<ハンドル>`（その人へのメモ）、`scia://report?acct=<ハンドル>`（その人の通報。送らなければサーバーに届かない）
   - 人のリスト: `scia://accounts/<followers|following>`（自分の。`?id=<アカウントのID>`でその人の）、`scia://accounts/<favourited|reblogged>?id=<投稿のID>`（その投稿をお気に入り、ブーストした人）、`scia://accounts/emoji-reactioned?id=<投稿のID>&name=<パーセントエンコードした絵文字>`（その投稿にその絵文字でリアクションした人）
   - タイムライン: `scia://hashtag?name=<名前>`（ハッシュタグ）、`scia://account-hashtag?acct=<ハンドル>&name=<名前>`（その人のハッシュタグ）、`scia://scheduled`（予約投稿。タブを無効にしていれば手前に重ねる）
-  - 投稿: `scia://thread?id=<投稿のID>`（スレッド）、`scia://edit-history?id=<投稿のID>`（編集履歴）
+  - 投稿: `scia://thread?id=<投稿のID>`（スレッド）、`scia://edit-history?id=<投稿のID>`（編集履歴）、`scia://api-response?id=<投稿のID>`（その投稿を読み直したAPIの応答のJSON）
   - 検索: `scia://search?q=<パーセントエンコードした語>`（検索のタブに語を入れて確定する。`q`がなければタブを開くだけ。検索を無効にしていれば選んでいるタブに積む）
   - 投稿欄: `scia://compose/<tools|language|schedule|emoji|media-picker>`（書き始めて、ボタンの並び、言語、予約の日時、絵文字のパレット、メディアのピッカーを開く。予約していなければ予約を始める）、`scia://compose/<attachment|alt-text|crop>?index=<n>`（n番目の添付のビューア、その代替テキストの入力、切り抜き。先に`scia-debug://compose?media=<枚数>`で添付を足す）
   - アカウントの画面: `scia://account`（シートで開く。設定に重ねるのは`scia://settings/account`。決まりはdocs/account-screen.md）
