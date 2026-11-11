@@ -14,7 +14,7 @@ public enum SciaLog {
     /// `localizedDescription`は、APIの失敗では応答の本文を、ファイルの失敗ではファイルのパスを含むため、ログには使わない。
     public static func describe(_ error: any Error) -> String {
         switch error {
-        case let error as MastodonAPIError: "HTTP \(error.statusCode)"
+        case let error as any HTTPStatusFailure: "HTTP \(error.statusCode)"
         case let error as URLError: "URLError \(error.code.rawValue)"
         case let error as DecodingError: "decoding \(DecodingLog.describe(error))"
         case let error as CocoaError: "CocoaError \(error.code.rawValue)"

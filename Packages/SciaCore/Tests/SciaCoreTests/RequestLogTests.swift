@@ -88,6 +88,7 @@ struct RequestLogTests {
     @Test func errorDescriptionForLogsOmitsResponseContent() throws {
         let apiError = MastodonAPIError.from(statusCode: 422, body: Data(#"{"error":"alice@example.social は使えません"}"#.utf8))
         #expect(SciaLog.describe(apiError) == "HTTP 422")
+        #expect(SciaLog.describe(HTTPStatusError(statusCode: 503)) == "HTTP 503")
         #expect(SciaLog.describe(URLError(.notConnectedToInternet)) == "URLError -1009")
         let decodingError = DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "ISO 8601形式ではない日時です: secret"))
         #expect(!SciaLog.describe(decodingError).contains("secret"))
