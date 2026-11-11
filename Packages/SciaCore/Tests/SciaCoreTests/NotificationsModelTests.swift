@@ -164,6 +164,47 @@ struct NotificationsModelTests {
         try await waitUntil { display.entries.first?.id == .notification("34975865") }
     }
 
+    /// ストリーミングで届いた投稿の削除は、その投稿についての通知を除く。ホームやスレッドと同じく、読み込み直さなくても反映する。
+    /// 使う人の操作によらない変化なので、閉じる動きは付けない。
+    @Test func streamedDeleteRemovesNotificationsOfStatus() async throws {
+        let firstMessage = Gate()
+        let message = String(decoding: try JSONSerialization.data(withJSONObject: ["stream": ["user"], "event": "delete", "payload": "113000000000000010"]), as: UTF8.self)
+        let connector = ScriptedConnector([.init(messages: [message], firstMessageGate: firstMessage)])
+        let (model, display) = makeModel(transport: try Self.transport(), hub: TimelineModelFixtures.hub(connector))
+        defer { model.stop() }
+
+        model.start(purpose: .action)
+        try await waitUntil { display.contentState == .loaded && display.catchUp?.attempt == 1 && display.catchUp?.phase == .idle && model.runningTaskCount == 0 }
+        firstMessage.open()
+
+        try await waitUntil { !display.entries.contains { $0.id == .notification("34975863") } }
+        #expect(display.entries.map(\.id) == ["34975864", "34975862", "34975861"].map { .notification($0) })
+        #expect(display.entriesCalls.last?.animatesRemoval == false)
+    }
+
+    /// ストリーミングで届いた投稿の編集は、その投稿についての通知の本文に反映する。
+    @Test func streamedEditUpdatesStatusOfNotification() async throws {
+        let firstMessage = Gate()
+        let payload = String(decoding: try TimelineModelFixtures.body([113_000_000_000_000_010]).dropFirst().dropLast(), as: UTF8.self)
+        let message = String(decoding: try JSONSerialization.data(withJSONObject: ["stream": ["user"], "event": "status.update", "payload": payload]), as: UTF8.self)
+        let connector = ScriptedConnector([.init(messages: [message], firstMessageGate: firstMessage)])
+        let (model, display) = makeModel(transport: try Self.transport(), hub: TimelineModelFixtures.hub(connector))
+        defer { model.stop() }
+        func mentionContent() -> String? {
+            display.entries.lazy.compactMap { entry -> String? in
+                guard case .notification(let notification) = entry, notification.id == "34975863" else { return nil }
+                return notification.status?.content
+            }.first
+        }
+
+        model.start(purpose: .action)
+        try await waitUntil { display.contentState == .loaded && display.catchUp?.attempt == 1 && display.catchUp?.phase == .idle && model.runningTaskCount == 0 }
+        #expect(mentionContent() != "<p>113000000000000010</p>")
+        firstMessage.open()
+
+        try await waitUntil { mentionContent() == "<p>113000000000000010</p>" }
+    }
+
     /// バックグラウンドから戻ったときは、切れていた間の補完を終えるまで、最上部にいても追従せず、一番上に見えていた行の位置を保つ。
     /// 補完の最中に届いた通知も、補完を終える前に挿入しても後に挿入しても、位置を保って挿入する。
     @Test(arguments: [true, false])

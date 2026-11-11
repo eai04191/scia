@@ -463,6 +463,13 @@ public final class NotificationsModel {
         case .event(.notificationsMerged):
             logger.info("notifications merged")
             mergeDidFinish()
+        case .event(.statusUpdate(let edited)):
+            guard store.updateStatus(edited.id, { _ in edited }) else { return }
+            showEntries()
+        case .event(.delete(let id)):
+            // 使う人の操作によらない削除なので、閉じる動きは付けない。
+            guard store.removeStatus(id) else { return }
+            showEntries()
         case .event:
             break
         case .poll:
