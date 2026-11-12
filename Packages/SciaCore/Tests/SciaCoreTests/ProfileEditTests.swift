@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import SciaTesting
 import Synchronization
 import Testing
 @testable import SciaCore
@@ -354,7 +355,7 @@ struct ProfileEditTests {
         #expect(editor.draft != nil)
     }
 
-    /// 保存では、送る前に今のタグを読み直し、先に外してから足す。別の端末で足したタグは外し、同じタグは足し直さない。
+    /// 保存では、送る前に今のタグを読み直し、先に外してから足す。別の端末で足したタグは外し、同じタグは足し直さない。外すもの同士は並行に送るので、順は問わない。
     @MainActor
     @Test func saveRereadsTagsAndRemovesBeforeAdding() async throws {
         let server = FeaturedServer(tags: [FeaturedTag(id: "1", name: "猫", statusesCount: 3), FeaturedTag(id: "2", name: "犬", statusesCount: 1)])
@@ -369,13 +370,13 @@ struct ProfileEditTests {
 
         _ = try await editor.save()
 
-        #expect(await server.sent == ["unfeature:2", "unfeature:4"])
+        #expect(await server.sent.sorted() == ["unfeature:2", "unfeature:4"])
         #expect(await server.tags.map(\.name) == ["猫", "鳥"])
         #expect(!editor.hasChanges)
         #expect(changes == 1)
     }
 
-    /// 途中で送れなければ止めて投げ、送れた分は元の値に取り込む。送り直すときは残りだけを送る。
+    /// 送れないものがあれば投げ、送れた分は元の値に取り込む。送り直すときは残りだけを送る。足すのは外し終えてからで、足すもの同士は並行に送る。
     @MainActor
     @Test func failedTagSaveKeepsRemainderForRetry() async throws {
         let server = FeaturedServer(tags: [FeaturedTag(id: "1", name: "猫", statusesCount: 3)])
@@ -390,7 +391,8 @@ struct ProfileEditTests {
 
         await #expect(throws: MastodonAPIError.self) { try await editor.save() }
 
-        #expect(await server.sent == ["unfeature:1", "feature:鳥", "feature:魚"])
+        #expect(await server.sent.first == "unfeature:1")
+        #expect(await server.sent.dropFirst().sorted() == ["feature:魚", "feature:鳥"].sorted())
         #expect(editor.featuredTagNames == ["鳥", "魚"])
         #expect(editor.hasChanges)
         #expect(changes == 1)
@@ -424,6 +426,68 @@ struct ProfileEditTests {
         #expect(editor.hasChanges)
     }
 
+    /// プロフィールの項目、注目のハッシュタグ、紹介しているユーザーは、前のものの応答を待たずに並行に送る。
+    @MainActor
+    @Test func saveSendsProfileTagsAndEndorsementsConcurrently() async throws {
+        let server = FeaturedServer(tags: [])
+        let profileGate = Gate()
+        let original = source()
+        let editor = ProfileEditor(limits: .beforeMastodon46, api: ProfileEditor.API(
+            source: { original },
+            save: { _ in
+                try await profileGate.wait()
+                return original
+            },
+            featuredTags: { await server.tags },
+            featureTag: { try await server.feature($0) },
+            unfeatureTag: { await server.unfeature($0) },
+            endorsements: { [] },
+            endorse: { await server.endorse($0) },
+            unendorse: { await server.unendorse($0) }
+        ))
+        await editor.loadAll()
+        editor.draft?.note = "書き換えた"
+        editor.addFeaturedTag("猫")
+        #expect(editor.addEndorsement(account("3")))
+
+        let saving = Task { try await editor.save() }
+        // プロフィールの項目の応答が届かない間に、ほかの2つを送り終える。
+        try await waitUntil { await server.sent.count >= 2 && profileGate.waiterCount >= 1 }
+        #expect(await server.sent.sorted() == ["endorse:3", "feature:猫"])
+        #expect(editor.isSaving)
+
+        profileGate.open()
+        _ = try await saving.value
+        #expect(!editor.hasChanges)
+    }
+
+    /// プロフィールの項目を送れなくても、注目のハッシュタグは送り終え、送れた分を取り込む。
+    @MainActor
+    @Test func failedProfileSaveStillSendsTags() async throws {
+        struct Failure: Error {}
+        let server = FeaturedServer(tags: [])
+        let original = source()
+        let editor = ProfileEditor(limits: .beforeMastodon46, api: ProfileEditor.API(
+            source: { original },
+            save: { _ in throw Failure() },
+            featuredTags: { await server.tags },
+            featureTag: { try await server.feature($0) },
+            unfeatureTag: { await server.unfeature($0) }
+        ))
+        await editor.loadAll()
+        editor.draft?.note = "書き換えた"
+        editor.addFeaturedTag("猫")
+        var changes = 0
+        editor.onFeaturedChange = { changes += 1 }
+
+        await #expect(throws: Failure.self) { try await editor.save() }
+
+        #expect(await server.sent == ["feature:猫"])
+        #expect(!editor.featuredTagsChanged)
+        #expect(editor.hasChanges)
+        #expect(changes == 1)
+    }
+
     /// 読めなかった節は、読み直して読めたら変えられるようになる。
     @MainActor
     @Test func failedSectionCanBeReloaded() async {
@@ -447,9 +511,9 @@ struct ProfileEditTests {
         #expect(editor.addFeaturedTag("犬"))
     }
 
-    /// 紹介は、元の値と比べて、外してから足す。
+    /// 紹介は、元の値と比べて、外すものと足すものを並行に送る。
     @MainActor
-    @Test func saveEndorsementsRemovesThenAdds() async throws {
+    @Test func saveEndorsementsRemovesAndAdds() async throws {
         let server = FeaturedServer(tags: [], endorsed: ["2"])
         let editor = makeEditor(server, endorsements: [account("2")])
         await editor.loadAll()
@@ -459,7 +523,7 @@ struct ProfileEditTests {
 
         _ = try await editor.save()
 
-        #expect(await server.sent == ["unendorse:2", "endorse:3"])
+        #expect(await server.sent.sorted() == ["endorse:3", "unendorse:2"])
         #expect(!editor.hasChanges)
     }
 

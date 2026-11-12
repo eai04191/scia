@@ -205,6 +205,9 @@ public final class ProfileEditor {
         }
     }
 
+    /// 走っている保存で、注目のハッシュタグか紹介しているユーザーを1件でも送れた。
+    private var changedFeaturedWhileSaving = false
+
     public var hasChanges: Bool {
         profileChanged || featuredTagsChanged || endorsementsChanged
     }
@@ -223,66 +226,111 @@ public final class ProfileEditor {
     }
 
     /// 保存し、保存したあとのプロフィールを返す。決まりはdocs/profile.mdの「注目のハッシュタグと紹介しているユーザーの編集」にある。
-    /// プロフィールの項目、ハッシュタグを外す、ハッシュタグを足す、ユーザーを外す、ユーザーを足すの順に1つずつ送る。
-    /// 途中で送れなければ、そこで止めて投げる。送れた分は元の値に取り込み、送り直すときは残りだけを送る。書きかけの下書きは残す。
+    /// プロフィールの項目、注目のハッシュタグ、紹介しているユーザーは、互いによらないので並行に送る。応答の遅いサーバーで、待つ時間が足し合わさらないようにするため。
+    /// 送れないものがあっても、ほかは送り終えてから投げる。送れた分は元の値に取り込み、送り直すときは残りだけを送る。書きかけの下書きは残す。
     public func save() async throws -> ProfileSource {
-        guard case .loaded(var saved) = source, let draft, !isSaving else { throw CancellationError() }
+        guard case .loaded(let original) = source, let draft, !isSaving else { throw CancellationError() }
         isSaving = true
-        var changedFeatured = false
+        changedFeaturedWhileSaving = false
         defer {
             isSaving = false
-            if changedFeatured { onFeaturedChange?() }
+            if changedFeaturedWhileSaving { onFeaturedChange?() }
         }
-        if draft.hasChanges(from: saved) {
-            saved = try await api.save(draft)
-            source = .loaded(saved)
-            self.draft = ProfileDraft(source: saved)
-            onProfileSaved?(saved)
-        }
-        if featuredTagsChanged {
-            try await saveFeaturedTags { changedFeatured = true }
-        }
-        if endorsementsChanged {
-            try await saveEndorsements { changedFeatured = true }
-        }
+        let savesTags = featuredTagsChanged
+        let savesEndorsements = endorsementsChanged
+        async let profile = Result { try await saveProfile(draft, from: original) }
+        async let tags = Result { if savesTags { try await saveFeaturedTags() } }
+        async let endorsements = Result { if savesEndorsements { try await saveEndorsements() } }
+        let (savedProfile, savedTags, savedEndorsements) = await (profile, tags, endorsements)
+        let saved = try savedProfile.get()
+        try savedTags.get()
+        try savedEndorsements.get()
+        return saved
+    }
+
+    private func saveProfile(_ draft: ProfileDraft, from original: ProfileSource) async throws -> ProfileSource {
+        guard draft.hasChanges(from: original) else { return original }
+        let saved = try await api.save(draft)
+        source = .loaded(saved)
+        self.draft = ProfileDraft(source: saved)
+        onProfileSaved?(saved)
         return saved
     }
 
     /// 送る前に今の注目のハッシュタグを読み直し、それと比べて外すものと足すものを決める。同じタグを2度足すとサーバーが断り、
     /// 外したタグを2度外すと見つからないと返すので、前の保存が届いたのに応答を失ったときや、別の端末やwebで変えたときに、送り直しが断られ続けないようにするため。
-    /// 上限まで載せているときに入れ替えられるよう、先に外す。
-    private func saveFeaturedTags(didSend: () -> Void) async throws {
+    /// 上限まで載せているときに入れ替えられるよう、外し終えてから足す。外すもの同士、足すもの同士は並行に送る。
+    private func saveFeaturedTags() async throws {
         var current = try await api.featuredTags()
         featuredTagsSource = .loaded(current)
         let wanted = Set(featuredTagNames.map(Hashtag.normalizedName))
-        for tag in current where !wanted.contains(Hashtag.normalizedName(tag.name)) {
-            try await api.unfeatureTag(tag.id)
+        let removing = current.filter { !wanted.contains(Hashtag.normalizedName($0.name)) }
+        let removed = await Self.sendAll(removing.map(\.id), api.unfeatureTag)
+        for (tag, result) in zip(removing, removed) where result.isSuccess {
             current.removeAll { $0.id == tag.id }
-            featuredTagsSource = .loaded(current)
-            didSend()
+            changedFeaturedWhileSaving = true
         }
-        for name in featuredTagNames where current.first(named: name) == nil {
-            current.append(try await api.featureTag(name))
-            featuredTagsSource = .loaded(current)
-            didSend()
+        featuredTagsSource = .loaded(current)
+        try Self.throwFirstFailure(of: removed)
+
+        let adding = featuredTagNames.filter { current.first(named: $0) == nil }
+        let added = await Self.sendAll(adding, api.featureTag)
+        for case .success(let tag) in added {
+            current.append(tag)
+            changedFeaturedWhileSaving = true
+        }
+        featuredTagsSource = .loaded(current)
+        try Self.throwFirstFailure(of: added)
+    }
+
+    /// 紹介は何度送っても同じ結果になるので、読み直さずに元の値と比べて送る。外すものと足すものは、互いによらないので並行に送る。
+    private func saveEndorsements() async throws {
+        guard var current = endorsementsSource.value else { return }
+        let wanted = Set(endorsedAccounts.map(\.id))
+        let removing = current.filter { !wanted.contains($0.id) }
+        let adding = endorsedAccounts.filter { account in !current.contains { $0.id == account.id } }
+        async let removal = Self.sendAll(removing.map(\.id), api.unendorse)
+        async let addition = Self.sendAll(adding.map(\.id), api.endorse)
+        let (removed, added) = await (removal, addition)
+        for (account, result) in zip(removing, removed) where result.isSuccess {
+            current.removeAll { $0.id == account.id }
+            changedFeaturedWhileSaving = true
+        }
+        for (account, result) in zip(adding, added) where result.isSuccess {
+            current.append(account)
+            changedFeaturedWhileSaving = true
+        }
+        endorsementsSource = .loaded(current)
+        try Self.throwFirstFailure(of: removed)
+        try Self.throwFirstFailure(of: added)
+    }
+
+    /// `inputs`を並行に送り、結果を`inputs`の順に返す。送れないものがあっても、ほかは送り終える。
+    nonisolated private static func sendAll<Input: Sendable, Output: Sendable>(
+        _ inputs: [Input],
+        _ send: @escaping @Sendable (Input) async throws -> Output
+    ) async -> [Result<Output, any Error>] {
+        await withTaskGroup(of: (Int, Result<Output, any Error>).self) { group in
+            for (index, input) in inputs.enumerated() {
+                group.addTask { (index, await Result { try await send(input) }) }
+            }
+            var results: [Int: Result<Output, any Error>] = [:]
+            for await (index, result) in group {
+                results[index] = result
+            }
+            return inputs.indices.compactMap { results[$0] }
         }
     }
 
-    /// 紹介は何度送っても同じ結果になるので、読み直さずに元の値と比べて送る。
-    private func saveEndorsements(didSend: () -> Void) async throws {
-        guard var current = endorsementsSource.value else { return }
-        let wanted = Set(endorsedAccounts.map(\.id))
-        for account in current where !wanted.contains(account.id) {
-            try await api.unendorse(account.id)
-            current.removeAll { $0.id == account.id }
-            endorsementsSource = .loaded(current)
-            didSend()
+    nonisolated private static func throwFirstFailure<Output>(of results: [Result<Output, any Error>]) throws {
+        for result in results {
+            _ = try result.get()
         }
-        for account in endorsedAccounts where !current.contains(where: { $0.id == account.id }) {
-            try await api.endorse(account.id)
-            current.append(account)
-            endorsementsSource = .loaded(current)
-            didSend()
-        }
+    }
+}
+
+private extension Result {
+    var isSuccess: Bool {
+        if case .success = self { true } else { false }
     }
 }
