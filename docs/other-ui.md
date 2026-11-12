@@ -15,7 +15,8 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 ## ログイン
 
 - `LoginModel`と`OAuthClient`。`OAuthClient.Configuration`には戻る先のURLだけを渡す。アプリの名前と求めるスコープはSciaCoreが決める
-- 認可の画面を出すのはUI（`LoginModel.login(authenticate:)`に渡す）
+- 認可の画面を出すのはUI（`LoginModel.startLogin(authenticate:)`に渡す）
+- サーバーの応答を待つのが長引いたら`offersCancel`がtrueになるので、やめる操作を出して`cancelLogin()`を呼ぶ
 
 ## アカウント1つ分
 
@@ -34,7 +35,7 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 
 ## 投稿
 
-- 投稿欄は`ComposeModel`。`AccountSession.applyComposeDefaults(to:)`が済むまで`canPost`はfalseのまま
+- 投稿欄は`ComposeModel`。`AccountSession.applyComposeDefaults(to:)`が済むまで`canPost`はfalseのまま。書き始めたときに待たせないよう、セッションを始めたら`preloadComposeDefaults()`で先に読んでおく
 - 送れた結果（`onSubmitted`）は`session.statuses.reflect(_:usingTagsIn:)`に渡す。どの一覧へ配るかはそこで決まる
 - 書きかけの投稿欄で返信、引用、編集、書き直しを始める前に、進むか、確かめるか、断るかは`Confirmation.starting(_:draft:now:)`が決める（共有されたもので書き始めるときは`Confirmation.shared`）。後から選んだ投稿の読み込みだけを使うのは`LatestLookup`
 - 削除は、`Confirmation.deleting`で確かめてから`StatusDeletion.delete(_:onFailure:)`。どの一覧からも除き、投稿欄の編集や書き直しもやめる。ほかのアカウントの投稿を消したら、`ComposeModel.statusWasDeleted(_:accountID:willReset:)`をそのアカウントのIDで呼ぶ
@@ -44,6 +45,8 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 - 何を出すかはSciaCoreが決め、UIは描くだけにする。確認は`Confirmation`、メニューは`MenuNode`（`StatusMenuTree`など）
 - 受け持たない項目を外した並びは、`MenuLayout(defaultElements:)`で作る
 - 失敗の文言は`ErrorPresentation`（`@_spi(FailureDisplay) import SciaCore`で読む）
+- 押しても応答が届くまで画面が変わらない操作は、`SlowActivity.track(_:)`で囲み、`isSlow`の間は待っていることを知らせる。削除は`StatusDeletion.slowActivity`に渡す
+- 揃えて出すために応答を待つものは、`ResponseWait.limit`がたったら待つのをやめる（[vision.md](vision.md)の「想定外の応答への向き合い方」）
 
 ## SciaCoreにあるが、iOSの画面の作りに合わせた部品
 
