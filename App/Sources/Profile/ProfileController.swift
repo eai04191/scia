@@ -36,6 +36,9 @@ final class ProfileController {
     private var listReveal = ListReveal.waiting
     /// 最初のタイムラインに使う投稿を読み終えた。
     private var isInitialListLoaded = false
+    /// 開いてから`ResponseWait.limit`がたち、ヘッダーの棚を待つのをやめた。棚は届いたときに出す。
+    private var hasStoppedWaitingForShelves = false
+    private var shelvesWaitTask: Task<Void, Never>?
     /// フォローの関係を待つのが長引いている。フォローのボタンの中にアクティビティインジケータを出す。
     private var isRelationshipSlow = false
     /// 開いたときの読み込みを終えた。相手がサーバーの応答に入らなかったときは、関係が分からないまま終わる。
@@ -274,6 +277,18 @@ final class ProfileController {
         loadProfile()
         loadInitial()
         waitForRelationship()
+        limitWaitForShelves()
+    }
+
+    /// ヘッダーの棚が届かなくても、開いてから`ResponseWait.limit`がたったら、届いている投稿でタイムラインを出す。
+    /// 棚のどれかの応答が遅いだけで、届いている投稿まで出せなくなるため。あとから届いた棚は、タイムラインを押し下げて現れる。
+    private func limitWaitForShelves() {
+        guard let clock = viewController?.clock else { return }
+        shelvesWaitTask = run(.display) { controller in
+            guard (try? await clock.sleep(for: ResponseWait.limit)) != nil else { return }
+            controller.hasStoppedWaitingForShelves = true
+            controller.afterTransition { $0.revealListIfReady() }
+        }
     }
 
     /// 開いたときにフォローの関係がまだなければ、少し待っても届かないときだけ、フォローのボタンの中にインジケータを出す。
@@ -515,6 +530,7 @@ final class ProfileController {
                     return
                 }
                 controller.listReveal = .revealed
+                controller.shelvesWaitTask?.cancel()
                 controller.showEntries(replacing: true)
                 // 待つ間に別のタイムラインへ切り替えていたら、フッターはそのタイムラインの読み込み中や失敗の表示のまま残す。
                 if controller.shownTimeline === controller.store.timeline {
@@ -527,8 +543,9 @@ final class ProfileController {
     }
 
     /// 最初のタイムラインの投稿と、ヘッダーの棚を読み終えた。棚が後から現れて、タブとタイムラインを押し下げないようにするため。
+    /// 棚は、待つのをやめたあとは待たない。
     private var isReadyToRevealList: Bool {
-        isInitialListLoaded && store.isShelvesSettled
+        isInitialListLoaded && (store.isShelvesSettled || hasStoppedWaitingForShelves)
     }
 
     private var revealDuration: TimeInterval {
