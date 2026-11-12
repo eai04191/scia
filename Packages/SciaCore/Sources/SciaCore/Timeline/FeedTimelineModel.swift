@@ -387,8 +387,12 @@ public final class FeedTimelineModel {
     private func loadInitial() async {
         logger.info("\(self.feed.name, privacy: .public) loadInitial start")
         do {
-            let markerID = try await loadMarker()
-            guard let statuses = try await store.loadInitial(around: markerID), !isStopped else { return }
+            var markerID: String?
+            let loaded = try await store.loadInitial { [weak self] in
+                markerID = try await self?.loadMarker()
+                return markerID
+            }
+            guard let statuses = loaded, !isStopped else { return }
             // 前回読んだところから続きを読めるよう、既読位置の投稿を最上部に置く。新しい投稿はその上にある。
             let topID = markerID.flatMap { id in store.statuses.contains { $0.id == id } ? TimelineEntry.ID.status(id) : nil }
             display?.show(store.entries, placingAtTop: topID)

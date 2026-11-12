@@ -112,35 +112,27 @@ public final class TimelineStore {
     /// 既読位置から続きを読めるようにするため。
     /// サーバーがホームを再生成中なら既読位置の周りは読まず、返った投稿の間をギャップにする。
     public func loadInitial(around markerID: String? = nil) async throws -> [Status]? {
+        try await loadInitial { markerID }
+    }
+
+    /// 既読位置を、最新のページと並行に読む。最新のページは既読位置によらないため。
+    /// - Parameter marker: サーバーに保存された既読位置を読む。投げたら、読み込み全体を失敗にする。
+    public func loadInitial(marker: @escaping @MainActor @Sendable () async throws -> String?) async throws -> [Status]? {
         guard !state.isLoading else { return nil }
         state.isLoading = true
         defer { state.isLoading = false }
 
+        async let savedMarker = marker()
         let latest = try await fetch(TimelineQuery(limit: pageSize))
+        let markerID = try await savedMarker
         var loaded = [latest]
         var loadedGaps: [TimelineGap] = []
+        var unloadedTailID: String?
         if let markerID, !latest.isRegenerating, let oldestLatest = Self.oldestID(of: latest), StatusID.isNewer(oldestLatest, than: markerID) {
-            let afterMarker = try await fetch(TimelineQuery(minID: markerID, limit: pageSize))
-            let fromMarkerMaxID = Self.oldestID(of: afterMarker) ?? oldestLatest
-            let fromMarker = try await fetch(TimelineQuery(maxID: fromMarkerMaxID, limit: pageSize))
-            loaded += [afterMarker, fromMarker]
-            // 件数では判断しない。求めた件数より少なく返すサーバーでは、満杯でなくても間に投稿が残っているため。
-            // 間に投稿がなかったときは、ギャップを読んだときに0件が返って閉じる。
-            // 再生成中の結果は、返った投稿の間にもまだ出ていない投稿が残りうるため、返った投稿の一番古いものまでをギャップにする。
-            // 最新のページを読んだ後に増えた投稿も返りうるので、新しい側の端は、最新のページの一番古い投稿と返った投稿の最も新しいもののうち、新しい方にする。
-            if afterMarker.isRegenerating {
-                if let oldestAfterMarker = Self.oldestID(of: afterMarker), let newestAfterMarker = Self.newestID(of: afterMarker) {
-                    let newerID = Self.newer(oldestLatest, newestAfterMarker)
-                    if StatusID.isNewer(newerID, than: oldestAfterMarker) {
-                        loadedGaps.append(TimelineGap(newerID: newerID, olderID: oldestAfterMarker))
-                    }
-                }
-            } else if let newestAfterMarker = Self.newestID(of: afterMarker), StatusID.isNewer(oldestLatest, than: newestAfterMarker) {
-                loadedGaps.append(TimelineGap(newerID: oldestLatest, olderID: newestAfterMarker))
-            }
-            if fromMarker.isRegenerating, let oldestFromMarker = Self.oldestID(of: fromMarker) {
-                loadedGaps.append(TimelineGap(newerID: fromMarkerMaxID, olderID: oldestFromMarker))
-            }
+            let around = try await loadAroundMarker(markerID, below: oldestLatest)
+            loaded += around.pages
+            loadedGaps += around.gaps
+            unloadedTailID = around.unloadedTailID
         }
         // 再生成中の結果は揃っておらず、返った投稿の間にもまだ出ていない投稿が残りうる。最も新しい投稿から最も古い投稿までをギャップにする。
         // 最も古い投稿より下は古いページの読み込みで、最も新しい投稿より上は次の補完で読む。
@@ -154,6 +146,7 @@ public final class TimelineStore {
         // 辞書の取り出し順は走らせるたびに変わるため、IDの順にしてから渡す。フィルターで出さない投稿は、渡した順のまま持つため。
         rebuild(statuses: unique.values.sorted { StatusID.isNewer($0.id, than: $1.id) }, gaps: loadedGaps)
         state.oldestLoadedID = Self.oldest(unique.keys.map(Optional.some) + state.unreadableItems.map(\.id))
+        state.unloadedTailID = unloadedTailID
         state.olderArrivals = []
         // 前のタイムラインで埋まらなかった基準は、読み直したタイムラインの範囲の外にあり、そこから読むと読み込み済みの区間にギャップを置いてしまう。
         // 再生成中なら、最も新しい投稿より上は、そのあと新着が入っても、次の補完がその投稿から読む。1件も返らなければ最新のページから読む。
@@ -181,6 +174,54 @@ public final class TimelineStore {
         return statuses
     }
 
+    /// 既読位置のすぐ後に続く投稿と、既読位置から古い投稿を読み、最新のページとの間に置くギャップと一緒に返す。
+    /// 読めなければ、読めた分だけを返し、最新のページから既読位置までをギャップにする。最新のページは読めているので、それだけで表示できるため。
+    /// 取り消しとトークンの失効は、読み込み全体を失敗にする。
+    /// - Parameter oldestLatest: 最新のページの一番古い投稿。
+    private func loadAroundMarker(_ markerID: String, below oldestLatest: String) async throws -> (pages: [TimelinePage], gaps: [TimelineGap], unloadedTailID: String?) {
+        let afterMarker: TimelinePage
+        do {
+            afterMarker = try await fetch(TimelineQuery(minID: markerID, limit: pageSize))
+        } catch where !Self.endsInitialLoad(error) {
+            logger.error("load after marker failed: \(SciaLog.describe(error), privacy: .public)")
+            // ギャップも末尾の読み込みも端の投稿を含めずに読むので、既読位置の投稿は、末尾の読み込みでその投稿から読む（`unloadedTailID`）。
+            // そのための`max_id`を作れないIDなら、ギャップを置かず、最新のページから古い方へ続けて読めるようにする。
+            guard StatusID.justAbove(markerID) != nil else { return ([], [], nil) }
+            return ([], [TimelineGap(newerID: oldestLatest, olderID: markerID)], markerID)
+        }
+        var gaps: [TimelineGap] = []
+        let fromMarkerMaxID = Self.oldestID(of: afterMarker) ?? oldestLatest
+        // 件数では判断しない。求めた件数より少なく返すサーバーでは、満杯でなくても間に投稿が残っているため。
+        // 間に投稿がなかったときは、ギャップを読んだときに0件が返って閉じる。
+        // 再生成中の結果は、返った投稿の間にもまだ出ていない投稿が残りうるため、返った投稿の一番古いものまでをギャップにする。
+        // 最新のページを読んだ後に増えた投稿も返りうるので、新しい側の端は、最新のページの一番古い投稿と返った投稿の最も新しいもののうち、新しい方にする。
+        if afterMarker.isRegenerating {
+            if let oldestAfterMarker = Self.oldestID(of: afterMarker), let newestAfterMarker = Self.newestID(of: afterMarker) {
+                let newerID = Self.newer(oldestLatest, newestAfterMarker)
+                if StatusID.isNewer(newerID, than: oldestAfterMarker) {
+                    gaps.append(TimelineGap(newerID: newerID, olderID: oldestAfterMarker))
+                }
+            }
+        } else if let newestAfterMarker = Self.newestID(of: afterMarker), StatusID.isNewer(oldestLatest, than: newestAfterMarker) {
+            gaps.append(TimelineGap(newerID: oldestLatest, olderID: newestAfterMarker))
+        }
+        do {
+            let fromMarker = try await fetch(TimelineQuery(maxID: fromMarkerMaxID, limit: pageSize))
+            if fromMarker.isRegenerating, let oldestFromMarker = Self.oldestID(of: fromMarker) {
+                gaps.append(TimelineGap(newerID: fromMarkerMaxID, olderID: oldestFromMarker))
+            }
+            return ([afterMarker, fromMarker], gaps, nil)
+        } catch where !Self.endsInitialLoad(error) {
+            // 既読位置から古い投稿は、末尾の古いページの読み込みで読める。
+            logger.error("load from marker failed: \(SciaLog.describe(error), privacy: .public)")
+            return ([afterMarker], gaps, nil)
+        }
+    }
+
+    private static func endsInitialLoad(_ error: any Error) -> Bool {
+        error is CancellationError || (error as? URLError)?.code == .cancelled || (error as? MastodonAPIError)?.isUnauthorized == true
+    }
+
     /// 末尾より古いページを読み、新たに足した投稿を返す。
     /// 読み込み中、終端に達している、まだ1件もない場合は何もせずnilを返す。
     public func loadOlder() async throws -> [Status]? {
@@ -188,7 +229,10 @@ public final class TimelineStore {
         state.isLoading = true
         defer { state.isLoading = false }
 
-        let added = try await fetchOlder(than: oldestID)
+        // 末尾がまだ読んでいない投稿なら、その投稿から読む。
+        let maxID = state.unloadedTailID.flatMap { $0 == oldestID ? StatusID.justAbove($0) : nil } ?? oldestID
+        let added = try await fetchOlder(than: maxID)
+        state.unloadedTailID = nil
         return added + mergeOlderArrivals()
     }
 

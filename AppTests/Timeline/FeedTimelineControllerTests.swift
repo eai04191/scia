@@ -96,17 +96,18 @@ struct FeedTimelineControllerTests {
 
     /// 止めたタイムラインの401は、セッションに知らせない。知らせると、ログアウトされたとして止まるため。
     @Test func stoppedControllerDoesNotReportUnauthorized() async throws {
-        let gate = ResponseGate()
+        let gate = Gate()
         let transport = ScriptedTransport { _ in
-            await gate.wait()
+            try? await gate.wait()
             return (401, Data(#"{"error":"The access token is invalid"}"#.utf8))
         }
         let controller = try makeController(transport: transport)
 
         controller.start(purpose: .action)
-        await gate.waitUntilWaiting()
+        // 既読位置と最新のページを並行に読むので、どちらも止まってから止める。
+        try await waitUntil { gate.waiterCount >= 2 }
         controller.stop()
-        await gate.open()
+        gate.open()
         // 止めた読み込みが、取り消しを受けて戻り切るまで待つ。
         try await waitUntil { controller.runningTaskCount == 0 }
         let session = try #require(sessions.sessions.last)
@@ -117,18 +118,19 @@ struct FeedTimelineControllerTests {
 
     /// ログアウトなどでセッションを閉じたら、タイムラインの`stop()`を呼ばなくても、走っている読み込みを止めて結果を使わない。
     @Test func closingSessionStopsLoadsWithoutStop() async throws {
-        let gate = ResponseGate()
+        let gate = Gate()
         let transport = ScriptedTransport { _ in
-            await gate.wait()
+            try? await gate.wait()
             return (401, Data(#"{"error":"The access token is invalid"}"#.utf8))
         }
         let controller = try makeController(transport: transport)
         let session = try #require(sessions.sessions.last)
 
         controller.start(purpose: .action)
-        await gate.waitUntilWaiting()
+        // 既読位置と最新のページを並行に読むので、どちらも止まってから閉じる。
+        try await waitUntil { gate.waiterCount >= 2 }
         session.close()
-        await gate.open()
+        gate.open()
         try await waitUntil { controller.runningTaskCount == 0 }
         try await waitUntil { session.tasks.runningCount == 0 }
 

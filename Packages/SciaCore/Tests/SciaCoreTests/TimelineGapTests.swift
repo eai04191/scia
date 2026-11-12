@@ -217,6 +217,96 @@ struct TimelineGapTests {
         }
     }
 
+    /// 既読位置のすぐ後のページを読めなくても、最新のページだけで表示し、既読位置までをギャップにする。
+    @Test func latestPageIsShownWhenPageAfterMarkerFails() async throws {
+        let server = FakeHomeServer(ids: 1...20, maxLimit: 2)
+        let store = TimelineStoreTester(pageSize: Self.pageSize) { query in
+            if query.minID != nil { throw URLError(.timedOut) }
+            return server.page(query)
+        }
+
+        try await store.expectChanges(during: { store in try await store.loadInitial(around: "5") }) {
+            $0.entries = entryRows([20, 19]) + [gapEntry(19, 5)]
+            $0.oldestLoadedID = "19"
+            $0.unloadedTailID = "5"
+            $0.lastReadID = "5"
+            #if DEBUG
+            $0.lastSavableReadID = "5"
+            #endif
+            $0.lastReadPosition = TimelineStore.DisplayPosition(anchorID: "5", sequence: 0)
+            $0.savedReadID = "5"
+        }
+        #expect(server.queries == [TimelineQuery(limit: Self.pageSize)], "既読位置から古いページまで読みました")
+    }
+
+    /// 既読位置までをギャップにしたあと、ギャップと末尾のどちらを先に読んでも、既読位置の投稿とその前後を読み落とさず、重ねて読まない。
+    /// ギャップも末尾の読み込みも、端の投稿を含めずに返すため。
+    @Test(arguments: [true, false])
+    func markerAndNeighborsAreLoadedAfterPageAfterMarkerFails(olderFirst: Bool) async throws {
+        let server = FakeHomeServer(ids: 1...12, maxLimit: 2)
+        let failsAfterMarker = Mutex(true)
+        let store = TimelineStoreTester(pageSize: Self.pageSize) { query in
+            if query.minID != nil, failsAfterMarker.withLock({ $0 }) { throw URLError(.timedOut) }
+            return server.page(query)
+        }
+        try await store.expectChanges(during: { store in
+            _ = try await store.loadInitial(around: "5")
+            failsAfterMarker.withLock { $0 = false }
+            if olderFirst {
+                while try await store.loadOlder() != nil, !store.reachedEnd {}
+            }
+            while let gap = store.gaps.first {
+                _ = try await store.loadGap(gap.id, from: .fromOlder)
+            }
+            while try await store.loadOlder() != nil, !store.reachedEnd {}
+        }) {
+            $0.entries = entryRows(1...12)
+            $0.oldestLoadedID = "1"
+            $0.reachedEnd = true
+            $0.lastReadID = "5"
+            #if DEBUG
+            $0.lastSavableReadID = "5"
+            #endif
+            $0.lastReadPosition = TimelineStore.DisplayPosition(anchorID: "5", sequence: 0)
+            $0.savedReadID = "5"
+        }
+        #expect(ids(store) == Array((1...12).reversed()))
+    }
+
+    /// 既読位置から古いページを読めなくても、読めた分で表示する。古いページは末尾の読み込みで読める。
+    @Test func loadedPagesAreShownWhenPageFromMarkerFails() async throws {
+        let server = FakeHomeServer(ids: 1...20, maxLimit: 2)
+        let store = TimelineStoreTester(pageSize: Self.pageSize) { query in
+            if query.maxID == "6" { throw URLError(.timedOut) }
+            return server.page(query)
+        }
+
+        try await store.expectChanges(during: { store in try await store.loadInitial(around: "5") }) {
+            $0.entries = entryRows([20, 19]) + [gapEntry(19, 7)] + entryRows([7, 6])
+            $0.oldestLoadedID = "6"
+            $0.lastReadID = "5"
+            #if DEBUG
+            $0.lastSavableReadID = "5"
+            #endif
+            $0.lastReadPosition = TimelineStore.DisplayPosition(anchorID: "5", sequence: 0)
+            $0.savedReadID = "5"
+        }
+    }
+
+    /// トークンの失効は、最新のページが読めていても読み込み全体を失敗にする。
+    @Test func unauthorizedAroundMarkerFailsInitialLoad() async throws {
+        let server = FakeHomeServer(ids: 1...20, maxLimit: 2)
+        let store = TimelineStoreTester(pageSize: Self.pageSize) { query in
+            if query.minID != nil { throw MastodonAPIError(statusCode: 401, message: "") }
+            return server.page(query)
+        }
+
+        await #expect(throws: MastodonAPIError.self) {
+            try await store.expectChanges(during: { store in try await store.loadInitial(around: "5") }) { _ in }
+        }
+        #expect(store.isEmpty)
+    }
+
     @Test func fillWithinOnePageLeavesNoGap() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)

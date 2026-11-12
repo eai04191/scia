@@ -66,6 +66,58 @@ struct FeedTimelineModelTests {
         #expect(display.footerState == model.footerState)
     }
 
+    /// 既読位置の応答を待たずに、最新のページを読み始める。届いたら、既読位置の投稿を最上部に置く。
+    @Test func initialLoadReadsLatestPageWhileMarkerIsPending() async throws {
+        let markerGate = Gate()
+        let transport = RoutedTransport { request in
+            switch request.url?.path() {
+            case "/api/v1/markers":
+                try await markerGate.wait()
+                return (200, Data(#"{"home":{"last_read_id":"2"}}"#.utf8))
+            case "/api/v1/timelines/home":
+                let query = request.url?.query() ?? ""
+                return (200, try TimelineModelFixtures.body(query.contains("min_id") || query.contains("since_id") ? [] : [3, 2, 1]))
+            default:
+                return (404, Data(#"{"error":"Not found"}"#.utf8))
+            }
+        }
+        let (model, display) = makeModel(transport: transport)
+        defer { model.stop() }
+
+        model.start(purpose: .action)
+        try await waitUntil { markerGate.waiterCount >= 1 && !transport.requests(to: "/api/v1/timelines/home").isEmpty }
+        #expect(display.contentState == .loading)
+
+        markerGate.open()
+        try await waitUntil { display.contentState == .loaded }
+        #expect(display.entriesCalls.first?.topID == .status("2"))
+    }
+
+    /// 既読位置の周りのページを読めなくても、最新のページを表示する。
+    @Test func initialLoadShowsLatestPageWhenPagesAroundMarkerFail() async throws {
+        let transport = RoutedTransport { request in
+            switch request.url?.path() {
+            case "/api/v1/markers":
+                return (200, Data(#"{"home":{"last_read_id":"3"}}"#.utf8))
+            case "/api/v1/timelines/home":
+                let query = request.url?.query() ?? ""
+                if query.contains("min_id") { return (500, Data(#"{"error":"Internal Server Error"}"#.utf8)) }
+                return (200, try TimelineModelFixtures.body(query.contains("since_id") ? [] : [9, 8, 7]))
+            default:
+                return (404, Data(#"{"error":"Not found"}"#.utf8))
+            }
+        }
+        let (model, display) = makeModel(transport: transport)
+        defer { model.stop() }
+
+        model.start(purpose: .action)
+        try await waitUntil { display.contentState == .loaded }
+
+        #expect(display.statusIDs == ["9", "8", "7"])
+        #expect(display.entries.last?.id == .gap(TimelineGap(newerID: "7", olderID: "3").id))
+        #expect(display.entriesCalls.first?.topID == nil)
+    }
+
     /// 最初の読み込みに失敗したら、画面ではなくモデルが失敗を覚えていて、電波の回復でやり直す。
     @Test func recoverRetriesFailedInitialLoad() async throws {
         let failsTimeline = Mutex(true)
@@ -388,7 +440,8 @@ struct FeedTimelineModelTests {
         let (model, display) = makeModel(transport: transport)
 
         model.start(purpose: .action)
-        try await waitUntil { gate.waiterCount == 1 }
+        // 既読位置と最新のページを並行に読むので、どちらも止まってから止める。
+        try await waitUntil { gate.waiterCount >= 2 }
         let commandsBeforeStop = display.commandCount
         model.stop()
         gate.open()
