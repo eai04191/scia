@@ -49,7 +49,7 @@ struct BodyTextPreparerTests {
     /// 先に作るのを頼んで、作り終えるまで待つ。作っている間にカスタム絵文字の画像の状態が変われば、タイムラインと同じく頼み直す。
     private func prepare(_ status: Status, builder: PostContentBuilder, preparer: BodyTextPreparer, geometry: BodyTextPreparer.Geometry?, translation: RichText? = nil) async throws -> BodyTextPreparer.Prepared {
         try await waitUntil {
-            preparer.prepare([status], renderer: builder.postBodyRenderer(of:translation:), geometry: geometry, truncation: { _ in nil }, translation: { _ in translation }, guessesLinkCardDirections: false)
+            preparer.prepare([status], renderer: { builder.postBodyRenderer(of: $0, translation: $1) }, geometry: geometry, truncation: { _ in nil }, translation: { _ in translation }, guessesLinkCardDirections: false)
             return preparer.prepared(for: status, translation: translation, renderer: builder.postBodyRenderer(of: status, translation: translation)) != nil
         }
         return try #require(preparer.prepared(for: status, translation: translation, renderer: builder.postBodyRenderer(of: status, translation: translation)))
@@ -134,7 +134,8 @@ struct BodyTextPreparerTests {
 
         let prepared = try await prepare(status, builder: builder, preparer: preparer, geometry: nil, translation: translation)
 
-        #expect(prepared.text.string == "こんにちは")
+        #expect(prepared.text.hasTranslationMark)
+        #expect(prepared.text.stringWithoutTranslationMark == "こんにちは")
         #expect(preparer.prepared(for: status, translation: nil, renderer: builder.postBodyRenderer(of: status)) == nil)
     }
 
@@ -193,7 +194,7 @@ struct BodyTextPreparerTests {
             url: nil,
             card: PreviewCard(url: URL(string: "https://example.com/page")!, title: title, description: description, type: .link, providerName: "")
         )
-        preparer.prepare([status], renderer: builder.postBodyRenderer(of:translation:), geometry: nil, truncation: { _ in nil }, translation: { _ in nil }, guessesLinkCardDirections: true)
+        preparer.prepare([status], renderer: { builder.postBodyRenderer(of: $0, translation: $1) }, geometry: nil, truncation: { _ in nil }, translation: { _ in nil }, guessesLinkCardDirections: true)
 
         try await waitUntil { GuessedWritingDirection.isKnown(title) && GuessedWritingDirection.isKnown(description) }
         #expect(GuessedWritingDirection.isRightToLeft(title))

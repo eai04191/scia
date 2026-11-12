@@ -56,13 +56,13 @@ struct TranslationArrivalTests {
         #expect(harness.secondaryText(of: target.id)?.hasPrefix("訳文") == true)
     }
 
-    /// 囲みの本文の先頭に足す翻訳のマークの空きは、先頭の文字の書体と段落の形だけを引き継ぐ。リンクを引き継ぐと、マークを押して先頭のリンクが開く。
+    /// 本文の先頭に足す翻訳のマークの空きは、先頭の文字の書体と段落の形だけを引き継ぐ。リンクを引き継ぐと、マークを押して先頭のリンクが開く。
     @Test func translationMarkDoesNotInheritLink() throws {
         let url = try #require(URL(string: "https://example.com/a"))
         let font = UIFont.systemFont(ofSize: 15)
         let text = NSAttributedString(string: "example.com/a", attributes: [.font: font, .linkDestination: RichText.LinkDestination.url(url), .copiedLinkText: "https://example.com/a"])
 
-        let reserved = EmbeddedPostView.reservingTranslationMark(in: text, scale: 2)
+        let reserved = RichTextRenderer.reservingTranslationMark(in: text, scale: 2)
 
         #expect(reserved.string.hasSuffix(" example.com/a"))
         #expect(reserved.length == text.length + 2)
@@ -73,6 +73,44 @@ struct TranslationArrivalTests {
         let attachment = try #require(attributes[.attachment] as? NSTextAttachment)
         #expect(attachment.bounds.height == EmojiFont.glyphHeight(of: font) * 2)
         #expect(reserved.attribute(.linkDestination, at: 2, effectiveRange: nil) != nil)
+        // コピーと読み上げには、マークの空きを渡さない。
+        #expect(reserved.copiedPlainText == "example.com/a")
+        #expect(reserved.stringWithoutTranslationMark == "example.com/a")
+    }
+
+    /// 引用の段落から始まる本文では、マークの空きも引用の縦線の属性を持つ。縦線は行の先頭の文字の属性で決まる。
+    @Test func translationMarkKeepsQuoteBars() {
+        var renderer = RichTextRenderer(font: .systemFont(ofSize: 15), textColor: .label, emojiImages: .offline, language: "ja")
+        let quote = RichText(blocks: [RichText.Block(inlines: [.text("引用", [])], quoteLevel: 1)])
+        let plain = renderer.render(quote)
+        renderer.marksTranslation = true
+
+        let marked = renderer.render(quote)
+
+        #expect(plain.attribute(.quoteBars, at: 0, effectiveRange: nil) != nil)
+        #expect(marked.attribute(.quoteBars, at: 0, effectiveRange: nil) != nil)
+    }
+
+    /// 絵文字だけの本文には訳す語がないので、マークの空きを足さない。文字のない本文にも足さない。
+    @Test func rendererDoesNotMarkBodyWithoutWords() {
+        var renderer = RichTextRenderer(font: .systemFont(ofSize: 15), textColor: .label, emojiImages: .offline, language: "ja")
+        renderer.marksTranslation = true
+
+        #expect(!renderer.render(.plain("😀", emojis: [])).hasTranslationMark)
+        #expect(!renderer.render(.plain("", emojis: [])).hasTranslationMark)
+        #expect(renderer.render(.plain("word 😀", emojis: [])).hasTranslationMark)
+    }
+
+    /// テキストの選択では、マークの空きを選んだ範囲に入れない。
+    @Test func selectionExcludesTranslationMark() {
+        var renderer = RichTextRenderer(font: .systemFont(ofSize: 15), textColor: .label, emojiImages: .offline, language: "ja")
+        renderer.marksTranslation = true
+        let view = SelectableTextView(text: renderer.render(.plain("訳文の本文", emojis: [])))
+
+        view.selectedRange = NSRange(location: 0, length: view.attributedText.length)
+        view.textViewDidChangeSelection(view)
+
+        #expect(view.selectedRange == NSRange(location: 2, length: 5))
     }
 
     private func line(_ y: CGFloat, width: CGFloat) -> TextReplacementTransition.Line {

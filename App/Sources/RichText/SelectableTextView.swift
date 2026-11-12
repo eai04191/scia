@@ -56,7 +56,7 @@ final class SelectableTextView: UITextView, UITextViewDelegate, @MainActor UIEdi
 
     /// 読み上げる文字。場所取りに置き換えた絵文字は、元の絵文字で読む。
     override var accessibilityValue: String? {
-        get { TextKitLabelLayout.restoringOverlaidGlyphs(attributedText) }
+        get { TextKitLabelLayout.restoringOverlaidGlyphs(attributedText.withoutTranslationMark) }
         set { super.accessibilityValue = newValue }
     }
 
@@ -108,7 +108,7 @@ final class SelectableTextView: UITextView, UITextViewDelegate, @MainActor UIEdi
     /// 本文の全体を選び、編集メニューを出す。Macでは出さない。右クリックやキー操作でコピーなどを行えるため。
     func beginSelectingAll() {
         becomeFirstResponder()
-        selectedRange = NSRange(location: 0, length: attributedText.length)
+        selectedRange = NSRange(location: translationMarkLength, length: attributedText.length - translationMarkLength)
         if !ProcessInfo.processInfo.isiOSAppOnMac {
             presentEditMenu()
         }
@@ -151,7 +151,19 @@ final class SelectableTextView: UITextView, UITextViewDelegate, @MainActor UIEdi
         return point.y <= height
     }
 
+    /// 先頭の自動翻訳のマークの空きの文字数。なければ0。
+    private var translationMarkLength: Int {
+        attributedText.length - attributedText.withoutTranslationMark.length
+    }
+
     func textViewDidChangeSelection(_ textView: UITextView) {
+        // 自動翻訳のマークの空きは本文ではないので、選んだ範囲に入れない。
+        let markLength = translationMarkLength
+        if selectedRange.length > 0, selectedRange.location < markLength {
+            let end = max(NSMaxRange(selectedRange), markLength)
+            selectedRange = NSRange(location: markLength, length: end - markLength)
+            return
+        }
         // マウスやトラックパッドのクリックとドラッグは、語や範囲に広げる前に一度選択を空にするので、空になってもやめない。
         if selectedRange.length == 0, lastTouchType != .indirectPointer {
             onEnd?()
@@ -188,7 +200,7 @@ extension NSAttributedString {
     var copiedPlainText: String {
         var result = ""
         enumerateAttributes(in: NSRange(location: 0, length: length)) { attributes, range, _ in
-            if attributes[.leadingEmojiGuard] != nil || attributes[.overlaidGlyphFiller] != nil {
+            if attributes[.leadingEmojiGuard] != nil || attributes[.overlaidGlyphFiller] != nil || attributes[.translationMark] != nil {
                 return
             }
             if let glyph = attributes[.overlaidGlyph] as? OverlaidGlyph {

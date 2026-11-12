@@ -45,11 +45,11 @@ enum PostRowCatalog {
                     var configuration = home.contentConfiguration(for: status, isPinned: false, base: .cell())
                     configuration.isTranslated = !isTranslating
                     configuration.isTranslating = isTranslating
+                    configuration.body = RichTextRenderer.reservingTranslationMark(in: configuration.body, scale: 1)
                     return configuration
                 }
             }
         }
-        let longNameAccount = Fixtures.account(displayName: String(repeating: "とても長い表示名", count: 4), acct: "a-very-long-account-name@subdomain.example.com")
         let longHandleAccount = Fixtures.account(displayName: "長いハンドルの人", acct: "a-very-long-account-name-for-replies@subdomain.example.com")
         let longSpoiler = String(repeating: "注意書きが長く、何行にもわたるときの折り返しを確かめる。", count: 4)
         /// `count`個の段落を並べた本文。1段落は1行に収まる。既定の「投稿の見た目」では、32行を超えたら15行に切る。
@@ -74,9 +74,10 @@ enum PostRowCatalog {
             post("切った本文をブーストした投稿", status(content: lines(40), rebloggedBy: booster)),
             post("切った本文を広げた", status(content: lines(40)), expandsBody: true),
             post("注意書きを開いた長い本文（切らない）", status(content: lines(40), spoilerText: "ネタバレ"), expandsSpoiler: true),
-            translation("訳文の投稿（翻訳のアイコン）", status(content: "<p>訳文の本文。</p>"), isTranslating: false),
-            translation("訳文を待っている投稿（パルス）", status(content: "<p>原文の本文。</p>"), isTranslating: true),
-            translation("長い表示名とハンドルに翻訳のアイコン", status(content: "<p>訳文の本文。</p>", account: longNameAccount), isTranslating: false),
+            translation("訳文の投稿（本文の先頭に翻訳のマーク）", status(content: "<p>訳文の本文。</p>"), isTranslating: false),
+            translation("訳文を待っている投稿（マークがパルス）", status(content: "<p>原文の本文。</p>"), isTranslating: true),
+            translation("訳文の投稿で、本文がメンションから始まる", status(content: #"<p><a href="https://example.com/@a" class="u-url mention">@a</a> 訳文の本文。</p>"#), isTranslating: false),
+            translation("訳文の投稿で、本文が折り返す", status(content: "<p>" + String(repeating: "訳文の本文が折り返す。", count: 8) + "</p>"), isTranslating: false),
             post("ブーストされた投稿", status(content: "<p>ブーストされた投稿。</p>", rebloggedBy: booster)),
             post("固定された投稿", status(content: "<p>プロフィールの上に固定された投稿。</p>"), isPinned: true),
             post("ほかの人への返信", status(content: "<p>返信の本文。</p>", account: booster, replyingTo: author)),
@@ -464,7 +465,10 @@ enum PostRowCatalog {
                 let status = status(content: "<p>引用した投稿の本文。</p>", quote: quote)
                 return CatalogFrame.post {
                     var configuration = home.contentConfiguration(for: status, base: .cell())
-                    configuration.embed?.translation = EmbeddedPostView.Content.Translation(isTranslated: isTranslated, wipeDuration: 0, shiftDuration: 0, wordDuration: 0, fadeWidth: 0, markScale: 1)
+                    configuration.embed?.translation = EmbeddedPostView.Content.Translation(isTranslated: isTranslated, wipeDuration: 0, shiftDuration: 0, wordDuration: 0, fadeWidth: 0)
+                    if let text = configuration.embed?.text {
+                        configuration.embed?.text = RichTextRenderer.reservingTranslationMark(in: text, scale: 1)
+                    }
                     return configuration
                 }
             }

@@ -16,7 +16,8 @@ struct PostContentBuilder {
     /// - Parameter isPinned: プロフィールの上に置く、固定された投稿。名前の上に固定されていることを示す行を出す。
     /// - Parameter replyLabel: 名前の上に出す返信のラベル。固定された投稿とブーストでは、そのことを示す行を優先し、ラベルは出さない。
     /// - Parameter translation: 本文を原文の代わりに描く訳文。
-    func configuration(for status: Status, isPinned: Bool = false, replyLabel: ReplyLabel? = nil, translation: RichText? = nil, base: UIListContentConfiguration) -> PostContentConfiguration {
+    /// - Parameter isTranslating: 本文の訳文を待っている。
+    func configuration(for status: Status, isPinned: Bool = false, replyLabel: ReplyLabel? = nil, translation: RichText? = nil, isTranslating: Bool = false, base: UIListContentConfiguration) -> PostContentConfiguration {
         let shown = status.displayed
         let typography = PostTypography(settings: settings)
         // 名前の上の行も名前を描くので、名前の行と同じ割合で絵文字の大きさを変える。本文の絵文字は本文の割合で描く。
@@ -73,7 +74,7 @@ struct PostContentBuilder {
             case .acct: renderer.render(.plain("@\(shown.account.acct)", emojis: []))
             }
         }
-        let bodyRenderer = postBodyRenderer(of: shown, translation: translation)
+        let bodyRenderer = postBodyRenderer(of: shown, translation: translation, isTranslating: isTranslating)
         let preparedBody = preparedBodies?.prepared(for: shown, translation: translation, renderer: bodyRenderer)
         let context: PostContentConfiguration.Context? = if isPinned {
             PostContentConfiguration.Context(
@@ -118,6 +119,7 @@ struct PostContentBuilder {
         )
         configuration.preparedBodyLayout = preparedBody?.layout
         configuration.isTranslated = translation != nil
+        configuration.isTranslating = translation == nil && isTranslating
         configuration.translationFadeDuration = tuning.value(of: TuningCatalog.translationTransitionDuration)
         configuration.translationWipeDuration = tuning.value(of: TuningCatalog.translationWipeDuration)
         configuration.translationWordDuration = tuning.value(of: TuningCatalog.translationWordDuration)
@@ -251,9 +253,11 @@ struct PostContentBuilder {
 
     /// タイムラインの投稿の本文（`configuration(for:isPinned:replyLabel:base:)`の本文）の描き手。本文を先に作るときも、同じ描き手で作る。
     /// - Parameter translation: 本文を原文の代わりに描く訳文。訳文は翻訳先の言語の字形で描き、訳文の中に残した原文の部分は投稿の言語の字形で描く。
-    func postBodyRenderer(of status: Status, translation: RichText? = nil) -> RichTextRenderer {
+    /// - Parameter isTranslating: 本文の訳文を待っている。訳文か、待っている原文には、先頭に翻訳のマークの空きを足す。
+    func postBodyRenderer(of status: Status, translation: RichText? = nil, isTranslating: Bool = false) -> RichTextRenderer {
         var renderer = bodyRenderer(of: status, font: PostTypography(settings: settings).font(.body), color: .label)
         renderer.emojiOnly = emojiOnlyEnlargement
+        renderer.marksTranslation = translation != nil || isTranslating
         if translation != nil {
             renderer.originalLanguage = renderer.language
             renderer.language = settings.glyphLanguageIdentifier(for: settings.resolvedTranslationTarget.minimalIdentifier)
@@ -300,7 +304,8 @@ struct PostContentBuilder {
     func xPost(_ post: XPost, translation: EmbedTranslation? = nil, media: MediaGridView.Content?, base: UIListContentConfiguration) -> EmbeddedPostView.Content {
         let typography = PostTypography(settings: settings)
         let language = settings.glyphLanguageIdentifier(for: post.language)
-        let body = translated(RichTextRenderer(font: typography.font(.xPostBody), textColor: .label, emojiImages: emojiImages, language: language), by: translation)
+        // Xの投稿にカスタム絵文字はないが、翻訳のマークを引用の囲みと同じ大きさにするため、同じ倍率を渡す。
+        let body = translated(RichTextRenderer(font: typography.font(.xPostBody), textColor: .label, emojiScale: settings.value(of: AppearanceCatalog.customEmojiScale), emojiImages: emojiImages, language: language), by: translation)
         return embed(
             id: "x:\(post.id)",
             header: EmbeddedPostView.Content.Header(
@@ -421,10 +426,12 @@ struct PostContentBuilder {
         var text: RichText?
     }
 
-    /// 訳文を描くなら、訳文は翻訳先の言語の字形で、訳文の中に残した原文の部分は元の言語の字形で描く描き手にする。
+    /// 訳文か、訳文を待っている原文なら、先頭に翻訳のマークの空きを足す描き手にする。
+    /// 訳文を描くなら、訳文は翻訳先の言語の字形で、訳文の中に残した原文の部分は元の言語の字形で描く。
     private func translated(_ renderer: RichTextRenderer, by translation: EmbedTranslation?) -> RichTextRenderer {
-        guard translation?.text != nil else { return renderer }
         var renderer = renderer
+        renderer.marksTranslation = translation != nil
+        guard translation?.text != nil else { return renderer }
         renderer.originalLanguage = renderer.language
         renderer.language = settings.glyphLanguageIdentifier(for: settings.resolvedTranslationTarget.minimalIdentifier)
         return renderer
@@ -437,8 +444,7 @@ struct PostContentBuilder {
                 wipeDuration: tuning.value(of: TuningCatalog.translationWipeDuration),
                 shiftDuration: tuning.value(of: TuningCatalog.translationTransitionDuration),
                 wordDuration: tuning.value(of: TuningCatalog.translationWordDuration),
-                fadeWidth: tuning.value(of: TuningCatalog.translationFadeWidth),
-                markScale: settings.value(of: AppearanceCatalog.customEmojiScale)
+                fadeWidth: tuning.value(of: TuningCatalog.translationFadeWidth)
             )
         }
     }

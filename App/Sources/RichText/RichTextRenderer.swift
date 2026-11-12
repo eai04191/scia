@@ -29,6 +29,8 @@ struct RichTextRenderer: Sendable {
     var language: String
     /// 訳文の中に残した原文の部分（`RichText.Style.original`）に付ける言語。nilなら`language`を付ける。
     var originalLanguage: String?
+    /// 先頭に、自動翻訳のマークの空きを足す。訳文か、訳文を待っている原文で使う。決まりはdocs/auto-translation.mdの「見せ方」にある。
+    var marksTranslation = false
     /// Unicodeの絵文字を描く絵。描く場所ごとに渡さず、設定から読む。
     var emojiStyle: EmojiStyle
     /// カスタム絵文字を描く画面の、1ptあたりのピクセル数。読む画像の高さを決めるのに使う。
@@ -134,9 +136,46 @@ struct RichTextRenderer: Sendable {
             && underlinesLinks == other.underlinesLinks && paragraphSpacing == other.paragraphSpacing && lineSpacing == other.lineSpacing
             && indentPerLevel == other.indentPerLevel && quoteBarWidth == other.quoteBarWidth && emojiScale == other.emojiScale && unicodeEmojiScale == other.unicodeEmojiScale
             && emojiOnly == other.emojiOnly && language == other.language && originalLanguage == other.originalLanguage && emojiStyle == other.emojiStyle && displayScale == other.displayScale
+            && marksTranslation == other.marksTranslation
     }
 
     func render(_ text: RichText) -> NSAttributedString {
+        let body = renderBody(text)
+        // 絵文字だけの本文には訳す語がなく、訳文にならないので、訳せないと分かるまでの間もマークを出さない。
+        guard marksTranslation, text.emojiOnlyCount(isEmoji: { Self.isUnicodeEmoji($0, in: font(for: $1, block: $2)) }) == nil else { return body }
+        return Self.reservingTranslationMark(in: body, font: font, scale: emojiScale)
+    }
+
+    /// `text`の先頭に、自動翻訳のマークの空きと空白を足す。空きは、同じ文字の大きさのカスタム絵文字と同じ大きさと位置にする。マークは、描く部品が空きに重ねる。
+    /// 待つ間にパルスさせるため、文字の中の画像にしない。文字のない`text`には足さない。
+    /// 先頭の文字からは、行の形を決める属性だけを引き継ぐ。リンクや絵文字の属性を引き継ぐと、マークがその一部として扱われる。
+    /// 引用の段落の縦線は行の先頭の文字の属性で決まるので、その属性は引き継ぐ。
+    /// - Parameters:
+    ///   - font: 大きさの基準にする文字の書体。nilなら先頭の文字の書体。先頭がコードのように別の書体でも、本文の文字の大きさで置くために渡す。
+    ///   - scale: カスタム絵文字の倍率。
+    static func reservingTranslationMark(in text: NSAttributedString, font: UIFont? = nil, scale: CGFloat) -> NSAttributedString {
+        guard text.length > 0 else { return text }
+        let first = text.attributes(at: 0, effectiveRange: nil)
+        guard let font = font ?? first[.font] as? UIFont else { return text }
+        var attributes = first.filter { [.paragraphStyle, .languageIdentifier, .foregroundColor, .quoteBars].contains($0.key) }
+        attributes[.font] = font
+        attributes[.translationMark] = true
+        let side = EmojiFont.glyphHeight(of: font) * scale
+        // カスタム絵文字と同じく、行より広ければ行の幅まで縮めて置く。`NSTextAttachment(image:)`で作ると、`bounds`を入れても大きさが変わらない。
+        let attachment = LineFittingAttachment()
+        attachment.image = translationMarkPlaceholder
+        attachment.bounds = CGRect(x: 0, y: emojiCenterHeight * font.pointSize - side / 2, width: side, height: side)
+        let result = NSMutableAttributedString(attachment: attachment)
+        result.append(NSAttributedString(string: " "))
+        result.addAttributes(attributes, range: NSRange(location: 0, length: result.length))
+        result.append(text)
+        return result
+    }
+
+    /// 自動翻訳のマークの空きに置く、透明な画像。読み込み中のカスタム絵文字の空き（`emojiPlaceholder`）と見分けるため、別の画像にする。
+    static let translationMarkPlaceholder = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1)).image { _ in }
+
+    private func renderBody(_ text: RichText) -> NSAttributedString {
         if let emojiOnly, let count = text.emojiOnlyCount(isEmoji: { Self.isUnicodeEmoji($0, in: font(for: $1, block: $2)) }) {
             return render(emojiOnlyText: text, count: count, enlargement: emojiOnly)
         }
@@ -165,6 +204,7 @@ struct RichTextRenderer: Sendable {
     private func render(emojiOnlyText text: RichText, count: Int, enlargement: EmojiOnlyEnlargement) -> NSAttributedString {
         var renderer = self
         renderer.emojiOnly = nil
+        renderer.marksTranslation = false
         if count <= enlargement.limit {
             renderer.emojiScale *= enlargement.scale
             renderer.unicodeEmojiScale *= enlargement.scale
@@ -609,6 +649,8 @@ extension NSAttributedString.Key {
     /// リンクの行き先（`RichText.LinkDestination`）。`.link`はUILabelが特別に扱い、再利用したラベルで前の内容の色のまま次の本文を描くことがあるため、
     /// UILabelが関知しない独自の名前で持つ。押されたリンクは`LinkLabel`がこの属性から読む。
     static let linkDestination = NSAttributedString.Key("net.mizle.scia.linkDestination")
+    /// 自動翻訳のマークの空きと、その後ろの空白（`RichTextRenderer.reservingTranslationMark`）。コピーや読み上げに渡す文字から除くのに使う。
+    static let translationMark = NSAttributedString.Key("net.mizle.scia.translationMark")
     /// 画像を埋め込んだカスタム絵文字（`CustomEmoji`）。`LinkLabel`が、アニメーションする絵文字を動かすのに読む。
     static let customEmoji = NSAttributedString.Key("net.mizle.scia.customEmoji")
     /// カスタム絵文字を動かすときに、動く層の上に重ねる色（`UIColor`）。編集履歴で足した絵文字を示すのに使う。
@@ -636,4 +678,23 @@ struct EmojiOnlyEnlargement: Equatable, Sendable {
     var scale: CGFloat
     /// 大きくする絵文字の数の上限。
     var limit: Int
+}
+
+extension NSAttributedString {
+    /// 先頭に自動翻訳のマークの空きがあるか。
+    var hasTranslationMark: Bool {
+        length > 0 && attribute(.translationMark, at: 0, effectiveRange: nil) != nil
+    }
+
+    /// 自動翻訳のマークの空きを除いた文字列。
+    var withoutTranslationMark: NSAttributedString {
+        var range = NSRange()
+        guard length > 0, attribute(.translationMark, at: 0, longestEffectiveRange: &range, in: NSRange(location: 0, length: length)) != nil else { return self }
+        return attributedSubstring(from: NSRange(location: NSMaxRange(range), length: length - NSMaxRange(range)))
+    }
+
+    /// 自動翻訳のマークの空きを除いた文字。読み上げに渡す。
+    var stringWithoutTranslationMark: String {
+        withoutTranslationMark.string
+    }
 }

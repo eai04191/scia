@@ -2291,7 +2291,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let builder = postContentBuilder
         bodyTextPreparer.prepare(
             statuses,
-            renderer: builder.postBodyRenderer(of:translation:),
+            renderer: { [translations] status, translated in
+                builder.postBodyRenderer(of: status, translation: translated, isTranslating: translations?.isTranslating(TranslationSource(status)) == true)
+            },
             geometry: bodyTextGeometry,
             truncation: { truncations[$0.id] },
             translation: { [translations] in translations?.translation(for: TranslationSource($0)) },
@@ -2319,8 +2321,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         // 消すと、読み終えた瞬間に名前と本文がラベルの1行分だけ上へ跳ねる。
         let hidesReplyLabel = hidesReplyLabelBelowParent && connection.parentIsAbove && shown.id != threadFocusID
         let replyLabel = hidesReplyLabel ? nil : ReplyLabel(status: shown, myAccountID: myAccountID)
-        var configuration = postContentBuilder.configuration(for: status, isPinned: isPinned, replyLabel: replyLabel, translation: translatesBody ? translatedBody(of: status) : nil, base: base)
-        configuration.isTranslating = translatesBody && translations?.isTranslating(TranslationSource(status.displayed)) == true
+        let isTranslating = translatesBody && translations?.isTranslating(TranslationSource(status.displayed)) == true
+        var configuration = postContentBuilder.configuration(for: status, isPinned: isPinned, replyLabel: replyLabel, translation: translatesBody ? translatedBody(of: status) : nil, isTranslating: isTranslating, base: base)
         configuration.replyConnection = connection
         configuration.onOpenAccount = { [weak self] in self?.onOpenProfile?(shown.account) }
         configuration.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination, shown) }

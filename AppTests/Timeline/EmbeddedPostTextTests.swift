@@ -77,10 +77,11 @@ struct EmbeddedPostTextTests {
     }
 
     private func translating(_ string: String, isTranslated: Bool) -> EmbeddedPostView.Content {
-        let renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: .offline, language: "ja")
+        var renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: .offline, language: "ja")
+        renderer.marksTranslation = true
         var content = embed(text: renderer.render(.plain(string, emojis: [])))
         content.notes = [EmbeddedPostView.Content.Note(text: NSAttributedString(string: "投票", attributes: [.font: font]), isPressable: false)]
-        content.translation = EmbeddedPostView.Content.Translation(isTranslated: isTranslated, wipeDuration: 0.3, shiftDuration: 0.3, wordDuration: 0.1, fadeWidth: 10, markScale: 1)
+        content.translation = EmbeddedPostView.Content.Translation(isTranslated: isTranslated, wipeDuration: 0.3, shiftDuration: 0.3, wordDuration: 0.1, fadeWidth: 10)
         return content
     }
 

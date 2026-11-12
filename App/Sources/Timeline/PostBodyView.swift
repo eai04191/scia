@@ -37,6 +37,8 @@ struct PostBodyContent {
     /// 注意書きがなければnil。
     var spoiler: Spoiler?
     var text: NSAttributedString
+    /// 本文が訳文ならfalse、訳文を待っている原文ならtrue。`text`の先頭の空き（`RichTextRenderer.marksTranslation`）に、翻訳のマークを重ねる。出さなければnil。
+    var translationMarkPulses: Bool?
     /// `text`を先に並べた結果。先に並べていなければnil。
     var preparedLayout: PreparedTextLayout?
     /// 本文を切る行数。0なら切らない。
@@ -152,6 +154,8 @@ final class PostBodyView: UIView {
     private let mediaImages: MediaImageStore<UIImage>
     private let avatarImages: AvatarImageStore<UIImage>
     private let textLabel = LinkLabel()
+    /// 本文の先頭の空きに重ねる、翻訳のマーク。
+    private let translationMark = TranslationMarkView()
     /// 本文の最初と最後のベースラインの位置。本文の上下のすき間は字面から測るので、「投稿の見た目」のプレビューで字面の枠を求めるのに使う。
     /// 本文の上下の部品は、ラベルのベースラインではなく、この位置から置く。
     private let textFirstBaselineGuide = UILayoutGuide()
@@ -411,6 +415,7 @@ final class PostBodyView: UIView {
         textLabel.numberOfLines = 0
         textLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(textLabel)
+        addSubview(translationMark)
         let textTrailing = textLabel.trailingAnchor.constraint(equalTo: trailingAnchor)
         self.textTrailing = textTrailing
         NSLayoutConstraint.activate([textLabel.leadingAnchor.constraint(equalTo: leadingAnchor), textTrailing])
@@ -648,7 +653,7 @@ final class PostBodyView: UIView {
     /// 切った本文は、切った部分を選べず、高さを変えずに全文を出せないため。
     var canSelectText: Bool {
         guard let content, !textLabel.isHidden, content.maximumLines == 0, !textLabel.isTruncatedByLength else { return false }
-        return !content.text.string.allSatisfy(\.isWhitespace)
+        return !content.text.stringWithoutTranslationMark.allSatisfy(\.isWhitespace)
     }
 
     /// 本文を選べる状態にしたときと、やめたときに呼ぶ。置く側は、読み上げの要素を差し替える。
@@ -805,6 +810,10 @@ final class PostBodyView: UIView {
         let embed = isCollapsed ? nil : content.embed
         let card = isCollapsed || embed != nil ? nil : content.card
         textLabel.isHidden = isCollapsed || (content.text.length == 0 && (poll != nil || media != nil || card != nil || embed != nil || content.spoiler != nil))
+        translationMark.apply(
+            pulses: textLabel.isHidden || !content.text.hasTranslationMark ? nil : content.translationMarkPulses,
+            keepsPulse: previous?.statusID == content.statusID && previous?.translationMarkPulses == true
+        )
         // 本文と添付ファイルは、注意書きがあればその下から並べる。
         let contentTop = shownSpoiler?.bottomAnchor ?? topAnchor
         let contentTopSpacing = shownSpoiler == nil ? 0 : content.spoiler?.bodySpacing ?? 0
@@ -946,6 +955,7 @@ final class PostBodyView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        translationMark.layout(over: textLabel, in: self)
         // 行より広いカスタム絵文字の縮め方が、中身を適用したときに見込んだ幅と違えば、字面の上下の位置が変わり、本文の高さも変わるので、タイムラインの行に測り直させる。
         if updateTextKitBaselines(width: textLabel.bounds.width) {
             invalidateRowHeight()
@@ -1244,13 +1254,13 @@ final class PostBodyView: UIView {
     /// 読み上げる文。注意書きがあれば先に読み、折りたたんでいる間は本文を読まない。フィルターの注記は別の要素なので含めない。
     var accessibilityText: String {
         guard let content else { return "" }
-        guard let spoiler = content.spoiler else { return content.text.string }
+        guard let spoiler = content.spoiler else { return content.text.stringWithoutTranslationMark }
         let label = switch spoiler.kind {
         case .contentWarning: "注意書き"
         // ボックスの文字が「フィルター: 名前」なので、重ねて読まない。
         case .filter: ""
         }
-        let parts = [label, spoiler.text.string] + (spoiler.isCollapsed ? [] : [content.text.string])
+        let parts = [label, spoiler.text.string] + (spoiler.isCollapsed ? [] : [content.text.stringWithoutTranslationMark])
         return parts.filter { !$0.isEmpty }.joined(separator: "、")
     }
 

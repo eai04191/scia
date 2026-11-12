@@ -99,7 +99,7 @@ final class TimelineHarness {
 
     /// 表示中のセルに設定されている本文。セルが表示されていなければnil。
     func secondaryText(of id: Status.ID) -> String? {
-        (visibleCell(of: .status(id))?.contentConfiguration as? PostContentConfiguration)?.body.string
+        (visibleCell(of: .status(id))?.contentConfiguration as? PostContentConfiguration)?.body.stringWithoutTranslationMark
     }
 
     /// 最上部へスプリングで動かしているのが終わるまで待つ。

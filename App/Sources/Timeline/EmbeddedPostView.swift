@@ -33,8 +33,6 @@ final class EmbeddedPostView: UIButton {
             var shiftDuration: TimeInterval
             var wordDuration: TimeInterval
             var fadeWidth: Double
-            /// 本文のカスタム絵文字の倍率。翻訳のマークを同じ大きさにする。
-            var markScale: CGFloat
         }
 
         /// 中身を見分ける。リンクカードから替わったのが同じ囲みかを比べるのに使う。
@@ -44,7 +42,7 @@ final class EmbeddedPostView: UIButton {
         /// 注意書きかフィルターの警告。折りたたんでいる間は、本文、添付ファイル、補足の行を出さない。
         var spoiler: SpoilerView.Content?
         var text: NSAttributedString
-        /// 本文が訳文か、訳文を待っているなら、その状態。本文の先頭に翻訳のマークを出す。
+        /// 本文が訳文か、訳文を待っているなら、その状態。`text`の先頭の空き（`RichTextRenderer.marksTranslation`）に、翻訳のマークを重ねる。
         var translation: Translation?
         /// 長い本文を切って「続きを読む」を出す行数。nilなら切らない。
         var truncation: BodyTruncation?
@@ -92,11 +90,8 @@ final class EmbeddedPostView: UIButton {
     private let nameLabel = EmojiLabel()
     private let spoilerView = SpoilerView()
     private let textLabel = LinkLabel()
-    /// 本文の先頭の翻訳のマーク。本文には同じ大きさの空きを入れてあり、その上に重ねる。待つ間にパルスさせるため、文字の中の画像にしない。
-    private let translationMark = UIImageView()
-    private var translationMarkPulses = false
-    /// ラベルに渡している本文。翻訳のマークの空きを先頭に足してある。
-    private var displayedText = NSAttributedString()
+    /// 本文の先頭の空きに重ねる、翻訳のマーク。
+    private let translationMark = TranslationMarkView()
     /// 本文の1行目のベースライン。TextKit 2で描くラベルのベースラインは、UILabelのベースライン（`firstBaselineAnchor`）ではなく、TextKit 2の並びから置く。
     private let textFirstBaselineGuide = UILayoutGuide()
     private lazy var textFirstBaseline = textFirstBaselineGuide.topAnchor.constraint(equalTo: textLabel.topAnchor)
@@ -154,10 +149,6 @@ final class EmbeddedPostView: UIButton {
         // 本文はリンクの上だけ押下を受ける。リンクの外の押下は、囲みのボタンが受ける。
         textLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
         textLabel.onExpand = { [weak self] in self?.onExpandBody?() }
-        translationMark.image = UIImage(systemName: "translate")
-        translationMark.contentMode = .scaleAspectFit
-        translationMark.tintColor = .secondaryLabel
-        translationMark.isHidden = true
         avatarView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(avatarTapped)))
         accountInteraction = ObjectInteraction(on: avatarView, tapsSelf: false, lift: .shape)
         spoilerView.addAction(UIAction { [weak self] _ in self?.onToggleSpoiler?() }, for: .touchUpInside)
@@ -277,11 +268,12 @@ final class EmbeddedPostView: UIButton {
         if let replacement {
             textLabel.prepareTextReplacement(duration: replacement.wipeDuration, shiftDuration: replacement.shiftDuration, wordDuration: replacement.wordDuration, fadeWidth: replacement.fadeWidth)
         }
-        displayedText = content.translation == nil ? content.text : Self.reservingTranslationMark(in: content.text, scale: content.translation?.markScale ?? 1)
-        textLabel.attributedText = displayedText
+        textLabel.attributedText = content.text
         textLabel.truncation = content.truncation
         textLabel.isHidden = isCollapsed || content.text.length == 0
-        updateTranslationMark(for: content, keepsPulse: previousTranslation?.isTranslated == false)
+        let pulses: Bool? = textLabel.isHidden || !content.text.hasTranslationMark ? nil : content.translation.map { !$0.isTranslated }
+        translationMark.apply(pulses: pulses, keepsPulse: previousTranslation?.isTranslated == false)
+        setNeedsLayout()
         if !textLabel.isHidden {
             constraints += [
                 textLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: padding),
@@ -384,7 +376,7 @@ final class EmbeddedPostView: UIButton {
         if textFirstBaseline.constant != first {
             textFirstBaseline.constant = first
         }
-        let top = content == nil ? 0 : PostBodyView.textTopInset(of: displayedText, width: width, firstLine: textLabel.textKitLineRanges(of: displayedText, width: width)?.first)
+        let top = content.map { PostBodyView.textTopInset(of: $0.text, width: width, firstLine: textLabel.textKitLineRanges(of: $0.text, width: width)?.first) } ?? 0
         if textGlyphsTop.constant != top {
             textGlyphsTop.constant = top
         }
@@ -419,7 +411,7 @@ final class EmbeddedPostView: UIButton {
             parts += [spoiler.kind == .contentWarning ? "注意書き" : nil, spoiler.text.string]
         }
         if !isCollapsed {
-            parts.append(content.text.string)
+            parts.append(content.text.stringWithoutTranslationMark)
             parts += content.notes.filter { !$0.isPressable }.map(\.text.string)
         }
         summaryElement.accessibilityLabel = parts.compactMap(\.self).filter { !$0.isEmpty }.joined(separator: "、")
@@ -483,7 +475,7 @@ final class EmbeddedPostView: UIButton {
             updateAccessibility(for: content)
         }
         summaryElement.accessibilityFrameInContainerSpace = bounds
-        layoutTranslationMark()
+        translationMark.layout(over: textLabel, in: self)
         startPendingShiftBelowText()
     }
 
@@ -541,46 +533,6 @@ final class EmbeddedPostView: UIButton {
         move.fromValue = -growth / 2
         move.toValue = 0
         addShift(move, to: layer)
-    }
-
-    /// `text`の先頭に、翻訳のマークの空きと空白を足す。空きは、同じ文字の大きさのカスタム絵文字と同じ大きさと位置にする。
-    /// 先頭の文字からは、行の形を決める属性だけを引き継ぐ。リンクや絵文字の属性を引き継ぐと、マークがその一部として扱われる。
-    /// - Parameter scale: カスタム絵文字の倍率。
-    static func reservingTranslationMark(in text: NSAttributedString, scale: CGFloat) -> NSAttributedString {
-        guard text.length > 0 else { return text }
-        let first = text.attributes(at: 0, effectiveRange: nil)
-        guard let font = first[.font] as? UIFont else { return text }
-        let attributes = first.filter { [.font, .paragraphStyle, .languageIdentifier, .foregroundColor].contains($0.key) }
-        let side = EmojiFont.glyphHeight(of: font) * scale
-        // カスタム絵文字と同じく、行より広ければ行の幅まで縮めて置く。`NSTextAttachment(image:)`で作ると、`bounds`を入れても大きさが変わらない。
-        let attachment = LineFittingAttachment()
-        attachment.image = RichTextRenderer.emojiPlaceholder
-        attachment.bounds = CGRect(x: 0, y: RichTextRenderer.emojiCenterHeight * font.pointSize - side / 2, width: side, height: side)
-        let result = NSMutableAttributedString(attachment: attachment)
-        result.append(NSAttributedString(string: " "))
-        result.addAttributes(attributes, range: NSRange(location: 0, length: result.length))
-        result.append(text)
-        return result
-    }
-
-    /// - Parameter keepsPulse: 同じ囲みで、前から訳文を待っていた。パルスを最初からやり直さない。
-    private func updateTranslationMark(for content: Content, keepsPulse: Bool) {
-        let shows = content.translation != nil && !textLabel.isHidden && displayedText !== content.text
-        translationMark.isHidden = !shows
-        let pulses = shows && content.translation?.isTranslated == false
-        if pulses, !(translationMarkPulses && keepsPulse) {
-            translationMark.removeAllSymbolEffects()
-            translationMark.addSymbolEffect(.pulse, options: .repeat(.continuous))
-        } else if !pulses, translationMarkPulses {
-            translationMark.removeAllSymbolEffects()
-        }
-        translationMarkPulses = pulses
-        setNeedsLayout()
-    }
-
-    private func layoutTranslationMark() {
-        guard !translationMark.isHidden, let frame = textLabel.attachmentFrame(at: 0) else { return }
-        translationMark.frame = textLabel.convert(frame, to: self)
     }
 
     /// 「投稿の見た目」のプレビューで、部品の場所を示すための枠。`space`の座標で返す。
