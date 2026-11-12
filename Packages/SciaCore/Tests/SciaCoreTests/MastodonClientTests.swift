@@ -441,6 +441,87 @@ struct MastodonClientTests {
         #expect(components.queryItems?.contains { $0.name == "in_reply_to_id" } == false)
     }
 
+    private func form(of request: URLRequest) throws -> [URLQueryItem] {
+        var components = URLComponents()
+        components.percentEncodedQuery = String(decoding: try #require(request.httpBody), as: UTF8.self)
+        return components.queryItems ?? []
+    }
+
+    /// 引用できる人は、選んでいれば送る。サーバーがいつも「自分のみ」にする公開範囲では`nobody`を送り、選んでいなければ送らない。
+    @Test func postStatusSendsQuotePolicy() async throws {
+        let transport = StubTransport(Array(repeating: .json(Self.interactedStatus, statusCode: 200), count: 3))
+        let client = try makeClient(transport)
+
+        _ = try await client.postStatus(StatusDraft(text: "a", quotePolicy: .followers))
+        _ = try await client.postStatus(StatusDraft(text: "b", visibility: .private, quotePolicy: .public))
+        _ = try await client.postStatus(StatusDraft(text: "c"))
+
+        let sent = try await transport.requests.map { try form(of: $0).filter { $0.name == "quote_approval_policy" }.map(\.value) }
+        #expect(sent == [["followers"], ["nobody"], []])
+    }
+
+    @Test func setQuotePolicyPutsInteractionPolicy() async throws {
+        let transport = StubTransport([.json(Self.interactedStatus, statusCode: 200)])
+
+        _ = try await makeClient(transport).setQuotePolicy(.nobody, of: "113")
+
+        let request = try #require(await transport.requests.first)
+        #expect(request.httpMethod == "PUT")
+        #expect(request.url?.path() == "/api/v1/statuses/113/interaction_policy")
+        #expect(try form(of: request) == [URLQueryItem(name: "quote_approval_policy", value: "nobody")])
+    }
+
+    @Test func revokeQuotePostsToQuotedStatus() async throws {
+        let transport = StubTransport([.json(Self.interactedStatus, statusCode: 200)])
+
+        _ = try await makeClient(transport).revokeQuote(of: "113", by: "200")
+
+        let request = try #require(await transport.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path() == "/api/v1/statuses/113/quotes/200/revoke")
+    }
+
+    /// 引用した投稿のリストは、続きの位置を`Link`ヘッダーから読む。
+    @Test func quotesReadsNextPositionFromLinkHeader() async throws {
+        let link = #"<https://example.social/api/v1/statuses/113/quotes?max_id=77>; rel="next""#
+        let transport = StubTransport([.json("[\(Self.interactedStatus)]", statusCode: 200, headers: ["Link": link])])
+
+        let page = try await makeClient(transport).quotes(of: "113", maxID: "99", limit: 40)
+
+        #expect(page.statuses.map(\.id) == ["113000000000000001"])
+        #expect(page.nextMaxID == "77")
+        let url = try #require(await transport.requests.first?.url)
+        #expect(url.path() == "/api/v1/statuses/113/quotes")
+        #expect(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems == [URLQueryItem(name: "limit", value: "40"), URLQueryItem(name: "max_id", value: "99")])
+    }
+
+    @Test(arguments: [
+        (PostingDefaultChange.visibility(.unlisted), "source[privacy]", "unlisted"),
+        (.sensitive(true), "source[sensitive]", "true"),
+        (.language("en"), "source[language]", "en"),
+        (.language(nil), "source[language]", ""),
+        (.quotePolicy(.nobody), "source[quote_policy]", "nobody"),
+    ])
+    func updatePostingDefaultPatchesSource(change: PostingDefaultChange, name: String, value: String) async throws {
+        let transport = StubTransport([.json("{}", statusCode: 200)])
+
+        try await makeClient(transport).updatePostingDefault(change)
+
+        let request = try #require(await transport.requests.first)
+        #expect(request.httpMethod == "PATCH")
+        #expect(request.url?.path() == "/api/v1/accounts/update_credentials")
+        #expect(try form(of: request) == [URLQueryItem(name: name, value: value)])
+    }
+
+    /// 既定の引用できる人は、引用に対応していないサーバーでは返らない。
+    @Test func readsDefaultQuotePolicy() async throws {
+        let transport = StubTransport([.json(#"{"posting:default:quote_policy":"followers"}"#, statusCode: 200), .json("{}", statusCode: 200)])
+        let client = try makeClient(transport)
+
+        #expect(try await client.preferences().defaultQuotePolicy == .followers)
+        #expect(try await client.preferences().defaultQuotePolicy == nil)
+    }
+
     @Test func postStatusSendsPoll() async throws {
         let transport = StubTransport([.json(Self.interactedStatus, statusCode: 200)])
         let poll = PollDraft(options: [" 朝 ", "", "夜"], multiple: true, hidesTotals: true, expiresIn: 3_600)

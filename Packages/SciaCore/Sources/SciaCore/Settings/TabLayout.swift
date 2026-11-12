@@ -165,10 +165,12 @@ public enum TabItem: MenuItemKind {
         }
     }
 
-    public init(_ kind: SavedStatusesKind) {
+    /// タブに置ける種類なら、その項目。引用した投稿のタイムラインはタブに置けないのでnil。
+    public init?(_ kind: SavedStatusesKind) {
         switch kind {
         case .bookmarks: self = .bookmarks
         case .favourites: self = .favourites
+        case .quotes: return nil
         }
     }
 

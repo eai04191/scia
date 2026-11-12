@@ -358,6 +358,69 @@ struct AccountSessionTests {
         await applyComposeDefaults(of: session, to: model)
         #expect(transport.requests(to: "/api/v1/preferences").count > firstPreferenceRequests)
     }
+
+    /// 起動時の設定の読み込みが遅れ、その間に既定を保存しても、遅れて届いた古い応答で、保存したあとの設定を上書きせず、投稿欄にも配らない。
+    @Test func staleStartupLoadDoesNotUndoSavedPostingDefault() async throws {
+        let startupResponse = Gate()
+        let reads = Mutex(0)
+        let transport = RoutedTransport { request in
+            if request.httpMethod == "PATCH" { return (200, Data("{}".utf8)) }
+            let count = reads.withLock { count in
+                count += 1
+                return count
+            }
+            if count == 1 { try await startupResponse.wait() }
+            let visibility = count <= 2 ? "public" : "private"
+            return (200, Data(#"{"posting:default:visibility":"\#(visibility)"}"#.utf8))
+        }
+        let session = makeSession(transport: transport)
+        defer { session.close() }
+        var delivered: [Status.Visibility] = []
+        session.onPreferencesLoad = { delivered.append($0.defaultVisibility) }
+
+        let startup = Task { await RequestPurpose.$current.withValue(.action) { await session.loadPreferences() } }
+        try await waitUntil { startupResponse.waiterCount == 1 }
+        try await RequestPurpose.$current.withValue(.action) {
+            _ = try await session.reloadPreferences()
+            _ = try await session.updatePostingDefault(.visibility(.private))
+        }
+        startupResponse.open()
+        let loaded = await startup.value
+
+        #expect(loaded?.defaultVisibility == .private)
+        #expect(session.preferences?.defaultVisibility == .private)
+        #expect(delivered == [.public, .private])
+    }
+
+    /// 既定を保存する前に始めた設定の読み直しが、保存のあとに届いても、保存したあとの設定を古い値で上書きせず、投稿欄にも配らない。
+    @Test func staleReloadDoesNotUndoSavedPostingDefault() async throws {
+        let staleResponse = Gate()
+        let reads = Mutex(0)
+        let transport = RoutedTransport { request in
+            if request.httpMethod == "PATCH" { return (200, Data("{}".utf8)) }
+            let count = reads.withLock { count in
+                count += 1
+                return count
+            }
+            if count == 1 { try await staleResponse.wait() }
+            let visibility = count == 1 ? "public" : "private"
+            return (200, Data(#"{"posting:default:visibility":"\#(visibility)"}"#.utf8))
+        }
+        let session = makeSession(transport: transport)
+        defer { session.close() }
+        var delivered: [Status.Visibility] = []
+        session.onPreferencesLoad = { delivered.append($0.defaultVisibility) }
+
+        let reload = Task { try await RequestPurpose.$current.withValue(.action) { try await session.reloadPreferences() } }
+        try await waitUntil { staleResponse.waiterCount == 1 }
+        try await RequestPurpose.$current.withValue(.action) { _ = try await session.updatePostingDefault(.visibility(.private)) }
+        staleResponse.open()
+        let reloaded = try await reload.value
+
+        #expect(reloaded.defaultVisibility == .private)
+        #expect(session.preferences?.defaultVisibility == .private)
+        #expect(delivered == [.private])
+    }
 }
 
 @MainActor

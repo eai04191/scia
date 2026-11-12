@@ -71,12 +71,13 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
   - プロフィール: `scia://profile/<user@domain>`（ホームのタブに開く）、`scia://my-profile`（選んでいるタブに自分のプロフィールを開く）、`scia://profile-edit`（自分のプロフィールの編集）、`scia://note?acct=<ハンドル>`（その人へのメモ）、`scia://report?acct=<ハンドル>`（その人の通報。送らなければサーバーに届かない）
   - 人のリスト: `scia://accounts/<followers|following>`（自分の。`?id=<アカウントのID>`でその人の）、`scia://accounts/<favourited|reblogged>?id=<投稿のID>`（その投稿をお気に入り、ブーストした人）、`scia://accounts/emoji-reactioned?id=<投稿のID>&name=<パーセントエンコードした絵文字>`（その投稿にその絵文字でリアクションした人）
   - タイムライン: `scia://hashtag?name=<名前>`（ハッシュタグ）、`scia://account-hashtag?acct=<ハンドル>&name=<名前>`（その人のハッシュタグ）、`scia://scheduled`（予約投稿。タブを無効にしていれば手前に重ねる）
-  - 投稿: `scia://thread?id=<投稿のID>`（スレッド）、`scia://edit-history?id=<投稿のID>`（編集履歴）、`scia://api-response?id=<投稿のID>`（その投稿を読み直したAPIの応答のJSON）
+  - 投稿: `scia://thread?id=<投稿のID>`（スレッド）、`scia://edit-history?id=<投稿のID>`（編集履歴）、`scia://quotes?id=<投稿のID>`（その投稿を引用した投稿のタイムライン）、`scia://api-response?id=<投稿のID>`（その投稿を読み直したAPIの応答のJSON）
   - 検索: `scia://search?q=<パーセントエンコードした語>`（検索のタブに語を入れて確定する。`q`がなければタブを開くだけ。検索を無効にしていれば選んでいるタブに積む）
   - 投稿欄: `scia://compose/<tools|language|schedule|emoji|media-picker>`（書き始めて、ボタンの並び、言語、予約の日時、絵文字のパレット、メディアのピッカーを開く。予約していなければ予約を始める）、`scia://compose/<attachment|alt-text|crop>?index=<n>`（n番目の添付のビューア、その代替テキストの入力、切り抜き。先に`scia-debug://compose?media=<枚数>`で添付を足す）
   - アカウントの画面: `scia://account`（シートで開く。設定に重ねるのは`scia://settings/account`。決まりはdocs/account-screen.md）
   - サーバーのお知らせ: `scia://announcements`（お知らせのシート）
   - 保留中の通知: `scia://notification-requests`（通知のタブに保留中の通知を送ってきた人のリスト）、`scia://notification-request?id=<保留中の通知のID>`（その上にその人からの通知）、`scia://notification-policy`（通知のフィルタリングの設定）。IDは`api/v1/notifications/requests`で調べる。ダミーのセッションでは`dummy-request-1`〜`3`
+  - 投稿のデフォルト: `scia://posting-defaults`（新しく投稿するときの公開範囲、引用できる人、言語、閲覧注意の既定を変えるシート。変えるとサーバーの設定が変わる。決まりはdocs/account-screen.md）
   - フィルター: `scia://filters`（自分のフィルターを並べたシート。決まりはdocs/filters.md）
   - そのほか: `scia://crash-report?id=<投稿のID>`（隔離した投稿について開発者に送る内容の画面。決まりはdocs/crash-quarantine.md）、`scia://operation-status`（操作の状況）、`scia://in-app-browser-height`（重ねた画面を閉じ、ホームの上にアプリ内のSafariの高さを選ぶシートを出す。`?return=<設定の画面>`で、閉じたときにその設定の画面を開き直す）
   - デバッグ版だけ: `scia-debug://viewer?index=<n>`（選んでいるタブで一番上に見えている画像付きの投稿を、n番目の添付ファイルでビューアに開く。代替テキストの全文はビューアの「代替テキスト」から開く）、`scia-debug://profile-edit?crop=<avatar|header>`（ダミーの画像でアイコンかヘッダー画像の切り抜きを開く）、`scia-debug://discomfort-report`（違和感レポート）、`scia-debug://tuning`（チューニング）、`scia-debug://catalog`（部品カタログ）

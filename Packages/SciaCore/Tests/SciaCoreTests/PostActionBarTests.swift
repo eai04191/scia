@@ -83,7 +83,7 @@ struct PostActionBarTests {
     @Test func itemsRemovedFromMenuFollowSettings() {
         let layout = PostActionBarItem.defaultLayout
         let barItems: Set<StatusMenuItem> = [.reply, .reblog, .favourite, .bookmark]
-        let longPressItems: Set<StatusMenuItem> = [.reblogWithVisibility, .quote, .rebloggedBy, .favouritedBy]
+        let longPressItems: Set<StatusMenuItem> = [.reblogWithVisibility, .quote, .rebloggedBy, .quotedBy, .favouritedBy]
         #expect(layout.itemsRemovedFromMenu(barItems: true, longPressItems: false) == barItems)
         #expect(layout.itemsRemovedFromMenu(barItems: false, longPressItems: true) == longPressItems)
         #expect(layout.itemsRemovedFromMenu(barItems: true, longPressItems: true) == barItems.union(longPressItems))
@@ -131,7 +131,7 @@ struct PostActionBarTests {
     }
 
     @Test func longPressItems() {
-        #expect(PostActionBarItem.status(.reblog).longPressItems == [.reblogWithVisibility, .quote, .rebloggedBy])
+        #expect(PostActionBarItem.status(.reblog).longPressItems == [.reblogWithVisibility, .quote, .rebloggedBy, .quotedBy])
         #expect(PostActionBarItem.status(.favourite).longPressItems == [.favouritedBy])
         #expect(PostActionBarItem.status(.reply).longPressItems.isEmpty)
         #expect(PostActionBarItem.menu.longPressItems.isEmpty)

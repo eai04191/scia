@@ -71,7 +71,8 @@ extension StatusDraft {
             quotedStatusID: status.quote?.quotedStatusID,
             attachments: attachments,
             poll: status.poll.map { PollDraft(redrafting: $0, postedAt: status.createdAt, limits: pollLimits) },
-            language: status.language
+            language: status.language,
+            quotePolicy: status.quoteApproval?.policy
         )
     }
 }

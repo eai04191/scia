@@ -63,7 +63,7 @@ public enum PostActionBarItem: Hashable, Sendable, MenuItemKind, MenuItemPresent
     /// ボタンを長押ししたときに出すメニューの項目。空ならメニューを出さない。決まりはdocs/post-action-bar.mdの「ボタン」にある。
     public var longPressItems: [StatusMenuItem] {
         switch self {
-        case .status(.reblog): [.reblogWithVisibility, .quote, .rebloggedBy]
+        case .status(.reblog): [.reblogWithVisibility, .quote, .rebloggedBy, .quotedBy]
         case .status(.favourite): [.favouritedBy]
         default: []
         }

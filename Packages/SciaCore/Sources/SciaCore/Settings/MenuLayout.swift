@@ -269,6 +269,12 @@ public enum StatusMenuItem: String, BundledMenuDefaults {
     case favouritedBy
     /// 投稿をブーストした人のリストを開く。ブーストされた投稿でだけ出る。
     case rebloggedBy
+    /// 投稿を引用した投稿のタイムラインを開く。引用された投稿でだけ出る。決まりはdocs/quote.mdの「引用した投稿のタイムライン」にある。
+    case quotedBy
+    /// 自分の投稿を引用できる人を変えるサブメニュー。引用に対応したサーバーの自分の投稿でだけ出る。決まりはdocs/quote.mdの「投稿したあとに変える」にある。
+    case quotePolicy
+    /// 自分の投稿への引用を取り消す。自分の投稿を引用していて、引用が認められている投稿でだけ出る。決まりはdocs/quote.mdの「引用を取り消す」にある。
+    case revokeQuote
     /// 自分の投稿を投稿欄で編集する。自分の投稿でだけ出る。
     case edit
     /// 自分の投稿を削除する。自分の投稿でだけ出る。

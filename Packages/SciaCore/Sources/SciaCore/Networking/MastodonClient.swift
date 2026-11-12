@@ -323,6 +323,7 @@ public struct MastodonClient: Sendable {
             let expandsSpoilers: Bool?
             let language: String?
             let autoplaysAnimations: Bool?
+            let quotePolicy: String?
 
             private enum CodingKeys: String, CodingKey {
                 case visibility = "posting:default:visibility"
@@ -330,6 +331,7 @@ public struct MastodonClient: Sendable {
                 case language = "posting:default:language"
                 case expandsSpoilers = "reading:expand:spoilers"
                 case autoplaysAnimations = "reading:autoplay:gifs"
+                case quotePolicy = "posting:default:quote_policy"
             }
         }
         // キーにコロンを含むため、スネークケースからの変換を通さずに読む。
@@ -343,8 +345,15 @@ public struct MastodonClient: Sendable {
             defaultSensitive: preferences.sensitive ?? false,
             expandsSpoilers: preferences.expandsSpoilers ?? false,
             defaultLanguage: preferences.language.flatMap { $0.isEmpty ? nil : $0 },
-            autoplaysAnimations: preferences.autoplaysAnimations ?? false
+            autoplaysAnimations: preferences.autoplaysAnimations ?? false,
+            defaultQuotePolicy: preferences.quotePolicy.flatMap(QuotePolicy.init(rawValue:))
         )
+    }
+
+    /// 新しく投稿するときの既定を1つ変える。応答の中身は使わず、変えたあとの値は`preferences()`で読み直す。
+    /// https://docs.joinmastodon.org/methods/accounts/#update_credentials
+    public func updatePostingDefault(_ change: PostingDefaultChange) async throws {
+        _ = try await send(formRequest(method: "PATCH", path: "api/v1/accounts/update_credentials", form: [change.formItem]))
     }
 
     /// サーバーが投稿の言語として受け付ける言語。並びはサーバーが返すまま。
@@ -415,6 +424,26 @@ public struct MastodonClient: Sendable {
         try await post(Status.self, path: "api/v1/statuses/\(statusID)/pin", form: []).0
     }
 
+    /// 自分の投稿を引用できる人を変える。すでにされた引用は取り消されない。
+    /// https://docs.joinmastodon.org/methods/statuses/#interaction_policy
+    public func setQuotePolicy(_ policy: QuotePolicy, of statusID: String) async throws -> Status {
+        let form = [URLQueryItem(name: "quote_approval_policy", value: policy.rawValue)]
+        return try await send(formRequest(method: "PUT", path: "api/v1/statuses/\(statusID)/interaction_policy", form: form), decoding: Status.self).0
+    }
+
+    /// 自分の投稿`statusID`への、`quotingStatusID`の投稿による引用を取り消す。引用した側の投稿を返す。
+    /// https://docs.joinmastodon.org/methods/statuses/#revoke_quote
+    public func revokeQuote(of statusID: String, by quotingStatusID: String) async throws -> Status {
+        try await post(Status.self, path: "api/v1/statuses/\(statusID)/quotes/\(quotingStatusID)/revoke", form: []).0
+    }
+
+    /// 投稿を引用した投稿を、引用した新しい順に返す。認められた引用だけが返る。1回に読める件数の上限は40件。
+    /// - Parameter maxID: 前のページの`SavedStatusesPage.nextMaxID`。nilなら最新のページ。
+    /// https://docs.joinmastodon.org/methods/statuses/#quotes
+    public func quotes(of statusID: String, maxID: String?, limit: Int) async throws -> SavedStatusesPage {
+        try await savedStatuses(path: "api/v1/statuses/\(statusID)/quotes", maxID: maxID, limit: limit)
+    }
+
     /// https://docs.joinmastodon.org/methods/statuses/#unpin
     public func unpin(_ statusID: String) async throws -> Status {
         try await post(Status.self, path: "api/v1/statuses/\(statusID)/unpin", form: []).0
@@ -472,6 +501,10 @@ public struct MastodonClient: Sendable {
         // 送らなければ、サーバーはアカウントの既定の言語、なければweb UIの表示言語にする。
         if let language = draft.language {
             form.append(URLQueryItem(name: "language", value: language))
+        }
+        // 送らなければ、サーバーはアカウントの既定にする。
+        if let quotePolicy = draft.sentQuotePolicy {
+            form.append(URLQueryItem(name: "quote_approval_policy", value: quotePolicy.rawValue))
         }
         form += mediaIDs.map { URLQueryItem(name: "media_ids[]", value: $0) }
         if let poll = draft.poll {

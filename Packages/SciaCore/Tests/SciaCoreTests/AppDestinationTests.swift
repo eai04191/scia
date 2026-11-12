@@ -45,6 +45,9 @@ struct AppDestinationTests {
             ("scia://notification-request", nil),
             ("scia://notification-policy", .notificationPolicy),
             ("scia://filters", .filters),
+            ("scia://posting-defaults", .postingDefaults),
+            ("scia://quotes?id=123", .quotes(statusID: "123")),
+            ("scia://quotes", nil),
             ("scia://announcements", .announcements),
             ("scia://in-app-browser-height", .inAppBrowserHeight(returningTo: nil)),
             ("scia://in-app-browser-height?return=interaction", .inAppBrowserHeight(returningTo: .interaction)),
@@ -104,7 +107,7 @@ struct AppDestinationTests {
         + [.accounts(.followers(accountID: nil)), .accounts(.followers(accountID: "9")), .accounts(.following(accountID: nil)), .accounts(.following(accountID: "9"))]
         + [.accounts(.favourited(statusID: "123")), .accounts(.reblogged(statusID: "123")), .accounts(.emojiReactioned(statusID: "123", name: "👍")), .accounts(.emojiReactioned(statusID: "123", name: "blob_cat"))]
         + [.hashtag(name: "日本語 & tag"), .accountHashtag(acct: "bob@example.com", name: "scia"), .search(query: nil), .search(query: "https://example.com/@bob/1"), .scheduled, .operationStatus]
-        + [.notificationRequests, .notificationRequest(id: "7"), .notificationPolicy, .filters, .announcements, .account, .inAppBrowserHeight(returningTo: nil), .inAppBrowserHeight(returningTo: .interaction)]
+        + [.notificationRequests, .notificationRequest(id: "7"), .notificationPolicy, .filters, .postingDefaults, .quotes(statusID: "123"), .announcements, .account, .inAppBrowserHeight(returningTo: nil), .inAppBrowserHeight(returningTo: .interaction)]
         + [.note(acct: "bob@example.com"), .report(acct: "bob+1@example.com")]
         + [.compose(.tools), .compose(.language), .compose(.schedule), .compose(.emoji), .compose(.mediaPicker)]
         + [.compose(.attachment(index: 0)), .compose(.altText(index: 2)), .compose(.crop(index: 3))]
@@ -138,7 +141,7 @@ struct AppDestinationTests {
     enum Kind: CaseIterable {
         case tab, userTabList, userTabHashtag, userTabProfile, userTabAccountHashtag, settings, appearanceGroup, notificationAppearanceGroup, profile, myProfile, profileEdit
         case thread, editHistory, apiResponse, crashReport, followers, following, favourited, reblogged, emojiReactioned, hashtag, accountHashtag, search, scheduled, operationStatus
-        case notificationRequests, notificationRequest, notificationPolicy, filters, announcements, account, inAppBrowserHeight
+        case notificationRequests, notificationRequest, notificationPolicy, filters, postingDefaults, quotes, announcements, account, inAppBrowserHeight
         case note, report, composeTools, composeLanguage, composeSchedule, composeEmoji, composeMediaPicker, composeAttachment, composeAltText, composeCrop
     }
 
@@ -173,6 +176,8 @@ struct AppDestinationTests {
         case .notificationRequest: .notificationRequest
         case .notificationPolicy: .notificationPolicy
         case .filters: .filters
+        case .postingDefaults: .postingDefaults
+        case .quotes: .quotes
         case .announcements: .announcements
         case .account: .account
         case .inAppBrowserHeight: .inAppBrowserHeight

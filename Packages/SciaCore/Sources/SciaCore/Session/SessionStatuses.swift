@@ -62,6 +62,13 @@ public final class SessionStatuses {
         }
     }
 
+    /// `quotingID`の投稿による、自分の投稿への引用を取り消した。引用した投稿のタイムラインから、その投稿を除かせる。
+    public func quoteWasRevoked(by quotingID: Status.ID) {
+        for list in lists.compactMap(\.list) {
+            list.quoteWasRevoked(by: quotingID)
+        }
+    }
+
     /// 消えた自分の投稿を、どの一覧からも除き、引用元としても消えたことにする。
     /// この端末で消したとき（`StatusDeletion`）と、削除して書き直すために消したとき（`ComposeModel.onRedraftDeleted`）に呼ぶ。
     public func removeStatus(_ id: Status.ID) {
@@ -91,10 +98,13 @@ public protocol SessionStatusList: AnyObject {
     func removeStatus(_ id: Status.ID)
     /// 投稿欄から送った自分の投稿を受け取る。足す一覧（ホームと、返信先を開いているスレッド）だけが足す。既定では何もしない。
     func receivePosted(_ status: Status)
+    /// `quotingID`の投稿による引用が取り消された。引用した投稿のタイムラインだけが、その投稿を除く。既定では何もしない。
+    func quoteWasRevoked(by quotingID: Status.ID)
 }
 
 extension SessionStatusList {
     public func receivePosted(_ status: Status) {}
+    public func quoteWasRevoked(by quotingID: Status.ID) {}
 }
 
 /// 引用元の変化の対象。

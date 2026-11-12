@@ -36,13 +36,14 @@ public final class SavedStatusesModel {
             switch kind {
             case .bookmarks: try await client.bookmarks(maxID: maxID, limit: pageSize)
             case .favourites: try await client.favourites(maxID: maxID, limit: pageSize)
+            case .quotes(let statusID): try await client.quotes(of: statusID, maxID: maxID, limit: pageSize)
             }
         }
         self.kind = kind
-        filtering = StatusFiltering(context: .home, myAccountID: client.credential.accountID, hidesMatches: false)
+        filtering = StatusFiltering(context: kind.filter.context, myAccountID: client.credential.accountID, hidesMatches: kind.filter.hidesMatches)
     }
 
-    private var name: String { kind.rawValue }
+    private var name: String { kind.name }
 
     /// まだ始めていなければ始める。開くまで読まない。開いたことのないタイムラインのために、起動のたびに通信しないため。
     public func startIfNeeded() {
@@ -247,6 +248,15 @@ public final class SavedStatusesModel {
     public func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
         guard !isStopped, store.updateStatus(id, transform) else { return }
         showEntries()
+    }
+
+    /// `quotingID`の投稿による引用が取り消された。その投稿を引用した投稿のタイムラインから、使う人の操作の結果なので、閉じる動きで除く。
+    /// まだ読んでいない投稿でも覚えておき、取り消す前に読み始めたページが遅れて届いても出さない。取り消しは戻せないので、ブックマークのように行を残さない。
+    public func quoteWasRevoked(by quotingID: Status.ID) {
+        guard !isStopped, case .quotes = kind else { return }
+        guard store.removeStatus(quotingID) else { return }
+        logger.info("\(self.name, privacy: .public) removed revoked quote")
+        showEntries(animatesRemoval: true)
     }
 
     /// 削除した投稿を除く。使う人の操作の結果なので、閉じる動きで消す。

@@ -233,6 +233,70 @@ struct StatusMenuTreeTests {
         #expect(!titles(tree(status(), myAccountID: "9")).contains("削除して書き直す"))
     }
 
+    /// メニューの中から、名前が`title`の項目を探す。ユーザーの`@acct`のサブメニューの中は探さない。
+    private func node(titled title: String, in tree: StatusMenuTree) -> MenuNode<StatusMenuCommand>? {
+        func find(_ nodes: [MenuNode<StatusMenuCommand>]) -> MenuNode<StatusMenuCommand>? {
+            for node in nodes {
+                if node.title == title { return node }
+                guard !node.title.hasPrefix("@") else { continue }
+                if let found = find(node.children) { return found }
+            }
+            return nil
+        }
+        return find(tree.menu(groups: StatusMenuItem.defaultLayout.groups, includesFollowRequest: false).root?.children ?? [])
+    }
+
+    private func quotable(_ status: Status, automatic: [String] = ["public"], quotesCount: Int = 0, quote: Quote? = nil) -> Status {
+        Status(
+            id: status.id, createdAt: status.createdAt, account: status.account, content: status.content, spoilerText: "", url: nil, visibility: status.visibility,
+            quote: quote, quoteApproval: QuoteApproval(automatic: automatic, currentUser: "automatic"), quotesCount: quotesCount
+        )
+    }
+
+    /// 引用できる人は、自分の投稿でだけ、今の値をサブタイトルとチェックマークで示すサブメニューにする。
+    /// フォロワーのみの投稿は、サーバーがいつも「自分のみ」にするので、押せない形で理由を添える。引用に対応していないサーバーの投稿では出さない。
+    @Test func quotePolicyIsSubmenuOnOwnPosts() throws {
+        let me = account("9", "me")
+        let title = "引用できる人"
+
+        let submenu = try #require(node(titled: title, in: tree(quotable(status(account: me), automatic: ["followers"]), myAccountID: "9")))
+        #expect(submenu.subtitle == "フォロワーのみ")
+        #expect(submenu.children.map(\.title) == ["誰でも", "フォロワーのみ", "自分のみ"])
+        #expect(submenu.children.map(\.isSelected) == [false, true, false])
+
+        #expect(node(titled: title, in: tree(quotable(status()), myAccountID: "9")) == nil)
+        #expect(node(titled: title, in: tree(status(account: me), myAccountID: "9")) == nil)
+
+        let followersOnly = try #require(node(titled: title, in: tree(quotable(status(account: me, visibility: .private), automatic: []), myAccountID: "9")))
+        #expect(!followersOnly.isEnabled)
+        #expect(followersOnly.subtitle == "フォロワーのみの投稿は、ほかの人が引用できません")
+        #expect(followersOnly.children.isEmpty)
+    }
+
+    /// 引用した投稿は、誰の投稿でも、引用の数をサブタイトルに出す。0なら出さない。
+    @Test func quotedByShowsCount() throws {
+        let title = "引用した投稿"
+
+        #expect(try #require(node(titled: title, in: tree(quotable(status(), quotesCount: 1_200), myAccountID: "9"))).subtitle == "1,200件")
+        #expect(node(titled: title, in: tree(quotable(status()), myAccountID: "9")) == nil)
+    }
+
+    /// 引用を取り消すは、自分の投稿を引用していて、引用が認められている投稿でだけ出す。
+    @Test func revokeQuoteAppearsOnAcceptedQuotesOfMyPosts() {
+        let title = "引用を取り消す"
+        let mine = Status(id: "50", createdAt: Date(timeIntervalSince1970: 50), account: account("9", "me"), content: "<p>元</p>", spoilerText: "", url: nil)
+        let others = Status(id: "51", createdAt: Date(timeIntervalSince1970: 51), account: account("3", "carol"), content: "<p>元</p>", spoilerText: "", url: nil)
+        func quoting(_ source: Status, state: String) -> Status {
+            quotable(status(), quote: Quote(state: state, quotedStatus: source))
+        }
+
+        #expect(node(titled: title, in: tree(quoting(mine, state: "accepted"), myAccountID: "9"))?.isDestructive == true)
+        #expect(node(titled: title, in: tree(quoting(mine, state: "revoked"), myAccountID: "9")) == nil)
+        #expect(node(titled: title, in: tree(quoting(mine, state: "pending"), myAccountID: "9")) == nil)
+        #expect(node(titled: title, in: tree(quoting(others, state: "accepted"), myAccountID: "9")) == nil)
+        #expect(node(titled: title, in: tree(quoting(mine, state: "accepted"))) == nil)
+    }
+
     /// 公開範囲を選んでブーストは、既定では隠す。出したときは、ブーストしていない投稿で、3つの公開範囲のサブメニューとして出る。ブーストした投稿では出さない。
     @Test func reblogWithVisibilityIsSubmenuOnlyBeforeBoosting() {
         let submenu = "公開範囲を選んでブースト[公開,ひかえめな公開,フォロワーのみ]"

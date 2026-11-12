@@ -32,6 +32,8 @@ public struct TimelineTexts: Sendable {
     public static let federated = TimelineTexts(dumpName: "federated", title: "連合", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
     public static let bookmarks = TimelineTexts(dumpName: "bookmarks", title: "ブックマーク", empty: "ブックマークした投稿はありません", reachedEnd: "これより前にブックマークした投稿はありません", unreadable: "表示できない投稿")
     public static let favourites = TimelineTexts(dumpName: "favourites", title: "お気に入り", empty: "お気に入りした投稿はありません", reachedEnd: "これより前にお気に入りした投稿はありません", unreadable: "表示できない投稿")
+    /// ある投稿を引用した投稿。
+    public static let quotes = TimelineTexts(dumpName: "quotes", title: "引用した投稿", empty: "引用した投稿はありません", reachedEnd: "これより前に引用した投稿はありません", unreadable: "表示できない投稿")
     public static func list(title: String) -> TimelineTexts {
         TimelineTexts(dumpName: "list", title: title, empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
     }

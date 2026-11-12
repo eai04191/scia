@@ -39,6 +39,8 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 - 送れた結果（`onSubmitted`）は`session.statuses.reflect(_:usingTagsIn:)`に渡す。どの一覧へ配るかはそこで決まる
 - 書きかけの投稿欄で返信、引用、編集、書き直しを始める前に、進むか、確かめるか、断るかは`Confirmation.starting(_:draft:now:)`が決める（共有されたもので書き始めるときは`Confirmation.shared`）。後から選んだ投稿の読み込みだけを使うのは`LatestLookup`
 - 削除は、`Confirmation.deleting`で確かめてから`StatusDeletion.delete(_:onFailure:)`。どの一覧からも除き、投稿欄の編集や書き直しもやめる。ほかのアカウントの投稿を消したら、`ComposeModel.statusWasDeleted(_:accountID:willReset:)`をそのアカウントのIDで呼ぶ
+- 自分の投稿を引用できる人の変更は`QuoteControl.setPolicy(_:of:onFinish:)`、自分の投稿への引用の取り消しは、`Confirmation.revokingQuote(by:)`で確かめてから`QuoteControl.revoke(_:onFinish:)`。どちらも結果をどの一覧にも当てる。ある投稿を引用した投稿のタイムラインは、`SavedStatusesModel`を`.quotes(of:)`で作る（[quote.md](quote.md)）
+- 新しく投稿するときの既定（公開範囲、引用できる人、言語、閲覧注意）の画面は`PostingDefaultsModel`。保存は`AccountSession.updatePostingDefault(_:)`を通り、`onPreferencesLoad`で届くので、そこで`applyComposeDefaults(to:)`を呼んで投稿欄に反映する（[account-screen.md](account-screen.md)）
 
 ## メニューと確認と失敗
 

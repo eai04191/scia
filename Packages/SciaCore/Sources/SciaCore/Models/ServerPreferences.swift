@@ -11,12 +11,15 @@ public struct ServerPreferences: Sendable, Equatable {
     public var defaultLanguage: String?
     /// アイコンやカスタム絵文字などのアニメーションを自動で再生するか（「アニメーションGIFを自動再生する」）。
     public var autoplaysAnimations: Bool
+    /// 新しく投稿するときの、引用できる人の既定値。引用に対応していないサーバーではnil。
+    public var defaultQuotePolicy: QuotePolicy?
 
-    public init(defaultVisibility: Status.Visibility, defaultSensitive: Bool, expandsSpoilers: Bool, defaultLanguage: String? = nil, autoplaysAnimations: Bool = false) {
+    public init(defaultVisibility: Status.Visibility, defaultSensitive: Bool, expandsSpoilers: Bool, defaultLanguage: String? = nil, autoplaysAnimations: Bool = false, defaultQuotePolicy: QuotePolicy? = nil) {
         self.defaultVisibility = defaultVisibility
         self.defaultSensitive = defaultSensitive
         self.expandsSpoilers = expandsSpoilers
         self.defaultLanguage = defaultLanguage
         self.autoplaysAnimations = autoplaysAnimations
+        self.defaultQuotePolicy = defaultQuotePolicy
     }
 }

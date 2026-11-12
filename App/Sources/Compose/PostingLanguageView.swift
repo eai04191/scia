@@ -8,7 +8,16 @@ struct PostingLanguageView: View {
     @Bindable var picker: PostingLanguagePicker
     let onSelect: @MainActor (PostingLanguageRow) -> Void
     let close: @MainActor () -> Void
+    /// 選ぶ対象。アカウントの既定を選ぶときは、題と、言語を決めない行の文言を変える。
+    var purpose = Purpose.post
     @Environment(\.locale) private var locale
+
+    enum Purpose {
+        /// 書いている投稿の言語。
+        case post
+        /// アカウントの既定の言語（docs/account-screen.mdの「投稿のデフォルト」）。
+        case accountDefault
+    }
     /// 「読み直す」で増やし、読み込みをやり直させる。読み込みはシートの`task`で走らせ、閉じたら止まるようにする。
     @State private var loadGeneration = 0
 
@@ -24,13 +33,13 @@ struct PostingLanguageView: View {
                             languageRow(row)
                         }
                     } header: {
-                        Text(Self.title(of: section.kind))
+                        Text(title(of: section.kind))
                     }
                 }
             }
             .searchable(text: $picker.query, placement: .navigationBarDrawer(displayMode: .always), prompt: "言語の名前")
             .topEdgeEffectHiddenOnMac()
-            .navigationTitle("投稿の言語")
+            .navigationTitle(purpose == .post ? "投稿の言語" : "言語")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -43,10 +52,10 @@ struct PostingLanguageView: View {
         }
     }
 
-    private static func title(of kind: PostingLanguageSection.Kind) -> String {
+    private func title(of kind: PostingLanguageSection.Kind) -> String {
         switch kind {
-        case .defaultLanguage: "アカウントのデフォルト"
-        case .recent: "最近選んだ言語"
+        case .defaultLanguage: purpose == .post ? "アカウントのデフォルト" : "指定なし"
+        case .recent: purpose == .post ? "最近選んだ言語" : "候補"
         case .all: "すべての言語"
         }
     }
@@ -83,7 +92,7 @@ struct PostingLanguageView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.code == nil ? "サーバーに任せる" : row.name)
                     if row.code == nil {
-                        Text("デフォルトの言語が設定されていないため、サーバーが決めます")
+                        Text(purpose == .post ? "デフォルトの言語が設定されていないため、サーバーが決めます" : "言語を指定せず、投稿するときにサーバーが決めます")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }

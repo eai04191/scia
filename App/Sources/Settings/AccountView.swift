@@ -11,6 +11,7 @@ enum AccountScreenItem: Hashable {
     case followedTags
     case scheduled
     case list(id: String, title: String)
+    case postingDefaults
     case filters
     case notificationPolicy
     case logOut
@@ -64,6 +65,7 @@ struct AccountView: View {
                 Text(account)
             }
             Section {
+                row("投稿のデフォルト", opens: .postingDefaults)
                 row("フィルター", opens: .filters)
                 if context.showsNotificationPolicy() {
                     row("通知のフィルタリング", opens: .notificationPolicy)

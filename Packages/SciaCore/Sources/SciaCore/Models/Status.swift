@@ -32,7 +32,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     /// 引用。引用していなければnil。
     public private(set) var quote: Quote?
     /// 誰が引用できるかと、自分が引用できるか。引用に対応していないサーバーではnil。
-    public let quoteApproval: QuoteApproval?
+    public private(set) var quoteApproval: QuoteApproval?
     /// 一致した自分のフィルター。ログインせずに読んだときや、Mastodon 4.0より前のサーバーでは返らないため、無ければ空にする。
     /// ブーストでは、サーバーは元の投稿と同じ結果をブーストにも付ける。
     public private(set) var filtered: [FilterResult]
@@ -50,6 +50,8 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     public private(set) var pinned: Bool
     public private(set) var favouritesCount: Int
     public private(set) var reblogsCount: Int
+    /// 認められた引用の数。引用に対応していないサーバーでは0。
+    public private(set) var quotesCount: Int
     /// 絵文字のリアクション。Fedibirdの形で、返さないサーバーでは空。出すかはサーバーが対応しているかで決める（docs/emoji-reaction.md）。
     public private(set) var emojiReactions: [EmojiReaction]
     public let repliesCount: Int
@@ -86,6 +88,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         pinned: Bool = false,
         favouritesCount: Int = 0,
         reblogsCount: Int = 0,
+        quotesCount: Int = 0,
         emojiReactions: [EmojiReaction] = [],
         repliesCount: Int = 0,
         reblog: Status? = nil
@@ -119,6 +122,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         self.pinned = pinned
         self.favouritesCount = favouritesCount
         self.reblogsCount = reblogsCount
+        self.quotesCount = quotesCount
         self.emojiReactions = emojiReactions
         self.repliesCount = repliesCount
         reblogBox = reblog.map(StatusBox.init)
@@ -162,6 +166,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         pinned = try container.decodeIfPresent(Bool.self, forKey: .pinned) ?? false
         favouritesCount = try container.decodeCountIfPresent(forKey: .favouritesCount) ?? 0
         reblogsCount = try container.decodeCountIfPresent(forKey: .reblogsCount) ?? 0
+        quotesCount = try container.decodeCountIfPresent(forKey: .quotesCount) ?? 0
         repliesCount = try container.decodeCountIfPresent(forKey: .repliesCount) ?? 0
         emojiReactions = try container.decodeLossyArray(EmojiReaction.self, forKey: .emojiReactions)
         reblogBox = try container.decodeIfPresent(StatusBox.self, forKey: .reblogBox)
@@ -196,6 +201,21 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     public func replacingQuote(_ quote: Quote) -> Status {
         var status = self
         status.quote = quote
+        return status
+    }
+
+    /// 引用できる人と引用の数を`other`に揃えたもの。引用できる人を変えたときのサーバーの応答を反映するために使う。
+    public func adoptingQuoteApproval(of other: Status) -> Status {
+        var status = self
+        status.quoteApproval = other.quoteApproval
+        status.quotesCount = other.quotesCount
+        return status
+    }
+
+    /// 引用の数を`delta`だけ変えたもの。引用を取り消したときに、サーバーの結果を待たずに引用元へ反映するために使う。
+    public func adjustingQuotesCount(by delta: Int) -> Status {
+        var status = self
+        status.quotesCount = max(quotesCount + delta, 0)
         return status
     }
 
@@ -305,7 +325,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     private enum CodingKeys: String, CodingKey {
         case id, createdAt, account, content, spoilerText, language, uri, url, mentions, tags, emojis, mediaAttachments, sensitive
         case visibility, inReplyToId, inReplyToAccountId, poll, card, quote, quoteApproval, filtered, editedAt
-        case favourited, reblogged, bookmarked, muted, pinned, favouritesCount, reblogsCount, emojiReactions, repliesCount
+        case favourited, reblogged, bookmarked, muted, pinned, favouritesCount, reblogsCount, quotesCount, emojiReactions, repliesCount
         case reblogBox = "reblog"
     }
 

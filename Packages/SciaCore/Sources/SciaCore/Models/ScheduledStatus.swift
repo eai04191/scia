@@ -51,6 +51,8 @@ public struct ScheduledStatus: Decodable, Hashable, Sendable, Identifiable {
         public let mediaIDs: [String]
         /// 送らなかったときはnilで、投稿するときにサーバーが決める。
         public let language: String?
+        /// 送らなかったときはnilで、アカウントの既定の引用できる人で投稿される。
+        public let quotePolicy: QuotePolicy?
 
         public init(
             text: String,
@@ -61,7 +63,8 @@ public struct ScheduledStatus: Decodable, Hashable, Sendable, Identifiable {
             quotedStatusID: String? = nil,
             poll: PollDraft? = nil,
             mediaIDs: [String] = [],
-            language: String? = nil
+            language: String? = nil,
+            quotePolicy: QuotePolicy? = nil
         ) {
             self.text = text
             self.spoilerText = spoilerText
@@ -72,6 +75,7 @@ public struct ScheduledStatus: Decodable, Hashable, Sendable, Identifiable {
             self.poll = poll
             self.mediaIDs = mediaIDs
             self.language = language
+            self.quotePolicy = quotePolicy
         }
 
         private enum CodingKeys: String, CodingKey {
@@ -79,6 +83,7 @@ public struct ScheduledStatus: Decodable, Hashable, Sendable, Identifiable {
             case mediaIDs = "mediaIds"
             case inReplyToID = "inReplyToId"
             case quotedStatusID = "quotedStatusId"
+            case quotePolicy = "quoteApprovalPolicy"
         }
 
         public init(from decoder: any Decoder) throws {
@@ -93,6 +98,7 @@ public struct ScheduledStatus: Decodable, Hashable, Sendable, Identifiable {
             poll = container.decodeLossyIfPresent(ScheduledPoll.self, forKey: .poll)?.draft
             mediaIDs = (try? container.decodeIfPresent([String].self, forKey: .mediaIDs)) ?? []
             language = (try? container.decodeIfPresent(String.self, forKey: .language)).flatMap { $0 }.flatMap { $0.isEmpty ? nil : $0 }
+            quotePolicy = (try? container.decodeIfPresent(String.self, forKey: .quotePolicy)).flatMap { $0 }.flatMap(QuotePolicy.init(rawValue:))
         }
     }
 }

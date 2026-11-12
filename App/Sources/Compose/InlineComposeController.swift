@@ -202,7 +202,11 @@ final class InlineComposeController: NSObject {
     /// シートで選んだ言語の名前。端末が名前を知らない言語でも、メニューの副題とVoiceOverでサーバーの名前を出すため。
     private var chosenLanguageNames: [String: String] = [:]
     /// 既定と違う言語を選んでいて、言語の項目が＋の中にあるときに、＋の右上に付けるコードのバッジ。ツールバーの幅を変えないよう、＋に重ねる。
-    private let languageBadge = UILabel()
+    private let languageBadge = TintBadgeLabel(surface: .glass)
+    /// 既定と違う引用できる人を選んでいる間に付ける、引用符のバッジ。公開範囲の項目がツールバーにあればそのボタンの右上に、＋の中にあれば＋の右下に付ける。
+    /// ＋の右上は言語のバッジが使うので、両方が出ても重ならないよう右下にする。決まりはdocs/quote.mdの「投稿欄で選ぶ」にある。
+    private lazy var visibilityQuoteBadge = makeQuotePolicyBadge(on: visibilityButton, above: true)
+    private lazy var addQuoteBadge = makeQuotePolicyBadge(on: addButton, above: false)
     /// 添付したメディアのサムネイルの列。書いていて、添付があるときだけ出す。
     let attachmentStrip = ComposeAttachmentStrip()
     /// 注意書きの入力欄。＋のメニューから足したときと、注意書きの付いた投稿へ返信したときだけ、本文の上に出す。
@@ -950,8 +954,7 @@ final class InlineComposeController: NSObject {
             return accountMenu()
         case .visibility:
             // 選んでいる公開範囲が分かるよう、サブメニューの項目に今の値を添える。
-            let menu = UIMenu(title: item.title, subtitle: VisibilityOption(model.visibility).title, image: UIImage(systemName: VisibilityOption(model.visibility).symbolName), children: visibilityActions())
-            return menu
+            return visibilityMenu(title: item.title, subtitle: VisibilityOption(model.visibility).title, image: UIImage(systemName: VisibilityOption(model.visibility).symbolName))
         case .customize:
             return UIAction(title: item.title, image: UIImage(systemName: item.symbolName)) { [weak self] _ in
                 self?.presentToolLayoutSettings()
@@ -1036,11 +1039,79 @@ final class InlineComposeController: NSObject {
 
     /// 編集では公開範囲を変えられないため、今の範囲にチェックマークを付けたまま、どれも押せないようにする。
     /// 編集中と、引用元より広い範囲は、選べない形で並べる。
+    /// 引用できる人を選べるときは、選んでもメニューを閉じない。公開範囲と引用できる人を続けて選べるようにするため。
     private func visibilityActions() -> [UIAction] {
-        VisibilityOption.choices.map { choice in
-            UIAction(title: choice.title, image: UIImage(systemName: choice.symbolName), attributes: model.canChoose(choice.visibility) ? [] : .disabled, state: choice.visibility == model.visibility ? .on : .off) { [weak self] _ in
+        let keepsPresented = model.shownQuotePolicy != nil
+        return VisibilityOption.choices.map { choice in
+            var attributes: UIMenuElement.Attributes = model.canChoose(choice.visibility) ? [] : .disabled
+            if keepsPresented { attributes.insert(.keepsMenuPresented) }
+            return UIAction(title: choice.title, image: UIImage(systemName: choice.symbolName), attributes: attributes, state: choice.visibility == model.visibility ? .on : .off) { [weak self] _ in
                 self?.model.choose(choice.visibility)
+                self?.refreshVisibleVisibilityMenu()
             }
+        }
+    }
+
+    /// 公開範囲のメニュー。公開範囲の下に、引用できる人を区切って並べる。決まりはdocs/quote.mdの「投稿欄で選ぶ」にある。
+    private func visibilityMenu(title: String, subtitle: String? = nil, image: UIImage? = nil) -> UIMenu {
+        let visibility = UIMenu(options: .displayInline, children: visibilityActions())
+        let menu = UIMenu(title: title, subtitle: subtitle, image: image, identifier: Self.visibilityMenuIdentifier, children: [visibility] + (quotePolicyMenu().map { [$0] } ?? []))
+        return menu
+    }
+
+    private static let visibilityMenuIdentifier = UIMenu.Identifier("net.mizle.scia.compose.visibility")
+
+    /// 引用できる人の選択肢。引用に対応していないサーバーと、既定をまだ読めていない間はnilで、並べない。
+    /// 公開範囲で「自分のみ」に決まっている間は、「自分のみ」を選んだ形で、選べなくして理由を添える。
+    private func quotePolicyMenu() -> UIMenu? {
+        guard let shown = model.shownQuotePolicy else { return nil }
+        let attributes: UIMenuElement.Attributes = model.canChooseQuotePolicy ? .keepsMenuPresented : .disabled
+        let actions = QuotePolicy.allCases.map { policy in
+            UIAction(title: policy.title, image: UIImage(systemName: policy.symbolName), attributes: attributes, state: policy == shown ? .on : .off) { [weak self] _ in
+                self?.model.choose(quotePolicy: policy)
+                self?.refreshVisibleVisibilityMenu()
+            }
+        }
+        // 理由は項目のサブタイトルにしない。開いたままのメニューで行の高さが変わると、メニューが伸びて下が投稿欄に隠れるため。
+        return UIMenu(title: model.quotePolicyFixedReason == nil ? "引用できる人" : "引用できる人（この公開範囲では選べません）", options: .displayInline, children: actions)
+    }
+
+    /// 開いたままの公開範囲のメニューを、選んだあとの状態に描き直す。選んでも閉じないので、チェックマークと選べるかを開いたまま合わせる。
+    private func refreshVisibleVisibilityMenu() {
+        for button in [visibilityButton, addButton] {
+            button.contextMenuInteraction?.updateVisibleMenu { [weak self] visible in
+                guard let self, visible.identifier == Self.visibilityMenuIdentifier else { return visible }
+                return visibilityMenu(title: visible.title, subtitle: visible.subtitle, image: visible.image)
+            }
+        }
+    }
+
+    /// 引用符のバッジを`button`に重ねる。押してもボタンのメニューが開くよう、触れたものを受けない。
+    /// - Parameter above: ボタンの記号の右上に置くならtrue、右下に置くならfalse。
+    private func makeQuotePolicyBadge(on button: UIButton, above: Bool) -> TintSymbolBadge {
+        let badge = TintSymbolBadge(symbolName: QuotePolicy.badgeSymbolName, surface: .glass)
+        badge.isUserInteractionEnabled = false
+        badge.isAccessibilityElement = false
+        badge.isHidden = true
+        badge.translatesAutoresizingMaskIntoConstraints = false
+        button.addSubview(badge)
+        let center = button.imageView ?? button
+        NSLayoutConstraint.activate([
+            badge.leadingAnchor.constraint(equalTo: button.centerXAnchor, constant: 2),
+            above ? badge.bottomAnchor.constraint(equalTo: center.centerYAnchor, constant: -2) : badge.topAnchor.constraint(equalTo: center.centerYAnchor, constant: 2),
+        ])
+        return badge
+    }
+
+    /// 既定と違う引用できる人を選んでいる間、引用符のバッジを見せる。公開範囲の項目がツールバーにあればそのボタンに、＋の中にあれば＋に付ける。
+    private func updateQuotePolicyIndicators() {
+        let differs = model.choosesNonDefaultQuotePolicy
+        let inRow = toolPlacement?.row.contains(.visibility) == true
+        visibilityQuoteBadge.isHidden = !(differs && inRow)
+        addQuoteBadge.isHidden = !(differs && !inRow && toolPlacement?.showsAddButton == true)
+        // ＋の読み上げの値は、言語のバッジ（`updateLanguageIndicators`）が先に入れる。
+        if !addQuoteBadge.isHidden, let policy = model.shownQuotePolicy {
+            addButton.accessibilityValue = [addButton.accessibilityValue, "引用できる人: \(policy.title)"].compactMap { $0 }.joined(separator: "、")
         }
     }
 
@@ -1577,8 +1648,6 @@ final class InlineComposeController: NSObject {
     /// ＋の右上に重ねる言語のコードのバッジ。＋の記号に少しかかる位置に置き、押しても＋のメニューが開くよう、触れたものを受けない。
     private func configureLanguageBadge() {
         languageBadge.font = Self.languageCodeFont(for: addButton.traitCollection)
-        languageBadge.textColor = .white
-        languageBadge.backgroundColor = .tintColor
         languageBadge.layer.cornerRadius = languageBadge.font.lineHeight / 2
         languageBadge.layer.cornerCurve = .continuous
         languageBadge.clipsToBounds = true
@@ -1639,6 +1708,7 @@ final class InlineComposeController: NSObject {
         }
         toolButtons[.discardDraft]?.isEnabled = model.canDiscardDraft
         updateLanguageIndicators()
+        updateQuotePolicyIndicators()
     }
 
     /// 既定と違う言語を選んでいる間、言語のコードを見せる。項目がツールバーにあれば記号の代わりにコードを、＋の中にあれば＋の右上にバッジを出す。
@@ -2901,9 +2971,9 @@ final class InlineComposeController: NSObject {
         let option = VisibilityOption(model.visibility)
         visibilityButton.configuration?.image = UIImage(systemName: option.symbolName)
         visibilityButton.accessibilityLabel = "公開範囲"
-        visibilityButton.accessibilityValue = option.title
+        visibilityButton.accessibilityValue = [option.title, model.shownQuotePolicy.map { "引用できる人: \($0.title)" }].compactMap { $0 }.joined(separator: "、")
         visibilityButton.largeContentTitle = option.title
-        visibilityButton.menu = UIMenu(title: "公開範囲", children: visibilityActions())
+        visibilityButton.menu = visibilityMenu(title: "公開範囲")
 
         updateToolButtons()
 

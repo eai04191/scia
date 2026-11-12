@@ -56,6 +56,11 @@ public final class ComposeModel<Thumbnail: Sendable> {
     public private(set) var language: String?
     /// アカウントの既定の言語。決めていないか、まだ読めていなければnil。
     public private(set) var defaultLanguage: String?
+    /// この投稿を引用できる人として選んでいる値。引用に対応していないサーバーか、まだ既定を読めていなければnilで、送らない。
+    /// 公開範囲で決まる分は含めない。見せる値は`shownQuotePolicy`。決まりはdocs/quote.mdの「引用できる人を決める」にある。
+    public private(set) var quotePolicy: QuotePolicy?
+    /// アカウントの既定の引用できる人。引用に対応していないサーバーか、まだ読めていなければnil。
+    public private(set) var defaultQuotePolicy: QuotePolicy?
 
     /// 返信先から自動で入れた宛先と注意書き。返信先を替えたとき、自分で書いた部分と見分けるために使う。
     @ObservationIgnored private var initialDraft: StatusDraft
@@ -63,6 +68,8 @@ public final class ComposeModel<Thumbnail: Sendable> {
     private var hasChosenVisibility = false
     /// 言語を自分で選んだか、編集や予約の書き直しで元の言語を入れた。後から既定値が届いても上書きしない。
     @ObservationIgnored private var hasChosenLanguage = false
+    /// 引用できる人を自分で選んだか、編集や書き直しで元の値を入れた。後から既定値が届いても上書きしない。
+    @ObservationIgnored private var hasChosenQuotePolicy = false
     /// 既定の公開範囲を読み終えた、または読めなかった。読み終えるまでは、既定より広い範囲で投稿しないよう、選ばない限り投稿させない。
     private var hasResolvedDefaults = false
     @ObservationIgnored private var defaultVisibility: Status.Visibility?
@@ -174,7 +181,35 @@ public final class ComposeModel<Thumbnail: Sendable> {
         draft.poll = poll
         draft.scheduledAt = scheduledAt
         draft.language = language
+        draft.quotePolicy = quotePolicy
         return draft
+    }
+
+    /// 今の公開範囲で投稿したときに付く、引用できる人。フォロワーのみとメンションした相手のみでは、選んだ値によらず「自分のみ」。
+    public var shownQuotePolicy: QuotePolicy? {
+        quotePolicy?.effective(for: visibility)
+    }
+
+    /// 引用できる人を選べない理由。選べるときと、引用に対応していないサーバーではnil。
+    public var quotePolicyFixedReason: String? {
+        quotePolicy == nil ? nil : QuotePolicy.fixedReason(for: visibility)
+    }
+
+    /// 引用できる人を選べる。公開範囲で「自分のみ」に決まっている間と、送っている間は選べない。
+    public var canChooseQuotePolicy: Bool {
+        !isPosting && quotePolicy != nil && !QuotePolicy.isFixed(by: visibility)
+    }
+
+    /// 既定と違う引用できる人を選んでいる。前の値のまま気づかずに送らないよう、バッジを見せる。公開範囲で決まっている間は、自分で選んだものではないので見せない。
+    public var choosesNonDefaultQuotePolicy: Bool {
+        quotePolicy != nil && quotePolicy != defaultQuotePolicy && !QuotePolicy.isFixed(by: visibility)
+    }
+
+    /// 引用できる人を選ぶ。
+    public func choose(quotePolicy: QuotePolicy) {
+        guard canChooseQuotePolicy else { return }
+        self.quotePolicy = quotePolicy
+        hasChosenQuotePolicy = true
     }
 
     /// 既定と違う言語を選んでいる。前の言語のまま気づかずに送らないよう、コードを見せる。サーバーに任せているときは既定のままとみなす。
@@ -311,15 +346,33 @@ public final class ComposeModel<Thumbnail: Sendable> {
         return visibility.narrower(limit) == visibility
     }
 
-    /// インスタンスの上限と、ユーザーの既定の公開範囲、閲覧注意、言語を反映する。公開範囲と言語は、自分で選んでいたら変えない。
+    /// インスタンスの上限と、ユーザーの既定の公開範囲、閲覧注意、言語、引用できる人を反映する。公開範囲、言語、引用できる人は、自分で選んでいたら変えない。
     /// 既定の閲覧注意は、この後に最初の添付を足したときから使う。
     /// - Parameter defaultLanguage: 既定の言語。読めなければnilで、今のままにする。既定を決めていなければ`.some(nil)`。
     /// - Parameter accountID: 値を読んだアカウントの`ComposeAccount.id`。今のアカウントならnil。読んでいる間に投稿するアカウントを替えていたら、何もしない。
     ///   前のアカウントのサーバーの上限や既定値で、替えたアカウントの下書きを決めないため。
-    public func apply(configuration: InstanceConfiguration?, defaultVisibility: Status.Visibility?, defaultSensitive: Bool?, defaultLanguage: String?? = nil, accountID: String? = nil) {
+    /// - Parameter defaultQuotePolicy: 既定の引用できる人。読めなければnilで、今のままにする。引用に対応していないサーバーなら`.some(nil)`で、送らない。
+    public func apply(
+        configuration: InstanceConfiguration?,
+        defaultVisibility: Status.Visibility?,
+        defaultSensitive: Bool?,
+        defaultLanguage: String?? = nil,
+        defaultQuotePolicy: QuotePolicy?? = nil,
+        accountID: String? = nil
+    ) {
         guard accountID == otherAccount?.id else { return }
         hasResolvedDefaults = true
         defer { startAwaitingReuploads() }
+        if let defaultQuotePolicy {
+            self.defaultQuotePolicy = defaultQuotePolicy
+            // 対応していないサーバーには、選んでいても送らない。選んだことも忘れ、対応しているサーバーのアカウントに戻したら、その既定から選び直せるようにする。
+            if defaultQuotePolicy == nil {
+                hasChosenQuotePolicy = false
+            }
+            if !hasChosenQuotePolicy {
+                quotePolicy = defaultQuotePolicy
+            }
+        }
         if let defaultLanguage {
             self.defaultLanguage = defaultLanguage
             if !hasChosenLanguage {
@@ -492,6 +545,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
             || visibility != resolvedVisibility
             // 言語のバッジの判定（`choosesNonDefaultLanguage`）は、サーバーに任せる（nil）を既定扱いにするため使わない。
             || language != defaultLanguage
+            || quotePolicy != defaultQuotePolicy
     }
 
     /// ペーストを読み始めたときの下書き。読み終えたら`noteInsertedText(_:token:)`に渡す。
@@ -547,6 +601,8 @@ public final class ComposeModel<Thumbnail: Sendable> {
         redraft = nil
         language = draft.language
         hasChosenLanguage = true
+        quotePolicy = draft.quotePolicy
+        hasChosenQuotePolicy = true
         forgetInsertedURLs()
         lastSubmitted = nil
         hasChosenVisibility = false
@@ -583,6 +639,9 @@ public final class ComposeModel<Thumbnail: Sendable> {
         // 言語を送っていない予約は、送らずにサーバーに任せたままにする。
         language = draft.language
         hasChosenLanguage = true
+        // 引用できる人を送っていない予約は、既定にする。まだ届いていなければ、届いたときに`apply`が入れる。
+        quotePolicy = draft.quotePolicy ?? defaultQuotePolicy
+        hasChosenQuotePolicy = draft.quotePolicy != nil
         forgetInsertedURLs()
         lastSubmitted = nil
         // 予約したときの公開範囲を、あとから届く既定の公開範囲で上書きしない。公開範囲を送っていない予約は、既定の公開範囲が届くのを待つ。
@@ -624,6 +683,8 @@ public final class ComposeModel<Thumbnail: Sendable> {
         redraft = StatusRedraft(status: status)
         language = draft.language
         hasChosenLanguage = true
+        quotePolicy = draft.quotePolicy
+        hasChosenQuotePolicy = true
         forgetInsertedURLs()
         lastSubmitted = nil
         // 元の投稿の公開範囲を、あとから届く既定の公開範囲で上書きしない。
@@ -654,6 +715,8 @@ public final class ComposeModel<Thumbnail: Sendable> {
         // 選んだ言語を次の投稿に残さない。たまに英語で書いたあとの投稿まで、英語として送らないため。
         hasChosenLanguage = false
         language = defaultLanguage
+        hasChosenQuotePolicy = false
+        quotePolicy = defaultQuotePolicy
     }
 
     /// 投稿するアカウントを替える。nilなら今のアカウントに戻す。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
@@ -711,6 +774,8 @@ public final class ComposeModel<Thumbnail: Sendable> {
         redraft = previous.redraft
         language = previous.language
         hasChosenLanguage = previous.hasChosenLanguage
+        quotePolicy = previous.quotePolicy
+        hasChosenQuotePolicy = previous.hasChosenQuotePolicy
         insertedURLs = previous.insertedURLs
         // 応答だけを受け取れなかった投稿を、ログインし直してから送り直しても、同じ投稿として送る。
         lastSubmitted = previous.lastSubmitted
@@ -829,10 +894,10 @@ public final class ComposeModel<Thumbnail: Sendable> {
         guard draft.editing == nil, let lastSubmitted else { return draft }
         if lastSubmitted.text == draft.text, lastSubmitted.spoilerText == draft.spoilerText, lastSubmitted.sensitive == draft.sensitive,
            lastSubmitted.visibility == draft.visibility, lastSubmitted.mediaIDs == draft.mediaIDs, lastSubmitted.poll == draft.poll,
-           lastSubmitted.scheduledAt == draft.scheduledAt, lastSubmitted.language == draft.language {
+           lastSubmitted.scheduledAt == draft.scheduledAt, lastSubmitted.language == draft.language, lastSubmitted.quotePolicy == draft.quotePolicy {
             return lastSubmitted
         }
-        return StatusDraft(text: draft.text, spoilerText: draft.spoilerText, hasSpoiler: draft.hasSpoiler, visibility: draft.visibility, inReplyToID: draft.inReplyToID, quotedStatusID: draft.quotedStatusID, attachments: draft.attachments, poll: draft.poll, scheduledAt: draft.scheduledAt, language: draft.language)
+        return StatusDraft(text: draft.text, spoilerText: draft.spoilerText, hasSpoiler: draft.hasSpoiler, visibility: draft.visibility, inReplyToID: draft.inReplyToID, quotedStatusID: draft.quotedStatusID, attachments: draft.attachments, poll: draft.poll, scheduledAt: draft.scheduledAt, language: draft.language, quotePolicy: draft.quotePolicy)
     }
 
     /// 投稿し、成功したら下書きを空に戻す。失敗したら下書きを残し、同じ下書きで送り直せるようにする。

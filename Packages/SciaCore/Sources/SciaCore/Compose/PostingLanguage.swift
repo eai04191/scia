@@ -25,6 +25,13 @@ public struct PostingLanguage: Decodable, Hashable, Sendable, Identifiable {
         locale.localizedString(forIdentifier: code)
     }
 
+    /// 端末の言語のリスト（`Locale.preferredLanguages`）から、言語のコードを優先の順に取り出す。地域や文字の種類（`ja-JP`、`zh-Hans-JP`）は外し、同じ言語は1度だけにする。
+    /// たくさんの言語の中から探さずに済むよう、言語を選ぶシートの候補に使う。
+    public static func deviceCodes(preferredLanguages: [String]) -> [String] {
+        var seen: Set<String> = []
+        return preferredLanguages.compactMap { Locale.Language(identifier: $0).languageCode?.identifier }.filter { seen.insert($0).inserted }
+    }
+
     /// 既定と違う言語を選んでいる間に見せるコード。大文字にする。
     public static func badgeText(of code: String) -> String {
         code.uppercased()

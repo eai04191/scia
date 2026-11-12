@@ -19,6 +19,12 @@ public enum StatusAction: Sendable {
     case openFavouritedBy
     /// 投稿をブーストした人のリストを開く。
     case openRebloggedBy
+    /// 投稿を引用した投稿のタイムラインを開く。
+    case openQuotes
+    /// 自分の投稿を引用できる人を変える。
+    case setQuotePolicy(QuotePolicy)
+    /// 自分の投稿への、この投稿による引用を取り消す。
+    case revokeQuote
     case edit
     case delete
     /// 投稿欄に戻して書き直し、送るときに元の投稿を削除する。
@@ -224,6 +230,9 @@ public struct StatusMenuTree {
         case .reblogWithVisibility:
             guard let status else { return [] }
             return reblogWithVisibilityMenu(for: status, item: item).map { [$0] } ?? []
+        case .quotePolicy:
+            guard let status else { return [] }
+            return quotePolicyMenu(for: status, item: item).map { [$0] } ?? []
         case .otherAccounts:
             guard let status else { return [] }
             return otherAccountsMenu(for: status, item: item).map { [$0] } ?? []
@@ -255,7 +264,7 @@ public struct StatusMenuTree {
         case .customize:
             // 投稿のない通知（フォローなど）でも出す。
             return [.action(item.title, icon: .symbol(item.symbolName), .customize)]
-        case .reply, .favourite, .reblog, .bookmark, .quote, .emojiReaction, .muteConversation, .pin, .toggleTranslation, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .favouritedBy, .rebloggedBy, .hideMedia, .systemTranslate, .selectText, .edit, .delete, .redraft, .apiResponse:
+        case .reply, .favourite, .reblog, .bookmark, .quote, .emojiReaction, .muteConversation, .pin, .toggleTranslation, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .favouritedBy, .rebloggedBy, .quotedBy, .revokeQuote, .hideMedia, .systemTranslate, .selectText, .edit, .delete, .redraft, .apiResponse:
             guard let status else { return [] }
             return statusNode(item, on: status).map { [$0] } ?? []
         }
@@ -307,6 +316,13 @@ public struct StatusMenuTree {
         case .rebloggedBy:
             guard shown.reblogsCount > 0 else { return nil }
             return .action(item.title, subtitle: "\(shown.reblogsCount.formatted())人", icon: icon, .status(.openRebloggedBy))
+        case .quotedBy:
+            guard shown.quotesCount > 0 else { return nil }
+            return .action(item.title, subtitle: "\(shown.quotesCount.formatted())件", icon: icon, .status(.openQuotes))
+        case .revokeQuote:
+            // どこに出ている投稿でも、自分の投稿を引用していて、引用が認められていれば出す。取り消すと戻せないので、赤で出す。
+            guard let myAccountID, shown.quote?.state == .accepted, shown.quote?.quotedStatus?.account.id == myAccountID else { return nil }
+            return .action(item.title, icon: icon, isDestructive: true, .status(.revokeQuote))
         case .edit:
             guard let myAccountID, status.isAuthored(by: myAccountID) else { return nil }
             // 投票の締め切りが近い投稿は、送り直すとサーバーが拒むので、押せないまま理由を添える。
@@ -338,7 +354,7 @@ public struct StatusMenuTree {
             return .action(item.title, icon: icon, .selectText)
         case .apiResponse:
             return .action(item.title, icon: icon, .status(.viewAPIResponse))
-        case .openThread, .select, .notifyingUser, .author, .booster, .mentionedUsers, .customEmojis, .hashtags, .dismissNotification, .reblogWithVisibility, .otherAccounts, .customize:
+        case .openThread, .select, .notifyingUser, .author, .booster, .mentionedUsers, .customEmojis, .hashtags, .dismissNotification, .reblogWithVisibility, .quotePolicy, .otherAccounts, .customize:
             return nil
         }
     }
@@ -391,10 +407,28 @@ public struct StatusMenuTree {
         })
     }
 
+    /// 自分の投稿を引用できる人を変えるサブメニュー。今の値にチェックマークを付け、項目のサブタイトルにも出す。
+    /// 引用に対応していないサーバーの投稿（`quote_approval`がない）と、ほかの人の投稿では出さない。
+    /// フォロワーのみとメンションした相手のみの投稿は、サーバーがいつも「自分のみ」にするので、押せない形で理由を添える。
+    private func quotePolicyMenu(for status: Status, item: StatusMenuItem) -> MenuNode<StatusMenuCommand>? {
+        guard let myAccountID, status.isAuthored(by: myAccountID), let approval = status.displayed.quoteApproval else { return nil }
+        let icon = MenuIcon.symbol(item.symbolName)
+        if let reason = QuotePolicy.fixedReason(for: status.displayed.visibility) {
+            return .action(item.title, subtitle: reason, icon: icon, isEnabled: false, nil)
+        }
+        let current = approval.policy
+        return .submenu(item.title, subtitle: current.title, icon: icon, QuotePolicy.allCases.map { policy in
+            .action(policy.title, icon: .symbol(policy.symbolName), isSelected: policy == current, .status(.setQuotePolicy(policy)))
+        })
+    }
+
     /// 「別のアカウントで」の中に出さない項目。どのアカウントで行っても同じ結果になるもの（コピー、共有、今のアカウントで画面を開くもの、このタイムラインの表示を変えるもの）。
     static let sameForEveryAccountItems: Set<StatusMenuItem> = [
         .openThread, .select, .copyLink, .copyText, .selectText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari,
-        .editHistory, .favouritedBy, .rebloggedBy, .dismissNotification, .hideMedia, .systemTranslate, .toggleTranslation, .customEmojis, .apiResponse, .otherAccounts, .customize,
+        .editHistory, .favouritedBy, .rebloggedBy, .quotedBy, .dismissNotification, .hideMedia, .systemTranslate, .toggleTranslation, .customEmojis, .apiResponse, .otherAccounts, .customize,
+        // 引用できる人と引用の取り消しは、アカウントによって結果が違うが、「別のアカウントで」からは行えない。
+        // ほかのアカウントの自分の投稿への操作で、編集や削除と違い、ほかのアカウントから行う経路をまだ作っていないため。
+        .quotePolicy, .revokeQuote,
     ]
     /// 「別のアカウントで」のハッシュタグのメニューに出さない項目。どのアカウントで行っても同じ結果になるもの。
     static let sameForEveryAccountHashtagItems: Set<HashtagMenuItem> = [.timeline, .accountStatuses, .addToCompose, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .copyLink, .share, .customize]

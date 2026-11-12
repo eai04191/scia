@@ -25,6 +25,8 @@ public enum AppDestination: Equatable, Sendable {
     case editHistory(statusID: String)
     /// `api-response?id=<投稿のID>`。その投稿をサーバーから読み直し、APIの応答のJSONを開く。
     case apiResponse(statusID: String)
+    /// `quotes?id=<投稿のID>`。選んでいるタブに、その投稿を引用した投稿のタイムラインを開く。
+    case quotes(statusID: String)
     /// `crash-report?id=<投稿のID>`。隔離した投稿について、開発者に送る内容の画面を手前に重ねて開く。
     case crashReport(statusID: String)
     /// `accounts/<followers|following>`で自分の、`?id=<アカウントのID>`でその人のフォロワーかフォローしている人のリストを開く。
@@ -49,6 +51,8 @@ public enum AppDestination: Equatable, Sendable {
     case notificationPolicy
     /// `filters`。自分のフィルターを並べた画面を開く。
     case filters
+    /// `posting-defaults`。新しく投稿するときの既定の画面を開く。
+    case postingDefaults
     /// `announcements`。サーバーのお知らせのリストを開く。
     case announcements
     /// アカウントの画面。サーバーにあるものの入口を並べる。決まりはdocs/account-screen.mdにある。
@@ -122,10 +126,10 @@ public enum AppDestination: Equatable, Sendable {
     /// 予約投稿は、タブを無効にしていれば手前に重ねるが、タブに並べていればタブを見せるので、こちらに入れる。
     public var showsTab: Bool {
         switch self {
-        case .tab, .userTab, .profile, .myProfile, .thread, .editHistory, .apiResponse, .accounts, .hashtag, .accountHashtag, .search, .scheduled,
+        case .tab, .userTab, .profile, .myProfile, .thread, .quotes, .editHistory, .apiResponse, .accounts, .hashtag, .accountHashtag, .search, .scheduled,
              .notificationRequests, .notificationRequest:
             true
-        case .settings, .appearanceGroup, .notificationAppearanceGroup, .profileEdit, .operationStatus, .notificationPolicy, .filters, .announcements, .account, .inAppBrowserHeight, .note, .report, .compose, .crashReport:
+        case .settings, .appearanceGroup, .notificationAppearanceGroup, .profileEdit, .operationStatus, .notificationPolicy, .filters, .postingDefaults, .announcements, .account, .inAppBrowserHeight, .note, .report, .compose, .crashReport:
             false
         }
     }
@@ -142,6 +146,7 @@ public enum AppDestination: Equatable, Sendable {
         case .myProfile: "my profile"
         case .profileEdit: "profile edit"
         case .thread: "thread"
+        case .quotes: "quotes"
         case .editHistory: "edit history"
         case .apiResponse: "api response"
         case .crashReport: "crash report"
@@ -155,6 +160,7 @@ public enum AppDestination: Equatable, Sendable {
         case .notificationRequest: "notification request"
         case .notificationPolicy: "notification policy"
         case .filters: "filters"
+        case .postingDefaults: "posting defaults"
         case .announcements: "announcements"
         case .account: "account"
         case .inAppBrowserHeight: "in-app browser height"
@@ -194,6 +200,7 @@ public enum AppDestination: Equatable, Sendable {
         case ("my-profile", ""): .myProfile
         case ("profile-edit", ""): .profileEdit
         case ("thread", ""): query("id").map { .thread(statusID: $0) }
+        case ("quotes", ""): query("id").map { .quotes(statusID: $0) }
         case ("edit-history", ""): query("id").map { .editHistory(statusID: $0) }
         case ("api-response", ""): query("id").map { .apiResponse(statusID: $0) }
         case ("crash-report", ""): query("id").map { .crashReport(statusID: $0) }
@@ -211,6 +218,7 @@ public enum AppDestination: Equatable, Sendable {
         case ("notification-request", ""): query("id").map { .notificationRequest(id: $0) }
         case ("notification-policy", ""): .notificationPolicy
         case ("filters", ""): .filters
+        case ("posting-defaults", ""): .postingDefaults
         case ("announcements", ""): .announcements
         case ("account", ""): .account
         case ("in-app-browser-height", ""):
@@ -251,6 +259,7 @@ public enum AppDestination: Equatable, Sendable {
         case .myProfile: ("my-profile", nil, [])
         case .profileEdit: ("profile-edit", nil, [])
         case .thread(let statusID): ("thread", nil, [("id", statusID)])
+        case .quotes(let statusID): ("quotes", nil, [("id", statusID)])
         case .editHistory(let statusID): ("edit-history", nil, [("id", statusID)])
         case .apiResponse(let statusID): ("api-response", nil, [("id", statusID)])
         case .crashReport(let statusID): ("crash-report", nil, [("id", statusID)])
@@ -268,6 +277,7 @@ public enum AppDestination: Equatable, Sendable {
         case .notificationRequest(let id): ("notification-request", nil, [("id", id)])
         case .notificationPolicy: ("notification-policy", nil, [])
         case .filters: ("filters", nil, [])
+        case .postingDefaults: ("posting-defaults", nil, [])
         case .announcements: ("announcements", nil, [])
         case .account: ("account", nil, [])
         case .inAppBrowserHeight(let page): ("in-app-browser-height", nil, page.map { [("return", $0.rawValue)] } ?? [])

@@ -2,7 +2,7 @@ import Foundation
 import SciaCore
 import UIKit
 
-/// ブックマークやお気に入りの画面を組み立て、読み込みを受け持つ`SavedStatusesModel`とTimelineViewControllerをつなぐ。決まりはdocs/tabs.mdの「ブックマークとお気に入り」にある。
+/// ブックマークやお気に入り、ある投稿を引用した投稿の画面を組み立て、読み込みを受け持つ`SavedStatusesModel`とTimelineViewControllerをつなぐ。決まりはdocs/tabs.mdの「ブックマークとお気に入り」にある。
 @MainActor
 final class SavedStatusesController {
     private(set) lazy var viewController = TimelineViewController(texts: Self.texts(for: kind)) { [weak model] in await model?.refresh() }
@@ -27,6 +27,7 @@ final class SavedStatusesController {
         switch kind {
         case .bookmarks: .bookmarks
         case .favourites: .favourites
+        case .quotes: .quotes
         }
     }
 

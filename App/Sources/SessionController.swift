@@ -85,6 +85,21 @@ final class SessionController {
     let debugScrollHitches = ScrollHitchMonitor()
     #endif
     /// 今のアカウントでの投稿の削除。消せたら、どの一覧からも除き、投稿欄の編集や書き直しもやめる。
+    /// サーバーが受け付ける言語。投稿欄の言語のシートと「投稿のデフォルト」で使う。
+    private let postingLanguages: PostingLanguageCache
+    private lazy var quoteControl = QuoteControl(session: session, tasks: tasks)
+    private lazy var postingDefaults: PostingDefaultsModel = {
+        let model = PostingDefaultsModel(api: .init(session: session), initial: session.preferences, tasks: tasks.child())
+        model.onFailure = { [weak self] reason in
+            guard let self else { return }
+            let title = "投稿のデフォルトを変更できませんでした"
+            operationStatus.recordFailure(title: title, reason: reason)
+            showFailureNotice(.interactionFailure(title: title) { [weak self] in
+                self?.presentAlert(title: title, reason: reason)
+            })
+        }
+        return model
+    }()
     private lazy var deletion: StatusDeletion = {
         let deletion = StatusDeletion(session: session, composer: composer.model, tasks: tasks) { [weak composer] in
             composer?.willResetForDeletedStatus()
@@ -499,11 +514,13 @@ final class SessionController {
             accounts: { ids in await Array(accounts.load(ids).values) }
         ).remembering(customEmojisIn: customEmojis)
         let completion = ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, account: credential.handle))
+        let postingLanguages = PostingLanguageCache { try await client.postingLanguages() }
+        self.postingLanguages = postingLanguages
         composer = InlineComposeController(
             model: ComposeModel<UIImage>(tasks: tasks.child(), myAccountID: credential.accountID, media: media, redraft: redraft, backgroundTime: BackgroundTime.request, submit: client.submit),
             completion: completion,
             recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance),
-            languages: PostingLanguageSource(recent: RecentPostingLanguages(defaults: .standard, account: credential.handle), load: PostingLanguageCache { try await client.postingLanguages() }.languages)
+            languages: PostingLanguageSource(recent: RecentPostingLanguages(defaults: .standard, account: credential.handle), load: postingLanguages.languages)
         )
         rootViewController = tabBarController
         windowRootViewController = InAppBrowserDockContainer(content: tabBarController)
@@ -539,6 +556,8 @@ final class SessionController {
             for timeline in self?.timelines.allObjects ?? [] {
                 timeline.spoilerExpansion.expandsByDefault = preferences.expandsSpoilers
             }
+            // 「投稿のデフォルト」で変えた値を、開いている投稿欄の既定にも反映する。自分で選んでいた値は変えない。
+            self?.applyComposeDefaults()
         }
         for viewController in [home.viewController, local.viewController, federated.viewController, notifications.viewController, bookmarks.viewController, favourites.viewController, followedTagsList.viewController] {
             configureTabRoot(viewController)
@@ -704,7 +723,7 @@ final class SessionController {
     /// 上にスレッドやビューアを重ねても、タブで見せていることは変わらないので、消さない。
     private func applyShownSavedLists() {
         for list in [bookmarks, favourites] {
-            list.setShown(tabs.isShowing(TabItem(list.kind)))
+            list.setShown(TabItem(list.kind).map(tabs.isShowing) ?? false)
         }
         followedTagsList.setShown(tabs.isShowing(.followedTags))
         // アカウントの画面から積んだものは、積んだ先のタブを選んでいる間、見せている扱いにする。
@@ -1730,6 +1749,13 @@ final class SessionController {
         }
     }
 
+    /// 新しく投稿するときの既定の画面をシートで開く。決まりはdocs/account-screen.mdの「投稿のデフォルト」にある。
+    func showPostingDefaults() {
+        // 最近選んだ言語は候補に並べるために読むだけで、既定に選んだ言語は覚えさせない。
+        let languages = PostingLanguageSource(recent: RecentPostingLanguages(defaults: .standard, account: credential.handle), load: postingLanguages.languages)
+        rootViewController.presentOnFrontmost(PostingDefaultsView.makeSheet(model: postingDefaults, languages: languages), animated: true)
+    }
+
     /// 通知のフィルタリングの設定をシートで開く。
     func showFilters() {
         rootViewController.presentOnFrontmost(FiltersView.makeSheet(model: filters, now: now), animated: true)
@@ -2056,6 +2082,13 @@ final class SessionController {
         case .openRebloggedBy:
             guard let timeline else { return }
             openAccountList(.rebloggedBy(status.displayed.id), from: timeline)
+        case .openQuotes:
+            guard let timeline else { return }
+            openQuotes(of: status.displayed.id, from: timeline)
+        case .setQuotePolicy(let policy):
+            setQuotePolicy(policy, of: status)
+        case .revokeQuote:
+            confirmRevokingQuote(by: status)
         case .edit:
             UserAction.editStatus.record()
             startEditing(status)
@@ -2279,6 +2312,7 @@ final class SessionController {
                 defaultVisibility: preferences?.defaultVisibility,
                 defaultSensitive: preferences?.defaultSensitive,
                 defaultLanguage: preferences.map(\.defaultLanguage),
+                defaultQuotePolicy: preferences.map(\.defaultQuotePolicy),
                 accountID: writing.id
             )
         }
@@ -2376,7 +2410,7 @@ final class SessionController {
             UserAction.redraftStatus.record()
             startRedrafting(status, as: account)
             return
-        case .editHistory, .openFavouritedBy, .openRebloggedBy, .viewAPIResponse:
+        case .editHistory, .openFavouritedBy, .openRebloggedBy, .openQuotes, .setQuotePolicy, .revokeQuote, .viewAPIResponse:
             // 「別のアカウントで」の並びから除いているので来ない（`StatusMenuTree.sameForEveryAccountItems`）。
             return
         case .react:
@@ -3179,6 +3213,7 @@ final class SessionController {
             case .followedTags: showFollowedTags()
             case .scheduled: showScheduledStatuses()
             case .list(let id, let title): showList(id: id, title: title)
+            case .postingDefaults: showPostingDefaults()
             case .filters: showFilters()
             case .notificationPolicy: showNotificationPolicy()
             case .logOut: logOut?()
@@ -3195,7 +3230,7 @@ final class SessionController {
 
     /// ブックマークかお気に入りを開く。タブを無効にしていれば、選んでいるタブに積む。積んだものは、ナビゲーションから外されたら止める。
     private func showSavedStatuses(_ kind: SavedStatusesKind) {
-        guard !showTabIfEnabled(TabItem(kind)), let navigation = tabs.selectedNavigation else { return }
+        guard !(TabItem(kind).map(showTabIfEnabled) ?? false), let navigation = tabs.selectedNavigation else { return }
         let controller = SavedStatusesController(kind: kind, session: session)
         let viewController = controller.viewController
         configure(viewController)
@@ -3204,6 +3239,20 @@ final class SessionController {
         releaseOnClose(viewController)
         pushedSavedLists.add(controller)
         navigation.pushViewController(viewController, animated: true)
+        controller.setShown(true)
+    }
+
+    /// 投稿を引用した投稿のタイムラインを、`source`の上に積む。積んだものは、ナビゲーションから外されたら止める。決まりはdocs/quote.mdの「引用した投稿のタイムライン」にある。
+    private func openQuotes(of statusID: Status.ID, from source: UIViewController) {
+        UserAction.openQuotes.record()
+        let controller = SavedStatusesController(kind: .quotes(of: statusID), session: session)
+        let viewController = controller.viewController
+        configure(viewController)
+        viewController.lifetimeOwner = controller
+        viewController.onRemovedFromParent = { [weak controller] in controller?.model.stop() }
+        releaseOnClose(viewController)
+        pushedSavedLists.add(controller)
+        source.navigationController?.pushViewController(viewController, animated: true)
         controller.setShown(true)
     }
 
@@ -3561,6 +3610,47 @@ final class SessionController {
     }
 
     /// 削除は元に戻せないので、確かめてから送る。
+    /// 引用できる人を変える。変えられたらチップで知らせ、失敗は押し直せば済むので、お気に入りの失敗と同じくチップの列に出す。
+    private func setQuotePolicy(_ policy: QuotePolicy, of status: Status) {
+        UserAction.setQuotePolicy.record()
+        quoteControl.setPolicy(policy, of: status) { [weak self] error in
+            guard let self else { return }
+            guard let error else {
+                showToggledNotice("引用できる人を“\(policy.title)”に変更しました")
+                return
+            }
+            await showQuoteFailure(title: "引用できる人を変更できませんでした", error: error, status: status)
+        }
+    }
+
+    /// 引用の取り消しは元に戻せないので、確かめてから送る。
+    private func confirmRevokingQuote(by quoting: Status) {
+        presentOnTop(UIAlertController(Confirmation.revokingQuote(by: quoting.displayed.account.acct), preferredStyle: .alert) { [weak self] _ in
+            self?.revokeQuote(by: quoting)
+        }, animated: true)
+    }
+
+    private func revokeQuote(by quoting: Status) {
+        UserAction.revokeQuote.record()
+        quoteControl.revoke(quoting) { [weak self] error in
+            guard let self else { return }
+            guard let error else {
+                showToggledNotice("引用を取り消しました")
+                return
+            }
+            await showQuoteFailure(title: "引用を取り消せませんでした", error: error, status: quoting)
+        }
+    }
+
+    private func showQuoteFailure(title: String, error: any Error, status: Status) async {
+        logger.error("quote control failed: \(SciaLog.describe(error), privacy: .public)")
+        let reason = await failureReason(for: error)
+        operationStatus.recordFailure(title: title, reason: reason, subject: OperationStatus.Subject(status))
+        showFailureNotice(.interactionFailure(title: title) { [weak self] in
+            self?.presentAlert(title: title, reason: reason)
+        })
+    }
+
     private func confirmDeleting(_ status: Status) {
         presentOnTop(UIAlertController(Confirmation.deleting, preferredStyle: .alert) { [weak self] _ in
             self?.delete(status)
@@ -4350,6 +4440,12 @@ final class SessionController {
             showNotificationPolicy()
         case .filters:
             showFilters()
+        case .postingDefaults:
+            showPostingDefaults()
+        case .quotes(let statusID):
+            if let source = tabs.selectedNavigation?.topViewController {
+                openQuotes(of: statusID, from: source)
+            }
         case .announcements:
             showAnnouncements()
         case .account:

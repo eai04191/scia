@@ -176,6 +176,12 @@ extension Confirmation where Choice == Proceed {
         .destructive(title: "\(actor.map { "\($0)で" } ?? "")投稿を削除しますか？", message: "削除した投稿は元に戻せません。", action: "削除")
     }
 
+    /// 引用の取り消しは元に戻せないので確かめる。
+    /// - Parameter acct: 引用した人のハンドル。
+    public static func revokingQuote(by acct: String) -> Confirmation {
+        .destructive(title: "@\(acct)の引用を取り消しますか？", message: "この投稿からあなたの投稿が表示されなくなり、元に戻せません。", action: "取り消す")
+    }
+
     /// 予約の取り消しは元に戻せないので確かめる。
     public static var cancelingSchedule: Confirmation {
         .destructive(title: "予約を取り消しますか？", message: "取り消した予約は投稿されず、元に戻せません。", action: "取り消す")

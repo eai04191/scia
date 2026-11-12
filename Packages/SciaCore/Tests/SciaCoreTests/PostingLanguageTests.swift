@@ -20,7 +20,13 @@ struct PostingLanguageTests {
     }
 
     /// 既定の言語、最近選んだ言語、すべての言語の順に並べ、名前は端末の言語で書く。最近選んだ言語から既定の言語は除く。
-    @Test func listsDefaultRecentAndAll() {
+    /// 端末の言語のリストから、地域や文字の種類を外した言語のコードを、優先の順に1度ずつ取り出す。
+    @Test func deviceCodesDropRegionsAndDuplicates() {
+        #expect(PostingLanguage.deviceCodes(preferredLanguages: ["ja-JP", "en-US", "en-GB", "zh-Hans-JP"]) == ["ja", "en", "zh"])
+        #expect(PostingLanguage.deviceCodes(preferredLanguages: []).isEmpty)
+    }
+
+        @Test func listsDefaultRecentAndAll() {
         let result = sections(recentCodes: ["fr", "ja"])
 
         #expect(result.map(\.kind) == [.defaultLanguage, .recent, .all])

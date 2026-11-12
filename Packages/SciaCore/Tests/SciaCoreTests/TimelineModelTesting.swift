@@ -149,6 +149,11 @@ enum TimelineModelFixtures {
         try encoder().encode(statuses)
     }
 
+    /// 1件の投稿を、APIの応答の本文にする。
+    static func body(_ status: Status) throws -> Data {
+        try encoder().encode(status)
+    }
+
     /// 投稿を、ストリーミングの`update`イベントのテキストにする。
     static func updateMessage(_ id: Int, stream: [String] = ["user"]) throws -> String {
         let payload = String(decoding: try encoder().encode(status(id)), as: UTF8.self)

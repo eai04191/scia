@@ -116,7 +116,8 @@ extension StatusDraft {
             inReplyToID: status.inReplyToId,
             attachments: attachments,
             editing: StatusEditTarget(statusID: status.id, poll: status.poll.flatMap { PollResubmission($0, now: now) }),
-            language: status.language
+            language: status.language,
+            quotePolicy: status.quoteApproval?.policy
         )
     }
 
@@ -142,6 +143,10 @@ extension StatusDraft {
         // 言語は、送らなければサーバーが今の言語のまま残すので、分からないときだけ送らない。
         if let language {
             form.append(URLQueryItem(name: "language", value: language))
+        }
+        // 送らなければ、サーバーは今の値のまま残す。
+        if let sentQuotePolicy {
+            form.append(URLQueryItem(name: "quote_approval_policy", value: sentQuotePolicy.rawValue))
         }
         form += mediaIDs.map { URLQueryItem(name: "media_ids[]", value: $0) }
         // Rackは配列の中のハッシュを、同じキーがもう一度出たところで次の要素に分ける。要素ごとにidを先に置く。

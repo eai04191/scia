@@ -37,6 +37,9 @@ public final class AccountSession {
     public var onPreferencesLoad: (ServerPreferences) -> Void = { _ in }
     /// 読めたアカウントの設定。まだ読めていなければnil。
     public private(set) var preferences: ServerPreferences?
+    /// 設定を入れ替えたか、既定を保存した回数。読み始めたあとに増えていたら、その読み込みの応答は古いので使わない。
+    /// 起動時の読み込み、画面を開いたときの読み直し、保存のあとの読み直しのどれが遅れて届いても、新しい設定を古い値で上書きしないため。
+    @ObservationIgnored private var preferencesVersion = 0
     private var instanceConfiguration: InstanceConfiguration?
     private let configurationLoad = SharedLoad()
     private let preferencesLoad = SharedLoad()
@@ -225,13 +228,41 @@ public final class AccountSession {
     public func loadPreferences() async -> ServerPreferences? {
         await preferencesLoad.run(cached: { preferences }) {
             do {
-                let loaded = try await client.preferences()
-                preferences = loaded
-                onPreferencesLoad(loaded)
+                let version = preferencesVersion
+                adoptPreferences(try await client.preferences(), readAt: version)
             } catch {
                 logger.info("preferences unavailable error=\(SciaLog.describe(error), privacy: .public)")
             }
         }
+    }
+
+    /// アカウントの設定を読み直す。ほかのクライアントで変えた値を拾うために、設定を見せる画面を開くときに呼ぶ。読めなければ投げ、手元の設定は変えない。
+    @discardableResult
+    public func reloadPreferences() async throws -> ServerPreferences {
+        let version = preferencesVersion
+        return adoptPreferences(try await client.preferences(), readAt: version)
+    }
+
+    /// 読んだ設定を入れ、配る。読み始めたあとに、ほかの読み込みや保存が設定を入れ替えていたら、読んだのはその前の値なので使わず、今の設定を返す。
+    @discardableResult
+    private func adoptPreferences(_ loaded: ServerPreferences, readAt version: Int) -> ServerPreferences {
+        if preferencesVersion != version, let preferences { return preferences }
+        preferencesVersion += 1
+        preferences = loaded
+        onPreferencesLoad(loaded)
+        return loaded
+    }
+
+    /// 新しく投稿するときの既定を1つ変え、変えたあとのアカウントの設定を返す。決まりはdocs/account-screen.mdの「投稿のデフォルト」にある。
+    /// 保存できたら設定を読み直す。読み直せなければ、送った変更を手元の設定に当てる。保存できなければ投げ、手元の設定は変えない。
+    @discardableResult
+    public func updatePostingDefault(_ change: PostingDefaultChange) async throws -> ServerPreferences? {
+        try await client.updatePostingDefault(change)
+        // 保存の前に読み始めた応答を、ここから先は使わせない。
+        preferencesVersion += 1
+        let version = preferencesVersion
+        guard let updated = (try? await client.preferences()) ?? preferences.map(change.applied(to:)) else { return nil }
+        return adoptPreferences(updated, readAt: version)
     }
 
     /// インスタンスの上限と、アカウントの既定の公開範囲、閲覧注意、言語を読み、投稿欄に反映する。
@@ -245,7 +276,7 @@ public final class AccountSession {
         async let preferences = loadPreferences()
         let loaded = adjustingConfiguration(await configuration)
         let loadedPreferences = await preferences
-        model.apply(configuration: loaded, defaultVisibility: loadedPreferences?.defaultVisibility, defaultSensitive: loadedPreferences?.defaultSensitive, defaultLanguage: loadedPreferences.map(\.defaultLanguage))
+        model.apply(configuration: loaded, defaultVisibility: loadedPreferences?.defaultVisibility, defaultSensitive: loadedPreferences?.defaultSensitive, defaultLanguage: loadedPreferences.map(\.defaultLanguage), defaultQuotePolicy: loadedPreferences.map(\.defaultQuotePolicy))
     }
 }
 

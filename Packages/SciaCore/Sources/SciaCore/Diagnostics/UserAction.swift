@@ -46,6 +46,12 @@ public enum UserAction: Sendable, Equatable {
     case openEditHistory
     case editStatus
     case deleteStatus
+    /// 投稿を引用した投稿のタイムラインを開いた。
+    case openQuotes
+    /// 自分の投稿を引用できる人を変えた。
+    case setQuotePolicy
+    /// 自分の投稿への引用を取り消した。
+    case revokeQuote
     case redraftStatus
     case expandCompose
     case submitPost
@@ -92,6 +98,9 @@ public enum UserAction: Sendable, Equatable {
         case .openEditHistory: "status.editHistory"
         case .editStatus: "status.edit"
         case .deleteStatus: "status.delete"
+        case .openQuotes: "status.quotes.open"
+        case .setQuotePolicy: "status.quotePolicy.set"
+        case .revokeQuote: "status.quote.revoke"
         case .redraftStatus: "status.redraft"
         case .expandCompose: "compose.expand"
         case .submitPost: "compose.submit"
@@ -153,6 +162,9 @@ public enum UserAction: Sendable, Equatable {
         case ("status.editHistory", 0): self = .openEditHistory
         case ("status.edit", 0): self = .editStatus
         case ("status.delete", 0): self = .deleteStatus
+        case ("status.quotes.open", 0): self = .openQuotes
+        case ("status.quotePolicy.set", 0): self = .setQuotePolicy
+        case ("status.quote.revoke", 0): self = .revokeQuote
         case ("status.redraft", 0): self = .redraftStatus
         case ("compose.expand", 0): self = .expandCompose
         case ("compose.submit", 0): self = .submitPost
@@ -202,6 +214,9 @@ public enum UserAction: Sendable, Equatable {
         case .openEditHistory: "投稿の編集履歴を開いた"
         case .editStatus: "自分の投稿の編集を選んだ"
         case .deleteStatus: "自分の投稿の削除を決めた"
+        case .openQuotes: "投稿を引用した投稿のタイムラインを開いた"
+        case .setQuotePolicy: "自分の投稿を引用できる人を変えた"
+        case .revokeQuote: "自分の投稿への引用の取り消しを決めた"
         case .redraftStatus: "自分の投稿の削除して書き直すを選んだ"
         case .expandCompose: "投稿欄を広げた"
         case .submitPost: "投稿を送った"

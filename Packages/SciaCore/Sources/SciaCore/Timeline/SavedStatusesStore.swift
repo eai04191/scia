@@ -1,23 +1,52 @@
 import Foundation
 
-/// 自分で残した投稿のタイムラインの種類。
-public enum SavedStatusesKind: String, Sendable, CaseIterable {
+/// サーバーが返す順のまま並べ、続きを`Link`ヘッダーから読むタイムラインの種類。自分で残した投稿（ブックマーク、お気に入り）と、ある投稿を引用した投稿。
+public enum SavedStatusesKind: Sendable, Hashable {
     case bookmarks
     case favourites
+    /// `statusID`の投稿を引用した投稿。決まりはdocs/quote.mdの「引用した投稿のタイムライン」にある。
+    case quotes(of: Status.ID)
+
+    /// ログに残す名前。
+    public var name: String {
+        switch self {
+        case .bookmarks: "bookmarks"
+        case .favourites: "favourites"
+        case .quotes: "quotes"
+        }
+    }
 
     /// このタイムラインに入る状態（ブックマークやお気に入り）か。
+    /// 引用した投稿は、投稿の中身からは決めない。サーバーは、引用元の人をミュートかブロックしていると、認められた引用にもその状態（`muted_account`など）を返すので、
+    /// 引用の状態で外れたとみなすと、取り消していない行まで消すため。取り消した引用は、`SavedStatusesModel.quoteWasRevoked(by:)`で知らせを受けて除く。
     public func isSaved(_ status: Status) -> Bool {
         switch self {
         case .bookmarks: status.bookmarked
         case .favourites: status.favourited
+        case .quotes: true
         }
     }
 
-    /// このタイムラインに関わる操作。
-    public var action: StatusInteractions.Action {
+    /// このタイムラインに関わる操作。引用した投稿のタイムラインは、アプリの中の操作で増えない。
+    public var action: StatusInteractions.Action? {
         switch self {
         case .bookmarks: .bookmark
         case .favourites: .favourite
+        case .quotes: nil
+        }
+    }
+
+    /// サーバーのフィルターを当てる文脈と、「隠す」に一致した投稿を隠すか。
+    /// ブックマークとお気に入りは、公式のWebクライアントと同じくホームの文脈で当て、自分で残した投稿なので隠さずに警告で折りたたむ。
+    /// 引用した投稿は、1つの投稿への反応を並べるので、スレッドの文脈で当てる。
+    /// 公式のWebクライアントは、v4.5.0でもmain（2026-11-09）でも、この画面でフィルターを当てていない。当てないための処理があるのではなく、
+    /// 投稿のリストに画面の名前（`timelineId`）を渡していないため、フィルターの文脈が決まらず、判定がまるごと飛ばされている。
+    /// お気に入りやブックマークの画面は名前を渡しているので、意図した動きとは読めず、合わせていない。
+    /// https://github.com/mastodon/mastodon/blob/v4.5.0/app/javascript/mastodon/features/quotes/index.tsx
+    var filter: (context: FilterResult.Context, hidesMatches: Bool) {
+        switch self {
+        case .bookmarks, .favourites: (.home, false)
+        case .quotes: (.thread, true)
         }
     }
 }

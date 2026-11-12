@@ -24,6 +24,8 @@ public struct StatusDraft: Sendable, Equatable {
     public var scheduledAt: Date?
     /// 投稿の言語のコード。nilなら送らず、サーバーに任せる。決まりはdocs/compose.mdの「投稿の言語」にある。
     public var language: String?
+    /// この投稿を引用できる人。nilなら送らず、サーバーに任せる。決まりはdocs/quote.mdの「引用できる人を決める」にある。
+    public var quotePolicy: QuotePolicy?
 
     public init(
         text: String = "",
@@ -37,7 +39,8 @@ public struct StatusDraft: Sendable, Equatable {
         idempotencyKey: String = UUID().uuidString,
         editing: StatusEditTarget? = nil,
         scheduledAt: Date? = nil,
-        language: String? = nil
+        language: String? = nil,
+        quotePolicy: QuotePolicy? = nil
     ) {
         self.text = text
         self.spoilerText = spoilerText
@@ -51,6 +54,7 @@ public struct StatusDraft: Sendable, Equatable {
         self.editing = editing
         self.scheduledAt = scheduledAt
         self.language = language
+        self.quotePolicy = quotePolicy
     }
 
     /// 返信の下書き。返信先の投稿者と、その投稿でメンションされた相手を宛先に入れる。自分は入れない。
@@ -94,6 +98,12 @@ public struct StatusDraft: Sendable, Equatable {
         }
     }
 
+    /// 送る`quote_approval_policy`。選んでいなければnilで、送らない。
+    /// 公式のWebクライアントと同じく、サーバーがいつも`nobody`にする公開範囲では`nobody`を送る。
+    public var sentQuotePolicy: QuotePolicy? {
+        quotePolicy?.effective(for: visibility)
+    }
+
     /// 添付を閲覧注意にする。注意書きの欄を出していて、添付があるとき。
     /// 添付のない投稿に付けても、Mastodonは何も隠さないので付けない（注意書きがあれば、サーバーが投稿を閲覧注意にする）。
     public var sensitive: Bool {
@@ -133,7 +143,8 @@ public struct StatusDraft: Sendable, Equatable {
             attachments: attachments,
             poll: params.poll,
             scheduledAt: scheduled.scheduledAt,
-            language: params.language
+            language: params.language,
+            quotePolicy: params.quotePolicy
         )
     }
 
