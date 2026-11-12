@@ -249,8 +249,15 @@ public final class NotificationsModel {
     private func loadInitial() async {
         logger.info("notifications loadInitial start")
         do {
-            let markerID = try await loadMarker()
-            guard let notifications = try await store.loadInitial(markerID: markerID), !isStopped else { return }
+            // 既読位置は最初のページを読むのに使わないので、並行に読む。
+            async let marker = loadMarker()
+            guard let notifications = try await store.loadInitial(), !isStopped else { return }
+            let markerID = try await marker
+            // 既読位置を待つ間に止められていたら、何も出さない。
+            guard !isStopped else { return }
+            if let markerID {
+                store.applySavedMarker(markerID)
+            }
             showEntries()
             hasLoadedInitial = true
             updateCatchUp { $0.finish(at: now()) }

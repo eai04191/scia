@@ -45,6 +45,30 @@ struct NotificationsModelTests {
         return (model, display)
     }
 
+    /// 既読位置の応答を待たずに、最初のページを読み始める。
+    @Test func initialLoadReadsFirstPageWhileMarkerIsPending() async throws {
+        let markerGate = Gate()
+        let base = try Self.transport()
+        let transport = RoutedTransport { request in
+            if request.url?.path() == "/api/v1/markers", request.httpMethod != "POST" {
+                try await markerGate.wait()
+                return (200, Data(#"{"notifications":{"last_read_id":"34975862"}}"#.utf8))
+            }
+            let (data, response) = try await base.send(request)
+            return (response.statusCode, data)
+        }
+        let (model, display) = makeModel(transport: transport)
+        defer { model.stop() }
+
+        model.start(purpose: .action)
+        try await waitUntil { markerGate.waiterCount >= 1 && !transport.requests(to: "/api/v2/notifications").isEmpty }
+        #expect(display.contentState == .loading)
+
+        markerGate.open()
+        try await waitUntil { display.contentState == .loaded }
+        #expect(display.unreadCount == 2)
+    }
+
     /// 最初の読み込みで通知を並べ、未読の数を画面とタブのバッジへ伝える。
     @Test func initialLoadShowsNotificationsAndUnreadCount() async throws {
         let (model, display) = makeModel(transport: try Self.transport())
