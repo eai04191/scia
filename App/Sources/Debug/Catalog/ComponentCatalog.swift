@@ -50,6 +50,7 @@ enum CatalogComponent: String, CaseIterable {
     case reportSheet = "report-sheet"
     case crashReport = "crash-report"
     case listMembership = "list-membership"
+    case filters
     case profileEdit = "profile-edit"
     case storage
     case mediaCache = "media-cache"
@@ -94,6 +95,7 @@ enum CatalogComponent: String, CaseIterable {
         case .reportSheet: "通報のシート"
         case .crashReport: "クラッシュした投稿の報告"
         case .listMembership: "リストに追加のシート"
+        case .filters: "フィルター"
         case .profileEdit: "プロフィールの編集"
         case .storage: "設定のストレージ"
         case .mediaCache: "ストレージのメディアのキャッシュ"
@@ -141,6 +143,7 @@ enum CatalogComponent: String, CaseIterable {
         case .reportSheet: ReportSheetCatalog.states()
         case .crashReport: CrashReportCatalog.states()
         case .listMembership: ListMembershipCatalog.states()
+        case .filters: FiltersCatalog.states()
         case .profileEdit: ProfileEditCatalog.states()
         case .storage: StorageCatalog.states()
         case .mediaCache: StorageCatalog.mediaCacheStates()
