@@ -458,6 +458,17 @@ enum PostRowCatalog {
                 return CatalogFrame.post { home.contentConfiguration(for: status, base: .cell()) }
             }
         }
+        /// 引用元の本文の自動翻訳の状態。実物では、訳す言語を選んで訳文が届くまで待つ必要がある。
+        func translation(_ title: String, _ quote: Quote, isTranslated: Bool) -> CatalogState {
+            CatalogState(title: title) {
+                let status = status(content: "<p>引用した投稿の本文。</p>", quote: quote)
+                return CatalogFrame.post {
+                    var configuration = home.contentConfiguration(for: status, base: .cell())
+                    configuration.embed?.translation = EmbeddedPostView.Content.Translation(isTranslated: isTranslated, wipeDuration: 0, shiftDuration: 0, wordDuration: 0, fadeWidth: 0, markScale: 1)
+                    return configuration
+                }
+            }
+        }
         func quoted(content: String = "<p>引用元の本文。</p>", account: Account = booster, spoilerText: String = "", media: [MediaAttachment] = [], sensitive: Bool = false, poll: Poll? = nil, filtered: [FilterResult] = [], quote: Quote? = nil) -> Status {
             status(content: content, account: account, spoilerText: spoilerText, media: media, sensitive: sensitive, poll: poll, filtered: filtered, quote: quote)
         }
@@ -475,6 +486,10 @@ enum PostRowCatalog {
             post("引用元の本文が長い（切り始める行数に届かず切らない）", accepted(quoted(content: longBody))),
             post("引用元の本文が切り始める行数を超える（続きを読む）", accepted(quoted(content: veryLongBody, media: [image]))),
             post("引用した投稿と引用元の本文の両方が長い（別々に切る）", accepted(quoted(content: veryLongBody)), content: (1...40).map { "<p>引用した投稿の\($0)行目</p>" }.joined()),
+            translation("引用元が訳文（本文の先頭に翻訳のマーク）", accepted(quoted(content: "<p>訳文の本文。</p>", media: [image])), isTranslated: true),
+            translation("引用元の訳文を待っている（マークがパルス）", accepted(quoted(content: "<p>原文の本文。</p>")), isTranslated: false),
+            translation("引用元が訳文で、切り始める行数を超える", accepted(quoted(content: veryLongBody)), isTranslated: true),
+            translation("引用元が訳文で、リンクから始まる", accepted(quoted(content: #"<p><a href="https://example.com/a">example.com/a</a> を見た。</p>"#)), isTranslated: true),
             post("引用元の名前とハンドルが長い", accepted(quoted(account: longNamed))),
             post("引用元に投票（1行にする）", accepted(quoted(poll: PollCatalog.endedPoll))),
             post("引用元が閲覧注意の画像", accepted(quoted(media: [image], sensitive: true))),
