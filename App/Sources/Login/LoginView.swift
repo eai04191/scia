@@ -116,6 +116,22 @@ struct LoginView: View {
                 }
             }
         }
+        // 最初の起動の画面にはバーがないので、サーバーの応答が長引いたときだけ、バーのボタンの位置に重ねて出す。
+        // バーを出すと、アイコンから下がバーの高さだけ下へ飛ぶ。
+        .overlay(alignment: .topLeading) {
+            if isFirstLogin, model.offersCancel {
+                Button(role: .cancel) {
+                    model.cancelLogin()
+                } label: {
+                    // バーのボタンと同じ高さにする。
+                    Text("キャンセル").padding(.vertical, 4).padding(.horizontal, 2)
+                }
+                .buttonStyle(.glass)
+                .padding(.leading, 16)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            }
+        }
+        .animation(.smooth, value: model.offersCancel)
     }
 
     private func login() {
@@ -124,10 +140,8 @@ struct LoginView: View {
 
     private func login(isPrivate: Bool) {
         guard let authenticator = makeAuthenticator() else { return }
-        Task(.action) {
-            await model.login { url in
-                try await authenticator.authenticate(url: url, callbackScheme: AppDependencies.oauthCallbackScheme, isPrivate: isPrivate)
-            }
+        model.startLogin { url in
+            try await authenticator.authenticate(url: url, callbackScheme: AppDependencies.oauthCallbackScheme, isPrivate: isPrivate)
         }
     }
 }
