@@ -3867,7 +3867,8 @@ final class SessionController {
         // アニメーションを再生するかは、読み直すまで、前に読めたサーバーの値で描く。
         AppDependencies.settings.followServerAnimations(of: credential.handle)
         // 注意書きを最初から開いておくかと、アニメーションを再生するかをタイムラインに反映する。読めなければ前の値のままにし、次に投稿欄で書き始めたときに読み直す。
-        tasks.run(.display) { [session] in await session.loadPreferences() }
+        // 投稿欄が使うサーバーの上限も、書き始める前に読んでおく。
+        session.preloadComposeDefaults()
         session.loadCapabilities()
     }
 

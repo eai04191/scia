@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SciaTesting
+import Synchronization
 import Testing
 @testable import SciaCore
 
@@ -278,6 +279,66 @@ struct AccountSessionTests {
         await applyComposeDefaults(of: session, to: model)
         #expect(transport.requests(to: "/api/v2/instance").count == 1)
         #expect(transport.requests(to: "/api/v1/preferences").count == 1)
+    }
+
+    /// 起動のときに読み始めた上限と既定値がまだ届いていなければ、書き始めたときは送り直さずにそれを待つ。
+    @Test func composeDefaultsWaitForLoadsAlreadyRunning() async throws {
+        let instance = try Data(contentsOf: try #require(Bundle.module.url(forResource: "instance_v2", withExtension: "json", subdirectory: "Fixtures")))
+        let gate = Gate()
+        let transport = RoutedTransport { request in
+            try await gate.wait()
+            return switch request.url?.path() {
+            case "/api/v2/instance": (200, instance)
+            case "/api/v1/preferences": (200, Data(#"{"posting:default:visibility":"unlisted","posting:default:sensitive":false,"posting:default:language":null,"reading:expand:spoilers":false}"#.utf8))
+            default: (404, Data())
+            }
+        }
+        let session = makeSession(transport: transport)
+        defer { session.close() }
+        let model = ComposeModel(tasks: session.tasks.child(), myAccountID: "1") { _ in }
+        model.text = "hello"
+
+        session.preloadComposeDefaults()
+        try await waitUntil { gate.waiterCount >= 2 }
+        let applying = Task { await applyComposeDefaults(of: session, to: model) }
+        try await waitUntil { session.composeDefaultsWaiterCount >= 2 }
+        #expect(!model.canPost)
+
+        gate.open()
+        await applying.value
+        #expect(model.canPost)
+        #expect(model.visibility == .unlisted)
+        #expect(model.maxMediaAttachments == 6)
+        #expect(transport.requests(to: "/api/v2/instance").count == 1)
+        #expect(transport.requests(to: "/api/v1/preferences").count == 1)
+    }
+
+    /// 待っていた読み込みが失敗したら、書き始めた側が自分で読み直す。起動のときの読み込みは、レート制限で止められている間は送られないため。
+    @Test func composeDefaultsReloadWhenAwaitedLoadFails() async throws {
+        let instance = try Data(contentsOf: try #require(Bundle.module.url(forResource: "instance_v2", withExtension: "json", subdirectory: "Fixtures")))
+        let gate = Gate()
+        let failsNext = Mutex(true)
+        let transport = RoutedTransport { request in
+            guard request.url?.path() == "/api/v2/instance" else { return (403, Data()) }
+            if failsNext.withLock({ fails in defer { fails = false }; return fails }) {
+                try await gate.wait()
+                return (403, Data())
+            }
+            return (200, instance)
+        }
+        let session = makeSession(transport: transport)
+        defer { session.close() }
+        let model = ComposeModel(tasks: session.tasks.child(), myAccountID: "1") { _ in }
+
+        session.preloadComposeDefaults()
+        try await waitUntil { gate.waiterCount >= 1 }
+        let applying = Task { await applyComposeDefaults(of: session, to: model) }
+        try await waitUntil { session.composeDefaultsWaiterCount >= 1 }
+
+        gate.open()
+        await applying.value
+        #expect(model.maxMediaAttachments == 6)
+        #expect(transport.requests(to: "/api/v2/instance").count == 2)
     }
 
     /// 読めなくても既定のまま投稿でき、次に書き始めたときに読み直す。

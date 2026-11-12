@@ -38,6 +38,8 @@ public final class AccountSession {
     /// 読めたアカウントの設定。まだ読めていなければnil。
     public private(set) var preferences: ServerPreferences?
     private var instanceConfiguration: InstanceConfiguration?
+    private let configurationLoad = SharedLoad()
+    private let preferencesLoad = SharedLoad()
     /// サーバーの、Mastodonにない機能の有無。読めていないうちと、読めなかったときはMastodonと同じ。
     public private(set) var capabilities = ServerCapabilities.mastodon
     /// サーバーが投稿への絵文字のリアクションに対応しているか（docs/emoji-reaction.md）。
@@ -172,15 +174,25 @@ public final class AccountSession {
 
     /// インスタンスの上限。一度読めたら使い回す。読めなければnilを返し、次に呼ばれたときに読み直す。
     public func loadInstanceConfiguration() async -> InstanceConfiguration? {
-        if let instanceConfiguration { return instanceConfiguration }
-        do {
-            instanceConfiguration = try await client.instanceConfiguration()
-        } catch {
-            // 読めないと添付とペーストが使えないため、違和感レポートで理由を追えるよう残す。
-            logger.info("instance configuration unavailable error=\(SciaLog.describe(error), privacy: .public)")
+        await configurationLoad.run(cached: { instanceConfiguration }) {
+            do {
+                instanceConfiguration = try await client.instanceConfiguration()
+            } catch {
+                // 読めないと添付とペーストが使えないため、違和感レポートで理由を追えるよう残す。
+                logger.info("instance configuration unavailable error=\(SciaLog.describe(error), privacy: .public)")
+            }
         }
-        return instanceConfiguration
     }
+
+    /// 投稿欄が使う上限と既定値を、書き始める前に読んでおく。書き始めてから読むと、応答の遅いサーバーでは、届くまで投稿できないため。
+    /// 読めなければ、書き始めたときに読み直す。
+    public func preloadComposeDefaults() {
+        tasks.run(.display) { [weak self] in _ = await self?.loadInstanceConfiguration() }
+        tasks.run(.display) { [weak self] in await self?.loadPreferences() }
+    }
+
+    /// 走っている上限と既定値の読み込みを待っている呼び出しの数。
+    var composeDefaultsWaiterCount: Int { configurationLoad.waiterCount + preferencesLoad.waiterCount }
 
     /// サーバーの機能の有無を読む。一度読めたら読み直さない。
     /// 読めなかったら、次にやり直すとき（通信が戻ったときなど）にまた読む。起動のときの一時的な失敗で、ずっとMastodonと同じ扱いのままにしないため。
@@ -211,15 +223,14 @@ public final class AccountSession {
     /// アカウントの設定。一度読めたら使い回す。読めなければnilを返し、次に呼ばれたときに読み直す。
     @discardableResult
     public func loadPreferences() async -> ServerPreferences? {
-        if let preferences { return preferences }
-        do {
-            let loaded = try await client.preferences()
-            preferences = loaded
-            onPreferencesLoad(loaded)
-            return loaded
-        } catch {
-            logger.info("preferences unavailable error=\(SciaLog.describe(error), privacy: .public)")
-            return nil
+        await preferencesLoad.run(cached: { preferences }) {
+            do {
+                let loaded = try await client.preferences()
+                preferences = loaded
+                onPreferencesLoad(loaded)
+            } catch {
+                logger.info("preferences unavailable error=\(SciaLog.describe(error), privacy: .public)")
+            }
         }
     }
 
@@ -266,4 +277,30 @@ private final class UnauthorizedRelay {
 @MainActor
 private struct WeakList {
     weak var list: (any SessionList)?
+}
+
+/// 一度読めたら使い回す値の読み込みを、同時に1つだけ走らせる。走っている間に呼ばれたら、送り直さずにそれを待つ。
+@MainActor
+private final class SharedLoad {
+    /// 読み込みが走っている間だけ、待っている呼び出し。
+    private var waiters: [CheckedContinuation<Void, Never>]?
+
+    var waiterCount: Int { waiters?.count ?? 0 }
+
+    /// - Parameter cached: 読めていれば、その値。
+    /// - Parameter load: 読んで、読めたら`cached`が返す場所に入れる。
+    func run<Value>(cached: () -> Value?, load: () async -> Void) async -> Value? {
+        // 待っていた読み込みが読めずに終わったら、自分で読み直す。目的が違うと、レート制限で止められている間に送られるかが違うため。
+        while waiters != nil {
+            await withCheckedContinuation { waiters?.append($0) }
+            if let value = cached() { return value }
+        }
+        if let value = cached() { return value }
+        waiters = []
+        await load()
+        let waiting = waiters ?? []
+        waiters = nil
+        waiting.forEach { $0.resume() }
+        return cached()
+    }
 }
