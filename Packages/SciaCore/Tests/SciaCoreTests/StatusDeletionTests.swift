@@ -88,6 +88,25 @@ struct StatusDeletionTests {
         #expect(sent == 1)
     }
 
+    /// 削除の応答が長引いたら知らせ、届いたら戻す。応答が届くまで投稿が残って、表示が変わらないため。
+    @Test func slowDeletionIsReported() async throws {
+        let gate = Gate()
+        let clock = TestClock()
+        let slow = SlowActivity(clock: clock) { .milliseconds(300) }
+        var deleted = 0
+        let deletion = StatusDeletion(deleteStatus: { _ in try await gate.wait() }, statuses: SessionStatuses(), tasks: TaskScope()) { _ in deleted += 1 }
+        deletion.slowActivity = slow
+
+        deletion.delete(status(id: "10")) { _ in }
+        try await waitUntil { gate.waiterCount >= 1 && clock.sleeperCount(remaining: .milliseconds(300)) >= 1 }
+        try await clock.advance(afterSleeping: .milliseconds(300))
+        try await waitUntil { slow.isSlow }
+
+        gate.open()
+        try await waitUntil { deleted == 1 }
+        #expect(!slow.isSlow)
+    }
+
     /// 消えた一覧は、外さなくても配り先から消える。
     @Test func releasedListIsNotKept() throws {
         let statuses = SessionStatuses()

@@ -8,6 +8,8 @@ public final class StatusDeletion {
     private let statuses: SessionStatuses
     private let tasks: TaskScope
     private let didDelete: @MainActor (Status.ID) -> Void
+    /// 削除の応答を待つ間を数える。応答が届くまで投稿が残って表示が変わらないので、長引いたらチップで知らせるのに使う。
+    public var slowActivity: SlowActivity?
 
     /// - Parameters:
     ///   - session: 削除を送るクライアントと、除く一覧。
@@ -47,9 +49,13 @@ public final class StatusDeletion {
     /// - Parameter onFailure: 消せなかったときに呼ぶ。一覧にも投稿欄にも触れない。
     public func delete(_ status: Status, onFailure: @escaping @MainActor (any Error) async -> Void) {
         let id = status.displayed.id
-        tasks.run(key: "delete:\(id)", .skippingWhileRunning, .action) { [weak self, deleteStatus] in
+        tasks.run(key: "delete:\(id)", .skippingWhileRunning, .action) { [weak self, deleteStatus, slowActivity] in
             do {
-                try await deleteStatus(id)
+                if let slowActivity {
+                    try await slowActivity.track { try await deleteStatus(id) }
+                } else {
+                    try await deleteStatus(id)
+                }
             } catch {
                 await onFailure(error)
                 return

@@ -991,9 +991,10 @@ public enum TuningCatalog {
     )
 
     /// プロフィールを開くときに、探し始めてから「取得中」のチップを出すまでの時間。すぐ見つかったときに、チップが一瞬だけ出入りしないようにする。
+    /// 押しても応答が届くまで画面が変わらないほかの操作（`SlowActivity`）の「取得中」と「削除中」のチップも、この時間で出す。
     public static let profileLookupChipDelay = NumberTuning(
         id: "notice.profileLookupChipDelay",
-        title: "プロフィールの取得中のチップを出すまでの時間（秒）",
+        title: "取得中と削除中のチップを出すまでの時間（秒）",
         range: 0...2,
         step: 0.1,
         defaultValue: 0.3

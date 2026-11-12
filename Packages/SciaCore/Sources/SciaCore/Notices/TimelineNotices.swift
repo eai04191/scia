@@ -9,6 +9,12 @@ extension Notice {
     /// リンクのメニューの「プロフィールとして開く」で、リンク先を探している途中。サーバーが相手のページを取りに行くため、時間がかかることがある。
     public static let profileLookup = Notice(id: "timeline.profileLookup", kind: .progress, title: "取得中")
 
+    /// 押しても応答が届くまで画面が変わらない操作（IDで開くスレッド、編集や書き直しの開始、引用の開始、替えたアカウントでの返信先の検索）で、読むのが長引いている。
+    public static let slowFetch = Notice(id: "timeline.slowFetch", kind: .progress, title: "取得中")
+
+    /// 投稿の削除の応答が長引いている。
+    public static let slowDeletion = Notice(id: "timeline.slowDeletion", kind: .progress, title: "削除中")
+
     /// まとめてブーストの途中。済んだ件数と全体の件数を出し、押すと止めるかの確認を出す。決まりはdocs/batch-actions.mdの「ブースト」にある。
     public static func batchReblog(completed: Int, total: Int, onStop: @escaping @MainActor () -> Void) -> Notice {
         Notice(id: "timeline.batchReblog", kind: .progress, title: "ブースト中", value: "\(completed)/\(total)", action: .disclosure(hint: "まとめてブーストを中止するか選べます。", handler: onStop), valueIsProgress: true)

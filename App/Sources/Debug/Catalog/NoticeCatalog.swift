@@ -41,6 +41,8 @@ enum NoticeCatalog {
                 stack(transient: .objectActionUnavailable(itemTitle: StatusMenuItem.edit.title, reason: "締め切りまで5分を切った投票は編集できません"))
             },
             CatalogState(title: "プロフィールを取得中") { stack(persistent: .profileLookup) },
+            CatalogState(title: "押した操作の応答が長引いている（スレッド、編集、引用など）") { stack(persistent: .slowFetch) },
+            CatalogState(title: "投稿の削除の応答が長引いている") { stack(persistent: .slowDeletion) },
             // まとめて行う操作。件数で長さが変わり、失敗は実物では起こしにくい。
             CatalogState(title: "まとめてブースト中（件数が多い）") { stack(persistent: .batchReblog(completed: 12, total: 120) {}) },
             CatalogState(title: "まとめてブーストが途中で失敗した（数秒で消える、押すと理由）") {

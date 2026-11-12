@@ -85,9 +85,27 @@ final class SessionController {
     let debugScrollHitches = ScrollHitchMonitor()
     #endif
     /// 今のアカウントでの投稿の削除。消せたら、どの一覧からも除き、投稿欄の編集や書き直しもやめる。
-    private lazy var deletion = StatusDeletion(session: session, composer: composer.model, tasks: tasks) { [weak composer] in
-        composer?.willResetForDeletedStatus()
-    }
+    private lazy var deletion: StatusDeletion = {
+        let deletion = StatusDeletion(session: session, composer: composer.model, tasks: tasks) { [weak composer] in
+            composer?.willResetForDeletedStatus()
+        }
+        deletion.slowActivity = slowDeletion
+        return deletion
+    }()
+    /// 押しても応答が届くまで画面が変わらない操作のうち、後から押したものに譲らないもの（編集や書き直しの元の本文、引用できるかの確認）を待つ間。
+    /// 長引いたら、プロフィールを探すときと同じ時間で「取得中」のチップを出す。後から押したものに譲る操作（IDで開くスレッド、替えたアカウントでの返信先の検索）は、
+    /// 止めた分を数えないよう`LatestLookup`が測り、同じチップを出す（`showSlowFetchProgress`）。
+    private lazy var slowFetch: SlowActivity = {
+        let activity = SlowActivity(clock: clock) { .seconds(AppDependencies.tuning.value(of: TuningCatalog.profileLookupChipDelay)) }
+        activity.onSlowChange = { [weak self] _ in self?.showSlowFetchProgress() }
+        return activity
+    }()
+    /// 投稿の削除の応答を待つ間。長引いたら「削除中」のチップを出す。
+    private lazy var slowDeletion: SlowActivity = {
+        let activity = SlowActivity(clock: clock) { .seconds(AppDependencies.tuning.value(of: TuningCatalog.profileLookupChipDelay)) }
+        activity.onSlowChange = { [weak self] isSlow in self?.showSlowProgress(isSlow, in: .slowDeletion, notice: .slowDeletion, activityID: "slow.deletion") }
+        return activity
+    }()
     /// プロフィールを開く操作の入口。メンション、リンク、自分のプロフィール、ほかのアプリからのURLのどれで開くときも通し、後から押したものだけを開く。
     /// 探すのが長引いたら「取得中」のチップを出す。すぐ見つかったときにチップが一瞬だけ出入りしないよう、出すのは少し待ってから。
     private lazy var profileOpening: LatestLookup = {
@@ -103,14 +121,18 @@ final class SessionController {
         return lookup
     }()
     /// 投稿欄の「投稿するアカウント」で、替えた先のサーバーで返信先や引用元を探す操作の入口。後から選んだアカウントだけに替える。
+    /// 探すのが長引いたら「取得中」のチップを出す。選び直して止めた検索は、チップに数えない。
     private lazy var writingAccountLookup: LatestLookup = {
-        let lookup = LatestLookup(clock: clock) { nil }
+        let lookup = LatestLookup(clock: clock) { .seconds(AppDependencies.tuning.value(of: TuningCatalog.profileLookupChipDelay)) }
+        lookup.onSlowChange = { [weak self] _ in self?.showSlowFetchProgress() }
         tasks.onClose { [weak lookup] in lookup?.cancel() }
         return lookup
     }()
     /// 引用元の中の引用のように、IDしか分からない投稿のスレッドを開く操作の入口。後から押したものだけを開く。
+    /// 読むのが長引いたら「取得中」のチップを出す。
     private lazy var statusOpening: LatestLookup = {
-        let lookup = LatestLookup(clock: clock) { nil }
+        let lookup = LatestLookup(clock: clock) { .seconds(AppDependencies.tuning.value(of: TuningCatalog.profileLookupChipDelay)) }
+        lookup.onSlowChange = { [weak self] _ in self?.showSlowFetchProgress() }
         tasks.onClose { [weak lookup] in lookup?.cancel() }
         return lookup
     }()
@@ -1443,6 +1465,23 @@ final class SessionController {
     private static let profileLookupActivityID = "profile.lookup"
 
     /// プロフィールを探すのが長引いている間、「取得中」のチップと「操作の状況」の行を出す。
+    /// 読むのを待つ操作のどれかが長引いている間、「取得中」を出す。
+    private func showSlowFetchProgress() {
+        let isSlow = slowFetch.isSlow || statusOpening.isSlow || writingAccountLookup.isSlow
+        showSlowProgress(isSlow, in: .slowFetch, notice: .slowFetch, activityID: "slow.fetch")
+    }
+
+    /// 待つのが長引いている間、チップと「操作の状況」の行で知らせる。送り始めた操作は止められないので、行から止める操作は付けない。
+    private func showSlowProgress(_ isSlow: Bool, in slot: PersistentNotices.Slot, notice: Notice, activityID: String) {
+        if isSlow {
+            operationStatus.update(OperationStatus.Activity(id: activityID, title: notice.title))
+            notices.setPersistent({ _ in notice }, in: slot)
+        } else {
+            operationStatus.end(activityID)
+            notices.setPersistent(nil, in: slot)
+        }
+    }
+
     private func showProfileLookupProgress(_ isSlow: Bool) {
         guard isSlow else {
             operationStatus.end(Self.profileLookupActivityID)
@@ -2369,9 +2408,10 @@ final class SessionController {
         let handle = account.credential.handle
         let failureTitle = "\(handle)で投稿を削除できませんでした"
         // 送り終える前に確かめ直して押しても、同じ削除を重ねて送らない。
+        let slowDeletion = slowDeletion
         tasks.run(key: "otherAccountDelete:\(account.credential.id):\(status.id)", .skippingWhileRunning, .action) { [weak self] in
             do {
-                try await account.delete(status)
+                try await slowDeletion.track { try await account.delete(status) }
                 guard let self else { return }
                 showToggledNotice("\(handle)で投稿を削除しました")
                 // そのアカウントで編集か書き直しをしている投稿なら、今のアカウントで消したときと同じくやめる。
@@ -3300,9 +3340,10 @@ final class SessionController {
         }
         let client = client
         let target = status.displayed
+        let slowFetch = slowFetch
         tasks.run(.action) { [weak self] in
             do {
-                let refetched = try await client.status(target.id)
+                let refetched = try await slowFetch.track { try await client.status(target.id) }
                 guard let self else { return }
                 switch refetched.quoteApproval?.availability {
                 case .automatic, .manual:
@@ -3342,9 +3383,10 @@ final class SessionController {
         }
         let client = account.map(otherAccounts.client) ?? client
         let writing = account.map(composeAccount(for:))
+        let slowFetch = slowFetch
         tasks.run(.action) { [weak self] in
             do {
-                let source = try await client.statusSource(target.id)
+                let source = try await slowFetch.track { try await client.statusSource(target.id) }
                 self?.confirmEditing(target, source: source, as: writing, actor: account.map { "@\($0.credential.username)" })
             } catch {
                 guard let self else { return }
@@ -3375,11 +3417,14 @@ final class SessionController {
         let client = account.map(otherAccounts.client) ?? client
         let writing = account.map(composeAccount(for:))
         let defaults = account.map(otherAccounts.composeDefaults(of:))
+        let slowFetch = slowFetch
         tasks.run(.action) { [weak self] in
             do {
-                let source = try await client.statusSource(target.id)
                 // 投票の締め切りを、そのアカウントのサーバーで選べるものにするため、上限を読んでから始める。読めなければ、読む前の上限で決める。
-                let configuration = Self.composeConfiguration(await defaults?().configuration)
+                let (source, loadedConfiguration) = try await slowFetch.track {
+                    (try await client.statusSource(target.id), await defaults?().configuration)
+                }
+                let configuration = Self.composeConfiguration(loadedConfiguration)
                 self?.confirmRedrafting(target, source: source, as: writing, configuration: configuration, actor: account.map { "@\($0.credential.username)" })
             } catch {
                 guard let self else { return }
