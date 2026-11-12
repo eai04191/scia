@@ -1222,6 +1222,28 @@ public struct MastodonClient: Sendable {
         return try await post(ServerFilter.self, path: "api/v2/filters", form: form).0
     }
 
+    /// フィルターを変える。`keywords`に書かなかったキーワードは、そのまま残る。
+    /// 期限は、`expires_in`を送らなければ変わらず、空で送ると外れる（Mastodonの`Expireable#expires_in=`）。
+    /// キーワードは、どれも同じ項目を同じ順で送る。サーバーは同じ名前の項目が繰り返されたところで次のキーワードに区切るので、
+    /// 項目が揃っていないと、消すキーワードと足すキーワードが1つにまとめられる。足すキーワードは`id`を空にする。
+    /// https://docs.joinmastodon.org/methods/filters/#update
+    public func updateFilter(_ id: String, title: String, context: [FilterResult.Context], action: FilterResult.Action, expiry: ServerFilter.ExpiryChange, keywords: [ServerFilter.KeywordChange]) async throws -> ServerFilter {
+        var form = [URLQueryItem(name: "title", value: title), URLQueryItem(name: "filter_action", value: action.rawValue)]
+        form += context.map { URLQueryItem(name: "context[]", value: $0.rawValue) }
+        switch expiry {
+        case .keep: break
+        case .never: form.append(URLQueryItem(name: "expires_in", value: ""))
+        case .after(let duration): form.append(URLQueryItem(name: "expires_in", value: "\(duration.components.seconds)"))
+        }
+        for keyword in keywords {
+            form.append(URLQueryItem(name: "keywords_attributes[][id]", value: keyword.id ?? ""))
+            form.append(URLQueryItem(name: "keywords_attributes[][keyword]", value: keyword.keyword))
+            form.append(URLQueryItem(name: "keywords_attributes[][whole_word]", value: keyword.wholeWord ? "true" : "false"))
+            form.append(URLQueryItem(name: "keywords_attributes[][_destroy]", value: keyword.removes ? "true" : "false"))
+        }
+        return try await send(formRequest(method: "PUT", path: "api/v2/filters/\(id)", form: form), decoding: ServerFilter.self).0
+    }
+
     /// https://docs.joinmastodon.org/methods/filters/#delete
     public func deleteFilter(_ id: String) async throws {
         var request = URLRequest(url: credential.instance.appending(path: "api/v2/filters/\(id)"))

@@ -47,6 +47,8 @@ public enum AppDestination: Equatable, Sendable {
     case notificationRequest(id: String)
     /// `notification-policy`。通知のフィルタリングの設定を開く。
     case notificationPolicy
+    /// `filters`。自分のフィルターを並べた画面を開く。
+    case filters
     /// `announcements`。サーバーのお知らせのリストを開く。
     case announcements
     /// アカウントの画面。サーバーにあるものの入口を並べる。決まりはdocs/account-screen.mdにある。
@@ -123,7 +125,7 @@ public enum AppDestination: Equatable, Sendable {
         case .tab, .userTab, .profile, .myProfile, .thread, .editHistory, .apiResponse, .accounts, .hashtag, .accountHashtag, .search, .scheduled,
              .notificationRequests, .notificationRequest:
             true
-        case .settings, .appearanceGroup, .notificationAppearanceGroup, .profileEdit, .operationStatus, .notificationPolicy, .announcements, .account, .inAppBrowserHeight, .note, .report, .compose, .crashReport:
+        case .settings, .appearanceGroup, .notificationAppearanceGroup, .profileEdit, .operationStatus, .notificationPolicy, .filters, .announcements, .account, .inAppBrowserHeight, .note, .report, .compose, .crashReport:
             false
         }
     }
@@ -152,6 +154,7 @@ public enum AppDestination: Equatable, Sendable {
         case .notificationRequests: "notification requests"
         case .notificationRequest: "notification request"
         case .notificationPolicy: "notification policy"
+        case .filters: "filters"
         case .announcements: "announcements"
         case .account: "account"
         case .inAppBrowserHeight: "in-app browser height"
@@ -207,6 +210,7 @@ public enum AppDestination: Equatable, Sendable {
         case ("notification-requests", ""): .notificationRequests
         case ("notification-request", ""): query("id").map { .notificationRequest(id: $0) }
         case ("notification-policy", ""): .notificationPolicy
+        case ("filters", ""): .filters
         case ("announcements", ""): .announcements
         case ("account", ""): .account
         case ("in-app-browser-height", ""):
@@ -263,6 +267,7 @@ public enum AppDestination: Equatable, Sendable {
         case .notificationRequests: ("notification-requests", nil, [])
         case .notificationRequest(let id): ("notification-request", nil, [("id", id)])
         case .notificationPolicy: ("notification-policy", nil, [])
+        case .filters: ("filters", nil, [])
         case .announcements: ("announcements", nil, [])
         case .account: ("account", nil, [])
         case .inAppBrowserHeight(let page): ("in-app-browser-height", nil, page.map { [("return", $0.rawValue)] } ?? [])

@@ -49,6 +49,33 @@ public struct ServerFilter: Decodable, Hashable, Sendable, Identifiable {
         }
     }
 
+    /// フィルターを変えるときの、キーワード1つの変更。
+    public struct KeywordChange: Sendable, Equatable {
+        /// 変えるか消すキーワードのID。足すキーワードではnil。
+        public let id: String?
+        public let keyword: String
+        public let wholeWord: Bool
+        /// `id`のキーワードを消す。
+        public let removes: Bool
+
+        public init(id: String?, keyword: String, wholeWord: Bool, removes: Bool = false) {
+            self.id = id
+            self.keyword = keyword
+            self.wholeWord = wholeWord
+            self.removes = removes
+        }
+    }
+
+    /// フィルターを変えるときの、期限の変え方。
+    public enum ExpiryChange: Sendable, Hashable {
+        /// 今の期限のままにする。
+        case keep
+        /// 期限を外す。
+        case never
+        /// 保存したときから数えた期限にする。
+        case after(Duration)
+    }
+
     public init(id: String, title: String, context: [FilterResult.Context], filterAction: FilterResult.Action, expiresAt: Date? = nil, keywords: [Keyword], statuses: [FilteredStatus] = []) {
         self.id = id
         self.title = title

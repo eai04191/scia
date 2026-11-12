@@ -16,6 +16,7 @@ final class SessionController {
     let notifications: NotificationsController
     /// 通知のフィルタリングの設定と、保留中の通知の人数。通知のタブのボタンと設定の画面が同じものを見る。
     private let notificationPolicy: NotificationPolicyModel
+    private let filters: FiltersModel
     /// サーバーのお知らせ。アカウントのボタンの点と、メニューから開くシートが同じものを見る。
     let announcements: AnnouncementsModel
     /// タブの画面ごとに置いたアカウントのボタン。お知らせの未読の点を、どれにも付ける。
@@ -325,6 +326,7 @@ final class SessionController {
         notifications.viewController.onAppearing = { [weak notifications] in notifications?.startIfNeeded() }
         self.notifications = notifications
         notificationPolicy = NotificationPolicyModel(client: client, tasks: tasks.child())
+        filters = FiltersModel(api: FiltersModel.API(client: client), tasks: tasks.child())
         announcements = AnnouncementsModel(operations: AnnouncementsModel.Operations(client: client), streamingHub: streamingHub, tasks: tasks.child())
         let mediaFormats = UnprocessableMediaFormats(defaults: .standard, instance: credential.instance)
         let diagnostics = ConnectionDiagnostics(rateLimit: session.rateLimit, features: session.features, requestLog: session.requestLog, mediaFormats: mediaFormats)
@@ -1528,6 +1530,8 @@ final class SessionController {
             openNotificationRequests(from: notifications.viewController)
         })
         notifications.onReload = { [weak notificationPolicy] in notificationPolicy?.reload(purpose: .display) }
+        // ハッシュタグのメニューの「ミュート」が見る、覚えているフィルターを読み直す。
+        filters.onChange = { [serverFilters] in serverFilters.reload(purpose: .action) }
         notificationPolicy.onFailure = { [weak self] reason in
             guard let self else { return }
             let title = "通知のフィルタリングを変えられませんでした"
@@ -1685,6 +1689,10 @@ final class SessionController {
     }
 
     /// 通知のフィルタリングの設定をシートで開く。
+    func showFilters() {
+        rootViewController.presentOnFrontmost(FiltersView.makeSheet(model: filters, now: now), animated: true)
+    }
+
     func showNotificationPolicy(from presenter: UIViewController? = nil) {
         (presenter ?? rootViewController).presentOnFrontmost(NotificationPolicyView.makeSheet(model: notificationPolicy), animated: true)
     }
@@ -3118,6 +3126,7 @@ final class SessionController {
             case .followedTags: showFollowedTags()
             case .scheduled: showScheduledStatuses()
             case .list(let id, let title): showList(id: id, title: title)
+            case .filters: showFilters()
             case .notificationPolicy: showNotificationPolicy()
             case .logOut: logOut?()
             }
@@ -4280,6 +4289,8 @@ final class SessionController {
             }
         case .notificationPolicy:
             showNotificationPolicy()
+        case .filters:
+            showFilters()
         case .announcements:
             showAnnouncements()
         case .account:
