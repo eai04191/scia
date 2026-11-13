@@ -440,20 +440,38 @@ require_lease() {
     [ "$holder" = "$(borrower)" ] || fail "${sim}を借りていない（借りているもの: ${holder:-なし}）。先にTools/sim.sh acquireで借りる"
 }
 
-# 端末のクリップボードを、Macのクリップボードから切り離して空にする。
-# DeviceHub（Xcode 27でSimulator.appに代わったアプリ）は、端末の画面を開いている間、Macのクリップボードを端末へ書き込む。
-# Macのクリップボードには、Universal Clipboardで届いたiPhoneのコピーも入るため、agentが投稿欄でペーストすると、ユーザーが仕事でコピーしたものが投稿される。
-# 同期は端末ごとの設定（DeviceHubの「Use Shared Clipboard」）なので、クローンで作り直した端末でも切れるよう、借りるたびに書く。
-isolate_pasteboard() {
-    local sim=$1 udid
+device_udid() {
+    local udid
     udid=$(xcrun simctl list devices -j | /usr/bin/python3 -I -c '
 import json, sys
 for devices in json.load(sys.stdin)["devices"].values():
     for d in devices:
         if d["name"] == sys.argv[1] or d["udid"] == sys.argv[1]:
             print(d["udid"]); sys.exit()
-' "$sim")
-    [ -n "$udid" ] || fail "端末が見つからない: $sim"
+' "$1")
+    [ -n "$udid" ] || fail "端末が見つからない: $1"
+    echo "$udid"
+}
+
+# 端末の使わないサービスを、simslimで写真のほかすべて止めた状態にする。メモリを減らすため。
+# simslimの設定は、作り直した端末やxcrun simctl cloneで作った端末には引き継がれず、外れていても端末は動くので気づけない。
+# 外れているか、前の借り手が確かめのために分類を残していれば、入れ直す。入れ直すと端末が再起動する。
+ensure_slim() {
+    local sim=$1 udid
+    command -v simslim > /dev/null || fail "simslimがない。brew install mobai-app/tap/simslimで入れる"
+    udid=$(device_udid "$sim")
+    simslim verify "$udid" --except photos > /dev/null 2>&1 && return 0
+    echo "sim.sh: ${sim}の使わないサービスを止め直す（端末が再起動する）" >&2
+    simslim on "$udid" --except photos >&2 || fail "${sim}の使わないサービスを止められない"
+}
+
+# 端末のクリップボードを、Macのクリップボードから切り離して空にする。
+# DeviceHub（Xcode 27でSimulator.appに代わったアプリ）は、端末の画面を開いている間、Macのクリップボードを端末へ書き込む。
+# Macのクリップボードには、Universal Clipboardで届いたiPhoneのコピーも入るため、agentが投稿欄でペーストすると、ユーザーが仕事でコピーしたものが投稿される。
+# 同期は端末ごとの設定（DeviceHubの「Use Shared Clipboard」）なので、クローンで作り直した端末でも切れるよう、借りるたびに書く。
+isolate_pasteboard() {
+    local sim=$1 udid
+    udid=$(device_udid "$sim")
     # -dict-addは端末ごとの辞書を丸ごと置き換える。いまDeviceHubがこの辞書に持つのはこの項目だけなので、ほかの端末ごとの設定は消えない。
     # DeviceHubがここにほかの項目を持つようになると、借りるたびにそれが既定に戻る。そうなったら、辞書を読んで足す形にする。
     defaults write "$HOME/Library/Containers/com.apple.dt.Devices/Data/Library/Preferences/com.apple.dt.Devices" \
@@ -485,8 +503,17 @@ clear_pasteboard() {
     done
 }
 
+# このworktreeが今借りている端末。
+leased_sims() {
+    local me=$1 sim sims
+    sims=$(pool) || fail "端末のリストを読めない"
+    while IFS= read -r sim; do
+        if [ -n "$sim" ] && [ "$(lease_holder "$sim")" = "$me" ]; then echo "$sim"; fi
+    done <<< "$sims"
+}
+
 command_acquire() {
-    local wait=540 want='' me out status deadline
+    local wait=540 want='' me out status deadline held_before
     while [ $# -gt 0 ]; do
         case $1 in
             --wait) wait=$2; shift 2 ;;
@@ -495,6 +522,9 @@ command_acquire() {
     done
     [ -z "$want" ] || pool | grep -qxF "$want" || fail "貸す端末にない: $want"
     me=$(borrower)
+    # 借りたまま延ばすときは、サービスを止め直さない。止め直すと端末が再起動し、借り手が走らせている処理が止まるため。
+    # リストを読めないまま進むと、延ばす端末を新しく貸す端末と取り違えて止め直すので、止める。
+    held_before=$(leased_sims "$me") || exit 1
     # 回数ではなく経過時間で数える。.guardの取り合いでlockfが待つ時間も、上限に含めるため。0なら上限なく待つ。
     deadline=$(( $(date +%s) + wait ))
     while true; do
@@ -507,6 +537,10 @@ command_acquire() {
             if ! xcrun simctl bootstatus "${out% *}" -b > /dev/null; then
                 guarded __release "$me"
                 fail "${out% *}を起動できない"
+            fi
+            if ! grep -qxF "${out% *}" <<< "$held_before" && ! (ensure_slim "${out% *}"); then
+                guarded __release "$me"
+                fail "${out% *}を貸せない"
             fi
             # 切れなければ、ユーザーのコピーが入りうる端末を貸さず、30分ふさがないよう返してから失敗する。
             if ! (isolate_pasteboard "${out% *}"); then
