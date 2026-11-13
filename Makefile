@@ -23,7 +23,7 @@ check-app-info:
 
 ## 実行時クラッシュにつながる書き方（強制アンラップ、try!、IUO）と、.swiftlint.ymlとTools/SciaLintの規則に反する書き方を検出する。swiftlintはbrew install swiftlintで入れる
 ## 設定を明示しないと、worktreeでは親のディレクトリにある元のcheckoutの.swiftlint.ymlも重ねて読み、そちらにない規則が外れる
-## 呼び出しや文字列の補間の形で決まる規則（持ち主を通さない処理、目的を名乗らない処理、ログに公開扱いで出す値、テストで出し終えるのを待たない画面、テストで件数を==で待つ待ち、決め打ちの文字の大きさ、半透明の白い文字）は、構文木で調べるTools/SciaLintで検出する
+## 呼び出しや文字列の補間の形で決まる規則（持ち主を通さない処理、目的を名乗らない処理、ログに公開扱いで出す値、テストで出し終えるのを待たない画面、テストで件数を==で待つ待ち、決め打ちの文字の大きさ、半透明の白い文字、ティントカラーを直接塗った地）は、構文木で調べるTools/SciaLintで検出する
 lint:
 	swiftlint lint --quiet --config .swiftlint.yml
 	swift run --package-path Tools/SciaLint --quiet scia-lint .

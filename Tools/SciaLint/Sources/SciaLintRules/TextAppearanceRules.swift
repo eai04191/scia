@@ -27,6 +27,23 @@ extension Rule {
         }
     )
 
+    // 地に.tintColorをそのまま塗って白い中身を載せると、モノトーンのダークで白い地に白い中身になり、ガラスの中ではほかのボタンより明るく描かれる。
+    // 中身を載せる地はTintFillから色を取る（バッジはTintBadgeLabelとTintSymbolBadge）。上に何も載せない地だけ、理由を書いてこの規則を外す
+    static let rawTintBackground = Rule(
+        id: "raw_tint_background",
+        message: "地に.tintColorを直接塗らない。中身を載せる地の色はTintFill.colors(for:on:)から取る。上に何も載せない地だけ、理由を書いてこの規則を外す",
+        appliesTo: isReleaseAppFile,
+        find: { tree in
+            tree.all(SequenceExprSyntax.self).compactMap { sequence in
+                let elements = Array(sequence.elements)
+                guard elements.count == 3, elements[1].is(AssignmentExprSyntax.self),
+                      let target = elements[0].nameChainLast, ["backgroundColor", "baseBackgroundColor"].contains(target),
+                      elements[2].isBareTintColor else { return nil }
+                return sequence.positionAfterSkippingLeadingTrivia
+            }
+        }
+    )
+
     private static let isReleaseAppFile: @Sendable (String) -> Bool = { path in
         ["App/Sources/", "ShareExtension/", "Packages/TextKit2Label/Sources/"].contains { path.hasPrefix($0) } && !path.hasPrefix("App/Sources/Debug/")
     }
@@ -103,5 +120,14 @@ private extension FunctionCallExprSyntax {
                 return false
             }
         }
+    }
+}
+
+private extension ExprSyntax {
+    /// `.tintColor`か`UIColor.tintColor`そのものか。`.tintColor.withAlphaComponent(0.1)`のように薄めた色は、中身を載せる地ではないので含めない
+    var isBareTintColor: Bool {
+        guard let member = self.as(MemberAccessExprSyntax.self), member.declName.baseName.text == "tintColor" else { return false }
+        guard let base = member.base else { return true }
+        return base.as(DeclReferenceExprSyntax.self)?.baseName.text == "UIColor"
     }
 }

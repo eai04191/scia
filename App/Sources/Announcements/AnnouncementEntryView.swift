@@ -32,6 +32,8 @@ final class AnnouncementEntryView: UIView {
         dateLabel.textColor = .secondaryLabel
         dateLabel.adjustsFontForContentSizeCategory = true
         dateLabel.numberOfLines = 0
+        // 上に何も載せない点なので、ティントカラーをそのまま塗る。
+        // scialint:disable:next raw_tint_background
         unreadMark.backgroundColor = .tintColor
         unreadMark.layer.cornerRadius = Self.unreadMarkSize / 2
         unreadMark.translatesAutoresizingMaskIntoConstraints = false

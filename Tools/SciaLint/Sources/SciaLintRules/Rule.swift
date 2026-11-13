@@ -28,6 +28,7 @@ public enum Linter {
         .suiteWithoutFailureState,
         .fixedFontSize,
         .dimmedWhiteText,
+        .rawTintBackground,
         .timelineStoreWithoutTester,
         .iosWording,
         .exactCountWait,

@@ -108,3 +108,41 @@ import Testing
         #expect(violations(statement) == 0)
     }
 }
+
+@Suite struct RawTintBackgroundTests {
+    private func violations(_ statement: String, path: String = "App/Sources/Foo.swift") -> Int {
+        Linter.lint(source: statement, path: path, rules: [.rawTintBackground]).count
+    }
+
+    @Test(arguments: [
+        "badge.backgroundColor = .tintColor",
+        "badge.backgroundColor = UIColor.tintColor",
+        "backgroundColor = .tintColor",
+        "button.configuration?.baseBackgroundColor = .tintColor",
+    ])
+    func flagsRawTintBackgrounds(_ statement: String) {
+        #expect(violations(statement) == 1)
+    }
+
+    @Test(arguments: [
+        // 薄めた地は、中身を載せる地ではない
+        "view.backgroundColor = .tintColor.withAlphaComponent(0.1)",
+        "badge.backgroundColor = colors.fill",
+        // 地のほかにティントカラーを使うのは止めない
+        "label.textColor = .tintColor",
+        "button.configuration?.baseForegroundColor = .tintColor",
+        "badge.backgroundColor = view.tintColor",
+    ])
+    func allowsOtherColors(_ statement: String) {
+        #expect(violations(statement) == 0)
+    }
+
+    @Test func suppressedWithReason() {
+        #expect(violations("// 上に何も載せない点\n// scialint:disable:next raw_tint_background\ndot.backgroundColor = .tintColor") == 0)
+    }
+
+    @Test(arguments: ["App/Sources/Debug/Foo.swift", "AppTests/Foo.swift"])
+    func skipsDebugAndTests(_ path: String) {
+        #expect(violations("badge.backgroundColor = .tintColor", path: path) == 0)
+    }
+}
