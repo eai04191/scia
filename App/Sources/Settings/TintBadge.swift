@@ -19,7 +19,8 @@ enum TintFill {
         let monochrome = UIColor.isMonochromeTint(tint, traits: view.traitCollection)
         switch surface {
         case .plain:
-            return (.whiteForegroundFill(tint), .filledForeground(on: tint, traits: view.traitCollection))
+            // モノトーンの地には、白い中身のための色の変換を当てない。「コントラストを上げる」のダークで、地がライトの黒に替わり、背景の色の中身と同じ暗さになるため。
+            return (monochrome ? tint : .whiteForegroundFill(tint), .filledForeground(on: tint, traits: view.traitCollection))
         case .glass:
             return (monochrome ? .tertiarySystemFill : .whiteForegroundFill(tint), monochrome ? .label : .white)
         }

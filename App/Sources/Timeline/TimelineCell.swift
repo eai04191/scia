@@ -190,7 +190,6 @@ private final class SelectionMarkView: UIView {
         layer.borderWidth = 1.5
         label.translatesAutoresizingMaskIntoConstraints = false
         label.textAlignment = .center
-        label.textColor = .white
         // 丸の大きさは決まっているので、文字を大きくする設定や3桁の番号では、丸に収まるまで縮める。
         let font = UIFont.monospacedDigitFont(forTextStyle: .footnote)
         label.font = font.fontDescriptor.withSymbolicTraits(.traitBold).map { UIFont(descriptor: $0, size: 0) } ?? font
@@ -214,6 +213,11 @@ private final class SelectionMarkView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    override func tintColorDidChange() {
+        super.tintColorDidChange()
+        apply()
+    }
+
     private func apply() {
         switch mark {
         case .unselected:
@@ -221,8 +225,12 @@ private final class SelectionMarkView: UIView {
             layer.borderColor = UIColor.white.cgColor
             label.text = nil
         case .selected(let number):
-            backgroundColor = .tintColor
-            layer.borderColor = UIColor.white.cgColor
+            // 番号の色は地から決める。白に決め打ちすると、モノトーンのダークで白い地に白い番号になるため。
+            let colors = TintFill.colors(for: self, on: .plain)
+            backgroundColor = colors.fill
+            label.textColor = colors.foreground
+            // フチは、モノトーンのライトでも黒い地から浮かないよう、番号と同じ色にする。
+            layer.borderColor = colors.foreground.resolvedColor(with: traitCollection).cgColor
             label.text = "\(number)"
         }
     }
