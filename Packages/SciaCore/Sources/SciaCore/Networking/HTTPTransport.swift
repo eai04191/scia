@@ -43,3 +43,12 @@ public enum UploadProgress {
     /// 0から1。送り直したときは、また0から届く。
     @TaskLocal public static var report: (@Sendable (Double) -> Void)?
 }
+
+/// 応答を通信で受け取ったか、応答のキャッシュ（URLCache）から読んだか。
+public enum ResponseSource: Sendable {
+    case network
+    case cache
+
+    /// 受け取る。読み直しが通信になっているかを数えるために、読む呼び出しを包んで値を入れる。`UploadProgress`と同じ理由でタスクローカルにする。
+    @TaskLocal public static var report: (@Sendable (ResponseSource) -> Void)?
+}

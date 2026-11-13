@@ -35,7 +35,7 @@ public struct URLSessionTransport: HTTPTransport {
     public func open(_ request: URLRequest, limit: Int) async throws -> (HTTPResponseBody, HTTPURLResponse) {
         try Self.checkScheme(of: request, allowing: ["http", "https"])
         let (body, continuation) = HTTPResponseBody.makeStream()
-        let receiver = ResponseReceiver(body: continuation, limit: limit, uploadProgress: UploadProgress.report)
+        let receiver = ResponseReceiver(body: continuation, limit: limit, uploadProgress: UploadProgress.report, source: ResponseSource.report)
         let task: URLSessionTask
         if UploadProgress.report != nil, let httpBody = request.httpBody {
             var request = request
@@ -102,13 +102,15 @@ private final class ResponseReceiver: NSObject, URLSessionDataDelegate, Sendable
     private let body: HTTPResponseBody.Continuation
     private let limit: Int
     private let uploadProgress: (@Sendable (Double) -> Void)?
+    private let source: (@Sendable (ResponseSource) -> Void)?
     private let head = Mutex(Head.waiting(nil))
     private let received = Mutex(0)
 
-    init(body: HTTPResponseBody.Continuation, limit: Int, uploadProgress: (@Sendable (Double) -> Void)?) {
+    init(body: HTTPResponseBody.Continuation, limit: Int, uploadProgress: (@Sendable (Double) -> Void)?, source: (@Sendable (ResponseSource) -> Void)?) {
         self.body = body
         self.limit = limit
         self.uploadProgress = uploadProgress
+        self.source = source
     }
 
     /// 応答の頭が届くまで待つ。頭より先に失敗したら投げる。
@@ -186,6 +188,17 @@ private final class ResponseReceiver: NSObject, URLSessionDataDelegate, Sendable
     func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64, totalBytesSent: Int64, totalBytesExpectedToSend: Int64) {
         guard let uploadProgress, totalBytesExpectedToSend > 0 else { return }
         uploadProgress(Double(totalBytesSent) / Double(totalBytesExpectedToSend))
+    }
+
+    /// 終わりの知らせ（`didCompleteWithError`）より先に届く。リダイレクトをたどったときは、最後の応答で見る。
+    func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
+        guard let source, let fetchType = metrics.transactionMetrics.last?.resourceFetchType else { return }
+        switch fetchType {
+        case .localCache: source(.cache)
+        case .networkLoad, .serverPush: source(.network)
+        case .unknown: break
+        @unknown default: break
+        }
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {

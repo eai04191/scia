@@ -19,6 +19,19 @@ struct URLSessionTransportTests {
         #expect(data == Data("hello".utf8))
     }
 
+    /// 通信で受け取った応答は、出どころを通信と知らせる。
+    @Test func reportsNetworkAsResponseSource() async throws {
+        let server = try await LocalHTTPServer(response: Self.response(status: 200, headers: "Cache-Control: no-store\r\n", body: "hello", length: true))
+        defer { server.stop() }
+        let sources = Mutex<[ResponseSource]>([])
+
+        _ = try await ResponseSource.$report.withValue({ source in sources.withLock { $0.append(source) } }) {
+            try await URLSessionTransport().send(URLRequest(url: server.url))
+        }
+
+        #expect(sources.withLock { $0 } == [.network])
+    }
+
     /// 2xx以外も、本文とともに返す。分けるのは`HTTPClient`の役目。
     @Test func returnsErrorStatus() async throws {
         let server = try await LocalHTTPServer(response: Self.response(status: 429, headers: "Retry-After: 30\r\n", body: "busy", length: true))

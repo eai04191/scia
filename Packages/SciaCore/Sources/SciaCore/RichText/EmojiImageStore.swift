@@ -3,6 +3,7 @@ public import Foundation
 import ImageIO
 import MemoryCache
 import os
+import Synchronization
 
 /// カスタム絵文字の画像を読み込み、メモリに持つ。`Image`は描く側の画像の型で、iOSでは`UIImage`にする。
 /// 静止画もアニメーション版も、高さを`pixelHeight`にそろえて縮めて持ち、上限を設けて、あふれたら古いものから捨て、また要るときに読み直す。
@@ -210,14 +211,19 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     /// - Parameter purpose: 行に描いたときの読み込みは自動の通信として送り、止められている間は送らない（docs/network.md）。
     private func load(_ url: URL, pixelHeight: Int, purpose: RequestPurpose) {
         guard loading.insert(url).inserted else { return }
-        if evictedStills.contains(url) {
+        let isReload = evictedStills.contains(url)
+        if isReload {
             stats.stillReloads += 1
         }
         let maker = maker
         RequestPurpose.$current.withValue(purpose) { Task {
             defer { loading.remove(url) }
             do {
-                let data = try await fetch(url)
+                let (data, source) = try await fetchRecordingSource(url)
+                stats.stillSources.count(source)
+                if isReload {
+                    stats.stillReloadSources.count(source)
+                }
                 guard let (image, isLargest, source) = await Self.decodeStill(data, pixelHeight: pixelHeight) else { throw DecodeError() }
                 onSourceSize?(url, source.width, source.height)
                 evictedStills.formUnion(stills.setValue(maker.still(image), forKey: url, cost: PlatformImageMaker<Image>.cost(of: image)))
@@ -244,6 +250,36 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
 
     public struct DecodeError: Error {}
 
+    /// 読み、応答を通信で受け取ったかキャッシュから読んだかも返す。通信の層が知らせなければnil。
+    private func fetchRecordingSource(_ url: URL) async throws -> (Data, ResponseSource?) {
+        let reported = ReportedSource()
+        let data = try await ResponseSource.$report.withValue({ source in reported.value.withLock { $0 = source } }) {
+            try await fetch(url)
+        }
+        return (data, reported.value.withLock { $0 })
+    }
+
+    private final class ReportedSource: Sendable {
+        let value = Mutex<ResponseSource?>(nil)
+    }
+
+    /// 読んだ応答を、通信で受け取ったものと、応答のキャッシュから読んだものに分けて数える。
+    private struct SourceCounts: CustomStringConvertible {
+        var network = 0
+        var cache = 0
+        var unknown = 0
+
+        mutating func count(_ source: ResponseSource?) {
+            switch source {
+            case .network: network += 1
+            case .cache: cache += 1
+            case nil: unknown += 1
+            }
+        }
+
+        var description: String { "network \(network) cache \(cache) unknown \(unknown)" }
+    }
+
     /// 読み直しの回数を数える。解像度とキャッシュの上限を決めるときに、上限を超えて捨てたものをどれだけ読み直したかを見る。
     private struct Stats {
         /// 上限を超えて捨てた静止画を、もう一度描こうとして読み直した回数。
@@ -256,6 +292,10 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
         var animationBytes = 0
         /// 読み込んだアニメーション1つの重さの、これまでの最大。
         var largestAnimationBytes = 0
+        /// 読めた静止画とアニメーションの応答の出どころ。捨てたものの読み直しが通信になっているかを見る。
+        var stillSources = SourceCounts()
+        var stillReloadSources = SourceCounts()
+        var animationSources = SourceCounts()
     }
 
     /// 状態ダンプ。URLは出さず、数だけを書く。
@@ -266,6 +306,8 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
             "pixelHeight: \(Self.pixelHeight) enlarged: \(stillResolutions.filter { stills.contains($0.key) && $0.value.pixelHeight > Self.pixelHeight }.count)",
             "stills: \(stills.count) cost: \(stills.totalCost / kilobyte)KB peak: \(stats.peakStillCost / kilobyte)KB limit: \(stills.totalCostLimit / kilobyte)KB",
             "stillReloadsAfterEviction: \(stats.stillReloads) evictedNow: \(evictedStills.count)",
+            "stillFetched: \(stats.stillSources) afterEviction: \(stats.stillReloadSources)",
+            "animationFetched: \(stats.animationSources)",
             "animated: \(resolutions.count) enlarged: \(resolutions.filter { $0.pixelHeight > Self.pixelHeight }.count) animationReloadsAfterEviction: \(stats.animationReloads)",
             "animationLoaded: \(stats.animationBytes / kilobyte)KB largest: \(stats.largestAnimationBytes / kilobyte)KB limit: \(animations.totalCostLimit / kilobyte)KB",
         ].joined(separator: "\n")
@@ -352,7 +394,8 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
             defer { upgradingAnimations.remove(url) }
             let state: AnimationState
             do {
-                let data = try await fetch(url)
+                let (data, source) = try await fetchRecordingSource(url)
+                stats.animationSources.count(source)
                 let decoded = await Task.detached(priority: .utility) {
                     await Self.decodeAnimation(data, pixelHeight: pixelHeight)
                 }.value

@@ -170,6 +170,26 @@ struct EmojiImageStoreTests {
         #expect(sizes == ["emoji.png 400x100"])
     }
 
+    /// 読めた応答の出どころを数えて、状態ダンプに出す。捨てた画像の読み直しが通信になっているかを、違和感レポートで見るため。
+    @Test func countsWhereResponsesCameFrom() async throws {
+        let data = try Self.png(width: 100, height: 100)
+        let store = EmojiImageStore(
+            clock: TestClock(),
+            retryPolicy: { RetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) },
+            maker: PlatformImageMaker<CGImage>(still: { $0 }, animated: { _, _ in nil }),
+            upgradePurpose: { nil }
+        ) { url in
+            if url.lastPathComponent != "silent.png" {
+                ResponseSource.report?(url.lastPathComponent == "cached.png" ? .cache : .network)
+            }
+            return data
+        }
+        let urls = ["cached.png", "fresh.png", "silent.png"].map { url.deletingLastPathComponent().appending(path: $0) }
+        urls.forEach { _ = store.image(for: $0) }
+        try await waitUntil { urls.allSatisfy { store.image(for: $0) != nil } }
+        #expect(store.stateDump().contains("stillFetched: network 1 cache 1 unknown 1 afterEviction: network 0 cache 0 unknown 0"))
+    }
+
     /// 既定より大きく描くと、そのURLを描く高さで読み直す。読み終えるまでは前の画像を返し、読み終えたら、小さく描く場所にも同じ1枚を返す。
     @Test func reloadsAtLargerHeightAndKeepsOneImagePerURL() async throws {
         let store = makeStore(try Self.png(width: 400, height: 400))
