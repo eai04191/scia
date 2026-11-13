@@ -1,10 +1,11 @@
 #!/bin/bash
 # agentがシミュレーターを見るための道具。画像を小さく撮り、画面が止まってから撮り、画面の要素を文字で取り出す。
 # 使い方:
-#   Tools/sim.sh shot '<端末>' [--width <px>] [--crop <x>,<y>,<w>,<h>] [--out <ファイル>] [--full <ファイル>] [--no-settle]
+#   Tools/sim.sh shot '<端末>' [--width <px>] [--crop <x>,<y>,<w>,<h>] [--out <ファイル>] [--full <ファイル>] [--no-settle] [--display <画面>]
 #     画面が止まるまで待ってから撮り、縮小したJPEGのパスを出す。--widthの既定は端末のポイント幅で、画像の1pxがタップの1ptになる。
 #     --cropはポイントで指定し、切り出した範囲だけを同じ倍率で出す（座標は切り出した左上からになる）。
 #     --fullを付けると、ユーザーに送るための原寸のPNGも残す。
+#     画面が2つある端末（Scia Duo）では主の画面（primary）を撮る。ほかの画面は--displayに`simctl io`が受け付ける名前か番号で渡す。
 #   Tools/sim.sh drag <x1> <y1> <x2> <y2>
 #     慣性を残さずに止まるドラッグの点の並びを、シミュレーターのツールのtouch_pathのpointsに渡せるJSONで出す。
 #     ツールのtouch_pathは同じ座標の点を「動いた」として送らないため、最後に同じ点を並べても離した瞬間の速さが残り、慣性で流れる。
@@ -21,19 +22,21 @@
 #     ターンを返したあともバックグラウンドの処理は走り続けるので、止まっているスレッドの端末を取る前に、使っている処理が残っていないかを確かめる。
 #     シミュレーターのツールのタップやスワイプは1回ずつで終わり、処理として残らないので、ここには出ない。
 #   Tools/sim.sh acquire [--wait <秒>] ['<端末>']
-#     このworktreeに端末を貸す。空きがなければ空くまで待ち（既定は540秒、0なら上限なく待つ）、電源が切れていれば起動して、借りた端末と状態を「Scia 2 ready」の形で出す。
+#     このworktreeに端末を貸す。端末を省くと番号の端末（Scia 1〜）から貸し、ほかの貸し借りする端末（Scia iPad 1、Scia Duoなど）は名指ししたときだけ貸す。空きがなければ空くまで待ち（既定は540秒、0なら上限なく待つ）、電源が切れていれば起動して、借りた端末と状態を「Scia 2 ready」の形で出す。
 #     readyなら、前にこのworktreeが設定を戻してビルドを入れ、そのあと誰も借りていない。claimedなら、設定を戻してビルドを入れ直し、readyを記録する。
-#     すでに借りていれば同じ端末を延ばす。貸し出しは30分で切れるので、長く使うときはacquireし直す。待っても空かなければ終了コード75で終わる。
-#   Tools/sim.sh release
+#     すでに借りていれば同じ端末を延ばす。端末を省いたときは、名指しで借りた端末を持たせたまま、番号の端末を借りるか延ばす。別の端末を名指しすると、借りていた端末は返す。貸し出しは30分で切れるので、長く使うときはacquireし直す。待っても空かなければ終了コード75で終わる。
+#   Tools/sim.sh release [--numbered]
 #     このworktreeが借りている端末を返す。シミュレーターを触り終えたら、ターンを返す前に返す。
+#     --numberedを付けると、番号の端末だけを返す。make testの入口が、自分で借りた端末だけを返すのに使う。
 #   Tools/sim.sh ready '<端末>'
 #     借りた端末に、設定を戻して自分のビルドを入れ終えたことを記録する。
 #   Tools/sim.sh status
 #     端末ごとの借り手、最後にビルドを入れたworktree、使っている処理の数を出す。
-#   Tools/sim.sh leased ['<端末>']
+#   Tools/sim.sh leased ['<端末>' | --numbered]
 #     make testなどが走らせる端末を出す。端末を省くと、このworktreeが借りている端末を出し、借りていなければ失敗する。
-#     貸し借りする端末（Scia 1〜）を渡したときは、このworktreeが借りていなければ失敗する。借りずに走らせると、ほかのスレッドが入れたビルドを入れ替えてしまうため。
-#     貸し借りしない端末（機種ごとに作った端末など）は、そのまま出す。
+#     番号の端末と名指しで借りた端末の両方を借りていれば、番号の端末を出す。--numberedを付けると、番号の端末だけから探す。
+#     貸し借りする端末（Scia 1〜、Scia iPad 1〜、Scia Duo）を渡したときは、このworktreeが借りていなければ失敗する。借りずに走らせると、ほかのスレッドが入れたビルドを入れ替えてしまうため。
+#     貸し借りしない端末（機種ごとに作った一時的な端末など）は、そのまま出す。
 #   Tools/sim.sh ctl '<端末>' <simctlの操作> [引数...]
 #     借りているかを確かめてから、`xcrun simctl <操作> '<端末>' <引数...>`を走らせる。端末に命令を送るsimctlは、直接呼ばずにここを通す。
 #     simctlは名前を渡せばどの端末にも届くので、借りた端末を確かめずに別の名前を書くと、ほかのスレッドの端末を触ってしまうため。
@@ -100,8 +103,11 @@ print(int(scale))
 ' "$bundle/Contents/Resources/capabilities.plist"
 }
 
+# 画面が2つある端末（Scia Duoは外側と内側）では、simctlが撮る画面を選べずに失敗するので、いつも画面を指定する。
+# 既定のprimaryは、どの端末にもある主の画面。ほかの画面は、shotの--displayで`simctl io`が受け付ける名前か番号を渡す。
+SHOT_DISPLAY=primary
 capture() {
-    xcrun simctl io "$1" screenshot --type=png "$2" >/dev/null 2>&1 || fail "撮影できない: $1"
+    xcrun simctl io "$1" screenshot --display="$SHOT_DISPLAY" --type=png "$2" >/dev/null 2>&1 || fail "撮影できない: ${1}（画面: ${SHOT_DISPLAY}）"
 }
 
 # 縮小した画像のハッシュ。時計の数字の変化などの細かい差を無視するため、小さくしてから比べる。
@@ -140,6 +146,7 @@ command_shot() {
             --out) out=$2; shift 2 ;;
             --full) full=$2; shift 2 ;;
             --no-settle) do_settle=0; shift ;;
+            --display) SHOT_DISPLAY=$2; shift 2 ;;
             *) fail "知らない引数: $1（保存先は--out、原寸の保存先は--fullで指定する）" ;;
         esac
     done
@@ -345,13 +352,23 @@ borrower() {
     git rev-parse --show-toplevel || fail "gitのworktreeの外で走らせている"
 }
 
-# 貸す端末。名前が「Scia <番号>」の端末を番号の順に並べる。
+# 貸し借りする端末。番号の端末（Scia 1〜）を先に、機種の違う端末（Scia iPad 1〜、Scia Duo）を名前の順に並べる。
+# 名前が「Scia 」で始まるほかの端末は貸し借りしない。Scia Scenarioはmake scenario-*が、
+# テストを任せる別のMacの端末（Scia Remote 1など）はTools/remote-test-worker.shが、借りずに専用に使うため。
+# 引数にnumberedを渡すと、番号の端末だけを出す。端末を省いたacquireが貸すのはこれだけで、残りは名指ししたときだけ貸す。
+# 端末を省いて借りるmake testが、機種の違う端末で走らないようにするため。
 pool() {
     xcrun simctl list devices -j | /usr/bin/python3 -I -c '
 import json, re, sys
-names = [d["name"] for ds in json.load(sys.stdin)["devices"].values() for d in ds if re.fullmatch(r"Scia [0-9]+", d["name"])]
-print("\n".join(sorted(set(names), key=lambda n: int(n.split()[1]))))
-'
+numbered_only = sys.argv[1:] == ["numbered"]
+names = {d["name"] for ds in json.load(sys.stdin)["devices"].values() for d in ds if re.fullmatch(r"Scia ([0-9]+|iPad [0-9]+|Duo)", d["name"])}
+def numbered(name):
+    return re.fullmatch(r"Scia [0-9]+", name) is not None
+def order(name):
+    # 数字は数として比べる（Scia iPad 2をScia iPad 10より先に並べる）。
+    return (not numbered(name), [int(part) if part.isdigit() else part for part in re.split(r"([0-9]+)", name)])
+print("\n".join(sorted((n for n in names if numbered(n) or not numbered_only), key=order)))
+' "$@"
 }
 
 # 借りたまま返さずに止まったスレッドのため、この秒数より古い貸し出しは返されたものとして扱う。
@@ -384,6 +401,8 @@ command___acquire_try() {
     local me=$1 want=${2:-} root sim held='' candidates procs
     root=$(lock_root)
     # すでに借りていれば、同じ端末を延ばす。別の端末を指定されたら、借りていたものを返す。
+    # 端末を省いたときは、番号の端末だけを見る。名指しで借りた端末（Scia iPad 1など）はそのまま持たせ、延ばす端末にもしない。
+    # make testが、このworktreeが確かめのために借りている機種の違う端末で走らないようにするため。
     while IFS= read -r sim; do
         [ -n "$sim" ] && [ "$(lease_holder "$sim")" = "$me" ] || continue
         if [ -z "$want" ] || [ "$want" = "$sim" ]; then
@@ -391,14 +410,14 @@ command___acquire_try() {
         else
             rm -f "$root/$sim.lease"
         fi
-    done <<< "$(pool)"
+    done <<< "$(if [ -n "$want" ]; then pool; else pool numbered; fi)"
     if [ -n "$held" ]; then
         echo "$(date +%s) $me" > "$root/$held.lease"
         if [ "$(build_state "$held")" = "$me ready" ]; then echo "$held ready"; else echo "$held claimed"; fi
         return 0
     fi
     # 前に自分のビルドを入れ終えた端末を先に試す。入れ直しを省けるため。
-    candidates=$( { if [ -n "$want" ]; then echo "$want"; else pool; fi; } | while IFS= read -r sim; do
+    candidates=$( { if [ -n "$want" ]; then echo "$want"; else pool numbered; fi; } | while IFS= read -r sim; do
         if [ "$(build_state "$sim")" = "$me ready" ]; then echo "0 $sim"; else echo "1 $sim"; fi
     done | sort -s -k1,1 | cut -d' ' -f2-)
     while IFS= read -r sim; do
@@ -421,10 +440,17 @@ command___acquire_try() {
 
 command___release() {
     local me=$1 sim
+    shift
     while IFS= read -r sim; do
         [ -n "$sim" ] && [ "$(lease_holder "$sim")" = "$me" ] && rm -f "$(lock_root)/$sim.lease"
-    done <<< "$(pool)"
+    done <<< "$(pool "$@")"
     return 0
+}
+
+# 借りる途中で失敗した端末だけを返す。このworktreeがほかに借りている端末は持たせたままにする。
+command___release_one() {
+    local me=$1 sim=$2
+    [ "$(lease_holder "$sim")" != "$me" ] || rm -f "$(lock_root)/$sim.lease"
 }
 
 command___ready() {
@@ -535,16 +561,16 @@ command_acquire() {
             # 起動を待つ間はほかのスレッドが借りられるよう、.guardの外で行う。起動済みならすぐ戻る。
             # 起動できなければ、使えない端末を30分ふさがないよう返してから失敗する。
             if ! xcrun simctl bootstatus "${out% *}" -b > /dev/null; then
-                guarded __release "$me"
+                guarded __release_one "$me" "${out% *}"
                 fail "${out% *}を起動できない"
             fi
             if ! grep -qxF "${out% *}" <<< "$held_before" && ! (ensure_slim "${out% *}"); then
-                guarded __release "$me"
+                guarded __release_one "$me" "${out% *}"
                 fail "${out% *}を貸せない"
             fi
             # 切れなければ、ユーザーのコピーが入りうる端末を貸さず、30分ふさがないよう返してから失敗する。
             if ! (isolate_pasteboard "${out% *}"); then
-                guarded __release "$me"
+                guarded __release_one "$me" "${out% *}"
                 fail "${out% *}のクリップボードをMacから切り離せない"
             fi
             echo "$out"
@@ -561,7 +587,11 @@ command_acquire() {
 }
 
 command_release() {
-    guarded __release "$(borrower)"
+    case ${1:-} in
+        '') guarded __release "$(borrower)" ;;
+        --numbered) guarded __release "$(borrower)" numbered ;;
+        *) fail "使い方: Tools/sim.sh release [--numbered]" ;;
+    esac
     echo "返した: $(borrower)"
 }
 
@@ -574,7 +604,12 @@ command_ready() {
 command_leased() {
     local sim=${1:-} me candidate sims
     # 端末のリストを読めないときに、貸し借りする端末を貸し借りしない端末と取り違えて素通りさせないよう、止める。
-    sims=$(pool) || fail "端末のリストを読めない"
+    if [ "$sim" = --numbered ]; then
+        sim=''
+        sims=$(pool numbered) || fail "端末のリストを読めない"
+    else
+        sims=$(pool) || fail "端末のリストを読めない"
+    fi
     if [ -z "$sim" ]; then
         me=$(borrower)
         while IFS= read -r candidate; do
@@ -622,7 +657,7 @@ command_status() {
     done <<< "$(pool)"
 }
 
-[ $# -ge 1 ] || fail "使い方: Tools/sim.sh shot|dump|reset|busy|ready '<端末>' [オプション]、Tools/sim.sh ctl '<端末>' <simctlの操作> [引数...]、Tools/sim.sh acquire [--wait <秒>] ['<端末>']、Tools/sim.sh release|status、Tools/sim.sh leased ['<端末>']、Tools/sim.sh drag <x1> <y1> <x2> <y2>"
+[ $# -ge 1 ] || fail "使い方: Tools/sim.sh shot|dump|reset|busy|ready '<端末>' [オプション]、Tools/sim.sh ctl '<端末>' <simctlの操作> [引数...]、Tools/sim.sh acquire [--wait <秒>] ['<端末>']、Tools/sim.sh release [--numbered]、Tools/sim.sh status、Tools/sim.sh leased ['<端末>']、Tools/sim.sh drag <x1> <y1> <x2> <y2>"
 subcommand=$1
 shift
 case $subcommand in
@@ -639,6 +674,7 @@ case $subcommand in
     ctl) command_ctl "$@" ;;
     __acquire_try) command___acquire_try "$@" ;;
     __release) command___release "$@" ;;
+    __release_one) command___release_one "$@" ;;
     __ready) command___ready "$@" ;;
     *) fail "知らない操作: $subcommand" ;;
 esac

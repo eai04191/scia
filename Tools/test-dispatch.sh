@@ -233,7 +233,7 @@ run_here() {
         run_step make --no-print-directory build || exit "$?"
     fi
     # このworktreeが借りていた端末は、貸し出しの期限を延ばすだけで、走らせたあとも返さない
-    held=$(Tools/sim.sh leased 2> /dev/null) || held=
+    held=$(Tools/sim.sh leased --numbered 2> /dev/null) || held=
     # 借り終えてから記録するまでの間に止められても返せるよう、借り始める前に記録する。借りていないときのreleaseは何もしない
     [[ -n "$held" ]] || borrowed=1
     acquired=$(mktemp)
@@ -266,7 +266,7 @@ run_here() {
 # 入口が借りた端末を返して終わる
 leave_here() {
     if [[ -n "$borrowed" ]]; then
-        Tools/sim.sh release > /dev/null
+        Tools/sim.sh release --numbered > /dev/null
         borrowed=
     fi
     exit "$1"
@@ -317,7 +317,7 @@ stop_child() {
             done
         fi
     fi
-    [[ -z "$borrowed" ]] || Tools/sim.sh release > /dev/null || true
+    [[ -z "$borrowed" ]] || Tools/sim.sh release --numbered > /dev/null || true
     exit "$1"
 }
 

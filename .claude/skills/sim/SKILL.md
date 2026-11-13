@@ -1,18 +1,18 @@
 ---
 name: sim
-description: シミュレーター（Scia 1〜Scia 4）を、触る間だけこのworktreeに借りる。空きがなければ空くまで待ち、端末が替わっていたら設定を戻してビルドを入れ直す。シミュレーターを触る直前に毎回、またはユーザーが/simで起動したときに使う。
-argument-hint: "[番号]"
+description: シミュレーター（Scia 1〜Scia 4。名指しすればScia iPad 1、Scia Duoなども）を、触る間だけこのworktreeに借りる。空きがなければ空くまで待ち、端末が替わっていたら設定を戻してビルドを入れ直す。シミュレーターを触る直前に毎回、またはユーザーが/simで起動したときに使う。
+argument-hint: "[番号か名前]"
 ---
 
 # シミュレーターを借りる
 
 端末は4台しかないので、スレッドが4つより多くても回るよう、シミュレーターを触る間だけ借りて、触り終えたらすぐ返す。コードを書いたりビルドしたりしている間は持たない。貸し借りは`Tools/sim.sh`がworktreeごとに記録する。並行するスレッドはworktreeを分けるので、借り手はworktreeで表す。
 
-引数（`$ARGUMENTS`）には、使う端末の番号（1〜4）が入ることがある。ユーザーが特定の端末を指定したときだけ渡す。
+引数（`$ARGUMENTS`）には、使う端末の番号（1〜4）か名前（`Scia iPad 1`、`Scia Duo`など）が入ることがある。ユーザーが特定の端末を指定したときと、iPadや画面を開閉するiPhoneでの見え方を確かめるときだけ渡す。
 
 ## 1. 借りる
 
-シミュレーターを触る直前（確かめ、録画、`ONLY`を付けた`make test`、`Tools/sim.sh shot`・`dump`の前）に、`Tools/sim.sh acquire`を走らせる。番号を指定されたら`Tools/sim.sh acquire 'Scia <番号>'`にする。
+シミュレーターを触る直前（確かめ、録画、`ONLY`を付けた`make test`、`Tools/sim.sh shot`・`dump`の前）に、`Tools/sim.sh acquire`を走らせる。番号を指定されたら`Tools/sim.sh acquire 'Scia <番号>'`、名前なら`Tools/sim.sh acquire '<名前>'`にする。端末を省くと番号の端末から貸し、ほかの端末（`Scia iPad 1`、`Scia Duo`など）は名指ししたときだけ貸す。名指しで借りた端末は、端末を省いた`acquire`で番号の端末を借りても持ったままになり、別の端末を名指しすると返る。
 
 `SIM`も`ONLY`も付けない`make test`、`make check`、`make check-test`では借りない。入口が別のMacか手元の枠を選び、手元の枠で走るときは入口が借りて返すため（docs/test-dispatch.md）。
 

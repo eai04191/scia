@@ -55,7 +55,7 @@ warnings: build
 	Tools/check-warnings.sh $(DERIVED_DATA) $(SIM_ARCH)
 
 ## シミュレーター上でschemeのテストを実行する
-## 貸し借りする端末（Scia 1〜）をSIMで指定するときは、このworktreeが借りている端末だけを受け付ける（Tools/sim.sh leased）
+## 貸し借りする端末（Scia 1〜、Scia iPad 1〜、Scia Duo）をSIMで指定するときは、このworktreeが借りている端末だけを受け付ける（Tools/sim.sh leased）
 ## 端末のiOSの版で初めて走らせたときは、UIKitの公開されていない作りに頼る部分のUIテスト（SciaSystemUITests）も走らせる（Tools/system-ui-check.sh）
 ## 通ったら、確かめた作業ツリーの中身を覚える
 ## ONLYにテストの識別子（空白区切りで複数）を渡すと、それだけを走らせる。手元で走り、SIMを省くとこのworktreeが借りている端末（Tools/sim.sh acquire）を使うので、先に借りる。全部は走らせていないので、SciaSystemUITestsも走らせず、通っても中身を覚えない

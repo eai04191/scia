@@ -34,7 +34,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `make test-core`: SciaCoreのテスト（macOS上、シミュレーター不要）
 - `make test-memory-cache`: `Packages/MemoryCache`のテスト（macOS上、シミュレーター不要）
 - `make build`: シミュレーター向けにビルドする
-- `make test`: シミュレーターでテストする。`SIM='<端末>'`で指定もできるが、貸し借りする端末（`Scia 1`〜`Scia 4`）は借りているものしか受け付けない。端末のiOSの版で初めて走らせたときは、UIKitの公開されていない作りに頼る部分のUIテスト（`SciaSystemUITests`）も走らせる。通ると、確かめた作業ツリーの中身を覚える
+- `make test`: シミュレーターでテストする。`SIM='<端末>'`で指定もできるが、貸し借りする端末（`Scia 1`〜`Scia 4`、`Scia iPad 1`、`Scia iPad 2`、`Scia Duo`）は借りているものしか受け付けない。端末のiOSの版で初めて走らせたときは、UIKitの公開されていない作りに頼る部分のUIテスト（`SciaSystemUITests`）も走らせる。通ると、確かめた作業ツリーの中身を覚える
 - `make test`の記録: 全部を走らせると、`DerivedData/test-logs/watch-<時刻>`に実行中の負荷（`load.log`）と、30秒たっても終わらないSciaCoreのテストのスタック（`<テストの名前>-<ハッシュ>.sample.txt`。名前の英数字のほかは`_`になるので、どのテストかは末尾の`test:`の行で見る）が残る。落ちた回の`.xcresult`と、その回の`watch-<時刻>`のコピーは、`DerivedData/test-logs/failed-<時刻>`に残る
 - `make test ONLY='SciaTests/LinkLabelTests'`: 一部のテストだけを走らせる。手元で走り、このworktreeが借りている端末を使うので、先に借りる。識別子は空白で区切って複数渡せる。通っても中身は覚えない。`xcodebuild ... test`を直接走らせるときは、`-collect-test-diagnostics never`を付ける。付けないと、テストが失敗したときにシミュレーターの診断を集め、応答を待って10分止まる
 - `make check`: 変更を報告する前に必ず通す。通ると、確かめた作業ツリーの中身（commitしていない変更も含む）を覚える
@@ -50,8 +50,11 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 ## シミュレーター
 
 - 動作確認とテストには、`Scia 1`、`Scia 2`、`Scia 3`、`Scia 4`のどれかのシミュレーターを使う。どれもログイン済みの端末の複製で、ログイン情報が端末のKeychainに残っているため、ログインし直さずに済む
+- iPadと画面を開閉するiPhoneでの見え方は、`Scia iPad 1`、`Scia iPad 2`（iPad mini）、`Scia Duo`（iPhone Duo）で確かめる。`Tools/sim.sh acquire 'Scia iPad 1'`のように名指ししたときだけ借りられ、端末を省いた`acquire`と`make test`には使われない。名指しで借りた端末は、端末を省いた`acquire`で番号の端末を借りても持ったままになり、別の端末を名指しすると返る。ログインしていない端末では`scia-debug://dummy-session`で入る
+- iPadでは、アプリが画面の一部のウインドウで開く。`dump`の座標は画面の座標（タップと同じ）で、ウインドウの位置と大きさは`ウインドウ`の行の`枠`に出る
+- `Scia Duo`は画面が2つあり、`simctl io`の`screenshot`と`recordVideo`は`--display`がないと失敗する。`Tools/sim.sh shot`は主の画面（`primary`）を撮り、ほかの画面は`--display`で渡す。録画は`io recordVideo --display=primary`で撮る
 - `Scia Scenario`は`make scenario-*`の専用の端末で、`Tools/sim.sh`では貸し借りしない。ほかの確かめには使わない
-- 端末は4台なので、シミュレーターを触る間だけ借りる。触る直前に`sim`のskillで`Tools/sim.sh acquire`を走らせて借り（空きがなければ空くまで待つ）、触り終えたら`Tools/sim.sh release`で返す。借りた端末をほかのworktreeが使ったあとなら、`Tools/sim.sh reset '<使う端末>'`でアプリの設定を既定に戻し、自分のビルドを入れ直す
+- 番号の端末は4台なので、シミュレーターを触る間だけ借りる。触る直前に`sim`のskillで`Tools/sim.sh acquire`を走らせて借り（空きがなければ空くまで待つ）、触り終えたら`Tools/sim.sh release`で返す。借りた端末をほかのworktreeが使ったあとなら、`Tools/sim.sh reset '<使う端末>'`でアプリの設定を既定に戻し、自分のビルドを入れ直す
 - 端末のクリップボードには、自分が`Tools/sim.sh ctl '<使う端末>' pbcopy`で入れたもの以外をペーストしない。DeviceHubの「Use Shared Clipboard」がオンだと、Macのクリップボードが端末へ書き込まれ、Universal Clipboardで届いたユーザーのiPhoneのコピーも入るため、投稿欄に貼ると仕事の内容が投稿される。`Tools/sim.sh acquire`は、借りた端末の同期を切ってクリップボードを空にする。投稿欄の本文と添付は、ペーストではなく`scia-debug://compose`の`text`と`media`で入れる。ペーストそのものを確かめるときは、貼る直前に`pbcopy`で中身を入れる
 - 端末の設定は、ほかのスレッドが変えたり、借りるときに既定に戻したりする。確かめに要る設定（チューニング、タップや長押しの操作、見た目など）は、前に入れたものが残っている前提にせず、確かめる直前に入れる
 - シミュレーターのツールでは、決まった端末を毎回`device`で指定する。省略すると、他のスレッドが使っている端末を操作してしまうことがある
@@ -59,7 +62,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - 並行して作業するスレッドは、worktreeも分ける。`make build`・`make test`はworktree直下の`DerivedData`、`make test-core`は`Packages/SciaCore/.build`を使うため、同じworktreeで同時に走らせると、ロック待ちで失敗したり成果物を上書きし合ったりする
 - 4台は同じアカウントでログインしているため、サーバー上の状態は共有される。読んだ位置は`api/v1/markers`でサーバーに保存され、起動時に読み込まれるので、別のスレッドがスクロールすると次の起動位置が変わる。投稿やブーストも、ストリーミングで他の端末に流れ込む。起動時の位置や新着の挙動を確かめるときは、他のスレッドの操作で結果が乱れていないか疑う
 - 端末のリセット（`xcrun simctl erase`）や別の端末での起動をすると、ユーザーにログインし直してもらう必要がある
-- `Scia 1`〜`Scia 4`は、メモリを減らすため、[simslim](https://github.com/MobAI-App/simslim)で写真以外の使わないサービスを止めている（`simslim on <UDID> --except photos`）。プッシュ通知、ユニバーサルリンク、iCloud、Spotlight、言語のデータの読み込みなどは、エラーを出さずに動かないことがある。こうした機能が動かないときは、Sciaの不具合と決める前に`simslim status <UDID> --dropped`で止めているサービスを確かめる。要る分類（`simslim profiles`）があれば、`simslim on <UDID> --except photos,<分類>`で残して入れ直し（端末は再起動する）、確かめ終えたら`--except photos`で入れ直す。設定は端末を再起動しても消えないが、`xcrun simctl clone`で作った端末には引き継がれない
+- 貸し借りする端末は、メモリを減らすため、[simslim](https://github.com/MobAI-App/simslim)で写真以外の使わないサービスを止めている（`simslim on <UDID> --except photos`）。プッシュ通知、ユニバーサルリンク、iCloud、Spotlight、言語のデータの読み込みなどは、エラーを出さずに動かないことがある。こうした機能が動かないときは、Sciaの不具合と決める前に`simslim status <UDID> --dropped`で止めているサービスを確かめる。要る分類（`simslim profiles`）があれば、`simslim on <UDID> --except photos,<分類>`で残して入れ直し（端末は再起動する）、確かめ終えたら`--except photos`で入れ直す。設定は端末を再起動しても消えないが、`xcrun simctl clone`で作った端末には引き継がれない
 - 画面は`Tools/sim.sh dump '<使う端末>'`で文字として読む。アプリの中でアニメーションとスクロールの慣性が止まるのを待ってから（多くは1秒ほど）、要素の名前と中心の座標（タップと同じポイント）、タイムラインの`contentOffset.y`などの状態を出す。初回は、アプリに要素を作らせる設定を端末に入れ、起動し直しを求める。この設定でアプリが少し重くなるので、hitchを測るときは`Tools/sim.sh ctl '<使う端末>' spawn defaults delete com.apple.Accessibility ApplicationAccessibilityEnabled`で外す
 - 見た目を確かめるときは、シミュレーターのツールの`screenshot`ではなく`Tools/sim.sh shot '<使う端末>'`で撮る。画面が止まるのを待ってから、端末のポイント幅に縮小したJPEGを出すので、画像の座標がそのままタップの座標になり、1枚のトークンも約1/5になる。`--crop x,y,幅,高さ`で一部を切り出し、`--full <ファイル>`でユーザーに送る原寸のPNGも残す。原寸は自分では読まない
 - 画面は、タップでたどらず`Tools/sim.sh ctl '<使う端末>' openurl '<URL>'`で開く。アプリの画面は`scia://`のURLで開き、デバッグ版だけの画面と操作は`scia-debug://`で開く。`scia-debug://reset`（重ねた画面を閉じてホームに戻す）のあとに続けて送ってよい。閉じ終えてから開く。IDやハンドルは、ログインしているサーバー（stellaria.network）の公開API（`api/v1/accounts/lookup?acct=`、`api/v1/accounts/<ID>/statuses`）で調べる。画面を足したら、`AppDestination`に開く先を足し、このリストにも書く。`scia://`のURLは、これから足すショートカットと同じ入り口を通る
