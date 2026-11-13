@@ -54,7 +54,7 @@ enum PostRowCatalog {
                     var configuration = home.contentConfiguration(for: status, isPinned: false, base: .cell())
                     configuration.isTranslated = !isTranslating
                     configuration.isTranslating = isTranslating
-                    configuration.body = RichTextRenderer.reservingTranslationMark(in: configuration.body, scale: 1)
+                    configuration.body = RichTextRenderer.reservingTranslationMark(in: configuration.body)
                     return configuration
                 }
             }
@@ -503,7 +503,7 @@ enum PostRowCatalog {
                     var configuration = home.contentConfiguration(for: status, base: .cell())
                     configuration.embed?.translation = EmbeddedPostView.Content.Translation(isTranslated: isTranslated, wipeDuration: 0, shiftDuration: 0, wordDuration: 0, fadeWidth: 0)
                     if let text = configuration.embed?.text {
-                        configuration.embed?.text = RichTextRenderer.reservingTranslationMark(in: text, scale: 1)
+                        configuration.embed?.text = RichTextRenderer.reservingTranslationMark(in: text)
                     }
                     return configuration
                 }

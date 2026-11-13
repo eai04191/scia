@@ -62,7 +62,7 @@ struct TranslationArrivalTests {
         let font = UIFont.systemFont(ofSize: 15)
         let text = NSAttributedString(string: "example.com/a", attributes: [.font: font, .linkDestination: RichText.LinkDestination.url(url), .copiedLinkText: "https://example.com/a"])
 
-        let reserved = RichTextRenderer.reservingTranslationMark(in: text, scale: 2)
+        let reserved = RichTextRenderer.reservingTranslationMark(in: text)
 
         #expect(reserved.string.hasSuffix(" example.com/a"))
         #expect(reserved.length == text.length + 2)
@@ -71,7 +71,7 @@ struct TranslationArrivalTests {
         #expect(attributes[.copiedLinkText] == nil)
         #expect(attributes[.font] as? UIFont == font)
         let attachment = try #require(attributes[.attachment] as? NSTextAttachment)
-        #expect(attachment.bounds.height == EmojiFont.glyphHeight(of: font) * 2)
+        #expect(attachment.bounds.height == EmojiFont.glyphHeight(of: font))
         #expect(reserved.attribute(.linkDestination, at: 2, effectiveRange: nil) != nil)
         // コピーと読み上げには、マークの空きを渡さない。
         #expect(reserved.copiedPlainText == "example.com/a")

@@ -143,24 +143,22 @@ struct RichTextRenderer: Sendable {
         let body = renderBody(text)
         // 絵文字だけの本文には訳す語がなく、訳文にならないので、訳せないと分かるまでの間もマークを出さない。
         guard marksTranslation, text.emojiOnlyCount(isEmoji: { Self.isUnicodeEmoji($0, in: font(for: $1, block: $2)) }) == nil else { return body }
-        return Self.reservingTranslationMark(in: body, font: font, scale: emojiScale)
+        return Self.reservingTranslationMark(in: body, font: font)
     }
 
-    /// `text`の先頭に、自動翻訳のマークの空きと空白を足す。空きは、同じ文字の大きさのカスタム絵文字と同じ大きさと位置にする。マークは、描く部品が空きに重ねる。
+    /// `text`の先頭に、自動翻訳のマークの空きと空白を足す。空きは文字の大きさにし、カスタム絵文字と同じ高さに置く。マークは、描く部品が空きに重ねる。
     /// 待つ間にパルスさせるため、文字の中の画像にしない。文字のない`text`には足さない。
     /// 先頭の文字からは、行の形を決める属性だけを引き継ぐ。リンクや絵文字の属性を引き継ぐと、マークがその一部として扱われる。
     /// 引用の段落の縦線は行の先頭の文字の属性で決まるので、その属性は引き継ぐ。
-    /// - Parameters:
-    ///   - font: 大きさの基準にする文字の書体。nilなら先頭の文字の書体。先頭がコードのように別の書体でも、本文の文字の大きさで置くために渡す。
-    ///   - scale: カスタム絵文字の倍率。
-    static func reservingTranslationMark(in text: NSAttributedString, font: UIFont? = nil, scale: CGFloat) -> NSAttributedString {
+    /// - Parameter font: 大きさの基準にする文字の書体。nilなら先頭の文字の書体。先頭がコードのように別の書体でも、本文の文字の大きさで置くために渡す。
+    static func reservingTranslationMark(in text: NSAttributedString, font: UIFont? = nil) -> NSAttributedString {
         guard text.length > 0 else { return text }
         let first = text.attributes(at: 0, effectiveRange: nil)
         guard let font = font ?? first[.font] as? UIFont else { return text }
         var attributes = first.filter { [.paragraphStyle, .languageIdentifier, .foregroundColor, .quoteBars].contains($0.key) }
         attributes[.font] = font
         attributes[.translationMark] = true
-        let side = EmojiFont.glyphHeight(of: font) * scale
+        let side = EmojiFont.glyphHeight(of: font)
         // カスタム絵文字と同じく、行より広ければ行の幅まで縮めて置く。`NSTextAttachment(image:)`で作ると、`bounds`を入れても大きさが変わらない。
         let attachment = LineFittingAttachment()
         attachment.image = translationMarkPlaceholder

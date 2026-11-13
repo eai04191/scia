@@ -55,7 +55,7 @@ final class TranslationTransitionLoopView: UIView {
         var configuration = timeline.contentConfiguration(for: isTranslated ? translated : original, isPinned: false, base: .cell())
         configuration.isTranslated = isTranslated
         if isTranslated {
-            configuration.body = RichTextRenderer.reservingTranslationMark(in: configuration.body, scale: 1)
+            configuration.body = RichTextRenderer.reservingTranslationMark(in: configuration.body)
         }
         contentView.configuration = configuration
         let tuning = AppDependencies.tuning
