@@ -8,8 +8,9 @@ import UniformTypeIdentifiers
 @testable import SciaCore
 
 /// 画像と動画を、AVFoundationとImageIOで実際に書き出して確かめる。
-/// 固まったら、テストの実行を止めずに失敗させる。上限は待つ長さの見積もりではなく、固まったとみなす長さ。
-@Suite(.scratch, .timeLimit(.minutes(1)))
+/// 固まったら、テストの実行を止めずに失敗させる。テスト全体の時間では見ない。ほかのビルドと重なると、シミュレーターのコーデックがふだんの100倍以上遅くなり、
+/// 固まっていないのに1分を過ぎたことがあるため。動画のテストは、コマや書き出しの進み具合を伝える。
+@Suite(.scratch, .stallLimit)
 struct MediaReencoderTests {
     private func makeDirectory() throws -> URL {
         let directory = TestScratch.url("MediaReencoderTests")
@@ -199,8 +200,15 @@ struct MediaReencoderTests {
         return item
     }
 
+    /// 書き出しの進み具合を、固まったかどうかの判定に伝える。
+    private func noteExport() -> @Sendable (Double) -> Void {
+        let progress = StallProgress.current
+        return { progress.note("書き出しが\(Int($0 * 100))%まで進んだ") }
+    }
+
     /// 1秒の塗りつぶしの動画を書き出す。
     private func writeVideo(width: Int, height: Int, frameRate: Int = 30, location: VideoLocation = .none, to url: URL) async throws {
+        let progress = StallProgress.current
         let writer = try AVAssetWriter(outputURL: url, fileType: url.pathExtension == "mov" ? .mov : .mp4)
         switch location {
         case .none, .trackCoordinates: break
@@ -232,10 +240,12 @@ struct MediaReencoderTests {
             memset(CVPixelBufferGetBaseAddress(pixelBuffer), Int32(frame * 8), CVPixelBufferGetDataSize(pixelBuffer))
             CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
             #expect(adaptor.append(pixelBuffer, withPresentationTime: CMTime(value: CMTimeValue(frame), timescale: CMTimeScale(frameRate))))
+            progress.note("試験動画のコマ\(frame)を渡した")
         }
         input.markAsFinished()
         await writer.finishWriting()
         #expect(writer.status == .completed)
+        progress.note("試験動画を書き終えた")
     }
 
     @Test func exportsSmallerH264KeepingTheDuration() async throws {
@@ -247,9 +257,13 @@ struct MediaReencoderTests {
 
         let output = directory.appending(path: "out.mp4")
         let lastProgress = LockedValue(0.0)
+        let note = noteExport()
         try await VideoReencoder.export(
             source, size: PixelSize(width: 320, height: 180), frameRate: nil, bitRate: 300_000, audioBitRate: 128_000, destination: output
-        ) { fraction in lastProgress.set(fraction) }
+        ) { fraction in
+            lastProgress.set(fraction)
+            note(fraction)
+        }
 
         let info = try #require(await VideoReencoder.info(of: output))
         #expect(info.size == PixelSize(width: 320, height: 180))
@@ -317,8 +331,8 @@ struct MediaReencoderTests {
         let output = directory.appending(path: "small.mp4")
         try await VideoReencoder.export(
             source, size: PixelSize(width: 160, height: 90), frameRate: nil, bitRate: 200_000, audioBitRate: 128_000, removesAudio: removesAudio,
-            destination: output
-        ) { _ in }
+            destination: output, progress: noteExport()
+        )
         #expect(try #require(await VideoReencoder.info(of: output)).hasAudio == !removesAudio)
     }
 
@@ -328,7 +342,7 @@ struct MediaReencoderTests {
         let source = directory.appending(path: "clip.mov")
         try await writeVideo(width: 320, height: 180, location: .coordinates, to: source)
         let output = directory.appending(path: "small.mp4")
-        try await VideoReencoder.export(source, size: PixelSize(width: 160, height: 90), frameRate: nil, bitRate: 200_000, audioBitRate: 128_000, destination: output) { _ in }
+        try await VideoReencoder.export(source, size: PixelSize(width: 160, height: 90), frameRate: nil, bitRate: 200_000, audioBitRate: 128_000, destination: output, progress: noteExport())
         #expect(try await !hasLocation(output))
     }
 
@@ -341,8 +355,8 @@ struct MediaReencoderTests {
 
         let output = directory.appending(path: "capped.mp4")
         try await VideoReencoder.export(
-            source, size: PixelSize(width: 320, height: 180), frameRate: 30, bitRate: 300_000, audioBitRate: 128_000, destination: output
-        ) { _ in }
+            source, size: PixelSize(width: 320, height: 180), frameRate: 30, bitRate: 300_000, audioBitRate: 128_000, destination: output, progress: noteExport()
+        )
         let info = try #require(await VideoReencoder.info(of: output))
         #expect(info.frameRate <= 31)
     }
@@ -352,6 +366,7 @@ struct MediaReencoderTests {
 
     /// iPhoneのHDR動画と同じ、BT.2020とHLGの10bitのHEVCで、灰色の帯を並べた動画を書き出す。
     private func writeHLGVideo(width: Int, height: Int, to url: URL) async throws {
+        let progress = StallProgress.current
         let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
             AVVideoCodecKey: AVVideoCodecType.hevc,
@@ -393,10 +408,12 @@ struct MediaReencoderTests {
             CVBufferSetAttachment(pixelBuffer, kCVImageBufferTransferFunctionKey, kCVImageBufferTransferFunction_ITU_R_2100_HLG, .shouldPropagate)
             CVBufferSetAttachment(pixelBuffer, kCVImageBufferYCbCrMatrixKey, kCVImageBufferYCbCrMatrix_ITU_R_2020, .shouldPropagate)
             #expect(adaptor.append(pixelBuffer, withPresentationTime: CMTime(value: CMTimeValue(frame), timescale: 30)))
+            progress.note("HLGの試験動画のコマ\(frame)を渡した")
         }
         input.markAsFinished()
         await writer.finishWriting()
         #expect(writer.status == .completed)
+        progress.note("試験動画を書き終えた")
     }
 
     /// SDRの動画の最初のコマで、帯ごとの真ん中の明るさを、黒0から白1で読む。
@@ -430,28 +447,24 @@ struct MediaReencoderTests {
     /// VTPixelTransferSessionで出力の色をBT.709にしたときも同じ値になる。CIToneMapHeadroom（元のヘッドルーム4.93、目標1）は0.75、0.92、1.00で、参照白を明るく残す代わりに、ハイライトの差が小さくなる。
     /// 色を変えずにHLGの値を素通しすると、0.75、0.90、1.00がそのまま出て、全体が明るく白っぽくなる。
     @Test func tonemapsHLGVideoToSDR() async throws {
-        // 時間切れになったときに、どの段階で止まったかをログの時刻で読めるようにする。
-        func mark(_ step: String) { NSLog("tonemapsHLGVideoToSDR: %@", step) }
+        let progress = StallProgress.current
         let directory = try makeDirectory()
         let source = directory.appending(path: "hlg.mov")
-        mark("writing source")
         try await writeHLGVideo(width: 320, height: 180, to: source)
 
         let reference = directory.appending(path: "reference.mp4")
         let session = try #require(AVAssetExportSession(asset: AVURLAsset(url: source), presetName: AVAssetExportPreset1280x720))
-        mark("exporting reference")
         try await session.export(to: reference, as: .mp4)
-        mark("reading reference")
+        progress.note("比較用の動画を書き出した")
         let expected = try await bandLuma(of: reference)
+        progress.note("比較用の動画を読んだ")
         // 比べる基準が素通しになっていないこと。
         #expect(expected[2] < 0.7)
 
         let output = directory.appending(path: "sdr.mp4")
-        mark("exporting SDR")
-        try await VideoReencoder.export(source, size: PixelSize(width: 320, height: 180), frameRate: nil, bitRate: 1_000_000, audioBitRate: 128_000, destination: output) { _ in }
-        mark("reading SDR")
+        try await VideoReencoder.export(source, size: PixelSize(width: 320, height: 180), frameRate: nil, bitRate: 1_000_000, audioBitRate: 128_000, destination: output, progress: noteExport())
         let actual = try await bandLuma(of: output)
-        mark("finished")
+        progress.note("書き出した動画を読んだ")
         for (actualLuma, expectedLuma) in zip(actual, expected) {
             #expect(abs(actualLuma - expectedLuma) < 0.03, "書き出した明るさ \(actual)、Appleの変換 \(expected)")
         }
