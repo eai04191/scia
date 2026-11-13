@@ -138,10 +138,13 @@ enum AgentScreenDump {
         let windows = scene.windows.filter { !$0.isHidden && $0.alpha > 0 }.sorted { $0.windowLevel > $1.windowLevel }
         for window in windows {
             var elements: [String] = []
-            collect(window, screen: screen, covered: coveredViews(in: window), into: &elements)
+            // iPadではアプリのウインドウが画面の一部になる。タップは画面の座標で送るので、ウインドウの中の枠を画面の座標にずらして出す。
+            let frame = window.convert(window.bounds, to: window.screen.coordinateSpace)
+            let place = Placement(origin: frame.origin, screen: screen.offsetBy(dx: -frame.minX, dy: -frame.minY))
+            collect(window, place: place, covered: coveredViews(in: window), into: &elements)
             guard !elements.isEmpty else { continue }
             lines.append("")
-            lines.append("ウインドウ \(type(of: window)) 画面の重なり: \(controllerChain(from: window.rootViewController).joined(separator: " > "))")
+            lines.append("ウインドウ \(type(of: window)) 枠=(\(Int(frame.minX)),\(Int(frame.minY)),\(Int(frame.width)),\(Int(frame.height))) 画面の重なり: \(controllerChain(from: window.rootViewController).joined(separator: " > "))")
             lines.append(contentsOf: elements)
         }
         // スクロールの位置など、画面の要素からは分からない状態は、違和感レポートと同じ状態ダンプから出す。
@@ -204,18 +207,24 @@ enum AgentScreenDump {
         return covered
     }
 
-    private static func collect(_ object: NSObject, screen: CGRect, covered: Set<ObjectIdentifier>, into lines: inout [String]) {
+    /// ウインドウの画面上の位置と、ウインドウの座標で表した画面の範囲。
+    private struct Placement {
+        let origin: CGPoint
+        let screen: CGRect
+    }
+
+    private static func collect(_ object: NSObject, place: Placement, covered: Set<ObjectIdentifier>, into lines: inout [String]) {
         if let view = object as? UIView, view.isHidden || view.alpha < 0.01 || view.accessibilityElementsHidden || covered.contains(ObjectIdentifier(view)) {
             return
         }
         if object.isAccessibilityElement {
-            if let line = describe(object, screen: screen) {
+            if let line = describe(object, place: place) {
                 lines.append(line)
             }
             return
         }
         for child in children(of: object) {
-            collect(child, screen: screen, covered: covered, into: &lines)
+            collect(child, place: place, covered: covered, into: &lines)
         }
     }
 
@@ -232,15 +241,16 @@ enum AgentScreenDump {
         return view.subviews
     }
 
-    private static func describe(_ element: NSObject, screen: CGRect) -> String? {
+    private static func describe(_ element: NSObject, place: Placement) -> String? {
         // VoiceOverが動いていないと、ビューのaccessibilityFrameは空になる。ビューなら画面上の位置から求める。
-        var frame = (element as? UIView).map { $0.convert($0.bounds, to: nil) } ?? element.accessibilityFrame
+        var frame = (element as? UIView).map { $0.convert($0.bounds, to: nil) } ?? windowFrame(of: element)
         // 枠を後から決める要素は、描き直した直後に枠が空のままのことがある。そのときは入れ物のビューの枠を使う。
         if frame.isNull || frame.isEmpty, let container = (element as? UIAccessibilityElement)?.accessibilityContainer as? UIView {
             frame = container.convert(container.bounds, to: nil)
         }
         // タップに使う中心は、見えている部分から求める。一部だけ見えている行の枠の中心は、画面の外やバーの下を指すため。
-        let visible = visibleFrame(of: element, frame: frame, screen: screen)
+        let visible = visibleFrame(of: element, frame: frame, screen: place.screen).offsetBy(dx: place.origin.x, dy: place.origin.y)
+        frame = frame.offsetBy(dx: place.origin.x, dy: place.origin.y)
         guard !visible.isNull, visible.width >= 1, visible.height >= 1 else { return nil }
         let label = element.accessibilityLabel ?? ""
         let value = element.accessibilityValue ?? ""
@@ -252,6 +262,15 @@ enum AgentScreenDump {
         parts.append("中心=(\(Int(visible.midX)),\(Int(visible.midY)))")
         parts.append("枠=(\(Int(frame.minX)),\(Int(frame.minY)),\(Int(frame.width)),\(Int(frame.height)))")
         return parts.joined(separator: " ")
+    }
+
+    /// ビューでない要素の、ウインドウの座標の枠。入れ物のビューの中の枠（accessibilityFrameInContainerSpace）があれば、そこから求める。
+    private static func windowFrame(of element: NSObject) -> CGRect {
+        guard let element = element as? UIAccessibilityElement, let container = element.accessibilityContainer as? UIView,
+              !element.accessibilityFrameInContainerSpace.isEmpty else {
+            return element.accessibilityFrame
+        }
+        return container.convert(element.accessibilityFrameInContainerSpace, to: nil)
     }
 
     /// 画面と、外側のスクロールビューの見えている範囲で切り取った枠。スクロールビューは、上下のバーに隠れる余白（adjustedContentInset）も除く。
