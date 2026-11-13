@@ -86,6 +86,8 @@ enum AppDependencies {
         return store
     }()
 
+    static let emojiGlyphImages = EmojiGlyphImageStore()
+
     /// サーバーごとのカスタム絵文字のリスト。端末に残し、絵文字のパレットを開いたときに読み込み中を挟まずに並べる。
     static let customEmojis = CustomEmojiCaches()
 

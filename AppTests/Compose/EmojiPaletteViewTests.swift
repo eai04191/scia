@@ -57,6 +57,40 @@ struct EmojiPaletteViewTests {
         #expect(blank.isEmpty, "画像が届いたのに空のまま画面に出たセル: \(blank.compactMap(\.accessibilityLabel))")
     }
 
+    /// Unicodeの絵文字は、画像ができるまで空けておき、できたら見えているセルに入れる。
+    /// 文字として描いていたときは、セルを画面に出すフレームで絵を作り、速いスクロールでフレームが落ちた。
+    @Test func standardEmojiAppearsWhenItsImageIsReady() async throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 400, height: 400)
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        let gate = Gate()
+        let drawn = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { _ in }
+        let glyphs = EmojiGlyphImageStore { _ in
+            try? await gate.wait()
+            return drawn
+        }
+        let palette = EmojiPaletteView(emojiImages: EmojiImageStore { _ in throw CancellationError() }, glyphImages: glyphs)
+        palette.frame = window.bounds
+        window.addSubview(palette)
+        let emojis = ["😀", "😃", "😄"].map { PaletteEmoji.standard(StandardEmoji(emoji: $0, name: $0, keywords: [], version: "1.0")) }
+        palette.setContent(.sections([EmojiPaletteSection(kind: .standard("顔と感情"), emojis: emojis)], customStatus: nil))
+        palette.layoutIfNeeded()
+        let collectionView = try #require(Self.descendants(of: palette).compactMap { $0 as? UICollectionView }.first)
+        let cells = Self.cells(in: collectionView)
+        #expect(cells.count == emojis.count)
+        #expect(cells.allSatisfy { Self.glyphView(of: $0)?.image == nil })
+
+        gate.open()
+        try await waitUntil { cells.allSatisfy { Self.glyphView(of: $0)?.image === drawn } }
+    }
+
+    private static func glyphView(of cell: UICollectionViewCell) -> UIImageView? {
+        cell.contentView.subviews.filter { type(of: $0) == UIImageView.self }.compactMap { $0 as? UIImageView }.first
+    }
+
     private static func descendants(of view: UIView) -> [UIView] {
         view.subviews + view.subviews.flatMap(descendants)
     }

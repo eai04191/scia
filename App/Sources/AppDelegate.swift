@@ -27,6 +27,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     /// メモリに持つ画像のうち、使っていないものをすべて手放す。描いている画像は残す（docs/image-loading.mdの「メモリに持つ画像」）。
     func applicationDidReceiveMemoryWarning(_ application: UIApplication) {
         AppDependencies.emojiImages.releaseUnusedMemory()
+        AppDependencies.emojiGlyphImages.releaseUnusedMemory()
         AppDependencies.avatarImages.releaseUnusedMemory()
         AppDependencies.mediaImages.releaseUnusedMemory()
     }

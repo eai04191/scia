@@ -102,6 +102,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     private var customStatus: CustomEmojiStatus?
     private var sections: [EmojiPaletteSection] = []
     private let emojiImages: EmojiImageStore<UIImage>
+    private let glyphImages: EmojiGlyphImageStore
     private lazy var collectionView: UICollectionView = EmojiPaletteCollectionView(frame: .zero, collectionViewLayout: makeLayout())
     /// スクロールの間に落ちたフレームと、そのフレームに使った処理を数える。違和感レポートで、パレットのスクロールの重さを読むため。
     private let scrollHitches = ScrollHitchMonitor()
@@ -141,10 +142,18 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         let key: String
     }
 
-    init(emojiImages: EmojiImageStore<UIImage>) {
+    init(emojiImages: EmojiImageStore<UIImage>, glyphImages: EmojiGlyphImageStore = AppDependencies.emojiGlyphImages) {
         self.emojiImages = emojiImages
+        self.glyphImages = glyphImages
         super.init(frame: .zero)
         configureViews()
+        glyphImages.addListener(owner: self) { [weak self] request, image in
+            self?.glyphDidLoad(request, image)
+        }
+        // 文字のまま描く絵文字の色は、外観で変わる。
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: Self, _) in
+            self.reconfigureAllCells()
+        }
         emojiImages.addListener(owner: self) { [weak self] urls in
             FrameWork.measure("EmojiPaletteView.imagesDidLoad") { self?.reconfigureVisibleCells(showing: urls) }
         }
@@ -510,7 +519,14 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
 
     private func configureCell(at indexPath: IndexPath, _ cell: UICollectionViewCell?) {
         guard let cell = cell as? EmojiPaletteCell, let emoji = emoji(at: indexPath) else { return }
-        FrameWork.measure("EmojiPaletteCell.configure") { cell.configure(emoji, store: emojiImages, emojiStyle: emojiStyle) }
+        FrameWork.measure("EmojiPaletteCell.configure") { cell.configure(emoji, store: emojiImages, glyphs: glyphImages, emojiStyle: emojiStyle) }
+    }
+
+    /// できたUnicodeの絵文字の画像を、それを待っているセルに入れる。
+    private func glyphDidLoad(_ request: EmojiGlyphImageStore.Request, _ image: UIImage) {
+        for case let cell as EmojiPaletteCell in collectionView.visibleCells {
+            cell.showGlyph(image, for: request)
+        }
     }
 
     // MARK: - まとまりのボタン
@@ -697,13 +713,6 @@ extension EmojiPaletteView: UICollectionViewDelegate {
     static let scrollScreenName = "emojiPalette"
 }
 
-/// 絵文字の文字を描くのにかかった時間を、スクロールの記録に渡す。描くのは画面を更新する直前で、セルの組み立ての時間には入らない。
-private final class EmojiPaletteGlyphLabel: UILabel {
-    override func drawText(in rect: CGRect) {
-        FrameWork.measure("EmojiPaletteGlyphLabel.drawText") { super.drawText(in: rect) }
-    }
-}
-
 /// 並べ直しにかかった時間を、スクロールの記録に渡す。
 private final class EmojiPaletteCollectionView: UICollectionView {
     override func layoutSubviews() {
@@ -715,8 +724,10 @@ private final class EmojiPaletteCollectionView: UICollectionView {
 final class EmojiPaletteCell: UICollectionViewCell {
     static let reuseIdentifier = "EmojiPaletteCell"
     private let imageView = EmojiImageView(frame: .zero)
-    /// Unicodeの絵文字を、文字として描く。
-    private let label: UILabel = EmojiPaletteGlyphLabel()
+    /// Unicodeの絵文字を、文字として描いた画像で出す。
+    private let glyphView = UIImageView()
+    /// 画像ができるのを待っているUnicodeの絵文字。
+    private var glyphRequest: EmojiGlyphImageStore.Request?
     private let highlight = UIView()
 
     override init(frame: CGRect) {
@@ -727,10 +738,8 @@ final class EmojiPaletteCell: UICollectionViewCell {
         highlight.isHidden = true
         contentView.addSubview(highlight)
         contentView.addSubview(imageView)
-        label.textAlignment = .center
-        label.adjustsFontSizeToFitWidth = true
-        label.minimumScaleFactor = 0.5
-        contentView.addSubview(label)
+        glyphView.contentMode = .center
+        contentView.addSubview(glyphView)
         isAccessibilityElement = true
         accessibilityTraits = .button
     }
@@ -745,7 +754,7 @@ final class EmojiPaletteCell: UICollectionViewCell {
         highlight.frame = contentView.bounds.insetBy(dx: 2, dy: 2)
         let inset = Self.imageInset(in: contentView.bounds.size)
         imageView.frame = contentView.bounds.insetBy(dx: inset, dy: inset)
-        label.frame = imageView.frame
+        glyphView.frame = imageView.frame
     }
 
     override var isHighlighted: Bool {
@@ -763,10 +772,12 @@ final class EmojiPaletteCell: UICollectionViewCell {
     }
 
     /// カスタム絵文字は、「カスタム絵文字のアニメーションを再生する」の設定によらず動かす。
-    func configure(_ emoji: PaletteEmoji, store: EmojiImageStore<UIImage>, emojiStyle: EmojiStyle) {
+    func configure(_ emoji: PaletteEmoji, store: EmojiImageStore<UIImage>, glyphs: EmojiGlyphImageStore, emojiStyle: EmojiStyle) {
         switch emoji {
         case .custom(let custom):
-            label.isHidden = true
+            glyphView.isHidden = true
+            glyphView.image = nil
+            glyphRequest = nil
             imageView.isHidden = false
             // 枠を大きくしたときは、描く高さで読む。既定の枠（48pt）は既定の高さの1.1倍以内なので、読み直さない。
             let pixelHeight = RichTextRenderer.pixelHeight(of: Self.imageSide(in: bounds.size), scale: traitCollection.displayScale)
@@ -777,14 +788,29 @@ final class EmojiPaletteCell: UICollectionViewCell {
             imageView.isHidden = true
             imageView.stillImage = nil
             imageView.animation = nil
-            label.isHidden = false
-            // 絵文字の文字の大きさは、枠いっぱいの画像と同じくらいに見えるよう、枠の高さの少し下にする。
-            // 文字ではなく、カスタム絵文字の画像と並べる絵として描くため、端末の文字の大きさではなく枠の大きさで決める。
-            // scialint:disable:next fixed_font_size
-            label.font = EmojiFont.font(.systemFont(ofSize: max(bounds.height, 32) * 0.58), style: emojiStyle)
-            label.text = standard.emoji
+            glyphView.isHidden = false
+            let side = Self.imageSide(in: bounds.size)
+            let request = EmojiGlyphImageStore.Request(
+                text: standard.emoji,
+                // 絵文字の文字の大きさは、枠いっぱいの画像と同じくらいに見えるよう、枠の高さの少し下にする。
+                // 文字ではなく、カスタム絵文字の画像と並べる絵として描くため、端末の文字の大きさではなく枠の大きさで決める。
+                pointSize: max(bounds.height, 32) * 0.58,
+                style: emojiStyle,
+                width: bounds.width - Self.imageInset(in: bounds.size) * 2,
+                height: side,
+                scale: traitCollection.displayScale,
+                userInterfaceStyle: traitCollection.userInterfaceStyle
+            )
+            guard request != glyphRequest || glyphView.image == nil else { break }
+            glyphRequest = request
+            glyphView.image = glyphs.image(for: request)
             accessibilityLabel = standard.name
         }
+    }
+
+    func showGlyph(_ image: UIImage, for request: EmojiGlyphImageStore.Request) {
+        guard request == glyphRequest else { return }
+        glyphView.image = image
     }
 }
 
