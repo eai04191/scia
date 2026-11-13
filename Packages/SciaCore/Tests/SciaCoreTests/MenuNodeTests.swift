@@ -17,6 +17,16 @@ struct MenuNodeTests {
         }.joined(separator: "|")
     }
 
+    /// 見出しに出す名前は、長すぎれば先頭だけを残して「…」で切る。UIKitは見出しを行数の上限なしに折り返し、2999文字のハッシュタグの見出しがメニューを埋めて、項目に届かなくなったため。
+    @Test func longMenuTitleIsTruncatedForHeading() {
+        let limit = MenuNode<Int>.headingTitleLimit
+        let long = MenuNode<Int>.submenu("#" + String(repeating: "あ", count: 2999), [.action("項目", 1)])
+        let short = MenuNode<Int>.submenu(String(repeating: "あ", count: limit), [.action("項目", 1)])
+
+        #expect(long.headingTitle == "#" + String(repeating: "あ", count: limit - 1) + "…")
+        #expect(short.headingTitle == short.title)
+    }
+
     /// 区切り線で分けたまとまりごとに並べ、「その他」の中身はサブメニューにする。中身のないまとまりと「その他」は出さない。
     @Test func groupsBecomeInlineGroupsAndMoreSubmenu() {
         let layout = MenuLayout<LinkMenuItem>(elements: [

@@ -19,7 +19,7 @@ struct MenuRenderer<Command> {
 
     /// 木の根を、見出しを付けたメニューにする。見出しの名前が空なら、見出しを置かない。
     func menu(_ root: MenuNode<Command>) -> UIMenu {
-        UIMenu(title: root.title, subtitle: root.subtitle, image: image(root.icon), children: elements(root.children))
+        UIMenu(title: root.headingTitle, subtitle: root.subtitle, image: image(root.icon), children: elements(root.children))
     }
 
     func elements(_ nodes: [MenuNode<Command>]) -> [UIMenuElement] {
@@ -31,7 +31,7 @@ struct MenuRenderer<Command> {
         case .action:
             return action(node)
         case .submenu(let children):
-            return UIMenu(title: node.title, subtitle: node.subtitle, image: image(node.icon), children: elements(children))
+            return UIMenu(title: node.headingTitle, subtitle: node.subtitle, image: image(node.icon), children: elements(children))
         case .group(let children, let isRow):
             let menu = UIMenu(options: .displayInline, children: elements(children))
             if isRow { menu.preferredElementSize = .medium }

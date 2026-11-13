@@ -63,6 +63,16 @@ public struct MenuNode<Command> {
         MenuNode(title: "", content: .deferred(load))
     }
 
+    /// 見出しに出す名前の文字数の上限。
+    public static var headingTitleLimit: Int { 80 }
+
+    /// メニューの見出しに出す名前。長すぎれば先頭だけを残して「…」で切る。
+    /// UIKitは、項目の名前は3行で切るが、見出し（単独で出すメニューと、開いたサブメニューの上）は行数の上限なしに折り返す。サーバーから来る名前（ハッシュタグ、URL）が長いと、見出しがメニューを埋めて項目に届かなくなる。
+    public var headingTitle: String {
+        guard title.count > Self.headingTitleLimit else { return title }
+        return title.prefix(Self.headingTitleLimit) + "…"
+    }
+
     /// サブメニューとまとまりの中身。項目と、開いてから読む項目では空。
     public var children: [MenuNode] {
         switch content {

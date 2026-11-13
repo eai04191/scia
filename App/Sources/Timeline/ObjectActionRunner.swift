@@ -158,7 +158,7 @@ struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable, Command>: Obje
         case .submenu(let submenu):
             // サブメニューの名前だけの1行のメニューを出すと、もう1回押さないと中身に届かないため、中身を出す。
             guard let built else { return }
-            TapMenuPresenter.shared.present(UIMenu(title: submenu.title, subtitle: submenu.subtitle, children: built.elements(submenu.children)), in: view, at: point, lifecycle: lifecycle)
+            TapMenuPresenter.shared.present(UIMenu(title: submenu.headingTitle, subtitle: submenu.subtitle, children: built.elements(submenu.children)), in: view, at: point, lifecycle: lifecycle)
         case .menu(let nodes):
             guard let built else { return }
             TapMenuPresenter.shared.present(UIMenu(children: built.elements(nodes)), in: view, at: point, lifecycle: lifecycle)
