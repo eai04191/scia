@@ -97,6 +97,20 @@ struct PushAnchorTests {
         #expect(anchor.isStillShowing)
     }
 
+    /// 重ねた画面を閉じている途中は、閉じるのと同時にその下に積めるよう、積む。
+    @Test func showingWhilePresentedScreenIsBeingDismissed() async throws {
+        let harness = try Harness()
+        let root = harness.arrangement.tabBarController
+        let anchor = PushAnchor(try harness.source(.home))
+        let sheet = UIViewController()
+        try await root.presentForTesting(sheet)
+
+        root.dismiss(animated: false)
+        #expect(sheet.isBeingDismissed)
+        #expect(anchor.isStillShowing)
+        try await waitUntil { root.presentedViewController == nil }
+    }
+
     /// アプリ内のSafariを下げている間は後ろの画面を触れるので、積む。全画面に広げたときと、シートの上にさらに画面を重ねたときは積まない。
     @Test func showingOnlyWhileBrowserSheetLeavesScreenBehindUsable() async throws {
         let harness = try Harness()

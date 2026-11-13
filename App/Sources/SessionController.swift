@@ -1475,6 +1475,15 @@ final class SessionController {
         }
     }
 
+    /// デバッグ版で`scia-debug://lookup/slow`にしている。
+    private var delaysLookupForDebug: Bool {
+        #if DEBUG
+        DebugFaults.slowLookupDelay != nil
+        #else
+        false
+        #endif
+    }
+
     /// デバッグ版で`scia-debug://lookup/slow`にしていれば、相手を探す前に待つ。待つ間に止められたら、探さない。
     private func debugDelayed<Value: Sendable>(_ work: @escaping @Sendable () async throws -> Value) -> @Sendable () async throws -> Value {
         #if DEBUG
@@ -1997,6 +2006,12 @@ final class SessionController {
     }
 
     private func openMyProfile(from source: UIViewController) {
+        // 読み込み済みなら、探すのを待たずにその場で積む。アカウントの画面を閉じるのと同時に開くとき、閉じ始めから行き先が出ているようにする。
+        if let cachedMyAccount, !delaysLookupForDebug {
+            profileOpening.cancel()
+            pushProfile(cachedMyAccount, from: source)
+            return
+        }
         let logger = logger
         openProfile(from: source, failureTitle: "プロフィールを読み込めませんでした") { [weak self] in
             guard let self else { throw CancellationError() }
@@ -3229,20 +3244,48 @@ final class SessionController {
         )
     }
 
-    /// アカウントの画面で押した項目を、アカウントの画面（設定から開いていれば設定ごと）を閉じてから開く。
+    /// アカウントの画面で押した項目を開き、アカウントの画面（設定から開いていれば設定ごと）を閉じる。
+    /// タブの画面に出す項目は、閉じ始めるのと同時にアニメーションなしで出し、閉じていく画面の下に行き先がもう出ているようにする。
+    /// 手前に重ねて出す項目は、閉じている途中には重ねられないので、閉じ終えてから出す。
     private func openFromAccountScreen(_ item: AccountScreenItem) {
-        closeScreensForDestination { [weak self] in
-            guard let self else { return }
-            switch item {
-            case .profile:
-                if let source = tabs.selectedNavigation?.topViewController { openMyProfile(from: source) }
-            case .bookmarks: showSavedStatuses(.bookmarks)
-            case .favourites: showSavedStatuses(.favourites)
-            case .followedTags: showFollowedTags()
-            case .scheduled: showScheduledStatuses()
-            case .list(let id, let title): showList(id: id, title: title)
-            case .logOut: logOut?()
-            }
+        guard showsInTab(item) else {
+            closeScreensForDestination { [weak self] in self?.show(item) }
+            return
+        }
+        guard !rootViewController.isShowingAlert else {
+            logger.error("open account screen item dropped: alert shown")
+            return
+        }
+        setPushesWithoutAnimation(true)
+        closeScreensForDestination { [weak self] in self?.setPushesWithoutAnimation(false) }
+        show(item)
+    }
+
+    /// タブを切り替えるか、選んでいるタブに積んで出す項目か。
+    private func showsInTab(_ item: AccountScreenItem) -> Bool {
+        switch item {
+        case .profile, .bookmarks, .favourites, .followedTags, .list: true
+        case .scheduled: tabs.placement.location(of: .scheduled) != .disabled
+        case .logOut: false
+        }
+    }
+
+    private func setPushesWithoutAnimation(_ isOn: Bool) {
+        for navigation in contentNavigations.allObjects {
+            navigation.pushesWithoutAnimation = isOn
+        }
+    }
+
+    private func show(_ item: AccountScreenItem) {
+        switch item {
+        case .profile:
+            if let source = tabs.selectedNavigation?.topViewController { openMyProfile(from: source) }
+        case .bookmarks: showSavedStatuses(.bookmarks)
+        case .favourites: showSavedStatuses(.favourites)
+        case .followedTags: showFollowedTags()
+        case .scheduled: showScheduledStatuses()
+        case .list(let id, let title): showList(id: id, title: title)
+        case .logOut: logOut?()
         }
     }
 

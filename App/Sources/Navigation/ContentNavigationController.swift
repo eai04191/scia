@@ -17,6 +17,9 @@ final class ContentNavigationController: UINavigationController, UIGestureRecogn
         didSet { applyCoveredBottom(to: viewControllers) }
     }
 
+    /// trueの間は、積む画面をアニメーションなしで出す。上に重ねた画面を閉じるのと同時に積むとき、閉じていく画面の下に行き先がもう出ているようにする。
+    var pushesWithoutAnimation = false
+
     override init(rootViewController: UIViewController) {
         super.init(navigationBarClass: ContentNavigationBar.self, toolbarClass: nil)
         viewControllers = [rootViewController]
@@ -31,7 +34,7 @@ final class ContentNavigationController: UINavigationController, UIGestureRecogn
 
     override func pushViewController(_ viewController: UIViewController, animated: Bool) {
         applyCoveredBottom(to: [viewController])
-        super.pushViewController(viewController, animated: animated)
+        super.pushViewController(viewController, animated: animated && !pushesWithoutAnimation)
     }
 
     override func setViewControllers(_ viewControllers: [UIViewController], animated: Bool) {
