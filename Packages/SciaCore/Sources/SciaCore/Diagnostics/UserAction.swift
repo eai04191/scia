@@ -245,6 +245,7 @@ public enum UserAction: Sendable, Equatable {
         case "notifications": "通知"
         case "profile": "プロフィール"
         case "thread": "スレッド"
+        case "emojiPalette": "絵文字のパレット"
         default: id
         }
     }

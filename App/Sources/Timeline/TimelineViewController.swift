@@ -429,7 +429,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             newArrivalsButton.trailingAnchor.constraint(equalTo: view.layoutMarginsGuide.trailingAnchor),
         ])
         AppDependencies.stateDumps.register(texts.dumpName, owner: self) { $0.stateDump() }
-        emojiImages.addListener(owner: self) { [weak self] urls in self?.emojiImagesDidLoad(urls) }
+        emojiImages.addListener(owner: self) { [weak self] urls in
+            FrameWork.measure("TimelineViewController.emojiImagesDidLoad") { self?.emojiImagesDidLoad(urls) }
+        }
         avatarImages.addListener(owner: self) { [weak self] key in self?.avatarImageDidLoad(key) }
         observeTuning()
         // 行の文字は、組むときのアプリの文字の大きさで決めるため、端末の文字の大きさが変わったら組み直す。

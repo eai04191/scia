@@ -102,7 +102,11 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     private var customStatus: CustomEmojiStatus?
     private var sections: [EmojiPaletteSection] = []
     private let emojiImages: EmojiImageStore<UIImage>
-    private lazy var collectionView = UICollectionView(frame: .zero, collectionViewLayout: makeLayout())
+    private lazy var collectionView: UICollectionView = EmojiPaletteCollectionView(frame: .zero, collectionViewLayout: makeLayout())
+    /// スクロールの間に落ちたフレームと、そのフレームに使った処理を数える。違和感レポートで、パレットのスクロールの重さを読むため。
+    private let scrollHitches = ScrollHitchMonitor()
+    private var scrollStart: (offset: CGFloat, time: CFTimeInterval)?
+    var mediaTime: () -> CFTimeInterval = AppDependencies.mediaTime
     private lazy var dataSource = makeDataSource()
     /// 検索欄の入れ物。絵文字のリストの上端に重ね、リストの端の効果を、検索欄の形に合わせて描かせる。
     private let topBar = UIView()
@@ -142,7 +146,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         super.init(frame: .zero)
         configureViews()
         emojiImages.addListener(owner: self) { [weak self] urls in
-            self?.reconfigureVisibleCells(showing: urls)
+            FrameWork.measure("EmojiPaletteView.imagesDidLoad") { self?.reconfigureVisibleCells(showing: urls) }
         }
     }
 
@@ -215,7 +219,8 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     /// シートに載せたときは、検索欄にキーボードを出していなければシートの下端に置く。前に検索したまま閉じても、ほかの入力欄のキーボードに付いて動かさないため。
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        guard window != nil else { return }
+        // スクロールの途中でシートが閉じると、止まりの通知を受けずに終わる。
+        guard window != nil else { return recordScroll() }
         setFollowsKeyboard(searchField.isFirstResponder)
     }
 
@@ -505,7 +510,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
 
     private func configureCell(at indexPath: IndexPath, _ cell: UICollectionViewCell?) {
         guard let cell = cell as? EmojiPaletteCell, let emoji = emoji(at: indexPath) else { return }
-        cell.configure(emoji, store: emojiImages, emojiStyle: emojiStyle)
+        FrameWork.measure("EmojiPaletteCell.configure") { cell.configure(emoji, store: emojiImages, emojiStyle: emojiStyle) }
     }
 
     // MARK: - まとまりのボタン
@@ -594,6 +599,8 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     }
 
     private func scrollToTop() {
+        // コードから位置を動かすと、慣性で動いている途中のスクロールは止まりの通知を受けずに終わる。
+        recordScroll()
         collectionView.setContentOffset(CGPoint(x: 0, y: -collectionView.adjustedContentInset.top), animated: false)
     }
 
@@ -606,6 +613,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         let top = -collectionView.adjustedContentInset.top
         let bottom = max(top, collectionView.contentSize.height + collectionView.adjustedContentInset.bottom - collectionView.bounds.height)
         let y = min(max((header?.frame.minY ?? 0) + top, top), bottom)
+        recordScroll()
         collectionView.setContentOffset(CGPoint(x: 0, y: y), animated: true)
         setSelectedSection(index)
     }
@@ -649,7 +657,50 @@ extension EmojiPaletteView: UICollectionViewDelegate {
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         guard scrollView === collectionView, scrollView.isTracking || scrollView.isDecelerating else { return }
-        updateSelectedSection()
+        FrameWork.measure("EmojiPaletteView.scrollViewDidScroll") { updateSelectedSection() }
+    }
+
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        guard scrollView === collectionView else { return }
+        // 慣性で動いている途中で触れると、前のスクロールは止まりの通知を受けずに終わるため、ここで記録する。
+        recordScroll()
+        scrollStart = (scrollView.contentOffset.y, mediaTime())
+        scrollHitches.start()
+    }
+
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        guard scrollView === collectionView, !decelerate else { return }
+        recordScroll()
+    }
+
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        guard scrollView === collectionView else { return }
+        recordScroll()
+    }
+
+    private func recordScroll() {
+        guard let start = scrollStart else { return }
+        scrollStart = nil
+        let (hitches, work) = scrollHitches.finish()
+        FrameWorkLog.record(work, screen: Self.scrollScreenName)
+        UserAction.scroll(ScrollRecord(
+            screen: Self.scrollScreenName,
+            startOffset: start.offset,
+            endOffset: collectionView.contentOffset.y,
+            viewportHeight: collectionView.bounds.inset(by: collectionView.adjustedContentInset).height,
+            duration: mediaTime() - start.time,
+            hitches: hitches
+        )).record()
+    }
+
+    /// スクロールの記録に書く画面の名前。
+    static let scrollScreenName = "emojiPalette"
+}
+
+/// 並べ直しにかかった時間を、スクロールの記録に渡す。
+private final class EmojiPaletteCollectionView: UICollectionView {
+    override func layoutSubviews() {
+        FrameWork.measure("EmojiPaletteCollectionView.layoutSubviews") { super.layoutSubviews() }
     }
 }
 
