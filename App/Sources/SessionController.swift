@@ -29,8 +29,8 @@ final class SessionController {
     private let favourites: SavedStatusesController
     /// 予約した投稿のタブ。
     private let scheduled: ScheduledStatusesController
-    /// タブを無効にしているときに、手前に重ねて開いた予約した投稿のタイムライン。閉じたあとも、次に開くまで持つ。
-    private var presentedScheduled: ScheduledStatusesController?
+    /// タブを無効にしているときに、選んでいるタブに積んだ予約した投稿のタイムライン。ナビゲーションから外れたものは、次に開くときに手放す。
+    private var pushedScheduled: [ScheduledStatusesController] = []
     /// リストとハッシュタグのタイムラインのタブ。並びに出たときに作る。
     private let serverFeeds: ServerFeedRegistry
     /// タブに置いたプロフィール。並びに出たときに作る。
@@ -631,7 +631,7 @@ final class SessionController {
         composer.model.onScheduleRewritten = { [weak self] id in self?.cancelRewrittenSchedule(id) }
         composer.model.onRedraftDeleted = { [weak statuses = session.statuses] id in statuses?.removeStatus(id) }
         session.statuses.onQuoteSourcesChange = { [weak self] changes, change in self?.applyQuoteSourceChanges(changes, affecting: change) }
-        composer.onShowScheduledStatuses = { [weak self] in self?.showScheduledStatuses() }
+        composer.onShowScheduledStatuses = { [weak self] in self?.open(.scheduled) }
         scheduled.onRewrite = { [weak self] status in self?.confirmRewriting(status) }
         installAccountButton(on: scheduled.viewController)
         installNotificationRequests()
@@ -3246,9 +3246,9 @@ final class SessionController {
 
     /// アカウントの画面で押した項目を開き、アカウントの画面（設定から開いていれば設定ごと）を閉じる。
     /// タブの画面に出す項目は、閉じ始めるのと同時にアニメーションなしで出し、閉じていく画面の下に行き先がもう出ているようにする。
-    /// 手前に重ねて出す項目は、閉じている途中には重ねられないので、閉じ終えてから出す。
+    /// ログアウトは、閉じ終えてから始める。
     private func openFromAccountScreen(_ item: AccountScreenItem) {
-        guard showsInTab(item) else {
+        guard item != .logOut else {
             closeScreensForDestination { [weak self] in self?.show(item) }
             return
         }
@@ -3259,15 +3259,6 @@ final class SessionController {
         setPushesWithoutAnimation(true)
         closeScreensForDestination { [weak self] in self?.setPushesWithoutAnimation(false) }
         show(item)
-    }
-
-    /// タブを切り替えるか、選んでいるタブに積んで出す項目か。
-    private func showsInTab(_ item: AccountScreenItem) -> Bool {
-        switch item {
-        case .profile, .bookmarks, .favourites, .followedTags, .list: true
-        case .scheduled: tabs.placement.location(of: .scheduled) != .disabled
-        case .logOut: false
-        }
     }
 
     private func setPushesWithoutAnimation(_ isOn: Bool) {
@@ -3597,35 +3588,27 @@ final class SessionController {
     private func showScheduledNotice(_ status: ScheduledStatus) {
         let title = "\(ScheduleDateText.shortTitle(for: status.scheduledAt, now: now(), calendar: .autoupdatingCurrent))に予約しました"
         let notice = Notice(id: "compose.scheduled", kind: .success, title: title, action: .disclosure(hint: "予約投稿を表示します。") { [weak self] in
-            self?.showScheduledStatuses()
+            self?.open(.scheduled)
         })
         notices.showTransient(notice, duration: AppDependencies.tuning.value(of: TuningCatalog.noticeFailureChipDuration))
     }
 
-    /// 予約投稿の画面を開く。タブに並べていればそのタブを開き、無効にしていれば、閉じるボタンを付けて手前に重ねる。
+    /// 予約投稿の画面を開く。タブに並べていればそのタブを開き、無効にしていれば、ブックマークなどと同じく選んでいるタブに積む。
     private func showScheduledStatuses() {
-        if tabs.placement.location(of: .scheduled) != .disabled {
-            tabs.show(.scheduled)
-            return
-        }
+        guard !showTabIfEnabled(.scheduled), let navigation = tabs.selectedNavigation else { return }
+        pushedScheduled.removeAll { $0.viewController.navigationController == nil }
+        // いちばん上に出ていれば、重ねて積まない。
+        guard !pushedScheduled.contains(where: { $0.viewController === navigation.topViewController }) else { return }
         let list = ScheduledStatusesController(client: client, tasks: tasks.child(), myAccount: { [weak self] in
             guard let self else { throw CancellationError() }
             return try await myAccount()
         })
         list.viewController.mediaTransfers = mediaTransfers
         list.viewController.notices = notices
-        list.onRewrite = { [weak self, weak list] status in
-            // 投稿欄は予約投稿の画面の下にあるので、書き直すときはその画面を閉じてから聞く。
-            list?.viewController.dismiss(animated: true) {
-                self?.confirmRewriting(status)
-            }
-        }
-        presentedScheduled = list
-        let navigation = UINavigationController(rootViewController: list.viewController)
-        list.viewController.navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .close, primaryAction: UIAction { [weak navigation] _ in
-            navigation?.dismiss(animated: true)
-        })
-        presentOnTop(navigation, animated: true)
+        list.onRewrite = { [weak self] status in self?.confirmRewriting(status) }
+        session.statuses.register(list.model)
+        pushedScheduled.append(list)
+        navigation.pushViewController(list.viewController, animated: true)
     }
 
     /// 書きかけの下書きがあれば捨ててよいかを聞いてから、予約した投稿の書き直しを始める。
@@ -3649,12 +3632,15 @@ final class SessionController {
                 guard let self, !(error is CancellationError) else { return }
                 logger.error("rewritten schedule cancel failed: \(SciaLog.describe(error), privacy: .public)")
                 let reason = ErrorPresentation(error).leading("書き直した投稿は送りましたが、元の予約が残っています。両方投稿されないよう、予約投稿の画面から取り消してください。")
-                let openList = UIAlertAction(title: "予約投稿を開く", style: .default) { [weak self] _ in self?.showScheduledStatuses() }
+                let openList = UIAlertAction(title: "予約投稿を開く", style: .default) { [weak self] _ in self?.open(.scheduled) }
                 presentOnTop(UIAlertController.failure(title: "元の予約を取り消せませんでした", reason: reason, actions: [openList], cancelTitle: "閉じる"), animated: true)
                 return
             }
             self?.logger.info("rewritten schedule cancel done")
             self?.scheduled.didCancel(id)
+            for list in self?.pushedScheduled ?? [] {
+                list.didCancel(id)
+            }
         }
         if task == nil {
             endBackgroundTime()
@@ -4403,7 +4389,7 @@ final class SessionController {
     }
 
     /// 決まったタブに開く行き先（`.tab`、`.userTab`、保留中の通知）なら、そのタブが並びにあって有効か。ほかの行き先はtrue。
-    /// 検索と予約投稿は、タブを無効にしていても選んでいるタブに積むか手前に重ねて開くので、true。
+    /// 検索と予約投稿は、タブを無効にしていても選んでいるタブに積んで開くので、true。
     private func canShowTab(of destination: AppDestination) -> Bool {
         let item: TabItem?
         switch destination {
@@ -4587,7 +4573,9 @@ final class SessionController {
             list.enterForeground()
         }
         scheduled.enterForeground()
-        presentedScheduled?.enterForeground()
+        for list in pushedScheduled {
+            list.enterForeground()
+        }
         announcements.enterForeground()
         threads.enterForeground()
         profileTabs.enterForeground()
