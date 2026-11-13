@@ -68,8 +68,7 @@ struct ComposePollEditorTests {
     }
 
     /// 設定の行の幅が足りなくなるにつれ、結果のボタンを先に「表示」に縮め、それでも足りなければ選び方のボタンも「1つ」に縮める。
-    /// 読み上げる値は、縮めても元の文言のまま。
-    @Test func settingsLabelsShortenAsWidthNarrows() throws {
+    @Test func settingsLabelsShortenAsWidthNarrows() {
         let editor = laidOutEditor(["a", "b", ""])
         var seen: [SettingsLabelLength] = []
         for width in stride(from: 600, through: 150, by: -5) {
@@ -80,17 +79,75 @@ struct ComposePollEditorTests {
             }
         }
         #expect(seen == [.full, .shortResults, .shortBoth])
-
-        let hidesTotals = try #require(buttons(in: editor).first { $0.accessibilityLabel == "結果" })
-        let multiple = try #require(buttons(in: editor).first { $0.accessibilityLabel == "選び方" })
-        #expect(hidesTotals.configuration?.title == "表示")
-        #expect(multiple.configuration?.title == "1つ")
-        #expect(hidesTotals.accessibilityValue == "結果を表示")
-        #expect(multiple.accessibilityValue == "1つ選ぶ")
     }
 
-    private func buttons(in view: UIView) -> [UIButton] {
-        (view as? UIButton).map { [$0] } ?? view.subviews.flatMap(buttons(in:))
+    /// 締め切りの文字が長くなって行に収まらなくなったら、幅が変わらなくても、値を替えるのと同時に文言を縮める。
+    @Test func settingsLabelsShortenWhenExpiryGrows() throws {
+        let editor = laidOutEditor(["a", "b", ""])
+        let width = try #require(stride(from: 600, through: 150, by: -1).first { width in
+            editor.frame.size.width = CGFloat(width)
+            editor.layoutIfNeeded()
+            return editor.labelLength != .full
+        })
+        editor.frame.size.width = CGFloat(width + 1)
+        editor.layoutIfNeeded()
+        #expect(editor.labelLength == .full)
+
+        var poll = PollDraft(options: ["a", "b", ""])
+        poll.expiresIn = 43_200
+        editor.apply(ComposePollEditor.Content(poll: poll, expiryChoices: PollDraft.expiryChoices))
+
+        #expect(editor.labelLength == .shortResults)
+    }
+
+    /// 増えた欄のマークは、浮かび上がらせる前に、今の選び方の形で置かれている。あとから置くと、マークが大きさ0から広がるところが動きに乗る。
+    @Test func addedRowHasIndicatorBeforeReveal() throws {
+        var poll = PollDraft(options: ["a", ""], multiple: true)
+        let editor = ComposePollEditor(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        editor.apply(ComposePollEditor.Content(poll: poll, expiryChoices: PollDraft.expiryChoices))
+        editor.layoutIfNeeded()
+
+        poll.options = ["a", "b", ""]
+        editor.apply(ComposePollEditor.Content(poll: poll, expiryChoices: PollDraft.expiryChoices), animatesRows: true)
+
+        let added = try #require(editor.fields.last?.superview?.superview)
+        let mark = try #require(marks(in: added).first)
+        #expect(mark.multiple)
+        #expect(mark.frame.width > 0)
+        #expect(mark.frame.height > 0)
+    }
+
+    /// 選び方を変えると、どの欄のマークも、丸と四角の間で形を変える。
+    @Test func marksFollowMultiple() {
+        var poll = PollDraft(options: ["a", "b", ""])
+        let editor = ComposePollEditor(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        editor.apply(ComposePollEditor.Content(poll: poll, expiryChoices: PollDraft.expiryChoices))
+        editor.layoutIfNeeded()
+        #expect(marks(in: editor).map(\.multiple) == [false, false, false])
+
+        poll.multiple = true
+        editor.apply(ComposePollEditor.Content(poll: poll, expiryChoices: PollDraft.expiryChoices))
+
+        #expect(marks(in: editor).map(\.multiple) == [true, true, true])
+    }
+
+    /// 開いている間は、設定の行を切り抜かない。締め切りのメニューが閉じて戻ってくるボタンは、行の外から入るため、切り抜くと欠けて見える。
+    @Test func settingsRowIsNotClippedWhileUnfolded() throws {
+        let editor = laidOutEditor(["a", "b", ""])
+        let row = try #require(settingsRow(in: editor))
+        var view: UIView? = row
+        while let current = view, current !== editor {
+            #expect(!current.clipsToBounds)
+            view = current.superview
+        }
+    }
+
+    private func marks(in view: UIView) -> [ComposePollOptionMark] {
+        (view as? ComposePollOptionMark).map { [$0] } ?? view.subviews.flatMap(marks(in:))
+    }
+
+    private func settingsRow(in view: UIView) -> ComposePollSettingsRow? {
+        (view as? ComposePollSettingsRow) ?? view.subviews.lazy.compactMap(settingsRow(in:)).first
     }
 
     /// 動かさないときは、これまでどおり、すぐ足して外す。

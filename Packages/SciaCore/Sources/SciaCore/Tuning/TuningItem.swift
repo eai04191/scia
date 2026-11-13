@@ -1643,6 +1643,15 @@ public enum TuningCatalog {
         defaultValue: 0.25
     )
 
+    /// 投票の設定（締め切り、選び方、結果を表示するか）を変えたときに、ボタンの中身を入れ替え、ボタンの幅と位置を変える時間。
+    public static let composePollSettingDuration = NumberTuning(
+        id: "compose.pollSettingDuration",
+        title: "投票の設定を変えたときにボタンを入れ替える時間（秒）",
+        range: 0...1.5,
+        step: 0.05,
+        defaultValue: 0.3
+    )
+
     /// 投票の欄を出して本文を書いているとき、本文に残す最低の行数。欄を全部出すと本文がこの高さより低くなるなら、選択肢の欄を1行に折りたたむ。
     public static let composePollFoldMinBodyLines = NumberTuning(
         id: "compose.pollFoldMinBodyLines",
@@ -2118,6 +2127,7 @@ public enum TuningCatalog {
             .number(composeExpandedMinLines),
             .number(composeTextGrowDuration),
             .number(composePollOptionDuration),
+            .number(composePollSettingDuration),
             .number(composePollFoldMinBodyLines),
             .number(composePollFoldDuration),
             .number(composeReplyLabelSwitchDuration),

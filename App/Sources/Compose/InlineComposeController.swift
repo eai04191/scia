@@ -1255,10 +1255,11 @@ final class InlineComposeController: NSObject {
         guard let poll = model.poll else { return }
         // 視差効果を減らす設定や、画面に出ていないときは、動かさずに次の並べ直しに任せる。
         let animates = animatesRows && !UIAccessibility.isReduceMotionEnabled && host?.view.window != nil
+        let showsMotion = !UIAccessibility.isReduceMotionEnabled && host?.view.window != nil
         let changed = pollEditor.apply(ComposePollEditor.Content(
             poll: poll,
             expiryChoices: PollDraft.expiryChoices(within: model.pollLimits)
-        ), animatesRows: animates)
+        ), animatesRows: animates, settingsDuration: showsMotion ? tuning.value(of: TuningCatalog.composePollSettingDuration) : 0)
         guard changed, animates, let host else { return }
         var leaving: [UIView] = []
         UIView.animateSmoothly(duration: tuning.value(of: TuningCatalog.composePollOptionDuration)) {
@@ -1356,14 +1357,17 @@ final class InlineComposeController: NSObject {
         guard folded != pollEditor.isFolded else { return }
         logger.info("compose: poll \(folded ? "folded" : "unfolded", privacy: .public)")
         guard animated, let host, host.view.window != nil, !UIAccessibility.isReduceMotionEnabled else {
-            pollEditor.setFolded(folded)
+            pollEditor.setFolded(folded)()
             return
         }
+        var finish = {}
         UIView.animateSmoothly(duration: tuning.value(of: TuningCatalog.composePollFoldDuration)) {
-            self.pollEditor.setFolded(folded)
+            finish = self.pollEditor.setFolded(folded)
             host.view.layoutIfNeeded()
             self.layoutCompletionListIfShown()
             host.view.layoutIfNeeded()
+        } completion: {
+            finish()
         }
     }
 
