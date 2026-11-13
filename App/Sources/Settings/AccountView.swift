@@ -5,7 +5,6 @@ import UIKit
 /// アカウントの画面から開くもの。
 enum AccountScreenItem: Hashable {
     case profile
-    case announcements
     case bookmarks
     case favourites
     case followedTags
@@ -26,6 +25,8 @@ struct AccountScreenContext {
     let showsLogOut: Bool
     /// アカウントの画面（設定から開いていれば設定ごと）を閉じてから開く。
     let open: @MainActor (AccountScreenItem) -> Void
+    /// 中に置く、お知らせの画面を作る。
+    let makeAnnouncements: @MainActor () -> UIViewController
     /// 「フィルター」の画面に渡すもの。
     let filters: (model: FiltersModel, now: () -> Date)
     /// 「通知のフィルタリング」の画面に渡すもの。
@@ -51,7 +52,19 @@ struct AccountView: View {
     var body: some View {
         Form {
             Section {
-                row("サーバーのお知らせ", value: unreadAnnouncementCount > 0 ? "未読\(unreadAnnouncementCount)件" : nil, opens: .announcements)
+                // タブの画面に開くものがないので、アカウントの画面を閉じずに、この中で進む。リンクを押したときだけ、閉じてから開く。
+                NavigationLink {
+                    AnnouncementsPage(make: context.makeAnnouncements)
+                        .ignoresSafeArea()
+                        .navigationTitle("サーバーのお知らせ")
+                        .navigationBarTitleDisplayMode(.inline)
+                } label: {
+                    if unreadAnnouncementCount > 0 {
+                        LabeledContent("サーバーのお知らせ", value: "未読\(unreadAnnouncementCount)件")
+                    } else {
+                        Text("サーバーのお知らせ")
+                    }
+                }
             } header: {
                 Text(context.server)
             }
@@ -95,6 +108,17 @@ struct AccountView: View {
     private func row(_ title: String, value: String? = nil, opens item: AccountScreenItem) -> some View {
         AccountScreenRow(title: title, value: value) { context.open(item) }
     }
+}
+
+/// UIKitで作ったお知らせの画面を、アカウントの画面の中の1画面として置く。
+private struct AnnouncementsPage: UIViewControllerRepresentable {
+    let make: @MainActor () -> UIViewController
+
+    func makeUIViewController(context: Context) -> UIViewController {
+        make()
+    }
+
+    func updateUIViewController(_ viewController: UIViewController, context: Context) {}
 }
 
 /// アカウントの画面を閉じてほかの画面を開く行。ほかの画面へ入る行に揃え、シェブロンを付ける。

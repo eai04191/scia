@@ -1,7 +1,7 @@
 import SciaCore
 import UIKit
 
-/// サーバーのお知らせのリスト。アカウントのメニューから開くシートの中身。決まりはdocs/announcements.mdにある。
+/// サーバーのお知らせのリスト。アカウントの画面の中の1画面として開くか、アカウントのメニューとURLから単独のシートで開く。決まりはdocs/announcements.mdにある。
 ///
 /// お知らせは多くても数件なので、編集履歴と同じく、スクロールビューに行を縦に積む。
 final class AnnouncementsViewController: UIViewController {
@@ -19,6 +19,10 @@ final class AnnouncementsViewController: UIViewController {
     var notices: NoticeCenter?
 
     private let model: AnnouncementsModel
+    /// アカウントの画面の中の1画面として置いている。単独のシートならfalse。閉じるボタンを置かず、離れたときの片づけと、チップの列を出す場所を自分で受け持つ。
+    private let isEmbedded: Bool
+    /// 中の1画面として出ていたウインドウ。離れるときに、チップの列を戻すのに使う。
+    private weak var shownWindow: UIWindow?
     private let completion: TextInputCompletion
     private let settings: AppSettings
     private let emojiImages: EmojiImageStore<UIImage>
@@ -45,6 +49,7 @@ final class AnnouncementsViewController: UIViewController {
     init(
         model: AnnouncementsModel,
         completion: TextInputCompletion,
+        isEmbedded: Bool = false,
         settings: AppSettings = AppDependencies.settings,
         emojiImages: EmojiImageStore<UIImage> = AppDependencies.emojiImages,
         tuning: TuningStore = AppDependencies.tuning,
@@ -52,6 +57,7 @@ final class AnnouncementsViewController: UIViewController {
     ) {
         self.model = model
         self.completion = completion
+        self.isEmbedded = isEmbedded
         self.settings = settings
         self.emojiImages = emojiImages
         self.tuning = tuning
@@ -69,9 +75,12 @@ final class AnnouncementsViewController: UIViewController {
         super.viewDidLoad()
         emojiImages.addListener(whileShownIn: view) { [weak self] _ in self?.render() }
         view.backgroundColor = .systemBackground
-        navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .close, primaryAction: UIAction { [weak self] _ in
-            self?.dismiss(animated: true)
-        })
+        // 中の1画面では、戻るボタンで離れる。
+        if !isEmbedded {
+            navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .close, primaryAction: UIAction { [weak self] _ in
+                self?.dismiss(animated: true)
+            })
+        }
         scrollView.alwaysBounceVertical = true
         scrollView.delegate = self
         scrollView.hidesTopEdgeEffectOnMac()
@@ -115,6 +124,11 @@ final class AnnouncementsViewController: UIViewController {
         isShown = true
         visibleIDs = []
         showVisibleEntries()
+        // 中の1画面では、チップの列を自分でアカウントの画面のシートの上へ出す。単独のシートでは`AnnouncementsNavigationController`が出す。
+        if isEmbedded {
+            shownWindow = view.window
+            NoticeOverlay.installed(in: view.window)?.bringToFront()
+        }
     }
 
     override func viewDidDisappear(_ animated: Bool) {
@@ -122,8 +136,12 @@ final class AnnouncementsViewController: UIViewController {
         isShown = false
         visibleIDs = []
         // シートを閉じたら、開いている間だけ残していた未読の点を消す。
-        guard isBeingDismissed || navigationController?.isBeingDismissed == true else { return }
+        // 中の1画面は、上に重ねるものが見えなくするシートではないので、見えなくなるのは戻ったときとアカウントの画面を閉じたときだけ。
+        guard isEmbedded || isBeingDismissed || navigationController?.isBeingDismissed == true else { return }
         model.disappear()
+        if isEmbedded {
+            NoticeOverlay.installed(in: shownWindow)?.returnBelowPresentations()
+        }
     }
 
     override func viewDidLayoutSubviews() {
@@ -481,5 +499,13 @@ final class AnnouncementsNavigationController: UINavigationController, NoticeScr
             }
             NoticeOverlay.installed(in: window)?.returnBelowPresentations()
         }
+    }
+}
+
+/// アカウントの画面の中の1画面として置いたお知らせは、チップの列を、その画面のナビゲーションバーのすぐ下に置く。
+extension AnnouncementsViewController: EmbeddedNoticeScreen {
+    func noticePlacement(below: CGFloat) -> NoticePlacement {
+        guard isEmbedded, let view = viewIfLoaded, view.window != nil else { return NoticePlacement(top: below) }
+        return NoticePlacement(top: view.convert(CGPoint(x: 0, y: view.safeAreaInsets.top + 8), to: nil).y)
     }
 }

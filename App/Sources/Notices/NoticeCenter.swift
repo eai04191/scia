@@ -44,6 +44,11 @@ protocol NoticeScreen: UIViewController {
     func noticePlacement(below: CGFloat) -> NoticePlacement
 }
 
+/// 重ねて出した画面（SwiftUIのシートなど）の中に置かれて、チップの列の置き場所を決める画面。
+/// 重ねて出した画面そのものが`NoticeScreen`でないとき、その中で見えているこの画面に置き場所を聞く。
+@MainActor
+protocol EmbeddedNoticeScreen: NoticeScreen {}
+
 /// アプリ全体のアプリ内通知。セッションごとに1つ持ち、ウインドウごとのチップの列（`NoticeOverlay`）に配る。
 ///
 /// 中身は「前の画面の様子を受け取ってチップの中身を返す関数」で受け取る。数秒で消えるものは出す時点で列ごとに一度だけ呼んで固定し、

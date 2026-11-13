@@ -23,6 +23,8 @@ final class SessionController {
     private let accountButtons = NSHashTable<UIBarButtonItem>.weakObjects()
     /// 開いているお知らせのシート。
     private weak var presentedAnnouncements: UIViewController?
+    /// アカウントの画面の中に置いた、お知らせの画面。
+    private weak var embeddedAnnouncements: UIViewController?
     private let bookmarks: SavedStatusesController
     private let favourites: SavedStatusesController
     /// 予約した投稿のタブ。
@@ -1684,37 +1686,58 @@ final class SessionController {
         controller.model.start(purpose: .action)
     }
 
-    /// サーバーのお知らせをシートで開く。リンクを押したら、シートを閉じてから、選んでいるタブの画面に開く。「操作の状況」と同じ。
+    /// サーバーのお知らせを、単独のシートで開く。アカウントのメニューとURLから開くときに使う。リンクを押したら、シートを閉じてから、選んでいるタブの画面に開く。「操作の状況」と同じ。
     func showAnnouncements(from presenter: UIViewController? = nil) {
-        // シートは1つのモデルを画面として受け持つので、開いているときに重ねて開かない。重ねると、閉じて戻ったシートに変化が届かなくなる。
-        if let presentedAnnouncements, presentedAnnouncements.presentingViewController != nil, !presentedAnnouncements.isBeingDismissed { return }
+        // お知らせの画面は1つのモデルを受け持つので、開いているときに重ねて開かない。重ねると、閉じて戻った画面に変化が届かなくなる。
+        guard !isShowingAnnouncements else { return }
+        weak var shown: UIViewController?
+        let controller = makeAnnouncements(isEmbedded: false) { open in
+            shown?.dismiss(animated: true, completion: open)
+        }
+        shown = controller
+        let navigation = AnnouncementsNavigationController(rootViewController: controller)
+        presentedAnnouncements = navigation
+        (presenter ?? rootViewController).presentOnFrontmost(navigation, animated: true)
+    }
+
+    /// お知らせの画面を、単独のシートかアカウントの画面の中で出している。
+    private var isShowingAnnouncements: Bool {
+        if let presentedAnnouncements, presentedAnnouncements.presentingViewController != nil, !presentedAnnouncements.isBeingDismissed { return true }
+        return embeddedAnnouncements?.viewIfLoaded?.window != nil
+    }
+
+    /// アカウントの画面の中に置く、お知らせの画面。リンクを押したら、アカウントの画面（設定から開いていれば設定ごと）を閉じてから、選んでいるタブの画面に開く。
+    private func makeEmbeddedAnnouncements() -> UIViewController {
+        let controller = makeAnnouncements(isEmbedded: true) { [weak self] open in
+            self?.closeScreensForDestination(then: open)
+        }
+        embeddedAnnouncements = controller
+        return controller
+    }
+
+    /// - Parameter close: リンクを開く前に、お知らせを出している画面を閉じる。閉じ終えたら、渡した処理を呼ぶ。
+    private func makeAnnouncements(isEmbedded: Bool, close: @escaping @MainActor (@escaping () -> Void) -> Void) -> AnnouncementsViewController {
         let completion = TextInputCompletion(
             completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
             recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
         )
-        let controller = AnnouncementsViewController(model: announcements, completion: completion)
+        let controller = AnnouncementsViewController(model: announcements, completion: completion, isEmbedded: isEmbedded)
         controller.notices = notices
         controller.userMenuActions = userMenuActions
         controller.hashtagMenuActions = hashtagMenuActions
-        controller.onOpenLink = { [weak self, weak controller] destination, announcement in
-            controller?.dismiss(animated: true) {
-                self?.open(destination, inAnnouncement: announcement)
-            }
+        controller.onOpenLink = { [weak self] destination, announcement in
+            close { self?.open(destination, inAnnouncement: announcement) }
         }
-        controller.onOpenURL = { [weak self, weak controller] url, browser in
-            controller?.dismiss(animated: true) {
-                self?.open(url, in: browser)
-            }
+        controller.onOpenURL = { [weak self] url, browser in
+            close { self?.open(url, in: browser) }
         }
-        controller.onOpenProfileURL = { [weak self, weak controller] url in
-            controller?.dismiss(animated: true) { [weak self] in
+        controller.onOpenProfileURL = { [weak self] url in
+            close { [weak self] in
                 guard let self, let source = tabs.selectedNavigation?.topViewController else { return }
                 openProfile(resolvingLink: url, from: source)
             }
         }
-        let navigation = AnnouncementsNavigationController(rootViewController: controller)
-        presentedAnnouncements = navigation
-        (presenter ?? rootViewController).presentOnFrontmost(navigation, animated: true)
+        return controller
     }
 
     /// お知らせの本文のリンクを開く。メンションはお知らせのメンションのリストにあるIDで、投稿へのリンクはお知らせがリンクした投稿のIDで開く。
@@ -3197,6 +3220,7 @@ final class SessionController {
             showsNotificationPolicy: { [notificationPolicy] in notificationPolicy.isSupported },
             showsLogOut: logOut != nil,
             open: { [weak self] in self?.openFromAccountScreen($0) },
+            makeAnnouncements: { [weak self] in self?.makeEmbeddedAnnouncements() ?? UIViewController() },
             filters: (filters, now),
             notificationPolicy: notificationPolicy,
             postingDefaults: (postingDefaults, postingDefaultLanguages),
@@ -3212,7 +3236,6 @@ final class SessionController {
             switch item {
             case .profile:
                 if let source = tabs.selectedNavigation?.topViewController { openMyProfile(from: source) }
-            case .announcements: showAnnouncements()
             case .bookmarks: showSavedStatuses(.bookmarks)
             case .favourites: showSavedStatuses(.favourites)
             case .followedTags: showFollowedTags()

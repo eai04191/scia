@@ -120,12 +120,21 @@ final class NoticeOverlay: UIView {
         var placement = (base as? any NoticeScreen)?.noticePlacement(below: 0) ?? NoticePlacement(top: Self.defaultTop(of: base))
         var current = root
         while let next = current.presentedViewController, !next.isBeingDismissed {
-            if let screen = next as? any NoticeScreen {
+            if let screen = (next as? any NoticeScreen) ?? Self.embeddedScreen(in: next) {
                 placement = screen.noticePlacement(below: placement.top)
             }
             current = next
         }
         return placement
+    }
+
+    /// `viewController`の中に置かれて見えている、列の位置を決める画面。なければnil。
+    private static func embeddedScreen(in viewController: UIViewController) -> (any EmbeddedNoticeScreen)? {
+        if let screen = viewController as? any EmbeddedNoticeScreen, screen.viewIfLoaded?.window != nil { return screen }
+        for child in viewController.children.reversed() {
+            if let screen = embeddedScreen(in: child) { return screen }
+        }
+        return nil
     }
 
     /// 列の位置を決めない画面では、上の安全領域（ナビゲーションバーを含む）のすぐ下に置く。

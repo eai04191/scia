@@ -37,6 +37,34 @@ struct AnnouncementsViewControllerTests {
         return view.subviews.flatMap(entries(in:))
     }
 
+    /// 単独のシートでは閉じるボタンを置く。アカウントの画面の中の1画面では戻るボタンで離れるので置かず、チップの列をナビゲーションバーのすぐ下に置かせる。
+    @Test func embeddedScreenHasNoCloseButtonAndPlacesNotices() async throws {
+        let operations = AnnouncementsModel.Operations(list: { AnnouncementList(announcements: []) }, dismiss: { _ in }, addReaction: { _, _ in }, removeReaction: { _, _ in })
+        func controller(isEmbedded: Bool) -> AnnouncementsViewController {
+            let model = AnnouncementsModel(operations: operations, streamingHub: nil, tasks: TaskScope())
+            let completion = TextInputCompletion(completion: ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)), recentEmojis: nil)
+            return AnnouncementsViewController(model: model, completion: completion, isEmbedded: isEmbedded)
+        }
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 600)
+
+        let standalone = controller(isEmbedded: false)
+        standalone.loadViewIfNeeded()
+        #expect(standalone.navigationItem.rightBarButtonItem != nil)
+
+        let embedded = controller(isEmbedded: true)
+        let navigation = UINavigationController(rootViewController: embedded)
+        window.rootViewController = navigation
+        window.isHidden = false
+        window.layoutIfNeeded()
+        #expect(embedded.navigationItem.rightBarButtonItem == nil)
+        #expect(embedded.noticePlacement(below: 0).top == navigation.navigationBar.frame.maxY + 8)
+        // 中の1画面でなければ、下の画面が決めた位置をそのまま使う。
+        #expect(standalone.noticePlacement(below: 40).top == 40)
+        window.isHidden = true
+    }
+
     /// 下へ読み進めている間に、上へお知らせが届いても、読んでいる行を画面の同じ位置に保つ。
     @Test func keepsReadingRowWhenAnnouncementArrivesAbove() async throws {
         let rows = (0..<6).map { Self.announcement("\($0)", at: TimeInterval($0)) }
