@@ -255,6 +255,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     let avatarImages: AvatarImageStore<UIImage>
     let network: NetworkConditionsMonitor
     let settings: AppSettings
+    /// 区切り線の引き方と、描き直しの要る設定の変化。予約投稿のタイムラインと同じ決まりを使う。
+    private let listStyle: PostListStyle
     private let crashGuard: PostCrashGuard
     /// スクロールが止まったときに見えている画像を、ビューアで開く元の画像で先読みする。セッションが入れる。nilなら先読みしない。
     var mediaPrefetcher: MediaPrefetcher?
@@ -335,6 +337,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         self.avatarImages = avatarImages
         self.network = network
         self.settings = settings
+        listStyle = PostListStyle(settings: settings, tuning: tuning, network: network)
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -499,7 +502,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         onAppearing?()
         onVisibilityChange?(true)
         applyPendingOpening()
-        applyHeldSettingsChange()
+        listStyle.applyHeldChange()
         applyHiddenReconfigures()
     }
 
@@ -588,56 +591,20 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         reconfigure(stale)
     }
 
-    /// チューニングの値、回線の状態、設定が変わったら、表示中の投稿を描き直す。
-    /// サムネイルは、低データモードを抜けたときなどに、表示中のものも読む画像を選び直す。
+    /// チューニングの値、回線の状態、設定が変わったら、表示中の投稿を描き直す。見えていない間と、設定の画面が手前にある間は、`listStyle`が溜める。
     private func observeTuning() {
-        withObservationTracking {
-            _ = settings.appearanceValues
-            _ = tuning.value(of: TuningCatalog.mediaThumbnailUpscaleTolerance)
-            _ = settings.expandsXPosts
-            _ = tuning.value(of: TuningCatalog.reactionGlowMixesInOKLab)
-            _ = tuning.value(of: TuningCatalog.reactionGlowIconRiseDelay)
-            _ = tuning.value(of: TuningCatalog.reactionGlowHDRExposure)
-            _ = tuning.value(of: TuningCatalog.reactionGlowLightIntensity)
-            _ = tuning.value(of: TuningCatalog.reactionGlowLightBloomIntensityRatio)
-            _ = tuning.value(of: TuningCatalog.reactionGlowDarkGlowHDRExposure)
-            _ = network.usePolicy(settings: settings)
-            _ = settings.ignoresUselessAltText
-            _ = settings.appearance
-            _ = settings.postActionBarLayout
-            // アニメーションを再生するかは、選ぶまでサーバーの値に従うため、読めた値が変わったときも描き直す。
-            _ = settings.serverAutoplaysAnimations
-            _ = settings.accentColor.underlinesLinks
-        } onChange: { [weak self] in
-            Task(.withoutRequests) { @MainActor in
-                guard let self else { return }
-                self.observeTuning()
-                // 見えていない間は描き直さず、見えたときに1回だけ描き直す。設定の+−を押すたびに、見えないタイムラインのすべての行を組み直すと、押してから数字が変わるまでが遅れるため。
-                guard !self.holdsSettingsChanges, self.view.window != nil else {
-                    self.hasHeldSettingsChange = true
-                    return
-                }
-                self.applySettingsChange()
-            }
-        }
+        listStyle.isShown = { [weak self] in self?.viewIfLoaded?.window != nil }
+        listStyle.onRedrawNeeded = { [weak self] in self?.applySettingsChange() }
+        listStyle.observeRedrawNeeds()
     }
 
-    /// 設定の画面が手前にある間は、設定やチューニングが変わっても描き直さずに溜める。画面を閉じて外したときに、溜めた変更を1回で描き直す。
-    /// 設定の画面のシートはタイムラインをほぼ覆うので、上の端に見えているタイムラインは、閉じるまで前の見た目のまま残る。
-    var holdsSettingsChanges = false {
-        didSet {
-            guard !holdsSettingsChanges, oldValue else { return }
-            applyHeldSettingsChange()
-        }
+    /// 設定の画面が手前にある間は、設定やチューニングが変わっても描き直さずに溜める。
+    var holdsSettingsChanges: Bool {
+        get { listStyle.holdsChanges }
+        set { listStyle.holdsChanges = newValue }
     }
     /// 見えていない間か、`holdsSettingsChanges`の間に、設定やチューニングが変わった。
-    private(set) var hasHeldSettingsChange = false
-
-    private func applyHeldSettingsChange() {
-        guard hasHeldSettingsChange, !holdsSettingsChanges, viewIfLoaded?.window != nil else { return }
-        hasHeldSettingsChange = false
-        applySettingsChange()
-    }
+    var hasHeldSettingsChange: Bool { listStyle.hasHeldChange }
 
     private func applySettingsChange() {
         if isAppearancePreview {
@@ -1917,29 +1884,18 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         configuration.headerTopPadding = 0
         // 線で下の行とつながっている行も、区切り線を出さない。つながった行を1つの会話として見せるため。
         configuration.itemSeparatorHandler = { [weak self] indexPath, separator in
-            var separator = separator
             guard let self, let id = self.dataSource.itemIdentifier(for: indexPath) else { return separator }
+            // 線は本文の左端から引く。アイコンの下を空けるときは、アイコンの列に線を入れない。決まりはdocs/post-header-layout.mdにある。
+            var separator = self.listStyle.separator(
+                separator,
+                isFirst: indexPath.item == 0,
+                isLast: self.dataSource.itemIdentifier(for: IndexPath(item: indexPath.item + 1, section: indexPath.section)) == nil,
+                leading: self.entries[id].map { self.separatorLeadingInset(for: $0) },
+                joinsNext: self.replyConnections[id]?.below == true
+            )
             guard self.settings.appearance.showsSeparators else {
-                separator.topSeparatorVisibility = .hidden
-                separator.bottomSeparatorVisibility = .hidden
                 self.drawSeparatorUnderReactionGlow(&separator, id: id, at: indexPath)
                 return separator
-            }
-            // 区切り線は行と行のあいだにだけ引き、1件目の上と最後の行の下には引かない。決まりはdocs/post-header-layout.mdにある。
-            if indexPath.item == 0 {
-                separator.topSeparatorVisibility = .hidden
-            }
-            if self.dataSource.itemIdentifier(for: IndexPath(item: indexPath.item + 1, section: indexPath.section)) == nil {
-                separator.bottomSeparatorVisibility = .hidden
-            }
-            if self.replyConnections[id]?.below == true {
-                separator.bottomSeparatorVisibility = .hidden
-            }
-            // 線は本文の左端から引く。アイコンの下を空けるときは、アイコンの列に線を入れない。決まりはdocs/post-header-layout.mdにある。
-            if let entry = self.entries[id] {
-                let insets = NSDirectionalEdgeInsets(top: 0, leading: self.separatorLeadingInset(for: entry), bottom: 0, trailing: 0)
-                separator.topSeparatorInsets = insets
-                separator.bottomSeparatorInsets = insets
             }
             // 検索の結果の見出しは、連絡先アプリの見出しと同じく、上に線を引かず、下に左右の余白を空けた線を引く。
             // 見出しの上は空きで区切るため、直前の行の下の線も消す。
@@ -2045,14 +2001,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// 区切り線を引き始める、行の左端からの長さ。行の本文の左端にする。
     func separatorLeadingInset(for entry: TimelineEntry) -> CGFloat {
-        let margin = settings.rowMargins.leading
-        let textColumn = margin + settings.value(of: AppearanceCatalog.avatarSize) + settings.value(of: AppearanceCatalog.avatarSpacing)
+        let textColumn = settings.textColumnLeading
         switch entry {
         case .status, .pinned:
-            return settings.appearance.wrapsBelowAvatar ? margin : textColumn
+            return settings.postSeparatorLeading
         case .notification(let notification):
             // メンションなどは投稿の行として描くので、投稿と同じ。ほかの通知の行は、アイコンの列の右に文字を置く。
-            return notification.layout == .post && notification.status != nil && settings.appearance.wrapsBelowAvatar ? margin : textColumn
+            return notification.layout == .post && notification.status != nil ? settings.postSeparatorLeading : textColumn
         case .account, .notificationRequest:
             return textColumn
         case .search:
