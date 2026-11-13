@@ -63,7 +63,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
             collectionView.collectionViewLayout.invalidateLayout()
             // 読む画像の高さとUnicodeの絵文字の文字の大きさは、組み立てたときの枠で決めるので、新しい枠で組み立て直す。
             collectionView.layoutIfNeeded()
-            reconfigureCells(matching: nil)
+            reconfigureAllCells()
         }
     }
 
@@ -87,7 +87,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     var emojiStyle: EmojiStyle = .system {
         didSet {
             guard emojiStyle != oldValue else { return }
-            reconfigureCells(matching: nil)
+            reconfigureAllCells()
             rebuildSectionButtons()
         }
     }
@@ -142,7 +142,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         super.init(frame: .zero)
         configureViews()
         emojiImages.addListener(owner: self) { [weak self] urls in
-            self?.reconfigureCells(matching: urls)
+            self?.reconfigureVisibleCells(showing: urls)
         }
     }
 
@@ -431,9 +431,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
                 return cell
             }
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: EmojiPaletteCell.reuseIdentifier, for: indexPath)
-            if let self, let cell = cell as? EmojiPaletteCell, let emoji = emoji(at: indexPath) {
-                cell.configure(emoji, store: emojiImages, emojiStyle: emojiStyle)
-            }
+            self?.configureCell(at: indexPath, cell)
             return cell
         }
         dataSource.supplementaryViewProvider = { [weak self] collectionView, kind, indexPath in
@@ -486,25 +484,28 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         }
     }
 
-    /// 届いた画像の絵文字だけを描き直す。nilならすべて描き直す。
-    /// 見えているセルだけでなく、スクロールで画面に入る前に組み立てたセルも描き直すため、差分で描き直させる。
-    /// 見えているセルだけを描き直すと、組み立てたあとに画像が届いたセルが、空のまま画面に入っていた。
-    private func reconfigureCells(matching urls: Set<URL>?) {
+    /// すべての絵文字を描き直す。枠の大きさやUnicodeの絵文字の絵のように、組み立てたセルすべてに関わる設定を変えたときに使う。
+    private func reconfigureAllCells() {
         var snapshot = dataSource.snapshot()
-        let items = sections.flatMap { section in
-            section.emojis.compactMap { emoji -> Item? in
-                if let urls {
-                    // 画像が届いて描き直すのは、カスタム絵文字だけ。
-                    guard case .custom(let custom) = emoji, urls.contains(custom.staticUrl) || urls.contains(custom.url) else { return nil }
-                }
-                return Item(section: section.kind, key: emoji.recentKey)
-            }
-        }
-        if !items.isEmpty {
-            snapshot.reconfigureItems(items)
-            dataSource.apply(snapshot, animatingDifferences: false)
+        snapshot.reconfigureItems(snapshot.itemIdentifiers)
+        dataSource.apply(snapshot, animatingDifferences: false)
+        updateSectionIcons(matching: nil)
+    }
+
+    /// 届いた画像の絵文字のうち、見えているセルだけを描き直す。
+    /// 画面に入る前に組み立てたセルは、画面に入るときに描き直す（`willDisplay`）。組み立てたあとに画像が届いたセルを、空のまま画面に入れないため。
+    /// 差分（`reconfigureItems`）では描き直さない。差分の計算は絵文字の数（数千個のサーバーがある）に比例し、スクロール中は画像が1秒に数十回届くため。
+    private func reconfigureVisibleCells(showing urls: Set<URL>) {
+        for indexPath in collectionView.indexPathsForVisibleItems {
+            guard case .custom(let custom)? = emoji(at: indexPath), urls.contains(custom.staticUrl) || urls.contains(custom.url) else { continue }
+            configureCell(at: indexPath, collectionView.cellForItem(at: indexPath))
         }
         updateSectionIcons(matching: urls)
+    }
+
+    private func configureCell(at indexPath: IndexPath, _ cell: UICollectionViewCell?) {
+        guard let cell = cell as? EmojiPaletteCell, let emoji = emoji(at: indexPath) else { return }
+        cell.configure(emoji, store: emojiImages, emojiStyle: emojiStyle)
     }
 
     // MARK: - まとまりのボタン
@@ -635,6 +636,10 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
 }
 
 extension EmojiPaletteView: UICollectionViewDelegate {
+    func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+        configureCell(at: indexPath, cell)
+    }
+
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         collectionView.deselectItem(at: indexPath, animated: false)
         guard let emoji = emoji(at: indexPath) else { return }
