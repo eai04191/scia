@@ -52,7 +52,7 @@ enum TimelineCatalog {
 
     /// 投稿の代わりに出す行。
     @MainActor
-    static func rowStates() -> [CatalogState] {
+    static func unreadableStates() -> [CatalogState] {
         let home = TimelineViewController(texts: .home, refresh: {})
         let notifications = TimelineViewController(texts: .notifications, refresh: {})
         func row(_ title: String, _ configuration: UIListContentConfiguration) -> CatalogState {
@@ -63,6 +63,17 @@ enum TimelineCatalog {
             row("読めない投稿（ブラウザで開ける）", home.unreadableContentConfiguration(for: UnreadableItem(id: "1", url: URL(string: "https://example.com/@user/1")), base: base)),
             row("読めない通知（開ける先がない）", notifications.unreadableContentConfiguration(for: UnreadableItem(id: "2", url: nil), base: base)),
             row("表示中にクラッシュしたため隠した投稿", home.unreadableContentConfiguration(for: UnreadableItem(id: "3", url: nil, isCrashQuarantined: true), base: base)),
+        ]
+    }
+
+    @MainActor
+    static func gapStates() -> [CatalogState] {
+        let home = TimelineViewController(texts: .home, refresh: {})
+        func row(_ title: String, _ configuration: UIListContentConfiguration) -> CatalogState {
+            CatalogState(title: title) { CatalogFrame.bordered(UIListContentView(configuration: configuration)) }
+        }
+        let base = UIListContentConfiguration.cell()
+        return [
             row("読み込んでいない投稿がある", home.gapContentConfiguration(isLoading: false, base: base)),
             row("読み込んでいない投稿を読み込み中", home.gapContentConfiguration(isLoading: true, base: base)),
             row("読み込んでいない投稿を読み込めなかった（サーバーの失敗）", home.gapContentConfiguration(

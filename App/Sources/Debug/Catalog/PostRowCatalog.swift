@@ -14,22 +14,29 @@ enum PostRowCatalog {
         avatar: Fixtures.imageURL(width: 200, height: 200, color: .systemPink)
     )
 
+    /// タイムラインの投稿の状態を、ホームのタイムラインの組み立てを通して作る。
     @MainActor
-    static func postStates() -> [CatalogState] {
-        let home = TimelineViewController(texts: .home, refresh: {})
-        home.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
-        // カタログのアカウントを自分として組むタイムライン。自分の投稿は、フィルターに一致しても折りたたまずに注記を出す。
-        let mine = TimelineViewController(texts: .home, refresh: {})
-        mine.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: author.id))
-        mine.myAccountID = author.id
+    private struct PostStates {
+        private let home: TimelineViewController
+        /// カタログのアカウントを自分として組むタイムライン。自分の投稿は、フィルターに一致しても折りたたまずに注記を出す。
+        private let mine: TimelineViewController
+
+        init() {
+            home = TimelineViewController(texts: .home, refresh: {})
+            home.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
+            mine = TimelineViewController(texts: .home, refresh: {})
+            mine.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: author.id))
+            mine.myAccountID = author.id
+        }
+
         /// - Parameters:
         ///   - expandsSpoiler: 注意書きを開く。フィルターの警告で折りたたんでいれば、警告を開く。
         ///   - isMine: カタログのアカウントを自分として組む。
         ///   - connection: 隣の行と線でつながっている形にする。
         ///   - expandsBody: 切った本文を「続きを読む」で広げる。
-        func post(_ title: String, _ status: Status, isPinned: Bool = false, expandsSpoiler: Bool = false, isMine: Bool = false, connection: ReplyConnection = ReplyConnection(), expandsBody: Bool = false) -> CatalogState {
-            CatalogState(title: title) {
-                let timeline = isMine ? mine : home
+        private func post(_ title: String, _ status: Status, isPinned: Bool = false, expandsSpoiler: Bool = false, isMine: Bool = false, connection: ReplyConnection = ReplyConnection(), expandsBody: Bool = false) -> CatalogState {
+            let timeline = isMine ? mine : home
+            return CatalogState(title: title) {
                 if expandsSpoiler { timeline.toggleSpoiler(of: status) }
                 if expandsBody { timeline.longBodyExpansion.expand(.status(status.displayed.id)) }
                 return CatalogFrame.post {
@@ -39,8 +46,10 @@ enum PostRowCatalog {
                 }
             }
         }
-        func translation(_ title: String, _ status: Status, isTranslating: Bool) -> CatalogState {
-            CatalogState(title: title) {
+
+        private func translation(_ title: String, _ status: Status, isTranslating: Bool) -> CatalogState {
+            let home = home
+            return CatalogState(title: title) {
                 CatalogFrame.post {
                     var configuration = home.contentConfiguration(for: status, isPinned: false, base: .cell())
                     configuration.isTranslated = !isTranslating
@@ -50,121 +59,148 @@ enum PostRowCatalog {
                 }
             }
         }
-        let longHandleAccount = Fixtures.account(displayName: "長いハンドルの人", acct: "a-very-long-account-name-for-replies@subdomain.example.com")
-        let longSpoiler = String(repeating: "注意書きが長く、何行にもわたるときの折り返しを確かめる。", count: 4)
-        /// `count`個の段落を並べた本文。1段落は1行に収まる。既定の「投稿の見た目」では、32行を超えたら15行に切る。
-        func lines(_ count: Int, last: String = "") -> String {
-            (1...count).map { "<p>\($0)行目\($0 == count ? last : "")</p>" }.joined()
+
+        /// 本文の長さ、切り方、訳文、行より広いカスタム絵文字。
+        func body() -> [CatalogState] {
+            /// `count`個の段落を並べた本文。1段落は1行に収まる。既定の「投稿の見た目」では、32行を超えたら15行に切る。
+            func lines(_ count: Int, last: String = "") -> String {
+                (1...count).map { "<p>\($0)行目\($0 == count ? last : "")</p>" }.joined()
+            }
+            let wrappedLong = "<p>" + String(repeating: "長い本文を、段落を分けずに書いたときの切れ方を確かめるための文。", count: 40) + "</p>"
+            // 行より広いカスタム絵文字。縦横比を保って行の幅まで縮め、行の高さと本文の上下のすき間も縮めた大きさで決める。
+            // 置く幅は文字の高さ×縦横比なので、iPadの広い行でも文字の大きさのまま行より広くなるよう、縦横比を80にする。
+            let wideEmoji = Fixtures.imageURL(width: 4_000, height: 50, color: .systemPink, label: "横長の絵文字").map { [CustomEmoji(shortcode: "wide", url: $0, staticUrl: $0)] } ?? []
+            return [
+                post("短い本文", status(content: "<p>短い本文。</p>")),
+                post("本文が短く、アイコンの方が下まで届く", status(content: "<p>あ</p>")),
+                post("長い本文", status(content: "<p>" + String(repeating: "長い本文が何行にもわたるときの折り返しと、行の高さを確かめるための文。", count: 5) + "</p>")),
+                post("本文がちょうど切り始める行数（切らない）", status(content: lines(32))),
+                post("本文が切り始める行数を超える（続きを読む）", status(content: lines(40))),
+                post("切った本文の最後の行が長い（薄くしてつなぐ）", status(content: wrappedLong)),
+                post("切った本文の最後の行に絵文字", status(content: (1...14).map { "<p>\($0)行目</p>" }.joined() + "<p>" + String(repeating: "🎉", count: 30) + "</p>" + lines(20))),
+                post("切った本文と画像", status(content: lines(40), media: [
+                    Fixtures.attachment("a", width: 1_600, height: 900, color: .systemTeal),
+                ])),
+                post("切った本文をブーストした投稿", status(content: lines(40), rebloggedBy: booster)),
+                post("切った本文を広げた", status(content: lines(40)), expandsBody: true),
+                post("注意書きを開いた長い本文（切らない）", status(content: lines(40), spoilerText: "ネタバレ"), expandsSpoiler: true),
+                translation("訳文の投稿（本文の先頭に翻訳のマーク）", status(content: "<p>訳文の本文。</p>"), isTranslating: false),
+                translation("訳文を待っている投稿（マークがパルス）", status(content: "<p>原文の本文。</p>"), isTranslating: true),
+                translation("訳文の投稿で、本文がメンションから始まる", status(content: #"<p><a href="https://example.com/@a" class="u-url mention">@a</a> 訳文の本文。</p>"#), isTranslating: false),
+                translation("訳文の投稿で、本文が折り返す", status(content: "<p>" + String(repeating: "訳文の本文が折り返す。", count: 8) + "</p>"), isTranslating: false),
+                post("行より広いカスタム絵文字だけの本文（縮めて大きく描く）", status(content: "<p>:wide:</p>", emojis: wideEmoji)),
+                post("文の途中の、行より広いカスタム絵文字", status(content: "<p>文の途中に :wide: がある本文。</p>", emojis: wideEmoji)),
+                post("引用の段落の、行より広いカスタム絵文字（字下げの内側に縮める）", status(content: "<blockquote><p>引用の :wide:</p></blockquote><p>引用のあとの文。</p>", emojis: wideEmoji)),
+            ]
         }
-        let wrappedLong = "<p>" + String(repeating: "長い本文を、段落を分けずに書いたときの切れ方を確かめるための文。", count: 40) + "</p>"
-        // 行より広いカスタム絵文字。縦横比を保って行の幅まで縮め、行の高さと本文の上下のすき間も縮めた大きさで決める。
-        // 置く幅は文字の高さ×縦横比なので、iPadの広い行でも文字の大きさのまま行より広くなるよう、縦横比を80にする。
-        let wideEmoji = Fixtures.imageURL(width: 4_000, height: 50, color: .systemPink, label: "横長の絵文字").map { [CustomEmoji(shortcode: "wide", url: $0, staticUrl: $0)] } ?? []
-        return [
-            post("短い本文", status(content: "<p>短い本文。</p>")),
-            post("本文が短く、アイコンの方が下まで届く", status(content: "<p>あ</p>")),
-            post("長い本文", status(content: "<p>" + String(repeating: "長い本文が何行にもわたるときの折り返しと、行の高さを確かめるための文。", count: 5) + "</p>")),
-            post("本文がちょうど切り始める行数（切らない）", status(content: lines(32))),
-            post("本文が切り始める行数を超える（続きを読む）", status(content: lines(40))),
-            post("切った本文の最後の行が長い（薄くしてつなぐ）", status(content: wrappedLong)),
-            post("切った本文の最後の行に絵文字", status(content: (1...14).map { "<p>\($0)行目</p>" }.joined() + "<p>" + String(repeating: "🎉", count: 30) + "</p>" + lines(20))),
-            post("切った本文と画像", status(content: lines(40), media: [
-                Fixtures.attachment("a", width: 1_600, height: 900, color: .systemTeal),
-            ])),
-            post("切った本文をブーストした投稿", status(content: lines(40), rebloggedBy: booster)),
-            post("切った本文を広げた", status(content: lines(40)), expandsBody: true),
-            post("注意書きを開いた長い本文（切らない）", status(content: lines(40), spoilerText: "ネタバレ"), expandsSpoiler: true),
-            translation("訳文の投稿（本文の先頭に翻訳のマーク）", status(content: "<p>訳文の本文。</p>"), isTranslating: false),
-            translation("訳文を待っている投稿（マークがパルス）", status(content: "<p>原文の本文。</p>"), isTranslating: true),
-            translation("訳文の投稿で、本文がメンションから始まる", status(content: #"<p><a href="https://example.com/@a" class="u-url mention">@a</a> 訳文の本文。</p>"#), isTranslating: false),
-            translation("訳文の投稿で、本文が折り返す", status(content: "<p>" + String(repeating: "訳文の本文が折り返す。", count: 8) + "</p>"), isTranslating: false),
-            post("ブーストされた投稿", status(content: "<p>ブーストされた投稿。</p>", rebloggedBy: booster)),
-            post("固定された投稿", status(content: "<p>プロフィールの上に固定された投稿。</p>"), isPinned: true),
-            post("ほかの人への返信", status(content: "<p>返信の本文。</p>", account: booster, replyingTo: author)),
-            post("ほかの人への返信（ハンドルが長い）", status(content: "<p>返信の本文。</p>", replyingTo: longHandleAccount)),
-            post("投稿した人が続けて書いた投稿", status(content: "<p>続けて書いた本文。</p>", replyingTo: author)),
-            post("自分への返信", status(content: "<p>自分への返信の本文。</p>", account: booster, replyingTo: author), isMine: true),
-            post("返信先のハンドルが分からない返信（メンションを消した）", status(content: "<p>メンションのない返信。</p>", account: booster, replyingTo: author, mentionsReplyTarget: false)),
-            post("返信をブーストした投稿（ブーストの行を出し、ラベルは出さない）", status(content: "<p>ブーストされた返信。</p>", rebloggedBy: booster, replyingTo: author)),
-            post("上と下の行と線でつながった返信", status(content: "<p>線でつながった返信。</p>", replyingTo: author), connection: ReplyConnection(above: true, below: true)),
-            post("下の行とだけ線でつながった、本文の長い返信", status(content: "<p>" + String(repeating: "本文が長く、線がアイコンの下から行の下端まで伸びることを確かめる文。", count: 3) + "</p>", account: booster, replyingTo: author), connection: ReplyConnection(below: true)),
-            post("お気に入り済み", status(content: "<p>お気に入りした投稿。</p>", favourited: true)),
-            post("ブースト済み", status(content: "<p>ブーストした投稿。</p>", reblogged: true)),
-            post("お気に入りとブースト済み（真ん中で色が変わる）", status(content: "<p>お気に入りもブーストもした投稿。</p>", favourited: true, reblogged: true)),
-            post("お気に入りとブースト済みで、本文が短い", status(content: "<p>あ</p>", favourited: true, reblogged: true)),
-            post("お気に入りとブースト済みで、画像が下の端にある", status(content: "<p>画像の後ろに光が隠れる投稿。</p>", media: [
-                Fixtures.attachment("a", width: 1_600, height: 900, color: .systemTeal),
-            ], favourited: true, reblogged: true)),
-            post("ほかの人がブーストした投稿に、お気に入り済み", status(content: "<p>ブーストで流れてきた投稿。</p>", favourited: true, rebloggedBy: booster)),
-            post("注意書き（閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ")),
-            post("注意書き（開いた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ"), expandsSpoiler: true),
-            post("注意書きが長い（閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: longSpoiler)),
-            post("注意書きと閲覧注意の画像（閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", media: [
-                Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
-            ], sensitive: true)),
-            post("注意書きと閲覧注意の画像（開いた、画像はぼかしたまま）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", media: [
-                Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
-            ], sensitive: true), expandsSpoiler: true),
-            post("注意書きと画像だけで本文がない（開いた）", status(content: "", spoilerText: "ネタバレ", media: [
-                Fixtures.attachment("a", width: 1_600, height: 900, color: .systemTeal),
-            ], sensitive: true), expandsSpoiler: true),
-            post("ブーストされた注意書き（閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", rebloggedBy: booster)),
-            post("フィルターの警告", status(content: "<p>警告で折りたたんだ本文。</p>", filtered: [filter("ネタバレ", .warn)])),
-            post("フィルターの警告（名前が長い、2つに一致した）", status(content: "<p>警告で折りたたんだ本文。</p>", filtered: [filter(longFilterTitle, .warn), filter("ネタバレ", .warn)])),
-            post("フィルターの警告と画像とリンクカード（どれも出さない）", status(
-                content: #"<p>警告で折りたたんだ本文。<a href="https://news.example/articles/1">news.example/articles/1</a></p>"#,
-                media: [Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange)],
-                filtered: [filter("ネタバレ", .warn)]
-            )),
-            post("フィルターの警告と注意書き（閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", filtered: [filter("ネタバレ", .warn)])),
-            post("フィルターの警告と注意書き（警告を開いた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", filtered: [filter("ネタバレ", .warn)]), expandsSpoiler: true),
-            post("ブーストされたフィルターの警告", status(content: "<p>警告で折りたたんだ本文。</p>", filtered: [filter("ネタバレ", .warn)], rebloggedBy: booster)),
-            post("フィルターで画像をぼかす", status(content: "<p>フィルターで画像をぼかした投稿。</p>", media: [
-                Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
-            ], filtered: [filter("ネタバレ", .blur)])),
-            post("フィルターで画像をぼかす（閲覧注意も付いた、名前が長い）", status(content: "<p>フィルターで画像をぼかした投稿。</p>", media: [
-                Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
-            ], sensitive: true, filtered: [filter(longFilterTitle, .blur)])),
-            post("自分の投稿がフィルターに一致した（折りたたまずに注記を出す）", status(content: "<p>フィルターした話題に自分で触れた投稿。</p>", filtered: [filter("ネタバレ", .hide)]), isMine: true),
-            post("自分の投稿が複数のフィルターに一致した（名前が長い、画像つき）", status(content: "<p>フィルターした話題に自分で触れた投稿。</p>", media: [
-                Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
-            ], filtered: [filter(longFilterTitle, .warn), filter("画像", .blur)]), isMine: true),
-            post("自分の投稿がフィルターに一致した（注意書き、閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", filtered: [filter("ネタバレ", .warn)]), isMine: true),
-            post("フィルターの警告とぼかし（警告を開いた）", status(content: "<p>警告を開くと、画像はぼかしたまま出る。</p>", media: [
-                Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
-            ], filtered: [filter("ネタバレ", .warn), filter("画像", .blur)]), expandsSpoiler: true),
-            post("画像2枚", status(content: "<p>画像を2枚添付した投稿。</p>", media: [
-                Fixtures.attachment("a", width: 1_200, height: 900, color: .systemBlue),
-                Fixtures.attachment("b", width: 1_200, height: 900, color: .systemGreen, description: "緑の地に白い格子"),
-            ])),
-            post("閲覧注意の画像", status(content: "<p>閲覧注意の画像を添付した投稿。</p>", media: [
-                Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
-            ], sensitive: true)),
-            post("名前が長い（末尾をぼかす）", status(
-                content: "<p>名前が1行に収まらない投稿。</p>",
-                account: Fixtures.account(displayName: String(repeating: "とても長い名前", count: 4), acct: "a-very-long-account-name@subdomain.example.com")
-            )),
-            post("編集された投稿", status(content: "<p>投稿したあとに編集した投稿。</p>", editedAt: .now.addingTimeInterval(-60))),
-            post("編集された投稿で名前が長い", status(
-                content: "<p>名前が1行に収まらず、編集済みのアイコンも付く投稿。</p>",
-                account: Fixtures.account(displayName: String(repeating: "とても長い名前", count: 4), acct: "a-very-long-account-name@subdomain.example.com"),
-                editedAt: .now.addingTimeInterval(-60)
-            )),
-            post("ひかえめな公開", status(content: "<p>ひかえめな公開の投稿。</p>", visibility: .unlisted)),
-            post("フォロワーのみ", status(content: "<p>フォロワーのみの投稿。</p>", visibility: .private)),
-            post("メンションした相手のみ", status(content: "<p>メンションした相手のみの投稿。</p>", visibility: .direct)),
-            post("フォロワーのみで編集され、名前が長い", status(
-                content: "<p>名前が1行に収まらず、公開範囲の記号と編集済みのアイコンも付く投稿。</p>",
-                account: Fixtures.account(displayName: String(repeating: "とても長い名前", count: 4), acct: "a-very-long-account-name@subdomain.example.com"),
-                editedAt: .now.addingTimeInterval(-60),
-                visibility: .private
-            )),
-            post("アイコンがない", status(content: "<p>アイコンのURLがないアカウントの投稿。</p>", account: Fixtures.account(acct: "noavatar@example.com", avatar: nil))),
-            post("行より広いカスタム絵文字だけの本文（縮めて大きく描く）", status(content: "<p>:wide:</p>", emojis: wideEmoji)),
-            post("文の途中の、行より広いカスタム絵文字", status(content: "<p>文の途中に :wide: がある本文。</p>", emojis: wideEmoji)),
-            post("引用の段落の、行より広いカスタム絵文字（字下げの内側に縮める）", status(content: "<blockquote><p>引用の :wide:</p></blockquote><p>引用のあとの文。</p>", emojis: wideEmoji)),
-        ]
+
+        /// ブースト、固定、返信のラベルと線、名前の行に並ぶ編集済みと公開範囲。
+        func labels() -> [CatalogState] {
+            let longHandleAccount = Fixtures.account(displayName: "長いハンドルの人", acct: "a-very-long-account-name-for-replies@subdomain.example.com")
+            return [
+                post("ブーストされた投稿", status(content: "<p>ブーストされた投稿。</p>", rebloggedBy: booster)),
+                post("固定された投稿", status(content: "<p>プロフィールの上に固定された投稿。</p>"), isPinned: true),
+                post("ほかの人への返信", status(content: "<p>返信の本文。</p>", account: booster, replyingTo: author)),
+                post("ほかの人への返信（ハンドルが長い）", status(content: "<p>返信の本文。</p>", replyingTo: longHandleAccount)),
+                post("投稿した人が続けて書いた投稿", status(content: "<p>続けて書いた本文。</p>", replyingTo: author)),
+                post("自分への返信", status(content: "<p>自分への返信の本文。</p>", account: booster, replyingTo: author), isMine: true),
+                post("返信先のハンドルが分からない返信（メンションを消した）", status(content: "<p>メンションのない返信。</p>", account: booster, replyingTo: author, mentionsReplyTarget: false)),
+                post("返信をブーストした投稿（ブーストの行を出し、ラベルは出さない）", status(content: "<p>ブーストされた返信。</p>", rebloggedBy: booster, replyingTo: author)),
+                post("上と下の行と線でつながった返信", status(content: "<p>線でつながった返信。</p>", replyingTo: author), connection: ReplyConnection(above: true, below: true)),
+                post("下の行とだけ線でつながった、本文の長い返信", status(content: "<p>" + String(repeating: "本文が長く、線がアイコンの下から行の下端まで伸びることを確かめる文。", count: 3) + "</p>", account: booster, replyingTo: author), connection: ReplyConnection(below: true)),
+                post("名前が長い（末尾をぼかす）", status(
+                    content: "<p>名前が1行に収まらない投稿。</p>",
+                    account: Fixtures.account(displayName: String(repeating: "とても長い名前", count: 4), acct: "a-very-long-account-name@subdomain.example.com")
+                )),
+                post("編集された投稿", status(content: "<p>投稿したあとに編集した投稿。</p>", editedAt: .now.addingTimeInterval(-60))),
+                post("編集された投稿で名前が長い", status(
+                    content: "<p>名前が1行に収まらず、編集済みのアイコンも付く投稿。</p>",
+                    account: Fixtures.account(displayName: String(repeating: "とても長い名前", count: 4), acct: "a-very-long-account-name@subdomain.example.com"),
+                    editedAt: .now.addingTimeInterval(-60)
+                )),
+                post("ひかえめな公開", status(content: "<p>ひかえめな公開の投稿。</p>", visibility: .unlisted)),
+                post("フォロワーのみ", status(content: "<p>フォロワーのみの投稿。</p>", visibility: .private)),
+                post("メンションした相手のみ", status(content: "<p>メンションした相手のみの投稿。</p>", visibility: .direct)),
+                post("フォロワーのみで編集され、名前が長い", status(
+                    content: "<p>名前が1行に収まらず、公開範囲の記号と編集済みのアイコンも付く投稿。</p>",
+                    account: Fixtures.account(displayName: String(repeating: "とても長い名前", count: 4), acct: "a-very-long-account-name@subdomain.example.com"),
+                    editedAt: .now.addingTimeInterval(-60),
+                    visibility: .private
+                )),
+                post("アイコンがない", status(content: "<p>アイコンのURLがないアカウントの投稿。</p>", account: Fixtures.account(acct: "noavatar@example.com", avatar: nil))),
+            ]
+        }
+
+        /// お気に入りとブーストをした投稿の色。
+        func interacted() -> [CatalogState] {
+            [
+                post("お気に入り済み", status(content: "<p>お気に入りした投稿。</p>", favourited: true)),
+                post("ブースト済み", status(content: "<p>ブーストした投稿。</p>", reblogged: true)),
+                post("お気に入りとブースト済み（真ん中で色が変わる）", status(content: "<p>お気に入りもブーストもした投稿。</p>", favourited: true, reblogged: true)),
+                post("お気に入りとブースト済みで、本文が短い", status(content: "<p>あ</p>", favourited: true, reblogged: true)),
+                post("お気に入りとブースト済みで、画像が下の端にある", status(content: "<p>画像の後ろに光が隠れる投稿。</p>", media: [
+                    Fixtures.attachment("a", width: 1_600, height: 900, color: .systemTeal),
+                ], favourited: true, reblogged: true)),
+                post("ほかの人がブーストした投稿に、お気に入り済み", status(content: "<p>ブーストで流れてきた投稿。</p>", favourited: true, rebloggedBy: booster)),
+            ]
+        }
+
+        /// 注意書き、閲覧注意、フィルターで隠す本文と添付ファイル。
+        func warnings() -> [CatalogState] {
+            let longSpoiler = String(repeating: "注意書きが長く、何行にもわたるときの折り返しを確かめる。", count: 4)
+            return [
+                post("画像2枚", status(content: "<p>画像を2枚添付した投稿。</p>", media: [
+                    Fixtures.attachment("a", width: 1_200, height: 900, color: .systemBlue),
+                    Fixtures.attachment("b", width: 1_200, height: 900, color: .systemGreen, description: "緑の地に白い格子"),
+                ])),
+                post("閲覧注意の画像", status(content: "<p>閲覧注意の画像を添付した投稿。</p>", media: [
+                    Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
+                ], sensitive: true)),
+                post("注意書き（閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ")),
+                post("注意書き（開いた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ"), expandsSpoiler: true),
+                post("注意書きが長い（閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: longSpoiler)),
+                post("注意書きと閲覧注意の画像（閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", media: [
+                    Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
+                ], sensitive: true)),
+                post("注意書きと閲覧注意の画像（開いた、画像はぼかしたまま）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", media: [
+                    Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
+                ], sensitive: true), expandsSpoiler: true),
+                post("注意書きと画像だけで本文がない（開いた）", status(content: "", spoilerText: "ネタバレ", media: [
+                    Fixtures.attachment("a", width: 1_600, height: 900, color: .systemTeal),
+                ], sensitive: true), expandsSpoiler: true),
+                post("ブーストされた注意書き（閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", rebloggedBy: booster)),
+                post("フィルターの警告", status(content: "<p>警告で折りたたんだ本文。</p>", filtered: [filter("ネタバレ", .warn)])),
+                post("フィルターの警告（名前が長い、2つに一致した）", status(content: "<p>警告で折りたたんだ本文。</p>", filtered: [filter(longFilterTitle, .warn), filter("ネタバレ", .warn)])),
+                post("フィルターの警告と画像とリンクカード（どれも出さない）", status(
+                    content: #"<p>警告で折りたたんだ本文。<a href="https://news.example/articles/1">news.example/articles/1</a></p>"#,
+                    media: [Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange)],
+                    filtered: [filter("ネタバレ", .warn)]
+                )),
+                post("フィルターの警告と注意書き（閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", filtered: [filter("ネタバレ", .warn)])),
+                post("フィルターの警告と注意書き（警告を開いた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", filtered: [filter("ネタバレ", .warn)]), expandsSpoiler: true),
+                post("ブーストされたフィルターの警告", status(content: "<p>警告で折りたたんだ本文。</p>", filtered: [filter("ネタバレ", .warn)], rebloggedBy: booster)),
+                post("フィルターで画像をぼかす", status(content: "<p>フィルターで画像をぼかした投稿。</p>", media: [
+                    Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
+                ], filtered: [filter("ネタバレ", .blur)])),
+                post("フィルターで画像をぼかす（閲覧注意も付いた、名前が長い）", status(content: "<p>フィルターで画像をぼかした投稿。</p>", media: [
+                    Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
+                ], sensitive: true, filtered: [filter(longFilterTitle, .blur)])),
+                post("自分の投稿がフィルターに一致した（折りたたまずに注記を出す）", status(content: "<p>フィルターした話題に自分で触れた投稿。</p>", filtered: [filter("ネタバレ", .hide)]), isMine: true),
+                post("自分の投稿が複数のフィルターに一致した（名前が長い、画像つき）", status(content: "<p>フィルターした話題に自分で触れた投稿。</p>", media: [
+                    Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
+                ], filtered: [filter(longFilterTitle, .warn), filter("画像", .blur)]), isMine: true),
+                post("自分の投稿がフィルターに一致した（注意書き、閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", filtered: [filter("ネタバレ", .warn)]), isMine: true),
+                post("フィルターの警告とぼかし（警告を開いた）", status(content: "<p>警告を開くと、画像はぼかしたまま出る。</p>", media: [
+                    Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
+                ], filtered: [filter("ネタバレ", .warn), filter("画像", .blur)]), expandsSpoiler: true),
+            ]
+        }
     }
+
+    @MainActor static func postBodyStates() -> [CatalogState] { PostStates().body() }
+    @MainActor static func postLabelStates() -> [CatalogState] { PostStates().labels() }
+    @MainActor static func postInteractedStates() -> [CatalogState] { PostStates().interacted() }
+    @MainActor static func postWarningStates() -> [CatalogState] { PostStates().warnings() }
 
     /// 添付ファイルを本文の右に小さく出す並べ方の投稿。アプリの設定は変えず、この並べ方にした設定で組む。
     /// 数による重なり、本文の長さとの高さの比べ合い、ぼかし、下に並ぶ部品との重なりを見比べる。
@@ -536,15 +572,15 @@ enum PostRowCatalog {
                 acct: "a-very-long-account-name@subdomain.example.com"
             )),
             row("表示名がない（ユーザー名を出す）", Fixtures.account(displayName: "", acct: "noname@example.com")),
-        ] + notificationRequestStates()
+        ]
     }
 
     /// 保留中の通知のリストの行。人のリストの行に、保留している通知の件数を3行目に足す。
     @MainActor
-    private static func notificationRequestStates() -> [CatalogState] {
+    static func notificationRequestStates() -> [CatalogState] {
         let list = TimelineViewController(texts: .notificationRequests, refresh: {})
         func row(_ title: String, _ account: Account, count: Int) -> CatalogState {
-            CatalogState(title: "保留中の通知: \(title)") {
+            CatalogState(title: title) {
                 let request = NotificationRequest(id: "catalog", updatedAt: Date(timeIntervalSince1970: 1_800_000_000), account: account, notificationsCount: count)
                 return CatalogFrame.bordered(list.notificationRequestConfiguration(for: request, base: .cell()).makeContentView())
             }

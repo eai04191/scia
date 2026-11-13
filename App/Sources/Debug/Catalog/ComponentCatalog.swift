@@ -23,11 +23,15 @@ enum CatalogComponent: String, CaseIterable {
 
     case timelineEmpty = "timeline-empty"
     case timelineFooter = "timeline-footer"
-    case timelineRows = "timeline-rows"
+    case timelineUnreadable = "timeline-unreadable"
+    case timelineGap = "timeline-gap"
     case timelineOverlays = "timeline-overlays"
     case streamingStatus = "streaming-status"
 
-    case posts
+    case postBody = "post-body"
+    case postLabels = "post-labels"
+    case postInteracted = "post-interacted"
+    case postWarnings = "post-warnings"
     case postsMediaBeside = "posts-media-beside"
     case mediaGrid = "media-grid"
     case linkCards = "link-cards"
@@ -41,6 +45,7 @@ enum CatalogComponent: String, CaseIterable {
 
     case notifications
     case accounts
+    case notificationRequests = "notification-requests"
 
     case caption
     case videoControls = "video-controls"
@@ -51,6 +56,7 @@ enum CatalogComponent: String, CaseIterable {
     case profileEdit = "profile-edit"
 
     case notices
+    case noticeLayout = "notice-layout"
     case statusBarTicker = "status-bar-ticker"
     case operationStatus = "operation-status"
 
@@ -81,28 +87,34 @@ enum CatalogComponent: String, CaseIterable {
         case .altTextEditor: "代替テキストの入力欄"
         case .caption: "ビューアの説明"
         case .translationTransition: "自動翻訳の置き換え（繰り返す）"
-        case .notices: "アプリ内通知のチップの列"
+        case .notices: "アプリ内通知のチップの種類"
+        case .noticeLayout: "アプリ内通知のチップの並べ方"
         case .statusBarTicker: "ステータスバーの通知"
         case .operationStatus: "操作の状況のリスト"
         case .videoControls: "動画の再生の操作"
         case .mediaStatus: "ビューアの読み込み中と見せられないとき"
         case .timelineEmpty: "タイムラインが空のときの表示"
         case .timelineFooter: "タイムラインの末尾"
-        case .timelineRows: "読めない行とギャップの行"
+        case .timelineUnreadable: "読めない投稿と通知の行"
+        case .timelineGap: "ギャップの行"
         case .timelineOverlays: "タイムラインの上に重ねる表示"
         case .streamingStatus: "引っぱると見える新着の経路"
         case .mediaGrid: "タイムラインの添付ファイルのサムネイル"
         case .profileHeader: "プロフィールのヘッダー"
         case .profileAccent: "プロフィールのカードの色"
-        case .posts: "タイムラインの投稿"
-        case .postsMediaBeside: "タイムラインの投稿（添付ファイルを本文の右に小さく）"
+        case .postBody: "投稿の本文"
+        case .postLabels: "投稿のラベルと名前"
+        case .postInteracted: "お気に入りとブースト済みの投稿"
+        case .postWarnings: "投稿の注意書きとフィルター"
+        case .postsMediaBeside: "投稿（添付ファイルを本文の右に小さく）"
         case .linkCards: "リンクカード"
         case .quotes: "投稿の中の引用"
         case .polls: "投稿の投票"
         case .emojiReactions: "投稿の絵文字のリアクション"
         case .postActionBar: "投稿のアクションバー"
         case .notifications: "通知の種類"
-        case .accounts: "人のリストと保留中の通知の行"
+        case .accounts: "人のリストの行"
+        case .notificationRequests: "保留中の通知の行"
         case .editHistory: "編集履歴の版"
         case .announcements: "サーバーのお知らせ"
         case .hdrEmoji: "HDRのカスタム絵文字"
@@ -130,20 +142,25 @@ enum CatalogComponent: String, CaseIterable {
         case .altTextEditor: AltTextEditorCatalog.states()
         case .caption: CaptionCatalog.states()
         case .translationTransition: [CatalogState(title: "投稿") { CatalogFrame.bordered(TranslationTransitionLoopView(), height: 240) }]
-        case .notices: NoticeCatalog.states()
+        case .notices: NoticeCatalog.kindStates()
+        case .noticeLayout: NoticeCatalog.layoutStates()
         case .statusBarTicker: StatusBarTickerCatalog.states()
         case .operationStatus: OperationStatusCatalog.states()
         case .videoControls: VideoControlsCatalog.states()
         case .mediaStatus: MediaStatusCatalog.states()
         case .timelineEmpty: TimelineCatalog.emptyStates()
         case .timelineFooter: TimelineCatalog.footerStates()
-        case .timelineRows: TimelineCatalog.rowStates()
+        case .timelineUnreadable: TimelineCatalog.unreadableStates()
+        case .timelineGap: TimelineCatalog.gapStates()
         case .timelineOverlays: TimelineOverlayCatalog.states()
         case .streamingStatus: StreamingStatusCatalog.states()
         case .mediaGrid: MediaGridCatalog.states()
         case .profileHeader: ProfileHeaderCatalog.states()
         case .profileAccent: ProfileHeaderCatalog.accentStates()
-        case .posts: PostRowCatalog.postStates()
+        case .postBody: PostRowCatalog.postBodyStates()
+        case .postLabels: PostRowCatalog.postLabelStates()
+        case .postInteracted: PostRowCatalog.postInteractedStates()
+        case .postWarnings: PostRowCatalog.postWarningStates()
         case .postsMediaBeside: PostRowCatalog.mediaBesideStates()
         case .linkCards: PostRowCatalog.linkCardStates()
         case .quotes: PostRowCatalog.quoteStates()
@@ -152,6 +169,7 @@ enum CatalogComponent: String, CaseIterable {
         case .postActionBar: PostActionBarCatalog.states()
         case .notifications: PostRowCatalog.notificationStates()
         case .accounts: PostRowCatalog.accountStates()
+        case .notificationRequests: PostRowCatalog.notificationRequestStates()
         case .editHistory: EditHistoryCatalog.states()
         case .announcements: AnnouncementsCatalog.states()
         case .hdrEmoji: HDREmojiCatalog.states()
@@ -197,12 +215,12 @@ enum CatalogSection: CaseIterable {
     var components: [CatalogComponent] {
         switch self {
         case .compose: [.attachmentStrip, .composeCapsule, .completionList, .emojiPalette, .composePoll, .postingLanguage, .extendedURL, .altTextEditor]
-        case .timeline: [.timelineEmpty, .timelineFooter, .timelineRows, .timelineOverlays, .streamingStatus]
-        case .post: [.posts, .postsMediaBeside, .mediaGrid, .linkCards, .quotes, .polls, .emojiReactions, .postActionBar, .translationTransition, .hdrEmoji, .editHistory]
-        case .notificationsAndAccounts: [.notifications, .accounts]
+        case .timeline: [.timelineEmpty, .timelineFooter, .timelineUnreadable, .timelineGap, .timelineOverlays, .streamingStatus]
+        case .post: [.postBody, .postLabels, .postInteracted, .postWarnings, .postsMediaBeside, .mediaGrid, .linkCards, .quotes, .polls, .emojiReactions, .postActionBar, .translationTransition, .hdrEmoji, .editHistory]
+        case .notificationsAndAccounts: [.notifications, .accounts, .notificationRequests]
         case .viewer: [.caption, .videoControls, .mediaStatus]
         case .profile: [.profileHeader, .profileAccent, .profileEdit]
-        case .appWide: [.notices, .statusBarTicker, .operationStatus, .login]
+        case .appWide: [.notices, .noticeLayout, .statusBarTicker, .operationStatus, .login]
         case .sheets: [.announcements, .reportSheet, .crashReport, .listMembership, .filters]
         case .settings: [.storage, .mediaCache]
         }

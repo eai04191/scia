@@ -7,10 +7,12 @@ import UIKit
 enum NoticeCatalog {
     private static let url = URL(string: "https://x.example/video.mp4") ?? URL(filePath: "/")
 
+    @MainActor private static let disclosure = Notice.Action.disclosure(hint: "続きを見られます。") {}
+
+    /// 何を伝えるチップか。1枚ずつ出す。
     @MainActor
-    static func states() -> [CatalogState] {
-        let disclosure = Notice.Action.disclosure(hint: "続きを見られます。") {}
-        return [
+    static func kindStates() -> [CatalogState] {
+        [
             CatalogState(title: "写真に保存しました（数秒で消える）") { stack(transient: .savedToPhotos) },
             CatalogState(title: "ダウンロード中（大きさが分かる前）") { stack(persistent: .download(of: url, fraction: 0) {}) },
             CatalogState(title: "ダウンロード中（押すと止めるかの確認）") { stack(persistent: .download(of: url, fraction: 0.42) {}) },
@@ -79,6 +81,13 @@ enum NoticeCatalog {
             CatalogState(title: "代替テキストを送信中") { stack(persistent: draft(.sendingDescription)) },
             CatalogState(title: "アップロードできませんでした（押すと理由）") { stack(persistent: draft(.failed)) },
             CatalogState(title: "代替テキストを送信できませんでした（押すと理由）") { stack(persistent: draft(.descriptionFailed)) },
+        ]
+    }
+
+    /// 2件あるとき、文言が長いとき、ログインし直しやほかのチップと並ぶときの置き方。
+    @MainActor
+    static func layoutStates() -> [CatalogState] {
+        [
             CatalogState(title: "出たままの知らせが2件（処理の途中、押すと操作の状況のリスト）") {
                 var notices = PersistentNotices()
                 notices.set(.download(of: url, fraction: 0.42) {}, in: .download)
