@@ -697,6 +697,13 @@ extension EmojiPaletteView: UICollectionViewDelegate {
     static let scrollScreenName = "emojiPalette"
 }
 
+/// 絵文字の文字を描くのにかかった時間を、スクロールの記録に渡す。描くのは画面を更新する直前で、セルの組み立ての時間には入らない。
+private final class EmojiPaletteGlyphLabel: UILabel {
+    override func drawText(in rect: CGRect) {
+        FrameWork.measure("EmojiPaletteGlyphLabel.drawText") { super.drawText(in: rect) }
+    }
+}
+
 /// 並べ直しにかかった時間を、スクロールの記録に渡す。
 private final class EmojiPaletteCollectionView: UICollectionView {
     override func layoutSubviews() {
@@ -709,7 +716,7 @@ final class EmojiPaletteCell: UICollectionViewCell {
     static let reuseIdentifier = "EmojiPaletteCell"
     private let imageView = EmojiImageView(frame: .zero)
     /// Unicodeの絵文字を、文字として描く。
-    private let label = UILabel()
+    private let label: UILabel = EmojiPaletteGlyphLabel()
     private let highlight = UIView()
 
     override init(frame: CGRect) {
