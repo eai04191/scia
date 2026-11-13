@@ -4422,6 +4422,23 @@ final class ComposeLineField: GlyphLanguageTextField {
     var onSubmit: () -> Void = {}
     var completionKeys = CompletionKeys()
 
+    /// 書いたときの高さを、同じ書体で測るための入力欄。画面には置かない。
+    private static let filledHeightProbe: UITextField = {
+        let field = UITextField()
+        field.text = " "
+        return field
+    }()
+
+    /// 空のときも、書いたときと同じ高さを取る。UITextFieldは、空のときの高さを今の書体ではなく既定の大きさの書体から出す。
+    /// 文字の大きさの設定が既定と違うと、書き始めたときと消したときに、欄と投稿欄の高さが変わっていた。
+    override var intrinsicContentSize: CGSize {
+        var size = super.intrinsicContentSize
+        guard text?.isEmpty ?? true, let font else { return size }
+        Self.filledHeightProbe.font = font
+        size.height = Self.filledHeightProbe.intrinsicContentSize.height
+        return size
+    }
+
     override var keyCommands: [UIKeyCommand]? {
         let submit = UIKeyCommand(title: "投稿", action: #selector(submitFromKeyboard), input: "\r", modifierFlags: .command)
         return (super.keyCommands ?? []) + [submit] + completionKeys.commands(
