@@ -20,41 +20,54 @@ enum CatalogComponent: String, CaseIterable {
     case postingLanguage = "posting-language"
     case extendedURL = "extended-url"
     case altTextEditor = "alt-text-editor"
-    case caption
-    case notices
-    case statusBarTicker = "status-bar-ticker"
-    case operationStatus = "operation-status"
-    case videoControls = "video-controls"
-    case mediaStatus = "media-status"
+
     case timelineEmpty = "timeline-empty"
     case timelineFooter = "timeline-footer"
     case timelineRows = "timeline-rows"
     case timelineOverlays = "timeline-overlays"
     case streamingStatus = "streaming-status"
-    case mediaGrid = "media-grid"
-    case profileHeader = "profile-header"
-    case profileAccent = "profile-accent"
-    case translationTransition = "translation-transition"
+
     case posts
     case postsMediaBeside = "posts-media-beside"
+    case mediaGrid = "media-grid"
     case linkCards = "link-cards"
     case quotes
     case polls
     case emojiReactions = "emoji-reactions"
     case postActionBar = "post-action-bar"
+    case translationTransition = "translation-transition"
+    case hdrEmoji = "hdr-emoji"
+    case editHistory = "edit-history"
+
     case notifications
     case accounts
-    case editHistory = "edit-history"
+
+    case caption
+    case videoControls = "video-controls"
+    case mediaStatus = "media-status"
+
+    case profileHeader = "profile-header"
+    case profileAccent = "profile-accent"
+    case profileEdit = "profile-edit"
+
+    case notices
+    case statusBarTicker = "status-bar-ticker"
+    case operationStatus = "operation-status"
+
     case announcements
-    case hdrEmoji = "hdr-emoji"
     case reportSheet = "report-sheet"
     case login
     case crashReport = "crash-report"
     case listMembership = "list-membership"
     case filters
-    case profileEdit = "profile-edit"
+
     case storage
     case mediaCache = "media-cache"
+
+    /// 検索の語が、名前かURLの名前（`rawValue`）に含まれるか。
+    func matches(_ query: String) -> Bool {
+        title.localizedStandardContains(query) || rawValue.localizedStandardContains(query)
+    }
 
     var title: String {
         switch self {
@@ -150,6 +163,57 @@ enum CatalogComponent: String, CaseIterable {
         case .profileEdit: ProfileEditCatalog.states()
         case .storage: StorageCatalog.states()
         case .mediaCache: StorageCatalog.mediaCacheStates()
+        }
+    }
+}
+
+/// カタログのリストで、部品をまとめるセクション。部品が出る画面ごとに分ける。
+enum CatalogSection: CaseIterable {
+    case compose
+    case timeline
+    case post
+    case notificationsAndAccounts
+    case viewer
+    case profile
+    case appWide
+    case sheets
+    case settings
+
+    var title: String {
+        switch self {
+        case .compose: "投稿欄"
+        case .timeline: "タイムライン"
+        case .post: "投稿"
+        case .notificationsAndAccounts: "通知と人"
+        case .viewer: "ビューア"
+        case .profile: "プロフィール"
+        case .appWide: "アプリ全体"
+        case .sheets: "シート"
+        case .settings: "設定"
+        }
+    }
+
+    /// セクションに入れる部品。リストには、この順に並べる。
+    var components: [CatalogComponent] {
+        switch self {
+        case .compose: [.attachmentStrip, .composeCapsule, .completionList, .emojiPalette, .composePoll, .postingLanguage, .extendedURL, .altTextEditor]
+        case .timeline: [.timelineEmpty, .timelineFooter, .timelineRows, .timelineOverlays, .streamingStatus]
+        case .post: [.posts, .postsMediaBeside, .mediaGrid, .linkCards, .quotes, .polls, .emojiReactions, .postActionBar, .translationTransition, .hdrEmoji, .editHistory]
+        case .notificationsAndAccounts: [.notifications, .accounts]
+        case .viewer: [.caption, .videoControls, .mediaStatus]
+        case .profile: [.profileHeader, .profileAccent, .profileEdit]
+        case .appWide: [.notices, .statusBarTicker, .operationStatus, .login]
+        case .sheets: [.announcements, .reportSheet, .crashReport, .listMembership, .filters]
+        case .settings: [.storage, .mediaCache]
+        }
+    }
+
+    /// 検索の語に一致する部品を、セクションごとに返す。語が空ならすべて返し、部品が残らないセクションは省く。
+    static func contents(matching query: String) -> [(section: CatalogSection, components: [CatalogComponent])] {
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return allCases.compactMap { section in
+            let components = section.components.filter { query.isEmpty || $0.matches(query) }
+            return components.isEmpty ? nil : (section, components)
         }
     }
 }
@@ -289,13 +353,16 @@ extension UIViewController {
     }
 }
 
-/// カタログに載せた部品のリスト。
-final class ComponentCatalogViewController: UIViewController {
-    private lazy var collectionView = UICollectionView(
-        frame: .zero,
-        collectionViewLayout: UICollectionViewCompositionalLayout.list(using: UICollectionLayoutListConfiguration(appearance: .insetGrouped))
-    )
-    private var dataSource: UICollectionViewDiffableDataSource<Int, CatalogComponent>?
+/// カタログに載せた部品のリスト。セクションに分けて並べ、検索欄で名前とURLの名前から絞り込む。
+final class ComponentCatalogViewController: UIViewController, UISearchResultsUpdating {
+    private lazy var collectionView: UICollectionView = {
+        var configuration = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
+        configuration.headerMode = .supplementary
+        return UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewCompositionalLayout.list(using: configuration))
+    }()
+
+    private var dataSource: UICollectionViewDiffableDataSource<CatalogSection, CatalogComponent>?
+    private let searchController = UISearchController(searchResultsController: nil)
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -303,25 +370,51 @@ final class ComponentCatalogViewController: UIViewController {
         navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .close, primaryAction: UIAction { [weak self] _ in
             self?.dismiss(animated: true)
         })
+        searchController.searchResultsUpdater = self
+        searchController.obscuresBackgroundDuringPresentation = false
+        searchController.searchBar.autocapitalizationType = .none
+        // ペーストした文字を、コピーしたとおりに入れる。理由は`GlyphLanguageTextView`の`smartInsertDeleteType`と同じ。
+        searchController.searchBar.searchTextField.smartInsertDeleteType = .no
+        navigationItem.searchController = searchController
+        navigationItem.hidesSearchBarWhenScrolling = false
         collectionView.frame = view.bounds
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        collectionView.keyboardDismissMode = .onDrag
         collectionView.delegate = self
         view.addSubview(collectionView)
         let registration = UICollectionView.CellRegistration<UICollectionViewListCell, CatalogComponent> { cell, _, component in
             var content = cell.defaultContentConfiguration()
             content.text = component.title
-            content.secondaryText = component.rawValue
             cell.contentConfiguration = content
             cell.accessories = [.disclosureIndicator()]
         }
-        let dataSource = UICollectionViewDiffableDataSource<Int, CatalogComponent>(collectionView: collectionView) { collectionView, indexPath, component in
+        let dataSource = UICollectionViewDiffableDataSource<CatalogSection, CatalogComponent>(collectionView: collectionView) { collectionView, indexPath, component in
             collectionView.dequeueConfiguredReusableCell(using: registration, for: indexPath, item: component)
         }
-        var snapshot = NSDiffableDataSourceSnapshot<Int, CatalogComponent>()
-        snapshot.appendSections([0])
-        snapshot.appendItems(CatalogComponent.allCases)
-        dataSource.apply(snapshot, animatingDifferences: false)
+        let header = UICollectionView.SupplementaryRegistration<UICollectionViewListCell>(elementKind: UICollectionView.elementKindSectionHeader) { [weak dataSource] cell, _, indexPath in
+            var content = UIListContentConfiguration.header()
+            content.text = dataSource?.sectionIdentifier(for: indexPath.section)?.title
+            cell.contentConfiguration = content
+        }
+        dataSource.supplementaryViewProvider = { collectionView, _, indexPath in
+            collectionView.dequeueConfiguredReusableSupplementary(using: header, for: indexPath)
+        }
         self.dataSource = dataSource
+        apply(query: "")
+    }
+
+    func updateSearchResults(for searchController: UISearchController) {
+        apply(query: searchController.searchBar.text ?? "")
+    }
+
+    private func apply(query: String) {
+        var snapshot = NSDiffableDataSourceSnapshot<CatalogSection, CatalogComponent>()
+        for (section, components) in CatalogSection.contents(matching: query) {
+            snapshot.appendSections([section])
+            snapshot.appendItems(components, toSection: section)
+        }
+        dataSource?.apply(snapshot, animatingDifferences: false)
+        contentUnavailableConfiguration = snapshot.numberOfItems == 0 ? UIContentUnavailableConfiguration.search() : nil
     }
 }
 
