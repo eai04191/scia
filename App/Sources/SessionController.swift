@@ -3356,6 +3356,10 @@ final class SessionController {
         for timeline in timelines.allObjects {
             timeline.holdsSettingsChanges = shownSettingsCount > 0
         }
+        scheduled.viewController.listStyle.holdsChanges = shownSettingsCount > 0
+        for list in pushedScheduled {
+            list.viewController.listStyle.holdsChanges = shownSettingsCount > 0
+        }
     }
 
     /// 重ねた画面を閉じてホームのタブのタイムラインを出し、その本物のタイムラインの上に、アプリ内のSafariの高さを選ぶシートを出す。
@@ -3608,6 +3612,7 @@ final class SessionController {
         list.onRewrite = { [weak self] status in self?.confirmRewriting(status) }
         session.statuses.register(list.model)
         pushedScheduled.append(list)
+        list.viewController.listStyle.holdsChanges = shownSettingsCount > 0
         navigation.pushViewController(list.viewController, animated: true)
     }
 

@@ -77,6 +77,31 @@ struct ScheduledStatusesControllerTests {
 
         #expect(controller.runningTaskCount == 0)
     }
+
+    /// 区切り線は、タイムラインの投稿と同じく、行と行のあいだにだけ、本文の左端から引く。区切り線を出さない設定では引かない。
+    @Test(.scratch, arguments: [false, true])
+    func separatorsFollowPostAppearance(wraps: Bool) async throws {
+        let controller = try makeController(transport: ScriptedTransport { _ in Self.body(["60", "70", "80"]) })
+        let settings = AppSettings.isolated()
+        settings.appearance.wrapsBelowAvatar = wraps
+        controller.viewController.listStyle = PostListStyle(settings: settings, tuning: TuningStore(defaults: nil), network: AppDependencies.network)
+        await controller.reload(purpose: .action)?.value
+        let base = UIListSeparatorConfiguration(listAppearance: .plain)
+        func separator(at item: Int) -> UIListSeparatorConfiguration {
+            controller.viewController.separator(base, at: IndexPath(item: item, section: 0))
+        }
+
+        #expect(separator(at: 0).topSeparatorVisibility == .hidden)
+        #expect(separator(at: 0).bottomSeparatorVisibility != .hidden)
+        #expect(separator(at: 1).topSeparatorVisibility != .hidden)
+        #expect(separator(at: 2).bottomSeparatorVisibility == .hidden)
+        #expect(separator(at: 1).bottomSeparatorInsets.leading == (wraps ? settings.rowMargins.leading : settings.textColumnLeading))
+        #expect(separator(at: 1).bottomSeparatorInsets.trailing == 0)
+
+        settings.appearance.showsSeparators = false
+        #expect(separator(at: 1).topSeparatorVisibility == .hidden)
+        #expect(separator(at: 1).bottomSeparatorVisibility == .hidden)
+    }
 }
 
 /// 予約の本文を、投稿の本文と同じ部品で描く。

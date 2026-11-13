@@ -28,7 +28,9 @@ final class ScheduledStatusesViewController: UICollectionViewController {
     /// 添付のぼかし。タイムラインと同じく、閲覧注意と注意書きのある予約は最初からぼかし、タップで外す。
     private var mediaCovers = MediaCovers()
     private let tuning = AppDependencies.tuning
-    private let settings = AppDependencies.settings
+    /// 区切り線の引き方と、描き直しの要る設定の変化。タイムラインと同じ決まりを使う。テストでは、画面を出す前に差し替える。
+    var listStyle = PostListStyle(settings: AppDependencies.settings, tuning: AppDependencies.tuning, network: AppDependencies.network)
+    private var settings: AppSettings { listStyle.settings }
     private var contentState = ContentState.loading
     /// 行の日時の書き方（今年でなければ年を書く）を決める今の日付。
     var now: () -> Date
@@ -39,7 +41,8 @@ final class ScheduledStatusesViewController: UICollectionViewController {
         self.now = now
         self.calendar = calendar
         var configuration = UICollectionLayoutListConfiguration(appearance: .plain)
-        configuration.showsSeparators = true
+        var separatorAt: (IndexPath, UIListSeparatorConfiguration) -> UIListSeparatorConfiguration = { _, separator in separator }
+        configuration.itemSeparatorHandler = { separatorAt($0, $1) }
         // 行を消すのは取り消しだけなので、行のメニューと同じく確かめてから取り消す。
         var onCancel: (ScheduledStatus) -> Void = { _ in }
         var statusAt: (IndexPath) -> ScheduledStatus? = { _ in nil }
@@ -56,6 +59,7 @@ final class ScheduledStatusesViewController: UICollectionViewController {
         super.init(collectionViewLayout: UICollectionViewCompositionalLayout.list(using: configuration))
         onCancel = { [weak self] in self?.onCancel($0) }
         statusAt = { [weak self] in self?.status(at: $0) }
+        separatorAt = { [weak self] in self?.separator($1, at: $0) ?? $1 }
         title = "予約投稿"
     }
 
@@ -78,6 +82,13 @@ final class ScheduledStatusesViewController: UICollectionViewController {
         collectionView.refreshControl = refresh
         applySnapshot(animatingChanges: false)
         setNeedsUpdateContentUnavailableConfiguration()
+        // 投稿の見た目の設定が変わったら、タイムラインと同じく組み立て直し、区切り線も引き直させる。
+        listStyle.isShown = { [weak self] in self?.viewIfLoaded?.window != nil }
+        listStyle.onRedrawNeeded = { [weak self] in
+            self?.reconfigureAll()
+            self?.collectionView.collectionViewLayout.invalidateLayout()
+        }
+        listStyle.observeRedrawNeeds()
         // 行の文字は組み立てたときの大きさで持つので、文字の大きさが変わったら組み立て直す。
         collectionView.registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { [weak self] (_: UICollectionView, _) in
             self?.reconfigureAll()
@@ -99,6 +110,11 @@ final class ScheduledStatusesViewController: UICollectionViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         onAppearing()
+    }
+
+    override func viewIsAppearing(_ animated: Bool) {
+        super.viewIsAppearing(animated)
+        listStyle.applyHeldChange()
     }
 
     override func viewDidDisappear(_ animated: Bool) {
@@ -124,6 +140,11 @@ final class ScheduledStatusesViewController: UICollectionViewController {
         return statuses.first { $0.id == id }
     }
 
+    /// 区切り線を、タイムラインの投稿と同じ決まりで引く。
+    func separator(_ base: UIListSeparatorConfiguration, at indexPath: IndexPath) -> UIListSeparatorConfiguration {
+        listStyle.separator(base, isFirst: indexPath.item == 0, isLast: indexPath.item == statuses.count - 1)
+    }
+
     private func applySnapshot(animatingChanges: Bool) {
         guard isViewLoaded else { return }
         var snapshot = NSDiffableDataSourceSnapshot<Int, ScheduledStatus.ID>()
@@ -135,7 +156,7 @@ final class ScheduledStatusesViewController: UICollectionViewController {
     }
 
     private func makeDataSource() -> UICollectionViewDiffableDataSource<Int, ScheduledStatus.ID> {
-        let registration = UICollectionView.CellRegistration<UICollectionViewListCell, ScheduledStatus.ID> { [weak self] cell, _, id in
+        let registration = UICollectionView.CellRegistration<TimelineCell, ScheduledStatus.ID> { [weak self] cell, _, id in
             guard let self, let scheduled = statuses.first(where: { $0.id == id }), let account else { return }
             cell.contentConfiguration = contentConfiguration(for: scheduled, account: account, base: cell.defaultContentConfiguration())
             cell.accessibilityHint = "日時を変えます。"
