@@ -29,7 +29,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 
 - `make generate`: Xcodeプロジェクトを生成する
 - `make app-info`: `Config/app-info.json`から、アプリの`AppInfo.generated.swift`と`README.md`の生成の節を書き出す
-- `make lint`: SwiftLintで強制アンラップ、`try!`、IUOを検出する（`brew install swiftlint`が必要）。呼び出しや文字列の補間の形で決まる規則は、構文木で調べる`Tools/SciaLint`で検出し、`// scialint:disable:next <規則>`で外す
+- `make lint`: `.swiftlint.yml`の規則に反する書き方をSwiftLintで検出する（`brew install swiftlint`が必要）。呼び出しや文字列の補間の形で決まる規則は、構文木で調べる`Tools/SciaLint`で検出し、`// scialint:disable:next <規則>`で外す
 - `make test-lint`: `Tools/SciaLint`の規則のテスト
 - `make test-core`: SciaCoreのテスト（macOS上、シミュレーター不要）
 - `make test-memory-cache`: `Packages/MemoryCache`のテスト（macOS上、シミュレーター不要）

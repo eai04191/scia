@@ -21,9 +21,9 @@ app-info:
 check-app-info:
 	python3 Tools/generate-app-info.py --check
 
-## 実行時クラッシュにつながる書き方（強制アンラップ、try!、IUO）と、.swiftlint.ymlとTools/SciaLintの規則に反する書き方を検出する。swiftlintはbrew install swiftlintで入れる
+## .swiftlint.ymlとTools/SciaLintの規則に反する書き方を検出する。swiftlintはbrew install swiftlintで入れる
 ## 設定を明示しないと、worktreeでは親のディレクトリにある元のcheckoutの.swiftlint.ymlも重ねて読み、そちらにない規則が外れる
-## 呼び出しや文字列の補間の形で決まる規則（持ち主を通さない処理、目的を名乗らない処理、ログに公開扱いで出す値、テストで出し終えるのを待たない画面、テストで件数を==で待つ待ち、決め打ちの文字の大きさ、半透明の白い文字、ティントカラーを直接塗った地）は、構文木で調べるTools/SciaLintで検出する
+## 呼び出しや文字列の補間の形で決まる規則は、構文木で調べるTools/SciaLintで検出する。規則はTools/SciaLint/Sources/SciaLintRules/Rule.swiftのLinter.rulesにある
 lint:
 	swiftlint lint --quiet --config .swiftlint.yml
 	swift run --package-path Tools/SciaLint --quiet scia-lint .
@@ -127,7 +127,7 @@ scenario-reset: scenario-build
 	Tools/scenario/reset.sh '$(SCENARIO_APP)'
 
 ## 1人分を走らせる。リセットしてから、何も知らないエージェントをPERSONAの役で初めて使う人として触らせ、報告を~/scia-scenario/runs/に残す
-## 役はTools/scenario/personas/にある（literal、impatient、breaker）。claude -pを使うので、利用枠を使う
+## 役はTools/scenario/personas/にある。claude -pを使うので、利用枠を使う
 ## 例: make scenario-run PERSONA=literal
 scenario-run: scenario-build
 	Tools/scenario/run.sh '$(SCENARIO_APP)' '$(PERSONA)'
