@@ -46,6 +46,26 @@ public final class AppSettings {
         didSet { defaults.set(autoTranslationLanguages, forKey: Keys.autoTranslationLanguages) }
     }
 
+    /// 自動翻訳の対象外にした人のハンドル（`username@domain`）。対象外にした順（docs/auto-translation.md）。
+    public var autoTranslationExcludedHandles: [String] {
+        didSet { defaults.set(autoTranslationExcludedHandles, forKey: Keys.autoTranslationExcludedHandles) }
+    }
+
+    /// 同じサーバーの人は、ログインしたアドレスのサーバー名を補ったハンドルで比べる。どのアカウントから見ても同じ人を同じハンドルで指すため。
+    /// ユーザーのIDにアドレスと別のドメイン（`LOCAL_DOMAIN`）を使うサーバーでは、そのサーバーのアカウントで対象外にした同じサーバーの人が、ほかのサーバーのアカウントから見たハンドルと一致せず、そちらでは訳される。
+    /// そろえるには`api/v2/instance`の`domain`を持ち回る必要があり、`Credential.handle(ofAcct:)`と同じく読んでいない。
+    /// - Parameter localServer: ログインしているサーバーの名前。`acct`にサーバー名がないときに補う。
+    public func isExcludedFromAutoTranslation(acct: String, localServer: String) -> Bool {
+        let handle = UserHandle(acct: acct, localServer: localServer).fullAcct.lowercased()
+        return autoTranslationExcludedHandles.contains { $0.lowercased() == handle }
+    }
+
+    public func setExcludedFromAutoTranslation(_ isExcluded: Bool, acct: String, localServer: String) {
+        let handle = UserHandle(acct: acct, localServer: localServer).fullAcct
+        autoTranslationExcludedHandles.removeAll { $0.lowercased() == handle.lowercased() }
+        if isExcluded { autoTranslationExcludedHandles.append(handle) }
+    }
+
     /// 自動翻訳の翻訳先の言語の識別子。nilならデバイスの言語（docs/auto-translation.md）。
     public var autoTranslationTarget: String? {
         didSet { defaults.set(autoTranslationTarget, forKey: Keys.autoTranslationTarget) }
@@ -426,6 +446,7 @@ public final class AppSettings {
         static let expandsXPosts = "settings.expandsXPosts"
         static let isAutoTranslationEnabled = "settings.isAutoTranslationEnabled"
         static let autoTranslationLanguages = "settings.autoTranslationLanguages"
+        static let autoTranslationExcludedHandles = "settings.autoTranslationExcludedHandles"
         static let autoTranslationTarget = "settings.autoTranslationTarget"
         static let autoTranslationStrategy = "settings.autoTranslationStrategy"
         static let appearanceChoices = "settings.appearanceChoices"
@@ -487,6 +508,7 @@ public final class AppSettings {
         expandsXPosts = defaults.bool(forKey: Keys.expandsXPosts)
         isAutoTranslationEnabled = defaults.bool(forKey: Keys.isAutoTranslationEnabled)
         autoTranslationLanguages = defaults.stringArray(forKey: Keys.autoTranslationLanguages) ?? []
+        autoTranslationExcludedHandles = defaults.stringArray(forKey: Keys.autoTranslationExcludedHandles) ?? []
         autoTranslationTarget = defaults.string(forKey: Keys.autoTranslationTarget)
         autoTranslationStrategy = defaults.string(forKey: Keys.autoTranslationStrategy).flatMap(TranslationStrategy.init(rawValue:)) ?? .lowLatency
         appearance = AppearanceChoices(stored: defaults.data(forKey: Keys.appearanceChoices))

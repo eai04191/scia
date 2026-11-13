@@ -130,6 +130,7 @@ extension UserMenuItem: MenuItemContentProviding {
         case .follow: .own(title: "フォロー", symbolName: "person.badge.plus")
         case .addToList: .own(title: "リストに追加", symbolName: "text.badge.plus")
         case .showReblogs: .own(title: "ブーストを表示", symbolName: "arrow.2.squarepath")
+        case .autoTranslation: .own(title: "自動翻訳", symbolName: "translate")
         case .notify: .own(title: "投稿を通知", symbolName: "bell")
         case .endorse: .own(title: "プロフィールで紹介", symbolName: "person.text.rectangle")
         case .note: .own(title: "メモを追加", symbolName: "note.text")

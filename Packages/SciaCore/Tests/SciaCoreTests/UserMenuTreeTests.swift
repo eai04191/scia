@@ -12,11 +12,16 @@ struct UserMenuTreeTests {
     }
 
     /// - Parameter known: 手元で分かっている相手との関係。渡さなければ、どの相手の関係も覚えていない。
-    private func actions(known: @escaping @MainActor (UserMenuTarget) -> KnownRelation? = { _ in nil }) -> UserMenuActions {
+    /// - Parameter isExcluded: その人を自動翻訳の対象外にしているか。渡さなければ、自動翻訳の項目を出さない。
+    private func actions(
+        known: @escaping @MainActor (UserMenuTarget) -> KnownRelation? = { _ in nil },
+        isExcluded: @escaping @MainActor (String) -> Bool? = { _ in nil }
+    ) -> UserMenuActions {
         UserMenuActions(
             mention: { _ in }, copy: { _, _, _ in }, localServer: "example.social",
             resolveTarget: { _ in throw CancellationError() }, loadRelation: { _, _ in nil }, knownRelation: known, reloadRelations: { _ in },
-            changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, addToList: { _ in }, accounts: AccountCache { _ in [] }
+            changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, addToList: { _ in },
+            isExcludedFromAutoTranslation: isExcluded, accounts: AccountCache { _ in [] }
         )
     }
 
@@ -178,6 +183,30 @@ struct UserMenuTreeTests {
         }
         #expect(user.id == "2")
         #expect(fallback == "person.crop.circle")
+    }
+
+    /// 自動翻訳は、対象にしている人にチェックを付けて出し、押すと今と逆にする。自動翻訳を使えないかオフなら出さない。
+    @Test func autoTranslationItemShowsWhetherUserIsTranslated() throws {
+        let groups = layout(visible: [.profile, .autoTranslation])
+        #expect(try #require(submenu(groups, actions: actions())).contains("自動翻訳") == false)
+        #expect(try #require(submenu(groups, actions: actions(isExcluded: { _ in false }))).contains("自動翻訳✓"))
+        let excluded = try #require(submenu(groups, actions: actions(isExcluded: { _ in true })))
+        #expect(excluded.contains("自動翻訳") && !excluded.contains("自動翻訳✓"))
+
+        let tree = UserMenuTree(subject: UserMenuSubject(.account(alice)), actions: actions(isExcluded: { _ in false }), linkBrowser: .inApp)
+        let item = try #require(tree.submenu(groups: groups, avatar: nil)?.flattenedChildren.first { $0.title == "自動翻訳" })
+        guard case .excludeFromAutoTranslation(true, let acct) = item.command else {
+            Issue.record("対象外にする命令になっていません")
+            return
+        }
+        #expect(acct == "alice@remote.example")
+    }
+
+    /// リンクのメンションは、選ぶまで相手を探さず、対象外かが分からないので、自動翻訳を出さない。
+    @Test func mentionLinkHasNoAutoTranslationItem() throws {
+        let tree = UserMenuTree(subject: UserMenuSubject(mentionLink: try #require(alice.url), acct: "alice"), actions: actions(isExcluded: { _ in false }), linkBrowser: .inApp)
+        let menu = try #require(tree.submenu(groups: layout(visible: [.profile, .autoTranslation]), avatar: nil))
+        #expect(!MenuNodeTests.describe([menu]).contains("自動翻訳"))
     }
 
     /// カスタマイズは数えない。ほかの中身が1つなら、カスタマイズを出さずに直接並べる。1回余計に押す手間を省くため。

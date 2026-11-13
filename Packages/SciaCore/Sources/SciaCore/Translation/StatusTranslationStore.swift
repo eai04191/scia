@@ -18,6 +18,8 @@ public struct TranslationSource: Sendable {
     public let id: ID
     /// 本文の言語。分からなければnil。
     public let language: String?
+    /// 投稿した人の`acct`。Xの投稿ではnil。
+    public let authorAcct: String?
     /// 訳した結果が使えるかを比べる本文。変われば訳し直す。空なら訳すものがない。
     let content: String
     let richText: @Sendable () -> RichText
@@ -26,6 +28,7 @@ public struct TranslationSource: Sendable {
     public init(_ status: Status) {
         id = .status(status.id)
         language = status.language
+        authorAcct = status.account.acct
         content = status.content
         richText = { .status(status) }
     }
@@ -33,6 +36,7 @@ public struct TranslationSource: Sendable {
     public init(_ post: XPost) {
         id = .xPost(post.id)
         language = post.language
+        authorAcct = nil
         content = post.text.plainText
         richText = { post.text }
     }
@@ -74,6 +78,10 @@ public final class StatusTranslationStore {
 
     /// 訳す言語。地域や文字を除いた言語のコード。
     private var languages: Set<String> = []
+    /// 訳さない人。小文字にした`username@domain`。
+    private var excludedAuthors: Set<String> = []
+    /// ログインしているサーバーの名前。同じサーバーの人の`acct`に補う。
+    private var localServer = ""
     private var entries = CostLimitedCache<TranslationSource.ID, Entry>(totalCostLimit: StatusTranslationStore.cacheCostLimit)
     private var originals: Set<TranslationSource.ID> = []
     /// 言語モデルが入っていないと分かった言語。訳せた時点で外す。
@@ -119,6 +127,15 @@ public final class StatusTranslationStore {
         targetGeneration += 1
         skipped = CostLimitedCache(totalCostLimit: Self.cacheCostLimit)
         uninstalledLanguages = []
+    }
+
+    /// 訳さない人を置き換える。訳文は捨てず、対象外にしている間だけ出さない。
+    /// - Parameters:
+    ///   - handles: `username@domain`の形のハンドル。大文字と小文字は区別しない。
+    ///   - localServer: ログインしているサーバーの名前。
+    public func setExcludedAuthors(_ handles: some Sequence<String>, localServer: String) {
+        excludedAuthors = Set(handles.map { $0.lowercased() })
+        self.localServer = localServer
     }
 
     /// 翻訳先を置き換える。持っている訳文を捨てて訳し直す。
@@ -190,6 +207,9 @@ public final class StatusTranslationStore {
 
     private func isTranslatable(_ source: TranslationSource) -> Bool {
         guard let code = source.language.flatMap(Self.matchKey), languages.contains(code) else { return false }
+        if !excludedAuthors.isEmpty, let acct = source.authorAcct, excludedAuthors.contains(UserHandle(acct: acct, localServer: localServer).fullAcct.lowercased()) {
+            return false
+        }
         return source.language.flatMap(Self.languageCode) != Self.languageCode(targetLanguage)
     }
 

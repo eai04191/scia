@@ -628,6 +628,7 @@ final class SessionController {
             }
         }
         translations?.setLanguages(AppDependencies.settings.effectiveAutoTranslationLanguages)
+        translations?.setExcludedAuthors(AppDependencies.settings.autoTranslationExcludedHandles, localServer: credential.server)
         translations?.onChange = { [weak self] ids in
             for timeline in self?.timelines.allObjects ?? [] {
                 timeline.applyTranslations(ids)
@@ -783,10 +784,11 @@ final class SessionController {
         )
     }
 
-    /// 自動翻訳のオンオフ、訳す言語、翻訳先、翻訳の方式が変わるか、言語モデルが入ったら、訳せなかった言語を忘れ、タイムラインを描き直す。
+    /// 自動翻訳のオンオフ、訳す言語、対象外の人、翻訳先、翻訳の方式が変わるか、言語モデルが入ったら、訳せなかった言語を忘れ、タイムラインを描き直す。
     private func observeAutoTranslationSetting() {
         withObservationTracking {
             _ = AppDependencies.settings.effectiveAutoTranslationLanguages
+            _ = AppDependencies.settings.autoTranslationExcludedHandles
             _ = AppDependencies.settings.autoTranslationModelRevision
             _ = AppDependencies.settings.autoTranslationTarget
             // 選んだ翻訳モードに加えて、Apple Intelligenceのモデルが使えるかの変化も追う。
@@ -797,6 +799,7 @@ final class SessionController {
                 self.translations?.setTargetLanguage(AppDependencies.settings.resolvedTranslationTarget.minimalIdentifier)
                 self.translations?.setStrategy(AppDependencies.settings.resolvedTranslationStrategy)
                 self.translations?.setLanguages(AppDependencies.settings.effectiveAutoTranslationLanguages)
+                self.translations?.setExcludedAuthors(AppDependencies.settings.autoTranslationExcludedHandles, localServer: self.credential.server)
                 for timeline in self.timelines.allObjects {
                     timeline.applyTranslationLanguages()
                 }
@@ -2843,6 +2846,16 @@ final class SessionController {
                 self?.resolveIdentity(of: target, failureTitle: "リストに追加できませんでした") { id, acct in
                     self?.presentListMembership(accountID: id, acct: acct)
                 }
+            },
+            isExcludedFromAutoTranslation: { [weak self] acct in
+                guard let self, translations != nil, AppDependencies.settings.isAutoTranslationEnabled else { return nil }
+                return AppDependencies.settings.isExcludedFromAutoTranslation(acct: acct, localServer: credential.server)
+            },
+            excludeFromAutoTranslation: { [weak self] isExcluded, acct in
+                guard let self else { return }
+                AppDependencies.settings.setExcludedFromAutoTranslation(isExcluded, acct: acct, localServer: credential.server)
+                let title = "\(credential.handle(ofAcct: acct))を\(isExcluded ? "自動翻訳しません" : "自動翻訳します")"
+                notices.showTransient(Notice(id: "user.autoTranslationChanged", kind: .success, title: title), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
             },
             accounts: accounts,
             // メニューを組むたびに呼ばれるので、アイコンを読まない。開いたときにメニューが読む。

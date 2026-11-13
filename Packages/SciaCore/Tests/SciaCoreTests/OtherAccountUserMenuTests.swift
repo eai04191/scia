@@ -91,6 +91,13 @@ struct OtherAccountUserMenuTests {
         #expect(MenuNodeTests.describe([both]) == "別のアカウントで[@bob[…],@carol[…]]")
     }
 
+    /// 自動翻訳は、どのアカウントでも同じ対象外を切り替えるので、「別のアカウントで」の中に出さない。ほかに中身がなければ、「別のアカウントで」も出さない。
+    @Test func autoTranslationAloneDoesNotShowOtherAccounts() throws {
+        var tree = UserMenuTree(subject: UserMenuSubject(.account(alice)), actions: actions([try account("bob")]), linkBrowser: .inApp)
+        tree.otherAccountGroups = MenuLayout<UserMenuItem>.Groups(main: [.init([.profile, .autoTranslation]), .init([.otherAccounts])], more: [])
+        #expect(tree.menu(groups: .single(.otherAccounts), avatar: nil)?.flattenedChildren.first == nil)
+    }
+
     /// 選んだアカウントのサーバーでプロフィールのURLで相手を探し、そのアカウントから見た関係で項目を組む。どのアカウントでも同じ結果になる項目と、「別のアカウントで」は出さない。
     /// 見つけた相手は覚え、次はすぐ組む。
     @Test func buildsUserMenuAsOtherAccount() async throws {

@@ -279,6 +279,50 @@ struct StatusTranslationStoreTests {
         #expect(store.hasTranslation(of: post))
     }
 
+    /// 対象外の人の投稿は訳さず、待ってもいない。ほかの人の投稿は訳す。同じサーバーの人の`acct`には、ログインしているサーバーの名前を補って比べる。
+    @Test func doesNotTranslateExcludedAuthor() async throws {
+        let scope = TaskScope()
+        let clock = TestClock()
+        let translator = FakeTranslator()
+        let store = store(translator, clock: clock, scope: scope)
+        store.setExcludedAuthors(["Bob@Example.Social"], localServer: "example.social")
+        var delivered: Set<TranslationSource.ID> = []
+        store.onChange = { delivered.formUnion($0) }
+        let excluded = TranslationSource(status("1"))
+        let other = Account(id: "3", username: "bob", acct: "bob@remote.example", displayName: "Bob", avatar: nil)
+        let translated = TranslationSource(Status(id: "2", createdAt: Date(timeIntervalSince1970: 0), account: other, content: "<p>post 2</p>", spoilerText: "", language: "en", url: nil))
+
+        store.request([excluded, translated])
+        #expect(!store.isTranslating(excluded))
+        try await waitForDelivery(of: ["2"], clock: clock) { delivered }
+        try await waitUntilSettled(scope, clock: clock)
+
+        #expect(translator.requested == ["post 2"])
+        #expect(store.translation(for: excluded) == nil)
+        #expect(store.translation(for: translated)?.plainText == "訳:post 2")
+    }
+
+    /// 訳文を持っている人を対象外にすると、訳文を出さず、切り替える訳文もないものとして扱う。対象に戻すと、訳し直さずに出す。
+    @Test func hidesTranslationWhileAuthorIsExcluded() async throws {
+        let scope = TaskScope()
+        let clock = TestClock()
+        let translator = FakeTranslator()
+        let store = store(translator, clock: clock, scope: scope)
+        var delivered: Set<TranslationSource.ID> = []
+        store.onChange = { delivered.formUnion($0) }
+        let post = TranslationSource(status("1"))
+        store.request([post])
+        try await waitForDelivery(of: ["1"], clock: clock) { delivered }
+
+        store.setExcludedAuthors(["bob@example.social"], localServer: "example.social")
+        #expect(store.translation(for: post) == nil)
+        #expect(!store.hasTranslation(of: post))
+
+        store.setExcludedAuthors([], localServer: "example.social")
+        #expect(store.translation(for: post)?.plainText == "訳:post 1")
+        #expect(translator.attempts == 1)
+    }
+
     /// ハッシュタグは語に分けて1つずつ訳し、後ろに併記する。同じハッシュタグは訳し直さない。
     @Test func glossesHashtags() async throws {
         let scope = TaskScope()

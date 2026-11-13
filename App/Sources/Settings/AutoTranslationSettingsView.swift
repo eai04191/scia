@@ -85,6 +85,14 @@ struct AutoTranslationSettingsView: View {
         if loadedSubject == subject {
             languages
         }
+        if !settings.autoTranslationExcludedHandles.isEmpty {
+            Section("自動翻訳しないユーザー") {
+                ForEach(settings.autoTranslationExcludedHandles, id: \.self) { handle in
+                    Text(verbatim: "@\(handle)")
+                }
+                .onDelete { settings.autoTranslationExcludedHandles.remove(atOffsets: $0) }
+            }
+        }
     }
 
     @ViewBuilder private var languages: some View {

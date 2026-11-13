@@ -78,6 +78,7 @@ enum MenuFixture {
         "item:showReblogs",
         "item:notify",
         "item:endorse",
+        "item:autoTranslation",
         "separator",
         "item:customize",
     ])

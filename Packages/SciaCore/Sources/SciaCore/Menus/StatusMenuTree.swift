@@ -399,7 +399,7 @@ public struct StatusMenuTree {
     /// 「別のアカウントで」のハッシュタグのメニューに出さない項目。どのアカウントで行っても同じ結果になるもの。
     static let sameForEveryAccountHashtagItems: Set<HashtagMenuItem> = [.timeline, .accountStatuses, .addToCompose, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .copyLink, .share, .customize]
     /// 「別のアカウントで」のユーザーのメニューに出さない項目。どのアカウントで行っても同じ結果になるもの。
-    static let sameForEveryAccountUserItems: Set<UserMenuItem> = [.profile, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .customize]
+    static let sameForEveryAccountUserItems: Set<UserMenuItem> = [.profile, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .autoTranslation, .customize]
 
     /// 「別のアカウントで」のサブメニュー。
     private func otherAccountsMenu(for status: Status, item: StatusMenuItem) -> MenuNode<StatusMenuCommand>? {

@@ -24,6 +24,9 @@ public struct UserHandle: Equatable, Sendable {
     /// `@username@domain`の形。
     public var handle: String { "@\(username)@\(server)" }
 
+    /// `username@domain`の形。ログインしているアカウントによらず、同じ人を同じ文字で指す。
+    public var fullAcct: String { "\(username)@\(server)" }
+
     public func text(of part: UserHandlePart) -> String {
         switch part {
         case .handle: handle

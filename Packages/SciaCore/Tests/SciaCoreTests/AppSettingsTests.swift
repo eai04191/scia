@@ -82,6 +82,23 @@ struct AppSettingsTests {
         #expect(AppSettings(defaults: defaults).isAutoTranslationEnabled)
     }
 
+    /// 対象外の人は、サーバー名を補ったハンドルで覚え、大文字と小文字を区別せずに比べる。
+    @Test func persistsAutoTranslationExclusions() throws {
+        let defaults = try makeDefaults()
+        let settings = AppSettings(defaults: defaults)
+        settings.setExcludedFromAutoTranslation(true, acct: "alice", localServer: "example.social")
+        settings.setExcludedFromAutoTranslation(true, acct: "bob@remote.example", localServer: "example.social")
+        settings.setExcludedFromAutoTranslation(true, acct: "Alice", localServer: "example.social")
+
+        let reloaded = AppSettings(defaults: defaults)
+        #expect(reloaded.autoTranslationExcludedHandles == ["bob@remote.example", "Alice@example.social"])
+        #expect(reloaded.isExcludedFromAutoTranslation(acct: "alice@example.social", localServer: "other.example"))
+        #expect(!reloaded.isExcludedFromAutoTranslation(acct: "alice", localServer: "other.example"))
+
+        reloaded.setExcludedFromAutoTranslation(false, acct: "BOB@remote.example", localServer: "example.social")
+        #expect(AppSettings(defaults: defaults).autoTranslationExcludedHandles == ["Alice@example.social"])
+    }
+
     @Test func autoTranslationStrategyDefaultsToLowLatency() throws {
         #expect(AppSettings(defaults: try makeDefaults()).autoTranslationStrategy == .lowLatency)
     }

@@ -105,6 +105,8 @@ struct UserMenu {
             actions?.report(accountID, acct, statusID)
         case .addToList:
             actions?.addToList(subject.target)
+        case .excludeFromAutoTranslation(let isExcluded, let acct):
+            actions?.excludeFromAutoTranslation(isExcluded, acct)
         case .otherAccount(let account, let action):
             actions?.performAsOtherAccount(account, action)
         case .logIn(let account):

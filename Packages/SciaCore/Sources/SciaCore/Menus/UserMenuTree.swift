@@ -22,6 +22,8 @@ public enum UserMenuCommand: Sendable {
     case otherAccount(OtherAccount, OtherAccountUserAction)
     /// ログアウトされたアカウントにログインし直す。「別のアカウントで」で、そのアカウントで人を探せなかったときに出す。
     case logIn(RequestAccount)
+    /// その人の投稿を自動翻訳の対象外にするか、対象に戻す。
+    case excludeFromAutoTranslation(Bool, acct: String)
     /// このメニューの並びの設定の画面を開く。
     case customize
 }
@@ -104,6 +106,10 @@ public struct UserMenuActions {
     public let report: @MainActor (_ accountID: String, _ acct: String, _ statusID: String?) -> Void
     /// その人をどのリストに入れるかを選ぶシートを開く。リンクのメンションは、相手を探してから開く。
     public let addToList: @MainActor (UserMenuTarget) -> Void
+    /// その人を自動翻訳の対象外にしているか。自動翻訳を使えないかオフなら、項目を出さないのでnil。
+    public let isExcludedFromAutoTranslation: @MainActor (_ acct: String) -> Bool?
+    /// その人を自動翻訳の対象外にするか、対象に戻す。
+    public let excludeFromAutoTranslation: @MainActor (Bool, _ acct: String) -> Void
     /// セッションで読んだアカウント。メンションされたユーザーのように、アイコンのURLが手元にない相手のアイコンを出すのに使う。
     public let accounts: AccountCache
     /// 「別のアカウントで」に並べる、ログインしているほかのアカウント。メニューを組むたびに呼ぶので、通信を起こさない。
@@ -127,6 +133,8 @@ public struct UserMenuActions {
         editNote: @escaping @MainActor (UserRelation) -> Void,
         report: @escaping @MainActor (_ accountID: String, _ acct: String, _ statusID: String?) -> Void,
         addToList: @escaping @MainActor (UserMenuTarget) -> Void,
+        isExcludedFromAutoTranslation: @escaping @MainActor (_ acct: String) -> Bool? = { _ in nil },
+        excludeFromAutoTranslation: @escaping @MainActor (Bool, _ acct: String) -> Void = { _, _ in },
         accounts: AccountCache,
         otherAccounts: @escaping @MainActor () -> [OtherAccount] = { [] },
         performAsOtherAccount: @escaping @MainActor (OtherAccount, OtherAccountUserAction) -> Void = { _, _ in },
@@ -134,6 +142,8 @@ public struct UserMenuActions {
         findProfileURL: @escaping @MainActor (UserMenuTarget, _ proceed: @escaping @MainActor (URL) -> Void) -> Void = { _, _ in }
     ) {
         self.mention = mention
+        self.isExcludedFromAutoTranslation = isExcludedFromAutoTranslation
+        self.excludeFromAutoTranslation = excludeFromAutoTranslation
         self.copy = copy
         self.localServer = localServer
         self.resolveTarget = resolveTarget
@@ -289,6 +299,10 @@ public struct UserMenuTree {
             case .addToList:
                 guard tree.actions != nil else { return [] }
                 return [.action(inSubmenu ? item.title : "@\(subject.acct)をリストに追加", icon: .symbol(item.symbolName), .addToList)]
+            case .autoTranslation:
+                // リンクのメンションと文字のままのハンドルは、選ぶまで相手を探さず、対象外かが分からないので出さない。
+                guard case .account(_, let acct) = subject.target, let isExcluded = tree.actions?.isExcludedFromAutoTranslation(acct) else { return [] }
+                return [.action(inSubmenu ? item.title : "@\(subject.acct)を自動翻訳", icon: .symbol(item.symbolName), isSelected: !isExcluded, .excludeFromAutoTranslation(!isExcluded, acct: acct))]
             case .follow, .showReblogs, .notify, .endorse, .note, .mute, .block, .report:
                 guard let actions = tree.actions, let load else { return [] }
                 return tree.relationNodes(item, actions: actions, load: load, failureSlots: failureSlots)
@@ -440,7 +454,7 @@ extension UserMenuTree {
             return [node(item.title, "hand.raised", isDestructive: true, .block)]
         case .report:
             return [.action(item.title, icon: .symbol(item.symbolName), .report(accountID: relation.accountID, acct: relation.acct, statusID: reportableStatusID))]
-        case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .addToList, .otherAccounts, .customize:
+        case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .addToList, .autoTranslation, .otherAccounts, .customize:
             return []
         }
     }
