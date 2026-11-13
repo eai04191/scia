@@ -460,7 +460,29 @@ for devices in json.load(sys.stdin)["devices"].values():
         DevicePreferences -dict-add "$udid" '<dict><key>pasteboardSyncEnabled</key><false/></dict>' \
         || fail "${sim}のクリップボードの同期を切れない"
     # 切る前に同期で入ったものを残さない。
-    printf '' | xcrun simctl pbcopy "$udid" || fail "${sim}のクリップボードを空にできない"
+    clear_pasteboard "$udid" || fail "${sim}のクリップボードを空にできない"
+}
+
+# simctl pbcopyは、端末の中のクリップボードのサービス（pasted）の応答を約1秒だけ待つ。
+# pastedは使われないと止まり、止まっていると、起動が間に合わずに時間切れ（NSPOSIXErrorDomainの60）で終わる。
+# 呼び出しがpastedを起動するので、時間切れのときだけ、通るまでやり直す。起動した直後の端末では、12秒後のやり直しも時間切れになったことがある。
+# ほかの失敗と、上限まで時間切れが続いたときは、空にできていないので失敗で返す。
+PASTEBOARD_TIMEOUT=${PASTEBOARD_TIMEOUT:-30}
+clear_pasteboard() {
+    local udid=$1 started errors
+    started=$(date +%s)
+    while true; do
+        if errors=$(printf '' | xcrun simctl pbcopy "$udid" 2>&1); then return 0; fi
+        case $errors in
+            *'code=60'*) ;;
+            *) echo "$errors" >&2; return 1 ;;
+        esac
+        if [ $(( $(date +%s) - started )) -ge "$PASTEBOARD_TIMEOUT" ]; then
+            echo "$errors" >&2
+            return 1
+        fi
+        sleep 1
+    done
 }
 
 command_acquire() {
