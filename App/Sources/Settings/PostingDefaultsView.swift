@@ -7,7 +7,6 @@ import UIKit
 struct PostingDefaultsView: View {
     let model: PostingDefaultsModel
     let languages: PostingLanguageSource
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
     /// 言語を選ぶシートに渡すもの。出している間だけ持つ。
     @State private var languagePicker: PostingLanguagePicker?
@@ -15,17 +14,11 @@ struct PostingDefaultsView: View {
     @State private var chosenLanguageNames: [String: String] = [:]
 
     var body: some View {
-        NavigationStack {
-            content
-                .navigationTitle("投稿のデフォルト")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("完了") { dismiss() }
-                    }
-                }
-        }
-        .task(.action) { model.reload(purpose: .action) }
+        content
+            .topEdgeEffectHiddenOnMac()
+            .navigationTitle("投稿のデフォルト")
+            .navigationBarTitleDisplayMode(.inline)
+            .task(.action) { model.reload(purpose: .action) }
         .sheet(item: $languagePicker) { picker in
             PostingLanguageView(
                 picker: picker,
@@ -110,8 +103,26 @@ struct PostingDefaultsView: View {
         return PostingLanguage.localizedName(of: code, in: locale) ?? chosenLanguageNames[code] ?? PostingLanguage.badgeText(of: code)
     }
 
+    /// `scia://posting-defaults`で開く、単独のシート。アカウントの画面からは、その中で進むので使わない。
     static func makeSheet(model: PostingDefaultsModel, languages: PostingLanguageSource) -> UIViewController {
-        UIHostingController(rootView: PostingDefaultsView(model: model, languages: languages))
+        UIHostingController(rootView: PostingDefaultsSheet(model: model, languages: languages))
+    }
+}
+
+private struct PostingDefaultsSheet: View {
+    let model: PostingDefaultsModel
+    let languages: PostingLanguageSource
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            PostingDefaultsView(model: model, languages: languages)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("完了") { dismiss() }
+                    }
+                }
+        }
     }
 }
 

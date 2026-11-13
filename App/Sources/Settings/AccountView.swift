@@ -11,9 +11,6 @@ enum AccountScreenItem: Hashable {
     case followedTags
     case scheduled
     case list(id: String, title: String)
-    case postingDefaults
-    case filters
-    case notificationPolicy
     case logOut
 }
 
@@ -29,6 +26,12 @@ struct AccountScreenContext {
     let showsLogOut: Bool
     /// アカウントの画面（設定から開いていれば設定ごと）を閉じてから開く。
     let open: @MainActor (AccountScreenItem) -> Void
+    /// 「フィルター」の画面に渡すもの。
+    let filters: (model: FiltersModel, now: () -> Date)
+    /// 「通知のフィルタリング」の画面に渡すもの。
+    let notificationPolicy: NotificationPolicyModel
+    /// 「投稿のデフォルト」の画面に渡すもの。
+    let postingDefaults: (model: PostingDefaultsModel, languages: PostingLanguageSource)
     /// 名前を入れるアラートを出して、リストを作る。
     let createList: @MainActor () -> Void
     /// 確かめてから、リストを消す。
@@ -65,10 +68,17 @@ struct AccountView: View {
                 Text(account)
             }
             Section {
-                row("投稿のデフォルト", opens: .postingDefaults)
-                row("フィルター", opens: .filters)
+                // この節の画面は投稿やリンクを出さないので、アカウントの画面を閉じずに、この中で進む。
+                NavigationLink("投稿のデフォルト") {
+                    PostingDefaultsView(model: context.postingDefaults.model, languages: context.postingDefaults.languages)
+                }
+                NavigationLink("フィルター") {
+                    FiltersView(model: context.filters.model, now: context.filters.now)
+                }
                 if context.showsNotificationPolicy() {
-                    row("通知のフィルタリング", opens: .notificationPolicy)
+                    NavigationLink("通知のフィルタリング") {
+                        NotificationPolicyView(model: context.notificationPolicy)
+                    }
                 }
             }
             if context.showsLogOut {

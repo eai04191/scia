@@ -100,6 +100,10 @@ final class SessionController {
         }
         return model
     }()
+    /// 「投稿のデフォルト」の言語のシートに渡すもの。最近選んだ言語は候補に並べるために読むだけで、既定に選んだ言語は覚えさせない。
+    private var postingDefaultLanguages: PostingLanguageSource {
+        PostingLanguageSource(recent: RecentPostingLanguages(defaults: .standard, account: credential.handle), load: postingLanguages.languages)
+    }
     private lazy var deletion: StatusDeletion = {
         let deletion = StatusDeletion(session: session, composer: composer.model, tasks: tasks) { [weak composer] in
             composer?.willResetForDeletedStatus()
@@ -1751,9 +1755,7 @@ final class SessionController {
 
     /// 新しく投稿するときの既定の画面をシートで開く。決まりはdocs/account-screen.mdの「投稿のデフォルト」にある。
     func showPostingDefaults() {
-        // 最近選んだ言語は候補に並べるために読むだけで、既定に選んだ言語は覚えさせない。
-        let languages = PostingLanguageSource(recent: RecentPostingLanguages(defaults: .standard, account: credential.handle), load: postingLanguages.languages)
-        rootViewController.presentOnFrontmost(PostingDefaultsView.makeSheet(model: postingDefaults, languages: languages), animated: true)
+        rootViewController.presentOnFrontmost(PostingDefaultsView.makeSheet(model: postingDefaults, languages: postingDefaultLanguages), animated: true)
     }
 
     /// 通知のフィルタリングの設定をシートで開く。
@@ -3195,6 +3197,9 @@ final class SessionController {
             showsNotificationPolicy: { [notificationPolicy] in notificationPolicy.isSupported },
             showsLogOut: logOut != nil,
             open: { [weak self] in self?.openFromAccountScreen($0) },
+            filters: (filters, now),
+            notificationPolicy: notificationPolicy,
+            postingDefaults: (postingDefaults, postingDefaultLanguages),
             createList: { [weak self] in self?.listEditor.presentCreate() },
             deleteList: { [weak self] id, title in self?.listEditor.confirmDelete(listID: id, title: title) }
         )
@@ -3213,9 +3218,6 @@ final class SessionController {
             case .followedTags: showFollowedTags()
             case .scheduled: showScheduledStatuses()
             case .list(let id, let title): showList(id: id, title: title)
-            case .postingDefaults: showPostingDefaults()
-            case .filters: showFilters()
-            case .notificationPolicy: showNotificationPolicy()
             case .logOut: logOut?()
             }
         }

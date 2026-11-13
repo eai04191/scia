@@ -7,7 +7,6 @@ import UIKit
 struct FiltersView: View {
     let model: FiltersModel
     let now: () -> Date
-    @Environment(\.dismiss) private var dismiss
     /// 編集の画面で作るか変えている下書き。
     @State private var editing: EditedFilter?
     @State private var deleting: ServerFilter?
@@ -19,21 +18,15 @@ struct FiltersView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            content
-                .navigationTitle("フィルター")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    // 右上は「フィルターを作成」に使うので、閉じるボタンは左に置く。
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("完了") { dismiss() }
-                    }
-                    ToolbarItem(placement: .primaryAction) {
-                        Button("フィルターを作成", systemImage: "plus") { editing = EditedFilter(draft: FilterDraft()) }
-                            .disabled(model.filters == nil)
-                    }
+        content
+            .navigationTitle("フィルター")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("フィルターを作成", systemImage: "plus") { editing = EditedFilter(draft: FilterDraft()) }
+                        .disabled(model.filters == nil)
                 }
-        }
+            }
         .sheet(item: $editing) { edited in
             FilterEditorView(model: model, now: now, draft: edited.draft)
         }
@@ -77,8 +70,27 @@ struct FiltersView: View {
         }
     }
 
+    /// `scia://filters`で開く、単独のシート。アカウントの画面からは、その中で進むので使わない。
     static func makeSheet(model: FiltersModel, now: @escaping () -> Date) -> UIViewController {
-        UIHostingController(rootView: FiltersView(model: model, now: now))
+        UIHostingController(rootView: FiltersSheet(model: model, now: now))
+    }
+}
+
+private struct FiltersSheet: View {
+    let model: FiltersModel
+    let now: () -> Date
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            FiltersView(model: model, now: now)
+                .toolbar {
+                    // 右上は「フィルターを作成」に使うので、閉じるボタンは左に置く。
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("完了") { dismiss() }
+                    }
+                }
+        }
     }
 }
 

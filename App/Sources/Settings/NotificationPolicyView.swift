@@ -6,22 +6,14 @@ import UIKit
 /// 決まりはdocs/notification-filter.mdの「通知のフィルタリングの設定」にある。
 struct NotificationPolicyView: View {
     let model: NotificationPolicyModel
-    @Environment(\.dismiss) private var dismiss
     /// 「無視」にしてよいか確かめている項目。
     @State private var confirmingDrop: NotificationPolicy.Item?
 
     var body: some View {
-        NavigationStack {
-            content
-                .navigationTitle("通知のフィルタリング")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("完了") { dismiss() }
-                    }
-                }
-        }
-        .task(.action) { model.reload(purpose: .action) }
+        content
+            .navigationTitle("通知のフィルタリング")
+            .navigationBarTitleDisplayMode(.inline)
+            .task(.action) { model.reload(purpose: .action) }
     }
 
     @ViewBuilder
@@ -124,7 +116,24 @@ struct NotificationPolicyView: View {
         }
     }
 
+    /// 保留中の通知のリストと`scia://notification-policy`から開く、単独のシート。アカウントの画面からは、その中で進むので使わない。
     static func makeSheet(model: NotificationPolicyModel) -> UIViewController {
-        UIHostingController(rootView: NotificationPolicyView(model: model))
+        UIHostingController(rootView: NotificationPolicySheet(model: model))
+    }
+}
+
+private struct NotificationPolicySheet: View {
+    let model: NotificationPolicyModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            NotificationPolicyView(model: model)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("完了") { dismiss() }
+                    }
+                }
+        }
     }
 }
