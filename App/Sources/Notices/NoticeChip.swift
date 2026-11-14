@@ -162,7 +162,7 @@ final class NoticeChip: UIControl {
             spinner.isHidden = true
             iconView.isHidden = true
         }
-        countLabel.text = notice.additionalCount > 0 ? "+\(notice.additionalCount)件" : nil
+        countLabel.text = notice.additionalCount > 0 ? NoticeTexts.additionalCount(notice.additionalCount) : nil
         countLabel.isHidden = notice.additionalCount == 0
         let hint: String?
         switch notice.action {
@@ -177,7 +177,7 @@ final class NoticeChip: UIControl {
             disclosureView.isHidden = true
         }
         // 「›」は読ませず、押すと何が起きるかをヒントで伝える。
-        accessibilityLabel = notice.additionalCount > 0 ? "\(notice.title)、ほかに\(notice.additionalCount)件" : notice.title
+        accessibilityLabel = notice.additionalCount > 0 ? NoticeTexts.accessibilityLabel(title: notice.title, additionalCount: notice.additionalCount) : notice.title
         accessibilityValue = notice.value
         accessibilityHint = hint
         var traits: UIAccessibilityTraits = notice.isActionable ? .button : .staticText

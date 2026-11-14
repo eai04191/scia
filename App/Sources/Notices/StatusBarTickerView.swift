@@ -239,7 +239,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
         capsule.alpha = 0
         capsule.isAccessibilityElement = true
         capsule.accessibilityTraits = .button
-        capsule.accessibilityHint = "通知タブを開きます。"
+        capsule.accessibilityHint = StatusBarTickerTexts.openHint
         capsule.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
         // 文字はステータスバーの高さに収めるため、端末の文字の大きさに合わせて大きくできない。タブバーと同じく、
         // 文字を大きくする設定では、長押しで拡大表示（Large Content Viewer）に出し、指を離すと押したことにする。
@@ -823,19 +823,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
             self.item = item
             self.metrics = metrics
             let appearance = NotificationAppearance(item.kind)
-            let name = item.account.displayNameOrUsername
-            let action = if let emoji = item.reactionEmoji {
-                // 通知のタイムラインの行と同じく、何の絵文字かまで読む。カスタム絵文字はショートコードで読む。
-                "\(name)が\(emoji.isCustom ? ":\(emoji.name):" : emoji.name)でリアクションしました"
-            } else {
-                appearance.phrase.includesName ? "\(appearance.phrase.before)\(name)\(appearance.phrase.after)" : appearance.phrase.before
-            }
-            accessibilityLabel = switch item.subject {
-            case .text(let text): "\(action)。\(text.plainText)"
-            case .media(_, _, let isImageOnly): "\(action)。\(isImageOnly ? "画像" : "メディア")だけの投稿"
-            case .handle(let handle): "\(action)。\(handle)"
-            case .none: action
-            }
+            accessibilityLabel = item.accessibilityLabel
 
             for stack in [left, right] {
                 stack.axis = .horizontal

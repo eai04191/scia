@@ -1,3 +1,4 @@
+import SciaCore
 import UIKit
 
 /// チップの列の中身。一番上にログインし直しの段、その下に出たままのチップと数秒で消えるチップを縦に並べる。
@@ -189,12 +190,12 @@ final class ReauthenticationButton: UIButton {
         // アカウント名は省かず、長ければ真ん中を省く。ユーザー名とサーバー名の両方の端を残すため。
         configuration.subtitleLineBreakMode = .byTruncatingMiddle
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16)
-        var title = AttributedString("ログインし直してください")
+        var title = AttributedString(NoticeTexts.logInPrompt)
         title.font = .preferredFont(forTextStyle: .subheadline)
         configuration.attributedTitle = title
         self.configuration = configuration
         addAction(UIAction { [weak self] _ in self?.action?() }, for: .primaryActionTriggered)
-        accessibilityHint = "ログインし直します。"
+        accessibilityHint = NoticeTexts.logInHint
     }
 
     @available(*, unavailable)

@@ -13,11 +13,11 @@ struct OperationStatusView: View {
     var body: some View {
         NavigationStack {
             content
-                .navigationTitle("操作の状況")
+                .navigationTitle(OperationStatusTexts.title)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("完了") { dismiss() }
+                        Button(OperationStatusTexts.done) { dismiss() }
                     }
                 }
         }
@@ -27,14 +27,14 @@ struct OperationStatusView: View {
     private var content: some View {
         if notices.activities.isEmpty && notices.failures.isEmpty {
             ContentUnavailableView {
-                Label("進行中の操作も失敗もありません", systemImage: "checkmark.circle")
+                Label(OperationStatusTexts.empty, systemImage: "checkmark.circle")
             } description: {
-                Text("保存のためのダウンロードと、お気に入りやブーストなどの失敗が並びます。失敗はアプリを終了するまで残ります。")
+                Text(OperationStatusTexts.emptyDescription)
             }
         } else {
             List {
                 if !notices.activities.isEmpty {
-                    Section("進行中") {
+                    Section(OperationStatusTexts.activitiesHeader) {
                         ForEach(notices.activities) { activity in
                             ActivityRow(activity: activity) { notices.stop(activity.id) }
                         }
@@ -42,16 +42,16 @@ struct OperationStatusView: View {
                 }
                 Section {
                     if notices.failures.isEmpty {
-                        Text("失敗はありません")
+                        Text(OperationStatusTexts.noFailures)
                             .foregroundStyle(.secondary)
                     }
                     ForEach(notices.failures) { failure in
                         FailureRow(failure: failure, onOpen: onOpen)
                     }
                 } header: {
-                    Text("最近の失敗")
+                    Text(OperationStatusTexts.failuresHeader)
                 } footer: {
-                    Text("アプリを終了するまで直近の\(OperationStatus.failureLimit)件を残します。")
+                    Text(OperationStatusTexts.failuresFooter(limit: OperationStatus.failureLimit))
                 }
             }
             .topEdgeEffectHiddenOnMac()
@@ -112,7 +112,7 @@ private struct ProgressRingStopButton: View {
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("中止")
+            .accessibilityLabel(OperationStatusTexts.stop)
         } else {
             ring
                 .frame(width: 44, height: 44)
@@ -168,7 +168,7 @@ private struct FailureRow: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .accessibilityHint("投稿を開きます。")
+            .accessibilityHint(OperationStatusTexts.openStatusHint)
         } else {
             details
         }

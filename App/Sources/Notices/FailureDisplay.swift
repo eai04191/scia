@@ -61,7 +61,7 @@ private struct SceneTrackerView: UIViewRepresentable {
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UIView, context: Context) -> CGSize? { .zero }
 }
 
-private let logInTitle = "ログインし直す"
+private let logInTitle = NoticeTexts.logIn
 
 extension UIAlertController {
     /// 失敗の理由を出すアラート。理由にログアウトされたアカウントがあれば、「ログインし直す」を添える。
@@ -176,7 +176,7 @@ struct FailureRowButton<Label: View, Style: ButtonStyle>: View {
         }
         .buttonStyle(style)
         .background(SceneTrackerView(box: box))
-        .accessibilityHint(logsIn ? "ログインし直します。" : "再読み込みします。")
+        .accessibilityHint(logsIn ? NoticeTexts.logInHint : NoticeTexts.reloadHint)
     }
 }
 

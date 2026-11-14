@@ -52,7 +52,7 @@ final class NoticeStackView: UIView {
         super.init(frame: frame)
         // 処理中のインジケーターは、ほかのアイコンより背が高い。
         // 2行に折り返したチップが2枚並んでも収まる高さを取るため、2行の文言で測る。
-        sizingChip.apply(Notice(id: "sizing", kind: .progress, title: "あ\nあ"))
+        sizingChip.apply(Notice(id: "sizing", kind: .progress, title: NoticeTexts.sizingSample))
         // 文字の大きさの設定が変われば、高さを測り直す。
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
             self.invalidateIntrinsicContentSize()
@@ -141,7 +141,7 @@ final class NoticeStackView: UIView {
         let pan = UIPanGestureRecognizer(target: self, action: #selector(handleDismissPan(_:)))
         pan.delegate = self
         chip.addGestureRecognizer(pan)
-        chip.accessibilityCustomActions = [UIAccessibilityCustomAction(name: "閉じる") { [weak self, weak chip] _ in
+        chip.accessibilityCustomActions = [UIAccessibilityCustomAction(name: NoticeTexts.close) { [weak self, weak chip] _ in
             guard let self, let chip else { return false }
             return self.dismiss(chip)
         }]
