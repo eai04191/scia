@@ -311,8 +311,8 @@ final class ReactionChipsView: UIView {
         button.label.emojiImages = animatedEmojis
         button.label.attributedText = reaction.emoji
         button.setCount(reaction.count, isMine: reaction.isMine, animation: animated ? transitionDuration : nil)
-        button.accessibilityLabel = "\(reaction.spokenName) \(reaction.count.formatted())件"
-        button.accessibilityValue = reaction.isMine ? "リアクション済み" : nil
+        button.accessibilityLabel = PostTexts.reactionAccessibilityLabel(name: reaction.spokenName, count: reaction.count)
+        button.accessibilityValue = reaction.isMine ? PostTexts.ownReaction : nil
         button.accessibilityTraits = reaction.isMine ? [.button, .selected] : .button
         button.setNeedsLayout()
     }
@@ -322,7 +322,7 @@ final class ReactionChipsView: UIView {
         applyStyle(to: button)
         button.label.attributedText = addSymbol()
         button.label.textColor = .secondaryLabel
-        button.accessibilityLabel = "リアクションを追加"
+        button.accessibilityLabel = PostTexts.addReaction
         button.accessibilityTraits = .button
         button.addAction(UIAction { [weak self] _ in self?.onAdd?() }, for: .touchUpInside)
         return button

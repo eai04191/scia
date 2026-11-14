@@ -286,7 +286,7 @@ final class NotificationContentView: UIView, UIContentView {
             .joined(separator: "、")
         // まとめた行の「ほか3人」は文字の中にあり、読み上げでは押せないため、操作として足す。
         let groupAccountsAction = configuration.onOpenGroupAccounts.map { open in
-            UIAccessibilityCustomAction(name: "通知を送った人のリスト") { _ in
+            UIAccessibilityCustomAction(name: PostTexts.openGroupAccounts) { _ in
                 open()
                 return true
             }
@@ -307,14 +307,14 @@ final class NotificationContentView: UIView, UIContentView {
     private func profileAccessibilityActions(for configuration: NotificationContentConfiguration) -> [UIAccessibilityCustomAction] {
         if let open = configuration.onOpenGroupAccount, !configuration.groupAccountNames.isEmpty {
             return configuration.groupAccountNames.enumerated().map { index, name in
-                UIAccessibilityCustomAction(name: "\(name)のプロフィール") { _ in
+                UIAccessibilityCustomAction(name: PostTexts.openProfile(name: name)) { _ in
                     open(index)
                     return true
                 }
             }
         }
         guard let open = configuration.onOpenAccount, let name = configuration.accountName else { return [] }
-        return [UIAccessibilityCustomAction(name: "\(name)のプロフィール") { _ in
+        return [UIAccessibilityCustomAction(name: PostTexts.openProfile(name: name)) { _ in
             open()
             return true
         }]

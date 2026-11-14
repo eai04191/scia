@@ -63,8 +63,7 @@ struct ReactionGlow: Equatable {
 
     /// 読み上げで、名前や本文に続けて読む状態。
     var accessibilityText: String? {
-        let parts = [isReblogged ? "ブースト済み" : nil, isFavourited ? "お気に入り済み" : nil].compactMap(\.self)
-        return parts.isEmpty ? nil : parts.joined(separator: "、")
+        PostTexts.reactionGlowAccessibilityText(isReblogged: isReblogged, isFavourited: isFavourited)
     }
 }
 

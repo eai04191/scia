@@ -147,7 +147,7 @@ extension TimelineViewController {
     /// 保留中の通知の行。人のリストの行に、保留している通知の件数を足す。
     func notificationRequestConfiguration(for request: NotificationRequest, base: UIListContentConfiguration) -> AccountRowConfiguration {
         var configuration = accountConfiguration(for: request.account, base: base)
-        configuration.detail = NSAttributedString(string: "通知\(request.notificationsCount.formatted())件", attributes: [
+        configuration.detail = NSAttributedString(string: PostTexts.notificationRequestCount(request.notificationsCount), attributes: [
             .font: base.secondaryTextProperties.font,
             .foregroundColor: UIColor.secondaryLabel,
         ])

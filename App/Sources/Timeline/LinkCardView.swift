@@ -139,7 +139,7 @@ final class LinkCardView: UIButton {
         if !animates {
             showText(of: content)
         }
-        accessibilityLabel = ["リンク", text.titleIsURL ? nil : text.title, text.site].compactMap(\.self).filter { !$0.isEmpty }.joined(separator: "、")
+        accessibilityLabel = PostTexts.linkCardAccessibilityLabel(title: text.titleIsURL ? nil : text.title, site: text.site)
         if paddingChanged {
             invalidateIntrinsicContentSize()
         }
@@ -220,7 +220,7 @@ final class LinkCardView: UIButton {
     private func updateImageInteraction() {
         if isCoveringImage {
             thumbnailView.isUserInteractionEnabled = true
-            accessibilityCustomActions = [UIAccessibilityCustomAction(name: "閲覧注意の画像を表示") { [weak self] _ in
+            accessibilityCustomActions = [UIAccessibilityCustomAction(name: PostTexts.revealSensitiveLinkImage) { [weak self] _ in
                 self?.onRevealImage?()
                 return true
             }]
@@ -229,7 +229,7 @@ final class LinkCardView: UIButton {
         let opensImage = request != nil && thumbnailView.imageURL == request?.url
         thumbnailView.isUserInteractionEnabled = opensImage
         accessibilityCustomActions = opensImage
-            ? [UIAccessibilityCustomAction(name: "画像を開く") { [weak self] _ in
+            ? [UIAccessibilityCustomAction(name: PostTexts.openLinkImage) { [weak self] _ in
                 self?.openImage()
                 return true
             }]

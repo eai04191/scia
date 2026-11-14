@@ -597,7 +597,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         moreLabel.text = "+\(hiddenCount)"
         accessibilityParts = (attachment.type.displayName, attachment.description)
         updateBadge()
-        accessibilityValue = hiddenCount > 0 ? "ほか\(hiddenCount)件" : nil
+        accessibilityValue = hiddenCount > 0 ? PostTexts.hiddenMediaCount(hiddenCount) : nil
     }
 
     /// 投稿欄で選んだ手元のメディアを描く。サーバーから取得せず、投稿欄で作ったサムネイルをそのまま出す。
@@ -618,7 +618,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         playView.isHidden = kind != .video
         marks = MediaBadgeView.marks(hasDescription: !description.isEmpty, kind: kind)
         moreLabel.isHidden = true
-        accessibilityParts = (kind.map(\.displayName) ?? "メディア", description)
+        accessibilityParts = (kind.map(\.displayName) ?? PostTexts.unknownMediaKind, description)
         updateBadge()
         accessibilityValue = nil
         setNeedsLayout()

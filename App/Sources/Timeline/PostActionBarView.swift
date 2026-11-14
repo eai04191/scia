@@ -52,7 +52,7 @@ final class PostActionBarView: UIView {
             stack.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
         accessibilityContainerType = .semanticGroup
-        accessibilityLabel = "アクションバー"
+        accessibilityLabel = PostTexts.actionBar
     }
 
     @available(*, unavailable)
@@ -309,7 +309,7 @@ final class PostActionBarButtonView: UIControl {
         setNeedsLayout()
         applyColor()
         accessibilityLabel = button.title
-        accessibilityValue = [button.isOn ? "済み" : nil, button.count.map { "\($0.formatted())件" }].compactMap(\.self).joined(separator: "、")
+        accessibilityValue = PostTexts.actionBarButtonValue(isOn: button.isOn, count: button.count)
         accessibilityTraits = button.isOn ? [.button, .selected] : .button
     }
 

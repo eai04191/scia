@@ -158,34 +158,48 @@ extension TimelineViewController {
         let nameRenderer = RichTextRenderer(font: font, textColor: base.textProperties.color, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
         // 言い回しはアプリの文言なので、言語を付けず、ウィンドウに付けたアプリの言語で描く。
         let phraseAttributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.secondaryLabel]
-        let header = NSMutableAttributedString(string: appearance.phrase.before, attributes: phraseAttributes)
-        if appearance.phrase.includesName {
+        let reactionEmoji = notification.type == .emojiReaction ? notification.reactionEmoji : nil
+        // 付けた絵文字は、名前と同じ大きさで文の中に描く。カスタム絵文字は画像で描く。
+        let emojiText = reactionEmoji.map { emoji in
+            emoji.customEmoji.map { ":\($0.shortcode):" } ?? (emoji.isCustom ? ":\(emoji.name):" : emoji.name)
+        }
+        let sentence = PostTexts.notificationHeader(
+            appearance,
+            name: notification.account.displayNameOrUsername,
+            otherAccountCount: notification.isGroup ? notification.notificationsCount - 1 : nil,
+            reactionEmoji: emojiText
+        )
+        // 文の中の名前、ほかの人の数、絵文字を、それぞれの描き方で描いた部分に置き換える。ほかの部分は言い回しの色で描く。
+        var parts: [(range: Range<String.Index>, text: NSAttributedString)] = []
+        if let range = sentence.name {
+            let name = NSMutableAttributedString()
             // まとめた行では、名前の前にアイコンを差し込まず、行の上にアイコンを並べる。
             if !notification.isGroup {
-                header.append(avatarAttachment(of: notification.account, font: font))
+                name.append(avatarAttachment(of: notification.account, font: font))
             }
-            header.append(nameRenderer.render(.plain(notification.account.displayNameOrUsername, emojis: notification.account.emojis)))
-            if notification.isGroup {
-                header.append(NSAttributedString(string: "と", attributes: phraseAttributes))
-                var linkAttributes = phraseAttributes
-                linkAttributes[.foregroundColor] = UIColor.tintColor
-                if settings.accentColor.underlinesLinks {
-                    linkAttributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
-                }
-                linkAttributes[.groupAccountsLink] = true
-                header.append(NSAttributedString(string: PostTexts.otherAccounts(count: notification.notificationsCount - 1), attributes: linkAttributes))
+            name.append(nameRenderer.render(.plain(notification.account.displayNameOrUsername, emojis: notification.account.emojis)))
+            parts.append((range, name))
+        }
+        if let range = sentence.otherAccounts {
+            var linkAttributes = phraseAttributes
+            linkAttributes[.foregroundColor] = UIColor.tintColor
+            if settings.accentColor.underlinesLinks {
+                linkAttributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
             }
+            linkAttributes[.groupAccountsLink] = true
+            parts.append((range, NSAttributedString(string: String(sentence.text[range]), attributes: linkAttributes)))
         }
-        let reactionEmoji = notification.type == .emojiReaction ? notification.reactionEmoji : nil
-        if let emoji = reactionEmoji {
-            // 付けた絵文字は、名前と同じ大きさで文の中に描く。カスタム絵文字は画像で描く。
-            let text: RichText = emoji.customEmoji.map { .plain(":\($0.shortcode):", emojis: [$0]) } ?? .plain(emoji.isCustom ? ":\(emoji.name):" : emoji.name, emojis: [])
-            header.append(NSAttributedString(string: "が", attributes: phraseAttributes))
-            header.append(nameRenderer.render(text))
-            header.append(NSAttributedString(string: "でリアクションしました", attributes: phraseAttributes))
-        } else {
-            header.append(NSAttributedString(string: appearance.phrase.after, attributes: phraseAttributes))
+        if let range = sentence.reactionEmoji, let emoji = reactionEmoji, let emojiText {
+            parts.append((range, nameRenderer.render(.plain(emojiText, emojis: emoji.customEmoji.map { [$0] } ?? []))))
         }
+        let header = NSMutableAttributedString()
+        var cursor = sentence.text.startIndex
+        for part in parts.sorted(by: { $0.range.lowerBound < $1.range.lowerBound }) {
+            header.append(NSAttributedString(string: String(sentence.text[cursor..<part.range.lowerBound]), attributes: phraseAttributes))
+            header.append(part.text)
+            cursor = part.range.upperBound
+        }
+        header.append(NSAttributedString(string: String(sentence.text[cursor...]), attributes: phraseAttributes))
         var configuration = NotificationContentConfiguration(
             symbolName: appearance.symbolName,
             symbolColor: appearance.color,
@@ -209,7 +223,12 @@ extension TimelineViewController {
         )
         if let emoji = reactionEmoji {
             // カスタム絵文字は画像の文字で読めないので、本文と同じくショートコードで読む。
-            configuration.headerAccessibilityText = "\(notification.account.displayNameOrUsername)が\(emoji.isCustom ? ":\(emoji.name):" : emoji.name)でリアクションしました"
+            configuration.headerAccessibilityText = PostTexts.notificationHeader(
+                appearance,
+                name: notification.account.displayNameOrUsername,
+                otherAccountCount: nil,
+                reactionEmoji: emoji.isCustom ? ":\(emoji.name):" : emoji.name
+            ).text
         }
         if appearance.phrase.includesName {
             configuration.accountName = notification.account.displayNameOrUsername

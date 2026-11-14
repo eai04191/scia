@@ -234,19 +234,13 @@ struct PostContentConfiguration: UIContentConfiguration {
 
     /// 読み上げる時刻。アイコンは読まず、言葉にする。
     func timeAccessibilityText(now: Date) -> String {
-        var text = StatusTimestamp.accessibilityText(for: createdAt, now: now, style: timeStyle)
-        if isEdited {
-            text = "編集済み、\(text)"
-        }
-        if isTranslated {
-            text = "翻訳済み、\(text)"
-        } else if isTranslating {
-            text = "翻訳中、\(text)"
-        }
-        if visibility != .public {
-            text = "\(VisibilityOption(visibility).title)、\(text)"
-        }
-        return text
+        PostTexts.timeAccessibilityText(
+            StatusTimestamp.accessibilityText(for: createdAt, now: now, style: timeStyle),
+            isEdited: isEdited,
+            isTranslated: isTranslated,
+            isTranslating: isTranslating,
+            visibility: visibility
+        )
     }
 }
 
@@ -997,13 +991,13 @@ final class PostContentView: UIView, UIContentView {
     private func profileAccessibilityActions(for configuration: PostContentConfiguration) -> [UIAccessibilityCustomAction] {
         var actions: [UIAccessibilityCustomAction] = []
         if configuration.onOpenAccount != nil {
-            actions.append(UIAccessibilityCustomAction(name: "\(configuration.authorName)のプロフィール") { [weak self] _ in
+            actions.append(UIAccessibilityCustomAction(name: PostTexts.openProfile(name: configuration.authorName)) { [weak self] _ in
                 self?.openAccount()
                 return true
             })
         }
         if let context = configuration.context, context.opensAccount, let name = context.accountName, configuration.onOpenContextAccount != nil {
-            actions.append(UIAccessibilityCustomAction(name: "\(name)のプロフィール") { [weak self] _ in
+            actions.append(UIAccessibilityCustomAction(name: PostTexts.openProfile(name: name)) { [weak self] _ in
                 self?.openContextAccount()
                 return true
             })

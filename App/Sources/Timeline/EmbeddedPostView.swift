@@ -423,7 +423,7 @@ final class EmbeddedPostView: UIButton {
             })
         }
         if let header = content.header, header.opensAccount {
-            actions.append(UIAccessibilityCustomAction(name: "\(header.name.string)のプロフィール") { [weak self] _ in
+            actions.append(UIAccessibilityCustomAction(name: PostTexts.openProfile(name: header.name.string)) { [weak self] _ in
                 self?.openAccount()
                 return true
             })

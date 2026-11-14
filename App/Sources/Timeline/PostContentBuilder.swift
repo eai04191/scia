@@ -312,7 +312,7 @@ struct PostContentBuilder {
             text: body.render(translation?.text ?? post.text),
             translation: embedTranslation(translation),
             media: media,
-            openActionName: "Xの投稿を開く"
+            openActionName: PostTexts.openXPost
         )
     }
 
@@ -350,7 +350,7 @@ struct PostContentBuilder {
             translation: embedTranslation(translation),
             media: media,
             notes: notes,
-            openActionName: "引用元の投稿を開く"
+            openActionName: PostTexts.openQuotedPost
         )
     }
 
