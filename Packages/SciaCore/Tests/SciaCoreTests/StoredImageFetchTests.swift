@@ -46,6 +46,19 @@ struct StoredImageFetchTests {
         #expect(remote.count == 1)
     }
 
+    /// 端末に置いたファイルから読んだときは、そう知らせる。取得したときは、通信の層が知らせるので、ここでは知らせない。
+    @Test func reportsFileAsSourceOnlyWhenReadFromStoredFile() async throws {
+        let fetch = makeFetch(Remote())
+        let reported = Mutex<[ResponseSource]>([])
+        try await ResponseSource.$report.withValue({ source in reported.withLock { $0.append(source) } }) {
+            _ = try await fetch.data(from: try url("a.png"))
+            #expect(reported.withLock { $0 }.isEmpty)
+            _ = try await fetch.data(from: try url("a.png"))
+        }
+
+        #expect(reported.withLock { $0 } == [.file])
+    }
+
     /// URLごとに置く。別のURLは取得する。
     @Test func fetchesEachURLOnce() async throws {
         let remote = Remote()

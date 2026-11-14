@@ -179,15 +179,18 @@ struct EmojiImageStoreTests {
             maker: PlatformImageMaker<CGImage>(still: { $0 }, animated: { _, _ in nil }),
             upgradePurpose: { nil }
         ) { url in
-            if url.lastPathComponent != "silent.png" {
-                ResponseSource.report?(url.lastPathComponent == "cached.png" ? .cache : .network)
+            switch url.lastPathComponent {
+            case "cached.png": ResponseSource.report?(.cache)
+            case "stored.png": ResponseSource.report?(.file)
+            case "fresh.png": ResponseSource.report?(.network)
+            default: break
             }
             return data
         }
-        let urls = ["cached.png", "fresh.png", "silent.png"].map { url.deletingLastPathComponent().appending(path: $0) }
+        let urls = ["cached.png", "stored.png", "fresh.png", "silent.png"].map { url.deletingLastPathComponent().appending(path: $0) }
         urls.forEach { _ = store.image(for: $0) }
         try await waitUntil { urls.allSatisfy { store.image(for: $0) != nil } }
-        #expect(store.stateDump().contains("stillFetched: network 1 cache 1 unknown 1 afterEviction: network 0 cache 0 unknown 0"))
+        #expect(store.stateDump().contains("stillFetched: network 1 cache 1 file 1 unknown 1 afterEviction: network 0 cache 0 file 0 unknown 0"))
     }
 
     /// 読んだデータが画像として読めなかったら、URLを渡す。端末に置いたファイルを消して、次は取得し直せるようにするため。

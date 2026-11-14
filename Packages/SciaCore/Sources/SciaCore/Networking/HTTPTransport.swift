@@ -48,6 +48,8 @@ public enum UploadProgress {
 public enum ResponseSource: Sendable {
     case network
     case cache
+    /// 通信の層を通さず、アプリが端末に置いたファイルから読んだ（`StoredImageFetch`）。
+    case file
 
     /// 受け取る。読み直しが通信になっているかを数えるために、読む呼び出しを包んで値を入れる。`UploadProgress`と同じ理由でタスクローカルにする。
     @TaskLocal public static var report: (@Sendable (ResponseSource) -> Void)?

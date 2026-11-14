@@ -268,21 +268,23 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
         let value = Mutex<ResponseSource?>(nil)
     }
 
-    /// 読んだ応答を、通信で受け取ったものと、応答のキャッシュから読んだものに分けて数える。
+    /// 読んだ応答を、通信で受け取ったもの、応答のキャッシュから読んだもの、端末に置いたファイルから読んだものに分けて数える。
     private struct SourceCounts: CustomStringConvertible {
         var network = 0
         var cache = 0
+        var file = 0
         var unknown = 0
 
         mutating func count(_ source: ResponseSource?) {
             switch source {
             case .network: network += 1
             case .cache: cache += 1
+            case .file: file += 1
             case nil: unknown += 1
             }
         }
 
-        var description: String { "network \(network) cache \(cache) unknown \(unknown)" }
+        var description: String { "network \(network) cache \(cache) file \(file) unknown \(unknown)" }
     }
 
     /// 読み直しの回数を数える。解像度とキャッシュの上限を決めるときに、上限を超えて捨てたものをどれだけ読み直したかを見る。

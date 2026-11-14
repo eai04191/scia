@@ -16,6 +16,7 @@ public struct StoredImageFetch: Sendable {
 
     public func data(from url: URL) async throws -> Data {
         if let data = await files.data(for: url) {
+            ResponseSource.report?(.file)
             return data
         }
         let generation = await files.generation
