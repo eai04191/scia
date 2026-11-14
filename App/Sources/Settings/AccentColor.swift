@@ -105,7 +105,7 @@ struct AccentColorPicker: View {
     @Binding var selection: AccentColorChoice
 
     var body: some View {
-        Picker("アクセントカラー", selection: $selection) {
+        Picker(SettingsItem.accentColor.title, selection: $selection) {
             ForEach(AccentColorChoice.allCases, id: \.self) { choice in
                 Label {
                     Text(choice.title)

@@ -78,42 +78,19 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack(path: $path) {
             Form {
-                Section {
-                    NavigationLink(value: SettingsPage.account) {
-                        SettingsCategoryLabel("アカウント", systemImage: "person.crop.circle.fill", color: .systemBlue)
-                    }
-                    NavigationLink(value: SettingsPage.tabs) {
-                        SettingsCategoryLabel("タブ", systemImage: "dock.rectangle", color: .systemBlue)
-                    }
-                } header: {
-                    Text(account)
-                }
-                Section {
-                    NavigationLink(value: SettingsPage.display) {
-                        SettingsCategoryLabel("表示", systemImage: "circle.lefthalf.filled", color: .systemBlue)
-                    }
-                    NavigationLink(value: SettingsPage.interaction) {
-                        SettingsCategoryLabel("操作", systemImage: "hand.tap.fill", color: .systemOrange)
-                    }
-                    NavigationLink(value: SettingsPage.compose) {
-                        SettingsCategoryLabel("作成", systemImage: "square.and.pencil", color: .systemGreen)
-                    }
-                    NavigationLink(value: SettingsPage.appIcon) {
-                        AppIconSettingsLabel()
-                    }
-                }
-                Section {
-                    NavigationLink(value: SettingsPage.storage) {
-                        SettingsCategoryLabel("ストレージ", systemImage: "externaldrive.fill", color: .systemGray)
-                    }
-                    NavigationLink(value: SettingsPage.about) {
-                        SettingsCategoryLabel("情報", systemImage: "doc.text.fill", color: .systemGray)
+                ForEach(SettingsPage.rootSections(handle: account), id: \.self) { section in
+                    SettingsFormSection(header: section.header, footer: section.footer) {
+                        ForEach(section.rows, id: \.self) { row in
+                            if case .page(let page) = row {
+                                NavigationLink(value: page) { rootLabel(of: page) }
+                            }
+                        }
                     }
                 }
             }
             .topEdgeEffectHiddenOnMac()
             .navigationDestination(for: SettingsPage.self) { destination($0) }
-            .navigationTitle("設定")
+            .navigationTitle(SettingsPage.rootTitle)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完了") { dismiss() }
@@ -123,13 +100,35 @@ struct SettingsView: View {
         .onChange(of: path, initial: true) { navigation.isAtRoot = path.isEmpty }
     }
 
+    /// トップの画面の行のラベル。分類には、iPhoneの設定アプリと同じく、色を敷いた四角のアイコンを添える。
+    @ViewBuilder
+    private func rootLabel(of page: SettingsPage) -> some View {
+        if page == .appIcon {
+            AppIconSettingsLabel()
+        } else {
+            let icon = Self.rootIcon(of: page)
+            SettingsCategoryLabel(page.rowTitle, systemImage: icon.systemImage, color: icon.color)
+        }
+    }
+
+    private static func rootIcon(of page: SettingsPage) -> (systemImage: String, color: UIColor) {
+        switch page {
+        case .account: ("person.crop.circle.fill", .systemBlue)
+        case .tabs: ("dock.rectangle", .systemBlue)
+        case .display: ("circle.lefthalf.filled", .systemBlue)
+        case .interaction: ("hand.tap.fill", .systemOrange)
+        case .compose: ("square.and.pencil", .systemGreen)
+        case .storage: ("externaldrive.fill", .systemGray)
+        case .about: ("doc.text.fill", .systemGray)
+        default: ("gearshape.fill", .systemGray)
+        }
+    }
+
     @ViewBuilder
     private func destination(_ page: SettingsPage) -> some View {
         switch page {
-        case .display: DisplaySettingsView(settings: settings)
-        case .interaction: InteractionSettingsView(settings: settings, openInAppBrowserHeight: openInAppBrowserHeight)
-        case .compose: ComposeSettingsView(settings: settings)
-        case .media: MediaSettingsView(settings: settings)
+        case .display, .compose, .media, .linkLoading: SettingsScreenForm(page: page, settings: settings)
+        case .interaction: SettingsScreenForm(page: page, settings: settings, openInAppBrowserHeight: openInAppBrowserHeight)
         case .about: AboutSettingsView()
         case .appIcon: AppIconSettingsView()
         case .account: AccountView(settings: settings, account: account, context: accountScreen)
@@ -139,14 +138,13 @@ struct SettingsView: View {
         case .notificationAppearance:
             NotificationAppearanceEditorView(settings: settings, opening: appearanceGroup)
                 .onAppear { appearanceGroup = nil }
-        case .linkLoading: LinkLoadingSettingsView(settings: settings)
         case .autoTranslation:
             if #available(iOS 26.4, *) {
                 AutoTranslationSettingsView(settings: settings)
             }
         case .tabs:
             MenuLayoutSettingsView(
-                title: "タブ",
+                title: page.title,
                 layout: tabLayoutBinding,
                 image: { [tabIcons] in tabIcons.icon(for: $0)?.menu },
                 imageRevision: { [tabIcons] in tabIcons.revision },
@@ -166,41 +164,27 @@ struct SettingsView: View {
                     }
                 }
             )
-        case .statusActions:
-            ObjectActionsSettingsView(
-                entity: .status,
-                settings: settings,
-                menu: .statusMenu,
-                actionBar: .statusActionBar,
-                swipes: PostSwipeSettingsSection(leading: settings.postLeadingSwipeLayout, trailing: settings.postTrailingSwipeLayout),
-                toggles: SettingsToggleSection(
-                    header: "アクションバーを表示している投稿のメニュー",
-                    toggles: [
-                        .init(title: "アクションバーにある項目を表示", isOn: $settings.showsActionBarItemsInMenu),
-                        .init(title: "ブーストとお気に入りの長押しの項目を表示", isOn: $settings.showsActionBarLongPressItemsInMenu),
-                    ]
-                )
-            )
-        case .quotedStatusActions: ObjectActionsSettingsView(entity: .quotedStatus, settings: settings, menu: nil)
-        case .notificationActions: ObjectActionsSettingsView(entity: .notification, settings: settings, menu: nil)
-        case .userActions: ObjectActionsSettingsView(entity: .user, settings: settings, menu: .userMenu)
-        case .linkActions: ObjectActionsSettingsView(entity: .link, settings: settings, menu: .linkMenu)
-        case .externalPostActions: ObjectActionsSettingsView(entity: .externalPost, settings: settings, menu: .externalPostMenu)
-        case .hashtagActions: ObjectActionsSettingsView(entity: .hashtag, settings: settings, menu: .hashtagMenu)
-        case .reactionActions: ObjectActionsSettingsView(entity: .reaction, settings: settings, menu: .reactionMenu)
-        case .mediaActions: ObjectActionsSettingsView(entity: .media, settings: settings, menu: .mediaMenu)
-        case .statusMenu: MenuLayoutSettingsView(title: "投稿のメニュー", layout: $settings.statusMenuLayout)
-        case .statusActionBar: MenuLayoutSettingsView(title: "アクションバー", layout: $settings.postActionBarLayout)
-        case .statusLeadingSwipe: MenuLayoutSettingsView(title: PostSwipeSettingsSection.title(of: .leading, in: layoutDirection), layout: $settings.postLeadingSwipeLayout)
-        case .statusTrailingSwipe: MenuLayoutSettingsView(title: PostSwipeSettingsSection.title(of: .trailing, in: layoutDirection), layout: $settings.postTrailingSwipeLayout)
-        case .userMenu: MenuLayoutSettingsView(title: "ユーザーのメニュー", layout: $settings.userMenuLayout)
-        case .linkMenu: MenuLayoutSettingsView(title: "リンクのメニュー", layout: $settings.linkMenuLayout)
-        case .externalPostMenu: MenuLayoutSettingsView(title: "ほかのサービスの投稿のメニュー", layout: $settings.externalPostMenuLayout)
-        case .profileTextMenu: MenuLayoutSettingsView(title: "プロフィールの文章のメニュー", layout: $settings.profileTextMenuLayout)
-        case .hashtagMenu: MenuLayoutSettingsView(title: "ハッシュタグのメニュー", layout: $settings.hashtagMenuLayout)
-        case .reactionMenu: MenuLayoutSettingsView(title: "リアクションのメニュー", layout: $settings.reactionMenuLayout)
-        case .mediaMenu: MenuLayoutSettingsView(title: "メディアのメニュー", layout: $settings.mediaMenuLayout)
-        case .composeTools: MenuLayoutSettingsView(title: "投稿欄のボタン", layout: $settings.composeToolLayout)
+        case .statusActions: ObjectActionsSettingsView(entity: .status, settings: settings)
+        case .quotedStatusActions: ObjectActionsSettingsView(entity: .quotedStatus, settings: settings)
+        case .notificationActions: ObjectActionsSettingsView(entity: .notification, settings: settings)
+        case .userActions: ObjectActionsSettingsView(entity: .user, settings: settings)
+        case .linkActions: ObjectActionsSettingsView(entity: .link, settings: settings)
+        case .externalPostActions: ObjectActionsSettingsView(entity: .externalPost, settings: settings)
+        case .hashtagActions: ObjectActionsSettingsView(entity: .hashtag, settings: settings)
+        case .reactionActions: ObjectActionsSettingsView(entity: .reaction, settings: settings)
+        case .mediaActions: ObjectActionsSettingsView(entity: .media, settings: settings)
+        case .statusMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.statusMenuLayout)
+        case .statusActionBar: MenuLayoutSettingsView(title: page.title, layout: $settings.postActionBarLayout)
+        case .statusLeadingSwipe: MenuLayoutSettingsView(title: page.title(isRightToLeft: layoutDirection == .rightToLeft), layout: $settings.postLeadingSwipeLayout)
+        case .statusTrailingSwipe: MenuLayoutSettingsView(title: page.title(isRightToLeft: layoutDirection == .rightToLeft), layout: $settings.postTrailingSwipeLayout)
+        case .userMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.userMenuLayout)
+        case .linkMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.linkMenuLayout)
+        case .externalPostMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.externalPostMenuLayout)
+        case .profileTextMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.profileTextMenuLayout)
+        case .hashtagMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.hashtagMenuLayout)
+        case .reactionMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.reactionMenuLayout)
+        case .mediaMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.mediaMenuLayout)
+        case .composeTools: MenuLayoutSettingsView(title: page.title, layout: $settings.composeToolLayout)
         case .connection: ConnectionStatusView(instance: instance, diagnostics: diagnostics)
         case .connectionTimelines: StreamingTimelinesView(diagnostics: diagnostics, listTitles: listTitles)
         case .storage: StorageView()

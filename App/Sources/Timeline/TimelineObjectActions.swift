@@ -261,12 +261,6 @@ extension TimelineViewController {
     }
 }
 
-/// 投稿の行のどちらの側のスワイプか。先頭の側は右にスワイプ、末尾の側は左にスワイプで出す（右から左へ書く言語では逆）。
-enum PostSwipeSide {
-    case leading
-    case trailing
-}
-
 /// 投稿のスワイプの1つのボタンの見え方。
 private struct PostSwipeButton {
     let title: String

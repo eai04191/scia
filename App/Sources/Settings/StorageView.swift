@@ -17,74 +17,25 @@ struct StorageView: View {
     let actions: Actions
     @State private var breakdown: StorageBreakdown?
     /// 消している途中のボタン。消し終えて測り直すまで、ほかのボタンも押せないようにする。
-    @State private var removing: RemoveTarget?
+    @State private var removing: StorageRemoveTarget?
     @State private var removeError: ErrorPresentation?
     /// 消す前に確かめているボタン。キャッシュと違い、消すと困ることがあるものだけ確かめる。
-    @State private var confirming: RemoveTarget?
+    @State private var confirming: StorageRemoveTarget?
 
     /// - Parameters:
     ///   - removing: 消している途中のボタン。部品カタログで、消している途中の見た目を作るために渡す。
     ///   - removeError: 消せなかったときの説明。部品カタログで、失敗の見た目を作るために渡す。
-    init(actions: Actions = .app, removing: RemoveTarget? = nil, removeError: ErrorPresentation? = nil) {
+    init(actions: Actions = .app, removing: StorageRemoveTarget? = nil, removeError: ErrorPresentation? = nil) {
         self.actions = actions
         _removing = State(initialValue: removing)
         _removeError = State(initialValue: removeError)
-    }
-
-    /// 消すボタン。空き容量を増やすためのボタンなので、消してもまた見れば読み直すものは、1つのボタンでまとめて消す。
-    /// 消せない項目は、使う人のデータか、なくなるとアプリが動かないもの。
-    enum RemoveTarget: CaseIterable {
-        /// 消しても、また見れば読み直すもの。
-        case caches
-        /// 消すとサイトからログアウトするので、キャッシュと分ける。
-        case inAppSafari
-        /// 開発のための仕組みで、消すと戻らないので、キャッシュと分ける。
-        case discomfortReports
-
-        var categories: [StorageBreakdown.Category] {
-            switch self {
-            case .caches: [.mediaFiles, .mediaPrefetch, .networkCache, .temporaryFiles]
-            case .inAppSafari: [.inAppSafari]
-            case .discomfortReports: [.discomfortReports]
-            }
-        }
-
-        var name: String {
-            switch self {
-            case .caches: "キャッシュ"
-            case .inAppSafari: StorageBreakdown.Category.inAppSafari.title
-            case .discomfortReports: StorageBreakdown.Category.discomfortReports.title
-            }
-        }
-
-        /// 消す前に確かめるときの説明。確かめずに消すボタンではnil。
-        var confirmationMessage: String? {
-            switch self {
-            case .caches: nil
-            case .inAppSafari: "アプリ内のSafariで開いたサイトのキャッシュとCookieを消去します。サイトからログアウトします。"
-            case .discomfortReports: "保存した違和感レポートをすべて消去します。消去したレポートは元に戻せません。"
-            }
-        }
-
-        /// 消せる大きさ。測れない項目が1つでもあればnilにして、消せるものがあるかもしれないので押せるままにする。
-        func removableBytes(in breakdown: StorageBreakdown) -> Int64? {
-            categories.reduce(Int64(0)) { sum, category in
-                guard let sum, let bytes = breakdown.item(category).map(\.removableBytes) ?? 0 else { return nil }
-                return sum + bytes
-            }
-        }
-    }
-
-    /// 内訳と消すボタンに出すか。違和感レポートは開発のための仕組みなので、残っているときだけ出す。測れなかったときは、残っているかもしれないので出す。
-    static func isShown(_ category: StorageBreakdown.Category, bytes: Int64?) -> Bool {
-        category != .discomfortReports || bytes != 0
     }
 
     var body: some View {
         List {
             if let breakdown {
                 Section {
-                    ForEach(breakdown.items.filter { Self.isShown($0.category, bytes: $0.bytes) }, id: \.category) { item in
+                    ForEach(breakdown.items.filter { $0.category.isShown(bytes: $0.bytes) }, id: \.category) { item in
                         switch item.category {
                         case .mediaFiles:
                             mediaCacheRows(viewed: item, prefetched: breakdown.item(.mediaPrefetch))
@@ -98,17 +49,17 @@ struct StorageView: View {
                     LabeledContent {
                         Text(Self.text(breakdown.dataBytes))
                     } label: {
-                        Text("合計").bold()
+                        Text(StorageBreakdown.totalTitle).bold()
                     }
                 } header: {
-                    Text("書類とデータ")
+                    Text(StorageBreakdown.dataHeader)
                 } footer: {
                     if breakdown.hasUnmeasuredItems {
-                        Text("“不明”の項目は合計に入っていません。")
+                        Text(StorageBreakdown.unmeasuredFooter)
                     }
                 }
                 Section {
-                    ForEach(RemoveTarget.allCases.filter { target in target.categories.allSatisfy { Self.isShown($0, bytes: breakdown.item($0)?.bytes) } }, id: \.self) { target in
+                    ForEach(StorageRemoveTarget.shown(in: breakdown), id: \.self) { target in
                         removeButton(target, bytes: target.removableBytes(in: breakdown))
                     }
                 } footer: {
@@ -118,7 +69,7 @@ struct StorageView: View {
                     }
                 }
                 Section {
-                    LabeledContent("アプリ本体", value: Self.text(breakdown.appBytes))
+                    LabeledContent(StorageBreakdown.appTitle, value: Self.text(breakdown.appBytes))
                 } footer: {
                     Text("このiPhoneに入っているアプリのファイルを合計した大きさです。iPhoneの設定の“Appのサイズ”とは数え方が違い、ずれることがあります。")
                 }
@@ -130,13 +81,13 @@ struct StorageView: View {
                 }
             }
         }
-        .navigationTitle("ストレージ")
+        .navigationTitle(SettingsPage.storage.title)
         .navigationBarTitleDisplayMode(.inline)
         .task(.withoutRequests) {
             breakdown = await actions.measure()
         }
         .confirmationDialog(
-            confirming.map { "\($0.name)を消去しますか？" } ?? "",
+            confirming?.confirmationTitle ?? "",
             isPresented: Binding { confirming != nil } set: { if !$0 { confirming = nil } },
             titleVisibility: .visible,
             presenting: confirming
@@ -152,30 +103,28 @@ struct StorageView: View {
     @ViewBuilder
     private func mediaCacheRows(viewed: StorageBreakdown.Item, prefetched: StorageBreakdown.Item?) -> some View {
         let total: Int64? = if let viewedBytes = viewed.bytes, let prefetchedBytes = prefetched?.bytes { viewedBytes + prefetchedBytes } else { nil }
-        LabeledContent(Self.mediaCacheName, value: Self.text(total))
+        LabeledContent(StorageBreakdown.mediaCacheTitle, value: Self.text(total))
         // 中身を見返して、共有や保存をできるようにする。
         NavigationLink {
             MediaCacheView(category: .mediaFiles, actions: actions.mediaFiles)
         } label: {
-            LabeledContent("表示済み", value: Self.text(viewed.bytes))
+            LabeledContent(SettingsPage.viewedMediaCache.rowTitle, value: Self.text(viewed.bytes))
                 .padding(.leading, Self.subrowIndent)
         }
         NavigationLink {
             MediaCacheView(category: .mediaPrefetch, actions: actions.mediaPrefetch)
         } label: {
-            LabeledContent("先読み", value: Self.text(prefetched?.bytes))
+            LabeledContent(SettingsPage.prefetchedMediaCache.rowTitle, value: Self.text(prefetched?.bytes))
                 .padding(.leading, Self.subrowIndent)
         }
     }
 
-    /// 表示済みと先読みを合わせた、メディアのキャッシュの名前。
-    static let mediaCacheName = "メディアのキャッシュ"
     /// メディアのキャッシュの下の段を、合計の行より下げる幅。
     private static let subrowIndent: CGFloat = 16
 
     /// 消せる大きさは、上の内訳の値と同じなので出さない。値を並べると、内訳と同じ押せない行の形になるため。
     /// `bytes`がnilなら、測れないだけで消せるものがあるかもしれないので、押せるままにする。
-    private func removeButton(_ target: RemoveTarget, bytes: Int64?) -> some View {
+    private func removeButton(_ target: StorageRemoveTarget, bytes: Int64?) -> some View {
         Button {
             if target.confirmationMessage != nil {
                 confirming = target
@@ -195,7 +144,7 @@ struct StorageView: View {
     }
 
     /// 項目を順に消す。1つ消せなくても残りは消し、最初に消せなかった理由を出す。
-    private func remove(_ target: RemoveTarget) {
+    private func remove(_ target: StorageRemoveTarget) {
         removing = target
         removeError = nil
         Task(.withoutRequests) {
@@ -213,7 +162,7 @@ struct StorageView: View {
 
     /// iPhoneの設定と同じく、1000バイトを1KBとして、大きさに合った単位で書く。測れないときは「不明」。
     static func text(_ bytes: Int64?) -> String {
-        bytes?.formatted(.byteCount(style: .file)) ?? "不明"
+        bytes?.formatted(.byteCount(style: .file)) ?? StorageBreakdown.unmeasuredValue
     }
 }
 

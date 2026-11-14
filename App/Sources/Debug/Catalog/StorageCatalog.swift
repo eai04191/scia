@@ -126,7 +126,7 @@ enum StorageCatalog {
         _ title: String,
         breakdown: StorageBreakdown = small,
         measure: (@Sendable () async -> StorageBreakdown)? = nil,
-        removing: StorageView.RemoveTarget? = nil,
+        removing: StorageRemoveTarget? = nil,
         removeError: ErrorPresentation? = nil
     ) -> CatalogState {
         CatalogState(title: title) {

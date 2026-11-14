@@ -12,33 +12,43 @@ struct AboutSettingsView: View {
         Form {
             // いろいろなブランチのビルドを入れ替えて試すときに、いま入っているのがどれか分かるようにする。
             // iPhoneの設定の「情報」と同じく、長押しでその行の値をコピーする。違和感の報告などに貼れるよう、全部をまとめてもコピーできる
-            Section {
-                buildRow("バージョン", value: BuildInfo.current.version)
-                buildRow("ビルド", value: BuildInfo.current.build, onTap: registerDeveloperModeTap)
-                buildRow("ブランチ", value: BuildInfo.current.branch)
-                buildRow("commit", value: BuildInfo.current.commit)
-                buildRow("ビルド日時", value: BuildInfo.current.builtAt.formatted(date: .numeric, time: .shortened))
-            }
-            Section {
-                NavigationLink("接続の状態", value: SettingsPage.connection)
-                NavigationLink("ライセンス", value: SettingsPage.licenses)
-                NavigationLink("謝辞", value: SettingsPage.acknowledgments)
-            }
-            Section {
-                if let repository = AppInfo.repository {
-                    Link("ソースコード", destination: repository)
-                }
-                if let privacyPolicy = AppInfo.privacyPolicy {
-                    Link("プライバシーポリシー", destination: privacyPolicy)
+            ForEach(SettingsPage.about.sections ?? [], id: \.self) { section in
+                Section {
+                    ForEach(section.rows, id: \.self) { row in
+                        switch row {
+                        case .page(let page): NavigationLink(page.rowTitle, value: page)
+                        case .item(let item): itemRow(item)
+                        }
+                    }
                 }
             }
         }
         .topEdgeEffectHiddenOnMac()
-        .navigationTitle("情報")
+        .navigationTitle(SettingsPage.about.title)
         .navigationBarTitleDisplayMode(.inline)
         .onDisappear { developerMode.resetTaps() }
         .alert(developerMode.isEnabled ? "デバッグメニューをオンにしました" : "デバッグメニューをオフにしました", isPresented: $showsDeveloperModeChanged) {
             Button("OK") {}
+        }
+    }
+
+    @ViewBuilder
+    private func itemRow(_ item: SettingsItem) -> some View {
+        switch item {
+        case .version: buildRow(item.title, value: BuildInfo.current.version)
+        case .build: buildRow(item.title, value: BuildInfo.current.build, onTap: registerDeveloperModeTap)
+        case .branch: buildRow(item.title, value: BuildInfo.current.branch)
+        case .commit: buildRow(item.title, value: BuildInfo.current.commit)
+        case .builtAt: buildRow(item.title, value: BuildInfo.current.builtAt.formatted(date: .numeric, time: .shortened))
+        case .sourceCode:
+            if let repository = AppInfo.repository {
+                Link(item.title, destination: repository)
+            }
+        case .privacyPolicy:
+            if let privacyPolicy = AppInfo.privacyPolicy {
+                Link(item.title, destination: privacyPolicy)
+            }
+        default: EmptyView()
         }
     }
 

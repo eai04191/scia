@@ -155,72 +155,119 @@ struct SettingsIcon: View {
     }
 }
 
-/// 表示の分類。投稿と通知とメディアの見た目、アクセントカラー、新着の動き、ステータスバーの通知、リンク先の読み込み。
-struct DisplaySettingsView: View {
+/// 並びが決まっている設定の画面（表示、操作、作成、メディア、リンク先の読み込み）。何を、どの順で、どんな名前で並べるかは`SettingsPage.sections`にあり、ここは行の部品を選んで描く。
+struct SettingsScreenForm: View {
+    let page: SettingsPage
     @Bindable var settings: AppSettings
+    /// 設定を閉じ、ホームの上でアプリ内のSafariの高さを選ぶシートを出す。
+    var openInAppBrowserHeight: @MainActor () -> Void = {}
+
     var body: some View {
         Form {
-            Section {
-                NavigationLink("投稿", value: SettingsPage.appearance)
-                NavigationLink("通知", value: SettingsPage.notificationAppearance)
-                NavigationLink("メディア", value: SettingsPage.media)
-                AccentColorPicker(selection: $settings.accentColor)
-            } header: {
-                Text("外観")
-            } footer: {
-                if settings.accentColor.obscuresSelectedTab {
-                    Text("iOS 26.0ではこのカラーを使用すると選択中のタブがほかのタブと区別しにくくなります。iOS 26.1以降での使用を推奨します。")
-                }
-            }
-            Section {
-                Picker("最上部での新着の挿入", selection: $settings.insertionMotion) {
-                    ForEach(InsertionMotion.allCases, id: \.self) { motion in
-                        Text(motion.title).tag(motion)
+            ForEach(sections, id: \.self) { section in
+                if section.rows == [.item(.statusBarTicker)] {
+                    StatusBarTickerSettingsSection(isOn: $settings.showsStatusBarTicker, isAvailable: StatusBarCutout.isAvailable)
+                } else {
+                    SettingsFormSection(header: section.header, footer: footer(of: section)) {
+                        ForEach(section.rows, id: \.self) { row in
+                            switch row {
+                            case .page(let page): NavigationLink(page.rowTitle, value: page)
+                            case .item(let item): itemRow(item)
+                            }
+                        }
                     }
-                }
-            } footer: {
-                Text("“自動”では“視差効果を減らす”がオンのときはアニメーションしません。")
-            }
-            StatusBarTickerSettingsSection(isOn: $settings.showsStatusBarTicker, isAvailable: StatusBarCutout.isAvailable)
-            Section {
-                NavigationLink("リンク先の読み込み", value: SettingsPage.linkLoading)
-                if #available(iOS 26.4, *) {
-                    NavigationLink("自動翻訳", value: SettingsPage.autoTranslation)
                 }
             }
         }
         .topEdgeEffectHiddenOnMac()
-        .navigationTitle("表示")
+        .navigationTitle(page.title)
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// このiOSで出せない行を除いた節。
+    private var sections: [SettingsSection] {
+        (page.sections ?? []).compactMap { section in
+            var section = section
+            section.rows.removeAll { !Self.isAvailable($0) }
+            return section.rows.isEmpty ? nil : section
+        }
+    }
+
+    private static func isAvailable(_ row: SettingsRow) -> Bool {
+        guard row == .page(.autoTranslation) else { return true }
+        if #available(iOS 26.4, *) { return true }
+        return false
+    }
+
+    /// 節の下の説明。iOSの版や機種で決まる説明は、ここで足す。
+    private func footer(of section: SettingsSection) -> String? {
+        if section.rows.contains(.item(.accentColor)), settings.accentColor.obscuresSelectedTab {
+            return "iOS 26.0ではこのカラーを使用すると選択中のタブがほかのタブと区別しにくくなります。iOS 26.1以降での使用を推奨します。"
+        }
+        return section.footer
+    }
+
+    @ViewBuilder
+    private func itemRow(_ item: SettingsItem) -> some View {
+        switch item {
+        case .accentColor: AccentColorPicker(selection: $settings.accentColor)
+        case .insertionMotion: choicePicker(item, selection: $settings.insertionMotion, title: \.title)
+        case .statusBarTicker: StatusBarTickerToggle(isOn: $settings.showsStatusBarTicker, isAvailable: StatusBarCutout.isAvailable)
+        case .linkBrowser: choicePicker(item, selection: $settings.linkBrowser, title: \.title)
+        case .inAppBrowserHeight:
+            // 本物のホームの上で選ぶので、設定の画面を重ねずに外へ出る。行の見た目は、ほかの画面へ入る行に揃え、シェブロンを付ける。
+            Button(action: openInAppBrowserHeight) {
+                HStack(spacing: 8) {
+                    LabeledContent(item.title, value: SettingsItem.inAppBrowserHeightValue(in: settings))
+                    Image(systemName: "chevron.forward")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
+            }
+            .tint(.primary)
+        case .reblogVisibility: choicePicker(item, selection: $settings.reblogVisibility, title: \.title)
+        case .composeBarIdle: choicePicker(item, selection: $settings.composeBarIdle, title: \.title)
+        case .imageUploadSize: choicePicker(item, selection: $settings.imageUploadSize, title: \.title)
+        case .videoUploadSize: choicePicker(item, selection: $settings.videoUploadSize, title: \.title)
+        case .mediaDynamicRange: choicePicker(item, selection: $settings.mediaDynamicRange, title: \.title)
+        case .viewerMediaDynamicRange: choicePicker(item, selection: $settings.viewerMediaDynamicRange, title: \.title)
+        case .originalThumbnailsOnExpensiveNetwork: Toggle(item.title, isOn: $settings.usesOriginalThumbnailsOnExpensiveNetwork)
+        case .ignoresUselessAltText: Toggle(item.title, isOn: $settings.ignoresUselessAltText)
+        case .expandsXPosts: Toggle(item.title, isOn: $settings.expandsXPosts)
+        case .version, .build, .branch, .commit, .builtAt, .sourceCode, .privacyPolicy:
+            // 情報の画面（`AboutSettingsView`）が描く。
+            EmptyView()
+        }
+    }
+
+    private func choicePicker<Choice: CaseIterable & Hashable>(_ item: SettingsItem, selection: Binding<Choice>, title: KeyPath<Choice, String>) -> some View where Choice.AllCases: RandomAccessCollection {
+        Picker(item.title, selection: selection) {
+            ForEach(Choice.allCases, id: \.self) { choice in
+                Text(choice[keyPath: title]).tag(choice)
+            }
+        }
     }
 }
 
-/// 表示しただけで、Sciaと関係のない外のサービスへ通信する機能の画面。決まりはdocs/link-card.mdにある。
-/// 同意は、トグルのすぐ下の説明で取る。オンにするときに確認は重ねない。
-struct LinkLoadingSettingsView: View {
-    @Bindable var settings: AppSettings
+/// 見出しと説明があるときだけ、それを付ける節。説明は、文中のMarkdownのリンクを押せるリンクにする。
+struct SettingsFormSection<Content: View>: View {
+    let header: String?
+    let footer: String?
+    @ViewBuilder let content: Content
 
     var body: some View {
-        Form {
-            Section {
-                Toggle("Xの投稿を展開", isOn: $settings.expandsXPosts)
-            } footer: {
-                // 送り先、届くもの、通信のきっかけを、オンにする前に読めるように書く。fxtwitterのプライバシーの説明はFAQの中にある。
-                // 文字列リテラルのTextは、Markdownのリンクを押せるリンクにする。
-                Text("""
-                Xの投稿へのリンクを引用のように表示します。
-
-                オンにすると、Xの投稿へのリンクを含む投稿を表示するたびにfxtwitter（Sciaと無関係な外部サービス）へ問い合わせ、アイコンやメディアをXから読み込みます。IPアドレスや表示した投稿がfxtwitterとXに伝わり、通信量も増えます。
-
-                [fxtwitterのプライバシーについて](https://docs.fxembed.com/guide/faq/)
-                """)
-            }
+        switch (header, footer) {
+        case (let header?, let footer?):
+            Section { content } header: { Text(header) } footer: { Text(LocalizedStringKey(footer)) }
+        case (let header?, nil):
+            Section { content } header: { Text(header) }
+        case (nil, let footer?):
+            Section { content } footer: { Text(LocalizedStringKey(footer)) }
+        case (nil, nil):
+            Section { content }
         }
-        .topEdgeEffectHiddenOnMac()
-        .navigationTitle("リンク先の読み込み")
-        .navigationBarTitleDisplayMode(.inline)
     }
-
 }
 
 /// アプリのアイコンを選ぶ画面。
@@ -261,7 +308,7 @@ struct AppIconSettingsView: View {
             }
         }
         .topEdgeEffectHiddenOnMac()
-        .navigationTitle("アプリのアイコン")
+        .navigationTitle(SettingsPage.appIcon.title)
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -272,7 +319,7 @@ struct AppIconSettingsLabel: View {
 
     var body: some View {
         Label {
-            Text("アプリのアイコン")
+            Text(SettingsPage.appIcon.rowTitle)
         } icon: {
             if let image = AppDependencies.appIcon.current.previewImage {
                 Image(uiImage: image)
@@ -289,130 +336,6 @@ struct AppIconSettingsLabel: View {
     }
 }
 
-/// 操作の分類。対象ごとのタップと長押しとメニューの画面、リンクを開く場所とアプリ内のSafariの高さ、ブーストの公開範囲。
-struct InteractionSettingsView: View {
-    @Bindable var settings: AppSettings
-    /// 設定を閉じ、ホームの上でアプリ内のSafariの高さを選ぶシートを出す。
-    let openInAppBrowserHeight: @MainActor () -> Void
-
-    var body: some View {
-        Form {
-            Section {
-                NavigationLink(ObjectEntity.status.title, value: SettingsPage.statusActions)
-                NavigationLink(ObjectEntity.quotedStatus.title, value: SettingsPage.quotedStatusActions)
-                NavigationLink(ObjectEntity.notification.title, value: SettingsPage.notificationActions)
-                NavigationLink(ObjectEntity.user.title, value: SettingsPage.userActions)
-                NavigationLink(ObjectEntity.link.title, value: SettingsPage.linkActions)
-                NavigationLink(ObjectEntity.externalPost.title, value: SettingsPage.externalPostActions)
-                NavigationLink(ObjectEntity.hashtag.title, value: SettingsPage.hashtagActions)
-                NavigationLink(ObjectEntity.media.title, value: SettingsPage.mediaActions)
-                NavigationLink(ObjectEntity.reaction.title, value: SettingsPage.reactionActions)
-                NavigationLink("プロフィールの文章", value: SettingsPage.profileTextMenu)
-            }
-            Section {
-                Picker("開く場所", selection: $settings.linkBrowser) {
-                    ForEach(LinkBrowser.allCases, id: \.self) { browser in
-                        Text(browser.title).tag(browser)
-                    }
-                }
-                // 本物のホームの上で選ぶので、設定の画面を重ねずに外へ出る。行の見た目は、ほかの画面へ入る行に揃え、シェブロンを付ける。
-                Button(action: openInAppBrowserHeight) {
-                    HStack(spacing: 8) {
-                        LabeledContent("アプリ内のSafariの高さ", value: settings.opensInAppBrowserFullScreen ? "全画面" : settings.inAppBrowserHeight.title)
-                        Image(systemName: "chevron.forward")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                            .accessibilityHidden(true)
-                    }
-                }
-                .tint(.primary)
-            } header: {
-                Text("リンク")
-            }
-            Section {
-                Picker("公開範囲", selection: $settings.reblogVisibility) {
-                    ForEach(ReblogVisibility.allCases, id: \.self) { visibility in
-                        Text(visibility.title).tag(visibility)
-                    }
-                }
-            } header: {
-                Text("ブースト")
-            }
-        }
-        .topEdgeEffectHiddenOnMac()
-        .navigationTitle("操作")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-/// 作成の分類。投稿欄の出し方、ボタンの並び、送る前にメディアを縮める大きさ。
-struct ComposeSettingsView: View {
-    @Bindable var settings: AppSettings
-
-    var body: some View {
-        Form {
-            Section {
-                Picker("書いていないとき", selection: $settings.composeBarIdle) {
-                    ForEach(ComposeBarIdle.allCases, id: \.self) { idle in
-                        Text(idle.title).tag(idle)
-                    }
-                }
-                NavigationLink("投稿欄のボタン", value: SettingsPage.composeTools)
-            }
-            Section {
-                Picker("画像", selection: $settings.imageUploadSize) {
-                    ForEach(ImageUploadSize.allCases, id: \.self) { size in
-                        Text(size.title).tag(size)
-                    }
-                }
-                Picker("動画", selection: $settings.videoUploadSize) {
-                    ForEach(VideoUploadSize.allCases, id: \.self) { size in
-                        Text(size.title).tag(size)
-                    }
-                }
-            } header: {
-                Text("送る前に縮める")
-            }
-        }
-        .topEdgeEffectHiddenOnMac()
-        .navigationTitle("作成")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-/// 表示の中の、メディアの画面。HDRの明るさ、サムネイルの画質、代替テキストの扱い。
-struct MediaSettingsView: View {
-    @Bindable var settings: AppSettings
-
-    var body: some View {
-        Form {
-            Section {
-                Picker("アプリ", selection: $settings.mediaDynamicRange) {
-                    MediaDynamicRangeOptions()
-                }
-                Picker("ビューア", selection: $settings.viewerMediaDynamicRange) {
-                    MediaDynamicRangeOptions()
-                }
-            } header: {
-                Text("HDRのメディアの明るさ")
-            }
-            Section {
-                Toggle("高画質のサムネイル", isOn: $settings.usesOriginalThumbnailsOnExpensiveNetwork)
-            } header: {
-                Text("モバイル通信")
-            }
-            Section {
-                Toggle("仮の代替テキストを無視", isOn: $settings.ignoresUselessAltText)
-            } footer: {
-                Text("投稿したアプリが自動で付けたと思われる説明にならない代替テキストをないものとして扱います。")
-            }
-        }
-        .topEdgeEffectHiddenOnMac()
-        .navigationTitle("メディア")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
 /// ステータスバーの通知の設定。使えない機種では、切り替えをオフにして灰色にし、理由を添える。
 struct StatusBarTickerSettingsSection: View {
     @Binding var isOn: Bool
@@ -421,13 +344,22 @@ struct StatusBarTickerSettingsSection: View {
 
     var body: some View {
         Section {
-            Toggle("通知をステータスバーに流す", isOn: Binding { isAvailable && isOn } set: { isOn = $0 })
-                .disabled(!isAvailable)
+            StatusBarTickerToggle(isOn: $isOn, isAvailable: isAvailable)
         } footer: {
             if !isAvailable {
                 Text("このiPhoneでは使えません。")
             }
         }
+    }
+}
+
+struct StatusBarTickerToggle: View {
+    @Binding var isOn: Bool
+    let isAvailable: Bool
+
+    var body: some View {
+        Toggle(SettingsItem.statusBarTicker.title, isOn: Binding { isAvailable && isOn } set: { isOn = $0 })
+            .disabled(!isAvailable)
     }
 }
 
@@ -450,14 +382,5 @@ private struct AppIconChoiceRow: View {
             }
             Text(choice.title)
         }
-    }
-}
-
-/// HDRのメディアの明るさの選択肢。アプリとビューアで同じものを並べる。
-private struct MediaDynamicRangeOptions: View {
-    var body: some View {
-        Text("SDR").tag(MediaDynamicRange.standard)
-        Text("控えめなHDR").tag(MediaDynamicRange.constrainedHigh)
-        Text("HDR").tag(MediaDynamicRange.high)
     }
 }

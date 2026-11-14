@@ -141,7 +141,79 @@ extension StorageBreakdown {
     }
 }
 
+/// ストレージの画面の消すボタン。空き容量を増やすためのボタンなので、消してもまた見れば読み直すものは、1つのボタンでまとめて消す。
+/// 消せない項目は、使う人のデータか、なくなるとアプリが動かないもの。
+public enum StorageRemoveTarget: CaseIterable, Hashable, Sendable {
+    /// 消しても、また見れば読み直すもの。
+    case caches
+    /// 消すとサイトからログアウトするので、キャッシュと分ける。
+    case inAppSafari
+    /// 開発のための仕組みで、消すと戻らないので、キャッシュと分ける。
+    case discomfortReports
+
+    public var categories: [StorageBreakdown.Category] {
+        switch self {
+        case .caches: [.mediaFiles, .mediaPrefetch, .networkCache, .temporaryFiles]
+        case .inAppSafari: [.inAppSafari]
+        case .discomfortReports: [.discomfortReports]
+        }
+    }
+
+    public var name: String {
+        switch self {
+        case .caches: "キャッシュ"
+        case .inAppSafari: StorageBreakdown.Category.inAppSafari.title
+        case .discomfortReports: StorageBreakdown.Category.discomfortReports.title
+        }
+    }
+
+    /// 消す前に確かめるときの題。
+    public var confirmationTitle: String { "\(name)を消去しますか？" }
+
+    /// 消す前に確かめるときの説明。確かめずに消すボタンではnil。
+    public var confirmationMessage: String? {
+        switch self {
+        case .caches: nil
+        case .inAppSafari: "アプリ内のSafariで開いたサイトのキャッシュとCookieを消去します。サイトからログアウトします。"
+        case .discomfortReports: "保存した違和感レポートをすべて消去します。消去したレポートは元に戻せません。"
+        }
+    }
+
+    /// 消せる大きさ。測れない項目が1つでもあればnilにして、消せるものがあるかもしれないので押せるままにする。
+    public func removableBytes(in breakdown: StorageBreakdown) -> Int64? {
+        categories.reduce(Int64(0)) { sum, category in
+            guard let sum, let bytes = breakdown.item(category).map(\.removableBytes) ?? 0 else { return nil }
+            return sum + bytes
+        }
+    }
+
+    /// `breakdown`の画面に出すボタン。出さない項目（`StorageBreakdown.Category.isShown`）だけを消すボタンは出さない。
+    public static func shown(in breakdown: StorageBreakdown) -> [StorageRemoveTarget] {
+        allCases.filter { target in target.categories.allSatisfy { $0.isShown(bytes: breakdown.item($0)?.bytes) } }
+    }
+}
+
+extension StorageBreakdown {
+    /// 内訳の節の見出し。
+    public static let dataHeader = "書類とデータ"
+    /// 内訳の合計の行の名前。
+    public static let totalTitle = "合計"
+    /// 測れなかった項目があるときに、内訳の節の下に出す説明。
+    public static let unmeasuredFooter = "“不明”の項目は合計に入っていません。"
+    /// 測れなかった大きさの値。
+    public static let unmeasuredValue = "不明"
+    /// 表示済みと先読みを合わせた、メディアのキャッシュの名前。合計の行の下に、表示済みと先読みの2段に分けて並べる（docs/image-loading.md）。
+    public static let mediaCacheTitle = "メディアのキャッシュ"
+    /// アプリ本体の大きさの行の名前。
+    public static let appTitle = "アプリ本体"
+}
+
 extension StorageBreakdown.Category {
+    /// 内訳と消すボタンに出すか。違和感レポートは開発のための仕組みなので、残っているときだけ出す。測れなかったときは、残っているかもしれないので出す。
+    public func isShown(bytes: Int64?) -> Bool {
+        self != .discomfortReports || bytes != 0
+    }
+
     /// 項目の名前。
     public var title: String {
         switch self {
