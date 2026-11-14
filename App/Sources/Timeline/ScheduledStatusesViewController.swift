@@ -48,7 +48,7 @@ final class ScheduledStatusesViewController: UICollectionViewController {
         var statusAt: (IndexPath) -> ScheduledStatus? = { _ in nil }
         configuration.trailingSwipeActionsConfigurationProvider = { indexPath in
             guard let scheduled = statusAt(indexPath) else { return nil }
-            let cancel = UIContextualAction(style: .destructive, title: "取り消す") { _, _, completion in
+            let cancel = UIContextualAction(style: .destructive, title: ScheduledStatusTexts.cancel) { _, _, completion in
                 onCancel(scheduled)
                 // 取り消すかは確認で決めるので、行はまだ消さずに戻す。
                 completion(false)
@@ -60,7 +60,7 @@ final class ScheduledStatusesViewController: UICollectionViewController {
         onCancel = { [weak self] in self?.onCancel($0) }
         statusAt = { [weak self] in self?.status(at: $0) }
         separatorAt = { [weak self] in self?.separator($1, at: $0) ?? $1 }
-        title = "予約投稿"
+        title = ScheduledStatusTexts.title
     }
 
     @available(*, unavailable)
@@ -159,17 +159,17 @@ final class ScheduledStatusesViewController: UICollectionViewController {
         let registration = UICollectionView.CellRegistration<TimelineCell, ScheduledStatus.ID> { [weak self] cell, _, id in
             guard let self, let scheduled = statuses.first(where: { $0.id == id }), let account else { return }
             cell.contentConfiguration = contentConfiguration(for: scheduled, account: account, base: cell.defaultContentConfiguration())
-            cell.accessibilityHint = "日時を変えます。"
+            cell.accessibilityHint = ScheduledStatusTexts.rescheduleHint
             cell.accessibilityCustomActions = [
-                UIAccessibilityCustomAction(name: "日時を変える") { [weak self] _ in
+                UIAccessibilityCustomAction(name: ScheduledStatusTexts.reschedule) { [weak self] _ in
                     self?.onReschedule(scheduled)
                     return true
                 },
-                UIAccessibilityCustomAction(name: "投稿欄に戻して書き直す") { [weak self] _ in
+                UIAccessibilityCustomAction(name: ScheduledStatusTexts.rewrite) { [weak self] _ in
                     self?.onRewrite(scheduled)
                     return true
                 },
-                UIAccessibilityCustomAction(name: "取り消す") { [weak self] _ in
+                UIAccessibilityCustomAction(name: ScheduledStatusTexts.cancel) { [weak self] _ in
                     self?.onCancel(scheduled)
                     return true
                 },
@@ -191,11 +191,11 @@ final class ScheduledStatusesViewController: UICollectionViewController {
             }
             var configuration = UIContentUnavailableConfiguration.empty()
             configuration.image = UIImage(systemName: "exclamationmark.triangle")
-            configuration.text = "読み込めませんでした"
+            configuration.text = ScheduledStatusTexts.loadFailure
             // 1つしか置けないボタンは「再読み込み」に使う。予約投稿は今のアカウントのものなので、401ならログインし直しの段から行える。
             configuration.secondaryText = FailureText.withoutLogIn(presentation)
             var button = UIButton.Configuration.borderless()
-            button.title = "再読み込み"
+            button.title = ScheduledStatusTexts.reload
             configuration.button = button
             configuration.buttonProperties.primaryAction = UIAction { [weak self] _ in self?.onRetry() }
             contentUnavailableConfiguration = configuration
@@ -206,7 +206,7 @@ final class ScheduledStatusesViewController: UICollectionViewController {
             }
             var configuration = UIContentUnavailableConfiguration.empty()
             configuration.image = UIImage(systemName: "clock")
-            configuration.text = "予約した投稿はありません"
+            configuration.text = ScheduledStatusTexts.empty
             contentUnavailableConfiguration = configuration
         }
     }
@@ -215,10 +215,10 @@ final class ScheduledStatusesViewController: UICollectionViewController {
 
     private func menu(for scheduled: ScheduledStatus) -> UIMenu {
         UIMenu(children: [
-            UIAction(title: "日時を変える", image: UIImage(systemName: "calendar.badge.clock")) { [weak self] _ in self?.onReschedule(scheduled) },
-            UIAction(title: "投稿欄に戻して書き直す", image: UIImage(systemName: "pencil")) { [weak self] _ in self?.onRewrite(scheduled) },
+            UIAction(title: ScheduledStatusTexts.reschedule, image: UIImage(systemName: "calendar.badge.clock")) { [weak self] _ in self?.onReschedule(scheduled) },
+            UIAction(title: ScheduledStatusTexts.rewrite, image: UIImage(systemName: "pencil")) { [weak self] _ in self?.onRewrite(scheduled) },
             UIMenu(options: .displayInline, children: [
-                UIAction(title: "取り消す", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in self?.onCancel(scheduled) },
+                UIAction(title: ScheduledStatusTexts.cancel, image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in self?.onCancel(scheduled) },
             ]),
         ])
     }
@@ -277,13 +277,13 @@ final class ScheduledStatusesViewController: UICollectionViewController {
 
     /// 名前の上の行。返信、引用、投票の予約なら、そのことを書く。どれでもなければnil。
     private func context(for params: ScheduledStatus.Params, font: UIFont) -> PostContentConfiguration.Context? {
-        let parts: [(symbol: String, text: String)] = [
-            params.inReplyToID != nil ? ("arrowshape.turn.up.left", "返信") : nil,
-            params.quotedStatusID != nil ? ("quote.bubble", "引用") : nil,
-            params.poll != nil ? ("chart.bar.doc.horizontal", "投票") : nil,
+        let parts: [(symbol: String, part: ScheduledStatusTexts.ContextPart)] = [
+            params.inReplyToID != nil ? ("arrowshape.turn.up.left", .reply) : nil,
+            params.quotedStatusID != nil ? ("quote.bubble", .quote) : nil,
+            params.poll != nil ? ("chart.bar.doc.horizontal", .poll) : nil,
         ].compactMap(\.self)
         guard let first = parts.first else { return nil }
-        let text = parts.map(\.text).joined(separator: "・")
+        let text = ScheduledStatusTexts.context(parts.map(\.part))
         return PostContentConfiguration.Context(
             symbolName: first.symbol,
             avatar: nil,

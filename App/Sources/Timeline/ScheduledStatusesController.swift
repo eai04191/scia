@@ -24,10 +24,7 @@ final class ScheduledStatusesController {
         viewController = ScheduledStatusesViewController(now: AppDependencies.now, calendar: calendar)
         model.display = viewController
         model.onFailure = { [weak self] operation, error in
-            switch operation {
-            case .reschedule: self?.presentFailure(title: "日時を変えられませんでした", reason: error)
-            case .cancel: self?.presentFailure(title: "予約を取り消せませんでした", reason: error)
-            }
+            self?.presentFailure(title: operation.failureTitle, reason: error)
         }
         viewController.onAppearing = { [weak model] in model?.appear() }
         viewController.onDisappearing = { [weak model] in model?.disappear() }
@@ -57,10 +54,10 @@ final class ScheduledStatusesController {
 
     private func presentReschedule(_ scheduled: ScheduledStatus) {
         let sheet = ScheduleDateSheet(
-            title: "予約の日時を変える",
+            title: ScheduledStatusTexts.rescheduleSheetTitle,
             date: scheduled.scheduledAt,
             minimumDate: ScheduledPosting.earliestDate(now: now(), calendar: calendar),
-            confirmTitle: "変更"
+            confirmTitle: ScheduledStatusTexts.rescheduleConfirm
         ) { [weak self] date in
             self?.reschedule(scheduled, to: date)
         } onClose: {}
@@ -71,7 +68,7 @@ final class ScheduledStatusesController {
         guard date != scheduled.scheduledAt else { return }
         // 選んでから決めるまでの間に5分を切ったら、送らずに知らせる。サーバーが断るため。
         guard ScheduledPosting.accepts(date, now: now()) else {
-            presentFailure(title: "日時を変えられませんでした", reason: ErrorPresentation(message: "予約の日時は今から5分より後にしてください。", code: nil))
+            presentFailure(title: ScheduledStatusesModel.Operation.reschedule.failureTitle, reason: ErrorPresentation(message: ScheduledStatusTexts.tooSoon, code: nil))
             return
         }
         model.reschedule(scheduled, to: date)
