@@ -17,7 +17,7 @@ final class NotificationRequestsController {
         let controller = NotificationRequestsController(model: model, viewController: viewController)
         viewController.lifetimeOwner = controller
         let item = UIBarButtonItem(image: UIImage(systemName: "slider.horizontal.3"), primaryAction: UIAction { _ in openPolicy() })
-        item.accessibilityLabel = "通知のフィルタリング"
+        item.accessibilityLabel = TimelineScreenTexts.notificationPolicy
         viewController.screenBarItems = [item]
         return (controller, viewController)
     }
@@ -83,11 +83,11 @@ final class AccountNotificationsController {
         case .accept:
             let item = UIBarButtonItem(image: UIImage(systemName: "checkmark"), primaryAction: UIAction { _ in perform() })
             item.style = .prominent
-            item.accessibilityLabel = "受け入れる"
+            item.accessibilityLabel = decision.title
             return item
         case .dismiss:
             let item = UIBarButtonItem(image: UIImage(systemName: "xmark"), primaryAction: UIAction { _ in perform() })
-            item.accessibilityLabel = "無視"
+            item.accessibilityLabel = decision.title
             return item
         }
     }

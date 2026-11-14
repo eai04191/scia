@@ -51,7 +51,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onFocusInlineCompose: (() -> Void)?
     private lazy var focusInlineComposeItem: UIBarButtonItem = {
         let item = UIBarButtonItem(image: UIImage(systemName: "square.and.pencil"), primaryAction: UIAction { [weak self] _ in self?.onFocusInlineCompose?() })
-        item.accessibilityLabel = "投稿欄に書く"
+        item.accessibilityLabel = TimelineScreenTexts.focusInlineCompose
         return item
     }()
     private var showsFocusInlineCompose = false
@@ -532,7 +532,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// ハードウェアキーボードのnで、投稿欄で書き始める。入力欄に書いている間は、文字の入力が先に受けるため効かない。
     override var keyCommands: [UIKeyCommand]? {
         guard onFocusInlineCompose != nil else { return super.keyCommands }
-        let focus = UIKeyCommand(title: "投稿欄に書く", action: #selector(focusInlineComposeFromKeyboard), input: "n")
+        let focus = UIKeyCommand(title: TimelineScreenTexts.focusInlineCompose, action: #selector(focusInlineComposeFromKeyboard), input: "n")
         return (super.keyCommands ?? []) + [focus]
     }
 
@@ -1297,7 +1297,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let update = unreadCountUpdates
         // 通知のタブのバッジと同じく、読み込んでいない分があるときは「+」を付ける。
         let title = isLowerBound ? "\(count)+" : "\(count)"
-        newArrivalsButton.accessibilityLabel = isLowerBound ? "\(count)件以上の新着" : "\(count)件の新着"
+        newArrivalsButton.accessibilityLabel = TimelineScreenTexts.newArrivals(count: count, isLowerBound: isLowerBound)
         if newArrivalsButton.configuration?.title != title || newArrivalsButtonShowsArrow != newArrivalsButtonWantsArrow {
             // 桁が変わると幅が変わるため、出ている間は前後のカプセルをクロスフェードする。幅を伸ばすと、伸びる途中で件数の文字が切れるため。
             // 「↑」の有無も同じく幅を変えるので、同じクロスフェードで入れ替える。続けて2回入れ替えると、幅が2段に変わって見えるため。
@@ -1402,8 +1402,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// ストリーミングにつながらない状態が続いていることを、タイトルの下に控えめに出す。題の下に添える文字があれば、その後ろに並べる。
     func setOutageNotice(_ isShown: Bool) {
-        let parts = [texts.subtitle, isShown ? "ストリーミング未接続" : nil].compactMap(\.self)
-        navigationItem.subtitle = parts.isEmpty ? nil : parts.joined(separator: "・")
+        navigationItem.subtitle = texts.subtitle(showsStreamingOutage: isShown)
     }
 
     func setContentState(_ state: ContentState) {
@@ -1432,15 +1431,15 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         case .loading:
             return UIContentUnavailableConfiguration.loading()
         case .loaded:
-            return emptyConfiguration(text: texts.empty, secondaryText: texts.emptyDetail, buttonTitle: "再読み込み")
+            return emptyConfiguration(text: texts.empty, secondaryText: texts.emptyDetail, buttonTitle: TimelineScreenTexts.reload)
         case .regenerating:
             return emptyConfiguration(
-                text: "ホームを準備しています",
-                secondaryText: "しばらく使っていなかったため、サーバーがホームを作り直しています。少し待ってから読み込み直してください。",
-                buttonTitle: "再読み込み"
+                text: TimelineScreenTexts.regeneratingTitle,
+                secondaryText: TimelineScreenTexts.regeneratingDetail,
+                buttonTitle: TimelineScreenTexts.reload
             )
         case .failed(let message):
-            var configuration = emptyConfiguration(text: "読み込めませんでした", secondaryText: nil, buttonTitle: "再試行")
+            var configuration = emptyConfiguration(text: TimelineScreenTexts.loadFailure, secondaryText: nil, buttonTitle: TimelineScreenTexts.retry)
             configuration.secondaryAttributedText = message.attributedText(textStyle: .body)
             return configuration
         case .unavailable:
@@ -1941,12 +1940,12 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         guard let id = dataSource.itemIdentifier(for: indexPath), case .notificationRequest(let request) = entries[id], let onDecision = onNotificationRequestDecision else { return nil }
         let action = switch decision {
         case .accept:
-            UIContextualAction(style: .normal, title: "受け入れる") { _, _, completion in
+            UIContextualAction(style: .normal, title: decision.title) { _, _, completion in
                 onDecision(.accept, request)
                 completion(false)
             }
         case .dismiss:
-            UIContextualAction(style: .destructive, title: "無視") { _, _, completion in
+            UIContextualAction(style: .destructive, title: decision.title) { _, _, completion in
                 onDecision(.dismiss, request)
                 completion(false)
             }
@@ -1964,7 +1963,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 人の行を左へスワイプして外す。リストのメンバーの画面でだけ出す。行を消すのは外せてからなので、スワイプした行はいったん戻す。
     private func accountRemovalSwipe(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         guard let id = dataSource.itemIdentifier(for: indexPath), case .account(let account) = entries[id], let onRemoveAccount else { return nil }
-        let action = UIContextualAction(style: .destructive, title: "外す") { _, _, completion in
+        let action = UIContextualAction(style: .destructive, title: TimelineScreenTexts.removeAccount) { _, _, completion in
             onRemoveAccount(account)
             completion(false)
         }
@@ -1980,7 +1979,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 最近の検索の行のスワイプ。ほかの行ではnil。
     private func recentSearchSwipe(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         guard let id = dataSource.itemIdentifier(for: indexPath), case .search(.recent(let query)) = entries[id], let onRemove = onRemoveRecentSearch else { return nil }
-        let action = UIContextualAction(style: .destructive, title: "削除") { _, _, completion in
+        let action = UIContextualAction(style: .destructive, title: SearchScreenTexts.removeRecent) { _, _, completion in
             onRemove(query)
             completion(true)
         }
@@ -2127,13 +2126,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         content.imageProperties.tintColor = .secondaryLabel
         content.text = texts.unreadable
         content.textProperties.color = .secondaryLabel
-        content.secondaryText = if item.isCrashQuarantined {
-            "表示中にSciaが終了したため隠しています。タップすると詳細を表示します。"
-        } else if item.url == nil {
-            "サーバーから届いた内容を読めませんでした。"
-        } else {
-            "サーバーから届いた内容を読めませんでした。タップするとブラウザで開きます。"
-        }
+        content.secondaryText = TimelineScreenTexts.unreadableDetail(isCrashQuarantined: item.isCrashQuarantined, opensInBrowser: item.url != nil)
         content.secondaryTextProperties.color = .secondaryLabel
         return content
     }
@@ -2151,11 +2144,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             content.text = "#\(hashtag.name)"
             content.textProperties.numberOfLines = 1
         case .showAll:
-            content.text = "すべて見る"
+            content.text = SearchScreenTexts.showAll
             content.textProperties.color = .tintColor
         case .failed(_, let failure):
             // 押すと読み込み直すため、押せることを色で示す。理由は下に小さく添える。
-            content.text = "読み込めませんでした。タップして再試行"
+            content.text = TimelineScreenTexts.loadFailureTapToRetry
             content.textProperties.color = .tintColor
             content.secondaryAttributedText = failure.attributedText(textStyle: .footnote)
         case .action(let action):
@@ -2164,7 +2157,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             content.textProperties.numberOfLines = 1
         case .recentsHeading:
             content = UIListContentConfiguration.header()
-            content.text = "最近の検索"
+            content.text = SearchScreenTexts.recentsHeading
         case .recent(let query):
             content.image = UIImage(systemName: "clock.arrow.circlepath")
             content.imageProperties.tintColor = .secondaryLabel
@@ -2177,7 +2170,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 最近の検索の見出しに添える「消去」。
     private func removeAllRecentSearchesButton() -> UIButton {
         var configuration = UIButton.Configuration.plain()
-        configuration.title = "消去"
+        configuration.title = SearchScreenTexts.clearRecents
         configuration.contentInsets = .zero
         configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
             var attributes = attributes
@@ -2192,16 +2185,16 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         var content = base
         content.textProperties.alignment = .center
         if isLoading {
-            content.text = "読み込み中"
+            content.text = TimelineScreenTexts.loading
             content.textProperties.color = .secondaryLabel
         } else if let failure {
             // 押すと読み込み直すため、押せることを色で示す。理由は下に小さく添える。
-            content.text = "読み込めませんでした。タップして再試行"
+            content.text = TimelineScreenTexts.loadFailureTapToRetry
             content.textProperties.color = .tintColor
             content.secondaryAttributedText = failure.attributedText(textStyle: .footnote)
             content.secondaryTextProperties.alignment = .center
         } else {
-            content.text = "読み込んでいない投稿を読み込む"
+            content.text = TimelineScreenTexts.loadGap
             content.textProperties.color = .tintColor
         }
         return content

@@ -68,7 +68,7 @@ final class SearchViewController: UIViewController, UISearchBarDelegate, UISearc
         // リストをスクロールしても、見出しを隠さず、検索欄を残す。
         searchController.hidesNavigationBarDuringPresentation = false
         searchController.searchBar.delegate = self
-        searchController.searchBar.placeholder = "ユーザー、ハッシュタグ、投稿、URL"
+        searchController.searchBar.placeholder = SearchScreenTexts.placeholder
         searchController.searchBar.autocapitalizationType = .none
         // ペーストした文字を、コピーしたとおりに入れる。理由は`GlyphLanguageTextView`の`smartInsertDeleteType`と同じ。
         searchController.searchBar.smartInsertDeleteType = .no

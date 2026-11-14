@@ -6,7 +6,7 @@ extension MenuLayout.Groups {
     /// まとまりごとに区切り線で分けて並べ、「その他」の中身はサブメニューにする。中身のないまとまりと「その他」は出さない。
     /// 横並びのまとまりは、その大きさで横に並べる。横に並ぶ数（`MenuRowSize.capacity`）を超えた項目は、その下にふだんの行として続く。
     func menuElements(_ elements: (Item) -> [UIMenuElement]) -> [UIMenuElement] {
-        arranged(elements, group: { UIMenu.group($0, row: $1) }, more: { UIMenu(title: "その他", image: UIImage(systemName: "ellipsis.circle"), children: $0) })
+        arranged(elements, group: { UIMenu.group($0, row: $1) }, more: { UIMenu(title: TimelineScreenTexts.moreMenu, image: UIImage(systemName: "ellipsis.circle"), children: $0) })
     }
 }
 

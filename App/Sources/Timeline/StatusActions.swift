@@ -550,7 +550,7 @@ extension TimelineViewController {
     /// そのタイムラインを開いている画面なので「すべての投稿」を出さず、投稿がないので「投稿したユーザーの投稿」も出さない。並びは開くたびに設定から読む。
     func makeHashtagMenuItem(name: String, url: URL) -> UIBarButtonItem {
         // 右上に入り切らず「さらに表示」にまとめられたときも、何のボタンか分かるよう名前を付ける。
-        let item = UIBarButtonItem(title: "ハッシュタグ", image: UIImage(systemName: "ellipsis"))
+        let item = UIBarButtonItem(title: TimelineScreenTexts.hashtagMenu, image: UIImage(systemName: "ellipsis"))
         item.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self, weak item] completion in
             guard let self, let item else { return completion([]) }
             let menu = HashtagMenu(

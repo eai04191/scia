@@ -6,7 +6,7 @@ import UIKit
 final class BatchActionCenter {
     /// 同じ操作の結果を待っている投稿だったので送らなかった。押した操作の結果を待ってから続きを送れば済む。
     private struct Busy: LocalizedError {
-        var errorDescription: String? { "この投稿へのほかの操作の結果を待っています。" }
+        var errorDescription: String? { BatchActionTexts.busy }
     }
 
     private static let reblogActivityID = "batch.reblog"
@@ -85,7 +85,7 @@ final class BatchActionCenter {
     private func showReblogProgress() {
         guard let run = reblog else { return }
         let fraction = run.total > 0 ? Double(run.completedCount) / Double(run.total) : nil
-        operationStatus.update(OperationStatus.Activity(id: Self.reblogActivityID, title: "ブースト中", value: "\(run.completedCount)/\(run.total)", fraction: fraction)) { [weak run] in
+        operationStatus.update(OperationStatus.Activity(id: Self.reblogActivityID, title: BatchActionTexts.reblogging, value: "\(run.completedCount)/\(run.total)", fraction: fraction)) { [weak run] in
             run?.stop()
         }
         notices.setPersistent({ [weak self, weak run] _ in
@@ -116,19 +116,19 @@ final class BatchActionCenter {
     }
 
     private func presentReblogFailure(_ run: BatchReblog, title: String, reason: ErrorPresentation) {
-        let resume = reblog === run ? [UIAlertAction(title: "続きからブースト", style: .default) { [weak self] _ in self?.resumeReblog(run) }] : []
-        present(UIAlertController.failure(title: title, reason: reason, actions: resume, cancelTitle: "閉じる"))
+        let resume = reblog === run ? [UIAlertAction(title: BatchActionTexts.resumeReblog, style: .default) { [weak self] _ in self?.resumeReblog(run) }] : []
+        present(UIAlertController.failure(title: title, reason: reason, actions: resume, cancelTitle: BatchActionTexts.close))
     }
 
     private func confirmStoppingReblog() {
         guard reblog != nil, reblogStopConfirmation == nil else { return }
         // チップから吹き出すシートでは「続ける」が省かれ、外をタップして続けることになるため、両方を並べるアラートにする。
-        let alert = UIAlertController(title: "まとめてブーストを中止しますか？", message: "ブーストし終えた投稿はそのまま残ります。", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "中止", style: .destructive) { [weak self] _ in
+        let alert = UIAlertController(title: BatchActionTexts.stopReblogTitle, message: BatchActionTexts.stopReblogMessage, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: MediaViewerTexts.Transfer.stop, style: .destructive) { [weak self] _ in
             self?.reblogStopConfirmation = nil
             self?.reblog?.stop()
         })
-        alert.addAction(UIAlertAction(title: "続ける", style: .cancel) { [weak self] _ in self?.reblogStopConfirmation = nil })
+        alert.addAction(UIAlertAction(title: MediaViewerTexts.Transfer.continue, style: .cancel) { [weak self] _ in self?.reblogStopConfirmation = nil })
         reblogStopConfirmation = alert
         present(alert)
     }
@@ -186,7 +186,7 @@ final class BatchActionCenter {
 
     private func showDownloadProgress(fraction: Double? = nil) {
         guard let progress = shareProgress else { return }
-        operationStatus.update(OperationStatus.Activity(id: Self.downloadActivityID, title: "ダウンロード中", value: "\(progress.completed)/\(progress.total)", fraction: fraction)) { [weak self] in
+        operationStatus.update(OperationStatus.Activity(id: Self.downloadActivityID, title: BatchActionTexts.downloading, value: "\(progress.completed)/\(progress.total)", fraction: fraction)) { [weak self] in
             self?.stopSharing()
         }
         notices.setPersistent({ [weak self] _ in
@@ -217,12 +217,12 @@ final class BatchActionCenter {
 
     private func confirmStoppingShare() {
         guard shareTask != nil, shareStopConfirmation == nil else { return }
-        let alert = UIAlertController(title: "ダウンロードを中止しますか？", message: nil, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "中止", style: .destructive) { [weak self] _ in
+        let alert = UIAlertController(title: MediaViewerTexts.Transfer.stopConfirmationTitle, message: nil, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: MediaViewerTexts.Transfer.stop, style: .destructive) { [weak self] _ in
             self?.shareStopConfirmation = nil
             self?.stopSharing()
         })
-        alert.addAction(UIAlertAction(title: "続ける", style: .cancel) { [weak self] _ in self?.shareStopConfirmation = nil })
+        alert.addAction(UIAlertAction(title: MediaViewerTexts.Transfer.continue, style: .cancel) { [weak self] _ in self?.shareStopConfirmation = nil })
         shareStopConfirmation = alert
         present(alert)
     }

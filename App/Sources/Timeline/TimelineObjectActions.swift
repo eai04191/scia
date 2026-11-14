@@ -231,10 +231,10 @@ extension TimelineViewController {
         switch item {
         case .menu:
             guard tree.menu(groups: defaultStatusMenuGroups(for: id, status: entry.targetStatus), includesFollowRequest: false).root != nil else { return nil }
-            return PostSwipeButton(title: "メニュー", symbolName: item.symbolName)
+            return PostSwipeButton(title: TimelineScreenTexts.swipeMenu, symbolName: item.symbolName)
         case .actionBar:
             guard !settings.appearance.showsActionBar, canShowActionBar(in: entry) else { return nil }
-            let title = openActionBarItemID == id ? "アクションバーを閉じる" : item.title
+            let title = openActionBarItemID == id ? TimelineScreenTexts.closeActionBar : item.title
             return PostSwipeButton(title: title, symbolName: item.symbolName)
         case .status(let statusItem):
             let root = tree.menu(groups: .single(statusItem), includesFollowRequest: false).root

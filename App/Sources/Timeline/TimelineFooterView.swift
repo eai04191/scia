@@ -7,7 +7,7 @@ final class TimelineFooterView: UICollectionReusableView {
 
     private let indicator = UIActivityIndicatorView(style: .medium)
     private let label = UILabel()
-    private lazy var retryButton = UIButton(configuration: .plain(), primaryAction: UIAction(title: "再試行") { [weak self] _ in
+    private lazy var retryButton = UIButton(configuration: .plain(), primaryAction: UIAction(title: TimelineScreenTexts.retry) { [weak self] _ in
         self?.onRetry?()
     })
     private let stack = UIStackView()
@@ -53,7 +53,7 @@ final class TimelineFooterView: UICollectionReusableView {
             retryButton.isHidden = true
         case .failed(let presentation):
             indicator.stopAnimating()
-            label.attributedText = presentation.attributedText(prefix: "読み込めませんでした: ", textStyle: .footnote)
+            label.attributedText = presentation.attributedText(prefix: TimelineScreenTexts.footerFailurePrefix, textStyle: .footnote)
             retryButton.isHidden = false
         case .reachedEnd:
             indicator.stopAnimating()

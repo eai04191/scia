@@ -101,7 +101,7 @@ extension TimelineViewController {
 
     private func updatePostSelectionDisplay() {
         guard let postSelection else { return }
-        navigationItem.title = postSelection.isEmpty ? "投稿を選択" : "\(postSelection.count)件を選択"
+        navigationItem.title = TimelineScreenTexts.PostSelection.title(count: postSelection.count)
         for item in toolbarItems ?? [] where item.tag == Self.postSelectionActionTag {
             item.isEnabled = !postSelection.isEmpty
         }
@@ -119,13 +119,13 @@ extension TimelineViewController {
     private static var postSelectionActionTag: Int { 0x5E1EC7 }
 
     private func makePostSelectionToolbarItems() -> [UIBarButtonItem] {
-        let reblog = UIBarButtonItem(title: "ブースト", image: UIImage(systemName: "arrow.2.squarepath"), menu: UIMenu(children: [
+        let reblog = UIBarButtonItem(title: TimelineScreenTexts.PostSelection.reblog, image: UIImage(systemName: "arrow.2.squarepath"), menu: UIMenu(children: [
             UIDeferredMenuElement.uncached { [weak self] completion in
                 completion(self?.batchReblogMenuElements() ?? [])
             },
         ]))
         reblog.tag = Self.postSelectionActionTag
-        let share = UIBarButtonItem(primaryAction: UIAction(title: "共有", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in
+        let share = UIBarButtonItem(primaryAction: UIAction(title: TimelineScreenTexts.PostSelection.share, image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in
             guard let self else { return }
             let statuses = selectedStatuses
             guard !statuses.isEmpty else { return }
@@ -142,12 +142,9 @@ extension TimelineViewController {
         let statuses = selectedStatuses
         guard let myAccountID, !statuses.isEmpty else { return [] }
         let plan = BatchReblogPlan(statuses: statuses, myAccountID: myAccountID)
-        var notes: [String] = []
-        if plan.reblogAgainCount > 0 { notes.append("ブースト済みの\(plan.reblogAgainCount)件は付け直します") }
-        if plan.skippedCount > 0 { notes.append("ブーストできない\(plan.skippedCount)件は飛ばします") }
         let start = UIAction(
-            title: "選んだ順にブースト（\(plan.steps.count)件）",
-            subtitle: notes.isEmpty ? nil : notes.joined(separator: "。"),
+            title: plan.startTitle,
+            subtitle: plan.startSubtitle,
             image: UIImage(systemName: "arrow.2.squarepath"),
             attributes: plan.steps.isEmpty ? .disabled : []
         ) { [weak self] _ in
