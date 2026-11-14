@@ -1256,7 +1256,7 @@ final class PostBodyView: UIView {
         guard let content else { return "" }
         guard let spoiler = content.spoiler else { return content.text.stringWithoutTranslationMark }
         let label = switch spoiler.kind {
-        case .contentWarning: "注意書き"
+        case .contentWarning: PostTexts.contentWarningLabel
         // ボックスの文字が「フィルター: 名前」なので、重ねて読まない。
         case .filter: ""
         }

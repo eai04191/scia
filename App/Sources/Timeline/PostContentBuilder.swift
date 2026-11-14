@@ -80,8 +80,8 @@ struct PostContentBuilder {
             PostContentConfiguration.Context(
                 symbolName: "pin.fill",
                 avatar: nil,
-                text: contextRenderer.render(.plain("固定された投稿", emojis: [])),
-                accessibilityText: "固定された投稿"
+                text: contextRenderer.render(.plain(PostTexts.pinned, emojis: [])),
+                accessibilityText: PostTexts.pinned
             )
         } else if status.reblog != nil {
             PostContentConfiguration.Context(
@@ -89,7 +89,7 @@ struct PostContentBuilder {
                 avatar: settings.appearance.showsBoosterAvatar ? avatarContent(of: status.account) : nil,
                 text: boosterName.text,
                 secondaryRange: boosterName.secondaryRange,
-                accessibilityText: "\(status.account.displayNameOrUsername)がブースト",
+                accessibilityText: PostTexts.boosted(by: status.account.displayNameOrUsername),
                 accountName: status.account.displayNameOrUsername
             )
         } else if let replyLabel, settings.appearance.showsReplyLabel {
@@ -189,12 +189,7 @@ struct PostContentBuilder {
 
     /// 返信のラベル。自分への返信は、タイムラインの中で気づけるよう、記号と文字をアプリの色で描く。
     private func replyContext(_ label: ReplyLabel, font: UIFont, language: String) -> PostContentConfiguration.Context {
-        let text = switch label {
-        case .continuation: "続き"
-        case .toMe: "自分への返信"
-        case .toAccount(let acct): "@\(acct)への返信"
-        case .unknownAccount: "返信"
-        }
+        let text = label.title
         let color: UIColor = label == .toMe ? .tintColor : .secondaryLabel
         let renderer = RichTextRenderer(font: font, textColor: color, emojiImages: emojiImages, language: language)
         return PostContentConfiguration.Context(
@@ -331,13 +326,13 @@ struct PostContentBuilder {
         var notes: [EmbeddedPostView.Content.Note] = []
         // 囲みが投稿1件分に近い重さにならないよう、投票は選択肢を並べず、あることだけを示す。
         if quoted.poll != nil {
-            notes.append(EmbeddedPostView.Content.Note(text: noteText("投票", symbolName: "chart.bar.xaxis", color: .secondaryLabel, font: font), isPressable: false))
+            notes.append(EmbeddedPostView.Content.Note(text: noteText(PostTexts.quotedPollNote, symbolName: "chart.bar.xaxis", color: .secondaryLabel, font: font), isPressable: false))
         }
         switch NestedQuote(quoted.quote) {
         case .link:
-            notes.append(EmbeddedPostView.Content.Note(text: noteText("引用した投稿があります", symbolName: "quote.bubble", color: .tintColor, font: font), isPressable: true))
+            notes.append(EmbeddedPostView.Content.Note(text: noteText(PostTexts.nestedQuoteNote, symbolName: "quote.bubble", color: .tintColor, font: font), isPressable: true))
         case .unavailable(let reason):
-            notes.append(EmbeddedPostView.Content.Note(text: noteText(Self.quoteUnavailableText(reason), symbolName: "quote.bubble", color: .secondaryLabel, font: font), isPressable: false))
+            notes.append(EmbeddedPostView.Content.Note(text: noteText(reason.title, symbolName: "quote.bubble", color: .secondaryLabel, font: font), isPressable: false))
         case nil:
             break
         }
@@ -374,22 +369,9 @@ struct PostContentBuilder {
         return content
     }
 
-    /// 引用元を出せない理由の文言。
-    static func quoteUnavailableText(_ reason: QuoteDisplay.Reason) -> String {
-        switch reason {
-        case .pending: "承認待ちの引用です"
-        case .withdrawn: "引用元の投稿者が引用を取り消しました"
-        case .deleted: "引用元の投稿は削除されました"
-        case .unauthorized: "引用元の投稿を表示できません"
-        case .blockedAccount: "ブロックしている人の投稿です"
-        case .blockedDomain: "ブロックしているドメインの人の投稿です"
-        case .mutedAccount: "ミュートしている人の投稿です"
-        }
-    }
-
     /// お気に入りやブーストの通知で再掲する投稿に、囲みの代わりに添える、引用のある投稿であることを示す1行。
     func quoteNote(font: UIFont) -> NSAttributedString {
-        noteText("引用した投稿", symbolName: "quote.bubble", color: .secondaryLabel, font: font)
+        noteText(PostTexts.quoteNote, symbolName: "quote.bubble", color: .secondaryLabel, font: font)
     }
 
     private func embed(
@@ -491,8 +473,8 @@ struct PostContentBuilder {
     /// フィルターの名前は使う人が付けたものなので、投稿の言語ではなく、アプリの文字で描く。
     func filterWarning(titles: [String], base: UIListContentConfiguration) -> PostBodyContent.Spoiler {
         let font = PostTypography(settings: settings).font(.body)
-        let text = NSMutableAttributedString(string: "フィルター: ", attributes: [.font: font, .foregroundColor: UIColor.secondaryLabel])
-        text.append(NSAttributedString(string: titles.joined(separator: "、"), attributes: [.font: font, .foregroundColor: UIColor.label]))
+        let text = NSMutableAttributedString(string: PostTexts.filterWarningPrefix, attributes: [.font: font, .foregroundColor: UIColor.secondaryLabel])
+        text.append(NSAttributedString(string: PostTexts.filterNames(titles), attributes: [.font: font, .foregroundColor: UIColor.label]))
         return PostBodyContent.Spoiler(
             text: text,
             isCollapsed: true,
@@ -513,7 +495,7 @@ struct PostContentBuilder {
             text.append(NSAttributedString(attachment: NSTextAttachment(image: symbol.withRenderingMode(.alwaysTemplate))))
             text.append(NSAttributedString(string: " "))
         }
-        text.append(NSAttributedString(string: "フィルター" + titles.map { "“\($0)”" }.joined() + "に一致"))
+        text.append(NSAttributedString(string: PostTexts.ownFilterNote(titles: titles)))
         text.addAttributes([.font: font, .foregroundColor: UIColor.secondaryLabel], range: NSRange(location: 0, length: text.length))
         return text
     }

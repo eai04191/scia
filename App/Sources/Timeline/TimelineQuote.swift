@@ -57,14 +57,14 @@ extension TimelineViewController {
             }
             return (content, actions)
         case .concealed(let reason, _):
-            let content = postContentBuilder.quotePlaceholder(id: shown.id, message: PostContentBuilder.quoteUnavailableText(reason), revealTitle: "引用元を表示", base: base)
+            let content = postContentBuilder.quotePlaceholder(id: shown.id, message: reason.title, revealTitle: PostTexts.revealQuote, base: base)
             var actions = EmbedActions()
             actions.open = { [weak self] _ in self?.revealQuote(of: shown, keeping: itemID) }
             return (content, actions)
         case .unavailable(let reason):
-            return (postContentBuilder.quotePlaceholder(id: shown.id, message: PostContentBuilder.quoteUnavailableText(reason), revealTitle: nil, base: base), EmbedActions())
+            return (postContentBuilder.quotePlaceholder(id: shown.id, message: reason.title, revealTitle: nil, base: base), EmbedActions())
         case .filtered:
-            return (postContentBuilder.quotePlaceholder(id: shown.id, message: "フィルターで隠しました", revealTitle: nil, base: base), EmbedActions())
+            return (postContentBuilder.quotePlaceholder(id: shown.id, message: PostTexts.quoteFiltered, revealTitle: nil, base: base), EmbedActions())
         }
     }
 

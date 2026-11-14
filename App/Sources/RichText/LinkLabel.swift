@@ -252,7 +252,7 @@ final class LinkLabel: EmojiLabel {
 /// 読み上げでは、本文の要素の操作で広げるので、要素にしない。
 /// スクロールビューは標準では`UIControl`の上で始まった押下をスクロールに切り替えないため、載せるスクロールビューは`touchesShouldCancel(in:)`でこの部品にtrueを返す。
 final class ReadMoreButton: UIControl {
-    static let title = "続きを読む"
+    static let title = PostTexts.readMore
     private let label = UILabel()
 
     var font: UIFont {

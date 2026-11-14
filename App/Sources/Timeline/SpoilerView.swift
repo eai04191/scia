@@ -81,9 +81,8 @@ final class SpoilerView: UIControl {
 
     static func toggleTitle(isCollapsed: Bool, kind: PostBodyContent.Spoiler.Kind) -> String {
         switch kind {
-        case .contentWarning: isCollapsed ? "本文を表示" : "本文を隠す"
-        // フィルターの警告は、本文だけでなく添付ファイルやリンクカードも隠しているため、本文に限らない言い方にする。
-        case .filter: "投稿を表示"
+        case .contentWarning: PostTexts.contentWarningToggle(isCollapsed: isCollapsed)
+        case .filter: PostTexts.filterWarningToggle
         }
     }
 

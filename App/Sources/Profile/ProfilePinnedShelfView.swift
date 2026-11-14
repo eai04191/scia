@@ -42,7 +42,7 @@ final class ProfilePinnedShelfView: UIView, UIScrollViewDelegate {
     }
 
     private func configureSubviews() {
-        titleLabel.text = "固定された投稿"
+        titleLabel.text = PostTexts.pinned
         titleLabel.font = .preferredFont(forTextStyle: .headline)
         titleLabel.adjustsFontForContentSizeCategory = true
         titleLabel.accessibilityTraits = .header
@@ -170,8 +170,8 @@ private final class ProfilePinnedCard: UIControl {
         // 警告のフィルターに一致した投稿と、注意書きのある投稿は、警告の文だけを出し、本文と添付ファイルを出さない。開いた先で、いつもどおり読むかを選ぶ。
         // フィルターの警告は、タイムラインの行（`PostContentBuilder.filterWarning`）と同じ文言にする。
         if hasFilterWarning {
-            let text = NSMutableAttributedString(string: "フィルター: ", attributes: [.font: font, .foregroundColor: UIColor.secondaryLabel])
-            text.append(NSAttributedString(string: verdict.warningTitles.joined(separator: "、"), attributes: [.font: font, .foregroundColor: UIColor.label]))
+            let text = NSMutableAttributedString(string: PostTexts.filterWarningPrefix, attributes: [.font: font, .foregroundColor: UIColor.secondaryLabel])
+            text.append(NSAttributedString(string: PostTexts.filterNames(verdict.warningTitles), attributes: [.font: font, .foregroundColor: UIColor.label]))
             bodyLabel.attributedText = text
         } else {
             let text: RichText = hasWarning ? .plain(status.spoilerText, emojis: status.emojis) : .html(status.content, emojis: status.emojis)

@@ -82,7 +82,7 @@ final class PollView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         optionsStack.axis = .vertical
-        emptyLabel.text = "選択肢がありません"
+        emptyLabel.text = PostTexts.Poll.empty
         emptyLabel.textColor = .secondaryLabel
         emptyLabel.numberOfLines = 0
         optionsStack.addArrangedSubview(emptyLabel)
@@ -102,7 +102,7 @@ final class PollView: UIView {
         }, for: .primaryActionTriggered)
 
         var vote = UIButton.Configuration.filled()
-        vote.title = "投票"
+        vote.title = PostTexts.Poll.vote
         vote.cornerStyle = .capsule
         vote.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14)
         voteButton.configuration = vote
@@ -241,10 +241,10 @@ final class PollView: UIView {
         voteButton.isEnabled = display.canSubmit
         voteButton.configuration?.showsActivityIndicator = display.isSubmitting
         let secondary: (title: String, action: Action, enabled: Bool)? = switch display.mode {
-        case .voting where display.canRevealResults: ("結果を見る", .reveal, !display.isSubmitting)
+        case .voting where display.canRevealResults: (PostTexts.Poll.reveal, .reveal, !display.isSubmitting)
         case .voting: nil
-        case .results where display.canReturnToVoting: ("投票に戻る", .returnToVoting, true)
-        case .results where display.canRefresh: ("更新", .refresh, !display.isRefreshing)
+        case .results where display.canReturnToVoting: (PostTexts.Poll.returnToVoting, .returnToVoting, true)
+        case .results where display.canRefresh: (PostTexts.Poll.refresh, .refresh, !display.isRefreshing)
         case .results: nil
         }
         secondaryAction = secondary?.action
@@ -560,7 +560,7 @@ final class PollOptionView: UIControl {
             accessibilityValue = nil
         case .results:
             accessibilityTraits = .staticText
-            accessibilityValue = [option.fraction.map { Self.percentText($0) }, option.isOwnVote ? "投票済み" : nil].compactMap(\.self).joined(separator: "、")
+            accessibilityValue = [option.fraction.map { Self.percentText($0) }, option.isOwnVote ? PostTexts.Poll.ownVote : nil].compactMap(\.self).joined(separator: "、")
         }
     }
 

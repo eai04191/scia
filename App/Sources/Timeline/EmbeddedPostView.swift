@@ -408,7 +408,7 @@ final class EmbeddedPostView: UIButton {
         let isCollapsed = content.spoiler?.isCollapsed ?? false
         var parts = [content.header?.name.string]
         if let spoiler = content.spoiler {
-            parts += [spoiler.kind == .contentWarning ? "注意書き" : nil, spoiler.text.string]
+            parts += [spoiler.kind == .contentWarning ? PostTexts.contentWarningLabel : nil, spoiler.text.string]
         }
         if !isCollapsed {
             parts.append(content.text.stringWithoutTranslationMark)

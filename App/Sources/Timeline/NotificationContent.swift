@@ -173,7 +173,7 @@ extension TimelineViewController {
                     linkAttributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
                 }
                 linkAttributes[.groupAccountsLink] = true
-                header.append(NSAttributedString(string: "ほか\((notification.notificationsCount - 1).formatted())人", attributes: linkAttributes))
+                header.append(NSAttributedString(string: PostTexts.otherAccounts(count: notification.notificationsCount - 1), attributes: linkAttributes))
             }
         }
         let reactionEmoji = notification.type == .emojiReaction ? notification.reactionEmoji : nil

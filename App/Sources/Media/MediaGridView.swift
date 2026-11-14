@@ -109,7 +109,7 @@ final class MediaGridView: UIView {
         if content.isStacked {
             tileContainer.isHidden = true
             loadedPhotoStack().isHidden = false
-            photoStack?.apply(content, coverTitle: Self.coverTitle(of: content.cover))
+            photoStack?.apply(content, coverAccessibilityLabel: PostTexts.mediaCoverAccessibilityLabel(content.cover))
             setNeedsLayout()
             return
         }
@@ -237,27 +237,17 @@ final class MediaGridView: UIView {
     /// 小さなサムネイルには文字が入りきらないため、1列に並べるときは記号だけを出す。
     private func updateCoverButton(for content: Content) {
         guard let coverButton, var configuration = coverButton.configuration else { return }
-        let title = Self.coverTitle(of: content.cover)
+        let title = MediaCover.title(of: content.cover)
         switch content.arrangement {
         case .grid:
             configuration.title = title
-            configuration.subtitle = "タップして表示"
+            configuration.subtitle = PostTexts.mediaCoverHint
         case .strip, .stack:
             configuration.title = nil
             configuration.subtitle = nil
         }
         coverButton.configuration = configuration
-        coverButton.accessibilityLabel = "\(title)、タップして表示"
-    }
-
-    /// ぼかしている理由。使う人が隠した投稿に「閲覧注意」と出すと、投稿者が付けたように読めるため、文言を分ける。
-    /// フィルターでぼかした投稿は、どのフィルターに一致したかを出す。
-    static func coverTitle(of cover: MediaCover?) -> String {
-        switch cover {
-        case .hidden: "非表示"
-        case .filtered(let titles): "フィルター: \(titles.joined(separator: "、"))"
-        case .sensitive, nil: "閲覧注意"
-        }
+        coverButton.accessibilityLabel = PostTexts.mediaCoverAccessibilityLabel(content.cover)
     }
 
     private func loadedCover() -> UIView {
@@ -275,8 +265,8 @@ final class MediaGridView: UIView {
         effect.layer.cornerCurve = .continuous
         effect.clipsToBounds = true
         var configuration = UIButton.Configuration.plain()
-        configuration.title = "閲覧注意"
-        configuration.subtitle = "タップして表示"
+        configuration.title = MediaCover.title(of: nil)
+        configuration.subtitle = PostTexts.mediaCoverHint
         configuration.image = UIImage(systemName: "eye.slash")
         configuration.imagePlacement = .top
         configuration.imagePadding = 4

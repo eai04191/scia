@@ -130,8 +130,8 @@ final class MediaPhotoStackView: PhotoStackView {
         setNeedsLayout()
     }
 
-    /// - Parameter coverTitle: ぼかしているときに読み上げる、ぼかしている理由。
-    func apply(_ content: MediaGridView.Content, coverTitle: String) {
+    /// - Parameter coverAccessibilityLabel: ぼかしているときに読み上げる文。
+    func apply(_ content: MediaGridView.Content, coverAccessibilityLabel: String) {
         if content.stackSeed != seed || content.tiltsStack != tilts {
             seed = content.stackSeed
             tilts = content.tiltsStack
@@ -159,7 +159,7 @@ final class MediaPhotoStackView: PhotoStackView {
             cover.isHidden = !content.isCovered || index >= attachments.count
         }
         // ぼかしている間は、添付ファイルの説明を読まず、ぼかしている理由を読む。押すとぼかしを外す。
-        coverAccessibilityLabel = "\(coverTitle)、タップして表示"
+        self.coverAccessibilityLabel = coverAccessibilityLabel
         isAccessibilityElement = content.isCovered
         front.tile.isAccessibilityElement = !content.isCovered
         invalidateIntrinsicContentSize()
