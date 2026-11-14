@@ -34,7 +34,7 @@ struct PostContentConfiguration: UIContentConfiguration {
     var replyConnection = ReplyConnection()
     /// 返信をつなぐ線を描く。描かなくても、つながりは区切り線の有無などに使う。
     var showsReplyLines = true
-    /// 名前の行の右端に時刻を出す。出さなくても、読み上げでは読む。
+    /// 名前の行の右端に時刻を出す。出さなくても、読み上げでは読む。公開範囲の記号と編集済みの「*」は、時刻を出さなくても出す。
     var showsTime = true
     /// 名前の行に2つ並べるとき、2つ目を2段目に置く。時刻は1段目の右端に残す。
     var stacksNameParts = false
@@ -221,10 +221,20 @@ struct PostContentConfiguration: UIContentConfiguration {
         isNameStacked ? [nameParts[0]] : nameParts
     }
 
-    /// `now`の時点での時刻の表記。
+    /// `now`の時点での時刻の表記。時刻を出さなければ、編集済みの「*」だけにする。
     func timeText(now: Date) -> String {
-        let text = StatusTimestamp.text(for: createdAt, now: now, style: timeStyle)
-        return isEdited && showsEditedMark ? "*\(text)" : text
+        let mark = showsEditedMarkInTime ? "*" : ""
+        return showsTime ? mark + StatusTimestamp.text(for: createdAt, now: now, style: timeStyle) : mark
+    }
+
+    /// 時刻の前に、編集済みの「*」を付ける。
+    var showsEditedMarkInTime: Bool {
+        isEdited && showsEditedMark
+    }
+
+    /// 時刻のラベルに描くものがある。時刻、公開範囲の記号、編集済みの「*」のどれか。
+    var showsTimeLabel: Bool {
+        showsTime || visibilitySymbolName != nil || showsEditedMarkInTime
     }
 
     /// 時刻の前に付ける公開範囲の記号。公開ならnil。
@@ -494,7 +504,7 @@ final class PostContentView: UIView, UIContentView {
         timeLabel.font = metrics.timeFont
         timeText = configuration.timeText(now: now())
         timeLabel.attributedText = timeAttributedText(timeText, for: configuration)
-        timeLabel.isHidden = !configuration.showsTime
+        timeLabel.isHidden = !configuration.showsTimeLabel
         nameRow.setCustomSpacing(metrics.visibilitySymbolSpacing, after: timeLabel)
 
         bodyView.emojiImages = configuration.emojiImages
@@ -657,7 +667,7 @@ final class PostContentView: UIView, UIContentView {
         if current.isReply {
             frames[.replyLabelSlot] = current.context == nil ? bar(x: row.minX, y: row.minY - 1, width: row.width) : textExtent(of: contextLabel)
         }
-        frames[.timeSlot] = timeLabel.isHidden ? line(x: row.maxX, y: row.minY, height: row.height) : [timeLabel.convert(timeLabel.bounds, to: self)]
+        frames[.timeSlot] = current.showsTime ? [timeLabel.convert(timeLabel.bounds, to: self)] : line(x: row.maxX, y: row.minY, height: row.height)
         if current.replyConnection.below {
             frames[.replyLineSlot] = replyLineBelow.isHidden ? line(x: avatarView.frame.midX, y: avatarView.frame.maxY, height: bounds.maxY - avatarView.frame.maxY) : [replyLineBelow.frame]
         }
@@ -674,9 +684,10 @@ final class PostContentView: UIView, UIContentView {
     /// 時刻の中の、公開範囲の記号と「*」と、それぞれと時刻のすき間。時刻のラベルは文字の幅に合わせて置くので、左端から測る。
     /// すき間は設定の値ではなく、描く文字列の幅から測る。すき間が効いていなければ、それが帯の太さに出るようにするため。
     private func timePreviewFrames() -> AppearancePreviewFrames {
-        guard !timeLabel.isHidden, let text = timeLabel.attributedText, text.length > 0 else { return [:] }
-        // 時刻のラベルは名前の行の中にあるので、この行の座標に直す。
-        let label = timeLabel.convert(timeLabel.bounds, to: self)
+        let text = timeLabel.isHidden ? NSAttributedString() : timeLabel.attributedText ?? NSAttributedString()
+        // 時刻のラベルは名前の行の中にあるので、この行の座標に直す。ラベルに何も出していなければ、ラベルを置く名前の行の右端で示す。
+        let row = nameRow.frame
+        let label = timeLabel.isHidden ? CGRect(x: row.maxX, y: row.minY, width: 0, height: row.height) : timeLabel.convert(timeLabel.bounds, to: self)
         func width(upTo end: Int) -> CGFloat {
             ceil(text.attributedSubstring(from: NSRange(location: 0, length: min(end, text.length))).size().width)
         }
@@ -690,8 +701,11 @@ final class PostContentView: UIView, UIContentView {
                 // 記号の画像、すき間を作る空白の順に並ぶ。
                 let symbolEnd = width(upTo: 1)
                 frames[.visibilitySymbol] = band(from: 0, to: symbolEnd)
-                frames[.visibilitySymbolGap] = band(from: symbolEnd, to: width(upTo: 2))
-                index = 2
+                // 記号の後ろに何も出していなければ、すき間を作る空白も置いていない。
+                index = min(2, text.length)
+                if index == 2 {
+                    frames[.visibilitySymbolGap] = band(from: symbolEnd, to: width(upTo: 2))
+                }
             } else {
                 frames[.visibilitySymbol] = [CGRect(x: label.minX - 1, y: label.minY, width: 2, height: label.height)]
             }
@@ -701,7 +715,9 @@ final class PostContentView: UIView, UIContentView {
             if current.showsEditedMark {
                 let markWidth = ceil(("*" as NSString).size(withAttributes: [.font: current.metrics.timeFont]).width)
                 frames[.editedMark] = band(from: start, to: start + markWidth)
-                frames[.editedMarkGap] = band(from: start + markWidth, to: width(upTo: index + 1))
+                if current.showsTime {
+                    frames[.editedMarkGap] = band(from: start + markWidth, to: width(upTo: index + 1))
+                }
             } else {
                 frames[.editedMark] = [CGRect(x: label.minX + start - 1, y: label.minY, width: 2, height: label.height)]
             }
@@ -781,11 +797,14 @@ final class PostContentView: UIView, UIContentView {
            let image = UIImage(systemName: symbolName, withConfiguration: UIImage.SymbolConfiguration(font: font, scale: .small)) {
             result.append(NSAttributedString(attachment: NSTextAttachment(image: image)))
             // 画像の添付の文字にも幅0の文字にも字送りが効かないので、後ろに空白を置き、空白の幅を差し引いた字送りで、すき間を設定の値にする。
-            let spaceWidth = (" " as NSString).size(withAttributes: [.font: font]).width
-            result.append(NSAttributedString(string: " ", attributes: [.kern: configuration.metrics.visibilitySymbolSpacing - spaceWidth]))
+            // 後ろに何も出さなければ、すき間は要らない。
+            if !text.isEmpty {
+                let spaceWidth = (" " as NSString).size(withAttributes: [.font: font]).width
+                result.append(NSAttributedString(string: " ", attributes: [.kern: configuration.metrics.visibilitySymbolSpacing - spaceWidth]))
+            }
         }
         let time = NSMutableAttributedString(string: text)
-        if configuration.isEdited, configuration.showsEditedMark, text.hasPrefix("*") {
+        if configuration.showsEditedMarkInTime, configuration.showsTime, text.hasPrefix("*") {
             time.addAttribute(.kern, value: configuration.metrics.editedMarkSpacing, range: NSRange(location: 0, length: 1))
         }
         result.append(time)
@@ -933,7 +952,7 @@ final class PostContentView: UIView, UIContentView {
     static func largestNamePointSize(of configuration: PostContentConfiguration) -> CGFloat {
         var sizes = configuration.firstLineNameParts.map(pointSize(of:))
         sizes.append(configuration.metrics.nameFont.pointSize)
-        if configuration.showsTime {
+        if configuration.showsTimeLabel {
             sizes.append(configuration.metrics.timeFont.pointSize)
         }
         return sizes.max() ?? configuration.metrics.nameFont.pointSize
