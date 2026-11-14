@@ -202,12 +202,12 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
                 sections.insert(statusSection, at: index)
             }
             self.sections = sections
-            statusLabel.text = "並べる絵文字がありません"
+            statusLabel.text = ComposeTexts.EmojiPalette.noEmojis
             statusLabel.isHidden = !sections.isEmpty
         case .searchResults(let emojis, let customStatus):
             self.customStatus = customStatus
             sections = (customStatus == nil ? [] : [statusSection]) + (emojis.isEmpty ? [] : [EmojiPaletteSection(kind: .searchResults, emojis: emojis)])
-            statusLabel.text = "見つかりません"
+            statusLabel.text = ComposeTexts.EmojiPalette.noResults
             statusLabel.isHidden = !emojis.isEmpty
         }
         applySnapshot()
@@ -265,8 +265,8 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
 
     private func configureViews() {
         searchField.translatesAutoresizingMaskIntoConstraints = false
-        searchField.placeholder = "絵文字を検索"
-        searchField.accessibilityLabel = "絵文字を検索"
+        searchField.placeholder = ComposeTexts.EmojiPalette.search
+        searchField.accessibilityLabel = ComposeTexts.EmojiPalette.search
         // Unicodeの絵文字は日本語の言葉でも探すので、ふだんのキーボードにする。
         searchField.autocapitalizationType = .none
         searchField.autocorrectionType = .no
@@ -311,7 +311,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         deleteButton.translatesAutoresizingMaskIntoConstraints = false
         deleteButton.configuration?.image = UIImage(systemName: "delete.backward")
         deleteButton.configuration?.baseForegroundColor = .label
-        deleteButton.accessibilityLabel = "削除"
+        deleteButton.accessibilityLabel = ComposeTexts.delete
         deleteButton.addAction(UIAction { [weak self] _ in
             UIDevice.current.playInputClick()
             self?.onDelete()
@@ -564,22 +564,9 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
             return Self.icon(from: image)
         case .standard(let title):
             // Unicodeの絵文字のまとまりは、iOSの絵文字キーボードと同じく、記号のアイコンにする。時計や虫めがねと同じ色で並ぶ。
-            return UIImage(systemName: Self.standardGroupSymbols[title] ?? "square.grid.2x2")
+            return UIImage(systemName: StandardEmojiGroup.symbolName(forTitle: title) ?? "square.grid.2x2")
         }
     }
-
-    /// Unicodeの絵文字のまとまりの名前（`Tools/build-emoji-data.py`の`GROUP_TITLES`）と、まとまりのボタンのアイコン。
-    private static let standardGroupSymbols: [String: String] = [
-        "顔と感情": "face.smiling",
-        "人と体": "hand.raised",
-        "動物と自然": "pawprint",
-        "食べ物と飲み物": "fork.knife",
-        "旅行と場所": "car",
-        "活動": "soccerball",
-        "物": "lightbulb",
-        "記号": "number",
-        "旗": "flag",
-    ]
 
     /// 縦横比を保って、アイコンの大きさの枠に収める。絵文字の色のまま描く。
     private static func icon(from image: UIImage) -> UIImage {
@@ -862,7 +849,7 @@ private final class EmojiPaletteStatusCell: UICollectionViewCell {
         label.textColor = .secondaryLabel
         label.numberOfLines = 0
         label.textAlignment = .center
-        retryButton.configuration?.title = "再試行"
+        retryButton.configuration?.title = ComposeTexts.retry
         retryButton.addAction(UIAction { [weak self] _ in self?.onRetry() }, for: .primaryActionTriggered)
         // 読み込み中はインジケーターと文言を横に、失敗は文言の下に読み直すボタンを置く。カスタム絵文字の中身の代わりに出すので、タイムラインが空のときやタイムラインの失敗と同じく中央にそろえる。
         let message = UIStackView(arrangedSubviews: [spinner, label])
@@ -895,7 +882,7 @@ private final class EmojiPaletteStatusCell: UICollectionViewCell {
         case .loading:
             spinner.startAnimating()
             spinner.isHidden = false
-            label.text = "カスタム絵文字を読み込んでいます"
+            label.text = ComposeTexts.EmojiPalette.loadingCustomEmojis
             retryButton.isHidden = true
         case .failed(let reason):
             spinner.stopAnimating()
