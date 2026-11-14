@@ -52,7 +52,8 @@ struct TimelineStoreInterleavingTests {
     private static func run(seed: UInt64) async -> Failure? {
         var random = SplitMix64(seed: seed)
         let server = InterleavingServer(initialCount: Int.random(in: 0...15, using: &random))
-        let store = TimelineStore(pageSize: pageSize, now: { Date(timeIntervalSince1970: 0) }) { query in
+        // メインアクターのまま受けるので、ストアが要求を出したところでサーバーに届く。届く順が走らせるたびに変わると、同じseedで同じ手順にならないため。
+        let store = TimelineStore(pageSize: pageSize, now: { Date(timeIntervalSince1970: 0) }) { @MainActor query in
             try await server.fetch(query)
         }
         var trace: [String] = []
@@ -262,6 +263,8 @@ final class InterleavingServer {
         let query: TimelineQuery
         /// 要求を受けた時点の投稿。
         let snapshot: Set<Int>
+        /// 要求を出した操作。
+        let operation: Int?
         let continuation: CheckedContinuation<TimelinePage, any Error>
 
         var label: String {
@@ -276,6 +279,9 @@ final class InterleavingServer {
     private(set) var requests: [Request] = []
     /// 始めて、まだ終わっていない操作の数。
     private var running = 0
+    private var nextOperation = 0
+    /// 要求を出している操作。1つの操作が、並行に読む2つの要求を同時に待つことがあるため、要求を操作ごとにまとめて数える。
+    @TaskLocal private static var operation: Int?
     private var settleWaiter: CheckedContinuation<Void, Never>?
     private var nextID: Int
 
@@ -287,7 +293,7 @@ final class InterleavingServer {
 
     func fetch(_ query: TimelineQuery) async throws -> TimelinePage {
         try await withCheckedThrowingContinuation { continuation in
-            requests.append(Request(query: query, snapshot: ids, continuation: continuation))
+            requests.append(Request(query: query, snapshot: ids, operation: Self.operation, continuation: continuation))
             notifyIfSettled()
         }
     }
@@ -295,15 +301,18 @@ final class InterleavingServer {
     /// 操作を始める。失敗は、アプリと同じく呼び出し元で捨てる。
     func start(_ operation: @escaping @MainActor () async throws -> Void) {
         running += 1
-        Task { @MainActor in
-            try? await operation()
-            running -= 1
-            notifyIfSettled()
+        nextOperation += 1
+        Self.$operation.withValue(nextOperation) {
+            Task { @MainActor in
+                try? await operation()
+                running -= 1
+                notifyIfSettled()
+            }
         }
     }
 
-    /// 始めた操作が、どれも終わったかサーバーの応答を待つまで待つ。操作は応答のほかに待つものがなく、1つの操作は一度に1件しか要求しないため、
-    /// 終わっていない操作の数と止めている要求の数が揃えば、テストが答えるまで何も進まない。
+    /// 始めた操作が、どれも終わったかサーバーの応答を待つまで待つ。操作は応答のほかに待つものがなく、並行に読む要求は出したところで届くため、
+    /// 終わっていない操作の数と要求を止めている操作の数が揃えば、テストが答えるまで何も進まない。
     func settled() async {
         guard !isSettled else { return }
         await withCheckedContinuation { settleWaiter = $0 }
@@ -325,7 +334,7 @@ final class InterleavingServer {
         await drain()
     }
 
-    private var isSettled: Bool { running == requests.count }
+    private var isSettled: Bool { running == Set(requests.map(\.operation)).count }
 
     private func notifyIfSettled() {
         guard isSettled, let settleWaiter else { return }

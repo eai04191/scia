@@ -220,7 +220,8 @@ struct TimelineGapTests {
     /// 既読位置のすぐ後のページを読めなくても、最新のページだけで表示し、既読位置までをギャップにする。
     @Test func latestPageIsShownWhenPageAfterMarkerFails() async throws {
         let server = FakeHomeServer(ids: 1...20, maxLimit: 2)
-        let store = TimelineStoreTester(pageSize: Self.pageSize) { query in
+        // メインアクターのまま受け、並行に出す要求も、出したところでサーバーに届くようにする。下で要求を数えるため。
+        let store = TimelineStoreTester(pageSize: Self.pageSize) { @MainActor query in
             if query.minID != nil { throw URLError(.timedOut) }
             return server.page(query)
         }
@@ -236,7 +237,8 @@ struct TimelineGapTests {
             $0.lastReadPosition = TimelineStore.DisplayPosition(anchorID: "5", sequence: 0)
             $0.savedReadID = "5"
         }
-        #expect(server.queries == [TimelineQuery(limit: Self.pageSize)], "既読位置から古いページまで読みました")
+        // 既読位置から古いページは並行に読み始めているが、すぐ後のページを読めなければ使わず、末尾の読み込みで既読位置から読む。
+        #expect(server.queries == [TimelineQuery(limit: Self.pageSize), TimelineQuery(maxID: "6", limit: Self.pageSize)])
     }
 
     /// 既読位置までをギャップにしたあと、ギャップと末尾のどちらを先に読んでも、既読位置の投稿とその前後を読み落とさず、重ねて読まない。
@@ -2296,11 +2298,11 @@ struct TimelineGapTests {
             $0.lastReadPosition = readPosition(5)
             $0.savedReadID = "5"
         }
-        #expect(server.queries == [
-            TimelineQuery(limit: Self.pageSize),
-            TimelineQuery(minID: "5", limit: Self.pageSize),
-            TimelineQuery(maxID: "6", limit: Self.pageSize),
-        ])
+        // 既読位置の前後の2ページは並行に読むので、どちらが先に届くかは決まらない。
+        let aroundMarker = [TimelineQuery(minID: "5", limit: Self.pageSize), TimelineQuery(maxID: "6", limit: Self.pageSize)]
+        #expect(server.queries.first == TimelineQuery(limit: Self.pageSize))
+        #expect(server.queries.count == 3)
+        #expect(aroundMarker.allSatisfy(server.queries.contains))
         #expect(store.unreadCount == 6)
         #expect(store.hasUnloadedUnread)
 
@@ -2312,6 +2314,55 @@ struct TimelineGapTests {
             $0.entries = entryRows(Array((3...20).reversed()))
         }
         #expect(!store.hasUnloadedUnread)
+    }
+
+    /// 既読位置から古いページは、既読位置のすぐ後のページを待たずに読み始める。起動してから表示するまでに、往復を順に待つ回数を減らすため。
+    @Test func pageFromMarkerDoesNotWaitForPageAfterMarker() async throws {
+        let server = FakeHomeServer(ids: 1...20)
+        let afterMarker = FetchGate()
+        let store = TimelineStoreTester(pageSize: Self.pageSize) { query in
+            if query.minID != nil {
+                await afterMarker.wait()
+            }
+            return server.page(query)
+        }
+
+        try await store.expectChanges(during: { store in
+            let loading = Task { try await store.loadInitial(around: "5") }
+            await afterMarker.waitUntilWaiting()
+            try await waitUntil { server.queries.contains(TimelineQuery(maxID: "6", limit: Self.pageSize)) }
+            await afterMarker.open()
+            _ = try await loading.value
+        }) {
+            $0.entries = entryRows([20, 19, 18]) + [gapEntry(18, 8)] + entryRows([8, 7, 6, 5, 4, 3])
+            $0.oldestLoadedID = "3"
+            $0.lastReadID = "5"
+            #if DEBUG
+            $0.lastSavableReadID = "5"
+            #endif
+            $0.lastReadPosition = readPosition(5)
+            $0.savedReadID = "5"
+        }
+    }
+
+    /// 既読位置から古いページを待っている間に読み込みを取り消すと、その要求も取り消す。ログアウトやアカウントの切り替えで、前のアカウントの通信を残さないため。
+    @Test func cancellingInitialLoadCancelsPageFromMarker() async throws {
+        let server = FakeHomeServer(ids: 1...20)
+        let fromMarker = Gate()
+        let store = TimelineStoreTester(pageSize: Self.pageSize) { @MainActor query in
+            if query.maxID != nil {
+                try await fromMarker.wait()
+            }
+            return server.page(query)
+        }
+
+        try await store.expectChanges(during: { store in
+            let loading = Task { try await store.loadInitial(around: "5") }
+            try await waitUntil { fromMarker.waiterCount == 1 && server.queries.contains { $0.minID != nil } }
+            loading.cancel()
+            try await waitUntil { fromMarker.waiterCount == 0 }
+            _ = try? await loading.value
+        }) { _ in }
     }
 
     /// 新着は今の並びに差し込むが、全件を並べ直したときと同じ並びになる。ギャップの上下、遅れて届いて積んだ投稿、読めなかった行の置き換えを含めて確かめる。

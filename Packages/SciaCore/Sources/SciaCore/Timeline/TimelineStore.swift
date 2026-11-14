@@ -179,6 +179,16 @@ public final class TimelineStore {
     /// 取り消しとトークンの失効は、読み込み全体を失敗にする。
     /// - Parameter oldestLatest: 最新のページの一番古い投稿。
     private func loadAroundMarker(_ markerID: String, below oldestLatest: String) async throws -> (pages: [TimelinePage], gaps: [TimelineGap], unloadedTailID: String?) {
+        // 既読位置から古いページは、既読位置のすぐ上の値を`max_id`にして、すぐ後のページと並行に読む。起動してから表示するまでに、往復を順に待つ回数を減らすため。
+        // すぐ後のページは既読位置のすぐ上から返るので、その一番古い投稿を`max_id`にして読んだときと、読む範囲は変わらない。
+        // ただし作り直し中のすぐ後のページは、既読位置の真上の投稿を抜かして返りうるので、並行に読んだ結果は使わず、その一番古い投稿から読み直す。
+        // 数字のIDでなければその値を作れないので、すぐ後のページを読んでから、その一番古い投稿を`max_id`にして読む。
+        // 呼んだところで要求を出すので、2つの要求は決まった順に出る。親のTaskとは別のTaskなので、すぐ後のページで読み込みを終えるときと、
+        // 読み込みが取り消されたときは、ここで取り消す。
+        let concurrentFromMarker = StatusID.justAbove(markerID).map { maxID in
+            Task.immediate { @MainActor [fetch, pageSize] in await Result { try await fetch(TimelineQuery(maxID: maxID, limit: pageSize)) } }
+        }
+        defer { concurrentFromMarker?.cancel() }
         let afterMarker: TimelinePage
         do {
             afterMarker = try await fetch(TimelineQuery(minID: markerID, limit: pageSize))
@@ -205,8 +215,13 @@ public final class TimelineStore {
         } else if let newestAfterMarker = Self.newestID(of: afterMarker), StatusID.isNewer(oldestLatest, than: newestAfterMarker) {
             gaps.append(TimelineGap(newerID: oldestLatest, olderID: newestAfterMarker))
         }
+        let fromMarkerResult = if let concurrentFromMarker, !afterMarker.isRegenerating {
+            await withTaskCancellationHandler { await concurrentFromMarker.value } onCancel: { concurrentFromMarker.cancel() }
+        } else {
+            await Result { try await fetch(TimelineQuery(maxID: fromMarkerMaxID, limit: pageSize)) }
+        }
         do {
-            let fromMarker = try await fetch(TimelineQuery(maxID: fromMarkerMaxID, limit: pageSize))
+            let fromMarker = try fromMarkerResult.get()
             if fromMarker.isRegenerating, let oldestFromMarker = Self.oldestID(of: fromMarker) {
                 gaps.append(TimelineGap(newerID: fromMarkerMaxID, olderID: oldestFromMarker))
             }
