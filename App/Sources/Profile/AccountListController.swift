@@ -83,7 +83,7 @@ final class AccountListController {
                 completion(true)
             } catch {
                 controller.handle(error, during: adds ? "addMember" : "removeMember") { _ in }
-                controller.onMemberFailure?(adds ? "リストに追加できませんでした" : "リストから外せませんでした", error)
+                controller.onMemberFailure?((adds ? ListMembershipModel.Operation.add : .remove).failureTitle, error)
                 completion(false)
             }
         }

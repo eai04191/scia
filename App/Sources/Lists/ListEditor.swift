@@ -48,8 +48,7 @@ final class ListEditor {
     func presentCreate(text: String = "", create: (@MainActor (String) async throws -> MastodonList)? = nil, otherAccount: String? = nil, onCreate: @escaping @MainActor (MastodonList) -> Void = { _ in }) {
         let client = client
         let create = create ?? { title in try await client.createList(title: title) }
-        let failureTitle = "\(otherAccount.map { "\($0)で" } ?? "")リストを作成できませんでした"
-        presentNameInput(title: "リストを作成", text: text, actionTitle: "作成", failureTitle: failureTitle, isOwnAccount: otherAccount == nil) { [weak self] title in
+        presentNameInput(title: ListTexts.create, text: text, actionTitle: ListTexts.createAction, failureTitle: ListTexts.createFailure(account: otherAccount), isOwnAccount: otherAccount == nil) { [weak self] title in
             let list = try await create(title)
             self?.logger.info("list created id=\(list.id, privacy: .public)")
             if otherAccount == nil {
@@ -64,7 +63,7 @@ final class ListEditor {
     /// 名前を入れるアラートを出して、リストの名前を変える。
     func presentRename(listID: String, currentTitle: String, text: String? = nil) {
         let client = client
-        presentNameInput(title: "リストの名前", text: text ?? currentTitle, actionTitle: "保存", failureTitle: "リストの名前を変えられませんでした") { [weak self] title in
+        presentNameInput(title: ListTexts.name, text: text ?? currentTitle, actionTitle: ListTexts.saveName, failureTitle: ListTexts.renameFailure) { [weak self] title in
             try await self?.enqueue(listID) { [weak self] in
                 guard title != self?.host?.knownList(listID)?.title ?? currentTitle else { return }
                 let list = try await client.updateList(listID, title: title)
@@ -77,7 +76,7 @@ final class ListEditor {
     /// 返信の表示かホームに出さないを変える。押し直せば済むので、失敗はチップで知らせる。
     func update(_ list: MastodonList, repliesPolicy: ListRepliesPolicy? = nil, exclusive: Bool? = nil) {
         let client = client
-        let failureTitle = repliesPolicy != nil ? "返信の表示を変えられませんでした" : "“ホームに表示しない”を切り替えられませんでした"
+        let failureTitle = repliesPolicy != nil ? ListTexts.repliesPolicyFailure : ListTexts.exclusiveFailure
         tasks.run(.action) { [weak self] in
             do {
                 try await self?.enqueue(list.id) { [weak self] in
@@ -134,7 +133,7 @@ final class ListEditor {
                 logger.info("list deleted id=\(listID, privacy: .public)")
                 host?.listDidDelete(listID)
             } catch {
-                await self?.reportFailure(error, title: "リストを削除できませんでした", during: "delete")
+                await self?.reportFailure(error, title: ListTexts.deleteFailure, during: "delete")
             }
         }
     }
@@ -149,23 +148,23 @@ final class ListEditor {
             completion(menuElements(listID: listID, fallbackTitle: fallbackTitle, openMembers: openMembers))
         }])
         // 右上に入り切らず「さらに表示」にまとめられたときも、何のボタンか分かるよう名前を付ける。
-        return UIBarButtonItem(title: "リスト", image: UIImage(systemName: "ellipsis"), menu: menu)
+        return UIBarButtonItem(title: ListTexts.Menu.button, image: UIImage(systemName: "ellipsis"), menu: menu)
     }
 
     private func menuElements(listID: String, fallbackTitle: String, openMembers: @escaping @MainActor (_ title: String) -> Void) -> [UIMenuElement] {
         let list = host?.knownList(listID)
         let title = list?.title ?? fallbackTitle
         var main: [UIMenuElement] = [
-            UIAction(title: "名前を変える", image: UIImage(systemName: "pencil")) { [weak self] _ in
+            UIAction(title: ListTexts.Menu.rename, image: UIImage(systemName: "pencil")) { [weak self] _ in
                 self?.presentRename(listID: listID, currentTitle: title)
             },
-            UIAction(title: "メンバー", image: UIImage(systemName: "person.2")) { _ in
+            UIAction(title: ListTexts.Menu.members, image: UIImage(systemName: "person.2")) { _ in
                 openMembers(title)
             },
         ]
         // 設定はリストを読めてから出す。読む前の値で選ばせると、送る値が今の設定とずれるため。
         if let list {
-            main.append(UIMenu(title: "返信の表示", subtitle: list.repliesPolicy?.title, image: UIImage(systemName: "arrowshape.turn.up.left"), children: ListRepliesPolicy.allCases.map { policy in
+            main.append(UIMenu(title: ListTexts.Menu.repliesPolicy, subtitle: list.repliesPolicy?.title, image: UIImage(systemName: "arrowshape.turn.up.left"), children: ListRepliesPolicy.allCases.map { policy in
                 UIAction(title: policy.title, state: list.repliesPolicy == policy ? .on : .off) { [weak self] _ in
                     guard list.repliesPolicy != policy else { return }
                     self?.update(list, repliesPolicy: policy)
@@ -173,12 +172,12 @@ final class ListEditor {
             }))
             // 返さないサーバー（Mastodon 4.2より前）には、この設定がない。
             if let exclusive = list.exclusive {
-                main.append(UIAction(title: "ホームに表示しない", image: UIImage(systemName: "house.slash"), state: exclusive ? .on : .off) { [weak self] _ in
+                main.append(UIAction(title: ListTexts.Menu.exclusive, image: UIImage(systemName: "house.slash"), state: exclusive ? .on : .off) { [weak self] _ in
                     self?.update(list, exclusive: !exclusive)
                 })
             }
         }
-        let delete = UIAction(title: "削除", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in
+        let delete = UIAction(title: ListTexts.Menu.delete, image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in
             self?.confirmDelete(listID: listID, title: title)
         }
         return [UIMenu(options: .displayInline, children: main), UIMenu(options: .displayInline, children: [delete])]
@@ -210,7 +209,7 @@ final class ListEditor {
         }
         alert.addTextField { [weak action] field in
             field.text = text
-            field.placeholder = "リストの名前"
+            field.placeholder = ListTexts.name
             field.clearButtonMode = .whileEditing
             // ペーストした文字を、コピーしたとおりに入れる。理由は`GlyphLanguageTextView`の`smartInsertDeleteType`と同じ。
             field.smartInsertDeleteType = .no
@@ -219,7 +218,7 @@ final class ListEditor {
             }, for: .editingChanged)
         }
         action.isEnabled = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        alert.addAction(UIAlertAction(title: ListTexts.cancel, style: .cancel))
         alert.addAction(action)
         alert.preferredAction = action
         presenter.presentOnFrontmost(alert)

@@ -16,12 +16,12 @@ struct ListMembershipView: View {
     var body: some View {
         NavigationStack {
             content
-                .navigationTitle("リストに追加")
+                .navigationTitle(ListTexts.Membership.title)
                 .navigationSubtitle("@\(acct)")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("完了", action: dismiss)
+                        Button(ListTexts.Membership.done, action: dismiss)
                     }
                 }
         }
@@ -30,7 +30,7 @@ struct ListMembershipView: View {
             isPresented: Binding { followingListID != nil } set: { if !$0 { followingListID = nil } },
             presenting: followingListID
         ) { listID in
-            Button("キャンセル", role: .cancel) {}
+            Button(ListTexts.Membership.cancel, role: .cancel) {}
             Button(followConfirmation.buttons.last?.title ?? "") {
                 model.followAndAdd(listID)
             }
@@ -51,11 +51,11 @@ struct ListMembershipView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .failed(let presentation):
             ContentUnavailableView {
-                Label("読み込めませんでした", systemImage: "exclamationmark.triangle")
+                Label(ListTexts.Membership.loadFailed, systemImage: "exclamationmark.triangle")
             } description: {
                 FailureReason(reason: presentation)
             } actions: {
-                Button("再読み込み") { model.load() }
+                Button(ListTexts.Membership.reload) { model.load() }
             }
         case .loaded:
             List {
@@ -66,14 +66,14 @@ struct ListMembershipView: View {
                     Button {
                         requestCreate { list in toggle(list.id) }
                     } label: {
-                        Label("リストを作成", systemImage: "plus")
+                        Label(ListTexts.create, systemImage: "plus")
                     }
                     // 押せないときに、UIKitのように灰色にならず黒い文字になるため、色を決める。
                     .foregroundStyle(model.isFollowing ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
                     .disabled(model.isFollowing)
                 } footer: {
                     if model.availability == .blocked {
-                        Text("ブロックしているかされているため、フォローもリストへの追加もできません。")
+                        Text(ListTexts.Membership.blocked)
                     }
                 }
             }
