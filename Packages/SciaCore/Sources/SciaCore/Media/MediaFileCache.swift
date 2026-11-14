@@ -13,6 +13,7 @@ import os
 /// 整理で消してしまわないようにするため。
 ///
 /// 置く、整理する、引いてコピーするといった操作が重なると、引いたファイルをコピーする前に置き直しや整理で消してしまうため、actorで1つずつ行う。
+/// 中身を読むだけの`data(for:)`は、消えていたら置いていないものとして扱えるので、順番を待たずに並べて読む。
 public actor MediaFileCache {
     /// 上限を超えたとき、ここまで減らす割合。整理のたびにすぐまた上限を超えないよう、少し余裕を持たせる（Nukeと同じ値）。
     private static let trimRatio = 0.7
@@ -52,7 +53,7 @@ public actor MediaFileCache {
     }
 
     /// `url`のファイルを置くフォルダ。名前は共有先でファイル名として見えるため、URLごとにフォルダを分け、その中にURLのファイル名のまま置く。
-    private func folder(for url: URL) -> URL {
+    private nonisolated func folder(for url: URL) -> URL {
         let digest = SHA256.hash(data: Data(url.absoluteString.utf8))
         return directory.appending(fileName: SafeFileName(digest.map { String(format: "%02x", $0) }.joined()), directoryHint: .isDirectory)
     }
@@ -65,8 +66,14 @@ public actor MediaFileCache {
     }
 
     /// `url`のファイルが置いてあれば、その中身。引いたものは最後に使った日時を更新する。
-    public func data(for url: URL) -> Data? {
-        file(for: url).flatMap { try? Data(contentsOf: $0) }
+    /// ほかの操作の順番を待たずに、並べて読む。カスタム絵文字のパレットのように、一度に数十個を読む画面で、1個ずつ順番に読むと、
+    /// シミュレーターで6000個を流したとき、読む処理そのものは1ms前後なのに、遅いほうの1割が順番待ちで195ms以上かかったため。
+    /// 読んでいる最中に、置き直しや整理でファイルが消えたら、置いていないものとしてnilを返す。
+    @concurrent
+    public nonisolated func data(for url: URL) async -> Data? {
+        guard let file = Self.storedFile(in: folder(for: url)), let data = try? Data(contentsOf: file) else { return nil }
+        touch(file)
+        return data
     }
 
     /// `url`のファイルが置いてあるか。最後に使った日時は更新しない。
@@ -168,7 +175,9 @@ public actor MediaFileCache {
     /// 合計が上限を超えていたら、最後に使った日時の古いものから、上限の`trimRatio`倍まで消す。
     /// 最後に使ったものは、上限より大きくても消さない。置いた直後や引いた直後のファイルを、渡す前に消さないようにするため。
     /// 書き込みの途中で落ちて、置いたファイルのないフォルダは、上限にかかわらず消す。
-    public func trim() {
+    /// - Parameter stored: 置いたばかりのファイルのフォルダー。最後に使った日時によらず消さない。
+    ///   中身を読む`data(for:)`は順番を待たずにほかのファイルの日時を更新するので、置いたばかりのファイルの日時が、いちばん新しいとは限らないため。
+    public func trim(keeping stored: URL? = nil) {
         scanCount += 1
         let keys: Set<URLResourceKey> = [.contentAccessDateKey, .totalFileAllocatedSizeKey]
         guard let folders = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else { return }
@@ -185,7 +194,7 @@ public actor MediaFileCache {
         guard total > sizeLimit else { return }
         entries.sort { $0.accessDate < $1.accessDate }
         let target = Int(Double(sizeLimit) * Self.trimRatio)
-        for entry in entries.dropLast() where total > target {
+        for entry in entries.dropLast() where total > target && entry.folder.lastPathComponent != stored?.lastPathComponent {
             do {
                 try FileManager.default.removeItem(at: entry.folder)
                 total -= entry.size
@@ -238,10 +247,10 @@ public actor MediaFileCache {
             let total = known - replaced + Self.storedSize(in: folder)
             totalSize = total
             if total > sizeLimit {
-                trim()
+                trim(keeping: folder)
             }
         } else {
-            trim()
+            trim(keeping: folder)
         }
         return file
     }
@@ -261,7 +270,7 @@ public actor MediaFileCache {
         storedFiles(in: folder).first
     }
 
-    private func touch(_ file: URL) {
+    private nonisolated func touch(_ file: URL) {
         var values = URLResourceValues()
         values.contentAccessDate = now()
         var file = file

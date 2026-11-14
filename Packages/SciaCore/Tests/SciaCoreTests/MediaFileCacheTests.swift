@@ -1,5 +1,6 @@
 import Foundation
 import SciaTesting
+import Synchronization
 import Testing
 @testable import SciaCore
 
@@ -107,6 +108,64 @@ struct MediaFileCacheTests {
         #expect(await cache.contains(try url("c")) == false)
         #expect(await cache.contains(try url("a")))
         #expect(await cache.contains(try url("d")))
+    }
+
+    /// 中身を読んだファイルも、最近使ったものとして残す。中身を読むのは順番を待たずに行うが、最後に使った日時は同じく更新する。
+    @Test func readingDataMarksFileAsRecentlyUsed() async throws {
+        let directories = Directories()
+        defer { directories.remove() }
+        let size = 100 * 1_024
+        let clock = TestClock()
+        let cache = directories.makeCache(sizeLimit: size * 3 + size / 2, clock: clock)
+        for name in ["a", "b", "c"] {
+            _ = try await cache.store(Data(count: size), named: name, for: try url(name), generation: 0)
+            clock.advance(by: .seconds(1))
+        }
+        #expect(await cache.data(for: try url("a"))?.count == size)
+        clock.advance(by: .seconds(1))
+
+        _ = try await cache.store(Data(count: size), named: "d", for: try url("d"), generation: 0)
+
+        #expect(await cache.contains(try url("a")))
+        #expect(await cache.contains(try url("b")) == false)
+    }
+
+    /// 置いている最中に、並べて走る読み出しがほかのファイルを使ったことにしても、置いたばかりのファイルは整理で消さない。
+    /// 置いたファイルの日時がいちばん新しくなくなる並びを、置くときだけ古い日時を返す時計で作る。
+    @Test func keepsJustStoredFileEvenIfAnotherFileWasUsedLater() async throws {
+        let directories = Directories()
+        defer { directories.remove() }
+        let size = 100 * 1_024
+        let clock = TestClock()
+        let storing = Mutex(false)
+        let base = clock.date
+        let cache = MediaFileCache(directory: directories.cache, sharingDirectory: directories.sharing, sizeLimit: size * 3 + size / 2) {
+            storing.withLock { $0 } ? base.addingTimeInterval(-60) : clock.date
+        }
+        for name in ["a", "b", "c"] {
+            _ = try await cache.store(Data(count: size), named: name, for: try url(name), generation: 0)
+            clock.advance(by: .seconds(1))
+        }
+
+        storing.withLock { $0 = true }
+        let stored = try await cache.store(Data(count: size), named: "d", for: try url("d"), generation: 0)
+
+        #expect(FileManager.default.fileExists(atPath: stored.path))
+        #expect(await cache.contains(try url("d")))
+    }
+
+    /// 置いていないURLと、置いたあとに消したURLの中身は、nilを返す。
+    @Test func readingDataOfMissingFileReturnsNil() async throws {
+        let directories = Directories()
+        defer { directories.remove() }
+        let cache = directories.makeCache()
+        #expect(await cache.data(for: try url("a")) == nil)
+        _ = try await cache.store(Data("a".utf8), named: "a", for: try url("a"), generation: 0)
+        #expect(await cache.data(for: try url("a")) == Data("a".utf8))
+
+        await cache.remove(try url("a"))
+
+        #expect(await cache.data(for: try url("a")) == nil)
     }
 
     /// 合計が上限に届かない間は、置くたびに置き場所の全ファイルを調べない。カスタム絵文字の画像のように数千個を置く置き場所で、置くたびに数千個を調べないため。
