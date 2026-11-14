@@ -1,5 +1,6 @@
 public import Foundation
 import os
+import Synchronization
 
 /// ホームや公開タイムラインの読み込み、ストリーミング、既読位置、ポーリング、補完、新着の挿入の予約を受け持ち、結果をタイムラインの画面（`TimelineDisplay`）へ命令として伝える。
 /// タブのタイムラインのほか、開いたタイムラインに積むハッシュタグのタイムラインにも使う。
@@ -130,7 +131,8 @@ public final class FeedTimelineModel {
             return
         }
         setContentState(.loading)
-        run(purpose) { await $0.loadInitial() }
+        // 起動したときは、画面を組み立ててメインスレッドが空くのを待たずに読み始める。表示までの待ちが、組み立てと通信の和にならないようにするため。
+        tasks.runImmediately(purpose) { [weak self] in await self?.loadInitial() }
     }
 
     /// まだ始めていなければ始める。開くまで読まないタイムラインを、初めて開いたときに始めるのに使う。
@@ -387,11 +389,14 @@ public final class FeedTimelineModel {
     private func loadInitial() async {
         logger.info("\(self.feed.name, privacy: .public) loadInitial start")
         do {
-            var markerID: String?
-            let loaded = try await store.loadInitial { [weak self] in
-                markerID = try await self?.loadMarker()
-                return markerID
+            // 既読位置も、メインスレッドが空くのを待たずに最新のページと並行に読む。
+            let loadedMarker = Mutex<String?>(nil)
+            let loaded = try await store.loadInitial { [marker = feed.marker, client, feedName = feed.name, logger] in
+                let id = try await Self.loadMarker(marker, client: client, feedName: feedName, logger: logger)
+                loadedMarker.withLock { $0 = id }
+                return id
             }
+            let markerID = loadedMarker.withLock { $0 }
             guard let statuses = loaded, !isStopped else { return }
             // 前回読んだところから続きを読めるよう、既読位置の投稿を最上部に置く。新しい投稿はその上にある。
             let topID = markerID.flatMap { id in store.statuses.contains { $0.id == id } ? TimelineEntry.ID.status(id) : nil }
@@ -699,8 +704,8 @@ public final class FeedTimelineModel {
     // MARK: - 既読位置
 
     /// 既読位置はタイムラインを読む助けで、読めなくてもタイムラインは表示できるため、トークンの失効以外の失敗では位置なしで進める。
-    private func loadMarker() async throws -> String? {
-        guard let marker = feed.marker else { return nil }
+    private nonisolated static func loadMarker(_ marker: MarkerTimeline?, client: MastodonClient, feedName: String, logger: Logger) async throws -> String? {
+        guard let marker else { return nil }
         do {
             return try await client.marker(for: marker)
         } catch let error as MastodonAPIError where error.isUnauthorized {
@@ -708,7 +713,7 @@ public final class FeedTimelineModel {
         } catch is FeatureUnavailable {
             return nil
         } catch {
-            logger.error("\(self.feed.name, privacy: .public) marker load failed: \(SciaLog.describe(error), privacy: .public)")
+            logger.error("\(feedName, privacy: .public) marker load failed: \(SciaLog.describe(error), privacy: .public)")
             return nil
         }
     }

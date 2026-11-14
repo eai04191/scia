@@ -33,6 +33,47 @@ struct TaskScopeTests {
         #expect(!ran)
     }
 
+    /// すぐ始める処理は、最初に待つところまで、呼んだところで走る。走り終えたら外れ、閉じると取り消す。
+    @Test func immediateTaskRunsBeforeReturning() async throws {
+        let scope = TaskScope()
+        let gate = Gate()
+        var started = false
+        var cancelled = false
+        scope.runImmediately(.action) {
+            started = true
+            do { try await gate.wait() } catch { cancelled = true }
+        }
+        #expect(started)
+        #expect(scope.runningCount == 1)
+        try await waitUntil { gate.waiterCount == 1 }
+        scope.close()
+        try await waitUntil { scope.runningCount == 0 }
+        #expect(cancelled)
+    }
+
+    /// すぐ始める処理が、最初に待つ前に持ち主を閉じても、その処理を取り消す。
+    @Test func immediateTaskClosingItsScopeIsCancelled() async throws {
+        let scope = TaskScope()
+        let gate = Gate()
+        var cancelled = false
+        scope.runImmediately(.action) {
+            scope.close()
+            do { try await gate.wait() } catch { cancelled = true }
+        }
+        try await waitUntil { scope.runningCount == 0 }
+        #expect(cancelled)
+    }
+
+    /// 待たずに走り終えたすぐ始める処理も、走っている処理として残らない。
+    @Test func immediateTaskFinishingSynchronouslyLeaves() async throws {
+        let scope = TaskScope()
+        var ran = false
+        scope.runImmediately(.action) { ran = true }
+        #expect(ran)
+        #expect(scope.runningCount == 0)
+        await scope.waitForRunning()
+    }
+
     /// 親を閉じると、子の処理も止まる。
     @Test func closingParentClosesChildren() async throws {
         let parent = TaskScope()

@@ -22,6 +22,8 @@ public final class TaskScope {
     private var tasks: [Int: Task<Void, Never>] = [:]
     private var keys: [String: Int] = [:]
     private var nextID = 0
+    /// すぐ始めた処理のうち、登録する前に走り終えたもの。
+    private var finishedBeforeRegistering: Set<Int> = []
     private var children: [WeakScope] = []
     private var closeActions: [@MainActor () -> Void] = []
     /// 走り終えていない処理の数を、親の持ち主まで届ける。処理はこれを持つので、持ち主が捨てられても走り終えたときに減らせる。
@@ -45,13 +47,23 @@ public final class TaskScope {
     /// 目的は、中で送る通信と、中で作るTaskに引き継がれる（`RequestPurpose`）。中の一部だけ違う目的で送るときは、そこで名乗り直す。
     @discardableResult
     public func run(_ purpose: RequestPurpose, _ operation: @escaping @MainActor () async -> Void) -> Task<Void, Never>? {
+        start(purpose, operation, immediately: false)
+    }
+
+    /// `operation`を、通信の目的を`purpose`と名乗って、呼んだところで始める（`Task.immediate`）。最初に待つところまでは、戻る前に走る。
+    /// 起動したときの読み込みのように、画面を組み立ててメインスレッドが空くのを待たずに通信を始めたいときに使う。閉じていれば始めずにnilを返す。
+    @discardableResult
+    public func runImmediately(_ purpose: RequestPurpose, _ operation: @escaping @MainActor () async -> Void) -> Task<Void, Never>? {
+        start(purpose, operation, immediately: true)
+    }
+
+    private func start(_ purpose: RequestPurpose, _ operation: @escaping @MainActor () async -> Void, immediately: Bool) -> Task<Void, Never>? {
         guard !isClosed else { return nil }
         let id = nextID
         nextID += 1
         let counter = counter
         counter.add(1)
-        // メインアクターで作るので、中身は登録を終えてから走る。
-        let task = Task { [weak self] in
+        let body: @MainActor () async -> Void = { [weak self] in
             // 走り出す前に閉じたり始め直したりしたら、中身を動かさない。取り消しだけでは、まだ始まっていない中身は止まらないため。
             if !Task.isCancelled {
                 await RequestPurpose.$current.withValue(purpose) {
@@ -61,7 +73,15 @@ public final class TaskScope {
             counter.add(-1)
             self?.finish(id)
         }
-        tasks[id] = task
+        // `Task`はメインアクターで作るので、中身は登録を終えてから走る。`Task.immediate`は登録する前に走り終えることがあるので、走り終えていたら登録しない。
+        let task = immediately ? Task.immediate { @MainActor in await body() } : Task { @MainActor in await body() }
+        if finishedBeforeRegistering.remove(id) == nil {
+            tasks[id] = task
+            // すぐ始めた処理が、最初に待つまでに持ち主を閉じていたら、閉じたときには登録していなかったので、ここで取り消す。
+            if isClosed {
+                task.cancel()
+            }
+        }
         return task
     }
 
@@ -142,7 +162,9 @@ public final class TaskScope {
     }
 
     private func finish(_ id: Int) {
-        tasks[id] = nil
+        if tasks.removeValue(forKey: id) == nil {
+            finishedBeforeRegistering.insert(id)
+        }
         if let key = keys.first(where: { $0.value == id })?.key {
             keys[key] = nil
         }

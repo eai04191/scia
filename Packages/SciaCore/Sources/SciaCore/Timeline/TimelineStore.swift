@@ -117,7 +117,7 @@ public final class TimelineStore {
 
     /// 既読位置を、最新のページと並行に読む。最新のページは既読位置によらないため。
     /// - Parameter marker: サーバーに保存された既読位置を読む。投げたら、読み込み全体を失敗にする。
-    public func loadInitial(marker: @escaping @MainActor @Sendable () async throws -> String?) async throws -> [Status]? {
+    public func loadInitial(marker: @escaping @Sendable () async throws -> String?) async throws -> [Status]? {
         guard !state.isLoading else { return nil }
         state.isLoading = true
         defer { state.isLoading = false }
