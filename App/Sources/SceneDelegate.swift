@@ -298,10 +298,10 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// アカウントのリスト、追加、設定のメニュー。開くたびに今のアカウントで組み立て直す。
     private func makeAccountMenu() -> UIMenu {
         guard let accounts else { return UIMenu() }
-        let add = UIAction(title: "アカウントを追加", image: UIImage(systemName: "person.badge.plus")) { [weak self] _ in
+        let add = UIAction(title: AccountSwitchTexts.addAccount, image: UIImage(systemName: "person.badge.plus")) { [weak self] _ in
             self?.confirmAddingAccount()
         }
-        let settings = UIAction(title: "設定", image: UIImage(systemName: "gearshape")) { [weak self] _ in
+        let settings = UIAction(title: SettingsPage.rootTitle, image: UIImage(systemName: "gearshape")) { [weak self] _ in
             self?.session?.open(.settings(nil))
         }
         #if DEBUG
@@ -340,12 +340,12 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
         let alert = UIAlertController(
-            title: "\(account.handle)に切り替えますか？",
-            message: "書きかけの投稿は破棄されます。",
+            title: AccountSwitchTexts.Switching.title(handle: account.handle),
+            message: AccountSwitchTexts.Switching.message,
             preferredStyle: .alert
         )
-        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
-        alert.addAction(UIAlertAction(title: "切り替える", style: .destructive) { _ in perform() })
+        alert.addAction(UIAlertAction(title: AccountSwitchTexts.cancel, style: .cancel))
+        alert.addAction(UIAlertAction(title: AccountSwitchTexts.Switching.confirm, style: .destructive) { _ in perform() })
         root.presentOnFrontmost(alert)
     }
 
@@ -359,12 +359,12 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
         let alert = UIAlertController(
-            title: "アカウントを追加しますか？",
-            message: "ログインすると追加したアカウントに切り替わり、書きかけの投稿は破棄されます。",
+            title: AccountSwitchTexts.Adding.title,
+            message: AccountSwitchTexts.Adding.message,
             preferredStyle: .alert
         )
-        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
-        alert.addAction(UIAlertAction(title: "追加する", style: .default) { [weak self] _ in self?.presentAddAccount() })
+        alert.addAction(UIAlertAction(title: AccountSwitchTexts.cancel, style: .cancel))
+        alert.addAction(UIAlertAction(title: AccountSwitchTexts.Adding.confirm, style: .default) { [weak self] _ in self?.presentAddAccount() })
         root.presentOnFrontmost(alert)
     }
 
@@ -449,7 +449,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             logger.info("reauthentication cancelled with session")
         } catch {
             logger.error("reauthentication failed: \(SciaLog.describe(error), privacy: .public)")
-            window.rootViewController?.presentOnFrontmost(UIAlertController.failure(title: "ログインし直せませんでした", reason: ErrorPresentation(error)))
+            window.rootViewController?.presentOnFrontmost(UIAlertController.failure(title: AccountSwitchTexts.reauthenticationFailure, reason: ErrorPresentation(error)))
         }
     }
 
@@ -491,14 +491,12 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private func confirmLogOut() {
         guard let root = window?.rootViewController, let current = accounts?.current else { return }
         let alert = UIAlertController(
-            title: "\(current.handle)からログアウトしますか？",
-            // 使っているアカウントを消すと、画面ごと作り直して下書きも消えるため、書きかけがあれば添える。
-            message: "このデバイスからアカウントの情報を削除します。もう一度使うにはログインし直す必要があります。"
-                + (Self.hasWrittenDraftInAnyScene ? "書きかけの投稿も破棄されます。" : ""),
+            title: AccountSwitchTexts.LoggingOut.title(handle: current.handle),
+            message: AccountSwitchTexts.LoggingOut.message(discardsDraft: Self.hasWrittenDraftInAnyScene),
             preferredStyle: .alert
         )
-        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
-        alert.addAction(UIAlertAction(title: "ログアウト", style: .destructive) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: AccountSwitchTexts.cancel, style: .cancel))
+        alert.addAction(UIAlertAction(title: AccountSwitchTexts.LoggingOut.confirm, style: .destructive) { [weak self] _ in
             self?.logOut(current)
         })
         root.presentOnFrontmost(alert)
@@ -517,7 +515,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             // 消せなければ、アカウントはアカウントのリストにも端末にも残っているので、今の画面のまま知らせる。
             // ログイン画面に替えると、残っているほかのアカウントにも、起動し直すまで戻れなくなるため。
             logger.error("account removal failed: \(SciaLog.describe(error), privacy: .public)")
-            window?.rootViewController?.presentOnFrontmost(UIAlertController.failure(title: "ログアウトできませんでした", reason: ErrorPresentation(error)))
+            window?.rootViewController?.presentOnFrontmost(UIAlertController.failure(title: AccountSwitchTexts.logOutFailure, reason: ErrorPresentation(error)))
             return
         }
         logger.info("account removed")
@@ -572,14 +570,14 @@ private struct DifferentAccountLoggedIn: LocalizedError {
     let actual: String
 
     var errorDescription: String? {
-        "\(actual)でログインされました。\(expected)でログインし直してください。"
+        AccountSwitchTexts.differentAccountLoggedIn(expected: expected, actual: actual)
     }
 }
 
 /// 起動時にKeychainを読めず、アカウントを保存できない。
 private struct AccountsUnavailable: LocalizedError {
     var errorDescription: String? {
-        "アカウントの情報を読み書きできません。アプリを再起動してください。"
+        AccountSwitchTexts.accountsUnavailable
     }
 }
 

@@ -37,12 +37,12 @@ struct LoginView: View {
                     }
                     .disabled(model.isLoggingIn)
                 } header: {
-                    Text("サーバー")
+                    Text(LoginTexts.serverHeader)
                 } footer: {
                     if let errorMessage = model.errorMessage {
                         Text(errorMessage).foregroundStyle(.red)
                     } else {
-                        Text("アカウントがあるMastodonのサーバーのアドレス")
+                        Text(LoginTexts.serverFooter)
                     }
                 }
                 let suggestions = model.suggestions
@@ -59,7 +59,7 @@ struct LoginView: View {
                         }
                     } footer: {
                         // サーバーのリストを無償で使わせてもらっている感謝を込めて、キラキラを添える。
-                        Text("サーバーのリストの提供: [FediDB](https://fedidb.com) \(Text(Image(systemName: "sparkles")).foregroundStyle(.yellow))")
+                        Text("\(Text(LocalizedStringKey(LoginTexts.serverListCredit))) \(Text(Image(systemName: "sparkles")).foregroundStyle(.yellow))")
                     }
                     .disabled(model.isLoggingIn)
                 }
@@ -82,12 +82,12 @@ struct LoginView: View {
                     // メニューの幅が狭く「プライベートでログイン」は途中で折り返すため、名前を短くして説明をサブタイトルに回す。
                     Button { login(isPrivate: true) } label: {
                         Image(systemName: "hand.raised")
-                        Text("プライベート")
-                        Text("Safariのログイン状態を使わない")
+                        Text(LoginTexts.privateLogin)
+                        Text(LoginTexts.privateLoginSubtitle)
                     }
                 } label: {
                     ZStack {
-                        Text("ログイン")
+                        Text(LoginTexts.logIn)
                             .opacity(model.isLoggingIn ? 0 : 1)
                         if model.isLoggingIn {
                             ProgressView()
@@ -105,13 +105,13 @@ struct LoginView: View {
             }
             // セクションの間の既定の間隔は広く、アイコンと名前が入力欄から離れて見えるため詰める
             .listSectionSpacing(.compact)
-            .navigationTitle(isFirstLogin ? "" : "アカウントを追加")
+            .navigationTitle(isFirstLogin ? "" : LoginTexts.addAccountTitle)
             // 最初の起動の画面はタイトルもキャンセルのボタンもなく、空のバーが高さだけ取るので隠す
             .toolbar(isFirstLogin ? .hidden : .automatic, for: .navigationBar)
             .toolbar {
                 if let onCancel {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("キャンセル", role: .cancel) { onCancel() }
+                        Button(LoginTexts.cancel, role: .cancel) { onCancel() }
                     }
                 }
             }
@@ -124,7 +124,7 @@ struct LoginView: View {
                     model.cancelLogin()
                 } label: {
                     // バーのボタンと同じ高さにする。
-                    Text("キャンセル").padding(.vertical, 4).padding(.horizontal, 2)
+                    Text(LoginTexts.cancel).padding(.vertical, 4).padding(.horizontal, 2)
                 }
                 .buttonStyle(.glass)
                 .padding(.leading, 16)
