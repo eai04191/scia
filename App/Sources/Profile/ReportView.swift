@@ -13,10 +13,10 @@ struct ReportView: View {
             Form {
                 if draft.statusID != nil {
                     Section {
-                        Toggle("長押しした投稿を添える", isOn: $draft.includesStatus)
+                        Toggle(ReportTexts.includesStatus, isOn: $draft.includesStatus)
                     }
                 }
-                Section("理由") {
+                Section(ReportTexts.categorySection) {
                     ForEach(ReportCategory.allCases, id: \.self) { category in
                         categoryRow(category)
                     }
@@ -29,19 +29,19 @@ struct ReportView: View {
                     TextEditor(text: $draft.comment)
                         .frame(minHeight: 100, maxHeight: 240)
                 } header: {
-                    Text("補足")
+                    Text(ReportTexts.commentSection)
                 } footer: {
                     // 上限はサーバーごとに違うので、分母は出さない。
                     // メモの欄の文字数と揃え、3桁の区切りを付けない。
-                    Text(verbatim: "\(draft.commentLength)文字")
+                    Text(verbatim: ProfileTexts.characterCount(draft.commentLength))
                         .monospacedDigit()
                 }
                 if let domain = draft.remoteDomain {
                     // サーバー名は説明文に出す。スイッチの名前に入れると、長いサーバー名で「にも送る」が切れて見えなくなるため。
                     Section {
-                        Toggle("相手のサーバーにも送る", isOn: $draft.forward)
+                        Toggle(ReportTexts.forward, isOn: $draft.forward)
                     } footer: {
-                        Text("\(domain)の管理者にもこの通報を転送します。")
+                        Text(ReportTexts.forwardDetail(domain: domain))
                     }
                 }
                 if let error = draft.submitError {
@@ -55,19 +55,19 @@ struct ReportView: View {
             .disabled(draft.isSubmitting)
             .topEdgeEffectHiddenOnMac()
             // 相手は小見出しに出す。見出しに入れると、長いハンドルで「を通報」が切れて見えなくなるため。
-            .navigationTitle("通報")
+            .navigationTitle(ReportTexts.title)
             .navigationSubtitle("@\(draft.acct)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル", role: .cancel) { dismiss() }
+                    Button(ReportTexts.cancel, role: .cancel) { dismiss() }
                         .disabled(draft.isSubmitting)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     if draft.isSubmitting {
                         ProgressView()
                     } else {
-                        Button("送信", action: submit)
+                        Button(ReportTexts.submit, action: submit)
                             .disabled(!draft.canSubmit)
                     }
                 }
@@ -114,16 +114,16 @@ struct ReportView: View {
                     .frame(maxWidth: .infinity)
             case .failed(let error):
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("ルールを読み込めませんでした")
+                    Text(ReportTexts.Rules.loadFailure)
                     FailureReason(reason: ErrorPresentation(error), includesCode: false)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
-                Button("再試行") {
+                Button(ReportTexts.Rules.retry) {
                     Task(.action) { await draft.loadRules() }
                 }
             case .loaded(let rules) where rules.isEmpty:
-                Text("このサーバーにはルールがありません")
+                Text(ReportTexts.Rules.empty)
                     .foregroundStyle(.secondary)
             case .loaded(let rules):
                 ForEach(rules) { rule in
@@ -131,7 +131,7 @@ struct ReportView: View {
                 }
             }
         } header: {
-            Text("違反したルール")
+            Text(ReportTexts.Rules.section)
         }
     }
 
