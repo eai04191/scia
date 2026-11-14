@@ -1119,7 +1119,7 @@ final class SessionController {
         viewController.spoilerExpansion.expandsByDefault = session.preferences?.expandsSpoilers ?? false
         viewController.supportsEmojiReactions = session.supportsEmojiReactions
         viewController.onToggleEmojiReaction = { [weak self] status, emoji in
-            self?.toggle(.emojiReaction(emoji), on: status, failureTitle: Self.emojiReactionFailureTitle)
+            self?.toggle(.emojiReaction(emoji), on: status)
         }
         viewController.onAddEmojiReaction = { [weak self, weak viewController] status in
             guard let viewController else { return }
@@ -2085,30 +2085,30 @@ final class SessionController {
             chooseEmojiReaction(for: status, from: source)
         case .favourite:
             UserAction.toggleFavourite.record()
-            toggle(.favourite, on: status, failureTitle: "お気に入りを変更できませんでした")
+            toggle(.favourite, on: status)
         case .reblog:
             UserAction.toggleReblog.record()
-            toggle(.reblog, on: status, reblogVisibility: AppDependencies.settings.reblogVisibility, failureTitle: "ブーストを変更できませんでした")
+            toggle(.reblog, on: status, reblogVisibility: AppDependencies.settings.reblogVisibility)
         case .reblogWithVisibility(let visibility):
             UserAction.toggleReblog.record()
-            toggle(.reblog, on: status, reblogVisibility: visibility, failureTitle: "ブーストできませんでした")
+            toggle(.reblog, on: status, reblogVisibility: visibility, addsOnly: true)
         case .bookmark:
             UserAction.toggleBookmark.record()
-            let done = status.displayed.bookmarked ? "ブックマークを外しました" : "ブックマークしました"
-            toggle(.bookmark, on: status, failureTitle: "ブックマークを変更できませんでした") { [weak self] in
+            let done = StatusInteractions.Action.bookmark.doneTitle(wasOn: status.displayed.bookmarked)
+            toggle(.bookmark, on: status) { [weak self] in
                 self?.showToggledNotice(done)
             }
         case .muteConversation:
             UserAction.toggleConversationMute.record()
-            let done = status.displayed.muted ? "会話のミュートを解除しました" : "会話をミュートしました"
-            toggle(.muteConversation, on: status, failureTitle: "会話のミュートを変更できませんでした") { [weak self] in
+            let done = StatusInteractions.Action.muteConversation.doneTitle(wasOn: status.displayed.muted)
+            toggle(.muteConversation, on: status) { [weak self] in
                 self?.showToggledNotice(done)
             }
         case .pin:
             UserAction.togglePin.record()
-            let done = status.displayed.pinned ? "プロフィールの固定を外しました" : "プロフィールに固定しました"
+            let done = StatusInteractions.Action.pin.doneTitle(wasOn: status.displayed.pinned)
             // 固定の数の上限を超えたときは、サーバーの422の文言が理由に出る。
-            toggle(.pin, on: status, failureTitle: "プロフィールの固定を変更できませんでした") { [weak self] in
+            toggle(.pin, on: status) { [weak self] in
                 guard let self else { return }
                 profiles.reloadPinned(of: credential.accountID)
                 showToggledNotice(done)
@@ -2293,11 +2293,11 @@ final class SessionController {
             switch submitted {
             case .edited(let edited):
                 account?.didEdit(edited)
-                self?.showToggledNotice("\(handle)で編集しました")
+                self?.showToggledNotice(OtherAccountTexts.title(OtherAccountTexts.edited, handle: handle))
             case .scheduled:
-                self?.showToggledNotice("\(handle)で予約しました")
+                self?.showToggledNotice(OtherAccountTexts.title(OtherAccountTexts.scheduled, handle: handle))
             case .posted:
-                self?.showToggledNotice("\(handle)で投稿しました")
+                self?.showToggledNotice(OtherAccountTexts.title(OtherAccountTexts.posted, handle: handle))
             }
         }) { draft in
             try await client().submit(draft)
@@ -2400,38 +2400,26 @@ final class SessionController {
 
     private func perform(_ statusAction: StatusAction, on status: Status, as account: OtherAccount, original: Status) {
         let shown = status.displayed
-        let (action, visibility, done, failure): (StatusInteractions.Action, ReblogVisibility, String, String)
+        let (action, visibility, wasOn, addsOnly): (StatusInteractions.Action, ReblogVisibility, Bool, Bool)
         switch statusAction {
         case .favourite:
             UserAction.toggleFavourite.record()
-            (action, visibility) = (.favourite, .accountDefault)
-            done = shown.favourited ? "お気に入りを取り消しました" : "お気に入りしました"
-            failure = "お気に入りを変更できませんでした"
+            (action, visibility, wasOn, addsOnly) = (.favourite, .accountDefault, shown.favourited, false)
         case .reblog:
             UserAction.toggleReblog.record()
-            (action, visibility) = (.reblog, AppDependencies.settings.reblogVisibility)
-            done = shown.reblogged ? "ブーストを取り消しました" : "ブーストしました"
-            failure = "ブーストを変更できませんでした"
+            (action, visibility, wasOn, addsOnly) = (.reblog, AppDependencies.settings.reblogVisibility, shown.reblogged, false)
         case .reblogWithVisibility(let chosen):
             UserAction.toggleReblog.record()
-            (action, visibility) = (.reblog, chosen)
-            done = "ブーストしました"
-            failure = "ブーストできませんでした"
+            (action, visibility, wasOn, addsOnly) = (.reblog, chosen, false, true)
         case .bookmark:
             UserAction.toggleBookmark.record()
-            (action, visibility) = (.bookmark, .accountDefault)
-            done = shown.bookmarked ? "ブックマークを外しました" : "ブックマークしました"
-            failure = "ブックマークを変更できませんでした"
+            (action, visibility, wasOn, addsOnly) = (.bookmark, .accountDefault, shown.bookmarked, false)
         case .muteConversation:
             UserAction.toggleConversationMute.record()
-            (action, visibility) = (.muteConversation, .accountDefault)
-            done = shown.muted ? "会話のミュートを解除しました" : "会話をミュートしました"
-            failure = "会話のミュートを変更できませんでした"
+            (action, visibility, wasOn, addsOnly) = (.muteConversation, .accountDefault, shown.muted, false)
         case .pin:
             UserAction.togglePin.record()
-            (action, visibility) = (.pin, .accountDefault)
-            done = shown.pinned ? "プロフィールの固定を外しました" : "プロフィールに固定しました"
-            failure = "プロフィールの固定を変更できませんでした"
+            (action, visibility, wasOn, addsOnly) = (.pin, .accountDefault, shown.pinned, false)
         case .delete:
             confirmDeleting(status, as: account, original: original)
             return
@@ -2460,11 +2448,12 @@ final class SessionController {
             return
         }
         let handle = account.credential.handle
-        let failureTitle = "\(handle)で\(failure)"
+        let failureTitle = OtherAccountTexts.title(action.failureTitle(addsOnly: addsOnly), handle: handle)
+        let done = OtherAccountTexts.title(action.doneTitle(wasOn: wasOn), handle: handle)
         tasks.run(.action) { [weak self] in
             do {
                 guard try await account.toggle(action, on: status, reblogVisibility: visibility) else { return }
-                self?.showToggledNotice("\(handle)で\(done)")
+                self?.showToggledNotice(done)
             } catch {
                 guard let self else { return }
                 logger.error("other account toggle \(String(describing: action), privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
@@ -2485,14 +2474,14 @@ final class SessionController {
     private func delete(_ status: Status, as account: OtherAccount, original: Status) {
         UserAction.deleteStatus.record()
         let handle = account.credential.handle
-        let failureTitle = "\(handle)で投稿を削除できませんでした"
+        let failureTitle = OtherAccountTexts.title(OtherAccountTexts.deleteFailure, handle: handle)
         // 送り終える前に確かめ直して押しても、同じ削除を重ねて送らない。
         let slowDeletion = slowDeletion
         tasks.run(key: "otherAccountDelete:\(account.credential.id):\(status.id)", .skippingWhileRunning, .action) { [weak self] in
             do {
                 try await slowDeletion.track { try await account.delete(status) }
                 guard let self else { return }
-                showToggledNotice("\(handle)で投稿を削除しました")
+                showToggledNotice(OtherAccountTexts.title(OtherAccountTexts.deleted, handle: handle))
                 // そのアカウントで編集か書き直しをしている投稿なら、今のアカウントで消したときと同じくやめる。
                 composer.model.statusWasDeleted(status.id, accountID: account.credential.id) { [weak composer] in composer?.willResetForDeletedStatus() }
             } catch {
@@ -2519,14 +2508,14 @@ final class SessionController {
     /// 失敗は、投稿への操作と同じく、このセッションのログインし直しの案内につなげずに知らせる。
     private func send(_ change: UserRelationChange, to relation: UserRelation, as account: OtherAccount) {
         let handle = account.credential.handle
-        let failureTitle = "\(handle)で\(change.failureTitle)"
+        let failureTitle = OtherAccountTexts.title(change.failureTitle, handle: handle)
         logger.info("other account relation change: \(String(describing: change), privacy: .public)")
         // 送り終える前に押し直しても、同じ相手への変更は重ねて送らない。
         tasks.run(key: "otherAccountRelation:\(account.credential.id):\(relation.accountID)", .skippingWhileRunning, .action) { [weak self] in
             do {
                 let relationship = try await account.change(change, of: relation)
                 guard let self else { return }
-                notices.showTransient(Notice(id: "user.relationChanged", kind: .success, title: "\(handle)で\(change.doneTitle(relationship))"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+                notices.showTransient(Notice(id: "user.relationChanged", kind: .success, title: OtherAccountTexts.title(change.doneTitle(relationship), handle: handle)), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
             } catch {
                 guard let self else { return }
                 logger.error("other account relation change failed: \(SciaLog.describe(error), privacy: .public)")
@@ -3848,8 +3837,10 @@ final class SessionController {
     /// 消えたあとも確かめられるよう、「最近の失敗」に残す。
     /// - Parameter turningOn: 今の状態によらず、その向きにする。nilなら反転する。
     /// - Parameter onSuccess: サーバーが受け付けたら呼ぶ。同じ操作の結果を待っている間に押されて送らなかったときは呼ばない。
-    private func toggle(_ action: StatusInteractions.Action, on status: Status, turningOn: Bool? = nil, reblogVisibility: ReblogVisibility = .accountDefault, failureTitle: String, onSuccess: (() -> Void)? = nil) {
+    /// - Parameter addsOnly: メニューで公開範囲を選んだブースト。失敗の見出しを、付けられなかったことを言う文言にする。
+    private func toggle(_ action: StatusInteractions.Action, on status: Status, turningOn: Bool? = nil, reblogVisibility: ReblogVisibility = .accountDefault, addsOnly: Bool = false, onSuccess: (() -> Void)? = nil) {
         let interactions = interactions
+        let failureTitle = action.failureTitle(addsOnly: addsOnly)
         tasks.run(.action) { [weak self] in
             do {
                 let sent = if let turningOn {
@@ -3873,8 +3864,6 @@ final class SessionController {
         }
     }
 
-    private static let emojiReactionFailureTitle = "リアクションを変更できませんでした"
-
     /// 「別のアカウントで」のリアクション。そのアカウントのサーバーの絵文字のシートを開き、選んだ絵文字でそのアカウントとしてリアクションする。
     /// 今のアカウントのタイムラインの投稿は変えないので、どのアカウントでリアクションしたかを知らせる。
     private func chooseEmojiReaction(for status: Status, as account: OtherAccount, original: Status) {
@@ -3885,11 +3874,11 @@ final class SessionController {
                 self?.tasks.run(.action) { [weak self] in
                     do {
                         guard try await account.react(with: emoji, on: status) else { return }
-                        self?.showToggledNotice("\(handle)でリアクションしました")
+                        self?.showToggledNotice(OtherAccountTexts.title(StatusInteractions.Action.emojiReaction(emoji).doneTitle(wasOn: false), handle: handle))
                     } catch {
                         guard let self else { return }
                         logger.error("other account emoji reaction failed: \(SciaLog.describe(error), privacy: .public)")
-                        showOtherAccountFailure(title: "\(handle)でリアクションできませんでした", error: error, recording: OperationStatus.Subject(original))
+                        showOtherAccountFailure(title: OtherAccountTexts.title(StatusInteractions.Action.emojiReaction(emoji).failureTitle(addsOnly: true), handle: handle), error: error, recording: OperationStatus.Subject(original))
                     }
                 }
             }
@@ -3900,7 +3889,7 @@ final class SessionController {
     func chooseEmojiReaction(for status: Status, from viewController: UIViewController) {
         guard session.supportsEmojiReactions else { return }
         emojiReactionPicker.present(from: viewController.navigationController ?? viewController) { [weak self] emoji in
-            self?.toggle(.emojiReaction(emoji), on: status, turningOn: true, failureTitle: Self.emojiReactionFailureTitle)
+            self?.toggle(.emojiReaction(emoji), on: status, turningOn: true)
         }
     }
 
