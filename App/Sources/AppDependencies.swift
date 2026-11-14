@@ -88,6 +88,12 @@ enum AppDependencies {
     /// 大きすぎて動かせないと分かった元の画像の記録。
     static var oversizedEmojis: OversizedEmojiRecord { images.oversizedEmojis }
 
+    /// 絵文字のパレットで、静止画が届くまでの間に描く小さい静止画。
+    static var emojiThumbnails: EmojiThumbnails { images.emojiThumbnails }
+
+    /// 小さい静止画を、パレットを閉じている間に、端末に置いた画像から作る。
+    static let emojiThumbnailBuilder = EmojiThumbnailBuilder()
+
     static let emojiGlyphImages = EmojiGlyphImageStore()
 
     static var customEmojis: CustomEmojiCaches { images.customEmojis }

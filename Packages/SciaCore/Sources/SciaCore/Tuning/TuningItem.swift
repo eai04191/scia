@@ -1771,6 +1771,16 @@ public enum TuningCatalog {
         defaultValue: 24
     )
 
+    /// 絵文字のパレットで、静止画が届くまでの間に描く小さい静止画の高さのピクセル数（`EmojiThumbnails`）。
+    /// 変えると、作ってあるものを捨てて作り直す。起動し直したときから効く。
+    public static let composeEmojiPaletteThumbnailHeight = NumberTuning(
+        id: "compose.emojiPalette.thumbnailHeight",
+        title: "絵文字のパレットの小さい静止画の高さ（px、起動し直すと効く）",
+        range: 8...96,
+        step: 4,
+        defaultValue: 32
+    )
+
     /// 送る前に縮めるとき、JPEGとHEICで作り直す品質。
     public static let mediaImageQuality = NumberTuning(
         id: "compose.media.imageQuality",
@@ -2152,6 +2162,7 @@ public enum TuningCatalog {
             .number(composeEmojiPaletteMaxSpan),
             .number(composeEmojiPaletteMinimumHeightFraction),
             .number(composeEmojiPaletteRecentLimit),
+            .number(composeEmojiPaletteThumbnailHeight),
             .number(completionDebounce),
             .number(completionLimit),
             .number(completionMinimumQuery),

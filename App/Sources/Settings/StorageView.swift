@@ -199,6 +199,7 @@ extension StorageView.Actions {
         let customEmojis = AppDependencies.customEmojis
         let emojiImageFiles = AppDependencies.emojiImageFiles
         let oversizedEmojis = AppDependencies.oversizedEmojis
+        let emojiThumbnails = AppDependencies.emojiThumbnails
         return Self(
             measure: { await measure(locations, launchDate: launchDate) },
             remove: { category in
@@ -210,6 +211,7 @@ extension StorageView.Actions {
                 case .customEmojis:
                     try await emojiImageFiles.removeCachedFiles()
                     oversizedEmojis.removeAll()
+                    await emojiThumbnails.removeAll()
                     await customEmojis.removeAll()
                 case .networkCache:
                     URLSessionTransport.responseCache?.removeAllCachedResponses()

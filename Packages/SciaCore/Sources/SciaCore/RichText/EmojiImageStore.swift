@@ -1,4 +1,4 @@
-import CoreGraphics
+public import CoreGraphics
 public import Foundation
 import ImageIO
 import MemoryCache
@@ -104,6 +104,8 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     /// 読んだデータを端末に残さないときに、URLを渡す。端末に置いたファイルを消すのに使う（`StoredImageFetch.discard`）。
     /// 画像として読めなかったデータと、大きすぎて動かせない元の画像で呼ぶ。動かせない元の画像は、次から動かない版を読むので、残しても使わない。
     public var onDiscard: (@Sendable (URL) async -> Void)?
+    /// 静止画を展開したときに、URLと展開した画像を渡す。絵文字のパレットの小さい静止画を作るのに使う（`EmojiThumbnails`）。
+    public var onStillDecoded: (@Sendable (URL, CGImage) -> Void)?
     /// 大きすぎて動かせないと分かった元の画像を残す先。nilなら残さない。
     public var oversized: OversizedEmojiRecord?
     /// 読んでいる途中の通信。同じURLの静止画とアニメーションを同時に求められたときに、1回の通信を分け合う。
@@ -251,6 +253,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
                     await onDiscard?(url)
                 }
                 onSourceSize?(url, source.width, source.height)
+                onStillDecoded?(url, image)
                 evictedStills.formUnion(stills.setValue(maker.still(image), forKey: url, cost: PlatformImageMaker<Image>.cost(of: image)))
                 stillResolutions[url] = Resolution(pixelHeight: pixelHeight, isLargest: isLargest)
                 if stillResolutions.count > stillResolutionCleanupThreshold {

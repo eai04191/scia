@@ -69,10 +69,14 @@ public actor MediaFileCache {
     /// ほかの操作の順番を待たずに、並べて読む。カスタム絵文字のパレットのように、一度に数十個を読む画面で、1個ずつ順番に読むと、
     /// シミュレーターで6000個を流したとき、読む処理そのものは1ms前後なのに、遅いほうの1割が順番待ちで195ms以上かかったため。
     /// 読んでいる最中に、置き直しや整理でファイルが消えたら、置いていないものとしてnilを返す。
+    /// - Parameter touching: 最後に使った日時を更新するか。表示のためでなく裏で読むとき（絵文字のパレットの小さい静止画を作るなど）は、
+    ///   古いものから消す順番を変えないよう、更新しない。
     @concurrent
-    public nonisolated func data(for url: URL) async -> Data? {
+    public nonisolated func data(for url: URL, touching: Bool = true) async -> Data? {
         guard let file = Self.storedFile(in: folder(for: url)), let data = try? Data(contentsOf: file) else { return nil }
-        touch(file)
+        if touching {
+            touch(file)
+        }
         return data
     }
 

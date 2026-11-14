@@ -58,6 +58,43 @@ struct EmojiPaletteViewTests {
         #expect(blank.isEmpty, "画像が届いたのに空のまま画面に出たセル: \(blank.compactMap(\.accessibilityLabel))")
     }
 
+    /// 静止画がまだ届いていない絵文字は、小さい静止画で描き、静止画が届いたら差し替える。
+    /// 速く流したときに、ファイルの読み出しや展開を待って枠が空いたまま見えないようにするため。
+    @Test(.scratch) func drawsThumbnailUntilStillArrives() async throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 400, height: 400)
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        let gate = Gate()
+        let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 96, height: 96)).image { context in
+            UIColor.red.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 96, height: 96))
+        }.pngData())
+        let store = EmojiImageStore { _ in
+            try await gate.wait()
+            return png
+        }
+        let thumbnails = EmojiThumbnails(file: TestScratch.url("EmojiPaletteViewTests").appending(path: "thumbnails.bin"), pixelHeight: 8)
+        let base = URL(filePath: "/")
+        let emoji = ServerEmoji(shortcode: "blob", url: base.appending(path: "blob.gif"), staticUrl: base.appending(path: "blob.png"))
+        thumbnails.add(emoji.url, image: try #require(UIImage(data: png)?.cgImage))
+        try await waitUntil { thumbnails.contains(emoji.url) }
+        let palette = EmojiPaletteView(emojiImages: store, thumbnails: thumbnails, thumbnailBuilder: nil)
+        palette.frame = window.bounds
+        window.addSubview(palette)
+        palette.setContent(.sections([EmojiPaletteSection(kind: .uncategorized, emojis: [.custom(emoji)])], customStatus: nil))
+        palette.layoutIfNeeded()
+        let collectionView = try #require(Self.descendants(of: palette).compactMap { $0 as? UICollectionView }.first)
+        let cell = try #require(Self.cells(in: collectionView).first)
+
+        #expect(Self.imageView(of: cell)?.image?.cgImage?.height == 8, "静止画が届く前は、小さい静止画で描く")
+
+        gate.open()
+        try await waitUntil { store.image(for: emoji.url) != nil && Self.imageView(of: cell)?.image?.cgImage?.height == 96 }
+    }
+
     /// Unicodeの絵文字は、画像ができるまで空けておき、できたら見えているセルに入れる。
     /// 文字として描いていたときは、セルを画面に出すフレームで絵を作り、速いスクロールでフレームが落ちた。
     @Test func standardEmojiAppearsWhenItsImageIsReady() async throws {

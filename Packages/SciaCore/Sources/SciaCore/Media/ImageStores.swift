@@ -27,6 +27,8 @@ public final class ImageStores<Image: AnyObject & Sendable> {
     /// 大きすぎて動かせないと分かった元の画像の記録。画像と一緒に消えるよう、同じフォルダーに置く。
     /// 画像の置き場所の中には置かない。`MediaFileCache`は、置き場所の直下の、ファイルを置いたフォルダーでないものを整理で消すため。
     public let oversizedEmojis: OversizedEmojiRecord
+    /// 絵文字のパレットで、静止画が届くまでの間に描く小さい静止画。画像と一緒に消えるよう、同じフォルダーに置く。
+    public let emojiThumbnails: EmojiThumbnails
     /// サーバーごとのカスタム絵文字のリスト。端末に残し、絵文字のパレットを開いたときに読み込み中を挟まずに並べる。
     public let customEmojis: CustomEmojiCaches
 
@@ -97,6 +99,12 @@ public final class ImageStores<Image: AnyObject & Sendable> {
         }
         emojis.onDiscard = { await stored.discard($0) }
         emojis.oversized = oversizedEmojis
+        let emojiThumbnails = EmojiThumbnails(
+            file: emojiImageDirectory.appending(path: "thumbnails.bin"),
+            pixelHeight: Int(tuning.value(of: TuningCatalog.composeEmojiPaletteThumbnailHeight))
+        )
+        self.emojiThumbnails = emojiThumbnails
+        emojis.onStillDecoded = { url, image in emojiThumbnails.add(url, image: image) }
         emojis.onSourceSize = { [customEmojis] url, width, height in customEmojis.learn(url, width: width, height: height) }
     }
 }

@@ -103,6 +103,11 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     private var sections: [EmojiPaletteSection] = []
     private let emojiImages: EmojiImageStore<UIImage>
     private let glyphImages: EmojiGlyphImageStore
+    private let thumbnails: EmojiThumbnails
+    /// 画面に出ている間、小さい静止画を裏で作るのを止めさせる。部品カタログやテストのように、作らせなくてよいパレットではnil。
+    private let thumbnailBuilder: EmojiThumbnailBuilder?
+    /// `thumbnailBuilder`に、画面に出ていると伝えたか。
+    private var isCountedAsShown = false
     private lazy var collectionView: UICollectionView = EmojiPaletteCollectionView(frame: .zero, collectionViewLayout: makeLayout())
     /// スクロールの間に落ちたフレームと、そのフレームに使った処理を数える。違和感レポートで、パレットのスクロールの重さを読むため。
     private let scrollHitches = ScrollHitchMonitor()
@@ -142,8 +147,17 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         let key: String
     }
 
-    init(emojiImages: EmojiImageStore<UIImage>, glyphImages: EmojiGlyphImageStore = AppDependencies.emojiGlyphImages) {
+    init(
+        emojiImages: EmojiImageStore<UIImage>,
+        glyphImages: EmojiGlyphImageStore = AppDependencies.emojiGlyphImages,
+        thumbnails: EmojiThumbnails = AppDependencies.emojiThumbnails,
+        thumbnailBuilder: EmojiThumbnailBuilder? = AppDependencies.emojiThumbnailBuilder
+    ) {
         self.emojiImages = emojiImages
+        self.thumbnails = thumbnails
+        self.thumbnailBuilder = thumbnailBuilder
+        // 小さい静止画をメモリに写す。写すだけで中身は読まないので、すぐ済む。
+        thumbnails.load()
         self.glyphImages = glyphImages
         super.init(frame: .zero)
         configureViews()
@@ -228,6 +242,14 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     /// シートに載せたときは、検索欄にキーボードを出していなければシートの下端に置く。前に検索したまま閉じても、ほかの入力欄のキーボードに付いて動かさないため。
     override func didMoveToWindow() {
         super.didMoveToWindow()
+        if (window != nil) != isCountedAsShown {
+            isCountedAsShown = window != nil
+            if isCountedAsShown {
+                thumbnailBuilder?.paletteDidAppear()
+            } else {
+                thumbnailBuilder?.paletteDidDisappear()
+            }
+        }
         // スクロールの途中でシートが閉じると、止まりの通知を受けずに終わる。
         guard window != nil else { return recordScroll() }
         setFollowsKeyboard(searchField.isFirstResponder)
@@ -508,7 +530,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
 
     private func configureCell(at indexPath: IndexPath, _ cell: UICollectionViewCell?) {
         guard let cell = cell as? EmojiPaletteCell, let emoji = emoji(at: indexPath) else { return }
-        FrameWork.measure("EmojiPaletteCell.configure") { cell.configure(emoji, store: emojiImages, glyphs: glyphImages, emojiStyle: emojiStyle) }
+        FrameWork.measure("EmojiPaletteCell.configure") { cell.configure(emoji, store: emojiImages, thumbnails: thumbnails, glyphs: glyphImages, emojiStyle: emojiStyle) }
     }
 
     /// できたUnicodeの絵文字の画像を、それを待っているセルに入れる。
@@ -755,7 +777,8 @@ final class EmojiPaletteCell: UICollectionViewCell {
     }
 
     /// カスタム絵文字は、「カスタム絵文字のアニメーションを再生する」の設定によらず動かす。
-    func configure(_ emoji: PaletteEmoji, store: EmojiImageStore<UIImage>, glyphs: EmojiGlyphImageStore, emojiStyle: EmojiStyle) {
+    /// 静止画がメモリになければ、届くまで小さい静止画で描き、届いたら差し替える（`reconfigureVisibleCells`）。
+    func configure(_ emoji: PaletteEmoji, store: EmojiImageStore<UIImage>, thumbnails: EmojiThumbnails, glyphs: EmojiGlyphImageStore, emojiStyle: EmojiStyle) {
         switch emoji {
         case .custom(let custom):
             glyphView.isHidden = true
@@ -766,7 +789,8 @@ final class EmojiPaletteCell: UICollectionViewCell {
             let pixelHeight = RichTextRenderer.pixelHeight(of: Self.imageSide(in: bounds.size), scale: traitCollection.displayScale)
             // 動かすので元の画像だけを読み、動かない絵文字もその最初のコマで描く。
             let choice = Self.choice(of: store)
-            imageView.stillImage = store.image(for: choice.url(of: custom), pixelHeight: pixelHeight)
+            let url = choice.url(of: custom)
+            imageView.stillImage = store.image(for: url, pixelHeight: pixelHeight) ?? thumbnails.image(for: url).map { UIImage(cgImage: $0) }
             imageView.animation = choice.animationURL(of: custom).flatMap { store.animation(for: $0, pixelHeight: pixelHeight) }
             accessibilityLabel = custom.shortcode
         case .standard(let standard):

@@ -84,9 +84,10 @@ extension Task where Failure == Never {
     }
 
     /// 通信を送らない`operation`を始める。始めたところで名乗っていた目的も引き継がない。中で通信を送ると、名乗っていない通信として失敗する。
+    /// - Parameter priority: 裏で済ませる処理（絵文字のシートの小さい静止画を作るなど）は、`.background`を渡す。
     @discardableResult
-    public init(_: WithoutRequests, operation: @escaping @MainActor () async -> Success) {
-        self.init { @MainActor in
+    public init(_: WithoutRequests, priority: TaskPriority? = nil, operation: @escaping @MainActor () async -> Success) {
+        self.init(priority: priority) { @MainActor in
             await RequestPurpose.$current.withValue(nil) {
                 await operation()
             }

@@ -23,7 +23,7 @@ public final class CustomEmojiCache {
     static let saveDelay: Duration = .seconds(2)
 
     private let server: String
-    private let files: CustomEmojiFiles
+    nonisolated private let files: CustomEmojiFiles
     private let clock: any Clock<Duration>
     private let logger = SciaLog.logger(category: "emoji")
     private(set) var emojis: [ServerEmoji]?
@@ -175,7 +175,7 @@ public final class CustomEmojiCache {
 /// アプリ全体で、サーバーごとの`CustomEmojiCache`を持つ。
 @MainActor
 public final class CustomEmojiCaches {
-    private let files: CustomEmojiFiles
+    nonisolated private let files: CustomEmojiFiles
     private let clock: any Clock<Duration>
     private var caches: [String: CustomEmojiCache] = [:]
 
@@ -204,6 +204,11 @@ public final class CustomEmojiCaches {
         for cache in caches.values {
             cache.learn(url, width: width, height: height)
         }
+    }
+
+    /// 端末に残している、すべてのサーバーのリストの絵文字。開いていないサーバーの分も、ファイルから読む。
+    public nonisolated func storedEmojis() async -> [ServerEmoji] {
+        await files.readAll().flatMap { $0.emojis.map(\.emoji) }
     }
 
     /// `instance`のサーバーのリストを消す。そのサーバーのアカウントを全部ログアウトしたときに呼ぶ。
@@ -322,6 +327,15 @@ actor CustomEmojiFiles {
 
     func remove(server: String) {
         try? FileManager.default.removeItem(at: file(server: server))
+    }
+
+    /// 残しているすべてのサーバーのリスト。読めないファイルは飛ばす。
+    func readAll() -> [StoredCustomEmojis] {
+        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        return files.filter { $0.pathExtension == "json" }.compactMap { file in
+            (try? Data(contentsOf: file)).flatMap { try? JSONDecoder().decode(StoredCustomEmojis.self, from: $0) }
+                .flatMap { $0.version == StoredCustomEmojis.currentVersion ? $0 : nil }
+        }
     }
 
     func removeAll() {
