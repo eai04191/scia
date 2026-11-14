@@ -180,3 +180,32 @@ enum TimelineModelFixtures {
         }
     }
 }
+
+extension AccountSession {
+    /// テストのセッション。設定の保存先を`TestScratch`で作るので、使うテストかスイートに`.scratch`を付ける。
+    /// - Parameter http: APIの外の通信の口。省略すると、`transport`で送る。
+    static func testing(
+        transport: any HTTPTransport,
+        connector: any WebSocketConnector = StubWebSocketConnector(messages: []),
+        http: HTTPClient? = nil,
+        settings: AppSettings? = nil,
+        defaults: UserDefaults? = nil,
+        translation: StatusTranslationSetup? = nil,
+        clock: any Clock<Duration> = TestClock(),
+        now: @escaping @Sendable () -> Date = { Date(timeIntervalSince1970: 1_800_000_000) }
+    ) -> AccountSession {
+        let defaults = defaults ?? TestScratch.defaults("AccountSession.testing")
+        return AccountSession(
+            credential: TimelineModelFixtures.credential(),
+            transport: transport,
+            connector: connector,
+            http: http ?? HTTPClient(transport: transport, retry: RetryPolicy(maxRetries: 0, initialDelay: .zero), clock: clock, now: now),
+            settings: settings ?? AppSettings(defaults: defaults),
+            defaults: defaults,
+            tuning: TuningStore(defaults: nil),
+            translation: translation,
+            clock: clock,
+            now: now
+        )
+    }
+}

@@ -258,8 +258,8 @@ final class SessionController {
     private lazy var mediaPrefetcher = MediaPrefetcher(scope: tasks, store: AppDependencies.mediaImages, network: AppDependencies.network, settings: AppDependencies.settings)
     /// fxtwitterから読んだXの投稿。ホームと通知とプロフィールで同じ投稿を1回だけ読む。
     /// 投稿の本文の自動翻訳。iOS 26.4より前ではnil（docs/auto-translation.md）。
-    private lazy var translations: StatusTranslationStore? = makeTranslations()
-    private let xPosts = XPostStore(client: XPostClient(client: AppDependencies.http), retryPolicy: { TuningCatalog.imageRetry(in: AppDependencies.tuning) })
+    private var translations: StatusTranslationStore? { session.translations }
+    private var xPosts: XPostStore { session.xPosts }
     private var composerObscuredHeight: CGFloat = 0
     /// 本文のリンクを開くアプリ内のSafari。シートが覆っている高さも、投稿欄と同じく積んだ画面の下の余白にする。
     let browser = InAppBrowser()
@@ -290,9 +290,14 @@ final class SessionController {
             credential: credential,
             transport: transport,
             connector: FaultInjectingWebSocketConnector(base: ScenarioMode.server?.connector ?? URLSessionWebSocketConnector()),
+            http: AppDependencies.http,
+            settings: AppDependencies.settings,
+            defaults: .standard,
             // デバッグ版でだけ応答の本文も残す。
             requestLog: RequestLog(includesBody: true),
-            tuning: tuning
+            tuning: tuning,
+            translation: Self.translationSetup(),
+            pollOperations: Self.pollOperations(client:)
         )
         #else
         let transport = BurstMonitoringTransport(base: URLSessionTransport(), monitor: RequestBurstLog.monitor)
@@ -300,7 +305,12 @@ final class SessionController {
             credential: credential,
             transport: transport,
             connector: URLSessionWebSocketConnector(),
-            tuning: tuning
+            http: AppDependencies.http,
+            settings: AppDependencies.settings,
+            defaults: .standard,
+            tuning: tuning,
+            translation: Self.translationSetup(),
+            pollOperations: Self.pollOperations(client:)
         )
         #endif
         self.session = session
@@ -371,22 +381,19 @@ final class SessionController {
         notificationPolicy = NotificationPolicyModel(client: client, tasks: tasks.child())
         filters = FiltersModel(api: FiltersModel.API(client: client), tasks: tasks.child())
         announcements = AnnouncementsModel(operations: AnnouncementsModel.Operations(client: client), streamingHub: streamingHub, tasks: tasks.child())
-        let mediaFormats = UnprocessableMediaFormats(defaults: .standard, instance: credential.instance)
-        let diagnostics = ConnectionDiagnostics(rateLimit: session.rateLimit, features: session.features, requestLog: session.requestLog, mediaFormats: mediaFormats)
-        self.diagnostics = diagnostics
+        diagnostics = session.diagnostics
         // コントローラーはHubを持っているので、弱く持って循環させない。
         let pushedFeeds = PushedFeedRegistry()
         self.pushedFeeds = pushedFeeds
-        streamingHub.onChange = { [weak streamingHub, weak home, weak local, weak federated, weak notifications, weak serverFeeds, weak pushedFeeds] in
+        session.onStreamingChange = { [weak streamingHub, weak home, weak local, weak federated, weak notifications, weak serverFeeds, weak pushedFeeds] in
             guard let streamingHub else { return }
-            diagnostics.setStreaming(streamingHub.state, subscriptions: streamingHub.subscriptions)
             for feed in [home, local, federated] + (serverFeeds?.controllers ?? []) + (pushedFeeds?.controllers ?? []) {
                 feed?.showStreamingState(streamingHub.state)
             }
             notifications?.showStreamingState(streamingHub.state)
         }
         self.client = client
-        let profiles = ProfileRegistry(relationships: RelationshipCache { [client] ids in try await client.relationships(ids) })
+        let profiles = ProfileRegistry(relationships: session.relationships)
         self.profiles = profiles
         let threads = ThreadRegistry()
         self.threads = threads
@@ -406,7 +413,7 @@ final class SessionController {
                 list.statusDidSettle(action, status)
             }
         }
-        polls = PollVoting(operations: Self.pollOperations(client: client), update: updateStatusEverywhere)
+        polls = session.polls
         let timelines = timelines
         let statusRefresher = StatusRefresher(client: client) { refetched in
             let shown = timelines.allObjects
@@ -468,40 +475,28 @@ final class SessionController {
             tabBarController.noticeOverlay?.follow(nil)
         }
         tabBarController.delegate = tabBarDelegate
-        let media = ComposeMediaService<UIImage>(
-            upload: { upload in
-                #if DEBUG
-                if let delay = DebugFaults.slowUploadDelay {
-                    try await AppDependencies.clock.sleep(for: delay)
-                }
-                #endif
-                return try await client.uploadMedia(upload)
-            },
-            waitUntilProcessed: { id in try await client.waitUntilProcessed(id) },
-            updateDescription: { id, description in try await client.updateMediaDescription(id, description: description) },
-            makeThumbnail: { file in await LocalMediaThumbnail.make(for: file, maxPixelSize: ComposeAttachmentStrip.thumbnailPixelSize) },
-            // 版を読めていないときは、版の分からないサーバーとして覚える。版を読めたあとは、もう一度試す。
-            unprocessableImageTypes: { mediaFormats.mimeTypes(serverVersion: diagnostics.serverVersion) },
-            recordUnprocessableImageType: { mimeType in mediaFormats.record(mimeType, serverVersion: diagnostics.serverVersion) },
-            preparation: { Self.mediaPreparation() }
-        )
-        let redraft = ComposeRedraftService(
-            // 新しい投稿に付け直すので、添付は残して削除する。
-            deleteStatus: { id in try await client.deleteStatus(id, deleteMedia: false) },
-            waitUntilReleased: { id in try await client.waitUntilReleased(id) }
-        )
-        let accounts = AccountCache { [client] ids in try await client.accounts(ids) }
+        var media: ComposeMediaService<UIImage> = session.composeMediaService { file in
+            await LocalMediaThumbnail.make(for: file, maxPixelSize: ComposeAttachmentStrip.thumbnailPixelSize)
+        }
+        #if DEBUG
+        media.upload = { [upload = media.upload] file in
+            if let delay = DebugFaults.slowUploadDelay {
+                try await AppDependencies.clock.sleep(for: delay)
+            }
+            return try await upload(file)
+        }
+        #endif
+        let redraft = session.composeRedraftService()
+        let accounts = session.accounts
         self.accounts = accounts
         serverFilters = ServerFilterCache(label: "filters") { [client] in try await client.filters() }
         let ownFeaturedTags = LatestValueCache<[FeaturedTag]>(label: "featuredTags") { [client] in try await client.featuredTags() }
         self.ownFeaturedTags = ownFeaturedTags
         // キャッシュが自分で始めた通信も、ログアウトやアカウントの切り替えで止める。
-        tasks.onClose { [weak accounts, weak serverFilters, weak ownFeaturedTags, weak followedTags, weak relationships = profiles.relationships] in
-            accounts?.close()
+        tasks.onClose { [weak serverFilters, weak ownFeaturedTags, weak followedTags] in
             serverFilters?.close()
             ownFeaturedTags?.close()
             followedTags?.close()
-            relationships?.close()
         }
         let customEmojis = AppDependencies.customEmojis.cache(for: credential.instance)
         self.customEmojis = customEmojis
@@ -557,8 +552,7 @@ final class SessionController {
                 self?.local.markUnavailableOnServer()
             }
         }
-        session.onPreferencesLoad = { [weak self, handle = credential.handle] preferences in
-            AppDependencies.settings.rememberServerAnimations(preferences.autoplaysAnimations, of: handle)
+        session.onPreferencesLoad = { [weak self] preferences in
             for timeline in self?.timelines.allObjects ?? [] {
                 timeline.spoilerExpansion.expandsByDefault = preferences.expandsSpoilers
             }
@@ -652,20 +646,21 @@ final class SessionController {
             case .update, .notification, .filtersChanged, .notificationsMerged, .announcement, .announcementReaction, .announcementDelete, .unhandled: break
             }
         }
-        translations?.setLanguages(AppDependencies.settings.effectiveAutoTranslationLanguages)
-        translations?.setExcludedAuthors(AppDependencies.settings.autoTranslationExcludedHandles, localServer: credential.server)
         translations?.onChange = { [weak self] ids in
             for timeline in self?.timelines.allObjects ?? [] {
                 timeline.applyTranslations(ids)
             }
         }
-        observeAutoTranslationSetting()
+        session.onTranslationSettingsChange = { [weak self] in
+            for timeline in self?.timelines.allObjects ?? [] {
+                timeline.applyTranslationLanguages()
+            }
+        }
         xPosts.onChange = { [weak self] id in
             for timeline in self?.timelines.allObjects ?? [] {
                 timeline.applyXPost(id: id)
             }
         }
-        observeXPostSetting()
         configureStatusBarTicker(tabBarController: tabBarController)
         for navigation in [homeNavigation, localNavigation, federatedNavigation, notificationsNavigation, bookmarksNavigation, favouritesNavigation, scheduledNavigation, followedTagsNavigation, searchNavigation] {
             configure(navigation, scrollToTop: scrollToTop)
@@ -791,7 +786,8 @@ final class SessionController {
     }
 
 
-    private func makeTranslations() -> StatusTranslationStore? {
+    /// 自動翻訳の、アプリが用意する部品。iOS 26.4より前ではnil（docs/auto-translation.md）。
+    private static func translationSetup() -> StatusTranslationSetup? {
         var translator: (any StatusTranslating)?
         if #available(iOS 26.4, *) {
             translator = SystemStatusTranslator()
@@ -800,52 +796,12 @@ final class SessionController {
         translator = DebugStatusTranslator(system: translator)
         #endif
         guard let translator else { return nil }
-        return StatusTranslationStore(
+        return StatusTranslationSetup(
             translator: translator,
-            targetLanguage: AppDependencies.settings.resolvedTranslationTarget.minimalIdentifier,
-            strategy: AppDependencies.settings.resolvedTranslationStrategy,
-            scope: tasks,
-            applyInterval: { .seconds(AppDependencies.tuning.value(of: TuningCatalog.translationApplyInterval)) }
+            targetLanguage: { AppDependencies.settings.resolvedTranslationTarget.minimalIdentifier },
+            // 選んだ翻訳モードに加えて、Apple Intelligenceのモデルが使えるかの変化も追われる。
+            strategy: { AppDependencies.settings.resolvedTranslationStrategy }
         )
-    }
-
-    /// 自動翻訳のオンオフ、訳す言語、対象外の人、翻訳先、翻訳の方式が変わるか、言語モデルが入ったら、訳せなかった言語を忘れ、タイムラインを描き直す。
-    private func observeAutoTranslationSetting() {
-        withObservationTracking {
-            _ = AppDependencies.settings.effectiveAutoTranslationLanguages
-            _ = AppDependencies.settings.autoTranslationExcludedHandles
-            _ = AppDependencies.settings.autoTranslationModelRevision
-            _ = AppDependencies.settings.autoTranslationTarget
-            // 選んだ翻訳モードに加えて、Apple Intelligenceのモデルが使えるかの変化も追う。
-            _ = AppDependencies.settings.resolvedTranslationStrategy
-        } onChange: { [weak self] in
-            Task(.withoutRequests) { @MainActor in
-                guard let self, !self.tasks.isClosed else { return }
-                self.translations?.setTargetLanguage(AppDependencies.settings.resolvedTranslationTarget.minimalIdentifier)
-                self.translations?.setStrategy(AppDependencies.settings.resolvedTranslationStrategy)
-                self.translations?.setLanguages(AppDependencies.settings.effectiveAutoTranslationLanguages)
-                self.translations?.setExcludedAuthors(AppDependencies.settings.autoTranslationExcludedHandles, localServer: self.credential.server)
-                for timeline in self.timelines.allObjects {
-                    timeline.applyTranslationLanguages()
-                }
-                self.observeAutoTranslationSetting()
-            }
-        }
-    }
-
-    /// 設定でXの投稿の展開をオフにしたら、読み込み中のfxtwitterへの通信と読み直しの待ちをやめる。オフのあいだ通信しないため（docs/link-card.md）。
-    private func observeXPostSetting() {
-        withObservationTracking {
-            _ = AppDependencies.settings.expandsXPosts
-        } onChange: { [weak self] in
-            Task(.withoutRequests) { @MainActor in
-                guard let self, !self.tasks.isClosed else { return }
-                if !AppDependencies.settings.expandsXPosts {
-                    self.xPosts.cancelAll()
-                }
-                self.observeXPostSetting()
-            }
-        }
     }
 
     /// 設定でステータスバーの通知をオフからオンにしたら、どう出るかが分かるよう、デモの通知を1件流す。
@@ -2271,22 +2227,13 @@ final class SessionController {
     private func composeAccount(for account: OtherAccount) -> ComposeAccount<UIImage> {
         let client = otherAccounts.latestClient(for: account)
         let handle = account.credential.handle
-        let media = ComposeMediaService<UIImage>(
-            upload: { try await client().uploadMedia($0) },
-            waitUntilProcessed: { try await client().waitUntilProcessed($0) },
-            updateDescription: { try await client().updateMediaDescription($0, description: $1) },
-            makeThumbnail: { file in await LocalMediaThumbnail.make(for: file, maxPixelSize: ComposeAttachmentStrip.thumbnailPixelSize) },
-            // 処理できない画像の形式は、今のアカウントのサーバーの版ごとに覚えている。ほかのアカウントのサーバーの版は読まないので覚えず、
-            // 処理できなかったときにJPEGで送り直すのを、送るたびに行う。
-            unprocessableImageTypes: { [] },
-            recordUnprocessableImageType: { _ in },
-            preparation: { Self.mediaPreparation() }
-        )
+        // 処理できない画像の形式は、今のアカウントのサーバーの版ごとに覚えている。ほかのアカウントのサーバーの版は読まないので覚えず、
+        // 処理できなかったときにJPEGで送り直すのを、送るたびに行う。
+        let media = ComposeMediaService<UIImage>(client: client, settings: AppDependencies.settings, tuning: AppDependencies.tuning) { file in
+            await LocalMediaThumbnail.make(for: file, maxPixelSize: ComposeAttachmentStrip.thumbnailPixelSize)
+        }
         // 新しい投稿に付け直すので、添付は残して削除する。今のアカウントで削除して書き直すときと同じ。
-        let redraft = ComposeRedraftService(
-            deleteStatus: { try await client().deleteStatus($0, deleteMedia: false) },
-            waitUntilReleased: { try await client().waitUntilReleased($0) }
-        )
+        let redraft = ComposeRedraftService(client: client)
         return ComposeAccount(id: account.credential.id, myAccountID: account.credential.accountID, media: media, redraft: redraft, onRedraftDeleted: { [weak account] id in
             account?.didDelete(id)
         }, onSubmitted: { [weak self, weak account] submitted in
@@ -2369,18 +2316,6 @@ final class SessionController {
         #endif
     }
 
-    /// 投稿欄で送る前に縮める大きさと、作り直すときの好みの値。どのアカウントで書いても同じ設定を使う。
-    private static func mediaPreparation() -> MediaPreparationSettings {
-        let settings = AppDependencies.settings
-        let tuning = AppDependencies.tuning
-        return MediaPreparationSettings(
-            imageSize: settings.imageUploadSize,
-            videoSize: settings.videoUploadSize,
-            imageQuality: tuning.value(of: TuningCatalog.mediaImageQuality),
-            videoQuality: TuningCatalog.videoQuality(in: tuning),
-            exportProgressShare: tuning.value(of: TuningCatalog.mediaExportProgressShare)
-        )
-    }
 
     /// ほかのアカウントとして、ハッシュタグをフォロー、ミュート、プロフィールで紹介する。済んだことと失敗は`otherAccounts`の知らせで出す。
     private func perform(_ command: HashtagMenuCommand, on name: String, as account: OtherAccount) {
@@ -3130,18 +3065,7 @@ final class SessionController {
         let client = sheetClient(as: otherAccount)
         let actor = otherAccount.map { "\($0.credential.handle)で" } ?? ""
         let myAccountID = otherAccount?.credential.accountID ?? credential.accountID
-        let model = ListMembershipModel(isMyself: accountID == myAccountID, api: ListMembershipModel.API(
-            lists: { try await client().lists() },
-            listsContaining: { try await client().lists(containing: accountID) },
-            relationship: {
-                guard let relationship = try await client().relationships([accountID]).first else { throw ProfileNotFound(acct: acct) }
-                return relationship
-            },
-            add: { try await client().addAccounts([accountID], toList: $0) },
-            remove: { try await client().removeAccounts([accountID], fromList: $0) },
-            follow: { try await client().follow(accountID) },
-            create: { try await client().createList(title: $0) }
-        ), tasks: tasks.child())
+        let model = ListMembershipModel(isMyself: accountID == myAccountID, api: ListMembershipModel.API(client: client, accountID: accountID, acct: acct), tasks: tasks.child())
         model.onFailure = { [weak self] operation, reason in
             self?.reportListFailure(title: actor + operation.failureTitle, reason: reason)
         }
@@ -4057,32 +3981,11 @@ final class SessionController {
         otherAccounts.loadProfiles()
         // 投稿欄の「投稿するアカウント」の行に出す、このアカウント自身のアイコン。
         tasks.run(.display) { [weak self] in _ = try? await self?.myAccount(purpose: .display) }
-        let network = AppDependencies.network
-        session.observeRecoveries { network.recoveryCount }
-        loadServerVersion()
         loadTabSources()
         announcements.start()
-        // アニメーションを再生するかは、読み直すまで、前に読めたサーバーの値で描く。
-        AppDependencies.settings.followServerAnimations(of: credential.handle)
-        // 注意書きを最初から開いておくかと、アニメーションを再生するかをタイムラインに反映する。読めなければ前の値のままにし、次に投稿欄で書き始めたときに読み直す。
-        // 投稿欄が使うサーバーの上限も、書き始める前に読んでおく。
-        session.preloadComposeDefaults()
-        session.loadCapabilities()
-    }
-
-    /// 原因を絞れるよう、サーバーの版を記録に残す。読めなくても使うのに困らないので、失敗は記録するだけにする。
-    private func loadServerVersion() {
-        let client = client
-        let instance = credential.instance.host() ?? credential.instance.absoluteString
-        tasks.run(.display) { [weak self] in
-            do {
-                let version = try await client.serverVersion()
-                self?.logger.info("server instance=\(instance, privacy: .public) version=\(version, privacy: .public)")
-                self?.diagnostics.setServerVersion(version)
-            } catch {
-                self?.logger.info("server version unavailable instance=\(instance, privacy: .public) error=\(SciaLog.describe(error), privacy: .public)")
-            }
-        }
+        // 注意書きを最初から開いておくかは、読めたら`onPreferencesLoad`でタイムラインに反映する。読めなければ前の値のままにし、次に投稿欄で書き始めたときに読み直す。
+        let network = AppDependencies.network
+        session.start { network.recoveryCount }
     }
 
     // MARK: - ログインし直し
@@ -4591,12 +4494,6 @@ final class SessionController {
         threads.enterBackground()
         profileTabs.enterBackground()
     }
-}
-
-private struct ProfileNotFound: LocalizedError {
-    let acct: String
-
-    var errorDescription: String? { "@\(acct)が見つかりませんでした。" }
 }
 
 /// リンクのメニューの「プロフィールとして開く」で、リンク先がプロフィールとして見つからなかった。プロフィールでないページのリンクでも起きる。

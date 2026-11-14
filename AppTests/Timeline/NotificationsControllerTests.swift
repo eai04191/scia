@@ -7,7 +7,7 @@ import UIKit
 
 /// 通知のタイムラインで、切れていた間の補完が手元とつながらなかったときのギャップを確かめる。
 @MainActor
-@Suite(.serialized, .failureState)
+@Suite(.serialized, .failureState, .scratch)
 struct NotificationsControllerTests {
     private var tolerance: CGFloat { 1 / max(UITraitCollection.current.displayScale, 1) }
 

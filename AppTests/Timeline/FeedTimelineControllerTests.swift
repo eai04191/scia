@@ -7,7 +7,7 @@ import UIKit
 @testable import Scia
 
 @MainActor
-@Suite(.serialized, .failureState)
+@Suite(.serialized, .failureState, .scratch)
 struct FeedTimelineControllerTests {
     private let sessions = TestAccountSessions()
 

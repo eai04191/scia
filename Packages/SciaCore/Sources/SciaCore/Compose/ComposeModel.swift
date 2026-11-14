@@ -1238,6 +1238,18 @@ public struct MediaPreparationSettings: Sendable {
         self.exportProgressShare = exportProgressShare
     }
 
+    /// 設定の「送る前に縮める」と、チューニングの好みの値から作る。
+    @MainActor
+    public init(settings: AppSettings, tuning: TuningStore) {
+        self.init(
+            imageSize: settings.imageUploadSize,
+            videoSize: settings.videoUploadSize,
+            imageQuality: tuning.value(of: TuningCatalog.mediaImageQuality),
+            videoQuality: TuningCatalog.videoQuality(in: tuning),
+            exportProgressShare: tuning.value(of: TuningCatalog.mediaExportProgressShare)
+        )
+    }
+
     /// 設定では縮めない。サーバーの上限を超えるものだけを縮める。メディアを添付しない画面とテストで使う。
     public static let keepsOriginal = MediaPreparationSettings(
         imageSize: .original,
@@ -1277,6 +1289,30 @@ public struct ComposeMediaService<Thumbnail> {
         self.unprocessableImageTypes = unprocessableImageTypes
         self.recordUnprocessableImageType = recordUnprocessableImageType
         self.preparation = preparation
+    }
+
+    /// `client`で送る口を組む。書いている間にログインし直しても新しいトークンで送れるよう、送るたびに`client`を呼ぶ。
+    /// - Parameters:
+    ///   - formats: 処理できなかった画像の形式を、サーバーの版ごとに覚える先。今のアカウントなら`AccountSession.composeMediaService`が渡す。
+    ///     nilなら覚えず、処理できなかったときにJPEGで送り直すのを、送るたびに行う。
+    ///   - serverVersion: 接続しているサーバーの版。読めていなければnilを返し、版の分からないサーバーとして覚える。
+    public init(
+        client: @escaping @MainActor @Sendable () -> MastodonClient,
+        settings: AppSettings,
+        tuning: TuningStore,
+        formats: UnprocessableMediaFormats? = nil,
+        serverVersion: @escaping @MainActor () -> String? = { nil },
+        makeThumbnail: @escaping (LocalMediaFile) async -> Thumbnail?
+    ) {
+        self.init(
+            upload: { try await client().uploadMedia($0) },
+            waitUntilProcessed: { try await client().waitUntilProcessed($0) },
+            updateDescription: { try await client().updateMediaDescription($0, description: $1) },
+            makeThumbnail: makeThumbnail,
+            unprocessableImageTypes: { formats?.mimeTypes(serverVersion: serverVersion()) ?? [] },
+            recordUnprocessableImageType: { formats?.record($0, serverVersion: serverVersion()) },
+            preparation: { MediaPreparationSettings(settings: settings, tuning: tuning) }
+        )
     }
 
     /// メディアを添付しない画面とテストで使う。

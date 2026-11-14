@@ -64,6 +64,25 @@ public final class ListMembershipModel {
             self.follow = follow
             self.create = create
         }
+
+        /// `client`で送る。書いている間にログインし直しても新しいトークンで送れるよう、送るたびに`client`を呼ぶ。
+        /// - Parameters:
+        ///   - accountID: リストに入れる人のID。
+        ///   - acct: その人のハンドル。関係を読めなかったときの理由に出す。
+        public init(client: @escaping @MainActor @Sendable () -> MastodonClient, accountID: String, acct: String) {
+            self.init(
+                lists: { try await client().lists() },
+                listsContaining: { try await client().lists(containing: accountID) },
+                relationship: {
+                    guard let relationship = try await client().relationships([accountID]).first else { throw ProfileNotFound(acct: acct) }
+                    return relationship
+                },
+                add: { try await client().addAccounts([accountID], toList: $0) },
+                remove: { try await client().removeAccounts([accountID], fromList: $0) },
+                follow: { try await client().follow(accountID) },
+                create: { try await client().createList(title: $0) }
+            )
+        }
     }
 
     public private(set) var phase: Phase = .loading

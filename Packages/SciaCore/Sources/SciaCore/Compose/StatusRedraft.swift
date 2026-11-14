@@ -43,6 +43,14 @@ public struct ComposeRedraftService {
         self.waitUntilReleased = waitUntilReleased
     }
 
+    /// `client`で送る口を組む。新しい投稿に付け直すので、添付は残して削除する。
+    public init(client: @escaping @MainActor @Sendable () -> MastodonClient) {
+        self.init(
+            deleteStatus: { try await client().deleteStatus($0, deleteMedia: false) },
+            waitUntilReleased: { try await client().waitUntilReleased($0) }
+        )
+    }
+
     /// 削除して書き直さない画面とテストで使う。
     public static var unavailable: ComposeRedraftService {
         ComposeRedraftService(deleteStatus: { _ in throw CancellationError() }, waitUntilReleased: { _ in throw CancellationError() })

@@ -4,6 +4,7 @@ import Testing
 @testable import SciaCore
 
 /// 下書きを送るAPIの振り分けと、送った結果の知らせ先、送るときに受けた401の扱い。
+@Suite(.scratch)
 @MainActor
 struct DraftSubmissionTests {
     nonisolated private static let now = Date(timeIntervalSince1970: 1_800_000_000)
@@ -36,7 +37,7 @@ struct DraftSubmissionTests {
     }
 
     private func makeSession(_ transport: RoutedTransport) -> AccountSession {
-        AccountSession(credential: TimelineModelFixtures.credential(), transport: transport, connector: StubWebSocketConnector(messages: []), tuning: TuningStore(defaults: nil), clock: TestClock(), now: { Self.now })
+        .testing(transport: transport, clock: TestClock(), now: { Self.now })
     }
 
     private func makeModel(submit: @escaping (StatusDraft) async throws -> SubmittedDraft) -> ComposeModel {

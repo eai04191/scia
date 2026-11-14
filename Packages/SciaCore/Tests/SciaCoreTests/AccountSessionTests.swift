@@ -5,6 +5,7 @@ import Synchronization
 import Testing
 @testable import SciaCore
 
+@Suite(.scratch)
 @MainActor
 struct AccountSessionTests {
     nonisolated private static let now = Date(timeIntervalSince1970: 1_800_000_000)
@@ -14,14 +15,7 @@ struct AccountSessionTests {
         connector: any WebSocketConnector = StubWebSocketConnector(messages: []),
         clock: TestClock = TestClock()
     ) -> AccountSession {
-        AccountSession(
-            credential: TimelineModelFixtures.credential(),
-            transport: transport,
-            connector: connector,
-            tuning: TuningStore(defaults: nil),
-            clock: clock,
-            now: { Self.now }
-        )
+        .testing(transport: transport, connector: connector, clock: clock, now: { Self.now })
     }
 
     /// 書き始めたときと同じく、使う人の操作として読む。
