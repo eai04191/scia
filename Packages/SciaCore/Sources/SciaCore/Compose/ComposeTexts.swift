@@ -83,6 +83,117 @@ public enum ComposeTexts {
     public static let retry = "再試行"
     public static let delete = "削除"
 
+    /// 書いていないときの1行の読み上げのラベル。
+    public static let composerLabel = "投稿欄"
+    /// 本文の入力欄の案内。
+    public static let textPlaceholder = "いまどうしてる？"
+    public static let textLabel = "本文"
+    public static let send = "投稿"
+    /// ボタンの並びに入らない項目を出す＋のボタン。
+    public static let add = "追加"
+    public static let collapse = "元の大きさに戻す"
+    /// 絵文字のパレットやメディアのピッカーを出している間に、同じ項目の代わりに出す、閉じてキーボードに戻る項目。
+    public static let backToKeyboard = "キーボードに戻る"
+    public static let crop = "トリミング"
+    /// 音声のある動画の音声を消して送る項目。Mastodonは音声のない動画をGIFとして扱うので、「音声を消す」ではなく、送ったあとの姿で書く。
+    public static let sendAsGIF = "GIFとして送る"
+
+    /// 広げるボタンの名前。
+    public static func expandToggle(isExpanded: Bool) -> String {
+        isExpanded ? collapse : ComposeToolItem.expand.title
+    }
+
+    /// 書いているほかのアカウントの行を消して、今のアカウントに戻すボタン。
+    public static let switchToCurrentAccount = "今のアカウントで投稿する"
+    /// 編集や書き直しの間に、投稿するアカウントのメニューに添える、替えられない理由。
+    public static let accountLocked = "編集や書き直しの間は替えられません"
+
+    /// 書いているほかのアカウントの行。
+    public static func writingAs(username: String) -> String {
+        "@\(username)で投稿"
+    }
+
+    /// 押せない項目に添える理由。
+    public static let unavailableWithQuote = "引用とは一緒に付けられません"
+    public static let unavailableWithPoll = "投票とは一緒に付けられません"
+    public static let unavailableWithMedia = "メディアとは一緒に付けられません"
+    public static let unavailableInEdit = "編集では付けられません"
+    /// リンクにタイトルを付ける項目の、本文にURLがないときの理由。
+    public static let noURLInText = "本文にURLがありません"
+
+    /// 添付があるときに、注意書きの項目に添える説明。
+    public static let spoilerMarksMediaSensitive = "添付も閲覧注意にします"
+    /// 閲覧注意にしているときの、注意書きのボタンの読み上げの値。
+    public static let spoilerSensitiveValue = "添付も閲覧注意"
+
+    /// 注意書きの欄の案内。添付があると、空の注意書きでも閲覧注意になるので、空のまま出している意味が分かるよう、案内を変える。
+    public static func spoilerPlaceholder(hasAttachments: Bool) -> String {
+        hasAttachments ? "注意書き（空なら閲覧注意だけ）" : ComposeToolItem.spoiler.title
+    }
+
+    /// 注意書きの欄を外すボタン。
+    public static func spoilerClearLabel(isSensitive: Bool) -> String {
+        isSensitive ? "注意書きと閲覧注意を外す" : "注意書きを外す"
+    }
+
+    /// 公開範囲のメニューの中の、引用できる人の見出し。公開範囲で決まっていて選べなければ、そう添える。
+    public static func quotePolicyMenuTitle(isFixed: Bool) -> String {
+        isFixed ? "引用できる人（この公開範囲では選べません）" : "引用できる人"
+    }
+
+    /// 公開範囲や＋のボタンの読み上げの値に続ける、引用できる人。
+    public static func quotePolicyValue(_ title: String) -> String {
+        "引用できる人: \(title)"
+    }
+
+    /// ＋のボタンの読み上げの値に入れる、選んでいる言語。
+    public static func languageValue(_ name: String) -> String {
+        "言語: \(name)"
+    }
+
+    public static let scheduleDate = "予約の日時"
+    public static let cancelSchedule = "予約をやめる"
+
+    /// 予約の行。日時を押せるラベルにし、続く文を添えるので、日時の範囲を添える。
+    public static func scheduledPost(date: String) -> PostTexts.EmphasizedText {
+        let text = "\(date)に投稿"
+        let start = text.range(of: date)?.lowerBound ?? text.startIndex
+        return PostTexts.EmphasizedText(text: text, emphasis: start..<text.index(start, offsetBy: date.count))
+    }
+
+    /// 送れなかったときのアラートの題。
+    public static func postFailedTitle(isScheduled: Bool) -> String {
+        isScheduled ? "予約できませんでした" : "投稿できませんでした"
+    }
+
+    /// 書いていないときの1行の読み上げの値。ラベルとサムネイルは文字を出さないので、書いているときのラベルと同じ文と、添付の数を読む。
+    /// - Parameters:
+    ///   - chipTitle: 本文の上のラベル（返信先など）。
+    ///   - onlyImages: 添付がどれも画像か。
+    ///   - hasFailedAttachment: 送れなかった添付があるか。
+    ///   - scheduledDate: 予約している日時の読み上げ。予約していなければnil。
+    ///   - text: 本文。
+    public static func restAccessibilityValue(chipTitle: String?, attachmentCount: Int, onlyImages: Bool, hasFailedAttachment: Bool, scheduledDate: String?, text: String, isPosting: Bool) -> String {
+        var parts: [String] = []
+        if let chipTitle {
+            parts.append(chipTitle)
+        }
+        if attachmentCount > 0 {
+            parts.append(onlyImages ? "画像\(attachmentCount)枚を添付" : "メディア\(attachmentCount)件を添付")
+            if hasFailedAttachment {
+                parts.append("送信できなかった添付があります")
+            }
+        }
+        if let scheduledDate {
+            parts.append("\(scheduledDate)に予約")
+        }
+        parts.append(text)
+        if isPosting {
+            parts.append(scheduledDate != nil ? "予約中" : "投稿中")
+        }
+        return parts.joined(separator: "、")
+    }
+
     /// 添付の帯のサムネイルの操作と読み上げ。
     public enum Attachment {
         public static let moveToFirst = "先頭へ移動"

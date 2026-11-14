@@ -181,7 +181,7 @@ final class InlineComposeController: NSObject {
         configuration.baseForegroundColor = .secondaryLabel
         configuration.contentInsets = .zero
         let clear = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in self?.onSwitchToHomeAccount() })
-        clear.accessibilityLabel = "今のアカウントで投稿する"
+        clear.accessibilityLabel = ComposeTexts.switchToCurrentAccount
         clear.setContentHuggingPriority(.required, for: .horizontal)
         clear.setContentCompressionResistancePriority(.required, for: .horizontal)
         return clear
@@ -193,6 +193,8 @@ final class InlineComposeController: NSObject {
     private lazy var scheduleDateButton = UIButton(configuration: .tinted(), primaryAction: UIAction { [weak self] _ in
         self?.presentScheduleDatePicker()
     })
+    /// 予約の日時に続ける文（「に投稿」）。
+    private let scheduleSuffixLabel = UILabel()
     /// 書いている途中に予約の日時を選ぶシートを開いてから、閉じるまでtrue。この間は、キーボードを閉じても書いている状態を解かない。
     private var isShowingScheduleDatePicker = false
     /// 書いている途中に言語を選ぶシートを開いてから、閉じるまでtrue。予約の日時のシートと同じ扱い。
@@ -660,7 +662,7 @@ final class InlineComposeController: NSObject {
     /// スタックビューが行を隠したものとして扱うと、行は見えたまま高さが0になり、中身が下の行に重なって描かれる。
     var overlappingRows: [String] {
         let visible = rowStates.filter { !$0.view.isHidden && $0.view.alpha > 0 }
-        let collapsed = visible.filter { $0.view.frame.height < 1 }.map { "\($0.name)(高さ0)" }
+        let collapsed = visible.filter { $0.view.frame.height < 1 }.map { "\($0.name)(height 0)" }
         let overlapped = zip(visible, visible.dropFirst()).compactMap { upper, lower in
             upper.view.frame.maxY > lower.view.frame.minY + 0.5 ? "\(upper.name)/\(lower.name)" : nil
         }
@@ -837,7 +839,7 @@ final class InlineComposeController: NSObject {
     private func applyExpandedLayout() {
         expandedTop?.isActive = isExpanded || limitsBarTopForPoll
         expandButton.configuration?.image = UIImage(systemName: isExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-        expandButton.accessibilityLabel = isExpanded ? "元の大きさに戻す" : "広げて書く"
+        expandButton.accessibilityLabel = ComposeTexts.expandToggle(isExpanded: isExpanded)
         expandButton.largeContentTitle = expandButton.accessibilityLabel
         textDidChange()
     }
@@ -958,20 +960,20 @@ final class InlineComposeController: NSObject {
                 self?.presentToolLayoutSettings()
             }
         case .expand:
-            return UIAction(title: isExpanded ? "元の大きさに戻す" : item.title, image: UIImage(systemName: isExpanded ? "arrow.down.right.and.arrow.up.left" : item.symbolName)) { [weak self] _ in
+            return UIAction(title: isExpanded ? ComposeTexts.collapse : item.title, image: UIImage(systemName: isExpanded ? "arrow.down.right.and.arrow.up.left" : item.symbolName)) { [weak self] _ in
                 self?.toggleExpanded()
             }
         case .media:
             // シートを出している間は、同じ項目でシートを閉じてキーボードに戻れるようにする。
             let action = mediaPicker == nil
                 ? UIAction(title: item.title, image: UIImage(systemName: item.symbolName)) { [weak self] _ in self?.toggleMediaPicker() }
-                : UIAction(title: "キーボードに戻る", image: UIImage(systemName: "keyboard")) { [weak self] _ in self?.toggleMediaPicker() }
+                : UIAction(title: ComposeTexts.backToKeyboard, image: UIImage(systemName: "keyboard")) { [weak self] _ in self?.toggleMediaPicker() }
             if mediaPicker == nil, !model.canAttachMedia {
                 action.attributes = .disabled
                 if model.quoteTarget != nil {
-                    action.subtitle = "引用とは一緒に付けられません"
+                    action.subtitle = ComposeTexts.unavailableWithQuote
                 } else if model.poll != nil {
-                    action.subtitle = "投票とは一緒に付けられません"
+                    action.subtitle = ComposeTexts.unavailableWithPoll
                 }
             }
             return action
@@ -981,7 +983,7 @@ final class InlineComposeController: NSObject {
             }
             if model.poll == nil, !model.canAddPoll {
                 action.attributes = .disabled
-                action.subtitle = model.editedStatus != nil ? "編集では付けられません" : model.quoteTarget != nil ? "引用とは一緒に付けられません" : "メディアとは一緒に付けられません"
+                action.subtitle = model.editedStatus != nil ? ComposeTexts.unavailableInEdit : model.quoteTarget != nil ? ComposeTexts.unavailableWithQuote : ComposeTexts.unavailableWithMedia
             }
             return action
         case .schedule:
@@ -990,7 +992,7 @@ final class InlineComposeController: NSObject {
             }
             if model.scheduledAt == nil, !model.canSchedule {
                 action.attributes = .disabled
-                action.subtitle = "編集では付けられません"
+                action.subtitle = ComposeTexts.unavailableInEdit
             }
             return action
         case .language:
@@ -1004,14 +1006,14 @@ final class InlineComposeController: NSObject {
                 self?.toggleSpoiler()
             }
             if !model.attachments.isEmpty {
-                action.subtitle = "添付も閲覧注意にします"
+                action.subtitle = ComposeTexts.spoilerMarksMediaSensitive
             }
             return action
         case .linkTitle:
             let actions = linkTitleActions()
             guard !actions.isEmpty else {
                 // URLがなくても項目を消さず、押せない形で出す。押そうとしている間に、メニューの並びがずれないようにするため。
-                return UIAction(title: item.title, subtitle: "本文にURLがありません", image: UIImage(systemName: item.symbolName), attributes: .disabled) { _ in }
+                return UIAction(title: item.title, subtitle: ComposeTexts.noURLInText, image: UIImage(systemName: item.symbolName), attributes: .disabled) { _ in }
             }
             // VoiceOverでは、光るURLを探して押すのが難しいため、URLをサブメニューで選ばせる。
             if UIAccessibility.isVoiceOverRunning {
@@ -1026,7 +1028,7 @@ final class InlineComposeController: NSObject {
             }
         case .customEmoji:
             return emojiSheet != nil
-                ? UIAction(title: "キーボードに戻る", image: UIImage(systemName: "keyboard")) { [weak self] _ in self?.toggleEmojiPalette() }
+                ? UIAction(title: ComposeTexts.backToKeyboard, image: UIImage(systemName: "keyboard")) { [weak self] _ in self?.toggleEmojiPalette() }
                 : UIAction(title: item.title, image: UIImage(systemName: item.symbolName)) { [weak self] _ in self?.toggleEmojiPalette() }
         case .discardDraft:
             return UIAction(title: item.title, image: UIImage(systemName: item.symbolName), attributes: model.canDiscardDraft ? .destructive : [.destructive, .disabled]) { [weak self] _ in
@@ -1071,7 +1073,7 @@ final class InlineComposeController: NSObject {
             }
         }
         // 理由は項目のサブタイトルにしない。開いたままのメニューで行の高さが変わると、メニューが伸びて下が投稿欄に隠れるため。
-        return UIMenu(title: model.quotePolicyFixedReason == nil ? "引用できる人" : "引用できる人（この公開範囲では選べません）", options: .displayInline, children: actions)
+        return UIMenu(title: ComposeTexts.quotePolicyMenuTitle(isFixed: model.quotePolicyFixedReason != nil), options: .displayInline, children: actions)
     }
 
     /// 開いたままの公開範囲のメニューを、選んだあとの状態に描き直す。選んでも閉じないので、チェックマークと選べるかを開いたまま合わせる。
@@ -1109,7 +1111,7 @@ final class InlineComposeController: NSObject {
         addQuoteBadge.isHidden = !(differs && !inRow && toolPlacement?.showsAddButton == true)
         // ＋の読み上げの値は、言語のバッジ（`updateLanguageIndicators`）が先に入れる。
         if !addQuoteBadge.isHidden, let policy = model.shownQuotePolicy {
-            addButton.accessibilityValue = [addButton.accessibilityValue, "引用できる人: \(policy.title)"].compactMap { $0 }.joined(separator: "、")
+            addButton.accessibilityValue = [addButton.accessibilityValue, ComposeTexts.quotePolicyValue(policy.title)].compactMap { $0 }.joined(separator: "、")
         }
     }
 
@@ -1141,7 +1143,7 @@ final class InlineComposeController: NSObject {
         logger.info("compose: present schedule date picker (editing=\(resumesEditing))")
         isShowingScheduleDatePicker = resumesEditing
         resignInput()
-        let sheet = ScheduleDateSheet(title: "予約の日時", date: scheduledAt, minimumDate: model.earliestScheduleDate, confirmTitle: "完了") { [weak self] date in
+        let sheet = ScheduleDateSheet(title: ComposeTexts.scheduleDate, date: scheduledAt, minimumDate: model.earliestScheduleDate, confirmTitle: ComposeTexts.done) { [weak self] date in
             self?.model.setScheduledDate(date)
         } onClose: { [weak self] in
             self?.scheduleDatePickerDidClose(resumesEditing: resumesEditing)
@@ -1561,7 +1563,7 @@ final class InlineComposeController: NSObject {
             button.showsMenuAsPrimaryAction = UIAccessibility.isVoiceOverRunning
             button.menu = UIMenu(title: item.title, children: [UIDeferredMenuElement.uncached { [weak self] completion in
                 let actions = self?.linkTitleActions() ?? []
-                completion(actions.isEmpty ? [UIAction(title: "本文にURLがありません", attributes: .disabled) { _ in }] : actions)
+                completion(actions.isEmpty ? [UIAction(title: ComposeTexts.noURLInText, attributes: .disabled) { _ in }] : actions)
             }])
             // 通知の列は終わらないため、投稿欄がなくなったら止める。止めないと、セッションを作り直すたびに待ち続けるTaskが残る。
             linkTitleVoiceOverObservation?.cancel()
@@ -1594,7 +1596,7 @@ final class InlineComposeController: NSObject {
             }
             return action
         }
-        let subtitle = locked && !model.isPosting ? "編集や書き直しの間は替えられません" : current.map { "@\($0.username)" }
+        let subtitle = locked && !model.isPosting ? ComposeTexts.accountLocked : current.map { "@\($0.username)" }
         return UIMenu(title: ComposeToolItem.account.title, subtitle: subtitle, image: UIImage(systemName: ComposeToolItem.account.symbolName), children: actions)
     }
 
@@ -1696,7 +1698,7 @@ final class InlineComposeController: NSObject {
         if let spoiler = toolButtons[.spoiler] {
             showToolButton(spoiler, isOn: model.showsSpoiler)
             spoiler.accessibilityTraits = model.showsSpoiler ? [.button, .selected] : .button
-            spoiler.accessibilityValue = model.isSensitive ? "添付も閲覧注意" : nil
+            spoiler.accessibilityValue = model.isSensitive ? ComposeTexts.spoilerSensitiveValue : nil
         }
         if let poll = toolButtons[.poll] {
             showToolButton(poll, isOn: model.poll != nil)
@@ -1725,7 +1727,7 @@ final class InlineComposeController: NSObject {
         let showsBadge = code != nil && toolPlacement?.row.contains(.language) != true && toolPlacement?.showsAddButton == true
         languageBadge.text = code.map { " \($0) " }
         languageBadge.isHidden = !showsBadge
-        addButton.accessibilityValue = showsBadge ? "言語: \(languageName(model.language))" : nil
+        addButton.accessibilityValue = showsBadge ? ComposeTexts.languageValue(languageName(model.language)) : nil
     }
 
     private static func languageCodeFont(for traits: UITraitCollection) -> UIFont {
@@ -1736,7 +1738,7 @@ final class InlineComposeController: NSObject {
 
     /// 言語の名前。サーバーに任せているときは、そう書く。
     private func languageName(_ code: String?) -> String {
-        guard let code else { return "サーバーに任せる" }
+        guard let code else { return ComposeTexts.Language.serverDecides }
         return PostingLanguage.localizedName(of: code, in: .current) ?? chosenLanguageNames[code] ?? PostingLanguage.badgeText(of: code)
     }
 
@@ -2916,8 +2918,8 @@ final class InlineComposeController: NSObject {
         }
         setRowShown(spoilerRow, isOpen && model.showsSpoiler)
         // 添付があると、空の注意書きでも閲覧注意になる。空のまま出している意味が分かるよう、案内を変える。
-        spoilerField.placeholder = model.attachments.isEmpty ? "注意書き" : "注意書き（空なら閲覧注意だけ）"
-        spoilerClearButton.accessibilityLabel = model.isSensitive ? "注意書きと閲覧注意を外す" : "注意書きを外す"
+        spoilerField.placeholder = ComposeTexts.spoilerPlaceholder(hasAttachments: !model.attachments.isEmpty)
+        spoilerClearButton.accessibilityLabel = ComposeTexts.spoilerClearLabel(isSensitive: model.isSensitive)
 
         let chip = chip
         // ラベルを消すときは、薄くなる間も文字が残るよう、前の文字のままにする。
@@ -2947,7 +2949,10 @@ final class InlineComposeController: NSObject {
             if scheduleDateButton.configuration?.title != title {
                 scheduleDateButton.configuration?.title = title
             }
-            scheduleDateButton.accessibilityLabel = "予約の日時"
+            // 日時のラベルを行の先頭に置くので、日時の前の文は出さない。今の文言は日時から始まり、前の文はない。
+            let row = ComposeTexts.scheduledPost(date: title)
+            scheduleSuffixLabel.text = String(row.text[row.emphasis.upperBound...])
+            scheduleDateButton.accessibilityLabel = ComposeTexts.scheduleDate
             scheduleDateButton.accessibilityValue = ScheduleDateText.spokenTitle(for: scheduledAt, now: model.now(), calendar: model.calendar)
         }
         setRowShown(scheduleRow, isOpen && model.scheduledAt != nil)
@@ -2972,10 +2977,10 @@ final class InlineComposeController: NSObject {
 
         let option = VisibilityOption(model.visibility)
         visibilityButton.configuration?.image = UIImage(systemName: option.symbolName)
-        visibilityButton.accessibilityLabel = "公開範囲"
-        visibilityButton.accessibilityValue = [option.title, model.shownQuotePolicy.map { "引用できる人: \($0.title)" }].compactMap { $0 }.joined(separator: "、")
+        visibilityButton.accessibilityLabel = ComposeToolItem.visibility.title
+        visibilityButton.accessibilityValue = [option.title, model.shownQuotePolicy.map { ComposeTexts.quotePolicyValue($0.title) }].compactMap { $0 }.joined(separator: "、")
         visibilityButton.largeContentTitle = option.title
-        visibilityButton.menu = visibilityMenu(title: "公開範囲")
+        visibilityButton.menu = visibilityMenu(title: ComposeToolItem.visibility.title)
 
         updateToolButtons()
 
@@ -3102,7 +3107,7 @@ final class InlineComposeController: NSObject {
     }
 
     private static func placeholderText() -> NSAttributedString {
-        NSAttributedString(string: "いまどうしてる？", attributes: [.font: UIFont.preferredFont(forTextStyle: .body), .foregroundColor: UIColor.placeholderText])
+        NSAttributedString(string: ComposeTexts.textPlaceholder, attributes: [.font: UIFont.preferredFont(forTextStyle: .body), .foregroundColor: UIColor.placeholderText])
     }
 
     /// 入力欄の文字を、入力欄の外で同じ見え方に描ける形にする。色は文字の色に揃える。入力欄の文字には、リンクにタイトルを付ける動きの間だけ
@@ -3113,34 +3118,24 @@ final class InlineComposeController: NSObject {
         return drawable
     }
 
-    /// 書いていないときの1行の読み上げ。ラベルとサムネイルは文字を出さないので、書いているときのラベルと同じ文と、添付の数を読む。
+    /// 書いていないときの1行の読み上げ。
     private func restAccessibilityValue(chip: ComposeContextChip?, attachments: [ComposeAttachmentStrip.Item]) -> String {
-        var parts: [String] = []
-        if let chip {
-            parts.append(chip.title)
-        }
-        if !attachments.isEmpty {
-            let onlyImages = attachments.allSatisfy { ($0.local?.displayKind ?? $0.attachedMedia?.type) == .image }
-            parts.append(onlyImages ? "画像\(attachments.count)枚を添付" : "メディア\(attachments.count)件を添付")
-            if attachments.contains(where: { $0.status == .failed || $0.status == .descriptionFailed }) {
-                parts.append("送信できなかった添付があります")
-            }
-        }
-        if let scheduledAt = model.scheduledAt {
-            parts.append("\(ScheduleDateText.spokenTitle(for: scheduledAt, now: model.now(), calendar: model.calendar))に予約")
-        }
-        parts.append(restText().string)
-        if model.isPosting {
-            parts.append(model.scheduledAt != nil ? "予約中" : "投稿中")
-        }
-        return parts.joined(separator: "、")
+        ComposeTexts.restAccessibilityValue(
+            chipTitle: chip?.title,
+            attachmentCount: attachments.count,
+            onlyImages: attachments.allSatisfy { ($0.local?.displayKind ?? $0.attachedMedia?.type) == .image },
+            hasFailedAttachment: attachments.contains(where: { $0.status == .failed || $0.status == .descriptionFailed }),
+            scheduledDate: model.scheduledAt.map { ScheduleDateText.spokenTitle(for: $0, now: model.now(), calendar: model.calendar) },
+            text: restText().string,
+            isPosting: model.isPosting
+        )
     }
 
     /// 画面を出し入れしている途中で出せなければ、出し入れを終えたときに呼び直して知らせる。
     private func presentErrorIfNeeded() {
         guard let reason = model.postError, !isPresentingAlert, let presenter = presenterForErrors, presenter.presentedViewController == nil else { return }
         logger.info("compose: presenting post error (focused=\(self.isInputFocused) editing=\(self.isEditing) picker=\(self.mediaPicker != nil))")
-        let alert = UIAlertController.failure(title: model.scheduledAt != nil ? "予約できませんでした" : "投稿できませんでした", reason: reason) { [weak self] in
+        let alert = UIAlertController.failure(title: ComposeTexts.postFailedTitle(isScheduled: model.scheduledAt != nil), reason: reason) { [weak self] in
             self?.model.postError = nil
             self?.alertDidClose()
         }
@@ -3283,25 +3278,25 @@ final class InlineComposeController: NSObject {
         guard let id = UUID(uuidString: itemID), let status = model.attachmentStatus(of: id) else { return [] }
         var elements: [UIMenuElement] = []
         if model.canCrop(id) {
-            elements.append(UIAction(title: "トリミング", image: UIImage(systemName: "crop")) { [weak self] _ in
+            elements.append(UIAction(title: ComposeTexts.crop, image: UIImage(systemName: "crop")) { [weak self] _ in
                 self?.presentCrop(id)
             })
         }
         if !model.isPosting, let local = model.localMedia[id], local.hasAudio == true {
             // Mastodonは音声のない動画をGIFとして扱うので、「音声を消す」ではなく、送ったあとの姿で書く。
             let removesAudio = local.removesAudio
-            elements.append(UIAction(title: "GIFとして送る", image: UIImage(systemName: "speaker.slash"), state: removesAudio ? .on : .off) { [weak self] _ in
+            elements.append(UIAction(title: ComposeTexts.sendAsGIF, image: UIImage(systemName: "speaker.slash"), state: removesAudio ? .on : .off) { [weak self] _ in
                 self?.model.setRemovesAudio(!removesAudio, of: id)
             })
         }
         if status == .failed || status == .descriptionFailed {
-            elements.append(UIAction(title: "再試行", image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
+            elements.append(UIAction(title: ComposeTexts.retry, image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
                 self?.model.retryAttachment(id)
             })
         }
         // 送っている間と、準備を待っている間は外さない。トリミングとGIFとして送るかも出さない。
         guard !model.isPosting else { return elements }
-        elements.append(UIAction(title: "削除", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in
+        elements.append(UIAction(title: ComposeTexts.delete, image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in
             self?.removeAttachment(id)
         })
         return elements
@@ -3320,23 +3315,22 @@ final class InlineComposeController: NSObject {
 
     /// 失敗の理由と、送り直すか外すかを、`presenter`の上に出す。
     private func presentAttachmentFailure(_ id: DraftAttachment.ID, from presenter: UIViewController) {
-        guard let status = model.attachmentStatus(of: id), status == .failed || status == .descriptionFailed else { return }
+        guard let status = model.attachmentStatus(of: id), status == .failed || status == .descriptionFailed, let title = status.title else { return }
         let local = model.localMedia[id]
         let failure = status == .failed ? local?.failure : local?.descriptionFailure
-        let title = status == .failed ? "アップロードできませんでした" : "代替テキストを送信できませんでした"
         let actions = [
-            UIAlertAction(title: "再試行", style: .default) { [weak self] _ in self?.model.retryAttachment(id) },
-            UIAlertAction(title: "削除", style: .destructive) { [weak self] _ in self?.removeAttachment(id) },
+            UIAlertAction(title: ComposeTexts.retry, style: .default) { [weak self] _ in self?.model.retryAttachment(id) },
+            UIAlertAction(title: ComposeTexts.delete, style: .destructive) { [weak self] _ in self?.removeAttachment(id) },
         ]
         guard let failure else {
             // 理由が残っていない（失敗を覚える前に消えた）ときは、操作だけを出す。
             let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)
             actions.forEach(alert.addAction)
-            alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+            alert.addAction(UIAlertAction(title: ComposeTexts.cancel, style: .cancel))
             presenter.present(alert, animated: true)
             return
         }
-        presenter.present(UIAlertController.failure(title: title, reason: ErrorPresentation(failure), actions: actions, cancelTitle: "キャンセル"), animated: true)
+        presenter.present(UIAlertController.failure(title: title, reason: ErrorPresentation(failure), actions: actions, cancelTitle: ComposeTexts.cancel), animated: true)
     }
 
     /// 添付を外す。ピッカーを出していれば、その選択からも外す。
@@ -3622,7 +3616,7 @@ final class InlineComposeController: NSObject {
         ])
         restRow.addAction(UIAction { [weak self] _ in self?.beginEditing() }, for: .touchUpInside)
         restRow.isAccessibilityElement = true
-        restRow.accessibilityLabel = "投稿欄"
+        restRow.accessibilityLabel = ComposeTexts.composerLabel
         restRow.accessibilityTraits = .button
     }
 
@@ -3737,7 +3731,7 @@ final class InlineComposeController: NSObject {
     /// 書いているアカウントの行を、今のアカウントに合わせる。行を消すときは、薄くなる間も名前が残るよう、前の名前のままにする。
     private func applyWritingAccount() {
         if let writingAccount {
-            accountLabel.text = "@\(writingAccount.username)で投稿"
+            accountLabel.text = ComposeTexts.writingAs(username: writingAccount.username)
             accountAvatarView.image = writingAccount.avatar ?? UIImage(systemName: "person.crop.circle")
             accountRow.accessibilityLabel = accountLabel.text
         }
@@ -3760,8 +3754,7 @@ final class InlineComposeController: NSObject {
         scheduleDateButton.setContentHuggingPriority(.required, for: .horizontal)
         scheduleDateButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        let suffix = UILabel()
-        suffix.text = "に投稿"
+        let suffix = scheduleSuffixLabel
         suffix.font = .preferredFont(forTextStyle: .footnote)
         suffix.adjustsFontForContentSizeCategory = true
         suffix.textColor = .secondaryLabel
@@ -3774,7 +3767,7 @@ final class InlineComposeController: NSObject {
         configuration.baseForegroundColor = .secondaryLabel
         configuration.contentInsets = .zero
         let clear = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in self?.toggleSchedule() })
-        clear.accessibilityLabel = "予約をやめる"
+        clear.accessibilityLabel = ComposeTexts.cancelSchedule
         clear.setContentHuggingPriority(.required, for: .horizontal)
         clear.setContentCompressionResistancePriority(.required, for: .horizontal)
 
@@ -3805,8 +3798,8 @@ final class InlineComposeController: NSObject {
         spoilerField.adjustsFontForContentSizeCategory = true
         // 本文と同じく、自分の文で言語が分からないため、設定の字形で描く。
         spoilerField.followGlyphLanguage(of: settings)
-        spoilerField.placeholder = "注意書き"
-        spoilerField.accessibilityLabel = "注意書き"
+        spoilerField.placeholder = ComposeToolItem.spoiler.title
+        spoilerField.accessibilityLabel = ComposeToolItem.spoiler.title
         spoilerField.returnKeyType = .next
         spoilerField.delegate = self
         spoilerField.onSubmit = { [weak self] in self?.submit() }
@@ -3901,7 +3894,7 @@ final class InlineComposeController: NSObject {
         }
         textView.completionKeys = completionKeys()
         textView.overlayControl = { [weak self] point in self?.linkTitleEffects.highlight(at: point) }
-        textView.accessibilityLabel = "本文"
+        textView.accessibilityLabel = ComposeTexts.textLabel
         // 広げて上端に届いたときや、行が収まらない高さでは、本文から縮める。
         textView.setContentHuggingPriority(.defaultLow - 1, for: .vertical)
         textView.setContentCompressionResistancePriority(.defaultLow - 1, for: .vertical)
@@ -3936,14 +3929,14 @@ final class InlineComposeController: NSObject {
         sendButton.configuration?.cornerStyle = .capsule
         // 投稿欄のガラスの中にあるので、モノトーンでは白い地に黒い記号にできない。
         sendButton.followsGlassAccent(monochromeFill: .tertiarySystemFill)
-        sendButton.accessibilityLabel = "投稿"
+        sendButton.accessibilityLabel = ComposeTexts.send
         sendButton.setContentHuggingPriority(.required, for: .horizontal)
 
         let spacer = UIView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         addButton.configuration?.image = UIImage(systemName: "plus")
         addButton.configuration?.baseForegroundColor = .label
-        addButton.accessibilityLabel = "追加"
+        addButton.accessibilityLabel = ComposeTexts.add
         addButton.showsMenuAsPrimaryAction = true
         // 「投稿するアカウント」の行に、開いている間に届いたアイコンを差し替える。
         watchMenuIcons(of: addButton)
@@ -4349,7 +4342,7 @@ private final class ComposeTextView: GlyphLanguageTextView {
     }
 
     override var keyCommands: [UIKeyCommand]? {
-        let submit = UIKeyCommand(title: "投稿", action: #selector(submitFromKeyboard), input: "\r", modifierFlags: .command)
+        let submit = UIKeyCommand(title: ComposeTexts.send, action: #selector(submitFromKeyboard), input: "\r", modifierFlags: .command)
         return (super.keyCommands ?? []) + [submit] + completionKeys.commands(
             move: #selector(moveCompletion(_:)), confirm: #selector(confirmCompletion), dismiss: #selector(dismissCompletion)
         )
@@ -4405,7 +4398,7 @@ final class ComposeLineField: GlyphLanguageTextField {
     }
 
     override var keyCommands: [UIKeyCommand]? {
-        let submit = UIKeyCommand(title: "投稿", action: #selector(submitFromKeyboard), input: "\r", modifierFlags: .command)
+        let submit = UIKeyCommand(title: ComposeTexts.send, action: #selector(submitFromKeyboard), input: "\r", modifierFlags: .command)
         return (super.keyCommands ?? []) + [submit] + completionKeys.commands(
             move: #selector(moveCompletion(_:)), confirm: #selector(confirmCompletion), dismiss: #selector(dismissCompletion)
         )
