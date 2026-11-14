@@ -9,7 +9,7 @@ struct MenuNodeTests {
     static func describe<C>(_ nodes: [MenuNode<C>]) -> String {
         nodes.map { node in
             switch node.content {
-            case .group(let children, let isRow): (isRow ? "=" : "") + children.map { describe([$0]) }.joined(separator: ",")
+            case .group(let children, let row): (row != nil ? "=" : "") + children.map { describe([$0]) }.joined(separator: ",")
             case .submenu(let children): "\(node.title)[\(children.map { describe([$0]) }.joined(separator: ","))]"
             case .deferred: "…"
             case .action: node.title + (node.isEnabled ? "" : "(押せない)") + (node.isSelected ? "✓" : "") + (node.isDestructive ? "!" : "")
@@ -30,7 +30,7 @@ struct MenuNodeTests {
     /// 区切り線で分けたまとまりごとに並べ、「その他」の中身はサブメニューにする。中身のないまとまりと「その他」は出さない。
     @Test func groupsBecomeInlineGroupsAndMoreSubmenu() {
         let layout = MenuLayout<LinkMenuItem>(elements: [
-            .rowSeparator, .item(.openInBrowser, isVisible: true), .item(.share, isVisible: true),
+            .rowSeparator(.medium), .item(.openInBrowser, isVisible: true), .item(.share, isVisible: true),
             .separator, .item(.copyLink, isVisible: true),
             .more, .item(.openAsProfile, isVisible: true), .item(.openInDefaultBrowser, isVisible: true), .item(.openInAppSafari, isVisible: true), .item(.customize, isVisible: true),
         ])

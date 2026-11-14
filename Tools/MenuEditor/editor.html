@@ -364,27 +364,28 @@ function isRowToken(token) { return token === "row" || token === "row:small"; }
 function groupsOf(tokens) {
   const groups = { main: [], more: [] };
   let current = [];
-  let isRow = false;
+  // 横並びなら"medium"か"small"、横並びでなければnull。
+  let row = null;
   let inMore = false;
   const close = (startingRow) => {
-    if (current.length) (inMore ? groups.more : groups.main).push({ items: current, isRow });
+    if (current.length) (inMore ? groups.more : groups.main).push({ items: current, row });
     current = [];
-    isRow = startingRow;
+    row = startingRow;
   };
   for (const token of tokens) {
-    if (token === "separator") close(false);
-    else if (isRowToken(token)) close(true);
-    else if (token === "more") { close(false); inMore = true; }
+    if (token === "separator") close(null);
+    else if (isRowToken(token)) close(token === "row:small" ? "small" : "medium");
+    else if (token === "more") { close(null); inMore = true; }
     else if (token.startsWith("item:")) current.push(token.slice(5));
   }
-  close(false);
+  close(null);
   return groups;
 }
 
 function renderGroup(menu, group) {
   const div = document.createElement("div");
   div.className = "group";
-  if (group.isRow) {
+  if (group.row) {
     const tiles = document.createElement("div");
     tiles.className = "tiles";
     for (const id of group.items) {
@@ -396,7 +397,7 @@ function renderGroup(menu, group) {
       sym.textContent = item.symbol;
       const name = document.createElement("span");
       name.textContent = item.title;
-      tile.append(sym, name);
+      if (group.row === "small") tile.append(sym); else tile.append(sym, name);
       tiles.append(tile);
     }
     div.append(tiles);

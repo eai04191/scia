@@ -16,6 +16,8 @@ public protocol MenuItemPresentable {
     static var supportsSeparators: Bool { get }
     /// 横並びの区切り線を足せるか。
     static var supportsRowSeparators: Bool { get }
+    /// 「その他」の境目の後ろの節でも、横並びの区切り線が効くか。
+    static var arrangesRowsInMoreSection: Bool { get }
     /// 表示する項目を1つは残すか。残すなら、最後の1つのスイッチを切れなくする。
     static var requiresVisibleItem: Bool { get }
     /// 並びの画面に、「その他」の境目の後ろの節を出すか。境目を持たない並び（アクションバー）では出さない。
@@ -31,6 +33,7 @@ extension MenuItemPresentable {
     public static var moreSectionNote: String? { nil }
     public static var supportsSeparators: Bool { true }
     public static var supportsRowSeparators: Bool { true }
+    public static var arrangesRowsInMoreSection: Bool { true }
     public static var requiresVisibleItem: Bool { false }
     public static var hasMoreSection: Bool { true }
 }
@@ -356,8 +359,8 @@ extension ComposeToolItem: MenuItemPresentable {
     public static var mainSectionTitle: String { "＋のメニュー" }
     public static var moreSectionTitle: String { "ツールバー" }
     public static var moreSectionNote: String? { "入りきらない項目は＋のメニューに表示されます。" }
-    /// ＋のメニューは項目が少なく、ツールバーは横並びの区切り線に関わらず横に並ぶため、足させない。
-    public static var supportsRowSeparators: Bool { false }
+    /// ツールバーは横並びの区切り線に関わらず横に並ぶ。
+    public static var arrangesRowsInMoreSection: Bool { false }
 }
 
 extension ReactionMenuItem: MenuItemContentProviding {

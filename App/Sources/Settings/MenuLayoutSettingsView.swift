@@ -108,9 +108,6 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     private var dataSource: UICollectionViewDiffableDataSource<Section, Cell>?
     private lazy var collectionView = UICollectionView(frame: .zero, collectionViewLayout: makeLayout())
 
-    /// メニューで横に並ぶ項目の数。これを超えた項目は、横並びの下にふだんの行として続く。
-    private let rowCapacity = 3
-
     /// 項目の記号の代わりに出す画像。nilなら項目の記号を出す。
     private let image: (Item) -> UIImage?
     private var imageRevision: Int
@@ -408,8 +405,12 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         case .separator:
             cell.contentConfiguration = UIHostingConfiguration { SeparatorRow() }
             cell.accessories = [reorder]
-        case .rowSeparator:
-            cell.contentConfiguration = UIHostingConfiguration { RowSeparatorRow() }
+        case .rowSeparator(let size):
+            cell.contentConfiguration = UIHostingConfiguration { [weak self, id = row.id] in
+                RowSeparatorRow(size: size) { self?.setRowSize($0, id: id) }
+                    // セルを使い回しても、前の行で選んだ大きさを持ち越さない。
+                    .id(id)
+            }
             cell.accessories = [reorder]
         case .more:
             // 境目は行として出さず、節の分かれ目にする。
@@ -501,20 +502,25 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
 
     /// メニューで横に並ぶ項目の、`rows`の中の位置。
     private var rowGroupIndices: Set<Int> {
-        Self.rowGroupIndices(in: rows.map(\.element), capacity: rowCapacity)
+        Self.rowGroupIndices(in: rows.map(\.element))
     }
 
     /// 横並びの区切り線の下で、メニューで横に並ぶ項目と、その間に挟まる隠した項目の位置。字下げして、どこまでが横に並ぶかを見せる。
-    /// 区切り線か「その他」の境目でまとまりが終わり、表示する項目が`capacity`個に達したあとの項目は、ふだんの行で出るので含めない。
-    static func rowGroupIndices(in elements: [MenuLayout<Item>.Element], capacity: Int) -> Set<Int> {
+    /// 区切り線か「その他」の境目でまとまりが終わり、表示する項目がその大きさで横に並ぶ数に達したあとの項目は、ふだんの行で出るので含めない。
+    /// 境目の後ろで横並びが効かない並び（投稿欄のツールバー）では、境目の後ろの項目を含めない。
+    static func rowGroupIndices(in elements: [MenuLayout<Item>.Element]) -> Set<Int> {
         var indices: Set<Int> = []
         var remaining = 0
+        var arrangesRows = true
         for (index, element) in elements.enumerated() {
             switch element {
-            case .rowSeparator:
-                remaining = capacity
-            case .separator, .more:
+            case .rowSeparator(let size):
+                remaining = arrangesRows ? size.capacity : 0
+            case .separator:
                 remaining = 0
+            case .more:
+                remaining = 0
+                arrangesRows = Item.arrangesRowsInMoreSection
             case .item(_, let isVisible):
                 guard remaining > 0 else { continue }
                 indices.insert(index)
@@ -522,6 +528,14 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             }
         }
         return indices
+    }
+
+    /// 行は描き直さない。行のラベルは行が自分で持つ選択で変わり、字下げは見えているセルだけを変える。
+    private func setRowSize(_ size: MenuRowSize, id: UUID) {
+        guard let index = rows.firstIndex(where: { $0.id == id }), case .rowSeparator = rows[index].element else { return }
+        rows[index].element = .rowSeparator(size)
+        save()
+        refreshRowGroups()
     }
 
     private func setVisible(_ isVisible: Bool, id: UUID) {
@@ -582,7 +596,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         case .addSeparator:
             insert(.separator, at: rows.endIndex)
         case .addRowSeparator:
-            insert(.rowSeparator, at: rows.endIndex)
+            insert(.rowSeparator(.medium), at: rows.endIndex)
         case .action(let index):
             actions[index].handler()
         case .reset:
@@ -624,20 +638,71 @@ private struct SeparatorRow: View {
     }
 }
 
+/// 横並びの区切り線の行。ラベルを押すと、横に並べる大きさを選ぶメニューを出す。
 private struct RowSeparatorRow: View {
+    @State private var size: MenuRowSize
+    private let onChange: (MenuRowSize) -> Void
+
+    init(size: MenuRowSize, onChange: @escaping (MenuRowSize) -> Void) {
+        _size = State(initialValue: size)
+        self.onChange = onChange
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             SeparatorLine()
-            Label("横並び", systemImage: "rectangle.split.3x1")
-                // リストの行の中では、指定しないとアイコンだけになる。
-                .labelStyle(.titleAndIcon)
+            Menu {
+                // Pickerの選択肢は、メニューでサブタイトルを出さない。
+                ForEach(MenuRowSize.allCases, id: \.self) { choice in
+                    Toggle(isOn: Binding { size == choice } set: { if $0 { size = choice } }) {
+                        Image(systemName: choice.symbolName)
+                        Text(choice.title)
+                        Text("\(choice.capacity)個まで")
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Label(size.rowTitle, systemImage: size.symbolName)
+                        // リストの行の中では、指定しないとアイコンだけになる。
+                        .labelStyle(.titleAndIcon)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .imageScale(.small)
+                }
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize()
+            }
+            // 区切り線の行のラベルなので、ティントカラーにせず、前からの控えめな色のままにする。押せることはシェブロンで示す。
+            .buttonStyle(.plain)
+            .accessibilityLabel("横並びの区切り線")
+            .accessibilityValue(size.title)
             SeparatorLine()
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("横並びの区切り線")
+        .onChange(of: size) { _, size in onChange(size) }
+    }
+}
+
+private extension MenuRowSize {
+    var title: String {
+        switch self {
+        case .medium: "アイコンと名前"
+        case .small: "アイコンのみ"
+        }
+    }
+
+    /// 行のラベル。前からあるアイコンと名前の横並びは「横並び」のままにし、アイコンだけのときに大きさを添える。
+    var rowTitle: String {
+        switch self {
+        case .medium: "横並び"
+        case .small: "横並び（アイコンのみ）"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .medium: "rectangle.split.3x1"
+        case .small: "circle.grid.2x1"
+        }
     }
 }
 

@@ -642,7 +642,7 @@ final class InlineComposeController: NSObject {
         editing: \(isEditing) open: \(isLayoutOpen) barHidden: \(isBarHidden) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder ? "text" : spoilerField.isFirstResponder ? "spoiler" : pollEditor.fields.firstIndex(where: \.isFirstResponder).map { "poll\($0 + 1)" } ?? "none") spoiler: \(model.showsSpoiler) poll: \(model.poll.map { "options=\($0.options.count) multiple=\($0.multiple) hidesTotals=\($0.hidesTotals) expiresIn=\($0.expiresIn) folded=\(pollEditor.isFolded)" } ?? "nil") sensitive: \(model.isSensitive) replyTo: \(model.replyTo?.id ?? "nil") quoteTarget: \(model.quoteTarget?.id ?? "nil") editedStatus: \(model.editedStatus?.id ?? "nil") scheduledAt: \(model.scheduledAt.map { "\($0)" } ?? "nil") rewritingSchedule: \(model.rewritingSchedule?.id ?? "nil") scheduleDatePicker: \(isShowingScheduleDatePicker) language: \(model.language ?? "nil") defaultLanguage: \(model.defaultLanguage ?? "nil") languagePicker: \(isShowingLanguagePicker)
         mediaPicker: \(mediaPicker.map { $0.isClosing ? "closing" : "shown" } ?? "nil") mediaViewer: \(mediaViewer != nil ? "shown" : isShowingMediaViewer ? "closing" : "nil") holdAboveKeyboard: \(holdAboveKeyboard?.isActive ?? false) lastKeyboardHeight: \(lastKeyboardHeight.map { "\($0)" } ?? "nil")
         attachments: \(model.attachments.map(\.state.dumpLabel).joined(separator: ", "))
-        tools: row=\(toolPlacement.map { "\($0.row.map(\.rawValue))" } ?? "nil") menu=\(toolPlacement.map { "\($0.menu.map { $0.map(\.rawValue) })" } ?? "nil")
+        tools: row=\(toolPlacement.map { "\($0.row.map(\.rawValue))" } ?? "nil") menu=\(toolPlacement.map { "\($0.menu.map { $0.items.map(\.rawValue) })" } ?? "nil")
         bar.frame: \(bar.frame)
         rows: \(rowStates.map { "\($0.name) hidden=\($0.view.isHidden) frame=\($0.view.frame)" }.joined(separator: ", "))
         overlaps: \(overlappingRows.isEmpty ? "none" : overlappingRows.joined(separator: ", "))
@@ -910,7 +910,9 @@ final class InlineComposeController: NSObject {
     /// ＋のメニューの項目。設定の区切り線で分けたまとまりごとに、区切って並べる。
     private func addMenuElements() -> [UIMenuElement] {
         (toolPlacement?.menu ?? []).map { group in
-            UIMenu(options: .displayInline, children: group.map(menuAction(for:)))
+            let menu = UIMenu(options: .displayInline, children: group.items.map(menuAction(for:)))
+            if let row = group.row { menu.preferredElementSize = row.elementSize }
+            return menu
         }
     }
 
@@ -1779,7 +1781,7 @@ final class InlineComposeController: NSObject {
             width: { [toolButtons, toolButtonWidth] item in item == .language ? toolButtonWidth : max(toolButtons[item]?.intrinsicContentSize.width ?? 0, toolButtonWidth) }
         )
         guard placement != toolPlacement else { return }
-        logger.info("compose tools: row=\(placement.row.map(\.rawValue), privacy: .public) menu=\(placement.menu.map { $0.map(\.rawValue) }, privacy: .public) available=\(available)")
+        logger.info("compose tools: row=\(placement.row.map(\.rawValue), privacy: .public) menu=\(placement.menu.map { $0.items.map(\.rawValue) }, privacy: .public) available=\(available)")
         toolPlacement = placement
         for (item, button) in toolButtons {
             setRowHidden(button, !placement.row.contains(item))

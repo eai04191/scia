@@ -97,26 +97,26 @@ struct MenuLayoutTests {
     /// 横並びの区切り線は、並びの先頭や「その他」の境目のすぐ下でも、その下のまとまりを横に並べる。次の区切り線で横並びは終わる。
     @Test func rowSeparatorMakesFollowingGroupARow() {
         let layout = MenuLayout<TestMenuItem>(elements: [
-            .rowSeparator,
+            .rowSeparator(.medium),
             .item(.a, isVisible: true),
             .item(.b, isVisible: true),
             .separator,
             .item(.c, isVisible: true),
             .item(.hiddenByDefault, isVisible: false),
             .more,
-            .rowSeparator,
+            .rowSeparator(.small),
             .item(.delete, isVisible: true),
         ])
 
-        #expect(layout.groups.main == [.init([.a, .b], isRow: true), .init([.c])])
-        #expect(layout.groups.more == [.init([.delete], isRow: true)])
+        #expect(layout.groups.main == [.init([.a, .b], row: .medium), .init([.c])])
+        #expect(layout.groups.more == [.init([.delete], row: .small)])
     }
 
     /// 中身がすべて非表示の横並びのまとまりは出さず、横並びを次のまとまりに持ち越さない。
     @Test func emptyRowGroupDoesNotCarryOver() {
         let layout = MenuLayout<TestMenuItem>(elements: [
             .item(.a, isVisible: true),
-            .rowSeparator,
+            .rowSeparator(.medium),
             .item(.b, isVisible: false),
             .separator,
             .item(.c, isVisible: true),
@@ -154,9 +154,18 @@ struct MenuLayoutTests {
         #expect(groups == TestMenuItem.defaultLayout.groups)
     }
 
+    /// アイコンだけの横並びは`row:small`で保存し、前からある`row`はアイコンと名前の横並びとして読む。知らない大きさは捨てる。
+    @Test func rowSeparatorTokensKeepSize() {
+        let layout = MenuLayout<TestMenuItem>(elements: [.rowSeparator(.small), .item(.a, isVisible: true), .rowSeparator(.medium), .item(.b, isVisible: true)])
+
+        #expect(layout.tokens.filter { $0.hasPrefix("row") } == ["row:small", "row"])
+        #expect(MenuLayout<TestMenuItem>(tokens: layout.tokens) == layout)
+        #expect(MenuLayout<TestMenuItem>.element(from: "row:huge") == nil)
+    }
+
     @Test func tokensRoundTripIncludingHiddenItemsAndSeparators() {
         let layout = MenuLayout<TestMenuItem>(elements: [
-            .rowSeparator,
+            .rowSeparator(.medium),
             .item(.delete, isVisible: true),
             .separator,
             .item(.c, isVisible: false),

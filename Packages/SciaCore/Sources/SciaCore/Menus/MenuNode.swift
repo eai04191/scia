@@ -10,8 +10,8 @@ public struct MenuNode<Command> {
         case action(Command?)
         /// 名前の付いたサブメニュー。
         case submenu([MenuNode])
-        /// 区切り線で分けたまとまり。名前は出さない。`isRow`なら、アイコンと名前を縦に積んだ中くらいの大きさで横に並べる。
-        case group([MenuNode], isRow: Bool)
+        /// 区切り線で分けたまとまり。名前は出さない。`row`があれば、その大きさで横に並べる。
+        case group([MenuNode], row: MenuRowSize?)
         /// 開いてから中身を読む項目。読む間は読み込み中の行を出し、読み終えたら中身に差し替える。
         case deferred(@MainActor () async -> [MenuNode])
     }
@@ -55,8 +55,8 @@ public struct MenuNode<Command> {
         MenuNode(title: title, subtitle: subtitle, icon: icon, content: .submenu(children))
     }
 
-    public static func group(_ children: [MenuNode], isRow: Bool = false) -> MenuNode {
-        MenuNode(title: "", content: .group(children, isRow: isRow))
+    public static func group(_ children: [MenuNode], row: MenuRowSize? = nil) -> MenuNode {
+        MenuNode(title: "", content: .group(children, row: row))
     }
 
     public static func deferred(_ load: @escaping @MainActor () async -> [MenuNode]) -> MenuNode {
@@ -102,7 +102,7 @@ extension MenuNode {
         let content: MenuNode<T>.Content = switch self.content {
         case .action(let command): .action(command.map(transform))
         case .submenu(let children): .submenu(children.map { $0.map(transform) })
-        case .group(let children, let isRow): .group(children.map { $0.map(transform) }, isRow: isRow)
+        case .group(let children, let row): .group(children.map { $0.map(transform) }, row: row)
         case .deferred(let load): .deferred { await load().map { $0.map(transform) } }
         }
         return MenuNode<T>(title: title, subtitle: subtitle, icon: icon, isEnabled: isEnabled, isDestructive: isDestructive, isSelected: isSelected, content: content)
@@ -129,9 +129,9 @@ extension MenuNode {
             switch node.content {
             case .action:
                 return node
-            case .group(let children, let isRow):
+            case .group(let children, let row):
                 var group = node
-                group.content = .group(loadingSubmenusBeforeShowing(children), isRow: isRow)
+                group.content = .group(loadingSubmenusBeforeShowing(children), row: row)
                 return group
             case .deferred(let load):
                 return .deferred { loadingSubmenusBeforeShowing(await load()) }
@@ -182,11 +182,11 @@ extension MenuNode {
             var submenu = node
             submenu.content = .submenu(await loaded(children))
             return [submenu]
-        case .group(let children, let isRow):
+        case .group(let children, let row):
             let children = await loaded(children)
             guard !children.isEmpty else { return [] }
             var group = node
-            group.content = .group(children, isRow: isRow)
+            group.content = .group(children, row: row)
             return [group]
         }
     }
@@ -308,12 +308,12 @@ extension MenuLayout.Groups {
     /// 横並びのまとまりは、横に並べる印を付ける。項目は「その他」の外のまとまりから順に組む。
     /// - Parameters:
     ///   - elements: 項目ごとの中身。出さない項目は空。
-    ///   - group: まとまりを1つの要素にする。2つ目の引数は横並びか。
+    ///   - group: まとまりを1つの要素にする。2つ目の引数は横並びの大きさで、横並びでなければnil。
     ///   - more: 「その他」のサブメニューにする。
     /// 並びにカスタマイズのほかの項目があるのに、どれも出ないときは、カスタマイズだけのメニューにせず空にする。並びがカスタマイズだけなら、それを出す。
     /// 開いてから中身を読む項目（関係を覚えていない相手の関係の項目など）は、組む時点では出るものとして数える。読んだ結果が空になると、
     /// 開いたメニューにカスタマイズだけが残る。開いたメニューは閉じずに中身を差し替えるだけなので、読んだあとにメニューごと引っ込められないため、この場合は扱わない。
-    public func arranged<Element>(_ elements: (Item) -> [Element], group: ([Element], Bool) -> Element, more: ([Element]) -> Element) -> [Element] {
+    public func arranged<Element>(_ elements: (Item) -> [Element], group: ([Element], MenuRowSize?) -> Element, more: ([Element]) -> Element) -> [Element] {
         var showsOtherItem = false
         func inline(_ groups: [MenuLayout<Item>.Group]) -> [Element] {
             groups.compactMap { entry in
@@ -322,7 +322,7 @@ extension MenuLayout.Groups {
                     if item != Item.customizeItem, !built.isEmpty { showsOtherItem = true }
                     return built
                 }
-                return children.isEmpty ? nil : group(children, entry.isRow)
+                return children.isEmpty ? nil : group(children, entry.row)
             }
         }
         let mainElements = inline(main)
@@ -338,7 +338,7 @@ extension MenuLayout.Groups {
         func removing(_ groups: [MenuLayout<Item>.Group]) -> [MenuLayout<Item>.Group] {
             groups.compactMap { group in
                 let items = group.items.filter { $0 != Item.customizeItem }
-                return items.isEmpty ? nil : MenuLayout<Item>.Group(items, isRow: group.isRow)
+                return items.isEmpty ? nil : MenuLayout<Item>.Group(items, row: group.row)
             }
         }
         return Self(main: removing(main), more: removing(more))
@@ -346,6 +346,6 @@ extension MenuLayout.Groups {
 
     /// メニューの木にする。
     public func nodes<Command>(_ elements: (Item) -> [MenuNode<Command>]) -> [MenuNode<Command>] {
-        arranged(elements, group: { MenuNode.group($0, isRow: $1) }, more: { MenuNode.submenu("その他", icon: .symbol("ellipsis.circle"), $0) })
+        arranged(elements, group: { MenuNode.group($0, row: $1) }, more: { MenuNode.submenu("その他", icon: .symbol("ellipsis.circle"), $0) })
     }
 }

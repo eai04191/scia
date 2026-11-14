@@ -13,7 +13,7 @@ struct ComposeToolPlacementTests {
         let placement = ComposeToolPlacement(layout: ComposeToolItem.defaultLayout, available: 200, addButtonWidth: 40, width: { _ in 40 })
 
         #expect(placement.row == [.visibility, .media, .customEmoji, .expand])
-        #expect(placement.menu == [[.customize], [.linkTitle, .spoiler, .poll, .schedule, .language], [.mention, .hashtag]])
+        #expect(placement.menu.map(\.items) == [[.customize], [.linkTitle, .spoiler, .poll, .schedule, .language], [.mention, .hashtag]])
         #expect(placement.showsAddButton)
     }
 
@@ -31,7 +31,7 @@ struct ComposeToolPlacementTests {
         let placement = placement([.more, .item(.media, isVisible: true), .item(.spoiler, isVisible: true)], available: 79, addButtonWidth: 20)
 
         #expect(placement.row == [.media])
-        #expect(placement.menu == [[.spoiler]])
+        #expect(placement.menu.map(\.items) == [[.spoiler]])
     }
 
     /// 行に1つも入らなければ、全部を＋に入れる。回した項目は、＋に元からある項目の後ろ（＋にいちばん近いところ）に続ける。
@@ -39,7 +39,7 @@ struct ComposeToolPlacementTests {
         let placement = placement([.item(.spoiler, isVisible: true), .more, .item(.media, isVisible: true)], available: 60)
 
         #expect(placement.row.isEmpty)
-        #expect(placement.menu == [[.spoiler], [.media]])
+        #expect(placement.menu.map(\.items) == [[.spoiler], [.media]])
     }
 
     /// 非表示にした項目は、行にも＋にも出さない。
@@ -47,6 +47,13 @@ struct ComposeToolPlacementTests {
         let placement = placement([.item(.spoiler, isVisible: true), .more, .item(.media, isVisible: false)], available: 200)
 
         #expect(placement.row.isEmpty)
-        #expect(placement.menu == [[.spoiler]])
+        #expect(placement.menu.map(\.items) == [[.spoiler]])
+    }
+
+    /// ＋のメニューの横並びは、まとまりに大きさを残す。ツールバーの節の横並びの区切り線は効かず、入りきらずに＋へ回した項目はふだんの行で出す。
+    @Test func keepsRowSizeOnlyInMenu() {
+        let placement = placement([.rowSeparator(.small), .item(.spoiler, isVisible: true), .more, .rowSeparator(.small), .item(.media, isVisible: true)], available: 0)
+
+        #expect(placement.menu == [.init([.spoiler], row: .small), .init([.media])])
     }
 }

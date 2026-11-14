@@ -11,26 +11,43 @@ struct MenuLayoutRowGroupTests {
     /// 表示する項目の先頭から3個までを字下げし、4個目からは字下げしない。
     @Test func indentsUpToCapacity() {
         let elements: [MenuLayout<StatusMenuItem>.Element] = [
-            .item(.reply, isVisible: true), .rowSeparator,
+            .item(.reply, isVisible: true), .rowSeparator(.medium),
             .item(.favourite, isVisible: true), .item(.bookmark, isVisible: true), .item(.quote, isVisible: true), .item(.reblog, isVisible: true),
         ]
-        #expect(Controller.rowGroupIndices(in: elements, capacity: 3) == [2, 3, 4])
+        #expect(Controller.rowGroupIndices(in: elements) == [2, 3, 4])
     }
 
     /// 隠した項目は数えずに、その間に挟まるものは字下げしてまとまりを途切れさせない。
     @Test func hiddenItemsDoNotUseSlots() {
         let elements: [MenuLayout<StatusMenuItem>.Element] = [
-            .rowSeparator, .item(.favourite, isVisible: true), .item(.bookmark, isVisible: false), .item(.quote, isVisible: true), .item(.reblog, isVisible: true), .item(.reply, isVisible: true),
+            .rowSeparator(.medium), .item(.favourite, isVisible: true), .item(.bookmark, isVisible: false), .item(.quote, isVisible: true), .item(.reblog, isVisible: true), .item(.reply, isVisible: true),
         ]
-        #expect(Controller.rowGroupIndices(in: elements, capacity: 3) == [1, 2, 3, 4])
+        #expect(Controller.rowGroupIndices(in: elements) == [1, 2, 3, 4])
     }
 
     /// 区切り線か「その他」の境目で、まとまりが終わる。
     @Test func groupEndsAtSeparatorOrMore() {
         let elements: [MenuLayout<StatusMenuItem>.Element] = [
-            .rowSeparator, .item(.favourite, isVisible: true), .separator, .item(.bookmark, isVisible: true),
-            .rowSeparator, .item(.quote, isVisible: true), .more, .item(.reblog, isVisible: true),
+            .rowSeparator(.medium), .item(.favourite, isVisible: true), .separator, .item(.bookmark, isVisible: true),
+            .rowSeparator(.medium), .item(.quote, isVisible: true), .more, .item(.reblog, isVisible: true),
         ]
-        #expect(Controller.rowGroupIndices(in: elements, capacity: 3) == [1, 5])
+        #expect(Controller.rowGroupIndices(in: elements) == [1, 5])
+    }
+
+    /// アイコンのみの横並びは、4個までを字下げする。
+    @Test func smallRowIndentsFour() {
+        let elements: [MenuLayout<StatusMenuItem>.Element] = [
+            .rowSeparator(.small),
+            .item(.favourite, isVisible: true), .item(.bookmark, isVisible: true), .item(.quote, isVisible: true), .item(.reblog, isVisible: true), .item(.reply, isVisible: true),
+        ]
+        #expect(Controller.rowGroupIndices(in: elements) == [1, 2, 3, 4])
+    }
+
+    /// 投稿欄の並びでは、＋のメニューの節の横並びだけを字下げする。ツールバーの節では横並びの区切り線が効かないため。
+    @Test func composeToolbarSectionIsNotIndented() {
+        let elements: [MenuLayout<ComposeToolItem>.Element] = [
+            .rowSeparator(.medium), .item(.spoiler, isVisible: true), .more, .rowSeparator(.medium), .item(.media, isVisible: true),
+        ]
+        #expect(MenuLayoutViewController<ComposeToolItem>.rowGroupIndices(in: elements) == [1])
     }
 }

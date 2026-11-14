@@ -53,14 +53,14 @@ struct MenuDefaultsTests {
         let elements = Item.defaultLayout.elements
         for (index, element) in elements.enumerated() {
             guard case .item(let item, _) = element else { continue }
-            let predecessor = elements[..<index].last { $0 != .separator && $0 != .rowSeparator }
+            let predecessor = elements[..<index].last { !$0.isSeparatorForTest }
             let saved = MenuLayout<Item>(tokens: Item.defaultLayout.tokens.filter { $0.split(separator: ":").last.map(String.init) != item.rawValue })
             guard let restored = saved.elements.firstIndex(of: element) else {
                 Issue.record("\(Item.self)の\(item.rawValue)が戻らない")
                 continue
             }
             #expect(saved.elements.filter { $0 == element }.count == 1, "\(Item.self)の\(item.rawValue)")
-            let restoredPredecessor = saved.elements[..<restored].last { $0 != .separator && $0 != .rowSeparator }
+            let restoredPredecessor = saved.elements[..<restored].last { !$0.isSeparatorForTest }
             #expect(restoredPredecessor == predecessor, "\(Item.self)の\(item.rawValue)の位置")
             #expect(saved == Item.defaultLayout, "\(Item.self)の\(item.rawValue)を抜いた既定の並びが、既定に戻る")
         }
@@ -77,5 +77,14 @@ struct MenuDefaultsTests {
         #expect(Set(items) == Set(Item.allCases), "\(Item.defaultsKey)に足りない項目がある")
         #expect(elements.filter { $0 == .more }.count == 1, "\(Item.defaultsKey)の「その他」の数")
         #expect(MenuLayout<Item>(tokens: tokens).tokens == tokens, "\(Item.defaultsKey)は読み直すと変わる")
+    }
+}
+
+private extension MenuLayout.Element {
+    var isSeparatorForTest: Bool {
+        switch self {
+        case .separator, .rowSeparator: true
+        case .item, .more: false
+        }
     }
 }

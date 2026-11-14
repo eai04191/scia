@@ -55,11 +55,11 @@ public struct ComposeToolPlacement: Equatable, Sendable {
     /// ツールバーに、＋の右から出す項目。並びの順。
     public var row: [ComposeToolItem]
     /// ＋のメニューのまとまり。上から並びの順。行に入りきらなかった項目は、最後のまとまりにする。空なら＋を出さない。
-    public var menu: [[ComposeToolItem]]
+    public var menu: [MenuLayout<ComposeToolItem>.Group]
 
     public var showsAddButton: Bool { !menu.isEmpty }
 
-    public init(row: [ComposeToolItem], menu: [[ComposeToolItem]]) {
+    public init(row: [ComposeToolItem], menu: [MenuLayout<ComposeToolItem>.Group]) {
         self.row = row
         self.menu = menu
     }
@@ -73,9 +73,9 @@ public struct ComposeToolPlacement: Equatable, Sendable {
     ///   - width: 項目のボタンの幅。隣との間隔を含める。
     public init(layout: MenuLayout<ComposeToolItem>, available: Double, addButtonWidth: Double, width: (ComposeToolItem) -> Double) {
         let groups = layout.groups
-        // 境目より下（`more`）がツールバー、上（`main`）が＋のメニュー。行では区切り線を数えない。横並びの区切り線も、ふつうの区切り線と同じに扱う。
+        // 境目より下（`more`）がツールバー、上（`main`）が＋のメニュー。行では区切り線を数えず、横並びの区切り線も効かない。ツールバーはもともと横に並ぶため。
         let wanted = groups.more.flatMap(\.items)
-        let menu = groups.main.map(\.items)
+        let menu = groups.main
         let widths = wanted.map(width)
         if menu.isEmpty, widths.reduce(0, +) <= available {
             self.init(row: wanted, menu: [])
@@ -89,6 +89,6 @@ public struct ComposeToolPlacement: Equatable, Sendable {
             count += 1
         }
         let overflow = Array(wanted.dropFirst(count))
-        self.init(row: Array(wanted.prefix(count)), menu: menu + (overflow.isEmpty ? [] : [overflow]))
+        self.init(row: Array(wanted.prefix(count)), menu: menu + (overflow.isEmpty ? [] : [MenuLayout<ComposeToolItem>.Group(overflow)]))
     }
 }

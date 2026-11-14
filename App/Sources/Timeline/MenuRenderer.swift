@@ -32,9 +32,9 @@ struct MenuRenderer<Command> {
             return action(node)
         case .submenu(let children):
             return UIMenu(title: node.headingTitle, subtitle: node.subtitle, image: image(node.icon), children: elements(children))
-        case .group(let children, let isRow):
+        case .group(let children, let row):
             let menu = UIMenu(options: .displayInline, children: elements(children))
-            if isRow { menu.preferredElementSize = .medium }
+            if let row { menu.preferredElementSize = row.elementSize }
             return menu
         case .deferred(let load):
             // 読む間はUIKitの読み込み中の行を出す。

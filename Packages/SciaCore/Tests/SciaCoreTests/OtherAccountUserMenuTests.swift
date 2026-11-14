@@ -69,7 +69,7 @@ struct OtherAccountUserMenuTests {
         for node in nodes {
             switch node.content {
             case .deferred(let load): result += await loaded(await load())
-            case .group(let children, let isRow): result.append(.group(await loaded(children), isRow: isRow))
+            case .group(let children, let row): result.append(.group(await loaded(children), row: row))
             default: result.append(node)
             }
         }

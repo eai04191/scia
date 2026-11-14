@@ -4,13 +4,22 @@ import UIKit
 @MainActor
 extension MenuLayout.Groups {
     /// まとまりごとに区切り線で分けて並べ、「その他」の中身はサブメニューにする。中身のないまとまりと「その他」は出さない。
-    /// 横並びのまとまりは、アイコンと名前を縦に積んだ中くらいの大きさで横に並べる。横に並ぶのは3個までで、4個目からはその下にふだんの行として続く。
+    /// 横並びのまとまりは、その大きさで横に並べる。横に並ぶ数（`MenuRowSize.capacity`）を超えた項目は、その下にふだんの行として続く。
     func menuElements(_ elements: (Item) -> [UIMenuElement]) -> [UIMenuElement] {
-        arranged(elements, group: { children, isRow in
+        arranged(elements, group: { children, row in
             let menu = UIMenu(options: .displayInline, children: children)
-            if isRow { menu.preferredElementSize = .medium }
+            if let row { menu.preferredElementSize = row.elementSize }
             return menu
         }, more: { UIMenu(title: "その他", image: UIImage(systemName: "ellipsis.circle"), children: $0) })
+    }
+}
+
+extension MenuRowSize {
+    var elementSize: UIMenu.ElementSize {
+        switch self {
+        case .medium: .medium
+        case .small: .small
+        }
     }
 }
 

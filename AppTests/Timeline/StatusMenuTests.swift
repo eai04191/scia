@@ -252,7 +252,7 @@ struct StatusMenuTests {
         #expect(groups.dropFirst().allSatisfy { $0.preferredElementSize != .medium })
 
         let settings = try makeSettings()
-        settings.statusMenuLayout = MenuLayout(elements: MenuFixture.status.elements.filter { $0 != .rowSeparator })
+        settings.statusMenuLayout = MenuLayout(elements: MenuFixture.status.elements.filter { $0 != .rowSeparator(.medium) })
         let withoutRow = try menu(for: .status(post), settings: settings)?.children.compactMap { $0 as? UIMenu } ?? []
 
         #expect(withoutRow.allSatisfy { $0.preferredElementSize != .medium })

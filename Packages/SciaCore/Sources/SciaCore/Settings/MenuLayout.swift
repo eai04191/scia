@@ -11,14 +11,30 @@ extension MenuItemKind {
     public static var customizeItem: Self? { nil }
 }
 
+/// 横並びのまとまりの大きさ。`rawValue`は設定に保存するため、一度使った値は変えない。
+public enum MenuRowSize: String, CaseIterable, Hashable, Sendable {
+    /// アイコンと名前を縦に積んで並べる。
+    case medium
+    /// アイコンだけを並べる。
+    case small
+
+    /// 横に並ぶ項目の数。これを超えた項目は、横並びの下にふだんの行として続く。UIKitのメニューが大きさごとに並べる数。
+    public var capacity: Int {
+        switch self {
+        case .medium: 3
+        case .small: 4
+        }
+    }
+}
+
 /// メニューの並び。項目、区切り線、「その他」の境目を1本に並べる。決まりはdocs/menus.mdにある。
 public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
     public enum Element: Hashable, Sendable {
         /// 非表示にした項目も、同じ場所に残す。
         case item(Item, isVisible: Bool)
         case separator
-        /// 区切り線と同じくまとまりを分け、これより下のまとまりの項目をメニューで横に並べる。
-        case rowSeparator
+        /// 区切り線と同じくまとまりを分け、これより下のまとまりの項目をメニューでその大きさで横に並べる。
+        case rowSeparator(MenuRowSize)
         /// これより下の項目は「その他」のサブメニューに入る。並びに1つだけある。
         case more
     }
@@ -26,12 +42,12 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
     /// 区切り線で分けたメニューの1つのまとまり。
     public struct Group: Equatable, Sendable {
         public var items: [Item]
-        /// 横並びの区切り線で始まったまとまりなら、項目を横に並べる。
-        public var isRow: Bool
+        /// 横並びの区切り線で始まったまとまりなら、項目を横に並べる大きさ。
+        public var row: MenuRowSize?
 
-        public init(_ items: [Item], isRow: Bool = false) {
+        public init(_ items: [Item], row: MenuRowSize? = nil) {
             self.items = items
-            self.isRow = isRow
+            self.row = row
         }
     }
 
@@ -59,7 +75,7 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
             func filtered(_ groups: [Group]) -> [Group] {
                 groups.compactMap { group in
                     let kept = group.items.filter { !items.contains($0) }
-                    return kept.isEmpty ? nil : Group(kept, isRow: group.isRow)
+                    return kept.isEmpty ? nil : Group(kept, row: group.row)
                 }
             }
             let keptMain = filtered(main)
@@ -92,30 +108,30 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
     private func groups(revealing: Set<Item>) -> Groups {
         var groups = Groups(main: [], more: [])
         var current: [Item] = []
-        var isRow = false
+        var row: MenuRowSize?
         var inMore = false
-        func close(startingRow: Bool) {
+        func close(startingRow: MenuRowSize?) {
             if !current.isEmpty {
-                let group = Group(current, isRow: isRow)
+                let group = Group(current, row: row)
                 if inMore { groups.more.append(group) } else { groups.main.append(group) }
             }
             current = []
-            isRow = startingRow
+            row = startingRow
         }
         for element in elements {
             switch element {
             case .item(let item, let isVisible):
                 if isVisible || revealing.contains(item) { current.append(item) }
             case .separator:
-                close(startingRow: false)
-            case .rowSeparator:
-                close(startingRow: true)
+                close(startingRow: nil)
+            case .rowSeparator(let size):
+                close(startingRow: size)
             case .more:
-                close(startingRow: false)
+                close(startingRow: nil)
                 inMore = true
             }
         }
-        close(startingRow: false)
+        close(startingRow: nil)
         return groups
     }
 
@@ -127,13 +143,14 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
 
     // MARK: - 保存
 
-    /// 設定に保存する形。項目は`item:<rawValue>`か非表示の`hidden:<rawValue>`、区切り線は`separator`、横並びの区切り線は`row`、「その他」は`more`。
+    /// 設定に保存する形。項目は`item:<rawValue>`か非表示の`hidden:<rawValue>`、区切り線は`separator`、横並びの区切り線は`row`（アイコンだけの大きさは`row:small`）、「その他」は`more`。
     public var tokens: [String] {
         elements.map { element in
             switch element {
             case .item(let item, let isVisible): "\(isVisible ? "item" : "hidden"):\(item.rawValue)"
             case .separator: "separator"
-            case .rowSeparator: "row"
+            case .rowSeparator(.medium): "row"
+            case .rowSeparator(let size): "row:\(size.rawValue)"
             case .more: "more"
             }
         }
@@ -147,11 +164,15 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
     static func element(from token: String) -> Element? {
         switch token {
         case "separator": return .separator
-        case "row": return .rowSeparator
+        case "row": return .rowSeparator(.medium)
         case "more": return .more
         default:
             let parts = token.split(separator: ":", maxSplits: 1).map(String.init)
-            guard parts.count == 2, let item = Item(rawValue: parts[1]) else { return nil }
+            guard parts.count == 2 else { return nil }
+            if parts[0] == "row" {
+                return MenuRowSize(rawValue: parts[1]).map(Element.rowSeparator)
+            }
+            guard let item = Item(rawValue: parts[1]) else { return nil }
             switch parts[0] {
             case "item": return .item(item, isVisible: true)
             case "hidden": return .item(item, isVisible: false)

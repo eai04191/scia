@@ -84,7 +84,7 @@ struct OtherAccountMenuTests {
     }
 
     /// ブーストとお気に入りを横に並べ、ブックマークを続けた並び。そのアカウントから見た状態を確かめるテストで、項目を絞るのに使う。
-    private let interactionGroups = MenuLayout<StatusMenuItem>.Groups(main: [.init([.reblog, .favourite], isRow: true), .init([.bookmark])], more: [])
+    private let interactionGroups = MenuLayout<StatusMenuItem>.Groups(main: [.init([.reblog, .favourite], row: .medium), .init([.bookmark])], more: [])
 
     /// 「別のアカウントで」の項目だけを組んだもの。
     private func node(_ tree: StatusMenuTree) -> MenuNode<StatusMenuCommand>? {
