@@ -77,22 +77,14 @@ enum AppDependencies {
         return try await remoteFetch.data(from: url)
     }
 
-    /// 画像を読めたら元の大きさを渡し、サーバーが縦横比を返さないカスタム絵文字の縦横比を、リストに残す。
-    static let emojiImages: EmojiImageStore<UIImage> = {
-        let store = EmojiImageStore { url in
-            try await imageData(from: url)
-        }
-        store.onSourceSize = { url, width, height in customEmojis.learn(url, width: width, height: height) }
-        return store
-    }()
+    static var emojiImages: EmojiImageStore<UIImage> { images.emojis }
 
     static let emojiGlyphImages = EmojiGlyphImageStore()
 
-    /// サーバーごとのカスタム絵文字のリスト。端末に残し、絵文字のパレットを開いたときに読み込み中を挟まずに並べる。
-    static let customEmojis = CustomEmojiCaches()
+    static var customEmojis: CustomEmojiCaches { images.customEmojis }
 
-    /// アイコンと添付ファイルの画像のストア。設定の見本の画像は端末で作ったものなので、通信せずに返す。
-    static let images = ImageStores(http: http, tuning: tuning, maker: .uiKit, clock: clock) { url in
+    /// アイコン、添付ファイル、カスタム絵文字の画像のストア。設定の見本の画像は端末で作ったものなので、通信せずに返す。
+    static let images = ImageStores(http: http, tuning: tuning, network: network, settings: settings, maker: .uiKit, clock: clock) { url in
         await localImageData(for: url)
     }
 

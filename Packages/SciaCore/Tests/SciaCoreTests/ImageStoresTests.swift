@@ -30,11 +30,14 @@ struct ImageStoresTests {
         return ImageStores(
             http: http,
             tuning: TuningStore(defaults: nil),
+            network: NetworkConditionsMonitor(monitor: nil),
+            settings: AppSettings(defaults: TestScratch.defaults("ImageStoresTests.stores")),
             maker: PlatformImageMaker<CGImage>(still: { $0 }, animated: { _, _ in nil }),
             clock: TestClock(),
             localData: localData,
             mediaFiles: MediaFileCache(directory: root.appending(path: "files"), sharingDirectory: root.appending(path: "sharing")) { Date(timeIntervalSince1970: 0) },
-            mediaPrefetchFiles: MediaFileCache(directory: root.appending(path: "prefetch"), sharingDirectory: root.appending(path: "prefetch-sharing")) { Date(timeIntervalSince1970: 0) }
+            mediaPrefetchFiles: MediaFileCache(directory: root.appending(path: "prefetch"), sharingDirectory: root.appending(path: "prefetch-sharing")) { Date(timeIntervalSince1970: 0) },
+            customEmojis: CustomEmojiCaches(directory: root.appending(path: "emojis"), clock: TestClock())
         )
     }
 
