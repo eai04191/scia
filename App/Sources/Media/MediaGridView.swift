@@ -524,7 +524,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         accessibilityLabel = [accessibilityParts.kind, showsHDR ? "HDR" : nil, accessibilityParts.description]
             .compactMap(\.self)
             .filter { !$0.isEmpty }
-            .joined(separator: "、")
+            .joinedAsTextList
         setNeedsLayout()
     }
 

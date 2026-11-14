@@ -18,6 +18,8 @@ public enum ProfileTexts {
 
     /// ヘッダーに出す文言。
     public enum Header {
+        /// 投稿、フォロー、フォロワーの数のあいだに置く空白（全角の空白1つ）。
+        public static let countSeparator = "　"
         /// フォローの関係を読めなかったときに、フォローのボタンの場所に出す文言。
         public static let relationshipFailure = "読み込みエラー"
         public static let relationshipRetry = "再試行"

@@ -1,5 +1,10 @@
 /// クラッシュした投稿の隔離（docs/crash-quarantine.md）の、チップと報告の画面の文言。
 public enum CrashReportTexts {
+    /// 開発者に送る内容に書く、アプリの版とデバイスとOSの版。
+    public static func environment(version: String, build: String, device: String, systemVersion: String) -> String {
+        TextLists.joined(["Scia \(version) (\(build))", device, "iOS \(systemVersion)"])
+    }
+
     /// 表示できない投稿があったことを伝えるチップ。
     public static let quarantinedChip = "表示できない投稿がありました"
     public static let quarantinedChipHint = "隠した投稿の詳細を表示します。"

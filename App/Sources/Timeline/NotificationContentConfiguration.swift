@@ -283,7 +283,7 @@ final class NotificationContentView: UIView, UIContentView {
             // 名前の前に差し込んだアイコンの文字は読まない。
             .map { $0.replacingOccurrences(of: "\u{FFFC}", with: "").trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-            .joined(separator: "、")
+            .joinedAsTextList
         // まとめた行の「ほか3人」は文字の中にあり、読み上げでは押せないため、操作として足す。
         let groupAccountsAction = configuration.onOpenGroupAccounts.map { open in
             UIAccessibilityCustomAction(name: PostTexts.openGroupAccounts) { _ in

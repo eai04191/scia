@@ -128,7 +128,7 @@ final class EditHistoryEntryView: UIView {
         row.spacing = 8
         row.alignment = .firstBaseline
         row.isAccessibilityElement = true
-        row.accessibilityLabel = "\(title)、\(spokenDate)"
+        row.accessibilityLabel = TextLists.joined([title, spokenDate])
         row.accessibilityTraits = .header
         return row
     }

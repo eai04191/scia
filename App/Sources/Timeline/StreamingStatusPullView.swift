@@ -85,7 +85,7 @@ final class StreamingStatusPullView: UIView {
         noteLabel.isHidden = rest.note == nil
         accessibilityLabel = [streamingColumn.title, streaming.text, streaming.detail, restColumn.title, rest.text, rest.detail, rest.note]
             .compactMap(\.self)
-            .joined(separator: "、")
+            .joinedAsTextList
     }
 
     /// タイムラインの内容の上端の上に置き、引っぱった分だけ見えるようにする。

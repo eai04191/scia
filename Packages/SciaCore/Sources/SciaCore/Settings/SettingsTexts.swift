@@ -20,6 +20,12 @@ public enum SettingsTexts {
         "\(count)件"
     }
 
+    /// メディアのキャッシュの件数。ほかの件数と違い、桁区切りを付ける。
+    /// iOSでは、この件数だけSwiftUIの`Text`に数を埋めて出していて、`Text`が桁区切りを付けていたため。
+    public static func cachedCount(_ count: Int) -> String {
+        "\(count.formatted())件"
+    }
+
     /// 情報の画面。
     public enum About {
         /// ビルドの行を続けてタップしてデバッグメニューを切り替えたときのアラート。

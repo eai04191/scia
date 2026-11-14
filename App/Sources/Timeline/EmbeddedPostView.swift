@@ -414,7 +414,7 @@ final class EmbeddedPostView: UIButton {
             parts.append(content.text.stringWithoutTranslationMark)
             parts += content.notes.filter { !$0.isPressable }.map(\.text.string)
         }
-        summaryElement.accessibilityLabel = parts.compactMap(\.self).filter { !$0.isEmpty }.joined(separator: "、")
+        summaryElement.accessibilityLabel = parts.compactMap(\.self).filter { !$0.isEmpty }.joinedAsTextList
         var actions: [UIAccessibilityCustomAction] = []
         if content.isPressable {
             actions.append(UIAccessibilityCustomAction(name: content.openActionName) { [weak self] _ in

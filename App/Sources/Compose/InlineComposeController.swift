@@ -1111,7 +1111,7 @@ final class InlineComposeController: NSObject {
         addQuoteBadge.isHidden = !(differs && !inRow && toolPlacement?.showsAddButton == true)
         // ＋の読み上げの値は、言語のバッジ（`updateLanguageIndicators`）が先に入れる。
         if !addQuoteBadge.isHidden, let policy = model.shownQuotePolicy {
-            addButton.accessibilityValue = [addButton.accessibilityValue, ComposeTexts.quotePolicyValue(policy.title)].compactMap { $0 }.joined(separator: "、")
+            addButton.accessibilityValue = [addButton.accessibilityValue, ComposeTexts.quotePolicyValue(policy.title)].compactMap { $0 }.joinedAsTextList
         }
     }
 
@@ -2978,7 +2978,7 @@ final class InlineComposeController: NSObject {
         let option = VisibilityOption(model.visibility)
         visibilityButton.configuration?.image = UIImage(systemName: option.symbolName)
         visibilityButton.accessibilityLabel = ComposeToolItem.visibility.title
-        visibilityButton.accessibilityValue = [option.title, model.shownQuotePolicy.map { ComposeTexts.quotePolicyValue($0.title) }].compactMap { $0 }.joined(separator: "、")
+        visibilityButton.accessibilityValue = [option.title, model.shownQuotePolicy.map { ComposeTexts.quotePolicyValue($0.title) }].compactMap { $0 }.joinedAsTextList
         visibilityButton.largeContentTitle = option.title
         visibilityButton.menu = visibilityMenu(title: ComposeToolItem.visibility.title)
 

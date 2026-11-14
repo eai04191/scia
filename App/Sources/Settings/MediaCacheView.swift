@@ -44,7 +44,7 @@ struct MediaCacheView: View {
                         }
                     }
                     // 写真アプリのグリッドの下と同じく、件数だけを出す。
-                    Text(SettingsTexts.count(entries.count))
+                    Text(SettingsTexts.cachedCount(entries.count))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)

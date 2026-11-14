@@ -402,7 +402,7 @@ private struct CompletionRowView: View {
                 Text("@\(account.acct)").fadingTail(of: account.acct)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(account.displayNameOrUsername)、@\(account.acct)")
+            .accessibilityLabel(TextLists.account(name: account.displayNameOrUsername, acct: account.acct))
         case .localAccount(let mention, let source):
             // 検索の結果より上に出る理由が分かるよう、どこから出した人かを添える。
             let subtitle = ComposeTexts.Completion.localAccountSubtitle(acct: mention.acct, source: source)
@@ -421,7 +421,7 @@ private struct CompletionRowView: View {
                 }
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(mention.displayNameOrUsername)、@\(mention.acct)、\(source.title)")
+            .accessibilityLabel(TextLists.joined([TextLists.account(name: mention.displayNameOrUsername, acct: mention.acct), source.title]))
         case .hashtag(let hashtag):
             RowLayout {
                 Image(systemName: "number").foregroundStyle(.secondary)

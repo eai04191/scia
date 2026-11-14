@@ -81,7 +81,7 @@ final class AccountRowView: UIView, UIContentView {
         accessibilityLabel = [configuration.name.string, configuration.handle.string, configuration.detail?.string ?? ""]
             .map { $0.replacingOccurrences(of: "\u{FFFC}", with: "").trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-            .joined(separator: "、")
+            .joinedAsTextList
 
         NSLayoutConstraint.deactivate(variableConstraints)
         let margins = configuration.margins

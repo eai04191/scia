@@ -337,7 +337,7 @@ struct RichTextRenderer: Sendable {
             }
         }
         close()
-        return parts.joined(separator: "、")
+        return parts.joinedAsTextList
     }
 
     /// 本文中のすべてのカスタム絵文字の、表示に使うURL。

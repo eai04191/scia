@@ -1261,7 +1261,7 @@ final class PostBodyView: UIView {
         case .filter: ""
         }
         let parts = [label, spoiler.text.string] + (spoiler.isCollapsed ? [] : [content.text.stringWithoutTranslationMark])
-        return parts.filter { !$0.isEmpty }.joined(separator: "、")
+        return parts.filter { !$0.isEmpty }.joinedAsTextList
     }
 
     /// 行数で切る本文の末尾に、省略記号を出す。本文の段落は折り返しの指定を持ち、そのままでは最後の行が黙って切れるため。

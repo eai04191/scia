@@ -970,7 +970,7 @@ final class PostContentView: UIView, UIContentView {
         parts.append(configuration.timeAccessibilityText(now: now()))
         parts.append(bodyView.accessibilityText)
         parts += [configuration.reactionGlow?.accessibilityText].compactMap(\.self)
-        textAccessibilityElement.accessibilityLabel = parts.filter { !$0.isEmpty }.joined(separator: "、")
+        textAccessibilityElement.accessibilityLabel = parts.filter { !$0.isEmpty }.joinedAsTextList
         // 本文を切っているかは並べるまで分からないので、並べたあとに変わったら作り直す（`layoutContents`）。
         accessibilityReflectsTruncation = bodyView.isBodyTruncated
         textAccessibilityElement.accessibilityCustomActions = [bodyView.spoilerAccessibilityAction(), bodyView.readMoreAccessibilityAction()].compactMap(\.self) + bodyView.linkAccessibilityActions()

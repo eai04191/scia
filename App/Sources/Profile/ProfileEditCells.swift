@@ -625,6 +625,6 @@ final class ProfileEditAccountCell: UITableViewCell {
             .truncatingTail(alignment: .natural)
         handleLabel.text = "@\(account.acct)"
         // 人のリストの行と同じく、描いた名前を読ませる。カスタム絵文字の`:shortcode:`を読ませないため。
-        accessibilityLabel = "\(nameLabel.attributedText?.string ?? account.displayNameOrUsername)、@\(account.acct)"
+        accessibilityLabel = TextLists.account(name: nameLabel.attributedText?.string ?? account.displayNameOrUsername, acct: account.acct)
     }
 }

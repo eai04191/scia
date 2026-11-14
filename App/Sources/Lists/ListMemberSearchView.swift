@@ -108,7 +108,7 @@ struct ListMemberSearchView: View {
         // 標準では文字が色付きになるので、検索の候補と同じく通常の色にする。
         .foregroundStyle(.primary)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(account.displayNameOrUsername)、@\(account.acct)")
+        .accessibilityLabel(TextLists.account(name: account.displayNameOrUsername, acct: account.acct))
         .accessibilityAddTraits(isMember ? [.isButton, .isSelected] : .isButton)
         .disabled(pendingIDs.contains(account.id))
     }

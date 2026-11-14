@@ -1,3 +1,5 @@
+import Foundation
+
 /// 「操作の状況」の画面の文言。
 public enum OperationStatusTexts {
     /// 画面の題。アカウントのメニューの、この画面を開く項目の名前にも使う。
@@ -12,7 +14,8 @@ public enum OperationStatusTexts {
     /// 最近の失敗の節の注記。
     /// - Parameter limit: 残す失敗の数（`OperationStatus.failureLimit`）。
     public static func failuresFooter(limit: Int) -> String {
-        "アプリを終了するまで直近の\(limit)件を残します。"
+        // iOSでは、SwiftUIの`Text`に数を埋めて出していて、`Text`が桁区切りを付けていたため、同じにする。
+        "アプリを終了するまで直近の\(limit.formatted())件を残します。"
     }
 
     /// 進行中の操作を止めるボタンの読み上げ。

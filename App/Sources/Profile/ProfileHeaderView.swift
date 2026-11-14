@@ -1191,7 +1191,7 @@ final class ProfileHeaderView: UIView {
         ]
         for (index, (count, list)) in counts.enumerated() {
             if index > 0 {
-                text.append(NSAttributedString(string: "　", attributes: [.font: font]))
+                text.append(NSAttributedString(string: ProfileTexts.Header.countSeparator, attributes: [.font: font]))
             }
             var labelAttributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.secondaryLabel]
             if let list {

@@ -2482,7 +2482,7 @@ final class SessionController {
     private func presentCrashReport(statusID: Status.ID) {
         guard let presenter = notices.presenter else { return }
         let client = client
-        let environment = "Scia \(BuildInfo.current.version) (\(BuildInfo.current.build))、\(DeviceModel.identifier)、iOS \(UIDevice.current.systemVersion)"
+        let environment = CrashReportTexts.environment(version: BuildInfo.current.version, build: BuildInfo.current.build, device: DeviceModel.identifier, systemVersion: UIDevice.current.systemVersion)
         let controller = PostCrashReportView.makeController(fallbackURL: notices.quarantinedPageURLs[statusID]) {
             try PostCrashReport(response: try await client.statusResponse(statusID), environment: environment)
         } describe: { [weak self] error in

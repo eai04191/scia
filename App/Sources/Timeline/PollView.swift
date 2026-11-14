@@ -560,7 +560,7 @@ final class PollOptionView: UIControl {
             accessibilityValue = nil
         case .results:
             accessibilityTraits = .staticText
-            accessibilityValue = [option.fraction.map { Self.percentText($0) }, option.isOwnVote ? PostTexts.Poll.ownVote : nil].compactMap(\.self).joined(separator: "、")
+            accessibilityValue = [option.fraction.map { Self.percentText($0) }, option.isOwnVote ? PostTexts.Poll.ownVote : nil].compactMap(\.self).joinedAsTextList
         }
     }
 

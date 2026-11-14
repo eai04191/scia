@@ -105,7 +105,7 @@ private struct FilterRow: View {
                 Text(filter.title)
                     .lineLimit(2)
                 if !filter.keywords.isEmpty {
-                    Text(filter.keywords.map(\.keyword).joined(separator: "、"))
+                    Text(TextLists.joined(filter.keywords.map(\.keyword)))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)

@@ -94,7 +94,7 @@ struct EditHistoryContentBuilder {
         if let detail = change.detail {
             attributed.append(NSAttributedString(string: "\n"))
             attributed.append(renderer.render(detail))
-            accessibilityText += "、\(RichTextRenderer.accessibilityText(of: detail))"
+            accessibilityText = TextLists.joined([accessibilityText, RichTextRenderer.accessibilityText(of: detail)])
         }
         return EditHistoryEntryView.MediaChange(
             thumbnail: content,
