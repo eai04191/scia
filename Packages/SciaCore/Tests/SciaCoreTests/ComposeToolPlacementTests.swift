@@ -13,7 +13,7 @@ struct ComposeToolPlacementTests {
         let placement = ComposeToolPlacement(layout: ComposeToolItem.defaultLayout, available: 200, addButtonWidth: 40, width: { _ in 40 })
 
         #expect(placement.row == [.visibility, .media, .customEmoji, .expand])
-        #expect(placement.menu.map(\.items) == [[.customize], [.linkTitle, .spoiler, .poll, .schedule, .language], [.mention, .hashtag]])
+        #expect(placement.menu == [.init([.customize]), .init([.linkTitle]), .init([.schedule, .poll, .spoiler, .language], row: .medium), .init([.mention, .hashtag], row: .small)])
         #expect(placement.showsAddButton)
     }
 
