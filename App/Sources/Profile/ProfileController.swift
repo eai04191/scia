@@ -202,7 +202,7 @@ final class ProfileController {
         if header.redrawEndorsements(ifUsing: urls) {
             viewController?.headerDidChangeSize()
         }
-        guard !Set(store.account.emojis.map(\.staticUrl)).isDisjoint(with: urls) else { return }
+        guard store.account.emojis.hasImage(in: urls) else { return }
         updateHeader()
     }
 

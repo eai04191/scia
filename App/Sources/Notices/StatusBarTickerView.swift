@@ -947,9 +947,11 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
             if let (view, emoji, fallback) = reactionImage {
                 // 読み込みの途中は空けておき、読めなかったら記号にする。
                 let store = AppDependencies.emojiImages
-                let failed = store.hasFailed(emoji.staticUrl)
-                view.stillImage = failed ? nil : store.image(for: emoji.staticUrl)
-                view.animation = failed || !settings.animatesCustomEmojis ? nil : store.animation(for: emoji.url)
+                let choice = store.choice(animates: settings.animatesCustomEmojis)
+                let url = choice.url(of: emoji)
+                let failed = store.hasFailed(url)
+                view.stillImage = failed ? nil : store.image(for: url)
+                view.animation = failed ? nil : choice.animationURL(of: emoji).flatMap { store.animation(for: $0) }
                 fallback.isHidden = !failed
             }
             switch item.subject {

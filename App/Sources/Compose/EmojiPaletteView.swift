@@ -500,7 +500,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     /// 差分（`reconfigureItems`）では描き直さない。差分の計算は絵文字の数（数千個のサーバーがある）に比例し、スクロール中は画像が1秒に数十回届くため。
     private func reconfigureVisibleCells(showing urls: Set<URL>) {
         for indexPath in collectionView.indexPathsForVisibleItems {
-            guard case .custom(let custom)? = emoji(at: indexPath), urls.contains(custom.staticUrl) || urls.contains(custom.url) else { continue }
+            guard case .custom(let custom)? = emoji(at: indexPath), custom.hasImage(in: urls) else { continue }
             configureCell(at: indexPath, collectionView.cellForItem(at: indexPath))
         }
         updateSectionIcons(matching: urls)
@@ -560,7 +560,8 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
             return UIImage(systemName: customStatus == .loading ? "hourglass" : "exclamationmark.triangle")
         case .uncategorized, .category:
             // 画像が届く前は空けておき、届いたら`updateSectionIcons`で入れる。
-            guard case .custom(let emoji) = section.emojis.first, let image = emojiImages.image(for: emoji.staticUrl) else { return nil }
+            // セルと同じ画像を読む。
+            guard case .custom(let emoji) = section.emojis.first, let image = emojiImages.image(for: EmojiPaletteCell.choice(of: emojiImages).url(of: emoji)) else { return nil }
             return Self.icon(from: image)
         case .standard(let title):
             // Unicodeの絵文字のまとまりは、iOSの絵文字キーボードと同じく、記号のアイコンにする。時計や虫めがねと同じ色で並ぶ。
@@ -584,7 +585,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         for (index, button) in sectionButtons.enumerated() where sections.indices.contains(index) {
             let section = sections[index]
             guard case .custom(let first) = section.emojis.first, section.kind != .recent, section.kind != .searchResults else { continue }
-            if let urls, !urls.contains(first.staticUrl) { continue }
+            if let urls, !first.hasImage(in: urls) { continue }
             button.configuration?.image = sectionIcon(for: section)
             button.largeContentImage = button.configuration?.image
         }
@@ -747,6 +748,12 @@ final class EmojiPaletteCell: UICollectionViewCell {
         size.height - imageInset(in: size) * 2
     }
 
+    /// パレットが読む画像。設定によらず動かすので、元の画像を読む。
+    /// 端末の設定が動く画像を許さないときも元の画像を読み、`EmojiImageView`が動かさずに描く。開いている間に端末の設定が変わったら、読み直さずに動かせる。
+    static func choice(of store: EmojiImageStore<UIImage>) -> EmojiImageChoice {
+        store.choice(animates: true)
+    }
+
     /// カスタム絵文字は、「カスタム絵文字のアニメーションを再生する」の設定によらず動かす。
     func configure(_ emoji: PaletteEmoji, store: EmojiImageStore<UIImage>, glyphs: EmojiGlyphImageStore, emojiStyle: EmojiStyle) {
         switch emoji {
@@ -757,8 +764,10 @@ final class EmojiPaletteCell: UICollectionViewCell {
             imageView.isHidden = false
             // 枠を大きくしたときは、描く高さで読む。既定の枠（48pt）は既定の高さの1.1倍以内なので、読み直さない。
             let pixelHeight = RichTextRenderer.pixelHeight(of: Self.imageSide(in: bounds.size), scale: traitCollection.displayScale)
-            imageView.stillImage = store.image(for: custom.staticUrl, pixelHeight: pixelHeight)
-            imageView.animation = store.animation(for: custom.url, pixelHeight: pixelHeight)
+            // 動かすので元の画像だけを読み、動かない絵文字もその最初のコマで描く。
+            let choice = Self.choice(of: store)
+            imageView.stillImage = store.image(for: choice.url(of: custom), pixelHeight: pixelHeight)
+            imageView.animation = choice.animationURL(of: custom).flatMap { store.animation(for: $0, pixelHeight: pixelHeight) }
             accessibilityLabel = custom.shortcode
         case .standard(let standard):
             imageView.isHidden = true

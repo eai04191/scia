@@ -100,7 +100,7 @@ final class ProfilePinnedShelfView: UIView, UIScrollViewDelegate {
     /// 本文に、`urls`のどれかのカスタム絵文字を使っている投稿がある。
     func uses(emojiURLs urls: Set<URL>) -> Bool {
         items.contains { item in
-            item.status.emojis.contains { urls.contains($0.url) || urls.contains($0.staticUrl) }
+            item.status.emojis.hasImage(in: urls)
         }
     }
 
@@ -176,7 +176,7 @@ private final class ProfilePinnedCard: UIControl {
             bodyLabel.attributedText = text
         } else {
             let text: RichText = hasWarning ? .plain(status.spoilerText, emojis: status.emojis) : .html(status.content, emojis: status.emojis)
-            bodyLabel.attributedText = RichTextRenderer(font: font, textColor: hasWarning ? .secondaryLabel : .label, emojiImages: emojiImages, language: glyphLanguage)
+            bodyLabel.attributedText = RichTextRenderer(font: font, textColor: hasWarning ? .secondaryLabel : .label, emojiImages: emojiImages, animatesEmojis: false, language: glyphLanguage)
                 .render(text)
         }
         bodyLabel.numberOfLines = 5

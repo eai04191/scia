@@ -171,7 +171,7 @@ final class ProfileEndorsementsShelfView: ProfileShelfView {
     /// 並べている人の表示名に、`urls`のどれかのカスタム絵文字を使っている人がいる。
     func uses(emojiURLs urls: Set<URL>) -> Bool {
         content?.accounts.contains { account in
-            account.emojis.contains { urls.contains($0.url) || urls.contains($0.staticUrl) }
+            account.emojis.hasImage(in: urls)
         } ?? false
     }
 

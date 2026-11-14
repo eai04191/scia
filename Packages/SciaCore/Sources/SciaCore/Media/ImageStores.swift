@@ -20,8 +20,13 @@ public final class ImageStores<Image: AnyObject & Sendable> {
     public let media: MediaImageStore<Image>
     /// 本文、名前、リアクション、絵文字のパレットに出すカスタム絵文字の画像。
     public let emojis: EmojiImageStore<Image>
+    /// カスタム絵文字の画像と、それに付く記録を置くフォルダー。
+    public let emojiImageDirectory: URL
     /// カスタム絵文字の画像を置く場所。ログアウトしても消さない。公開の画像で、同じサーバーのほかのアカウントも使うため。
     public let emojiImageFiles: MediaFileCache
+    /// 大きすぎて動かせないと分かった元の画像の記録。画像と一緒に消えるよう、同じフォルダーに置く。
+    /// 画像の置き場所の中には置かない。`MediaFileCache`は、置き場所の直下の、ファイルを置いたフォルダーでないものを整理で消すため。
+    public let oversizedEmojis: OversizedEmojiRecord
     /// サーバーごとのカスタム絵文字のリスト。端末に残し、絵文字のパレットを開いたときに読み込み中を挟まずに並べる。
     public let customEmojis: CustomEmojiCaches
 
@@ -35,7 +40,7 @@ public final class ImageStores<Image: AnyObject & Sendable> {
     ///   - mediaFiles: 添付ファイルの元のファイルの置き場所。省略すると`MediaFileCache`の既定の置き場所。テストでは一時フォルダーを渡す。
     ///   - mediaPrefetchFiles: 先読みした画像の置き場所。省略するとキャッシュのフォルダーの`MediaPrefetch`。
     ///   - customEmojis: カスタム絵文字のリストの置き場所。省略すると`CustomEmojiCaches`の既定の置き場所。
-    ///   - emojiImageFiles: カスタム絵文字の画像の置き場所。省略するとキャッシュのフォルダーの`EmojiImages`。
+    ///   - emojiImageDirectory: カスタム絵文字の画像と、それに付く記録を置くフォルダー。省略するとキャッシュのフォルダーの`EmojiImages`。
     public init(
         http: HTTPClient,
         tuning: TuningStore,
@@ -47,7 +52,7 @@ public final class ImageStores<Image: AnyObject & Sendable> {
         mediaFiles: MediaFileCache? = nil,
         mediaPrefetchFiles: MediaFileCache? = nil,
         customEmojis: CustomEmojiCaches? = nil,
-        emojiImageFiles: MediaFileCache? = nil
+        emojiImageDirectory: URL? = nil
     ) {
         let mediaFiles = mediaFiles ?? MediaFileCache()
         let mediaPrefetchFiles = mediaPrefetchFiles ?? MediaFileCache(
@@ -73,12 +78,16 @@ public final class ImageStores<Image: AnyObject & Sendable> {
         }
         let customEmojis = customEmojis ?? CustomEmojiCaches(clock: clock)
         self.customEmojis = customEmojis
-        let emojiImageFiles = emojiImageFiles ?? MediaFileCache(
-            directory: .cachesDirectory.appending(path: "EmojiImages"),
+        let emojiImageDirectory = emojiImageDirectory ?? .cachesDirectory.appending(path: "EmojiImages")
+        self.emojiImageDirectory = emojiImageDirectory
+        let emojiImageFiles = MediaFileCache(
+            directory: emojiImageDirectory.appending(path: "Files"),
             sharingDirectory: .temporaryDirectory.appending(path: "EmojiImageSharing"),
             sizeLimit: 512 * 1_024 * 1_024
         )
         self.emojiImageFiles = emojiImageFiles
+        let oversizedEmojis = OversizedEmojiRecord(file: emojiImageDirectory.appending(path: "oversized.json"))
+        self.oversizedEmojis = oversizedEmojis
         let stored = StoredImageFetch(files: emojiImageFiles) { try await remoteFetch.data(from: $0) }
         emojis = EmojiImageStore(clock: clock, retryPolicy: retryPolicy, maker: maker, upgradePurpose: { network.usePolicy(settings: settings).enhancement }) { url in
             if let data = await localData(url) {
@@ -86,7 +95,8 @@ public final class ImageStores<Image: AnyObject & Sendable> {
             }
             return try await stored.data(from: url)
         }
-        emojis.onUnreadable = { await stored.discard($0) }
+        emojis.onDiscard = { await stored.discard($0) }
+        emojis.oversized = oversizedEmojis
         emojis.onSourceSize = { [customEmojis] url, width, height in customEmojis.learn(url, width: width, height: height) }
     }
 }

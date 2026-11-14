@@ -181,7 +181,7 @@ extension StorageView.Actions {
             preferences: URL.libraryDirectory.appending(path: "Preferences", directoryHint: .isDirectory),
             // URLCacheがファイルを置く場所と名前は公開されていない。iOS 27のシミュレーターで、`URLSession.shared`の応答がここに入るのを確かめた。
             // `currentDiskUsage`は消した直後に古い値を返したため、ファイルを測る。場所が変わると0と数え、その分は「その他」に入る。消すのは公開されたAPIで行う。
-            customEmojis: [AppDependencies.emojiImageFiles.directory, AppDependencies.customEmojis.directory],
+            customEmojis: [AppDependencies.emojiImageDirectory, AppDependencies.customEmojis.directory],
             networkCache: ["Cache.db", "Cache.db-shm", "Cache.db-wal", "fsCachedData"].map {
                 URL.cachesDirectory.appending(fileName: SafeFileName(bundleIdentifier), directoryHint: .isDirectory).appending(fileName: SafeFileName($0))
             },
@@ -198,6 +198,7 @@ extension StorageView.Actions {
         let clock = AppDependencies.clock
         let customEmojis = AppDependencies.customEmojis
         let emojiImageFiles = AppDependencies.emojiImageFiles
+        let oversizedEmojis = AppDependencies.oversizedEmojis
         return Self(
             measure: { await measure(locations, launchDate: launchDate) },
             remove: { category in
@@ -208,6 +209,7 @@ extension StorageView.Actions {
                     try await mediaPrefetchFiles.removeCachedFiles()
                 case .customEmojis:
                     try await emojiImageFiles.removeCachedFiles()
+                    oversizedEmojis.removeAll()
                     await customEmojis.removeAll()
                 case .networkCache:
                     URLSessionTransport.responseCache?.removeAllCachedResponses()

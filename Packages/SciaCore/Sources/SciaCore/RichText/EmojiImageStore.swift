@@ -101,8 +101,13 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     private var listeners: [Listener] = []
     /// 画像を読めたときに、元の画像の、描く向きに直した幅と高さを渡す。サーバーが縦横比を返さないカスタム絵文字の縦横比を、リストに残すために使う（`CustomEmojiCaches.learn`）。
     public var onSourceSize: (@MainActor (URL, Int, Int) -> Void)?
-    /// 読んだデータが画像として読めなかったときに、URLを渡す。端末に置いたファイルを消すのに使う（`StoredImageFetch.discard`）。
-    public var onUnreadable: (@Sendable (URL) async -> Void)?
+    /// 読んだデータを端末に残さないときに、URLを渡す。端末に置いたファイルを消すのに使う（`StoredImageFetch.discard`）。
+    /// 画像として読めなかったデータと、大きすぎて動かせない元の画像で呼ぶ。動かせない元の画像は、次から動かない版を読むので、残しても使わない。
+    public var onDiscard: (@Sendable (URL) async -> Void)?
+    /// 大きすぎて動かせないと分かった元の画像を残す先。nilなら残さない。
+    public var oversized: OversizedEmojiRecord?
+    /// 読んでいる途中の通信。同じURLの静止画とアニメーションを同時に求められたときに、1回の通信を分け合う。
+    private var fetches: [URL: (purpose: RequestPurpose?, task: Task<(Data, ResponseSource?), any Error>)] = [:]
     private var pendingNotification: Set<URL> = []
     private let logger = SciaLog.logger(category: "emoji")
 
@@ -118,6 +123,12 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
         self.upgradePurpose = upgradePurpose
         self.clock = clock
         retry = RetrySchedule(policy: retryPolicy, clock: clock)
+    }
+
+    /// 描く場所が、絵文字の2つの画像のどちらを読むか。
+    /// - Parameter animates: その場所で絵文字を動かすか。
+    public func choice(animates: Bool) -> EmojiImageChoice {
+        EmojiImageChoice(animates: animates, oversized: oversized)
     }
 
     /// 読み込み済みなら画像を返す。まだなら読み込みを始めてnilを返す。
@@ -146,7 +157,8 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
 
     /// `url`のアニメーションを読み終えたか。動かすか静止画で描くかが決まっていればtrue。読み始めていなければfalse。
     public func hasFinishedLoadingAnimation(for url: URL) -> Bool {
-        switch animationStates[url] {
+        if oversized?.contains(url) == true { return true }
+        return switch animationStates[url] {
         case .animated, .still, .failed: true
         case .loading, nil: false
         }
@@ -158,6 +170,8 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     ///   その高さでは`AnimatedImage.maxByteCount`を超えるときは、動きを止めないよう、収まる中で一番高く読む。
     ///   静止画と同じく、持っているコマより高く読み直すのは、質を上げる通信を送ってよいときだけ。
     public func animation(for url: URL, pixelHeight: Int = pixelHeight) -> EmojiAnimation? {
+        // 大きすぎて動かせないと分かっている元の画像は、読まない。
+        if oversized?.contains(url) == true { return nil }
         let loadHeight = Self.loadHeight(for: pixelHeight)
         switch animationStates[url] {
         case .animated(let resolution):
@@ -221,12 +235,16 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
         RequestPurpose.$current.withValue(purpose) { Task {
             defer { loading.remove(url) }
             do {
-                let (data, source) = try await fetchRecordingSource(url)
-                stats.stillSources.count(source)
+                let (data, source, isShared) = try await fetchRecordingSource(url)
+                stats.stillSources.count(source, isShared: isShared)
                 if isReload {
-                    stats.stillReloadSources.count(source)
+                    stats.stillReloadSources.count(source, isShared: isShared)
                 }
                 guard let (image, isLargest, source) = await Self.decodeStill(data, pixelHeight: pixelHeight) else { throw DecodeError() }
+                // 大きすぎて動かせないと分かった元の画像を、静止画がメモリから捨てられて読み直したときも、端末に残さない。
+                if oversized?.contains(url) == true {
+                    await onDiscard?(url)
+                }
                 onSourceSize?(url, source.width, source.height)
                 evictedStills.formUnion(stills.setValue(maker.still(image), forKey: url, cost: PlatformImageMaker<Image>.cost(of: image)))
                 stillResolutions[url] = Resolution(pixelHeight: pixelHeight, isLargest: isLargest)
@@ -238,12 +256,12 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
                 failedStills.remove(url)
                 retry.recordSuccess(for: url)
             } catch {
+                let error = recordFailure(error, for: url)
                 logger.error("emoji load failed host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash)): \(SciaLog.describe(error), privacy: .public)")
                 if error is DecodeError {
-                    await onUnreadable?(url)
+                    await onDiscard?(url)
                 }
                 // 高さを上げて読み直すのに失敗したときは、持っている画像で描き続ける。
-                retry.recordFailure(error, for: url)
                 if !stills.contains(url) {
                     failedStills.insert(url)
                     scheduleRetry(url)
@@ -256,12 +274,50 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     public struct DecodeError: Error {}
 
     /// 読み、応答を通信で受け取ったかキャッシュから読んだかも返す。通信の層が知らせなければnil。
-    private func fetchRecordingSource(_ url: URL) async throws -> (Data, ResponseSource?) {
-        let reported = ReportedSource()
-        let data = try await ResponseSource.$report.withValue({ source in reported.value.withLock { $0 = source } }) {
-            try await fetch(url)
+    /// 同じURLを同じ目的で読んでいる途中なら、その通信を待って同じデータを受け取る。動かす場所は、同じ元の画像から静止画とアニメーションを作るため。
+    /// - Returns: データと、応答の出どころ。読んでいる途中の通信を分け合ったときは`isShared`がtrue。
+    private func fetchRecordingSource(_ url: URL) async throws -> (data: Data, source: ResponseSource?, isShared: Bool) {
+        let purpose = RequestPurpose.current
+        if let running = fetches[url], running.purpose == purpose {
+            do {
+                let (data, source) = try await running.task.value
+                return (data, source, true)
+            } catch {
+                throw SharedFetchFailure(underlying: error)
+            }
         }
-        return (data, reported.value.withLock { $0 })
+        let fetch = fetch
+        let task = Task {
+            let reported = ReportedSource()
+            let data = try await ResponseSource.$report.withValue({ source in reported.value.withLock { $0 = source } }) {
+                try await fetch(url)
+            }
+            return (data, reported.value.withLock { $0 })
+        }
+        // 目的の違う通信が走っていれば、分け合う相手には登録しない。
+        let isRegistered = fetches[url] == nil
+        if isRegistered {
+            fetches[url] = (purpose, task)
+        }
+        defer {
+            if isRegistered {
+                fetches[url] = nil
+            }
+        }
+        let (data, source) = try await task.value
+        return (data, source, false)
+    }
+
+    /// 分け合った通信の失敗。通信を始めた側が失敗を覚えるので、分け合った側は覚えない。両方で覚えると、1回の失敗を2回と数える。
+    private struct SharedFetchFailure: Error {
+        let underlying: any Error
+    }
+
+    /// `error`を失敗として覚える。分け合った通信の失敗なら、覚えずに元の失敗を返す。
+    private func recordFailure(_ error: any Error, for url: URL) -> any Error {
+        if let shared = error as? SharedFetchFailure { return shared.underlying }
+        retry.recordFailure(error, for: url)
+        return error
     }
 
     private final class ReportedSource: Sendable {
@@ -274,8 +330,14 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
         var cache = 0
         var file = 0
         var unknown = 0
+        /// 読んでいる途中の同じURLの通信を分け合った回数。通信もファイルの読み出しも増やしていない。
+        var shared = 0
 
-        mutating func count(_ source: ResponseSource?) {
+        mutating func count(_ source: ResponseSource?, isShared: Bool) {
+            if isShared {
+                shared += 1
+                return
+            }
             switch source {
             case .network: network += 1
             case .cache: cache += 1
@@ -284,7 +346,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
             }
         }
 
-        var description: String { "network \(network) cache \(cache) file \(file) unknown \(unknown)" }
+        var description: String { "network \(network) cache \(cache) file \(file) unknown \(unknown) shared \(shared)" }
     }
 
     /// 読み直しの回数を数える。解像度とキャッシュの上限を決めるときに、上限を超えて捨てたものをどれだけ読み直したかを見る。
@@ -399,17 +461,23 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
         }
         RequestPurpose.$current.withValue(purpose) { Task {
             defer { upgradingAnimations.remove(url) }
-            let state: AnimationState
+            let state: AnimationState?
             do {
-                let (data, source) = try await fetchRecordingSource(url)
-                stats.animationSources.count(source)
+                let (data, source, isShared) = try await fetchRecordingSource(url)
+                stats.animationSources.count(source, isShared: isShared)
                 // 動かせない画像（1コマ、大きすぎる）は読めているので、画像として読めないデータと分ける。
-                let (decoded, isReadable) = await Task.detached(priority: .utility) {
+                let (decoded, size) = await Task.detached(priority: .utility) {
                     let decoded = await Self.decodeAnimation(data, pixelHeight: pixelHeight)
-                    return (decoded, decoded != nil || SourceSize(of: data) != nil)
+                    return (decoded, decoded?.source ?? SourceSize(of: data))
                 }.value
-                if !isReadable {
-                    await onUnreadable?(url)
+                if let size {
+                    // 大きすぎて動かせないと分かった元の画像は、大きさを残し、次から動かない版を読む。データは端末に残さない。
+                    if decoded == nil, AnimatedImage.exceedsEmojiLimits(frameCount: size.frameCount, width: size.width, height: size.height, emojiPixelHeight: Self.pixelHeight) {
+                        oversized?.record(url, width: size.width, height: size.height, frameCount: size.frameCount)
+                        await onDiscard?(url)
+                    }
+                } else {
+                    await onDiscard?(url)
                 }
                 if let (image, isLargest, source) = decoded {
                     onSourceSize?(url, source.width, source.height)
@@ -420,15 +488,18 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
                     state = .animated(Resolution(pixelHeight: pixelHeight, isLargest: isLargest))
                 } else if let current {
                     state = .animated(Resolution(pixelHeight: current.pixelHeight, isLargest: true))
+                } else if oversized?.contains(url) == true {
+                    // 動かせないことは記録が覚えている。ここで覚えると、記録を消したあとに読み直さず、残し直せない。
+                    state = nil
                 } else {
                     state = .still
                 }
                 retry.recordSuccess(for: url)
             } catch {
+                let error = recordFailure(error, for: url)
                 logger.error("emoji animation load failed host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash)): \(SciaLog.describe(error), privacy: .public)")
                 // 高さを上げて読み直すのに失敗したときは、今のコマで描き続け、間隔をおいてから読み直す。
                 state = current.map { .animated($0) } ?? .failed
-                retry.recordFailure(error, for: url)
                 if current == nil {
                     scheduleRetry(url)
                 }

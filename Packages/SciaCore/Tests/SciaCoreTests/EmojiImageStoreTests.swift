@@ -190,14 +190,126 @@ struct EmojiImageStoreTests {
         let urls = ["cached.png", "stored.png", "fresh.png", "silent.png"].map { url.deletingLastPathComponent().appending(path: $0) }
         urls.forEach { _ = store.image(for: $0) }
         try await waitUntil { urls.allSatisfy { store.image(for: $0) != nil } }
-        #expect(store.stateDump().contains("stillFetched: network 1 cache 1 file 1 unknown 1 afterEviction: network 0 cache 0 file 0 unknown 0"))
+        #expect(store.stateDump().contains("stillFetched: network 1 cache 1 file 1 unknown 1 shared 0 afterEviction: network 0 cache 0 file 0 unknown 0 shared 0"))
+    }
+
+    /// 同じURLの静止画とアニメーションを続けて求めたら、1回だけ読み、そのデータから両方を作る。動かす場所が、元の画像を2回読まないため。
+    @Test func fetchesOnceForStillAndAnimationOfSameURL() async throws {
+        let store = makeStore(try Self.gif(size: 100, frameCount: 3))
+
+        _ = store.image(for: url)
+        _ = store.animation(for: url)
+        try await waitUntil(state: { await animationState(of: store, url) }) { store.image(for: url) != nil && store.animation(for: url) != nil }
+
+        #expect(fetches.count.withLock { $0 } == 1)
+        #expect(store.stateDump().contains("animationFetched: network 0 cache 0 file 0 unknown 0 shared 1"))
+    }
+
+    /// 静止画とアニメーションで分け合った1回の通信が失敗したら、失敗は1回と数える。2回と数えると、1回の失敗で、読み直すまでの間隔が2回失敗したときの長さになる。
+    @Test func countsFailureOfSharedFetchOnce() async throws {
+        let clock = TestClock()
+        let store = makeStore(try Self.gif(size: 96, frameCount: 2), failingFirst: 1, clock: clock)
+        store.addListener(owner: clock) { [url] urls in
+            if urls.contains(url) { _ = store.image(for: url) }
+        }
+
+        _ = store.image(for: url)
+        _ = store.animation(for: url)
+        try await waitUntil(state: { await animationState(of: store, url) }) {
+            store.hasFailed(url) && store.hasFinishedLoadingAnimation(for: url) && clock.sleeperCount(remaining: .seconds(5)) >= 1
+        }
+        #expect(fetches.count.withLock { $0 } == 1)
+        clock.advance(by: .seconds(5))
+
+        try await waitUntil { store.image(for: url) != nil }
+    }
+
+    /// 大きすぎて動かせない元の画像は、最初のコマを静止画で描き、大きさを残して、端末に置いたファイルを消させる。
+    /// 次からは、動かす場所も動かない版を選び、元の画像のアニメーションを求めても読まない。
+    @Test(.scratch) func recordsOversizedOriginalAndStopsReadingIt() async throws {
+        let record = OversizedEmojiRecord(file: TestScratch.url("EmojiImageStoreTests").appending(path: "oversized.json"))
+        let store = makeStore(try Self.gif(width: 1_100, height: 1_000, frameCount: 2))
+        store.oversized = record
+        let discarded = Mutex<[URL]>([])
+        store.onDiscard = { url in discarded.withLock { $0.append(url) } }
+        let emoji = CustomEmoji(shortcode: "big", url: url, staticUrl: url.deletingLastPathComponent().appending(path: "static.png"))
+        #expect(store.choice(animates: true).url(of: emoji) == emoji.url)
+
+        _ = store.image(for: url)
+        _ = store.animation(for: url)
+        // 大きさを残したあと、端末のファイルを消させ終えてから、読み込みの状態を片付ける。片付け終えるまで待つ。
+        try await waitUntil(state: { await animationState(of: store, url) }) {
+            record.contains(url) && store.animationDiagnosis(of: url).contains("animationState: nil") && store.image(for: url) != nil
+        }
+
+        // 静止画が、大きさを残したあとに読み終えたら、静止画の側からも消させる。何度消させても同じ。
+        #expect(Set(discarded.withLock { $0 }) == [url])
+        #expect(record.contains(url))
+        #expect(store.choice(animates: true).url(of: emoji) == emoji.url, "この起動の間は、読めている元の画像の最初のコマで描き続ける")
+        let fetched = fetches.count.withLock { $0 }
+        #expect(store.animation(for: url) == nil)
+        #expect(store.animationDiagnosis(of: url).contains("animationState: nil"), "アニメーションは読み直さない")
+        #expect(fetches.count.withLock { $0 } == fetched)
+
+        // 起動し直したあと。
+        let next = makeStore(try Self.gif(width: 1_100, height: 1_000, frameCount: 2))
+        next.oversized = OversizedEmojiRecord(file: record.file)
+        #expect(next.choice(animates: true).url(of: emoji) == emoji.staticUrl)
+        #expect(next.choice(animates: true).animationURL(of: emoji) == nil)
+        #expect(next.animation(for: url) == nil)
+        #expect(next.animationDiagnosis(of: url).contains("animationState: nil"), "読み始めない")
+    }
+
+    /// 大きさの記録を消したら（設定のストレージで絵文字の画像を消したとき）、元の画像を読み直して、残し直す。
+    @Test(.scratch) func recordsOversizedOriginalAgainAfterRecordIsRemoved() async throws {
+        let record = OversizedEmojiRecord(file: TestScratch.url("EmojiImageStoreTests").appending(path: "removed.json"))
+        let store = makeStore(try Self.gif(width: 1_100, height: 1_000, frameCount: 2))
+        store.oversized = record
+        _ = store.animation(for: url)
+        try await waitUntil(state: { await animationState(of: store, url) }) { record.contains(url) }
+
+        record.removeAll()
+        _ = store.animation(for: url)
+
+        try await waitUntil(state: { await animationState(of: store, url) }) { record.contains(url) }
+        #expect(fetches.count.withLock { $0 } == 2)
+    }
+
+    /// 大きすぎて動かせないと分かった元の画像の静止画を、メモリから捨てたあとに読み直したときも、端末に置いたファイルを消させる。
+    @Test(.scratch) func discardsOversizedOriginalWhenStillIsReloaded() async throws {
+        let record = OversizedEmojiRecord(file: TestScratch.url("EmojiImageStoreTests").appending(path: "reloaded.json"))
+        record.record(url, width: 1_100, height: 1_000, frameCount: 2)
+        let store = makeStore(try Self.gif(width: 1_100, height: 1_000, frameCount: 2))
+        store.oversized = record
+        let discarded = Mutex<[URL]>([])
+        store.onDiscard = { url in discarded.withLock { $0.append(url) } }
+
+        _ = store.image(for: url)
+        try await waitUntil { store.image(for: url) != nil }
+
+        #expect(discarded.withLock { $0 } == [url])
+    }
+
+    /// 1コマしかない元の画像は、大きすぎるのではないので残さず、端末に置いたファイルも消させない。動かす場所が、次も同じ元の画像を端末から読むため。
+    @Test(.scratch) func doesNotRecordSingleFrameOriginal() async throws {
+        let record = OversizedEmojiRecord(file: TestScratch.url("EmojiImageStoreTests").appending(path: "single.json"))
+        let store = makeStore(try Self.png(width: 100, height: 100))
+        store.oversized = record
+        let discarded = Mutex<[URL]>([])
+        store.onDiscard = { url in discarded.withLock { $0.append(url) } }
+
+        _ = store.animation(for: url)
+        try await waitUntil { store.hasFinishedLoadingAnimation(for: url) }
+
+        #expect(!record.contains(url))
+        #expect(discarded.withLock { $0 }.isEmpty)
     }
 
     /// 読んだデータが画像として読めなかったら、URLを渡す。端末に置いたファイルを消して、次は取得し直せるようにするため。
     @Test func reportsUnreadableData() async throws {
         let store = makeStore(Data("not an image".utf8))
         let unreadable = Mutex<[URL]>([])
-        store.onUnreadable = { url in unreadable.withLock { $0.append(url) } }
+        store.onDiscard = { url in unreadable.withLock { $0.append(url) } }
 
         _ = store.image(for: url)
         try await waitUntil { store.hasFailed(url) }
@@ -217,7 +329,7 @@ struct EmojiImageStoreTests {
             url.lastPathComponent == "broken.gif" ? Data("not an image".utf8) : still
         }
         let unreadable = Mutex<[URL]>([])
-        store.onUnreadable = { url in unreadable.withLock { $0.append(url) } }
+        store.onDiscard = { url in unreadable.withLock { $0.append(url) } }
         let urls = ["broken.gif", "still.png"].map { url.deletingLastPathComponent().appending(path: $0) }
 
         urls.forEach { _ = store.animation(for: $0) }

@@ -27,6 +27,9 @@ struct RichTextRenderer: Sendable {
     /// カスタム絵文字を描く。描かなければ、画像も読まず、ショートコードの文字も出さない。
     var showsCustomEmojis: Bool
     private(set) var emojiImages: EmojiImageSource
+    /// カスタム絵文字の2つの画像のどちらで描くか。描いた文字列を出すラベルが絵文字を動かすなら元の画像、動かさないなら動かない版（docs/animated-custom-emoji.mdの「コマの読み方」）。
+    /// 描く場所ごとに渡さず、設定から読む。設定がオンでも絵文字を動かさないラベルに出す文字列だけ、初期化で`animatesEmojis`にfalseを渡す。
+    let emojiChoice: EmojiImageChoice
     /// 文字列に付ける言語。付けないと、漢字とかなの書体が端末の言語の設定で決まり、英語の設定では日本語も中国語の書体で描かれる。
     var language: String
     /// 訳文の中に残した原文の部分（`RichText.Style.original`）に付ける言語。nilなら`language`を付ける。
@@ -55,6 +58,7 @@ struct RichTextRenderer: Sendable {
         emojiOnly: EmojiOnlyEnlargement? = nil,
         showsCustomEmojis: Bool = true,
         emojiImages: EmojiImageStore<UIImage>,
+        animatesEmojis: Bool = AnimatedImagePlayback.animatesCustomEmojis(AppDependencies.settings),
         language: String,
         emojiStyle: EmojiStyle = AppDependencies.settings.appearance.emojiStyle,
         displayScale: CGFloat = UITraitCollection.current.displayScale
@@ -73,6 +77,7 @@ struct RichTextRenderer: Sendable {
         self.emojiOnly = emojiOnly
         self.showsCustomEmojis = showsCustomEmojis
         self.emojiImages = .store(emojiImages)
+        emojiChoice = emojiImages.choice(animates: animatesEmojis)
         self.language = language
         self.emojiStyle = emojiStyle
         self.displayScale = displayScale
@@ -141,7 +146,7 @@ struct RichTextRenderer: Sendable {
             && underlinesLinks == other.underlinesLinks && paragraphSpacing == other.paragraphSpacing && lineSpacing == other.lineSpacing
             && indentPerLevel == other.indentPerLevel && quoteBarWidth == other.quoteBarWidth && showsCustomEmojis == other.showsCustomEmojis && emojiScale == other.emojiScale && unicodeEmojiScale == other.unicodeEmojiScale
             && emojiOnly == other.emojiOnly && language == other.language && originalLanguage == other.originalLanguage && emojiStyle == other.emojiStyle && displayScale == other.displayScale
-            && marksTranslation == other.marksTranslation
+            && marksTranslation == other.marksTranslation && emojiChoice.animates == other.emojiChoice.animates
     }
 
     func render(_ text: RichText) -> NSAttributedString {
@@ -346,9 +351,9 @@ struct RichTextRenderer: Sendable {
     }
 
     /// 本文中のすべてのカスタム絵文字の、表示に使うURL。
-    static func emojiURLs(in text: RichText) -> Set<URL> {
+    func emojiURLs(in text: RichText) -> Set<URL> {
         Set(text.blocks.flatMap(\.inlines).compactMap { inline in
-            if case .emoji(let emoji) = inline { emoji.staticUrl } else { nil }
+            if case .emoji(let emoji) = inline { emojiChoice.url(of: emoji) } else { nil }
         })
     }
 
@@ -379,7 +384,7 @@ struct RichTextRenderer: Sendable {
         let height = EmojiFont.glyphHeight(of: font) * emojiScale
         // 先に画像を求める。前に読めなかった画像も、間隔が過ぎていればここで読み直しが始まる。読めるまでは文字で描く。
         // 絵文字だけの本文のように大きく描くときは、その高さで読み直させ、読み終えるまでは持っている画像を拡大して描く。
-        let state = emojiState(of: emoji.staticUrl, pixelHeight: Self.pixelHeight(of: height, scale: displayScale))
+        let state = emojiState(of: emojiChoice.url(of: emoji), pixelHeight: Self.pixelHeight(of: height, scale: displayScale))
         if state == .failed {
             return NSAttributedString(string: ":\(emoji.shortcode):", attributes: attributes(style: [], block: block))
         }

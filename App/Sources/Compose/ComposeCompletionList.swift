@@ -448,7 +448,7 @@ private struct CompletionRowView: View {
             .accessibilityLabel(ComposeTexts.Completion.hashtagAccessibilityLabel(name: hashtag.name, note: note))
         case .emoji(let emoji):
             RowLayout {
-                EmojiImage(url: emoji.staticUrl, animationURL: model.settings.animatesCustomEmojis ? emoji.url : nil, store: model.emojiImages)
+                EmojiImage(emoji, choice: model.emojiImages.choice(animates: model.settings.animatesCustomEmojis), store: model.emojiImages)
             } title: {
                 Text(":\(emoji.shortcode):").fadingTail(of: emoji.shortcode)
             }
@@ -577,10 +577,17 @@ struct AvatarImage: UIViewRepresentable {
 
 /// カスタム絵文字の画像。届いたら描き直す。
 private struct EmojiImage: UIViewRepresentable {
+    /// 描くのに読む画像。動かすなら元の画像、動かさないなら動かない版。
     let url: URL
-    /// 元の画像。アニメーション版を読むのに使う。nilなら動かさない。
+    /// アニメーションを求めるURL。nilなら動かさない。
     let animationURL: URL?
     let store: EmojiImageStore<UIImage>
+
+    init(_ emoji: ServerEmoji, choice: EmojiImageChoice, store: EmojiImageStore<UIImage>) {
+        url = choice.url(of: emoji)
+        animationURL = choice.animationURL(of: emoji)
+        self.store = store
+    }
 
     func makeUIView(context: Context) -> EmojiImageView {
         let view = EmojiImageView(frame: .zero)

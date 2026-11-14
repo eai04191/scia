@@ -82,6 +82,12 @@ enum AppDependencies {
     /// カスタム絵文字の画像を置く場所。
     static var emojiImageFiles: MediaFileCache { images.emojiImageFiles }
 
+    /// カスタム絵文字の画像と、それに付く記録を置くフォルダー。設定のストレージの画面は、ここを「カスタム絵文字」に数える。
+    static var emojiImageDirectory: URL { images.emojiImageDirectory }
+
+    /// 大きすぎて動かせないと分かった元の画像の記録。
+    static var oversizedEmojis: OversizedEmojiRecord { images.oversizedEmojis }
+
     static let emojiGlyphImages = EmojiGlyphImageStore()
 
     static var customEmojis: CustomEmojiCaches { images.customEmojis }

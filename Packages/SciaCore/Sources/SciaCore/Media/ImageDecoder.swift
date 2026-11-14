@@ -58,6 +58,11 @@ public enum ImageDecoder {
         if let orientation = properties[kCGImagePropertyOrientation] as? UInt32, orientation >= 5 {
             swap(&width, &sourceHeight)
         }
+        return maxPixelSize(forHeight: height, width: width, height: sourceHeight, maxAspectRatio: maxAspectRatio)
+    }
+
+    /// 描く向きに直した大きさが`width`×`sourceHeight`の画像の、高さを`height`ピクセルにそろえて縮めるときの、長い辺の上限。
+    public static func maxPixelSize(forHeight height: Int, width: Int, height sourceHeight: Int, maxAspectRatio: Double = 8) -> Int {
         let aspectRatio = min(max(Double(width) / Double(sourceHeight), 1), maxAspectRatio)
         return Int((Double(height) * aspectRatio).rounded(.up))
     }

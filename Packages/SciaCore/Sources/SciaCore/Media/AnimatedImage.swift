@@ -139,6 +139,16 @@ public struct AnimatedImage: Sendable {
         return [UTType.gif, .png, .webP].contains(type)
     }
 
+    /// `width`×`height`のコマが`frameCount`枚ある画像は、絵文字の上限（`Limits.emoji`、`maxFrameCount`）では大きすぎて動かせないか。
+    /// 絵文字の既定の高さ（`emojiPixelHeight`）で並べても`maxByteCount`を超えるものも含む。1コマの画像は、大きすぎるのではないのでfalse。
+    /// 幅と高さは、描く向きに直したもの。
+    public static func exceedsEmojiLimits(frameCount: Int, width: Int, height: Int, emojiPixelHeight: Int = 96) -> Bool {
+        guard frameCount > 1, width > 0, height > 0 else { return false }
+        if frameCount > maxFrameCount || width * height > maxSourcePixelCount { return true }
+        let minimum = ImageDecoder.maxPixelSize(forHeight: emojiPixelHeight, width: width, height: height)
+        return fittingPixelSize(frameCount: frameCount, width: width, height: height, maxPixelSize: minimum) < min(minimum, max(width, height))
+    }
+
     /// `width`×`height`のコマを`frameCount`枚並べた画像が`maxByteCount`に収まる、`maxPixelSize`以下で一番大きい、長い辺の上限。
     /// 1ピクセルまで縮めても収まらなければ0。コマの大きさは`scaled`と同じく求め、並べ方は`sheet`と同じく求める。
     static func fittingPixelSize(frameCount: Int, width: Int, height: Int, maxPixelSize: Int, maxByteCount: Int = maxByteCount) -> Int {

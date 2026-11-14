@@ -38,7 +38,7 @@ struct ImageStoresTests {
             mediaFiles: MediaFileCache(directory: root.appending(path: "files"), sharingDirectory: root.appending(path: "sharing")) { Date(timeIntervalSince1970: 0) },
             mediaPrefetchFiles: MediaFileCache(directory: root.appending(path: "prefetch"), sharingDirectory: root.appending(path: "prefetch-sharing")) { Date(timeIntervalSince1970: 0) },
             customEmojis: CustomEmojiCaches(directory: root.appending(path: "emojis"), clock: TestClock()),
-            emojiImageFiles: MediaFileCache(directory: root.appending(path: "emoji-images"), sharingDirectory: root.appending(path: "emoji-sharing"))
+            emojiImageDirectory: root.appending(path: "emoji-images")
         )
     }
 

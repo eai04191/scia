@@ -44,7 +44,8 @@ struct EmojiPaletteViewTests {
         gate.open()
         let urls = emojis.compactMap { emoji -> URL? in
             guard case .custom(let custom) = emoji else { return nil }
-            return custom.staticUrl
+            // パレットは絵文字を動かすので、元の画像を読む。
+            return custom.url
         }
         // パレットより後に登録したので、ここに知らせが届いたときには、パレットも描き直し終えている。
         var notified: Set<URL> = []

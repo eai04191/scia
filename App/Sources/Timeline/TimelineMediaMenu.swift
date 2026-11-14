@@ -192,15 +192,20 @@ final class CustomEmojiMenus {
     func node(for emoji: CustomEmoji) -> MenuNode<MediaMenuCommand>? {
         guard let timeline else { return nil }
         // 使う人が開いたメニューなので、前に読めなかった画像も間隔を待たずに読み直す。
-        images[emoji.staticUrl] = timeline.emojiImages.image(for: emoji.staticUrl, retriesNow: true)
+        images[emoji.staticUrl] = timeline.emojiImages.image(for: choice(in: timeline).url(of: emoji), retriesNow: true)
         return timeline.mediaMenuTree(for: target(for: emoji), statusMenu: nil).customEmojiSubmenu(emoji, groups: timeline.settings.mediaMenuLayout.submenuGroups(actions: timeline.settings.mediaActions))
     }
 
     /// サブメニューのアイコン。動く絵文字は、動かす設定なら動く画像にする。画像がまだ届いていなければnil。
     func icon(for emoji: CustomEmoji) -> UIImage? {
         guard let timeline else { return nil }
-        let animation = timeline.settings.animatesCustomEmojis && AnimatedImagePlayback.isAllowed ? timeline.emojiImages.animation(for: emoji.url) : nil
+        let animation = choice(in: timeline).animationURL(of: emoji).flatMap { timeline.emojiImages.animation(for: $0) }
         return animation.flatMap { TimelineViewController.animatedMenuIcon($0.image) } ?? images[emoji.staticUrl].map(TimelineViewController.menuIcon)
+    }
+
+    /// メニューのアイコンに読む画像。動かす設定なら元の画像だけを読む。
+    private func choice(in timeline: TimelineViewController) -> EmojiImageChoice {
+        timeline.emojiImages.choice(animates: AnimatedImagePlayback.animatesCustomEmojis(timeline.settings))
     }
 
     func perform(_ command: MediaMenuCommand, on emoji: CustomEmoji) {
