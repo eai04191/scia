@@ -11,6 +11,10 @@ public enum PostTexts {
         "\(name)がブースト"
     }
 
+    /// 行の高さを測るためだけに組む1行の文字で、画面には出さない。日本語の代わりの書体の行の高さも測るため、日本語の文字を入れる。
+    /// 訳すときも訳さない。
+    public static let lineHeightSample = "あA"
+
     /// 長い本文を切ったときに、末尾に出すボタン。
     public static let readMore = "続きを読む"
 

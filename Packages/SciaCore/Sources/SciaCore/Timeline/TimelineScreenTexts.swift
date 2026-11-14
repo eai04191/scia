@@ -19,9 +19,10 @@ public enum TimelineScreenTexts {
     public static let regeneratingTitle = "ホームを準備しています"
     public static let regeneratingDetail = "しばらく使っていなかったため、サーバーがホームを作り直しています。少し待ってから読み込み直してください。"
 
-    /// 末尾の読み込みに失敗したときに、理由の前に付ける語。
-    /// 理由は`ErrorPresentation`の部品（App/Sources/Notices/FailureDisplay.swift）が、前に付ける語を受け取ってつなげて描くため、文を丸ごとにせずに渡す。
-    public static let footerFailurePrefix = "読み込めませんでした: "
+    /// タイムラインの末尾に出す、続きを読み込めなかった文。理由の文言を埋める。
+    public static func footerFailure(reason: String) -> String {
+        "読み込めませんでした: \(reason)"
+    }
 
     /// 読めなかった投稿や通知の行で、なぜ読めなかったかと、押すと何が起きるか。
     /// - Parameter isCrashQuarantined: 表示中にアプリが終了したため隠している。

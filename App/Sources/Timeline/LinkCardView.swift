@@ -385,7 +385,7 @@ final class LinkCardView: UIButton {
     /// 2行以上は、日本語を含めて実際に折り返したときの高さで測る。日本語の代わりの書体は行が高く、書体の行の高さを行数倍した枠には1行しか入らないため。
     private static func blockHeight(font: UIFont, lines: Int) -> CGFloat {
         guard lines > 1 else { return font.lineHeight }
-        let sample = Array(repeating: "あA", count: lines).joined(separator: "\n") as NSString
+        let sample = Array(repeating: PostTexts.lineHeightSample, count: lines).joined(separator: "\n") as NSString
         return ceil(sample.boundingRect(with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude), options: .usesLineFragmentOrigin, attributes: [.font: font], context: nil).height)
     }
 

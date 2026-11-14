@@ -53,7 +53,7 @@ final class TimelineFooterView: UICollectionReusableView {
             retryButton.isHidden = true
         case .failed(let presentation):
             indicator.stopAnimating()
-            label.attributedText = presentation.attributedText(prefix: TimelineScreenTexts.footerFailurePrefix, textStyle: .footnote)
+            label.attributedText = presentation.attributedText(sentence: TimelineScreenTexts.footerFailure(reason:), textStyle: .footnote)
             retryButton.isHidden = false
         case .reachedEnd:
             indicator.stopAnimating()

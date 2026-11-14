@@ -218,8 +218,9 @@ extension ErrorPresentation {
     /// 文言の下に、補足（ステータスコードなど）を一段小さく薄く添える。補足は調べるときのためのもので、読まなくても分かるようにする。
     /// 「ログインし直す」は付かないので、`FailureText.withoutLogIn`と同じく、ボタンを並べられないところだけで使う。
     /// タイムラインの読み込みの失敗のように、401になると再試行のボタンがログインし直しに替わるところ（`SessionController.showReauthenticationPrompt`）に当たる。
-    func attributedText(prefix: String = "", textStyle: UIFont.TextStyle, color: UIColor = .secondaryLabel) -> NSAttributedString {
-        let result = NSMutableAttributedString(string: prefix + message, attributes: [
+    /// - Parameter sentence: 理由の文言から、出す文を丸ごと作る。理由をほかの文に埋めるところで渡す。
+    func attributedText(sentence: (String) -> String = { $0 }, textStyle: UIFont.TextStyle, color: UIColor = .secondaryLabel) -> NSAttributedString {
+        let result = NSMutableAttributedString(string: sentence(message), attributes: [
             .font: UIFont.preferredFont(forTextStyle: textStyle),
             .foregroundColor: color,
         ])
