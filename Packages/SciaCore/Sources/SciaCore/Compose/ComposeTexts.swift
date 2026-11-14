@@ -73,3 +73,25 @@ extension ComposeAttachmentStatus {
         return "\(title)、\(percent)"
     }
 }
+
+/// 投稿欄と、投稿欄から開く画面（補完の候補、投票の欄、絵文字のパレット、画像の切り抜き、投稿の言語）の文言。
+public enum ComposeTexts {
+    public static let cancel = "キャンセル"
+    public static let done = "完了"
+    public static let retry = "再試行"
+    public static let delete = "削除"
+
+    /// 添付の帯のサムネイルの操作と読み上げ。
+    public enum Attachment {
+        public static let moveToFirst = "先頭へ移動"
+        public static let moveBackward = "前へ移動"
+        public static let moveForward = "後ろへ移動"
+        public static let moveToLast = "末尾へ移動"
+        public static let editHint = "開いて代替テキストを編集できます。"
+
+        /// サムネイルの読み上げ。種類、閲覧注意か、代替テキストの順に、空でないものを読む。種類が分からなければ「メディア」と読む。
+        public static func accessibilityLabel(kind: MediaAttachment.Kind?, isSensitive: Bool, description: String) -> String {
+            [kind?.displayName ?? "メディア", isSensitive ? MediaCover.title(of: .sensitive) : "", description].filter { !$0.isEmpty }.joined(separator: "、")
+        }
+    }
+}

@@ -145,18 +145,18 @@ final class ComposeAttachmentStrip: UIView {
         let last = itemCount - 1
         var actions: [AttachmentAction] = []
         if index > 1 {
-            actions.append(AttachmentAction(title: "先頭へ移動", systemImage: "arrow.left.to.line") { [weak self] in self?.onMove(id, 0) })
+            actions.append(AttachmentAction(title: ComposeTexts.Attachment.moveToFirst, systemImage: "arrow.left.to.line") { [weak self] in self?.onMove(id, 0) })
         }
         if index > 0 {
-            actions.append(AttachmentAction(title: "前へ移動", systemImage: "arrow.left") { [weak self] in self?.onMove(id, index - 1) })
+            actions.append(AttachmentAction(title: ComposeTexts.Attachment.moveBackward, systemImage: "arrow.left") { [weak self] in self?.onMove(id, index - 1) })
         }
         if index < last {
-            actions.append(AttachmentAction(title: "後ろへ移動", systemImage: "arrow.right") { [weak self] in self?.onMove(id, index + 1) })
+            actions.append(AttachmentAction(title: ComposeTexts.Attachment.moveForward, systemImage: "arrow.right") { [weak self] in self?.onMove(id, index + 1) })
         }
         if index < last - 1 {
-            actions.append(AttachmentAction(title: "末尾へ移動", systemImage: "arrow.right.to.line") { [weak self] in self?.onMove(id, last) })
+            actions.append(AttachmentAction(title: ComposeTexts.Attachment.moveToLast, systemImage: "arrow.right.to.line") { [weak self] in self?.onMove(id, last) })
         }
-        actions.append(AttachmentAction(title: "削除", systemImage: "trash", isDestructive: true) { [weak self] in self?.onRemove(id) })
+        actions.append(AttachmentAction(title: ComposeTexts.delete, systemImage: "trash", isDestructive: true) { [weak self] in self?.onRemove(id) })
         return actions
     }
 
@@ -354,11 +354,10 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
         setAnimating(descriptionSpinner, item.status == .sendingDescription)
         descriptionFailureView.isHidden = item.status != .descriptionFailed
         sensitiveBadge.isHidden = !item.isSensitive
-        let kindName = (item.local?.displayKind ?? item.attachedMedia?.type).map(\.displayName) ?? "メディア"
-        accessibilityLabel = [kindName, item.isSensitive ? "閲覧注意" : "", description].filter { !$0.isEmpty }.joined(separator: "、")
+        accessibilityLabel = ComposeTexts.Attachment.accessibilityLabel(kind: item.local?.displayKind ?? item.attachedMedia?.type, isSensitive: item.isSensitive, description: description)
         accessibilityValue = item.status.accessibilityValue(progress: item.progress)
         accessibilityTraits = .button
-        accessibilityHint = "開いて代替テキストを編集できます。"
+        accessibilityHint = ComposeTexts.Attachment.editHint
         accessibilityCustomActions = actions.map { action in
             UIAccessibilityCustomAction(name: action.title) { _ in
                 action.handler()
