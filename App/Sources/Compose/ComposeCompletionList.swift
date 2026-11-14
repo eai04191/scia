@@ -333,7 +333,7 @@ private struct CompletionListView: View {
             .glassEffect(.regular, in: .rect(cornerRadius: Self.cornerRadius))
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("補完の候補")
+        .accessibilityLabel(ComposeTexts.Completion.listLabel)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: anchor == .bottom ? .bottom : .top)
     }
 }
@@ -359,26 +359,26 @@ private struct CompletionRowView: View {
                     RowLayout(subtitleLines: 3) {
                         Image(systemName: "exclamationmark.triangle").foregroundStyle(.secondary)
                     } title: {
-                        Text("候補を読み込めませんでした")
+                        Text(ComposeTexts.Completion.failed)
                     } subtitle: {
                         Text(message)
                     } trailing: {
                         Image(systemName: logsIn ? "person.crop.circle.badge.exclamationmark" : "arrow.clockwise").foregroundStyle(.secondary)
                     }
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("候補を読み込めませんでした。\(message)")
+                    .accessibilityLabel(ComposeTexts.Completion.failedAccessibilityLabel(message: message))
                 }
             case .loading:
                 RowLayout {
                     ProgressView()
                 } title: {
-                    Text("候補を探しています").foregroundStyle(.secondary)
+                    Text(ComposeTexts.Completion.loading).foregroundStyle(.secondary)
                 }
             case .empty(let kind):
                 RowLayout {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 } title: {
-                    Text(Self.emptyTitle(kind)).foregroundStyle(.secondary)
+                    Text(kind.emptyTitle).foregroundStyle(.secondary)
                 }
             }
         }
@@ -405,10 +405,7 @@ private struct CompletionRowView: View {
             .accessibilityLabel("\(account.displayNameOrUsername)、@\(account.acct)")
         case .localAccount(let mention, let source):
             // 検索の結果より上に出る理由が分かるよう、どこから出した人かを添える。
-            let note = switch source {
-            case .reply: "返信先"
-            case .recent: "前にメンションした人"
-            }
+            let subtitle = ComposeTexts.Completion.localAccountSubtitle(acct: mention.acct, source: source)
             RowLayout {
                 AvatarImage(url: mention.avatar, shape: model.settings.appearance.avatarShape)
             } title: {
@@ -419,12 +416,12 @@ private struct CompletionRowView: View {
             } subtitle: {
                 // 長いハンドルでも、どこから出した人かは切らずに見せる。
                 HStack(spacing: 0) {
-                    Text("@\(mention.acct)").fadingTail(of: mention.acct)
-                    Text("・\(note)").layoutPriority(1)
+                    Text(subtitle.text[..<subtitle.emphasis.upperBound]).fadingTail(of: mention.acct)
+                    Text(subtitle.text[subtitle.emphasis.upperBound...]).layoutPriority(1)
                 }
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(mention.displayNameOrUsername)、@\(mention.acct)、\(note)")
+            .accessibilityLabel("\(mention.displayNameOrUsername)、@\(mention.acct)、\(source.title)")
         case .hashtag(let hashtag):
             RowLayout {
                 Image(systemName: "number").foregroundStyle(.secondary)
@@ -432,16 +429,13 @@ private struct CompletionRowView: View {
                 Text(hashtag.name).fadingTail(of: hashtag.name)
             } subtitle: {
                 if hashtag.recentUses > 0 {
-                    Text("最近の投稿\(hashtag.recentUses.formatted())件")
+                    Text(ComposeTexts.Completion.recentUses(hashtag.recentUses))
                 }
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("ハッシュタグ \(hashtag.name)")
+            .accessibilityLabel(ComposeTexts.Completion.hashtagAccessibilityLabel(name: hashtag.name))
         case .ownHashtag(let hashtag):
-            let note = switch hashtag.source {
-            case .featured(let count): "プロフィールのタグ・投稿\(count.formatted())件"
-            case .recent: "最近使ったタグ"
-            }
+            let note = hashtag.source.title
             // 検索の結果より上に出る理由が分かるよう、自分のタグであることを添える。
             RowLayout {
                 Image(systemName: "number").foregroundStyle(.secondary)
@@ -451,7 +445,7 @@ private struct CompletionRowView: View {
                 Text(note)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("ハッシュタグ \(hashtag.name)、\(note)")
+            .accessibilityLabel(ComposeTexts.Completion.hashtagAccessibilityLabel(name: hashtag.name, note: note))
         case .emoji(let emoji):
             RowLayout {
                 EmojiImage(url: emoji.staticUrl, animationURL: model.settings.animatesCustomEmojis ? emoji.url : nil, store: model.emojiImages)
@@ -459,7 +453,7 @@ private struct CompletionRowView: View {
                 Text(":\(emoji.shortcode):").fadingTail(of: emoji.shortcode)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("絵文字 \(emoji.shortcode)")
+            .accessibilityLabel(ComposeTexts.Completion.emojiAccessibilityLabel(name: emoji.shortcode))
         case .standardEmoji(let emoji):
             // 本文と同じ設定の絵（OSの絵文字かtwemoji）で、カスタム絵文字の画像と同じくらいの大きさに描く。
             // 文字ではなく画像と並べる絵なので、端末の文字の大きさではなく枠の大きさで決める。
@@ -472,15 +466,7 @@ private struct CompletionRowView: View {
                 Text(emoji.englishName).fadingTail(of: emoji.englishName)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("絵文字 \(emoji.name)")
-        }
-    }
-
-    private static func emptyTitle(_ kind: CompletionKind) -> String {
-        switch kind {
-        case .mention: "一致するアカウントがありません"
-        case .hashtag: "一致するハッシュタグがありません"
-        case .emoji: "一致する絵文字がありません"
+            .accessibilityLabel(ComposeTexts.Completion.emojiAccessibilityLabel(name: emoji.name))
         }
     }
 }

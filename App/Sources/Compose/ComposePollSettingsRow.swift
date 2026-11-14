@@ -14,11 +14,11 @@ enum SettingsLabelLength: CaseIterable {
     typealias Label = (title: String, symbolName: String)
 
     static func multipleLabels(short: Bool) -> (off: Label, on: Label) {
-        short ? (("1つ", "checklist"), ("複数", "checklist.checked")) : (("1つ選ぶ", "checklist"), ("複数選ぶ", "checklist.checked"))
+        ((ComposeTexts.Poll.multipleTitle(false, short: short), "checklist"), (ComposeTexts.Poll.multipleTitle(true, short: short), "checklist.checked"))
     }
 
     static func hidesTotalsLabels(short: Bool) -> (off: Label, on: Label) {
-        short ? (("表示", "eye"), ("隠す", "eye.slash")) : (("結果を表示", "eye"), ("結果を隠す", "eye.slash"))
+        ((ComposeTexts.Poll.hidesTotalsTitle(false, short: short), "eye"), (ComposeTexts.Poll.hidesTotalsTitle(true, short: short), "eye.slash"))
     }
 }
 
@@ -231,7 +231,7 @@ private struct ComposePollSettingsContent: View {
         let expiry = PollDraft.expiryTitle(settings.expiresIn)
         HStack(spacing: 6) {
             Menu {
-                Picker("締め切り", selection: Binding(get: { settings.expiresIn }, set: { actions?.onSetExpiry($0) })) {
+                Picker(ComposeTexts.Poll.expiry, selection: Binding(get: { settings.expiresIn }, set: { actions?.onSetExpiry($0) })) {
                     ForEach(settings.expiryChoices, id: \.self) { seconds in
                         Text(PollDraft.expiryTitle(seconds)).tag(seconds)
                     }
@@ -244,7 +244,7 @@ private struct ComposePollSettingsContent: View {
             }
             // 締め切りは「1日」のように短く、切ると値が読めなくなるため、幅が足りなければ切り替えのボタンの文字を切る。
             .layoutPriority(1)
-            .accessibilityLabel("締め切り")
+            .accessibilityLabel(ComposeTexts.Poll.expiry)
             .accessibilityValue(expiry)
 
             // 押すとラベルの長さが変わり、右隣の結果のボタンがずれるため、選び方のボタンは2つの値の長いほうに幅を合わせる。
@@ -252,15 +252,15 @@ private struct ComposePollSettingsContent: View {
             toggle(value: settings.multiple, labels: multiple, reservesBothValues: true) {
                 actions?.onSetMultiple(!settings.multiple)
             }
-            .accessibilityLabel("選び方")
-            .accessibilityValue(settings.multiple ? "複数選ぶ" : "1つ選ぶ")
+            .accessibilityLabel(ComposeTexts.Poll.choiceLabel)
+            .accessibilityValue(ComposeTexts.Poll.multipleTitle(settings.multiple))
 
             toggle(value: settings.hidesTotals, labels: hidesTotals, reservesBothValues: reservesBothValues) {
                 actions?.onSetHidesTotals(!settings.hidesTotals)
             }
-            .accessibilityLabel("結果")
-            .accessibilityValue(settings.hidesTotals ? "結果を隠す" : "結果を表示")
-            .accessibilityHint(settings.hidesTotals ? "投票した人に票数を表示します。" : "締め切るまで票数を隠します。")
+            .accessibilityLabel(ComposeTexts.Poll.resultsLabel)
+            .accessibilityValue(ComposeTexts.Poll.hidesTotalsTitle(settings.hidesTotals))
+            .accessibilityHint(ComposeTexts.Poll.hidesTotalsHint(settings.hidesTotals))
 
             Spacer(minLength: 0)
 
@@ -274,7 +274,7 @@ private struct ComposePollSettingsContent: View {
             }
             .buttonStyle(.plain)
             .layoutPriority(1)
-            .accessibilityLabel("投票を外す")
+            .accessibilityLabel(ComposeTexts.Poll.remove)
         }
     }
 

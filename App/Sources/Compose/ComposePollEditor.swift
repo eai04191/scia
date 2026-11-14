@@ -262,8 +262,8 @@ final class ComposePollEditor: UIView {
             summaryChevron.trailingAnchor.constraint(equalTo: summaryButton.trailingAnchor, constant: -10),
             summaryChevron.centerYAnchor.constraint(equalTo: summaryButton.centerYAnchor),
         ])
-        summaryButton.accessibilityLabel = "投票の選択肢"
-        summaryButton.accessibilityHint = "開いて選択肢を書きます。"
+        summaryButton.accessibilityLabel = ComposeTexts.Poll.optionsLabel
+        summaryButton.accessibilityHint = ComposeTexts.Poll.optionsHint
         summaryButton.addAction(UIAction { [weak self] _ in self?.onUnfold() }, for: .primaryActionTriggered)
         // 1行の文字は大きさを決めて入れるので、文字の大きさの設定が変わったら入れ直す。
         summaryButton.registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { [weak self] (_: UIButton, _) in
@@ -276,13 +276,13 @@ final class ComposePollEditor: UIView {
     /// 締め切りは出さない。選択肢のあとに並べると、小さい画面では末尾で切れて読めなかったため。
     private func updateSummary(_ poll: PollDraft) {
         let options = poll.options.filter { !$0.isEmpty }
-        var title = AttributedString(options.isEmpty ? "選択肢を書く" : options.joined(separator: "、"))
+        var title = AttributedString(options.isEmpty ? ComposeTexts.Poll.writeOptions : options.joined(separator: "、"))
         title.font = .preferredFont(forTextStyle: .body)
         title.foregroundColor = options.isEmpty ? .placeholderText : .label
         summaryButton.configuration?.attributedTitle = title
         // 選択肢の文字が末尾のシンボルに重ならないよう、シンボルの幅だけ文字の右の余白を空ける。文字の大きさで幅が変わるので、入れ直すたびに測る。
         summaryButton.configuration?.contentInsets.trailing = 10 + summaryChevron.intrinsicContentSize.width + 8
-        summaryButton.accessibilityValue = options.isEmpty ? "まだ書いていません" : options.joined(separator: "、")
+        summaryButton.accessibilityValue = options.isEmpty ? ComposeTexts.Poll.noOptionsValue : options.joined(separator: "、")
     }
 
     private func makeOptionRow(index: Int, multiple: Bool) -> OptionRow {
@@ -295,9 +295,8 @@ final class ComposePollEditor: UIView {
         let field = ComposeLineField()
         field.font = .preferredFont(forTextStyle: .body)
         field.adjustsFontForContentSizeCategory = true
-        // 3つ目からは、書くと次の欄が増えることが分かるよう、足す欄として案内する。
-        field.placeholder = index < 2 ? "選択肢\(index + 1)" : "選択肢を追加"
-        field.accessibilityLabel = "選択肢\(index + 1)"
+        field.placeholder = ComposeTexts.Poll.optionPlaceholder(index: index)
+        field.accessibilityLabel = ComposeTexts.Poll.optionLabel(index: index)
         field.returnKeyType = .next
         // 選択肢は短い単語や固有名詞が多く、欄を移ったときに自動修正で替わっても気づきにくいため、修正も先頭の大文字化もしない。
         field.autocorrectionType = .no
