@@ -44,14 +44,14 @@ struct MediaCacheView: View {
                         }
                     }
                     // 写真アプリのグリッドの下と同じく、件数だけを出す。
-                    Text("\(entries.count)件")
+                    Text(SettingsTexts.count(entries.count))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
                         .padding()
                 }
             } else {
-                ProgressView("読み込んでいます")
+                ProgressView(SettingsTexts.MediaCache.loading)
             }
         }
         .navigationTitle(category.title)
@@ -60,7 +60,7 @@ struct MediaCacheView: View {
             entries = await actions.entries()
         }
         .quickLookPreview($previewing)
-        .failureAlert("開けませんでした", reason: $openError)
+        .failureAlert(SettingsTexts.MediaCache.openFailed, reason: $openError)
     }
 
     private func open(_ entry: MediaFileCache.Entry) {
@@ -69,7 +69,7 @@ struct MediaCacheView: View {
                 if let copy = try await actions.open(entry.id) {
                     previewing = copy
                 } else {
-                    openError = ErrorPresentation(message: "キャッシュから削除されていました。", code: nil)
+                    openError = ErrorPresentation(message: SettingsTexts.MediaCache.removedFromCache, code: nil)
                     entries = await actions.entries()
                 }
             } catch {

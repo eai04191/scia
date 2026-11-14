@@ -50,14 +50,14 @@ struct AutoTranslationSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Toggle("自動翻訳", isOn: $settings.isAutoTranslationEnabled.animation())
+                Toggle(SettingsTexts.AutoTranslation.toggle, isOn: $settings.isAutoTranslationEnabled.animation())
             }
             if settings.isAutoTranslationEnabled {
                 options
             }
         }
         .topEdgeEffectHiddenOnMac()
-        .navigationTitle("自動翻訳")
+        .navigationTitle(SettingsPage.autoTranslation.title)
         .navigationBarTitleDisplayMode(.inline)
         .task(.withoutRequests, id: subject) { await poll(subject) }
         .translationTask(download) { @concurrent session in
@@ -68,17 +68,17 @@ struct AutoTranslationSettingsView: View {
 
     @ViewBuilder private var options: some View {
         Section {
-            Picker("翻訳先", selection: $settings.autoTranslationTarget) {
-                Text("デバイスの言語（\(Self.name(of: Locale.current.language))）").tag(String?.none)
+            Picker(SettingsTexts.AutoTranslation.target, selection: $settings.autoTranslationTarget) {
+                Text(SettingsTexts.AutoTranslation.deviceLanguage(name: Self.name(of: Locale.current.language))).tag(String?.none)
                 ForEach(availability.targets) { language in
                     Text(language.name).tag(String?.some(language.code))
                 }
             }
             .pickerStyle(.navigationLink)
             if canUseAppleIntelligence {
-                Picker("翻訳モード", selection: $settings.autoTranslationStrategy) {
+                Picker(SettingsTexts.AutoTranslation.mode, selection: $settings.autoTranslationStrategy) {
                     Text(verbatim: "Apple Intelligence").tag(TranslationStrategy.highFidelity)
-                    Text("標準").tag(TranslationStrategy.lowLatency)
+                    Text(SettingsTexts.AutoTranslation.standardMode).tag(TranslationStrategy.lowLatency)
                 }
             }
         }
@@ -86,7 +86,7 @@ struct AutoTranslationSettingsView: View {
             languages
         }
         if !settings.autoTranslationExcludedHandles.isEmpty {
-            Section("自動翻訳しないユーザー") {
+            Section(SettingsTexts.AutoTranslation.excludedUsers) {
                 ForEach(settings.autoTranslationExcludedHandles, id: \.self) { handle in
                     Text(verbatim: "@\(handle)")
                 }
@@ -102,10 +102,10 @@ struct AutoTranslationSettingsView: View {
                     Toggle(language.name, isOn: isOn(language))
                 }
             } header: {
-                Text(usesSharedModel ? "翻訳元" : "ダウンロード済み")
+                Text(SettingsTexts.AutoTranslation.installedHeader(usesSharedModel: usesSharedModel))
             } footer: {
                 if !usesSharedModel {
-                    Text("言語は“設定”>“アプリ”>“翻訳”>“言語”で削除できます。")
+                    Text(SettingsTexts.AutoTranslation.removeLanguageFooter)
                 }
             }
         }
@@ -121,10 +121,10 @@ struct AutoTranslationSettingsView: View {
                             Image(systemName: "plus")
                         }
                     }
-                    .accessibilityLabel("\(language.name)をダウンロード")
+                    .accessibilityLabel(SettingsTexts.AutoTranslation.download(languageName: language.name))
                 }
             } header: {
-                Text("ダウンロード可能な言語")
+                Text(SettingsTexts.AutoTranslation.downloadable)
             }
         }
     }

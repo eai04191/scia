@@ -1,3 +1,4 @@
+import SciaCore
 import SwiftUI
 
 /// アプリに入れたり使ったりしている、ほかの人の作ったものと、そのライセンス。項目ごとに折りたたみ、開くと配布元と使い方を出す。
@@ -8,7 +9,7 @@ struct LicensesView: View {
                 LicenseRow(item: item)
             }
         }
-        .navigationTitle("ライセンス")
+        .navigationTitle(SettingsPage.licenses.title)
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -37,10 +38,10 @@ private struct LicenseRow: View {
             }
             .font(.subheadline)
             if let source = item.source {
-                Link("配布元", destination: source)
+                Link(SettingsTexts.Licenses.source, destination: source)
             }
             if let licenseURL = item.licenseURL {
-                Link("ライセンス（\(item.license)）", destination: licenseURL)
+                Link(SettingsTexts.Licenses.licenseLink(name: item.license), destination: licenseURL)
             }
         } label: {
             LabeledContent(item.name, value: item.license)

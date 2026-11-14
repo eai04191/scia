@@ -56,25 +56,25 @@ struct AccountView: View {
                 NavigationLink {
                     AnnouncementsPage(make: context.makeAnnouncements)
                         .ignoresSafeArea()
-                        .navigationTitle("サーバーのお知らせ")
+                        .navigationTitle(SettingsTexts.Account.announcements)
                         .navigationBarTitleDisplayMode(.inline)
                 } label: {
                     if unreadAnnouncementCount > 0 {
-                        LabeledContent("サーバーのお知らせ", value: "未読\(unreadAnnouncementCount)件")
+                        LabeledContent(SettingsTexts.Account.announcements, value: SettingsTexts.Account.unreadAnnouncements(count: unreadAnnouncementCount))
                     } else {
-                        Text("サーバーのお知らせ")
+                        Text(SettingsTexts.Account.announcements)
                     }
                 }
             } header: {
                 Text(context.server)
             }
             Section {
-                row("プロフィール", opens: .profile)
-                row("ブックマーク", opens: .bookmarks)
-                row("お気に入り", opens: .favourites)
-                row("フォロー中のハッシュタグ", opens: .followedTags)
-                row("予約投稿", opens: .scheduled)
-                NavigationLink("リスト") {
+                row(SettingsTexts.Account.profile, opens: .profile)
+                row(TabItem.bookmarks.title, opens: .bookmarks)
+                row(TabItem.favourites.title, opens: .favourites)
+                row(TabItem.followedTags.title, opens: .followedTags)
+                row(TabItem.scheduled.title, opens: .scheduled)
+                NavigationLink(SettingsTexts.Account.lists) {
                     AccountListsView(settings: settings, account: account, context: context)
                 }
             } header: {
@@ -82,26 +82,26 @@ struct AccountView: View {
             }
             Section {
                 // この節の画面は投稿やリンクを出さないので、アカウントの画面を閉じずに、この中で進む。
-                NavigationLink("投稿のデフォルト") {
+                NavigationLink(SettingsTexts.PostingDefaults.title) {
                     PostingDefaultsView(model: context.postingDefaults.model, languages: context.postingDefaults.languages)
                 }
-                NavigationLink("フィルター") {
+                NavigationLink(SettingsTexts.Filters.title) {
                     FiltersView(model: context.filters.model, now: context.filters.now)
                 }
                 if context.showsNotificationPolicy() {
-                    NavigationLink("通知のフィルタリング") {
+                    NavigationLink(SettingsTexts.NotificationFiltering.title) {
                         NotificationPolicyView(model: context.notificationPolicy)
                     }
                 }
             }
             if context.showsLogOut {
                 Section {
-                    Button("ログアウト", role: .destructive) { context.open(.logOut) }
+                    Button(SettingsTexts.Account.logOut, role: .destructive) { context.open(.logOut) }
                 }
             }
         }
         .topEdgeEffectHiddenOnMac()
-        .navigationTitle("アカウント")
+        .navigationTitle(SettingsPage.account.title)
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -166,22 +166,22 @@ private struct AccountListsView: View {
                 AccountScreenRow(title: list.title) { context.open(.list(id: list.id, title: list.title)) }
                     .swipeActions {
                         // 確かめてから消すので、スワイプしきっても行は残し、消せたら並びから外れる。
-                        Button("削除") { context.deleteList(list.id, list.title) }
+                        Button(SettingsTexts.delete) { context.deleteList(list.id, list.title) }
                             .tint(.red)
                     }
             }
         }
         .overlay {
             if lists.isEmpty {
-                ContentUnavailableView("リストはありません", systemImage: "list.bullet")
+                ContentUnavailableView(SettingsTexts.Account.noLists, systemImage: "list.bullet")
             }
         }
         .topEdgeEffectHiddenOnMac()
-        .navigationTitle("リスト")
+        .navigationTitle(SettingsTexts.Account.lists)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button("リストを作成", systemImage: "plus", action: context.createList)
+                Button(SettingsTexts.createList, systemImage: "plus", action: context.createList)
             }
         }
     }
@@ -206,7 +206,7 @@ private struct AccountSheet: View {
             AccountView(settings: settings, account: account, context: context)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("完了") { dismiss() }
+                        Button(SettingsTexts.done) { dismiss() }
                     }
                 }
         }

@@ -235,14 +235,14 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             let element = rows[index].element
             if case .item(let item, _) = element, let itemDeletion, itemDeletion.canDelete(item) {
                 // 消すのは確かめてサーバーが受け付けてからなので、スワイプした行はいったん戻す。外れた並びが届いたら、行を動きで閉じる。
-                let delete = UIContextualAction(style: .destructive, title: "削除") { [weak self] _, _, completion in
+                let delete = UIContextualAction(style: .destructive, title: SettingsTexts.delete) { [weak self] _, _, completion in
                     self?.requestDeletion(of: item)
                     completion(false)
                 }
                 return UISwipeActionsConfiguration(actions: [delete])
             }
             guard element.isSeparator else { return nil }
-            let delete = UIContextualAction(style: .destructive, title: "削除") { [weak self, id = rows[index].id] _, _, completion in
+            let delete = UIContextualAction(style: .destructive, title: SettingsTexts.delete) { [weak self, id = rows[index].id] _, _, completion in
                 self?.removeRow(id: id)
                 completion(true)
             }
@@ -282,16 +282,16 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
                 content.image = UIImage(systemName: action.symbolName)
                 content.textProperties.color = .tintColor
             case .addSeparator:
-                content.text = "区切り線を追加"
+                content.text = SettingsTexts.MenuLayout.addSeparator
                 content.textProperties.color = .tintColor
             case .addRowSeparator:
-                content.text = "横並びを追加"
+                content.text = SettingsTexts.MenuLayout.addRowSeparator
                 content.textProperties.color = .tintColor
             case .reset:
-                content.text = "デフォルトの並びに戻す"
+                content.text = SettingsTexts.MenuLayout.reset
                 content.textProperties.color = .systemRed
             case .empty:
-                content.text = "なし"
+                content.text = SettingsTexts.MenuLayout.empty
                 content.textProperties.color = .secondaryLabel
             case .row, .option:
                 break
@@ -494,7 +494,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     /// 横並びに入る項目は、字下げし、字下げの見えないVoiceOverでは横に並ぶことを読み上げる。
     private func setRowGroupMembership(_ isMember: Bool, of cell: UICollectionViewListCell) {
         cell.indentationLevel = isMember ? 1 : 0
-        cell.accessibilityHint = isMember ? "メニューで横に並びます。" : nil
+        cell.accessibilityHint = isMember ? SettingsTexts.MenuLayout.rowGroupHint : nil
     }
 
     /// 横並びに入る項目の字下げの幅。既定の幅では、アイコンがずれて見えるだけで、まとまりに見えないため広げる。
@@ -627,14 +627,14 @@ private struct SeparatorRow: View {
     var body: some View {
         HStack(spacing: 12) {
             SeparatorLine()
-            Text("区切り線")
+            Text(SettingsTexts.MenuLayout.separator)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize()
             SeparatorLine()
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("区切り線")
+        .accessibilityLabel(SettingsTexts.MenuLayout.separator)
     }
 }
 
@@ -657,7 +657,7 @@ private struct RowSeparatorRow: View {
                     Toggle(isOn: Binding { size == choice } set: { if $0 { size = choice } }) {
                         Image(systemName: choice.symbolName)
                         Text(choice.title)
-                        Text("\(choice.capacity)個まで")
+                        Text(choice.capacityTitle)
                     }
                 }
             } label: {
@@ -674,7 +674,7 @@ private struct RowSeparatorRow: View {
             }
             // 区切り線の行のラベルなので、ティントカラーにせず、前からの控えめな色のままにする。押せることはシェブロンで示す。
             .buttonStyle(.plain)
-            .accessibilityLabel("横並びの区切り線")
+            .accessibilityLabel(SettingsTexts.MenuLayout.rowSeparatorAccessibilityLabel)
             .accessibilityValue(size.title)
             SeparatorLine()
         }
@@ -683,21 +683,6 @@ private struct RowSeparatorRow: View {
 }
 
 private extension MenuRowSize {
-    var title: String {
-        switch self {
-        case .medium: "アイコンと名前"
-        case .small: "アイコンのみ"
-        }
-    }
-
-    /// 行のラベル。前からあるアイコンと名前の横並びは「横並び」のままにし、アイコンだけのときに大きさを添える。
-    var rowTitle: String {
-        switch self {
-        case .medium: "横並び"
-        case .small: "横並び（アイコンのみ）"
-        }
-    }
-
     var symbolName: String {
         switch self {
         case .medium: "rectangle.split.3x1"

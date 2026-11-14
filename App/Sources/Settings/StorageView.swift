@@ -64,19 +64,19 @@ struct StorageView: View {
                     }
                 } footer: {
                     if let removeError {
-                        FailureReason(reason: removeError, lead: "消去できませんでした。")
+                        FailureReason(reason: removeError, lead: SettingsTexts.Storage.removeFailureLead)
                             .foregroundStyle(.red)
                     }
                 }
                 Section {
                     LabeledContent(StorageBreakdown.appTitle, value: Self.text(breakdown.appBytes))
                 } footer: {
-                    Text("このiPhoneに入っているアプリのファイルを合計した大きさです。iPhoneの設定の“Appのサイズ”とは数え方が違い、ずれることがあります。")
+                    Text(SettingsTexts.Storage.appSizeFooter)
                 }
             } else {
                 HStack {
                     Spacer()
-                    ProgressView("測っています")
+                    ProgressView(SettingsTexts.Storage.measuring)
                     Spacer()
                 }
             }
@@ -92,7 +92,7 @@ struct StorageView: View {
             titleVisibility: .visible,
             presenting: confirming
         ) { target in
-            Button("消去", role: .destructive) { remove(target) }
+            Button(SettingsTexts.Storage.remove, role: .destructive) { remove(target) }
         } message: { target in
             Text(target.confirmationMessage ?? "")
         }

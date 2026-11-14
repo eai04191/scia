@@ -27,7 +27,7 @@ struct AboutSettingsView: View {
         .navigationTitle(SettingsPage.about.title)
         .navigationBarTitleDisplayMode(.inline)
         .onDisappear { developerMode.resetTaps() }
-        .alert(developerMode.isEnabled ? "デバッグメニューをオンにしました" : "デバッグメニューをオフにしました", isPresented: $showsDeveloperModeChanged) {
+        .alert(SettingsTexts.About.developerModeChanged(isEnabled: developerMode.isEnabled), isPresented: $showsDeveloperModeChanged) {
             Button("OK") {}
         }
     }
@@ -65,8 +65,8 @@ struct AboutSettingsView: View {
             .overlay {
                 CopyMenuArea(value: value, all: BuildInfo.current.text, onTap: onTap)
             }
-            .accessibilityAction(named: "コピー") { UIPasteboard.general.string = value }
-            .accessibilityAction(named: "すべてコピー") { UIPasteboard.general.string = BuildInfo.current.text }
+            .accessibilityAction(named: SettingsTexts.About.copy) { UIPasteboard.general.string = value }
+            .accessibilityAction(named: SettingsTexts.About.copyAll) { UIPasteboard.general.string = BuildInfo.current.text }
     }
 }
 
@@ -116,8 +116,8 @@ private final class CopyMenuView: UIView, @MainActor UIEditMenuInteractionDelega
 
     func editMenuInteraction(_ interaction: UIEditMenuInteraction, menuFor configuration: UIEditMenuConfiguration, suggestedActions: [UIMenuElement]) -> UIMenu? {
         UIMenu(children: [
-            UIAction(title: "コピー") { [value] _ in UIPasteboard.general.string = value },
-            UIAction(title: "すべてコピー") { [all] _ in UIPasteboard.general.string = all },
+            UIAction(title: SettingsTexts.About.copy) { [value] _ in UIPasteboard.general.string = value },
+            UIAction(title: SettingsTexts.About.copyAll) { [all] _ in UIPasteboard.general.string = all },
         ])
     }
 }

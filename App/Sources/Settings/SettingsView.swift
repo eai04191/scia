@@ -93,7 +93,7 @@ struct SettingsView: View {
             .navigationTitle(SettingsPage.rootTitle)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("完了") { dismiss() }
+                    Button(SettingsTexts.done) { dismiss() }
                 }
             }
         }
@@ -149,11 +149,11 @@ struct SettingsView: View {
                 image: { [tabIcons] in tabIcons.icon(for: $0)?.menu },
                 imageRevision: { [tabIcons] in tabIcons.revision },
                 options: [MenuLayoutOption(
-                    title: "メニューに“カスタマイズ”を表示",
-                    footer: "切り替えタブのメニューに、この画面を開く“カスタマイズ”を表示します。",
+                    title: SettingsTexts.Tabs.showsCustomize,
+                    footer: SettingsTexts.Tabs.showsCustomizeFooter,
                     isOn: $settings.showsTabMenuCustomize
                 )],
-                actions: [MenuLayoutAction(title: "リストを作成", symbolName: "plus", handler: tabSources.createList)],
+                actions: [MenuLayoutAction(title: SettingsTexts.createList, symbolName: "plus", handler: tabSources.createList)],
                 itemDeletion: MenuLayoutItemDeletion(canDelete: { $0.isList || $0.isUserAdded }) { item in
                     if case .list(let id, let title) = item {
                         tabSources.deleteList(id, title)

@@ -1,3 +1,4 @@
+import SciaCore
 import SwiftUI
 
 /// Sciaが影響を受けたクライアントと、コードを書いたエージェント。コードや素材を取り込んだものではないので、ライセンスの画面とは分ける。
@@ -19,7 +20,7 @@ struct AcknowledgmentsView: View {
             }
         }
         .topEdgeEffectHiddenOnMac()
-        .navigationTitle("謝辞")
+        .navigationTitle(SettingsPage.acknowledgments.title)
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -53,13 +54,13 @@ private struct AcknowledgmentRow: View {
         } else {
             DisclosureGroup(item.name, isExpanded: $isExpanded) {
                 if let site = item.site {
-                    Link("ウェブサイト", destination: site)
+                    Link(SettingsTexts.Acknowledgments.website, destination: site)
                 }
                 if let github = item.github {
                     Link("GitHub", destination: github)
                 }
                 if let account = item.account {
-                    Button("アカウント") { openProfile(account) }
+                    Button(SettingsTexts.Acknowledgments.account) { openProfile(account) }
                 }
             }
         }

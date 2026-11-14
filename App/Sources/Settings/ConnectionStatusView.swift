@@ -12,11 +12,11 @@ struct ConnectionStatusView: View {
     var body: some View {
         List {
             Section {
-                LabeledContent("サーバー", value: instance.host() ?? instance.absoluteString)
-                LabeledContent("バージョン", value: diagnostics.serverVersion ?? "読み込めていません")
+                LabeledContent(SettingsTexts.Connection.server, value: instance.host() ?? instance.absoluteString)
+                LabeledContent(SettingsTexts.Connection.version, value: diagnostics.serverVersion ?? SettingsTexts.Connection.versionUnknown)
             }
             Section {
-                LabeledContent("ストリーミング") {
+                LabeledContent(SettingsTexts.Connection.streaming) {
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(ConnectionDiagnostics.StreamingState.title(of: diagnostics.streaming))
                         if let note = ConnectionDiagnostics.StreamingState.note(of: diagnostics.streaming) {
@@ -27,44 +27,44 @@ struct ConnectionStatusView: View {
                 }
                 if !diagnostics.streamingSubscriptions.isEmpty {
                     NavigationLink(value: SettingsPage.connectionTimelines) {
-                        LabeledContent("受信中のタイムライン", value: "\(diagnostics.streamingSubscriptions.count)")
+                        LabeledContent(SettingsPage.connectionTimelines.title, value: "\(diagnostics.streamingSubscriptions.count)")
                     }
                 }
             }
             if let status {
                 Section {
-                    LabeledContent("レート制限", value: status.pausedUntil.map { "\($0.formatted(date: .omitted, time: .standard))まで" } ?? "なし")
+                    LabeledContent(SettingsTexts.Connection.rateLimit, value: SettingsTexts.Connection.rateLimitValue(pausedUntil: status.pausedUntil))
                 } footer: {
                     if status.pausedUntil != nil {
-                        Text("自動の読み込みを控えています。")
+                        Text(SettingsTexts.Connection.rateLimitFooter)
                     }
                 }
                 if !status.disabledFeatures.isEmpty || !unprocessableFormats.isEmpty {
-                    Section("使っていない機能") {
+                    Section(SettingsTexts.Connection.disabledFeatures) {
                         ForEach(status.disabledFeatures, id: \.feature) { disabled in
-                            LabeledContent(Self.name(of: disabled.feature), value: "HTTP \(disabled.statusCode)・\(disabled.date.formatted(date: .omitted, time: .shortened))")
+                            LabeledContent(disabled.feature.title, value: SettingsTexts.Connection.disabledFeatureValue(statusCode: disabled.statusCode, date: disabled.date))
                         }
                         ForEach(unprocessableFormats, id: \.mimeType) { entry in
-                            LabeledContent(Self.name(ofImageType: entry.mimeType), value: "JPEGで送っています・\(entry.serverVersion.isEmpty ? "版が不明" : entry.serverVersion)")
+                            LabeledContent(SettingsTexts.Connection.imageTypeTitle(mimeType: entry.mimeType), value: SettingsTexts.Connection.unprocessableFormatValue(serverVersion: entry.serverVersion))
                         }
                     }
                 }
                 if !status.recentFailures.isEmpty {
-                    Section("最近のエラー") {
+                    Section(SettingsTexts.Connection.recentFailures) {
                         ForEach(status.recentFailures) { failure in
                             FailureRow(failure: failure)
                         }
                     }
                 }
                 Section {
-                    LabeledContent("読めなかった項目", value: "\(status.droppedCount)件")
+                    LabeledContent(SettingsTexts.Connection.dropped, value: SettingsTexts.count(status.droppedCount))
                 } footer: {
-                    Text("アプリを起動してからサーバーから届いた内容のうち読めなかった投稿や通知などの数です。")
+                    Text(SettingsTexts.Connection.droppedFooter)
                 }
             }
         }
         .topEdgeEffectHiddenOnMac()
-        .navigationTitle("接続の状態")
+        .navigationTitle(SettingsPage.connection.title)
         .navigationBarTitleDisplayMode(.inline)
         .task(.withoutRequests) {
             // 開いている間も状態は変わるため、読み直し続ける。
@@ -80,28 +80,6 @@ struct ConnectionStatusView: View {
         let version = diagnostics.serverVersion ?? ""
         return diagnostics.mediaFormats.entries.filter { $0.serverVersion == version }
     }
-
-    private static func name(ofImageType mimeType: String) -> String {
-        let format = switch mimeType {
-        case "image/heic": "HEIC"
-        case "image/heif": "HEIF"
-        case "image/avif": "AVIF"
-        default: mimeType
-        }
-        return "\(format)の画像を送る"
-    }
-
-    private static func name(of feature: OptionalFeature) -> String {
-        switch feature {
-        case .markers: "既読位置の保存"
-        case .preferences: "アカウントの設定（公開範囲のデフォルトなど）"
-        case .instanceV2: "サーバーの設定（v2）"
-        case .multipleStatuses: "リンクカードの取り直し"
-        case .multipleAccounts: "メンションされたユーザーのアイコン"
-        case .groupedNotifications: "通知のまとめ表示"
-        case .notificationFilter: "保留中の通知"
-        }
-    }
 }
 
 private struct FailureRow: View {
@@ -113,7 +91,7 @@ private struct FailureRow: View {
                 .font(.footnote.monospaced())
                 .lineLimit(1)
                 .truncationMode(.middle)
-            Text("\(failure.date.formatted(date: .omitted, time: .standard))・\(failure.kindDescription)")
+            Text(SettingsTexts.Connection.failureDetail(date: failure.date, kind: failure.kindDescription))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
@@ -137,31 +115,19 @@ struct StreamingTimelinesView: View {
     var body: some View {
         List(diagnostics.streamingSubscriptions, id: \.self) { subscription in
             LabeledContent {
-                Text(name(of: subscription))
+                Text(subscription.title(listTitles: listTitles))
             } label: {
                 Text(streamValue(of: subscription))
                     .font(.body.monospaced())
             }
         }
         .topEdgeEffectHiddenOnMac()
-        .navigationTitle("受信中のタイムライン")
+        .navigationTitle(SettingsPage.connectionTimelines.title)
         .navigationBarTitleDisplayMode(.inline)
     }
 
     /// サーバーへ申し込むストリームの値。
     private func streamValue(of subscription: StreamingSubscription) -> String {
         [subscription.stream, subscription.list ?? subscription.tag].compactMap(\.self).joined(separator: ":")
-    }
-
-    /// タブの名前にそろえる。
-    private func name(of subscription: StreamingSubscription) -> String {
-        switch subscription.stream {
-        case "user": "ホームと通知"
-        case "public:local": "ローカル"
-        case "public": "連合"
-        case "list": subscription.list.flatMap { listTitles[$0] }.map { "リスト“\($0)”" } ?? "リスト"
-        case "hashtag": subscription.tag.map { "#\($0)" } ?? "ハッシュタグ"
-        default: subscription.stream
-        }
     }
 }

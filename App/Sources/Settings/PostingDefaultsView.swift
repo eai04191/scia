@@ -16,7 +16,7 @@ struct PostingDefaultsView: View {
     var body: some View {
         content
             .topEdgeEffectHiddenOnMac()
-            .navigationTitle("投稿のデフォルト")
+            .navigationTitle(SettingsTexts.PostingDefaults.title)
             .navigationBarTitleDisplayMode(.inline)
             .task(.action) { model.reload(purpose: .action) }
         .sheet(item: $languagePicker) { picker in
@@ -39,13 +39,13 @@ struct PostingDefaultsView: View {
         if let preferences = model.preferences {
             Form {
                 Section {
-                    Picker("公開範囲", selection: Binding(get: { preferences.defaultVisibility }, set: { model.select(.visibility($0)) })) {
+                    Picker(SettingsTexts.PostingDefaults.visibility, selection: Binding(get: { preferences.defaultVisibility }, set: { model.select(.visibility($0)) })) {
                         ForEach(Self.visibilityChoices(including: preferences.defaultVisibility), id: \.self) { visibility in
                             Text(VisibilityOption(visibility).title).tag(visibility)
                         }
                     }
                     if let quotePolicy = model.shownQuotePolicy {
-                        Picker("引用できる人", selection: Binding(get: { quotePolicy }, set: { model.select(.quotePolicy($0)) })) {
+                        Picker(SettingsTexts.PostingDefaults.quotePolicy, selection: Binding(get: { quotePolicy }, set: { model.select(.quotePolicy($0)) })) {
                             ForEach(QuotePolicy.allCases, id: \.self) { policy in
                                 Text(policy.title).tag(policy)
                             }
@@ -64,7 +64,7 @@ struct PostingDefaultsView: View {
                         languagePicker = PostingLanguagePicker(defaultCode: nil, selectedCode: preferences.defaultLanguage, recentCodes: candidates, load: languages.load)
                     } label: {
                         HStack(spacing: 8) {
-                            LabeledContent("言語", value: languageName(preferences.defaultLanguage))
+                            LabeledContent(SettingsTexts.PostingDefaults.language, value: languageName(preferences.defaultLanguage))
                             Image(systemName: "chevron.forward")
                                 .font(.footnote.weight(.semibold))
                                 .foregroundStyle(.tertiary)
@@ -74,18 +74,18 @@ struct PostingDefaultsView: View {
                     .tint(.primary)
                 }
                 Section {
-                    Toggle("メディアを閲覧注意にする", isOn: Binding(get: { preferences.defaultSensitive }, set: { model.select(.sensitive($0)) }))
+                    Toggle(SettingsTexts.PostingDefaults.sensitive, isOn: Binding(get: { preferences.defaultSensitive }, set: { model.select(.sensitive($0)) }))
                 } footer: {
-                    Text("メディアを添付すると、注意書きの欄を開きます。")
+                    Text(SettingsTexts.PostingDefaults.sensitiveFooter)
                 }
             }
         } else if let failure = model.loadFailure {
             ContentUnavailableView {
-                Label("読み込めませんでした", systemImage: "exclamationmark.triangle")
+                Label(SettingsTexts.loadFailed, systemImage: "exclamationmark.triangle")
             } description: {
                 FailureReason(reason: failure)
             } actions: {
-                Button("再読み込み") { model.reload(purpose: .action) }
+                Button(SettingsTexts.reload) { model.reload(purpose: .action) }
             }
         } else {
             ProgressView()
@@ -99,7 +99,7 @@ struct PostingDefaultsView: View {
     }
 
     private func languageName(_ code: String?) -> String {
-        guard let code else { return "サーバーに任せる" }
+        guard let code else { return SettingsTexts.PostingDefaults.languageUnset }
         return PostingLanguage.localizedName(of: code, in: locale) ?? chosenLanguageNames[code] ?? PostingLanguage.badgeText(of: code)
     }
 
@@ -119,7 +119,7 @@ private struct PostingDefaultsSheet: View {
             PostingDefaultsView(model: model, languages: languages)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("完了") { dismiss() }
+                        Button(SettingsTexts.done) { dismiss() }
                     }
                 }
         }

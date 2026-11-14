@@ -19,11 +19,11 @@ struct FiltersView: View {
 
     var body: some View {
         content
-            .navigationTitle("フィルター")
+            .navigationTitle(SettingsTexts.Filters.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button("フィルターを作成", systemImage: "plus") { editing = EditedFilter(draft: FilterDraft()) }
+                    Button(SettingsTexts.Filters.create, systemImage: "plus") { editing = EditedFilter(draft: FilterDraft()) }
                         .disabled(model.filters == nil)
                 }
             }
@@ -47,23 +47,23 @@ struct FiltersView: View {
                     .tint(.primary)
                     .swipeActions {
                         // 確かめてから消すので、スワイプしきっても行は残し、消せたらリストから外れる。
-                        Button("削除") { deleting = filter }
+                        Button(SettingsTexts.delete) { deleting = filter }
                             .tint(.red)
                     }
                 }
             }
             .overlay {
                 if filters.isEmpty {
-                    ContentUnavailableView("フィルターはありません", systemImage: "line.3.horizontal.decrease")
+                    ContentUnavailableView(SettingsTexts.Filters.empty, systemImage: "line.3.horizontal.decrease")
                 }
             }
         } else if let failure = model.loadFailure {
             ContentUnavailableView {
-                Label("読み込めませんでした", systemImage: "exclamationmark.triangle")
+                Label(SettingsTexts.loadFailed, systemImage: "exclamationmark.triangle")
             } description: {
                 FailureReason(reason: failure)
             } actions: {
-                Button("再読み込み") { model.reload(purpose: .action) }
+                Button(SettingsTexts.reload) { model.reload(purpose: .action) }
             }
         } else {
             ProgressView()
@@ -87,7 +87,7 @@ private struct FiltersSheet: View {
                 .toolbar {
                     // 右上は「フィルターを作成」に使うので、閉じるボタンは左に置く。
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("完了") { dismiss() }
+                        Button(SettingsTexts.done) { dismiss() }
                     }
                 }
         }
@@ -98,18 +98,6 @@ private struct FiltersSheet: View {
 private struct FilterRow: View {
     let filter: ServerFilter
     let now: Date
-
-    private var isExpired: Bool { filter.expiresAt.map { $0 <= now } ?? false }
-
-    private var detail: String {
-        var parts = [filter.filterAction.title]
-        if isExpired {
-            parts.append("期限切れ")
-        } else if let expiresAt = filter.expiresAt {
-            parts.append("\(expiresAt.formatted(date: .abbreviated, time: .shortened))まで")
-        }
-        return parts.joined(separator: "・")
-    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -122,7 +110,7 @@ private struct FilterRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                Text(detail)
+                Text(filter.rowDetail(now: now))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -150,10 +138,10 @@ private struct FilterEditorView: View {
         NavigationStack {
             Form {
                 Section {
-                    GlyphLanguageField(placeholder: "名前", text: $draft.title)
+                    GlyphLanguageField(placeholder: SettingsTexts.Filters.namePlaceholder, text: $draft.title)
                 }
                 keywordsSection
-                Section("対象") {
+                Section(SettingsTexts.Filters.contexts) {
                     ForEach(FilterDraft.contextChoices, id: \.self) { context in
                         Toggle(context.title, isOn: Binding {
                             draft.contexts.contains(context)
@@ -163,7 +151,7 @@ private struct FilterEditorView: View {
                     }
                 }
                 Section {
-                    Picker("一致した投稿", selection: $draft.action) {
+                    Picker(SettingsTexts.Filters.action, selection: $draft.action) {
                         ForEach(actionChoices, id: \.self) { action in
                             Text(action.title).tag(action)
                         }
@@ -175,41 +163,41 @@ private struct FilterEditorView: View {
                 if let original = draft.original {
                     if !original.statuses.isEmpty {
                         Section {
-                            LabeledContent("個別に追加した投稿", value: "\(original.statuses.count)件")
+                            LabeledContent(SettingsTexts.Filters.statuses, value: SettingsTexts.count(original.statuses.count))
                         }
                     }
                     Section {
-                        Button("フィルターを削除", role: .destructive) { deleting = original }
+                        Button(SettingsTexts.Filters.deleteFilter, role: .destructive) { deleting = original }
                     }
                 }
             }
             // 送っている間に変えたものは保存されないので、送り終えるまで変えさせない。
             .disabled(model.isSaving)
-            .navigationTitle(draft.original == nil ? "新規フィルター" : "フィルターを編集")
+            .navigationTitle(SettingsTexts.Filters.editorTitle(isNew: draft.original == nil))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") {
+                    Button(SettingsTexts.cancel) {
                         if draft.hasChanges { confirmingDiscard = true } else { dismiss() }
                     }
                     // 送り始めた保存は止められないので、送り終えるまで閉じさせない。
                     .disabled(model.isSaving)
                     .confirmationDialog("", isPresented: $confirmingDiscard) {
-                        Button("変更を破棄", role: .destructive) { dismiss() }
+                        Button(SettingsTexts.Filters.discardChanges, role: .destructive) { dismiss() }
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     if model.isSaving {
                         ProgressView()
                     } else {
-                        Button("保存", action: save)
+                        Button(SettingsTexts.Filters.save, action: save)
                             .disabled(!draft.canSave || !draft.hasChanges)
                     }
                 }
             }
             // 書いたものを、下にスワイプして閉じたときに失わないようにする。
             .interactiveDismissDisabled(draft.hasChanges || model.isSaving)
-            .failureAlert("フィルターを保存できませんでした", reason: $saveFailure)
+            .failureAlert(SettingsTexts.Filters.saveFailed, reason: $saveFailure)
             .filterDeletion(of: $deleting, model: model) { dismiss() }
         }
     }
@@ -219,29 +207,29 @@ private struct FilterEditorView: View {
     private var keywordsSection: some View {
         ForEach($draft.keywords) { $keyword in
             Section {
-                GlyphLanguageField(placeholder: "キーワードまたはフレーズ", text: $keyword.keyword, corrects: false)
+                GlyphLanguageField(placeholder: SettingsTexts.Filters.keywordPlaceholder, text: $keyword.keyword, corrects: false)
                     .swipeActions {
-                        Button("削除", role: .destructive) { draft.keywords.removeAll { $0.id == keyword.id } }
+                        Button(SettingsTexts.delete, role: .destructive) { draft.keywords.removeAll { $0.id == keyword.id } }
                     }
-                Toggle("単語全体に一致", isOn: $keyword.wholeWord)
+                Toggle(SettingsTexts.Filters.wholeWord, isOn: $keyword.wholeWord)
             } header: {
                 if keyword.id == draft.keywords.first?.id {
-                    Text("キーワード")
+                    Text(SettingsTexts.Filters.keywords)
                 }
             }
         }
         Section {
-            Button("キーワードを追加") { draft.addKeyword() }
+            Button(SettingsTexts.Filters.addKeyword) { draft.addKeyword() }
         } header: {
             if draft.keywords.isEmpty {
-                Text("キーワード")
+                Text(SettingsTexts.Filters.keywords)
             }
         }
     }
 
     private var expirySection: some View {
         Section {
-            Picker("期限", selection: $draft.expiry) {
+            Picker(SettingsTexts.Filters.expiry, selection: $draft.expiry) {
                 if draft.original != nil {
                     Text(ServerFilter.keepExpiryTitle).tag(ServerFilter.ExpiryChange.keep)
                 }
@@ -290,11 +278,11 @@ private struct FilterDeletionModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .alert(
-                filter.map { "フィルター“\($0.title)”を削除しますか？" } ?? "",
+                filter.map { SettingsTexts.Filters.deleteConfirmation(title: $0.title) } ?? "",
                 isPresented: Binding { filter != nil } set: { if !$0 { filter = nil } },
                 presenting: filter
             ) { filter in
-                Button("削除", role: .destructive) {
+                Button(SettingsTexts.delete, role: .destructive) {
                     model.delete(filter.id) { failure in
                         if let failure {
                             self.failure = failure
@@ -303,8 +291,8 @@ private struct FilterDeletionModifier: ViewModifier {
                         }
                     }
                 }
-                Button("キャンセル", role: .cancel) {}
+                Button(SettingsTexts.cancel, role: .cancel) {}
             }
-            .failureAlert("フィルターを削除できませんでした", reason: $failure)
+            .failureAlert(SettingsTexts.Filters.deleteFailed, reason: $failure)
     }
 }

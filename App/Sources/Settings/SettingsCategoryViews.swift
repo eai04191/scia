@@ -202,7 +202,7 @@ struct SettingsScreenForm: View {
     /// 節の下の説明。iOSの版や機種で決まる説明は、ここで足す。
     private func footer(of section: SettingsSection) -> String? {
         if section.rows.contains(.item(.accentColor)), settings.accentColor.obscuresSelectedTab {
-            return "iOS 26.0ではこのカラーを使用すると選択中のタブがほかのタブと区別しにくくなります。iOS 26.1以降での使用を推奨します。"
+            return SettingsTexts.Display.accentColorObscuresSelectedTab
         }
         return section.footer
     }
@@ -293,7 +293,7 @@ struct AppIconSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Picker("アイコン", selection: appIconBinding) {
+                Picker(SettingsTexts.AppIcon.picker, selection: appIconBinding) {
                     ForEach(AppIconChoice.allCases, id: \.self) { choice in
                         AppIconChoiceRow(choice: choice)
                             .tag(choice)
@@ -303,7 +303,7 @@ struct AppIconSettingsView: View {
                 .labelsHidden()
             } footer: {
                 if let appIconError {
-                    FailureReason(reason: appIconError, lead: "アイコンを変えられませんでした。")
+                    FailureReason(reason: appIconError, lead: SettingsTexts.AppIcon.failureLead)
                 }
             }
         }
@@ -347,7 +347,7 @@ struct StatusBarTickerSettingsSection: View {
             StatusBarTickerToggle(isOn: $isOn, isAvailable: isAvailable)
         } footer: {
             if !isAvailable {
-                Text("このiPhoneでは使えません。")
+                Text(SettingsTexts.Display.statusBarTickerUnavailable)
             }
         }
     }

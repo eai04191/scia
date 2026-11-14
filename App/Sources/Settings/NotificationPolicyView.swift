@@ -11,7 +11,7 @@ struct NotificationPolicyView: View {
 
     var body: some View {
         content
-            .navigationTitle("通知のフィルタリング")
+            .navigationTitle(SettingsTexts.NotificationFiltering.title)
             .navigationBarTitleDisplayMode(.inline)
             .task(.action) { model.reload(purpose: .action) }
     }
@@ -19,7 +19,7 @@ struct NotificationPolicyView: View {
     @ViewBuilder
     private var content: some View {
         if !model.isSupported {
-            ContentUnavailableView("このサーバーでは使えません", systemImage: "nosign", description: Text("通知のフィルタリングはMastodon 4.3から使えます。"))
+            ContentUnavailableView(SettingsTexts.NotificationFiltering.unsupported, systemImage: "nosign", description: Text(SettingsTexts.NotificationFiltering.unsupportedDescription))
         } else if let policy = model.policy {
             Form {
                 ForEach(NotificationPolicy.Item.allCases, id: \.self) { item in
@@ -38,19 +38,19 @@ struct NotificationPolicyView: View {
                 titleVisibility: .visible,
                 presenting: confirmingDrop
             ) { item in
-                Button("“無視”に設定", role: .destructive) { model.select(.drop, for: item) }
-                Button("“保留”に設定") { model.select(.filter, for: item) }
-                Button("キャンセル", role: .cancel) {}
+                Button(SettingsTexts.NotificationFiltering.setDrop, role: .destructive) { model.select(.drop, for: item) }
+                Button(SettingsTexts.NotificationFiltering.setFilter) { model.select(.filter, for: item) }
+                Button(SettingsTexts.cancel, role: .cancel) {}
             } message: { _ in
-                Text("無視した通知はサーバーが作らず、あとから見られません。“保留”にすると保留中の通知で個別に確認できます。")
+                Text(SettingsTexts.NotificationFiltering.dropMessage)
             }
         } else if let failure = model.loadFailure {
             ContentUnavailableView {
-                Label("読み込めませんでした", systemImage: "exclamationmark.triangle")
+                Label(SettingsTexts.loadFailed, systemImage: "exclamationmark.triangle")
             } description: {
                 FailureReason(reason: failure)
             } actions: {
-                Button("再読み込み") { model.reload(purpose: .action) }
+                Button(SettingsTexts.reload) { model.reload(purpose: .action) }
             }
         } else {
             ProgressView()
@@ -61,7 +61,7 @@ struct NotificationPolicyView: View {
     private func row(for item: NotificationPolicy.Item, value: NotificationPolicy.Value) -> some View {
         if case .unknown = value {
             // サーバーが知らない値を返した項目は、選べない形で出し、送らない。
-            LabeledContent(item.title, value: "不明")
+            LabeledContent(item.title, value: value.title)
         } else {
             Picker(item.title, selection: Binding(get: { value }, set: { choose($0, for: item) })) {
                 ForEach(NotificationPolicy.Value.choices, id: \.self) { choice in
@@ -95,7 +95,7 @@ private struct NotificationPolicySheet: View {
             NotificationPolicyView(model: model)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("完了") { dismiss() }
+                        Button(SettingsTexts.done) { dismiss() }
                     }
                 }
         }

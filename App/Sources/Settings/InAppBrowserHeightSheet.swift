@@ -141,14 +141,14 @@ struct InAppBrowserHeightChoices: View {
         NavigationStack {
             Form {
                 Section {
-                    LabeledContent("上の余白", value: settings.inAppBrowserHeight.title)
-                    Button("標準に戻す") { settings.inAppBrowserHeight = .standard }
+                    LabeledContent(SettingsTexts.InAppBrowserHeight.topInset, value: settings.inAppBrowserHeight.title)
+                    Button(SettingsTexts.InAppBrowserHeight.reset) { settings.inAppBrowserHeight = .standard }
                         .disabled(settings.inAppBrowserHeight == .standard)
                 } footer: {
-                    Text("シートを上下にドラッグしてリンクを開いたときの高さを調整します。")
+                    Text(SettingsTexts.InAppBrowserHeight.footer)
                 }
                 Section {
-                    Toggle("最初から全画面で開く", isOn: $settings.opensInAppBrowserFullScreen)
+                    Toggle(SettingsTexts.InAppBrowserHeight.opensFullScreen, isOn: $settings.opensInAppBrowserFullScreen)
                 }
             }
             // アプリ内のSafariのシートと同じく、後ろのホームを透かさない。透けると、シートの上に見える量が分かりにくい。
@@ -156,12 +156,12 @@ struct InAppBrowserHeightChoices: View {
             .background(Color(uiColor: .systemBackground))
             // アプリ内のSafariのシートと同じく、上の帯と中身のあいだに区切り線を引く。
             .safeAreaInset(edge: .top, spacing: 0) { Divider() }
-            .navigationTitle("アプリ内のSafariの高さ")
+            .navigationTitle(SettingsItem.inAppBrowserHeight.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 // 引いて決めた高さを確かめて閉じるので、取りやめのバツではなく、確定のチェックマークにする。
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("完了", systemImage: "checkmark", action: onClose)
+                    Button(SettingsTexts.done, systemImage: "checkmark", action: onClose)
                 }
             }
         }

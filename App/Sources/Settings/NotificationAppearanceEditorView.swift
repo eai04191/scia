@@ -45,7 +45,7 @@ struct NotificationAppearanceEditorView: View {
                         Button(AppearanceCatalog.resetAllTitle, role: .destructive) { confirmsReset = true }
                             .disabled(!settings.isNotificationAppearanceModified)
                     } footer: {
-                        Text("メンションなどの投稿の見た目と行の余白やアイコンの列の幅は、“表示”の“投稿”に従います。文字の大きさは投稿の本文との差を保ちます。")
+                        Text(SettingsTexts.Appearance.notificationFooter)
                     }
                 }
             }
@@ -111,7 +111,7 @@ struct NotificationAppearanceGroupEditorView: View {
             // 数字のキーボードには確定のキーがないため、閉じて打った値を確定するボタンを置く。
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button("完了") {
+                Button(SettingsTexts.done) {
                     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                 }
             }

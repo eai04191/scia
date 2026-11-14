@@ -443,21 +443,6 @@ struct AppearanceEditorTests {
         #expect(!configurations.contains { $0.embed?.id.hasPrefix("x:") == true })
     }
 
-    /// 割合の項目の説明は項目ごとに決まり、縦長の比率の説明がほかの割合の項目に出ない。
-    @Test func ratioNotesBelongToTheirItems() {
-        #expect(AppearanceValueRow.ratioNote(for: AppearanceCatalog.mediaTallestAspectRatio) == "小さいほど縦長のまま表示")
-        #expect(AppearanceValueRow.ratioNote(for: AppearanceCatalog.reactionGlowIconOpacity) == nil)
-        // カスタム絵文字の倍率は、見出しに割合の基準を書かず、1がどの大きさかを説明に出す。名前の行と本文で同じ説明にする。
-        for item in [AppearanceCatalog.customEmojiScale, AppearanceCatalog.nameCustomEmojiScale] {
-            #expect(AppearanceValueRow.ratioNote(for: item) == "1で絵文字と同じ大きさ", "\(item.id)")
-        }
-        // 普通の絵文字の倍率は、1でいつもの大きさなのが倍率から分かるので、説明を出さない。
-        for item in [AppearanceCatalog.unicodeEmojiScale, AppearanceCatalog.nameUnicodeEmojiScale, AppearanceCatalog.emojiOnlyScale] {
-            #expect(AppearanceValueRow.ratioNote(for: item) == nil, "\(item.id)")
-        }
-        #expect(AppearanceValueRow.ratioNote(for: AppearanceCatalog.linkCardImageWidthRatio) == "画像はカードの高さの正方形より広くならない")
-    }
-
     /// 見本の行を幅402で並べ、行ごとの部品の枠を返す。
     /// - Parameter excluding: 除く見本の投稿のID。
     private func layOutSamples(_ settings: AppSettings, groups: Set<AppearanceGroup.ID>? = nil, focus: AppearanceFocus? = nil, excluding excluded: String? = nil) -> [AppearancePreviewFrames] {

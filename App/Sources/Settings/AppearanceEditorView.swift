@@ -45,7 +45,7 @@ struct AppearanceEditorView: View {
                         Button(AppearanceCatalog.resetAllTitle, role: .destructive) { confirmsReset = true }
                             .disabled(!settings.isAppearanceModified)
                     } footer: {
-                        Text("文字の大きさはiPhoneの文字サイズが標準のときの大きさです。本文はiPhoneの文字サイズに合わせて伸び縮みし、ほかの文字は本文との差を保ちます。")
+                        Text(SettingsTexts.Appearance.footer)
                     }
                 }
             }
@@ -122,7 +122,7 @@ struct AppearanceGroupEditorView: View {
             // 数字のキーボードには確定のキーがないため、閉じて打った値を確定するボタンを置く。
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button("完了") {
+                Button(SettingsTexts.done) {
                     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                 }
             }
@@ -204,7 +204,7 @@ struct GroupLabel: View {
                 Circle()
                     .fill(.tint)
                     .frame(width: 6, height: 6)
-                    .accessibilityLabel("変更あり")
+                    .accessibilityLabel(SettingsTexts.Appearance.modified)
             }
         }
     }
@@ -233,7 +233,7 @@ struct AppearanceValueRow: View {
                         .fill(.tint)
                         .frame(width: 6, height: 6)
                         .opacity(settings.isModified(item) ? 1 : 0)
-                        .accessibilityLabel("変更あり")
+                        .accessibilityLabel(SettingsTexts.Appearance.modified)
                         .accessibilityHidden(!settings.isModified(item))
                 }
                 if let note {
@@ -272,7 +272,7 @@ struct AppearanceValueRow: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: onToggleFocus)
         .contextMenu {
-            Button("デフォルトに戻す", systemImage: "arrow.uturn.backward") {
+            Button(SettingsTexts.Appearance.resetItem, systemImage: "arrow.uturn.backward") {
                 settings.reset([item])
                 onFocus()
             }
@@ -307,12 +307,7 @@ struct AppearanceValueRow: View {
     }
 
     private var unitText: String? {
-        switch item.unit {
-        case .ratio: nil
-        case .lines: "行"
-        case .count: "個"
-        case .point, .bodyTextOffset, .textOffset: "pt"
-        }
+        item.unit.title
     }
 
     /// 打った数を値にする。文字の大きさは実際の大きさで打つので、本文との差に直す。範囲の外は範囲に収め、数でなければ元のままにする。
@@ -325,42 +320,16 @@ struct AppearanceValueRow: View {
         onFocus()
     }
 
-    /// 割合の項目の、値の向きの説明。割合の意味は項目ごとに違うので、単位ではなく項目で決める。
-    static func ratioNote(for item: AppearanceValue) -> String? {
-        switch item.id {
-        case AppearanceCatalog.mediaTallestAspectRatio.id: "小さいほど縦長のまま表示"
-        case AppearanceCatalog.mediaWidestAspectRatio.id: "大きいほど横長のまま表示"
-        case AppearanceCatalog.avatarCornerRatio.id: "0.5で円になる"
-        case AppearanceCatalog.quoteIndent.id: "1で本文の1文字分"
-        case AppearanceCatalog.linkCardImageWidthRatio.id: "画像はカードの高さの正方形より広くならない"
-        // カスタム絵文字の割合の基準（普通の絵文字を文字の大きさのまま描いたときの大きさ）は見出しに書かず、1がどの大きさかで伝える。普通の絵文字は、1でいつもの大きさなのが倍率から分かるので添えない。
-        case AppearanceCatalog.customEmojiScale.id, AppearanceCatalog.nameCustomEmojiScale.id: "1で絵文字と同じ大きさ"
-        default: nil
-        }
-    }
-
     private var note: String? {
-        let offset = settings.value(of: item)
-        switch item.unit {
-        case .point: return nil
-        case .lines: return offset == 0 ? (item == AppearanceCatalog.bodyTruncationThreshold ? "切らない" : "表示しない") : nil
-        case .count: return item == AppearanceCatalog.emojiOnlyLimit && offset == 0 ? "大きくしない" : nil
-        case .ratio: return Self.ratioNote(for: item)
-        case .bodyTextOffset: return offset == 0 ? "標準" : "標準\(Self.signed(offset))"
-        case .textOffset: return offset == 0 ? "本文と同じ" : "本文\(Self.signed(offset))"
-        }
+        item.note(for: settings.value(of: item))
     }
 
     private static func format(_ value: Double) -> String {
-        value.rounded() == value ? String(Int(value)) : String(format: "%.1f", value)
+        AppearanceValue.numberText(value)
     }
 
     private static func format(_ value: CGFloat) -> String {
         format(Double(value))
-    }
-
-    private static func signed(_ value: Double) -> String {
-        (value > 0 ? "+" : "−") + format(abs(value))
     }
 }
 

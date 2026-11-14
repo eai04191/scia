@@ -1,4 +1,5 @@
 import Observation
+import SciaCore
 import UIKit
 
 /// ホーム画面に出すアプリのアイコン。選んだものはシステムが覚えるため、AppSettingsには持たない。
@@ -18,8 +19,8 @@ enum AppIconChoice: CaseIterable {
 
     var title: String {
         switch self {
-        case .standard: "青地に白"
-        case .light: "白地に青"
+        case .standard: SettingsTexts.AppIcon.standard
+        case .light: SettingsTexts.AppIcon.light
         }
     }
 
