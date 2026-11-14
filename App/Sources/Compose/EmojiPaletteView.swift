@@ -451,7 +451,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         dataSource.supplementaryViewProvider = { [weak self] collectionView, kind, indexPath in
             let header = collectionView.dequeueReusableSupplementaryView(ofKind: kind, withReuseIdentifier: EmojiPaletteHeader.reuseIdentifier, for: indexPath)
             if let self, let header = header as? EmojiPaletteHeader, sections.indices.contains(indexPath.section) {
-                header.label.text = Self.title(of: sections[indexPath.section].kind)
+                header.label.text = sections[indexPath.section].kind.title
             }
             return header
         }
@@ -485,17 +485,6 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     private func emoji(at indexPath: IndexPath) -> PaletteEmoji? {
         guard sections.indices.contains(indexPath.section), sections[indexPath.section].emojis.indices.contains(indexPath.item) else { return nil }
         return sections[indexPath.section].emojis[indexPath.item]
-    }
-
-    static func title(of kind: EmojiPaletteSection.Kind) -> String {
-        switch kind {
-        case .recent: "最近使った絵文字"
-        case .uncategorized: "カスタム"
-        case .category(let name): name
-        case .standard(let name): name
-        case .searchResults: "検索の結果"
-        case .customEmojiStatus: "カスタム"
-        }
     }
 
     /// すべての絵文字を描き直す。枠の大きさやUnicodeの絵文字の絵のように、組み立てたセルすべてに関わる設定を変えたときに使う。
@@ -543,9 +532,9 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
             configuration.cornerStyle = .capsule
             configuration.image = sectionIcon(for: section)
             let button = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in self?.scrollToSection(index) })
-            button.accessibilityLabel = Self.title(of: section.kind)
+            button.accessibilityLabel = section.kind.title
             button.showsLargeContentViewer = true
-            button.largeContentTitle = Self.title(of: section.kind)
+            button.largeContentTitle = section.kind.title
             button.largeContentImage = configuration.image
             button.addInteraction(UILargeContentViewerInteraction())
             button.widthAnchor.constraint(greaterThanOrEqualToConstant: Self.sectionButtonWidth).isActive = true

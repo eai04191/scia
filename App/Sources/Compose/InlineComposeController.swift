@@ -2981,7 +2981,7 @@ final class InlineComposeController: NSObject {
 
         remainingLabel.text = "\(model.remainingCharacters)"
         remainingLabel.textColor = model.remainingCharacters < 0 ? .systemRed : .secondaryLabel
-        remainingLabel.accessibilityLabel = "残り\(model.remainingCharacters)文字"
+        remainingLabel.accessibilityLabel = model.remainingCharactersLabel
         remainingLabel.largeContentTitle = remainingLabel.accessibilityLabel
         sendButton.isEnabled = model.canPost || model.isWaitingForMedia
         sendButton.configuration?.showsActivityIndicator = model.isPosting
@@ -2990,12 +2990,7 @@ final class InlineComposeController: NSObject {
         if sendButton.configuration?.image != UIImage(systemName: sendSymbol) {
             sendButton.configuration?.image = UIImage(systemName: sendSymbol)
         }
-        sendButton.accessibilityLabel = switch (model.isWaitingForMedia, model.scheduledAt != nil) {
-        case (true, true): "予約をやめる"
-        case (true, false): "投稿をやめる"
-        case (false, true): "予約"
-        case (false, false): "投稿"
-        }
+        sendButton.accessibilityLabel = model.sendButtonTitle
         sendButton.largeContentTitle = sendButton.accessibilityLabel
 
         applyRestContent(chip: chip, attachments: attachmentItems)
@@ -3016,7 +3011,7 @@ final class InlineComposeController: NSObject {
     }
 
     /// 書いていないときの1行を、今の下書きに合わせる。
-    private func applyRestContent(chip: Chip?, attachments: [ComposeAttachmentStrip.Item]) {
+    private func applyRestContent(chip: ComposeContextChip?, attachments: [ComposeAttachmentStrip.Item]) {
         restContent.configure(symbolName: chip?.symbolName, showsSchedule: model.scheduledAt != nil, attachments: attachments, text: restText(), isPosting: model.isPosting)
         restRow.accessibilityValue = restAccessibilityValue(chip: chip, attachments: attachments)
     }
@@ -3042,7 +3037,7 @@ final class InlineComposeController: NSObject {
     }
 
     /// 出ているラベルの中身が替わるなら、替わる前のラベルの像。替わらないか、ラベルが見えていなければnil。
-    private func replyLabelSwitchSnapshot(to chip: Chip) -> UIView? {
+    private func replyLabelSwitchSnapshot(to chip: ComposeContextChip) -> UIView? {
         guard isOpen, bar.window != nil, !replyRow.isHidden, replyRow.alpha > 0, !UIAccessibility.isReduceMotionEnabled,
               replyButton.configuration?.title != chip.title || replyButton.configuration?.image != Self.chipSymbol(chip.symbolName)
         else { return nil }
@@ -3078,35 +3073,7 @@ final class InlineComposeController: NSObject {
         replyRow.setNeedsLayout()
     }
 
-    /// 本文の上のラベル。返信なら返信先、引用なら引用元、編集なら編集していること（返信の編集なら返信先も）を書く。
-    /// 編集では返信先を変えられないので、返信先のラベルは出さず、編集のラベルにまとめる。返信、引用、編集で1つの行を使い、行を増やさない。
-    private struct Chip {
-        let title: String
-        let symbolName: String
-        let hint: String
-        let clearLabel: String
-    }
-
-    private var chip: Chip? {
-        if let title = model.redraftChipTitle {
-            // 削除したあとは、押しても見せる元の投稿がない。
-            let deleted = model.redraft?.mayHaveDeleted == true
-            return Chip(title: title, symbolName: "square.and.pencil", hint: deleted ? "" : "タイムラインの元の投稿を表示します。", clearLabel: "書き直しをやめる")
-        }
-        if let title = model.rewriteChipTitle {
-            return Chip(title: title, symbolName: "pencil", hint: "予約投稿を表示します。", clearLabel: "書き直しをやめる")
-        }
-        if let title = model.editChipTitle {
-            return Chip(title: title, symbolName: "pencil", hint: "タイムラインの編集している投稿を表示します。", clearLabel: "編集をやめる")
-        }
-        if let quoteTarget = model.quoteTarget {
-            let acct = "@\(quoteTarget.displayed.account.acct)"
-            return Chip(title: "\(acct)の投稿を引用", symbolName: "quote.bubble.fill", hint: "タイムラインの引用元の投稿を表示します。", clearLabel: "引用をやめる")
-        }
-        guard let replyTo = model.replyTo else { return nil }
-        let acct = "@\(replyTo.displayed.account.acct)"
-        return Chip(title: "\(acct)への返信", symbolName: "arrowshape.turn.up.left.fill", hint: "タイムラインの返信先の投稿を表示します。", clearLabel: "返信をやめる")
-    }
+    private var chip: ComposeContextChip? { model.contextChip }
 
     /// 書いていないときの1行に、ラベルのアイコンとサムネイルに続けて出す、自分で書いた本文。何も書いていなければ書き出しを促す。
     /// 改行は空白にし、前後の空白は外す。開閉で入力欄の同じ文字と行き来するので、文字の属性は入力欄の文字のものを使う。
@@ -3147,7 +3114,7 @@ final class InlineComposeController: NSObject {
     }
 
     /// 書いていないときの1行の読み上げ。ラベルとサムネイルは文字を出さないので、書いているときのラベルと同じ文と、添付の数を読む。
-    private func restAccessibilityValue(chip: Chip?, attachments: [ComposeAttachmentStrip.Item]) -> String {
+    private func restAccessibilityValue(chip: ComposeContextChip?, attachments: [ComposeAttachmentStrip.Item]) -> String {
         var parts: [String] = []
         if let chip {
             parts.append(chip.title)

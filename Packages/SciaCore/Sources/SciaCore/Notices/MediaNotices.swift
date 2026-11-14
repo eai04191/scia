@@ -17,15 +17,13 @@ extension Notice {
         showFailure: @escaping @MainActor () -> Void
     ) -> Notice? {
         let failureAction = Action.disclosure(hint: "理由と、再試行か削除を選べます。", handler: showFailure)
+        guard let status else { return nil }
+        guard let title = status.title else { return reduction.map(mediaReducedDetail) }
         return switch status {
-        case nil: nil
-        case .ready: reduction.map(mediaReducedDetail)
-        case .exporting: Notice(id: "media.draft", kind: .progress, title: "書き出し中", value: progress.flatMap(percentText(of:)), valueIsProgress: true)
-        case .uploading: Notice(id: "media.draft", kind: .progress, title: "アップロード中", value: progress.flatMap(percentText(of:)), valueIsProgress: true)
-        case .processing: Notice(id: "media.draft", kind: .progress, title: "サーバーで処理中")
-        case .sendingDescription: Notice(id: "media.draft", kind: .progress, title: "代替テキストを送信中")
-        case .failed: Notice(id: "media.draft", kind: .failure, title: "アップロードできませんでした", action: failureAction)
-        case .descriptionFailed: Notice(id: "media.draft", kind: .failure, title: "代替テキストを送信できませんでした", action: failureAction)
+        case .ready: nil
+        case .exporting, .uploading: Notice(id: "media.draft", kind: .progress, title: title, value: progress.flatMap(percentText(of:)), valueIsProgress: true)
+        case .processing, .sendingDescription: Notice(id: "media.draft", kind: .progress, title: title)
+        case .failed, .descriptionFailed: Notice(id: "media.draft", kind: .failure, title: title, action: failureAction)
         }
     }
 

@@ -28,6 +28,18 @@ public struct EmojiPaletteSection: Equatable, Sendable, Identifiable {
         case searchResults
         /// カスタム絵文字のリストを読んでいる間か、読めなかったとき、カスタム絵文字のまとまりの場所に置く状態の段。絵文字は持たない。
         case customEmojiStatus
+
+        /// まとまりの見出し。
+        public var title: String {
+            switch self {
+            case .recent: "最近使った絵文字"
+            case .uncategorized: "カスタム"
+            case .category(let name): name
+            case .standard(let name): name
+            case .searchResults: "検索の結果"
+            case .customEmojiStatus: "カスタム"
+            }
+        }
     }
 
     public let kind: Kind

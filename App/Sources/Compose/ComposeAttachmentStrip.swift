@@ -356,15 +356,7 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
         sensitiveBadge.isHidden = !item.isSensitive
         let kindName = (item.local?.displayKind ?? item.attachedMedia?.type).map(\.displayName) ?? "メディア"
         accessibilityLabel = [kindName, item.isSensitive ? "閲覧注意" : "", description].filter { !$0.isEmpty }.joined(separator: "、")
-        accessibilityValue = switch item.status {
-        case .exporting: ["書き出し中", item.progress.flatMap(Notice.percentText(of:))].compactMap(\.self).joined(separator: "、")
-        case .uploading: ["アップロード中", item.progress.flatMap(Notice.percentText(of:))].compactMap(\.self).joined(separator: "、")
-        case .processing: "サーバーで処理中"
-        case .ready: nil
-        case .sendingDescription: "代替テキストを送信中"
-        case .failed: "アップロードできませんでした"
-        case .descriptionFailed: "代替テキストを送信できませんでした"
-        }
+        accessibilityValue = item.status.accessibilityValue(progress: item.progress)
         accessibilityTraits = .button
         accessibilityHint = "開いて代替テキストを編集できます。"
         accessibilityCustomActions = actions.map { action in
