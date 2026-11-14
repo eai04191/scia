@@ -77,7 +77,8 @@ extension ReactionGlow.Style {
     @MainActor
     init(tuning: TuningStore, settings: AppSettings) {
         typealias C = AppearanceCatalog
-        let height = settings.value(of: C.reactionGlowHeight)
+        // 光を出さない設定では、高さを0にして描かない。
+        let height = settings.appearance.showsReactionGlow ? settings.value(of: C.reactionGlowHeight) : 0
         let lightOpacity = settings.value(of: C.reactionGlowLightOpacity)
         self.init(
             height: height,

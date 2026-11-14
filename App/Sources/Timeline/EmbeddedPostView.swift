@@ -46,6 +46,8 @@ final class EmbeddedPostView: UIButton {
         var translation: Translation?
         /// 長い本文を切って「続きを読む」を出す行数。nilなら切らない。
         var truncation: BodyTruncation?
+        /// 切った本文の末尾に「続きを読む」を出す。
+        var showsReadMore = true
         /// 添付ファイルがなければnil。
         var media: MediaGridView.Content?
         var notes: [Note] = []
@@ -270,6 +272,7 @@ final class EmbeddedPostView: UIButton {
         }
         textLabel.attributedText = content.text
         textLabel.truncation = content.truncation
+        textLabel.showsReadMore = content.showsReadMore
         textLabel.isHidden = isCollapsed || content.text.length == 0
         let pulses: Bool? = textLabel.isHidden || !content.text.hasTranslationMark ? nil : content.translation.map { !$0.isTranslated }
         translationMark.apply(pulses: pulses, keepsPulse: previousTranslation?.isTranslated == false)
@@ -442,7 +445,7 @@ final class EmbeddedPostView: UIButton {
                 }
             }
         }
-        if !textLabel.isHidden, textLabel.isTruncatedByLength {
+        if !textLabel.isHidden, textLabel.isTruncatedByLength, textLabel.showsReadMore {
             actions.append(UIAccessibilityCustomAction(name: ReadMoreButton.title) { [weak self] _ in
                 self?.onExpandBody?()
                 return true

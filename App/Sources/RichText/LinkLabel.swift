@@ -34,6 +34,13 @@ final class LinkLabel: EmojiLabel {
             setNeedsLayout()
         }
     }
+    /// 切った本文の末尾に「続きを読む」を出す。出さなければ、最後の行の末尾を薄くするだけにする。
+    var showsReadMore = true {
+        didSet {
+            guard showsReadMore != oldValue else { return }
+            setNeedsLayout()
+        }
+    }
     /// 「続きを読む」が押されたときに呼ぶ。広げた状態を持つのは置く側で、`truncation`をnilにするまで見た目は変わらない。
     var onExpand: (() -> Void)?
     /// 幅ごとに決めた、本文を出す行数。高さを測るたびに並べ直さないよう、文字列か切る行数が変わるまで使い回す。
@@ -133,17 +140,24 @@ final class LinkLabel: EmojiLabel {
             }
             return
         }
-        let button = loadedReadMoreButton()
-        button.isHidden = false
         let font = attributedText.attribute(.font, at: 0, effectiveRange: nil) as? UIFont ?? self.font ?? .preferredFont(forTextStyle: .body)
-        button.font = font
-        let size = button.intrinsicContentSize
         let isRightToLeft = effectiveUserInterfaceLayoutDirection == .rightToLeft
-        button.frame = CGRect(x: isRightToLeft ? 0 : bounds.width - size.width, y: line.baseline - font.ascender, width: size.width, height: size.height)
-        // ボタンの手前を少し空けて文字を消し、その手前の2文字分ほどで薄くしてつなぐ。
-        let gap = font.pointSize * 0.5
         let fadeWidth = font.pointSize * 2
-        let end = isRightToLeft ? button.frame.maxX + gap : button.frame.minX - gap
+        let end: CGFloat
+        if showsReadMore {
+            let button = loadedReadMoreButton()
+            button.isHidden = false
+            button.font = font
+            let size = button.intrinsicContentSize
+            button.frame = CGRect(x: isRightToLeft ? 0 : bounds.width - size.width, y: line.baseline - font.ascender, width: size.width, height: size.height)
+            // ボタンの手前を少し空けて文字を消し、その手前の2文字分ほどで薄くしてつなぐ。
+            let gap = font.pointSize * 0.5
+            end = isRightToLeft ? button.frame.maxX + gap : button.frame.minX - gap
+        } else {
+            // ボタンを出さないときは、行の端で消えるように薄くする。
+            readMoreButton?.isHidden = true
+            end = isRightToLeft ? 0 : bounds.width
+        }
         let start = isRightToLeft ? end + fadeWidth : end - fadeWidth
         let lineFrame = CGRect(x: 0, y: line.frame.minY, width: bounds.width, height: line.frame.height)
         if readMoreFade?.line != lineFrame || readMoreFade?.start != start || readMoreFade?.end != end {

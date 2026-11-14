@@ -6,6 +6,8 @@ public enum StatusNameStyle: String, Codable, CaseIterable, Sendable {
     case nameOnly
     case acctOnly
     case acctAndName
+    /// 名前もハンドルも出さない。
+    case none
 
     /// 並べる順。先頭を目立たせ、2つ目は控えめに描く。
     public var parts: [StatusNamePart] {
@@ -14,6 +16,7 @@ public enum StatusNameStyle: String, Codable, CaseIterable, Sendable {
         case .nameOnly: [.displayName]
         case .acctOnly: [.acct]
         case .acctAndName: [.acct, .displayName]
+        case .none: []
         }
     }
 }

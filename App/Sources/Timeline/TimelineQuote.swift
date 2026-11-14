@@ -9,6 +9,7 @@ extension TimelineViewController {
     func quoteEmbed(for status: Status, itemID: ItemID?, translatesBody: Bool = true, base: UIListContentConfiguration) -> (content: EmbeddedPostView.Content, actions: EmbedActions)? {
         let shown = quoteSourceChanges.applying(to: status.displayed)
         let filterWarnings = filterWarnings
+        guard settings.appearance.showsQuote else { return nil }
         guard let display = QuoteDisplay(quoting: shown, isRevealed: quoteReveals.isRevealed(shown), verdict: { filterWarnings.verdict(for: $0) }) else { return nil }
         switch display {
         case .post(let quoted):

@@ -169,6 +169,8 @@ public struct AppearancePreviewSamples: Sendable {
         case .value(AppearanceCatalog.mediaTallestAspectRatio): ["media"]
         case .value(AppearanceCatalog.mediaWidestAspectRatio): ["wide"]
         case .choice(.embedMediaArrangement): ["quote"]
+        case .choice(.showsReadMore): ["long"]
+        case .choice(.showsFilterNote): ["filtered"]
         case .value(AppearanceCatalog.mediaBesideSide), .choice(.tiltsStackedPhotos): onlyEmbedIsBeside ? ["quote"] : []
         default: []
         }

@@ -19,14 +19,15 @@ extension TimelineViewController {
 
     /// `status`の行で訳すもの。投稿の本文、囲みで出している引用元かXの投稿の本文の順。`status`はブーストなら元の投稿。
     func translationSources(of status: Status) -> [TranslationSource] {
-        [TranslationSource(status)] + [embedTranslationSource(of: status)].compactMap(\.self)
+        // 出さない設定の本文と引用は訳さない。
+        (settings.appearance.showsBody ? [TranslationSource(status)] : []) + [embedTranslationSource(of: status)].compactMap(\.self)
     }
 
     /// `status`の行に囲みで出している、引用元かXの投稿。読み終えていないXの投稿はnil。`status`はブーストなら元の投稿。
     func embedTranslationSource(of status: Status) -> TranslationSource? {
         let shown = quoteSourceChanges.applying(to: status)
         let filterWarnings = filterWarnings
-        if let display = QuoteDisplay(quoting: shown, isRevealed: quoteReveals.isRevealed(shown), verdict: { filterWarnings.verdict(for: $0) }) {
+        if settings.appearance.showsQuote, let display = QuoteDisplay(quoting: shown, isRevealed: quoteReveals.isRevealed(shown), verdict: { filterWarnings.verdict(for: $0) }) {
             guard case .post(let quoted) = display else { return nil }
             return TranslationSource(quoted)
         }

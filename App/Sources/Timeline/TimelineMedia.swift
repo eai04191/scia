@@ -25,6 +25,7 @@ extension TimelineViewController {
     /// 引用とXの投稿の囲みの添付ファイルを並べる中身。囲みの並べ方が本文の右に小さく出す設定なら、重ねて出す。
     /// - Parameter seed: 重ね方をばらつかせる種。引用元の投稿のIDか、Xの投稿のID。
     func embedMediaContent(of attachments: [MediaAttachment], cover: MediaCover?, seed: String) -> MediaGridView.Content? {
+        guard settings.appearance.showsMedia else { return nil }
         var content = mediaContent(of: attachments, cover: cover)
         content?.arrange(settings.appearance.resolvedEmbedMediaArrangement, seed: seed, settings: settings)
         return content

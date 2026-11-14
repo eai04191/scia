@@ -2232,6 +2232,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         if viewIfLoaded?.window != nil {
             translations?.request(((first...last).compactMap(shownStatus(atItem:)) + statuses).flatMap(translationSources(of:)))
         }
+        // 本文を出さない設定では、先に作らない。
+        guard settings.appearance.showsBody else { return }
         let builder = postContentBuilder
         bodyTextPreparer.prepare(
             statuses,
@@ -2280,7 +2282,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             }
         }
         // フィルターの結果はブーストの外側にだけ付くことがあるため、判定にはブーストごと渡す。
-        if let media = mediaContent(for: status) {
+        if !settings.appearance.showsMedia {
+            if !shown.mediaAttachments.isEmpty {
+                configuration.hiddenSlots.append(.mediaSlot)
+            }
+        } else if let media = mediaContent(for: status) {
             configuration.media = media
             configuration.onSelectMedia = { [weak self] index, grid in
                 self?.openMedia(media.attachments, at: index, of: shown, from: grid)
@@ -2289,11 +2295,18 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         configuration.onRevealMedia = { [weak self] in
             self?.revealMedia(of: shown)
         }
-        configuration.poll = pollContent(for: shown, base: base)
+        if settings.appearance.showsPoll {
+            configuration.poll = pollContent(for: shown, base: base)
+        } else if shown.poll != nil {
+            configuration.hiddenSlots.append(.pollSlot)
+        }
         configuration.onPollAction = { [weak self] action in self?.handlePollAction(action, on: status, keeping: itemID) }
         configuration.card?.coversImage = mediaCovers.linkCardImageCover(for: shown) != nil
         if let itemID, let url = configuration.card?.card.url {
             configuration.linkCardTarget = linkTarget(for: url, id: itemID) { [weak self] in self?.onOpenLink?(.url(url), shown) }
+        }
+        if !settings.appearance.showsQuote, shown.quote != nil {
+            configuration.hiddenSlots.append(.quoteSlot)
         }
         if let quote = quoteEmbed(for: status, itemID: itemID, translatesBody: translatesBody, base: base) {
             configuration.embed = quote.content
@@ -2325,7 +2338,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
         configuration.spoiler = spoiler(of: status, base: base)
         let ownMatchTitles = filterWarnings.verdict(for: status).ownMatchTitles
-        configuration.filterNote = ownMatchTitles.isEmpty ? nil : postContentBuilder.ownFilterNote(titles: ownMatchTitles)
+        if !ownMatchTitles.isEmpty {
+            if settings.appearance.showsFilterNote {
+                configuration.filterNote = postContentBuilder.ownFilterNote(titles: ownMatchTitles)
+            } else {
+                configuration.hiddenSlots.append(.filterNoteSlot)
+            }
+        }
         configuration.onToggleSpoiler = { [weak self] in self?.toggleSpoiler(of: status, keeping: itemID) }
         configuration.bodyTruncation = longBodyExpansion.truncation(forBodyOf: status, isThreadFocus: shown.id == threadFocusID, rule: bodyTruncationRule)
         configuration.onExpandBody = { [weak self] in self?.expandBody(.status(shown.id), keeping: itemID) }

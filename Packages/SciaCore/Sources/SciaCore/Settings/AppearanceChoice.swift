@@ -36,21 +36,38 @@ public enum AppearanceChoice: Hashable, CaseIterable, Sendable {
     case reactionGlowLightFavouriteColor
     case showsActionBar
     case showsActionBarCounts
+    case showsAvatar
+    case showsNameRow
+    case showsBody
+    case showsReadMore
+    case showsFilterNote
+    case showsSpoiler
+    case showsMedia
+    case showsQuote
+    case showsEmbedAvatar
+    case showsPoll
+    case showsReactions
+    case showsReactionGlow
 
     /// `group`の分類の画面に並べる項目。上から並べる順。選んで決める項目のない分類では空。
     /// 白より明るく描けない画面のUIは、`drawsReactionGlowInHDR`を除く。
     public static func choices(inGroup group: AppearanceGroup.ID) -> [AppearanceChoice] {
         switch group {
+        // 部品を表示するかのスイッチは、その分類の先頭に置く。
         case "row": [.showsSeparators]
         case "context": [.contextNameStyle, .showsContextSymbol, .showsBoosterAvatar, .showsReplyLabel]
-        case "avatar": [.avatarShape, .showsAvatarBorder, .animatesAvatars, .wrapsBelowAvatar, .showsReplyLines]
-        case "name": [.nameStyle, .stacksNameParts, .timeStyle, .boldsName, .showsTime, .showsVisibilitySymbol, .showsEditedMark]
-        case "body": [.glyphLanguage, .emojiStyle, .animatesCustomEmojis]
-        case "media": [.mediaArrangement, .embedMediaArrangement, .tiltsStackedPhotos, .showsMediaBadges]
+        case "avatar": [.showsAvatar, .avatarShape, .showsAvatarBorder, .animatesAvatars, .wrapsBelowAvatar, .showsReplyLines]
+        case "name": [.showsNameRow, .nameStyle, .stacksNameParts, .timeStyle, .boldsName, .showsTime, .showsVisibilitySymbol, .showsEditedMark]
+        case "body": [.showsBody, .showsReadMore, .showsFilterNote, .glyphLanguage, .emojiStyle, .animatesCustomEmojis]
+        case "spoiler": [.showsSpoiler]
+        case "media": [.showsMedia, .mediaArrangement, .embedMediaArrangement, .tiltsStackedPhotos, .showsMediaBadges]
         case "linkCard": [.showsLinkCard, .boldsLinkCardTitle, .showsLinkCardImage, .linkCardThumbnailSide, .showsLinkCardSite]
+        case AppearanceCatalog.xPostGroupID: [.showsQuote, .showsEmbedAvatar]
+        case "poll": [.showsPoll]
+        case "reactions": [.showsReactions]
         case AppearanceCatalog.actionBarGroupID: [.showsActionBar, .showsActionBarCounts]
         // HDRのメディアの明るさの設定はメディアに対するものなので、光はそれに従わせず、ここで別に選ぶ。
-        case "reactionGlow": [.drawsReactionGlowInHDR, .reactionGlowIcons, .reactionGlowFillsWidthWhenAlone, .reactionGlowLightFavouriteColor]
+        case "reactionGlow": [.showsReactionGlow, .drawsReactionGlowInHDR, .reactionGlowIcons, .reactionGlowFillsWidthWhenAlone, .reactionGlowLightFavouriteColor]
         default: []
         }
     }
@@ -92,6 +109,18 @@ public enum AppearanceChoice: Hashable, CaseIterable, Sendable {
         case .reactionGlowIcons: "アイコン"
         case .reactionGlowFillsWidthWhenAlone: "片方だけのときは全幅を光らせる"
         case .reactionGlowLightFavouriteColor: "ライトモードのお気に入りの色"
+        case .showsAvatar: "アイコンを表示"
+        case .showsNameRow: "名前の行を表示"
+        case .showsBody: "本文を表示"
+        case .showsReadMore: "“続きを読む”を表示"
+        case .showsFilterNote: "フィルターの注記を表示"
+        case .showsSpoiler: "注意書きを表示"
+        case .showsMedia: "メディアを表示"
+        case .showsQuote: "引用を表示"
+        case .showsEmbedAvatar: "アイコンを表示"
+        case .showsPoll: "投票を表示"
+        case .showsReactions: "絵文字のリアクションを表示"
+        case .showsReactionGlow: "光を表示"
         }
     }
 
@@ -144,6 +173,18 @@ public enum AppearanceChoice: Hashable, CaseIterable, Sendable {
         case .reactionGlowIcons: .firstOf([.part(.reactionGlowIcons), .part(.reactionGlow)])
         case .showsActionBar: .part(.actionBar)
         case .showsActionBarCounts: .firstOf([.part(.actionBarCounts), .part(.actionBar)])
+        case .showsAvatar: .part(.avatar)
+        case .showsNameRow: .part(.nameRowSlot)
+        case .showsBody: .firstOf([.part(.bodyText), .part(.bodySlot)])
+        case .showsReadMore: .firstOf([.part(.readMore), .part(.truncatedBody)])
+        case .showsFilterNote: .firstOf([.part(.filterNote), .part(.filterNoteSlot)])
+        case .showsSpoiler: .firstOf([.part(.spoiler), .part(.spoilerSlot)])
+        case .showsMedia: .firstOf([.part(.media), .part(.besideMedia), .part(.mediaSlot)])
+        case .showsQuote: .firstOf([.part(.xPost), .part(.quoteSlot)])
+        case .showsEmbedAvatar: .part(.xPostAvatar)
+        case .showsPoll: .firstOf([.part(.poll), .part(.pollSlot)])
+        case .showsReactions: .firstOf([.part(.reactions), .part(.reactionsSlot)])
+        case .showsReactionGlow: .part(.reactionGlow)
         }
     }
 
@@ -226,6 +267,18 @@ extension AppearanceChoice {
             .options(AppearanceChoiceOptions(\.appearance.reactionGlowIcons, [(.none, "表示しない"), (.atBottom, "下の端に1つずつ"), (.scattered, "散らす")]))
         case .reactionGlowFillsWidthWhenAlone: .toggle(\.appearance.reactionGlowFillsWidthWhenAlone)
         case .reactionGlowLightFavouriteColor: .options(AppearanceChoiceOptions(\.appearance.reactionGlowLightFavouriteColor, [(.orange, "橙"), (.yellow, "黄色")]))
+        case .showsAvatar: .toggle(\.appearance.showsAvatar)
+        case .showsNameRow: .toggle(\.appearance.showsNameRow)
+        case .showsBody: .toggle(\.appearance.showsBody)
+        case .showsReadMore: .toggle(\.appearance.showsReadMore)
+        case .showsFilterNote: .toggle(\.appearance.showsFilterNote)
+        case .showsSpoiler: .toggle(\.appearance.showsSpoiler)
+        case .showsMedia: .toggle(\.appearance.showsMedia)
+        case .showsQuote: .toggle(\.appearance.showsQuote)
+        case .showsEmbedAvatar: .toggle(\.appearance.showsEmbedAvatar)
+        case .showsPoll: .toggle(\.appearance.showsPoll)
+        case .showsReactions: .toggle(\.appearance.showsReactions)
+        case .showsReactionGlow: .toggle(\.appearance.showsReactionGlow)
         }
     }
 
@@ -234,6 +287,7 @@ extension AppearanceChoice {
         (.nameOnly, "名前"),
         (.acctOnly, "ハンドル"),
         (.acctAndName, "ハンドル、名前"),
+        (.none, "表示しない"),
     ]
 }
 

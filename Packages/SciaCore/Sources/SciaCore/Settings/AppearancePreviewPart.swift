@@ -52,6 +52,14 @@ public enum AppearancePreviewPart: Hashable, CaseIterable, Sendable {
     case timeSlot
     case replyLineSlot
     case cardSlot
+    case nameRowSlot
+    case bodySlot
+    case spoilerSlot
+    case mediaSlot
+    case pollSlot
+    case quoteSlot
+    case reactionsSlot
+    case filterNoteSlot
     case cardImageSlot
     case cardSiteSlot
     /// サムネイルのALTやGIFのバッジ。

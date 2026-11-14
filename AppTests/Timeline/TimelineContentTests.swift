@@ -149,7 +149,7 @@ struct TimelineContentTests {
 
         #expect(content.context?.text.string == "bob")
         #expect(content.context?.avatar?.url == booster.avatarStatic)
-        #expect(content.avatar.url == original.account.avatarStatic)
+        #expect(content.avatar?.url == original.account.avatarStatic)
         #expect(content.nameParts.map(\.string) == [original.account.displayName, "@\(original.account.acct)"])
         #expect(content.createdAt == original.createdAt)
         #expect(content.body.string == original.content)

@@ -73,6 +73,30 @@ public struct AppearanceChoices: Codable, Hashable, Sendable {
     public var showsActionBar = true
     /// アクションバーの返信、ブースト、お気に入りのボタンに件数を添える。
     public var showsActionBarCounts = true
+    /// 投稿の左にアイコンを出す。出さなければ、アイコンの列と、文字の列とのあいだも取らない。
+    public var showsAvatar = true
+    /// 名前の行（名前、ハンドル、時刻、公開範囲の記号、編集済みの「*」）を出す。
+    public var showsNameRow = true
+    /// 本文を出す。
+    public var showsBody = true
+    /// 切った本文の末尾に「続きを読む」を出す。出さなくても本文は切り、その場では広げられない。
+    public var showsReadMore = true
+    /// 自分の投稿が自分のフィルターに一致したことを示す注記を出す。
+    public var showsFilterNote = true
+    /// 注意書きのボックスを出す。出さなければ、注意書きのある投稿の本文を、注意書きのない投稿と同じく出す。
+    public var showsSpoiler = true
+    /// 添付ファイルのサムネイルを出す。引用とXの投稿の囲みの中のサムネイルも含む。
+    public var showsMedia = true
+    /// 引用の囲みを出す。
+    public var showsQuote = true
+    /// 引用とXの投稿の囲みの、作者のアイコンを出す。
+    public var showsEmbedAvatar = true
+    /// 投票を出す。
+    public var showsPoll = true
+    /// 絵文字のリアクションの列を出す。
+    public var showsReactions = true
+    /// お気に入りとブーストの光を出す。
+    public var showsReactionGlow = true
 
     public init() {}
 

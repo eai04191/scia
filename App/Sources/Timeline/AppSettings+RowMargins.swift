@@ -12,13 +12,23 @@ extension AppSettings {
         )
     }
 
-    /// 行の文字の列の左端。アイコンの右。
+    /// 通知と人の行の、文字の列の左端。アイコンの右。これらの行は、投稿のアイコンを出さない設定でもアイコンを出すので、設定によらずアイコンの列を取る。
     var textColumnLeading: CGFloat {
         rowMargins.leading + value(of: AppearanceCatalog.avatarSize) + value(of: AppearanceCatalog.avatarSpacing)
     }
 
+    /// 行の左のアイコンの一辺。アイコンを出さなければ0。
+    var postAvatarSize: CGFloat {
+        appearance.showsAvatar ? value(of: AppearanceCatalog.avatarSize) : 0
+    }
+
+    /// 行の左のアイコンの列と、文字の列のあいだ。アイコンを出さなければ0。
+    var postAvatarSpacing: CGFloat {
+        appearance.showsAvatar ? value(of: AppearanceCatalog.avatarSpacing) : 0
+    }
+
     /// 投稿の行の区切り線の左端。本文の左端から引く。決まりはdocs/post-header-layout.mdの「区切り線」にある。
     var postSeparatorLeading: CGFloat {
-        appearance.wrapsBelowAvatar ? rowMargins.leading : textColumnLeading
+        appearance.wrapsBelowAvatar ? rowMargins.leading : rowMargins.leading + postAvatarSize + postAvatarSpacing
     }
 }

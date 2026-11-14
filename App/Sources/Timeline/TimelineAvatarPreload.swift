@@ -38,7 +38,8 @@ extension TimelineViewController {
         let scale = traitCollection.displayScale
         var keys: [AvatarImageKey] = []
         let shown = avatarContent(of: status.displayed.account)
-        if let url = shown.url {
+        // アイコンを出さない設定では読まない。
+        if let url = shown.url, settings.appearance.showsAvatar {
             keys.append(AvatarView.key(url: url, animates: shown.animates, side: settings.value(of: AppearanceCatalog.avatarSize), scale: scale))
         }
         // ブーストした人のアイコンを出さない設定では読まない。新着の挿入は、ここで並べたアイコンを待つため。

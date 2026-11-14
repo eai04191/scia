@@ -45,6 +45,8 @@ struct PostBodyContent {
     var maximumLines = 0
     /// 長い本文を切って「続きを読む」を出す行数。nilなら切らない。`maximumLines`とは一緒に使わない。
     var truncation: BodyTruncation?
+    /// 切った本文の末尾に「続きを読む」を出す。出さなければ、その場では広げられない。
+    var showsReadMore = true
     /// 添付ファイルがなければnil。
     var media: MediaGridView.Content?
     /// 本文と添付ファイルのあいだの余白。本文がなければ取らない。
@@ -258,10 +260,11 @@ final class PostBodyView: UIView {
             .spoiler: Self.shown(spoilerView)?.previewFrame(in: space),
             .spoilerButton: Self.shown(spoilerView)?.buttonPreviewFrame(in: space),
             .spoilerText: Self.shown(spoilerView)?.textPreviewFrame(in: space),
-            .bodyText: textLabel.previewFrame(in: space),
+            // 本文のない投稿は、ほかの部品がなければ空のラベルを置いているが、本文としては示さない。
+            .bodyText: content?.text.length == 0 ? nil : textLabel.previewFrame(in: space),
             .truncatedBody: textLabel.isTruncatedByLength ? textLabel.previewFrame(in: space) : nil,
             .readMore: textLabel.readMoreFrame.map { [textLabel.convert($0, to: space)] },
-            .bodyGlyphs: textGlyphsFrame(in: space),
+            .bodyGlyphs: content?.text.length == 0 ? nil : textGlyphsFrame(in: space),
             .card: linkCard?.previewFrame(in: space),
             .poll: poll?.previewFrame(in: space),
             .pollOptions: poll?.optionsPreviewFrame(in: space),
@@ -796,6 +799,7 @@ final class PostBodyView: UIView {
             textLabel.numberOfLines = content.maximumLines
         }
         textLabel.truncation = content.truncation
+        textLabel.showsReadMore = content.showsReadMore
         // ベースラインを置く前に、先に並べた結果を渡す。渡さないと、ベースラインを置くために、ここで並べることになる。
         textLabel.usePreparedLayout(content.preparedLayout)
         updateTextKitBaselines(width: textLabel.bounds.width > 0 ? textLabel.bounds.width : bounds.width)
@@ -1235,7 +1239,7 @@ final class PostBodyView: UIView {
 
     /// 読み上げで、切った本文を広げる操作。切っていなければnil。
     func readMoreAccessibilityAction() -> UIAccessibilityCustomAction? {
-        guard isBodyTruncated else { return nil }
+        guard isBodyTruncated, content?.showsReadMore != false else { return nil }
         return UIAccessibilityCustomAction(name: ReadMoreButton.title) { [weak self] _ in
             self?.onExpandBody?()
             return true
