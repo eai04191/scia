@@ -230,25 +230,55 @@ struct AccountCacheTests {
         #expect(try await cache.resolve(handle: "alice@example.social", localServer: "local.example") { alice }?.id == "1")
     }
 
-    /// プロフィール画面が読む前に始めたアイコンのための読み込みが、あとから届いても、プロフィール画面が読んだアカウントを置き換えない。
-    @Test func loadInFlightDoesNotReplaceProfile() async {
+    private func account(_ id: String, _ displayName: String) -> Account {
+        Account(id: id, username: "user\(id)", acct: "user\(id)", displayName: displayName, avatar: nil)
+    }
+
+    /// 受け取ったアカウントは、あとからとった番号のもので置き換える。先にとった番号のものが遅れて届いても戻さない。
+    @Test func keepsAccountWithLaterOrder() {
+        let received = ReceivedAccounts()
+        let cache = AccountCache(received: received) { _ in [] }
+        let first = received.nextOrder()
+        let second = received.nextOrder()
+
+        received.remember([account("1", "Second")], order: second)
+        received.remember([account("1", "First")], order: first)
+        #expect(cache.account("1")?.displayName == "Second")
+
+        received.remember([account("1", "Third")], order: received.nextOrder())
+        #expect(cache.account("1")?.displayName == "Third")
+    }
+
+    /// プロフィールを開くときに渡されたアカウントより、覚えているものを出す。覚えていなければ渡されたものを出す。
+    @Test func latestPrefersRememberedAccount() {
+        let received = ReceivedAccounts()
+        let cache = AccountCache(received: received) { _ in [] }
+        received.remember([account("1", "Fresh")], order: received.nextOrder())
+
+        #expect(cache.latest(of: account("1", "Given")).displayName == "Fresh")
+        #expect(cache.latest(of: account("2", "Given")).displayName == "Given")
+    }
+
+    /// アイコンのために読み始めた読み込みが、そのあとに番号をとって受け取ったアカウントより遅れて届いても、古いもので戻さない。
+    @Test func loadInFlightDoesNotReplaceAccountReceivedLater() async {
         let server = Server(holds: true)
-        let cache = makeCache(server)
-        let fresh = Account(id: "1", username: "user1", acct: "user1", displayName: "Fresh", avatar: nil)
+        let received = ReceivedAccounts()
+        let cache = AccountCache(received: received) { ids in try await server.fetch(ids) }
 
         let load = Task { await cache.load(["1"]) }
         await server.waitForRequests(1)
-        cache.rememberProfile(fresh)
+        received.remember([account("1", "Fresh")], order: received.nextOrder())
         server.release()
-        _ = await load.value
+        let loaded = await load.value
 
-        #expect(cache.profile(startingFrom: Account(id: "1", username: "user1", acct: "user1", displayName: "Given", avatar: nil)) == fresh)
-        #expect(cache.account("1") == fresh)
+        #expect(cache.account("1")?.displayName == "Fresh")
+        #expect(loaded["1"]?.displayName == "Fresh")
     }
 
-    /// プロフィール画面が読む前に始めた検索が、あとから届いても、プロフィール画面が読んだアカウントを置き換えない。
-    @Test func searchInFlightDoesNotReplaceProfile() async throws {
-        let cache = makeCache(Server())
+    /// 探している間に、そのあとに番号をとって受け取ったアカウントがあれば、古いもので戻さず、新しいほうを返す。
+    @Test func searchInFlightDoesNotReplaceAccountReceivedLater() async throws {
+        let received = ReceivedAccounts()
+        let cache = AccountCache(received: received) { _ in [] }
         let gate = Gate()
         let url = try #require(URL(string: "https://remote.example/@alice"))
         let old = Account(id: "7", username: "alice", acct: "alice@remote.example", displayName: "Old", avatar: nil)
@@ -261,11 +291,11 @@ struct AccountCacheTests {
             }
         }
         try await waitUntil { gate.waiterCount == 1 }
-        cache.rememberProfile(fresh)
+        received.remember([fresh], order: received.nextOrder())
         gate.open()
-        _ = try await search.value
 
-        #expect(cache.profile(startingFrom: old) == fresh)
+        #expect(try await search.value == fresh)
+        #expect(cache.account("7") == fresh)
         #expect(try await cache.resolve(.profileURL(url)) { old } == fresh)
     }
 }

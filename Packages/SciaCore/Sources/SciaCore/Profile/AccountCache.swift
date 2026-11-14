@@ -1,22 +1,24 @@
 public import Foundation
 import os
 
-/// ログイン中のセッションで読んだアカウント。メンションのように、IDしか分からない相手のアイコンを出すのに使う。
+/// ログイン中のセッションで受け取ったアカウントの、IDごとに一番新しいもの。
+/// メンションのように、IDしか分からない相手のアイコンを出すのと、プロフィール画面を開くときに最初に出すのに使う。
 /// プロフィールのURLやハンドルで探したアカウントも、探した値ごとに覚える。探すのは検索のAPIで、相手のサーバーへの問い合わせも起きるため、同じ相手を何度も探さない。
+///
+/// 覚えるのは`ReceivedAccounts`で、自分で読んだものに加え、タイムラインの投稿や通知、プロフィールなど、セッションのクライアントとストリーミングが受け取ったアカウントをすべて覚える。
+/// 新しいものを決める番号の決まりは`ReceivedAccounts`にある。
 ///
 /// 足りないアカウントは、相手ごとにリクエストを送らず、`MastodonClient.multipleAccountsLimit`件ずつまとめて1回で読む。
 /// メンションが何人いても、メニューを開くたびのリクエストは1回で済み、トークンごとのレート制限を削らない。
-/// IDはサーバーごとに違うため、セッション（ログイン中のアカウント）ごとに持つ。起動している間だけ覚える。
-/// 覚えたアカウントを置き換えるのは、プロフィール画面が読んだものだけで、ほかに相手がプロフィールを変えても追わない。
+/// IDはサーバーごとに違うため、セッション（ログイン中のアカウント）ごとに持つ。起動している間だけ覚え、受け取ったアカウントは消さない。
 @MainActor
 public final class AccountCache {
     public typealias Fetch = @Sendable ([String]) async throws -> [Account]
 
     private let fetch: Fetch
     private let limit: Int
-    private var accounts: [String: Account] = [:]
-    /// プロフィール画面が読んだアカウント。`accounts`と分けて持ち、ほかの読み込みや検索の応答では置き換えない。プロフィール画面が読む前に始めた読み込みの応答が、あとから届くことがあるため。
-    private var profiles: [String: Account] = [:]
+    /// 覚えているアカウント。セッションのクライアントとストリーミングと共有する。
+    private let received: ReceivedAccounts
     /// 読み込み中のIDと、それを読んでいる読み込み。同じIDを続けて求められても、二重に送らない。
     private var inFlight: [String: Task<Void, Never>] = [:]
     /// 探して見つかったアカウントのID。
@@ -26,33 +28,24 @@ public final class AccountCache {
     private var isClosed = false
     private let logger = SciaLog.logger(category: "accountCache")
 
-    /// - Parameter limit: 1回のリクエストで読む数。
-    public init(limit: Int = MastodonClient.multipleAccountsLimit, fetch: @escaping Fetch) {
+    /// - Parameters:
+    ///   - limit: 1回のリクエストで読む数。
+    ///   - received: 覚える先。セッションのクライアントとストリーミングに渡したものと同じものを渡す。
+    public init(limit: Int = MastodonClient.multipleAccountsLimit, received: ReceivedAccounts = ReceivedAccounts(), fetch: @escaping Fetch) {
         self.fetch = fetch
         self.limit = limit
+        self.received = received
     }
 
-    /// 読み込み済みのアカウント。読んでいなければnil。
+    /// 覚えているアカウント。受け取っていなければnil。
     public func account(_ id: String) -> Account? {
-        accounts[id]
+        received.account(id)
     }
 
-    /// プロフィール画面を`account`で開くときに、最初に出すアカウント。前にプロフィール画面が読んでいればそれを、なければ`account`を返す。
-    /// 開くときに渡るアカウントは、投稿に付いてきたものや、前に探して覚えたもので、プロフィール画面が読んだものより古いことがあるため。
-    /// アイコンのために読んだだけのアカウントは、渡されたものより新しいとは限らないので使わない。
-    public func profile(startingFrom account: Account) -> Account {
-        profiles[account.id] ?? account
-    }
-
-    /// プロフィール画面が読んだか、編集して保存した`account`を覚える。IDで読む経路と探して開く経路も、次からこれを返す。
-    public func rememberProfile(_ account: Account) {
-        profiles[account.id] = account
-        accounts[account.id] = account
-    }
-
-    /// 読み込みや検索で届いた`account`を覚える。プロフィール画面が読んだものがあれば、そちらを残す。
-    private func remember(_ account: Account) {
-        accounts[account.id] = profiles[account.id] ?? account
+    /// `account`と同じ人の、覚えている一番新しいアカウント。覚えていなければ`account`を返す。
+    /// プロフィール画面を開くときに渡るアカウントは、前に受け取った投稿に付いてきたものなどで、そのあとに受け取ったものより古いことがあるため、これで出す。
+    public func latest(of account: Account) -> Account {
+        received.account(account.id) ?? account
     }
 
     /// `ids`のアカウントを読み、読めたものを返す。読み込み済みのものは読まず、読み込み中のものはその読み込みを待つ。
@@ -60,14 +53,13 @@ public final class AccountCache {
     public func load(_ ids: [String]) async -> [String: Account] {
         var seen = Set<String>()
         let unique = ids.filter { seen.insert($0).inserted }
-        let missing = isClosed ? [] : unique.filter { accounts[$0] == nil && inFlight[$0] == nil }
+        let missing = isClosed ? [] : unique.filter { received.account($0) == nil && inFlight[$0] == nil }
         for start in stride(from: 0, to: missing.count, by: limit) {
             let chunk = Array(missing[start..<min(start + limit, missing.count)])
+            let order = received.nextOrder()
             let task = Task {
                 do {
-                    for account in try await fetch(chunk) {
-                        remember(account)
-                    }
+                    received.remember(try await fetch(chunk), order: order)
                 } catch {
                     logger.error("accounts load failed count=\(chunk.count, privacy: .public): \(SciaLog.describe(error), privacy: .public)")
                 }
@@ -83,7 +75,7 @@ public final class AccountCache {
             await task.value
         }
         return unique.reduce(into: [:]) { loaded, id in
-            loaded[id] = accounts[id]
+            loaded[id] = received.account(id)
         }
     }
 
@@ -108,22 +100,22 @@ public final class AccountCache {
     /// 見つからなかったときと、検索が失敗したときは覚えず、次に求められたときに探し直す。
     public func resolve(_ lookup: AccountLookup, search: @escaping @Sendable () async throws -> Account?) async throws -> Account? {
         let lookup = lookup.normalized
-        if let id = resolvedIDs[lookup], let account = accounts[id] {
+        if let id = resolvedIDs[lookup], let account = received.account(id) {
             return account
         }
         if let task = resolving[lookup] {
-            return try await task.value
+            return try await task.value.map(latest(of:))
         }
         guard !isClosed else { throw CancellationError() }
+        let order = received.nextOrder()
         let task = Task { try await search() }
         resolving[lookup] = task
         defer { resolving[lookup] = nil }
-        let account = try await task.value
-        if let account {
-            remember(account)
-            resolvedIDs[lookup] = account.id
-        }
-        return account
+        guard let account = try await task.value else { return nil }
+        received.remember([account], order: order)
+        resolvedIDs[lookup] = account.id
+        // 探している間に、もっと新しいものを受け取っていれば、そちらを返す。
+        return latest(of: account)
     }
 }
 

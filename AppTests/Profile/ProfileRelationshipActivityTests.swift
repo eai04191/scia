@@ -63,7 +63,6 @@ struct ProfileRelationshipActivityTests {
         let (controller, viewController) = ProfileController.make(
             account: Self.account,
             client: client,
-            accounts: AccountCache { _ in [] },
             relationshipCache: cache,
             settings: .isolated(),
             tasks: tasks,

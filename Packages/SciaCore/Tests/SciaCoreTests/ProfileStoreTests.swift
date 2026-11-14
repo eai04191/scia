@@ -40,13 +40,13 @@ struct ProfileStoreTests {
         }
     }
 
-    private func account(displayName: String = "Bob", locked: Bool = false, statusesCount: Int = 0) throws -> Account {
+    private func account(locked: Bool = false, statusesCount: Int = 0) throws -> Account {
         let avatar = try #require(URL(string: "https://example.social/avatars/bob.png"))
         return Account(
             id: "2",
             username: "bob",
             acct: "bob@remote.example",
-            displayName: displayName,
+            displayName: "Bob",
             avatar: avatar,
             locked: locked,
             statusesCount: statusesCount
@@ -98,7 +98,7 @@ struct ProfileStoreTests {
 
     @Test func showsKnownAccountBeforeLoading() throws {
         let known = try account()
-        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: makeAPI(account: known))
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: makeAPI(account: known))
 
         #expect(store.account == known)
         #expect(store.followState == .unknown)
@@ -106,7 +106,7 @@ struct ProfileStoreTests {
 
     @Test func editedAccountReplacesOnlySameAccount() throws {
         let known = try account()
-        let store = ProfileStore(account: known, myAccountID: "2", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: makeAPI(account: known))
+        let store = ProfileStore(account: known, myAccountID: "2", postsFilter: .standard, relationshipCache: localRelationships(), api: makeAPI(account: known))
         let edited = Account(id: "2", username: "bob", acct: "bob", displayName: "編集したBob", avatar: known.avatar)
         let other = Account(id: "3", username: "carol", acct: "carol", displayName: "Carol", avatar: known.avatar)
 
@@ -120,7 +120,7 @@ struct ProfileStoreTests {
     @Test func loadProfileReplacesAccountRelationshipAndPinned() async throws {
         let fresh = try account(statusesCount: 42)
         let pinned = try pinnedStatus()
-        let store = ProfileStore(account: try account(), myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: makeAPI(
+        let store = ProfileStore(account: try account(), myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: makeAPI(
             account: fresh,
             relationship: Relationship(id: "2", following: true),
             pinned: [pinned]
@@ -138,7 +138,7 @@ struct ProfileStoreTests {
     @Test func myselfLoadsRelationshipForNote() async throws {
         let known = try account()
         let cache = localRelationships()
-        let store = ProfileStore(account: known, myAccountID: "2", postsFilter: .standard, accounts: localAccounts(), relationshipCache: cache, api: makeAPI(
+        let store = ProfileStore(account: known, myAccountID: "2", postsFilter: .standard, relationshipCache: cache, api: makeAPI(
             account: known,
             relationship: Relationship(id: "2", note: "TODO")
         ))
@@ -159,13 +159,13 @@ struct ProfileStoreTests {
     @Test func reopenedProfileStartsFromCachedRelationship() async throws {
         let known = try account()
         let cache = localRelationships()
-        let first = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: cache, api: makeAPI(
+        let first = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: cache, api: makeAPI(
             account: known,
             relationship: Relationship(id: "2", following: true, followedBy: true)
         ))
         _ = await first.loadProfile()
 
-        let reopened = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: cache, api: makeAPI(
+        let reopened = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: cache, api: makeAPI(
             account: known,
             relationship: Relationship(id: "2")
         ))
@@ -177,47 +177,11 @@ struct ProfileStoreTests {
         #expect(cache[known.id] == Relationship(id: "2"))
     }
 
-    /// 同じ相手を開き直したら、前にプロフィール画面で読んだアカウントで始める。開くときに渡されたのが、読む前の古いアカウントでも。
-    @Test func reopenedProfileStartsFromAccountReadBefore() async throws {
-        let stale = try account()
-        let fresh = try account(displayName: "Bob :new:")
-        let accounts = localAccounts()
-        let first = ProfileStore(account: stale, myAccountID: "1", postsFilter: .standard, accounts: accounts, relationshipCache: localRelationships(), api: makeAPI(account: fresh))
-        #expect(first.account == stale)
-        _ = await first.loadProfile()
-        #expect(first.account == fresh)
-
-        let reopened = ProfileStore(account: stale, myAccountID: "1", postsFilter: .standard, accounts: accounts, relationshipCache: localRelationships(), api: makeAPI(account: fresh))
-        #expect(reopened.account == fresh)
-    }
-
-    /// メニューのアイコンのために読んだだけのアカウントは、開くときに渡されたアカウントより新しいとは限らないので、渡されたもので始める。
-    @Test func profileStartsFromGivenAccountWhenOnlyLoadedForIcons() async throws {
-        let loaded = try account()
-        let given = try account(displayName: "Bob :new:")
-        let accounts = AccountCache { _ in [loaded] }
-        _ = await accounts.load([loaded.id])
-        let store = ProfileStore(account: given, myAccountID: "1", postsFilter: .standard, accounts: accounts, relationshipCache: localRelationships(), api: makeAPI(account: given))
-        #expect(store.account == given)
-    }
-
-    /// 編集して保存した自分のプロフィールも、開き直したときに使う。
-    @Test func reopenedProfileStartsFromEditedAccount() throws {
-        let old = try account()
-        let edited = try account(displayName: "Bobby")
-        let accounts = localAccounts()
-        let first = ProfileStore(account: old, myAccountID: old.id, postsFilter: .standard, accounts: accounts, relationshipCache: localRelationships(), api: makeAPI(account: old))
-        first.apply(edited: edited)
-
-        let reopened = ProfileStore(account: old, myAccountID: old.id, postsFilter: .standard, accounts: accounts, relationshipCache: localRelationships(), api: makeAPI(account: old))
-        #expect(reopened.account == edited)
-    }
-
     /// フォローを変えたら、開き直したときも変えたあとの関係で始める。
     @Test func followChangeIsCachedForReopening() async throws {
         let known = try account()
         let cache = localRelationships()
-        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: cache, api: makeAPI(account: known))
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: cache, api: makeAPI(account: known))
         _ = await store.loadProfile()
 
         try await store.toggleFollow()
@@ -250,7 +214,7 @@ struct ProfileStoreTests {
         let old = try account(statusesCount: 1)
         let new = try account(statusesCount: 2)
         let gate = Gate()
-        let store = ProfileStore(account: old, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: makeAPIWithGatedFirstAccount(old: old, new: new, gate: gate))
+        let store = ProfileStore(account: old, myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: makeAPIWithGatedFirstAccount(old: old, new: new, gate: gate))
 
         let load = Task { await store.loadProfile() }
         try await waitUntil { await gate.isEntered }
@@ -267,7 +231,7 @@ struct ProfileStoreTests {
         let old = try account(statusesCount: 1)
         let edited = try account(statusesCount: 3)
         let gate = Gate()
-        let store = ProfileStore(account: old, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: makeAPIWithGatedFirstAccount(old: old, new: old, gate: gate))
+        let store = ProfileStore(account: old, myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: makeAPIWithGatedFirstAccount(old: old, new: old, gate: gate))
 
         let load = Task { await store.loadProfile() }
         try await waitUntil { await gate.isEntered }
@@ -310,7 +274,7 @@ struct ProfileStoreTests {
             follow: { id in Relationship(id: id, following: true) },
             unfollow: { id in Relationship(id: id) }
         )
-        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: cache, api: api)
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: cache, api: api)
 
         let load = Task { await store.loadProfile() }
         try await waitUntil { await gate.isEntered }
@@ -337,7 +301,7 @@ struct ProfileStoreTests {
             follow: { id in Relationship(id: id, following: true) },
             unfollow: { id in Relationship(id: id) }
         )
-        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: cache, api: api)
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: cache, api: api)
 
         let load = Task { await store.loadProfile() }
         try await waitUntil { await gate.isEntered }
@@ -365,7 +329,7 @@ struct ProfileStoreTests {
             },
             unfollow: { id in Relationship(id: id) }
         )
-        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: cache, api: api)
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: cache, api: api)
 
         let follow = Task { try await store.toggleFollow() }
         try await waitUntil { await gate.isEntered }
@@ -382,7 +346,7 @@ struct ProfileStoreTests {
         let known = try account()
         let cache = localRelationships()
         cache[known.id] = Relationship(id: "2", following: true)
-        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: cache, api: makeAPI(account: known, failsRelationshipTimes: 1))
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: cache, api: makeAPI(account: known, failsRelationshipTimes: 1))
 
         let failures = await store.loadProfile()
 
@@ -394,7 +358,7 @@ struct ProfileStoreTests {
     @Test(arguments: [false, true])
     func pinnedSettlesWhetherLoadedOrFailed(failsPinned: Bool) async throws {
         let known = try account()
-        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: makeAPI(account: known, failsPinned: failsPinned))
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: makeAPI(account: known, failsPinned: failsPinned))
         #expect(!store.isShelvesSettled)
 
         _ = await store.loadProfile()
@@ -418,7 +382,7 @@ struct ProfileStoreTests {
             pageSizes.withLock { $0.append(limit) }
             return AccountListPage(accounts: [endorsed], nextMaxID: "100")
         }
-        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: api)
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: api)
 
         let failures = await store.loadProfile()
 
@@ -443,7 +407,7 @@ struct ProfileStoreTests {
             if failsEndorsements { throw Failure() }
             return AccountListPage(accounts: [known], nextMaxID: nil)
         }
-        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: api)
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: api)
 
         let failures = await store.loadProfile()
 
@@ -479,7 +443,7 @@ struct ProfileStoreTests {
             if read > 1 { throw Failure() }
             return AccountListPage(accounts: [known], nextMaxID: nil)
         }
-        let store = ProfileStore(account: known, myAccountID: "2", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: api)
+        let store = ProfileStore(account: known, myAccountID: "2", postsFilter: .standard, relationshipCache: localRelationships(), api: api)
         _ = await store.loadProfile()
 
         await #expect(throws: Failure.self) { try await store.reloadFeatured() }
@@ -507,7 +471,7 @@ struct ProfileStoreTests {
             }
             return []
         }
-        let store = ProfileStore(account: known, myAccountID: "2", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: api)
+        let store = ProfileStore(account: known, myAccountID: "2", postsFilter: .standard, relationshipCache: localRelationships(), api: api)
         _ = await store.loadProfile()
         let earlier = Task { try await store.reloadFeatured() }
         try await waitUntil { await gate.isEntered }
@@ -524,7 +488,7 @@ struct ProfileStoreTests {
         let known = try account()
         let hide = FilterResult(filter: FilterResult.Filter(id: "1", title: "x", context: [.account], filterAction: .hide))
         let hidden = Status(id: "10", createdAt: Date(timeIntervalSince1970: 0), account: known, content: "<p>固定</p>", spoilerText: "", url: nil, filtered: [hide])
-        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: makeAPI(account: known, pinned: [hidden]))
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: makeAPI(account: known, pinned: [hidden]))
         _ = await store.loadProfile()
         #expect(store.pinned.isEmpty)
 
@@ -535,7 +499,7 @@ struct ProfileStoreTests {
 
     @Test func removesDeletedPinnedStatus() async throws {
         let known = try account()
-        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: makeAPI(account: known, pinned: [try pinnedStatus()]))
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: makeAPI(account: known, pinned: [try pinnedStatus()]))
         _ = await store.loadProfile()
 
         #expect(store.removeStatus("10"))
@@ -555,7 +519,7 @@ struct ProfileStoreTests {
             follow: { _ in throw Failure() },
             unfollow: { _ in throw Failure() }
         )
-        let store = ProfileStore(account: known, myAccountID: "2", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: api)
+        let store = ProfileStore(account: known, myAccountID: "2", postsFilter: .standard, relationshipCache: localRelationships(), api: api)
         _ = await store.loadProfile()
         #expect(store.pinned.isEmpty)
 
@@ -587,7 +551,7 @@ struct ProfileStoreTests {
             follow: { _ in throw Failure() },
             unfollow: { _ in throw Failure() }
         )
-        let store = ProfileStore(account: known, myAccountID: "2", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: api)
+        let store = ProfileStore(account: known, myAccountID: "2", postsFilter: .standard, relationshipCache: localRelationships(), api: api)
         _ = await store.loadProfile()
         await gate.hold()
         let afterPin = Task { try await store.reloadPinned() }
@@ -612,7 +576,7 @@ struct ProfileStoreTests {
             follow: { _ in throw Failure() },
             unfollow: { _ in throw Failure() }
         )
-        let store = ProfileStore(account: known, myAccountID: "2", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: api)
+        let store = ProfileStore(account: known, myAccountID: "2", postsFilter: .standard, relationshipCache: localRelationships(), api: api)
         _ = await store.loadProfile()
         await gate.hold()
         let reload = Task { try await store.reloadPinned() }
@@ -637,7 +601,7 @@ struct ProfileStoreTests {
             follow: { _ in throw Failure() },
             unfollow: { _ in throw Failure() }
         )
-        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: api)
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: api)
         await gate.hold()
         let read = Task { await store.loadProfile() }
         await gate.waitForRequest()
@@ -653,7 +617,7 @@ struct ProfileStoreTests {
     @Test func loadProfileKeepsOtherResultsWhenOneFails() async throws {
         let known = try account()
         let pinned = try pinnedStatus()
-        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: makeAPI(
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: makeAPI(
             account: known,
             relationship: Relationship(id: "2", requested: true),
             failsAccount: true,
@@ -673,7 +637,7 @@ struct ProfileStoreTests {
     /// 固定された投稿を読めなくても、フォローのボタンには関係しない。
     @Test func pinnedFailureIsReportedSeparately() async throws {
         let known = try account()
-        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: makeAPI(
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: makeAPI(
             account: known,
             relationship: Relationship(id: "2", following: true),
             failsPinned: true
@@ -690,7 +654,7 @@ struct ProfileStoreTests {
     /// 関係を読めなかったら、フォローのボタンを黙って消さず、読めなかったことを示す。読み直せたら、ボタンに戻す。
     @Test func relationshipFailureCanBeRetried() async throws {
         let known = try account()
-        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: makeAPI(
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: makeAPI(
             account: known,
             relationship: Relationship(id: "2", following: true),
             failsRelationshipTimes: 2
@@ -714,7 +678,7 @@ struct ProfileStoreTests {
     @Test func toggleFollowDoesNothingWhileRelationshipIsUnreadable() async throws {
         let known = try account()
         let calls = Calls()
-        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: makeAPI(calls: calls, account: known, failsRelationshipTimes: 1))
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: makeAPI(calls: calls, account: known, failsRelationshipTimes: 1))
         _ = await store.loadProfile()
 
         #expect(try await store.toggleFollow() == false)
@@ -723,7 +687,7 @@ struct ProfileStoreTests {
 
     @Test func myselfHasNoFollowButtonAndSkipsRelationship() async throws {
         let known = try account()
-        let store = ProfileStore(account: known, myAccountID: known.id, postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: makeAPI(account: known, relationship: nil))
+        let store = ProfileStore(account: known, myAccountID: known.id, postsFilter: .standard, relationshipCache: localRelationships(), api: makeAPI(account: known, relationship: nil))
 
         _ = await store.loadProfile()
 
@@ -733,7 +697,7 @@ struct ProfileStoreTests {
     @Test func lockedAccountAsksForRequest() async throws {
         let locked = try account(locked: true)
         let calls = Calls()
-        let store = ProfileStore(account: locked, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: makeAPI(calls: calls, account: locked))
+        let store = ProfileStore(account: locked, myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: makeAPI(calls: calls, account: locked))
         _ = await store.loadProfile()
         #expect(store.followState == .notFollowing(locked: true))
 
@@ -750,7 +714,7 @@ struct ProfileStoreTests {
     @Test func reloadAccountReflectsFollowersCountAfterFollow() async throws {
         let known = try account()
         let followedAccount = Account(id: known.id, username: known.username, acct: known.acct, displayName: known.displayName, avatar: known.avatar, followersCount: 1)
-        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: makeAPI(account: known, accountAfterFollow: followedAccount))
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: makeAPI(account: known, accountAfterFollow: followedAccount))
         _ = await store.loadProfile()
         #expect(store.account.followersCount == 0)
 
@@ -765,7 +729,7 @@ struct ProfileStoreTests {
     @Test func toggleFollowReportsNothingSentForMyself() async throws {
         let known = try account()
         let calls = Calls()
-        let store = ProfileStore(account: known, myAccountID: known.id, postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: makeAPI(calls: calls, account: known))
+        let store = ProfileStore(account: known, myAccountID: known.id, postsFilter: .standard, relationshipCache: localRelationships(), api: makeAPI(calls: calls, account: known))
 
         #expect(try await store.toggleFollow() == false)
         #expect(await calls.follows.isEmpty)
@@ -774,7 +738,7 @@ struct ProfileStoreTests {
     @Test func postsFilterChangesQueryOnlyOnPostsTab() async throws {
         let known = try account()
         let calls = Calls()
-        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, accounts: localAccounts(), relationshipCache: localRelationships(), api: makeAPI(calls: calls, account: known))
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: makeAPI(calls: calls, account: known))
 
         _ = try await store.timeline.loadInitial()
         let withReplies = try #require(store.setPostsFilter(ProfilePostsFilter(showsReplies: true, showsBoosts: false)))
@@ -798,15 +762,6 @@ struct ProfileStoreTests {
 private func localRelationships() -> RelationshipCache {
     RelationshipCache { _ in
         Issue.record("ProfileStoreがRelationshipCacheから関係を読み直した")
-        return []
-    }
-}
-
-/// プロフィールの状態は、アカウントを覚えて読み出すだけで、キャッシュに読ませない。読ませたらテストを失敗させる。
-@MainActor
-private func localAccounts() -> AccountCache {
-    AccountCache { _ in
-        Issue.record("ProfileStoreがAccountCacheにアカウントを読ませた")
         return []
     }
 }

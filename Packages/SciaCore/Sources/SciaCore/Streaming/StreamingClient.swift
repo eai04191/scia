@@ -11,20 +11,24 @@ public struct StreamingClient: Sendable {
     private let connector: any WebSocketConnector
     private let rateLimit: RateLimitGate
     private let now: @Sendable () -> Date
+    private let receivedAccounts: ReceivedAccounts?
 
     /// - Parameters:
     ///   - rateLimit: REST APIと共有する、アカウントの自動の通信を止める門。
     ///   - now: 断られた応答の再開の時刻を、待つ長さに直すための今の日付。
+    ///   - receivedAccounts: イベントの中で読んだアカウントを覚える先。nilなら覚えない。
     public init(
         credential: Credential,
         connector: any WebSocketConnector,
         rateLimit: RateLimitGate = RateLimitGate(),
-        now: @escaping @Sendable () -> Date = SystemTime.now
+        now: @escaping @Sendable () -> Date = SystemTime.now,
+        receivedAccounts: ReceivedAccounts? = nil
     ) {
         self.credential = credential
         self.connector = connector
         self.rateLimit = rateLimit
         self.now = now
+        self.receivedAccounts = receivedAccounts
     }
 
     /// - Parameter baseURL: `StreamingEndpoint.url()`で得た接続先。
@@ -38,7 +42,7 @@ public struct StreamingClient: Sendable {
         // クエリのaccess_tokenはアクセスログに残りうるため使わない。
         request.setValue("Bearer \(credential.accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue(credential.accessToken, forHTTPHeaderField: "Sec-WebSocket-Protocol")
-        return StreamingConnection(connection: connector.connect(request), account: RequestAccount(credential, isOtherAccount: false), rateLimit: rateLimit, now: now)
+        return StreamingConnection(connection: connector.connect(request), account: RequestAccount(credential, isOtherAccount: false), rateLimit: rateLimit, now: now, receivedAccounts: receivedAccounts)
     }
 }
 
@@ -95,13 +99,15 @@ public struct StreamingConnection: Sendable {
     private let account: RequestAccount
     private let rateLimit: RateLimitGate
     private let now: @Sendable () -> Date
+    private let receivedAccounts: ReceivedAccounts?
     private let logger = SciaLog.logger(category: "streaming")
 
-    init(connection: any WebSocketConnection, account: RequestAccount, rateLimit: RateLimitGate, now: @escaping @Sendable () -> Date) {
+    init(connection: any WebSocketConnection, account: RequestAccount, rateLimit: RateLimitGate, now: @escaping @Sendable () -> Date, receivedAccounts: ReceivedAccounts?) {
         self.connection = connection
         self.account = account
         self.rateLimit = rateLimit
         self.now = now
+        self.receivedAccounts = receivedAccounts
     }
 
     /// ハンドシェイクを断られた失敗を、REST APIと同じエラーに直す。429や503が再開の時刻を示していれば、アカウントの自動の通信を止める。
@@ -137,7 +143,9 @@ public struct StreamingConnection: Sendable {
         while true {
             let text = try await translating { try await connection.receive() }
             do {
-                return try StreamingMessageDecoder.decode(text)
+                // イベントはサーバーが送った時点の内容なので、受け取った時点で番号をとる。
+                guard let receivedAccounts else { return try StreamingMessageDecoder.decode(text) }
+                return try receivedAccounts.collect(order: receivedAccounts.nextOrder()) { try StreamingMessageDecoder.decode(text) }
             } catch let error as StreamingServerError {
                 if let status = error.status, status >= 500 {
                     throw error

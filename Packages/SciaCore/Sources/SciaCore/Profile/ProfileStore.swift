@@ -104,10 +104,7 @@ public final class ProfileStore {
         }
     }
 
-    /// 読み込む前は、前に同じ相手を開いたときに読んだアカウント。なければ、開くときに渡されたアカウント。
-    public private(set) var account: Account {
-        didSet { accounts.rememberProfile(account) }
-    }
+    public private(set) var account: Account
     /// 読み込む前は、前に同じ相手を開いたときに読んだ関係。
     public private(set) var relationship: Relationship? {
         didSet { relationshipCache[account.id] = relationship }
@@ -162,7 +159,6 @@ public final class ProfileStore {
     public let filtering: StatusFiltering
     private let api: API
     private let pageSize: Int
-    @ObservationIgnored private let accounts: AccountCache
     @ObservationIgnored private let relationshipCache: RelationshipCache
     /// フィルターの期限と比べる今の日付。
     @ObservationIgnored private let now: @MainActor () -> Date
@@ -173,14 +169,12 @@ public final class ProfileStore {
         tab: ProfileTab = .posts,
         postsFilter: ProfilePostsFilter,
         pageSize: Int = 40,
-        accounts: AccountCache,
         relationshipCache: RelationshipCache,
         now: @escaping @MainActor () -> Date = SystemTime.now,
         api: API
     ) {
         self.now = now
-        self.accounts = accounts
-        self.account = accounts.profile(startingFrom: account)
+        self.account = account
         isMyself = account.id == myAccountID
         self.relationshipCache = relationshipCache
         relationship = relationshipCache[account.id]

@@ -1,10 +1,11 @@
 import Foundation
+import Synchronization
 import Testing
 @testable import SciaCore
 
 @Suite(.requestPurpose(.action))
 struct MastodonClientTests {
-    private func makeClient(_ transport: StubTransport) throws -> MastodonClient {
+    private func makeClient(_ transport: StubTransport, receivedAccounts: ReceivedAccounts? = nil) throws -> MastodonClient {
         MastodonClient(
             credential: Credential(
                 instance: try #require(URL(string: "https://example.social")),
@@ -14,8 +15,22 @@ struct MastodonClientTests {
                 accountID: "1",
                 username: "alice"
             ),
-            transport: transport
+            transport: transport,
+            receivedAccounts: receivedAccounts
         )
+    }
+
+    /// 応答の中で読んだアカウントを、ブーストした人もブーストされた投稿の投稿者も、すべて覚える。送る前にとった番号のものより新しいものとして置き換える。
+    @Test func remembersAccountsReadInResponse() async throws {
+        let received = ReceivedAccounts()
+        let client = try makeClient(StubTransport([try .fixture("home_timeline")]), receivedAccounts: received)
+        received.remember([Account(id: "2", username: "bob", acct: "bob", displayName: "Earlier", avatar: nil)], order: received.nextOrder())
+
+        _ = try await client.homeTimeline(TimelineQuery(limit: 40))
+
+        #expect(received.account("1")?.username == "alice")
+        #expect(received.account("2")?.displayName == "Bob")
+        #expect(received.account("3")?.username == "carol")
     }
 
     /// ハッシュタグのページは自分のサーバーの`/tags/<名前>`で、名前の`/`や`..`はパスの区切りにせず符号化する。

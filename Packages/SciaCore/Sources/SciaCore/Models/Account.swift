@@ -112,6 +112,7 @@ public struct Account: Codable, Hashable, Sendable, Identifiable {
         followersCount = try container.decodeCount(forKey: .followersCount)
         followingCount = try container.decodeCount(forKey: .followingCount)
         statusesCount = try container.decodeCount(forKey: .statusesCount)
+        ReceivedAccounts.record(self)
     }
 
     /// 表示名が空ならユーザー名を使う。

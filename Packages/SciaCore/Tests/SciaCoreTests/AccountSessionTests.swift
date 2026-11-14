@@ -29,6 +29,60 @@ struct AccountSessionTests {
         (401, Data(#"{"error":"The access token is invalid"}"#.utf8))
     }
 
+    /// fixtureのアカウント（IDは2）を、表示名を`name`に替えて返す。`withSource`なら、プロフィールの保存の応答と同じく`source`も付ける。
+    private func accountBody(_ name: String, withSource: Bool = false) throws -> Data {
+        let url = try #require(Bundle.module.url(forResource: "account", withExtension: "json", subdirectory: "Fixtures"))
+        var text = try String(contentsOf: url, encoding: .utf8).replacingOccurrences(of: "Bob :blobcat:", with: name)
+        if withSource {
+            text = text.replacingOccurrences(of: #""id": "2","#, with: #""id": "2", "source": {"note": "", "fields": []},"#)
+        }
+        return Data(text.utf8)
+    }
+
+    /// セッションのクライアントで受け取ったアカウントは、応答を受け取った側が続けて読むときには、もうセッションの`AccountCache`が覚えている。
+    /// 受け取ったものでプロフィールを開くとき、覚えている古いもので置き換えないため。
+    @Test func accountsReceivedByClientAreInCacheWhenResponseReturns() async throws {
+        let body = try accountBody("Fresh")
+        let transport = RoutedTransport { _ in (200, body) }
+        let session = makeSession(transport: transport)
+        defer { session.close() }
+        let client = session.client
+        #expect(session.accounts.account("2") == nil)
+
+        let loaded = try await RequestPurpose.$current.withValue(.action) { try await client.account("2") }
+
+        #expect(session.accounts.account("2") == loaded)
+        #expect(session.accounts.latest(of: loaded).displayName == "Fresh")
+    }
+
+    /// プロフィールを保存している間に読み始めた読み込みが保存の前の内容を返しても、保存の応答のほうを新しいものとして覚える。
+    @Test func savedProfileWinsOverReadStartedWhileSaving() async throws {
+        let oldBody = try accountBody("Old")
+        let savedBody = try accountBody("Saved", withSource: true)
+        let gate = Gate()
+        let transport = RoutedTransport { request in
+            guard request.httpMethod == "PATCH" else { return (200, oldBody) }
+            try await gate.wait()
+            return (200, savedBody)
+        }
+        let session = makeSession(transport: transport)
+        defer { session.close() }
+        let client = session.client
+        let old = try MastodonDecoder.make().decode(Account.self, from: oldBody)
+        var draft = ProfileDraft(source: ProfileSource(account: old, note: "", fields: []))
+        draft.displayName = "Saved"
+        let submitted = draft
+
+        let save = Task { try await RequestPurpose.$current.withValue(.action) { try await client.updateProfile(submitted) } }
+        try await waitUntil { gate.waiterCount == 1 }
+        _ = try await RequestPurpose.$current.withValue(.action) { try await client.account("2") }
+        #expect(session.accounts.account("2")?.displayName == "Old")
+        gate.open()
+        let saved = try await save.value
+
+        #expect(session.accounts.latest(of: saved.account).displayName == "Saved")
+    }
+
     /// ストリーミングが429で断られたら、RESTの自動の通信も止める。門が別々だと、断られてもRESTが送り続ける。
     @Test func streamingRefusalPausesRESTRequests() async throws {
         let transport = RoutedTransport { request in

@@ -34,7 +34,7 @@ public final class AccountSession {
     public let tasks: TaskScope
     /// 投稿を並べる一覧へ、自分の操作で変わった投稿を配る。
     public let statuses: SessionStatuses
-    /// セッションで読んだアカウント。IDからアカウントを引く（メニューや補完に出すアイコン、IDだけを持つ画面の行き先）。
+    /// `client`とストリーミングが受け取ったアカウントの、IDごとに一番新しいもの。IDからアカウントを引く（メニューや補完に出すアイコン、IDだけを持つ画面の行き先、プロフィールを開くときに最初に出すアカウント）。
     public let accounts: AccountCache
     /// セッションで読んだ相手との関係。プロフィール、メニュー、人のリストで同じものを使い、どこで変えても揃える。
     public let relationships: RelationshipCache
@@ -114,11 +114,14 @@ public final class AccountSession {
         self.features = features
         // 401を知らせる先のAuthorizationCheckは、確かめるのにこのクライアントを使うので、作ったあとにつなぐ。
         let unauthorized = UnauthorizedRelay()
-        let client = MastodonClient(credential: credential, transport: transport, rateLimit: rateLimit, features: features, requestLog: requestLog, clock: clock, now: now) {
+        let receivedAccounts = ReceivedAccounts()
+        let client = MastodonClient(credential: credential, transport: transport, rateLimit: rateLimit, features: features, requestLog: requestLog, clock: clock, now: now, receivedAccounts: receivedAccounts) {
             await unauthorized.report()
         }
         self.client = client
-        let streaming = StreamingClient(credential: credential, connector: connector, rateLimit: rateLimit, now: now)
+        let accounts = AccountCache(received: receivedAccounts) { ids in try await client.accounts(ids) }
+        self.accounts = accounts
+        let streaming = StreamingClient(credential: credential, connector: connector, rateLimit: rateLimit, now: now, receivedAccounts: receivedAccounts)
         let streamingEndpoint = StreamingEndpoint(client: client)
         let streamingHub = StreamingHub(livePolicy: { TuningCatalog.liveUpdates(in: tuning) }, clock: clock) {
             try await streaming.open(baseURL: try await streamingEndpoint.url())
@@ -132,8 +135,6 @@ public final class AccountSession {
         tasks.onClose { unauthorized.authorization = nil }
         // 開いているスレッドなどの購読を、閉じる順に頼らずに止めるため、申し込みが残っていても切る。
         tasks.onClose { [weak streamingHub] in streamingHub?.shutDown() }
-        let accounts = AccountCache { ids in try await client.accounts(ids) }
-        self.accounts = accounts
         let relationships = RelationshipCache { ids in try await client.relationships(ids) }
         self.relationships = relationships
         // キャッシュが自分で始めた通信も、ログアウトやアカウントの切り替えで止める。

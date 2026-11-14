@@ -14,6 +14,8 @@ public struct MastodonClient: Sendable {
     /// 再試行までと、メディアの処理が終わるまでの待ちを数える。テストでは手で進める時計を渡す。
     private let clock: any Clock<Duration>
     private let onUnauthorized: (@Sendable () async -> Void)?
+    /// 応答の中で読んだアカウントを覚える先。nilなら覚えない。
+    private let receivedAccounts: ReceivedAccounts?
     private static let logger = SciaLog.logger(category: "network")
 
     /// - Parameters:
@@ -22,6 +24,7 @@ public struct MastodonClient: Sendable {
     ///   - retry: 一時的な失敗で送り直す回数と間隔。
     ///   - requestLog: 失敗の記録。セッションの中で共有する。
     ///   - isOtherAccount: 「別のアカウントで」使う、今使っているアカウントとは別のアカウントのクライアントか。断られた通信の理由に、どのアカウントかを出すために使う。
+    ///   - receivedAccounts: 応答の中で読んだアカウントを覚える先。`AccountSession`が作るクライアントは、セッションの`AccountCache`と同じものを渡す。
     ///   - onUnauthorized: どのAPIでも、401を受けたときに、失敗を投げる前に待って呼ぶ。呼び終えてから呼び出し側に401の`MastodonAPIError`が届く。
     ///     `AccountSession`が作るクライアント（`AccountSession.client`）は、トークンが無効になったとセッションへ知らせるものを渡してあるので、
     ///     そのクライアントで受けた401は、呼び出し側が拾わなくても、自動の通信を止めてログインし直しを促す（`AccountSession.onCredentialsInvalid`）。
@@ -36,9 +39,11 @@ public struct MastodonClient: Sendable {
         clock: any Clock<Duration> = SystemTime.clock,
         now: @escaping @Sendable () -> Date = SystemTime.now,
         isOtherAccount: Bool = false,
+        receivedAccounts: ReceivedAccounts? = nil,
         onUnauthorized: (@Sendable () async -> Void)? = nil
     ) {
         self.isOtherAccount = isOtherAccount
+        self.receivedAccounts = receivedAccounts
         self.onUnauthorized = onUnauthorized
         self.clock = clock
         self.credential = credential
@@ -1425,8 +1430,16 @@ public struct MastodonClient: Sendable {
     }
 
     private func send<T: Decodable>(_ request: URLRequest, decoding type: T.Type, feature: OptionalFeature? = nil, retries: Bool = true) async throws -> (T, HTTPURLResponse) {
+        // 読み込みは送る前に番号をとる。あとから送った読み込みの応答が先に届いても、どちらが新しいかを送った順で決められる。
+        // 書き込みは応答を受け取ってからとる。書き込みが済む前に読み始めた読み込みは、書き込む前の内容を返しうるため。
+        let isRead = (request.httpMethod ?? "GET") == "GET"
+        let readOrder = isRead ? receivedAccounts?.nextOrder() : nil
         let (data, response) = try await send(request, feature: feature, retries: retries)
-        return (try decode(type, from: data, of: response, for: request), response)
+        guard let receivedAccounts else {
+            return (try decode(type, from: data, of: response, for: request), response)
+        }
+        let order = readOrder ?? receivedAccounts.nextOrder()
+        return (try receivedAccounts.collect(order: order) { try decode(type, from: data, of: response, for: request) }, response)
     }
 
     /// 読めなければ、どの項目が読めなかったかを記録して投げる。

@@ -140,6 +140,20 @@ struct StreamingClientTests {
         ])
     }
 
+    /// イベントの中で読んだアカウントを、受け取ったときにとった番号で覚える。
+    @Test func remembersAccountsReadInEvent() async throws {
+        let url = try #require(Bundle.module.url(forResource: "streaming_update", withExtension: "json", subdirectory: "Fixtures"))
+        let connector = StubWebSocketConnector(messages: [try String(contentsOf: url, encoding: .utf8)])
+        let received = ReceivedAccounts()
+        let connection = try await StreamingClient(credential: try makeCredential(), connector: connector, receivedAccounts: received)
+            .open(baseURL: try #require(URL(string: "wss://streaming.example.social")))
+        received.remember([Account(id: "1", username: "alice", acct: "alice", displayName: "Earlier", avatar: nil)], order: received.nextOrder())
+
+        _ = try await connection.next()
+
+        #expect(received.account("1")?.displayName != "Earlier")
+    }
+
     @Test func skipsUndecodableMessages() async throws {
         let connector = StubWebSocketConnector(messages: [
             "not json",
