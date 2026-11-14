@@ -22,15 +22,17 @@ public final class StatusDeletion {
         tasks: TaskScope,
         willResetComposer: @escaping @MainActor () -> Void = {}
     ) {
-        let client = session.client
-        self.init(
-            // web UIと同じく、添付もすぐ消す。送らないと、削除して書き直すために、サーバーが添付を1日ほど残すため。
-            deleteStatus: { try await client.deleteStatus($0, deleteMedia: true) },
-            statuses: session.statuses,
-            tasks: tasks
-        ) { [weak composer] id in
+        self.init(session: session, tasks: tasks) { [weak composer] id in
             composer?.statusWasDeleted(id, willReset: willResetComposer)
         }
+    }
+
+    /// 投稿欄を`ComposeModel`で渡せないUIのための入口。消せたあとに投稿欄へ伝えるのを、`didDelete`で受け取って行う。
+    /// - Parameter didDelete: 消せて、どの一覧からも除いたあとに呼ぶ。消した投稿のIDを受け取り、`ComposeModel.statusWasDeleted(_:accountID:willReset:)`を呼ぶ。
+    public convenience init(session: AccountSession, tasks: TaskScope, didDelete: @escaping @MainActor (Status.ID) -> Void) {
+        let client = session.client
+        // web UIと同じく、添付もすぐ消す。送らないと、削除して書き直すために、サーバーが添付を1日ほど残すため。
+        self.init(deleteStatus: { try await client.deleteStatus($0, deleteMedia: true) }, statuses: session.statuses, tasks: tasks, didDelete: didDelete)
     }
 
     init(

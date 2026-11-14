@@ -47,13 +47,7 @@ enum LocalMediaLoader {
 
     /// ファイルを一時ディレクトリにコピーし、コピーした先を返す。
     private static func copyToDirectory(_ url: URL) throws -> URL {
-        // 元の名前のままサーバーに送れるよう、選ぶたびにディレクトリを分ける。
-        let folder = directory.appending(fileName: SafeFileName(UUID().uuidString), directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        // 名前はほかのアプリから受け取ったファイルのものなので、選ぶたびのディレクトリの直下に収める。
-        let destination = folder.appending(fileName: SafeFileName(url.lastPathComponent))
-        try FileManager.default.copyItem(at: url, to: destination)
-        return destination
+        try LocalMediaFile.ownedCopy(of: url, in: directory)
     }
 
     /// 添付したときの種類。GIFは、サーバーが音のない動画（gifv）に変える。

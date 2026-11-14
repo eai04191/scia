@@ -188,4 +188,20 @@ struct ComposeModelStatusDeletionTests {
         gate.open()
         await submitting.value
     }
+
+    /// 投稿欄を`ComposeModel`で渡さないUIでも、セッションのクライアントで添付ごと消し、消せたら投稿欄へ伝える口を呼ぶ。
+    @Test(.scratch) func sessionInitDeletesWithMediaAndNotifies() async throws {
+        let transport = RoutedTransport { _ in (200, Data("{}".utf8)) }
+        let session = AccountSession.testing(transport: transport)
+        defer { session.close() }
+        var deleted: [Status.ID] = []
+        let deletion = StatusDeletion(session: session, tasks: session.tasks.child()) { deleted.append($0) }
+
+        deletion.delete(status(id: "10")) { _ in Issue.record("失敗しないはず") }
+        try await waitUntil { deleted == ["10"] }
+
+        let request = try #require(transport.requests(to: "/api/v1/statuses/10").first)
+        #expect(request.httpMethod == "DELETE")
+        #expect(request.url?.query()?.contains("delete_media=true") == true)
+    }
 }

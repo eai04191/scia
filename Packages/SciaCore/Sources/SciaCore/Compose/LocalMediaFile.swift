@@ -1,15 +1,37 @@
 public import Foundation
 
 /// 端末から選び、アプリの一時ディレクトリにコピーしたメディアのファイル。アップロードと、投稿欄のサムネイルに使う。
+///
+/// ファイルは、このファイルのためだけに作ったフォルダーに置く。添付から外したときと投稿できたときに、フォルダーごと消すため（`remove()`）。
+/// 使う人のファイルやほかのアプリから受け取ったファイルは、場所をそのまま渡さず、`init(copying:in:mimeType:kind:)`でコピーして作る。
 public struct LocalMediaFile: Sendable, Equatable {
     public let url: URL
     public let mimeType: String
     public let kind: MediaAttachment.Kind
 
+    /// - Parameter url: このファイルのためだけに作ったフォルダーに置いたファイル。`remove()`は、このファイルのあるフォルダーを中身ごと消す。
+    ///   使う人のファイルの場所を渡すと、そのファイルのあるフォルダーが消える。
     public init(url: URL, mimeType: String, kind: MediaAttachment.Kind) {
         self.url = url
         self.mimeType = mimeType
         self.kind = kind
+    }
+
+    /// `source`を、`directory`の中に作ったこのファイルのためだけのフォルダーへコピーして作る。元のファイルには触れない。
+    /// - Parameter directory: コピーを置く場所。アプリの一時ディレクトリの中のフォルダーを渡す。
+    public init(copying source: URL, in directory: URL, mimeType: String, kind: MediaAttachment.Kind) throws {
+        self.init(url: try Self.ownedCopy(of: source, in: directory), mimeType: mimeType, kind: kind)
+    }
+
+    /// `source`を、`directory`の中に作ったそのファイルのためだけのフォルダーへコピーし、コピーした先を返す。
+    public static func ownedCopy(of source: URL, in directory: URL) throws -> URL {
+        // 元の名前のままサーバーに送れるよう、コピーするたびにフォルダーを分ける。
+        let folder = directory.appending(fileName: SafeFileName(UUID().uuidString), directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        // 名前はほかのアプリから受け取ったファイルのものでありうるので、フォルダーの直下に収める。
+        let destination = folder.appending(fileName: SafeFileName(source.lastPathComponent))
+        try FileManager.default.copyItem(at: source, to: destination)
+        return destination
     }
 
     /// ファイルを、コピーしたときに作ったディレクトリごと消す。添付から外したときと、投稿できたときに呼ぶ。
