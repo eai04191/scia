@@ -170,8 +170,9 @@ private final class ProfilePinnedCard: UIControl {
         // 警告のフィルターに一致した投稿と、注意書きのある投稿は、警告の文だけを出し、本文と添付ファイルを出さない。開いた先で、いつもどおり読むかを選ぶ。
         // フィルターの警告は、タイムラインの行（`PostContentBuilder.filterWarning`）と同じ文言にする。
         if hasFilterWarning {
-            let text = NSMutableAttributedString(string: PostTexts.filterWarningPrefix, attributes: [.font: font, .foregroundColor: UIColor.secondaryLabel])
-            text.append(NSAttributedString(string: PostTexts.filterNames(verdict.warningTitles), attributes: [.font: font, .foregroundColor: UIColor.label]))
+            let warning = PostTexts.filterWarning(titles: verdict.warningTitles)
+            let text = NSMutableAttributedString(string: warning.text, attributes: [.font: font, .foregroundColor: UIColor.secondaryLabel])
+            text.addAttribute(.foregroundColor, value: UIColor.label, range: NSRange(warning.emphasis, in: warning.text))
             bodyLabel.attributedText = text
         } else {
             let text: RichText = hasWarning ? .plain(status.spoilerText, emojis: status.emojis) : .html(status.content, emojis: status.emojis)

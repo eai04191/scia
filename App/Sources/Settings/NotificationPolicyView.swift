@@ -33,7 +33,7 @@ struct NotificationPolicyView: View {
                 }
             }
             .confirmationDialog(
-                confirmingDrop.map { "本当に“\($0.confirmationName)”を無視するようにしますか？" } ?? "",
+                confirmingDrop?.dropConfirmationTitle ?? "",
                 isPresented: Binding(get: { confirmingDrop != nil }, set: { if !$0 { confirmingDrop = nil } }),
                 titleVisibility: .visible,
                 presenting: confirmingDrop

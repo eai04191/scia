@@ -1,7 +1,7 @@
 import Foundation
 
 /// 投稿と通知の行に出す文言。どのUIも同じ文言で出すため、行を描く側では書かない。
-/// 通知の文は`NotificationKindAppearance`、投票の票数と期限は`PollDisplay.summary`、一覧の空と終わりの文は`TimelineTexts`にある。
+/// 通知の文は`NotificationAppearance.phrase`、投票の票数と期限は`PollDisplay.summary`、一覧の空と終わりの文は`TimelineTexts`にある。
 public enum PostTexts {
     /// 固定された投稿の行の上に出すラベル。プロフィールの固定された投稿の棚の見出しにも使う。
     public static let pinned = "固定された投稿"
@@ -25,12 +25,18 @@ public enum PostTexts {
     /// フィルターの警告のボックスを開くボタン。本文だけでなく添付ファイルやリンクカードも隠しているため、本文に限らない言い方にする。
     public static let filterWarningToggle = "投稿を表示"
 
-    /// フィルターの警告と、フィルターでぼかした添付ファイルで、フィルターの名前の前に出す語。
-    public static let filterWarningPrefix = "フィルター: "
+    /// 一部を目立たせて描く文。文を丸ごと持ち、目立たせる範囲を添える。言語で語順が変わっても、描く側は範囲に色を付けるだけで済む。
+    public struct EmphasizedText: Equatable, Sendable {
+        public let text: String
+        /// 目立たせる部分。
+        public let emphasis: Range<String.Index>
+    }
 
-    /// フィルターの警告に並べる、一致したフィルターの名前。
-    public static func filterNames(_ titles: [String]) -> String {
-        titles.joined(separator: "、")
+    /// フィルターの警告と、フィルターでぼかした添付ファイルに出す文。一致したフィルターの名前を目立たせる。
+    public static func filterWarning(titles: [String]) -> EmphasizedText {
+        let names = titles.joined(separator: "、")
+        let text = "フィルター: \(names)"
+        return EmphasizedText(text: text, emphasis: text.index(text.endIndex, offsetBy: -names.count)..<text.endIndex)
     }
 
     /// 自分の投稿が、自分のフィルターに一致していることを示す1行。
@@ -107,7 +113,7 @@ extension MediaCover {
     public static func title(of cover: MediaCover?) -> String {
         switch cover {
         case .hidden: "非表示"
-        case .filtered(let titles): PostTexts.filterWarningPrefix + PostTexts.filterNames(titles)
+        case .filtered(let titles): PostTexts.filterWarning(titles: titles).text
         case .sensitive, nil: "閲覧注意"
         }
     }

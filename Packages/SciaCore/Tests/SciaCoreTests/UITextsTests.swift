@@ -39,6 +39,14 @@ struct UITextsTests {
         #expect(PostTexts.mediaCoverAccessibilityLabel(.hidden) == "非表示、タップして表示")
     }
 
+    /// フィルターの警告は文を丸ごと返し、色を変える名前の範囲を添える。
+    @Test func filterWarningMarksFilterNames() {
+        let warning = PostTexts.filterWarning(titles: ["ネタバレ", "広告"])
+
+        #expect(warning.text == "フィルター: ネタバレ、広告")
+        #expect(warning.text[warning.emphasis] == "ネタバレ、広告")
+    }
+
     @Test func ownFilterNoteQuotesEachFilter() {
         #expect(PostTexts.ownFilterNote(titles: ["ネタバレ", "広告"]) == "フィルター“ネタバレ”“広告”に一致")
     }
@@ -59,6 +67,7 @@ struct UITextsTests {
         let done = StatusInteractions.Action.favourite.doneTitle(wasOn: false)
 
         #expect(OtherAccountTexts.title(done, handle: "@me@example.social") == "@me@example.socialでお気に入りしました")
+        #expect(OtherAccountTexts.title(done, handle: nil) == "お気に入りしました")
     }
 
     @Test func attachmentStatusReadsProgressOnlyWhileSending() {
@@ -87,8 +96,8 @@ struct UITextsTests {
     }
 
     @Test func notificationPolicyConfirmationNamesNotifications() {
-        #expect(NotificationPolicy.Item.notFollowing.confirmationName == "フォローしていないアカウントからの通知")
-        #expect(NotificationPolicy.Item.privateMentions.confirmationName == "外部からの非公開の返信")
+        #expect(NotificationPolicy.Item.notFollowing.dropConfirmationTitle == "本当に“フォローしていないアカウントからの通知”を無視するようにしますか？")
+        #expect(NotificationPolicy.Item.privateMentions.dropConfirmationTitle == "本当に“外部からの非公開の返信”を無視するようにしますか？")
     }
 
     @Test func searchSuggestionNamesTheTarget() {

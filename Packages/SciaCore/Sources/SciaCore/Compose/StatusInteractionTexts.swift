@@ -30,9 +30,11 @@ extension StatusInteractions.Action {
 
 /// 今のアカウントではないアカウントで行った操作の文言。今のアカウントのタイムラインの投稿は変わらないので、どのアカウントで行ったかを頭に付ける。
 public enum OtherAccountTexts {
-    /// - Parameter handle: 行ったアカウントのハンドル（`StoredCredential.handle`）。
-    public static func title(_ title: String, handle: String) -> String {
-        "\(handle)で\(title)"
+    /// 済んだことか失敗の文`title`を、`handle`のアカウントで行ったことが分かる文にして返す。
+    /// - Parameter handle: 行ったアカウントのハンドル（`Credential.handle`）。今のアカウントで行ったときはnilで、`title`のまま返す。
+    public static func title(_ title: String, handle: String?) -> String {
+        guard let handle else { return title }
+        return "\(handle)で\(title)"
     }
 
     public static let deleted = "投稿を削除しました"

@@ -167,6 +167,9 @@ public enum StorageRemoveTarget: CaseIterable, Hashable, Sendable {
         }
     }
 
+    /// 消すボタンの名前。
+    public var removeTitle: String { "\(name)を消去" }
+
     /// 消す前に確かめるときの題。
     public var confirmationTitle: String { "\(name)を消去しますか？" }
 
@@ -213,6 +216,9 @@ extension StorageBreakdown.Category {
     public func isShown(bytes: Int64?) -> Bool {
         self != .discomfortReports || bytes != 0
     }
+
+    /// この項目の中身を並べる画面で、中身がないときに出す文。
+    public var emptyTitle: String { "\(title)はありません" }
 
     /// 項目の名前。
     public var title: String {

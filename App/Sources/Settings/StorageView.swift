@@ -133,7 +133,7 @@ struct StorageView: View {
             }
         } label: {
             HStack {
-                Text("\(target.name)を消去")
+                Text(target.removeTitle)
                 Spacer()
                 if removing == target {
                     ProgressView()

@@ -29,7 +29,7 @@ struct MediaCacheView: View {
     var body: some View {
         Group {
             if let entries, entries.isEmpty {
-                ContentUnavailableView("\(category.title)はありません", systemImage: "photo.on.rectangle")
+                ContentUnavailableView(category.emptyTitle, systemImage: "photo.on.rectangle")
             } else if let entries {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 2)], spacing: 2) {

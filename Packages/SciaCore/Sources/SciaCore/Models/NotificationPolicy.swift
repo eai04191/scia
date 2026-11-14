@@ -202,9 +202,10 @@ extension NotificationPolicy.Item {
         }
     }
 
-    /// 無視するかを確かめるダイアログの、項目の名前。
-    public var confirmationName: String {
-        self == .privateMentions ? title : "\(title)からの通知"
+    /// 無視するかを確かめるダイアログの題。
+    public var dropConfirmationTitle: String {
+        let name = self == .privateMentions ? title : "\(title)からの通知"
+        return "本当に“\(name)”を無視するようにしますか？"
     }
 }
 

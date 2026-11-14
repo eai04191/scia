@@ -473,8 +473,9 @@ struct PostContentBuilder {
     /// フィルターの名前は使う人が付けたものなので、投稿の言語ではなく、アプリの文字で描く。
     func filterWarning(titles: [String], base: UIListContentConfiguration) -> PostBodyContent.Spoiler {
         let font = PostTypography(settings: settings).font(.body)
-        let text = NSMutableAttributedString(string: PostTexts.filterWarningPrefix, attributes: [.font: font, .foregroundColor: UIColor.secondaryLabel])
-        text.append(NSAttributedString(string: PostTexts.filterNames(titles), attributes: [.font: font, .foregroundColor: UIColor.label]))
+        let warning = PostTexts.filterWarning(titles: titles)
+        let text = NSMutableAttributedString(string: warning.text, attributes: [.font: font, .foregroundColor: UIColor.secondaryLabel])
+        text.addAttribute(.foregroundColor, value: UIColor.label, range: NSRange(warning.emphasis, in: warning.text))
         return PostBodyContent.Spoiler(
             text: text,
             isCollapsed: true,
