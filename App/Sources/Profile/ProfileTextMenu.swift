@@ -31,7 +31,7 @@ extension TimelineViewController {
     /// 自分にしか見えないメモの欄を長押ししたときのメニュー。プロフィールの文章のメニューの先頭に、並びの設定の外の「メモを編集」を足す。
     /// 自分で書いた文章なので、翻訳は出さない。
     func privateNoteMenu(for note: String, edit: @escaping @MainActor () -> Void) -> UIMenu {
-        let editAction = UIAction(title: "メモを編集", image: UIImage(systemName: "square.and.pencil")) { _ in edit() }
+        let editAction = UIAction(title: AccountNoteTexts.edit, image: UIImage(systemName: "square.and.pencil")) { _ in edit() }
         let textElements = profileTextMenu(for: .privateNote(note), omitting: [.systemTranslate])?.children ?? []
         return UIMenu(children: [UIMenu(options: .displayInline, children: [editAction])] + textElements)
     }

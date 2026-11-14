@@ -21,7 +21,7 @@ final class ProfilePrivateNoteView: UIView {
         iconView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .caption1)
         iconView.tintColor = .secondaryLabel
         iconView.setContentHuggingPriority(.required, for: .horizontal)
-        titleLabel.text = "メモ"
+        titleLabel.text = AccountNoteTexts.title
         titleLabel.font = .preferredFont(forTextStyle: .footnote)
         titleLabel.adjustsFontForContentSizeCategory = true
         titleLabel.textColor = .secondaryLabel
@@ -51,7 +51,7 @@ final class ProfilePrivateNoteView: UIView {
         addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
         isAccessibilityElement = true
         accessibilityTraits = .button
-        accessibilityHint = "メモを編集します。"
+        accessibilityHint = AccountNoteTexts.editHint
     }
 
     @available(*, unavailable)
@@ -63,7 +63,7 @@ final class ProfilePrivateNoteView: UIView {
     func apply(note: String, glyphLanguage: String, emojiImages: EmojiImageStore<UIImage>) {
         bodyLabel.attributedText = RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, emojiImages: emojiImages, language: glyphLanguage)
             .render(.plain(note, emojis: []))
-        accessibilityLabel = "メモ、\(note)"
+        accessibilityLabel = AccountNoteTexts.accessibilityLabel(note: note)
     }
 
     @objc private func tapped() {

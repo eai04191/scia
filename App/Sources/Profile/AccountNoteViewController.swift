@@ -48,15 +48,15 @@ final class AccountNoteViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemGroupedBackground
-        navigationItem.title = "メモ"
+        navigationItem.title = AccountNoteTexts.title
         navigationItem.leftBarButtonItem = UIBarButtonItem(systemItem: .cancel, primaryAction: UIAction { [weak self] _ in self?.cancel() })
-        let save = UIBarButtonItem(title: "保存", style: .prominent, target: nil, action: nil)
-        save.primaryAction = UIAction(title: "保存") { [weak self] _ in self?.save() }
+        let save = UIBarButtonItem(title: AccountNoteTexts.save, style: .prominent, target: nil, action: nil)
+        save.primaryAction = UIAction(title: AccountNoteTexts.save) { [weak self] _ in self?.save() }
         navigationItem.rightBarButtonItem = save
 
         textView.text = editor.text
-        textView.placeholder = "メモを追加"
-        textView.accessibilityLabel = "メモ"
+        textView.placeholder = AccountNoteTexts.placeholder
+        textView.accessibilityLabel = AccountNoteTexts.title
         textView.followGlyphLanguage(of: settings)
         textView.delegate = self
         textView.updatePlaceholder()
@@ -106,7 +106,7 @@ final class AccountNoteViewController: UIViewController {
             navigationItem.rightBarButtonItem?.customView = nil
         }
         isModalInPresentation = editor.hasChanges || saving
-        footer.setText("\(editor.length)文字", isProblem: false)
+        footer.setText(ProfileTexts.characterCount(editor.length), isProblem: false)
     }
 
     // MARK: - 保存と取りやめ
@@ -124,7 +124,7 @@ final class AccountNoteViewController: UIViewController {
                 // ログアウトやアカウントの切り替えで止めた。通信の途中なら`URLError(.cancelled)`で届く。シートもセッションと一緒に閉じるので、知らせない。
             } catch {
                 logger.error("account note save failed: \(SciaLog.describe(error), privacy: .public)")
-                onError(error, "メモを保存できませんでした")
+                onError(error, AccountNoteTexts.saveFailure)
             }
         }
     }
@@ -142,12 +142,12 @@ final class AccountNoteViewController: UIViewController {
         guard !isConfirmingDiscard, !editor.isSaving else { return }
         isConfirmingDiscard = true
         view.endEditing(true)
-        let sheet = UIAlertController(title: nil, message: "変更を保存していません", preferredStyle: .actionSheet)
-        sheet.addAction(UIAlertAction(title: "変更を破棄", style: .destructive) { [weak self] _ in
+        let sheet = UIAlertController(title: nil, message: ProfileTexts.Discard.message, preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: ProfileTexts.Discard.discard, style: .destructive) { [weak self] _ in
             self?.isConfirmingDiscard = false
             self?.dismiss(animated: true)
         })
-        sheet.addAction(UIAlertAction(title: "編集を続ける", style: .cancel) { [weak self] _ in
+        sheet.addAction(UIAlertAction(title: ProfileTexts.Discard.keepEditing, style: .cancel) { [weak self] _ in
             self?.isConfirmingDiscard = false
         })
         sheet.popoverPresentationController?.barButtonItem = navigationItem.leftBarButtonItem
@@ -165,7 +165,7 @@ extension AccountNoteViewController: UITableViewDataSource, UITableViewDelegate 
     }
 
     func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        "@\(acct)についての自分にしか見えないメモ"
+        AccountNoteTexts.header(acct: acct)
     }
 
     func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
