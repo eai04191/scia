@@ -65,6 +65,12 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
   - 公開範囲の名前と記号: `VisibilityOption`の`title`と`symbolName`
   - フォローのボタン: `FollowState.buttonTitle`。検索の種類と候補の行: `SearchCategory.title`、`SearchSuggestions.Action`の`title`と`symbolName`
   - 各画面: `NotificationPolicy.Item`と`Value`、`FilterResult.Context`と`Action`、`ReportCategory`、`StorageBreakdown.Category`、`ConnectionDiagnostics.StreamingState.title(of:)`の`title`など、値の型に文言がある
+- 値の型に結び付かない画面の文言は、画面ごとの`…Texts`にある。iOSのアプリは、使う人に見える文言をすべてここか値の型から読む（`make lint`の`user_text_outside_core`で止めている）ので、iOSの画面にある文言はどれもSciaCoreで見つかる
+  - タイムライン: `TimelineScreenTexts`、`BatchActionTexts`（まとめてブースト）、`StreamingStatusTexts`（引っぱると見える接続の状態）、`ScheduledStatusTexts`、`SearchScreenTexts`、`AnnouncementTexts`、`EditHistoryTexts`、`MediaViewerTexts`
+  - アカウント一式: `SessionTexts`（操作の失敗の見出しなど）、`HashtagChangeTexts`、`TabMenuTexts`、`NoticeTexts`、`OperationStatusTexts`、`StatusBarTickerTexts`、`LoginTexts`、`AccountSwitchTexts`、`CrashReportTexts`、`APIResponseTexts`、`InAppBrowserSheetTexts`
+  - プロフィールとリスト: `ProfileTexts`、`AccountNoteTexts`、`ProfileEditTexts`、`ReportTexts`、`ListTexts`
+  - 投稿欄: `ComposeTexts`。設定: `SettingsTexts`
+  - 「キャンセル」「再試行」のような短い語も、画面ごとの`…Texts`に別々に置いてある。共通の定数はない
 
 ## 投稿
 
