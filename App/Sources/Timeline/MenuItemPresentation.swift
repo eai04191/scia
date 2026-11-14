@@ -6,11 +6,32 @@ extension MenuLayout.Groups {
     /// まとまりごとに区切り線で分けて並べ、「その他」の中身はサブメニューにする。中身のないまとまりと「その他」は出さない。
     /// 横並びのまとまりは、その大きさで横に並べる。横に並ぶ数（`MenuRowSize.capacity`）を超えた項目は、その下にふだんの行として続く。
     func menuElements(_ elements: (Item) -> [UIMenuElement]) -> [UIMenuElement] {
-        arranged(elements, group: { children, row in
-            let menu = UIMenu(options: .displayInline, children: children)
-            if let row { menu.preferredElementSize = row.elementSize }
-            return menu
-        }, more: { UIMenu(title: "その他", image: UIImage(systemName: "ellipsis.circle"), children: $0) })
+        arranged(elements, group: { UIMenu.group($0, row: $1) }, more: { UIMenu(title: "その他", image: UIImage(systemName: "ellipsis.circle"), children: $0) })
+    }
+}
+
+/// 横並びのまとまりの項目に、サブタイトルを出すか。
+@MainActor
+enum MenuRowSubtitles {
+    /// VoiceOverでは見た目の幅や高さが関わらず、押せない理由などを読み上げで伝えるため、出したままにする。
+    static var areShown: Bool { UIAccessibility.isVoiceOverRunning }
+}
+
+@MainActor
+extension UIMenu {
+    /// 区切り線で分けたまとまり。横並びなら、その大きさで横に並べ、横に並ぶ項目のサブタイトルを出さない。
+    /// 狭い幅では長い文字が途中で切れ、出たときだけ段が高くなって下の項目を押し出すため。横に並ぶ数を超えてふだんの行で出る項目には残す。
+    /// 開いてから中身を読む項目（`UIDeferredMenuElement`）は、UIKitが中身を見せないので、読んだ項目のサブタイトルは残る。木から描くメニュー（`MenuRenderer`）では、読んだ項目からも除く。
+    static func group(_ children: [UIMenuElement], row: MenuRowSize?) -> UIMenu {
+        let menu = UIMenu(options: .displayInline, children: children)
+        guard let row else { return menu }
+        menu.preferredElementSize = row.elementSize
+        guard !MenuRowSubtitles.areShown else { return menu }
+        for child in children.prefix(row.capacity) {
+            (child as? UIAction)?.subtitle = nil
+            (child as? UIMenu)?.subtitle = nil
+        }
+        return menu
     }
 }
 

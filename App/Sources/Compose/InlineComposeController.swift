@@ -909,11 +909,7 @@ final class InlineComposeController: NSObject {
 
     /// ＋のメニューの項目。設定の区切り線で分けたまとまりごとに、区切って並べる。
     private func addMenuElements() -> [UIMenuElement] {
-        (toolPlacement?.menu ?? []).map { group in
-            let menu = UIMenu(options: .displayInline, children: group.items.map(menuAction(for:)))
-            if let row = group.row { menu.preferredElementSize = row.elementSize }
-            return menu
-        }
+        (toolPlacement?.menu ?? []).map { UIMenu.group($0.items.map(menuAction(for:)), row: $0.row) }
     }
 
     /// 設定と同じ、投稿欄のボタンの並びを変える画面を重ねる。書いている途中なら、閉じたあとにキーボードを戻す。

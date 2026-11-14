@@ -23,17 +23,23 @@ struct MenuRenderer<Command> {
     }
 
     func elements(_ nodes: [MenuNode<Command>]) -> [UIMenuElement] {
-        nodes.map(element)
+        nodes.map { element($0) }
     }
 
-    func element(_ node: MenuNode<Command>) -> UIMenuElement {
+    /// - Parameter showsSubtitle: 横並びのまとまりで横に並ぶ項目ではfalse。決まりはdocs/menus.mdの「並びの設定」にある。
+    func element(_ node: MenuNode<Command>, showsSubtitle: Bool = true) -> UIMenuElement {
         switch node.content {
         case .action:
-            return action(node)
+            return action(node, showsSubtitle: showsSubtitle)
         case .submenu(let children):
-            return UIMenu(title: node.headingTitle, subtitle: node.subtitle, image: image(node.icon), children: elements(children))
+            return UIMenu(title: node.headingTitle, subtitle: showsSubtitle ? node.subtitle : nil, image: image(node.icon), children: elements(children))
         case .group(let children, let row):
-            let menu = UIMenu(options: .displayInline, children: elements(children))
+            // 横に並ぶ項目は、まとまりの先頭から横に並ぶ数までとして、サブタイトルを除く。
+            // 開いてから中身を読む項目（関係を覚えていない相手の関係の項目など）は、読む前の1個として数えるので、読んだ結果が0個や2個以上だと、後ろの項目の位置がずれる。
+            // 0個なら、詰まって横に並んだ後ろの項目にサブタイトルが残り、2個以上なら、押し出されてふだんの行で出る項目のサブタイトルが消える。
+            // 後ろの項目は読み終える前に描き、UIKitは描いたあとの項目を差し替えさせないため、読んだあとの位置では決められない。問題を認識したうえで、対応しない。
+            let hidden = row.map { MenuRowSubtitles.areShown ? 0 : $0.capacity } ?? 0
+            let menu = UIMenu(options: .displayInline, children: children.enumerated().map { element($1, showsSubtitle: $0 >= hidden) })
             if let row { menu.preferredElementSize = row.elementSize }
             return menu
         case .deferred(let load):
@@ -41,7 +47,7 @@ struct MenuRenderer<Command> {
             return UIDeferredMenuElement.uncached { completion in
                 // 使う人が開いたメニューの中身なので、操作として読む。
                 Task(.action) {
-                    completion(elements(await load()))
+                    completion(await load().map { element($0, showsSubtitle: showsSubtitle) })
                     didRenderDeferred()
                 }
             }
@@ -49,12 +55,12 @@ struct MenuRenderer<Command> {
     }
 
     /// 項目を描く。項目でないものは、押せない項目にする。
-    func action(_ node: MenuNode<Command>) -> UIAction {
+    func action(_ node: MenuNode<Command>, showsSubtitle: Bool = true) -> UIAction {
         var attributes: UIMenuElement.Attributes = []
         if !node.isEnabled { attributes.insert(.disabled) }
         if node.isDestructive { attributes.insert(.destructive) }
         let command = node.command
-        return UIAction(title: node.title, subtitle: node.subtitle, image: image(node.icon), attributes: attributes, state: node.isSelected ? .on : .off) { [perform] _ in
+        return UIAction(title: node.title, subtitle: showsSubtitle ? node.subtitle : nil, image: image(node.icon), attributes: attributes, state: node.isSelected ? .on : .off) { [perform] _ in
             guard let command else { return }
             perform(command)
         }

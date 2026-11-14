@@ -19,7 +19,7 @@ struct MenuRendererTests {
                 .action("投稿を通知", isSelected: true, 4),
             ]),
             .submenu("その他", icon: .symbol("ellipsis.circle"), [.deferred { [] }]),
-            .group([.action("共有", 5)], row: .small),
+            .group([.action("共有", subtitle: "補足", 5), .submenu("送る", subtitle: "補足", []), .action("3", 6), .action("4", 7), .action("言語", subtitle: "日本語", 8)], row: .small),
         ])
 
         let menu = renderer.menu(root)
@@ -32,7 +32,10 @@ struct MenuRendererTests {
         #expect(reply.image != nil)
         let group = try #require(menu.children[1] as? UIMenu)
         #expect(group.preferredElementSize != .medium && group.preferredElementSize != .small)
-        #expect((menu.children[3] as? UIMenu)?.preferredElementSize == .small)
+        // 横並びのまとまりで横に並ぶ項目は、サブタイトルを出さない。横に並ぶ数を超えてふだんの行で出る項目には残す。
+        let small = try #require(menu.children[3] as? UIMenu)
+        #expect(small.preferredElementSize == .small)
+        #expect(small.children.map(\.subtitle) == [nil, nil, nil, nil, "日本語"])
         let actions = group.children.compactMap { $0 as? UIAction }
         #expect(actions.map(\.title) == ["削除", "編集", "投稿を通知"])
         #expect(actions[0].attributes == .destructive)
