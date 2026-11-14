@@ -68,7 +68,7 @@ final class AnnouncementEntryView: UIView {
 
     func apply(_ content: Content) {
         dateLabel.text = content.date
-        dateLabel.accessibilityLabel = content.showsUnreadMark ? "\(content.date)、未読" : content.date
+        dateLabel.accessibilityLabel = AnnouncementTexts.dateAccessibilityLabel(date: content.date, isUnread: content.showsUnreadMark)
         unreadMark.isHidden = !content.showsUnreadMark
         bodyLabel.emojiImages = content.animatedEmojis
         bodyLabel.attributedText = content.body

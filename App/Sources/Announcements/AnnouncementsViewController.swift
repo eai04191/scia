@@ -63,7 +63,7 @@ final class AnnouncementsViewController: UIViewController {
         self.tuning = tuning
         self.now = now
         super.init(nibName: nil, bundle: nil)
-        title = "サーバーのお知らせ"
+        title = AnnouncementTexts.title
     }
 
     @available(*, unavailable)
@@ -266,7 +266,7 @@ final class AnnouncementsViewController: UIViewController {
         label.font = .preferredFont(forTextStyle: .subheadline)
         label.textColor = .secondaryLabel
         label.numberOfLines = 0
-        label.text = "読めなかったお知らせ"
+        label.text = AnnouncementTexts.unreadable
         return padded(label)
     }
 
@@ -275,13 +275,13 @@ final class AnnouncementsViewController: UIViewController {
         let title = UILabel()
         title.font = .preferredFont(forTextStyle: .subheadline).bold
         title.numberOfLines = 0
-        title.text = "お知らせを読み込めませんでした"
+        title.text = AnnouncementTexts.loadFailure
         let detail = UILabel()
         detail.attributedText = reason.attributedText(textStyle: .footnote)
         detail.textColor = .secondaryLabel
         detail.numberOfLines = 0
         var configuration = UIButton.Configuration.borderedTinted()
-        configuration.title = "再試行"
+        configuration.title = AnnouncementTexts.retry
         let retry = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in self?.model.refresh() })
         let column = UIStackView(arrangedSubviews: [title, detail, retry])
         column.axis = .vertical
@@ -330,15 +330,15 @@ final class AnnouncementsViewController: UIViewController {
             contentUnavailableConfiguration = UIContentUnavailableConfiguration.loading()
         case .failed(let reason):
             var configuration = UIContentUnavailableConfiguration.empty()
-            configuration.text = "お知らせを読み込めませんでした"
+            configuration.text = AnnouncementTexts.loadFailure
             configuration.secondaryAttributedText = reason.attributedText(textStyle: .body)
             configuration.button = .borderedTinted()
-            configuration.button.title = "再試行"
+            configuration.button.title = AnnouncementTexts.retry
             configuration.buttonProperties.primaryAction = UIAction { [weak self] _ in self?.model.refresh() }
             contentUnavailableConfiguration = configuration
         case .loaded:
             var configuration = UIContentUnavailableConfiguration.empty()
-            configuration.text = "お知らせはありません"
+            configuration.text = AnnouncementTexts.empty
             contentUnavailableConfiguration = configuration
         }
     }
