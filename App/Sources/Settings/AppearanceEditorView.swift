@@ -42,7 +42,7 @@ struct AppearanceEditorView: View {
                         }
                     }
                     Section {
-                        Button("すべてデフォルトに戻す", role: .destructive) { confirmsReset = true }
+                        Button(AppearanceCatalog.resetAllTitle, role: .destructive) { confirmsReset = true }
                             .disabled(!settings.isAppearanceModified)
                     } footer: {
                         Text("文字の大きさはiPhoneの文字サイズが標準のときの大きさです。本文はiPhoneの文字サイズに合わせて伸び縮みし、ほかの文字は本文との差を保ちます。")
@@ -55,10 +55,10 @@ struct AppearanceEditorView: View {
                 AppearanceGroupEditorView(group: group, settings: settings)
             }
         }
-        .navigationTitle("投稿")
+        .navigationTitle(SettingsPage.appearance.title)
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog("投稿の見た目をすべてデフォルトに戻しますか？", isPresented: $confirmsReset, titleVisibility: .visible) {
-            Button("デフォルトに戻す", role: .destructive) {
+        .confirmationDialog(AppearanceCatalog.resetAllConfirmation, isPresented: $confirmsReset, titleVisibility: .visible) {
+            Button(AppearanceCatalog.resetTitle, role: .destructive) {
                 settings.resetAppearance()
                 resets += 1
             }
@@ -99,7 +99,9 @@ struct AppearanceGroupEditorView: View {
                 Form {
                     // 選んで決める項目のない分類では、中身のないセクションは描かれない。
                     Section {
-                        choices(of: group)
+                        ForEach(choices, id: \.self) { choice in
+                            choiceRow(choice)
+                        }
                     }
                     Section {
                         ForEach(group.values) { item in
@@ -110,35 +112,10 @@ struct AppearanceGroupEditorView: View {
                                 onFocus: { focused = .value(item) },
                                 onToggleFocus: { toggleFocus(.value(item)) }
                             )
-                            .disabled(isUnused(item))
+                            .disabled(!AppearanceCatalog.isUsed(item, in: settings.appearance))
                         }
                     }
                 }
-                // スイッチは押すとすぐ切り替わるので、切り替えたときに触っている項目にする。メニューで選ぶ項目は、メニューを開いたときにする。
-                .onChange(of: settings.appearance.showsBoosterAvatar) { focused = .choice(.showsBoosterAvatar) }
-                .onChange(of: settings.appearance.showsContextSymbol) { focused = .choice(.showsContextSymbol) }
-                .onChange(of: settings.appearance.boldsName) { focused = .choice(.boldsName) }
-                .onChange(of: settings.appearance.showsAvatarBorder) { focused = .choice(.showsAvatarBorder) }
-                .onChange(of: settings.appearance.showsMediaBadges) { focused = .choice(.showsMediaBadges) }
-                .onChange(of: settings.appearance.tiltsStackedPhotos) { focused = .choice(.tiltsStackedPhotos) }
-                .onChange(of: settings.appearance.showsLinkCard) { focused = .choice(.showsLinkCard) }
-                .onChange(of: settings.appearance.boldsLinkCardTitle) { focused = .choice(.boldsLinkCardTitle) }
-                .onChange(of: settings.appearance.showsSeparators) { focused = .choice(.showsSeparators) }
-                .onChange(of: settings.appearance.showsReplyLabel) { focused = .choice(.showsReplyLabel) }
-                .onChange(of: settings.appearance.showsReplyLines) { focused = .choice(.showsReplyLines) }
-                .onChange(of: settings.appearance.wrapsBelowAvatar) { focused = .choice(.wrapsBelowAvatar) }
-                .onChange(of: settings.appearance.stacksNameParts) { focused = .choice(.stacksNameParts) }
-                .onChange(of: settings.appearance.showsTime) { focused = .choice(.showsTime) }
-                .onChange(of: settings.appearance.showsVisibilitySymbol) { focused = .choice(.showsVisibilitySymbol) }
-                .onChange(of: settings.appearance.showsEditedMark) { focused = .choice(.showsEditedMark) }
-                .onChange(of: settings.appearance.showsLinkCardSite) { focused = .choice(.showsLinkCardSite) }
-                .onChange(of: settings.appearance.showsLinkCardImage) { focused = .choice(.showsLinkCardImage) }
-                .onChange(of: settings.appearance.animatesAvatars) { focused = .choice(.animatesAvatars) }
-                .onChange(of: settings.appearance.animatesCustomEmojis) { focused = .choice(.animatesCustomEmojis) }
-                .onChange(of: settings.appearance.drawsReactionGlowInHDR) { focused = .choice(.drawsReactionGlowInHDR) }
-                .onChange(of: settings.appearance.reactionGlowFillsWidthWhenAlone) { focused = .choice(.reactionGlowFillsWidthWhenAlone) }
-                .onChange(of: settings.appearance.showsActionBar) { focused = .choice(.showsActionBar) }
-                .onChange(of: settings.appearance.showsActionBarCounts) { focused = .choice(.showsActionBarCounts) }
             }
         }
         .toolbar {
@@ -167,178 +144,50 @@ struct AppearanceGroupEditorView: View {
         focused = focused == focus ? nil : focus
     }
 
-    /// 数値ではなく選んで決める項目。その部品の項目の先頭に置く。
-    @ViewBuilder
-    private func choices(of group: AppearanceGroup) -> some View {
-        switch group.id {
-        case "row":
-            TitledToggleRow(title: "投稿のあいだに区切り線を引く", isOn: $settings.appearance.showsSeparators) { toggleFocus(.choice(.showsSeparators)) }
-        case "context":
-            PopUpChoiceRow(title: "ブーストした人の表記", selection: $settings.appearance.contextNameStyle, options: Self.nameStyles, onOpen: { focus(.contextNameStyle) }, onTapTitle: { toggleFocus(.choice(.contextNameStyle)) })
-            TitledToggleRow(title: "ブーストや返信の記号を表示", isOn: $settings.appearance.showsContextSymbol) { toggleFocus(.choice(.showsContextSymbol)) }
-            TitledToggleRow(title: "ブーストした人のアイコンを表示", isOn: $settings.appearance.showsBoosterAvatar) { toggleFocus(.choice(.showsBoosterAvatar)) }
-            TitledToggleRow(title: "返信のラベルを表示", isOn: $settings.appearance.showsReplyLabel) { toggleFocus(.choice(.showsReplyLabel)) }
-        case "avatar":
-            PopUpChoiceRow(title: "形", selection: $settings.appearance.avatarShape, options: [(.circle, "円"), (.roundedSquare, "角丸の四角")], onOpen: { focus(.avatarShape) }, onTapTitle: { toggleFocus(.choice(.avatarShape)) })
-            TitledToggleRow(title: "縁取りを表示", isOn: $settings.appearance.showsAvatarBorder) { toggleFocus(.choice(.showsAvatarBorder)) }
-            TitledToggleRow(title: "アニメーションを再生する", isOn: $settings.animatesAvatars) { toggleFocus(.choice(.animatesAvatars)) }
-            TitledToggleRow(title: "アイコンの下を空けない", isOn: $settings.appearance.wrapsBelowAvatar) { toggleFocus(.choice(.wrapsBelowAvatar)) }
-            // アイコンの下を空けないときは、線の通る場所に本文などが入るので、線を出さない。
-            TitledToggleRow(title: "返信をつなぐ線を表示", isOn: $settings.appearance.showsReplyLines) { toggleFocus(.choice(.showsReplyLines)) }
-                .disabled(settings.appearance.wrapsBelowAvatar)
-        case "name":
-            PopUpChoiceRow(title: "名前の表記", selection: $settings.appearance.statusNameStyle, options: Self.nameStyles, onOpen: { focus(.nameStyle) }, onTapTitle: { toggleFocus(.choice(.nameStyle)) })
-            TitledToggleRow(title: "名前とハンドルを2段に分ける", isOn: $settings.appearance.stacksNameParts) { toggleFocus(.choice(.stacksNameParts)) }
-                .disabled(settings.appearance.statusNameStyle.parts.count < 2)
-            PopUpChoiceRow(title: "時刻の表記", selection: $settings.appearance.statusTimeStyle, options: [(.relative, "相対時刻"), (.absolute, "日時")], onOpen: { focus(.timeStyle) }, onTapTitle: { toggleFocus(.choice(.timeStyle)) })
-            TitledToggleRow(title: "名前を太字にする", isOn: $settings.appearance.boldsName) { toggleFocus(.choice(.boldsName)) }
-            TitledToggleRow(title: "時刻を表示", isOn: $settings.appearance.showsTime) { toggleFocus(.choice(.showsTime)) }
-            TitledToggleRow(title: "公開範囲の記号を表示", isOn: $settings.appearance.showsVisibilitySymbol) { toggleFocus(.choice(.showsVisibilitySymbol)) }
-            TitledToggleRow(title: "編集済みの“*”を表示", isOn: $settings.appearance.showsEditedMark) { toggleFocus(.choice(.showsEditedMark)) }
-        case "body":
-            PopUpChoiceRow(
-                title: "漢字の字形",
-                selection: $settings.appearance.glyphLanguage,
-                options: [(.automatic, "自動"), (.japanese, "日本語"), (.simplifiedChinese, "簡体字中国語"), (.traditionalChinese, "繁体字中国語"), (.korean, "韓国語")]
-            , onOpen: { focus(.glyphLanguage) }, onTapTitle: { toggleFocus(.choice(.glyphLanguage)) })
-            PopUpChoiceRow(title: "絵文字", selection: $settings.appearance.emojiStyle, options: [(.system, "Apple"), (.twemoji, "Twemoji")], onOpen: { focus(.emojiStyle) }, onTapTitle: { toggleFocus(.choice(.emojiStyle)) })
-            TitledToggleRow(title: "カスタム絵文字のアニメーションを再生する", isOn: $settings.animatesCustomEmojis) { toggleFocus(.choice(.animatesCustomEmojis)) }
-        case "media":
-            PopUpChoiceRow(title: "並べ方", selection: $settings.appearance.mediaArrangement, options: [(.belowBody, "本文の下に大きく"), (.besideBody, "本文の右に小さく")], onOpen: { focus(.mediaArrangement) }, onTapTitle: { toggleFocus(.choice(.mediaArrangement)) })
-            PopUpChoiceRow(title: "引用", selection: $settings.appearance.embedMediaArrangement, options: [(.sameAsPost, "投稿と同じ"), (.besideBody, "本文の右に小さく"), (.belowBody, "本文の下に大きく")], onOpen: { focus(.embedMediaArrangement) }, onTapTitle: { toggleFocus(.choice(.embedMediaArrangement)) })
-            TitledToggleRow(title: "写真を傾ける", isOn: $settings.appearance.tiltsStackedPhotos) { toggleFocus(.choice(.tiltsStackedPhotos)) }
-                .disabled(!settings.appearance.stacksMediaBesideBody)
-            TitledToggleRow(title: "ALTやGIFのバッジを表示", isOn: $settings.appearance.showsMediaBadges) { toggleFocus(.choice(.showsMediaBadges)) }
-        case "linkCard":
-            TitledToggleRow(title: "リンクカードを表示", isOn: $settings.appearance.showsLinkCard) { toggleFocus(.choice(.showsLinkCard)) }
-            TitledToggleRow(title: "タイトルを太字にする", isOn: $settings.appearance.boldsLinkCardTitle) { toggleFocus(.choice(.boldsLinkCardTitle)) }
-            TitledToggleRow(title: "画像を表示", isOn: $settings.appearance.showsLinkCardImage) { toggleFocus(.choice(.showsLinkCardImage)) }
-            PopUpChoiceRow(title: "画像の位置", selection: $settings.appearance.linkCardThumbnailSide, options: [(.left, "左"), (.right, "右")], onOpen: { focus(.linkCardThumbnailSide) }, onTapTitle: { toggleFocus(.choice(.linkCardThumbnailSide)) })
-                .disabled(!settings.appearance.showsLinkCardImage)
-            TitledToggleRow(title: "サイト名を表示", isOn: $settings.appearance.showsLinkCardSite) { toggleFocus(.choice(.showsLinkCardSite)) }
-        case AppearanceCatalog.actionBarGroupID:
-            TitledToggleRow(title: "アクションバーを常に表示", isOn: $settings.appearance.showsActionBar) { toggleFocus(.choice(.showsActionBar)) }
-            TitledToggleRow(title: "件数を表示", isOn: $settings.appearance.showsActionBarCounts) { toggleFocus(.choice(.showsActionBarCounts)) }
-        case "reactionGlow":
-            // HDRのメディアの明るさの設定はメディアに対するものなので、光はそれに従わせず、ここで別に選ぶ。
-            if ReactionGlowView.mayDrawInHDR {
-                TitledToggleRow(title: "HDRに対応した画面では白より明るく光らせる", isOn: $settings.appearance.drawsReactionGlowInHDR) { toggleFocus(.choice(.drawsReactionGlowInHDR)) }
-            }
-            PopUpChoiceRow(title: "アイコン", selection: $settings.appearance.reactionGlowIcons, options: [(.none, "表示しない"), (.atBottom, "下の端に1つずつ"), (.scattered, "散らす")], onOpen: { focus(.reactionGlowIcons) }, onTapTitle: { toggleFocus(.choice(.reactionGlowIcons)) })
-            TitledToggleRow(title: "片方だけのときは全幅を光らせる", isOn: $settings.appearance.reactionGlowFillsWidthWhenAlone) { toggleFocus(.choice(.reactionGlowFillsWidthWhenAlone)) }
-            PopUpChoiceRow(title: "ライトモードのお気に入りの色", selection: $settings.appearance.reactionGlowLightFavouriteColor, options: [(.orange, "橙"), (.yellow, "黄色")], onOpen: { focus(.reactionGlowLightFavouriteColor) }, onTapTitle: { toggleFocus(.choice(.reactionGlowLightFavouriteColor)) })
-        default:
-            EmptyView()
-        }
+    /// 数値ではなく選んで決める項目。その部品の項目の先頭に置く。何を、どの順で、どんな名前で並べるかは`AppearanceChoice`にある。
+    private var choices: [AppearanceChoice] {
+        AppearanceChoice.choices(inGroup: group.id).filter { $0 != .drawsReactionGlowInHDR || ReactionGlowView.mayDrawInHDR }
     }
 
-    /// ほかの選択肢のために、見た目に効かない項目。光のアイコンを出さないときの、アイコンの大きさと濃さ。
-    private func isUnused(_ item: AppearanceValue) -> Bool {
-        settings.appearance.reactionGlowIcons == .none && [AppearanceCatalog.reactionGlowIconSize, AppearanceCatalog.reactionGlowIconOpacity].contains(item)
+    @ViewBuilder
+    private func choiceRow(_ choice: AppearanceChoice) -> some View {
+        switch choice.control {
+        case .toggle(let keyPath):
+            // スイッチは押すとすぐ切り替わるので、切り替えたときに触っている項目にする。メニューで選ぶ項目は、メニューを開いたときにする。
+            let isOn = Binding {
+                settings[keyPath: keyPath]
+            } set: { newValue in
+                guard settings[keyPath: keyPath] != newValue else { return }
+                settings[keyPath: keyPath] = newValue
+                focused = .choice(choice)
+            }
+            TitledToggleRow(title: choice.title, isOn: isOn) { toggleFocus(.choice(choice)) }
+                .disabled(!choice.isEnabled(in: settings.appearance))
+        case .options(let options):
+            PopUpChoiceRow(
+                title: choice.title,
+                selection: Binding { options.selectedIndex(settings) } set: { options.select($0, settings) },
+                options: options.titles.enumerated().map { (value: $0.offset, title: $0.element) },
+                onOpen: { focus(choice) },
+                onTapTitle: { toggleFocus(.choice(choice)) }
+            )
+            .disabled(!choice.isEnabled(in: settings.appearance))
+        }
     }
 
     /// 選択肢のメニューを開いたときに、その場所を示す。選んで閉じても示したままにする。
     private func focus(_ choice: AppearanceChoice) {
         focused = .choice(choice)
     }
-
-    private static let nameStyles: [(value: StatusNameStyle, title: String)] = [
-        (.nameAndAcct, "名前、ハンドル"),
-        (.nameOnly, "名前"),
-        (.acctOnly, "ハンドル"),
-        (.acctAndName, "ハンドル、名前"),
-    ]
 }
 
-/// 「投稿の見た目」で、最後に触った項目。
-enum AppearanceFocus: Hashable {
-    case value(AppearanceValue)
-    case choice(AppearanceChoice)
-
+extension AppearanceFocus {
     /// この項目が効く外観。どちらの外観でも効く項目はnil。
     var colorScheme: ColorScheme? {
-        switch self {
-        case .value(AppearanceCatalog.reactionGlowDarkOpacity): .dark
-        case .value(AppearanceCatalog.reactionGlowLightOpacity), .choice(.reactionGlowLightFavouriteColor): .light
-        default: nil
-        }
-    }
-}
-
-/// 数値ではなく選んで決める項目。
-enum AppearanceChoice: Hashable, CaseIterable {
-    case contextNameStyle
-    case showsContextSymbol
-    case boldsName
-    case showsAvatarBorder
-    case showsMediaBadges
-    case showsLinkCard
-    case boldsLinkCardTitle
-    case showsSeparators
-    case showsBoosterAvatar
-    case showsReplyLabel
-    case showsReplyLines
-    case wrapsBelowAvatar
-    case stacksNameParts
-    case showsTime
-    case showsLinkCardImage
-    case showsVisibilitySymbol
-    case showsEditedMark
-    case showsLinkCardSite
-    case avatarShape
-    case animatesAvatars
-    case nameStyle
-    case timeStyle
-    case glyphLanguage
-    case emojiStyle
-    case animatesCustomEmojis
-    case linkCardThumbnailSide
-    case mediaArrangement
-    case embedMediaArrangement
-    case tiltsStackedPhotos
-    case drawsReactionGlowInHDR
-    case reactionGlowIcons
-    case reactionGlowFillsWidthWhenAlone
-    case reactionGlowLightFavouriteColor
-    case showsActionBar
-    case showsActionBarCounts
-
-    var highlight: AppearanceHighlight {
-        switch self {
-        case .contextNameStyle: .part(.boostLine)
-        case .showsContextSymbol: .part(.contextSymbolSlot)
-        case .boldsName: .part(.namePrimary)
-        case .showsAvatarBorder: .part(.avatar)
-        case .showsMediaBadges: .part(.mediaBadgeSlot)
-        case .showsLinkCard: .firstOf([.part(.card), .part(.cardSlot)])
-        case .boldsLinkCardTitle: .firstPart([.cardTitle, .card])
-        case .showsSeparators: .part(.separatorLine)
-        case .showsBoosterAvatar: .part(.boosterAvatarSlot)
-        case .showsReplyLabel: .part(.replyLabelSlot)
-        case .showsReplyLines: .part(.replyLineSlot)
-        case .wrapsBelowAvatar: .firstOf([.part(.postHeader), .part(.avatar)])
-        case .stacksNameParts: .firstOf([.part(.nameGlyphs), .part(.nameRow)])
-        case .showsTime: .part(.timeSlot)
-        case .showsLinkCardImage: .part(.cardImageSlot)
-        case .showsVisibilitySymbol: .part(.visibilitySymbol)
-        case .showsEditedMark: .part(.editedMark)
-        case .showsLinkCardSite: .part(.cardSiteSlot)
-        case .avatarShape, .animatesAvatars: .part(.avatar)
-        case .nameStyle: .part(.nameRow)
-        case .timeStyle: .firstOf([.part(.time), .part(.timeSlot)])
-        // 字形と絵文字は、名前、名前の上の行、注意書き、本文のどれにも効くので、行の中のそれらをすべて示す。
-        case .glyphLanguage, .emojiStyle: .allParts([.contextLine, .namePrimary, .nameSecondary, .spoilerText, .bodyText])
-        case .animatesCustomEmojis: .firstOf([.part(.customEmojis), .part(.bodyText)])
-        case .linkCardThumbnailSide: .part(.card)
-        case .mediaArrangement: .firstOf([.part(.besideMedia), .part(.media)])
-        // 引用とXの投稿だけを右に出すときは、囲みの中の写真を示す。
-        case .tiltsStackedPhotos: .firstOf([.part(.besideMedia), .part(.xPostBesideMedia), .part(.media)])
-        case .embedMediaArrangement: .firstOf([.part(.xPostBesideMedia), .part(.xPostMedia)])
-        case .drawsReactionGlowInHDR, .reactionGlowLightFavouriteColor: .part(.reactionGlow)
-        case .reactionGlowFillsWidthWhenAlone: .firstOf([.part(.reactionGlowAlone), .part(.reactionGlow)])
-        case .reactionGlowIcons: .firstOf([.part(.reactionGlowIcons), .part(.reactionGlow)])
-        case .showsActionBar: .part(.actionBar)
-        case .showsActionBarCounts: .firstOf([.part(.actionBarCounts), .part(.actionBar)])
+        switch scheme {
+        case .light: .light
+        case .dark: .dark
+        case nil: nil
         }
     }
 }
@@ -515,44 +364,31 @@ struct AppearanceValueRow: View {
     }
 }
 
-/// プレビューに並べる見本の投稿。調整できる部品がどれかの投稿に出るように組む。決まりはdocs/appearance.mdの「プレビュー」にある。
-/// タイムライン（`TimelineViewController`）に並べて描き、画像は通信しないよう、アプリのアイコンから作ったものと同梱した写真を使う。
+/// 「投稿の見た目」のプレビューに並べる見本を、タイムライン（`TimelineViewController`）に並べて描く。何を並べるかは`AppearancePreviewSamples`にある。
+/// 画像は通信しないよう、アプリのアイコンから作ったものと同梱した写真を使う。
 @MainActor
 struct AppearanceSamples {
     /// 見本を並べるタイムライン。見本を組むのにも、プレビューに置いて見せるのにも使う。1つの画面に1つずつ置く。
     let timeline: TimelineViewController
     private let settings: AppSettings
-    private let tuning: TuningStore
-    private let now: Date
-    private let posts: [Status]
-    private let lightPosts: [Status]
-    private let quote: Status
+    private let samples: AppearancePreviewSamples
 
     init(settings: AppSettings, tuning: TuningStore, now: Date) {
         self.settings = settings
-        self.tuning = tuning
-        self.now = now
-        timeline = .appearancePreview(texts: .home, filterContext: .home, myAccountID: Self.myAccountID, tuning: tuning, settings: settings)
-        posts = Self.posts(now: now, cardImage: PreviewImages.cardURL(for: .dark))
-        lightPosts = Self.posts(now: now, cardImage: PreviewImages.cardURL(for: .light))
-        quote = Self.quote(now: now)
-        // 注意書きの開閉と本文のあいだを見せるため、注意書きは開いておく。開いた状態は投稿のIDで持つので、外観ごとの見本で同じIDを1回だけ開く。
-        for status in posts where !status.displayed.spoilerText.isEmpty {
+        timeline = .appearancePreview(texts: .home, filterContext: .home, myAccountID: AppearancePreviewSamples.myAccountID, tuning: tuning, settings: settings)
+        samples = AppearancePreviewSamples(now: now, sources: PreviewImages.sampleSources())
+        for status in samples.spoilerStatuses {
             timeline.toggleSpoiler(of: status)
         }
     }
 
-    /// プレビューのタイムラインに並べる見本。引用の囲みを出した投稿は、いつも最後に並べる。Xの投稿の囲みも同じ値で描くが、Xの投稿は設定でオンにしたときだけ出すため、見本には出さない。
+    /// プレビューのタイムラインに並べる見本。
     /// - Parameters:
-    ///   - groups: 見本を出す分類。渡すと、その分類の見本（`sampleIDs(for:focus:)`）だけを返す。nilならすべての見本を返す。
+    ///   - groups: 見本を出す分類。nilならすべての見本を返す。
     ///   - focus: 触っている項目。`groups`を渡したとき、その項目にしか要らない見本を足す。
     func entries(colorScheme: ColorScheme, groups: Set<AppearanceGroup.ID>? = nil, focus: AppearanceFocus? = nil) -> [TimelineEntry] {
-        // アクションバーの分類では、いつも出す設定でなくても、見本にアクションバーを出す。
-        timeline.showsActionBarInPreview = groups?.contains(AppearanceCatalog.actionBarGroupID) == true
-        let shown = groups.map { Self.sampleIDs(for: $0, focus: focus, appearance: settings.appearance) }
-        return ((colorScheme == .dark ? posts : lightPosts) + [quote])
-            .filter { shown?.contains($0.id) ?? true }
-            .map { .status($0) }
+        timeline.showsActionBarInPreview = AppearancePreviewSamples.showsActionBar(inGroups: groups)
+        return samples.statuses(isDark: colorScheme == .dark, groups: groups, focus: focus, appearance: settings.appearance).map { .status($0) }
     }
 
     /// 見本の行の中身。タイムラインに並べたときと同じく、返信でつながった隣の行と線でつなぐ。テストで、見本の部品の位置を測るのに使う。
@@ -566,205 +402,5 @@ struct AppearanceSamples {
             configuration.replyConnection = connections[entry.id] ?? ReplyConnection()
             return configuration
         }
-    }
-
-    /// 分類の見本の投稿のID。分類ごとの見本に、触っている項目にしか要らない見本を足す。分類が空なら、分類を並べた画面に出す部品の少ない投稿を1件だけにする。
-    static func sampleIDs(for groups: Set<AppearanceGroup.ID>, focus: AppearanceFocus?, appearance: AppearanceChoices) -> Set<String> {
-        let names = groups.isEmpty ? ["basic"] : groups.flatMap { groupSamples[$0] ?? [] } + focusSamples(focus, appearance: appearance)
-        return Set(names.map { "preview-\($0)" })
-    }
-
-    /// 分類ごとに出す見本。その分類の項目の場所を示せる、なるべく小さい投稿を選ぶ。どの見本も、その分類のどれかの項目に要るものにする。
-    /// 行の余白と区切り線は投稿のあいだの見た目なので、行には2件を出す。
-    private static let groupSamples: [AppearanceGroup.ID: [String]] = [
-        "row": ["basic", "next"],
-        "context": ["boost-plain", "emoji-only"],
-        "avatar": ["parent", "child"],
-        "name": ["basic", "name"],
-        "body": ["paragraphs"],
-        "spoiler": ["reply"],
-        "media": ["thread"],
-        "linkCard": ["boost"],
-        AppearanceCatalog.xPostGroupID: ["quote"],
-        "poll": ["poll"],
-        "reactions": ["reactions"],
-        "reactionGlow": ["boost-plain", "wide"],
-        // 件数を表示する項目があるので、件数の付いた見本にする。
-        AppearanceCatalog.actionBarGroupID: ["boost-plain"],
-    ]
-
-    /// 分類のうち一部の項目にしか要らない見本。上限を見せる大きい見本などは、ふだん出すと見本の枠からはみ出すので、その項目を触っている間だけ出す。
-    /// 右に並べる写真にだけ効く項目は、投稿の添付ファイルを本文の下に並べ、囲みの添付ファイルだけを右に並べるときは、引用の見本で見せる。
-    private static func focusSamples(_ focus: AppearanceFocus?, appearance: AppearanceChoices) -> [String] {
-        let onlyEmbedIsBeside = appearance.mediaArrangement == .belowBody && appearance.resolvedEmbedMediaArrangement == .besideBody
-        return switch focus {
-        case .value(AppearanceCatalog.bodyTruncationThreshold), .value(AppearanceCatalog.bodyTruncatedLines): ["long"]
-        case .value(AppearanceCatalog.emojiOnlyScale), .value(AppearanceCatalog.emojiOnlyLimit): ["emoji-only"]
-        case .value(AppearanceCatalog.filterNoteText), .value(AppearanceCatalog.filterNoteSpacing): ["filtered"]
-        case .value(AppearanceCatalog.mediaTallestAspectRatio): ["media"]
-        case .value(AppearanceCatalog.mediaWidestAspectRatio): ["wide"]
-        case .choice(.embedMediaArrangement): ["quote"]
-        case .value(AppearanceCatalog.mediaBesideSide), .choice(.tiltsStackedPhotos): onlyEmbedIsBeside ? ["quote"] : []
-        default: []
-        }
-    }
-
-    private static let quoteID = "preview-quote"
-
-    /// 投稿を引用した投稿。引用元には、囲みの中の部品が出るよう、本文と画像を付ける。
-    private static func quote(now: Date) -> Status {
-        let image = PreviewImages.photoURL(.wide)
-        let avatar = PreviewImages.avatarURL()
-        let friend = Account(id: "preview-friend", username: "friend", acct: "friend@example.com", displayName: "ともだち", avatar: avatar)
-        let scia = Account(id: myAccountID, username: "scia", acct: "scia", displayName: "Scia", avatar: avatar)
-        let attachment = MediaAttachment(
-            id: "preview-quote-image",
-            type: .image,
-            url: image,
-            previewUrl: image,
-            // 見本の枠に収まるよう、横長の写真にする。
-            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_600, height: 400))
-        )
-        let quoted = Status(
-            id: "preview-quoted",
-            createdAt: now.addingTimeInterval(-3_600),
-            account: scia,
-            content: PreviewPhoto.credit([.wide]),
-            spoilerText: "",
-            url: nil,
-            mediaAttachments: [attachment]
-        )
-        return Status(
-            id: quoteID,
-            createdAt: now.addingTimeInterval(-60),
-            account: friend,
-            content: "<p>投稿を引用した投稿です。</p>",
-            spoilerText: "",
-            url: nil,
-            quote: Quote(state: "accepted", quotedStatus: quoted)
-        )
-    }
-
-    private static let myAccountID = "preview-scia"
-
-    private static func posts(now: Date, cardImage: URL?) -> [Status] {
-        let avatar = PreviewImages.avatarURL()
-        // アニメーションを再生する設定の違いを見せるため、アイコンと絵文字には色相の回るアニメーション版を付ける。
-        let animated = PreviewImages.animatedAvatarURL() ?? avatar
-        let scia = Account(id: myAccountID, username: "scia", acct: "scia", displayName: "Scia", avatar: animated, avatarStatic: avatar)
-        // カスタム絵文字の大きさを見せるため、アプリのアイコンを絵文字にする。
-        let emojis = avatar.map { [CustomEmoji(shortcode: "scia", url: animated ?? $0, staticUrl: $0)] } ?? []
-        // 名前の絵文字とカスタム絵文字の大きさを見せるため、名前にも絵文字と本文と同じカスタム絵文字を付ける。
-        let friend = Account(id: "preview-friend", username: "friend", acct: "friend@example.com", displayName: "ともだち🌱:scia:", avatar: animated, avatarStatic: avatar, emojis: emojis)
-        // 入りきらない名前の行末のぼかしを見せるため、名前の長いアカウントも用意する。
-        // 名前の絵文字の大きさも同じ投稿で見せるため、名前に絵文字とカスタム絵文字を入れる。
-        let longNamed = Account(id: "preview-long", username: "long", acct: "long@example.com", displayName: "とても長い名前🌱:scia:のアカウントで、名前の行に入りきりません", avatar: animated, avatarStatic: avatar, emojis: emojis)
-        func photo(_ photo: PreviewPhoto, width: Int, height: Int, description: String? = nil) -> MediaAttachment {
-            let url = PreviewImages.photoURL(photo)
-            return MediaAttachment(
-                id: photo.rawValue,
-                type: .image,
-                url: url,
-                previewUrl: url,
-                description: description,
-                meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: width, height: height))
-            )
-        }
-        // 縦長と横長の比率の上限を見せるため、縦長の写真と横長の写真を1枚ずつ出す投稿を用意する。
-        let tallImage = photo(.tall, width: 1_200, height: 1_800)
-        let wideImage = photo(.wide, width: 1_600, height: 400)
-        // 代替テキストのバッジを見せるため、1枚には代替テキストを付ける。
-        let describedImage = photo(.gridFirst, width: 800, height: 800, description: "窓辺の猫")
-        let image = photo(.gridSecond, width: 800, height: 800)
-        let ownFilter = FilterResult(
-            filter: FilterResult.Filter(id: "preview-filter", title: "見本", context: [.home], filterAction: .warn),
-            keywordMatches: ["見本"]
-        )
-        let card = AppInfo.repository.map {
-            PreviewCard(
-                url: $0,
-                // 行数を増やしたときの折り返しを見せるため、タイトルも説明も1行に入りきらない長さにする。
-                title: "eai04191/scia: ストリーミングAPIに対応した、手触りの良いiOS向けMastodonクライアント",
-                description: "ストリーミングAPIで新着が流れてくる、手触りの良いiOS向けMastodonクライアントです。読んでいる最中に新着が来ても視点が動きません。",
-                type: .link,
-                providerName: "GitHub",
-                image: cardImage
-            )
-        }
-        // 絵文字のリアクションのボタンのあいだと折り返しを見せるため、Unicodeの絵文字とカスタム絵文字のリアクションを、見本の枠で2行に折り返す数だけ付ける。
-        let reactions = [("👍", 12, true), ("🎉", 5, false)].map { EmojiReaction(emoji: ReactionEmoji(name: $0.0), count: $0.1, me: $0.2) }
-            + emojis.map { EmojiReaction(emoji: ReactionEmoji(customEmoji: $0), count: 3, me: false) }
-            + [("😂", 2), ("🙏", 1), ("❤️", 128), ("👀", 1)].map { EmojiReaction(emoji: ReactionEmoji(name: $0.0), count: $0.1, me: false) }
-        func status(_ id: String, minutes: Double, account: Account, content: String, spoiler: String = "", media: [MediaAttachment] = [], poll: Poll? = nil, card: PreviewCard? = nil, replyingTo: Account? = nil, inReplyTo: Status.ID = "preview-thread", visibility: Status.Visibility = .public, edited: Bool = false, emojis: [CustomEmoji] = [], filtered: [FilterResult] = [], favourited: Bool = false, reblogged: Bool = false, emojiReactions: [EmojiReaction] = [], counts: (replies: Int, reblogs: Int, favourites: Int) = (0, 0, 0)) -> Status {
-            Status(
-                id: "preview-\(id)",
-                createdAt: now.addingTimeInterval(-minutes * 60),
-                account: account,
-                content: content,
-                spoilerText: spoiler,
-                url: nil,
-                mentions: replyingTo.map { [Mention(id: $0.id, username: $0.username, url: nil, acct: $0.acct)] } ?? [],
-                emojis: emojis,
-                mediaAttachments: media,
-                visibility: visibility,
-                inReplyToId: replyingTo.map { _ in inReplyTo },
-                inReplyToAccountId: replyingTo?.id,
-                poll: poll,
-                card: card,
-                filtered: filtered,
-                editedAt: edited ? now : nil,
-                favourited: favourited,
-                reblogged: reblogged,
-                favouritesCount: counts.favourites,
-                reblogsCount: counts.reblogs,
-                emojiReactions: emojiReactions,
-                repliesCount: counts.replies
-            )
-        }
-        // お気に入りとブーストの光を見せるため、ブーストした投稿は、お気に入りとブーストをした投稿にする。
-        let boosted = status("boosted", minutes: 30, account: friend, content: #"<p>段落の1つ目です。設定を変えるとタイムラインの投稿がこのように表示されます🎉:scia:</p><p>段落の2つ目です。<a href="https://github.com/eai04191/scia">github.com/eai04191/scia</a></p>"#, card: card, emojis: emojis, favourited: true, reblogged: true)
-        let boost = Status(id: "preview-boost", createdAt: now.addingTimeInterval(-180), account: scia, content: "", spoilerText: "", url: nil, reblog: boosted)
-        // 名前の上の行と光の分類の画面に出す、リンクカードのないブースト。アクションバーの分類の画面にも出すので、件数を付ける。
-        let plainBoosted = status("boosted-plain", minutes: 40, account: friend, content: "<p>ブーストされた投稿です。</p>", emojis: emojis, favourited: true, reblogged: true, counts: (2, 12, 34))
-        let plainBoost = Status(id: "preview-boost-plain", createdAt: now.addingTimeInterval(-240), account: scia, content: "", spoilerText: "", url: nil, reblog: plainBoosted)
-        let poll = Poll(
-            id: "preview-poll",
-            expiresAt: now.addingTimeInterval(86_400),
-            expired: false,
-            multiple: false,
-            votesCount: 12,
-            options: [Poll.Option(title: "円", votesCount: nil), Poll.Option(title: "角丸の四角", votesCount: nil)]
-        )
-        return [
-            // 分類を並べた画面に出す、部品の少ない投稿。
-            status("basic", minutes: 1, account: scia, content: "<p>設定を変えるとタイムラインの投稿がこのように表示されます。</p>"),
-            boost,
-            // 注意書きのある投稿の画像はぼかされ、サムネイル同士のすき間が見えないため、画像は注意書きのない投稿に付ける。
-            status("thread", minutes: 20, account: scia, content: PreviewPhoto.credit([.gridFirst, .gridSecond]), media: [describedImage, image]),
-            // 公開範囲の記号と編集済みの「*」を見せるため、未収載で編集した投稿にする。
-            status("reply", minutes: 12, account: friend, content: "<p>注意書きの下の本文です。</p>", spoiler: "注意書き", replyingTo: scia, visibility: .unlisted, edited: true),
-            status("media", minutes: 8, account: scia, content: PreviewPhoto.credit([.tall]), media: [tallImage]),
-            // 絵文字だけの本文を見せるため、先頭にメンションの付いた、絵文字だけの返信を用意する。メンションは大きくしない。
-            status("emoji-only", minutes: 7.5, account: friend, content: #"<p><span class="h-card"><a href="https://example.com/@scia" class="u-url mention">@<span>scia</span></a></span> 👍:scia:🎉</p>"#, replyingTo: scia, emojis: emojis),
-            // 長い本文を切って「続きを読む」を出すところを見せるため、1行ずつの段落を、既定の切り始める行数より1行だけ多く並べる。
-            // 切り始める行数を少し増やすと切らなくなり、値の違いが見本に出る。
-            status("long", minutes: 7.2, account: scia, content: (1...33).map { "<p>長い本文の\($0)行目です。</p>" }.joined()),
-            // 片方だけのときの光の幅を見せるため、お気に入りだけをした投稿にする。
-            status("wide", minutes: 7, account: friend, content: PreviewPhoto.credit([.wide]), media: [wideImage], favourited: true),
-            status("poll", minutes: 5, account: longNamed, content: "<p>アイコンの形はどちらが好きですか？</p>", poll: poll),
-            status("reactions", minutes: 4, account: friend, content: "<p>絵文字のリアクションが付いた投稿です。</p>", emojiReactions: reactions),
-            status("filtered", minutes: 2, account: scia, content: "<p>自分のフィルターに一致した自分の投稿です。</p>", filtered: [ownFilter]),
-            // 名前の行の部品を1件で見せる投稿。入りきらない名前、公開範囲の記号、編集済みの「*」を出し、名前と画像のあいだを見せるため本文を付けないので、写真のクレジットは書かない。
-            // 画像は、見本の枠に収まるよう横長にする。
-            status("name", minutes: 1.5, account: longNamed, content: "", media: [wideImage], visibility: .unlisted, edited: true),
-            // 段落のあいだ、引用の字下げ、本文の絵文字を見せる投稿。
-            status("paragraphs", minutes: 1.2, account: friend, content: "<p>段落の1つ目です🎉:scia:</p><blockquote><p>引用した文です。</p></blockquote><p>段落の2つ目です。</p>", emojis: emojis),
-            plainBoost,
-            // 行の余白と区切り線を見せる、部品の少ない投稿の次に並べる1行の投稿。
-            status("next", minutes: 0.5, account: scia, content: "<p>次の投稿です。</p>"),
-            // 返信をつなぐ線を見せる、本文だけの2件。タイムラインと同じく、すぐ上の投稿への返信は線でつなぎ、返信のラベルを出さない。
-            status("parent", minutes: 1.1, account: scia, content: "<p>返信でつながった投稿の最初の投稿です。</p>"),
-            status("child", minutes: 1, account: friend, content: "<p>返信です。</p>", replyingTo: scia, inReplyTo: "preview-parent"),
-        ]
     }
 }

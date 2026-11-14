@@ -167,7 +167,7 @@ struct AppearanceEditorTests {
             _ = AppearanceSheets.change(choice, in: settings)
             variants.append(settings)
         }
-        let sampleIDs = AppearanceSamples.sampleIDs(for: [group], focus: nil, appearance: try #require(variants.first).appearance)
+        let sampleIDs = AppearancePreviewSamples.sampleIDs(for: [group], focus: nil, appearance: try #require(variants.first).appearance)
         for sampleID in sampleIDs.sorted() {
             let needed = variants.contains { settings in
                 focuses.contains { focus in
@@ -205,23 +205,8 @@ struct AppearanceEditorTests {
         .choice(.showsSeparators),
     ]
 
-    /// 分類ごとの、選んで決める項目。`AppearanceEditorView.choices(of:)`に並べたものと同じにする。
-    private static let choices: [AppearanceGroup.ID: [AppearanceChoice]] = [
-        "row": [.showsSeparators],
-        "context": [.contextNameStyle, .showsContextSymbol, .showsBoosterAvatar, .showsReplyLabel],
-        "avatar": [.avatarShape, .showsAvatarBorder, .animatesAvatars, .wrapsBelowAvatar, .showsReplyLines],
-        "name": [.nameStyle, .stacksNameParts, .timeStyle, .boldsName, .showsTime, .showsVisibilitySymbol, .showsEditedMark],
-        "body": [.glyphLanguage, .emojiStyle, .animatesCustomEmojis],
-        "media": [.mediaArrangement, .embedMediaArrangement, .tiltsStackedPhotos, .showsMediaBadges],
-        "linkCard": [.showsLinkCard, .boldsLinkCardTitle, .showsLinkCardImage, .linkCardThumbnailSide, .showsLinkCardSite],
-        AppearanceCatalog.actionBarGroupID: [.showsActionBar, .showsActionBarCounts],
-        "reactionGlow": [.drawsReactionGlowInHDR, .reactionGlowIcons, .reactionGlowFillsWidthWhenAlone, .reactionGlowLightFavouriteColor],
-    ]
-
-    /// 分類ごとの選んで決める項目のリストに、漏れがない。
-    @Test func groupChoicesCoverEveryChoice() {
-        #expect(Set(Self.choices.values.joined()) == Set(AppearanceChoice.allCases))
-    }
+    /// 分類ごとの、選んで決める項目。
+    private static let choices: [AppearanceGroup.ID: [AppearanceChoice]] = Dictionary(uniqueKeysWithValues: AppearanceCatalog.groups.map { ($0.id, AppearanceChoice.choices(inGroup: $0.id)) })
 
     /// どの分類も開いていなければ、見本は1件だけにする。
     @Test func closedGroupsShowOneSample() throws {
