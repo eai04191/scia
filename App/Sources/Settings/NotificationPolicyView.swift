@@ -27,13 +27,13 @@ struct NotificationPolicyView: View {
                         Section {
                             row(for: item, value: value)
                         } footer: {
-                            Text(Self.hint(of: item))
+                            Text(item.hint)
                         }
                     }
                 }
             }
             .confirmationDialog(
-                confirmingDrop.map { "本当に“\(Self.confirmationName(of: $0))”を無視するようにしますか？" } ?? "",
+                confirmingDrop.map { "本当に“\($0.confirmationName)”を無視するようにしますか？" } ?? "",
                 isPresented: Binding(get: { confirmingDrop != nil }, set: { if !$0 { confirmingDrop = nil } }),
                 titleVisibility: .visible,
                 presenting: confirmingDrop
@@ -61,11 +61,11 @@ struct NotificationPolicyView: View {
     private func row(for item: NotificationPolicy.Item, value: NotificationPolicy.Value) -> some View {
         if case .unknown = value {
             // サーバーが知らない値を返した項目は、選べない形で出し、送らない。
-            LabeledContent(Self.title(of: item), value: "不明")
+            LabeledContent(item.title, value: "不明")
         } else {
-            Picker(Self.title(of: item), selection: Binding(get: { value }, set: { choose($0, for: item) })) {
+            Picker(item.title, selection: Binding(get: { value }, set: { choose($0, for: item) })) {
                 ForEach(NotificationPolicy.Value.choices, id: \.self) { choice in
-                    Text(Self.label(of: choice)).tag(choice)
+                    Text(choice.title).tag(choice)
                 }
             }
         }
@@ -77,42 +77,6 @@ struct NotificationPolicyView: View {
             confirmingDrop = item
         } else {
             model.select(value, for: item)
-        }
-    }
-
-    /// 無視するかを確かめるダイアログの、項目の名前。
-    private static func confirmationName(of item: NotificationPolicy.Item) -> String {
-        item == .privateMentions ? title(of: item) : "\(title(of: item))からの通知"
-    }
-
-    /// 項目の名前。Mastodonのwebの日本語訳から、画面の題と重なる「からの通知」を省く。
-    static func title(of item: NotificationPolicy.Item) -> String {
-        switch item {
-        case .notFollowing: "フォローしていないアカウント"
-        case .notFollowers: "フォローされていないアカウント"
-        case .newAccounts: "新しいアカウント"
-        case .privateMentions: "外部からの非公開の返信"
-        case .limitedAccounts: "モデレーションされたアカウント"
-        }
-    }
-
-    /// 項目の説明。Mastodonのwebの日本語訳に揃える。日数（3日と30日）は、APIで返らず、webも文言に決まった値で書いているため、同じ値にする。
-    static func hint(of item: NotificationPolicy.Item) -> String {
-        switch item {
-        case .notFollowing: "手動で通知を受け入れたアカウントは対象外です"
-        case .notFollowers: "フォローされていてもフォローから3日経っていない場合は対象になります"
-        case .newAccounts: "作成から30日以内のアカウントが対象です"
-        case .privateMentions: "メンションした相手からの返信、およびフォローしているアカウントからの返信は対象外です"
-        case .limitedAccounts: "モデレーターにより制限されたアカウントから送られる通知が対象です"
-        }
-    }
-
-    static func label(of value: NotificationPolicy.Value) -> String {
-        switch value {
-        case .accept: "受け入れ"
-        case .filter: "保留"
-        case .drop: "無視"
-        case .unknown: "不明"
         }
     }
 

@@ -178,3 +178,44 @@ public enum NotificationRequestDecision: Sendable, Equatable {
     /// 保留中の通知から外し、数えないようにする。
     case dismiss
 }
+
+extension NotificationPolicy.Item {
+    /// 項目の名前。Mastodonのwebの日本語訳から、画面の題と重なる「からの通知」を省く。
+    public var title: String {
+        switch self {
+        case .notFollowing: "フォローしていないアカウント"
+        case .notFollowers: "フォローされていないアカウント"
+        case .newAccounts: "新しいアカウント"
+        case .privateMentions: "外部からの非公開の返信"
+        case .limitedAccounts: "モデレーションされたアカウント"
+        }
+    }
+
+    /// 項目の説明。Mastodonのwebの日本語訳に揃える。日数（3日と30日）は、APIで返らず、webも文言に決まった値で書いているため、同じ値にする。
+    public var hint: String {
+        switch self {
+        case .notFollowing: "手動で通知を受け入れたアカウントは対象外です"
+        case .notFollowers: "フォローされていてもフォローから3日経っていない場合は対象になります"
+        case .newAccounts: "作成から30日以内のアカウントが対象です"
+        case .privateMentions: "メンションした相手からの返信、およびフォローしているアカウントからの返信は対象外です"
+        case .limitedAccounts: "モデレーターにより制限されたアカウントから送られる通知が対象です"
+        }
+    }
+
+    /// 無視するかを確かめるダイアログの、項目の名前。
+    public var confirmationName: String {
+        self == .privateMentions ? title : "\(title)からの通知"
+    }
+}
+
+extension NotificationPolicy.Value {
+    /// 選択肢の名前。
+    public var title: String {
+        switch self {
+        case .accept: "受け入れ"
+        case .filter: "保留"
+        case .drop: "無視"
+        case .unknown: "不明"
+        }
+    }
+}

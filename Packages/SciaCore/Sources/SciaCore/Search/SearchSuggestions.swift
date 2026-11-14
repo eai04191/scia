@@ -198,3 +198,25 @@ public final class SearchSuggestions {
         }
     }
 }
+
+extension SearchSuggestions.Action {
+    /// 候補の行の文言。
+    public var title: String {
+        switch self {
+        case .search(let query): "“\(query)”を検索"
+        case .openURL: "このURLを開く"
+        case .openHandle(let acct): "@\(acct)を開く"
+        case .openHashtag(let name): "#\(name)を開く"
+        }
+    }
+
+    /// 候補の行の記号。
+    public var symbolName: String {
+        switch self {
+        case .search: "magnifyingglass"
+        case .openURL: "link"
+        case .openHandle: "person.crop.circle"
+        case .openHashtag: "number"
+        }
+    }
+}

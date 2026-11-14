@@ -1,26 +1,6 @@
 import SciaCore
 import SwiftUI
 
-extension ReportCategory {
-    var title: String {
-        switch self {
-        case .spam: "スパム"
-        case .violation: "サーバーのルールへの違反"
-        case .legal: "違法な内容"
-        case .other: "その他"
-        }
-    }
-
-    var detail: String {
-        switch self {
-        case .spam: "宣伝のリンク、同じ内容の繰り返しなど"
-        case .violation: "違反したルールを選びます"
-        case .legal: "法律に反する内容"
-        case .other: "その他"
-        }
-    }
-}
-
 /// 通報のシート。理由の種類、違反したルール、コメント、ほかのサーバーへの転送を1枚で選ぶ。決まりはdocs/menus.mdの「ユーザーのメニュー」にある。
 struct ReportView: View {
     @Bindable var draft: ReportDraft

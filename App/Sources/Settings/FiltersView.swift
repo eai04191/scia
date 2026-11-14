@@ -102,7 +102,7 @@ private struct FilterRow: View {
     private var isExpired: Bool { filter.expiresAt.map { $0 <= now } ?? false }
 
     private var detail: String {
-        var parts = [FilterWording.label(of: filter.filterAction)]
+        var parts = [filter.filterAction.title]
         if isExpired {
             parts.append("期限切れ")
         } else if let expiresAt = filter.expiresAt {
@@ -155,7 +155,7 @@ private struct FilterEditorView: View {
                 keywordsSection
                 Section("対象") {
                     ForEach(FilterDraft.contextChoices, id: \.self) { context in
-                        Toggle(FilterWording.label(of: context), isOn: Binding {
+                        Toggle(context.title, isOn: Binding {
                             draft.contexts.contains(context)
                         } set: { isOn in
                             if isOn { draft.contexts.insert(context) } else { draft.contexts.remove(context) }
@@ -165,11 +165,11 @@ private struct FilterEditorView: View {
                 Section {
                     Picker("一致した投稿", selection: $draft.action) {
                         ForEach(actionChoices, id: \.self) { action in
-                            Text(FilterWording.label(of: action)).tag(action)
+                            Text(action.title).tag(action)
                         }
                     }
                 } footer: {
-                    Text(FilterWording.hint(of: draft.action))
+                    Text(draft.action.hint)
                 }
                 expirySection
                 if let original = draft.original {
@@ -243,7 +243,7 @@ private struct FilterEditorView: View {
         Section {
             Picker("期限", selection: $draft.expiry) {
                 if draft.original != nil {
-                    Text("変更しない").tag(ServerFilter.ExpiryChange.keep)
+                    Text(ServerFilter.keepExpiryTitle).tag(ServerFilter.ExpiryChange.keep)
                 }
                 ForEach(UserRelationChange.muteDurations, id: \.title) { choice in
                     Text(choice.title).tag(choice.duration.map(ServerFilter.ExpiryChange.after) ?? .never)
@@ -251,7 +251,7 @@ private struct FilterEditorView: View {
             }
         } footer: {
             if let original = draft.original {
-                Text(FilterWording.currentExpiry(of: original, now: now()))
+                Text(original.currentExpiryText(now: now()))
             }
         }
     }
@@ -306,44 +306,5 @@ private struct FilterDeletionModifier: ViewModifier {
                 Button("キャンセル", role: .cancel) {}
             }
             .failureAlert("フィルターを削除できませんでした", reason: $failure)
-    }
-}
-
-/// フィルターの画面の文言。
-enum FilterWording {
-    /// 対象の名前。Mastodonのwebの日本語訳に揃える。
-    static func label(of context: FilterResult.Context) -> String {
-        switch context {
-        case .home: "ホームとリスト"
-        case .notifications: "通知"
-        case .public: "公開タイムライン"
-        case .thread: "会話"
-        case .account: "プロフィール"
-        case .other(let rawValue): rawValue
-        }
-    }
-
-    static func label(of action: FilterResult.Action) -> String {
-        switch action {
-        case .warn: "警告"
-        case .hide: "隠す"
-        case .blur: "メディアをぼかす"
-        case .other(let rawValue): rawValue
-        }
-    }
-
-    static func hint(of action: FilterResult.Action) -> String {
-        switch action {
-        case .warn: "フィルターの名前を出して折りたたみます。"
-        case .hide: "タイムラインに表示しません。"
-        case .blur: "本文はそのまま表示し、メディアをぼかします。"
-        case .other: "このアプリでは、警告と同じに扱います。"
-        }
-    }
-
-    static func currentExpiry(of filter: ServerFilter, now: Date) -> String {
-        guard let expiresAt = filter.expiresAt else { return "今の期限は無期限です。" }
-        let date = expiresAt.formatted(date: .abbreviated, time: .shortened)
-        return expiresAt <= now ? "\(date)に期限が切れています。" : "今の期限は\(date)です。"
     }
 }

@@ -65,3 +65,23 @@ public final class ConnectionDiagnostics {
         public let droppedCount: Int
     }
 }
+
+extension ConnectionDiagnostics.StreamingState {
+    /// 状態の文言。まだ状態が届いていなければ（nil）、未接続として出す。
+    public static func title(of state: Self?) -> String {
+        switch state {
+        case .connected: "接続済み"
+        case .connecting, .polling: "接続中"
+        case .stopped, .loginRequired, nil: "未接続"
+        }
+    }
+
+    /// 状態に添える補足。なければnil。
+    public static func note(of state: Self?) -> String? {
+        switch state {
+        case .polling: "ポーリング中"
+        case .loginRequired: "ログインが必要"
+        case .connected, .connecting, .stopped, nil: nil
+        }
+    }
+}

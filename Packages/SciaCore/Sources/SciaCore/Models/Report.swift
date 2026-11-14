@@ -45,3 +45,25 @@ public struct ReportRequest: Equatable, Sendable {
         self.ruleIDs = ruleIDs
     }
 }
+
+extension ReportCategory {
+    /// 通報の理由の名前。
+    public var title: String {
+        switch self {
+        case .spam: "スパム"
+        case .violation: "サーバーのルールへの違反"
+        case .legal: "違法な内容"
+        case .other: "その他"
+        }
+    }
+
+    /// 理由の説明。
+    public var detail: String {
+        switch self {
+        case .spam: "宣伝のリンク、同じ内容の繰り返しなど"
+        case .violation: "違反したルールを選びます"
+        case .legal: "法律に反する内容"
+        case .other: "その他"
+        }
+    }
+}

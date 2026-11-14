@@ -18,8 +18,8 @@ struct ConnectionStatusView: View {
             Section {
                 LabeledContent("ストリーミング") {
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text(Self.text(diagnostics.streaming))
-                        if let note = Self.note(diagnostics.streaming) {
+                        Text(ConnectionDiagnostics.StreamingState.title(of: diagnostics.streaming))
+                        if let note = ConnectionDiagnostics.StreamingState.note(of: diagnostics.streaming) {
                             Text(note)
                                 .font(.footnote)
                         }
@@ -72,22 +72,6 @@ struct ConnectionStatusView: View {
                 status = await diagnostics.status()
                 try? await clock.sleep(for: .seconds(1))
             }
-        }
-    }
-
-    private static func text(_ state: ConnectionDiagnostics.StreamingState?) -> String {
-        switch state {
-        case .connected: "接続済み"
-        case .connecting, .polling: "接続中"
-        case .stopped, .loginRequired, nil: "未接続"
-        }
-    }
-
-    private static func note(_ state: ConnectionDiagnostics.StreamingState?) -> String? {
-        switch state {
-        case .polling: "ポーリング中"
-        case .loginRequired: "ログインが必要"
-        case .connected, .connecting, .stopped, nil: nil
         }
     }
 

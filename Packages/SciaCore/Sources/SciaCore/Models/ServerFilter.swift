@@ -86,3 +86,15 @@ public struct ServerFilter: Decodable, Hashable, Sendable, Identifiable {
         self.statuses = statuses
     }
 }
+
+extension ServerFilter {
+    /// 期限を変える選択肢のうち、変えないものの名前。
+    public static let keepExpiryTitle = "変更しない"
+
+    /// 今の期限を伝える文。
+    public func currentExpiryText(now: Date) -> String {
+        guard let expiresAt else { return "今の期限は無期限です。" }
+        let date = expiresAt.formatted(date: .abbreviated, time: .shortened)
+        return expiresAt <= now ? "\(date)に期限が切れています。" : "今の期限は\(date)です。"
+    }
+}

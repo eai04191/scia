@@ -2159,14 +2159,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             content.textProperties.color = .tintColor
             content.secondaryAttributedText = failure.attributedText(textStyle: .footnote)
         case .action(let action):
-            let (symbol, text): (String, String) = switch action {
-            case .search(let query): ("magnifyingglass", "“\(query)”を検索")
-            case .openURL: ("link", "このURLを開く")
-            case .openHandle(let acct): ("person.crop.circle", "@\(acct)を開く")
-            case .openHashtag(let name): ("number", "#\(name)を開く")
-            }
-            content.image = UIImage(systemName: symbol)
-            content.text = text
+            content.image = UIImage(systemName: action.symbolName)
+            content.text = action.title
             content.textProperties.numberOfLines = 1
         case .recentsHeading:
             content = UIListContentConfiguration.header()

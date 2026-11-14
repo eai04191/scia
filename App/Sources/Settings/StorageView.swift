@@ -52,8 +52,8 @@ struct StorageView: View {
         var name: String {
             switch self {
             case .caches: "キャッシュ"
-            case .inAppSafari: StorageView.name(of: .inAppSafari)
-            case .discomfortReports: StorageView.name(of: .discomfortReports)
+            case .inAppSafari: StorageBreakdown.Category.inAppSafari.title
+            case .discomfortReports: StorageBreakdown.Category.discomfortReports.title
             }
         }
 
@@ -92,7 +92,7 @@ struct StorageView: View {
                             // メディアのキャッシュの下の段に並べる。
                             EmptyView()
                         default:
-                            LabeledContent(Self.name(of: item.category), value: Self.text(item.bytes))
+                            LabeledContent(item.category.title, value: Self.text(item.bytes))
                         }
                     }
                     LabeledContent {
@@ -208,20 +208,6 @@ struct StorageView: View {
             }
             breakdown = await actions.measure()
             removing = nil
-        }
-    }
-
-    nonisolated static func name(of category: StorageBreakdown.Category) -> String {
-        switch category {
-        case .mediaFiles: "表示済みのメディア"
-        case .mediaPrefetch: "先読みしたメディア"
-        case .networkCache: "通信のキャッシュ"
-        case .temporaryFiles: "一時ファイル"
-        case .inAppSafari: "アプリ内のSafariのデータ"
-        case .discomfortReports: "違和感レポート"
-        case .settings: "設定"
-        case .sharedMedia: "共有から受け取り中のメディア"
-        case .other: "その他"
         }
     }
 

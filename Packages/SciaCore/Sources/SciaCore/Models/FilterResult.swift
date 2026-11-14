@@ -121,3 +121,39 @@ public struct FilterResult: Codable, Hashable, Sendable {
         }
     }
 }
+
+extension FilterResult.Context {
+    /// 対象の名前。Mastodonのwebの日本語訳に揃える。
+    public var title: String {
+        switch self {
+        case .home: "ホームとリスト"
+        case .notifications: "通知"
+        case .public: "公開タイムライン"
+        case .thread: "会話"
+        case .account: "プロフィール"
+        case .other(let rawValue): rawValue
+        }
+    }
+}
+
+extension FilterResult.Action {
+    /// 動作の名前。
+    public var title: String {
+        switch self {
+        case .warn: "警告"
+        case .hide: "隠す"
+        case .blur: "メディアをぼかす"
+        case .other(let rawValue): rawValue
+        }
+    }
+
+    /// 動作の説明。
+    public var hint: String {
+        switch self {
+        case .warn: "フィルターの名前を出して折りたたみます。"
+        case .hide: "タイムラインに表示しません。"
+        case .blur: "本文はそのまま表示し、メディアをぼかします。"
+        case .other: "このアプリでは、警告と同じに扱います。"
+        }
+    }
+}

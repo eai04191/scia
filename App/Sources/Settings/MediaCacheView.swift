@@ -29,7 +29,7 @@ struct MediaCacheView: View {
     var body: some View {
         Group {
             if let entries, entries.isEmpty {
-                ContentUnavailableView("\(StorageView.name(of: category))はありません", systemImage: "photo.on.rectangle")
+                ContentUnavailableView("\(category.title)はありません", systemImage: "photo.on.rectangle")
             } else if let entries {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 2)], spacing: 2) {
@@ -54,7 +54,7 @@ struct MediaCacheView: View {
                 ProgressView("読み込んでいます")
             }
         }
-        .navigationTitle(StorageView.name(of: category))
+        .navigationTitle(category.title)
         .navigationBarTitleDisplayMode(.inline)
         .task(.withoutRequests) {
             entries = await actions.entries()

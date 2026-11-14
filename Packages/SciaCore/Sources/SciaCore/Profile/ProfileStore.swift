@@ -447,3 +447,18 @@ public final class ProfileStore {
         }
     }
 }
+
+extension FollowState {
+    /// プロフィールのフォローのボタンの文言。ボタンを出さない状態ではnil。
+    /// 関係を読む前（`unknown`）は、届いたときに場所が動かないよう、フォローする前と同じ文言で場所を取る。
+    public var buttonTitle: String? {
+        switch self {
+        case .myself: "プロフィールを編集"
+        case .loadFailed, .blocked: nil
+        case .unknown: "フォローする"
+        case .notFollowing(let locked): locked ? "フォローをリクエスト" : "フォローする"
+        case .requested: "リクエスト中"
+        case .following: "フォロー中"
+        }
+    }
+}

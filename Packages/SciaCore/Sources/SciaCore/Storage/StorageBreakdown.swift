@@ -140,3 +140,20 @@ extension StorageBreakdown {
         return path.starts(with: folder)
     }
 }
+
+extension StorageBreakdown.Category {
+    /// 項目の名前。
+    public var title: String {
+        switch self {
+        case .mediaFiles: "表示済みのメディア"
+        case .mediaPrefetch: "先読みしたメディア"
+        case .networkCache: "通信のキャッシュ"
+        case .temporaryFiles: "一時ファイル"
+        case .inAppSafari: "アプリ内のSafariのデータ"
+        case .discomfortReports: "違和感レポート"
+        case .settings: "設定"
+        case .sharedMedia: "共有から受け取り中のメディア"
+        case .other: "その他"
+        }
+    }
+}

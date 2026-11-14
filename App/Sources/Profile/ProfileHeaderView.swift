@@ -962,14 +962,8 @@ final class ProfileHeaderView: UIView {
     private func applyFollowButton(_ content: Content, animation: Animation?) {
         // 関係を読む前は、届いたときに何もない所から出ないよう、文字を消したボタンで場所を取っておく。
         let isPlaceholder = content.followState == .unknown
-        let button: (title: String, style: ProfileFollowButton.Style)? = switch content.followState {
-        case .myself: ("プロフィールを編集", secondaryButtonStyle)
-        case .loadFailed, .blocked: nil
-        case .unknown: ("フォローする", secondaryButtonStyle)
-        case .notFollowing(let locked): (locked ? "フォローをリクエスト" : "フォローする", .filled)
-        case .requested: ("リクエスト中", secondaryButtonStyle)
-        case .following: ("フォロー中", secondaryButtonStyle)
-        }
+        let style: ProfileFollowButton.Style = if case .notFollowing = content.followState { .filled } else { secondaryButtonStyle }
+        let button = content.followState.buttonTitle.map { (title: $0, style: style) }
         followButton.isHidden = button == nil
         if let button {
             followButton.apply(ProfileFollowButton.State(
