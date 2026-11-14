@@ -21,10 +21,11 @@ extension Rule {
 }
 
 extension StringLiteralExprSyntax {
-    /// ひらがな、カタカナ、漢字のどれかを含むか
+    /// ひらがな、カタカナ、漢字、日本語の句読点（「、」「。」「・」など）、全角の記号（「（」「：」など）のどれかを含むか。
+    /// 句読点や全角の記号だけでも、値を日本語の文につなげる書き方（`"\(名前)、\(ハンドル)"`）になるので見る
     var containsJapanese: Bool {
         literalText.unicodeScalars.contains { scalar in
-            (0x3040...0x30FF).contains(scalar.value) || (0x4E00...0x9FFF).contains(scalar.value) || (0x3400...0x4DBF).contains(scalar.value)
+            [0x3000...0x303F, 0x3040...0x30FF, 0x3400...0x4DBF, 0x4E00...0x9FFF, 0xFF01...0xFF60].contains { $0.contains(scalar.value) }
         }
     }
 }

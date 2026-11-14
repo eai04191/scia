@@ -12,6 +12,9 @@ import Testing
         #"button.accessibilityLabel = "閉じる""#,
         #"Text(verbatim: "カタカナ")"#,
         #"let label = "漢字""#,
+        // 句読点や全角の記号だけで値をつなげる文も見る
+        #"let label = "\(name)、@\(acct)""#,
+        #"let label = "（\(count)）""#,
         // ほかの呼び出しに包んで渡したものは、使う人に見えうるので見る
         #"logger.info(describe(Text("読み込み中")))"#,
     ])
