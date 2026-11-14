@@ -22,41 +22,11 @@ extension AccentColorChoice {
         }
     }
 
-    /// タブのアイコンを、アクセントカラーではなく本文の色の濃淡で描くか。タブバーは選んでいないタブを本文の色で描くので、
-    /// モノトーンでは選んでいるタブと同じ色に、グレーでは選んでいるタブより濃くなる。そこでこの2つは、選んでいるタブを本文の色、選んでいないタブを一段薄い色で描く。
-    var drawsTabsInTextColors: Bool {
-        self == .gray || self == .monochrome
-    }
-
-    /// ティントカラーが本文の色と同じで、色だけではオンとオフを見分けられないか。
-    var tintMatchesTextColor: Bool {
-        self == .monochrome
-    }
-
     /// 選んでいるタブが、ほかのタブと見分けにくくなるか。選んでいるときの画像を渡せるのはiOS 26.1からなので、
     /// 26.0では`drawsTabsInTextColors`の色で、選んでいるタブがほかのタブと同じ色かより薄い色になる。
     var obscuresSelectedTab: Bool {
         if #available(iOS 26.1, *) { return false }
         return drawsTabsInTextColors
-    }
-
-    var title: String {
-        switch self {
-        case .blue: "ブルー"
-        case .indigo: "インディゴ"
-        case .purple: "パープル"
-        case .pink: "ピンク"
-        case .red: "レッド"
-        case .orange: "オレンジ"
-        case .yellow: "イエロー"
-        case .green: "グリーン"
-        case .mint: "ミント"
-        case .teal: "ティール"
-        case .cyan: "シアン"
-        case .brown: "ブラウン"
-        case .gray: "グレー"
-        case .monochrome: "モノトーン"
-        }
     }
 }
 
