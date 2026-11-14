@@ -1,3 +1,4 @@
+import SciaCore
 import SwiftUI
 import UIKit
 
@@ -27,7 +28,7 @@ final class ProfileFollowButton: UIView {
     }
 
     /// 出しうる文字。枠の幅を、このうちいちばん長いものに合わせる。
-    static let titles = ["フォローする", "フォローをリクエスト", "リクエスト中", "フォロー中", "プロフィールを編集"]
+    static let titles = FollowState.allButtonTitles
 
     var onTap: (() -> Void)?
     /// 塗りつぶしたボタンの地と文字の色。nilならティントカラーと白で塗る。
@@ -222,7 +223,7 @@ private struct ProfileFollowButtonView: View {
             .disabled(state.isChanging)
             // 関係を読む前は、押せない見た目にすると下地が薄くなるため、見た目はそのままで触れないだけにする。
             .allowsHitTesting(!state.isPlaceholder)
-            .accessibilityLabel(state.isPlaceholder ? "フォローの状態を読み込み中" : state.title)
+            .accessibilityLabel(state.isPlaceholder ? ProfileTexts.Header.relationshipLoading : state.title)
             // 押せない見た目にしない代わりに、VoiceOverには押せるボタンとして示さず、文字として読ませる。
             .accessibilityRemoveTraits(state.isPlaceholder ? .isButton : [])
             .accessibilityAddTraits(state.isPlaceholder ? .isStaticText : [])

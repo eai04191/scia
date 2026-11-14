@@ -82,7 +82,7 @@ final class ProfileFeaturedTagsShelfView: ProfileShelfView {
     private var menuInteractions: [ProfileTextMenuInteraction] = []
 
     init() {
-        super.init(title: "注目のハッシュタグ", itemSpacing: 8)
+        super.init(title: ProfileTexts.Shelf.featuredTags, itemSpacing: 8)
     }
 
     /// 並べるタグを変える。中身が同じなら作り直さない。
@@ -107,7 +107,7 @@ final class ProfileFeaturedTagsShelfView: ProfileShelfView {
         chip.configurationUpdateHandler = { button in
             button.configuration?.baseForegroundColor = .label
         }
-        chip.accessibilityLabel = "#\(tag.name)、\(tag.statusesCount)件の投稿"
+        chip.accessibilityLabel = ProfileTexts.Shelf.featuredTagAccessibilityLabel(name: tag.name, statusesCount: tag.statusesCount)
         chip.addAction(UIAction { [weak self] _ in self?.onOpen?(tag) }, for: .primaryActionTriggered)
         menuInteractions.append(ProfileTextMenuInteraction(
             on: chip,
@@ -159,7 +159,7 @@ final class ProfileEndorsementsShelfView: ProfileShelfView {
     init(emojiImages: EmojiImageStore<UIImage>, avatarImages: AvatarImageStore<UIImage>) {
         self.emojiImages = emojiImages
         self.avatarImages = avatarImages
-        super.init(title: "紹介しているユーザー", itemSpacing: 10)
+        super.init(title: ProfileTexts.Shelf.endorsements, itemSpacing: 10)
     }
 
     /// 並べる人を変える。中身が同じなら作り直さない。
@@ -209,7 +209,7 @@ final class ProfileEndorsementsShelfView: ProfileShelfView {
 
     private func makeShowAllCard() -> UIView {
         var configuration = UIButton.Configuration.tinted()
-        configuration.title = "すべて見る"
+        configuration.title = ProfileTexts.Shelf.showAll
         configuration.image = UIImage(systemName: "chevron.forward")
         configuration.imagePlacement = .top
         configuration.imagePadding = 6

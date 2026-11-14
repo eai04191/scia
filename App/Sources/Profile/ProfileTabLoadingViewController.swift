@@ -110,10 +110,10 @@ final class ProfileTabLoadingViewController: UIViewController {
             contentUnavailableConfiguration = UIContentUnavailableConfiguration.loading()
         case .failed(let reason):
             var configuration = UIContentUnavailableConfiguration.empty()
-            configuration.text = "プロフィールを読み込めませんでした"
+            configuration.text = ProfileTexts.loadFailure
             configuration.secondaryAttributedText = reason.attributedText(textStyle: .body)
             configuration.button = .borderedTinted()
-            configuration.button.title = "再試行"
+            configuration.button.title = ProfileTexts.retry
             configuration.buttonProperties.primaryAction = UIAction { [weak self] _ in self?.load() }
             contentUnavailableConfiguration = configuration
         }

@@ -561,7 +561,7 @@ final class ProfileController {
     /// 設定ですべての項目を隠していると、空のメニューが出る。ボタンを消すには設定の変化を見張る必要があり、すべて隠すことはまずないため、そのままにする。
     private func makeUserMenuItem() -> UIBarButtonItem {
         let item = UIBarButtonItem(image: UIImage(systemName: "ellipsis"))
-        item.accessibilityLabel = "ユーザーのメニュー"
+        item.accessibilityLabel = ProfileTexts.userMenu
         item.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self, weak item] completion in
             guard let self, let item, let menu = self.viewController?.profileUserMenu(for: self.store.account, from: item) else {
                 completion([])
@@ -807,7 +807,7 @@ final class ProfileController {
                 }
             } catch {
                 controller.logger.error("follow change failed: \(SciaLog.describe(error), privacy: .public)")
-                controller.onError(error, "フォローを変更できませんでした")
+                controller.onError(error, UserRelationChange.follow.failureTitle)
                 return
             }
             do {

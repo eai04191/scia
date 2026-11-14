@@ -219,7 +219,7 @@ final class ProfileHeaderView: UIView {
     private let remoteStack = UIStackView()
     private let remoteLabel = UILabel()
     private let openOriginalButton = UIButton(configuration: .plain())
-    private let tabControl = UISegmentedControl(items: ["投稿", "メディア"])
+    private let tabControl = UISegmentedControl(items: [ProfileTab.posts.title, ProfileTab.media.title])
     private let filterButton = UIButton(configuration: .plain())
     /// 絞り込みのボタンが今出しているアイコンの状態。まだ出していなければnil。
     private var shownFilterIconIsFiltered: Bool?
@@ -332,7 +332,7 @@ final class ProfileHeaderView: UIView {
             previewPath: { UIBezierPath(roundedRect: $0, cornerRadius: ProfilePrivateNoteView.cornerRadius) },
             lifecycle: textMenuLifecycleForwarding()
         )
-        for (view, label) in [(bannerView, "ヘッダー画像"), (avatarView, "アイコン")] as [(UIView, String)] {
+        for (view, label) in [(bannerView, ProfileImage.header.title), (avatarView, ProfileImage.avatar.title)] as [(UIView, String)] {
             view.isUserInteractionEnabled = true
             view.isAccessibilityElement = true
             view.accessibilityLabel = label
@@ -358,17 +358,17 @@ final class ProfileHeaderView: UIView {
         followButton.setContentCompressionResistancePriority(.required - 1, for: .horizontal)
 
         // フォローの関係を読めなかったら、ボタンを黙って消さず、その場所で読めなかったことと再試行を示す。
-        relationshipFailureLabel.text = "読み込みエラー"
+        relationshipFailureLabel.text = ProfileTexts.Header.relationshipFailure
         relationshipFailureLabel.font = .preferredFont(forTextStyle: .footnote)
         relationshipFailureLabel.adjustsFontForContentSizeCategory = true
         relationshipFailureLabel.textColor = .secondaryLabel
         relationshipFailureLabel.numberOfLines = 0
         relationshipFailureLabel.textAlignment = .right
-        relationshipRetryButton.configuration?.title = "再試行"
+        relationshipRetryButton.configuration?.title = ProfileTexts.Header.relationshipRetry
         relationshipRetryButton.configuration?.image = UIImage(systemName: "arrow.clockwise")
         relationshipRetryButton.configuration?.imagePadding = 4
         relationshipRetryButton.configuration?.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .footnote)
-        relationshipRetryButton.accessibilityHint = "フォローの状態を読み込み直します。"
+        relationshipRetryButton.accessibilityHint = ProfileTexts.Header.relationshipRetryHint
         relationshipRetryButton.setContentCompressionResistancePriority(.required, for: .horizontal)
         relationshipRetryButton.addAction(UIAction { [weak self] _ in self?.onRetryRelationship?() }, for: .primaryActionTriggered)
         relationshipFailureStack.axis = .horizontal
@@ -395,7 +395,7 @@ final class ProfileHeaderView: UIView {
         followedByBadge.layer.cornerRadius = MediaBadgeView.cornerRadius
         followedByBadge.layer.cornerCurve = .continuous
         followedByBadge.clipsToBounds = true
-        followedByBadge.text = "フォローされています"
+        followedByBadge.text = ProfileTexts.Header.followedBy
         // 触れたらヘッダー画像を開けるよう、タップは下のヘッダー画像に通す。
         followedByBadge.isUserInteractionEnabled = false
         noteLabel.numberOfLines = Self.collapsedNoteLines
@@ -412,7 +412,7 @@ final class ProfileHeaderView: UIView {
             }
         }
 
-        moreButton.configuration?.title = "さらに表示"
+        moreButton.configuration?.title = ProfileTexts.Header.showMore
         moreButton.configuration?.contentInsets = .zero
         moreButton.isHidden = true
         moreButton.addAction(UIAction { [weak self] _ in self?.expandNote() }, for: .primaryActionTriggered)
@@ -421,10 +421,10 @@ final class ProfileHeaderView: UIView {
         remoteLabel.font = .preferredFont(forTextStyle: .footnote)
         remoteLabel.adjustsFontForContentSizeCategory = true
         remoteLabel.textColor = .secondaryLabel
-        remoteLabel.text = "ほかのサーバーのアカウント"
+        remoteLabel.text = ProfileTexts.Header.remoteAccount
         remoteLabel.setContentHuggingPriority(.required, for: .horizontal)
         let openOriginal = openOriginalButton
-        openOriginal.configuration?.title = "元のサーバーで開く"
+        openOriginal.configuration?.title = ProfileTexts.Header.openOriginal
         openOriginal.configuration?.image = UIImage(systemName: "safari")
         openOriginal.configuration?.imagePadding = 4
         openOriginal.configuration?.contentInsets = .zero
@@ -448,7 +448,7 @@ final class ProfileHeaderView: UIView {
             self.onSelectTab?(self.tabControl.selectedSegmentIndex == 1 ? .media : .posts)
         }, for: .valueChanged)
         filterButton.showsMenuAsPrimaryAction = true
-        filterButton.accessibilityLabel = "投稿の絞り込み"
+        filterButton.accessibilityLabel = ProfileTexts.PostsFilter.accessibilityLabel
         filterButton.setContentCompressionResistancePriority(.required, for: .horizontal)
         filterButton.setContentHuggingPriority(.required, for: .horizontal)
 
@@ -837,7 +837,7 @@ final class ProfileHeaderView: UIView {
         }
         let underlinesScreenLinks = appearance?.underlinesScreenLinks ?? false
         ProfileAccentAppearance.restyleLinks(in: noteLabel, underline: underlinesScreenLinks, badge: nil)
-        var moreTitle = AttributedString("さらに表示")
+        var moreTitle = AttributedString(ProfileTexts.Header.showMore)
         if underlinesScreenLinks { moreTitle.underlineStyle = .single }
         moreButton.configuration?.attributedTitle = moreTitle
         pinnedShelf.accent = appearance
@@ -900,7 +900,7 @@ final class ProfileHeaderView: UIView {
                 let badge = NSMutableAttributedString(attachment: NSTextAttachment(image: check.withTintColor(.systemGreen, renderingMode: .alwaysOriginal)))
                 badge.addAttribute(.profileVerifiedBadge, value: true, range: NSRange(location: 0, length: badge.length))
                 value.append(badge)
-                valueLabel.accessibilityValue = "確認済み"
+                valueLabel.accessibilityValue = ProfileTexts.Header.verified
             }
             valueLabel.attributedText = value
             valueLabel.accessibilityCustomActions = linkAccessibilityActions(in: value)
@@ -998,8 +998,7 @@ final class ProfileHeaderView: UIView {
             shownFilterIconIsFiltered = isFiltered
             filterButton.replaceSymbol(with: UIImage(systemName: isFiltered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle"))
         }
-        let shown = [filter.showsReplies ? "返信を表示" : nil, filter.showsBoosts ? "ブーストを表示" : nil].compactMap { $0 }
-        filterButton.accessibilityValue = shown.isEmpty ? "返信とブーストを表示しない" : shown.joined(separator: "、")
+        filterButton.accessibilityValue = ProfileTexts.PostsFilter.accessibilityValue(filter)
         filterButton.menu = filterMenu(filter)
         // メニューを開いたまま切り替えたときは、開いているメニューのチェックも書き換える。
         filterButton.contextMenuInteraction?.updateVisibleMenu { [weak self] _ in
@@ -1008,17 +1007,17 @@ final class ProfileHeaderView: UIView {
     }
 
     private func filterMenu(_ filter: ProfilePostsFilter) -> UIMenu {
-        let replies = UIAction(title: "返信を表示", image: Self.checkImage(filter.showsReplies), attributes: .keepsMenuPresented) { [weak self] _ in
+        let replies = UIAction(title: ProfileTexts.PostsFilter.showReplies, image: Self.checkImage(filter.showsReplies), attributes: .keepsMenuPresented) { [weak self] _ in
             var changed = filter
             changed.showsReplies.toggle()
             self?.onChangePostsFilter?(changed)
         }
-        let boosts = UIAction(title: "ブーストを表示", image: Self.checkImage(filter.showsBoosts), attributes: .keepsMenuPresented) { [weak self] _ in
+        let boosts = UIAction(title: ProfileTexts.PostsFilter.showBoosts, image: Self.checkImage(filter.showsBoosts), attributes: .keepsMenuPresented) { [weak self] _ in
             var changed = filter
             changed.showsBoosts.toggle()
             self?.onChangePostsFilter?(changed)
         }
-        return UIMenu(title: "自分のスレッドの続きは返信を隠しても表示します", children: [replies, boosts])
+        return UIMenu(title: ProfileTexts.PostsFilter.menuTitle, children: [replies, boosts])
     }
 
     /// メニューのチェック。UIActionのstateを使うと、どちらもオフにしたときにメニューがチェックの列を詰め、文字が左へ動く。
@@ -1185,19 +1184,22 @@ final class ProfileHeaderView: UIView {
         let font = UIFont.preferredFont(forTextStyle: .footnote)
         let bold = font.fontDescriptor.withSymbolicTraits(.traitBold).map { UIFont(descriptor: $0, size: 0) } ?? font
         let text = NSMutableAttributedString()
-        let counts: [(Int, String, ProfileCountList?)] = [(account.statusesCount, "投稿", nil), (account.followingCount, "フォロー", .following), (account.followersCount, "フォロワー", .followers)]
-        for (index, (count, label, list)) in counts.enumerated() {
+        let counts: [(PostTexts.EmphasizedText, ProfileCountList?)] = [
+            (ProfileTexts.Header.statusesCount(account.statusesCount), nil),
+            (ProfileTexts.Header.followingCount(account.followingCount), .following),
+            (ProfileTexts.Header.followersCount(account.followersCount), .followers),
+        ]
+        for (index, (count, list)) in counts.enumerated() {
             if index > 0 {
                 text.append(NSAttributedString(string: "　", attributes: [.font: font]))
             }
-            var countAttributes: [NSAttributedString.Key: Any] = [.font: bold, .foregroundColor: UIColor.label]
             var labelAttributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.secondaryLabel]
             if let list {
-                countAttributes[.profileCountList] = list.rawValue
                 labelAttributes[.profileCountList] = list.rawValue
             }
-            text.append(NSAttributedString(string: count.formatted(), attributes: countAttributes))
-            text.append(NSAttributedString(string: " \(label)", attributes: labelAttributes))
+            let item = NSMutableAttributedString(string: count.text, attributes: labelAttributes)
+            item.addAttributes([.font: bold, .foregroundColor: UIColor.label], range: NSRange(count.emphasis, in: count.text))
+            text.append(item)
         }
         return text
     }
@@ -1280,8 +1282,8 @@ enum ProfileCountList: String, CaseIterable {
 
     var accessibilityName: String {
         switch self {
-        case .following: "フォローしている人のリスト"
-        case .followers: "フォロワーのリスト"
+        case .following: ProfileTexts.Header.followingListAccessibilityName
+        case .followers: ProfileTexts.Header.followersListAccessibilityName
         }
     }
 }

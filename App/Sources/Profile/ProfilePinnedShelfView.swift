@@ -226,8 +226,7 @@ private final class ProfilePinnedCard: UIControl {
 
         isAccessibilityElement = true
         accessibilityTraits = .button
-        let attachments = status.mediaAttachments.isEmpty ? nil : "添付ファイル\(status.mediaAttachments.count)件"
-        accessibilityLabel = [bodyLabel.attributedText?.string, attachments, dateLabel.text].compactMap(\.self).joined(separator: "、")
+        accessibilityLabel = ProfileTexts.Shelf.pinnedAccessibilityLabel(body: bodyLabel.attributedText?.string, attachmentCount: status.mediaAttachments.count, date: dateLabel.text)
 
         addAction(UIAction { [weak self] _ in self?.onTap?() }, for: .touchUpInside)
         if case .image(let request) = thumbnail {
