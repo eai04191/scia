@@ -14,10 +14,10 @@ final class ComposeToolLayoutSheet: UIHostingController<ComposeToolLayoutSheet.C
 
         var body: some View {
             NavigationStack {
-                MenuLayoutSettingsView(title: "投稿欄のボタン", layout: $settings.composeToolLayout)
+                MenuLayoutSettingsView(title: SettingsPage.composeTools.title, layout: $settings.composeToolLayout)
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
-                            Button("完了", action: dismiss)
+                            Button(ComposeTexts.done, action: dismiss)
                         }
                     }
             }
