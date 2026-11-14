@@ -109,6 +109,8 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     /// 読んでいる途中の通信。同じURLの静止画とアニメーションを同時に求められたときに、1回の通信を分け合う。
     private var fetches: [URL: (purpose: RequestPurpose?, task: Task<(Data, ResponseSource?), any Error>)] = [:]
     private var pendingNotification: Set<URL> = []
+    /// 端末のファイルから読んだ静止画の、知らせを配るまでの時間の記録。求められてからの長さを返す関数、ファイルを読み終えた時点、展開し終えた時点。
+    private var arriving: [URL: (elapsed: @Sendable () -> Duration, fetched: Duration, decoded: Duration)] = [:]
     private let logger = SciaLog.logger(category: "emoji")
 
     public init(
@@ -227,6 +229,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     /// - Parameter purpose: 行に描いたときの読み込みは自動の通信として送り、止められている間は送らない（docs/network.md）。
     private func load(_ url: URL, pixelHeight: Int, purpose: RequestPurpose) {
         guard loading.insert(url).inserted else { return }
+        let elapsed = stopwatch(on: clock)
         let isReload = evictedStills.contains(url)
         if isReload {
             stats.stillReloads += 1
@@ -236,6 +239,8 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
             defer { loading.remove(url) }
             do {
                 let (data, source, isShared) = try await fetchRecordingSource(url)
+                let fetched = elapsed()
+                let isFromFile = source == .file && !isShared
                 stats.stillSources.count(source, isShared: isShared)
                 if isReload {
                     stats.stillReloadSources.count(source, isShared: isShared)
@@ -255,6 +260,9 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
                 stats.peakStillCost = max(stats.peakStillCost, stills.totalCost)
                 failedStills.remove(url)
                 retry.recordSuccess(for: url)
+                if isFromFile {
+                    arriving[url] = (elapsed, fetched, elapsed())
+                }
             } catch {
                 let error = recordFailure(error, for: url)
                 logger.error("emoji load failed host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash)): \(SciaLog.describe(error), privacy: .public)")
@@ -349,6 +357,44 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
         var description: String { "network \(network) cache \(cache) file \(file) unknown \(unknown) shared \(shared)" }
     }
 
+    /// 端末のファイルから読んだ静止画が、求められてから描き直されるまでの時間の内訳。空いた枠が見える長さが、どの段で決まっているかを見る。
+    /// 新しいほうから`maxCount`個までを持つ。
+    private struct ArrivalTimes: CustomStringConvertible {
+        /// 段ごとの長さ（ミリ秒）。ファイルを読む（順番待ちを含む）、展開する（順番待ちを含む）、知らせを配るまで待つ、知らせを受けた画面が描き直す。
+        var fetch: [Double] = []
+        var decode: [Double] = []
+        var deliver: [Double] = []
+        var redraw: [Double] = []
+        var total: [Double] = []
+
+        /// 持っておく記録の数。超えたら古い半分を捨てる。起動している間、読み直すたびに溜め続けないため。
+        static var maxCount: Int { 8_192 }
+
+        mutating func record(fetched: Duration, decoded: Duration, delivered: Duration, redrawn: Duration) {
+            if total.count >= Self.maxCount {
+                for keyPath in [\Self.fetch, \.decode, \.deliver, \.redraw, \.total] {
+                    self[keyPath: keyPath].removeFirst(Self.maxCount / 2)
+                }
+            }
+            func milliseconds(_ duration: Duration) -> Double { Double(duration.components.seconds) * 1_000 + Double(duration.components.attoseconds) / 1e15 }
+            fetch.append(milliseconds(fetched))
+            decode.append(milliseconds(decoded - fetched))
+            deliver.append(milliseconds(delivered - decoded))
+            redraw.append(milliseconds(redrawn - delivered))
+            total.append(milliseconds(redrawn))
+        }
+
+        var description: String {
+            func summary(_ values: [Double]) -> String {
+                let sorted = values.sorted()
+                guard let last = sorted.last else { return "-" }
+                func at(_ ratio: Double) -> String { String(format: "%.1f", sorted[min(sorted.count - 1, Int(Double(sorted.count) * ratio))]) }
+                return "min \(String(format: "%.2f", sorted[0])) p10 \(at(0.1)) p50 \(at(0.5)) p90 \(at(0.9)) max \(String(format: "%.1f", last))"
+            }
+            return "count \(total.count) | total \(summary(total)) | fetch \(summary(fetch)) | decode \(summary(decode)) | deliver \(summary(deliver)) | redraw \(summary(redraw))"
+        }
+    }
+
     /// 読み直しの回数を数える。解像度とキャッシュの上限を決めるときに、上限を超えて捨てたものをどれだけ読み直したかを見る。
     private struct Stats {
         /// 上限を超えて捨てた静止画を、もう一度描こうとして読み直した回数。
@@ -365,6 +411,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
         var stillSources = SourceCounts()
         var stillReloadSources = SourceCounts()
         var animationSources = SourceCounts()
+        var stillArrival = ArrivalTimes()
     }
 
     /// 状態ダンプ。URLは出さず、数だけを書く。
@@ -377,6 +424,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
             "stillReloadsAfterEviction: \(stats.stillReloads) evictedNow: \(evictedStills.count)",
             "stillFetched: \(stats.stillSources) afterEviction: \(stats.stillReloadSources)",
             "animationFetched: \(stats.animationSources)",
+            "stillArrivalFromFileMs: \(stats.stillArrival)",
             "animated: \(resolutions.count) enlarged: \(resolutions.filter { $0.pixelHeight > Self.pixelHeight }.count) animationReloadsAfterEviction: \(stats.animationReloads)",
             "animationLoaded: \(stats.animationBytes / kilobyte)KB largest: \(stats.largestAnimationBytes / kilobyte)KB limit: \(animations.totalCostLimit / kilobyte)KB",
         ].joined(separator: "\n")
@@ -540,8 +588,12 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
             let urls = pendingNotification
             pendingNotification = []
             listeners.removeAll { $0.owner == nil }
+            let arrived = urls.compactMap { arriving.removeValue(forKey: $0) }.map { ($0, $0.elapsed()) }
             for listener in listeners {
                 listener.onLoad(urls)
+            }
+            for (arrival, delivered) in arrived {
+                stats.stillArrival.record(fetched: arrival.fetched, decoded: arrival.decoded, delivered: delivered, redrawn: arrival.elapsed())
             }
         }
     }
