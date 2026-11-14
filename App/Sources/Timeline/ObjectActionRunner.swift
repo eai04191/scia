@@ -11,57 +11,12 @@ struct MenuLifecycle {
     var didHide: () -> Void = {}
 }
 
-/// タップと長押しの操作を選べる対象。設定画面の見出しと、選んだ操作の設定を1か所に持つ。
-/// どの部品がどの対象かは、docs/object-actions.mdの「対象」にある。主な操作（タップの既定）は、項目の種類の`primaryItem`で決まる。
-struct ObjectEntity<Item: ObjectActionItem & MenuItemPresentable> {
-    let title: String
-    let actions: ReferenceWritableKeyPath<AppSettings, ObjectActions<Item>>
-
-    /// `trigger`に、主な操作を選んでいるか。主な操作は、呼ぶ側が今のタップの処理で行う。
+extension ObjectEntity {
+    /// アプリの設定で、`trigger`に主な操作を選んでいるか。
     @MainActor
-    func performsPrimary(_ trigger: ObjectTrigger, settings: AppSettings = AppDependencies.settings) -> Bool {
-        settings[keyPath: actions].performsPrimary(trigger)
+    func performsPrimary(_ trigger: ObjectTrigger) -> Bool {
+        performsPrimary(trigger, settings: AppDependencies.settings)
     }
-}
-
-@MainActor
-extension ObjectEntity where Item == StatusMenuItem {
-    /// タイムラインの投稿の行。
-    static var status: Self { ObjectEntity(title: "投稿", actions: \.statusActions) }
-    /// 引用の囲み。アクションバーを出さないので、投稿とは別に選ぶ。
-    static var quotedStatus: Self { ObjectEntity(title: "引用の投稿", actions: \.quotedStatusActions) }
-    static var notification: Self { ObjectEntity(title: "通知", actions: \.notificationActions) }
-}
-
-@MainActor
-extension ObjectEntity where Item == UserMenuItem {
-    static var user: Self { ObjectEntity(title: "ユーザー", actions: \.userActions) }
-}
-
-@MainActor
-extension ObjectEntity where Item == LinkMenuItem {
-    static var link: Self { ObjectEntity(title: "リンク", actions: \.linkActions) }
-}
-
-/// Xの投稿の囲みのような、Mastodonの外のサービスの投稿。
-@MainActor
-extension ObjectEntity where Item == ExternalPostMenuItem {
-    static var externalPost: Self { ObjectEntity(title: "ほかのサービスの投稿", actions: \.externalPostActions) }
-}
-
-@MainActor
-extension ObjectEntity where Item == HashtagMenuItem {
-    static var hashtag: Self { ObjectEntity(title: "ハッシュタグ", actions: \.hashtagActions) }
-}
-
-@MainActor
-extension ObjectEntity where Item == ReactionMenuItem {
-    static var reaction: Self { ObjectEntity(title: "リアクション", actions: \.reactionActions) }
-}
-
-@MainActor
-extension ObjectEntity where Item == MediaMenuItem {
-    static var media: Self { ObjectEntity(title: "メディア", actions: \.mediaActions) }
 }
 
 /// 押された対象。部品は、タップと長押しをこれに渡す。項目の種類の違う対象を同じ部品で扱えるよう、型を消して持つ。

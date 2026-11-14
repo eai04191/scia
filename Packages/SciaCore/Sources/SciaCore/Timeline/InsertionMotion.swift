@@ -14,3 +14,14 @@ public enum InsertionMotion: String, CaseIterable, Sendable {
         }
     }
 }
+
+extension InsertionMotion {
+    /// 設定の選択肢の名前。
+    public var title: String {
+        switch self {
+        case .followsSystem: "自動"
+        case .animated: "アニメーションあり"
+        case .instant: "アニメーションなし"
+        }
+    }
+}

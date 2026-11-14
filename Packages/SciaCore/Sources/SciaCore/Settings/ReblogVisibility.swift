@@ -19,3 +19,15 @@ public enum ReblogVisibility: String, CaseIterable, Sendable {
         }
     }
 }
+
+extension ReblogVisibility {
+    /// 設定の選択肢の名前。公開範囲を選ぶものは、投稿欄の公開範囲（`VisibilityOption`）と同じ名前にする。
+    public var title: String {
+        switch self {
+        case .accountDefault: "アカウントのデフォルト"
+        case .public: VisibilityOption(.public).title
+        case .unlisted: VisibilityOption(.unlisted).title
+        case .private: VisibilityOption(.private).title
+        }
+    }
+}

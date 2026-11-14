@@ -20,3 +20,14 @@ extension AppSettings {
         }
     }
 }
+
+extension ComposeBarIdle {
+    /// 設定の選択肢の名前。
+    public var title: String {
+        switch self {
+        case .hidden: "隠す"
+        case .collapsed: "折りたたむ"
+        case .open: "開いたまま"
+        }
+    }
+}

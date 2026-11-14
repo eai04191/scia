@@ -15,3 +15,13 @@ public enum LinkBrowser: String, CaseIterable, Sendable {
         return .inApp
     }
 }
+
+extension LinkBrowser {
+    /// 設定の選択肢の名前。
+    public var title: String {
+        switch self {
+        case .external: "デフォルトのブラウザ"
+        case .inApp: "アプリ内のSafari"
+        }
+    }
+}

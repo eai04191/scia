@@ -174,9 +174,9 @@ struct DisplaySettingsView: View {
             }
             Section {
                 Picker("最上部での新着の挿入", selection: $settings.insertionMotion) {
-                    Text("自動").tag(InsertionMotion.followsSystem)
-                    Text("アニメーションあり").tag(InsertionMotion.animated)
-                    Text("アニメーションなし").tag(InsertionMotion.instant)
+                    ForEach(InsertionMotion.allCases, id: \.self) { motion in
+                        Text(motion.title).tag(motion)
+                    }
                 }
             } footer: {
                 Text("“自動”では“視差効果を減らす”がオンのときはアニメーションしません。")
@@ -311,8 +311,9 @@ struct InteractionSettingsView: View {
             }
             Section {
                 Picker("開く場所", selection: $settings.linkBrowser) {
-                    Text("デフォルトのブラウザ").tag(LinkBrowser.external)
-                    Text("アプリ内のSafari").tag(LinkBrowser.inApp)
+                    ForEach(LinkBrowser.allCases, id: \.self) { browser in
+                        Text(browser.title).tag(browser)
+                    }
                 }
                 // 本物のホームの上で選ぶので、設定の画面を重ねずに外へ出る。行の見た目は、ほかの画面へ入る行に揃え、シェブロンを付ける。
                 Button(action: openInAppBrowserHeight) {
@@ -330,9 +331,8 @@ struct InteractionSettingsView: View {
             }
             Section {
                 Picker("公開範囲", selection: $settings.reblogVisibility) {
-                    Text("アカウントのデフォルト").tag(ReblogVisibility.accountDefault)
-                    ForEach([(ReblogVisibility.public, Status.Visibility.public), (.unlisted, .unlisted), (.private, .private)], id: \.0) { reblogVisibility, visibility in
-                        Text(VisibilityOption(visibility).title).tag(reblogVisibility)
+                    ForEach(ReblogVisibility.allCases, id: \.self) { visibility in
+                        Text(visibility.title).tag(visibility)
                     }
                 }
             } header: {
@@ -353,9 +353,9 @@ struct ComposeSettingsView: View {
         Form {
             Section {
                 Picker("書いていないとき", selection: $settings.composeBarIdle) {
-                    Text("隠す").tag(ComposeBarIdle.hidden)
-                    Text("折りたたむ").tag(ComposeBarIdle.collapsed)
-                    Text("開いたまま").tag(ComposeBarIdle.open)
+                    ForEach(ComposeBarIdle.allCases, id: \.self) { idle in
+                        Text(idle.title).tag(idle)
+                    }
                 }
                 NavigationLink("投稿欄のボタン", value: SettingsPage.composeTools)
             }
