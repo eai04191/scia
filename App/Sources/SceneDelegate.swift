@@ -512,7 +512,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
         do {
-            try accounts.remove(credential.id)
+            try AccountLogout.logOut(credential, from: accounts, defaults: .standard, settings: AppDependencies.settings, images: AppDependencies.images)
         } catch {
             // 消せなければ、アカウントはアカウントのリストにも端末にも残っているので、今の画面のまま知らせる。
             // ログイン画面に替えると、残っているほかのアカウントにも、起動し直すまで戻れなくなるため。
@@ -521,17 +521,6 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
         logger.info("account removed")
-        // そのアカウントのために覚えた値と、そのアカウントで見たメディアのキャッシュを消す。
-        AccountScopedDefaults.removeData(of: credential, remaining: accounts.accounts, defaults: .standard, settings: AppDependencies.settings)
-        let remainsOnServer = accounts.accounts.contains { $0.instance.host() == credential.instance.host() }
-        Task(.withoutRequests) {
-            await AppDependencies.mediaFiles.removeAll()
-            await AppDependencies.mediaPrefetchFiles.removeAll()
-            // カスタム絵文字のリストはサーバーのものなので、同じサーバーのアカウントが残っていれば残す。
-            if !remainsOnServer {
-                await AppDependencies.customEmojis.remove(instance: credential.instance)
-            }
-        }
         showCurrentAccount()
         Self.syncAllScenes()
     }
