@@ -7,6 +7,7 @@ import os
 ///
 /// 画像ライブラリ（Nuke、Kingfisherなど）のディスクキャッシュと同じく、OSが空き容量に応じて消してよい`Caches`に置き、起動をまたいで残す。
 /// 合計が上限を超えたら、最後に使った日時の古いものから消す。最後に使った日時は、OSの更新を当てにせず、引くたびにファイルへ書き込む。
+/// 合計は置いた分と消した分を足し引きして持ち、置き場所の全ファイルを調べるのは、作って最初に置くときと、上限を超えたときだけにする。
 ///
 /// キャッシュのファイルは共有や保存に直接渡さず、`copyForSharing(for:)`で作るコピーを渡す。渡したあとも共有先が読み続けている間に、
 /// 整理で消してしまわないようにするため。
@@ -27,6 +28,11 @@ public actor MediaFileCache {
     /// `removeAll()`で全部消すたびに進める。置く側は読み始めたときの値を`store`に渡し、その間に消していたら置かない。
     /// ログアウトの前に始めた読み込みが、消したあとにファイルを置き直さないため。
     public private(set) var generation = 0
+    /// 置いてあるファイルの大きさの合計。置き場所を調べるまではnil。置くたびに全ファイルを調べないよう、置いた分と消した分を足し引きして持つ。
+    /// OSが裏でファイルを消すと実際より大きくなるが、上限を超えたと見て調べたところで合う。
+    private var totalSize: Int?
+    /// 置き場所の全ファイルを調べた回数。上限に届かない間は調べないことを、テストで確かめる。
+    private(set) var scanCount = 0
 
     /// - Parameters:
     ///   - sharingDirectory: 共有や保存に渡すコピーを置く場所。共有先が読み終えたことを知るすべがないため、作るときに前回の起動で残したコピーを消す。
@@ -70,7 +76,15 @@ public actor MediaFileCache {
 
     /// `url`のファイルを消す。先読みの置き場から、ビューアで開いてメディアのキャッシュへ移したものを消すのに使う。
     public func remove(_ url: URL) {
-        try? FileManager.default.removeItem(at: folder(for: url))
+        let folder = folder(for: url)
+        let size = Self.storedSize(in: folder)
+        do {
+            try FileManager.default.removeItem(at: folder)
+            totalSize = totalSize.map { $0 - size }
+        } catch {
+            // 消せたか分からないので、次に置くときに調べ直す。
+            totalSize = nil
+        }
     }
 
     /// `data`を`url`のファイルとして`name`の名前で置き、置いた場所を返す。同じURLのファイルがあれば置き換える。
@@ -155,6 +169,7 @@ public actor MediaFileCache {
     /// 最後に使ったものは、上限より大きくても消さない。置いた直後や引いた直後のファイルを、渡す前に消さないようにするため。
     /// 書き込みの途中で落ちて、置いたファイルのないフォルダは、上限にかかわらず消す。
     public func trim() {
+        scanCount += 1
         let keys: Set<URLResourceKey> = [.contentAccessDateKey, .totalFileAllocatedSizeKey]
         guard let folders = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else { return }
         var entries: [(folder: URL, accessDate: Date, size: Int)] = folders.compactMap { folder in
@@ -166,6 +181,7 @@ public actor MediaFileCache {
             return (folder, values.contentAccessDate ?? .distantPast, values.totalFileAllocatedSize ?? 0)
         }
         var total = entries.reduce(0) { $0 + $1.size }
+        defer { totalSize = total }
         guard total > sizeLimit else { return }
         entries.sort { $0.accessDate < $1.accessDate }
         let target = Int(Double(sizeLimit) * Self.trimRatio)
@@ -183,6 +199,7 @@ public actor MediaFileCache {
     /// 置いたファイルと共有用のコピーを全部消す。ログアウトで、そのアカウントで見た添付ファイルを残さないために呼ぶ。
     public func removeAll() {
         generation += 1
+        totalSize = nil
         for folder in [directory, sharingDirectory] {
             do {
                 try FileManager.default.removeItem(at: folder)
@@ -198,6 +215,7 @@ public actor MediaFileCache {
     /// 共有や保存に渡したコピーは、共有先がまだ読んでいるかもしれないので消さない。消したあとに置き直すときは、フォルダーを作り直す。
     public func removeCachedFiles() throws {
         generation += 1
+        totalSize = nil
         do {
             try FileManager.default.removeItem(at: directory)
         } catch CocoaError.fileNoSuchFile {
@@ -206,7 +224,9 @@ public actor MediaFileCache {
     }
 
     /// 書き終えた`source`を、`folder`にあった前のファイルと入れ替えて`name`の名前で置き、整理する。
+    /// 合計が上限を超えたときと、合計をまだ知らないときだけ、全ファイルを調べる。
     private func publish(_ source: URL, named name: String, in folder: URL) throws -> URL {
+        let replaced = Self.storedSize(in: folder)
         for old in Self.storedFiles(in: folder) {
             try? FileManager.default.removeItem(at: old)
         }
@@ -214,13 +234,26 @@ public actor MediaFileCache {
         let file = folder.appending(fileName: SafeFileName(name))
         try FileManager.default.moveItem(at: source, to: file)
         touch(file)
-        trim()
+        if let known = totalSize {
+            let total = known - replaced + Self.storedSize(in: folder)
+            totalSize = total
+            if total > sizeLimit {
+                trim()
+            }
+        } else {
+            trim()
+        }
         return file
     }
 
     /// フォルダに置いたファイル。書きかけの隠しファイルは数えない。
     private static func storedFiles(in folder: URL) -> [URL] {
         (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil, options: .skipsHiddenFiles)) ?? []
+    }
+
+    /// フォルダに置いたファイルの大きさ。`trim()`が数えるのと同じ、割り当てた大きさ。
+    private static func storedSize(in folder: URL) -> Int {
+        storedFiles(in: folder).reduce(0) { $0 + ((try? $1.resourceValues(forKeys: [.totalFileAllocatedSizeKey]).totalFileAllocatedSize) ?? 0) }
     }
 
     /// フォルダに置いたファイル。書き込みの途中で落ちるなどしてファイルがなければnil。

@@ -109,6 +109,41 @@ struct MediaFileCacheTests {
         #expect(await cache.contains(try url("d")))
     }
 
+    /// 合計が上限に届かない間は、置くたびに置き場所の全ファイルを調べない。カスタム絵文字の画像のように数千個を置く置き場所で、置くたびに数千個を調べないため。
+    /// 作って最初に置くときは、前の起動で置いた分を数えるために1度調べる。
+    @Test func scansAllFilesOnlyWhenOverLimit() async throws {
+        let directories = Directories()
+        defer { directories.remove() }
+        let size = 100 * 1_024
+        let cache = directories.makeCache(sizeLimit: size * 3 + size / 2)
+
+        for name in ["a", "b", "c"] {
+            _ = try await cache.store(Data(count: size), named: name, for: try url(name), generation: 0)
+        }
+        #expect(await cache.scanCount == 1)
+
+        _ = try await cache.store(Data(count: size), named: "d", for: try url("d"), generation: 0)
+        #expect(await cache.scanCount == 2)
+    }
+
+    /// 置き換えたファイルと消したファイルの大きさは、合計から引く。引かないと、上限に届いていないのに全ファイルを調べる。
+    @Test func replacedAndRemovedFilesLeaveTheTotal() async throws {
+        let directories = Directories()
+        defer { directories.remove() }
+        let size = 100 * 1_024
+        let cache = directories.makeCache(sizeLimit: size * 2 + size / 2)
+
+        _ = try await cache.store(Data(count: size), named: "a", for: try url("a"), generation: 0)
+        _ = try await cache.store(Data(count: size), named: "a", for: try url("a"), generation: 0)
+        _ = try await cache.store(Data(count: size), named: "b", for: try url("b"), generation: 0)
+        await cache.remove(try url("b"))
+        _ = try await cache.store(Data(count: size), named: "c", for: try url("c"), generation: 0)
+
+        #expect(await cache.scanCount == 1)
+        #expect(await cache.contains(try url("a")))
+        #expect(await cache.contains(try url("c")))
+    }
+
     /// 上限より大きなファイルでも、置いた直後に消さない。共有や保存に渡す前に消えないようにするため。
     @Test func keepsMostRecentFileEvenIfOverLimit() async throws {
         let directories = Directories()
