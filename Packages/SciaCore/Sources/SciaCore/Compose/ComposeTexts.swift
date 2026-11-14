@@ -214,3 +214,18 @@ extension CompletionKind {
         }
     }
 }
+
+extension ComposeTexts {
+    /// 添付の画像を切り抜く画面。
+    public enum Crop {
+        public static let cropArea = "切り抜く範囲"
+        public static let cropAreaHint = "上下にスワイプして拡大と縮小をします。範囲は操作で動かします。"
+        public static let rotate = "回転"
+        public static let reset = "リセット"
+        public static let aspect = "縦横比"
+        /// 縦横比を決めない選び方。
+        public static let freeAspect = "自由"
+        /// 回したあとの画像の比率の選び方。
+        public static let originalAspect = "元の比率"
+    }
+}

@@ -17,8 +17,8 @@ final class ImageCropViewController: UIViewController, StaysForSharedContent {
         case ratio(width: CGFloat, height: CGFloat)
 
         static let choices: [(title: String, aspect: Aspect)] = [
-            ("自由", .free),
-            ("元の比率", .original),
+            (ComposeTexts.Crop.freeAspect, .free),
+            (ComposeTexts.Crop.originalAspect, .original),
             ("1:1", .ratio(width: 1, height: 1)),
             ("4:3", .ratio(width: 4, height: 3)),
             ("3:4", .ratio(width: 3, height: 4)),
@@ -114,8 +114,8 @@ final class ImageCropViewController: UIViewController, StaysForSharedContent {
 
     override var keyCommands: [UIKeyCommand]? {
         [
-            UIKeyCommand(title: "キャンセル", action: #selector(cancel), input: UIKeyCommand.inputEscape),
-            UIKeyCommand(title: "完了", action: #selector(finish), input: "\r"),
+            UIKeyCommand(title: ComposeTexts.cancel, action: #selector(cancel), input: UIKeyCommand.inputEscape),
+            UIKeyCommand(title: ComposeTexts.done, action: #selector(finish), input: "\r"),
         ]
     }
 
@@ -145,7 +145,7 @@ final class ImageCropViewController: UIViewController, StaysForSharedContent {
         canvas.addSubview(overlay)
         // 枠のハンドルと画像の位置は指でしか動かせないため、VoiceOverには、拡大縮小と範囲を動かす操作を持つ1つの要素として出す。
         // 枠の形は縦横比のボタンで選ぶ。
-        cropElement.accessibilityLabel = "切り抜く範囲"
+        cropElement.accessibilityLabel = ComposeTexts.Crop.cropArea
         cropElement.frame = { [weak self] in self?.box ?? .zero }
         cropElement.viewport = { [weak self] in
             guard let self, !self.overlay.isHidden else { return nil }
@@ -166,12 +166,12 @@ final class ImageCropViewController: UIViewController, StaysForSharedContent {
         spinner.startAnimating()
         view.addSubview(spinner)
 
-        configure(cancelButton, title: "キャンセル", action: #selector(cancel))
-        configure(doneButton, title: "完了", action: #selector(finish))
+        configure(cancelButton, title: ComposeTexts.cancel, action: #selector(cancel))
+        configure(doneButton, title: ComposeTexts.done, action: #selector(finish))
         doneButton.followsGlassAccent()
-        configure(rotateButton, symbol: "rotate.left", label: "回転", action: #selector(rotate))
-        configure(resetButton, title: "リセット", action: #selector(reset))
-        configure(aspectButton, symbol: "aspectratio", label: "縦横比", action: nil)
+        configure(rotateButton, symbol: "rotate.left", label: ComposeTexts.Crop.rotate, action: #selector(rotate))
+        configure(resetButton, title: ComposeTexts.Crop.reset, action: #selector(reset))
+        configure(aspectButton, symbol: "aspectratio", label: ComposeTexts.Crop.aspect, action: nil)
         aspectButton.showsMenuAsPrimaryAction = true
         updateAspectMenu()
         setControlsEnabled(false)
@@ -532,7 +532,7 @@ final class ImageCropViewController: UIViewController, StaysForSharedContent {
     }
 
     private func updateAspectMenu() {
-        aspectButton.menu = UIMenu(title: "縦横比", options: .singleSelection, children: Aspect.choices.map { choice in
+        aspectButton.menu = UIMenu(title: ComposeTexts.Crop.aspect, options: .singleSelection, children: Aspect.choices.map { choice in
             UIAction(title: choice.title, state: choice.aspect == aspect ? .on : .off) { [weak self] _ in self?.choose(choice.aspect) }
         })
     }
