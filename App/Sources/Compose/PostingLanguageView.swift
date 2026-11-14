@@ -12,12 +12,7 @@ struct PostingLanguageView: View {
     var purpose = Purpose.post
     @Environment(\.locale) private var locale
 
-    enum Purpose {
-        /// 書いている投稿の言語。
-        case post
-        /// アカウントの既定の言語（docs/account-screen.mdの「投稿のデフォルト」）。
-        case accountDefault
-    }
+    typealias Purpose = PostingLanguagePurpose
     /// 「読み直す」で増やし、読み込みをやり直させる。読み込みはシートの`task`で走らせ、閉じたら止まるようにする。
     @State private var loadGeneration = 0
 
@@ -33,30 +28,22 @@ struct PostingLanguageView: View {
                             languageRow(row)
                         }
                     } header: {
-                        Text(title(of: section.kind))
+                        Text(purpose.sectionTitle(of: section.kind))
                     }
                 }
             }
-            .searchable(text: $picker.query, placement: .navigationBarDrawer(displayMode: .always), prompt: "言語の名前")
+            .searchable(text: $picker.query, placement: .navigationBarDrawer(displayMode: .always), prompt: ComposeTexts.Language.searchPrompt)
             .topEdgeEffectHiddenOnMac()
-            .navigationTitle(purpose == .post ? "投稿の言語" : "言語")
+            .navigationTitle(purpose.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル", role: .cancel) { close() }
+                    Button(ComposeTexts.cancel, role: .cancel) { close() }
                 }
             }
             .task(.action, id: loadGeneration) {
                 await picker.loadLanguages()
             }
-        }
-    }
-
-    private func title(of kind: PostingLanguageSection.Kind) -> String {
-        switch kind {
-        case .defaultLanguage: purpose == .post ? "アカウントのデフォルト" : "指定なし"
-        case .recent: purpose == .post ? "最近選んだ言語" : "候補"
-        case .all: "すべての言語"
         }
     }
 
@@ -69,12 +56,12 @@ struct PostingLanguageView: View {
                 .frame(maxWidth: .infinity)
         case .failed(let error):
             VStack(alignment: .leading, spacing: 4) {
-                Text("言語のリストを読み込めませんでした")
+                Text(ComposeTexts.Language.loadFailed)
                 FailureReason(reason: ErrorPresentation(error), includesCode: false)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-            Button("再試行") {
+            Button(ComposeTexts.retry) {
                 loadGeneration += 1
             }
         case .loaded:
@@ -90,9 +77,9 @@ struct PostingLanguageView: View {
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(row.code == nil ? "サーバーに任せる" : row.name)
+                    Text(row.code == nil ? ComposeTexts.Language.serverDecides : row.name)
                     if row.code == nil {
-                        Text(purpose == .post ? "デフォルトの言語が設定されていないため、サーバーが決めます" : "言語を指定せず、投稿するときにサーバーが決めます")
+                        Text(purpose.serverDecidesNote)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
