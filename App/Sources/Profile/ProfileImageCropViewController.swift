@@ -57,13 +57,10 @@ final class ProfileImageCropViewController: UIViewController, StaysForSharedCont
         super.viewDidLoad()
         view.backgroundColor = .black
         overrideUserInterfaceStyle = .dark
-        navigationItem.title = switch kind {
-        case .avatar: "アイコンを切り抜く"
-        case .header: "ヘッダー画像を切り抜く"
-        }
+        navigationItem.title = kind.cropTitle
         navigationItem.leftBarButtonItem = UIBarButtonItem(systemItem: .cancel, primaryAction: UIAction { [weak self] _ in self?.onCancel() })
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "完了", style: .prominent, target: nil, action: nil)
-        navigationItem.rightBarButtonItem?.primaryAction = UIAction(title: "完了") { [weak self] _ in self?.finish() }
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: ProfileEditTexts.Crop.done, style: .prominent, target: nil, action: nil)
+        navigationItem.rightBarButtonItem?.primaryAction = UIAction(title: ProfileEditTexts.Crop.done) { [weak self] _ in self?.finish() }
 
         touchArea.frame = view.bounds
         touchArea.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -111,7 +108,7 @@ final class ProfileImageCropViewController: UIViewController, StaysForSharedCont
             aspectControl.insertSegment(action: action, at: index, animated: false)
         }
         aspectControl.selectedSegmentIndex = ProfileImageCrop.HeaderAspect.allCases.firstIndex(of: headerAspect) ?? 0
-        aspectControl.accessibilityLabel = "縦横比"
+        aspectControl.accessibilityLabel = ProfileEditTexts.Crop.aspect
         aspectControl.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(aspectControl)
         NSLayoutConstraint.activate([

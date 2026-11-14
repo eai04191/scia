@@ -137,12 +137,12 @@ final class ProfileEditFieldCell: UITableViewCell, UITextFieldDelegate {
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
         selectionStyle = .none
-        nameField.placeholder = "ラベル"
-        nameField.accessibilityLabel = "補足情報のラベル"
+        nameField.placeholder = ProfileEditTexts.Field.namePlaceholder
+        nameField.accessibilityLabel = ProfileEditTexts.Field.nameAccessibilityLabel
         nameField.font = .preferredFont(forTextStyle: .subheadline)
-        valueField.placeholder = "内容"
+        valueField.placeholder = ProfileEditTexts.Field.valuePlaceholder
         valueField.completionKinds = Set(CompletionKind.allCases)
-        valueField.accessibilityLabel = "補足情報の内容"
+        valueField.accessibilityLabel = ProfileEditTexts.Field.valueAccessibilityLabel
         let divider = UIView()
         divider.backgroundColor = .separator
         divider.translatesAutoresizingMaskIntoConstraints = false
@@ -342,7 +342,7 @@ final class ProfileEditImagesCell: UITableViewCell {
         headerImageView.translatesAutoresizingMaskIntoConstraints = false
         headerButton.translatesAutoresizingMaskIntoConstraints = false
         headerButton.showsMenuAsPrimaryAction = true
-        headerButton.accessibilityLabel = "ヘッダー画像"
+        headerButton.accessibilityLabel = ProfileImage.header.title
         headerButton.addSubview(headerImageView)
 
         avatarImageView.contentMode = .scaleAspectFill
@@ -356,7 +356,7 @@ final class ProfileEditImagesCell: UITableViewCell {
         avatarRing.translatesAutoresizingMaskIntoConstraints = false
         avatarButton.translatesAutoresizingMaskIntoConstraints = false
         avatarButton.showsMenuAsPrimaryAction = true
-        avatarButton.accessibilityLabel = "アイコン"
+        avatarButton.accessibilityLabel = ProfileImage.avatar.title
         avatarButton.addSubview(avatarRing)
         avatarButton.addSubview(avatarImageView)
 
@@ -534,8 +534,8 @@ final class ProfileEditImagesCell: UITableViewCell {
         }
         avatarButton.menu = menu(for: .avatar, change: shown.avatar, has: shown.hasAvatar)
         headerButton.menu = menu(for: .header, change: shown.header, has: shown.hasHeader)
-        avatarButton.accessibilityValue = Self.accessibilityValue(change: shown.avatar, has: shown.hasAvatar)
-        headerButton.accessibilityValue = Self.accessibilityValue(change: shown.header, has: shown.hasHeader)
+        avatarButton.accessibilityValue = shown.avatar.accessibilityValue(isSet: shown.hasAvatar)
+        headerButton.accessibilityValue = shown.header.accessibilityValue(isSet: shown.hasHeader)
     }
 
     /// 見え方を変える。`fades`なら、前の見え方からクロスフェードで入れる。変わらなければ、見た目は動かない。
@@ -555,20 +555,12 @@ final class ProfileEditImagesCell: UITableViewCell {
         }
     }
 
-    private static func accessibilityValue(change: ProfileImageChange, has: Bool) -> String {
-        switch change {
-        case .keep: has ? "設定済み" : "未設定"
-        case .replace: "変更あり"
-        case .remove: "削除予定"
-        }
-    }
-
     private func menu(for kind: ProfileImage, change: ProfileImageChange, has: Bool) -> UIMenu {
         var actions: [UIAction] = [
-            UIAction(title: "写真を選ぶ", image: UIImage(systemName: "photo.on.rectangle")) { [weak self] _ in self?.onPick(kind) },
+            UIAction(title: ProfileEditTexts.ImageMenu.pick, image: UIImage(systemName: "photo.on.rectangle")) { [weak self] _ in self?.onPick(kind) },
         ]
         if change != .keep {
-            actions.append(UIAction(title: "変更を取り消す", image: UIImage(systemName: "arrow.uturn.backward")) { [weak self] _ in self?.onRevert(kind) })
+            actions.append(UIAction(title: ProfileEditTexts.ImageMenu.revert, image: UIImage(systemName: "arrow.uturn.backward")) { [weak self] _ in self?.onRevert(kind) })
         }
         let isSet = switch change {
         case .keep: has
@@ -576,7 +568,7 @@ final class ProfileEditImagesCell: UITableViewCell {
         case .remove: false
         }
         if isSet {
-            actions.append(UIAction(title: "削除", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in self?.onRemove(kind) })
+            actions.append(UIAction(title: ProfileEditTexts.ImageMenu.remove, image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in self?.onRemove(kind) })
         }
         return UIMenu(children: actions)
     }

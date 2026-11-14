@@ -127,10 +127,10 @@ final class ProfileEditViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemGroupedBackground
-        navigationItem.title = "プロフィールを編集"
+        navigationItem.title = ProfileEditTexts.title
         navigationItem.leftBarButtonItem = UIBarButtonItem(systemItem: .cancel, primaryAction: UIAction { [weak self] _ in self?.cancel() })
-        let save = UIBarButtonItem(title: "保存", style: .prominent, target: nil, action: nil)
-        save.primaryAction = UIAction(title: "保存") { [weak self] _ in self?.save() }
+        let save = UIBarButtonItem(title: ProfileEditTexts.save, style: .prominent, target: nil, action: nil)
+        save.primaryAction = UIAction(title: ProfileEditTexts.save) { [weak self] _ in self?.save() }
         navigationItem.rightBarButtonItem = save
 
         configureTable()
@@ -272,7 +272,7 @@ final class ProfileEditViewController: UIViewController {
             failureView.isHidden = true
         case .failed(let error) where !isLoaded:
             loadingView.stopAnimating()
-            failureReason.show(ErrorPresentation(error), lead: "プロフィールを読み込めませんでした")
+            failureReason.show(ErrorPresentation(error), lead: ProfileTexts.loadFailure)
             failureView.isHidden = false
         default:
             if !isLoaded {
@@ -336,14 +336,14 @@ final class ProfileEditViewController: UIViewController {
         let fieldCount = draft.fields.count
         var fieldsText = "\(fieldCount) / \(limits.fields)"
         if problems.contains(where: { if case .fieldNameMissing = $0 { true } else { false } }) {
-            fieldsText = "内容を書いた行にはラベルも書いてください"
+            fieldsText = ProfileEditTexts.Field.nameMissing
         } else if problems.contains(where: {
             switch $0 {
             case .fieldNameTooLong, .fieldValueTooLong: true
             default: false
             }
         }) {
-            fieldsText = "ラベルと内容は\(limits.fieldName)文字までです"
+            fieldsText = ProfileEditTexts.Field.tooLong(limit: limits.fieldName)
         }
         fieldsFooter.setText(fieldsText, isProblem: fieldsText != "\(fieldCount) / \(limits.fields)" || fieldCount > limits.fields)
         // 上限が返らなければ、数だけを出して止めない。
@@ -366,7 +366,7 @@ final class ProfileEditViewController: UIViewController {
             } catch {
                 logger.error("profile save failed: \(SciaLog.describe(error), privacy: .public)")
                 showPartiallySavedDraft()
-                onError(error, "プロフィールを保存できませんでした")
+                onError(error, ProfileEditTexts.saveFailure)
             }
         }
     }
@@ -395,12 +395,12 @@ final class ProfileEditViewController: UIViewController {
         guard !isConfirmingDiscard, !editor.isSaving else { return }
         isConfirmingDiscard = true
         view.endEditing(true)
-        let sheet = UIAlertController(title: nil, message: "変更を保存していません", preferredStyle: .actionSheet)
-        sheet.addAction(UIAlertAction(title: "変更を破棄", style: .destructive) { [weak self] _ in
+        let sheet = UIAlertController(title: nil, message: ProfileTexts.Discard.message, preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: ProfileTexts.Discard.discard, style: .destructive) { [weak self] _ in
             self?.isConfirmingDiscard = false
             self?.dismiss(animated: true)
         })
-        sheet.addAction(UIAlertAction(title: "編集を続ける", style: .cancel) { [weak self] _ in
+        sheet.addAction(UIAlertAction(title: ProfileTexts.Discard.keepEditing, style: .cancel) { [weak self] _ in
             self?.isConfirmingDiscard = false
         })
         sheet.popoverPresentationController?.barButtonItem = navigationItem.leftBarButtonItem
@@ -437,16 +437,16 @@ final class ProfileEditViewController: UIViewController {
     }
 
     private func configureInputs() {
-        displayNameField.placeholder = "表示名"
-        displayNameField.accessibilityLabel = "表示名"
+        displayNameField.placeholder = ProfileEditTexts.displayName
+        displayNameField.accessibilityLabel = ProfileEditTexts.displayName
         displayNameField.followGlyphLanguage(of: settings)
         displayNameField.addAction(UIAction { [weak self] _ in
             guard let self else { return }
             editor.draft?.displayName = displayNameField.text ?? ""
             textCompletion.textDidChange(in: displayNameField)
         }, for: .editingChanged)
-        noteView.accessibilityLabel = "自己紹介"
-        noteView.placeholder = "自己紹介"
+        noteView.accessibilityLabel = ProfileEditTexts.note
+        noteView.placeholder = ProfileEditTexts.note
         noteView.followGlyphLanguage(of: settings)
         for input in [displayNameField as any ProfileEditInput, noteView] {
             input.completionKeys = textCompletion.keys(
@@ -495,7 +495,7 @@ final class ProfileEditViewController: UIViewController {
         failureReason.label.adjustsFontForContentSizeCategory = true
         failureReason.label.textColor = .secondaryLabel
         var retry = UIButton.Configuration.gray()
-        retry.title = "再試行"
+        retry.title = ProfileEditTexts.retry
         retry.cornerStyle = .capsule
         let retryButton = UIButton(configuration: retry, primaryAction: UIAction { [weak self] _ in
             guard let self else { return }
@@ -522,7 +522,7 @@ final class ProfileEditViewController: UIViewController {
     private func makeInputAccessory() -> UIView {
         let toolbar = UIToolbar(frame: CGRect(x: 0, y: 0, width: 320, height: 44))
         let emoji = UIBarButtonItem(image: UIImage(systemName: "face.smiling"), primaryAction: UIAction { [weak self] _ in self?.presentEmojiPalette() })
-        emoji.accessibilityLabel = "カスタム絵文字"
+        emoji.accessibilityLabel = ProfileEditTexts.customEmoji
         toolbar.items = [emoji, .flexibleSpace()]
         toolbar.sizeToFit()
         return toolbar
@@ -693,11 +693,11 @@ final class ProfileEditViewController: UIViewController {
     }
 
     private func configureAddFields() {
-        featuredTagField.placeholder = "ハッシュタグを追加"
-        featuredTagField.accessibilityLabel = "注目のハッシュタグを追加"
+        featuredTagField.placeholder = ProfileEditTexts.AddField.featuredTagPlaceholder
+        featuredTagField.accessibilityLabel = ProfileEditTexts.AddField.featuredTagAccessibilityLabel
         featuredTagField.completionKinds = [.hashtag]
-        endorsementField.placeholder = "ユーザーを追加"
-        endorsementField.accessibilityLabel = "紹介するユーザーを追加"
+        endorsementField.placeholder = ProfileEditTexts.AddField.endorsementPlaceholder
+        endorsementField.accessibilityLabel = ProfileEditTexts.AddField.endorsementAccessibilityLabel
         for field in [featuredTagField, endorsementField] {
             field.autocapitalizationType = .none
             field.autocorrectionType = .no
@@ -782,7 +782,7 @@ final class ProfileEditViewController: UIViewController {
     private func sectionLoadingCell() -> UITableViewCell {
         let cell = UITableViewCell()
         var content = cell.defaultContentConfiguration()
-        content.text = "読み込み中"
+        content.text = ProfileEditTexts.SectionLoad.loading
         content.textProperties.color = .secondaryLabel
         cell.contentConfiguration = content
         let indicator = UIActivityIndicatorView(style: .medium)
@@ -797,10 +797,10 @@ final class ProfileEditViewController: UIViewController {
     private func sectionFailureCell(_ error: any Error) -> UITableViewCell {
         let cell = UITableViewCell()
         var content = UIListContentConfiguration.subtitleCell()
-        content.text = "再読み込み"
+        content.text = ProfileEditTexts.SectionLoad.reload
         content.textProperties.color = .tintColor
         // 行を押すと読み直すので、ボタンは並べられない。自分のプロフィールの読み込みなので、401ならログインし直しの段から行える。
-        content.secondaryText = "読み込めませんでした。\(FailureText.withoutLogIn(ErrorPresentation(error)))"
+        content.secondaryText = ProfileEditTexts.SectionLoad.failure(reason: FailureText.withoutLogIn(ErrorPresentation(error)))
         content.secondaryTextProperties.color = .secondaryLabel
         content.secondaryTextProperties.font = .preferredFont(forTextStyle: .footnote)
         cell.contentConfiguration = content
@@ -1109,7 +1109,7 @@ extension ProfileEditViewController: UITableViewDataSource, UITableViewDelegate 
             guard let field = editor.draft?.fields[safe: indexPath.row] else {
                 let cell = UITableViewCell()
                 var content = cell.defaultContentConfiguration()
-                content.text = "補足情報を追加"
+                content.text = ProfileEditTexts.Field.add
                 content.textProperties.color = .tintColor
                 cell.contentConfiguration = content
                 return cell
@@ -1153,8 +1153,8 @@ extension ProfileEditViewController: UITableViewDataSource, UITableViewDelegate 
             // 説明はスイッチごとに、名前の下に小さく出す。
             var content = UIListContentConfiguration.subtitleCell()
             let toggle = indexPath.row == 0 ? lockedSwitch : botSwitch
-            content.text = indexPath.row == 0 ? "フォローを承認制にする" : "botのアカウントとして示す"
-            content.secondaryText = indexPath.row == 0 ? "フォローリクエストを承認した人だけがフォローできます" : "自動で投稿するアカウントだとほかの人に伝わります"
+            content.text = indexPath.row == 0 ? ProfileEditTexts.Flag.locked : ProfileEditTexts.Flag.bot
+            content.secondaryText = indexPath.row == 0 ? ProfileEditTexts.Flag.lockedDetail : ProfileEditTexts.Flag.botDetail
             content.secondaryTextProperties.color = .secondaryLabel
             // 説明は、区切りの下の説明と同じ小さい文字にする。`subtitleCell`の既定はそれより一回り大きい。
             content.secondaryTextProperties.font = .preferredFont(forTextStyle: .footnote)
@@ -1171,11 +1171,11 @@ extension ProfileEditViewController: UITableViewDataSource, UITableViewDelegate 
 
     private func headerTitle(of section: Int) -> String? {
         switch Section(rawValue: section) {
-        case .displayName: "表示名"
-        case .note: "自己紹介"
-        case .fields: "補足情報"
-        case .featuredTags: "注目のハッシュタグ"
-        case .endorsements: "紹介しているユーザー"
+        case .displayName: ProfileEditTexts.Section.displayName
+        case .note: ProfileEditTexts.Section.note
+        case .fields: ProfileEditTexts.Section.fields
+        case .featuredTags: ProfileEditTexts.Section.featuredTags
+        case .endorsements: ProfileEditTexts.Section.endorsements
         default: nil
         }
     }
@@ -1226,7 +1226,7 @@ extension ProfileEditViewController: UITableViewDataSource, UITableViewDelegate 
     }
 
     func tableView(_ tableView: UITableView, titleForDeleteConfirmationButtonForRowAt indexPath: IndexPath) -> String? {
-        "削除"
+        ProfileEditTexts.delete
     }
 
     func tableView(_ tableView: UITableView, canMoveRowAt indexPath: IndexPath) -> Bool {
@@ -1370,7 +1370,7 @@ extension ProfileEditViewController: PHPickerViewControllerDelegate {
                 picker.dismiss(animated: true) {
                     guard let data, let decoded else {
                         self.logger.error("profile image load failed: \(error.map(SciaLog.describe) ?? "decode", privacy: .public)")
-                        self.onError(ProfileImageLoadError(), "画像を読み込めませんでした")
+                        self.onError(ProfileImageLoadError(), ProfileEditTexts.imageLoadFailure)
                         return
                     }
                     guard isGIF else {
@@ -1387,7 +1387,7 @@ extension ProfileEditViewController: PHPickerViewControllerDelegate {
 
 /// 選んだ写真を読めなかった。
 struct ProfileImageLoadError: LocalizedError {
-    var errorDescription: String? { "選んだ画像を読めませんでした。別の画像を選んでください。" }
+    var errorDescription: String? { ProfileEditTexts.imageUnreadable }
 }
 
 private extension Array {
