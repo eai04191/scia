@@ -307,8 +307,8 @@ struct RichTextRenderer: Sendable {
             guard let run, !run.text.isEmpty else { return }
             switch run.change {
             case .unchanged: parts.append(run.text)
-            case .inserted: parts.append("追加：\(run.text)")
-            case .removed: parts.append("削除：\(run.text)")
+            case .inserted: parts.append(EditHistoryTexts.insertedAccessibilityText(run.text))
+            case .removed: parts.append(EditHistoryTexts.removedAccessibilityText(run.text))
             }
         }
         for (index, block) in diff.blocks.enumerated() {
@@ -317,7 +317,7 @@ struct RichTextRenderer: Sendable {
                 if block.breakChange == .inserted, block.pieces.first?.change != .inserted {
                     close()
                     run = nil
-                    parts.append("追加：段落の区切り")
+                    parts.append(EditHistoryTexts.insertedParagraphBreak)
                 } else {
                     run?.text += "\n"
                 }

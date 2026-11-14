@@ -70,7 +70,7 @@ final class EditHistoryViewController: UIViewController {
         self.mediaImages = mediaImages
         builder = EditHistoryContentBuilder(tuning: tuning, settings: settings, emojiImages: emojiImages, network: network)
         super.init(nibName: nil, bundle: nil)
-        title = "編集履歴"
+        title = EditHistoryTexts.title
     }
 
     @available(*, unavailable)
@@ -226,10 +226,10 @@ final class EditHistoryViewController: UIViewController {
             contentUnavailableConfiguration = UIContentUnavailableConfiguration.loading()
         case .failed(let reason):
             var configuration = UIContentUnavailableConfiguration.empty()
-            configuration.text = "編集履歴を読み込めませんでした"
+            configuration.text = EditHistoryTexts.loadFailure
             configuration.secondaryAttributedText = reason.attributedText(textStyle: .body)
             configuration.button = .borderedTinted()
-            configuration.button.title = "再試行"
+            configuration.button.title = EditHistoryTexts.retry
             configuration.buttonProperties.primaryAction = UIAction { [weak self] _ in self?.load() }
             contentUnavailableConfiguration = configuration
         case .loaded:

@@ -138,7 +138,7 @@ final class EditHistoryEntryView: UIView {
         let label = Self.label(font: .preferredFont(forTextStyle: .subheadline), color: .label)
         label.emojiImages = animatedEmojis
         label.attributedText = spoiler.attributed
-        label.accessibilityLabel = "注意書き、\(spoiler.accessibilityText)"
+        label.accessibilityLabel = EditHistoryTexts.spoilerAccessibilityLabel(spoiler.accessibilityText)
         let box = UIView()
         box.backgroundColor = .secondarySystemFill
         box.layer.cornerRadius = 8
@@ -198,7 +198,7 @@ final class EditHistoryEntryView: UIView {
 
     private func pollView(_ options: [Text]) -> UIView {
         let title = Self.label(font: .preferredFont(forTextStyle: .footnote), color: .secondaryLabel)
-        title.text = "投票の選択肢"
+        title.text = EditHistoryTexts.pollOptionsTitle
         let column = UIStackView(arrangedSubviews: [title])
         column.axis = .vertical
         column.spacing = 4
