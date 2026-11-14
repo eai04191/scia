@@ -110,7 +110,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     private var fetches: [URL: (purpose: RequestPurpose?, task: Task<(Data, ResponseSource?), any Error>)] = [:]
     private var pendingNotification: Set<URL> = []
     /// 端末のファイルから読んだ静止画の、知らせを配るまでの時間の記録。求められてからの長さを返す関数、ファイルを読み終えた時点、展開し終えた時点。
-    private var arriving: [URL: (elapsed: @Sendable () -> Duration, fetched: Duration, decoded: Duration)] = [:]
+    private var arriving: [URL: (elapsed: @Sendable () -> Duration, fetched: Duration, decoding: DecodeTimes, decoded: Duration)] = [:]
     private let logger = SciaLog.logger(category: "emoji")
 
     public init(
@@ -245,7 +245,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
                 if isReload {
                     stats.stillReloadSources.count(source, isShared: isShared)
                 }
-                guard let (image, isLargest, source) = await Self.decodeStill(data, pixelHeight: pixelHeight) else { throw DecodeError() }
+                guard let (image, isLargest, source, decoding) = await Self.decodeStill(data, pixelHeight: pixelHeight, elapsed: elapsed) else { throw DecodeError() }
                 // 大きすぎて動かせないと分かった元の画像を、静止画がメモリから捨てられて読み直したときも、端末に残さない。
                 if oversized?.contains(url) == true {
                     await onDiscard?(url)
@@ -261,7 +261,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
                 failedStills.remove(url)
                 retry.recordSuccess(for: url)
                 if isFromFile {
-                    arriving[url] = (elapsed, fetched, elapsed())
+                    arriving[url] = (elapsed, fetched, decoding, elapsed())
                 }
             } catch {
                 let error = recordFailure(error, for: url)
@@ -360,28 +360,27 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     /// 端末のファイルから読んだ静止画が、求められてから描き直されるまでの時間の内訳。空いた枠が見える長さが、どの段で決まっているかを見る。
     /// 新しいほうから`maxCount`個までを持つ。
     private struct ArrivalTimes: CustomStringConvertible {
-        /// 段ごとの長さ（ミリ秒）。ファイルを読む（順番待ちを含む）、展開する（順番待ちを含む）、知らせを配るまで待つ、知らせを受けた画面が描き直す。
-        var fetch: [Double] = []
-        var decode: [Double] = []
-        var deliver: [Double] = []
-        var redraw: [Double] = []
-        var total: [Double] = []
+        /// 段の名前。ファイルを読む（順番待ちを含む）、メインスレッドの外に移る、展開のキューを待つ、展開する、メインスレッドに戻るのを待つ、
+        /// 知らせを配るまで待つ、知らせを受けた画面が描き直す。
+        static var stages: [String] { ["fetch", "leaveMain", "decodeQueue", "decodeRun", "returnToMain", "deliver", "redraw", "total"] }
+        /// 段ごとの長さ（ミリ秒）。
+        var samples: [String: [Double]] = [:]
 
         /// 持っておく記録の数。超えたら古い半分を捨てる。起動している間、読み直すたびに溜め続けないため。
         static var maxCount: Int { 8_192 }
 
-        mutating func record(fetched: Duration, decoded: Duration, delivered: Duration, redrawn: Duration) {
-            if total.count >= Self.maxCount {
-                for keyPath in [\Self.fetch, \.decode, \.deliver, \.redraw, \.total] {
-                    self[keyPath: keyPath].removeFirst(Self.maxCount / 2)
+        mutating func record(fetched: Duration, decoding: DecodeTimes, decoded: Duration, delivered: Duration, redrawn: Duration) {
+            if (samples["total"]?.count ?? 0) >= Self.maxCount {
+                for stage in Self.stages {
+                    samples[stage]?.removeFirst(Self.maxCount / 2)
                 }
             }
             func milliseconds(_ duration: Duration) -> Double { Double(duration.components.seconds) * 1_000 + Double(duration.components.attoseconds) / 1e15 }
-            fetch.append(milliseconds(fetched))
-            decode.append(milliseconds(decoded - fetched))
-            deliver.append(milliseconds(delivered - decoded))
-            redraw.append(milliseconds(redrawn - delivered))
-            total.append(milliseconds(redrawn))
+            let marks = [.zero, fetched, decoding.entered, decoding.started, decoding.finished, decoded, delivered, redrawn]
+            for (index, stage) in Self.stages.dropLast().enumerated() {
+                samples[stage, default: []].append(milliseconds(marks[index + 1] - marks[index]))
+            }
+            samples["total", default: []].append(milliseconds(redrawn))
         }
 
         var description: String {
@@ -391,7 +390,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
                 func at(_ ratio: Double) -> String { String(format: "%.1f", sorted[min(sorted.count - 1, Int(Double(sorted.count) * ratio))]) }
                 return "min \(String(format: "%.2f", sorted[0])) p10 \(at(0.1)) p50 \(at(0.5)) p90 \(at(0.9)) max \(String(format: "%.1f", last))"
             }
-            return "count \(total.count) | total \(summary(total)) | fetch \(summary(fetch)) | decode \(summary(decode)) | deliver \(summary(deliver)) | redraw \(summary(redraw))"
+            return (["count \(samples["total"]?.count ?? 0)"] + Self.stages.map { "\($0) \(summary(samples[$0] ?? []))" }).joined(separator: " | ")
         }
     }
 
@@ -472,8 +471,10 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     /// 元の画像より大きくはしない。拡大しても、ぼけは消えないため。`maxStillPixelCount`を超える大きさにもしない。
     /// カスタム絵文字は文字と一緒にSDRで描く決まりなので（docs/hdr-display.md）、HDRを求めずに読む。
     /// - Returns: 展開した画像と、これより高く読めないか（`Resolution.isLargest`）と、元の画像の大きさ。
+    /// - Parameter elapsed: 求められてからの長さを返す関数。展開の段の内訳（`DecodeTimes`）を測るのに使う。
     @concurrent
-    private static func decodeStill(_ data: Data, pixelHeight: Int) async -> (image: CGImage, isLargest: Bool, source: SourceSize)? {
+    private static func decodeStill(_ data: Data, pixelHeight: Int, elapsed: @escaping @Sendable () -> Duration) async -> (image: CGImage, isLargest: Bool, source: SourceSize, times: DecodeTimes)? {
+        let entered = elapsed()
         guard let source = SourceSize(of: data) else { return nil }
         var maxPixelSize = ImageDecoder.maxPixelSize(forHeight: pixelHeight, of: data)
         let longest = max(source.width, source.height)
@@ -483,8 +484,21 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
         if isLimited {
             maxPixelSize = Int((Double(longest) * (Double(maxStillPixelCount) / Double(source.width * source.height)).squareRoot()).rounded(.down))
         }
-        guard let image = await ImageDecoder.thumbnail(of: data, maxPixelSize: maxPixelSize, dynamicRange: .standard) else { return nil }
-        return (image, isLimited || source.isFullHeight(image.height), source)
+        let size = maxPixelSize
+        let (image, started, finished) = await ImageDecoder.run {
+            let started = elapsed()
+            let image = CGImageSourceCreateWithData(data as CFData, nil).flatMap { ImageDecoder.thumbnail(of: $0, maxPixelSize: size, dynamicRange: .standard) }
+            return (image, started, elapsed())
+        }
+        guard let image else { return nil }
+        return (image, isLimited || source.isFullHeight(image.height), source, DecodeTimes(entered: entered, started: started, finished: finished))
+    }
+
+    /// 静止画の展開の段の、求められてからの時点。メインスレッドの外に移った時点、展開のキューを受け取って展開を始めた時点、展開を終えた時点。
+    private struct DecodeTimes: Sendable {
+        let entered: Duration
+        let started: Duration
+        let finished: Duration
     }
 
     /// `pixelHeight`の高さにそろえてコマに分ける。その高さでは`AnimatedImage.maxByteCount`を超えるときは、収まる高さまで下げる。
@@ -593,7 +607,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
                 listener.onLoad(urls)
             }
             for (arrival, delivered) in arrived {
-                stats.stillArrival.record(fetched: arrival.fetched, decoded: arrival.decoded, delivered: delivered, redrawn: arrival.elapsed())
+                stats.stillArrival.record(fetched: arrival.fetched, decoding: arrival.decoding, decoded: arrival.decoded, delivered: delivered, redrawn: arrival.elapsed())
             }
         }
     }
