@@ -29,11 +29,11 @@ struct PostCrashReportView: View {
                 explanation
                 content
             }
-            .navigationTitle("表示できない投稿")
+            .navigationTitle(CrashReportTexts.Screen.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("閉じる", systemImage: "xmark", action: close)
+                    Button(CrashReportTexts.Screen.close, systemImage: "xmark", action: close)
                 }
             }
         }
@@ -45,8 +45,8 @@ struct PostCrashReportView: View {
         // 押せるものでも項目でもないので、行の形にせず、普通の文として置く。
         Section {
             VStack(alignment: .leading, spacing: 8) {
-                Text("以前この投稿を読み込んだ際に問題が発生したため表示を中止しました。ご不便をおかけして申し訳ありません。")
-                Text("この投稿にはSciaが想定していないデータが含まれている可能性があります。原因を特定して修正するために開発者に情報を提供していただけませんか？")
+                Text(CrashReportTexts.Screen.apology)
+                Text(CrashReportTexts.Screen.request)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .listRowBackground(Color.clear)
@@ -63,8 +63,8 @@ struct PostCrashReportView: View {
             }
         case .failed(let reason):
             Section {
-                FailureReason(reason: reason, lead: "報告する内容を読み込めませんでした。")
-                Button("再試行") { Task(.action) { await reload() } }
+                FailureReason(reason: reason, lead: CrashReportTexts.Screen.loadFailureLead)
+                Button(CrashReportTexts.Screen.retry) { Task(.action) { await reload() } }
             }
             if let fallbackURL {
                 browserSection(fallbackURL)
@@ -84,25 +84,25 @@ struct PostCrashReportView: View {
                 .font(.footnote.monospaced())
                 .textSelection(.enabled)
         } header: {
-            Text("開発者に報告する内容")
+            Text(CrashReportTexts.Screen.contentHeader)
         }
         if report.maskedJSON != nil {
             Section {
-                Toggle("詳しいデータも送る", isOn: $includesDetail)
+                Toggle(CrashReportTexts.Screen.includesDetail, isOn: $includesDetail)
             } footer: {
-                Text("本文の文字を置き換えたデータです。長いためメールでのみ送れます。")
+                Text(CrashReportTexts.Screen.detailNote)
             }
         }
         Section {
-            Button("メールで報告") { sendByMail(text) }
-            Button("Mastodonのダイレクトで報告") { sendByMastodon(text) }
+            Button(CrashReportTexts.Screen.sendByMail) { sendByMail(text) }
+            Button(CrashReportTexts.Screen.sendByMastodon) { sendByMastodon(text) }
                 .disabled(includesDetail)
         }
     }
 
     private func browserSection(_ url: URL) -> some View {
         Section {
-            Link("ブラウザで開く", destination: url)
+            Link(CrashReportTexts.Screen.openInBrowser, destination: url)
         }
     }
 

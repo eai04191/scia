@@ -1,7 +1,8 @@
 import Foundation
+import SciaCore
 
 enum CrashReportMail {
-    static let subject = "Scia クラッシュレポート"
+    static let subject = CrashReportTexts.mailSubject
 
     /// 使う人が既定にしたメールアプリで開くURL。
     static func url(to address: String, body: String) -> URL? {
