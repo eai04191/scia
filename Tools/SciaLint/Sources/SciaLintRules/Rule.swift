@@ -35,6 +35,7 @@ public enum Linter {
         .advanceAfterSleeperCount,
         .synthesizedServerValueDecoding,
         .tuningItemNotInSections,
+        .userTextOutsideCore,
     ]
 
     /// `path`（リポジトリのルートからの相対パス）の`source`を、当てはまる規則で調べる。
