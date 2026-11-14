@@ -160,7 +160,7 @@ function validate(menu, tokens) {
     if (typeof token !== "string") return `${menu.key}に文字列でない項目があります: ${JSON.stringify(token)}`;
     if (token === "more") { more++; continue; }
     if (token === "separator") { if (!menu.supportsSeparators) return `${menu.key}は区切り線を使えません`; continue; }
-    if (token === "row") { if (!menu.supportsRowSeparators) return `${menu.key}は横並びの区切り線を使えません`; continue; }
+    if (isRowToken(token)) { if (!menu.supportsRowSeparators) return `${menu.key}は横並びの区切り線を使えません`; continue; }
     const m = /^(item|hidden):(.+)$/.exec(token);
     if (!m || !ids.has(m[2])) return `${menu.key}に知らない項目があります: ${token}`;
     if (seen.has(m[2])) return `${menu.key}に同じ項目が2つあります: ${m[2]}`;
@@ -253,9 +253,9 @@ function renderRows() {
       meta.className = "meta";
       meta.textContent = "これより下の項目は「その他」のサブメニューに入ります";
       label.append(meta);
-    } else if (token === "separator" || token === "row") {
-      li.classList.add(token === "row" ? "rowsep" : "sep");
-      title.textContent = token === "row" ? "── 横並びの区切り線（下のまとまりを横に並べる） ──" : "── 区切り線 ──";
+    } else if (token === "separator" || isRowToken(token)) {
+      li.classList.add(isRowToken(token) ? "rowsep" : "sep");
+      title.textContent = token === "row:small" ? "── 横並びの区切り線（下のまとまりをアイコンのみで横に並べる） ──" : token === "row" ? "── 横並びの区切り線（下のまとまりを横に並べる） ──" : "── 区切り線 ──";
       removable = true;
     } else {
       const [kind, id] = token.split(":");
@@ -357,6 +357,9 @@ function move(from, to, focusButton) {
 }
 
 // ---- プレビュー ----
+// 横並びの区切り線。`row`はアイコンと名前、`row:small`はアイコンのみ。
+function isRowToken(token) { return token === "row" || token === "row:small"; }
+
 // SciaCoreのMenuLayout.groupsと同じく、区切り線でまとまりを分け、空のまとまりは捨てる。
 function groupsOf(tokens) {
   const groups = { main: [], more: [] };
@@ -370,7 +373,7 @@ function groupsOf(tokens) {
   };
   for (const token of tokens) {
     if (token === "separator") close(false);
-    else if (token === "row") close(true);
+    else if (isRowToken(token)) close(true);
     else if (token === "more") { close(false); inMore = true; }
     else if (token.startsWith("item:")) current.push(token.slice(5));
   }
