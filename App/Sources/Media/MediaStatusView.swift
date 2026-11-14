@@ -1,3 +1,4 @@
+import SciaCore
 import UIKit
 
 /// ビューアのページの中央に出す、読み込み中と、見せられないことの表示。動画とGIFの最初のコマを描くまでと、画像、動画、GIFを読み込めなかったとき、
@@ -45,7 +46,7 @@ final class MediaStatusView: UIView {
         failureLabel.textColor = .white
         failureLabel.textAlignment = .center
         failureLabel.numberOfLines = 0
-        openButton.configuration?.title = "ブラウザで開く"
+        openButton.configuration?.title = MediaViewerTexts.openInBrowser
         openButton.configuration?.baseForegroundColor = .white
         // 半透明の黒の下地の上でボタンと分かるよう、下地より明るくする。
         openButton.configuration?.baseBackgroundColor = UIColor.white.withAlphaComponent(0.2)

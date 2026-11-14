@@ -23,19 +23,19 @@ struct PhotoLibrarySaver: Sendable {
     /// 許可がないときは設定を開く案内が要るため、呼ぶ側で別に扱う。
     static func failurePresentation(of error: any Error) -> ErrorPresentation {
         if error is UnsupportedFile {
-            return ErrorPresentation(message: "写真に入らない形式のファイルです。", code: nil)
+            return ErrorPresentation(message: MediaViewerTexts.PhotoLibrary.unsupportedFile, code: nil)
         }
         if let error = error as? PHPhotosError {
             let message = switch error.code {
-            case .notEnoughSpace: "ストレージの空き容量が足りません。"
-            case .invalidResource: "写真に入らない形式のファイルです。"
-            case .accessRestricted, .accessUserDenied: "写真への追加が許可されていません。"
-            default: "写真に追加できませんでした。"
+            case .notEnoughSpace: MediaViewerTexts.PhotoLibrary.notEnoughSpace
+            case .invalidResource: MediaViewerTexts.PhotoLibrary.unsupportedFile
+            case .accessRestricted, .accessUserDenied: MediaViewerTexts.PhotoLibrary.notAuthorized
+            default: MediaViewerTexts.PhotoLibrary.failure
             }
             return ErrorPresentation(message: message, code: "PHPhotosError \(error.code.rawValue)")
         }
         let nsError = error as NSError
-        return ErrorPresentation(message: "写真に追加できませんでした。", code: "\(nsError.domain) \(nsError.code)")
+        return ErrorPresentation(message: MediaViewerTexts.PhotoLibrary.failure, code: "\(nsError.domain) \(nsError.code)")
     }
 
     /// ファイルを写真に足すときの種類。拡張子から決める。GIFの添付ファイルは中身がmp4のため、動画として入る。

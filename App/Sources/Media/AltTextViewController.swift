@@ -16,7 +16,7 @@ final class AltTextViewController: UIViewController {
         self.text = text
         self.settings = settings
         super.init(nibName: nil, bundle: nil)
-        title = "代替テキスト"
+        title = MediaViewerTexts.AltText.title
     }
 
     @available(*, unavailable)
@@ -42,7 +42,7 @@ final class AltTextViewController: UIViewController {
         // バーが本文を見つけられず、本文の先頭がバーの下に潜った。今は本文の上に置いているが、置き場所で壊れないよう明示したままにする。
         setContentScrollView(textView, for: .top)
         translation.install(in: self)
-        navigationItem.leftBarButtonItem = UIBarButtonItem(title: "翻訳", image: UIImage(systemName: "translate"), primaryAction: UIAction { [weak self] _ in
+        navigationItem.leftBarButtonItem = UIBarButtonItem(title: MediaViewerTexts.AltText.translate, image: UIImage(systemName: "translate"), primaryAction: UIAction { [weak self] _ in
             self?.translate()
         })
         navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .close, primaryAction: UIAction { [weak self] _ in

@@ -89,11 +89,11 @@ final class VideoControlsView: UIView {
         var play = playButton.configuration
         play?.image = UIImage(systemName: state.isPlaying ? "pause.fill" : "play.fill")
         playButton.configuration = play
-        playButton.accessibilityLabel = state.isPlaying ? "一時停止" : "再生"
+        playButton.accessibilityLabel = MediaViewerTexts.Video.playButton(isPlaying: state.isPlaying)
         var mute = muteButton.configuration
         mute?.image = UIImage(systemName: state.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
         muteButton.configuration = mute
-        muteButton.accessibilityLabel = state.isMuted ? "消音を解除" : "消音"
+        muteButton.accessibilityLabel = MediaViewerTexts.Video.muteButton(isMuted: state.isMuted)
         muteButton.isHidden = !state.hasAudio
         elapsedLabel.text = state.time.elapsedText
         remainingLabel.text = state.time.remainingText
@@ -167,9 +167,9 @@ final class VideoControlsView: UIView {
     }
 
     private func setUpActions() {
-        backButton.accessibilityLabel = "10秒戻る"
-        forwardButton.accessibilityLabel = "10秒進む"
-        speedButton.accessibilityLabel = "再生速度"
+        backButton.accessibilityLabel = MediaViewerTexts.Video.skipBackward
+        forwardButton.accessibilityLabel = MediaViewerTexts.Video.skipForward
+        speedButton.accessibilityLabel = MediaViewerTexts.playbackSpeed
         playButton.addAction(UIAction { [weak self] _ in
             self?.onPlayPause?()
             self?.onInteraction?()
@@ -194,7 +194,7 @@ final class VideoControlsView: UIView {
         // 開いたときと閉じたときに知らせ、開いている間は隠さず、閉じたところから数え直させる。項目を選んだときも閉じる。
         speedButton.onMenuOpenChange = { [weak self] _ in self?.onInteraction?() }
 
-        slider.accessibilityLabel = "再生位置"
+        slider.accessibilityLabel = MediaViewerTexts.Video.position
         slider.addAction(UIAction { [weak self] _ in self?.scrub(.began) }, for: .touchDown)
         slider.addAction(UIAction { [weak self] _ in self?.scrub(.changed) }, for: .valueChanged)
         for event: UIControl.Event in [.touchUpInside, .touchUpOutside, .touchCancel] {
@@ -323,7 +323,7 @@ private final class FastForwardChip: UIView {
         icon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .subheadline, scale: .small)
         icon.tintColor = .label
         let label = UILabel()
-        label.text = "2倍速"
+        label.text = MediaViewerTexts.Video.doubleSpeed
         label.font = .preferredFont(forTextStyle: .subheadline)
         label.adjustsFontForContentSizeCategory = true
         label.textColor = .label
@@ -356,7 +356,7 @@ private final class FastForwardChip: UIView {
             self.alpha = shown ? 1 : 0
         }
         if shown {
-            UIAccessibility.post(notification: .announcement, argument: "2倍速")
+            UIAccessibility.post(notification: .announcement, argument: MediaViewerTexts.Video.doubleSpeed)
         }
     }
 }

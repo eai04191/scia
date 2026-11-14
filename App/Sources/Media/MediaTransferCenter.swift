@@ -136,16 +136,16 @@ final class MediaTransferCenter {
             var notice = Notice.download(of: transfer.target.url, fraction: transfer.fraction ?? 0, onStop: onStop)
             notice.additionalCount = others
             if others > 0, let showAll {
-                notice.action = .disclosure(hint: "操作の状況を開きます。", handler: showAll)
+                notice.action = .disclosure(hint: MediaViewerTexts.Transfer.showAllHint, handler: showAll)
             }
             return notice
         case .count(let count):
             let only = transfers.transfers.filter(\.isVisible)
             let action: Notice.Action
             if count > 1, let showAll {
-                action = .disclosure(hint: "操作の状況を開きます。", handler: showAll)
+                action = .disclosure(hint: MediaViewerTexts.Transfer.showAllHint, handler: showAll)
             } else if let transfer = only.last, transfer.isStoppable {
-                action = .disclosure(hint: "ダウンロードを中止するか選べます。") { [weak self] in
+                action = .disclosure(hint: MediaViewerTexts.Transfer.stopHint) { [weak self] in
                     guard let presenter = presenter() else { return }
                     self?.confirmStopping(transfer.id, from: presenter)
                 }
@@ -164,7 +164,7 @@ final class MediaTransferCenter {
             current.insert(id)
             let activity = OperationStatus.Activity(
                 id: id,
-                title: "ダウンロード中",
+                title: MediaViewerTexts.Transfer.downloading,
                 value: Notice.percentText(of: transfer.fraction ?? 0),
                 // 全体の大きさが分かるまでは0のため、0%に止まった輪にせず、分からない進み具合として回す。
                 fraction: transfer.fraction == 0 ? nil : transfer.fraction,
@@ -249,13 +249,13 @@ final class MediaTransferCenter {
     }
 
     private static func notAuthorizedAlert() -> UIAlertController {
-        let alert = UIAlertController(title: "写真に保存できません", message: "写真への追加が許可されていません。設定でSciaに写真の追加を許可してください。", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "設定を開く", style: .default) { _ in
+        let alert = UIAlertController(title: MediaViewerTexts.PhotoLibrary.notAuthorizedTitle, message: MediaViewerTexts.PhotoLibrary.notAuthorizedMessage, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: MediaViewerTexts.PhotoLibrary.openSettings, style: .default) { _ in
             if let url = URL(string: UIApplication.openSettingsURLString) {
                 UIApplication.shared.open(url)
             }
         })
-        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        alert.addAction(UIAlertAction(title: MediaViewerTexts.PhotoLibrary.cancel, style: .cancel))
         return alert
     }
 
@@ -306,9 +306,9 @@ final class MediaTransferCenter {
     func confirmStopping(_ id: MediaTransfers.Transfer.ID, from presenter: UIViewController) {
         guard transfers.transfer(id)?.isStoppable == true, stopConfirmation == nil else { return }
         // チップから吹き出すシートでは「続ける」が省かれ、外をタップして続けることになるため、両方を並べるアラートにする。
-        let alert = UIAlertController(title: "ダウンロードを中止しますか？", message: nil, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "中止", style: .destructive) { [weak self] _ in self?.transfers.stop(id) })
-        alert.addAction(UIAlertAction(title: "続ける", style: .cancel))
+        let alert = UIAlertController(title: MediaViewerTexts.Transfer.stopConfirmationTitle, message: nil, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: MediaViewerTexts.Transfer.stop, style: .destructive) { [weak self] _ in self?.transfers.stop(id) })
+        alert.addAction(UIAlertAction(title: MediaViewerTexts.Transfer.continue, style: .cancel))
         stopConfirmation = alert
         stopConfirmationTarget = id
         presenter.withFrontmostPresented { [weak self] top in

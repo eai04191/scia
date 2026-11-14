@@ -47,11 +47,11 @@ final class AltTextEditorView: UIView {
         textView.keyboardAppearance = .dark
         textView.textContainerInset = UIEdgeInsets(top: 4, left: 0, bottom: 4, right: 0)
         textView.textContainer.lineFragmentPadding = 0
-        textView.accessibilityLabel = "代替テキスト"
+        textView.accessibilityLabel = MediaViewerTexts.AltText.title
         // 書いている代替テキストは言語が分からないため、設定の字形で描く。
         textView.followGlyphLanguage(of: settings)
         textView.delegate = self
-        placeholderLabel.text = "代替テキストを追加"
+        placeholderLabel.text = MediaViewerTexts.AltText.placeholder
         placeholderLabel.font = .preferredFont(forTextStyle: .body)
         placeholderLabel.adjustsFontForContentSizeCategory = true
         placeholderLabel.textColor = .dimmedWhiteText(alpha: 0.5)
@@ -62,7 +62,7 @@ final class AltTextEditorView: UIView {
         doneButton.configuration?.image = UIImage(systemName: "keyboard.chevron.compact.down")
         doneButton.configuration?.baseForegroundColor = .white
         doneButton.configuration?.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 0)
-        doneButton.accessibilityLabel = "代替テキストを書き終える"
+        doneButton.accessibilityLabel = MediaViewerTexts.AltText.doneEditing
         doneButton.setContentHuggingPriority(.required, for: .horizontal)
         doneButton.setContentCompressionResistancePriority(.required, for: .horizontal)
         doneButton.addAction(UIAction { [weak self] _ in self?.onDone() }, for: .primaryActionTriggered)
@@ -150,7 +150,7 @@ final class AltTextEditorView: UIView {
         remainingLabel.isHidden = remaining > remainingThreshold
         remainingLabel.text = "\(remaining)"
         remainingLabel.textColor = remaining < 0 ? .systemRed : .dimmedWhiteText(alpha: 0.7)
-        remainingLabel.accessibilityLabel = "残り\(remaining)文字"
+        remainingLabel.accessibilityLabel = MediaViewerTexts.AltText.remainingCharacters(remaining)
     }
 }
 

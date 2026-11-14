@@ -331,7 +331,7 @@ final class MediaViewerController: UIViewController {
     }
 
     override var keyCommands: [UIKeyCommand]? {
-        [UIKeyCommand(title: "閉じる", action: #selector(close), input: UIKeyCommand.inputEscape)]
+        [UIKeyCommand(title: MediaViewerTexts.close, action: #selector(close), input: UIKeyCommand.inputEscape)]
     }
 
     /// VoiceOverの2本指のZで閉じる。
@@ -412,7 +412,7 @@ final class MediaViewerController: UIViewController {
 
     private func setUpChrome() {
         menuButton.configuration?.image = UIImage(systemName: "ellipsis")
-        menuButton.accessibilityLabel = "その他の操作"
+        menuButton.accessibilityLabel = MediaViewerTexts.moreActions
         // メニューを開いている間は、動画の部品を自動で隠さない。閉じたら、そこから数え直す。
         menuButton.onMenuOpenChange = { [weak self] isOpen in
             guard let self, !isOpen else { return }
@@ -856,7 +856,7 @@ final class MediaViewerController: UIViewController {
 
     /// メニューの「代替テキストを編集」と、投稿欄から渡された項目。
     private func editingMenuElements(_ editing: Editing) -> [UIMenuElement] {
-        let edit = editing.canEditDescription() ? UIAction(title: "代替テキストを編集", image: UIImage(systemName: "text.below.photo")) { [weak self] _ in
+        let edit = editing.canEditDescription() ? UIAction(title: MediaViewerTexts.editAltText, image: UIImage(systemName: "text.below.photo")) { [weak self] _ in
             self?.beginEditingDescription()
         } : nil
         let loop = (pages[currentIndex] as? PlayerPageController)?.loopMenuAction()
@@ -2022,7 +2022,7 @@ final class ImagePageController: MediaPageController {
     /// Live Textのボタンは画像に重なって見る邪魔になるため出さず、この項目で代える。ハイライトしなくても、文字やコードは長押しで選べる。
     func liveTextMenuAction() -> UIAction? {
         guard liveText.analysis?.hasResults(for: [.text, .machineReadableCode]) == true else { return nil }
-        return UIAction(title: "画像の文字を選択", image: UIImage(systemName: "text.viewfinder"), state: liveText.selectableItemsHighlighted ? .on : .off) { [weak self] _ in
+        return UIAction(title: MediaViewerTexts.selectTextInImage, image: UIImage(systemName: "text.viewfinder"), state: liveText.selectableItemsHighlighted ? .on : .off) { [weak self] _ in
             guard let self else { return }
             self.liveText.selectableItemsHighlighted.toggle()
         }
@@ -2292,7 +2292,7 @@ final class ImagePageController: MediaPageController {
     /// 読み込めなかったことを、ブラウザで開けるなら「ブラウザで開く」を添えて出す。
     private func showFailure() {
         statusView.onOpen = browserFallbackAction()
-        statusView.setState(.failed("画像を読み込めませんでした"), animated: true)
+        statusView.setState(.failed(MediaViewerTexts.imageLoadFailure), animated: true)
     }
 
     /// 出している、読み込めなかったことの文言。出していなければnil。
@@ -2556,7 +2556,7 @@ final class PlayerPageController: MediaPageController {
 
     /// 画像のページの「画像を読み込めませんでした」と揃え、種類の名前で言う。
     static func failureText(of kind: MediaAttachment.Kind) -> String {
-        "\(kind == .gifv ? "GIF" : "動画")を読み込めませんでした"
+        MediaViewerTexts.playbackFailure(of: kind)
     }
 
     /// インジケーターは、出ていれば薄くして消す。
@@ -2898,7 +2898,7 @@ final class PlayerPageController: MediaPageController {
                 }
             }
         }
-        return [UIMenu(title: "再生速度", options: .displayInline, children: actions)]
+        return [UIMenu(title: MediaViewerTexts.playbackSpeed, options: .displayInline, children: actions)]
     }
 
     /// 再生している間、最後に触れてから`controlsHideDelay`秒たったら、ビューアに隠すよう頼む。このページでまだ隠していなければ、すぐ頼む。
@@ -3019,7 +3019,7 @@ final class PlayerPageController: MediaPageController {
     /// 右上のメニューに出す、ループ再生を切り替える項目。GIFはもとからくり返すため、nilを返す。
     func loopMenuAction() -> UIAction? {
         guard item.kind != .gifv else { return nil }
-        return UIAction(title: "ループ再生", image: UIImage(systemName: "repeat"), state: isLooping ? .on : .off) { [weak self] _ in
+        return UIAction(title: MediaViewerTexts.loop, image: UIImage(systemName: "repeat"), state: isLooping ? .on : .off) { [weak self] _ in
             guard let self else { return }
             self.setLooping(!self.isLooping)
         }
@@ -3116,7 +3116,7 @@ final class UnsupportedPageController: MediaPageController {
         statusView.frame = view.bounds
         statusView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         statusView.onOpen = browserFallbackAction()
-        statusView.setState(.failed("このファイルはアプリで表示できません"), animated: false)
+        statusView.setState(.failed(MediaViewerTexts.unsupportedFile), animated: false)
         view.addSubview(statusView)
     }
 
@@ -3144,14 +3144,14 @@ final class CaptionView: UIView {
     private func updateLabel() {
         let isPlaceholder = isEditable && text.isEmpty
         if isPlaceholder {
-            label.text = "代替テキストを追加"
+            label.text = MediaViewerTexts.AltText.placeholder
         } else {
             // 人が書いた代替テキストは言語が分からないため、設定の字形で描く。書き始めを促す文言は、ウィンドウに付けたアプリの言語で描く。
             label.attributedText = NSAttributedString(string: text, attributes: [.languageIdentifier: settings.glyphLanguageIdentifier()])
         }
         label.textColor = isPlaceholder ? .dimmedWhiteText(alpha: 0.6) : .white
-        accessibilityLabel = isPlaceholder ? "代替テキストを追加" : text
-        accessibilityHint = isEditable ? "代替テキストを編集します。" : "全文を表示します。"
+        accessibilityLabel = isPlaceholder ? MediaViewerTexts.AltText.placeholder : text
+        accessibilityHint = isEditable ? MediaViewerTexts.AltText.editHint : MediaViewerTexts.AltText.showFullTextHint
     }
 
     /// 文字の下端。安全領域に合わせるために使う。
@@ -3184,7 +3184,7 @@ final class CaptionView: UIView {
         addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(open)))
         isAccessibilityElement = true
         accessibilityTraits = .button
-        accessibilityHint = "全文を表示します。"
+        accessibilityHint = MediaViewerTexts.AltText.showFullTextHint
     }
 
     @objc private func open() {

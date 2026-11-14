@@ -10,7 +10,7 @@ enum MediaWindow {
     static let configurationName = "Media Viewer"
     private static let requestIDKey = "requestID"
     /// Macのウィンドウのタイトル。AeroSpaceなどがタイムラインのウィンドウと見分けるために使う。
-    static let windowTitle = "Scia メディア"
+    static let windowTitle = MediaViewerTexts.windowTitle
 
     struct Request {
         let attachments: [MediaAttachment]
