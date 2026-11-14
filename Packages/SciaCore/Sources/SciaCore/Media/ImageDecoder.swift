@@ -1,6 +1,7 @@
 public import CoreGraphics
 public import Foundation
 import ImageIO
+import Synchronization
 
 /// 画像を、描く大きさまで縮めて展開する。アイコン、添付ファイル、絵文字、投稿欄の手元のファイル、プロフィール画像の切り抜き、送る前の書き出し直しで、同じ読み方をする。
 /// 元の大きさのまま展開すると、大きな写真では時間がかかりメモリも食うため、ImageIOの縮めて読む関数で、長い辺が`maxPixelSize`以下になるように読む。
@@ -74,49 +75,117 @@ public enum ImageDecoder {
     /// ImageIOで画像を展開する`body`を、専用のシリアルキューで走らせる。
     /// 同時に走らせるのは、協調スレッドで展開していたときの同時数（協調スレッドの数と同じCPUのコア数）までにし、展開に使うメモリの最大を前と変えない。
     /// `body`は呼んだタスクの優先度で走る。待っている間に取り消されても、展開は止めない。
-    static func run<T: Sendable>(_ body: @escaping @Sendable () -> T) async -> T {
-        let queue = await queues.take()
+    /// - Parameter work: 展開の種類。動く画像のコマは、1枚の画像を待たせない（`DecodeWork`）。
+    static func run<T: Sendable>(_ work: DecodeWork = .image, _ body: @escaping @Sendable () -> T) async -> T {
         let qos = DispatchQoS(qosClass: DispatchQoS.QoSClass(rawValue: qos_class_t(rawValue: UInt32(Task.currentPriority.rawValue))) ?? .default, relativePriority: 0)
-        let result = await withCheckedContinuation { continuation in
-            queue.async(qos: qos, flags: .enforceQoS) { continuation.resume(returning: body()) }
-        }
-        await queues.put(queue)
-        return result
+        return await queues.run(work, qos: qos, body)
     }
 
     private static let queues = DecodeQueues(count: ProcessInfo.processInfo.activeProcessorCount)
 
-    /// 展開のキューの空きと順番待ちの数。待ちが固まったテストで、展開が詰まっているかを見る。
-    static func queueState() async -> String {
-        await queues.state()
+    /// 展開のキューごとの、待っているか走っている展開の数。待ちが固まったテストで、展開が詰まっているかを見る。
+    static func queueState() -> String {
+        queues.state()
     }
 }
 
-/// 展開に使うシリアルキュー。空いているキューを貸し、空いていなければ返されるまで待たせる。
-private actor DecodeQueues {
-    private var idle: [DispatchQueue]
-    private var waiting: [CheckedContinuation<DispatchQueue, Never>] = []
+/// 展開の種類。
+enum DecodeWork: Sendable {
+    /// 1枚の画像。空いた枠を埋める画像で、縮めて読むので短く済む。
+    case image
+    /// 動く画像のコマ。全部のコマを展開するので長くかかり、届くまでは1枚の画像で描けている。
+    case frames
+}
 
-    init(count: Int) {
-        idle = (0..<max(count, 1)).map { DispatchQueue(label: "net.mizle.scia.image-decode.\($0)") }
+/// 展開に使うシリアルキュー。展開を順番待ちの列に並べ、空いたキューが列から取って走らせる。1枚の画像を、動く画像のコマの後ろで待たせない。
+///
+/// 空いたキューは、1枚の画像を、動く画像のコマより先に取る。キューの前半は1枚の画像だけを取り、コマは後半のキューだけが取る。
+/// iPhone 16 Proで絵文字のパレット（約6000個、うち動くもの約1100個）を流すと、1枚の展開そのものは中央0.9msなのに、
+/// 動く絵文字のコマと同じキューを分け合って、キューを待つ時間の中央が670msあり、絵文字の枠が空いたまま見えていたため。
+///
+/// 積むキューを先に決めない。決めてしまうと、決めた先で長い展開（大きな写真、コマ）が走っているあいだ、ほかのキューが空いても待つため。
+/// キューは協調スレッドで貸し借りしない。返すたびと借りるたびに協調スレッドの順番を待ち、同じ端末で、協調スレッドに移るのに中央3ms、
+/// 遅いほうの1割で22msかかっていて、キューの半分を1枚の画像に残しても、キューを待つ時間の中央が391msあった。
+final class DecodeQueues: Sendable {
+    private struct Job {
+        let qos: DispatchQoS
+        let body: @Sendable () -> Void
     }
 
-    func take() async -> DispatchQueue {
-        if let queue = idle.popLast() {
-            return queue
+    private struct State {
+        var images: [Job] = []
+        var frames: [Job] = []
+        /// キューごとに、展開を走らせているか。
+        var busy: [Bool]
+    }
+
+    private let queues: [DispatchQueue]
+    private let shared: Mutex<State>
+    /// コマを取るキューの、最初の位置。それより前は、1枚の画像だけを取る。キューが1本しかなければ0で、分けない。
+    private let framesStart: Int
+
+    init(count: Int) {
+        let count = max(count, 1)
+        queues = (0..<count).map { DispatchQueue(label: "net.mizle.scia.image-decode.\($0)") }
+        shared = Mutex(State(busy: Array(repeating: false, count: count)))
+        framesStart = count / 2
+    }
+
+    func run<T: Sendable>(_ work: DecodeWork, qos: DispatchQoS, _ body: @escaping @Sendable () -> T) async -> T {
+        await withCheckedContinuation { continuation in
+            let job = Job(qos: qos) { continuation.resume(returning: body()) }
+            let started: (Int, Job)? = shared.withLock { state in
+                switch work {
+                case .image:
+                    state.images.append(job)
+                case .frames:
+                    state.frames.append(job)
+                }
+                // 空いたキューのうち、今並べた展開を取れるものを走らせる。取れるのが前に並んだ展開なら、そちらを走らせる。
+                for index in state.busy.indices where !state.busy[index] {
+                    if let next = Self.take(for: index, framesStart: framesStart, from: &state) {
+                        state.busy[index] = true
+                        return (index, next)
+                    }
+                }
+                return nil
+            }
+            if let (index, next) = started {
+                start(next, on: index)
+            }
         }
-        return await withCheckedContinuation { waiting.append($0) }
+    }
+
+    /// `index`のキューが次に取る展開。1枚の画像を先に取り、コマは後半のキューだけが取る。
+    private static func take(for index: Int, framesStart: Int, from state: inout State) -> Job? {
+        if !state.images.isEmpty {
+            return state.images.removeFirst()
+        }
+        if index >= framesStart, !state.frames.isEmpty {
+            return state.frames.removeFirst()
+        }
+        return nil
+    }
+
+    /// `job`を`index`のキューで走らせ、終えたら列から次を取る。取るものがなければ、キューを空いたことにする。
+    /// `index`のキューは、走らせている間は走っていることにしてあるので、ほかから積まれない。
+    private func start(_ job: Job, on index: Int) {
+        queues[index].async(qos: job.qos, flags: .enforceQoS) { [self] in
+            job.body()
+            let next: Job? = shared.withLock { state in
+                let next = Self.take(for: index, framesStart: framesStart, from: &state)
+                state.busy[index] = next != nil
+                return next
+            }
+            if let next {
+                start(next, on: index)
+            }
+        }
     }
 
     func state() -> String {
-        "decodeQueues idle: \(idle.count) waiting: \(waiting.count)"
-    }
-
-    func put(_ queue: DispatchQueue) {
-        if waiting.isEmpty {
-            idle.append(queue)
-        } else {
-            waiting.removeFirst().resume(returning: queue)
+        shared.withLock { state in
+            "decodeQueues busy: \(state.busy.filter(\.self).count) waiting images: \(state.images.count) frames: \(state.frames.count)"
         }
     }
 }

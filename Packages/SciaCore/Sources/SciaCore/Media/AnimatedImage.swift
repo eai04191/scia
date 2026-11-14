@@ -93,7 +93,7 @@ public struct AnimatedImage: Sendable {
     /// コマはImageIOが前のコマと重ねた、そのまま描ける画像になる。展開は`ImageDecoder.run`の専用のキューで行う。
     /// - Parameter limits: 上限。既定は絵文字の上限（`maxByteCount`、`maxSourcePixelCount`）。
     public static func decode(_ data: Data, maxPixelSize: Int, limits: Limits = .emoji) async -> AnimatedImage? {
-        await ImageDecoder.run { decodeOnDecodeQueue(data, maxPixelSize: maxPixelSize, limits: limits) }
+        await ImageDecoder.run(.frames) { decodeOnDecodeQueue(data, maxPixelSize: maxPixelSize, limits: limits) }
     }
 
     /// `data`を、長い辺が`maxPixelSize`以下で、並べた画像が`limits`のバイト数に収まる一番大きい大きさのコマに分ける。

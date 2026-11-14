@@ -48,7 +48,7 @@ struct EmojiImageStoreTests {
 
     /// 待ちが固まったときに失敗に添える、`url`のアニメーションの読み込みの状態。GIFを読むテストが、たまに読み終えないまま固まったため。
     private func animationState(of store: EmojiImageStore<CGImage>, _ url: URL) async -> String {
-        [store.animationDiagnosis(of: url), await ImageDecoder.queueState(), "fetches: \(fetches.count.withLock { $0 })"].joined(separator: "\n")
+        [store.animationDiagnosis(of: url), ImageDecoder.queueState(), "fetches: \(fetches.count.withLock { $0 })"].joined(separator: "\n")
     }
 
     /// 1色で塗った`width`×`height`の画像。
