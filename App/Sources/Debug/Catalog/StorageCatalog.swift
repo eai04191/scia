@@ -24,6 +24,7 @@ enum StorageCatalog {
         items: [
             .init(category: .mediaFiles, bytes: 8_800_000, removableBytes: 8_800_000),
             .init(category: .mediaPrefetch, bytes: 42_300_000, removableBytes: 42_300_000),
+            .init(category: .customEmojis, bytes: 120_000_000, removableBytes: 120_000_000),
             .init(category: .networkCache, bytes: 1_500_000, removableBytes: 1_500_000),
             .init(category: .temporaryFiles, bytes: 164_200_000, removableBytes: 164_163_000),
             .init(category: .inAppSafari, bytes: 13_600_000, removableBytes: 13_600_000),
@@ -49,6 +50,7 @@ enum StorageCatalog {
         items: [
             .init(category: .mediaFiles, bytes: 157_286_400, removableBytes: 157_286_400),
             .init(category: .mediaPrefetch, bytes: 104_857_600, removableBytes: 104_857_600),
+            .init(category: .customEmojis, bytes: 512_000_000, removableBytes: 512_000_000),
             .init(category: .networkCache, bytes: 1_234_567_890, removableBytes: 1_234_567_890),
             .init(category: .temporaryFiles, bytes: 12_345_678_901, removableBytes: 12_000_000_000),
             .init(category: .inAppSafari, bytes: 987_654_321, removableBytes: 987_654_321),

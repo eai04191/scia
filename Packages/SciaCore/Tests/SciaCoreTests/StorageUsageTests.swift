@@ -140,6 +140,8 @@ struct StorageUsageTests {
         try write("Container/Library/HTTPStorages/c")
         try write("Container/SystemData/com.apple.SafariViewService/Library/w", size: 6_000)
         try write("Container/Library/Caches/net.example/Cache.db", size: 4_096)
+        try write("Container/Library/Caches/EmojiImages/e/e.png", size: 7_000)
+        try write("Container/Library/Caches/CustomEmojis/list.json", size: 5_000)
         try write("Container/Library/Caches/net.example/fsCachedData/f", size: 9_000)
         try write("Container/Library/Caches/net.example/com.apple.metal/m")
         try write("Shared/SharedMedia/s")
@@ -152,6 +154,7 @@ struct StorageUsageTests {
             temporary: root.appending(path: "Container/tmp"),
             discomfortReports: root.appending(path: "Container/Documents/DiscomfortReports"),
             preferences: root.appending(path: "Container/Library/Preferences"),
+            customEmojis: ["EmojiImages", "CustomEmojis"].map { root.appending(path: "Container/Library/Caches/\($0)") },
             networkCache: ["Cache.db", "Cache.db-wal", "fsCachedData"].map { root.appending(path: "Container/Library/Caches/net.example/\($0)") },
             inAppSafari: root.appending(path: "Container/SystemData/com.apple.SafariViewService"),
             sharedContainer: root.appending(path: "Shared"),
@@ -165,6 +168,9 @@ struct StorageUsageTests {
         // 先読みした画像は、置き場を分けたので、ストレージでも項目を分ける。
         let prefetch = size("Container/Library/Caches/MediaPrefetch")
         #expect(breakdown.item(.mediaPrefetch) == .init(category: .mediaPrefetch, bytes: prefetch, removableBytes: prefetch))
+        // カスタム絵文字の画像と絵文字のリストは、通信の応答のキャッシュとは別の項目に数える。
+        let emojis = size("Container/Library/Caches/EmojiImages") + size("Container/Library/Caches/CustomEmojis")
+        #expect(breakdown.item(.customEmojis) == .init(category: .customEmojis, bytes: emojis, removableBytes: emojis))
         #expect(breakdown.item(.networkCache) == .init(category: .networkCache, bytes: networkCache, removableBytes: networkCache))
         #expect(breakdown.item(.temporaryFiles) == .init(category: .temporaryFiles, bytes: size("Container/tmp"), removableBytes: size("Container/tmp/old")))
         let reports = size("Container/Documents/DiscomfortReports")
@@ -190,7 +196,7 @@ struct StorageUsageTests {
         try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: safari.path(percentEncoded: false))
         let locations = StorageLocations(
             container: root.appending(path: "Container"), mediaFiles: root.appending(path: "Container/Library/Caches/MediaFiles"), mediaPrefetch: root.appending(path: "Container/Library/Caches/MediaPrefetch"), temporary: root.appending(path: "tmp"),
-            discomfortReports: root.appending(path: "d"), preferences: root.appending(path: "p"), networkCache: [], inAppSafari: safari, sharedContainer: nil, appBundle: root.appending(path: "a")
+            discomfortReports: root.appending(path: "d"), preferences: root.appending(path: "p"), customEmojis: [], networkCache: [], inAppSafari: safari, sharedContainer: nil, appBundle: root.appending(path: "a")
         )
         let breakdown = StorageBreakdown.measure(locations, launchDate: nil)
         #expect(breakdown.item(.inAppSafari) == .init(category: .inAppSafari, bytes: nil, removableBytes: nil))
@@ -202,7 +208,7 @@ struct StorageUsageTests {
     @Test func missingSafariDataIsZero() {
         let locations = StorageLocations(
             container: root, mediaFiles: root.appending(path: "m"), mediaPrefetch: root.appending(path: "p"), temporary: root.appending(path: "tmp"),
-            discomfortReports: root.appending(path: "d"), preferences: root.appending(path: "p"), networkCache: [], inAppSafari: root.appending(path: "s"), sharedContainer: nil, appBundle: root.appending(path: "a")
+            discomfortReports: root.appending(path: "d"), preferences: root.appending(path: "p"), customEmojis: [], networkCache: [], inAppSafari: root.appending(path: "s"), sharedContainer: nil, appBundle: root.appending(path: "a")
         )
         let breakdown = StorageBreakdown.measure(locations, launchDate: nil)
         #expect(breakdown.item(.inAppSafari) == .init(category: .inAppSafari, bytes: 0, removableBytes: 0))
@@ -215,7 +221,7 @@ struct StorageUsageTests {
         try write("tmp/old")
         let locations = StorageLocations(
             container: root, mediaFiles: root.appending(path: "m"), mediaPrefetch: root.appending(path: "p"), temporary: root.appending(path: "tmp"),
-            discomfortReports: root.appending(path: "d"), preferences: root.appending(path: "p"), networkCache: [], inAppSafari: root.appending(path: "s"), sharedContainer: nil, appBundle: root.appending(path: "a")
+            discomfortReports: root.appending(path: "d"), preferences: root.appending(path: "p"), customEmojis: [], networkCache: [], inAppSafari: root.appending(path: "s"), sharedContainer: nil, appBundle: root.appending(path: "a")
         )
         let breakdown = StorageBreakdown.measure(locations, launchDate: nil)
         #expect(breakdown.item(.temporaryFiles)?.removableBytes == 0)

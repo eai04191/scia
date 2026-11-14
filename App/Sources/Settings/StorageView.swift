@@ -181,10 +181,10 @@ extension StorageView.Actions {
             preferences: URL.libraryDirectory.appending(path: "Preferences", directoryHint: .isDirectory),
             // URLCacheがファイルを置く場所と名前は公開されていない。iOS 27のシミュレーターで、`URLSession.shared`の応答がここに入るのを確かめた。
             // `currentDiskUsage`は消した直後に古い値を返したため、ファイルを測る。場所が変わると0と数え、その分は「その他」に入る。消すのは公開されたAPIで行う。
-            // カスタム絵文字のリストも、サーバーの応答を残したものなので、通信のキャッシュに数えて一緒に消す。
+            customEmojis: [AppDependencies.emojiImageFiles.directory, AppDependencies.customEmojis.directory],
             networkCache: ["Cache.db", "Cache.db-shm", "Cache.db-wal", "fsCachedData"].map {
                 URL.cachesDirectory.appending(fileName: SafeFileName(bundleIdentifier), directoryHint: .isDirectory).appending(fileName: SafeFileName($0))
-            } + [AppDependencies.customEmojis.directory],
+            },
             // SFSafariViewControllerがデータを置く場所は公開されていない。iOS 27のシミュレーターで、ここに置くのを確かめた。
             // 場所が変わると0と数え、その分は「その他」に入る。消すのは公開されたAPIで行うので、場所が変わっても消せる。
             inAppSafari: URL.homeDirectory.appending(path: "SystemData/com.apple.SafariViewService", directoryHint: .isDirectory),
@@ -197,6 +197,7 @@ extension StorageView.Actions {
         let discomfortReports = AppDependencies.discomfortReports
         let clock = AppDependencies.clock
         let customEmojis = AppDependencies.customEmojis
+        let emojiImageFiles = AppDependencies.emojiImageFiles
         return Self(
             measure: { await measure(locations, launchDate: launchDate) },
             remove: { category in
@@ -205,8 +206,10 @@ extension StorageView.Actions {
                     try await mediaFiles.removeCachedFiles()
                 case .mediaPrefetch:
                     try await mediaPrefetchFiles.removeCachedFiles()
-                case .networkCache:
+                case .customEmojis:
+                    try await emojiImageFiles.removeCachedFiles()
                     await customEmojis.removeAll()
+                case .networkCache:
                     URLSessionTransport.responseCache?.removeAllCachedResponses()
                     try await waitUntilSettled(locations.networkCache, clock: clock)
                 case .temporaryFiles:

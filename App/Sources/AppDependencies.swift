@@ -79,6 +79,9 @@ enum AppDependencies {
 
     static var emojiImages: EmojiImageStore<UIImage> { images.emojis }
 
+    /// カスタム絵文字の画像を置く場所。
+    static var emojiImageFiles: MediaFileCache { images.emojiImageFiles }
+
     static let emojiGlyphImages = EmojiGlyphImageStore()
 
     static var customEmojis: CustomEmojiCaches { images.customEmojis }

@@ -7,6 +7,8 @@ public struct StorageBreakdown: Sendable, Equatable {
         case mediaFiles
         /// ビューアで開く画像を先読みした置き場。開いていない画像なので、メディアのキャッシュとは分ける。
         case mediaPrefetch
+        /// カスタム絵文字の画像と、サーバーごとの絵文字のリスト。
+        case customEmojis
         /// 通信の応答のキャッシュ（URLCache）。
         case networkCache
         /// 一時ファイル。投稿欄の添付、共有や保存に渡すコピー、ダウンロードの途中のファイル。
@@ -68,6 +70,8 @@ public struct StorageLocations: Sendable {
     public var temporary: URL
     public var discomfortReports: URL
     public var preferences: URL
+    /// カスタム絵文字の画像と、絵文字のリストを置く場所。
+    public var customEmojis: [URL]
     /// 通信の応答のキャッシュ（URLCache）のファイル。
     public var networkCache: [URL]
     /// アプリ内のSafariのデータを置く場所。
@@ -76,13 +80,14 @@ public struct StorageLocations: Sendable {
     public var sharedContainer: URL?
     public var appBundle: URL
 
-    public init(container: URL, mediaFiles: URL, mediaPrefetch: URL, temporary: URL, discomfortReports: URL, preferences: URL, networkCache: [URL], inAppSafari: URL, sharedContainer: URL?, appBundle: URL) {
+    public init(container: URL, mediaFiles: URL, mediaPrefetch: URL, temporary: URL, discomfortReports: URL, preferences: URL, customEmojis: [URL], networkCache: [URL], inAppSafari: URL, sharedContainer: URL?, appBundle: URL) {
         self.container = container
         self.mediaFiles = mediaFiles
         self.mediaPrefetch = mediaPrefetch
         self.temporary = temporary
         self.discomfortReports = discomfortReports
         self.preferences = preferences
+        self.customEmojis = customEmojis
         self.networkCache = networkCache
         self.inAppSafari = inAppSafari
         self.sharedContainer = sharedContainer
@@ -105,6 +110,8 @@ extension StorageBreakdown {
         // 実機では、アプリ内のSafariのデータはSafariのサービスの持ち物で、アプリからは中を読めない（iOS 27のiPhone SE 3で確かめた）。
         // 0と出すと、何もないように見えて消すボタンも押せなくなるため、測れないものとして出す。
         let safari = StorageUsage.allocatedSizeIfReadable(of: locations.inAppSafari)
+        let customEmojis = locations.customEmojis.map { ($0, StorageUsage.allocatedSize(of: $0)) }
+        let customEmojiBytes = customEmojis.reduce(0) { $0 + $1.1 }
         let networkCache = locations.networkCache.map { ($0, StorageUsage.allocatedSize(of: $0)) }
         let networkCacheBytes = networkCache.reduce(0) { $0 + $1.1 }
         // 残りは、コンテナの合計から、コンテナの中にある項目を引いて出す。Macでは一時ファイルがコンテナの外にあるため、中にあるかを確かめてから引く。
@@ -115,13 +122,14 @@ extension StorageBreakdown {
             (locations.discomfortReports, reports),
             (locations.preferences, settings),
             (locations.inAppSafari, safari ?? 0),
-        ] + networkCache
+        ] + customEmojis + networkCache
         let counted = inside.filter { isInside($0.0, locations.container) }.reduce(0) { $0 + $1.1 }
         let other = max(0, StorageUsage.allocatedSize(of: locations.container) - counted)
         return StorageBreakdown(
             items: [
                 Item(category: .mediaFiles, bytes: media, removableBytes: media),
                 Item(category: .mediaPrefetch, bytes: prefetch, removableBytes: prefetch),
+                Item(category: .customEmojis, bytes: customEmojiBytes, removableBytes: customEmojiBytes),
                 Item(category: .networkCache, bytes: networkCacheBytes, removableBytes: networkCacheBytes),
                 Item(category: .temporaryFiles, bytes: temporary, removableBytes: leftovers),
                 Item(category: .inAppSafari, bytes: safari, removableBytes: safari),
@@ -153,7 +161,7 @@ public enum StorageRemoveTarget: CaseIterable, Hashable, Sendable {
 
     public var categories: [StorageBreakdown.Category] {
         switch self {
-        case .caches: [.mediaFiles, .mediaPrefetch, .networkCache, .temporaryFiles]
+        case .caches: [.mediaFiles, .mediaPrefetch, .customEmojis, .networkCache, .temporaryFiles]
         case .inAppSafari: [.inAppSafari]
         case .discomfortReports: [.discomfortReports]
         }
@@ -225,6 +233,7 @@ extension StorageBreakdown.Category {
         switch self {
         case .mediaFiles: "表示済みのメディア"
         case .mediaPrefetch: "先読みしたメディア"
+        case .customEmojis: "カスタム絵文字"
         case .networkCache: "通信のキャッシュ"
         case .temporaryFiles: "一時ファイル"
         case .inAppSafari: "アプリ内のSafariのデータ"

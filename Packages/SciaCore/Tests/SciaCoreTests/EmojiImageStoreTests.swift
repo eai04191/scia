@@ -190,6 +190,39 @@ struct EmojiImageStoreTests {
         #expect(store.stateDump().contains("stillFetched: network 1 cache 1 unknown 1 afterEviction: network 0 cache 0 unknown 0"))
     }
 
+    /// 読んだデータが画像として読めなかったら、URLを渡す。端末に置いたファイルを消して、次は取得し直せるようにするため。
+    @Test func reportsUnreadableData() async throws {
+        let store = makeStore(Data("not an image".utf8))
+        let unreadable = Mutex<[URL]>([])
+        store.onUnreadable = { url in unreadable.withLock { $0.append(url) } }
+
+        _ = store.image(for: url)
+        try await waitUntil { store.hasFailed(url) }
+
+        #expect(unreadable.withLock { $0 } == [url])
+    }
+
+    /// アニメーション版として読んだデータが画像として読めなかったときも、URLを渡す。1コマしかない画像は、読めているので渡さない。
+    @Test func reportsUnreadableAnimationDataButNotStillImages() async throws {
+        let still = try Self.png(width: 100, height: 100)
+        let store = EmojiImageStore(
+            clock: TestClock(),
+            retryPolicy: { RetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) },
+            maker: PlatformImageMaker<CGImage>(still: { $0 }, animated: { _, _ in nil }),
+            upgradePurpose: { nil }
+        ) { url in
+            url.lastPathComponent == "broken.gif" ? Data("not an image".utf8) : still
+        }
+        let unreadable = Mutex<[URL]>([])
+        store.onUnreadable = { url in unreadable.withLock { $0.append(url) } }
+        let urls = ["broken.gif", "still.png"].map { url.deletingLastPathComponent().appending(path: $0) }
+
+        urls.forEach { _ = store.animation(for: $0) }
+        try await waitUntil { urls.allSatisfy { store.hasFinishedLoadingAnimation(for: $0) } }
+
+        #expect(unreadable.withLock { $0 } == [urls[0]])
+    }
+
     /// 既定より大きく描くと、そのURLを描く高さで読み直す。読み終えるまでは前の画像を返し、読み終えたら、小さく描く場所にも同じ1枚を返す。
     @Test func reloadsAtLargerHeightAndKeepsOneImagePerURL() async throws {
         let store = makeStore(try Self.png(width: 400, height: 400))

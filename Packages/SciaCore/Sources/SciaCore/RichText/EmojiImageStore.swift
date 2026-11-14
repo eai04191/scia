@@ -101,6 +101,8 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     private var listeners: [Listener] = []
     /// 画像を読めたときに、元の画像の、描く向きに直した幅と高さを渡す。サーバーが縦横比を返さないカスタム絵文字の縦横比を、リストに残すために使う（`CustomEmojiCaches.learn`）。
     public var onSourceSize: (@MainActor (URL, Int, Int) -> Void)?
+    /// 読んだデータが画像として読めなかったときに、URLを渡す。端末に置いたファイルを消すのに使う（`StoredImageFetch.discard`）。
+    public var onUnreadable: (@Sendable (URL) async -> Void)?
     private var pendingNotification: Set<URL> = []
     private let logger = SciaLog.logger(category: "emoji")
 
@@ -237,6 +239,9 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
                 retry.recordSuccess(for: url)
             } catch {
                 logger.error("emoji load failed host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash)): \(SciaLog.describe(error), privacy: .public)")
+                if error is DecodeError {
+                    await onUnreadable?(url)
+                }
                 // 高さを上げて読み直すのに失敗したときは、持っている画像で描き続ける。
                 retry.recordFailure(error, for: url)
                 if !stills.contains(url) {
@@ -396,9 +401,14 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
             do {
                 let (data, source) = try await fetchRecordingSource(url)
                 stats.animationSources.count(source)
-                let decoded = await Task.detached(priority: .utility) {
-                    await Self.decodeAnimation(data, pixelHeight: pixelHeight)
+                // 動かせない画像（1コマ、大きすぎる）は読めているので、画像として読めないデータと分ける。
+                let (decoded, isReadable) = await Task.detached(priority: .utility) {
+                    let decoded = await Self.decodeAnimation(data, pixelHeight: pixelHeight)
+                    return (decoded, decoded != nil || SourceSize(of: data) != nil)
                 }.value
+                if !isReadable {
+                    await onUnreadable?(url)
+                }
                 if let (image, isLargest, source) = decoded {
                     onSourceSize?(url, source.width, source.height)
                     let animation = EmojiAnimation(image)

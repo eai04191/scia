@@ -5,7 +5,8 @@ public import Foundation
 /// - アイコンは、APIの外の画像として読む（`RemoteFetch`）
 /// - 添付ファイルは、範囲を指定して読めるところは範囲で読み（`MediaRangeDownload`）、ビューアで開いた画像の元のファイルは`mediaFiles`に、
 ///   開く前に先読みした画像は`mediaPrefetchFiles`に分けて置く。先読みした画像で、開いた画像を押し出したり、ストレージの画面に並べたりしないため
-/// - カスタム絵文字は、APIの外の画像として読む。画像を読めたら元の大きさを`customEmojis`へ渡し、サーバーが縦横比を返さない絵文字の縦横比をリストに残す
+/// - カスタム絵文字は、APIの外の画像として読み、取得した画像を`emojiImageFiles`に置いて、次からは通信せずに読む（`StoredImageFetch`）。
+///   画像を読めたら元の大きさを`customEmojis`へ渡し、サーバーが縦横比を返さない絵文字の縦横比をリストに残す
 /// - 読めなかった画像を読み直す間隔は、`TuningCatalog.imageRetry(in:)`で読むたびに決める
 ///
 /// サムネイルにどの画像を読むかの条件は、`NetworkConditionsMonitor.thumbnailPolicy(settings:tuning:)`で作る。
@@ -19,6 +20,8 @@ public final class ImageStores<Image: AnyObject & Sendable> {
     public let media: MediaImageStore<Image>
     /// 本文、名前、リアクション、絵文字のパレットに出すカスタム絵文字の画像。
     public let emojis: EmojiImageStore<Image>
+    /// カスタム絵文字の画像を置く場所。ログアウトしても消さない。公開の画像で、同じサーバーのほかのアカウントも使うため。
+    public let emojiImageFiles: MediaFileCache
     /// サーバーごとのカスタム絵文字のリスト。端末に残し、絵文字のパレットを開いたときに読み込み中を挟まずに並べる。
     public let customEmojis: CustomEmojiCaches
 
@@ -32,6 +35,7 @@ public final class ImageStores<Image: AnyObject & Sendable> {
     ///   - mediaFiles: 添付ファイルの元のファイルの置き場所。省略すると`MediaFileCache`の既定の置き場所。テストでは一時フォルダーを渡す。
     ///   - mediaPrefetchFiles: 先読みした画像の置き場所。省略するとキャッシュのフォルダーの`MediaPrefetch`。
     ///   - customEmojis: カスタム絵文字のリストの置き場所。省略すると`CustomEmojiCaches`の既定の置き場所。
+    ///   - emojiImageFiles: カスタム絵文字の画像の置き場所。省略するとキャッシュのフォルダーの`EmojiImages`。
     public init(
         http: HTTPClient,
         tuning: TuningStore,
@@ -42,7 +46,8 @@ public final class ImageStores<Image: AnyObject & Sendable> {
         localData: @escaping @Sendable (URL) async -> Data? = { _ in nil },
         mediaFiles: MediaFileCache? = nil,
         mediaPrefetchFiles: MediaFileCache? = nil,
-        customEmojis: CustomEmojiCaches? = nil
+        customEmojis: CustomEmojiCaches? = nil,
+        emojiImageFiles: MediaFileCache? = nil
     ) {
         let mediaFiles = mediaFiles ?? MediaFileCache()
         let mediaPrefetchFiles = mediaPrefetchFiles ?? MediaFileCache(
@@ -68,12 +73,20 @@ public final class ImageStores<Image: AnyObject & Sendable> {
         }
         let customEmojis = customEmojis ?? CustomEmojiCaches(clock: clock)
         self.customEmojis = customEmojis
+        let emojiImageFiles = emojiImageFiles ?? MediaFileCache(
+            directory: .cachesDirectory.appending(path: "EmojiImages"),
+            sharingDirectory: .temporaryDirectory.appending(path: "EmojiImageSharing"),
+            sizeLimit: 512 * 1_024 * 1_024
+        )
+        self.emojiImageFiles = emojiImageFiles
+        let stored = StoredImageFetch(files: emojiImageFiles) { try await remoteFetch.data(from: $0) }
         emojis = EmojiImageStore(clock: clock, retryPolicy: retryPolicy, maker: maker, upgradePurpose: { network.usePolicy(settings: settings).enhancement }) { url in
             if let data = await localData(url) {
                 return data
             }
-            return try await remoteFetch.data(from: url)
+            return try await stored.data(from: url)
         }
+        emojis.onUnreadable = { await stored.discard($0) }
         emojis.onSourceSize = { [customEmojis] url, width, height in customEmojis.learn(url, width: width, height: height) }
     }
 }
