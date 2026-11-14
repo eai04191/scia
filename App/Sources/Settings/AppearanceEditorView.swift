@@ -33,6 +33,12 @@ struct AppearanceEditorView: View {
                 Divider()
                 Form {
                     Section {
+                        // どの分類の「〜を表示」にも効くので、分類の中には置かない。
+                        Toggle(SettingsTexts.Appearance.revealsAllPartsInThread, isOn: $settings.appearance.revealsAllPartsInThread)
+                    } footer: {
+                        Text(SettingsTexts.Appearance.revealsAllPartsInThreadFooter)
+                    }
+                    Section {
                         ForEach(groups) { group in
                             NavigationLink {
                                 AppearanceGroupEditorView(group: group, settings: settings)

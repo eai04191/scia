@@ -9,7 +9,7 @@ extension TimelineViewController {
         let typography = PostTypography(settings: settings)
         let font = typography.font(.body)
         // 選択肢は投稿した人が書いたものなので、本文と同じく投稿の言語で描く。
-        let renderer = RichTextRenderer(font: font, textColor: .label, showsCustomEmojis: settings.appearance.showsCustomEmojis, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier(for: shown.language))
+        let renderer = RichTextRenderer(font: font, textColor: .label, showsCustomEmojis: appearance(for: shown).showsCustomEmojis, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier(for: shown.language))
         return PollView.Content(
             pollID: poll.id,
             display: PollDisplay(poll: poll, choices: pollChoices, now: now(), allowsVoting: allowsVoting),

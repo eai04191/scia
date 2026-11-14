@@ -24,9 +24,11 @@ extension TimelineViewController {
 
     /// 引用とXの投稿の囲みの添付ファイルを並べる中身。囲みの並べ方が本文の右に小さく出す設定なら、重ねて出す。
     /// - Parameter seed: 重ね方をばらつかせる種。引用元の投稿のIDか、Xの投稿のID。
-    func embedMediaContent(of attachments: [MediaAttachment], cover: MediaCover?, seed: String) -> MediaGridView.Content? {
-        guard settings.appearance.showsMedia else { return nil }
+    /// - Parameter appearance: 囲みを置く投稿を組むときの見た目の選択肢。
+    func embedMediaContent(of attachments: [MediaAttachment], cover: MediaCover?, seed: String, appearance: AppearanceChoices) -> MediaGridView.Content? {
+        guard appearance.showsMedia else { return nil }
         var content = mediaContent(of: attachments, cover: cover)
+        content?.showsBadges = appearance.showsMediaBadges
         content?.arrange(settings.appearance.resolvedEmbedMediaArrangement, seed: seed, settings: settings)
         return content
     }
@@ -78,10 +80,10 @@ extension TimelineViewController {
             return nil
         }
         // 投稿した人が閲覧注意を付けていれば、Xの添付ファイルもぼかす。ぼかしを外すと、投稿の添付ファイルと同じくそろって外れる。
-        let media = embedMediaContent(of: post.media, cover: mediaCover(for: status), seed: post.id)
+        let media = embedMediaContent(of: post.media, cover: mediaCover(for: status), seed: post.id, appearance: appearance(for: status))
         let text = post.text.plainText
         let translation = translatesBody ? embedTranslation(of: TranslationSource(post)) : nil
-        return (postContentBuilder.xPost(post, translation: translation, media: media, base: base), post, media?.attachments ?? [], post.url, text.allSatisfy(\.isWhitespace) ? nil : text)
+        return (postContentBuilder(for: status).xPost(post, translation: translation, media: media, base: base), post, media?.attachments ?? [], post.url, text.allSatisfy(\.isWhitespace) ? nil : text)
     }
 
     private func reconfigureRows(showing status: Status) {

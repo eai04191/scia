@@ -469,6 +469,31 @@ struct AppSettingsTests {
         #expect(choices.statusNameStyle == AppearanceChoices().statusNameStyle)
     }
 
+    /// すべての部品を出した選択肢は、「〜を表示」（名前が`shows`で始まる選択肢）をすべてオンにし、名前の表記の「表示しない」を既定の表記にする。ほかの選択肢は変えない。
+    @Test func revealingAllPartsTurnsOnEveryShowsChoice() throws {
+        var dictionary: [String: Any] = [:]
+        for child in Mirror(reflecting: AppearanceChoices()).children {
+            guard let label = child.label, label.hasPrefix("shows"), child.value is Bool else { continue }
+            dictionary[label] = false
+        }
+        dictionary["statusNameStyle"] = "none"
+        dictionary["contextNameStyle"] = "none"
+        dictionary["avatarShape"] = "circle"
+        let hidden = AppearanceChoices(stored: try JSONSerialization.data(withJSONObject: dictionary))
+        #expect(!hidden.showsBody)
+        let revealed = hidden.revealingAllParts
+
+        for child in Mirror(reflecting: revealed).children {
+            guard let label = child.label, label.hasPrefix("shows"), label != "showsSeparators", let value = child.value as? Bool else { continue }
+            #expect(value, "\(label)がオフのまま")
+        }
+        // 区切り線は投稿の部品ではないので変えない。
+        #expect(!revealed.showsSeparators)
+        #expect(revealed.statusNameStyle == AppearanceChoices().statusNameStyle)
+        #expect(revealed.contextNameStyle == AppearanceChoices().contextNameStyle)
+        #expect(revealed.avatarShape == .circle)
+    }
+
     /// 読めない値（名前を変えた選択肢など）がある項目だけを既定値に戻し、ほかの項目は保存した値のまま読む。
     @Test func appearanceChoicesDropOnlyUnreadableFields() throws {
         let data = Data(#"{"showsTime":false,"statusNameStyle":"removedStyle","avatarShape":"circle"}"#.utf8)

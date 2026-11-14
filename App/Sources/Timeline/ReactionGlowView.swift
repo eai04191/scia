@@ -75,10 +75,11 @@ extension ReactionGlow.Style {
     static let lightSDROpacityRatio: CGFloat = 0.3 / 0.95
 
     @MainActor
-    init(tuning: TuningStore, settings: AppSettings) {
+    /// - Parameter appearance: 投稿を組むときの見た目の選択肢。渡さなければ設定のもの。
+    init(tuning: TuningStore, settings: AppSettings, appearance: AppearanceChoices? = nil) {
         typealias C = AppearanceCatalog
         // 光を出さない設定では、高さを0にして描かない。
-        let height = settings.appearance.showsReactionGlow ? settings.value(of: C.reactionGlowHeight) : 0
+        let height = (appearance ?? settings.appearance).showsReactionGlow ? settings.value(of: C.reactionGlowHeight) : 0
         let lightOpacity = settings.value(of: C.reactionGlowLightOpacity)
         self.init(
             height: height,

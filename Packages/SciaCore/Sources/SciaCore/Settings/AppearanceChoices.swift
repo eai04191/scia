@@ -101,6 +101,8 @@ public struct AppearanceChoices: Codable, Hashable, Sendable {
     public var showsReactions = true
     /// お気に入りとブーストの光を出す。
     public var showsReactionGlow = true
+    /// スレッドで開いた投稿では、表示しない設定にした部品もすべて出す（`revealingAllParts`）。
+    public var revealsAllPartsInThread = true
 
     public init() {}
 
@@ -113,6 +115,28 @@ public struct AppearanceChoices: Codable, Hashable, Sendable {
     public var stacksMediaBesideBody: Bool {
         mediaArrangement == .besideBody || resolvedEmbedMediaArrangement == .besideBody
     }
+
+    /// 表示しない設定にした部品をすべて出す選択肢。「〜を表示」（名前が`shows`で始まる選択肢）をすべてオンにし、名前の表記の「表示しない」は既定の表記にする。
+    /// 選択肢は名前で選ぶので、「〜を表示」を足せば、ここを変えなくても含まれる。投稿の部品ではない選択肢は`notParts`で除く。
+    public var revealingAllParts: Self {
+        let fallback = Self()
+        guard var dictionary = Self.dictionary(of: self) else { return self }
+        for child in Mirror(reflecting: self).children {
+            guard let label = child.label, label.hasPrefix("shows"), !Self.notParts.contains(label), child.value is Bool else { continue }
+            dictionary[label] = true
+        }
+        var revealed = Self.decode(dictionary) ?? self
+        if revealed.statusNameStyle == .none {
+            revealed.statusNameStyle = fallback.statusNameStyle
+        }
+        if revealed.contextNameStyle == .none {
+            revealed.contextNameStyle = fallback.contextNameStyle
+        }
+        return revealed
+    }
+
+    /// 名前が`shows`で始まるが、投稿の部品を出すかではない選択肢。区切り線は投稿と投稿のあいだの線で、1件の投稿だけで変えられないため。
+    private static let notParts: Set<String> = ["showsSeparators"]
 
     /// 保存したJSONから読む。保存にない項目は既定値にする。項目を足しても、保存してある値を失わないため。
     /// 読めない値（名前を変えた選択肢など）がある項目は既定値に戻し、ほかの項目は保存した値のまま読む。

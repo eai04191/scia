@@ -328,4 +328,45 @@ struct HiddenPostPartsTests {
         #expect(abs(settings.postSeparatorLeading - settings.rowMargins.leading) < 0.001)
         #expect(abs(settings.textColumnLeading - column) < 0.001)
     }
+
+    // MARK: スレッド
+
+    /// スレッドで開いた投稿は、表示しない設定にした部品も出す。ほかの投稿は設定に従う。スイッチをオフにすると、開いた投稿も設定に従う。
+    @Test(arguments: [true, false])
+    func threadFocusRevealsHiddenParts(reveals: Bool) throws {
+        let focus = try status()
+        let other = Status(id: "999", createdAt: focus.createdAt, account: focus.account, content: "<p>返信です。</p>", spoilerText: "", url: nil)
+        let controller = timeline {
+            $0.appearance.showsBody = false
+            $0.appearance.showsAvatar = false
+            $0.appearance.statusNameStyle = .none
+            $0.appearance.revealsAllPartsInThread = reveals
+        }
+        controller.threadFocusID = focus.id
+        let focused = controller.contentConfiguration(for: focus, base: .cell())
+        let replied = controller.contentConfiguration(for: other, base: .cell())
+
+        #expect((focused.body.length > 0) == reveals)
+        #expect((focused.avatar != nil) == reveals)
+        #expect(focused.nameParts.isEmpty != reveals)
+        #expect(replied.body.length == 0)
+        #expect(replied.avatar == nil)
+        // 隣の投稿にアイコンがないので、開いた投稿でも返信をつなぐ線を引かない。
+        #expect(!focused.showsReplyLines)
+    }
+
+    /// スレッドで開いた投稿は、アクションバーの件数を出さない設定でも件数を出す。ほかの投稿は設定どおり出さない。
+    @Test func threadFocusRevealsActionBarCounts() throws {
+        let base = try status()
+        let focus = Status(id: base.id, createdAt: base.createdAt, account: base.account, content: base.content, spoilerText: "", url: nil, favouritesCount: 3)
+        let other = Status(id: "999", createdAt: base.createdAt, account: base.account, content: base.content, spoilerText: "", url: nil, favouritesCount: 3)
+        let controller = timeline {
+            $0.appearance.showsActionBar = true
+            $0.appearance.showsActionBarCounts = false
+        }
+        controller.threadFocusID = focus.id
+
+        #expect(controller.contentConfiguration(for: focus, base: .cell()).actionBar?.buttons.contains { $0.count == 3 } == true)
+        #expect(controller.contentConfiguration(for: other, base: .cell()).actionBar?.buttons.contains { $0.count != nil } == false)
+    }
 }

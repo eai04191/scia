@@ -17,18 +17,23 @@ extension AppSettings {
         rowMargins.leading + value(of: AppearanceCatalog.avatarSize) + value(of: AppearanceCatalog.avatarSpacing)
     }
 
-    /// 行の左のアイコンの一辺。アイコンを出さなければ0。
-    var postAvatarSize: CGFloat {
+    /// 投稿の行の左のアイコンの一辺。アイコンを出さなければ0。
+    /// - Parameter appearance: 投稿を組むときの見た目の選択肢。スレッドで開いた投稿は、設定と違うことがある。
+    func postAvatarSize(_ appearance: AppearanceChoices) -> CGFloat {
         appearance.showsAvatar ? value(of: AppearanceCatalog.avatarSize) : 0
     }
 
-    /// 行の左のアイコンの列と、文字の列のあいだ。アイコンを出さなければ0。
-    var postAvatarSpacing: CGFloat {
+    /// 投稿の行の左のアイコンの列と、文字の列のあいだ。アイコンを出さなければ0。
+    func postAvatarSpacing(_ appearance: AppearanceChoices) -> CGFloat {
         appearance.showsAvatar ? value(of: AppearanceCatalog.avatarSpacing) : 0
     }
 
     /// 投稿の行の区切り線の左端。本文の左端から引く。決まりはdocs/post-header-layout.mdの「区切り線」にある。
     var postSeparatorLeading: CGFloat {
-        appearance.wrapsBelowAvatar ? rowMargins.leading : rowMargins.leading + postAvatarSize + postAvatarSpacing
+        postSeparatorLeading(appearance)
+    }
+
+    func postSeparatorLeading(_ appearance: AppearanceChoices) -> CGFloat {
+        appearance.wrapsBelowAvatar ? rowMargins.leading : rowMargins.leading + postAvatarSize(appearance) + postAvatarSpacing(appearance)
     }
 }

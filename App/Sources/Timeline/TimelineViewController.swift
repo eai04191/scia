@@ -2004,8 +2004,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     func separatorLeadingInset(for entry: TimelineEntry) -> CGFloat {
         let textColumn = settings.textColumnLeading
         switch entry {
-        case .status, .pinned:
-            return settings.postSeparatorLeading
+        case .status(let status), .pinned(let status):
+            return settings.postSeparatorLeading(appearance(for: status))
         case .notification(let notification):
             // メンションなどは投稿の行として描くので、投稿と同じ。ほかの通知の行は、アイコンの列の右に文字を置く。
             return notification.layout == .post && notification.status != nil ? settings.postSeparatorLeading : textColumn
@@ -2205,6 +2205,20 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         PostContentBuilder(tuning: tuning, settings: settings, emojiImages: emojiImages, mediaImages: mediaImages, avatarImages: avatarImages, preparedBodies: bodyTextPreparer)
     }
 
+    /// `status`の行を組むときの見た目の選択肢。スレッドで開いた投稿は、選んでいれば、表示しない設定にした部品もすべて出す（docs/appearance.md）。
+    func appearance(for status: Status) -> AppearanceChoices {
+        let appearance = settings.appearance
+        guard appearance.revealsAllPartsInThread, let threadFocusID, status.displayed.id == threadFocusID else { return appearance }
+        return appearance.revealingAllParts
+    }
+
+    /// `status`の行の中身を組み立てる。見た目の選択肢は`appearance(for:)`に従う。
+    func postContentBuilder(for status: Status) -> PostContentBuilder {
+        var builder = postContentBuilder
+        builder.appearanceOverride = appearance(for: status)
+        return builder
+    }
+
     /// 画面に出ている行の前後の投稿の本文を、先に作って並べておく。画面に出ている行の範囲が変わったときだけ頼む。
     func prepareBodiesAroundVisibleRows() {
         let visible = collectionView.indexPathsForVisibleItems.filter { $0.section == 0 }.map(\.item)
@@ -2262,14 +2276,20 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     ///   - translatesBody: 本文を自動翻訳の訳文で出してよい。通知の中の投稿では訳さない。
     func contentConfiguration(for status: Status, isPinned: Bool = false, itemID: ItemID? = nil, translatesBody: Bool = true, base: UIListContentConfiguration) -> PostContentConfiguration {
         let shown = status.displayed
+        let appearance = appearance(for: status)
+        let builder = postContentBuilder(for: status)
         let connection = itemID.flatMap { replyConnections[$0] } ?? ReplyConnection()
         // スレッドで押した投稿は、開いた時点では返信先がまだ並んでおらずラベルを出しているため、返信先が並んでもラベルを残す。
         // 消すと、読み終えた瞬間に名前と本文がラベルの1行分だけ上へ跳ねる。
         let hidesReplyLabel = hidesReplyLabelBelowParent && connection.parentIsAbove && shown.id != threadFocusID
         let replyLabel = hidesReplyLabel ? nil : ReplyLabel(status: shown, myAccountID: myAccountID)
         let isTranslating = translatesBody && translations?.isTranslating(TranslationSource(status.displayed)) == true
-        var configuration = postContentBuilder.configuration(for: status, isPinned: isPinned, replyLabel: replyLabel, translation: translatesBody ? translatedBody(of: status) : nil, isTranslating: isTranslating, base: base)
+        var configuration = builder.configuration(for: status, isPinned: isPinned, replyLabel: replyLabel, translation: translatesBody ? translatedBody(of: status) : nil, isTranslating: isTranslating, base: base)
         configuration.replyConnection = connection
+        // スレッドで開いた投稿だけがアイコンを出すとき、隣の投稿は設定どおりアイコンを出さないので、線でつなぐ先がない。
+        if !settings.appearance.showsAvatar {
+            configuration.showsReplyLines = false
+        }
         configuration.onOpenAccount = { [weak self] in self?.onOpenProfile?(shown.account) }
         configuration.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination, shown) }
         if let itemID {
@@ -2282,11 +2302,12 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             }
         }
         // フィルターの結果はブーストの外側にだけ付くことがあるため、判定にはブーストごと渡す。
-        if !settings.appearance.showsMedia {
+        if !appearance.showsMedia {
             if !shown.mediaAttachments.isEmpty {
                 configuration.hiddenSlots.append(.mediaSlot)
             }
-        } else if let media = mediaContent(for: status) {
+        } else if var media = mediaContent(for: status) {
+            media.showsBadges = appearance.showsMediaBadges
             configuration.media = media
             configuration.onSelectMedia = { [weak self] index, grid in
                 self?.openMedia(media.attachments, at: index, of: shown, from: grid)
@@ -2295,7 +2316,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         configuration.onRevealMedia = { [weak self] in
             self?.revealMedia(of: shown)
         }
-        if settings.appearance.showsPoll {
+        if appearance.showsPoll {
             configuration.poll = pollContent(for: shown, base: base)
         } else if shown.poll != nil {
             configuration.hiddenSlots.append(.pollSlot)
@@ -2305,7 +2326,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         if let itemID, let url = configuration.card?.card.url {
             configuration.linkCardTarget = linkTarget(for: url, id: itemID) { [weak self] in self?.onOpenLink?(.url(url), shown) }
         }
-        if !settings.appearance.showsQuote, shown.quote != nil {
+        if !appearance.showsQuote, shown.quote != nil {
             configuration.hiddenSlots.append(.quoteSlot)
         }
         if let quote = quoteEmbed(for: status, itemID: itemID, translatesBody: translatesBody, base: base) {
@@ -2336,11 +2357,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                 }
             }
         }
-        configuration.spoiler = spoiler(of: status, base: base)
+        configuration.spoiler = spoiler(of: status, base: base, builder: builder)
         let ownMatchTitles = filterWarnings.verdict(for: status).ownMatchTitles
         if !ownMatchTitles.isEmpty {
-            if settings.appearance.showsFilterNote {
-                configuration.filterNote = postContentBuilder.ownFilterNote(titles: ownMatchTitles)
+            if appearance.showsFilterNote {
+                configuration.filterNote = builder.ownFilterNote(titles: ownMatchTitles)
             } else {
                 configuration.hiddenSlots.append(.filterNoteSlot)
             }
@@ -2358,7 +2379,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                 configuration.actionBarLongPressTarget = { [weak self] item in self?.actionBarLongPressTarget(for: item, id: itemID) }
             }
         }
-        if supportsEmojiReactions, let reactions = postContentBuilder.reactionChips(for: shown) {
+        if supportsEmojiReactions, let reactions = builder.reactionChips(for: shown) {
             configuration.reactions = reactions
             configuration.onToggleReaction = { [weak self] name in
                 guard let emoji = shown.emojiReactions.first(where: { $0.emoji.name == name })?.emoji else { return }
@@ -2434,7 +2455,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     func showsActionBar(itemID: ItemID?, shown: Status) -> Bool {
         guard !isAppearancePreview, let itemID else { return settings.appearance.showsActionBar || showsActionBarInPreview }
         guard let entry = entries[itemID], canShowActionBar(in: entry) else { return false }
-        return settings.appearance.showsActionBar || openActionBarItemID == itemID
+        return appearance(for: shown).showsActionBar || openActionBarItemID == itemID
     }
 
     /// アクションバーの中身。押せない項目は、メニューと同じ組み方で決めて薄く描く。
@@ -2442,10 +2463,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// - Parameter canSelectText: これから置く本文を選べるか。投稿のセルはまだこの中身を置いていないので、置いてある本文からは決めない。
     private func actionBarContent(for status: Status, itemID: ItemID?, countFont: UIFont, canSelectText: Bool) -> PostActionBarContent {
         let shown = status.displayed
-        guard let itemID else { return postContentBuilder.actionBar(for: shown, countFont: countFont) { _ in true } }
+        let builder = postContentBuilder(for: status)
+        guard let itemID else { return builder.actionBar(for: shown, countFont: countFont) { _ in true } }
         return FrameWork.measure("actionBar") {
             let tree = offlineStatusMenuTree(for: status, id: itemID, canSelectText: canSelectText)
-            return postContentBuilder.actionBar(for: shown, countFont: countFont) { item in
+            return builder.actionBar(for: shown, countFont: countFont) { item in
                 MenuItemOutcome(singleItemMenu: tree.menu(groups: .single(item), includesFollowRequest: false).root).isAvailable
             }
         }
@@ -2668,10 +2690,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 注意書き。開いているかは、このタイムラインで覚えている状態を当てる。ブーストなら元の投稿の注意書きにする。
     /// フィルターの警告で折りたたんでいれば、注意書きの代わりに警告を出す。警告を開くと、注意書きのある投稿は注意書きで折りたたんだ形に戻る。
     /// - Parameter font: 注意書きの文字の書体。nilなら本文の文字で描く。フィルターの警告には使わない。
-    func spoiler(of status: Status, base: UIListContentConfiguration, color: UIColor = .label, font: UIFont? = nil) -> PostBodyContent.Spoiler? {
+    /// - Parameter builder: 組み立てに使う部品。渡さなければ設定の見た目の選択肢で組む。
+    func spoiler(of status: Status, base: UIListContentConfiguration, color: UIColor = .label, font: UIFont? = nil, builder: PostContentBuilder? = nil) -> PostBodyContent.Spoiler? {
         let warningTitles = filterWarnings.verdict(for: status).warningTitles
         guard warningTitles.isEmpty else { return postContentBuilder.filterWarning(titles: warningTitles, base: base) }
-        var spoiler = postContentBuilder.spoiler(of: status.displayed, base: base, color: color, font: font)
+        var spoiler = (builder ?? postContentBuilder).spoiler(of: status.displayed, base: base, color: color, font: font)
         spoiler?.isCollapsed = spoilerExpansion.isCollapsed(status)
         return spoiler
     }

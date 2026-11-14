@@ -11,6 +11,13 @@ struct PostContentBuilder {
     let avatarImages: AvatarImageStore<UIImage>
     /// タイムラインの投稿の本文を先に作っておく部品。あれば、作っておいた本文を使う。
     var preparedBodies: BodyTextPreparer?
+    /// 設定と違う見た目の選択肢で組むときに渡す。スレッドで開いた投稿は、表示しない設定にした部品も出すため。
+    var appearanceOverride: AppearanceChoices?
+
+    /// 組むときの見た目の選択肢。
+    var appearance: AppearanceChoices {
+        appearanceOverride ?? settings.appearance
+    }
 
     /// タップしたときの処理と添付ファイルは含めない。タイムラインでは呼び出し側が足す。
     /// - Parameter isPinned: プロフィールの上に置く、固定された投稿。名前の上に固定されていることを示す行を出す。
@@ -25,12 +32,12 @@ struct PostContentBuilder {
         let unicodeEmojiScale = CGFloat(settings.value(of: AppearanceCatalog.nameUnicodeEmojiScale))
         let metrics = PostContentConfiguration.Metrics(
             margins: settings.rowMargins,
-            avatarSize: settings.postAvatarSize,
+            avatarSize: settings.postAvatarSize(appearance),
             boosterAvatarSize: settings.value(of: AppearanceCatalog.boosterAvatarSize),
             nameFadeWidth: settings.value(of: AppearanceCatalog.nameFadeWidth),
             contextSymbolSpacing: settings.value(of: AppearanceCatalog.contextSymbolSpacing),
             contextAvatarTextSpacing: settings.value(of: AppearanceCatalog.contextAvatarTextSpacing),
-            avatarSpacing: settings.postAvatarSpacing,
+            avatarSpacing: settings.postAvatarSpacing(appearance),
             contextSpacing: settings.value(of: AppearanceCatalog.contextSpacing),
             replyLineWidth: settings.value(of: AppearanceCatalog.replyLineWidth),
             replyLineGap: settings.value(of: AppearanceCatalog.replyLineGap),
@@ -49,18 +56,18 @@ struct PostContentBuilder {
             visibilitySymbolSpacing: settings.value(of: AppearanceCatalog.visibilitySymbolSpacing),
             editedMarkSpacing: settings.value(of: AppearanceCatalog.editedMarkSpacing),
             filterNoteSpacing: settings.value(of: AppearanceCatalog.filterNoteSpacing),
-            showsContextSymbol: settings.appearance.showsContextSymbol,
+            showsContextSymbol: appearance.showsContextSymbol,
             bodyEmbedSpacing: settings.value(of: AppearanceCatalog.bodyXPostSpacing),
             reactionsSpacing: settings.value(of: AppearanceCatalog.bodyReactionsSpacing),
             reactionStyle: reactionStyle(typography: typography),
             actionBarSpacing: settings.value(of: AppearanceCatalog.actionBarSpacing)
         )
         let language = settings.glyphLanguageIdentifier()
-        let primaryRenderer = RichTextRenderer(font: metrics.nameFont, textColor: base.textProperties.color, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: settings.appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
-        let secondaryRenderer = RichTextRenderer(font: typography.font(.nameSecondary), textColor: .secondaryLabel, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: settings.appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
-        let contextRenderer = RichTextRenderer(font: metrics.contextFont, textColor: .secondaryLabel, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: settings.appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
-        let contextSecondaryRenderer = RichTextRenderer(font: typography.font(.contextSecondary), textColor: .secondaryLabel, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: settings.appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
-        let boosterName = Self.joined(spacing: settings.value(of: AppearanceCatalog.contextPartsSpacing), settings.appearance.contextNameStyle.parts.enumerated().map { index, part in
+        let primaryRenderer = RichTextRenderer(font: metrics.nameFont, textColor: base.textProperties.color, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
+        let secondaryRenderer = RichTextRenderer(font: typography.font(.nameSecondary), textColor: .secondaryLabel, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
+        let contextRenderer = RichTextRenderer(font: metrics.contextFont, textColor: .secondaryLabel, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
+        let contextSecondaryRenderer = RichTextRenderer(font: typography.font(.contextSecondary), textColor: .secondaryLabel, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
+        let boosterName = Self.joined(spacing: settings.value(of: AppearanceCatalog.contextPartsSpacing), appearance.contextNameStyle.parts.enumerated().map { index, part in
             let renderer = index == 0 ? contextRenderer : contextSecondaryRenderer
             return switch part {
             case .displayName: renderer.render(.plain(status.account.displayNameOrUsername, emojis: status.account.emojis))
@@ -68,7 +75,7 @@ struct PostContentBuilder {
             }
         })
         // 名前の行を出さないときは、名前を組み立てない。組み立てると、名前のカスタム絵文字の画像を読む。
-        let nameStyle = settings.appearance.showsNameRow ? settings.appearance.statusNameStyle : .none
+        let nameStyle = appearance.showsNameRow ? appearance.statusNameStyle : .none
         let nameParts = nameStyle.parts.enumerated().map { index, part in
             let renderer = index == 0 ? primaryRenderer : secondaryRenderer
             return switch part {
@@ -77,7 +84,7 @@ struct PostContentBuilder {
             }
         }
         let bodyRenderer = postBodyRenderer(of: shown, translation: translation, isTranslating: isTranslating)
-        let showsBody = settings.appearance.showsBody
+        let showsBody = appearance.showsBody
         let preparedBody = showsBody ? preparedBodies?.prepared(for: shown, translation: translation, renderer: bodyRenderer) : nil
         let body = showsBody ? withoutBlankLeftByHiddenEmojis(preparedBody?.text ?? bodyRenderer.render(translation ?? .status(shown))) : NSAttributedString()
         let context: PostContentConfiguration.Context? = if isPinned {
@@ -90,28 +97,28 @@ struct PostContentBuilder {
         } else if status.reblog != nil {
             PostContentConfiguration.Context(
                 symbolName: "arrow.2.squarepath",
-                avatar: settings.appearance.showsBoosterAvatar ? avatarContent(of: status.account) : nil,
+                avatar: appearance.showsBoosterAvatar ? avatarContent(of: status.account) : nil,
                 text: boosterName.text,
                 secondaryRange: boosterName.secondaryRange,
                 accessibilityText: PostTexts.boosted(by: status.account.displayNameOrUsername),
                 accountName: status.account.displayNameOrUsername
             )
-        } else if let replyLabel, settings.appearance.showsReplyLabel {
+        } else if let replyLabel, appearance.showsReplyLabel {
             replyContext(replyLabel, font: metrics.contextFont, language: language)
         } else {
             nil
         }
         var configuration = PostContentConfiguration(
             context: context,
-            avatar: settings.appearance.showsAvatar ? avatarContent(of: shown.account) : nil,
+            avatar: appearance.showsAvatar ? avatarContent(of: shown.account) : nil,
             nameParts: nameParts,
             authorName: shown.account.displayNameOrUsername,
             createdAt: shown.createdAt,
             isEdited: shown.editedAt != nil,
             visibility: shown.visibility,
-            showsVisibilitySymbol: settings.appearance.showsVisibilitySymbol,
-            showsEditedMark: settings.appearance.showsEditedMark,
-            timeStyle: settings.appearance.statusTimeStyle,
+            showsVisibilitySymbol: appearance.showsVisibilitySymbol,
+            showsEditedMark: appearance.showsEditedMark,
+            timeStyle: appearance.statusTimeStyle,
             body: body,
             spoiler: spoiler(of: shown, base: base),
             metrics: metrics,
@@ -129,31 +136,31 @@ struct PostContentBuilder {
         configuration.translationWordDuration = tuning.value(of: TuningCatalog.translationWordDuration)
         configuration.translationFadeWidth = tuning.value(of: TuningCatalog.translationFadeWidth)
         configuration.reactionGlow = reactionGlow(for: shown)
-        configuration.showsReplyLines = settings.appearance.showsReplyLines
-        configuration.showsTime = settings.appearance.showsTime
-        configuration.showsNameRow = settings.appearance.showsNameRow
-        configuration.showsReadMore = settings.appearance.showsReadMore
-        if !settings.appearance.showsSpoiler, !shown.spoilerText.isEmpty {
+        configuration.showsReplyLines = appearance.showsReplyLines
+        configuration.showsTime = appearance.showsTime
+        configuration.showsNameRow = appearance.showsNameRow
+        configuration.showsReadMore = appearance.showsReadMore
+        if !appearance.showsSpoiler, !shown.spoilerText.isEmpty {
             configuration.hiddenSlots.append(.spoilerSlot)
         }
-        if !settings.appearance.showsReactions, !shown.emojiReactions.isEmpty {
+        if !appearance.showsReactions, !shown.emojiReactions.isEmpty {
             configuration.hiddenSlots.append(.reactionsSlot)
         }
         if !showsBody, !shown.content.isEmpty {
             configuration.hiddenSlots.append(.bodySlot)
         }
-        configuration.stacksNameParts = settings.appearance.stacksNameParts
-        configuration.wrapsBelowAvatar = settings.appearance.wrapsBelowAvatar
+        configuration.stacksNameParts = appearance.stacksNameParts
+        configuration.wrapsBelowAvatar = appearance.wrapsBelowAvatar
         configuration.isBoost = status.reblog != nil
         configuration.isReply = replyLabel != nil && status.reblog == nil && !isPinned
-        configuration.hasHiddenLinkCard = !settings.appearance.showsLinkCard && LinkCard(status: shown) != nil
+        configuration.hasHiddenLinkCard = !appearance.showsLinkCard && LinkCard(status: shown) != nil
         configuration.hashtagAccount = shown.account
         return configuration
     }
 
     /// `shown`は表示している投稿。ブーストなら、ブーストされた投稿。
     func reactionGlow(for shown: Status) -> ReactionGlow {
-        ReactionGlow(statusID: shown.id, isReblogged: shown.reblogged, isFavourited: shown.favourited, style: ReactionGlow.Style(tuning: tuning, settings: settings))
+        ReactionGlow(statusID: shown.id, isReblogged: shown.reblogged, isFavourited: shown.favourited, style: ReactionGlow.Style(tuning: tuning, settings: settings, appearance: appearance))
     }
 
     /// アクションバーの中身。ボタンの並びと件数は設定から、した状態は投稿から決める。
@@ -161,11 +168,11 @@ struct PostContentBuilder {
     /// - Parameter isAvailable: 投稿のメニューの項目を、いま押して行えるか。
     func actionBar(for shown: Status, countFont: UIFont, isAvailable: (StatusMenuItem) -> Bool) -> PostActionBarContent {
         PostActionBarContent(
-            buttons: PostActionBarButton.buttons(for: shown, items: settings.postActionBarLayout.actionBarItems, showsCounts: settings.appearance.showsActionBarCounts, isAvailable: isAvailable),
+            buttons: PostActionBarButton.buttons(for: shown, items: settings.postActionBarLayout.actionBarItems, showsCounts: appearance.showsActionBarCounts, isAvailable: isAvailable),
             iconSize: settings.value(of: AppearanceCatalog.actionBarIconSize),
             padding: settings.value(of: AppearanceCatalog.actionBarPadding),
             countFont: countFont,
-            lightFavouriteIsYellow: settings.appearance.reactionGlowLightFavouriteColor == .yellow,
+            lightFavouriteIsYellow: appearance.reactionGlowLightFavouriteColor == .yellow,
             leadingHitReach: settings.value(of: AppearanceCatalog.actionBarIconSize) * tuning.value(of: TuningCatalog.actionBarLeadingHitReach),
             statusID: shown.id
         )
@@ -174,7 +181,7 @@ struct PostContentBuilder {
     /// 投稿の絵文字のリアクションを、リアクションの列のボタンにする。リアクションがなければnil。
     /// ボタンは、絵文字の名前で見分ける。Fedibirdは名前でまとめるため、同じ名前のリアクションは1つしか並ばない。
     func reactionChips(for shown: Status) -> [ReactionChipsView.Reaction]? {
-        guard !shown.emojiReactions.isEmpty, settings.appearance.showsReactions else { return nil }
+        guard !shown.emojiReactions.isEmpty, appearance.showsReactions else { return nil }
         let renderer = RichTextRenderer(font: PostTypography(settings: settings).font(.reaction), textColor: .label, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
         return shown.emojiReactions.map { reaction in
             let emoji = reaction.emoji
@@ -206,7 +213,7 @@ struct PostContentBuilder {
     private func replyContext(_ label: ReplyLabel, font: UIFont, language: String) -> PostContentConfiguration.Context {
         let text = label.title
         let color: UIColor = label == .toMe ? .tintColor : .secondaryLabel
-        let renderer = RichTextRenderer(font: font, textColor: color, showsCustomEmojis: settings.appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
+        let renderer = RichTextRenderer(font: font, textColor: color, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
         return PostContentConfiguration.Context(
             symbolName: "arrowshape.turn.up.left",
             symbolColor: color,
@@ -220,10 +227,10 @@ struct PostContentBuilder {
     func avatarContent(of account: Account) -> AvatarView.Content {
         AvatarView.Content(
             url: settings.animatesAvatars ? account.avatar : account.avatarStatic,
-            shape: settings.appearance.avatarShape,
+            shape: appearance.avatarShape,
             animates: settings.animatesAvatars,
             cornerRatio: settings.value(of: AppearanceCatalog.avatarCornerRatio),
-            showsBorder: settings.appearance.showsAvatarBorder
+            showsBorder: appearance.showsAvatarBorder
         )
     }
 
@@ -289,20 +296,20 @@ struct PostContentBuilder {
 
     /// 投稿のリンクカード。出さない投稿ならnil。
     func linkCard(of status: Status) -> LinkCardView.Content? {
-        guard settings.appearance.showsLinkCard else { return nil }
+        guard appearance.showsLinkCard else { return nil }
         return LinkCard(status: status).map {
             LinkCardView.Content(
                 card: $0,
                 padding: settings.value(of: AppearanceCatalog.linkCardPadding),
                 transitionDuration: tuning.value(of: TuningCatalog.linkCardTransitionDuration),
-                thumbnailSide: settings.appearance.linkCardThumbnailSide,
+                thumbnailSide: appearance.linkCardThumbnailSide,
                 typography: PostTypography(settings: settings),
-                showsSite: settings.appearance.showsLinkCardSite,
-                showsImage: settings.appearance.showsLinkCardImage,
+                showsSite: appearance.showsLinkCardSite,
+                showsImage: appearance.showsLinkCardImage,
                 descriptionLines: Int(settings.value(of: AppearanceCatalog.linkCardDescriptionLines)),
                 lineSpacing: settings.value(of: AppearanceCatalog.linkCardLineSpacing),
                 titleLines: Int(settings.value(of: AppearanceCatalog.linkCardTitleLines)),
-                boldsTitle: settings.appearance.boldsLinkCardTitle,
+                boldsTitle: appearance.boldsLinkCardTitle,
                 imageWidthRatio: settings.value(of: AppearanceCatalog.linkCardImageWidthRatio)
             )
         }
@@ -315,12 +322,12 @@ struct PostContentBuilder {
         let typography = PostTypography(settings: settings)
         let language = settings.glyphLanguageIdentifier(for: post.language)
         // Xの投稿にカスタム絵文字はないが、翻訳のマークを引用の囲みと同じ大きさにするため、同じ倍率を渡す。
-        let body = translated(RichTextRenderer(font: typography.font(.xPostBody), textColor: .label, emojiScale: settings.value(of: AppearanceCatalog.customEmojiScale), showsCustomEmojis: settings.appearance.showsCustomEmojis, emojiImages: emojiImages, language: language), by: translation)
+        let body = translated(RichTextRenderer(font: typography.font(.xPostBody), textColor: .label, emojiScale: settings.value(of: AppearanceCatalog.customEmojiScale), showsCustomEmojis: appearance.showsCustomEmojis, emojiImages: emojiImages, language: language), by: translation)
         return embed(
             id: "x:\(post.id)",
             header: EmbeddedPostView.Content.Header(
                 // Xのアイコンは静止画なので、アニメーションの設定によらず動かさない。
-                avatar: AvatarView.Content(url: showsEmbedAvatar ? post.authorAvatar : nil, shape: settings.appearance.avatarShape, animates: false),
+                avatar: AvatarView.Content(url: showsEmbedAvatar ? post.authorAvatar : nil, shape: appearance.avatarShape, animates: false),
                 name: embedName(.plain(post.authorName, emojis: []), handle: post.authorScreenName, base: base),
                 opensAccount: false
             ),
@@ -340,7 +347,7 @@ struct PostContentBuilder {
         let font = PostTypography(settings: settings).font(.xPostBody)
         var notes: [EmbeddedPostView.Content.Note] = []
         // 囲みが投稿1件分に近い重さにならないよう、投票は選択肢を並べず、あることだけを示す。
-        if quoted.poll != nil, settings.appearance.showsPoll {
+        if quoted.poll != nil, appearance.showsPoll {
             notes.append(EmbeddedPostView.Content.Note(text: noteText(PostTexts.quotedPollNote, symbolName: "chart.bar.xaxis", color: .secondaryLabel, font: font), isPressable: false))
         }
         switch NestedQuote(quoted.quote) {
@@ -354,7 +361,7 @@ struct PostContentBuilder {
         return embed(
             id: "quote:\(quoted.id)",
             header: EmbeddedPostView.Content.Header(
-                avatar: showsEmbedAvatar ? avatarContent(of: quoted.account) : AvatarView.Content(url: nil, shape: settings.appearance.avatarShape, animates: false),
+                avatar: showsEmbedAvatar ? avatarContent(of: quoted.account) : AvatarView.Content(url: nil, shape: appearance.avatarShape, animates: false),
                 name: embedName(.plain(quoted.account.displayNameOrUsername, emojis: quoted.account.emojis), handle: quoted.account.acct, base: base),
                 opensAccount: true
             ),
@@ -392,13 +399,13 @@ struct PostContentBuilder {
     /// カスタム絵文字を出さない設定で、絵文字を除いた本文に空白と改行しか残らなければ、本文のない投稿と同じく空にする。
     /// 残すと、絵文字だけの本文のあった場所に、空の行と本文とのすき間が残る。
     private func withoutBlankLeftByHiddenEmojis(_ text: NSAttributedString) -> NSAttributedString {
-        guard !settings.appearance.showsCustomEmojis, text.string.unicodeScalars.allSatisfy({ CharacterSet.whitespacesAndNewlines.contains($0) }) else { return text }
+        guard !appearance.showsCustomEmojis, text.string.unicodeScalars.allSatisfy({ CharacterSet.whitespacesAndNewlines.contains($0) }) else { return text }
         return NSAttributedString()
     }
 
     /// 引用とXの投稿の囲みに、作者のアイコンを出す。出さなければ、画像を読まず、大きさと名前とのすき間を0にする。
     private var showsEmbedAvatar: Bool {
-        settings.appearance.showsEmbedAvatar
+        appearance.showsEmbedAvatar
     }
 
     private func embed(
@@ -427,7 +434,7 @@ struct PostContentBuilder {
             mediaSpacing: settings.value(of: AppearanceCatalog.xPostMediaSpacing),
             transitionDuration: tuning.value(of: TuningCatalog.linkCardTransitionDuration)
         )
-        content.showsReadMore = settings.appearance.showsReadMore
+        content.showsReadMore = appearance.showsReadMore
         return content
     }
 
@@ -464,8 +471,8 @@ struct PostContentBuilder {
     private func embedName(_ name: RichText, handle: String, base: UIListContentConfiguration) -> NSAttributedString {
         let nameFont = PostTypography(settings: settings).font(.xPostName)
         let language = settings.glyphLanguageIdentifier()
-        let primary = RichTextRenderer(font: Self.boldFont(nameFont), textColor: base.textProperties.color, showsCustomEmojis: settings.appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
-        let secondary = RichTextRenderer(font: nameFont, textColor: .secondaryLabel, showsCustomEmojis: settings.appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
+        let primary = RichTextRenderer(font: Self.boldFont(nameFont), textColor: base.textProperties.color, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
+        let secondary = RichTextRenderer(font: nameFont, textColor: .secondaryLabel, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
         let text = NSMutableAttributedString(attributedString: primary.render(name))
         text.append(secondary.render(.plain(" @\(handle)", emojis: [])))
         return text
@@ -486,7 +493,7 @@ struct PostContentBuilder {
     /// 投稿の注意書き。注意書きがなければnil。開いているかはタイムラインが覚えているため、ここでは折りたたんだ形で返す。
     /// - Parameter font: 注意書きの文字の書体。nilなら本文の文字で描く。
     func spoiler(of status: Status, base: UIListContentConfiguration, color: UIColor = .label, font: UIFont? = nil) -> PostBodyContent.Spoiler? {
-        guard !status.spoilerText.isEmpty, settings.appearance.showsSpoiler else { return nil }
+        guard !status.spoilerText.isEmpty, appearance.showsSpoiler else { return nil }
         return PostBodyContent.Spoiler(
             text: bodyRenderer(of: status, font: font ?? PostTypography(settings: settings).font(.body), color: color).render(.plain(status.spoilerText, emojis: status.emojis)),
             isCollapsed: true,
@@ -541,7 +548,7 @@ struct PostContentBuilder {
             quoteBarWidth: settings.value(of: AppearanceCatalog.quoteBarWidth),
             emojiScale: settings.value(of: AppearanceCatalog.customEmojiScale),
             unicodeEmojiScale: settings.value(of: AppearanceCatalog.unicodeEmojiScale),
-            showsCustomEmojis: settings.appearance.showsCustomEmojis, emojiImages: emojiImages,
+            showsCustomEmojis: appearance.showsCustomEmojis, emojiImages: emojiImages,
             language: settings.glyphLanguageIdentifier(for: status.language)
         )
     }

@@ -123,6 +123,10 @@ public enum SettingsTexts {
         public static let modified = "変更あり"
         /// 項目をデフォルトの値に戻すメニューの項目。
         public static let resetItem = "デフォルトに戻す"
+        /// スレッドで開いた投稿では、表示しない設定にした部品も出すかのスイッチ。
+        public static let revealsAllPartsInThread = "スレッドで開いた投稿はすべて表示"
+        /// `revealsAllPartsInThread`の下に出す説明。
+        public static let revealsAllPartsInThreadFooter = "表示しない部品も、スレッドで開いた投稿では表示します。"
     }
 
     /// アプリ内のSafariの高さを選ぶシート。
