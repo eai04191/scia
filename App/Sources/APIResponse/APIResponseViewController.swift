@@ -34,7 +34,7 @@ final class APIResponseViewController: UIViewController {
         self.describe = describe
         self.tuning = tuning
         super.init(nibName: nil, bundle: nil)
-        title = "APIの応答"
+        title = StatusMenuItem.apiResponse.title
     }
 
     @available(*, unavailable)
@@ -57,7 +57,7 @@ final class APIResponseViewController: UIViewController {
             textView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             textView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
         ])
-        let copy = UIBarButtonItem(title: "コピー", image: UIImage(systemName: "doc.on.doc"), primaryAction: UIAction { [weak self] _ in self?.copyText() })
+        let copy = UIBarButtonItem(title: APIResponseTexts.copy, image: UIImage(systemName: "doc.on.doc"), primaryAction: UIAction { [weak self] _ in self?.copyText() })
         let share = UIBarButtonItem(barButtonSystemItem: .action, target: self, action: #selector(shareText(_:)))
         navigationItem.rightBarButtonItems = [share, copy]
         load()
@@ -131,10 +131,10 @@ final class APIResponseViewController: UIViewController {
             contentUnavailableConfiguration = UIContentUnavailableConfiguration.loading()
         case .failed(let reason):
             var configuration = UIContentUnavailableConfiguration.empty()
-            configuration.text = "APIの応答を読み込めませんでした"
+            configuration.text = APIResponseTexts.loadFailure
             configuration.secondaryAttributedText = reason.attributedText(textStyle: .body)
             configuration.button = .borderedTinted()
-            configuration.button.title = "再試行"
+            configuration.button.title = APIResponseTexts.retry
             configuration.buttonProperties.primaryAction = UIAction { [weak self] _ in self?.load() }
             contentUnavailableConfiguration = configuration
         case .loaded:

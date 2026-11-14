@@ -131,7 +131,7 @@ private final class InAppBrowserGrabberView: UIView {
         layer.cornerRadius = 2.5
         isUserInteractionEnabled = false
         isAccessibilityElement = true
-        accessibilityLabel = "シートグラバー"
+        accessibilityLabel = InAppBrowserSheetTexts.grabber
         accessibilityTraits = .button
     }
 
@@ -141,7 +141,7 @@ private final class InAppBrowserGrabberView: UIView {
     }
 
     override var accessibilityValue: String? {
-        get { presentation?.selected == .collapsed ? "折りたたまれました" : "広げられました" }
+        get { InAppBrowserSheetTexts.grabberValue(isCollapsed: presentation?.selected == .collapsed) }
         set { _ = newValue }
     }
 
