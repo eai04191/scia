@@ -56,10 +56,10 @@ struct PostContentBuilder {
             actionBarSpacing: settings.value(of: AppearanceCatalog.actionBarSpacing)
         )
         let language = settings.glyphLanguageIdentifier()
-        let primaryRenderer = RichTextRenderer(font: metrics.nameFont, textColor: base.textProperties.color, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, emojiImages: emojiImages, language: language)
-        let secondaryRenderer = RichTextRenderer(font: typography.font(.nameSecondary), textColor: .secondaryLabel, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, emojiImages: emojiImages, language: language)
-        let contextRenderer = RichTextRenderer(font: metrics.contextFont, textColor: .secondaryLabel, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, emojiImages: emojiImages, language: language)
-        let contextSecondaryRenderer = RichTextRenderer(font: typography.font(.contextSecondary), textColor: .secondaryLabel, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, emojiImages: emojiImages, language: language)
+        let primaryRenderer = RichTextRenderer(font: metrics.nameFont, textColor: base.textProperties.color, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: settings.appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
+        let secondaryRenderer = RichTextRenderer(font: typography.font(.nameSecondary), textColor: .secondaryLabel, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: settings.appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
+        let contextRenderer = RichTextRenderer(font: metrics.contextFont, textColor: .secondaryLabel, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: settings.appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
+        let contextSecondaryRenderer = RichTextRenderer(font: typography.font(.contextSecondary), textColor: .secondaryLabel, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: settings.appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
         let boosterName = Self.joined(spacing: settings.value(of: AppearanceCatalog.contextPartsSpacing), settings.appearance.contextNameStyle.parts.enumerated().map { index, part in
             let renderer = index == 0 ? contextRenderer : contextSecondaryRenderer
             return switch part {
@@ -79,6 +79,7 @@ struct PostContentBuilder {
         let bodyRenderer = postBodyRenderer(of: shown, translation: translation, isTranslating: isTranslating)
         let showsBody = settings.appearance.showsBody
         let preparedBody = showsBody ? preparedBodies?.prepared(for: shown, translation: translation, renderer: bodyRenderer) : nil
+        let body = showsBody ? withoutBlankLeftByHiddenEmojis(preparedBody?.text ?? bodyRenderer.render(translation ?? .status(shown))) : NSAttributedString()
         let context: PostContentConfiguration.Context? = if isPinned {
             PostContentConfiguration.Context(
                 symbolName: "pin.fill",
@@ -111,7 +112,7 @@ struct PostContentBuilder {
             showsVisibilitySymbol: settings.appearance.showsVisibilitySymbol,
             showsEditedMark: settings.appearance.showsEditedMark,
             timeStyle: settings.appearance.statusTimeStyle,
-            body: showsBody ? preparedBody?.text ?? bodyRenderer.render(translation ?? .status(shown)) : NSAttributedString(),
+            body: body,
             spoiler: spoiler(of: shown, base: base),
             metrics: metrics,
             card: linkCard(of: shown),
@@ -120,7 +121,7 @@ struct PostContentBuilder {
             avatarImages: avatarImages,
             emojiImages: settings.animatesCustomEmojis ? emojiImages : nil
         )
-        configuration.preparedBodyLayout = preparedBody?.layout
+        configuration.preparedBodyLayout = body.length > 0 ? preparedBody?.layout : nil
         configuration.isTranslated = showsBody && translation != nil
         configuration.isTranslating = showsBody && translation == nil && isTranslating
         configuration.translationFadeDuration = tuning.value(of: TuningCatalog.translationTransitionDuration)
@@ -205,7 +206,7 @@ struct PostContentBuilder {
     private func replyContext(_ label: ReplyLabel, font: UIFont, language: String) -> PostContentConfiguration.Context {
         let text = label.title
         let color: UIColor = label == .toMe ? .tintColor : .secondaryLabel
-        let renderer = RichTextRenderer(font: font, textColor: color, emojiImages: emojiImages, language: language)
+        let renderer = RichTextRenderer(font: font, textColor: color, showsCustomEmojis: settings.appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
         return PostContentConfiguration.Context(
             symbolName: "arrowshape.turn.up.left",
             symbolColor: color,
@@ -314,7 +315,7 @@ struct PostContentBuilder {
         let typography = PostTypography(settings: settings)
         let language = settings.glyphLanguageIdentifier(for: post.language)
         // Xの投稿にカスタム絵文字はないが、翻訳のマークを引用の囲みと同じ大きさにするため、同じ倍率を渡す。
-        let body = translated(RichTextRenderer(font: typography.font(.xPostBody), textColor: .label, emojiScale: settings.value(of: AppearanceCatalog.customEmojiScale), emojiImages: emojiImages, language: language), by: translation)
+        let body = translated(RichTextRenderer(font: typography.font(.xPostBody), textColor: .label, emojiScale: settings.value(of: AppearanceCatalog.customEmojiScale), showsCustomEmojis: settings.appearance.showsCustomEmojis, emojiImages: emojiImages, language: language), by: translation)
         return embed(
             id: "x:\(post.id)",
             header: EmbeddedPostView.Content.Header(
@@ -360,7 +361,7 @@ struct PostContentBuilder {
             spoiler: spoiler.map {
                 SpoilerView.Content(text: $0.text, isCollapsed: $0.isCollapsed, kind: $0.kind, padding: $0.padding, buttonFont: $0.buttonFont, buttonSpacing: $0.buttonSpacing, cornerRadius: $0.cornerRadius)
             },
-            text: translated(bodyRenderer(of: quoted, font: font, color: .label), by: translation).render(translation?.text ?? .status(quoted)),
+            text: withoutBlankLeftByHiddenEmojis(translated(bodyRenderer(of: quoted, font: font, color: .label), by: translation).render(translation?.text ?? .status(quoted))),
             translation: embedTranslation(translation),
             media: media,
             notes: notes,
@@ -386,6 +387,13 @@ struct PostContentBuilder {
     /// お気に入りやブーストの通知で再掲する投稿に、囲みの代わりに添える、引用のある投稿であることを示す1行。
     func quoteNote(font: UIFont) -> NSAttributedString {
         noteText(PostTexts.quoteNote, symbolName: "quote.bubble", color: .secondaryLabel, font: font)
+    }
+
+    /// カスタム絵文字を出さない設定で、絵文字を除いた本文に空白と改行しか残らなければ、本文のない投稿と同じく空にする。
+    /// 残すと、絵文字だけの本文のあった場所に、空の行と本文とのすき間が残る。
+    private func withoutBlankLeftByHiddenEmojis(_ text: NSAttributedString) -> NSAttributedString {
+        guard !settings.appearance.showsCustomEmojis, text.string.unicodeScalars.allSatisfy({ CharacterSet.whitespacesAndNewlines.contains($0) }) else { return text }
+        return NSAttributedString()
     }
 
     /// 引用とXの投稿の囲みに、作者のアイコンを出す。出さなければ、画像を読まず、大きさと名前とのすき間を0にする。
@@ -456,8 +464,8 @@ struct PostContentBuilder {
     private func embedName(_ name: RichText, handle: String, base: UIListContentConfiguration) -> NSAttributedString {
         let nameFont = PostTypography(settings: settings).font(.xPostName)
         let language = settings.glyphLanguageIdentifier()
-        let primary = RichTextRenderer(font: Self.boldFont(nameFont), textColor: base.textProperties.color, emojiImages: emojiImages, language: language)
-        let secondary = RichTextRenderer(font: nameFont, textColor: .secondaryLabel, emojiImages: emojiImages, language: language)
+        let primary = RichTextRenderer(font: Self.boldFont(nameFont), textColor: base.textProperties.color, showsCustomEmojis: settings.appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
+        let secondary = RichTextRenderer(font: nameFont, textColor: .secondaryLabel, showsCustomEmojis: settings.appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
         let text = NSMutableAttributedString(attributedString: primary.render(name))
         text.append(secondary.render(.plain(" @\(handle)", emojis: [])))
         return text
@@ -533,7 +541,7 @@ struct PostContentBuilder {
             quoteBarWidth: settings.value(of: AppearanceCatalog.quoteBarWidth),
             emojiScale: settings.value(of: AppearanceCatalog.customEmojiScale),
             unicodeEmojiScale: settings.value(of: AppearanceCatalog.unicodeEmojiScale),
-            emojiImages: emojiImages,
+            showsCustomEmojis: settings.appearance.showsCustomEmojis, emojiImages: emojiImages,
             language: settings.glyphLanguageIdentifier(for: status.language)
         )
     }

@@ -79,6 +79,10 @@ public struct AppearanceChoices: Codable, Hashable, Sendable {
     public var showsNameRow = true
     /// 本文を出す。
     public var showsBody = true
+    /// 本文、注意書き、投票の選択肢、引用とXの投稿の囲みの本文のカスタム絵文字を出す。出さなければ、ショートコードの文字も出さない。絵文字のリアクションのボタンは変えない。
+    public var showsCustomEmojis = true
+    /// 名前、名前の上の行、引用の囲みの作者の名前のカスタム絵文字を出す。出さなければ、ショートコードの文字も出さない。
+    public var showsNameCustomEmojis = true
     /// 切った本文の末尾に「続きを読む」を出す。出さなくても本文は切り、その場では広げられない。
     public var showsReadMore = true
     /// 自分の投稿が自分のフィルターに一致したことを示す注記を出す。

@@ -48,6 +48,8 @@ public enum AppearanceChoice: Hashable, CaseIterable, Sendable {
     case showsPoll
     case showsReactions
     case showsReactionGlow
+    case showsCustomEmojis
+    case showsNameCustomEmojis
 
     /// `group`の分類の画面に並べる項目。上から並べる順。選んで決める項目のない分類では空。
     /// 白より明るく描けない画面のUIは、`drawsReactionGlowInHDR`を除く。
@@ -57,8 +59,8 @@ public enum AppearanceChoice: Hashable, CaseIterable, Sendable {
         case "row": [.showsSeparators]
         case "context": [.contextNameStyle, .showsContextSymbol, .showsBoosterAvatar, .showsReplyLabel]
         case "avatar": [.showsAvatar, .avatarShape, .showsAvatarBorder, .animatesAvatars, .wrapsBelowAvatar, .showsReplyLines]
-        case "name": [.showsNameRow, .nameStyle, .stacksNameParts, .timeStyle, .boldsName, .showsTime, .showsVisibilitySymbol, .showsEditedMark]
-        case "body": [.showsBody, .showsReadMore, .showsFilterNote, .glyphLanguage, .emojiStyle, .animatesCustomEmojis]
+        case "name": [.showsNameRow, .nameStyle, .stacksNameParts, .timeStyle, .showsNameCustomEmojis, .boldsName, .showsTime, .showsVisibilitySymbol, .showsEditedMark]
+        case "body": [.showsBody, .showsReadMore, .showsFilterNote, .glyphLanguage, .emojiStyle, .showsCustomEmojis, .animatesCustomEmojis]
         case "spoiler": [.showsSpoiler]
         case "media": [.showsMedia, .mediaArrangement, .embedMediaArrangement, .tiltsStackedPhotos, .showsMediaBadges]
         case "linkCard": [.showsLinkCard, .boldsLinkCardTitle, .showsLinkCardImage, .linkCardThumbnailSide, .showsLinkCardSite]
@@ -121,6 +123,7 @@ public enum AppearanceChoice: Hashable, CaseIterable, Sendable {
         case .showsPoll: "投票を表示"
         case .showsReactions: "絵文字のリアクションを表示"
         case .showsReactionGlow: "光を表示"
+        case .showsCustomEmojis, .showsNameCustomEmojis: "カスタム絵文字を表示"
         }
     }
 
@@ -185,6 +188,8 @@ public enum AppearanceChoice: Hashable, CaseIterable, Sendable {
         case .showsPoll: .firstOf([.part(.poll), .part(.pollSlot)])
         case .showsReactions: .firstOf([.part(.reactions), .part(.reactionsSlot)])
         case .showsReactionGlow: .part(.reactionGlow)
+        case .showsCustomEmojis: .firstOf([.part(.customEmojis), .part(.bodyText)])
+        case .showsNameCustomEmojis: .firstOf([.part(.nameCustomEmojis), .part(.nameRow)])
         }
     }
 
@@ -279,6 +284,8 @@ extension AppearanceChoice {
         case .showsPoll: .toggle(\.appearance.showsPoll)
         case .showsReactions: .toggle(\.appearance.showsReactions)
         case .showsReactionGlow: .toggle(\.appearance.showsReactionGlow)
+        case .showsCustomEmojis: .toggle(\.appearance.showsCustomEmojis)
+        case .showsNameCustomEmojis: .toggle(\.appearance.showsNameCustomEmojis)
         }
     }
 

@@ -298,6 +298,27 @@ struct HiddenPostPartsTests {
         #expect(timeline { $0.appearance.showsBody = false }.translationSources(of: post).isEmpty)
     }
 
+    /// カスタム絵文字のスイッチは、「本文」のものは本文に、「名前の行」のものは名前にだけ効く。描かない絵文字は、ショートコードの文字も出さない。
+    @Test func hiddenCustomEmojisAreNotDrawn() throws {
+        let base = try status()
+        let url = try #require(URL(string: "https://files.example.social/blob.png"))
+        let emoji = CustomEmoji(shortcode: "blob", url: url, staticUrl: url)
+        let account = Account(id: base.account.id, username: base.account.username, acct: base.account.acct, displayName: "名前:blob:", avatar: base.account.avatar, emojis: [emoji])
+        let post = Status(id: base.id, createdAt: base.createdAt, account: account, content: "<p>前:blob:後</p>", spoilerText: "", url: nil, emojis: [emoji])
+        let shown = timeline { _ in }.contentConfiguration(for: post, base: .cell())
+        let hidden = timeline { $0.appearance.showsCustomEmojis = false }.contentConfiguration(for: post, base: .cell())
+
+        #expect(shown.body.length == 3)
+        #expect(hidden.body.string == "前後")
+        #expect(hidden.nameParts.first?.length == shown.nameParts.first?.length)
+        let hiddenName = timeline { $0.appearance.showsNameCustomEmojis = false }.contentConfiguration(for: post, base: .cell())
+        #expect(hiddenName.nameParts.first?.string == "名前")
+        #expect(hiddenName.body.length == shown.body.length)
+        // 絵文字だけの本文は、あいだの空白や改行を残さず空にする。
+        let emojiOnly = Status(id: base.id, createdAt: base.createdAt, account: account, content: "<p>:blob: :blob:</p><p>:blob:</p>", spoilerText: "", url: nil, emojis: [emoji])
+        #expect(timeline { $0.appearance.showsCustomEmojis = false }.contentConfiguration(for: emojiOnly, base: .cell()).body.length == 0)
+    }
+
     /// 投稿のアイコンを出さないと、投稿の区切り線は本文の左端（行の左の余白）から引く。アイコンを出したままの通知や人の行は、アイコンの列の右から引く。
     @Test func hiddenAvatarMovesOnlyPostSeparators() {
         let settings = AppSettings.isolated()

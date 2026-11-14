@@ -181,6 +181,8 @@ struct AppearanceSheets {
         case .showsPoll: return flip(\.appearance.showsPoll)
         case .showsReactions: return flip(\.appearance.showsReactions)
         case .showsReactionGlow: return flip(\.appearance.showsReactionGlow)
+        case .showsCustomEmojis: return flip(\.appearance.showsCustomEmojis)
+        case .showsNameCustomEmojis: return flip(\.appearance.showsNameCustomEmojis)
         case .showsLinkCardImage: return flip(\.appearance.showsLinkCardImage)
         case .showsVisibilitySymbol: return flip(\.appearance.showsVisibilitySymbol)
         case .showsEditedMark: return flip(\.appearance.showsEditedMark)

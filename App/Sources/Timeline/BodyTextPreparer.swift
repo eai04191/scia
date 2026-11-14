@@ -221,7 +221,7 @@ final class BodyTextPreparer {
         return Entry(
             source: request.source,
             renderer: request.renderer,
-            emojiPixelHeights: emojiPixelHeights(in: text, urls: RichTextRenderer.emojiURLs(in: richText), scale: request.renderer.displayScale),
+            emojiPixelHeights: emojiPixelHeights(in: text, urls: request.renderer.showsCustomEmojis ? RichTextRenderer.emojiURLs(in: richText) : [], scale: request.renderer.displayScale),
             text: text,
             layout: layout
         )

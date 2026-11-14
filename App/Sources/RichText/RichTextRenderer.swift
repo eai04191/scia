@@ -24,6 +24,8 @@ struct RichTextRenderer: Sendable {
     var unicodeEmojiScale: CGFloat
     /// 本文が絵文字だけのときに、絵文字を大きく描く決まり。nilなら絵文字だけでも大きくしない。
     var emojiOnly: EmojiOnlyEnlargement?
+    /// カスタム絵文字を描く。描かなければ、画像も読まず、ショートコードの文字も出さない。
+    var showsCustomEmojis: Bool
     private(set) var emojiImages: EmojiImageSource
     /// 文字列に付ける言語。付けないと、漢字とかなの書体が端末の言語の設定で決まり、英語の設定では日本語も中国語の書体で描かれる。
     var language: String
@@ -51,6 +53,7 @@ struct RichTextRenderer: Sendable {
         emojiScale: CGFloat = 1,
         unicodeEmojiScale: CGFloat = 1,
         emojiOnly: EmojiOnlyEnlargement? = nil,
+        showsCustomEmojis: Bool = true,
         emojiImages: EmojiImageStore<UIImage>,
         language: String,
         emojiStyle: EmojiStyle = AppDependencies.settings.appearance.emojiStyle,
@@ -68,6 +71,7 @@ struct RichTextRenderer: Sendable {
         self.emojiScale = emojiScale
         self.unicodeEmojiScale = unicodeEmojiScale
         self.emojiOnly = emojiOnly
+        self.showsCustomEmojis = showsCustomEmojis
         self.emojiImages = .store(emojiImages)
         self.language = language
         self.emojiStyle = emojiStyle
@@ -103,7 +107,8 @@ struct RichTextRenderer: Sendable {
     func withEmojiSnapshot(of urls: some Sequence<URL>) -> RichTextRenderer {
         var images: [URL: UIImage] = [:]
         var failed: Set<URL> = []
-        for url in urls {
+        // カスタム絵文字を描かないときは、画像を求めない。求めると読み込みが始まる。
+        for url in urls where showsCustomEmojis {
             switch emojiState(of: url, pixelHeight: EmojiImageStore<UIImage>.pixelHeight) {
             case .loaded(let image): images[url] = image
             case .failed: failed.insert(url)
@@ -134,7 +139,7 @@ struct RichTextRenderer: Sendable {
     func hasSameStyle(as other: RichTextRenderer) -> Bool {
         font == other.font && textColor == other.textColor && secondaryColor == other.secondaryColor && linkColor == other.linkColor
             && underlinesLinks == other.underlinesLinks && paragraphSpacing == other.paragraphSpacing && lineSpacing == other.lineSpacing
-            && indentPerLevel == other.indentPerLevel && quoteBarWidth == other.quoteBarWidth && emojiScale == other.emojiScale && unicodeEmojiScale == other.unicodeEmojiScale
+            && indentPerLevel == other.indentPerLevel && quoteBarWidth == other.quoteBarWidth && showsCustomEmojis == other.showsCustomEmojis && emojiScale == other.emojiScale && unicodeEmojiScale == other.unicodeEmojiScale
             && emojiOnly == other.emojiOnly && language == other.language && originalLanguage == other.originalLanguage && emojiStyle == other.emojiStyle && displayScale == other.displayScale
             && marksTranslation == other.marksTranslation
     }
@@ -361,7 +366,7 @@ struct RichTextRenderer: Sendable {
             attributes[.copiedLinkText] = copied
             return NSAttributedString(string: Self.lineSeparated(text), attributes: attributes)
         case .emoji(let emoji):
-            return render(emoji, block: block)
+            return showsCustomEmojis ? render(emoji, block: block) : NSAttributedString()
         case .lineBreak:
             // 段落を分けると段落間隔が入るため、段落の中の改行は行区切り文字にする。
             return NSAttributedString(string: "\u{2028}", attributes: attributes(style: [], block: block))
