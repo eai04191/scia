@@ -229,4 +229,43 @@ struct AccountCacheTests {
 
         #expect(try await cache.resolve(handle: "alice@example.social", localServer: "local.example") { alice }?.id == "1")
     }
+
+    /// プロフィール画面が読む前に始めたアイコンのための読み込みが、あとから届いても、プロフィール画面が読んだアカウントを置き換えない。
+    @Test func loadInFlightDoesNotReplaceProfile() async {
+        let server = Server(holds: true)
+        let cache = makeCache(server)
+        let fresh = Account(id: "1", username: "user1", acct: "user1", displayName: "Fresh", avatar: nil)
+
+        let load = Task { await cache.load(["1"]) }
+        await server.waitForRequests(1)
+        cache.rememberProfile(fresh)
+        server.release()
+        _ = await load.value
+
+        #expect(cache.profile(startingFrom: Account(id: "1", username: "user1", acct: "user1", displayName: "Given", avatar: nil)) == fresh)
+        #expect(cache.account("1") == fresh)
+    }
+
+    /// プロフィール画面が読む前に始めた検索が、あとから届いても、プロフィール画面が読んだアカウントを置き換えない。
+    @Test func searchInFlightDoesNotReplaceProfile() async throws {
+        let cache = makeCache(Server())
+        let gate = Gate()
+        let url = try #require(URL(string: "https://remote.example/@alice"))
+        let old = Account(id: "7", username: "alice", acct: "alice@remote.example", displayName: "Old", avatar: nil)
+        let fresh = Account(id: "7", username: "alice", acct: "alice@remote.example", displayName: "Fresh", avatar: nil)
+
+        let search = Task {
+            try await cache.resolve(.profileURL(url)) {
+                try await gate.wait()
+                return old
+            }
+        }
+        try await waitUntil { gate.waiterCount == 1 }
+        cache.rememberProfile(fresh)
+        gate.open()
+        _ = try await search.value
+
+        #expect(cache.profile(startingFrom: old) == fresh)
+        #expect(try await cache.resolve(.profileURL(url)) { old } == fresh)
+    }
 }

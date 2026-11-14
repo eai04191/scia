@@ -60,6 +60,7 @@ final class ProfileController {
     static func make(
         account: Account,
         client: MastodonClient,
+        accounts: AccountCache,
         relationshipCache: RelationshipCache,
         settings: AppSettings = AppDependencies.settings,
         tasks: TaskScope,
@@ -71,6 +72,7 @@ final class ProfileController {
         let controller = ProfileController(
             account: account,
             client: client,
+            accounts: accounts,
             relationshipCache: relationshipCache,
             settings: settings,
             viewController: viewController,
@@ -85,6 +87,7 @@ final class ProfileController {
     private init(
         account: Account,
         client: MastodonClient,
+        accounts: AccountCache,
         relationshipCache: RelationshipCache,
         settings: AppSettings,
         viewController: TimelineViewController,
@@ -96,6 +99,7 @@ final class ProfileController {
             account: account,
             myAccountID: client.credential.accountID,
             postsFilter: settings.profilePostsFilter,
+            accounts: accounts,
             relationshipCache: relationshipCache,
             api: ProfileStore.API(client: client)
         )

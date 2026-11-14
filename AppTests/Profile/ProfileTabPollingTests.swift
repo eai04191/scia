@@ -53,6 +53,7 @@ struct ProfileTabPollingTests {
         let (controller, viewController) = ProfileController.make(
             account: Self.account,
             client: client,
+            accounts: AccountCache { _ in [] },
             relationshipCache: RelationshipCache { _ in [] },
             settings: .isolated(),
             tasks: tasks,

@@ -6,7 +6,8 @@ import os
 ///
 /// 足りないアカウントは、相手ごとにリクエストを送らず、`MastodonClient.multipleAccountsLimit`件ずつまとめて1回で読む。
 /// メンションが何人いても、メニューを開くたびのリクエストは1回で済み、トークンごとのレート制限を削らない。
-/// IDはサーバーごとに違うため、セッション（ログイン中のアカウント）ごとに持つ。起動している間だけ覚え、相手がプロフィールを変えても追わない。
+/// IDはサーバーごとに違うため、セッション（ログイン中のアカウント）ごとに持つ。起動している間だけ覚える。
+/// 覚えたアカウントを置き換えるのは、プロフィール画面が読んだものだけで、ほかに相手がプロフィールを変えても追わない。
 @MainActor
 public final class AccountCache {
     public typealias Fetch = @Sendable ([String]) async throws -> [Account]
@@ -14,6 +15,8 @@ public final class AccountCache {
     private let fetch: Fetch
     private let limit: Int
     private var accounts: [String: Account] = [:]
+    /// プロフィール画面が読んだアカウント。`accounts`と分けて持ち、ほかの読み込みや検索の応答では置き換えない。プロフィール画面が読む前に始めた読み込みの応答が、あとから届くことがあるため。
+    private var profiles: [String: Account] = [:]
     /// 読み込み中のIDと、それを読んでいる読み込み。同じIDを続けて求められても、二重に送らない。
     private var inFlight: [String: Task<Void, Never>] = [:]
     /// 探して見つかったアカウントのID。
@@ -34,6 +37,24 @@ public final class AccountCache {
         accounts[id]
     }
 
+    /// プロフィール画面を`account`で開くときに、最初に出すアカウント。前にプロフィール画面が読んでいればそれを、なければ`account`を返す。
+    /// 開くときに渡るアカウントは、投稿に付いてきたものや、前に探して覚えたもので、プロフィール画面が読んだものより古いことがあるため。
+    /// アイコンのために読んだだけのアカウントは、渡されたものより新しいとは限らないので使わない。
+    public func profile(startingFrom account: Account) -> Account {
+        profiles[account.id] ?? account
+    }
+
+    /// プロフィール画面が読んだか、編集して保存した`account`を覚える。IDで読む経路と探して開く経路も、次からこれを返す。
+    public func rememberProfile(_ account: Account) {
+        profiles[account.id] = account
+        accounts[account.id] = account
+    }
+
+    /// 読み込みや検索で届いた`account`を覚える。プロフィール画面が読んだものがあれば、そちらを残す。
+    private func remember(_ account: Account) {
+        accounts[account.id] = profiles[account.id] ?? account
+    }
+
     /// `ids`のアカウントを読み、読めたものを返す。読み込み済みのものは読まず、読み込み中のものはその読み込みを待つ。
     /// 読めなかったアカウント（見つからない、承認されていない、リクエストが失敗した）は返さず、覚えもしないので、次に求められたときに読み直す。
     public func load(_ ids: [String]) async -> [String: Account] {
@@ -45,7 +66,7 @@ public final class AccountCache {
             let task = Task {
                 do {
                     for account in try await fetch(chunk) {
-                        accounts[account.id] = account
+                        remember(account)
                     }
                 } catch {
                     logger.error("accounts load failed count=\(chunk.count, privacy: .public): \(SciaLog.describe(error), privacy: .public)")
@@ -99,7 +120,7 @@ public final class AccountCache {
         defer { resolving[lookup] = nil }
         let account = try await task.value
         if let account {
-            accounts[account.id] = account
+            remember(account)
             resolvedIDs[lookup] = account.id
         }
         return account

@@ -1550,7 +1550,7 @@ final class SessionController {
 
     /// プロフィール画面を作り、投稿への操作とリンクを開けるようにする。積んで開くものとタブに置くもので使う。
     private func makeProfile(_ account: Account, tasks: TaskScope) -> (ProfileController, TimelineViewController) {
-        let (controller, viewController) = ProfileController.make(account: account, client: client, relationshipCache: profiles.relationships, tasks: tasks) { [weak self] error, title in
+        let (controller, viewController) = ProfileController.make(account: account, client: client, accounts: accounts, relationshipCache: profiles.relationships, tasks: tasks) { [weak self] error, title in
             self?.handle(error, title: title)
         }
         configure(viewController)
@@ -1938,7 +1938,7 @@ final class SessionController {
         }
     }
 
-    /// 自分のプロフィールの編集をシートで開く。保存したら、開いている自分のプロフィールに反映する。
+    /// 自分のプロフィールの編集をシートで開く。保存したら、開いている自分のプロフィールに反映し、次に開くときのために覚える。
     /// - Parameters:
     ///   - debugNote: デバッグURLで渡した、読み込んだあとに置き換える自己紹介。
     ///   - debugField: デバッグURLで渡した、読み込んだあとに足す補足情報の内容。
@@ -1950,6 +1950,8 @@ final class SessionController {
         // そのあとに注目のハッシュタグや紹介を送れずにシートを閉じなくても、保存できたプロフィールは開いている自分のプロフィールに反映する。
         editor.onProfileSaved = { [weak self] saved in
             self?.cachedMyAccount = saved.account
+            // 自分のプロフィールを開いていなくても覚え、次に開いたときに、前に読んだ編集の前のものから始めない。
+            self?.accounts.rememberProfile(saved.account)
             self?.profiles.apply(edited: saved.account)
         }
         // 上限を読めなければ、4.6.0より前のMastodonの値のまま使う。超えた分はサーバーが拒む。
