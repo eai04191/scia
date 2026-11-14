@@ -12,8 +12,8 @@ import UIKit
 final class StreamingStatusPullView: UIView {
     /// 今の日付。テストでは決まった日付に差し替える。
     var now: () -> Date = AppDependencies.now
-    private let streamingColumn = Column(title: "ストリーミング")
-    private let restColumn = Column(title: "REST")
+    private let streamingColumn = Column(title: StreamingStatusTexts.streamingColumn)
+    private let restColumn = Column(title: StreamingStatusTexts.restColumn)
     /// 補完が止まっている理由。列に収まらない長さになるため、2列の下に出す。
     private let noteLabel = UILabel()
     private var observations: [NSKeyValueObservation] = []
@@ -140,45 +140,45 @@ final class StreamingStatusPullView: UIView {
     private static func streamingContent(for state: ConnectionDiagnostics.StreamingState?, rate: ArrivalRate, now: Date) -> Content {
         switch state {
         case .connected:
-            Content(symbol: "checkmark.circle.fill", tint: .systemGreen, text: "接続済み", detail: "\(rate.perMinute(at: now))件 / 分")
+            Content(symbol: "checkmark.circle.fill", tint: .systemGreen, text: StreamingStatusTexts.streaming(state), detail: StreamingStatusTexts.arrivalRate(perMinute: rate.perMinute(at: now)))
         case .connecting:
-            Content(symbol: "ellipsis.circle.fill", tint: .secondaryLabel, text: "接続中")
+            Content(symbol: "ellipsis.circle.fill", tint: .secondaryLabel, text: StreamingStatusTexts.streaming(state))
         case .polling:
-            Content(symbol: "exclamationmark.triangle.fill", tint: .systemOrange, text: "ポーリング中")
+            Content(symbol: "exclamationmark.triangle.fill", tint: .systemOrange, text: StreamingStatusTexts.streaming(state))
         case .stopped:
-            Content(symbol: "pause.circle.fill", tint: .secondaryLabel, text: "未接続")
+            Content(symbol: "pause.circle.fill", tint: .secondaryLabel, text: StreamingStatusTexts.streaming(state))
         case .loginRequired:
-            Content(symbol: "pause.circle.fill", tint: .secondaryLabel, text: "ログインが必要")
+            Content(symbol: "pause.circle.fill", tint: .secondaryLabel, text: StreamingStatusTexts.streaming(state))
         case nil:
-            Content(symbol: "circle.dashed", tint: .secondaryLabel, text: "未接続")
+            Content(symbol: "circle.dashed", tint: .secondaryLabel, text: StreamingStatusTexts.streaming(state))
         }
     }
 
     private static func restContent(for catchUp: CatchUpStatus, now: Date) -> Content {
         // 止まっている間は、タイムラインがいつまでの投稿を出しているかを添える。
-        let loadedUntil = catchUp.lastLoadedAt.map { "\(time($0, now: now))まで" }
+        let loadedUntil = catchUp.lastLoadedAt.map { StreamingStatusTexts.loadedUntil(time($0, now: now)) }
         switch catchUp.phase {
         case .idle:
             guard let loadedAt = catchUp.lastLoadedAt else {
-                return Content(symbol: "circle.dashed", tint: .secondaryLabel, text: "読み込み前")
+                return Content(symbol: "circle.dashed", tint: .secondaryLabel, text: StreamingStatusTexts.notLoaded)
             }
-            return Content(symbol: "checkmark.circle.fill", tint: .systemGreen, text: "最新", detail: time(loadedAt, now: now))
+            return Content(symbol: "checkmark.circle.fill", tint: .systemGreen, text: StreamingStatusTexts.upToDate, detail: time(loadedAt, now: now))
         case .loading(let readCount):
             // 何ページで終わるかはサーバーが返さないため、全体は出さず、読んだ件数だけを出す。
-            return Content(symbol: "arrow.down.circle.fill", tint: .secondaryLabel, text: "読み込み中", detail: "\(readCount)件")
+            return Content(symbol: "arrow.down.circle.fill", tint: .secondaryLabel, text: StreamingStatusTexts.loading, detail: StreamingStatusTexts.readCount(readCount))
         case .regenerating:
             return Content(
                 symbol: "hourglass.circle.fill",
                 tint: .secondaryLabel,
-                text: "作り直し待ち",
+                text: StreamingStatusTexts.regenerating,
                 detail: loadedUntil,
-                note: "サーバーがホームを作り直し中のため、時間をおいて読み直します。"
+                note: StreamingStatusTexts.regeneratingNote
             )
         case .paused(let until):
             return Content(
                 symbol: "pause.circle.fill",
                 tint: .systemOrange,
-                text: "待機中",
+                text: StreamingStatusTexts.paused,
                 detail: loadedUntil,
                 // 引っぱる間だけ出す表示で、ボタンを置けない。止めた理由は、時間を過ぎると自動で読み直す旨で、ログアウトにはならない。
                 note: FailureText.withoutLogIn(ErrorPresentation(AutomaticRequestsPaused(until: until)))
@@ -187,10 +187,10 @@ final class StreamingStatusPullView: UIView {
             return Content(
                 symbol: "exclamationmark.triangle.fill",
                 tint: .systemOrange,
-                text: "失敗",
+                text: StreamingStatusTexts.failed,
                 detail: loadedUntil,
                 // 引っぱる間だけ出す表示で、ボタンを置けない。今のアカウントの通信なので、401ならログインし直しの段から行える。
-                note: "\(FailureText.withoutLogIn(presentation))次につながったときに読み直します。"
+                note: StreamingStatusTexts.failedNote(reason: FailureText.withoutLogIn(presentation))
             )
         }
     }
