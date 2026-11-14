@@ -69,19 +69,19 @@ final class OtherAccountHashtags {
     }
 
     private func follow(_ name: String) {
-        send(key: "follow:\(name)", done: "#\(name)をフォローしました", failure: "ハッシュタグをフォローできませんでした", reloading: followed) { client in
+        send(key: "follow:\(name)", done: HashtagChangeTexts.followed(name), failure: HashtagChangeTexts.followFailure, reloading: followed) { client in
             try await client.followTag(name)
         }
     }
 
     private func unfollow(_ name: String) {
-        send(key: "follow:\(name)", done: "#\(name)のフォローを外しました", failure: "ハッシュタグのフォローを外せませんでした", reloading: followed) { client in
+        send(key: "follow:\(name)", done: HashtagChangeTexts.unfollowed(name), failure: HashtagChangeTexts.unfollowFailure, reloading: followed) { client in
             try await client.unfollowTag(name)
         }
     }
 
     private func feature(_ name: String) {
-        send(key: "feature:\(name)", done: "#\(name)をプロフィールで紹介しました", failure: "プロフィールでの紹介を変更できませんでした", reloading: featured) { client in
+        send(key: "feature:\(name)", done: HashtagChangeTexts.featured(name), failure: HashtagChangeTexts.featureFailure, reloading: featured) { client in
             _ = try await client.featureTag(name)
         }
     }
@@ -89,7 +89,7 @@ final class OtherAccountHashtags {
     /// 外すIDは、外すときに読み直したハッシュタグで決める。今のアカウントで外すときと同じく、別の端末で足し直したタグを古いIDで消さないため。
     private func unfeature(_ name: String) {
         let featured = featured
-        send(key: "feature:\(name)", done: "#\(name)をプロフィールから外しました", failure: "プロフィールでの紹介を変更できませんでした", reloading: featured) { client in
+        send(key: "feature:\(name)", done: HashtagChangeTexts.unfeatured(name), failure: HashtagChangeTexts.featureFailure, reloading: featured) { client in
             featured.reload(purpose: .action)
             if let tag = try await featured.latest().first(named: name) {
                 try await client.unfeatureTag(tag.id)
@@ -98,7 +98,7 @@ final class OtherAccountHashtags {
     }
 
     private func mute(_ name: String, duration: Duration?) {
-        send(key: "mute:\(name)", done: "#\(name)をミュートしました", failure: "ミュートを変更できませんでした", reloading: filters) { client in
+        send(key: "mute:\(name)", done: HashtagChangeTexts.muted(name), failure: HashtagChangeTexts.muteFailure, reloading: filters) { client in
             try await HashtagMute.mute(name, duration: duration, client: client)
         }
     }
@@ -107,7 +107,7 @@ final class OtherAccountHashtags {
     private func unmute(_ name: String) {
         let filters = filters
         let now = now
-        send(key: "mute:\(name)", done: "#\(name)のミュートを解除しました", failure: "ミュートを変更できませんでした", reloading: filters) { client in
+        send(key: "mute:\(name)", done: HashtagChangeTexts.unmuted(name), failure: HashtagChangeTexts.muteFailure, reloading: filters) { client in
             filters.reload(purpose: .action)
             if let muted = HashtagMute.find(name, in: try await filters.latest(), now: now()) {
                 try await muted.unmute(client: client)

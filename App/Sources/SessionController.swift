@@ -94,7 +94,7 @@ final class SessionController {
         let model = PostingDefaultsModel(api: .init(session: session), initial: session.preferences, tasks: tasks.child())
         model.onFailure = { [weak self] reason in
             guard let self else { return }
-            let title = "投稿のデフォルトを変更できませんでした"
+            let title = SessionTexts.Failure.postingDefaults
             operationStatus.recordFailure(title: title, reason: reason)
             showFailureNotice(.interactionFailure(title: title) { [weak self] in
                 self?.presentAlert(title: title, reason: reason)
@@ -826,7 +826,7 @@ final class SessionController {
             guard let self else { return }
             do {
                 let account = try await myAccount()
-                statusBarTicker.receive(StatusBarTickerItem(id: "demo", kind: .favourite, account: account, subject: .text(RichText.plain("通知はここに流れます", emojis: []))))
+                statusBarTicker.receive(StatusBarTickerItem(id: "demo", kind: .favourite, account: account, subject: .text(RichText.plain(SessionTexts.statusBarTickerDemo, emojis: []))))
             } catch {
                 logger.info("statusBarTicker demo skipped: \(SciaLog.describe(error), privacy: .public)")
             }
@@ -876,15 +876,15 @@ final class SessionController {
     private func installAccountButton(on viewController: UIViewController) {
         let accountMenu = accountMenu
         viewController.navigationItem.leftBarButtonItem = Self.accountButton(for: credential) { [weak self] in
-            let account = UIAction(title: "アカウント", image: UIImage(systemName: "person.text.rectangle")) { _ in
+            let account = UIAction(title: SettingsPage.account.title(), image: UIImage(systemName: "person.text.rectangle")) { _ in
                 self?.open(.account)
             }
-            let recent = UIAction(title: "操作の状況", image: UIImage(systemName: "list.bullet.clipboard")) { _ in
+            let recent = UIAction(title: OperationStatusTexts.title, image: UIImage(systemName: "list.bullet.clipboard")) { _ in
                 self?.showOperationStatus()
             }
             // お知らせは、未読があるときだけ並べる。未読がなければ、アカウントの画面から開く。決まりはdocs/account-screen.mdにある。
             let unread = self?.announcements.unreadCount ?? 0
-            let announcements = UIAction(title: "サーバーのお知らせ", subtitle: "未読\(unread)件", image: UIImage(systemName: "megaphone")) { _ in
+            let announcements = UIAction(title: SessionTexts.announcements, subtitle: SessionTexts.unreadAnnouncements(count: unread), image: UIImage(systemName: "megaphone")) { _ in
                 self?.showAnnouncements()
             }
             let top = unread > 0 ? [account, recent, announcements] : [account, recent]
@@ -906,7 +906,7 @@ final class SessionController {
     private func applyAccountBadge(to item: UIBarButtonItem) {
         let unread = announcements.unreadCount
         item.badge = unread > 0 ? .indicator() : nil
-        item.accessibilityHint = unread > 0 ? "未読のお知らせが\(unread)件あります。" : nil
+        item.accessibilityHint = unread > 0 ? SessionTexts.unreadAnnouncementsHint(count: unread) : nil
     }
 
     /// タブのナビゲーションで、チップの列を画面の移り変わりに合わせ、Macでバーの空いたところを押したらタイムラインを最上部へ動かす。
@@ -1201,7 +1201,7 @@ final class SessionController {
             // ローカルのacctはドメインを含まず、検索では完全一致にならないため、投稿のメンションのリストにあるIDで引く。
             guard let mention = status.mentions.first(where: { $0.url == url || $0.acct == acct }) else {
                 logger.error("mention not in status acct=\(acct, privacy: .private(mask: .hash))")
-                handle(ProfileNotFound(acct: acct), title: "プロフィールを開けませんでした")
+                handle(ProfileNotFound(acct: acct), title: SessionTexts.Failure.openProfile)
                 return
             }
             openProfile(accountID: mention.id, from: source)
@@ -1249,14 +1249,14 @@ final class SessionController {
         let menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
             let layout = AppDependencies.settings.tabLayout(for: handle)
             if let current = layout.item(matching: item) {
-                completion([UIAction(title: "名前を変える", image: UIImage(systemName: "pencil")) { [weak self] _ in
+                completion([UIAction(title: TabMenuTexts.rename, image: UIImage(systemName: "pencil")) { [weak self] _ in
                     self?.presentTabRename(current)
-                }, UIAction(title: "タブから外す", image: UIImage(systemName: "rectangle.stack.badge.minus"), attributes: .destructive) { [weak self] _ in
+                }, UIAction(title: TabMenuTexts.remove, image: UIImage(systemName: "rectangle.stack.badge.minus"), attributes: .destructive) { [weak self] _ in
                     self?.setTabLayout(AppDependencies.settings.tabLayout(for: handle).removing(item))
-                    self?.showTabLayoutNotice("タブから外しました")
+                    self?.showTabLayoutNotice(TabMenuTexts.removed)
                 }])
             } else {
-                completion([UIAction(title: "タブに追加", subtitle: "切り替えタブに入ります", image: UIImage(systemName: "rectangle.stack.badge.plus")) { [weak self] _ in
+                completion([UIAction(title: TabMenuTexts.add, subtitle: TabMenuTexts.addSubtitle, image: UIImage(systemName: "rectangle.stack.badge.plus")) { [weak self] _ in
                     guard let self else { return }
                     // 並びを書いたら、タブバーへの反映を待ってから飛ばす。メニューを開いたあとにほかのウインドウで同じ項目を足していて、並びが変わらなければ飛ばさない。
                     // 残すと、あとの関係のない並びの変化で飛んでしまうため。
@@ -1264,12 +1264,12 @@ final class SessionController {
                     if !setTabLayout(AppDependencies.settings.tabLayout(for: handle).adding(item)) {
                         pendingTabAddFlight = nil
                     }
-                    showTabLayoutNotice("タブに追加しました")
+                    showTabLayoutNotice(TabMenuTexts.added)
                 }])
             }
         }])
         // 右上に入り切らず「さらに表示」にまとめられたときも、何のボタンか分かるよう名前を付ける。
-        let button = UIBarButtonItem(title: "タブ", image: UIImage(systemName: "rectangle.stack"), menu: menu)
+        let button = UIBarButtonItem(title: TabMenuTexts.button, image: UIImage(systemName: "rectangle.stack"), menu: menu)
         barItem = button
         return button
     }
@@ -1305,7 +1305,7 @@ final class SessionController {
         guard item.isUserAdded else { return }
         let handle = credential.handle
         let defaultTitle = item.renamed("").title
-        let alert = UIAlertController(title: "タブの名前", message: "空にすると“\(defaultTitle)”に戻ります", preferredStyle: .alert)
+        let alert = UIAlertController(title: TabMenuTexts.Rename.title, message: TabMenuTexts.Rename.message(defaultTitle: defaultTitle), preferredStyle: .alert)
         alert.addTextField { field in
             field.text = item.title == defaultTitle ? "" : item.title
             field.placeholder = defaultTitle
@@ -1313,8 +1313,8 @@ final class SessionController {
             // ペーストした文字を、コピーしたとおりに入れる。理由は`GlyphLanguageTextView`の`smartInsertDeleteType`と同じ。
             field.smartInsertDeleteType = .no
         }
-        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
-        alert.addAction(UIAlertAction(title: "保存", style: .default) { [weak self, weak alert] _ in
+        alert.addAction(UIAlertAction(title: TabMenuTexts.Rename.cancel, style: .cancel))
+        alert.addAction(UIAlertAction(title: TabMenuTexts.Rename.save, style: .default) { [weak self, weak alert] _ in
             guard let text = alert?.textFields?.first?.text else { return }
             let renamed = item.renamed(text.trimmingCharacters(in: .whitespacesAndNewlines))
             self?.setTabLayout(AppDependencies.settings.tabLayout(for: handle).replacing(renamed))
@@ -1412,7 +1412,7 @@ final class SessionController {
     /// プロフィールを開く操作は、どの経路もここに通す。`find`で探したアカウントのプロフィールを、`source`の画面に積む。
     /// 探している途中に別のプロフィールを開こうとしたら、前のものは止めて結果を使わない。待っている間も、ほかの操作は止めない。
     /// 待つ間にタブを移ったり、戻ったり、別の画面を開いたりしたら、見つかっても積まず、失敗も知らせない。
-    private func openProfile(from source: UIViewController, failureTitle: String = "プロフィールを開けませんでした", finding find: @escaping @Sendable () async throws -> Account) {
+    private func openProfile(from source: UIViewController, failureTitle: String = SessionTexts.Failure.openProfile, finding find: @escaping @Sendable () async throws -> Account) {
         let anchor = PushAnchor(source)
         profileOpening.start(.action, debugDelayed(find)) { [logger] in
             guard anchor.isStillShowing else {
@@ -1566,7 +1566,7 @@ final class SessionController {
         filters.onChange = { [serverFilters] in serverFilters.reload(purpose: .action) }
         notificationPolicy.onFailure = { [weak self] reason in
             guard let self else { return }
-            let title = "通知のフィルタリングを変えられませんでした"
+            let title = SessionTexts.Failure.notificationPolicy
             operationStatus.recordFailure(title: title, reason: reason)
             showFailureNotice(.interactionFailure(title: title) { [weak self] in
                 self?.presentAlert(title: title, reason: reason)
@@ -1586,7 +1586,7 @@ final class SessionController {
             let count = notificationPolicy.pendingRequestsCount
             let text = count >= NotificationPolicyModel.pendingRequestsCap ? "\(count)+" : "\(count)"
             item.badge = count == 0 ? nil : .string(text)
-            item.accessibilityLabel = count == 0 ? "保留中の通知" : "保留中の通知、\(text)人"
+            item.accessibilityLabel = SessionTexts.pendingRequests(countText: count == 0 ? nil : text)
         } onChange: { [weak self, weak item] in
             Task(.withoutRequests) { @MainActor [weak self, weak item] in
                 guard let self, let item, !tasks.isClosed else { return }
@@ -1618,10 +1618,7 @@ final class SessionController {
         }
         controller.model.onFailure = { [weak self] decision, reason in
             guard let self else { return }
-            let title = switch decision {
-            case .accept: "通知を受け入れられませんでした"
-            case .dismiss: "通知を無視できませんでした"
-            }
+            let title = decision.failureTitle
             operationStatus.recordFailure(title: title, reason: reason)
             showFailureNotice(.interactionFailure(title: title) { [weak self] in
                 self?.presentAlert(title: title, reason: reason)
@@ -1730,7 +1727,7 @@ final class SessionController {
 
     /// お知らせのリアクションの失敗。投稿への操作と同じく、数秒で消えるチップで知らせ、押すと理由を出す。
     private func reportAnnouncementReactionFailure(_ error: any Error) {
-        let title = "リアクションを変更できませんでした"
+        let title = SessionTexts.Failure.announcementReaction
         tasks.run(.action) { [weak self] in
             guard let self else { return }
             let reason = await failureReason(for: error)
@@ -1889,7 +1886,7 @@ final class SessionController {
             case .success(let status):
                 openThread(of: status, rowFrame: rowFrame, from: source)
             case .failure(let error):
-                handle(error, title: "投稿を開けませんでした")
+                handle(error, title: SessionTexts.Failure.openStatus)
             }
         }
     }
@@ -1971,7 +1968,7 @@ final class SessionController {
             return
         }
         let logger = logger
-        openProfile(from: source, failureTitle: "プロフィールを読み込めませんでした") { [weak self] in
+        openProfile(from: source, failureTitle: SessionTexts.Failure.loadProfile) { [weak self] in
             guard let self else { throw CancellationError() }
             do {
                 return try await myAccount()
@@ -1988,7 +1985,7 @@ final class SessionController {
             completion(menu().children)
         }
         let item = UIBarButtonItem(image: UIImage(systemName: "person.crop.circle"), menu: UIMenu(children: [deferred]))
-        item.accessibilityLabel = "アカウント"
+        item.accessibilityLabel = SessionTexts.accountButton
         item.accessibilityValue = credential.handle
         return item
     }
@@ -2188,7 +2185,7 @@ final class SessionController {
             return current?.displayed.uri == target.displayed.uri
         } completion: { [weak self] result in
             guard let self, case .success(let lookup) = result else { return }
-            let title = "投稿するアカウントを替えられませんでした"
+            let title = SessionTexts.Failure.switchWritingAccount
             let reason: ErrorPresentation
             switch lookup {
             case .found(let found):
@@ -2197,9 +2194,9 @@ final class SessionController {
                     composer.switchWritingAccount(to: writing, replyTo: isReply ? found : nil, quoteTarget: isReply ? nil : found)
                     return
                 }
-                reason = ErrorPresentation(message: "@\(username)では引用元の投稿を引用できません。", code: nil)
+                reason = ErrorPresentation(message: SessionTexts.cannotQuote(username: username), code: nil)
             case .notFound:
-                reason = ErrorPresentation(message: "@\(username)からは\(isReply ? "返信先" : "引用元")の投稿が見られません。", code: nil)
+                reason = ErrorPresentation(message: SessionTexts.cannotSee(username: username, isReply: isReply), code: nil)
             case .failed(let error):
                 reason = ErrorPresentation(error)
             }
@@ -2476,8 +2473,8 @@ final class SessionController {
         let notice = Notice(
             id: "crashQuarantine",
             kind: .info,
-            title: "表示できない投稿がありました",
-            action: .disclosure(hint: "隠した投稿の詳細を表示します。") { [weak self] in self?.presentCrashReport(statusID: statusID) }
+            title: CrashReportTexts.quarantinedChip,
+            action: .disclosure(hint: CrashReportTexts.quarantinedChipHint) { [weak self] in self?.presentCrashReport(statusID: statusID) }
         )
         notices.showTransient(notice, duration: AppDependencies.tuning.value(of: TuningCatalog.crashQuarantineChipDuration))
     }
@@ -2502,7 +2499,7 @@ final class SessionController {
         guard let url = CrashReportMail.url(to: AppInfo.contactEmail, body: text) else { return }
         UIApplication.shared.open(url) { [weak host] opened in
             guard !opened, let host else { return }
-            Self.presentCrashReportAlert(title: "メールを開けませんでした", message: "メールアプリを設定するかMastodonで報告してください。", on: host)
+            Self.presentCrashReportAlert(title: CrashReportTexts.SendFailure.mailTitle, message: CrashReportTexts.SendFailure.mailMessage, on: host)
         }
     }
 
@@ -2515,7 +2512,7 @@ final class SessionController {
 
     private func sendCrashReportByMastodon(_ text: String, from host: UIViewController) {
         guard composer.startDirectMessage("@\(AppInfo.contactMastodon)\n\n\(text)") else {
-            Self.presentCrashReportAlert(title: "投稿欄を開けませんでした", message: "書きかけの投稿を投稿するか削除してください。", on: host)
+            Self.presentCrashReportAlert(title: CrashReportTexts.SendFailure.composeTitle, message: CrashReportTexts.SendFailure.composeMessage, on: host)
             return
         }
         host.dismiss(animated: true)
@@ -2605,12 +2602,12 @@ final class SessionController {
             do {
                 try await client.followTag(name)
                 hashtagDidFollow(name)
-                notices.showTransient(Notice(id: "hashtag.followChanged", kind: .success, title: "#\(name)をフォローしました"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+                notices.showTransient(Notice(id: "hashtag.followChanged", kind: .success, title: HashtagChangeTexts.followed(name)), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
             } catch {
                 logger.error("hashtag follow failed: \(SciaLog.describe(error), privacy: .public)")
                 // 応答が届かなかっただけでフォローしていることがあるので、読み直す。
                 followedTags.reload(purpose: .action)
-                handle(error, title: "ハッシュタグをフォローできませんでした")
+                handle(error, title: HashtagChangeTexts.followFailure)
             }
         }
     }
@@ -2624,11 +2621,11 @@ final class SessionController {
             do {
                 try await client.unfollowTag(name)
                 hashtagDidUnfollow(name)
-                notices.showTransient(Notice(id: "hashtag.followChanged", kind: .success, title: "#\(name)のフォローを外しました"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+                notices.showTransient(Notice(id: "hashtag.followChanged", kind: .success, title: HashtagChangeTexts.unfollowed(name)), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
             } catch {
                 logger.error("hashtag unfollow failed: \(SciaLog.describe(error), privacy: .public)")
                 followedTags.reload(purpose: .action)
-                handle(error, title: "ハッシュタグのフォローを外せませんでした")
+                handle(error, title: HashtagChangeTexts.unfollowFailure)
             }
         }
     }
@@ -2672,12 +2669,12 @@ final class SessionController {
             do {
                 _ = try await client.featureTag(name)
                 ownFeaturedTagsDidChange()
-                notices.showTransient(Notice(id: "hashtag.featureChanged", kind: .success, title: "#\(name)をプロフィールで紹介しました"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+                notices.showTransient(Notice(id: "hashtag.featureChanged", kind: .success, title: HashtagChangeTexts.featured(name)), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
             } catch {
                 logger.error("hashtag feature failed: \(SciaLog.describe(error), privacy: .public)")
                 // 応答が届かなかっただけで載っていることがあるので、読み直す。
                 ownFeaturedTags.reload(purpose: .action)
-                handle(error, title: "プロフィールでの紹介を変更できませんでした")
+                handle(error, title: HashtagChangeTexts.featureFailure)
             }
         }
     }
@@ -2695,11 +2692,11 @@ final class SessionController {
                     try await client.unfeatureTag(featured.id)
                 }
                 ownFeaturedTagsDidChange()
-                notices.showTransient(Notice(id: "hashtag.featureChanged", kind: .success, title: "#\(name)をプロフィールから外しました"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+                notices.showTransient(Notice(id: "hashtag.featureChanged", kind: .success, title: HashtagChangeTexts.unfeatured(name)), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
             } catch {
                 logger.error("hashtag unfeature failed: \(SciaLog.describe(error), privacy: .public)")
                 ownFeaturedTags.reload(purpose: .action)
-                handle(error, title: "プロフィールでの紹介を変更できませんでした")
+                handle(error, title: HashtagChangeTexts.featureFailure)
             }
         }
     }
@@ -2740,10 +2737,10 @@ final class SessionController {
                 if let duration {
                     includeAfterHashtagMuteExpires(name, duration: duration)
                 }
-                notices.showTransient(Notice(id: "hashtag.muteChanged", kind: .success, title: "#\(name)をミュートしました"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+                notices.showTransient(Notice(id: "hashtag.muteChanged", kind: .success, title: HashtagChangeTexts.muted(name)), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
             } catch {
                 logger.error("hashtag mute failed: \(SciaLog.describe(error), privacy: .public)")
-                handle(error, title: "ミュートを変更できませんでした")
+                handle(error, title: HashtagChangeTexts.muteFailure)
             }
         }
     }
@@ -2763,10 +2760,10 @@ final class SessionController {
                     serverFilters.reload(purpose: .action)
                 }
                 excludeInLists(tag: name, excluded: false)
-                notices.showTransient(Notice(id: "hashtag.muteChanged", kind: .success, title: "#\(name)のミュートを解除しました"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+                notices.showTransient(Notice(id: "hashtag.muteChanged", kind: .success, title: HashtagChangeTexts.unmuted(name)), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
             } catch {
                 logger.error("hashtag unmute failed: \(SciaLog.describe(error), privacy: .public)")
-                handle(error, title: "ミュートを変更できませんでした")
+                handle(error, title: HashtagChangeTexts.muteFailure)
             }
         }
     }
@@ -2801,18 +2798,13 @@ final class SessionController {
     private var userMenuActions: UserMenuActions {
         UserMenuActions(
             mention: { [weak self] target in
-                self?.resolveIdentity(of: target, failureTitle: "メンションできませんでした") { _, acct in
+                self?.resolveIdentity(of: target, failureTitle: SessionTexts.Failure.mention) { _, acct in
                     UserAction.mention.record()
                     self?.composer.mention(acct)
                 }
             },
             copy: { [weak self] target, part, notify in
-                let failureTitle = switch part {
-                case .handle: "ハンドルをコピーできませんでした"
-                case .username: "ユーザー名をコピーできませんでした"
-                case .server: "サーバーをコピーできませんでした"
-                }
-                self?.resolveIdentity(of: target, failureTitle: failureTitle) { _, acct in
+                self?.resolveIdentity(of: target, failureTitle: part.copyFailureTitle) { _, acct in
                     guard let self else { return }
                     UIPasteboard.general.string = UserHandle(acct: acct, localServer: self.credential.server).text(of: part)
                     notify()
@@ -2843,7 +2835,7 @@ final class SessionController {
                 self?.presentReport(accountID: accountID, acct: acct, statusID: statusID)
             },
             addToList: { [weak self] target in
-                self?.resolveIdentity(of: target, failureTitle: "リストに追加できませんでした") { id, acct in
+                self?.resolveIdentity(of: target, failureTitle: ListMembershipModel.Operation.add.failureTitle) { id, acct in
                     self?.presentListMembership(accountID: id, acct: acct)
                 }
             },
@@ -2854,7 +2846,7 @@ final class SessionController {
             excludeFromAutoTranslation: { [weak self] isExcluded, acct in
                 guard let self else { return }
                 AppDependencies.settings.setExcludedFromAutoTranslation(isExcluded, acct: acct, localServer: credential.server)
-                let title = "\(credential.handle(ofAcct: acct))を\(isExcluded ? "自動翻訳しません" : "自動翻訳します")"
+                let title = SessionTexts.autoTranslation(handle: credential.handle(ofAcct: acct), isExcluded: isExcluded)
                 notices.showTransient(Notice(id: "user.autoTranslationChanged", kind: .success, title: title), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
             },
             accounts: accounts,
@@ -2867,10 +2859,10 @@ final class SessionController {
                 FailureRecovery.logIn(account, from: self?.rootViewController.view)
             },
             findProfileURL: { [weak self] target, proceed in
-                self?.resolveIdentity(of: target, failureTitle: "リンクを取得できませんでした") { id, acct in
+                self?.resolveIdentity(of: target, failureTitle: SessionTexts.Failure.profileLink) { id, acct in
                     guard let self else { return }
                     guard let url = self.accounts.account(id)?.url else {
-                        self.handle(ProfileNotFound(acct: acct), title: "リンクを取得できませんでした")
+                        self.handle(ProfileNotFound(acct: acct), title: SessionTexts.Failure.profileLink)
                         return
                     }
                     proceed(url)
@@ -3026,7 +3018,7 @@ final class SessionController {
             } else {
                 profiles.apply(relationship, reloadsAccount: false)
             }
-            let title = relationship.note.isEmpty ? "メモを削除しました" : "メモを保存しました"
+            let title = relationship.note.isEmpty ? SessionTexts.noteDeleted : SessionTexts.noteSaved
             notices.showTransient(Notice(id: "user.noteSaved", kind: .success, title: OtherAccountTexts.title(title, handle: actorHandle)), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
         }
         controller.onError = { [weak self] error, title in
@@ -3051,7 +3043,7 @@ final class SessionController {
         logger.info("report sheet opened (status: \(statusID != nil, privacy: .public))")
         let sheet = ReportView.sheet(draft: draft) { [weak self] in
             self?.logger.info("report submitted")
-            self?.notices.showTransient(Notice(id: "user.reported", kind: .success, title: OtherAccountTexts.title("通報しました", handle: actorHandle)), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+            self?.notices.showTransient(Notice(id: "user.reported", kind: .success, title: OtherAccountTexts.title(SessionTexts.reported, handle: actorHandle)), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
         }
         presentOnTop(sheet, animated: true)
     }
@@ -3096,7 +3088,7 @@ final class SessionController {
                 reportListFailure(title: title, reason: await listFailureReason(for: error))
             }
         }
-        let add = UIBarButtonItem(title: "メンバーを追加", image: UIImage(systemName: "plus"), primaryAction: UIAction { [weak self, weak controller] _ in
+        let add = UIBarButtonItem(title: SessionTexts.addListMember, image: UIImage(systemName: "plus"), primaryAction: UIAction { [weak self, weak controller] _ in
             guard let controller else { return }
             self?.presentListMemberSearch(for: controller)
         })
@@ -3395,7 +3387,7 @@ final class SessionController {
                 }
             } catch {
                 guard let self else { return }
-                let title = "引用を始められませんでした"
+                let title = SessionTexts.Failure.startQuote
                 logger.error("quote check failed: \(SciaLog.describe(error), privacy: .public)")
                 let reason = await failureReason(for: error)
                 operationStatus.recordFailure(title: title, reason: reason, subject: OperationStatus.Subject(status))
@@ -3432,10 +3424,10 @@ final class SessionController {
                 guard let self else { return }
                 logger.error("edit source failed: \(SciaLog.describe(error), privacy: .public)")
                 if let account {
-                    showOtherAccountFailure(title: "\(account.credential.handle)で編集を始められませんでした", error: error, recording: OperationStatus.Subject(status))
+                    showOtherAccountFailure(title: OtherAccountTexts.title(SessionTexts.Failure.startEditing, handle: account.credential.handle), error: error, recording: OperationStatus.Subject(status))
                     return
                 }
-                let title = "編集を始められませんでした"
+                let title = SessionTexts.Failure.startEditing
                 let reason = await failureReason(for: error)
                 operationStatus.recordFailure(title: title, reason: reason, subject: OperationStatus.Subject(status))
                 showFailureNotice(.interactionFailure(title: title) { [weak self] in
@@ -3470,10 +3462,10 @@ final class SessionController {
                 guard let self else { return }
                 logger.error("redraft source failed: \(SciaLog.describe(error), privacy: .public)")
                 if let account {
-                    showOtherAccountFailure(title: "\(account.credential.handle)で書き直しを始められませんでした", error: error, recording: OperationStatus.Subject(status))
+                    showOtherAccountFailure(title: OtherAccountTexts.title(SessionTexts.Failure.startRedrafting, handle: account.credential.handle), error: error, recording: OperationStatus.Subject(status))
                     return
                 }
-                let title = "書き直しを始められませんでした"
+                let title = SessionTexts.Failure.startRedrafting
                 let reason = await failureReason(for: error)
                 operationStatus.recordFailure(title: title, reason: reason, subject: OperationStatus.Subject(status))
                 showFailureNotice(.interactionFailure(title: title) { [weak self] in
@@ -3505,8 +3497,8 @@ final class SessionController {
 
     /// 予約できた。予約はタイムラインに何も出ず、うまくいったことが画面の変化で見えないため、チップで知らせる。押すと予約投稿の画面を開く。
     private func showScheduledNotice(_ status: ScheduledStatus) {
-        let title = "\(ScheduleDateText.shortTitle(for: status.scheduledAt, now: now(), calendar: .autoupdatingCurrent))に予約しました"
-        let notice = Notice(id: "compose.scheduled", kind: .success, title: title, action: .disclosure(hint: "予約投稿を表示します。") { [weak self] in
+        let title = SessionTexts.scheduled(at: ScheduleDateText.shortTitle(for: status.scheduledAt, now: now(), calendar: .autoupdatingCurrent))
+        let notice = Notice(id: "compose.scheduled", kind: .success, title: title, action: .disclosure(hint: SessionTexts.scheduledHint) { [weak self] in
             self?.open(.scheduled)
         })
         notices.showTransient(notice, duration: AppDependencies.tuning.value(of: TuningCatalog.noticeFailureChipDuration))
@@ -3551,9 +3543,9 @@ final class SessionController {
             } catch {
                 guard let self, !(error is CancellationError) else { return }
                 logger.error("rewritten schedule cancel failed: \(SciaLog.describe(error), privacy: .public)")
-                let reason = ErrorPresentation(error).leading("書き直した投稿は送りましたが、元の予約が残っています。両方投稿されないよう、予約投稿の画面から取り消してください。")
-                let openList = UIAlertAction(title: "予約投稿を開く", style: .default) { [weak self] _ in self?.open(.scheduled) }
-                presentOnTop(UIAlertController.failure(title: "元の予約を取り消せませんでした", reason: reason, actions: [openList], cancelTitle: "閉じる"), animated: true)
+                let reason = ErrorPresentation(error).leading(SessionTexts.RewrittenSchedule.reasonLead)
+                let openList = UIAlertAction(title: SessionTexts.RewrittenSchedule.openScheduled, style: .default) { [weak self] _ in self?.open(.scheduled) }
+                presentOnTop(UIAlertController.failure(title: SessionTexts.RewrittenSchedule.cancelFailure, reason: reason, actions: [openList], cancelTitle: SessionTexts.RewrittenSchedule.close), animated: true)
                 return
             }
             self?.logger.info("rewritten schedule cancel done")
@@ -3590,10 +3582,10 @@ final class SessionController {
         quoteControl.setPolicy(policy, of: status) { [weak self] error in
             guard let self else { return }
             guard let error else {
-                showToggledNotice("引用できる人を“\(policy.title)”に変更しました")
+                showToggledNotice(SessionTexts.quotePolicyChanged(to: policy.title))
                 return
             }
-            await showQuoteFailure(title: "引用できる人を変更できませんでした", error: error, status: status)
+            await showQuoteFailure(title: SessionTexts.quotePolicyFailure, error: error, status: status)
         }
     }
 
@@ -3609,10 +3601,10 @@ final class SessionController {
         quoteControl.revoke(quoting) { [weak self] error in
             guard let self else { return }
             guard let error else {
-                showToggledNotice("引用を取り消しました")
+                showToggledNotice(SessionTexts.quoteRevoked)
                 return
             }
-            await showQuoteFailure(title: "引用を取り消せませんでした", error: error, status: quoting)
+            await showQuoteFailure(title: SessionTexts.quoteRevokeFailure, error: error, status: quoting)
         }
     }
 
@@ -3637,7 +3629,7 @@ final class SessionController {
         UserAction.deleteStatus.record()
         deletion.delete(status) { [weak self] error in
             guard let self else { return }
-            let title = "投稿を削除できませんでした"
+            let title = OtherAccountTexts.deleteFailure
             logger.error("delete failed: \(SciaLog.describe(error), privacy: .public)")
             let reason = await failureReason(for: error)
             operationStatus.recordFailure(title: title, reason: reason, subject: OperationStatus.Subject(status))
@@ -3666,10 +3658,7 @@ final class SessionController {
                 notifications.removeFollowRequests(answering: request)
             } catch {
                 guard let self else { return }
-                let title = switch decision {
-                case .authorize: "フォローリクエストを承認できませんでした"
-                case .reject: "フォローリクエストを却下できませんでした"
-                }
+                let title = decision.failureTitle
                 logger.error("follow request \(String(describing: decision), privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
                 let reason = await failureReason(for: error)
                 operationStatus.recordFailure(title: title, reason: reason)
@@ -3695,7 +3684,7 @@ final class SessionController {
                 notifications.removeNotification(notification)
             } catch {
                 guard let self else { return }
-                let title = "通知を削除できませんでした"
+                let title = SessionTexts.Failure.dismissNotification
                 logger.error("dismiss notification failed: \(SciaLog.describe(error), privacy: .public)")
                 let reason = await failureReason(for: error)
                 operationStatus.recordFailure(title: title, reason: reason)
@@ -3711,7 +3700,7 @@ final class SessionController {
     /// 投稿欄でタイトルを読んでいる間は、読んでいるURLの上にきらめきを流すほか、「操作の状況」の進行中にも並べる。
     private func linkTitleActivityDidChange() {
         if composer.isLoadingLinkTitle {
-            operationStatus.update(OperationStatus.Activity(id: Self.linkTitleActivityID, title: "タイトルを読み込み中"))
+            operationStatus.update(OperationStatus.Activity(id: Self.linkTitleActivityID, title: SessionTexts.linkTitleLoading))
         } else {
             operationStatus.end(Self.linkTitleActivityID)
         }
@@ -3722,9 +3711,9 @@ final class SessionController {
         linkTitleActivityDidChange()
         let reason = switch failure {
         case .unreadable(let error as URLError): ErrorPresentation(error)
-        case .unreadable(let error as HTTPStatusError): ErrorPresentation(message: "リンク先のページを読み込めませんでした。", code: "HTTP \(error.statusCode)")
-        case .unreadable: ErrorPresentation(message: "リンク先のページを読み込めませんでした。", code: nil)
-        case .noTitle: ErrorPresentation(message: "リンク先のページにタイトルがありませんでした。", code: nil)
+        case .unreadable(let error as HTTPStatusError): ErrorPresentation(message: SessionTexts.linkPageUnreadable, code: "HTTP \(error.statusCode)")
+        case .unreadable: ErrorPresentation(message: SessionTexts.linkPageUnreadable, code: nil)
+        case .noTitle: ErrorPresentation(message: SessionTexts.linkPageNoTitle, code: nil)
         }
         operationStatus.recordFailure(title: failure.title, reason: reason)
         notices.showTransient(duration: AppDependencies.tuning.value(of: TuningCatalog.noticeFailureChipDuration)) { [weak self] _ in
@@ -3839,7 +3828,7 @@ final class SessionController {
         guard let pollID = status.displayed.poll?.id else { return }
         UserAction.vote.record()
         let polls = polls
-        let title = "投票できませんでした"
+        let title = SessionTexts.Failure.vote
         tasks.run(.action) { [weak self, weak timeline] in
             do {
                 // ほかのタイムラインから送った同じ投票の結果を待っているときは送らない。その結果は、送った側がすべてのタイムラインに反映する。
@@ -3863,7 +3852,7 @@ final class SessionController {
         guard let pollID = status.displayed.poll?.id else { return }
         UserAction.refreshPoll.record()
         let polls = polls
-        let title = "投票の結果を読み直せませんでした"
+        let title = SessionTexts.Failure.refreshPoll
         tasks.run(.action) { [weak self, weak timeline] in
             do {
                 try await polls.refresh(status)
@@ -4017,7 +4006,7 @@ final class SessionController {
         }
     }
 
-    private static let reauthenticationListMessage = ErrorPresentation(message: "ログインし直すと読み込めます。", code: nil)
+    private static let reauthenticationListMessage = ErrorPresentation(message: SessionTexts.reauthenticationListMessage, code: nil)
 
     /// 失敗の理由のボタンから、そのアカウントにログインし直す。このセッションのアカウントなら、ログインし直しの段と同じ流れにする。
     func reauthenticate(_ account: RequestAccount) {
@@ -4442,7 +4431,7 @@ final class SessionController {
                 open(value)
             case .failure(let error):
                 self?.logger.error("open \(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
-                self?.handle(error, title: "開けませんでした")
+                self?.handle(error, title: SessionTexts.Failure.open)
             }
         }
     }
@@ -4498,7 +4487,7 @@ final class SessionController {
 
 /// リンクのメニューの「プロフィールとして開く」で、リンク先がプロフィールとして見つからなかった。プロフィールでないページのリンクでも起きる。
 private struct LinkProfileNotFound: LocalizedError {
-    var errorDescription: String? { "リンク先のプロフィールが見つかりませんでした。" }
+    var errorDescription: String? { SessionTexts.linkProfileNotFound }
 }
 
 /// リストとハッシュタグのタイムラインと、そのナビゲーション。使う人ごとに数が違うため、タブの並びに出たときに作る。

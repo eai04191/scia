@@ -311,7 +311,7 @@ final class TabArrangement {
         }
         guard AppDependencies.settings.showsTabMenuCustomize else { return UIMenu(children: timelines) }
         let customize = UIMenu(options: .displayInline, children: [
-            UIAction(title: "カスタマイズ", image: UIImage(systemName: "slider.horizontal.3")) { [weak self] _ in
+            UIAction(title: TabMenuTexts.customize, image: UIImage(systemName: "slider.horizontal.3")) { [weak self] _ in
                 self?.tabBarController.openMenuSettings(.tabs)
             },
         ])
