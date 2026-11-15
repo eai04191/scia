@@ -1109,10 +1109,18 @@ final class InlineComposeController: NSObject {
         let inRow = toolPlacement?.row.contains(.visibility) == true
         visibilityQuoteBadge.isHidden = !(differs && inRow)
         addQuoteBadge.isHidden = !(differs && !inRow && toolPlacement?.showsAddButton == true)
-        // ＋の読み上げの値は、言語のバッジ（`updateLanguageIndicators`）が先に入れる。
-        if !addQuoteBadge.isHidden, let policy = model.shownQuotePolicy {
-            addButton.accessibilityValue = [addButton.accessibilityValue, ComposeTexts.quotePolicyValue(policy.title)].compactMap { $0 }.joinedAsTextList
-        }
+    }
+
+    /// ＋に付ける言語と引用できる人のバッジを入れ直し、出しているバッジの分を＋の読み上げの値に並べる。
+    /// 片方のバッジだけを入れ直すと、＋の読み上げの値からもう片方が落ちるため、＋の値はここでだけ入れる。
+    private func updateAddButtonIndicators() {
+        updateLanguageIndicators()
+        updateQuotePolicyIndicators()
+        let values = [
+            languageBadge.isHidden ? nil : ComposeTexts.languageValue(languageName(model.language)),
+            addQuoteBadge.isHidden ? nil : model.shownQuotePolicy.map { ComposeTexts.quotePolicyValue($0.title) },
+        ].compactMap { $0 }
+        addButton.accessibilityValue = values.isEmpty ? nil : values.joinedAsTextList
     }
 
     private func toggleSpoiler() {
@@ -1711,8 +1719,7 @@ final class InlineComposeController: NSObject {
             schedule.isEnabled = model.scheduledAt != nil || model.canSchedule
         }
         toolButtons[.discardDraft]?.isEnabled = model.canDiscardDraft
-        updateLanguageIndicators()
-        updateQuotePolicyIndicators()
+        updateAddButtonIndicators()
     }
 
     /// 既定と違う言語を選んでいる間、言語のコードを見せる。項目がツールバーにあれば記号の代わりにコードを、＋の中にあれば＋の右上にバッジを出す。
@@ -1727,7 +1734,6 @@ final class InlineComposeController: NSObject {
         let showsBadge = code != nil && toolPlacement?.row.contains(.language) != true && toolPlacement?.showsAddButton == true
         languageBadge.text = code.map { " \($0) " }
         languageBadge.isHidden = !showsBadge
-        addButton.accessibilityValue = showsBadge ? ComposeTexts.languageValue(languageName(model.language)) : nil
     }
 
     private static func languageCodeFont(for traits: UITraitCollection) -> UIFont {
@@ -1785,8 +1791,8 @@ final class InlineComposeController: NSObject {
             setRowHidden(button, !placement.row.contains(item))
         }
         setRowHidden(addButton, !placement.showsAddButton)
-        // 言語の項目が行と＋のどちらにあるかで、コードの出し方が変わる。
-        updateLanguageIndicators()
+        // 言語と公開範囲の項目が行と＋のどちらにあるかで、バッジの付け先が変わる。
+        updateAddButtonIndicators()
     }
 
     /// 振り分ける並び。ほかのアカウントでログインしていなければ、「投稿するアカウント」を隠した並びにする。

@@ -575,6 +575,31 @@ final class InlineComposeControllerTests {
         expectShown([add, media], hidden: [spoiler])
     }
 
+    /// ＋の中の言語と引用できる人をどちらも既定から変えている間は、並びが変わって言語のバッジを入れ直しても、＋の読み上げの値に両方を残す。
+    @Test func addButtonValueKeepsQuotePolicyAcrossPlacementChange() async throws {
+        defer { window.isHidden = true }
+        settings.composeToolLayout = MenuLayout(elements: [.item(.visibility, isVisible: true), .item(.language, isVisible: true), .item(.spoiler, isVisible: true), .more, .item(.media, isVisible: true)])
+        composer.model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: false, defaultLanguage: "ja", defaultQuotePolicy: .public)
+        composer.beginEditing()
+        composer.model.choose(language: "en")
+        composer.model.choose(quotePolicy: .followers)
+        try await waitUntilSettled()
+        window.layoutIfNeeded()
+        let add = try #require(buttons(in: window).first { $0.accessibilityLabel == "追加" })
+        let spoiler = try #require(buttons(in: window).first { $0.accessibilityLabel == "注意書き" })
+        let language = try #require(PostingLanguage.localizedName(of: "en", in: .current))
+        let expected = [ComposeTexts.languageValue(language), ComposeTexts.quotePolicyValue(QuotePolicy.followers.title)].joinedAsTextList
+        // 下書きの変化は、次の実行ループでボタンに入る。
+        try await waitUntil { add.accessibilityValue != nil }
+        #expect(add.accessibilityValue == expected)
+
+        // 注意書きを行へ出して、＋に入る項目の振り分けを変える。
+        settings.composeToolLayout = MenuLayout(elements: [.item(.visibility, isVisible: true), .item(.language, isVisible: true), .more, .item(.media, isVisible: true), .item(.spoiler, isVisible: true)])
+        try await waitUntil { !spoiler.isHidden }
+        window.layoutIfNeeded()
+        #expect(add.accessibilityValue == expected)
+    }
+
     /// 公開範囲と展開も、＋の中に入れれば行から隠れる。
     @Test func visibilityAndExpandMoveIntoMenu() async throws {
         defer { window.isHidden = true }
