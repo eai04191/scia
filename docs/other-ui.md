@@ -15,6 +15,8 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 - `HTTPClient`: APIの外の通信の口。決まりは[network.md](network.md)
 - `NetworkConditionsMonitor`: 回線の見張り。サムネイルの条件（`thumbnailPolicy(settings:tuning:)`）と、電波が戻った回数（`recoveryCount`）を出す
 - `ImageStores`: アイコン、添付ファイル、カスタム絵文字の画像のストア（`avatars`、`media`、`emojis`）と、サーバーごとのカスタム絵文字のリスト（`customEmojis`）。置き場所、読み方、読み直しの間隔まで組んである。UIは画像の型の作り方（`PlatformImageMaker`）だけを渡す。絵文字の画像のストアは、アカウントごとに作らない
+- カスタム絵文字の画像は、`ImageStores`が`emojiImageFiles`（`EmojiImageFiles`）に、端末に残した`api/v1/custom_emojis`の応答に載っている画像（A）とそれ以外（B）を分けて置く。応答が変わったら（`CustomEmojiCaches.onListsChanged`）、`EmojiImageFiles.updateListed(_:)`で分け直し、`EmojiPrefetch`で先読みする。絵文字ピッカーの小さい静止画は`emojiThumbnails`（`EmojiThumbnails`）。決まりは[animated-custom-emoji.md](animated-custom-emoji.md)
+- 設定のストレージの「絵文字」の中の行は、`EmojiStorageRow.rows(_:)`で数える
 - `CrashMark`と`PostQuarantine`、`PostCrashReport`: クラッシュした投稿の隔離と、開発者に送る文章（[crash-quarantine.md](crash-quarantine.md)）。行の処理の前に印を付け、隠すのと送る画面はUIで書く
 - `AccountRegistry`と`KeychainCredentialStore(service:)`: ログインしたアカウント。サービス名はUIで決める
 - ログアウトは`AccountLogout.logOut(_:from:defaults:settings:images:)`。アカウントのリストから消し、そのアカウントのために覚えた設定、メディアのキャッシュ、そのサーバーのカスタム絵文字のリストを消す。呼んだあと、そのアカウントのセッションを閉じ、残ったアカウントかログインの画面を出すのはUI。使う人がログアウトを選んだときだけ呼ぶ
