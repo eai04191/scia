@@ -335,6 +335,11 @@ final class ComposePollOptionMark: UIView {
     private(set) var multiple: Bool
     private let shape = UIView()
 
+    /// 丸の直径、四角の一辺、四角の角の丸みの、記号の文字の大きさに対する割合。選び方のボタンのアイコンも、丸と四角の比をここから取る。
+    nonisolated static let circleDiameterRatio: CGFloat = 1.06
+    nonisolated static let squareSideRatio: CGFloat = 0.94
+    nonisolated static let squareCornerRatio: CGFloat = 0.22
+
     /// 記号の文字の大きさ。
     private var pointSize: CGFloat { UIFont.preferredFont(forTextStyle: .subheadline, compatibleWith: traitCollection).pointSize }
 
@@ -382,9 +387,9 @@ final class ComposePollOptionMark: UIView {
 
     private func applyShape() {
         // 四角は、記号と同じく丸より少し小さい。
-        let side = pointSize * (multiple ? 0.94 : 1.06)
+        let side = pointSize * (multiple ? Self.squareSideRatio : Self.circleDiameterRatio)
         shape.bounds = CGRect(x: 0, y: 0, width: side, height: side)
-        shape.layer.cornerRadius = multiple ? pointSize * 0.22 : side / 2
+        shape.layer.cornerRadius = multiple ? pointSize * Self.squareCornerRatio : side / 2
         shape.layer.borderWidth = pointSize * 0.087
     }
 

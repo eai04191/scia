@@ -237,7 +237,7 @@ private struct ComposePollSettingsContent: View {
                     }
                 }
             } label: {
-                chip(symbolName: "clock") {
+                chip(icon: .symbol("clock")) {
                     Text(expiry)
                         .contentTransition(.numericText())
                 }
@@ -249,7 +249,7 @@ private struct ComposePollSettingsContent: View {
 
             // 押すとラベルの長さが変わり、右隣の結果のボタンがずれるため、選び方のボタンは2つの値の長いほうに幅を合わせる。
             // 結果のボタンは合わせない。右は空きで、幅が変わっても動くものがなく、揃えると「隠す」の両側に余白が目立ったため。
-            toggle(value: settings.multiple, labels: multiple, reservesBothValues: true) {
+            toggle(value: settings.multiple, labels: multiple, reservesBothValues: true, icon: .pollChoice(multiple: settings.multiple)) {
                 actions?.onSetMultiple(!settings.multiple)
             }
             .accessibilityLabel(ComposeTexts.Poll.choiceLabel)
@@ -279,10 +279,16 @@ private struct ComposePollSettingsContent: View {
     }
 
     /// 今の設定をラベルに出す切り替えのボタン。締め切りのボタンと同じく、どちらの値でも同じ灰色で描く。
-    private func toggle(value: Bool, labels: (off: SettingsLabelLength.Label, on: SettingsLabelLength.Label), reservesBothValues: Bool, action: @escaping () -> Void) -> some View {
+    private func toggle(
+        value: Bool,
+        labels: (off: SettingsLabelLength.Label, on: SettingsLabelLength.Label),
+        reservesBothValues: Bool,
+        icon: ChipIcon? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
         let label = value ? labels.on : labels.off
         return Button(action: action) {
-            chip(symbolName: label.symbolName) {
+            chip(icon: icon ?? .symbol(label.symbolName)) {
                 ZStack(alignment: .leading) {
                     if reservesBothValues {
                         Text(labels.off.title).hidden()
@@ -309,14 +315,27 @@ private struct ComposePollSettingsContent: View {
         .buttonStyle(.plain)
     }
 
-    private func chip(symbolName: String, @ViewBuilder title: () -> some View) -> some View {
+    private enum ChipIcon {
+        case symbol(String)
+        /// 選び方のボタンの、自前で描くアイコン。
+        case pollChoice(multiple: Bool)
+    }
+
+    private func chip(icon: ChipIcon, @ViewBuilder title: () -> some View) -> some View {
         HStack(spacing: 4) {
-            Image(systemName: symbolName)
-                .imageScale(.large)
-                // 行の高さは文字で決める。アイコンは文字より背が高く、アイコンによって高さも違うため。
-                .frame(height: 0)
-                // アイコンを替えるときは動かさない。`contentTransition(.identity)`だけでは、設定を変える動きの中で前のアイコンと重なって入れ替わる。
-                .transaction(value: symbolName) { $0.animation = nil }
+            Group {
+                switch icon {
+                case let .symbol(symbolName):
+                    Image(systemName: symbolName)
+                        // アイコンを替えるときは動かさない。`contentTransition(.identity)`だけでは、設定を変える動きの中で前のアイコンと重なって入れ替わる。
+                        .transaction(value: symbolName) { $0.animation = nil }
+                case let .pollChoice(multiple):
+                    PollChoiceSymbol(multiple: multiple)
+                }
+            }
+            .imageScale(.large)
+            // 行の高さは文字で決める。アイコンは文字より背が高く、アイコンによって高さも違うため。
+            .frame(height: 0)
             title()
                 .lineLimit(1)
         }
