@@ -148,6 +148,14 @@ public final class EmojiThumbnails: Sendable {
         }
     }
 
+    /// ファイルにある小さい静止画の、URLごとの大きさ（圧縮した画素と、URLや幅と高さの記録）。設定のストレージで、サーバーごとに数えるのに使う。
+    /// 同じURLの記録が重なっていれば、あとの記録だけを数える。
+    public func storedSizes() -> [URL: Int] {
+        Self.read(file, pixelHeight: pixelHeight).entries.reduce(into: [:]) { sizes, item in
+            sizes[item.key] = item.value.length + Data(item.key.absoluteString.utf8).count + 12
+        }
+    }
+
     /// 書いた分を待つ。テストで、書き終えてから読み直すのに使う。
     func flush() async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in

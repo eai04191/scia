@@ -224,6 +224,11 @@ public final class CustomEmojiCaches {
         await files.readAll().flatMap { $0.emojis.map(\.emoji) }
     }
 
+    /// 端末に残している、サーバーごとのリストと、そのファイルの大きさ（割り当てた大きさ）。設定のストレージで、サーバーごとに数えるのに使う。
+    public nonisolated func storedLists() async -> [StoredEmojiList] {
+        await files.readAllWithServers()
+    }
+
     /// `instance`のサーバーのリストを消す。そのサーバーのアカウントを全部ログアウトしたときに呼ぶ。
     public func remove(instance: URL) async {
         let server = Self.server(of: instance)
@@ -238,6 +243,21 @@ public final class CustomEmojiCaches {
     /// サーバーを見分ける名前。サーバーのための設定の値（`AccountScopedDefaults.key(_:server:)`）と同じく、ホスト名で見分ける。
     private static func server(of instance: URL) -> String {
         instance.host()?.lowercased() ?? instance.absoluteString
+    }
+}
+
+/// 端末に残したサーバーのリスト。
+public struct StoredEmojiList: Sendable, Equatable {
+    /// サーバーのホスト名。
+    public let server: String
+    public let emojis: [ServerEmoji]
+    /// リストのファイルの大きさ（割り当てた大きさ）。
+    public let fileBytes: Int64
+
+    public init(server: String, emojis: [ServerEmoji], fileBytes: Int64) {
+        self.server = server
+        self.emojis = emojis
+        self.fileBytes = fileBytes
     }
 }
 
@@ -332,6 +352,16 @@ actor CustomEmojiFiles {
 
     func remove(server: String) {
         try? FileManager.default.removeItem(at: file(server: server))
+    }
+
+    /// 残しているサーバーごとのリストと、ファイルの大きさ。読めないファイルは飛ばす。
+    func readAllWithServers() -> [StoredEmojiList] {
+        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        return files.filter { $0.pathExtension == "json" }.compactMap { file in
+            guard let stored = read(server: file.deletingPathExtension().lastPathComponent) else { return nil }
+            return StoredEmojiList(server: file.deletingPathExtension().lastPathComponent, emojis: stored.emojis.map(\.emoji), fileBytes: StorageUsage.allocatedSize(of: file))
+        }
+        .sorted { $0.server < $1.server }
     }
 
     /// 残しているすべてのサーバーのリスト。読めないファイルは飛ばす。

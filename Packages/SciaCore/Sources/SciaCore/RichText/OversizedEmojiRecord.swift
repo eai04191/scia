@@ -45,6 +45,11 @@ public final class OversizedEmojiRecord: Sendable {
         launchEntries.withLock { $0[url]?.isOversized == true }
     }
 
+    /// 大きさを残している元の画像のURL。設定のストレージで、記録をサーバーごとに数えるのに使う。
+    public var recordedURLs: Set<URL> {
+        entries.withLock { Set($0.map(\.url)) }
+    }
+
     /// 大きすぎて動かせなかった元の画像の大きさを残す。
     public func record(_ url: URL, width: Int, height: Int, frameCount: Int) {
         let entry = Entry(url: url, width: width, height: height, frameCount: frameCount)

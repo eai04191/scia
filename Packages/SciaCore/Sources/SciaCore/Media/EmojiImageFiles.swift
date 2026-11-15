@@ -53,7 +53,9 @@ public actor EmojiImageFiles {
         othersSizeLimit: Int = EmojiImageFiles.othersSizeLimit,
         availableCapacity: @escaping @Sendable () -> Int? = EmojiImageFiles.opportunisticCapacity
     ) {
-        listed = MediaFileCache(directory: directory.appending(path: "Listed"), sharingDirectory: sharingDirectory.appending(path: "Listed"), sizeLimit: .max)
+        // Aは、前の作りがすべての画像を置いていたフォルダー（`Files`）をそのまま使う。起動したときの分け直し（`updateListed(_:)`）で、
+        // 応答に載っていない画像が消えるので、前の作りで置いたほかのサーバーの絵文字の画像が、「キャッシュを消去」で消せないまま残らない。
+        listed = MediaFileCache(directory: directory.appending(path: "Files"), sharingDirectory: sharingDirectory.appending(path: "Listed"), sizeLimit: .max)
         others = MediaFileCache(directory: directory.appending(path: "Others"), sharingDirectory: sharingDirectory.appending(path: "Others"), sizeLimit: othersSizeLimit)
         self.availableCapacity = availableCapacity
     }
@@ -174,6 +176,14 @@ public actor EmojiImageFiles {
         }
         logger.info("emoji images listed=\(urls.count, privacy: .public) removed=\(removed, privacy: .public) moved=\(moved, privacy: .public)")
     }
+
+    /// AとBに置いた画像の大きさを、フォルダーの名前（`MediaFileCache.folderName(for:)`）で引けるように並べる。設定のストレージで、サーバーごとに数えるのに使う。
+    public func sizesByFolderName() async -> (listed: [String: Int], others: [String: Int]) {
+        (await listed.sizesByFolderName(), await others.sizesByFolderName())
+    }
+
+    /// Bのフォルダー。設定のストレージで、「キャッシュを消去」で消える大きさを測る。
+    public nonisolated var othersDirectory: URL { others.directory }
 
     /// 置いた画像を、AとBの両方から消す。画像として読めなかったときに呼ぶ。
     public func remove(_ url: URL) async {

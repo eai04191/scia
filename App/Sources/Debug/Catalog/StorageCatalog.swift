@@ -16,7 +16,7 @@ enum StorageCatalog {
             state("消せなかった", removeError: ErrorPresentation(Failure())),
             state("消せるものがない", breakdown: empty),
             state("測れない項目がある（実機のアプリ内のSafari）", breakdown: unmeasured),
-            state("GBの大きさ", breakdown: large),
+            state("GBの大きさと長いサーバー名", breakdown: large),
         ]
     }
 
@@ -24,7 +24,7 @@ enum StorageCatalog {
         items: [
             .init(category: .mediaFiles, bytes: 8_800_000, removableBytes: 8_800_000),
             .init(category: .mediaPrefetch, bytes: 42_300_000, removableBytes: 42_300_000),
-            .init(category: .customEmojis, bytes: 120_000_000, removableBytes: 120_000_000),
+            .init(category: .emojis, bytes: 186_000_000, removableBytes: 41_000_000),
             .init(category: .networkCache, bytes: 1_500_000, removableBytes: 1_500_000),
             .init(category: .temporaryFiles, bytes: 164_200_000, removableBytes: 164_163_000),
             .init(category: .inAppSafari, bytes: 13_600_000, removableBytes: 13_600_000),
@@ -32,6 +32,12 @@ enum StorageCatalog {
             .init(category: .settings, bytes: 4_096),
             .init(category: .sharedMedia, bytes: 0),
             .init(category: .other, bytes: 4_400_000),
+        ],
+        emojiRows: [
+            .init(kind: .server("fedibird.com"), bytes: 158_000_000),
+            .init(kind: .server("stellaria.network"), bytes: 3_400_000),
+            .init(kind: .unicode, bytes: 0),
+            .init(kind: .otherServers, bytes: 41_000_000),
         ],
         appBytes: 88_200_000
     )
@@ -43,6 +49,7 @@ enum StorageCatalog {
 
     private static let unmeasured = StorageBreakdown(
         items: small.items.map { $0.category == .inAppSafari ? .init(category: .inAppSafari, bytes: nil, removableBytes: nil) : $0 },
+        emojiRows: small.emojiRows,
         appBytes: small.appBytes
     )
 
@@ -50,7 +57,7 @@ enum StorageCatalog {
         items: [
             .init(category: .mediaFiles, bytes: 157_286_400, removableBytes: 157_286_400),
             .init(category: .mediaPrefetch, bytes: 104_857_600, removableBytes: 104_857_600),
-            .init(category: .customEmojis, bytes: 512_000_000, removableBytes: 512_000_000),
+            .init(category: .emojis, bytes: 1_345_678_901, removableBytes: 67_108_864),
             .init(category: .networkCache, bytes: 1_234_567_890, removableBytes: 1_234_567_890),
             .init(category: .temporaryFiles, bytes: 12_345_678_901, removableBytes: 12_000_000_000),
             .init(category: .inAppSafari, bytes: 987_654_321, removableBytes: 987_654_321),
@@ -58,6 +65,12 @@ enum StorageCatalog {
             .init(category: .settings, bytes: 1_048_576),
             .init(category: .sharedMedia, bytes: 3_456_789_012),
             .init(category: .other, bytes: 456_789_012),
+        ],
+        emojiRows: [
+            .init(kind: .server("a-very-long-server-name-for-checking-truncation.example.social"), bytes: 1_234_567_890),
+            .init(kind: .server("fedibird.com"), bytes: 158_000_000),
+            .init(kind: .unicode, bytes: 109_000_000),
+            .init(kind: .otherServers, bytes: 67_108_864),
         ],
         appBytes: 1_234_567_890
     )

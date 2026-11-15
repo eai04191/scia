@@ -42,6 +42,8 @@ struct StorageView: View {
                         case .mediaPrefetch:
                             // メディアのキャッシュの下の段に並べる。
                             EmptyView()
+                        case .emojis:
+                            emojiRows(item, rows: breakdown.emojiRows)
                         default:
                             LabeledContent(item.category.title, value: Self.text(item.bytes))
                         }
@@ -119,6 +121,17 @@ struct StorageView: View {
         }
     }
 
+    /// 絵文字を、合計の行の下に、サーバーごと、Unicodeの絵文字、ほかのサーバーの絵文字の段に分けて並べる（docs/animated-custom-emoji.mdの「設定のストレージでの出し方」）。
+    /// 合計は端末で実際に使っている量で、2つのサーバーが同じ画像を使っていれば、その画像はどちらの段にも数える。
+    @ViewBuilder
+    private func emojiRows(_ item: StorageBreakdown.Item, rows: [EmojiStorageRow]) -> some View {
+        LabeledContent(item.category.title, value: Self.text(item.bytes))
+        ForEach(rows, id: \.kind) { row in
+            LabeledContent(row.kind.title, value: Self.text(row.bytes))
+                .padding(.leading, Self.subrowIndent)
+        }
+    }
+
     /// メディアのキャッシュの下の段を、合計の行より下げる幅。
     private static let subrowIndent: CGFloat = 16
 
@@ -181,7 +194,8 @@ extension StorageView.Actions {
             preferences: URL.libraryDirectory.appending(path: "Preferences", directoryHint: .isDirectory),
             // URLCacheがファイルを置く場所と名前は公開されていない。iOS 27のシミュレーターで、`URLSession.shared`の応答がここに入るのを確かめた。
             // `currentDiskUsage`は消した直後に古い値を返したため、ファイルを測る。場所が変わると0と数え、その分は「その他」に入る。消すのは公開されたAPIで行う。
-            customEmojis: [AppDependencies.emojiImageDirectory, AppDependencies.customEmojis.directory],
+            emojis: [AppDependencies.emojiImageDirectory, AppDependencies.customEmojis.directory],
+            removableEmojis: AppDependencies.emojiImageFiles.othersDirectory,
             networkCache: ["Cache.db", "Cache.db-shm", "Cache.db-wal", "fsCachedData"].map {
                 URL.cachesDirectory.appending(fileName: SafeFileName(bundleIdentifier), directoryHint: .isDirectory).appending(fileName: SafeFileName($0))
             },
@@ -197,15 +211,21 @@ extension StorageView.Actions {
         let discomfortReports = AppDependencies.discomfortReports
         let clock = AppDependencies.clock
         let emojiImageFiles = AppDependencies.emojiImageFiles
+        let customEmojis = AppDependencies.customEmojis
+        let emojiThumbnails = AppDependencies.emojiThumbnails
+        let oversizedEmojis = AppDependencies.oversizedEmojis
         return Self(
-            measure: { await measure(locations, launchDate: launchDate) },
+            measure: {
+                let rows = await emojiRows(files: emojiImageFiles, customEmojis: customEmojis, thumbnails: emojiThumbnails, oversized: oversizedEmojis)
+                return await measure(locations, launchDate: launchDate, emojiRows: rows)
+            },
             remove: { category in
                 switch category {
                 case .mediaFiles:
                     try await mediaFiles.removeCachedFiles()
                 case .mediaPrefetch:
                     try await mediaPrefetchFiles.removeCachedFiles()
-                case .customEmojis:
+                case .emojis:
                     // 消すのはBだけ。A、小さい静止画、端末に残した`api/v1/custom_emojis`の応答、大きすぎる元の画像の記録は、
                     // 絵文字ピッカーを空白なく出すのに要るか、サーバーの絵文字の数で大きさが決まるので残す（docs/animated-custom-emoji.mdの「端末に置く画像の分け方」）。
                     try await emojiImageFiles.removeOthers()
@@ -232,9 +252,25 @@ extension StorageView.Actions {
         )
     }
 
+    /// 「絵文字」の中の行を数える。リストと小さい静止画のファイルを読むので、メインスレッドの外で行う。
     @concurrent
-    private static func measure(_ locations: StorageLocations, launchDate: Date?) async -> StorageBreakdown {
-        StorageBreakdown.measure(locations, launchDate: launchDate)
+    private static func emojiRows(files: EmojiImageFiles, customEmojis: CustomEmojiCaches, thumbnails: EmojiThumbnails, oversized: OversizedEmojiRecord) async -> [EmojiStorageRow] {
+        let sizes = await files.sizesByFolderName()
+        let sources = await EmojiStorageSources(
+            lists: customEmojis.storedLists(),
+            listedSizes: sizes.listed,
+            othersSizes: sizes.others,
+            thumbnailSizes: thumbnails.storedSizes(),
+            oversizedURLs: oversized.recordedURLs,
+            oversizedBytes: StorageUsage.allocatedSize(of: oversized.file),
+            unicodeBytes: 0
+        )
+        return EmojiStorageRow.rows(sources)
+    }
+
+    @concurrent
+    private static func measure(_ locations: StorageLocations, launchDate: Date?, emojiRows: [EmojiStorageRow]) async -> StorageBreakdown {
+        StorageBreakdown.measure(locations, launchDate: launchDate, emojiRows: emojiRows)
     }
 
     /// 消し終えるまで待つ。URLCacheは`removeAllCachedResponses()`から戻ったあともファイルを裏で消し続け、終わったことを知らせるAPIもない。
