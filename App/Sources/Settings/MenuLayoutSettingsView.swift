@@ -655,14 +655,14 @@ private struct RowSeparatorRow: View {
                 // Pickerの選択肢は、メニューでサブタイトルを出さない。
                 ForEach(MenuRowSize.allCases, id: \.self) { choice in
                     Toggle(isOn: Binding { size == choice } set: { if $0 { size = choice } }) {
-                        Image(systemName: choice.symbolName)
+                        Image(choice.symbolName)
                         Text(choice.title)
                         Text(choice.capacityTitle)
                     }
                 }
             } label: {
                 HStack(spacing: 4) {
-                    Label(size.rowTitle, systemImage: size.symbolName)
+                    Label(size.rowTitle, image: size.symbolName)
                         // リストの行の中では、指定しないとアイコンだけになる。
                         .labelStyle(.titleAndIcon)
                     Image(systemName: "chevron.up.chevron.down")
@@ -682,11 +682,12 @@ private struct RowSeparatorRow: View {
     }
 }
 
-private extension MenuRowSize {
+extension MenuRowSize {
+    /// 並びの形を表すカスタムシンボル（`Symbols.xcassets`）の名前。
     var symbolName: String {
         switch self {
-        case .medium: "rectangle.split.3x1"
-        case .small: "circle.grid.2x1"
+        case .medium: "menu.row.icons.and.names"
+        case .small: "menu.row.icons"
         }
     }
 }

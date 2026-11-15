@@ -1,0 +1,12 @@
+{
+  "info": {
+    "author": "xcode",
+    "version": 1
+  },
+  "symbols": [
+    {
+      "filename": "menu.row.icons.svg",
+      "idiom": "universal"
+    }
+  ]
+}

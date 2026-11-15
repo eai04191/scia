@@ -1,6 +1,7 @@
 import SciaCore
 import Testing
 import UIKit
+@testable import Scia
 
 /// メニューや並びの画面に出す項目の記号が、iOSにある記号であることを確かめる。
 /// `UIImage(systemName:)`は、ない名前を渡してもエラーにならずnilを返し、アイコンのない行を黙って描くため。
@@ -16,6 +17,12 @@ struct MenuItemSymbolTests {
         items.compactMap { item in
             UIImage(systemName: item.symbolName) == nil ? "\(item.rawValue): \(item.symbolName)" : nil
         }
+    }
+
+    /// 横並びの大きさのカスタムシンボルが、アプリのアセットにある。`Image(_:)`は、ない名前を渡しても何も描かないだけになるため。
+    @Test func everyRowSizeHasASymbol() {
+        let missing = MenuRowSize.allCases.filter { UIImage(named: $0.symbolName) == nil }.map(\.symbolName)
+        #expect(missing == [])
     }
 
     /// 並びを設定で変えられるメニューの項目の型。どれも並びの画面に項目の記号を出し、メニューにも同じ記号を出す。
