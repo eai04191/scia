@@ -50,6 +50,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 
 - 動作確認とテストには、`Scia 1`、`Scia 2`、`Scia 3`、`Scia 4`のどれかのシミュレーターを使う。どれもログイン済みの端末の複製で、ログイン情報が端末のKeychainに残っているため、ログインし直さずに済む
 - iPadと画面を開閉するiPhoneでの見え方は、`Scia iPad 1`、`Scia iPad 2`（iPad mini）、`Scia Duo`（iPhone Duo）で確かめる。`Tools/sim.sh acquire 'Scia iPad 1'`のように名指ししたときだけ借りられ、端末を省いた`acquire`と`make test`には使われない。名指しで借りた端末は、端末を省いた`acquire`で番号の端末を借りても持ったままになり、別の端末を名指しすると返る。ログインしていない端末では`scia-debug://dummy-session`で入る
+- iPadだけ、`Scia Duo`だけ、ダークモードだけのように、起きる端末や見た目が限られた不具合は、その中だけを変えて直す。ほかの端末や見た目にも効かせるときは、理由をcommit messageに書く。直したら、ほかの端末で見え方が変わっていないことも確かめる
 - iPadでは、アプリが画面の一部のウインドウで開く。`dump`の座標は画面の座標（タップと同じ）で、ウインドウの位置と大きさは`ウインドウ`の行の`枠`に出る
 - `Scia Duo`は画面が2つあり、`simctl io`の`screenshot`と`recordVideo`は`--display`がないと失敗する。`Tools/sim.sh shot`は主の画面（`primary`）を撮り、ほかの画面は`--display`で渡す。録画は`io recordVideo --display=primary`で撮る
 - `Scia Scenario`は`make scenario-*`の専用の端末で、`Tools/sim.sh`では貸し借りしない。ほかの確かめには使わない
