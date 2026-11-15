@@ -104,6 +104,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     private let emojiImages: EmojiImageStore<UIImage>
     private let glyphImages: EmojiGlyphImageStore
     private let thumbnails: EmojiThumbnails
+    private let glyphArchive: EmojiGlyphArchive
     /// 画面に出ている間、小さい静止画を裏で作るのを止めさせる。部品カタログやテストのように、作らせなくてよいパレットではnil。
     private let thumbnailBuilder: EmojiThumbnailBuilder?
     /// `thumbnailBuilder`に、画面に出ていると伝えたか。
@@ -151,10 +152,12 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         emojiImages: EmojiImageStore<UIImage>,
         glyphImages: EmojiGlyphImageStore = AppDependencies.emojiGlyphImages,
         thumbnails: EmojiThumbnails = AppDependencies.emojiThumbnails,
+        glyphArchive: EmojiGlyphArchive = AppDependencies.emojiGlyphArchive,
         thumbnailBuilder: EmojiThumbnailBuilder? = AppDependencies.emojiThumbnailBuilder
     ) {
         self.emojiImages = emojiImages
         self.thumbnails = thumbnails
+        self.glyphArchive = glyphArchive
         self.thumbnailBuilder = thumbnailBuilder
         // 小さい静止画をメモリに写す。写すだけで中身は読まないので、すぐ済む。
         thumbnails.load()
@@ -237,6 +240,11 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     override func layoutSubviews() {
         super.layoutSubviews()
         updateSectionBarLeadingInset()
+        // Unicodeの絵文字のマスが画面に出る前から、描く大きさを渡す。閉じている間に、その大きさで画像を作らせるため。
+        if window != nil {
+            let side = CGSize(width: cellSize, height: cellSize)
+            glyphArchive.use(EmojiPaletteCell.glyphGeometry(cellSize: side, scale: traitCollection.displayScale, style: emojiStyle))
+        }
     }
 
     /// シートに載せたときは、検索欄にキーボードを出していなければシートの下端に置く。前に検索したまま閉じても、ほかの入力欄のキーボードに付いて動かさないため。
@@ -530,7 +538,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
 
     private func configureCell(at indexPath: IndexPath, _ cell: UICollectionViewCell?) {
         guard let cell = cell as? EmojiPaletteCell, let emoji = emoji(at: indexPath) else { return }
-        FrameWork.measure("EmojiPaletteCell.configure") { cell.configure(emoji, store: emojiImages, thumbnails: thumbnails, glyphs: glyphImages, emojiStyle: emojiStyle) }
+        FrameWork.measure("EmojiPaletteCell.configure") { cell.configure(emoji, store: emojiImages, thumbnails: thumbnails, glyphs: glyphImages, glyphArchive: glyphArchive, emojiStyle: emojiStyle) }
     }
 
     /// できたUnicodeの絵文字の画像を、それを待っているセルに入れる。
@@ -738,6 +746,8 @@ final class EmojiPaletteCell: UICollectionViewCell {
         contentView.addSubview(highlight)
         contentView.addSubview(imageView)
         glyphView.contentMode = .center
+        // 端末に置いた、形だけのUnicodeの絵文字の画像に付ける色。
+        glyphView.tintColor = .label
         contentView.addSubview(glyphView)
         isAccessibilityElement = true
         accessibilityTraits = .button
@@ -778,7 +788,7 @@ final class EmojiPaletteCell: UICollectionViewCell {
 
     /// カスタム絵文字は、「カスタム絵文字のアニメーションを再生する」の設定によらず動かす。
     /// 静止画がメモリになければ、届くまで小さい静止画で描き、届いたら差し替える（`reconfigureVisibleCells`）。
-    func configure(_ emoji: PaletteEmoji, store: EmojiImageStore<UIImage>, thumbnails: EmojiThumbnails, glyphs: EmojiGlyphImageStore, emojiStyle: EmojiStyle) {
+    func configure(_ emoji: PaletteEmoji, store: EmojiImageStore<UIImage>, thumbnails: EmojiThumbnails, glyphs: EmojiGlyphImageStore, glyphArchive: EmojiGlyphArchive, emojiStyle: EmojiStyle) {
         switch emoji {
         case .custom(let custom):
             glyphView.isHidden = true
@@ -798,23 +808,55 @@ final class EmojiPaletteCell: UICollectionViewCell {
             imageView.stillImage = nil
             imageView.animation = nil
             glyphView.isHidden = false
-            let side = Self.imageSide(in: bounds.size)
+            let geometry = Self.glyphGeometry(cellSize: bounds.size, scale: traitCollection.displayScale, style: emojiStyle)
             let request = EmojiGlyphImageStore.Request(
                 text: standard.emoji,
-                // 絵文字の文字の大きさは、枠いっぱいの画像と同じくらいに見えるよう、枠の高さの少し下にする。
-                // 文字ではなく、カスタム絵文字の画像と並べる絵として描くため、端末の文字の大きさではなく枠の大きさで決める。
-                pointSize: max(bounds.height, 32) * 0.58,
-                style: emojiStyle,
-                width: bounds.width - Self.imageInset(in: bounds.size) * 2,
-                height: side,
-                scale: traitCollection.displayScale,
+                pointSize: geometry.pointSize,
+                style: geometry.style,
+                width: geometry.width,
+                height: geometry.height,
+                scale: geometry.scale,
                 userInterfaceStyle: traitCollection.userInterfaceStyle
             )
             guard request != glyphRequest || glyphView.image == nil else { break }
             glyphRequest = request
-            glyphView.image = glyphs.image(for: request)
+            glyphView.image = Self.glyphImage(for: request, glyphs: glyphs, archive: glyphArchive)
             accessibilityLabel = standard.name
         }
+    }
+
+    /// `cellSize`のマスに、Unicodeの絵文字を描く大きさ。
+    static func glyphGeometry(cellSize: CGSize, scale: CGFloat, style: EmojiStyle) -> EmojiGlyphArchive.Geometry {
+        EmojiGlyphArchive.Geometry(
+            // 絵文字の文字の大きさは、枠いっぱいの画像と同じくらいに見えるよう、枠の高さの少し下にする。
+            // 文字ではなく、カスタム絵文字の画像と並べる絵として描くため、端末の文字の大きさではなく枠の大きさで決める。
+            pointSize: max(cellSize.height, 32) * 0.58,
+            width: cellSize.width - imageInset(in: cellSize) * 2,
+            height: imageSide(in: cellSize),
+            scale: scale,
+            style: style,
+            systemVersion: EmojiGlyphArchive.systemVersion
+        )
+    }
+
+    /// Unicodeの絵文字の画像。端末に置いた描く大きさの画像があればそれを、なければメモリの画像を使い、どちらもなければ、
+    /// メモリの画像を作らせて、届くまで端末に置いた小さい画像で描く（docs/animated-custom-emoji.mdの「Unicodeの絵文字の画像」）。
+    /// 端末に置いた画像のうち形だけのものは、テンプレートの画像にして、今の外観の文字の色（`glyphView`の`tintColor`）で描く。
+    private static func glyphImage(for request: EmojiGlyphImageStore.Request, glyphs: EmojiGlyphImageStore, archive: EmojiGlyphArchive) -> UIImage? {
+        let geometry = EmojiGlyphArchive.Geometry(
+            pointSize: request.pointSize, width: request.width, height: request.height, scale: request.scale, style: request.style, systemVersion: EmojiGlyphArchive.systemVersion
+        )
+        archive.use(geometry)
+        let stored = archive.glyph(for: request.text, geometry: geometry)
+        func image(_ glyph: EmojiGlyphArchive.Glyph) -> UIImage {
+            // 小さい画像も、描く大きさの画像と同じポイントの大きさで描く。
+            let image = UIImage(cgImage: glyph.image, scale: CGFloat(glyph.image.height) / request.height, orientation: .up)
+            return glyph.isShape ? image.withRenderingMode(.alwaysTemplate) : image
+        }
+        if let stored, stored.isFull {
+            return image(stored)
+        }
+        return glyphs.image(for: request) ?? stored.map(image)
     }
 
     func showGlyph(_ image: UIImage, for request: EmojiGlyphImageStore.Request) {

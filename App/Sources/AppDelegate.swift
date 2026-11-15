@@ -16,6 +16,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         AppDependencies.stateDumps.register("emojiImages", owner: AppDependencies.emojiImages) { $0.stateDump() }
         AppDependencies.stateDumps.register("emojiThumbnails", owner: AppDependencies.emojiThumbnails) { $0.stateDump() }
         AppDependencies.stateDumps.register("emojiGlyphs", owner: AppDependencies.emojiGlyphImages) { $0.stateDump() }
+        AppDependencies.stateDumps.register("emojiGlyphArchive", owner: AppDependencies.emojiGlyphArchive) { $0.stateDump() }
         AppDependencies.stateDumps.register("emojiImageFiles", owner: AppDependencies.emojiImageFiles) { $0.stateDump() }
         // 受け取られないまま残った共有拡張のファイルを消す。開かれたばかりの共有は新しいので消さない。
         SharedMediaInbox.app?.removeStale(now: AppDependencies.now())

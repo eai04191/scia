@@ -2,7 +2,7 @@ import os
 import SciaCore
 import UIKit
 
-/// 絵文字ピッカーの小さい静止画（`EmojiThumbnails`）を、絵文字ピッカーを閉じている間に、端末に置いた画像から作る。
+/// 絵文字ピッカーの小さい静止画（`EmojiThumbnails`）と、Unicodeの絵文字の画像（`EmojiGlyphArchive`）を、絵文字ピッカーを閉じている間に作る。
 /// 一度も表示していない絵文字も、初めて流したときから枠が空かないようにするため（docs/animated-custom-emoji.mdの「絵文字ピッカーの小さい静止画」）。
 /// パレットが開いている間は作らない。作る処理がCPUを使い、パレットの絵文字の読み込みを待たせるため。
 /// 通信はしない。端末に置いていない画像の分は、表示して画像を読んだときに作る。
@@ -59,7 +59,19 @@ final class EmojiThumbnailBuilder {
         let files = AppDependencies.emojiImageFiles
         let choice = AppDependencies.emojiImages.choice(animates: true)
         let logger = SciaLog.logger(category: "emoji")
-        return { await build(thumbnails: thumbnails, customEmojis: customEmojis, files: files, choice: choice, logger: logger) }
+        let glyphs = AppDependencies.emojiGlyphArchive
+        let settings = AppDependencies.settings
+        return {
+            await build(thumbnails: thumbnails, customEmojis: customEmojis, files: files, choice: choice, logger: logger)
+            guard !Task.isCancelled else { return }
+            // Unicodeの絵文字の画像も、絵文字ピッカーを開いていない間に作る（docs/animated-custom-emoji.mdの「Unicodeの絵文字の画像」）。
+            let (style, texts) = await MainActor.run {
+                let style = settings.appearance.emojiStyle
+                return (style, StandardEmojiAvailability.groups(for: style).flatMap { $0.emojis.map(\.emoji) })
+            }
+            glyphs.loadStoredGeometry(style: style)
+            await glyphs.build(texts)
+        }
     }
 
     @concurrent

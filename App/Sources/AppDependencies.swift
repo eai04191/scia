@@ -99,6 +99,9 @@ enum AppDependencies {
 
     static let emojiGlyphImages = EmojiGlyphImageStore()
 
+    /// 絵文字ピッカーのUnicodeの絵文字の画像を、端末に置いて持つ。設定のストレージで「絵文字」に数えるよう、カスタム絵文字の画像と同じフォルダーに置く。
+    static let emojiGlyphArchive = EmojiGlyphArchive(directory: emojiImageDirectory.appending(path: "Glyphs"))
+
     static var customEmojis: CustomEmojiCaches { images.customEmojis }
 
     /// アイコン、添付ファイル、カスタム絵文字の画像のストア。設定の見本の画像は端末で作ったものなので、通信せずに返す。

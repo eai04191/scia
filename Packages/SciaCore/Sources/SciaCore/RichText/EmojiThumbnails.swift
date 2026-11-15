@@ -157,7 +157,7 @@ public final class EmojiThumbnails: Sendable {
     }
 
     /// 書いた分を待つ。テストで、書き終えてから読み直すのに使う。
-    func flush() async {
+    public func flush() async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             writer.async { continuation.resume() }
         }

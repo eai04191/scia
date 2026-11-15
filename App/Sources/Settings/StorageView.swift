@@ -214,9 +214,10 @@ extension StorageView.Actions {
         let customEmojis = AppDependencies.customEmojis
         let emojiThumbnails = AppDependencies.emojiThumbnails
         let oversizedEmojis = AppDependencies.oversizedEmojis
+        let glyphArchive = AppDependencies.emojiGlyphArchive
         return Self(
             measure: {
-                let rows = await emojiRows(files: emojiImageFiles, customEmojis: customEmojis, thumbnails: emojiThumbnails, oversized: oversizedEmojis)
+                let rows = await emojiRows(files: emojiImageFiles, customEmojis: customEmojis, thumbnails: emojiThumbnails, oversized: oversizedEmojis, glyphs: glyphArchive)
                 return await measure(locations, launchDate: launchDate, emojiRows: rows)
             },
             remove: { category in
@@ -254,7 +255,7 @@ extension StorageView.Actions {
 
     /// 「絵文字」の中の行を数える。リストと小さい静止画のファイルを読むので、メインスレッドの外で行う。
     @concurrent
-    private static func emojiRows(files: EmojiImageFiles, customEmojis: CustomEmojiCaches, thumbnails: EmojiThumbnails, oversized: OversizedEmojiRecord) async -> [EmojiStorageRow] {
+    private static func emojiRows(files: EmojiImageFiles, customEmojis: CustomEmojiCaches, thumbnails: EmojiThumbnails, oversized: OversizedEmojiRecord, glyphs: EmojiGlyphArchive) async -> [EmojiStorageRow] {
         let sizes = await files.sizesByFolderName()
         let sources = await EmojiStorageSources(
             lists: customEmojis.storedLists(),
@@ -263,7 +264,7 @@ extension StorageView.Actions {
             thumbnailSizes: thumbnails.storedSizes(),
             oversizedURLs: oversized.recordedURLs,
             oversizedBytes: StorageUsage.allocatedSize(of: oversized.file),
-            unicodeBytes: 0
+            unicodeBytes: glyphs.storedBytes()
         )
         return EmojiStorageRow.rows(sources)
     }
