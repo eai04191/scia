@@ -123,8 +123,8 @@ public struct StatusMenuTree {
     public var translationDisplay: TranslationDisplay?
     /// タイムラインで投稿を選び始められるか。投稿を選べるタイムラインの行でだけ選べる。
     public var canSelectPosts = false
-    /// サーバーが投稿への絵文字のリアクションに対応しているか。対応していなければ「リアクション」を出さない。
-    public var supportsEmojiReactions = false
+    /// サーバーの、Mastodonにない機能の有無。絵文字のリアクションに対応していなければ「リアクション」を出さない。
+    public var capabilities = ServerCapabilities.mastodon
     /// ユーザーのメニューの並びと、メンション、ハンドルをコピー、関係の項目を組むもの。
     public var userMenu: MenuLayout<UserMenuItem>.Groups = UserMenuItem.defaultLayout.groups
     public var userActions: UserMenuActions?
@@ -254,7 +254,7 @@ public struct StatusMenuTree {
             return users(status?.displayed.mentions.map(MenuUser.mention) ?? [])
         case .customEmojis:
             // 投稿の行に出しているリアクションのカスタム絵文字も含める。行に見えている絵文字をどれでも調べられるようにするため（docs/emoji-reaction.md）。
-            let reactionEmojis = notification == nil && supportsEmojiReactions ? status?.displayed.emojiReactions.compactMap(\.emoji.customEmoji) ?? [] : []
+            let reactionEmojis = notification == nil && capabilities.supportsEmojiReactions ? status?.displayed.emojiReactions.compactMap(\.emoji.customEmoji) ?? [] : []
             var seen: Set<URL> = []
             let emojis = ((notification?.emojisInRow ?? status?.emojisInRow ?? []) + reactionEmojis).filter { seen.insert($0.url).inserted }
             return emojis.compactMap { emoji in customEmoji(emoji)?.map { .customEmoji(emoji, $0) } }
@@ -291,7 +291,7 @@ public struct StatusMenuTree {
         case .quote:
             return quoteNode(item, on: status)
         case .emojiReaction:
-            guard supportsEmojiReactions else { return nil }
+            guard capabilities.supportsEmojiReactions else { return nil }
             return .action(item.title, icon: icon, .status(.react))
         case .muteConversation:
             // サーバーはどの会話でもミュートできるが、通知が届かない会話をミュートしても変わらないため、自分が加わっていそうな投稿でだけ出す。
@@ -523,7 +523,7 @@ public struct StatusMenuTree {
     private func otherAccountTree(for found: Status, original status: Status, as account: OtherAccount) -> StatusMenuTree {
         var tree = StatusMenuTree(status: found, notification: nil, now: now, linkBrowser: linkBrowser)
         tree.myAccountID = account.credential.accountID
-        tree.supportsEmojiReactions = account.supportsEmojiReactions
+        tree.capabilities = account.capabilities
         tree.userActions = account.userActions
         tree.userMenu = otherAccountUserGroups
         tree.hashtagMenu = hashtagMenu.excluding(Self.sameForEveryAccountHashtagItems)

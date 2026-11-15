@@ -287,10 +287,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onVote: ((Set<Int>, Status) -> Void)?
     /// 投票の「更新」が押されたときに、押した投稿を渡して呼ぶ。読み終えたら、呼ばれた側が`finishRefreshingPoll(_:)`を呼ぶ。
     var onRefreshPoll: ((Status) -> Void)?
-    /// サーバーが投稿への絵文字のリアクションに対応しているか。読めたら、セッションが入れる。対応していなければ、投稿にリアクションがあっても出さない（docs/emoji-reaction.md）。
-    var supportsEmojiReactions = false {
+    /// サーバーの、Mastodonにない機能の有無。読めたら、セッションが入れる。
+    /// 絵文字のリアクションに対応していなければ、投稿にリアクションがあっても出さない（docs/emoji-reaction.md）。
+    var capabilities = ServerCapabilities.mastodon {
         didSet {
-            guard supportsEmojiReactions != oldValue, isViewLoaded else { return }
+            guard capabilities.supportsEmojiReactions != oldValue.supportsEmojiReactions, isViewLoaded else { return }
             reconfigure(Set(displayedItemIDs.filter { status(for: $0)?.displayed.emojiReactions.isEmpty == false }))
         }
     }
@@ -2369,7 +2370,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         configuration.onToggleSpoiler = { [weak self] in self?.toggleSpoiler(of: status, keeping: itemID) }
         configuration.bodyTruncation = longBodyExpansion.truncation(forBodyOf: status, isThreadFocus: shown.id == threadFocusID, rule: bodyTruncationRule)
         configuration.onExpandBody = { [weak self] in self?.expandBody(.status(shown.id), keeping: itemID) }
-        if supportsEmojiReactions {
+        if capabilities.supportsEmojiReactions {
             configuration.reactionTransitionDuration = tuning.value(of: TuningCatalog.reactionTransitionDuration)
         }
         if showsActionBar(itemID: itemID, shown: shown) {
@@ -2379,7 +2380,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                 configuration.actionBarLongPressTarget = { [weak self] item in self?.actionBarLongPressTarget(for: item, id: itemID) }
             }
         }
-        if supportsEmojiReactions, let reactions = builder.reactionChips(for: shown) {
+        if capabilities.supportsEmojiReactions, let reactions = builder.reactionChips(for: shown) {
             configuration.reactions = reactions
             configuration.onToggleReaction = { [weak self] name in
                 guard let emoji = shown.emojiReactions.first(where: { $0.emoji.name == name })?.emoji else { return }

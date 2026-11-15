@@ -22,7 +22,7 @@ enum EmojiReactionCatalog {
             CatalogState(title: title) {
                 let timeline = TimelineViewController(texts: .home, refresh: {})
                 timeline.myAccountID = author.id
-                timeline.supportsEmojiReactions = true
+                timeline.capabilities.supportsEmojiReactions = true
                 timeline.onToggleEmojiReaction = { _, _ in }
                 if showsAddButton {
                     timeline.onAddEmojiReaction = { _ in }

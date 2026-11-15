@@ -29,7 +29,7 @@ enum PostActionBarCatalog {
             CatalogState(title: title) {
                 let timeline = TimelineViewController(texts: .home, refresh: {})
                 timeline.myAccountID = author.id
-                timeline.supportsEmojiReactions = !reactions.isEmpty
+                timeline.capabilities.supportsEmojiReactions = !reactions.isEmpty
                 let status = Status(
                     id: UUID().uuidString,
                     createdAt: .now.addingTimeInterval(-3_600),

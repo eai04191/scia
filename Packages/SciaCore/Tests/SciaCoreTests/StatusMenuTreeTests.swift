@@ -67,7 +67,7 @@ struct StatusMenuTreeTests {
     /// 「リアクション」は、絵文字のリアクションに対応したサーバーでだけ出し、ブックマークと引用と同じまとまりに置く。
     @Test func emojiReactionAppearsOnlyOnSupportingServer() {
         var supporting = tree(status())
-        supporting.supportsEmojiReactions = true
+        supporting.capabilities.supportsEmojiReactions = true
         #expect(outline(supporting).contains("|ブックマーク,リアクション|"))
         #expect(!titles(tree(status())).contains("リアクション"))
     }
@@ -186,7 +186,7 @@ struct StatusMenuTreeTests {
         let post = status().settingEmojiReaction(ReactionEmoji(customEmoji: emoji), true)
         func menu(supports: Bool) -> String {
             var reacted = tree(post)
-            reacted.supportsEmojiReactions = supports
+            reacted.capabilities.supportsEmojiReactions = supports
             reacted.customEmoji = { (emoji: CustomEmoji) in
                 var media = MediaMenuTree(kind: .image, attachment: emoji.attachment)
                 media.open = true

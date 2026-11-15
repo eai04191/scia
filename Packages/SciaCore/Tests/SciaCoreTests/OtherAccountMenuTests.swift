@@ -450,7 +450,7 @@ struct OtherAccountMenuTests {
         mastodon.loadCapabilities()
         failing.loadCapabilities()
         gate.open()
-        try await waitUntil { fedibird.supportsEmojiReactions }
+        try await waitUntil { fedibird.capabilities.supportsEmojiReactions }
 
         #expect(MenuNodeTests.describe(try #require(node(tree(status(uri: uri), accounts: [fedibird], groups: groups))).children) == "お気に入り,リアクション")
         #expect(await loaded(try #require(node(tree(status(uri: uri), accounts: [mastodon], groups: groups))).children) == "お気に入り")
@@ -468,9 +468,9 @@ struct OtherAccountMenuTests {
 
         bob.loadCapabilities()
         try await waitUntil { calls.withLock { $0 } == 1 && !bob.isLoadingCapabilities }
-        #expect(!bob.supportsEmojiReactions)
+        #expect(!bob.capabilities.supportsEmojiReactions)
         bob.loadCapabilities()
-        try await waitUntil { bob.supportsEmojiReactions }
+        try await waitUntil { bob.capabilities.supportsEmojiReactions }
         bob.loadCapabilities()
         #expect(calls.withLock { $0 } == 2)
     }

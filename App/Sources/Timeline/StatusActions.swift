@@ -128,7 +128,7 @@ extension TimelineViewController {
             tree.translationDisplay = translations?.isShowingOriginal(TranslationSource(shown)) == true ? .original : .translation
         }
         tree.canSelectPosts = canSelectPost(id)
-        tree.supportsEmojiReactions = supportsEmojiReactions
+        tree.capabilities = capabilities
         tree.userMenu = userMenuSubmenuGroups
         tree.userActions = userMenuActions
         tree.hashtagMenu = settings.hashtagMenuLayout.submenuGroups(actions: settings.hashtagActions)

@@ -14,7 +14,7 @@ struct ReactionMotionTests {
 
     private func harness(reactions: [EmojiReaction] = [], showsAddButton: Bool = false) throws -> (harness: TimelineHarness, statuses: [Status], id: TimelineViewController.ItemID) {
         let harness = try TimelineHarness { timeline in
-            timeline.supportsEmojiReactions = true
+            timeline.capabilities.supportsEmojiReactions = true
             if showsAddButton {
                 timeline.onAddEmojiReaction = { _ in }
             }

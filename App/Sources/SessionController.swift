@@ -546,7 +546,7 @@ final class SessionController {
         session.onCredentialsInvalid = { [weak self] in self?.credentialsDidBecomeInvalid() }
         session.onCapabilitiesLoad = { [weak self] capabilities in
             for timeline in self?.timelines.allObjects ?? [] {
-                timeline.supportsEmojiReactions = capabilities.supportsEmojiReactions
+                timeline.capabilities = capabilities
             }
             if !capabilities.hasLocalTimeline {
                 self?.local.markUnavailableOnServer()
@@ -1073,7 +1073,7 @@ final class SessionController {
         viewController.setShowsFocusInlineCompose(showsFocusInlineCompose)
         viewController.myAccountID = credential.accountID
         viewController.spoilerExpansion.expandsByDefault = session.preferences?.expandsSpoilers ?? false
-        viewController.supportsEmojiReactions = session.supportsEmojiReactions
+        viewController.capabilities = session.capabilities
         viewController.onToggleEmojiReaction = { [weak self] status, emoji in
             self?.toggle(.emojiReaction(emoji), on: status)
         }

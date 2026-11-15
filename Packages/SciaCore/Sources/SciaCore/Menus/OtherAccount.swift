@@ -24,7 +24,7 @@ public final class OtherAccount {
         public var resolveHandle: @Sendable (String) async throws -> Account?
         /// そのアカウントの投稿を、添付ごと削除する。
         public var deleteStatus: @Sendable (Status.ID) async throws -> Void
-        /// そのアカウントのサーバーの、Mastodonにない機能の有無。絵文字のリアクションを出すかに使う。
+        /// そのアカウントのサーバーの、Mastodonにない機能の有無。
         public var capabilities: @Sendable () async throws -> ServerCapabilities
 
         public init(
@@ -128,8 +128,8 @@ public final class OtherAccount {
         }
     }
 
-    /// そのアカウントのサーバーが、絵文字のリアクションに対応しているか。読めないうちと、読めなかったときはfalse（docs/emoji-reaction.md）。
-    public private(set) var supportsEmojiReactions = false
+    /// そのアカウントのサーバーの、Mastodonにない機能の有無。読めないうちと、読めなかったときはMastodonと同じ。
+    public private(set) var capabilities = ServerCapabilities.mastodon
     private var capabilitiesState = CapabilitiesState.unknown
     private enum CapabilitiesState { case unknown, loading, loaded }
     /// サーバーの機能の有無を読んでいる途中か。
@@ -143,7 +143,7 @@ public final class OtherAccount {
             let loaded = try? await operations.capabilities()
             guard let self else { return }
             if let loaded {
-                supportsEmojiReactions = loaded.supportsEmojiReactions
+                capabilities = loaded
                 capabilitiesState = .loaded
             } else {
                 capabilitiesState = .unknown
