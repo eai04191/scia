@@ -110,7 +110,7 @@ public enum AccountNoteTexts {
     public static let save = "保存"
     public static let placeholder = "メモを追加"
     public static let saveFailure = "メモを保存できませんでした"
-    /// プロフィールの文章のメニューの先頭に足す項目。
+    /// プロフィールの文章のメニューの先頭に足す項目と、メモがあるときのユーザーのメニューの項目。
     public static let edit = "メモを編集"
     /// プロフィールの欄を押したときの、読み上げのヒント。
     public static let editHint = "メモを編集します。"

@@ -443,7 +443,7 @@ extension UserMenuTree {
             return [node(relationship.endorsed ? "プロフィールから外す" : "プロフィールで紹介する", item.symbolName, .endorse(!relationship.endorsed))]
         case .note:
             // ブロックしていてもメモは書ける。
-            return [.action(relationship.note.isEmpty ? item.title : "メモを編集", icon: .symbol(item.symbolName), .editNote(relation))]
+            return [.action(relationship.note.isEmpty ? item.title : AccountNoteTexts.edit, icon: .symbol(item.symbolName), .editNote(relation))]
         case .mute:
             if relationship.muting { return [node("ミュートを解除", "speaker.wave.2", .unmute)] }
             return [.submenu(item.title, icon: .symbol(item.symbolName), UserRelationChange.muteDurations.map { choice in
