@@ -93,7 +93,7 @@ public enum SessionTexts {
         public static let postingDefaults = "投稿のデフォルトを変更できませんでした"
         public static let openProfile = "プロフィールを開けませんでした"
         public static let loadProfile = "プロフィールを読み込めませんでした"
-        public static let notificationPolicy = "通知のフィルタリングを変えられませんでした"
+        public static let notificationPolicy = "通知のフィルタリングを変更できませんでした"
         public static let openStatus = "投稿を開けませんでした"
         public static let switchWritingAccount = "投稿するアカウントを替えられませんでした"
         public static let mention = "メンションできませんでした"

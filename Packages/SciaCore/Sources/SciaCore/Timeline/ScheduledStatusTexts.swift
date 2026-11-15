@@ -43,7 +43,7 @@ extension ScheduledStatusesModel.Operation {
     /// 失敗の見出し。
     public var failureTitle: String {
         switch self {
-        case .reschedule: "日時を変えられませんでした"
+        case .reschedule: "日時を変更できませんでした"
         case .cancel: "予約を取り消せませんでした"
         }
     }

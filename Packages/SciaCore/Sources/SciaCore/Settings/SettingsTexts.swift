@@ -59,7 +59,7 @@ public enum SettingsTexts {
     public enum AppIcon {
         /// 選択肢を並べるピッカーの名前。ラベルは隠すので、読み上げで使う。
         public static let picker = "アイコン"
-        public static let failureLead = "アイコンを変えられませんでした。"
+        public static let failureLead = "アイコンを変更できませんでした。"
         /// 主アイコンの名前。
         public static let standard = "青地に白"
         /// 白地のアイコンの名前。

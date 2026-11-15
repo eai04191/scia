@@ -18,8 +18,8 @@ public enum ListTexts {
     public static let name = "リストの名前"
     /// 名前を変えるアラートの、保存するボタン。
     public static let saveName = "保存"
-    public static let renameFailure = "リストの名前を変えられませんでした"
-    public static let repliesPolicyFailure = "返信の表示を変えられませんでした"
+    public static let renameFailure = "リストの名前を変更できませんでした"
+    public static let repliesPolicyFailure = "返信の表示を変更できませんでした"
     public static let exclusiveFailure = "“ホームに表示しない”を切り替えられませんでした"
     public static let deleteFailure = "リストを削除できませんでした"
     /// 名前を入れるアラートの、やめるボタン。
