@@ -84,6 +84,7 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 - 削除は、`Confirmation.deleting`で確かめてから`StatusDeletion.delete(_:onFailure:)`。どの一覧からも除き、投稿欄の編集や書き直しもやめる。ほかのアカウントの投稿を消したら、`ComposeModel.statusWasDeleted(_:accountID:willReset:)`をそのアカウントのIDで呼ぶ
   - `StatusDeletion`は、`init(session:composer:tasks:willResetComposer:)`で`ComposeModel`を渡して作る。削除を送る側から`ComposeModel`に届かない作りのUIは、`init(session:tasks:didDelete:)`で作り、`didDelete`の中で投稿欄へ伝える。同じ手順をUIで書き直さない
 - 自分の投稿を引用できる人の変更は`QuoteControl.setPolicy(_:of:onFinish:)`、自分の投稿への引用の取り消しは、`Confirmation.revokingQuote(by:)`で確かめてから`QuoteControl.revoke(_:onFinish:)`。どちらも結果をどの一覧にも当てる。ある投稿を引用した投稿のタイムラインは、`SavedStatusesModel`を`.quotes(of:)`で作る（[quote.md](quote.md)）
+- 引用できるか、引用を取り消せるかは、サーバーで違うので、`session.capabilities.quotes`（`QuoteRules`）に聞く。投稿の`quoteApproval`を直接見ない。投稿のメニュー（`StatusMenuTree`）には`capabilities`を渡す（[quote.md](quote.md)の「Fedibirdの形」）
 - 新しく投稿するときの既定（公開範囲、引用できる人、言語、閲覧注意）の画面は`PostingDefaultsModel`。保存は`AccountSession.updatePostingDefault(_:)`を通り、`onPreferencesLoad`で届くので、そこで`applyComposeDefaults(to:)`を呼んで投稿欄に反映する（[account-screen.md](account-screen.md)）
 
 ## メニューと確認と失敗
