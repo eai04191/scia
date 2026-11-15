@@ -196,10 +196,7 @@ extension StorageView.Actions {
         let mediaPrefetchFiles = AppDependencies.mediaPrefetchFiles
         let discomfortReports = AppDependencies.discomfortReports
         let clock = AppDependencies.clock
-        let customEmojis = AppDependencies.customEmojis
         let emojiImageFiles = AppDependencies.emojiImageFiles
-        let oversizedEmojis = AppDependencies.oversizedEmojis
-        let emojiThumbnails = AppDependencies.emojiThumbnails
         return Self(
             measure: { await measure(locations, launchDate: launchDate) },
             remove: { category in
@@ -209,10 +206,10 @@ extension StorageView.Actions {
                 case .mediaPrefetch:
                     try await mediaPrefetchFiles.removeCachedFiles()
                 case .customEmojis:
-                    try await emojiImageFiles.removeCachedFiles()
-                    oversizedEmojis.removeAll()
-                    await emojiThumbnails.removeAll()
-                    await customEmojis.removeAll()
+                    // 消すのはBだけ。A、小さい静止画、端末に残した`api/v1/custom_emojis`の応答、大きすぎる元の画像の記録は、
+                    // 絵文字ピッカーを空白なく出すのに要るか、サーバーの絵文字の数で大きさが決まるので残す（docs/animated-custom-emoji.mdの「端末に置く画像の分け方」）。
+                    try await emojiImageFiles.removeOthers()
+                    await emojiImageFiles.refreshStats()
                 case .networkCache:
                     URLSessionTransport.responseCache?.removeAllCachedResponses()
                     try await waitUntilSettled(locations.networkCache, clock: clock)

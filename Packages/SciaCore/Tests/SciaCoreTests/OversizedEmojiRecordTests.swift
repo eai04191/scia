@@ -54,17 +54,6 @@ struct OversizedEmojiRecordTests {
         #expect(record.contains(try url("\(OversizedEmojiRecord.maxCount).gif")))
     }
 
-    /// 全部消すと、ファイルも消え、起動し直しても残らない。
-    @Test func removesAll() throws {
-        let record = OversizedEmojiRecord(file: file)
-        record.record(try url("big.gif"), width: 2_000, height: 2_000, frameCount: 10)
-
-        record.removeAll()
-
-        #expect(!record.contains(try url("big.gif")))
-        #expect(!OversizedEmojiRecord(file: file).contains(try url("big.gif")))
-    }
-
     /// 動かす場所は元の画像、動かさない場所は動かない版を読む。
     @Test func choosesOriginalOnlyWhereAnimated() throws {
         let emoji = CustomEmoji(shortcode: "blob", url: try url("blob.gif"), staticUrl: try url("blob_static.png"))

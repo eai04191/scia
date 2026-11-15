@@ -31,7 +31,6 @@ public final class EmojiThumbnails: Sendable {
         /// 静止画がなかったときに求められて、小さい静止画を返した数と、返せなかった数。返せなかった分だけ、パレットの枠が空く。
         var served = 0
         var missed = 0
-        var generation = 0
         /// ファイルの、読めた最後の記録の終わり。書き足す前に、ここまで切り詰める。書きかけで途切れた記録の後ろに書き足すと、
         /// 書き足した記録が途切れた記録の続きとして読まれ、起動し直したときに引けなくなるため。まだ調べていなければnil。`writer`の上でだけ使う。
         var fileEnd: Int?
@@ -108,14 +107,10 @@ public final class EmojiThumbnails: Sendable {
     }
 
     /// `image`を縮めて、`url`の小さい静止画として足す。持っていれば何もしない。縮めるのと書くのは、裏で行う。
-    /// 全部消すたびに進める。裏で作る側は、端末に置いた画像を読み始める前の値を`add`に渡し、その間に消していたら足さない。
-    public var generation: Int { state.withLock { $0.generation } }
-
-    /// - Parameter generation: 画像を読み始める前の`generation`。その後に全部消していたら、足さない。
-    public func add(_ url: URL, image: CGImage, generation: Int? = nil) {
+    public func add(_ url: URL, image: CGImage) {
         guard !contains(url) else { return }
         writer.async { [self] in
-            guard !contains(url), generation.map({ $0 == self.generation }) ?? true,
+            guard !contains(url),
                   let (pixels, width, height) = Self.scale(image, toHeight: pixelHeight), let made = Self.makeImage(pixels, width: width, height: height)
             else { return }
             state.withLock { $0.added[url] = made }
@@ -149,23 +144,6 @@ public final class EmojiThumbnails: Sendable {
                 } catch {
                     logger.error("emoji thumbnails prune failed: \(SciaLog.describe(error), privacy: .public)")
                 }
-            }
-        }
-    }
-
-    /// 全部消す。設定のストレージで、使う人がカスタム絵文字を消すときに呼ぶ。
-    public func removeAll() async {
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            writer.async { [self] in
-                state.withLock { state in
-                    state.entries = [:]
-                    state.added = [:]
-                    state.mapped = nil
-                    state.generation += 1
-                    state.fileEnd = nil
-                }
-                try? FileManager.default.removeItem(at: file)
-                continuation.resume()
             }
         }
     }

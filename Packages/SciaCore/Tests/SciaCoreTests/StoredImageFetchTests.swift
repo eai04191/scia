@@ -23,11 +23,11 @@ struct StoredImageFetchTests {
 
     private let root = TestScratch.url("StoredImageFetchTests")
 
-    private func makeFiles() -> MediaFileCache {
-        MediaFileCache(directory: root.appending(path: "files"), sharingDirectory: root.appending(path: "sharing"))
+    private func makeFiles() -> EmojiImageFiles {
+        EmojiImageFiles(directory: root.appending(path: "files"), sharingDirectory: root.appending(path: "sharing")) { Int.max }
     }
 
-    private func makeFetch(_ remote: Remote, files: MediaFileCache? = nil) -> StoredImageFetch {
+    private func makeFetch(_ remote: Remote, files: EmojiImageFiles? = nil) -> StoredImageFetch {
         StoredImageFetch(files: files ?? makeFiles()) { try remote.data(from: $0) }
     }
 
@@ -97,17 +97,17 @@ struct StoredImageFetchTests {
         #expect(remote.count == 2)
     }
 
-    /// 取得している間に、使う人が置いたファイルを全部消したら、取得した画像は返すが置かない。消したあとに置き直さないため。
+    /// 取得している間に、使う人が「キャッシュを消去」でBを消したら、取得した画像は返すが置かない。消したあとに置き直さないため。
     @Test func doesNotStoreAfterFilesWereRemovedDuringFetch() async throws {
         let files = makeFiles()
         let remote = Remote()
         let fetch = StoredImageFetch(files: files) { url in
-            try await files.removeCachedFiles()
+            try await files.removeOthers()
             return try remote.data(from: url)
         }
 
         _ = try await fetch.data(from: try url("a.png"))
 
-        #expect(await files.contains(try url("a.png")) == false)
+        #expect(await files.data(for: try url("a.png")) == nil)
     }
 }

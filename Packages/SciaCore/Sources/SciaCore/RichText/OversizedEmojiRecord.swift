@@ -60,19 +60,6 @@ public final class OversizedEmojiRecord: Sendable {
         }
     }
 
-    /// 残したものを全部消す。設定のストレージの画面で、使う人が絵文字の画像を消すときに呼ぶ。
-    public func removeAll() {
-        entries.withLock { $0 = [] }
-        launchEntries.withLock { $0 = [:] }
-        do {
-            try FileManager.default.removeItem(at: file)
-        } catch CocoaError.fileNoSuchFile {
-            return
-        } catch {
-            logger.error("oversized emoji record remove failed: \(SciaLog.describe(error), privacy: .public)")
-        }
-    }
-
     private func write(_ entries: [Entry]) {
         do {
             try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)

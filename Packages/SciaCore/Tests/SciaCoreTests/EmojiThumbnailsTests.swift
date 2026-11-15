@@ -98,24 +98,6 @@ struct EmojiThumbnailsTests {
         #expect(reloaded.image(for: try url("b.png"))?.height == 16)
     }
 
-    /// 全部消すと、ファイルも消える。消したあとも足せる。
-    @Test func removesAll() async throws {
-        let thumbnails = EmojiThumbnails(file: file, pixelHeight: 16)
-        thumbnails.load()
-        thumbnails.add(try url("a.png"), image: try Self.image(width: 96, height: 96, red: 1))
-        await thumbnails.flush()
-
-        await thumbnails.removeAll()
-
-        #expect(thumbnails.image(for: try url("a.png")) == nil)
-        #expect(!FileManager.default.fileExists(atPath: file.path))
-        thumbnails.add(try url("b.png"), image: try Self.image(width: 96, height: 96, red: 1))
-        await thumbnails.flush()
-        let reloaded = EmojiThumbnails(file: file, pixelHeight: 16)
-        reloaded.load()
-        #expect(reloaded.count == 1)
-    }
-
     /// 途切れた記録のあとに足しても、途切れた分を切り詰めてから書き足すので、起動し直しても前の記録と足した記録を引ける。
     @Test func appendsAfterTruncatedRecord() async throws {
         let thumbnails = EmojiThumbnails(file: file, pixelHeight: 16)
@@ -135,20 +117,6 @@ struct EmojiThumbnailsTests {
         reloaded.load()
         #expect(reloaded.image(for: try url("a.png")) != nil)
         #expect(reloaded.image(for: try url("c.png")) != nil)
-    }
-
-    /// 全部消す前に始めた作業の画像は、消したあとに足さない。消したものを戻さないため。
-    @Test func dropsImagesStartedBeforeRemoval() async throws {
-        let thumbnails = EmojiThumbnails(file: file, pixelHeight: 16)
-        thumbnails.load()
-        let generation = thumbnails.generation
-
-        await thumbnails.removeAll()
-        thumbnails.add(try url("a.png"), image: try Self.image(width: 96, height: 96, red: 1), generation: generation)
-        await thumbnails.flush()
-
-        #expect(thumbnails.image(for: try url("a.png")) == nil)
-        #expect(!FileManager.default.fileExists(atPath: file.path))
     }
 
     /// 幅を高さの8倍で止めるときは、縦横の比を保って高さも縮める。

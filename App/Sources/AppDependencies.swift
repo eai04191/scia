@@ -79,8 +79,11 @@ enum AppDependencies {
 
     static var emojiImages: EmojiImageStore<UIImage> { images.emojis }
 
-    /// カスタム絵文字の画像を置く場所。
-    static var emojiImageFiles: MediaFileCache { images.emojiImageFiles }
+    /// カスタム絵文字の画像を置く場所。端末に残した`api/v1/custom_emojis`の応答に載っているか（A）、いないか（B）で分けて置く。
+    static var emojiImageFiles: EmojiImageFiles { images.emojiImageFiles }
+
+    /// 応答が変わったら、端末に置く絵文字の画像を分け直し、自分のサーバーの絵文字の画像を先読みする。
+    static let emojiPrefetcher = EmojiPrefetcher()
 
     /// カスタム絵文字の画像と、それに付く記録を置くフォルダー。設定のストレージの画面は、ここを「カスタム絵文字」に数える。
     static var emojiImageDirectory: URL { images.emojiImageDirectory }

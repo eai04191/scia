@@ -29,6 +29,19 @@ struct EmojiImageStoreTests {
         }
     }
 
+    /// 先読みで読めなかった画像は、表示の読み込みと同じく覚え、続けて先読みしない。通信の失敗でなければ覚えない。
+    @Test func remembersPrefetchFailures() {
+        let store = makeStore(Data())
+        let other = URL(string: "https://example.com/other.png")!
+        #expect(store.allowsPrefetch(of: url))
+
+        store.recordPrefetchFailure(HTTPStatusError(statusCode: 404), for: url)
+        store.recordPrefetchFailure(CancellationError(), for: other)
+
+        #expect(store.allowsPrefetch(of: url) == false)
+        #expect(store.allowsPrefetch(of: other))
+    }
+
     /// 最初の`failures`回は503で失敗し、そのあとは`data`を返すストア。
     private func makeStore(_ data: Data, failingFirst failures: Int, clock: TestClock) -> EmojiImageStore<CGImage> {
         EmojiImageStore(
@@ -258,21 +271,6 @@ struct EmojiImageStoreTests {
         #expect(next.choice(animates: true).animationURL(of: emoji) == nil)
         #expect(next.animation(for: url) == nil)
         #expect(next.animationDiagnosis(of: url).contains("animationState: nil"), "読み始めない")
-    }
-
-    /// 大きさの記録を消したら（設定のストレージで絵文字の画像を消したとき）、元の画像を読み直して、残し直す。
-    @Test(.scratch) func recordsOversizedOriginalAgainAfterRecordIsRemoved() async throws {
-        let record = OversizedEmojiRecord(file: TestScratch.url("EmojiImageStoreTests").appending(path: "removed.json"))
-        let store = makeStore(try Self.gif(width: 1_100, height: 1_000, frameCount: 2))
-        store.oversized = record
-        _ = store.animation(for: url)
-        try await waitUntil(state: { await animationState(of: store, url) }) { record.contains(url) }
-
-        record.removeAll()
-        _ = store.animation(for: url)
-
-        try await waitUntil(state: { await animationState(of: store, url) }) { record.contains(url) }
-        #expect(fetches.count.withLock { $0 } == 2)
     }
 
     /// 大きすぎて動かせないと分かった元の画像の静止画を、メモリから捨てたあとに読み直したときも、端末に置いたファイルを消させる。

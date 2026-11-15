@@ -5,11 +5,11 @@ import os
 /// URLSessionの応答のキャッシュ（URLCache）には頼らない。APIの応答やほかの画像と1つの上限を分け合い、iOS 27のシミュレーターではその上限が10MBで、
 /// タイムラインを流すと絵文字の画像が押し出され、表示するたびに取得し直していたため。
 public struct StoredImageFetch: Sendable {
-    private let files: MediaFileCache
+    private let files: EmojiImageFiles
     private let fetch: @Sendable (URL) async throws -> Data
     private let logger = SciaLog.logger(category: "emoji")
 
-    public init(files: MediaFileCache, fetch: @escaping @Sendable (URL) async throws -> Data) {
+    public init(files: EmojiImageFiles, fetch: @escaping @Sendable (URL) async throws -> Data) {
         self.files = files
         self.fetch = fetch
     }
@@ -22,9 +22,9 @@ public struct StoredImageFetch: Sendable {
         let generation = await files.generation
         let data = try await fetch(url)
         do {
-            _ = try await files.store(data, named: url.lastPathComponent, for: url, generation: generation)
+            try await files.store(data, named: url.lastPathComponent, for: url, generation: generation)
         } catch is CancellationError {
-            // 取得している間に、置いたファイルを全部消した。置き直さない。
+            // 取得している間に、使う人がBを消した。置き直さない。
         } catch {
             // 置けなくても、取得した画像は返す。次に読むときに取得し直す。
             logger.error("emoji image store failed: \(SciaLog.describe(error), privacy: .public)")

@@ -2,7 +2,7 @@ import os
 import SciaCore
 import UIKit
 
-/// 絵文字のパレットの小さい静止画（`EmojiThumbnails`）を、パレットを閉じている間に、端末に置いた画像から作る。
+/// 絵文字ピッカーの小さい静止画（`EmojiThumbnails`）を、絵文字ピッカーを閉じている間に、端末に置いた画像から作る。
 /// 一度も表示していない絵文字も、初めて流したときから枠が空かないようにするため（docs/animated-custom-emoji.mdの「絵文字ピッカーの小さい静止画」）。
 /// パレットが開いている間は作らない。作る処理がCPUを使い、パレットの絵文字の読み込みを待たせるため。
 /// 通信はしない。端末に置いていない画像の分は、表示して画像を読んだときに作る。
@@ -63,7 +63,7 @@ final class EmojiThumbnailBuilder {
     }
 
     @concurrent
-    private static func build(thumbnails: EmojiThumbnails, customEmojis: CustomEmojiCaches, files: MediaFileCache, choice: EmojiImageChoice, logger: Logger) async {
+    private static func build(thumbnails: EmojiThumbnails, customEmojis: CustomEmojiCaches, files: EmojiImageFiles, choice: EmojiImageChoice, logger: Logger) async {
         thumbnails.load()
         let emojis = await customEmojis.storedEmojis()
         // パレットと同じく、元の画像か、起動したときに大きすぎると分かっていた元の画像なら動かない版で作る。
@@ -72,12 +72,10 @@ final class EmojiThumbnailBuilder {
         for emoji in emojis {
             guard !Task.isCancelled else { break }
             let url = choice.url(of: emoji)
-            // 読んでいる間に、使う人が設定のストレージで消したら、作った画像を足さない。
-            let generation = thumbnails.generation
             guard !thumbnails.contains(url), let data = await files.data(for: url, touching: false) else { continue }
             let maxPixelSize = ImageDecoder.maxPixelSize(forHeight: thumbnails.pixelHeight, of: data)
             guard let image = await ImageDecoder.thumbnail(of: data, maxPixelSize: maxPixelSize, dynamicRange: .standard) else { continue }
-            thumbnails.add(url, image: image, generation: generation)
+            thumbnails.add(url, image: image)
             made += 1
         }
         logger.info("emoji thumbnails built made=\(made, privacy: .public) total=\(thumbnails.count, privacy: .public) cancelled=\(Task.isCancelled, privacy: .public)")

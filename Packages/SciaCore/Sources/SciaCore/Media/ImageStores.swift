@@ -22,8 +22,9 @@ public final class ImageStores<Image: AnyObject & Sendable> {
     public let emojis: EmojiImageStore<Image>
     /// カスタム絵文字の画像と、それに付く記録を置くフォルダー。
     public let emojiImageDirectory: URL
-    /// カスタム絵文字の画像を置く場所。ログアウトしても消さない。公開の画像で、同じサーバーのほかのアカウントも使うため。
-    public let emojiImageFiles: MediaFileCache
+    /// カスタム絵文字の画像を置く場所。端末に残した`api/v1/custom_emojis`の応答に載っているか（A）、いないか（B）で分けて置く。
+    /// ログアウトしても全部は消さない。公開の画像で、同じサーバーのほかのアカウントも使うため。応答を消したときに、載らなくなったAだけを消す。
+    public let emojiImageFiles: EmojiImageFiles
     /// 大きすぎて動かせないと分かった元の画像の記録。画像と一緒に消えるよう、同じフォルダーに置く。
     /// 画像の置き場所の中には置かない。`MediaFileCache`は、置き場所の直下の、ファイルを置いたフォルダーでないものを整理で消すため。
     public let oversizedEmojis: OversizedEmojiRecord
@@ -82,10 +83,9 @@ public final class ImageStores<Image: AnyObject & Sendable> {
         self.customEmojis = customEmojis
         let emojiImageDirectory = emojiImageDirectory ?? .cachesDirectory.appending(path: "EmojiImages")
         self.emojiImageDirectory = emojiImageDirectory
-        let emojiImageFiles = MediaFileCache(
-            directory: emojiImageDirectory.appending(path: "Files"),
-            sharingDirectory: .temporaryDirectory.appending(path: "EmojiImageSharing"),
-            sizeLimit: 512 * 1_024 * 1_024
+        let emojiImageFiles = EmojiImageFiles(
+            directory: emojiImageDirectory,
+            sharingDirectory: .temporaryDirectory.appending(path: "EmojiImageSharing")
         )
         self.emojiImageFiles = emojiImageFiles
         let oversizedEmojis = OversizedEmojiRecord(file: emojiImageDirectory.appending(path: "oversized.json"))
@@ -104,7 +104,11 @@ public final class ImageStores<Image: AnyObject & Sendable> {
             pixelHeight: Int(tuning.value(of: TuningCatalog.composeEmojiPaletteThumbnailHeight))
         )
         self.emojiThumbnails = emojiThumbnails
-        emojis.onStillDecoded = { url, image in emojiThumbnails.add(url, image: image) }
+        // 絵文字ピッカーに出る、応答に載っている絵文字だけを足す。ほかのサーバーの絵文字まで足すと、タイムラインを読むほど際限なく増えるため。
+        emojis.onStillDecoded = { url, image in
+            guard emojiImageFiles.isListed(url) else { return }
+            emojiThumbnails.add(url, image: image)
+        }
         emojis.onSourceSize = { [customEmojis] url, width, height in customEmojis.learn(url, width: width, height: height) }
     }
 }

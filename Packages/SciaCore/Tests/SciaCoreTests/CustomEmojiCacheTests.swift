@@ -79,13 +79,13 @@ struct CustomEmojiCacheTests {
     }
 
     /// 消すと、メモリのリストもファイルも消える。消したあとに分かった縦横比で、消したリストを書き戻さない。
-    @Test func removeAllForgetsMemoryAndFile() async throws {
+    @Test func removeForgetsMemoryAndFile() async throws {
         let caches = makeCaches()
         let cache = caches.cache(for: instance)
         cache.remember([emoji("wide")], loadStartedAt: cache.generation)
         try await waitUntil { FileManager.default.fileExists(atPath: file.path(percentEncoded: false)) }
 
-        await caches.removeAll()
+        await caches.remove(instance: instance)
         cache.learn(emoji("wide").staticUrl, width: 400, height: 100)
         clock.advance(by: CustomEmojiCache.saveDelay)
 
@@ -159,7 +159,7 @@ struct CustomEmojiCacheTests {
         #expect(cache.snapshot.emojis == nil)
     }
 
-    /// 設定のストレージで消したら、リストを持っている補完も、次にパレットを開いたときに読み直す。
+    /// リストを消したら、リストを持っている補完も、次に絵文字ピッカーを開いたときに読み直す。
     /// 持ったままにすると、消したリストを出し続け、縦横比も残らなくなるため。
     @Test func completionReloadsAfterCacheIsCleared() async throws {
         let caches = makeCaches()
@@ -173,7 +173,7 @@ struct CustomEmojiCacheTests {
         completion.loadEmojisIfNeeded()
         try await waitUntil { cache.snapshot.emojis != nil }
 
-        await caches.removeAll()
+        await caches.remove(instance: instance)
         completion.loadEmojisIfNeeded()
 
         #expect(completion.emojis == nil, "消したリストは出さない")

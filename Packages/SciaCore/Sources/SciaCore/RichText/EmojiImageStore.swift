@@ -222,6 +222,19 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
         failedStills.contains(url)
     }
 
+    /// 先読みしてよいか。前に読めなかった画像と、読み直しを待っている間の画像は、先読みしない（docs/image-loading.mdの「読めなかった画像の読み直し」）。
+    /// 読めない画像のために通信を増やさないため。
+    public func allowsPrefetch(of url: URL) -> Bool {
+        retry.allowsAutomaticLoad(of: url) && !retry.hasFailed(url)
+    }
+
+    /// 先読みで読めなかったことを、表示のための読み込みと同じく覚える。表示の側が、間隔を待たずに読み直さないため。
+    /// 通信の失敗でなければ（止めた、など）覚えない。
+    public func recordPrefetchFailure(_ error: any Error, for url: URL) {
+        guard HTTPFailure(error) != nil else { return }
+        retry.recordFailure(error, for: url)
+    }
+
     /// 画像が届いたときに呼ぶ処理を登録する。`owner`が解放されると呼ばれなくなる。
     public func addListener(owner: AnyObject, onLoad: @escaping @MainActor (Set<URL>) -> Void) {
         listeners.append(Listener(owner: owner, onLoad: onLoad))

@@ -4,7 +4,7 @@ import Synchronization
 import Testing
 @testable import Scia
 
-/// 絵文字のシートの小さい静止画を、シートを閉じている間に裏で作る仕組み。
+/// 絵文字ピッカーの小さい静止画を、絵文字ピッカーを閉じている間に裏で作る仕組み。
 @MainActor
 @Suite(.failureState)
 struct EmojiThumbnailBuilderTests {
@@ -32,8 +32,8 @@ struct EmojiThumbnailBuilderTests {
         func open(_ index: Int) { gates.withLock { $0[index] }.open() }
     }
 
-    /// 止めた作業が終わる前に、シートを閉じて作業を始め直しても、あとで始めた作業をシートを開いたときに止められる。
-    /// 止めた作業が終わるときに、あとで始めた作業の控えを消していたため、シートを開いても作り続けていた。
+    /// 止めた作業が終わる前に、絵文字ピッカーを閉じて作業を始め直しても、あとで始めた作業を絵文字ピッカーを開いたときに止められる。
+    /// 止めた作業が終わるときに、あとで始めた作業の控えを消していたため、絵文字ピッカーを開いても作り続けていた。
     @Test func keepsHandleOfRestartedBuildWhenCancelledBuildFinishes() async throws {
         let builds = Builds()
         let builder = EmojiThumbnailBuilder { await builds.run() }
@@ -54,7 +54,7 @@ struct EmojiThumbnailBuilderTests {
         try await waitUntil { builder.finishedCount >= 2 }
     }
 
-    /// シートが開いている間は、作り始めない。
+    /// 絵文字ピッカーが開いている間は、作り始めない。
     @Test func doesNotStartWhilePaletteIsShown() {
         let builds = Builds()
         let builder = EmojiThumbnailBuilder { await builds.run() }

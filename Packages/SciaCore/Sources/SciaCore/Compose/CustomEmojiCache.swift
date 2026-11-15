@@ -39,6 +39,8 @@ public final class CustomEmojiCache {
     private var saveTask: Task<Void, Never>?
     /// 端末に残したリストを読んでいる途中の処理。テストで、読み終えるのを待つ。
     private(set) var restoreTask: Task<Void, Never>?
+    /// サーバーから読んだリストを書き出し終えたときと、リストを消したときに呼ぶ。`CustomEmojiCaches`が付ける。
+    var onListChanged: (@MainActor () -> Void)?
     /// `remove()`で消すたびに進める。消す前に読み始めた端末のリストや通信の応答と、消す前に予約した書き出しで、消したあとのリストを埋めないため。
     private(set) var generation = 0
 
@@ -65,7 +67,11 @@ public final class CustomEmojiCache {
         isFresh = true
         restoreTask?.cancel()
         restoreTask = nil
-        save()
+        let written = save()
+        Task { [weak self] in
+            await written?.value
+            self?.onListChanged?()
+        }
     }
 
     /// 画像が届いたときに、元の画像の幅と高さを渡す。リストにあり、サーバーが縦横比を返していない絵文字なら、縦横比を残す。
@@ -98,6 +104,7 @@ public final class CustomEmojiCache {
         saveTask?.cancel()
         saveTask = nil
         await files.remove(server: server)
+        onListChanged?()
     }
 
     private func set(_ emojis: [ServerEmoji]) {
@@ -154,10 +161,12 @@ public final class CustomEmojiCache {
     }
 
     /// リストと分かっている縦横比を書き出す。端末から読んだリストのままでも書く。読み直す前にタイムラインで分かった縦横比を、次の起動に残すため。
-    private func save() {
+    /// 書き出す処理を返す。書かなければnil。
+    @discardableResult
+    private func save() -> Task<Void, Never>? {
         saveTask?.cancel()
         saveTask = nil
-        guard let emojis else { return }
+        guard let emojis else { return nil }
         let stored = StoredCustomEmojis(emojis: emojis.map { emoji in
             StoredCustomEmojis.Entry(emoji, aspectRatio: emoji.aspectRatio ?? learnedAspectRatios[emoji.staticUrl])
         })
@@ -165,7 +174,7 @@ public final class CustomEmojiCache {
         let server = server
         let generation = generation
         // 始める前に消していたら書かない。消す処理より先にファイルへ届いた書き出しは、消す処理が後から消す。
-        Task { [weak self] in
+        return Task { [weak self] in
             guard self?.generation == generation else { return }
             await files.write(stored, server: server)
         }
@@ -178,6 +187,9 @@ public final class CustomEmojiCaches {
     nonisolated private let files: CustomEmojiFiles
     private let clock: any Clock<Duration>
     private var caches: [String: CustomEmojiCache] = [:]
+    /// どれかのサーバーのリストを、サーバーから読んで書き出したときと、消したときに呼ぶ。
+    /// 端末に置く絵文字の画像を、リストに載っているか（docs/animated-custom-emoji.mdの「端末に置く画像の分け方」）で分け直し、先読みするのに使う。
+    public var onListsChanged: (@MainActor () -> Void)?
 
     /// - Parameter directory: リストを書き出すフォルダー。サーバーの応答から作れるので、OSが空き容量に応じて消してよい`Caches`に置く。
     public init(directory: URL = .cachesDirectory.appending(path: "CustomEmojis"), clock: any Clock<Duration> = SystemTime.clock) {
@@ -195,6 +207,7 @@ public final class CustomEmojiCaches {
             return cache
         }
         let cache = CustomEmojiCache(server: server, files: files, clock: clock)
+        cache.onListChanged = { [weak self] in self?.onListsChanged?() }
         caches[server] = cache
         return cache
     }
@@ -218,16 +231,8 @@ public final class CustomEmojiCaches {
             await cache.remove()
         } else {
             await files.remove(server: server)
+            onListsChanged?()
         }
-    }
-
-    /// すべてのサーバーのリストを消す。設定のストレージで、通信のキャッシュと一緒に消す。
-    /// 開いている画面のリストを、次に書き出すときに戻さないよう、メモリに持っているリストも消す。
-    public func removeAll() async {
-        for cache in caches.values {
-            await cache.remove()
-        }
-        await files.removeAll()
     }
 
     /// サーバーを見分ける名前。サーバーのための設定の値（`AccountScopedDefaults.key(_:server:)`）と同じく、ホスト名で見分ける。
@@ -338,9 +343,6 @@ actor CustomEmojiFiles {
         }
     }
 
-    func removeAll() {
-        try? FileManager.default.removeItem(at: directory)
-    }
 }
 
 extension ComposeCompletion.Sources {

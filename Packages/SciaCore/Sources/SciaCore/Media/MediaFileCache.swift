@@ -34,6 +34,8 @@ public actor MediaFileCache {
     private var totalSize: Int?
     /// 置き場所の全ファイルを調べた回数。上限に届かない間は調べないことを、テストで確かめる。
     private(set) var scanCount = 0
+    /// 上限を超えて、ファイルを消した回数。状態ダンプで、上限が足りているかを確かめるのに使う。
+    public private(set) var trimCount = 0
 
     /// - Parameters:
     ///   - sharingDirectory: 共有や保存に渡すコピーを置く場所。共有先が読み終えたことを知るすべがないため、作るときに前回の起動で残したコピーを消す。
@@ -54,8 +56,29 @@ public actor MediaFileCache {
 
     /// `url`のファイルを置くフォルダ。名前は共有先でファイル名として見えるため、URLごとにフォルダを分け、その中にURLのファイル名のまま置く。
     private nonisolated func folder(for url: URL) -> URL {
-        let digest = SHA256.hash(data: Data(url.absoluteString.utf8))
-        return directory.appending(fileName: SafeFileName(digest.map { String(format: "%02x", $0) }.joined()), directoryHint: .isDirectory)
+        directory.appending(fileName: SafeFileName(Self.folderName(for: url)), directoryHint: .isDirectory)
+    }
+
+    /// `url`のファイルを置くフォルダーの名前。置き場所のフォルダーの名前（`folderNames()`）と突き合わせて、URLのファイルがあるかを1つずつ調べずに知るのに使う。
+    public nonisolated static func folderName(for url: URL) -> String {
+        SHA256.hash(data: Data(url.absoluteString.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// ファイルを置いたフォルダーの名前。書き込みの途中で落ちて、ファイルのないフォルダーは数えない。
+    public func folderNames() -> Set<String> {
+        let folders = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        return Set(folders.filter { Self.storedFile(in: $0) != nil }.map(\.lastPathComponent))
+    }
+
+    /// 置いたファイルの大きさ（割り当てた大きさ）を、フォルダーの名前（`folderName(for:)`）で引けるように並べる。
+    public func sizesByFolderName() -> [String: Int] {
+        Dictionary(entries().map { ($0.id, $0.size) }) { first, _ in first }
+    }
+
+    /// 置いてあるファイルの数と、大きさの合計。
+    public func summary() -> (count: Int, size: Int) {
+        let entries = entries()
+        return (entries.count, entries.reduce(0) { $0 + $1.size })
     }
 
     /// `url`のファイルが置いてあれば、その場所。引いたものは最後に使った日時を更新し、整理で後回しにする。
@@ -83,6 +106,37 @@ public actor MediaFileCache {
     /// `url`のファイルが置いてあるか。最後に使った日時は更新しない。
     public func contains(_ url: URL) -> Bool {
         Self.storedFile(in: folder(for: url)) != nil
+    }
+
+    /// `url`のファイルを、置き場所から外して`destination`へ移し、置いていたファイルの名前を返す。置いていなければnil。
+    /// ほかの置き場所へ、中身を読まずに移すのに使う。
+    public func take(_ url: URL, to destination: URL) throws -> String? {
+        let folder = folder(for: url)
+        guard let file = Self.storedFile(in: folder) else { return nil }
+        let size = Self.storedSize(in: folder)
+        try FileManager.default.moveItem(at: file, to: destination)
+        try? FileManager.default.removeItem(at: folder)
+        totalSize = totalSize.map { $0 - size }
+        return file.lastPathComponent
+    }
+
+    /// `urls`のほかのファイルを全部消す。消した数を返す。
+    public func remove(except urls: Set<URL>) -> Int {
+        let kept = Set(urls.map(Self.folderName(for:)))
+        let folders = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        var removed = 0
+        for folder in folders where !kept.contains(folder.lastPathComponent) {
+            do {
+                try FileManager.default.removeItem(at: folder)
+                removed += 1
+            } catch {
+                logger.error("media file cache remove failed: \(SciaLog.describe(error), privacy: .public)")
+            }
+        }
+        if removed > 0 {
+            totalSize = nil
+        }
+        return removed
     }
 
     /// `url`のファイルを消す。先読みの置き場から、ビューアで開いてメディアのキャッシュへ移したものを消すのに使う。
@@ -197,6 +251,7 @@ public actor MediaFileCache {
         defer { totalSize = total }
         guard total > sizeLimit else { return }
         entries.sort { $0.accessDate < $1.accessDate }
+        trimCount += 1
         let target = Int(Double(sizeLimit) * Self.trimRatio)
         for entry in entries.dropLast() where total > target && entry.folder.lastPathComponent != stored?.lastPathComponent {
             do {
