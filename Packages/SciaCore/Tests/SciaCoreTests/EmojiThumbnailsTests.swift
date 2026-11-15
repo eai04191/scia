@@ -43,6 +43,23 @@ struct EmojiThumbnailsTests {
         #expect(next.image(for: try url("missing.png")) == nil)
     }
 
+    /// 画素はLZ4で圧縮して書く。単色の画像なら、展開した画素よりずっと小さいファイルになり、読み直しても同じ画素に戻る。
+    @Test func storesCompressedPixels() async throws {
+        let thumbnails = EmojiThumbnails(file: file, pixelHeight: 32)
+        thumbnails.load()
+        thumbnails.add(try url("a.png"), image: try Self.image(width: 96, height: 96, red: 1))
+        await thumbnails.flush()
+
+        let size = try #require(try FileManager.default.attributesOfItem(atPath: file.path)[.size] as? Int)
+        #expect(size < 32 * 32 * 4 / 4)
+        let reloaded = EmojiThumbnails(file: file, pixelHeight: 32)
+        reloaded.load()
+        let image = try #require(reloaded.image(for: try url("a.png")))
+        let pixel = try #require(image.dataProvider?.data as Data?)
+        #expect(pixel.count == 32 * 32 * 4)
+        #expect(pixel.prefix(4) == Data([255, 0, 0, 255]))
+    }
+
     /// 高さを変えたら、前のファイルは使わずに作り直す。
     @Test func discardsFileOfDifferentHeight() async throws {
         let thumbnails = EmojiThumbnails(file: file, pixelHeight: 16)

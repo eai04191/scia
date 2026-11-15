@@ -1,18 +1,24 @@
+import Compression
 public import CoreGraphics
 public import Foundation
 import os
 import Synchronization
 
-/// 絵文字のパレットで、静止画が届くまでの間に描く、カスタム絵文字の小さい静止画（docs/animated-custom-emoji.mdの「パレットの小さい静止画」）。
-/// 展開済みの画素のまま1つのファイルに並べ、メモリに写して（mmap）読む。描くときにファイルの読み出しも展開も待たないので、
+/// 絵文字のパレットで、静止画が届くまでの間に描く、カスタム絵文字の小さい静止画（docs/animated-custom-emoji.mdの「絵文字ピッカーの小さい静止画」）。
+/// 展開済みの画素をLZ4で圧縮して1つのファイルに並べ、メモリに写して（mmap）読む。描くときに、画像の形式の展開もファイルの読み出しも待たないので、
 /// CPUが動く絵文字のコマの展開で埋まっていても、どの速さで流しても絵文字の枠が空かない。
 /// iPhone 16 Proで約6000個のパレットを流すと、端末に置いた画像から静止画を作るのに、中央で579msかかっていたため。
+/// LZ4にしたのは、描くたびにメインスレッドで展開するため。fedibird.comの6129個をMacで測ると、非圧縮の58%の大きさで、1つを1.4µsで展開できた。
+/// LZFSEは48%まで小さくなるが展開に7.4µs、zlibは45%で14.5µsかかった。
 ///
-/// 記録の並びは、先頭の`header`のあとに、URLの長さ（4バイト）、URL、幅と高さ（2バイトずつ）、4バイト境界までの詰め物、画素（RGBA、乗算済み）。
+/// 記録の並びは、先頭の`header`のあとに、URLの長さ（4バイト）、URL、幅と高さ（2バイトずつ）、圧縮した画素の長さ（4バイト）、4バイト境界までの詰め物、
+/// LZ4で圧縮した画素（RGBA、乗算済み）、4バイト境界までの詰め物。
 /// 足すときは末尾に書き足し、同じURLはあとの記録を使う。写したデータは書き足しても伸びないので、足した画像は次に読み込むまでメモリに持つ。
 public final class EmojiThumbnails: Sendable {
     private struct Entry: Sendable {
+        /// 圧縮した画素の始まりと長さ。
         let offset: Int
+        let length: Int
         let width: Int
         let height: Int
     }
@@ -32,7 +38,7 @@ public final class EmojiThumbnails: Sendable {
     }
 
     /// 書き方を変えたら上げる。読んだファイルの値か高さが違えば、捨てて作り直す。
-    static var version: UInt32 { 1 }
+    static var version: UInt32 { 2 }
     /// 1枚の幅の、高さに対する上限の割合。極端に横長な絵文字で場所を取りすぎないため。静止画の読み方（`ImageDecoder.maxPixelSize(forHeight:of:)`）と同じ。
     static var maxAspectRatio: Double { 8 }
 
@@ -78,9 +84,10 @@ public final class EmojiThumbnails: Sendable {
 
     private static func image(for url: URL, in state: State) -> CGImage? {
         if let image = state.added[url] { return image }
-        guard let entry = state.entries[url], let mapped = state.mapped else { return nil }
-        // 1枚は数KBなので、写したデータから取り出して画像にする。ページがまだ読まれていなければ、ここで読む。
-        let pixels = mapped.subdata(in: entry.offset..<(entry.offset + entry.width * entry.height * 4))
+        guard let entry = state.entries[url], let mapped = state.mapped,
+              let pixels = decompress(mapped[(mapped.startIndex + entry.offset)..<(mapped.startIndex + entry.offset + entry.length)], count: entry.width * entry.height * 4)
+        else { return nil }
+        // 1枚は数KBなので、写したデータから展開して画像にする。ページがまだ読まれていなければ、ここで読む。
         return makeImage(pixels, width: entry.width, height: entry.height)
     }
 
@@ -128,7 +135,7 @@ public final class EmojiThumbnails: Sendable {
                 var data = Self.header(pixelHeight: pixelHeight)
                 for (url, entry) in kept {
                     guard let mapped else { break }
-                    Self.appendRecord(to: &data, url: url, pixels: mapped.subdata(in: entry.offset..<(entry.offset + entry.width * entry.height * 4)), width: entry.width, height: entry.height)
+                    Self.appendRecord(to: &data, url: url, compressed: mapped.subdata(in: entry.offset..<(entry.offset + entry.length)), width: entry.width, height: entry.height)
                 }
                 do {
                     try data.write(to: file, options: .atomic)
@@ -181,9 +188,9 @@ public final class EmojiThumbnails: Sendable {
                 try header.write(to: file, options: .atomic)
                 end = header.count
             }
-            guard let end else { return }
+            guard let end, let compressed = Self.compress(pixels) else { return }
             var record = Data()
-            Self.appendRecord(to: &record, url: url, pixels: pixels, width: width, height: height)
+            Self.appendRecord(to: &record, url: url, compressed: compressed, width: width, height: height)
             let handle = try FileHandle(forWritingTo: file)
             defer { try? handle.close() }
             try handle.truncate(atOffset: UInt64(end))
@@ -213,15 +220,43 @@ public final class EmojiThumbnails: Sendable {
         return data
     }
 
-    /// 記録を`data`に足す。画素が4バイト境界から始まるよう、詰め物を入れる。`data`の長さは4の倍数で渡す。
-    private static func appendRecord(to data: inout Data, url: URL, pixels: Data, width: Int, height: Int) {
+    /// 記録を`data`に足す。圧縮した画素が4バイト境界から始まるよう、前に詰め物を入れる。圧縮した長さは4の倍数とは限らないので、
+    /// 次の記録も4バイト境界から始まるよう、後ろにも詰め物を入れる。`data`の長さは4の倍数で渡す。
+    private static func appendRecord(to data: inout Data, url: URL, compressed: Data, width: Int, height: Int) {
         let name = Data(url.absoluteString.utf8)
         data.append(contentsOf: withUnsafeBytes(of: UInt32(name.count).littleEndian, Array.init))
         data.append(name)
         data.append(contentsOf: withUnsafeBytes(of: UInt16(width).littleEndian, Array.init))
         data.append(contentsOf: withUnsafeBytes(of: UInt16(height).littleEndian, Array.init))
+        data.append(contentsOf: withUnsafeBytes(of: UInt32(compressed.count).littleEndian, Array.init))
         data.append(Data(count: (4 - data.count % 4) % 4))
-        data.append(pixels)
+        data.append(compressed)
+        data.append(Data(count: (4 - compressed.count % 4) % 4))
+    }
+
+    /// 画素をLZ4で圧縮する。縮まらない画素は、圧縮できずにnilになる。
+    private static func compress(_ pixels: Data) -> Data? {
+        var output = Data(count: pixels.count + 64)
+        let size = output.withUnsafeMutableBytes { destination in
+            pixels.withUnsafeBytes { source in
+                guard let to = destination.bindMemory(to: UInt8.self).baseAddress, let from = source.bindMemory(to: UInt8.self).baseAddress else { return 0 }
+                return compression_encode_buffer(to, destination.count, from, source.count, nil, COMPRESSION_LZ4_RAW)
+            }
+        }
+        guard size > 0 else { return nil }
+        return output.prefix(size)
+    }
+
+    /// LZ4で圧縮した画素を、`count`バイトに展開する。長さが合わなければ、壊れているのでnil。
+    private static func decompress(_ compressed: Data, count: Int) -> Data? {
+        var output = Data(count: count)
+        let size = output.withUnsafeMutableBytes { destination in
+            compressed.withUnsafeBytes { source in
+                guard let to = destination.bindMemory(to: UInt8.self).baseAddress, let from = source.bindMemory(to: UInt8.self).baseAddress else { return 0 }
+                return compression_decode_buffer(to, count, from, source.count, nil, COMPRESSION_LZ4_RAW)
+            }
+        }
+        return size == count ? output : nil
     }
 
     /// ファイルを写して、記録を並べる。読めない記録があれば、そこから先は使わない。先頭の書き方か高さが違えば、何も使わない。
@@ -256,14 +291,17 @@ public final class EmojiThumbnails: Sendable {
         while offset + 4 <= data.count {
             let length = Int(integer(UInt32.self, in: data, at: offset))
             let nameEnd = offset + 4 + length
-            guard nameEnd + 4 <= data.count, let string = String(data: data[(data.startIndex + offset + 4)..<(data.startIndex + nameEnd)], encoding: .utf8), let url = URL(string: string) else { break }
+            guard nameEnd <= data.count, let string = String(data: data[(data.startIndex + offset + 4)..<(data.startIndex + nameEnd)], encoding: .utf8), let url = URL(string: string) else { break }
+            guard nameEnd + 8 <= data.count else { break }
             let width = Int(integer(UInt16.self, in: data, at: nameEnd))
             let height = Int(integer(UInt16.self, in: data, at: nameEnd + 2))
-            let pixelStart = nameEnd + 4 + (4 - (nameEnd + 4) % 4) % 4
-            let pixelEnd = pixelStart + width * height * 4
-            guard width > 0, height > 0, pixelEnd <= data.count else { break }
-            records.append((url, Entry(offset: pixelStart, width: width, height: height), pixelEnd))
-            offset = pixelEnd
+            let compressedLength = Int(integer(UInt32.self, in: data, at: nameEnd + 4))
+            let start = nameEnd + 8 + (4 - (nameEnd + 8) % 4) % 4
+            let end = start + compressedLength
+            let padded = end + (4 - compressedLength % 4) % 4
+            guard width > 0, height > 0, compressedLength > 0, padded <= data.count else { break }
+            records.append((url, Entry(offset: start, length: compressedLength, width: width, height: height), padded))
+            offset = padded
         }
         return records
     }
