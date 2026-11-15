@@ -226,14 +226,15 @@ public struct MastodonClient: Sendable {
         }
     }
 
-    /// サーバーの、Mastodonにない機能の有無。Fedibirdの拡張で、`api/v1/instance`の`fedibird_capabilities`で決める。
+    /// サーバーの、Mastodonにない機能の有無。Fedibirdの拡張で、`api/v1/instance`の`fedibird_capabilities`と`feature_quote`で決める。
     /// Fedibirdとkmyblueはv1に必ず返すので、v2は読まない。項目がないサーバーは、Mastodonと同じとみなす。
     public func serverCapabilities() async throws -> ServerCapabilities {
         struct Instance: Decodable {
             let fedibirdCapabilities: [String]?
+            let featureQuote: Bool?
         }
-        let capabilities = try await get(Instance.self, path: "api/v1/instance", query: []).0.fedibirdCapabilities ?? []
-        return ServerCapabilities(fedibirdCapabilities: capabilities)
+        let instance = try await get(Instance.self, path: "api/v1/instance", query: []).0
+        return ServerCapabilities(fedibirdCapabilities: instance.fedibirdCapabilities ?? [], featureQuote: instance.featureQuote ?? false)
     }
 
     /// https://docs.joinmastodon.org/methods/instance/#v2
@@ -473,20 +474,21 @@ public struct MastodonClient: Sendable {
     /// 添付ファイルが済んでいなければ送らずに`StatusPostError.attachmentsNotReady`を投げる。
     /// サーバーが内容を拒んだら、422の`MastodonAPIError`を投げる。
     /// https://docs.joinmastodon.org/methods/statuses/#create
-    public func postStatus(_ draft: StatusDraft) async throws -> Status {
-        try await post(Status.self, path: "api/v1/statuses", form: try postForm(of: draft), headers: ["Idempotency-Key": draft.idempotencyKey]).0
+    /// - Parameter quotes: サーバーの引用の決まり。引用元のIDを入れるパラメーターの名前を決める。
+    public func postStatus(_ draft: StatusDraft, quotes: QuoteRules = .mastodon) async throws -> Status {
+        try await post(Status.self, path: "api/v1/statuses", form: try postForm(of: draft, quotes: quotes), headers: ["Idempotency-Key": draft.idempotencyKey]).0
     }
 
     /// `date`に投稿するよう予約する。投稿と同じく、下書きごとの`Idempotency-Key`を付ける。サーバーは予約にも同じキーで二重に作らない。
     /// 今から5分以内の日時は、サーバーが422の`MastodonAPIError`で断る。過去の日時はすぐ投稿されてしまうため、送る前に`ScheduledPosting.accepts`で確かめる。
     /// https://docs.joinmastodon.org/methods/statuses/#create
-    public func scheduleStatus(_ draft: StatusDraft, at date: Date) async throws -> ScheduledStatus {
-        let form = try postForm(of: draft) + [URLQueryItem(name: "scheduled_at", value: date.formatted(.iso8601))]
+    public func scheduleStatus(_ draft: StatusDraft, at date: Date, quotes: QuoteRules = .mastodon) async throws -> ScheduledStatus {
+        let form = try postForm(of: draft, quotes: quotes) + [URLQueryItem(name: "scheduled_at", value: date.formatted(.iso8601))]
         return try await post(ScheduledStatus.self, path: "api/v1/statuses", form: form, headers: ["Idempotency-Key": draft.idempotencyKey]).0
     }
 
     /// 投稿と予約で送るフォーム。
-    private func postForm(of draft: StatusDraft) throws -> [URLQueryItem] {
+    private func postForm(of draft: StatusDraft, quotes: QuoteRules) throws -> [URLQueryItem] {
         guard let mediaIDs = draft.mediaIDs else { throw StatusPostError.attachmentsNotReady }
         var form = [
             URLQueryItem(name: "status", value: draft.text),
@@ -501,7 +503,7 @@ public struct MastodonClient: Sendable {
             form.append(URLQueryItem(name: "in_reply_to_id", value: inReplyToID))
         }
         if let quotedStatusID = draft.quotedStatusID {
-            form.append(URLQueryItem(name: "quoted_status_id", value: quotedStatusID))
+            form.append(URLQueryItem(name: quotes.quotedStatusParameter, value: quotedStatusID))
         }
         // 送らなければ、サーバーはアカウントの既定の言語、なければweb UIの表示言語にする。
         if let language = draft.language {
@@ -596,15 +598,18 @@ public struct MastodonClient: Sendable {
     /// 下書きを、中身に合ったAPIで送る。編集の対象（`StatusDraft.editing`）があれば編集し、予約の日時（`StatusDraft.scheduledAt`）があれば予約し、どちらもなければすぐ投稿する。
     /// Mastodonは編集の予約を受け付けないので、両方あっても編集する（`ComposeModel`は編集の間に予約させない）。
     /// 投票の付いた投稿の編集では、残りの時間をこのクライアントの今の日付（`init`の`now`）から数える。
-    /// `ComposeModel`と`ComposeAccount`の`submit`に渡す。
-    public func submit(_ draft: StatusDraft) async throws -> SubmittedDraft {
+    /// `ComposeModel`と`ComposeAccount`の`submit`には、`AccountSession.submit(_:)`か、これに引用の決まりを添えたものを渡す。
+    /// - Parameter quotes: サーバーの引用の決まりを返す。引用のある下書きを投稿か予約するときだけ呼ぶ。
+    ///   投げたら送らずに失敗させる。決まりを取り違えて送ると、サーバーは引用のない投稿として受け付けるため。
+    public func submit(_ draft: StatusDraft, quotes: @Sendable () async throws -> QuoteRules) async throws -> SubmittedDraft {
         if let editing = draft.editing {
             return .edited(try await editStatus(editing, to: draft, now: now()))
         }
+        let rules = draft.quotedStatusID == nil ? QuoteRules.mastodon : try await quotes()
         if let scheduledAt = draft.scheduledAt {
-            return .scheduled(try await scheduleStatus(draft, at: scheduledAt))
+            return .scheduled(try await scheduleStatus(draft, at: scheduledAt, quotes: rules))
         }
-        return .posted(try await postStatus(draft))
+        return .posted(try await postStatus(draft, quotes: rules))
     }
 
     /// 自分の投稿を`draft`の内容に編集し、編集したあとの投稿を返す。`target`は`draft.editing`。

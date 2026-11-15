@@ -518,7 +518,7 @@ final class SessionController {
         let postingLanguages = PostingLanguageCache { try await client.postingLanguages() }
         self.postingLanguages = postingLanguages
         composer = InlineComposeController(
-            model: ComposeModel<UIImage>(tasks: tasks.child(), myAccountID: credential.accountID, media: media, redraft: redraft, backgroundTime: BackgroundTime.request, submit: client.submit),
+            model: ComposeModel<UIImage>(tasks: tasks.child(), myAccountID: credential.accountID, media: media, redraft: redraft, backgroundTime: BackgroundTime.request, submit: { [session] draft in try await session.submit(draft) }),
             completion: completion,
             recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance),
             languages: PostingLanguageSource(recent: RecentPostingLanguages(defaults: .standard, account: credential.handle), load: postingLanguages.languages)
@@ -2176,7 +2176,11 @@ final class SessionController {
         let isReply = model.replyTo != nil
         let username = other?.credential.username ?? credential.username
         writingAccountLookup.start(.action) { [weak self] () -> OtherAccount.Lookup in
-            if let other { return await other.lookup(target) }
+            if let other {
+                // 引用できるかは、替えた先のサーバーの引用の決まりで決めるので、読み終えてから探す。
+                if !isReply { _ = try? await other.loadedCapabilities() }
+                return await other.lookup(target)
+            }
             return await self?.lookUpOnHome(target) ?? .notFound
         } isStillWanted: { [weak self] in
             let current = isReply ? self?.composer.model.replyTo : self?.composer.model.quoteTarget
@@ -2187,8 +2191,9 @@ final class SessionController {
             let reason: ErrorPresentation
             switch lookup {
             case .found(let found):
-                // 引用に対応していないサーバー（`quote_approval`がない）でも、引用できないものとして替えない。
-                if isReply || found.displayed.quoteApproval?.availability.canQuote == true {
+                // 引用に対応していないサーバーでも、引用できないものとして替えない。
+                let quotes = other?.capabilities.quotes ?? session.capabilities.quotes
+                if isReply || quotes.availability(of: found)?.canQuote == true {
                     composer.switchWritingAccount(to: writing, replyTo: isReply ? found : nil, quoteTarget: isReply ? nil : found)
                     return
                 }
@@ -2242,7 +2247,12 @@ final class SessionController {
                 self?.showToggledNotice(OtherAccountTexts.title(OtherAccountTexts.posted, handle: handle))
             }
         }) { draft in
-            try await client().submit(draft)
+            try await client().submit(draft) { [weak account] in
+                guard let account else { throw CancellationError() }
+                // 読めていなければ、送るのと同じく、そのアカウントの今の認証情報で読む。
+                let latest = await client()
+                return try await account.loadedCapabilities { try await latest.serverCapabilities() }.quotes
+            }
         }
     }
 
@@ -3364,7 +3374,8 @@ final class SessionController {
     /// ログインしていない人向けの形で届き、引用できるかが分からないので、読み直して確かめてから始める。
     /// 読めなかったら、編集を始められなかったときと同じく、チップの列に出す。
     private func startQuoting(_ status: Status) {
-        guard status.displayed.quoteApproval?.availability == .unverified else {
+        let quotes = session.capabilities.quotes
+        guard quotes.availability(of: status) == .unverified else {
             beginQuoting(status)
             return
         }
@@ -3375,7 +3386,7 @@ final class SessionController {
             do {
                 let refetched = try await slowFetch.track { try await client.status(target.id) }
                 guard let self else { return }
-                switch refetched.quoteApproval?.availability {
+                switch quotes.availability(of: refetched) {
                 case .automatic, .manual:
                     beginQuoting(status)
                 case .denied(followersOnly: true):

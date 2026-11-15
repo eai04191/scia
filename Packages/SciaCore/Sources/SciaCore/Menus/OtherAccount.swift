@@ -132,6 +132,7 @@ public final class OtherAccount {
     public private(set) var capabilities = ServerCapabilities.mastodon
     private var capabilitiesState = CapabilitiesState.unknown
     private enum CapabilitiesState { case unknown, loading, loaded }
+    private var capabilitiesLoad: Task<Void, Never>?
     /// サーバーの機能の有無を読んでいる途中か。
     public var isLoadingCapabilities: Bool { capabilitiesState == .loading }
 
@@ -139,9 +140,9 @@ public final class OtherAccount {
     public func loadCapabilities() {
         guard capabilitiesState == .unknown else { return }
         capabilitiesState = .loading
-        tasks.run(.display) { [weak self, operations] in
+        capabilitiesLoad = tasks.run(.display) { [weak self, operations] in
             let loaded = try? await operations.capabilities()
-            guard let self else { return }
+            guard let self, capabilitiesState == .loading else { return }
             if let loaded {
                 capabilities = loaded
                 capabilitiesState = .loaded
@@ -149,6 +150,20 @@ public final class OtherAccount {
                 capabilitiesState = .unknown
             }
         }
+    }
+
+    /// 読めた、そのアカウントのサーバーの機能の有無。読めていればそれを返し、読んでいる途中なら終わるのを待つ。それでも読めていなければ読み、読めなければ投げる。
+    /// Mastodonと同じとみなして進むと取り違えるところ（引用できるか、引用を送るパラメーターの名前）で使う。
+    /// - Parameter fetch: 読めていないときに読むもの。省くと、このアカウントを作ったときの認証情報で読む。
+    ///   そのアカウントにログインし直したあとは、新しい認証情報のクライアントで読むものを渡す。
+    public func loadedCapabilities(fetch: (@Sendable () async throws -> ServerCapabilities)? = nil) async throws -> ServerCapabilities {
+        loadCapabilities()
+        await capabilitiesLoad?.value
+        if capabilitiesState == .loaded { return capabilities }
+        let loaded = try await (fetch ?? operations.capabilities)()
+        capabilities = loaded
+        capabilitiesState = .loaded
+        return loaded
     }
 
     /// そのアカウント自身のプロフィール。まだ読んでいなければ読み、読み終えるのを待つ。読めなければnil。

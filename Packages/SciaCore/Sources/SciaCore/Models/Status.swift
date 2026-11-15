@@ -54,6 +54,8 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     public private(set) var quotesCount: Int
     /// 絵文字のリアクション。Fedibirdの形で、返さないサーバーでは空。出すかはサーバーが対応しているかで決める（docs/emoji-reaction.md）。
     public private(set) var emojiReactions: [EmojiReaction]
+    /// この投稿が参照している投稿のID。Fedibirdの拡張（`status_reference_ids`）で、返さないサーバーでは空。引用元も参照として入る。
+    public let referenceIDs: [Status.ID]
     public let repliesCount: Int
     /// ブーストの場合、ブーストされた元の投稿。構造体は自分自身を直接持てないため、参照型の`StatusBox`に入れる。
     private var reblogBox: StatusBox?
@@ -90,6 +92,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         reblogsCount: Int = 0,
         quotesCount: Int = 0,
         emojiReactions: [EmojiReaction] = [],
+        referenceIDs: [Status.ID] = [],
         repliesCount: Int = 0,
         reblog: Status? = nil
     ) {
@@ -124,6 +127,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         self.reblogsCount = reblogsCount
         self.quotesCount = quotesCount
         self.emojiReactions = emojiReactions
+        self.referenceIDs = referenceIDs
         self.repliesCount = repliesCount
         reblogBox = reblog.map(StatusBox.init)
     }
@@ -151,7 +155,10 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         inReplyToAccountId = try container.decodeIfPresent(String.self, forKey: .inReplyToAccountId)
         poll = container.decodeLossyIfPresent(Poll.self, forKey: .poll)
         card = container.decodeLossyIfPresent(PreviewCard.self, forKey: .card)
+        // Fedibirdは、引用元の投稿の`quote`をいつもnullにし、引用元のIDだけを`quote_id`に残す。
         quote = container.decodeLossyIfPresent(Quote.self, forKey: .quote)
+            ?? (try? decoder.container(keyedBy: FedibirdKeys.self).decodeIfPresent(String.self, forKey: .quoteId))
+            .map { Quote(state: Quote.State.accepted.rawValue, quotedStatusID: $0) }
         // 自分の操作を表す項目がなければ、ログインしていない人向けの形（公開とハッシュタグのストリーミング）で届いたもので、
         // `current_user`が自分について決めた値ではない。
         let isRenderedForViewer = container.contains(.favourited)
@@ -169,6 +176,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         quotesCount = try container.decodeCountIfPresent(forKey: .quotesCount) ?? 0
         repliesCount = try container.decodeCountIfPresent(forKey: .repliesCount) ?? 0
         emojiReactions = try container.decodeLossyArray(EmojiReaction.self, forKey: .emojiReactions)
+        referenceIDs = (try? container.decodeIfPresent([String].self, forKey: .referenceIDs)) ?? []
         reblogBox = try container.decodeIfPresent(StatusBox.self, forKey: .reblogBox)
     }
 
@@ -327,6 +335,24 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         case visibility, inReplyToId, inReplyToAccountId, poll, card, quote, quoteApproval, filtered, editedAt
         case favourited, reblogged, bookmarked, muted, pinned, favouritesCount, reblogsCount, quotesCount, emojiReactions, repliesCount
         case reblogBox = "reblog"
+        case referenceIDs = "statusReferenceIds"
+    }
+
+    private enum FedibirdKeys: String, CodingKey {
+        case quoteId
+    }
+
+    /// 本文から除く、サーバーが足した要素。本文の文字列を決めるので、本文から作ったものを使い回すときの見分けにも入れる。
+    public struct BodyOmissions: Hashable, Sendable {
+        /// 引用元へのリンク（`quote-inline`）。引用のある投稿で除く。
+        public let quoteLink: Bool
+        /// 参照のページへのリンク（`reference-link-inline`）。参照が引用元の1件だけの投稿で除く。
+        /// Fedibirdは引用を参照としても記録するので、囲みで出す引用元を二重に示すだけになる（docs/quote.mdの「Fedibirdの形」）。
+        public let referenceLink: Bool
+    }
+
+    public var bodyOmissions: BodyOmissions {
+        BodyOmissions(quoteLink: quote != nil, referenceLink: quote?.quotedStatusID.map { referenceIDs == [$0] } ?? false)
     }
 
     /// 公開範囲。

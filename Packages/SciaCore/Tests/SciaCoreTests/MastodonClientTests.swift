@@ -444,16 +444,33 @@ struct MastodonClientTests {
         #expect(await transport.requests.first?.url?.path() == "/api/v1/instance/languages")
     }
 
+    /// 引用元のIDは、Mastodonの形では`quoted_status_id`で送る。
     @Test func postStatusSendsQuotedStatusID() async throws {
         let transport = StubTransport([.json(Self.interactedStatus, statusCode: 200)])
 
         _ = try await makeClient(transport).postStatus(StatusDraft(text: "見て", quotedStatusID: "113000000000000000", idempotencyKey: "key-1"))
 
-        let request = try #require(await transport.requests.first)
-        var components = URLComponents()
-        components.percentEncodedQuery = String(decoding: try #require(request.httpBody), as: UTF8.self)
-        #expect(components.queryItems?.filter { $0.name == "quoted_status_id" } == [URLQueryItem(name: "quoted_status_id", value: "113000000000000000")])
-        #expect(components.queryItems?.contains { $0.name == "in_reply_to_id" } == false)
+        let items = try form(of: try #require(await transport.requests.first))
+        #expect(items.filter { $0.name.contains("quot") } == [URLQueryItem(name: "quoted_status_id", value: "113000000000000000")])
+        #expect(!items.contains { $0.name == "in_reply_to_id" })
+    }
+
+    /// Fedibirdの形では`quote_id`で送る。`quoted_status_id`では、引用のない投稿として受け付けられる。
+    @Test func postStatusSendsQuoteIDToFedibird() async throws {
+        let transport = StubTransport([.json(Self.interactedStatus, statusCode: 200)])
+
+        _ = try await makeClient(transport).postStatus(StatusDraft(text: "見て", quotedStatusID: "113000000000000000", idempotencyKey: "key-1"), quotes: .fedibird)
+
+        let items = try form(of: try #require(await transport.requests.first))
+        #expect(items.filter { $0.name.contains("quot") } == [URLQueryItem(name: "quote_id", value: "113000000000000000")])
+    }
+
+    @Test func readsQuoteRulesFromInstance() async throws {
+        let fedibird = StubTransport([.json(#"{"feature_quote":true,"fedibird_capabilities":["emoji_reaction"]}"#, statusCode: 200)])
+        #expect(try await makeClient(fedibird).serverCapabilities() == ServerCapabilities(supportsEmojiReactions: true, hasLocalTimeline: true, quotes: .fedibird))
+
+        let mastodon = StubTransport([.json(#"{"version":"4.5.0"}"#, statusCode: 200)])
+        #expect(try await makeClient(mastodon).serverCapabilities() == .mastodon)
     }
 
     private func form(of request: URLRequest) throws -> [URLQueryItem] {

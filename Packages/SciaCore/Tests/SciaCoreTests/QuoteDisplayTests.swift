@@ -33,6 +33,81 @@ struct QuoteDisplayTests {
         #expect(quoted.quote?.quotedStatusID == "150")
     }
 
+    /// Fedibirdは、`quote`に引用元の投稿そのものを入れ、`state`を持たない。引用元の中の引用は、`quote_id`だけが届く。
+    @Test func decodesFedibirdQuote() throws {
+        let status = try MastodonDecoder.make().decode(Status.self, from: try fixture("fedibird_status_with_quote"))
+        let quote = try #require(status.quote)
+        let quoted = try #require(quote.quotedStatus)
+
+        #expect(quote.state == .accepted)
+        #expect(quoted.id == "200")
+        #expect(display(status) == .post(quoted))
+        #expect(NestedQuote(quoted.quote) == .link("150"))
+    }
+
+    /// Fedibirdの`quote_muted`は、引用元の人をミュートかブロックしていることを表す。押して開くまで隠す。
+    @Test func concealsFedibirdQuoteOfMutedAccount() throws {
+        var json = try #require(JSONSerialization.jsonObject(with: try fixture("fedibird_status_with_quote")) as? [String: Any])
+        var quoted = try #require(json["quote"] as? [String: Any])
+        quoted["quote_muted"] = true
+        json["quote"] = quoted
+        let status = try MastodonDecoder.make().decode(Status.self, from: JSONSerialization.data(withJSONObject: json))
+
+        #expect(display(status) == .concealed(.mutedAccount, try #require(status.quote?.quotedStatus)))
+    }
+
+    /// FedibirdとMisskeyは、引用元へのリンクを本文の末尾に`span`で足す。中のリンクが持つ`span`で終わりを取り違えない。
+    @Test func dropsQuoteInlineSpanFromQuotingStatus() throws {
+        let status = try MastodonDecoder.make().decode(Status.self, from: try fixture("fedibird_status_with_quote"))
+
+        #expect(RichText.status(status).plainText == "引用した本文")
+    }
+
+    /// Fedibirdが本文に足す参照のページへのリンクは、参照が引用元の1件だけのときに消す。ほかの参照もあれば、そこへ行く入口として残す。
+    @Test func dropsReferenceLinkOnlyWhenQuoteIsTheOnlyReference() throws {
+        let content = #"<p>本文<br><br><span class="quote-inline">RE: <a href="https://example.social/@bob/10">example.social/@bob/10</a></span><span class="reference-link-inline"> <a href="https://example.social/@bob/1/references">[参照]</a></span></p>"#
+        let quote = Quote(state: "accepted", quotedStatus: status("10"))
+        func text(referenceIDs: [String], quote: Quote?) -> String {
+            RichText.status(Status(id: "1", createdAt: Date(timeIntervalSince1970: 0), account: bob, content: content, spoilerText: "", url: nil, quote: quote, referenceIDs: referenceIDs)).plainText
+        }
+
+        #expect(text(referenceIDs: ["10"], quote: quote) == "本文")
+        #expect(text(referenceIDs: ["10", "11"], quote: quote) == "本文\n\n [参照]")
+        #expect(text(referenceIDs: ["11"], quote: nil).hasSuffix("[参照]"))
+    }
+
+    /// 参照のIDは、投稿をencodeして読み直しても残る。落ちると、消したリンクが読み直したあとに出る。
+    @Test func referenceIDsSurviveReencoding() throws {
+        let status = try MastodonDecoder.make().decode(Status.self, from: try fixture("fedibird_status_with_quote"))
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        encoder.dateEncodingStrategy = .iso8601
+        let restored = try MastodonDecoder.make().decode(Status.self, from: encoder.encode(status))
+
+        #expect(restored.referenceIDs == ["200"])
+        #expect(RichText.status(restored).plainText == "引用した本文")
+    }
+
+    /// 同じ本文でも、参照が増えてリンクを残すようになったら、訳文を作り直す。
+    @Test func translationIsRedoneWhenOmissionsChange() {
+        let content = #"<p>本文<span class="reference-link-inline"> <a href="https://example.social/@bob/1/references">[参照]</a></span></p>"#
+        let quote = Quote(state: "accepted", quotedStatus: status("10"))
+        func source(_ referenceIDs: [String]) -> TranslationSource {
+            TranslationSource(Status(id: "1", createdAt: Date(timeIntervalSince1970: 0), account: bob, content: content, spoilerText: "", url: nil, quote: quote, referenceIDs: referenceIDs))
+        }
+
+        #expect(source(["10"]).signature != source(["10", "11"]).signature)
+        #expect(source(["10"]).signature == source(["10"]).signature)
+    }
+
+    /// `span`のあとに続く本文は残す。
+    @Test func keepsTextAfterQuoteInlineSpan() {
+        let content = #"<p>前<span class="quote-inline"><br/>RE: <a href="https://example.social/@bob/1"><span class="invisible">https://</span><span>example.social/@bob/1</span></a></span> 後</p>"#
+
+        #expect(RichText.status(status("1", content: content, quote: Quote(state: "accepted", quotedStatus: status("10")))).plainText == "前 後")
+        #expect(RichText.status(status("1", content: content)).plainText.contains("RE: "))
+    }
+
     /// 引用のある投稿では、サーバーが互換のために足す`RE: <リンク>`の段落を本文から除く。
     @Test func dropsQuoteInlineFromQuotingStatus() throws {
         let status = try MastodonDecoder.make().decode(Status.self, from: try fixture("status_with_quote"))

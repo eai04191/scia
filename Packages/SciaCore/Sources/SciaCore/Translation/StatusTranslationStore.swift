@@ -22,6 +22,8 @@ public struct TranslationSource: Sendable {
     public let authorAcct: String?
     /// 訳した結果が使えるかを比べる本文。変われば訳し直す。空なら訳すものがない。
     let content: String
+    /// 本文から除く要素。同じ本文でも、引用や参照が変わると訳す文字列が変わる。
+    let omissions: Status.BodyOmissions?
     let richText: @Sendable () -> RichText
 
     /// ブーストなら元の投稿を渡す。
@@ -30,6 +32,7 @@ public struct TranslationSource: Sendable {
         language = status.language
         authorAcct = status.account.acct
         content = status.content
+        omissions = status.bodyOmissions
         richText = { .status(status) }
     }
 
@@ -38,6 +41,7 @@ public struct TranslationSource: Sendable {
         language = post.language
         authorAcct = nil
         content = post.text.plainText
+        omissions = nil
         richText = { post.text }
     }
 
@@ -49,9 +53,10 @@ public struct TranslationSource: Sendable {
         }
     }
 
-    /// 言語か本文が変われば、別の値になる。
+    /// 言語、本文、本文から除く要素のどれかが変われば、別の値になる。
     var signature: String {
-        "\(language ?? "")\n\(content)"
+        let omitted = omissions.map { "\($0.quoteLink ? "q" : "")\($0.referenceLink ? "r" : "")" } ?? ""
+        return "\(language ?? "")\n\(omitted)\n\(content)"
     }
 }
 

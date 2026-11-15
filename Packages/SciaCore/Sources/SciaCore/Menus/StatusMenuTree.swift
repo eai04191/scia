@@ -123,7 +123,7 @@ public struct StatusMenuTree {
     public var translationDisplay: TranslationDisplay?
     /// タイムラインで投稿を選び始められるか。投稿を選べるタイムラインの行でだけ選べる。
     public var canSelectPosts = false
-    /// サーバーの、Mastodonにない機能の有無。絵文字のリアクションに対応していなければ「リアクション」を出さない。
+    /// サーバーの、Mastodonにない機能の有無。絵文字のリアクションと引用の項目を、出すか、押せるかを決める。
     public var capabilities = ServerCapabilities.mastodon
     /// ユーザーのメニューの並びと、メンション、ハンドルをコピー、関係の項目を組むもの。
     public var userMenu: MenuLayout<UserMenuItem>.Groups = UserMenuItem.defaultLayout.groups
@@ -321,7 +321,7 @@ public struct StatusMenuTree {
             return .action(item.title, subtitle: "\(shown.quotesCount.formatted())件", icon: icon, .status(.openQuotes))
         case .revokeQuote:
             // どこに出ている投稿でも、自分の投稿を引用していて、引用が認められていれば出す。取り消すと戻せないので、赤で出す。
-            guard let myAccountID, shown.quote?.state == .accepted, shown.quote?.quotedStatus?.account.id == myAccountID else { return nil }
+            guard capabilities.quotes.canRevoke, let myAccountID, shown.quote?.state == .accepted, shown.quote?.quotedStatus?.account.id == myAccountID else { return nil }
             return .action(item.title, icon: icon, isDestructive: true, .status(.revokeQuote))
         case .edit:
             guard let myAccountID, status.isAuthored(by: myAccountID) else { return nil }
@@ -381,10 +381,10 @@ public struct StatusMenuTree {
         }
     }
 
-    /// 引用の項目。引用に対応していないサーバー（`quote_approval`がない）では出さない。押せるかを決められないため。
+    /// 引用の項目。引用に対応していないサーバー（Mastodonの形で`quote_approval`がない）では出さない。押せるかを決められないため。
     /// 投稿者の承認が要るときと、引用できないときは、そのことをサブタイトルに添える。決まりはdocs/quote.mdの「引用して投稿する」にある。
     private func quoteNode(_ item: StatusMenuItem, on status: Status) -> MenuNode<StatusMenuCommand>? {
-        guard let availability = status.displayed.quoteApproval?.availability else { return nil }
+        guard let availability = capabilities.quotes.availability(of: status) else { return nil }
         let subtitle: String? = switch availability {
         // ログインしていない人向けに届いた投稿は、押してから確かめる。
         case .automatic, .unverified: nil

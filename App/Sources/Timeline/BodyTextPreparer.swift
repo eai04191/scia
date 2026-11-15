@@ -21,7 +21,7 @@ final class BodyTextPreparer {
         let mentions: [Mention]
         let tags: [Tag]
         let emojis: [CustomEmoji]
-        let hasQuote: Bool
+        let omissions: Status.BodyOmissions
         /// 自動翻訳の訳文。訳文で描かないならnil。
         let translation: RichText?
 
@@ -30,7 +30,7 @@ final class BodyTextPreparer {
             mentions = status.mentions
             tags = status.tags
             emojis = status.emojis
-            hasQuote = status.quote != nil
+            omissions = status.bodyOmissions
             self.translation = translation
         }
     }

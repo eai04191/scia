@@ -35,6 +35,13 @@ struct ScheduledStatusTests {
     }
 
     /// サーバーはフォームの値をそのまま持つので、真偽値や数が文字列で返る。数で返るIDや、nullの本文と公開範囲も読む。
+    /// Fedibirdは引用元のIDを`quote_id`で受け取り、予約にもその名前で返す。
+    @Test func readsFedibirdQuoteID() throws {
+        let json = #"{"text":"見て","quote_id":"113000000000000009"}"#
+
+        #expect(try MastodonDecoder.make().decode(ScheduledStatus.Params.self, from: Data(json.utf8)).quotedStatusID == "113000000000000009")
+    }
+
     @Test func decodesParamsSentAsForm() async throws {
         let transport = StubTransport([try .fixture("scheduled_statuses")])
 

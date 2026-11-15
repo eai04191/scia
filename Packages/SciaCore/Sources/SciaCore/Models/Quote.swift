@@ -4,6 +4,9 @@
 /// どちらも同じキーで届くので、1つの型で読む。
 /// https://docs.joinmastodon.org/entities/Quote/
 /// https://docs.joinmastodon.org/entities/ShallowQuote/
+///
+/// Fedibirdは、投稿の`quote`に引用元の投稿そのものを入れ、`state`を持たない。届いた形で見分けて、同じ型に読む（`docs/quote.md`の「Fedibirdの形」）。
+/// fedibird/mastodonの`app/serializers/rest/status_serializer.rb`
 public struct Quote: Codable, Hashable, Sendable {
     /// 引用を出せるかどうか。
     public enum State: Hashable, Sendable {
@@ -84,6 +87,15 @@ public struct Quote: Codable, Hashable, Sendable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        guard container.contains(.state) else {
+            let quoted = try Status(from: decoder)
+            // Fedibirdは、引用元の人をミュートかブロックしているか、ブロックされているかを、1つの真偽値にまとめて返す。
+            let isMuted = (try? decoder.container(keyedBy: FedibirdKeys.self).decodeIfPresent(Bool.self, forKey: .quoteMuted)) ?? false
+            rawState = (isMuted ? State.mutedAccount : .accepted).rawValue
+            quotedStatusBox = StatusBox(quoted)
+            quotedStatusID = quoted.id
+            return
+        }
         rawState = try container.decode(String.self, forKey: .state)
         // 引用元の投稿が読めなくても、引用があることは残し、出せないときの表示にする。
         quotedStatusBox = container.decodeLossyIfPresent(StatusBox.self, forKey: .quotedStatus)
@@ -99,5 +111,9 @@ public struct Quote: Codable, Hashable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case state, quotedStatus, quotedStatusId
+    }
+
+    private enum FedibirdKeys: String, CodingKey {
+        case quoteMuted
     }
 }

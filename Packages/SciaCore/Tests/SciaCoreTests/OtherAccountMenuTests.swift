@@ -457,6 +457,38 @@ struct OtherAccountMenuTests {
         #expect(await loaded(try #require(node(tree(status(uri: uri), accounts: [failing], groups: groups))).children) == "お気に入り")
     }
 
+    /// 引用できるかと引用の送り方を決めるところは、Mastodonと同じ値のまま進まないよう、読めた値を使う。
+    /// 読んでいる途中なら終わるのを待って同じ結果を使い、一度読めたら読み直さない。
+    @Test func loadedCapabilitiesSharesRunningLoad() async throws {
+        let calls = Mutex(0)
+        let gate = Gate()
+        let bob = try account("bob", operations(search: { _ in [] }, capabilities: {
+            calls.withLock { $0 += 1 }
+            try await gate.wait()
+            return ServerCapabilities(fedibirdCapabilities: [], featureQuote: true)
+        }))
+
+        bob.loadCapabilities()
+        async let loaded = bob.loadedCapabilities()
+        try await waitUntil { calls.withLock { $0 } >= 1 }
+        #expect(bob.capabilities.quotes == .mastodon)
+        gate.open()
+
+        #expect(try await loaded.quotes == .fedibird)
+        #expect(try await bob.loadedCapabilities().quotes == .fedibird)
+        #expect(calls.withLock { $0 } == 1)
+    }
+
+    /// 読めなければ投げる。読めていないときに読むものを渡されたら、それで読む。ログインし直したあとの認証情報で読むため。
+    @Test func loadedCapabilitiesThrowsOrReadsWithGivenFetch() async throws {
+        let bob = try account("bob", operations(search: { _ in [] }))
+
+        await #expect(throws: (any Error).self) { _ = try await bob.loadedCapabilities() }
+        #expect(bob.capabilities.quotes == .mastodon)
+        #expect(try await bob.loadedCapabilities { ServerCapabilities(fedibirdCapabilities: [], featureQuote: true) }.quotes == .fedibird)
+        #expect(bob.capabilities.quotes == .fedibird)
+    }
+
     /// 読めなかったサーバーの対応は、次に呼ばれたときに読み直す。読めたら読み直さない。
     @Test func reloadsCapabilitiesOnlyAfterFailure() async throws {
         let calls = Mutex(0)

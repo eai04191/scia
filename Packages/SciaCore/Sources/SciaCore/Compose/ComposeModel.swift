@@ -144,7 +144,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
 
     /// - Parameter backgroundTime: 送っている途中にバックグラウンドへ移っても、送り終えるまでアプリを止めないよう頼む。頼んで、終えるときに呼ぶものを返す。
     ///   OSがバックグラウンドでアプリを止めるUI（iOS）が渡す。止めないUI（macOS）では省き、頼まない。
-    /// - Parameter submit: 下書きを今のアカウントのサーバーへ送る。ふつうは`AccountSession.client`の`MastodonClient.submit(_:)`を渡す。
+    /// - Parameter submit: 下書きを今のアカウントのサーバーへ送る。ふつうは`AccountSession.submit(_:)`を渡す。
     ///   投稿、予約、編集のどれで送るかは下書きの中身で決まり、そのクライアントで受けた401はセッションへ知らせる。送れた結果は`onSubmitted`に渡る。
     public init(
         tasks: TaskScope,

@@ -5,7 +5,7 @@ public struct ComposeAccount<Thumbnail> {
     public let id: String
     /// そのサーバーでの自分のアカウントのID。返信の宛先から自分を除くのに使う。
     public let myAccountID: String
-    /// 下書きをそのアカウントのサーバーへ送る。ふつうはそのアカウントの`MastodonClient.submit(_:)`を渡す。
+    /// 下書きをそのアカウントのサーバーへ送る。ふつうはそのアカウントの`MastodonClient.submit(_:quotes:)`に、そのサーバーの引用の決まりを添えて渡す。
     public let submit: (StatusDraft) async throws -> SubmittedDraft
     /// そのアカウントで送れたとき、下書きを空に戻す前に呼ぶ。今のアカウントの一覧には反映しない。IDがサーバーごとに違うため。
     /// 今のアカウントの`ComposeModel.onSubmitted`は、ほかのアカウントで送ったときは呼ばない。

@@ -36,6 +36,7 @@ public struct ScheduledStatus: Decodable, Hashable, Sendable, Identifiable {
 
     /// 予約したときに送った内容。サーバーは送られたフォームの値をそのまま持つため、真偽値や数も文字列で返ることがある。
     /// 文書では`in_reply_to_id`は数、`quoted_status_id`は文字列なので、どれも両方の形で読む。
+    /// Fedibirdは引用元のIDを`quote_id`で受け取るので、予約にもその名前で入る。
     public struct Params: Decodable, Hashable, Sendable {
         /// 書いたときのソースのままの本文。HTMLではない。
         public let text: String
@@ -86,6 +87,10 @@ public struct ScheduledStatus: Decodable, Hashable, Sendable, Identifiable {
             case quotePolicy = "quoteApprovalPolicy"
         }
 
+        private enum FedibirdKeys: String, CodingKey {
+            case quoteID = "quoteId"
+        }
+
         public init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             // 添付だけの予約では本文がnullになりうる。
@@ -94,7 +99,8 @@ public struct ScheduledStatus: Decodable, Hashable, Sendable, Identifiable {
             sensitive = container.decodeFlexibleBool(forKey: .sensitive) ?? false
             visibility = (try? container.decodeIfPresent(String.self, forKey: .visibility)).flatMap { $0 }.map(Status.Visibility.init(rawValue:))
             inReplyToID = try? container.decodeFlexibleString(forKey: .inReplyToID)
-            quotedStatusID = try? container.decodeFlexibleString(forKey: .quotedStatusID)
+            quotedStatusID = (try? container.decodeFlexibleString(forKey: .quotedStatusID))
+                ?? (try? decoder.container(keyedBy: FedibirdKeys.self).decodeFlexibleString(forKey: .quoteID))
             poll = container.decodeLossyIfPresent(ScheduledPoll.self, forKey: .poll)?.draft
             mediaIDs = (try? container.decodeIfPresent([String].self, forKey: .mediaIDs)) ?? []
             language = (try? container.decodeIfPresent(String.self, forKey: .language)).flatMap { $0 }.flatMap { $0.isEmpty ? nil : $0 }

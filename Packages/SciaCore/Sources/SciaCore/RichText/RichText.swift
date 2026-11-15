@@ -132,9 +132,13 @@ extension RichText {
         MastodonHTMLParser(mentions: [], tags: [], emojis: emojis, linksPlainHandles: true).parse(html)
     }
 
-    /// 引用のある投稿では、サーバーが互換のために足す`RE: <リンク>`の段落を除く。
+    /// 引用のある投稿では、サーバーが互換のために足す引用元へのリンクを除く。参照が引用元だけなら、参照のページへのリンクも除く。
     public static func status(_ status: Status) -> RichText {
-        MastodonHTMLParser(mentions: status.mentions, tags: status.tags, emojis: status.emojis, dropsQuoteInline: status.quote != nil).parse(status.content)
+        let omissions = status.bodyOmissions
+        return MastodonHTMLParser(
+            mentions: status.mentions, tags: status.tags, emojis: status.emojis,
+            dropsQuoteInline: omissions.quoteLink, dropsReferenceLink: omissions.referenceLink
+        ).parse(status.content)
     }
 }
 

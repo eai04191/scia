@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import SciaTesting
 import Testing
 @testable import SciaCore
@@ -51,7 +52,7 @@ struct DraftSubmissionTests {
         let transport = Self.server()
         let client = MastodonClient(credential: TimelineModelFixtures.credential(), transport: transport)
 
-        let submitted = try await asAction { try await client.submit(StatusDraft(text: "こんにちは")) }
+        let submitted = try await asAction { try await client.submit(StatusDraft(text: "こんにちは")) { .mastodon } }
 
         guard case .posted(let status) = submitted else { Issue.record("投稿として送りませんでした: \(submitted)"); return }
         #expect(status.id == "5")
@@ -63,7 +64,7 @@ struct DraftSubmissionTests {
         let transport = Self.server()
         let client = MastodonClient(credential: TimelineModelFixtures.credential(), transport: transport)
 
-        let submitted = try await asAction { try await client.submit(StatusDraft(text: "予約", scheduledAt: Self.now.addingTimeInterval(3600))) }
+        let submitted = try await asAction { try await client.submit(StatusDraft(text: "予約", scheduledAt: Self.now.addingTimeInterval(3600))) { .mastodon } }
 
         guard case .scheduled(let scheduled) = submitted else { Issue.record("予約として送りませんでした: \(submitted)"); return }
         #expect(scheduled.id == "70")
@@ -78,7 +79,7 @@ struct DraftSubmissionTests {
         var draft = StatusDraft(text: "直した", editing: StatusEditTarget(statusID: "4", poll: nil))
         draft.scheduledAt = Self.now.addingTimeInterval(3600)
 
-        let submitted = try await asAction { try await client.submit(draft) }
+        let submitted = try await asAction { try await client.submit(draft) { .mastodon } }
 
         guard case .edited(let status) = submitted else { Issue.record("編集として送りませんでした: \(submitted)"); return }
         #expect(status.id == "4")
@@ -93,16 +94,65 @@ struct DraftSubmissionTests {
         let status = Status(id: "4", createdAt: Self.now, account: Account(id: "1", username: "me", acct: "me", displayName: "Me", avatar: URL(string: "https://example.social/a.png")), content: "", spoilerText: "", url: nil, visibility: .public, poll: poll)
         let draft = try #require(StatusDraft.edit(of: status, source: StatusSource(id: "4", text: "どっち？", spoilerText: ""), now: Self.now))
 
-        _ = try await asAction { try await client.submit(draft) }
+        _ = try await asAction { try await client.submit(draft) { .mastodon } }
 
         let body = String(decoding: try #require(transport.requests(to: "/api/v1/statuses/4").first?.httpBody), as: UTF8.self)
         #expect(body.contains("poll%5Bexpires_in%5D=3601"), "\(body)")
     }
 
+    /// 引用のある下書きは、渡された引用の決まりのパラメーターで送る。引用のない下書きと編集では、決まりを聞かない。
+    @Test func quoteIsSentWithGivenRules() async throws {
+        let transport = Self.server()
+        let client = MastodonClient(credential: TimelineModelFixtures.credential(), transport: transport)
+        let asked = Mutex(0)
+
+        _ = try await asAction { try await client.submit(StatusDraft(text: "見て", quotedStatusID: "9")) { asked.withLock { $0 += 1 }; return .fedibird } }
+        _ = try await asAction { try await client.submit(StatusDraft(text: "見て", quotedStatusID: "9", scheduledAt: Self.now.addingTimeInterval(3600))) { asked.withLock { $0 += 1 }; return .mastodon } }
+        _ = try await asAction { try await client.submit(StatusDraft(text: "こんにちは")) { asked.withLock { $0 += 1 }; return .fedibird } }
+
+        let bodies = transport.requests(to: "/api/v1/statuses").map { String(decoding: $0.httpBody ?? Data(), as: UTF8.self) }
+        #expect(bodies.map { $0.contains("quote_id=9") } == [true, false, false])
+        #expect(bodies.map { $0.contains("quoted_status_id=9") } == [false, true, false])
+        #expect(asked.withLock { $0 } == 2)
+    }
+
+    /// 引用の決まりを読めなければ、引用のある下書きを送らない。違う名前で送ると、引用のない投稿として受け付けられるため。
+    @Test func quoteIsNotSentWithoutRules() async throws {
+        struct Unavailable: Error {}
+        let transport = Self.server()
+        let client = MastodonClient(credential: TimelineModelFixtures.credential(), transport: transport)
+
+        await #expect(throws: Unavailable.self) {
+            _ = try await asAction { try await client.submit(StatusDraft(text: "見て", quotedStatusID: "9")) { throw Unavailable() } }
+        }
+        #expect(transport.requests.isEmpty)
+    }
+
+    /// セッションは、読めたサーバーの引用の決まりで送る。まだ読めていなければ読み、一度読めたら読み直さない。
+    @Test func sessionSubmitsQuoteWithLoadedRules() async throws {
+        let transport = RoutedTransport { request in
+            switch request.url?.path() {
+            case "/api/v1/instance": (200, Data(#"{"feature_quote":true,"fedibird_capabilities":[]}"#.utf8))
+            case "/api/v1/statuses": (200, try Self.statusBody(5))
+            default: (404, Data())
+            }
+        }
+        let session = makeSession(transport)
+        defer { session.close() }
+
+        _ = try await asAction { try await session.submit(StatusDraft(text: "見て", quotedStatusID: "9")) }
+        _ = try await asAction { try await session.submit(StatusDraft(text: "もう一度", quotedStatusID: "9")) }
+
+        let bodies = transport.requests(to: "/api/v1/statuses").map { String(decoding: $0.httpBody ?? Data(), as: UTF8.self) }
+        #expect(bodies.map { $0.contains("quote_id=9") } == [true, true])
+        #expect(transport.requests(to: "/api/v1/instance").count == 1)
+        #expect(session.capabilities.quotes == .fedibird)
+    }
+
     /// 今のアカウントで送れたら、下書きを空に戻す前に、送った結果を`onSubmitted`へ渡す。
     @Test func homeSubmissionReachesOnSubmittedBeforeReset() async throws {
         let client = MastodonClient(credential: TimelineModelFixtures.credential(), transport: Self.server())
-        let model = makeModel(submit: client.submit)
+        let model = makeModel(submit: { try await client.submit($0) { .mastodon } })
         var textWhenSubmitted: String?
         var postedID: Status.ID?
         model.onSubmitted = { submitted in
@@ -128,7 +178,7 @@ struct DraftSubmissionTests {
         model.onSubmitted = { _ in homeSubmitted += 1 }
         var otherSubmitted: [SubmittedDraft] = []
         let client = MastodonClient(credential: TimelineModelFixtures.credential(), transport: Self.server(), isOtherAccount: true)
-        let other = ComposeAccount<Never>(id: "other", myAccountID: "50", media: .unavailable, onSubmitted: { otherSubmitted.append($0) }, submit: client.submit)
+        let other = ComposeAccount<Never>(id: "other", myAccountID: "50", media: .unavailable, onSubmitted: { otherSubmitted.append($0) }, submit: { try await client.submit($0) { .mastodon } })
         #expect(model.switchAccount(to: other))
         model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil, accountID: "other")
         model.text = "別のアカウントで"
@@ -145,7 +195,7 @@ struct DraftSubmissionTests {
         defer { session.close() }
         var invalidated = 0
         session.onCredentialsInvalid = { invalidated += 1 }
-        let model = makeModel(submit: session.client.submit)
+        let model = makeModel(submit: session.submit)
         model.text = "こんにちは"
 
         await asAction { await model.submit() }

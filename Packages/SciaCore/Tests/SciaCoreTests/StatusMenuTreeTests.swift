@@ -297,6 +297,37 @@ struct StatusMenuTreeTests {
         #expect(node(titled: title, in: tree(quoting(mine, state: "accepted"))) == nil)
     }
 
+    /// Fedibirdの形のサーバーでは、`quote_approval`がなくても、公開か未収載の投稿に「引用」を押せる形で出す。
+    /// ほかの公開範囲では、押せない形で理由を添える。
+    @Test func quoteFollowsVisibilityOnFedibird() throws {
+        let title = "引用"
+        func fedibird(_ status: Status) -> StatusMenuTree {
+            var tree = tree(status, myAccountID: "9")
+            tree.capabilities.quotes = .fedibird
+            return tree
+        }
+
+        #expect(node(titled: title, in: tree(status(), myAccountID: "9")) == nil)
+        for visibility in [Status.Visibility.public, .unlisted] {
+            let quote = try #require(node(titled: title, in: fedibird(status(visibility: visibility))))
+            #expect(quote.isEnabled)
+            #expect(quote.subtitle == nil)
+        }
+        let followersOnly = try #require(node(titled: title, in: fedibird(status(visibility: .private))))
+        #expect(!followersOnly.isEnabled)
+        #expect(followersOnly.subtitle == "引用できない投稿です")
+    }
+
+    /// Fedibirdには引用を取り消す仕組みがないので、自分の投稿の引用にも「引用を取り消す」を出さない。
+    @Test func revokeQuoteIsHiddenOnFedibird() {
+        let mine = Status(id: "50", createdAt: Date(timeIntervalSince1970: 50), account: account("9", "me"), content: "<p>元</p>", spoilerText: "", url: nil)
+        let quoting = Status(id: "100", createdAt: Date(timeIntervalSince1970: 100), account: alice, content: "<p>見て</p>", spoilerText: "", url: nil, quote: Quote(state: "accepted", quotedStatus: mine))
+        var tree = tree(quoting, myAccountID: "9")
+        tree.capabilities.quotes = .fedibird
+
+        #expect(node(titled: "引用を取り消す", in: tree) == nil)
+    }
+
     /// 公開範囲を選んでブーストは、既定では隠す。出したときは、ブーストしていない投稿で、3つの公開範囲のサブメニューとして出る。ブーストした投稿では出さない。
     @Test func reblogWithVisibilityIsSubmenuOnlyBeforeBoosting() {
         let submenu = "公開範囲を選んでブースト[公開,ひかえめな公開,フォロワーのみ]"

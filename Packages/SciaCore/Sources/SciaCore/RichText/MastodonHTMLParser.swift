@@ -9,26 +9,31 @@ public struct MastodonHTMLParser {
     private let tagNames: Set<String>
     private let emojiSplitter: CustomEmojiSplitter
     private let dropsQuoteInline: Bool
+    private let dropsReferenceLink: Bool
     private let expandsShortenedURLs: Bool
     private let linksPlainHandles: Bool
 
     /// - Parameters:
     ///   - tags: 投稿のタグ。`class`も`rel`もないハッシュタグを、リンクの文字列で見分けるのに使う。
-    ///   - dropsQuoteInline: `class`に`quote-inline`のある段落を除く。引用のある投稿で、サーバーが互換のために本文の頭に足す`RE: <リンク>`を出さないため。
+    ///   - dropsQuoteInline: `class`に`quote-inline`のある段落と`span`を除く。引用のある投稿で、サーバーが互換のために本文に足す引用元へのリンクを出さないため。
+    ///     Mastodonは本文の頭に段落で`RE: <リンク>`を、FedibirdとMisskeyは本文の末尾に`span`で`QT: <リンク>`や`RE: <リンク>`を足す。
     ///     引用のない投稿では、書いた人の本文なので除かない。
+    ///   - dropsReferenceLink: `class`に`reference-link-inline`のある`span`を除く。Fedibirdが、参照に対応していないクライアント向けに本文の末尾に足す、
+    ///     参照のページへのリンク（`[参照]`）を出さないため。
     ///   - expandsShortenedURLs: サーバーが30字で縮めたURLの、省いた後ろの部分も出し、「…」を付けない。先頭のスキームは省いたまま。
     ///   - linksPlainHandles: 文字のままの`@user@domain`をリンクにする。
-    public init(mentions: [Mention], tags: [Tag], emojis: [CustomEmoji], dropsQuoteInline: Bool = false, expandsShortenedURLs: Bool = false, linksPlainHandles: Bool = false) {
+    public init(mentions: [Mention], tags: [Tag], emojis: [CustomEmoji], dropsQuoteInline: Bool = false, dropsReferenceLink: Bool = false, expandsShortenedURLs: Bool = false, linksPlainHandles: Bool = false) {
         self.mentions = mentions
         tagNames = Hashtag.normalizedNames(of: tags)
         emojiSplitter = CustomEmojiSplitter(emojis: emojis)
         self.dropsQuoteInline = dropsQuoteInline
+        self.dropsReferenceLink = dropsReferenceLink
         self.expandsShortenedURLs = expandsShortenedURLs
         self.linksPlainHandles = linksPlainHandles
     }
 
     public func parse(_ html: String) -> RichText {
-        var builder = Builder(mentions: mentions, tagNames: tagNames, emojiSplitter: emojiSplitter, dropsQuoteInline: dropsQuoteInline, expandsShortenedURLs: expandsShortenedURLs, linksPlainHandles: linksPlainHandles)
+        var builder = Builder(mentions: mentions, tagNames: tagNames, emojiSplitter: emojiSplitter, dropsQuoteInline: dropsQuoteInline, dropsReferenceLink: dropsReferenceLink, expandsShortenedURLs: expandsShortenedURLs, linksPlainHandles: linksPlainHandles)
         for token in HTMLTokenizer.tokenize(html) {
             builder.handle(token)
         }
@@ -78,6 +83,7 @@ private struct Builder {
     let tagNames: Set<String>
     let emojiSplitter: CustomEmojiSplitter
     let dropsQuoteInline: Bool
+    let dropsReferenceLink: Bool
     let expandsShortenedURLs: Bool
     let linksPlainHandles: Bool
 
@@ -94,12 +100,15 @@ private struct Builder {
     private var spans: [SpanKind] = []
     /// `quote-inline`の段落の中にいて、閉じるまで読み飛ばしている。段落は入れ子にならないため、最初の`</p>`で終える。
     private var isSkippingQuoteInline = false
+    /// 除く`span`（`quote-inline`、`reference-link-inline`）の中にいて、閉じるまで読み飛ばしている。開いている`span`の数で、中のリンクが持つ`span`と見分ける。0なら中にいない。
+    private var droppedSpanDepth = 0
 
-    init(mentions: [Mention], tagNames: Set<String>, emojiSplitter: CustomEmojiSplitter, dropsQuoteInline: Bool, expandsShortenedURLs: Bool, linksPlainHandles: Bool) {
+    init(mentions: [Mention], tagNames: Set<String>, emojiSplitter: CustomEmojiSplitter, dropsQuoteInline: Bool, dropsReferenceLink: Bool, expandsShortenedURLs: Bool, linksPlainHandles: Bool) {
         self.mentions = mentions
         self.tagNames = tagNames
         self.emojiSplitter = emojiSplitter
         self.dropsQuoteInline = dropsQuoteInline
+        self.dropsReferenceLink = dropsReferenceLink
         self.expandsShortenedURLs = expandsShortenedURLs
         self.linksPlainHandles = linksPlainHandles
     }
@@ -119,6 +128,14 @@ private struct Builder {
     mutating func handle(_ token: HTMLToken) {
         if isSkippingQuoteInline {
             if case .close(name: "p") = token { isSkippingQuoteInline = false }
+            return
+        }
+        if droppedSpanDepth > 0 {
+            switch token {
+            case .open(name: "span", _): droppedSpanDepth += 1
+            case .close(name: "span"): droppedSpanDepth -= 1
+            default: break
+            }
             return
         }
         switch token {
@@ -197,7 +214,9 @@ private struct Builder {
             link = LinkContext(href: attributes["href"] ?? "", classes: classes, rels: rels)
         case "span":
             let classes = Set((attributes["class"] ?? "").split(separator: " "))
-            if classes.contains("invisible") {
+            if (dropsQuoteInline && classes.contains("quote-inline")) || (dropsReferenceLink && classes.contains("reference-link-inline")) {
+                droppedSpanDepth = 1
+            } else if classes.contains("invisible") {
                 // 縮めるときに省いた後ろの部分は、広げるときは出す。先頭のスキームは`ellipsis`より前に来るので省いたまま。
                 spans.append(expandsShortenedURLs && link?.hasEllipsis == true ? .plain : .invisible)
             } else if classes.contains("ellipsis") {

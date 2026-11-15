@@ -71,6 +71,7 @@ public final class AccountSession {
     /// サーバーの機能の有無を読めたときに呼ぶ。
     public var onCapabilitiesLoad: (ServerCapabilities) -> Void = { _ in }
     private var capabilitiesState: CapabilitiesState = .unknown
+    private var capabilitiesLoad: Task<Void, Never>?
     private var lists: [WeakList] = []
     private let settings: AppSettings
     private let tuning: TuningStore
@@ -363,19 +364,43 @@ public final class AccountSession {
         guard capabilitiesState == .unknown else { return }
         capabilitiesState = .loading
         let client = client
-        tasks.run(.display) { [weak self] in
+        capabilitiesLoad = tasks.run(.display) { [weak self] in
             do {
                 let loaded = try await client.serverCapabilities()
-                guard let self else { return }
-                capabilitiesState = .loaded
-                capabilities = loaded
-                logger.info("server capabilities loaded emojiReaction=\(loaded.supportsEmojiReactions, privacy: .public) localTimeline=\(loaded.hasLocalTimeline, privacy: .public)")
-                onCapabilitiesLoad(loaded)
+                self?.didLoad(loaded)
             } catch {
-                guard let self else { return }
+                guard let self, capabilitiesState == .loading else { return }
                 capabilitiesState = .unknown
                 logger.info("server capabilities unavailable error=\(SciaLog.describe(error), privacy: .public)")
             }
+        }
+    }
+
+    /// 読めたサーバーの機能の有無。読めていればそれを返し、読んでいる途中なら終わるのを待つ。それでも読めていなければ読み、読めなければ投げる。
+    /// Mastodonと同じとみなして進むと取り違えるところ（引用を送るパラメーターの名前）で使う。
+    public func loadedCapabilities() async throws -> ServerCapabilities {
+        loadCapabilities()
+        await capabilitiesLoad?.value
+        if capabilitiesState == .loaded { return capabilities }
+        let loaded = try await client.serverCapabilities()
+        didLoad(loaded)
+        return capabilities
+    }
+
+    private func didLoad(_ loaded: ServerCapabilities) {
+        guard capabilitiesState != .loaded else { return }
+        capabilitiesState = .loaded
+        capabilities = loaded
+        logger.info("server capabilities loaded emojiReaction=\(loaded.supportsEmojiReactions, privacy: .public) localTimeline=\(loaded.hasLocalTimeline, privacy: .public) quotes=\(String(describing: loaded.quotes), privacy: .public)")
+        onCapabilitiesLoad(loaded)
+    }
+
+    /// 下書きをこのアカウントのサーバーへ送る。`ComposeModel`の`submit`に渡す。
+    /// 引用のある下書きは、読めたサーバーの引用の決まりで送り、決まりを読めなければ送らない。
+    public func submit(_ draft: StatusDraft) async throws -> SubmittedDraft {
+        try await client.submit(draft) { [weak self] in
+            guard let self else { throw CancellationError() }
+            return try await loadedCapabilities().quotes
         }
     }
 

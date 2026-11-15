@@ -291,7 +291,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 絵文字のリアクションに対応していなければ、投稿にリアクションがあっても出さない（docs/emoji-reaction.md）。
     var capabilities = ServerCapabilities.mastodon {
         didSet {
-            guard capabilities.supportsEmojiReactions != oldValue.supportsEmojiReactions, isViewLoaded else { return }
+            guard capabilities != oldValue, isViewLoaded else { return }
+            // 引用の決まりは、アクションバーに並べた「引用」を押せるかを変えるので、出しているすべてを描き直す。
+            guard capabilities.quotes == oldValue.quotes else { return reconfigure(Set(displayedItemIDs)) }
+            guard capabilities.supportsEmojiReactions != oldValue.supportsEmojiReactions else { return }
             reconfigure(Set(displayedItemIDs.filter { status(for: $0)?.displayed.emojiReactions.isEmpty == false }))
         }
     }
