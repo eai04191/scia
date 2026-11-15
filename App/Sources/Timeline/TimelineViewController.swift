@@ -140,7 +140,12 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
         return dataSource
     }()
-    private var entries: [ItemID: TimelineEntry] = [:]
+    private var entries: [ItemID: TimelineEntry] = [:] {
+        didSet { emojiURLIndex = nil }
+    }
+    /// 絵文字の画像のURLから、それを描く行を引く。画像が届くたびに全部の行の絵文字を集め直さないため、行か引用元の変更が変わったときだけ作り直す。
+    /// 絵文字ピッカーを流す間は、ほぼ毎フレーム画像が届き、そのたびに集め直すと、行の数に比例してメインスレッドを使っていた。
+    private var emojiURLIndex: [URL: [ItemID]]?
     /// メニューを開いている間に届いたアイコンを、メニューを組み直さずに差し替える。
     let contextMenuIcons = ContextMenuIconSwapper()
     /// 行を触れた位置。行のタップの処理は押した位置を受け取らないため、タップでメニューを出す位置にする。
@@ -279,7 +284,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// ブロックかミュートしている人の引用元のうち、押して開いたもの。
     var quoteReveals = QuoteReveals()
     /// 引用元の、受け取ったあとの変化。セッションがほかの画面とそろえる。
-    var quoteSourceChanges = QuoteSourceChanges()
+    var quoteSourceChanges = QuoteSourceChanges() {
+        didSet { emojiURLIndex = nil }
+    }
     /// 投票する前に選んでいる選択肢と、結果を見ると選んだ投票、送っている途中の投票。
     var pollChoices = PollChoices()
     /// 投票の「投票」が押されたときに、選んだ選択肢と、押した投稿（ブーストならブーストした投稿）を渡して呼ぶ。
@@ -703,16 +710,28 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     private func emojiImagesDidLoad(_ urls: Set<URL>) {
-        let ids = dataSource.snapshot().itemIdentifiers.filter { id in
-            switch entries[id] {
-            case .status(let status), .pinned(let status): !Self.emojiURLs(of: status, quoteSources: quoteSourceChanges).isDisjoint(with: urls)
-            case .notification(let notification): !Self.emojiURLs(of: notification, quoteSources: quoteSourceChanges).isDisjoint(with: urls)
-            case .account(let account): account.emojis.hasImage(in: urls)
-            case .notificationRequest(let request): request.account.emojis.hasImage(in: urls)
-            case .gap, .unreadable, .search, nil: false
+        let index = emojiURLIndex ?? makeEmojiURLIndex()
+        emojiURLIndex = index
+        // 索引は`entries`から作るので、並びにない行も入る。並びにある行だけを描き直す。
+        let ids = Set(urls.flatMap { index[$0] ?? [] }).filter { dataSource.indexPath(for: $0) != nil }
+        reconfigureWhenShown(ids) { reconfigureShiftingRowsBelow($0, duration: tuning.value(of: TuningCatalog.customEmojiArrivalDuration)) }
+    }
+
+    private func makeEmojiURLIndex() -> [URL: [ItemID]] {
+        var index: [URL: [ItemID]] = [:]
+        for (id, entry) in entries {
+            let urls: Set<URL> = switch entry {
+            case .status(let status), .pinned(let status): Self.emojiURLs(of: status, quoteSources: quoteSourceChanges)
+            case .notification(let notification): Self.emojiURLs(of: notification, quoteSources: quoteSourceChanges)
+            case .account(let account): Self.imageURLs(of: account.emojis)
+            case .notificationRequest(let request): Self.imageURLs(of: request.account.emojis)
+            case .gap, .unreadable, .search: []
+            }
+            for url in urls {
+                index[url, default: []].append(id)
             }
         }
-        reconfigureWhenShown(Set(ids)) { reconfigureShiftingRowsBelow($0, duration: tuning.value(of: TuningCatalog.customEmojiArrivalDuration)) }
+        return index
     }
 
     /// 行の中身を、同じセルのまま動かさずに描き直し、高さが変わって位置がずれた見えている行と区切り線を、元の位置から新しい位置へ動かしてつなぐ。
