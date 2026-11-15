@@ -84,6 +84,28 @@ struct RequestLogTests {
         #expect(log.recentFailures.map(\.logMessage) == ["GET /api/v1/timelines/home URLError -1009"])
     }
 
+    /// https://docs.joinmastodon.org/api/guidelines/#deprecations
+    @Test func deprecatedEndpointIsRecordedOncePerPath() async throws {
+        let log = RequestLog(includesBody: false)
+        let transport = StubTransport([
+            .json("[]", statusCode: 200, headers: ["Deprecation": "@1688169599"]),
+            .json("[]", statusCode: 200, headers: ["Deprecation": "@1688169599"]),
+            .json("{}", statusCode: 404, headers: ["Deprecation": "@nan"]),
+            .json("{}", statusCode: 404),
+        ])
+        let client = try makeClient(transport, log: log)
+
+        _ = try await client.homeTimeline(TimelineQuery(limit: 40))
+        _ = try await client.homeTimeline(TimelineQuery(limit: 40))
+        await #expect(throws: MastodonAPIError.self) { try await client.favourite("3") }
+        await #expect(throws: MastodonAPIError.self) { try await client.account("1") }
+
+        #expect(log.deprecatedEndpoints == [
+            DeprecatedEndpoint(method: "GET", path: "/api/v1/timelines/home", since: 1_688_169_599),
+            DeprecatedEndpoint(method: "POST", path: "/api/v1/statuses/:id/favourite", since: nil),
+        ])
+    }
+
     /// ログに書く失敗は、応答の本文やサーバーが返した文言を含めない。
     @Test func errorDescriptionForLogsOmitsResponseContent() throws {
         let apiError = MastodonAPIError.from(statusCode: 422, body: Data(#"{"error":"alice@example.social は使えません"}"#.utf8))

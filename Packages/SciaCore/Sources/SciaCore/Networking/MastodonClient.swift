@@ -1480,6 +1480,7 @@ public struct MastodonClient: Sendable {
             requestLog.record(request, statusCode: nil, error: error, body: nil)
             throw error
         }
+        requestLog.noteDeprecation(of: request, in: response)
         if (200..<300).contains(response.statusCode) {
             return (data, response)
         }

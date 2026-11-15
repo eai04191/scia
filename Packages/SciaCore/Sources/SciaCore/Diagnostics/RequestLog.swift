@@ -8,7 +8,7 @@ import Synchronization
 /// 読めなかった応答では、どの項目にどんな形の値があったかを残し、値そのものは残さない。
 /// 応答の本文は個人情報を含みうるため、`includesBody`のとき（デバッグ版）だけ足す。組み立てる処理はどちらも同じ。
 public final class RequestLog: Sendable {
-    private let state = Mutex<(failures: [RequestFailure], nextID: Int)>(([], 0))
+    private let state = Mutex<(failures: [RequestFailure], nextID: Int, deprecated: [DeprecatedEndpoint])>(([], 0, []))
     private let includesBody: Bool
     private let capacity: Int
     private let now: @Sendable () -> Date
@@ -53,6 +53,29 @@ public final class RequestLog: Sendable {
         logger.error("request failed \(failure.logMessage, privacy: .public)")
     }
 
+    /// 見つけた順。
+    var deprecatedEndpoints: [DeprecatedEndpoint] {
+        state.withLock { $0.deprecated }
+    }
+
+    /// 応答が`Deprecation`ヘッダー（RFC 9745。Mastodon 4.4から）を付けていたら、非推奨のAPIとしてログに残す。同じメソッドとパスは1度だけ残す。
+    /// https://docs.joinmastodon.org/api/guidelines/#deprecations
+    func noteDeprecation(of request: URLRequest, in response: HTTPURLResponse) {
+        guard let value = response.value(forHTTPHeaderField: "Deprecation") else { return }
+        let method = request.httpMethod ?? "GET"
+        let path = request.url.map(Self.redactedPath) ?? ""
+        // `@`に続くUNIX時間の秒。ほかの形なら、いつからかは残さない。
+        let since = value.hasPrefix("@") ? Int(value.dropFirst()) : nil
+        let endpoint = DeprecatedEndpoint(method: method, path: path, since: since)
+        let isNew = state.withLock { state in
+            guard !state.deprecated.contains(where: { $0.method == method && $0.path == path }) else { return false }
+            state.deprecated.append(endpoint)
+            return true
+        }
+        guard isNew else { return }
+        logger.warning("deprecated API \(endpoint.logMessage, privacy: .public)")
+    }
+
     /// パスのうち、IDらしいところを`:id`に伏せる。クエリはIDやacctを含むため残さない。
     /// `v1`のような版を除き、数字を含む部分をIDとみなす。Mastodonの数字のIDも、ULIDなど英数字のIDも伏せられる。
     /// `tag`と`tags`の次はハッシュタグの名前なので、`:name`に伏せる。
@@ -66,6 +89,20 @@ public final class RequestLog: Sendable {
                 return !isVersion && component.contains(where: \.isNumber) ? ":id" : component
             }
             .joined(separator: "/")
+    }
+}
+
+/// サーバーが非推奨と知らせたAPI。
+struct DeprecatedEndpoint: Sendable, Equatable {
+    let method: String
+    /// IDを伏せたパス。
+    let path: String
+    /// 非推奨になった、またはなる日時のUNIX時間の秒。サーバーが日時を付けなければnil。
+    let since: Int?
+
+    var logMessage: String {
+        let line = "\(method) \(path)"
+        return since.map { "\(line) since=@\($0)" } ?? line
     }
 }
 
