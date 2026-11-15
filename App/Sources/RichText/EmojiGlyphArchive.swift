@@ -49,6 +49,9 @@ final class EmojiGlyphArchive: Sendable {
     let directory: URL
     private let availableCapacity: @Sendable () -> Int?
     private let files = Mutex<Files?>(nil)
+    /// 切り替え（`use`、`loadStoredGeometry`）を1つずつ行う。並べて行うと、同じファイルを書く`EmojiThumbnails`が2つでき、
+    /// それぞれが書き足す位置を持って、相手の記録を切り詰めて消すため。
+    private let switching = Mutex<[Geometry: Files]>([:])
     private let logger = SciaLog.logger(category: "emoji")
 
     init(directory: URL, availableCapacity: @escaping @Sendable () -> Int? = EmojiImageFiles.opportunisticCapacity) {
@@ -61,28 +64,41 @@ final class EmojiGlyphArchive: Sendable {
     /// 絵文字ピッカーで描く大きさと絵を渡す。前に作ったときと違えば、前の画像を消して作り直す。
     /// 起動したあと、絵文字ピッカーを開く前は、前に渡した大きさと絵で読む（`loadStoredGeometry()`）。
     func use(_ geometry: Geometry) {
-        let current = files.withLock { $0?.geometry }
-        guard current != geometry else { return }
-        let stored = (try? Data(contentsOf: geometryFile)).flatMap { try? JSONDecoder().decode(Geometry.self, from: $0) }
-        if stored != geometry {
-            do {
-                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-                try JSONEncoder().encode(geometry).write(to: geometryFile, options: .atomic)
-            } catch {
-                logger.error("emoji glyph archive geometry write failed: \(SciaLog.describe(error), privacy: .public)")
+        guard files.withLock({ $0?.geometry }) != geometry else { return }
+        switching.withLock { opened in
+            guard files.withLock({ $0?.geometry }) != geometry else { return }
+            let stored = storedGeometry()
+            if stored != geometry {
+                do {
+                    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                    try JSONEncoder().encode(geometry).write(to: geometryFile, options: .atomic)
+                } catch {
+                    logger.error("emoji glyph archive geometry write failed: \(SciaLog.describe(error), privacy: .public)")
+                }
             }
+            open(geometry, opened: &opened)
+            removeFolders(except: Set(opened.keys))
         }
-        open(geometry)
-        removeFolders(except: geometry)
     }
 
-    /// 前に絵文字ピッカーで渡した大きさと絵で、置いた画像を読めるようにする。iOSの版か絵文字の絵の設定が変わっていれば、読まない。
-    func loadStoredGeometry(style: EmojiStyle) {
-        guard files.withLock({ $0 == nil }),
-              let stored = (try? Data(contentsOf: geometryFile)).flatMap({ try? JSONDecoder().decode(Geometry.self, from: $0) }),
-              stored.style == style, stored.systemVersion == Self.systemVersion
-        else { return }
-        open(stored)
+    /// 前に絵文字ピッカーで渡した大きさと絵で、置いた画像を読めるようにする。読めるようにしたか、もう読めるようになっていればtrue。
+    /// iOSの版か絵文字の絵の設定が変わっていれば、読まずにfalse。
+    /// 裏で作る側は、これがfalseのときだけ、自分で計算した大きさを渡す。絵文字ピッカーが渡した大きさを優先するため。
+    /// 画面の倍率の違う画面にシーンが複数あると、計算した大きさが絵文字ピッカーのものと食い違い、互いの画像を消し合うため。
+    @discardableResult
+    func loadStoredGeometry(style: EmojiStyle) -> Bool {
+        switching.withLock { opened in
+            if let current = files.withLock({ $0?.geometry }) {
+                return current.style == style && current.systemVersion == Self.systemVersion
+            }
+            guard let stored = storedGeometry(), stored.style == style, stored.systemVersion == Self.systemVersion else { return false }
+            open(stored, opened: &opened)
+            return true
+        }
+    }
+
+    private func storedGeometry() -> Geometry? {
+        (try? Data(contentsOf: geometryFile)).flatMap { try? JSONDecoder().decode(Geometry.self, from: $0) }
     }
 
     /// 大きさと絵ごとに、画像を置くフォルダーを分ける。切り替える前に作り始めた画像を書き終える前に、前のフォルダーを消しても、
@@ -92,25 +108,32 @@ final class EmojiGlyphArchive: Sendable {
         return directory.appending(fileName: SafeFileName(name), directoryHint: .isDirectory)
     }
 
-    /// 今の大きさと絵のほかのフォルダーを消す。切り替える前に作り始めた画像が、消したあとにフォルダーを作り直して書いても、次に切り替えたときに消える。
-    private func removeFolders(except geometry: Geometry) {
-        let kept = folder(for: geometry).lastPathComponent
+    /// この起動のうちに開いた大きさと絵のほかのフォルダーを消す。開いたものは、書き手（`EmojiThumbnails`）を使い回すので、
+    /// 消すと、戻ったときに書いたつもりの画像がファイルに残らず、次の起動で作り直すまで枠が空くため。次に起動して切り替えたときに消える。
+    private func removeFolders(except geometries: Set<Geometry>) {
+        let kept = Set(geometries.map { folder(for: $0).lastPathComponent })
         let folders = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isDirectoryKey])) ?? []
-        for folder in folders where folder.lastPathComponent != kept && (try? folder.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+        for folder in folders where !kept.contains(folder.lastPathComponent) && (try? folder.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
             try? FileManager.default.removeItem(at: folder)
         }
     }
 
-    private func open(_ geometry: Geometry) {
+    /// 同じ大きさと絵のファイルは、前に開いたものを使い回す。書き手（`EmojiThumbnails`の書く順番）を1つにするため。
+    private func open(_ geometry: Geometry, opened: inout [Geometry: Files]) {
+        if let reused = opened[geometry] {
+            files.withLock { $0 = reused }
+            return
+        }
         let folder = folder(for: geometry)
-        let opened = Files(
+        let made = Files(
             geometry: geometry,
             small: EmojiThumbnails(file: folder.appending(path: "small.bin"), pixelHeight: Self.smallPixelHeight),
             full: EmojiThumbnails(file: folder.appending(path: "full.bin"), pixelHeight: geometry.pixelHeight)
         )
-        opened.small.load()
-        opened.full.load()
-        files.withLock { $0 = opened }
+        made.small.load()
+        made.full.load()
+        opened[geometry] = made
+        files.withLock { $0 = made }
     }
 
     static var systemVersion: String {
@@ -142,17 +165,19 @@ final class EmojiGlyphArchive: Sendable {
         return components.url ?? URL(fileURLWithPath: "/")
     }
 
-    /// まだ持っていない絵文字の画像を作る。絵文字ピッカーを開いていない間に、裏で呼ぶ。止められたら（`Task.isCancelled`）、途中で終える。
-    /// 小さい画像は全部作る。描く大きさの画像は、必須でない用途の空きが、残りの見積もり以上あるときだけ作る。
-    func build(_ texts: [String]) async {
+    /// まだ持っていない絵文字の画像を作る。止められたら（`Task.isCancelled`）、途中で終える。
+    /// 小さい画像は全部作る。描く大きさの画像は、`includesFull`で、必須でない用途の空きが残りの見積もり以上あるときだけ作る。
+    /// - Parameter includesFull: falseなら小さい画像だけを、小さく描いて作る。絵文字ピッカーを開いている間に呼ぶ。
+    ///   描く大きさで描いてから縮めるより軽く、絵文字ピッカーの画像の読み込みと取り合うCPUを減らすため。
+    func build(_ texts: [String], includesFull: Bool = true) async {
         guard let files = files.withLock({ $0 }) else { return }
         let missing = texts.filter { text in
-            ![false, true].contains { files.small.contains(Self.url(text, isShape: $0)) && files.full.contains(Self.url(text, isShape: $0)) }
+            ![false, true].contains { files.small.contains(Self.url(text, isShape: $0)) && (!includesFull || files.full.contains(Self.url(text, isShape: $0))) }
         }
         guard !missing.isEmpty else { return }
         // 見積もりは非圧縮の大きさで、圧縮すると小さくなるので、少なめに作ることはあっても、空きを超えて作ることはない。
         let fullBytes = Int(files.geometry.width * files.geometry.scale) * files.geometry.pixelHeight * 4
-        var keepsFull = (availableCapacity() ?? 0) >= missing.count * fullBytes
+        var keepsFull = includesFull && (availableCapacity() ?? 0) >= missing.count * fullBytes
         var writtenSinceCheck = 0
         var made = 0
         for (index, text) in missing.enumerated() {
@@ -163,7 +188,12 @@ final class EmojiGlyphArchive: Sendable {
             }
             let hasSmall = [false, true].contains { files.small.contains(Self.url(text, isShape: $0)) }
             guard !hasSmall || keepsFull else { continue }
-            guard let (image, isShape) = await Self.render(text, geometry: files.geometry) else { continue }
+            var drawn = files.geometry
+            if !keepsFull {
+                // 小さい画像だけを作るときは、小さい画像の高さで描く。
+                drawn.scale = CGFloat(Self.smallPixelHeight) / drawn.height
+            }
+            guard let (image, isShape) = await Self.render(text, geometry: drawn) else { continue }
             // 作っている間に大きさか絵が変わったら、前の大きさの画像を足さずにやめる。
             guard !Task.isCancelled, self.files.withLock({ $0?.geometry }) == files.geometry else { break }
             let url = Self.url(text, isShape: isShape)
@@ -174,7 +204,7 @@ final class EmojiGlyphArchive: Sendable {
             }
             made += 1
         }
-        logger.info("emoji glyphs built made=\(made, privacy: .public) keepsFull=\(keepsFull, privacy: .public) cancelled=\(Task.isCancelled, privacy: .public)")
+        logger.info("emoji glyphs built made=\(made, privacy: .public) includesFull=\(includesFull, privacy: .public) keepsFull=\(keepsFull, privacy: .public) cancelled=\(Task.isCancelled, privacy: .public)")
     }
 
     /// ライトの外観の文字の色（黒）で描き、色の付いた画素がなければ、形だけの絵文字とする。

@@ -4,9 +4,9 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// 投稿欄の絵文字のパレット。
+/// 投稿欄の絵文字ピッカー。
 @MainActor
-@Suite(.failureState)
+@Suite(.failureState, .scratch)
 struct EmojiPaletteViewTests {
     /// 画面に入る前に組み立てたセルも、画像が届いたら描き直し、画面に入ったときに画像で描く。
     /// 画面に見えているセルだけを描き直していたため、スクロールで先に組み立てたセルは、画像が届いても空のまま画面に出ていた。
@@ -23,7 +23,7 @@ struct EmojiPaletteViewTests {
             try await gate.wait()
             return png
         }
-        let palette = EmojiPaletteView(emojiImages: store)
+        let palette = EmojiPaletteView(emojiImages: store, thumbnailBuilder: nil)
         palette.frame = window.bounds
         window.addSubview(palette)
         let base = URL(filePath: "/")
@@ -110,7 +110,13 @@ struct EmojiPaletteViewTests {
             try? await gate.wait()
             return drawn
         }
-        let palette = EmojiPaletteView(emojiImages: EmojiImageStore { _ in throw CancellationError() }, glyphImages: glyphs)
+        // 端末に置いたUnicodeの絵文字の画像を使わず、メモリの画像だけで描かせる。
+        let palette = EmojiPaletteView(
+            emojiImages: EmojiImageStore { _ in throw CancellationError() },
+            glyphImages: glyphs,
+            glyphArchive: EmojiGlyphArchive(directory: TestScratch.url("EmojiPaletteViewTests")) { 0 },
+            thumbnailBuilder: nil
+        )
         palette.frame = window.bounds
         window.addSubview(palette)
         let emojis = ["😀", "😃", "😄"].map { PaletteEmoji.standard(StandardEmoji(emoji: $0, name: $0, keywords: [], version: "1.0")) }

@@ -68,6 +68,35 @@ struct EmojiGlyphArchiveTests {
         #expect(reopened.glyph(for: "😀", geometry: Self.geometry) == nil, "絵文字の絵の設定が違うので読まない")
     }
 
+    /// 裏で作る側は、絵文字ピッカーが記録した大きさがあればそれを使い、なければ自分で計算した大きさを使う。
+    /// 画面の倍率の違う画面にシーンが複数あると、計算した大きさが絵文字ピッカーのものと食い違い、互いの画像を消し合うため。
+    @Test func prefersGeometryRecordedByPalette() {
+        makeArchive(capacity: Int.max).use(Self.geometry)
+
+        let reopened = makeArchive(capacity: Int.max)
+        #expect(reopened.loadStoredGeometry(style: .twemoji))
+        #expect(makeArchive(capacity: Int.max).loadStoredGeometry(style: .system) == false, "絵文字の絵の設定が違えば、記録した大きさは使わない")
+    }
+
+    /// 描く大きさを切り替えて戻っても、前に作った画像は、起動し直したあとも読める。
+    /// 切り替えたときに前のフォルダーを消すと、戻ったときに使い回す書き手が書いたつもりの画像が残らないため。
+    @Test func keepsImagesAfterSwitchingBack() async throws {
+        let archive = makeArchive(capacity: Int.max)
+        archive.use(Self.geometry)
+        await archive.build(["😀"])
+        _ = await waitForGlyph("😀", in: archive) { $0.isFull }
+        await archive.flush()
+
+        var changed = Self.geometry
+        changed.style = .system
+        archive.use(changed)
+        archive.use(Self.geometry)
+
+        let reopened = makeArchive(capacity: Int.max)
+        reopened.loadStoredGeometry(style: .twemoji)
+        #expect(reopened.glyph(for: "😀", geometry: Self.geometry)?.isFull == true)
+    }
+
     /// 文字として描かれる絵文字（twemojiの「©」）は、外観で色が変わるので、形だけで持つ。色の付いた絵文字は、色のまま持つ。
     @Test func keepsTextGlyphsAsShape() async throws {
         let archive = makeArchive(capacity: Int.max)

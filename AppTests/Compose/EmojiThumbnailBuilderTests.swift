@@ -36,7 +36,7 @@ struct EmojiThumbnailBuilderTests {
     /// 止めた作業が終わるときに、あとで始めた作業の控えを消していたため、絵文字ピッカーを開いても作り続けていた。
     @Test func keepsHandleOfRestartedBuildWhenCancelledBuildFinishes() async throws {
         let builds = Builds()
-        let builder = EmojiThumbnailBuilder { await builds.run() }
+        let builder = EmojiThumbnailBuilder(build: { await builds.run() }, buildWhileShown: {})
         builder.start()
         try await waitUntil { builds.count >= 1 }
 
@@ -54,10 +54,30 @@ struct EmojiThumbnailBuilderTests {
         try await waitUntil { builder.finishedCount >= 2 }
     }
 
+    /// 絵文字ピッカーが開いている間は、Unicodeの絵文字の小さい画像だけを作り、閉じたら止めて、閉じている間の作業に替える。
+    @Test func buildsSmallGlyphsOnlyWhileShown() async throws {
+        let builds = Builds()
+        let shown = Builds()
+        let builder = EmojiThumbnailBuilder(build: { await builds.run() }, buildWhileShown: { await shown.run() })
+
+        builder.paletteDidAppear()
+        try await waitUntil { shown.count >= 1 }
+        #expect(builder.isBuildingWhileShown)
+        #expect(!builder.isBuilding)
+
+        builder.paletteDidDisappear()
+        #expect(!builder.isBuildingWhileShown)
+        #expect(shown.cancelled.withLock { $0 } == [true])
+        try await waitUntil { builds.count >= 1 }
+        shown.open(0)
+        builds.open(0)
+        try await waitUntil { builder.finishedCount >= 1 }
+    }
+
     /// 絵文字ピッカーが開いている間は、作り始めない。
     @Test func doesNotStartWhilePaletteIsShown() {
         let builds = Builds()
-        let builder = EmojiThumbnailBuilder { await builds.run() }
+        let builder = EmojiThumbnailBuilder(build: { await builds.run() }, buildWhileShown: {})
         builder.paletteDidAppear()
 
         builder.start()
