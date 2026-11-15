@@ -84,6 +84,33 @@ struct NotificationContentViewTests {
         #expect(opened == (grouped ? ["2", "3"] : ["2"]))
     }
 
+    /// 絵文字のリアクションの通知をまとめた行も、画面の文と同じく「ほかN人」を読み上げる。絵文字は画像でなく名前で読む。
+    @Test(arguments: [false, true])
+    func groupedEmojiReactionReadsOtherAccounts(custom: Bool) throws {
+        let vc = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline, settings: .isolated())
+        let status = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
+        let bob = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: nil)
+        let carol = Account(id: "3", username: "carol", acct: "carol", displayName: "Carol", avatar: nil)
+        let emoji = custom
+            ? ReactionEmoji(name: "blobcat", url: URL(string: "https://files.example.social/blobcat.png"))
+            : ReactionEmoji(name: "👍")
+        let notification = MastodonNotification(
+            id: "1",
+            type: .emojiReaction,
+            createdAt: Date(timeIntervalSince1970: 0),
+            account: bob,
+            status: status,
+            groupKey: "emoji_reaction-1",
+            notificationsCount: 3,
+            sampleAccounts: [bob, carol],
+            reactionEmoji: emoji
+        )
+        let view = vc.contentConfiguration(for: notification, base: .cell()).makeContentView()
+        let element = try #require(view.accessibilityElements?.first as? UIAccessibilityElement)
+
+        #expect(element.accessibilityLabel?.hasPrefix(custom ? "Bobとほか2人が:blobcat:でリアクションしました" : "Bobとほか2人が👍でリアクションしました") == true)
+    }
+
     /// 名前の前に差し込むアイコンも、角丸の四角の丸みを「投稿の見た目」の設定に従わせる。丸みを0にすると、四隅も中央と同じ濃さで塗る。
     @Test func headerAvatarFollowsCornerRatio() throws {
         let settings = AppSettings.isolated()

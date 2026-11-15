@@ -163,10 +163,11 @@ extension TimelineViewController {
         let emojiText = reactionEmoji.map { emoji in
             emoji.customEmoji.map { ":\($0.shortcode):" } ?? (emoji.isCustom ? ":\(emoji.name):" : emoji.name)
         }
+        let otherAccountCount = notification.isGroup ? notification.notificationsCount - 1 : nil
         let sentence = PostTexts.notificationHeader(
             appearance,
             name: notification.account.displayNameOrUsername,
-            otherAccountCount: notification.isGroup ? notification.notificationsCount - 1 : nil,
+            otherAccountCount: otherAccountCount,
             reactionEmoji: emojiText
         )
         // 文の中の名前、ほかの人の数、絵文字を、それぞれの描き方で描いた部分に置き換える。ほかの部分は言い回しの色で描く。
@@ -226,7 +227,7 @@ extension TimelineViewController {
             configuration.headerAccessibilityText = PostTexts.notificationHeader(
                 appearance,
                 name: notification.account.displayNameOrUsername,
-                otherAccountCount: nil,
+                otherAccountCount: otherAccountCount,
                 reactionEmoji: emoji.isCustom ? ":\(emoji.name):" : emoji.name
             ).text
         }
