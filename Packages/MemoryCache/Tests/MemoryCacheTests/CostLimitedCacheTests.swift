@@ -61,4 +61,22 @@ struct CostLimitedCacheTests {
         #expect(!cache.contains("a"))
         #expect(cache.contains("b"))
     }
+
+    /// 真ん中や先頭のものを使ったり入れ直したりしても、使った順を保ち、その順に捨てる。
+    @Test func keepsUseOrderAcrossUsesAndReplacements() {
+        var cache = CostLimitedCache<String, Int>(totalCostLimit: 4)
+        for (index, key) in ["a", "b", "c", "d"].enumerated() {
+            cache.setValue(index, forKey: key, cost: 1)
+        }
+        _ = cache.value(forKey: "b")
+        cache.setValue(9, forKey: "a", cost: 1)
+        _ = cache.value(forKey: "d")
+        // 使った順は古いものから c, b, a, d。
+        #expect(cache.setValue(10, forKey: "e", cost: 1) == ["c"])
+        #expect(cache.setValue(11, forKey: "f", cost: 2) == ["b", "a"])
+        #expect(cache.value(forKey: "a") == nil)
+        #expect(cache.value(forKey: "d") == 3)
+        #expect(cache.count == 3)
+        #expect(cache.totalCost == 4)
+    }
 }
