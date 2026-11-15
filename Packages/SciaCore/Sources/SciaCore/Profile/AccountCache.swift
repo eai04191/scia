@@ -10,7 +10,7 @@ import os
 ///
 /// 足りないアカウントは、相手ごとにリクエストを送らず、`MastodonClient.multipleAccountsLimit`件ずつまとめて1回で読む。
 /// メンションが何人いても、メニューを開くたびのリクエストは1回で済み、トークンごとのレート制限を削らない。
-/// IDはサーバーごとに違うため、セッション（ログイン中のアカウント）ごとに持つ。起動している間だけ覚え、受け取ったアカウントは消さない。
+/// IDはサーバーごとに違うため、セッション（ログイン中のアカウント）ごとに持つ。起動している間だけ覚え、覚える人数の上限は`ReceivedAccounts.limit`。
 @MainActor
 public final class AccountCache {
     public typealias Fetch = @Sendable ([String]) async throws -> [Account]
@@ -19,8 +19,8 @@ public final class AccountCache {
     private let limit: Int
     /// 覚えているアカウント。セッションのクライアントとストリーミングと共有する。
     private let received: ReceivedAccounts
-    /// 読み込み中のIDと、それを読んでいる読み込み。同じIDを続けて求められても、二重に送らない。
-    private var inFlight: [String: Task<Void, Never>] = [:]
+    /// 読み込み中のIDと、それを読んでいる読み込み。同じIDを続けて求められても、二重に送らない。読み込みは読めたアカウントを返す。
+    private var inFlight: [String: Task<[Account], Never>] = [:]
     /// 探して見つかったアカウントのID。
     private var resolvedIDs: [AccountLookup: String] = [:]
     /// 探している途中の値と、その検索。同じ値を続けて探しても、二重に送らない。
@@ -53,30 +53,38 @@ public final class AccountCache {
     public func load(_ ids: [String]) async -> [String: Account] {
         var seen = Set<String>()
         let unique = ids.filter { seen.insert($0).inserted }
-        let missing = isClosed ? [] : unique.filter { received.account($0) == nil && inFlight[$0] == nil }
+        // 待つ間に、ほかの経路で受け取った人で上限を超えて消えても返せるよう、覚えていた人と読めた人を手元にも持つ。
+        var loaded: [String: Account] = unique.reduce(into: [:]) { loaded, id in
+            loaded[id] = received.account(id)
+        }
+        let missing = isClosed ? [] : unique.filter { loaded[$0] == nil && inFlight[$0] == nil }
         for start in stride(from: 0, to: missing.count, by: limit) {
             let chunk = Array(missing[start..<min(start + limit, missing.count)])
             let order = received.nextOrder()
             let task = Task {
+                var accounts: [Account] = []
                 do {
-                    received.remember(try await fetch(chunk), order: order)
+                    accounts = try await fetch(chunk)
+                    received.remember(accounts, order: order)
                 } catch {
                     logger.error("accounts load failed count=\(chunk.count, privacy: .public): \(SciaLog.describe(error), privacy: .public)")
                 }
                 for id in chunk {
                     inFlight[id] = nil
                 }
+                return accounts
             }
             for id in chunk {
                 inFlight[id] = task
             }
         }
         for task in Set(unique.compactMap { inFlight[$0] }) {
-            await task.value
+            for account in await task.value where seen.contains(account.id) {
+                loaded[account.id] = account
+            }
         }
-        return unique.reduce(into: [:]) { loaded, id in
-            loaded[id] = received.account(id)
-        }
+        // 待つ間に、もっと新しいものを受け取っていれば、そちらを返す。
+        return loaded.mapValues(latest(of:))
     }
 
     /// 走っている読み込みと検索を止め、以後は読まない。ログアウトやアカウントの切り替えのあとに、前のアカウントのトークンで通信し続けないため。

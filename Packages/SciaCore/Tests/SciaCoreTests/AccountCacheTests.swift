@@ -249,6 +249,32 @@ struct AccountCacheTests {
         #expect(cache.account("1")?.displayName == "Third")
     }
 
+    /// 上限の人数を超えたら、受け取ったり読んだりしてから一番長い人から消す。
+    @Test func forgetsLeastRecentlyUsedAccountOverLimit() {
+        let received = ReceivedAccounts(limit: 2)
+        received.remember([account("1", "One"), account("2", "Two")], order: received.nextOrder())
+        #expect(received.account("1")?.displayName == "One")
+
+        received.remember([account("3", "Three")], order: received.nextOrder())
+
+        #expect(received.account("1")?.displayName == "One")
+        #expect(received.account("2") == nil)
+        #expect(received.account("3")?.displayName == "Three")
+    }
+
+    /// 読み込むうちに上限を超えて消えた人も、覚えていた人も読めた人も返す。
+    @Test func loadReturnsAccountsForgottenWhileLoading() async {
+        let received = ReceivedAccounts(limit: 1)
+        let cache = AccountCache(received: received) { ids in try await Server().fetch(ids) }
+        received.remember([account("1", "Cached")], order: received.nextOrder())
+
+        let loaded = await cache.load(["1", "2", "3"])
+
+        #expect(loaded["1"]?.displayName == "Cached")
+        #expect(loaded["2"]?.id == "2")
+        #expect(loaded["3"]?.id == "3")
+    }
+
     /// プロフィールを開くときに渡されたアカウントより、覚えているものを出す。覚えていなければ渡されたものを出す。
     @Test func latestPrefersRememberedAccount() {
         let received = ReceivedAccounts()
