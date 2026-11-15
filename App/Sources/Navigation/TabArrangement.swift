@@ -9,6 +9,9 @@ import UIKit
 @MainActor
 final class TabArrangement {
     let tabBarController: UITabBarController
+    /// 今のウインドウでのタブバーの形。
+    let shape = TabBarShapeModel()
+    private let shapeObserver = LayoutObserverView()
     /// 並びが変わったとき。どの項目を購読するかを決め直す。
     var onPlacementChange: ((TabPlacement) -> Void)?
     /// 選んでいる画面が変わったとき。タブを押したときと、見出しのメニューで切り替えたとき。
@@ -72,13 +75,24 @@ final class TabArrangement {
         tabBarController.registerForTraitChanges([UITraitHorizontalSizeClass.self, UITraitUserInterfaceIdiom.self]) { [weak self] (_: UITabBarController, _: UITraitCollection) in
             guard let self else { return }
             apply(self.layout)
+            updateShape()
         }
+        shapeObserver.frame = tabBarController.view.bounds
+        shapeObserver.onLayout = { [weak self] in self?.updateShape() }
+        tabBarController.view.insertSubview(shapeObserver, at: 0)
+    }
+
+    private func updateShape() {
+        // アプリ内のSafariを下に置いている間は、タブバーの画面がウインドウより低くなるので、ウインドウの大きさで決める。
+        let size = tabBarController.view.window?.bounds.size ?? tabBarController.view.bounds.size
+        guard size.width > 0, size.height > 0 else { return }
+        shape.update(TabBarShape(windowSize: size, traits: tabBarController.traitCollection))
     }
 
     /// タブバーに並べられるタブの数。横幅の広いiPadのタブバーは、上に出て横にスクロールするので数を限らず、切り替えタブも出さない。
     /// ほかは、UIKitが「その他」を出さずに並べられる数にする。「その他」は、選んでいるタブを変えず、中の項目の画面を自分のナビゲーションへ移すため、Sciaの作りとぶつかる。
     private static func tabBarCapacity(for traits: UITraitCollection) -> Int? {
-        traits.userInterfaceIdiom == .pad && traits.horizontalSizeClass == .regular ? nil : TabPlacement.compactTabBarCapacity
+        TabBarShape.isAtTop(traits) ? nil : TabPlacement.compactTabBarCapacity
     }
 
     /// 並びを反映する。振り分けが変わらず、タブの名前も変わらなければ、タブバーに触らない。

@@ -3131,6 +3131,7 @@ final class SessionController {
             diagnostics: diagnostics,
             tabIcons: profileTabIcons,
             tabSources: settingsTabSourceActions,
+            tabBarShape: tabs.shape,
             accountScreen: accountScreenContext,
             openInAppBrowserHeight: { [weak self] in self?.open(.inAppBrowserHeight(returningTo: .interaction)) },
             openProfile: { [weak self] in self?.open(.profile(acct: $0)) },
