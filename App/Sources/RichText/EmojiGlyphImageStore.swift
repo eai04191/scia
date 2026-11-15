@@ -30,6 +30,15 @@ final class EmojiGlyphImageStore {
     private var images = MemoryCache<Request, UIImage>(totalCostLimit: 16 * 1024 * 1024)
     private var rendering: Set<Request> = []
     private var listeners: [Listener] = []
+    /// 求められた数と、持っていて返せた数。返せなかった分だけ、絵文字のパレットの枠が空く。
+    private var lookups = 0
+    private var hits = 0
+    /// 作った数と、一度作ったのに上限を超えて捨て、また作った数。
+    private var renders = 0
+    private var rerenders = 0
+    private var everRendered: Set<Request> = []
+    /// 作り始めてから届けるまでのミリ秒（作るのを待つ間を含む）。新しいほうから1024個まで。
+    private var renderDelays: [Double] = []
 
     init(render: @escaping Render = EmojiGlyphImageStore.draw) {
         self.render = render
@@ -37,15 +46,28 @@ final class EmojiGlyphImageStore {
 
     /// 持っていれば返す。持っていなければ作り始め、できたら`addListener`で登録したところへ渡す。
     func image(for request: Request) -> UIImage? {
-        if let image = images.value(forKey: request) { return image }
+        lookups += 1
+        if let image = images.value(forKey: request) {
+            hits += 1
+            return image
+        }
         guard rendering.insert(request).inserted else { return nil }
-        Task(.withoutRequests) { await self.load(request) }
+        let startedAt = AppDependencies.mediaTime()
+        Task(.withoutRequests) { await self.load(request, startedAt: startedAt) }
         return nil
     }
 
-    private func load(_ request: Request) async {
+    private func load(_ request: Request, startedAt: CFTimeInterval) async {
         let image = await render(request)
         rendering.remove(request)
+        renders += 1
+        if !everRendered.insert(request).inserted {
+            rerenders += 1
+        }
+        renderDelays.append((AppDependencies.mediaTime() - startedAt) * 1_000)
+        if renderDelays.count > 1_024 {
+            renderDelays.removeFirst(renderDelays.count - 1_024)
+        }
         images.setValue(image, forKey: request, cost: image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0)
         listeners.removeAll { $0.owner == nil }
         for listener in listeners {
@@ -55,6 +77,17 @@ final class EmojiGlyphImageStore {
 
     func addListener(owner: AnyObject, onLoad: @escaping @MainActor (Request, UIImage) -> Void) {
         listeners.append(Listener(owner: owner, onLoad: onLoad))
+    }
+
+    /// 状態ダンプ。絵文字は出さず、数だけを書く。
+    func stateDump() -> String {
+        let sorted = renderDelays.sorted()
+        func at(_ ratio: Double) -> String { sorted.isEmpty ? "-" : String(format: "%.1f", sorted[min(sorted.count - 1, Int(Double(sorted.count) * ratio))]) }
+        return [
+            "glyphs: \(images.count) cost: \(images.totalCost / 1024)KB limit: \(images.totalCostLimit / 1024)KB",
+            "lookups: \(lookups) hits: \(hits) renders: \(renders) rerendersAfterEviction: \(rerenders)",
+            "renderDelayMs: p50 \(at(0.5)) p90 \(at(0.9)) max \(sorted.last.map { String(format: "%.1f", $0) } ?? "-")",
+        ].joined(separator: "\n")
     }
 
     func releaseUnusedMemory() {

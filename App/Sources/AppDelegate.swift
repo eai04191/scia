@@ -15,6 +15,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         startPostCrashGuard()
         AppDependencies.stateDumps.register("emojiImages", owner: AppDependencies.emojiImages) { $0.stateDump() }
         AppDependencies.stateDumps.register("emojiThumbnails", owner: AppDependencies.emojiThumbnails) { $0.stateDump() }
+        AppDependencies.stateDumps.register("emojiGlyphs", owner: AppDependencies.emojiGlyphImages) { $0.stateDump() }
         // 受け取られないまま残った共有拡張のファイルを消す。開かれたばかりの共有は新しいので消さない。
         SharedMediaInbox.app?.removeStale(now: AppDependencies.now())
         // パレットを開く前に、端末に置いた画像から絵文字のパレットの小さい静止画を作っておく。パレットを開いたら止める。
