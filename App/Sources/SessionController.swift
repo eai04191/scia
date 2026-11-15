@@ -3962,29 +3962,41 @@ final class SessionController {
     func start() {
         hasStarted = true
         startCrashQuarantine()
-        // 無効にしている項目は、有効にしたときか開いたときに始める。
-        if tabs.placement.location(of: .home) != .disabled {
-            home.start(purpose: .action)
-        }
-        if tabs.placement.location(of: .notifications) != .disabled {
-            notifications.start(purpose: .action)
-        }
-        loadProfileTabIcons(tabs.placement)
         otherAccounts.onHashtagDone = { [weak self] account, title in
             self?.notices.showTransient(Notice(id: "hashtag.otherAccountChanged", kind: .success, title: OtherAccountTexts.title(title, handle: account.credential.handle)), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
         }
         otherAccounts.onHashtagFailure = { [weak self] account, title, error in
             self?.showOtherAccountFailure(title: OtherAccountTexts.title(title, handle: account.credential.handle), error: error)
         }
+        let network = AppDependencies.network
+        session.start { network.recoveryCount }
+        // ホームのほかの読み込みは、ホームの最初の読み込みを終えてから始める。起動と同時に送ると、サーバーで順番待ちになり、ホームの応答まで遅れたため。
+        // 無効にしている項目は、有効にしたときか開いたときに始める。
+        if tabs.placement.location(of: .home) != .disabled {
+            home.model.onInitialLoadFinished = { [weak self] in self?.startAfterHome() }
+            home.start(purpose: .action)
+        } else {
+            startAfterHome()
+        }
+    }
+
+    /// 起動したときの、ホームのほかの読み込み。
+    private func startAfterHome() {
+        guard !tasks.isClosed else { return }
+        // ホームを待つ間に通知のタブを開いていれば、もう読み込んでいるので、読み直さない。
+        if tabs.placement.location(of: .notifications) != .disabled {
+            notifications.startIfNeeded()
+        }
+        loadProfileTabIcons(tabs.placement)
         // 「別のアカウントで」の行に出す、ほかのアカウントのアイコン。
         otherAccounts.loadProfiles()
         // 投稿欄の「投稿するアカウント」の行に出す、このアカウント自身のアイコン。
         tasks.run(.display) { [weak self] in _ = try? await self?.myAccount(purpose: .display) }
         loadTabSources()
         announcements.start()
-        // 注意書きを最初から開いておくかは、読めたら`onPreferencesLoad`でタイムラインに反映する。読めなければ前の値のままにし、次に投稿欄で書き始めたときに読み直す。
-        let network = AppDependencies.network
-        session.start { network.recoveryCount }
+        // サーバーの版、投稿欄が使う上限と既定値、サーバーの機能を読む。注意書きを最初から開いておくかは、読めたら`onPreferencesLoad`でタイムラインに反映する。
+        // 読めなければ前の値のままにし、次に投稿欄で書き始めたときに読み直す。
+        session.loadServerInfo()
     }
 
     // MARK: - ログインし直し

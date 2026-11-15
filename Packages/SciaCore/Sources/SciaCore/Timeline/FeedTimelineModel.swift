@@ -50,6 +50,8 @@ public final class FeedTimelineModel {
     private var arrivalRate = ArrivalRate()
     /// 最初の読み込みが済んだ。空のホームでも、済んでいればつなぐ。
     private var hasLoadedInitial = false
+    /// 最初の読み込みを終えたときに、成功しても失敗しても1回だけ呼ぶ。起動したときに、ほかの通信をホームを出すまで待たせるのに使う。
+    public var onInitialLoadFinished: (@MainActor () -> Void)?
     /// バックグラウンドでは接続しない。最初の読み込みの途中でバックグラウンドへ入っても、読み込み後につながないようにする。
     private var isInForeground = true
     /// 近づいたときの自動の読み込みに失敗した、または進まなかったギャップ。読み直し続けないよう、タップされるまで自動では読まない。
@@ -397,7 +399,10 @@ public final class FeedTimelineModel {
                 return id
             }
             let markerID = loadedMarker.withLock { $0 }
-            guard let statuses = loaded, !isStopped else { return }
+            // 読み込みの途中で見送ったときは、走っている読み込みが終えたときに知らせる。
+            guard let statuses = loaded else { return }
+            defer { finishInitialLoad() }
+            guard !isStopped else { return }
             // 前回読んだところから続きを読めるよう、既読位置の投稿を最上部に置く。新しい投稿はその上にある。
             let topID = markerID.flatMap { id in store.statuses.contains { $0.id == id } ? TimelineEntry.ID.status(id) : nil }
             display?.show(store.entries, placingAtTop: topID)
@@ -409,8 +414,15 @@ public final class FeedTimelineModel {
             logger.info("\(self.feed.name, privacy: .public) loadInitial done count=\(statuses.count, privacy: .public) regenerating=\(self.store.isRegenerating, privacy: .public)")
             startStreaming()
         } catch {
+            defer { finishInitialLoad() }
             handle(error, during: "loadInitial") { setContentState(.failed($0)) }
         }
+    }
+
+    private func finishInitialLoad() {
+        let finished = onInitialLoadFinished
+        onInitialLoadFinished = nil
+        finished?()
     }
 
     /// 末尾が近づいたときに呼ぶ（どこまで近づいたらかは`TimelineLoadTrigger.isApproachingEnd(displaying:count:)`）。古い投稿を自動で読む。

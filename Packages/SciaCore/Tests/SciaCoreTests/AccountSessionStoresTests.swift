@@ -34,7 +34,23 @@ struct AccountSessionStoresTests {
         Status(id: "1", createdAt: Date(timeIntervalSince1970: 0), account: Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: nil), content: "<p>Hello</p>", spoilerText: "", language: language, url: nil)
     }
 
-    /// 使い始めると、サーバーの版を接続の状態に入れ、アカウントの設定を読んで、アニメーションを再生するかを設定に覚えさせる。
+    /// 使い始めるだけでは通信しない。サーバーの情報は、最初のタイムラインを読み終えてから`loadServerInfo()`で読むため。
+    @Test func startSendsNoRequests() async throws {
+        let transport = transport()
+        let session = AccountSession.testing(transport: transport)
+        defer { session.close() }
+
+        session.start { 0 }
+        // 走っているのは、レート制限が明けたときと電波が戻ったときの、やり直しの見張りの2つだけ。どちらも閉じるまで走り続けるので、終わりは待たない。
+        #expect(session.tasks.runningCount == 2)
+        #expect(transport.requests.isEmpty)
+
+        session.loadServerInfo()
+        try await waitUntil { session.diagnostics.serverVersion != nil }
+        #expect(!transport.requests.isEmpty)
+    }
+
+    /// 使い始めてサーバーの情報を読むと、サーバーの版を接続の状態に入れ、アカウントの設定を読んで、アニメーションを再生するかを設定に覚えさせる。
     @Test func startLoadsServerVersionAndRemembersServerAnimations() async throws {
         let defaults = TestScratch.defaults("AccountSessionStoresTests.start")
         let settings = AppSettings(defaults: defaults)
@@ -44,6 +60,7 @@ struct AccountSessionStoresTests {
         session.onPreferencesLoad = { loaded = $0 }
 
         session.start { 0 }
+        session.loadServerInfo()
         try await waitUntil { session.diagnostics.serverVersion != nil && loaded != nil }
 
         #expect(session.diagnostics.serverVersion == "4.7.3")
@@ -74,6 +91,7 @@ struct AccountSessionStoresTests {
         let session = AccountSession.testing(transport: transport())
         defer { session.close() }
         session.start { 0 }
+        session.loadServerInfo()
         try await waitUntil { session.diagnostics.serverVersion != nil }
         let media: ComposeMediaService = session.composeMediaService { _ in nil }
 

@@ -30,7 +30,8 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 ## アカウント1つ分
 
 - `AccountSession`を作り、閉じるまで持つ。アカウントを切り替えるときは、前のセッションを`close()`してから、次のアカウントのセッションを作る
-- 画面を出すときに`start(networkRecoveryCount:)`を1度呼び、`NetworkConditionsMonitor.recoveryCount`を渡す。やり直しの見張り、サーバーの版、アニメーションの設定、投稿欄の既定、サーバーの機能の読み込みを、ここでまとめて始める。`onPreferencesLoad`、`onCapabilitiesLoad`、`onCredentialsInvalid`は、呼ぶ前に置く
+- 画面を出すときに`start(networkRecoveryCount:)`を1度呼び、`NetworkConditionsMonitor.recoveryCount`を渡す。やり直しの見張りと、アニメーションの設定を始める。通信はしない
+- そのあと`loadServerInfo()`を1度呼び、サーバーの版、投稿欄の既定、サーバーの機能を読む。起動してすぐのタイムラインの読み込みと同時に送ると、サーバーで順番待ちになってタイムラインが遅れるので、最初のタイムラインを読み終えてから呼ぶ（iOSでは`FeedTimelineModel.onInitialLoadFinished`）。`onPreferencesLoad`、`onCapabilitiesLoad`、`onCredentialsInvalid`は、呼ぶ前に置く
 - アカウントごとに1つ持つ部品は、セッションが作って持つ。UIでは作らない
   - `accounts`（`AccountCache`）と`relationships`（`RelationshipCache`）: IDからアカウントと関係を引く。IDやハンドルしか持たない行き先（`AppDestination.profile(acct:)`など）は、ここから引く。`accounts`は、セッションのクライアントとストリーミングが受け取ったアカウントを、読み始めた順で一番新しいものにして覚えている。人のアイコンや名前と、プロフィールを開くときに最初に出すアカウントは、ここから取る（[profile.md](profile.md)の「開いたときに出すアカウント」）
   - `diagnostics`（`ConnectionDiagnostics`）: 接続の状態の画面に出す値。ストリーミングの状態とサーバーの版（`diagnostics.serverVersion`）は、セッションが入れる

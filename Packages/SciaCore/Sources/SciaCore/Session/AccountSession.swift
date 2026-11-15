@@ -173,19 +173,26 @@ public final class AccountSession {
         observeTranslationSettings()
     }
 
-    /// アカウントを使い始める。画面を出すときに1度呼ぶ。次を行う。
+    /// アカウントを使い始める。画面を出すときに1度呼ぶ。通信はしない。次を行う。
     /// - レート制限が明けたときと、電波が戻ったときのやり直しを始める（`observeRecoveries`）
-    /// - サーバーの版を読み、接続の状態（`diagnostics`）に入れる。読めなくても使うのに困らないので、失敗は記録するだけにする
     /// - アニメーションを再生するかを、読み直すまで、前に読めたサーバーの値で描かせる（`AppSettings.followServerAnimations`）
+    ///
+    /// サーバーから読むものは`loadServerInfo()`で始める。
+    /// - Parameter networkRecoveryCount: 電波がつながっていない状態から戻った回数（`NetworkConditionsMonitor.recoveryCount`）。Observationで追える値を返す。
+    public func start(networkRecoveryCount: @escaping @MainActor () -> Int) {
+        observeRecoveries(networkRecoveryCount: networkRecoveryCount)
+        settings.followServerAnimations(of: credential.handle)
+    }
+
+    /// 使い始めたアカウントの、サーバーの情報を読む。`start(networkRecoveryCount:)`のあとに1度呼ぶ。次を行う。
+    /// 起動してすぐのタイムラインの読み込みと同時に送ると、サーバーで順番待ちになってタイムラインが遅れるため、`start`と分けてある。
+    /// - サーバーの版を読み、接続の状態（`diagnostics`）に入れる。読めなくても使うのに困らないので、失敗は記録するだけにする
     /// - 投稿欄が使う上限と既定値、アカウントの設定を先に読む（`preloadComposeDefaults`）。読めたら`onPreferencesLoad`を呼ぶ
     /// - サーバーの機能の有無を読む（`loadCapabilities`）。読めたら`onCapabilitiesLoad`を呼ぶ
     ///
     /// `onPreferencesLoad`、`onCapabilitiesLoad`、`onCredentialsInvalid`は、呼ぶ前に置いておく。
-    /// - Parameter networkRecoveryCount: 電波がつながっていない状態から戻った回数（`NetworkConditionsMonitor.recoveryCount`）。Observationで追える値を返す。
-    public func start(networkRecoveryCount: @escaping @MainActor () -> Int) {
-        observeRecoveries(networkRecoveryCount: networkRecoveryCount)
+    public func loadServerInfo() {
         loadServerVersion()
-        settings.followServerAnimations(of: credential.handle)
         preloadComposeDefaults()
         loadCapabilities()
     }

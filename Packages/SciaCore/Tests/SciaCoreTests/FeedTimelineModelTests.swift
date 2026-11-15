@@ -118,6 +118,63 @@ struct FeedTimelineModelTests {
         #expect(display.entriesCalls.first?.topID == nil)
     }
 
+    /// 最初の読み込みを終えたら、表示したあとに1回だけ知らせる。起動したときに、ほかの読み込みをホームを出すまで待たせるため。
+    @Test func initialLoadFinishedIsCalledOnceAfterShowing() async throws {
+        let (model, display) = makeModel(transport: Self.homeTransport([3, 2, 1], marker: "2"))
+        defer { model.stop() }
+        var finishedStates: [TimelineContentState] = []
+        model.onInitialLoadFinished = { finishedStates.append(display.contentState) }
+
+        model.start(purpose: .action)
+        try await waitUntil { model.runningTaskCount == 0 && !finishedStates.isEmpty }
+        #expect(finishedStates == [.loaded])
+
+        await model.refresh()
+        #expect(finishedStates == [.loaded])
+    }
+
+    /// 最初の読み込みの途中でもう一度始めても、見送った読み込みでは知らせず、走っている読み込みを終えてから知らせる。
+    /// 画面が出たときの`startIfNeeded()`と起動の`start()`が重なると、ホームを出す前に、待たせているほかの読み込みが始まってしまうため。
+    @Test func initialLoadFinishedWaitsForRunningLoadWhenStartedAgain() async throws {
+        let gate = Gate()
+        let transport = RoutedTransport { request in
+            if request.url?.path() == "/api/v1/timelines/home" {
+                try await gate.wait()
+                return (200, try TimelineModelFixtures.body([3, 2, 1]))
+            }
+            return (200, Data("{}".utf8))
+        }
+        let (model, display) = makeModel(transport: transport)
+        defer { model.stop() }
+        model.startIfNeeded()
+        try await waitUntil { gate.waiterCount >= 1 }
+        var finishedStates: [TimelineContentState] = []
+        model.onInitialLoadFinished = { finishedStates.append(display.contentState) }
+
+        model.start(purpose: .action)
+        try await waitUntil { model.runningTaskCount == 1 }
+        #expect(finishedStates.isEmpty)
+
+        gate.open()
+        try await waitUntil { model.runningTaskCount == 0 && !finishedStates.isEmpty }
+        #expect(finishedStates == [.loaded])
+    }
+
+    /// 最初の読み込みに失敗しても知らせる。待たせているほかの読み込みが、始まらないままにならないため。
+    @Test func initialLoadFinishedIsCalledWhenLoadFails() async throws {
+        let transport = RoutedTransport { request in
+            request.url?.path() == "/api/v1/timelines/home" ? (422, Data(#"{"error":"Unprocessable"}"#.utf8)) : (200, Data("{}".utf8))
+        }
+        let (model, _) = makeModel(transport: transport)
+        defer { model.stop() }
+        var finishedCount = 0
+        model.onInitialLoadFinished = { finishedCount += 1 }
+
+        model.start(purpose: .action)
+        try await waitUntil { model.runningTaskCount == 0 && finishedCount >= 1 }
+        #expect(finishedCount == 1)
+    }
+
     /// 最初の読み込みに失敗したら、画面ではなくモデルが失敗を覚えていて、電波の回復でやり直す。
     @Test func recoverRetriesFailedInitialLoad() async throws {
         let failsTimeline = Mutex(true)
