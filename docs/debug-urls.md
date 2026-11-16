@@ -47,7 +47,7 @@
 
 ## 実機
 
-- 指で操作できない検証用の実機でスクロールの重さを測るときは、`xcrun devicectl device process launch --device <UDID> --payload-url 'scia-debug://autoscroll?distance=<pt>&speed=<pt/秒>' <bundle id>`で、選んでいるタブのタイムラインを一定の速さで動かす。distanceを負にすると上へ戻す。慣性のない一定の速さなので、指で流したときとは動きが違う。条件をそろえて比べるためのもの。動かしている間の落ちたフレームは、指のスクロールと同じ仕組みで数え、アプリのDocuments/DebugAutoscroll.logに1行ずつ書き足すので、`xcrun devicectl device copy from --domain-type appDataContainer --domain-identifier <bundle id> --source Documents/DebugAutoscroll.log`で取り出して読む。xctraceの`--attach`は実機では使えず、`--all-processes`では画面の描画を拾えなかった。設定を変えて測り比べるときは、`--payload-url 'scia-debug://appearance?json=<パーセントエンコードしたJSON>'`で、「投稿の見た目」の選ぶ項目のうちJSONに書いたものだけを上書きする（例は`{"showsActionBar":false}`）
+- 指で操作できない検証用の実機でスクロールの重さを測るときは、`xcrun devicectl device process launch --device <UDID> --payload-url 'scia-debug://autoscroll?distance=<pt>&speed=<pt/秒>' <bundle id>`で、選んでいるタブのタイムラインを一定の速さで動かす。distanceを負にすると上へ戻す。慣性のない一定の速さなので、指で流したときとは動きが違う。条件をそろえて比べるためのもの。動かしている間の落ちたフレームは、指のスクロールと同じ仕組みで数え、アプリのDocuments/DebugAutoscroll.logに1行ずつ書き足すので、`xcrun devicectl device copy from --domain-type appDataContainer --domain-identifier <bundle id> --source Documents/DebugAutoscroll.log`で取り出して読む。設定を変えて測り比べるときは、`--payload-url 'scia-debug://appearance?json=<パーセントエンコードしたJSON>'`で、「投稿の見た目」の選ぶ項目のうちJSONに書いたものだけを上書きする（例は`{"showsActionBar":false}`）
 
 ## デバッグ版だけの画面
 
