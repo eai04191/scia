@@ -22,7 +22,22 @@ enum EmojiPaletteCatalog {
         let failure = ComposeCompletion.failure(for: MastodonAPIError(statusCode: 502, message: "Bad Gateway"))
         // カスタム絵文字のリストがまだないときは、最近使ったもののうちUnicodeの絵文字だけが並ぶ。
         let withoutCustom = EmojiPalette.sections(emojis: [], standardGroups: standard, recentKeys: ["emoji_3", "🐈", "emoji_20", "👍"], recentLimit: 24)
+        // 個人セットには、ピッカーに出さないカスタム絵文字、肌の色を付けたUnicodeの絵文字、横長の絵文字も入る。
+        let wideURL = CatalogFixtures.imageURL(width: 256, height: 64, color: .systemIndigo, label: "4:1") ?? URL(filePath: "/")
+        let personal = PersonalEmojiSet(categories: [
+            .init(id: "unicode-first", name: "見出しがUnicodeの絵文字", heading: .emoji(.standard(StandardEmoji(emoji: "👍🏽", name: "サムズアップ", keywords: [], version: ""))), entries: [
+                .init(emoji: .standard(StandardEmoji(emoji: "👍🏽", name: "サムズアップ", keywords: [], version: ""))),
+                .init(emoji: .custom(emojis[3])),
+                .init(emoji: .custom(ServerEmoji(shortcode: "personal_wide", url: wideURL, staticUrl: wideURL, aspectRatio: 4))),
+                .init(emoji: .standard(StandardEmoji(emoji: "🐈", name: "ネコ", keywords: [], version: ""))),
+            ]),
+            .init(id: "custom-first", name: "見出しがカスタム絵文字", heading: .emoji(.custom(emojis[20])), entries: [.init(emoji: .custom(emojis[20])), .init(emoji: .standard(StandardEmoji(emoji: "🧑🏻‍💻", name: "技術者", keywords: [], version: "")))]),
+            .init(id: "text", name: "見出しが名前の先頭の1文字", entries: [.init(emoji: .custom(emojis[5]))]),
+        ])
         return [
+            CatalogState(title: "個人セット（最近使ったもののあと、サーバーのカスタム絵文字の前。見出しは絵文字か名前の先頭の1文字）") {
+                palette(.sections(EmojiPalette.sections(emojis: emojis, personal: personal, standardGroups: standard, recentKeys: ["emoji_3", "👍🏽"], recentLimit: 24), customStatus: nil))
+            },
             CatalogState(title: "横長と縦長のカスタム絵文字（Fedibirdが返す縦横比で、マスを横に足す）") { palette(.sections(EmojiPalette.sections(emojis: shapedEmojis(), standardGroups: [], recentKeys: [], recentLimit: 0), customStatus: nil)) },
             CatalogState(title: "最近使ったもの（カスタム絵文字とUnicodeの絵文字）、カテゴリーのないもの、長い名前のカテゴリー") { palette(.sections(sections, customStatus: nil)) },
             CatalogState(title: "最近使ったものがない") { palette(.sections(EmojiPalette.sections(emojis: emojis, standardGroups: standard, recentKeys: [], recentLimit: 24), customStatus: nil)) },
