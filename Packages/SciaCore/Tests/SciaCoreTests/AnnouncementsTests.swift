@@ -156,6 +156,33 @@ struct AnnouncementsModelTests {
         return (model, display)
     }
 
+    /// 始める前にアプリに戻っても、購読しない。起動したときは、ホームの最初の読み込みを終えてから始めるため、それより先にストリーミングにつながない。
+    @Test func foregroundBeforeStartDoesNotSubscribe() async throws {
+        let server = Server(lists: [AnnouncementList(announcements: [])])
+        let hub = TimelineModelFixtures.hub()
+        let model = AnnouncementsModel(operations: server.operations, streamingHub: hub, tasks: TaskScope())
+
+        model.enterForeground()
+        #expect(hub.subscriptions.isEmpty)
+
+        model.start()
+        #expect(hub.subscriptions == [.user])
+        try await waitUntil { model.contentState == .loaded }
+        #expect(server.recorded == ["list"])
+    }
+
+    /// 始める前に裏に回って戻っても、始めたときに購読する。
+    @Test func backgroundBeforeStartStillSubscribesOnStart() {
+        let server = Server(lists: [AnnouncementList(announcements: [])])
+        let hub = TimelineModelFixtures.hub()
+        let model = AnnouncementsModel(operations: server.operations, streamingHub: hub, tasks: TaskScope())
+
+        model.enterBackground()
+        model.enterForeground()
+        model.start()
+        #expect(hub.subscriptions == [.user])
+    }
+
     @Test func sortsNewestFirstAndCountsUnread() async throws {
         let server = Server(lists: [AnnouncementList(announcements: [Self.announcement("1", publishedAt: 0), Self.announcement("2", read: true, publishedAt: 10), Self.announcement("3", publishedAt: 20)])])
         var counts: [Int] = []

@@ -205,6 +205,9 @@ final class SessionController {
     let tabs: TabArrangement
     /// `start()`を呼んだ。それより前に並びが変わっても、ホームと通知を読み始めない。
     private var hasStarted = false
+    /// 起動したときの、ホームのほかの読み込み（`startAfterHome()`）を始めた。それまでは、アプリに戻っても通知の設定とタブの並びを読み直さない。
+    /// 終了状態から起動したときも戻ったときの知らせが届き、ホームの最初の読み込みと同時に送ると、サーバーで順番待ちになってホームが遅れるため。始めるときに読むので、読み落とさない。
+    private var hasStartedAfterHome = false
     /// 画面を移る動きに、チップの列を相乗りさせる。
     private let navigationDelegate = NoticeNavigationDelegate()
     /// 開いているプロフィール画面。投稿への操作の結果を反映するために持つ。閉じたものは自然に消える。
@@ -3983,10 +3986,13 @@ final class SessionController {
     /// 起動したときの、ホームのほかの読み込み。
     private func startAfterHome() {
         guard !tasks.isClosed else { return }
+        hasStartedAfterHome = true
         // ホームを待つ間に通知のタブを開いていれば、もう読み込んでいるので、読み直さない。
         if tabs.placement.location(of: .notifications) != .disabled {
             notifications.startIfNeeded()
         }
+        // 通知の設定は、通知のタイムラインを読めたときにも読み直すが、読めなかったときや通知のタブを無効にしているときも読むよう、ここでも読む。
+        notificationPolicy.reload(purpose: .display)
         loadProfileTabIcons(tabs.placement)
         // 「別のアカウントで」の行に出す、ほかのアカウントのアイコン。
         otherAccounts.loadProfiles()
@@ -4473,7 +4479,7 @@ final class SessionController {
             feed.enterForeground()
         }
         notifications.enterForeground()
-        if hasStarted {
+        if hasStartedAfterHome {
             notificationPolicy.reload(purpose: .display)
         }
         for list in savedLists {
@@ -4490,7 +4496,7 @@ final class SessionController {
         threads.enterForeground()
         profileTabs.enterForeground()
         // ほかの端末で作ったり消したりしたリストや、フォローしたハッシュタグを、戻ったときに並びへ反映する。
-        if hasStarted {
+        if hasStartedAfterHome {
             loadTabSources()
         }
     }

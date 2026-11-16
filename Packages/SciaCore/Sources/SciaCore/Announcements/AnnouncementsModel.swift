@@ -104,6 +104,8 @@ public final class AnnouncementsModel {
     private let logger = SciaLog.logger(category: "announcements")
     private var streamingSubscription: StreamingHub.Subscription?
     private var isInForeground = true
+    /// `start()`を呼んだ。それより前に戻っても購読しない。起動したときは、ホームの最初の読み込みを終えてから始めるため。
+    private var hasStarted = false
     /// 読み直している途中の読み込み。重ねて読まない。
     private var loading: Task<Void, Never>?
     /// 今の読み込みを、シートで開いたときか引っぱったときに始めたか。失敗をシートに出すかを決める。
@@ -129,6 +131,7 @@ public final class AnnouncementsModel {
 
     /// セッションを始めたときに呼ぶ。購読を始め、お知らせを読む。
     public func start() {
+        hasStarted = true
         startStreaming()
         reload(purpose: .display)
     }
@@ -146,7 +149,7 @@ public final class AnnouncementsModel {
     }
 
     private func startStreaming() {
-        guard isInForeground, streamingSubscription == nil, let streamingHub, !tasks.isClosed else { return }
+        guard hasStarted, isInForeground, streamingSubscription == nil, let streamingHub, !tasks.isClosed else { return }
         streamingSubscription = streamingHub.subscribe(.user) { [weak self] activity in
             self?.streamingDidChange(activity)
         }
