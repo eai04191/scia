@@ -1,0 +1,269 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{margin:0;box-sizing:border-box}
+html,body{width:1080px;height:1080px;overflow:hidden;background:var(--bg);font-family:"Hiragino Sans",-apple-system,sans-serif;color:var(--fg)}
+#glow{position:absolute;inset:0;background:radial-gradient(900px 420px at 50% -60px,rgba(56,84,240,.40),rgba(43,196,235,.10) 55%,transparent 75%)}
+#brand{position:absolute;display:flex;align-items:center;gap:12px;font-weight:700;font-size:24px;z-index:7}
+#brand img{width:46px;height:46px}
+#cap{position:absolute;left:96px;top:110px;width:900px;font-size:50px;font-weight:700;line-height:1.3;z-index:7}
+#cap .hi{color:var(--accent)}
+#scrim{position:absolute;left:0;top:0;width:1080px;height:360px;background:linear-gradient(var(--bg) 55%,transparent);z-index:6;opacity:0}
+#view{position:absolute;left:0;top:0;width:1080px;height:1080px;overflow:hidden}
+#stage{position:absolute;left:0;top:0;width:1080px;height:1080px;transform-origin:0 0}
+#compose{position:absolute;left:96px;top:236px;width:888px;height:150px;border-radius:40px;background:var(--glass);border:1px solid var(--glass-line);padding:22px 34px;font-size:30px}
+#compose .tr{position:absolute;left:24px;right:12px;bottom:12px;height:56px;display:flex;align-items:center;gap:14px}
+#compose .tb{width:56px;height:56px;display:flex;align-items:center;justify-content:center}
+#compose .cnt{font-size:24px;color:var(--fg3);margin-right:6px}
+#compose .send{width:56px;height:56px;border-radius:28px;background:var(--accent);display:flex;align-items:center;justify-content:center}
+#pal{position:absolute;left:96px;top:404px;width:888px;height:600px;border-radius:36px;background:var(--card);border:1px solid var(--card-line);overflow:hidden}
+#grid{position:absolute;left:60px;top:16px;width:768px}
+.c{position:absolute;width:96px;height:96px;display:flex;align-items:center;justify-content:center}
+.c img{width:68px;height:68px;position:absolute}
+.c img:not([src]){display:none}
+.hd{position:absolute;left:4px;height:44px;line-height:44px;font-size:22px;font-weight:600;color:var(--fg3)}
+.c i{position:absolute;width:56px;height:56px;border-radius:16px;background:var(--empty);display:none}
+#cursor{position:absolute;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;background:var(--cursor);box-shadow:0 2px 12px rgba(0,0,0,.4);z-index:8}
+#mech{position:absolute;inset:0;opacity:0}
+#server{position:absolute;left:60px;top:340px;width:280px;height:230px;border-radius:32px;background:var(--card);border:2px solid var(--card-line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;font-size:24px;font-weight:700;color:var(--icon)}
+#wire{position:absolute;left:340px;top:454px;width:240px;height:0;border-top:3px dashed var(--line)}
+#wifi{position:absolute;left:430px;top:390px}
+.phone{position:absolute;left:580px;top:300px;width:420px;height:760px;border-radius:64px;border:4px solid var(--line);background:var(--phone)}
+.phone .isl{position:absolute;left:150px;top:18px;width:120px;height:34px;border-radius:17px;background:#05070A}
+.app{position:absolute;left:30px;top:30px;width:352px;height:190px;border-radius:30px;border:2px solid var(--line)}
+.app img{position:absolute;left:50%;top:-24px;width:48px;height:48px;margin-left:-24px;box-shadow:0 0 0 8px var(--phone);border-radius:11px}
+.st{position:absolute;left:30px;top:246px;width:352px;height:476px;border-radius:30px;background:var(--card);border:2px solid var(--card-line)}
+.st .h{position:absolute;left:0;bottom:14px;width:100%;text-align:center;font-size:24px;font-weight:700;color:var(--icon)}
+.col{position:absolute;top:20px;height:388px!important;border-radius:8px;background:var(--col);transition:none}
+.col .l{position:absolute;bottom:-30px;left:50%;width:120px;margin-left:-60px;text-align:center;font-size:20px;color:var(--fg3)}
+.col .w{position:absolute;left:0;top:8px;width:100%;height:330px;overflow:hidden}
+.col .in{position:absolute;left:0;top:0;width:100%}
+.col .in img{position:absolute;left:50%}
+.other{position:absolute;top:20px;width:150px;height:388px;border-radius:8px;background:var(--other);display:flex;align-items:center;justify-content:center;text-align:center;font-size:18px;line-height:1.4;color:var(--fg3)}
+.pt{position:absolute}
+#mid2{position:absolute;left:96px;font-size:50px;font-weight:700;line-height:1.3;white-space:nowrap;opacity:0;z-index:7;transform-origin:0 0}
+#mid{position:absolute;left:96px;top:110px;font-size:50px;font-weight:700;line-height:1.3;white-space:nowrap;opacity:0;z-index:7;transform-origin:0 0}
+#end{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;opacity:0}
+#end img{width:220px;height:220px}
+#end .n{font-size:68px;font-weight:700}
+
+:root{--bg:#000;--fg:#fff;--icon:#fff;--fg3:#8E8E93;--accent:#0091FF;--glass:rgba(44,44,46,.72);--glass-line:rgba(255,255,255,.14);--glass-shadow:none;--card:#1C1C1E;--card-line:#2C2C2E;--empty:#2C2C2E;--line:#48484A;--phone:#0A0A0A;--col:#2C2C2E;--other:#3A3A3C;--cursor:rgba(255,255,255,.88)}
+:root.light{--bg:#F2F2F7;--fg:#000;--icon:#000;--fg3:#8A8A8E;--accent:#0088FF;--glass:rgba(255,255,255,.78);--glass-line:rgba(255,255,255,.9);--glass-shadow:0 10px 40px rgba(0,0,0,.10);--card:#FFFFFF;--card-line:#E5E5EA;--empty:#E5E5EA;--line:#C7C7CC;--phone:#FFFFFF;--col:#E5E5EA;--other:#D1D1D6;--cursor:rgba(60,60,67,.55)}
+#glow{display:none}
+#compose{box-shadow:var(--glass-shadow)}#compose .tb,#server{color:var(--icon)}
+#pal{background:var(--glass)!important;border-color:var(--glass-line)!important;box-shadow:var(--glass-shadow)}
+
+/* ロゴの置き方。左右の余白は96px、上下の余白は同じにする */
+#brand{right:96px;top:54px}
+:root.lb #brand{top:auto;bottom:54px;right:auto;left:96px}
+:root.bar #brand{left:0;right:0;top:0;height:84px;padding:0 96px;justify-content:flex-end;background:var(--card);border-bottom:1px solid var(--card-line)}
+:root.bar.lb #brand{top:auto;bottom:0;justify-content:flex-start;border-bottom:none;border-top:1px solid var(--card-line)}
+#mech{transform-origin:0 0}
+:root.bardark #brand{background:#1C1C1E;color:#fff;border-top-color:#1C1C1E}
+</style></head><body><div id="glow"></div>
+<div id="brand"><img src="appicon.png">Scia</div>
+<div id="scrim"></div><div id="cap"></div>
+<div id="view"><div id="stage">
+ <div id="compose"><div>今日のごはん</div><div class="tr"><div class="tb"><svg width="40" height="40" viewBox="-6.33 -83 96 96" fill="currentColor"><path d="M45.6055-7.27539L45.6055-63.2324C45.6055-65.332 43.8477-67.1875 41.6992-67.1875C39.5508-67.1875 37.7441-65.332 37.7441-63.2324L37.7441-7.27539C37.7441-5.17578 39.5508-3.32031 41.6992-3.32031C43.8477-3.32031 45.6055-5.17578 45.6055-7.27539ZM13.7207-31.2988L69.6777-31.2988C71.7773-31.2988 73.584-33.1055 73.584-35.2539C73.584-37.4023 71.7773-39.209 69.6777-39.209L13.7207-39.209C11.5723-39.209 9.76562-37.4023 9.76562-35.2539C9.76562-33.1055 11.5723-31.2988 13.7207-31.2988Z"/></svg></div><div class="tb"><svg width="40" height="40" viewBox="-1.74 -83 96 96" fill="currentColor"><path d="M46.2402 4.15039C68.0176 4.15039 85.6934-13.4766 85.6934-35.2539C85.6934-57.0312 68.0176-74.6582 46.2402-74.6582C24.5117-74.6582 6.83594-57.0312 6.83594-35.2539C6.83594-13.4766 24.5117 4.15039 46.2402 4.15039ZM46.2402-1.70898C27.7344-1.70898 12.7441-16.748 12.7441-35.2539C12.7441-53.7598 27.7344-68.7988 46.2402-68.7988C64.7461-68.7988 79.7852-53.7598 79.7852-35.2539C79.7852-16.748 64.7461-1.70898 46.2402-1.70898Z"/><path d="M46.2402 1.66016C57.1777 1.66016 65.8203-14.4043 65.8203-35.1562C65.8203-56.0547 57.2266-72.168 46.2402-72.168C35.2539-72.168 26.709-56.0547 26.709-35.1562C26.709-14.4043 35.3027 1.66016 46.2402 1.66016ZM46.2402-3.66211C39.0137-3.66211 32.4707-18.5059 32.4707-35.1562C32.4707-52.002 39.0137-66.8457 46.2402-66.8457C53.5156-66.8457 60.0586-52.002 60.0586-35.1562C60.0586-18.5059 53.5156-3.66211 46.2402-3.66211Z"/><path d="M46.2402 2.92969C47.8027 2.92969 49.0723 1.66016 49.0723 0.0976562L49.0723-70.2148C49.0723-71.7773 47.8027-73.0469 46.2402-73.0469C44.7266-73.0469 43.4082-71.7773 43.4082-70.2148L43.4082 0.0976562C43.4082 1.66016 44.7266 2.92969 46.2402 2.92969ZM22.7539-9.52148C27.7344-13.5742 35.9375-15.7715 46.2402-15.7715C56.5918-15.7715 64.7461-13.5742 69.7754-9.52148C70.9961-8.54492 72.6562-8.39844 73.7793-9.47266C74.9023-10.5469 75-12.3047 73.8281-13.4277C68.75-18.1641 58.1543-21.4355 46.2402-21.4355C34.375-21.4355 23.7793-18.1641 18.7012-13.4277C17.5293-12.3047 17.627-10.5469 18.75-9.47266C19.873-8.39844 21.4844-8.54492 22.7539-9.52148ZM12.0605-32.4219L81.3965-32.4219C82.959-32.4219 84.2285-33.6914 84.2285-35.2539C84.2285-36.8164 82.959-38.0859 81.3965-38.0859L12.0605-38.0859C10.498-38.0859 9.22852-36.8164 9.22852-35.2539C9.22852-33.6914 10.498-32.4219 12.0605-32.4219ZM46.2402-48.877C58.1543-48.877 68.75-52.1484 73.8281-56.8848C75-58.0078 74.9023-59.7656 73.7793-60.8398C72.6562-61.9141 70.9961-61.7676 69.7754-60.791C64.7461-56.7383 56.5918-54.541 46.2402-54.541C35.9375-54.541 27.7344-56.7383 22.7539-60.791C21.4844-61.7676 19.873-61.9141 18.75-60.8398C17.627-59.7656 17.5293-58.0078 18.7012-56.8848C23.7793-52.1484 34.375-48.877 46.2402-48.877Z"/></svg></div><div class="tb"><svg width="40" height="40" viewBox="7.05 -83 96 96" fill="currentColor"><path d="M22.0703-2.63672L84.9121-2.63672C92.041-2.63672 95.8008-6.5918 95.8008-14.6484L73.3887-35.8398C71.7285-37.3535 69.6777-38.1348 67.7246-38.1348C65.6738-38.1348 63.7695-37.4023 62.0117-35.8887L44.8242-20.5078L37.793-26.8066C36.1816-28.2227 34.4238-28.9551 32.6172-28.9551C31.0059-28.9551 29.2969-28.2715 27.7344-26.8555L13.0859-13.7207C13.1348-6.49414 16.2109-2.63672 22.0703-2.63672ZM22.2168 0.390625L87.8906 0.390625C96.2402 0.390625 100.342-3.71094 100.342-11.9141L100.342-58.4961C100.342-66.6992 96.2402-70.8008 87.8906-70.8008L22.2168-70.8008C13.916-70.8008 9.76562-66.6992 9.76562-58.4961L9.76562-11.9141C9.76562-3.71094 13.916 0.390625 22.2168 0.390625ZM22.3145-6.68945C18.7988-6.68945 16.7969-8.59375 16.7969-12.2559L16.7969-58.1543C16.7969-61.8652 18.7988-63.7207 22.3145-63.7207L87.793-63.7207C91.3086-63.7207 93.3105-61.8652 93.3105-58.1543L93.3105-12.2559C93.3105-8.59375 91.3086-6.68945 87.793-6.68945Z"/><path d="M38.4766-34.9609C43.4082-34.9609 47.4609-39.0137 47.4609-43.9941C47.4609-48.9258 43.4082-53.0273 38.4766-53.0273C33.4961-53.0273 29.4434-48.9258 29.4434-43.9941C29.4434-39.0137 33.4961-34.9609 38.4766-34.9609Z"/></svg></div><div class="tb"><svg width="40" height="40" viewBox="-1.74 -83 96 96" fill="currentColor"><path d="M46.2402 4.15039C68.0176 4.15039 85.6934-13.4766 85.6934-35.2539C85.6934-57.0312 68.0176-74.6582 46.2402-74.6582C24.5117-74.6582 6.83594-57.0312 6.83594-35.2539C6.83594-13.4766 24.5117 4.15039 46.2402 4.15039ZM46.2402-3.27148C28.5645-3.27148 14.3066-17.5781 14.3066-35.2539C14.3066-52.9297 28.5645-67.2363 46.2402-67.2363C63.916-67.2363 78.2227-52.9297 78.2227-35.2539C78.2227-17.5781 63.916-3.27148 46.2402-3.27148Z"/><path d="M46.1914-15.8691C54.3457-15.8691 59.8145-21.2402 59.8145-23.877C59.8145-24.8535 58.8379-25.3418 57.8613-24.9512C54.9805-23.584 51.8066-21.875 46.1914-21.875C40.625-21.875 37.4512-23.584 34.5703-24.9512C33.5938-25.3418 32.6172-24.8535 32.6172-23.877C32.6172-21.2402 38.0859-15.8691 46.1914-15.8691ZM34.9121-38.5742C37.4512-38.5742 39.6973-40.7715 39.6973-43.9453C39.6973-47.2168 37.4512-49.4141 34.9121-49.4141C32.4219-49.4141 30.2246-47.2168 30.2246-43.9453C30.2246-40.7715 32.4219-38.5742 34.9121-38.5742ZM57.5195-38.5742C60.0586-38.5742 62.2559-40.7715 62.2559-43.9453C62.2559-47.2168 60.0586-49.4141 57.5195-49.4141C54.9805-49.4141 52.832-47.2168 52.832-43.9453C52.832-40.7715 54.9805-38.5742 57.5195-38.5742Z"/></svg></div><div class="tb"><svg width="40" height="40" viewBox="-1.59 -83 96 96" fill="currentColor"><path d="M17.8223-45.8496L16.5527-65.1367L35.8887-63.8672L37.1094-63.8672C39.4531-63.8672 41.2598-65.5273 41.2598-67.8711C41.2598-70.2148 39.4531-71.9238 37.1094-71.9238L16.8457-71.9238C12.3535-71.9238 9.76562-69.3359 9.76562-64.8438L9.76562-44.5801C9.76562-42.2852 11.4746-40.5273 13.8184-40.5273C16.1621-40.5273 17.8223-42.2363 17.8223-44.5801ZM19.043-67.6758C15.2344-71.2402 10.498-66.3574 14.0137-62.5977L26.123-49.6582L37.4512-38.2324C38.2324-37.4023 39.209-37.0605 40.2832-37.0605C42.7734-37.0605 44.6289-38.6719 44.6289-41.1621C44.6289-42.334 44.2383-43.4082 43.4082-44.1895L32.0312-55.5664ZM75-24.5605L76.2695-5.32227L56.9824-6.54297L55.7129-6.54297C53.3691-6.54297 51.5625-4.88281 51.5625-2.53906C51.5625-0.195312 53.3691 1.51367 55.7129 1.51367L75.9766 1.51367C80.4688 1.51367 83.0566-1.07422 83.0566-5.56641L83.0566-25.8301C83.0566-28.125 81.3477-29.8828 79.0039-29.8828C76.709-29.8828 75-28.1738 75-25.8301ZM73.7793-2.73438C77.6367 0.830078 82.3242-4.05273 78.8574-7.8125L66.748-20.752L55.3711-32.2266C54.6387-33.0078 53.6133-33.3984 52.5391-33.3984C50.0488-33.3984 48.1934-31.7383 48.1934-29.248C48.1934-28.0762 48.6328-27.002 49.4141-26.2207L60.791-14.8438Z"/></svg></div><div style="flex:1"></div><span class="cnt">494</span><div class="send"><svg width="34" height="34" viewBox="-5.54 -83 96 96" fill="currentColor" style="color:#fff"><path d="M17.2852-32.4219C19.8242-32.4219 21.582-33.5938 23.0469-35.1074L31.6895-43.8965L42.4316-57.5684L53.1738-43.8965L61.8652-35.1074C63.3301-33.5938 65.0879-32.4219 67.627-32.4219C71.875-32.4219 75.1465-35.498 75.1465-40.0879C75.1465-42.1875 74.2676-44.1895 72.6562-45.8008L48.291-70.166C46.9238-71.5332 44.5801-72.4121 42.4316-72.4121C40.2832-72.4121 37.9395-71.5332 36.5723-70.166L12.2559-45.8008C10.6445-44.1895 9.76562-42.1875 9.76562-40.0879C9.76562-35.498 13.0371-32.4219 17.2852-32.4219ZM42.4316 1.95312C47.2656 1.95312 50.4395-1.41602 50.4395-6.54297L50.4395-39.7949L49.6094-57.6172C49.6094-62.207 46.7285-65.2344 42.4316-65.2344C38.1348-65.2344 35.2539-62.207 35.2539-57.6172L34.4238-39.7949L34.4238-6.54297C34.4238-1.41602 37.5977 1.95312 42.4316 1.95312Z"/></svg></div></div></div>
+ <div id="pal"><div id="grid"></div></div>
+</div></div>
+<div id="mech">
+ <div id="server"><svg width="110" height="110" viewBox="7.05 -83 96 96" fill="currentColor"><path d="M80.0293-51.4648C82.7637-51.5137 85.0098-53.7598 85.0098-56.4941C85.0098-59.2285 82.7637-61.5723 80.0293-61.5723C77.3438-61.5723 75-59.2285 75-56.4941C75-53.7598 77.3438-51.416 80.0293-51.4648ZM80.0293-30.2734C82.7637-30.3223 85.0098-32.5684 85.0098-35.3027C85.0098-38.0371 82.7637-40.3809 80.0293-40.3809C77.3438-40.3809 75-38.0371 75-35.3027C75-32.5684 77.3438-30.2246 80.0293-30.2734ZM80.0293-9.08203C82.7637-9.13086 85.0098-11.377 85.0098-14.1113C85.0098-16.8457 82.7637-19.1895 80.0293-19.1895C77.3438-19.1895 75-16.8457 75-14.1113C75-11.377 77.3438-9.0332 80.0293-9.08203ZM96.5332-42.5293L96.5332-49.1211L13.623-49.1211L13.623-42.5293ZM96.5332-21.2891L96.5332-27.8809L13.623-27.8809L13.623-21.2891ZM22.2168 0.390625L87.8906 0.390625C96.2402 0.390625 100.342-3.71094 100.342-11.9141L100.342-58.4961C100.342-66.6992 96.2402-70.8008 87.8906-70.8008L22.2168-70.8008C13.916-70.8008 9.76562-66.6992 9.76562-58.4961L9.76562-11.9141C9.76562-3.71094 13.916 0.390625 22.2168 0.390625ZM22.3145-6.68945C18.7988-6.68945 16.7969-8.59375 16.7969-12.2559L16.7969-58.1543C16.7969-61.8652 18.7988-63.7207 22.3145-63.7207L87.793-63.7207C91.3086-63.7207 93.3105-61.8652 93.3105-58.1543L93.3105-12.2559C93.3105-8.59375 91.3086-6.68945 87.793-6.68945Z"/></svg>Mastodonサーバー</div>
+ <div id="wire"></div>
+ <svg width="64" height="64" viewBox="4.03 -83 96 96" fill="currentColor" id="wifi" style="color:var(--accent)"><path d="M11.1816-42.5781C13.4277-40.2832 16.8457-40.6738 19.6777-43.2129C28.6133-51.1719 39.6973-55.2734 52.0508-55.2734C64.3555-55.2734 75.5371-51.0742 84.4238-43.2129C87.207-40.6738 90.625-40.3809 92.9199-42.627C95.2148-44.9707 95.5078-48.4863 93.1641-50.9277C83.6914-60.498 68.2617-67.2363 52.0508-67.2363C35.8398-67.2363 20.3613-60.4492 10.9375-50.8789C8.54492-48.4863 8.83789-44.9707 11.1816-42.5781Z"/><path d="M26.7578-26.8555C29.2969-24.3652 32.5684-24.707 35.4492-27.0508C39.9414-30.5664 45.8984-32.959 52.0508-32.9102C58.2031-32.959 64.1602-30.5176 68.6523-27.002C71.4844-24.707 74.9023-24.4629 77.3926-26.9531C79.834-29.4434 80.2246-33.2031 77.6367-35.5469C71.4844-41.0156 62.3047-44.9219 52.0508-44.9219C41.748-44.9219 32.5684-41.0156 26.4648-35.5469C24.2676-33.5449 23.6816-29.9805 26.7578-26.8555Z"/><path d="M47.6074-6.20117C50.4883-3.4668 53.4668-3.4668 56.3965-6.20117L61.3281-10.8887C64.209-13.6719 64.7949-17.1387 61.5234-19.5312C58.9355-21.3379 55.6641-22.5586 52.0508-22.5586C48.3398-22.5586 45.1172-21.3379 42.5781-19.4824C39.3066-17.1387 39.9414-13.623 42.8223-10.8887Z"/></svg>
+ <div class="phone" id="d1"><div class="app"><img src="appicon.png"></div><div class="st"><div class="h">ストレージ</div>
+  <div class="other" style="left:20px;width:78px">ほかの<br>データ</div><div class="col cs" style="left:111px;width:50px"><div class="w"><div class="in"></div></div></div>
+  <div class="col co" style="left:171px;width:70px"><div class="w"><div class="in"></div></div></div></div></div>
+ <div class="phone" id="d2"><div class="app"><img src="appicon.png"></div><div class="st"><div class="h">ストレージ</div>
+  <div class="other" style="left:20px;width:78px">ほかの<br>データ</div><div class="col cs" style="left:111px;width:50px"><div class="w"><div class="in"></div></div></div>
+  <div class="other" style="left:171px;width:157px">ほかの<br>データ</div></div></div>
+ <div id="parts"></div><div id="disp"></div>
+</div>
+<div id="mid">新しい絵文字パレットは</div><div id="mid2" class="midq">サムネイルはどこから来るのか</div><div id="end"><img src="appicon.png"><div class="n">Scia</div></div>
+<div id="cursor"></div>
+<script>{const q=location.search,c=document.documentElement.classList;if(q.includes("theme=light"))c.add("light");if(q.includes("logo=bottom"))c.add("lb");if(q.includes("style=bar"))c.add("bar");if(q.includes("style=bardark"))c.add("bardark")}</script><script src="meta.js"></script><script>
+const N=720,COLS=8,SZ=96,H=600,PAD=16;
+const rnd=i=>{let x=Math.sin(i*12.9898+78.233)*43758.5453;return x-Math.floor(x)};
+const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const spring=(tau,w=13)=>tau<=0?0:1-Math.exp(-w*tau)*(1+w*tau);
+const lerp=(a,b,k)=>a+(b-a)*k;
+const ease=x=>(1-Math.cos(Math.PI*clamp(x)))/2;
+const $=id=>document.getElementById(id);
+const pick=i=>i%N;
+const pad=n=>String(n).padStart(4,'0');
+const small=i=>'fe4/small/'+pad(pick(i))+'.png',sharp=i=>'fe4/big/'+pad(pick(i))+'.png';
+const cells=[];const NC=720;const HD=44;
+const PX=[],PY=[],HEADS=[];{let y=0,c=0,prev=null;for(let i=0;i<NC;i++){const cat=CATS[i];if(cat!==prev){if(c>0){y+=SZ;c=0}HEADS.push([cat,y]);y+=HD;prev=cat}PX.push(c*SZ);PY.push(y);c++;if(c===COLS){c=0;y+=SZ}}}
+window.ready=(async()=>{
+ const urls=[];for(let i=0;i<N;i++)urls.push('fe4/small/'+pad(i)+'.png','fe4/big/'+pad(i)+'.png');urls.push('appicon.png');
+ await Promise.all(urls.map(u=>new Promise(r=>{const im=new Image();im.onload=im.onerror=r;im.src=u})));
+ const grid=$('grid');for(const[cat,y]of HEADS){const h=document.createElement('div');h.className='hd';h.style.top=y+'px';h.textContent=cat;grid.appendChild(h)}
+ for(let i=0;i<NC;i++){const d=document.createElement('div');d.className='c';d.style.left=PX[i]+'px';d.style.top=PY[i]+'px';d.innerHTML='<i></i><img><img>';grid.appendChild(d);cells.push(d)}
+})();
+// 慣性で流す
+const V0=5600,K=1.7;
+const flick=tau=>tau<=0?0:V0/K*(1-Math.exp(-K*tau));
+const DRAG=420,DT=0.15;const drag=(t,t1)=>{const k=clamp((t-(t1-DT))/DT);return DRAG*k*k};
+const S1off=t=>t<4.3?140*spring(t-2.7,4)+drag(t,4.3):140+DRAG+flick(t-4.3);
+const ZS=14.6,ZD=3.4,ZDIST=1.5*SZ;
+const OFF0=DRAG+flick(ZS-9.9);
+// 印の枠は、3つ目の見出し（サムネイルを表示して）が始まる16.0に入ってくる行の、4列目
+let FOCUS=0;function pickFocus(){const y=S3off(15.8)+H-PAD-SZ;for(let i=0;i<NC;i++)if(PX[i]===3*SZ&&PY[i]>=y){FOCUS=i;return}}
+const FP=18.7,FL=1.2,QP=19.1,QL=2.5;
+const S3base=t=>t<9.9?drag(t,9.9):t<ZS?DRAG+flick(t-9.9):OFF0+ZDIST*ease((t-ZS)/ZD);
+const S3off=t=>t<=FP?S3base(t):S3base(FP)+(t-FP<DT?DRAG*((t-FP)/DT)**2:DRAG+flick(t-FP-DT));
+function offAt(t){if(t<8.6)return S1off(t);if(t<9.0)return S1off(8.6);return S3off(t)}
+function enterTime(y,ts,f){if(f(ts)+H>=y)return ts;let a=ts,b=ts+20;for(let k=0;k<40;k++){const m=(a+b)/2;if(f(m)+H>=y)b=m;else a=m}return b}
+function setCell(el,i,state,k){const ph=el.children[0],im=el.children[1],sp=el.children[2];
+ ph.style.display=state==='empty'?'block':'none';
+ if(state==='empty'){sp.removeAttribute('src');im.removeAttribute('src');return}
+ if(state==='sharp'){if(sp.getAttribute('src')!==sharp(i))sp.src=sharp(i);sp.style.opacity=1;im.removeAttribute('src');return}
+ if(im.getAttribute('src')!==small(i))im.src=small(i);im.style.opacity=1;
+ if(k>0){if(sp.getAttribute('src')!==sharp(i))sp.src=sharp(i)}else sp.removeAttribute('src');sp.style.opacity=k}
+const CAPS=[[1.6,4.0,'今までの絵文字パレットは'],[4.0,6.5,'速く流すと'],[6.5,8.9,'ほとんど<span class="hi">表示できませんでした</span>'],[9.9,13.7,'速く流しても<span class="hi">すべて表示できます</span>'],
+ [13.9,15.0,'なぜ空白が出ないのか'],[15.0,16.0,'空白が出るのは<br>読み込みに時間がかかるから'],[16.0,16.95,'なので最初は<br>すぐ出せるサムネイルを表示して'],[16.95,18.3,'準備ができたら<br>元の絵に差し替えます'],
+ [19.2,22.3,'Wi-Fiのときに<br>絵文字をまとめて読み込んで'],[22.3,25.0,'サムネイルを作っておきます'],[25.0,28.0,'空きに余裕があれば<br>元の絵も残します'],[29.2,33.2,'空きが少なければ<br>元の絵は残しません'],[33.3,37.2,'表示するときに<br>都度読み込みます']];
+function caption(t){let h='',op=0;for(const[a,b,s]of CAPS){if(t>=a-0.05&&t<b){h=s;op=clamp((t-a)/0.25)*clamp((b-t)/0.2)}}const c=$('cap');if(c.innerHTML!==h)c.innerHTML=h;c.style.opacity=op;c.style.transform=`translateY(${(1-op)*10}px)`}
+function cursorAt(t){const c=$('cursor');let x=-100,y=-100,s=1,o=0;
+ const br=document.querySelectorAll('#compose .tb')[3].getBoundingClientRect(),btn=[br.left+br.width/2,br.top+br.height/2];
+ if(t<1.1){const k=spring(t-0.2,10);x=lerp(700,btn[0],k);y=lerp(760,btn[1],k);o=clamp(t/0.2)*clamp((1.1-t)/0.1);s=t>0.85&&t<1.0?0.8:1}
+ else if(t>2.4&&t<3.8){const k=spring(t-2.7,4);x=600;y=lerp(860,720,k);o=clamp((t-2.4)/0.2)*clamp((3.8-t)/0.2)}
+ else if(t>3.9&&t<4.5){x=600;y=900-drag(t,4.3);o=clamp((t-3.9)/0.1)*clamp((4.5-t)/0.15);s=t<4.3?0.85:1}
+ else if(t>9.5&&t<10.1){x=600;y=900-drag(t,9.9);o=clamp((t-9.5)/0.1)*clamp((10.1-t)/0.15);s=t<9.9?0.85:1}
+ else if(t>FP-0.2&&t<FP+DT+0.3){x=600;y=900-drag(t,FP+DT);o=clamp((t-FP+0.2)/0.1)*clamp((FP+DT+0.3-t)/0.15);s=t<FP+DT?0.85:1}
+ c.style.left=x+'px';c.style.top=y+'px';c.style.opacity=o;c.style.transform=`scale(${s})`}
+function palette(t){
+ let open;if(t<1.0)open=0;else if(t<8.6)open=spring(t-1.0,11);else if(t<9.0)open=1;else open=spring(t-9.0,11);
+ $('pal').style.transform=`translateY(${(1-open)*720}px)`;$('pal').style.opacity=clamp(open*3);
+ const off=offAt(t);$('grid').style.transform=`translateY(${-off}px)`;
+ const isNew=t>=9.0,ts=isNew?9.0:1.0,f=isNew?S3off:S1off;
+ for(let i=0;i<cells.length;i++){const el=cells[i];const y=PY[i]+PAD;
+  if(y+SZ<off||y>off+H||t<ts){if(el._v){setCell(el,i,'empty');el.children[0].style.display='none';el._v=0}continue}el._v=1;
+  const te=enterTime(y,ts,f);
+  if(!isNew){setCell(el,i,t>=te+0.15+rnd(i)*1.5?'sharp':'empty');continue}
+  // 近づいたあとに入る行は、小さい絵からくっきりした絵へ替わる間を伸ばして見せる
+  const slow=te>=ZS-0.05&&te<FP,d=slow?LAG+rnd(i+5)*0.35:0.12+rnd(i+5)*0.18,fd=slow?0.45:0.12;
+  if(i===FOCUS){setCell(el,i,'mix',clamp((t-16.95)/0.45));continue}
+  setCell(el,i,'mix',clamp((t-te-d)/fd))}
+ const fp=zoomP();
+ for(let i=0;i<cells.length;i++){const el=cells[i];if(!el._v)continue;const f=i===FOCUS;el.style.opacity=f?1:1-0.88*fp;el.style.boxShadow=f&&t>=ZS?`inset 0 0 0 ${3*fp}px var(--accent)`:'none';el.style.borderRadius='22px'}
+ // 近づく: v4と同じく1枠に3.4倍で寄る。枠が入るまではパレットの下の端で待ち、入ったら枠を追う
+ // 注目点（印の枠の列で、パレットの下の端から半行上の点。印の枠が入ってくる所）は動かさず、画面の上の位置が元の場所から中心へまっすぐ移るようにする
+ const p=zoomP(),s=lerp(1,3.4,p);
+ const fx=96+60+PX[FOCUS]+SZ/2,fy=404+H-PAD-0.5*SZ,vt=$('view').offsetTop;
+ const sx=lerp(fx,540,p),sy=lerp(fy,740-vt,p);
+ $('stage').style.transform=`translate(${sx-fx*s}px,${sy-fy*s}px) scale(${s})`;
+ $('scrim').style.opacity=p;$('compose').style.opacity=1-0.9*p;
+}
+// 仕組み
+const ARR=0.7,DS=0.4,DW=30;
+const items=[];for(let st=18.9;st<=27.4;st+=0.12)items.push({st,k:1});for(let st=29.5;st<=32.7;st+=0.12)items.push({st,k:2});
+let SRV=[340,455],APP=[580+30+28+40,300+80+70];
+const COLX={s:580+30+14+78,o:580+30+182+78},ROWY0=300+240+62+44,ROW=56,VIS=6;
+let SRVR=340,MOFF=0;
+function clipEl(el,x,y,sz,bottom){const h=sz*MS/2,l=Math.max(0,(SRVR-(x-h))/MS),b=bottom==null?0:Math.max(0,((y+h)-bottom)/MS);el.style.clipPath=`inset(0px 0px ${b}px ${l}px)`;if(l>=sz||b>=sz)el.style.opacity=0}
+// 列の枠と同じ角丸の形で切り取る。上は、Sciaの囲みから降りてくるので切らない
+function clipCol(el,x,y,sz,col,ready){if(!ready){el.style.clipPath='none';return}const h=sz*MS/2,L=x-h,T=y-h,Rr=x+h,B=y+h;el.style.clipPath=`inset(-2000px ${(Rr-col.right)/MS}px ${(B-col.bottom)/MS}px ${(col.left-L)/MS}px round 8px)`;if(T>=col.bottom)el.style.opacity=0}
+function colOff(t,k){let f=0;for(const it of items)if(it.k===k)f+=spring(t-it.st-ARR+0.22,24);return Math.max(0,f-VIS)*ROW}
+function mech(t){
+ {const mr=$('mech').getBoundingClientRect();ML=mr.left;MT=mr.top}
+ {const sv=$('server').getBoundingClientRect();SRV=[sv.right,sv.top+sv.height/2];SRVR=sv.right}
+ const mo=clamp((t-19.1)/0.35)*(1-clamp((t-37.2)/0.4));$('mech').style.opacity=mo;
+ $('wifi').style.opacity=0.35+0.65*Math.max(0,Math.sin(t*5))*(t<28.3||t>29.4?1:0);
+ const sw=ease((t-28.3)/1.0);
+ $('d1').style.transform=`translateY(${sw*820}px)`;$('d1').style.opacity=1-sw;
+ $('d2').style.transform=`translateY(${(1-sw)*-820}px)`;$('d2').style.opacity=sw;
+ // 列の縁を光らせる
+ const glow=(a,b)=>t>a&&t<b?`0 0 0 ${4*clamp((t-a)/0.3)*clamp((b-t)/0.3)}px var(--accent)`:'none';
+ $('d1').querySelector('.cs').style.boxShadow=glow(22.4,25.0);$('d1').querySelector('.co').style.boxShadow=glow(25.1,28.0);
+ const parts=$('parts');if(!parts.children.length)for(let j=0;j<items.length*2;j++){const im=document.createElement('img');im.className='pt';parts.appendChild(im)}
+ const n={1:0,2:0};const fill={1:{s:[],o:[]},2:{s:[],o:[]}};
+ const arrs={1:[],2:[]};
+ const Y={};{const last={1:-1e9,2:-1e9},gap={1:1,2:1};for(let j=items.length-1;j>=0;j--){const it=items[j];if(t<it.st+DS)continue;
+  const sr=$('d'+it.k).querySelector('.cs .w').getBoundingClientRect(),bx=$('d'+it.k).querySelector('.app').getBoundingClientRect();
+  const own=lerp(bx.top+bx.height/2+10,sr.top+ROW/2,spring(t-it.st-DS,DW));Y[j]=Math.max(own,last[it.k]+ROW*gap[it.k]);last[it.k]=Y[j];const tl=LIFT.get(j);gap[it.k]=tl!=null&&t>=tl?1-spring(t-tl,18):1}}
+ items.forEach((it,j)=>{const big=parts.children[2*j],sm=parts.children[2*j+1];if(LIFT.has(j)&&t>=LIFT.get(j)){big.style.opacity=0;sm.style.opacity=0;return}const ei=SRVORDER[j%NC];const slot=n[it.k]++;
+  const sr=$('d'+it.k).querySelector('.cs .w').getBoundingClientRect(),orr=it.k===1?$('d1').querySelector('.co .w').getBoundingClientRect():sr;
+  const ty=Y[j]??0;
+  // 列の下の端を越えたら消す
+  const vis=1;
+  if(t<it.st||ty-ROW/2>sr.bottom+20){big.style.opacity=0;sm.style.opacity=0;return}
+  big.src=sharp(ei);sm.src=small(ei);
+  const a=clamp((t-it.st)/DS),b=t<it.st+DS?0:spring(t-it.st-DS,DW);
+  // サーバーから線に沿って、囲みの左の端から中へ入る。アイコンは囲みの上の線に乗っているので通らない
+  const bx=$('d'+it.k).querySelector('.app').getBoundingClientRect(),cx=bx.left+bx.width/2,cy=bx.top+bx.height/2+10;
+  const put=(el,x,y,sz,op)=>{el.style.left=((x-ML)/MS-sz/2)+'px';el.style.top=((y-MT)/MS-sz/2)+'px';el.style.width=sz+'px';el.style.height=sz+'px';el.style.opacity=op};
+  const ex=lerp(SRV[0]-30,cx,a),ey=lerp(SRV[1],cy,a);
+  if(b<=0){put(big,ex,ey,48,1);clipEl(big,ex,ey,48);sm.style.opacity=0;return}
+  // 囲みの中で2つに分かれ、真下の列のいちばん上へ入る
+  const bb=b,sb=ease(clamp(b*1.6));
+  const sx=lerp(cx,sr.left+sr.width/2,sb),ssz=lerp(48,26,sb);put(sm,sx,ty,ssz,vis);clipCol(sm,sx,ty,ssz,$('d'+it.k).querySelector('.cs').getBoundingClientRect(),sb>=1);
+  if(it.k===1){const ox=lerp(cx,orr.left+orr.width/2,sb),osz=lerp(48,46,sb);put(big,ox,ty,osz,vis);clipCol(big,ox,ty,osz,$('d1').querySelector('.co').getBoundingClientRect(),sb>=1)}
+  else{big.style.opacity=0}
+ });
+ for(const k of[1,2]){const d=$('d'+k);
+  const fillCol=(sel,list,src,sz)=>{const box=d.querySelector(sel+' .in');if(!box)return;while(box.children.length<list.length)box.appendChild(document.createElement('img'));
+   for(let q=0;q<box.children.length;q++){const im=box.children[q];if(q<list.length){if(im.getAttribute('src')!==src(list[q]))im.src=src(list[q]);im.style.cssText=`width:${sz}px;height:${sz}px;margin-left:${-sz/2}px;top:${push(k,q)*ROW+(ROW-sz)/2}px;opacity:1`}else im.style.opacity=0}};
+  const push=(k,q)=>{let f=0;for(let j=q+1;j<arrs[k].length;j++)f+=spring(t-arrs[k][j],DW);return f};
+  fillCol('.cs',fill[k].s,small,26);fillCol('.co',fill[k].o,sharp,46)}
+ const dp=$('disp');if(!dp.children.length)for(let j=0;j<6;j++){const im=document.createElement('img');im.className='pt';dp.appendChild(im)}
+ const sr2=$('d2').querySelector('.cs .w').getBoundingClientRect(),bx2=$('d2').querySelector('.app').getBoundingClientRect();
+ const put=(el,x,y,sz,op)=>{el.style.left=((x-ML)/MS-sz/2)+'px';el.style.top=((y-MT)/MS-sz/2)+'px';el.style.width=sz+'px';el.style.height=sz+'px';el.style.opacity=op};
+ [...LIFT].forEach(([jq,t0],q)=>{const th=dp.children[2*q],or=dp.children[2*q+1];const ei=SRVORDER[jq%NC];
+  if(t<t0||t>t0+1.9){th.style.opacity=0;or.style.opacity=0;return}
+  th.src=small(ei);or.src=sharp(ei);
+  const sx=sr2.left+sr2.width/2,sy=sr2.top+ROW/2,dx=bx2.left+bx2.width/2+(q-1)*110,dy=bx2.top+bx2.height/2+10;
+  const u=ease((t-t0)/0.4),w=clamp((t-t0-0.5)/0.4),x=clamp((t-t0-0.9)/0.15),fade=1-clamp((t-t0-1.5)/0.4);
+  put(th,lerp(sx,dx,u),lerp(sy,dy,u),lerp(26,96,u),(1-x)*fade);
+  if(w<=0){or.style.opacity=0}else{const ox=lerp(SRV[0]-30,dx,w),oy=lerp(SRV[1],dy,w);const osz=lerp(48,96,clamp((w-0.6)/0.4));put(or,ox,oy,osz,fade);clipEl(or,ox,oy,osz)}
+ });
+}
+const LIFT=new Map();{const k2=items.map((it,j)=>it.k===2?j:-1).filter(j=>j>=0);[33.6,34.7,35.8].forEach((t0,q)=>LIFT.set(k2[k2.length-1-q],t0))}
+function closing(t){const eo=spring(t-37.8,9)*(1-clamp((t-40.8)/0.4));$('end').style.opacity=eo;$('end').style.transform=`scale(${lerp(0.92,1,spring(t-37.8,9))})`}
+const HOLD=1.4,LOOP=40.8;
+const ZLB=[13.9,15.0,16.0,16.95,18.3],ZCH=[10,21,21,17],ZDR=ZCH.map(n=>1+0.12*n);
+const ZEXTRA=ZDR.reduce((a,b)=>a+b,0)-(ZLB[4]-ZLB[0]);
+// 実時間r（止めた区間を除いたもの）を、場面の時刻に直す
+function warp(r){if(r<ZLB[0])return r;let a=ZLB[0];for(let i=0;i<4;i++){if(r<a+ZDR[i])return ZLB[i]+(r-a)/ZDR[i]*(ZLB[i+1]-ZLB[i]);a+=ZDR[i]}return r-ZEXTRA}
+const ZIN=13.7,ZOUT=ZLB[0]+ZDR.reduce((a,b)=>a+b,0)-0.2;let RR=0;
+function zoomP(){return spring(RR-ZIN,10)*(1-spring(RR-ZOUT,10))}
+let LAG=null;
+let MS=0.94,ML=0,MT=0;
+// 間隔は見た目の文字の端で測る。見出しの枠の上から、文字の上の端までGT、1行目の下の端までGB、2行目の下の端までGB2
+const GT=8,GB=55,GB2=120,GAP=40,LOGO=46,CONTENT=(GB-GT)+GAP+768;
+function layout(){const c=document.documentElement.classList,lb=c.contains('lb'),bar=c.contains('bar'),br=$('brand');
+ let Y,M;
+ if(bar){M=(1080-84-CONTENT)/2;Y=M-GT;br.style.top='';br.style.bottom=''}
+ else{M=(1080-CONTENT-LOGO)/3;if(lb){Y=M-GT;br.style.top='auto';br.style.bottom=M+'px'}else{Y=M+LOGO+M-GT;br.style.top=M+'px';br.style.bottom='auto'}}
+ $('cap').style.top=Y+'px';$('mid').style.top=Y+'px';
+ // 入力欄の上の端（view内で236）を、1行の見出しの文字の下の端からGAPだけ下に置く
+ $('view').style.top=(Y+GB+GAP-236)+'px';
+ // 仕組みの図は、2行の見出しの文字の下の端からGAPだけ下に置き、下の端を絵文字パレットの下の端にそろえる
+ const top=Y+GB2+GAP,bottom=Y+GT+CONTENT;MS=Math.min((bottom-top)/760,888/940);
+ const tx=96+(888-940*MS)/2-60*MS,ty=top-300*MS;$('mech').style.transform=`translate(${tx}px,${ty}px) scale(${MS})`}
+window.render=(T)=>{
+ if(!FOCUS)pickFocus();
+ layout();
+ if(LAG===null){const fy=PY[FOCUS]+PAD;LAG=16.95-enterTime(fy,9.0,S3off)}
+ const r=T<9.0?T:(T<9.0+HOLD?9.0:T-HOLD);
+ RR=r;const t=warp(r);
+ const tp=Math.min(t,FP+FL+0.8);
+ const t1=t<FP?t:(t<FP+FL?FP:t-FL);
+ const t2=t1<QP?t1:(t1<QP+QL?QP:t1-QL);
+ caption(t2);
+ {const md=$('mid2'),q=t1-QP,on=t1>=QP&&t1<QP+QL,o=on?clamp(q/0.25)*clamp((QL-q)/0.25):0;md.style.top=$('cap').style.top;const w=md.offsetWidth,h=md.offsetHeight,S=Math.min(1.44,888/w);md.style.opacity=o;md.style.transform=`translate(${(1080-w*S)/2-96}px,${(1080-h*S)/2-md.offsetTop}px) scale(${S})`}
+ // 真ん中に大きく出し、springで、ほかの見出しと同じ場所へ動かす。絵文字パレットと入力欄は、そのあいだ消す
+ const MV=9.0+HOLD-0.35,mv=spring(T-MV,9);
+ const mo2=clamp((T-9.0)/0.25)*(1-clamp((T-(9.7+HOLD))/0.2));
+ const vf=clamp((T-9.0)/0.25)*(1-clamp((T-(MV+0.3))/0.3));
+ // 最後はt=0と同じ絵に戻して、繰り返しにつなげる
+ const back=clamp((t2-LOOP)/0.6);
+ if(t2<LOOP){palette(tp);cursorAt(tp)}else{palette(0);cursorAt(0)}
+ $('view').style.opacity=t2<LOOP?1-clamp((t2-18.75)/0.35):back;
+ mech(t2);closing(t2);
+ {const md=$('mid'),w=md.offsetWidth,h=md.offsetHeight,S=1.44,dx=(1080-w*S)/2-96,dy=(1080-h*S)/2-md.offsetTop;
+  md.style.opacity=T<9.0?0:mo2;md.style.transform=`translate(${dx*(1-mv)}px,${dy*(1-mv)}px) scale(${lerp(S,1,mv)})`;
+  $('cursor').style.opacity=(parseFloat($('cursor').style.opacity)||0)*(1-vf);
+  const v0=parseFloat($('view').style.opacity);$('view').style.opacity=(isNaN(v0)?1:v0)*(1-vf)}
+ $('brand').style.opacity=t2<LOOP?1-clamp((t2-37.5)/0.3):back;
+};
+window.DURATION=LOOP+0.6+HOLD+ZEXTRA+FL+QL;
+</script></body></html>
