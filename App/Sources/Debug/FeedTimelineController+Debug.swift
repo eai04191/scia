@@ -91,8 +91,8 @@ extension FeedTimelineController {
         }
     }
 
-    /// サーバーのフィルターに一致したダミーの投稿を、新着と同じ経路で流す。警告、警告と注意書き、添付ファイルのぼかし、隠すの4件。
-    /// 隠す投稿はタイムラインに出ないので、3件だけ並べば合っている。実際にフィルターを作らずに、何度でも同じ条件で確かめるため。
+    /// サーバーのフィルターに一致したダミーの投稿を、新着と同じ経路で流す。警告、警告と注意書き、2つのフィルターの警告、添付ファイルのぼかし、2つのフィルターのぼかし、隠すの6件。
+    /// 隠す投稿はタイムラインに出ないので、5件だけ並べば合っている。実際にフィルターを作らずに、何度でも同じ条件で確かめるため。
     private func streamDummyFiltered() {
         let avatar = model.debugStore.statuses.first?.account.avatar ?? client.credential.instance
         func filter(_ title: String, _ action: FilterResult.Action) -> [FilterResult] {
@@ -101,7 +101,9 @@ extension FeedTimelineController {
         let posts: [(content: String, spoilerText: String, filtered: [FilterResult], media: Bool)] = [
             ("警告のフィルターに一致したダミーの投稿", "", filter("ダミーの警告", .warn), false),
             ("警告のフィルターと注意書きのあるダミーの投稿", "ダミーの注意書き", filter("ダミーの警告", .warn), false),
+            ("警告のフィルター2つに一致したダミーの投稿", "", filter("ダミーの警告", .warn) + filter("そば・うどん", .warn), false),
             ("添付ファイルをぼかすフィルターに一致したダミーの投稿", "", filter("ダミーのぼかし", .blur), true),
+            ("添付ファイルをぼかすフィルター2つに一致したダミーの投稿", "", filter("ダミーのぼかし", .blur) + filter("そば・うどん", .blur), true),
             ("隠すフィルターに一致したダミーの投稿。タイムラインに出たら誤り", "", filter("ダミーの非表示", .hide), false),
         ]
         model.debugRun { model in

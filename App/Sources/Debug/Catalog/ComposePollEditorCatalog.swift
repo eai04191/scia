@@ -19,6 +19,7 @@ enum ComposePollEditorCatalog {
             state("縮めても収まらない幅（行末をぼかして切る）", PollDraft(options: ["朝", "昼", ""], multiple: true, expiresIn: 1_800), width: 262),
             state("折りたたんだ（小さい画面で本文を書いている）", PollDraft(options: ["朝", "昼", "夜", "深夜"], multiple: true), folded: true),
             state("折りたたんだ、選択肢をまだ書いていない", PollDraft(), folded: true),
+            state("折りたたんだ、選択肢に「・」が入る", PollDraft(options: ["朝", "そば・うどん", "夜"]), folded: true),
             state("折りたたんだ、選択肢の文字が長い", PollDraft(options: [longOption, "短い"]), folded: true),
         ]
     }

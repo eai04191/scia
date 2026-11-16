@@ -48,11 +48,12 @@ enum ProfileHeaderCatalog {
         ]
     }()
 
-    /// サーバーのフィルターに一致した、添付ファイル付きの投稿。1つ目は警告、2つ目は添付ファイルのぼかし。
+    /// サーバーのフィルターに一致した、添付ファイル付きの投稿。1つ目は警告、2つ目は2つのフィルターの警告、3つ目は添付ファイルのぼかし。
     private static let filteredStatuses: [Status] = [
-        ("warn", "ネタバレ", FilterResult.Action.warn, UIColor.systemRed),
-        ("blur", "写真", .blur, .systemBlue),
-    ].map { id, title, action, color in
+        ("warn", ["ネタバレ"], FilterResult.Action.warn, UIColor.systemRed),
+        ("warn-two", ["ネタバレ", "そば・うどん"], .warn, .systemGreen),
+        ("blur", ["写真"], .blur, .systemBlue),
+    ].map { id, titles, action, color in
         Status(
             id: "filtered-\(id)",
             createdAt: Date(timeIntervalSince1970: 1_790_000_000),
@@ -61,7 +62,7 @@ enum ProfileHeaderCatalog {
             spoilerText: "",
             url: nil,
             mediaAttachments: [Fixtures.attachment("filtered-\(id)", width: 800, height: 800, color: color)],
-            filtered: [FilterResult(filter: FilterResult.Filter(id: id, title: title, context: [.account], filterAction: action))]
+            filtered: titles.map { FilterResult(filter: FilterResult.Filter(id: "\(id)-\($0)", title: $0, context: [.account], filterAction: action)) }
         )
     }
 
@@ -142,7 +143,7 @@ enum ProfileHeaderCatalog {
                 header(fullAccount, .following, endorsements: Array(endorsedAccounts.prefix(1)))
             },
             CatalogState(title: "固定された投稿が1件") { header(fullAccount, .following, pinned: Array(pinnedStatuses.prefix(1))) },
-            CatalogState(title: "フィルターに一致した固定された投稿（1つ目が警告、2つ目がぼかし）") {
+            CatalogState(title: "フィルターに一致した固定された投稿（1つ目が警告、2つ目が2つのフィルターの警告、3つ目がぼかし）") {
                 header(fullAccount, .following, pinned: filteredStatuses)
             },
             CatalogState(title: "3行に収まらない自己紹介と補足情報3つ、ほかのサーバー（「さらに表示」で広がる）") {
