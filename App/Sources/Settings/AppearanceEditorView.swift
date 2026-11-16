@@ -34,7 +34,20 @@ struct AppearanceEditorView: View {
                 Form {
                     Section {
                         // どの分類の「〜を表示」にも効くので、分類の中には置かない。
-                        Toggle(SettingsTexts.Appearance.revealsAllPartsInThread, isOn: $settings.appearance.revealsAllPartsInThread)
+                        Toggle(isOn: $settings.appearance.revealsAllPartsInThread) {
+                            // インジケーターは名前の幅に足さない。足すと、変えていなくても名前が2行に折り返すため。
+                            Text(SettingsTexts.Appearance.revealsAllPartsInThread)
+                                .overlay(alignment: .trailing) {
+                                    ModifiedIndicator(isModified: settings.isRevealsAllPartsInThreadModified)
+                                        .offset(x: 10)
+                                }
+                        }
+                        .contextMenu {
+                            Button(SettingsTexts.Appearance.resetItem, systemImage: "arrow.uturn.backward") {
+                                settings.resetRevealsAllPartsInThread()
+                            }
+                            .disabled(!settings.isRevealsAllPartsInThreadModified)
+                        }
                     } footer: {
                         Text(SettingsTexts.Appearance.revealsAllPartsInThreadFooter)
                     }
@@ -43,7 +56,7 @@ struct AppearanceEditorView: View {
                             NavigationLink {
                                 AppearanceGroupEditorView(group: group, settings: settings)
                             } label: {
-                                GroupLabel(title: group.title, isModified: group.values.contains(where: settings.isModified))
+                                GroupLabel(title: group.title, isModified: settings.isAppearanceGroupModified(group))
                             }
                         }
                     }
@@ -167,18 +180,29 @@ struct AppearanceGroupEditorView: View {
                 settings[keyPath: keyPath] = newValue
                 focused = .choice(choice)
             }
-            TitledToggleRow(title: choice.title, isOn: isOn) { toggleFocus(.choice(choice)) }
+            TitledToggleRow(title: choice.title, isOn: isOn, isModified: settings.isModified(choice)) { toggleFocus(.choice(choice)) }
+                .contextMenu { resetButton(choice) }
                 .disabled(!choice.isEnabled(in: settings.appearance))
         case .options(let options):
             PopUpChoiceRow(
                 title: choice.title,
                 selection: Binding { options.selectedIndex(settings) } set: { options.select($0, settings) },
                 options: options.titles.enumerated().map { (value: $0.offset, title: $0.element) },
+                isModified: settings.isModified(choice),
                 onOpen: { focus(choice) },
                 onTapTitle: { toggleFocus(.choice(choice)) }
             )
+            .contextMenu { resetButton(choice) }
             .disabled(!choice.isEnabled(in: settings.appearance))
         }
+    }
+
+    private func resetButton(_ choice: AppearanceChoice) -> some View {
+        Button(SettingsTexts.Appearance.resetItem, systemImage: "arrow.uturn.backward") {
+            settings.reset(choice)
+            focused = .choice(choice)
+        }
+        .disabled(!settings.isModified(choice))
     }
 
     /// 選択肢のメニューを開いたときに、その場所を示す。選んで閉じても示したままにする。
@@ -232,15 +256,9 @@ struct AppearanceValueRow: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                // 印の幅は変えていなくても取っておく。値を変えて印が出たときに名前が折り返すと、行が高くなり、押しているステッパーが指の下から動くため。
                 HStack(spacing: 6) {
                     Text(item.title)
-                    Circle()
-                        .fill(.tint)
-                        .frame(width: 6, height: 6)
-                        .opacity(settings.isModified(item) ? 1 : 0)
-                        .accessibilityLabel(SettingsTexts.Appearance.modified)
-                        .accessibilityHidden(!settings.isModified(item))
+                    ModifiedIndicator(isModified: settings.isModified(item))
                 }
                 if let note {
                     Text(note)

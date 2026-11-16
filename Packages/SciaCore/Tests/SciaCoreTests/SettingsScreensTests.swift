@@ -123,7 +123,37 @@ struct SettingsScreensTests {
         #expect(options.selectedIndex(settings) == 0)
     }
 
-    /// アニメーションを再生するかは、選ぶまではサーバーの設定に従うので、スイッチは今の値を出す。
+    /// 選んで決める項目は、部品で変えると、その項目だけが既定から変わったことになり、戻すと既定の値に戻る。
+    @Test(arguments: AppearanceChoice.allCases)
+    func changedChoiceIsModifiedUntilReset(_ choice: AppearanceChoice) {
+        let settings = AppSettings(defaults: TestScratch.defaults("SettingsScreensTests.modified.\(choice)"))
+        #expect(!settings.isModified(choice))
+
+        switch choice.control {
+        case .toggle(let keyPath): settings[keyPath: keyPath].toggle()
+        case .options(let options): options.select(options.selectedIndex(settings) == 0 ? 1 : 0, settings)
+        }
+
+        #expect(AppearanceChoice.allCases.filter(settings.isModified) == [choice])
+        #expect(settings.isAppearanceModified)
+
+        settings.reset(choice)
+
+        #expect(settings.appearance == AppearanceChoices())
+    }
+
+    /// 分類は、選んで決める項目だけを変えても、変わったことになる。
+    @Test func groupIsModifiedByChoiceAlone() throws {
+        let settings = AppSettings(defaults: TestScratch.defaults("SettingsScreensTests.modifiedGroup"))
+        let body = try #require(AppearanceCatalog.groups.first { $0.id == "body" })
+        let media = try #require(AppearanceCatalog.groups.first { $0.id == "media" })
+
+        settings.appearance.showsBody = false
+
+        #expect(settings.isAppearanceGroupModified(body))
+        #expect(!settings.isAppearanceGroupModified(media))
+    }
+
     @Test func animationToggleShowsServerValueUntilChosen() {
         let settings = AppSettings(defaults: TestScratch.defaults("SettingsScreensTests.animations"))
         settings.followServerAnimations(of: "@alice@example.social")

@@ -227,65 +227,115 @@ public struct AppearanceChoiceOptions {
     }
 }
 
+/// 選んで決める項目の、部品と保存先。保存先は`AppearanceChoices`のプロパティで、既定の値はその初期値。
+@MainActor
+struct AppearanceChoiceDefinition {
+    let control: AppearanceChoiceControl
+    let isModified: (AppearanceChoices) -> Bool
+    let reset: (inout AppearanceChoices) -> Void
+
+    private init<Stored: Equatable>(control: AppearanceChoiceControl, stored: WritableKeyPath<AppearanceChoices, Stored>) {
+        self.control = control
+        isModified = { $0[keyPath: stored] != AppearanceChoices()[keyPath: stored] }
+        reset = { $0[keyPath: stored] = AppearanceChoices()[keyPath: stored] }
+    }
+
+    static func toggle(_ stored: WritableKeyPath<AppearanceChoices, Bool>) -> Self {
+        Self(control: .toggle(settingsKeyPath(stored)), stored: stored)
+    }
+
+    /// 選ぶまではほかの値に従うスイッチ。今の値は`shown`から読み、選んだかは`stored`で見る。
+    static func toggle(_ shown: ReferenceWritableKeyPath<AppSettings, Bool>, stored: WritableKeyPath<AppearanceChoices, Bool?>) -> Self {
+        Self(control: .toggle(shown), stored: stored)
+    }
+
+    static func options<Value: Equatable>(_ stored: WritableKeyPath<AppearanceChoices, Value>, _ options: [(value: Value, title: String)]) -> Self {
+        Self(control: .options(AppearanceChoiceOptions(settingsKeyPath(stored), options)), stored: stored)
+    }
+
+    private static func settingsKeyPath<Value>(_ stored: WritableKeyPath<AppearanceChoices, Value>) -> ReferenceWritableKeyPath<AppSettings, Value> {
+        // ファイルの名前ではなく、キーパスをつなげている。
+        // swiftlint:disable:next unsafe_file_name
+        (\AppSettings.appearance).appending(path: stored)
+    }
+}
+
 extension AppearanceChoice {
     @MainActor
     public var control: AppearanceChoiceControl {
+        definition.control
+    }
+
+    /// 既定の値から変わっているか。
+    @MainActor
+    public func isModified(in appearance: AppearanceChoices) -> Bool {
+        definition.isModified(appearance)
+    }
+
+    /// 既定の値へ戻す。
+    @MainActor
+    public func reset(in appearance: inout AppearanceChoices) {
+        definition.reset(&appearance)
+    }
+
+    @MainActor
+    private var definition: AppearanceChoiceDefinition {
         switch self {
-        case .showsSeparators: .toggle(\.appearance.showsSeparators)
-        case .contextNameStyle: .options(AppearanceChoiceOptions(\.appearance.contextNameStyle, Self.nameStyles))
-        case .showsContextSymbol: .toggle(\.appearance.showsContextSymbol)
-        case .showsBoosterAvatar: .toggle(\.appearance.showsBoosterAvatar)
-        case .showsReplyLabel: .toggle(\.appearance.showsReplyLabel)
-        case .avatarShape: .options(AppearanceChoiceOptions(\.appearance.avatarShape, [(.circle, "円"), (.roundedSquare, "角丸の四角")]))
-        case .showsAvatarBorder: .toggle(\.appearance.showsAvatarBorder)
+        case .showsSeparators: .toggle(\.showsSeparators)
+        case .contextNameStyle: .options(\.contextNameStyle, Self.nameStyles)
+        case .showsContextSymbol: .toggle(\.showsContextSymbol)
+        case .showsBoosterAvatar: .toggle(\.showsBoosterAvatar)
+        case .showsReplyLabel: .toggle(\.showsReplyLabel)
+        case .avatarShape: .options(\.avatarShape, [(.circle, "円"), (.roundedSquare, "角丸の四角")])
+        case .showsAvatarBorder: .toggle(\.showsAvatarBorder)
         // 選ぶまではサーバーの設定に従うので、今の値は`AppSettings`から読む。
-        case .animatesAvatars: .toggle(\.animatesAvatars)
-        case .wrapsBelowAvatar: .toggle(\.appearance.wrapsBelowAvatar)
-        case .showsReplyLines: .toggle(\.appearance.showsReplyLines)
-        case .nameStyle: .options(AppearanceChoiceOptions(\.appearance.statusNameStyle, Self.nameStyles))
-        case .stacksNameParts: .toggle(\.appearance.stacksNameParts)
-        case .timeStyle: .options(AppearanceChoiceOptions(\.appearance.statusTimeStyle, [(.relative, "相対時刻"), (.absolute, "日時")]))
-        case .boldsName: .toggle(\.appearance.boldsName)
-        case .showsTime: .toggle(\.appearance.showsTime)
-        case .showsVisibilitySymbol: .toggle(\.appearance.showsVisibilitySymbol)
-        case .showsEditedMark: .toggle(\.appearance.showsEditedMark)
+        case .animatesAvatars: .toggle(\.animatesAvatars, stored: \.animatesAvatars)
+        case .wrapsBelowAvatar: .toggle(\.wrapsBelowAvatar)
+        case .showsReplyLines: .toggle(\.showsReplyLines)
+        case .nameStyle: .options(\.statusNameStyle, Self.nameStyles)
+        case .stacksNameParts: .toggle(\.stacksNameParts)
+        case .timeStyle: .options(\.statusTimeStyle, [(.relative, "相対時刻"), (.absolute, "日時")])
+        case .boldsName: .toggle(\.boldsName)
+        case .showsTime: .toggle(\.showsTime)
+        case .showsVisibilitySymbol: .toggle(\.showsVisibilitySymbol)
+        case .showsEditedMark: .toggle(\.showsEditedMark)
         case .glyphLanguage:
-            .options(AppearanceChoiceOptions(\.appearance.glyphLanguage, [
+            .options(\.glyphLanguage, [
                 (.automatic, "自動"), (.japanese, "日本語"), (.simplifiedChinese, "簡体字中国語"), (.traditionalChinese, "繁体字中国語"), (.korean, "韓国語"),
-            ]))
-        case .emojiStyle: .options(AppearanceChoiceOptions(\.appearance.emojiStyle, [(.system, "Apple"), (.twemoji, "Twemoji")]))
-        case .animatesCustomEmojis: .toggle(\.animatesCustomEmojis)
-        case .mediaArrangement: .options(AppearanceChoiceOptions(\.appearance.mediaArrangement, [(.belowBody, "本文の下に大きく"), (.besideBody, "本文の右に小さく")]))
+            ])
+        case .emojiStyle: .options(\.emojiStyle, [(.system, "Apple"), (.twemoji, "Twemoji")])
+        case .animatesCustomEmojis: .toggle(\.animatesCustomEmojis, stored: \.animatesCustomEmojis)
+        case .mediaArrangement: .options(\.mediaArrangement, [(.belowBody, "本文の下に大きく"), (.besideBody, "本文の右に小さく")])
         case .embedMediaArrangement:
-            .options(AppearanceChoiceOptions(\.appearance.embedMediaArrangement, [(.sameAsPost, "投稿と同じ"), (.besideBody, "本文の右に小さく"), (.belowBody, "本文の下に大きく")]))
-        case .tiltsStackedPhotos: .toggle(\.appearance.tiltsStackedPhotos)
-        case .showsMediaBadges: .toggle(\.appearance.showsMediaBadges)
-        case .showsLinkCard: .toggle(\.appearance.showsLinkCard)
-        case .boldsLinkCardTitle: .toggle(\.appearance.boldsLinkCardTitle)
-        case .showsLinkCardImage: .toggle(\.appearance.showsLinkCardImage)
-        case .linkCardThumbnailSide: .options(AppearanceChoiceOptions(\.appearance.linkCardThumbnailSide, [(.left, "左"), (.right, "右")]))
-        case .showsLinkCardSite: .toggle(\.appearance.showsLinkCardSite)
-        case .showsActionBar: .toggle(\.appearance.showsActionBar)
-        case .showsActionBarCounts: .toggle(\.appearance.showsActionBarCounts)
-        case .drawsReactionGlowInHDR: .toggle(\.appearance.drawsReactionGlowInHDR)
+            .options(\.embedMediaArrangement, [(.sameAsPost, "投稿と同じ"), (.besideBody, "本文の右に小さく"), (.belowBody, "本文の下に大きく")])
+        case .tiltsStackedPhotos: .toggle(\.tiltsStackedPhotos)
+        case .showsMediaBadges: .toggle(\.showsMediaBadges)
+        case .showsLinkCard: .toggle(\.showsLinkCard)
+        case .boldsLinkCardTitle: .toggle(\.boldsLinkCardTitle)
+        case .showsLinkCardImage: .toggle(\.showsLinkCardImage)
+        case .linkCardThumbnailSide: .options(\.linkCardThumbnailSide, [(.left, "左"), (.right, "右")])
+        case .showsLinkCardSite: .toggle(\.showsLinkCardSite)
+        case .showsActionBar: .toggle(\.showsActionBar)
+        case .showsActionBarCounts: .toggle(\.showsActionBarCounts)
+        case .drawsReactionGlowInHDR: .toggle(\.drawsReactionGlowInHDR)
         case .reactionGlowIcons:
-            .options(AppearanceChoiceOptions(\.appearance.reactionGlowIcons, [(.none, "表示しない"), (.atBottom, "下の端に1つずつ"), (.scattered, "散らす")]))
-        case .reactionGlowFillsWidthWhenAlone: .toggle(\.appearance.reactionGlowFillsWidthWhenAlone)
-        case .reactionGlowLightFavouriteColor: .options(AppearanceChoiceOptions(\.appearance.reactionGlowLightFavouriteColor, [(.orange, "橙"), (.yellow, "黄色")]))
-        case .showsAvatar: .toggle(\.appearance.showsAvatar)
-        case .showsNameRow: .toggle(\.appearance.showsNameRow)
-        case .showsBody: .toggle(\.appearance.showsBody)
-        case .showsReadMore: .toggle(\.appearance.showsReadMore)
-        case .showsFilterNote: .toggle(\.appearance.showsFilterNote)
-        case .showsSpoiler: .toggle(\.appearance.showsSpoiler)
-        case .showsMedia: .toggle(\.appearance.showsMedia)
-        case .showsQuote: .toggle(\.appearance.showsQuote)
-        case .showsEmbedAvatar: .toggle(\.appearance.showsEmbedAvatar)
-        case .showsPoll: .toggle(\.appearance.showsPoll)
-        case .showsReactions: .toggle(\.appearance.showsReactions)
-        case .showsReactionGlow: .toggle(\.appearance.showsReactionGlow)
-        case .showsCustomEmojis: .toggle(\.appearance.showsCustomEmojis)
-        case .showsNameCustomEmojis: .toggle(\.appearance.showsNameCustomEmojis)
+            .options(\.reactionGlowIcons, [(.none, "表示しない"), (.atBottom, "下の端に1つずつ"), (.scattered, "散らす")])
+        case .reactionGlowFillsWidthWhenAlone: .toggle(\.reactionGlowFillsWidthWhenAlone)
+        case .reactionGlowLightFavouriteColor: .options(\.reactionGlowLightFavouriteColor, [(.orange, "橙"), (.yellow, "黄色")])
+        case .showsAvatar: .toggle(\.showsAvatar)
+        case .showsNameRow: .toggle(\.showsNameRow)
+        case .showsBody: .toggle(\.showsBody)
+        case .showsReadMore: .toggle(\.showsReadMore)
+        case .showsFilterNote: .toggle(\.showsFilterNote)
+        case .showsSpoiler: .toggle(\.showsSpoiler)
+        case .showsMedia: .toggle(\.showsMedia)
+        case .showsQuote: .toggle(\.showsQuote)
+        case .showsEmbedAvatar: .toggle(\.showsEmbedAvatar)
+        case .showsPoll: .toggle(\.showsPoll)
+        case .showsReactions: .toggle(\.showsReactions)
+        case .showsReactionGlow: .toggle(\.showsReactionGlow)
+        case .showsCustomEmojis: .toggle(\.showsCustomEmojis)
+        case .showsNameCustomEmojis: .toggle(\.showsNameCustomEmojis)
         }
     }
 

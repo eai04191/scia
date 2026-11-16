@@ -153,7 +153,28 @@ public final class AppSettings {
         value(of: item) != item.defaultValue
     }
 
-    /// 「投稿の見た目」の数値か選択肢のどれかが、既定値から変わっているか。
+    public func isModified(_ choice: AppearanceChoice) -> Bool {
+        choice.isModified(in: appearance)
+    }
+
+    public func reset(_ choice: AppearanceChoice) {
+        choice.reset(in: &appearance)
+    }
+
+    /// 「投稿の見た目」の分類の、数値か選択肢のどれかが、既定値から変わっているか。
+    public func isAppearanceGroupModified(_ group: AppearanceGroup) -> Bool {
+        group.values.contains(where: isModified) || AppearanceChoice.choices(inGroup: group.id).contains(where: isModified)
+    }
+
+    /// 分類の外に置く「スレッドで開いた投稿はすべて表示」が、既定値から変わっているか。
+    public var isRevealsAllPartsInThreadModified: Bool {
+        appearance.revealsAllPartsInThread != AppearanceChoices().revealsAllPartsInThread
+    }
+
+    public func resetRevealsAllPartsInThread() {
+        appearance.revealsAllPartsInThread = AppearanceChoices().revealsAllPartsInThread
+    }
+
     public var isAppearanceModified: Bool {
         AppearanceCatalog.values.contains(where: isModified) || appearance != AppearanceChoices()
     }

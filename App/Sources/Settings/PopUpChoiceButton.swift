@@ -1,3 +1,4 @@
+import SciaCore
 import SwiftUI
 import UIKit
 
@@ -48,6 +49,7 @@ struct PopUpChoiceRow<Value: Hashable>: View {
     let title: String
     @Binding var selection: Value
     let options: [(value: Value, title: String)]
+    var isModified = false
     /// メニューを開いたときに呼ぶ。
     let onOpen: () -> Void
     /// ボタンのほかの場所をタップしたときに呼ぶ。
@@ -55,10 +57,7 @@ struct PopUpChoiceRow<Value: Hashable>: View {
 
     var body: some View {
         HStack {
-            // 名前はボタンが読み上げるので、VoiceOverで同じ名前を2回たどらせない。
-            Text(title)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityHidden(true)
+            ModifiedTitle(title: title, isModified: isModified)
             PopUpChoiceButton(selection: $selection, options: options, onOpen: onOpen)
                 .accessibilityLabel(title)
         }
@@ -72,19 +71,49 @@ struct PopUpChoiceRow<Value: Hashable>: View {
 struct TitledToggleRow: View {
     let title: String
     @Binding var isOn: Bool
+    var isModified = false
     let onTapTitle: () -> Void
 
     var body: some View {
         HStack {
-            // 名前はスイッチが読み上げるので、VoiceOverで同じ名前を2回たどらせない。
-            Text(title)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityHidden(true)
+            ModifiedTitle(title: title, isModified: isModified)
             Toggle(title, isOn: $isOn)
                 .labelsHidden()
         }
         // 数値の行と同じく、行のどこをタップしても示す。スイッチの上のタップはスイッチが受ける。
         .contentShape(Rectangle())
         .onTapGesture(perform: onTapTitle)
+    }
+}
+
+/// 部品の左に置く名前。既定値から変えていれば、インジケーターを添える。
+private struct ModifiedTitle: View {
+    let title: String
+    let isModified: Bool
+
+    var body: some View {
+        // インジケーターの幅は変えていなくても取っておく。変えてインジケーターが出たときに名前が折り返すと、行が高くなり、押している部品が指の下から動くため。
+        HStack(spacing: 6) {
+            // 名前は部品が読み上げるので、VoiceOverで同じ名前を2回たどらせない。
+            Text(title)
+                .accessibilityHidden(true)
+            ModifiedIndicator(isModified: isModified)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// 既定値から変えた項目に添えるインジケーター。変えていなくても幅を取る。
+struct ModifiedIndicator: View {
+    let isModified: Bool
+
+    var body: some View {
+        Circle()
+            .fill(.tint)
+            .frame(width: 6, height: 6)
+            .opacity(isModified ? 1 : 0)
+            // スイッチのラベルに置くと、隠した要素の名前もスイッチの名前にまとめられるので、変えていなければ名前も空にする。
+            .accessibilityLabel(isModified ? SettingsTexts.Appearance.modified : "")
+            .accessibilityHidden(!isModified)
     }
 }
