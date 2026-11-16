@@ -1,13 +1,45 @@
 # 投稿への絵文字リアクション
 
-投稿に絵文字でリアクションするときに、作者が決めたこと。Mastodonにはない機能で、Fedibirdの形だけに対応する。APIはFedibirdのソース（[fedibird/mastodon](https://github.com/fedibird/mastodon)）で確かめた。
+投稿に絵文字でリアクションするときに、作者が決めたこと。Mastodonにはない機能で、Fedibirdの形と、Chuckyaの形（glitch-socの絵文字のリアクション。Firefishから分かれたSharkey、Catodon、Iceshrimpも同じ経路を使う）に対応する。APIはFedibirdのソース（[fedibird/mastodon](https://github.com/fedibird/mastodon)）と、Chuckya（TheEssem/mastodon）、Sharkey、Catodon、Iceshrimp、Iceshrimp.NETのソースで確かめた。以下は、断りがなければFedibirdの形の決まりで、Chuckyaの形で違うところは「Chuckyaの形とFirefishの形」にまとめる。
 
 ## 対象のサーバー
 
-- `api/v1/instance`の`fedibird_capabilities`に`emoji_reaction`があるサーバーでだけ、リアクションを出し、付け外しできるようにする。FedibirdとkmyblueがFedibirdの形で返す
-- ほかの形（glitch-socの絵文字リアクションのPRとChuckyaの`reactions`、Pleromaの`pleroma.emoji_reactions`）は扱わない
+- `api/v1/instance`の`fedibird_capabilities`に`emoji_reaction`があるサーバーを、Fedibirdの形として扱う。FedibirdとkmyblueがFedibirdの形で返す
+- そうでなく、`api/v1/instance`に`configuration.reactions`があるサーバーを、`react/:name`で付け外しするサーバーとして扱う。そのうち、`api/v2/instance`の`api_versions`に`chuckya`があるサーバーをChuckyaの形、ないサーバーをFirefishの形として扱う。`api/v2/instance`がないサーバー（Sharkey、Iceshrimp）も、Firefishの形にする
+- 形は、サーバーが自分で返す宣言で決める。バージョンの表記やソフトウェアの名前では決めない。数値（`max_reactions`）から動きを推測もしない
+- `api/v2/instance`は、`configuration.reactions`があるサーバーでだけ読む。セッションを始めるときに1回で、Mastodonでは読まない
+- どれかの形のサーバーでだけ、リアクションを出し、付け外しできるようにする
+- Pleromaの形（PleromaとAkkomaの`pleroma.emoji_reactions`）は扱わない
 - 対応していないサーバーでは、投稿に`emoji_reactions`が入っていても出さず、メニューの項目と操作も出さない
 - サーバー情報が読めないうちや読めなかったときは、対応していないものとして扱う
+
+## Chuckyaの形とFirefishの形
+
+Fedibirdの形と違うところ。実物は、Catodon（catodon.rocks）と、Dockerで立てたChuckya（5.0.0-nightly.2026-11-16）、Sharkey 2025.4.7、Iceshrimp 2026.5.5、Iceshrimp.NET 2026.1.2-betaで確かめた。
+
+どちらの形でも同じこと:
+
+- 投稿の`reactions`を読む。`name`、`count`、`me`と、カスタム絵文字なら`url`と`static_url`がある
+- ほかのサーバーのカスタム絵文字は、`domain`がなく、`name`が`shortcode@host`になる。同じショートコードでも、サーバーが違えば別のリアクション
+- 付けるのは`POST /api/v1/statuses/:id/react/:name`、外すのは`POST /api/v1/statuses/:id/unreact/:name`で送る
+- 置き換えるか、上限で断るか、お気に入りが連動するかは、サーバーによって違う。Sharkey、Catodon、Iceshrimpは、1人1つで、別の絵文字を付けると前のリアクションと置き換え、お気に入りを既定の絵文字のリアクションとして保存する。Chuckyaは、上限（既定は1）に達すると断り、お気に入りを別に持つ。Iceshrimp.NETは、複数付けられ、お気に入りを別に持つ。どれになるかを手元で決めず、押した絵文字だけをすぐ出して、応答の投稿から、リアクションの列とお気に入りの数と状態を丸ごと取り込む。お気に入りの結果でも同じく取り込む
+- 応答を丸ごと取り込むので、その投稿のお気に入りかリアクションの結果を待っている間は、お気に入りもほかの絵文字も送らない。応答が前後したときに、先に送った操作の古い列で、あとの結果を消さないため。リアクションの結果は、お気に入りのタイムラインにも伝える
+- 付けた絵文字が返った列になくても、失敗にしない。断られたときは、ほかの失敗と同じく、押した絵文字を戻して、サーバーが返した理由を失敗のチップで出す
+- お気に入りのボタンと数は、Mastodonと同じくそのまま出す
+- リアクションした人のリストは出さず、リアクションのボタンのメニューに「リアクションした人」を出さない
+- ストリーミングにリアクションのイベントがないので、ほかの人のリアクションは、投稿を読み直すまで変わらない。SharkeyにはMastodonの形のストリーミングがない
+- リアクションの通知は、絵文字の入った通知として出さない。お気に入りの通知として出る。Sharkeyが同じIDで重ねて返す`reaction`と`favourite`は、1件のお気に入りの通知になる。Catodonは`favourite`に`emoji`を付け、Sharkeyは`reaction`と`favourite`を重ねて返し、Iceshrimp.NETは`reaction`に`emoji`と`emoji_url`を付けて返すが、どれも読まない Chuckyaは`reaction`に`reaction`（`name`など）を付けて返す
+
+Chuckyaの形だけのこと:
+
+- カスタム絵文字は、投稿に返った名前（コロンなし。ほかのサーバーのものは`shortcode@host`）のまま送る。Chuckyaは、コロンを付けた名前を断る
+
+Firefishの形だけのこと:
+
+- カスタム絵文字は`:shortcode:`で送る。Sharkeyは、コロンのない名前をUnicodeの絵文字として扱い、既定の絵文字に替えて付けるため。Iceshrimpはどちらでも受け付ける
+- ほかのサーバーのカスタム絵文字では付けられない。サーバーは、ログインしているサーバーにない絵文字を既定の絵文字に替えて付けるので、送らずに、付けられないことを失敗のチップで出す。自分が付けているものを外すのは送る
+- 既定の絵文字は、SharkeyとCatodonが❤、Iceshrimpは`configuration.reactions.default_reaction`（既定は⭐）。サーバーにない絵文字などは、この絵文字に替わって付く。Iceshrimp.NETは替えずに断る
+- Sharkeyは、ログインしているサーバーのカスタム絵文字に画像のURLを付けない。`api/v1/custom_emojis`のリストから、ショートコードで画像を引く。リストが読めないうちは、ショートコードを文字で出す
 
 ## 読む値
 

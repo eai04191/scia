@@ -159,7 +159,7 @@ extension TimelineViewController {
     /// リアクションのボタンを長押ししたときに出すメニュー。出す項目がなければnil。
     /// - Parameter groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
     func builtReactionMenu(for status: Status, reaction: EmojiReaction, groups: MenuLayout<ReactionMenuItem>.Groups? = nil) -> BuiltMenu<ReactionMenuCommand>? {
-        let tree = ReactionMenuTree(reaction: reaction)
+        let tree = ReactionMenuTree(reaction: reaction, listsReactedAccounts: capabilities.emojiReactions?.listsReactedAccounts ?? true)
         let subject = OperationStatus.Subject(status.displayed)
         return tree.menu(groups: groups ?? settings.reactionMenuLayout.groups).map { root in
             BuiltMenu(root: root, renderer: MenuRenderer { [weak self] command in

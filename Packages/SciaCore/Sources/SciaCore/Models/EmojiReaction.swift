@@ -34,6 +34,11 @@ public struct EmojiReaction: Codable, Hashable, Sendable {
     /// 出す数。サーバーの数が自分のリアクションを含まない値で届いても、自分がしているなら1と出す。
     public var displayedCount: Int { me ? max(count, 1) : count }
 
+    /// 絵文字の画像を`localEmojis`で補ったもの。
+    public func resolvingImage(in localEmojis: [String: CustomEmoji]) -> EmojiReaction {
+        EmojiReaction(emoji: emoji.resolvingImage(in: localEmojis), count: count, me: me)
+    }
+
     /// 数と自分がしたかを変えたもの。
     func setting(count: Int, me: Bool) -> EmojiReaction {
         var reaction = self
@@ -96,14 +101,34 @@ public struct ReactionEmoji: Codable, Hashable, Sendable {
         hasher.combine(name)
     }
 
-    /// APIのパスに入れる名前。ほかのサーバーのカスタム絵文字は、Fedibirdが`name@domain`で受け取る。
-    public var requestName: String {
-        domain.map { "\(name)@\($0)" } ?? name
+    /// APIのパスに入れる名前。
+    /// Fedibirdは、ほかのサーバーのカスタム絵文字を`name@domain`で受け取る。
+    /// Chuckyaは、投稿に返した名前（ほかのサーバーのカスタム絵文字は`shortcode@domain`）をそのまま受け取り、コロンを付けた名前を断る。
+    /// Firefishの形のサーバーは、カスタム絵文字を`:name:`で受け取る。Sharkeyは、コロンのない名前をUnicodeの絵文字として扱い、既定の絵文字に替えて付ける。
+    public func requestName(for style: EmojiReactionStyle) -> String {
+        switch style {
+        case .fedibird: domain.map { "\(name)@\($0)" } ?? name
+        case .chuckya: name
+        case .firefish: isCustom ? ":\(name):" : name
+        }
     }
 
-    /// カスタム絵文字か。画像のURLが読めなかったものも、ショートコードの形（英数字と`_`）ならカスタム絵文字とする。
+    /// カスタム絵文字か。画像のURLが読めなかったものも、ショートコードの形（英数字と`_`、`+`、`-`）ならカスタム絵文字とする。
+    /// Sharkeyは、ログインしているサーバーのカスタム絵文字のリアクションに画像のURLを付けず、ショートコードに`+`と`-`も使える。
     public var isCustom: Bool {
-        url != nil || domain != nil || (!name.isEmpty && name.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_") })
+        url != nil || domain != nil || (!name.isEmpty && name.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || "_+-".contains($0)) })
+    }
+
+    /// ほかのサーバーのカスタム絵文字か。ChuckyaとFirefishの形のサーバーは、`domain`を返さず、名前を`shortcode@host`にする。
+    public var isRemote: Bool {
+        domain != nil || name.contains("@")
+    }
+
+    /// 画像のURLがない、ログインしているサーバーのカスタム絵文字に、`localEmojis`（ショートコードで引く、サーバーの絵文字のリスト）の画像を付けたもの。
+    /// Firefishの形のサーバーは、ログインしているサーバーのカスタム絵文字のリアクションに画像のURLを付けない。
+    public func resolvingImage(in localEmojis: [String: CustomEmoji]) -> ReactionEmoji {
+        guard url == nil, !isRemote, let local = localEmojis[name] else { return self }
+        return ReactionEmoji(name: name, url: local.url, staticUrl: local.staticUrl)
     }
 
     /// カスタム絵文字なら、本文の絵文字と同じ部品で描くための絵文字。
@@ -208,18 +233,18 @@ extension Status {
         return replacingEmojiReactions(reactions)
     }
 
-    /// `other`と、表示している投稿の絵文字のリアクションのほかは同じか。リアクションが同じならfalse。
-    /// タイムラインで、リアクションだけが変わった行を、ボタンの出入りと行の高さを動かして描き直すために使う（docs/emoji-reaction.md）。
+    /// `other`と、表示している投稿の絵文字のリアクションとお気に入りのほかは同じか。リアクションが同じならfalse。
+    /// タイムラインで、リアクションが変わった行を、ボタンの出入りと行の高さを動かして描き直すために使う（docs/emoji-reaction.md）。
+    /// お気に入りがリアクションとして保存されるサーバー（Sharkeyなど）では、リアクションの結果でお気に入りの数と状態も変わるので、お気に入りの違いは見ない。
     public func differsOnlyInEmojiReactions(from other: Status) -> Bool {
         guard displayed.emojiReactions != other.displayed.emojiReactions else { return false }
         return adoptingDisplayedEmojiReactions(of: other) == other
     }
 
-    /// 表示している投稿の絵文字のリアクションを、`other`の表示している投稿のものにしたもの。
+    /// 表示している投稿の絵文字のリアクションとお気に入りを、`other`の表示している投稿のものにしたもの。
     private func adoptingDisplayedEmojiReactions(of other: Status) -> Status {
-        let reactions = other.displayed.emojiReactions
-        guard let reblog else { return replacingEmojiReactions(reactions) }
-        return replacingReblog(with: reblog.replacingEmojiReactions(reactions))
+        guard let reblog else { return adoptingFavouriteAndEmojiReactions(of: other.displayed) }
+        return replacingReblog(with: reblog.adoptingFavouriteAndEmojiReactions(of: other.displayed))
     }
 
     /// 自分が`emoji`でリアクションしているか。

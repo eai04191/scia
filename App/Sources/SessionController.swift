@@ -241,6 +241,16 @@ final class SessionController {
     private let followedTagsList: FollowedTagsController
     /// 補完の候補を読む口。投稿欄とプロフィールの編集で使う。
     private let completionSources: ComposeCompletion.Sources
+    /// カスタム絵文字のリストを読めたことを、初期化のあとのセッションへ伝える。
+    private let localReactionEmojiRelay = LocalReactionEmojiRelay()
+    /// ログインしているサーバーのカスタム絵文字を、ショートコードで引くもの。リアクションに画像のURLを付けないサーバー（Firefishの形）でだけ入れる。
+    private var localReactionEmojis: [String: CustomEmoji] = [:] {
+        didSet {
+            for timeline in timelines.allObjects {
+                timeline.localReactionEmojis = localReactionEmojis
+            }
+        }
+    }
     /// このサーバーのカスタム絵文字のリスト。端末に残し、開くたびに補完を作るプロフィールの編集にも、読み込み中を挟まずに渡す。
     private let customEmojis: CustomEmojiCache
     /// タブバーの上の投稿欄。ホームと通知のどちらでも同じ下書きを使う。
@@ -507,7 +517,7 @@ final class SessionController {
         }
         let customEmojis = AppDependencies.customEmojis.cache(for: credential.instance)
         self.customEmojis = customEmojis
-        completionSources = ComposeCompletion.Sources(
+        var completionSources = ComposeCompletion.Sources(
             searchAccounts: { query, limit in try await client.searchAccountsForCompletion(query, limit: limit) },
             searchHashtags: { query, limit in try await client.searchHashtagsForCompletion(query, limit: limit) },
             customEmojis: { try await client.customEmojis() },
@@ -521,6 +531,14 @@ final class SessionController {
             // 読めなかった人は返らないだけで、失敗はAccountCacheがログに残す。
             accounts: { ids in await Array(accounts.load(ids).values) }
         ).remembering(customEmojisIn: customEmojis).readingPersonalEmojiSet(with: client) { [session] in try await session.loadedCapabilities() }
+        // パレットや補完がカスタム絵文字のリストを読めたときにも、リアクションの画像を引くリストを合わせる。
+        let loadCustomEmojis = completionSources.customEmojis
+        completionSources.customEmojis = { [localReactionEmojiRelay] in
+            let emojis = try await loadCustomEmojis()
+            await localReactionEmojiRelay.didLoad(emojis)
+            return emojis
+        }
+        self.completionSources = completionSources
         let completion = ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, account: credential.handle))
         let postingLanguages = PostingLanguageCache { try await client.postingLanguages() }
         self.postingLanguages = postingLanguages
@@ -554,6 +572,12 @@ final class SessionController {
         composer.onChooseWritingAccount = { [weak self] id in self?.chooseWritingAccount(id) }
         session.onCredentialsInvalid = { [weak self] in self?.credentialsDidBecomeInvalid() }
         session.onCapabilitiesLoad = { [weak self] capabilities in
+            if let style = capabilities.emojiReactions {
+                self?.interactions.emojiReactionStyle = style
+                if style.omitsLocalEmojiImages {
+                    self?.loadLocalReactionEmojis()
+                }
+            }
             for timeline in self?.timelines.allObjects ?? [] {
                 timeline.capabilities = capabilities
             }
@@ -1083,6 +1107,7 @@ final class SessionController {
         viewController.myAccountID = credential.accountID
         viewController.spoilerExpansion.expandsByDefault = session.preferences?.expandsSpoilers ?? false
         viewController.capabilities = session.capabilities
+        viewController.localReactionEmojis = localReactionEmojis
         viewController.onToggleEmojiReaction = { [weak self] status, emoji in
             self?.toggle(.emojiReaction(emoji), on: status)
         }
@@ -3834,6 +3859,22 @@ final class SessionController {
     }
 
     /// 投票の通信の口。デバッグビルドでは、ダミー投稿の投票だけ、通信せずに`DummyPolls`が答える。
+    /// リアクションの画像を引くために、サーバーのカスタム絵文字のリストを読む。端末に残したリストがあれば先に使い、この起動で読んでいなければ読み直す。
+    /// 読めなければ、画像のないリアクションはショートコードの文字のまま出る。あとでパレットや補完が読めたら、そのリストを使う。
+    private func loadLocalReactionEmojis() {
+        localReactionEmojiRelay.onLoad = { [weak self] emojis in
+            self?.localReactionEmojis = Dictionary(emojis.map { ($0.shortcode, CustomEmoji(shortcode: $0.shortcode, url: $0.url, staticUrl: $0.staticUrl)) }) { first, _ in first }
+        }
+        let snapshot = customEmojis.snapshot
+        if let emojis = snapshot.emojis {
+            localReactionEmojiRelay.didLoad(emojis)
+        }
+        guard !snapshot.isFresh else { return }
+        tasks.run(.display) { [completionSources] in
+            _ = try? await completionSources.customEmojis()
+        }
+    }
+
     private static func pollOperations(client: MastodonClient) -> PollVoting.Operations {
         #if DEBUG
         PollVoting.Operations(
@@ -4922,5 +4963,15 @@ extension SessionController: ListEditorHost {
         showFailureNotice(.interactionFailure(title: title) { [weak self] in
             self?.presentAlert(title: title, reason: reason)
         })
+    }
+}
+
+/// カスタム絵文字のリストを読めたことを伝える口。補完の口はセッションの初期化の途中で作るので、あとから受け取る側をつなぐ。
+@MainActor
+private final class LocalReactionEmojiRelay {
+    var onLoad: (([ServerEmoji]) -> Void)?
+
+    func didLoad(_ emojis: [ServerEmoji]) {
+        onLoad?(emojis)
     }
 }

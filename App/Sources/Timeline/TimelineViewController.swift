@@ -305,6 +305,15 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             reconfigure(Set(displayedItemIDs.filter { status(for: $0)?.displayed.emojiReactions.isEmpty == false }))
         }
     }
+    /// ログインしているサーバーのカスタム絵文字を、ショートコードで引くもの。リアクションに画像のURLを付けないサーバーで、セッションが入れる。
+    var localReactionEmojis: [String: CustomEmoji] = [:] {
+        didSet {
+            guard localReactionEmojis != oldValue else { return }
+            emojiURLIndex = nil
+            guard isViewLoaded else { return }
+            reconfigure(Set(displayedItemIDs.filter { status(for: $0)?.displayed.emojiReactions.contains { $0.emoji.url == nil && $0.emoji.isCustom } == true }))
+        }
+    }
     /// リアクションのボタンが押されたときに、押した投稿（ブーストならブーストした投稿）と絵文字を渡して呼ぶ。
     var onToggleEmojiReaction: ((Status, ReactionEmoji) -> Void)?
     /// リアクションの列の「＋」が押されたときに、押した投稿を渡して呼ぶ。nilなら「＋」を出さない。
@@ -721,8 +730,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         var index: [URL: [ItemID]] = [:]
         for (id, entry) in entries {
             let urls: Set<URL> = switch entry {
-            case .status(let status), .pinned(let status): Self.emojiURLs(of: status, quoteSources: quoteSourceChanges)
-            case .notification(let notification): Self.emojiURLs(of: notification, quoteSources: quoteSourceChanges)
+            case .status(let status), .pinned(let status): Self.emojiURLs(of: status, quoteSources: quoteSourceChanges, localReactionEmojis: localReactionEmojis)
+            case .notification(let notification): Self.emojiURLs(of: notification, quoteSources: quoteSourceChanges, localReactionEmojis: localReactionEmojis)
             case .account(let account): Self.imageURLs(of: account.emojis)
             case .notificationRequest(let request): Self.imageURLs(of: request.account.emojis)
             case .gap, .unreadable, .search: []
@@ -904,10 +913,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// 引用の囲みに出す引用元の本文、注意書き、作者の名前の絵文字も含める。引用元は、囲みと同じく受け取ったあとの変化を当てた版から集める。
-    static func emojiURLs(of status: Status, quoteSources: QuoteSourceChanges) -> Set<URL> {
+    static func emojiURLs(of status: Status, quoteSources: QuoteSourceChanges, localReactionEmojis: [String: CustomEmoji] = [:]) -> Set<URL> {
         let shown = status.displayed
         let quoted = quoteSources.applying(to: shown).quote?.quotedStatus.map { $0.emojis + $0.account.emojis } ?? []
-        let reactions = shown.emojiReactions.compactMap(\.emoji.customEmoji)
+        let reactions = shown.emojiReactions.compactMap { $0.emoji.resolvingImage(in: localReactionEmojis).customEmoji }
         return imageURLs(of: shown.emojis + (shown.poll?.emojis ?? []) + shown.account.emojis + status.account.emojis + quoted + reactions)
     }
 
@@ -916,8 +925,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         Set(emojis.flatMap { [$0.url, $0.staticUrl] })
     }
 
-    private static func emojiURLs(of notification: MastodonNotification, quoteSources: QuoteSourceChanges) -> Set<URL> {
-        imageURLs(of: notification.account.emojis + [notification.reactionEmoji?.customEmoji].compactMap(\.self)).union(notification.status.map { emojiURLs(of: $0, quoteSources: quoteSources) } ?? [])
+    private static func emojiURLs(of notification: MastodonNotification, quoteSources: QuoteSourceChanges, localReactionEmojis: [String: CustomEmoji]) -> Set<URL> {
+        imageURLs(of: notification.account.emojis + [notification.reactionEmoji?.customEmoji].compactMap(\.self)).union(notification.status.map { emojiURLs(of: $0, quoteSources: quoteSources, localReactionEmojis: localReactionEmojis) } ?? [])
     }
 
     /// 端末の文字の大きさが変わったら、行をすべて組み直し、変わる前に読んでいた位置へ戻す。
@@ -2407,7 +2416,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                 configuration.actionBarLongPressTarget = { [weak self] item in self?.actionBarLongPressTarget(for: item, id: itemID) }
             }
         }
-        if capabilities.supportsEmojiReactions, let reactions = builder.reactionChips(for: shown) {
+        if capabilities.supportsEmojiReactions, let reactions = builder.reactionChips(for: shown, localEmojis: localReactionEmojis) {
             configuration.reactions = reactions
             configuration.onToggleReaction = { [weak self] name in
                 guard let emoji = shown.emojiReactions.first(where: { $0.emoji.name == name })?.emoji else { return }
@@ -2418,7 +2427,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             }
             configuration.reactionTarget = { [weak self] name in
                 guard let reaction = shown.emojiReactions.first(where: { $0.emoji.name == name }) else { return nil }
-                return self?.reactionTarget(for: status, reaction: reaction)
+                return self.map { $0.reactionTarget(for: status, reaction: reaction.resolvingImage(in: $0.localReactionEmojis)) }
             }
         }
         return isAppearancePreview ? Self.keepingOnlyLinks(configuration) : configuration

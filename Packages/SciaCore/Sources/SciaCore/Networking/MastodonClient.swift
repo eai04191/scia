@@ -226,15 +226,38 @@ public struct MastodonClient: Sendable {
         }
     }
 
-    /// サーバーの、Mastodonにない機能の有無。Fedibirdの拡張で、`api/v1/instance`の`fedibird_capabilities`と`feature_quote`で決める。
-    /// Fedibirdとkmyblueはv1に必ず返すので、v2は読まない。項目がないサーバーは、Mastodonと同じとみなす。
+    /// サーバーの、Mastodonにない機能の有無。`api/v1/instance`の、Fedibirdの拡張の`fedibird_capabilities`と`feature_quote`、`configuration.reactions`で決める。
+    /// Fedibirdとkmyblue、Chuckya、Sharkey、Catodon、Iceshrimpはv1に必ず返す。項目がないサーバーは、Mastodonと同じとみなす。
+    /// `configuration.reactions`を返すサーバーでだけ、`api/v2/instance`の`api_versions`も読み、Chuckyaの宣言があるかで形を決める。宣言はv1にはない。
     public func serverCapabilities() async throws -> ServerCapabilities {
         struct Instance: Decodable {
             let fedibirdCapabilities: [String]?
             let featureQuote: Bool?
+            let configuration: Configuration?
+
+            struct Configuration: Decodable {
+                let reactions: Reactions?
+            }
+
+            struct Reactions: Decodable {}
+        }
+        struct InstanceV2: Decodable {
+            let apiVersions: [String: ServerLimit]?
         }
         let instance = try await get(Instance.self, path: "api/v1/instance", query: []).0
-        return ServerCapabilities(fedibirdCapabilities: instance.fedibirdCapabilities ?? [], featureQuote: instance.featureQuote ?? false)
+        let fedibirdCapabilities = instance.fedibirdCapabilities ?? []
+        var reactEndpoints: EmojiReactionStyle?
+        if instance.configuration?.reactions != nil, !fedibirdCapabilities.contains("emoji_reaction") {
+            // SharkeyとIceshrimpには`api/v2/instance`がない。ないサーバーは、宣言がないものとして扱う。
+            let apiVersions: [String: ServerLimit]?
+            do {
+                apiVersions = try await get(InstanceV2.self, path: "api/v2/instance", query: [], feature: .instanceV2).0.apiVersions
+            } catch is FeatureUnavailable {
+                apiVersions = nil
+            }
+            reactEndpoints = apiVersions?["chuckya"] != nil ? .chuckya : .firefish
+        }
+        return ServerCapabilities(fedibirdCapabilities: fedibirdCapabilities, featureQuote: instance.featureQuote ?? false, reactEndpoints: reactEndpoints)
     }
 
     /// https://docs.joinmastodon.org/methods/instance/#v2
@@ -1201,23 +1224,35 @@ public struct MastodonClient: Sendable {
         credential.instance.appending(path: "api/v1/announcements/\(id)/reactions").appending(component: name)
     }
 
-    /// 投稿に絵文字でリアクションする。Fedibirdの拡張で、`fedibird_capabilities`に`emoji_reaction`があるサーバーでだけ使う。
+    /// 投稿に絵文字でリアクションする。絵文字のリアクションに対応しているサーバーでだけ、そのサーバーの形で使う。
     /// Fedibirdは、付けられなかったときも投稿を返すので、返った投稿に自分のリアクションがあるかで確かめる。
     /// fedibird/mastodonの`app/controllers/api/v1/statuses/emoji_reactions_controller.rb`
-    public func addEmojiReaction(_ statusID: Status.ID, emoji: ReactionEmoji) async throws -> Status {
-        try await send(formRequest(method: "PUT", url: emojiReactionURL(statusID, emoji: emoji), form: []), decoding: Status.self).0
+    /// Chuckyaは、TheEssem/mastodonの`app/controllers/api/v1/statuses/reactions_controller.rb`
+    /// Firefishの形は、Sharkeyの`packages/backend/src/server/api/mastodon/endpoints/status.ts`の`react/:name`
+    public func addEmojiReaction(_ statusID: Status.ID, emoji: ReactionEmoji, style: EmojiReactionStyle) async throws -> Status {
+        switch style {
+        case .fedibird:
+            try await send(formRequest(method: "PUT", url: emojiReactionURL(statusID, "emoji_reactions", emoji: emoji, style: style), form: []), decoding: Status.self).0
+        case .chuckya, .firefish:
+            try await send(formRequest(method: "POST", url: emojiReactionURL(statusID, "react", emoji: emoji, style: style), form: []), decoding: Status.self).0
+        }
     }
 
     /// 投稿にした自分の絵文字のリアクションを外す。
-    public func removeEmojiReaction(_ statusID: Status.ID, emoji: ReactionEmoji) async throws -> Status {
-        var request = URLRequest(url: emojiReactionURL(statusID, emoji: emoji))
-        request.httpMethod = "DELETE"
-        return try await send(request, decoding: Status.self).0
+    public func removeEmojiReaction(_ statusID: Status.ID, emoji: ReactionEmoji, style: EmojiReactionStyle) async throws -> Status {
+        switch style {
+        case .fedibird:
+            var request = URLRequest(url: emojiReactionURL(statusID, "emoji_reactions", emoji: emoji, style: style))
+            request.httpMethod = "DELETE"
+            return try await send(request, decoding: Status.self).0
+        case .chuckya, .firefish:
+            return try await send(formRequest(method: "POST", url: emojiReactionURL(statusID, "unreact", emoji: emoji, style: style), form: []), decoding: Status.self).0
+        }
     }
 
     /// 絵文字は1つのパスの要素としてエンコードする。お知らせのリアクションと同じ理由。
-    private func emojiReactionURL(_ statusID: Status.ID, emoji: ReactionEmoji) -> URL {
-        credential.instance.appending(path: "api/v1/statuses/\(statusID)/emoji_reactions").appending(component: emoji.requestName)
+    private func emojiReactionURL(_ statusID: Status.ID, _ action: String, emoji: ReactionEmoji, style: EmojiReactionStyle) -> URL {
+        credential.instance.appending(path: "api/v1/statuses/\(statusID)/\(action)").appending(component: emoji.requestName(for: style))
     }
 
     /// 鍵のかかったアカウントには、フォローリクエストを送る。

@@ -66,8 +66,8 @@ struct OtherAccountMenuTests {
             unmuteConversation: { _ in throw Failure() },
             pin: { _ in throw Failure() },
             unpin: { _ in throw Failure() },
-            addEmojiReaction: addEmojiReaction,
-            removeEmojiReaction: { _, _ in throw Failure() }
+            addEmojiReaction: { id, emoji, _ in try await addEmojiReaction(id, emoji) },
+            removeEmojiReaction: { _, _, _ in throw Failure() }
         ), profile: profile, relationships: relationships, changeRelation: changeRelation, resolveAccount: resolveAccount, deleteStatus: deleteStatus, capabilities: capabilities)
     }
 

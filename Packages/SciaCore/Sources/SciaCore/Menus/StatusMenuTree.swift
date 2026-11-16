@@ -125,6 +125,8 @@ public struct StatusMenuTree {
     public var canSelectPosts = false
     /// サーバーの、Mastodonにない機能の有無。絵文字のリアクションと引用の項目を、出すか、押せるかを決める。
     public var capabilities = ServerCapabilities.mastodon
+    /// ログインしているサーバーのカスタム絵文字を、ショートコードで引くもの。リアクションに画像のURLを付けないサーバーで、行に出している画像と同じ絵文字を「カスタム絵文字」に並べるのに使う。
+    public var localReactionEmojis: [String: CustomEmoji] = [:]
     /// ユーザーのメニューの並びと、メンション、ハンドルをコピー、関係の項目を組むもの。
     public var userMenu: MenuLayout<UserMenuItem>.Groups = UserMenuItem.defaultLayout.groups
     public var userActions: UserMenuActions?
@@ -254,7 +256,7 @@ public struct StatusMenuTree {
             return users(status?.displayed.mentions.map(MenuUser.mention) ?? [])
         case .customEmojis:
             // 投稿の行に出しているリアクションのカスタム絵文字も含める。行に見えている絵文字をどれでも調べられるようにするため（docs/emoji-reaction.md）。
-            let reactionEmojis = notification == nil && capabilities.supportsEmojiReactions ? status?.displayed.emojiReactions.compactMap(\.emoji.customEmoji) ?? [] : []
+            let reactionEmojis = notification == nil && capabilities.supportsEmojiReactions ? status?.displayed.emojiReactions.compactMap { $0.emoji.resolvingImage(in: localReactionEmojis).customEmoji } ?? [] : []
             var seen: Set<URL> = []
             let emojis = ((notification?.emojisInRow ?? status?.emojisInRow ?? []) + reactionEmojis).filter { seen.insert($0.url).inserted }
             return emojis.compactMap { emoji in customEmoji(emoji)?.map { .customEmoji(emoji, $0) } }

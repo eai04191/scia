@@ -129,6 +129,7 @@ extension TimelineViewController {
         }
         tree.canSelectPosts = canSelectPost(id)
         tree.capabilities = capabilities
+        tree.localReactionEmojis = localReactionEmojis
         tree.userMenu = userMenuSubmenuGroups
         tree.userActions = userMenuActions
         tree.hashtagMenu = settings.hashtagMenuLayout.submenuGroups(actions: settings.hashtagActions)

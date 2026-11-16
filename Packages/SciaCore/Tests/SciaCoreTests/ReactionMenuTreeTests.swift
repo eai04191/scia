@@ -33,4 +33,11 @@ struct ReactionMenuTreeTests {
         #expect(menu.title == ":broken_cat: 1")
         #expect(!MenuNodeTests.describe(menu.children).contains("開く"))
     }
+
+    /// リアクションした人を読むAPIのないサーバーでは、「リアクションした人」を出さない。
+    @Test func omitsReactedByWhereServerCannotList() throws {
+        let tree = ReactionMenuTree(reaction: EmojiReaction(emoji: ReactionEmoji(name: "👍"), count: 2, me: false), listsReactedAccounts: false)
+
+        #expect(MenuNodeTests.describe(try #require(tree.menu(groups: all)).children) == "リアクションする,カスタマイズ")
+    }
 }

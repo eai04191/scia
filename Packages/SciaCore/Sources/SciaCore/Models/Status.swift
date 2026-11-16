@@ -175,7 +175,12 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         reblogsCount = try container.decodeCountIfPresent(forKey: .reblogsCount) ?? 0
         quotesCount = try container.decodeCountIfPresent(forKey: .quotesCount) ?? 0
         repliesCount = try container.decodeCountIfPresent(forKey: .repliesCount) ?? 0
-        emojiReactions = try container.decodeLossyArray(EmojiReaction.self, forKey: .emojiReactions)
+        // Fedibirdは`emoji_reactions`、Firefishの形のサーバーは`reactions`で返す（docs/emoji-reaction.mdの「読む値」）。
+        emojiReactions = if container.contains(.emojiReactions) {
+            try container.decodeLossyArray(EmojiReaction.self, forKey: .emojiReactions)
+        } else {
+            try decoder.container(keyedBy: FirefishCodingKeys.self).decodeLossyArray(EmojiReaction.self, forKey: .reactions)
+        }
         referenceIDs = (try? container.decodeIfPresent([String].self, forKey: .referenceIDs)) ?? []
         reblogBox = try container.decodeIfPresent(StatusBox.self, forKey: .reblogBox)
     }
@@ -254,6 +259,11 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         return status
     }
 
+    /// お気に入りと絵文字のリアクションを`other`に揃えたもの。お気に入りとリアクションの結果を応答に任せるサーバーで、どちらかの操作の結果を反映するときに使う。
+    public func adoptingFavouriteAndEmojiReactions(of other: Status) -> Status {
+        adoptingFavourite(of: other).replacingEmojiReactions(other.emojiReactions)
+    }
+
     /// ブーストの状態と件数を`other`に揃えたもの。
     public func adoptingReblog(of other: Status) -> Status {
         var status = self
@@ -328,6 +338,10 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         case .public, .unlisted, .private: true
         case .direct, .other: false
         }
+    }
+
+    private enum FirefishCodingKeys: String, CodingKey {
+        case reactions
     }
 
     private enum CodingKeys: String, CodingKey {

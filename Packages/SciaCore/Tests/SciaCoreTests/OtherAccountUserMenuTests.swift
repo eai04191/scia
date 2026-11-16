@@ -31,7 +31,7 @@ struct OtherAccountUserMenuTests {
                 bookmark: { _ in throw Failure() }, unbookmark: { _ in throw Failure() },
                 muteConversation: { _ in throw Failure() }, unmuteConversation: { _ in throw Failure() },
                 pin: { _ in throw Failure() }, unpin: { _ in throw Failure() },
-                addEmojiReaction: { _, _ in throw Failure() }, removeEmojiReaction: { _, _ in throw Failure() }
+                addEmojiReaction: { _, _, _ in throw Failure() }, removeEmojiReaction: { _, _, _ in throw Failure() }
             ),
             profile: { throw Failure() },
             relationships: relationships,

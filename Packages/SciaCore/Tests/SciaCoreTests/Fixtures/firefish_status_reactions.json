@@ -1,0 +1,63 @@
+{
+  "id": "atmg1b5d0dxx013n",
+  "created_at": "2026-11-05T12:00:00.000Z",
+  "in_reply_to_id": null,
+  "in_reply_to_account_id": null,
+  "sensitive": false,
+  "spoiler_text": "",
+  "visibility": "public",
+  "language": "ja",
+  "uri": "https://catodon.example/users/alice/statuses/113000000000000001",
+  "url": "https://catodon.example/@alice/113000000000000001",
+  "replies_count": 0,
+  "reblogs_count": 0,
+  "favourites_count": 4,
+  "content": "<p>本文</p>",
+  "account": {
+    "id": "100",
+    "username": "alice",
+    "acct": "alice",
+    "display_name": "Alice",
+    "avatar": "https://catodon.example/avatar.png",
+    "avatar_static": "https://catodon.example/avatar.png",
+    "header": "https://catodon.example/header.png",
+    "header_static": "https://catodon.example/header.png",
+    "note": "",
+    "url": "https://catodon.example/@alice",
+    "locked": false,
+    "bot": false,
+    "created_at": "2020-01-01T00:00:00.000Z",
+    "followers_count": 1,
+    "following_count": 1,
+    "statuses_count": 1,
+    "fields": [],
+    "emojis": []
+  },
+  "media_attachments": [],
+  "mentions": [],
+  "tags": [],
+  "emojis": [],
+  "favourited": true,
+  "reblogged": false,
+  "card": null,
+  "poll": null,
+  "reactions": [
+    {
+      "count": 1,
+      "me": false,
+      "name": "❤"
+    },
+    {
+      "count": 2,
+      "me": true,
+      "name": "blobcat"
+    },
+    {
+      "count": 1,
+      "me": false,
+      "name": "neofox_happy@misskey.example",
+      "url": "https://media.misskey.example/files/neofox.webp",
+      "static_url": "https://media.misskey.example/files/neofox.webp"
+    }
+  ]
+}

@@ -13,6 +13,13 @@ public final class StatusInteractions {
         case pin
         /// その絵文字の自分のリアクション。Fedibirdの拡張で、決まりはdocs/emoji-reaction.mdにある。
         case emojiReaction(ReactionEmoji)
+
+        var isFavouriteOrEmojiReaction: Bool {
+            switch self {
+            case .favourite, .emojiReaction: true
+            case .reblog, .bookmark, .muteConversation, .pin: false
+            }
+        }
     }
 
     /// サーバーが成功の応答を返したのに、リアクションを付けなかった。Fedibirdは、その投稿にまだ付いていないほかのサーバーのカスタム絵文字では、付けずに投稿を返す。
@@ -21,6 +28,16 @@ public final class StatusInteractions {
 
         public var errorDescription: String? {
             "サーバーがこの絵文字でのリアクションを受け付けませんでした。ほかのサーバーのカスタム絵文字は、その投稿にすでに付いているものだけを使えます。"
+        }
+    }
+
+    /// ほかのサーバーのカスタム絵文字ではリアクションできないサーバーで、その絵文字を付けようとした。
+    /// Firefishの形のサーバーは、ログインしているサーバーにない絵文字を既定の絵文字に替えて付けるので、送らずに止める。
+    public struct RemoteEmojiReactionUnavailable: LocalizedError {
+        public init() {}
+
+        public var errorDescription: String? {
+            "このサーバーでは、ほかのサーバーのカスタム絵文字でリアクションできません。"
         }
     }
 
@@ -36,8 +53,8 @@ public final class StatusInteractions {
         public var unmuteConversation: @Sendable (Status.ID) async throws -> Status
         public var pin: @Sendable (Status.ID) async throws -> Status
         public var unpin: @Sendable (Status.ID) async throws -> Status
-        public var addEmojiReaction: @Sendable (Status.ID, ReactionEmoji) async throws -> Status
-        public var removeEmojiReaction: @Sendable (Status.ID, ReactionEmoji) async throws -> Status
+        public var addEmojiReaction: @Sendable (Status.ID, ReactionEmoji, EmojiReactionStyle) async throws -> Status
+        public var removeEmojiReaction: @Sendable (Status.ID, ReactionEmoji, EmojiReactionStyle) async throws -> Status
 
         public init(
             favourite: @escaping @Sendable (Status.ID) async throws -> Status,
@@ -51,8 +68,8 @@ public final class StatusInteractions {
             pin: @escaping @Sendable (Status.ID) async throws -> Status,
             unpin: @escaping @Sendable (Status.ID) async throws -> Status,
             // 既定値は、絵文字のリアクションを使わないテストのためのもの。アプリは`init(client:)`で両方を渡す。
-            addEmojiReaction: @escaping @Sendable (Status.ID, ReactionEmoji) async throws -> Status = { _, _ in preconditionFailure("絵文字のリアクションの口を渡していない") },
-            removeEmojiReaction: @escaping @Sendable (Status.ID, ReactionEmoji) async throws -> Status = { _, _ in preconditionFailure("絵文字のリアクションの口を渡していない") }
+            addEmojiReaction: @escaping @Sendable (Status.ID, ReactionEmoji, EmojiReactionStyle) async throws -> Status = { _, _, _ in preconditionFailure("絵文字のリアクションの口を渡していない") },
+            removeEmojiReaction: @escaping @Sendable (Status.ID, ReactionEmoji, EmojiReactionStyle) async throws -> Status = { _, _, _ in preconditionFailure("絵文字のリアクションの口を渡していない") }
         ) {
             self.favourite = favourite
             self.unfavourite = unfavourite
@@ -80,8 +97,8 @@ public final class StatusInteractions {
                 unmuteConversation: { try await client.unmuteConversation($0) },
                 pin: { try await client.pin($0) },
                 unpin: { try await client.unpin($0) },
-                addEmojiReaction: { try await client.addEmojiReaction($0, emoji: $1) },
-                removeEmojiReaction: { try await client.removeEmojiReaction($0, emoji: $1) }
+                addEmojiReaction: { try await client.addEmojiReaction($0, emoji: $1, style: $2) },
+                removeEmojiReaction: { try await client.removeEmojiReaction($0, emoji: $1, style: $2) }
             )
         }
     }
@@ -91,6 +108,8 @@ public final class StatusInteractions {
 
     private let operations: Operations
     private let update: Update
+    /// サーバーの絵文字のリアクションのAPIの形。サーバーの機能が読めたときに入れる。リアクションは読めてからしか出さないので、付け外しのときには入っている。
+    public var emojiReactionStyle = EmojiReactionStyle.fedibird
     /// 結果を待っている操作。同じ投稿への同じ操作を重ねて送らない。
     public private(set) var inFlight: Set<Key> = []
 
@@ -132,7 +151,17 @@ public final class StatusInteractions {
     public func set(_ action: Action, to turningOn: Bool, on status: Status, reblogVisibility: ReblogVisibility = .accountDefault) async throws -> Bool {
         let target = status.displayed
         let key = Key(statusID: target.id, action: action)
-        guard inFlight.insert(key).inserted else { return false }
+        // 結果を応答から丸ごと取り込むサーバーでは、その投稿のお気に入りかリアクションの結果を待っている間は、ほかのお気に入りとリアクションを送らない。
+        // 並べて送ると、応答が前後したときに、先に送った操作の古い列で、あとから成功した操作の結果を消すため。
+        if emojiReactionStyle.settlesFromResponse, action.isFavouriteOrEmojiReaction,
+           inFlight.contains(where: { $0.statusID == target.id && $0.action.isFavouriteOrEmojiReaction }) {
+            return false
+        }
+        guard !inFlight.contains(key) else { return false }
+        if case .emojiReaction(let emoji) = action, turningOn, emojiReactionStyle.refusesRemoteEmojis, emoji.isRemote {
+            throw RemoteEmojiReactionUnavailable()
+        }
+        inFlight.insert(key)
         defer {
             inFlight.remove(key)
             streamedReactions.remove(key)
@@ -146,15 +175,22 @@ public final class StatusInteractions {
         update(target.id) { Self.setting(action, turningOn, on: $0) }
         do {
             let result = try await call(action, turningOn, target.id, reblogVisibility: reblogVisibility)
-            if case .emojiReaction(let emoji) = action, turningOn, !result.displayed.hasEmojiReaction(emoji) {
+            // 形は、応答が返ったときのものを使う。お気に入りは、サーバーの機能が読める前にも押せるため。
+            let style = emojiReactionStyle
+            // 結果を応答から丸ごと取り込むサーバーでは、付けた絵文字が返った列になくても失敗にしない。Sharkeyなどは、付けられない絵文字を既定の絵文字に替えて付ける。
+            if case .emojiReaction(let emoji) = action, turningOn, !style.settlesFromResponse, !result.displayed.hasEmojiReaction(emoji) {
                 throw EmojiReactionNotApplied()
             }
             // 投稿全体を置き換えると、待っている間に届いた編集や、並行して成功した別の操作を古い内容で戻すため、この操作の結果だけを反映する。
-            update(target.id) { Self.adopting(action, of: result, on: $0) }
-            let settled = Self.adopting(action, of: result, on: latest[target.id] ?? target)
+            update(target.id) { Self.adopting(action, of: result, on: $0, style: style) }
+            let settled = Self.adopting(action, of: result, on: latest[target.id] ?? target, style: style)
             latest[target.id] = settled
             if action == .reblog { settledReblogs[target.id] = settled.reblogged }
             onSettle?(action, settled)
+            // リアクションでお気に入りの状態も変わるサーバー（Sharkeyなど）があるので、お気に入りのタイムラインにも伝える。
+            if case .emojiReaction = action, style.settlesFromResponse {
+                onSettle?(.favourite, settled)
+            }
         } catch {
             let revert: (Status) -> Status = if case .emojiReaction(let emoji) = action, streamedReactions.contains(key) {
                 { $0.settingEmojiReactionMe(emoji, wasOn) }
@@ -213,8 +249,11 @@ public final class StatusInteractions {
         }
     }
 
-    private static func adopting(_ action: Action, of result: Status, on status: Status) -> Status {
-        switch action {
+    private static func adopting(_ action: Action, of result: Status, on status: Status, style: EmojiReactionStyle) -> Status {
+        if style.settlesFromResponse, action.isFavouriteOrEmojiReaction {
+            return status.adoptingFavouriteAndEmojiReactions(of: result.displayed)
+        }
+        return switch action {
         case .favourite: status.adoptingFavourite(of: result)
         case .reblog: status.adoptingReblog(of: result)
         case .bookmark: status.adoptingBookmark(of: result)
@@ -236,8 +275,8 @@ public final class StatusInteractions {
         case (.muteConversation, false): try await operations.unmuteConversation(id)
         case (.pin, true): try await operations.pin(id)
         case (.pin, false): try await operations.unpin(id)
-        case (.emojiReaction(let emoji), true): try await operations.addEmojiReaction(id, emoji)
-        case (.emojiReaction(let emoji), false): try await operations.removeEmojiReaction(id, emoji)
+        case (.emojiReaction(let emoji), true): try await operations.addEmojiReaction(id, emoji, emojiReactionStyle)
+        case (.emojiReaction(let emoji), false): try await operations.removeEmojiReaction(id, emoji, emojiReactionStyle)
         }
     }
 }

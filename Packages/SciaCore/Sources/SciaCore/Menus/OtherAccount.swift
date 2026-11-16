@@ -129,7 +129,13 @@ public final class OtherAccount {
     }
 
     /// そのアカウントのサーバーの、Mastodonにない機能の有無。読めないうちと、読めなかったときはMastodonと同じ。
-    public private(set) var capabilities = ServerCapabilities.mastodon
+    public private(set) var capabilities = ServerCapabilities.mastodon {
+        didSet {
+            if let style = capabilities.emojiReactions {
+                interactions.emojiReactionStyle = style
+            }
+        }
+    }
     private var capabilitiesState = CapabilitiesState.unknown
     private enum CapabilitiesState { case unknown, loading, loaded }
     private var capabilitiesLoad: Task<Void, Never>?

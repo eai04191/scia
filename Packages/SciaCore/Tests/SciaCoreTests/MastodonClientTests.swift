@@ -473,6 +473,47 @@ struct MastodonClientTests {
         #expect(try await makeClient(mastodon).serverCapabilities() == .mastodon)
     }
 
+    /// `configuration.reactions`を返すサーバーでだけ`api/v2/instance`も読み、Chuckyaの宣言があるかで形を決める。Mastodonでは読まない。
+    /// `api/v2/instance`がないサーバーは、宣言がないものとして扱う。
+    @Test func readsReactionStyleFromInstance() async throws {
+        let reactions = #"{"configuration":{"reactions":{"max_reactions":1}}}"#
+        let chuckya = StubTransport([.json(reactions, statusCode: 200), .json(#"{"api_versions":{"mastodon":12,"glitch":1,"chuckya":5}}"#, statusCode: 200)])
+        #expect(try await makeClient(chuckya).serverCapabilities().emojiReactions == .chuckya)
+        #expect(await chuckya.requests.map(\.url?.path) == ["/api/v1/instance", "/api/v2/instance"])
+
+        let firefish = StubTransport([.json(reactions, statusCode: 200), .json(#"{"api_versions":{"mastodon":7}}"#, statusCode: 200)])
+        #expect(try await makeClient(firefish).serverCapabilities().emojiReactions == .firefish)
+
+        let withoutVersions = StubTransport([.json(reactions, statusCode: 200), .json("{}", statusCode: 200)])
+        #expect(try await makeClient(withoutVersions).serverCapabilities().emojiReactions == .firefish)
+
+        // SharkeyとIceshrimpには`api/v2/instance`がない。
+        let withoutV2 = StubTransport([.json(reactions, statusCode: 200), .json(#"{"error":"Unknown API endpoint."}"#, statusCode: 404)])
+        #expect(try await makeClient(withoutV2).serverCapabilities().emojiReactions == .firefish)
+
+        let mastodon = StubTransport([.json(#"{"configuration":{"statuses":{}}}"#, statusCode: 200)])
+        #expect(try await makeClient(mastodon).serverCapabilities().emojiReactions == nil)
+        #expect(await mastodon.requests.count == 1)
+    }
+
+    /// 付け外しは、形ごとの経路と名前で送る。
+    @Test func sendsEmojiReactionInServerStyle() async throws {
+        let blobcat = ReactionEmoji(name: "blobcat", url: URL(string: "https://example.social/blobcat.png"))
+        var sent: [String] = []
+        for style in [EmojiReactionStyle.fedibird, .chuckya, .firefish] {
+            let transport = StubTransport([.json(Self.interactedStatus, statusCode: 200), .json(Self.interactedStatus, statusCode: 200)])
+            let client = try makeClient(transport)
+            _ = try await client.addEmojiReaction("1", emoji: blobcat, style: style)
+            _ = try await client.removeEmojiReaction("1", emoji: blobcat, style: style)
+            sent += await transport.requests.map { "\($0.httpMethod ?? "") \($0.url?.path ?? "")" }
+        }
+        #expect(sent == [
+            "PUT /api/v1/statuses/1/emoji_reactions/blobcat", "DELETE /api/v1/statuses/1/emoji_reactions/blobcat",
+            "POST /api/v1/statuses/1/react/blobcat", "POST /api/v1/statuses/1/unreact/blobcat",
+            "POST /api/v1/statuses/1/react/:blobcat:", "POST /api/v1/statuses/1/unreact/:blobcat:",
+        ])
+    }
+
     @Test func readsPersonalEmojiSetSupportFromInstance() async throws {
         let fedibird = StubTransport([.json(#"{"fedibird_capabilities":["personal_emoji_sets"]}"#, statusCode: 200)])
         #expect(try await makeClient(fedibird).serverCapabilities().supportsPersonalEmojiSets)

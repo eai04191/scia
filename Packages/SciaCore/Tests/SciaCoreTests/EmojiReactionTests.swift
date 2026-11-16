@@ -24,13 +24,15 @@ struct EmojiReactionTests {
         )
     }
 
-    /// リアクションだけが変わった投稿を見分ける。ブーストでは元の投稿のリアクションを比べ、ほかも変わっていれば当たらない。
+    /// リアクションが変わった投稿を見分ける。ブーストでは元の投稿のリアクションを比べ、お気に入りのほかも変わっていれば当たらない。
     @Test func detectsReactionOnlyChange() {
         let before = status([EmojiReaction(emoji: thumbsUp, count: 1, me: false)])
         let after = before.settingEmojiReaction(thumbsUp, true)
         #expect(after.differsOnlyInEmojiReactions(from: before))
         #expect(!before.differsOnlyInEmojiReactions(from: before))
-        #expect(!after.settingFavourited(true).differsOnlyInEmojiReactions(from: before))
+        #expect(!after.settingBookmarked(true).differsOnlyInEmojiReactions(from: before))
+        // お気に入りがリアクションとして保存されるサーバーでは、リアクションと一緒にお気に入りも変わる。
+        #expect(after.settingFavourited(true).differsOnlyInEmojiReactions(from: before))
 
         let boost = Status(id: "11", createdAt: Date(timeIntervalSince1970: 0), account: before.account, content: "", spoilerText: "", url: nil, reblog: before)
         #expect(boost.replacingReblog(with: after).differsOnlyInEmojiReactions(from: boost))
@@ -49,15 +51,62 @@ struct EmojiReactionTests {
         #expect(status.emojiReactions[3].emoji.url == nil)
     }
 
+    /// Firefishの形は`reactions`で返る。ほかのサーバーのカスタム絵文字は名前が`shortcode@host`で、同じショートコードでも別のリアクションになる。
+    /// ログインしているサーバーのカスタム絵文字は、画像のURLがなくてもカスタム絵文字として読む。
+    @Test func decodesFirefishReactions() throws {
+        let status = try MastodonDecoder.make().decode(Status.self, from: fixture("firefish_status_reactions"))
+
+        #expect(status.emojiReactions.map(\.emoji.name) == ["❤", "blobcat", "neofox_happy@misskey.example"])
+        #expect(status.emojiReactions.map(\.count) == [1, 2, 1])
+        #expect(status.emojiReactions.map(\.me) == [false, true, false])
+        #expect(status.emojiReactions.map(\.emoji.isCustom) == [false, true, true])
+        #expect(status.emojiReactions.map(\.emoji.isRemote) == [false, false, true])
+        #expect(status.emojiReactions[2].emoji.customEmoji != nil)
+    }
+
+    /// Firefishの形のサーバーは、カスタム絵文字を`:name:`で受け取り、コロンのない名前を絵文字として扱う。
+    @Test func firefishRequestNameWrapsCustomEmojiInColons() {
+        #expect(thumbsUp.requestName(for: .firefish) == "👍")
+        #expect(localBlobcat.requestName(for: .firefish) == ":blobcat:")
+        #expect(ReactionEmoji(name: "blob-cat+1").requestName(for: .firefish) == ":blob-cat+1:")
+    }
+
+    /// Chuckyaは、投稿に返した名前をそのまま受け取り、コロンを付けた名前を断る。
+    @Test func chuckyaRequestNameIsNameAsReturned() {
+        #expect(thumbsUp.requestName(for: .chuckya) == "👍")
+        #expect(localBlobcat.requestName(for: .chuckya) == "blobcat")
+        #expect(ReactionEmoji(name: "neofox@misskey.example").requestName(for: .chuckya) == "neofox@misskey.example")
+    }
+
+    /// 画像のURLがない自分のサーバーのカスタム絵文字にだけ、サーバーの絵文字のリストの画像を付ける。ほかのサーバーの同じショートコードには付けない。
+    @Test func resolvesImageOfLocalCustomEmojiOnly() throws {
+        let image = try #require(URL(string: "https://catodon.example/emoji/blobcat.png"))
+        let blobcat = CustomEmoji(shortcode: "blobcat", url: image, staticUrl: image)
+        let local = ["blobcat": blobcat]
+
+        #expect(ReactionEmoji(name: "blobcat").resolvingImage(in: local).url == image)
+        #expect(ReactionEmoji(name: "blobcat@misskey.example").resolvingImage(in: local).url == nil)
+        #expect(remoteCat.resolvingImage(in: ["remote_cat": blobcat]).url == remoteCat.url)
+        #expect(ReactionEmoji(name: "unknown").resolvingImage(in: local).url == nil)
+    }
+
+    /// `react/:name`の形は、Fedibirdの宣言がないサーバーでだけ使う。
+    @Test func capabilitiesChooseReactionStyle() {
+        #expect(ServerCapabilities(fedibirdCapabilities: []).emojiReactions == nil)
+        #expect(ServerCapabilities(fedibirdCapabilities: [], reactEndpoints: .firefish).emojiReactions == .firefish)
+        #expect(ServerCapabilities(fedibirdCapabilities: [], reactEndpoints: .chuckya).emojiReactions == .chuckya)
+        #expect(ServerCapabilities(fedibirdCapabilities: ["emoji_reaction"], reactEndpoints: .firefish).emojiReactions == .fedibird)
+    }
+
     @Test func statusWithoutReactionsHasNone() throws {
         #expect(status().emojiReactions.isEmpty)
     }
 
     /// ほかのサーバーのカスタム絵文字は、Fedibirdが`name@domain`で受け取る。
     @Test func requestNameIncludesDomainOfRemoteEmoji() {
-        #expect(thumbsUp.requestName == "👍")
-        #expect(localBlobcat.requestName == "blobcat")
-        #expect(remoteCat.requestName == "remote_cat@misskey.example")
+        #expect(thumbsUp.requestName(for: .fedibird) == "👍")
+        #expect(localBlobcat.requestName(for: .fedibird) == "blobcat")
+        #expect(remoteCat.requestName(for: .fedibird) == "remote_cat@misskey.example")
     }
 
     /// Fedibirdは名前でまとめるので、同じ絵文字かは名前だけで見分ける。画像のURLとサーバーは比べない。

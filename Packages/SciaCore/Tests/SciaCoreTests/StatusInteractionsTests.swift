@@ -68,8 +68,8 @@ struct StatusInteractionsTests {
             unmuteConversation: { _ in throw Failure() },
             pin: { _ in throw Failure() },
             unpin: { _ in throw Failure() },
-            addEmojiReaction: add,
-            removeEmojiReaction: remove
+            addEmojiReaction: { id, emoji, _ in try await add(id, emoji) },
+            removeEmojiReaction: { id, emoji, _ in try await remove(id, emoji) }
         )
     }
 
@@ -110,6 +110,157 @@ struct StatusInteractionsTests {
         }
 
         #expect(shown.history.map { $0.emojiReactions.count } == [1, 0])
+    }
+
+    /// 前のリアクションと置き換えるか、お気に入りが連動するかは手元で決めない。押した絵文字だけをすぐ出し、返った列とお気に入りを丸ごと取り込む。
+    @Test func firefishReactionAdoptsServerListAndFavourite() async throws {
+        let thumbsUp = ReactionEmoji(name: "👍")
+        let blobcat = ReactionEmoji(name: "blobcat")
+        let shown = Shown(status(reactions: [EmojiReaction(emoji: thumbsUp, count: 1, me: true)]))
+        let fromServer = status(reactions: [EmojiReaction(emoji: blobcat, count: 1, me: true), EmojiReaction(emoji: ReactionEmoji(name: "🎉"), count: 4, me: false)])
+            .settingFavourited(true)
+        let interactions = StatusInteractions(operations: reactionOperations { _, _ in fromServer }) { shown.update($0, $1) }
+        interactions.emojiReactionStyle = .firefish
+
+        #expect(try await interactions.toggle(.emojiReaction(blobcat), on: shown.status))
+
+        #expect(shown.history.map { $0.emojiReactions.map(\.emoji.name) } == [["👍", "blobcat"], ["blobcat", "🎉"]])
+        #expect(shown.history.map(\.favourited) == [false, true])
+    }
+
+    /// サーバーの機能が読める前に押したお気に入りにも、応答が返ったときに分かっている形を使い、返ったリアクションの列を取り込む。
+    @Test func favouriteStartedBeforeStyleIsKnownAdoptsReactions() async throws {
+        let shown = Shown(status(reactions: [EmojiReaction(emoji: ReactionEmoji(name: "👍"), count: 1, me: true)]))
+        let gate = Gate()
+        let fromServer = status(reactions: [EmojiReaction(emoji: ReactionEmoji(name: "❤"), count: 1, me: true)]).settingFavourited(true)
+        let interactions = StatusInteractions(operations: operations { _ in
+            try await gate.wait()
+            return fromServer
+        }) { shown.update($0, $1) }
+
+        let favourite = Task { try await interactions.toggle(.favourite, on: shown.status) }
+        try await waitUntil { interactions.inFlight.count >= 1 }
+        interactions.emojiReactionStyle = .firefish
+        gate.open()
+        #expect(try await favourite.value)
+
+        #expect(shown.status.emojiReactions.map(\.emoji.name) == ["❤"])
+    }
+
+    /// 結果を応答から取り込むサーバーでは、リアクションの結果をお気に入りの結果としても伝え、待っている間はその投稿のお気に入りとほかのリアクションを送らない。
+    @Test func firefishReactionSettlesFavouriteAndBlocksConcurrentOperations() async throws {
+        let blobcat = ReactionEmoji(name: "blobcat")
+        let shown = Shown(status(reactions: []))
+        let gate = Gate()
+        let fromServer = status(reactions: [EmojiReaction(emoji: blobcat, count: 1, me: true)]).settingFavourited(true)
+        let interactions = StatusInteractions(operations: reactionOperations { _, _ in
+            try await gate.wait()
+            return fromServer
+        }) { shown.update($0, $1) }
+        interactions.emojiReactionStyle = .firefish
+        var settled: [StatusInteractions.Action] = []
+        interactions.onSettle = { action, _ in settled.append(action) }
+
+        let first = Task { try await interactions.toggle(.emojiReaction(blobcat), on: shown.status) }
+        try await waitUntil { interactions.inFlight.count >= 1 }
+        #expect(try await !interactions.toggle(.emojiReaction(ReactionEmoji(name: "👍")), on: shown.status))
+        #expect(try await !interactions.toggle(.favourite, on: shown.status))
+        gate.open()
+        #expect(try await first.value)
+
+        #expect(settled == [.emojiReaction(blobcat), .favourite])
+    }
+
+    /// 複数付けられ、お気に入りをリアクションと別に持つサーバー（Iceshrimp.NET、Chuckya）では、返った列のとおり、お気に入りと自分のほかのリアクションが残る。
+    @Test func chuckyaKeepsOtherReactionsAndFavouriteAsServerReturns() async throws {
+        let thumbsUp = ReactionEmoji(name: "👍")
+        let blobcat = ReactionEmoji(name: "blobcat")
+        let shown = Shown(status(reactions: [EmojiReaction(emoji: thumbsUp, count: 1, me: true)]))
+        let fromServer = status(reactions: [EmojiReaction(emoji: thumbsUp, count: 1, me: true), EmojiReaction(emoji: blobcat, count: 1, me: true)])
+        let interactions = StatusInteractions(operations: reactionOperations { _, _ in fromServer }) { shown.update($0, $1) }
+        interactions.emojiReactionStyle = .chuckya
+
+        #expect(try await interactions.toggle(.emojiReaction(blobcat), on: shown.status))
+
+        #expect(shown.history.map { $0.emojiReactions.map(\.me) } == [[true, true], [true, true]])
+        #expect(shown.history.map(\.favourited) == [false, false])
+    }
+
+    /// 自分が付けたほかのサーバーのカスタム絵文字を外している間に同じボタンを押しても、ほかの重ねた操作と同じく何もしない。
+    @Test func firefishIgnoresRepeatedRemovalOfRemoteCustomEmoji() async throws {
+        let remote = ReactionEmoji(name: "neofox@misskey.example", url: URL(string: "https://misskey.example/neofox.png"))
+        let shown = Shown(status(reactions: [EmojiReaction(emoji: remote, count: 2, me: true)]))
+        let gate = Gate()
+        let interactions = StatusInteractions(operations: reactionOperations(add: { _, _ in throw Failure() }, remove: { _, _ in
+            try await gate.wait()
+            return Status(id: "10", createdAt: Date(timeIntervalSince1970: 0), account: Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: nil), content: "", spoilerText: "", url: nil)
+        })) { shown.update($0, $1) }
+        interactions.emojiReactionStyle = .firefish
+
+        let first = Task { try await interactions.toggle(.emojiReaction(remote), on: shown.status) }
+        try await waitUntil { interactions.inFlight.count >= 1 }
+        #expect(try await !interactions.toggle(.emojiReaction(remote), on: shown.status))
+        gate.open()
+        #expect(try await first.value)
+    }
+
+    /// 失敗したら（Chuckyaが上限で断ったときなど）、押した絵文字だけを戻す。
+    @Test func firefishReactionFailureRevertsOnlyPressedEmoji() async throws {
+        let thumbsUp = ReactionEmoji(name: "👍")
+        let shown = Shown(status(reactions: [EmojiReaction(emoji: thumbsUp, count: 1, me: true)]))
+        let interactions = StatusInteractions(operations: reactionOperations { _, _ in throw Failure() }) { shown.update($0, $1) }
+        interactions.emojiReactionStyle = .firefish
+
+        await #expect(throws: Failure.self) {
+            try await interactions.toggle(.emojiReaction(ReactionEmoji(name: "blobcat")), on: shown.status)
+        }
+
+        #expect(shown.history.map { $0.emojiReactions.map(\.emoji.name) } == [["👍", "blobcat"], ["👍"]])
+        #expect(shown.status.hasEmojiReaction(thumbsUp))
+    }
+
+    /// Chuckyaでは、ほかのサーバーのカスタム絵文字も、返った名前のまま送る。
+    @Test func chuckyaSendsRemoteCustomEmoji() async throws {
+        let remote = ReactionEmoji(name: "neofox@misskey.example", url: URL(string: "https://misskey.example/neofox.png"))
+        let shown = Shown(status(reactions: [EmojiReaction(emoji: remote, count: 1, me: false)]))
+        let fromServer = status(reactions: [EmojiReaction(emoji: remote, count: 2, me: true)])
+        let interactions = StatusInteractions(operations: reactionOperations { _, _ in fromServer }) { shown.update($0, $1) }
+        interactions.emojiReactionStyle = .chuckya
+
+        #expect(try await interactions.toggle(.emojiReaction(remote), on: shown.status))
+
+        #expect(shown.status.hasEmojiReaction(remote))
+    }
+
+    /// サーバーが既定の絵文字に替えて付けたときは、失敗にせず、返った列を出す。
+    @Test func firefishReactionAdoptsFallbackEmoji() async throws {
+        let heart = ReactionEmoji(name: "❤")
+        let shown = Shown(status(reactions: []))
+        let fromServer = status(reactions: [EmojiReaction(emoji: heart, count: 1, me: true)])
+        let interactions = StatusInteractions(operations: reactionOperations { _, _ in fromServer }) { shown.update($0, $1) }
+        interactions.emojiReactionStyle = .firefish
+
+        #expect(try await interactions.toggle(.emojiReaction(ReactionEmoji(name: "blobcat")), on: shown.status))
+
+        #expect(shown.status.emojiReactions.map(\.emoji.name) == ["❤"])
+    }
+
+    /// ほかのサーバーのカスタム絵文字は、サーバーが既定の絵文字に替えてしまうので、送らずに断る。外すのは送る。
+    @Test func firefishRefusesToAddRemoteCustomEmoji() async throws {
+        let remote = ReactionEmoji(name: "neofox@misskey.example", url: URL(string: "https://misskey.example/neofox.png"))
+        let shown = Shown(status(reactions: [EmojiReaction(emoji: remote, count: 1, me: false)]))
+        let interactions = StatusInteractions(operations: reactionOperations { _, _ in
+            Issue.record("送らない")
+            throw Failure()
+        }) { shown.update($0, $1) }
+        interactions.emojiReactionStyle = .firefish
+
+        await #expect(throws: StatusInteractions.RemoteEmojiReactionUnavailable.self) {
+            try await interactions.toggle(.emojiReaction(remote), on: shown.status)
+        }
+
+        #expect(shown.history.isEmpty)
+        #expect(interactions.inFlight.isEmpty)
     }
 
     /// 結果を待っている間に、同じ絵文字は送らず、ほかの絵文字は送る。

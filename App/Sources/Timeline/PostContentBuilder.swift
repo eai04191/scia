@@ -180,11 +180,11 @@ struct PostContentBuilder {
 
     /// 投稿の絵文字のリアクションを、リアクションの列のボタンにする。リアクションがなければnil。
     /// ボタンは、絵文字の名前で見分ける。Fedibirdは名前でまとめるため、同じ名前のリアクションは1つしか並ばない。
-    func reactionChips(for shown: Status) -> [ReactionChipsView.Reaction]? {
+    func reactionChips(for shown: Status, localEmojis: [String: CustomEmoji]) -> [ReactionChipsView.Reaction]? {
         guard !shown.emojiReactions.isEmpty, appearance.showsReactions else { return nil }
         let renderer = RichTextRenderer(font: PostTypography(settings: settings).font(.reaction), textColor: .label, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
         return shown.emojiReactions.map { reaction in
-            let emoji = reaction.emoji
+            let emoji = reaction.emoji.resolvingImage(in: localEmojis)
             // 画像のないカスタム絵文字（URLが読めなかったもの）は、ショートコードを文字で出す。
             let shortcode = emoji.isCustom ? ":\(emoji.name):" : nil
             let text: RichText = emoji.customEmoji.map { .plain(":\($0.shortcode):", emojis: [$0]) } ?? .plain(shortcode ?? emoji.name, emojis: [])
