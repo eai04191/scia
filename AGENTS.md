@@ -49,28 +49,15 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 ## シミュレーター
 
 - 動作確認とテストには、`Scia 1`、`Scia 2`、`Scia 3`、`Scia 4`のどれかのシミュレーターを使う。どれもログイン済みの端末の複製で、ログイン情報が端末のKeychainに残っているため、ログインし直さずに済む
-- iPadと画面を開閉するiPhoneでの見え方は、`Scia iPad 1`、`Scia iPad 2`（iPad mini）、`Scia Duo`（iPhone Duo）で確かめる。`Tools/sim.sh acquire 'Scia iPad 1'`のように名指ししたときだけ借りられ、端末を省いた`acquire`と`make test`には使われない。名指しで借りた端末は、端末を省いた`acquire`で番号の端末を借りても持ったままになり、別の端末を名指しすると返る。ログインしていない端末では`scia-debug://dummy-session`で入る
 - iPadだけ、`Scia Duo`だけ、ダークモードだけのように、起きる端末や見た目が限られた不具合は、その中だけを変えて直す。ほかの端末や見た目にも効かせるときは、理由をcommit messageに書く。直したら、ほかの端末で見え方が変わっていないことも確かめる
-- iPadでは、アプリが画面の一部のウインドウで開く。`dump`の座標は画面の座標（タップと同じ）で、ウインドウの位置と大きさは`ウインドウ`の行の`枠`に出る
-- `Scia Duo`は画面が2つあり、`simctl io`の`screenshot`と`recordVideo`は`--display`がないと失敗する。`Tools/sim.sh shot`は主の画面（`primary`）を撮り、ほかの画面は`--display`で渡す。録画は`io recordVideo --display=primary`で撮る
 - `Scia Scenario`は`make scenario-*`の専用の端末で、`Tools/sim.sh`では貸し借りしない。ほかの確かめには使わない
-- 番号の端末は4台なので、シミュレーターを触る間だけ借りる。触る直前に`sim`のskillで`Tools/sim.sh acquire`を走らせて借り（空きがなければ空くまで待つ）、触り終えたら`Tools/sim.sh release`で返す。借りた端末をほかのworktreeが使ったあとなら、`Tools/sim.sh reset '<使う端末>'`でアプリの設定を既定に戻し、自分のビルドを入れ直す
+- シミュレーターを触る直前に、`sim`のskillで端末を借り、触り終えたら返す。貸し借りの手順のほか、`Tools/sim.sh`の`dump`と`shot`での画面の読み方、iPadと`Scia Duo`（名指しで借りる）、4台が同じアカウントを共有していることの注意、simslimで止めているサービスも、skillにある
 - 端末のクリップボードには、自分が`Tools/sim.sh ctl '<使う端末>' pbcopy`で入れたもの以外をペーストしない。DeviceHubの「Use Shared Clipboard」がオンだと、Macのクリップボードが端末へ書き込まれ、Universal Clipboardで届いたユーザーのiPhoneのコピーも入るため、投稿欄に貼ると仕事の内容が投稿される。`Tools/sim.sh acquire`は、借りた端末の同期を切ってクリップボードを空にする。投稿欄の本文と添付は、ペーストではなく`scia-debug://compose`の`text`と`media`で入れる。ペーストそのものを確かめるときは、貼る直前に`pbcopy`で中身を入れる
-- 端末の設定は、ほかのスレッドが変えたり、借りるときに既定に戻したりする。確かめに要る設定（チューニング、タップや長押しの操作、見た目など）は、前に入れたものが残っている前提にせず、確かめる直前に入れる
 - シミュレーターのツールでは、決まった端末を毎回`device`で指定する。省略すると、他のスレッドが使っている端末を操作してしまうことがある
-- 端末に命令を送る`xcrun simctl`（`openurl`、`spawn`、`launch`、`install`、`io`など）は、直接呼ばずに`Tools/sim.sh ctl '<使う端末>' <操作> <引数...>`で送る。貸し借りを確かめてから`xcrun simctl <操作> '<使う端末>' <引数...>`を走らせる。直接の呼び出しと、借りていない端末を指したシミュレーターのツールは、hook（`.claude/settings.json`、`Tools/sim-lease-guard.py`）が実行の前に止める。simctlは名前を渡せばどの端末にも届き、借りた端末を確かめずに別の名前を書くと、ほかのスレッドの端末を触ってしまうため。端末は名前で書く（UDID、`booted`、`all`は受け付けない）。`list`と`get_app_container`のような、端末を変えない操作は直接呼んでよい。`Tools/sim.sh acquire`の出力の最後の行で借りた端末を読んでから、次のコマンドで送る
+- 端末に命令を送る`xcrun simctl`は、直接呼ばずに`Tools/sim.sh ctl '<使う端末>' <操作> <引数...>`で送る。直接の呼び出しと、借りていない端末を指したシミュレーターのツールは、hookが止める
 - 並行して作業するスレッドは、worktreeも分ける。`make build`・`make test`はworktree直下の`DerivedData`、`make test-core`は`Packages/SciaCore/.build`を使うため、同じworktreeで同時に走らせると、ロック待ちで失敗したり成果物を上書きし合ったりする
-- 4台は同じアカウントでログインしているため、サーバー上の状態は共有される。読んだ位置は`api/v1/markers`でサーバーに保存され、起動時に読み込まれるので、別のスレッドがスクロールすると次の起動位置が変わる。投稿やブーストも、ストリーミングで他の端末に流れ込む。起動時の位置や新着の挙動を確かめるときは、他のスレッドの操作で結果が乱れていないか疑う
-- 端末のリセット（`xcrun simctl erase`）や別の端末での起動をすると、ユーザーにログインし直してもらう必要がある
-- 貸し借りする端末は、メモリを減らすため、[simslim](https://github.com/MobAI-App/simslim)で写真以外の使わないサービスを止めている（`simslim on <UDID> --except photos`）。プッシュ通知、ユニバーサルリンク、iCloud、Spotlight、言語のデータの読み込みなどは、エラーを出さずに動かないことがある。こうした機能が動かないときは、Sciaの不具合と決める前に`simslim status <UDID> --dropped`で止めているサービスを確かめる。要る分類（`simslim profiles`）があれば、`simslim on <UDID> --except photos,<分類>`で残して入れ直し（端末は再起動する）、確かめ終えたら`--except photos`で入れ直す。設定は端末を再起動しても消えないが、`xcrun simctl clone`で作った端末には引き継がれない
-- 画面は`Tools/sim.sh dump '<使う端末>'`で文字として読む。アプリの中でアニメーションとスクロールの慣性が止まるのを待ってから（多くは1秒ほど）、要素の名前と中心の座標（タップと同じポイント）、タイムラインの`contentOffset.y`などの状態を出す。初回は、アプリに要素を作らせる設定を端末に入れ、起動し直しを求める。この設定でアプリが少し重くなるので、hitchを測るときは`Tools/sim.sh ctl '<使う端末>' spawn defaults delete com.apple.Accessibility ApplicationAccessibilityEnabled`で外す
-- 見た目を確かめるときは、シミュレーターのツールの`screenshot`ではなく`Tools/sim.sh shot '<使う端末>'`で撮る。画面が止まるのを待ってから、端末のポイント幅に縮小したJPEGを出すので、画像の座標がそのままタップの座標になり、1枚のトークンも約1/5になる。`--crop x,y,幅,高さ`で一部を切り出し、`--full <ファイル>`でユーザーに送る原寸のPNGも残す。原寸は自分では読まない
 - 画面は、タップでたどらず`Tools/sim.sh ctl '<使う端末>' openurl '<URL>'`で開く。アプリの画面は`scia://`のURLで開き、デバッグ版だけの画面と操作は`scia-debug://`で開く。`scia-debug://reset`（重ねた画面を閉じてホームに戻す）のあとに続けて送ってよい。閉じ終えてから開く。IDやハンドルは、ログインしているサーバー（stellaria.network）の公開API（`api/v1/accounts/lookup?acct=`、`api/v1/accounts/<ID>/statuses`）で調べる。画面を足したら、`AppDestination`に開く先を足し、[docs/app-url.md](docs/app-url.md)の「開ける画面」にも書く。開ける画面は、そこに並べてある。`scia://`のURLは、これから足すショートカットと同じ入り口を通る
 - ダミーのセッション、保存してあるアカウントへの切り替え、投稿欄やプロフィールの編集への入力、新着の保留、ソフトウェアキーボードの出し方は、[docs/debug-urls.md](docs/debug-urls.md)にある
-- URLを送ったあとや操作のあとに`sleep`しない。`dump`と`shot`が画面が止まるまで待つので、続けて行うコマンドは1つのBashの呼び出しにまとめる（例: `Tools/sim.sh ctl '<使う端末>' openurl 'scia-debug://reset' && Tools/sim.sh dump '<使う端末>'`）
-- タップやスワイプのあとは、dumpで結果を確かめてから次へ進む。思った画面でなければ、同じ座標を打ち直さず、dumpから座標を取り直す
-- 画像の読み込みのように、動きのないまま中身が後から入る表示は、止まっていても終わっていない。目的の要素が出るまでdumpし直す。ダミー投稿の画像は、流してから1〜2秒で入る
-- 写真のピッカーは別のプロセスが描くので、`sim.sh`はその表示を待たない。アプリを起動して最初に開いたときだけ、表示まで数秒かかる。撮った画像にピッカーが写っていなければ、dumpで`mediaPicker: shown`を確かめて、数秒後に撮り直す
 
 ## 設計原則
 
