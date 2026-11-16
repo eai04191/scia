@@ -58,7 +58,18 @@ struct LocalMediaPasteTests {
         #expect(file.mimeType == "video/quicktime")
     }
 
-    @Test func 画像でも動画でもないファイルのURLは添付しない() async throws {
+    @Test func 音声のファイルのURLは音声として添付する() async throws {
+        let source = try temporaryFile(named: "memo.mp3", contents: Data("mp3".utf8))
+        let pasted = try #require(await LocalMediaLoader.startLoadingPastedFile(from: finderItem(for: source)))
+        let file = try await pasted.load()
+        defer { file.remove() }
+
+        #expect(pasted.kind == .audio)
+        #expect(file.kind == .audio)
+        #expect(file.mimeType == "audio/mpeg")
+    }
+
+    @Test func メディアでないファイルのURLは添付しない() async throws {
         let source = try temporaryFile(named: "notes.txt", contents: Data("text".utf8))
         #expect(await LocalMediaLoader.startLoadingPastedFile(from: finderItem(for: source)) == nil)
     }

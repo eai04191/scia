@@ -4214,7 +4214,7 @@ extension InlineComposeController: UITextPasteDelegate {
         }
     }
 
-    /// ファイルのURLの項目は、指す先が画像か動画なら、文字やアイコンより優先してそのファイルを添付する。それ以外のファイルなら、
+    /// ファイルのURLの項目は、指す先がメディアなら、文字やアイコンより優先してそのファイルを添付する。それ以外のファイルなら、
     /// いつもどおり本文に入れる。
     private func transformPastedFile(_ item: any UITextPasteItem) {
         let index = pendingPastedMedia.count

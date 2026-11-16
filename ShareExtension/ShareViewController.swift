@@ -126,11 +126,11 @@ final class ShareViewController: UIViewController {
         }
     }
 
-    /// 画像か動画の表現をファイルで受け取り、App Groupのフォルダーにコピーする。受け取ったファイルは完了の処理を抜けると消されるため、その中でコピーする。
+    /// 画像、動画、音声の表現をファイルで受け取り、App Groupのフォルダーにコピーする。受け取ったファイルは完了の処理を抜けると消されるため、その中でコピーする。
     private func store(_ provider: NSItemProvider, in inbox: SharedMediaInbox, id: UUID, index: Int) async throws {
         let type = provider.registeredTypeIdentifiers
             .compactMap { UTType($0) }
-            .first { $0.conforms(to: .movie) || $0.conforms(to: .image) }
+            .first { $0.conforms(to: .movie) || $0.conforms(to: .image) || $0.conforms(to: .audio) }
         guard let type else { throw CocoaError(.fileReadUnsupportedScheme) }
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             _ = provider.loadFileRepresentation(for: type, openInPlace: false) { url, _, error in

@@ -23,7 +23,7 @@ struct MediaDrop {
     fileprivate let loaded: LoadedMedia
     fileprivate let loads: [Task<Void, any Error>]
 
-    /// 読み終えるのを待ち、画像か動画として読めたものをドロップした順に返す。読めなかった項目（画像か動画でないファイルや、読み込みに失敗したもの）は数だけ返す。
+    /// 読み終えるのを待ち、メディアとして読めたものをドロップした順に返す。読めなかった項目（メディアでないファイルや、読み込みに失敗したもの）は数だけ返す。
     func result() async -> (media: [PastedMedia], missingCount: Int) {
         for load in loads {
             _ = await load.result

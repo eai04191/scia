@@ -15,7 +15,7 @@ enum LocalMediaLoader {
         PickedMedia(assetIdentifier: assetIdentifier) { avoiding in try await load(from: provider, avoiding: avoiding) }
     }
 
-    /// 画像か動画の表現をファイルで受け取り、一時ディレクトリにコピーする。
+    /// 画像、動画、音声の表現をファイルで受け取り、一時ディレクトリにコピーする。
     /// 受け取ったファイルは完了の処理を抜けると消されるため、その中でコピーする。
     ///
     /// ピッカーには形式を変えさせない（`MediaPickerSheet`）ので、写真はHEICのまま並ぶ。その後ろに、ピッカーが作るJPEGも並ぶ
@@ -24,11 +24,11 @@ enum LocalMediaLoader {
     static func load(from provider: NSItemProvider, avoiding: Set<String>) async throws -> LocalMediaFile {
         let type = provider.registeredTypeIdentifiers
             .compactMap { UTType($0) }
-            .filter { $0.conforms(to: .movie) || $0.conforms(to: .image) }
+            .filter { type in mediaTypes.contains { type.conforms(to: $0) } }
             .first { $0.preferredMIMEType.map { !avoiding.contains($0) } ?? true }
         guard let type else { throw LocalMediaError.unsupportedType }
         let kind = Self.kind(of: type)
-        let mimeType = type.preferredMIMEType ?? (kind == .video ? "video/mp4" : "image/jpeg")
+        let mimeType = mimeType(of: type, kind: kind)
         let url = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, any Error>) in
             _ = provider.loadFileRepresentation(for: type, openInPlace: false) { url, _, error in
                 guard let url else {
@@ -52,11 +52,21 @@ enum LocalMediaLoader {
 
     /// 添付したときの種類。GIFは、サーバーが音のない動画（gifv）に変える。
     private static func kind(of type: UTType) -> MediaAttachment.Kind {
-        type.conforms(to: .gif) ? .gifv : type.conforms(to: .movie) ? .video : .image
+        type.conforms(to: .gif) ? .gifv : type.conforms(to: .movie) ? .video : type.conforms(to: .audio) ? .audio : .image
+    }
+
+    /// サーバーに送るMIMEタイプ。型から決まらないときは、種類ごとの代表の形式にする。
+    private static func mimeType(of type: UTType, kind: MediaAttachment.Kind) -> String {
+        if let mimeType = type.preferredMIMEType { return mimeType }
+        return switch kind {
+        case .video: "video/mp4"
+        case .audio: "audio/mp4"
+        case .image, .gifv, .unknown: "image/jpeg"
+        }
     }
 
     /// 投稿欄で受け付けるメディアの型。
-    static let mediaTypes: [UTType] = [.image, .movie]
+    static let mediaTypes: [UTType] = [.image, .movie, .audio]
 
     /// クリップボードの項目が、本文ではなく添付に回すメディアなら、その型を返す。文字を持つ項目は本文に入れるのでnil。
     /// 文字と画像を両方持つ項目（画像の説明の文字が付いたものなど）は、本文にペーストするつもりのことが多いため、文字を優先する。
@@ -91,20 +101,20 @@ enum LocalMediaLoader {
         provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
     }
 
-    /// ペーストした項目のURLが画像か動画のファイルを指すなら、そのファイルのコピーを始める。それ以外のファイルならnil。
+    /// ペーストした項目のURLが画像、動画、音声のファイルを指すなら、そのファイルのコピーを始める。それ以外のファイルならnil。
     @MainActor
     static func startLoadingPastedFile(from provider: NSItemProvider) async -> PastedMedia? {
         guard let url = await fileURL(in: provider) else { return nil }
         return startCopyingFile(url)
     }
 
-    /// 画像か動画のファイルなら、一時ディレクトリへのコピーを始める。それ以外のファイルならnil。
+    /// 画像、動画、音声のファイルなら、一時ディレクトリへのコピーを始める。それ以外のファイルならnil。
     /// ペーストしたファイルと、共有拡張から受け取ったファイル（`SharedMediaInbox`）に使う。
     @MainActor
     static func startCopyingFile(_ url: URL) -> PastedMedia? {
         guard let type = UTType(filenameExtension: url.pathExtension), mediaTypes.contains(where: { type.conforms(to: $0) }) else { return nil }
         let kind = kind(of: type)
-        let mimeType = type.preferredMIMEType ?? (kind == .video ? "video/mp4" : "image/jpeg")
+        let mimeType = mimeType(of: type, kind: kind)
         let loading = Task.immediate(.withoutRequests) { try await copyPastedFile(url, mimeType: mimeType, kind: kind) }
         return PastedMedia(kind: kind, load: { try await loading.value }, discard: {
             Task(.withoutRequests) { try? await loading.value.remove() }
@@ -141,6 +151,7 @@ enum LocalMediaThumbnail {
     /// 表示する大きさまで縮めたサムネイル。元の大きさで読むと、大きな写真では時間がかかり、メモリも食う。動画は最初のコマを使う。
     @concurrent
     static func make(for file: LocalMediaFile, maxPixelSize: CGFloat) async -> UIImage? {
+        guard file.kind != .audio else { return nil }
         if file.kind == .video {
             let generator = AVAssetImageGenerator(asset: AVURLAsset(url: file.url))
             generator.appliesPreferredTrackTransform = true

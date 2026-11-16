@@ -4158,7 +4158,7 @@ final class SessionController {
         }
         let media = files.compactMap(LocalMediaLoader.startCopyingFile)
         logger.info("shared media received count=\(media.count, privacy: .public) of \(files.count, privacy: .public) unreadable=\(unreadableCount, privacy: .public)")
-        // 選んだうちの一部が欠けたことは、添付した列を見ても分からないので知らせる。画像か動画でないファイルは、拡張が画像か動画の表現を選んで置くので、普通は届かない。
+        // 選んだうちの一部が欠けたことは、添付した列を見ても分からないので知らせる。メディアでないファイルは、拡張がメディアの表現を選んで置くので、普通は届かない。
         let missingCount = unreadableCount + files.count - media.count
         if missingCount > 0 {
             notices.showTransient(.sharedMediaUnreadable(count: missingCount), duration: AppDependencies.tuning.value(of: TuningCatalog.noticeFailureChipDuration))

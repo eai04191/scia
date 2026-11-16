@@ -174,14 +174,30 @@ targets:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
           NSExtensionAttributes:
-            NSExtensionActivationRule:
-              NSExtensionActivationSupportsImageWithMaxCount: 4
-              NSExtensionActivationSupportsMovieWithMaxCount: 4
-              # Safariのページと、選んだ文のメニューの「共有」。選んだ文を引用して書き始める
-              NSExtensionActivationSupportsWebPageWithMaxCount: 1
-              # リンクの「共有」や、URLだけを渡すアプリの共有。URLで書き始める
-              NSExtensionActivationSupportsWebURLWithMaxCount: 1
-              NSExtensionActivationSupportsText: true
+            # 共有シートに出る条件。辞書のキーでは件数の上限を外せず、音声も数えられないので、述語で書く。
+            # 添付がどれも、画像、動画、音声、テキスト、リンク（ファイルを指さないURL）のどれかのときに出る。
+            # 画像、動画、音声は件数を問わない。添付できる件数はサーバーごとに違い、ここでは読めないので、受け取ったあとにアプリが止める。
+            # メディアでもテキストでもない添付（リンク）は1件まで。本文にするのは1件だけのため。
+            # 行を分けて書き、YAMLの折りたたみ（>-）で1行の文字列にする
+            NSExtensionActivationRule: >-
+              extensionItems.@count > 0
+              AND SUBQUERY(extensionItems, $item,
+              $item.attachments.@count > 0
+              AND SUBQUERY($item.attachments, $a,
+              ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.image"
+              OR ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.movie"
+              OR ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.audio"
+              OR ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.plain-text"
+              OR (ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.url"
+              AND NOT (ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.file-url"))
+              ).@count == $item.attachments.@count
+              AND SUBQUERY($item.attachments, $a,
+              NOT (ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.image")
+              AND NOT (ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.movie")
+              AND NOT (ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.audio")
+              AND NOT (ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.plain-text")
+              ).@count <= 1
+              ).@count == extensionItems.@count
             # Safariの共有ボタンから共有するとき、ページの中で選んでいる文とURLを読む
             NSExtensionJavaScriptPreprocessingFile: SharePreprocessing
   SciaTests:
