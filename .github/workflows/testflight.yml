@@ -113,7 +113,7 @@ jobs:
           if [ -z "$LAST" ]; then
             echo 'Sciaのベータ版です。'
           else
-            changes=$(git log --format=%s "$LAST..HEAD" | grep -E '^(feat|fix|perf)(\([^)]*\))?!?: ' | grep -v -E '^[a-z]+\(dev\)' | sed 's/^/* /' || true)
+            changes=$(git log --reverse --format=%s "$LAST..HEAD" | grep -E '^(feat|fix|perf)(\([^)]*\))?!?: ' | grep -v -E '^[a-z]+\(dev\)' | sed 's/^/* /' || true)
             printf '前のビルドからの変更:\n\n%s\n' "${changes:-* 使う人に見える変更はありません}"
           fi > "$RUNNER_TEMP/what-to-test.txt"
           cat "$RUNNER_TEMP/what-to-test.txt"
