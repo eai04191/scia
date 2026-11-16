@@ -1,13 +1,15 @@
 #!/bin/sh
 # ログイン画面の補完に使うサーバーのリストを、FediDBのデータセット（CC BY 4.0）から作り直す。
-# Mastodonとその派生を、月間アクティブ数の多い順に1行1ドメインで書き出す。FediDBに載らないサーバーはTools/known-servers-extra.txtで足す。
+# Mastodonとその派生、Mastodon互換のAPIでログインできるサーバー（Pleroma、Akkoma、Sharkey、Iceshrimp、Iceshrimp.NET、Firefish、Catodon）を、
+# 月間アクティブ数の多い順に1行1ドメインで書き出す。FediDBに載らないサーバーはTools/known-servers-extra.txtで足す。
+# ソフトウェアの名前は、FediDBのデータセットの表記で書く（Iceshrimp.NETは`iceshrimpnet`）。
 # FediDBの出力は週1回なので、GitHub Actionsで週1回走らせてPRにする。
 set -eu
 
 out=Packages/SciaCore/Sources/SciaCore/Auth/Resources/known-servers.txt
 tmp=$(mktemp)
 extra=Tools/known-servers-extra.txt
-software='["mastodon", "hometown", "fedibird", "kmyblue", "ecko"]'
+software='["mastodon", "hometown", "fedibird", "kmyblue", "ecko", "pleroma", "akkoma", "sharkey", "iceshrimp", "iceshrimpnet", "firefish", "catodon"]'
 fedidb=$(mktemp)
 extras=$(mktemp)
 trap 'rm -f "$tmp" "$fedidb" "$extras"' EXIT
@@ -38,7 +40,7 @@ while IFS= read -r domain || [ -n "$domain" ]; do
     exit 1
   fi
   if ! printf '%s' "$nodeinfo" | jq -e --argjson software "$software" '.software.name as $s | $software | index($s)' > /dev/null; then
-    echo "${domain}のソフトウェアがMastodonとその派生でないため、リストを置き換えません" >&2
+    echo "${domain}のソフトウェアが対象のソフトウェアでないため、リストを置き換えません" >&2
     exit 1
   fi
   printf '%s' "$nodeinfo" | jq -c --arg domain "$domain" '
