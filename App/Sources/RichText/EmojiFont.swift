@@ -10,8 +10,12 @@ import UIKit
 /// 文字列は変えないため、コピーや読み上げ、行の折り返しは、Appleの絵文字で描くときと変わらない。
 /// タイムラインの本文はメインスレッドの外でも作るため、覚えておく表は`Mutex`で守る。
 enum EmojiFont {
+    private struct FontKey: Hashable {
+        let font: UIFont
+        let language: String?
+    }
     private struct Fonts {
-        var cache: [UIFont: UIFont] = [:]
+        var cache: [FontKey: UIFont] = [:]
         /// twemojiを足した書体から、足す前の書体を引く。
         var originals: [UIFont: UIFont] = [:]
     }
@@ -26,23 +30,36 @@ enum EmojiFont {
         return descriptor as UIFontDescriptor
     }()
 
-    static func font(_ font: UIFont, style: EmojiStyle) -> UIFont {
+    /// - Parameter language: 文字列に付ける言語（`.languageIdentifier`）。絵文字だけを描くときはnil。
+    ///   代わりの書体のリストを付けた書体では、システムが文字列の言語で漢字とかなの書体を選び分けなくなり、中国語の文もヒラギノで描かれる。
+    ///   twemojiの後ろに、その言語でシステムが使うリストを続けて、Appleの絵文字で描くときと同じ書体を選ばせる。
+    static func font(_ font: UIFont, style: EmojiStyle, language: String? = nil) -> UIFont {
         switch style {
         case .system:
             return font
         case .twemoji:
-            if let cached = fonts.withLock({ $0.cache[font] }) { return cached }
-            let cascade = (font.fontDescriptor.object(forKey: .cascadeList) as? [UIFontDescriptor]) ?? []
+            let key = FontKey(font: font, language: language)
+            if let cached = fonts.withLock({ $0.cache[key] }) { return cached }
+            var cascade = (font.fontDescriptor.object(forKey: .cascadeList) as? [UIFontDescriptor]) ?? []
+            if let language, let defaults = CTFontCopyDefaultCascadeListForLanguages(font as CTFont, [language] as CFArray) as? [CTFontDescriptor] {
+                cascade += defaults as [UIFontDescriptor]
+            }
             let descriptor = font.fontDescriptor.addingAttributes([.cascadeList: [twemoji] + cascade])
             let result = UIFont(descriptor: descriptor, size: font.pointSize)
             return fonts.withLock { fonts in
                 // ほかのスレッドが先に作っていれば、そちらを使う。足す前の書体を引く表と同じものを返すため。
-                if let cached = fonts.cache[font] { return cached }
-                fonts.cache[font] = result
+                if let cached = fonts.cache[key] { return cached }
+                fonts.cache[key] = result
                 fonts.originals[result] = font
                 return result
             }
         }
+    }
+
+    /// `font(_:style:language:)`で作った書体を、言語を渡さずに作った書体にする。ほかの書体はそのまま返す。
+    static func removingLanguage(from font: UIFont) -> UIFont {
+        guard let original = fonts.withLock({ $0.originals[font] }) else { return font }
+        return self.font(original, style: .twemoji)
     }
 
     /// 測るのに使う絵文字。Appleの絵文字でもtwemojiでも、絵の枠いっぱいに描く。

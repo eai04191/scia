@@ -423,7 +423,7 @@ struct RichTextRenderer: Sendable {
         var attributes: [NSAttributedString.Key: Any] = [
             .font: font(for: style, block: block),
             .foregroundColor: block.quoteLevel > 0 ? secondaryColor : textColor,
-            .languageIdentifier: style.contains(.original) ? originalLanguage ?? language : language,
+            .languageIdentifier: language(for: style),
         ]
         if style.contains(.strikethrough) {
             attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
@@ -434,8 +434,23 @@ struct RichTextRenderer: Sendable {
         return attributes
     }
 
+    /// 文字列から言語を外し、ウィンドウに付けた言語で描かせる。twemojiの書体に続けた、言語ごとの代わりの書体のリストも外す。
+    static func removeLanguage(from string: NSMutableAttributedString) {
+        let range = NSRange(location: 0, length: string.length)
+        string.removeAttribute(.languageIdentifier, range: range)
+        string.enumerateAttribute(.font, in: range) { value, range, _ in
+            guard let font = value as? UIFont else { return }
+            let plain = EmojiFont.removingLanguage(from: font)
+            if plain !== font { string.addAttribute(.font, value: plain, range: range) }
+        }
+    }
+
+    private func language(for style: RichText.Style) -> String {
+        style.contains(.original) ? originalLanguage ?? language : language
+    }
+
     private func font(for style: RichText.Style, block: RichText.Block) -> UIFont {
-        EmojiFont.font(textFont(for: style, block: block), style: emojiStyle)
+        EmojiFont.font(textFont(for: style, block: block), style: emojiStyle, language: language(for: style))
     }
 
     private func textFont(for style: RichText.Style, block: RichText.Block) -> UIFont {

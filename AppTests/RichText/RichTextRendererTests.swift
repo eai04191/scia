@@ -113,6 +113,36 @@ struct RichTextRendererTests {
         #expect(system["😀"]?.contains("Apple Color Emoji") == true)
     }
 
+    /// twemojiにしても、漢字とかなの書体は、Appleの絵文字のときと同じく文字列の言語で選ぶ。訳文の中に残した原文の部分は、原文の言語で選ぶ。
+    /// 代わりの書体のリストを付けた書体では、システムが文字列の言語で書体を選び分けず、中国語の文もヒラギノで描いていた。
+    @Test(arguments: ["ja", "zh-Hans", "zh-Hant", "ko"])
+    func twemojiKeepsFontsChosenByLanguage(_ language: String) {
+        let text = RichText(blocks: [.init(inlines: [.text("直骨关门。本文の話😀", []), .text("直骨", .original)])])
+        func families(_ style: EmojiStyle) -> [String: String] {
+            var renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: .offline, language: language, emojiStyle: style)
+            renderer.originalLanguage = "zh-Hant"
+            return glyphRuns(of: renderer.render(text)).mapValues(\.family)
+        }
+        var expected = families(.system)
+        expected["😀"] = "Twemoji"
+
+        #expect(families(.twemoji) == expected)
+    }
+
+    /// 言語を外した文字列は、twemojiでも、組むときに渡した言語の書体で描かない。
+    /// 通知の言い回しのようなアプリの文言は、言語を外してウィンドウに付けたアプリの言語で描くため。
+    @Test func removingLanguageAlsoRemovesItFromTwemojiFont() {
+        func families(_ language: String) -> [String: String] {
+            let renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: .offline, language: language, emojiStyle: .twemoji)
+            let rendered = NSMutableAttributedString(attributedString: renderer.render(.plain("直骨が投稿しました", emojis: [])))
+            RichTextRenderer.removeLanguage(from: rendered)
+            #expect(rendered.attribute(.languageIdentifier, at: 0, effectiveRange: nil) == nil)
+            return glyphRuns(of: rendered).mapValues(\.family)
+        }
+
+        #expect(families("zh-Hans") == families("ko"))
+    }
+
     /// twemojiは文字で描く指定（U+FE0E）を区別せず、キーキャップの部品の数字を空の字形で持つため、これらの並びはtwemojiで描かない。
     @Test func twemojiKeepsTextPresentationAndBareKeycapBases() {
         let sequences = ["☺\u{FE0E}", "1\u{FE0F}", "#\u{FE0F}", "1\u{FE0F}\u{20E3}", "☺\u{FE0F}"]

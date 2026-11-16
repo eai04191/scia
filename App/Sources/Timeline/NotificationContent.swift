@@ -54,7 +54,7 @@ extension TimelineViewController {
         // 言い回しはアプリの文言なので、言語を外し、ウィンドウに付けたアプリの言語で描く。
         func phrase(_ string: String) -> NSAttributedString {
             let rendered = NSMutableAttributedString(attributedString: renderer.render(.plain(string, emojis: [])))
-            rendered.removeAttribute(.languageIdentifier, range: NSRange(location: 0, length: rendered.length))
+            RichTextRenderer.removeLanguage(from: rendered)
             return rendered
         }
         let text = NSMutableAttributedString(attributedString: phrase(appearance.phrase.before))
