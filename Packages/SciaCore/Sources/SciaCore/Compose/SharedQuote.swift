@@ -1,7 +1,17 @@
 import Foundation
+import UniformTypeIdentifiers
 
 /// Safariなどの共有で受け取った、ページのタイトルとURLと選んだ文から、投稿欄の本文を作る。決まりはdocs/compose.mdの「共有で引用する」にある。
 public enum SharedQuote {
+    /// 共有された項目の型から、本文にして書き始める共有（ページ、選んだ文、URL）かを決める。画像、動画、音声が1つでも入っていれば、メディアの共有として添付する。
+    /// ファイルを指すURLは、リンクとして本文に入れない。ファイルのURLの項目は`public.url`も一緒に登録するので、型ごとではなく全体で見る。
+    public static func isQuote(typeIdentifiers: [String]) -> Bool {
+        let types = typeIdentifiers.compactMap { UTType($0) }
+        guard !types.contains(where: { $0.conforms(to: .image) || $0.conforms(to: .movie) || $0.conforms(to: .audio) }) else { return false }
+        let hasLink = types.contains { $0.conforms(to: .url) } && !types.contains { $0.conforms(to: .fileURL) }
+        return hasLink || types.contains { $0.conforms(to: .propertyList) || $0.conforms(to: .plainText) }
+    }
+
     /// タイトル、URL、引用の順に1行ずつ並べ、引用は選んだ文の各行の頭に`> `を付ける。ないものは行ごと省く。どれもなければnil。
     /// 最後に改行を付ける。共有するのは感想を書くためなので、続けてすぐ次の行に書けるようにする。
     /// タイトルは`LinkTitling.normalizedTitle`で1行に整える。選んだ文の前後の空白と改行は外し、途中の空行も`>`だけの行にして段落の区切りを残す。

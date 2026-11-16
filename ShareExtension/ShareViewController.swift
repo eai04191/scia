@@ -46,7 +46,7 @@ final class ShareViewController: UIViewController {
         }
         let providers = (extensionContext?.inputItems as? [NSExtensionItem] ?? []).flatMap { $0.attachments ?? [] }
         logger.info("received types: \(providers.map(\.registeredTypeIdentifiers), privacy: .public)")
-        if Self.isQuoteShare(providers) {
+        if SharedQuote.isQuote(typeIdentifiers: providers.flatMap(\.registeredTypeIdentifiers)) {
             guard let quote = await quote(from: providers) else {
                 logger.error("nothing to quote")
                 fail()
@@ -83,29 +83,29 @@ final class ShareViewController: UIViewController {
         }
     }
 
-    /// Safariのページか選んだ文の共有。画像や動画が1つでも入っていれば、メディアの共有として添付する。
-    private static func isQuoteShare(_ providers: [NSItemProvider]) -> Bool {
-        let types = providers.flatMap(\.registeredTypeIdentifiers).compactMap { UTType($0) }
-        return !types.contains { $0.conforms(to: .image) || $0.conforms(to: .movie) }
-            && types.contains { $0.conforms(to: .propertyList) || $0.conforms(to: .plainText) }
-    }
-
-    /// Safariのページや選んだ文から、投稿欄の本文を作る。どれもなければnil。
+    /// Safariのページや選んだ文やリンクから、投稿欄の本文を作る。どれもなければnil。
     /// Safariの共有ボタンからは、前処理のJS（SharePreprocessing.js）が読んだページのタイトルとURLと選んだ文が届く。
-    /// 選んだ文のメニューの「共有」からは、選んだ文がテキストで届く。
+    /// 選んだ文のメニューの「共有」からは、選んだ文がテキストで届く。リンクの共有からは、URLだけが届く。
     private func quote(from providers: [NSItemProvider]) async -> String? {
         if let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.propertyList.identifier) }) {
             let results = try? await provider.loadItem(forTypeIdentifier: UTType.propertyList.identifier) as? [String: Any]
             let page = results?[NSExtensionJavaScriptPreprocessingResultsKey] as? [String: Any]
             return SharedQuote.body(title: page?["title"] as? String, url: page?["url"] as? String, selection: page?["selection"] as? String)
         }
-        guard let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) }) else { return nil }
         // Safariは文字列で渡すが、アプリによってはUTF-8のデータで渡す。
-        let item = try? await provider.loadItem(forTypeIdentifier: UTType.plainText.identifier)
+        let item = try? await providers.first { $0.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) }?
+            .loadItem(forTypeIdentifier: UTType.plainText.identifier)
         let text = (item as? String) ?? (item as? Data).flatMap { String(data: $0, encoding: .utf8) }
-        let url = try? await providers.first { $0.hasItemConformingToTypeIdentifier(UTType.url.identifier) }?
-            .loadItem(forTypeIdentifier: UTType.url.identifier) as? URL
+        let url = await url(in: providers.first { $0.hasItemConformingToTypeIdentifier(UTType.url.identifier) })
         return SharedQuote.body(title: nil, url: url?.absoluteString, selection: text)
+    }
+
+    /// 項目のURLを読む。`loadItem`は、共有元がURLをオブジェクトで登録していると`Data`で返すので、オブジェクトとして読む。
+    private func url(in provider: NSItemProvider?) async -> URL? {
+        guard let provider else { return nil }
+        return await withCheckedContinuation { continuation in
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in continuation.resume(returning: url) }
+        }
     }
 
     private func openCompose(_ text: String, scheme: String) {

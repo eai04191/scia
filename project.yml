@@ -179,6 +179,8 @@ targets:
               NSExtensionActivationSupportsMovieWithMaxCount: 4
               # Safariのページと、選んだ文のメニューの「共有」。選んだ文を引用して書き始める
               NSExtensionActivationSupportsWebPageWithMaxCount: 1
+              # リンクの「共有」や、URLだけを渡すアプリの共有。URLで書き始める
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
               NSExtensionActivationSupportsText: true
             # Safariの共有ボタンから共有するとき、ページの中で選んでいる文とURLを読む
             NSExtensionJavaScriptPreprocessingFile: SharePreprocessing

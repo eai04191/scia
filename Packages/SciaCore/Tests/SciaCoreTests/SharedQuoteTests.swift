@@ -2,6 +2,25 @@ import SciaCore
 import Testing
 
 struct SharedQuoteTests {
+    @Test(arguments: [
+        (["public.url"], true),
+        (["public.plain-text"], true),
+        (["com.apple.property-list"], true),
+        (["public.url", "public.jpeg"], false),
+        (["public.plain-text", "com.apple.quicktime-movie"], false),
+        (["public.file-url"], false),
+        (["public.file-url", "public.url"], false),
+        (["public.url", "com.apple.m4a-audio"], false),
+        ([], false),
+    ])
+    func writesFromSharedTextAndLinksButNotMediaOrFiles(_ typeIdentifiers: [String], _ expected: Bool) {
+        #expect(SharedQuote.isQuote(typeIdentifiers: typeIdentifiers) == expected)
+    }
+
+    @Test func usesOnlyURLWithoutTitleAndSelection() {
+        #expect(SharedQuote.body(title: nil, url: "https://example.com/a", selection: nil) == "https://example.com/a\n")
+    }
+
     @Test func putsTitleURLAndQuoteOnSeparateLines() {
         #expect(SharedQuote.body(title: "ページ", url: "https://example.com/a", selection: "選んだ文") == "ページ\nhttps://example.com/a\n> 選んだ文\n")
     }
