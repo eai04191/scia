@@ -108,7 +108,7 @@ enum PostStructureSummary {
         let combiningRun = longestCombiningRun(in: text)
         // 該当しない項目は出さない。出ていなければ、その項目はない。
         let lines: [String?] = [
-            "本文: \(text.count)文字、改行\(breaks.total)回（連続は最大\(breaks.longestRun)回）",
+            "本文: \(text.count)文字・改行\(breaks.total)回（連続は最大\(breaks.longestRun)回）",
             characterKinds(in: text, customEmojiCount: customEmojiCount).map { "文字の種類: \($0)" },
             combiningRun > 0 ? "文字に重ねる記号: 最大\(combiningRun)個連続" : nil,
             tagSummary(tokens).map { "書式: \($0)" },
@@ -184,7 +184,7 @@ enum PostStructureSummary {
         if kinds.isEmpty {
             return text.allSatisfy(\.isWhitespace) ? nil : "記号のみ"
         }
-        return kinds.joined(separator: "、")
+        return kinds.joined(separator: TextLists.plainSeparator)
     }
 
     private static func longestCombiningRun(in text: String) -> Int {
@@ -215,7 +215,7 @@ enum PostStructureSummary {
         if others > 0 {
             parts.append("そのほか\(others)個")
         }
-        return parts.joined(separator: "、")
+        return parts.joined(separator: TextLists.plainSeparator)
     }
 
     private static func spoiler(_ status: [String: Any]) -> Int? {
@@ -231,7 +231,7 @@ enum PostStructureSummary {
         for (type, name) in names {
             let matching = items.filter { $0["type"] as? String == type }
             guard !matching.isEmpty else { continue }
-            let sizes = matching.map(size(of:)).joined(separator: "、")
+            let sizes = matching.map(size(of:)).joined(separator: TextLists.plainSeparator)
             parts.append("\(name)\(matching.count)枚（\(sizes)）")
         }
         let others = items.count { item in !names.contains { $0.0 == item["type"] as? String } }
@@ -239,7 +239,7 @@ enum PostStructureSummary {
             parts.append("そのほか\(others)個")
         }
         let describedCount = items.count { !($0["description"] as? String ?? "").isEmpty }
-        return (parts + (describedCount > 0 ? ["代替テキストあり\(describedCount)個"] : [])).joined(separator: "、")
+        return (parts + (describedCount > 0 ? ["代替テキストあり\(describedCount)個"] : [])).joined(separator: TextLists.plainSeparator)
     }
 
     private static func size(of attachment: [String: Any]) -> String {

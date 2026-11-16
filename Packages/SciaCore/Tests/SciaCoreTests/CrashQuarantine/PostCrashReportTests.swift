@@ -3,7 +3,7 @@ import Foundation
 import Testing
 
 struct PostCrashReportTests {
-    private let environment = "Scia 1.0 (1)、iPhone17,1、iOS 26.1"
+    private let environment = "Scia 1.0 (1)・iPhone17,1・iOS 26.1"
 
     private func report(_ fields: [String: Any]) throws -> PostCrashReport {
         var status: [String: Any] = ["id": "109", "content": "", "visibility": "private", "url": "https://example.com/@secret/109"]
@@ -70,11 +70,11 @@ struct PostCrashReportTests {
         #expect(text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) == [
             "公開投稿でないため本文は送信されません。",
             "",
-            "本文: 7文字、改行2回（連続は最大2回）",
-            "文字の種類: かな、漢字、英数字、絵文字1個、カスタム絵文字1個",
+            "本文: 7文字・改行2回（連続は最大2回）",
+            "文字の種類: かな・漢字・英数字・絵文字1個・カスタム絵文字1個",
             "書式: 段落2個",
             "注意書き: 2文字",
-            "添付: 画像1枚（4000×300）、動画1枚（大きさ不明）、代替テキストあり1個",
+            "添付: 画像1枚（4000×300）・動画1枚（大きさ不明）・代替テキストあり1個",
             "投票: 選択肢0個",
             "引用: 2段",
             "リンクカードあり",
@@ -104,7 +104,7 @@ struct PostCrashReportTests {
     }
 
     @Test func 該当しない項目は出さない() throws {
-        #expect(try report([:]).text == "公開投稿でないため本文は送信されません。\n\n本文: 0文字、改行0回（連続は最大0回）\n\(environment)")
+        #expect(try report([:]).text == "公開投稿でないため本文は送信されません。\n\n本文: 0文字・改行0回（連続は最大0回）\n\(environment)")
     }
 
     @Test func 崩れやすい文字は該当するときだけ分かる言葉で出す() throws {
@@ -136,7 +136,7 @@ struct PostCrashReportTests {
             "card": ["type": "alice-card"],
         ])
         #expect(!(report.text + (report.maskedJSON ?? "")).contains("alice"))
-        #expect(report.text.contains("書式: 段落1個、そのほか1個"))
+        #expect(report.text.contains("書式: 段落1個・そのほか1個"))
     }
 
     @Test func 閉じていない山かっこは文字として扱う() {

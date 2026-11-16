@@ -48,7 +48,7 @@ public enum PreviewPhoto: String, CaseIterable, Sendable {
             }
             return links.joined(separator: " and ") + " by \(group.photographer) on Unsplash"
         }
-        return "<p>\(credits.joined(separator: "、"))</p>"
+        return "<p>\(credits.joined(separator: TextLists.plainSeparator))</p>"
     }
 }
 

@@ -2,7 +2,7 @@
 public enum CrashReportTexts {
     /// 開発者に送る内容に書く、アプリの版とデバイスとOSの版。
     public static func environment(version: String, build: String, device: String, systemVersion: String) -> String {
-        TextLists.joined(["Scia \(version) (\(build))", device, "iOS \(systemVersion)"])
+        TextLists.plain(["Scia \(version) (\(build))", device, "iOS \(systemVersion)"])
     }
 
     /// 表示できない投稿があったことを伝えるチップ。
