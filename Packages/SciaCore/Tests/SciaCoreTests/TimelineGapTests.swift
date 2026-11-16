@@ -217,6 +217,38 @@ struct TimelineGapTests {
         }
     }
 
+    /// 最初の最新のページだけを`initialPageSize`の件数で読み、古いページはいつもの件数で読む。起動してから表示するまでの、サーバーの応答を待つ時間を短くするため。
+    @Test func initialLatestPageUsesInitialPageSize() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let store = TimelineStoreTester(pageSize: Self.pageSize, initialPageSize: 2) { @MainActor query in server.page(query) }
+        try await store.expectChanges(during: { store in try await store.loadInitial() }) {
+            $0.entries = entryRows([10, 9])
+            $0.oldestLoadedID = "9"
+        }
+        try await store.expectChanges(during: { store in try await store.loadOlder() }) {
+            $0.entries += entryRows([8, 7, 6])
+            $0.oldestLoadedID = "6"
+        }
+        #expect(server.queries == [TimelineQuery(limit: 2), TimelineQuery(maxID: "9", limit: Self.pageSize)])
+    }
+
+    /// 既読位置が最初の最新のページより古ければ、既読位置の前後をいつもの件数で読む。
+    @Test func pagesAroundMarkerUsePageSizeAfterSmallInitialPage() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let store = TimelineStoreTester(pageSize: Self.pageSize, initialPageSize: 2) { @MainActor query in server.page(query) }
+        try await store.expectChanges(during: { store in try await store.loadInitial(around: "5") }) {
+            $0.entries = entryRows([10, 9]) + [gapEntry(9, 8)] + entryRows([8, 7, 6, 5, 4, 3])
+            $0.oldestLoadedID = "3"
+            $0.lastReadID = "5"
+            #if DEBUG
+            $0.lastSavableReadID = "5"
+            #endif
+            $0.lastReadPosition = TimelineStore.DisplayPosition(anchorID: "5", sequence: 0)
+            $0.savedReadID = "5"
+        }
+        #expect(server.queries == [TimelineQuery(limit: 2), TimelineQuery(maxID: "6", limit: Self.pageSize), TimelineQuery(minID: "5", limit: Self.pageSize)])
+    }
+
     /// 既読位置のすぐ後のページを読めなくても、最新のページだけで表示し、既読位置までをギャップにする。
     @Test func latestPageIsShownWhenPageAfterMarkerFails() async throws {
         let server = FakeHomeServer(ids: 1...20, maxLimit: 2)

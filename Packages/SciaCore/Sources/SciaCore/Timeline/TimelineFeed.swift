@@ -78,6 +78,16 @@ public enum TimelineFeed: Hashable, Sendable {
     }
 
     /// サーバーに既読位置を保存する先。markerはホームと通知にしかないため、ほかのタイムラインではnil。
+    /// 最初の読み込みで、最新のページを読む件数。nilなら、ほかの読み込みと同じ件数で読む。ホームは、40件より20件のほうがサーバーの応答を早く返し、
+    /// 検証用の実機（iPhone SE 第3世代、stellaria.network）で、起動してからホームを出すまでの中央値が約730msから約480msに縮んだ。
+    /// 既読位置が最新の20件より古い起動では、既読位置の前後を読む往復が増える。
+    public var initialPageSize: Int? {
+        switch self {
+        case .home: 20
+        case .local, .federated, .list, .hashtag, .accountHashtag: nil
+        }
+    }
+
     public var marker: MarkerTimeline? {
         switch self {
         case .home: .home

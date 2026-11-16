@@ -30,16 +30,21 @@ public final class TimelineStore {
     /// 読み込み中のギャップのID。
     public var loadingGapIDs: Set<String> { state.loadingGapIDs }
     private let pageSize: Int
+    /// 最初の読み込みで、最新のページを読む件数。
+    private let initialPageSize: Int
     private let filtering: StatusFiltering?
     private let now: @MainActor () -> Date
     private let fetch: Fetch
     private let logger = SciaLog.logger(category: "timeline")
 
     /// - Parameters:
+    ///   - pageSize: 1回に読む件数。
+    ///   - initialPageSize: 最初の読み込みで、最新のページを読む件数。nilなら`pageSize`。既読位置の前後と、そのあとの読み込みは`pageSize`で読む。
     ///   - filtering: このタイムラインで当てるサーバーのフィルター。nilなら当てない。
     ///   - now: 今の時刻を返す。フィルターの期限が切れたかを決めるのに使う。
-    public init(pageSize: Int, filtering: StatusFiltering? = nil, now: @escaping @MainActor () -> Date = SystemTime.now, fetch: @escaping Fetch) {
+    public init(pageSize: Int, initialPageSize: Int? = nil, filtering: StatusFiltering? = nil, now: @escaping @MainActor () -> Date = SystemTime.now, fetch: @escaping Fetch) {
         self.pageSize = pageSize
+        self.initialPageSize = initialPageSize ?? pageSize
         self.filtering = filtering
         self.now = now
         self.fetch = fetch
@@ -123,7 +128,7 @@ public final class TimelineStore {
         defer { state.isLoading = false }
 
         async let savedMarker = marker()
-        let latest = try await fetch(TimelineQuery(limit: pageSize))
+        let latest = try await fetch(TimelineQuery(limit: initialPageSize))
         let markerID = try await savedMarker
         var loaded = [latest]
         var loadedGaps: [TimelineGap] = []

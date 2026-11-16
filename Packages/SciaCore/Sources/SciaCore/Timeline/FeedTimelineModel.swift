@@ -99,7 +99,7 @@ public final class FeedTimelineModel {
         self.now = now
         let filtering = StatusFiltering(context: feed.filterContext, myAccountID: client.credential.accountID)
         self.filtering = filtering
-        store = TimelineStore(pageSize: Self.pageSize, filtering: filtering) { query in
+        store = TimelineStore(pageSize: Self.pageSize, initialPageSize: feed.initialPageSize, filtering: filtering) { query in
             try await feed.page(query, from: client)
         }
         self.feed = feed

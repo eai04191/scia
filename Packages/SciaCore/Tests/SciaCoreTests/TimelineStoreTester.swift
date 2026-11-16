@@ -11,11 +11,11 @@ final class TimelineStoreTester {
     private let store: TimelineStore
 
     /// `now`を渡さなければ、`TimelineStore`の既定の今の時刻を使う。
-    init(pageSize: Int, filtering: StatusFiltering? = nil, now: (@MainActor () -> Date)? = nil, fetch: @escaping TimelineStore.Fetch) {
+    init(pageSize: Int, initialPageSize: Int? = nil, filtering: StatusFiltering? = nil, now: (@MainActor () -> Date)? = nil, fetch: @escaping TimelineStore.Fetch) {
         store = if let now {
-            TimelineStore(pageSize: pageSize, filtering: filtering, now: now, fetch: fetch)
+            TimelineStore(pageSize: pageSize, initialPageSize: initialPageSize, filtering: filtering, now: now, fetch: fetch)
         } else {
-            TimelineStore(pageSize: pageSize, filtering: filtering, fetch: fetch)
+            TimelineStore(pageSize: pageSize, initialPageSize: initialPageSize, filtering: filtering, fetch: fetch)
         }
     }
 

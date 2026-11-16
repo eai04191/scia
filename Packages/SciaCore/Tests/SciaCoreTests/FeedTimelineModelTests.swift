@@ -118,6 +118,18 @@ struct FeedTimelineModelTests {
         #expect(display.entriesCalls.first?.topID == nil)
     }
 
+    /// ホームは、最初の最新のページだけを20件で読む。ほかのタイムラインは、ほかの読み込みと同じ40件で読む。
+    @Test(arguments: [(TimelineFeed.home, "/api/v1/timelines/home", "limit=20"), (.local, "/api/v1/timelines/public", "limit=40&local=true")])
+    func initialLatestPageSize(feed: TimelineFeed, path: String, query: String) async throws {
+        let transport = feed == .home ? Self.homeTransport([3, 2, 1]) : Self.localTransport {}
+        let (model, _) = makeModel(feed: feed, transport: transport)
+        defer { model.stop() }
+
+        model.start(purpose: .action)
+        try await waitUntil { model.runningTaskCount == 0 }
+        #expect(transport.requests(to: path).first?.url?.query() == query)
+    }
+
     /// 最初の読み込みを終えたら、表示したあとに1回だけ知らせる。起動したときに、ほかの読み込みをホームを出すまで待たせるため。
     @Test func initialLoadFinishedIsCalledOnceAfterShowing() async throws {
         let (model, display) = makeModel(transport: Self.homeTransport([3, 2, 1], marker: "2"))
