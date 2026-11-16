@@ -72,3 +72,8 @@ SCIA_REMOTE_SIMS=('Scia Remote 1' 'Scia Remote 2')
 - `runner`で、`security create-keychain -p '' login.keychain`、`security default-keychain -s login.keychain`、`security list-keychains -d user -s login.keychain`、`security set-keychain-settings login.keychain`を走らせる。GUIセッションがないとログインキーチェーンができず、SciaCoreのKeychainのテストが落ちる
 - `runner`で、`xcrun simctl create 'Scia Remote <番号>' com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro com.apple.CoreSimulator.SimRuntime.iOS-27-2`で、`SCIA_REMOTE_SIMS`の端末を作る
 - `runner`で、作った端末ごとに`simslim on <UDID> --except photos`を走らせる。手元の`Scia 1`〜`4`と同じく、メモリを減らすため
+
+## 落ちたテストの記録
+
+- `make test`の記録: 全部を走らせると、`DerivedData/test-logs/watch-<時刻>`に実行中の負荷（`load.log`）と、30秒たっても終わらないSciaCoreのテストのスタック（`<テストの名前>-<ハッシュ>.sample.txt`。名前の英数字のほかは`_`になるので、どのテストかは末尾の`test:`の行で見る）が残る。落ちた回の`.xcresult`と、その回の`watch-<時刻>`のコピーは、`DerivedData/test-logs/failed-<時刻>`に残る
+- テストが落ちたら、`DerivedData/test-logs/failed-<時刻>`のxcresultを`xcrun xcresulttool get test-results tests --path <xcresult>`で読む。別のMacで走った分も手元のここに届く。式の実際の値は`make test`の出力に残らず、ここにある。落ちたテストの前後のアプリのログ（`SciaLog`）は、`xcrun xcresulttool export diagnostics --path <xcresult> --output-path <フォルダー>`で取り出した`StandardOutputAndStandardError.txt`にある（`get log --type console`では出ない）
