@@ -173,6 +173,7 @@ private final class ProfilePinnedCard: UIControl {
             let warning = PostTexts.filterWarning(titles: verdict.warningTitles)
             let text = NSMutableAttributedString(string: warning.text, attributes: [.font: font, .foregroundColor: UIColor.secondaryLabel])
             text.addAttribute(.foregroundColor, value: UIColor.label, range: NSRange(warning.emphasis, in: warning.text))
+            ListSeparator.replaceSeparators(warning.separators, of: warning.text, in: text, font: font)
             bodyLabel.attributedText = text
         } else {
             let text: RichText = hasWarning ? .plain(status.spoilerText, emojis: status.emojis) : .html(status.content, emojis: status.emojis)
@@ -226,7 +227,7 @@ private final class ProfilePinnedCard: UIControl {
 
         isAccessibilityElement = true
         accessibilityTraits = .button
-        accessibilityLabel = ProfileTexts.Shelf.pinnedAccessibilityLabel(body: bodyLabel.attributedText?.string, attachmentCount: status.mediaAttachments.count, date: dateLabel.text)
+        accessibilityLabel = ProfileTexts.Shelf.pinnedAccessibilityLabel(body: bodyLabel.attributedText?.stringSpeakingListSeparators, attachmentCount: status.mediaAttachments.count, date: dateLabel.text)
 
         addAction(UIAction { [weak self] _ in self?.onTap?() }, for: .touchUpInside)
         if case .image(let request) = thumbnail {

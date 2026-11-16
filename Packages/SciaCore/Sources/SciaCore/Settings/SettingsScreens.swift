@@ -282,8 +282,8 @@ public enum PostSwipeSide: Hashable, Sendable {
 
 extension MenuLayout where Item == PostSwipeItem {
     /// 投稿の操作の画面の、スワイプの行の値。割り当てた項目の名前を並べる。
-    public var swipeSummary: String {
-        swipeItems.isEmpty ? "なし" : swipeItems.map(\.title).formatted(.list(type: .and, width: .narrow))
+    public var swipeSummary: TextLists.ItemList {
+        swipeItems.isEmpty ? TextLists.ItemList(single: "なし") : TextLists.items(swipeItems.map(\.title))
     }
 }
 

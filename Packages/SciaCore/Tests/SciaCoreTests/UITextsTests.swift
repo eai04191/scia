@@ -35,7 +35,7 @@ struct UITextsTests {
         #expect(MediaCover.title(of: .sensitive) == "閲覧注意")
         #expect(MediaCover.title(of: nil) == "閲覧注意")
         #expect(MediaCover.title(of: .hidden) == "非表示")
-        #expect(MediaCover.title(of: .filtered(["ネタバレ", "広告"])) == "フィルター: ネタバレ、広告")
+        #expect(MediaCover.title(of: .filtered(["ネタバレ", "広告"])) == "フィルター: ネタバレ・広告")
         #expect(PostTexts.mediaCoverAccessibilityLabel(.hidden) == "非表示、タップして表示")
     }
 
@@ -43,8 +43,29 @@ struct UITextsTests {
     @Test func filterWarningMarksFilterNames() {
         let warning = PostTexts.filterWarning(titles: ["ネタバレ", "広告"])
 
-        #expect(warning.text == "フィルター: ネタバレ、広告")
-        #expect(warning.text[warning.emphasis] == "ネタバレ、広告")
+        #expect(warning.text == "フィルター: ネタバレ・広告")
+        #expect(warning.text[warning.emphasis] == "ネタバレ・広告")
+        #expect(warning.separators.map { String(warning.text[$0]) } == ["・"])
+        #expect(warning.separators.first?.lowerBound == warning.text.firstIndex(of: "・"))
+    }
+
+    /// 結合文字で始まるアイテムは区切りと1文字にまとまる。区切りの範囲はアイテムの文字を巻き込まない。
+    @Test func itemListSeparatorExcludesLeadingCombiningMark() {
+        let list = TextLists.items(["朝", "\u{0301}夜"])
+        #expect(list.separators.map { String(list.text[$0]) } == ["・"])
+
+        let warning = PostTexts.filterWarning(titles: ["朝", "\u{0301}夜"])
+        #expect(warning.separators.map { String(warning.text[$0]) } == ["・"])
+        #expect(String(warning.text[warning.emphasis]).unicodeScalars.elementsEqual("朝・\u{0301}夜".unicodeScalars))
+    }
+
+    /// アイテムに区切りと同じ「・」が入っていても、区切りの範囲はアイテムのあいだだけを指す。
+    @Test func itemListMarksOnlySeparatorsBetweenItems() {
+        let list = TextLists.items(["朝", "そば・うどん", "夜"])
+
+        #expect(list.text == "朝・そば・うどん・夜")
+        #expect(list.separators.map { list.text.distance(from: list.text.startIndex, to: $0.lowerBound) } == [1, 8])
+        #expect(list.spoken == "朝、そば・うどん、夜")
     }
 
     @Test func ownFilterNoteQuotesEachFilter() {

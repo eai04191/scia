@@ -92,6 +92,12 @@ final class MediaGridView: UIView {
         // ステータスバーのタップで先頭へ戻る対象はタイムラインだけにする。画面に対象が複数あると、UIKitはどれも動かさない。
         tileContainer.scrollsToTop = false
         addSubview(tileContainer)
+        // ぼかしの題の境界線は文字の大きさに合わせて作るので、文字の大きさの設定が変わったら入れ直す。
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
+            if let content = self.content, content.isCovered {
+                self.updateCoverButton(for: content)
+            }
+        }
     }
 
     @available(*, unavailable)
@@ -241,6 +247,12 @@ final class MediaGridView: UIView {
         switch content.arrangement {
         case .grid:
             configuration.title = title
+            if case .filtered(let titles) = content.cover {
+                // 一致したフィルターの名前は、境界線で区切って並べる。線の大きさを文字に合わせるため、文字の大きさを決めて入れる。
+                let warning = PostTexts.filterWarning(titles: titles)
+                let font = UIFont.preferredFont(forTextStyle: .body)
+                configuration.attributedTitle = AttributedString(ListSeparator.attributedString(warning.text, separators: warning.separators, font: font, attributes: [:]))
+            }
             configuration.subtitle = PostTexts.mediaCoverHint
         case .strip, .stack:
             configuration.title = nil

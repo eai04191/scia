@@ -1264,7 +1264,7 @@ final class PostBodyView: UIView {
         // ボックスの文字が「フィルター: 名前」なので、重ねて読まない。
         case .filter: ""
         }
-        let parts = [label, spoiler.text.string] + (spoiler.isCollapsed ? [] : [content.text.stringWithoutTranslationMark])
+        let parts = [label, spoiler.text.stringSpeakingListSeparators] + (spoiler.isCollapsed ? [] : [content.text.stringWithoutTranslationMark])
         return parts.filter { !$0.isEmpty }.joinedAsTextList
     }
 

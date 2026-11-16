@@ -94,7 +94,7 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
                 Text(side.title(isRightToLeft: layoutDirection == .rightToLeft))
                     .layoutPriority(1)
                 Spacer()
-                Text(side.layout(in: settings).swipeSummary)
+                ItemListText(list: side.layout(in: settings).swipeSummary, textStyle: .body)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }

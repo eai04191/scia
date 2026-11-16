@@ -276,13 +276,15 @@ final class ComposePollEditor: UIView {
     /// 締め切りは出さない。選択肢のあとに並べると、小さい画面では末尾で切れて読めなかったため。
     private func updateSummary(_ poll: PollDraft) {
         let options = poll.options.filter { !$0.isEmpty }
-        var title = AttributedString(options.isEmpty ? ComposeTexts.Poll.writeOptions : TextLists.joined(options))
-        title.font = .preferredFont(forTextStyle: .body)
-        title.foregroundColor = options.isEmpty ? .placeholderText : .label
-        summaryButton.configuration?.attributedTitle = title
+        let font = UIFont.preferredFont(forTextStyle: .body)
+        let list = TextLists.items(options)
+        let title = options.isEmpty
+            ? NSAttributedString(string: ComposeTexts.Poll.writeOptions, attributes: [.font: font, .foregroundColor: UIColor.placeholderText])
+            : ListSeparator.attributedString(list, font: font, attributes: [.foregroundColor: UIColor.label])
+        summaryButton.configuration?.attributedTitle = AttributedString(title)
         // 選択肢の文字が末尾のシンボルに重ならないよう、シンボルの幅だけ文字の右の余白を空ける。文字の大きさで幅が変わるので、入れ直すたびに測る。
         summaryButton.configuration?.contentInsets.trailing = 10 + summaryChevron.intrinsicContentSize.width + 8
-        summaryButton.accessibilityValue = options.isEmpty ? ComposeTexts.Poll.noOptionsValue : TextLists.joined(options)
+        summaryButton.accessibilityValue = options.isEmpty ? ComposeTexts.Poll.noOptionsValue : list.spoken
     }
 
     private func makeOptionRow(index: Int, multiple: Bool) -> OptionRow {

@@ -96,7 +96,7 @@ struct SettingsScreensTests {
     }
 
     @Test func swipeSummaryListsAssignedItems() {
-        #expect(MenuLayout<PostSwipeItem>(tokens: []).swipeSummary == "なし")
+        #expect(MenuLayout<PostSwipeItem>(tokens: []).swipeSummary == TextLists.ItemList(single: "なし"))
     }
 
     /// 選んで決める項目は、どれか1つの分類にだけ並べる。

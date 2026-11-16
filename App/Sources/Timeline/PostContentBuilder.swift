@@ -512,6 +512,7 @@ struct PostContentBuilder {
         let warning = PostTexts.filterWarning(titles: titles)
         let text = NSMutableAttributedString(string: warning.text, attributes: [.font: font, .foregroundColor: UIColor.secondaryLabel])
         text.addAttribute(.foregroundColor, value: UIColor.label, range: NSRange(warning.emphasis, in: warning.text))
+        ListSeparator.replaceSeparators(warning.separators, of: warning.text, in: text, font: font)
         return PostBodyContent.Spoiler(
             text: text,
             isCollapsed: true,

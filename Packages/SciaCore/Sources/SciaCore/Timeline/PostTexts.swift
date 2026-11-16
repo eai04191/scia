@@ -34,13 +34,30 @@ public enum PostTexts {
         public let text: String
         /// 目立たせる部分。
         public let emphasis: Range<String.Index>
+        /// 並べたアイテムの区切りの範囲。画面では境界線に置き換えて描く。
+        public var separators: [Range<String.Index>] = []
     }
 
     /// フィルターの警告と、フィルターでぼかした添付ファイルに出す文。一致したフィルターの名前を目立たせる。
     public static func filterWarning(titles: [String]) -> EmphasizedText {
-        let names = titles.joined(separator: "、")
-        let text = "フィルター: \(names)"
-        return EmphasizedText(text: text, emphasis: text.index(text.endIndex, offsetBy: -names.count)..<text.endIndex)
+        let names = TextLists.items(titles)
+        let prefix = "フィルター: "
+        let text = prefix + names.text
+        let offset = prefix.utf16.count
+        let separators = names.separators.map { range in
+            TextLists.range(
+                utf16Offset: offset + names.text.utf16.distance(from: names.text.utf16.startIndex, to: range.lowerBound),
+                length: names.text.utf16.distance(from: range.lowerBound, to: range.upperBound),
+                in: text
+            )
+        }
+        let start = text.utf16.index(text.utf16.startIndex, offsetBy: offset)
+        return EmphasizedText(text: text, emphasis: start..<text.endIndex, separators: separators)
+    }
+
+    /// フィルターの警告の読み上げ。
+    public static func filterWarningSpoken(titles: [String]) -> String {
+        "フィルター: \(TextLists.joined(titles))"
     }
 
     /// 自分の投稿が、自分のフィルターに一致していることを示す1行。
@@ -53,7 +70,7 @@ public enum PostTexts {
 
     /// ぼかした添付ファイルの読み上げ。
     public static func mediaCoverAccessibilityLabel(_ cover: MediaCover?) -> String {
-        "\(MediaCover.title(of: cover))、\(mediaCoverHint)"
+        "\(MediaCover.spokenTitle(of: cover))、\(mediaCoverHint)"
     }
 
     /// まとめた通知で、最初の人の名前に続けて出す、ほかの人の数。`count`は最初の人を除いた数。
@@ -242,13 +259,21 @@ extension QuoteDisplay.Reason {
 }
 
 extension MediaCover {
-    /// ぼかしている理由。使う人が隠した投稿に「閲覧注意」と出すと、投稿者が付けたように読めるため、文言を分ける。
+    /// ぼかしている理由。フィルターの名前を並べるところは、画面では`PostTexts.filterWarning`の区切りの範囲を境界線に置き換えて描く。使う人が隠した投稿に「閲覧注意」と出すと、投稿者が付けたように読めるため、文言を分ける。
     /// フィルターでぼかした投稿は、どのフィルターに一致したかを出す。
     public static func title(of cover: MediaCover?) -> String {
         switch cover {
         case .hidden: "非表示"
         case .filtered(let titles): PostTexts.filterWarning(titles: titles).text
         case .sensitive, nil: "閲覧注意"
+        }
+    }
+
+    /// ぼかしている理由の読み上げ。
+    public static func spokenTitle(of cover: MediaCover?) -> String {
+        switch cover {
+        case .filtered(let titles): PostTexts.filterWarningSpoken(titles: titles)
+        case .hidden, .sensitive, nil: title(of: cover)
         }
     }
 }
