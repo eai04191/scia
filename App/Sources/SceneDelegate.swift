@@ -44,7 +44,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 guard let url = URL(string: "\(DebugURL.scheme)://\(path)"), let debugURL = DebugURL(url) else { return }
                 self?.session?.handle(debugURL)
             }
-        } else if Self.isHostingUnitTests {
+        } else if AppDependencies.isHostingUnitTests {
             // ユニットテストは、このアプリをホストにして同じプロセスとメインスレッドで走る。保存してあるアカウントでセッションを始めると、
             // 実サーバーとの通信とストリーミング、状態ダンプの登録、キーボードの知らせを受ける投稿欄が、テストと並んで動き、
             // 結果が端末のログインの有無やサーバーの状態、ほかのスレッドの操作に左右されるため、何も始めない。
@@ -208,12 +208,6 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         UserAction.enterBackground.record()
         session?.enterBackground()
     }
-
-    #if DEBUG
-    /// ユニットテストのホストとして起動されたか。XCTestがホストのプロセスに渡す、テストの設定のファイルの場所で見分ける。
-    /// UIテストでは、アプリはテストと別のプロセスで起動され、これを受け取らないため、ふだんどおりに始める。
-    private static let isHostingUnitTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
-    #endif
 
     /// Keychainに保存したアカウントのタイムラインを出す。なければログイン画面を出す。
     /// ダミーを選んでいる間に開いたシーンは、ほかのシーンに揃えてダミーにする。

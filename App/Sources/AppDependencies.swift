@@ -6,9 +6,30 @@ import UIKit
 /// シーンをまたいで共有する依存。
 @MainActor
 enum AppDependencies {
+    #if DEBUG
+    /// ユニットテストのホストとして起動されたか。XCTestがホストのプロセスに渡す、テストの設定のファイルの場所で見分ける。
+    /// UIテストでは、アプリはテストと別のプロセスで起動され、これを受け取らないため、ふだんどおりに始める。
+    static let isHostingUnitTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+
+    /// ユニットテストのホストの、設定とチューニングの保存先。起動のたびに空にする。
+    /// 端末のアプリの保存先を読むと、端末で変えた設定（絵文字をTwemojiにするなど）でテストの結果が変わるため。
+    private static let unitTestHostDefaults: UserDefaults? = {
+        guard isHostingUnitTests else { return nil }
+        let suiteName = "net.mizle.scia.unit-test-host"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            preconditionFailure("ユニットテストのホストのUserDefaultsを作れない")
+        }
+        defaults.removePersistentDomain(forName: suiteName)
+        return defaults
+    }()
+
+    /// 撮影モードとユニットテストのホストでは、端末に残った値を使わない保存先。
+    private static var isolatedDefaults: UserDefaults? { ScenarioMode.defaults ?? unitTestHostDefaults }
+    #endif
+
     static let tuning: TuningStore = {
         #if DEBUG
-        TuningStore(defaults: ScenarioMode.defaults ?? .standard)
+        TuningStore(defaults: isolatedDefaults ?? .standard)
         #else
         TuningStore(defaults: .standard)
         #endif
@@ -133,7 +154,7 @@ enum AppDependencies {
     static let settings: AppSettings = {
         let keepsComposeBarOpen = ProcessInfo.processInfo.isiOSAppOnMac
         #if DEBUG
-        return AppSettings(defaults: ScenarioMode.defaults ?? .standard, keepsComposeBarOpenByDefault: keepsComposeBarOpen)
+        return AppSettings(defaults: isolatedDefaults ?? .standard, keepsComposeBarOpenByDefault: keepsComposeBarOpen)
         #else
         return AppSettings(defaults: .standard, keepsComposeBarOpenByDefault: keepsComposeBarOpen)
         #endif
