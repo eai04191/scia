@@ -32,7 +32,7 @@ enum PreviewImages {
         image(named: "avatar") { avatar() }
     }
 
-    /// 見本の投稿者のアイコンと絵文字の、アニメーション版。静止画（`avatarURL()`）を最初のコマにして、色を1周させるGIF。
+    /// 見本の投稿者のアイコンと絵文字の、アニメーション版。静止画（`avatarURL()`）を最初のコマにして、色を1周させるAPNG。GIFは1コマ256色までで、アイコンのグラデーションが段になる。
     /// アニメーションを再生する設定の違いが、プレビューで見て分かるようにする。作れなければnil。
     /// 色はCore Imageの色相の回転ではなく、Core Graphicsの色相の合成で塗る。Core Imageでは準備と描画に、シミュレーターで130msほどメインスレッドが止まるため。
     static func animatedAvatarURL() -> URL? {
@@ -57,7 +57,7 @@ enum PreviewImages {
                 logger.error("preview animated avatar render failed")
                 return nil
             }
-            return gif(frames)
+            return apng(frames)
         }
     }
 
@@ -164,15 +164,15 @@ enum PreviewImages {
         return UIGraphicsImageRenderer(size: size, format: format)
     }
 
-    private static func gif(_ frames: [CGImage]) -> Data? {
+    private static func apng(_ frames: [CGImage]) -> Data? {
         let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(data as CFMutableData, UTType.gif.identifier as CFString, frames.count, nil) else {
+        guard let destination = CGImageDestinationCreateWithData(data as CFMutableData, UTType.png.identifier as CFString, frames.count, nil) else {
             logger.error("preview animated avatar encode failed")
             return nil
         }
-        let loop = [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0]]
+        let loop = [kCGImagePropertyPNGDictionary: [kCGImagePropertyAPNGLoopCount: 0]]
         CGImageDestinationSetProperties(destination, loop as CFDictionary)
-        let delay = [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: animatedFrameDuration]]
+        let delay = [kCGImagePropertyPNGDictionary: [kCGImagePropertyAPNGDelayTime: animatedFrameDuration]]
         for frame in frames {
             CGImageDestinationAddImage(destination, frame, delay as CFDictionary)
         }
