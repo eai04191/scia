@@ -334,6 +334,21 @@ struct MastodonClientTests {
     }
 
     /// 絞ったページが空のまま`max_id`が循環しても、同じページを読み続けずに終わる。
+    /// PleromaとAkkomaでは、すべての絵文字のリアクションを読み、投稿に返った名前（ほかのサーバーのカスタム絵文字は`shortcode@host`）で選ぶ。
+    @Test func pleromaReactedByReadsAccountsOfEmoji() async throws {
+        func account(_ id: String) -> String {
+            #"{"id":"\#(id)","username":"u\#(id)","acct":"u\#(id)","display_name":"","avatar":"https://example.social/a.png","avatar_static":"https://example.social/a.png","header":"https://example.social/h.png","header_static":"https://example.social/h.png","note":"","url":"https://example.social/@u\#(id)","fields":[],"locked":false,"bot":false,"followers_count":0,"following_count":0,"statuses_count":0,"emojis":[]}"#
+        }
+        let transport = StubTransport([.json(#"[{"name":"🎉","accounts":[\#(account("1"))]},{"name":"neofox@misskey.example","accounts":[\#(account("2"))]}]"#, statusCode: 200)])
+        let client = try makeClient(transport)
+
+        let page = try await client.accounts(in: .emojiReactionedBy("1", name: "neofox@misskey.example"), maxID: nil, limit: 40, emojiReactionStyle: .pleroma)
+
+        #expect(page.accounts.map(\.acct) == ["u2"])
+        #expect(page.nextMaxID == nil)
+        #expect(await transport.requests.map(\.url?.path) == ["/api/v1/pleroma/statuses/1/reactions"])
+    }
+
     @Test func emojiReactionedByStopsOnCyclingCursor() async throws {
         func page(next: String) -> StubTransport.Response {
             .json(#"[{"name":"🎉","account":{"id":"1","username":"u","acct":"u","display_name":"","avatar":"https://example.social/a.png","avatar_static":"https://example.social/a.png","header":"https://example.social/h.png","header_static":"https://example.social/h.png","note":"","url":"https://example.social/@u","fields":[],"locked":false,"bot":false,"followers_count":0,"following_count":0,"statuses_count":0,"emojis":[]}}]"#, statusCode: 200, headers: ["Link": "<https://example.social/api/v1/statuses/1/emoji_reactioned_by?max_id=\(next)>; rel=\"next\""])
@@ -491,6 +506,10 @@ struct MastodonClientTests {
         let withoutV2 = StubTransport([.json(reactions, statusCode: 200), .json(#"{"error":"Unknown API endpoint."}"#, statusCode: 404)])
         #expect(try await makeClient(withoutV2).serverCapabilities().emojiReactions == .firefish)
 
+        let pleroma = StubTransport([.json(#"{"pleroma":{"metadata":{"features":["pleroma_api","pleroma_emoji_reactions"]}}}"#, statusCode: 200)])
+        #expect(try await makeClient(pleroma).serverCapabilities().emojiReactions == .pleroma)
+        #expect(await pleroma.requests.count == 1)
+
         let mastodon = StubTransport([.json(#"{"configuration":{"statuses":{}}}"#, statusCode: 200)])
         #expect(try await makeClient(mastodon).serverCapabilities().emojiReactions == nil)
         #expect(await mastodon.requests.count == 1)
@@ -500,7 +519,7 @@ struct MastodonClientTests {
     @Test func sendsEmojiReactionInServerStyle() async throws {
         let blobcat = ReactionEmoji(name: "blobcat", url: URL(string: "https://example.social/blobcat.png"))
         var sent: [String] = []
-        for style in [EmojiReactionStyle.fedibird, .chuckya, .firefish] {
+        for style in [EmojiReactionStyle.fedibird, .chuckya, .firefish, .pleroma] {
             let transport = StubTransport([.json(Self.interactedStatus, statusCode: 200), .json(Self.interactedStatus, statusCode: 200)])
             let client = try makeClient(transport)
             _ = try await client.addEmojiReaction("1", emoji: blobcat, style: style)
@@ -511,6 +530,7 @@ struct MastodonClientTests {
             "PUT /api/v1/statuses/1/emoji_reactions/blobcat", "DELETE /api/v1/statuses/1/emoji_reactions/blobcat",
             "POST /api/v1/statuses/1/react/blobcat", "POST /api/v1/statuses/1/unreact/blobcat",
             "POST /api/v1/statuses/1/react/:blobcat:", "POST /api/v1/statuses/1/unreact/:blobcat:",
+            "PUT /api/v1/pleroma/statuses/1/reactions/blobcat", "DELETE /api/v1/pleroma/statuses/1/reactions/blobcat",
         ])
     }
 

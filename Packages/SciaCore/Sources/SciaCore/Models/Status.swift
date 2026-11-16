@@ -175,11 +175,16 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         reblogsCount = try container.decodeCountIfPresent(forKey: .reblogsCount) ?? 0
         quotesCount = try container.decodeCountIfPresent(forKey: .quotesCount) ?? 0
         repliesCount = try container.decodeCountIfPresent(forKey: .repliesCount) ?? 0
-        // Fedibirdは`emoji_reactions`、Firefishの形のサーバーは`reactions`で返す（docs/emoji-reaction.mdの「読む値」）。
+        // FedibirdとAkkomaは`emoji_reactions`、ChuckyaとFirefishの形のサーバーは`reactions`、Pleromaは`pleroma.emoji_reactions`で返す（docs/emoji-reaction.md）。
+        let otherKeys = try decoder.container(keyedBy: OtherReactionCodingKeys.self)
         emojiReactions = if container.contains(.emojiReactions) {
             try container.decodeLossyArray(EmojiReaction.self, forKey: .emojiReactions)
+        } else if otherKeys.contains(.reactions) {
+            try otherKeys.decodeLossyArray(EmojiReaction.self, forKey: .reactions)
+        } else if let pleroma = try? otherKeys.nestedContainer(keyedBy: OtherReactionCodingKeys.self, forKey: .pleroma) {
+            try pleroma.decodeLossyArray(EmojiReaction.self, forKey: .emojiReactions)
         } else {
-            try decoder.container(keyedBy: FirefishCodingKeys.self).decodeLossyArray(EmojiReaction.self, forKey: .reactions)
+            []
         }
         referenceIDs = (try? container.decodeIfPresent([String].self, forKey: .referenceIDs)) ?? []
         reblogBox = try container.decodeIfPresent(StatusBox.self, forKey: .reblogBox)
@@ -340,8 +345,8 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         }
     }
 
-    private enum FirefishCodingKeys: String, CodingKey {
-        case reactions
+    private enum OtherReactionCodingKeys: String, CodingKey {
+        case reactions, pleroma, emojiReactions
     }
 
     private enum CodingKeys: String, CodingKey {

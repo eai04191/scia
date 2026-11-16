@@ -76,20 +76,32 @@ public struct MastodonNotification: Codable, Hashable, Sendable, Identifiable {
     private enum CodingKeys: String, CodingKey {
         case id, type, createdAt, account, status, groupKey
         case reactionEmoji = "emojiReaction"
+        case emoji, emojiUrl
     }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(Kind.self, forKey: .type)
         self.init(
             id: try container.decode(String.self, forKey: .id),
-            type: try container.decode(Kind.self, forKey: .type),
+            type: type,
             createdAt: try container.decode(Date.self, forKey: .createdAt),
             account: try container.decode(Account.self, forKey: .account),
             status: try container.decodeIfPresent(Status.self, forKey: .status),
             groupKey: try container.decodeIfPresent(String.self, forKey: .groupKey),
             // 絵文字が読めなくても、通知そのものは読む。行には絵文字なしで出す。
             reactionEmoji: container.decodeLossyIfPresent(ReactionEmoji.self, forKey: .reactionEmoji)
+                ?? (type == .emojiReaction ? Self.pleromaReactionEmoji(in: container) : nil)
         )
+    }
+
+    /// PleromaとAkkomaの`pleroma:emoji_reaction`の絵文字。`emoji`にUnicodeの絵文字か`:shortcode:`、カスタム絵文字なら`emoji_url`に画像が入る。
+    /// ほかの種類の通知の`emoji`（Catodonが`favourite`に付ける）は読まない。
+    private static func pleromaReactionEmoji(in container: KeyedDecodingContainer<CodingKeys>) -> ReactionEmoji? {
+        guard let emoji = container.decodeLossyIfPresent(String.self, forKey: .emoji), !emoji.isEmpty else { return nil }
+        let url = container.decodeURL(.media, forKey: .emojiUrl)
+        let isShortcode = emoji.count > 2 && emoji.hasPrefix(":") && emoji.hasSuffix(":")
+        return ReactionEmoji(name: isShortcode ? String(emoji.dropFirst().dropLast()) : emoji, url: url, staticUrl: url)
     }
 
     /// 1件の通知の形で書く。まとまりの人数とアカウントは書かない。
@@ -120,7 +132,7 @@ public struct MastodonNotification: Codable, Hashable, Sendable, Identifiable {
         case quote
         /// 引用した投稿が編集された。
         case quotedUpdate
-        /// 投稿に絵文字でリアクションされた。Fedibirdの拡張。
+        /// 投稿に絵文字でリアクションされた。Fedibirdの拡張の`emoji_reaction`と、PleromaとAkkomaの`pleroma:emoji_reaction`。
         case emojiReaction
         case other(String)
 
@@ -141,7 +153,7 @@ public struct MastodonNotification: Codable, Hashable, Sendable, Identifiable {
             case "update": .update
             case "quote": .quote
             case "quoted_update": .quotedUpdate
-            case "emoji_reaction": .emojiReaction
+            case "emoji_reaction", "pleroma:emoji_reaction": .emojiReaction
             default: .other(rawValue)
             }
         }

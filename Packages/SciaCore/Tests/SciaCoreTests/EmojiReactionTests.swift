@@ -64,6 +64,17 @@ struct EmojiReactionTests {
         #expect(status.emojiReactions[2].emoji.customEmoji != nil)
     }
 
+    /// Pleromaは`pleroma.emoji_reactions`で返す。画像のURLがnullの絵文字はUnicodeの絵文字として読む。
+    @Test func decodesPleromaReactions() throws {
+        let status = try MastodonDecoder.make().decode(Status.self, from: fixture("pleroma_status_reactions"))
+
+        #expect(status.emojiReactions.map(\.emoji.name) == ["👍", "test_red", "neofox@misskey.example"])
+        #expect(status.emojiReactions.map(\.count) == [2, 1, 1])
+        #expect(status.emojiReactions.map(\.me) == [true, false, false])
+        #expect(status.emojiReactions.map(\.emoji.isCustom) == [false, true, true])
+        #expect(status.emojiReactions.map { $0.emoji.requestName(for: .pleroma) } == ["👍", "test_red", "neofox@misskey.example"])
+    }
+
     /// Firefishの形のサーバーは、カスタム絵文字を`:name:`で受け取り、コロンのない名前を絵文字として扱う。
     @Test func firefishRequestNameWrapsCustomEmojiInColons() {
         #expect(thumbsUp.requestName(for: .firefish) == "👍")
@@ -96,6 +107,10 @@ struct EmojiReactionTests {
         #expect(ServerCapabilities(fedibirdCapabilities: [], reactEndpoints: .firefish).emojiReactions == .firefish)
         #expect(ServerCapabilities(fedibirdCapabilities: [], reactEndpoints: .chuckya).emojiReactions == .chuckya)
         #expect(ServerCapabilities(fedibirdCapabilities: ["emoji_reaction"], reactEndpoints: .firefish).emojiReactions == .fedibird)
+        #expect(ServerCapabilities(fedibirdCapabilities: [], pleromaFeatures: ["pleroma_api", "pleroma_emoji_reactions"]).emojiReactions == .pleroma)
+        #expect(ServerCapabilities(fedibirdCapabilities: [], pleromaFeatures: ["pleroma_api"]).emojiReactions == nil)
+        // Iceshrimp.NETは、Pleromaの宣言と`configuration.reactions`の両方を返す。
+        #expect(ServerCapabilities(fedibirdCapabilities: [], reactEndpoints: .firefish, pleromaFeatures: ["pleroma_emoji_reactions"]).emojiReactions == .firefish)
     }
 
     @Test func statusWithoutReactionsHasNone() throws {
@@ -218,5 +233,30 @@ struct EmojiReactionTests {
         #expect(notification.reactionEmoji == remoteCat)
         #expect(notification.groupKey == "ungrouped-50")
         #expect(notification.layout == .quoted(showsPollResults: false))
+    }
+
+    /// PleromaとAkkomaの通知は、種類が`pleroma:emoji_reaction`で、絵文字を`emoji`（`:shortcode:`かUnicodeの絵文字）と`emoji_url`に入れる。
+    /// ほかの種類の通知の`emoji`（Catodonが`favourite`に付ける）は、付けた絵文字として読まない。
+    @Test func decodesPleromaReactionNotification() throws {
+        let status = try #require(JSONSerialization.jsonObject(with: fixture("pleroma_status_reactions")) as? [String: Any])
+        func notification(type: String, emoji: String, url: String?) throws -> MastodonNotification {
+            var object: [String: Any] = [
+                "id": "50", "type": type, "created_at": "2026-11-17T12:00:00.000Z",
+                "account": try #require(status["account"]), "status": status, "emoji": emoji,
+            ]
+            object["emoji_url"] = url ?? NSNull()
+            return try MastodonDecoder.make().decode(MastodonNotification.self, from: JSONSerialization.data(withJSONObject: object))
+        }
+
+        let custom = try notification(type: "pleroma:emoji_reaction", emoji: ":test_red:", url: "https://pleroma.example/emoji/custom/test_red.png")
+        #expect(custom.type == .emojiReaction)
+        #expect(custom.reactionEmoji?.name == "test_red")
+        #expect(custom.reactionEmoji?.customEmoji?.url == URL(string: "https://pleroma.example/emoji/custom/test_red.png"))
+
+        let unicode = try notification(type: "pleroma:emoji_reaction", emoji: "🎉", url: nil)
+        #expect(unicode.reactionEmoji?.name == "🎉")
+        #expect(unicode.reactionEmoji?.url == nil)
+
+        #expect(try notification(type: "favourite", emoji: ":blobcat@.:", url: nil).reactionEmoji == nil)
     }
 }

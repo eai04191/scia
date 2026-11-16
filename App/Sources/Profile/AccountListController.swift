@@ -25,17 +25,24 @@ final class AccountListController {
     /// 読む前に開くと、もう入っている人を入っていないものとして出し、押すと足し直してしまうため。
     var onLoadedChange: ((Bool) -> Void)?
 
-    static func make(kind: AccountListKind, client: MastodonClient, tasks: TaskScope) -> (AccountListController, TimelineViewController) {
+    /// - Parameter emojiReactionStyle: リアクションした人を読むときの、サーバーのAPIの形。ほかのリストでは呼ばれても使わない。
+    static func make(
+        kind: AccountListKind, client: MastodonClient, tasks: TaskScope,
+        emojiReactionStyle: @escaping @MainActor @Sendable () async throws -> EmojiReactionStyle = { .fedibird }
+    ) -> (AccountListController, TimelineViewController) {
         // 画面を作る時点ではコントローラーがまだないため、作ったあとに入れる。
         weak var owner: AccountListController?
         let viewController = TimelineViewController(texts: .accountList(kind)) { await owner?.refresh() }
-        let controller = AccountListController(kind: kind, client: client, viewController: viewController, tasks: tasks)
+        let controller = AccountListController(kind: kind, client: client, viewController: viewController, tasks: tasks, emojiReactionStyle: emojiReactionStyle)
         viewController.lifetimeOwner = controller
         owner = controller
         return (controller, viewController)
     }
 
-    private init(kind: AccountListKind, client: MastodonClient, viewController: TimelineViewController, tasks: TaskScope) {
+    private init(
+        kind: AccountListKind, client: MastodonClient, viewController: TimelineViewController, tasks: TaskScope,
+        emojiReactionStyle: @escaping @MainActor @Sendable () async throws -> EmojiReactionStyle
+    ) {
         self.tasks = tasks
         self.client = client
         if case .listMembers(let listID) = kind {
@@ -47,7 +54,9 @@ final class AccountListController {
         // メンバーはフォローしている人に限られ、ページに分けずに読める数で収まる。
         let pageSize = listID == nil ? Self.pageSize : 0
         store = AccountListStore(kind: kind) { maxID in
-            try await client.accounts(in: kind, maxID: maxID, limit: pageSize)
+            // 形を読むのは、リアクションした人のリストだけ。ほかのリストを、サーバーの機能の読み込みで待たせない。
+            guard case .emojiReactionedBy = kind else { return try await client.accounts(in: kind, maxID: maxID, limit: pageSize) }
+            return try await client.accounts(in: kind, maxID: maxID, limit: pageSize, emojiReactionStyle: emojiReactionStyle())
         }
         self.viewController = viewController
         viewController.onApproachingEnd = { [weak self] in self?.loadOlder(purpose: .display) }

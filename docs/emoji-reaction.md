@@ -1,6 +1,6 @@
 # 投稿への絵文字リアクション
 
-投稿に絵文字でリアクションするときに、作者が決めたこと。Mastodonにはない機能で、Fedibirdの形と、Chuckyaの形（glitch-socの絵文字のリアクション。Firefishから分かれたSharkey、Catodon、Iceshrimpも同じ経路を使う）に対応する。APIはFedibirdのソース（[fedibird/mastodon](https://github.com/fedibird/mastodon)）と、Chuckya（TheEssem/mastodon）、Sharkey、Catodon、Iceshrimp、Iceshrimp.NETのソースで確かめた。以下は、断りがなければFedibirdの形の決まりで、Chuckyaの形で違うところは「Chuckyaの形とFirefishの形」にまとめる。
+投稿に絵文字でリアクションするときに、作者が決めたこと。Mastodonにはない機能で、Fedibirdの形、Chuckyaの形（glitch-socの絵文字のリアクション。Firefishから分かれたSharkey、Catodon、Iceshrimpも同じ経路を使う）、Pleromaの形（PleromaとAkkoma）に対応する。APIはFedibirdのソース（[fedibird/mastodon](https://github.com/fedibird/mastodon)）と、Chuckya（TheEssem/mastodon）、Sharkey、Catodon、Iceshrimp、Iceshrimp.NET、Pleroma、Akkomaのソースで確かめた。以下は、断りがなければFedibirdの形の決まりで、Chuckyaの形で違うところは「Chuckyaの形とFirefishの形」に、Pleromaの形で違うところは「Pleromaの形」にまとめる。
 
 ## 対象のサーバー
 
@@ -8,8 +8,9 @@
 - そうでなく、`api/v1/instance`に`configuration.reactions`があるサーバーを、`react/:name`で付け外しするサーバーとして扱う。そのうち、`api/v2/instance`の`api_versions`に`chuckya`があるサーバーをChuckyaの形、ないサーバーをFirefishの形として扱う。`api/v2/instance`がないサーバー（Sharkey、Iceshrimp）も、Firefishの形にする
 - 形は、サーバーが自分で返す宣言で決める。バージョンの表記やソフトウェアの名前では決めない。数値（`max_reactions`）から動きを推測もしない
 - `api/v2/instance`は、`configuration.reactions`があるサーバーでだけ読む。セッションを始めるときに1回で、Mastodonでは読まない
+- そのどれでもなく、`api/v1/instance`の`pleroma.metadata.features`に`pleroma_emoji_reactions`があるサーバーを、Pleromaの形として扱う。PleromaとAkkomaが返す。Iceshrimp.NETはこの値も`configuration.reactions`も返すので、実物で確かめてあるFirefishの形になる
 - どれかの形のサーバーでだけ、リアクションを出し、付け外しできるようにする
-- Pleromaの形（PleromaとAkkomaの`pleroma.emoji_reactions`）は扱わない
+- 機能を宣言しているのに一部のAPIを持たないサーバーには、代わりの読み方を足さず、項目も隠さない。Holloは`fedibird_capabilities`に`emoji_reaction`を返してFedibirdの形で付け外しできるが、`emoji_reactioned_by`を持たないので、「リアクションした人」は読み込めなかった表示（HTTP 404）になる
 - 対応していないサーバーでは、投稿に`emoji_reactions`が入っていても出さず、メニューの項目と操作も出さない
 - サーバー情報が読めないうちや読めなかったときは、対応していないものとして扱う
 
@@ -40,6 +41,20 @@ Firefishの形だけのこと:
 - ほかのサーバーのカスタム絵文字では付けられない。サーバーは、ログインしているサーバーにない絵文字を既定の絵文字に替えて付けるので、送らずに、付けられないことを失敗のチップで出す。自分が付けているものを外すのは送る
 - 既定の絵文字は、SharkeyとCatodonが❤、Iceshrimpは`configuration.reactions.default_reaction`（既定は⭐）。サーバーにない絵文字などは、この絵文字に替わって付く。Iceshrimp.NETは替えずに断る
 - Sharkeyは、ログインしているサーバーのカスタム絵文字に画像のURLを付けない。`api/v1/custom_emojis`のリストから、ショートコードで画像を引く。リストが読めないうちは、ショートコードを文字で出す
+
+## Pleromaの形
+
+Fedibirdの形と違うところ。実物は、Dockerで立てたPleroma 2.11.1とAkkoma 3.20.1で確かめた。
+
+- 投稿の`pleroma.emoji_reactions`を読む。`name`、`count`、`me`、`url`、`account_ids`がある。Akkomaは同じ中身を最上位の`emoji_reactions`にも返す
+- ほかのサーバーのカスタム絵文字は、`domain`がなく、`name`が`shortcode@host`になる（ソースで確かめた。実物では確かめていない）
+- 付けるのは`PUT /api/v1/pleroma/statuses/:id/reactions/:emoji`、外すのは`DELETE`で送る。カスタム絵文字は、投稿に返った名前（コロンなし）のまま送る。コロンを付けても受け取る
+- 1人が複数付けられ、お気に入りは別に持つ。付け外しの扱いはFedibirdの形と同じ
+- サーバーにない絵文字は断る。ほかの失敗と同じく、返した理由を失敗のチップで出す
+- リアクションした人は、`GET /api/v1/pleroma/statuses/:id/reactions`で、すべての絵文字のリアクションと人をページに分けずに読み、投稿に返った名前のものだけを手元で選ぶ。絵文字で絞る`reactions/:emoji`は使わない。サーバーは保存したショートコードと比べるので、ほかのサーバーのカスタム絵文字の`shortcode@host`では誰も返らないため（Akkomaのソースで確かめた）
+- リアクションした人を読む形は、読むときに決める。`scia://accounts/emoji-reactioned`で直接開いたときは、サーバーの機能がまだ読めていないため
+- 通知の種類は`pleroma:emoji_reaction`で、付けた絵文字を`emoji`（`:shortcode:`かUnicodeの絵文字）と`emoji_url`に入れる。Fedibirdの`emoji_reaction`と同じ通知として出す
+- ストリーミングにリアクションの数のイベントはない。通知はストリーミングで届く
 
 ## 読む値
 

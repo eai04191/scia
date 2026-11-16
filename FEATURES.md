@@ -230,3 +230,8 @@ Sciaでできること
 ## Chuckya・Sharkey・Catodon・Iceshrimp対応
 
 - 絵文字のリアクション
+
+## Pleroma・Akkoma対応
+
+- 絵文字のリアクション
+- リアクションした人のリスト

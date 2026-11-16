@@ -104,11 +104,12 @@ public struct ReactionEmoji: Codable, Hashable, Sendable {
     /// APIのパスに入れる名前。
     /// Fedibirdは、ほかのサーバーのカスタム絵文字を`name@domain`で受け取る。
     /// Chuckyaは、投稿に返した名前（ほかのサーバーのカスタム絵文字は`shortcode@domain`）をそのまま受け取り、コロンを付けた名前を断る。
+    /// PleromaとAkkomaも、投稿に返した名前をそのまま受け取る（コロンを付けても受け取る）。
     /// Firefishの形のサーバーは、カスタム絵文字を`:name:`で受け取る。Sharkeyは、コロンのない名前をUnicodeの絵文字として扱い、既定の絵文字に替えて付ける。
     public func requestName(for style: EmojiReactionStyle) -> String {
         switch style {
         case .fedibird: domain.map { "\(name)@\($0)" } ?? name
-        case .chuckya: name
+        case .chuckya, .pleroma: name
         case .firefish: isCustom ? ":\(name):" : name
         }
     }

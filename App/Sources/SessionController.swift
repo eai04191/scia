@@ -1584,7 +1584,10 @@ final class SessionController {
 
     /// - Parameter ownerAcct: フォローとフォロワーのリストなら、誰のリストかを示すハンドル。見出しの下に出す。
     private func openAccountList(_ kind: AccountListKind, ownerAcct: String? = nil, from source: UIViewController) {
-        let (controller, viewController) = AccountListController.make(kind: kind, client: client, tasks: tasks.child())
+        // リアクションした人を読む形は、読むときに決める。URLから直接開いたときは、サーバーの機能がまだ読めていないため。
+        let (controller, viewController) = AccountListController.make(kind: kind, client: client, tasks: tasks.child()) { [session] in
+            try await session.loadedCapabilities().emojiReactions ?? .fedibird
+        }
         viewController.navigationItem.subtitle = ownerAcct.map { "@\($0)" }
         UserAction.openAccountList.record()
         configure(viewController)

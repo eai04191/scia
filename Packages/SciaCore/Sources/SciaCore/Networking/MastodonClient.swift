@@ -226,8 +226,8 @@ public struct MastodonClient: Sendable {
         }
     }
 
-    /// サーバーの、Mastodonにない機能の有無。`api/v1/instance`の、Fedibirdの拡張の`fedibird_capabilities`と`feature_quote`、`configuration.reactions`で決める。
-    /// Fedibirdとkmyblue、Chuckya、Sharkey、Catodon、Iceshrimpはv1に必ず返す。項目がないサーバーは、Mastodonと同じとみなす。
+    /// サーバーの、Mastodonにない機能の有無。`api/v1/instance`の、Fedibirdの拡張の`fedibird_capabilities`と`feature_quote`、`configuration.reactions`、Pleromaの`pleroma.metadata.features`で決める。
+    /// Fedibirdとkmyblue、Chuckya、Sharkey、Catodon、Iceshrimp、Pleroma、Akkomaはv1に必ず返す。項目がないサーバーは、Mastodonと同じとみなす。
     /// `configuration.reactions`を返すサーバーでだけ、`api/v2/instance`の`api_versions`も読み、Chuckyaの宣言があるかで形を決める。宣言はv1にはない。
     public func serverCapabilities() async throws -> ServerCapabilities {
         struct Instance: Decodable {
@@ -240,6 +240,16 @@ public struct MastodonClient: Sendable {
             }
 
             struct Reactions: Decodable {}
+
+            struct Pleroma: Decodable {
+                let metadata: Metadata?
+            }
+
+            struct Metadata: Decodable {
+                let features: [String]?
+            }
+
+            let pleroma: Pleroma?
         }
         struct InstanceV2: Decodable {
             let apiVersions: [String: ServerLimit]?
@@ -257,7 +267,12 @@ public struct MastodonClient: Sendable {
             }
             reactEndpoints = apiVersions?["chuckya"] != nil ? .chuckya : .firefish
         }
-        return ServerCapabilities(fedibirdCapabilities: fedibirdCapabilities, featureQuote: instance.featureQuote ?? false, reactEndpoints: reactEndpoints)
+        return ServerCapabilities(
+            fedibirdCapabilities: fedibirdCapabilities,
+            featureQuote: instance.featureQuote ?? false,
+            reactEndpoints: reactEndpoints,
+            pleromaFeatures: instance.pleroma?.metadata?.features ?? []
+        )
     }
 
     /// https://docs.joinmastodon.org/methods/instance/#v2
@@ -966,9 +981,12 @@ public struct MastodonClient: Sendable {
     /// https://docs.joinmastodon.org/methods/accounts/#following
     /// https://docs.joinmastodon.org/methods/lists/#accounts
     /// https://docs.joinmastodon.org/methods/accounts/#endorsements
-    public func accounts(in list: AccountListKind, maxID: String?, limit: Int) async throws -> AccountListPage {
+    /// - Parameter emojiReactionStyle: リアクションした人を読むときの、サーバーのAPIの形。ほかのリストでは使わない。
+    public func accounts(in list: AccountListKind, maxID: String?, limit: Int, emojiReactionStyle: EmojiReactionStyle = .fedibird) async throws -> AccountListPage {
         if case .emojiReactionedBy(let statusID, let name) = list {
-            return try await emojiReactionedBy(statusID, name: name, maxID: maxID, limit: limit)
+            return emojiReactionStyle == .pleroma
+                ? try await pleromaReactedBy(statusID, name: name, maxID: maxID)
+                : try await emojiReactionedBy(statusID, name: name, maxID: maxID, limit: limit)
         }
         let path = switch list {
         case .emojiReactionedBy: preconditionFailure("上で返している")
@@ -1008,6 +1026,30 @@ public struct MastodonClient: Sendable {
             }
             maxID = next
         }
+    }
+
+    /// PleromaとAkkomaで、投稿にその絵文字でリアクションした人。ページに分けずにすべて返る。
+    /// 絵文字で絞る`reactions/:emoji`は使わず、すべての絵文字のリアクションを読んで、投稿に返った名前で選ぶ。
+    /// サーバーは絞るときに保存したショートコードと比べるので、ほかのサーバーのカスタム絵文字の`shortcode@host`では誰も返らないため。
+    /// Pleromaの`lib/pleroma/web/pleroma_api/controllers/emoji_reaction_controller.ex`
+    private func pleromaReactedBy(_ statusID: Status.ID, name: String, maxID: String?) async throws -> AccountListPage {
+        struct Reaction: Decodable {
+            let name: String
+            let accounts: [Account]
+
+            private enum CodingKeys: String, CodingKey {
+                case name, accounts
+            }
+
+            init(from decoder: any Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                name = try container.decode(String.self, forKey: .name)
+                accounts = try container.decodeLossyArray(Account.self, forKey: .accounts)
+            }
+        }
+        guard maxID == nil else { return AccountListPage(accounts: [], nextMaxID: nil) }
+        let reactions = try await get(ElementList<Reaction>.self, path: "api/v1/pleroma/statuses/\(statusID)/reactions", query: []).0
+        return AccountListPage(accounts: reactions.elements.filter { $0.name == name }.flatMap(\.accounts), nextMaxID: nil)
     }
 
     /// `max_id`は投稿のIDではない内部のIDで、`Link`ヘッダーの`next`のURLにだけ書かれている。
@@ -1229,12 +1271,15 @@ public struct MastodonClient: Sendable {
     /// fedibird/mastodonの`app/controllers/api/v1/statuses/emoji_reactions_controller.rb`
     /// Chuckyaは、TheEssem/mastodonの`app/controllers/api/v1/statuses/reactions_controller.rb`
     /// Firefishの形は、Sharkeyの`packages/backend/src/server/api/mastodon/endpoints/status.ts`の`react/:name`
+    /// Pleromaの形は、Pleromaの`lib/pleroma/web/pleroma_api/controllers/emoji_reaction_controller.ex`
     public func addEmojiReaction(_ statusID: Status.ID, emoji: ReactionEmoji, style: EmojiReactionStyle) async throws -> Status {
         switch style {
         case .fedibird:
             try await send(formRequest(method: "PUT", url: emojiReactionURL(statusID, "emoji_reactions", emoji: emoji, style: style), form: []), decoding: Status.self).0
         case .chuckya, .firefish:
             try await send(formRequest(method: "POST", url: emojiReactionURL(statusID, "react", emoji: emoji, style: style), form: []), decoding: Status.self).0
+        case .pleroma:
+            try await send(formRequest(method: "PUT", url: pleromaReactionURL(statusID, emoji: emoji), form: []), decoding: Status.self).0
         }
     }
 
@@ -1247,7 +1292,15 @@ public struct MastodonClient: Sendable {
             return try await send(request, decoding: Status.self).0
         case .chuckya, .firefish:
             return try await send(formRequest(method: "POST", url: emojiReactionURL(statusID, "unreact", emoji: emoji, style: style), form: []), decoding: Status.self).0
+        case .pleroma:
+            var request = URLRequest(url: pleromaReactionURL(statusID, emoji: emoji))
+            request.httpMethod = "DELETE"
+            return try await send(request, decoding: Status.self).0
         }
+    }
+
+    private func pleromaReactionURL(_ statusID: Status.ID, emoji: ReactionEmoji) -> URL {
+        credential.instance.appending(path: "api/v1/pleroma/statuses/\(statusID)/reactions").appending(component: emoji.requestName(for: .pleroma))
     }
 
     /// 絵文字は1つのパスの要素としてエンコードする。お知らせのリアクションと同じ理由。
