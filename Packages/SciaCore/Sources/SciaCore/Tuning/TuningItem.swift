@@ -1744,6 +1744,15 @@ public enum TuningCatalog {
         defaultValue: 48
     )
 
+    /// 絵文字のパレットでカスタム絵文字を長押ししたときに、持ち上げて見せる絵の高さ（pt）。
+    public static let composeEmojiPalettePreviewHeight = NumberTuning(
+        id: "compose.emojiPalette.previewHeight",
+        title: "絵文字のパレットの長押しのプレビューの高さ（pt）",
+        range: 64...240,
+        step: 8,
+        defaultValue: 120
+    )
+
     /// 絵文字のパレットで、横長のカスタム絵文字に横に使わせるマスの数の上限。
     public static let composeEmojiPaletteMaxSpan = NumberTuning(
         id: "compose.emojiPalette.maxSpan",
@@ -2159,6 +2168,7 @@ public enum TuningCatalog {
             .number(composeEmojiPaletteBarHeight),
             .number(composeEmojiPaletteBarBottomInset),
             .number(composeEmojiPaletteCellSize),
+            .number(composeEmojiPalettePreviewHeight),
             .number(composeEmojiPaletteMaxSpan),
             .number(composeEmojiPaletteMinimumHeightFraction),
             .number(composeEmojiPaletteRecentLimit),

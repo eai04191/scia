@@ -22,6 +22,11 @@ final class InlineComposeController: NSObject {
     /// サーバーは注意書きのメンションとハッシュタグを読まないため。
     private let textCompletion: TextInputCompletion
     var completion: ComposeCompletion { textCompletion.completion }
+    /// 絵文字のパレットのカスタム絵文字のメニューが使う、セッションの部品。
+    var paletteMenu: EmojiPaletteMenuContext {
+        get { textCompletion.paletteMenu }
+        set { textCompletion.paletteMenu = newValue }
+    }
     /// 編集を始めるときに呼ぶ。既定の公開範囲などをまだ読めていなければ読む。
     var onBeginEditing: () -> Void = {}
     /// 畳まない設定で、書き始める前から入力欄とボタンを出すときに呼ぶ。既定の公開範囲やメディアの上限などをまだ読めていなければ読む。

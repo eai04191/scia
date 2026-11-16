@@ -6,6 +6,11 @@ import UIKit
 @MainActor
 final class EmojiReactionPicker {
     private let completion: TextInputCompletion
+    /// 絵文字のパレットのカスタム絵文字のメニューが使う、セッションの部品。
+    var paletteMenu: EmojiPaletteMenuContext {
+        get { completion.paletteMenu }
+        set { completion.paletteMenu = newValue }
+    }
     private let emojiImages: EmojiImageStore<UIImage>
     private lazy var palette = makePalette()
     private var sheet: EmojiPaletteSheet?

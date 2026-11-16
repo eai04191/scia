@@ -34,6 +34,7 @@ struct MenuItemSymbolTests {
         #expect(missingSymbols(ProfileTextMenuItem.self) == [])
         #expect(missingSymbols(HashtagMenuItem.self) == [])
         #expect(missingSymbols(ReactionMenuItem.self) == [])
+        #expect(missingSymbols(CustomEmojiMenuItem.self) == [])
         #expect(missingSymbols(MediaMenuItem.self) == [])
         #expect(missingSymbols(PostActionBarItem.self) == [])
         #expect(missingSymbols(ComposeToolItem.self) == [])

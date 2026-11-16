@@ -71,7 +71,7 @@ public enum StatusMenuCommand {
     /// ハッシュタグのメニューのサブメニューの項目。
     case hashtag(Tag, HashtagMenuCommand)
     /// カスタム絵文字の画像の、メディアのメニューのサブメニューの項目。
-    indirect case customEmoji(CustomEmoji, MediaMenuCommand)
+    case customEmoji(CustomEmoji, CustomEmojiMenuCommand)
     /// 「別のアカウントで」の、ほかのアカウントとしての操作。
     case otherAccount(OtherAccountCommand)
     /// ログアウトされたアカウントにログインし直す。「別のアカウントで」で、そのアカウントで投稿を探せなかったときに出す。
@@ -132,7 +132,7 @@ public struct StatusMenuTree {
     public var hashtagMenu: MenuLayout<HashtagMenuItem>.Groups = HashtagMenuItem.defaultLayout.groups
     public var hashtagActions: HashtagMenuActions?
     /// カスタム絵文字の画像のメディアのメニュー。メディアを共有や保存できるかは置く側で決まるため、置く側が組む。
-    public var customEmoji: @MainActor (CustomEmoji) -> MenuNode<MediaMenuCommand>? = { _ in nil }
+    public var customEmoji: @MainActor (CustomEmoji) -> MenuNode<CustomEmojiMenuCommand>? = { _ in nil }
     /// 「別のアカウントで」に並べる、ログインしているほかのアカウント。空なら項目を出さない。
     public var otherAccounts: [OtherAccount] = []
     /// 「別のアカウントで」の中の並び。投稿のメニューの、ほかのメニューの中に出すときの並び（`submenuGroups`）を渡す。

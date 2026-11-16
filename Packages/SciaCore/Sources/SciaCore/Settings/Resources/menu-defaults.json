@@ -143,6 +143,22 @@
     "more",
     "item:customize"
   ],
+  "customEmoji": [
+    "item:copyShortcode",
+    "separator",
+    "item:open",
+    "item:saveToPhotos",
+    "separator",
+    "hidden:copyLink",
+    "item:openInBrowser",
+    "hidden:openInDefaultBrowser",
+    "hidden:openInAppSafari",
+    "item:share",
+    "more",
+    "item:info",
+    "separator",
+    "item:customize"
+  ],
   "media": [
     "hidden:open",
     "item:saveToPhotos",

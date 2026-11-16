@@ -96,16 +96,4 @@ struct MediaMenuTreeTests {
         }
         #expect(value == "640×480")
     }
-
-    /// カスタム絵文字は、`:shortcode:`のサブメニューにし、アイコンに絵文字の画像を置く。
-    @Test func customEmojiSubmenu() throws {
-        let url = try #require(URL(string: "https://example.social/emoji/blobcat.png"))
-        let emoji = CustomEmoji(shortcode: "blobcat", url: url, staticUrl: url)
-        var menu = MediaMenuTree(kind: .image, attachment: emoji.attachment)
-        menu.open = true
-
-        let node = try #require(menu.customEmojiSubmenu(emoji, groups: MenuFixture.media.groups))
-        #expect(MenuNodeTests.describe([node]) == ":blobcat:[開く,その他[メディアの情報[PNG],カスタマイズ]]")
-        #expect(node.icon?.symbolName == "face.smiling")
-    }
 }

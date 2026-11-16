@@ -10,6 +10,8 @@ final class OtherAccounts {
     private let current: Credential
     private let tasks: TaskScope
     private let makeClient: (Credential) -> MastodonClient
+    /// 絵文字のパレットのカスタム絵文字のメニューが使う、セッションの部品。
+    var paletteMenu = EmojiPaletteMenuContext()
     private var accounts: [Credential.ID: OtherAccount] = [:]
     /// アカウントごとの、ハッシュタグの状態を読んで変えるもの。アカウントと一緒に作り直す。
     private var hashtags: [Credential.ID: OtherAccountHashtags] = [:]
@@ -157,6 +159,7 @@ final class OtherAccounts {
             completion: ComposeCompletion(sources: sources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
             recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
         ))
+        picker.paletteMenu = paletteMenu
         emojiReactionPickers[credential.id] = (credential, picker)
         return picker
     }

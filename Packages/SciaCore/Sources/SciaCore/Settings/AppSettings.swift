@@ -298,6 +298,10 @@ public final class AppSettings {
         didSet { defaults.set(profileTextMenuLayout.tokens, forKey: Keys.profileTextMenuLayout) }
     }
 
+    public var customEmojiMenuLayout: MenuLayout<CustomEmojiMenuItem> {
+        didSet { defaults.set(customEmojiMenuLayout.tokens, forKey: Keys.customEmojiMenuLayout) }
+    }
+
     /// 本文のハッシュタグを長押しして出すメニューの並び。
     public var hashtagMenuLayout: MenuLayout<HashtagMenuItem> {
         didSet { defaults.set(hashtagMenuLayout.tokens, forKey: Keys.hashtagMenuLayout) }
@@ -463,6 +467,7 @@ public final class AppSettings {
         static let linkMenuLayout = "settings.linkMenuLayout"
         static let externalPostMenuLayout = "settings.externalPostMenuLayout"
         static let profileTextMenuLayout = "settings.profileTextMenuLayout"
+        static let customEmojiMenuLayout = "settings.customEmojiMenuLayout"
         static let hashtagMenuLayout = "settings.hashtagMenuLayout"
         static let reactionMenuLayout = "settings.reactionMenuLayout"
         static let mediaMenuLayout = "settings.mediaMenuLayout"
@@ -523,6 +528,7 @@ public final class AppSettings {
         linkMenuLayout = defaults.stringArray(forKey: Keys.linkMenuLayout).map(MenuLayout.init(tokens:)) ?? LinkMenuItem.defaultLayout
         externalPostMenuLayout = defaults.stringArray(forKey: Keys.externalPostMenuLayout).map(MenuLayout.init(tokens:)) ?? ExternalPostMenuItem.defaultLayout
         profileTextMenuLayout = defaults.stringArray(forKey: Keys.profileTextMenuLayout).map(MenuLayout.init(tokens:)) ?? ProfileTextMenuItem.defaultLayout
+        customEmojiMenuLayout = defaults.stringArray(forKey: Keys.customEmojiMenuLayout).map(MenuLayout.init(tokens:)) ?? CustomEmojiMenuItem.defaultLayout
         hashtagMenuLayout = defaults.stringArray(forKey: Keys.hashtagMenuLayout).map(MenuLayout.init(tokens:)) ?? HashtagMenuItem.defaultLayout
         reactionMenuLayout = defaults.stringArray(forKey: Keys.reactionMenuLayout).map(MenuLayout.init(tokens:)) ?? ReactionMenuItem.defaultLayout
         mediaMenuLayout = defaults.stringArray(forKey: Keys.mediaMenuLayout).map(MenuLayout.init(tokens:)) ?? MediaMenuItem.defaultLayout

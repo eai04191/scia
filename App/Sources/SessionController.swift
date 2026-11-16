@@ -169,10 +169,14 @@ final class SessionController {
     private let updateStatusEverywhere: StatusInteractions.Update
     let interactions: StatusInteractions
     /// 投稿にリアクションする絵文字を選ぶシート。開くときに、カスタム絵文字と最近使った絵文字を読む。
-    private lazy var emojiReactionPicker = EmojiReactionPicker(completion: TextInputCompletion(
-        completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
-        recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
-    ))
+    private lazy var emojiReactionPicker = {
+        let picker = EmojiReactionPicker(completion: TextInputCompletion(
+            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
+            recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
+        ))
+        picker.paletteMenu = paletteMenuContext
+        return picker
+    }()
     private let polls: PollVoting
     /// カードが付く前に受け取った投稿を、見えている間に取り直す。
     private let statusRefresher: StatusRefresher
@@ -529,6 +533,8 @@ final class SessionController {
         rootViewController = tabBarController
         windowRootViewController = InAppBrowserDockContainer(content: tabBarController)
         prepare(searchRoot)
+        composer.paletteMenu = paletteMenuContext
+        otherAccounts.paletteMenu = paletteMenuContext
         tabBarController.view.addInteraction(UIDropInteraction(delegate: mediaDrop))
         // ペーストと同じく、書きかけの下書きがあっても聞かずに後ろに足す。
         mediaDrop.onDrop = { [weak self] drop in self?.receiveDroppedMedia(drop) }
@@ -1351,6 +1357,11 @@ final class SessionController {
     }
 
     /// `url`を`browser`で開く。アプリ内のSafariはhttpとhttps以外のURLで例外を出して落ちるため、呼ぶ側が`LinkBrowser.browser(for:)`などで確かめてから渡す。
+    /// 絵文字のパレットのカスタム絵文字のメニューに渡す部品。
+    private var paletteMenuContext: EmojiPaletteMenuContext {
+        EmojiPaletteMenuContext(notices: notices, transfers: mediaTransfers) { [weak self] url, browser in self?.open(url, in: browser) }
+    }
+
     private func open(_ url: URL, in browser: LinkBrowser) {
         switch browser {
         case .external: UIApplication.shared.open(url)
@@ -1686,6 +1697,7 @@ final class SessionController {
             completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
             recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
         )
+        completion.paletteMenu = paletteMenuContext
         let controller = AnnouncementsViewController(model: announcements, completion: completion, isEmbedded: isEmbedded)
         controller.notices = notices
         controller.userMenuActions = userMenuActions
@@ -1925,6 +1937,7 @@ final class SessionController {
             completion: ComposeCompletion(sources: endorsementSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
             recentEmojis: nil
         )
+        completion.paletteMenu = paletteMenuContext
         let controller = ProfileEditViewController(editor: editor, completion: completion, endorsementCompletion: endorsementCompletion)
         controller.onError = { [weak self] error, title in self?.handle(error, title: title) }
         #if DEBUG

@@ -173,7 +173,7 @@ extension TimelineViewController {
     }
 }
 
-/// カスタム絵文字の画像の、メディアのメニュー。投稿のメニューの「カスタム絵文字」と、プロフィールの文章のメニューに置く。「投稿」はこのメニューの中なので出さない。
+/// カスタム絵文字のメニュー。投稿のメニューの「カスタム絵文字」と、プロフィールの文章のメニューに置く。決まりはdocs/menus.mdの「カスタム絵文字のメニュー」にある。
 /// 画像は行に描いているアニメーションしない版を、メニューに文字色で塗られないよう元の色のまま置く。まだ届いていなければ、項目のアイコンを置く。
 /// メニューを組んだときに読んだ画像を、アイコンと、共有のシートの見出しに添える画像に使う。
 @MainActor
@@ -189,11 +189,11 @@ final class CustomEmojiMenus {
     }
 
     /// `:shortcode:`のサブメニュー。出す項目がなければnil。
-    func node(for emoji: CustomEmoji) -> MenuNode<MediaMenuCommand>? {
+    func node(for emoji: CustomEmoji) -> MenuNode<CustomEmojiMenuCommand>? {
         guard let timeline else { return nil }
         // 使う人が開いたメニューなので、前に読めなかった画像も間隔を待たずに読み直す。
         images[emoji.staticUrl] = timeline.emojiImages.image(for: choice(in: timeline).url(of: emoji), retriesNow: true)
-        return timeline.mediaMenuTree(for: target(for: emoji), statusMenu: nil).customEmojiSubmenu(emoji, groups: timeline.settings.mediaMenuLayout.submenuGroups(actions: timeline.settings.mediaActions))
+        return timeline.customEmojiMenuTree(for: emoji).submenu(groups: timeline.settings.customEmojiMenuLayout.groups)
     }
 
     /// サブメニューのアイコン。動く絵文字は、動かす設定なら動く画像にする。画像がまだ届いていなければnil。
@@ -208,13 +208,23 @@ final class CustomEmojiMenus {
         timeline.emojiImages.choice(animates: AnimatedImagePlayback.animatesCustomEmojis(timeline.settings))
     }
 
-    func perform(_ command: MediaMenuCommand, on emoji: CustomEmoji) {
-        if case .copyValue(let value) = command {
-            UIPasteboard.general.string = value
+    /// 開く、共有、保存、URLの項目は、絵文字の画像のメディアとして、メディアのメニューと同じ処理で行う。
+    func perform(_ command: CustomEmojiMenuCommand, on emoji: CustomEmoji) {
+        let media: MediaMenuCommand
+        switch command {
+        case .copyShortcode(let text), .copyValue(let text):
+            UIPasteboard.general.string = text
             timeline?.showTextCopiedNotice()
             return
+        case .customize:
+            timeline?.openMenuSettings(.customEmojiMenu)
+            return
+        case .open: media = .open
+        case .share: media = .share
+        case .saveToPhotos: media = .saveToPhotos
+        case .url(let command): media = .url(command)
         }
-        timeline?.performMediaMenu(command, target: target(for: emoji), subject: subject)
+        timeline?.performMediaMenu(media, target: target(for: emoji), subject: subject)
     }
 
     private func target(for emoji: CustomEmoji) -> TimelineViewController.MediaMenuTarget {
@@ -222,5 +232,17 @@ final class CustomEmojiMenus {
         return TimelineViewController.MediaMenuTarget(attachment: attachment, source: nil, preview: images[emoji.staticUrl]) { [weak timeline, subject] in
             timeline?.openMedia([attachment], at: 0, subject: subject) { _ in nil }
         }
+    }
+}
+
+extension TimelineViewController {
+    /// カスタム絵文字のメニューの木。タイムラインで行える項目を入れる。
+    func customEmojiMenuTree(for emoji: CustomEmoji) -> CustomEmojiMenuTree {
+        var tree = CustomEmojiMenuTree(emoji: emoji)
+        tree.open = true
+        tree.share = mediaTransfers != nil
+        tree.saveToPhotos = mediaTransfers != nil
+        tree.linkBrowser = settings.linkBrowser
+        return tree
     }
 }

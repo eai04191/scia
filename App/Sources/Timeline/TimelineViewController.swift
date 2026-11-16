@@ -2505,9 +2505,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 組むだけで通信しない。メニューを出すときと違い、メニューに出る人の関係は読み直さず、カスタム絵文字の画像も読まない。
     func offlineStatusMenuTree(for status: Status, id: ItemID, canSelectText: Bool) -> StatusMenuTree {
         var tree = statusMenuTree(status: status, notification: nil, id: id, canSelectText: canSelectText)
-        let emojiGroups = settings.mediaMenuLayout.submenuGroups(actions: settings.mediaActions)
+        let emojiGroups = settings.customEmojiMenuLayout.groups
         tree.customEmoji = { [weak self] emoji in
-            self?.mediaMenuTree(for: MediaMenuTarget(attachment: emoji.attachment, source: nil) {}, statusMenu: nil).customEmojiSubmenu(emoji, groups: emojiGroups)
+            self?.customEmojiMenuTree(for: emoji).submenu(groups: emojiGroups)
         }
         return tree
     }

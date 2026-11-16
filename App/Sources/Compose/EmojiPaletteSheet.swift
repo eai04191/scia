@@ -41,6 +41,7 @@ final class EmojiPaletteSheet: NSObject, ComposeBottomSheet {
         lifecycle = ComposeSheetLifecycle(controller: controller, name: "emoji palette sheet")
         super.init()
         controller.view.backgroundColor = .clear
+        palette.closeSheet = { [weak self] in self?.lifecycle.close(notifiesWillClose: false) }
         palette.translatesAutoresizingMaskIntoConstraints = false
         palette.removeFromSuperview()
         controller.view.addSubview(palette)

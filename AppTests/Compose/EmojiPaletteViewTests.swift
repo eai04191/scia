@@ -62,6 +62,56 @@ struct EmojiPaletteViewTests {
         }
     }
 
+    /// パレットを並べるたびに、チューニングの値をパレットに入れる。
+    @Test func updatePaletteAppliesTuningValues() {
+        let tuning = TuningStore(defaults: nil)
+        tuning.setValue(2, for: TuningCatalog.composeEmojiPaletteMaxSpan)
+        tuning.setValue(0.5, for: TuningCatalog.composeEmojiPaletteMinimumHeightFraction)
+        tuning.setValue(true, for: TuningCatalog.composeEmojiPaletteHardEdgeEffect)
+        tuning.setValue(44, for: TuningCatalog.composeEmojiPaletteBarHeight)
+        tuning.setValue(20, for: TuningCatalog.composeEmojiPaletteBarBottomInset)
+        tuning.setValue(56, for: TuningCatalog.composeEmojiPaletteCellSize)
+        tuning.setValue(160, for: TuningCatalog.composeEmojiPalettePreviewHeight)
+        let core = ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning))
+        let completion = TextInputCompletion(completion: core, recentEmojis: nil, tuning: tuning)
+        let palette = EmojiPaletteView(emojiImages: .offline, thumbnailBuilder: nil)
+
+        completion.updatePalette(palette, recentKeys: [])
+
+        #expect(palette.maxSpan == 2)
+        #expect(palette.minimumHeightFraction == 0.5)
+        #expect(palette.hardEdgeEffect)
+        #expect(palette.barHeight == 44)
+        #expect(palette.barBottomInset == 20)
+        #expect(palette.cellSize == 56)
+        #expect(palette.previewHeight == 160)
+    }
+
+    /// 長押しのメニューは、カスタム絵文字にだけ出す。Unicodeの絵文字の長押しは、肌の色の変更に空けておく。
+    @Test func contextMenuIsOfferedOnlyForCustomEmojis() throws {
+        let palette = EmojiPaletteView(emojiImages: .offline, thumbnailBuilder: nil)
+        palette.frame = CGRect(x: 0, y: 0, width: 400, height: 400)
+        let base = URL(filePath: "/")
+        let custom = PaletteEmoji.custom(ServerEmoji(shortcode: "blob", url: base.appending(path: "blob.gif"), staticUrl: base.appending(path: "blob.png")))
+        let standard = PaletteEmoji.standard(StandardEmoji(emoji: "😀", name: "grinning", keywords: [], version: ""))
+        palette.setContent(.sections([EmojiPaletteSection(kind: .uncategorized, emojis: [custom, standard], heading: .text("a"))], customStatus: nil))
+        palette.layoutIfNeeded()
+        let collectionView = try #require(Self.descendants(of: palette).compactMap { $0 as? UICollectionView }.first)
+
+        #expect(palette.collectionView(collectionView, contextMenuConfigurationForItemsAt: [IndexPath(item: 0, section: 0)], point: .zero) != nil)
+        #expect(palette.collectionView(collectionView, contextMenuConfigurationForItemsAt: [IndexPath(item: 1, section: 0)], point: .zero) == nil)
+    }
+
+    /// 持ち上げる絵は縦横比を保ち、パレットの幅を超える横長の絵文字は、幅に収まるまで高さごと縮める。
+    @Test func previewOfWideEmojiShrinksToFitTheWidth() {
+        let square = EmojiPalettePreviewController.contentSize(aspectRatio: 1, height: 120, maxWidth: 338)
+        let wide = EmojiPalettePreviewController.contentSize(aspectRatio: 8, height: 120, maxWidth: 338)
+
+        #expect(square == CGSize(width: 152, height: 152))
+        #expect(wide.width == 338)
+        #expect(abs((wide.width - 32) / (wide.height - 32) - 8) < 0.2)
+    }
+
     private static func sectionTitles(in palette: EmojiPaletteView) -> [String] {
         palette.layoutIfNeeded()
         return descendants(of: palette).compactMap { ($0 as? UIButton)?.accessibilityLabel }

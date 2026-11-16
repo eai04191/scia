@@ -185,6 +185,7 @@ struct SettingsView: View {
         case .linkMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.linkMenuLayout)
         case .externalPostMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.externalPostMenuLayout)
         case .profileTextMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.profileTextMenuLayout)
+        case .customEmojiMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.customEmojiMenuLayout)
         case .hashtagMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.hashtagMenuLayout)
         case .reactionMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.reactionMenuLayout)
         case .mediaMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.mediaMenuLayout)

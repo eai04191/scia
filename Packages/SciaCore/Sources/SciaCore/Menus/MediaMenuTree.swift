@@ -57,14 +57,6 @@ public struct MediaMenuTree {
         return children.isEmpty ? nil : .submenu("", children)
     }
 
-    /// 投稿のメニューの「カスタム絵文字」に並べる、絵文字の画像の`:shortcode:`のサブメニュー。出す項目がなければnil。
-    /// アイコンには絵文字の画像を置き、出せなければ「カスタム絵文字」のアイコンを置く。
-    @MainActor
-    public func customEmojiSubmenu(_ emoji: CustomEmoji, groups: MenuLayout<MediaMenuItem>.Groups) -> MenuNode<MediaMenuCommand>? {
-        guard let children = menu(groups: groups)?.children else { return nil }
-        return .submenu(":\(emoji.shortcode):", icon: .customEmoji(emoji, fallbackSymbol: StatusMenuItem.customEmojis.symbolName), children)
-    }
-
     @MainActor
     private func node(for item: MediaMenuItem) -> MenuNode<MediaMenuCommand>? {
         if let action = item.urlAction {

@@ -361,6 +361,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     case linkMenu = "link-menu"
     case externalPostMenu = "external-post-menu"
     case profileTextMenu = "profile-text-menu"
+    case customEmojiMenu = "custom-emoji-menu"
     case hashtagMenu = "hashtag-menu"
     case mediaMenu = "media-menu"
     case reactionMenu = "reaction-menu"
@@ -380,7 +381,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
         switch self {
         case .appearance, .notificationAppearance, .media, .linkLoading, .autoTranslation: [.display, self]
         case .statusActions, .quotedStatusActions, .notificationActions, .userActions, .linkActions, .externalPostActions, .hashtagActions, .mediaActions,
-             .reactionActions, .profileTextMenu:
+             .reactionActions, .profileTextMenu, .customEmojiMenu:
             [.interaction, self]
         case .statusMenu, .statusActionBar, .statusLeadingSwipe, .statusTrailingSwipe: [.interaction, .statusActions, self]
         case .userMenu: [.interaction, .userActions, self]

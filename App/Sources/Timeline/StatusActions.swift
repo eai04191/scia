@@ -233,7 +233,7 @@ extension TimelineViewController {
         showNotice(.textCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
     }
 
-    /// カスタム絵文字の画像のメディアのメニューを、絵文字の画像と`:shortcode:`のサブメニューにする。「投稿」はこのメニューの中なので出さない。
+    /// カスタム絵文字のメニューを、絵文字の画像と`:shortcode:`のサブメニューにする。
     /// プロフィールの文章のメニューに置く。
     func emojiElement(for emoji: CustomEmoji, subject: OperationStatus.Subject?) -> UIMenuElement? {
         let emojis = CustomEmojiMenus(timeline: self, subject: subject)

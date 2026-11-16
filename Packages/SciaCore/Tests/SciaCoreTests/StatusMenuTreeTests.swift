@@ -170,12 +170,12 @@ struct StatusMenuTreeTests {
         let emoji = CustomEmoji(shortcode: "blobcat", url: emojiURL, staticUrl: emojiURL)
         var withEmoji = tree(status(emojis: [emoji]))
         withEmoji.customEmoji = { (emoji: CustomEmoji) in
-            var media = MediaMenuTree(kind: .image, attachment: emoji.attachment)
-            media.open = true
-            return media.customEmojiSubmenu(emoji, groups: MenuFixture.media.groups)
+            var menu = CustomEmojiMenuTree(emoji: emoji)
+            menu.open = true
+            return menu.submenu(groups: MenuFixture.customEmoji.groups)
         }
 
-        #expect(outline(withEmoji).hasSuffix("|その他[:blobcat:[開く,その他[メディアの情報[PNG],カスタマイズ]],カスタマイズ]"))
+        #expect(outline(withEmoji).hasSuffix("|その他[:blobcat:[:blobcat:,開く,その他[メディアの情報[PNG],カスタマイズ]],カスタマイズ]"))
         #expect(!outline(tree(status())).contains(":"))
     }
 
@@ -188,14 +188,14 @@ struct StatusMenuTreeTests {
             var reacted = tree(post)
             reacted.capabilities.supportsEmojiReactions = supports
             reacted.customEmoji = { (emoji: CustomEmoji) in
-                var media = MediaMenuTree(kind: .image, attachment: emoji.attachment)
-                media.open = true
-                return media.customEmojiSubmenu(emoji, groups: MenuFixture.media.groups)
+                var menu = CustomEmojiMenuTree(emoji: emoji)
+                menu.open = true
+                return menu.submenu(groups: MenuFixture.customEmoji.groups)
             }
             return outline(reacted)
         }
 
-        #expect(menu(supports: true).contains(":blobcat:[開く"))
+        #expect(menu(supports: true).contains(":blobcat:[:blobcat:,開く"))
         #expect(!menu(supports: false).contains(":blobcat:"))
     }
 

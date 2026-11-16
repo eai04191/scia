@@ -374,6 +374,23 @@ extension ReactionMenuItem: MenuItemContentProviding {
     }
 }
 
+extension CustomEmojiMenuItem: MenuItemContentProviding {
+    public var content: MenuItemContent {
+        switch self {
+        case .copyShortcode: .own(title: "ショートコードをコピー", symbolName: "doc.on.doc")
+        case .open: .own(title: "開く", symbolName: "arrow.up.left.and.arrow.down.right")
+        case .share: .own(title: "共有", symbolName: "square.and.arrow.up")
+        case .saveToPhotos: .own(title: "写真に保存", symbolName: "square.and.arrow.down")
+        case .copyLink: .url(.copyLink)
+        case .openInBrowser: .url(.openInBrowser)
+        case .openInDefaultBrowser: .url(.openInDefaultBrowser)
+        case .openInAppSafari: .url(.openInAppSafari)
+        case .info: .own(title: "メディアの情報", symbolName: "info.circle")
+        case .customize: .own(title: "カスタマイズ", symbolName: "slider.horizontal.3")
+        }
+    }
+}
+
 extension MediaMenuItem: MenuItemContentProviding {
     public var content: MenuItemContent {
         switch self {

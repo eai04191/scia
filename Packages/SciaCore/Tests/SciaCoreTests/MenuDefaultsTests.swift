@@ -12,6 +12,7 @@ struct MenuDefaultsTests {
         ProfileTextMenuItem.defaultsKey,
         HashtagMenuItem.defaultsKey,
         ReactionMenuItem.defaultsKey,
+        CustomEmojiMenuItem.defaultsKey,
         MediaMenuItem.defaultsKey,
     ]
 
@@ -30,6 +31,7 @@ struct MenuDefaultsTests {
         check(ProfileTextMenuItem.self)
         check(HashtagMenuItem.self)
         check(ReactionMenuItem.self)
+        check(CustomEmojiMenuItem.self)
         check(MediaMenuItem.self)
     }
 
@@ -45,6 +47,7 @@ struct MenuDefaultsTests {
         checkInsertion(ProfileTextMenuItem.self)
         checkInsertion(HashtagMenuItem.self)
         checkInsertion(ReactionMenuItem.self)
+        checkInsertion(CustomEmojiMenuItem.self)
         checkInsertion(MediaMenuItem.self)
         checkInsertion(TabItem.self)
     }

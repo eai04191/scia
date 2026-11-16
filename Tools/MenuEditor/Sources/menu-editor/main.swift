@@ -45,6 +45,7 @@ let catalog = Catalog(menus: [
     menu(ProfileTextMenuItem.self, title: "プロフィールの文章のメニュー"),
     menu(HashtagMenuItem.self, title: "ハッシュタグのメニュー"),
     menu(ReactionMenuItem.self, title: "リアクションのメニュー"),
+    menu(CustomEmojiMenuItem.self, title: "カスタム絵文字のメニュー"),
     menu(MediaMenuItem.self, title: "メディアのメニュー"),
 ])
 

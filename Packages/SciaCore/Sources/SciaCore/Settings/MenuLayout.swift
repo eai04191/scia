@@ -529,6 +529,35 @@ public enum ReactionMenuItem: String, BundledMenuDefaults {
     public static let defaultLayout = MenuLayout<ReactionMenuItem>.bundledDefault()
 }
 
+/// カスタム絵文字のメニューの項目。投稿のメニューとプロフィールの文章のメニューの「カスタム絵文字」と、絵文字のパレットの長押しで出す。決まりはdocs/menus.mdの「カスタム絵文字のメニュー」にある。
+public enum CustomEmojiMenuItem: String, BundledMenuDefaults {
+    /// `:shortcode:`の文字をコピーする。
+    case copyShortcode
+    /// 絵文字の画像をビューアで開く。
+    case open
+    /// 絵文字の画像のファイルを共有する。
+    case share
+    /// 絵文字の画像を写真に保存する。
+    case saveToPhotos
+    /// 絵文字の画像のURLをコピーする。
+    case copyLink
+    /// 開く場所の設定に従って、絵文字の画像のURLを開く。
+    case openInBrowser
+    /// 開く場所の設定にかかわらず、既定のブラウザで開く。
+    case openInDefaultBrowser
+    /// 開く場所の設定にかかわらず、アプリ内のSafariで開く。
+    case openInAppSafari
+    /// 画像の解像度や形式などを並べるサブメニュー。
+    case info
+
+    /// このメニューの並びの設定の画面を開く。決まりはdocs/menus.mdの「並びの設定」にある。
+    case customize
+    public static var customizeItem: Self? { .customize }
+
+    public static let defaultsKey = "customEmoji"
+    public static let defaultLayout = MenuLayout<CustomEmojiMenuItem>.bundledDefault()
+}
+
 /// タイムラインのサムネイル、リンクカードの画像、プロフィールの画像を長押ししたときと、ビューアのメニューの項目。決まりはdocs/menus.mdの「メディアのメニュー」にある。
 public enum MediaMenuItem: String, BundledMenuDefaults {
     /// ビューアで開く。ビューアでは出ない。

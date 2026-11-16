@@ -146,6 +146,20 @@ enum MenuFixture {
         "item:customize",
     ])
 
+    static let customEmoji = MenuLayout<CustomEmojiMenuItem>(tokens: [
+        "item:copyShortcode",
+        "separator",
+        "item:open",
+        "item:share",
+        "item:saveToPhotos",
+        "separator",
+        "item:copyLink",
+        "item:openInBrowser",
+        "more",
+        "item:info",
+        "item:customize",
+    ])
+
     static let media = MenuLayout<MediaMenuItem>(tokens: [
         "item:open",
         "item:share",
@@ -177,6 +191,7 @@ extension AppSettings {
         profileTextMenuLayout = MenuFixture.profileText
         hashtagMenuLayout = MenuFixture.hashtag
         reactionMenuLayout = MenuFixture.reaction
+        customEmojiMenuLayout = MenuFixture.customEmoji
         mediaMenuLayout = MenuFixture.media
     }
 }

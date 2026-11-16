@@ -23,6 +23,8 @@ final class TextInputCompletion {
     /// 候補を選んだときに、入力欄に入れる前に呼ぶ。trueを返したら入力欄に入れない。
     /// プロフィールの編集の追加の行のように、選んだものを文字ではなく項目として足す入力欄で使う。
     var onSelect: (CompletionCandidate, any UITextInput) -> Bool = { _, _ in false }
+    /// パレットのカスタム絵文字のメニューが使う、セッションの部品。
+    var paletteMenu = EmojiPaletteMenuContext()
     /// 補完している入力欄。
     private(set) weak var input: (any UITextInput)?
     private var inputHadMarkedText = false
@@ -197,6 +199,11 @@ final class TextInputCompletion {
         palette.hardEdgeEffect = tuning.value(of: TuningCatalog.composeEmojiPaletteHardEdgeEffect)
         palette.barHeight = tuning.value(of: TuningCatalog.composeEmojiPaletteBarHeight)
         palette.barBottomInset = tuning.value(of: TuningCatalog.composeEmojiPaletteBarBottomInset)
+        palette.previewHeight = tuning.value(of: TuningCatalog.composeEmojiPalettePreviewHeight)
+        palette.menu = { [weak self, weak palette] emoji in
+            guard let self, let palette else { return nil }
+            return EmojiPaletteMenu(context: paletteMenu, tuning: tuning, settings: settings, emojiImages: palette.emojiImages).menu(for: emoji, in: palette)
+        }
         palette.emojiStyle = settings.appearance.emojiStyle
         let query = palette.query
         let standardGroups = StandardEmojiAvailability.groups(for: settings.appearance.emojiStyle)

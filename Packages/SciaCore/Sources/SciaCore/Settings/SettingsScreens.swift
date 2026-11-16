@@ -161,6 +161,7 @@ extension SettingsPage {
         case .linkMenu: "リンクのメニュー"
         case .externalPostMenu: "ほかのサービスの投稿のメニュー"
         case .profileTextMenu: "プロフィールの文章のメニュー"
+        case .customEmojiMenu: "カスタム絵文字のメニュー"
         case .hashtagMenu: "ハッシュタグのメニュー"
         case .mediaMenu: "メディアのメニュー"
         case .reactionMenu: "リアクションのメニュー"
@@ -180,6 +181,7 @@ extension SettingsPage {
         switch self {
         case .statusMenu, .userMenu, .linkMenu, .externalPostMenu, .hashtagMenu, .mediaMenu, .reactionMenu: "メニュー"
         case .profileTextMenu: "プロフィールの文章"
+        case .customEmojiMenu: "カスタム絵文字"
         case .viewedMediaCache: "表示済み"
         case .prefetchedMediaCache: "先読み"
         default: title(isRightToLeft: isRightToLeft)
@@ -207,7 +209,7 @@ extension SettingsPage {
             [
                 SettingsSection(rows: [
                     .page(.statusActions), .page(.quotedStatusActions), .page(.notificationActions), .page(.userActions), .page(.linkActions),
-                    .page(.externalPostActions), .page(.hashtagActions), .page(.mediaActions), .page(.reactionActions), .page(.profileTextMenu),
+                    .page(.externalPostActions), .page(.hashtagActions), .page(.mediaActions), .page(.reactionActions), .page(.profileTextMenu), .page(.customEmojiMenu),
                 ]),
                 SettingsSection(header: "リンク", rows: [.item(.linkBrowser), .item(.inAppBrowserHeight)]),
                 SettingsSection(header: "ブースト", rows: [.item(.reblogVisibility)]),
@@ -240,7 +242,7 @@ extension SettingsPage {
             ]
         case .appIcon, .appearance, .notificationAppearance, .autoTranslation, .tabs, .account, .statusActions, .quotedStatusActions, .notificationActions,
              .userActions, .linkActions, .externalPostActions, .hashtagActions, .mediaActions, .reactionActions, .statusMenu, .statusActionBar,
-             .statusLeadingSwipe, .statusTrailingSwipe, .userMenu, .linkMenu, .externalPostMenu, .profileTextMenu, .hashtagMenu, .mediaMenu, .reactionMenu,
+             .statusLeadingSwipe, .statusTrailingSwipe, .userMenu, .linkMenu, .externalPostMenu, .profileTextMenu, .customEmojiMenu, .hashtagMenu, .mediaMenu, .reactionMenu,
              .composeTools, .connection, .connectionTimelines, .storage, .viewedMediaCache, .prefetchedMediaCache, .licenses, .acknowledgments:
             nil
         }

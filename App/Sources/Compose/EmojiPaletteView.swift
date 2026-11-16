@@ -23,6 +23,14 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
 
     var onSelect: (PaletteEmoji) -> Void = { _ in }
     var onDelete: () -> Void = {}
+    /// カスタム絵文字を長押ししたときに、持ち上げた絵の下に出すメニュー。nilなら絵だけを出す。
+    var menu: ((ServerEmoji) -> UIMenu?)?
+    /// パレットを載せているシートを閉じる。メニューから、シートの上に重ねない画面（設定、ブラウザ）へ移るときに使う。載せたシートが入れる。
+    var closeSheet: () -> Void = {}
+    /// 長押ししたカスタム絵文字を持ち上げて見せる絵の高さ。
+    var previewHeight: CGFloat = TuningCatalog.composeEmojiPalettePreviewHeight.defaultValue
+    /// 長押しで持ち上げて見せているプレビュー。大きく読み直した画像が届いたら描き直す。
+    private weak var preview: EmojiPalettePreviewController?
     /// 削除のボタンを出すか。入力欄に入れずに絵文字を選ぶだけのとき（お知らせのリアクション）は出さない。
     var showsDeleteButton = true {
         didSet { deleteButton.isHidden = !showsDeleteButton }
@@ -101,7 +109,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     private(set) var content: Content = .sections([], customStatus: .loading)
     private var customStatus: CustomEmojiStatus?
     private var sections: [EmojiPaletteSection] = []
-    private let emojiImages: EmojiImageStore<UIImage>
+    let emojiImages: EmojiImageStore<UIImage>
     private let glyphImages: EmojiGlyphImageStore
     private let thumbnails: EmojiThumbnails
     private let glyphArchive: EmojiGlyphArchive
@@ -173,6 +181,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         }
         emojiImages.addListener(owner: self) { [weak self] urls in
             FrameWork.measure("EmojiPaletteView.imagesDidLoad") { self?.reconfigureVisibleCells(showing: urls) }
+            self?.preview?.imagesDidLoad(urls)
         }
     }
 
@@ -737,6 +746,23 @@ extension EmojiPaletteView: UICollectionViewDelegate {
         onSelect(emoji)
     }
 
+    /// カスタム絵文字は、長押しで大きく見せてメニューを出す。Unicodeの絵文字では出さない。決まりはdocs/menus.mdの「カスタム絵文字のメニュー」にある。
+    func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemsAt indexPaths: [IndexPath], point: CGPoint) -> UIContextMenuConfiguration? {
+        guard let indexPath = indexPaths.first, indexPaths.count == 1, case .custom(let emoji) = emoji(at: indexPath) else { return nil }
+        let store = emojiImages
+        let height = previewHeight
+        // 横長の絵文字も、パレットの幅に収める。
+        let maxWidth = bounds.width - 64
+        let menu = menu
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: { [weak self] in
+            let preview = EmojiPalettePreviewController(emoji: emoji, store: store, height: height, maxWidth: maxWidth)
+            self?.preview = preview
+            return preview
+        }, actionProvider: { _ in
+            menu?(emoji)
+        })
+    }
+
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         guard scrollView === collectionView, scrollView.isTracking || scrollView.isDecelerating else { return }
         FrameWork.measure("EmojiPaletteView.scrollViewDidScroll") { updateSelectedSection() }
@@ -777,6 +803,73 @@ extension EmojiPaletteView: UICollectionViewDelegate {
 
     /// スクロールの記録に書く画面の名前。
     static let scrollScreenName = "emojiPalette"
+}
+
+/// パレットで長押ししたカスタム絵文字を、大きく見せる。パレットと同じく、設定によらず動かす。
+final class EmojiPalettePreviewController: UIViewController {
+    private let emoji: ServerEmoji
+    private let store: EmojiImageStore<UIImage>
+    private let height: CGFloat
+    private let maxWidth: CGFloat
+    private let imageView = EmojiImageView(frame: .zero)
+    private static let padding: CGFloat = 16
+
+    init(emoji: ServerEmoji, store: EmojiImageStore<UIImage>, height: CGFloat, maxWidth: CGFloat) {
+        self.emoji = emoji
+        self.store = store
+        self.height = height
+        self.maxWidth = maxWidth
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .secondarySystemBackground
+        view.addSubview(imageView)
+        // 使う人が長押しして開いたので、前に読めなかった画像も間隔を待たずに読み直す。
+        loadImages(retriesNow: true)
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        imageView.frame = view.bounds.insetBy(dx: Self.padding, dy: Self.padding)
+    }
+
+    func imagesDidLoad(_ urls: Set<URL>) {
+        guard urls.contains(emoji.url) || urls.contains(emoji.staticUrl) else { return }
+        loadImages(retriesNow: false)
+    }
+
+    /// 持っている画像で描き、描く高さに足りなければ読み直させる。届いたら`imagesDidLoad`で描き直す。
+    private func loadImages(retriesNow: Bool) {
+        let choice = EmojiPaletteCell.choice(of: store)
+        let url = choice.url(of: emoji)
+        // 縦横比は、持っている画像から知る。まだなければサーバーが返したものを使い、どちらもなければ正方形にする。
+        let known = store.image(for: url, retriesNow: retriesNow)
+        let aspectRatio: CGFloat = if let size = known?.size, size.height > 0 {
+            size.width / size.height
+        } else {
+            emoji.aspectRatio.map { CGFloat($0) } ?? 1
+        }
+        let size = Self.contentSize(aspectRatio: aspectRatio, height: height, maxWidth: maxWidth)
+        // 横長の絵文字は幅に収めて縮めるので、縮めたあとの高さで読む。縮める前の高さで読むと、描く大きさの何倍もの画素を展開する。
+        let pixelHeight = RichTextRenderer.pixelHeight(of: size.height - Self.padding * 2, scale: traitCollection.displayScale)
+        imageView.stillImage = store.image(for: url, pixelHeight: pixelHeight, retriesNow: retriesNow)
+        imageView.animation = choice.animationURL(of: emoji).flatMap { store.animation(for: $0, pixelHeight: pixelHeight) }
+        preferredContentSize = size
+    }
+
+    /// 絵を`height`の高さで描く大きさ。幅が`maxWidth`を超える横長の絵文字は、幅を`maxWidth`にして高さを縮める。
+    static func contentSize(aspectRatio: CGFloat, height: CGFloat, maxWidth: CGFloat) -> CGSize {
+        let width = height * aspectRatio
+        let scale = min(1, max(1, maxWidth - padding * 2) / max(1, width))
+        return CGSize(width: (width * scale).rounded() + padding * 2, height: (height * scale).rounded() + padding * 2)
+    }
 }
 
 /// 並べ直しにかかった時間を、スクロールの記録に渡す。
