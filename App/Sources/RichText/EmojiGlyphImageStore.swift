@@ -97,6 +97,11 @@ final class EmojiGlyphImageStore {
     /// 枠の中央に、文字として描く。枠より広い並び（端末の絵文字の書体が1つの絵にできない並び）は、半分の大きさまで縮める。
     @concurrent
     static func draw(_ request: Request) async -> UIImage {
+        drawNow(request)
+    }
+
+    /// その場で描く。メニューのアイコンのように、数個をすぐ出すときに使う。
+    nonisolated static func drawNow(_ request: Request) -> UIImage {
         let color = UIColor.label.resolvedColor(with: UITraitCollection(userInterfaceStyle: request.userInterfaceStyle))
         func string(scaledBy factor: CGFloat) -> NSAttributedString {
             // 枠の大きさで決めた大きさを受け取るので、端末の文字の大きさには合わせない。

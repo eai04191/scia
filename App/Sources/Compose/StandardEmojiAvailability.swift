@@ -15,6 +15,17 @@ enum StandardEmojiAvailability {
     private static let checkedFromVersion = 16.0
     private static var systemGroups: [StandardEmojiGroup]?
 
+    private static var toned: (style: EmojiStyle, tone: EmojiSkinTone, groups: [StandardEmojiGroup])?
+
+    /// `style`で描ける絵文字を、肌の色を変えられるものは`skinTone`の色にして並べたリスト。
+    static func groups(for style: EmojiStyle, skinTone: EmojiSkinTone) -> [StandardEmojiGroup] {
+        guard skinTone != .none else { return groups(for: style) }
+        if let toned, toned.style == style, toned.tone == skinTone { return toned.groups }
+        let groups = groups(for: style).withSkinTone(skinTone)
+        toned = (style, skinTone, groups)
+        return groups
+    }
+
     static func groups(for style: EmojiStyle) -> [StandardEmojiGroup] {
         switch style {
         case .twemoji:
@@ -25,6 +36,13 @@ enum StandardEmojiAvailability {
             let groups = StandardEmojiCatalog.groups.map { group in
                 StandardEmojiGroup(title: group.title, emojis: group.emojis.filter { emoji in
                     (Double(emoji.version) ?? 0) < checkedFromVersion || isSingleGlyph(emoji.emoji, font: font)
+                }.map { emoji in
+                    // 肌の色を付けた並びは、元の絵文字より後の版で足されたものがある（うさ耳の人やレスリングは17.0）。
+                    // 端末が1つの絵にできない並びは選ばせない。2人の色の違う並びだけ描けないなら、2人同じ色だけを選ばせる。
+                    guard let samples = emoji.skinToneSamples else { return emoji }
+                    guard isSingleGlyph(samples.same, font: font) else { return emoji.removingSkinTones() }
+                    guard let mixed = samples.mixed, !isSingleGlyph(mixed, font: font) else { return emoji }
+                    return emoji.limitingSkinTonesToSameForBoth()
                 })
             }
             systemGroups = groups
@@ -35,12 +53,19 @@ enum StandardEmojiAvailability {
     private static func isSingleGlyph(_ emoji: String, font: CTFont) -> Bool {
         let string = NSAttributedString(string: emoji, attributes: [.font: font])
         let line = CTLineCreateWithAttributedString(string)
-        guard CTLineGetGlyphCount(line) == 1, let run = (CTLineGetGlyphRuns(line) as? [CTRun])?.first,
+        guard let runs = CTLineGetGlyphRuns(line) as? [CTRun], runs.count == 1, let run = runs.first,
               let runFont = (CTRunGetAttributes(run) as NSDictionary)[kCTFontAttributeName] as? UIFont,
               runFont.fontName == CTFontCopyPostScriptName(font) as String
         else { return false }
-        var glyph = CGGlyph()
-        CTRunGetGlyphs(run, CFRange(location: 0, length: 1), &glyph)
-        return glyph != 0
+        let count = CTRunGetGlyphCount(run)
+        var glyphs = [CGGlyph](repeating: 0, count: count)
+        var advances = [CGSize](repeating: .zero, count: count)
+        CTRunGetGlyphs(run, CFRange(location: 0, length: count), &glyphs)
+        CTRunGetAdvances(run, CFRange(location: 0, length: count), &advances)
+        guard count > 0, !glyphs.contains(0) else { return false }
+        // 字形が複数でも、送り幅を持つものが1つなら、重ねて1つの絵に描かれる。
+        // 2人の肌の色が違う並び（🫱🏻‍🫲🏼など）は、iPad miniのシミュレーター（iOS 27.2）では字形2つを重ねて描かれ、送り幅は片方が0だった。
+        // 書体が1つの絵にできない並びは、字形ごとに送り幅を持って横に並ぶ。
+        return advances.filter { $0.width > 0 }.count == 1
     }
 }

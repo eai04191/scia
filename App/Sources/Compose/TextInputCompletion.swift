@@ -34,7 +34,7 @@ final class TextInputCompletion {
         self.recentEmojis = recentEmojis
         self.tuning = tuning
         self.settings = settings
-        completion.standardEmojiGroups = { [settings] in StandardEmojiAvailability.groups(for: settings.appearance.emojiStyle) }
+        completion.standardEmojiGroups = { [settings] in StandardEmojiAvailability.groups(for: settings.appearance.emojiStyle, skinTone: settings.emojiSkinTone) }
     }
 
     // MARK: - 補完
@@ -205,8 +205,14 @@ final class TextInputCompletion {
             return EmojiPaletteMenu(context: paletteMenu, tuning: tuning, settings: settings, emojiImages: palette.emojiImages).menu(for: emoji, in: palette)
         }
         palette.emojiStyle = settings.appearance.emojiStyle
+        palette.defaultSkinTone = settings.emojiSkinTone
+        palette.onDefaultSkinToneChange = { [weak self, weak palette] tone in
+            guard let self, let palette else { return }
+            settings.emojiSkinTone = tone
+            updatePalette(palette, recentKeys: recentKeys)
+        }
         let query = palette.query
-        let standardGroups = StandardEmojiAvailability.groups(for: settings.appearance.emojiStyle)
+        let standardGroups = StandardEmojiAvailability.groups(for: settings.appearance.emojiStyle, skinTone: settings.emojiSkinTone)
         // カスタム絵文字のリストがまだないか読めなかったときも、Unicodeの絵文字は通信なしで並べられるので出し、カスタム絵文字の場所に状態を出す。
         let emojis = paletteEmojis?.emojis ?? []
         // 個人セットは、カスタム絵文字のリストと違い、出している間に読み直したものが届いたら並べ直す。使う人が自分で変えた並びなので、

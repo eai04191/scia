@@ -27,6 +27,19 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     var menu: ((ServerEmoji) -> UIMenu?)?
     /// パレットを載せているシートを閉じる。メニューから、シートの上に重ねない画面（設定、ブラウザ）へ移るときに使う。載せたシートが入れる。
     var closeSheet: () -> Void = {}
+    /// 肌の色を変えられる絵文字に付けている既定の肌の色。検索欄の隣のボタンに出す。
+    var defaultSkinTone: EmojiSkinTone = .none {
+        didSet {
+            guard defaultSkinTone != oldValue else { return }
+            updateSkinToneButton()
+        }
+    }
+    /// 検索欄の隣のボタンで、既定の肌の色を選んだ。
+    var onDefaultSkinToneChange: (EmojiSkinTone) -> Void = { _ in }
+    /// 長押しした2人の絵文字の、選んでいる途中の肌の色。メニューを出している間だけ持つ。
+    private var pairSelection: (emoji: StandardEmoji, first: EmojiSkinTone, second: EmojiSkinTone)?
+    /// 長押しで持ち上げて見せているUnicodeの絵文字。2人の絵文字で肌の色を選ぶたびに描き直す。
+    private weak var glyphPreview: EmojiGlyphPreviewController?
     /// 長押ししたカスタム絵文字を持ち上げて見せる絵の高さ。
     var previewHeight: CGFloat = TuningCatalog.composeEmojiPalettePreviewHeight.defaultValue
     /// 長押しで持ち上げて見せているプレビュー。大きく読み直した画像が届いたら描き直す。
@@ -97,6 +110,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
             guard emojiStyle != oldValue else { return }
             reconfigureAllCells()
             rebuildSectionButtons()
+            updateSkinToneButton()
         }
     }
 
@@ -106,6 +120,8 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     }
 
     let searchField = UISearchTextField()
+    /// 既定の肌の色を選ぶボタン。検索欄の隣に置く。
+    private let skinToneButton = UIButton(configuration: .plain())
     private(set) var content: Content = .sections([], customStatus: .loading)
     private var customStatus: CustomEmojiStatus?
     private var sections: [EmojiPaletteSection] = []
@@ -178,6 +194,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         // 文字のまま描く絵文字の色は、外観で変わる。
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: Self, _) in
             self.reconfigureAllCells()
+            self.updateSkinToneButton()
         }
         emojiImages.addListener(owner: self) { [weak self] urls in
             FrameWork.measure("EmojiPaletteView.imagesDidLoad") { self?.reconfigureVisibleCells(showing: urls) }
@@ -319,6 +336,12 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         searchField.addAction(UIAction { [weak self] _ in self?.onQueryChange() }, for: .editingChanged)
         topBar.translatesAutoresizingMaskIntoConstraints = false
         topBar.addSubview(searchField)
+        skinToneButton.translatesAutoresizingMaskIntoConstraints = false
+        skinToneButton.configuration?.contentInsets = .zero
+        skinToneButton.accessibilityLabel = ComposeTexts.EmojiPalette.defaultSkinTone
+        skinToneButton.showsMenuAsPrimaryAction = true
+        topBar.addSubview(skinToneButton)
+        updateSkinToneButton()
 
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         collectionView.backgroundColor = .clear
@@ -399,7 +422,11 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
             topBar.bottomAnchor.constraint(equalTo: searchField.bottomAnchor),
             searchField.topAnchor.constraint(equalTo: topAnchor, constant: Self.topInset),
             searchField.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 16),
-            searchField.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -16),
+            searchField.trailingAnchor.constraint(equalTo: skinToneButton.leadingAnchor, constant: -8),
+            skinToneButton.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -16),
+            skinToneButton.centerYAnchor.constraint(equalTo: searchField.centerYAnchor),
+            skinToneButton.widthAnchor.constraint(equalToConstant: Self.searchRowHeight),
+            skinToneButton.heightAnchor.constraint(equalToConstant: Self.searchRowHeight),
             searchField.heightAnchor.constraint(equalToConstant: Self.searchRowHeight),
             collectionView.topAnchor.constraint(equalTo: topAnchor),
             collectionView.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -748,7 +775,11 @@ extension EmojiPaletteView: UICollectionViewDelegate {
 
     /// カスタム絵文字は、長押しで大きく見せてメニューを出す。Unicodeの絵文字では出さない。決まりはdocs/menus.mdの「カスタム絵文字のメニュー」にある。
     func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemsAt indexPaths: [IndexPath], point: CGPoint) -> UIContextMenuConfiguration? {
-        guard let indexPath = indexPaths.first, indexPaths.count == 1, case .custom(let emoji) = emoji(at: indexPath) else { return nil }
+        guard let indexPath = indexPaths.first, indexPaths.count == 1 else { return nil }
+        if case .standard(let standard) = emoji(at: indexPath) {
+            return skinToneMenuConfiguration(for: standard)
+        }
+        guard case .custom(let emoji) = emoji(at: indexPath) else { return nil }
         let store = emojiImages
         let height = previewHeight
         // 横長の絵文字も、パレットの幅に収める。
@@ -761,6 +792,10 @@ extension EmojiPaletteView: UICollectionViewDelegate {
         }, actionProvider: { _ in
             menu?(emoji)
         })
+    }
+
+    func collectionView(_ collectionView: UICollectionView, willEndContextMenuInteraction configuration: UIContextMenuConfiguration, animator: (any UIContextMenuInteractionAnimating)?) {
+        pairSelection = nil
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
@@ -803,6 +838,155 @@ extension EmojiPaletteView: UICollectionViewDelegate {
 
     /// スクロールの記録に書く画面の名前。
     static let scrollScreenName = "emojiPalette"
+}
+
+// MARK: - 肌の色
+
+/// 肌の色の選び方。決まりはdocs/compose.mdの「絵文字の肌の色」にある。
+extension EmojiPaletteView {
+    /// メニューと検索欄の隣のボタンに置く、絵文字の絵。メニューに文字色で塗られないよう、元の色のまま置く。
+    private func glyphIcon(_ text: String, side: CGFloat) -> UIImage {
+        EmojiGlyphImageStore.drawNow(EmojiGlyphImageStore.Request(
+            text: text, pointSize: side * 0.8, style: emojiStyle, width: side, height: side,
+            scale: traitCollection.displayScale, userInterfaceStyle: traitCollection.userInterfaceStyle
+        )).withRenderingMode(.alwaysOriginal)
+    }
+
+    /// 既定の肌の色のボタン。今の既定の色の手の絵文字を出し、押すと6色から選ぶ。
+    fileprivate func updateSkinToneButton() {
+        let hand = StandardEmoji(emoji: "✋", name: "", keywords: [], version: "", skinTones: .single(["✋🏻", "✋🏼", "✋🏽", "✋🏾", "✋🏿"]))
+        skinToneButton.configuration?.image = glyphIcon(hand.withSkinTone(defaultSkinTone).emoji, side: 24)
+        skinToneButton.accessibilityValue = defaultSkinTone.title
+        skinToneButton.menu = UIMenu(options: .displayAsPalette, children: EmojiSkinTone.allCases.map { tone in
+            UIAction(title: tone.title, image: glyphIcon(hand.withSkinTone(tone).emoji, side: 28), state: tone == defaultSkinTone ? .on : .off) { [weak self] _ in
+                self?.onDefaultSkinToneChange(tone)
+            }
+        })
+    }
+
+    /// 肌の色を変えられる絵文字の長押し。絵を持ち上げ、下に肌の色を並べる。変えられない絵文字では出さない。
+    fileprivate func skinToneMenuConfiguration(for emoji: StandardEmoji) -> UIContextMenuConfiguration? {
+        guard let skinTones = emoji.skinTones else { return nil }
+        let current = emoji.currentSkinTones
+        if skinTones.isPair {
+            pairSelection = (emoji, current.first, current.second)
+        }
+        let style = emojiStyle
+        let side = previewHeight
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: { [weak self] in
+            let preview = EmojiGlyphPreviewController(text: emoji.emoji, style: style, side: side)
+            self?.glyphPreview = preview
+            return preview
+        }, actionProvider: { [weak self] _ in
+            guard let self else { return nil }
+            return skinTones.isPair ? pairSkinToneMenu() : singleSkinToneMenu(for: emoji, current: current.first)
+        })
+    }
+
+    /// 1人の絵文字。押した色の絵文字を、その1回だけ入れる。既定の色は変えない。
+    private func singleSkinToneMenu(for emoji: StandardEmoji, current: EmojiSkinTone) -> UIMenu {
+        UIMenu(options: .displayAsPalette, children: EmojiSkinTone.allCases.map { tone in
+            let toned = emoji.withSkinTone(tone)
+            return UIAction(title: tone.title, image: glyphIcon(toned.emoji, side: 28), state: tone == current ? .on : .off) { [weak self] _ in
+                self?.insert(toned)
+            }
+        })
+    }
+
+    /// 2人の絵文字。2人それぞれの色を選んでから、入れる。色を押してもメニューは閉じず、持ち上げた絵を選んだ色に描き直す。
+    private func pairSkinToneMenu() -> UIMenu? {
+        guard let selection = pairSelection else { return nil }
+        func row(_ title: String, current: EmojiSkinTone, choose: @escaping (EmojiSkinTone) -> Void) -> UIMenu {
+            UIMenu(title: title, options: [.displayInline, .displayAsPalette], children: EmojiSkinTone.allCases.map { tone in
+                UIAction(title: tone.title, image: glyphIcon(Self.swatch(tone), side: 28), attributes: .keepsMenuPresented, state: tone == current ? .on : .off) { _ in choose(tone) }
+            })
+        }
+        let toned = selection.emoji.withSkinTones(selection.first, selection.second)
+        return UIMenu(children: [
+            row(ComposeTexts.EmojiPalette.firstPersonSkinTone, current: selection.first) { [weak self] tone in self?.choosePairTone(first: tone) },
+            row(ComposeTexts.EmojiPalette.secondPersonSkinTone, current: selection.second) { [weak self] tone in self?.choosePairTone(second: tone) },
+            UIAction(title: ComposeTexts.EmojiPalette.insertEmoji, image: glyphIcon(toned.emoji, side: 28)) { [weak self] _ in self?.insert(toned) },
+        ])
+    }
+
+    /// 片方だけに肌の色を付けた並びはUnicodeにないので、片方を外したら2人とも外し、外れている相手には同じ色を付ける。
+    private func choosePairTone(first: EmojiSkinTone? = nil, second: EmojiSkinTone? = nil) {
+        guard var selection = pairSelection else { return }
+        let chosen = first ?? second ?? .none
+        if chosen == .none {
+            selection.first = .none
+            selection.second = .none
+        } else {
+            selection.first = first ?? (selection.first == .none ? chosen : selection.first)
+            selection.second = second ?? (selection.second == .none ? chosen : selection.second)
+        }
+        pairSelection = selection
+        glyphPreview?.text = selection.emoji.withSkinTones(selection.first, selection.second).emoji
+        collectionView.contextMenuInteraction?.updateVisibleMenu { [weak self] menu in self?.pairSkinToneMenu() ?? menu }
+    }
+
+    /// 肌の色の見本。肌の色の修飾だけを描くと、その色の四角になる。色なしは、絵文字の書体の既定の色に近い手で示す。
+    private static func swatch(_ tone: EmojiSkinTone) -> String {
+        switch tone {
+        case .none: "✋"
+        case .light: "✋🏻"
+        case .mediumLight: "✋🏼"
+        case .medium: "✋🏽"
+        case .mediumDark: "✋🏾"
+        case .dark: "✋🏿"
+        }
+    }
+
+    private func insert(_ emoji: StandardEmoji) {
+        UIDevice.current.playInputClick()
+        onSelect(.standard(emoji))
+    }
+}
+
+/// パレットで長押ししたUnicodeの絵文字を、大きく見せる。
+final class EmojiGlyphPreviewController: UIViewController {
+    var text: String {
+        didSet { draw() }
+    }
+
+    private let style: EmojiStyle
+    private let side: CGFloat
+    private let imageView = UIImageView()
+    private static let padding: CGFloat = 16
+
+    init(text: String, style: EmojiStyle, side: CGFloat) {
+        self.text = text
+        self.style = style
+        self.side = side
+        super.init(nibName: nil, bundle: nil)
+        preferredContentSize = CGSize(width: side + Self.padding * 2, height: side + Self.padding * 2)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .secondarySystemBackground
+        imageView.contentMode = .center
+        view.addSubview(imageView)
+        draw()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        imageView.frame = view.bounds
+    }
+
+    private func draw() {
+        guard isViewLoaded else { return }
+        imageView.image = EmojiGlyphImageStore.drawNow(EmojiGlyphImageStore.Request(
+            text: text, pointSize: side * 0.8, style: style, width: side, height: side,
+            scale: traitCollection.displayScale, userInterfaceStyle: traitCollection.userInterfaceStyle
+        ))
+    }
 }
 
 /// パレットで長押ししたカスタム絵文字を、大きく見せる。パレットと同じく、設定によらず動かす。
@@ -955,11 +1139,15 @@ final class EmojiPaletteCell: UICollectionViewCell {
             imageView.stillImage = store.image(for: url, pixelHeight: pixelHeight) ?? thumbnails.image(for: url).map { UIImage(cgImage: $0) }
             imageView.animation = choice.animationURL(of: custom).flatMap { store.animation(for: $0, pixelHeight: pixelHeight) }
             accessibilityLabel = custom.shortcode
+            accessibilityValue = nil
         case .standard(let standard):
             imageView.isHidden = true
             imageView.stillImage = nil
             imageView.animation = nil
             glyphView.isHidden = false
+            // 名前は肌の色を付けても同じなので、色違いを読み上げで区別できるよう、肌の色を値に置く。
+            accessibilityLabel = standard.name
+            accessibilityValue = standard.skinToneDescription
             let geometry = Self.glyphGeometry(cellSize: bounds.size, scale: traitCollection.displayScale, style: emojiStyle)
             let request = EmojiGlyphImageStore.Request(
                 text: standard.emoji,
@@ -973,7 +1161,6 @@ final class EmojiPaletteCell: UICollectionViewCell {
             guard request != glyphRequest || glyphView.image == nil else { break }
             glyphRequest = request
             glyphView.image = Self.glyphImage(for: request, glyphs: glyphs, archive: glyphArchive)
-            accessibilityLabel = standard.name
         }
     }
 

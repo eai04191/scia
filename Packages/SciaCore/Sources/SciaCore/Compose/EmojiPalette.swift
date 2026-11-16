@@ -76,11 +76,20 @@ public enum EmojiPalette {
         for emoji in visible where byKey[emoji.shortcode] == nil {
             byKey[emoji.shortcode] = .custom(emoji)
         }
+        // リストは既定の肌の色で並べているので、ほかの色の絵文字（個人セットの絵文字、ほかの色で使った最近のもの）は、肌の色の並びから引く。
+        // 引いたものは、文字はそのままで、肌の色を変えられることを持つ。引く表を作るのは、リストにない絵文字があるときだけにする。
+        var toned: [String: PaletteEmoji]?
+        func tonedForm(_ key: String) -> PaletteEmoji? {
+            if toned == nil {
+                toned = Dictionary(standardGroups.flatMap(\.emojis).flatMap(\.allSkinToneForms).map { ($0.emoji, PaletteEmoji.standard($0)) }) { first, _ in first }
+            }
+            return toned?[key]
+        }
         // Unicodeの絵文字のリストにある絵文字は、そのリストのものにそろえる。同じ絵文字が、個人セットとUnicodeの絵文字のまとまりとで別のものにならないようにするため。
         // カスタム絵文字は、個人セットの応答の画像のまま並べる。端末に残した古いリストの画像に替えないため。
         let personalCategories = (personal?.categories ?? []).map { category in
             (category, category.entries.map { entry in
-                guard case .standard = entry.emoji, let listed = byKey[entry.emoji.recentKey] else { return entry.emoji }
+                guard case .standard = entry.emoji, let listed = byKey[entry.emoji.recentKey] ?? tonedForm(entry.emoji.recentKey) else { return entry.emoji }
                 return listed
             })
         }
@@ -94,15 +103,7 @@ public enum EmojiPalette {
                 }
             }
         }
-        // 最近使ったものは、使ったときの肌の色のまま出す。リストは既定の肌の色で並べているので、ほかの色で使ったものは、肌の色の並びから引く。
-        // 引く表を作るのは、リストにない最近使ったものがあるときだけにする。
-        var toned: [String: PaletteEmoji]?
-        func tonedForm(_ key: String) -> PaletteEmoji? {
-            if toned == nil {
-                toned = Dictionary(standardGroups.flatMap(\.emojis).flatMap(\.allSkinToneForms).map { ($0.emoji, PaletteEmoji.standard($0)) }) { first, _ in first }
-            }
-            return toned?[key]
-        }
+        // 最近使ったものは、使ったときの肌の色のまま出す。
         let recent = recentKeys.compactMap { byKey[$0] ?? tonedForm($0) }.prefix(max(recentLimit, 0))
         var sections: [EmojiPaletteSection] = []
         if !recent.isEmpty {

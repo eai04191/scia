@@ -96,7 +96,8 @@ final class EmojiThumbnailBuilder {
                 let style = settings.appearance.emojiStyle
                 let side = tuning.value(of: TuningCatalog.composeEmojiPaletteCellSize)
                 let geometry = displayScale().map { EmojiPaletteCell.glyphGeometry(cellSize: CGSize(width: side, height: side), scale: $0, style: style) }
-                return (style, StandardEmojiAvailability.groups(for: style).flatMap { $0.emojis.map(\.emoji) }, geometry)
+                // 絵文字ピッカーは既定の肌の色で並べるので、その色の画像を作る。
+                return (style, StandardEmojiAvailability.groups(for: style, skinTone: settings.emojiSkinTone).flatMap { $0.emojis.map(\.emoji) }, geometry)
             }
             // 絵文字ピッカーが記録した大きさがあれば、それを使う。なければ計算した大きさで作る。
             if !glyphs.loadStoredGeometry(style: style), let geometry {

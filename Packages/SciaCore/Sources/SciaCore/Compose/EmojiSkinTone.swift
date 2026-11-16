@@ -87,6 +87,35 @@ extension StandardEmoji {
         }
     }
 
+    /// 付けている肌の色の名前。読み上げで、同じ絵文字の色違いを区別するのに使う。付けていなければnil。
+    /// 2人の絵文字で2人の色が違うときは、左の人、右の人の順に並べる。
+    public var skinToneDescription: String? {
+        let tones = currentSkinTones
+        guard tones.first != .none else { return nil }
+        return tones.first == tones.second ? tones.first.title : "\(tones.first.title)、\(tones.second.title)"
+    }
+
+    /// 肌の色を変えられないものとして扱う絵文字。端末が肌の色を付けた並びを描けないときに使う。
+    public func removingSkinTones() -> StandardEmoji {
+        StandardEmoji(emoji: untonedEmoji, name: name, englishName: englishName, keywords: keywords, shortcodes: shortcodes, version: version)
+    }
+
+    /// 2人の絵文字を、2人同じ色だけを選べる絵文字として扱うもの。端末が2人の色の違う並びを描けないときに使う。
+    public func limitingSkinTonesToSameForBoth() -> StandardEmoji {
+        guard case .pair(let variants) = skinTones else { return self }
+        return StandardEmoji(emoji: untonedEmoji, name: name, englishName: englishName, keywords: keywords, shortcodes: shortcodes, version: version, skinTones: .single((0..<5).map { variants[$0 * 5 + $0] }))
+    }
+
+    /// 肌の色を付けた並びを端末が描けるかを確かめるための見本。`same`は1人の絵文字か、2人とも同じ色の並び。`mixed`は2人の色が違う並びで、1人の絵文字ではnil。
+    /// 2人の色が違う並びは、同じ色の並びと別の文字で組まれることがあり（握手の🤝🏻に対する🫱🏻‍🫲🏼）、描けるかが分かれるため、別々に確かめる。
+    public var skinToneSamples: (same: String, mixed: String?)? {
+        switch skinTones {
+        case .single(let variants): (variants[0], nil)
+        case .pair(let variants): (variants[0], variants[1])
+        case nil: nil
+        }
+    }
+
     /// 肌の色を付ける前の絵文字と、肌の色を付けた並びすべて。最近使った絵文字を、使ったときの色のまま引くのに使う。
     var allSkinToneForms: [StandardEmoji] {
         guard let skinTones else { return [] }

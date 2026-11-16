@@ -40,6 +40,24 @@ struct EmojiSkinToneTests {
         #expect(handshake.withSkinTones(.none, .dark) == handshake)
     }
 
+    /// 端末が2人の色の違う並びを描けないときは、2人同じ色の5つだけを選べる絵文字として扱う。
+    @Test func pairLimitedToSameToneOffersOnlyMatchingTones() throws {
+        let handshake = try emoji("🤝").limitingSkinTonesToSameForBoth()
+
+        #expect(handshake.skinTones == .single(["🤝🏻", "🤝🏼", "🤝🏽", "🤝🏾", "🤝🏿"]))
+        #expect(handshake.withSkinTones(.light, .dark).emoji == "🤝🏻")
+        #expect(handshake.withSkinTone(.dark).currentSkinTones.second == .dark)
+    }
+
+    /// 端末が描けるかを確かめる見本は、2人の絵文字では同じ色の並びと違う色の並びを別々に持つ。
+    @Test func samplesSeparateSameAndMixedTones() throws {
+        #expect(try emoji("👍").skinToneSamples?.same == "👍🏻")
+        #expect(try emoji("👍").skinToneSamples?.mixed == nil)
+        #expect(try emoji("🤝").skinToneSamples?.same == "🤝🏻")
+        #expect(try emoji("🤝").skinToneSamples?.mixed == "🫱🏻‍🫲🏼")
+        #expect(try emoji("😀").skinToneSamples == nil)
+    }
+
     /// 肌の色を変えられない絵文字は、そのまま。
     @Test func emojiWithoutTonesIsUnchanged() throws {
         let grinning = try emoji("😀")
@@ -66,6 +84,39 @@ struct EmojiSkinToneTests {
 
         #expect(sections.first?.kind == .recent)
         #expect(sections.first?.emojis.map(\.recentKey) == ["👍🏿", "👍", "👍🏽", "🫱🏻‍🫲🏿"])
+    }
+
+    /// 個人セットの絵文字は応答の文字のまま並べるが、肌の色を変えられることは引き継ぐ。既定の肌の色を付けていても、長押しで色を選べるようにするため。
+    /// 最近使ったものに同じ絵文字があっても、同じく引き継ぐ。
+    @Test func personalSetEmojiKeepsItsTextAndCanStillChangeTone() throws {
+        let groups = StandardEmojiCatalog.groups.withSkinTone(.dark)
+        let personal = PersonalEmojiSet(categories: [.init(id: "a", name: "a", entries: [
+            .init(emoji: .standard(StandardEmoji(emoji: "👍", name: "", keywords: [], version: ""))),
+            .init(emoji: .standard(StandardEmoji(emoji: "👋🏻", name: "", keywords: [], version: ""))),
+        ])])
+        let sections = EmojiPalette.sections(emojis: [], personal: personal, standardGroups: groups, recentKeys: ["👍"], recentLimit: 10)
+        func standards(_ kind: (EmojiPaletteSection.Kind) -> Bool) -> [StandardEmoji] {
+            sections.filter { kind($0.kind) }.flatMap(\.emojis).compactMap { if case .standard(let emoji) = $0 { emoji } else { nil } }
+        }
+        let inPersonal = standards { if case .personal = $0 { true } else { false } }
+        let inRecent = standards { $0 == .recent }
+
+        #expect(inPersonal.map(\.emoji) == ["👍", "👋🏻"])
+        #expect(inPersonal.allSatisfy { $0.skinTones != nil })
+        #expect(inPersonal.last?.currentSkinTones.first == .light)
+        #expect(inRecent.map(\.emoji) == ["👍"])
+        #expect(inRecent.first?.skinTones != nil)
+    }
+
+    /// 肌の色を付けた絵文字は、読み上げで色を区別できるよう、肌の色の名前を持つ。付けていなければ持たない。
+    @Test func tonedEmojiDescribesItsTone() throws {
+        let thumbsUp = try emoji("👍")
+        let handshake = try emoji("🤝")
+
+        #expect(thumbsUp.skinToneDescription == nil)
+        #expect(thumbsUp.withSkinTone(.dark).skinToneDescription == "濃い肌色")
+        #expect(handshake.withSkinTone(.light).skinToneDescription == "薄い肌色")
+        #expect(handshake.withSkinTones(.light, .dark).skinToneDescription == "薄い肌色、濃い肌色")
     }
 
     /// 既定の肌の色は、設定に残る。

@@ -102,6 +102,44 @@ struct EmojiPaletteViewTests {
         #expect(palette.collectionView(collectionView, contextMenuConfigurationForItemsAt: [IndexPath(item: 1, section: 0)], point: .zero) == nil)
     }
 
+    /// Unicodeの絵文字の長押しは、肌の色を変えられる絵文字にだけ出す。
+    @Test func skinToneMenuIsOfferedOnlyForEmojisWithTones() throws {
+        let palette = EmojiPaletteView(emojiImages: .offline, thumbnailBuilder: nil)
+        palette.frame = CGRect(x: 0, y: 0, width: 400, height: 400)
+        let all = StandardEmojiCatalog.groups.flatMap(\.emojis)
+        let thumbsUp = try #require(all.first { $0.emoji == "👍" })
+        let grinning = try #require(all.first { $0.emoji == "😀" })
+        palette.setContent(.sections([EmojiPaletteSection(kind: .standard("a"), emojis: [.standard(thumbsUp), .standard(grinning)])], customStatus: nil))
+        palette.layoutIfNeeded()
+        let collectionView = try #require(Self.descendants(of: palette).compactMap { $0 as? UICollectionView }.first)
+
+        #expect(palette.collectionView(collectionView, contextMenuConfigurationForItemsAt: [IndexPath(item: 0, section: 0)], point: .zero) != nil)
+        #expect(palette.collectionView(collectionView, contextMenuConfigurationForItemsAt: [IndexPath(item: 1, section: 0)], point: .zero) == nil)
+    }
+
+    /// 検索欄の隣のボタンで既定の肌の色を選ぶと、設定に残り、並びと補完の候補がその色になる。
+    @Test(.scratch) func choosingDefaultSkinToneUpdatesThePaletteAndCompletion() throws {
+        let tuning = TuningStore(defaults: nil)
+        let settings = AppSettings(defaults: TestScratch.defaults("EmojiPaletteViewTests.skinTone"))
+        let core = ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning))
+        let completion = TextInputCompletion(completion: core, recentEmojis: nil, tuning: tuning, settings: settings)
+        let palette = EmojiPaletteView(emojiImages: .offline, thumbnailBuilder: nil)
+        palette.frame = CGRect(x: 0, y: 0, width: 400, height: 400)
+        completion.updatePalette(palette, recentKeys: [])
+        func standardEmojis() -> [String] {
+            guard case .sections(let sections, _) = palette.content else { return [] }
+            return sections.flatMap(\.emojis).map(\.recentKey)
+        }
+        #expect(standardEmojis().contains("👍"))
+
+        palette.onDefaultSkinToneChange(.dark)
+
+        #expect(settings.emojiSkinTone == .dark)
+        #expect(palette.defaultSkinTone == .dark)
+        #expect(standardEmojis().contains("👍🏿") && !standardEmojis().contains("👍"))
+        #expect(core.standardEmojiGroups().flatMap(\.emojis).contains { $0.emoji == "👍🏿" })
+    }
+
     /// 持ち上げる絵は縦横比を保ち、パレットの幅を超える横長の絵文字は、幅に収まるまで高さごと縮める。
     @Test func previewOfWideEmojiShrinksToFitTheWidth() {
         let square = EmojiPalettePreviewController.contentSize(aspectRatio: 1, height: 120, maxWidth: 338)

@@ -346,6 +346,13 @@ extension ComposeTexts {
         public static let noResults = "見つかりません"
         public static let search = "絵文字を検索"
         public static let loadingCustomEmojis = "カスタム絵文字を読み込んでいます"
+        /// 検索欄の隣の、既定の肌の色を選ぶボタンの読み上げ。
+        public static let defaultSkinTone = "絵文字の肌の色"
+        /// 2人の絵文字の長押しのメニューで、2人それぞれの肌の色を選ぶ段の見出し。
+        public static let firstPersonSkinTone = "左の人"
+        public static let secondPersonSkinTone = "右の人"
+        /// 2人の絵文字の長押しのメニューで、選んだ肌の色の絵文字を入れる。
+        public static let insertEmoji = "入力"
     }
 }
 
