@@ -7,9 +7,8 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `project.yml`: XcodeGenの定義。`Scia.xcodeproj`と`App/Info.plist`は生成物なのでコミットせず、直接編集しない。ターゲットや設定の変更は`project.yml`で行う
 - `Config/Local.xcconfig`: 署名のチーム（`DEVELOPMENT_TEAM = <チームID>`）など、人ごとに違うビルド設定を書く。コミットしない。なくてもシミュレーター向けにはビルドできる
 - `Config/CacheLocal.xcconfig`: makeのDebugのビルドが使うコンパイルキャッシュの置き場所（`COMPILATION_CACHE_CAS_PATH = <フォルダー>`）を、人ごとに書く（`Config/Cache.xcconfig`が読む）。コミットしない。なければXcodeの既定の場所に置く
-- `Config/app-info.json`: 謝辞、第三者のライセンス、Scia自身のリンク（プライバシーポリシーなど）の置き場所。ここだけを編集し、`make app-info`で`App/Sources/Settings/AppInfo.generated.swift`と`README.md`の`<!-- generated:... -->`の中を書き出す。書き出したものは直接編集せず、JSONと一緒にcommitする。合っているかは`make check`と`Tools/merge-queue.sh`で調べる
+- `Config/app-info.json`: 謝辞、第三者のライセンス、Scia自身のリンク（プライバシーポリシーなど）の置き場所。ここだけを編集し、`make app-info`で`App/Sources/Settings/AppInfo.generated.swift`と`README.md`の`<!-- generated:... -->`の中を書き出す。書き出したものは直接編集せず、JSONと一緒にcommitする。合っているかは`make check`と`Tools/merge-queue.sh`で調べる。`contact`は、クラッシュした投稿の報告の宛先（メールとMastodonのハンドル）
 - `Packages/SciaCore`: UIに依存しないロジック（モデル、APIクライアント、ストリーミング、タイムラインの状態管理）。iOSとmacOSで共有するため、UIKit／AppKit／SwiftUIをimportしない。別のUIから何を使うかの入口は[docs/other-ui.md](docs/other-ui.md)。別のUIも使う部品を足したり、決まりをUIからSciaCoreへ移したりしたら、そのdocsにも足す
-- `Config/app-info.json`の`contact`: クラッシュした投稿の報告の宛先（メールとMastodonのハンドル）。`make app-info`で`AppInfo.generated.swift`に書き出す
 - `Packages/MemoryCache`: Sciaに依存しない、メモリに持つキャッシュ（`CostLimitedCache`）。SciaCoreとアプリが使う。SciaCoreに依存しないことを、パッケージを分けてコンパイラーで守る
 - `Packages/TextKit2Label`: Sciaに依存しない、TextKit 2で文字を並べて描くラベル（`TextKitLabel`、`TextKitLabelLayout`、`LineFittingAttachment`）。アプリが使い、絵文字やリンクを扱うラベルはアプリで派生させる。Sciaの型を使わないことを、パッケージを分けてコンパイラーで守る。UIKitに依存するので、テストは`make test`でシミュレーターで走る
 - `App/Sources`: iOSアプリ（UIKitライフサイクル）
@@ -74,7 +73,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - 設定で項目が1つのセクションの見出しは、行の名前に情報を足すときだけ付ける（「ブースト」の見出しの「公開範囲」など）
 - 設定のトップの分類は、見る（表示）、触る（操作）、書く（作成）の場面で分ける。アプリのアイコンはホーム画面のアイコンを変える設定で、範囲が違うので「表示」に入れない
 - UIKitで作った部品でLiquid Glassの不都合が出たら、SwiftUIへの置き換えを候補に入れる。UIKitとSwiftUIの境目では、`UIViewRepresentable`の中身が大きさの希望を変え続けて並べ直しが止まらなくなることがあるので、包む部品は`sizeThatFits`で大きさを決める
-- Mastodon APIの仕様は推測せず、公式ドキュメント（https://docs.joinmastodon.org/ ）で確認する。サーバー実装による差異（glitch-soc、Fedibird、GoToSocialなど）は、必要になった時点で個別に対応してテストに残す
+- Mastodon APIの仕様は、公式ドキュメント（https://docs.joinmastodon.org/ ）で確認する。サーバー実装による差異（glitch-soc、Fedibird、GoToSocialなど）は、必要になった時点で個別に対応してテストに残す
 - サーバー（ほかのサーバーの利用者が書いた投稿や、fxtwitterの応答を含む）から来る件数、上限、URLは、読むところで`decodeCount`、`ServerLimit`、`decodeURL`で確かめる（`make lint`の`server_value_without_check`と`synthesized_server_value_decoding`で止める）。読んだあとの計算でも、サーバーの値から作った数（縦横比や割合）を整数に直す前に、範囲に収める
 - ファイルやフォルダーの名前は、文字列の決まった名前でなければ`SafeFileName`で作り、`appending(fileName:)`でつなげる（`make lint`の`unsafe_file_name`で止める）
 - ログに何を`privacy: .public`で出してよいかは[docs/logging.md](docs/logging.md)に従う（`make lint`の`log_private_value`で止める）。違和感レポートの状態ダンプも同じ決まりで書く
@@ -126,7 +125,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - 部品の見た目を変えた作業の報告には、カタログに足した状態か載せない理由と、どの状態を実物で見て、どの状態をカタログだけで見たかを書く
 - 「投稿の見た目」の項目や見本、投稿の行の描き方を変えたら、すべての項目と選択肢を変える前と後に並べた画像を作って、全部見る。`TEST_RUNNER_SCIA_APPEARANCE_SHEETS=1 make test ONLY='SciaTests/AppearanceSheets'`で、`xcrun simctl get_app_container '<使う端末>' net.mizle.scia data`のtmp/AppearanceSheetsに書く。示す帯（赤）が変わった部分と合っているか、変えて崩れないかを確かめる。いくつかをつまんで見るだけでは、ずれに気づけない
 - 描画性能: スクロール時のhitchは`xcrun xctrace record --template 'Animation Hitches'`や`XCTOSSignpostMetric.scrollDecelerationMetric`で測る。シミュレーターの値は参考値で、最終確認は実機で行う
-- 見た目: 実データに近いfixtureを使い、スクリーンショットで確認する
+- 見た目は、実データに近いfixtureを使って確かめる
 - 好みで決まる値は、ハードコードで決め打ちしない。余白や文字の大きさのような投稿の見た目の値は、設定の「投稿の見た目」（`AppearanceCatalog`）に項目を足す。アニメーションの時間や新着をまとめて挿入する間隔のような、動きや間合いの値は、`TuningCatalog`に項目を足してデバッグ用のチューニングパネルから調整できるようにする。足した項目は`sections`にも並べる（`make lint`の`tuning_item_not_in_sections`で止める）。パネルはデバッグメニューから開くが、値はデバッグメニューを出していないReleaseでも`TuningStore`から読むので、SciaCoreのモデルには、どのUIも`TuningStore`を作って渡す。どちらも、ユーザーに選んでもらう
 - デバッグメニューは、デバッグ版では常に出す。Releaseでは、設定の「情報」の「ビルド」の行を7回タップするとオンになり（同じ操作でオフに戻る）、チューニング、部品カタログ、違和感レポート、当たり判定の表示、HDRの余地の表示だけを出す。通信や既読位置を変える検証の項目と`scia-debug://`は、DEBUGのビルドだけに入れる
 - 違和感レポートは、デバッグメニューから開く。シェイクで開くのはデバッグ版だけ。ユーザーが残した違和感レポートは、アプリのDocuments/DiscomfortReportsにJSONで保存される。シミュレーターでは`xcrun simctl get_app_container '<使う端末>' net.mizle.scia data`で場所を調べられる。状態を追いたい画面は`AppDependencies.stateDumps`に状態ダンプを登録し、調査に必要なイベントはinfo以上のレベルで`SciaLog`に出す（debugレベルはレポートに残らない）
@@ -143,7 +142,6 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 
 - テストはSwift Testing（`import Testing`）で書く
 - APIレスポンスのfixtureは`Packages/SciaCore/Tests/SciaCoreTests/Fixtures/`に置く。実サーバーのレスポンスを使う場合は、個人を特定できる情報を置き換える
-- バグ修正では先に失敗するテストを書き、直す前のコードで失敗することを確かめてから直す
 - 変更した処理を差し替え、差し替えたものの呼ばれ方や返した値を確かめるだけのテストは書かない。変更した処理そのものを通らないので、壊れても落ちないため
 - 決め打ちの文言を直すだけの修正には、直した文字列を書き写して比べるテストを足さない。文言を変えるたびにテストも同じように書き換えるだけで、取り違えも退行も止めないため。テストを書く前に、どんな取り違えや退行を止めるかを一文で言えるか確かめ、言えなければ書かない。読み戻し、分岐、計算が絡む修正では、先に失敗するテストを書く
 - アプリのテスト（`AppTests`）のsuiteには`@Suite(.failureState)`を付ける（`make lint`の`suite_without_failure_state`で止める）。落ちたときに要る状態が失敗のメッセージに出ない画面は、状態ダンプ（`AppDependencies.stateDumps`）を登録するか足す
