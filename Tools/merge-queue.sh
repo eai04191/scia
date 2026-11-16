@@ -358,7 +358,7 @@ land() {
     fast_forwarding=1
     fast_forward
     echo "$TARGET へ入れました:"
-    git log --oneline "$before..$TARGET"
+    git --no-pager log --oneline "$before..$TARGET"
 }
 
 run() {
