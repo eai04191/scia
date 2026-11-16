@@ -126,6 +126,8 @@ public final class ComposeCompletion {
         public var accounts: @Sendable ([String]) async throws -> [Account]
         /// 端末かこの起動で前に読んで残しているカスタム絵文字のリスト。リストを残す場所がなければnil。`remembering(customEmojisIn:)`で渡す。
         public var cachedCustomEmojis: @MainActor @Sendable () -> CustomEmojiCache.Snapshot? = { nil }
+        /// 自分の絵文字の個人セット。サーバーが対応していなければnil（docs/personal-emoji-set.md）。
+        public var personalEmojiSet: @Sendable () async throws -> PersonalEmojiSet? = { nil }
 
         public init(
             searchAccounts: @escaping @Sendable (String, Int) async throws -> [Account],
@@ -155,6 +157,17 @@ public final class ComposeCompletion {
                 statusTags: { try await client.recentStatusTags(of: client.credential.accountID) },
                 accounts: { try await client.accounts($0) }
             )
+        }
+
+        /// サーバーが対応していれば、個人セットを読ませる。
+        /// - Parameter capabilities: そのサーバーの機能の有無を返すもの。読めなければ投げる。
+        public func readingPersonalEmojiSet(with client: MastodonClient, capabilities: @escaping @Sendable () async throws -> ServerCapabilities) -> Self {
+            var sources = self
+            sources.personalEmojiSet = {
+                guard try await capabilities().supportsPersonalEmojiSets else { return nil }
+                return try await client.personalEmojiSet()
+            }
+            return sources
         }
 
         /// 補完を使わない画面とテストで使う。
@@ -261,6 +274,9 @@ public final class ComposeCompletion {
     @ObservationIgnored private var cachedEmojisGeneration: Int?
     /// 探すサーバーを替えた回数。絵文字のパレットが、開いた時点のリストを並べ続けるか、替えた先のリストに並べ直すかを決めるのに使う。
     public private(set) var emojiSourceGeneration = 0
+    @ObservationIgnored private var personalEmojiSetTask: Task<Void, Never>?
+    /// 絵文字のパレットに並べる個人セット。読み終えるまでと、サーバーが対応していないときはnil。読み直せなかったときは、前に読んだものを残す。
+    public private(set) var personalEmojiSet: PersonalEmojiSet?
     /// 絵文字のリストを読めなかった理由の文言。パレットに出す。読み直し始めたらnilに戻す。
     public private(set) var emojiFailure: ErrorPresentation?
     /// プロフィールに載せているタグ、よく使うタグ、最近の投稿のタグ。読めるまではnilで、次に書き始めたときに読み直す。
@@ -422,6 +438,9 @@ public final class ComposeCompletion {
         cachedEmojisGeneration = nil
         emojiSourceGeneration += 1
         emojiFailure = nil
+        personalEmojiSetTask?.cancel()
+        personalEmojiSetTask = nil
+        personalEmojiSet = nil
         adoptCachedEmojis()
         forgetOwnTags()
         statusTags = nil
@@ -593,6 +612,7 @@ public final class ComposeCompletion {
     /// 絵文字のパレットを開いたときに呼ぶ。この起動のうちにまだ読めていなければ読む。失敗していたら読み直す。
     /// 端末に残したリストがあれば、読み直す間もそれを出す。ほかの画面がこの起動のうちに読めていれば、読まずにそのリストにする。
     public func loadEmojisIfNeeded() {
+        loadPersonalEmojiSet()
         adoptCachedEmojis()
         guard !emojisAreFresh else { return }
         loadEmojis()
@@ -635,6 +655,29 @@ public final class ComposeCompletion {
             } catch {
                 guard let self, generation == serverGeneration else { return }
                 didFailEmojis(error)
+            }
+        }
+    }
+
+    /// 個人セットは、ほかの端末やwebで並べ替えられるので、呼ばれるたびに読み直す。読めなくても、絵文字を選ぶのは止めない。
+    private func loadPersonalEmojiSet() {
+        guard personalEmojiSetTask == nil else { return }
+        let generation = serverGeneration
+        personalEmojiSetTask = Task { [weak self, sources] in
+            do {
+                let loaded = try await RequestPurpose.$current.withValue(.display) {
+                    try await sources.personalEmojiSet()
+                }
+                guard let self, generation == serverGeneration else { return }
+                personalEmojiSetTask = nil
+                logger.info("completion: loaded personal emoji set categories=\(loaded?.categories.count ?? -1, privacy: .public) emojis=\(loaded?.categories.reduce(0) { $0 + $1.entries.count } ?? 0, privacy: .public)")
+                if personalEmojiSet != loaded {
+                    personalEmojiSet = loaded
+                }
+            } catch {
+                guard let self, generation == serverGeneration else { return }
+                personalEmojiSetTask = nil
+                logger.info("completion: personal emoji set failed: \(ErrorPresentation(error).code ?? "unknown", privacy: .public)")
             }
         }
     }

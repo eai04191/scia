@@ -41,6 +41,61 @@ struct EmojiPaletteTests {
         #expect(sections.first?.emojis.map(\.recentKey) == ["shown"])
     }
 
+    /// 個人セットのカテゴリーは、最近使ったもののあと、サーバーのカスタム絵文字の前に、サーバーが返す順で並べる。空のカテゴリーは作らない。
+    /// ピッカーに出さないカスタム絵文字と、Unicodeの絵文字のリストにない絵文字も、個人セットにあれば並べ、最近使ったものにも出す。
+    @Test func placesPersonalSetAfterRecent() throws {
+        let groups = [StandardEmojiGroup(title: "動物と自然", emojis: [standard("🐈", "ネコ", ["猫"])])]
+        let hidden = try emoji("hidden", visible: false)
+        let personal = PersonalEmojiSet(categories: [
+            .init(id: "b", name: "同じ名前", entries: [.init(emoji: .standard(StandardEmoji(emoji: "👍🏽", name: "サムズアップ", keywords: [], version: ""))), .init(emoji: .custom(hidden))]),
+            .init(id: "empty", name: "空", entries: []),
+            .init(id: "a", name: "同じ名前", entries: [.init(emoji: .standard(StandardEmoji(emoji: "🐈", name: "ねこ", keywords: [], version: ""))), .init(emoji: .custom(try emoji("shown")))]),
+        ])
+        let sections = EmojiPalette.sections(emojis: [try emoji("shown"), hidden], personal: personal, standardGroups: groups, recentKeys: ["hidden", "👍🏽", "🐈"], recentLimit: 10)
+        #expect(sections.map(\.kind) == [.recent, .personal(id: "b", name: "同じ名前"), .personal(id: "a", name: "同じ名前"), .uncategorized, .standard("動物と自然")])
+        #expect(sections.map { $0.emojis.map(\.recentKey) } == [["hidden", "👍🏽", "🐈"], ["👍🏽", "hidden"], ["🐈", "shown"], ["shown"], ["🐈"]])
+        // Unicodeの絵文字のリストにある絵文字は、どのまとまりでも同じものにする。
+        #expect(sections[2].emojis.first == sections[4].emojis.first)
+        #expect(sections[0].emojis.last == sections[4].emojis.first)
+    }
+
+    /// 個人セットのカスタム絵文字は、同じショートコードがサーバーのリストにあっても、個人セットの応答の画像で並べる。
+    @Test func keepsPersonalSetImageOfCustomEmoji() throws {
+        let fresh = ServerEmoji(shortcode: "blobcat", url: try #require(URL(string: "https://example.social/emoji/new.png")), staticUrl: try #require(URL(string: "https://example.social/emoji/new.png")))
+        let personal = PersonalEmojiSet(categories: [.init(id: "a", name: "a", entries: [.init(emoji: .custom(fresh))])])
+        let sections = EmojiPalette.sections(emojis: [try emoji("blobcat")], personal: personal, standardGroups: [], recentKeys: ["blobcat"], recentLimit: 10)
+        #expect(sections.map(\.kind) == [.recent, .personal(id: "a", name: "a"), .uncategorized])
+        // 最近使ったものにも、個人セットの画像で出す。
+        #expect(sections[0].emojis == [.custom(fresh)])
+        #expect(sections[1].emojis == [.custom(fresh)])
+    }
+
+    /// 個人セットのカテゴリーの見出しを、まとまりに渡す。見出しのUnicodeの絵文字は、まとまりの中と同じく、Unicodeの絵文字のリストのものにそろえる。
+    @Test func passesPersonalSetHeadingToSection() throws {
+        let groups = [StandardEmojiGroup(title: "動物と自然", emojis: [standard("🐈", "ネコ", ["猫"])])]
+        let cat = PaletteEmoji.standard(StandardEmoji(emoji: "🐈", name: "ねこ", keywords: [], version: ""))
+        let personal = PersonalEmojiSet(categories: [
+            .init(id: "a", name: "絵文字", heading: .emoji(cat), entries: [.init(emoji: .custom(try emoji("shown"))), .init(emoji: cat)]),
+            .init(id: "b", name: "文字", heading: .text("文"), entries: [.init(emoji: cat)]),
+        ])
+        let sections = EmojiPalette.sections(emojis: [], personal: personal, standardGroups: groups, recentKeys: [], recentLimit: 10)
+        #expect(sections.map(\.heading) == [.emoji(sections[2].emojis[0]), .text("文"), nil])
+    }
+
+    /// 検索では、個人セットの絵文字を、サーバーが返す検索の語（読みや別名）でも見つけ、先に並べる。ほかの結果と重ねない。
+    @Test func searchesPersonalSetByServerTerms() throws {
+        let personal = PersonalEmojiSet(categories: [
+            .init(id: "a", name: "a", entries: [
+                .init(emoji: .custom(try emoji("wide_emoji")), searchTerms: ["wide_emoji", "よこなが"]),
+                .init(emoji: .custom(try emoji("blobcat")), searchTerms: ["blobcat", "ねこ"]),
+            ]),
+        ])
+        let emojis = [try emoji("blobcat"), try emoji("blobdog")]
+        #expect(EmojiPalette.searchResults(matching: "よこ", emojis: emojis, personal: personal, standardGroups: [], limit: 10).map(\.recentKey) == ["wide_emoji"])
+        #expect(EmojiPalette.searchResults(matching: "ヨコナガ", emojis: emojis, personal: personal, standardGroups: [], limit: 10).map(\.recentKey) == ["wide_emoji"])
+        #expect(EmojiPalette.searchResults(matching: "ＢＬＯＢ", emojis: emojis, personal: personal, standardGroups: [], limit: 10).map(\.recentKey) == ["blobcat", "blobdog"])
+    }
+
     @Test func limitsRecentEmojis() throws {
         let emojis = try ["a1", "a2", "a3"].map { try emoji($0) }
         let sections = EmojiPalette.sections(emojis: emojis, standardGroups: [], recentKeys: ["a3", "a1", "a2"], recentLimit: 2)

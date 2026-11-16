@@ -207,6 +207,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     func setContent(_ content: Content) {
         guard content != self.content else { return }
         let wasSearchResults = if case .searchResults = self.content { true } else { false }
+        let previousPersonal = Self.personalEmojis(in: sections)
         self.content = content
         let statusSection = EmojiPaletteSection(kind: .customEmojiStatus, emojis: [])
         switch content {
@@ -228,6 +229,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
             statusLabel.isHidden = !emojis.isEmpty
         }
         applySnapshot()
+        reconfigureChangedPersonalEmojis(since: previousPersonal)
         rebuildSectionButtons()
         // 打つたびに結果が変わるので、先頭に戻す。検索をやめてまとまりごとの並びに戻ったときも先頭から見せる。
         if case .searchResults = content {
@@ -518,6 +520,29 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     }
 
     /// すべての絵文字を描き直す。枠の大きさやUnicodeの絵文字の絵のように、組み立てたセルすべてに関わる設定を変えたときに使う。
+    /// 個人セットのまとまりの絵文字。
+    private static func personalEmojis(in sections: [EmojiPaletteSection]) -> [Item: PaletteEmoji] {
+        var emojis: [Item: PaletteEmoji] = [:]
+        for section in sections {
+            guard case .personal = section.kind else { continue }
+            for emoji in section.emojis {
+                emojis[Item(section: section.kind, key: emoji.recentKey)] = emoji
+            }
+        }
+        return emojis
+    }
+
+    /// 個人セットは出している間に並べ直すので、同じ場所の絵文字の画像だけが変わることがある。項目はショートコードで見分けていて、
+    /// 並べ直しではそのセルを描き直さないので、ここで描き直す。
+    private func reconfigureChangedPersonalEmojis(since previous: [Item: PaletteEmoji]) {
+        guard !previous.isEmpty else { return }
+        let changed = Self.personalEmojis(in: sections).filter { item, emoji in previous[item].map { $0 != emoji } ?? false }.map(\.key)
+        guard !changed.isEmpty else { return }
+        var snapshot = dataSource.snapshot()
+        snapshot.reconfigureItems(changed)
+        dataSource.apply(snapshot, animatingDifferences: false)
+    }
+
     private func reconfigureAllCells() {
         var snapshot = dataSource.snapshot()
         snapshot.reconfigureItems(snapshot.itemIdentifiers)
@@ -588,10 +613,20 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
             return UIImage(systemName: "magnifyingglass")
         case .customEmojiStatus:
             return UIImage(systemName: customStatus == .loading ? "hourglass" : "exclamationmark.triangle")
+        case .personal:
+            // 個人セットのカテゴリーは、Fedibirdで選んだ見出し（絵文字か、名前の先頭の1文字）をアイコンにする。
+            switch section.heading {
+            // scialint:disable:next fixed_font_size
+            case .text(let text): return Self.icon(from: text, font: .systemFont(ofSize: Self.sectionIconSize * 0.8, weight: .medium)).withRenderingMode(.alwaysTemplate)
+            // scialint:disable:next fixed_font_size
+            case .emoji(.standard(let emoji)): return Self.icon(from: emoji.emoji, font: EmojiFont.font(.systemFont(ofSize: Self.sectionIconSize * 0.8), style: emojiStyle), color: UIColor.label.resolvedColor(with: traitCollection))
+            case .emoji(.custom), nil: break
+            }
+            fallthrough
         case .uncategorized, .category:
             // 画像が届く前は空けておき、届いたら`updateSectionIcons`で入れる。
             // セルと同じ画像を読む。
-            guard case .custom(let emoji) = section.emojis.first, let image = emojiImages.image(for: EmojiPaletteCell.choice(of: emojiImages).url(of: emoji)) else { return nil }
+            guard case .custom(let emoji) = Self.iconEmoji(of: section), let image = emojiImages.image(for: EmojiPaletteCell.choice(of: emojiImages).url(of: emoji)) else { return nil }
             return Self.icon(from: image)
         case .standard(let title):
             // Unicodeの絵文字のまとまりは、iOSの絵文字キーボードと同じく、記号のアイコンにする。時計や虫めがねと同じ色で並ぶ。
@@ -610,11 +645,35 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         }.withRenderingMode(.alwaysOriginal)
     }
 
+    /// アイコンにする絵文字。個人セットのカテゴリーは見出しの絵文字、ほかは先頭の絵文字。
+    private static func iconEmoji(of section: EmojiPaletteSection) -> PaletteEmoji? {
+        if case .emoji(let emoji) = section.heading { return emoji }
+        return section.emojis.first
+    }
+
+    /// 文字を、アイコンの大きさの枠の中央に描く。まとまりのボタンは、文字の大きさの設定によらず決まった大きさのアイコンを並べるので、
+    /// `font`はその枠に合わせた大きさで渡す。
+    /// - Parameter color: 絵文字の絵がなく文字で描かれる絵文字（Twemojiでの「©」など）の色。
+    private static func icon(from string: String, font: UIFont, color: UIColor = .label) -> UIImage {
+        let text = NSAttributedString(string: string, attributes: [.font: font, .foregroundColor: color])
+        let size = text.size()
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: sectionIconSize, height: sectionIconSize))
+        return renderer.image { _ in
+            text.draw(at: CGPoint(x: (sectionIconSize - size.width) / 2, y: (sectionIconSize - size.height) / 2))
+        }.withRenderingMode(.alwaysOriginal)
+    }
+
     /// アイコンの画像が届いたまとまりのボタンに、アイコンを入れる。
     private func updateSectionIcons(matching urls: Set<URL>?) {
         for (index, button) in sectionButtons.enumerated() where sections.indices.contains(index) {
             let section = sections[index]
-            guard case .custom(let first) = section.emojis.first, section.kind != .recent, section.kind != .searchResults else { continue }
+            // Unicodeの絵文字の見出しは、外観が変わったときに、文字で描かれる絵文字の色を合わせ直す。
+            if urls == nil, case .emoji(.standard) = section.heading {
+                button.configuration?.image = sectionIcon(for: section)
+                button.largeContentImage = button.configuration?.image
+                continue
+            }
+            guard case .custom(let first) = Self.iconEmoji(of: section), section.kind != .recent, section.kind != .searchResults else { continue }
             if let urls, !first.hasImage(in: urls) { continue }
             button.configuration?.image = sectionIcon(for: section)
             button.largeContentImage = button.configuration?.image

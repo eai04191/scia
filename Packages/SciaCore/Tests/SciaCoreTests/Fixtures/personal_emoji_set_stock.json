@@ -1,0 +1,70 @@
+{
+  "revision": 4,
+  "picker_emoji_size": 22,
+  "stock": {
+    "categories": [
+      {
+        "id": "favorites",
+        "name": "よく選ぶ",
+        "heading": { "text": "よ", "image": { "src": "https://example.social/emoji/1f44d-1f3fd.svg", "alt": "👍🏽", "title": "サムズアップ", "width": 36, "height": 36 } },
+        "items": [
+          {
+            "key": "thumb-medium",
+            "label": "サムズアップ",
+            "image": { "src": "https://example.social/emoji/1f44d-1f3fd.svg", "alt": "👍🏽", "title": "サムズアップ", "width": 36, "height": 36 },
+            "search": ["+1", "thumbsup", "いいね"],
+            "selection": { "id": "+1", "custom": false, "native": "👍🏽" },
+            "reference": { "kind": "unicode", "native": "👍🏽" }
+          },
+          {
+            "key": "custom-wide",
+            "label": "横長",
+            "image": { "src": "https://example.social/emoji/wide_static.png", "animatedSrc": "https://example.social/emoji/wide.gif", "alt": ":wide_emoji:", "title": "横長", "width": 320, "height": 32 },
+            "search": ["wide_emoji", "横長", "よこなが"],
+            "selection": { "id": "wide_emoji", "custom": true, "native": ":wide_emoji:", "colons": ":wide_emoji:" },
+            "reference": { "kind": "custom", "scope": "local", "custom_emoji_id": "123456789", "shortcode": "wide_emoji" }
+          },
+          {
+            "key": "custom-wide-again",
+            "label": "横長",
+            "image": { "src": "https://example.social/emoji/wide_static.png", "alt": ":wide_emoji:", "width": 320, "height": 32 },
+            "search": ["wide_emoji"],
+            "selection": { "id": "wide_emoji", "custom": true, "native": ":wide_emoji:", "colons": ":wide_emoji:" }
+          },
+          {
+            "key": "broken",
+            "label": "こわれた",
+            "search": []
+          }
+        ]
+      },
+      {
+        "id": "empty",
+        "name": "空",
+        "heading": { "text": "空" },
+        "items": []
+      },
+      {
+        "id": "cats",
+        "name": "ねこ",
+        "heading": { "text": "ね", "image": { "src": "https://example.social/emoji/hidden_static.png", "animatedSrc": "https://example.social/emoji/hidden.png", "alt": ":hidden_blob:", "width": null, "height": null } },
+        "items": [
+          {
+            "key": "cat",
+            "label": "ネコ",
+            "image": { "src": "https://example.social/emoji/1f408.svg", "alt": "🐈", "width": 36, "height": 36 },
+            "search": ["cat", "ねこ"],
+            "selection": { "id": "cat2", "custom": false, "native": "🐈" }
+          },
+          {
+            "key": "hidden",
+            "label": "hidden_blob",
+            "image": { "src": "https://example.social/emoji/hidden_static.png", "animatedSrc": "https://example.social/emoji/hidden.png", "alt": ":hidden_blob:", "width": null, "height": null },
+            "search": ["hidden_blob"],
+            "selection": { "id": "hidden_blob", "custom": true, "native": ":hidden_blob:", "colons": ":hidden_blob:" }
+          }
+        ]
+      }
+    ]
+  }
+}

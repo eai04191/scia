@@ -880,6 +880,70 @@ struct ComposeCompletionTests {
 
         #expect(completion.emojis?.map { $0.shortcode } == ["other"])
     }
+
+    /// 個人セットは、絵文字のパレットを開くたびに読み直す。読み直せなかったときは、前に読んだものを残す。
+    @Test func reloadsPersonalEmojiSetAndKeepsItOnFailure() async throws {
+        let responses = PersonalSetResponses([.success(.stub("first")), .failure(URLError(.timedOut)), .success(.stub("second"))])
+        var sources = ComposeCompletion.Sources.unavailable
+        sources.personalEmojiSet = { try await responses.next() }
+        let completion = ComposeCompletion(sources: sources, settings: ComposeCompletion.Settings(debounce: .milliseconds(30), limit: 5))
+
+        completion.loadEmojisIfNeeded()
+        try await waitUntil { await responses.served >= 1 && completion.personalEmojiSet != nil }
+        #expect(completion.personalEmojiSet == .stub("first"))
+
+        completion.loadEmojisIfNeeded()
+        try await waitUntil { await responses.finished >= 2 }
+        #expect(completion.personalEmojiSet == .stub("first"))
+
+        completion.loadEmojisIfNeeded()
+        try await waitUntil { completion.personalEmojiSet == .stub("second") }
+    }
+
+    /// 投稿するアカウントを替えたら、前のアカウントの個人セットを捨てる。替える前に読み始めた応答は使わない。
+    @Test func switchingSourcesForgetsPersonalEmojiSet() async throws {
+        let gate = Gate()
+        var home = ComposeCompletion.Sources.unavailable
+        home.personalEmojiSet = {
+            try await gate.wait()
+            return .stub("home")
+        }
+        var other = ComposeCompletion.Sources.unavailable
+        other.personalEmojiSet = { .stub("other") }
+        let completion = ComposeCompletion(sources: home, settings: ComposeCompletion.Settings(debounce: .milliseconds(30), limit: 5))
+
+        completion.loadEmojisIfNeeded()
+        completion.switchSources(other, recentMentions: nil)
+        #expect(completion.personalEmojiSet == nil)
+        gate.open()
+        completion.loadEmojisIfNeeded()
+        try await waitUntil { completion.personalEmojiSet != nil }
+
+        #expect(completion.personalEmojiSet == .stub("other"))
+    }
+}
+
+private actor PersonalSetResponses {
+    private var responses: [Result<PersonalEmojiSet, any Error>]
+    private(set) var served = 0
+    /// 返し終えて、補完が結果を受け取れるようになった数。
+    private(set) var finished = 0
+
+    init(_ responses: [Result<PersonalEmojiSet, any Error>]) {
+        self.responses = responses
+    }
+
+    func next() throws -> PersonalEmojiSet? {
+        served += 1
+        defer { finished += 1 }
+        return try responses.removeFirst().get()
+    }
+}
+
+private extension PersonalEmojiSet {
+    static func stub(_ id: String) -> PersonalEmojiSet {
+        PersonalEmojiSet(categories: [.init(id: id, name: id, entries: [.init(emoji: .standard(StandardEmoji(emoji: "👍", name: "", keywords: [], version: "")))])])
+    }
 }
 
 private extension Account {

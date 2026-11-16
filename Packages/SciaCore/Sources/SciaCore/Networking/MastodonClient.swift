@@ -1160,6 +1160,12 @@ public struct MastodonClient: Sendable {
         return ServerEmoji.lastOfEachShortcode(emojis)
     }
 
+    /// 自分の絵文字の個人セット。Fedibirdの拡張で、`fedibird_capabilities`に`personal_emoji_sets`があるサーバーでだけ使う。
+    /// fedibird/mastodonの`docs/personal_emoji_sets.md`
+    public func personalEmojiSet() async throws -> PersonalEmojiSet {
+        try await get(PersonalEmojiSet.self, path: "api/v1/emoji_sets/personal/stock", query: []).0
+    }
+
     // MARK: - お知らせ
 
     /// サーバーが出しているお知らせを、既読にしたものも含めてすべて返す。ページに分けずに返る。

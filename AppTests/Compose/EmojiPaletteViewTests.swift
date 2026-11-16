@@ -8,6 +8,65 @@ import UIKit
 @MainActor
 @Suite(.failureState, .scratch)
 struct EmojiPaletteViewTests {
+    /// 個人セットは、絵文字ピッカーを出している間に読み直したものが届いたら、その場で並べ直す。
+    @Test func personalSetArrivingWhileShownReplacesTheSections() async throws {
+        let sets = PersonalSets(["前のカテゴリー", "後のカテゴリー"])
+        var sources = ComposeCompletion.Sources.unavailable
+        sources.personalEmojiSet = { await sets.next() }
+        let tuning = TuningStore(defaults: nil)
+        let core = ComposeCompletion(sources: sources, settings: TuningCatalog.completionSettings(in: tuning))
+        let completion = TextInputCompletion(completion: core, recentEmojis: nil, tuning: tuning)
+        let palette = EmojiPaletteView(emojiImages: .offline, thumbnailBuilder: nil)
+        palette.frame = CGRect(x: 0, y: 0, width: 400, height: 400)
+
+        completion.preparePalette()
+        try await waitUntil { core.personalEmojiSet != nil }
+        completion.updatePalette(palette, recentKeys: [])
+        #expect(Self.sectionTitles(in: palette).contains("前のカテゴリー"))
+
+        core.loadEmojisIfNeeded()
+        try await waitUntil { core.personalEmojiSet?.categories.first?.name == "後のカテゴリー" }
+        completion.updatePalette(palette, recentKeys: [])
+        let titles = Self.sectionTitles(in: palette)
+        #expect(titles.contains("後のカテゴリー") && !titles.contains("前のカテゴリー"), "まとまりのボタン: \(titles)")
+    }
+
+    /// 出している間に、個人セットの同じ絵文字の画像だけが変わったら、そのセルを新しい画像で描き直す。
+    @Test func personalEmojiWithChangedImageIsRedrawn() async throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 400, height: 400)
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { _ in }.pngData())
+        let store = EmojiImageStore { _ in png }
+        let palette = EmojiPaletteView(emojiImages: store, thumbnailBuilder: nil)
+        palette.frame = window.bounds
+        window.addSubview(palette)
+        let base = URL(filePath: "/")
+        func sections(_ name: String) -> [EmojiPaletteSection] {
+            let emoji = PaletteEmoji.custom(ServerEmoji(shortcode: "blob", url: base.appending(path: "\(name).gif"), staticUrl: base.appending(path: "\(name).png")))
+            return [EmojiPaletteSection(kind: .personal(id: "a", name: "a"), emojis: [emoji], heading: .text("a"))]
+        }
+        palette.setContent(.sections(sections("old"), customStatus: nil))
+        palette.layoutIfNeeded()
+        let collectionView = try #require(Self.descendants(of: palette).compactMap { $0 as? UICollectionView }.first)
+        try await waitUntil { Self.cells(in: collectionView).first.flatMap(Self.imageView(of:))?.image != nil }
+        let drawn = Self.cells(in: collectionView).first.flatMap(Self.imageView(of:))?.image
+
+        palette.setContent(.sections(sections("new"), customStatus: nil))
+        try await waitUntil {
+            collectionView.layoutIfNeeded()
+            let image = Self.cells(in: collectionView).first.flatMap(Self.imageView(of:))?.image
+            return image != nil && image !== drawn
+        }
+    }
+
+    private static func sectionTitles(in palette: EmojiPaletteView) -> [String] {
+        palette.layoutIfNeeded()
+        return descendants(of: palette).compactMap { ($0 as? UIButton)?.accessibilityLabel }
+    }
+
     /// 画面に入る前に組み立てたセルも、画像が届いたら描き直し、画面に入ったときに画像で描く。
     /// 画面に見えているセルだけを描き直していたため、スクロールで先に組み立てたセルは、画像が届いても空のまま画面に出ていた。
     @Test func cellPreparedBeforeImageArrivesShowsTheImage() async throws {
@@ -149,5 +208,19 @@ struct EmojiPaletteViewTests {
 
     private static func imageView(of cell: UICollectionViewCell) -> UIImageView? {
         cell.contentView.subviews.compactMap { $0 as? UIImageView }.first
+    }
+}
+
+/// 読むたびに、次の名前のカテゴリーを1つ持つ個人セットを返す。
+private actor PersonalSets {
+    private var names: [String]
+
+    init(_ names: [String]) {
+        self.names = names
+    }
+
+    func next() -> PersonalEmojiSet? {
+        let name = names.count > 1 ? names.removeFirst() : names.first ?? ""
+        return PersonalEmojiSet(categories: [.init(id: name, name: name, entries: [.init(emoji: .standard(StandardEmoji(emoji: "👍", name: "サムズアップ", keywords: [], version: "")))])])
     }
 }

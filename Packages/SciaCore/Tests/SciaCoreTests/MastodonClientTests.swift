@@ -473,6 +473,12 @@ struct MastodonClientTests {
         #expect(try await makeClient(mastodon).serverCapabilities() == .mastodon)
     }
 
+    @Test func readsPersonalEmojiSetSupportFromInstance() async throws {
+        let fedibird = StubTransport([.json(#"{"fedibird_capabilities":["personal_emoji_sets"]}"#, statusCode: 200)])
+        #expect(try await makeClient(fedibird).serverCapabilities().supportsPersonalEmojiSets)
+        #expect(!ServerCapabilities.mastodon.supportsPersonalEmojiSets)
+    }
+
     private func form(of request: URLRequest) throws -> [URLQueryItem] {
         var components = URLComponents()
         components.percentEncodedQuery = String(decoding: try #require(request.httpBody), as: UTF8.self)
@@ -1092,6 +1098,28 @@ struct MastodonClientTests {
         #expect(emojis.first { $0.shortcode == "blobcat" }?.category == "Blobs")
         // 選択に出すかを返さない絵文字は、出すものとして扱う。
         #expect(emojis.first { $0.shortcode == "no_picker_flag" }?.visibleInPicker == true)
+    }
+
+    /// Fedibirdの個人セットを読む。読めない絵文字と、同じカテゴリーに重なった絵文字は外す。
+    @Test func personalEmojiSet() async throws {
+        let transport = StubTransport([try .fixture("personal_emoji_set_stock")])
+
+        let set = try await makeClient(transport).personalEmojiSet()
+
+        #expect(await transport.requests.first?.url?.path() == "/api/v1/emoji_sets/personal/stock")
+        #expect(set.categories.map(\.name) == ["よく選ぶ", "空", "ねこ"])
+        #expect(set.categories.map { $0.entries.map(\.emoji.recentKey) } == [["👍🏽", "wide_emoji"], [], ["🐈", "hidden_blob"]])
+        guard case .custom(let wide) = set.categories[0].entries[1].emoji, case .custom(let hidden) = set.categories[2].entries[1].emoji else {
+            Issue.record("カスタム絵文字として読めていない")
+            return
+        }
+        #expect(wide.url.lastPathComponent == "wide.gif")
+        #expect(wide.staticUrl.lastPathComponent == "wide_static.png")
+        #expect(wide.aspectRatio == 10)
+        #expect(hidden.aspectRatio == nil)
+        #expect(set.categories[0].entries[1].searchTerms == ["wide_emoji", "横長", "よこなが"])
+        // 見出しは、絵文字の指定があればカテゴリーの中のその絵文字、なければ名前の先頭の1文字。
+        #expect(set.categories.map(\.heading) == [.emoji(set.categories[0].entries[0].emoji), .text("空"), .emoji(.custom(hidden))])
     }
 
     /// Fedibirdが返す画像の幅と高さから、縦横比を読む。幅か高さが0のものと、大きさを返さないものは分からないものとする。

@@ -19,6 +19,8 @@ public enum PaletteEmoji: Hashable, Sendable {
 public struct EmojiPaletteSection: Equatable, Sendable, Identifiable {
     public enum Kind: Hashable, Sendable {
         case recent
+        /// 個人セットのカテゴリー。名前は同じものを作れるので、IDでも見分ける。
+        case personal(id: String, name: String)
         /// カテゴリーの付いていない絵文字。
         case uncategorized
         case category(String)
@@ -33,6 +35,7 @@ public struct EmojiPaletteSection: Equatable, Sendable, Identifiable {
         public var title: String {
             switch self {
             case .recent: "最近使った絵文字"
+            case .personal(_, let name): name
             case .uncategorized: "カスタム"
             case .category(let name): name
             case .standard(let name): name
@@ -44,21 +47,25 @@ public struct EmojiPaletteSection: Equatable, Sendable, Identifiable {
 
     public let kind: Kind
     public let emojis: [PaletteEmoji]
+    /// 個人セットのカテゴリーの見出し。まとまりのボタンのアイコンにする。ほかのまとまりではnil。
+    public let heading: PersonalEmojiSet.Heading?
     public var id: Kind { kind }
 
-    public init(kind: Kind, emojis: [PaletteEmoji]) {
+    public init(kind: Kind, emojis: [PaletteEmoji], heading: PersonalEmojiSet.Heading? = nil) {
         self.kind = kind
         self.emojis = emojis
+        self.heading = heading
     }
 }
 
 /// パレットに並べるものを決める。
 public enum EmojiPalette {
-    /// 最近使ったもの、カテゴリーのないもの、カテゴリーごと（名前の順）、Unicodeの絵文字のまとまりの順に分ける。
-    /// 最近使ったものは新しい順、カスタム絵文字のまとまりの中はショートコードを小文字にそろえて比べた順、Unicodeの絵文字はデータの順。
-    /// ピッカーに出さないカスタム絵文字は除く。最近使ったもののうち、サーバーの絵文字のリストやUnicodeの絵文字のリストにないものも除く。空のまとまりは作らない。
+    /// 最近使ったもの、個人セットのカテゴリーごと（サーバーが返す順）、カテゴリーのないもの、カテゴリーごと（名前の順）、Unicodeの絵文字のまとまりの順に分ける。
+    /// 最近使ったものは新しい順、個人セットの中はサーバーが返す順、カスタム絵文字のまとまりの中はショートコードを小文字にそろえて比べた順、Unicodeの絵文字はデータの順。
+    /// ピッカーに出さないカスタム絵文字は除く。個人セットには、ピッカーに出さないカスタム絵文字も、肌の色を付けたUnicodeの絵文字も入るので、そのまま並べる。
+    /// 最近使ったもののうち、サーバーの絵文字のリストにも、Unicodeの絵文字のリストにも、個人セットにもないものは除く。空のまとまりは作らない。
     /// カスタム絵文字を先に置くのは、サーバーにしかない絵文字を探しに来ることが多いため。カテゴリーのないものを先にすることと、まとまりの中の順は、Mastodonのweb UIと同じ。
-    public static func sections(emojis: [ServerEmoji], standardGroups: [StandardEmojiGroup], recentKeys: [String], recentLimit: Int) -> [EmojiPaletteSection] {
+    public static func sections(emojis: [ServerEmoji], personal: PersonalEmojiSet? = nil, standardGroups: [StandardEmojiGroup], recentKeys: [String], recentLimit: Int) -> [EmojiPaletteSection] {
         let visible = emojis.filter(\.visibleInPicker).sorted { $0.shortcode.lowercased() < $1.shortcode.lowercased() }
         var byKey: [String: PaletteEmoji] = [:]
         for group in standardGroups {
@@ -69,10 +76,38 @@ public enum EmojiPalette {
         for emoji in visible where byKey[emoji.shortcode] == nil {
             byKey[emoji.shortcode] = .custom(emoji)
         }
+        // Unicodeの絵文字のリストにある絵文字は、そのリストのものにそろえる。同じ絵文字が、個人セットとUnicodeの絵文字のまとまりとで別のものにならないようにするため。
+        // カスタム絵文字は、個人セットの応答の画像のまま並べる。端末に残した古いリストの画像に替えないため。
+        let personalCategories = (personal?.categories ?? []).map { category in
+            (category, category.entries.map { entry in
+                guard case .standard = entry.emoji, let listed = byKey[entry.emoji.recentKey] else { return entry.emoji }
+                return listed
+            })
+        }
+        // 最近使ったものでも、個人セットのカスタム絵文字は個人セットの応答の画像で出す。同じ絵文字が、まとまりによって別の画像にならないようにするため。
+        for (_, emojis) in personalCategories {
+            for emoji in emojis {
+                if case .custom = emoji {
+                    byKey[emoji.recentKey] = emoji
+                } else if byKey[emoji.recentKey] == nil {
+                    byKey[emoji.recentKey] = emoji
+                }
+            }
+        }
         let recent = recentKeys.compactMap { byKey[$0] }.prefix(max(recentLimit, 0))
         var sections: [EmojiPaletteSection] = []
         if !recent.isEmpty {
             sections.append(EmojiPaletteSection(kind: .recent, emojis: Array(recent)))
+        }
+        var personalIDs: Set<String> = []
+        for (category, emojis) in personalCategories where !emojis.isEmpty && personalIDs.insert(category.id).inserted {
+            // 見出しの絵文字も、まとまりの中の絵文字と同じものにそろえる。
+            let heading: PersonalEmojiSet.Heading = if case .emoji(let emoji) = category.heading, let listed = emojis.first(where: { $0.recentKey == emoji.recentKey }) {
+                .emoji(listed)
+            } else {
+                category.heading
+            }
+            sections.append(EmojiPaletteSection(kind: .personal(id: category.id, name: category.name), emojis: emojis, heading: heading))
         }
         let uncategorized = visible.filter { ($0.category ?? "").isEmpty }
         if !uncategorized.isEmpty {
@@ -88,12 +123,24 @@ public enum EmojiPalette {
         return sections
     }
 
-    /// 検索の結果。カスタム絵文字のショートコードの一致を先に、Unicodeの絵文字の名前と言葉の一致を後に並べる。
+    /// 検索の結果。個人セットのうち検索の語（ショートコード、別名、読みなど）に検索語を含むものを先に、カスタム絵文字のショートコードの一致、Unicodeの絵文字の名前と言葉の一致の順に並べる。
     /// 検索欄は日本語の入力のまま打つので、全角の英数字は半角にそろえてからショートコードと比べる。
-    public static func searchResults(matching query: String, emojis: [ServerEmoji], standardGroups: [StandardEmojiGroup], limit: Int) -> [PaletteEmoji] {
-        let custom = EmojiCompletion.candidates(matching: query.precomposedStringWithCompatibilityMapping, in: emojis, limit: limit).map(PaletteEmoji.custom)
+    public static func searchResults(matching query: String, emojis: [ServerEmoji], personal: PersonalEmojiSet? = nil, standardGroups: [StandardEmojiGroup], limit: Int) -> [PaletteEmoji] {
+        let normalized = query.precomposedStringWithCompatibilityMapping
+        let custom = EmojiCompletion.candidates(matching: normalized, in: emojis, limit: limit).map(PaletteEmoji.custom)
         let standard = StandardEmojiSearch.candidates(matching: query, in: standardGroups, limit: limit).map(PaletteEmoji.standard)
-        return Array((custom + standard).prefix(max(limit, 0)))
+        var seen: Set<String> = []
+        let results = (personalMatches(query, in: personal) + custom + standard).filter { seen.insert($0.recentKey).inserted }
+        return Array(results.prefix(max(limit, 0)))
+    }
+
+    /// ひらがなとカタカナ、全角と半角、大文字と小文字は、Unicodeの絵文字の検索と同じく区別しない。
+    private static func personalMatches(_ query: String, in personal: PersonalEmojiSet?) -> [PaletteEmoji] {
+        let needle = StandardEmojiSearch.normalize(query)
+        guard let personal, !needle.isEmpty else { return [] }
+        return personal.categories.flatMap(\.entries).filter { entry in
+            entry.searchTerms.contains { StandardEmojiSearch.normalize($0).contains(needle) }
+        }.map(\.emoji)
     }
 }
 

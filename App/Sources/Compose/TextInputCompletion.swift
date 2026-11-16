@@ -202,6 +202,9 @@ final class TextInputCompletion {
         let standardGroups = StandardEmojiAvailability.groups(for: settings.appearance.emojiStyle)
         // カスタム絵文字のリストがまだないか読めなかったときも、Unicodeの絵文字は通信なしで並べられるので出し、カスタム絵文字の場所に状態を出す。
         let emojis = paletteEmojis?.emojis ?? []
+        // 個人セットは、カスタム絵文字のリストと違い、出している間に読み直したものが届いたら並べ直す。使う人が自分で変えた並びなので、
+        // 押そうとしている絵文字が動かないことより、変えたとおりに並ぶことを優先する（docs/personal-emoji-set.md）。
+        let personal = completion.personalEmojiSet
         let customStatus: EmojiPaletteView.CustomEmojiStatus? = if paletteEmojis != nil {
             nil
         } else if let reason = completion.emojiFailure {
@@ -211,9 +214,9 @@ final class TextInputCompletion {
         }
         if query.isEmpty {
             let recentLimit = Int(tuning.value(of: TuningCatalog.composeEmojiPaletteRecentLimit))
-            palette.setContent(.sections(EmojiPalette.sections(emojis: emojis, standardGroups: standardGroups, recentKeys: recentKeys, recentLimit: recentLimit), customStatus: customStatus))
+            palette.setContent(.sections(EmojiPalette.sections(emojis: emojis, personal: personal, standardGroups: standardGroups, recentKeys: recentKeys, recentLimit: recentLimit), customStatus: customStatus))
         } else {
-            palette.setContent(.searchResults(EmojiPalette.searchResults(matching: query, emojis: emojis, standardGroups: standardGroups, limit: 200), customStatus: customStatus))
+            palette.setContent(.searchResults(EmojiPalette.searchResults(matching: query, emojis: emojis, personal: personal, standardGroups: standardGroups, limit: 200), customStatus: customStatus))
         }
     }
 

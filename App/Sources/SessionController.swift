@@ -516,7 +516,7 @@ final class SessionController {
             statusTags: { [accountID = credential.accountID] in try await client.recentStatusTags(of: accountID) },
             // 読めなかった人は返らないだけで、失敗はAccountCacheがログに残す。
             accounts: { ids in await Array(accounts.load(ids).values) }
-        ).remembering(customEmojisIn: customEmojis)
+        ).remembering(customEmojisIn: customEmojis).readingPersonalEmojiSet(with: client) { [session] in try await session.loadedCapabilities() }
         let completion = ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, account: credential.handle))
         let postingLanguages = PostingLanguageCache { try await client.postingLanguages() }
         self.postingLanguages = postingLanguages
@@ -2270,6 +2270,7 @@ final class SessionController {
         }
         let client = otherAccounts.client(for: account)
         let sources = ComposeCompletion.Sources(client: client).remembering(customEmojisIn: AppDependencies.customEmojis.cache(for: account.credential.instance))
+            .readingPersonalEmojiSet(with: client) { try await account.loadedCapabilities { try await client.serverCapabilities() } }
         composer.completion.switchSources(sources, recentMentions: RecentMentions(defaults: .standard, account: account.credential.handle))
         // 開いている絵文字のパレットや補完が、替えた先のサーバーの絵文字とタグを読み直すよう、書き始めたときと同じく読み始める。
         composer.completion.prefetch()
