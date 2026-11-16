@@ -42,7 +42,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `make menu-editor`: メニューの既定の並びを並べ替えるページを、今の項目の名前と既定の並びを入れて`DerivedData/menu-editor.html`に書き出す
 - `make archive`: 実機向けのReleaseビルドをアーカイブする。ビルド番号はアーカイブしたUTCの日時になる
 - `make testflight`: アーカイブしてApp Store Connectへ上げる。mainは、GitHub Actions（`.github/workflows/testflight.yml`）が毎朝5時（JST）に、前に上げたときから変わっていれば上げる。上げたビルドは、`make testflight-external`で外部テストのグループ（リポジトリのvariablesの`TESTFLIGHT_EXTERNAL_GROUP`）に足し、TestFlight App Reviewに出す
-- `make hooks`: ローカルのmainを、`make check`と`make test`の両方が通った中身のcommitにしか動かさないhookを入れる。checkoutごとに1回で、worktreeにも効く。通った中身との違いがMarkdown（`*.md`）とログイン画面の補完に使うサーバーのリスト（`known-servers.txt`）だけなら、走らせ直さずに通ったものとして扱う
+- `make hooks`: ローカルのmainを、`make check`と`make test`の両方が通った中身のcommitにしか動かさないhookを入れる。checkoutごとに1回で、worktreeにも効く。hookが止める条件は「Git」にある
 - `make scenario-run PERSONA=<役>`: 何も知らないエージェントを、`Tools/scenario/personas/`の役で初めて使う人としてSciaに触らせ、報告とスクリーンショットを`~/scia-scenario/runs/`に残す。外へ出ないMastodon（`mastodon.localhost`）と専用の端末`Scia Scenario`を使い、Release構成のSciaを入れる。先に`make scenario-setup`で準備する（何度走らせても同じ状態になる）。DockerとAXe（`brew install cameroncooke/axe/axe`）が要る。ユーザーが`/scenario`で起動したときは、`.claude/skills/scenario`の手順で走らせてまとめる
 
 ## シミュレーター
@@ -64,7 +64,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - 非決定的な外部依存（今の時刻、時間の経過、乱数、UUID、通信、ファイル、OSの状態など）は、ロジックの内部で直接生成・取得せず、テストで差し替え可能な境界に集約する
 - 時間をおく処理は、標準の`Clock`（`any Clock<Duration>`）で受け取る。待つ関数や独自の時計の型で受け取らない。期限や残りの長さは`stopwatch(on:)`で測る。日付としての今が要るときは今の日付を返す関数を、Core Animationの時間が要るときはその時間を返す関数を受け取る
 - 実物の時計、今の日付、Core Animationの時間を作るのは、SciaCoreの`SystemTime`とアプリの`AppDependencies`だけにし、ほかは既定値としてそこを参照する（`make lint`の`direct_time_access`で止める）。デバッグ用のコード（`App/Sources/Debug`）は対象外
-- セッションの持ち物（各タイムライン、開いた画面、投稿欄）で始める処理は、セッションの持ち主（`TaskScope`）の子で始める。ログアウト、アカウントの切り替え、窓を閉じたときに、止める処理を並べなくても止まるようにするため（`make lint`の`session_task_outside_scope`で止める）
+- セッションの持ち物（各タイムライン、開いた画面、投稿欄）で始める処理は、セッションの持ち主（`TaskScope`）の子で始める（`make lint`の`session_task_outside_scope`で止める）
 - タイムラインはUICollectionViewとdiffable data sourceで組む。スクロール位置を細かく制御する必要があるため、SwiftUIのListやScrollViewにはしない
 - 独自のアニメーションやジェスチャーを足す前に、UIKit標準の部品と挙動で実現できないか検討する
 - UIKitの動きは、SwiftUIのスプリング（`.smooth`、`.snappy`など）を`UIView.animate(_:changes:completion:)`に渡して書く。途中で止める、逆向きにするなど`UIViewPropertyAnimator`で動かすときは、`UISpringTimingParameters(duration:bounce:)`で同じスプリングにする。`UIView.animate(withDuration:)`の既定の加減速や`usingSpringWithDamping`では書かない。SwiftUIの部品と動きが揃わず、そこだけ古い動きに見えるため。前の書き方で残っている動きは、その箇所に手を入れるときに置き換える。ただし、OSから渡る時間と曲線に合わせる動き（キーボードの出入りに付いて動く投稿欄など）は、渡された値のまま動かす。スプリングの進み具合を自分で計算して、ほかの値を付いて動かしている部分（ステータスバーの通知の中身は、`UIKitSpring`でUIKitのスプリングを計算している）は、動きと計算を一緒に置き換える。片方だけ替えると、付いて動く値がずれるため
@@ -75,20 +75,20 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - 設定のトップの分類は、見る（表示）、触る（操作）、書く（作成）の場面で分ける。アプリのアイコンはホーム画面のアイコンを変える設定で、範囲が違うので「表示」に入れない
 - UIKitで作った部品でLiquid Glassの不都合が出たら、SwiftUIへの置き換えを候補に入れる。UIKitとSwiftUIの境目では、`UIViewRepresentable`の中身が大きさの希望を変え続けて並べ直しが止まらなくなることがあるので、包む部品は`sizeThatFits`で大きさを決める
 - Mastodon APIの仕様は推測せず、公式ドキュメント（https://docs.joinmastodon.org/ ）で確認する。サーバー実装による差異（glitch-soc、Fedibird、GoToSocialなど）は、必要になった時点で個別に対応してテストに残す
-- サーバー（ほかのサーバーの利用者が書いた投稿や、fxtwitterの応答を含む）から来る件数、上限、URLは、読むところで確かめる。件数は`decodeCount`で範囲に収め、上限は`ServerLimit`で1以上だけを受け付け、URLは使い道（読み込む画像やメディアか、押して開く先か、ストリーミングの接続先か）ごとに`decodeURL`でスキームを確かめる（`make lint`の`server_value_without_check`で止める。コンパイラーが作るDecodableに`Int`や`URL`のプロパティを書いて読むのは、`synthesized_server_value_decoding`で止める）。読んだあとの計算でも、サーバーの値から作った数（縦横比や割合）を整数に直す前に、範囲に収める
-- ファイルやフォルダーの名前は、文字列の決まった名前でなければ`SafeFileName`で作り、`appending(fileName:)`でつなげる。URLやサーバーの応答、ほかのアプリから受け取ったファイルの名前には、`/`や`..`が入りうるため（`make lint`の`unsafe_file_name`で止める）
-- ログに何を`privacy: .public`で出してよいかは[docs/logging.md](docs/logging.md)に従う。ハンドル、本文、URL、応答の本文、`localizedDescription`を公開扱いで出す書き方は、`make lint`の`log_private_value`で止める。違和感レポートの状態ダンプも同じ決まりで書く
+- サーバー（ほかのサーバーの利用者が書いた投稿や、fxtwitterの応答を含む）から来る件数、上限、URLは、読むところで`decodeCount`、`ServerLimit`、`decodeURL`で確かめる（`make lint`の`server_value_without_check`と`synthesized_server_value_decoding`で止める）。読んだあとの計算でも、サーバーの値から作った数（縦横比や割合）を整数に直す前に、範囲に収める
+- ファイルやフォルダーの名前は、文字列の決まった名前でなければ`SafeFileName`で作り、`appending(fileName:)`でつなげる（`make lint`の`unsafe_file_name`で止める）
+- ログに何を`privacy: .public`で出してよいかは[docs/logging.md](docs/logging.md)に従う（`make lint`の`log_private_value`で止める）。違和感レポートの状態ダンプも同じ決まりで書く
 - サーバーの上限のうち、APIで返らないもの（メモや通報のコメントの文字数など）は、Mastodonのソースにある値でも手元で固定しない。Mastodonはソースを変えて動かせるので、上限を変えたサーバーで、書ける長さを手元で止めたり、断られる長さを通したりするため。手元では止めず、サーバーが断って返す理由を、送れなかったときの表示で出す。文字数のような目安は、上限を付けずに出してよい
-- 通信は`HTTPClient`を通す（APIの外は`AppDependencies.http`、ストリーミングは`StreamingClient`）。再開の時刻で止める、一時的な失敗で送り直す、応答の大きさの上限、httpとhttps以外を開かない決まりを、すべての経路で守らせるため。URLSessionを`URLSessionTransport`の外で使う書き方は、`make lint`の`url_session_outside_network_layer`で止める。決まりは[docs/network.md](docs/network.md)にある
-- ティントカラーで塗った地に文字や記号を載せるときは、地と中身の色を`TintFill.colors(for:on:)`から取る（バッジは`TintBadgeLabel`と`TintSymbolBadge`）。中身を白に決め打ちすると、アクセントカラーがモノトーンのときにダークで白い地に白い中身になり、地を`.tintColor`のまま置くと、ガラスの中でほかのボタンより明るく描かれるため。地に`.tintColor`を直接塗る書き方は、`make lint`の`raw_tint_background`で止める。上に何も載せない地だけ、理由を書いて外す
-- 失敗の理由（`ErrorPresentation`）は、`App/Sources/Notices/FailureDisplay.swift`の部品で出す。ログアウトされたアカウントがあれば、部品が「ログインし直す」を付けるため。文言はSciaCoreでSPI（`FailureDisplay`）にしてあり、部品のファイルのほかでそのSPIをimportする書き方は、`make lint`の`failure_reason_outside_display`で止める
+- 通信は`HTTPClient`を通す（APIの外は`AppDependencies.http`、ストリーミングは`StreamingClient`。`make lint`の`url_session_outside_network_layer`で止める）。決まりは[docs/network.md](docs/network.md)にある
+- ティントカラーで塗った地に文字や記号を載せるときは、地と中身の色を`TintFill.colors(for:on:)`から取る（バッジは`TintBadgeLabel`と`TintSymbolBadge`。`make lint`の`raw_tint_background`で止める）。上に何も載せない地だけ、理由を書いて外す
+- 失敗の理由（`ErrorPresentation`）は、`App/Sources/Notices/FailureDisplay.swift`の部品で出す（`make lint`の`failure_reason_outside_display`で止める）
 - Swift 6のstrict concurrencyを有効にしている。`@unchecked Sendable`や`nonisolated(unsafe)`で警告を消さず、設計で解決する
 
 ## 文言
 
-- 使う人に見える文言は、SciaCoreに置き、アプリ（`App/Sources`）は読むだけにする。アプリに書くと、SciaCoreだけを使う別のUI（AppKitのMac版など）が同じ文言を出せず、UIごとに言い回しがずれるため。値の型に結び付く文言はその型の`title`などに、型のない文言は画面ごとの`…Texts`に置く。アプリに日本語の文字列を書く書き方は、`make lint`の`user_text_outside_core`で止める。デバッグ版だけに入るもの（`App/Sources/Debug`、違和感レポート、`#if DEBUG`の中）、ログ、`preconditionFailure`などの理由は対象外
+- 使う人に見える文言は、SciaCoreに置き、アプリ（`App/Sources`）は読むだけにする。値の型に結び付く文言はその型の`title`などに、型のない文言は画面ごとの`…Texts`に置く。アプリに日本語の文字列を書く書き方は、`make lint`の`user_text_outside_core`で止める。デバッグ版だけに入るもの（`App/Sources/Debug`、違和感レポート、`#if DEBUG`の中）、ログ、`preconditionFailure`などの理由は対象外
 - 名前、ハンドル、数、日時などを埋める文言は、埋める値を受け取って文を丸ごと返す関数にする。「がブースト」のような文の一部を返して、呼ぶ側でつなげない。将来ほかの言語に訳したときに、語順が変わっても呼ぶ側を直さずに済むようにするため。文の一部だけ色や書体を変えるものも、文を丸ごと持ち、変える範囲を添えて返す（`PostTexts.EmphasizedText`）
-- 使う人に見える文言は、iOSの日本語UIの標準の言い回し（設定アプリ、メール、Safariなどの表記）に倣う。前に直した言い回し（「既定」「捨てる」「消す」「止める」「端末」など）は、`make lint`の`ios_wording`で止める。規則が並べていない言い回しも、同じ操作をiOSがどう書くかを確かめてから書く
+- 使う人に見える文言は、iOSの日本語UIの標準の言い回し（設定アプリ、メール、Safariなどの表記）に倣う（`make lint`の`ios_wording`で止める）。規則が並べていない言い回しも、同じ操作をiOSがどう書くかを確かめてから書く
 - 画面で同じ種類のアイテムを並べるとき（投票の選択肢、フィルターのキーワード、一致したフィルターの名前、割り当てた項目の名前など）は、「、」や「・」ではなく境界線で区切る。`TextLists.items`で並べ、UIKitでは`ListSeparator.attributedString`、SwiftUIでは`ItemListText`で描く。「、」は文のための記号で並べたアイテムが文に見え、「・」はアイテムの中身に入ると区切りと紛れるため（「そば・うどん」）
 - 1つのものに付く、種類の違う情報を1行に並べるとき（「40票・終了」「隠す・期限切れ」「1:25:28・HTTP 404」など）は、「・」でつなぐ。項目の種類と数が決まっていて、合わせて1つの説明になるため
 - 境界線を引けない、文字だけの出し先（送る文面、見本の投稿の本文など）では、同じ種類のアイテムの列挙も`TextLists.plain`で「・」にする。読み上げ（`accessibilityLabel`と`accessibilityValue`）と、文の中の列挙（「お気に入り、ブーストはなくなり…」）は「、」のままにする
@@ -127,7 +127,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - 「投稿の見た目」の項目や見本、投稿の行の描き方を変えたら、すべての項目と選択肢を変える前と後に並べた画像を作って、全部見る。`TEST_RUNNER_SCIA_APPEARANCE_SHEETS=1 make test ONLY='SciaTests/AppearanceSheets'`で、`xcrun simctl get_app_container '<使う端末>' net.mizle.scia data`のtmp/AppearanceSheetsに書く。示す帯（赤）が変わった部分と合っているか、変えて崩れないかを確かめる。いくつかをつまんで見るだけでは、ずれに気づけない
 - 描画性能: スクロール時のhitchは`xcrun xctrace record --template 'Animation Hitches'`や`XCTOSSignpostMetric.scrollDecelerationMetric`で測る。シミュレーターの値は参考値で、最終確認は実機で行う
 - 見た目: 実データに近いfixtureを使い、スクリーンショットで確認する
-- 好みで決まる値は、ハードコードで決め打ちしない。余白や文字の大きさのような投稿の見た目の値は、設定の「投稿の見た目」（`AppearanceCatalog`）に項目を足す。アニメーションの時間や新着をまとめて挿入する間隔のような、動きや間合いの値は、`TuningCatalog`に項目を足してデバッグ用のチューニングパネルから調整できるようにする。足した項目は`sections`にも並べる（入れ忘れると、パネルに出ず、`defaults write`で入れた値も読まれない。`make lint`の`tuning_item_not_in_sections`で止める）。パネルはデバッグメニューから開くが、値はデバッグメニューを出していないReleaseでも`TuningStore`から読むので、SciaCoreのモデルには、どのUIも`TuningStore`を作って渡す。どちらも、ユーザーに選んでもらう
+- 好みで決まる値は、ハードコードで決め打ちしない。余白や文字の大きさのような投稿の見た目の値は、設定の「投稿の見た目」（`AppearanceCatalog`）に項目を足す。アニメーションの時間や新着をまとめて挿入する間隔のような、動きや間合いの値は、`TuningCatalog`に項目を足してデバッグ用のチューニングパネルから調整できるようにする。足した項目は`sections`にも並べる（`make lint`の`tuning_item_not_in_sections`で止める）。パネルはデバッグメニューから開くが、値はデバッグメニューを出していないReleaseでも`TuningStore`から読むので、SciaCoreのモデルには、どのUIも`TuningStore`を作って渡す。どちらも、ユーザーに選んでもらう
 - デバッグメニューは、デバッグ版では常に出す。Releaseでは、設定の「情報」の「ビルド」の行を7回タップするとオンになり（同じ操作でオフに戻る）、チューニング、部品カタログ、違和感レポート、当たり判定の表示、HDRの余地の表示だけを出す。通信や既読位置を変える検証の項目と`scia-debug://`は、DEBUGのビルドだけに入れる
 - 違和感レポートは、デバッグメニューから開く。シェイクで開くのはデバッグ版だけ。ユーザーが残した違和感レポートは、アプリのDocuments/DiscomfortReportsにJSONで保存される。シミュレーターでは`xcrun simctl get_app_container '<使う端末>' net.mizle.scia data`で場所を調べられる。状態を追いたい画面は`AppDependencies.stateDumps`に状態ダンプを登録し、調査に必要なイベントはinfo以上のレベルで`SciaLog`に出す（debugレベルはレポートに残らない）
 
@@ -146,14 +146,14 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - バグ修正では先に失敗するテストを書き、直す前のコードで失敗することを確かめてから直す
 - 変更した処理を差し替え、差し替えたものの呼ばれ方や返した値を確かめるだけのテストは書かない。変更した処理そのものを通らないので、壊れても落ちないため
 - 決め打ちの文言を直すだけの修正には、直した文字列を書き写して比べるテストを足さない。文言を変えるたびにテストも同じように書き換えるだけで、取り違えも退行も止めないため。テストを書く前に、どんな取り違えや退行を止めるかを一文で言えるか確かめ、言えなければ書かない。読み戻し、分岐、計算が絡む修正では、先に失敗するテストを書く
-- アプリのテスト（`AppTests`）のsuiteには`@Suite(.failureState)`を付ける。落ちた時点のウィンドウ、フォーカスのある入力欄、画面の状態ダンプ（`AppDependencies.stateDumps`）を失敗のメッセージに添えるので、確認ごとに状態を出す文を書かなくてよい（`make lint`の`suite_without_failure_state`で止める）。落ちたときに要る状態がここに出ない画面は、状態ダンプを登録するか足す
-- テストで作る一時ファイルと設定の保存先（`UserDefaults(suiteName:)`）は、`SciaTesting`の`TestScratch`で作り、テストかスイートに`.scratch`を付ける。テストの終わりと次に走らせたときに消すので、走らせるたびに溜まらない（`make lint`の`test_file_without_scratch`で止める）
+- アプリのテスト（`AppTests`）のsuiteには`@Suite(.failureState)`を付ける（`make lint`の`suite_without_failure_state`で止める）。落ちたときに要る状態が失敗のメッセージに出ない画面は、状態ダンプ（`AppDependencies.stateDumps`）を登録するか足す
+- テストで作る一時ファイルと設定の保存先（`UserDefaults(suiteName:)`）は、`SciaTesting`の`TestScratch`で作り、テストかスイートに`.scratch`を付ける（`make lint`の`test_file_without_scratch`で止める）
 - テストは実際の時間や今の時刻に頼らせない（`make lint`の`time_dependent_test`で止める）。時間をおく処理には`SciaTesting`の手で進める`Clock`（`TestClock`）を渡し、アニメーションは層の時計（`LayerClock`）、毎フレーム進める動きは手で送るコマ（`ManualFrameSource`）で進める。ほかの処理は門（`Gate`）か条件（`waitUntil`）で待ち（`Task.yield`で譲って待たない。`make lint`の`yield_based_waiting`で止める）、日時は決まった値で作る。止めたあとに何も起きないことは、時間を待たずに、走り終えていない処理の数や予約が残っていないことで確かめる
 - 実物のコーデックやファイルの書き出しのように、かかる時間を差し替えられない処理のテストは、`.timeLimit`ではなく`.stallLimit`を付け、段階が進むたびに`StallProgress.current`の`note`で伝える。テスト全体の時間で見ると、ほかのビルドと重なってシミュレーターのコーデックが100倍以上遅くなった回に、固まっていないのに落ちるため
-- 手で進める`Clock`（`TestClock`）を進めるときは、`clock.advance(afterSleeping: 待ちの長さ)`で起こしたい待ちを長さで指す。ほかの条件と一緒に待つときは`sleeperCount(remaining:)`を使う。待ちの数だけを見ると、同じ時計を使う別の待ちで揃ったと読み、眠る前の待ちを起こせずに固まるため（`make lint`の`advance_after_sleeper_count`で止める）
-- テストで裏に回った状態を作るときは、`whileInBackground`で囲む。裏に回った通知（`didEnterBackgroundNotification`）を投げたままにすると、UIKitがSwiftUIのスプリングで動かす`UIView.animate`を戻った通知が来るまで止め、同じプロセスであとに走るテストの動きが終わらなくなるため（`make lint`の`background_notification_in_test`で止める）
-- `waitUntil`は条件を間をおいて確かめるので、増えていく件数を`==`で待つと、確かめる間に飛び越えて固まる。件数は`>=`で待ってから`#expect`で確かめる（`make lint`の`exact_count_wait`で止める）
-- `TimelineStore`のテストは、`TimelineStoreTester`を通し、操作を`expectChanges`に起きる変化と一緒に渡して、状態を丸ごと比べる。確かめたい値だけを見ると、書いていない変化を見逃すため（テストで直接作ったり持ったりするのは`make lint`の`timeline_store_without_tester`で止める）。状態を足すときは、ストアのプロパティではなく`TimelineStore.State`に足す。ストアに直接持つと、比べる対象から漏れるため
+- 手で進める`Clock`（`TestClock`）を進めるときは、`clock.advance(afterSleeping: 待ちの長さ)`で起こしたい待ちを長さで指す。ほかの条件と一緒に待つときは`sleeperCount(remaining:)`を使う（`make lint`の`advance_after_sleeper_count`で止める）
+- テストで裏に回った状態を作るときは、`whileInBackground`で囲む（`make lint`の`background_notification_in_test`で止める）
+- `waitUntil`で増えていく件数を待つときは、`==`ではなく`>=`で待ってから`#expect`で確かめる（`make lint`の`exact_count_wait`で止める）
+- `TimelineStore`のテストは、`TimelineStoreTester`を通し、操作を`expectChanges`に起きる変化と一緒に渡して、状態を丸ごと比べる（`make lint`の`timeline_store_without_tester`で止める）。状態を足すときは、ストアのプロパティではなく`TimelineStore.State`に足す
 
 ## Git
 
@@ -163,5 +163,5 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - 開発のための変更（チューニングパネル、違和感レポート、検証ハーネス、ビルドやlintの設定など）を`feat`・`fix`・`perf`で書くときは、`feat(dev):`、`fix(dev):`のようにdev scopeを付けてリリースノートから外す
 - 使う人向けの変更と開発のための変更は別のcommitに分ける
 - pushはユーザーが行う。agentはcommitまでで止め、pushやpush承認の依頼はしない
-- mainへは、ユーザーが`/merge-to-main`で起動したときだけ、`.claude/skills/merge-to-main`の手順で入れる（agentからは起動しない。共通の`tidy-ff-merge`は、`make check`と`make test`を通さないので使わない）。`Tools/merge-queue.sh`が、どのスレッドからでも1つずつ、branchをmainへrebaseし、そのworktreeで`make check`と`make test`を通してから、fast-forwardで入れる。通したあとにファイルを変えたり、rebaseで中身が変わったりしたら、通し直す。`make hooks`のhookは、`make check`と`make test`の両方が通っていない中身のcommitと、中身が新しくなるmerge commitをmainに入れず、作業ツリーに触る前に止める
+- mainへは、ユーザーが`/merge-to-main`で起動したときだけ、`.claude/skills/merge-to-main`の手順で入れる（agentからは起動しない。共通の`tidy-ff-merge`は、`make check`と`make test`を通さないので使わない）。`Tools/merge-queue.sh`が、どのスレッドからでも1つずつ、branchをmainへrebaseし、そのworktreeで`make check`と`make test`を通してから、fast-forwardで入れる。通したあとにファイルを変えたり、rebaseで中身が変わったりしたら、通し直す。`make hooks`のhookは、`make check`と`make test`の両方が通っていない中身のcommitと、中身が新しくなるmerge commitをmainに入れず、作業ツリーに触る前に止める。通った中身との違いがMarkdown（`*.md`）とログイン画面の補完に使うサーバーのリスト（`known-servers.txt`）だけなら、走らせ直さずに通ったものとして扱う
 - worktreeの中では、fixup commitを作ることも、`rebase --autosquash`で元のcommitへまとめることも、確認なしで行ってよい。後ろに載ったユーザーのcommitのhashが作り直されても構わない
