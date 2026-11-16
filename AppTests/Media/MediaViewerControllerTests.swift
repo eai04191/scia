@@ -1,3 +1,4 @@
+import AVFoundation
 import SciaCore
 import SciaTesting
 import Synchronization
@@ -482,18 +483,17 @@ struct MediaViewerControllerTests {
         let viewer = try await presentDraftViewer(on: harness, items: [video], actions: DraftActions())
         defer { viewer.dismiss(animated: false) }
         let videoPage = try #require(viewer.displayedPage as? PlayerPageController)
-        #expect(videoPage.loopMenuAction() != nil)
+        #expect(!videoPage.isLooping)
 
         viewer.update(items: [MediaViewerItem(id: "a", kind: .gifv, description: "", file: file, thumbnail: nil, status: .uploading)])
 
         let gifPage = try #require(viewer.displayedPage as? PlayerPageController)
         #expect(gifPage !== videoPage)
-        // GIFはもとからくり返すので、ループ再生の項目を出さない。
-        #expect(gifPage.loopMenuAction() == nil)
+        #expect(gifPage.isLooping)
 
         viewer.update(items: [video])
 
-        #expect((viewer.displayedPage as? PlayerPageController)?.loopMenuAction() != nil)
+        #expect((viewer.displayedPage as? PlayerPageController)?.isLooping == false)
     }
 
     /// 横にスワイプしている途中で切り替え先が動画と分かったら、切り替えを終えた時点で、残っていた画像のページを動画のページに差し替える。
@@ -657,24 +657,66 @@ struct MediaViewerControllerTests {
         let file = LocalMediaFile(url: URL(filePath: "/tmp/v.mov"), mimeType: "video/quicktime", kind: .video)
         let page = PlayerPageController(item: MediaViewerItem(id: "v", kind: .video, description: "", file: file, thumbnail: nil, status: .ready))
         page.loadViewIfNeeded()
-        #expect(page.loopMenuAction()?.title == "ループ再生")
-        #expect(page.loopMenuAction()?.state == .off)
+        #expect(page.loopMenuAction().title == "ループ再生")
+        #expect(page.loopMenuAction().state == .off)
 
         page.setLooping(true)
-        #expect(page.loopMenuAction()?.state == .on)
+        #expect(page.loopMenuAction().state == .on)
         #expect(page.isLooping)
 
         let another = PlayerPageController(item: MediaViewerItem(id: "w", kind: .video, description: "", file: file, thumbnail: nil, status: .ready))
         another.loadViewIfNeeded()
-        #expect(another.loopMenuAction()?.state == .off)
+        #expect(another.loopMenuAction().state == .off)
     }
 
-    /// GIFはもとからくり返すため、ループ再生の項目を出さない。
-    @Test func gifDoesNotOfferLoopPlayback() {
+    /// GIFは、ループ再生を入れた状態で始める。動画と同じ項目で切れる。
+    @Test func gifLoopsUntilTurnedOff() {
         let file = LocalMediaFile(url: URL(filePath: "/tmp/g.mp4"), mimeType: "video/mp4", kind: .gifv)
         let page = PlayerPageController(item: MediaViewerItem(id: "g", kind: .gifv, description: "", file: file, thumbnail: nil, status: .ready))
         page.loadViewIfNeeded()
-        #expect(page.loopMenuAction() == nil)
+        #expect(page.isLooping)
+        #expect(page.loopMenuAction().state == .on)
+        #expect(page.player?.actionAtItemEnd == AVPlayer.ActionAtItemEnd.none)
+
+        page.setLooping(false)
+        #expect(page.loopMenuAction().state == .off)
+        #expect(page.player?.actionAtItemEnd == .pause)
+    }
+
+    /// 動画とGIFは、最初のコマを描いたら、ピンチで拡大できる。拡大している間は、下へのスワイプで閉じず、映像の枠は拡大した大きさになる。
+    @Test(arguments: [MediaAttachment.Kind.video, .gifv])
+    func playerZoomsAfterFirstFrame(kind: MediaAttachment.Kind) throws {
+        // 手元のファイルを読み込み終える前の添付にして、最初のコマを待っている状態から始める。
+        let thumbnail = UIGraphicsImageRenderer(size: CGSize(width: 160, height: 80)).image { _ in }
+        let page = PlayerPageController(item: MediaViewerItem(id: "v", kind: kind, description: "", file: nil, thumbnail: thumbnail, status: .ready))
+        page.loadViewIfNeeded()
+        page.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
+        page.view.layoutIfNeeded()
+        let fitted = CGRect(x: 0, y: 240, width: 320, height: 160)
+        #expect(page.contentFrame == fitted)
+        // 描く前は、下のサムネイルが拡大に付いてこないので、拡大させない。
+        #expect(page.zoomScroll.maximumZoomScale == 1)
+
+        page.displayDidBecomeReady()
+        page.zoomScroll.zoomScale = 2
+        page.zoomScroll.layoutIfNeeded()
+
+        #expect(page.isZoomedIn)
+        #expect(!page.allowsInteractiveDismiss)
+        #expect(page.contentFrame.size == CGSize(width: 640, height: 320))
+
+        page.zoomScroll.zoomScale = 1
+        #expect(page.allowsInteractiveDismiss)
+        #expect(page.contentFrame == fitted)
+    }
+
+    /// 音声には拡大する映像がない。
+    @Test func audioDoesNotZoom() {
+        let page = PlayerPageController(item: MediaViewerItem(id: "a", kind: .audio, description: "", file: nil, thumbnail: nil, status: .ready))
+        page.loadViewIfNeeded()
+        page.view.frame = CGRect(x: 0, y: 0, width: 400, height: 800)
+        page.view.layoutIfNeeded()
+        #expect(page.zoomScroll.maximumZoomScale == 1)
     }
 
     /// 動画とGIFは、最初のコマを描けるまでサムネイルを出し、黒い背景だけにしない。少し待っても描けなければ、読み込み中のインジケーターを回す。
@@ -722,6 +764,8 @@ struct MediaViewerControllerTests {
         let missing = LocalMediaFile(url: URL(filePath: "/tmp/scia-missing-\(UUID().uuidString).mp4"), mimeType: "video/mp4", kind: .gifv)
         let page = PlayerPageController(item: MediaViewerItem(id: "g", kind: .gifv, description: "", file: missing, thumbnail: nil, status: .ready), preview: UIImage(systemName: "photo"))
         page.clock = clock
+        // 操作の部品を出している間は、読み込み中や失敗の表示を隠すので、部品を隠して見る。
+        page.setChromeHidden(true, animated: false)
         page.loadViewIfNeeded()
 
         try await waitUntil { !page.isWaitingForDisplay }
@@ -777,6 +821,8 @@ struct MediaViewerControllerTests {
         let page = PlayerPageController(item: MediaViewerItem(id: "g", kind: .gifv, description: "", file: nil, thumbnail: nil, status: .ready))
         page.clock = clock
         page.loadingIndicatorDelay = 0
+        // 操作の部品を出している間は、読み込み中や失敗の表示を隠すので、部品を隠して見る。
+        page.setChromeHidden(true, animated: false)
         page.loadViewIfNeeded()
         #expect(page.transitionOverlay == nil)
         try await waitUntil { page.isShowingLoadingIndicator }
@@ -790,6 +836,8 @@ struct MediaViewerControllerTests {
         let page = PlayerPageController(item: MediaViewerItem(MediaAttachment(id: "1", type: .gifv, url: missing, previewUrl: nil, remoteUrl: remote)))
         var opened: [URL] = []
         page.onOpenInBrowser = { opened.append($0) }
+        // 操作の部品を出している間は、読み込み中や失敗の表示を隠すので、部品を隠して見る。
+        page.setChromeHidden(true, animated: false)
         page.loadViewIfNeeded()
         try await waitUntil { page.shownFailure != nil }
         #expect(page.offersBrowserFallback)
@@ -803,6 +851,8 @@ struct MediaViewerControllerTests {
         let missing = LocalMediaFile(url: URL(filePath: "/tmp/scia-missing-\(UUID().uuidString).mp4"), mimeType: "video/mp4", kind: .gifv)
         let page = PlayerPageController(item: MediaViewerItem(id: "g", kind: .gifv, description: "", file: missing, thumbnail: nil, status: .ready))
         page.onOpenInBrowser = { _ in }
+        // 操作の部品を出している間は、読み込み中や失敗の表示を隠すので、部品を隠して見る。
+        page.setChromeHidden(true, animated: false)
         page.loadViewIfNeeded()
         try await waitUntil { page.shownFailure != nil }
         #expect(!page.offersBrowserFallback)
@@ -1322,20 +1372,6 @@ struct MediaViewerControllerTests {
 
         #expect(topLevelTitles(of: viewer) == ["共有", "リンクをコピー", "ループ再生"])
         #expect(try #require(menuAction("共有", in: viewer)).attributes.isEmpty)
-    }
-
-    /// 動画やGIFのページでも、長押しでメニューボタンと同じメニューを出す。
-    @Test func longPressOnPlayerOffersMenu() throws {
-        let page = PlayerPageController(item: MediaViewerItem(MediaAttachment(id: "1", type: .gifv, url: nil, previewUrl: nil)))
-        page.loadViewIfNeeded()
-        page.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
-        page.view.layoutIfNeeded()
-        let interaction = try #require(contextMenuInteraction(in: page.view))
-        let center = CGPoint(x: 195, y: 422)
-
-        #expect(page.contextMenuInteraction(interaction, configurationForMenuAtLocation: center) == nil)
-        page.menuElements = { [UIAction(title: "共有") { _ in }] }
-        #expect(page.contextMenuInteraction(interaction, configurationForMenuAtLocation: center) != nil)
     }
 
     /// 処理中でURLのない添付ファイルは、共有するものがないため選べない。

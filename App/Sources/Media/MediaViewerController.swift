@@ -2345,8 +2345,6 @@ extension ImagePageController {
 /// 再生している間は、最後に触れてから`controlsHideDelay`秒で、ビューアに隠すよう頼む。長押ししている間は2倍速で再生する。
 final class PlayerPageController: MediaPageController {
     private let playerController = AVPlayerViewController()
-    /// GIFを最後まで再生したら先頭へ戻す、通知の受け口。
-    private var loopObserver: (any NSObjectProtocol)?
     /// 動画を最後まで再生したら、隠したボタンや操作の部品を出すための通知の受け口。
     private var endObserver: (any NSObjectProtocol)?
     /// 再生の途中で読めなくなったら、Now Playingを離すための通知の受け口。
@@ -2358,7 +2356,7 @@ final class PlayerPageController: MediaPageController {
     private var statusObservation: AnyCancellable?
     /// 動画の画素を表示の向きにする回し方。端末を縦にして撮った動画は、横向きの画素に回転情報を付けて保存されている。
     private var frameOrientation = UIImage.Orientation.up
-    /// 動画と音声の操作の部品。GIFではnil。
+    /// 再生の操作の部品。
     private var controls: VideoControlsView?
 
     /// 読み込み中や失敗の表示は、操作の部品を出している間は隠しているので、どちらか見えているほうを返す。
@@ -2373,7 +2371,7 @@ final class PlayerPageController: MediaPageController {
     var controlsHideDelay: TimeInterval = 3
     /// ダブルタップで10秒戻ったか進んだことを知らせる表示を、出しておく時間。
     var skipEffectDuration: TimeInterval = 0.3
-    /// 最後まで再生したら先頭から続ける。右上のメニューで、その動画を見ている間だけ切り替える。
+    /// 最後まで再生したら先頭から続ける。右上のメニューで、その動画を見ている間だけ切り替える。GIFは入れた状態で始める。
     private(set) var isLooping = false
     /// ビューアのボタンと説明を隠す（true）か出す（false）よう、ビューアに頼む。
     var onRequestChromeHidden: ((Bool) -> Void)?
@@ -2425,6 +2423,57 @@ final class PlayerPageController: MediaPageController {
     init(item: MediaViewerItem, preview: UIImage? = nil) {
         self.preview = preview
         super.init(item: item)
+        isLooping = item.kind == .gifv
+    }
+
+    /// 映像をピンチで拡大し、拡大している間はドラッグで動かす。
+    /// ダブルタップは10秒戻る・進むに使うので、画像と違って拡大には使わない。
+    let zoomScroll = UIScrollView()
+    /// 画面に収めた大きさの何倍まで拡大できるか。画像と同じにする。
+    private static let maximumZoomScale: CGFloat = 4
+    /// 映像の枠を決めたときの、ページの大きさ、映像の縦横比、拡大できるか。変わったら拡大を戻して決め直す。
+    private var fittedLayout: (size: CGSize, aspectRatio: CGFloat?, canZoom: Bool)?
+    /// 最初のコマを描いた。描くまでは、下に出しているサムネイルが拡大に付いてこないので、拡大させない。
+    private var hasDisplayedVideo = false
+
+    /// 画面に収めた大きさより拡大している。
+    var isZoomedIn: Bool { zoomScroll.zoomScale > 1.01 }
+
+    override var allowsInteractiveDismiss: Bool { !isZoomedIn }
+
+    /// 映像の縦横比。再生する項目から分かればそれを、分かるまでは添付ファイルの値を使う。音声ではnil。
+    private var videoAspectRatio: CGFloat? {
+        guard item.kind != .audio else { return nil }
+        if let size = playerController.player?.currentItem?.presentationSize, size.width > 0, size.height > 0 {
+            return size.width / size.height
+        }
+        guard let aspectRatio = item.aspectRatio, aspectRatio > 0 else { return nil }
+        return aspectRatio
+    }
+
+    /// 映像を画面に収めた枠を拡大の中身にする。ページ全体を中身にすると、拡大したときに上下や左右の黒い余白まで動かせるため。
+    private func layoutZoom() {
+        let size = view.bounds.size
+        let aspectRatio = videoAspectRatio
+        let canZoom = aspectRatio != nil && hasDisplayedVideo
+        if let fittedLayout, fittedLayout.size == size {
+            // 再生する項目から分かった縦横比が添付ファイルの値とわずかに違っても、拡大して見ている途中では決め直さない。拡大が戻ってしまうため。
+            if isZoomedIn || (fittedLayout.aspectRatio == aspectRatio && fittedLayout.canZoom == canZoom) { return }
+        }
+        guard size.width > 0, size.height > 0 else { return }
+        fittedLayout = (size, aspectRatio, canZoom)
+        zoomScroll.zoomScale = 1
+        let fitted = aspectRatio.map { AVMakeRect(aspectRatio: CGSize(width: $0, height: 1), insideRect: view.bounds).size } ?? size
+        playerController.view.frame = CGRect(origin: .zero, size: fitted)
+        zoomScroll.contentSize = fitted
+        zoomScroll.maximumZoomScale = canZoom ? Self.maximumZoomScale : 1
+        centerZoomContent()
+    }
+
+    private func centerZoomContent() {
+        let horizontal = max((zoomScroll.bounds.width - zoomScroll.contentSize.width) / 2, 0)
+        let vertical = max((zoomScroll.bounds.height - zoomScroll.contentSize.height) / 2, 0)
+        zoomScroll.contentInset = UIEdgeInsets(top: vertical, left: horizontal, bottom: vertical, right: horizontal)
     }
 
     /// 動画の表示の準備が整うまでは、添付ファイルの縦横比で画面に収めた枠を返す。開く遷移はその準備より先に始まるため。
@@ -2433,15 +2482,23 @@ final class PlayerPageController: MediaPageController {
         if !videoBounds.isEmpty {
             return playerController.view.convert(videoBounds, to: view)
         }
-        guard let aspectRatio = item.aspectRatio, aspectRatio > 0 else { return view.bounds }
-        return AVMakeRect(aspectRatio: CGSize(width: aspectRatio, height: 1), insideRect: view.bounds)
+        guard let aspectRatio = videoAspectRatio else { return view.bounds }
+        // 映像の枠を決める前は、決めたときと同じ枠を計算で返す。
+        guard fittedLayout != nil else { return AVMakeRect(aspectRatio: CGSize(width: aspectRatio, height: 1), insideRect: view.bounds) }
+        return zoomScroll.convert(playerController.view.frame, to: view)
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        zoomScroll.frame = view.bounds
+        zoomScroll.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        zoomScroll.delegate = self
+        zoomScroll.showsVerticalScrollIndicator = false
+        zoomScroll.showsHorizontalScrollIndicator = false
+        zoomScroll.contentInsetAdjustmentBehavior = .never
+        zoomScroll.decelerationRate = .fast
+        view.addSubview(zoomScroll)
         addChild(playerController)
-        playerController.view.frame = view.bounds
-        playerController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         // 閉じる操作で動かしたときに画面大の黒い枠が動かないよう、黒はビューアの背景に任せる。
         playerController.view.backgroundColor = .clear
         playerController.showsPlaybackControls = false
@@ -2449,32 +2506,28 @@ final class PlayerPageController: MediaPageController {
         playerController.allowsVideoFrameAnalysis = false
         // Now Playingは、動画と音声を再生し始めてから掴む。音を出さないGIFでは掴まない。
         playerController.updatesNowPlayingInfoCenter = false
-        view.addSubview(playerController.view)
+        zoomScroll.addSubview(playerController.view)
         playerController.didMove(toParent: self)
         // 再生の画面の背景は透明なので、最初のコマを描くまでは下のサムネイルが見え、描いたら映像が同じ枠に重なる。
         posterView.focus = item.serverAttachment?.meta?.focus
         posterView.isUserInteractionEnabled = false
-        view.insertSubview(posterView, belowSubview: playerController.view)
+        view.insertSubview(posterView, belowSubview: zoomScroll)
         loadStatusView.frame = view.bounds
         loadStatusView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(loadStatusView)
         let tap = UITapGestureRecognizer(target: self, action: #selector(tapped))
         tap.delegate = self
         view.addGestureRecognizer(tap)
-        if item.kind == .gifv {
-            addLongPressMenu(to: playerController.view)
-        } else {
-            // 標準の再生画面は、操作の部品を出さなくても、ダブルタップやピンチを自前で受けて、こちらのタップやダブルタップと取り合う。
-            // 映像を描かせるだけにし、タッチはこのページで受ける。
-            playerController.view.isUserInteractionEnabled = false
-            setUpControls()
-            // 標準の再生画面と同じく、左右をダブルタップして10秒戻る・進む。1回のタップは、ダブルタップでないと分かってから扱う。
-            let doubleTap = UITapGestureRecognizer(target: self, action: #selector(doubleTapped(_:)))
-            doubleTap.numberOfTapsRequired = 2
-            doubleTap.delegate = self
-            view.addGestureRecognizer(doubleTap)
-            tap.require(toFail: doubleTap)
-        }
+        // 標準の再生画面は、操作の部品を出さなくても、ダブルタップやピンチを自前で受けて、こちらのタップやダブルタップと取り合う。
+        // 映像を描かせるだけにし、タッチはこのページで受ける。
+        playerController.view.isUserInteractionEnabled = false
+        setUpControls()
+        // 標準の再生画面と同じく、左右をダブルタップして10秒戻る・進む。1回のタップは、ダブルタップでないと分かってから扱う。
+        let doubleTap = UITapGestureRecognizer(target: self, action: #selector(doubleTapped(_:)))
+        doubleTap.numberOfTapsRequired = 2
+        doubleTap.delegate = self
+        view.addGestureRecognizer(doubleTap)
+        tap.require(toFail: doubleTap)
         if item.kind != .audio {
             waitForDisplay()
         }
@@ -2495,6 +2548,7 @@ final class PlayerPageController: MediaPageController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        layoutZoom()
         posterView.frame = contentFrame
         applyDynamicRange()
     }
@@ -2545,6 +2599,8 @@ final class PlayerPageController: MediaPageController {
         guard isWaitingForDisplay else { return }
         stopWaitingForDisplay()
         posterView.isHidden = true
+        hasDisplayedVideo = true
+        layoutZoom()
     }
 
     /// 読み込めずに終わったら、インジケーターの代わりに読み込めなかったことを出す。サムネイルは、出せていればそのまま見せる。
@@ -2601,10 +2657,9 @@ final class PlayerPageController: MediaPageController {
         guard let player = playerController.player, let url = mediaURL, let playing = playingURL, playing != url else { return }
         let time = player.currentTime()
         let wasPlaying = player.timeControlStatus != .paused
-        for observer in [loopObserver, endObserver, failureObserver].compactMap(\.self) {
+        for observer in [endObserver, failureObserver].compactMap(\.self) {
             NotificationCenter.default.removeObserver(observer)
         }
-        loopObserver = nil
         endObserver = nil
         failureObserver = nil
         if let timeObserver {
@@ -2663,20 +2718,10 @@ final class PlayerPageController: MediaPageController {
                 }
         }
         if item.kind == .gifv {
-            // `AVPlayerLooper`は使わず、同じ項目を最後で先頭へ戻してくり返す。
-            // `AVPlayerLooper`は周ごとに再生する項目を替えるが、実機（iPhone 16 Pro、iOS 27.0.1）の`AVPlayerViewController`では、
-            // 再生は周を重ねて進むのに、画面の絵が1周目の終わりで止まった。シミュレーターでは起きない。
             player.isMuted = true
-            player.actionAtItemEnd = .none
-            loopObserver = NotificationCenter.default.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: playerItem, queue: .main) { [weak player] _ in
-                MainActor.assumeIsolated {
-                    player?.seek(to: .zero)
-                }
-            }
-        } else {
-            player.actionAtItemEnd = isLooping ? .none : .pause
-            observe(player, playing: playerItem)
         }
+        player.actionAtItemEnd = isLooping ? .none : .pause
+        observe(player, playing: playerItem)
         Task(.action) { [weak self] in
             guard let track = try? await playerItem.asset.loadTracks(withMediaType: .video).first,
                   let transform = try? await track.load(.preferredTransform)
@@ -2775,9 +2820,6 @@ final class PlayerPageController: MediaPageController {
     }
 
     isolated deinit {
-        if let loopObserver {
-            NotificationCenter.default.removeObserver(loopObserver)
-        }
         if let endObserver {
             NotificationCenter.default.removeObserver(endObserver)
         }
@@ -3016,9 +3058,8 @@ final class PlayerPageController: MediaPageController {
         onSingleTap?()
     }
 
-    /// 右上のメニューに出す、ループ再生を切り替える項目。GIFはもとからくり返すため、nilを返す。
-    func loopMenuAction() -> UIAction? {
-        guard item.kind != .gifv else { return nil }
+    /// 右上のメニューに出す、ループ再生を切り替える項目。
+    func loopMenuAction() -> UIAction {
         return UIAction(title: MediaViewerTexts.loop, image: UIImage(systemName: "repeat"), state: isLooping ? .on : .off) { [weak self] _ in
             guard let self else { return }
             self.setLooping(!self.isLooping)
@@ -3064,7 +3105,7 @@ final class PlayerPageController: MediaPageController {
     /// 再生し始めたら、Now Playingに再生の情報を出し、操作をこのアプリで受ける。掴んでいる間は、再生と一時停止を伝える。
     /// Macは音声セッションから再生の状態を判断しないため、`playbackState`を再生や停止のたびに設定する必要がある。標準の再生画面はこれを設定しない。
     private func updateNowPlaying(isPlaying: Bool) {
-        guard holdsNowPlaying || isPlaying else { return }
+        guard item.kind != .gifv, holdsNowPlaying || isPlaying else { return }
         if !holdsNowPlaying {
             holdsNowPlaying = true
             playerController.updatesNowPlayingInfoCenter = true
@@ -3089,9 +3130,11 @@ final class PlayerPageController: MediaPageController {
 
     override func stateDump() -> String {
         let loading = "loading: waiting=\(isWaitingForDisplay) poster=\(isShowingPoster) indicator=\(isShowingLoadingIndicator) failure=\(shownFailure ?? "nil")"
-        guard let controls else { return loading }
+        let zoom = "zoom: scale=\(zoomScroll.zoomScale) max=\(zoomScroll.maximumZoomScale) contentSize=\(zoomScroll.contentSize) offset=\(zoomScroll.contentOffset) inset=\(zoomScroll.contentInset) player.frame=\(playerController.view.frame) videoBounds=\(playerController.videoBounds)"
+        guard let controls else { return loading + "\n" + zoom }
         return """
         \(loading)
+        \(zoom)
         controls: playing=\(controls.state.isPlaying) chromeHidden=\(isChromeHidden) interacting=\(controls.isInteracting) fastForward=\(wasPlayingBeforeFastForward != nil)
         """
     }
@@ -3104,6 +3147,16 @@ extension PlayerPageController: UIGestureRecognizerDelegate {
         if loadStatusView.isOpenButtonTouch(touch) { return false }
         guard let controls, let touched = touch.view else { return true }
         return !touched.isDescendant(of: controls)
+    }
+}
+
+extension PlayerPageController: UIScrollViewDelegate {
+    func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+        playerController.view
+    }
+
+    func scrollViewDidZoom(_ scrollView: UIScrollView) {
+        centerZoomContent()
     }
 }
 
