@@ -77,4 +77,4 @@
 
 ## 確かめ方
 
-- どの経路の障害も、`scia-debug://status/<ステータス>?retry-after=<秒>&target=<経路>`でシミュレーターに起こせる（AGENTS.md）
+- どの経路の障害も、`scia-debug://status/<ステータス>?retry-after=<秒>&target=<経路>`でシミュレーターに起こせる（[debug-urls.md](debug-urls.md)）
