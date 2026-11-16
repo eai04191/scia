@@ -104,6 +104,11 @@ public final class AppSettings {
         didSet { defaults.set(linkBrowser.rawValue, forKey: Keys.linkBrowser) }
     }
 
+    /// 絵文字のパレットと補完で、肌の色を変えられる絵文字に付ける既定の肌の色。決まりはdocs/compose.mdの「絵文字の肌の色」にある。
+    public var emojiSkinTone: EmojiSkinTone {
+        didSet { defaults.set(emojiSkinTone.rawValue, forKey: Keys.emojiSkinTone) }
+    }
+
     /// アプリ内のSafariを中くらいの高さで出すときのシートの高さ。
     public var inAppBrowserHeight: InAppBrowserHeight {
         didSet { defaults.set(inAppBrowserHeight.spaceAbove, forKey: Keys.inAppBrowserSpaceAbove) }
@@ -480,6 +485,7 @@ public final class AppSettings {
         static let profileShowsReplies = "settings.profileShowsReplies"
         static let profileShowsBoosts = "settings.profileShowsBoosts"
         static let linkBrowser = "settings.linkBrowser"
+        static let emojiSkinTone = "settings.emojiSkinTone"
         static let inAppBrowserSpaceAbove = "settings.inAppBrowserSpaceAbove"
         static let opensInAppBrowserFullScreen = "settings.opensInAppBrowserFullScreen"
         static let reblogVisibility = "settings.reblogVisibility"
@@ -541,6 +547,7 @@ public final class AppSettings {
         insertionMotion = defaults.string(forKey: Keys.insertionMotion).flatMap(InsertionMotion.init(rawValue:)) ?? .followsSystem
         accentColor = defaults.string(forKey: Keys.accentColor).flatMap(AccentColorChoice.init(rawValue:)) ?? .blue
         linkBrowser = defaults.string(forKey: Keys.linkBrowser).flatMap(LinkBrowser.init(rawValue:)) ?? .inApp
+        emojiSkinTone = (defaults.object(forKey: Keys.emojiSkinTone) as? Int).flatMap(EmojiSkinTone.init(rawValue:)) ?? .none
         inAppBrowserHeight = Self.inAppBrowserHeight(stored: defaults.object(forKey: Keys.inAppBrowserSpaceAbove))
         opensInAppBrowserFullScreen = defaults.bool(forKey: Keys.opensInAppBrowserFullScreen)
         reblogVisibility = defaults.string(forKey: Keys.reblogVisibility).flatMap(ReblogVisibility.init(rawValue:)) ?? .accountDefault

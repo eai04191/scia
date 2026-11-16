@@ -15,14 +15,20 @@ public struct StandardEmoji: Hashable, Sendable, Decodable {
     public let shortcodes: [String]
     /// その絵文字が入ったUnicodeの絵文字の版（「15.1」など）。
     public let version: String
+    /// 肌の色を付けた並び。肌の色を変えられない絵文字ではnil。
+    public let skinTones: EmojiSkinToneVariants?
+    /// 肌の色を付ける前の絵文字。肌の色を付けていなければ`emoji`と同じ。
+    public let untonedEmoji: String
     /// 検索で比べる、そろえた名前（日本語、英語、短縮名）と言葉。打つたびにそろえ直すと、全部で数十msかかるため、作るときに一度だけそろえる。
     let searchNames: [String]
     let searchKeywords: [String]
     /// 名前と言葉を英数字以外で分けた、英語の単語。単語を空白なしでつなげて打ったときに比べる。打つたびに分けると遅いため、作るときに一度だけ分ける。
     let searchWords: [[UInt8]]
 
-    public init(emoji: String, name: String, englishName: String = "", keywords: [String], shortcodes: [String] = [], version: String) {
+    public init(emoji: String, name: String, englishName: String = "", keywords: [String], shortcodes: [String] = [], version: String, skinTones: EmojiSkinToneVariants? = nil) {
         self.emoji = emoji
+        untonedEmoji = emoji
+        self.skinTones = skinTones
         self.name = name
         self.englishName = englishName
         self.keywords = keywords
@@ -34,6 +40,25 @@ public struct StandardEmoji: Hashable, Sendable, Decodable {
         searchWords = Set(words.filter { $0.allSatisfy(\.isASCII) }.map(String.init)).sorted().map { Array($0.utf8) }
     }
 
+    /// 絵文字の文字だけを替えたもの。名前や検索の言葉は、肌の色を付けても変えない。
+    func replacingEmoji(_ emoji: String) -> StandardEmoji {
+        StandardEmoji(copying: self, emoji: emoji)
+    }
+
+    private init(copying other: StandardEmoji, emoji: String) {
+        self.emoji = emoji
+        untonedEmoji = other.untonedEmoji
+        skinTones = other.skinTones
+        name = other.name
+        englishName = other.englishName
+        keywords = other.keywords
+        shortcodes = other.shortcodes
+        version = other.version
+        searchNames = other.searchNames
+        searchKeywords = other.searchKeywords
+        searchWords = other.searchWords
+    }
+
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try self.init(
@@ -42,7 +67,8 @@ public struct StandardEmoji: Hashable, Sendable, Decodable {
             englishName: container.decode(String.self, forKey: .englishName),
             keywords: container.decode([String].self, forKey: .keywords),
             shortcodes: container.decodeIfPresent([String].self, forKey: .shortcodes) ?? [],
-            version: container.decode(String.self, forKey: .version)
+            version: container.decode(String.self, forKey: .version),
+            skinTones: container.decodeIfPresent([String].self, forKey: .skinTones).flatMap(EmojiSkinToneVariants.init)
         )
     }
 
@@ -53,6 +79,7 @@ public struct StandardEmoji: Hashable, Sendable, Decodable {
         case keywords = "k"
         case shortcodes = "s"
         case version = "v"
+        case skinTones = "t"
     }
 }
 

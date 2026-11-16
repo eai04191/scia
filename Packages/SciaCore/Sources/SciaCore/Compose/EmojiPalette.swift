@@ -94,7 +94,16 @@ public enum EmojiPalette {
                 }
             }
         }
-        let recent = recentKeys.compactMap { byKey[$0] }.prefix(max(recentLimit, 0))
+        // 最近使ったものは、使ったときの肌の色のまま出す。リストは既定の肌の色で並べているので、ほかの色で使ったものは、肌の色の並びから引く。
+        // 引く表を作るのは、リストにない最近使ったものがあるときだけにする。
+        var toned: [String: PaletteEmoji]?
+        func tonedForm(_ key: String) -> PaletteEmoji? {
+            if toned == nil {
+                toned = Dictionary(standardGroups.flatMap(\.emojis).flatMap(\.allSkinToneForms).map { ($0.emoji, PaletteEmoji.standard($0)) }) { first, _ in first }
+            }
+            return toned?[key]
+        }
+        let recent = recentKeys.compactMap { byKey[$0] ?? tonedForm($0) }.prefix(max(recentLimit, 0))
         var sections: [EmojiPaletteSection] = []
         if !recent.isEmpty {
             sections.append(EmojiPaletteSection(kind: .recent, emojis: Array(recent)))

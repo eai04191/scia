@@ -1,0 +1,81 @@
+import Foundation
+import SciaCore
+import SciaTesting
+import Testing
+
+/// 絵文字の肌の色。決まりはdocs/compose.mdの「絵文字の肌の色」にある。
+struct EmojiSkinToneTests {
+    private func emoji(_ text: String) throws -> StandardEmoji {
+        try #require(StandardEmojiCatalog.groups.flatMap(\.emojis).first { $0.emoji == text })
+    }
+
+    /// 1人の絵文字は、肌の色を付けた並びに替わる。名前と検索の言葉は変えない。肌の色を外すと元に戻る。
+    @Test func singlePersonEmojiTakesTheTone() throws {
+        let thumbsUp = try emoji("👍")
+        let toned = thumbsUp.withSkinTone(.medium)
+
+        #expect(toned.emoji == "👍🏽")
+        #expect(toned.name == thumbsUp.name)
+        #expect(toned.currentSkinTones.first == .medium)
+        #expect(toned.withSkinTone(.none) == thumbsUp)
+        #expect(toned.withSkinTone(.dark).emoji == "👍🏿")
+    }
+
+    /// 2人の絵文字は、2人それぞれの色を選べる。色が違う握手は、元の絵文字と別の文字で組んだ並びになる。
+    @Test func pairEmojiTakesTwoTones() throws {
+        let handshake = try emoji("🤝")
+
+        #expect(handshake.skinTones?.isPair == true)
+        #expect(handshake.withSkinTone(.light).emoji == "🤝🏻")
+        let mixed = handshake.withSkinTones(.light, .dark)
+        #expect(mixed.emoji == "🫱🏻‍🫲🏿")
+        #expect(mixed.currentSkinTones.first == .light && mixed.currentSkinTones.second == .dark)
+    }
+
+    /// 片方だけに肌の色を付けた並びはUnicodeにないので、どちらかが付けないなら2人とも付けない。
+    @Test func pairWithoutEitherToneIsUntoned() throws {
+        let handshake = try emoji("🤝")
+
+        #expect(handshake.withSkinTones(.light, .none) == handshake)
+        #expect(handshake.withSkinTones(.none, .dark) == handshake)
+    }
+
+    /// 肌の色を変えられない絵文字は、そのまま。
+    @Test func emojiWithoutTonesIsUnchanged() throws {
+        let grinning = try emoji("😀")
+
+        #expect(grinning.skinTones == nil)
+        #expect(grinning.withSkinTone(.dark) == grinning)
+    }
+
+    /// 既定の肌の色は、肌の色を変えられる絵文字だけに付き、並びと数は変えない。
+    @Test func defaultToneAppliesToTheWholeList() {
+        let groups = StandardEmojiCatalog.groups
+        let toned = groups.withSkinTone(.mediumDark)
+
+        #expect(toned.map(\.emojis.count) == groups.map(\.emojis.count))
+        let changed = zip(groups.flatMap(\.emojis), toned.flatMap(\.emojis)).filter { $0.emoji != $1.emoji }
+        #expect(changed.count == groups.flatMap(\.emojis).filter { $0.skinTones != nil }.count)
+        #expect(changed.allSatisfy { $1.untonedEmoji == $0.emoji })
+    }
+
+    /// 最近使った絵文字は、使ったときの肌の色のまま出す。リストが別の既定の色で並んでいても、色なしで使ったものは色なしで出す。
+    @Test func recentEmojisKeepTheToneTheyWereUsedWith() {
+        let groups = StandardEmojiCatalog.groups.withSkinTone(.medium)
+        let sections = EmojiPalette.sections(emojis: [], standardGroups: groups, recentKeys: ["👍🏿", "👍", "👍🏽", "🫱🏻‍🫲🏿"], recentLimit: 10)
+
+        #expect(sections.first?.kind == .recent)
+        #expect(sections.first?.emojis.map(\.recentKey) == ["👍🏿", "👍", "👍🏽", "🫱🏻‍🫲🏿"])
+    }
+
+    /// 既定の肌の色は、設定に残る。
+    @MainActor
+    @Test(.scratch) func defaultToneIsSaved() {
+        let defaults = TestScratch.defaults("EmojiSkinToneTests")
+        #expect(AppSettings(defaults: defaults).emojiSkinTone == .none)
+
+        AppSettings(defaults: defaults).emojiSkinTone = .mediumLight
+
+        #expect(AppSettings(defaults: defaults).emojiSkinTone == .mediumLight)
+    }
+}
