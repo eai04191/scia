@@ -7,6 +7,8 @@ final class TimelineMotionLabViewController: UIViewController {
     private static let postCount = 20
     private static let linesPerStep = 5
     private static let delay: TimeInterval = 3
+    /// 毎秒の編集で、投稿の本文の途中に入れる行の数。伸びる、縮む、途中の行が足される、削られる、を順に起こす。
+    private static let autoEditLines = [3, 1, 5, 0, 2]
     private static let benchmarkRounds = 5
     /// 1回ごとにコマの間隔を測る長さ。動きが止まるのを待つ長さにもなる。
     private static let benchmarkWindow: CFTimeInterval = 0.8
@@ -25,6 +27,9 @@ final class TimelineMotionLabViewController: UIViewController {
     private let targetLabel = UILabel()
     private let delaySwitch = UISwitch()
     private let menuSwitch = UISwitch()
+    private let autoEditSwitch = UISwitch()
+    private var autoEditTimer: Timer?
+    private var autoEditStep = 0
     private let stateLabel = UILabel()
     private let measureLabel = UILabel()
     private var stateTimer: Timer?
@@ -65,6 +70,9 @@ final class TimelineMotionLabViewController: UIViewController {
         super.viewWillDisappear(animated)
         stateTimer?.invalidate()
         stateTimer = nil
+        autoEditTimer?.invalidate()
+        autoEditTimer = nil
+        autoEditSwitch.isOn = false
     }
 
     // MARK: - 並び
@@ -223,6 +231,24 @@ final class TimelineMotionLabViewController: UIViewController {
         }
     }
 
+    /// オンにしたときの対象の投稿を、毎秒編集して高さを変え続ける。スクロールして、投稿が画面のどこにあるときの動きも見られる。
+    private func setAutoEdit(_ isOn: Bool) {
+        autoEditTimer?.invalidate()
+        autoEditTimer = nil
+        guard isOn else { return }
+        let number = target
+        autoEditTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.editAutomatically(number) }
+        }
+    }
+
+    private func editAutomatically(_ number: Int) {
+        extraLines[number] = Self.autoEditLines[autoEditStep % Self.autoEditLines.count]
+        autoEditStep += 1
+        entries = makeEntries()
+        timeline.setEntries(entries)
+    }
+
     private func setMenuFlag(_ isOn: Bool) {
         if isOn {
             timeline.menuWillShow()
@@ -271,6 +297,11 @@ final class TimelineMotionLabViewController: UIViewController {
         panel.addArrangedSubview(benchmark)
         panel.addArrangedSubview(row(label("\(Int(Self.delay))秒後に行う（実物のメニューを開く時間）"), delaySwitch))
         panel.addArrangedSubview(row(label("メニューを開いている扱いにする"), menuSwitch))
+        autoEditSwitch.addAction(UIAction { [weak self] _ in
+            guard let self else { return }
+            setAutoEdit(autoEditSwitch.isOn)
+        }, for: .valueChanged)
+        panel.addArrangedSubview(row(label("対象の投稿を毎秒編集する"), autoEditSwitch))
         panel.addArrangedSubview(stateLabel)
         panel.addArrangedSubview(measureLabel)
 
