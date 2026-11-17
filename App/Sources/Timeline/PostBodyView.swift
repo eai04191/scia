@@ -762,9 +762,12 @@ final class PostBodyView: UIView {
             move.isAdditive = true
             move.fromValue = CGPoint(x: 0, y: -shift)
             move.toValue = CGPoint.zero
-            view.layer.add(move, forKey: "belowTextShift")
+            view.layer.add(move, forKey: Self.belowTextShiftName)
         }
     }
+
+    /// 本文より下の部品を動かす動きの名前。
+    static let belowTextShiftName = "belowTextShift"
 
     func apply(_ content: PostBodyContent) {
         let previous = self.content

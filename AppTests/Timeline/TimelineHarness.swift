@@ -108,6 +108,21 @@ final class TimelineHarness {
         #expect(!viewController.isScrollingToTop, "最上部へ動かすのが終わりません", sourceLocation: sourceLocation)
     }
 
+    /// 動き始めに、最後の位置から画面上でどれだけ下にずれているか。足し合わせる位置の動きの始まりの値を、行のセルまで合計する。
+    func initialOffsetY(of view: UIView, in cell: UICollectionViewCell) -> CGFloat {
+        var total: CGFloat = 0
+        var current: UIView? = view
+        while let layer = current?.layer {
+            for key in layer.animationKeys() ?? [] {
+                guard let move = layer.animation(forKey: key) as? CABasicAnimation, move.isAdditive, move.keyPath == "position", let from = move.fromValue as? CGPoint else { continue }
+                total += from.y
+            }
+            if current === cell { break }
+            current = current?.superview
+        }
+        return total
+    }
+
     func visibleCell(of id: TimelineViewController.ItemID) -> UICollectionViewCell? {
         collectionView.layoutIfNeeded()
         return collectionView.visibleCells.first { cell in

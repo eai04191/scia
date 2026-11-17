@@ -58,6 +58,39 @@ struct TranslationArrivalTests {
         #expect(harness.secondaryText(of: target.id)?.hasPrefix("訳文") == true)
     }
 
+    /// 上端が表示領域より上にある投稿が訳文で伸びるとき、本文より下の部品は、動き始めから画面上の同じ位置にあり、本文より上の部品は、前の画面上の位置から動く。
+    /// 本文より下の部品は、行の中の座標では下へ押されるが、行が上へ伸びた分と差し引きで動かない。行の中の座標だけで動かすと、いったん上へ跳んでから下りて見える。
+    @Test func partsKeepScreenPositionWhenRowGrowsUpward() async throws {
+        let scope = TaskScope()
+        let store = StatusTranslationStore(translator: ExpandingTranslator(), targetLanguage: "ja", strategy: .lowLatency, scope: scope, clock: TestClock(), applyInterval: { .zero })
+        store.setLanguages(["en"])
+        let harness = try TimelineHarness { $0.translations = store }
+        defer { harness.tearDown() }
+        harness.settings.appearance.showsActionBar = true
+        let all = statuses()
+        harness.setStatuses(all)
+        let target = all[20]
+        let id = TimelineViewController.ItemID.status(target.id)
+        try harness.scroll(to: id, at: .top)
+        harness.collectionView.contentOffset.y += 30
+        harness.collectionView.layoutIfNeeded()
+        let height = try #require(harness.visibleCell(of: id)?.bounds.height)
+
+        store.request([TranslationSource(target)])
+        try await waitUntil { store.translation(for: TranslationSource(target)) != nil }
+        harness.viewController.applyTranslations([.status(target.id)])
+        harness.collectionView.layoutIfNeeded()
+
+        let cell = try #require(harness.visibleCell(of: id))
+        #expect(cell.bounds.height > height, "訳文で行が伸びていません")
+        let bar = try #require((cell.contentView as? PostContentView)?.postBody.actionBar, "アクションバーがありません")
+        #expect(abs(harness.initialOffsetY(of: bar, in: cell)) < 0.5, "本文より下の部品が、動き始めに\(harness.initialOffsetY(of: bar, in: cell))ptずれています")
+        // 本文より上の部品は、伸びた分だけ下の、前の画面上の位置から動く。
+        let avatar = try #require(cell.contentView.subviews.first { $0 is AvatarView }, "アイコンがありません")
+        let grown = cell.bounds.height - height
+        #expect(abs(harness.initialOffsetY(of: avatar, in: cell) - grown) < 0.5, "本文より上の部品が、前の位置から動いていません（\(harness.initialOffsetY(of: avatar, in: cell))pt、伸びは\(grown)pt）")
+    }
+
     /// 本文の先頭に足す翻訳のマークの空きは、先頭の文字の書体と段落の形だけを引き継ぐ。リンクを引き継ぐと、マークを押して先頭のリンクが開く。
     @Test func translationMarkDoesNotInheritLink() throws {
         let url = try #require(URL(string: "https://example.com/a"))

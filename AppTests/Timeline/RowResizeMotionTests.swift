@@ -68,4 +68,64 @@ struct RowResizeMotionTests {
         #expect(try abs(#require(harness.windowMinY(of: id)) - y) < 0.5, "編集した行が動きました")
         #expect(try hasRowShift(#require(harness.visibleCell(of: below))), "下の行を動かしていません")
     }
+
+    /// 上端が表示領域より上にある行が編集で伸びたら、中身全体を、伸びた分だけ下の、前の画面上の位置から動かす。
+    /// 伸びた本文は、前の高さから切り抜きを広げる。切り抜かないと、足された本文が、動き始めに行の下端からはみ出して下の行に重なる。
+    @Test func editedRowAboveTopSlidesItsContent() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
+        harness.setStatuses(statuses)
+        let id = TimelineViewController.ItemID.status(statuses[10].id)
+        try harness.scroll(to: id, at: .top)
+        harness.collectionView.contentOffset.y += 20
+        harness.collectionView.layoutIfNeeded()
+        let height = try #require(harness.visibleCell(of: id)?.bounds.height)
+
+        statuses[10] = replacing(statuses[10], content: "<p>" + String(repeating: "編集で伸びた本文。", count: 20) + "</p>")
+        harness.setStatuses(statuses)
+        harness.collectionView.layoutIfNeeded()
+
+        let cell = try #require(harness.visibleCell(of: id))
+        let grown = cell.bounds.height - height
+        #expect(grown > 0, "編集しても行が伸びていません")
+        let slides = (cell.contentView.layer.animationKeys() ?? []).compactMap { cell.contentView.layer.animation(forKey: $0) as? CABasicAnimation }
+            .filter { $0.isAdditive && $0.keyPath == "position" }
+            .compactMap { ($0.fromValue as? CGPoint)?.y }
+        #expect(slides.count == 1 && abs((slides.first ?? 0) - grown) < 0.5, "中身を、伸びた分だけ下から動かしていません")
+        let body = try #require(cell.contentView as? PostContentView).postBody
+        #expect(body.subviews.contains { $0.layer.mask?.animation(forKey: TimelineViewController.partRevealName) != nil }, "伸びた本文を切り抜いていません")
+    }
+
+    /// 上端が表示領域より上にある行にリンクカードが現れたら、カードは動き始めから最後の位置に置き、下の端から切り抜いて現す。
+    /// カードより上の本文は、伸びた分だけ下の、前の画面上の位置から動かす。本文が上へ退くのに合わせて、カードが現れる。
+    @Test func cardAppearingInRowAboveTopIsRevealedFromItsBottom() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
+        harness.setStatuses(statuses)
+        let id = TimelineViewController.ItemID.status(statuses[10].id)
+        try harness.scroll(to: id, at: .top)
+        harness.collectionView.contentOffset.y += 20
+        harness.collectionView.layoutIfNeeded()
+        let height = try #require(harness.visibleCell(of: id)?.bounds.height)
+
+        let base = statuses[10]
+        let card = PreviewCard(url: try #require(URL(string: "https://news.example/a")), title: "見出し", description: "説明", type: .link, providerName: "", image: nil, width: 0, height: 0, blurhash: nil)
+        statuses[10] = Status(id: base.id, createdAt: base.createdAt, account: base.account, content: base.content, spoilerText: "", url: nil, card: card)
+        harness.setStatuses(statuses)
+        harness.collectionView.layoutIfNeeded()
+
+        let cell = try #require(harness.visibleCell(of: id))
+        let grown = cell.bounds.height - height
+        #expect(grown > 0, "リンクカードが現れても行が伸びていません")
+        let body = try #require(cell.contentView as? PostContentView).postBody
+        let cardView = try #require(body.linkCard, "リンクカードが出ていません")
+        #expect(abs(harness.initialOffsetY(of: cardView, in: cell)) < 0.5, "カードが、動き始めに\(harness.initialOffsetY(of: cardView, in: cell))ptずれています")
+        let mask = try #require(cardView.layer.mask, "カードを切り抜いていません")
+        #expect(mask.animation(forKey: TimelineViewController.partRevealName) != nil)
+        #expect(mask.anchorPoint.y == 1, "カードを下の端から現していません")
+        let text = try #require(body.subviews.first { $0 is LinkLabel }, "本文がありません")
+        #expect(abs(harness.initialOffsetY(of: text, in: cell) - grown) < 0.5, "本文が、前の位置から動いていません（\(harness.initialOffsetY(of: text, in: cell))pt、伸びは\(grown)pt）")
+    }
 }

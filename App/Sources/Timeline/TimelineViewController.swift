@@ -759,13 +759,18 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let separatorsBefore = visibleSeparators()
         // 縮むかは描き直すまで分からないので、描き直す行の像は先に取っておく。
         let resizedBefore = ids.compactMap { id in
-            cell(for: id).map { (id: id, height: $0.bounds.height, contentBottom: contentBottom(of: $0), maxY: $0.convert($0.bounds, to: nil).maxY, snapshot: concealsShrink ? $0.snapshotView(afterScreenUpdates: false) : nil) }
+            cell(for: id).map { (id: id, height: $0.bounds.height, contentBottom: contentBottom(of: $0), maxY: $0.convert($0.bounds, to: nil).maxY, parts: rowParts(of: $0), snapshot: concealsShrink ? $0.snapshotView(afterScreenUpdates: false) : nil) }
         }
         reconfigure(ids, keeping: anchorID)
         collectionView.layoutIfNeeded()
         for row in resizedBefore {
+            guard let cell = cell(for: row.id) else { continue }
             // 下端を保って上へ伸び縮みした行（`anchorBelowResizing`）は、下の行が動かないので、切り抜きも像も要らない。上から切り抜くと、見えていた下の部分が一度隠れる。
-            guard let cell = cell(for: row.id), abs(cell.convert(cell.bounds, to: nil).maxY - row.maxY) > 0.5 else { continue }
+            // 代わりに、行の中身を、前の画面上の位置から動かす。
+            guard abs(cell.convert(cell.bounds, to: nil).maxY - row.maxY) > 0.5 else {
+                shiftParts(of: cell, from: row.parts, growth: cell.bounds.height - row.height, duration: duration)
+                continue
+            }
             // 伸びた行は、前の中身の下の端から切り抜きを広げる。前の高さからにすると、前は余白だった部分に、新しい中身が最初のコマで見える。
             if cell.bounds.height - row.height > 0.5 {
                 revealGrowth(of: cell, from: row.contentBottom, duration: duration)
@@ -810,6 +815,71 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             result[ObjectIdentifier(view)] = (view, view.convert(view.bounds, to: nil).minY)
         }
     }
+
+    /// 行の中身の部品と、描き直す前の、親の座標での上端、高さ、隠れていたか。
+    private typealias RowPart = (view: UIView, minY: CGFloat, height: CGFloat, wasHidden: Bool)
+
+    /// 行の中身のビューと、その部品。中身が投稿でも通知でもない行ではnil。
+    private func rowParts(of cell: UICollectionViewCell) -> (content: UIView, parts: [RowPart])? {
+        let content = cell.contentView
+        guard let body = (content as? PostContentView)?.postBody ?? (content as? NotificationContentView)?.postBody else { return nil }
+        return (content, (content.subviews + body.subviews).map { ($0, $0.frame.minY, $0.frame.height, $0.isHidden) })
+    }
+
+    /// 下端を保って上へ`growth`だけ伸びた行（縮んだなら負）の中身を、前の画面上の位置から新しい位置へ動かす。
+    /// 行の中の座標で動いた部品を前の位置から動かし、中身全体を伸びた分だけ下から動かす。2つの動きが足し合わさり、変わった箇所より下の部品は差し引きで止まり、上の部品だけが動く。
+    /// 本文が自分で付ける動き（届いた絵文字、訳文、本文より下の部品）も、行の中の座標で付くので、同じように差し引かれる。
+    ///
+    /// 伸びた部品は、前の高さから切り抜きを広げる。上端と一緒に動くので、切り抜かないと、伸びた分が動き始めに下の部品や下の行に重なる。
+    /// 描き直す前は隠れていたか、なかった部品は、前の位置がないので、中身全体の動きを打ち消して最後の位置に置き、下の端から切り抜きを広げる。上の部品が上へ退くのに合わせて現れる。
+    ///
+    /// 縮んだ部品は切り抜かない。なくなった中身のあった場所は、上の部品が下りてくるまで空く。
+    /// 上端が表示領域より上にある行が、使う人の操作によらず縮むときだけ起きる。埋めるには、下へ縮むときと同じく前の像が要り、像を取る行が増えるので、範囲外にしている。
+    private func shiftParts(of cell: UICollectionViewCell, from before: (content: UIView, parts: [RowPart])?, growth: CGFloat, duration: TimeInterval) {
+        guard let before, before.content === cell.contentView, abs(growth) > 0.5 else { return }
+        // 部品のビューには、現れるときに初めて作られるものがある（リンクカードなど）。前の一覧にないものも、隠れていた部品と同じに扱う。
+        let known = Set(before.parts.map { ObjectIdentifier($0.view) })
+        let created = (rowParts(of: cell)?.parts ?? []).filter { !known.contains(ObjectIdentifier($0.view)) }.map { RowPart($0.view, 0, 0, true) }
+        for part in before.parts + created where !part.view.isHidden {
+            let view = part.view
+            if part.wasHidden {
+                shiftRow(view.layer, by: growth, duration: duration)
+                revealPart(view, from: max(view.bounds.height - growth, 0), anchoredAtBottom: true, duration: duration)
+            } else {
+                if view.layer.animation(forKey: PostBodyView.belowTextShiftName) == nil {
+                    shiftRow(view.layer, by: view.frame.minY - part.minY, duration: duration)
+                }
+                revealPart(view, from: part.height, anchoredAtBottom: false, duration: duration)
+            }
+        }
+        shiftRow(before.content.layer, by: -growth, duration: duration)
+    }
+
+    /// 伸びた部品を、`height`から今の高さまで切り抜いて見せる。`anchoredAtBottom`なら下の端から、そうでなければ上の端から広げる。
+    private func revealPart(_ view: UIView, from height: CGFloat, anchoredAtBottom: Bool, duration: TimeInterval) {
+        let newHeight = view.bounds.height
+        guard newHeight - height > 0.5, view.layer.mask == nil else { return }
+        let mask = CALayer()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        mask.backgroundColor = UIColor.black.cgColor
+        mask.anchorPoint = anchoredAtBottom ? CGPoint(x: 0, y: 1) : .zero
+        mask.bounds = CGRect(origin: .zero, size: view.bounds.size)
+        mask.position = anchoredAtBottom ? CGPoint(x: 0, y: newHeight) : .zero
+        CATransaction.commit()
+        let grow = CASpringAnimation.rowSpring(keyPath: "bounds.size.height", duration: duration)
+        grow.fromValue = height
+        grow.toValue = newHeight
+        grow.delegate = RowShiftCompletion { [weak view, weak mask] in
+            guard let view, let mask, view.layer.mask === mask else { return }
+            view.layer.mask = nil
+        }
+        mask.add(grow, forKey: Self.partRevealName)
+        view.layer.mask = mask
+    }
+
+    /// 伸びた部品を現す切り抜きの動きの名前。
+    static let partRevealName = "rowPartReveal"
 
     /// 行の中身の下の端（行のセルの座標）。行の高さから下の余白を引いたもの。下の余白が分からない行では、行の下端。
     private func contentBottom(of cell: UICollectionViewCell) -> CGFloat {
