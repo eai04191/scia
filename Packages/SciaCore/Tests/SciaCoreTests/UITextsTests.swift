@@ -117,8 +117,8 @@ struct UITextsTests {
     }
 
     @Test func notificationPolicyConfirmationNamesNotifications() {
-        #expect(NotificationPolicy.Item.notFollowing.dropConfirmationTitle == "本当に“フォローしていないアカウントからの通知”を無視するようにしますか？")
-        #expect(NotificationPolicy.Item.privateMentions.dropConfirmationTitle == "本当に“外部からの非公開の返信”を無視するようにしますか？")
+        #expect(NotificationPolicy.Item.notFollowing.dropConfirmationTitle == "“フォローしていないアカウントからの通知”を無視しますか？")
+        #expect(NotificationPolicy.Item.privateMentions.dropConfirmationTitle == "“外部からの非公開の返信”を無視しますか？")
     }
 
     @Test func searchSuggestionNamesTheTarget() {

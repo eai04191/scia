@@ -194,8 +194,8 @@ public enum StorageRemoveTarget: CaseIterable, Hashable, Sendable {
     public var confirmationMessage: String? {
         switch self {
         case .caches: nil
-        case .inAppSafari: "アプリ内のSafariで開いたサイトのキャッシュとCookieを消去します。サイトからログアウトします。"
-        case .discomfortReports: "保存した違和感レポートをすべて消去します。消去したレポートは元に戻せません。"
+        case .inAppSafari: "ウェブサイトからはログアウトされます。"
+        case .discomfortReports: "この操作は取り消せません。"
         }
     }
 

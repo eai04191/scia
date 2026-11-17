@@ -205,7 +205,7 @@ public enum SettingsTexts {
         public static let setDrop = "“無視”に設定"
         /// 「無視」にしてよいか確かめるダイアログで、代わりに「保留」にするボタン。
         public static let setFilter = "“保留”に設定"
-        public static let dropMessage = "無視した通知はサーバーが作らず、あとから見られません。“保留”にすると保留中の通知で個別に確認できます。"
+        public static let dropMessage = "無視した通知は作成されないため、あとから表示できません。“保留”にすると保留中の通知で個別に確認できます。"
     }
 
     /// フィルターの画面と、フィルターを作るか変える画面。
