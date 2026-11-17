@@ -65,7 +65,7 @@ final class TimelineCell: UICollectionViewListCell, SizingMeasurable {
         return overlay
     }
 
-    /// 縮む途中に重ねている、縮む前の像。アクションバーを閉じるときに使う（`TimelineViewController.concealShrink`）。
+    /// 縮む途中に重ねている、縮む前の像。なくなった部品の場所に見せる（`TimelineViewController.concealDownwardShrink`、`concealUpwardShrink`）。
     private var shrinkSnapshot: UIView?
 
     /// 縮む前の像を重ねているか。テストで、閉じる動きを見るのに使う。

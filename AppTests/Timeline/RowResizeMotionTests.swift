@@ -16,9 +16,8 @@ struct RowResizeMotionTests {
         Status(id: base.id, createdAt: base.createdAt, account: base.account, content: content, spoilerText: spoilerText, url: nil)
     }
 
-    /// 注意書きを開くと、下の行を元の位置から動かす。閉じると、なくなる本文の像を重ねて下の端から縮め、下の行が詰めてくる前に空きを見せない。
-    /// 切り抜きの境は、行の下端ではなく、短いほうの中身の下の端にする。行の下端にすると、開き始めは余白だった部分に本文が1コマで見え、
-    /// 閉じ始めは余白になる部分の本文が1コマで消える。
+    /// 注意書きを開くと、下の行を元の位置から動かす。閉じると、なくなる本文の像を、本文のあった場所に見せて下の端から縮め、下の行が詰めてくる前に空きを見せない。
+    /// 開くときの行の切り抜きは、行の下端ではなく、閉じていたときの中身の下の端から広げる。行の下端からにすると、余白だった部分に本文が1コマで見える。
     @Test func togglingSpoilerShiftsRowsBelowAndConcealsShrink() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -41,12 +40,15 @@ struct RowResizeMotionTests {
 
         // 描かれる前の行は像を取れないため、描かれるのを待つ。
         try await waitUntil { harness.visibleCell(of: id)?.snapshotView(afterScreenUpdates: false) != nil }
+        let opened = try #require(harness.visibleCell(of: id))
+        let text = try #require((opened.contentView as? PostContentView)?.postBody.subviews.first { $0 is LinkLabel }, "本文がありません")
+        let textTop = text.convert(text.bounds, to: opened).minY
         harness.viewController.toggleSpoiler(of: statuses[10], keeping: id)
 
         let cell = try #require(harness.visibleCell(of: id))
         #expect(abs(cell.bounds.height - height) < 0.5, "注意書きを閉じても行が縮んでいません")
         let mask = try #require(cell.subviews.lazy.compactMap { $0.layer.mask }.first { $0.animation(forKey: TimelineViewController.shrinkName) != nil }, "閉じたときに、なくなる本文の像を縮めていません")
-        #expect(abs(mask.frame.minY - contentBottom) < 0.01, "閉じたあとの中身の下の端まで縮めていません")
+        #expect(abs(mask.frame.minY - textTop) < 0.01, "なくなった本文の枠の上の端まで縮めていません")
     }
 
     /// 編集で本文が伸びた行も、その行の位置を保ち、下の行を元の位置から動かす。
@@ -248,5 +250,29 @@ struct RowResizeMotionTests {
         #expect(try abs(#require(harness.windowMinY(of: below)) - belowY) < 0.5, "下の行が動きました")
         let mask = try #require(cell.subviews.lazy.compactMap { $0.layer.mask }.first { $0.animation(forKey: TimelineViewController.shrinkName) != nil }, "カードのあった場所に、前の像を見せていません")
         #expect(mask.anchorPoint.y == 1, "上の端から縮めていません")
+    }
+
+    /// 見えている行が伸びたら、行の下端に付いたアクションバーも、前の位置から、下の行と同じだけ動かす。
+    /// 動かさないと、アクションバーは一度に新しい位置へ移り、すぐ下の区切り線だけが動いて見える。
+    @Test func actionBarMovesWithRowsBelow() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.settings.appearance.showsActionBar = true
+        var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
+        harness.setStatuses(statuses)
+        let id = TimelineViewController.ItemID.status(statuses[10].id)
+        try harness.scroll(to: id, at: .centeredVertically)
+        harness.collectionView.layoutIfNeeded()
+        let height = try #require(harness.visibleCell(of: id)?.bounds.height)
+
+        statuses[10] = replacing(statuses[10], content: "<p>" + String(repeating: "編集で伸びた本文。", count: 20) + "</p>")
+        harness.setStatuses(statuses)
+        harness.collectionView.layoutIfNeeded()
+
+        let cell = try #require(harness.visibleCell(of: id))
+        let grown = cell.bounds.height - height
+        #expect(grown > 0, "編集しても行が伸びていません")
+        let bar = try #require((cell.contentView as? PostContentView)?.postBody.actionBar, "アクションバーがありません")
+        #expect(abs(harness.initialOffsetY(of: bar, in: cell) + grown) < 0.5, "アクションバーが、前の位置から動いていません（\(harness.initialOffsetY(of: bar, in: cell))pt、伸びは\(grown)pt）")
     }
 }
