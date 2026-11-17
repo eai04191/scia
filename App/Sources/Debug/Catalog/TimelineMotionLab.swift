@@ -356,6 +356,7 @@ private final class FrameProbe: NSObject {
     private var link: CADisplayLink?
     private var previous: CFTimeInterval?
     private var result = Result()
+    private var hitches = HitchCounter()
 
     init(start: CFTimeInterval, window: CFTimeInterval = 1, onFinish: @escaping (Result) -> Void) {
         self.start = start
@@ -369,13 +370,18 @@ private final class FrameProbe: NSObject {
         self.link = link
     }
 
+    /// 測るのをやめ、そこまでの結果を渡す。待っている側を、結果を渡さずに残さない。
     func stop() {
+        guard link != nil else { return }
         link?.invalidate()
         link = nil
+        result.dropped = hitches.summary.droppedFrames
+        onFinish(result)
     }
 
     @objc private func tick(_ link: CADisplayLink) {
         let now = CACurrentMediaTime()
+        hitches.record(timestamp: link.timestamp, targetTimestamp: link.targetTimestamp)
         guard let previous else {
             result.firstFrame = now - start
             previous = now
@@ -385,13 +391,8 @@ private final class FrameProbe: NSObject {
         self.previous = now
         result.frames += 1
         result.longest = max(result.longest, interval)
-        // 画面の更新の間隔の1.5倍を超えたコマを、落ちたコマに数える。
-        if interval > (link.targetTimestamp - link.timestamp) * 1.5 {
-            result.dropped += 1
-        }
         if now - start >= window {
             stop()
-            onFinish(result)
         }
     }
 }
