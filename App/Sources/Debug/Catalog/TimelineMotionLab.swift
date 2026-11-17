@@ -15,6 +15,8 @@ final class TimelineMotionLabViewController: UIViewController {
     /// 上から並べる投稿の番号。新着は負の番号で先頭に足す。
     private var numbers = Array(1...postCount)
     private var extraLines: [Int: Int] = [:]
+    /// リンクカードを付けている投稿の番号。
+    private var carded: Set<Int> = []
     private var entries: [TimelineEntry] = []
     private var arrivalCount = 0
     private var target = 1
@@ -85,8 +87,14 @@ final class TimelineMotionLabViewController: UIViewController {
             // 足す行は本文の途中に入れる。前後の文字が、編集で動くところを見られる。
             content: "<p>\(name)</p>\(extra)<p>高さが変わる前の本文。読んでいる位置の目印にする。</p>",
             spoilerText: "",
-            url: nil
+            url: nil,
+            card: carded.contains(number) ? Self.card : nil
         )
+    }
+
+    /// 通信しないで出せるよう、画像のないカードにする。
+    private static let card = URL(string: "https://news.example/articles/lab").map {
+        PreviewCard(url: $0, title: "実験のリンクカード", description: "投稿に部品が現れたり消えたりする動きを見る。", type: .link, providerName: "", image: nil, width: 0, height: 0, blurhash: nil)
     }
 
     private func makeEntries() -> [TimelineEntry] {
@@ -184,6 +192,19 @@ final class TimelineMotionLabViewController: UIViewController {
         )
     }
 
+    /// 対象の投稿のリンクカードを付け外しし、取り直した投稿が届いたときと同じ入口から並びを渡す。
+    private func toggleCard() {
+        let number = target
+        perform { [weak self] in
+            guard let self else { return }
+            measure(carded.contains(number) ? "カードを外す" : "カードを付ける") {
+                carded.formSymmetricDifference([number])
+                entries = makeEntries()
+                timeline.setEntries(entries)
+            }
+        }
+    }
+
     private func toggleActionBar() {
         let number = target
         perform { [weak self] in
@@ -231,8 +252,9 @@ final class TimelineMotionLabViewController: UIViewController {
         measureLabel.text = "操作すると、かかった時間が出る"
 
         let buttons = UIStackView(arrangedSubviews: [
-            button("\(Self.linesPerStep)行足す") { [weak self] in self?.resizeTarget(by: Self.linesPerStep) },
-            button("\(Self.linesPerStep)行減らす") { [weak self] in self?.resizeTarget(by: -Self.linesPerStep) },
+            button("+\(Self.linesPerStep)行") { [weak self] in self?.resizeTarget(by: Self.linesPerStep) },
+            button("-\(Self.linesPerStep)行") { [weak self] in self?.resizeTarget(by: -Self.linesPerStep) },
+            button("カード") { [weak self] in self?.toggleCard() },
             button("アクションバー") { [weak self] in self?.toggleActionBar() },
             button("新着") { [weak self] in self?.addArrival() },
         ])
