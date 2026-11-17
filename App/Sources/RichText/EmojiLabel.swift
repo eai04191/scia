@@ -179,10 +179,10 @@ class EmojiLabel: TextKitLabel {
         cancelTextReplacement()
         let running = emojiArrival?.isRunning == true ? emojiArrival : nil
         let before = running?.currentPlacements(filling: []) ?? EmojiArrivalTransition.placements(of: shown, in: self, filling: [])
-        let start = Self.remappingUnchangedEnds(before, from: shown.string, to: new.string)
+        let start = Self.remappingUnchanged(before, from: shown.string, to: new.string)
         let startBars = running?.currentBars() ?? quoteBarFrames()
         // なくなった文字は、前の描画の像から切り出して薄くする。前の位置を新しい位置へ写せなかった文字が、なくなった文字になる。
-        let kept = Set(Self.remappingUnchangedEnds(Dictionary(uniqueKeysWithValues: before.keys.map { ($0, $0) }), from: shown.string, to: new.string).values)
+        let kept = Set(Self.remappingUnchanged(Dictionary(uniqueKeysWithValues: before.keys.map { ($0, $0) }), from: shown.string, to: new.string).values)
         let leavingFrames = before.filter { !kept.contains($0.key) }.map(\.value.frame)
         // 文字が動いている途中なら、枠は動いている途中の位置なので、像も、いま見えている描画から取る。並べ終えた描画から取ると、枠と像がずれて、別の文字を切り出す。
         let image = leavingFrames.isEmpty ? nil : running == nil ? TextReplacementTransition.render(self) : TextReplacementTransition.shownImage(of: self)
@@ -204,9 +204,9 @@ class EmojiLabel: TextKitLabel {
         return true
     }
 
-    /// 文字の先頭の位置（UTF-16）をキーにした値を、編集のあとの文字列の位置へ写す。前後で変わらない先頭と末尾の文字だけを残し、あいだの文字は除く。
-    /// 変わらない範囲は、編集の前の文字列の、文字（書記素クラスタ）の切れ目に合わせる。
-    static func remappingUnchangedEnds<Value>(_ values: [Int: Value], from old: String, to new: String) -> [Int: Value] {
+    /// 文字の先頭の位置（UTF-16）をキーにした値を、編集のあとの文字列の位置へ写す。前後で変わらない先頭と末尾の文字と、そのあいだで変わらない行を残し、ほかの文字は除く。
+    /// 先頭と末尾の変わらない範囲は、編集の前の文字列の、文字（書記素クラスタ）の切れ目に合わせる。
+    static func remappingUnchanged<Value>(_ values: [Int: Value], from old: String, to new: String) -> [Int: Value] {
         let old = old as NSString
         let new = new as NSString
         let limit = min(old.length, new.length)
@@ -223,13 +223,57 @@ class EmojiLabel: TextKitLabel {
             if cluster.location < suffixStart { suffixStart = cluster.location + cluster.length }
         }
         let delta = new.length - old.length
+        let lines = unchangedLines(
+            from: old.substring(with: NSRange(location: prefix, length: suffixStart - prefix)),
+            to: new.substring(with: NSRange(location: prefix, length: suffixStart + delta - prefix))
+        )
         return values.reduce(into: [:]) { result, entry in
             if entry.key < prefix {
                 result[entry.key] = entry.value
             } else if entry.key >= suffixStart {
                 result[entry.key + delta] = entry.value
+            } else if let line = lines.first(where: { NSLocationInRange(entry.key - prefix, $0.range) }) {
+                result[entry.key + line.shift] = entry.value
             }
         }
+    }
+
+    /// 編集の前後で変わらない行の、前の文字列での範囲と、あとの文字列の位置までのずれ。空の行は数えない。
+    /// 行は、UTF-16の並びで比べる。`String`で比べると、正規化すると同じになる行が、長さが違うのに同じとされ、位置がずれる。
+    /// カスタム絵文字のある行は、変わらない行に数えない。どの絵文字も同じ文字（U+FFFC）で入っていて、別の絵文字に替わっても文字列では見分けられないため。
+    private static func unchangedLines(from old: String, to new: String) -> [(range: NSRange, shift: Int)] {
+        let oldLines = lineContents(of: old as NSString)
+        let newLines = lineContents(of: new as NSString)
+        guard !oldLines.isEmpty, !newLines.isEmpty else { return [] }
+        let difference = newLines.map(\.units).difference(from: oldLines.map(\.units))
+        var removed: Set<Int> = []
+        var inserted: Set<Int> = []
+        for change in difference {
+            switch change {
+            case .remove(let offset, _, _): removed.insert(offset)
+            case .insert(let offset, _, _): inserted.insert(offset)
+            }
+        }
+        let keptOld = oldLines.indices.filter { !removed.contains($0) }
+        let keptNew = newLines.indices.filter { !inserted.contains($0) }
+        return zip(keptOld, keptNew).map { (oldLines[$0].range, newLines[$1].range.location - oldLines[$0].range.location) }
+    }
+
+    /// 行ごとの、改行を除いたUTF-16の並びと範囲。空の行と、カスタム絵文字のある行は除く。
+    private static func lineContents(of text: NSString) -> [(units: [UInt16], range: NSRange)] {
+        var lines: [(units: [UInt16], range: NSRange)] = []
+        var location = 0
+        while location < text.length {
+            var start = 0
+            var end = 0
+            var contentsEnd = 0
+            text.getLineStart(&start, end: &end, contentsEnd: &contentsEnd, for: NSRange(location: location, length: 0))
+            let range = NSRange(location: location, length: contentsEnd - location)
+            let units = Array(text.substring(with: range).utf16)
+            if !units.isEmpty, !units.contains(0xFFFC) { lines.append((units, range)) }
+            location = max(end, location + 1)
+        }
+        return lines
     }
 
     private func cancelEmojiArrival() {

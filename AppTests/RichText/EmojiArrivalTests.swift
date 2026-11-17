@@ -133,12 +133,12 @@ struct EmojiArrivalTests {
         #expect(pieces[3].offset == CGPoint(x: -40, y: 20))
     }
 
-    /// 編集の前の文字の位置を、編集のあとの位置へ写す。前後で変わらない先頭と末尾の文字だけを残し、あいだの文字は除く。
+    /// 編集の前の文字の位置を、編集のあとの位置へ写す。前後で変わらない先頭と末尾の文字と、そのあいだで変わらない行を残し、ほかの文字は除く。
     /// 絵文字が別の絵文字に替わって、UTF-16の前半だけが同じになるときは、その絵文字を変わらない文字に数えない。
     @Test func remapsUnchangedEndsOfEditedText() {
         func remap(_ old: String, _ new: String) -> [Int: Int] {
             let keys = Dictionary(uniqueKeysWithValues: (0..<(old as NSString).length).map { ($0, $0) })
-            return EmojiLabel.remappingUnchangedEnds(keys, from: old, to: new)
+            return EmojiLabel.remappingUnchanged(keys, from: old, to: new)
         }
         // 写した先の位置をキーに、元の位置を値に持つ。
         #expect(remap("あいう", "あXXいう") == [0: 0, 3: 1, 4: 2], "途中に足した")
@@ -147,6 +147,11 @@ struct EmojiArrivalTests {
         #expect(remap("あいう", "あえう") == [0: 0, 2: 2], "途中を替えた")
         #expect(remap("a😀b", "a😁b") == [0: 0, 3: 3], "絵文字を替えた")
         #expect(remap("あい", "あい") == [0: 0, 1: 1], "同じ")
+        #expect(remap("あ\nか\nう", "あ\nX\nか\nY\nう") == [0: 0, 1: 1, 4: 2, 7: 3, 8: 4], "2か所に足した")
+        #expect(remap("あ\nX\nか\nY\nう", "あ\nか\nう") == [0: 0, 1: 1, 2: 4, 3: 7, 4: 8], "2か所を消した")
+        #expect(remap("あ\nX\nか\nY\nう", "あ\nZ\nか\nW\nう") == [0: 0, 1: 1, 4: 4, 7: 7, 8: 8], "2か所を替えた")
+        #expect(remap("X\nがく\nY", "Z\nか\u{3099}く\nW") == [:], "あいだの行が、正規化すると同じになる別の並びに替わった")
+        #expect(remap("X\n\u{FFFC}\nY", "Z\n\u{FFFC}\nW") == [:], "あいだの行にカスタム絵文字がある")
     }
 
     /// 編集で新しく入った文字は、動き始める見え方がないので、透明から濃くする。
