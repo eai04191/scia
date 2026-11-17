@@ -7,6 +7,8 @@ extension CASpringAnimation {
         let spring = CASpringAnimation(perceptualDuration: duration, bounce: 0)
         spring.keyPath = keyPath
         spring.duration = spring.settlingDuration
+        // 指定しないと、120Hzの画面でも粗いコマで描かれる（実機で、指定のあるなしを切り替えて見比べた）。
+        spring.preferredFrameRateRange = CAFrameRateRange(minimum: 80, maximum: 120, preferred: 120)
         return spring
     }
 }
