@@ -7,7 +7,7 @@ import UIKit
 ///
 /// 並べ替えはドラッグ&ドロップで行う。iOS 15からはiPhoneでもコレクションビューのドラッグが既定で有効になっている。
 /// VoiceOverとキーボードのために、同じ操作を「先頭へ移動」「前へ移動」「後ろへ移動」「末尾へ移動」として、セルのカスタムアクションとコンテキストメニューにも置く。
-/// 同じ場所に、添付を外す「削除」も置く。
+/// 同じ場所に、閲覧注意の付け外しと、添付を外す「削除」も置く。
 @MainActor
 final class ComposeAttachmentStrip: UIView {
     /// サムネイルの一辺。
@@ -25,6 +25,8 @@ final class ComposeAttachmentStrip: UIView {
     var onMove: (DraftAttachment.ID, Int) -> Void = { _, _ in }
     /// 削除を選んだときに、外す添付を渡して呼ぶ。
     var onRemove: (DraftAttachment.ID) -> Void = { _ in }
+    /// 閲覧注意にする（外す）を選んだときに呼ぶ。閲覧注意は投稿全体の値で、どの添付から選んでも同じになる。
+    var onSetSensitive: (Bool) -> Void = { _ in }
     /// コンテキストメニューを出す直前と、閉じ始めたときに呼ぶ。メニューの間、iOSはソフトウェアキーボードを隠す。
     var onContextMenuWillShow: () -> Void = {}
     var onContextMenuWillEnd: () -> Void = {}
@@ -34,6 +36,7 @@ final class ComposeAttachmentStrip: UIView {
     private var items: [DraftAttachment.ID: Item] = [:]
     /// 投稿を送っている間と、準備を待っている間。並べ替え、移動、削除を受け付けない。送る中身は押した時点で決めるため。
     private var isLocked = false
+    private var sensitivityToggle = MediaSensitivityToggle.mark
 
     struct Item {
         let attachment: DraftAttachment
@@ -98,9 +101,12 @@ final class ComposeAttachmentStrip: UIView {
     }
 
     /// 並びと各サムネイルの状態を描き直す。足したものは後ろに付け、並びの変わらないものは中身だけ描き直す。
-    /// - Parameter isLocked: 投稿を送っている間と、準備を待っている間。
-    func update(_ newItems: [Item], isLocked: Bool = false) {
+    /// - Parameters:
+    ///   - isLocked: 投稿を送っている間と、準備を待っている間。
+    ///   - sensitivityToggle: メニューに出す、閲覧注意の付け外しの項目。
+    func update(_ newItems: [Item], isLocked: Bool = false, sensitivityToggle: MediaSensitivityToggle = .mark) {
         self.isLocked = isLocked
+        self.sensitivityToggle = sensitivityToggle
         items = Dictionary(uniqueKeysWithValues: newItems.map { ($0.attachment.id, $0) })
         guard let dataSource else { return }
         let ids = newItems.map(\.attachment.id)
@@ -138,7 +144,7 @@ final class ComposeAttachmentStrip: UIView {
         dataSource?.snapshot().numberOfItems ?? 0
     }
 
-    /// 移動と削除の操作。端にあって動かせない向きは含めない。
+    /// 移動、閲覧注意、削除の操作。端にあって動かせない向きは含めない。
     /// 先頭へ・末尾へは、前へ・後ろへと同じ位置に移すとき（隣が端のとき）は出さず、同じ結果の項目を並べない。
     private func actions(for id: DraftAttachment.ID, at index: Int) -> [AttachmentAction] {
         guard !isLocked else { return [] }
@@ -156,8 +162,21 @@ final class ComposeAttachmentStrip: UIView {
         if index < last - 1 {
             actions.append(AttachmentAction(title: ComposeTexts.Attachment.moveToLast, systemImage: "arrow.right.to.line") { [weak self] in self?.onMove(id, last) })
         }
-        actions.append(AttachmentAction(title: ComposeTexts.delete, systemImage: "trash", isDestructive: true) { [weak self] in self?.onRemove(id) })
+        actions.append(sensitivityAction())
+        actions.append(AttachmentAction(title: ComposeTexts.delete, systemImage: "trash", group: .remove) { [weak self] in self?.onRemove(id) })
         return actions
+    }
+
+    private func sensitivityAction() -> AttachmentAction {
+        switch sensitivityToggle {
+        case .mark:
+            AttachmentAction(title: ComposeTexts.Attachment.markSensitive, systemImage: "eye.slash", group: .sensitivity) { [weak self] in self?.onSetSensitive(true) }
+        case .unmark:
+            AttachmentAction(title: ComposeTexts.Attachment.unmarkSensitive, systemImage: "eye", group: .sensitivity) { [weak self] in self?.onSetSensitive(false) }
+        case .lockedBySpoiler:
+            // 項目を消さず、押せない形で理由を添える。外せない理由が分からないまま、項目がなくなったように見えないようにするため。
+            AttachmentAction(title: ComposeTexts.Attachment.unmarkSensitive, subtitle: ComposeTexts.Attachment.sensitiveLockedBySpoiler, systemImage: "eye", group: .sensitivity, isEnabled: false) {}
+        }
     }
 
     /// ドロップで並びが変わった。移したものは、差分のうち挿し込んだ位置にあるもの。
@@ -170,11 +189,18 @@ final class ComposeAttachmentStrip: UIView {
     }
 }
 
-/// 移動と削除の操作。セルのカスタムアクションとコンテキストメニューで同じものを出す。
+/// 移動、閲覧注意、削除の操作。セルのカスタムアクションとコンテキストメニューで同じものを出す。
 private struct AttachmentAction {
+    /// メニューで区切って並べるまとまり。並びの順に出す。
+    enum Group: CaseIterable {
+        case move, sensitivity, remove
+    }
+
     let title: String
+    var subtitle: String? = nil
     let systemImage: String
-    var isDestructive = false
+    var group = Group.move
+    var isEnabled = true
     let handler: () -> Void
 }
 
@@ -198,13 +224,16 @@ extension ComposeAttachmentStrip: UICollectionViewDelegate {
         let actions = actions(for: id, at: indexPath.item)
         guard !actions.isEmpty else { return nil }
         return UIContextMenuConfiguration(actionProvider: { _ in
-            let elements = actions.map { action in
-                UIAction(title: action.title, image: UIImage(systemName: action.systemImage), attributes: action.isDestructive ? .destructive : []) { _ in action.handler() }
+            let sections = AttachmentAction.Group.allCases.map { group in
+                let elements = actions.filter { $0.group == group }.map { action in
+                    var attributes: UIMenuElement.Attributes = []
+                    if group == .remove { attributes.insert(.destructive) }
+                    if !action.isEnabled { attributes.insert(.disabled) }
+                    return UIAction(title: action.title, subtitle: action.subtitle, image: UIImage(systemName: action.systemImage), attributes: attributes) { _ in action.handler() }
+                }
+                return UIMenu(options: .displayInline, children: elements)
             }
-            // 削除は移動と区切って最後に置く。
-            let moves = elements.filter { !$0.attributes.contains(.destructive) }
-            let removes = elements.filter { $0.attributes.contains(.destructive) }
-            return UIMenu(children: [UIMenu(options: .displayInline, children: moves), UIMenu(options: .displayInline, children: removes)])
+            return UIMenu(children: sections)
         })
     }
 }
@@ -358,7 +387,7 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
         accessibilityValue = item.status.accessibilityValue(progress: item.progress)
         accessibilityTraits = .button
         accessibilityHint = ComposeTexts.Attachment.editHint
-        accessibilityCustomActions = actions.map { action in
+        accessibilityCustomActions = actions.filter(\.isEnabled).map { action in
             UIAccessibilityCustomAction(name: action.title) { _ in
                 action.handler()
                 return true

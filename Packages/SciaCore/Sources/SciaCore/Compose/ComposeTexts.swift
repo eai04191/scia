@@ -201,6 +201,10 @@ public enum ComposeTexts {
         public static let moveForward = "後ろへ移動"
         public static let moveToLast = "末尾へ移動"
         public static let editHint = "開いて代替テキストを編集できます。"
+        public static let markSensitive = "閲覧注意にする"
+        public static let unmarkSensitive = "閲覧注意を外す"
+        /// 注意書きを書いているときの、閲覧注意を外す項目に添える理由。
+        public static let sensitiveLockedBySpoiler = "注意書きがあると外せません"
 
         /// サムネイルの読み上げ。種類、閲覧注意か、代替テキストの順に、空でないものを読む。種類が分からなければ「メディア」と読む。
         public static func accessibilityLabel(kind: MediaAttachment.Kind?, isSensitive: Bool, description: String) -> String {

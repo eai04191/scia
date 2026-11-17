@@ -229,6 +229,25 @@ public final class ComposeModel<Thumbnail: Sendable> {
         draftToPost.sensitive
     }
 
+    /// 添付のメニューの、閲覧注意を付け外しする項目。
+    public var mediaSensitivityToggle: MediaSensitivityToggle {
+        guard showsSpoiler else { return .mark }
+        return spoilerText.isEmpty ? .unmark : .lockedBySpoiler
+    }
+
+    /// 添付のメニューから閲覧注意を付け外しする。付けるときは、閉じた欄に残した注意書きを戻さず、空の欄を開く。閲覧注意だけを付けるつもりで、注意書きまで送らないようにするため。
+    /// 注意書きを書いているときは外さない。
+    public func setMediaSensitive(_ sensitive: Bool) {
+        guard !isPosting else { return }
+        if sensitive {
+            guard !showsSpoiler else { return }
+            spoilerText = ""
+            showsSpoiler = true
+        } else if mediaSensitivityToggle == .unmark {
+            showsSpoiler = false
+        }
+    }
+
     public var remainingCharacters: Int {
         maxCharacters - draftToPost.length(charactersReservedPerURL: charactersReservedPerURL)
     }
@@ -1890,4 +1909,14 @@ extension ComposeModel {
         guard let index = attachments.firstIndex(where: { $0.id == id }), attachments[index].description == sent else { return }
         attachments[index].description = returned.description ?? ""
     }
+}
+
+/// 投稿欄の添付のメニューの、閲覧注意を付け外しする項目。閲覧注意は注意書きの欄で兼ねるので、欄を開け閉めする。
+public enum MediaSensitivityToggle: Equatable, Sendable {
+    /// 空の注意書きの欄を開いて、閲覧注意にする。
+    case mark
+    /// 空の注意書きの欄を閉じて、閲覧注意を外す。
+    case unmark
+    /// 注意書きを書いているので外せない。サーバーは注意書きのある投稿を必ず閲覧注意にし、欄を閉じると書いた注意書きも投稿から外れるため。
+    case lockedBySpoiler
 }

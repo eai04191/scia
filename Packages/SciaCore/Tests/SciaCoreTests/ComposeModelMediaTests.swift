@@ -447,6 +447,43 @@ struct ComposeModelMediaTests {
         #expect(sent.last?.sensitive == false)
     }
 
+    /// 添付のメニューの閲覧注意の項目は、欄を閉じていれば付ける、空の欄なら外す、注意書きを書いていれば外せない。
+    @Test func mediaSensitivityToggleFollowsSpoilerField() async throws {
+        let model = makeModel(FakeServer())
+        model.applyPickerSelection([try picked("a")])
+        #expect(model.mediaSensitivityToggle == .mark)
+        #expect(!model.isSensitive)
+
+        model.showsSpoiler = true
+        #expect(model.mediaSensitivityToggle == .unmark)
+        #expect(model.isSensitive)
+
+        model.spoilerText = "ネタバレ"
+        #expect(model.mediaSensitivityToggle == .lockedBySpoiler)
+        #expect(model.isSensitive)
+
+        model.spoilerText = ""
+        #expect(model.mediaSensitivityToggle == .unmark)
+    }
+
+    /// 添付のメニューから閲覧注意にすると、閉じた欄に残した注意書きは戻さず、空の欄を開く。外すと欄を閉じる。
+    @Test func markingMediaSensitiveOpensEmptySpoiler() async throws {
+        let model = makeModel(FakeServer())
+        model.applyPickerSelection([try picked("a")])
+        model.showsSpoiler = true
+        model.spoilerText = "ネタバレ"
+        model.showsSpoiler = false
+
+        model.setMediaSensitive(true)
+        #expect(model.showsSpoiler)
+        #expect(model.spoilerText == "")
+        #expect(model.mediaSensitivityToggle == .unmark)
+
+        model.setMediaSensitive(false)
+        #expect(!model.showsSpoiler)
+        #expect(!model.isSensitive)
+    }
+
     /// 既定で閲覧注意にする人は、最初の添付を足したときに注意書きの欄が開く。閉じたあとに足しても、開き直さない。
     @Test func defaultSensitiveOpensSpoilerOnFirstAttachment() async throws {
         let server = FakeServer()

@@ -2025,6 +2025,13 @@ final class InlineComposeController: NSObject {
         }
     }
 
+    /// 添付のメニューから閲覧注意を付け外しする。注意書きを書かせないよう、注意書きの欄にはフォーカスを移さない。
+    private func setMediaSensitive(_ sensitive: Bool) {
+        logger.info("compose: media sensitive \(sensitive, privacy: .public)")
+        model.setMediaSensitive(sensitive)
+        update()
+    }
+
     // MARK: - メディアを選ぶシート
 
     /// 出していなければシートを出し、出していれば閉じてキーボードに戻る。
@@ -2969,7 +2976,7 @@ final class InlineComposeController: NSObject {
         setRowShown(scheduleRow, isOpen && model.scheduledAt != nil)
 
         let attachmentItems = attachmentItems()
-        attachmentStrip.update(attachmentItems, isLocked: model.isPosting)
+        attachmentStrip.update(attachmentItems, isLocked: model.isPosting, sensitivityToggle: model.mediaSensitivityToggle)
         mediaViewer?.update(items: viewerItems())
         setRowShown(attachmentStrip, isOpen && !model.attachments.isEmpty)
 
@@ -3987,6 +3994,7 @@ final class InlineComposeController: NSObject {
         attachmentStrip.onSelect = { [weak self] id in self?.openAttachment(id) }
         attachmentStrip.onMove = { [weak self] id, index in self?.model.moveAttachment(id, to: index) }
         attachmentStrip.onRemove = { [weak self] id in self?.removeAttachment(id) }
+        attachmentStrip.onSetSensitive = { [weak self] sensitive in self?.setMediaSensitive(sensitive) }
         attachmentStrip.onContextMenuWillShow = { [weak self] in self?.holdBarForContextMenu() }
         attachmentStrip.onContextMenuWillEnd = { [weak self] in self?.contextMenuWillEnd() }
         configurePollEditor()

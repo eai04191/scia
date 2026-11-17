@@ -46,9 +46,9 @@ final class ComposeAttachmentStripTests {
 
         let cells = cells()
         try #require(cells.count == 3)
-        #expect(cells[0].accessibilityCustomActions?.map(\.name) == ["後ろへ移動", "末尾へ移動", "削除"])
-        #expect(cells[1].accessibilityCustomActions?.map(\.name) == ["前へ移動", "後ろへ移動", "削除"])
-        #expect(cells[2].accessibilityCustomActions?.map(\.name) == ["先頭へ移動", "前へ移動", "削除"])
+        #expect(cells[0].accessibilityCustomActions?.map(\.name) == ["後ろへ移動", "末尾へ移動", "閲覧注意にする", "削除"])
+        #expect(cells[1].accessibilityCustomActions?.map(\.name) == ["前へ移動", "後ろへ移動", "閲覧注意にする", "削除"])
+        #expect(cells[2].accessibilityCustomActions?.map(\.name) == ["先頭へ移動", "前へ移動", "閲覧注意にする", "削除"])
 
         let moveForward = try #require(cells[2].accessibilityCustomActions?[1])
         _ = moveForward.actionHandler?(moveForward)
@@ -67,8 +67,8 @@ final class ComposeAttachmentStripTests {
 
         let cells = cells()
         try #require(cells.count == 4)
-        #expect(cells[1].accessibilityCustomActions?.map(\.name) == ["前へ移動", "後ろへ移動", "末尾へ移動", "削除"])
-        #expect(cells[2].accessibilityCustomActions?.map(\.name) == ["先頭へ移動", "前へ移動", "後ろへ移動", "削除"])
+        #expect(cells[1].accessibilityCustomActions?.map(\.name) == ["前へ移動", "後ろへ移動", "末尾へ移動", "閲覧注意にする", "削除"])
+        #expect(cells[2].accessibilityCustomActions?.map(\.name) == ["先頭へ移動", "前へ移動", "後ろへ移動", "閲覧注意にする", "削除"])
 
         let toLast = try #require(cells[1].accessibilityCustomActions?.first { $0.name == "末尾へ移動" })
         _ = toLast.actionHandler?(toLast)
@@ -92,6 +92,29 @@ final class ComposeAttachmentStripTests {
         #expect(removed == [items[1].attachment.id])
     }
 
+    /// 閲覧注意の項目は状態に合わせて付ける・外すを出し、注意書きがあって外せないときは押せる操作に入れない。
+    @Test func sensitivityActionFollowsToggle() throws {
+        defer { window.isHidden = true }
+        let items = items(1)
+        var requested: [Bool] = []
+        strip.onSetSensitive = { requested.append($0) }
+
+        strip.update(items, sensitivityToggle: .mark)
+        strip.layoutIfNeeded()
+        let mark = try #require(cells().first?.accessibilityCustomActions?.first { $0.name == "閲覧注意にする" })
+        _ = mark.actionHandler?(mark)
+
+        strip.update(items, sensitivityToggle: .unmark)
+        strip.layoutIfNeeded()
+        let unmark = try #require(cells().first?.accessibilityCustomActions?.first { $0.name == "閲覧注意を外す" })
+        _ = unmark.actionHandler?(unmark)
+        #expect(requested == [true, false])
+
+        strip.update(items, sensitivityToggle: .lockedBySpoiler)
+        strip.layoutIfNeeded()
+        #expect(cells().first?.accessibilityCustomActions?.map(\.name) == ["削除"])
+    }
+
     /// 並べ替えた後に描き直すと、位置に合わせて操作も変わる。
     @Test func moveActionsFollowNewOrder() throws {
         defer { window.isHidden = true }
@@ -102,7 +125,7 @@ final class ComposeAttachmentStripTests {
         strip.layoutIfNeeded()
 
         let first = try #require(cells().first)
-        #expect(first.accessibilityCustomActions?.map(\.name) == ["後ろへ移動", "削除"])
+        #expect(first.accessibilityCustomActions?.map(\.name) == ["後ろへ移動", "閲覧注意にする", "削除"])
         #expect(strip.tile(for: items[1].attachment.id) != nil)
     }
 }
