@@ -770,7 +770,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             // 下端を保って上へ伸び縮みした行（`upwardResizingRow`）は、下の行が動かないので、切り抜きも像も要らない。上から切り抜くと、見えていた下の部分が一度隠れる。
             // 代わりに、行の中身を、前の画面上の位置から動かす。
             guard abs(cell.convert(cell.bounds, to: nil).maxY - row.maxY) > 0.5 else {
-                shiftParts(of: cell, from: row.parts, growth: cell.bounds.height - row.height, duration: duration)
+                shiftParts(of: cell, from: row.parts, growth: cell.bounds.height - row.height, snapshot: row.snapshot, oldHeight: row.height, duration: duration)
                 continue
             }
             // 伸びた行は、前の中身の下の端から切り抜きを広げる。前の高さからにすると、前は余白だった部分に、新しい中身が最初のコマで見える。
@@ -818,14 +818,14 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
-    /// 行の中身の部品と、描き直す前の、親の座標での上端、高さ、隠れていたか。
-    private typealias RowPart = (view: UIView, minY: CGFloat, height: CGFloat, wasHidden: Bool)
+    /// 行の中身の部品と、描き直す前の、親の座標での上端、高さ、隠れていたか、行のセルの座標での枠。
+    private typealias RowPart = (view: UIView, minY: CGFloat, height: CGFloat, wasHidden: Bool, frameInCell: CGRect)
 
     /// 行の中身のビューと、その部品。中身が投稿でも通知でもない行ではnil。
     private func rowParts(of cell: UICollectionViewCell) -> (content: UIView, parts: [RowPart])? {
         let content = cell.contentView
         guard let body = (content as? PostContentView)?.postBody ?? (content as? NotificationContentView)?.postBody else { return nil }
-        return (content, (content.subviews + body.subviews).map { ($0, $0.frame.minY, $0.frame.height, $0.isHidden) })
+        return (content, (content.subviews + body.subviews).map { ($0, $0.frame.minY, $0.frame.height, $0.isHidden, $0.convert($0.bounds, to: cell)) })
     }
 
     /// 下端を保って上へ`growth`だけ伸びた行（縮んだなら負）の中身を、前の画面上の位置から新しい位置へ動かす。
@@ -835,13 +835,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 伸びた部品は、前の高さから切り抜きを広げる。上端と一緒に動くので、切り抜かないと、伸びた分が動き始めに下の部品や下の行に重なる。
     /// 描き直す前は隠れていたか、なかった部品は、前の位置がないので、中身全体の動きを打ち消して最後の位置に置き、下の端から切り抜きを広げる。上の部品が上へ退くのに合わせて現れる。
     ///
-    /// 縮んだ部品は切り抜かない。なくなった中身のあった場所は、上の部品が下りてくるまで空く。
-    /// 上端が表示領域より上にある行が、使う人の操作によらず縮むときだけ起きる。埋めるには、下へ縮むときと同じく前の像が要り、像を取る行が増えるので、範囲外にしている。
-    private func shiftParts(of cell: UICollectionViewCell, from before: (content: UIView, parts: [RowPart])?, growth: CGFloat, duration: TimeInterval) {
+    /// 縮んだときは、なくなった部品の場所に、描き直す前の像を見せる（`concealUpwardShrink`）。
+    /// - Parameter snapshot: 描き直す前の行の像。縮んだときに、なくなった部品の場所に見せる。
+    private func shiftParts(of cell: UICollectionViewCell, from before: (content: UIView, parts: [RowPart])?, growth: CGFloat, snapshot: UIView?, oldHeight: CGFloat, duration: TimeInterval) {
         guard let before, before.content === cell.contentView, abs(growth) > 0.5 else { return }
         // 部品のビューには、現れるときに初めて作られるものがある（リンクカードなど）。前の一覧にないものも、隠れていた部品と同じに扱う。
         let known = Set(before.parts.map { ObjectIdentifier($0.view) })
-        let created = (rowParts(of: cell)?.parts ?? []).filter { !known.contains(ObjectIdentifier($0.view)) }.map { RowPart($0.view, 0, 0, true) }
+        let created = (rowParts(of: cell)?.parts ?? []).filter { !known.contains(ObjectIdentifier($0.view)) }.map { RowPart($0.view, 0, 0, true, .zero) }
         for part in before.parts + created where !part.view.isHidden {
             let view = part.view
             if part.wasHidden {
@@ -855,6 +855,41 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             }
         }
         shiftRow(before.content.layer, by: -growth, duration: duration)
+        if growth < 0, let snapshot, let cell = cell as? TimelineCell {
+            concealUpwardShrink(of: cell, with: snapshot, parts: before.parts, oldHeight: oldHeight, shrink: -growth, duration: duration)
+        }
+    }
+
+    /// 下端を保って上へ縮んだ行で、なくなった部品（描き直す前は出ていて、今は隠れている部品）のあった場所に、描き直す前の像のその部分を見せ、上の中身が下りてくるのに合わせて、上の端から縮める。
+    /// 見せないと、なくなった部品の場所が、上の中身が下りてくるまで空く。下へ縮むときの`concealShrink`の、向きを逆にしたもの。
+    /// 高さが減っただけの部品は扱わない。どこがなくなったかが分からないため。本文は、なくなった文字を自分で薄くして消す。
+    private func concealUpwardShrink(of cell: TimelineCell, with snapshot: UIView, parts: [RowPart], oldHeight: CGFloat, shrink: CGFloat, duration: TimeInterval) {
+        let gone = parts.filter { !$0.wasHidden && $0.view.isHidden && $0.frameInCell.height > 0.5 }.map(\.frameInCell)
+        guard let first = gone.first else { return }
+        let area = gone.dropFirst().reduce(first) { $0.union($1) }
+        snapshot.isUserInteractionEnabled = false
+        // 像は、下端を今の行の下端に合わせて置く。行は下端を保って縮んだので、像の中の部品は、描き直す前と同じ画面上の位置に来る。
+        snapshot.frame = CGRect(x: 0, y: cell.bounds.height - oldHeight, width: cell.bounds.width, height: oldHeight)
+        cell.showShrinkSnapshot(snapshot)
+        let mask = CALayer()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        mask.backgroundColor = UIColor.black.cgColor
+        mask.anchorPoint = CGPoint(x: 0, y: 1)
+        mask.bounds = CGRect(x: 0, y: 0, width: cell.bounds.width, height: 0)
+        mask.position = CGPoint(x: 0, y: area.maxY)
+        CATransaction.commit()
+        // 上の中身は、縮んだ分だけ下りてくる。切り抜きの上の端を、その下の端と一緒に動かす。
+        // 切り抜きは、なくなった部品の枠の中から始める。縮んだ分には部品とのすき間も入っているので、縮んだ分から始めると、下りてくる中身の下の端と、像の上の端が重なる。
+        let conceal = CASpringAnimation.rowSpring(keyPath: "bounds.size.height", duration: duration)
+        conceal.fromValue = min(shrink, area.height)
+        conceal.toValue = 0
+        conceal.delegate = RowShiftCompletion { [weak cell, weak snapshot] in
+            guard let cell, let snapshot else { return }
+            cell.removeShrinkSnapshot(snapshot)
+        }
+        mask.add(conceal, forKey: Self.shrinkName)
+        snapshot.layer.mask = mask
     }
 
     /// 伸びた部品を、`height`から今の高さまで切り抜いて見せる。`anchoredAtBottom`なら下の端から、そうでなければ上の端から広げる。

@@ -218,4 +218,35 @@ struct RowResizeMotionTests {
         #expect(try #require(harness.visibleCell(of: id)?.bounds.height) > height, "編集しても行が伸びていません")
         #expect(try textLabel(in: harness, of: id).emojiArrival?.isRunning != true, "行を動かさないのに、本文の文字を動かしています")
     }
+
+    /// 上端が表示領域より上にある行からリンクカードがなくなったら、カードのあった場所に、描き直す前の像を見せ、上の中身が下りてくるのに合わせて、上の端から縮める。
+    /// 見せないと、カードのあった場所が、上の中身が下りてくるまで空く。
+    @Test func cardLeavingRowAboveTopIsConcealedFromItsTop() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
+        let base = statuses[10]
+        let card = PreviewCard(url: try #require(URL(string: "https://news.example/a")), title: "見出し", description: "説明", type: .link, providerName: "", image: nil, width: 0, height: 0, blurhash: nil)
+        statuses[10] = Status(id: base.id, createdAt: base.createdAt, account: base.account, content: base.content, spoilerText: "", url: nil, card: card)
+        harness.setStatuses(statuses)
+        let id = TimelineViewController.ItemID.status(base.id)
+        try harness.scroll(to: id, at: .top)
+        harness.collectionView.contentOffset.y += 20
+        harness.collectionView.layoutIfNeeded()
+        // 描かれる前の行は像を取れないため、描かれるのを待つ。
+        try await waitUntil { harness.visibleCell(of: id)?.snapshotView(afterScreenUpdates: false) != nil }
+        let height = try #require(harness.visibleCell(of: id)?.bounds.height)
+        let below = TimelineViewController.ItemID.status(statuses[11].id)
+        let belowY = try #require(harness.windowMinY(of: below))
+
+        statuses[10] = Status(id: base.id, createdAt: base.createdAt, account: base.account, content: base.content, spoilerText: "", url: nil)
+        harness.setStatuses(statuses)
+        harness.collectionView.layoutIfNeeded()
+
+        let cell = try #require(harness.visibleCell(of: id))
+        #expect(cell.bounds.height < height, "リンクカードがなくなっても行が縮んでいません")
+        #expect(try abs(#require(harness.windowMinY(of: below)) - belowY) < 0.5, "下の行が動きました")
+        let mask = try #require(cell.subviews.lazy.compactMap { $0.layer.mask }.first { $0.animation(forKey: TimelineViewController.shrinkName) != nil }, "カードのあった場所に、前の像を見せていません")
+        #expect(mask.anchorPoint.y == 1, "上の端から縮めていません")
+    }
 }
