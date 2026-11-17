@@ -241,7 +241,7 @@ struct TimelineQuoteTests {
     }
 
     /// 承認待ちだった引用を取り直して、承認された引用元の囲みに替わるときは、docs/vision.mdの「タイムラインの動き」のとおり伸ばす。
-    /// 上端が表示領域より上にある行は画面上の位置を保ち、下の行は元の位置から新しい位置へ動かす。
+    /// 見えている行は画面上の位置を保ち、下の行は元の位置から新しい位置へ動かす。
     @Test func refreshedQuoteGrowsRowWithMotion() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -251,7 +251,6 @@ struct TimelineQuoteTests {
         harness.setStatuses(statuses)
         let id = TimelineViewController.ItemID.status(base.id)
         try harness.scroll(to: id, at: .top)
-        harness.collectionView.contentOffset.y += 20
         harness.collectionView.layoutIfNeeded()
         let y = try #require(harness.windowMinY(of: id))
         let height = try #require(harness.visibleCell(of: id)?.frame.height)

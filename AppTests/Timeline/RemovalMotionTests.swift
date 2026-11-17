@@ -122,6 +122,7 @@ struct RemovalMotionTests {
     }
 
     /// 消すのと一緒に、残る行の中身が変わるときは、高さの変化で読んでいる行がずれうるため、動かさずに位置を保つ。
+    /// 中身が変わるのは上端にかかっている行なので、位置を保つのは、その下に残る行になる。
     @Test func removalWithContentChangeKeepsAnchor() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -132,7 +133,8 @@ struct RemovalMotionTests {
         let anchor = try #require(harness.viewController.currentAnchor())
         let anchorIndex = try #require(ids.firstIndex(of: anchor.id))
         let removed = ids[anchorIndex + 1]
-        let before = try #require(harness.windowMinY(of: anchor.id))
+        let kept = ids[anchorIndex + 2]
+        let before = try #require(harness.windowMinY(of: kept))
 
         let entries: [TimelineEntry] = statuses.compactMap { status in
             let entry = TimelineEntry.status(status)
@@ -149,9 +151,9 @@ struct RemovalMotionTests {
         }
         harness.viewController.setEntries(entries, animatesRemoval: true)
 
-        let after = try #require(harness.windowMinY(of: anchor.id))
+        let after = try #require(harness.windowMinY(of: kept))
         #expect(abs(after - before) <= tolerance, "基準の投稿が\(after - before)pt動きました")
-        let cell = try #require(harness.visibleCell(of: anchor.id))
+        let cell = try #require(harness.visibleCell(of: kept))
         #expect(!isAnimating(cell), "中身が変わる行があるのに動きました")
     }
 }

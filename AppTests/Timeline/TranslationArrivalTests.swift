@@ -31,9 +31,10 @@ struct TranslationArrivalTests {
         }
     }
 
-    /// 高さの変わる投稿が画面の上端にかかっていても、その投稿の画面上の位置は変わらない。
+    /// 高さの変わる投稿の上端が見えていれば、その投稿の画面上の位置は変わらない。
+    /// 上端が表示領域より上にあれば、伸びた分は上へ出し、その下の投稿の画面上の位置が変わらない。
     @Test(arguments: [CGFloat(0), 30])
-    func translatedRowKeepsItsPosition(offsetIntoRow: CGFloat) async throws {
+    func translatedRowKeepsReadingPosition(offsetIntoRow: CGFloat) async throws {
         let scope = TaskScope()
         let store = StatusTranslationStore(translator: ExpandingTranslator(), targetLanguage: "ja", strategy: .lowLatency, scope: scope, clock: TestClock(), applyInterval: { .zero })
         store.setLanguages(["en"])
@@ -45,13 +46,14 @@ struct TranslationArrivalTests {
         try harness.scroll(to: .status(target.id), at: .top)
         harness.collectionView.contentOffset.y += offsetIntoRow
         harness.collectionView.layoutIfNeeded()
-        let before = try #require(harness.windowMinY(of: .status(target.id)))
+        let kept = offsetIntoRow > 0 ? all[21] : target
+        let before = try #require(harness.windowMinY(of: .status(kept.id)))
 
         store.request([TranslationSource(target)])
         try await waitUntil { store.translation(for: TranslationSource(target)) != nil }
         harness.viewController.applyTranslations([.status(target.id)])
 
-        let after = try #require(harness.windowMinY(of: .status(target.id)))
+        let after = try #require(harness.windowMinY(of: .status(kept.id)))
         #expect(abs(after - before) <= 0.5)
         #expect(harness.secondaryText(of: target.id)?.hasPrefix("訳文") == true)
     }

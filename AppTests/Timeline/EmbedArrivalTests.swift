@@ -125,7 +125,7 @@ struct EmbedArrivalTests {
 }
 
 /// Xの投稿を読み終えて行が伸びるときの、タイムラインの行の位置。docs/vision.mdの「タイムラインの動き」のとおり、見えている行は下の行ごと動かして伸ばし、
-/// 上端が表示領域より上にある行は、伸びても画面上の位置を保つ。
+/// 上端が表示領域より上にある行は、下の行を動かさずに上へ伸ばす。
 @Suite(.scratch, .failureState)
 @MainActor
 struct XPostArrivalScrollTests {
@@ -154,8 +154,8 @@ struct XPostArrivalScrollTests {
         return (harness, store)
     }
 
-    /// 上端が表示領域より上にある行が伸びても、その行の画面上の位置は動かない。下の行は、元の位置から新しい位置へ動かす。
-    @Test func rowAboveTopKeepsPosition() throws {
+    /// 上端が表示領域より上にある行が伸びたら、伸びた分は表示領域の上へ出し、下の行は動かさない。
+    @Test func rowAboveTopGrowsUpward() throws {
         var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
         statuses[10] = linking(statuses[10], to: "7")
         let (harness, store) = try harness(with: statuses)
@@ -166,17 +166,24 @@ struct XPostArrivalScrollTests {
         harness.collectionView.layoutIfNeeded()
         let y = try #require(harness.windowMinY(of: id))
         let height = try #require(harness.visibleCell(of: id)?.frame.height)
-        let belowCell = try #require(harness.visibleCell(of: .status(statuses[11].id)))
+        let below = TimelineViewController.ItemID.status(statuses[11].id)
+        let belowY = try #require(harness.windowMinY(of: below))
+        let belowCell = try #require(harness.visibleCell(of: below))
 
         store.deliver(try post("7"))
         harness.viewController.applyXPost(id: "7")
 
-        #expect(try #require(harness.visibleCell(of: id)?.frame.height) > height, "囲みに替わって行が伸びていません")
-        #expect(harness.windowMinY(of: id) == y)
-        #expect(belowCell.layer.animationKeys()?.contains { $0.hasPrefix("rowShift") } == true, "下の行を動かしていません")
+        let grown = try #require(harness.visibleCell(of: id)?.frame.height) - height
+        #expect(grown > 0, "囲みに替わって行が伸びていません")
+        #expect(try abs(#require(harness.windowMinY(of: id)) - (y - grown)) < 0.5, "伸びた分が上へ出ていません")
+        #expect(try abs(#require(harness.windowMinY(of: below)) - belowY) < 0.5, "下の行が動きました")
+        #expect(belowCell.layer.animationKeys()?.contains { $0.hasPrefix("rowShift") } != true, "動かない下の行に動きを付けています")
+        #expect(harness.visibleCell(of: id)?.layer.mask == nil, "上へ伸びた行を切り抜いています")
+        // 伸びた行を、伸びた分だけ下から滑らせると、伸びた中身が下の行に重なって見える。
+        #expect(harness.visibleCell(of: id)?.layer.animationKeys()?.contains { $0.hasPrefix("rowShift") } != true, "上へ伸びた行そのものを動かしました")
     }
 
-    /// 上端が表示領域より上にある行が大きく伸びて、下の何行もが表示領域の外へ押し出されるときは、押し出される行をどれも1コマで消さず、
+    /// 見えている行が大きく伸びて、下の何行もが表示領域の外へ押し出されるときは、押し出される行をどれも1コマで消さず、
     /// 描き直す前の像を動かして外へ送る。
     @Test func largeGrowthSendsOutEveryPushedRow() async throws {
         var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
@@ -185,7 +192,6 @@ struct XPostArrivalScrollTests {
         defer { harness.tearDown() }
         let id = TimelineViewController.ItemID.status(statuses[10].id)
         try harness.scroll(to: id, at: .top)
-        harness.collectionView.contentOffset.y += 20
         harness.collectionView.layoutIfNeeded()
         // 描かれる前の行は像を取れないため、描かれるのを待つ。
         try await waitUntil { harness.collectionView.visibleCells.allSatisfy { $0.snapshotView(afterScreenUpdates: false) != nil } }

@@ -230,6 +230,8 @@ struct EmojiArrivalTests {
 
         #expect(harness.windowMinY(of: reading) == y)
         #expect(!hasRowShift(readingCell), "位置を保った行を動かしました")
+        // 伸びた行を、伸びた分だけ下から滑らせると、伸びた中身が下の行に重なって見える。
+        #expect(!hasRowShift(hiddenCell), "上へ伸びた行そのものを動かしました")
     }
 
     /// 表示領域の上端をまたぐ行が同じ絵文字を使っていても、その行の高さが変わらなければ、見えている行が伸びた分は下の行ごと動かす。
@@ -258,9 +260,8 @@ struct EmojiArrivalTests {
         #expect(hasRowShift(belowCell), "上端をまたぐ行が変わらないのに、下の行を動かしませんでした")
     }
 
-    /// 絵文字が届いて、上端が表示領域より上にある行の折り返しが増えても、その行の画面上の位置は動かない。
-    /// 下の行は、1コマで下げず、元の位置から新しい位置へ動かす。
-    @Test func emojiArrivalKeepsRowAboveTop() async throws {
+    /// 絵文字が届いて、上端が表示領域より上にある行の折り返しが増えたら、伸びた分は表示領域の上へ出し、下の行は動かさない。
+    @Test func emojiArrivalGrowsRowAboveTopUpward() async throws {
         let wide = try (1...6).map { try emoji("wide\($0)") }
         let png = try widePNG()
         let gate = Gate()
@@ -288,13 +289,18 @@ struct EmojiArrivalTests {
         harness.collectionView.layoutIfNeeded()
         let y = try #require(harness.windowMinY(of: id))
         let height = try #require(harness.visibleCell(of: id)?.frame.height)
-        let belowCell = try #require(harness.visibleCell(of: .status(statuses[11].id)))
+        let below = TimelineViewController.ItemID.status(statuses[11].id)
+        let belowY = try #require(harness.windowMinY(of: below))
+        let belowCell = try #require(harness.visibleCell(of: below))
 
         gate.open()
         try await waitUntil { (try? #require(harness.visibleCell(of: id)?.frame.height)).map { $0 > height } ?? false }
 
-        #expect(harness.windowMinY(of: id) == y)
-        #expect(hasRowShift(belowCell), "下の行を動かしていません")
+        let grown = try #require(harness.visibleCell(of: id)?.frame.height) - height
+        #expect(try abs(#require(harness.windowMinY(of: id)) - (y - grown)) < 0.5, "伸びた分が上へ出ていません")
+        #expect(try abs(#require(harness.windowMinY(of: below)) - belowY) < 0.5, "下の行が動きました")
+        #expect(!hasRowShift(belowCell), "動かない下の行に動きを付けています")
+        #expect(try !hasRowShift(#require(harness.visibleCell(of: id))), "上へ伸びた行そのものを動かしました")
     }
 
     /// 引用の中の絵文字が届いて動く間も、引用の縦線を見せる。縦線は文字の枠の外（字下げの中）にあり、ラベル自身の描画は隠すため、
