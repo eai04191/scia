@@ -14,6 +14,7 @@ enum OperationStatusCatalog {
                 notices.recordFailure(title: "プロフィールを開けませんでした", reason: ErrorPresentation(message: "@nobody@example.comが見つかりませんでした。", code: nil))
                 notices.recordFailure(title: "お気に入りを変更できませんでした", reason: badGateway, subject: subject(2))
             },
+            pastDaysState(),
             state("進行中と最近の失敗") { notices in
                 notices.update(.init(id: "download", title: "ダウンロード中", value: "42%", fraction: 0.42, subject: subject(3)), onStop: {})
                 notices.update(.init(id: "upload", title: "アップロード中"))
@@ -97,14 +98,36 @@ enum OperationStatusCatalog {
         )
     }
 
+    /// 時刻がそろうよう、記録した時刻を決めておく。
+    private static let now = Date(timeIntervalSince1970: 1_790_000_000)
+
     @MainActor
     private static func state(_ title: String, fill: @escaping @MainActor (OperationStatus) -> Void) -> CatalogState {
         CatalogState(title: title) {
-            // 時刻がそろうよう、記録した時刻を決めておく。
-            let notices = OperationStatus { Date(timeIntervalSince1970: 1_790_000_000) }
+            let notices = OperationStatus { now }
             fill(notices)
-            let controller = UIHostingController(rootView: OperationStatusView(notices: notices) { _ in })
-            return CatalogControllerHost(controller, height: 480)
+            return host(notices)
         }
+    }
+
+    @MainActor
+    private static func pastDaysState() -> CatalogState {
+        CatalogState(title: "今日より前の失敗（時刻に日付を、前の年なら年も添える）") {
+            var recordedAt = now.addingTimeInterval(-400 * 24 * 60 * 60)
+            let notices = OperationStatus { recordedAt }
+            notices.recordFailure(title: "お気に入りを変更できませんでした", reason: badGateway, subject: subject(9))
+            recordedAt = now.addingTimeInterval(-3 * 24 * 60 * 60)
+            notices.recordFailure(title: "ブーストを変更できませんでした", reason: ErrorPresentation(message: "サーバーに接続できませんでした。", code: "URLError -1004"), subject: subject(1))
+            recordedAt = now.addingTimeInterval(-24 * 60 * 60)
+            notices.recordFailure(title: "動画を保存できませんでした", reason: ErrorPresentation(message: "インターネットに接続されていません。", code: "URLError -1009"), subject: subject(7))
+            recordedAt = now
+            notices.recordFailure(title: "お気に入りを変更できませんでした", reason: badGateway, subject: subject(2))
+            return host(notices)
+        }
+    }
+
+    @MainActor
+    private static func host(_ notices: OperationStatus) -> CatalogControllerHost {
+        CatalogControllerHost(UIHostingController(rootView: OperationStatusView(notices: notices) { _ in }), height: 480)
     }
 }
