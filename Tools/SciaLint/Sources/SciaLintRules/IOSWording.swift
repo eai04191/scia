@@ -6,7 +6,7 @@ import SwiftSyntax
 extension Rule {
     static let iosWording = Rule(
         id: "ios_wording",
-        message: "iOSの標準の言い回しにする。既定→デフォルト、捨てる→破棄、消す→削除か消去、止める→中止、端末→デバイスかストレージ、足す→追加、出す・見せる→表示、やり直してください→もう一度お試しください、起動し直す→再起動、変えられませんでした→変更できませんでした、押すと→タップすると（VoiceOverのヒントでは操作を言わず、起きることだけを書く）",
+        message: "iOSの標準の言い回しにする。既定→デフォルト、捨てる→破棄、消す→削除か消去、止める→中止、端末→デバイスかストレージ、足す→追加、出す・見せる→表示、やり直してください→もう一度お試しください、起動し直す→再起動、変えられませんでした→変更できませんでした、見られません→表示できません、押すと→タップすると（VoiceOverのヒントでは操作を言わず、起きることだけを書く）",
         appliesTo: { path in
             ["App/Sources/", "ShareExtension/", "Packages/SciaCore/Sources/SciaCore/"].contains { path.hasPrefix($0) }
                 && !["App/Sources/Debug/", "App/Sources/DiscomfortReport/", "Packages/SciaCore/Sources/SciaCore/Tuning/"].contains { path.hasPrefix($0) }
@@ -44,6 +44,7 @@ enum IOSWording {
         ("止めま", []),
         ("押すと", []),
         ("変えられませんでした", []),
+        ("見られません", []),
     ]
 
     /// 「足」で終わる、追加の意味でない語の頭

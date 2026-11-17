@@ -19,6 +19,7 @@ import Testing
         #"Button("\(name)を消す") {}"#,
         #"button.accessibilityHint = "押すと読み込み直します""#,
         #"let title = "リストの名前を変えられませんでした""#,
+        #"let message = "@aliceからは返信先の投稿が見られません。""#,
         // ログでない受け手の、ログと同じ名前の呼び出しは見る
         #"Banner.error("下書きを捨てる")"#,
         // ほかの呼び出しに包んで渡したものは、使う人に見えうるので見る
