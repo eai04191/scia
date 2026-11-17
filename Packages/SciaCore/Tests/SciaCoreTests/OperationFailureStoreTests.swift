@@ -86,6 +86,38 @@ struct OperationFailureStoreTests {
         #expect(first.failures.map(\.title) == ["2つ目のウインドウ", "1つ目のウインドウ"])
     }
 
+    /// 消した失敗は、起動し直しても並ばない。
+    @Test func removedFailuresStayRemovedAfterRestoring() throws {
+        let defaults = TestScratch.defaults("OperationFailureStoreTests")
+        let notices = OperationStatus(store: .init(defaults: defaults, account: "alice@example.social")) { date }
+        let first = notices.recordFailure(title: "1件目", reason: reason)
+        notices.recordFailure(title: "2件目", reason: reason)
+
+        notices.removeFailure(first.id)
+
+        #expect(notices.failures.map(\.title) == ["2件目"])
+        #expect(OperationStatus(store: .init(defaults: defaults, account: "alice@example.social")) { date }.failures.map(\.title) == ["2件目"])
+
+        notices.removeAllFailures()
+
+        #expect(notices.failures.isEmpty)
+        #expect(OperationStatus(store: .init(defaults: defaults, account: "alice@example.social")) { date }.failures.isEmpty)
+    }
+
+    /// 1件消しても、ほかのウインドウで増えた失敗は消さない。
+    @Test func removingAFailureKeepsFailuresRecordedInAnotherWindow() throws {
+        let defaults = TestScratch.defaults("OperationFailureStoreTests")
+        let first = OperationStatus(store: .init(defaults: defaults, account: "alice@example.social")) { date }
+        let second = OperationStatus(store: .init(defaults: defaults, account: "alice@example.social")) { date }
+        let removed = first.recordFailure(title: "消す失敗", reason: reason)
+        second.recordFailure(title: "2つ目のウインドウ", reason: reason)
+
+        first.removeFailure(removed.id)
+
+        #expect(first.failures.map(\.title) == ["2つ目のウインドウ"])
+        #expect(OperationStatus(store: .init(defaults: defaults, account: "alice@example.social")) { date }.failures.map(\.title) == ["2つ目のウインドウ"])
+    }
+
     @Test func logoutRemovesTheFailures() throws {
         let suite = TestScratch.suiteName("OperationFailureStoreTests")
         let defaults = try #require(UserDefaults(suiteName: suite))

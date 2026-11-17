@@ -47,9 +47,24 @@ struct OperationStatusView: View {
                     }
                     ForEach(notices.failures) { failure in
                         FailureRow(failure: failure, time: notices.timeText(of: failure), accessibilityTime: notices.accessibilityTimeText(of: failure), onOpen: onOpen)
+                            .swipeActions {
+                                Button(OperationStatusTexts.delete, role: .destructive) {
+                                    withAnimation { notices.removeFailure(failure.id) }
+                                }
+                            }
                     }
                 } header: {
-                    Text(OperationStatusTexts.failuresHeader)
+                    HStack {
+                        Text(OperationStatusTexts.failuresHeader)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if !notices.failures.isEmpty {
+                            Button(OperationStatusTexts.clearFailures) {
+                                withAnimation { notices.removeAllFailures() }
+                            }
+                            .font(.subheadline)
+                            .textCase(nil)
+                        }
+                    }
                 } footer: {
                     Text(OperationStatusTexts.failuresFooter(limit: OperationStatus.failureLimit))
                 }

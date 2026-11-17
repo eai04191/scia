@@ -18,6 +18,11 @@ public enum OperationStatusTexts {
         "直近の\(limit.formatted())件が表示されます。"
     }
 
+    /// 失敗の行をスワイプして消すボタン。
+    public static let delete = "削除"
+    /// 最近の失敗の見出しに添える、すべて消すボタン。
+    public static let clearFailures = "消去"
+
     /// 進行中の操作を止めるボタンの読み上げ。
     public static let stop = "中止"
     /// 投稿のある失敗の行のヒント。

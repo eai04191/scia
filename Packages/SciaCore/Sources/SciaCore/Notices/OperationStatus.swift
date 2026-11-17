@@ -119,6 +119,18 @@ public final class OperationStatus {
         return failure
     }
 
+    /// 失敗を1件消す。ほかのウインドウで増えた失敗を消さないよう、保存先から読み直してから外す。
+    public func removeFailure(_ failureID: Failure.ID) {
+        failures = (store?.load() ?? failures).filter { $0.id != failureID }
+        store?.save(failures)
+    }
+
+    /// 失敗をすべて消す。
+    public func removeAllFailures() {
+        failures = []
+        store?.save(failures)
+    }
+
     /// 以後の失敗を保存しない。ログアウトでは保存した値を消してからセッションを止めるため、止めた通信の失敗で消したキーに書き戻さないようにする。
     public func stopSaving() {
         store = nil
