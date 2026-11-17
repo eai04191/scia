@@ -4,12 +4,13 @@ import SciaTesting
 import UIKit
 @testable import Scia
 
-/// コンテキストメニューを出している間は、タイムラインの並びを変えず、閉じてから反映することを確かめる。
-/// メニューの元になった行が動くと、メニューと表示がずれるため。
+/// コンテキストメニューを出している間も、並びの更新と描き直しはすぐ反映し、メニューの元になった行は追従で流さないことを確かめる。
+/// スワイプのボタンを閉じる途中は、閉じ終えるまで並びを溜めることも確かめる。
 @MainActor
 @Suite(.scratch, .serialized, .failureState)
 struct RowHoldTests {
-    @Test func entriesAreAppliedAfterMenuHides() throws {
+    /// 最上部でメニューを出している間に届いた並びは、すぐ反映する。追従はせず、メニューの元になった行の位置を保つ。
+    @Test func entriesAreAppliedWhileMenuIsShownWithoutFollowing() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
         let existing = StatusFactory.make(count: 30, startingAt: 1_000)
@@ -23,15 +24,33 @@ struct RowHoldTests {
         let arrivals = StatusFactory.make(count: 3, startingAt: 1_003)
         harness.setStatuses(arrivals + existing)
 
-        #expect(harness.viewController.displayedStatusIDs == existing.map(\.id))
-        #expect(harness.windowMinY(of: .status(existing[0].id)) == touched)
+        #expect(harness.viewController.displayedStatusIDs == (arrivals + existing).map(\.id))
+        #expect(try abs(#require(harness.windowMinY(of: .status(existing[0].id))) - touched) < 0.5, "メニューの元になった行が動きました")
         #expect(harness.viewController.isUserInteracting)
 
         harness.viewController.menuDidHide()
 
-        #expect(harness.viewController.displayedStatusIDs == (arrivals + existing).map(\.id))
         #expect(!harness.viewController.isUserInteracting)
         #expect(settled == 1)
+    }
+
+    /// メニューを出している間に中身が変わった投稿は、閉じるのを待たずに描き直す。
+    @Test func contentChangeIsRedrawnWhileMenuIsShown() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
+        harness.setStatuses(statuses)
+        harness.scroll(toFraction: 0)
+        let id = TimelineViewController.ItemID.status(statuses[1].id)
+        let height = try #require(harness.visibleCell(of: id)?.bounds.height)
+
+        harness.viewController.menuWillShow()
+        let base = statuses[1]
+        statuses[1] = Status(id: base.id, createdAt: base.createdAt, account: base.account, content: "<p>" + String(repeating: "伸びた本文。", count: 60) + "</p>", spoilerText: "", url: nil)
+        harness.setStatuses(statuses)
+        harness.collectionView.layoutIfNeeded()
+
+        #expect(try #require(harness.visibleCell(of: id)?.bounds.height) > height, "メニューを出している間に描き直していません")
     }
 
     /// スワイプのボタンを閉じる途中の行は、閉じ終えるまで前の縦の位置に描かれるため、閉じ終えてから並びを変える。
@@ -75,27 +94,31 @@ struct RowHoldTests {
         #expect(harness.viewController.displayedStatusIDs == latest.map(\.id))
     }
 
-    /// スワイプのボタンを閉じ終えても、メニューを出している間は溜めたままにする。ボタンからメニューを出すと、閉じる動きとメニューが重なるため。
-    @Test func swipeCloseDoesNotApplyEntriesWhileMenuIsShown() throws {
+    /// スワイプのボタンを閉じる途中に溜めた更新に、使う人の操作によらない変化が混ざっていたら、動かさずに位置を保つ。
+    @Test func heldRemovalMixedWithOtherUpdateDoesNotAnimate() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
-        let existing = StatusFactory.make(count: 30, startingAt: 1_000)
-        harness.setStatuses(existing)
-        harness.scroll(toFraction: 0)
-        let cell = try #require(harness.visibleCell(of: .status(existing[2].id)))
+        let statuses = StatusFactory.make(count: 60, startingAt: 1_000)
+        harness.setStatuses(statuses)
+        harness.scroll(toFraction: 0.4)
+        let ids = harness.viewController.displayedItemIDs
+        let anchor = try #require(harness.viewController.currentAnchor())
+        let anchorIndex = try #require(ids.firstIndex(of: anchor.id))
+        let streamed = ids[anchorIndex + 3]
+        let removed = ids[anchorIndex + 1]
+        let below = ids[anchorIndex + 2]
+        let swiped = try #require(harness.visibleCell(of: anchor.id))
 
-        Self.startSwipeClose(on: cell)
-        let arrivals = StatusFactory.make(count: 3, startingAt: 1_003)
-        harness.setStatuses(arrivals + existing)
-        harness.viewController.menuWillShow()
-        Self.finishSwipeClose(on: cell)
+        Self.startSwipeClose(on: swiped)
+        let afterStream = statuses.map(TimelineEntry.status).filter { $0.id != streamed }
+        harness.viewController.setEntries(afterStream)
+        harness.viewController.setEntries(afterStream.filter { $0.id != removed }, animatesRemoval: true)
+        Self.finishSwipeClose(on: swiped)
         harness.frames.step()
 
-        #expect(harness.viewController.displayedStatusIDs == existing.map(\.id))
-
-        harness.viewController.menuDidHide()
-
-        #expect(harness.viewController.displayedStatusIDs == (arrivals + existing).map(\.id))
+        #expect(harness.viewController.displayedItemIDs == afterStream.filter { $0.id != removed }.map(\.id))
+        let cell = try #require(harness.visibleCell(of: below))
+        #expect((cell.layer.animationKeys() ?? []).isEmpty, "操作によらない削除と混ざった更新で行が動きました")
     }
 
     private static let swipeCloseKey = "testSwipeClose"
@@ -115,8 +138,8 @@ struct RowHoldTests {
         CATransaction.flush()
     }
 
-    /// 本文のリンクのメニューは、セルのメニューと別の部品が出すため、同じように溜めることを確かめる。
-    @Test func entriesAreAppliedAfterLinkMenuHides() throws {
+    /// 本文のリンクのメニューは、セルのメニューと別の部品が出すため、同じように追従を止め、閉じたら操作が終わったと知らせることを確かめる。
+    @Test func linkMenuStopsFollowingUntilItHides() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
         let existing = [Self.statusWithLink(number: 1_000)] + StatusFactory.make(count: 29, startingAt: 999)
@@ -133,12 +156,12 @@ struct RowHoldTests {
         let arrivals = StatusFactory.make(count: 3, startingAt: 1_003)
         harness.setStatuses(arrivals + existing)
 
-        #expect(harness.viewController.displayedStatusIDs == existing.map(\.id))
-        #expect(harness.windowMinY(of: .status(existing[0].id)) == touched)
+        #expect(harness.viewController.displayedStatusIDs == (arrivals + existing).map(\.id))
+        #expect(try abs(#require(harness.windowMinY(of: .status(existing[0].id))) - touched) < 0.5, "メニューの元になった行が動きました")
+        #expect(harness.viewController.isUserInteracting)
 
         delegate.contextMenuInteraction?(interaction, willEndFor: configuration, animator: nil)
 
-        #expect(harness.viewController.displayedStatusIDs == (arrivals + existing).map(\.id))
         #expect(!harness.viewController.isUserInteracting)
     }
 

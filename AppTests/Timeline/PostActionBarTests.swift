@@ -70,6 +70,21 @@ struct PostActionBarTests {
         #expect(try !hasRowShift(#require(harness.visibleCell(of: .status(statuses[9].id)))), "上のアイテムを動かしました")
     }
 
+    /// メニューを出している間も、閉じるアニメーションの途中も、開いたらすぐ出し、下のアイテムを動かしてつなぐ。
+    /// 閉じ終えるまで描き直しを待つと、閉じた直後に開いたアクションバーが、閉じ終えたコマに動かずに出る。
+    @Test func openingWhileMenuIsShownShiftsRowsBelow() throws {
+        let (harness, statuses) = try harness()
+        defer { harness.tearDown() }
+        let id = TimelineViewController.ItemID.status(statuses[10].id)
+
+        harness.viewController.menuWillShow()
+        harness.viewController.toggleActionBar(for: id)
+
+        let bar = try #require(bar(in: harness, of: statuses[10].id), "メニューを出している間に開いていません")
+        #expect(bar.layer.mask?.animation(forKey: TimelineViewController.actionBarRevealName) != nil, "アクションバーを切り抜いて現していません")
+        #expect(try hasRowShift(#require(harness.visibleCell(of: .status(statuses[11].id)))), "下のアイテムを動かしていません")
+    }
+
     /// 開くと、アクションバーを上の端から切り抜いて現す。開く前の投稿の下の余白はアクションバーに重なるので、投稿の切り抜きだけでは、重なった部分が最初のコマで見える。
     /// 投稿全体の切り抜きは開く前の高さから広げ、開く前から見えていた中身（短い投稿のアイコンなど）を隠さない。
     @Test func openingRevealsActionBarFromItsTop() throws {

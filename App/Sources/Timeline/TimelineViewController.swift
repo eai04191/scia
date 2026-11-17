@@ -166,12 +166,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private var gapFailures: [String: ErrorPresentation] = [:]
     private(set) var isShowingMenu = false
     private var swipeCloseTicker: FrameTicker?
-    /// メニューを出している間に届いた並びの更新。閉じたときに反映する。
+    /// スワイプのボタンを閉じる途中に届いた並びの更新。閉じ終えたときに反映する。
     private var heldEntries: HeldEntries?
-    /// メニューを出している間に求められた描き直し。
-    private var heldReconfigureIDs: Set<ItemID> = []
-    /// メニューを出している間に原文と訳文が替わった行。閉じたあと、翻訳の動きで描き直す。
-    var heldTranslationItems: Set<ItemID> = []
     /// 画面に出ていない間（ほかのタブ、上に重ねた画面の下）に、絵文字やXの投稿が届いて求められた描き直し。画面に出るときに描き直す。
     private var hiddenReconfigureIDs: Set<ItemID> = []
     private var contentSizeObserver: (any NSObjectProtocol)?
@@ -753,7 +749,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// - Parameter shiftLimit: 描き直した行が伸び縮みする長さの上限。分かっていれば、上下のどちらかの端からタイムラインの外へ出うる行の像だけを取る。像を取るのは重く、押した直後のコマが遅れて、動きの始まりが飛んで見えるため。nilなら、描き直す行より下のすべての行の像を取る。
     func reconfigureShiftingRowsBelow(_ ids: Set<ItemID>, keeping anchorID: ItemID? = nil, duration: TimeInterval, shiftLimit: CGFloat? = nil) {
         guard !ids.isEmpty else { return }
-        guard duration > 0, view.window != nil, !isShowingMenu, !UIAccessibility.isReduceMotionEnabled else {
+        guard duration > 0, view.window != nil, !UIAccessibility.isReduceMotionEnabled else {
             reconfigure(ids, keeping: anchorID)
             return
         }
@@ -948,10 +944,6 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// - Parameter anchorID: 画面上の位置を保つ要素。なければ、表示領域の上端にかかっている要素にする。
     func reconfigure(_ ids: Set<ItemID>, keeping anchorID: ItemID? = nil) {
         guard !ids.isEmpty else { return }
-        guard !isShowingMenu else {
-            heldReconfigureIDs.formUnion(ids)
-            return
-        }
         var snapshot = dataSource.snapshot()
         snapshot.reconfigureItems(Array(ids))
         applyPreservingAnchor(snapshot, keeping: anchorID, resizing: ids)
@@ -994,7 +986,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// - Parameter animatesChanges: 使う人の操作の結果として、足す、消す、並べ替えるをどれも動きで見せる。動かせなければ`keepsOffset`などの指定どおりに置き換える。
     private func updateEntries(_ newEntries: [TimelineEntry], keeping anchorID: ItemID?, placingAtTop topID: ItemID?, keepsOffset: Bool, animatesRemoval: Bool, animatesChanges: Bool, keepingRowContentsOf base: [TimelineEntry]?) {
         // 閉じ終えていても、溜めた分を反映する前は溜める。先に反映すると、あとで古い溜めた分で上書きするため。
-        guard !isShowingMenu, swipeCloseTicker == nil, !isRowClosingSwipe else {
+        guard swipeCloseTicker == nil, !isRowClosingSwipe else {
             // 後の呼び出しの並びが新しい。基準は、溜めるのをやめるときに最後に指定されたものを使う。
             heldEntries = HeldEntries(
                 entries: newEntries,
@@ -1018,7 +1010,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         // 添付ファイルのビューアや全画面のアプリ内のSafariで覆っている間は、新着を見たと報告しないので、追従もせずに読んでいた行の位置を保つ。
         // ウィンドウが前面にない間は、画面に出ていて流れを眺めていることがあるため追従する。見たとは報告しないので、追従した新着は未読に残る。
         let isCovered = isCoveredByMediaViewer || isCoveredByInAppBrowser
-        let followsTop = anchorID == nil && topID == nil && isAtTop && !isCovered && tuning.value(of: TuningCatalog.followsNewArrivalsAtTop)
+        // メニューを出している間も追従しない。メニューの元になった行が、メニューの下で流れるため。
+        let followsTop = anchorID == nil && topID == nil && isAtTop && !isCovered && !isShowingMenu && tuning.value(of: TuningCatalog.followsNewArrivalsAtTop)
         let newIDs = newEntries.map(\.id)
         // IDは元のまま、中身だけを読めない行にする。ストアは変えないので、既読位置や未読の数は隔離の影響を受けない。
         entries = Dictionary(zip(newIDs, newEntries.map(quarantined)), uniquingKeysWith: { _, new in new })
@@ -1199,7 +1192,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         collectionView.isTracking || collectionView.isDragging || collectionView.isDecelerating
     }
 
-    /// スクロールしている、コンテキストメニューを出している、またはまとめて行う操作のために投稿を選んでいる。新着を挿入するのは、これが終わってからにする。
+    /// スクロールしている、コンテキストメニューを出している、またはまとめて行う操作のために投稿を選んでいる。モデルが新着を挿入するのは、これが終わってからにする。
     /// 選んでいる間に新着で行がずれると、押そうとした行を押し損なうため。
     var isUserInteracting: Bool {
         isUserScrolling || isShowingMenu || isSelectingPosts
@@ -1223,29 +1216,20 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let animatesChanges: Bool
     }
 
-    /// コンテキストメニューを出した。メニューの元になった行が動かないよう、閉じるまでタイムラインの並びの更新と描き直しを溜めておく。
+    /// コンテキストメニューを出した。出している間は、最上部にいても新着に追従しない。並びの更新と描き直しは、読んでいる行の位置を保って、すぐ反映する。
     func menuWillShow() {
         isShowingMenu = true
-        logger.info("menu will show: holding updates")
+        logger.info("menu will show")
     }
 
-    /// メニューが閉じた。溜めていた更新を反映する。
+    /// メニューが閉じた。
     func menuDidHide() {
         guard isShowingMenu else { return }
         isShowingMenu = false
-        logger.info("menu did hide: applying held updates entries=\(self.heldEntries != nil, privacy: .public) reconfigure=\(self.heldReconfigureIDs.count, privacy: .public)")
-        applyHeldEntries()
-        let existing = Set(dataSource.snapshot().itemIdentifiers)
-        let reconfigureIDs = heldReconfigureIDs.intersection(existing)
-        heldReconfigureIDs.removeAll()
-        // 翻訳の描き直しは前の高さから動かすので、先に普通の描き直しで高さを変えない。
-        let translationItems = heldTranslationItems.intersection(existing)
-        heldTranslationItems.removeAll()
-        reconfigure(reconfigureIDs.subtracting(translationItems))
-        redrawTranslations(translationItems)
+        logger.info("menu did hide")
         if let pending = pendingTextSelection {
             pendingTextSelection = nil
-            // 溜めていた更新で、行が別の投稿に使い回されていれば選ばない。
+            // 開いている間の更新で、行が別の投稿に使い回されていれば選ばない。
             if pending.body.content?.statusID == pending.statusID {
                 beginTextSelection(in: pending.body, statusID: pending.statusID)
             }
@@ -1268,16 +1252,14 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
-    /// スワイプのボタンを閉じ終えたら、溜めていた並びを反映する。メニューを出している間は、閉じたときに反映するので待たない。
+    /// スワイプのボタンを閉じ終えたら、溜めていた並びを反映する。
     private func waitForSwipeToClose() {
-        guard !isShowingMenu, swipeCloseTicker == nil else { return }
+        guard swipeCloseTicker == nil else { return }
         let ticker = FrameTicker(source: frameSource) { [weak self] _ in
             guard let self else { return false }
-            guard isRowClosingSwipe, !isShowingMenu else {
+            guard isRowClosingSwipe else {
                 swipeCloseTicker = nil
-                if !isShowingMenu {
-                    applyHeldEntries()
-                }
+                applyHeldEntries()
                 return false
             }
             return true
@@ -1487,7 +1469,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         unreadCount: \(unreadCount)
         loadingGaps: \(loadingGapIDs.sorted().joined(separator: ", "))
         failedGaps: \(gapFailures.keys.sorted().joined(separator: ", "))
-        showingMenu: \(isShowingMenu) heldEntries: \(heldEntries.map { "\($0.entries.count)" } ?? "nil") heldReconfigure: \(heldReconfigureIDs.count)
+        showingMenu: \(isShowingMenu) heldEntries: \(heldEntries.map { "\($0.entries.count)" } ?? "nil")
         """
     }
 
@@ -2561,7 +2543,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 開く前の投稿の下の余白は、開いたあとのアクションバーの上の部分に重なるので、投稿の切り抜き（`revealGrowth`）だけでは、その部分が最初のコマで一度に見えた。
     /// 投稿全体の切り抜きをアクションバーの上の端から広げ直すと、アイコンの下の端がアクションバーの上の端より下に出る短い投稿で、開く前から見えていたアイコンまで一度消えるため、アクションバーだけを切り抜く。
     private func revealActionBarFromItsTop(of id: ItemID, duration: TimeInterval) {
-        guard duration > 0, view.window != nil, !isShowingMenu, !UIAccessibility.isReduceMotionEnabled,
+        guard duration > 0, view.window != nil, !UIAccessibility.isReduceMotionEnabled,
               let bar = (cell(for: id)?.contentView as? PostContentView)?.postBody.actionBar
         else { return }
         let mask = CALayer()
@@ -2587,7 +2569,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// アクションバーを閉じる投稿の、閉じる前の像と高さと、アクションバーの上の端（投稿のセルの座標）。動かさないときはnil。
     private func closingPostSnapshot(of id: ItemID, duration: TimeInterval) -> (cell: TimelineCell, snapshot: UIView, height: CGFloat, barTop: CGFloat)? {
-        guard duration > 0, view.window != nil, !isShowingMenu, !UIAccessibility.isReduceMotionEnabled,
+        guard duration > 0, view.window != nil, !UIAccessibility.isReduceMotionEnabled,
               let cell = cell(for: id) as? TimelineCell,
               let bar = (cell.contentView as? PostContentView)?.postBody.actionBar,
               let snapshot = cell.snapshotView(afterScreenUpdates: false)
@@ -2849,7 +2831,7 @@ extension TimelineViewController: UICollectionViewDelegate {
         contextMenuIcons.menuWillAppear(in: view.window)
     }
 
-    /// メニューが閉じるアニメーションの間も行を動かさない。
+    /// 閉じるアニメーションが終わるまでは、メニューを出している扱いにする。
     func collectionView(_ collectionView: UICollectionView, willEndContextMenuInteraction configuration: UIContextMenuConfiguration, animator: (any UIContextMenuInteractionAnimating)?) {
         contextMenuIcons.menuWillEnd()
         guard let animator else {

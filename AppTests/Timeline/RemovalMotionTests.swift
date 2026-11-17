@@ -97,30 +97,6 @@ struct RemovalMotionTests {
         #expect(!isAnimating(cell), "上端より上の行が消えたときに行が動きました")
     }
 
-    /// メニューを出している間に溜めた更新に、使う人の操作によらない変化が混ざっていたら、動かさずに位置を保つ。
-    @Test func heldRemovalMixedWithOtherUpdateDoesNotAnimate() throws {
-        let harness = try TimelineHarness()
-        defer { harness.tearDown() }
-        let statuses = StatusFactory.make(count: 60, startingAt: 1_000)
-        harness.setStatuses(statuses)
-        harness.scroll(toFraction: 0.4)
-        let ids = harness.viewController.displayedItemIDs
-        let anchor = try #require(harness.viewController.currentAnchor())
-        let anchorIndex = try #require(ids.firstIndex(of: anchor.id))
-        let streamed = ids[anchorIndex + 3]
-        let removed = ids[anchorIndex + 1]
-        let below = ids[anchorIndex + 2]
-
-        harness.viewController.menuWillShow()
-        let afterStream = statuses.map(TimelineEntry.status).filter { $0.id != streamed }
-        harness.viewController.setEntries(afterStream)
-        harness.viewController.setEntries(afterStream.filter { $0.id != removed }, animatesRemoval: true)
-        harness.viewController.menuDidHide()
-
-        let cell = try #require(harness.visibleCell(of: below))
-        #expect(!isAnimating(cell), "操作によらない削除と混ざった更新で行が動きました")
-    }
-
     /// 消すのと一緒に、残る行の中身が変わるときは、高さの変化で読んでいる行がずれうるため、動かさずに位置を保つ。
     /// 中身が変わるのは上端にかかっている行なので、位置を保つのは、その下に残る行になる。
     @Test func removalWithContentChangeKeepsAnchor() throws {

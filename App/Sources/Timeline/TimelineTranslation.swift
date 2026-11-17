@@ -43,10 +43,6 @@ extension TimelineViewController {
     }
 
     func redrawTranslations(_ items: Set<ItemID>) {
-        guard !isShowingMenu else {
-            heldTranslationItems.formUnion(items)
-            return
-        }
         reconfigureShiftingRowsBelow(items, duration: tuning.value(of: TuningCatalog.translationTransitionDuration))
     }
 
