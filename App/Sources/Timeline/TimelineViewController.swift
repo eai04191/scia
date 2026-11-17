@@ -57,7 +57,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private var showsFocusInlineCompose = false
     /// ログイン中のアカウントのID。ブーストできる投稿かの判定に使う。
     var myAccountID: String?
-    /// 指によるスクロールが止まったとき、またはコンテキストメニューが閉じたときに呼ぶ。
+    /// 指によるスクロールが止まったとき、または投稿を選び終えたときに呼ぶ。
     var onInteractionSettle: (() -> Void)?
     /// ギャップがタップされたときに、どちらの端から読むかを添えて呼ぶ。
     var onGapSelect: ((String, TimelineStore.GapDirection) -> Void)?
@@ -1212,10 +1212,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         collectionView.isTracking || collectionView.isDragging || collectionView.isDecelerating
     }
 
-    /// スクロールしている、コンテキストメニューを出している、またはまとめて行う操作のために投稿を選んでいる。モデルが新着を挿入するのは、これが終わってからにする。
+    /// スクロールしている、またはまとめて行う操作のために投稿を選んでいる。モデルが新着を挿入するのは、これが終わってからにする。
     /// 選んでいる間に新着で行がずれると、押そうとした行を押し損なうため。
+    /// コンテキストメニューを出している間は含めない。新着は、追従せずに位置を保って、すぐ上に積む。
     var isUserInteracting: Bool {
-        isUserScrolling || isShowingMenu || isSelectingPosts
+        isUserScrolling || isSelectingPosts
     }
 
     /// 2つの配列が同じ記憶域を指している。指していれば、中身も同じ。
@@ -1236,7 +1237,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let animatesChanges: Bool
     }
 
-    /// コンテキストメニューを出した。出している間は、最上部にいても新着に追従しない。並びの更新と描き直しは、読んでいる行の位置を保って、すぐ反映する。
+    /// コンテキストメニューを出した。出している間は、最上部にいても新着に追従しない。新着を含む並びの更新と描き直しは、読んでいる行の位置を保って、すぐ反映する。
+    /// 最上部で出している間に新着が入ると、上に積まれて最上部ではなくなるので、閉じたあとも追従には戻らず、新着のボタンで出す。
     func menuWillShow() {
         isShowingMenu = true
         logger.info("menu will show")
@@ -1254,7 +1256,6 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                 beginTextSelection(in: pending.body, statusID: pending.statusID)
             }
         }
-        reportInteractionSettled()
     }
 
     private func applyHeldEntries() {
@@ -1288,7 +1289,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         ticker.start()
     }
 
-    /// スクロールやメニューの操作が終わったことを知らせる。溜めていた新着の挿入と、既読の位置の保存はここから始まる。
+    /// スクロールの操作が終わったことを知らせる。溜めていた新着の挿入と、既読の位置の保存はここから始まる。
     /// 投稿を選んでいる間は知らせず、選び終えたときに知らせる。選んでいる間に新着が入ると、押そうとした行がずれるため。
     func reportInteractionSettled() {
         guard !isSelectingPosts else { return }

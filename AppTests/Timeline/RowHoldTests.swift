@@ -10,6 +10,7 @@ import UIKit
 @Suite(.scratch, .serialized, .failureState)
 struct RowHoldTests {
     /// 最上部でメニューを出している間に届いた並びは、すぐ反映する。追従はせず、メニューの元になった行の位置を保つ。
+    /// 新着を待たせないよう、メニューを出している間は、操作の最中と見なさない。閉じたあとも、追従には戻らない。
     @Test func entriesAreAppliedWhileMenuIsShownWithoutFollowing() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -17,21 +18,18 @@ struct RowHoldTests {
         harness.setStatuses(existing)
         harness.scroll(toFraction: 0)
         let touched = try #require(harness.windowMinY(of: .status(existing[0].id)))
-        var settled = 0
-        harness.viewController.onInteractionSettle = { settled += 1 }
 
         harness.viewController.menuWillShow()
+        #expect(!harness.viewController.isUserInteracting)
         let arrivals = StatusFactory.make(count: 3, startingAt: 1_003)
         harness.setStatuses(arrivals + existing)
 
         #expect(harness.viewController.displayedStatusIDs == (arrivals + existing).map(\.id))
         #expect(try abs(#require(harness.windowMinY(of: .status(existing[0].id))) - touched) < 0.5, "メニューの元になった行が動きました")
-        #expect(harness.viewController.isUserInteracting)
 
         harness.viewController.menuDidHide()
 
-        #expect(!harness.viewController.isUserInteracting)
-        #expect(settled == 1)
+        #expect(try abs(#require(harness.windowMinY(of: .status(existing[0].id))) - touched) < 0.5, "閉じたあとに追従して行が動きました")
     }
 
     /// メニューを出している間に中身が変わった投稿は、閉じるのを待たずに描き直す。
@@ -138,7 +136,7 @@ struct RowHoldTests {
         CATransaction.flush()
     }
 
-    /// 本文のリンクのメニューは、セルのメニューと別の部品が出すため、同じように追従を止め、閉じたら操作が終わったと知らせることを確かめる。
+    /// 本文のリンクのメニューは、セルのメニューと別の部品が出すため、同じように追従を止めることを確かめる。
     @Test func linkMenuStopsFollowingUntilItHides() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -158,11 +156,11 @@ struct RowHoldTests {
 
         #expect(harness.viewController.displayedStatusIDs == (arrivals + existing).map(\.id))
         #expect(try abs(#require(harness.windowMinY(of: .status(existing[0].id))) - touched) < 0.5, "メニューの元になった行が動きました")
-        #expect(harness.viewController.isUserInteracting)
 
         delegate.contextMenuInteraction?(interaction, willEndFor: configuration, animator: nil)
 
-        #expect(!harness.viewController.isUserInteracting)
+        #expect(try abs(#require(harness.windowMinY(of: .status(existing[0].id))) - touched) < 0.5, "閉じたあとに追従して行が動きました")
+        #expect(!harness.viewController.isShowingMenu)
     }
 
     private static func statusWithLink(number: Int) -> Status {
@@ -187,7 +185,7 @@ struct RowHoldTests {
     }
 
     /// まとめて行う操作のために投稿を選んでいる間は、新着を入れずに溜め、選び終えたら1度だけ知らせることを確かめる。
-    /// 選んでいる間にメニューを閉じても知らせない。新着で行がずれると、押そうとした行を押し損なうため。
+    /// 新着で行がずれると、押そうとした行を押し損なうため。
     @Test func selectingPostsHoldsUntilSelectionEnds() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -201,27 +199,10 @@ struct RowHoldTests {
         harness.viewController.beginPostSelection(with: .status(existing[0].id))
         #expect(harness.viewController.isUserInteracting)
 
-        harness.viewController.menuWillShow()
-        harness.viewController.menuDidHide()
-        #expect(harness.viewController.isUserInteracting)
         #expect(settled == 0)
 
         harness.viewController.endPostSelection()
         #expect(!harness.viewController.isUserInteracting)
-        #expect(settled == 1)
-    }
-
-    @Test func hidingMenuTwiceAppliesOnce() throws {
-        let harness = try TimelineHarness()
-        defer { harness.tearDown() }
-        harness.setStatuses(StatusFactory.make(count: 30, startingAt: 1_000))
-        var settled = 0
-        harness.viewController.onInteractionSettle = { settled += 1 }
-
-        harness.viewController.menuWillShow()
-        harness.viewController.menuDidHide()
-        harness.viewController.menuDidHide()
-
         #expect(settled == 1)
     }
 }
