@@ -100,7 +100,7 @@ extension TimelineViewController {
             case .account(let accountID): quoted.account.id == accountID
             }
         }
-        reconfigureAnimatingHeight(Set(ids), duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration))
+        reconfigureShiftingRowsBelow(Set(ids), duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration))
         if !ids.isEmpty { requestEmbedTranslations() }
     }
 }

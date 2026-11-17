@@ -1070,7 +1070,7 @@ final class PostBodyView: UIView {
         let embedView = loadedEmbedView()
         embedView.isHidden = false
         embedView.apply(embed)
-        // タイムラインは行の高さを動かす動きの中で描き直すため、その動きに乗せず、すぐ消す。乗せると、濃い状態から薄くなる途中で
+        // 動きの中で描き直されても、その動きに乗せず、すぐ消す。乗せると、濃い状態から薄くなる途中で
         // 濃くし始め、1コマで囲みが出て見える。濃くしている途中の行が別の投稿に使い回されたときも、その動きを止める。
         if fadesIn {
             embedView.stopFading(at: 0)
@@ -1099,7 +1099,7 @@ final class PostBodyView: UIView {
     private func leaveCard() -> UIView? {
         removeLeavingCardSnapshot()
         guard let cardView = Self.shown(cardView), let snapshot = cardView.snapshotView(afterScreenUpdates: false) else { return nil }
-        // タイムラインは行の高さを動かす動きの中で描き直すため、像の置き場所がその動きに乗って左上から動かないよう、動きの外で置く。
+        // 動きの中で描き直されても、像の置き場所がその動きに乗って左上から動かないよう、動きの外で置く。
         UIView.performWithoutAnimation {
             snapshot.frame = cardView.frame
             snapshot.isUserInteractionEnabled = false

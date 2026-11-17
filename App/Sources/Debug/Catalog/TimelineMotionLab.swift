@@ -8,16 +8,13 @@ final class TimelineMotionLabViewController: UIViewController {
     private enum Route: Int, CaseIterable {
         /// 並びの置き換えで、中身が変わった投稿を動かさずに描き直す（投稿の編集など）。
         case plain
-        /// 下の投稿ごと動かしてつなぐ（カスタム絵文字が届いたときなど）。
+        /// 下の投稿ごと動かしてつなぐ（リンクカードやカスタム絵文字が届いたときなど）。
         case shifting
-        /// 取り直した投稿として、高さを動かして描き直す（リンクカードが届いたときなど）。
-        case animatingHeight
 
         var title: String {
             switch self {
             case .plain: "動かさない"
             case .shifting: "下を動かす"
-            case .animatingHeight: "高さを動かす"
             }
         }
     }
@@ -163,17 +160,12 @@ final class TimelineMotionLabViewController: UIViewController {
             timeline.setEntries(entries)
         case .shifting:
             // 並びは中身を描き直さずに置き換え、描き直しは、カスタム絵文字が届いたときと同じ入口から頼む。
-            // 時間は、見比べられるよう「高さを動かす」と同じにする。
             timeline.setEntries(entries, keepingRowContentsOf: previous)
             timeline.reconfigureShiftingRowsBelow(
                 [.status(Self.id(number))],
                 duration: AppDependencies.tuning.value(of: TuningCatalog.linkCardTransitionDuration),
                 shiftLimit: shiftLimit
             )
-        case .animatingHeight:
-            timeline.refreshedStatusID = Self.id(number)
-            timeline.setEntries(entries)
-            timeline.refreshedStatusID = nil
         }
     }
 
@@ -191,7 +183,6 @@ final class TimelineMotionLabViewController: UIViewController {
             ("動かさない", .plain, nil),
             ("下を動かす", .shifting, nil),
             ("下を動かす（像を絞る）", .shifting, Self.shiftLimit),
-            ("高さを動かす", .animatingHeight, nil),
         ]
         let count = Self.benchmarkRounds * 2
         panel.isUserInteractionEnabled = false
@@ -290,7 +281,7 @@ final class TimelineMotionLabViewController: UIViewController {
             button("アクションバー") { [weak self] in self?.toggleActionBar() },
             button("新着") { [weak self] in self?.addArrival() },
         ])
-        let benchmark = button("ベンチマーク（3つの経路を順に測る）") { [weak self] in self?.runBenchmark() }
+        let benchmark = button("ベンチマーク") { [weak self] in self?.runBenchmark() }
         buttons.spacing = 6
         buttons.distribution = .fillProportionally
 

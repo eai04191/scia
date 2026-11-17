@@ -698,8 +698,6 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 絵文字の画像が届いたら、その絵文字を使う投稿だけを描き直す。読んでいる位置は保つ。
     /// 文字が横へずれたり次の行へ移ったりする動きは、ラベルが付ける（`EmojiArrivalTransition`）。
     /// 折り返しが変わって見えている行の高さが変わるときは、下の行ごと動かしてつなぐ（`reconfigureShiftingRowsBelow`）。
-    /// リンクカードと同じ描き直し（`reconfigureAnimatingHeight`）にしないのは、1つの投稿の絵文字は続けて届き、
-    /// 動いている途中に次の描き直しが重なると、タイムラインが行のセルを入れ替え、動かしているラベルが窓から外れて動きが止まるため（シミュレーターで確かめた）。
     /// 画面に出ていれば`redraw`で描き直し、出ていなければ画面に出るまで溜める。
     /// 絵文字とXの投稿のストアは、読めなかったものを読み直してよくなったときにも知らせ、描き直した行が求めると読みに行く。
     /// 隠れたまま描き直すと、見えていない行の分まで読みに行くため（docs/network.md）。
@@ -956,37 +954,6 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         applyPreservingAnchor(snapshot, keeping: anchorID)
     }
 
-    /// 行の中身を描き直し、高さが変わる分を、下の行ごとスプリングで動かしてつなぐ。動きの途中も操作を受け付ける。
-    /// 上端が表示領域の上端より上にある行は、スプリングで伸ばすと読んでいる位置がずれるため、その行の位置を保って描き直し、
-    /// 下の行と区切り線を動かしてつなぐ（`reconfigureShiftingRowsBelow`）。画面に出ていない行と、メニューを出している間は、動かさずに描き直す。
-    func reconfigureAnimatingHeight(_ ids: Set<ItemID>, duration: TimeInterval) {
-        guard !ids.isEmpty else { return }
-        guard duration > 0, view.window != nil, !isShowingMenu, !UIAccessibility.isReduceMotionEnabled else {
-            reconfigure(ids)
-            return
-        }
-        let visibleTop = collectionView.contentOffset.y + collectionView.adjustedContentInset.top
-        let visible = Set(collectionView.indexPathsForVisibleItems)
-        var animated: [ItemID] = []
-        var others: Set<ItemID> = []
-        for id in ids {
-            if let indexPath = dataSource.indexPath(for: id), visible.contains(indexPath),
-               let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame, frame.minY >= visibleTop {
-                animated.append(id)
-            } else {
-                others.insert(id)
-            }
-        }
-        // 上端が表示領域より上にある行は、その行の位置を保ったまま描き直し、下の行を動かしてつなぐ。
-        reconfigureShiftingRowsBelow(others, duration: duration)
-        guard !animated.isEmpty else { return }
-        var snapshot = dataSource.snapshot()
-        snapshot.reconfigureItems(animated)
-        UIView.animate(springDuration: duration, bounce: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
-            self.dataSource.apply(snapshot, animatingDifferences: true)
-        }
-    }
-
     /// サーバーから取り直した中身を反映している間の投稿。この投稿の行を描き直すときは、高さが変わる分を下の行ごと動かしてつなぐ。
     /// 承認された引用のように、あとから届いた中身で見えている行の高さが変わるため（docs/vision.mdの「タイムラインの動き」）。
     /// 取り直した投稿は各タイムラインの`updateStatus`から並びの置き換えを通って届くので、置き換えの間だけ立てる。
@@ -1071,7 +1038,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
         // 取り直した投稿の行は、並びを置き換えたあとで高さを動かして描き直す。
         let refreshedIDs = refreshedStatusID.map { refreshed in Set(changedIDs.filter { status(for: $0)?.displayed.id == refreshed }) } ?? []
-        defer { reconfigureAnimatingHeight(refreshedIDs, duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration)) }
+        defer { reconfigureShiftingRowsBelow(refreshedIDs, duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration)) }
         // 編集で本文か言語が変わった投稿の訳文は使えないので、見えている範囲が変わらなくても訳し直しを頼む。
         let bodyChanged = translations != nil && changedIDs.contains { id in
             let old = previous[id]?.postStatus?.displayed
@@ -2665,7 +2632,6 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// 切った本文を「続きを読む」で広げる。同じ投稿を出している行（ブースト、通知、引用の囲み）もまとめて描き直す。
     /// 広げる行は上端を動かさずに下へ伸びるので、行の位置を保って描き直し、下の行を元の位置から動かしてつなぐ。
-    /// 行ごとスプリングで伸ばす`reconfigureAnimatingHeight`では、全文が一度に並んで下の行を覆い、伸びる動きにならなかった。
     /// - Parameter anchorID: 押した行。同じ投稿の行が上にも並んでいると、その行も伸びるため、押した行の画面上の位置を保つ。
     func expandBody(_ key: LongBodyExpansion.Key, keeping anchorID: ItemID? = nil) {
         longBodyExpansion.expand(key)

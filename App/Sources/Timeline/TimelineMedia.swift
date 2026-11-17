@@ -63,7 +63,7 @@ extension TimelineViewController {
         let ids = displayedItemIDs.filter { itemID in
             self.status(for: itemID).flatMap { XPostLink.postID(of: $0.displayed) } == id
         }
-        reconfigureWhenShown(Set(ids)) { reconfigureAnimatingHeight($0, duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration)) }
+        reconfigureWhenShown(Set(ids)) { reconfigureShiftingRowsBelow($0, duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration)) }
         // 読み終えたXの投稿の本文を訳す。
         if translations != nil, !ids.isEmpty, viewIfLoaded?.window != nil {
             requestTranslationsAroundVisibleRows()
