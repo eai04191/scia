@@ -4,30 +4,12 @@ import UIKit
 /// 投稿の高さが変わる、新着が入る、メニューを開いている、を手で組み合わせて、読んでいる位置と動きを確かめる画面。
 /// 実物の`TimelineViewController`に番号付きの投稿を並べ、モデルを通さずに、並びと描き直しを実物と同じ入口から渡す。
 final class TimelineMotionLabViewController: UIViewController {
-    /// 高さが変わった投稿を描き直す経路。実物では、変化の種類で経路が決まる。
-    private enum Route: Int, CaseIterable {
-        /// 並びの置き換えで、中身が変わった投稿を動かさずに描き直す（投稿の編集など）。
-        case plain
-        /// 下の投稿ごと動かしてつなぐ（リンクカードやカスタム絵文字が届いたときなど）。
-        case shifting
-
-        var title: String {
-            switch self {
-            case .plain: "動かさない"
-            case .shifting: "下を動かす"
-            }
-        }
-    }
-
     private static let postCount = 20
     private static let linesPerStep = 5
     private static let delay: TimeInterval = 3
     private static let benchmarkRounds = 5
     /// 1回ごとにコマの間隔を測る長さ。動きが止まるのを待つ長さにもなる。
     private static let benchmarkWindow: CFTimeInterval = 0.8
-    /// 「下を動かす」で像を取る投稿を絞るときに渡す、伸び縮みする長さの上限。5行の本文より大きめにする。
-    private static let shiftLimit: CGFloat = 240
-
     private let timeline = TimelineViewController(texts: .home, refresh: {})
     private let account = CatalogFixtures.account(displayName: "実験のアカウント", acct: "lab@example.com")
     /// 上から並べる投稿の番号。新着は負の番号で先頭に足す。
@@ -40,9 +22,7 @@ final class TimelineMotionLabViewController: UIViewController {
     private let panel = UIStackView()
     private let targetLabel = UILabel()
     private let delaySwitch = UISwitch()
-    private let routeControl = UISegmentedControl(items: Route.allCases.map(\.title))
     private let menuSwitch = UISwitch()
-    private let limitSwitch = UISwitch()
     private let stateLabel = UILabel()
     private let measureLabel = UILabel()
     private var stateTimer: Timer?
@@ -140,33 +120,17 @@ final class TimelineMotionLabViewController: UIViewController {
 
     private func resizeTarget(by lines: Int) {
         let number = target
-        let route = Route(rawValue: routeControl.selectedSegmentIndex) ?? .plain
-        perform { [weak self] in self?.resize(number, by: lines, route: route) }
-    }
-
-    private func resize(_ number: Int, by lines: Int, route: Route) {
-        let limit: CGFloat? = limitSwitch.isOn ? Self.shiftLimit : nil
-        measure(route.title + (route == .shifting && limit != nil ? "（像を絞る）" : "")) {
-            apply(number, by: lines, route: route, shiftLimit: limit)
+        perform { [weak self] in
+            guard let self else { return }
+            measure(lines > 0 ? "\(lines)行足す" : "\(-lines)行減らす") { apply(number, by: lines) }
         }
     }
 
-    private func apply(_ number: Int, by lines: Int, route: Route, shiftLimit: CGFloat?) {
-        let previous = entries
+    /// 対象の投稿の本文を伸び縮みさせ、投稿が編集されたときと同じ入口から並びを渡す。
+    private func apply(_ number: Int, by lines: Int) {
         extraLines[number] = max(0, (extraLines[number] ?? 0) + lines)
         entries = makeEntries()
-        switch route {
-        case .plain:
-            timeline.setEntries(entries)
-        case .shifting:
-            // 並びは中身を描き直さずに置き換え、描き直しは、カスタム絵文字が届いたときと同じ入口から頼む。
-            timeline.setEntries(entries, keepingRowContentsOf: previous)
-            timeline.reconfigureShiftingRowsBelow(
-                [.status(Self.id(number))],
-                duration: AppDependencies.tuning.value(of: TuningCatalog.linkCardTransitionDuration),
-                shiftLimit: shiftLimit
-            )
-        }
+        timeline.setEntries(entries)
     }
 
     // MARK: - ベンチマーク
@@ -176,28 +140,19 @@ final class TimelineMotionLabViewController: UIViewController {
         let frames: FrameProbe.Result
     }
 
-    /// 対象の投稿で、経路ごとに5行足すと減らすを繰り返し、呼び出しの時間とコマの間隔をまとめて出す。結果はクリップボードにも入れる。
+    /// 対象の投稿で、5行足すと減らすを繰り返し、呼び出しの時間とコマの間隔をまとめて出す。結果はクリップボードにも入れる。
     private func runBenchmark() {
         let number = target
-        let cases: [(name: String, route: Route, shiftLimit: CGFloat?)] = [
-            ("動かさない", .plain, nil),
-            ("下を動かす", .shifting, nil),
-            ("下を動かす（像を絞る）", .shifting, Self.shiftLimit),
-        ]
         let count = Self.benchmarkRounds * 2
         panel.isUserInteractionEnabled = false
         Task { @MainActor in
-            var lines = ["対象: \(Self.name(number))、5行足す・減らすを\(Self.benchmarkRounds)回ずつ"]
-            for item in cases {
-                var samples: [Sample] = []
-                for index in 0..<count {
-                    measureLabel.text = "ベンチマーク中: \(item.name) \(index + 1)/\(count)"
-                    let lines = index.isMultiple(of: 2) ? Self.linesPerStep : -Self.linesPerStep
-                    samples.append(await sample { apply(number, by: lines, route: item.route, shiftLimit: item.shiftLimit) })
-                }
-                lines.append(Self.summary(item.name, samples))
+            var samples: [Sample] = []
+            for index in 0..<count {
+                measureLabel.text = "ベンチマーク中: \(index + 1)/\(count)"
+                let lines = index.isMultiple(of: 2) ? Self.linesPerStep : -Self.linesPerStep
+                samples.append(await sample { apply(number, by: lines) })
             }
-            let text = lines.joined(separator: "\n")
+            let text = Self.summary("\(Self.name(number))、\(Self.linesPerStep)行足す・減らすを\(Self.benchmarkRounds)回ずつ", samples)
             measureLabel.text = text
             UIPasteboard.general.string = text
             panel.isUserInteractionEnabled = true
@@ -263,7 +218,6 @@ final class TimelineMotionLabViewController: UIViewController {
         let tap = UITapGestureRecognizer(target: self, action: #selector(selectTarget))
         tap.cancelsTouchesInView = false
         timeline.collectionView.addGestureRecognizer(tap)
-        routeControl.selectedSegmentIndex = Route.plain.rawValue
         menuSwitch.addAction(UIAction { [weak self] _ in
             guard let self else { return }
             setMenuFlag(menuSwitch.isOn)
@@ -290,12 +244,10 @@ final class TimelineMotionLabViewController: UIViewController {
         panel.isLayoutMarginsRelativeArrangement = true
         panel.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12)
         panel.addArrangedSubview(targetLabel)
-        panel.addArrangedSubview(routeControl)
         panel.addArrangedSubview(buttons)
         panel.addArrangedSubview(benchmark)
         panel.addArrangedSubview(row(label("\(Int(Self.delay))秒後に行う（実物のメニューを開く時間）"), delaySwitch))
         panel.addArrangedSubview(row(label("メニューを開いている扱いにする"), menuSwitch))
-        panel.addArrangedSubview(row(label("「下を動かす」で像を取る投稿を絞る"), limitSwitch))
         panel.addArrangedSubview(stateLabel)
         panel.addArrangedSubview(measureLabel)
 
