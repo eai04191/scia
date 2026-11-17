@@ -85,7 +85,7 @@ enum OperationStatusCatalog {
         }
     }
 
-    private static let badGateway = ErrorPresentation(message: "サーバーかその手前で問題が起きています。しばらくしてからやり直してください。", code: "HTTP 502")
+    private static let badGateway = ErrorPresentation(MastodonAPIError(statusCode: 502, message: "Bad Gateway"))
 
     private static func subject(_ index: Int) -> OperationStatus.Subject {
         OperationStatus.Subject(
