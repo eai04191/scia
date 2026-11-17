@@ -11,7 +11,7 @@ import UIKit
 struct ProfileHeaderNoteTests {
     private static let longNote = (1...30).map { "<p>自己紹介の\($0)行目</p>" }.joined()
 
-    private func content(note: String) -> ProfileHeaderView.Content {
+    private func content(note: String, noteLineLimit: Int? = ProfileNoteLength.collapsedLineCount) -> ProfileHeaderView.Content {
         ProfileHeaderView.Content(
             account: Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: nil, note: note),
             followState: .unknown,
@@ -29,6 +29,7 @@ struct ProfileHeaderNoteTests {
             privateNote: "",
             avatarDescription: nil,
             headerDescription: nil,
+            noteLineLimit: noteLineLimit,
             usesAvatarAccent: true
         )
     }
@@ -92,5 +93,23 @@ struct ProfileHeaderNoteTests {
         window.frame.size.width = 320
         window.layoutIfNeeded()
         #expect(header.noteMeasurementCount > second)
+    }
+
+    /// 設定で全文を出すようにしたら、開いているプロフィールでも全文に広げ、折りたたむ設定に戻したら折りたたみ直す。
+    @Test func lineLimitSettingExpandsAndCollapsesNote() throws {
+        let (header, window) = try placeHeader()
+        defer { close(window) }
+        header.apply(content(note: Self.longNote))
+        window.layoutIfNeeded()
+        let collapsed = header.systemLayoutSizeFitting(window.bounds.size).height
+
+        header.apply(content(note: Self.longNote, noteLineLimit: nil))
+        window.layoutIfNeeded()
+        let full = header.systemLayoutSizeFitting(window.bounds.size).height
+        #expect(full > collapsed)
+
+        header.apply(content(note: Self.longNote))
+        window.layoutIfNeeded()
+        #expect(header.systemLayoutSizeFitting(window.bounds.size).height == collapsed)
     }
 }

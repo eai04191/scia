@@ -29,6 +29,8 @@ final class ProfileHeaderView: UIView {
         /// 読み上げるアイコンとヘッダー画像の代替テキスト。説明にならないものは除いておく。なければnil。
         let avatarDescription: String?
         let headerDescription: String?
+        /// 自己紹介を折りたたむ行数。nilなら全文を出す。
+        let noteLineLimit: Int?
         /// カードやボタン、画面のティントカラーに、アイコンから作った色を付ける。
         let usesAvatarAccent: Bool
     }
@@ -261,8 +263,6 @@ final class ProfileHeaderView: UIView {
     private var noteMeasuredWidth: CGFloat?
     /// 自己紹介が切った行数に収まるかを測った回数。テストで、測り直していないことを確かめる。
     private(set) var noteMeasurementCount = 0
-    /// 自己紹介を切るときの行数。
-    private static let collapsedNoteLines = 3
     /// 固定された投稿の棚より下（タブ）。タイムラインを出すまで隠し、タイムラインと一緒に出す。
     /// 先に出すと、タイムラインと一緒に届く棚が後から差し込まれ、タブが下へずれるため。
     private var sections: [UIView] = []
@@ -404,7 +404,7 @@ final class ProfileHeaderView: UIView {
         followedByBadge.text = ProfileTexts.Header.followedBy
         // 触れたらヘッダー画像を開けるよう、タップは下のヘッダー画像に通す。
         followedByBadge.isUserInteractionEnabled = false
-        noteLabel.numberOfLines = Self.collapsedNoteLines
+        noteLabel.numberOfLines = ProfileNoteLength.collapsedLineCount
         noteLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
         fieldsStack.axis = .vertical
         fieldsStack.spacing = 8
@@ -774,11 +774,12 @@ final class ProfileHeaderView: UIView {
         noteLabel.accessibilityCustomActions = linkAccessibilityActions(in: note)
         noteLabel.isHidden = note.length == 0
         noteContainer?.isHidden = note.length == 0
-        if previous?.account.id != account.id {
+        if previous?.account.id != account.id || previous?.noteLineLimit != content.noteLineLimit {
             isNoteExpanded = false
             noteView.finishExpanding()
+            noteMeasuredWidth = nil
         }
-        noteLabel.numberOfLines = isNoteExpanded ? 0 : Self.collapsedNoteLines
+        noteLabel.numberOfLines = isNoteExpanded ? 0 : content.noteLineLimit ?? 0
         privateNoteView.apply(note: content.privateNote, glyphLanguage: content.glyphLanguage, emojiImages: emojiImages)
         privateNoteContainer?.isHidden = content.privateNote.isEmpty
         applyFields(account, language: content.glyphLanguage, animatedEmojis: animatedEmojis)
@@ -1107,7 +1108,7 @@ final class ProfileHeaderView: UIView {
 
     /// 自己紹介が切った行数に収まらないときだけ、「さらに表示」を出す。測る幅は、タイムラインがヘッダーを測る幅から、左右の余白を引いたもの。
     private func updateMoreButton(width: CGFloat) {
-        guard !isNoteExpanded, !noteLabel.isHidden, width > 0 else {
+        guard !isNoteExpanded, let lineLimit = content?.noteLineLimit, !noteLabel.isHidden, width > 0 else {
             if !moreButton.isHidden {
                 moreButton.isHidden = true
                 noteView.setNeedsLayout()
@@ -1121,7 +1122,7 @@ final class ProfileHeaderView: UIView {
         // 段落の間隔を含めて、ラベルが描くのと同じ測り方で比べる。
         let bounds = CGRect(x: 0, y: 0, width: textWidth, height: .greatestFiniteMagnitude)
         let full = noteLabel.textRect(forBounds: bounds, limitedToNumberOfLines: 0).height
-        let limited = noteLabel.textRect(forBounds: bounds, limitedToNumberOfLines: Self.collapsedNoteLines).height
+        let limited = noteLabel.textRect(forBounds: bounds, limitedToNumberOfLines: lineLimit).height
         let isHidden = full <= limited + 1
         if moreButton.isHidden != isHidden {
             moreButton.isHidden = isHidden

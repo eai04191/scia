@@ -38,6 +38,7 @@ struct ProfileHeaderFollowRevealTests {
             privateNote: "",
             avatarDescription: nil,
             headerDescription: nil,
+            noteLineLimit: ProfileNoteLength.collapsedLineCount,
             usesAvatarAccent: true
         )
     }

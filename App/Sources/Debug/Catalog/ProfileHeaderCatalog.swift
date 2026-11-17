@@ -339,6 +339,7 @@ enum ProfileHeaderCatalog {
             privateNote: privateNote,
             avatarDescription: account.avatarDescription,
             headerDescription: account.headerDescription,
+            noteLineLimit: ProfileNoteLength.collapsedLineCount,
             usesAvatarAccent: true
         )
         header.apply(content)
@@ -413,6 +414,7 @@ private extension ProfileHeaderView.Content {
             privateNote: privateNote,
             avatarDescription: avatarDescription,
             headerDescription: headerDescription,
+            noteLineLimit: noteLineLimit,
             usesAvatarAccent: usesAvatarAccent
         )
     }

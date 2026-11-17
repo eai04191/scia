@@ -18,6 +18,11 @@ public final class AppSettings {
         didSet { defaults.set(ignoresUselessAltText, forKey: Keys.ignoresUselessAltText) }
     }
 
+    /// プロフィールの自己紹介を、折りたたむか、最初から全文を出すか。
+    public var profileNoteLength: ProfileNoteLength {
+        didSet { defaults.set(profileNoteLength.rawValue, forKey: Keys.profileNoteLength) }
+    }
+
     /// プロフィールの補足情報のカード、固定された投稿のカード、フォローのボタン、画面のティントカラーを、アイコンから取った色で塗る。
     /// オフなら、システムの色とアプリのアクセントカラーのままにする。
     public var usesDynamicProfileAccent: Bool {
@@ -481,6 +486,7 @@ public final class AppSettings {
         static let showsStatusBarTicker = "settings.showsStatusBarTicker"
         static let expandsXPosts = "settings.expandsXPosts"
         static let usesDynamicProfileAccent = "settings.usesDynamicProfileAccent"
+        static let profileNoteLength = "settings.profileNoteLength"
         static let isAutoTranslationEnabled = "settings.isAutoTranslationEnabled"
         static let autoTranslationLanguages = "settings.autoTranslationLanguages"
         static let autoTranslationExcludedHandles = "settings.autoTranslationExcludedHandles"
@@ -546,6 +552,7 @@ public final class AppSettings {
         showsStatusBarTicker = defaults.object(forKey: Keys.showsStatusBarTicker) as? Bool ?? true
         expandsXPosts = defaults.bool(forKey: Keys.expandsXPosts)
         usesDynamicProfileAccent = defaults.object(forKey: Keys.usesDynamicProfileAccent) as? Bool ?? true
+        profileNoteLength = defaults.string(forKey: Keys.profileNoteLength).flatMap(ProfileNoteLength.init(rawValue:)) ?? .collapsed
         isAutoTranslationEnabled = defaults.bool(forKey: Keys.isAutoTranslationEnabled)
         autoTranslationLanguages = defaults.stringArray(forKey: Keys.autoTranslationLanguages) ?? []
         autoTranslationExcludedHandles = defaults.stringArray(forKey: Keys.autoTranslationExcludedHandles) ?? []

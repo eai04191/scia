@@ -66,6 +66,8 @@ public enum SettingsItem: String, CaseIterable, Hashable, Sendable {
     case ignoresUselessAltText
 
     // プロフィール
+    /// `AppSettings.profileNoteLength`。選択肢は`ProfileNoteLength`。
+    case profileNoteLength
     /// `AppSettings.usesDynamicProfileAccent`。
     case dynamicProfileAccent
 
@@ -99,6 +101,7 @@ public enum SettingsItem: String, CaseIterable, Hashable, Sendable {
         case .viewerMediaDynamicRange: "ビューア"
         case .originalThumbnailsOnExpensiveNetwork: "高画質のサムネイル"
         case .ignoresUselessAltText: "仮の代替テキストを無視"
+        case .profileNoteLength: "自己紹介"
         case .dynamicProfileAccent: "アイコンのカラーに合わせる"
         case .expandsXPosts: "Xの投稿を展開"
         case .version: "バージョン"
@@ -232,7 +235,10 @@ extension SettingsPage {
                 SettingsSection(footer: "投稿したアプリが自動で付けたと思われる説明にならない代替テキストをないものとして扱います。", rows: [.item(.ignoresUselessAltText)]),
             ]
         case .profile:
-            [SettingsSection(rows: [.item(.dynamicProfileAccent)])]
+            [
+                SettingsSection(rows: [.item(.profileNoteLength)]),
+                SettingsSection(rows: [.item(.dynamicProfileAccent)]),
+            ]
         case .linkLoading:
             // 送り先、届くもの、通信のきっかけを、オンにする前に読めるように書く。同意はこの説明で取り、オンにするときに確認は重ねない（docs/link-card.md）。
             [SettingsSection(footer: """

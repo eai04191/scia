@@ -234,6 +234,7 @@ struct SettingsScreenForm: View {
         case .viewerMediaDynamicRange: choicePicker(item, selection: $settings.viewerMediaDynamicRange, title: \.title)
         case .originalThumbnailsOnExpensiveNetwork: Toggle(item.title, isOn: $settings.usesOriginalThumbnailsOnExpensiveNetwork)
         case .ignoresUselessAltText: Toggle(item.title, isOn: $settings.ignoresUselessAltText)
+        case .profileNoteLength: choicePicker(item, selection: $settings.profileNoteLength, title: \.title)
         case .dynamicProfileAccent: Toggle(item.title, isOn: $settings.usesDynamicProfileAccent)
         case .expandsXPosts: Toggle(item.title, isOn: $settings.expandsXPosts)
         case .version, .build, .branch, .commit, .builtAt, .sourceCode, .privacyPolicy:

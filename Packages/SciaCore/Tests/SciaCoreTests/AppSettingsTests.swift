@@ -128,6 +128,13 @@ struct AppSettingsTests {
         #expect(!AppSettings(defaults: defaults).usesDynamicProfileAccent)
     }
 
+    @Test func persistsProfileNoteLength() throws {
+        let defaults = try makeDefaults()
+        #expect(AppSettings(defaults: defaults).profileNoteLength == .collapsed)
+        AppSettings(defaults: defaults).profileNoteLength = .full
+        #expect(AppSettings(defaults: defaults).profileNoteLength == .full)
+    }
+
     /// HDRで描ける画面では、お気に入りとブーストの光を既定で白より明るく光らせる。白い背景の上では、HDRでないと光って見えないため。
     @Test func drawsReactionGlowInHDRByDefault() throws {
         let settings = AppSettings(defaults: try makeDefaults())

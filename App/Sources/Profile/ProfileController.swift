@@ -472,6 +472,7 @@ final class ProfileController {
             privateNote: store.relationship?.note ?? "",
             avatarDescription: attachment(of: .avatar)?.description,
             headerDescription: attachment(of: .header)?.description,
+            noteLineLimit: settings.profileNoteLength.lineLimit,
             usesAvatarAccent: settings.usesDynamicProfileAccent
         ))
         viewController?.headerDidChangeSize()

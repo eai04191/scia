@@ -26,6 +26,7 @@ struct ProfileHeaderAccentTests {
             privateNote: "",
             avatarDescription: nil,
             headerDescription: nil,
+            noteLineLimit: ProfileNoteLength.collapsedLineCount,
             usesAvatarAccent: usesAvatarAccent
         )
     }
