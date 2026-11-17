@@ -55,19 +55,21 @@ final class EmojiArrivalTransition {
     private weak var label: EmojiLabel?
 
     /// 文字列を入れ替える前に呼ぶ。`start`は、動き始めるときの文字ごとの見え方、`startBars`は引用の縦線の枠。
-    init(label: EmojiLabel, start: [Int: Placement], startBars: [CGRect], duration: TimeInterval, fadesInNewCharacters: Bool = false, leaving: Leaving? = nil) {
+    init(label: EmojiLabel, start: [Int: Placement], startBars: [CGRect], duration: TimeInterval, fadesInNewCharacters: Bool = false, newCharacterFadeDelay: Double = 0, leaving: Leaving? = nil, leavingFadeFraction: Double = 1) {
         self.label = label
         self.start = start
         self.startBars = startBars
         self.duration = duration
         self.fadesInNewCharacters = fadesInNewCharacters
+        self.newCharacterFadeDelay = newCharacterFadeDelay
         self.leaving = leaving
+        self.leavingFadeFraction = leavingFadeFraction
     }
 
-    /// 編集で入った文字を濃くし始めるまでの、動きの時間に対する割合。スプリングは、この時点で残りの動きが小さくなっている。
-    private static let newCharacterFadeDelay = 0.5
-    /// 編集でなくなった文字を薄くし終えるまでの、動きの時間に対する割合。なくなった文字の場所へ、残った文字が動いてくるので、先に消す。
-    private static let leavingFadeFraction = 0.25
+    /// 編集で入った文字を濃くし始めるまでの、動きの時間に対する割合。
+    private let newCharacterFadeDelay: Double
+    /// 編集でなくなった文字を薄くし終えるまでの、動きの時間に対する割合。
+    private let leavingFadeFraction: Double
 
     /// 文字の枠を、同じ行で続いているものどうしでまとめる。
     static func lineRuns(of frames: [CGRect]) -> [CGRect] {
@@ -158,7 +160,7 @@ final class EmojiArrivalTransition {
                     // 始めから濃くすると、動いている前の文字と、同じ場所で重なって見える。
                     let fade = CAKeyframeAnimation(keyPath: "opacity")
                     fade.values = [piece.startOpacity, piece.startOpacity, 1]
-                    fade.keyTimes = [0, NSNumber(value: Self.newCharacterFadeDelay), 1]
+                    fade.keyTimes = [0, NSNumber(value: newCharacterFadeDelay), 1]
                     fade.duration = duration
                     layer.add(fade, forKey: "fadeIn")
                 } else {
@@ -196,7 +198,7 @@ final class EmojiArrivalTransition {
                 let fade = CABasicAnimation(keyPath: "opacity")
                 fade.fromValue = 1
                 fade.toValue = 0
-                fade.duration = duration * Self.leavingFadeFraction
+                fade.duration = duration * leavingFadeFraction
                 fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
                 layer.add(fade, forKey: "fadeOut")
             }

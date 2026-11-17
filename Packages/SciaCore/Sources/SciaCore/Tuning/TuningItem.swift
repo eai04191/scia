@@ -181,6 +181,24 @@ public enum TuningCatalog {
         defaultValue: 0.5
     )
 
+    /// 本文が編集されたとき、新しく入った文字を濃くし始めるまでの、動きの時間に対する割合。前の文字が通り終える前に濃くすると、同じ場所で重なって見える。
+    public static let textEditNewCharacterFadeDelay = NumberTuning(
+        id: "timeline.textEditNewCharacterFadeDelay",
+        title: "本文の編集で入った文字を濃くし始めるまでの割合",
+        range: 0...0.9,
+        step: 0.05,
+        defaultValue: 0.5
+    )
+
+    /// 本文が編集されたとき、なくなった文字を薄くし終えるまでの、動きの時間に対する割合。なくなった文字の場所へ、残った文字が動いてくる。
+    public static let textEditLeavingFadeFraction = NumberTuning(
+        id: "timeline.textEditLeavingFadeFraction",
+        title: "本文の編集でなくなった文字を薄くし終えるまでの割合",
+        range: 0.05...1,
+        step: 0.05,
+        defaultValue: 0.25
+    )
+
     /// カスタム絵文字の画像が届いたとき、同じ行のあとの文字を前の位置から新しい位置へ動かし、絵文字を薄い状態から濃くする時間。0なら切り替える。
     public static let customEmojiArrivalDuration = NumberTuning(
         id: "timeline.customEmojiArrivalDuration",
@@ -2041,6 +2059,8 @@ public enum TuningCatalog {
             .number(actionBarDrawerDuration),
             .number(actionBarLeadingHitReach),
             .number(customEmojiArrivalDuration),
+            .number(textEditNewCharacterFadeDelay),
+            .number(textEditLeavingFadeFraction),
             .number(reactionTransitionDuration),
             .number(mediaSymbolRatio),
             .number(mediaSymbolMinSize),

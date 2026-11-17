@@ -188,7 +188,16 @@ class EmojiLabel: TextKitLabel {
         let image = leavingFrames.isEmpty ? nil : running == nil ? TextReplacementTransition.render(self) : TextReplacementTransition.shownImage(of: self)
         let leaving = image.map { EmojiArrivalTransition.Leaving(image: $0, size: bounds.size, frames: leavingFrames) }
         let previous = emojiArrival
-        emojiArrival = EmojiArrivalTransition(label: self, start: start, startBars: startBars, duration: duration, fadesInNewCharacters: true, leaving: leaving)
+        emojiArrival = EmojiArrivalTransition(
+            label: self,
+            start: start,
+            startBars: startBars,
+            duration: duration,
+            fadesInNewCharacters: true,
+            newCharacterFadeDelay: AppDependencies.tuning.value(of: TuningCatalog.textEditNewCharacterFadeDelay),
+            leaving: leaving,
+            leavingFadeFraction: AppDependencies.tuning.value(of: TuningCatalog.textEditLeavingFadeFraction)
+        )
         previous?.finish()
         pendingEmojiArrival = true
         setNeedsLayout()
