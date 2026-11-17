@@ -184,7 +184,9 @@ class EmojiLabel: TextKitLabel {
         // なくなった文字は、前の描画の像から切り出して薄くする。前の位置を新しい位置へ写せなかった文字が、なくなった文字になる。
         let kept = Set(Self.remappingUnchangedEnds(Dictionary(uniqueKeysWithValues: before.keys.map { ($0, $0) }), from: shown.string, to: new.string).values)
         let leavingFrames = before.filter { !kept.contains($0.key) }.map(\.value.frame)
-        let leaving = leavingFrames.isEmpty ? nil : TextReplacementTransition.render(self).map { EmojiArrivalTransition.Leaving(image: $0, size: bounds.size, frames: leavingFrames) }
+        // 文字が動いている途中なら、枠は動いている途中の位置なので、像も、いま見えている描画から取る。並べ終えた描画から取ると、枠と像がずれて、別の文字を切り出す。
+        let image = leavingFrames.isEmpty ? nil : running == nil ? TextReplacementTransition.render(self) : TextReplacementTransition.shownImage(of: self)
+        let leaving = image.map { EmojiArrivalTransition.Leaving(image: $0, size: bounds.size, frames: leavingFrames) }
         let previous = emojiArrival
         emojiArrival = EmojiArrivalTransition(label: self, start: start, startBars: startBars, duration: duration, fadesInNewCharacters: true, leaving: leaving)
         previous?.finish()

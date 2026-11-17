@@ -746,7 +746,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// セルの中で続いている動き（絵文字が入る文字の動きなど）も止まらない。
     /// 区切り線は、行のセルとは別のビューとしてタイムラインに並ぶため、セルと一緒に動かす。動かさないと、伸びた行の下の線だけが1コマで下がる。
     /// - Parameter anchorID: 画面上の位置を保つ行。なければ、表示領域の上端にかかっている行を基準にする。
-    /// - Parameter concealsShrink: 縮んだ行の、なくなった部品の場所に、描き直す前の像を見せて、まわりが詰めてくるのに合わせて縮める。縮む中身を自分で動かして消す描き直し（訳文、リアクション、本文の編集）では見せない。
+    /// - Parameter concealsShrink: 縮んだ行の、なくなった部品の場所に、描き直す前の像を見せて、まわりが詰めてくるのに合わせて縮める。縮む中身を自分で動かして消す描き直し（訳文、リアクション）では見せない。
     /// - Parameter shiftLimit: 描き直した行が伸び縮みする長さの上限。分かっていれば、上下のどちらかの端からタイムラインの外へ出うる行の像だけを取る。像を取るのは重く、押した直後のコマが遅れて、動きの始まりが飛んで見えるため。nilなら、描き直す行より下のすべての行の像を取る。
     func reconfigureShiftingRowsBelow(_ ids: Set<ItemID>, keeping anchorID: ItemID? = nil, duration: TimeInterval, shiftLimit: CGFloat? = nil, concealsShrink: Bool = true) {
         guard !ids.isEmpty else { return }
@@ -818,7 +818,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private func rowParts(of cell: UICollectionViewCell) -> (content: UIView, parts: [RowPart])? {
         let content = cell.contentView
         guard let body = (content as? PostContentView)?.postBody ?? (content as? NotificationContentView)?.postBody else { return nil }
-        return (content, (content.subviews + body.subviews).map { ($0, $0.frame.minY, $0.frame.height, $0.isHidden, $0.convert($0.bounds, to: cell)) })
+        // 本文が、消えていく部品の代わりにいっとき重ねている像は、本文が自分で薄くして外すので、部品に数えない。数えると、新しく現れた部品として切り抜き、見えていた像が最初のコマで隠れる。
+        let transient = body.transientSnapshots
+        let views = content.subviews + body.subviews.filter { view in !transient.contains { $0 === view } }
+        return (content, views.map { ($0, $0.frame.minY, $0.frame.height, $0.isHidden, $0.convert($0.bounds, to: cell)) })
     }
 
     /// `growth`だけ伸びた行（縮んだなら負）の中身を、前の画面上の位置から新しい位置へ動かす。
@@ -873,6 +876,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let areas = parts.compactMap { part -> CGRect? in
             guard !part.wasHidden, part.frameInCell.height > 0.5, !(part.view is PostBodyView) else { return nil }
             if part.view.isHidden { return part.frameInCell }
+            // 出たまま縮んだ本文は、なくなった文字を自分で薄くして消す（`EmojiLabel.prepareTextEdit`）。像を見せると、動いている文字と、像の中の文字が食い違う。
+            guard !(part.view is EmojiLabel) else { return nil }
             let lost = part.frameInCell.height - part.view.bounds.height
             guard lost > 0.5 else { return nil }
             return CGRect(x: part.frameInCell.minX, y: part.frameInCell.maxY - lost, width: part.frameInCell.width, height: lost)
@@ -1226,15 +1231,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             guard let old = previous[id]?.postStatus, let new = entries[id]?.postStatus else { return true }
             return !new.differsOnlyInFixedHeightParts(from: old)
         }).subtracting(reactionChangedIDs)
-        // 本文が変わった行は、なくなった文字を本文が自分で薄くして消すので、縮む前の像は重ねない。
-        // 像は、なくなる中身が行の末尾にあるものとして下の端から縮めるので、本文の途中がなくなると、動いている文字と像の中の文字が食い違う。
-        let textEditedIDs = resizedIDs.filter { id in
-            guard let old = previous[id]?.postStatus?.displayed, let new = entries[id]?.postStatus?.displayed else { return false }
-            return old.content != new.content
-        }
         defer {
-            reconfigureShiftingRowsBelow(textEditedIDs, keeping: anchorID, duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration), concealsShrink: false)
-            reconfigureShiftingRowsBelow(resizedIDs.subtracting(textEditedIDs), keeping: anchorID, duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration))
+            reconfigureShiftingRowsBelow(resizedIDs, keeping: anchorID, duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration))
             // 取り直す投稿は、行に出している中身から決める。下の`reportVisibleItems`は、ここで描き直す前の中身を読むので、描き直したあとに報告し直す。
             // 報告し直さないと、編集でリンクが足された投稿のカードを、次にスクロールするまで取り直さない。
             if !resizedIDs.isEmpty {

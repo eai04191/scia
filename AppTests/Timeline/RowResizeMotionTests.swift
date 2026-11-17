@@ -275,4 +275,31 @@ struct RowResizeMotionTests {
         let bar = try #require((cell.contentView as? PostContentView)?.postBody.actionBar, "アクションバーがありません")
         #expect(abs(harness.initialOffsetY(of: bar, in: cell) + grown) < 0.5, "アクションバーが、前の位置から動いていません（\(harness.initialOffsetY(of: bar, in: cell))pt、伸びは\(grown)pt）")
     }
+
+    /// 本文の編集と一緒にリンクカードがなくなったら、カードのあった場所には、描き直す前の像を見せる。
+    /// 本文は、なくなった文字を自分で薄くして消すが、カードは一度に隠れるので、像を見せないと、下の部品が上がってくるまで空く。
+    @Test func cardRemovedWithTextEditIsConcealed() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
+        let base = statuses[10]
+        let card = PreviewCard(url: try #require(URL(string: "https://news.example/a")), title: "見出し", description: "説明", type: .link, providerName: "", image: nil, width: 0, height: 0, blurhash: nil)
+        statuses[10] = Status(id: base.id, createdAt: base.createdAt, account: base.account, content: "<p>編集する前の本文</p>", spoilerText: "", url: nil, card: card)
+        harness.setStatuses(statuses)
+        let id = TimelineViewController.ItemID.status(base.id)
+        try harness.scroll(to: id, at: .centeredVertically)
+        harness.collectionView.layoutIfNeeded()
+        // 描かれる前の行は像を取れないため、描かれるのを待つ。
+        try await waitUntil { harness.visibleCell(of: id)?.snapshotView(afterScreenUpdates: false) != nil }
+        let cardView = try #require((harness.visibleCell(of: id)?.contentView as? PostContentView)?.postBody.linkCard, "リンクカードが出ていません")
+        let cardTop = try cardView.convert(cardView.bounds, to: #require(harness.visibleCell(of: id))).minY
+
+        statuses[10] = replacing(statuses[10], content: "<p>編集した本文</p>")
+        harness.setStatuses(statuses)
+        harness.collectionView.layoutIfNeeded()
+
+        let cell = try #require(harness.visibleCell(of: id))
+        let mask = try #require(cell.subviews.lazy.compactMap { $0.layer.mask }.first { $0.animation(forKey: TimelineViewController.shrinkName) != nil }, "カードのあった場所に、前の像を見せていません")
+        #expect(abs(mask.frame.minY - cardTop) < 0.01, "カードの枠の上の端から縮めていません")
+    }
 }

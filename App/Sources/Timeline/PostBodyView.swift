@@ -518,6 +518,11 @@ final class PostBodyView: UIView {
         setNeedsLayout()
     }
 
+    /// 消えていく部品の代わりに、いっとき重ねている像（替わったリンクカード、なくなったリアクションの列）。自分で薄くして外すので、部品としては動かさない。
+    var transientSnapshots: [UIView] {
+        reactionFadeOutSnapshots + [leavingCardSnapshot].compactMap(\.self)
+    }
+
     /// 次に並べるときに薄くして外す、なくなったリアクションの列の像。
     private var pendingReactionsFadeOut: (snapshot: UIView, duration: TimeInterval)?
 

@@ -224,7 +224,13 @@ final class TextReplacementTransition {
 
     /// 動いている途中の、いま画面に見えている描画。
     func currentImage() -> CGImage? {
-        guard isRunning, let label, label.bounds.width > 0, label.bounds.height > 0 else { return nil }
+        guard isRunning, let label else { return nil }
+        return Self.shownImage(of: label)
+    }
+
+    /// `label`の、いま画面に見えている描画。動いている途中の文字は、動いている途中の位置に写る。
+    static func shownImage(of label: EmojiLabel) -> CGImage? {
+        guard label.bounds.width > 0, label.bounds.height > 0 else { return nil }
         let format = UIGraphicsImageRendererFormat(for: label.traitCollection)
         return UIGraphicsImageRenderer(bounds: label.bounds, format: format).image { _ in
             label.drawHierarchy(in: label.bounds, afterScreenUpdates: false)

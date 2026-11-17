@@ -212,6 +212,9 @@ struct XPostArrivalScrollTests {
         #expect(pushedOut.count >= 2, "複数の行が押し出される条件になっていません")
         let sentOut = harness.collectionView.subviews.filter { !($0 is UICollectionViewCell) && $0.layer.animation(forKey: "rowShiftEnd") != nil }
         #expect(sentOut.count >= pushedOut.count, "押し出された行の像を動かしていません")
+        // 替わったリンクカードの像は、本文が自分で薄くして外す。新しく現れた部品として切り抜くと、見えていた像が最初のコマで隠れる。
+        let leaving = try #require((harness.visibleCell(of: id)?.contentView as? PostContentView)?.postBody.leavingCardSnapshot, "替わったカードの像を残していません")
+        #expect(leaving.layer.mask == nil, "薄くして消すカードの像を切り抜いています")
     }
 
     /// 見えている行が伸びたら、上の行は動かさず、下の行を伸びた分だけ押し下げる。
