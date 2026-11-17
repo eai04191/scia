@@ -23,6 +23,11 @@ public final class AppSettings {
         didSet { defaults.set(profileNoteLength.rawValue, forKey: Keys.profileNoteLength) }
     }
 
+    /// プロフィールの固定された投稿を、タイムラインの上の棚に分けて出す。オフなら、投稿のタイムラインの先頭に並べる。
+    public var separatesProfilePinned: Bool {
+        didSet { defaults.set(separatesProfilePinned, forKey: Keys.separatesProfilePinned) }
+    }
+
     /// プロフィールに、注目のハッシュタグの棚を出す。オフなら読み込まない。
     public var showsProfileFeaturedTags: Bool {
         didSet { defaults.set(showsProfileFeaturedTags, forKey: Keys.showsProfileFeaturedTags) }
@@ -497,6 +502,7 @@ public final class AppSettings {
         static let expandsXPosts = "settings.expandsXPosts"
         static let usesDynamicProfileAccent = "settings.usesDynamicProfileAccent"
         static let profileNoteLength = "settings.profileNoteLength"
+        static let separatesProfilePinned = "settings.separatesProfilePinned"
         static let showsProfileFeaturedTags = "settings.showsProfileFeaturedTags"
         static let showsProfileEndorsements = "settings.showsProfileEndorsements"
         static let isAutoTranslationEnabled = "settings.isAutoTranslationEnabled"
@@ -564,6 +570,7 @@ public final class AppSettings {
         showsStatusBarTicker = defaults.object(forKey: Keys.showsStatusBarTicker) as? Bool ?? true
         expandsXPosts = defaults.bool(forKey: Keys.expandsXPosts)
         usesDynamicProfileAccent = defaults.object(forKey: Keys.usesDynamicProfileAccent) as? Bool ?? true
+        separatesProfilePinned = defaults.object(forKey: Keys.separatesProfilePinned) as? Bool ?? true
         showsProfileFeaturedTags = defaults.object(forKey: Keys.showsProfileFeaturedTags) as? Bool ?? true
         showsProfileEndorsements = defaults.object(forKey: Keys.showsProfileEndorsements) as? Bool ?? true
         profileNoteLength = defaults.string(forKey: Keys.profileNoteLength).flatMap(ProfileNoteLength.init(rawValue:)) ?? .collapsed

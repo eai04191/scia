@@ -79,6 +79,20 @@ struct ProfileDisplaySettingsTests {
         }
     }
 
+    /// 分けないときは、固定された投稿を棚に出さず、投稿のタイムラインの先頭に並べる。分けるように戻したら、棚に戻す。
+    @Test func placesPinnedAtTopOfTimelineWhenNotSeparated() async throws {
+        let opened = try open { $0.separatesProfilePinned = false }
+        defer { opened.close() }
+        try await waitUntilRevealed(opened)
+        let header = try #require(opened.header)
+        #expect(opened.viewController.displayedItemIDs == [.pinned("5"), .status("10")])
+        #expect(!header.shownShelves.contains(.pinned))
+
+        opened.settings.separatesProfilePinned = true
+        try await waitUntil { opened.viewController.displayedItemIDs == [.status("10")] }
+        #expect(header.shownShelves.contains(.pinned))
+    }
+
     @Test func hidesFeaturedShelvesWhenTurnedOffAndShowsThemWhenTurnedOn() async throws {
         let opened = try open { settings in
             settings.showsProfileFeaturedTags = false

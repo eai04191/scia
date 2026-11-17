@@ -246,6 +246,7 @@ final class ProfileController {
             _ = store.featuredTags
             _ = store.endorsements
             _ = store.isShelvesSettled
+            _ = settings.separatesProfilePinned
             _ = settings.showsProfileFeaturedTags
             _ = settings.showsProfileEndorsements
         } onChange: { [weak self] in
@@ -528,12 +529,14 @@ final class ProfileController {
     /// - Returns: 棚の中身が変わった。
     private func showPinned() -> Bool {
         let covers = viewController?.mediaCovers ?? MediaCovers()
-        let items = listReveal == .revealed ? store.pinned.map { ProfileShelfItem(status: $0, verdict: store.filtering.verdict(for: $0), covers: covers) } : []
+        let items = listReveal == .revealed && settings.separatesProfilePinned ? store.pinned.map { ProfileShelfItem(status: $0, verdict: store.filtering.verdict(for: $0), covers: covers) } : []
         return header.setPinned(items, glyphLanguage: settings.glyphLanguageIdentifier())
     }
 
+    /// 固定された投稿を棚に分けないときは、「投稿」のタイムラインの先頭に並べる。同じ投稿が下にも並ぶので、IDの違う行にする。
     private func shownEntries() -> [TimelineEntry] {
-        shownTimeline.entries
+        let pinned = shownTab == .posts && !settings.separatesProfilePinned ? store.pinned : []
+        return pinned.map(TimelineEntry.pinned) + shownTimeline.entries
     }
 
     /// 最初のタイムラインを出せるようになっていたら、見える行のアイコンを上限まで待ってから、フェードで出す。
