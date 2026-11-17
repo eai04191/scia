@@ -259,9 +259,11 @@ struct EmojiArrivalTests {
         #expect(!hasRowShift(hiddenCell), "上へ伸びた行そのものを動かしました")
     }
 
-    /// 表示領域の上端をまたぐ行が同じ絵文字を使っていても、その行の高さが変わらなければ、見えている行が伸びた分は下の行ごと動かす。
-    @Test func unchangedRowAcrossTopDoesNotStopShifting() async throws {
-        let (harness, gate, statuses) = try widePostHarness(at: 12)
+    /// 表示領域の上端をまたぐ行が同じ絵文字を使っていても、その行の高さが変わらなければ、その行の位置を保ち、見えている行が伸びた分は下の行ごと動かす。
+    /// 伸びる行が、上端をまたぐ行のすぐ下にあっても同じ。描き直す行かどうかで基準を決めると、高さの変わらない上端の行まで、下の行が伸びた分だけ上へ流れる。
+    @Test(arguments: [11, 12])
+    func unchangedRowAcrossTopDoesNotStopShifting(growingIndex: Int) async throws {
+        let (harness, gate, statuses) = try widePostHarness(at: growingIndex)
         defer { harness.tearDown() }
         // 上端をまたぐ行にも同じ絵文字を1つだけ置く。届いても折り返しは変わらない。
         let across = statuses[10]
@@ -270,11 +272,12 @@ struct EmojiArrivalTests {
         updated[10] = small
         harness.setStatuses(updated)
         let acrossID = TimelineViewController.ItemID.status(across.id)
-        let growing = TimelineViewController.ItemID.status(statuses[12].id)
-        let below = TimelineViewController.ItemID.status(statuses[13].id)
+        let growing = TimelineViewController.ItemID.status(statuses[growingIndex].id)
+        let below = TimelineViewController.ItemID.status(statuses[growingIndex + 1].id)
         try harness.scroll(to: acrossID, at: .top)
         harness.collectionView.contentOffset.y += 10
         harness.collectionView.layoutIfNeeded()
+        let acrossY = try #require(harness.windowMinY(of: acrossID))
         let growingCell = try #require(harness.visibleCell(of: growing))
         let belowCell = try #require(harness.visibleCell(of: below))
         let height = growingCell.frame.height
@@ -283,6 +286,7 @@ struct EmojiArrivalTests {
         try await waitUntil { growingCell.frame.height > height }
 
         #expect(hasRowShift(belowCell), "上端をまたぐ行が変わらないのに、下の行を動かしませんでした")
+        #expect(try abs(#require(harness.windowMinY(of: acrossID)) - acrossY) < 0.5, "高さの変わらない上端の行が動きました")
     }
 
     /// 絵文字が届いて、上端が表示領域より上にある行の折り返しが増えたら、伸びた分は表示領域の上へ出し、下の行は動かさない。

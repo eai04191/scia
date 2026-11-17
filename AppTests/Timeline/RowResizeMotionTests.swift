@@ -128,4 +128,45 @@ struct RowResizeMotionTests {
         let text = try #require(body.subviews.first { $0 is LinkLabel }, "本文がありません")
         #expect(abs(harness.initialOffsetY(of: text, in: cell) - grown) < 0.5, "本文が、前の位置から動いていません（\(harness.initialOffsetY(of: text, in: cell))pt、伸びは\(grown)pt）")
     }
+
+    /// 切り抜きを広げている途中に同じ行がまた伸びたら、切り抜きの行き先を新しい高さへ動かし直す。
+    /// 動かし直さないと、切り抜きは前の高さまでしか広がらず、足された分が、切り抜きを外すコマで一度に現れる。
+    @Test func growingAgainRetargetsPartReveal() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
+        harness.setStatuses(statuses)
+        let id = TimelineViewController.ItemID.status(statuses[10].id)
+        try harness.scroll(to: id, at: .top)
+        harness.collectionView.contentOffset.y += 20
+        harness.collectionView.layoutIfNeeded()
+
+        for count in [10, 30] {
+            statuses[10] = replacing(statuses[10], content: "<p>" + String(repeating: "編集で伸びた本文。", count: count) + "</p>")
+            harness.setStatuses(statuses)
+            harness.collectionView.layoutIfNeeded()
+        }
+
+        let body = try #require(harness.visibleCell(of: id)?.contentView as? PostContentView).postBody
+        let text = try #require(body.subviews.first { $0 is LinkLabel }, "本文がありません")
+        let grow = try #require(text.layer.mask?.animation(forKey: TimelineViewController.partRevealName) as? CASpringAnimation, "伸びた本文を切り抜いていません")
+        #expect(abs((grow.toValue as? CGFloat ?? 0) - text.bounds.height) < 0.5, "切り抜きの行き先が、今の高さになっていません")
+    }
+
+    /// 編集で本文にリンクが足された見えている投稿は、描き直したあとの中身で、カードを取り直す投稿として報告する。
+    /// 描き直す前の中身で報告すると、リンクがないので報告から漏れ、次にスクロールするまで取り直さない。
+    @Test func editedRowWithNewLinkIsReportedAsUnsettled() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
+        harness.setStatuses(statuses)
+        harness.scroll(toFraction: 0)
+        var reported: [Status.ID] = []
+        harness.viewController.onVisibleUnsettledStatusesChange = { reported = $0.map(\.id) }
+
+        statuses[2] = replacing(statuses[2], content: #"<p><a href="https://news.example/article">news.example/article</a></p>"#)
+        harness.setStatuses(statuses)
+
+        #expect(reported.contains(statuses[2].id), "リンクが足された投稿を、カードを取り直す投稿として報告していません")
+    }
 }

@@ -738,7 +738,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// 行の中身を、同じセルのまま動かさずに描き直し、高さが変わって位置がずれた見えている行と区切り線を、元の位置から新しい位置へ動かしてつなぐ。
-    /// 上端が表示領域の上端より上にある行の高さが、使う人の操作によらず変わるときは、下の行は動かず、動かすものがない（`anchorBelowResizing`、docs/vision.mdの「タイムラインの動き」）。
+    /// 上端が表示領域の上端より上にある行の高さが、使う人の操作によらず変わるときは、下の行は動かず、動かすものがない（`upwardResizingRow`、docs/vision.mdの「タイムラインの動き」）。
     /// 押し下げられて表示領域の外へ出る行は、描き直す前に取っておいた像を動かして外へ送る。
     ///
     /// 動きは、層の位置に足し合わせる形（additive）で付ける。描き直しを続けて重ねても、前の動きの途中の位置から次の動きがつながり、
@@ -765,7 +765,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         collectionView.layoutIfNeeded()
         for row in resizedBefore {
             guard let cell = cell(for: row.id) else { continue }
-            // 下端を保って上へ伸び縮みした行（`anchorBelowResizing`）は、下の行が動かないので、切り抜きも像も要らない。上から切り抜くと、見えていた下の部分が一度隠れる。
+            // 下端を保って上へ伸び縮みした行（`upwardResizingRow`）は、下の行が動かないので、切り抜きも像も要らない。上から切り抜くと、見えていた下の部分が一度隠れる。
             // 代わりに、行の中身を、前の画面上の位置から動かす。
             guard abs(cell.convert(cell.bounds, to: nil).maxY - row.maxY) > 0.5 else {
                 shiftParts(of: cell, from: row.parts, growth: cell.bounds.height - row.height, duration: duration)
@@ -856,22 +856,28 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// 伸びた部品を、`height`から今の高さまで切り抜いて見せる。`anchoredAtBottom`なら下の端から、そうでなければ上の端から広げる。
+    /// 切り抜きを広げている途中にまた伸びたら（絵文字が続けて届いたなど）、同じ切り抜きを、今見えている高さから新しい高さへ動かし直す。
+    /// 動かし直さないと、切り抜きは前の高さまでしか広がらず、足された分が、切り抜きを外すコマで一度に現れる。
     private func revealPart(_ view: UIView, from height: CGFloat, anchoredAtBottom: Bool, duration: TimeInterval) {
         let newHeight = view.bounds.height
-        guard newHeight - height > 0.5, view.layer.mask == nil else { return }
-        let mask = CALayer()
+        let running = view.layer.mask.flatMap { $0.name == Self.partRevealName ? $0 : nil }
+        guard newHeight - height > 0.5, running != nil || view.layer.mask == nil else { return }
+        let mask = running ?? CALayer()
+        let from = running?.presentation()?.bounds.height ?? height
         CATransaction.begin()
         CATransaction.setDisableActions(true)
+        mask.name = Self.partRevealName
         mask.backgroundColor = UIColor.black.cgColor
         mask.anchorPoint = anchoredAtBottom ? CGPoint(x: 0, y: 1) : .zero
         mask.bounds = CGRect(origin: .zero, size: view.bounds.size)
         mask.position = anchoredAtBottom ? CGPoint(x: 0, y: newHeight) : .zero
         CATransaction.commit()
         let grow = CASpringAnimation.rowSpring(keyPath: "bounds.size.height", duration: duration)
-        grow.fromValue = height
+        grow.fromValue = from
         grow.toValue = newHeight
         grow.delegate = RowShiftCompletion { [weak view, weak mask] in
-            guard let view, let mask, view.layer.mask === mask else { return }
+            // 動かし直した動きが続いていれば外さない。
+            guard let view, let mask, view.layer.mask === mask, mask.animation(forKey: Self.partRevealName) == nil else { return }
             view.layer.mask = nil
         }
         mask.add(grow, forKey: Self.partRevealName)
@@ -1138,7 +1144,14 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             guard let old = previous[id]?.postStatus, let new = entries[id]?.postStatus else { return true }
             return !new.differsOnlyInFixedHeightParts(from: old)
         }).subtracting(reactionChangedIDs)
-        defer { reconfigureShiftingRowsBelow(resizedIDs, keeping: anchorID, duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration)) }
+        defer {
+            reconfigureShiftingRowsBelow(resizedIDs, keeping: anchorID, duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration))
+            // 取り直す投稿は、行に出している中身から決める。下の`reportVisibleItems`は、ここで描き直す前の中身を読むので、描き直したあとに報告し直す。
+            // 報告し直さないと、編集でリンクが足された投稿のカードを、次にスクロールするまで取り直さない。
+            if !resizedIDs.isEmpty {
+                reportVisibleItems()
+            }
+        }
         snapshot.reconfigureItems(Array(reconnectedIDs.union(changedIDs).subtracting(resizedIDs).subtracting(reactionChangedIDs)))
         if animatesRemoval, changedIDs.isEmpty, canAnimateRemoval(leaving: newIDs) {
             FrameWork.measure("snapshot.apply") { dataSource.apply(snapshot, animatingDifferences: true) }
@@ -2744,7 +2757,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// 使う人の操作で行を描き直すときに、位置を保つ行。押した行が渡されなければ、表示領域の上端にかかっている行にする。
-    /// 基準を渡さずに描き直すと、使う人の操作によらない変化として、上端が表示領域より上にある行を上へ伸ばす（`anchorBelowResizing`）。
+    /// 基準を渡さずに描き直すと、使う人の操作によらない変化として、上端が表示領域より上にある行を上へ伸ばす（`upwardResizingRow`）。
     func operatedAnchor(_ anchorID: ItemID?) -> ItemID? {
         anchorID ?? currentAnchor()?.id
     }
@@ -3290,27 +3303,32 @@ extension TimelineViewController {
         return ScrollAnchor(id: id, distanceFromVisibleTop: frame.minY - visibleTop)
     }
 
-    /// 上端が表示領域の上端より上にある行の中身が、使う人の操作によらず変わるときの基準。その行より下で、中身の変わらない最初の見えている行。
-    /// 上端にかかっている行を基準にすると、その行が伸びた分だけ、下の見えている行がすべて動く。下の行を基準にすれば、伸びた分は表示領域の上へ出て、下の行は動かない。
-    /// 下に中身の変わらない見えている行がなければnil。上端にかかっている行が表示領域を覆っているときで、どちらの端を保てば読んでいる位置が動かないかは、変わった箇所によるため、上端を保つままにする。
-    private func anchorBelowResizing(_ ids: Set<ItemID>, among remaining: Set<ItemID>) -> ScrollAnchor? {
+    /// 表示領域の上端にかかっている行が、使う人の操作によらず描き直され、上端が表示領域の上端より上、下端が表示領域の中にあるなら、その行と今の高さ。
+    /// この行の高さが変わったら、上端ではなく下端の位置を保つ。上端を保つと、伸びた分だけ、下の見えている行がすべて動く。下端を保てば、伸びた分は表示領域の上へ出て、下の行は動かない。
+    /// 下端が表示領域の下端より下にある行は、表示領域を覆っていて、どちらの端を保てば読んでいる位置が動かないかは、変わった箇所によるため、上端を保つままにする。
+    /// 下に、描き直さない見えている行がないときも、上端を保つままにする。
+    private func upwardResizingRow(_ ids: Set<ItemID>, among remaining: Set<ItemID>) -> (id: ItemID, height: CGFloat)? {
         guard !ids.isEmpty, let top = currentAnchor(among: remaining), ids.contains(top.id) else { return nil }
         let halfPixel = 0.5 / max(collectionView.traitCollection.displayScale, 1)
-        guard top.distanceFromVisibleTop < -halfPixel else { return nil }
         let visibleBottom = collectionView.contentOffset.y + collectionView.bounds.height - collectionView.adjustedContentInset.bottom
-        let below = collectionView.indexPathsForVisibleItems.sorted().lazy.compactMap { indexPath -> ItemID? in
-            guard let id = self.dataSource.itemIdentifier(for: indexPath), id != top.id, remaining.contains(id), !ids.contains(id),
-                  let frame = self.collectionView.layoutAttributesForItem(at: indexPath)?.frame,
-                  frame.minY > self.collectionView.contentOffset.y + self.collectionView.adjustedContentInset.top, frame.minY < visibleBottom
-            else { return nil }
-            return id
-        }.first
-        return below.flatMap(anchor(of:))
+        guard top.distanceFromVisibleTop < -halfPixel,
+              let indexPath = dataSource.indexPath(for: top.id), let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame,
+              frame.maxY < visibleBottom
+        else { return nil }
+        // 下に、描き直さない見えている行がなければ、下端を保っても動かずに済む行がない。設定が変わってすべての行を描き直すときなどで、上端を保つままにする。
+        let keepsRowBelow = collectionView.indexPathsForVisibleItems.contains { other in
+            guard let id = dataSource.itemIdentifier(for: other), remaining.contains(id), !ids.contains(id),
+                  let otherFrame = collectionView.layoutAttributesForItem(at: other)?.frame
+            else { return false }
+            return otherFrame.minY >= frame.maxY - halfPixel && otherFrame.minY < visibleBottom
+        }
+        return keepsRowBelow ? (top.id, frame.height) : nil
     }
 
     /// スナップショットを当て、更新前の基準の要素を同じ位置に戻す。戻した基準を返す。
     /// `anchorID`がなければ、表示領域の上端にあった要素を基準にする。
-    /// - Parameter ids: 中身を描き直す行。上端が表示領域の上端より上にある行が含まれていれば、その下の行を基準にする（`anchorBelowResizing`）。
+    /// - Parameter ids: 中身を描き直す行。上端が表示領域の上端より上にある行が含まれていて、その高さが変わったら、その行の下端を保つ（`upwardResizingRow`）。
+    ///   描き直しても高さが変わらなければ、上端を保つ。描き直す行には、高さの変わらない行も入るため（同じ絵文字を使う行など）。
     @discardableResult
     private func applyPreservingAnchor(_ snapshot: NSDiffableDataSourceSnapshot<Section, ItemID>, keeping anchorID: ItemID? = nil, resizing ids: Set<ItemID> = []) -> ScrollAnchor? {
         isRestoringAnchor = true
@@ -3319,9 +3337,16 @@ extension TimelineViewController {
         // 消える行を基準にすると、当て直したあとに位置を合わせる行がなく、読んでいる行が流れるため。指定された行が消えるときも同じにする。
         let remainingAnchorID = anchorID.flatMap { snapshot.indexOfItem($0) != nil ? $0 : nil }
         let remaining = Set(snapshot.itemIdentifiers)
-        let anchor = remainingAnchorID.flatMap(anchor(of:)) ?? anchorBelowResizing(ids, among: remaining) ?? currentAnchor(among: remaining)
+        let upward = remainingAnchorID == nil ? upwardResizingRow(ids, among: remaining) : nil
+        guard var anchor = remainingAnchorID.flatMap(anchor(of:)) ?? currentAnchor(among: remaining) else {
+            FrameWork.measure("snapshot.apply") { dataSource.apply(snapshot, animatingDifferences: false) }
+            return nil
+        }
         FrameWork.measure("snapshot.apply") { dataSource.apply(snapshot, animatingDifferences: false) }
-        if let anchor {
+        restore(anchor)
+        if let upward, upward.id == anchor.id, let indexPath = dataSource.indexPath(for: upward.id),
+           let height = collectionView.layoutAttributesForItem(at: indexPath)?.frame.height, abs(height - upward.height) > 0.5 {
+            anchor = ScrollAnchor(id: anchor.id, distanceFromVisibleTop: anchor.distanceFromVisibleTop - (height - upward.height))
             restore(anchor)
         }
         return anchor
