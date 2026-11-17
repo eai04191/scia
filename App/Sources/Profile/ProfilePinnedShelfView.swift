@@ -227,7 +227,7 @@ private final class ProfilePinnedCard: UIControl {
 
         isAccessibilityElement = true
         accessibilityTraits = .button
-        accessibilityLabel = ProfileTexts.Shelf.pinnedAccessibilityLabel(body: bodyLabel.attributedText?.stringSpeakingListSeparators, attachmentCount: status.mediaAttachments.count, date: dateLabel.text)
+        accessibilityLabel = ProfileTexts.Shelf.pinnedAccessibilityLabel(body: bodyLabel.attributedText?.stringSpeakingListSeparators, attachmentCount: item.spokenAttachmentCount, date: dateLabel.text)
 
         addAction(UIAction { [weak self] _ in self?.onTap?() }, for: .touchUpInside)
         if case .image(let request) = thumbnail {
@@ -293,6 +293,16 @@ struct ProfileShelfItem: Equatable {
         mediaCover = covers.cover(for: status, filterTitles: verdict.mediaTitles)
     }
 
+    /// 添付ファイルを出す。注意書きとフィルターの警告の投稿は、本文と同じく添付ファイルも出さず、タイムラインで折りたたんだ投稿と同じく、あることを読み上げでも伝えない。
+    var showsMedia: Bool {
+        status.spoilerText.isEmpty && verdict.warningTitles.isEmpty
+    }
+
+    /// 読み上げで伝える添付ファイルの数。
+    var spokenAttachmentCount: Int {
+        showsMedia ? status.mediaAttachments.count : 0
+    }
+
     /// カードのサムネイルの出し方。
     enum CardThumbnail: Equatable {
         case image(MediaThumbnailRequest)
@@ -301,9 +311,8 @@ struct ProfileShelfItem: Equatable {
     }
 
     /// カードに出すサムネイル。最初の添付ファイルで決める。出さないならnil。
-    /// 注意書きとフィルターの警告の投稿は、本文と同じく添付ファイルも出さない。
     func cardThumbnail(size: CGFloat) -> CardThumbnail? {
-        guard let attachment = status.mediaAttachments.first, status.spoilerText.isEmpty, verdict.warningTitles.isEmpty else { return nil }
+        guard showsMedia, let attachment = status.mediaAttachments.first else { return nil }
         if mediaCover != nil {
             return .covered(blurhash: attachment.blurhash)
         }

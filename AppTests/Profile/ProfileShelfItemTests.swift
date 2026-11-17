@@ -4,20 +4,20 @@ import SciaTesting
 import Testing
 @testable import Scia
 
-/// 固定された投稿のカードのサムネイルの出し方を確かめる。
+/// 固定された投稿のカードのサムネイルの出し方と読み上げを確かめる。
 @Suite(.failureState)
 struct ProfileShelfItemTests {
     private static let blurhash = "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
     private static let now = Date(timeIntervalSince1970: 1_790_000_000)
     private static let filtering = StatusFiltering(context: .account, myAccountID: nil)
 
-    private func cardThumbnail(
+    private func item(
         media: [MediaAttachment] = [Self.image],
         spoilerText: String = "",
         sensitive: Bool = false,
         filter: FilterResult.Action? = nil,
         choice: (inout MediaCovers, Status) -> Void = { _, _ in }
-    ) throws -> ProfileShelfItem.CardThumbnail? {
+    ) throws -> ProfileShelfItem {
         let base = try #require(StatusFactory.make(count: 1, startingAt: 1).first)
         let status = Status(
             id: base.id,
@@ -32,7 +32,17 @@ struct ProfileShelfItemTests {
         )
         var covers = MediaCovers()
         choice(&covers, status)
-        return ProfileShelfItem(status: status, verdict: Self.filtering.verdict(for: status, now: Self.now), covers: covers).cardThumbnail(size: 64)
+        return ProfileShelfItem(status: status, verdict: Self.filtering.verdict(for: status, now: Self.now), covers: covers)
+    }
+
+    private func cardThumbnail(
+        media: [MediaAttachment] = [Self.image],
+        spoilerText: String = "",
+        sensitive: Bool = false,
+        filter: FilterResult.Action? = nil,
+        choice: (inout MediaCovers, Status) -> Void = { _, _ in }
+    ) throws -> ProfileShelfItem.CardThumbnail? {
+        try item(media: media, spoilerText: spoilerText, sensitive: sensitive, filter: filter, choice: choice).cardThumbnail(size: 64)
     }
 
     private static let image = MediaAttachment(
@@ -81,5 +91,17 @@ struct ProfileShelfItemTests {
 
     @Test func 添付ファイルのない投稿には出さない() throws {
         #expect(try cardThumbnail(media: [], sensitive: true) == nil)
+    }
+
+    @Test func 添付ファイルの数を読み上げる() throws {
+        #expect(try item().spokenAttachmentCount == 1)
+    }
+
+    @Test func 注意書きのある投稿では添付ファイルの数を読み上げない() throws {
+        #expect(try item(spoilerText: "注意書き").spokenAttachmentCount == 0)
+    }
+
+    @Test func フィルターの警告の投稿では添付ファイルの数を読み上げない() throws {
+        #expect(try item(filter: .warn).spokenAttachmentCount == 0)
     }
 }
