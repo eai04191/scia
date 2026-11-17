@@ -18,6 +18,12 @@ public final class AppSettings {
         didSet { defaults.set(ignoresUselessAltText, forKey: Keys.ignoresUselessAltText) }
     }
 
+    /// プロフィールの補足情報のカード、固定された投稿のカード、フォローのボタン、画面のティントカラーを、アイコンから取った色で塗る。
+    /// オフなら、システムの色とアプリのアクセントカラーのままにする。
+    public var usesDynamicProfileAccent: Bool {
+        didSet { defaults.set(usesDynamicProfileAccent, forKey: Keys.usesDynamicProfileAccent) }
+    }
+
     /// Xの投稿へのリンクを、fxtwitterから読んだ作者、本文、添付ファイルの囲みで出す。
     /// 表示しただけでSciaと関係のないfxtwitterとXに通信するので、既定はオフにし、使う人がオンにしたときだけ通信する（docs/link-card.md）。
     public var expandsXPosts: Bool {
@@ -474,6 +480,7 @@ public final class AppSettings {
         static let ignoresUselessAltText = "settings.ignoresUselessAltText"
         static let showsStatusBarTicker = "settings.showsStatusBarTicker"
         static let expandsXPosts = "settings.expandsXPosts"
+        static let usesDynamicProfileAccent = "settings.usesDynamicProfileAccent"
         static let isAutoTranslationEnabled = "settings.isAutoTranslationEnabled"
         static let autoTranslationLanguages = "settings.autoTranslationLanguages"
         static let autoTranslationExcludedHandles = "settings.autoTranslationExcludedHandles"
@@ -538,6 +545,7 @@ public final class AppSettings {
         ignoresUselessAltText = defaults.object(forKey: Keys.ignoresUselessAltText) as? Bool ?? true
         showsStatusBarTicker = defaults.object(forKey: Keys.showsStatusBarTicker) as? Bool ?? true
         expandsXPosts = defaults.bool(forKey: Keys.expandsXPosts)
+        usesDynamicProfileAccent = defaults.object(forKey: Keys.usesDynamicProfileAccent) as? Bool ?? true
         isAutoTranslationEnabled = defaults.bool(forKey: Keys.isAutoTranslationEnabled)
         autoTranslationLanguages = defaults.stringArray(forKey: Keys.autoTranslationLanguages) ?? []
         autoTranslationExcludedHandles = defaults.stringArray(forKey: Keys.autoTranslationExcludedHandles) ?? []

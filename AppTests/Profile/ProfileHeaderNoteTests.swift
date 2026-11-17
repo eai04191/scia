@@ -28,7 +28,8 @@ struct ProfileHeaderNoteTests {
             isRemote: false,
             privateNote: "",
             avatarDescription: nil,
-            headerDescription: nil
+            headerDescription: nil,
+            usesAvatarAccent: true
         )
     }
 

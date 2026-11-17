@@ -131,7 +131,7 @@ struct SettingsView: View {
     @ViewBuilder
     private func destination(_ page: SettingsPage) -> some View {
         switch page {
-        case .display, .compose, .media, .linkLoading: SettingsScreenForm(page: page, settings: settings)
+        case .display, .compose, .media, .profile, .linkLoading: SettingsScreenForm(page: page, settings: settings)
         case .interaction: SettingsScreenForm(page: page, settings: settings, openInAppBrowserHeight: openInAppBrowserHeight)
         case .about: AboutSettingsView()
         case .appIcon: AppIconSettingsView()

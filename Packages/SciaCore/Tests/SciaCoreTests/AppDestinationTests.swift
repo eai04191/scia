@@ -205,6 +205,7 @@ struct AppDestinationTests {
         #expect(SettingsPage.appearance.path == [.display, .appearance])
         #expect(SettingsPage.linkLoading.path == [.display, .linkLoading])
         #expect(SettingsPage.media.path == [.display, .media])
+        #expect(SettingsPage.profile.path == [.display, .profile])
         #expect(SettingsPage.autoTranslation.path == [.display, .autoTranslation])
         #expect(SettingsPage.statusMenu.path == [.interaction, .statusActions, .statusMenu])
         #expect(SettingsPage.mediaMenu.path == [.interaction, .mediaActions, .mediaMenu])

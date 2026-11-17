@@ -234,6 +234,7 @@ struct SettingsScreenForm: View {
         case .viewerMediaDynamicRange: choicePicker(item, selection: $settings.viewerMediaDynamicRange, title: \.title)
         case .originalThumbnailsOnExpensiveNetwork: Toggle(item.title, isOn: $settings.usesOriginalThumbnailsOnExpensiveNetwork)
         case .ignoresUselessAltText: Toggle(item.title, isOn: $settings.ignoresUselessAltText)
+        case .dynamicProfileAccent: Toggle(item.title, isOn: $settings.usesDynamicProfileAccent)
         case .expandsXPosts: Toggle(item.title, isOn: $settings.expandsXPosts)
         case .version, .build, .branch, .commit, .builtAt, .sourceCode, .privacyPolicy:
             // 情報の画面（`AboutSettingsView`）が描く。

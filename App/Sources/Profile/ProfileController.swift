@@ -471,7 +471,8 @@ final class ProfileController {
             isRemote: account.acct.contains("@"),
             privateNote: store.relationship?.note ?? "",
             avatarDescription: attachment(of: .avatar)?.description,
-            headerDescription: attachment(of: .header)?.description
+            headerDescription: attachment(of: .header)?.description,
+            usesAvatarAccent: settings.usesDynamicProfileAccent
         ))
         viewController?.headerDidChangeSize()
     }

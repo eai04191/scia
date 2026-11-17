@@ -65,6 +65,10 @@ public enum SettingsItem: String, CaseIterable, Hashable, Sendable {
     /// `AppSettings.ignoresUselessAltText`。
     case ignoresUselessAltText
 
+    // プロフィール
+    /// `AppSettings.usesDynamicProfileAccent`。
+    case dynamicProfileAccent
+
     // リンク先の読み込み
     /// `AppSettings.expandsXPosts`。
     case expandsXPosts
@@ -95,6 +99,7 @@ public enum SettingsItem: String, CaseIterable, Hashable, Sendable {
         case .viewerMediaDynamicRange: "ビューア"
         case .originalThumbnailsOnExpensiveNetwork: "高画質のサムネイル"
         case .ignoresUselessAltText: "仮の代替テキストを無視"
+        case .dynamicProfileAccent: "アイコンのカラーに合わせる"
         case .expandsXPosts: "Xの投稿を展開"
         case .version: "バージョン"
         case .build: "ビルド"
@@ -136,6 +141,7 @@ extension SettingsPage {
         case .interaction: "操作"
         case .compose: "作成"
         case .media: "メディア"
+        case .profile: "プロフィール"
         case .about: "情報"
         case .appIcon: "アプリのアイコン"
         case .appearance: "投稿"
@@ -200,7 +206,7 @@ extension SettingsPage {
         switch self {
         case .display:
             [
-                SettingsSection(header: "外観", rows: [.page(.appearance), .page(.notificationAppearance), .page(.media), .item(.accentColor)]),
+                SettingsSection(header: "外観", rows: [.page(.appearance), .page(.notificationAppearance), .page(.media), .page(.profile), .item(.accentColor)]),
                 SettingsSection(footer: "“自動”では“視差効果を減らす”がオンのときはアニメーションしません。", rows: [.item(.insertionMotion)]),
                 SettingsSection(rows: [.item(.statusBarTicker)]),
                 SettingsSection(rows: [.page(.linkLoading), .page(.autoTranslation)]),
@@ -225,6 +231,8 @@ extension SettingsPage {
                 SettingsSection(header: "モバイル通信", rows: [.item(.originalThumbnailsOnExpensiveNetwork)]),
                 SettingsSection(footer: "投稿したアプリが自動で付けたと思われる説明にならない代替テキストをないものとして扱います。", rows: [.item(.ignoresUselessAltText)]),
             ]
+        case .profile:
+            [SettingsSection(rows: [.item(.dynamicProfileAccent)])]
         case .linkLoading:
             // 送り先、届くもの、通信のきっかけを、オンにする前に読めるように書く。同意はこの説明で取り、オンにするときに確認は重ねない（docs/link-card.md）。
             [SettingsSection(footer: """

@@ -338,7 +338,8 @@ enum ProfileHeaderCatalog {
             isRemote: account.acct.contains("@"),
             privateNote: privateNote,
             avatarDescription: account.avatarDescription,
-            headerDescription: account.headerDescription
+            headerDescription: account.headerDescription,
+            usesAvatarAccent: true
         )
         header.apply(content)
         // カタログは読み込み終えた状態を見せるので、タイムラインと一緒に出す部分も出しておく。
@@ -411,7 +412,8 @@ private extension ProfileHeaderView.Content {
             isRemote: isRemote,
             privateNote: privateNote,
             avatarDescription: avatarDescription,
-            headerDescription: headerDescription
+            headerDescription: headerDescription,
+            usesAvatarAccent: usesAvatarAccent
         )
     }
 }

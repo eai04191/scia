@@ -29,6 +29,8 @@ final class ProfileHeaderView: UIView {
         /// 読み上げるアイコンとヘッダー画像の代替テキスト。説明にならないものは除いておく。なければnil。
         let avatarDescription: String?
         let headerDescription: String?
+        /// カードやボタン、画面のティントカラーに、アイコンから作った色を付ける。
+        let usesAvatarAccent: Bool
     }
 
     var onToggleFollow: ((UIView) -> Void)?
@@ -280,6 +282,10 @@ final class ProfileHeaderView: UIView {
     private var filledButtonColors: (fill: UIColor, foreground: UIColor)?
     /// アイコンから作った、カードの色。アイコンがまだないか、透明なアイコンならnilで、カードはシステムの色にする。
     private var avatarAccent: ProfileAccentColor?
+    /// 今付ける色。設定でオフなら、アイコンから色を作っていてもnil。
+    private var appliedAccent: ProfileAccentColor? {
+        content?.usesAvatarAccent == false ? nil : avatarAccent
+    }
 
     init(emojiImages: EmojiImageStore<UIImage>, mediaImages: MediaImageStore<UIImage>, avatarImages: AvatarImageStore<UIImage>) {
         self.emojiImages = emojiImages
@@ -822,7 +828,7 @@ final class ProfileHeaderView: UIView {
     private func applyAccentNow() {
         let isDark = traitCollection.userInterfaceStyle == .dark
         let options = traitCollection.accessibilityContrast == .high ? accentOptions.raisingContrast() : accentOptions
-        let appearance = avatarAccent.map { ProfileAccentAppearance(palette: ProfileCardPalette(color: $0, options: options, isDark: isDark)) }
+        let appearance = appliedAccent.map { ProfileAccentAppearance(palette: ProfileCardPalette(color: $0, options: options, isDark: isDark)) }
         if let appearance {
             appearance.apply(to: aboutBox)
         } else {
@@ -921,7 +927,7 @@ final class ProfileHeaderView: UIView {
             fieldsStack.addArrangedSubview(row)
             // 補足情報の行は、文字の色をカードの色に合わせているため、カードの色を下地にして持ち上げる。色がなければ既定の下地にする。
             fieldMenuInteractions.append(textMenuInteraction(on: row, for: .field(index)) { [weak self] in
-                guard let self, avatarAccent != nil else { return nil }
+                guard let self, appliedAccent != nil else { return nil }
                 return aboutBox.backgroundColor
             })
         }

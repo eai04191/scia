@@ -330,6 +330,8 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     case compose
     /// 表示の中の、メディアの画面。HDRの明るさ、サムネイルの画質、代替テキストを並べる。
     case media
+    /// 表示の中の、プロフィールの画面。アイコンから取った色をプロフィールに付けるかを並べる。
+    case profile
     /// 情報。アプリのビルドと、接続の状態、ライセンス、謝辞を並べる。
     case about
     case appIcon = "app-icon"
@@ -379,7 +381,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     /// 設定のトップの画面からこの画面までに重ねる画面。
     public var path: [SettingsPage] {
         switch self {
-        case .appearance, .notificationAppearance, .media, .linkLoading, .autoTranslation: [.display, self]
+        case .appearance, .notificationAppearance, .media, .profile, .linkLoading, .autoTranslation: [.display, self]
         case .statusActions, .quotedStatusActions, .notificationActions, .userActions, .linkActions, .externalPostActions, .hashtagActions, .mediaActions,
              .reactionActions, .profileTextMenu, .customEmojiMenu:
             [.interaction, self]
