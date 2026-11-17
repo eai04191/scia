@@ -1140,6 +1140,21 @@ final class ProfileHeaderView: UIView {
         return wasHidden != pinnedShelf.isHidden || previous != items
     }
 
+    /// 出している棚。テストで、設定で隠した棚を出していないことを確かめる。
+    var shownShelves: Set<ProfileShelf> {
+        Set([
+            pinnedShelf.isHidden ? nil : ProfileShelf.pinned,
+            featuredTagsShelf.isHidden ? nil : .featuredTags,
+            endorsementsShelf.isHidden ? nil : .endorsements,
+        ].compactMap(\.self))
+    }
+
+    enum ProfileShelf {
+        case pinned
+        case featuredTags
+        case endorsements
+    }
+
     /// 注目のハッシュタグと紹介しているユーザーを並べる。どちらも空なら、その棚を見出しごと隠す。変わったらtrue。
     func setFeatured(tags: [FeaturedTag], endorsements: ProfileEndorsementsShelfView.Content) -> Bool {
         let before = (featuredTagsShelf.isHidden, endorsementsShelf.isHidden, featuredTagsShelf.tags, endorsementsShelf.content)

@@ -128,6 +128,16 @@ struct AppSettingsTests {
         #expect(!AppSettings(defaults: defaults).usesDynamicProfileAccent)
     }
 
+    @Test func persistsProfileShelfVisibility() throws {
+        let defaults = try makeDefaults()
+        #expect(AppSettings(defaults: defaults).showsProfileFeaturedTags)
+        #expect(AppSettings(defaults: defaults).showsProfileEndorsements)
+        AppSettings(defaults: defaults).showsProfileFeaturedTags = false
+        AppSettings(defaults: defaults).showsProfileEndorsements = false
+        #expect(!AppSettings(defaults: defaults).showsProfileFeaturedTags)
+        #expect(!AppSettings(defaults: defaults).showsProfileEndorsements)
+    }
+
     @Test func persistsProfileNoteLength() throws {
         let defaults = try makeDefaults()
         #expect(AppSettings(defaults: defaults).profileNoteLength == .collapsed)

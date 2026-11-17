@@ -124,8 +124,16 @@ public final class ProfileStore {
     public private(set) var endorsements: [Account] = []
     /// 紹介している人に、最初のページより後の続きがある。
     public private(set) var hasMoreEndorsements = false
-    /// 注目のハッシュタグと紹介している人を読み終えた。読めなかったときも含む。
-    private var isFeaturedSettled = false
+    /// 注目のハッシュタグを読み終えた。読めなかったときも含む。
+    private var isFeaturedTagsSettled = false
+    /// 紹介している人を読み終えた。読めなかったときも含む。
+    private var isEndorsementsSettled = false
+    /// 読む棚の注目のハッシュタグと紹介している人を読み終えた。読まない棚は待たない。読んでいる途中で読まなくした棚も待たない。
+    private var isFeaturedSettled: Bool {
+        (!featuredShelves.tags || isFeaturedTagsSettled) && (!featuredShelves.endorsements || isEndorsementsSettled)
+    }
+    /// 読む棚。設定で隠した棚は読まない。
+    public private(set) var featuredShelves: FeaturedShelves
     /// ヘッダーの棚（固定された投稿、注目のハッシュタグ、紹介している人）を読み終えた。読めなかったときも含む。
     /// 棚が後から現れてタイムラインを押し下げないよう、タイムラインはこれを待って出す。
     public var isShelvesSettled: Bool {
@@ -170,10 +178,12 @@ public final class ProfileStore {
         postsFilter: ProfilePostsFilter,
         pageSize: Int = 40,
         relationshipCache: RelationshipCache,
+        featuredShelves: FeaturedShelves = FeaturedShelves(),
         now: @escaping @MainActor () -> Date = SystemTime.now,
         api: API
     ) {
         self.now = now
+        self.featuredShelves = featuredShelves
         self.account = account
         isMyself = account.id == myAccountID
         self.relationshipCache = relationshipCache
@@ -222,17 +232,20 @@ public final class ProfileStore {
         let pinnedLoad = pinnedLoads
         featuredLoads += 1
         let featuredLoad = featuredLoads
-        // 注目のハッシュタグと紹介している人は、両方が届いてからタイムラインを出す。
-        var featuredPending = 2
+        let shelves = featuredShelves
         return await withTaskGroup(of: (Part, Result<Loaded, any Error>).self) { group -> ProfileLoadFailures in
             group.addTask { (.account, await Result { .account(try await api.account(id)) }) }
             // 自分のプロフィールでも読む。自分に書いたメモが関係に入って返るため。
             group.addTask { (.relationship, await Result { .relationship(try await api.relationship(id)) }) }
             // 固定された投稿はタイムラインの補足なので、読めなかったものは並べない。読めなかったことはデコードの記録に残る。
             group.addTask { (.pinned, await Result { .pinned(try await api.statuses(id, AccountStatusFilter(pinned: true), TimelineQuery(limit: pageSize)).statuses) }) }
-            group.addTask { (.featuredTags, await Result { .featuredTags(try await api.featuredTags(id)) }) }
-            // 4.4より前のサーバーは、ほかの人の紹介している人を返さない。読めなかったものとして、棚を出さない。
-            group.addTask { (.endorsements, await Result { .endorsements(try await api.endorsements(id, Self.endorsementsPageSize)) }) }
+            if shelves.tags {
+                group.addTask { (.featuredTags, await Result { .featuredTags(try await api.featuredTags(id)) }) }
+            }
+            if shelves.endorsements {
+                // 4.4より前のサーバーは、ほかの人の紹介している人を返さない。読めなかったものとして、棚を出さない。
+                group.addTask { (.endorsements, await Result { .endorsements(try await api.endorsements(id, Self.endorsementsPageSize)) }) }
+            }
             var failures = ProfileLoadFailures()
             for await (part, result) in group {
                 switch result {
@@ -253,13 +266,13 @@ public final class ProfileStore {
                     if featuredLoad == featuredLoads {
                         featuredTags = tags
                     }
-                    featuredPending -= 1
+                    isFeaturedTagsSettled = true
                 case .success(.endorsements(let page)):
                     if featuredLoad == featuredLoads {
                         endorsements = page.accounts
                         hasMoreEndorsements = page.nextMaxID != nil
                     }
-                    featuredPending -= 1
+                    isEndorsementsSettled = true
                 case .failure(let error):
                     switch part {
                     case .account: failures.account = error
@@ -271,14 +284,11 @@ public final class ProfileStore {
                         isPinnedSettled = true
                     case .featuredTags:
                         failures.featuredTags = error
-                        featuredPending -= 1
+                        isFeaturedTagsSettled = true
                     case .endorsements:
                         failures.endorsements = error
-                        featuredPending -= 1
+                        isEndorsementsSettled = true
                     }
-                }
-                if featuredPending == 0 {
-                    isFeaturedSettled = true
                 }
             }
             return failures
@@ -299,15 +309,16 @@ public final class ProfileStore {
         isPinnedSettled = true
     }
 
-    /// 注目のハッシュタグと紹介している人を読み直す。自分のプロフィールで、載せるものを変えたあとに呼ぶ。
+    /// 注目のハッシュタグと紹介している人のうち、読む棚を読み直す。自分のプロフィールで、載せるものを変えたあとに呼ぶ。
     /// 読めなかったものは前のまま残し、読めなかったものがあれば投げる。あとから読み始めた読み直しがあれば、この応答は捨てる。
     public func reloadFeatured() async throws {
         featuredLoads += 1
         let featuredLoad = featuredLoads
         let id = account.id
         let api = api
-        async let tags = Result { try await api.featuredTags(id) }
-        async let page = Result { try await api.endorsements(id, Self.endorsementsPageSize) }
+        let shelves = featuredShelves
+        async let tags = shelves.tags ? Result { try await api.featuredTags(id) } : nil
+        async let page = shelves.endorsements ? Result { try await api.endorsements(id, Self.endorsementsPageSize) } : nil
         let (loadedTags, loadedPage) = await (tags, page)
         guard featuredLoad == featuredLoads else { return }
         if case .success(let tags) = loadedTags {
@@ -317,9 +328,34 @@ public final class ProfileStore {
             endorsements = page.accounts
             hasMoreEndorsements = page.nextMaxID != nil
         }
-        isFeaturedSettled = true
-        _ = try loadedTags.get()
-        _ = try loadedPage.get()
+        if loadedTags != nil {
+            isFeaturedTagsSettled = true
+        }
+        if loadedPage != nil {
+            isEndorsementsSettled = true
+        }
+        _ = try loadedTags?.get()
+        _ = try loadedPage?.get()
+    }
+
+    /// 読む棚を変える。読んでいなかった棚を読むようにしたら、読む棚を読み直す。読めなかったものがあれば投げる。
+    /// 読まなくした棚の中身は消さない。出すかどうかは、設定を読むUIが決める。
+    public func setFeaturedShelves(_ shelves: FeaturedShelves) async throws {
+        let adds = (shelves.tags && !featuredShelves.tags) || (shelves.endorsements && !featuredShelves.endorsements)
+        featuredShelves = shelves
+        guard adds else { return }
+        try await reloadFeatured()
+    }
+
+    /// プロフィールのヘッダーの、注目のハッシュタグと紹介している人の棚のうち、読むもの。
+    public struct FeaturedShelves: Hashable, Sendable {
+        public var tags: Bool
+        public var endorsements: Bool
+
+        public init(tags: Bool = true, endorsements: Bool = true) {
+            self.tags = tags
+            self.endorsements = endorsements
+        }
     }
 
     /// 紹介している人の棚に並べる数。続きは人のリストで読む。

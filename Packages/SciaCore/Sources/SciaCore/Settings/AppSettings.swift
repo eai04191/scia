@@ -23,6 +23,16 @@ public final class AppSettings {
         didSet { defaults.set(profileNoteLength.rawValue, forKey: Keys.profileNoteLength) }
     }
 
+    /// プロフィールに、注目のハッシュタグの棚を出す。オフなら読み込まない。
+    public var showsProfileFeaturedTags: Bool {
+        didSet { defaults.set(showsProfileFeaturedTags, forKey: Keys.showsProfileFeaturedTags) }
+    }
+
+    /// プロフィールに、紹介しているユーザーの棚を出す。オフなら読み込まない。
+    public var showsProfileEndorsements: Bool {
+        didSet { defaults.set(showsProfileEndorsements, forKey: Keys.showsProfileEndorsements) }
+    }
+
     /// プロフィールの補足情報のカード、固定された投稿のカード、フォローのボタン、画面のティントカラーを、アイコンから取った色で塗る。
     /// オフなら、システムの色とアプリのアクセントカラーのままにする。
     public var usesDynamicProfileAccent: Bool {
@@ -487,6 +497,8 @@ public final class AppSettings {
         static let expandsXPosts = "settings.expandsXPosts"
         static let usesDynamicProfileAccent = "settings.usesDynamicProfileAccent"
         static let profileNoteLength = "settings.profileNoteLength"
+        static let showsProfileFeaturedTags = "settings.showsProfileFeaturedTags"
+        static let showsProfileEndorsements = "settings.showsProfileEndorsements"
         static let isAutoTranslationEnabled = "settings.isAutoTranslationEnabled"
         static let autoTranslationLanguages = "settings.autoTranslationLanguages"
         static let autoTranslationExcludedHandles = "settings.autoTranslationExcludedHandles"
@@ -552,6 +564,8 @@ public final class AppSettings {
         showsStatusBarTicker = defaults.object(forKey: Keys.showsStatusBarTicker) as? Bool ?? true
         expandsXPosts = defaults.bool(forKey: Keys.expandsXPosts)
         usesDynamicProfileAccent = defaults.object(forKey: Keys.usesDynamicProfileAccent) as? Bool ?? true
+        showsProfileFeaturedTags = defaults.object(forKey: Keys.showsProfileFeaturedTags) as? Bool ?? true
+        showsProfileEndorsements = defaults.object(forKey: Keys.showsProfileEndorsements) as? Bool ?? true
         profileNoteLength = defaults.string(forKey: Keys.profileNoteLength).flatMap(ProfileNoteLength.init(rawValue:)) ?? .collapsed
         isAutoTranslationEnabled = defaults.bool(forKey: Keys.isAutoTranslationEnabled)
         autoTranslationLanguages = defaults.stringArray(forKey: Keys.autoTranslationLanguages) ?? []

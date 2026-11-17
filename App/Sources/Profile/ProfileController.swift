@@ -97,6 +97,7 @@ final class ProfileController {
             myAccountID: client.credential.accountID,
             postsFilter: settings.profilePostsFilter,
             relationshipCache: relationshipCache,
+            featuredShelves: Self.featuredShelves(in: settings),
             api: ProfileStore.API(client: client)
         )
         header = ProfileHeaderView(emojiImages: viewController.emojiImages, mediaImages: viewController.mediaImages, avatarImages: viewController.avatarImages)
@@ -245,10 +246,13 @@ final class ProfileController {
             _ = store.featuredTags
             _ = store.endorsements
             _ = store.isShelvesSettled
+            _ = settings.showsProfileFeaturedTags
+            _ = settings.showsProfileEndorsements
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor in
                 self?.afterTransition { controller in
                     controller.observeHeaderContent()
+                    controller.applyFeaturedShelvesSetting()
                     controller.showEntries()
                     controller.revealListIfReady()
                 }
@@ -415,6 +419,23 @@ final class ProfileController {
         }
     }
 
+    private static func featuredShelves(in settings: AppSettings) -> ProfileStore.FeaturedShelves {
+        ProfileStore.FeaturedShelves(tags: settings.showsProfileFeaturedTags, endorsements: settings.showsProfileEndorsements)
+    }
+
+    /// 設定で出すようにした棚を、開いているプロフィールでも読む。読めなかったときは、開いたときと同じく棚を出さず、知らせない。
+    private func applyFeaturedShelvesSetting() {
+        let shelves = Self.featuredShelves(in: settings)
+        guard shelves != store.featuredShelves else { return }
+        run(.display) { controller in
+            do {
+                try await controller.store.setFeaturedShelves(shelves)
+            } catch {
+                controller.logger.error("profile featured load failed: \(SciaLog.describe(error), privacy: .public)")
+            }
+        }
+    }
+
     /// 載せるものを変えたあとに、注目のハッシュタグと紹介しているユーザーを読み直す。外したものは、使う人の操作の結果なので、閉じて詰める動きで消す。
     /// 読めなかったときは、前の棚のまま残す。載せる操作はできているので、知らせない。
     func reloadFeatured() {
@@ -487,9 +508,9 @@ final class ProfileController {
         let changesSections = isRevealed && header.setSectionsRevealed(true)
         let changesPinned = showPinned()
         let changesFeatured = header.setFeatured(
-            tags: isRevealed ? store.featuredTags : [],
+            tags: isRevealed && settings.showsProfileFeaturedTags ? store.featuredTags : [],
             endorsements: ProfileEndorsementsShelfView.Content(
-                accounts: isRevealed ? store.endorsements : [],
+                accounts: isRevealed && settings.showsProfileEndorsements ? store.endorsements : [],
                 hasMore: store.hasMoreEndorsements,
                 avatarShape: settings.appearance.avatarShape,
                 animatesAvatars: settings.animatesAvatars,

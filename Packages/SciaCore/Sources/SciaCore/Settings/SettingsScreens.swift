@@ -68,6 +68,10 @@ public enum SettingsItem: String, CaseIterable, Hashable, Sendable {
     // プロフィール
     /// `AppSettings.profileNoteLength`。選択肢は`ProfileNoteLength`。
     case profileNoteLength
+    /// `AppSettings.showsProfileFeaturedTags`。
+    case profileFeaturedTags
+    /// `AppSettings.showsProfileEndorsements`。
+    case profileEndorsements
     /// `AppSettings.usesDynamicProfileAccent`。
     case dynamicProfileAccent
 
@@ -102,6 +106,8 @@ public enum SettingsItem: String, CaseIterable, Hashable, Sendable {
         case .originalThumbnailsOnExpensiveNetwork: "高画質のサムネイル"
         case .ignoresUselessAltText: "仮の代替テキストを無視"
         case .profileNoteLength: "自己紹介"
+        case .profileFeaturedTags: "注目のハッシュタグを表示"
+        case .profileEndorsements: "紹介しているユーザーを表示"
         case .dynamicProfileAccent: "アイコンのカラーに合わせる"
         case .expandsXPosts: "Xの投稿を展開"
         case .version: "バージョン"
@@ -237,6 +243,7 @@ extension SettingsPage {
         case .profile:
             [
                 SettingsSection(rows: [.item(.profileNoteLength)]),
+                SettingsSection(rows: [.item(.profileFeaturedTags), .item(.profileEndorsements)]),
                 SettingsSection(rows: [.item(.dynamicProfileAccent)]),
             ]
         case .linkLoading:

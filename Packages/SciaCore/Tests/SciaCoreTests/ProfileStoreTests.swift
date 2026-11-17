@@ -419,6 +419,70 @@ struct ProfileStoreTests {
         #expect(Set(failures.all.map(\.part)) == Set((failsTags ? ["featuredTags"] : []) + (failsEndorsements ? ["endorsements"] : [])))
     }
 
+    /// 設定で隠した棚は読まず、読まなくてもタイムラインを待たせない。読むようにしたら、その場で読む。
+    @Test func readsOnlyShownFeaturedShelvesAndReadsAddedOne() async throws {
+        let known = try account()
+        let tag = FeaturedTag(id: "7", name: "猫写真", statusesCount: 3)
+        let tagReads = Mutex(0)
+        let endorsementReads = Mutex(0)
+        var api = makeAPI(account: known)
+        api.featuredTags = { _ in
+            tagReads.withLock { $0 += 1 }
+            return [tag]
+        }
+        api.endorsements = { _, _ in
+            endorsementReads.withLock { $0 += 1 }
+            return AccountListPage(accounts: [known], nextMaxID: nil)
+        }
+        let store = ProfileStore(
+            account: known,
+            myAccountID: "1",
+            postsFilter: .standard,
+            relationshipCache: localRelationships(),
+            featuredShelves: ProfileStore.FeaturedShelves(tags: false, endorsements: false),
+            api: api
+        )
+
+        _ = await store.loadProfile()
+
+        #expect(store.isShelvesSettled)
+        #expect(tagReads.withLock { $0 } == 0)
+        #expect(endorsementReads.withLock { $0 } == 0)
+
+        try await store.setFeaturedShelves(ProfileStore.FeaturedShelves(tags: true, endorsements: false))
+
+        #expect(store.featuredTags == [tag])
+        #expect(tagReads.withLock { $0 } == 1)
+        #expect(endorsementReads.withLock { $0 } == 0)
+
+        // 読まなくするだけでは読まない。
+        try await store.setFeaturedShelves(ProfileStore.FeaturedShelves(tags: false, endorsements: false))
+        #expect(tagReads.withLock { $0 } == 1)
+    }
+
+    /// 読んでいる途中の棚を読まなくしたら、その棚の応答を待たずに、読み終えたことにする。
+    @Test(arguments: [false, true])
+    func turningOffPendingShelfStopsWaitingForIt(turnsOffBoth: Bool) async throws {
+        let known = try account()
+        let gate = SciaTesting.Gate()
+        var api = makeAPI(account: known)
+        api.featuredTags = { _ in
+            try await gate.wait()
+            return []
+        }
+        api.endorsements = { _, _ in AccountListPage(accounts: [known], nextMaxID: nil) }
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: api)
+        let load = Task { await store.loadProfile() }
+        try await waitUntil { gate.waiterCount == 1 && store.endorsements == [known] }
+        #expect(!store.isShelvesSettled)
+
+        try await store.setFeaturedShelves(ProfileStore.FeaturedShelves(tags: false, endorsements: !turnsOffBoth))
+
+        #expect(store.isShelvesSettled)
+        gate.open()
+        _ = await load.value
+    }
+
     /// 自分のプロフィールで載せるものを変えたあと、注目のハッシュタグと紹介している人だけを読み直す。
     /// 読めなかったほうは前のまま残し、投げる。
     @Test func reloadFeaturedReplacesWhatWasRead() async throws {
