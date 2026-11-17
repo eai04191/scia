@@ -61,8 +61,20 @@ struct AppearanceEditorView: View {
                         }
                     }
                     Section {
-                        Button(AppearanceCatalog.resetAllTitle, role: .destructive) { confirmsReset = true }
+                        // 確認のポップオーバーを行の真ん中から出すため、ボタンを行の幅に広げる。
+                        Button(role: .destructive) {
+                            confirmsReset = true
+                        } label: {
+                            Text(AppearanceCatalog.resetAllTitle)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                             .disabled(!settings.isAppearanceModified)
+                            .confirmationDialog(AppearanceCatalog.resetAllConfirmation, isPresented: $confirmsReset, titleVisibility: .visible) {
+                                Button(AppearanceCatalog.resetTitle, role: .destructive) {
+                                    settings.resetAppearance()
+                                    resets += 1
+                                }
+                            }
                     } footer: {
                         Text(SettingsTexts.Appearance.footer)
                     }
@@ -76,12 +88,6 @@ struct AppearanceEditorView: View {
         }
         .navigationTitle(SettingsPage.appearance.title)
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog(AppearanceCatalog.resetAllConfirmation, isPresented: $confirmsReset, titleVisibility: .visible) {
-            Button(AppearanceCatalog.resetTitle, role: .destructive) {
-                settings.resetAppearance()
-                resets += 1
-            }
-        }
     }
 
     private var groups: [AppearanceGroup] {

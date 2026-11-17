@@ -32,18 +32,6 @@ struct NotificationPolicyView: View {
                     }
                 }
             }
-            .confirmationDialog(
-                confirmingDrop?.dropConfirmationTitle ?? "",
-                isPresented: Binding(get: { confirmingDrop != nil }, set: { if !$0 { confirmingDrop = nil } }),
-                titleVisibility: .visible,
-                presenting: confirmingDrop
-            ) { item in
-                Button(SettingsTexts.NotificationFiltering.setDrop, role: .destructive) { model.select(.drop, for: item) }
-                Button(SettingsTexts.NotificationFiltering.setFilter) { model.select(.filter, for: item) }
-                Button(SettingsTexts.cancel, role: .cancel) {}
-            } message: { _ in
-                Text(SettingsTexts.NotificationFiltering.dropMessage)
-            }
         } else if let failure = model.loadFailure {
             ContentUnavailableView {
                 Label(SettingsTexts.loadFailed, systemImage: "exclamationmark.triangle")
@@ -67,6 +55,17 @@ struct NotificationPolicyView: View {
                 ForEach(NotificationPolicy.Value.choices, id: \.self) { choice in
                     Text(choice.title).tag(choice)
                 }
+            }
+            .confirmationDialog(
+                item.dropConfirmationTitle,
+                isPresented: Binding(get: { confirmingDrop == item }, set: { if !$0 { confirmingDrop = nil } }),
+                titleVisibility: .visible
+            ) {
+                Button(SettingsTexts.NotificationFiltering.setDrop, role: .destructive) { model.select(.drop, for: item) }
+                Button(SettingsTexts.NotificationFiltering.setFilter) { model.select(.filter, for: item) }
+                Button(SettingsTexts.cancel, role: .cancel) {}
+            } message: {
+                Text(SettingsTexts.NotificationFiltering.dropMessage)
             }
         }
     }

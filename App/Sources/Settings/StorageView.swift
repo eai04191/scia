@@ -88,16 +88,6 @@ struct StorageView: View {
         .task(.withoutRequests) {
             breakdown = await actions.measure()
         }
-        .confirmationDialog(
-            confirming?.confirmationTitle ?? "",
-            isPresented: Binding { confirming != nil } set: { if !$0 { confirming = nil } },
-            titleVisibility: .visible,
-            presenting: confirming
-        ) { target in
-            Button(SettingsTexts.Storage.remove, role: .destructive) { remove(target) }
-        } message: { target in
-            Text(target.confirmationMessage ?? "")
-        }
     }
 
     /// メディアのキャッシュを、合計の行の下に、表示済みと先読みの2段に分けて並べる。
@@ -154,6 +144,15 @@ struct StorageView: View {
             }
         }
         .disabled(removing != nil || bytes == 0)
+        .confirmationDialog(
+            target.confirmationTitle,
+            isPresented: Binding { confirming == target } set: { if !$0 { confirming = nil } },
+            titleVisibility: .visible
+        ) {
+            Button(SettingsTexts.Storage.remove, role: .destructive) { remove(target) }
+        } message: {
+            Text(target.confirmationMessage ?? "")
+        }
     }
 
     /// 項目を順に消す。1つ消せなくても残りは消し、最初に消せなかった理由を出す。
