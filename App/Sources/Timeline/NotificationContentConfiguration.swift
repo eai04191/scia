@@ -34,6 +34,8 @@ struct NotificationContentConfiguration: UIContentConfiguration {
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
     var onRevealMedia: (() -> Void)?
     var onToggleSpoiler: (() -> Void)?
+    /// 本文が編集で変わったら、変わらない文字を前の位置から動かす（`PostContentConfiguration.animatesTextEdit`）。
+    var animatesTextEdit = false
     /// 誰が何をしたかの行がタップされたときに呼ぶ。通知のもとになる操作をした人のプロフィールを開く。
     var onOpenAccount: (() -> Void)?
     /// 誰が何をしたかの行（「ほか3人」の文字の外）のタップと長押し。渡すと、タップは`onOpenAccount`の代わりにこれで行う。
@@ -242,6 +244,7 @@ final class NotificationContentView: UIView, UIContentView {
         headerLabel.attributedText = configuration.header
         applyGroupAvatars(configuration.groupAvatars, metrics: metrics)
         bodyView.emojiImages = configuration.emojiImages
+        bodyView.animatesTextEdit = configuration.animatesTextEdit
         bodyView.apply(configuration.body)
         reactionGlowView.apply(configuration.reactionGlow)
 

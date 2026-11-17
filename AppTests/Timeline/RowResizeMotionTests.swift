@@ -169,4 +169,53 @@ struct RowResizeMotionTests {
 
         #expect(reported.contains(statuses[2].id), "リンクが足された投稿を、カードを取り直す投稿として報告していません")
     }
+
+    private func textLabel(in harness: TimelineHarness, of id: TimelineViewController.ItemID) throws -> EmojiLabel {
+        let body = try #require(harness.visibleCell(of: id)?.contentView as? PostContentView).postBody
+        return try #require(body.subviews.lazy.compactMap { $0 as? EmojiLabel }.first, "本文がありません")
+    }
+
+    /// 編集で本文の途中が削られたら、残った文字を前の位置から動かし、削られた文字は前の位置で薄くして消す。縮む前の行の像は重ねない。
+    /// 像は、なくなる中身が行の末尾にあるものとして下の端から縮めるので、重ねると、動いている文字と像の中の文字が食い違う。
+    @Test func removingTextInEditFadesRemovedCharacters() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
+        statuses[10] = replacing(statuses[10], content: "<p>先頭の行</p><p>削る行1</p><p>削る行2</p><p>末尾の行</p>")
+        harness.setStatuses(statuses)
+        let id = TimelineViewController.ItemID.status(statuses[10].id)
+        try harness.scroll(to: id, at: .centeredVertically)
+        harness.collectionView.layoutIfNeeded()
+
+        statuses[10] = replacing(statuses[10], content: "<p>先頭の行</p><p>末尾の行</p>")
+        harness.setStatuses(statuses)
+        harness.collectionView.layoutIfNeeded()
+
+        let label = try textLabel(in: harness, of: id)
+        #expect(label.emojiArrival?.isRunning == true, "残った文字を動かしていません")
+        let fading = (label.layer.sublayers ?? []).flatMap { $0.sublayers ?? [] }.filter { $0.animation(forKey: "fadeOut") != nil }
+        #expect(!fading.isEmpty, "削られた文字を薄くしていません")
+        let cell = try #require(harness.visibleCell(of: id))
+        #expect(!cell.subviews.contains { $0.layer.mask?.animation(forKey: TimelineViewController.shrinkName) != nil }, "縮む前の行の像を重ねています")
+    }
+
+    /// 新着と一緒に届いた編集では、行を動かさずに替えるので、本文の文字も動かさない。
+    /// 文字だけを動かすと、行は一度に伸びるのに中身が遅れて動き、伸びた場所が空いて見える。
+    @Test func editArrivingWithNewRowDoesNotAnimateText() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
+        harness.setStatuses(statuses)
+        let id = TimelineViewController.ItemID.status(statuses[10].id)
+        try harness.scroll(to: id, at: .centeredVertically)
+        harness.collectionView.layoutIfNeeded()
+        let height = try #require(harness.visibleCell(of: id)?.bounds.height)
+
+        statuses[10] = replacing(statuses[10], content: "<p>" + String(repeating: "編集で伸びた本文。", count: 20) + "</p>")
+        harness.setStatuses(StatusFactory.make(count: 1, startingAt: 1_100) + statuses)
+        harness.collectionView.layoutIfNeeded()
+
+        #expect(try #require(harness.visibleCell(of: id)?.bounds.height) > height, "編集しても行が伸びていません")
+        #expect(try textLabel(in: harness, of: id).emojiArrival?.isRunning != true, "行を動かさないのに、本文の文字を動かしています")
+    }
 }

@@ -185,6 +185,8 @@ final class PostBodyView: UIView {
     private var embedView: EmbeddedPostView?
     /// 囲みに替わったリンクカードの像。囲みを濃くする間、カードのあった位置に重ねて薄くする。
     private(set) var leavingCardSnapshot: UIView?
+    /// 本文が編集で変わったら、変わらない文字を前の位置から動かす（`PostContentConfiguration.animatesTextEdit`）。
+    var animatesTextEdit = false
     /// 次に並べるときに動かす、本文より下の部品と前の上端、動きの時間。
     private var pendingBelowTextShift: (views: [(UIView, CGFloat)], duration: TimeInterval)?
     private var filterNoteLabel: UILabel?
@@ -771,7 +773,7 @@ final class PostBodyView: UIView {
 
     /// 同じ投稿の本文が編集で変わるなら、変わらない文字を前の位置から動かす準備をする。訳文との入れ替えは、先に呼ばれた`prepareTextReplacement`が動かす。
     private func prepareTextEditIfNeeded(from previous: PostBodyContent?, to content: PostBodyContent) {
-        guard let previous, previous.statusID == content.statusID, previous.text.string != content.text.string, !textLabel.isPreparingTextReplacement else { return }
+        guard animatesTextEdit, let previous, previous.statusID == content.statusID, previous.text.string != content.text.string, !textLabel.isPreparingTextReplacement else { return }
         textLabel.prepareTextEdit()
     }
 

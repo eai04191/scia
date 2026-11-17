@@ -167,7 +167,7 @@ class EmojiLabel: TextKitLabel {
     private var expectsTextEdit = false
 
     /// 同じ投稿の本文が、編集で別の文字列に替わる前に呼ぶ。次に入れる文字列で、前と変わらない先頭と末尾の文字を、前の位置から新しい位置へ動かし、新しく入った文字を透明から濃くする。
-    /// なくなった文字は、動かさずに消す。
+    /// なくなった文字は、前の位置で薄くして消す。
     func prepareTextEdit() {
         expectsTextEdit = true
     }
@@ -181,8 +181,12 @@ class EmojiLabel: TextKitLabel {
         let before = running?.currentPlacements(filling: []) ?? EmojiArrivalTransition.placements(of: shown, in: self, filling: [])
         let start = Self.remappingUnchangedEnds(before, from: shown.string, to: new.string)
         let startBars = running?.currentBars() ?? quoteBarFrames()
+        // なくなった文字は、前の描画の像から切り出して薄くする。前の位置を新しい位置へ写せなかった文字が、なくなった文字になる。
+        let kept = Set(Self.remappingUnchangedEnds(Dictionary(uniqueKeysWithValues: before.keys.map { ($0, $0) }), from: shown.string, to: new.string).values)
+        let leavingFrames = before.filter { !kept.contains($0.key) }.map(\.value.frame)
+        let leaving = leavingFrames.isEmpty ? nil : TextReplacementTransition.render(self).map { EmojiArrivalTransition.Leaving(image: $0, size: bounds.size, frames: leavingFrames) }
         let previous = emojiArrival
-        emojiArrival = EmojiArrivalTransition(label: self, start: start, startBars: startBars, duration: duration, fadesInNewCharacters: true)
+        emojiArrival = EmojiArrivalTransition(label: self, start: start, startBars: startBars, duration: duration, fadesInNewCharacters: true, leaving: leaving)
         previous?.finish()
         pendingEmojiArrival = true
         setNeedsLayout()

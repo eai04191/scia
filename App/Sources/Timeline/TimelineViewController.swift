@@ -761,8 +761,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let resizedBefore = ids.compactMap { id in
             cell(for: id).map { (id: id, height: $0.bounds.height, contentBottom: contentBottom(of: $0), maxY: $0.convert($0.bounds, to: nil).maxY, parts: rowParts(of: $0), snapshot: concealsShrink ? $0.snapshotView(afterScreenUpdates: false) : nil) }
         }
+        isShiftingRows = true
         reconfigure(ids, keeping: anchorID)
         collectionView.layoutIfNeeded()
+        isShiftingRows = false
         for row in resizedBefore {
             guard let cell = cell(for: row.id) else { continue }
             // 下端を保って上へ伸び縮みした行（`upwardResizingRow`）は、下の行が動かないので、切り抜きも像も要らない。上から切り抜くと、見えていた下の部分が一度隠れる。
@@ -892,6 +894,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let margin = (cell.contentView as? PostContentView)?.rowBottomMargin ?? (cell.contentView as? NotificationContentView)?.rowBottomMargin ?? 0
         return cell.bounds.height - margin
     }
+
+    /// 行の高さの変化を、下の行ごと動かして描き直している最中。描き直す行の中身に、本文の文字も動かしてよいと伝える。
+    private(set) var isShiftingRows = false
 
     /// 足し合わせる行の動きに付ける名前を、重ねても取り替えないよう分ける。
     private var rowShiftCount = 0
@@ -1144,8 +1149,15 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             guard let old = previous[id]?.postStatus, let new = entries[id]?.postStatus else { return true }
             return !new.differsOnlyInFixedHeightParts(from: old)
         }).subtracting(reactionChangedIDs)
+        // 本文が変わった行は、なくなった文字を本文が自分で薄くして消すので、縮む前の像は重ねない。
+        // 像は、なくなる中身が行の末尾にあるものとして下の端から縮めるので、本文の途中がなくなると、動いている文字と像の中の文字が食い違う。
+        let textEditedIDs = resizedIDs.filter { id in
+            guard let old = previous[id]?.postStatus?.displayed, let new = entries[id]?.postStatus?.displayed else { return false }
+            return old.content != new.content
+        }
         defer {
-            reconfigureShiftingRowsBelow(resizedIDs, keeping: anchorID, duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration))
+            reconfigureShiftingRowsBelow(textEditedIDs, keeping: anchorID, duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration), concealsShrink: false)
+            reconfigureShiftingRowsBelow(resizedIDs.subtracting(textEditedIDs), keeping: anchorID, duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration))
             // 取り直す投稿は、行に出している中身から決める。下の`reportVisibleItems`は、ここで描き直す前の中身を読むので、描き直したあとに報告し直す。
             // 報告し直さないと、編集でリンクが足された投稿のカードを、次にスクロールするまで取り直さない。
             if !resizedIDs.isEmpty {
@@ -2460,6 +2472,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             }
         }
         configuration.onToggleSpoiler = { [weak self] in self?.toggleSpoiler(of: status, keeping: itemID) }
+        configuration.animatesTextEdit = isShiftingRows
         configuration.bodyTruncation = longBodyExpansion.truncation(forBodyOf: status, isThreadFocus: shown.id == threadFocusID, rule: bodyTruncationRule)
         configuration.onExpandBody = { [weak self] in self?.expandBody(.status(shown.id), keeping: itemID) }
         if capabilities.supportsEmojiReactions {

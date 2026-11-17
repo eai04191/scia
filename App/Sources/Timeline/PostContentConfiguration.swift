@@ -112,6 +112,9 @@ struct PostContentConfiguration: UIContentConfiguration {
     /// 添付ファイルか、リンクカードの画像の、閲覧注意のぼかしが押されたときに呼ぶ。ぼかしを外すのは置く側で、適用し直すまで見た目は変わらない。
     var onRevealMedia: (() -> Void)?
     var onToggleSpoiler: (() -> Void)?
+    /// 本文が編集で変わったら、変わらない文字を前の位置から動かす。タイムラインが、行の高さの変化を下の行ごと動かして描き直すときだけ立てる。
+    /// 行を動かさずに替えるときに文字だけを動かすと、行は一度に伸び縮みするのに中身が遅れて動き、空きが見える。
+    var animatesTextEdit = false
     /// 切った本文の「続きを読む」が押されたときに呼ぶ。広げた状態を持つのは置く側で、適用し直すまで見た目は変わらない。
     var onExpandBody: (() -> Void)?
     /// アイコンがタップされたときに呼ぶ。投稿した人のプロフィールを開く。
@@ -535,6 +538,7 @@ final class PostContentView: UIView, UIContentView {
             // 本文も同時に替わるときは、本文より下の部品として囲みごと動かしている。
             bodyView.prepareEmbedTextReplacement(shiftDuration: configuration.translationFadeDuration)
         }
+        bodyView.animatesTextEdit = configuration.animatesTextEdit
         bodyView.apply(PostBodyContent(
             spoiler: configuration.spoiler,
             text: configuration.body,

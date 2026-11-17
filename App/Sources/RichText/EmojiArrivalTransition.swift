@@ -37,6 +37,14 @@ final class EmojiArrivalTransition {
     private let duration: TimeInterval
     /// 動き始める見え方がない文字を、透明から濃くする。編集で新しく入った文字に使う。
     private let fadesInNewCharacters: Bool
+    /// 編集でなくなった文字。前の描画の像と、その大きさ、文字の枠（前の並びでの、ラベルの座標）。
+    struct Leaving {
+        let image: CGImage
+        let size: CGSize
+        let frames: [CGRect]
+    }
+
+    private let leaving: Leaving?
     private var overlay: CALayer?
     private var pieceLayers: [(piece: Piece, layer: CALayer)] = []
     /// 引用の縦線を切り出した層。
@@ -47,16 +55,30 @@ final class EmojiArrivalTransition {
     private weak var label: EmojiLabel?
 
     /// 文字列を入れ替える前に呼ぶ。`start`は、動き始めるときの文字ごとの見え方、`startBars`は引用の縦線の枠。
-    init(label: EmojiLabel, start: [Int: Placement], startBars: [CGRect], duration: TimeInterval, fadesInNewCharacters: Bool = false) {
+    init(label: EmojiLabel, start: [Int: Placement], startBars: [CGRect], duration: TimeInterval, fadesInNewCharacters: Bool = false, leaving: Leaving? = nil) {
         self.label = label
         self.start = start
         self.startBars = startBars
         self.duration = duration
         self.fadesInNewCharacters = fadesInNewCharacters
+        self.leaving = leaving
     }
 
     /// 編集で入った文字を濃くし始めるまでの、動きの時間に対する割合。スプリングは、この時点で残りの動きが小さくなっている。
     private static let newCharacterFadeDelay = 0.5
+    /// 編集でなくなった文字を薄くし終えるまでの、動きの時間に対する割合。なくなった文字の場所へ、残った文字が動いてくるので、先に消す。
+    private static let leavingFadeFraction = 0.25
+
+    /// 文字の枠を、同じ行で続いているものどうしでまとめる。
+    static func lineRuns(of frames: [CGRect]) -> [CGRect] {
+        frames.sorted { ($0.minY, $0.minX) < ($1.minY, $1.minX) }.reduce(into: []) { runs, frame in
+            if let last = runs.last, abs(last.minY - frame.minY) < 0.5, frame.minX - last.maxX < 0.5 {
+                runs[runs.count - 1] = last.union(frame)
+            } else {
+                runs.append(frame)
+            }
+        }
+    }
 
     /// 動かしている途中。
     var isRunning: Bool { overlay != nil }
@@ -154,6 +176,29 @@ final class EmojiArrivalTransition {
                 move.fromValue = CGPoint(x: layer.position.x - piece.offset.x, y: layer.position.y - piece.offset.y)
                 move.toValue = layer.position
                 layer.add(move, forKey: "move")
+            }
+        }
+        // 編集でなくなった文字は、前の描画の像から切り出して前の位置に置き、薄くして消す。
+        if let leaving, leaving.size.width > 0, leaving.size.height > 0 {
+            for run in Self.lineRuns(of: leaving.frames) {
+                let layer = CALayer()
+                layer.contents = leaving.image
+                layer.contentsScale = format.scale
+                layer.contentsRect = CGRect(
+                    x: run.minX / leaving.size.width,
+                    y: run.minY / leaving.size.height,
+                    width: run.width / leaving.size.width,
+                    height: run.height / leaving.size.height
+                )
+                layer.frame = run
+                layer.opacity = 0
+                overlay.addSublayer(layer)
+                let fade = CABasicAnimation(keyPath: "opacity")
+                fade.fromValue = 1
+                fade.toValue = 0
+                fade.duration = duration * Self.leavingFadeFraction
+                fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                layer.add(fade, forKey: "fadeOut")
             }
         }
         // 引用の縦線は、文字の枠の外（字下げの中）にあるので、文字とは別に切り出す。ラベル自身の描画を隠すため、切り出さないと動きの間だけ消える。

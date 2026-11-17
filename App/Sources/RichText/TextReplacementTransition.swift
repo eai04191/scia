@@ -231,7 +231,7 @@ final class TextReplacementTransition {
         }.cgImage
     }
 
-    private static func render(_ label: EmojiLabel) -> CGImage? {
+    static func render(_ label: EmojiLabel) -> CGImage? {
         let bounds = label.bounds
         guard bounds.width > 0, bounds.height > 0 else { return nil }
         let format = UIGraphicsImageRendererFormat(for: label.traitCollection)

@@ -113,6 +113,7 @@ extension TimelineViewController {
         configuration.reactionGlow = postContentBuilder.reactionGlow(for: shown)
         configuration.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination, shown) }
         configuration.onToggleSpoiler = { [weak self] in self?.toggleSpoiler(of: status, keeping: itemID) }
+        configuration.animatesTextEdit = isShiftingRows
         if let media {
             configuration.onSelectMedia = { [weak self] index, grid in
                 self?.openMedia(media.attachments, at: index, of: shown, from: grid)
