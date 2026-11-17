@@ -44,7 +44,7 @@ public enum AccountSwitchTexts {
 
         /// - Parameter discardsDraft: 書きかけの投稿がある。使っているアカウントを消すと、画面ごと作り直して下書きも消えるため、添える。
         public static func message(discardsDraft: Bool) -> String {
-            "このデバイスからアカウントの情報を削除します。もう一度使うにはログインし直す必要があります。"
+            "アカウントの情報はこのデバイスから削除されます。もう一度使うにはログインし直す必要があります。"
                 + (discardsDraft ? "書きかけの投稿も破棄されます。" : "")
         }
 

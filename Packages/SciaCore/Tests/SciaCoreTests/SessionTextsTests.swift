@@ -12,8 +12,8 @@ struct SessionTextsTests {
     }
 
     @Test func cannotSeeNamesReplyTargetOrQuotedPost() {
-        #expect(SessionTexts.cannotSee(username: "alice", isReply: true) == "@aliceからは返信先の投稿が見られません。")
-        #expect(SessionTexts.cannotSee(username: "alice", isReply: false) == "@aliceからは引用元の投稿が見られません。")
+        #expect(SessionTexts.cannotSee(username: "alice", isReply: true) == "@aliceからは返信先の投稿を表示できません。")
+        #expect(SessionTexts.cannotSee(username: "alice", isReply: false) == "@aliceからは引用元の投稿を表示できません。")
     }
 
     @Test func autoTranslationSaysWhetherExcluded() {
@@ -22,7 +22,7 @@ struct SessionTextsTests {
     }
 
     @Test func logOutMessageAddsDraftOnlyWhenWritten() {
-        let base = "このデバイスからアカウントの情報を削除します。もう一度使うにはログインし直す必要があります。"
+        let base = "アカウントの情報はこのデバイスから削除されます。もう一度使うにはログインし直す必要があります。"
         #expect(AccountSwitchTexts.LoggingOut.message(discardsDraft: false) == base)
         #expect(AccountSwitchTexts.LoggingOut.message(discardsDraft: true) == base + "書きかけの投稿も破棄されます。")
     }

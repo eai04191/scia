@@ -173,7 +173,7 @@ extension Confirmation where Choice == Proceed {
 
     /// - Parameter actor: ほかのアカウントとして削除するときの、そのアカウントの`@username`。見出しの初めに「〜で」と入れる。
     public static func deleting(actor: String?) -> Confirmation {
-        .destructive(title: "\(actor.map { "\($0)で" } ?? "")投稿を削除しますか？", message: "削除した投稿は元に戻せません。", action: "削除")
+        .destructive(title: "\(actor.map { "\($0)で" } ?? "")投稿を削除しますか？", message: "この操作は取り消せません。", action: "削除")
     }
 
     /// 引用の取り消しは元に戻せないので確かめる。

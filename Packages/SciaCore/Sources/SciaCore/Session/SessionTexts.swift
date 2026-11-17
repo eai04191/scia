@@ -85,7 +85,7 @@ public enum SessionTexts {
 
     /// 投稿欄で投稿するアカウントを替えたとき、替えた先のアカウントから返信先か引用元が見えない理由。
     public static func cannotSee(username: String, isReply: Bool) -> String {
-        "@\(username)からは\(isReply ? "返信先" : "引用元")の投稿が見られません。"
+        "@\(username)からは\(isReply ? "返信先" : "引用元")の投稿を表示できません。"
     }
 
     /// 操作の失敗の見出し。
