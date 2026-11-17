@@ -144,20 +144,19 @@ final class ProfilePinnedShelfView: UIView, UIScrollViewDelegate {
     }
 }
 
-/// 固定された投稿のカード。持ち主はプロフィールの本人なので、名前とアイコンは出さず、本文、最初の添付ファイル、投稿した日を出す。
+/// 固定された投稿のカード。持ち主はプロフィールの本人なので、名前とアイコンは出さず、本文、添付ファイル、投稿した日を出す。
+/// 添付ファイルは見せるだけで、押すとカードと同じく投稿を開く。
 private final class ProfilePinnedCard: UIControl {
     var onTap: (() -> Void)?
 
     private let bodyLabel = EmojiLabel()
     private let dateLabel = UILabel()
-    private let thumbnailView = UIImageView()
-    private var thumbnailTask: Task<Void, Never>?
-
-    private static let thumbnailSize: CGFloat = 64
+    private let mediaView: MediaGridView
 
     init(item: ProfileShelfItem, emojiImages: EmojiImageStore<UIImage>, mediaImages: MediaImageStore<UIImage>, glyphLanguage: String) {
         let status = item.status
         let verdict = item.verdict
+        mediaView = MediaGridView(store: mediaImages)
         super.init(frame: .zero)
         backgroundColor = .secondarySystemFill
         layer.cornerRadius = 16
@@ -190,39 +189,35 @@ private final class ProfilePinnedCard: UIControl {
         dateLabel.text = status.createdAt.formatted(date: .numeric, time: .omitted)
         dateLabel.setContentCompressionResistancePriority(.required, for: .vertical)
 
-        thumbnailView.contentMode = .scaleAspectFill
-        thumbnailView.clipsToBounds = true
-        thumbnailView.layer.cornerRadius = 8
-        thumbnailView.layer.cornerCurve = .continuous
-        thumbnailView.backgroundColor = .tertiarySystemFill
-        let thumbnail = item.cardThumbnail(size: Self.thumbnailSize)
-        thumbnailView.isHidden = thumbnail == nil
-        if case .covered(let blurhash) = thumbnail {
-            thumbnailView.image = blurhash.flatMap { mediaImages.placeholder(for: $0, aspectRatio: 1) }
-            let cover = LinkCardView.makeCover()
-            cover.frame = thumbnailView.bounds
-            cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            thumbnailView.addSubview(cover)
+        let mediaSide = item.media?.stackSide ?? 0
+        if let media = item.media {
+            mediaView.apply(media)
+        } else {
+            mediaView.isHidden = true
         }
 
         let textStack = UIStackView(arrangedSubviews: [bodyLabel, UIView(), dateLabel])
         textStack.axis = .vertical
         textStack.spacing = 6
-        let row = UIStackView(arrangedSubviews: [textStack, thumbnailView])
+        let row = UIStackView(arrangedSubviews: [textStack, mediaView])
         row.axis = .horizontal
         row.alignment = .top
         row.spacing = 10
         row.isUserInteractionEnabled = false
         row.translatesAutoresizingMaskIntoConstraints = false
         addSubview(row)
+        // 一辺は、カードが狭くて本文の幅が残らなければ縮められるよう、上限より弱くする。
+        let mediaWidth = mediaView.widthAnchor.constraint(equalToConstant: mediaSide)
+        mediaWidth.priority = .required - 1
         NSLayoutConstraint.activate([
             row.topAnchor.constraint(equalTo: topAnchor, constant: 12),
             row.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
             row.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
             row.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
             textStack.bottomAnchor.constraint(equalTo: row.bottomAnchor),
-            thumbnailView.widthAnchor.constraint(equalToConstant: Self.thumbnailSize),
-            thumbnailView.heightAnchor.constraint(equalToConstant: Self.thumbnailSize),
+            mediaWidth,
+            mediaView.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.5, constant: -12 - row.spacing),
+            mediaView.heightAnchor.constraint(equalTo: mediaView.widthAnchor),
         ])
 
         isAccessibilityElement = true
@@ -230,9 +225,6 @@ private final class ProfilePinnedCard: UIControl {
         accessibilityLabel = ProfileTexts.Shelf.pinnedAccessibilityLabel(body: bodyLabel.attributedText?.stringSpeakingListSeparators, attachmentCount: item.spokenAttachmentCount, date: dateLabel.text)
 
         addAction(UIAction { [weak self] _ in self?.onTap?() }, for: .touchUpInside)
-        if case .image(let request) = thumbnail {
-            loadThumbnail(request, from: mediaImages)
-        }
     }
 
     @available(*, unavailable)
@@ -252,10 +244,6 @@ private final class ProfilePinnedCard: UIControl {
         ProfileAccentAppearance.restyleLinks(in: bodyLabel, underline: accent != nil, badge: nil)
     }
 
-    deinit {
-        thumbnailTask?.cancel()
-    }
-
     /// 読み上げでダブルタップしたときも開く。`UIControl`はタップで`touchUpInside`を送るが、読み上げの操作では送らないため。
     override func accessibilityActivate() -> Bool {
         onTap?()
@@ -265,69 +253,47 @@ private final class ProfilePinnedCard: UIControl {
     override var isHighlighted: Bool {
         didSet { alpha = isHighlighted ? 0.6 : 1 }
     }
-
-    private func loadThumbnail(_ request: MediaThumbnailRequest, from mediaImages: MediaImageStore<UIImage>) {
-        if let cached = mediaImages.cachedImage(for: request.url, maxPixelSize: request.maxPixelSize) {
-            thumbnailView.image = cached
-            return
-        }
-        thumbnailTask = Task(.display) { [weak self] in
-            guard let image = await mediaImages.shownImage(for: request.url, maxPixelSize: request.maxPixelSize, purpose: request.purpose, while: { [weak self] in self != nil }, visible: { [weak self] in self?.isInVisibleHierarchy ?? false }), let self, !Task.isCancelled else { return }
-            UIView.transition(with: self.thumbnailView, duration: 0.15, options: [.transitionCrossDissolve, .allowUserInteraction]) {
-                self.thumbnailView.image = image
-            }
-        }
-    }
 }
 
 /// 固定された投稿の棚に並べる投稿と、それに当てたサーバーのフィルターの判定。棚でも、タイムラインの行と同じく警告とぼかしを当てる。
 struct ProfileShelfItem: Equatable {
     let status: Status
     let verdict: FilterVerdict
-    /// 添付ファイルをぼかす理由。タイムラインの行と同じく、使う人が開いたり隠したりした選択に従う。ぼかさなければnil。
-    let mediaCover: MediaCover?
+    /// カードの本文の右に重ねて出す添付ファイル。出さないならnil。ぼかしは、タイムラインの行と同じく、使う人が開いたり隠したりした選択に従う。
+    /// 「投稿の見た目」の並べ方によらず、本文の右に小さく出すときの形にする。カードの幅には、本文の下に大きく並べる余地がないため。
+    let media: MediaGridView.Content?
 
-    init(status: Status, verdict: FilterVerdict, covers: MediaCovers) {
+    @MainActor
+    init(
+        status: Status,
+        verdict: FilterVerdict,
+        covers: MediaCovers,
+        settings: AppSettings = AppDependencies.settings,
+        tuning: TuningStore = AppDependencies.tuning,
+        network: NetworkConditionsMonitor = AppDependencies.network
+    ) {
         self.status = status
         self.verdict = verdict
-        mediaCover = covers.cover(for: status, filterTitles: verdict.mediaTitles)
-    }
-
-    /// 添付ファイルを出す。注意書きとフィルターの警告の投稿は、本文と同じく添付ファイルも出さず、タイムラインで折りたたんだ投稿と同じく、あることを読み上げでも伝えない。
-    var showsMedia: Bool {
-        status.spoilerText.isEmpty && verdict.warningTitles.isEmpty
-    }
-
-    /// 読み上げで伝える添付ファイルの数。
-    var spokenAttachmentCount: Int {
-        showsMedia ? status.mediaAttachments.count : 0
-    }
-
-    /// カードのサムネイルの出し方。
-    enum CardThumbnail: Equatable {
-        case image(MediaThumbnailRequest)
-        /// ぼかしている添付ファイル。画像は読まず、blurhashのぼかしの上に目の記号を出す。
-        case covered(blurhash: String?)
-    }
-
-    /// カードに出すサムネイル。最初の添付ファイルで決める。出さないならnil。
-    func cardThumbnail(size: CGFloat) -> CardThumbnail? {
-        guard showsMedia, let attachment = status.mediaAttachments.first else { return nil }
-        if mediaCover != nil {
-            return .covered(blurhash: attachment.blurhash)
+        // 注意書きとフィルターの警告の投稿は、本文と同じく添付ファイルも出さない。
+        guard status.spoilerText.isEmpty, verdict.warningTitles.isEmpty else {
+            media = nil
+            return
         }
-        return Self.thumbnailRequest(for: attachment, size: size).map(CardThumbnail.image)
+        var media = MediaGridView.Content.make(of: status.mediaAttachments, cover: covers.cover(for: status, filterTitles: verdict.mediaTitles), settings: settings, tuning: tuning, network: network)
+        media?.arrange(.besideBody, seed: status.id, settings: settings)
+        self.media = media
     }
 
-    /// 棚の小さなサムネイルに読む画像。サーバーが縮めたプレビュー画像だけを読む。棚のサムネイルはプレビュー画像で足り、
-    /// 元のファイル（動画や音声の本体）を読まないため。読める画像がない種類（音声など）ならnil。
-    static func thumbnailRequest(for attachment: MediaAttachment, size: CGFloat) -> MediaThumbnailRequest? {
-        MediaThumbnailSelection.request(
-            for: attachment,
-            tileSize: CGSize(width: size, height: size),
-            displayScale: 3,
-            policy: MediaThumbnailPolicy(enhancement: nil, upscaleTolerance: 1)
-        )
+    /// 読み上げで伝える添付ファイルの数。添付ファイルを出さない投稿では、タイムラインで折りたたんだ投稿と同じく、あることを読み上げでも伝えない。
+    var spokenAttachmentCount: Int {
+        media?.attachments.count ?? 0
+    }
+}
+
+private extension MediaGridView.Content {
+    /// 重ねて出すときの正方形の一辺。重ねていなければnil。
+    var stackSide: CGFloat? {
+        if case .stack(let side) = arrangement { side } else { nil }
     }
 }
 

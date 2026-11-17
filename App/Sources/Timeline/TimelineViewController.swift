@@ -269,6 +269,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
     /// `mediaCovers`が変わったときに呼ぶ。行の外でぼかしを描く部品（プロフィールの固定された投稿のカード）が描き直すのに使う。
     var onUpdateMediaCovers: (() -> Void)?
+    /// 設定、チューニング、回線の状態が変わって、行を描き直したときに呼ぶ。行の外で添付ファイルを描く部品（プロフィールの固定された投稿のカード）が描き直すのに使う。
+    var onApplySettingsChange: (() -> Void)?
     /// この画面で開いたり隠したりしたときに、変えたあとの状態と、変えた投稿を渡して呼ぶ。
     var onChangeMediaCovers: ((MediaCovers, Status) -> Void)?
     /// fxtwitterから読んだXの投稿。セッションの中で1つを共有する。
@@ -632,6 +634,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         reconfigure(Set(dataSource.snapshot().itemIdentifiers))
         // 区切り線はリストのレイアウトが引くので、描き直しでは変わらない。引き直させる。
         collectionView.collectionViewLayout.invalidateLayout()
+        onApplySettingsChange?()
     }
 
     /// プレビューの見本の行の中身。見本に並べる投稿と通知のほかはnil。

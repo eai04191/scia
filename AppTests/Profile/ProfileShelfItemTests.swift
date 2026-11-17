@@ -1,11 +1,13 @@
 import Foundation
+import UIKit
 import SciaCore
 import SciaTesting
 import Testing
 @testable import Scia
 
-/// 固定された投稿のカードのサムネイルの出し方と読み上げを確かめる。
-@Suite(.failureState)
+/// 固定された投稿のカードの添付ファイルの出し方と読み上げを確かめる。
+@Suite(.scratch, .failureState)
+@MainActor
 struct ProfileShelfItemTests {
     private static let blurhash = "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
     private static let now = Date(timeIntervalSince1970: 1_790_000_000)
@@ -16,6 +18,7 @@ struct ProfileShelfItemTests {
         spoilerText: String = "",
         sensitive: Bool = false,
         filter: FilterResult.Action? = nil,
+        settings: AppSettings = .isolated(),
         choice: (inout MediaCovers, Status) -> Void = { _, _ in }
     ) throws -> ProfileShelfItem {
         let base = try #require(StatusFactory.make(count: 1, startingAt: 1).first)
@@ -32,17 +35,7 @@ struct ProfileShelfItemTests {
         )
         var covers = MediaCovers()
         choice(&covers, status)
-        return ProfileShelfItem(status: status, verdict: Self.filtering.verdict(for: status, now: Self.now), covers: covers)
-    }
-
-    private func cardThumbnail(
-        media: [MediaAttachment] = [Self.image],
-        spoilerText: String = "",
-        sensitive: Bool = false,
-        filter: FilterResult.Action? = nil,
-        choice: (inout MediaCovers, Status) -> Void = { _, _ in }
-    ) throws -> ProfileShelfItem.CardThumbnail? {
-        try item(media: media, spoilerText: spoilerText, sensitive: sensitive, filter: filter, choice: choice).cardThumbnail(size: 64)
+        return ProfileShelfItem(status: status, verdict: Self.filtering.verdict(for: status, now: Self.now), covers: covers, settings: settings)
     }
 
     private static let image = MediaAttachment(
@@ -55,42 +48,45 @@ struct ProfileShelfItemTests {
         blurhash: blurhash
     )
 
-    @Test func 閲覧注意でない添付ファイルは画像を読む() throws {
-        guard case .image = try cardThumbnail() else {
-            Issue.record("画像を読むはず")
-            return
-        }
+    @Test func 閲覧注意でない添付ファイルはぼかさずに重ねて出す() throws {
+        let media = try #require(try item().media)
+        #expect(media.cover == nil)
+        #expect(media.isStacked)
     }
 
-    @Test func 閲覧注意の添付ファイルは画像を読まずにぼかす() throws {
-        #expect(try cardThumbnail(sensitive: true) == .covered(blurhash: Self.blurhash))
+    @Test func 本文の下に大きく並べる設定でも重ねて出す() throws {
+        let settings = AppSettings.isolated()
+        settings.appearance.mediaArrangement = .belowBody
+        #expect(try item(settings: settings).media?.isStacked == true)
     }
 
-    @Test func ぼかすフィルターの添付ファイルは画像を読まずにぼかす() throws {
-        #expect(try cardThumbnail(filter: .blur) == .covered(blurhash: Self.blurhash))
+    @Test func 閲覧注意の添付ファイルはぼかす() throws {
+        #expect(try item(sensitive: true).media?.cover == .sensitive)
+    }
+
+    @Test func ぼかすフィルターの添付ファイルはぼかす() throws {
+        #expect(try item(filter: .blur).media?.cover == .filtered(["フィルター"]))
     }
 
     @Test func 使う人が隠した添付ファイルはぼかす() throws {
-        #expect(try cardThumbnail(choice: { covers, status in covers.hide(status) }) == .covered(blurhash: Self.blurhash))
+        #expect(try item(choice: { covers, status in covers.hide(status) }).media?.cover == .hidden)
     }
 
-    @Test func 使う人がぼかしを外した閲覧注意の添付ファイルは画像を読む() throws {
-        guard case .image = try cardThumbnail(sensitive: true, choice: { covers, status in covers.reveal(status) }) else {
-            Issue.record("画像を読むはず")
-            return
-        }
+    @Test func 使う人がぼかしを外した閲覧注意の添付ファイルはぼかさない() throws {
+        let media = try #require(try item(sensitive: true, choice: { covers, status in covers.reveal(status) }).media)
+        #expect(media.cover == nil)
     }
 
     @Test func 注意書きのある投稿には出さない() throws {
-        #expect(try cardThumbnail(spoilerText: "注意書き", sensitive: true) == nil)
+        #expect(try item(spoilerText: "注意書き", sensitive: true).media == nil)
     }
 
     @Test func フィルターの警告の投稿には出さない() throws {
-        #expect(try cardThumbnail(filter: .warn) == nil)
+        #expect(try item(filter: .warn).media == nil)
     }
 
     @Test func 添付ファイルのない投稿には出さない() throws {
-        #expect(try cardThumbnail(media: [], sensitive: true) == nil)
+        #expect(try item(media: [], sensitive: true).media == nil)
     }
 
     @Test func 添付ファイルの数を読み上げる() throws {
@@ -103,5 +99,26 @@ struct ProfileShelfItemTests {
 
     @Test func フィルターの警告の投稿では添付ファイルの数を読み上げない() throws {
         #expect(try item(filter: .warn).spokenAttachmentCount == 0)
+    }
+
+    @Test func 右に並べる大きさを上限にしても狭い棚で本文の幅を残す() throws {
+        let settings = AppSettings.isolated()
+        settings.setValue(AppearanceCatalog.mediaBesideSide.range.upperBound, for: AppearanceCatalog.mediaBesideSide)
+        let shelf = ProfilePinnedShelfView(emojiImages: AppDependencies.emojiImages, mediaImages: AppDependencies.mediaImages)
+        shelf.frame = CGRect(x: 0, y: 0, width: 320, height: 300)
+        shelf.setItems([try item(settings: settings)], glyphLanguage: "ja")
+        shelf.layoutIfNeeded()
+        let body = try #require(shelf.firstSubview(of: EmojiLabel.self))
+        #expect(body.bounds.width >= 80)
+    }
+}
+
+private extension UIView {
+    func firstSubview<View: UIView>(of type: View.Type) -> View? {
+        for subview in subviews {
+            if let view = subview as? View { return view }
+            if let view = subview.firstSubview(of: type) { return view }
+        }
+        return nil
     }
 }

@@ -109,13 +109,15 @@ final class ProfileController {
         viewController.filterWarnings = FilterWarnings(filtering: store.filtering)
         viewController.headerView = header
         viewController.myAccountID = client.credential.accountID
-        viewController.onUpdateMediaCovers = { [weak self] in
+        let redrawPinned: () -> Void = { [weak self] in
             self?.afterTransition { controller in
                 if controller.showPinned() {
                     controller.viewController?.headerDidChangeSize()
                 }
             }
         }
+        viewController.onUpdateMediaCovers = redrawPinned
+        viewController.onApplySettingsChange = redrawPinned
         viewController.onApproachingEnd = { [weak self] in self?.loadOlder(purpose: .display) }
         viewController.onRetry = { [weak self] in self?.retry() }
         // 引っぱって読み直した投稿が多く、手元の投稿との間が残ったときだけギャップの行が出る。読み直しの続きなので、押されたときだけ読む。
@@ -528,8 +530,10 @@ final class ProfileController {
     /// 固定された投稿の棚を今の状態にする。棚にも、タイムラインの行と同じサーバーのフィルターの警告とぼかしを当てる。
     /// - Returns: 棚の中身が変わった。
     private func showPinned() -> Bool {
-        let covers = viewController?.mediaCovers ?? MediaCovers()
-        let items = listReveal == .revealed && settings.separatesProfilePinned ? store.pinned.map { ProfileShelfItem(status: $0, verdict: store.filtering.verdict(for: $0), covers: covers) } : []
+        guard let viewController else { return false }
+        let items = listReveal == .revealed && settings.separatesProfilePinned
+            ? store.pinned.map { ProfileShelfItem(status: $0, verdict: store.filtering.verdict(for: $0), covers: viewController.mediaCovers, settings: settings, tuning: viewController.tuning, network: viewController.network) }
+            : []
         return header.setPinned(items, glyphLanguage: settings.glyphLanguageIdentifier())
     }
 
