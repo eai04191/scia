@@ -300,6 +300,7 @@ struct EmojiArrivalTests {
         }
         let harness = try TimelineHarness(emojiImages: store)
         defer { harness.tearDown() }
+        harness.settings.appearance.showsActionBar = true
         var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
         let base = statuses[10]
         statuses[10] = Status(
@@ -330,6 +331,10 @@ struct EmojiArrivalTests {
         #expect(try abs(#require(harness.windowMinY(of: below)) - belowY) < 0.5, "下の行が動きました")
         #expect(!hasRowShift(belowCell), "動かない下の行に動きを付けています")
         #expect(try !hasRowShift(#require(harness.visibleCell(of: id))), "上へ伸びた行そのものを動かしました")
+        // 本文より下の部品は、行の中の座標では下へ押されるが、行が上へ伸びた分と差し引きで、動き始めから画面上の同じ位置にある。
+        let cell = try #require(harness.visibleCell(of: id))
+        let bar = try #require((cell.contentView as? PostContentView)?.postBody.actionBar, "アクションバーがありません")
+        #expect(abs(harness.initialOffsetY(of: bar, in: cell)) < 0.5, "本文より下の部品が、動き始めに\(harness.initialOffsetY(of: bar, in: cell))ptずれています")
     }
 
     /// 引用の中の絵文字が届いて動く間も、引用の縦線を見せる。縦線は文字の枠の外（字下げの中）にあり、ラベル自身の描画は隠すため、
