@@ -27,6 +27,7 @@ enum CatalogComponent: String, CaseIterable {
     case timelineGap = "timeline-gap"
     case timelineOverlays = "timeline-overlays"
     case streamingStatus = "streaming-status"
+    case timelineMotion = "timeline-motion"
 
     case postBody = "post-body"
     case postLabels = "post-labels"
@@ -99,6 +100,7 @@ enum CatalogComponent: String, CaseIterable {
         case .timelineGap: "ギャップの行"
         case .timelineOverlays: "タイムラインの上に重ねる表示"
         case .streamingStatus: "引っぱると見える新着の経路"
+        case .timelineMotion: "タイムラインの動きの実験"
         case .mediaGrid: "タイムラインの添付ファイルのサムネイル"
         case .profileHeader: "プロフィールのヘッダー"
         case .profileAccent: "プロフィールのカードの色"
@@ -154,6 +156,7 @@ enum CatalogComponent: String, CaseIterable {
         case .timelineGap: TimelineCatalog.gapStates()
         case .timelineOverlays: TimelineOverlayCatalog.states()
         case .streamingStatus: StreamingStatusCatalog.states()
+        case .timelineMotion: []
         case .mediaGrid: MediaGridCatalog.states()
         case .profileHeader: ProfileHeaderCatalog.states()
         case .profileAccent: ProfileHeaderCatalog.accentStates()
@@ -181,6 +184,15 @@ enum CatalogComponent: String, CaseIterable {
         case .profileEdit: ProfileEditCatalog.states()
         case .storage: StorageCatalog.states()
         case .mediaCache: StorageCatalog.mediaCacheStates()
+        }
+    }
+
+    /// 部品を開いたときに出す画面。状態を並べるのではなく、手で動かして確かめる部品は、専用の画面を出す。
+    @MainActor
+    func makeScreen() -> UIViewController {
+        switch self {
+        case .timelineMotion: TimelineMotionLabViewController()
+        default: ComponentStatesViewController(component: self)
         }
     }
 }
@@ -215,7 +227,7 @@ enum CatalogSection: CaseIterable {
     var components: [CatalogComponent] {
         switch self {
         case .compose: [.attachmentStrip, .composeCapsule, .completionList, .emojiPalette, .composePoll, .postingLanguage, .extendedURL, .altTextEditor]
-        case .timeline: [.timelineEmpty, .timelineFooter, .timelineUnreadable, .timelineGap, .timelineOverlays, .streamingStatus]
+        case .timeline: [.timelineEmpty, .timelineFooter, .timelineUnreadable, .timelineGap, .timelineOverlays, .streamingStatus, .timelineMotion]
         case .post: [.postBody, .postLabels, .postInteracted, .postWarnings, .postsMediaBeside, .mediaGrid, .linkCards, .quotes, .polls, .emojiReactions, .postActionBar, .translationTransition, .hdrEmoji, .editHistory]
         case .notificationsAndAccounts: [.notifications, .accounts, .notificationRequests]
         case .viewer: [.caption, .videoControls, .mediaStatus]
@@ -360,7 +372,7 @@ extension UIViewController {
     /// カタログを出している上で呼ばれたら、重ねずに開いている画面を差し替える。URLで部品を次々に開くため。
     func presentComponentCatalog(opening component: CatalogComponent? = nil) {
         let list = ComponentCatalogViewController()
-        let controllers: [UIViewController] = [list] + (component.map { [ComponentStatesViewController(component: $0)] } ?? [])
+        let controllers: [UIViewController] = [list] + (component.map { [$0.makeScreen()] } ?? [])
         if let navigation = self as? UINavigationController, navigation.viewControllers.first is ComponentCatalogViewController {
             navigation.setViewControllers(controllers, animated: false)
             return
@@ -440,7 +452,7 @@ extension ComponentCatalogViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         collectionView.deselectItem(at: indexPath, animated: true)
         guard let component = dataSource?.itemIdentifier(for: indexPath) else { return }
-        navigationController?.pushViewController(ComponentStatesViewController(component: component), animated: true)
+        navigationController?.pushViewController(component.makeScreen(), animated: true)
     }
 }
 
