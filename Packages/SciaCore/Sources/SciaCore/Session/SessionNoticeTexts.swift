@@ -5,8 +5,8 @@ public enum OperationStatusTexts {
     /// 画面の題。アカウントのメニューの、この画面を開く項目の名前にも使う。
     public static let title = "操作の状況"
     public static let done = "完了"
-    public static let empty = "進行中の操作も失敗もありません"
-    public static let emptyDescription = "保存のためのダウンロードと、お気に入りやブーストなどの失敗が並びます。失敗はアプリを終了するまで残ります。"
+    public static let empty = "操作なし"
+    public static let emptyDescription = "ダウンロードなどの進行中の操作と、失敗した操作がここに表示されます。失敗はアプリを終了するまで残ります。"
     public static let activitiesHeader = "進行中"
     public static let noFailures = "失敗はありません"
     public static let failuresHeader = "最近の失敗"
