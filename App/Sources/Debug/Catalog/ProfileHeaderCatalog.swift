@@ -41,10 +41,38 @@ enum ProfileHeaderCatalog {
         }
         return [
             status("long", "<p>固定された投稿の本文が長いときは、5行で切って末尾を省く。カードの高さは一番背の高いカードに揃うので、短い本文のカードも同じ高さになる。ここから先は省かれる部分の文。ここから先は省かれる部分の文。</p>", daysAgo: 1),
-            status("media", "<p>添付ファイルのある投稿は、最初の1枚を右に小さく出す。<a href=\"https://example.com\">example.com</a></p>", media: [Fixtures.attachment("pinned-media", width: 1_200, height: 800, color: .systemOrange)], daysAgo: 30),
+            status("media", "<p>添付ファイルのある投稿は、本文の右に小さく出す。<a href=\"https://example.com\">example.com</a></p>", media: [Fixtures.attachment("pinned-media", width: 1_200, height: 800, color: .systemOrange)], daysAgo: 30),
             status("warning", "<p>警告の下の本文。カードには出さない。</p>", spoilerText: "閲覧注意の警告の文", media: [Fixtures.attachment("pinned-warning", width: 800, height: 800)], daysAgo: 120),
             status("sensitive", "<p>添付ファイルだけを閲覧注意にした投稿。カードではぼかして目の記号を出す。</p>", media: [Fixtures.attachment("pinned-sensitive", width: 800, height: 800, color: .systemRed, blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj")], sensitive: true, daysAgo: 400),
             status("short", "<p>短い本文</p>", daysAgo: 800),
+        ]
+    }()
+
+    /// 固定された投稿の棚に並べる、種類と数の違う添付ファイル。
+    private static let pinnedMediaStatuses: [Status] = {
+        func status(_ id: String, _ content: String, media: [MediaAttachment], daysAgo: Double) -> Status {
+            Status(
+                id: "pinned-media-\(id)",
+                createdAt: Date(timeIntervalSince1970: 1_790_000_000 - daysAgo * 86_400),
+                account: fullAccount,
+                content: content,
+                spoilerText: "",
+                url: nil,
+                mediaAttachments: media,
+                pinned: true
+            )
+        }
+        return [
+            status("three", "<p>4枚の画像。3枚まで重ねる。</p>", media: [
+                Fixtures.attachment("pinned-three-1", width: 1_200, height: 800, color: .systemOrange, description: "代替テキスト"),
+                Fixtures.attachment("pinned-three-2", width: 800, height: 1_200, color: .systemTeal),
+                Fixtures.attachment("pinned-three-3", width: 800, height: 800, color: .systemPink),
+                Fixtures.attachment("pinned-three-4", width: 800, height: 800, color: .systemYellow),
+            ], daysAgo: 2),
+            status("video", "<p>動画</p>", media: [Fixtures.attachment("pinned-video", type: .video, width: 1_920, height: 1_080, color: .systemIndigo)], daysAgo: 3),
+            status("gifv", "<p>GIF</p>", media: [Fixtures.attachment("pinned-gifv", type: .gifv, width: 800, height: 800, color: .systemGreen)], daysAgo: 4),
+            status("audio", "<p>音声</p>", media: [Fixtures.attachment("pinned-audio", type: .audio, width: 800, height: 800, blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj")], daysAgo: 5),
+            status("unknown", "<p>種類の分からないファイル</p>", media: [Fixtures.attachment("pinned-unknown", type: .unknown("binary"), width: 800, height: 800, hasPreview: false)], daysAgo: 6),
         ]
     }()
 
@@ -141,6 +169,9 @@ enum ProfileHeaderCatalog {
             },
             CatalogState(title: "紹介しているユーザーが1人だけで、注目のハッシュタグなし") {
                 header(fullAccount, .following, endorsements: Array(endorsedAccounts.prefix(1)))
+            },
+            CatalogState(title: "固定された投稿の添付ファイル（4枚、動画、GIF、音声、種類の分からないファイル）") {
+                header(fullAccount, .following, pinned: pinnedMediaStatuses)
             },
             CatalogState(title: "固定された投稿が1件") { header(fullAccount, .following, pinned: Array(pinnedStatuses.prefix(1))) },
             CatalogState(title: "フィルターに一致した固定された投稿（1つ目が警告、2つ目が2つのフィルターの警告、3つ目がぼかし）") {
