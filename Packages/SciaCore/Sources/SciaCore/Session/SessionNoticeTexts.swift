@@ -6,7 +6,7 @@ public enum OperationStatusTexts {
     public static let title = "操作の状況"
     public static let done = "完了"
     public static let empty = "操作なし"
-    public static let emptyDescription = "ダウンロードなどの進行中の操作と、失敗した操作がここに表示されます。失敗はアプリを終了するまで残ります。"
+    public static let emptyDescription = "ダウンロードなどの進行中の操作と、失敗した操作がここに表示されます。"
     public static let activitiesHeader = "進行中"
     public static let noFailures = "失敗はありません"
     public static let failuresHeader = "最近の失敗"
@@ -15,7 +15,7 @@ public enum OperationStatusTexts {
     /// - Parameter limit: 残す失敗の数（`OperationStatus.failureLimit`）。
     public static func failuresFooter(limit: Int) -> String {
         // iOSでは、SwiftUIの`Text`に数を埋めて出していて、`Text`が桁区切りを付けていたため、同じにする。
-        "アプリを終了するまで直近の\(limit.formatted())件を残します。"
+        "直近の\(limit.formatted())件が表示されます。"
     }
 
     /// 進行中の操作を止めるボタンの読み上げ。

@@ -46,7 +46,7 @@ struct OperationStatusView: View {
                             .foregroundStyle(.secondary)
                     }
                     ForEach(notices.failures) { failure in
-                        FailureRow(failure: failure, onOpen: onOpen)
+                        FailureRow(failure: failure, time: notices.timeText(of: failure), accessibilityTime: notices.accessibilityTimeText(of: failure), onOpen: onOpen)
                     }
                 } header: {
                     Text(OperationStatusTexts.failuresHeader)
@@ -55,6 +55,9 @@ struct OperationStatusView: View {
                 }
             }
             .topEdgeEffectHiddenOnMac()
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
+                notices.dayDidChange()
+            }
         }
     }
 }
@@ -151,6 +154,8 @@ private struct ProgressRingStopButton: View {
 
 private struct FailureRow: View {
     let failure: OperationStatus.Failure
+    let time: String
+    let accessibilityTime: String
     let onOpen: (OperationStatus.Subject) -> Void
 
     var body: some View {
@@ -184,7 +189,8 @@ private struct FailureRow: View {
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Text(failure.date, format: .dateTime.hour().minute())
+                Text(time)
+                    .accessibilityLabel(accessibilityTime)
                     .font(.footnote.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .fixedSize()

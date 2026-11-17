@@ -181,7 +181,7 @@ final class SessionController {
     /// カードが付く前に受け取った投稿を、見えている間に取り直す。
     private let statusRefresher: StatusRefresher
     /// 「操作の状況」の画面に並べる、処理の途中と最近の失敗。
-    let operationStatus = OperationStatus()
+    let operationStatus: OperationStatus
     /// アプリ全体のアプリ内通知。ウインドウごとのチップの列に配る。
     let notices = NoticeCenter()
     /// 届いた通知を、ステータスバーの場所に流す。
@@ -297,6 +297,7 @@ final class SessionController {
     ///     このセッションのアカウントのほか、「別のアカウントで」の操作で無効と分かったほかのアカウントも渡す。
     init(credential: Credential, accountMenu: @escaping @MainActor () -> UIMenu, logOut: (@MainActor () -> Void)?, onReauthenticate: @escaping (SessionController, Credential) async -> Void) {
         self.credential = credential
+        operationStatus = OperationStatus(store: OperationFailureStore(defaults: .standard, account: credential.handle), now: AppDependencies.now)
         self.onReauthenticate = onReauthenticate
         self.accountMenu = accountMenu
         self.logOut = logOut
@@ -2035,6 +2036,7 @@ final class SessionController {
     /// ビューアのチップから開いたときは、投稿が裏のタイムラインで動いても見えないため、ビューアも閉じ終えてから開く。
     /// - Parameter presenter: シートを出す画面。nilならいちばん手前の画面。
     func showOperationStatus(from presenter: UIViewController? = nil) {
+        operationStatus.reloadFailures()
         weak var sheet: UIViewController?
         let controller = OperationStatusView.makeSheet(notices: operationStatus) { [weak self, weak presenter] subject in
             sheet?.dismiss(animated: true) {
@@ -4130,6 +4132,7 @@ final class SessionController {
     /// このセッションで始めた処理を全部止め、以後の結果を捨てる。ログアウト、アカウントの切り替え、窓を閉じたときなど、画面を捨てるときに呼ぶ。
     /// タイムライン、開いている画面、投稿欄の送信とアップロード、ストリーミングは、どれも持ち主の子で始めているので、ここで並べなくても止まる。
     func stop() {
+        operationStatus.stopSaving()
         statusBarTicker.clear()
         session.close()
     }

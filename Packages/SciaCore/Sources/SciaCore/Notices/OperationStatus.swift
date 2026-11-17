@@ -3,12 +3,12 @@ public import Observation
 
 /// 「操作の状況」に並べる、処理の途中と最近の失敗。出方の決まりはdocs/notices.mdの「操作の状況」にある。セッションごとに1つ持つ。
 ///
-/// 起動している間だけメモリに持ち、ログには書かない。どの投稿の失敗かを持つため、IDを伏せた「接続の状態」の記録とは分ける。
+/// 処理の途中はメモリだけに持ち、最近の失敗は`OperationFailureStore`でアカウントごとに保存する。ログには書かない。どの投稿の失敗かを持つため、IDを伏せた「接続の状態」の記録とは分ける。
 @MainActor
 @Observable
 public final class OperationStatus {
     /// 知らせが結び付いた投稿。行から投稿を開くために持つ。
-    public struct Subject: Sendable, Equatable {
+    public struct Subject: Sendable, Equatable, Codable {
         /// 操作した要素のID。ブーストならブーストのID。
         public let statusID: Status.ID
         /// 中身の投稿のID。ブーストなら元の投稿のID。
@@ -98,21 +98,53 @@ public final class OperationStatus {
     /// 新しい順。
     public private(set) var failures: [Failure] = []
     @ObservationIgnored private let now: () -> Date
+    @ObservationIgnored private var store: OperationFailureStore?
+    /// 日付が変わった回数。行の時刻を描き直させるために、時刻の表記を作るときに読む。
+    private var dayChanges = 0
     @ObservationIgnored private var stopHandlers: [Activity.ID: @MainActor () -> Void] = [:]
 
-    public init(now: @escaping () -> Date = SystemTime.now) {
+    /// - Parameter store: 最近の失敗の保存先。nilならメモリだけに持つ。
+    public init(store: OperationFailureStore? = nil, now: @escaping () -> Date = SystemTime.now) {
+        self.store = store
         self.now = now
+        failures = store?.load() ?? []
     }
 
     /// 失敗を残す。成功は残さない。
     @discardableResult
     public func recordFailure(title: String, reason: ErrorPresentation, subject: Subject? = nil) -> Failure {
         let failure = Failure(id: UUID(), title: title, reason: reason, subject: subject, date: now())
-        failures.insert(failure, at: 0)
-        if failures.count > Self.failureLimit {
-            failures.removeLast(failures.count - Self.failureLimit)
-        }
+        failures = Array(([failure] + (store?.load() ?? failures)).prefix(Self.failureLimit))
+        store?.save(failures)
         return failure
+    }
+
+    /// 以後の失敗を保存しない。ログアウトでは保存した値を消してからセッションを止めるため、止めた通信の失敗で消したキーに書き戻さないようにする。
+    public func stopSaving() {
+        store = nil
+    }
+
+    /// 保存先から最近の失敗を読み直す。同じアカウントをほかのウインドウで開いていると、そちらの失敗が保存先に増えているため。
+    public func reloadFailures() {
+        guard let store else { return }
+        failures = store.load()
+    }
+
+    /// 日付が変わったときに呼ぶ。今日の失敗として時刻だけを出していた行に、日付を添え直す。
+    public func dayDidChange() {
+        dayChanges += 1
+    }
+
+    /// 行の時刻。今日なら時刻だけ、今年なら年を省く。
+    public func timeText(of failure: Failure, calendar: Calendar = .current, locale: Locale = .autoupdatingCurrent) -> String {
+        _ = dayChanges
+        return StatusTimestamp.text(for: failure.date, now: now(), style: .absolute, calendar: calendar, locale: locale)
+    }
+
+    /// VoiceOverで読む行の時刻。
+    public func accessibilityTimeText(of failure: Failure, calendar: Calendar = .current, locale: Locale = .autoupdatingCurrent) -> String {
+        _ = dayChanges
+        return StatusTimestamp.accessibilityText(for: failure.date, now: now(), style: .absolute, calendar: calendar, locale: locale)
     }
 
     /// 処理の途中を足すか、同じidのものを書き換える。書き換えても並びの位置は変えない。
