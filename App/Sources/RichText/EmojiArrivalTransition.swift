@@ -35,6 +35,8 @@ final class EmojiArrivalTransition {
     /// 動き始めるときの、引用の縦線の枠（`QuoteBars`）。
     private let startBars: [CGRect]
     private let duration: TimeInterval
+    /// 動き始める見え方がない文字を、透明から濃くする。編集で新しく入った文字に使う。
+    private let fadesInNewCharacters: Bool
     private var overlay: CALayer?
     private var pieceLayers: [(piece: Piece, layer: CALayer)] = []
     /// 引用の縦線を切り出した層。
@@ -45,12 +47,16 @@ final class EmojiArrivalTransition {
     private weak var label: EmojiLabel?
 
     /// 文字列を入れ替える前に呼ぶ。`start`は、動き始めるときの文字ごとの見え方、`startBars`は引用の縦線の枠。
-    init(label: EmojiLabel, start: [Int: Placement], startBars: [CGRect], duration: TimeInterval) {
+    init(label: EmojiLabel, start: [Int: Placement], startBars: [CGRect], duration: TimeInterval, fadesInNewCharacters: Bool = false) {
         self.label = label
         self.start = start
         self.startBars = startBars
         self.duration = duration
+        self.fadesInNewCharacters = fadesInNewCharacters
     }
+
+    /// 編集で入った文字を濃くし始めるまでの、動きの時間に対する割合。スプリングは、この時点で残りの動きが小さくなっている。
+    private static let newCharacterFadeDelay = 0.5
 
     /// 動かしている途中。
     var isRunning: Bool { overlay != nil }
@@ -89,7 +95,7 @@ final class EmojiArrivalTransition {
     func start(newText: NSAttributedString) {
         guard let label, label.bounds.width > 0, label.bounds.height > 0 else { return }
         finalFrames = Self.characterFrames(of: newText, in: label)
-        let pieces = Self.pieces(start: start, final: finalFrames)
+        let pieces = Self.pieces(start: start, final: finalFrames, newOpacity: fadesInNewCharacters ? 0 : 1)
         guard !pieces.isEmpty else { return }
         label.layer.setNeedsDisplay()
         label.layer.displayIfNeeded()
@@ -125,12 +131,22 @@ final class EmojiArrivalTransition {
             overlay.addSublayer(layer)
             pieceLayers.append((piece, layer))
             if piece.startOpacity < 1 {
-                let fade = CABasicAnimation(keyPath: "opacity")
-                fade.fromValue = piece.startOpacity
-                fade.toValue = 1
-                fade.duration = duration
-                fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                layer.add(fade, forKey: "fadeIn")
+                if fadesInNewCharacters {
+                    // 編集で入った文字の場所は、前の文字が通ってから空く。通り終えるまで透明のままにし、残りの時間で濃くする。
+                    // 始めから濃くすると、動いている前の文字と、同じ場所で重なって見える。
+                    let fade = CAKeyframeAnimation(keyPath: "opacity")
+                    fade.values = [piece.startOpacity, piece.startOpacity, 1]
+                    fade.keyTimes = [0, NSNumber(value: Self.newCharacterFadeDelay), 1]
+                    fade.duration = duration
+                    layer.add(fade, forKey: "fadeIn")
+                } else {
+                    let fade = CABasicAnimation(keyPath: "opacity")
+                    fade.fromValue = piece.startOpacity
+                    fade.toValue = 1
+                    fade.duration = duration
+                    fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    layer.add(fade, forKey: "fadeIn")
+                }
             }
             if piece.offset != .zero {
                 // 下の行を動かすタイムラインの動き（`TimelineViewController.reconfigureShiftingRowsBelow`）と同じスプリングにし、行と文字の動きをそろえる。
@@ -224,14 +240,15 @@ final class EmojiArrivalTransition {
     }
 
     /// 文字を、同じ行に並び、同じだけ動き、同じ濃さから始まる、続いた文字のまとまりに分ける。動き始める見え方がない文字（並べた範囲の外）は動かさない。
-    static func pieces(start: [Int: Placement], final: [Int: CGRect]) -> [Piece] {
+    /// - Parameter newOpacity: 動き始める見え方がない文字の、動き始めるときの濃さ。
+    static func pieces(start: [Int: Placement], final: [Int: CGRect], newOpacity: Float = 1) -> [Piece] {
         var pieces: [Piece] = []
         var current: Piece?
         for index in final.keys.sorted() {
             guard let frame = final[index] else { continue }
             let from = start[index]
             let offset = from.map { CGPoint(x: frame.minX - $0.frame.minX, y: frame.minY - $0.frame.minY) } ?? .zero
-            let opacity = from?.opacity ?? 1
+            let opacity = from?.opacity ?? newOpacity
             if var piece = current, piece.startOpacity == opacity,
                abs(piece.offset.x - offset.x) < 0.5, abs(piece.offset.y - offset.y) < 0.5,
                abs(piece.frame.minY - frame.minY) < 0.5 {

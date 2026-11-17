@@ -36,6 +36,8 @@ class EmojiLabel: TextKitLabel {
     override var attributedText: NSAttributedString? {
         get { super.attributedText }
         set {
+            let isEdit = expectsTextEdit
+            expectsTextEdit = false
             if let assignedText, Self.hasSameContent(assignedText, newValue) {
                 // 入れ替えていれば、そこで読めなかったアニメーション版を読み直していた。入れ替えなくても読み直す。
                 animatedEmojis?.reloadMissingAnimations()
@@ -45,6 +47,8 @@ class EmojiLabel: TextKitLabel {
             let filled = Self.filledEmojiIndices(from: assignedText, to: newValue)
             if !filled.isEmpty {
                 prepareEmojiArrival(filling: filled)
+            } else if isEdit, let newValue, prepareEditArrival(to: newValue) {
+                // 編集の前後で変わらない文字を、前の位置から動かす。
             } else if assignedText?.string != newValue?.string {
                 // 絵文字を入れている途中に、使い回された行で別の文字列に替わったら、前の文字列の像を重ねない。
                 cancelEmojiArrival()
@@ -157,6 +161,62 @@ class EmojiLabel: TextKitLabel {
         setNeedsLayout()
     }
 
+    /// 同じ投稿の本文が編集された動きの時間。行の高さが変わる分を、タイムラインが下の行ごと動かす時間と同じにする。0なら切り替える。
+    var textEditDuration: () -> TimeInterval = { AppDependencies.tuning.value(of: TuningCatalog.linkCardTransitionDuration) }
+    /// 次に入れる文字列は、同じ投稿の本文を編集したもの。
+    private var expectsTextEdit = false
+
+    /// 同じ投稿の本文が、編集で別の文字列に替わる前に呼ぶ。次に入れる文字列で、前と変わらない先頭と末尾の文字を、前の位置から新しい位置へ動かし、新しく入った文字を透明から濃くする。
+    /// なくなった文字は、動かさずに消す。
+    func prepareTextEdit() {
+        expectsTextEdit = true
+    }
+
+    /// 編集の前の並びを測り、変わらない文字を新しい文字列の位置へ写して、動かす準備をする。動かさないときはfalse。
+    private func prepareEditArrival(to new: NSAttributedString) -> Bool {
+        let duration = textEditDuration()
+        guard duration > 0, window != nil, bounds.width > 0, !UIAccessibility.isReduceMotionEnabled, let shown = attributedText, shown.string != new.string else { return false }
+        cancelTextReplacement()
+        let running = emojiArrival?.isRunning == true ? emojiArrival : nil
+        let before = running?.currentPlacements(filling: []) ?? EmojiArrivalTransition.placements(of: shown, in: self, filling: [])
+        let start = Self.remappingUnchangedEnds(before, from: shown.string, to: new.string)
+        let startBars = running?.currentBars() ?? quoteBarFrames()
+        let previous = emojiArrival
+        emojiArrival = EmojiArrivalTransition(label: self, start: start, startBars: startBars, duration: duration, fadesInNewCharacters: true)
+        previous?.finish()
+        pendingEmojiArrival = true
+        setNeedsLayout()
+        return true
+    }
+
+    /// 文字の先頭の位置（UTF-16）をキーにした値を、編集のあとの文字列の位置へ写す。前後で変わらない先頭と末尾の文字だけを残し、あいだの文字は除く。
+    /// 変わらない範囲は、編集の前の文字列の、文字（書記素クラスタ）の切れ目に合わせる。
+    static func remappingUnchangedEnds<Value>(_ values: [Int: Value], from old: String, to new: String) -> [Int: Value] {
+        let old = old as NSString
+        let new = new as NSString
+        let limit = min(old.length, new.length)
+        var prefix = 0
+        while prefix < limit, old.character(at: prefix) == new.character(at: prefix) { prefix += 1 }
+        if prefix < old.length {
+            prefix = old.rangeOfComposedCharacterSequence(at: prefix).location
+        }
+        var suffix = 0
+        while suffix < limit - prefix, old.character(at: old.length - 1 - suffix) == new.character(at: new.length - 1 - suffix) { suffix += 1 }
+        var suffixStart = old.length - suffix
+        if suffixStart < old.length {
+            let cluster = old.rangeOfComposedCharacterSequence(at: suffixStart)
+            if cluster.location < suffixStart { suffixStart = cluster.location + cluster.length }
+        }
+        let delta = new.length - old.length
+        return values.reduce(into: [:]) { result, entry in
+            if entry.key < prefix {
+                result[entry.key] = entry.value
+            } else if entry.key >= suffixStart {
+                result[entry.key + delta] = entry.value
+            }
+        }
+    }
+
     private func cancelEmojiArrival() {
         pendingEmojiArrival = false
         emojiArrival?.finish()
@@ -166,6 +226,8 @@ class EmojiLabel: TextKitLabel {
     /// 本文を別の文章へ置き換える動き。文字列を入れ替える前に前の描画を残し、並べ終えた`layoutSubviews`で動かし始める。
     private(set) var textReplacement: TextReplacementTransition?
     private var pendingTextReplacement = false
+    /// 訳文との入れ替えの準備を終え、まだ動かし始めていない。
+    var isPreparingTextReplacement: Bool { pendingTextReplacement }
 
     /// 文字列を入れ替える前に呼ぶ。`shiftDuration`は、まだ順番が来ていない段落を新しい位置へ動かす時間。
     func prepareTextReplacement(duration: TimeInterval, shiftDuration: TimeInterval, wordDuration: TimeInterval, fadeWidth: Double) {

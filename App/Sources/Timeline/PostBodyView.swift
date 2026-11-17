@@ -769,6 +769,12 @@ final class PostBodyView: UIView {
     /// 本文より下の部品を動かす動きの名前。
     static let belowTextShiftName = "belowTextShift"
 
+    /// 同じ投稿の本文が編集で変わるなら、変わらない文字を前の位置から動かす準備をする。訳文との入れ替えは、先に呼ばれた`prepareTextReplacement`が動かす。
+    private func prepareTextEditIfNeeded(from previous: PostBodyContent?, to content: PostBodyContent) {
+        guard let previous, previous.statusID == content.statusID, previous.text.string != content.text.string, !textLabel.isPreparingTextReplacement else { return }
+        textLabel.prepareTextEdit()
+    }
+
     func apply(_ content: PostBodyContent) {
         let previous = self.content
         defer {
@@ -795,6 +801,7 @@ final class PostBodyView: UIView {
             textLabel.cancelTextReplacement()
             pendingBelowTextShift = nil
         }
+        prepareTextEditIfNeeded(from: previous, to: content)
         textLabel.attributedText = Self.truncatingTail(content.text, when: content.maximumLines > 0)
         textLabel.hashtagAccount = content.hashtagAccount
         // 長い本文を切るときは、行数をラベルが幅から決める。

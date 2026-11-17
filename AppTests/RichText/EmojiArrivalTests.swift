@@ -133,6 +133,31 @@ struct EmojiArrivalTests {
         #expect(pieces[3].offset == CGPoint(x: -40, y: 20))
     }
 
+    /// 編集の前の文字の位置を、編集のあとの位置へ写す。前後で変わらない先頭と末尾の文字だけを残し、あいだの文字は除く。
+    /// 絵文字が別の絵文字に替わって、UTF-16の前半だけが同じになるときは、その絵文字を変わらない文字に数えない。
+    @Test func remapsUnchangedEndsOfEditedText() {
+        func remap(_ old: String, _ new: String) -> [Int: Int] {
+            let keys = Dictionary(uniqueKeysWithValues: (0..<(old as NSString).length).map { ($0, $0) })
+            return EmojiLabel.remappingUnchangedEnds(keys, from: old, to: new)
+        }
+        // 写した先の位置をキーに、元の位置を値に持つ。
+        #expect(remap("あいう", "あXXいう") == [0: 0, 3: 1, 4: 2], "途中に足した")
+        #expect(remap("あい", "あいう") == [0: 0, 1: 1], "末尾に足した")
+        #expect(remap("あいう", "いう") == [0: 1, 1: 2], "先頭を消した")
+        #expect(remap("あいう", "あえう") == [0: 0, 2: 2], "途中を替えた")
+        #expect(remap("a😀b", "a😁b") == [0: 0, 3: 3], "絵文字を替えた")
+        #expect(remap("あい", "あい") == [0: 0, 1: 1], "同じ")
+    }
+
+    /// 編集で新しく入った文字は、動き始める見え方がないので、透明から濃くする。
+    @Test func newCharactersFadeInWhenAsked() {
+        let start: [Int: EmojiArrivalTransition.Placement] = [0: .init(frame: CGRect(x: 0, y: 0, width: 10, height: 20), opacity: 1)]
+        let final: [Int: CGRect] = [0: CGRect(x: 0, y: 0, width: 10, height: 20), 1: CGRect(x: 10, y: 0, width: 10, height: 20)]
+
+        #expect(EmojiArrivalTransition.pieces(start: start, final: final, newOpacity: 0).map(\.startOpacity) == [1, 0])
+        #expect(EmojiArrivalTransition.pieces(start: start, final: final).map(\.startOpacity) == [1])
+    }
+
     /// 絵文字が届いて見えている行の折り返しが増えたら、下の行を1コマで下げず、元の位置から新しい位置へ動かす。上の行は動かさない。
     /// 行のセルは入れ替えない。入れ替えると、セルの中で続いている文字の動きが止まるため。
     @Test func visibleRowGrowthShiftsRowsBelow() async throws {
