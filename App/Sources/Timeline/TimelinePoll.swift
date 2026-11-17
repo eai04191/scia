@@ -65,6 +65,6 @@ extension TimelineViewController {
     private func reconfigurePoll(_ pollID: Poll.ID, keeping anchorID: ItemID? = nil) {
         guard isViewLoaded else { return }
         let ids = displayedItemIDs.filter { self.status(for: $0)?.displayed.poll?.id == pollID }
-        reconfigure(Set(ids), keeping: anchorID)
+        reconfigureShiftingRowsBelow(Set(ids), keeping: anchorID, duration: tuning.value(of: TuningCatalog.longBodyExpandDuration))
     }
 }

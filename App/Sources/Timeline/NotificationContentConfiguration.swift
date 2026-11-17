@@ -109,6 +109,9 @@ final class NotificationContentView: UIView, UIContentView {
     /// 誰が何をしたかの行の最後のベースライン。プレビューで、行の字面の下端を測るのに使う。
     private let headerLastBaselineGuide = UILayoutGuide()
     private var current: NotificationContentConfiguration
+
+    /// 行の下の余白。中身の下の端から行の下の端まで。
+    var rowBottomMargin: CGFloat { current.metrics.margins.bottom }
     /// 大きさで変わる制約。適用のたびに作り直す。
     private var variableConstraints: [NSLayoutConstraint] = []
 

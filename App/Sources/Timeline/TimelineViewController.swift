@@ -746,8 +746,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// セルの中で続いている動き（絵文字が入る文字の動きなど）も止まらない。
     /// 区切り線は、行のセルとは別のビューとしてタイムラインに並ぶため、セルと一緒に動かす。動かさないと、伸びた行の下の線だけが1コマで下がる。
     /// - Parameter anchorID: 画面上の位置を保つ行。なければ、表示領域の上端にかかっている行を基準にする。
+    /// - Parameter concealsShrink: 縮んだ行に、描き直す前の像を重ねて、下の端から縮めて見せる。縮む中身を自分で動かして消す描き直し（訳文、リアクション）では重ねない。
+    /// - Parameter shrinkTops: 縮む前の像を縮める先（行のセルの座標）。なければ、縮んだ行の中身の下の端まで縮める。
     /// - Parameter shiftLimit: 描き直した行が伸び縮みする長さの上限。分かっていれば、上下のどちらかの端からタイムラインの外へ出うる行の像だけを取る。像を取るのは重く、押した直後のコマが遅れて、動きの始まりが飛んで見えるため。nilなら、描き直す行より下のすべての行の像を取る。
-    func reconfigureShiftingRowsBelow(_ ids: Set<ItemID>, keeping anchorID: ItemID? = nil, duration: TimeInterval, shiftLimit: CGFloat? = nil) {
+    func reconfigureShiftingRowsBelow(_ ids: Set<ItemID>, keeping anchorID: ItemID? = nil, duration: TimeInterval, shiftLimit: CGFloat? = nil, concealsShrink: Bool = true, shrinkTops: [ItemID: CGFloat] = [:]) {
         guard !ids.isEmpty else { return }
         guard duration > 0, view.window != nil, !UIAccessibility.isReduceMotionEnabled else {
             reconfigure(ids, keeping: anchorID)
@@ -755,13 +757,22 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
         let before = visibleRows(snapshottingBelow: ids, within: shiftLimit)
         let separatorsBefore = visibleSeparators()
-        let heightsBefore = ids.compactMap { id in cell(for: id).map { (id, $0.bounds.height, $0.convert($0.bounds, to: nil).maxY) } }
+        // 縮むかは描き直すまで分からないので、描き直す行の像は先に取っておく。
+        let resizedBefore = ids.compactMap { id in
+            cell(for: id).map { (id: id, height: $0.bounds.height, contentBottom: contentBottom(of: $0), maxY: $0.convert($0.bounds, to: nil).maxY, snapshot: concealsShrink ? $0.snapshotView(afterScreenUpdates: false) : nil) }
+        }
         reconfigure(ids, keeping: anchorID)
         collectionView.layoutIfNeeded()
-        for (id, height, maxY) in heightsBefore {
-            // 下端を保って上へ伸びた行（`anchorBelowResizing`）は、下の行を覆わないので切り抜かない。上から切り抜くと、見えていた下の部分が一度隠れる。
-            if let cell = cell(for: id), abs(cell.convert(cell.bounds, to: nil).maxY - maxY) > 0.5 {
-                revealGrowth(of: cell, from: height, duration: duration)
+        for row in resizedBefore {
+            // 下端を保って上へ伸び縮みした行（`anchorBelowResizing`）は、下の行が動かないので、切り抜きも像も要らない。上から切り抜くと、見えていた下の部分が一度隠れる。
+            guard let cell = cell(for: row.id), abs(cell.convert(cell.bounds, to: nil).maxY - row.maxY) > 0.5 else { continue }
+            // 伸びた行は、前の中身の下の端から切り抜きを広げる。前の高さからにすると、前は余白だった部分に、新しい中身が最初のコマで見える。
+            if cell.bounds.height - row.height > 0.5 {
+                revealGrowth(of: cell, from: row.contentBottom, duration: duration)
+            }
+            // 縮んだ行は、新しい中身の下の端まで縮める。行の下端までにすると、余白になる部分にあった前の中身が、最初のコマで消える。
+            if let snapshot = row.snapshot, let cell = cell as? TimelineCell {
+                concealShrink(of: cell, with: snapshot, from: row.height, to: shrinkTops[row.id] ?? contentBottom(of: cell), duration: duration)
             }
         }
         let after = visibleRows(snapshottingBelow: [])
@@ -798,6 +809,12 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             guard !(view is UICollectionViewCell), !view.isHidden, view.bounds.height <= 2, view.bounds.width > 0 else { return }
             result[ObjectIdentifier(view)] = (view, view.convert(view.bounds, to: nil).minY)
         }
+    }
+
+    /// 行の中身の下の端（行のセルの座標）。行の高さから下の余白を引いたもの。下の余白が分からない行では、行の下端。
+    private func contentBottom(of cell: UICollectionViewCell) -> CGFloat {
+        let margin = (cell.contentView as? PostContentView)?.rowBottomMargin ?? (cell.contentView as? NotificationContentView)?.rowBottomMargin ?? 0
+        return cell.bounds.height - margin
     }
 
     /// 足し合わせる行の動きに付ける名前を、重ねても取り替えないよう分ける。
@@ -949,11 +966,6 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         applyPreservingAnchor(snapshot, keeping: anchorID, resizing: ids)
     }
 
-    /// サーバーから取り直した中身を反映している間の投稿。この投稿の行を描き直すときは、高さが変わる分を下の行ごと動かしてつなぐ。
-    /// 承認された引用のように、あとから届いた中身で見えている行の高さが変わるため（docs/vision.mdの「タイムラインの動き」）。
-    /// 取り直した投稿は各タイムラインの`updateStatus`から並びの置き換えを通って届くので、置き換えの間だけ立てる。
-    var refreshedStatusID: Status.ID?
-
     /// アクションバーの引き出しを開いている投稿。同時に1つだけ開く。タイムラインを閉じるか起動し直すと閉じた状態に戻る（docs/post-action-bar.mdの「引き出し」）。
     var openActionBarItemID: ItemID?
     /// 「投稿の見た目」のプレビューで、いつも出す設定でなくてもアクションバーを出す。アクションバーの分類の見本で立てる。
@@ -1032,9 +1044,6 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let reconnectedIDs = Set(previousConnections.keys).union(replyConnections.keys).filter { id in
             previous[id] != nil && entries[id] != nil && previousConnections[id] != replyConnections[id]
         }
-        // 取り直した投稿の行は、並びを置き換えたあとで高さを動かして描き直す。
-        let refreshedIDs = refreshedStatusID.map { refreshed in Set(changedIDs.filter { status(for: $0)?.displayed.id == refreshed }) } ?? []
-        defer { reconfigureShiftingRowsBelow(refreshedIDs, duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration)) }
         // 編集で本文か言語が変わった投稿の訳文は使えないので、見えている範囲が変わらなくても訳し直しを頼む。
         let bodyChanged = translations != nil && changedIDs.contains { id in
             let old = previous[id]?.postStatus?.displayed
@@ -1048,9 +1057,19 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let reactionChangedIDs = Set(changedIDs.filter { id in
             guard let old = previous[id]?.postStatus, let new = entries[id]?.postStatus else { return false }
             return new.differsOnlyInEmojiReactions(from: old)
-        }).subtracting(refreshedIDs)
-        defer { reconfigureShiftingRowsBelow(reactionChangedIDs, keeping: anchorID, duration: tuning.value(of: TuningCatalog.reactionTransitionDuration)) }
-        snapshot.reconfigureItems(Array(reconnectedIDs.union(changedIDs).subtracting(refreshedIDs).subtracting(reactionChangedIDs)))
+        })
+        // リアクションのボタンは、出入りを自分で動かすので、縮む前の像は重ねない。
+        defer { reconfigureShiftingRowsBelow(reactionChangedIDs, keeping: anchorID, duration: tuning.value(of: TuningCatalog.reactionTransitionDuration), concealsShrink: false) }
+        // ほかの中身が変わった行（編集、取り直した投稿など）は、高さが変わるものとして、並びを置き換えたあとで、下の行ごと動かして描き直す。
+        // 高さを変えない中身だけが変わった行は、下の行の像を取らずに済むよう、並びと一緒に動かさずに描き直す。
+        // 並びも変わるときは、行の出入りと高さの変化が重なり、位置を保つ基準が並びの置き換えと描き直しとで変わるので、並びと一緒に動かさずに描き直す。
+        let keepsOrder = dataSource.snapshot().itemIdentifiers == newIDs
+        let resizedIDs = !keepsOrder ? [] : Set(changedIDs.filter { id in
+            guard let old = previous[id]?.postStatus, let new = entries[id]?.postStatus else { return true }
+            return !new.differsOnlyInFixedHeightParts(from: old)
+        }).subtracting(reactionChangedIDs)
+        defer { reconfigureShiftingRowsBelow(resizedIDs, keeping: anchorID, duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration)) }
+        snapshot.reconfigureItems(Array(reconnectedIDs.union(changedIDs).subtracting(resizedIDs).subtracting(reactionChangedIDs)))
         if animatesRemoval, changedIDs.isEmpty, canAnimateRemoval(leaving: newIDs) {
             FrameWork.measure("snapshot.apply") { dataSource.apply(snapshot, animatingDifferences: true) }
             logger.info("setEntries count=\(newEntries.count, privacy: .public) animatesRemoval=true")
@@ -1093,7 +1112,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             }
             logger.info("setEntries count=\(newEntries.count, privacy: .public) followsTop=true animated=\(animates, privacy: .public)")
         } else {
-            let anchor = applyPreservingAnchor(snapshot, keeping: anchorID, resizing: Set(snapshot.reconfiguredItemIdentifiers))
+            // このあと下の行ごと動かして描き直す行も、高さが変わるので、位置を保つ基準にしない。
+            let anchor = applyPreservingAnchor(snapshot, keeping: anchorID, resizing: Set(snapshot.reconfiguredItemIdentifiers).union(resizedIDs).union(reactionChangedIDs))
             logger.info("setEntries count=\(newEntries.count, privacy: .public) anchor=\(anchor.map { Self.label($0.id) } ?? "nil", privacy: .public)")
         }
         if threadFocusID != nil {
@@ -2488,13 +2508,15 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         openActionBarItemID = previous == id ? nil : id
         let ids = Set([previous, id].compactMap(\.self)).intersection(dataSource.snapshot().itemIdentifiers)
         let duration = tuning.value(of: TuningCatalog.actionBarDrawerDuration)
-        let closing = previous.flatMap { $0 == openActionBarItemID ? nil : closingPostSnapshot(of: $0, duration: duration) }
-        reconfigureShiftingRowsBelow(ids, keeping: id, duration: duration, shiftLimit: actionBarHeightUpperBound)
+        // 閉じる投稿は、縮んだ投稿の下端ではなくアクションバーの上の端まで縮める。縮んだ投稿の下の余白はアクションバーの上の部分に重なるので、
+        // 下端までにすると、縮み終えたときにアイコンの上の部分が残り、像を外したコマで消えて見えた。
+        var barTops: [ItemID: CGFloat] = [:]
+        if let previous, previous != openActionBarItemID, let cell = cell(for: previous), let bar = (cell.contentView as? PostContentView)?.postBody.actionBar {
+            barTops[previous] = bar.convert(bar.bounds, to: cell).minY
+        }
+        reconfigureShiftingRowsBelow(ids, keeping: id, duration: duration, shiftLimit: actionBarHeightUpperBound, shrinkTops: barTops)
         if let opened = openActionBarItemID {
             revealActionBarFromItsTop(of: opened, duration: duration)
-        }
-        if let closing {
-            concealShrink(of: closing.cell, with: closing.snapshot, from: closing.height, to: closing.barTop, duration: duration)
         }
     }
 
@@ -2567,25 +2589,14 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// アクションバーを現す切り抜きの動きの名前。
     static let actionBarRevealName = "actionBarReveal"
 
-    /// アクションバーを閉じる投稿の、閉じる前の像と高さと、アクションバーの上の端（投稿のセルの座標）。動かさないときはnil。
-    private func closingPostSnapshot(of id: ItemID, duration: TimeInterval) -> (cell: TimelineCell, snapshot: UIView, height: CGFloat, barTop: CGFloat)? {
-        guard duration > 0, view.window != nil, !UIAccessibility.isReduceMotionEnabled,
-              let cell = cell(for: id) as? TimelineCell,
-              let bar = (cell.contentView as? PostContentView)?.postBody.actionBar,
-              let snapshot = cell.snapshotView(afterScreenUpdates: false)
-        else { return nil }
-        return (cell, snapshot, cell.bounds.height, bar.convert(bar.bounds, to: cell).minY)
-    }
-
-    /// アクションバーを閉じて縮んだ投稿に、閉じる前の像を重ね、下の端から上へ、まわりのアイテムと同じスプリングで切り抜いて縮める。開くときの切り抜き（`revealGrowth`）を逆にしたもの。
-    /// 投稿の中身は一度に新しい高さで並ぶので、像を重ねないと、まわりのアイテムが詰めてくる前にアクションバーが消える。
-    /// 像を投稿の後ろに残す作りでは、縮んだ投稿の下の余白がアクションバーの上の部分を隠し、半分に欠けて見えた。
-    /// 像は投稿のセルに載せるので、押した投稿の位置を保つために投稿が動くときも一緒に動く。
-    /// 切り抜きは、縮んだ投稿の下端ではなくアクションバーの上の端まで縮める。縮んだ投稿の下の余白はアクションバーの上の部分に重なるので、
-    /// 下端までにすると、縮み終えたときにアイコンの上の部分が残り、像を外したコマで消えて見えた。アクションバーの上の端より上は、縮んだ投稿と同じ中身になる。
-    private func concealShrink(of cell: TimelineCell, with snapshot: UIView, from oldHeight: CGFloat, to barTop: CGFloat, duration: TimeInterval) {
-        let newHeight = min(cell.bounds.height, barTop)
-        guard oldHeight - newHeight > 0.5 else { return }
+    /// 縮んだ行に、描き直す前の像のうち、縮んでなくなる部分だけを重ね、下の端から上へ、下の行と同じスプリングで切り抜いて縮める。伸びた行の切り抜き（`revealGrowth`）を逆にしたもの。
+    /// 行の中身は一度に新しい高さで並ぶので、像を重ねないと、下の行が詰めてくる前に、なくなる中身が消えて空きが見える。
+    /// 残る部分には像を重ねない。描き直した行が、残る中身を自分で動かしていることがあるため。
+    /// 像は行のセルに載せるので、位置を保つために行が動くときも一緒に動く。
+    /// - Parameter top: 像を縮める先（行のセルの座標）。
+    private func concealShrink(of cell: TimelineCell, with snapshot: UIView, from oldHeight: CGFloat, to top: CGFloat, duration: TimeInterval) {
+        guard oldHeight - cell.bounds.height > 0.5 else { return }
+        let newHeight = min(cell.bounds.height, top)
         snapshot.isUserInteractionEnabled = false
         snapshot.frame = CGRect(x: 0, y: 0, width: cell.bounds.width, height: oldHeight)
         cell.showShrinkSnapshot(snapshot)
@@ -2594,18 +2605,21 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         CATransaction.setDisableActions(true)
         mask.backgroundColor = UIColor.black.cgColor
         mask.anchorPoint = .zero
-        mask.frame = CGRect(x: 0, y: 0, width: cell.bounds.width, height: newHeight)
+        mask.frame = CGRect(x: 0, y: newHeight, width: cell.bounds.width, height: 0)
         CATransaction.commit()
         let shrink = CASpringAnimation.rowSpring(keyPath: "bounds.size.height", duration: duration)
-        shrink.fromValue = oldHeight
-        shrink.toValue = newHeight
+        shrink.fromValue = oldHeight - newHeight
+        shrink.toValue = 0
         shrink.delegate = RowShiftCompletion { [weak cell, weak snapshot] in
             guard let cell, let snapshot else { return }
             cell.removeShrinkSnapshot(snapshot)
         }
-        mask.add(shrink, forKey: "actionBarShrink")
+        mask.add(shrink, forKey: Self.shrinkName)
         snapshot.layer.mask = mask
     }
+
+    /// 縮む前の像を縮める切り抜きの動きの名前。
+    static let shrinkName = "rowShrink"
 
     /// 長い本文を切る行数。「投稿の見た目」の値で決める。
     var bodyTruncationRule: BodyTruncation? {
@@ -2655,7 +2669,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             filterWarnings.reveal(status)
         }
         guard isViewLoaded else { return }
-        reconfigure(Set(itemIDs(showing: status)), keeping: operatedAnchor(anchorID))
+        reconfigureShiftingRowsBelow(Set(itemIDs(showing: status)), keeping: operatedAnchor(anchorID), duration: tuning.value(of: TuningCatalog.longBodyExpandDuration))
     }
 
     /// 使う人の操作で行を描き直すときに、位置を保つ行。押した行が渡されなければ、表示領域の上端にかかっている行にする。

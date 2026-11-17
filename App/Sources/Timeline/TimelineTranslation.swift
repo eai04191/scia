@@ -43,7 +43,8 @@ extension TimelineViewController {
     }
 
     func redrawTranslations(_ items: Set<ItemID>) {
-        reconfigureShiftingRowsBelow(items, duration: tuning.value(of: TuningCatalog.translationTransitionDuration))
+        // 訳文は、なくなる行を自分で薄くして消すので、縮む前の像は重ねない。
+        reconfigureShiftingRowsBelow(items, duration: tuning.value(of: TuningCatalog.translationTransitionDuration), concealsShrink: false)
     }
 
     /// 訳す言語が変わった。訳文を出すかどうかが変わるので、見えている投稿を描き直し、画面の前後を訳し直す。

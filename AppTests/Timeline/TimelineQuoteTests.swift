@@ -257,9 +257,7 @@ struct TimelineQuoteTests {
         let belowCell = try #require(harness.visibleCell(of: .status(statuses[11].id)))
 
         statuses[10] = quoting(base, Quote(state: "accepted", quotedStatus: quoted("q1")))
-        harness.viewController.refreshedStatusID = base.id
         harness.setStatuses(statuses)
-        harness.viewController.refreshedStatusID = nil
 
         #expect(configuration(in: harness, of: base.id)?.embed?.text.string == "引用元の本文")
         #expect(try #require(harness.visibleCell(of: id)?.frame.height) > height, "囲みに替わって行が伸びていません")

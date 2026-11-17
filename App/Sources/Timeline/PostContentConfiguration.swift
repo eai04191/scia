@@ -573,6 +573,9 @@ final class PostContentView: UIView, UIContentView {
         updateAccessibility(for: configuration)
     }
 
+    /// 行の下の余白。中身の下の端から行の下の端まで。
+    var rowBottomMargin: CGFloat { current.metrics.margins.bottom }
+
     /// 「投稿の見た目」のプレビューで、部品の場所を示すための枠。このビューの座標で返す。
     func previewFrames() -> AppearancePreviewFrames {
         let margins = current.metrics.margins

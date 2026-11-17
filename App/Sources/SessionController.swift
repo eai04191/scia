@@ -433,9 +433,6 @@ final class SessionController {
         polls = session.polls
         let timelines = timelines
         let statusRefresher = StatusRefresher(client: client) { refetched in
-            let shown = timelines.allObjects
-            for timeline in shown { timeline.refreshedStatusID = refetched.id }
-            defer { for timeline in shown { timeline.refreshedStatusID = nil } }
             updateStatusEverywhere(refetched.id) { $0.adoptingRefreshed(of: refetched) }
         }
         self.statusRefresher = statusRefresher

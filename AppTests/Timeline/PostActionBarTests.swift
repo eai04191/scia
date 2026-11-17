@@ -86,12 +86,13 @@ struct PostActionBarTests {
     }
 
     /// 開くと、アクションバーを上の端から切り抜いて現す。開く前の投稿の下の余白はアクションバーに重なるので、投稿の切り抜きだけでは、重なった部分が最初のコマで見える。
-    /// 投稿全体の切り抜きは開く前の高さから広げ、開く前から見えていた中身（短い投稿のアイコンなど）を隠さない。
+    /// 投稿全体の切り抜きは開く前の中身の下の端から広げ、開く前から見えていた中身（短い投稿のアイコンなど）を隠さない。
     @Test func openingRevealsActionBarFromItsTop() throws {
         let (harness, statuses) = try harness()
         defer { harness.tearDown() }
         let id = TimelineViewController.ItemID.status(statuses[10].id)
-        let height = try #require(harness.visibleCell(of: id)?.bounds.height)
+        let closed = try #require(harness.visibleCell(of: id))
+        let contentBottom = closed.bounds.height - (try #require(closed.contentView as? PostContentView)).rowBottomMargin
 
         harness.viewController.toggleActionBar(for: id)
 
@@ -100,7 +101,7 @@ struct PostActionBarTests {
         #expect(reveal.fromValue as? CGFloat == 0)
         let cell = try #require(harness.visibleCell(of: id))
         let grow = try #require(cell.layer.mask?.animation(forKey: "rowGrowth") as? CASpringAnimation)
-        #expect(abs((grow.fromValue as? CGFloat ?? 0) - height) < 0.01)
+        #expect(abs((grow.fromValue as? CGFloat ?? 0) - contentBottom) < 0.01)
     }
 
     /// 表示領域の外へ出た行の像のうち、外へ送っている途中のもの。

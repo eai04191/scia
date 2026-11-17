@@ -77,7 +77,7 @@ extension TimelineViewController {
         guard isViewLoaded else { return }
         let shownID = status.displayed.id
         let ids = displayedItemIDs.filter { self.status(for: $0)?.displayed.id == shownID }
-        reconfigure(Set(ids), keeping: operatedAnchor(anchorID))
+        reconfigureShiftingRowsBelow(Set(ids), keeping: operatedAnchor(anchorID), duration: tuning.value(of: TuningCatalog.longBodyExpandDuration))
         requestEmbedTranslations()
     }
 

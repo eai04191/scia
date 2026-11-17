@@ -269,6 +269,28 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         adoptingFavourite(of: other).replacingEmojiReactions(other.emojiReactions)
     }
 
+    /// 投稿の行の高さを変えない中身（お気に入り、ブースト、ブックマークの状態と、お気に入り、ブースト、引用の件数）のほかは、`other`と同じか。
+    /// 同じ投稿なら`false`。ブーストなら、元の投稿のその中身も除いて比べる。
+    /// タイムラインは、中身が変わった行を、高さが変わるものとして下の行ごと動かして描き直す。ここに並べた中身だけが変わった行は、高さが変わらないので、動かさずに描き直す。
+    /// 高さを変えない中身を投稿に足したら、ここにも足す。足し忘れても、高さの変わらない行で下の行の像を取るだけで、見た目は変わらない。
+    public func differsOnlyInFixedHeightParts(from other: Status) -> Bool {
+        self != other && adoptingFixedHeightParts(of: other) == other
+    }
+
+    private func adoptingFixedHeightParts(of other: Status) -> Status {
+        var status = self
+        status.favourited = other.favourited
+        status.reblogged = other.reblogged
+        status.bookmarked = other.bookmarked
+        status.favouritesCount = other.favouritesCount
+        status.reblogsCount = other.reblogsCount
+        status.quotesCount = other.quotesCount
+        if let reblog, let otherReblog = other.reblog {
+            status.reblogBox = StatusBox(reblog.adoptingFixedHeightParts(of: otherReblog))
+        }
+        return status
+    }
+
     /// ブーストの状態と件数を`other`に揃えたもの。
     public func adoptingReblog(of other: Status) -> Status {
         var status = self
