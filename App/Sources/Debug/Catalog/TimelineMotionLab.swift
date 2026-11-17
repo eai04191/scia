@@ -82,7 +82,8 @@ final class TimelineMotionLabViewController: UIViewController {
             id: Self.id(number),
             createdAt: Date(timeIntervalSince1970: 1_700_000_000),
             account: account,
-            content: "<p>\(name)</p><p>高さが変わる前の本文。読んでいる位置の目印にする。</p>\(extra)",
+            // 足す行は本文の途中に入れる。前後の文字が、編集で動くところを見られる。
+            content: "<p>\(name)</p>\(extra)<p>高さが変わる前の本文。読んでいる位置の目印にする。</p>",
             spoilerText: "",
             url: nil
         )
