@@ -27,7 +27,6 @@ public enum BuiltInPreset: String, CaseIterable, Codable, Sendable {
                 "appearanceValue.timeline.rowPaddingTop": .number(8),
                 "appearanceValue.timeline.rowPaddingBottom": .number(8),
                 "appearanceValue.timeline.avatarSize": .number(32),
-                "appearanceValue.timeline.avatarSpacing": .number(8),
                 "appearanceValue.text.namePrimary": .number(1),
                 "appearanceValue.text.nameSecondary": .number(-1),
                 "appearanceValue.timeline.nameBodySpacing": .number(3),
