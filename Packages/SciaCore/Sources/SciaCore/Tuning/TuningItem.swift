@@ -172,6 +172,15 @@ public enum TuningCatalog {
         defaultValue: 0.1
     )
 
+    /// アクションバーの引き出しをタップで開閉したときの、触覚フィードバックの強さ。スタイルは`soft`で、0なら出さない。決まりはdocs/post-action-bar.mdの「引き出し」にある。
+    public static let actionBarDrawerHapticIntensity = NumberTuning(
+        id: "timeline.actionBarDrawerHapticIntensity",
+        title: "アクションバーをタップで開閉したときの触覚の強さ（0で出さない）",
+        range: 0...1,
+        step: 0.05,
+        defaultValue: 1
+    )
+
     /// アクションバーのボタンの押せる範囲を、アイコンの左端から左へ広げる長さ。アイコンの大きさに対する割合で、0なら広げない。決まりはdocs/post-action-bar.mdにある。
     public static let actionBarLeadingHitReach = NumberTuning(
         id: "timeline.actionBarLeadingHitReach",
@@ -2076,6 +2085,7 @@ public enum TuningCatalog {
             .number(translationApplyInterval),
             .number(longBodyExpandDuration),
             .number(actionBarDrawerDuration),
+            .number(actionBarDrawerHapticIntensity),
             .number(actionBarLeadingHitReach),
             .number(customEmojiArrivalDuration),
             .number(textEditNewCharacterFadeDelay),

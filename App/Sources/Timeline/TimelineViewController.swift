@@ -2679,9 +2679,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// 投稿の下のアクションバーの引き出しを開閉する。開いている投稿で押せば閉じ、別の投稿で開けば前の投稿のアクションバーは閉じる。
-    /// 押した投稿の画面上の位置を保ち、まわりのアイテムごと動かしてつなぐ（docs/vision.mdの「タイムラインの動き」）。いつも出す設定では、アクションバーがもう出ているので何もしない。
-    func toggleActionBar(for id: ItemID) {
-        guard !settings.appearance.showsActionBar else { return }
+    /// 押した投稿の画面上の位置を保ち、まわりのアイテムごと動かしてつなぐ（docs/vision.mdの「タイムラインの動き」）。いつも出す設定では、アクションバーがもう出ているので何もせず、falseを返す。
+    @discardableResult
+    func toggleActionBar(for id: ItemID) -> Bool {
+        guard !settings.appearance.showsActionBar else { return false }
         let previous = openActionBarItemID
         openActionBarItemID = previous == id ? nil : id
         let ids = Set([previous, id].compactMap(\.self)).intersection(dataSource.snapshot().itemIdentifiers)
@@ -2690,6 +2691,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         if let opened = openActionBarItemID {
             revealActionBarFromItsTop(of: opened, duration: duration)
         }
+        return true
     }
 
     /// 引き出しのアクションバーを、初めて開く前に1つ組んでおいたか。

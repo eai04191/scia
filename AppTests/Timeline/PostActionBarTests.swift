@@ -175,12 +175,12 @@ struct PostActionBarTests {
         let first = TimelineViewController.ItemID.status(statuses[10].id)
         let second = TimelineViewController.ItemID.status(statuses[12].id)
 
-        harness.viewController.toggleActionBar(for: first)
+        #expect(harness.viewController.toggleActionBar(for: first), "開閉したことを返していません")
         harness.viewController.toggleActionBar(for: second)
         #expect(bar(in: harness, of: statuses[10].id) == nil)
         #expect(bar(in: harness, of: statuses[12].id) != nil)
 
-        harness.viewController.toggleActionBar(for: second)
+        #expect(harness.viewController.toggleActionBar(for: second), "閉じたことを返していません")
         #expect(bar(in: harness, of: statuses[12].id) == nil)
         #expect(harness.viewController.openActionBarItemID == nil)
     }
@@ -199,12 +199,12 @@ struct PostActionBarTests {
         #expect(abs(try #require(harness.windowMinY(of: pressed)) - y) < 0.01)
     }
 
-    /// いつも出す設定では、開く操作は何もしない。
+    /// いつも出す設定では、開く操作は何もせず、開閉しなかったことを返す。返した値で、タップの触覚を鳴らすかを決める。
     @Test func toggleDoesNothingWhenAlwaysShown() throws {
         let (harness, statuses) = try harness()
         defer { harness.tearDown() }
         harness.settings.appearance.showsActionBar = true
-        harness.viewController.toggleActionBar(for: .status(statuses[10].id))
+        #expect(!harness.viewController.toggleActionBar(for: .status(statuses[10].id)), "何もしていないのに開閉したことを返しています")
         #expect(harness.viewController.openActionBarItemID == nil)
     }
 

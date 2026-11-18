@@ -48,8 +48,8 @@ struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable, Command>: Obje
     let lifecycle: MenuLifecycle
     /// 使えない項目を選んだことを、数秒で消えるチップで知らせる。
     let notify: (Notice) -> Void
-    /// 「アクションバーを開く」で、投稿の下のアクションバーを開閉する。押した部品を渡す。アクションバーを出せない部品（引用の囲み、通知）ではnil。
-    var openActionBar: ((UIView) -> Void)?
+    /// 「アクションバーを開く」で、投稿の下のアクションバーを開閉する。押した部品を渡し、開閉したかを返す。アクションバーを出せない部品（引用の囲み、通知）ではnil。
+    var openActionBar: ((UIView) -> Bool)?
 
     private var actions: ObjectActions<Item> {
         settings[keyPath: entity.actions]
@@ -76,11 +76,11 @@ struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable, Command>: Obje
     }
 
     func perform(_ trigger: ObjectTrigger, in view: UIView, at point: CGPoint) {
-        perform(action: actions[trigger], in: view, at: point)
+        perform(action: actions[trigger], in: view, at: point, trigger: trigger)
     }
 
-    /// 選んだ操作を行う。タップと長押しに割り当てた操作と、投稿のスワイプのボタンで使う。
-    func perform(action: ObjectAction<Item>, in view: UIView, at point: CGPoint) {
+    /// 選んだ操作を行う。タップと長押しに割り当てた操作と、投稿のスワイプのボタンで使う。スワイプのボタンでは`trigger`を渡さない。
+    func perform(action: ObjectAction<Item>, in view: UIView, at point: CGPoint, trigger: ObjectTrigger? = nil) {
         switch action {
         case .menu:
             guard let menu = menu() else { return }
@@ -90,7 +90,13 @@ struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable, Command>: Obje
                 notify(.objectActionUnavailable(itemTitle: ObjectAction<Item>.openActionBarTitle, reason: nil))
                 return
             }
-            openActionBar(view)
+            // 長押しでは、長押しを受けた時点で触覚を返しているので重ねない。決まりはdocs/post-action-bar.mdの「引き出し」にある。
+            if openActionBar(view), trigger == .tap {
+                let intensity = AppDependencies.tuning.value(of: TuningCatalog.actionBarDrawerHapticIntensity)
+                if intensity > 0 {
+                    UIImpactFeedbackGenerator(style: .soft, view: view).impactOccurred(intensity: intensity, at: point)
+                }
+            }
         case .item(let item):
             perform(item, in: view, at: point)
         }

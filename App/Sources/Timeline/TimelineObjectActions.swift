@@ -54,7 +54,7 @@ extension TimelineViewController {
             notify: { [weak self] in self?.showNotice($0) }
         )
         if canShowActionBar(in: entry) {
-            target.openActionBar = { [weak self] _ in self?.toggleActionBar(for: id) }
+            target.openActionBar = { [weak self] _ in self?.toggleActionBar(for: id) ?? false }
         }
         return target
     }
