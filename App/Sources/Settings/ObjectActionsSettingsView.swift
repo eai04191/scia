@@ -17,8 +17,8 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
     var body: some View {
         Form {
             Section {
-                picker(ObjectActionsScreen.tapTitle, selection: $actions.tap, trigger: .tap)
-                picker(ObjectActionsScreen.longPressTitle, selection: $actions.longPress, trigger: .longPress)
+                picker(ObjectActionsScreen.tapTitle, selection: selection(of: .tap), trigger: .tap)
+                picker(ObjectActionsScreen.longPressTitle, selection: selection(of: .longPress), trigger: .longPress)
             } footer: {
                 if !actions.opensMenu {
                     Text(screen.noMenuFooter())
@@ -56,6 +56,15 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
         }
         .navigationTitle(screen.page.title)
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// 選んだ操作は、親から受け継いだものと同じでも、このプリセットの値として書く（docs/preset.md）。
+    private func selection(of trigger: ObjectTrigger) -> Binding<ObjectAction<Item>> {
+        Binding {
+            actions[trigger]
+        } set: { action in
+            settings.select(action, for: trigger, on: screen.page)
+        }
     }
 
     private func binding(of toggle: ObjectActionsScreen.Toggle) -> Binding<Bool> {

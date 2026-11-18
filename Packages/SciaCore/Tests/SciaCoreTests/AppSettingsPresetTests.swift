@@ -134,6 +134,25 @@ struct AppSettingsPresetTests {
         #expect(homeSettings.statusActions == ObjectActions(tap: .actionBar, longPress: .item(.favourite)))
     }
 
+    /// 子で、親から受け継いでいる操作を選び直すと、子の値として持つ。あとで親の操作を変えても、選んだ操作は変わらない。
+    @Test func selectingInheritedActionPinsIt() throws {
+        let app = makeSettings()
+        var base: PresetID = .builtIn(.standard)
+        var home: PresetID = .builtIn(.standard)
+        try app.store.tryUpdateLibrary { library throws(PresetError) in
+            base = try library.create(parent: .builtIn(.standard), name: "自分用")
+            home = try library.create(parent: base, name: "家")
+        }
+        let homeSettings = app.editing(home)
+        let inherited = homeSettings.statusActions.tap
+
+        homeSettings.select(inherited, for: .tap, on: .statusActions)
+        app.editing(base).statusActions.tap = .actionBar
+
+        #expect(homeSettings.isModified(.tap, on: .statusActions))
+        #expect(homeSettings.statusActions.tap == inherited)
+    }
+
     /// 「アカウントの設定に従う」は値の1つで、親がオンにしていても、子で選べる。選ぶと、そのアカウントのサーバーの値に従う。
     @Test func followsAccountSettingOverridesParent() throws {
         let app = makeSettings()

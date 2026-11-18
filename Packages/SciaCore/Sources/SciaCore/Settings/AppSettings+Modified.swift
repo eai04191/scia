@@ -34,6 +34,12 @@ extension AppSettings {
         Self.actionsKey(of: page).map { isModified(key: Self.key(of: trigger, in: $0)) } ?? false
     }
 
+    /// 対象の操作の画面で選んだタップか長押しの操作を、親から受け継いだ値と同じでも、読んでいるプリセットの値として書く。選んだ操作を、あとで親を変えても変えないため（docs/preset.md）。
+    public func select<Item>(_ action: ObjectAction<Item>, for trigger: ObjectTrigger, on page: SettingsPage) {
+        guard let actionsKey = Self.actionsKey(of: page) else { return }
+        write(.text(action.token), Self.key(of: trigger, in: actionsKey))
+    }
+
     /// 対象の操作の画面の、タップか長押しの割り当てを、親のプリセットの値に従わせる。
     public func reset(_ trigger: ObjectTrigger, on page: SettingsPage) {
         guard let key = Self.actionsKey(of: page) else { return }
