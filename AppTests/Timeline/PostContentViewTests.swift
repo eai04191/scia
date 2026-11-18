@@ -250,6 +250,55 @@ struct PostContentViewTests {
         return CGPoint(x: CGFloat(minX + maxX) / 2, y: CGFloat(top + bottom) / 2)
     }
 
+    private func warnedStatus(spoilerText: String = "") throws -> Status {
+        let base = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
+        let warning = FilterResult(filter: FilterResult.Filter(id: "1", title: "そば", context: [.home], filterAction: .warn))
+        return Status(id: base.id, createdAt: base.createdAt, account: base.account, content: "<p>警告で折りたたんだ本文。</p>", spoilerText: spoilerText, url: nil, filtered: [warning])
+    }
+
+    private func makeFilteringViewController() -> TimelineViewController {
+        let controller = makeViewController()
+        controller.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
+        return controller
+    }
+
+    /// フィルターの警告を開いても、警告のボックスを残し、注意書きと同じく閉じ直せる。
+    @Test func revealedFilterWarningKeepsBoxAndClosesAgain() throws {
+        let controller = makeFilteringViewController()
+        let status = try warnedStatus()
+        let collapsed = controller.contentConfiguration(for: status, base: .cell())
+        controller.toggleSpoiler(.filter, of: status)
+        let revealed = controller.contentConfiguration(for: status, base: .cell())
+
+        #expect(collapsed.filterWarning?.isCollapsed == true)
+        #expect(revealed.filterWarning?.isCollapsed == false, "警告を開いたら、警告のボックスがなくなりました")
+        #expect(fittingHeight(of: revealed) > fittingHeight(of: collapsed))
+        let element = try #require(revealed.makeContentView().accessibilityElements?.first as? UIAccessibilityElement)
+        #expect(element.accessibilityLabel?.contains("警告で折りたたんだ本文") == true)
+        #expect((element.accessibilityCustomActions ?? []).filter { !$0.name.hasSuffix("のプロフィール") }.map(\.name) == ["投稿を隠す"])
+
+        controller.toggleSpoiler(.filter, of: status)
+        #expect(controller.contentConfiguration(for: status, base: .cell()).filterWarning?.isCollapsed == true, "開いた警告を閉じ直せません")
+    }
+
+    /// 警告と注意書きのある投稿は、警告を開くと、警告のボックスの下に、折りたたんだ注意書きのボックスを並べる。
+    @Test func revealedFilterWarningShowsSpoilerBelow() throws {
+        let controller = makeFilteringViewController()
+        let status = try warnedStatus(spoilerText: "ネタバレ")
+        let collapsedView = controller.contentConfiguration(for: status, base: .cell()).makeContentView()
+        let collapsed = try #require(collapsedView.accessibilityElements?.first as? UIAccessibilityElement)
+        #expect(collapsed.accessibilityLabel?.contains("ネタバレ") == false, "警告で折りたたんでいるのに、注意書きを出しています")
+
+        controller.toggleSpoiler(.filter, of: status)
+        let revealed = controller.contentConfiguration(for: status, base: .cell())
+        #expect(revealed.filterWarning?.isCollapsed == false)
+        #expect(revealed.spoiler?.isCollapsed == true)
+        let element = try #require(revealed.makeContentView().accessibilityElements?.first as? UIAccessibilityElement)
+        #expect(element.accessibilityLabel?.contains("注意書き、ネタバレ") == true)
+        #expect(element.accessibilityLabel?.contains("警告で折りたたんだ本文") == false, "注意書きで折りたたんでいるのに、本文を読んでいます")
+        #expect((element.accessibilityCustomActions ?? []).filter { !$0.name.hasSuffix("のプロフィール") }.map(\.name) == ["投稿を隠す", "本文を表示"])
+    }
+
     private func spoilerStatus() throws -> Status {
         let base = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
         let content = #"<p>注意書きの下の本文。<a href="https://example.com/a">example.com/a</a></p>"#
@@ -275,7 +324,7 @@ struct PostContentViewTests {
         let status = try spoilerStatus()
         var configuration = controller.contentConfiguration(for: status, base: .cell())
         var toggled = 0
-        configuration.onToggleSpoiler = { toggled += 1 }
+        configuration.onToggleSpoiler = { _ in toggled += 1 }
         let view = configuration.makeContentView()
 
         let element = try #require(view.accessibilityElements?.first as? UIAccessibilityElement)

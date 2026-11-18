@@ -1,7 +1,7 @@
 import UIKit
 import SciaCore
 
-/// 注意書き（CW）。本文の上に置き、押すと本文を開閉する。フィルターの警告も、同じボックスで本文の代わりに出す。
+/// 注意書き（CW）。本文の上に置き、押すと本文を開閉する。フィルターの警告も、同じボックスで注意書きの上に出す。
 ///
 /// 注意書きはただの文字と見分けがつくよう、地の色を敷いたボックスに入れ、押せることが分かるよう、開閉の文言と記号を添える。
 final class SpoilerView: UIControl {
@@ -82,7 +82,7 @@ final class SpoilerView: UIControl {
     static func toggleTitle(isCollapsed: Bool, kind: PostBodyContent.Spoiler.Kind) -> String {
         switch kind {
         case .contentWarning: PostTexts.contentWarningToggle(isCollapsed: isCollapsed)
-        case .filter: PostTexts.filterWarningToggle
+        case .filter: PostTexts.filterWarningToggle(isCollapsed: isCollapsed)
         }
     }
 
@@ -102,5 +102,11 @@ final class SpoilerView: UIControl {
 
     override var isHighlighted: Bool {
         didSet { alpha = isHighlighted ? 0.5 : 1 }
+    }
+}
+
+extension SpoilerView.Content {
+    init(_ spoiler: PostBodyContent.Spoiler) {
+        self.init(text: spoiler.text, isCollapsed: spoiler.isCollapsed, kind: spoiler.kind, padding: spoiler.padding, buttonFont: spoiler.buttonFont, buttonSpacing: spoiler.buttonSpacing, cornerRadius: spoiler.cornerRadius)
     }
 }

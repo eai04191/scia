@@ -97,8 +97,20 @@ struct StatusFilteringTests {
         let boost = status("20", reblog: original)
         #expect(warnings.verdict(for: boost, now: now).warningTitles == ["a"])
 
-        warnings.reveal(boost)
+        warnings.toggle(boost)
         #expect(warnings.verdict(for: original, now: now) == FilterVerdict(isHidden: false, warningTitles: [], mediaTitles: ["b"], ownMatchTitles: []))
+        #expect(warnings.warning(for: original, now: now) == FilterWarning(titles: ["a"], isRevealed: true))
+    }
+
+    /// 開いた警告は、もう一度押すと閉じ直す。開いている間も、閉じ直すボックスに出すために名前を返す。
+    @Test func revealedWarningClosesAgain() {
+        var warnings = FilterWarnings(filtering: home)
+        let filtered = status("10", filtered: [filter("a", .warn)])
+        warnings.toggle(filtered)
+        warnings.toggle(filtered)
+        #expect(warnings.verdict(for: filtered, now: now).warningTitles == ["a"])
+        #expect(warnings.warning(for: filtered, now: now) == FilterWarning(titles: ["a"], isRevealed: false))
+        #expect(warnings.warning(for: status("11"), now: now) == nil)
     }
 
     @Test func warningsWithoutFilteringShowEverything() {

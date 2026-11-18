@@ -2598,6 +2598,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                 }
             }
         }
+        configuration.filterWarning = filterWarning(of: status, base: base)
         configuration.spoiler = spoiler(of: status, base: base, builder: builder)
         let ownMatchTitles = filterWarnings.verdict(for: status).ownMatchTitles
         if !ownMatchTitles.isEmpty {
@@ -2607,7 +2608,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                 configuration.hiddenSlots.append(.filterNoteSlot)
             }
         }
-        configuration.onToggleSpoiler = { [weak self] in self?.toggleSpoiler(of: status, keeping: itemID) }
+        configuration.onToggleSpoiler = { [weak self] kind in self?.toggleSpoiler(kind, of: status, keeping: itemID) }
         configuration.animatesTextEdit = isShiftingRows
         configuration.bodyTruncation = longBodyExpansion.truncation(forBodyOf: status, isThreadFocus: shown.id == threadFocusID, rule: bodyTruncationRule)
         configuration.onExpandBody = { [weak self] in self?.expandBody(.status(shown.id), keeping: itemID) }
@@ -2730,7 +2731,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 長い本文を切るかは、並べた幅で決まるので、ここでは分からない。切った本文では、押すと選べないことをチップで知らせる（docs/object-actions.mdの「項目を行う」）。
     /// 切ったかを並べたあとに読んでボタンを描き直すには、投稿を組み直す経路が要り、それに見合わないため、切る本文でも押せる色で描く。
     private static func showsSelectableBody(_ configuration: PostContentConfiguration) -> Bool {
-        configuration.spoiler?.isCollapsed != true && !configuration.body.string.allSatisfy(\.isWhitespace)
+        configuration.filterWarning?.isCollapsed != true && configuration.spoiler?.isCollapsed != true && !configuration.body.string.allSatisfy(\.isWhitespace)
     }
 
     /// 投稿の下のアクションバーの引き出しを開閉する。開いている投稿で押せば閉じ、別の投稿で開けば前の投稿のアクションバーは閉じる。
@@ -2860,15 +2861,15 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
-    /// 注意書きの本文を開閉する。フィルターの警告で折りたたんでいれば、注意書きの代わりに警告を開く。同じ投稿をブーストした行と通知の行もまとめて描き直す。
+    /// 注意書きかフィルターの警告を開閉する。同じ投稿をブーストした行と通知の行もまとめて描き直す。
     /// 行の高さが変わるため、押した行の画面上の位置を保つ。同じ投稿の行が上にも並んでいると、その行も伸び縮みするため、
     /// 表示領域の上端の行を基準にすると、押した行がずれる。
+    /// - Parameter kind: 押したボックス。
     /// - Parameter anchorID: 押した行。なければ、表示領域の上端にかかっている行を基準にする。
-    func toggleSpoiler(of status: Status, keeping anchorID: ItemID? = nil) {
-        if filterWarnings.verdict(for: status).warningTitles.isEmpty {
-            spoilerExpansion.toggle(status)
-        } else {
-            filterWarnings.reveal(status)
+    func toggleSpoiler(_ kind: PostBodyContent.Spoiler.Kind = .contentWarning, of status: Status, keeping anchorID: ItemID? = nil) {
+        switch kind {
+        case .contentWarning: spoilerExpansion.toggle(status)
+        case .filter: filterWarnings.toggle(status)
         }
         guard isViewLoaded else { return }
         reconfigureShiftingRowsBelow(Set(itemIDs(showing: status)), keeping: operatedAnchor(anchorID), duration: tuning.value(of: TuningCatalog.longBodyExpandDuration))
@@ -2897,13 +2898,18 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         postContentBuilder.body(of: status, base: base, color: color)
     }
 
+    /// フィルターの警告。開いているかは、このタイムラインで覚えている状態を当てる。警告のフィルターに一致しなければnil。
+    func filterWarning(of status: Status, base: UIListContentConfiguration) -> PostBodyContent.Spoiler? {
+        guard let warning = filterWarnings.warning(for: status) else { return nil }
+        var box = postContentBuilder.filterWarning(titles: warning.titles, base: base)
+        box.isCollapsed = !warning.isRevealed
+        return box
+    }
+
     /// 注意書き。開いているかは、このタイムラインで覚えている状態を当てる。ブーストなら元の投稿の注意書きにする。
-    /// フィルターの警告で折りたたんでいれば、注意書きの代わりに警告を出す。警告を開くと、注意書きのある投稿は注意書きで折りたたんだ形に戻る。
-    /// - Parameter font: 注意書きの文字の書体。nilなら本文の文字で描く。フィルターの警告には使わない。
+    /// - Parameter font: 注意書きの文字の書体。nilなら本文の文字で描く。
     /// - Parameter builder: 組み立てに使う部品。渡さなければ設定の見た目の選択肢で組む。
     func spoiler(of status: Status, base: UIListContentConfiguration, color: UIColor = .label, font: UIFont? = nil, builder: PostContentBuilder? = nil) -> PostBodyContent.Spoiler? {
-        let warningTitles = filterWarnings.verdict(for: status).warningTitles
-        guard warningTitles.isEmpty else { return postContentBuilder.filterWarning(titles: warningTitles, base: base) }
         var spoiler = (builder ?? postContentBuilder).spoiler(of: status.displayed, base: base, color: color, font: font)
         spoiler?.isCollapsed = spoilerExpansion.isCollapsed(status)
         return spoiler

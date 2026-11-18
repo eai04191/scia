@@ -26,8 +26,10 @@ public enum PostTexts {
         isCollapsed ? "本文を表示" : "本文を隠す"
     }
 
-    /// フィルターの警告のボックスを開くボタン。本文だけでなく添付ファイルやリンクカードも隠しているため、本文に限らない言い方にする。
-    public static let filterWarningToggle = "投稿を表示"
+    /// フィルターの警告のボックスの開閉のボタン。本文だけでなく添付ファイルやリンクカードも隠すため、本文に限らない言い方にする。
+    public static func filterWarningToggle(isCollapsed: Bool) -> String {
+        isCollapsed ? "投稿を表示" : "投稿を隠す"
+    }
 
     /// 一部を目立たせて描く文。文を丸ごと持ち、目立たせる範囲を添える。言語で語順が変わっても、描く側は範囲に色を付けるだけで済む。
     public struct EmphasizedText: Equatable, Sendable {

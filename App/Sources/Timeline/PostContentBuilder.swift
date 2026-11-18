@@ -350,10 +350,11 @@ struct PostContentBuilder {
 
     /// 引用元の投稿の囲み。作者の行は名前だけを太くし、本文は引用元の投稿の言語で描く。
     /// - Parameters:
-    ///   - spoiler: 引用元の注意書きかフィルターの警告。開いているかはタイムラインが覚えているため、置く側が決めて渡す。
+    ///   - filterWarning: 引用元のフィルターの警告。開いているかはタイムラインが覚えているため、置く側が決めて渡す。
+    ///   - spoiler: 引用元の注意書き。開いているかはタイムラインが覚えているため、置く側が決めて渡す。
     ///   - media: 引用元の添付ファイル。ぼかすかはタイムラインが覚えているため、置く側が決めて渡す。
     ///   - translation: 本文の自動翻訳の状態。訳さない投稿ではnil。
-    func quote(_ quoted: Status, translation: EmbedTranslation? = nil, spoiler: PostBodyContent.Spoiler?, media: MediaGridView.Content?, base: UIListContentConfiguration) -> EmbeddedPostView.Content {
+    func quote(_ quoted: Status, translation: EmbedTranslation? = nil, filterWarning: PostBodyContent.Spoiler? = nil, spoiler: PostBodyContent.Spoiler?, media: MediaGridView.Content?, base: UIListContentConfiguration) -> EmbeddedPostView.Content {
         let font = PostTypography(settings: settings).font(.xPostBody)
         var notes: [EmbeddedPostView.Content.Note] = []
         // 囲みが投稿1件分に近い重さにならないよう、投票は選択肢を並べず、あることだけを示す。
@@ -375,9 +376,8 @@ struct PostContentBuilder {
                 name: embedName(.plain(quoted.account.displayNameOrUsername, emojis: quoted.account.emojis), handle: quoted.account.acct, base: base),
                 opensAccount: true
             ),
-            spoiler: spoiler.map {
-                SpoilerView.Content(text: $0.text, isCollapsed: $0.isCollapsed, kind: $0.kind, padding: $0.padding, buttonFont: $0.buttonFont, buttonSpacing: $0.buttonSpacing, cornerRadius: $0.cornerRadius)
-            },
+            filterWarning: filterWarning.map(SpoilerView.Content.init),
+            spoiler: spoiler.map(SpoilerView.Content.init),
             text: withoutBlankLeftByHiddenEmojis(translated(bodyRenderer(of: quoted, font: font, color: .label), by: translation).render(translation?.text ?? .status(quoted))),
             translation: embedTranslation(translation),
             media: media,
@@ -421,6 +421,7 @@ struct PostContentBuilder {
     private func embed(
         id: String,
         header: EmbeddedPostView.Content.Header?,
+        filterWarning: SpoilerView.Content? = nil,
         spoiler: SpoilerView.Content? = nil,
         text: NSAttributedString,
         translation: EmbeddedPostView.Content.Translation? = nil,
@@ -432,6 +433,7 @@ struct PostContentBuilder {
             id: id,
             header: header,
             avatarSize: showsEmbedAvatar ? settings.value(of: AppearanceCatalog.xPostAvatarSize) : 0,
+            filterWarning: filterWarning,
             spoiler: spoiler,
             text: text,
             translation: translation,
@@ -515,7 +517,7 @@ struct PostContentBuilder {
         )
     }
 
-    /// フィルターの警告。本文の代わりに注意書きのボックスに入れて出し、開くまで本文も添付ファイルも出さない。
+    /// フィルターの警告。注意書きと同じボックスに入れて注意書きの上に出し、開くまで注意書きも本文も添付ファイルも出さない。
     /// フィルターの名前は使う人が付けたものなので、投稿の言語ではなく、アプリの文字で描く。
     func filterWarning(titles: [String], base: UIListContentConfiguration) -> PostBodyContent.Spoiler {
         let font = PostTypography(settings: settings).font(.body)

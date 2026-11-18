@@ -66,10 +66,15 @@ public struct FilterVerdict: Sendable, Equatable {
     public static let none = FilterVerdict(isHidden: false, warningTitles: [], mediaTitles: [], ownMatchTitles: [])
 }
 
+/// フィルターの警告。一致した警告のフィルターの名前と、開いているか。
+public struct FilterWarning: Sendable, Equatable {
+    public let titles: [String]
+    public let isRevealed: Bool
+}
+
 /// タイムラインで、フィルターの警告で折りたたんだ投稿のうち、開いたもの。
 ///
-/// 開いたら閉じ直さない。公式のWebクライアントと同じく、警告は本文を読むかを一度だけ尋ねるもので、
-/// 注意書き（CW）のように読み返すたびに開閉するものではないため。
+/// 注意書き（CW）と同じく開閉できる。公式のWebクライアントと同じ。
 /// 開いたかは元の投稿のIDで覚え、同じ投稿のブーストの行もそろえる。覚えるのはアプリを起動している間だけ。
 public struct FilterWarnings: Sendable, Equatable {
     /// このタイムラインで当てるフィルター。nilなら当てない。
@@ -88,7 +93,17 @@ public struct FilterWarnings: Sendable, Equatable {
         return FilterVerdict(isHidden: verdict.isHidden, warningTitles: [], mediaTitles: verdict.mediaTitles, ownMatchTitles: verdict.ownMatchTitles)
     }
 
-    public mutating func reveal(_ status: Status) {
-        revealed.insert(status.displayed.id)
+    /// `status`に出す警告。警告のフィルターに一致しなければnil。開いていても、閉じ直せるよう名前を返す。
+    public func warning(for status: Status, now: Date = SystemTime.now()) -> FilterWarning? {
+        guard let titles = filtering?.verdict(for: status, now: now).warningTitles, !titles.isEmpty else { return nil }
+        return FilterWarning(titles: titles, isRevealed: revealed.contains(status.displayed.id))
+    }
+
+    /// 警告を開いていれば閉じ、閉じていれば開く。
+    public mutating func toggle(_ status: Status) {
+        let id = status.displayed.id
+        if revealed.remove(id) == nil {
+            revealed.insert(id)
+        }
     }
 }

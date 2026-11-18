@@ -4,8 +4,8 @@ import UIKit
 
 /// 投稿の中身。投稿のセルと通知のセルで同じ部品を使い、どの部品をどう出すかは置く側が決める。
 ///
-/// 上から、注意書き、本文、投票、添付ファイル、リンクカードか囲み（引用かXの投稿）の順に並べる。
-/// 注意書きで折りたたんでいる間は、注意書きだけを出す。
+/// 上から、フィルターの警告、注意書き、本文、投票、添付ファイル、リンクカードか囲み（引用かXの投稿）の順に並べる。
+/// 警告で折りたたんでいる間は警告だけを、注意書きで折りたたんでいる間は警告と注意書きだけを出す。
 /// 本文が空なら、本文と添付ファイルのあいだの余白も取らず、添付ファイルを上端から置く。上の行との間隔は置く側が`startsWithMedia`を見て決める。
 /// 添付ファイルを重ねて出すときは、本文の右に置き、本文はその分をあけて折り返す。投票から下の部品は、本文とサムネイルのどちらよりも下に置く。
 /// 本文がなくても、サムネイルの上端は本文の1行目の字面の上端と同じ位置にする。
@@ -15,7 +15,7 @@ struct PostBodyContent {
         enum Kind {
             /// 投稿した人が付けた注意書き。開閉できる。
             case contentWarning
-            /// 使う人のフィルターに一致した警告。開いたらボックスごと消え、閉じ直さない。
+            /// 使う人のフィルターに一致した警告。開閉できる。
             case filter
         }
 
@@ -34,8 +34,18 @@ struct PostBodyContent {
         var cornerRadius: CGFloat
     }
 
+    /// フィルターの警告。警告のフィルターに一致しなければnil。
+    var filterWarning: Spoiler?
     /// 注意書きがなければnil。
     var spoiler: Spoiler?
+    /// 警告か注意書きで、本文から下を折りたたんでいる。
+    var isCollapsed: Bool {
+        filterWarning?.isCollapsed == true || spoiler?.isCollapsed == true
+    }
+    /// 出すボックス。上から警告、注意書きの順。警告で折りたたんでいる間は、注意書きを出さない。
+    var shownBoxes: [Spoiler] {
+        ([filterWarning] + (filterWarning?.isCollapsed == true ? [] : [spoiler])).compactMap(\.self)
+    }
     var text: NSAttributedString
     /// 本文が訳文ならfalse、訳文を待っている原文ならtrue。`text`の先頭の空き（`RichTextRenderer.marksTranslation`）に、翻訳のマークを重ねる。出さなければnil。
     var translationMarkPulses: Bool?
@@ -101,8 +111,8 @@ struct EmbedActions {
     var openLink: ((RichText.LinkDestination) -> Void)?
     /// 囲みの作者のアイコンがタップされたときに呼ぶ。
     var openAccount: (() -> Void)?
-    /// 囲みの注意書きが押されたときに呼ぶ。
-    var toggleSpoiler: (() -> Void)?
+    /// 囲みの注意書きかフィルターの警告が押されたときに、押したボックスの種類を渡して呼ぶ。
+    var toggleSpoiler: ((PostBodyContent.Spoiler.Kind) -> Void)?
     /// 囲みの押せる補足の行がタップされたときに、何番目の行かを渡して呼ぶ。
     var selectNote: ((Int) -> Void)?
     /// 囲みの切った本文の「続きを読む」が押されたときに呼ぶ。
@@ -114,8 +124,8 @@ final class PostBodyView: UIView {
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
     /// 添付ファイルか、リンクカードの画像の、閲覧注意のぼかしが押されたときに呼ぶ。ぼかしを外すのは置く側で、適用し直すまで見た目は変わらない。
     var onRevealMedia: (() -> Void)?
-    /// 注意書きが押されたときに呼ぶ。開閉した状態を持つのは置く側で、適用し直すまで見た目は変わらない。
-    var onToggleSpoiler: (() -> Void)?
+    /// 注意書きかフィルターの警告が押されたときに、押したボックスの種類を渡して呼ぶ。開閉した状態を持つのは置く側で、適用し直すまで見た目は変わらない。
+    var onToggleSpoiler: ((PostBodyContent.Spoiler.Kind) -> Void)?
     /// 切った本文の「続きを読む」が押されたときに呼ぶ。広げた状態を持つのは置く側で、適用し直すまで見た目は変わらない。
     var onExpandBody: (() -> Void)?
     /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
@@ -178,6 +188,7 @@ final class PostBodyView: UIView {
     private let filterNoteBaselineGuide = UILayoutGuide()
     // 本文のほかの部品は、その中身が初めて来たときに作り、そのあとは隠して持っておく。
     // どれも持たない投稿が多いのに、行を作るたびに全部を作ると、まとめて行を作る画面の最初の表示でメインスレッドが止まるため。
+    private var filterWarningView: SpoilerView?
     private var spoilerView: SpoilerView?
     private var pollView: PollView?
     private var mediaView: MediaGridView?
@@ -253,7 +264,7 @@ final class PostBodyView: UIView {
     /// 注意書きも本文もなく、添付ファイルが上端から始まる。
     /// 本文の右に出すときは、本文がなくても本文の位置から置くので、当てはまらない。
     var startsWithMedia: Bool {
-        Self.shown(spoilerView) == nil && textLabel.isHidden && mediaGrid != nil && mediaGrid?.content?.isStacked != true
+        Self.shown(filterWarningView) == nil && Self.shown(spoilerView) == nil && textLabel.isHidden && mediaGrid != nil && mediaGrid?.content?.isStacked != true
     }
 
     /// 「投稿の見た目」のプレビューで、部品の場所を示すための枠。`space`の座標で返す。
@@ -395,9 +406,9 @@ final class PostBodyView: UIView {
         return [CGRect(x: frame.minX, y: top, width: frame.width, height: max(frame.maxY - top, 0))]
     }
 
-    /// 注意書きと本文の枠。読み上げの要素の範囲を決めるときに使う。
+    /// 警告と注意書きと本文の枠。読み上げの要素の範囲を決めるときに使う。
     var textFrame: CGRect {
-        [Self.shown(spoilerView), Self.shown(textLabel)].compactMap(\.self).map(\.frame).reduce(CGRect.null) { $0.union($1) }
+        [Self.shown(filterWarningView), Self.shown(spoilerView), Self.shown(textLabel)].compactMap(\.self).map(\.frame).reduce(CGRect.null) { $0.union($1) }
     }
 
     /// 注意書きと本文のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読み込むストア。nilなら動かさない。
@@ -457,12 +468,24 @@ final class PostBodyView: UIView {
 
     private func loadedSpoilerView() -> SpoilerView {
         if let spoilerView { return spoilerView }
-        let view = SpoilerView()
+        let view = makeBoxView(kind: .contentWarning)
         view.emojiImages = textLabel.emojiImages
-        install(view)
-        view.topAnchor.constraint(equalTo: topAnchor).isActive = true
-        view.addAction(UIAction { [weak self] _ in self?.onToggleSpoiler?() }, for: .touchUpInside)
         spoilerView = view
+        return view
+    }
+
+    private func loadedFilterWarningView() -> SpoilerView {
+        if let filterWarningView { return filterWarningView }
+        let view = makeBoxView(kind: .filter)
+        view.topAnchor.constraint(equalTo: topAnchor).isActive = true
+        filterWarningView = view
+        return view
+    }
+
+    private func makeBoxView(kind: PostBodyContent.Spoiler.Kind) -> SpoilerView {
+        let view = SpoilerView()
+        install(view)
+        view.addAction(UIAction { [weak self] _ in self?.onToggleSpoiler?(kind) }, for: .touchUpInside)
         return view
     }
 
@@ -610,7 +633,7 @@ final class PostBodyView: UIView {
         view.onRevealMedia = { [weak self] in self?.embedActions.revealMedia?() }
         view.onOpenLink = { [weak self] destination in self?.embedActions.openLink?(destination) }
         view.onOpenAccount = { [weak self] in self?.embedActions.openAccount?() }
-        view.onToggleSpoiler = { [weak self] in self?.embedActions.toggleSpoiler?() }
+        view.onToggleSpoiler = { [weak self] kind in self?.embedActions.toggleSpoiler?(kind) }
         view.onHeightChange = { [weak self] in self?.invalidateRowHeight() }
         view.onSelectNote = { [weak self] index in self?.embedActions.selectNote?(index) }
         view.onExpandBody = { [weak self] in self?.embedActions.expandBody?() }
@@ -822,22 +845,35 @@ final class PostBodyView: UIView {
         updateTextKitBaselines(width: textLabel.bounds.width > 0 ? textLabel.bounds.width : bounds.width)
         NSLayoutConstraint.deactivate(variableConstraints)
         variableConstraints = []
-        let shownSpoiler = applySpoiler(content.spoiler)
-        let isCollapsed = content.spoiler?.isCollapsed ?? false
+        let shownWarning = applyBox(content.filterWarning, to: content.filterWarning.map { _ in loadedFilterWarningView() } ?? filterWarningView)
+        // 警告で折りたたんでいる間は、注意書きも出さない。
+        let spoiler = content.filterWarning?.isCollapsed == true ? nil : content.spoiler
+        let shownSpoiler = applyBox(spoiler, to: spoiler.map { _ in loadedSpoilerView() } ?? spoilerView)
+        if let shownSpoiler {
+            variableConstraints.append(shownSpoiler.topAnchor.constraint(equalTo: shownWarning?.bottomAnchor ?? topAnchor, constant: shownWarning == nil ? 0 : content.filterWarning?.bodySpacing ?? 0))
+        }
+        let isCollapsed = content.isCollapsed
+        let lastBox = shownSpoiler ?? shownWarning
         let poll = isCollapsed ? nil : content.poll
         let media = isCollapsed ? nil : content.media.flatMap { $0.aspectRatio == nil ? nil : $0 }
         let besideSide: CGFloat? = if case .stack(let side)? = media?.arrangement { side } else { nil }
         textTrailing?.constant = besideSide.map { -($0 + content.mediaSpacing) } ?? 0
         let embed = isCollapsed ? nil : content.embed
         let card = isCollapsed || embed != nil ? nil : content.card
-        textLabel.isHidden = isCollapsed || (content.text.length == 0 && (poll != nil || media != nil || card != nil || embed != nil || content.spoiler != nil))
+        textLabel.isHidden = isCollapsed || (content.text.length == 0 && (poll != nil || media != nil || card != nil || embed != nil || content.spoiler != nil || content.filterWarning != nil))
         translationMark.apply(
             pulses: textLabel.isHidden || !content.text.hasTranslationMark ? nil : content.translationMarkPulses,
             keepsPulse: previous?.statusID == content.statusID && previous?.translationMarkPulses == true
         )
-        // 本文と添付ファイルは、注意書きがあればその下から並べる。
-        let contentTop = shownSpoiler?.bottomAnchor ?? topAnchor
-        let contentTopSpacing = shownSpoiler == nil ? 0 : content.spoiler?.bodySpacing ?? 0
+        // 本文と添付ファイルは、警告か注意書きがあればその下から並べる。
+        let contentTop = lastBox?.bottomAnchor ?? topAnchor
+        let contentTopSpacing: CGFloat = if shownSpoiler != nil {
+            spoiler?.bodySpacing ?? 0
+        } else if shownWarning != nil {
+            content.filterWarning?.bodySpacing ?? 0
+        } else {
+            0
+        }
         let text = textLabel.isHidden ? nil : textGlyphsBottomGuide.topAnchor
         if !textLabel.isHidden {
             variableConstraints.append(textGlyphsTopGuide.topAnchor.constraint(equalTo: contentTop, constant: contentTopSpacing))
@@ -860,7 +896,7 @@ final class PostBodyView: UIView {
         let leavingCard = fadesInEmbed ? leaveCard() : nil
         let shownCard = applyCard(card, below: shownMedia ?? shownPoll, spacing: content.cardSpacing, placement: placement)
         // 同じ投稿の囲みを描き直すだけなら、浮かび上がらせている途中の濃さを変えない。
-        let keepsEmbedFade = isSameStatus && previous?.embed != nil && !(previous?.spoiler?.isCollapsed ?? false)
+        let keepsEmbedFade = isSameStatus && previous?.embed != nil && !(previous?.isCollapsed ?? false)
         let shownEmbed = applyEmbed(embed, fadesIn: fadesInEmbed, keepsFade: keepsEmbedFade, leavingCard: leavingCard, below: shownMedia ?? shownPoll, spacing: content.embedSpacing, placement: placement)
         // 添付ファイルもリンクカードもないのに本文を隠すのは、注意書きがあるときだけ。
         let last: Bottom = if let shownEmbed {
@@ -873,8 +909,8 @@ final class PostBodyView: UIView {
             .view(shownPoll)
         } else if let besideBottom {
             .beside(parts: besideBottom.parts, end: besideBottom.end)
-        } else if textLabel.isHidden, let shownSpoiler {
-            .view(shownSpoiler)
+        } else if textLabel.isHidden, let lastBox {
+            .view(lastBox)
         } else {
             .view(textLabel)
         }
@@ -985,15 +1021,14 @@ final class PostBodyView: UIView {
         startPendingBelowTextShift()
     }
 
-    /// 出した注意書きのボックスを返す。
-    private func applySpoiler(_ spoiler: PostBodyContent.Spoiler?) -> SpoilerView? {
-        guard let spoiler else {
-            spoilerView?.isHidden = true
+    /// 注意書きか警告のボックスを`view`に出して返す。出さなければ`view`を隠してnilを返す。
+    private func applyBox(_ spoiler: PostBodyContent.Spoiler?, to view: SpoilerView?) -> SpoilerView? {
+        guard let spoiler, let spoilerView = view else {
+            view?.isHidden = true
             return nil
         }
-        let spoilerView = loadedSpoilerView()
         spoilerView.isHidden = false
-        spoilerView.apply(SpoilerView.Content(text: spoiler.text, isCollapsed: spoiler.isCollapsed, kind: spoiler.kind, padding: spoiler.padding, buttonFont: spoiler.buttonFont, buttonSpacing: spoiler.buttonSpacing, cornerRadius: spoiler.cornerRadius))
+        spoilerView.apply(SpoilerView.Content(spoiler))
         return spoilerView
     }
 
@@ -1263,25 +1298,27 @@ final class PostBodyView: UIView {
         }
     }
 
-    /// 読み上げで、注意書きの本文を開閉する操作。注意書きがなければnil。
-    func spoilerAccessibilityAction() -> UIAccessibilityCustomAction? {
-        guard let spoiler = content?.spoiler else { return nil }
-        return UIAccessibilityCustomAction(name: SpoilerView.toggleTitle(isCollapsed: spoiler.isCollapsed, kind: spoiler.kind)) { [weak self] _ in
-            self?.onToggleSpoiler?()
-            return true
-        }
+    /// 読み上げで、警告と注意書きを開閉する操作。出しているボックスの分だけ返す。
+    func spoilerAccessibilityActions() -> [UIAccessibilityCustomAction] {
+        content?.shownBoxes.map { box in
+            UIAccessibilityCustomAction(name: SpoilerView.toggleTitle(isCollapsed: box.isCollapsed, kind: box.kind)) { [weak self] _ in
+                self?.onToggleSpoiler?(box.kind)
+                return true
+            }
+        } ?? []
     }
 
-    /// 読み上げる文。注意書きがあれば先に読み、折りたたんでいる間は本文を読まない。フィルターの注記は別の要素なので含めない。
+    /// 読み上げる文。警告と注意書きがあれば先に読み、折りたたんでいる間は本文を読まない。フィルターの注記は別の要素なので含めない。
     var accessibilityText: String {
         guard let content else { return "" }
-        guard let spoiler = content.spoiler else { return content.text.stringWithoutTranslationMark }
-        let label = switch spoiler.kind {
-        case .contentWarning: PostTexts.contentWarningLabel
-        // ボックスの文字が「フィルター: 名前」なので、重ねて読まない。
-        case .filter: ""
+        let boxes = content.shownBoxes.flatMap { box in
+            switch box.kind {
+            case .contentWarning: [PostTexts.contentWarningLabel, box.text.stringSpeakingListSeparators]
+            // ボックスの文字が「フィルター: 名前」なので、重ねて読まない。
+            case .filter: [box.text.stringSpeakingListSeparators]
+            }
         }
-        let parts = [label, spoiler.text.stringSpeakingListSeparators] + (spoiler.isCollapsed ? [] : [content.text.stringWithoutTranslationMark])
+        let parts = boxes + (content.isCollapsed ? [] : [content.text.stringWithoutTranslationMark])
         return parts.filter { !$0.isEmpty }.joinedAsTextList
     }
 
@@ -1300,7 +1337,7 @@ final class PostBodyView: UIView {
 
     /// 読み上げで、本文のリンクを開く操作。
     func linkAccessibilityActions() -> [UIAccessibilityCustomAction] {
-        guard let text = content?.text, content?.spoiler?.isCollapsed != true else { return [] }
+        guard let text = content?.text, content?.isCollapsed != true else { return [] }
         return LinkLabel.links(in: text).map { text, destination in
             UIAccessibilityCustomAction(name: text) { [weak self] _ in
                 self?.onOpenLink?(destination)

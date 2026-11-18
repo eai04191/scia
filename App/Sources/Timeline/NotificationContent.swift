@@ -93,6 +93,7 @@ extension TimelineViewController {
         var configuration = headerConfiguration(
             for: notification,
             body: PostBodyContent(
+                filterWarning: filterWarning(of: status, base: base),
                 spoiler: spoiler(of: status, base: base, color: .secondaryLabel, font: bodyFont),
                 text: postContentBuilder.body(of: shown, base: base, color: .secondaryLabel, font: bodyFont, joinsLines: true),
                 maximumLines: Int(settings.value(of: N.quotedBodyLines)),
@@ -112,7 +113,7 @@ extension TimelineViewController {
         configuration.bodyKind = .quotedPost
         configuration.reactionGlow = postContentBuilder.reactionGlow(for: shown)
         configuration.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination, shown) }
-        configuration.onToggleSpoiler = { [weak self] in self?.toggleSpoiler(of: status, keeping: itemID) }
+        configuration.onToggleSpoiler = { [weak self] kind in self?.toggleSpoiler(kind, of: status, keeping: itemID) }
         configuration.animatesTextEdit = isShiftingRows
         if let media {
             configuration.onSelectMedia = { [weak self] index, grid in

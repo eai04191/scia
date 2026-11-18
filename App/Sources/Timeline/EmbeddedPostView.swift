@@ -39,8 +39,18 @@ final class EmbeddedPostView: UIButton {
         var id: String
         var header: Header?
         var avatarSize: CGFloat
-        /// 注意書きかフィルターの警告。折りたたんでいる間は、本文、添付ファイル、補足の行を出さない。
+        /// フィルターの警告。折りたたんでいる間は、注意書き、本文、添付ファイル、補足の行を出さない。
+        var filterWarning: SpoilerView.Content?
+        /// 注意書き。折りたたんでいる間は、本文、添付ファイル、補足の行を出さない。
         var spoiler: SpoilerView.Content?
+        /// 出す注意書き。警告で折りたたんでいる間は出さない。
+        var shownSpoiler: SpoilerView.Content? {
+            filterWarning?.isCollapsed == true ? nil : spoiler
+        }
+        /// 警告か注意書きで、本文から下を折りたたんでいる。
+        var isCollapsed: Bool {
+            filterWarning?.isCollapsed == true || spoiler?.isCollapsed == true
+        }
         var text: NSAttributedString
         /// 本文が訳文か、訳文を待っているなら、その状態。`text`の先頭の空き（`RichTextRenderer.marksTranslation`）に、翻訳のマークを重ねる。
         var translation: Translation?
@@ -81,8 +91,8 @@ final class EmbeddedPostView: UIButton {
         didSet { accountInteraction?.target = accountTarget }
     }
     private var accountInteraction: ObjectInteraction?
-    /// 注意書きが押されたときに呼ぶ。開閉した状態を持つのは置く側で、適用し直すまで見た目は変わらない。
-    var onToggleSpoiler: (() -> Void)?
+    /// 注意書きかフィルターの警告が押されたときに、押したボックスの種類を渡して呼ぶ。開閉した状態を持つのは置く側で、適用し直すまで見た目は変わらない。
+    var onToggleSpoiler: ((PostBodyContent.Spoiler.Kind) -> Void)?
     /// 押せる補足の行がタップされたときに、何番目の行かを渡して呼ぶ。
     var onSelectNote: ((Int) -> Void)?
     /// 切った本文の「続きを読む」が押されたときに呼ぶ。広げた状態を持つのは置く側で、適用し直すまで見た目は変わらない。
@@ -90,6 +100,7 @@ final class EmbeddedPostView: UIButton {
 
     private let avatarView: AvatarView
     private let nameLabel = EmojiLabel()
+    private let filterWarningView = SpoilerView()
     private let spoilerView = SpoilerView()
     private let textLabel = LinkLabel()
     /// 本文の先頭の空きに重ねる、翻訳のマーク。
@@ -153,8 +164,9 @@ final class EmbeddedPostView: UIButton {
         textLabel.onExpand = { [weak self] in self?.onExpandBody?() }
         avatarView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(avatarTapped)))
         accountInteraction = ObjectInteraction(on: avatarView, tapsSelf: false, lift: .shape)
-        spoilerView.addAction(UIAction { [weak self] _ in self?.onToggleSpoiler?() }, for: .touchUpInside)
-        for view in [avatarView, nameLabel, spoilerView, textLabel, mediaView] as [UIView] {
+        filterWarningView.addAction(UIAction { [weak self] _ in self?.onToggleSpoiler?(.filter) }, for: .touchUpInside)
+        spoilerView.addAction(UIAction { [weak self] _ in self?.onToggleSpoiler?(.contentWarning) }, for: .touchUpInside)
+        for view in [avatarView, nameLabel, filterWarningView, spoilerView, textLabel, mediaView] as [UIView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -252,16 +264,18 @@ final class EmbeddedPostView: UIButton {
             nameLabel.isHidden = true
         }
 
-        if let spoiler = content.spoiler {
-            spoilerView.isHidden = false
-            spoilerView.apply(spoiler)
-            constraints += horizontalConstraints(of: spoilerView, padding: padding)
-            constraints.append(spoilerView.topAnchor.constraint(equalTo: last.anchor, constant: last.spacing))
-            last = (spoilerView.bottomAnchor, content.mediaSpacing)
-        } else {
-            spoilerView.isHidden = true
+        for (view, box) in [(filterWarningView, content.filterWarning), (spoilerView, content.shownSpoiler)] {
+            guard let box else {
+                view.isHidden = true
+                continue
+            }
+            view.isHidden = false
+            view.apply(box)
+            constraints += horizontalConstraints(of: view, padding: padding)
+            constraints.append(view.topAnchor.constraint(equalTo: last.anchor, constant: last.spacing))
+            last = (view.bottomAnchor, content.mediaSpacing)
         }
-        let isCollapsed = content.spoiler?.isCollapsed ?? false
+        let isCollapsed = content.isCollapsed
         let media = isCollapsed ? nil : content.media.flatMap { $0.aspectRatio == nil ? nil : $0 }
         let besideSide: CGFloat? = if case .stack(let side)? = media?.arrangement { side } else { nil }
         // 本文と、本文の右に出すサムネイルの上端。本文がなくても、サムネイルは本文があるときの位置に置く。
@@ -408,10 +422,11 @@ final class EmbeddedPostView: UIButton {
     /// 読み上げでは、作者、注意書き、本文を1つの要素として読み、囲みを開く、プロフィール、注意書きの開閉、リンクを、その要素の操作にする。
     /// サムネイルと押せる補足の行は、別の要素のまま残す。
     private func updateAccessibility(for content: Content) {
-        let isCollapsed = content.spoiler?.isCollapsed ?? false
+        let isCollapsed = content.isCollapsed
+        let boxes = [content.filterWarning, content.shownSpoiler].compactMap(\.self)
         var parts = [content.header?.name.string]
-        if let spoiler = content.spoiler {
-            parts += [spoiler.kind == .contentWarning ? PostTexts.contentWarningLabel : nil, spoiler.text.stringSpeakingListSeparators]
+        for box in boxes {
+            parts += [box.kind == .contentWarning ? PostTexts.contentWarningLabel : nil, box.text.stringSpeakingListSeparators]
         }
         if !isCollapsed {
             parts.append(content.text.stringWithoutTranslationMark)
@@ -431,9 +446,9 @@ final class EmbeddedPostView: UIButton {
                 return true
             })
         }
-        if let spoiler = content.spoiler {
-            actions.append(UIAccessibilityCustomAction(name: SpoilerView.toggleTitle(isCollapsed: spoiler.isCollapsed, kind: spoiler.kind)) { [weak self] _ in
-                self?.onToggleSpoiler?()
+        for box in boxes {
+            actions.append(UIAccessibilityCustomAction(name: SpoilerView.toggleTitle(isCollapsed: box.isCollapsed, kind: box.kind)) { [weak self] _ in
+                self?.onToggleSpoiler?(box.kind)
                 return true
             })
         }

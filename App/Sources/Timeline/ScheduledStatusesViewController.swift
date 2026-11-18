@@ -262,7 +262,7 @@ final class ScheduledStatusesViewController: UICollectionViewController {
         configuration.reactionGlow = nil
         configuration.context = context(for: params, font: configuration.metrics.contextFont)
         configuration.spoiler?.isCollapsed = !expandedSpoilers.contains(scheduled.id)
-        configuration.onToggleSpoiler = { [weak self] in self?.toggleSpoiler(of: scheduled.id) }
+        configuration.onToggleSpoiler = { [weak self] _ in self?.toggleSpoiler(of: scheduled.id) }
         configuration.onRevealMedia = { [weak self] in self?.revealMedia(of: preview) }
         // 投稿されたときと同じく、閲覧注意と注意書きのある予約の添付はぼかす。
         if var media = MediaGridView.Content.make(of: scheduled.mediaAttachments, cover: mediaCovers.cover(for: preview, filterTitles: [], display: settings.mediaDisplay), settings: settings, tuning: tuning, network: AppDependencies.network) {

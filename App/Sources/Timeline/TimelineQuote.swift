@@ -17,7 +17,7 @@ extension TimelineViewController {
         case .post(let quoted):
             let media = embedMediaContent(of: quoted.mediaAttachments, cover: mediaCover(for: quoted), seed: quoted.id, appearance: appearance)
             let translation = translatesBody ? embedTranslation(of: TranslationSource(quoted)) : nil
-            var content = builder.quote(quoted, translation: translation, spoiler: spoiler(of: quoted, base: base, builder: builder), media: media, base: base)
+            var content = builder.quote(quoted, translation: translation, filterWarning: filterWarning(of: quoted, base: base), spoiler: spoiler(of: quoted, base: base, builder: builder), media: media, base: base)
             content.truncation = longBodyExpansion.truncation(forBodyOf: quoted, isThreadFocus: status.displayed.id == threadFocusID, rule: bodyTruncationRule)
             var actions = EmbedActions()
             actions.open = { [weak self] view in
@@ -48,7 +48,7 @@ extension TimelineViewController {
             actions.revealMedia = { [weak self] in self?.revealMedia(of: quoted) }
             actions.openLink = { [weak self] destination in self?.onOpenLink?(destination, quoted) }
             actions.openAccount = { [weak self] in self?.onOpenProfile?(quoted.account) }
-            actions.toggleSpoiler = { [weak self] in self?.toggleSpoiler(of: quoted, keeping: itemID) }
+            actions.toggleSpoiler = { [weak self] kind in self?.toggleSpoiler(kind, of: quoted, keeping: itemID) }
             actions.expandBody = { [weak self] in self?.expandBody(.status(quoted.id), keeping: itemID) }
             if case .link(let nestedID) = NestedQuote(quoted.quote) {
                 actions.selectNote = { [weak self] _ in

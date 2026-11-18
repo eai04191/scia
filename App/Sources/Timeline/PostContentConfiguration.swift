@@ -84,6 +84,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var bodyTruncation: BodyTruncation?
     /// 切った本文の末尾に「続きを読む」を出す。
     var showsReadMore = true
+    /// フィルターの警告。警告のフィルターに一致しなければnil。
+    var filterWarning: PostBodyContent.Spoiler?
     /// 注意書きがなければnil。
     var spoiler: PostBodyContent.Spoiler?
     var metrics: Metrics
@@ -111,7 +113,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
     /// 添付ファイルか、リンクカードの画像の、閲覧注意のぼかしが押されたときに呼ぶ。ぼかしを外すのは置く側で、適用し直すまで見た目は変わらない。
     var onRevealMedia: (() -> Void)?
-    var onToggleSpoiler: (() -> Void)?
+    /// 注意書きかフィルターの警告が押されたときに、押したボックスの種類を渡して呼ぶ。
+    var onToggleSpoiler: ((PostBodyContent.Spoiler.Kind) -> Void)?
     /// 本文が編集で変わったら、変わらない文字を前の位置から動かす。タイムラインが、行の高さの変化を下の行ごと動かして描き直すときだけ立てる。
     /// 行を動かさずに替えるときに文字だけを動かすと、行は一度に伸び縮みするのに中身が遅れて動き、空きが見える。
     var animatesTextEdit = false
@@ -359,7 +362,7 @@ final class PostContentView: UIView, UIContentView {
         configureSubviews()
         bodyView.onSelectMedia = { [weak self] index, grid in self?.current.onSelectMedia?(index, grid) }
         bodyView.onRevealMedia = { [weak self] in self?.current.onRevealMedia?() }
-        bodyView.onToggleSpoiler = { [weak self] in self?.current.onToggleSpoiler?() }
+        bodyView.onToggleSpoiler = { [weak self] kind in self?.current.onToggleSpoiler?(kind) }
         bodyView.onExpandBody = { [weak self] in self?.current.onExpandBody?() }
         bodyView.onOpenLink = { [weak self] destination in self?.current.onOpenLink?(destination) }
         bodyView.onTextSelectionChange = { [weak self] in
@@ -540,6 +543,7 @@ final class PostContentView: UIView, UIContentView {
         }
         bodyView.animatesTextEdit = configuration.animatesTextEdit
         bodyView.apply(PostBodyContent(
+            filterWarning: configuration.filterWarning,
             spoiler: configuration.spoiler,
             text: configuration.body,
             translationMarkPulses: configuration.isTranslated ? false : configuration.isTranslating ? true : nil,
@@ -1049,7 +1053,7 @@ final class PostContentView: UIView, UIContentView {
         textAccessibilityElement.accessibilityLabel = parts.filter { !$0.isEmpty }.joinedAsTextList
         // 本文を切っているかは並べるまで分からないので、並べたあとに変わったら作り直す（`layoutContents`）。
         accessibilityReflectsTruncation = bodyView.isBodyTruncated
-        textAccessibilityElement.accessibilityCustomActions = [bodyView.spoilerAccessibilityAction(), bodyView.readMoreAccessibilityAction()].compactMap(\.self) + bodyView.linkAccessibilityActions()
+        textAccessibilityElement.accessibilityCustomActions = bodyView.spoilerAccessibilityActions() + [bodyView.readMoreAccessibilityAction()].compactMap(\.self) + bodyView.linkAccessibilityActions()
             + profileAccessibilityActions(for: configuration)
         // 枠はlayoutSubviewsで決める。大きさの変わらない描き直し（絵文字の画像が届いたときなど）では並べ直しが起きないため、枠を空にせず、並べ直しを頼む。
         // 空にすると、次に並べ直すまで、VoiceOverで指でなぞってもこの行に止まらない。

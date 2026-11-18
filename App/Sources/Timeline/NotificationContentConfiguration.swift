@@ -33,7 +33,8 @@ struct NotificationContentConfiguration: UIContentConfiguration {
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
     var onRevealMedia: (() -> Void)?
-    var onToggleSpoiler: (() -> Void)?
+    /// 注意書きかフィルターの警告が押されたときに、押したボックスの種類を渡して呼ぶ。
+    var onToggleSpoiler: ((PostBodyContent.Spoiler.Kind) -> Void)?
     /// 本文が編集で変わったら、変わらない文字を前の位置から動かす（`PostContentConfiguration.animatesTextEdit`）。
     var animatesTextEdit = false
     /// 誰が何をしたかの行がタップされたときに呼ぶ。通知のもとになる操作をした人のプロフィールを開く。
@@ -167,7 +168,7 @@ final class NotificationContentView: UIView, UIContentView {
         ])
         bodyView.onSelectMedia = { [weak self] index, grid in self?.current.onSelectMedia?(index, grid) }
         bodyView.onRevealMedia = { [weak self] in self?.current.onRevealMedia?() }
-        bodyView.onToggleSpoiler = { [weak self] in self?.current.onToggleSpoiler?() }
+        bodyView.onToggleSpoiler = { [weak self] kind in self?.current.onToggleSpoiler?(kind) }
         bodyView.onOpenLink = { [weak self] destination in self?.current.onOpenLink?(destination) }
         bodyView.onTextSelectionChange = { [weak self] in
             guard let self else { return }
@@ -297,7 +298,7 @@ final class NotificationContentView: UIView, UIContentView {
                 return true
             }
         }
-        textAccessibilityElement.accessibilityCustomActions = [groupAccountsAction, bodyView.spoilerAccessibilityAction()].compactMap(\.self) + bodyView.linkAccessibilityActions()
+        textAccessibilityElement.accessibilityCustomActions = [groupAccountsAction].compactMap(\.self) + bodyView.spoilerAccessibilityActions() + bodyView.linkAccessibilityActions()
             + profileAccessibilityActions(for: configuration)
         // 枠はlayoutSubviewsで決める。大きさの変わらない描き直し（絵文字の画像が届いたときなど）では並べ直しが起きないため、枠を空にせず、並べ直しを頼む。
         // 空にすると、次に並べ直すまで、VoiceOverで指でなぞってもこの行に止まらない。

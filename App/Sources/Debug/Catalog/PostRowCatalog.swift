@@ -30,13 +30,15 @@ enum PostRowCatalog {
         }
 
         /// - Parameters:
-        ///   - expandsSpoiler: 注意書きを開く。フィルターの警告で折りたたんでいれば、警告を開く。
+        ///   - expandsSpoiler: 注意書きを開く。
+        ///   - revealsWarning: フィルターの警告を開く。
         ///   - isMine: カタログのアカウントを自分として組む。
         ///   - connection: 隣の行と線でつながっている形にする。
         ///   - expandsBody: 切った本文を「続きを読む」で広げる。
-        private func post(_ title: String, _ status: Status, isPinned: Bool = false, expandsSpoiler: Bool = false, isMine: Bool = false, connection: ReplyConnection = ReplyConnection(), expandsBody: Bool = false) -> CatalogState {
+        private func post(_ title: String, _ status: Status, isPinned: Bool = false, expandsSpoiler: Bool = false, revealsWarning: Bool = false, isMine: Bool = false, connection: ReplyConnection = ReplyConnection(), expandsBody: Bool = false) -> CatalogState {
             let timeline = isMine ? mine : home
             return CatalogState(title: title) {
+                if revealsWarning { timeline.toggleSpoiler(.filter, of: status) }
                 if expandsSpoiler { timeline.toggleSpoiler(of: status) }
                 if expandsBody { timeline.longBodyExpansion.expand(.status(status.displayed.id)) }
                 return CatalogFrame.post {
@@ -170,6 +172,7 @@ enum PostRowCatalog {
                 ], sensitive: true), expandsSpoiler: true),
                 post("ブーストされた注意書き（閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", rebloggedBy: booster)),
                 post("フィルターの警告", status(content: "<p>警告で折りたたんだ本文。</p>", filtered: [filter("ネタバレ", .warn)])),
+                post("フィルターの警告（開いた）", status(content: "<p>警告を開くと、警告のボックスを残したまま本文を出す。</p>", filtered: [filter("ネタバレ", .warn)]), revealsWarning: true),
                 post("フィルターの警告（名前が長い、2つに一致した）", status(content: "<p>警告で折りたたんだ本文。</p>", filtered: [filter(longFilterTitle, .warn), filter("ネタバレ", .warn)])),
                 post("フィルターの警告と画像とリンクカード（どれも出さない）", status(
                     content: #"<p>警告で折りたたんだ本文。<a href="https://news.example/articles/1">news.example/articles/1</a></p>"#,
@@ -177,7 +180,8 @@ enum PostRowCatalog {
                     filtered: [filter("ネタバレ", .warn)]
                 )),
                 post("フィルターの警告と注意書き（閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", filtered: [filter("ネタバレ", .warn)])),
-                post("フィルターの警告と注意書き（警告を開いた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", filtered: [filter("ネタバレ", .warn)]), expandsSpoiler: true),
+                post("フィルターの警告と注意書き（警告を開いた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", filtered: [filter("ネタバレ", .warn)]), revealsWarning: true),
+                post("フィルターの警告と注意書き（両方開いた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", filtered: [filter("ネタバレ", .warn)]), expandsSpoiler: true, revealsWarning: true),
                 post("ブーストされたフィルターの警告", status(content: "<p>警告で折りたたんだ本文。</p>", filtered: [filter("ネタバレ", .warn)], rebloggedBy: booster)),
                 post("フィルターで画像をぼかす", status(content: "<p>フィルターで画像をぼかした投稿。</p>", media: [
                     Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
@@ -192,7 +196,7 @@ enum PostRowCatalog {
                 post("自分の投稿がフィルターに一致した（注意書き、閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", filtered: [filter("ネタバレ", .warn)]), isMine: true),
                 post("フィルターの警告とぼかし（警告を開いた）", status(content: "<p>警告を開くと、画像はぼかしたまま出る。</p>", media: [
                     Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
-                ], filtered: [filter("ネタバレ", .warn), filter("画像", .blur)]), expandsSpoiler: true),
+                ], filtered: [filter("ネタバレ", .warn), filter("画像", .blur)]), revealsWarning: true),
             ]
         }
     }
@@ -485,11 +489,13 @@ enum PostRowCatalog {
         let home = TimelineViewController(texts: .home, settings: AppDependencies.settings, refresh: {})
         home.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
         /// - Parameters:
-        ///   - expandsQuotedSpoiler: 引用元の注意書きを開く。フィルターの警告で折りたたんでいれば、警告を開く。
+        ///   - expandsQuotedSpoiler: 引用元の注意書きを開く。
+        ///   - revealsQuotedWarning: 引用元のフィルターの警告を開く。
         ///   - revealsQuote: ブロックかミュートしている人の引用元を開く。
-        func post(_ title: String, _ quote: Quote, content: String = "<p>引用した投稿の本文。</p>", spoilerText: String = "", expandsQuotedSpoiler: Bool = false, revealsQuote: Bool = false) -> CatalogState {
+        func post(_ title: String, _ quote: Quote, content: String = "<p>引用した投稿の本文。</p>", spoilerText: String = "", expandsQuotedSpoiler: Bool = false, revealsQuotedWarning: Bool = false, revealsQuote: Bool = false) -> CatalogState {
             CatalogState(title: title) {
                 let status = status(content: content, spoilerText: spoilerText, quote: quote)
+                if revealsQuotedWarning, let quoted = quote.quotedStatus { home.toggleSpoiler(.filter, of: quoted) }
                 if expandsQuotedSpoiler, let quoted = quote.quotedStatus { home.toggleSpoiler(of: quoted) }
                 if revealsQuote { home.quoteReveals.reveal(status) }
                 return CatalogFrame.post { home.contentConfiguration(for: status, base: .cell()) }
@@ -537,6 +543,7 @@ enum PostRowCatalog {
             post("引用元に注意書き（開いた）", accepted(quoted(spoilerText: "ネタバレ", media: [image], sensitive: true)), expandsQuotedSpoiler: true),
             post("引用した投稿に注意書き（閉じて、囲みごと隠す）", accepted(quoted()), spoilerText: "引用のネタバレ"),
             post("引用元がフィルターの警告に一致", accepted(quoted(filtered: [filter("ネタバレ", .warn)]))),
+            post("引用元がフィルターの警告に一致（開いた）", accepted(quoted(filtered: [filter("ネタバレ", .warn)])), revealsQuotedWarning: true),
             post("引用元がフィルターで画像をぼかすに一致", accepted(quoted(media: [image], filtered: [filter("ネタバレ", .blur)]))),
             post("引用元がフィルターの「隠す」に一致", accepted(quoted(filtered: [filter("ネタバレ", .hide)]))),
             post("引用元がさらに引用している（押せる）", accepted(quoted(quote: Quote(state: "accepted", quotedStatusID: "1")))),
