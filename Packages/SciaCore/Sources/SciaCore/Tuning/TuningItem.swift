@@ -1743,6 +1743,15 @@ public enum TuningCatalog {
         defaultValue: false
     )
 
+    /// 絵文字のシートで絵文字を入れたときと削除キーを押したときの、触覚フィードバックの強さ。スタイルは`light`で、0なら出さない。決まりはdocs/compose.mdの「入れ方」にある。
+    public static let composeEmojiPaletteHapticIntensity = NumberTuning(
+        id: "compose.emojiPalette.hapticIntensity",
+        title: "絵文字のシートで入れたときの触覚の強さ（0で出さない）",
+        range: 0...1,
+        step: 0.05,
+        defaultValue: 1
+    )
+
     /// 絵文字のシートの下の段（まとまりのボタンと削除キー）の高さ（pt）。HIGの勧める44ptに届かなくても、押せなくて困る操作ではないため、絵文字を並べた部分の広さと見比べて選ぶ。
     public static let composeEmojiPaletteBarHeight = NumberTuning(
         id: "compose.emojiPalette.barHeight",
@@ -2195,6 +2204,7 @@ public enum TuningCatalog {
             .toggle(composePickerMatchesKeyboard),
             .number(composePickerHeight),
             .toggle(composeEmojiPaletteHardEdgeEffect),
+            .number(composeEmojiPaletteHapticIntensity),
             .number(composeEmojiPaletteBarHeight),
             .number(composeEmojiPaletteBarBottomInset),
             .number(composeEmojiPaletteCellSize),

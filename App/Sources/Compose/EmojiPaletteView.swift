@@ -377,7 +377,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         deleteButton.configuration?.baseForegroundColor = .label
         deleteButton.accessibilityLabel = ComposeTexts.delete
         deleteButton.addAction(UIAction { [weak self] _ in
-            UIDevice.current.playInputClick()
+            self?.playInputFeedback()
             self?.onDelete()
         }, for: .primaryActionTriggered)
         bottomBar.addSubview(deleteButton)
@@ -769,7 +769,7 @@ extension EmojiPaletteView: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         collectionView.deselectItem(at: indexPath, animated: false)
         guard let emoji = emoji(at: indexPath) else { return }
-        UIDevice.current.playInputClick()
+        playInputFeedback()
         onSelect(emoji)
     }
 
@@ -938,8 +938,16 @@ extension EmojiPaletteView {
     }
 
     private func insert(_ emoji: StandardEmoji) {
-        UIDevice.current.playInputClick()
+        playInputFeedback()
         onSelect(.standard(emoji))
+    }
+
+    /// 絵文字を入れたときと削除キーを押したときに、入力音を鳴らして触覚を返す。決まりはdocs/compose.mdの「入れ方」にある。
+    private func playInputFeedback() {
+        UIDevice.current.playInputClick()
+        let intensity = AppDependencies.tuning.value(of: TuningCatalog.composeEmojiPaletteHapticIntensity)
+        guard intensity > 0 else { return }
+        UIImpactFeedbackGenerator(style: .light, view: self).impactOccurred(intensity: intensity)
     }
 }
 
