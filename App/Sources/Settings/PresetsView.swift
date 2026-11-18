@@ -432,7 +432,8 @@ struct AccountPresetView: View {
                 settings.store.updateLibrary { library throws(PresetError) in try library.select(id, for: .account(account)) }
             }
         }
-        .navigationTitle(account)
+        .navigationTitle(SettingsPage.accountPreset.title)
+        .navigationSubtitle(account)
         .navigationBarTitleDisplayMode(.inline)
     }
 }
