@@ -106,11 +106,11 @@ public enum AppearanceCatalog {
 
     // MARK: 大きさと余白
 
-    // 行の余白の既定値は、リストのセルの標準の余白（`defaultContentConfiguration()`、iPhone）に合わせる。
+    // 行の上下の余白は行の外周のすき間の段にする。左右は画面の端からの余白で、投稿の中のすき間とは役割が違うので、段によらず、組み込みのプリセットでも変えない。
     public static let rowPaddingTop = AppearanceValue(id: "timeline.rowPaddingTop", title: "上の余白", range: 0...100, step: 1, spacing: .s4)
     public static let rowPaddingBottom = AppearanceValue(id: "timeline.rowPaddingBottom", title: "下の余白", range: 0...100, step: 1, spacing: .s4)
-    public static let rowPaddingLeading = AppearanceValue(id: "timeline.rowPaddingLeading", title: "左の余白", range: 0...100, step: 1, spacing: .s4)
-    public static let rowPaddingTrailing = AppearanceValue(id: "timeline.rowPaddingTrailing", title: "右の余白", range: 0...100, step: 1, spacing: .s4)
+    public static let rowPaddingLeading = AppearanceValue(id: "timeline.rowPaddingLeading", title: "左の余白", range: 0...100, step: 1, defaultValue: 16, role: .free)
+    public static let rowPaddingTrailing = AppearanceValue(id: "timeline.rowPaddingTrailing", title: "右の余白", range: 0...100, step: 1, defaultValue: 16, role: .free)
     /// 名前の行で、太字の部分と、後ろに添える部分のすき間。
     public static let namePartsSpacing = AppearanceValue(id: "timeline.namePartsSpacing", title: "太字と添える部分のすき間", range: 0...100, step: 1, spacing: .s1)
     /// 名前とハンドルを2段に分けるとき、1段目の字面の下端から2段目の字面の上端まで。
