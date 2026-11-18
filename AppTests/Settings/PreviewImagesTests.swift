@@ -16,6 +16,25 @@ struct PreviewImagesTests {
         #expect(UIImage(data: data) != nil)
     }
 
+    /// 見本のアイコンと絵文字の絵は、四隅まで不透明。アイコンの形と角丸の丸みで切り抜くときも、切り抜かれない絵文字でも、元のアイコンの角丸の透明な部分が見えないようにするため。
+    @Test func avatarCornersAreOpaque() async throws {
+        let url = try #require(PreviewImages.avatarURL())
+        let data = try await AppDependencies.imageData(from: url)
+        let image = try #require(UIImage(data: data)?.cgImage)
+        let width = image.width
+        let height = image.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let drawn = pixels.withUnsafeMutableBytes { buffer in
+            let context = CGContext(data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+            context?.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return context != nil
+        }
+        try #require(drawn)
+        for (x, y) in [(0, 0), (width - 1, 0), (0, height - 1), (width - 1, height - 1)] {
+            #expect(pixels[(y * width + x) * 4 + 3] == 255, "(\(x), \(y))が透けています")
+        }
+    }
+
     private static func url(named name: String) -> URL? {
         switch name {
         case "avatar": PreviewImages.avatarURL()

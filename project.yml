@@ -78,9 +78,11 @@ targets:
           - $(SRCROOT)/App/Resources/AppIconTry.icon/icon.json
           - $(SRCROOT)/App/Resources/AppIconTry.icon/Assets/trail.svg
           - $(SRCROOT)/App/Resources/AppIconTry.icon/Assets/grid.svg
+          - $(SRCROOT)/Tools/square-app-icon.py
         outputFiles:
           - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AppIconPreview@3x.png
           - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AppIconLightPreview@3x.png
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AppIconSquarePreview.png
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(SCIA_BUNDLE_ID)

@@ -28,3 +28,15 @@ for pair in "$SCIA_APP_ICON:AppIcon" AppIconLight:AppIconLight; do
         --output-file "$out/${name}Preview@3x.png" \
         --platform iOS --rendition Default --width 180 --height 180 --scale 1 >/dev/null
 done
+
+# 「投稿の見た目」の見本のアイコンとカスタム絵文字に使う、角まで絵の詰まった四角の絵（App/Sources/Settings/PreviewImages.swift）。
+# 縮めた.iconを1024pxで書き出し、真ん中の768pxを切り出して、アイコンの大きさの上限（200pt）の@3xに近い512pxにする。
+# 0.75は、角丸の切り抜きと縁の線が切り出す範囲に入らない倍率（180pxの書き出しで、角の対角線上の13pxまでが透明で、その内側に縁の線がある）。
+square=$(mktemp -d)
+trap 'rm -rf "$square"' EXIT
+/usr/bin/python3 "$SRCROOT/Tools/square-app-icon.py" "$SRCROOT/App/Resources/$SCIA_APP_ICON.icon" "$square/Square.icon" 0.75
+"$ictool" "$square/Square.icon" --export-image \
+    --output-file "$square/square.png" \
+    --platform iOS --rendition Default --width 1024 --height 1024 --scale 1 >/dev/null
+sips --cropToHeightWidth 768 768 "$square/square.png" --out "$square/cropped.png" >/dev/null
+sips --resampleHeightWidth 512 512 "$square/cropped.png" --out "$out/AppIconSquarePreview.png" >/dev/null
