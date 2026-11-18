@@ -6,9 +6,14 @@ public struct PresetComparison {
     public struct Section: Identifiable {
         /// 比べる項目の並びでの順番。見出しは、対象の操作の画面と節の見出しで同じになることがある（「操作>リンク」）ので、見出しとは別に持つ。
         public let id: Int
-        /// 設定の画面の階層を「>」でつないだもの。
-        public let title: String
+        /// 設定の画面の階層の名前を、上から順に並べたもの。画面ではシェブロンでつなぐ。
+        public let path: [String]
         public let rows: [Row]
+
+        /// 読み上げる見出し。
+        public var accessibilityTitle: String {
+            SettingsTexts.Presets.pathAccessibilityLabel(path)
+        }
     }
 
     public struct Row: Identifiable {
@@ -54,7 +59,7 @@ public struct PresetComparison {
                 let after = entry.read(compared)
                 return Row(title: entry.title, detailTitle: entry.detailTitle ?? entry.title, base: before, compared: after, keys: entry.keys)
             }
-            return rows.isEmpty ? nil : Section(id: index, title: section.title, rows: rows)
+            return rows.isEmpty ? nil : Section(id: index, path: section.path, rows: rows)
         }
     }
 
@@ -74,7 +79,7 @@ public struct PresetComparison {
     }
 
     struct EntrySection {
-        let title: String
+        let path: [String]
         var entries: [Entry]
     }
 
@@ -207,11 +212,10 @@ private struct CatalogBuilder {
     /// 同じ階層の節が続いていれば、そこに足す。空の項目は足さない。
     private mutating func add(_ entries: [Entry], to path: [String]) {
         guard !entries.isEmpty else { return }
-        let title = SettingsTexts.Presets.path(path)
-        if sections.last?.title == title {
+        if sections.last?.path == path {
             sections[sections.count - 1].entries += entries
         } else {
-            sections.append(PresetComparison.EntrySection(title: title, entries: entries))
+            sections.append(PresetComparison.EntrySection(path: path, entries: entries))
         }
     }
 

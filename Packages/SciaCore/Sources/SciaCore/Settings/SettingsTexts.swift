@@ -167,9 +167,9 @@ public enum SettingsTexts {
             "\(number)行"
         }
 
-        /// 比べた項目の節の見出し。設定の画面の階層をつなぐ。
-        public static func path(_ titles: [String]) -> String {
-            titles.joined(separator: ">")
+        /// 比べた項目の節の見出しの読み上げ。設定の画面の階層をつなぐ。画面では、名前をシェブロンでつないで描く。
+        public static func pathAccessibilityLabel(_ titles: [String]) -> String {
+            titles.joined(separator: "、")
         }
 
         /// 全画面で開くアプリ内のSafariの高さの値。つまみを下げたときの高さを添える。

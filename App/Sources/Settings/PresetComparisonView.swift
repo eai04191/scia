@@ -73,10 +73,12 @@ struct PresetComparisonView: View {
                         }
                     }
                     ForEach(sections) { section in
-                        Section(section.title) {
+                        Section {
                             ForEach(section.rows) { row in
                                 PresetComparisonRow(row: row, baseName: library.name(of: base) ?? "", targetName: library.name(of: target) ?? "")
                             }
+                        } header: {
+                            PresetComparisonSectionHeader(section: section)
                         }
                     }
                 }
@@ -259,5 +261,20 @@ private struct LayoutColumn: View {
                 .padding(.top, 14)
                 .padding(.bottom, 2)
         }
+    }
+}
+
+/// 比べた項目の節の見出し。設定の画面の階層の名前を、シェブロンでつなぐ。
+struct PresetComparisonSectionHeader: View {
+    let section: PresetComparison.Section
+
+    var body: some View {
+        // 文字より小さいフォントで描くと、記号がベースラインに寄って文字の中心より下に見えるので、見出しの文字の大きさのまま、記号の小さいスケールで描く。
+        let chevron = Text(Image(systemName: "chevron.forward"))
+        section.path.dropFirst().reduce(Text(verbatim: section.path.first ?? "")) { text, name in
+            Text("\(text) \(chevron) \(name)")
+        }
+        .imageScale(.small)
+        .accessibilityLabel(section.accessibilityTitle)
     }
 }

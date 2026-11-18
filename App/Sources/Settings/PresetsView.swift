@@ -260,10 +260,12 @@ struct PresetEditorView: View {
         }
         if !comparison.sections.isEmpty {
             ForEach(comparison.sections) { section in
-                Section(section.title) {
+                Section {
                     ForEach(section.rows) { row in
                         PresetComparisonRow(row: row, baseName: BuiltInPreset.standard.title, targetName: builtIn.title)
                     }
+                } header: {
+                    PresetComparisonSectionHeader(section: section)
                 }
             }
         }
