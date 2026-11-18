@@ -159,7 +159,7 @@ extension SettingsPage {
         case .appIcon: "アプリのアイコン"
         case .presets: "プリセット"
         case .accountPreset: "アカウントのプリセット"
-        case .appPreset: SettingsTexts.Presets.app
+        case .appPreset: "アプリのプリセット"
         case .presetEditor: "プリセットを編集"
         case .presetComparison: SettingsTexts.Presets.compare
         case .presetManagement: SettingsTexts.Presets.manage
