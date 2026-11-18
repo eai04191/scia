@@ -20,6 +20,7 @@
 - 翻訳先は、設定の「自動翻訳」で選ぶ。既定はデバイスの言語
 - 翻訳先と同じ言語の投稿は訳さない。地域や文字の違いは見ない
 - 翻訳モードは、設定の「自動翻訳」で「Apple Intelligence」（`highFidelity`）か「標準」（`lowLatency`）を選ぶ。既定は「標準」
+- 訳す言語と翻訳モードは、プリセットに含めず、端末に1つだけ持つ。翻訳先と自動翻訳のオンとオフは、プリセットに含める（docs/preset.mdの「プリセットに含める設定」）
 - Apple Intelligenceのモデルが使えない間は、翻訳モードの項目を出さず、「標準」で訳す。「Apple Intelligence」を選んだことは残し、使えるようになったら戻す。使えないデバイスでは「Apple Intelligence」も「標準」のモデルで訳すため。使えるかは、FoundationModelsの`SystemLanguageModel`が使えるかで見分ける
 
 ## 本文の扱い
