@@ -98,7 +98,7 @@ public enum SettingsItem: String, CaseIterable, Hashable, Sendable {
         case .insertionMotion: "最上部での新着の挿入"
         case .statusBarTicker: "通知をステータスバーに流す"
         case .linkBrowser: "開く場所"
-        case .inAppBrowserHeight: "アプリ内のSafariの高さ"
+        case .inAppBrowserHeight: "シートの高さ"
         case .reblogVisibility: "公開範囲"
         case .composeBarIdle: "書いていないとき"
         case .imageUploadSize: "画像"
@@ -125,6 +125,15 @@ public enum SettingsItem: String, CaseIterable, Hashable, Sendable {
 }
 
 extension SettingsItem {
+    /// `settings`で、この行を設定の画面に出すか。シートの高さは、リンクをアプリ内のSafariのシートで開くときだけ使う。
+    @MainActor
+    public func isShown(in settings: AppSettings) -> Bool {
+        switch self {
+        case .inAppBrowserHeight: settings.linkBrowser == .inApp
+        default: true
+        }
+    }
+
     /// アプリ内のSafariの高さの行に出す今の値。
     @MainActor
     public static func inAppBrowserHeightValue(in settings: AppSettings) -> String {

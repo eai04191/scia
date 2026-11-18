@@ -65,11 +65,15 @@ struct SettingsScreenForm: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    /// このiOSで出せない行を除いた節。
+    /// このiOSで出せない行と、今の設定で使わない行を除いた節。
     private var sections: [SettingsSection] {
         (page.sections ?? []).compactMap { section in
             var section = section
-            section.rows.removeAll { !Self.isAvailable($0) }
+            section.rows.removeAll { row in
+                guard Self.isAvailable(row) else { return true }
+                if case .item(let item) = row { return !item.isShown(in: settings) }
+                return false
+            }
             return section.rows.isEmpty ? nil : section
         }
     }

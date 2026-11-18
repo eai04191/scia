@@ -245,6 +245,8 @@ public enum SettingsTexts {
 
     /// アプリ内のSafariの高さを選ぶシート。
     public enum InAppBrowserHeight {
+        /// 設定の行の名前（「シートの高さ」）と違い、ホームの上に出すので、何のシートかを書く。
+        public static let title = "アプリ内のSafariの高さ"
         public static let topInset = "上の余白"
         public static let reset = "標準に戻す"
         public static let footer = "シートを上下にドラッグしてリンクを開いたときの高さを調整します。"

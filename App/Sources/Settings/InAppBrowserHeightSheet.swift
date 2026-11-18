@@ -156,7 +156,7 @@ struct InAppBrowserHeightChoices: View {
             .background(Color(uiColor: .systemBackground))
             // アプリ内のSafariのシートと同じく、上の帯と中身のあいだに区切り線を引く。
             .safeAreaInset(edge: .top, spacing: 0) { Divider() }
-            .navigationTitle(SettingsItem.inAppBrowserHeight.title)
+            .navigationTitle(SettingsTexts.InAppBrowserHeight.title)
             .navigationBarTitleDisplayMode(.inline)
             .presetEditingSubtitle(settings)
             .toolbar {
