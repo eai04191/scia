@@ -603,8 +603,9 @@ public final class AppSettings {
     // MARK: 読み書き
 
     private func value(_ key: String) -> PresetValue? {
-        store.track(key)
-        return store.library.value(forKey: key, in: presetID)
+        let preset = presetID
+        store.track(key, in: preset)
+        return store.library.value(forKey: key, in: preset)
     }
 
     private func bool(_ key: String, default defaultValue: Bool) -> Bool {
@@ -665,8 +666,9 @@ public final class AppSettings {
     }
 
     func isModified(key: String) -> Bool {
-        store.track(key)
-        return store.library.isModified(key, in: presetID)
+        let preset = presetID
+        store.track(key, in: preset)
+        return store.library.isModified(key, in: preset)
     }
 
     /// 組み込みのプリセットを読んでいるときは、変えた項目がないので何もしない。
@@ -759,8 +761,14 @@ public final class SettingsStore {
         return library
     }
 
-    /// 値のキーごとの購読。読まれたキーだけ作る。
-    @ObservationIgnored private var keyChanges: [String: ChangeSignal] = [:]
+    /// 使う人のプリセットの値の、キーごとの購読。読まれたものだけ作る。キーは`(プリセットの番号, 値のキー)`。
+    /// プリセットごとに分けるのは、使っていないプリセットを直しても、同じキーをほかのプリセットで読む画面に届かないようにするため。
+    @ObservationIgnored private var keyChanges: [ValueKey: ChangeSignal] = [:]
+
+    private struct ValueKey: Hashable {
+        let preset: Int
+        let key: String
+    }
     /// アプリとアカウントが使うプリセットの選び直し。
     private let selectionChange = ChangeSignal()
     /// 親の付け替えと、プリセットの削除。値をたどる道が変わるので、どの値も変わりうる。
@@ -890,7 +898,7 @@ public final class SettingsStore {
 
     func resolvedAppearance(in preset: PresetID) -> AppearanceChoices {
         for field in AppearanceStorage.fieldNames {
-            track(AppearanceStorage.key(field))
+            track(AppearanceStorage.key(field), in: preset)
         }
         if let cached = appearanceCache[preset] { return cached }
         var values: [String: PresetValue] = [:]
@@ -904,14 +912,18 @@ public final class SettingsStore {
         return resolved
     }
 
-    /// `key`の値の変化を購読する。
-    func track(_ key: String) {
-        let signal = keyChanges[key] ?? {
-            let created = ChangeSignal()
-            keyChanges[key] = created
-            return created
-        }()
-        _ = signal.revision
+    /// `preset`で読む`key`の値の変化を購読する。値を受け継ぐ先祖の使う人のプリセットの変化も購読する。組み込みのプリセットの値は変わらない。
+    func track(_ key: String, in preset: PresetID) {
+        for id in [preset] + library.ancestors(of: preset) {
+            guard case .user(let number) = id else { continue }
+            let valueKey = ValueKey(preset: number, key: key)
+            let signal = keyChanges[valueKey] ?? {
+                let created = ChangeSignal()
+                keyChanges[valueKey] = created
+                return created
+            }()
+            _ = signal.revision
+        }
         _ = structureChange.revision
     }
 
@@ -934,15 +946,11 @@ public final class SettingsStore {
             structureChange.revision += 1
             return
         }
-        var changedKeys: Set<String> = []
         for (id, preset) in newPresets {
             let before = oldPresets[id]?.values ?? [:]
             for key in Set(before.keys).union(preset.values.keys) where before[key] != preset.values[key] {
-                changedKeys.insert(key)
+                keyChanges[ValueKey(preset: id, key: key)]?.revision += 1
             }
-        }
-        for key in changedKeys {
-            keyChanges[key]?.revision += 1
         }
     }
 

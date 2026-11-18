@@ -246,6 +246,52 @@ struct AppSettingsPresetTests {
         #expect(!changed.isOpen)
     }
 
+    /// 使っていないプリセットの値を変えても、同じ値をほかのプリセットで読んでいる画面には届かない。プリセットを管理から直している間に、タイムラインを描き直したり翻訳をやり直したりしないため。
+    @Test func changingUnusedPresetDoesNotNotifyOtherReaders() throws {
+        let app = makeSettings()
+        app.accentColor = .purple
+        var unused: PresetID = .builtIn(.standard)
+        try app.store.tryUpdateLibrary { library throws(PresetError) in
+            unused = try library.create(parent: .builtIn(.standard), name: "外")
+        }
+        let account = app.forAccount("a@example.social")
+        let changed = Gate()
+        withObservationTracking {
+            _ = account.accentColor
+            _ = account.isAutoTranslationEnabled
+        } onChange: {
+            changed.open()
+        }
+
+        let editing = app.editing(unused)
+        editing.accentColor = .indigo
+        editing.isAutoTranslationEnabled = true
+
+        #expect(!changed.isOpen)
+    }
+
+    /// 親のプリセットの値を変えると、その値を受け継ぐ子を使う画面に届く。
+    @Test func changingParentValueNotifiesChildReaders() throws {
+        let app = makeSettings()
+        var parent: PresetID = .builtIn(.standard)
+        try app.store.tryUpdateLibrary { library throws(PresetError) in
+            parent = try library.create(parent: .builtIn(.standard), name: "親")
+            let child = try library.create(parent: parent, name: "子")
+            try library.select(child, for: .app)
+        }
+        let changed = Gate()
+        withObservationTracking {
+            _ = app.accentColor
+        } onChange: {
+            changed.open()
+        }
+
+        app.editing(parent).accentColor = .indigo
+
+        #expect(changed.isOpen)
+        #expect(app.accentColor == .indigo)
+    }
+
     /// プリセットの中身を変えると、そのプリセットのその値を読んでいる画面に届く。
     @Test func changingValueNotifiesReaders() throws {
         let app = makeSettings()
