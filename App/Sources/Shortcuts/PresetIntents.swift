@@ -144,7 +144,7 @@ private struct ShortcutFailure: Error, CustomLocalizedStringResourceConvertible 
         let text = switch reason {
         case .accountNotFound: PresetTexts.accountNotFound
         case .presetNotFound: PresetTexts.presetNotFound
-        case .builtInIsReadOnly, .invalidValue: preconditionFailure("プリセットを選ぶ操作は、値を変えないので起きない")
+        case .builtInIsReadOnly, .invalidValue, .nameTaken: preconditionFailure("プリセットを選ぶ操作は、値も名前も変えないので起きない")
         }
         return LocalizedStringResource(String.LocalizationValue(text))
     }

@@ -91,6 +91,8 @@ public enum PresetError: Error, Equatable {
     case invalidValue
     /// 指したアカウントがログアウトしている。
     case accountNotFound
+    /// ほかのプリセット（組み込みのプリセットを含む）が使っている名前。
+    case nameTaken
 }
 
 /// プリセットと、アプリとアカウントが使うプリセット。値の重ね方は、アプリの既定値、組み込みのプリセット、使う人のプリセット（親から子へ）の順（docs/preset.md）。
@@ -205,6 +207,7 @@ public struct PresetLibrary: Codable, Equatable, Sendable {
     @discardableResult
     public mutating func create(parent: PresetID, name: String? = nil) throws(PresetError) -> PresetID {
         guard let parentName = self.name(of: parent) else { throw .presetNotFound }
+        if let name, isTaken(name, except: nil) { throw .nameTaken }
         return add(UserPreset(id: 0, name: name ?? numberedName(from: parentName), parent: parent, values: [:]))
     }
 
@@ -221,7 +224,14 @@ public struct PresetLibrary: Codable, Equatable, Sendable {
     }
 
     public mutating func rename(_ id: PresetID, to name: String) throws(PresetError) {
+        if isTaken(name, except: id) { throw .nameTaken }
         try update(id) { $0.name = name }
+    }
+
+    /// 名前が、`except`のほかのプリセット（組み込みのプリセットを含む）に使われているか。
+    private func isTaken(_ name: String, except: PresetID?) -> Bool {
+        BuiltInPreset.allCases.contains { $0.title == name }
+            || userPresets.contains { $0.name == name && PresetID.user($0.id) != except }
     }
 
     /// `scope`が使うプリセットの値を変える。組み込みのプリセットを使っていたら、それを親にしたプリセットを作り、そのプリセットを使っていた側（割り当てていないアカウントならアプリ）をそちらに切り替えてから変える。
@@ -291,7 +301,7 @@ public struct PresetLibrary: Codable, Equatable, Sendable {
 
     /// 「コンパクト 2」のように、使っていない最小の番号を付ける。
     private func numberedName(from base: String) -> String {
-        let names = Set(userPresets.map(\.name))
+        let names = Set(userPresets.map(\.name) + BuiltInPreset.allCases.map(\.title))
         var number = 2
         while names.contains(PresetTexts.numberedName(base, number: number)) {
             number += 1

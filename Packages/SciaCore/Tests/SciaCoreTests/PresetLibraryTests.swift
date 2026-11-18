@@ -158,6 +158,23 @@ struct PresetLibraryTests {
         #expect(library == before)
     }
 
+    /// 使っている名前は、組み込みのプリセットの名前も含めて付けられない。ショートカットの候補や一覧で、名前だけで見分けられるようにするため。
+    @Test func rejectsTakenName() throws {
+        var library = PresetLibrary()
+        let home = try library.create(parent: .builtIn(.standard), name: "家")
+        let outside = try library.create(parent: .builtIn(.standard), name: "外")
+        let before = library
+
+        #expect(throws: PresetError.nameTaken) { try library.rename(outside, to: "家") }
+        #expect(throws: PresetError.nameTaken) { try library.rename(outside, to: "標準") }
+        #expect(throws: PresetError.nameTaken) { try library.create(parent: home, name: "家") }
+        #expect(library == before)
+
+        // 自分の今の名前に付け直すのは断らない。
+        try library.rename(home, to: "家")
+        #expect(library.name(of: home) == "家")
+    }
+
     @Test func builtInIsReadOnly() {
         var library = PresetLibrary()
         #expect(throws: PresetError.builtInIsReadOnly) { try library.setValue(.bool(true), forKey: "showsTime", in: .builtIn(.standard)) }
