@@ -112,13 +112,13 @@ struct PresetComparisonView: View {
         if !library.contains(target) { target = .builtIn(.standard) }
     }
 
-    private static func languageName(_ code: String) -> String {
+    static func languageName(_ code: String) -> String {
         Locale.current.localizedString(forIdentifier: code) ?? code
     }
 }
 
 /// 比べた1つの項目。名前の右に、比較元の値と比較先の値を矢印でつないで出す。並びは、押すと左右に並べた画面を開く。
-private struct PresetComparisonRow: View {
+struct PresetComparisonRow: View {
     let row: PresetComparison.Row
     let baseName: String
     let targetName: String

@@ -156,6 +156,7 @@ struct AppearanceGroupEditorView: View {
         .navigationTitle(group.title)
         .navigationBarTitleDisplayMode(.inline)
         .task(.withoutRequests) { await samples.showAnimatedAvatarWhenReady(colorScheme: previewColorScheme, groups: [group.id], focus: focused) }
+        .presetEditingSubtitle(settings)
     }
 
     /// 見本の高さの上限。画面の高さに対する割合。

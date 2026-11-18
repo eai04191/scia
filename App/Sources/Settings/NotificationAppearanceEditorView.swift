@@ -124,6 +124,7 @@ struct NotificationAppearanceGroupEditorView: View {
         }
         .navigationTitle(group.title)
         .navigationBarTitleDisplayMode(.inline)
+        .presetEditingSubtitle(settings)
     }
 }
 

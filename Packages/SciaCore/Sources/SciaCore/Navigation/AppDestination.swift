@@ -351,6 +351,8 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     case accountPreset = "account-preset"
     /// プリセットを選ぶ画面から、選ばずにそのプリセットの中身を変える画面。どのプリセットかは画面が持つので、URLでは開かない。
     case presetEditor = "preset-editor"
+    /// プリセットを作る・直す画面。決まりはdocs/preset.mdの「作る・直す」にある。
+    case presetManagement = "preset-management"
     /// 2つのプリセットを比べる画面。決まりはdocs/preset.mdの「プリセットを比較」にある。
     case presetComparison = "preset-comparison"
     /// アカウントの画面を、設定のトップの画面に重ねる。
@@ -407,7 +409,8 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
         case .connection, .licenses, .acknowledgments: [.about, self]
         case .connectionTimelines: [.about, .connection, self]
         case .viewedMediaCache, .prefetchedMediaCache: [.storage, self]
-        case .presetEditor, .presetComparison, .appPreset, .accountPreset: [.presets, self]
+        case .presetManagement, .appPreset, .accountPreset: [.presets, self]
+        case .presetEditor, .presetComparison: [.presets, .presetManagement, self]
         case .display, .interaction, .compose, .about, .appIcon, .tabs, .account, .storage, .presets: [self]
         }
     }

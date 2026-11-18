@@ -106,15 +106,32 @@ public enum SettingsTexts {
             guard let parent else { return "この操作は取り消せません。" }
             return "このプリセットを使っているアプリとアカウントは、“\(parent)”に切り替わります。"
         }
-        /// 分類の画面に入るときに、どちらのプリセットを変更するかを選ばせるアクションシートの題。
-        public static let targetTitle = "どちらのプリセットを変更しますか？"
-        /// アプリのプリセットを変える選択肢。
-        public static func appTarget(name: String) -> String {
-            "アプリ（\(name)）"
+        /// プリセットの画面の、アカウントごとの行の節の見出し。
+        public static let accountsHeader = "アカウントごと"
+        /// アカウントの選ぶ画面の、割り当てない選択肢。選ぶとどの見た目になるかが分かるよう、アプリのプリセットの名前を添える。
+        public static func sameAsApp(name: String) -> String {
+            "アプリと同じ（\(name)）"
         }
-        /// アカウントのプリセットを変える選択肢。
-        public static func accountTarget(name: String) -> String {
-            "アカウント（\(name)）"
+        /// アカウントの選ぶ画面の、割り当てない選択肢の節の下の説明。
+        public static let accountChoiceFooter = "アプリのプリセットの代わりに使うプリセットを選択できます。"
+        /// プリセットを作る・直す画面を開く行と、その画面の題。
+        public static let manage = "プリセットを管理"
+        /// 値を変える画面のサブタイトル。どのプリセットを直しているかを出す。
+        public static func editing(name: String) -> String {
+            "“\(name)”を編集中"
+        }
+        /// 組み込みのプリセットの画面で、複製してその複製を直す行。
+        public static let duplicateToEdit = "複製して変更"
+        /// プリセットの画面の、プリセットを削除する行。
+        public static let deletePreset = "プリセットを削除"
+        /// 「標準」の画面の説明。
+        public static let standardFooter = "アプリのデフォルトの値をそのまま使います。"
+        /// 新規作成のボタンの読み上げ。
+        public static let add = "追加"
+
+        /// 組み込みのプリセットを使っているときに値を変え、それを親にしたプリセットを作って切り替えた。
+        public static func createdNotice(name: String) -> Notice {
+            Notice(id: "settings.presetCreated", kind: .success, title: "“\(name)”を作成して切り替えました")
         }
 
         /// プリセットを選ぶ画面の右上のメニューの読み上げ。

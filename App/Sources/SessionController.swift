@@ -3197,7 +3197,9 @@ final class SessionController {
         // アプリ内のSafariの高さのシートから戻るときは、シートを開く前に設定の画面で選んでいたプリセットを変え続ける。
         let editing = settingsReturnTarget
         settingsReturnTarget = nil
+        installPresetCreatedNotice()
         rootViewController.presentSettings(
+            windowSettings: settings,
             instance: credential.instance,
             account: credential.handle,
             diagnostics: diagnostics,
@@ -3366,30 +3368,18 @@ final class SessionController {
             guard let self, let window = rootViewController.viewIfLoaded?.window else { return }
             tabs.show(.home)
             tabs.selectedNavigation?.popToRootViewController(animated: false)
-            if let fromSettings {
-                presentInAppBrowserHeightSheet(settings: fromSettings, window: window, returningTo: page)
-            } else if settings.store.library.accountPresets[credential.handle] != nil {
-                // URLで直接開いたときも、アカウントにプリセットを割り当てていれば、設定の画面と同じく変えるプリセットを選ばせる。
-                chooseInAppBrowserHeightTarget(window: window, returningTo: page)
-            } else {
-                presentInAppBrowserHeightSheet(settings: AppDependencies.settings, window: window, returningTo: page)
-            }
+            // URLで直接開いたときは、設定のトップの分類と同じく、開いているアカウントが使っているプリセットを変える。
+            installPresetCreatedNotice()
+            presentInAppBrowserHeightSheet(settings: fromSettings ?? settings, window: window, returningTo: page)
         }
     }
 
-    private func chooseInAppBrowserHeightTarget(window: UIWindow, returningTo page: SettingsPage?) {
-        let library = settings.store.library
-        let sheet = UIAlertController(title: SettingsTexts.Presets.targetTitle, message: nil, preferredStyle: .actionSheet)
-        sheet.addAction(UIAlertAction(title: SettingsTexts.Presets.appTarget(name: library.name(of: library.appPreset) ?? ""), style: .default) { [weak self] _ in
-            self?.presentInAppBrowserHeightSheet(settings: AppDependencies.settings, window: window, returningTo: page)
-        })
-        sheet.addAction(UIAlertAction(title: SettingsTexts.Presets.accountTarget(name: library.name(of: library.preset(forAccount: credential.handle)) ?? ""), style: .default) { [weak self] _ in
-            guard let self else { return }
-            presentInAppBrowserHeightSheet(settings: settings, window: window, returningTo: page)
-        })
-        sheet.addAction(UIAlertAction(title: SettingsTexts.cancel, style: .cancel))
-        sheet.popoverPresentationController?.sourceView = rootViewController.view
-        rootViewController.present(sheet, animated: true)
+    /// 組み込みのプリセットを使っているときに値を変えて、プリセットを作って切り替えたら、チップで知らせる（docs/preset.md）。
+    private func installPresetCreatedNotice() {
+        settings.onPresetCreated = { [weak self] id in
+            guard let self, let name = settings.store.library.name(of: id) else { return }
+            notices.showTransient(SettingsTexts.Presets.createdNotice(name: name), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+        }
     }
 
     /// - Parameter settings: 高さを書くプリセットの設定。閉じて設定の画面に戻るときも、このプリセットを変え続ける。
@@ -3398,7 +3388,7 @@ final class SessionController {
             // 上にアプリ内のSafariを重ねていれば一緒に閉じるので、閉じたことが届くよう、まとめて閉じる経路を通す。
             self?.rootViewController.dismissPresentedScreens(animated: true) {
                 guard let self, let page else { return }
-                self.settingsReturnTarget = settings === AppDependencies.settings ? nil : settings
+                self.settingsReturnTarget = settings === self.settings ? nil : settings
                 self.open(.settings(page))
             }
         }

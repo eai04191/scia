@@ -2,15 +2,61 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// プリセットの画面。決まりはdocs/preset.mdの「設定の画面」にある。
-/// 先頭に、アプリとアカウントごとの今のプリセットを並べ、押すと選ぶ画面を開く。その下にプリセットを並べ、使う人のプリセットは押すと中身を変える画面を開く。
-/// 長押しのメニューから、編集、複製、もとにした作成、削除を行う。
+/// 「プリセット」の画面。アプリとアカウントごとに使うプリセットを選ぶだけにし、作る・直すは「プリセットを管理」に分ける。決まりはdocs/preset.mdの「選ぶ」にある。
 struct PresetsView: View {
     let settings: AppSettings
-    /// ログインしているアカウントのハンドル。アカウントの切り替えのメニューと同じ順。1つだけなら、アカウントの行を出さない。
+    /// ログインしているアカウントのハンドル。アカウントの切り替えのメニューと同じ順。1つだけなら、アカウントの節を出さない。
     let accounts: [String]
-    /// 選ばずに中身を変える画面を開く。
-    let openEditor: (PresetID) -> Void
+
+    private var library: PresetLibrary { settings.store.observedLibrary }
+
+    var body: some View {
+        Form {
+            Section {
+                NavigationLink(value: SettingsPage.appPreset) {
+                    LabeledContent(SettingsTexts.Presets.app, value: library.name(of: library.appPreset) ?? "")
+                }
+            }
+            if accounts.count > 1 {
+                Section(SettingsTexts.Presets.accountsHeader) {
+                    ForEach(accounts, id: \.self) { account in
+                        NavigationLink {
+                            AccountPresetView(settings: settings, account: account)
+                        } label: {
+                            accountLabel(account)
+                        }
+                    }
+                }
+            }
+            Section {
+                NavigationLink(SettingsTexts.Presets.manage, value: SettingsPage.presetManagement)
+            }
+        }
+        .navigationTitle(SettingsPage.presets.title)
+    }
+
+    /// 割り当てていないアカウントには値を出さない。長いハンドルで値が2段目に落ちて行の高さが揃わなくならないよう、ハンドルを中央で省略して1行に収める。
+    private func accountLabel(_ account: String) -> some View {
+        HStack(spacing: 8) {
+            Text(account)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 8)
+            if let assigned = library.accountPresets[account].flatMap(library.name(of:)) {
+                Text(assigned)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// 「プリセットを管理」の画面。プリセットを並べ、押すとそのプリセットの画面を開く。押しても使うものは替わらない。決まりはdocs/preset.mdの「作る・直す」にある。
+struct PresetManagementView: View {
+    let settings: AppSettings
+    /// プリセットの画面を開く。
+    let openPreset: (PresetID) -> Void
     /// 2つのプリセットを比べる画面を開く。
     let openComparison: () -> Void
     @State private var deleting: PresetID?
@@ -22,31 +68,6 @@ struct PresetsView: View {
     var body: some View {
         Form {
             Section {
-                NavigationLink(value: SettingsPage.appPreset) {
-                    LabeledContent(SettingsTexts.Presets.app, value: library.name(of: library.appPreset) ?? "")
-                }
-                if accounts.count > 1 {
-                    ForEach(accounts, id: \.self) { account in
-                        NavigationLink {
-                            AccountPresetView(settings: settings, account: account)
-                        } label: {
-                            // 長いハンドルで値が2段目に落ちて行の高さが揃わなくならないよう、ハンドルを中央で省略して1行に収める。
-                            HStack(spacing: 8) {
-                                Text(account)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                                Spacer(minLength: 8)
-                                Text(library.accountPresets[account].flatMap(library.name(of:)) ?? SettingsTexts.Presets.followsApp)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .fixedSize()
-                            }
-                            .accessibilityElement(children: .combine)
-                        }
-                    }
-                }
-            }
-            Section {
                 ForEach(BuiltInPreset.allCases, id: \.self) { row(.builtIn($0)) }
             }
             if !library.userPresets.isEmpty {
@@ -55,7 +76,7 @@ struct PresetsView: View {
                 }
             }
         }
-        .navigationTitle(SettingsPage.presets.title)
+        .navigationTitle(SettingsPage.presetManagement.title)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -65,39 +86,42 @@ struct PresetsView: View {
                         .accessibilityLabel(SettingsTexts.Presets.moreMenu)
                 }
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Section(SettingsTexts.Presets.createTitle) {
+                        ForEach(BuiltInPreset.allCases, id: \.self) { createButton(parent: .builtIn($0)) }
+                        ForEach(library.userPresets, id: \.id) { createButton(parent: .user($0.id)) }
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .accessibilityLabel(SettingsTexts.Presets.add)
+                }
+            }
         }
         .background(WindowAnchorView(anchor: anchor))
     }
 
-    /// 使う人のプリセットは押すと中身を変える画面を開き、組み込みのプリセットは名前だけを出す。
-    @ViewBuilder
     private func row(_ id: PresetID) -> some View {
-        Group {
-            if case .user = id {
-                Button {
-                    openEditor(id)
-                } label: {
-                    HStack(spacing: 8) {
-                        Text(library.name(of: id) ?? "")
-                            .foregroundStyle(Color.primary)
-                            .lineLimit(1)
-                        Spacer(minLength: 8)
-                        Image(systemName: "chevron.forward")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                            .accessibilityHidden(true)
-                    }
-                }
-                .tint(.primary)
-            } else {
+        Button {
+            openPreset(id)
+        } label: {
+            HStack(spacing: 8) {
                 Text(library.name(of: id) ?? "")
                     .lineLimit(1)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.forward")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
             }
         }
-        .contextMenu { menu(for: id) }
+        .tint(.primary)
         .swipeActions {
             if case .user = id {
-                Button(SettingsTexts.Presets.delete, role: .destructive) { deleting = id }
+                // `.destructive`にすると、SwiftUIが出した確認をすぐに出し直し、そのときに前の確認と一緒に設定の画面まで閉じる（iOS 27で確認）。
+                // 出し直す理由はSwiftUIの中で分からないので、役割を付けずに同じ赤だけを付ける。
+                Button(SettingsTexts.Presets.delete) { deleting = id }
+                    .tint(.red)
             }
         }
         .confirmationDialog(
@@ -109,50 +133,181 @@ struct PresetsView: View {
                 settings.store.updateLibrary { library throws(PresetError) in try library.delete(id) }
             }
         } message: {
-            Text(SettingsTexts.Presets.deleteConfirmMessage(parent: isUsed(id) ? parentName(of: id) : nil))
+            Text(SettingsTexts.Presets.deleteConfirmMessage(parent: library.isUsed(id) ? library.parentName(of: id) : nil))
         }
     }
 
-    /// アプリかどれかのアカウントが使っているか。
-    private func isUsed(_ id: PresetID) -> Bool {
-        library.appPreset == id || library.accountPresets.values.contains(id)
-    }
-
-    private func parentName(of id: PresetID) -> String? {
-        guard case .user(let number) = id, let parent = library.userPreset(number)?.parent else { return nil }
-        return library.name(of: parent)
-    }
-
-    @ViewBuilder
-    private func menu(for id: PresetID) -> some View {
-        if case .user = id {
-            Button(SettingsTexts.Presets.edit, systemImage: "pencil") { openEditor(id) }
-        }
-        Button(SettingsTexts.Presets.duplicate, systemImage: "plus.square.on.square") {
-            PresetNameInput.present(from: anchor, title: SettingsTexts.Presets.duplicateTitle, actionTitle: SettingsTexts.Presets.duplicate, text: suggestedName(from: id)) { name throws(PresetError) in
-                try settings.store.tryUpdateLibrary { library throws(PresetError) in
-                    let duplicated = try library.duplicate(id)
-                    try library.rename(duplicated, to: name)
-                }
-            }
-        }
-        Button(SettingsTexts.Presets.createChild, systemImage: "plus") {
-            PresetNameInput.present(from: anchor, title: SettingsTexts.Presets.createTitle, actionTitle: SettingsTexts.Presets.create, text: suggestedName(from: id)) { name throws(PresetError) in
+    /// `parent`を親にしたプリセットを、名前を聞いてから作り、その画面を開く。
+    private func createButton(parent: PresetID) -> some View {
+        Button(library.name(of: parent) ?? "") {
+            PresetNameInput.present(from: anchor, title: SettingsTexts.Presets.createTitle, actionTitle: SettingsTexts.Presets.create, text: library.suggestedName(from: parent)) { name throws(PresetError) in
                 var created: PresetID?
-                try settings.store.tryUpdateLibrary { library throws(PresetError) in created = try library.create(parent: id, name: name) }
-                if let created { openEditor(created) }
+                try settings.store.tryUpdateLibrary { library throws(PresetError) in created = try library.create(parent: parent, name: name) }
+                if let created { openPreset(created) }
             }
-        }
-        if case .user = id {
-            Button(SettingsTexts.Presets.delete, systemImage: "trash", role: .destructive) { deleting = id }
         }
     }
 }
 
-extension PresetsView {
+/// 1つのプリセットの画面。使う人のプリセットは、名前、もとのプリセット、値を変える分類、複製、削除を並べる。
+/// 組み込みのプリセットは値を変えず、標準と違う値と「複製して変更」を並べる。決まりはdocs/preset.mdの「作る・直す」にある。
+struct PresetEditorView: View {
+    /// 値をこのプリセットに書く設定。
+    let settings: AppSettings
+    let preset: PresetID
+    /// 複製したプリセットの画面に替える。
+    let openPreset: (PresetID) -> Void
+    /// 入力欄で書き換えた名前。書き換えるまではnilで、欄にはプリセットの今の名前を出す。ほかの窓で名前を変えたとき、書き換えていない欄が前の名前で上書きしないため。
+    @State private var editedName: String?
+    @State private var isNameTaken = false
+    @State private var isDeleting = false
+    @State private var anchor = WindowAnchor()
+
+    init(settings: AppSettings, preset: PresetID, openPreset: @escaping (PresetID) -> Void) {
+        self.settings = settings
+        self.preset = preset
+        self.openPreset = openPreset
+    }
+
+    private var library: PresetLibrary { settings.store.observedLibrary }
+
+    var body: some View {
+        Form {
+            switch preset {
+            case .user(let number): userSections(number)
+            case .builtIn(let builtIn): builtInSections(builtIn)
+            }
+        }
+        .navigationTitle(library.name(of: preset) ?? SettingsPage.presetEditor.title)
+        .onDisappear(perform: rename)
+        .background(WindowAnchorView(anchor: anchor))
+    }
+
+    @ViewBuilder
+    private func userSections(_ number: Int) -> some View {
+        Section {
+            GlyphLanguageField(placeholder: SettingsTexts.Presets.name, text: nameBinding, settings: settings, onSubmit: rename)
+        } header: {
+            Text(SettingsTexts.Presets.name)
+        } footer: {
+            if isNameTaken {
+                Text(SettingsTexts.Presets.nameTaken)
+                    .foregroundStyle(.red)
+            }
+        }
+        if let parent = library.userPreset(number)?.parent {
+            Section {
+                LabeledContent(SettingsTexts.Presets.parent, value: library.name(of: parent) ?? "")
+            }
+        }
+        Section {
+            ForEach([SettingsPage.display, .interaction, .compose], id: \.self) { page in
+                NavigationLink(value: page) { Text(page.rowTitle) }
+            }
+        }
+        Section {
+            Button(SettingsTexts.Presets.duplicate) { duplicate() }
+        }
+        Section {
+            Button(SettingsTexts.Presets.deletePreset, role: .destructive) { isDeleting = true }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .confirmationDialog(
+                    SettingsTexts.Presets.deleteConfirmTitle(name: library.name(of: preset) ?? ""),
+                    isPresented: $isDeleting,
+                    titleVisibility: .visible
+                ) {
+                    Button(SettingsTexts.delete, role: .destructive) {
+                        settings.store.updateLibrary { library throws(PresetError) in try library.delete(preset) }
+                    }
+                } message: {
+                    Text(SettingsTexts.Presets.deleteConfirmMessage(parent: library.isUsed(preset) ? library.parentName(of: preset) : nil))
+                }
+        }
+    }
+
+    @ViewBuilder
+    private func builtInSections(_ builtIn: BuiltInPreset) -> some View {
+        let comparison = PresetComparison(
+            base: settings.editing(.builtIn(.standard)),
+            compared: settings,
+            languageName: PresetComparisonView.languageName,
+            deviceLanguageName: PresetComparisonView.languageName(Locale.current.language.minimalIdentifier)
+        )
+        Section {
+            Button(SettingsTexts.Presets.duplicateToEdit) { duplicate() }
+        } footer: {
+            if builtIn == .standard {
+                Text(SettingsTexts.Presets.standardFooter)
+            }
+        }
+        if !comparison.sections.isEmpty {
+            ForEach(comparison.sections) { section in
+                Section(section.title) {
+                    ForEach(section.rows) { row in
+                        PresetComparisonRow(row: row, baseName: BuiltInPreset.standard.title, targetName: builtIn.title)
+                    }
+                }
+            }
+        }
+    }
+
+    /// 名前を聞いて複製し、複製したプリセットの画面に替える。
+    private func duplicate() {
+        PresetNameInput.present(from: anchor, title: SettingsTexts.Presets.duplicateTitle, actionTitle: SettingsTexts.Presets.duplicate, text: library.suggestedName(from: preset)) { name throws(PresetError) in
+            var duplicated: PresetID?
+            try settings.store.tryUpdateLibrary { library throws(PresetError) in
+                let id = try library.duplicate(preset)
+                try library.rename(id, to: name)
+                duplicated = id
+            }
+            if let duplicated { openPreset(duplicated) }
+        }
+    }
+
+    /// 名前を確定する。空か今の名前と同じなら変えない。使っている名前なら断り、下に理由を出す。
+    private var nameBinding: Binding<String> {
+        Binding {
+            editedName ?? library.name(of: preset) ?? ""
+        } set: { newValue in
+            editedName = newValue
+            isNameTaken = false
+        }
+    }
+
+    private func rename() {
+        guard case .user = preset, let editedName else { return }
+        let trimmed = editedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != library.name(of: preset) else { return }
+        do {
+            try settings.store.tryUpdateLibrary { library throws(PresetError) in try library.rename(preset, to: trimmed) }
+            self.editedName = nil
+        } catch {
+            isNameTaken = error == .nameTaken
+        }
+    }
+}
+
+extension View {
+    /// 値を変える画面のサブタイトルに、`settings`が直しているプリセットを出す（docs/preset.md）。
+    func presetEditingSubtitle(_ settings: AppSettings) -> some View {
+        navigationSubtitle(SettingsTexts.Presets.editing(name: settings.store.observedLibrary.name(of: settings.presetID) ?? ""))
+    }
+}
+
+extension PresetLibrary {
+    /// アプリかどれかのアカウントが使っているか。
+    fileprivate func isUsed(_ id: PresetID) -> Bool {
+        appPreset == id || accountPresets.values.contains(id)
+    }
+
+    fileprivate func parentName(of id: PresetID) -> String? {
+        guard case .user(let number) = id, let parent = userPreset(number)?.parent else { return nil }
+        return name(of: parent)
+    }
+
     /// 名前を聞くアラートに最初から入れておく名前。もとの名前に、使っていない最小の番号を付ける（「コンパクト 2」）。
     fileprivate func suggestedName(from id: PresetID) -> String {
-        var trial = library
+        var trial = self
         guard let duplicated = try? trial.duplicate(id) else { return "" }
         return trial.name(of: duplicated) ?? ""
     }
@@ -226,23 +381,59 @@ struct AppPresetView: View {
 
     var body: some View {
         Form {
-            Section {
-                ForEach(BuiltInPreset.allCases, id: \.self) { choice(.builtIn($0)) }
-            }
-            if !library.userPresets.isEmpty {
-                Section(SettingsTexts.Presets.userHeader) {
-                    ForEach(library.userPresets, id: \.id) { choice(.user($0.id)) }
-                }
+            PresetChoiceSections(library: library, selected: library.appPreset) { id in
+                settings.store.updateLibrary { library throws(PresetError) in try library.select(id, for: .app) }
             }
         }
         .navigationTitle(SettingsPage.appPreset.title)
         .navigationBarTitleDisplayMode(.inline)
     }
+}
+
+/// アカウントに割り当てるプリセットを選ぶ画面。割り当てなければ、アプリのプリセットを使う。
+struct AccountPresetView: View {
+    let settings: AppSettings
+    let account: String
+
+    private var library: PresetLibrary { settings.store.observedLibrary }
+
+    var body: some View {
+        Form {
+            Section {
+                PresetChoiceRow(title: SettingsTexts.Presets.sameAsApp(name: library.name(of: library.appPreset) ?? ""), isSelected: library.accountPresets[account] == nil) {
+                    settings.store.updateLibrary { $0.unassign(account: account) }
+                }
+            } footer: {
+                Text(SettingsTexts.Presets.accountChoiceFooter)
+            }
+            PresetChoiceSections(library: library, selected: library.accountPresets[account]) { id in
+                settings.store.updateLibrary { library throws(PresetError) in try library.select(id, for: .account(account)) }
+            }
+        }
+        .navigationTitle(account)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// 組み込みのプリセットとマイプリセットを、選ぶ行で並べる。
+private struct PresetChoiceSections: View {
+    let library: PresetLibrary
+    let selected: PresetID?
+    let select: (PresetID) -> Void
+
+    var body: some View {
+        Section {
+            ForEach(BuiltInPreset.allCases, id: \.self) { choice(.builtIn($0)) }
+        }
+        if !library.userPresets.isEmpty {
+            Section(SettingsTexts.Presets.userHeader) {
+                ForEach(library.userPresets, id: \.id) { choice(.user($0.id)) }
+            }
+        }
+    }
 
     private func choice(_ id: PresetID) -> some View {
-        PresetChoiceRow(title: library.name(of: id) ?? "", isSelected: library.appPreset == id) {
-            settings.store.updateLibrary { library throws(PresetError) in try library.select(id, for: .app) }
-        }
+        PresetChoiceRow(title: library.name(of: id) ?? "", isSelected: selected == id) { select(id) }
     }
 }
 
@@ -267,98 +458,5 @@ private struct PresetChoiceRow: View {
             }
         }
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-}
-
-/// 選んでいるアカウントに、プリセットを割り当てる画面。割り当てなければ、アプリのプリセットを使う。
-struct AccountPresetView: View {
-    let settings: AppSettings
-    let account: String
-
-    private var library: PresetLibrary { settings.store.observedLibrary }
-
-    var body: some View {
-        Form {
-            Section {
-                choice(title: SettingsTexts.Presets.followsApp, isSelected: library.accountPresets[account] == nil) {
-                    settings.store.updateLibrary { $0.unassign(account: account) }
-                }
-            }
-            Section {
-                ForEach(BuiltInPreset.allCases, id: \.self) { presetChoice(.builtIn($0)) }
-            }
-            if !library.userPresets.isEmpty {
-                Section(SettingsTexts.Presets.userHeader) {
-                    ForEach(library.userPresets, id: \.id) { presetChoice(.user($0.id)) }
-                }
-            }
-        }
-        .navigationTitle(account)
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func presetChoice(_ id: PresetID) -> some View {
-        choice(title: library.name(of: id) ?? "", isSelected: library.accountPresets[account] == id) {
-            settings.store.updateLibrary { library throws(PresetError) in try library.select(id, for: .account(account)) }
-        }
-    }
-
-    private func choice(title: String, isSelected: Bool, select: @escaping () -> Void) -> some View {
-        PresetChoiceRow(title: title, isSelected: isSelected, select: select)
-    }
-}
-
-/// プリセットを選ばずに、その中身を変える画面。名前と、表示・操作・作成の分類を並べる。分類の中の値は、このプリセットに書く。
-struct PresetEditorView: View {
-    let settings: AppSettings
-    let preset: PresetID
-    @State private var name: String
-    @State private var isNameTaken = false
-
-    init(settings: AppSettings, preset: PresetID) {
-        self.settings = settings
-        self.preset = preset
-        _name = State(initialValue: settings.store.library.name(of: preset) ?? "")
-    }
-
-    private var library: PresetLibrary { settings.store.observedLibrary }
-
-    var body: some View {
-        Form {
-            Section {
-                GlyphLanguageField(placeholder: SettingsTexts.Presets.name, text: $name, settings: settings, onSubmit: rename)
-                    .onChange(of: name) { isNameTaken = false }
-            } header: {
-                Text(SettingsTexts.Presets.name)
-            } footer: {
-                if isNameTaken {
-                    Text(SettingsTexts.Presets.nameTaken)
-                        .foregroundStyle(.red)
-                }
-            }
-            if case .user(let number) = preset, let parent = library.userPreset(number)?.parent {
-                Section {
-                    LabeledContent(SettingsTexts.Presets.parent, value: library.name(of: parent) ?? "")
-                }
-            }
-            Section {
-                ForEach([SettingsPage.display, .interaction, .compose], id: \.self) { page in
-                    NavigationLink(value: page) { Text(page.rowTitle) }
-                }
-            }
-        }
-        .navigationTitle(library.name(of: preset) ?? SettingsPage.presetEditor.title)
-        .onDisappear(perform: rename)
-    }
-
-    /// 名前を確定する。空か今の名前と同じなら変えない。使っている名前なら断り、下に理由を出す。
-    private func rename() {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed != library.name(of: preset) else { return }
-        do {
-            try settings.store.tryUpdateLibrary { library throws(PresetError) in try library.rename(preset, to: trimmed) }
-        } catch {
-            isNameTaken = error == .nameTaken
-        }
     }
 }

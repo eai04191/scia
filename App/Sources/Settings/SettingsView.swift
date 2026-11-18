@@ -31,13 +31,14 @@ struct SettingsView: View {
     @State private var path: [SettingsPage]
     /// 開いたときに「投稿の見た目」か「通知の見た目」の上に重ねておく分類の画面。一度重ねたら、戻ってまた開いても重ねないよう、消す。
     @State private var appearanceGroup: AppearanceGroup.ID?
-    /// 分類の画面で値を書くプリセットの設定。nilならアプリのプリセット。トップの画面に戻ったらnilに戻す（docs/preset.md）。
+    /// 開いているアカウントが使っているプリセットを読み書きする設定。設定のトップの分類からは、これの値を変える（docs/preset.md）。
+    let windowSettings: AppSettings
+    /// 「プリセットを管理」から開いたプリセットの値を書く設定。nilなら`windowSettings`。プリセットの画面から戻ったらnilに戻す。
     @State private var editingSettings: AppSettings?
-    /// アカウントにプリセットを割り当てているときに、変えるプリセットを選ばせている分類の画面と、選んだあとに重ねる画面。
-    @State private var choosingTarget: [SettingsPage]?
 
     init(
         settings: AppSettings,
+        windowSettings: AppSettings,
         instance: URL,
         account: String,
         diagnostics: ConnectionDiagnostics,
@@ -53,6 +54,7 @@ struct SettingsView: View {
         editing: AppSettings? = nil
     ) {
         self.settings = settings
+        self.windowSettings = windowSettings
         self.instance = instance
         self.account = account
         self.diagnostics = diagnostics
@@ -63,15 +65,13 @@ struct SettingsView: View {
         self.openInAppBrowserHeight = openInAppBrowserHeight
         self.openProfile = openProfile
         self.navigation = navigation
-        let opening = page?.path ?? []
         _editingSettings = State(initialValue: editing)
-        // 分類の中の画面をURLで直接開くときも、アカウントにプリセットを割り当てていれば、先に変えるプリセットを選ばせる。
-        // 変えるプリセットを渡されたとき（アプリ内のSafariの高さのシートから戻るとき）は、選び直させない。
-        if editing == nil, let first = opening.first, Self.choosesTarget(first), settings.store.library.accountPresets[account] != nil {
-            _path = State(initialValue: [])
-            _choosingTarget = State(initialValue: opening)
+        // 「プリセットを管理」から開いたプリセットを直している途中にアプリ内のSafariの高さを選びに出たときは、戻ったときもそのプリセットの画面を挟む。
+        // 挟まないと、次に画面を移ったときに直す先が開いているアカウントのプリセットに戻るため。
+        if case .preset = editing?.target {
+            _path = State(initialValue: SettingsPage.presetEditor.path + (page?.path ?? []))
         } else {
-            _path = State(initialValue: opening)
+            _path = State(initialValue: page?.path ?? [])
         }
         _appearanceGroup = State(initialValue: page == .appearance || page == .notificationAppearance ? appearanceGroup : nil)
     }
@@ -117,88 +117,57 @@ struct SettingsView: View {
         }
         .onChange(of: path, initial: true) {
             navigation.isAtRoot = path.isEmpty
-            if path.isEmpty {
+        }
+        .onChange(of: path) {
+            // プリセットの画面から戻ったら、トップの分類はまた開いているアカウントのプリセットを直す。
+            if !path.contains(.presetEditor) {
                 editingSettings = nil
             }
         }
         .onChange(of: settings.store.observedLibrary) { _, library in
-            // 編集しているプリセットがほかで消されたら、書く先がないので、編集をやめて一覧に戻る。
+            // 編集しているプリセットが消されたら、書く先がないので、編集をやめて管理の画面に戻る。
             guard case .preset(let id) = editingSettings?.target, !library.contains(id) else { return }
             editingSettings = nil
-            path = path.first == .presets ? [.presets] : []
+            path = path.starts(with: SettingsPage.presetManagement.path) ? SettingsPage.presetManagement.path : []
         }
     }
 
-    /// 分類の画面に入る前に、変えるプリセットを選ばせるか。値を変える分類だけ選ばせる。
-    private static func choosesTarget(_ page: SettingsPage) -> Bool {
-        [.display, .interaction, .compose].contains(page)
-    }
+    /// 値を変える画面で値を書く設定。
+    private var current: AppSettings { editingSettings ?? windowSettings }
 
-    /// 分類の画面で値を書く設定。
-    private var current: AppSettings { editingSettings ?? settings }
-
-    /// トップの画面の行。アカウントにプリセットを割り当てていれば、値を変える分類は、押すと変えるプリセットを選ばせてから入る。
-    /// アクションシートは押した行に付け、行から出す。URLで分類の中の画面を開くときは、その分類の行から出す。
-    @ViewBuilder
     private func rootRow(_ page: SettingsPage) -> some View {
-        if Self.choosesTarget(page), settings.store.observedLibrary.accountPresets[account] != nil {
-            Button {
-                choosingTarget = [page]
-            } label: {
-                HStack {
-                    rootLabel(of: page)
-                    Spacer()
-                    Image(systemName: "chevron.forward")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                        .accessibilityHidden(true)
-                }
-                .contentShape(Rectangle())
-            }
-            .foregroundStyle(Color.primary)
-            .confirmationDialog(
-                SettingsTexts.Presets.targetTitle,
-                isPresented: Binding { choosingTarget?.first == page } set: { if !$0 { choosingTarget = nil } },
-                titleVisibility: .visible,
-                presenting: choosingTarget
-            ) { pages in
-                let library = settings.store.library
-                Button(SettingsTexts.Presets.appTarget(name: library.name(of: library.appPreset) ?? "")) {
-                    editingSettings = nil
-                    path = pages
-                }
-                Button(SettingsTexts.Presets.accountTarget(name: library.name(of: library.preset(forAccount: account)) ?? "")) {
-                    editingSettings = settings.forAccount(account)
-                    path = pages
-                }
-                Button(SettingsTexts.cancel, role: .cancel) {}
-            }
-        } else {
-            NavigationLink(value: page) {
-                HStack {
-                    rootLabel(of: page)
-                    if let value = rootValue(of: page) {
-                        Spacer(minLength: 8)
-                        Text(value)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
+        NavigationLink(value: page) {
+            HStack {
+                rootLabel(of: page)
+                if let value = rootValue(of: page) {
+                    Spacer(minLength: 8)
+                    Text(value)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
         }
     }
 
-    /// トップの画面の行に添える今の値。プリセットの2つの行に、使っているプリセットの名前を出す。
+    /// 管理の画面から、プリセットの画面を開く。プリセットの画面から開いたとき（複製したとき）は、その画面を替える。
+    private func openPreset(_ id: PresetID) {
+        editingSettings = settings.editing(id)
+        if path.last != .presetEditor {
+            path.append(.presetEditor)
+        }
+    }
+
     /// ログインしているアカウントのハンドル。アカウントの一覧を読めないとき（Keychainを読めないなど）は、開いているアカウントだけにする。
     /// 1つだけになるので、プリセットの画面にアカウントの行は出さない。
     private var signedInAccounts: [String] {
         (try? AppDependencies.accounts.get())?.accounts.map(\.handle) ?? [account]
     }
 
+    /// トップの画面の行に添える今の値。「プリセット」の行に、開いているアカウントが使っているプリセットの名前を出す。
     private func rootValue(of page: SettingsPage) -> String? {
         let library = settings.store.observedLibrary
         switch page {
-        case .presets: return library.name(of: library.appPreset)
+        case .presets: return library.name(of: library.preset(forAccount: account))
         default: return nil
         }
     }
@@ -217,7 +186,7 @@ struct SettingsView: View {
     private func rootIcon(of page: SettingsPage) -> (systemImage: String, color: UIColor) {
         switch page {
         case .account: ("person.crop.circle.fill", .systemBlue)
-        case .presets, .accountPreset: ("square.stack.3d.up.fill", .systemPurple)
+        case .presets: ("square.stack.3d.up.fill", .systemPurple)
         case .tabs: (tabBarShape.shape.symbolName, .systemBlue)
         case .display: ("circle.lefthalf.filled", .systemBlue)
         case .interaction: ("hand.tap.fill", .systemOrange)
@@ -228,19 +197,34 @@ struct SettingsView: View {
         }
     }
 
+    /// 値を変える画面には、サブタイトルに直しているプリセットを出す。
     @ViewBuilder
     private func destination(_ page: SettingsPage) -> some View {
+        if Self.changesPresetValues(page) {
+            screen(page)
+                .presetEditingSubtitle(current)
+        } else {
+            screen(page)
+        }
+    }
+
+    /// 「表示」「操作」「作成」と、その中の画面か。
+    private static func changesPresetValues(_ page: SettingsPage) -> Bool {
+        guard let first = page.path.first else { return false }
+        return [.display, .interaction, .compose].contains(first)
+    }
+
+    @ViewBuilder
+    private func screen(_ page: SettingsPage) -> some View {
         switch page {
         case .display, .compose, .media, .profile, .linkLoading: SettingsScreenForm(page: page, settings: current)
         case .interaction: SettingsScreenForm(page: page, settings: current) { [current] in openInAppBrowserHeight(current) }
         case .about: AboutSettingsView()
         case .appIcon: AppIconSettingsView()
         case .account: AccountView(settings: settings, account: account, context: accountScreen)
-        case .presets:
-            PresetsView(settings: settings, accounts: signedInAccounts) { id in
-                editingSettings = settings.editing(id)
-                path.append(.presetEditor)
-            } openComparison: {
+        case .presets: PresetsView(settings: settings, accounts: signedInAccounts)
+        case .presetManagement:
+            PresetManagementView(settings: settings, openPreset: openPreset) {
                 path.append(.presetComparison)
             }
         case .presetComparison: PresetComparisonView(settings: settings)
@@ -248,7 +232,8 @@ struct SettingsView: View {
         case .accountPreset: AccountPresetView(settings: settings, account: account)
         case .presetEditor:
             if let editingSettings, case .preset(let id) = editingSettings.target {
-                PresetEditorView(settings: editingSettings, preset: id)
+                PresetEditorView(settings: editingSettings, preset: id, openPreset: openPreset)
+                    .id(id)
             }
         case .appearance:
             AppearanceEditorView(settings: current, opening: appearanceGroup)
@@ -326,6 +311,7 @@ struct SettingsTabSourceActions {
 extension UIViewController {
     /// 設定の画面を、この画面から重ねた画面のうち、いちばん手前の画面に重ねて出す。
     /// - Parameters:
+    ///   - windowSettings: 開いているアカウントが使っているプリセットを読み書きする設定。設定のトップの分類からは、これの値を変える。
     ///   - instance: ログイン中のアカウントのサーバー。
     ///   - diagnostics: 「接続の状態」画面に出す、ログイン中のアカウントの接続の状態。
     ///   - tabIcons: タブの並びで、タブに置いたプロフィールに出すその人のアイコン。
@@ -337,9 +323,9 @@ extension UIViewController {
     ///   - page: 設定のトップの画面から重ねて開いておく画面。
     ///   - appearanceGroup: `page`が「投稿の見た目」か「通知の見た目」のとき、その上に重ねておく分類の画面。
     ///   - onShownChange: 設定の画面が出たときにtrue、消えたときにfalseで呼ぶ。
-    func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, tabSources: SettingsTabSourceActions, tabBarShape: TabBarShapeModel, accountScreen: AccountScreenContext, openInAppBrowserHeight: @escaping @MainActor (AppSettings) -> Void, openProfile: @escaping @MainActor (_ acct: String) -> Void, opening page: SettingsPage? = nil, appearanceGroup: AppearanceGroup.ID? = nil, editing: AppSettings? = nil, onShownChange: @escaping (Bool) -> Void) {
+    func presentSettings(windowSettings: AppSettings, instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, tabSources: SettingsTabSourceActions, tabBarShape: TabBarShapeModel, accountScreen: AccountScreenContext, openInAppBrowserHeight: @escaping @MainActor (AppSettings) -> Void, openProfile: @escaping @MainActor (_ acct: String) -> Void, opening page: SettingsPage? = nil, appearanceGroup: AppearanceGroup.ID? = nil, editing: AppSettings? = nil, onShownChange: @escaping (Bool) -> Void) {
         let navigation = SettingsNavigationState()
-        let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, tabSources: tabSources, tabBarShape: tabBarShape, accountScreen: accountScreen, openInAppBrowserHeight: openInAppBrowserHeight, openProfile: openProfile, navigation: navigation, opening: page, appearanceGroup: appearanceGroup, editing: editing)
+        let view = SettingsView(settings: AppDependencies.settings, windowSettings: windowSettings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, tabSources: tabSources, tabBarShape: tabBarShape, accountScreen: accountScreen, openInAppBrowserHeight: openInAppBrowserHeight, openProfile: openProfile, navigation: navigation, opening: page, appearanceGroup: appearanceGroup, editing: editing)
         presentOnFrontmost(SettingsHostingController(rootView: view, navigation: navigation, onShownChange: onShownChange))
     }
 

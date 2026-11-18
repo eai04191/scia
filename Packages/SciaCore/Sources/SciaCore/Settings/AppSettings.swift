@@ -17,6 +17,8 @@ public final class AppSettings {
 
     @ObservationIgnored public let store: SettingsStore
     @ObservationIgnored public let target: Target
+    /// 組み込みのプリセットを使っているときに値を変え、それを親にしたプリセットを作って切り替えたときに、作ったプリセットを渡す（docs/preset.md）。
+    @ObservationIgnored public var onPresetCreated: (@MainActor (PresetID) -> Void)?
 
     /// - Parameter keepsComposeBarOpenByDefault: 使う人が選んでいないときの`keepsComposeBarOpen`。端末で決まるので、アプリが渡す。
     public convenience init(defaults: UserDefaults, keepsComposeBarOpenByDefault: Bool = false) {
@@ -648,12 +650,17 @@ public final class AppSettings {
     /// 読んでいるプリセットへ書く。組み込みのプリセットを使っていれば、それを親にしたプリセットを作って切り替える。
     /// 書く先のプリセットが消えていたら（開いていた編集の画面のプリセットを、ほかで消したときなど）、書く先がないので書かない。
     func write(_ value: PresetValue, _ key: String) {
+        var created: PresetID?
         store.updateLibrary { library throws(PresetError) in
             switch target {
-            case .scope(let scope): try library.setValue(value, forKey: key, for: scope)
+            case .scope(let scope):
+                let before = library.preset(for: scope)
+                let written = try library.setValue(value, forKey: key, for: scope)
+                created = written == before ? nil : written
             case .preset(let id): try library.setValue(value, forKey: key, in: id)
             }
         }
+        if let created { onPresetCreated?(created) }
     }
 
     func isModified(key: String) -> Bool {

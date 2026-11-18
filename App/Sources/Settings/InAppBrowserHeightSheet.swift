@@ -158,6 +158,7 @@ struct InAppBrowserHeightChoices: View {
             .safeAreaInset(edge: .top, spacing: 0) { Divider() }
             .navigationTitle(SettingsItem.inAppBrowserHeight.title)
             .navigationBarTitleDisplayMode(.inline)
+            .presetEditingSubtitle(settings)
             .toolbar {
                 // 引いて決めた高さを確かめて閉じるので、取りやめのバツではなく、確定のチェックマークにする。
                 ToolbarItem(placement: .confirmationAction) {
