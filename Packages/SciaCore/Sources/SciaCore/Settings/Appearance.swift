@@ -225,7 +225,7 @@ public enum AppearanceCatalog {
     // MARK: アクションバー
 
     /// 本文などと、アクションバーのあいだ。
-    public static let actionBarSpacing = AppearanceValue(id: "actionBar.spacing", title: "本文とのあいだ", range: 0...100, step: 1, defaultValue: 8)
+    public static let actionBarSpacing = AppearanceValue(id: "actionBar.spacing", title: "本文とのあいだ", range: 0...100, step: 1, defaultValue: 12)
     /// アクションバーのボタンのアイコンの大きさ。0ptの記号は書体の標準の大きさで描かれるため、1ptを下限にする。
     public static let actionBarIconSize = AppearanceValue(id: "actionBar.iconSize", title: "アイコンの大きさ", range: 1...100, step: 1, defaultValue: 14)
     /// アクションバーのボタンの、アイコンの上下の余白。ボタンの押せる高さは、アイコンにこの余白を足したものになる。
