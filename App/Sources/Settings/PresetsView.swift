@@ -68,7 +68,7 @@ struct PresetManagementView: View {
 
     var body: some View {
         Form {
-            Section {
+            Section(SettingsTexts.Presets.builtInHeader) {
                 ForEach(BuiltInPreset.allCases, id: \.self) { row(.builtIn($0)) }
             }
             if !library.userPresets.isEmpty {
@@ -430,7 +430,7 @@ struct AccountPresetView: View {
                     settings.store.updateLibrary { $0.unassign(account: account) }
                 }
             }
-            PresetChoiceSections(library: library, selected: library.accountPresets[account], builtInHeader: SettingsTexts.Presets.accountChoiceHeader) { id in
+            PresetChoiceSections(library: library, selected: library.accountPresets[account]) { id in
                 settings.store.updateLibrary { library throws(PresetError) in try library.select(id, for: .account(account)) }
             }
         }
@@ -440,20 +440,15 @@ struct AccountPresetView: View {
     }
 }
 
-/// 組み込みのプリセットとマイプリセットを、選ぶ行で並べる。
+/// 組み込みのプリセットとマイプリセットを、見出しを付けた節に分けて、選ぶ行で並べる。鍵のアイコンは付けない。選べないように見えるため（docs/preset.md）。
 private struct PresetChoiceSections: View {
     let library: PresetLibrary
     let selected: PresetID?
-    var builtInHeader: String?
     let select: (PresetID) -> Void
 
     var body: some View {
-        Section {
+        Section(SettingsTexts.Presets.builtInHeader) {
             ForEach(BuiltInPreset.allCases, id: \.self) { choice(.builtIn($0)) }
-        } header: {
-            if let builtInHeader {
-                Text(builtInHeader)
-            }
         }
         if !library.userPresets.isEmpty {
             Section(SettingsTexts.Presets.userHeader) {
@@ -463,21 +458,21 @@ private struct PresetChoiceSections: View {
     }
 
     private func choice(_ id: PresetID) -> some View {
-        PresetChoiceRow(title: library.name(of: id) ?? "", isBuiltIn: id.isBuiltIn, isSelected: selected == id) { select(id) }
+        PresetChoiceRow(title: library.name(of: id) ?? "", isSelected: selected == id) { select(id) }
     }
 }
 
 /// 選ぶ画面の1行。選んでいるものにチェックマークを付ける。
 private struct PresetChoiceRow: View {
     let title: String
-    var isBuiltIn = false
     let isSelected: Bool
     let select: () -> Void
 
     var body: some View {
         Button(action: select) {
             HStack {
-                PresetNameLabel(name: title, isBuiltIn: isBuiltIn)
+                Text(title)
+                    .lineLimit(1)
                     .foregroundStyle(Color.primary)
                 Spacer(minLength: 8)
                 if isSelected {

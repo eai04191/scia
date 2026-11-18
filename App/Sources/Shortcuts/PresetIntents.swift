@@ -14,12 +14,8 @@ struct PresetEntity: AppEntity {
     let id: String
     let name: String
 
-    /// 組み込みのプリセットには鍵のアイコンを添える。名前は使う人のプリセットと重なりうるので、アイコンで見分ける（docs/preset.md）。
     var displayRepresentation: DisplayRepresentation {
-        guard PresetID(token: id).map({ if case .builtIn = $0 { true } else { false } }) == true else {
-            return DisplayRepresentation(title: "\(name)")
-        }
-        return DisplayRepresentation(title: "\(name)", image: DisplayRepresentation.Image(systemName: "lock.fill"))
+        DisplayRepresentation(title: "\(name)")
     }
 }
 
@@ -31,10 +27,12 @@ struct PresetQuery: EntityQuery {
         }
     }
 
-    /// アプリの選ぶ画面と同じく、使う人のプリセットは「マイプリセット」の見出しの下に分けて並べる。
+    /// アプリの選ぶ画面と同じく、組み込みのプリセットと使う人のプリセットを見出しを付けた節に分けて並べる。名前は重なりうるので、節で見分ける（docs/preset.md）。
     func suggestedEntities() async throws -> IntentItemCollection<PresetEntity> {
-        let (builtIn, user, userHeader) = await MainActor.run { (Self.builtIn(), Self.user(), SettingsTexts.Presets.userHeader) }
-        var sections = [IntentItemSection(items: builtIn.map { IntentItem($0) })]
+        let (builtIn, user, builtInHeader, userHeader) = await MainActor.run {
+            (Self.builtIn(), Self.user(), SettingsTexts.Presets.builtInHeader, SettingsTexts.Presets.userHeader)
+        }
+        var sections = [IntentItemSection("\(builtInHeader)", items: builtIn)]
         if !user.isEmpty {
             sections.append(IntentItemSection("\(userHeader)", items: user))
         }

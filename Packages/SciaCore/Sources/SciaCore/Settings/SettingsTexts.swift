@@ -114,8 +114,8 @@ public enum SettingsTexts {
         public static func sameAsApp(name: String) -> String {
             "アプリと同じ（\(name)）"
         }
-        /// アカウントの選ぶ画面の、組み込みのプリセットの節の見出し。
-        public static let accountChoiceHeader = "代わりに使うプリセット"
+        /// 組み込みのプリセットの節の見出し。
+        public static let builtInHeader = "デフォルトプリセット"
         /// プリセットを作る・直す画面を開く行と、その画面の題。
         public static let manage = "プリセットを管理"
         /// 値を変える画面のサブタイトル。どのプリセットを直しているかを出す。
