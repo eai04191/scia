@@ -110,7 +110,7 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
   - ストレージの画面は、内訳が`StorageBreakdown`、消すボタンが`StorageRemoveTarget`
 - 「投稿の見た目」と「通知の見た目」の分類と数値の項目は`AppearanceCatalog.groups`と`NotificationAppearanceCatalog.groups`、選んで決める項目は`AppearanceChoice`（分類ごとの並び、名前、部品、選べなくする条件、見本で示す場所）。分類の画面では、選んで決める項目を数値の項目より上に並べる
 - プレビューに並べる見本は`AppearancePreviewSamples`と`NotificationAppearancePreviewSamples`。UIは、見本に使う画像を用意して場所を渡し（`PreviewSampleSources`）、`ImageStores`の`localData`で通信せずに返す
-- iOSの見た目の設定で既定に戻す操作は、分類を並べた画面の「すべてデフォルトに戻す」（`AppearanceCatalog.resetAllTitle`）と、数値の行ごとの「デフォルトに戻す」の2つ。分類ごとに戻す操作はない
+- iOSの見た目の設定で親のプリセットに従わせる操作は、分類を並べた画面の「すべて“親のプリセットの名前”に従う」（`AppearanceCatalog.resetAllTitle(parentName:)`）と、数値の行ごとの「“親のプリセットの名前”に従う」（`SettingsTexts.Appearance.followParent(name:)`）の2つ。分類ごとに戻す操作はない
 - 揃えて出すために応答を待つものは、`ResponseWait.limit`がたったら待つのをやめる（[vision.md](vision.md)の「想定外の応答への向き合い方」）
 
 ## SciaCoreにあるが、iOSの画面の作りに合わせた部品

@@ -46,12 +46,12 @@ struct NotificationAppearanceEditorView: View {
                         Button(role: .destructive) {
                             confirmsReset = true
                         } label: {
-                            Text(AppearanceCatalog.resetAllTitle)
+                            Text(AppearanceCatalog.resetAllTitle(parentName: settings.parentPresetName))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                             .disabled(!settings.isNotificationAppearanceModified)
-                            .confirmationDialog(NotificationAppearanceCatalog.resetAllConfirmation, isPresented: $confirmsReset, titleVisibility: .visible) {
-                                Button(AppearanceCatalog.resetTitle, role: .destructive) {
+                            .confirmationDialog(NotificationAppearanceCatalog.resetAllConfirmation(parentName: settings.parentPresetName), isPresented: $confirmsReset, titleVisibility: .visible) {
+                                Button(AppearanceCatalog.resetTitle(parentName: settings.parentPresetName), role: .destructive) {
                                     settings.resetNotificationAppearance()
                                     resets += 1
                                 }

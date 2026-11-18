@@ -43,7 +43,7 @@ struct AppearanceEditorView: View {
                                 }
                         }
                         .contextMenu {
-                            Button(SettingsTexts.Appearance.resetItem, systemImage: "arrow.uturn.backward") {
+                            Button(SettingsTexts.Appearance.followParent(name: settings.parentPresetName), systemImage: "arrow.uturn.backward") {
                                 settings.resetRevealsAllPartsInThread()
                             }
                             .disabled(!settings.isRevealsAllPartsInThreadModified)
@@ -65,12 +65,12 @@ struct AppearanceEditorView: View {
                         Button(role: .destructive) {
                             confirmsReset = true
                         } label: {
-                            Text(AppearanceCatalog.resetAllTitle)
+                            Text(AppearanceCatalog.resetAllTitle(parentName: settings.parentPresetName))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                             .disabled(!settings.isAppearanceModified)
-                            .confirmationDialog(AppearanceCatalog.resetAllConfirmation, isPresented: $confirmsReset, titleVisibility: .visible) {
-                                Button(AppearanceCatalog.resetTitle, role: .destructive) {
+                            .confirmationDialog(AppearanceCatalog.resetAllConfirmation(parentName: settings.parentPresetName), isPresented: $confirmsReset, titleVisibility: .visible) {
+                                Button(AppearanceCatalog.resetTitle(parentName: settings.parentPresetName), role: .destructive) {
                                     settings.resetAppearance()
                                     resets += 1
                                 }
@@ -207,7 +207,7 @@ struct AppearanceGroupEditorView: View {
     }
 
     private func resetButton(_ choice: AppearanceChoice) -> some View {
-        Button(SettingsTexts.Appearance.resetItem, systemImage: "arrow.uturn.backward") {
+        Button(SettingsTexts.Appearance.followParent(name: settings.parentPresetName), systemImage: "arrow.uturn.backward") {
             settings.reset(choice)
             focused = .choice(choice)
         }
@@ -305,7 +305,7 @@ struct AppearanceValueRow: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: onToggleFocus)
         .contextMenu {
-            Button(SettingsTexts.Appearance.resetItem, systemImage: "arrow.uturn.backward") {
+            Button(SettingsTexts.Appearance.followParent(name: settings.parentPresetName), systemImage: "arrow.uturn.backward") {
                 settings.reset([item])
                 onFocus()
             }

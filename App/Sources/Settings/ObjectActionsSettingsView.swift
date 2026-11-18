@@ -30,7 +30,7 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
                         NavigationLink(value: page) {
                             ModifiedLabel(title: page.rowTitle, isModified: settings.isModified(page))
                         }
-                        .contextMenu { ResetButton(isModified: settings.isModified(page)) { settings.reset(page) } }
+                        .contextMenu { ResetButton(parentName: settings.parentPresetName, isModified: settings.isModified(page)) { settings.reset(page) } }
                     }
                 }
             }
@@ -47,7 +47,7 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
                         Toggle(isOn: binding(of: toggle)) {
                             ModifiedLabel(title: toggle.title, isModified: settings.isModified(toggle))
                         }
-                        .contextMenu { ResetButton(isModified: settings.isModified(toggle)) { settings.reset(toggle) } }
+                        .contextMenu { ResetButton(parentName: settings.parentPresetName, isModified: settings.isModified(toggle)) { settings.reset(toggle) } }
                     }
                 } header: {
                     Text(ObjectActionsScreen.toggleHeader)
@@ -96,7 +96,7 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
                 .foregroundStyle(.secondary)
         }
         .pickerStyle(.navigationLink)
-        .contextMenu { ResetButton(isModified: settings.isModified(trigger, on: screen.page)) { settings.reset(trigger, on: screen.page) } }
+        .contextMenu { ResetButton(parentName: settings.parentPresetName, isModified: settings.isModified(trigger, on: screen.page)) { settings.reset(trigger, on: screen.page) } }
     }
 
     /// iOSの設定アプリと同じく、名前と今の値を並べ、シェブロンで並びの画面へ入る。
@@ -112,7 +112,7 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
                     .lineLimit(1)
             }
         }
-        .contextMenu { ResetButton(isModified: settings.isModified(side.page)) { settings.reset(side.page) } }
+        .contextMenu { ResetButton(parentName: settings.parentPresetName, isModified: settings.isModified(side.page)) { settings.reset(side.page) } }
     }
 
     private func option(_ item: Item) -> some View {

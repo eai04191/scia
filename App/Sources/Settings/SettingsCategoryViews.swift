@@ -169,7 +169,8 @@ struct SettingsScreenForm: View {
                     StatusBarTickerSettingsSection(
                         isOn: $settings.showsStatusBarTicker,
                         isAvailable: StatusBarCutout.isAvailable,
-                        isModified: settings.isModified(.statusBarTicker)
+                        isModified: settings.isModified(.statusBarTicker),
+                        parentName: settings.parentPresetName
                     ) { settings.reset(.statusBarTicker) }
                 } else {
                     SettingsFormSection(header: section.header, footer: footer(of: section)) {
@@ -179,10 +180,10 @@ struct SettingsScreenForm: View {
                                 NavigationLink(value: page) {
                                     ModifiedLabel(title: page.rowTitle, isModified: settings.isModified(page))
                                 }
-                                .contextMenu { ResetButton(isModified: settings.isModified(page)) { settings.reset(page) } }
+                                .contextMenu { ResetButton(parentName: settings.parentPresetName, isModified: settings.isModified(page)) { settings.reset(page) } }
                             case .item(let item):
                                 itemRow(item)
-                                    .contextMenu { ResetButton(isModified: settings.isModified(item)) { settings.reset(item) } }
+                                    .contextMenu { ResetButton(parentName: settings.parentPresetName, isModified: settings.isModified(item)) { settings.reset(item) } }
                             }
                         }
                     }
@@ -379,12 +380,14 @@ struct StatusBarTickerSettingsSection: View {
     let isAvailable: Bool
     /// 読んでいるプリセットが変えたか。変えていれば、長押しのメニューで親のプリセットの値に戻す。
     var isModified = false
+    /// 長押しのメニューで従う、親のプリセットの名前。
+    var parentName = ""
     var reset: () -> Void = {}
 
     var body: some View {
         Section {
             StatusBarTickerToggle(isOn: $isOn, isAvailable: isAvailable, isModified: isModified)
-                .contextMenu { ResetButton(isModified: isModified, reset: reset) }
+                .contextMenu { ResetButton(parentName: parentName, isModified: isModified, reset: reset) }
         } footer: {
             if !isAvailable {
                 Text(SettingsTexts.Display.statusBarTickerUnavailable)
@@ -498,13 +501,15 @@ struct PresetNameLabel: View {
     }
 }
 
-/// 長押しのメニューの「デフォルトに戻す」。変えた値を、親のプリセットの値に従わせる。
+/// 長押しのメニューの「“親のプリセット”に従う」。変えた値を、親のプリセットの値に従わせる。
 struct ResetButton: View {
+    /// 従う親のプリセットの名前（`AppSettings.parentPresetName`）。
+    let parentName: String
     let isModified: Bool
     let reset: () -> Void
 
     var body: some View {
-        Button(SettingsTexts.Appearance.resetItem, systemImage: "arrow.uturn.backward", action: reset)
+        Button(SettingsTexts.Appearance.followParent(name: parentName), systemImage: "arrow.uturn.backward", action: reset)
             .disabled(!isModified)
     }
 }

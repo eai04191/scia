@@ -229,8 +229,10 @@ public enum SettingsTexts {
         public static let notificationFooter = "メンションなどの投稿の見た目と行の余白やアイコンの列の幅は、“表示”の“投稿”に従います。文字の大きさは投稿の本文との差を保ちます。"
         /// デフォルトから変えた項目に添えるインジケーターの読み上げ。
         public static let modified = "変更あり"
-        /// 項目をデフォルトの値に戻すメニューの項目。
-        public static let resetItem = "デフォルトに戻す"
+        /// 読んでいるプリセットが変えた項目を、親のプリセット（`name`）の値に従わせるメニューの項目。押したあとも、親を変えれば一緒に変わる。
+        public static func followParent(name: String) -> String {
+            "“\(name)”に従う"
+        }
         /// スレッドで開いた投稿では、表示しない設定にした部品も出すかのスイッチ。
         public static let revealsAllPartsInThread = "スレッドで開いた投稿はすべて表示"
         /// `revealsAllPartsInThread`の下に出す説明。

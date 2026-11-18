@@ -122,7 +122,7 @@ struct AutoTranslationSettingsView: View {
     }
 
     private func resetButton(_ setting: AutoTranslationSetting) -> some View {
-        ResetButton(isModified: settings.isModified(setting)) { settings.reset(setting) }
+        ResetButton(parentName: settings.parentPresetName, isModified: settings.isModified(setting)) { settings.reset(setting) }
     }
 
     @ViewBuilder private var languages: some View {

@@ -375,12 +375,22 @@ extension AppearanceCatalog {
         !(appearance.reactionGlowIcons == .none && [reactionGlowIconSize, reactionGlowIconOpacity].contains(value))
     }
 
-    /// 「投稿の見た目」の、分類を並べる画面の文言。
-    public static let resetAllTitle = "すべてデフォルトに戻す"
-    public static let resetAllConfirmation = "投稿の見た目をすべてデフォルトに戻しますか？"
-    public static let resetTitle = "デフォルトに戻す"
+    /// 「投稿の見た目」の、分類を並べる画面の文言。すべての項目を、親のプリセット（`parentName`）の値に従わせる。
+    public static func resetAllTitle(parentName: String) -> String {
+        "すべて“\(parentName)”に従う"
+    }
+
+    public static func resetAllConfirmation(parentName: String) -> String {
+        "投稿の見た目をすべて“\(parentName)”に従わせますか？"
+    }
+
+    public static func resetTitle(parentName: String) -> String {
+        SettingsTexts.Appearance.followParent(name: parentName)
+    }
 }
 
 extension NotificationAppearanceCatalog {
-    public static let resetAllConfirmation = "通知の見た目をすべてデフォルトに戻しますか？"
+    public static func resetAllConfirmation(parentName: String) -> String {
+        "通知の見た目をすべて“\(parentName)”に従わせますか？"
+    }
 }

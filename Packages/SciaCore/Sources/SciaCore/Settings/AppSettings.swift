@@ -52,6 +52,14 @@ public final class AppSettings {
         }
     }
 
+    /// 変えた項目を戻したときに従う、親のプリセットの名前。組み込みのプリセットは親を持たないので、そのプリセットの名前。
+    public var parentPresetName: String {
+        let library = store.observedLibrary
+        let preset = presetID
+        let parent = library.ancestors(of: preset).first ?? preset
+        return library.name(of: parent) ?? ""
+    }
+
     /// 表示しているアカウント。アプリの設定と、決まったプリセットの設定ではnil。
     private var account: String? {
         guard case .scope(.account(let handle)) = target else { return nil }
