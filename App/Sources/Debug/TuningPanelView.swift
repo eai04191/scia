@@ -90,6 +90,16 @@ struct TuningPanelView: View {
                 Text(tuning.title)
                 modifiedNote(for: item, defaultValue: Text(tuning.defaultValue ? "オン" : "オフ"))
             }
+        case .choice(let tuning):
+            let options = tuning.options
+            Picker(selection: Binding(get: { store.rawValue(of: tuning) }, set: { store.setRawValue($0, for: tuning) })) {
+                ForEach(options, id: \.rawValue) { option in
+                    Text(option.title).tag(option.rawValue)
+                }
+            } label: {
+                Text(tuning.title)
+                modifiedNote(for: item, defaultValue: Text(options.first { $0.rawValue == tuning.defaultRawValue }?.title ?? tuning.defaultRawValue))
+            }
         }
     }
 

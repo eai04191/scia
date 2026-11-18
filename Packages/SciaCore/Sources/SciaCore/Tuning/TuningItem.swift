@@ -2,11 +2,13 @@
 public enum TuningItem: Sendable, Identifiable {
     case number(NumberTuning)
     case toggle(ToggleTuning)
+    case choice(any AnyChoiceTuning)
 
     public var id: String {
         switch self {
         case .number(let tuning): tuning.id
         case .toggle(let tuning): tuning.id
+        case .choice(let tuning): tuning.id
         }
     }
 }
@@ -56,6 +58,53 @@ public struct ToggleTuning: Sendable, Identifiable {
         self.title = title
         self.defaultValue = defaultValue
     }
+}
+
+/// 選択肢から1つ選ぶ値の型。保存とパネルでは`rawValue`で扱う。
+public protocol TuningChoice: CaseIterable, RawRepresentable, Sendable where RawValue == String {
+    /// パネルに出す選択肢の名前。
+    var tuningTitle: String { get }
+}
+
+/// 選択肢の型を問わずに、パネルと保存から扱う。
+public protocol AnyChoiceTuning: Sendable {
+    var id: String { get }
+    var title: String { get }
+    var defaultRawValue: String { get }
+    /// 選択肢の`rawValue`と名前を、型の`allCases`の順に並べる。
+    var options: [(rawValue: String, title: String)] { get }
+}
+
+/// 選択肢から1つ選ぶ値。
+public struct ChoiceTuning<Choice: TuningChoice>: AnyChoiceTuning, Identifiable {
+    /// 保存に使うキー。項目ごとに一意にする。
+    public let id: String
+    public let title: String
+    public let defaultValue: Choice
+
+    public init(id: String, title: String, defaultValue: Choice) {
+        self.id = id
+        self.title = title
+        self.defaultValue = defaultValue
+    }
+
+    public var defaultRawValue: String { defaultValue.rawValue }
+
+    public var options: [(rawValue: String, title: String)] {
+        Choice.allCases.map { ($0.rawValue, $0.tuningTitle) }
+    }
+}
+
+/// 触覚フィードバックの種類。`UIImpactFeedbackGenerator`のスタイルと、`UISelectionFeedbackGenerator`の選択の触覚。
+public enum HapticStyle: String, TuningChoice {
+    case light
+    case medium
+    case heavy
+    case soft
+    case rigid
+    case selection
+
+    public var tuningTitle: String { rawValue }
 }
 
 /// アプリで使うチューニング項目のリスト。値を足すときは、ここに定義を追加してTuningStoreから読む。
@@ -172,7 +221,22 @@ public enum TuningCatalog {
         defaultValue: 0.1
     )
 
-    /// アクションバーの引き出しをタップで開閉したときの、触覚フィードバックの強さ。スタイルは`soft`で、0なら出さない。決まりはdocs/post-action-bar.mdの「引き出し」にある。
+    /// アクションバーの引き出しをタップで開閉したときの触覚を、開閉の動きが着いたとき（「アクションバーを開閉する時間」が過ぎたとき）に鳴らす。切ると、指を離したときに鳴らす。
+    /// 実機で比べて、既定はオフにした。決まりはdocs/post-action-bar.mdの「引き出し」にある。
+    public static let actionBarDrawerHapticAtLanding = ToggleTuning(
+        id: "timeline.actionBarDrawerHapticAtLanding",
+        title: "アクションバーの開閉の触覚を動きが着いたときに鳴らす（オフで指を離したとき）",
+        defaultValue: false
+    )
+
+    /// アクションバーの引き出しをタップで開閉したときの、触覚フィードバックの種類。実機で比べて、既定は`soft`にした。決まりはdocs/post-action-bar.mdの「引き出し」にある。
+    public static let actionBarDrawerHapticStyle = ChoiceTuning(
+        id: "timeline.actionBarDrawerHapticStyle",
+        title: "アクションバーをタップで開閉したときの触覚の種類",
+        defaultValue: HapticStyle.soft
+    )
+
+    /// アクションバーの引き出しをタップで開閉したときの、触覚フィードバックの強さ。0なら出さない。種類が`selection`のときは強さを選べないので、0かどうかだけを見る。決まりはdocs/post-action-bar.mdの「引き出し」にある。
     public static let actionBarDrawerHapticIntensity = NumberTuning(
         id: "timeline.actionBarDrawerHapticIntensity",
         title: "アクションバーをタップで開閉したときの触覚の強さ（0で出さない）",
@@ -2085,6 +2149,8 @@ public enum TuningCatalog {
             .number(translationApplyInterval),
             .number(longBodyExpandDuration),
             .number(actionBarDrawerDuration),
+            .toggle(actionBarDrawerHapticAtLanding),
+            .choice(actionBarDrawerHapticStyle),
             .number(actionBarDrawerHapticIntensity),
             .number(actionBarLeadingHitReach),
             .number(customEmojiArrivalDuration),

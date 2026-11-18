@@ -753,7 +753,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// - Parameter shiftLimit: 描き直した行が伸び縮みする長さの上限。分かっていれば、上下のどちらかの端からタイムラインの外へ出うる行の像だけを取る。像を取るのは重く、押した直後のコマが遅れて、動きの始まりが飛んで見えるため。nilなら、描き直す行より下のすべての行の像を取る。
     func reconfigureShiftingRowsBelow(_ ids: Set<ItemID>, keeping anchorID: ItemID? = nil, duration: TimeInterval, shiftLimit: CGFloat? = nil, concealsShrink: Bool = true) {
         guard !ids.isEmpty else { return }
-        guard duration > 0, view.window != nil, !UIAccessibility.isReduceMotionEnabled else {
+        guard animatesRowShift(duration: duration) else {
             reconfigure(ids, keeping: anchorID)
             return
         }
@@ -804,6 +804,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         for view in moved {
             collectionView.bringSubviewToFront(view)
         }
+    }
+
+    /// `reconfigureShiftingRowsBelow`が、`duration`で動かしてつなぐか。動かさないときは、動きなしで描き直す。
+    private func animatesRowShift(duration: TimeInterval) -> Bool {
+        duration > 0 && view.window != nil && !UIAccessibility.isReduceMotionEnabled
     }
 
     /// タイムラインに並ぶ区切り線のビューと、その画面（ウインドウ）での上端。区切り線はUIKitの非公開のビューなので、行のセルでも背景でもない、高さが細い線のビューとして見分ける。
@@ -2680,10 +2685,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// 投稿の下のアクションバーの引き出しを開閉する。開いている投稿で押せば閉じ、別の投稿で開けば前の投稿のアクションバーは閉じる。
     /// 押した投稿の画面上の位置を保ち、まわりのアイテムごと動かしてつなぐ（docs/vision.mdの「タイムラインの動き」）。
-    /// その投稿にアクションバーがいつも出ているとき（いつも出す設定か、すべての部品を見せるスレッドの中心の投稿）は、何もせず、falseを返す。
+    /// その投稿にアクションバーがいつも出ているとき（いつも出す設定か、すべての部品を見せるスレッドの中心の投稿）は、何もせず、nilを返す。
+    /// - Returns: 開閉したら、動きが着くまでの時間（スプリングの知覚上の長さ）。動かさずに開閉したら0。
     @discardableResult
-    func toggleActionBar(for id: ItemID) -> Bool {
-        guard let status = entries[id]?.postStatus, !appearance(for: status).showsActionBar else { return false }
+    func toggleActionBar(for id: ItemID) -> TimeInterval? {
+        guard let status = entries[id]?.postStatus, !appearance(for: status).showsActionBar else { return nil }
         let previous = openActionBarItemID
         openActionBarItemID = previous == id ? nil : id
         let ids = Set([previous, id].compactMap(\.self)).intersection(dataSource.snapshot().itemIdentifiers)
@@ -2692,7 +2698,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         if let opened = openActionBarItemID {
             revealActionBarFromItsTop(of: opened, duration: duration)
         }
-        return true
+        return animatesRowShift(duration: duration) ? duration : 0
     }
 
     /// 引き出しのアクションバーを、初めて開く前に1つ組んでおいたか。

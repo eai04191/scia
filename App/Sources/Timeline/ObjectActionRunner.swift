@@ -48,8 +48,8 @@ struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable, Command>: Obje
     let lifecycle: MenuLifecycle
     /// 使えない項目を選んだことを、数秒で消えるチップで知らせる。
     let notify: (Notice) -> Void
-    /// 「アクションバーを開く」で、投稿の下のアクションバーを開閉する。押した部品を渡し、開閉したかを返す。アクションバーを出せない部品（引用の囲み、通知）ではnil。
-    var openActionBar: ((UIView) -> Bool)?
+    /// 「アクションバーを開く」で、投稿の下のアクションバーを開閉する。押した部品を渡し、開閉したら動きが着くまでの秒数を、しなければnilを返す。アクションバーを出せない部品（引用の囲み、通知）ではnil。
+    var openActionBar: ((UIView) -> TimeInterval?)?
 
     private var actions: ObjectActions<Item> {
         settings[keyPath: entity.actions]
@@ -91,14 +91,27 @@ struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable, Command>: Obje
                 return
             }
             // 長押しでは、長押しを受けた時点で触覚を返しているので重ねない。決まりはdocs/post-action-bar.mdの「引き出し」にある。
-            if openActionBar(view), trigger == .tap {
-                let intensity = AppDependencies.tuning.value(of: TuningCatalog.actionBarDrawerHapticIntensity)
-                if intensity > 0 {
-                    UIImpactFeedbackGenerator(style: .soft, view: view).impactOccurred(intensity: intensity, at: point)
-                }
+            if let landing = openActionBar(view), trigger == .tap {
+                playActionBarHaptic(in: view, at: point, landing: landing)
             }
         case .item(let item):
             perform(item, in: view, at: point)
+        }
+    }
+
+    /// アクションバーをタップで開閉したときの触覚。チューニングで選べば、動きが着いたときに鳴らす。決まりはdocs/post-action-bar.mdの「引き出し」にある。
+    private func playActionBarHaptic(in view: UIView, at point: CGPoint, landing: TimeInterval) {
+        let tuning = AppDependencies.tuning
+        let style = tuning.value(of: TuningCatalog.actionBarDrawerHapticStyle)
+        let intensity = tuning.value(of: TuningCatalog.actionBarDrawerHapticIntensity)
+        guard landing > 0, tuning.value(of: TuningCatalog.actionBarDrawerHapticAtLanding) else {
+            style.play(intensity: intensity, in: view, at: point)
+            return
+        }
+        Task(.withoutRequests) { [weak view] in
+            try? await AppDependencies.clock.sleep(for: .seconds(landing))
+            guard let view, view.window != nil else { return }
+            style.play(intensity: intensity, in: view, at: point)
         }
     }
 

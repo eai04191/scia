@@ -12,6 +12,7 @@ public final class TuningStore {
     public let items: [TuningItem]
     private var numbers: [String: Double] = [:]
     private var toggles: [String: Bool] = [:]
+    private var choices: [String: String] = [:]
     @ObservationIgnored private let defaults: UserDefaults?
 
     /// - Parameter defaults: 変更した値の保存先。nilなら保存せず、起動のたびに既定値へ戻る。
@@ -32,6 +33,10 @@ public final class TuningStore {
                 if let stored = defaults?.object(forKey: Self.key(tuning.id)) as? Bool {
                     toggles[tuning.id] = stored
                 }
+            case .choice(let tuning):
+                if let stored = defaults?.string(forKey: Self.key(tuning.id)), tuning.options.contains(where: { $0.rawValue == stored }) {
+                    choices[tuning.id] = stored
+                }
             }
         }
     }
@@ -42,6 +47,22 @@ public final class TuningStore {
 
     public func value(of tuning: ToggleTuning) -> Bool {
         toggles[tuning.id] ?? tuning.defaultValue
+    }
+
+    public func value<Choice>(of tuning: ChoiceTuning<Choice>) -> Choice {
+        choices[tuning.id].flatMap(Choice.init(rawValue:)) ?? tuning.defaultValue
+    }
+
+    /// パネルから、選択肢の型を問わずに読む。
+    public func rawValue(of tuning: any AnyChoiceTuning) -> String {
+        choices[tuning.id] ?? tuning.defaultRawValue
+    }
+
+    /// 選択肢にない値は保存しない。
+    public func setRawValue(_ value: String, for tuning: any AnyChoiceTuning) {
+        guard tuning.options.contains(where: { $0.rawValue == value }) else { return }
+        choices[tuning.id] = value
+        defaults?.set(value, forKey: Self.key(tuning.id))
     }
 
     /// 範囲外の値は範囲内に丸めて保存する。
@@ -61,6 +82,7 @@ public final class TuningStore {
         switch item {
         case .number(let tuning): value(of: tuning) != tuning.defaultValue
         case .toggle(let tuning): value(of: tuning) != tuning.defaultValue
+        case .choice(let tuning): rawValue(of: tuning) != tuning.defaultRawValue
         }
     }
 
@@ -86,6 +108,7 @@ public final class TuningStore {
             defaults?.removeObject(forKey: Self.key(item.id))
             numbers[item.id] = nil
             toggles[item.id] = nil
+            choices[item.id] = nil
         }
     }
 

@@ -22,6 +22,35 @@ struct TuningStoreTests {
         return defaults
     }
 
+    private let haptic = ChoiceTuning(id: "haptic", title: "触覚の種類", defaultValue: HapticStyle.light)
+
+    @Test func persistsChosenValueAcrossInstancesAndResets() throws {
+        let defaults = try makeDefaults()
+        let sections = [TuningSection(id: "haptics", title: "触覚", items: [.choice(haptic)])]
+        let store = TuningStore(sections: sections, defaults: defaults)
+        #expect(store.value(of: haptic) == .light)
+
+        store.setRawValue(HapticStyle.rigid.rawValue, for: haptic)
+        #expect(store.isModified(.choice(haptic)))
+        #expect(TuningStore(sections: sections, defaults: defaults).value(of: haptic) == .rigid)
+
+        store.resetAll()
+        #expect(store.value(of: haptic) == .light)
+        #expect(TuningStore(sections: sections, defaults: defaults).value(of: haptic) == .light)
+    }
+
+    /// 選択肢から消した値が保存に残っていても、既定値で読む。
+    @Test func ignoresStoredChoiceNotInOptions() throws {
+        let defaults = try makeDefaults()
+        defaults.set("removed", forKey: "tuning.haptic")
+        let store = TuningStore(sections: [TuningSection(id: "haptics", title: "触覚", items: [.choice(haptic)])], defaults: defaults)
+
+        #expect(store.value(of: haptic) == .light)
+        #expect(!store.isModified(.choice(haptic)))
+        store.setRawValue("removed", for: haptic)
+        #expect(store.value(of: haptic) == .light)
+    }
+
     @Test func returnsDefaultValuesInitially() throws {
         let store = TuningStore(sections: items, defaults: try makeDefaults())
 

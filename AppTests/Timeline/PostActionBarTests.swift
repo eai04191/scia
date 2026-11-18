@@ -175,12 +175,13 @@ struct PostActionBarTests {
         let first = TimelineViewController.ItemID.status(statuses[10].id)
         let second = TimelineViewController.ItemID.status(statuses[12].id)
 
-        #expect(harness.viewController.toggleActionBar(for: first), "開閉したことを返していません")
+        // 触覚は、返した時間が過ぎて動きが着いたときに鳴らす。
+        #expect(harness.viewController.toggleActionBar(for: first) == harness.tuning.value(of: TuningCatalog.actionBarDrawerDuration), "動きが着くまでの時間を返していません")
         harness.viewController.toggleActionBar(for: second)
         #expect(bar(in: harness, of: statuses[10].id) == nil)
         #expect(bar(in: harness, of: statuses[12].id) != nil)
 
-        #expect(harness.viewController.toggleActionBar(for: second), "閉じたことを返していません")
+        #expect(harness.viewController.toggleActionBar(for: second) == harness.tuning.value(of: TuningCatalog.actionBarDrawerDuration), "閉じる動きが着くまでの時間を返していません")
         #expect(bar(in: harness, of: statuses[12].id) == nil)
         #expect(harness.viewController.openActionBarItemID == nil)
     }
@@ -204,8 +205,17 @@ struct PostActionBarTests {
         let (harness, statuses) = try harness()
         defer { harness.tearDown() }
         harness.settings.appearance.showsActionBar = true
-        #expect(!harness.viewController.toggleActionBar(for: .status(statuses[10].id)), "何もしていないのに開閉したことを返しています")
+        #expect(harness.viewController.toggleActionBar(for: .status(statuses[10].id)) == nil, "何もしていないのに開閉したことを返しています")
         #expect(harness.viewController.openActionBarItemID == nil)
+    }
+
+    /// 開閉の時間が0で動かさないときは、待たずに触覚を鳴らせるよう、0を返す。
+    @Test func toggleWithoutMotionReturnsZero() throws {
+        let (harness, statuses) = try harness()
+        defer { harness.tearDown() }
+        harness.tuning.setValue(0, for: TuningCatalog.actionBarDrawerDuration)
+
+        #expect(harness.viewController.toggleActionBar(for: .status(statuses[10].id)) == 0)
     }
 
     /// スレッドの中心の投稿ですべての部品を見せる設定では、その投稿にはいつも出ているので、開く操作は何もせず、ほかの投稿の引き出しも閉じない。
@@ -218,7 +228,7 @@ struct PostActionBarTests {
         harness.settings.appearance.revealsAllPartsInThread = true
         harness.viewController.reconfigure(Set(statuses.map { .status($0.id) }))
 
-        #expect(!harness.viewController.toggleActionBar(for: .status(statuses[10].id)), "いつも出ている投稿で開閉したことを返しています")
+        #expect(harness.viewController.toggleActionBar(for: .status(statuses[10].id)) == nil, "いつも出ている投稿で開閉したことを返しています")
         #expect(harness.viewController.openActionBarItemID == other)
     }
 
