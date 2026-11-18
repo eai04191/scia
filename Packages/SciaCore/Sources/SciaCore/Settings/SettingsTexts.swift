@@ -95,10 +95,14 @@ public enum SettingsTexts {
         public static let create = "作成"
         /// 作れなかったことを知らせるアラートを閉じるボタン。
         public static let ok = "OK"
-        public static let deleteConfirmTitle = "プリセットを削除"
-        /// 削除を確かめるアラートの本文。
-        public static func deleteConfirmMessage(name: String) -> String {
-            "“\(name)”を削除しますか？このプリセットを使っているアプリやアカウントは、もとのプリセットを使うようになります。"
+        /// 削除を確かめる確認の題。
+        public static func deleteConfirmTitle(name: String) -> String {
+            "“\(name)”を削除しますか？"
+        }
+        /// 削除を確かめる確認の本文。使っているアプリかアカウントがあれば`parent`に切り替わることを、なければ取り消せないことを書く。
+        public static func deleteConfirmMessage(parent: String?) -> String {
+            guard let parent else { return "この操作は取り消せません。" }
+            return "このプリセットを使っているアプリとアカウントは、“\(parent)”に切り替わります。"
         }
         /// 分類の画面に入るときに、どちらのプリセットを変更するかを選ばせるアクションシートの題。
         public static let targetTitle = "どちらのプリセットを変更しますか？"

@@ -27,14 +27,6 @@ struct PresetsView: View {
         }
         .navigationTitle(SettingsPage.presets.title)
         .background(WindowAnchorView(anchor: anchor))
-        .alert(SettingsTexts.Presets.deleteConfirmTitle, isPresented: Binding { deleting != nil } set: { if !$0 { deleting = nil } }, presenting: deleting) { id in
-            Button(SettingsTexts.delete, role: .destructive) {
-                settings.store.updateLibrary { library throws(PresetError) in try library.delete(id) }
-            }
-            Button(SettingsTexts.cancel, role: .cancel) {}
-        } message: { id in
-            Text(SettingsTexts.Presets.deleteConfirmMessage(name: library.name(of: id) ?? ""))
-        }
     }
 
     private func row(_ id: PresetID) -> some View {
@@ -60,6 +52,27 @@ struct PresetsView: View {
                 Button(SettingsTexts.Presets.delete, role: .destructive) { deleting = id }
             }
         }
+        .confirmationDialog(
+            SettingsTexts.Presets.deleteConfirmTitle(name: library.name(of: id) ?? ""),
+            isPresented: Binding { deleting == id } set: { if !$0 { deleting = nil } },
+            titleVisibility: .visible
+        ) {
+            Button(SettingsTexts.delete, role: .destructive) {
+                settings.store.updateLibrary { library throws(PresetError) in try library.delete(id) }
+            }
+        } message: {
+            Text(SettingsTexts.Presets.deleteConfirmMessage(parent: isUsed(id) ? parentName(of: id) : nil))
+        }
+    }
+
+    /// アプリかどれかのアカウントが使っているか。
+    private func isUsed(_ id: PresetID) -> Bool {
+        library.appPreset == id || library.accountPresets.values.contains(id)
+    }
+
+    private func parentName(of id: PresetID) -> String? {
+        guard case .user(let number) = id, let parent = library.userPreset(number)?.parent else { return nil }
+        return library.name(of: parent)
     }
 
     @ViewBuilder
