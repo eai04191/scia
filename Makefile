@@ -7,7 +7,7 @@ SIM_ARCH ?= $(shell uname -m)
 # 同じDerivedDataを使うDebugのビルドには、すべてコンパイルキャッシュの設定を渡す（Config/Cache.xcconfig）。Tools/system-ui-check.shも同じものを渡す
 CACHE_XCCONFIG := -xcconfig Config/Cache.xcconfig
 
-.PHONY: generate app-info check-app-info lint test-lint test-sim-guard test-core test-memory-cache test-release build-release-strict build warnings test test-here test-on-sim sim-keyboard scenario-build scenario-setup scenario-reset scenario-run archive testflight testflight-external promo readme-screenshots readme-icons update-known-servers check check-here check-steps check-test check-test-here hooks menu-editor clean
+.PHONY: generate app-info check-app-info lint test-lint test-sim-guard test-core test-memory-cache test-release build-release-strict build warnings test test-here test-on-sim sim-keyboard scenario-build scenario-setup scenario-reset scenario-run archive testflight testflight-external promo readme-screenshots readme-icons update-known-servers check check-here check-steps check-test check-test-here hooks scheduled-push scheduled-push-uninstall menu-editor clean
 
 ## project.ymlからXcodeプロジェクトを生成する
 generate:
@@ -242,6 +242,13 @@ check-test-here: generate
 ## ローカルのmainを、make checkとmake testの両方が通った中身のcommitにしか動かさないhookを入れる。worktreeにも効く
 hooks:
 	ln -sfn ../../Tools/git-hooks/reference-transaction "$$(git rev-parse --git-common-dir)/hooks/reference-transaction"
+
+## 毎朝4:50に、ローカルのmainをoriginへpushするLaunchAgentを入れる。外すのはscheduled-push-uninstall
+scheduled-push:
+	Tools/scheduled-push.sh install
+
+scheduled-push-uninstall:
+	Tools/scheduled-push.sh uninstall
 
 ## メニューの既定の並びを編集するページを、今の項目の名前と既定の並びを入れてDerivedData/menu-editor.htmlに書き出す。書き出したJSONはPackages/SciaCore/Sources/SciaCore/Settings/Resources/menu-defaults.jsonに置く
 menu-editor:

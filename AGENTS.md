@@ -40,6 +40,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - テストが落ちたら、`DerivedData/test-logs/failed-<時刻>`のxcresultを読む。読み方と、実行中の負荷や固まったテストのスタックの記録は、[docs/test-dispatch.md](docs/test-dispatch.md)の「落ちたテストの記録」にある
 - `make check-test`: `make check`と`make test`を両方走らせる。アプリをビルドしてから、checkの残りを`make test`と同時に走らせるので、続けて走らせるより早い。端末の選び方と、通ったものを覚えるのは、それぞれと同じ
 - `make test`、`make check`、`make check-test`は、`SIM`も`ONLY`も指定しなければ、テストを任せる別のMacと手元の、空いている枠で走らせる。端末は借りなくてよい。別のMacを優先し、どちらも満杯なら先着順に待つ。手元で走らせるときは`SCIA_REMOTE_TEST=local`を付ける（[docs/test-dispatch.md](docs/test-dispatch.md)）
+- `make scheduled-push`: 毎朝4:50（Macの時刻）に、ローカルのmainをoriginへpushするLaunchAgentを入れる。5:00のTestFlightに載せるためで、merge-queueが走っていても待たない。外すのは`make scheduled-push-uninstall`。ログは`~/Library/Logs/scia-scheduled-push.log`
 - `make menu-editor`: メニューの既定の並びを並べ替えるページを、今の項目の名前と既定の並びを入れて`DerivedData/menu-editor.html`に書き出す
 - `make archive`: 実機向けのReleaseビルドをアーカイブする。ビルド番号はアーカイブしたUTCの日時になる
 - `make testflight`: アーカイブしてApp Store Connectへ上げる。mainは、GitHub Actions（`.github/workflows/testflight.yml`）が毎朝5時（JST）に、前に上げたときから変わっていれば、Release構成のテスト（`make test-release`）に通してから上げる。上げたビルドは、`make testflight-external`で外部テストのグループ（リポジトリのvariablesの`TESTFLIGHT_EXTERNAL_GROUP`）に足し、TestFlight App Reviewに出す
@@ -168,6 +169,6 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `feat:`は使う人に見える機能の追加、`fix:`は使う人が遭遇する不具合の修正、`perf:`は使う人が体感する性能の改善に使う
 - 開発のための変更（チューニングパネル、違和感レポート、検証ハーネス、ビルドやlintの設定など）を`feat`・`fix`・`perf`で書くときは、`feat(dev):`、`fix(dev):`のようにdev scopeを付けてリリースノートから外す
 - 使う人向けの変更と開発のための変更は別のcommitに分ける
-- pushはユーザーが行う。agentはcommitまでで止め、pushやpush承認の依頼はしない
+- pushはユーザーが行う（`make scheduled-push`で入れた毎朝の自動pushを含む）。agentはcommitまでで止め、pushやpush承認の依頼はしない
 - mainへは、ユーザーが`/merge-to-main`で起動したときだけ、`.claude/skills/merge-to-main`の手順で入れる（agentからは起動しない。共通の`tidy-ff-merge`は、`make check`と`make test`を通さないので使わない）。`Tools/merge-queue.sh`が、どのスレッドからでも1つずつ、branchをmainへrebaseし、そのworktreeで`make check`と`make test`を通してから、fast-forwardで入れる。通したあとにファイルを変えたり、rebaseで中身が変わったりしたら、通し直す。`make hooks`のhookは、`make check`と`make test`の両方が通っていない中身のcommitと、中身が新しくなるmerge commitをmainに入れず、作業ツリーに触る前に止める。通った中身との違いがMarkdown（`*.md`）とログイン画面の補完に使うサーバーのリスト（`known-servers.txt`）だけなら、走らせ直さずに通ったものとして扱う
 - worktreeの中では、fixup commitを作ることも、`rebase --autosquash`で元のcommitへまとめることも、確認なしで行ってよい。後ろに載ったユーザーのcommitのhashが作り直されても構わない
