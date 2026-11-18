@@ -67,10 +67,9 @@ public final class AppSettings {
     }
 
     /// 「undefined」や「Screenshot」のような、説明にならない代替テキストを付いていないものとして扱う。
-    /// プリセットに含めない。見た目ではなく、代替テキストの扱いの設定のため（docs/preset.md）。
     public var ignoresUselessAltText: Bool {
-        get { store.ignoresUselessAltText }
-        set { store.ignoresUselessAltText = newValue }
+        get { bool(Keys.ignoresUselessAltText, default: true) }
+        set { write(.bool(newValue), Keys.ignoresUselessAltText) }
     }
 
     /// プロフィールの自己紹介を、折りたたむか、最初から全文を出すか。
@@ -696,6 +695,7 @@ public final class AppSettings {
         static let showsProfileEndorsements = "showsProfileEndorsements"
         static let usesDynamicProfileAccent = "usesDynamicProfileAccent"
         static let isAutoTranslationEnabled = "isAutoTranslationEnabled"
+        static let ignoresUselessAltText = "ignoresUselessAltText"
         static let autoTranslationTarget = "autoTranslationTarget"
         static let insertionMotion = "insertionMotion"
         static let accentColor = "accentColor"
@@ -770,10 +770,6 @@ public final class SettingsStore {
     /// プリセットごとの、解決した「投稿の見た目」の選択肢。行を描くたびに読むので、プリセットが変わるまで覚える。
     @ObservationIgnored private var appearanceCache: [PresetID: AppearanceChoices] = [:]
 
-    var ignoresUselessAltText: Bool {
-        didSet { defaults.set(ignoresUselessAltText, forKey: Keys.ignoresUselessAltText) }
-    }
-
     var autoTranslationExcludedHandles: [String] {
         didSet { defaults.set(autoTranslationExcludedHandles, forKey: Keys.autoTranslationExcludedHandles) }
     }
@@ -824,7 +820,6 @@ public final class SettingsStore {
         self.defaults = defaults
         self.keepsComposeBarOpenByDefault = keepsComposeBarOpenByDefault
         library = PresetLibrary(stored: defaults.data(forKey: Keys.presets))
-        ignoresUselessAltText = defaults.object(forKey: Keys.ignoresUselessAltText) as? Bool ?? true
         autoTranslationExcludedHandles = defaults.stringArray(forKey: Keys.autoTranslationExcludedHandles) ?? []
         autoTranslationLanguages = defaults.stringArray(forKey: Keys.autoTranslationLanguages) ?? []
         // 読めない値（名前を変えた方式など）は、持っていないときと同じく既定値にする。
@@ -999,7 +994,6 @@ public final class SettingsStore {
 
     private enum Keys {
         static let presets = "settings.presets"
-        static let ignoresUselessAltText = "settings.ignoresUselessAltText"
         static let autoTranslationExcludedHandles = "settings.autoTranslationExcludedHandles"
         static let autoTranslationLanguages = "settings.autoTranslationLanguages"
         static let autoTranslationStrategy = "settings.autoTranslationStrategy"

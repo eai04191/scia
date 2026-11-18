@@ -100,7 +100,8 @@ extension AppSettings {
         case .profileNoteLength: [Keys.profileNoteLength]
         case .dynamicProfileAccent: [Keys.usesDynamicProfileAccent]
         // プリセットに含めない値と、値を変えない行。
-        case .ignoresUselessAltText, .version, .build, .branch, .commit, .builtAt, .sourceCode, .privacyPolicy: []
+        case .ignoresUselessAltText: [Keys.ignoresUselessAltText]
+        case .version, .build, .branch, .commit, .builtAt, .sourceCode, .privacyPolicy: []
         }
     }
 

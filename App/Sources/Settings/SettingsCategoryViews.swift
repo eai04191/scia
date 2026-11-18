@@ -485,14 +485,14 @@ struct PresetNameLabel: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Text(name)
-                .lineLimit(1)
             if isBuiltIn {
                 Image(systemName: "lock.fill")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .accessibilityLabel(SettingsTexts.Presets.builtIn)
             }
+            Text(name)
+                .lineLimit(1)
         }
     }
 }

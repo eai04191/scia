@@ -276,7 +276,8 @@ private struct CatalogBuilder {
             case .profileFeaturedTags: PresetComparison.on(settings.showsProfileFeaturedTags)
             case .profileEndorsements: PresetComparison.on(settings.showsProfileEndorsements)
             case .dynamicProfileAccent: PresetComparison.on(settings.usesDynamicProfileAccent)
-            case .ignoresUselessAltText, .version, .build, .branch, .commit, .builtAt, .sourceCode, .privacyPolicy:
+            case .ignoresUselessAltText: PresetComparison.on(settings.ignoresUselessAltText)
+            case .version, .build, .branch, .commit, .builtAt, .sourceCode, .privacyPolicy:
                 preconditionFailure("\(item)はプリセットに値を持たない")
             }
         }

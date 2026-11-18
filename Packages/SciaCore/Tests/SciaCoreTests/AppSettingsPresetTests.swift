@@ -194,13 +194,11 @@ struct AppSettingsPresetTests {
     @Test func excludedValuesSurvivePresetSwitch() throws {
         let app = makeSettings()
         app.emojiSkinTone = .dark
-        app.ignoresUselessAltText = false
         try app.store.tryUpdateLibrary { library throws(PresetError) in
             let home = try library.create(parent: .builtIn(.standard), name: "家")
             try library.select(home, for: .app)
         }
         #expect(app.emojiSkinTone == .dark)
-        #expect(!app.ignoresUselessAltText)
         #expect(app.store.library.userPresets.allSatisfy { $0.values.isEmpty })
     }
 

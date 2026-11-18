@@ -223,10 +223,10 @@ struct SettingsModifiedTests {
         #expect(app.statusActions.tap == .actionBar)
     }
 
-    /// プリセットに含めない値の行には、点を付けない。
-    @Test func excludedItemIsNeverMarked() throws {
+    /// 「仮の代替テキストを無視」はプリセットに含め、変えたら点を付ける。
+    @Test func ignoresUselessAltTextIsMarked() throws {
         let settings = try makeSettings()
         settings.ignoresUselessAltText = false
-        #expect(!settings.isModified(.ignoresUselessAltText))
+        #expect(settings.isModified(.ignoresUselessAltText))
     }
 }
