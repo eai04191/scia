@@ -57,6 +57,38 @@ struct EmojiPrefetchTests {
         }
     }
 
+    /// 同時に取得した画像を、届いた順によらず、取得したURLの画像として置き、小さい静止画を作る。
+    /// 先頭のURLが先に届き、ほかがあとから届く順にする。Release構成で、最後に届いた画像を先頭のURLのものとして置いていたため。
+    @Test func keepsEachImageUnderItsOwnURL() async throws {
+        let urls = try urls(4)
+        let files = EmojiImageFiles(directory: root.appending(path: "images"), sharingDirectory: root.appending(path: "sharing")) { Int.max }
+        await files.updateListed(Set(urls))
+        let firstArrived = Gate()
+        let thumbnails = Mutex<[URL: Data]>([:])
+        let prefetch = EmojiPrefetch(
+            files: files,
+            fetch: { url in
+                if url == urls[0] {
+                    firstArrived.open()
+                } else {
+                    try await firstArrived.wait()
+                }
+                return Data(url.absoluteString.utf8)
+            },
+            hasThumbnail: { url in thumbnails.withLock { $0[url] != nil } },
+            makeThumbnail: { url, data in thumbnails.withLock { $0[url] = data } }
+        )
+
+        let result = await prefetch.run(urls)
+
+        #expect(result == EmojiPrefetch.Result(fetched: 4, keptOriginals: 4, failed: 0, stopped: false))
+        for url in urls {
+            let expected = Data(url.absoluteString.utf8)
+            #expect(await files.data(for: url) == expected)
+            #expect(thumbnails.withLock { $0[url] } == expected)
+        }
+    }
+
     /// 空きが足りなければ、小さい静止画のない絵文字だけ取得して作り、元の画像は持たない。小さい静止画のある絵文字は取得しない。
     @Test func fetchesOnlyForThumbnailsWithoutRoom() async throws {
         let world = World()

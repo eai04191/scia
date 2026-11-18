@@ -124,22 +124,21 @@ public struct EmojiPrefetch: Sendable {
     /// 同時に取得する数。1つずつでは、fedibird.comの6000個ほどを取得し終えるまで、1つの往復の長さの6000倍かかるため。
     static let concurrentFetches = 4
 
+    /// `urls`を同時に取得し、結果を`urls`の順に返す。`urls`に同じURLは入れない。
+    /// 子のタスクは、結果を`Result`にまとめてから組にして返す。`do { return (key, .success(try await …)) } catch { return (key, .failure(error)) }`の形で返すと、
+    /// Swift 6.4.2の最適化したビルドでは、成功したときに組の1つ目が書き込まれない（swiftlang/swift#92698）。
+    /// 並びの番号を1つ目にしていたとき、取得した画像がどれも先頭のURLの結果になり、先頭のURLの画像として別の絵文字の画像を端末に置いていた。
+    /// 1つ目が書き込まれなくても別のURLの結果にならないよう、結果は取得したURLで引く。
     private func fetchAll(_ urls: [URL]) async -> [Swift.Result<Data, any Error>] {
-        await withTaskGroup(of: (Int, Swift.Result<Data, any Error>).self) { group in
-            for (offset, url) in urls.enumerated() {
-                group.addTask { [fetch] in
-                    do {
-                        return (offset, .success(try await fetch(url)))
-                    } catch {
-                        return (offset, .failure(error))
-                    }
-                }
+        await withTaskGroup(of: (URL, Swift.Result<Data, any Error>).self) { group in
+            for url in urls {
+                group.addTask { [fetch] in (url, await Swift.Result { try await fetch(url) }) }
             }
-            var results = [Swift.Result<Data, any Error>](repeating: .failure(CancellationError()), count: urls.count)
-            for await (offset, result) in group {
-                results[offset] = result
+            var results: [URL: Swift.Result<Data, any Error>] = [:]
+            for await (url, result) in group {
+                results[url] = result
             }
-            return results
+            return urls.map { results[$0] ?? .failure(CancellationError()) }
         }
     }
 }
