@@ -77,7 +77,6 @@ public enum SettingsTexts {
     /// タブの並びの画面。
     /// プリセットの画面（docs/preset.md）。
     public enum Presets {
-        public static let builtInHeader = "標準のプリセット"
         public static let userHeader = "マイプリセット"
         /// アカウントに割り当てない選択肢。
         public static let followsApp = "アプリのプリセットを使用"
@@ -88,20 +87,28 @@ public enum SettingsTexts {
         public static let name = "名前"
         public static let parent = "もとのプリセット"
         public static let nameTaken = "この名前のプリセットはすでにあります。"
+        /// 複製するときに名前を聞くアラートの題。
+        public static let duplicateTitle = "プリセットを複製"
+        /// もとにして作るときに名前を聞くアラートの題。
+        public static let createTitle = "新規プリセット"
+        /// 名前を聞くアラートの、作るボタン。
+        public static let create = "作成"
+        /// 作れなかったことを知らせるアラートを閉じるボタン。
+        public static let ok = "OK"
         public static let deleteConfirmTitle = "プリセットを削除"
         /// 削除を確かめるアラートの本文。
         public static func deleteConfirmMessage(name: String) -> String {
             "“\(name)”を削除しますか？このプリセットを使っているアプリやアカウントは、もとのプリセットを使うようになります。"
         }
         /// 分類の画面に入るときに、どちらのプリセットを変更するかを選ばせるアクションシートの題。
-        public static let targetTitle = "変更するプリセット"
+        public static let targetTitle = "どちらのプリセットを変更しますか？"
         /// アプリのプリセットを変える選択肢。
         public static func appTarget(name: String) -> String {
-            "アプリ：\(name)"
+            "アプリ（\(name)）"
         }
         /// アカウントのプリセットを変える選択肢。
         public static func accountTarget(name: String) -> String {
-            "このアカウント：\(name)"
+            "アカウント（\(name)）"
         }
     }
 
