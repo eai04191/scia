@@ -88,6 +88,7 @@ struct AppearanceEditorView: View {
         }
         .navigationTitle(SettingsPage.appearance.title)
         .navigationBarTitleDisplayMode(.inline)
+        .task(.withoutRequests) { await samples.showAnimatedAvatarWhenReady(colorScheme: colorScheme, groups: []) }
     }
 
     private var groups: [AppearanceGroup] {
@@ -154,6 +155,7 @@ struct AppearanceGroupEditorView: View {
         }
         .navigationTitle(group.title)
         .navigationBarTitleDisplayMode(.inline)
+        .task(.withoutRequests) { await samples.showAnimatedAvatarWhenReady(colorScheme: previewColorScheme, groups: [group.id], focus: focused) }
     }
 
     /// 見本の高さの上限。画面の高さに対する割合。
@@ -366,18 +368,90 @@ struct AppearanceValueRow: View {
 /// 「投稿の見た目」のプレビューに並べる見本を、タイムライン（`TimelineViewController`）に並べて描く。何を並べるかは`AppearancePreviewSamples`にある。
 /// 画像は通信しないよう、アプリのアイコンから作ったものと同梱した写真を使う。
 @MainActor
-struct AppearanceSamples {
+@Observable
+final class AppearanceSamples {
     /// 見本を並べるタイムライン。見本を組むのにも、プレビューに置いて見せるのにも使う。1つの画面に1つずつ置く。
     let timeline: TimelineViewController
     private let settings: AppSettings
-    private let samples: AppearancePreviewSamples
+    private let tuning: TuningStore
+    private let now: Date
+    private var samples: AppearancePreviewSamples
+    private var hasAnimatedAvatar: Bool
+    /// アニメーション版に替える前に、その画像を読み込み終えるのを待つ長さの上限。読めないときも、静止画のまま止まらないようにする。
+    private static let animatedAvatarLoadWait: Duration = .seconds(1)
 
     init(settings: AppSettings, tuning: TuningStore, now: Date) {
         self.settings = settings
+        self.tuning = tuning
+        self.now = now
         timeline = .appearancePreview(texts: .home, filterContext: .home, myAccountID: AppearancePreviewSamples.myAccountID, tuning: tuning, settings: settings)
-        samples = AppearancePreviewSamples(now: now, sources: PreviewImages.sampleSources())
+        let sources = PreviewImages.sampleSources()
+        hasAnimatedAvatar = sources.animatedAvatar != nil
+        samples = AppearancePreviewSamples(now: now, sources: sources)
         for status in samples.spoilerStatuses {
             timeline.toggleSpoiler(of: status)
+        }
+    }
+
+    /// 見本のアイコンと絵文字のアニメーション版（`PreviewImages.animatedAvatarURL()`）を作り終えたら、静止画から替える。
+    /// 替える前に、替えたあとのアイコンと絵文字の画像を読み込んでおく。読み込む前に替えると、届くまでの間、アイコンが灰色に、絵文字が空白になるため。
+    /// アイコンは、引数の見本（`entries`と同じ）に出す分だけを読む。出さない見本のアイコンまで読むと、大きさの設定によっては、使わない大きな画像でアイコンのキャッシュを埋めるため。
+    func showAnimatedAvatarWhenReady(colorScheme: ColorScheme, groups: Set<AppearanceGroup.ID>? = nil, focus: AppearanceFocus? = nil) async {
+        guard !hasAnimatedAvatar, let animated = await PreviewImages.animatedAvatarWhenReady(), !Task.isCancelled else { return }
+        let next = AppearancePreviewSamples(now: now, sources: PreviewImages.sampleSources())
+        let elapsed = stopwatch(on: AppDependencies.clock)
+        await timeline.waitForAvatars(of: { next.statuses(isDark: colorScheme == .dark, groups: groups, focus: focus, appearance: settings.appearance).map { .status($0) } }, within: Self.animatedAvatarLoadWait)
+        await Self.loadEmoji(animated, within: Self.animatedAvatarLoadWait - elapsed())
+        guard !Task.isCancelled else { return }
+        hasAnimatedAvatar = true
+        crossfade { samples = next }
+    }
+
+    /// 替える前の見本の画像を重ね、替えたあとに薄くして消す。
+    /// カスタム絵文字は端末の時刻に合わせたコマから再生する（`AnimatedEmojiOverlay.frameAnimation`）ので、静止画から替えた瞬間に、1周の途中の色へ一コマで飛ぶため。
+    /// 重ねる画像はコレクションビューの中に置き、フェードの途中にスクロールしても行と一緒に動かす。
+    private func crossfade(_ change: () -> Void) {
+        let duration = tuning.value(of: TuningCatalog.appearancePreviewAnimatedAvatarFadeDuration)
+        let collectionView = timeline.collectionView
+        guard duration > 0, collectionView.window != nil, let cover = collectionView.snapshotView(afterScreenUpdates: false) else {
+            change()
+            return
+        }
+        cover.frame = collectionView.bounds
+        cover.isUserInteractionEnabled = false
+        collectionView.addSubview(cover)
+        change()
+        UIView.animateSmoothly(duration: duration) {
+            cover.alpha = 0
+        } completion: {
+            cover.removeFromSuperview()
+        }
+    }
+
+    /// 絵文字の静止画とアニメーションを読み終えるか、`timeout`が過ぎるまで待つ。
+    private static func loadEmoji(_ url: URL, within timeout: Duration) async {
+        let store = AppDependencies.emojiImages
+        func isLoaded() -> Bool {
+            store.image(for: url) != nil && store.hasFinishedLoadingAnimation(for: url)
+        }
+        _ = store.animation(for: url)
+        guard !isLoaded(), timeout > .zero else { return }
+        let (loads, continuation) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        let owner = NSObject()
+        store.addListener(owner: owner) { urls in
+            if urls.contains(url) { continuation.yield() }
+        }
+        let clock = AppDependencies.clock
+        let timer = Task(.withoutRequests) {
+            try? await clock.sleep(for: timeout)
+            continuation.finish()
+        }
+        defer {
+            timer.cancel()
+            withExtendedLifetime(owner) {}
+        }
+        for await _ in loads where isLoaded() {
+            return
         }
     }
 

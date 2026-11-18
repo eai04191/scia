@@ -1,15 +1,17 @@
+import AVFoundation
 import ImageIO
 import os
 import SciaCore
 import UIKit
 import UniformTypeIdentifiers
+import VideoToolbox
 
 /// 設定の見本の投稿に出す画像。アプリのアイコンの絵から作る。
-/// 見本のアイコンと絵文字には、ビルドで書き出した角まで絵の詰まった四角の絵（`AppIconSquarePreview`、Tools/render-app-icon-previews.sh）を使う。
+/// 見本のアイコンと絵文字には、ビルドで書き出した角まで絵の詰まった四角の絵と、その軌跡がうねる動画（Tools/render-preview-avatar.py）を使う。
 /// ホーム画面と同じ角丸で切り抜かれたアイコンの絵（`AppIconPreview`）では、アイコンの形と角丸の丸みの設定で切り抜いたときに、角に透明な部分と縁の線が残るため。
-/// 見本のアイコンとカードは画像をURLから読むため、作った画像のPNGをメモリに持ち、このアプリだけのスキームのURLを渡す。
+/// 見本のアイコンとカードは画像をURLから読むため、画像のPNGをメモリに持ち、このアプリだけのスキームのURLを渡す。
 /// 画像のストアは、このURLを通信に送らずに`data(for:)`から読む。通信の層はhttpとhttps以外を送らないため（docs/network.md）、ファイルに書いて`file:`のURLを渡すと読めない。
-/// どの画像も起動している間に1回だけ作る。
+/// どの画像も起動している間に1回だけ読むか作る。
 @MainActor
 enum PreviewImages {
     private static var images: [URL: Data] = [:]
@@ -17,53 +19,46 @@ enum PreviewImages {
     private static let scheme = "scia-preview"
     /// リンクカードの画像で、灰色の四角の幅に対するアイコンの幅。
     private static let cardIconRatio: CGFloat = 0.8
-    /// 動くアイコンの1辺のピクセル数。見本のアイコンと絵文字を、拡大せずに描ける大きさにする。
-    private static let animatedSide: CGFloat = 192
-    /// 動くアイコンのコマの数と、1コマの長さ。色相を1周させる。
-    private static let animatedFrameCount = 16
-    private static let animatedFrameDuration: TimeInterval = 0.1
-    /// アプリのアイコンの青の色相。
-    private static let animatedBaseHue: CGFloat = 0.58
+    private static let animatedAvatarName = "avatar-animated"
+    private static var animatedAvatarRender: Task<URL?, Never>?
 
-    /// 見本の投稿者のアイコン。角まで絵の詰まった四角の絵で、見本のアイコンの形だけで角を切り抜かせる。作れなければnil。
+    /// 見本の投稿者のアイコン。角まで絵の詰まった四角の絵で、見本のアイコンの形だけで角を切り抜かせる。読めなければnil。
     static func avatarURL() -> URL? {
-        image(named: "avatar") { avatar() }
-    }
-
-    /// 見本の投稿者のアイコンと絵文字の、アニメーション版。静止画（`avatarURL()`）を最初のコマにして、色を1周させるAPNG。GIFは1コマ256色までで、アイコンのグラデーションが段になる。
-    /// アニメーションを再生する設定の違いが、プレビューで見て分かるようにする。作れなければnil。
-    /// 色はCore Imageの色相の回転ではなく、Core Graphicsの色相の合成で塗る。Core Imageでは準備と描画に、シミュレーターで130msほどメインスレッドが止まるため。
-    static func animatedAvatarURL() -> URL? {
-        data(named: "avatar-animated") {
-            guard let original = avatar() else { return nil }
-            let bounds = CGRect(x: 0, y: 0, width: animatedSide, height: animatedSide)
-            // 元の大きな画像をコマごとに縮めて描くと遅いため、先に1回だけ縮める。
-            let still = renderer(size: bounds.size, scale: 1).image { _ in original.draw(in: bounds) }
-            let frames = (0..<animatedFrameCount).compactMap { index -> CGImage? in
-                renderer(size: bounds.size, scale: 1).image { context in
-                    still.draw(in: bounds)
-                    guard index > 0 else { return }
-                    // アイコンの青から色相を回す。白い線は彩度がないので、白のまま残る。
-                    let hue = (animatedBaseHue + CGFloat(index) / CGFloat(animatedFrameCount)).truncatingRemainder(dividingBy: 1)
-                    UIColor(hue: hue, saturation: 1, brightness: 1, alpha: 1).setFill()
-                    context.fill(bounds, blendMode: .hue)
-                }.cgImage
-            }
-            guard frames.count == animatedFrameCount else {
-                logger.error("preview animated avatar render failed")
+        data(named: "avatar") {
+            guard let url = Bundle.main.url(forResource: "AppIconSquarePreview", withExtension: "png"), let data = try? Data(contentsOf: url) else {
+                logger.error("preview square app icon missing")
                 return nil
             }
-            return apng(frames)
+            return data
         }
     }
 
-    /// 見本の投稿者のアイコンの静止画。
-    private static func avatar() -> UIImage? {
-        guard let image = UIImage(named: "AppIconSquarePreview") else {
-            logger.error("preview square app icon missing")
-            return nil
+    /// 見本の投稿者のアイコンと絵文字の、アニメーション版（`AnimatedPreviewAvatar`）。作り終えていなければ、作り始めてnilを返す。
+    /// 作り終えるまでは、見本に静止画を出しておく。SE3では作るのに0.4秒ほどかかり、その間アニメーション版のURLを渡すと、アイコンと絵文字が灰色や空白のままになるため。
+    static func animatedAvatarURL() -> URL? {
+        guard let url = URL(string: "\(scheme)://\(animatedAvatarName)") else { return nil }
+        if images[url] != nil { return url }
+        startAnimatedAvatarRender()
+        return nil
+    }
+
+    /// アニメーション版を作り終えるのを待って、そのURLを返す。作れなければnil。
+    static func animatedAvatarWhenReady() async -> URL? {
+        startAnimatedAvatarRender()
+        return await animatedAvatarRender?.value
+    }
+
+    private static func startAnimatedAvatarRender() {
+        guard animatedAvatarRender == nil, let url = URL(string: "\(scheme)://\(animatedAvatarName)") else { return }
+        guard let video = Bundle.main.url(forResource: "AppIconSquarePreviewAnimated", withExtension: "mp4") else {
+            logger.error("preview animated avatar video missing")
+            return
         }
-        return image
+        animatedAvatarRender = Task(.withoutRequests) {
+            guard let data = await AnimatedPreviewAvatar.render(from: video) else { return nil }
+            images[url] = data
+            return url
+        }
     }
 
     /// リンクカードの画像。灰色の四角の中央に、アイコンを小さく置く。灰色は外観に合わせる。作れなければnil。
@@ -155,23 +150,60 @@ enum PreviewImages {
         format.scale = scale
         return UIGraphicsImageRenderer(size: size, format: format)
     }
+}
 
-    private static func apng(_ frames: [CGImage]) -> Data? {
+/// 見本の投稿者のアイコンと絵文字の、アニメーション版。アプリに入れた動画（Tools/render-preview-avatar.py）をコマに展開し、APNGにまとめる。
+/// 見本の画像は、タイムラインのアイコンと絵文字と同じ画像のストアで描くため、動く画像のデータにする必要がある。APNGのままアプリに入れると約4MBになるので、動画で入れる。
+/// SE3では展開に0.04秒、APNGにまとめるのに0.36秒ほどかかるため、メインスレッドの外で作る。
+enum AnimatedPreviewAvatar {
+    private static let logger = SciaLog.logger(category: "settings")
+
+    @concurrent
+    static func render(from video: URL) async -> Data? {
+        do {
+            return try apng(await frames(of: video))
+        } catch {
+            logger.error("preview animated avatar render failed error=\(SciaLog.describe(error), privacy: .public)")
+            return nil
+        }
+    }
+
+    /// 動画のコマと、そのコマを見せる長さ。長さは、次のコマの表示時刻までで、最後のコマは動画の終わりまで。
+    private static func frames(of url: URL) async throws -> [(image: CGImage, duration: CMTime)] {
+        let asset = AVURLAsset(url: url)
+        guard let track = try await asset.loadTracks(withMediaType: .video).first else { throw CocoaError(.fileReadCorruptFile) }
+        let end = try await asset.load(.duration)
+        let reader = try AVAssetReader(asset: asset)
+        let output = AVAssetReaderTrackOutput(track: track, outputSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA])
+        reader.add(output)
+        guard reader.startReading() else { throw reader.error ?? CocoaError(.fileReadUnknown) }
+        var images: [(image: CGImage, time: CMTime)] = []
+        while let sample = output.copyNextSampleBuffer() {
+            guard let buffer = CMSampleBufferGetImageBuffer(sample) else { continue }
+            var image: CGImage?
+            VTCreateCGImageFromCVPixelBuffer(buffer, options: nil, imageOut: &image)
+            guard let image else { throw CocoaError(.fileReadCorruptFile) }
+            images.append((image, CMSampleBufferGetPresentationTimeStamp(sample)))
+        }
+        guard reader.status == .completed, !images.isEmpty else { throw reader.error ?? CocoaError(.fileReadCorruptFile) }
+        return images.indices.map { index in
+            let next = index + 1 < images.count ? images[index + 1].time : end
+            return (images[index].image, next - images[index].time)
+        }
+    }
+
+    private static func apng(_ frames: [(image: CGImage, duration: CMTime)]) throws -> Data {
         let data = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(data as CFMutableData, UTType.png.identifier as CFString, frames.count, nil) else {
-            logger.error("preview animated avatar encode failed")
-            return nil
+            throw CocoaError(.fileWriteUnknown)
         }
         let loop = [kCGImagePropertyPNGDictionary: [kCGImagePropertyAPNGLoopCount: 0]]
         CGImageDestinationSetProperties(destination, loop as CFDictionary)
-        let delay = [kCGImagePropertyPNGDictionary: [kCGImagePropertyAPNGDelayTime: animatedFrameDuration]]
         for frame in frames {
-            CGImageDestinationAddImage(destination, frame, delay as CFDictionary)
+            let delay = [kCGImagePropertyPNGDictionary: [kCGImagePropertyAPNGDelayTime: frame.duration.seconds]]
+            CGImageDestinationAddImage(destination, frame.image, delay as CFDictionary)
         }
-        guard CGImageDestinationFinalize(destination) else {
-            logger.error("preview animated avatar encode failed")
-            return nil
-        }
+        guard CGImageDestinationFinalize(destination) else { throw CocoaError(.fileWriteUnknown) }
         return data as Data
     }
 }

@@ -288,7 +288,7 @@ struct AppearanceEditorTests {
     /// アニメーション版も、ほかの見本の画像と同じく、通信の層を通さずに読む。
     @Test func samplesHaveAnimatedAvatar() async throws {
         let still = try #require(PreviewImages.avatarURL())
-        let animated = try #require(PreviewImages.animatedAvatarURL())
+        let animated = try #require(await PreviewImages.animatedAvatarWhenReady())
         #expect(animated != still)
         let data = try await AppDependencies.imageData(from: animated)
         let source = try #require(CGImageSourceCreateWithData(data as CFData, nil))

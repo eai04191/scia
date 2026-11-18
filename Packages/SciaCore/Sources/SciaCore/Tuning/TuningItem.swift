@@ -1634,6 +1634,16 @@ public enum TuningCatalog {
         defaultValue: 0.25
     )
 
+    /// 「投稿の見た目」の見本で、アイコンと絵文字を静止画からアニメーション版に替えるときのクロスフェードの時間。
+    /// カスタム絵文字は端末の時刻に合わせたコマから再生するので、替えた瞬間に色が一コマで飛ぶのを、混ぜてつなぐ。
+    public static let appearancePreviewAnimatedAvatarFadeDuration = NumberTuning(
+        id: "settings.appearancePreviewAnimatedAvatarFadeDuration",
+        title: "「投稿の見た目」の見本で、アイコンと絵文字を動く版に替えるフェードの時間（秒）",
+        range: 0...1.5,
+        step: 0.05,
+        defaultValue: 0.3
+    )
+
     /// 投稿欄を展開ボタンで本文に合わせた高さまで広げる時間と、5行の高さに戻す時間（秒）。
     public static let composeExpandDuration = NumberTuning(
         id: "compose.expandDuration",
@@ -2202,6 +2212,7 @@ public enum TuningCatalog {
         ]),
         TuningSection(id: "settings", title: "設定画面", items: [
             .number(menuLayoutIndentDuration),
+            .number(appearancePreviewAnimatedAvatarFadeDuration),
         ]),
         TuningSection(id: "batch", title: "まとめて行う操作", items: [
             .number(batchReblogInterval),

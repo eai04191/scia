@@ -1,3 +1,5 @@
+import ImageIO
+import SciaCore
 import Testing
 import UIKit
 @testable import Scia
@@ -32,6 +34,20 @@ struct PreviewImagesTests {
         try #require(drawn)
         for (x, y) in [(0, 0), (width - 1, 0), (0, height - 1), (width - 1, height - 1)] {
             #expect(pixels[(y * width + x) * 4 + 3] == 255, "(\(x), \(y))が透けています")
+        }
+    }
+
+    /// 見本の動くアイコンのコマの長さは、どれも1/100秒で割り切れる。アイコンの再生（`AvatarImageStore`）は1/100秒に丸め、絵文字の再生は丸めないため、割り切れないとアイコンだけ速く動く。
+    @Test func animatedAvatarFrameDurationsAreWholeCentiseconds() async throws {
+        let url = try #require(await PreviewImages.animatedAvatarWhenReady())
+        let data = try await AppDependencies.imageData(from: url)
+        let source = try #require(CGImageSourceCreateWithData(data as CFData, nil))
+        let count = CGImageSourceGetCount(source)
+        #expect(count > 1)
+        for index in 0..<count {
+            let properties = try #require(CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any])
+            let centiseconds = AnimatedImage.frameDuration(properties) * 100
+            #expect(abs(centiseconds - centiseconds.rounded()) < 0.001, "\(index)コマ目が\(centiseconds)/100秒です")
         }
     }
 
