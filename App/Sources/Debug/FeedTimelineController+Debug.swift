@@ -76,6 +76,8 @@ extension FeedTimelineController {
             streamDummyLinkCard(withImage: true, sensitive: true)
         case .xPost:
             streamDummyXPost()
+        case .spoilers:
+            streamDummySpoilers()
         case .filtered:
             streamDummyFiltered()
         case .animatedEmojis:
@@ -332,6 +334,50 @@ extension FeedTimelineController {
         }
     }
 
+    /// 注意書きのある3件を流す。4枚の画像、画像のないXの投稿、4枚の画像付きのXの投稿。Xの投稿は流す前に届けておく。
+    /// 中身の違う投稿で、注意書きを開閉する動きを見比べるため。Xの投稿の囲みは、設定で展開をオンにしているときだけ出る。
+    private func streamDummySpoilers() {
+        let avatar = model.debugStore.statuses.first?.account.avatar ?? client.credential.instance
+        let now = model.now()
+        let xPosts = viewController.xPosts
+        var dummies: [Status] = []
+        for (number, kind) in ["画像", "Xの投稿", "画像付きのXの投稿"].enumerated() {
+            let base = Self.dummyStatus(number: number + 1, avatar: avatar, now: now)
+            let isX = number > 0
+            guard let link = URL(string: "https://x.com/dummy/status/\(base.id)") else { return }
+            if isX {
+                xPosts?.deliver(XPost(
+                    id: base.id,
+                    url: link,
+                    authorName: "ダミーのXのアカウント",
+                    authorScreenName: "dummy",
+                    authorAvatar: avatar,
+                    text: .plain("A dummy X post behind a content warning.", emojis: []),
+                    language: "en",
+                    createdAt: now,
+                    media: number == 2 ? DummyMedia.attachments(idPrefix: "x-\(base.id)") : []
+                ))
+            }
+            dummies.append(Status(
+                id: base.id,
+                createdAt: base.createdAt,
+                account: Account(id: "dummy", username: "dummy", acct: "dummy", displayName: "ダミー（注意書きと\(kind)）", avatar: avatar),
+                content: isX
+                    ? #"<p>注意書きの中に\#(kind) <a href="\#(link.absoluteString)">x.com/dummy/status/\#(base.id)</a></p>"#
+                    : "<p>注意書きの中に\(kind)</p>",
+                spoilerText: "ダミーの注意書き（\(kind)）",
+                url: nil,
+                mediaAttachments: isX ? [] : DummyMedia.attachments(idPrefix: base.id)
+            ))
+        }
+        model.debugRun { model in
+            for dummy in dummies {
+                model.debugStore.debugLocalOnlyIDs.insert(dummy.id)
+                model.debugReceive(.update(dummy))
+            }
+        }
+    }
+
     /// ストリーミングで届いたのと同じ経路で、ダミーの新着を少しずつ流す。
     ///
     /// ダミーはサーバーにない投稿なので、見れば手元では既読になるが、サーバーに保存する既読位置には使わない。
@@ -460,6 +506,7 @@ enum DebugDummyPost: String, CaseIterable {
     case linkCardImage = "link-card-image"
     case linkCardSensitive = "link-card-sensitive"
     case xPost = "x-post"
+    case spoilers
     case filtered
     case animatedEmojis = "animated-emojis"
     case polls
@@ -480,6 +527,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .linkCardImage: "後から届くリンクカード（画像あり）"
         case .linkCardSensitive: "後から届くリンクカード（閲覧注意）"
         case .xPost: "後から届くXの投稿（画像4枚）"
+        case .spoilers: "注意書きのある投稿（画像、Xの投稿）"
         case .filtered: "フィルターに一致した投稿（警告、ぼかし、隠す）"
         case .animatedEmojis: "動く絵文字の多い投稿（40件）"
         case .polls: "投票の付いた投稿（4件）"
@@ -511,7 +559,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .arrivals, .animatedEmojis: .timeline
         case .images, .tall, .small, .transparent, .video, .longVideo: .media
         case .linkCard, .linkCardImage, .linkCardSensitive, .xPost: .delayed
-        case .filtered, .polls, .quotes, .reactions: .content
+        case .spoilers, .filtered, .polls, .quotes, .reactions: .content
         case .notifications: nil
         }
     }
@@ -527,6 +575,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .longVideo: "speaker.wave.2"
         case .linkCard, .linkCardImage, .linkCardSensitive: "link"
         case .xPost: "quote.bubble"
+        case .spoilers: "exclamationmark.bubble"
         case .filtered: "line.3.horizontal.decrease.circle"
         case .animatedEmojis: "face.smiling"
         case .polls: "chart.bar.horizontal.page"
