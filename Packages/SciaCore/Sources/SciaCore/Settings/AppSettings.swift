@@ -838,6 +838,22 @@ public final class SettingsStore {
         library = updated
     }
 
+    /// ショートカットから、アプリのプリセットを選ぶか、アカウントにプリセットを割り当てる。アカウントに`nil`を渡すと、割り当てを外す。
+    /// 消えたプリセットやログアウトしたアカウントを指したら、何も変えずに失敗する（docs/preset.md）。
+    /// - Parameter signedInAccounts: ログインしているアカウントのハンドル。
+    public func applyShortcut(selecting id: PresetID?, for scope: PresetScope, signedInAccounts: [String]) throws(PresetError) {
+        if case .account(let handle) = scope, !signedInAccounts.contains(handle) {
+            throw .accountNotFound
+        }
+        try tryUpdateLibrary { library throws(PresetError) in
+            switch (id, scope) {
+            case (let id?, _): try library.select(id, for: scope)
+            case (nil, .account(let handle)): library.unassign(account: handle)
+            case (nil, .app): throw .presetNotFound
+            }
+        }
+    }
+
     func resolvedAppearance(in preset: PresetID) -> AppearanceChoices {
         for field in AppearanceStorage.fieldNames {
             track(AppearanceStorage.key(field))

@@ -53,6 +53,8 @@ targets:
       - package: MemoryCache
       - package: TextKit2Label
       - target: SciaShareExtension
+      # ショートカットのアクションのメタデータは、つないだときだけ書き出される。importだけでは書き出さない
+      - sdk: AppIntents.framework
     postBuildScripts:
       - name: Embed Build Info
         script: '"$SRCROOT/Tools/embed-build-info.sh"'

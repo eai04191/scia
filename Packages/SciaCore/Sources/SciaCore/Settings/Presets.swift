@@ -41,6 +41,29 @@ public enum PresetID: Codable, Hashable, Sendable {
     case builtIn(BuiltInPreset)
     /// 使う人のプリセット。番号は`PresetLibrary`が作った順に振り、使い回さない。
     case user(Int)
+
+    /// ショートカットなどの外に残す、文字列の指し方。
+    public var token: String {
+        switch self {
+        case .builtIn(let preset): "builtIn:\(preset.rawValue)"
+        case .user(let number): "user:\(number)"
+        }
+    }
+
+    public init?(token: String) {
+        let parts = token.split(separator: ":", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { return nil }
+        switch parts[0] {
+        case "builtIn":
+            guard let preset = BuiltInPreset(rawValue: parts[1]) else { return nil }
+            self = .builtIn(preset)
+        case "user":
+            guard let number = Int(parts[1]) else { return nil }
+            self = .user(number)
+        default:
+            return nil
+        }
+    }
 }
 
 /// 使う人のプリセット。親から変えた項目だけを持つ。
@@ -66,6 +89,8 @@ public enum PresetError: Error, Equatable {
     case builtInIsReadOnly
     /// 数でない値（NaNや無限）。保存の形に書けない。
     case invalidValue
+    /// 指したアカウントがログアウトしている。
+    case accountNotFound
 }
 
 /// プリセットと、アプリとアカウントが使うプリセット。値の重ね方は、アプリの既定値、組み込みのプリセット、使う人のプリセット（親から子へ）の順（docs/preset.md）。
@@ -291,6 +316,11 @@ public struct PresetLibrary: Codable, Equatable, Sendable {
 }
 
 public enum PresetTexts {
+    /// ショートカットで、指したプリセットが削除されていたとき。
+    public static let presetNotFound = "プリセットが見つかりません"
+    /// ショートカットで、指したアカウントがログアウトしていたとき。
+    public static let accountNotFound = "アカウントが見つかりません"
+
     /// 自動で作るプリセットと、複製したプリセットの名前。
     public static func numberedName(_ base: String, number: Int) -> String {
         "\(base) \(number)"
