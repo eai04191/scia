@@ -98,6 +98,17 @@ public actor EmojiImageFiles {
         await listed.contains(url)
     }
 
+    /// 画像を置き終えた回数。端末になかった画像を、別の経路（先読みなど）で置いたかを、読み直す側が安く知るために使う。
+    private let writes = Mutex(0)
+
+    public nonisolated var writeCount: Int {
+        writes.withLock { $0 }
+    }
+
+    private func didWrite() {
+        writes.withLock { $0 += 1 }
+    }
+
     /// 描くために取得した画像を置く。応答に載っていて、必須でない用途の空きがこの画像の分あればA、ほかはBに置く。
     /// 空き容量が足りないときに描くために取得したAの画像は、Bとして扱う（上限で入れ替わる）。
     @discardableResult
@@ -110,6 +121,7 @@ public actor EmojiImageFiles {
             if listedURLs?.contains(url) == true {
                 await others.remove(url)
                 placed(data.count)
+                didWrite()
                 return .listed
             }
             await listed.remove(url)
@@ -119,6 +131,7 @@ public actor EmojiImageFiles {
         if othersStores % Self.statsRefreshInterval == 0 {
             await refreshStats()
         }
+        didWrite()
         return .others
     }
 
@@ -138,6 +151,7 @@ public actor EmojiImageFiles {
         }
         await others.remove(url)
         placed(data.count)
+        didWrite()
         return true
     }
 

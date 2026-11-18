@@ -68,6 +68,19 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     private let maker: PlatformImageMaker<Image>
     /// 持っている画像より高く読み直す通信を今送ってよいなら、その目的。持っている画像で描けるので、質を上げる通信として送る（docs/network.md）。
     private let upgradePurpose: @MainActor () -> RequestPurpose?
+    /// 端末に置いた元の画像。通信しないので、読み直しの通信を送れないときも、これがあれば描く高さで作り直す（docs/network.md）。
+    private let storedData: @Sendable (URL) async -> Data?
+    /// 端末に画像を置き終えた回数。`storageMisses`を、置いたあとに見直すために比べる。
+    private let storedWriteCount: @Sendable () -> Int
+    /// 端末から作り直そうとして、元の画像がなかったか読めなかった絵文字と、そのときの`storedWriteCount`。
+    /// 描くたびに端末を読みに行かないよう覚え、何か置かれたら（先読みなど別の経路を含む）見直す。
+    private var storageMisses: [URL: Int] = [:]
+    /// 端末から作り直している静止画とアニメーション。通信の読み込み（`loading`、`upgradingAnimations`）とは別に持ち、
+    /// 端末を見ている間に届いた通信の要求や操作の要求を、読み込み中として見送らないようにする。
+    private var reloadingStills: Set<URL> = []
+    /// 端末から作り直している静止画の数。終えたことを、テストが時間を待たずに確かめるのに使う。
+    var reloadingStillCount: Int { reloadingStills.count }
+    private var reloadingAnimations: Set<URL> = []
     /// 縮めた静止画。96pxの高さで1枚40KBほどなので、正方形の絵文字なら800個ほど入る。大きく描いた絵文字だけが、その高さで重くなる。
     /// 静止画は行を描き直すたびにここから求め直す。何をいつ捨てるかはdocs/image-loading.mdの「メモリに持つ画像」に従う。
     /// 画面に出ている絵文字が捨てられると空けた場所で描いて読み直し、読み終えるとまた行を描き直す。
@@ -120,11 +133,15 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
         retryPolicy: @escaping @MainActor () -> RetrySchedule.Policy,
         maker: PlatformImageMaker<Image>,
         upgradePurpose: @escaping @MainActor () -> RequestPurpose?,
+        storedData: @escaping @Sendable (URL) async -> Data? = { _ in nil },
+        storedWriteCount: @escaping @Sendable () -> Int = { 0 },
         fetch: @escaping Fetch
     ) {
         self.fetch = fetch
         self.maker = maker
         self.upgradePurpose = upgradePurpose
+        self.storedData = storedData
+        self.storedWriteCount = storedWriteCount
         self.clock = clock
         retry = RetrySchedule(policy: retryPolicy, clock: clock)
     }
@@ -145,8 +162,12 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     public func image(for url: URL, pixelHeight: Int = pixelHeight, retriesNow: Bool = false) -> Image? {
         let loadHeight = Self.loadHeight(for: pixelHeight)
         if let image = stills.value(forKey: url), let resolution = stillResolutions[url] {
-            if resolution.needsReload(for: loadHeight), let purpose = retriesNow ? .action : upgradePurpose(), retriesNow || retry.allowsAutomaticLoad(of: url) {
-                load(url, pixelHeight: loadHeight, purpose: purpose)
+            if resolution.needsReload(for: loadHeight) {
+                if let purpose = retriesNow ? .action : upgradePurpose(), retriesNow || retry.allowsAutomaticLoad(of: url) {
+                    load(url, pixelHeight: loadHeight, purpose: purpose)
+                } else {
+                    reloadStillFromStorage(url, pixelHeight: loadHeight)
+                }
             }
             return image
         }
@@ -184,9 +205,13 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
                 loadAnimation(url, pixelHeight: max(loadHeight, resolution.pixelHeight))
                 return nil
             }
-            if resolution.needsReload(for: loadHeight), !upgradingAnimations.contains(url), let purpose = upgradePurpose(), retry.allowsAutomaticLoad(of: url) {
-                upgradingAnimations.insert(url)
-                loadAnimation(url, pixelHeight: loadHeight, purpose: purpose, replacing: resolution)
+            if resolution.needsReload(for: loadHeight), !upgradingAnimations.contains(url) {
+                if let purpose = upgradePurpose(), retry.allowsAutomaticLoad(of: url) {
+                    upgradingAnimations.insert(url)
+                    loadAnimation(url, pixelHeight: loadHeight, purpose: purpose, replacing: resolution)
+                } else {
+                    reloadAnimationFromStorage(url, pixelHeight: loadHeight)
+                }
             }
             return animation
         case .failed:
@@ -293,6 +318,63 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
             }
             notify(url)
         } }
+    }
+
+    /// 読み直しの通信を送れないときに、端末に置いた元の画像があれば、通信せずに描く高さで作り直す。
+    /// なかったか読めなかったら、何か置かれるまで見に行かない。終えたら知らせ、見ている間に見送った描き直しを求め直させる。
+    private func reloadStillFromStorage(_ url: URL, pixelHeight: Int) {
+        guard !isStorageMiss(url), reloadingStills.insert(url).inserted else { return }
+        let writeCount = storedWriteCount()
+        Task(.withoutRequests) { [self] in
+            defer {
+                reloadingStills.remove(url)
+                notify(url)
+            }
+            let elapsed = stopwatch(on: clock)
+            guard let data = await storedData(url),
+                  let (image, isLargest, source, _) = await Self.decodeStill(data, pixelHeight: pixelHeight, elapsed: elapsed)
+            else {
+                storageMisses[url] = writeCount
+                return
+            }
+            // 作り直している間に、通信でもっと高く読めていたら、低い画像で上書きしない。
+            if let current = stillResolutions[url], current.pixelHeight >= pixelHeight { return }
+            onSourceSize?(url, source.width, source.height)
+            onStillDecoded?(url, image)
+            evictedStills.formUnion(stills.setValue(maker.still(image), forKey: url, cost: PlatformImageMaker<Image>.cost(of: image)))
+            stillResolutions[url] = Resolution(pixelHeight: pixelHeight, isLargest: isLargest)
+            evictedStills.remove(url)
+            stats.peakStillCost = max(stats.peakStillCost, stills.totalCost)
+        }
+    }
+
+    /// `reloadStillFromStorage`のアニメーション版。
+    private func reloadAnimationFromStorage(_ url: URL, pixelHeight: Int) {
+        guard !isStorageMiss(url), reloadingAnimations.insert(url).inserted else { return }
+        let writeCount = storedWriteCount()
+        Task(.withoutRequests) { [self] in
+            defer { reloadingAnimations.remove(url) }
+            guard let data = await storedData(url),
+                  let (image, isLargest, _) = await Task.detached(priority: .utility, operation: { await Self.decodeAnimation(data, pixelHeight: pixelHeight) }).value
+            else {
+                storageMisses[url] = writeCount
+                return
+            }
+            if case .animated(let current) = animationStates[url], current.pixelHeight >= pixelHeight { return }
+            animations.setValue(EmojiAnimation(image), forKey: url, cost: image.byteCount)
+            stats.animationBytes += image.byteCount
+            stats.largestAnimationBytes = max(stats.largestAnimationBytes, image.byteCount)
+            animationStates[url] = .animated(Resolution(pixelHeight: pixelHeight, isLargest: isLargest))
+            notify(url)
+        }
+    }
+
+    /// 前に端末から作り直そうとして、なかったか読めなかったか。そのあと何か置かれていれば、見直す。
+    private func isStorageMiss(_ url: URL) -> Bool {
+        guard let writeCount = storageMisses[url] else { return false }
+        if writeCount == storedWriteCount() { return true }
+        storageMisses[url] = nil
+        return false
     }
 
     public struct DecodeError: Error {}

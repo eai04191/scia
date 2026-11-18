@@ -26,6 +26,16 @@ struct NetworkUsePolicyTests {
     }
 
     /// 先読みは、設定によらずWi-Fiでだけ送る。
+    /// 大きく描くカスタム絵文字を取得して読み直す通信は、「高画質のサムネイル」によらずモバイル通信でも送り、低データモードでは送らない。
+    @Test func emojiUpgradeIgnoresThumbnailSettingButNotLowDataMode() {
+        for sends in [true, false] {
+            #expect(NetworkUsePolicy(conditions: cellular, sendsEnhancementOnExpensiveNetwork: sends).emojiUpgrade == .enhancement(onExpensiveNetwork: true))
+            #expect(NetworkUsePolicy(conditions: wifi, sendsEnhancementOnExpensiveNetwork: sends).emojiUpgrade == .enhancement(onExpensiveNetwork: true))
+            #expect(NetworkUsePolicy(conditions: lowData, sendsEnhancementOnExpensiveNetwork: sends).emojiUpgrade == nil)
+            #expect(NetworkUsePolicy(conditions: lowDataOnCellular, sendsEnhancementOnExpensiveNetwork: sends).emojiUpgrade == nil)
+        }
+    }
+
     @Test func prefetchIsSentOnlyOnUnmeteredNetwork() {
         #expect(NetworkUsePolicy(conditions: wifi, sendsEnhancementOnExpensiveNetwork: false).prefetch == .prefetch)
         #expect(NetworkUsePolicy(conditions: cellular, sendsEnhancementOnExpensiveNetwork: true).prefetch == nil)

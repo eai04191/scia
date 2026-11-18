@@ -26,7 +26,7 @@ extension EmojiImageStore where Image == UIImage {
     convenience init(
         clock: any Clock<Duration> = AppDependencies.clock,
         retryPolicy: @escaping @MainActor () -> RetrySchedule.Policy = { TuningCatalog.imageRetry(in: AppDependencies.tuning) },
-        upgradePurpose: @escaping @MainActor () -> RequestPurpose? = { AppDependencies.network.usePolicy(settings: AppDependencies.settings).enhancement },
+        upgradePurpose: @escaping @MainActor () -> RequestPurpose? = { AppDependencies.network.usePolicy(settings: AppDependencies.settings).emojiUpgrade },
         fetch: @escaping Fetch
     ) {
         self.init(clock: clock, retryPolicy: retryPolicy, maker: .uiKit, upgradePurpose: upgradePurpose, fetch: fetch)

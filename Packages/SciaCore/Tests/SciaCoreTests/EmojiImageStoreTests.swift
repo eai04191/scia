@@ -16,13 +16,16 @@ struct EmojiImageStoreTests {
         let count = Mutex(0)
     }
 
-    /// - Parameter upgradePurpose: 持っている画像より高く読み直す通信の目的。nilなら、質を上げる通信を送れない回線として扱う。
-    private func makeStore(_ data: Data, upgradePurpose: RequestPurpose? = .enhancement(onExpensiveNetwork: false)) -> EmojiImageStore<CGImage> {
+    /// - Parameters:
+    ///   - upgradePurpose: 持っている画像より高く読み直す通信の目的。nilなら、読み直しの通信を送れない回線として扱う。
+    ///   - storedLocally: 端末に元の画像を置いているか。置いていれば、通信せずに`data`を返す。
+    private func makeStore(_ data: Data, upgradePurpose: RequestPurpose? = .enhancement(onExpensiveNetwork: false), storedLocally: Bool = false) -> EmojiImageStore<CGImage> {
         EmojiImageStore(
             clock: TestClock(),
             retryPolicy: { RetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) },
             maker: PlatformImageMaker(still: { $0 }, animated: { _, _ in nil }),
-            upgradePurpose: { upgradePurpose }
+            upgradePurpose: { upgradePurpose },
+            storedData: { _ in storedLocally ? data : nil }
         ) { [fetches] _ in
             fetches.count.withLock { $0 += 1 }
             return data
@@ -73,7 +76,7 @@ struct EmojiImageStoreTests {
         return try #require(context.makeImage())
     }
 
-    private static func png(width: Int, height: Int) throws -> Data {
+    static func png(width: Int, height: Int) throws -> Data {
         let data = NSMutableData()
         let destination = try #require(CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil))
         CGImageDestinationAddImage(destination, try image(width: width, height: height), nil)
@@ -82,7 +85,7 @@ struct EmojiImageStoreTests {
     }
 
     /// `frameCount`コマの、`size`四方のGIF。コマごとに明るさを変える。
-    private static func gif(size: Int, frameCount: Int) throws -> Data {
+    static func gif(size: Int, frameCount: Int) throws -> Data {
         try gif(width: size, height: size, frameCount: frameCount)
     }
 
@@ -385,7 +388,7 @@ struct EmojiImageStoreTests {
         #expect(fetches.count.withLock { $0 } == 2)
     }
 
-    /// 質を上げる通信を送れない回線では、持っている画像より高く読み直さず、持っている画像を拡大して描く。
+    /// 読み直しの通信を送れない回線で、端末に元の画像もなければ、持っている画像より高く読み直さず、持っている画像を拡大して描く。
     /// 初めて読むときは、大きく描くための高さでも通信は同じなので、その高さで読む。
     @Test func doesNotReloadWithoutEnhancementPurpose() async throws {
         let store = makeStore(try Self.png(width: 400, height: 400), upgradePurpose: nil)
@@ -400,6 +403,19 @@ struct EmojiImageStoreTests {
         _ = store.image(for: other, pixelHeight: 200)
         try await waitUntil { store.image(for: other, pixelHeight: 200) != nil }
         #expect(store.image(for: other, pixelHeight: 200)?.height == 200)
+    }
+
+    /// 端末に元の画像があれば、読み直しの通信を送れない回線（低データモード）でも、通信せずに端末の画像から描く高さで作り直す。
+    @Test func reloadsFromStoredDataWithoutUpgradePurpose() async throws {
+        let store = makeStore(try Self.png(width: 400, height: 400), upgradePurpose: nil, storedLocally: true)
+        _ = store.image(for: url)
+        try await waitUntil { store.image(for: url) != nil }
+        let fetchesBefore = fetches.count.withLock { $0 }
+
+        _ = store.image(for: url, pixelHeight: 200)
+        try await waitUntil { store.image(for: url, pixelHeight: 200)?.height == 200 }
+
+        #expect(fetches.count.withLock { $0 } == fetchesBefore)
     }
 
     /// 持っている画像の1.1倍（`upscaleTolerance`）までの高さなら、読み直さずに拡大して描く。初めて読むときも、既定の高さの1.1倍までなら既定の高さで読む。

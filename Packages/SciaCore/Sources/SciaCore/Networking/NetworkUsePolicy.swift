@@ -30,6 +30,13 @@ public struct NetworkUsePolicy: Equatable, Sendable {
         return .enhancement(onExpensiveNetwork: sendsEnhancementOnExpensiveNetwork)
     }
 
+    /// 大きく描くカスタム絵文字を、端末にない元の画像を取得して読み直す通信を今送ってよいなら、その目的。
+    /// 「高画質のサムネイル」はメディアのサムネイルの設定なので見ず、モバイル通信でも送る。低データモードでは送らない（docs/network.md）。
+    public var emojiUpgrade: RequestPurpose? {
+        guard !conditions.isConstrained else { return nil }
+        return .enhancement(onExpensiveNetwork: true)
+    }
+
     /// 先読みを今送ってよいなら、その目的。Wi-Fiのように、通信量に限りがなく低データモードでもない回線でだけ送る。
     public var prefetch: RequestPurpose? {
         guard !conditions.isConstrained, !conditions.isExpensive else { return nil }

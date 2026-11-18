@@ -91,7 +91,19 @@ public final class ImageStores<Image: AnyObject & Sendable> {
         let oversizedEmojis = OversizedEmojiRecord(file: emojiImageDirectory.appending(path: "oversized.json"))
         self.oversizedEmojis = oversizedEmojis
         let stored = StoredImageFetch(files: emojiImageFiles) { try await remoteFetch.data(from: $0) }
-        emojis = EmojiImageStore(clock: clock, retryPolicy: retryPolicy, maker: maker, upgradePurpose: { network.usePolicy(settings: settings).enhancement }) { url in
+        emojis = EmojiImageStore(
+            clock: clock,
+            retryPolicy: retryPolicy,
+            maker: maker,
+            upgradePurpose: { network.usePolicy(settings: settings).emojiUpgrade },
+            storedData: { url in
+                if let data = await localData(url) {
+                    return data
+                }
+                return await emojiImageFiles.data(for: url)
+            },
+            storedWriteCount: { emojiImageFiles.writeCount }
+        ) { url in
             if let data = await localData(url) {
                 return data
             }
