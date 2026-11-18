@@ -115,6 +115,13 @@ struct PresetManagementView: View {
             }
         }
         .tint(.primary)
+        .contextMenu {
+            Button(SettingsTexts.Presets.duplicate, systemImage: "plus.square.on.square") { duplicate(id) }
+            Button(SettingsTexts.Presets.createChild, systemImage: "plus") { create(parent: id) }
+            if case .user = id {
+                Button(SettingsTexts.Presets.delete, systemImage: "trash", role: .destructive) { deleting = id }
+            }
+        }
         .swipeActions {
             if case .user = id {
                 // `.destructive`にすると、SwiftUIが出した確認をすぐに出し直し、そのときに前の確認と一緒に設定の画面まで閉じる（iOS 27で確認）。
@@ -136,13 +143,25 @@ struct PresetManagementView: View {
         }
     }
 
-    /// `parent`を親にしたプリセットを、名前を聞いてから作り、その画面を開く。
     private func createButton(parent: PresetID) -> some View {
-        Button(library.name(of: parent) ?? "") {
-            PresetNameInput.present(from: anchor, title: SettingsTexts.Presets.createTitle, actionTitle: SettingsTexts.Presets.create, text: library.suggestedName(from: parent)) { name throws(PresetError) in
-                var created: PresetID?
-                try settings.store.tryUpdateLibrary { library throws(PresetError) in created = try library.create(parent: parent, name: name) }
-                if let created { openPreset(created) }
+        Button(library.name(of: parent) ?? "") { create(parent: parent) }
+    }
+
+    /// `parent`を親にしたプリセットを、名前を聞いてから作り、その画面を開く。
+    private func create(parent: PresetID) {
+        PresetNameInput.present(from: anchor, title: SettingsTexts.Presets.createTitle, actionTitle: SettingsTexts.Presets.create, text: library.suggestedName(from: parent)) { name throws(PresetError) in
+            var created: PresetID?
+            try settings.store.tryUpdateLibrary { library throws(PresetError) in created = try library.create(parent: parent, name: name) }
+            if let created { openPreset(created) }
+        }
+    }
+
+    /// 名前を聞いて複製する。複製しても一覧にとどまる。
+    private func duplicate(_ id: PresetID) {
+        PresetNameInput.present(from: anchor, title: SettingsTexts.Presets.duplicateTitle, actionTitle: SettingsTexts.Presets.duplicate, text: library.suggestedName(from: id)) { name throws(PresetError) in
+            try settings.store.tryUpdateLibrary { library throws(PresetError) in
+                let duplicated = try library.duplicate(id)
+                try library.rename(duplicated, to: name)
             }
         }
     }
