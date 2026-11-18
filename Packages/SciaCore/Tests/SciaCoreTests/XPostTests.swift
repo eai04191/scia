@@ -149,6 +149,36 @@ struct XPostTests {
         #expect(links.map(\.1) == [.url(try url("https://x.com/DeepSeekHarness"))])
     }
 
+    /// 引用元は中身を出さず、押して開く先のURLだけを持つ。引用していない投稿ではnil。
+    @Test(.requestPurpose(.action)) func decodesQuote() async throws {
+        let transport = StubTransport([try .fixture("fxtwitter_quote"), try .fixture("fxtwitter_photo")])
+        let client = XPostClient(client: HTTPClient(transport: transport, retry: RetryPolicy(maxRetries: 0, initialDelay: .zero), clock: TestClock()))
+
+        let quoting = try await client.post(id: "1585664518373376004")
+        #expect(quoting.quote == .link(try url("https://x.com/example_quoted/status/1584425825268486144")))
+        #expect(quoting.text.plainText == "引用した投稿の本文")
+        let plain = try await client.post(id: "2110205221557453003")
+        #expect(plain.quote == nil)
+    }
+
+    /// 出せない引用元は、fxtwitterの`tombstone`の理由を、Mastodonの引用元を出せない理由に当てはめる。開く先のURLが読めない引用元も、出せないものにする。
+    @Test(arguments: [
+        (#"{"type": "tombstone", "provider": "twitter", "reason": "deleted", "message": "This post was deleted."}"#, XPostQuote.unavailable(.deleted)),
+        (#"{"type": "tombstone", "provider": "twitter", "reason": "private", "message": "Private."}"#, .unavailable(.unauthorized)),
+        (#"{"type": "tombstone", "provider": "twitter", "reason": "suspended", "message": "Suspended.", "url": "https://x.com/a/status/2"}"#, .unavailable(.unauthorized)),
+        (#"{"id": "2", "url": "tel:0123456789"}"#, .unavailable(.unauthorized)),
+    ])
+    func decodesUnavailableQuote(_ quote: String, expected: XPostQuote) throws {
+        let json = """
+        {"code": 200, "tweet": {"id": "1", "url": "https://x.com/a/status/1", "raw_text": {"text": "a", "facets": []}, "author": {"name": "A", "screen_name": "a"}, "quote": \(quote)}}
+        """
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+        let tweet = try #require(try decoder.decode(FxTwitterResponse.self, from: Data(json.utf8)).tweet)
+        #expect(XPost(tweet).quote == expected)
+    }
+
     /// fxtwitterの応答もサーバーから来る値なので、押して開く先はhttpとhttpsだけを受け付ける。ほかのスキームの投稿のURLは、Xの投稿として読めないものにする。
     @Test(arguments: ["tel:0123456789", "file:///etc/passwd", "sms:0123456789"])
     func rejectsPostWithOtherSchemeURL(_ postURL: String) throws {

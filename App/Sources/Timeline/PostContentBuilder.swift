@@ -323,6 +323,15 @@ struct PostContentBuilder {
         let language = settings.glyphLanguageIdentifier(for: post.language)
         // Xの投稿にカスタム絵文字はないが、翻訳のマークを引用の囲みと同じ大きさにするため、同じ倍率を渡す。
         let body = translated(RichTextRenderer(font: typography.font(.xPostBody), textColor: .label, settings: settings, emojiScale: settings.value(of: AppearanceCatalog.customEmojiScale), showsCustomEmojis: appearance.showsCustomEmojis, emojiImages: emojiImages, language: language), by: translation)
+        let font = typography.font(.xPostBody)
+        let notes: [EmbeddedPostView.Content.Note] = switch post.quote {
+        case .link:
+            [EmbeddedPostView.Content.Note(text: noteText(PostTexts.nestedQuoteNote, symbolName: "quote.bubble", color: .tintColor, font: font), isPressable: true)]
+        case .unavailable(let reason):
+            [EmbeddedPostView.Content.Note(text: noteText(reason.title, symbolName: "quote.bubble", color: .secondaryLabel, font: font), isPressable: false)]
+        case nil:
+            []
+        }
         return embed(
             id: "x:\(post.id)",
             header: EmbeddedPostView.Content.Header(
@@ -334,6 +343,7 @@ struct PostContentBuilder {
             text: body.render(translation?.text ?? post.text),
             translation: embedTranslation(translation),
             media: media,
+            notes: notes,
             openActionName: PostTexts.openXPost
         )
     }

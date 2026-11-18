@@ -17,6 +17,8 @@ public struct XPost: Hashable, Sendable {
     public let createdAt: Date?
     /// 添付ファイル。ビューアで開けるよう、Mastodonの添付ファイルの形にしてある。
     public let media: [MediaAttachment]
+    /// 引用している投稿。引用していなければnil。
+    public let quote: XPostQuote?
 
     public init(
         id: String,
@@ -27,7 +29,8 @@ public struct XPost: Hashable, Sendable {
         text: RichText,
         language: String? = nil,
         createdAt: Date? = nil,
-        media: [MediaAttachment] = []
+        media: [MediaAttachment] = [],
+        quote: XPostQuote? = nil
     ) {
         self.id = id
         self.url = url
@@ -38,7 +41,16 @@ public struct XPost: Hashable, Sendable {
         self.language = language
         self.createdAt = createdAt
         self.media = media
+        self.quote = quote
     }
+}
+
+/// Xの投稿が引用している投稿。囲みは1段だけにし、引用していることを示す1行だけを出す（docs/link-card.md）。
+public enum XPostQuote: Hashable, Sendable {
+    /// 押すと、このURLの投稿を開く。
+    case link(URL)
+    /// 押せず、出せない理由を出す。
+    case unavailable(QuoteDisplay.Reason)
 }
 
 /// Xの投稿へのリンク。
@@ -118,9 +130,10 @@ struct FxTwitterResponse: Decodable {
         let createdTimestamp: Double?
         let author: Author
         let media: Media?
+        let quote: Quote?
 
         private enum CodingKeys: String, CodingKey {
-            case id, url, rawText, lang, createdTimestamp, author, media
+            case id, url, rawText, lang, createdTimestamp, author, media, quote
         }
 
         init(from decoder: any Decoder) throws {
@@ -133,6 +146,29 @@ struct FxTwitterResponse: Decodable {
             createdTimestamp = try container.decodeIfPresent(Double.self, forKey: .createdTimestamp)
             author = try container.decode(Author.self, forKey: .author)
             media = try container.decodeIfPresent(Media.self, forKey: .media)
+            quote = try container.decodeIfPresent(Quote.self, forKey: .quote)
+        }
+    }
+
+    /// 引用している投稿。出せないときは、投稿の代わりに`type`が`tombstone`のものが入る。
+    /// 中身は出さず、押して開く先だけを読む。
+    enum Quote: Decodable {
+        case post(url: URL?)
+        /// `deleted`、`suspended`、`private`、`blocked`、`unavailable`。
+        case tombstone(reason: String?)
+
+        private enum CodingKeys: String, CodingKey {
+            case type, url, reason
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            if try container.decodeIfPresent(String.self, forKey: .type) == "tombstone" {
+                self = .tombstone(reason: try container.decodeIfPresent(String.self, forKey: .reason))
+            } else {
+                // 開く先が読めなくても、引用していることは出すため、外側の投稿ごと読めないものにはしない。
+                self = .post(url: container.decodeURL(.destination, forKey: .url))
+            }
         }
     }
 
@@ -225,8 +261,22 @@ extension XPost {
             createdAt: tweet.createdTimestamp.map { Date(timeIntervalSince1970: $0) },
             media: (tweet.media?.all ?? []).enumerated().compactMap { index, item in
                 MediaAttachment(item, postID: tweet.id, index: index)
-            }
+            },
+            quote: tweet.quote.map(XPostQuote.init)
         )
+    }
+}
+
+extension XPostQuote {
+    init(_ quote: FxTwitterResponse.Quote) {
+        switch quote {
+        case .post(let url?):
+            self = .link(url)
+        case .post(nil):
+            self = .unavailable(.unauthorized)
+        case .tombstone(let reason):
+            self = .unavailable(reason == "deleted" ? .deleted : .unauthorized)
+        }
     }
 }
 

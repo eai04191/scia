@@ -2531,6 +2531,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             // 投稿した人が付けた閲覧注意でぼかしているため、ぼかしを外すと、投稿の添付ファイルとそろって外れる。
             configuration.embedActions.revealMedia = { [weak self] in self?.revealMedia(of: shown) }
             configuration.embedActions.openLink = { [weak self] destination in self?.onOpenLink?(destination, shown) }
+            if case .link(let quoteURL) = xPost.post.quote {
+                configuration.embedActions.selectNote = { [weak self] _ in self?.onOpenLink?(.url(quoteURL), shown) }
+            }
         }
         if case .card(let card)? = configuration.card?.card, let attachment = card.imageAttachment {
             configuration.onOpenLinkCardImage = { [weak self] thumbnail in
