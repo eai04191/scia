@@ -11,7 +11,7 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 ## アプリで1つ作るもの
 
 - `TuningStore`: Releaseでも値を読むので、どのUIも作る。パネルを持たないなら`TuningStore(defaults: nil)`で既定値を使う
-- `AppSettings`: 設定。サムネイルの回線の条件や、リンクを開く先もここから読む
+- `AppSettings`: 設定。サムネイルの回線の条件や、リンクを開く先もここから読む。アプリで1つ作るのはアプリのプリセットを読む設定で、窓に開いたアカウントの設定は`forAccount(_:)`で作り、そのアカウントのセッション（`AccountSession`）に渡す。窓の中の部品は、そのアカウントの設定を読む（[preset.md](preset.md)）
 - `HTTPClient`: APIの外の通信の口。決まりは[network.md](network.md)
 - `NetworkConditionsMonitor`: 回線の見張り。サムネイルの条件（`thumbnailPolicy(settings:tuning:)`）と、電波が戻った回数（`recoveryCount`）を出す
 - `ImageStores`: アイコン、添付ファイル、カスタム絵文字の画像のストア（`avatars`、`media`、`emojis`）と、サーバーごとのカスタム絵文字のリスト（`customEmojis`）。置き場所、読み方、読み直しの間隔まで組んである。UIは画像の型の作り方（`PlatformImageMaker`）だけを渡す。絵文字の画像のストアは、アカウントごとに作らない
