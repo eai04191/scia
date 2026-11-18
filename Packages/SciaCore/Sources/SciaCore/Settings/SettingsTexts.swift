@@ -268,7 +268,7 @@ public enum SettingsTexts {
             usesSharedModel ? "翻訳元" : "ダウンロード済み"
         }
 
-        public static let removeLanguageFooter = "言語は“設定”>“アプリ”>“翻訳”>“言語”で削除できます。"
+        public static let removeLanguageFooter = PathText(before: "言語は", path: ["“設定”", "“アプリ”", "“翻訳”", "“言語”"], after: "で削除できます。")
 
         /// 言語をダウンロードするボタンの読み上げ。
         public static func download(languageName: String) -> String {
@@ -517,5 +517,18 @@ extension MenuRowSize {
     /// iOSでは、SwiftUIの`Text`に数を埋めて出していて、`Text`がデバイスの数字の書き方で書いていたため、同じにする。
     public var capacityTitle: String {
         "\(capacity.formatted())個まで"
+    }
+}
+
+/// 画面の階層をたどる道すじを含む文。画面では、道すじの名前をシェブロンの記号でつなぐ。
+public struct PathText: Sendable {
+    public let before: String
+    /// 上の階層から順に並べた名前。
+    public let path: [String]
+    public let after: String
+
+    /// 読み上げ。道すじの名前を「、」でつなぐ。
+    public var accessibilityLabel: String {
+        before + path.joined(separator: "、") + after
     }
 }

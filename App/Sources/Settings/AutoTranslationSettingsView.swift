@@ -135,7 +135,8 @@ struct AutoTranslationSettingsView: View {
                 NotInPresetLabel(title: SettingsTexts.AutoTranslation.installedHeader(usesSharedModel: usesSharedModel))
             } footer: {
                 if !usesSharedModel {
-                    Text(SettingsTexts.AutoTranslation.removeLanguageFooter)
+                    ChevronPathText(SettingsTexts.AutoTranslation.removeLanguageFooter)
+                        .accessibilityLabel(SettingsTexts.AutoTranslation.removeLanguageFooter.accessibilityLabel)
                 }
             }
         }
