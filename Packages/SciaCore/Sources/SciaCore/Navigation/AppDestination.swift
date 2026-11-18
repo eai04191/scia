@@ -193,7 +193,8 @@ public enum AppDestination: Equatable, Sendable {
             Self.appearanceGroup(id: String(path.dropFirst(Self.appearanceGroupPrefix.count)))
         case ("settings", _) where path.hasPrefix(Self.notificationAppearanceGroupPrefix):
             Self.notificationAppearanceGroup(id: String(path.dropFirst(Self.notificationAppearanceGroupPrefix.count)))
-        case ("settings", _): SettingsPage(rawValue: path).map { .settings($0) }
+        // プリセットの編集は、どのプリセットかを画面が持つので、URLでは開かない。
+        case ("settings", _): SettingsPage(rawValue: path).flatMap { $0 == .presetEditor ? nil : .settings($0) }
         case ("profile", _):
             // `@user@domain`の形で書かれていても読めるよう、先頭の@を外す。
             path.contains("/") ? nil : (path.isEmpty ? nil : .profile(acct: String(path.trimmingPrefix("@"))))
@@ -223,7 +224,7 @@ public enum AppDestination: Equatable, Sendable {
         case ("account", ""): .account
         case ("in-app-browser-height", ""):
             if let page = query("return") {
-                SettingsPage(rawValue: page).map { .inAppBrowserHeight(returningTo: $0) }
+                SettingsPage(rawValue: page).flatMap { $0 == .presetEditor ? nil : .inAppBrowserHeight(returningTo: $0) }
             } else {
                 .inAppBrowserHeight(returningTo: nil)
             }
@@ -342,6 +343,12 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     /// 自動で訳す投稿の言語を選ぶ画面。決まりはdocs/auto-translation.mdにある。
     case autoTranslation = "auto-translation"
     case tabs
+    /// アプリのプリセットを選ぶ画面。プリセットを作る、名前を変える、消す、選ばずに中身を変えるのもここから（docs/preset.md）。
+    case presets
+    /// 選んでいるアカウントに、プリセットを割り当てる画面。
+    case accountPreset = "account-preset"
+    /// プリセットを選ぶ画面から、選ばずにそのプリセットの中身を変える画面。どのプリセットかは画面が持つので、URLでは開かない。
+    case presetEditor = "preset-editor"
     /// アカウントの画面を、設定のトップの画面に重ねる。
     case account
     case statusActions = "status-actions"
@@ -396,7 +403,8 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
         case .connection, .licenses, .acknowledgments: [.about, self]
         case .connectionTimelines: [.about, .connection, self]
         case .viewedMediaCache, .prefetchedMediaCache: [.storage, self]
-        case .display, .interaction, .compose, .about, .appIcon, .tabs, .account, .storage: [self]
+        case .presetEditor: [.presets, self]
+        case .display, .interaction, .compose, .about, .appIcon, .tabs, .account, .storage, .presets, .accountPreset: [self]
         }
     }
 }

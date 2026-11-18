@@ -31,6 +31,10 @@ struct SettingsView: View {
     @State private var path: [SettingsPage]
     /// 開いたときに「投稿の見た目」か「通知の見た目」の上に重ねておく分類の画面。一度重ねたら、戻ってまた開いても重ねないよう、消す。
     @State private var appearanceGroup: AppearanceGroup.ID?
+    /// 分類の画面で値を書くプリセットの設定。nilならアプリのプリセット。トップの画面に戻ったらnilに戻す（docs/preset.md）。
+    @State private var editingSettings: AppSettings?
+    /// アカウントにプリセットを割り当てているときに、変えるプリセットを選ばせている分類の画面と、選んだあとに重ねる画面。
+    @State private var choosingTarget: [SettingsPage]?
 
     init(
         settings: AppSettings,
@@ -58,7 +62,14 @@ struct SettingsView: View {
         self.openInAppBrowserHeight = openInAppBrowserHeight
         self.openProfile = openProfile
         self.navigation = navigation
-        _path = State(initialValue: page?.path ?? [])
+        let opening = page?.path ?? []
+        // 分類の中の画面をURLで直接開くときも、アカウントにプリセットを割り当てていれば、先に変えるプリセットを選ばせる。
+        if let first = opening.first, Self.choosesTarget(first), settings.store.library.accountPresets[account] != nil {
+            _path = State(initialValue: [])
+            _choosingTarget = State(initialValue: opening)
+        } else {
+            _path = State(initialValue: opening)
+        }
         _appearanceGroup = State(initialValue: page == .appearance || page == .notificationAppearance ? appearanceGroup : nil)
     }
 
@@ -86,7 +97,7 @@ struct SettingsView: View {
                     SettingsFormSection(header: section.header, footer: section.footer) {
                         ForEach(section.rows, id: \.self) { row in
                             if case .page(let page) = row {
-                                NavigationLink(value: page) { rootLabel(of: page) }
+                                rootRow(page)
                             }
                         }
                     }
@@ -101,7 +112,81 @@ struct SettingsView: View {
                 }
             }
         }
-        .onChange(of: path, initial: true) { navigation.isAtRoot = path.isEmpty }
+        .onChange(of: path, initial: true) {
+            navigation.isAtRoot = path.isEmpty
+            if path.isEmpty {
+                editingSettings = nil
+            }
+        }
+    }
+
+    /// 分類の画面に入る前に、変えるプリセットを選ばせるか。値を変える分類だけ選ばせる。
+    private static func choosesTarget(_ page: SettingsPage) -> Bool {
+        [.display, .interaction, .compose].contains(page)
+    }
+
+    /// 分類の画面で値を書く設定。
+    private var current: AppSettings { editingSettings ?? settings }
+
+    /// トップの画面の行。アカウントにプリセットを割り当てていれば、値を変える分類は、押すと変えるプリセットを選ばせてから入る。
+    /// アクションシートは押した行に付け、行から出す。URLで分類の中の画面を開くときは、その分類の行から出す。
+    @ViewBuilder
+    private func rootRow(_ page: SettingsPage) -> some View {
+        if Self.choosesTarget(page), settings.store.observedLibrary.accountPresets[account] != nil {
+            Button {
+                choosingTarget = [page]
+            } label: {
+                HStack {
+                    rootLabel(of: page)
+                    Spacer()
+                    Image(systemName: "chevron.forward")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
+                .contentShape(Rectangle())
+            }
+            .foregroundStyle(Color.primary)
+            .confirmationDialog(
+                SettingsTexts.Presets.targetTitle,
+                isPresented: Binding { choosingTarget?.first == page } set: { if !$0 { choosingTarget = nil } },
+                titleVisibility: .visible,
+                presenting: choosingTarget
+            ) { pages in
+                let library = settings.store.library
+                Button(SettingsTexts.Presets.appTarget(name: library.name(of: library.appPreset) ?? "")) {
+                    editingSettings = nil
+                    path = pages
+                }
+                Button(SettingsTexts.Presets.accountTarget(name: library.name(of: library.preset(forAccount: account)) ?? "")) {
+                    editingSettings = settings.forAccount(account)
+                    path = pages
+                }
+                Button(SettingsTexts.cancel, role: .cancel) {}
+            }
+        } else {
+            NavigationLink(value: page) {
+                HStack {
+                    rootLabel(of: page)
+                    if let value = rootValue(of: page) {
+                        Spacer(minLength: 8)
+                        Text(value)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+        }
+    }
+
+    /// トップの画面の行に添える今の値。プリセットの2つの行に、使っているプリセットの名前を出す。
+    private func rootValue(of page: SettingsPage) -> String? {
+        let library = settings.store.observedLibrary
+        switch page {
+        case .presets: return library.name(of: library.appPreset)
+        case .accountPreset: return library.accountPresets[account].flatMap(library.name(of:)) ?? SettingsTexts.Presets.followsApp
+        default: return nil
+        }
     }
 
     /// トップの画面の行のラベル。分類には、iPhoneの設定アプリと同じく、色を敷いた四角のアイコンを添える。
@@ -118,6 +203,7 @@ struct SettingsView: View {
     private func rootIcon(of page: SettingsPage) -> (systemImage: String, color: UIColor) {
         switch page {
         case .account: ("person.crop.circle.fill", .systemBlue)
+        case .presets, .accountPreset: ("square.stack.3d.up.fill", .systemPurple)
         case .tabs: (tabBarShape.shape.symbolName, .systemBlue)
         case .display: ("circle.lefthalf.filled", .systemBlue)
         case .interaction: ("hand.tap.fill", .systemOrange)
@@ -131,20 +217,30 @@ struct SettingsView: View {
     @ViewBuilder
     private func destination(_ page: SettingsPage) -> some View {
         switch page {
-        case .display, .compose, .media, .profile, .linkLoading: SettingsScreenForm(page: page, settings: settings)
-        case .interaction: SettingsScreenForm(page: page, settings: settings, openInAppBrowserHeight: openInAppBrowserHeight)
+        case .display, .compose, .media, .profile, .linkLoading: SettingsScreenForm(page: page, settings: current)
+        case .interaction: SettingsScreenForm(page: page, settings: current, openInAppBrowserHeight: openInAppBrowserHeight)
         case .about: AboutSettingsView()
         case .appIcon: AppIconSettingsView()
         case .account: AccountView(settings: settings, account: account, context: accountScreen)
+        case .presets:
+            PresetsView(settings: settings) { id in
+                editingSettings = settings.editing(id)
+                path.append(.presetEditor)
+            }
+        case .accountPreset: AccountPresetView(settings: settings, account: account)
+        case .presetEditor:
+            if let editingSettings, case .preset(let id) = editingSettings.target {
+                PresetEditorView(settings: editingSettings, preset: id)
+            }
         case .appearance:
-            AppearanceEditorView(settings: settings, opening: appearanceGroup)
+            AppearanceEditorView(settings: current, opening: appearanceGroup)
                 .onAppear { appearanceGroup = nil }
         case .notificationAppearance:
-            NotificationAppearanceEditorView(settings: settings, opening: appearanceGroup)
+            NotificationAppearanceEditorView(settings: current, opening: appearanceGroup)
                 .onAppear { appearanceGroup = nil }
         case .autoTranslation:
             if #available(iOS 26.4, *) {
-                AutoTranslationSettingsView(settings: settings)
+                AutoTranslationSettingsView(settings: current)
             }
         case .tabs:
             MenuLayoutSettingsView(
@@ -168,28 +264,28 @@ struct SettingsView: View {
                     }
                 }
             )
-        case .statusActions: ObjectActionsSettingsView(entity: .status, settings: settings)
-        case .quotedStatusActions: ObjectActionsSettingsView(entity: .quotedStatus, settings: settings)
-        case .notificationActions: ObjectActionsSettingsView(entity: .notification, settings: settings)
-        case .userActions: ObjectActionsSettingsView(entity: .user, settings: settings)
-        case .linkActions: ObjectActionsSettingsView(entity: .link, settings: settings)
-        case .externalPostActions: ObjectActionsSettingsView(entity: .externalPost, settings: settings)
-        case .hashtagActions: ObjectActionsSettingsView(entity: .hashtag, settings: settings)
-        case .reactionActions: ObjectActionsSettingsView(entity: .reaction, settings: settings)
-        case .mediaActions: ObjectActionsSettingsView(entity: .media, settings: settings)
-        case .statusMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.statusMenuLayout)
-        case .statusActionBar: MenuLayoutSettingsView(title: page.title, layout: $settings.postActionBarLayout)
-        case .statusLeadingSwipe: MenuLayoutSettingsView(title: page.title(isRightToLeft: layoutDirection == .rightToLeft), layout: $settings.postLeadingSwipeLayout)
-        case .statusTrailingSwipe: MenuLayoutSettingsView(title: page.title(isRightToLeft: layoutDirection == .rightToLeft), layout: $settings.postTrailingSwipeLayout)
-        case .userMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.userMenuLayout)
-        case .linkMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.linkMenuLayout)
-        case .externalPostMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.externalPostMenuLayout)
-        case .profileTextMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.profileTextMenuLayout)
-        case .customEmojiMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.customEmojiMenuLayout)
-        case .hashtagMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.hashtagMenuLayout)
-        case .reactionMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.reactionMenuLayout)
-        case .mediaMenu: MenuLayoutSettingsView(title: page.title, layout: $settings.mediaMenuLayout)
-        case .composeTools: MenuLayoutSettingsView(title: page.title, layout: $settings.composeToolLayout)
+        case .statusActions: ObjectActionsSettingsView(entity: .status, settings: current)
+        case .quotedStatusActions: ObjectActionsSettingsView(entity: .quotedStatus, settings: current)
+        case .notificationActions: ObjectActionsSettingsView(entity: .notification, settings: current)
+        case .userActions: ObjectActionsSettingsView(entity: .user, settings: current)
+        case .linkActions: ObjectActionsSettingsView(entity: .link, settings: current)
+        case .externalPostActions: ObjectActionsSettingsView(entity: .externalPost, settings: current)
+        case .hashtagActions: ObjectActionsSettingsView(entity: .hashtag, settings: current)
+        case .reactionActions: ObjectActionsSettingsView(entity: .reaction, settings: current)
+        case .mediaActions: ObjectActionsSettingsView(entity: .media, settings: current)
+        case .statusMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).statusMenuLayout)
+        case .statusActionBar: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).postActionBarLayout)
+        case .statusLeadingSwipe: MenuLayoutSettingsView(title: page.title(isRightToLeft: layoutDirection == .rightToLeft), layout: Bindable(current).postLeadingSwipeLayout)
+        case .statusTrailingSwipe: MenuLayoutSettingsView(title: page.title(isRightToLeft: layoutDirection == .rightToLeft), layout: Bindable(current).postTrailingSwipeLayout)
+        case .userMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).userMenuLayout)
+        case .linkMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).linkMenuLayout)
+        case .externalPostMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).externalPostMenuLayout)
+        case .profileTextMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).profileTextMenuLayout)
+        case .customEmojiMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).customEmojiMenuLayout)
+        case .hashtagMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).hashtagMenuLayout)
+        case .reactionMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).reactionMenuLayout)
+        case .mediaMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).mediaMenuLayout)
+        case .composeTools: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).composeToolLayout)
         case .connection: ConnectionStatusView(instance: instance, diagnostics: diagnostics)
         case .connectionTimelines: StreamingTimelinesView(diagnostics: diagnostics, listTitles: listTitles)
         case .storage: StorageView()

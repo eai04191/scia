@@ -10,6 +10,8 @@ struct GlyphLanguageField: UIViewRepresentable {
     var settings: AppSettings
     /// 自動修正、スペルチェック、文頭の大文字。フィルターのキーワードのように、打ったとおりに入れたい欄ではfalse。
     var corrects = true
+    /// Returnで確定したときに呼ぶ。UIKitの入力欄なので、SwiftUIの`onSubmit`は届かない。
+    var onSubmit: () -> Void = {}
 
     func makeUIView(context: Context) -> GlyphLanguageTextField {
         let field = GlyphLanguageTextField()
@@ -30,6 +32,7 @@ struct GlyphLanguageField: UIViewRepresentable {
 
     func updateUIView(_ field: GlyphLanguageTextField, context: Context) {
         context.coordinator.text = $text
+        context.coordinator.onSubmit = onSubmit
         // 入力欄の外から変わったときだけ入れ直す。打っている途中に入れ直すと、カーソルが末尾へ飛び、変換も切れるため。
         if field.text != text {
             field.text = text
@@ -43,15 +46,17 @@ struct GlyphLanguageField: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text)
+        Coordinator(text: $text, onSubmit: onSubmit)
     }
 
     @MainActor
     final class Coordinator: NSObject, UITextFieldDelegate {
         var text: Binding<String>
+        var onSubmit: () -> Void
 
-        init(text: Binding<String>) {
+        init(text: Binding<String>, onSubmit: @escaping () -> Void) {
             self.text = text
+            self.onSubmit = onSubmit
         }
 
         @objc func editingChanged(_ field: UITextField) {
@@ -60,6 +65,7 @@ struct GlyphLanguageField: UIViewRepresentable {
 
         func textFieldShouldReturn(_ field: UITextField) -> Bool {
             field.resignFirstResponder()
+            onSubmit()
             return false
         }
     }

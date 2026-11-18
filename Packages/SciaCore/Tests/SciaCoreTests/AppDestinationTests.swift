@@ -15,6 +15,8 @@ struct AppDestinationTests {
             ("scia://tab/unknown", nil),
             ("scia://settings", .settings(nil)),
             ("scia://settings/unknown", nil),
+            // プリセットの編集は、どのプリセットかを画面が持つので、高さのシートの戻り先にもしない。
+            ("scia://in-app-browser-height?return=preset-editor", nil),
             ("scia://profile/@bob@example.com", .profile(acct: "bob@example.com")),
             ("scia://profile", nil),
             ("scia://my-profile", .myProfile),
@@ -70,10 +72,11 @@ struct AppDestinationTests {
         }
     }
 
+    /// どの設定の画面も、URLで開ける。プリセットの編集は、どのプリセットかを画面が持つので開かない。
     @Test(arguments: SettingsPage.allCases)
     func readsEverySettingsPage(_ page: SettingsPage) throws {
         let url = try #require(URL(string: "scia://settings/\(page.rawValue)"))
-        #expect(AppDestination(url) == .settings(page))
+        #expect(AppDestination(url) == (page == .presetEditor ? nil : .settings(page)))
     }
 
     /// 「投稿の見た目」のどの分類の画面も、URLで開ける。分類にない名前は読まない。
@@ -101,7 +104,7 @@ struct AppDestinationTests {
     /// 開く先の項目ごとに1つ以上。開く先を足したら、ここにも足す。
     static let samples: [AppDestination] = [.tab(.home), .tab(.scheduled)]
         + [.userTab(.list(id: "12")), .userTab(.hashtag(name: "日本語")), .userTab(.profile(acct: "bob@example.com")), .userTab(.accountHashtag(acct: "bob", name: "scia"))]
-        + [.settings(nil)] + SettingsPage.allCases.map { .settings($0) } + [.appearanceGroup("name"), .notificationAppearanceGroup("header")]
+        + [.settings(nil)] + SettingsPage.allCases.filter { $0 != .presetEditor }.map { .settings($0) } + [.appearanceGroup("name"), .notificationAppearanceGroup("header")]
         + [.profile(acct: "bob@example.com"), .profile(acct: "bob"), .myProfile, .profileEdit]
         + [.thread(statusID: "123"), .editHistory(statusID: "123"), .apiResponse(statusID: "123"), .crashReport(statusID: "123")]
         + [.accounts(.followers(accountID: nil)), .accounts(.followers(accountID: "9")), .accounts(.following(accountID: nil)), .accounts(.following(accountID: "9"))]

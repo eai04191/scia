@@ -139,7 +139,8 @@ extension SettingsPage {
     /// 設定のトップの画面。最初の節は、選んでいるアカウントのための設定で、見出しにそのアカウントのハンドルを出す。
     public static func rootSections(handle: String) -> [SettingsSection] {
         [
-            SettingsSection(header: handle, rows: [.page(.account), .page(.tabs)]),
+            SettingsSection(header: handle, rows: [.page(.account), .page(.tabs), .page(.accountPreset)]),
+            SettingsSection(rows: [.page(.presets)]),
             SettingsSection(rows: [.page(.display), .page(.interaction), .page(.compose), .page(.appIcon)]),
             SettingsSection(rows: [.page(.storage), .page(.about)]),
         ]
@@ -156,6 +157,8 @@ extension SettingsPage {
         case .profile: "プロフィール"
         case .about: "情報"
         case .appIcon: "アプリのアイコン"
+        case .presets, .accountPreset: "プリセット"
+        case .presetEditor: "プリセットを編集"
         case .appearance: "投稿"
         case .notificationAppearance: "通知"
         case .linkLoading: "リンク先の読み込み"
@@ -267,7 +270,8 @@ extension SettingsPage {
         case .appIcon, .appearance, .notificationAppearance, .autoTranslation, .tabs, .account, .statusActions, .quotedStatusActions, .notificationActions,
              .userActions, .linkActions, .externalPostActions, .hashtagActions, .mediaActions, .reactionActions, .statusMenu, .statusActionBar,
              .statusLeadingSwipe, .statusTrailingSwipe, .userMenu, .linkMenu, .externalPostMenu, .profileTextMenu, .customEmojiMenu, .hashtagMenu, .mediaMenu, .reactionMenu,
-             .composeTools, .connection, .connectionTimelines, .storage, .viewedMediaCache, .prefetchedMediaCache, .licenses, .acknowledgments:
+             .composeTools, .connection, .connectionTimelines, .storage, .viewedMediaCache, .prefetchedMediaCache, .licenses, .acknowledgments,
+             .presets, .accountPreset, .presetEditor:
             nil
         }
     }

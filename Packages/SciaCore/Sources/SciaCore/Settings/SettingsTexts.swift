@@ -75,6 +75,36 @@ public enum SettingsTexts {
     }
 
     /// タブの並びの画面。
+    /// プリセットの画面（docs/preset.md）。
+    public enum Presets {
+        public static let builtInHeader = "標準のプリセット"
+        public static let userHeader = "マイプリセット"
+        /// アカウントに割り当てない選択肢。
+        public static let followsApp = "アプリのプリセットを使用"
+        public static let edit = "編集"
+        public static let duplicate = "複製"
+        public static let createChild = "このプリセットをもとに作成"
+        public static let delete = "削除"
+        public static let name = "名前"
+        public static let parent = "もとのプリセット"
+        public static let nameTaken = "この名前のプリセットはすでにあります。"
+        public static let deleteConfirmTitle = "プリセットを削除"
+        /// 削除を確かめるアラートの本文。
+        public static func deleteConfirmMessage(name: String) -> String {
+            "“\(name)”を削除しますか？このプリセットを使っているアプリやアカウントは、もとのプリセットを使うようになります。"
+        }
+        /// 分類の画面に入るときに、どちらのプリセットを変更するかを選ばせるアクションシートの題。
+        public static let targetTitle = "変更するプリセット"
+        /// アプリのプリセットを変える選択肢。
+        public static func appTarget(name: String) -> String {
+            "アプリ：\(name)"
+        }
+        /// アカウントのプリセットを変える選択肢。
+        public static func accountTarget(name: String) -> String {
+            "このアカウント：\(name)"
+        }
+    }
+
     public enum Tabs {
         public static let showsCustomize = "メニューに“カスタマイズ”を表示"
         public static let showsCustomizeFooter = "切り替えタブのメニューに、この画面を開く“カスタマイズ”を表示します。"
