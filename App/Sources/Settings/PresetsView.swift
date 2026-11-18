@@ -33,6 +33,7 @@ struct PresetsView: View {
             }
         }
         .navigationTitle(SettingsPage.presets.title)
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     /// 割り当てていないアカウントには値を出さない。長いハンドルで値が2段目に落ちて行の高さが揃わなくならないよう、ハンドルを中央で省略して1行に収める。
@@ -77,6 +78,7 @@ struct PresetManagementView: View {
             }
         }
         .navigationTitle(SettingsPage.presetManagement.title)
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -190,6 +192,7 @@ struct PresetEditorView: View {
     private var library: PresetLibrary { settings.store.observedLibrary }
 
     var body: some View {
+        .navigationBarTitleDisplayMode(.inline)
         Form {
             switch preset {
             case .user(let number): userSections(number)
