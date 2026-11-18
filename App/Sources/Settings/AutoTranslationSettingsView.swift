@@ -84,14 +84,28 @@ struct AutoTranslationSettingsView: View {
         }
         if canUseAppleIntelligence {
             Section {
-                Picker(selection: $settings.autoTranslationStrategy) {
-                    Text(TranslationStrategy.highFidelity.title).tag(TranslationStrategy.highFidelity)
-                    Text(TranslationStrategy.lowLatency.title).tag(TranslationStrategy.lowLatency)
-                } label: {
-                    NotInPresetLabel(title: SettingsTexts.AutoTranslation.mode)
+                // 情報ボタンを値の右（行の右端）に置くため、名前と選択を並べて組む。
+                HStack(spacing: 8) {
+                    Text(SettingsTexts.AutoTranslation.mode)
+                    Spacer(minLength: 8)
+                    // 選択の部品をそのまま置くと、部品の上下の余白で行がほかの行より高くなるので、余白のないメニューにする。
+                    Menu {
+                        Picker(SettingsTexts.AutoTranslation.mode, selection: $settings.autoTranslationStrategy) {
+                            Text(TranslationStrategy.highFidelity.title).tag(TranslationStrategy.highFidelity)
+                            Text(TranslationStrategy.lowLatency.title).tag(TranslationStrategy.lowLatency)
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(settings.autoTranslationStrategy.title)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.footnote.weight(.medium))
+                        }
+                        .foregroundStyle(Color(uiColor: .secondaryLabel))
+                    }
+                    .accessibilityLabel(SettingsTexts.AutoTranslation.mode)
+                    .accessibilityValue(settings.autoTranslationStrategy.title)
+                    NotInPresetInfoButton()
                 }
-                // 選択の行は1つの要素として読まれ、情報ボタンに届かないので、同じ説明をヒントで読む。
-                .accessibilityHint(SettingsTexts.Presets.notInPreset)
             }
         }
         if loadedSubject == subject {

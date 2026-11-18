@@ -451,7 +451,7 @@ struct NotInPresetInfoButton: View {
             isShown = true
         } label: {
             Image(systemName: "info.circle")
-                .foregroundStyle(.tint)
+                .foregroundStyle(Color(uiColor: .secondaryLabel))
         }
         .buttonStyle(.borderless)
         .accessibilityLabel(SettingsTexts.Presets.notInPresetInfo)
@@ -466,13 +466,14 @@ struct NotInPresetInfoButton: View {
     }
 }
 
-/// 名前の横に、プリセットに含めないことを示す情報ボタンを添えたラベル。
+/// 右端に、プリセットに含めないことを示す情報ボタンを添えたラベル。見出しやスイッチの名前に使う。
 struct NotInPresetLabel: View {
     let title: String
 
     var body: some View {
         HStack(spacing: 6) {
             Text(title)
+            Spacer(minLength: 8)
             NotInPresetInfoButton()
         }
     }
