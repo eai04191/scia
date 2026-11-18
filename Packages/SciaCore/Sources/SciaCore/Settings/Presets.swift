@@ -6,14 +6,11 @@ public enum BuiltInPreset: String, CaseIterable, Codable, Sendable {
     case standard
     /// 余白と名前の行の文字を詰め、メディアを本文の右に小さく傾けずに並べ、アクションバーを常には出さずにタップで開く。
     case compact
-    /// 余白を広げ、アイコンと文字とメディアとアクションバーのボタンを大きく描く。
-    case relaxed
 
     public var title: String {
         switch self {
         case .standard: "標準"
         case .compact: "コンパクト"
-        case .relaxed: "ゆったり"
         }
     }
 
@@ -23,7 +20,6 @@ public enum BuiltInPreset: String, CaseIterable, Codable, Sendable {
         switch self {
         case .standard: Self.standardValues
         case .compact: Self.compactValues
-        case .relaxed: Self.relaxedValues
         }
     }
 
@@ -32,7 +28,6 @@ public enum BuiltInPreset: String, CaseIterable, Codable, Sendable {
         switch self {
         case .standard: nil
         case .compact: 2
-        case .relaxed: 5
         }
     }
 
@@ -48,13 +43,6 @@ public enum BuiltInPreset: String, CaseIterable, Codable, Sendable {
         "appearanceChoice.showsActionBar": .bool(false),
         "objectActions.status.tap": .text("actionBar"),
         "objectActions.status.longPress": .text("item:openThread"),
-    ])
-
-    private static let relaxedValues = BuiltInPreset.relaxed.withSpacing([
-        "appearanceValue.timeline.avatarSize": .number(48),
-        "appearanceValue.text.body": .number(1),
-        "appearanceValue.timeline.mediaTallestAspectRatio": .number(0.6),
-        "appearanceValue.actionBar.iconSize": .number(17),
     ])
 
     /// `values`に、すき間の項目を段の単位から求めた値を足す。
