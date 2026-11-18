@@ -171,8 +171,11 @@ public final class AppSettings {
     public var autoTranslationTarget: String? {
         get {
             switch value(Keys.autoTranslationTarget) {
-            case .text(let identifier): identifier
-            default: nil
+            case .text(let identifier): return identifier
+            case nil, .null: return nil
+            default:
+                noteUnreadable(Keys.autoTranslationTarget)
+                return nil
             }
         }
         set { write(newValue.map(PresetValue.text) ?? .null, Keys.autoTranslationTarget) }
@@ -270,7 +273,11 @@ public final class AppSettings {
 
     /// 範囲の外の値は、持っていないときと同じく既定値にする。
     public func value(of item: AppearanceValue) -> Double {
-        guard let stored = number(Self.appearanceKey(item)), item.range.contains(stored) else { return item.defaultValue }
+        guard let stored = number(Self.appearanceKey(item)) else { return item.defaultValue }
+        guard item.range.contains(stored) else {
+            noteUnreadable(Self.appearanceKey(item))
+            return item.defaultValue
+        }
         return stored
     }
 
@@ -632,39 +639,93 @@ public final class AppSettings {
     // MARK: 読み書き
 
     private func value(_ key: String) -> PresetValue? {
-        store.read(key, in: presetID)
+        if let readProbe, readProbe.key == key { return readProbe.value }
+        return store.read(key, in: presetID)
+    }
+
+    /// `canRead(_:forKey:by:)`で、保存していない値を読ませている間だけ持つ。
+    @ObservationIgnored private var readProbe: (key: String, value: PresetValue, isUnreadable: Bool)?
+
+    /// 読めない値を、持っていないときと同じく既定値にしたことを、`canRead(_:forKey:by:)`に伝える。
+    private func noteUnreadable(_ key: String) {
+        if readProbe?.key == key { readProbe?.isUnreadable = true }
+    }
+
+    /// `value`を`key`の値として保存したら、アプリがそれを読めるか。保存はしない。`read`で、そのキーを読む設定の値を読む。
+    /// 読めない値は読む側が黙って既定値に戻すので、書いたのに効かないことを、書く前に見つけるため。
+    func canRead(_ value: PresetValue, forKey key: String, by read: () -> Void) -> Bool {
+        readProbe = (key, value, false)
+        defer { readProbe = nil }
+        read()
+        return readProbe?.isUnreadable == false
     }
 
     private func bool(_ key: String, default defaultValue: Bool) -> Bool {
-        guard case .bool(let value) = value(key) else { return defaultValue }
-        return value
+        switch value(key) {
+        case .bool(let value): return value
+        case nil: return defaultValue
+        default:
+            noteUnreadable(key)
+            return defaultValue
+        }
     }
 
     private func number(_ key: String) -> Double? {
-        guard case .number(let value) = value(key) else { return nil }
-        return value
+        switch value(key) {
+        case .number(let value): return value
+        case nil: return nil
+        default:
+            noteUnreadable(key)
+            return nil
+        }
     }
 
     private func list(_ key: String) -> [String]? {
-        guard case .list(let value) = value(key) else { return nil }
-        return value
+        switch value(key) {
+        case .list(let value): return value
+        case nil: return nil
+        default:
+            noteUnreadable(key)
+            return nil
+        }
     }
 
     /// 読めない値（名前を変えた選択肢など）は、持っていないときと同じく既定値にする。
     private func choice<Value: RawRepresentable<String>>(_ key: String, default defaultValue: Value) -> Value {
-        guard case .text(let raw) = value(key) else { return defaultValue }
-        return Value(rawValue: raw) ?? defaultValue
+        switch value(key) {
+        case .text(let raw):
+            guard let value = Value(rawValue: raw) else {
+                noteUnreadable(key)
+                return defaultValue
+            }
+            return value
+        case nil: return defaultValue
+        default:
+            noteUnreadable(key)
+            return defaultValue
+        }
     }
 
     private func layout<Item>(_ key: String, default defaultValue: MenuLayout<Item>) -> MenuLayout<Item> {
-        list(key).map(MenuLayout.init(tokens:)) ?? defaultValue
+        guard let tokens = list(key) else { return defaultValue }
+        let layout = MenuLayout<Item>(tokens: tokens)
+        if tokens.contains(where: { !layout.tokens.contains($0) }) { noteUnreadable(key) }
+        return layout
     }
 
     /// タップと長押しは、別々の値として持つ（docs/preset.md）。読めない操作（なくなった項目など）は、その操作だけ既定に戻す。
     private func actions<Item: ObjectActionItem>(_ key: String) -> ObjectActions<Item> {
         func token(_ suffix: String) -> String {
-            guard case .text(let token) = value("\(key).\(suffix)") else { return "" }
-            return token
+            let fullKey = "\(key).\(suffix)"
+            switch value(fullKey) {
+            case .text(let token):
+                if ObjectAction<Item>(token: token) == nil { noteUnreadable(fullKey) }
+                return token
+            case nil: return ""
+            default:
+                noteUnreadable(fullKey)
+                return ""
+            }
         }
         return ObjectActions(tokens: [token("tap"), token("longPress")], default: .standard)
     }

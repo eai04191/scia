@@ -129,6 +129,10 @@ extension SessionController {
             AgentScreenDump.write(scene: rootViewController.view.window?.windowScene)
         case .storageProbe:
             StorageProbe.write()
+        case .settingsList:
+            SettingsDump.write(settings: settings, account: credential.handle)
+        case .settingsSet(let key, let json):
+            SettingsDump.set(key: key, json: json, settings: settings, account: credential.handle)
         case .fakeTranslation(let delay):
             DebugStatusTranslator.setFakeDelay(delay)
             settings.noteAutoTranslationModelInstalled()

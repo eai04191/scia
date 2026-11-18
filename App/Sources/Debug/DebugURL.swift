@@ -73,6 +73,11 @@ enum DebugURL: Equatable {
     /// `scia-debug://dump`。画面にある要素の名前と枠を、アプリのDocuments/AgentDump/screen.txtに書き出す。
     /// agentがスクリーンショットを読まずに、タップする座標や今の画面を文字で知るため。
     case dump
+    /// `scia-debug://settings/list`。設定のキー、設定の画面での場所、今の値を、アプリのDocuments/AgentDump/settings.txtに書き出す（`SettingsDump`）。
+    /// agentが、確かめの準備で設定を変えるときに、画面をたどらずにキーを探すため。
+    case settingsList
+    /// `scia-debug://settings/set?key=<キー>&value=<JSONの値>`。画面で変えたときと同じく、開いているアカウントが読むプリセットに書き、結果と一覧をsettings.txtに書き出す。
+    case settingsSet(key: String, json: String)
     /// `scia-debug://storage-probe`。ストレージの画面が測る置き場所を、読めるかを含めて、アプリのDocuments/AgentDump/storage.txtに書き出す（`StorageProbe`）。
     case storageProbe
     /// `scia-debug://translation-probe`。翻訳の言語の状態、速度、本文の保持を測り、アプリのDocuments/AgentDump/translation.txtに書き足す（`TranslationProbe`）。
@@ -172,6 +177,7 @@ enum DebugURL: Equatable {
         "catalog": .catalog(nil),
         "dump": .dump,
         "storage-probe": .storageProbe,
+        "settings/list": .settingsList,
         "translation-probe": .translationProbe,
         "translation/system": .fakeTranslation(delay: nil),
         "text-benchmark": .textBenchmark,
@@ -218,6 +224,7 @@ enum DebugURL: Equatable {
         case "appearance": Self.query("json", in: url).map { .appearance(json: $0) }
         case "inject": Self.inject(url)
         case "lists": Self.lists(url)
+        case "settings": Self.settingsSet(url)
         case "tags": Self.tags(url)
         case "compose": Self.compose(url)
         case "browser": Self.query("url", in: url).flatMap(URL.init(string:)).flatMap { LinkBrowser.inApp.browser(for: $0) == .inApp ? .browser($0) : nil }
@@ -242,6 +249,11 @@ enum DebugURL: Equatable {
             target = .api
         }
         return .status(statusCode, retryAfter: query("retry-after", in: url).flatMap { Int($0) }, target: target)
+    }
+
+    private static func settingsSet(_ url: URL) -> DebugURL? {
+        guard url.lastPathComponent == "set", let key = query("key", in: url), let json = query("value", in: url) else { return nil }
+        return .settingsSet(key: key, json: json)
     }
 
     private static func lists(_ url: URL) -> DebugURL? {
