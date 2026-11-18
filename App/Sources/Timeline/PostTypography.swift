@@ -111,12 +111,14 @@ struct PostTypography: Equatable {
     }
 
     /// - Parameter traits: 文字サイズを読む特性。nilなら今の特性に従う。
+    /// 大きさは`UIFontMetrics.scaledValue`で伸び縮みさせる。`scaledFont`は大きさを整数に丸め、標準でない文字サイズでは、1pt違う設定が同じ大きさになるため。
+    /// この書体は文字サイズの変更に自動では付いてこないので、置く側は文字サイズが変わったら作り直す。
     func font(_ role: Role, compatibleWith traits: UITraitCollection? = nil) -> UIFont {
         var descriptor = Self.standardDescriptor
         if isBold(role), let bold = descriptor.withSymbolicTraits(.traitBold) {
             descriptor = bold
         }
-        let font = UIFont(descriptor: descriptor, size: standardPointSize(role))
-        return UIFontMetrics(forTextStyle: Self.textStyle).scaledFont(for: font, compatibleWith: traits)
+        let size = UIFontMetrics(forTextStyle: Self.textStyle).scaledValue(for: standardPointSize(role), compatibleWith: traits)
+        return UIFont(descriptor: descriptor, size: size)
     }
 }

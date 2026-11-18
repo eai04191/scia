@@ -36,6 +36,19 @@ struct AppearanceEditorTests {
     }
 
     /// 本文を大きくすると、ほかの文字も本文との差を保って一緒に大きくなる。
+    /// 文字サイズが標準でなくても、1pt違えば違う大きさで描く。`UIFontMetrics.scaledFont`は大きさを整数に丸め、小さい文字サイズでは15ptと16ptが同じ14ptになるため。
+    @Test(arguments: [UIContentSizeCategory.extraSmall, .small, .medium, .large, .extraLarge, .accessibilityMedium])
+    func onePointStepChangesSizeAtEveryCategory(category: UIContentSizeCategory) throws {
+        let settings = try makeSettings()
+        let traits = UITraitCollection(preferredContentSizeCategory: category)
+        var sizes: [CGFloat] = []
+        for offset in -2...2 {
+            settings.setValue(Double(offset), for: NotificationAppearanceCatalog.headerText)
+            sizes.append(PostTypography(settings: settings).font(.notificationHeader, compatibleWith: traits).pointSize)
+        }
+        #expect(Set(sizes).count == sizes.count, "\(category.rawValue)で、1ptずつ変えた大きさ\(sizes)に同じものがあります")
+    }
+
     @Test func bodyOffsetMovesEveryRole() throws {
         let settings = try makeSettings()
         let before = PostTypography(settings: settings)
