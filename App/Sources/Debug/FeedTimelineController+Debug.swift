@@ -292,12 +292,14 @@ extension FeedTimelineController {
         }
     }
 
-    /// Xの投稿へのリンクだけのダミーの投稿を流し、`dummyLinkCardDelay`のあとに、fxtwitterに頼まずに4枚の画像付きのXの投稿を届ける。
+    /// Xの投稿へのリンクだけのダミーの投稿を流し、`dummyLinkCardDelay`のあとに、fxtwitterに頼まずに4枚の画像付きで、ほかの投稿を引用したXの投稿を届ける。
     /// リンクカードから囲みに替わるときの動きを、何度でも同じ条件で確かめるため。囲みは、チューニングで出すようにしているときだけ出る。
     private func streamDummyXPost() {
         let avatar = model.debugStore.statuses.first?.account.avatar ?? client.credential.instance
         let base = Self.dummyStatus(number: 1, avatar: avatar, now: model.now())
-        guard let link = URL(string: "https://x.com/dummy/status/\(base.id)") else { return }
+        guard let link = URL(string: "https://x.com/dummy/status/\(base.id)"),
+              let quoteLink = URL(string: "https://x.com/dummy/status/1")
+        else { return }
         let dummy = Status(
             id: base.id,
             createdAt: base.createdAt,
@@ -316,7 +318,8 @@ extension FeedTimelineController {
             text: .plain("A dummy X post delivered after five seconds, with four images attached.", emojis: []),
             language: "en",
             createdAt: model.now(),
-            media: DummyMedia.attachments(idPrefix: "x-\(base.id)")
+            media: DummyMedia.attachments(idPrefix: "x-\(base.id)"),
+            quote: .link(quoteLink)
         )
         let xPosts = viewController.xPosts
         // 行を描いたときにfxtwitterへ読みに行かないよう、届けるまで読み込み中にしておく。
