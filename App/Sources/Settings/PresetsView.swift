@@ -427,10 +427,8 @@ struct AccountPresetView: View {
                 PresetChoiceRow(title: SettingsTexts.Presets.sameAsApp(name: library.name(of: library.appPreset) ?? ""), isSelected: library.accountPresets[account] == nil) {
                     settings.store.updateLibrary { $0.unassign(account: account) }
                 }
-            } footer: {
-                Text(SettingsTexts.Presets.accountChoiceFooter)
             }
-            PresetChoiceSections(library: library, selected: library.accountPresets[account]) { id in
+            PresetChoiceSections(library: library, selected: library.accountPresets[account], builtInHeader: SettingsTexts.Presets.accountChoiceHeader) { id in
                 settings.store.updateLibrary { library throws(PresetError) in try library.select(id, for: .account(account)) }
             }
         }
@@ -443,11 +441,16 @@ struct AccountPresetView: View {
 private struct PresetChoiceSections: View {
     let library: PresetLibrary
     let selected: PresetID?
+    var builtInHeader: String?
     let select: (PresetID) -> Void
 
     var body: some View {
         Section {
             ForEach(BuiltInPreset.allCases, id: \.self) { choice(.builtIn($0)) }
+        } header: {
+            if let builtInHeader {
+                Text(builtInHeader)
+            }
         }
         if !library.userPresets.isEmpty {
             Section(SettingsTexts.Presets.userHeader) {
