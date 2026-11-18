@@ -7,7 +7,7 @@ SIM_ARCH ?= $(shell uname -m)
 # 同じDerivedDataを使うDebugのビルドには、すべてコンパイルキャッシュの設定を渡す（Config/Cache.xcconfig）。Tools/system-ui-check.shも同じものを渡す
 CACHE_XCCONFIG := -xcconfig Config/Cache.xcconfig
 
-.PHONY: generate app-info check-app-info lint test-lint test-sim-guard test-core test-memory-cache build warnings test test-here test-on-sim sim-keyboard scenario-build scenario-setup scenario-reset scenario-run archive testflight testflight-external promo readme-screenshots readme-icons update-known-servers check check-here check-steps check-test check-test-here hooks menu-editor clean
+.PHONY: generate app-info check-app-info lint test-lint test-sim-guard test-core test-memory-cache test-release build-release-strict build warnings test test-here test-on-sim sim-keyboard scenario-build scenario-setup scenario-reset scenario-run archive testflight testflight-external promo readme-screenshots readme-icons update-known-servers check check-here check-steps check-test check-test-here hooks menu-editor clean
 
 ## project.ymlからXcodeプロジェクトを生成する
 generate:
@@ -45,6 +45,20 @@ test-core:
 ## Sciaに依存しないキャッシュのパッケージ（Packages/MemoryCache）のテストをmacOS上で実行する
 test-memory-cache:
 	swift test --package-path Packages/MemoryCache --quiet
+
+## SciaCoreとMemoryCacheのテストを、Release構成で実行する。最適化したビルドでだけ変わる動きを見つける。
+## `@testable import`のために、テストできる形（-enable-testing）でビルドする
+## WARNINGS=errorを渡すと、警告をエラーとして扱う。Package.swiftが警告をエラーにするのはDebug構成だけなので、Releaseにしかない警告はこれで見つける
+RELEASE_WARNING_FLAGS := $(if $(filter error,$(WARNINGS)),-Xswiftc -warnings-as-errors)
+test-release:
+	cd Packages/SciaCore && swift test -c release -Xswiftc -enable-testing $(RELEASE_WARNING_FLAGS)
+	swift test --package-path Packages/MemoryCache -c release -Xswiftc -enable-testing $(RELEASE_WARNING_FLAGS) --quiet
+
+## アプリをシミュレーター向けに、Releaseで、警告をエラーとして扱ってビルドする。project.ymlはReleaseで警告を止めないので、Releaseにしかない警告はこれで見つける
+## 警告をエラーとして扱っても止まらない警告（Tools/check-warnings.shの冒頭）は、ビルドのあとに診断ファイルを読んで見つける
+build-release-strict: generate
+	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Release -destination '$(SIM_DESTINATION)' -derivedDataPath $(DERIVED_DATA) ARCHS=$(SIM_ARCH) SWIFT_TREAT_WARNINGS_AS_ERRORS=YES build
+	Tools/check-warnings.sh $(DERIVED_DATA) $(SIM_ARCH) Release
 
 ## アプリをシミュレーター向けにビルドする
 build: generate

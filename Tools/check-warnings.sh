@@ -1,5 +1,5 @@
 #!/bin/bash
-# `make build`のあとに、アプリのSwiftの警告が1つでも残っていれば失敗する。
+# ビルド（`make build`か`make build-release-strict`）のあとに、アプリのSwiftの警告が1つでも残っていれば失敗する。
 # SWIFT_TREAT_WARNINGS_AS_ERRORSを有効にしていても、@preconcurrency付きのAPI（SwiftUIのonGeometryChangeなど）を通る並行性の違反は、
 # コンパイラーが警告に格下げし、-warnings-as-errorsでもエラーに戻らないため、ビルドは成功してしまう。
 # ビルドのログは差分ビルドで作り直さなかったファイルの警告を出さないので、ログではなく、ファイルごとに残る診断ファイル（.dia）を読む。
@@ -8,22 +8,24 @@
 # 通常は、警告のないファイルの.diaは自分のソースのパスを含まない。例外は、まとめてコンパイルした相手の警告の補足（note）がこのファイルの宣言を指していた場合で、相手を直したあとも、このファイルを作り直すまで失敗する。
 # 起きるのは、補足の指す先が別のファイルにある警告を、その2つが同じ回にコンパイルされたビルドで出したときだけ。なくすには.diaのビットストリームを読んで診断ごとの位置を取り出す必要があるので、対応していない。
 # .diaとソースの対応は、ビルドが残す対応表（Scia-OutputFileMap.json）で引く。対応表にない.diaは、消したソースの残りなので読まない。
-# 見るのは`make build`が作るDebugのシミュレーター向けの、ビルドしたアーキテクチャだけ。同じDerivedDataで実機向けや別のアーキテクチャをビルドすると、そちらの古い診断が残り、直したあとも失敗し続けるため。
-# 使い方: Tools/check-warnings.sh [<DerivedDataのパス>] [<アーキテクチャ>]
+# Releaseはモジュール全体をまとめてコンパイルし、.diaはモジュールに1つ（対応表ではソースが空の行）しかない。作り直すたびに全体が置き換わるので、ソースのパスが入っていれば警告が残っているとみなす。
+# 見るのは、渡した構成（省略すると`make build`が作るDebug）のシミュレーター向けの、ビルドしたアーキテクチャだけ。同じDerivedDataで実機向けや別のアーキテクチャをビルドすると、そちらの古い診断が残り、直したあとも失敗し続けるため。
+# 使い方: Tools/check-warnings.sh [<DerivedDataのパス>] [<アーキテクチャ>] [<構成>]
 set -euo pipefail
 
 DERIVED_DATA=${1:-DerivedData}
 ARCH=${2:-$(uname -m)}
-OBJECTS="$DERIVED_DATA/Build/Intermediates.noindex/Scia.build/Debug-iphonesimulator/Scia.build/Objects-normal/$ARCH"
+CONFIGURATION=${3:-Debug}
+OBJECTS="$DERIVED_DATA/Build/Intermediates.noindex/Scia.build/$CONFIGURATION-iphonesimulator/Scia.build/Objects-normal/$ARCH"
 
 if [[ ! -d "$OBJECTS" ]]; then
-    echo "error: $OBJECTS がありません。先にmake buildを走らせてください" >&2
+    echo "error: $OBJECTS がありません。先にビルドしてください" >&2
     exit 1
 fi
 
 MAP="$OBJECTS/Scia-OutputFileMap.json"
 if [[ ! -f "$MAP" ]]; then
-    echo "error: $MAP がありません。先にmake buildを走らせてください" >&2
+    echo "error: $MAP がありません。先にビルドしてください" >&2
     exit 1
 fi
 
@@ -31,14 +33,20 @@ fi
 pairs=$(python3 -c '
 import json, sys
 for source, outputs in json.load(open(sys.argv[1])).items():
-    if source and "diagnostics" in outputs:
-        print(source, outputs["diagnostics"], sep="\t")
+    if "diagnostics" in outputs:
+        print(source or "*", outputs["diagnostics"], sep="\t")
 ' "$MAP")
 
 found=0
 while IFS=$'\t' read -r source dia; do
     # grep -qは使わない。一致したところで読むのをやめ、大きい.diaではstringsがSIGPIPEで終わり、pipefailで一致しなかった扱いになるため
-    if [[ ! -f "$dia" ]] || ! strings -n 4 "$dia" | grep -Fx -- "$source" > /dev/null; then
+    if [[ "$source" == "*" ]]; then
+        # モジュール全体をまとめてコンパイルする構成（Release）は、診断ファイルが1つで、作り直すたびに全体が置き換わる。ソースのパスが1つでも入っていれば、警告が残っている
+        if [[ ! -f "$dia" ]] || ! strings -n 4 "$dia" | grep -e '\.swift$' > /dev/null; then
+            continue
+        fi
+        source=$(strings -n 4 "$dia" | grep -m 1 -e '\.swift$' || true)
+    elif [[ ! -f "$dia" ]] || ! strings -n 4 "$dia" | grep -Fx -- "$source" > /dev/null; then
         continue
     fi
     found=1

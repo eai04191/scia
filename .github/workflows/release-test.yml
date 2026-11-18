@@ -1,0 +1,72 @@
+# SciaCoreとMemoryCacheのテストを、Release構成で走らせる（make test-release）。
+# 手元の`make check`と`make test`はDebug構成で走るので、最適化したビルドでだけ変わる動きは通ってしまう。
+# 絵文字の先読みが、Release構成でだけ、取得した画像を別の絵文字のものとして端末に置いていたことがある。
+#
+# 毎日17:00（JST）にmainで走らせる。このときは警告をエラーとして扱い、アプリもReleaseでビルドする（make build-release-strict）。
+# 警告を止めるのはDebugのビルドの役目にしてあり（project.ymlとPackage.swift）、Releaseにしかない警告はここで見つける。
+# TestFlightのworkflowも、上げる前にこれを呼ぶ。そのときは警告を止めず、テストが通らなければ上げない。
+name: Release test
+
+on:
+  schedule:
+    - cron: "0 17 * * *"
+      timezone: Asia/Tokyo
+  workflow_dispatch:
+    inputs:
+      warnings:
+        description: 警告の扱い。errorは警告をエラーとして扱い、アプリもビルドする
+        type: choice
+        options: [error, ignore]
+        default: error
+  workflow_call:
+    inputs:
+      ref:
+        description: テストするcommit。省略すると、実行に記録されるSHA
+        type: string
+        required: false
+      warnings:
+        description: 警告の扱い。errorは警告をエラーとして扱い、アプリもビルドする
+        type: string
+        required: false
+        default: ignore
+
+permissions: {}
+
+# 呼んだworkflowの組（TestFlightの`testflight`）と同じ名前にすると、呼んだ側が終わるのを待って止まるので、別の名前にする
+concurrency:
+  group: release-test-${{ inputs.ref || github.sha }}
+
+jobs:
+  test:
+    name: Test in release configuration
+    # Xcode 27は、macOS 27の`xcode-27`のイメージにしか入っていない
+    runs-on: xcode-27
+    timeout-minutes: 60
+    permissions:
+      contents: read # テストするcommitをcheckoutする
+    env:
+      # 定時の実行は入力がないので、警告をエラーとして扱う
+      WARNINGS: ${{ inputs.warnings || 'error' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_27.2.app
+
+      - name: Test
+        run: make test-release WARNINGS="$WARNINGS"
+
+      - name: Install XcodeGen
+        if: env.WARNINGS == 'error'
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
+          echo "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+
+      - name: Build app with warnings as errors
+        if: env.WARNINGS == 'error'
+        run: make build-release-strict

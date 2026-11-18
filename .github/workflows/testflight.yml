@@ -1,4 +1,5 @@
 # 毎朝5:00（JST）に、mainをReleaseでアーカイブしてTestFlightへ上げる。前に上げたときからmainが変わっていなければ上げない。
+# 上げる前に、Release構成のテスト（release-test.yml）に通す。通らなければ上げない。
 # 上げたビルドは、処理が終わるのを待って外部テストのグループに足し、TestFlight App Reviewに出す（Tools/testflight-external.swift）。
 # 手で走らせたとき（workflow_dispatch）は、変わっていなくても上げる。
 #
@@ -17,7 +18,8 @@ name: TestFlight
 
 on:
   schedule:
-    - cron: "0 20 * * *"
+    - cron: "0 5 * * *"
+      timezone: Asia/Tokyo
   workflow_dispatch:
 
 permissions: {}
@@ -26,27 +28,18 @@ concurrency:
   group: testflight
 
 jobs:
-  upload:
-    name: Archive and upload to TestFlight
+  changed:
+    name: Check whether main has changed
     # 前回の判定は、実行に記録されるSHA（github.sha）を上げたcommitとして使う。ほかのbranchから手で走らせるとそれがmainでなくなるため、mainからだけ走らせる
     if: github.ref == 'refs/heads/main'
-    # Xcode 27は、macOS 27の`xcode-27`のイメージにしか入っていない
-    runs-on: xcode-27
-    # ビルドの処理を待つ時間（最大40分）を、アーカイブとアップロードに足している
-    timeout-minutes: 90
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
-      contents: read # mainをcheckoutする
       actions: read # 前に上げたcommitを、このworkflowの前の実行から読む
+    outputs:
+      upload: ${{ steps.changed.outputs.upload }}
+      last: ${{ steps.changed.outputs.last }}
     steps:
-      # 発火したあとにmainが進んでも、実行に記録されるSHAと同じcommitをビルドする。アプリに埋め込むブランチ名（Tools/embed-build-info.sh）のため、mainとしてcheckoutする
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.sha }}
-          # What to Testに、前に上げたcommitからの変更を並べるため
-          fetch-depth: 0
-          persist-credentials: false
-      - run: git checkout -B main
-
       - name: Skip if main is unchanged
         id: changed
         env:
@@ -63,12 +56,43 @@ jobs:
           fi
           echo "last=$last" >> "$GITHUB_OUTPUT"
 
+  # 上げるcommitを、Release構成のテストに通す。通らなければ上げない。
+  test:
+    name: Release test
+    needs: changed
+    if: needs.changed.outputs.upload == 'true'
+    permissions:
+      contents: read # テストするcommitをcheckoutする
+    uses: $/.github/workflows/release-test.yml
+    with:
+      ref: ${{ github.sha }}
+      # 警告で上げるのを止めない。警告は、release-test.ymlの定時の実行で見つける
+      warnings: ignore
+
+  upload:
+    name: Archive and upload to TestFlight
+    needs: [changed, test]
+    if: needs.changed.outputs.upload == 'true'
+    # Xcode 27は、macOS 27の`xcode-27`のイメージにしか入っていない
+    runs-on: xcode-27
+    # ビルドの処理を待つ時間（最大40分）を、アーカイブとアップロードに足している
+    timeout-minutes: 90
+    permissions:
+      contents: read # mainをcheckoutする
+    steps:
+      # 発火したあとにmainが進んでも、実行に記録されるSHAと同じcommitをビルドする。アプリに埋め込むブランチ名（Tools/embed-build-info.sh）のため、mainとしてcheckoutする
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          # What to Testに、前に上げたcommitからの変更を並べるため
+          fetch-depth: 0
+          persist-credentials: false
+      - run: git checkout -B main
+
       - name: Select Xcode
-        if: steps.changed.outputs.upload == 'true'
         run: sudo xcode-select -s /Applications/Xcode_27.2.app
 
       - name: Install XcodeGen
-        if: steps.changed.outputs.upload == 'true'
         run: |
           curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
           echo "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c
@@ -76,7 +100,6 @@ jobs:
           echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
 
       - name: Install signing certificate and API key
-        if: steps.changed.outputs.upload == 'true'
         env:
           DEVELOPMENT_TEAM: ${{ vars.DEVELOPMENT_TEAM }}
           CERTIFICATE_P12: ${{ secrets.DEVELOPMENT_CERTIFICATE_P12 }}
@@ -96,7 +119,6 @@ jobs:
           printf '%s' "$API_KEY" > "$RUNNER_TEMP/AuthKey.p8"
 
       - name: Archive and upload
-        if: steps.changed.outputs.upload == 'true'
         env:
           KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
@@ -106,9 +128,8 @@ jobs:
       # 前に上げたcommitは、このworkflowの前の成功した実行のものなので、そのビルドを外部に出さなかった日（同じバージョンのほかのビルドが審査中だった日）の変更は、次のビルドのWhat to Testに入らない。
       # 外部に出したビルドとcommitの対応はApp Store Connectに残らず、対応を残すにはリポジトリへの書き込みが要るため、これは受け入れている。
       - name: Write What to Test
-        if: steps.changed.outputs.upload == 'true'
         env:
-          LAST: ${{ steps.changed.outputs.last }}
+          LAST: ${{ needs.changed.outputs.last }}
         run: |
           if [ -z "$LAST" ]; then
             echo 'Sciaのベータ版です。'
@@ -119,7 +140,6 @@ jobs:
           cat "$RUNNER_TEMP/what-to-test.txt"
 
       - name: Submit to external testing
-        if: steps.changed.outputs.upload == 'true'
         env:
           APP_STORE_CONNECT_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
@@ -129,7 +149,7 @@ jobs:
         run: make testflight-external
 
       - name: Remove signing keychain
-        if: always() && steps.changed.outputs.upload == 'true'
+        if: always()
         run: |
           security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
           rm -f "$RUNNER_TEMP/development.p12" "$RUNNER_TEMP/AuthKey.p8"

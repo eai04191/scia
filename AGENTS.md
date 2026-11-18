@@ -31,6 +31,8 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `make test-lint`: `Tools/SciaLint`の規則のテスト
 - `make test-core`: SciaCoreのテスト（macOS上、シミュレーター不要）
 - `make test-memory-cache`: `Packages/MemoryCache`のテスト（macOS上、シミュレーター不要）
+- `make test-release`: SciaCoreと`Packages/MemoryCache`のテストを、Release構成で走らせる。最適化したビルドでだけ変わる動きを見つけるためのもので、`make check`には入っていない。`WARNINGS=error`を付けると、警告をエラーとして扱う
+- `make build-release-strict`: アプリをReleaseで、警告をエラーとして扱ってビルドする。GitHub Actions（`.github/workflows/release-test.yml`）が毎日17時（JST）にmainで、`make test-release WARNINGS=error`と合わせて走らせる
 - `make build`: シミュレーター向けにビルドする
 - `make test`: シミュレーターでテストする。`SIM='<端末>'`で指定もできるが、貸し借りする端末（`Scia 1`〜`Scia 4`、`Scia iPad 1`、`Scia iPad 2`、`Scia Duo`）は借りているものしか受け付けない。端末のiOSの版で初めて走らせたときは、UIKitの公開されていない作りに頼る部分のUIテスト（`SciaSystemUITests`）も走らせる。通ると、確かめた作業ツリーの中身を覚える
 - `make test ONLY='SciaTests/LinkLabelTests'`: 一部のテストだけを走らせる。手元で走り、このworktreeが借りている端末を使うので、先に借りる。識別子は空白で区切って複数渡せる。通っても中身は覚えない。`xcodebuild ... test`を直接走らせるときは、`-collect-test-diagnostics never`を付ける。付けないと、テストが失敗したときにシミュレーターの診断を集め、応答を待って10分止まる
@@ -40,7 +42,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `make test`、`make check`、`make check-test`は、`SIM`も`ONLY`も指定しなければ、テストを任せる別のMacと手元の、空いている枠で走らせる。端末は借りなくてよい。別のMacを優先し、どちらも満杯なら先着順に待つ。手元で走らせるときは`SCIA_REMOTE_TEST=local`を付ける（[docs/test-dispatch.md](docs/test-dispatch.md)）
 - `make menu-editor`: メニューの既定の並びを並べ替えるページを、今の項目の名前と既定の並びを入れて`DerivedData/menu-editor.html`に書き出す
 - `make archive`: 実機向けのReleaseビルドをアーカイブする。ビルド番号はアーカイブしたUTCの日時になる
-- `make testflight`: アーカイブしてApp Store Connectへ上げる。mainは、GitHub Actions（`.github/workflows/testflight.yml`）が毎朝5時（JST）に、前に上げたときから変わっていれば上げる。上げたビルドは、`make testflight-external`で外部テストのグループ（リポジトリのvariablesの`TESTFLIGHT_EXTERNAL_GROUP`）に足し、TestFlight App Reviewに出す
+- `make testflight`: アーカイブしてApp Store Connectへ上げる。mainは、GitHub Actions（`.github/workflows/testflight.yml`）が毎朝5時（JST）に、前に上げたときから変わっていれば、Release構成のテスト（`make test-release`）に通してから上げる。上げたビルドは、`make testflight-external`で外部テストのグループ（リポジトリのvariablesの`TESTFLIGHT_EXTERNAL_GROUP`）に足し、TestFlight App Reviewに出す
 - `make hooks`: ローカルのmainを、`make check`と`make test`の両方が通った中身のcommitにしか動かさないhookを入れる。checkoutごとに1回で、worktreeにも効く。hookが止める条件は「Git」にある
 - `make scenario-run PERSONA=<役>`: 何も知らないエージェントを、`Tools/scenario/personas/`の役で初めて使う人としてSciaに触らせ、報告とスクリーンショットを`~/scia-scenario/runs/`に残す。外へ出ないMastodon（`mastodon.localhost`）と専用の端末`Scia Scenario`を使い、Release構成のSciaを入れる。先に`make scenario-setup`で準備する（何度走らせても同じ状態になる）。DockerとAXe（`brew install cameroncooke/axe/axe`）が要る。ユーザーが`/scenario`で起動したときは、`.claude/skills/scenario`の手順で走らせてまとめる
 
