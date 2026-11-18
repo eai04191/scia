@@ -176,13 +176,13 @@ public final class AccountSession {
 
     /// アカウントを使い始める。画面を出すときに1度呼ぶ。通信はしない。次を行う。
     /// - レート制限が明けたときと、電波が戻ったときのやり直しを始める（`observeRecoveries`）
-    /// - アニメーションを再生するかを、読み直すまで、前に読めたサーバーの値で描かせる（`AppSettings.followServerAnimations`）
+    /// - サーバーの設定に従う項目を、読み直すまで、前に読めたサーバーの値で描かせる（`AppSettings.followServerPreferences`）
     ///
     /// サーバーから読むものは`loadServerInfo()`で始める。
     /// - Parameter networkRecoveryCount: 電波がつながっていない状態から戻った回数（`NetworkConditionsMonitor.recoveryCount`）。Observationで追える値を返す。
     public func start(networkRecoveryCount: @escaping @MainActor () -> Int) {
         observeRecoveries(networkRecoveryCount: networkRecoveryCount)
-        settings.followServerAnimations(of: credential.handle)
+        settings.followServerPreferences(of: credential.handle)
     }
 
     /// 使い始めたアカウントの、サーバーの情報を読む。`start(networkRecoveryCount:)`のあとに1度呼ぶ。次を行う。

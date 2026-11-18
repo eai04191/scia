@@ -67,7 +67,7 @@ struct AccountSessionStoresTests {
         #expect(loaded?.autoplaysAnimations == true)
         // 次の起動では、読み直す前から、覚えた値で描く。
         let next = AppSettings(defaults: defaults)
-        next.followServerAnimations(of: session.credential.handle)
+        next.followServerPreferences(of: session.credential.handle)
         #expect(next.animatesAvatars == settings.animatesAvatars)
     }
 

@@ -241,7 +241,7 @@ struct AppSettingsTests {
     /// アイコンとカスタム絵文字のアニメーションは、選ぶまでは表示しているアカウントのサーバーの値に従い、選んだらその値を使う。
     @Test func animationsFollowServerUntilChosen() throws {
         let settings = AppSettings(defaults: try makeDefaults())
-        settings.followServerAnimations(of: "alice@example.social")
+        settings.followServerPreferences(of: "alice@example.social")
         settings.rememberServerAnimations(true, of: "alice@example.social")
         #expect(settings.animatesAvatars)
         #expect(settings.animatesCustomEmojis)
@@ -261,19 +261,19 @@ struct AppSettingsTests {
     @Test func remembersServerAnimationsPerAccount() throws {
         let defaults = try makeDefaults()
         let settings = AppSettings(defaults: defaults)
-        settings.followServerAnimations(of: "alice@example.social")
+        settings.followServerPreferences(of: "alice@example.social")
         settings.rememberServerAnimations(true, of: "alice@example.social")
         settings.rememberServerAnimations(false, of: "bob@example.social")
         #expect(settings.animatesCustomEmojis)
 
-        settings.followServerAnimations(of: "bob@example.social")
+        settings.followServerPreferences(of: "bob@example.social")
         #expect(!settings.animatesCustomEmojis)
 
         let relaunched = AppSettings(defaults: defaults)
         #expect(!relaunched.animatesCustomEmojis)
-        relaunched.followServerAnimations(of: "alice@example.social")
+        relaunched.followServerPreferences(of: "alice@example.social")
         #expect(relaunched.animatesCustomEmojis)
-        relaunched.followServerAnimations(of: "carol@example.social")
+        relaunched.followServerPreferences(of: "carol@example.social")
         #expect(!relaunched.animatesCustomEmojis)
     }
 

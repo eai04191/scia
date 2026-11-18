@@ -65,7 +65,7 @@ struct AccountScopedDefaultsTests {
         // 消したアカウントの値は、作り直した設定にも戻らない。
         #expect(AppSettings(defaults: defaults).switchTabItem(for: alice.handle) == nil)
         #expect(AppSettings(defaults: defaults).shownTabItem(for: alice.handle) == nil)
-        settings.followServerAnimations(of: alice.handle)
+        settings.followServerPreferences(of: alice.handle)
         #expect(!settings.animatesCustomEmojis)
         // 残ったアカウントと、そのサーバーの値は残す。
         #expect(RecentMentions(defaults: defaults, account: bob.handle).mentions.map(\.id) == ["9"])

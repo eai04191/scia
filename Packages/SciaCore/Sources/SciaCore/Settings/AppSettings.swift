@@ -397,8 +397,8 @@ public final class AppSettings {
     }
 
     /// 表示を始めるアカウントの、覚えたサーバーの値に従う。
-    public func followServerAnimations(of account: String) {
-        store.followServerAnimations(of: account)
+    public func followServerPreferences(of account: String) {
+        store.followServerPreferences(of: account)
     }
 
     /// 読めたサーバーの値を覚える。表示しているアカウントの値なら、すぐ従う。
@@ -845,7 +845,7 @@ public final class SettingsStore {
 
     /// アプリの設定（`AppDependencies.settings`）が読む、最後に表示を始めたアカウントのサーバーの値。
     private(set) var lastServerAutoplaysAnimations = false
-    @ObservationIgnored private var animationAccount: String?
+    @ObservationIgnored private var preferenceAccount: String?
 
     public init(defaults: UserDefaults, keepsComposeBarOpenByDefault: Bool = false) {
         self.defaults = defaults
@@ -1018,8 +1018,8 @@ public final class SettingsStore {
         defaults.set(item.rawValue, forKey: AccountScopedDefaults.key(Keys.shownTabItem, account: account))
     }
 
-    func followServerAnimations(of account: String) {
-        animationAccount = account
+    func followServerPreferences(of account: String) {
+        preferenceAccount = account
         let autoplays = serverAnimationAutoplays[account] ?? false
         if lastServerAutoplaysAnimations != autoplays {
             lastServerAutoplaysAnimations = autoplays
@@ -1031,7 +1031,7 @@ public final class SettingsStore {
             serverAnimationAutoplays[account] = autoplays
             defaults.set(autoplays, forKey: AccountScopedDefaults.key(Keys.serverAutoplaysAnimations, account: account))
         }
-        if animationAccount == account, lastServerAutoplaysAnimations != autoplays {
+        if preferenceAccount == account, lastServerAutoplaysAnimations != autoplays {
             lastServerAutoplaysAnimations = autoplays
         }
     }
@@ -1041,7 +1041,7 @@ public final class SettingsStore {
         switchTabItems[account] = nil
         shownTabItems[account] = nil
         serverAnimationAutoplays[account] = nil
-        if animationAccount == account {
+        if preferenceAccount == account {
             lastServerAutoplaysAnimations = false
         }
         updateLibrary { $0.forgetAccount(account) }
