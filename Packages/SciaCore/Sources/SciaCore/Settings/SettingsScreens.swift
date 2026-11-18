@@ -139,7 +139,7 @@ extension SettingsPage {
     /// 設定のトップの画面。最初の節は、選んでいるアカウントのための設定で、見出しにそのアカウントのハンドルを出す。
     public static func rootSections(handle: String) -> [SettingsSection] {
         [
-            SettingsSection(header: handle, rows: [.page(.account), .page(.tabs), .page(.accountPreset)]),
+            SettingsSection(header: handle, rows: [.page(.account), .page(.tabs)]),
             SettingsSection(rows: [.page(.presets)]),
             SettingsSection(rows: [.page(.display), .page(.interaction), .page(.compose), .page(.appIcon)]),
             SettingsSection(rows: [.page(.storage), .page(.about)]),
@@ -158,6 +158,7 @@ extension SettingsPage {
         case .about: "情報"
         case .appIcon: "アプリのアイコン"
         case .presets, .accountPreset: "プリセット"
+        case .appPreset: SettingsTexts.Presets.app
         case .presetEditor: "プリセットを編集"
         case .presetComparison: SettingsTexts.Presets.compare
         case .appearance: "投稿"
@@ -272,7 +273,7 @@ extension SettingsPage {
              .userActions, .linkActions, .externalPostActions, .hashtagActions, .mediaActions, .reactionActions, .statusMenu, .statusActionBar,
              .statusLeadingSwipe, .statusTrailingSwipe, .userMenu, .linkMenu, .externalPostMenu, .profileTextMenu, .customEmojiMenu, .hashtagMenu, .mediaMenu, .reactionMenu,
              .composeTools, .connection, .connectionTimelines, .storage, .viewedMediaCache, .prefetchedMediaCache, .licenses, .acknowledgments,
-             .presets, .accountPreset, .presetEditor, .presetComparison:
+             .presets, .appPreset, .accountPreset, .presetEditor, .presetComparison:
             nil
         }
     }

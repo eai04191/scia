@@ -23,7 +23,7 @@ struct SettingsScreensTests {
         let sections = SettingsPage.rootSections(handle: "@alice@example.social")
 
         #expect(sections.map(\.header) == ["@alice@example.social", nil, nil, nil])
-        #expect(sections.map { $0.rows.map(\.title) } == [["アカウント", "タブ", "プリセット"], ["プリセット"], ["表示", "操作", "作成", "アプリのアイコン"], ["ストレージ", "情報"]])
+        #expect(sections.map { $0.rows.map(\.title) } == [["アカウント", "タブ"], ["プリセット"], ["表示", "操作", "作成", "アプリのアイコン"], ["ストレージ", "情報"]])
     }
 
     /// 画面へ入る行は、`path`でその画面の1つ手前に重ねる画面にだけ並べる。食い違うと、URLで開いたときと行から入ったときで戻る先が変わる。
@@ -47,8 +47,8 @@ struct SettingsScreensTests {
                 reachable.formUnion([screen.menu, screen.actionBar].compactMap(\.self) + screen.swipes.map(\.page))
             }
         }
-        // 接続の状態とストレージは、値と一緒に並べる画面なので、入り口は画面の中にある。プリセットの編集は、プリセットの一覧の行から、比較は一覧の右上のメニューから開く。
-        reachable.formUnion([.connectionTimelines, .viewedMediaCache, .prefetchedMediaCache, .presetEditor, .presetComparison])
+        // 接続の状態とストレージは、値と一緒に並べる画面なので、入り口は画面の中にある。プリセットの選択と編集は、プリセットの画面の行から、比較は右上のメニューから開く。
+        reachable.formUnion([.connectionTimelines, .viewedMediaCache, .prefetchedMediaCache, .presetEditor, .presetComparison, .appPreset, .accountPreset])
 
         #expect(Set(SettingsPage.allCases).subtracting(reachable).isEmpty)
     }

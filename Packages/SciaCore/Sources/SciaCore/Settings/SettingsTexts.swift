@@ -78,8 +78,10 @@ public enum SettingsTexts {
     /// プリセットの画面（docs/preset.md）。
     public enum Presets {
         public static let userHeader = "マイプリセット"
-        /// アカウントに割り当てない選択肢。
-        public static let followsApp = "アプリのプリセットを使用"
+        /// アカウントに割り当てない選択肢と、割り当てていないアカウントの行の値。
+        public static let followsApp = "アプリに従う"
+        /// プリセットの画面の、アプリのプリセットを選ぶ行。
+        public static let app = "アプリ"
         public static let edit = "編集"
         public static let duplicate = "複製"
         public static let createChild = "このプリセットをもとに作成"

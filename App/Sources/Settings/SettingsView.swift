@@ -189,11 +189,16 @@ struct SettingsView: View {
     }
 
     /// トップの画面の行に添える今の値。プリセットの2つの行に、使っているプリセットの名前を出す。
+    /// ログインしているアカウントのハンドル。アカウントの一覧を読めないとき（Keychainを読めないなど）は、開いているアカウントだけにする。
+    /// 1つだけになるので、プリセットの画面にアカウントの行は出さない。
+    private var signedInAccounts: [String] {
+        (try? AppDependencies.accounts.get())?.accounts.map(\.handle) ?? [account]
+    }
+
     private func rootValue(of page: SettingsPage) -> String? {
         let library = settings.store.observedLibrary
         switch page {
         case .presets: return library.name(of: library.appPreset)
-        case .accountPreset: return library.accountPresets[account].flatMap(library.name(of:)) ?? SettingsTexts.Presets.followsApp
         default: return nil
         }
     }
@@ -232,13 +237,14 @@ struct SettingsView: View {
         case .appIcon: AppIconSettingsView()
         case .account: AccountView(settings: settings, account: account, context: accountScreen)
         case .presets:
-            PresetsView(settings: settings) { id in
+            PresetsView(settings: settings, accounts: signedInAccounts) { id in
                 editingSettings = settings.editing(id)
                 path.append(.presetEditor)
             } openComparison: {
                 path.append(.presetComparison)
             }
         case .presetComparison: PresetComparisonView(settings: settings)
+        case .appPreset: AppPresetView(settings: settings)
         case .accountPreset: AccountPresetView(settings: settings, account: account)
         case .presetEditor:
             if let editingSettings, case .preset(let id) = editingSettings.target {

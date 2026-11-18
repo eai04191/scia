@@ -2,10 +2,13 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// アプリのプリセットを選ぶ画面。決まりはdocs/preset.mdの「設定の画面」にある。
-/// 行を押すとアプリのプリセットに選び、長押しのメニューから、編集（選ばずに中身を変える）、複製、もとにした作成、削除を行う。
+/// プリセットの画面。決まりはdocs/preset.mdの「設定の画面」にある。
+/// 先頭に、アプリとアカウントごとの今のプリセットを並べ、押すと選ぶ画面を開く。その下にプリセットを並べ、使う人のプリセットは押すと中身を変える画面を開く。
+/// 長押しのメニューから、編集、複製、もとにした作成、削除を行う。
 struct PresetsView: View {
     let settings: AppSettings
+    /// ログインしているアカウントのハンドル。アカウントの切り替えのメニューと同じ順。1つだけなら、アカウントの行を出さない。
+    let accounts: [String]
     /// 選ばずに中身を変える画面を開く。
     let openEditor: (PresetID) -> Void
     /// 2つのプリセットを比べる画面を開く。
@@ -18,6 +21,31 @@ struct PresetsView: View {
 
     var body: some View {
         Form {
+            Section {
+                NavigationLink(value: SettingsPage.appPreset) {
+                    LabeledContent(SettingsTexts.Presets.app, value: library.name(of: library.appPreset) ?? "")
+                }
+                if accounts.count > 1 {
+                    ForEach(accounts, id: \.self) { account in
+                        NavigationLink {
+                            AccountPresetView(settings: settings, account: account)
+                        } label: {
+                            // 長いハンドルで値が2段目に落ちて行の高さが揃わなくならないよう、ハンドルを中央で省略して1行に収める。
+                            HStack(spacing: 8) {
+                                Text(account)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Spacer(minLength: 8)
+                                Text(library.accountPresets[account].flatMap(library.name(of:)) ?? SettingsTexts.Presets.followsApp)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .fixedSize()
+                            }
+                            .accessibilityElement(children: .combine)
+                        }
+                    }
+                }
+            }
             Section {
                 ForEach(BuiltInPreset.allCases, id: \.self) { row(.builtIn($0)) }
             }
@@ -41,23 +69,31 @@ struct PresetsView: View {
         .background(WindowAnchorView(anchor: anchor))
     }
 
+    /// 使う人のプリセットは押すと中身を変える画面を開き、組み込みのプリセットは名前だけを出す。
+    @ViewBuilder
     private func row(_ id: PresetID) -> some View {
-        Button {
-            settings.store.updateLibrary { library throws(PresetError) in try library.select(id, for: .app) }
-        } label: {
-            HStack {
-                Text(library.name(of: id) ?? "")
-                    .foregroundStyle(Color.primary)
-                    .lineLimit(1)
-                Spacer(minLength: 8)
-                if library.appPreset == id {
-                    Image(systemName: "checkmark")
-                        .foregroundStyle(.tint)
-                        .accessibilityHidden(true)
+        Group {
+            if case .user = id {
+                Button {
+                    openEditor(id)
+                } label: {
+                    HStack(spacing: 8) {
+                        Text(library.name(of: id) ?? "")
+                            .foregroundStyle(Color.primary)
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.forward")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                            .accessibilityHidden(true)
+                    }
                 }
+                .tint(.primary)
+            } else {
+                Text(library.name(of: id) ?? "")
+                    .lineLimit(1)
             }
         }
-        .accessibilityAddTraits(library.appPreset == id ? .isSelected : [])
         .contextMenu { menu(for: id) }
         .swipeActions {
             if case .user = id {
@@ -182,6 +218,58 @@ struct WindowAnchorView: UIViewRepresentable {
     }
 }
 
+/// アプリのプリセットを選ぶ画面。
+struct AppPresetView: View {
+    let settings: AppSettings
+
+    private var library: PresetLibrary { settings.store.observedLibrary }
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach(BuiltInPreset.allCases, id: \.self) { choice(.builtIn($0)) }
+            }
+            if !library.userPresets.isEmpty {
+                Section(SettingsTexts.Presets.userHeader) {
+                    ForEach(library.userPresets, id: \.id) { choice(.user($0.id)) }
+                }
+            }
+        }
+        .navigationTitle(SettingsPage.appPreset.title)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func choice(_ id: PresetID) -> some View {
+        PresetChoiceRow(title: library.name(of: id) ?? "", isSelected: library.appPreset == id) {
+            settings.store.updateLibrary { library throws(PresetError) in try library.select(id, for: .app) }
+        }
+    }
+}
+
+/// 選ぶ画面の1行。選んでいるものにチェックマークを付ける。
+private struct PresetChoiceRow: View {
+    let title: String
+    let isSelected: Bool
+    let select: () -> Void
+
+    var body: some View {
+        Button(action: select) {
+            HStack {
+                Text(title)
+                    .foregroundStyle(Color.primary)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(.tint)
+                        .accessibilityHidden(true)
+                }
+            }
+        }
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
 /// 選んでいるアカウントに、プリセットを割り当てる画面。割り当てなければ、アプリのプリセットを使う。
 struct AccountPresetView: View {
     let settings: AppSettings
@@ -205,7 +293,8 @@ struct AccountPresetView: View {
                 }
             }
         }
-        .navigationTitle(SettingsPage.accountPreset.title)
+        .navigationTitle(account)
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func presetChoice(_ id: PresetID) -> some View {
@@ -215,20 +304,7 @@ struct AccountPresetView: View {
     }
 
     private func choice(title: String, isSelected: Bool, select: @escaping () -> Void) -> some View {
-        Button(action: select) {
-            HStack {
-                Text(title)
-                    .foregroundStyle(Color.primary)
-                    .lineLimit(1)
-                Spacer(minLength: 8)
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .foregroundStyle(.tint)
-                        .accessibilityHidden(true)
-                }
-            }
-        }
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        PresetChoiceRow(title: title, isSelected: isSelected, select: select)
     }
 }
 
