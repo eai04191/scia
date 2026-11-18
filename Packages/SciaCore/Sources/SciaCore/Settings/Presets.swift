@@ -18,39 +18,55 @@ public enum BuiltInPreset: String, CaseIterable, Codable, Sendable {
     }
 
     /// アプリの既定値から変える値。キーは`AppSettings`がプリセットに持つ値のキー（`AppSettings+Modified.swift`の行と画面からたどれることを、テストで確かめる）。
+    /// すき間の項目は個々に並べず、段の単位（`spacingUnit`）から決める。設定を読むたびに引くので、組み立てた辞書を持っておく。
     public var values: [String: PresetValue] {
         switch self {
-        case .standard:
-            [:]
-        case .compact:
-            [
-                "appearanceValue.timeline.rowPaddingTop": .number(8),
-                "appearanceValue.timeline.rowPaddingBottom": .number(8),
-                "appearanceValue.timeline.avatarSize": .number(32),
-                "appearanceValue.text.namePrimary": .number(1),
-                "appearanceValue.text.nameSecondary": .number(-1),
-                "appearanceValue.timeline.nameBodySpacing": .number(3),
-                "appearanceValue.timeline.bodyMediaSpacing": .number(6),
-                "appearanceValue.timeline.mediaTallestAspectRatio": .number(1),
-                "appearanceChoice.mediaArrangement": .text("besideBody"),
-                "appearanceChoice.tiltsStackedPhotos": .bool(false),
-                "appearanceChoice.showsActionBar": .bool(false),
-                "objectActions.status.tap": .text("actionBar"),
-                "objectActions.status.longPress": .text("item:openThread"),
-            ]
-        case .relaxed:
-            [
-                "appearanceValue.timeline.rowPaddingTop": .number(20),
-                "appearanceValue.timeline.rowPaddingBottom": .number(20),
-                "appearanceValue.timeline.avatarSize": .number(48),
-                "appearanceValue.timeline.avatarSpacing": .number(12),
-                "appearanceValue.text.body": .number(1),
-                "appearanceValue.timeline.nameBodySpacing": .number(7),
-                "appearanceValue.timeline.bodyMediaSpacing": .number(14),
-                "appearanceValue.timeline.mediaTallestAspectRatio": .number(0.6),
-                "appearanceValue.actionBar.iconSize": .number(17),
-            ]
+        case .standard: Self.standardValues
+        case .compact: Self.compactValues
+        case .relaxed: Self.relaxedValues
         }
+    }
+
+    /// すき間の段の単位。nilなら既定の単位（`SpacingScale.unit`）のまま。
+    public var spacingUnit: Double? {
+        switch self {
+        case .standard: nil
+        case .compact: 2
+        case .relaxed: 5
+        }
+    }
+
+    private static let standardValues: [String: PresetValue] = [:]
+
+    private static let compactValues = BuiltInPreset.compact.withSpacing([
+        "appearanceValue.timeline.avatarSize": .number(32),
+        "appearanceValue.text.namePrimary": .number(1),
+        "appearanceValue.text.nameSecondary": .number(-1),
+        "appearanceValue.timeline.mediaTallestAspectRatio": .number(1),
+        "appearanceChoice.mediaArrangement": .text("besideBody"),
+        "appearanceChoice.tiltsStackedPhotos": .bool(false),
+        "appearanceChoice.showsActionBar": .bool(false),
+        "objectActions.status.tap": .text("actionBar"),
+        "objectActions.status.longPress": .text("item:openThread"),
+    ])
+
+    private static let relaxedValues = BuiltInPreset.relaxed.withSpacing([
+        "appearanceValue.timeline.avatarSize": .number(48),
+        "appearanceValue.text.body": .number(1),
+        "appearanceValue.timeline.mediaTallestAspectRatio": .number(0.6),
+        "appearanceValue.actionBar.iconSize": .number(17),
+    ])
+
+    /// `values`に、すき間の項目を段の単位から求めた値を足す。
+    private func withSpacing(_ values: [String: PresetValue]) -> [String: PresetValue] {
+        guard let unit = spacingUnit else { return values }
+        var result = values
+        for item in AppearanceCatalog.values + NotificationAppearanceCatalog.values {
+            guard case .spacing(let level) = item.role else { continue }
+            precondition(result[item.presetKey] == nil, "\(item.id)はすき間の段で決めるので、個々に並べない")
+            result[item.presetKey] = .number(level.value(unit: unit))
+        }
+        return result
     }
 }
 
