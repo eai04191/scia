@@ -26,6 +26,9 @@ final class StatusBarTicker {
     private let tuning: TuningStore
     private var queue: StatusBarTickerQueue<StatusBarTickerItem>
     private var window: TickerWindow?
+    private var windowSettings: WindowSettings?
+    /// 流すアカウントの設定。流すウィンドウに載せる。
+    private let settings: AppSettings
     /// 出し始めてから経った長さ。出していなければnil。
     private var sinceShown: (@Sendable () -> Duration)?
     /// 出している長さと、デバッグで出し続ける間合いを数える時計。
@@ -35,7 +38,8 @@ final class StatusBarTicker {
     private var statusBarReturnTask: Task<Void, Never>?
     private let logger = SciaLog.logger(category: "statusBarTicker")
 
-    init(tuning: TuningStore = AppDependencies.tuning, clock: any Clock<Duration> = AppDependencies.clock) {
+    init(settings: AppSettings, tuning: TuningStore = AppDependencies.tuning, clock: any Clock<Duration> = AppDependencies.clock) {
+        self.settings = settings
         self.tuning = tuning
         self.clock = clock
         queue = StatusBarTickerQueue(timing: TuningCatalog.statusBarTickerTiming(in: tuning))
@@ -246,10 +250,10 @@ final class StatusBarTicker {
             window.ticker.setCutout(cutout)
             return window
         }
-        let window = TickerWindow(windowScene: scene, cutout: cutout)
-        MediaDynamicRangeTraits.follow(window, settings: AppDependencies.settings, { $0.mediaDynamicRange }) { window, range in
-            window.traitOverrides.imageDynamicRange = range
-        }
+        let window = TickerWindow(windowScene: scene, cutout: cutout, settings: settings)
+        let windowSettings = WindowSettings(window: window, followsTint: false)
+        windowSettings.use(settings)
+        self.windowSettings = windowSettings
         window.ticker.onTap = { [weak self] in
             self?.onTap()
         }
@@ -267,8 +271,8 @@ private final class TickerWindow: UIWindow {
     let host: TickerHostController
     var ticker: StatusBarTickerView { host.ticker }
 
-    init(windowScene: UIWindowScene, cutout: StatusBarCutout) {
-        host = TickerHostController(ticker: StatusBarTickerView(cutout: cutout))
+    init(windowScene: UIWindowScene, cutout: StatusBarCutout, settings: AppSettings) {
+        host = TickerHostController(ticker: StatusBarTickerView(cutout: cutout, settings: settings))
         super.init(windowScene: windowScene)
         windowLevel = .statusBar
         backgroundColor = .clear

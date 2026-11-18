@@ -7,8 +7,9 @@ import UIKit
 /// タブのタイムラインのほか、開いたタイムラインに積むハッシュタグのタイムラインにも使う。
 @MainActor
 final class FeedTimelineController {
-    private(set) lazy var viewController = TimelineViewController(texts: texts) { [weak model] in await model?.refresh() }
+    private(set) lazy var viewController = TimelineViewController(texts: texts, settings: settings) { [weak model] in await model?.refresh() }
     private let texts: TimelineViewController.Texts
+    private let settings: AppSettings
     /// 読み込み、ストリーミング、既読位置を受け持つ。
     let model: FeedTimelineModel
     var feed: TimelineFeed { model.feed }
@@ -42,6 +43,7 @@ final class FeedTimelineController {
     ) {
         model = FeedTimelineModel(feed: feed, session: session, tuning: tuning, clock: clock, now: now, backgroundTime: BackgroundTime.request)
         self.texts = texts ?? Self.texts(for: feed)
+        settings = session.settings
         self.client = session.client
         self.tuning = tuning
         model.display = viewController

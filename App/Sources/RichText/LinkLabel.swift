@@ -5,7 +5,8 @@ import UIKit
 /// RichTextRendererで描いた本文の、リンクの部分をタップできるラベル。リンクの外のタップは受けず、セルなど後ろのビューに渡す。
 final class LinkLabel: EmojiLabel {
     /// メニューの並び。
-    var settings: AppSettings = AppDependencies.settings
+    /// 窓に開いたアカウントの設定。ラベルは投稿の本文などの中で何段も親から作られるので、窓から読む。
+    var settings: AppSettings { traitCollection.appSettings }
     /// リンクのタップで、タップと長押しの設定によらず、いつも開く。メニューも出さない。「投稿の見た目」のプレビューの見本で使う。
     var opensLinksOnTapOnly = false
 

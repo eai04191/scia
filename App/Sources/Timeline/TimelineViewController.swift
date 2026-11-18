@@ -337,13 +337,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     init(
         texts: Texts = .home,
+        settings: AppSettings,
         refresh: @escaping @MainActor () async -> Void,
         tuning: TuningStore = AppDependencies.tuning,
         emojiImages: EmojiImageStore<UIImage> = AppDependencies.emojiImages,
         mediaImages: MediaImageStore<UIImage> = AppDependencies.mediaImages,
         avatarImages: AvatarImageStore<UIImage> = AppDependencies.avatarImages,
         network: NetworkConditionsMonitor = AppDependencies.network,
-        settings: AppSettings = AppDependencies.settings,
         crashGuard: PostCrashGuard = AppDependencies.postCrashGuard
     ) {
         self.crashGuard = crashGuard

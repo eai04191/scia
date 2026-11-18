@@ -40,7 +40,8 @@ struct MediaViewerOpener {
                 timing: timing,
                 transfers: transfers,
                 notices: notices,
-                subject: subject
+                subject: subject,
+                settings: presenter.traitCollection.appSettings
             )
             MediaWindow.open(request, from: presenter.view.window?.windowScene)
             return

@@ -24,7 +24,7 @@ struct EmojiLabelTextKitTests {
     }
 
     private func text(_ string: String) -> NSAttributedString {
-        RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, emojiImages: .offline, language: "ja")
+        RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, settings: AppDependencies.settings, emojiImages: .offline, language: "ja")
             .render(RichText(blocks: [.init(inlines: [.text(string, [])])]))
     }
 

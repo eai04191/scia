@@ -27,7 +27,7 @@ enum PostActionBarCatalog {
             unavailable: Set<StatusMenuItem> = []
         ) -> CatalogState {
             CatalogState(title: title) {
-                let timeline = TimelineViewController(texts: .home, refresh: {})
+                let timeline = TimelineViewController(texts: .home, settings: AppDependencies.settings, refresh: {})
                 timeline.myAccountID = author.id
                 timeline.capabilities.supportsEmojiReactions = !reactions.isEmpty
                 let status = Status(

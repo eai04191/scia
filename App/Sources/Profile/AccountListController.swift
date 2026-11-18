@@ -27,12 +27,12 @@ final class AccountListController {
 
     /// - Parameter emojiReactionStyle: リアクションした人を読むときの、サーバーのAPIの形。ほかのリストでは呼ばれても使わない。
     static func make(
-        kind: AccountListKind, client: MastodonClient, tasks: TaskScope,
+        kind: AccountListKind, client: MastodonClient, settings: AppSettings, tasks: TaskScope,
         emojiReactionStyle: @escaping @MainActor @Sendable () async throws -> EmojiReactionStyle = { .fedibird }
     ) -> (AccountListController, TimelineViewController) {
         // 画面を作る時点ではコントローラーがまだないため、作ったあとに入れる。
         weak var owner: AccountListController?
-        let viewController = TimelineViewController(texts: .accountList(kind)) { await owner?.refresh() }
+        let viewController = TimelineViewController(texts: .accountList(kind), settings: settings) { await owner?.refresh() }
         let controller = AccountListController(kind: kind, client: client, viewController: viewController, tasks: tasks, emojiReactionStyle: emojiReactionStyle)
         viewController.lifetimeOwner = controller
         owner = controller

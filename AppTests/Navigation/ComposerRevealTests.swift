@@ -15,7 +15,7 @@ struct ComposerRevealTests {
 
     private func makeViewer() -> MediaViewerController {
         let attachment = MediaAttachment(id: "1", type: .image, url: URL(string: "https://x.example/1.png"), previewUrl: nil)
-        return MediaViewerController(attachments: [attachment], startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, sourceTile: { _ in nil })
+        return MediaViewerController(attachments: [attachment], startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, settings: AppDependencies.settings, sourceTile: { _ in nil })
     }
 
     /// 書きかけがあり、下へのスワイプで閉じさせない画面。
@@ -198,7 +198,7 @@ struct ComposerRevealTests {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let root = harness.viewController
-        let browser = InAppBrowser(tuning: .withoutBrowserMotion())
+        let browser = InAppBrowser(tuning: .withoutBrowserMotion(), settings: AppDependencies.settings)
         browser.open(try #require(URL(string: "https://example.com/1")), from: root)
         try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
         let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)

@@ -12,8 +12,11 @@ final class ProfilePrivateNoteView: UIView {
     private let titleLabel = UILabel()
     private let bodyLabel = UILabel()
 
-    override init(frame: CGRect) {
-        super.init(frame: frame)
+    private let settings: AppSettings
+
+    init(settings: AppSettings) {
+        self.settings = settings
+        super.init(frame: .zero)
         backgroundColor = .tertiarySystemFill
         layer.cornerRadius = Self.cornerRadius
         layer.cornerCurve = .continuous
@@ -61,7 +64,7 @@ final class ProfilePrivateNoteView: UIView {
 
     /// メモを出す。サーバーはメモを整形しないので、書いたままの平文で出す。
     func apply(note: String, glyphLanguage: String, emojiImages: EmojiImageStore<UIImage>) {
-        bodyLabel.attributedText = RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, emojiImages: emojiImages, language: glyphLanguage)
+        bodyLabel.attributedText = RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, settings: settings, emojiImages: emojiImages, language: glyphLanguage)
             .render(.plain(note, emojis: []))
         accessibilityLabel = AccountNoteTexts.accessibilityLabel(note: note)
     }

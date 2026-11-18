@@ -67,7 +67,7 @@ enum CompletionListCatalog {
 
     @MainActor
     private static func list(_ content: ComposeCompletion.Content, kind: CompletionKind, selected: Int = 0, growsUpward: Bool = true) -> UIView {
-        let list = ComposeCompletionList()
+        let list = ComposeCompletionList(settings: AppDependencies.settings)
         list.growsUpward = growsUpward
         list.update(content, kind: kind, selectedIndex: selected)
         let height = list.contentHeight

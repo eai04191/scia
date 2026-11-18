@@ -37,7 +37,7 @@ final class AltTextEditorView: UIView {
         textView.height(ofLines: maxLines)
     }
 
-    init(settings: AppSettings = AppDependencies.settings) {
+    init(settings: AppSettings) {
         super.init(frame: .zero)
         backgroundColor = UIColor.black.withAlphaComponent(0.6)
         textView.font = .preferredFont(forTextStyle: .body)

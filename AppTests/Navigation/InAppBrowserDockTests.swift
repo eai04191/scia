@@ -40,7 +40,7 @@ struct InAppBrowserDockTests {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let root = harness.viewController
-        let browser = InAppBrowser(tuning: .withoutBrowserMotion())
+        let browser = InAppBrowser(tuning: .withoutBrowserMotion(), settings: AppDependencies.settings)
         var docked: [CGFloat] = []
         var obscured: CGFloat = 0
         browser.onDockedHeightChange = { docked.append($0) }
@@ -71,7 +71,7 @@ struct InAppBrowserDockTests {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let root = harness.viewController
-        let browser = InAppBrowser(tuning: .withoutBrowserMotion())
+        let browser = InAppBrowser(tuning: .withoutBrowserMotion(), settings: AppDependencies.settings)
         var docked: CGFloat = 0
         browser.onDockedHeightChange = { docked = $0 }
         browser.open(try #require(URL(string: "https://example.com/1")), from: root)
@@ -92,7 +92,7 @@ struct InAppBrowserDockTests {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let root = harness.viewController
-        let browser = InAppBrowser(tuning: .withoutBrowserMotion())
+        let browser = InAppBrowser(tuning: .withoutBrowserMotion(), settings: AppDependencies.settings)
         browser.open(try #require(URL(string: "https://example.com/1")), from: root)
         try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
         let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
@@ -114,7 +114,7 @@ struct InAppBrowserDockTests {
         let tuning = TuningStore.withoutBrowserMotion()
         tuning.setValue(70, for: TuningCatalog.inAppBrowserCollapsedHeight)
         tuning.setValue(20, for: TuningCatalog.inAppBrowserCollapsedHomeIndicatorSpace)
-        let browser = InAppBrowser(tuning: tuning)
+        let browser = InAppBrowser(tuning: tuning, settings: AppDependencies.settings)
         browser.open(try #require(URL(string: "https://example.com/1")), from: root)
         try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
         let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
@@ -132,7 +132,7 @@ struct InAppBrowserDockTests {
         defer { harness.tearDown() }
         let root = harness.viewController
         let tuning = TuningStore.withoutBrowserMotion()
-        let browser = InAppBrowser(tuning: tuning)
+        let browser = InAppBrowser(tuning: tuning, settings: AppDependencies.settings)
         browser.open(try #require(URL(string: "https://example.com/1")), from: root)
         try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
         let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
@@ -154,7 +154,7 @@ struct InAppBrowserDockTests {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let root = harness.viewController
-        let browser = InAppBrowser(tuning: .withoutBrowserMotion())
+        let browser = InAppBrowser(tuning: .withoutBrowserMotion(), settings: AppDependencies.settings)
         browser.open(try #require(URL(string: "https://example.com/1")), from: root)
         try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
         let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
@@ -184,7 +184,7 @@ struct InAppBrowserDockTests {
         defer { harness.tearDown() }
         let root = harness.viewController
         let clock = TestClock()
-        let browser = InAppBrowser(tuning: .withoutBrowserMotion(), clock: clock)
+        let browser = InAppBrowser(tuning: .withoutBrowserMotion(), settings: AppDependencies.settings, clock: clock)
         browser.open(try #require(URL(string: "https://example.com/1")), from: root)
         try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
         let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
@@ -227,7 +227,7 @@ struct InAppBrowserDockTests {
         defer { harness.tearDown() }
         let root = harness.viewController
         let clock = TestClock()
-        let browser = InAppBrowser(tuning: .withoutBrowserMotion(), clock: clock)
+        let browser = InAppBrowser(tuning: .withoutBrowserMotion(), settings: AppDependencies.settings, clock: clock)
         var obscured: CGFloat = 0
         browser.onObscuredHeightChange = { obscured = $0 }
         let (_, presentation) = try await openBrowser(browser, from: root)
@@ -250,7 +250,7 @@ struct InAppBrowserDockTests {
         defer { harness.tearDown() }
         let root = harness.viewController
         let clock = TestClock()
-        let browser = InAppBrowser(tuning: .withoutBrowserMotion(), clock: clock)
+        let browser = InAppBrowser(tuning: .withoutBrowserMotion(), settings: AppDependencies.settings, clock: clock)
         let (first, presentation) = try await openBrowser(browser, from: root)
         try await makeTemporaryDetent(presentation, height: 301, expected: 300, clock: clock)
         presentation.select(.temporary, animated: false)
@@ -269,7 +269,7 @@ struct InAppBrowserDockTests {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let root = harness.viewController
-        let browser = InAppBrowser(tuning: .withoutBrowserMotion())
+        let browser = InAppBrowser(tuning: .withoutBrowserMotion(), settings: AppDependencies.settings)
         var covered = false
         browser.onCoverageChange = { covered = $0 }
         let (_, presentation) = try await openBrowser(browser, from: root)
@@ -298,7 +298,7 @@ struct InAppBrowserDockTests {
         let overlay = UIViewController()
         overlay.modalPresentationStyle = .overFullScreen
         try await root.presentForTesting(overlay)
-        let browser = InAppBrowser(tuning: .withoutBrowserMotion())
+        let browser = InAppBrowser(tuning: .withoutBrowserMotion(), settings: AppDependencies.settings)
         let (_, presentation) = try await openBrowser(browser, from: root)
         presentation.select(.medium, animated: false)
 
@@ -315,7 +315,7 @@ struct InAppBrowserDockTests {
         window.isHidden = false
         defer { window.isHidden = true }
         window.layoutIfNeeded()
-        let browser = InAppBrowser(tuning: .withoutBrowserMotion())
+        let browser = InAppBrowser(tuning: .withoutBrowserMotion(), settings: AppDependencies.settings)
         browser.open(try #require(URL(string: "https://example.com/1")), from: root)
         try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
         let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)

@@ -5,14 +5,17 @@ import UIKit
 /// ブックマークやお気に入り、ある投稿を引用した投稿の画面を組み立て、読み込みを受け持つ`SavedStatusesModel`とTimelineViewControllerをつなぐ。決まりはdocs/tabs.mdの「ブックマークとお気に入り」にある。
 @MainActor
 final class SavedStatusesController {
-    private(set) lazy var viewController = TimelineViewController(texts: Self.texts(for: kind)) { [weak model] in await model?.refresh() }
+    private(set) lazy var viewController = TimelineViewController(texts: Self.texts(for: kind), settings: settings) { [weak model] in await model?.refresh() }
     /// 読み込みを受け持つ。
     let model: SavedStatusesModel
     var kind: SavedStatusesKind { model.kind }
     /// 走り終えていない処理の数。止めたあとに何も起きないことを、テストが確かめるのに使う。
     var runningTaskCount: Int { model.runningTaskCount }
 
+    private let settings: AppSettings
+
     init(kind: SavedStatusesKind, session: AccountSession) {
+        settings = session.settings
         model = SavedStatusesModel(kind: kind, session: session)
         model.display = viewController
         viewController.filterWarnings = FilterWarnings(filtering: model.filtering)

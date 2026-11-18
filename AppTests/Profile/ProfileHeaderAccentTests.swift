@@ -37,7 +37,8 @@ struct ProfileHeaderAccentTests {
         let header = ProfileHeaderView(
             emojiImages: .offline,
             mediaImages: MediaImageStore(files: .temporary()) { _, _ in throw URLError(.notConnectedToInternet) },
-            avatarImages: AvatarImageStore { _ in avatar }
+            avatarImages: AvatarImageStore { _ in avatar },
+            settings: AppDependencies.settings
         )
         header.accentFadeDuration = 0
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)

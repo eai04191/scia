@@ -61,13 +61,13 @@ final class ProfileController {
         account: Account,
         client: MastodonClient,
         relationshipCache: RelationshipCache,
-        settings: AppSettings = AppDependencies.settings,
+        settings: AppSettings,
         tasks: TaskScope,
         onError: @escaping (any Error, String) -> Void
     ) -> (ProfileController, TimelineViewController) {
         // 画面を作る時点ではコントローラーがまだないため、作ったあとに入れる。
         weak var owner: ProfileController?
-        let viewController = TimelineViewController(texts: .profile) { await owner?.refresh() }
+        let viewController = TimelineViewController(texts: .profile, settings: settings) { await owner?.refresh() }
         let controller = ProfileController(
             account: account,
             client: client,
@@ -100,7 +100,7 @@ final class ProfileController {
             featuredShelves: Self.featuredShelves(in: settings),
             api: ProfileStore.API(client: client)
         )
-        header = ProfileHeaderView(emojiImages: viewController.emojiImages, mediaImages: viewController.mediaImages, avatarImages: viewController.avatarImages)
+        header = ProfileHeaderView(emojiImages: viewController.emojiImages, mediaImages: viewController.mediaImages, avatarImages: viewController.avatarImages, settings: settings)
         shownTimeline = store.timeline
         shownTab = store.tab
         self.settings = settings

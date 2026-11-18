@@ -50,7 +50,7 @@ extension TimelineViewController {
         var configuration = contentConfiguration(for: status, itemID: itemID, translatesBody: false, base: base)
         let appearance = NotificationAppearance(notification.type)
         let typography = PostTypography(settings: settings)
-        let renderer = RichTextRenderer(font: typography.font(.notificationContext), textColor: .secondaryLabel, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
+        let renderer = RichTextRenderer(font: typography.font(.notificationContext), textColor: .secondaryLabel, settings: settings, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
         // 言い回しはアプリの文言なので、言語を外し、ウィンドウに付けたアプリの言語で描く。
         func phrase(_ string: String) -> NSAttributedString {
             let rendered = NSMutableAttributedString(attributedString: renderer.render(.plain(string, emojis: [])))
@@ -156,7 +156,7 @@ extension TimelineViewController {
         typealias N = NotificationAppearanceCatalog
         let appearance = NotificationAppearance(notification.type)
         let font = PostTypography(settings: settings).font(.notificationHeader)
-        let nameRenderer = RichTextRenderer(font: font, textColor: base.textProperties.color, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
+        let nameRenderer = RichTextRenderer(font: font, textColor: base.textProperties.color, settings: settings, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
         // 言い回しはアプリの文言なので、言語を付けず、ウィンドウに付けたアプリの言語で描く。
         let phraseAttributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.secondaryLabel]
         let reactionEmoji = notification.type == .emojiReaction ? notification.reactionEmoji : nil

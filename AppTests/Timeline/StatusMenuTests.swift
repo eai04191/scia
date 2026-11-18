@@ -16,7 +16,7 @@ struct StatusMenuTests {
     /// - Parameter myAccountID: 自分のアカウントのID。自分の投稿でだけ出る項目を試すときに渡す。
     /// - Parameter userMenuActions: ユーザーのメニューのメンションとハンドルをコピーを組むもの。渡さなければ2つは出ない。
     private func menu(for entry: TimelineEntry, settings: AppSettings? = nil, myAccountID: String? = nil, userMenuActions: UserMenuActions? = nil) throws -> UIMenu? {
-        let viewController = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: try settings ?? makeSettings())
+        let viewController = TimelineViewController(settings: try settings ?? makeSettings(), refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
         viewController.myAccountID = myAccountID
         viewController.userMenuActions = userMenuActions
         return viewController.contextMenu(for: entry, id: entry.id)
@@ -117,7 +117,7 @@ struct StatusMenuTests {
 
     /// プロフィール画面のメニューも、開くたびにその人の関係を読み直す。
     @Test func profileUserMenuReloadsRelation() throws {
-        let viewController = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: try makeSettings())
+        let viewController = TimelineViewController(settings: try makeSettings(), refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
         let reloads = ReloadRecorder()
         viewController.userMenuActions = userMenuActions(reload: { reloads.requests.append($0) })
 
@@ -170,15 +170,13 @@ struct StatusMenuTests {
             element == .item(.mentionedUsers, isVisible: false) ? .item(.mentionedUsers, isVisible: true) : element
         })
         let viewController = TimelineViewController(
-            refresh: {},
+            settings: settings, refresh: {},
             tuning: TuningStore(defaults: nil),
             emojiImages: .offline,
             avatarImages: AvatarImageStore { url in
                 await recorder.avatar(url)
                 throw URLError(.notConnectedToInternet)
-            },
-            settings: settings
-        )
+            })
         viewController.userMenuActions = userMenuActions(accounts: AccountCache { ids in await recorder.accounts(ids) })
         let author = try account("2", "alice")
         let post = try status(url: nil, account: author, mentions: [Mention(id: "3", username: "carol", url: nil, acct: "carol")])
@@ -214,7 +212,7 @@ struct StatusMenuTests {
             tags: [Tag(name: "cat", url: nil), Tag(name: "dog", url: nil), Tag(name: "fox", url: nil)]
         )
         let refreshes = ReloadRecorder()
-        let viewController = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: try makeSettings())
+        let viewController = TimelineViewController(settings: try makeSettings(), refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
         viewController.hashtagMenuActions = HashtagMenuActions(mute: HashtagMuteActions(
             known: { name in
                 switch name {

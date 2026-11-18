@@ -37,7 +37,7 @@ final class TimelineHarness {
         let defaults = TestScratch.defaults("TimelineHarness")
         settings = AppSettings(defaults: defaults)
         settings.useMenuFixtures()
-        viewController = TimelineViewController(refresh: {}, tuning: tuning, emojiImages: emojiImages, mediaImages: mediaImages, avatarImages: .offline, settings: settings, crashGuard: crashGuard)
+        viewController = TimelineViewController(settings: settings, refresh: {}, tuning: tuning, emojiImages: emojiImages, mediaImages: mediaImages, avatarImages: .offline, crashGuard: crashGuard)
         viewController.headerView = headerView
         viewController.notices = notices
         viewController.frameSource = frames

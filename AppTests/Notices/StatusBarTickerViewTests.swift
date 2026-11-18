@@ -20,7 +20,7 @@ struct StatusBarTickerViewTests {
         let window = UIWindow(windowScene: scene)
         window.frame = CGRect(x: 0, y: 0, width: 390, height: 200)
         let clock = LayerClock(freezing: window.layer)
-        let view = StatusBarTickerView(cutout: .island(CGRect(x: 140, y: 11, width: 110, height: 32), sideMargin: 14))
+        let view = StatusBarTickerView(cutout: .island(CGRect(x: 140, y: 11, width: 110, height: 32), sideMargin: 14), settings: AppDependencies.settings)
         view.mediaTime = { clock.now }
         view.animationDuration = 1
         view.frame = CGRect(x: 0, y: 0, width: 390, height: 54)
@@ -64,7 +64,7 @@ extension StatusBarTickerViewTests {
         let window = UIWindow(windowScene: scene)
         window.frame = CGRect(x: 0, y: 0, width: 390, height: 200)
         let clock = LayerClock(freezing: window.layer)
-        let view = StatusBarTickerView(cutout: .island(CGRect(x: 140, y: 11, width: 110, height: 32), sideMargin: 14))
+        let view = StatusBarTickerView(cutout: .island(CGRect(x: 140, y: 11, width: 110, height: 32), sideMargin: 14), settings: AppDependencies.settings)
         view.mediaTime = { clock.now }
         view.animationDuration = 1
         view.frame = CGRect(x: 0, y: 0, width: 390, height: 54)
@@ -95,7 +95,7 @@ extension StatusBarTickerViewTests {
         let window = UIWindow(windowScene: scene)
         window.frame = CGRect(x: 0, y: 0, width: 390, height: 200)
         let clock = LayerClock(freezing: window.layer)
-        let view = StatusBarTickerView(cutout: .island(CGRect(x: 140, y: 11, width: 110, height: 32), sideMargin: 14))
+        let view = StatusBarTickerView(cutout: .island(CGRect(x: 140, y: 11, width: 110, height: 32), sideMargin: 14), settings: AppDependencies.settings)
         view.mediaTime = { clock.now }
         view.animationDuration = 1
         view.frame = CGRect(x: 0, y: 0, width: 390, height: 54)
@@ -141,7 +141,7 @@ struct StatusBarTickerStatusBarTests {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let tuning = TuningStore(defaults: nil)
         tuning.setValue(animationDuration, for: TuningCatalog.statusBarTickerAnimationDuration)
-        let ticker = StatusBarTicker(tuning: tuning, clock: clock)
+        let ticker = StatusBarTicker(settings: AppDependencies.settings, tuning: tuning, clock: clock)
         ticker.scene = { scene }
         return ticker
     }

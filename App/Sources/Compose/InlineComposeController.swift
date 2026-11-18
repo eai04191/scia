@@ -391,7 +391,7 @@ final class InlineComposeController: NSObject {
     /// 出しているアラートを閉じたら、入力欄にキーボードを戻す。シートやビューアの上に出したときはfalse。
     private var alertReturnsFocus = true
     /// 補完の候補のリスト。タイムラインに重ねて欄の上に出し、広げて欄の上に場所がなければ打っている行のすぐ下に重ねる。
-    private let completionList = ComposeCompletionList()
+    private lazy var completionList = ComposeCompletionList(settings: settings)
     /// 欄の上に出すときの、候補のリストの下端を欄の上端に付ける制約。
     private var completionListAboveBar: NSLayoutConstraint?
     /// 本文に重ねるときの、候補のリストの上端の位置。打っている行に合わせて決める。
@@ -429,7 +429,7 @@ final class InlineComposeController: NSObject {
         linkTitleVoiceOverObservation?.cancel()
     }
 
-    init(model: ComposeModel<UIImage>, completion: ComposeCompletion? = nil, recentEmojis: RecentEmojis? = nil, languages: PostingLanguageSource = .unavailable, tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings, keyboardNotifications: NotificationCenter = .default) {
+    init(model: ComposeModel<UIImage>, completion: ComposeCompletion? = nil, recentEmojis: RecentEmojis? = nil, languages: PostingLanguageSource = .unavailable, tuning: TuningStore = AppDependencies.tuning, settings: AppSettings, keyboardNotifications: NotificationCenter = .default) {
         self.model = model
         textCompletion = TextInputCompletion(
             completion: completion ?? ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning)),
@@ -3263,6 +3263,7 @@ final class InlineComposeController: NSObject {
                 },
                 canEditDescription: { [weak self] in !(self?.model.isPosting ?? true) }
             ),
+            settings: settings,
             sourceTile: { [weak self] itemID in
                 UUID(uuidString: itemID).flatMap { self?.attachmentStrip.tile(for: $0) }
             }

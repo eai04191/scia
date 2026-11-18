@@ -552,7 +552,7 @@ private extension PostContentConfiguration {
     /// ボタンを押したときの処理を付けた、見本の投稿の中身。
     @MainActor
     static func withActionBarPress() -> PostContentConfiguration {
-        let timeline = TimelineViewController(texts: .home, refresh: {})
+        let timeline = TimelineViewController(texts: .home, settings: AppDependencies.settings, refresh: {})
         let status = StatusFactory.make(count: 1, startingAt: 1_000)[0]
         var configuration = timeline.contentConfiguration(for: status, base: .cell())
         configuration.onActionBarPress = { _, _ in }

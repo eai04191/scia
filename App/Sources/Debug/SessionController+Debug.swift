@@ -131,10 +131,10 @@ extension SessionController {
             StorageProbe.write()
         case .fakeTranslation(let delay):
             DebugStatusTranslator.setFakeDelay(delay)
-            AppDependencies.settings.noteAutoTranslationModelInstalled()
+            settings.noteAutoTranslationModelInstalled()
         case .translationLanguages(let languages):
-            AppDependencies.settings.autoTranslationLanguages = languages
-            AppDependencies.settings.isAutoTranslationEnabled = true
+            settings.autoTranslationLanguages = languages
+            settings.isAutoTranslationEnabled = true
         case .translationProbe:
             if #available(iOS 26.4, *) {
                 TranslationProbe.start()
@@ -273,7 +273,6 @@ extension SessionController {
     /// 読めないJSONや、型の違う値（`"false"`のような文字列、知らない選択肢、`null`）を渡したら、設定を変えない。
     /// 保存した値を読む`AppearanceChoices(stored:)`は、読めない項目を既定値に戻すので使わない。使うと、渡し間違えた項目の今の値が既定値で上書きされるため。
     private func overrideAppearanceChoices(json: String) {
-        let settings = AppDependencies.settings
         guard let overrides = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any],
               var choices = (try? JSONSerialization.jsonObject(with: settings.appearance.storedData)) as? [String: Any]
         else {
@@ -305,7 +304,6 @@ extension SessionController {
         _ = debugScrollHitches.stop()
         debugScrollHitches.start()
         let startedAt = AppDependencies.mediaTime()
-        let settings = AppDependencies.settings
         let label = "\(settings.appearance.mediaArrangement.rawValue) tilts=\(settings.appearance.tiltsStackedPhotos)"
         var remaining = abs(distance)
         let direction: CGFloat = distance < 0 ? -1 : 1

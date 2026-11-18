@@ -6,7 +6,7 @@ import UIKit
 final class TranslationTransitionLoopView: UIView {
     private static let pause: TimeInterval = 1.2
 
-    private let timeline = TimelineViewController(texts: .home, refresh: {})
+    private let timeline = TimelineViewController(texts: .home, settings: AppDependencies.settings, refresh: {})
     private let original: Status
     private let translated: Status
     private let contentView: PostContentView

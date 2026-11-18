@@ -15,7 +15,7 @@ struct EmojiPaletteViewTests {
         sources.personalEmojiSet = { await sets.next() }
         let tuning = TuningStore(defaults: nil)
         let core = ComposeCompletion(sources: sources, settings: TuningCatalog.completionSettings(in: tuning))
-        let completion = TextInputCompletion(completion: core, recentEmojis: nil, tuning: tuning)
+        let completion = TextInputCompletion(completion: core, recentEmojis: nil, tuning: tuning, settings: AppDependencies.settings)
         let palette = EmojiPaletteView(emojiImages: .offline, thumbnailBuilder: nil)
         palette.frame = CGRect(x: 0, y: 0, width: 400, height: 400)
 
@@ -73,7 +73,7 @@ struct EmojiPaletteViewTests {
         tuning.setValue(56, for: TuningCatalog.composeEmojiPaletteCellSize)
         tuning.setValue(160, for: TuningCatalog.composeEmojiPalettePreviewHeight)
         let core = ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning))
-        let completion = TextInputCompletion(completion: core, recentEmojis: nil, tuning: tuning)
+        let completion = TextInputCompletion(completion: core, recentEmojis: nil, tuning: tuning, settings: AppDependencies.settings)
         let palette = EmojiPaletteView(emojiImages: .offline, thumbnailBuilder: nil)
 
         completion.updatePalette(palette, recentKeys: [])

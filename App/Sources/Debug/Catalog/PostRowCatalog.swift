@@ -22,9 +22,9 @@ enum PostRowCatalog {
         private let mine: TimelineViewController
 
         init() {
-            home = TimelineViewController(texts: .home, refresh: {})
+            home = TimelineViewController(texts: .home, settings: AppDependencies.settings, refresh: {})
             home.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
-            mine = TimelineViewController(texts: .home, refresh: {})
+            mine = TimelineViewController(texts: .home, settings: AppDependencies.settings, refresh: {})
             mine.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: author.id))
             mine.myAccountID = author.id
         }
@@ -213,9 +213,9 @@ enum PostRowCatalog {
         defaults.removePersistentDomain(forName: suiteName)
         let settings = AppSettings(defaults: defaults)
         settings.appearance.mediaArrangement = .besideBody
-        let home = TimelineViewController(texts: .home, refresh: {}, settings: settings)
+        let home = TimelineViewController(texts: .home, settings: settings, refresh: {})
         home.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
-        let mine = TimelineViewController(texts: .home, refresh: {}, settings: settings)
+        let mine = TimelineViewController(texts: .home, settings: settings, refresh: {})
         mine.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: author.id))
         mine.myAccountID = author.id
         // 「写真を傾ける」をオフにした設定のタイムライン。
@@ -227,7 +227,7 @@ enum PostRowCatalog {
         let straightSettings = AppSettings(defaults: straightDefaults)
         straightSettings.appearance.mediaArrangement = .besideBody
         straightSettings.appearance.tiltsStackedPhotos = false
-        let straight = TimelineViewController(texts: .home, refresh: {}, settings: straightSettings)
+        let straight = TimelineViewController(texts: .home, settings: straightSettings, refresh: {})
         straight.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
         // 投稿と、引用とXの投稿の並べ方を分けた設定のタイムライン。
         func timeline(suffix: String, post: MediaArrangement, embed: EmbedMediaArrangement) -> TimelineViewController {
@@ -239,7 +239,7 @@ enum PostRowCatalog {
             let settings = AppSettings(defaults: defaults)
             settings.appearance.mediaArrangement = post
             settings.appearance.embedMediaArrangement = embed
-            let timeline = TimelineViewController(texts: .home, refresh: {}, settings: settings)
+            let timeline = TimelineViewController(texts: .home, settings: settings, refresh: {})
             timeline.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
             return timeline
         }
@@ -317,7 +317,7 @@ enum PostRowCatalog {
     /// リンクカードの付いた投稿。サーバーのカードが後から届いても行の高さが変わらないことを、カードとリンク先だけのカードを並べて見比べる。
     @MainActor
     static func linkCardStates() -> [CatalogState] {
-        let home = TimelineViewController(texts: .home, refresh: {})
+        let home = TimelineViewController(texts: .home, settings: AppDependencies.settings, refresh: {})
         func post(_ title: String, _ status: Status, revealsMedia: Bool = false, expandsSpoiler: Bool = false) -> CatalogState {
             CatalogState(title: title) {
                 if revealsMedia { home.mediaCovers.reveal(status) }
@@ -383,7 +383,7 @@ enum PostRowCatalog {
 
     @MainActor
     static func notificationStates() -> [CatalogState] {
-        let notifications = TimelineViewController(texts: .notifications, refresh: {})
+        let notifications = TimelineViewController(texts: .notifications, settings: AppDependencies.settings, refresh: {})
         notifications.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .notifications, myAccountID: nil))
         // メンションなどの投稿は通知を送った人が書き、お気に入りなどで再掲する投稿は自分が書いたもの。
         let mentioned = status(content: "<p>@me 通知の元になった投稿。</p>", account: booster)
@@ -482,7 +482,7 @@ enum PostRowCatalog {
     /// 投稿の中の引用。引用元を出せないときの`state`ごとの文言と、囲みの中の注意書き、フィルター、入れ子、長さの違いを並べる。決まりは`docs/quote.md`。
     @MainActor
     static func quoteStates() -> [CatalogState] {
-        let home = TimelineViewController(texts: .home, refresh: {})
+        let home = TimelineViewController(texts: .home, settings: AppDependencies.settings, refresh: {})
         home.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
         /// - Parameters:
         ///   - expandsQuotedSpoiler: 引用元の注意書きを開く。フィルターの警告で折りたたんでいれば、警告を開く。
@@ -559,7 +559,7 @@ enum PostRowCatalog {
     /// お気に入りした人などを並べた人のリストの行。名前とハンドルの長さで崩れないかを見る。
     @MainActor
     static func accountStates() -> [CatalogState] {
-        let list = TimelineViewController(texts: .accountList(.favouritedBy("catalog")), refresh: {})
+        let list = TimelineViewController(texts: .accountList(.favouritedBy("catalog")), settings: AppDependencies.settings, refresh: {})
         func row(_ title: String, _ account: Account) -> CatalogState {
             CatalogState(title: title) {
                 CatalogFrame.bordered(list.accountConfiguration(for: account, base: .cell()).makeContentView())
@@ -578,7 +578,7 @@ enum PostRowCatalog {
     /// 保留中の通知のリストの行。人のリストの行に、保留している通知の件数を3行目に足す。
     @MainActor
     static func notificationRequestStates() -> [CatalogState] {
-        let list = TimelineViewController(texts: .notificationRequests, refresh: {})
+        let list = TimelineViewController(texts: .notificationRequests, settings: AppDependencies.settings, refresh: {})
         func row(_ title: String, _ account: Account, count: Int) -> CatalogState {
             CatalogState(title: title) {
                 let request = NotificationRequest(id: "catalog", updatedAt: Date(timeIntervalSince1970: 1_800_000_000), account: account, notificationsCount: count)

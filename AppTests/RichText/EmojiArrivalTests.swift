@@ -29,7 +29,7 @@ struct EmojiArrivalTests {
         let blobcat = try emoji("blobcat")
         let png = try widePNG()
         let store = EmojiImageStore { _ in png }
-        let renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: store, language: "ja")
+        let renderer = RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, emojiImages: store, language: "ja")
         let text = RichText.plain("前 :blobcat: 後ろの文字", emojis: [blobcat])
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
@@ -81,7 +81,7 @@ struct EmojiArrivalTests {
         let blobcat = try emoji("blobcat")
         let png = try widePNG()
         let store = EmojiImageStore { _ in png }
-        let renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: store, language: "ja")
+        let renderer = RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, emojiImages: store, language: "ja")
         let text = RichText.plain("前 :blobcat: 後ろの文字", emojis: [blobcat])
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
@@ -348,7 +348,7 @@ struct EmojiArrivalTests {
         let blobcat = try emoji("blobcat")
         let png = try widePNG()
         let store = EmojiImageStore { _ in png }
-        let renderer = RichTextRenderer(font: font, textColor: .label, quoteBarWidth: 3, emojiImages: store, language: "ja")
+        let renderer = RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, quoteBarWidth: 3, emojiImages: store, language: "ja")
         var text = RichText.plain("前 :blobcat: 後ろの文字", emojis: [blobcat])
         text.blocks[0].quoteLevel = 1
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)

@@ -48,7 +48,8 @@ struct ProfileHeaderFollowRevealTests {
         let header = ProfileHeaderView(
             emojiImages: .offline,
             mediaImages: MediaImageStore(files: .temporary()) { _, _ in throw URLError(.notConnectedToInternet) },
-            avatarImages: .offline
+            avatarImages: .offline,
+            settings: AppDependencies.settings
         )
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)

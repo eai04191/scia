@@ -29,9 +29,12 @@ final class ProfilePinnedShelfView: UIView, UIScrollViewDelegate {
     private static let cardWidthRatio: CGFloat = 0.72
     private static let margin: CGFloat = 16
 
-    init(emojiImages: EmojiImageStore<UIImage>, mediaImages: MediaImageStore<UIImage>) {
+    private let settings: AppSettings
+
+    init(emojiImages: EmojiImageStore<UIImage>, mediaImages: MediaImageStore<UIImage>, settings: AppSettings) {
         self.emojiImages = emojiImages
         self.mediaImages = mediaImages
+        self.settings = settings
         super.init(frame: .zero)
         configureSubviews()
     }
@@ -114,7 +117,7 @@ final class ProfilePinnedShelfView: UIView, UIScrollViewDelegate {
         }
         for item in items {
             let status = item.status
-            let card = ProfilePinnedCard(item: item, emojiImages: emojiImages, mediaImages: mediaImages, glyphLanguage: glyphLanguage)
+            let card = ProfilePinnedCard(item: item, emojiImages: emojiImages, mediaImages: mediaImages, glyphLanguage: glyphLanguage, settings: settings)
             card.onTap = { [weak self, weak card] in
                 guard let card else { return }
                 self?.onOpen?(status, card.convert(card.bounds, to: nil))
@@ -153,7 +156,7 @@ private final class ProfilePinnedCard: UIControl {
     private let dateLabel = UILabel()
     private let mediaView: MediaGridView
 
-    init(item: ProfileShelfItem, emojiImages: EmojiImageStore<UIImage>, mediaImages: MediaImageStore<UIImage>, glyphLanguage: String) {
+    init(item: ProfileShelfItem, emojiImages: EmojiImageStore<UIImage>, mediaImages: MediaImageStore<UIImage>, glyphLanguage: String, settings: AppSettings) {
         let status = item.status
         let verdict = item.verdict
         mediaView = MediaGridView(store: mediaImages)
@@ -176,7 +179,7 @@ private final class ProfilePinnedCard: UIControl {
             bodyLabel.attributedText = text
         } else {
             let text: RichText = hasWarning ? .plain(status.spoilerText, emojis: status.emojis) : .html(status.content, emojis: status.emojis)
-            bodyLabel.attributedText = RichTextRenderer(font: font, textColor: hasWarning ? .secondaryLabel : .label, emojiImages: emojiImages, animatesEmojis: false, language: glyphLanguage)
+            bodyLabel.attributedText = RichTextRenderer(font: font, textColor: hasWarning ? .secondaryLabel : .label, settings: settings, emojiImages: emojiImages, animatesEmojis: false, language: glyphLanguage)
                 .render(text)
         }
         bodyLabel.numberOfLines = 5

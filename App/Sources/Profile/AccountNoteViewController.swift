@@ -25,7 +25,7 @@ final class AccountNoteViewController: UIViewController {
     private let footer = ProfileEditFooter()
     private var isConfirmingDiscard = false
 
-    init(editor: AccountNoteEditor, acct: String, tasks: TaskScope, settings: AppSettings = AppDependencies.settings) {
+    init(editor: AccountNoteEditor, acct: String, tasks: TaskScope, settings: AppSettings) {
         self.editor = editor
         self.acct = acct
         self.tasks = tasks

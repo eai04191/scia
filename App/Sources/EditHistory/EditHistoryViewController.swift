@@ -55,10 +55,10 @@ final class EditHistoryViewController: UIViewController {
     ///   - describe: 読めなかったときに出す理由。
     init(
         status: Status,
+        settings: AppSettings,
         fetch: @escaping @MainActor () async throws -> [StatusRevision],
         describe: @escaping @MainActor (any Error) async -> ErrorPresentation,
         tuning: TuningStore = AppDependencies.tuning,
-        settings: AppSettings = AppDependencies.settings,
         emojiImages: EmojiImageStore<UIImage> = AppDependencies.emojiImages,
         mediaImages: MediaImageStore<UIImage> = AppDependencies.mediaImages,
         network: NetworkConditionsMonitor = AppDependencies.network

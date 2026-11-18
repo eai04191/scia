@@ -125,7 +125,7 @@ enum MediaGridCatalog {
             filtered: filtered
         )
         let grid = MediaGridView(store: store)
-        let timeline = TimelineViewController(texts: .home, refresh: {})
+        let timeline = TimelineViewController(texts: .home, settings: AppDependencies.settings, refresh: {})
         timeline.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
         if hidden {
             timeline.mediaCovers.hide(status)

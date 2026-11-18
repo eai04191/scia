@@ -39,14 +39,14 @@ struct EditHistoryContentBuilder {
         let base = UIListContentConfiguration.cell()
         let renderer = RichTextRenderer(
             font: base.secondaryTextProperties.font,
-            textColor: .label,
+            textColor: .label, settings: settings,
             paragraphSpacing: settings.value(of: AppearanceCatalog.paragraphSpacing),
             emojiImages: emojiImages,
             language: settings.glyphLanguageIdentifier(for: language)
         )
         let small = RichTextRenderer(
             font: .preferredFont(forTextStyle: .footnote),
-            textColor: .label,
+            textColor: .label, settings: settings,
             emojiImages: emojiImages,
             language: settings.glyphLanguageIdentifier(for: language)
         )

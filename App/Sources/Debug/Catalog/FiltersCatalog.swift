@@ -47,7 +47,7 @@ enum FiltersCatalog {
             } delete: { _ in
                 guard accepts else { throw refused }
             }
-            let controller = UIHostingController(rootView: FiltersView(model: FiltersModel(api: api, tasks: TaskScope()), now: { now }))
+            let controller = UIHostingController(rootView: FiltersView(model: FiltersModel(api: api, tasks: TaskScope()), now: { now }, settings: AppDependencies.settings))
             return CatalogControllerHost(controller, height: 640)
         }
     }

@@ -24,7 +24,7 @@ struct PushAnchorTests {
                 .item(.home, isVisible: true), .item(.notifications, isVisible: true), .more, .item(.local, isVisible: true), .item(.federated, isVisible: true),
                 .item(.search, isVisible: false), .item(.bookmarks, isVisible: false), .item(.favourites, isVisible: false), .item(.scheduled, isVisible: false),
             ])
-            arrangement = TabArrangement(navigation: { navigations[$0] }, layout: layout, restoring: .home)
+            arrangement = TabArrangement(navigation: { navigations[$0] }, layout: layout, restoring: .home, settings: AppDependencies.settings)
             let scene = try #require(
                 UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
                 "テストのホストアプリにウィンドウシーンがありません"
@@ -116,7 +116,7 @@ struct PushAnchorTests {
         let harness = try Harness()
         let root = harness.arrangement.tabBarController
         let anchor = PushAnchor(try harness.source(.home))
-        let browser = InAppBrowser(tuning: .withoutBrowserMotion())
+        let browser = InAppBrowser(tuning: .withoutBrowserMotion(), settings: AppDependencies.settings)
         browser.open(try #require(URL(string: "https://example.com/1")), from: root)
         try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
         let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)

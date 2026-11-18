@@ -10,6 +10,8 @@ final class OtherAccounts {
     private let current: Credential
     private let tasks: TaskScope
     private let makeClient: (Credential) -> MastodonClient
+    /// 窓に開いたアカウントの設定。ほかのアカウントで出す部品も、窓の見た目で描く。
+    private let settings: AppSettings
     /// 絵文字のパレットのカスタム絵文字のメニューが使う、セッションの部品。
     var paletteMenu = EmojiPaletteMenuContext()
     private var accounts: [Credential.ID: OtherAccount] = [:]
@@ -24,7 +26,8 @@ final class OtherAccounts {
     ///   - current: このセッションのアカウント。並べない。
     ///   - tasks: 探し直す処理を始めるセッションの持ち主。
     ///   - makeClient: ほかのアカウントのクライアントを作る。このセッションと同じ通信の実体を使う。
-    init(current: Credential, tasks: TaskScope, makeClient: @escaping (Credential) -> MastodonClient) {
+    init(current: Credential, tasks: TaskScope, settings: AppSettings, makeClient: @escaping (Credential) -> MastodonClient) {
+        self.settings = settings
         self.current = current
         self.tasks = tasks
         self.makeClient = makeClient
@@ -157,7 +160,8 @@ final class OtherAccounts {
         let sources = ComposeCompletion.Sources(client: client).readingPersonalEmojiSet(with: client) { try await account.loadedCapabilities { try await client.serverCapabilities() } }
         let picker = EmojiReactionPicker(completion: TextInputCompletion(
             completion: ComposeCompletion(sources: sources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
-            recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
+            recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance),
+            settings: settings
         ))
         picker.paletteMenu = paletteMenu
         emojiReactionPickers[credential.id] = (credential, picker)

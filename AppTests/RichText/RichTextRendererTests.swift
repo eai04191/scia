@@ -19,7 +19,7 @@ struct RichTextRendererTests {
     }
 
     private func renderer(_ store: EmojiImageStore<UIImage>, paragraphSpacing: CGFloat = 0) -> RichTextRenderer {
-        RichTextRenderer(font: font, textColor: .label, paragraphSpacing: paragraphSpacing, emojiImages: store, language: "ja")
+        RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, paragraphSpacing: paragraphSpacing, emojiImages: store, language: "ja")
     }
 
     /// 訳文の中に残した原文の部分には原文の言語を付け、ほかには訳文の言語を付ける。原文の言語を渡さなければ、どれにも同じ言語を付ける。
@@ -28,7 +28,7 @@ struct RichTextRendererTests {
         let text = RichText(blocks: [.init(inlines: [
             .text("訳", []), .link("#简", .hashtag(name: "简", url: url), .original), .link("（簡）", .hashtag(name: "简", url: url), []),
         ])])
-        var renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: .offline, language: "ja")
+        var renderer = RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, emojiImages: .offline, language: "ja")
         func languages(_ rendered: NSAttributedString) -> [String?] {
             (0..<rendered.length).map { rendered.attribute(.languageIdentifier, at: $0, effectiveRange: nil) as? String }
         }
@@ -101,7 +101,7 @@ struct RichTextRendererTests {
             .text("a😀", []), .text("©", []), .text("👨‍👩‍👧", []), .text(" 🏃\u{200D}♀ ", []), .text("👁\u{FE0F}\u{200D}🗨\u{FE0F}", []),
         ])])
 
-        let twemoji = glyphRuns(of: RichTextRenderer(font: font, textColor: .label, emojiImages: .offline, language: "ja", emojiStyle: .twemoji).render(text))
+        let twemoji = glyphRuns(of: RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, emojiImages: .offline, language: "ja", emojiStyle: .twemoji).render(text))
         #expect(twemoji["😀"]?.family == "Twemoji")
         for sequence in ["👨‍👩‍👧", "🏃\u{200D}♀", "👁\u{FE0F}\u{200D}🗨\u{FE0F}"] {
             #expect(twemoji[sequence]?.family == "Twemoji")
@@ -109,7 +109,7 @@ struct RichTextRendererTests {
         }
         #expect(twemoji["©"]?.family != "Twemoji")
 
-        let system = fontFamilies(of: RichTextRenderer(font: font, textColor: .label, emojiImages: .offline, language: "ja", emojiStyle: .system).render(text))
+        let system = fontFamilies(of: RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, emojiImages: .offline, language: "ja", emojiStyle: .system).render(text))
         #expect(system["😀"]?.contains("Apple Color Emoji") == true)
     }
 
@@ -119,7 +119,7 @@ struct RichTextRendererTests {
     func twemojiKeepsFontsChosenByLanguage(_ language: String) {
         let text = RichText(blocks: [.init(inlines: [.text("直骨关门。本文の話😀", []), .text("直骨", .original)])])
         func families(_ style: EmojiStyle) -> [String: String] {
-            var renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: .offline, language: language, emojiStyle: style)
+            var renderer = RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, emojiImages: .offline, language: language, emojiStyle: style)
             renderer.originalLanguage = "zh-Hant"
             return glyphRuns(of: renderer.render(text)).mapValues(\.family)
         }
@@ -133,7 +133,7 @@ struct RichTextRendererTests {
     /// 通知の言い回しのようなアプリの文言は、言語を外してウィンドウに付けたアプリの言語で描くため。
     @Test func removingLanguageAlsoRemovesItFromTwemojiFont() {
         func families(_ language: String) -> [String: String] {
-            let renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: .offline, language: language, emojiStyle: .twemoji)
+            let renderer = RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, emojiImages: .offline, language: language, emojiStyle: .twemoji)
             let rendered = NSMutableAttributedString(attributedString: renderer.render(.plain("直骨が投稿しました", emojis: [])))
             RichTextRenderer.removeLanguage(from: rendered)
             #expect(rendered.attribute(.languageIdentifier, at: 0, effectiveRange: nil) == nil)
@@ -146,7 +146,7 @@ struct RichTextRendererTests {
     /// twemojiは文字で描く指定（U+FE0E）を区別せず、キーキャップの部品の数字を空の字形で持つため、これらの並びはtwemojiで描かない。
     @Test func twemojiKeepsTextPresentationAndBareKeycapBases() {
         let sequences = ["☺\u{FE0E}", "1\u{FE0F}", "#\u{FE0F}", "1\u{FE0F}\u{20E3}", "☺\u{FE0F}"]
-        let rendered = RichTextRenderer(font: font, textColor: .label, emojiImages: .offline, language: "ja", emojiStyle: .twemoji)
+        let rendered = RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, emojiImages: .offline, language: "ja", emojiStyle: .twemoji)
             .render(RichText(blocks: [.init(inlines: [.text(sequences.joined(separator: " "), [])])]))
 
         let line = CTLineCreateWithAttributedString(rendered)

@@ -29,7 +29,7 @@ struct NotificationContentViewTests {
     /// 足りない分は行の下の余白で吸い、文字のラベルは求める高さを保つ。
     @Test(arguments: [false, true])
     func labelsKeepTheirHeightWhenRowIsSlightlyShort(withMedia: Bool) throws {
-        let vc = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline, settings: .isolated())
+        let vc = TimelineViewController(settings: .isolated(), refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline)
         let base = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
         let status = Status(
             id: base.id,
@@ -57,7 +57,7 @@ struct NotificationContentViewTests {
     /// 誰が何をしたかの行とまとめた行のアイコンのタップで開くプロフィールは、VoiceOverでは通知の要素の操作で開く。まとめた行では人ごとに出す。
     @Test(arguments: [false, true])
     func profilesOpenFromVoiceOverActions(grouped: Bool) throws {
-        let vc = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline, settings: .isolated())
+        let vc = TimelineViewController(settings: .isolated(), refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline)
         let status = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
         let bob = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: nil)
         let carol = Account(id: "3", username: "carol", acct: "carol", displayName: "Carol", avatar: nil)
@@ -87,7 +87,7 @@ struct NotificationContentViewTests {
     /// 絵文字のリアクションの通知をまとめた行も、画面の文と同じく「ほかN人」を読み上げる。絵文字は画像でなく名前で読む。
     @Test(arguments: [false, true])
     func groupedEmojiReactionReadsOtherAccounts(custom: Bool) throws {
-        let vc = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline, settings: .isolated())
+        let vc = TimelineViewController(settings: .isolated(), refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline)
         let status = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
         let bob = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: nil)
         let carol = Account(id: "3", username: "carol", acct: "carol", displayName: "Carol", avatar: nil)
@@ -116,7 +116,7 @@ struct NotificationContentViewTests {
         let settings = AppSettings.isolated()
         settings.appearance.avatarShape = .roundedSquare
         settings.setValue(0, for: AppearanceCatalog.avatarCornerRatio)
-        let vc = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline, settings: settings)
+        let vc = TimelineViewController(settings: settings, refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline)
         let bob = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: nil)
         let notification = MastodonNotification(id: "1", type: .follow, createdAt: Date(timeIntervalSince1970: 0), account: bob, status: nil)
         let configuration = try #require(vc.contentConfiguration(for: notification, base: .cell()) as? NotificationContentConfiguration)
@@ -142,7 +142,7 @@ struct NotificationContentViewTests {
             reads.withLock { $0 += 1 }
             return png
         }
-        let vc = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: avatars, settings: AppSettings.isolated())
+        let vc = TimelineViewController(settings: AppSettings.isolated(), refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: avatars)
         let bob = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: URL(string: "https://files.example.social/avatars/bob.png"))
         let notification = MastodonNotification(id: "1", type: .follow, createdAt: Date(timeIntervalSince1970: 0), account: bob, status: nil)
         func header() -> NSAttributedString? {
@@ -184,7 +184,7 @@ struct NotificationContentViewTests {
 @MainActor
 struct NotificationAppearanceTests {
     private func makeViewController(_ settings: AppSettings) -> TimelineViewController {
-        TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline, settings: settings)
+        TimelineViewController(settings: settings, refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline)
     }
 
     /// 通知の行の組み方をひととおり。再掲する投稿には、本文、注意書き、画像、投票、引用を付ける。

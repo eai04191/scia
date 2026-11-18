@@ -22,6 +22,8 @@ enum MediaWindow {
         /// アプリ全体のアプリ内通知。ビューアのウィンドウにもチップの列を重ね、全部のウィンドウに出す。
         let notices: NoticeCenter?
         let subject: OperationStatus.Subject?
+        /// 開いた窓のアカウントの設定。ビューアの窓も、同じ設定で描く。
+        let settings: AppSettings
     }
 
     private static var pending: [UUID: Request] = [:]
@@ -57,6 +59,7 @@ enum MediaWindow {
 /// ビューアのウィンドウ。ビューアが閉じたら、ウィンドウも閉じる。
 final class MediaWindowSceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
+    private var windowSettings: WindowSettings?
 
     func scene(
         _ scene: UIScene,
@@ -73,7 +76,9 @@ final class MediaWindowSceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
         let window = UIWindow(windowScene: windowScene)
-        AccentColorTint.follow(window, settings: AppDependencies.settings)
+        let windowSettings = WindowSettings(window: window)
+        windowSettings.use(request.settings)
+        self.windowSettings = windowSettings
         window.rootViewController = MediaWindowRootController(request: request) {
             UIApplication.shared.requestSceneSessionDestruction(session, options: nil)
         }

@@ -32,9 +32,9 @@ final class MediaViewerController: UIViewController {
         return button
     }()
     private let counterLabel = UILabel()
-    let captionView = CaptionView()
+    private(set) lazy var captionView = CaptionView(settings: settings)
     /// 投稿欄から開いたとき、代替テキストを書く入力欄。書いている間だけ出す。
-    let descriptionEditor = AltTextEditorView()
+    private(set) lazy var descriptionEditor = AltTextEditorView(settings: settings)
     /// 代替テキストを書いている。
     private(set) var isEditingDescription = false
     /// 投稿欄から開いたときの、アップロードや代替テキストの送信の状態。この画面だけのアプリ内通知として、チップの列に差し出す。
@@ -164,7 +164,7 @@ final class MediaViewerController: UIViewController {
         editing: Editing? = nil,
         transfers: MediaTransferCenter? = nil,
         subject: OperationStatus.Subject? = nil,
-        settings: AppSettings = AppDependencies.settings,
+        settings: AppSettings,
         sourceTile: @escaping @MainActor (String) -> (any MediaViewerSource)?
     ) {
         precondition(items.indices.contains(startIndex), "開く添付ファイルの位置が範囲外です")
@@ -195,7 +195,7 @@ final class MediaViewerController: UIViewController {
         timing: Timing,
         transfers: MediaTransferCenter? = nil,
         subject: OperationStatus.Subject? = nil,
-        settings: AppSettings = AppDependencies.settings,
+        settings: AppSettings,
         sourceTile: @escaping @MainActor (MediaAttachment.ID) -> (any MediaViewerSource)?
     ) {
         self.init(
@@ -826,7 +826,7 @@ final class MediaViewerController: UIViewController {
     /// 代替テキストの全文をシートで出す。
     func showAltText() {
         guard let description = currentItem.description, !description.isEmpty else { return }
-        present(AltTextViewController.sheet(text: description), animated: true)
+        present(AltTextViewController.sheet(text: description, settings: settings), animated: true)
     }
 
     // MARK: 投稿欄から開いたとき
@@ -1808,6 +1808,7 @@ extension MediaViewerController {
             timing: timing,
             transfers: transfers,
             subject: subject,
+            settings: presenter.traitCollection.appSettings,
             sourceTile: sourceTile
         )
         viewer.onDismiss = onDismiss
@@ -3210,7 +3211,7 @@ final class CaptionView: UIView {
     /// 文字の下端。安全領域に合わせるために使う。
     var contentBottomAnchor: NSLayoutYAxisAnchor { contentGuide.bottomAnchor }
 
-    init(settings: AppSettings = AppDependencies.settings) {
+    init(settings: AppSettings) {
         self.settings = settings
         super.init(frame: .zero)
         backgroundColor = UIColor.black.withAlphaComponent(0.6)

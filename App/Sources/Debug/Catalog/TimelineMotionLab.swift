@@ -12,7 +12,7 @@ final class TimelineMotionLabViewController: UIViewController {
     private static let benchmarkRounds = 5
     /// 1回ごとにコマの間隔を測る長さ。動きが止まるのを待つ長さにもなる。
     private static let benchmarkWindow: CFTimeInterval = 0.8
-    private let timeline = TimelineViewController(texts: .home, refresh: {})
+    private let timeline = TimelineViewController(texts: .home, settings: AppDependencies.settings, refresh: {})
     private let account = CatalogFixtures.account(displayName: "実験のアカウント", acct: "lab@example.com")
     /// 上から並べる投稿の番号。新着は負の番号で先頭に足す。
     private var numbers = Array(1...postCount)

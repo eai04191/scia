@@ -27,7 +27,7 @@ struct PostHeightProbeTests {
 
     private func measure(_ name: String, status: Status, emojiImages: EmojiImageStore<UIImage> = .offline) {
         let settings = AppSettings.isolated()
-        let timeline = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: emojiImages, avatarImages: .offline, settings: settings)
+        let timeline = TimelineViewController(settings: settings, refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: emojiImages, avatarImages: .offline)
         let configuration = timeline.contentConfiguration(for: status, base: .cell())
         for width: CGFloat in [375, 0] {
             let view = PostContentView(configuration: configuration)
@@ -122,7 +122,7 @@ struct PostHeightProbeTests {
         func height(_ change: (AppSettings) -> Void) -> CGFloat {
             let settings = AppSettings.isolated()
             change(settings)
-            let timeline = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: settings)
+            let timeline = TimelineViewController(settings: settings, refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
             let view = PostContentView(configuration: timeline.contentConfiguration(for: post, base: .cell()))
             return view.systemLayoutSizeFitting(CGSize(width: 375, height: 3_000_000), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel).height
         }

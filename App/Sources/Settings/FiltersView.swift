@@ -7,6 +7,7 @@ import UIKit
 struct FiltersView: View {
     let model: FiltersModel
     let now: () -> Date
+    let settings: AppSettings
     /// 編集の画面で作るか変えている下書き。
     @State private var editing: EditedFilter?
     @State private var deleting: ServerFilter?
@@ -28,7 +29,7 @@ struct FiltersView: View {
                 }
             }
         .sheet(item: $editing) { edited in
-            FilterEditorView(model: model, now: now, draft: edited.draft)
+            FilterEditorView(model: model, now: now, settings: settings, draft: edited.draft)
         }
         .filterDeletion(of: $deleting, model: model)
         .task(.action) { model.reload(purpose: .action) }
@@ -71,19 +72,20 @@ struct FiltersView: View {
     }
 
     /// `scia://filters`で開く、単独のシート。アカウントの画面からは、その中で進むので使わない。
-    static func makeSheet(model: FiltersModel, now: @escaping () -> Date) -> UIViewController {
-        UIHostingController(rootView: FiltersSheet(model: model, now: now))
+    static func makeSheet(model: FiltersModel, now: @escaping () -> Date, settings: AppSettings) -> UIViewController {
+        UIHostingController(rootView: FiltersSheet(model: model, now: now, settings: settings))
     }
 }
 
 private struct FiltersSheet: View {
     let model: FiltersModel
     let now: () -> Date
+    let settings: AppSettings
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            FiltersView(model: model, now: now)
+            FiltersView(model: model, now: now, settings: settings)
                 .toolbar {
                     // 右上は「フィルターを作成」に使うので、閉じるボタンは左に置く。
                     ToolbarItem(placement: .cancellationAction) {
@@ -128,6 +130,7 @@ private struct FilterRow: View {
 private struct FilterEditorView: View {
     let model: FiltersModel
     let now: () -> Date
+    let settings: AppSettings
     @State var draft: FilterDraft
     @Environment(\.dismiss) private var dismiss
     @State private var saveFailure: ErrorPresentation?
@@ -138,7 +141,7 @@ private struct FilterEditorView: View {
         NavigationStack {
             Form {
                 Section {
-                    GlyphLanguageField(placeholder: SettingsTexts.Filters.namePlaceholder, text: $draft.title)
+                    GlyphLanguageField(placeholder: SettingsTexts.Filters.namePlaceholder, text: $draft.title, settings: settings)
                 }
                 keywordsSection
                 Section(SettingsTexts.Filters.contexts) {
@@ -207,7 +210,7 @@ private struct FilterEditorView: View {
     private var keywordsSection: some View {
         ForEach($draft.keywords) { $keyword in
             Section {
-                GlyphLanguageField(placeholder: SettingsTexts.Filters.keywordPlaceholder, text: $keyword.keyword, corrects: false)
+                GlyphLanguageField(placeholder: SettingsTexts.Filters.keywordPlaceholder, text: $keyword.keyword, settings: settings, corrects: false)
                     .swipeActions {
                         Button(SettingsTexts.delete, role: .destructive) { draft.keywords.removeAll { $0.id == keyword.id } }
                     }

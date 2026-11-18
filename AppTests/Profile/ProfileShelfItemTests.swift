@@ -104,7 +104,7 @@ struct ProfileShelfItemTests {
     @Test func 右に並べる大きさを上限にしても狭い棚で本文の幅を残す() throws {
         let settings = AppSettings.isolated()
         settings.setValue(AppearanceCatalog.mediaBesideSide.range.upperBound, for: AppearanceCatalog.mediaBesideSide)
-        let shelf = ProfilePinnedShelfView(emojiImages: AppDependencies.emojiImages, mediaImages: AppDependencies.mediaImages)
+        let shelf = ProfilePinnedShelfView(emojiImages: AppDependencies.emojiImages, mediaImages: AppDependencies.mediaImages, settings: settings)
         shelf.frame = CGRect(x: 0, y: 0, width: 320, height: 300)
         shelf.setItems([try item(settings: settings)], glyphLanguage: "ja")
         shelf.layoutIfNeeded()

@@ -75,7 +75,7 @@ enum TimelineOverlayCatalog {
                 empty: TimelineViewController.Texts.home.empty,
                 reachedEnd: TimelineViewController.Texts.home.reachedEnd,
                 unreadable: TimelineViewController.Texts.home.unreadable
-            ), refresh: {})
+            ), settings: AppDependencies.settings, refresh: {})
             timeline.loadViewIfNeeded()
             // 中のタイムラインがスクロールすると、カタログのページを上下に送れなくなるため止める。
             timeline.collectionView.isScrollEnabled = false

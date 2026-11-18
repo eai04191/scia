@@ -11,9 +11,9 @@ final class NotificationRequestsController {
     let model: NotificationRequestsModel
 
     /// - Parameter openPolicy: 右上のボタンで、通知のフィルタリングの設定を開く。
-    static func make(client: MastodonClient, tasks: TaskScope, openPolicy: @escaping () -> Void) -> (NotificationRequestsController, TimelineViewController) {
+    static func make(client: MastodonClient, settings: AppSettings, tasks: TaskScope, openPolicy: @escaping () -> Void) -> (NotificationRequestsController, TimelineViewController) {
         let model = NotificationRequestsModel(client: client, tasks: tasks)
-        let viewController = TimelineViewController(texts: .notificationRequests) { [weak model] in await model?.refresh() }
+        let viewController = TimelineViewController(texts: .notificationRequests, settings: settings) { [weak model] in await model?.refresh() }
         let controller = NotificationRequestsController(model: model, viewController: viewController)
         viewController.lifetimeOwner = controller
         let item = UIBarButtonItem(image: UIImage(systemName: "slider.horizontal.3"), primaryAction: UIAction { _ in openPolicy() })
@@ -43,11 +43,12 @@ final class AccountNotificationsController {
     static func make(
         request: NotificationRequest,
         client: MastodonClient,
+        settings: AppSettings,
         tasks: TaskScope,
         answer: @escaping (NotificationRequestDecision) async -> Bool
     ) -> (AccountNotificationsController, TimelineViewController) {
         let model = AccountNotificationsModel(accountID: request.account.id, client: client, tasks: tasks)
-        let viewController = TimelineViewController(texts: .accountNotifications(name: request.account.displayNameOrUsername)) { [weak model] in await model?.refresh() }
+        let viewController = TimelineViewController(texts: .accountNotifications(name: request.account.displayNameOrUsername), settings: settings) { [weak model] in await model?.refresh() }
         let controller = AccountNotificationsController(model: model, viewController: viewController)
         viewController.lifetimeOwner = controller
         viewController.navigationItem.subtitle = "@\(request.account.acct)"

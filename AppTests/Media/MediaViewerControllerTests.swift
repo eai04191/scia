@@ -534,7 +534,7 @@ struct MediaViewerControllerTests {
 
     /// 代替テキストのシートの左上から、全文をシステムの翻訳シートで訳せる。
     @Test func altTextSheetOffersTranslation() throws {
-        let sheet = AltTextViewController.sheet(text: "A sunset over the sea")
+        let sheet = AltTextViewController.sheet(text: "A sunset over the sea", settings: AppDependencies.settings)
         let altText = try #require(sheet.viewControllers.first as? AltTextViewController)
         altText.loadViewIfNeeded()
 

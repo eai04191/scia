@@ -19,7 +19,7 @@ struct StatusBarTickerLargeContentTests {
     @Test func holdsWhileTheLargeContentViewerIsShown() async throws {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let clock = TestClock()
-        let ticker = StatusBarTicker(tuning: TuningStore(defaults: nil), clock: clock)
+        let ticker = StatusBarTicker(settings: AppDependencies.settings, tuning: TuningStore(defaults: nil), clock: clock)
         ticker.scene = { scene }
         defer { ticker.clear() }
         var tapped = 0

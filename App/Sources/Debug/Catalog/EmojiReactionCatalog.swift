@@ -20,7 +20,7 @@ enum EmojiReactionCatalog {
         }
         func post(_ title: String, _ reactions: [EmojiReaction], content: String = "<p>リアクションの付いた投稿。</p>", spoilerText: String = "", showsAddButton: Bool = true) -> CatalogState {
             CatalogState(title: title) {
-                let timeline = TimelineViewController(texts: .home, refresh: {})
+                let timeline = TimelineViewController(texts: .home, settings: AppDependencies.settings, refresh: {})
                 timeline.myAccountID = author.id
                 timeline.capabilities.supportsEmojiReactions = true
                 timeline.onToggleEmojiReaction = { _, _ in }

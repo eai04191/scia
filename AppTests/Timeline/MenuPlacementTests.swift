@@ -21,7 +21,7 @@ struct MenuPlacementTests {
 
     /// 関係を覚えている相手として組ませ、関係の項目もその場で並べる。
     private func makeViewController(settings: AppSettings) -> TimelineViewController {
-        let viewController = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: settings)
+        let viewController = TimelineViewController(settings: settings, refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
         viewController.userMenuActions = UserMenuActions(
             mention: { _ in }, copy: { _, _, _ in }, localServer: "example.social",
             resolveTarget: { _ in throw CancellationError() }, loadRelation: { _, _ in nil },
@@ -122,9 +122,10 @@ struct MenuPlacementTests {
     /// タイムラインに載せた本文の、リンクを長押ししたときのメニュー。
     /// - Parameter hashtagAccount: ハッシュタグのメニューの「投稿したユーザーの投稿」で開くユーザー。
     private func bodyLinkMenu(for destination: RichText.LinkDestination, in viewController: TimelineViewController, settings: AppSettings, hashtagAccount: Account? = nil) throws -> UIMenu? {
-        let renderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, emojiImages: .offline, language: "ja")
+        let renderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, settings: AppDependencies.settings, emojiImages: .offline, language: "ja")
         let label = LinkLabel()
-        label.settings = settings
+        label.traitOverrides.appSettings = settings
+        label.updateTraitsIfNeeded()
         label.hashtagAccount = hashtagAccount
         label.attributedText = renderer.render(RichText(blocks: [.init(inlines: [.link("x", destination, [])])]))
         label.frame = CGRect(x: 0, y: 0, width: 300, height: 44)

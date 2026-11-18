@@ -69,7 +69,7 @@ struct EmojiDrawingTests {
     @Test(arguments: [2.5, 4.0], Kind.allCases)
     func labelDrawsTextOnTheReportedBaseline(scale: Double, kind: Kind) async throws {
         let (red, store) = try await redEmoji()
-        var renderer = RichTextRenderer(font: font, textColor: .black, emojiImages: store, language: "ja")
+        var renderer = RichTextRenderer(font: font, textColor: .black, settings: AppDependencies.settings, emojiImages: store, language: "ja")
         renderer.emojiStyle = .system
         renderer.emojiScale = scale
         renderer.unicodeEmojiScale = scale
@@ -125,7 +125,7 @@ struct EmojiDrawingTests {
         let base = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
         let author = Account(id: "3", username: "carol", acct: "carol", displayName: ":red:名前😀", avatar: nil, emojis: [red])
         let post = Status(id: base.id, createdAt: base.createdAt, account: author, content: "<p>😀本文 :red: の絵文字</p>", spoilerText: "", url: nil, emojis: [red])
-        let controller = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: store, avatarImages: .offline, settings: settings)
+        let controller = TimelineViewController(settings: settings, refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: store, avatarImages: .offline)
         let view = controller.contentConfiguration(for: post, base: .cell()).makeContentView()
         let size = view.systemLayoutSizeFitting(CGSize(width: 402, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
         view.frame = CGRect(origin: .zero, size: size)
@@ -159,7 +159,7 @@ struct EmojiDrawingTests {
         let (red, store) = try await redEmoji()
         var previous: CGFloat = 0
         for scale in [0.5, 1.0, 1.1, 1.5, 2.0, 3.0] {
-            var renderer = RichTextRenderer(font: font, textColor: .black, emojiImages: store, language: "ja")
+            var renderer = RichTextRenderer(font: font, textColor: .black, settings: AppDependencies.settings, emojiImages: store, language: "ja")
             renderer.emojiStyle = style
             renderer.emojiScale = scale
             renderer.unicodeEmojiScale = scale

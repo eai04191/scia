@@ -29,7 +29,7 @@ struct ProfileEditRevealTests {
             api: ProfileEditor.API(source: { ProfileSource(account: account, note: "", fields: []) }, save: { _ in throw NotSaved() })
         )
         let tuning = TuningStore(defaults: nil)
-        let completion = TextInputCompletion(completion: ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning)), recentEmojis: nil)
+        let completion = TextInputCompletion(completion: ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning)), recentEmojis: nil, settings: AppDependencies.settings)
         let controller = ProfileEditViewController(editor: editor, completion: completion, mediaImages: images, settings: .isolated(), tuning: tuning, clock: clock)
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)

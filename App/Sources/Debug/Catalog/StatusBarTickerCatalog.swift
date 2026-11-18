@@ -97,7 +97,7 @@ enum StatusBarTickerCatalog {
         let (size, cutout) = device.screen
         let canvas = UIView(frame: CGRect(origin: .zero, size: size))
         canvas.backgroundColor = .systemBackground
-        let ticker = StatusBarTickerView(cutout: cutout)
+        let ticker = StatusBarTickerView(cutout: cutout, settings: AppDependencies.settings)
         ticker.frame = canvas.bounds
         canvas.addSubview(ticker)
         ticker.show(item, animated: false)

@@ -58,7 +58,7 @@ final class TabArrangement {
 
     /// - Parameter navigation: 項目のナビゲーションを作る。項目ごとに1回だけ呼ぶ。
     /// - Parameter restoring: 前に切り替えタブで開いていた項目。まだ切り替えタブにあれば、そこから開く。
-    init(navigation: @escaping (TabItem) -> UINavigationController?, layout: MenuLayout<TabItem>, restoring: TabItem? = nil, settings: AppSettings = AppDependencies.settings) {
+    init(navigation: @escaping (TabItem) -> UINavigationController?, layout: MenuLayout<TabItem>, restoring: TabItem? = nil, settings: AppSettings) {
         makeNavigation = navigation
         self.settings = settings
         self.layout = layout

@@ -34,7 +34,7 @@ struct PostHeaderLayoutTests {
     private func configuration(displayName: String? = nil, media: Bool = false, _ change: (AppSettings) -> Void) throws -> PostContentConfiguration {
         let settings = AppSettings.isolated()
         change(settings)
-        let timeline = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: settings)
+        let timeline = TimelineViewController(settings: settings, refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
         return timeline.contentConfiguration(for: try status(displayName: displayName, media: media), base: .cell())
     }
 
@@ -132,7 +132,7 @@ struct PostHeaderLayoutTests {
         func frames(displayName: String, _ change: (AppSettings) -> Void) throws -> AppearancePreviewFrames {
             let settings = AppSettings.isolated()
             change(settings)
-            let timeline = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: settings)
+            let timeline = TimelineViewController(settings: settings, refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
             let original = try status(displayName: displayName)
             let booster = try #require(StatusFactory.make(count: 1, startingAt: 200).first)
             let boost = Status(id: booster.id, createdAt: booster.createdAt, account: booster.account, content: "", spoilerText: "", url: nil, reblog: original)
@@ -224,7 +224,7 @@ struct PostHeaderLayoutTests {
     func separatorStartsAtBodyLeading(wraps: Bool) throws {
         let settings = AppSettings.isolated()
         settings.appearance.wrapsBelowAvatar = wraps
-        let timeline = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: settings)
+        let timeline = TimelineViewController(settings: settings, refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
         let status = try status()
         let margin = settings.rowMargins.leading
         let textColumn: CGFloat = settings.rowMargins.leading + settings.value(of: AppearanceCatalog.avatarSize) + settings.value(of: AppearanceCatalog.avatarSpacing)

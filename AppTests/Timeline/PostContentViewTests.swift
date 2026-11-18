@@ -8,7 +8,7 @@ import UIKit
 @MainActor
 struct PostContentViewTests {
     private func makeViewController() -> TimelineViewController {
-        TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: .isolated())
+        TimelineViewController(settings: .isolated(), refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
     }
 
     /// タイムラインのセルと同じく、大きな高さを目安に、高さを譲れる優先度で測る。
@@ -396,7 +396,7 @@ extension PostContentViewTests {
         let base = try status(content: "")
         let author = Account(id: "3", username: "carol", acct: "carol", displayName: "名前 :blobcat: 😀", avatar: nil, emojis: [blobcat])
         let post = Status(id: base.id, createdAt: base.createdAt, account: author, content: "<p>本文 :blobcat: の絵文字 😀</p><p>最後の段落 :blobcat: 😀</p>", spoilerText: "", url: nil, emojis: [blobcat])
-        let controller = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: store, avatarImages: .offline, settings: settings)
+        let controller = TimelineViewController(settings: settings, refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: store, avatarImages: .offline)
         let view = try #require(controller.contentConfiguration(for: post, base: .cell()).makeContentView() as? PostContentView)
         let size = view.systemLayoutSizeFitting(CGSize(width: 402, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
         view.frame = CGRect(origin: .zero, size: size)
@@ -450,7 +450,7 @@ extension PostContentViewTests {
     /// 行数で切って描く本文（通知の再掲など）は、最後に見える行の段落が分からないため、最後の段落でなくても大きい絵文字の分を下の余白に含める。
     @Test func truncatedBodyReservesEmojiBelowFromAnyParagraph() {
         let font = UIFont.preferredFont(forTextStyle: .body)
-        var renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: .offline, language: "ja")
+        var renderer = RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, emojiImages: .offline, language: "ja")
         renderer.unicodeEmojiScale = 4
         let text = renderer.render(RichText(blocks: [
             RichText.Block(inlines: [.text("文😀", [])]),

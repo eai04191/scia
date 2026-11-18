@@ -31,7 +31,7 @@ struct EmojiLabelReassignTests {
         let blobcat = try emoji("blobcat")
         let png = try squarePNG()
         let store = EmojiImageStore { _ in png }
-        let renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: store, language: "ja")
+        let renderer = RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, emojiImages: store, language: "ja")
         let text = RichText.plain("前 :blobcat: 後ろ", emojis: [blobcat])
         let placeholder = renderer.render(text)
         #expect(EmojiLabel.hasSameContent(placeholder, renderer.render(text)))
@@ -41,14 +41,14 @@ struct EmojiLabelReassignTests {
         #expect(!EmojiLabel.hasSameContent(placeholder, loaded), "絵文字の画像が届いたのに同じとみなしています")
         #expect(EmojiLabel.hasSameContent(loaded, renderer.render(text)))
 
-        let recolored = RichTextRenderer(font: font, textColor: .secondaryLabel, emojiImages: store, language: "ja").render(text)
+        let recolored = RichTextRenderer(font: font, textColor: .secondaryLabel, settings: AppDependencies.settings, emojiImages: store, language: "ja").render(text)
         #expect(!EmojiLabel.hasSameContent(loaded, recolored))
         #expect(!EmojiLabel.hasSameContent(loaded, renderer.render(.plain("前 :blobcat: 後ろ。", emojis: [blobcat]))))
     }
 
     /// 同じ中身を入れ直しても、ラベルは文字列を入れ替えない。違う中身なら入れ替える。
     @Test func reassigningSameContentKeepsText() {
-        let renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: EmojiImageStore { _ in Data() }, language: "ja")
+        let renderer = RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, emojiImages: EmojiImageStore { _ in Data() }, language: "ja")
         let label = LinkLabel()
         label.attributedText = renderer.render(.plain("本文", emojis: []))
         let shown = label.attributedText
@@ -97,7 +97,7 @@ struct EmojiLabelReassignTests {
             if isFirst { throw URLError(.notConnectedToInternet) }
             return gif
         }
-        let renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: store, language: "ja")
+        let renderer = RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, emojiImages: store, language: "ja")
         let text = RichText.plain("カニ :crab:", emojis: [crab])
         _ = renderer.render(text)
         _ = store.animation(for: crab.url)

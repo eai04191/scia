@@ -50,7 +50,7 @@ final class AnnouncementsViewController: UIViewController {
         model: AnnouncementsModel,
         completion: TextInputCompletion,
         isEmbedded: Bool = false,
-        settings: AppSettings = AppDependencies.settings,
+        settings: AppSettings,
         emojiImages: EmojiImageStore<UIImage> = AppDependencies.emojiImages,
         tuning: TuningStore = AppDependencies.tuning,
         now: @escaping () -> Date = AppDependencies.now
@@ -238,9 +238,9 @@ final class AnnouncementsViewController: UIViewController {
 
     private func content(for announcement: Announcement, showsUnreadMark: Bool, animatedEmojis: EmojiImageStore<UIImage>?) -> AnnouncementEntryView.Content {
         let language = settings.glyphLanguageIdentifier()
-        let bodyRenderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, paragraphSpacing: 6, emojiImages: emojiImages, language: language)
+        let bodyRenderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, settings: settings, paragraphSpacing: 6, emojiImages: emojiImages, language: language)
         let parser = MastodonHTMLParser(mentions: announcement.mentions, tags: announcement.tags, emojis: announcement.emojis)
-        let reactionRenderer = RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, emojiImages: emojiImages, language: language)
+        let reactionRenderer = RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, settings: settings, emojiImages: emojiImages, language: language)
         let reactions = announcement.reactions.map { reaction in
             let customEmoji = reaction.customEmoji
             let text: RichText = customEmoji.map { .plain(":\($0.shortcode):", emojis: [$0]) } ?? .plain(reaction.name, emojis: [])

@@ -29,7 +29,7 @@ final class TextInputCompletion {
     private(set) weak var input: (any UITextInput)?
     private var inputHadMarkedText = false
 
-    init(completion: ComposeCompletion, recentEmojis: RecentEmojis?, tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings) {
+    init(completion: ComposeCompletion, recentEmojis: RecentEmojis?, tuning: TuningStore = AppDependencies.tuning, settings: AppSettings) {
         self.completion = completion
         self.recentEmojis = recentEmojis
         self.tuning = tuning

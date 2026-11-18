@@ -9,7 +9,7 @@ import UIKit
 @Suite(.scratch, .failureState)
 @MainActor
 struct TextSelectionTests {
-    private let renderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, emojiImages: .offline, language: "ja")
+    private let renderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, settings: AppDependencies.settings, emojiImages: .offline, language: "ja")
 
     private func body(_ text: NSAttributedString, statusID: Status.ID = "1") -> PostBodyContent {
         var content = PostBodyContent(text: text, mediaSpacing: 8)
@@ -243,7 +243,7 @@ struct TextSelectionTests {
         let emoji = CustomEmoji(shortcode: "wide", url: url, staticUrl: url)
         let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 160, height: 10)).image { _ in }.pngData())
         let store = EmojiImageStore { _ in png }
-        var renderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, emojiImages: store, language: "ja")
+        var renderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, settings: AppDependencies.settings, emojiImages: store, language: "ja")
         renderer.emojiOnly = EmojiOnlyEnlargement(scale: 2, limit: 10)
         let rich = RichText(blocks: [.init(inlines: [.emoji(emoji)])])
         _ = renderer.render(rich)

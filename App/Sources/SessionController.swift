@@ -10,6 +10,8 @@ final class SessionController {
     let windowRootViewController: InAppBrowserDockContainer
     /// このセッションで使っているアカウント。
     let credential: Credential
+    /// このセッションのアカウントが使うプリセットの設定。窓ごとに、開いたアカウントの値で描き、動かす（docs/preset.md）。
+    let settings: AppSettings
     let home: FeedTimelineController
     let local: FeedTimelineController
     let federated: FeedTimelineController
@@ -172,7 +174,8 @@ final class SessionController {
     private lazy var emojiReactionPicker = {
         let picker = EmojiReactionPicker(completion: TextInputCompletion(
             completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
-            recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
+            recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance),
+            settings: settings
         ))
         picker.paletteMenu = paletteMenuContext
         return picker
@@ -185,7 +188,7 @@ final class SessionController {
     /// アプリ全体のアプリ内通知。ウインドウごとのチップの列に配る。
     let notices = NoticeCenter()
     /// 届いた通知を、ステータスバーの場所に流す。
-    let statusBarTicker = StatusBarTicker()
+    private(set) lazy var statusBarTicker = StatusBarTicker(settings: settings)
     /// 添付ファイルのビューアで、共有や保存のために落とす処理。ビューアを閉じても保存を続ける。
     private lazy var mediaTransfers = MediaTransferCenter(operationStatus: operationStatus, notices: notices)
     /// タイムラインで選んだ投稿に、まとめてブーストや共有をする。選んだタイムラインを離れても続ける。
@@ -272,14 +275,14 @@ final class SessionController {
     /// 「続きを読む」で広げた本文。どのタイムラインで広げても、開いているタイムラインと、あとで開くタイムラインにそろえる。
     private var longBodyExpansion = LongBodyExpansion()
     /// タイムラインで見えている画像の先読み。ログアウトしたら、セッションの持ち主と一緒に止める。
-    private lazy var mediaPrefetcher = MediaPrefetcher(scope: tasks, store: AppDependencies.mediaImages, network: AppDependencies.network, settings: AppDependencies.settings)
+    private lazy var mediaPrefetcher = MediaPrefetcher(scope: tasks, store: AppDependencies.mediaImages, network: AppDependencies.network, settings: settings)
     /// fxtwitterから読んだXの投稿。ホームと通知とプロフィールで同じ投稿を1回だけ読む。
     /// 投稿の本文の自動翻訳。iOS 26.4より前ではnil（docs/auto-translation.md）。
     private var translations: StatusTranslationStore? { session.translations }
     private var xPosts: XPostStore { session.xPosts }
     private var composerObscuredHeight: CGFloat = 0
     /// 本文のリンクを開くアプリ内のSafari。シートが覆っている高さも、投稿欄と同じく積んだ画面の下の余白にする。
-    let browser = InAppBrowser()
+    private(set) lazy var browser = InAppBrowser(settings: settings)
     private var browserObscuredHeight: CGFloat = 0
     private var browserCoversTimelines = false
     /// アプリ内のSafariの高さを選ぶシートが覆っている高さ。
@@ -298,6 +301,8 @@ final class SessionController {
     init(credential: Credential, accountMenu: @escaping @MainActor () -> UIMenu, logOut: (@MainActor () -> Void)?, onReauthenticate: @escaping (SessionController, Credential) async -> Void) {
         self.credential = credential
         operationStatus = OperationStatus(store: OperationFailureStore(defaults: .standard, account: credential.handle), now: AppDependencies.now)
+        let settings = AppDependencies.settings.forAccount(credential.handle)
+        self.settings = settings
         self.onReauthenticate = onReauthenticate
         self.accountMenu = accountMenu
         self.logOut = logOut
@@ -309,12 +314,12 @@ final class SessionController {
             transport: transport,
             connector: FaultInjectingWebSocketConnector(base: ScenarioMode.server?.connector ?? URLSessionWebSocketConnector()),
             http: AppDependencies.http,
-            settings: AppDependencies.settings,
+            settings: settings,
             defaults: .standard,
             // デバッグ版でだけ応答の本文も残す。
             requestLog: RequestLog(includesBody: true),
             tuning: tuning,
-            translation: Self.translationSetup(),
+            translation: Self.translationSetup(settings: settings),
             pollOperations: Self.pollOperations(client:)
         )
         #else
@@ -324,10 +329,10 @@ final class SessionController {
             transport: transport,
             connector: URLSessionWebSocketConnector(),
             http: AppDependencies.http,
-            settings: AppDependencies.settings,
+            settings: settings,
             defaults: .standard,
             tuning: tuning,
-            translation: Self.translationSetup(),
+            translation: Self.translationSetup(settings: settings),
             pollOperations: Self.pollOperations(client:)
         )
         #endif
@@ -335,7 +340,7 @@ final class SessionController {
         let tasks = session.tasks
         self.tasks = tasks
         let client = session.client
-        otherAccounts = OtherAccounts(current: credential, tasks: tasks) { MastodonClient(credential: $0, transport: transport, isOtherAccount: true) }
+        otherAccounts = OtherAccounts(current: credential, tasks: tasks, settings: settings) { MastodonClient(credential: $0, transport: transport, isOtherAccount: true) }
         let streamingHub = session.streamingHub
         let home = FeedTimelineController(feed: .home, session: session)
         let local = FeedTimelineController(feed: .local, session: session)
@@ -355,7 +360,7 @@ final class SessionController {
         }
         // 自分のアカウントを読むのはselfなので、作り終えてからつなぐ。
         let myAccountReference = SessionReference()
-        let scheduled = ScheduledStatusesController(client: client, tasks: tasks.child(), myAccount: {
+        let scheduled = ScheduledStatusesController(client: client, tasks: tasks.child(), settings: settings, myAccount: {
             guard let session = myAccountReference.session else { throw CancellationError() }
             return try await session.myAccount()
         })
@@ -380,7 +385,7 @@ final class SessionController {
             return (loading, scope)
         }
         self.profileTabs = profileTabs
-        let profileTabIcons = ProfileTabIcons(settings: AppDependencies.settings)
+        let profileTabIcons = ProfileTabIcons(settings: settings)
         self.profileTabIcons = profileTabIcons
         self.bookmarks = bookmarks
         self.favourites = favourites
@@ -465,14 +470,15 @@ final class SessionController {
                 case .profile: profileTabs.navigation(for: item)
                 }
             },
-            layout: AppDependencies.settings.tabLayout(for: credential.handle),
-            restoring: AppDependencies.settings.switchTabItem(for: credential.handle)
+            layout: settings.tabLayout(for: credential.handle),
+            restoring: settings.switchTabItem(for: credential.handle),
+            settings: settings
         )
         tabs.onSwitchSelectionChange = { [handle = credential.handle] item in
-            AppDependencies.settings.setSwitchTabItem(item, for: handle)
+            settings.setSwitchTabItem(item, for: handle)
         }
         // 最後に見ていたタブから開く。その項目を無効にしていたら、先頭のタブのままにする。
-        if let shown = AppDependencies.settings.shownTabItem(for: credential.handle) {
+        if let shown = settings.shownTabItem(for: credential.handle) {
             tabs.show(shown)
         }
         tabs.icon = { [profileTabIcons] in profileTabIcons.icon(for: $0) }
@@ -554,7 +560,8 @@ final class SessionController {
             model: ComposeModel<UIImage>(tasks: tasks.child(), myAccountID: credential.accountID, media: media, redraft: redraft, backgroundTime: BackgroundTime.request, submit: { [session] draft in try await session.submit(draft) }),
             completion: completion,
             recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance),
-            languages: PostingLanguageSource(recent: RecentPostingLanguages(defaults: .standard, account: credential.handle), load: postingLanguages.languages)
+            languages: PostingLanguageSource(recent: RecentPostingLanguages(defaults: .standard, account: credential.handle), load: postingLanguages.languages),
+            settings: settings
         )
         rootViewController = tabBarController
         windowRootViewController = InAppBrowserDockContainer(content: tabBarController)
@@ -718,13 +725,13 @@ final class SessionController {
     private func observeTabLayout() {
         let handle = credential.handle
         withObservationTracking {
-            _ = AppDependencies.settings.tabLayout(for: handle)
+            _ = settings.tabLayout(for: handle)
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor [weak self] in
                 guard let self, !tasks.isClosed else { return }
                 // 最初の並びに戻したら、リストが消えるので足し直す。足し直した変更は、もう一度ここへ来て反映する。
                 addMissingServerItemsToTabLayout()
-                let layout = AppDependencies.settings.tabLayout(for: handle)
+                let layout = settings.tabLayout(for: handle)
                 // ハッシュタグ、ユーザーのハッシュタグ、プロフィールは、「タブから外す」で並びから外したら、タイムラインを止めて捨てる。
                 let userAdded = Set(Self.userAddedItems(in: layout))
                 tabs.forget(serverFeeds.removeAll(where: \.isUserAdded, except: userAdded))
@@ -780,7 +787,7 @@ final class SessionController {
     /// 見ているタブの項目を、次に起動したときに開けるよう覚えておく。
     private func rememberShownTab() {
         guard let item = tabs.shownItem else { return }
-        AppDependencies.settings.setShownTabItem(item, for: credential.handle)
+        settings.setShownTabItem(item, for: credential.handle)
     }
 
     /// 設定でオフにしている間、この機種で使えない間、通知タブを見ている間、ビューアのように画面全体を覆う画面を出している間は流さない。
@@ -789,8 +796,8 @@ final class SessionController {
         let ticker = statusBarTicker
         ticker.scene = { [weak tabBarController] in tabBarController?.view.window?.windowScene }
         ticker.rootController = { [weak tabBarController] in tabBarController }
-        ticker.canShow = { [weak tabBarController, weak tabs] in
-            guard AppDependencies.settings.showsStatusBarTicker, StatusBarCutout.isAvailable else { return false }
+        ticker.canShow = { [weak tabBarController, weak tabs, settings] in
+            guard settings.showsStatusBarTicker, StatusBarCutout.isAvailable else { return false }
             guard let tabBarController, let tabs, !tabs.isShowing(.notifications) else { return false }
             // ビューアの上に代替テキストのシートを重ねたときのように、手前がシートでも奥に画面全体を覆う画面があれば流さない。
             var presented = tabBarController.presentedViewController
@@ -828,7 +835,7 @@ final class SessionController {
 
 
     /// 自動翻訳の、アプリが用意する部品。iOS 26.4より前ではnil（docs/auto-translation.md）。
-    private static func translationSetup() -> StatusTranslationSetup? {
+    private static func translationSetup(settings: AppSettings) -> StatusTranslationSetup? {
         var translator: (any StatusTranslating)?
         if #available(iOS 26.4, *) {
             translator = SystemStatusTranslator()
@@ -839,21 +846,21 @@ final class SessionController {
         guard let translator else { return nil }
         return StatusTranslationSetup(
             translator: translator,
-            targetLanguage: { AppDependencies.settings.resolvedTranslationTarget.minimalIdentifier },
+            targetLanguage: { settings.resolvedTranslationTarget.minimalIdentifier },
             // 選んだ翻訳モードに加えて、Apple Intelligenceのモデルが使えるかの変化も追われる。
-            strategy: { AppDependencies.settings.resolvedTranslationStrategy }
+            strategy: { settings.resolvedTranslationStrategy }
         )
     }
 
     /// 設定でステータスバーの通知をオフからオンにしたら、どう出るかが分かるよう、デモの通知を1件流す。
     private func observeStatusBarTickerSetting() {
-        let wasOn = AppDependencies.settings.showsStatusBarTicker
+        let wasOn = settings.showsStatusBarTicker
         withObservationTracking {
-            _ = AppDependencies.settings.showsStatusBarTicker
+            _ = settings.showsStatusBarTicker
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor in
                 guard let self, !self.tasks.isClosed else { return }
-                if !wasOn, AppDependencies.settings.showsStatusBarTicker {
+                if !wasOn, self.settings.showsStatusBarTicker {
                     self.showStatusBarTickerDemo()
                 }
                 self.observeStatusBarTickerSetting()
@@ -877,7 +884,7 @@ final class SessionController {
     /// 右上の投稿欄で書き始めるボタンは、投稿欄に触れられないときに出す。アプリ内のSafariのシートの裏に隠れている間と、設定で空の投稿欄を隠している間。
     /// 設定で隠しているときは、下書きがあって投稿欄が見えていても出したままにする。下書きの有無でボタンが出たり消えたりしないようにするため。
     private var showsFocusInlineCompose: Bool {
-        browser.isPresented || AppDependencies.settings.hidesEmptyComposeBar
+        browser.isPresented || settings.hidesEmptyComposeBar
     }
 
     private func applyShowsFocusInlineCompose() {
@@ -888,7 +895,7 @@ final class SessionController {
 
     private func observeHidesEmptyComposeBar() {
         withObservationTracking {
-            _ = AppDependencies.settings.hidesEmptyComposeBar
+            _ = settings.hidesEmptyComposeBar
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor in
                 guard let self, !self.tasks.isClosed else { return }
@@ -1073,7 +1080,7 @@ final class SessionController {
     private func apply(lists: [MastodonList]) {
         loadedLists = lists
         logger.info("lists loaded count=\(lists.count, privacy: .public)")
-        setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).syncingLists(lists))
+        setTabLayout(settings.tabLayout(for: credential.handle).syncingLists(lists))
         tabs.forget(serverFeeds.removeAll(where: \.isList, except: Set(lists.map { TabItem.list(id: $0.id, title: $0.title) })))
     }
 
@@ -1081,7 +1088,7 @@ final class SessionController {
     /// ハッシュタグ、ユーザーのハッシュタグ、プロフィールは、設定の画面が最初の並びを書くときに残す（`keepingUserAddedItems`）。
     private func addMissingServerItemsToTabLayout() {
         let items = (loadedLists ?? []).map { TabItem.list(id: $0.id, title: $0.title) }
-        setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).addingMissing(items))
+        setTabLayout(settings.tabLayout(for: credential.handle).addingMissing(items))
     }
 
     private static func userAddedItems(in layout: MenuLayout<TabItem>) -> [TabItem] {
@@ -1094,8 +1101,8 @@ final class SessionController {
     /// - Returns: 保存したか。
     @discardableResult
     private func setTabLayout(_ layout: MenuLayout<TabItem>) -> Bool {
-        guard layout.tokens != AppDependencies.settings.tabLayout(for: credential.handle).tokens else { return false }
-        AppDependencies.settings.setTabLayout(layout, for: credential.handle)
+        guard layout.tokens != settings.tabLayout(for: credential.handle).tokens else { return false }
+        settings.setTabLayout(layout, for: credential.handle)
         return true
     }
 
@@ -1145,7 +1152,7 @@ final class SessionController {
         viewController.onPostSelectionChange = { [weak self] isSelecting in self?.composer.yieldsToToolbar = isSelecting }
         viewController.onBatchReblog = { [weak self] statuses in
             guard let self else { return }
-            batchActions.reblog(statuses, myAccountID: credential.accountID, visibility: AppDependencies.settings.reblogVisibility)
+            batchActions.reblog(statuses, myAccountID: credential.accountID, visibility: settings.reblogVisibility)
         }
         viewController.onBatchShare = { [weak self] statuses in self?.batchActions.share(statuses) }
         viewController.onFollowRequestDecision = { [weak self] decision, request in self?.answerFollowRequest(decision, to: request) }
@@ -1238,7 +1245,7 @@ final class SessionController {
     private func open(_ destination: RichText.LinkDestination, in status: Status, from source: UIViewController) {
         switch destination {
         case .url(let url):
-            open(url, in: AppDependencies.settings.linkBrowser.browser(for: url))
+            open(url, in: settings.linkBrowser.browser(for: url))
         case .mention(let acct, let url):
             // ローカルのacctはドメインを含まず、検索では完全一致にならないため、投稿のメンションのリストにあるIDで引く。
             guard let mention = status.mentions.first(where: { $0.url == url || $0.acct == acct }) else {
@@ -1259,7 +1266,7 @@ final class SessionController {
     private func open(_ destination: RichText.LinkDestination, inProfileFrom source: UIViewController) {
         switch destination {
         case .url(let url):
-            open(url, in: AppDependencies.settings.linkBrowser.browser(for: url))
+            open(url, in: settings.linkBrowser.browser(for: url))
         case .mention(let acct, let url):
             openProfile(resolving: url, acct: acct, from: source)
         case .handle(let acct):
@@ -1288,13 +1295,13 @@ final class SessionController {
     private func tabToggleItem(for item: TabItem, avatarURL: URL? = nil) -> UIBarButtonItem {
         let handle = credential.handle
         weak var barItem: UIBarButtonItem?
-        let menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
-            let layout = AppDependencies.settings.tabLayout(for: handle)
+        let menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self, settings] completion in
+            let layout = settings.tabLayout(for: handle)
             if let current = layout.item(matching: item) {
                 completion([UIAction(title: TabMenuTexts.rename, image: UIImage(systemName: "pencil")) { [weak self] _ in
                     self?.presentTabRename(current)
                 }, UIAction(title: TabMenuTexts.remove, image: UIImage(systemName: "rectangle.stack.badge.minus"), attributes: .destructive) { [weak self] _ in
-                    self?.setTabLayout(AppDependencies.settings.tabLayout(for: handle).removing(item))
+                    self?.setTabLayout(settings.tabLayout(for: handle).removing(item))
                     self?.showTabLayoutNotice(TabMenuTexts.removed)
                 }])
             } else {
@@ -1303,7 +1310,7 @@ final class SessionController {
                     // 並びを書いたら、タブバーへの反映を待ってから飛ばす。メニューを開いたあとにほかのウインドウで同じ項目を足していて、並びが変わらなければ飛ばさない。
                     // 残すと、あとの関係のない並びの変化で飛んでしまうため。
                     pendingTabAddFlight = { [weak self] in self?.flyAddedTab(item, avatarURL: avatarURL, from: barItem) }
-                    if !setTabLayout(AppDependencies.settings.tabLayout(for: handle).adding(item)) {
+                    if !setTabLayout(settings.tabLayout(for: handle).adding(item)) {
                         pendingTabAddFlight = nil
                     }
                     showTabLayoutNotice(TabMenuTexts.added)
@@ -1327,7 +1334,7 @@ final class SessionController {
               let destination = tabs.switchTabButton, destination.window === window,
               let source = barItem.frame(in: window), !source.isNull, !source.isEmpty else { return }
         let symbol = TabAddFlight.symbolImage(item.symbolName, tint: window.tintColor, traits: window.traitCollection)
-        let shape = AppDependencies.settings.appearance.avatarShape
+        let shape = settings.appearance.avatarShape
         guard let avatarURL else {
             TabAddFlight.fly(symbol, from: source, to: destination, in: window)
             return
@@ -1356,10 +1363,10 @@ final class SessionController {
             field.smartInsertDeleteType = .no
         }
         alert.addAction(UIAlertAction(title: TabMenuTexts.Rename.cancel, style: .cancel))
-        alert.addAction(UIAlertAction(title: TabMenuTexts.Rename.save, style: .default) { [weak self, weak alert] _ in
+        alert.addAction(UIAlertAction(title: TabMenuTexts.Rename.save, style: .default) { [weak self, weak alert, settings] _ in
             guard let text = alert?.textFields?.first?.text else { return }
             let renamed = item.renamed(text.trimmingCharacters(in: .whitespacesAndNewlines))
-            self?.setTabLayout(AppDependencies.settings.tabLayout(for: handle).replacing(renamed))
+            self?.setTabLayout(settings.tabLayout(for: handle).replacing(renamed))
         })
         presentOnTop(alert, animated: true)
     }
@@ -1553,7 +1560,7 @@ final class SessionController {
 
     /// プロフィール画面を作り、投稿への操作とリンクを開けるようにする。積んで開くものとタブに置くもので使う。
     private func makeProfile(_ account: Account, tasks: TaskScope) -> (ProfileController, TimelineViewController) {
-        let (controller, viewController) = ProfileController.make(account: accounts.latest(of: account), client: client, relationshipCache: profiles.relationships, tasks: tasks) { [weak self] error, title in
+        let (controller, viewController) = ProfileController.make(account: accounts.latest(of: account), client: client, relationshipCache: profiles.relationships, settings: settings, tasks: tasks) { [weak self] error, title in
             self?.handle(error, title: title)
         }
         configure(viewController)
@@ -1593,7 +1600,7 @@ final class SessionController {
     /// - Parameter ownerAcct: フォローとフォロワーのリストなら、誰のリストかを示すハンドル。見出しの下に出す。
     private func openAccountList(_ kind: AccountListKind, ownerAcct: String? = nil, from source: UIViewController) {
         // リアクションした人を読む形は、読むときに決める。URLから直接開いたときは、サーバーの機能がまだ読めていないため。
-        let (controller, viewController) = AccountListController.make(kind: kind, client: client, tasks: tasks.child()) { [session] in
+        let (controller, viewController) = AccountListController.make(kind: kind, client: client, settings: settings, tasks: tasks.child()) { [session] in
             try await session.loadedCapabilities().emojiReactions ?? .fedibird
         }
         viewController.navigationItem.subtitle = ownerAcct.map { "@\($0)" }
@@ -1656,7 +1663,7 @@ final class SessionController {
     /// 保留中の通知のリストを開く。
     @discardableResult
     private func openNotificationRequests(from source: UIViewController) -> (NotificationRequestsController, TimelineViewController) {
-        let (controller, viewController) = NotificationRequestsController.make(client: client, tasks: tasks.child(), openPolicy: { [weak self] in
+        let (controller, viewController) = NotificationRequestsController.make(client: client, settings: settings, tasks: tasks.child(), openPolicy: { [weak self] in
             self?.showNotificationPolicy()
         })
         controller.model.onAnswered = { [weak self] decision in
@@ -1686,7 +1693,7 @@ final class SessionController {
 
     /// 保留中の通知の1人分の、その人からの通知を開く。受け入れるか無視が済んだら、保留中の通知の画面に戻る。
     private func openAccountNotifications(of request: NotificationRequest, in requests: NotificationRequestsModel, from source: UIViewController) {
-        let (controller, viewController) = AccountNotificationsController.make(request: request, client: client, tasks: tasks.child(), answer: { [weak requests] decision in
+        let (controller, viewController) = AccountNotificationsController.make(request: request, client: client, settings: settings, tasks: tasks.child(), answer: { [weak requests] decision in
             guard let requests else { return false }
             await requests.answer(request, decision)?.value
             return requests.isAnswered(request.id)
@@ -1731,10 +1738,11 @@ final class SessionController {
     private func makeAnnouncements(isEmbedded: Bool, close: @escaping @MainActor (@escaping () -> Void) -> Void) -> AnnouncementsViewController {
         let completion = TextInputCompletion(
             completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
-            recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
+            recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance),
+            settings: settings
         )
         completion.paletteMenu = paletteMenuContext
-        let controller = AnnouncementsViewController(model: announcements, completion: completion, isEmbedded: isEmbedded)
+        let controller = AnnouncementsViewController(model: announcements, completion: completion, isEmbedded: isEmbedded, settings: settings)
         controller.notices = notices
         controller.userMenuActions = userMenuActions
         controller.hashtagMenuActions = hashtagMenuActions
@@ -1761,7 +1769,7 @@ final class SessionController {
             if let linked = announcement.statuses.first(where: { $0.url == url }) {
                 openThread(statusID: linked.id, rowFrame: .zero, from: source)
             } else {
-                open(url, in: AppDependencies.settings.linkBrowser.browser(for: url))
+                open(url, in: settings.linkBrowser.browser(for: url))
             }
         case .mention(let acct, let url):
             if let mention = announcement.mentions.first(where: { $0.url == url || $0.acct == acct }) {
@@ -1796,7 +1804,7 @@ final class SessionController {
 
     /// 通知のフィルタリングの設定をシートで開く。
     func showFilters() {
-        rootViewController.presentOnFrontmost(FiltersView.makeSheet(model: filters, now: now), animated: true)
+        rootViewController.presentOnFrontmost(FiltersView.makeSheet(model: filters, now: now, settings: settings), animated: true)
     }
 
     func showNotificationPolicy(from presenter: UIViewController? = nil) {
@@ -1810,8 +1818,8 @@ final class SessionController {
         search.makeResults = { [weak self] input, carried, list in
             self?.makeSearchModel(input, scope: .all, carried: carried, presenter: list)
         }
-        search.makeList = { [weak self, weak search] in
-            let list = TimelineViewController(texts: .search(.all, query: "")) { await search?.refreshResults() }
+        search.makeList = { [weak self, weak search, settings] in
+            let list = TimelineViewController(texts: .search(.all, query: ""), settings: settings) { await search?.refreshResults() }
             self?.configure(list)
             return list
         }
@@ -1847,7 +1855,7 @@ final class SessionController {
     /// 確定した語の結果のリストを作り、探し始める。「すべて見る」で積む、1つの種類だけの結果に使う。決まりはdocs/search.mdにある。
     private func makeSearchResults(_ input: SearchInput, scope: SearchModel.Scope) -> TimelineViewController {
         weak var owner: SearchModel?
-        let viewController = TimelineViewController(texts: .search(scope, query: input.query)) { await owner?.refresh() }
+        let viewController = TimelineViewController(texts: .search(scope, query: input.query), settings: settings) { await owner?.refresh() }
         let model = makeSearchModel(input, scope: scope, carried: nil, presenter: viewController)
         owner = model
         model.display = viewController
@@ -1917,7 +1925,7 @@ final class SessionController {
     /// - Parameter rowFrame: 押した行のウインドウ上の枠。スレッドでも、押した投稿をこの位置に置いて開く。
     private func openThread(of status: Status, rowFrame: CGRect, from source: UIViewController) {
         let focus = status.displayed
-        let (controller, viewController) = ThreadController.make(focus: focus, client: client, streamingHub: streamingHub, tasks: tasks.child())
+        let (controller, viewController) = ThreadController.make(focus: focus, client: client, streamingHub: streamingHub, settings: settings, tasks: tasks.child())
         configure(viewController)
         threads.add(controller)
         session.statuses.register(controller.model)
@@ -1964,17 +1972,19 @@ final class SessionController {
         }
         let completion = TextInputCompletion(
             completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, account: credential.handle)),
-            recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
+            recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance),
+            settings: settings
         )
         // 紹介しているユーザーの追加の行は、サーバーがフォローしていない相手を断るので、フォローしている人だけから探す。
         var endorsementSources = ComposeCompletion.Sources.unavailable
         endorsementSources.searchAccounts = { [client] query, limit in try await client.searchAccountsForCompletion(query, limit: limit, following: true) }
         let endorsementCompletion = TextInputCompletion(
             completion: ComposeCompletion(sources: endorsementSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
-            recentEmojis: nil
+            recentEmojis: nil,
+            settings: settings
         )
         completion.paletteMenu = paletteMenuContext
-        let controller = ProfileEditViewController(editor: editor, completion: completion, endorsementCompletion: endorsementCompletion)
+        let controller = ProfileEditViewController(editor: editor, completion: completion, endorsementCompletion: endorsementCompletion, settings: settings)
         controller.onError = { [weak self] error, title in self?.handle(error, title: title) }
         #if DEBUG
         controller.debugNote = debugNote
@@ -2092,7 +2102,7 @@ final class SessionController {
             toggle(.favourite, on: status)
         case .reblog:
             UserAction.toggleReblog.record()
-            toggle(.reblog, on: status, reblogVisibility: AppDependencies.settings.reblogVisibility)
+            toggle(.reblog, on: status, reblogVisibility: settings.reblogVisibility)
         case .reblogWithVisibility(let visibility):
             UserAction.toggleReblog.record()
             toggle(.reblog, on: status, reblogVisibility: visibility, addsOnly: true)
@@ -2282,7 +2292,7 @@ final class SessionController {
         let handle = account.credential.handle
         // 処理できない画像の形式は、今のアカウントのサーバーの版ごとに覚えている。ほかのアカウントのサーバーの版は読まないので覚えず、
         // 処理できなかったときにJPEGで送り直すのを、送るたびに行う。
-        let media = ComposeMediaService<UIImage>(client: client, settings: AppDependencies.settings, tuning: AppDependencies.tuning) { file in
+        let media = ComposeMediaService<UIImage>(client: client, settings: settings, tuning: AppDependencies.tuning) { file in
             await LocalMediaThumbnail.make(for: file, maxPixelSize: ComposeAttachmentStrip.thumbnailPixelSize)
         }
         // 新しい投稿に付け直すので、添付は残して削除する。今のアカウントで削除して書き直すときと同じ。
@@ -2338,7 +2348,7 @@ final class SessionController {
             do {
                 let image = try await AppDependencies.avatarImages.image(for: AvatarView.key(url: url, animates: false, side: side, scale: scale))
                 guard let self, composer.model.otherAccount?.id == account.credential.id else { return }
-                let icon = AvatarIcon.image(image, side: side, shape: AppDependencies.settings.appearance.avatarShape)
+                let icon = AvatarIcon.image(image, side: side, shape: settings.appearance.avatarShape)
                 composer.writingAccount = InlineComposeController.WritingAccount(username: account.credential.username, avatar: icon)
             } catch {
                 self?.logger.error("writing account avatar load failed: \(SciaLog.describe(error), privacy: .public)")
@@ -2401,7 +2411,7 @@ final class SessionController {
             (action, visibility, wasOn, addsOnly) = (.favourite, .accountDefault, shown.favourited, false)
         case .reblog:
             UserAction.toggleReblog.record()
-            (action, visibility, wasOn, addsOnly) = (.reblog, AppDependencies.settings.reblogVisibility, shown.reblogged, false)
+            (action, visibility, wasOn, addsOnly) = (.reblog, settings.reblogVisibility, shown.reblogged, false)
         case .reblogWithVisibility(let chosen):
             UserAction.toggleReblog.record()
             (action, visibility, wasOn, addsOnly) = (.reblog, chosen, false, true)
@@ -2597,7 +2607,7 @@ final class SessionController {
     private func openEditHistory(of status: Status, filterTitles: [String], from source: UIViewController?) {
         let client = client
         // トークンが無効なら、理由はチップの列の一番上のログインし直しの段へ案内する。ログインし直したあとは、再試行で読める。
-        let viewController = EditHistoryViewController(status: status) {
+        let viewController = EditHistoryViewController(status: status, settings: settings) {
             try await client.statusHistory(status.id)
         } describe: { [weak self] error in
             await self?.failureReason(for: error) ?? ErrorPresentation(error)
@@ -2902,12 +2912,12 @@ final class SessionController {
                 }
             },
             isExcludedFromAutoTranslation: { [weak self] acct in
-                guard let self, translations != nil, AppDependencies.settings.isAutoTranslationEnabled else { return nil }
-                return AppDependencies.settings.isExcludedFromAutoTranslation(acct: acct, localServer: credential.server)
+                guard let self, translations != nil, settings.isAutoTranslationEnabled else { return nil }
+                return settings.isExcludedFromAutoTranslation(acct: acct, localServer: credential.server)
             },
             excludeFromAutoTranslation: { [weak self] isExcluded, acct in
                 guard let self else { return }
-                AppDependencies.settings.setExcludedFromAutoTranslation(isExcluded, acct: acct, localServer: credential.server)
+                settings.setExcludedFromAutoTranslation(isExcluded, acct: acct, localServer: credential.server)
                 let title = SessionTexts.autoTranslation(handle: credential.handle(ofAcct: acct), isExcluded: isExcluded)
                 notices.showTransient(Notice(id: "user.autoTranslationChanged", kind: .success, title: title), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
             },
@@ -3072,7 +3082,7 @@ final class SessionController {
             try await client().setNote(id, comment: comment)
         }
         logger.info("account note sheet opened (empty: \(relation.relationship.note.isEmpty, privacy: .public))")
-        let controller = AccountNoteViewController(editor: editor, acct: relation.acct, tasks: tasks.child())
+        let controller = AccountNoteViewController(editor: editor, acct: relation.acct, tasks: tasks.child(), settings: settings)
         controller.onSaved = { [weak self] relationship in
             guard let self else { return }
             if let otherAccount {
@@ -3142,7 +3152,7 @@ final class SessionController {
 
     /// リストのメンバーの画面を開いたタイムラインに積む。決まりはdocs/lists.mdの「メンバー」にある。
     private func openListMembers(listID: String, title: String, from source: UIViewController) {
-        let (controller, viewController) = AccountListController.make(kind: .listMembers(listID: listID), client: client, tasks: tasks.child())
+        let (controller, viewController) = AccountListController.make(kind: .listMembers(listID: listID), client: client, settings: settings, tasks: tasks.child())
         viewController.navigationItem.subtitle = title
         controller.onMemberFailure = { [weak self] title, error in
             self?.tasks.run(.action) { [weak self] in
@@ -3168,7 +3178,8 @@ final class SessionController {
         let client = client
         let sheet = ListMemberSearchView.sheet(
             search: { try await client.searchFollowedAccounts($0, limit: 20) },
-            initialMemberIDs: members.accountIDs
+            initialMemberIDs: members.accountIDs,
+            settings: settings
         ) { [weak members] account, adds, completion in
             guard let members else { return completion(false) }
             members.changeMember(account, adds: adds, completion: completion)
@@ -3342,6 +3353,7 @@ final class SessionController {
             guard let self, let window = rootViewController.viewIfLoaded?.window else { return }
             tabs.show(.home)
             tabs.selectedNavigation?.popToRootViewController(animated: false)
+            // 設定の画面から開くので、設定の画面と同じくアプリのプリセットを変える。
             let sheet = InAppBrowserHeightSheet(settings: AppDependencies.settings, window: window) { [weak self] in
                 // 上にアプリ内のSafariを重ねていれば一緒に閉じるので、閉じたことが届くよう、まとめて閉じる経路を通す。
                 self?.rootViewController.dismissPresentedScreens(animated: true) {
@@ -3574,7 +3586,7 @@ final class SessionController {
         pushedScheduled.removeAll { $0.viewController.navigationController == nil }
         // いちばん上に出ていれば、重ねて積まない。
         guard !pushedScheduled.contains(where: { $0.viewController === navigation.topViewController }) else { return }
-        let list = ScheduledStatusesController(client: client, tasks: tasks.child(), myAccount: { [weak self] in
+        let list = ScheduledStatusesController(client: client, tasks: tasks.child(), settings: settings, myAccount: { [weak self] in
             guard let self else { throw CancellationError() }
             return try await myAccount()
         })
@@ -4388,7 +4400,7 @@ final class SessionController {
 
     /// 足したタブの行き先に合う、並びの項目。
     private func layoutItem(for tab: AppDestination.UserTab) -> TabItem? {
-        for case .item(let item, _) in AppDependencies.settings.tabLayout(for: credential.handle).elements where tab.matches(item, credential: credential) {
+        for case .item(let item, _) in settings.tabLayout(for: credential.handle).elements where tab.matches(item, credential: credential) {
             return item
         }
         return nil
@@ -4487,7 +4499,7 @@ final class SessionController {
         case .announcements:
             showAnnouncements()
         case .account:
-            rootViewController.presentAccountScreen(settings: AppDependencies.settings, account: credential.handle, context: accountScreenContext)
+            rootViewController.presentAccountScreen(settings: settings, account: credential.handle, context: accountScreenContext)
         case .inAppBrowserHeight(let page):
             showInAppBrowserHeight(returningTo: page)
         case .note(let acct):
@@ -4935,7 +4947,7 @@ extension SessionController: ListEditorHost {
     func listDidCreate(_ list: MastodonList) {
         listChangeCount += 1
         loadedLists = (loadedLists ?? []).filter { $0.id != list.id } + [list]
-        setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).adding(.list(id: list.id, title: list.title)))
+        setTabLayout(settings.tabLayout(for: credential.handle).adding(.list(id: list.id, title: list.title)))
     }
 
     /// 変えたリストを覚え、名前が変わっていれば、並びの名前と、タブバーとタイムラインの見出しの名前をすぐ変える。
@@ -4950,7 +4962,7 @@ extension SessionController: ListEditorHost {
             feed.viewController.title = list.title
         }
         tabs.retitle(item)
-        setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).replacing(item))
+        setTabLayout(settings.tabLayout(for: credential.handle).replacing(item))
     }
 
     /// 消したリストを、自分のリストを読み直すのを待たずに並びから外し、タイムラインを止める。開いていたら、UIKitが選んだ先頭のタブへ移る。
@@ -4958,7 +4970,7 @@ extension SessionController: ListEditorHost {
         listChangeCount += 1
         loadedLists = loadedLists?.filter { $0.id != id }
         let item = TabItem.list(id: id, title: "")
-        setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).removing(item))
+        setTabLayout(settings.tabLayout(for: credential.handle).removing(item))
         tabs.forget(serverFeeds.removeAll(where: { $0 == item }, except: []))
         // アカウントの画面から積んだ、消したリストのタイムラインは、その画面から閉じる。
         for feed in pushedFeeds.controllers where feed.feed == .list(id: id) {

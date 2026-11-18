@@ -230,7 +230,11 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
     /// 出している通知を読み上げる文。
     var accessibilityText: String? { capsule.accessibilityLabel }
 
-    init(cutout: StatusBarCutout) {
+    /// 流すアカウントの設定。中身は窓に載せた直後に組むので、窓からではなくここから読む。
+    private let settings: AppSettings
+
+    init(cutout: StatusBarCutout, settings: AppSettings) {
+        self.settings = settings
         self.cutout = cutout
         super.init(frame: .zero)
         applyCutoutAppearance()
@@ -290,7 +294,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
     /// 「視差効果を減らす」がオンなら、動かさずに薄くして入れ替え、カプセルも広げずに浮かび上がらせる。
     func show(_ item: StatusBarTickerItem, animated: Bool) {
         self.item = item
-        let incoming = ContentViews(item: item, metrics: metrics)
+        let incoming = ContentViews(item: item, metrics: metrics, settings: settings)
         capsule.addSubview(incoming.left)
         capsule.addSubview(incoming.right)
         capsule.accessibilityLabel = incoming.accessibilityLabel
@@ -813,15 +817,17 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
         let accessibilityLabel: String
         private let item: StatusBarTickerItem
         private let metrics: Metrics
+        private let settings: AppSettings
         /// 入りきらない名前と文頭は、「…」で切らず、投稿の名前と同じく行末をぼかす。
         private let nameLabel = FadingLabel()
         private let subjectLabel = FadingLabel()
         /// 絵文字のリアクションの通知で、記号の代わりに描くカスタム絵文字の画像と、読めなかったときに代わりに出す記号。ほかの通知ではnil。
         private let reactionImage: (view: EmojiImageView, emoji: CustomEmoji, fallback: UIView)?
 
-        init(item: StatusBarTickerItem, metrics: Metrics) {
+        init(item: StatusBarTickerItem, metrics: Metrics, settings: AppSettings) {
             self.item = item
             self.metrics = metrics
+            self.settings = settings
             let appearance = NotificationAppearance(item.kind)
             accessibilityLabel = item.accessibilityLabel
 
@@ -892,7 +898,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
                 avatar.widthAnchor.constraint(equalToConstant: metrics.avatarSide),
                 avatar.heightAnchor.constraint(equalToConstant: metrics.avatarSide),
             ])
-            avatar.apply(AvatarView.Content(url: item.account.avatarStatic, shape: AppDependencies.settings.appearance.avatarShape, animates: false))
+            avatar.apply(AvatarView.Content(url: item.account.avatarStatic, shape: settings.appearance.avatarShape, animates: false))
             if metrics.badgesSymbol {
                 left.addArrangedSubview(Self.badged(avatar, with: symbol, side: metrics.avatarSide))
                 // 右下にはみ出す記号の分を空ける。
@@ -922,7 +928,6 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
 
         /// 名前と文頭を描く。カスタム絵文字が届いたら、描き直す。
         func render() {
-            let settings = AppDependencies.settings
             let fadeWidth = AppDependencies.tuning.value(of: TuningCatalog.statusBarTickerFadeWidth)
             nameLabel.fadeWidth = fadeWidth
             subjectLabel.fadeWidth = fadeWidth
@@ -932,13 +937,13 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
             // 文字はステータスバーの高さに収めるため、大きさを決め打ちする。文字を大きくする設定では、拡大表示で読む。
             // scialint:disable:next fixed_font_size
             let font = UIFont.systemFont(ofSize: metrics.fontSize, weight: .semibold)
-            let nameRenderer = RichTextRenderer(font: font, textColor: .label, emojiImages: AppDependencies.emojiImages, language: settings.glyphLanguageIdentifier())
+            let nameRenderer = RichTextRenderer(font: font, textColor: .label, settings: settings, emojiImages: AppDependencies.emojiImages, language: settings.glyphLanguageIdentifier())
             nameLabel.attributedText = nameRenderer.render(.plain(item.account.displayNameOrUsername, emojis: item.account.emojis))
             let subjectColor = UIColor.secondaryLabel
             var renderer = RichTextRenderer(
                 // scialint:disable:next fixed_font_size
                 font: .systemFont(ofSize: metrics.fontSize),
-                textColor: subjectColor,
+                textColor: subjectColor, settings: settings,
                 emojiImages: AppDependencies.emojiImages,
                 language: settings.glyphLanguageIdentifier()
             )

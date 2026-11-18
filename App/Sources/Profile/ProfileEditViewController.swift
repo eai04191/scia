@@ -29,7 +29,7 @@ final class ProfileEditViewController: UIViewController {
     private let loadingView = UIActivityIndicatorView(style: .medium)
     private let failureView = UIStackView()
     private let failureReason = FailureReasonStackView()
-    private let completionList = ComposeCompletionList()
+    private lazy var completionList = ComposeCompletionList(settings: settings)
     private var completionListTop: NSLayoutConstraint?
     private var completionListHeight: NSLayoutConstraint?
     private var isCompletionListShown = false
@@ -101,11 +101,11 @@ final class ProfileEditViewController: UIViewController {
         case failed
     }
 
-    init(editor: ProfileEditor, completion: TextInputCompletion, endorsementCompletion: TextInputCompletion? = nil, mediaImages: MediaImageStore<UIImage> = AppDependencies.mediaImages, settings: AppSettings = AppDependencies.settings, tuning: TuningStore = AppDependencies.tuning, clock: any Clock<Duration> = AppDependencies.clock) {
+    init(editor: ProfileEditor, completion: TextInputCompletion, endorsementCompletion: TextInputCompletion? = nil, mediaImages: MediaImageStore<UIImage> = AppDependencies.mediaImages, settings: AppSettings, tuning: TuningStore = AppDependencies.tuning, clock: any Clock<Duration> = AppDependencies.clock) {
         self.editor = editor
         self.clock = clock
         textCompletion = completion
-        self.endorsementCompletion = endorsementCompletion ?? TextInputCompletion(completion: ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning)), recentEmojis: nil)
+        self.endorsementCompletion = endorsementCompletion ?? TextInputCompletion(completion: ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning)), recentEmojis: nil, settings: settings)
         self.mediaImages = mediaImages
         self.settings = settings
         self.tuning = tuning
@@ -1146,7 +1146,7 @@ extension ProfileEditViewController: UITableViewDataSource, UITableViewDelegate 
             guard editor.endorsementsSource.value != nil else { return sectionLoadingCell() }
             guard let account = editor.endorsedAccounts[safe: indexPath.row] else { return endorsementAddCell }
             let cell = tableView.dequeueReusableCell(withIdentifier: ProfileEditAccountCell.reuseIdentifier, for: indexPath)
-            (cell as? ProfileEditAccountCell)?.configure(account: account, avatarShape: settings.appearance.avatarShape, language: settings.glyphLanguageIdentifier())
+            (cell as? ProfileEditAccountCell)?.configure(account: account, avatarShape: settings.appearance.avatarShape, language: settings.glyphLanguageIdentifier(), settings: settings)
             return cell
         case .flags:
             let cell = UITableViewCell()

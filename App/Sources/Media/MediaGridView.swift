@@ -304,7 +304,9 @@ final class MediaTileView: UIButton, MediaViewerSource {
     /// ビューアで開く。タップに選んだ操作によらず、メニューの「開く」と持ち上げた画像のタップでも、これで開く。
     var onOpen: (() -> Void)?
     private let store: MediaImageStore<UIImage>
-    private let settings: AppSettings
+    /// 窓に開いたアカウントの設定。タイルは投稿の本文の中で何段も親から作られるので、窓から読む。
+    private var settings: AppSettings { traitCollection.appSettings }
+    private var dynamicRangeGeneration = 0
     private let tuning: TuningStore
     private let thumbnailView = FocusCroppedImageView()
     private let symbolView = UIImageView()
@@ -337,9 +339,8 @@ final class MediaTileView: UIButton, MediaViewerSource {
         let aspectRatio: Double?
     }
 
-    init(store: MediaImageStore<UIImage>, settings: AppSettings = AppDependencies.settings, tuning: TuningStore = AppDependencies.tuning) {
+    init(store: MediaImageStore<UIImage>, tuning: TuningStore = AppDependencies.tuning) {
         self.store = store
-        self.settings = settings
         self.tuning = tuning
         super.init(frame: .zero)
         backgroundColor = .secondarySystemFill
@@ -371,6 +372,9 @@ final class MediaTileView: UIButton, MediaViewerSource {
             self.setNeedsLayout()
         }
         followDynamicRanges()
+        registerForTraitChanges([AppSettingsTrait.self]) { (self: Self, _) in
+            self.followDynamicRanges()
+        }
         followSymbolSizing()
         menuInteraction = MediaMenuInteraction(on: self, wholeImage: { [weak self] in self?.loadedThumbnail }, open: { [weak self] in
             self?.onOpen?()
@@ -392,12 +396,19 @@ final class MediaTileView: UIButton, MediaViewerSource {
     }
 
     /// HDRのバッジを出す明るさの組み合わせかを、設定から決め続ける。選び直すと、出ているバッジにもすぐ効かせる。
+    /// 窓の設定が替わったら、替わる前の設定の見張りは世代で止める。止めないと、見張りの系列が替わるたびに増えるため。
     private func followDynamicRanges() {
+        dynamicRangeGeneration += 1
+        followDynamicRanges(of: settings, generation: dynamicRangeGeneration)
+    }
+
+    private func followDynamicRanges(of settings: AppSettings, generation: Int) {
+        guard generation == dynamicRangeGeneration else { return }
         withObservationTracking {
             marksHDR = MediaDynamicRange.marksHDR(list: settings.mediaDynamicRange, viewer: settings.viewerMediaDynamicRange)
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor in
-                self?.followDynamicRanges()
+                self?.followDynamicRanges(of: settings, generation: generation)
             }
         }
     }

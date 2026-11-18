@@ -11,7 +11,7 @@ struct PrivateNoteMenuTests {
     private func makeViewController() -> TimelineViewController {
         let settings = AppSettings(defaults: TestScratch.defaults("PrivateNoteMenuTests"))
         settings.useMenuFixtures()
-        return TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: settings)
+        return TimelineViewController(settings: settings, refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
     }
 
     /// まとまりごとの項目の名前。

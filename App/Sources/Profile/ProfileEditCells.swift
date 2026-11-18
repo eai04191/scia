@@ -618,9 +618,9 @@ final class ProfileEditAccountCell: UITableViewCell {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func configure(account: Account, avatarShape: AvatarShape, language: String) {
+    func configure(account: Account, avatarShape: AvatarShape, language: String, settings: AppSettings) {
         avatarView.apply(AvatarView.Content(url: account.avatarStatic, shape: avatarShape, animates: false))
-        nameLabel.attributedText = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, emojiImages: AppDependencies.emojiImages, animatesEmojis: false, language: language)
+        nameLabel.attributedText = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, settings: settings, emojiImages: AppDependencies.emojiImages, animatesEmojis: false, language: language)
             .render(.plain(account.displayNameOrUsername, emojis: account.emojis))
             .truncatingTail(alignment: .natural)
         handleLabel.text = "@\(account.acct)"

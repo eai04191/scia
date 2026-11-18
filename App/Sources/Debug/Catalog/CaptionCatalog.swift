@@ -20,7 +20,7 @@ enum CaptionCatalog {
     @MainActor
     /// - Parameter contrast: コントラストの設定。nilなら端末の設定に従う。
     private static func caption(_ text: String, isEditable: Bool = false, contrast: UIAccessibilityContrast? = nil) -> UIView {
-        let caption = CaptionView()
+        let caption = CaptionView(settings: AppDependencies.settings)
         if let contrast {
             caption.traitOverrides.accessibilityContrast = contrast
         }

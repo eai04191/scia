@@ -156,9 +156,12 @@ final class ProfileEndorsementsShelfView: ProfileShelfView {
     private let emojiImages: EmojiImageStore<UIImage>
     private let avatarImages: AvatarImageStore<UIImage>
 
-    init(emojiImages: EmojiImageStore<UIImage>, avatarImages: AvatarImageStore<UIImage>) {
+    private let settings: AppSettings
+
+    init(emojiImages: EmojiImageStore<UIImage>, avatarImages: AvatarImageStore<UIImage>, settings: AppSettings) {
         self.emojiImages = emojiImages
         self.avatarImages = avatarImages
+        self.settings = settings
         super.init(title: ProfileTexts.Shelf.endorsements, itemSpacing: 10)
     }
 
@@ -193,7 +196,7 @@ final class ProfileEndorsementsShelfView: ProfileShelfView {
     }
 
     private func makeCard(for account: Account, content: Content) -> UIView {
-        let card = ProfileEndorsedCard(account: account, content: content, emojiImages: emojiImages, avatarImages: avatarImages)
+        let card = ProfileEndorsedCard(account: account, content: content, emojiImages: emojiImages, avatarImages: avatarImages, settings: settings)
         card.addAction(UIAction { [weak self] _ in self?.onOpen?(account) }, for: .primaryActionTriggered)
         menuInteractions.append(ProfileTextMenuInteraction(
             on: card,
@@ -238,7 +241,7 @@ final class ProfileEndorsedCard: UIControl {
     /// 地。「フォロー中」のボタンと同じく、ティントカラーで薄く塗る。同じ塗りにするため、UIKitのボタンの構成で描く。
     private let background = UIButton(configuration: .tinted())
 
-    init(account: Account, content: ProfileEndorsementsShelfView.Content, emojiImages: EmojiImageStore<UIImage>, avatarImages: AvatarImageStore<UIImage>) {
+    init(account: Account, content: ProfileEndorsementsShelfView.Content, emojiImages: EmojiImageStore<UIImage>, avatarImages: AvatarImageStore<UIImage>, settings: AppSettings) {
         avatarView = AvatarView(store: avatarImages)
         super.init(frame: .zero)
         background.configuration?.background.cornerRadius = Self.cornerRadius
@@ -253,7 +256,7 @@ final class ProfileEndorsedCard: UIControl {
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.textAlignment = .center
         nameLabel.emojiImages = content.animatesCustomEmojis ? emojiImages : nil
-        nameLabel.attributedText = RichTextRenderer(font: bold, textColor: .label, emojiImages: emojiImages, language: content.glyphLanguage)
+        nameLabel.attributedText = RichTextRenderer(font: bold, textColor: .label, settings: settings, emojiImages: emojiImages, language: content.glyphLanguage)
             .render(.plain(account.displayNameOrUsername, emojis: account.emojis))
             .truncatingTail(alignment: .center)
         handleLabel.text = "@\(account.acct)"

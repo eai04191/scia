@@ -26,7 +26,7 @@ enum PollCatalog {
         /// - Parameter choices: タイムラインで覚えている、選んでいる選択肢などの状態を、組み立てる前に当てる。
         func post(_ title: String, _ poll: Poll, account: Account = other, content: String = "<p>投票の付いた投稿。</p>", spoilerText: String = "", card: PreviewCard? = nil, choices: @escaping (inout PollChoices, Poll.ID) -> Void = { _, _ in }) -> CatalogState {
             CatalogState(title: title) {
-                let timeline = TimelineViewController(texts: .home, refresh: {})
+                let timeline = TimelineViewController(texts: .home, settings: AppDependencies.settings, refresh: {})
                 timeline.myAccountID = author.id
                 choices(&timeline.pollChoices, poll.id)
                 let status = Status(

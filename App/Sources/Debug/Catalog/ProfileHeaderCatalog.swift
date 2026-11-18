@@ -350,7 +350,8 @@ enum ProfileHeaderCatalog {
         let header = ProfileHeaderView(
             emojiImages: AppDependencies.emojiImages,
             mediaImages: AppDependencies.mediaImages,
-            avatarImages: AppDependencies.avatarImages
+            avatarImages: AppDependencies.avatarImages,
+            settings: AppDependencies.settings
         )
         configure(header)
         var content = ProfileHeaderView.Content(

@@ -10,7 +10,7 @@ import UIKit
 @MainActor
 struct LinkLabelTests {
     private func label(for text: RichText, width: CGFloat = 300) -> LinkLabel {
-        let renderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, emojiImages: .offline, language: "ja")
+        let renderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, settings: AppDependencies.settings, emojiImages: .offline, language: "ja")
         let label = LinkLabel()
         label.numberOfLines = 0
         label.attributedText = renderer.render(text)
@@ -194,7 +194,7 @@ struct LinkLabelTests {
         let link = try center(of: "example.com/a", in: label)
         #expect(label.link(at: link) == .url(url))
 
-        let renderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, emojiImages: .offline, language: "ja")
+        let renderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, settings: AppDependencies.settings, emojiImages: .offline, language: "ja")
         label.attributedText = renderer.render(RichText(blocks: [.init(inlines: [.text("リンクのない本文です。リンクのない本文です。", [])])]))
         #expect(label.link(at: link) == nil)
 
@@ -227,7 +227,8 @@ struct LinkLabelTests {
     /// 本文のリンクのメニューの、見出しと項目の名前。区切り線のまとまりは`|`で、サブメニューは`名前[中身]`で表す。
     private func menuOutline(of destination: RichText.LinkDestination, settings: AppSettings, hashtagAccount: Account? = nil) throws -> String? {
         let label = label(for: RichText(blocks: [.init(inlines: [.link("x", destination, [])])]))
-        label.settings = settings
+        label.traitOverrides.appSettings = settings
+        label.updateTraitsIfNeeded()
         label.hashtagAccount = hashtagAccount
         let hitArea = try #require(label.subviews.compactMap { $0 as? LinkHitArea }.first)
         guard let menu = hitArea.menu(for: destination, at: .zero) else { return nil }
@@ -260,7 +261,8 @@ struct LinkLabelTests {
 
         #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings, hashtagAccount: local) == "#cat: すべての投稿,@bobの投稿|リンクをコピー,共有,ブラウザで開く|その他[カスタマイズ]")
         let label = label(for: RichText(blocks: [.init(inlines: [.link("x", .hashtag(name: "cat", url: tag), [])])]))
-        label.settings = settings
+        label.traitOverrides.appSettings = settings
+        label.updateTraitsIfNeeded()
         label.hashtagAccount = remote
         let hitArea = try #require(label.subviews.compactMap { $0 as? LinkHitArea }.first)
         let menu = try #require(hitArea.menu(for: .hashtag(name: "cat", url: tag), at: .zero))
@@ -294,7 +296,8 @@ struct LinkLabelTests {
 
     private func disabledTitles(of destination: RichText.LinkDestination, settings: AppSettings) throws -> [String] {
         let label = label(for: RichText(blocks: [.init(inlines: [.link("x", destination, [])])]))
-        label.settings = settings
+        label.traitOverrides.appSettings = settings
+        label.updateTraitsIfNeeded()
         let hitArea = try #require(label.subviews.compactMap { $0 as? LinkHitArea }.first)
         let menu = try #require(hitArea.menu(for: destination, at: .zero))
         func actions(_ element: UIMenuElement) -> [UIAction] {
@@ -321,7 +324,8 @@ struct LinkLabelTests {
     @Test func longPressMenuUsesSeparateInteraction() throws {
         let url = try #require(URL(string: "https://example.com/a"))
         let label = label(for: RichText(blocks: [.init(inlines: [.text("見て ", []), .link("example.com/a", .url(url), [])])]))
-        label.settings = try settings()
+        label.traitOverrides.appSettings = try settings()
+        label.updateTraitsIfNeeded()
         let hitArea = try #require(label.subviews.compactMap { $0 as? LinkHitArea }.first)
         let interaction = try #require(hitArea.interactions.lazy.compactMap { $0 as? UIContextMenuInteraction }.first)
         let delegate = try #require(interaction.delegate)

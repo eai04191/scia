@@ -29,7 +29,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
     private var isGrowingFromCollapsed = false
     private let logger = SciaLog.logger(category: "browser")
 
-    init(tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings, clock: any Clock<Duration> = AppDependencies.clock) {
+    init(tuning: TuningStore = AppDependencies.tuning, settings: AppSettings, clock: any Clock<Duration> = AppDependencies.clock) {
         self.tuning = tuning
         self.settings = settings
         self.clock = clock

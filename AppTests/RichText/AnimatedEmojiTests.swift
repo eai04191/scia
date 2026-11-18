@@ -51,7 +51,7 @@ struct AnimatedEmojiTests {
     /// - Parameter lineBreakMode: はみ出す分の扱い。本物の本文や名前と同じく、文字列の段落に入れる。UILabelは文字列を入れたときに、
     ///   段落の設定で自分の`lineBreakMode`を上書きするため、ラベルに入れても効かない。
     private func label(_ text: RichText, store: EmojiImageStore<UIImage>, numberOfLines: Int = 0, lineBreakMode: NSLineBreakMode = .byWordWrapping, width: CGFloat = 300) async throws -> LinkLabel {
-        let renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: store, language: "ja")
+        let renderer = RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, emojiImages: store, language: "ja")
         let emojis = text.blocks.flatMap(\.inlines).compactMap { inline -> CustomEmoji? in
             if case .emoji(let emoji) = inline { emoji } else { nil }
         }
@@ -116,7 +116,7 @@ struct AnimatedEmojiTests {
         let before = animatedLayers(of: label)
         #expect(before.count == 1)
 
-        label.attributedText = RichTextRenderer(font: font, textColor: .label, emojiImages: store, language: "ja").render(text)
+        label.attributedText = RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, emojiImages: store, language: "ja").render(text)
         label.layoutIfNeeded()
 
         let after = animatedLayers(of: label)
@@ -162,7 +162,7 @@ struct AnimatedEmojiTests {
         let crab = try emoji("crab")
         let label = try await label(RichText.plain(":crab: :crab:", emojis: [crab]), store: store())
         // 1つ目の絵文字にだけ色を付けた文字列を入れ直す。
-        let renderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, emojiImages: try #require(label.emojiImages), language: "ja")
+        let renderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, settings: AppDependencies.settings, emojiImages: try #require(label.emojiImages), language: "ja")
         let source = NSMutableAttributedString(attributedString: renderer.render(RichText.plain(":crab: :crab:", emojis: [crab])))
         source.addAttribute(.emojiTint, value: UIColor.green, range: (source.string as NSString).range(of: "\u{FFFC}"))
         label.attributedText = source
@@ -289,7 +289,7 @@ struct AnimatedEmojiTests {
         #expect(animatedLayers(of: animated).count == 1)
 
         animated.emojiImages = nil
-        animated.attributedText = RichTextRenderer(font: font, textColor: .label, emojiImages: store, language: "ja").render(RichText.plain(":crab:", emojis: [crab]))
+        animated.attributedText = RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, emojiImages: store, language: "ja").render(RichText.plain(":crab:", emojis: [crab]))
         animated.layoutIfNeeded()
 
         #expect(animatedLayers(of: animated).isEmpty)

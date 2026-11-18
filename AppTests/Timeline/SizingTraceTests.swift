@@ -54,7 +54,7 @@ struct SizingTraceTests {
         let account = Account(id: "1", username: "a", acct: "a", displayName: "名前", avatar: nil)
         let poll = Poll(id: "1", expiresAt: nil, expired: false, multiple: false, votesCount: 0, options: [])
         let status = Status(id: "100", createdAt: Date(timeIntervalSince1970: 1_800_000_000), account: account, content: "<p>本文</p>", spoilerText: "", url: nil, poll: poll)
-        let timeline = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: AppSettings.isolated())
+        let timeline = TimelineViewController(settings: AppSettings.isolated(), refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
 
         let configuration = timeline.contentConfiguration(for: status, base: .cell())
         let cell = TimelineCell()

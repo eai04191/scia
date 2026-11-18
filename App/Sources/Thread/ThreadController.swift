@@ -14,10 +14,11 @@ final class ThreadController {
         focus: Status,
         client: MastodonClient,
         streamingHub: StreamingHub,
+        settings: AppSettings,
         tasks: TaskScope
     ) -> (ThreadController, TimelineViewController) {
         let model = ThreadModel(focus: focus, client: client, streamingHub: streamingHub, tasks: tasks)
-        let viewController = TimelineViewController(texts: .thread) { [weak model] in await model?.refresh() }
+        let viewController = TimelineViewController(texts: .thread, settings: settings) { [weak model] in await model?.refresh() }
         let controller = ThreadController(model: model, focusID: focus.id, viewController: viewController)
         viewController.lifetimeOwner = controller
         return (controller, viewController)

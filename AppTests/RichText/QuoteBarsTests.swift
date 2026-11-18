@@ -19,7 +19,7 @@ struct QuoteBarsTests {
         direction: UISemanticContentAttribute = .unspecified
     ) -> LinkLabel {
         let text = RichTextRenderer(
-            font: .preferredFont(forTextStyle: .body), textColor: .label, indentPerLevel: indent, quoteBarWidth: barWidth ?? self.barWidth,
+            font: .preferredFont(forTextStyle: .body), textColor: .label, settings: AppDependencies.settings, indentPerLevel: indent, quoteBarWidth: barWidth ?? self.barWidth,
             emojiImages: .offline, language: "ja"
         ).render(RichText(blocks: blocks))
         let label = LinkLabel()
@@ -112,7 +112,7 @@ struct QuoteBarsTests {
     /// 字下げは、本文の文字の大きさに合わせて伸び縮みする。文字を大きくしても、線とすき間が文字に比べて詰まらない。
     @Test func indentScalesWithFontSize() throws {
         func indent(fontSize: CGFloat) throws -> CGFloat {
-            let text = RichTextRenderer(font: .systemFont(ofSize: fontSize), textColor: .label, emojiImages: .offline, language: "ja")
+            let text = RichTextRenderer(font: .systemFont(ofSize: fontSize), textColor: .label, settings: AppDependencies.settings, emojiImages: .offline, language: "ja")
                 .render(RichText(blocks: [block("引用", quoteLevel: 1)]))
             return try #require(text.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle).headIndent
         }

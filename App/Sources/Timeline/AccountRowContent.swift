@@ -126,7 +126,7 @@ extension TimelineViewController {
     func accountConfiguration(for account: Account, base: UIListContentConfiguration) -> AccountRowConfiguration {
         let language = settings.glyphLanguageIdentifier()
         let nameFont = base.textProperties.font.fontDescriptor.withSymbolicTraits(.traitBold).map { UIFont(descriptor: $0, size: 0) } ?? base.textProperties.font
-        let nameRenderer = RichTextRenderer(font: nameFont, textColor: base.textProperties.color, emojiImages: emojiImages, language: language)
+        let nameRenderer = RichTextRenderer(font: nameFont, textColor: base.textProperties.color, settings: settings, emojiImages: emojiImages, language: language)
         let handle = NSAttributedString(string: "@\(account.acct)", attributes: [
             .font: base.secondaryTextProperties.font,
             .foregroundColor: UIColor.secondaryLabel,

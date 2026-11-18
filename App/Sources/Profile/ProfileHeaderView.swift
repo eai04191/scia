@@ -216,7 +216,8 @@ final class ProfileHeaderView: UIView {
     /// ヘッダー画像の上なら場所を取らない。添付ファイルのALTのバッジと同じ見た目にする。
     private let followedByBadge = PaddedLabel()
     private let noteLabel = LinkLabel()
-    private let privateNoteView = ProfilePrivateNoteView()
+    private let privateNoteView: ProfilePrivateNoteView
+    private let settings: AppSettings
     /// 自分にしか見えないメモを余白付きで包んだもの。メモがなければ、余白ごと隠す。
     private var privateNoteContainer: UIView?
     private let fieldsStack = UIStackView()
@@ -287,12 +288,15 @@ final class ProfileHeaderView: UIView {
         content?.usesAvatarAccent == false ? nil : avatarAccent
     }
 
-    init(emojiImages: EmojiImageStore<UIImage>, mediaImages: MediaImageStore<UIImage>, avatarImages: AvatarImageStore<UIImage>) {
+    /// - Parameter settings: 開いたアカウントの設定。中身は窓に載る前に組むことがあるので、窓からではなくここから読む。
+    init(emojiImages: EmojiImageStore<UIImage>, mediaImages: MediaImageStore<UIImage>, avatarImages: AvatarImageStore<UIImage>, settings: AppSettings) {
         self.emojiImages = emojiImages
         self.mediaImages = mediaImages
+        self.settings = settings
         avatarView = AvatarView(store: avatarImages)
-        pinnedShelf = ProfilePinnedShelfView(emojiImages: emojiImages, mediaImages: mediaImages)
-        endorsementsShelf = ProfileEndorsementsShelfView(emojiImages: emojiImages, avatarImages: avatarImages)
+        privateNoteView = ProfilePrivateNoteView(settings: settings)
+        pinnedShelf = ProfilePinnedShelfView(emojiImages: emojiImages, mediaImages: mediaImages, settings: settings)
+        endorsementsShelf = ProfileEndorsementsShelfView(emojiImages: emojiImages, avatarImages: avatarImages, settings: settings)
         super.init(frame: .zero)
         configureSubviews()
     }
@@ -679,7 +683,7 @@ final class ProfileHeaderView: UIView {
     /// 画像のタップに選んだ操作を行う。既定（開く）なら、今のタップの処理のまま開く。決まりはdocs/object-actions.mdにある。
     private func imageTapped(_ image: ProfileImage, gesture: UITapGestureRecognizer) {
         let interaction = imageMenuInteractions[image]
-        guard !ObjectEntity.media.performsPrimary(.tap), let interaction, let view = gesture.view else {
+        guard !ObjectEntity.media.performsPrimary(.tap, in: self), let interaction, let view = gesture.view else {
             open(image)
             return
         }
@@ -760,12 +764,12 @@ final class ProfileHeaderView: UIView {
         let boldTitle = title.fontDescriptor.withSymbolicTraits(.traitBold).map { UIFont(descriptor: $0, size: 0) } ?? title
         let animatedEmojis = content.animatesCustomEmojis ? emojiImages : nil
         nameLabel.emojiImages = animatedEmojis
-        nameLabel.attributedText = RichTextRenderer(font: boldTitle, textColor: .label, emojiImages: emojiImages, language: content.glyphLanguage)
+        nameLabel.attributedText = RichTextRenderer(font: boldTitle, textColor: .label, settings: settings, emojiImages: emojiImages, language: content.glyphLanguage)
             .render(.plain(account.displayNameOrUsername, emojis: account.emojis))
         acctButton.configuration?.attributedTitle = AttributedString(acctText(of: account))
 
         let body = UIFont.preferredFont(forTextStyle: .body)
-        let note = RichTextRenderer(font: body, textColor: .label, paragraphSpacing: 6, emojiImages: emojiImages, language: content.glyphLanguage).render(.profileNote(account.note, emojis: account.emojis))
+        let note = RichTextRenderer(font: body, textColor: .label, settings: settings, paragraphSpacing: 6, emojiImages: emojiImages, language: content.glyphLanguage).render(.profileNote(account.note, emojis: account.emojis))
         noteLabel.emojiImages = animatedEmojis
         noteLabel.attributedText = note
         noteMeasuredWidth = nil
@@ -891,14 +895,14 @@ final class ProfileHeaderView: UIView {
             let nameLabel = EmojiLabel()
             nameLabel.numberOfLines = 0
             nameLabel.emojiImages = animatedEmojis
-            nameLabel.attributedText = RichTextRenderer(font: nameFont, textColor: .secondaryLabel, emojiImages: emojiImages, language: language)
+            nameLabel.attributedText = RichTextRenderer(font: nameFont, textColor: .secondaryLabel, settings: settings, emojiImages: emojiImages, language: language)
                 .render(.plain(field.name, emojis: account.emojis))
             let valueLabel = LinkLabel()
             valueLabel.numberOfLines = 0
             valueLabel.emojiImages = animatedEmojis
             valueLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
             valueLabel.hashtagAccount = account
-            let value = NSMutableAttributedString(attributedString: RichTextRenderer(font: valueFont, textColor: .label, emojiImages: emojiImages, language: language)
+            let value = NSMutableAttributedString(attributedString: RichTextRenderer(font: valueFont, textColor: .label, settings: settings, emojiImages: emojiImages, language: language)
                 .render(.profileField(field.value, emojis: account.emojis)))
             if field.verifiedAt != nil,
                let check = UIImage(systemName: "checkmark.seal.fill", withConfiguration: UIImage.SymbolConfiguration(font: valueFont, scale: .small)) {

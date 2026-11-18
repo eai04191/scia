@@ -49,7 +49,7 @@ enum HDREmojiCatalog {
         let emoji = CustomEmoji(shortcode: "hdr_circle", url: url, staticUrl: url)
         let renderer = RichTextRenderer(
             font: .preferredFont(forTextStyle: .largeTitle),
-            textColor: .label,
+            textColor: .label, settings: AppDependencies.settings,
             emojiImages: AppDependencies.emojiImages,
             language: "ja"
         )

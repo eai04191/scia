@@ -12,7 +12,7 @@ final class AltTextViewController: UIViewController {
     /// システムの翻訳シートを出している、または出そうとしている。
     var isTranslationPresented: Bool { translation.isPresented }
 
-    init(text: String, settings: AppSettings = AppDependencies.settings) {
+    init(text: String, settings: AppSettings) {
         self.text = text
         self.settings = settings
         super.init(nibName: nil, bundle: nil)
@@ -56,8 +56,8 @@ final class AltTextViewController: UIViewController {
     }
 
     /// 半分の高さのシートで出し、引き上げると全画面にする。
-    static func sheet(text: String) -> UINavigationController {
-        let navigation = UINavigationController(rootViewController: AltTextViewController(text: text))
+    static func sheet(text: String, settings: AppSettings) -> UINavigationController {
+        let navigation = UINavigationController(rootViewController: AltTextViewController(text: text, settings: settings))
         if let sheet = navigation.sheetPresentationController {
             sheet.detents = [.medium(), .large()]
             sheet.prefersGrabberVisible = true

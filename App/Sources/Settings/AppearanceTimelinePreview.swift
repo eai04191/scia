@@ -129,7 +129,7 @@ extension TimelineViewController {
     /// 見本のメンションやハッシュタグの行き先は実在しないので、開かない。
     /// 自分のフィルターに一致した自分の投稿の注記や、自分の投稿への通知を見せるため、見本の`myAccountID`のアカウントを自分として組む。
     static func appearancePreview(texts: Texts, filterContext: FilterResult.Context, myAccountID: String, tuning: TuningStore, settings: AppSettings) -> TimelineViewController {
-        let timeline = TimelineViewController(texts: texts, refresh: {}, tuning: tuning, settings: settings)
+        let timeline = TimelineViewController(texts: texts, settings: settings, refresh: {}, tuning: tuning)
         timeline.isAppearancePreview = true
         // 見本の絵文字のリアクションと「＋」を、ログインしているサーバーによらず出す。押しても何もしない。
         timeline.capabilities.supportsEmojiReactions = true

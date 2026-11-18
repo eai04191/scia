@@ -115,7 +115,7 @@ struct TranslationArrivalTests {
 
     /// 引用の段落から始まる本文では、マークの空きも引用の縦線の属性を持つ。縦線は行の先頭の文字の属性で決まる。
     @Test func translationMarkKeepsQuoteBars() {
-        var renderer = RichTextRenderer(font: .systemFont(ofSize: 15), textColor: .label, emojiImages: .offline, language: "ja")
+        var renderer = RichTextRenderer(font: .systemFont(ofSize: 15), textColor: .label, settings: AppDependencies.settings, emojiImages: .offline, language: "ja")
         let quote = RichText(blocks: [RichText.Block(inlines: [.text("引用", [])], quoteLevel: 1)])
         let plain = renderer.render(quote)
         renderer.marksTranslation = true
@@ -128,7 +128,7 @@ struct TranslationArrivalTests {
 
     /// 絵文字だけの本文には訳す語がないので、マークの空きを足さない。文字のない本文にも足さない。
     @Test func rendererDoesNotMarkBodyWithoutWords() {
-        var renderer = RichTextRenderer(font: .systemFont(ofSize: 15), textColor: .label, emojiImages: .offline, language: "ja")
+        var renderer = RichTextRenderer(font: .systemFont(ofSize: 15), textColor: .label, settings: AppDependencies.settings, emojiImages: .offline, language: "ja")
         renderer.marksTranslation = true
 
         #expect(!renderer.render(.plain("😀", emojis: [])).hasTranslationMark)
@@ -138,7 +138,7 @@ struct TranslationArrivalTests {
 
     /// テキストの選択では、マークの空きを選んだ範囲に入れない。
     @Test func selectionExcludesTranslationMark() {
-        var renderer = RichTextRenderer(font: .systemFont(ofSize: 15), textColor: .label, emojiImages: .offline, language: "ja")
+        var renderer = RichTextRenderer(font: .systemFont(ofSize: 15), textColor: .label, settings: AppDependencies.settings, emojiImages: .offline, language: "ja")
         renderer.marksTranslation = true
         let view = SelectableTextView(text: renderer.render(.plain("訳文の本文", emojis: [])))
 

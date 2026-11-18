@@ -20,7 +20,7 @@ struct AnnouncementsViewControllerTests {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
         window.frame = CGRect(x: 0, y: 0, width: 390, height: 600)
-        let controller = AnnouncementsViewController(model: model, completion: TextInputCompletion(completion: ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)), recentEmojis: nil))
+        let controller = AnnouncementsViewController(model: model, completion: TextInputCompletion(completion: ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)), recentEmojis: nil, settings: AppDependencies.settings), settings: AppDependencies.settings)
         window.rootViewController = AnnouncementsNavigationController(rootViewController: controller)
         window.isHidden = false
         window.layoutIfNeeded()
@@ -42,8 +42,8 @@ struct AnnouncementsViewControllerTests {
         let operations = AnnouncementsModel.Operations(list: { AnnouncementList(announcements: []) }, dismiss: { _ in }, addReaction: { _, _ in }, removeReaction: { _, _ in })
         func controller(isEmbedded: Bool) -> AnnouncementsViewController {
             let model = AnnouncementsModel(operations: operations, streamingHub: nil, tasks: TaskScope())
-            let completion = TextInputCompletion(completion: ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)), recentEmojis: nil)
-            return AnnouncementsViewController(model: model, completion: completion, isEmbedded: isEmbedded)
+            let completion = TextInputCompletion(completion: ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)), recentEmojis: nil, settings: AppDependencies.settings)
+            return AnnouncementsViewController(model: model, completion: completion, isEmbedded: isEmbedded, settings: AppDependencies.settings)
         }
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)

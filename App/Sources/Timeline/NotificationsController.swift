@@ -5,7 +5,7 @@ import UIKit
 /// 通知の画面を組み立て、読み込みとストリーミングを受け持つ`NotificationsModel`とTimelineViewControllerをつなぐ。
 @MainActor
 final class NotificationsController {
-    private(set) lazy var viewController = TimelineViewController(texts: .notifications) { [weak model] in await model?.refresh() }
+    private(set) lazy var viewController = TimelineViewController(texts: .notifications, settings: settings) { [weak model] in await model?.refresh() }
     /// 読み込み、ストリーミング、既読位置を受け持つ。
     let model: NotificationsModel
     /// 未読の数が変わったときに呼ぶ。タブのバッジに出す。2つめの値は、実際はもっと多いかもしれないこと。
@@ -30,12 +30,15 @@ final class NotificationsController {
     /// 開いている、保留中の通知の1人分の画面。通知のタイムラインと同じく、投稿の操作や削除を反映する。
     private let accountScreens = NSHashTable<AccountNotificationsController>.weakObjects()
 
+    private let settings: AppSettings
+
     init(
         session: AccountSession,
         tuning: TuningStore = AppDependencies.tuning,
         clock: any Clock<Duration> = AppDependencies.clock,
         now: @escaping () -> Date = AppDependencies.now
     ) {
+        settings = session.settings
         model = NotificationsModel(session: session, tuning: tuning, clock: clock, now: now, backgroundTime: BackgroundTime.request)
         model.display = viewController
         model.streamingStatus = streamingStatusView

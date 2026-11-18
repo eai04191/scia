@@ -42,44 +42,46 @@ struct RichTextRenderer: Sendable {
     /// 文字列は描くビューより先に組むので、ビューのtraitではなく、組むときのtraitから読む。iPhoneの画面は1つなので、どのビューでも同じ値になる。
     var displayScale: CGFloat
 
+    /// - Parameter settings: 描く窓に開いたアカウントの設定。リンクの下線、引用の線、絵文字の書体とアニメーションの既定を、ここから決める。
     @MainActor
     init(
         font: UIFont,
         textColor: UIColor,
+        settings: AppSettings,
         secondaryColor: UIColor = .secondaryLabel,
         linkColor: UIColor = .tintColor,
-        underlinesLinks: Bool = AppDependencies.settings.accentColor.underlinesLinks,
+        underlinesLinks: Bool? = nil,
         paragraphSpacing: CGFloat = 0,
         lineSpacing: CGFloat = 0,
         indentPerLevel: CGFloat? = nil,
-        quoteBarWidth: CGFloat = AppDependencies.settings.value(of: AppearanceCatalog.quoteBarWidth),
+        quoteBarWidth: CGFloat? = nil,
         emojiScale: CGFloat = 1,
         unicodeEmojiScale: CGFloat = 1,
         emojiOnly: EmojiOnlyEnlargement? = nil,
         showsCustomEmojis: Bool = true,
         emojiImages: EmojiImageStore<UIImage>,
-        animatesEmojis: Bool = AnimatedImagePlayback.animatesCustomEmojis(AppDependencies.settings),
+        animatesEmojis: Bool? = nil,
         language: String,
-        emojiStyle: EmojiStyle = AppDependencies.settings.appearance.emojiStyle,
+        emojiStyle: EmojiStyle? = nil,
         displayScale: CGFloat = UITraitCollection.current.displayScale
     ) {
         self.font = font
         self.textColor = textColor
         self.secondaryColor = secondaryColor
         self.linkColor = linkColor
-        self.underlinesLinks = underlinesLinks
+        self.underlinesLinks = underlinesLinks ?? settings.accentColor.underlinesLinks
         self.paragraphSpacing = paragraphSpacing
         self.lineSpacing = lineSpacing
-        self.indentPerLevel = indentPerLevel ?? font.pointSize * AppDependencies.settings.value(of: AppearanceCatalog.quoteIndent)
-        self.quoteBarWidth = quoteBarWidth
+        self.indentPerLevel = indentPerLevel ?? font.pointSize * settings.value(of: AppearanceCatalog.quoteIndent)
+        self.quoteBarWidth = quoteBarWidth ?? settings.value(of: AppearanceCatalog.quoteBarWidth)
         self.emojiScale = emojiScale
         self.unicodeEmojiScale = unicodeEmojiScale
         self.emojiOnly = emojiOnly
         self.showsCustomEmojis = showsCustomEmojis
         self.emojiImages = .store(emojiImages)
-        emojiChoice = emojiImages.choice(animates: animatesEmojis)
+        emojiChoice = emojiImages.choice(animates: animatesEmojis ?? AnimatedImagePlayback.animatesCustomEmojis(settings))
         self.language = language
-        self.emojiStyle = emojiStyle
+        self.emojiStyle = emojiStyle ?? settings.appearance.emojiStyle
         self.displayScale = displayScale
     }
 

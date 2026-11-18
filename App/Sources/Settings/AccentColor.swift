@@ -84,22 +84,6 @@ class TintFollowingButton: UIButton {
     }
 }
 
-@MainActor
-enum AccentColorTint {
-    /// 選んだアクセントカラーを`window`のティントカラーにする。選び直すと塗り直すので、開いている画面にもすぐ効く。
-    /// `window`は弱く持ち、なくなったら塗り直すのをやめる。
-    static func follow(_ window: UIWindow, settings: AppSettings) {
-        withObservationTracking {
-            window.tintColor = settings.accentColor.uiColor
-        } onChange: { [weak window] in
-            Task(.withoutRequests) { @MainActor in
-                guard let window else { return }
-                follow(window, settings: settings)
-            }
-        }
-    }
-}
-
 /// 表示の分類から入る、アクセントカラーを選ぶ行。
 struct AccentColorPicker: View {
     @Binding var selection: AccentColorChoice

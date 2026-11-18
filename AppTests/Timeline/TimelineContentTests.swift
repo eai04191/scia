@@ -8,7 +8,7 @@ import UIKit
 @Suite(.scratch, .serialized, .failureState)
 struct TimelineContentTests {
     private func makeViewController() -> TimelineViewController {
-        TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: .isolated())
+        TimelineViewController(settings: .isolated(), refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
     }
 
     @Test func bodyIsRenderedFromHTML() throws {
@@ -75,7 +75,7 @@ struct TimelineContentTests {
         let notification = MastodonNotification(id: "1", type: .reblog, createdAt: Date(timeIntervalSince1970: 0), account: status.account, status: status)
         let settings = AppSettings.isolated()
         settings.setValue(5, for: NotificationAppearanceCatalog.quotedBodyLines)
-        let vc = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: settings)
+        let vc = TimelineViewController(settings: settings, refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
 
         let content = try #require(vc.contentConfiguration(for: notification, base: .cell()) as? NotificationContentConfiguration)
 

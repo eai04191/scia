@@ -59,7 +59,7 @@ struct AppearanceEditorTests {
     @Test func builderUsesBodyText() throws {
         let settings = try makeSettings()
         settings.setValue(4, for: AppearanceCatalog.bodyText)
-        let timeline = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: settings)
+        let timeline = TimelineViewController(settings: settings, refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
         let status = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
         let configuration = timeline.contentConfiguration(for: status, base: .cell())
         let font = try #require(configuration.body.attribute(.font, at: 0, effectiveRange: nil) as? UIFont)

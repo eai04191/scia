@@ -11,8 +11,8 @@ enum TimelineCatalog {
     /// 投稿が1件もないときにタイムラインの全面に出す表示。
     @MainActor
     static func emptyStates() -> [CatalogState] {
-        let home = TimelineViewController(texts: .home, refresh: {})
-        let notifications = TimelineViewController(texts: .notifications, refresh: {})
+        let home = TimelineViewController(texts: .home, settings: AppDependencies.settings, refresh: {})
+        let notifications = TimelineViewController(texts: .notifications, settings: AppDependencies.settings, refresh: {})
         func state(_ title: String, _ controller: TimelineViewController, _ state: TimelineViewController.ContentState) -> CatalogState {
             CatalogState(title: title) {
                 CatalogFrame.bordered(UIContentUnavailableView(configuration: controller.contentUnavailableConfiguration(for: state)), height: 280)
@@ -53,8 +53,8 @@ enum TimelineCatalog {
     /// 投稿の代わりに出す行。
     @MainActor
     static func unreadableStates() -> [CatalogState] {
-        let home = TimelineViewController(texts: .home, refresh: {})
-        let notifications = TimelineViewController(texts: .notifications, refresh: {})
+        let home = TimelineViewController(texts: .home, settings: AppDependencies.settings, refresh: {})
+        let notifications = TimelineViewController(texts: .notifications, settings: AppDependencies.settings, refresh: {})
         func row(_ title: String, _ configuration: UIListContentConfiguration) -> CatalogState {
             CatalogState(title: title) { CatalogFrame.bordered(UIListContentView(configuration: configuration)) }
         }
@@ -68,7 +68,7 @@ enum TimelineCatalog {
 
     @MainActor
     static func gapStates() -> [CatalogState] {
-        let home = TimelineViewController(texts: .home, refresh: {})
+        let home = TimelineViewController(texts: .home, settings: AppDependencies.settings, refresh: {})
         func row(_ title: String, _ configuration: UIListContentConfiguration) -> CatalogState {
             CatalogState(title: title) { CatalogFrame.bordered(UIListContentView(configuration: configuration)) }
         }

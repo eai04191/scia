@@ -59,7 +59,7 @@ final class ComposeCompletionList: UIView {
         rows.map(height(of:)).reduce(0, +) + verticalInset * 2
     }
 
-    init(settings: AppSettings = AppDependencies.settings, emojiImages: EmojiImageStore<UIImage> = AppDependencies.emojiImages) {
+    init(settings: AppSettings, emojiImages: EmojiImageStore<UIImage> = AppDependencies.emojiImages) {
         super.init(frame: .zero)
         model.settings = settings
         model.emojiImages = emojiImages
@@ -395,7 +395,7 @@ private struct CompletionRowView: View {
                 AvatarImage(url: account.avatarStatic ?? account.avatar, shape: model.settings.appearance.avatarShape)
             } title: {
                 RichTextLabel(numberOfLines: 1, emojiImages: model.emojiImages, animatesEmojis: model.settings.animatesCustomEmojis, fadesTail: true) { [model] in
-                    RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, emojiImages: model.emojiImages, language: model.settings.glyphLanguageIdentifier())
+                    RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, settings: model.settings, emojiImages: model.emojiImages, language: model.settings.glyphLanguageIdentifier())
                         .render(.plain(account.displayNameOrUsername, emojis: account.emojis))
                 }
             } subtitle: {
@@ -410,7 +410,7 @@ private struct CompletionRowView: View {
                 AvatarImage(url: mention.avatar, shape: model.settings.appearance.avatarShape)
             } title: {
                 RichTextLabel(numberOfLines: 1, emojiImages: model.emojiImages, animatesEmojis: model.settings.animatesCustomEmojis, fadesTail: true) { [model] in
-                    RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, emojiImages: model.emojiImages, language: model.settings.glyphLanguageIdentifier())
+                    RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, settings: model.settings, emojiImages: model.emojiImages, language: model.settings.glyphLanguageIdentifier())
                         .render(.plain(mention.displayNameOrUsername, emojis: mention.emojis))
                 }
             } subtitle: {

@@ -257,7 +257,7 @@ final class LinkCardView: UIButton {
 
     /// 画像のタップに選んだ操作を行う。ぼかしていればぼかしを外し、既定（開く）なら今のタップの処理のまま開く。決まりはdocs/object-actions.mdにある。
     @objc private func imageTapped(_ gesture: UITapGestureRecognizer) {
-        guard !isCoveringImage, !ObjectEntity.media.performsPrimary(.tap), let imageMenuInteraction else {
+        guard !isCoveringImage, !ObjectEntity.media.performsPrimary(.tap, in: self), let imageMenuInteraction else {
             openImage()
             return
         }

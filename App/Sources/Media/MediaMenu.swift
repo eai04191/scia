@@ -95,9 +95,10 @@ final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
     /// タップでメニューを出すときは、画像を持ち上げずに押した位置にメニューだけを出す。
     func target(at point: CGPoint) -> ObjectTarget<MediaMenuItem, MediaMenuCommand>? {
         let host = host
-        guard offersMenu(point), host?.offersMediaActions != false else { return nil }
+        guard let view, offersMenu(point), host?.offersMediaActions != false else { return nil }
         return ObjectTarget(
             entity: .media,
+            settings: view.traitCollection.appSettings,
             primary: { [open] _ in open() },
             buildMenu: { [weak self] groups in self?.buildMenu(at: point, groups: groups) },
             lifecycle: MenuLifecycle(willShow: { host?.mediaMenuWillShow() }, didHide: { host?.mediaMenuDidHide() }),

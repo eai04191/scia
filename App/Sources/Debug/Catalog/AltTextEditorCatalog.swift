@@ -25,7 +25,7 @@ enum AltTextEditorCatalog {
     ///   - contrast: コントラストの設定。nilなら端末の設定に従う。
     ///   - contentSize: 文字の大きさの設定。nilなら端末の設定に従う。
     private static func editor(_ text: String, limit: Int = 1500, contrast: UIAccessibilityContrast? = nil, contentSize: UIContentSizeCategory? = nil) -> UIView {
-        let editor = AltTextEditorView()
+        let editor = AltTextEditorView(settings: AppDependencies.settings)
         if let contrast {
             editor.traitOverrides.accessibilityContrast = contrast
         }

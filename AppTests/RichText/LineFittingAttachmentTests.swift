@@ -18,7 +18,7 @@ struct LineFittingAttachmentTests {
         let emoji = CustomEmoji(shortcode: "wide", url: url, staticUrl: url)
         let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 10 * aspect, height: 10)).image { _ in }.pngData())
         let store = EmojiImageStore { _ in png }
-        var renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: store, language: "ja")
+        var renderer = RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, emojiImages: store, language: "ja")
         renderer.emojiOnly = emojiOnly ? EmojiOnlyEnlargement(scale: 2, limit: 10) : nil
         let text = RichText(blocks: blocks(emoji))
         _ = renderer.render(text)

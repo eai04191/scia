@@ -33,7 +33,7 @@ struct HiddenPostPartsTests {
     private func timeline(_ change: (AppSettings) -> Void) -> TimelineViewController {
         let settings = AppSettings.isolated()
         change(settings)
-        return TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: settings)
+        return TimelineViewController(settings: settings, refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
     }
 
     /// タイムラインのセルと同じく高さを測って並べる。
@@ -260,7 +260,7 @@ struct HiddenPostPartsTests {
     @Test func hiddenEmbedAvatarHasNoSize() throws {
         let settings = AppSettings.isolated()
         settings.appearance.showsEmbedAvatar = false
-        let timeline = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: settings)
+        let timeline = TimelineViewController(settings: settings, refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
         let content = timeline.postContentBuilder.quote(try status(), spoiler: nil, media: nil, base: .cell())
 
         #expect(content.avatarSize == 0)

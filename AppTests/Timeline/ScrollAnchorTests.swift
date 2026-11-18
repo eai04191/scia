@@ -314,7 +314,7 @@ struct ScrollAnchorTests {
             let attachment = MediaAttachment(id: "1", type: .image, url: URL(string: "https://x.example/1.png"), previewUrl: nil)
             let drag = DragToDismiss(distanceThreshold: 0.12, velocityThreshold: 0.8, smallestScale: 0.6, fadeDistance: 0.5, restoreDuration: 0.35)
             let timing = MediaViewerController.Timing(openDuration: 0.1, closeDuration: 0.1, dragCloseBounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5, videoControlsHideDelay: 3, videoSkipEffectDuration: 0.3, doubleTapZoomDuration: 0.2)
-            try await harness.viewController.presentForTesting(MediaViewerController(attachments: [attachment], startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, sourceTile: { _ in nil }))
+            try await harness.viewController.presentForTesting(MediaViewerController(attachments: [attachment], startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, settings: AppDependencies.settings, sourceTile: { _ in nil }))
         } else {
             harness.viewController.setCoveredByInAppBrowser(true)
         }
@@ -390,7 +390,7 @@ struct ScrollAnchorTests {
     /// 画面を読み込む前に覆う高さを渡しても、画面は読み込まない。読み込むと、投稿ボタンなどを付ける設定より先に画面ができてしまう。
     /// 渡した高さは、画面を読み込んだあとに反映する。
     @Test func coveringBeforeViewLoadsDoesNotLoadView() throws {
-        let viewController = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, settings: .isolated())
+        let viewController = TimelineViewController(settings: .isolated(), refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline)
         let navigation = ContentNavigationController(rootViewController: viewController)
 
         navigation.coveredBottomHeight = 400

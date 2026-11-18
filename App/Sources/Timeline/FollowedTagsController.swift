@@ -6,7 +6,7 @@ import SciaCore
 /// 行は検索の結果のハッシュタグの行と同じもので、押したときと長押ししたときの動きは、画面を組むセッションが決める。
 @MainActor
 final class FollowedTagsController {
-    private(set) lazy var viewController = TimelineViewController(texts: .followedTags) { [weak self] in await self?.refresh() }
+    private(set) lazy var viewController = TimelineViewController(texts: .followedTags, settings: settings) { [weak self] in await self?.refresh() }
     private let store: FollowedTagsStore
     private let followedTags: LatestValueCache<[Hashtag]>
     /// この画面が始めた処理の持ち主。セッションの持ち主の子で、ログアウトやアカウントの切り替えで止まる。
@@ -17,7 +17,10 @@ final class FollowedTagsController {
 
     /// `session`の部品で作り、`session`に登録する。電波の回復などのやり直しと、トークンが無効と分かったときに止めるのを`session`から受け取る。
     /// - Parameter followedTags: ハッシュタグのメニューがフォローしているかを決めるのと同じ、フォロー中のハッシュタグ。どちらで読み直しても、もう一方に効く。
+    private let settings: AppSettings
+
     init(followedTags: LatestValueCache<[Hashtag]>, session: AccountSession) {
+        settings = session.settings
         tasks = session.tasks.child()
         self.followedTags = followedTags
         // 読み直しは、始める側が通信の目的を名乗って始める（`loadNow`）。ここでは、いちばん新しい読み直しの結果を受け取る。

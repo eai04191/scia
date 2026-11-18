@@ -5,6 +5,7 @@ import UIKit
 
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
+    private var windowSettings: WindowSettings?
     /// 窓に出しているアカウントの画面一式。替えたり外したりしたら、前のセッションで始めた処理を止める。
     /// ログアウト、アカウントの切り替え、ログイン画面に戻す、窓を閉じるのどの経路でも、ここを通れば止まる。
     private var session: SessionController? {
@@ -30,10 +31,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         let window = ShakeDetectingWindow(windowScene: windowScene)
         window.useAppLanguage()
-        AccentColorTint.follow(window, settings: AppDependencies.settings)
-        MediaDynamicRangeTraits.follow(window, settings: AppDependencies.settings, { $0.mediaDynamicRange }) { window, range in
-            window.traitOverrides.imageDynamicRange = range
-        }
+        let windowSettings = WindowSettings(window: window)
+        windowSettings.use(AppDependencies.settings)
+        self.windowSettings = windowSettings
         self.window = window
         #if DEBUG
         if let scenario = ScenarioMode.server {
@@ -251,6 +251,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         let replacesSession = self.session != nil
         self.session = session
+        windowSettings?.use(session.settings)
         // アカウントを切り替えたときは、前のアカウントの画面から薄くして入れ替える。起動したときは、ローンチ画面から切り替える。
         let duration = replacesSession ? AppDependencies.tuning.value(of: TuningCatalog.accountSwitchDuration) : 0
         if let window, duration > 0 {
@@ -525,6 +526,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func showLogin(errorMessage: String?) {
         // ログイン画面に替えたら、出していたアカウントの処理を止める。
         session = nil
+        windowSettings?.use(AppDependencies.settings)
         isShowingAccountsLoadFailure = false
         let model = LoginModel(oauth: AppDependencies.oauth, accountDomains: accountDomains) { [weak self] credential in
             guard let accounts = self?.accounts else {

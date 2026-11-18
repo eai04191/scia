@@ -10,6 +10,7 @@ struct ListMemberSearchView: View {
     let initialMemberIDs: Set<String>
     /// 足すか外す。送るのはメンバーの画面の持ち主の子で、失敗はメンバーの画面がチップで知らせる。終わったら、サーバーが受け付けたかを渡す。
     let change: @MainActor (_ account: Account, _ adds: Bool, _ completion: @escaping @MainActor (Bool) -> Void) -> Void
+    let settings: AppSettings
     let dismiss: () -> Void
 
     @State private var query = ""
@@ -81,7 +82,6 @@ struct ListMemberSearchView: View {
     /// 行は、検索の候補の人の行と同じ部品で描く。
     private func row(_ account: Account) -> some View {
         let isMember = memberIDs.contains(account.id)
-        let settings = AppDependencies.settings
         let emojiImages = AppDependencies.emojiImages
         return Button {
             toggle(account)
@@ -90,7 +90,7 @@ struct ListMemberSearchView: View {
                 AvatarImage(url: account.avatarStatic ?? account.avatar, shape: settings.appearance.avatarShape)
             } title: {
                 RichTextLabel(numberOfLines: 1, emojiImages: emojiImages, animatesEmojis: settings.animatesCustomEmojis, fadesTail: true) {
-                    RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
+                    RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, settings: settings, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
                         .render(.plain(account.displayNameOrUsername, emojis: account.emojis))
                 }
             } subtitle: {
@@ -133,13 +133,15 @@ extension ListMemberSearchView {
     static func sheet(
         search: @escaping @MainActor (String) async throws -> [Account],
         initialMemberIDs: Set<String>,
+        settings: AppSettings,
         change: @escaping @MainActor (_ account: Account, _ adds: Bool, _ completion: @escaping @MainActor (Bool) -> Void) -> Void
     ) -> UIViewController {
         weak var presented: UIViewController?
         let controller = UIHostingController(rootView: ListMemberSearchView(
             search: search,
             initialMemberIDs: initialMemberIDs,
-            change: change
+            change: change,
+            settings: settings
         ) {
             presented?.dismiss(animated: true)
         })

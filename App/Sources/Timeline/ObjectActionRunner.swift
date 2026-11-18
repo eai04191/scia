@@ -12,10 +12,10 @@ struct MenuLifecycle {
 }
 
 extension ObjectEntity {
-    /// アプリの設定で、`trigger`に主な操作を選んでいるか。
+    /// `view`の窓に開いたアカウントの設定で、`trigger`に主な操作を選んでいるか。
     @MainActor
-    func performsPrimary(_ trigger: ObjectTrigger) -> Bool {
-        performsPrimary(trigger, settings: AppDependencies.settings)
+    func performsPrimary(_ trigger: ObjectTrigger, in view: UIView) -> Bool {
+        performsPrimary(trigger, settings: view.traitCollection.appSettings)
     }
 }
 
@@ -38,7 +38,7 @@ protocol ObjectActionTarget {
 @MainActor
 struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable, Command>: ObjectActionTarget {
     let entity: ObjectEntity<Item>
-    var settings: AppSettings = AppDependencies.settings
+    var settings: AppSettings
     /// 主な操作がいま行えるか。
     var primaryIsAvailable = true
     /// 主な操作。今のタップの処理で行う。メニューの項目を組んで行うと、開く動きの起点などがタップと違うため。押した部品を渡す。

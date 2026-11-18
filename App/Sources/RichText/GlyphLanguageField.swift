@@ -7,7 +7,7 @@ import UIKit
 struct GlyphLanguageField: UIViewRepresentable {
     let placeholder: String
     @Binding var text: String
-    var settings: AppSettings = AppDependencies.settings
+    var settings: AppSettings
     /// 自動修正、スペルチェック、文頭の大文字。フィルターのキーワードのように、打ったとおりに入れたい欄ではfalse。
     var corrects = true
 

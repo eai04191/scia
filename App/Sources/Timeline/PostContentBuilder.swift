@@ -63,10 +63,10 @@ struct PostContentBuilder {
             actionBarSpacing: settings.value(of: AppearanceCatalog.actionBarSpacing)
         )
         let language = settings.glyphLanguageIdentifier()
-        let primaryRenderer = RichTextRenderer(font: metrics.nameFont, textColor: base.textProperties.color, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
-        let secondaryRenderer = RichTextRenderer(font: typography.font(.nameSecondary), textColor: .secondaryLabel, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
-        let contextRenderer = RichTextRenderer(font: metrics.contextFont, textColor: .secondaryLabel, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
-        let contextSecondaryRenderer = RichTextRenderer(font: typography.font(.contextSecondary), textColor: .secondaryLabel, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
+        let primaryRenderer = RichTextRenderer(font: metrics.nameFont, textColor: base.textProperties.color, settings: settings, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
+        let secondaryRenderer = RichTextRenderer(font: typography.font(.nameSecondary), textColor: .secondaryLabel, settings: settings, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
+        let contextRenderer = RichTextRenderer(font: metrics.contextFont, textColor: .secondaryLabel, settings: settings, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
+        let contextSecondaryRenderer = RichTextRenderer(font: typography.font(.contextSecondary), textColor: .secondaryLabel, settings: settings, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
         let boosterName = Self.joined(spacing: settings.value(of: AppearanceCatalog.contextPartsSpacing), appearance.contextNameStyle.parts.enumerated().map { index, part in
             let renderer = index == 0 ? contextRenderer : contextSecondaryRenderer
             return switch part {
@@ -182,7 +182,7 @@ struct PostContentBuilder {
     /// ボタンは、絵文字の名前で見分ける。Fedibirdは名前でまとめるため、同じ名前のリアクションは1つしか並ばない。
     func reactionChips(for shown: Status, localEmojis: [String: CustomEmoji]) -> [ReactionChipsView.Reaction]? {
         guard !shown.emojiReactions.isEmpty, appearance.showsReactions else { return nil }
-        let renderer = RichTextRenderer(font: PostTypography(settings: settings).font(.reaction), textColor: .label, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
+        let renderer = RichTextRenderer(font: PostTypography(settings: settings).font(.reaction), textColor: .label, settings: settings, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
         return shown.emojiReactions.map { reaction in
             let emoji = reaction.emoji.resolvingImage(in: localEmojis)
             // 画像のないカスタム絵文字（URLが読めなかったもの）は、ショートコードを文字で出す。
@@ -213,7 +213,7 @@ struct PostContentBuilder {
     private func replyContext(_ label: ReplyLabel, font: UIFont, language: String) -> PostContentConfiguration.Context {
         let text = label.title
         let color: UIColor = label == .toMe ? .tintColor : .secondaryLabel
-        let renderer = RichTextRenderer(font: font, textColor: color, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
+        let renderer = RichTextRenderer(font: font, textColor: color, settings: settings, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
         return PostContentConfiguration.Context(
             symbolName: "arrowshape.turn.up.left",
             symbolColor: color,
@@ -322,7 +322,7 @@ struct PostContentBuilder {
         let typography = PostTypography(settings: settings)
         let language = settings.glyphLanguageIdentifier(for: post.language)
         // Xの投稿にカスタム絵文字はないが、翻訳のマークを引用の囲みと同じ大きさにするため、同じ倍率を渡す。
-        let body = translated(RichTextRenderer(font: typography.font(.xPostBody), textColor: .label, emojiScale: settings.value(of: AppearanceCatalog.customEmojiScale), showsCustomEmojis: appearance.showsCustomEmojis, emojiImages: emojiImages, language: language), by: translation)
+        let body = translated(RichTextRenderer(font: typography.font(.xPostBody), textColor: .label, settings: settings, emojiScale: settings.value(of: AppearanceCatalog.customEmojiScale), showsCustomEmojis: appearance.showsCustomEmojis, emojiImages: emojiImages, language: language), by: translation)
         return embed(
             id: "x:\(post.id)",
             header: EmbeddedPostView.Content.Header(
@@ -471,8 +471,8 @@ struct PostContentBuilder {
     private func embedName(_ name: RichText, handle: String, base: UIListContentConfiguration) -> NSAttributedString {
         let nameFont = PostTypography(settings: settings).font(.xPostName)
         let language = settings.glyphLanguageIdentifier()
-        let primary = RichTextRenderer(font: Self.boldFont(nameFont), textColor: base.textProperties.color, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
-        let secondary = RichTextRenderer(font: nameFont, textColor: .secondaryLabel, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
+        let primary = RichTextRenderer(font: Self.boldFont(nameFont), textColor: base.textProperties.color, settings: settings, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
+        let secondary = RichTextRenderer(font: nameFont, textColor: .secondaryLabel, settings: settings, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
         let text = NSMutableAttributedString(attributedString: primary.render(name))
         text.append(secondary.render(.plain(" @\(handle)", emojis: [])))
         return text
@@ -542,7 +542,7 @@ struct PostContentBuilder {
     private func bodyRenderer(of status: Status, font: UIFont, color: UIColor) -> RichTextRenderer {
         RichTextRenderer(
             font: font,
-            textColor: color,
+            textColor: color, settings: settings,
             paragraphSpacing: settings.value(of: AppearanceCatalog.paragraphSpacing),
             lineSpacing: settings.value(of: AppearanceCatalog.bodyLineSpacing),
             indentPerLevel: font.pointSize * settings.value(of: AppearanceCatalog.quoteIndent),

@@ -77,7 +77,7 @@ struct EmbeddedPostTextTests {
     }
 
     private func translating(_ string: String, isTranslated: Bool) -> EmbeddedPostView.Content {
-        var renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: .offline, language: "ja")
+        var renderer = RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, emojiImages: .offline, language: "ja")
         renderer.marksTranslation = true
         var content = embed(text: renderer.render(.plain(string, emojis: [])))
         content.notes = [EmbeddedPostView.Content.Note(text: NSAttributedString(string: "投票", attributes: [.font: font]), isPressable: false)]
@@ -89,9 +89,9 @@ struct EmbeddedPostTextTests {
     @Test func largeUnicodeEmojiBodyIsAsTallAsCustomEmojiBody() throws {
         let url = try #require(URL(string: "https://example.social/emoji/a.png"))
         let parser = MastodonHTMLParser(mentions: [], tags: [], emojis: [CustomEmoji(shortcode: "a", url: url, staticUrl: url)])
-        var unicode = RichTextRenderer(font: font, textColor: .label, emojiImages: .offline, language: "ja")
+        var unicode = RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, emojiImages: .offline, language: "ja")
         unicode.unicodeEmojiScale = 2
-        var custom = RichTextRenderer(font: font, textColor: .label, emojiImages: .offline, language: "ja")
+        var custom = RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, emojiImages: .offline, language: "ja")
         custom.emojiScale = 2
 
         let unicodeHeight = laidOut(embed(text: unicode.render(parser.parse("<p>文😀文<br>次の行</p>")))).bounds.height
@@ -112,7 +112,7 @@ struct EmbeddedPostTextTests {
         )
         var media = MediaGridView.Content(attachments: [attachment], cover: nil, tallestAspectRatio: 0.75, thumbnailPolicy: .offline, spacing: 4)
         media.arrangement = .stack(side: 64)
-        let text = RichTextRenderer(font: font, textColor: .label, emojiImages: .offline, language: "ja").render(.plain("本文の1行目", emojis: []))
+        let text = RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, emojiImages: .offline, language: "ja").render(.plain("本文の1行目", emojis: []))
 
         let view = laidOut(embed(text: text, media: media))
         let grid = try #require(view.mediaGrid)
@@ -138,7 +138,7 @@ struct EmbeddedPostTextTests {
         )
         var media = MediaGridView.Content(attachments: [attachment], cover: nil, tallestAspectRatio: 0.75, thumbnailPolicy: .offline, spacing: 4)
         media.arrangement = .stack(side: 64)
-        var renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: .offline, language: "ja")
+        var renderer = RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, emojiImages: .offline, language: "ja")
         renderer.unicodeEmojiScale = 2
         let text = renderer.render(.plain(String(repeating: "文", count: 60) + "😀", emojis: []))
 

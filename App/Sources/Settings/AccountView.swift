@@ -86,7 +86,7 @@ struct AccountView: View {
                     PostingDefaultsView(model: context.postingDefaults.model, languages: context.postingDefaults.languages)
                 }
                 NavigationLink(SettingsTexts.Filters.title) {
-                    FiltersView(model: context.filters.model, now: context.filters.now)
+                    FiltersView(model: context.filters.model, now: context.filters.now, settings: settings)
                 }
                 if context.showsNotificationPolicy() {
                     NavigationLink(SettingsTexts.NotificationFiltering.title) {
