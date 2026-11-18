@@ -29,6 +29,7 @@ public final class AppSettings {
     public init(store: SettingsStore, target: Target) {
         self.store = store
         self.target = target
+        if case .scope(.account(let handle)) = target { account = handle }
     }
 
     /// 同じ保存先を共有し、アカウントが使うプリセットを読み書きする設定。
@@ -36,9 +37,11 @@ public final class AppSettings {
         AppSettings(store: store, target: .scope(.account(handle)))
     }
 
-    /// 同じ保存先を共有し、決まったプリセットを読み書きする設定。
+    /// 同じ保存先を共有し、決まったプリセットを読み書きする設定。サーバーの設定に従う値は、この設定と同じアカウントのものを読む。
     public func editing(_ preset: PresetID) -> AppSettings {
-        AppSettings(store: store, target: .preset(preset))
+        let editing = AppSettings(store: store, target: .preset(preset))
+        editing.account = account
+        return editing
     }
 
     /// 値を読むプリセット。
@@ -60,11 +63,8 @@ public final class AppSettings {
         return library.name(of: parent) ?? ""
     }
 
-    /// 表示しているアカウント。アプリの設定と、決まったプリセットの設定ではnil。
-    private var account: String? {
-        guard case .scope(.account(let handle)) = target else { return nil }
-        return handle
-    }
+    /// サーバーの設定に従う値を読むアカウント。アカウントの設定と、そこから作った決まったプリセットの設定で持つ。アプリの設定ではnil。
+    @ObservationIgnored private var account: String?
 
     // MARK: プリセットに含める値
 

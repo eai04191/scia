@@ -6,7 +6,7 @@ import UIKit
 /// SwiftUIのPickerのメニューは中のボタンが押下を受けるため、開いたことを外から拾えない。
 struct PopUpChoiceButton<Value: Hashable>: UIViewRepresentable {
     @Binding var selection: Value
-    let options: [(value: Value, title: String)]
+    let options: [(value: Value, title: String, subtitle: String?)]
     let onOpen: () -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -28,7 +28,7 @@ struct PopUpChoiceButton<Value: Hashable>: UIViewRepresentable {
     func updateUIView(_ button: UIButton, context: Context) {
         context.coordinator.onOpen = onOpen
         button.menu = UIMenu(children: options.map { option in
-            UIAction(title: option.title, state: option.value == selection ? .on : .off) { _ in
+            UIAction(title: option.title, subtitle: option.subtitle, state: option.value == selection ? .on : .off) { _ in
                 selection = option.value
             }
         })
@@ -48,7 +48,7 @@ struct PopUpChoiceButton<Value: Hashable>: UIViewRepresentable {
 struct PopUpChoiceRow<Value: Hashable>: View {
     let title: String
     @Binding var selection: Value
-    let options: [(value: Value, title: String)]
+    let options: [(value: Value, title: String, subtitle: String?)]
     var isModified = false
     /// メニューを開いたときに呼ぶ。
     let onOpen: () -> Void

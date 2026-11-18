@@ -215,13 +215,16 @@ public enum AppearanceChoiceControl {
 public struct AppearanceChoiceOptions {
     /// 選択肢の名前。並べる順。
     public let titles: [String]
+    /// 選択肢の名前の下に添える文。`titles`と同じ順で、添えない選択肢はnil。「アカウントの設定に従う」に、今のアカウントの値を添える。
+    public let subtitles: (AppSettings) -> [String?]
     /// 今選んでいる選択肢の番号。
     public let selectedIndex: (AppSettings) -> Int
     /// `titles`の番号の選択肢を選ぶ。
     public let select: (Int, AppSettings) -> Void
 
-    private init(titles: [String], selectedIndex: @escaping (AppSettings) -> Int, select: @escaping (Int, AppSettings) -> Void) {
+    private init(titles: [String], subtitles: @escaping (AppSettings) -> [String?], selectedIndex: @escaping (AppSettings) -> Int, select: @escaping (Int, AppSettings) -> Void) {
         self.titles = titles
+        self.subtitles = subtitles
         self.selectedIndex = selectedIndex
         self.select = select
     }
@@ -229,14 +232,15 @@ public struct AppearanceChoiceOptions {
     /// 選んだあとに、選んだ値を`field`の選択肢としてプリセットに書く。
     func pinning(_ field: String) -> Self {
         let select = select
-        return Self(titles: titles, selectedIndex: selectedIndex) { index, settings in
+        return Self(titles: titles, subtitles: subtitles, selectedIndex: selectedIndex) { index, settings in
             select(index, settings)
             settings.pinAppearanceChoice(field)
         }
     }
 
-    init<Value: Equatable>(_ keyPath: ReferenceWritableKeyPath<AppSettings, Value>, _ options: [(value: Value, title: String)]) {
+    init<Value: Equatable>(_ keyPath: ReferenceWritableKeyPath<AppSettings, Value>, _ options: [(value: Value, title: String)], subtitle: @escaping (Value, AppSettings) -> String?) {
         titles = options.map(\.title)
+        subtitles = { settings in options.map { subtitle($0.value, settings) } }
         selectedIndex = { settings in options.firstIndex { $0.value == settings[keyPath: keyPath] } ?? 0 }
         select = { index, settings in
             guard options.indices.contains(index) else { return }
@@ -262,8 +266,13 @@ struct AppearanceChoiceDefinition {
         Self(control: .toggle(settingsKeyPath(stored)), stored: stored)
     }
 
-    static func options<Value: Equatable>(_ stored: WritableKeyPath<AppearanceChoices, Value>, _ options: [(value: Value, title: String)]) -> Self {
-        Self(control: .options(AppearanceChoiceOptions(settingsKeyPath(stored), options)), stored: stored)
+    /// - Parameter subtitle: 選択肢の名前の下に添える文。添えなければnilを返す。
+    static func options<Value: Equatable>(
+        _ stored: WritableKeyPath<AppearanceChoices, Value>,
+        _ options: [(value: Value, title: String)],
+        subtitle: @escaping @MainActor (Value, AppSettings) -> String? = { _, _ in nil }
+    ) -> Self {
+        Self(control: .options(AppearanceChoiceOptions(settingsKeyPath(stored), options, subtitle: subtitle)), stored: stored)
     }
 
     private static func settingsKeyPath<Value>(_ stored: WritableKeyPath<AppearanceChoices, Value>) -> ReferenceWritableKeyPath<AppSettings, Value> {
@@ -306,7 +315,7 @@ extension AppearanceChoice {
         case .avatarShape: .options(\.avatarShape, [(.circle, "円"), (.roundedSquare, "角丸の四角")])
         case .showsAvatarBorder: .toggle(\.showsAvatarBorder)
         // 選ぶまではサーバーの設定に従うので、今の値は`AppSettings`から読む。
-        case .animatesAvatars: .options(\.animatesAvatars, Self.animationChoices)
+        case .animatesAvatars: .options(\.animatesAvatars, Self.animationChoices, subtitle: Self.serverAnimationSubtitle)
         case .wrapsBelowAvatar: .toggle(\.wrapsBelowAvatar)
         case .showsReplyLines: .toggle(\.showsReplyLines)
         case .nameStyle: .options(\.statusNameStyle, Self.nameStyles)
@@ -321,9 +330,12 @@ extension AppearanceChoice {
                 (.automatic, "自動"), (.japanese, "日本語"), (.simplifiedChinese, "簡体字中国語"), (.traditionalChinese, "繁体字中国語"), (.korean, "韓国語"),
             ])
         case .emojiStyle: .options(\.emojiStyle, [(.system, "Apple"), (.twemoji, "Twemoji")])
-        case .animatesCustomEmojis: .options(\.animatesCustomEmojis, Self.animationChoices)
+        case .animatesCustomEmojis: .options(\.animatesCustomEmojis, Self.animationChoices, subtitle: Self.serverAnimationSubtitle)
         // 選ぶまではサーバーの設定に従うので、今の値は`AppSettings`から読む。
-        case .mediaDisplay: .options(\.mediaDisplay, [(nil, Self.followsAccountTitle)] + MediaDisplay.allCases.map { ($0, $0.title) })
+        case .mediaDisplay:
+            .options(\.mediaDisplay, [(nil, Self.followsAccountTitle)] + MediaDisplay.allCases.map { ($0, $0.title) }) { value, settings in
+                value == nil ? settings.serverMediaDisplay.title : nil
+            }
         case .mediaArrangement: .options(\.mediaArrangement, [(.belowBody, "本文の下に大きく"), (.besideBody, "本文の右に小さく")])
         case .embedMediaArrangement:
             .options(\.embedMediaArrangement, [(.sameAsPost, "投稿と同じ"), (.besideBody, "本文の右に小さく"), (.belowBody, "本文の下に大きく")])
@@ -361,6 +373,12 @@ extension AppearanceChoice {
     /// アニメーションを再生するか。「アカウントの設定に従う」はサーバーのアカウントの設定に従い、親のプリセットがオンやオフを持っていても選べる（docs/preset.md）。
     /// サーバーのアカウントの設定に従う選択肢の名前。
     static let followsAccountTitle = "アカウントの設定に従う"
+
+    /// 「アカウントの設定に従う」に添える、今のアカウントの値。
+    @MainActor private static func serverAnimationSubtitle(_ value: Bool?, _ settings: AppSettings) -> String? {
+        guard value == nil else { return nil }
+        return settings.serverAutoplaysAnimations ? "オン" : "オフ"
+    }
 
     @MainActor private static let animationChoices: [(value: Bool?, title: String)] = [
         (nil, followsAccountTitle),

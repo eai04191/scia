@@ -303,6 +303,19 @@ struct AppSettingsTests {
         #expect(relaunched.mediaDisplay == .showsAll)
     }
 
+    /// アカウントの設定から作ったプリセットの編集用の設定は、最後に表示を始めたアカウントではなく、そのアカウントのサーバーの値を読む。
+    /// 別々のアカウントを窓に分けて開いているとき、プリセットの編集の「アカウント設定に従う」に、ほかのアカウントの値を添えないため。
+    @Test func presetEditingReadsServerValueOfItsAccount() throws {
+        let settings = AppSettings(defaults: try makeDefaults())
+        settings.rememberServerMediaDisplay(.showsAll, of: "alice@example.social")
+        settings.rememberServerMediaDisplay(.hidesAll, of: "bob@example.social")
+        settings.followServerPreferences(of: "bob@example.social")
+
+        let editing = settings.forAccount("alice@example.social").editing(.builtIn(.standard))
+
+        #expect(editing.serverMediaDisplay == .showsAll)
+    }
+
     @Test func persistsStatusDisplay() throws {
         let defaults = try makeDefaults()
         let settings = AppSettings(defaults: defaults)

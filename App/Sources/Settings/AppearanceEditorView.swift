@@ -196,7 +196,7 @@ struct AppearanceGroupEditorView: View {
             PopUpChoiceRow(
                 title: choice.title,
                 selection: Binding { options.selectedIndex(settings) } set: { options.select($0, settings) },
-                options: options.titles.enumerated().map { (value: $0.offset, title: $0.element) },
+                options: zip(options.titles, options.subtitles(settings)).enumerated().map { (value: $0.offset, title: $0.element.0, subtitle: $0.element.1) },
                 isModified: settings.isModified(choice),
                 onOpen: { focus(choice) },
                 onTapTitle: { toggleFocus(.choice(choice)) }
