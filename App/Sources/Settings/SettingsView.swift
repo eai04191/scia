@@ -352,7 +352,9 @@ final class SettingsNavigationState {
 
 /// 設定の画面を載せ、出たときと消えたときを1回ずつ知らせる。設定の画面の上に重ねたシートが出ている間は、まだ出ている扱いにする。
 /// スワイプして閉じるのを途中でやめると、消えないまま`viewWillAppear`がもう一度呼ばれるので、出ているかを持って、変わったときだけ知らせる。
-private final class SettingsHostingController: UIHostingController<SettingsView> {
+/// 開いている間は、アプリ内通知のチップの列をシートの上へ出し、ナビゲーションバーのすぐ下に置く。
+/// 組み込みのプリセットを複製して切り替えたこと（docs/preset.md）など、設定の中で起きたことの知らせが、シートに覆われて見えなくならないようにするため。
+private final class SettingsHostingController: UIHostingController<SettingsView>, NoticeScreen {
     private let navigation: SettingsNavigationState
     private let onShownChange: (Bool) -> Void
     /// 最後に指を置いた位置（このビューの座標）。下へのスワイプで閉じてよいかを、指を置いた場所で決める。
@@ -388,9 +390,41 @@ private final class SettingsHostingController: UIHostingController<SettingsView>
         isShown = true
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        let overlay = NoticeOverlay.installed(in: view.window)
+        overlay?.bringToFront()
+        overlay?.update()
+    }
+
+    /// 大きなタイトルの伸び縮みや、中の画面への移動でナビゲーションバーの高さが変わったら、列をそのすぐ下へ置き直す。
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        guard isShown, !isBeingDismissed else { return }
+        NoticeOverlay.installed(in: view.window)?.update()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        guard isBeingDismissed else { return }
+        // 閉じ始めたら、列をシートの下へ戻す。閉じる途中のシートの上にチップが浮いたままにならないようにする。閉じるのをやめたら手前へ戻す。
+        let window = view.window
+        NoticeOverlay.installed(in: window)?.returnBelowPresentations()
+        transitionCoordinator?.animate(alongsideTransition: nil) { context in
+            guard context.isCancelled, let overlay = NoticeOverlay.installed(in: window) else { return }
+            overlay.bringToFront()
+            overlay.update()
+        }
+    }
+
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         isShown = false
+    }
+
+    func noticePlacement(below: CGFloat) -> NoticePlacement {
+        guard let view = viewIfLoaded, view.window != nil, let bar = view.visibleNavigationBar else { return NoticePlacement(top: below) }
+        return NoticePlacement(top: bar.convert(CGPoint(x: 0, y: bar.bounds.maxY + 8), to: nil).y)
     }
 }
 
