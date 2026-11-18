@@ -19,12 +19,14 @@ public enum NotificationAppearanceCatalog {
     /// お気に入りやフォローなどの通知の、誰が何をしたかの行の文字。種類の記号もこの大きさで描く。
     public static let headerText = AppearanceValue(id: "notification.text.header", title: "文字", range: -40...40, step: 1, defaultValue: 2, unit: .textOffset)
     /// 名前の前に差し込むアイコンの一辺。投稿の名前の上の行の、ブーストした人のアイコンと同じく、文字の大きさでは変えない。
-    public static let headerAvatarSize = AppearanceValue(id: "notification.headerAvatarSize", title: "名前の前のアイコンの大きさ", range: 0...200, step: 1, defaultValue: 22)
+    public static let headerAvatarSize = AppearanceValue(id: "notification.headerAvatarSize", title: "名前の前のアイコンの大きさ", range: 0...200, step: 1, defaultValue: 18)
     /// 名前の前に差し込むアイコンと、名前のすき間。
     public static let headerAvatarNameSpacing = AppearanceValue(id: "notification.headerAvatarNameSpacing", title: "名前の前のアイコンと名前のすき間", range: 0...100, step: 1, defaultValue: SpacingScale.s1)
 
     // MARK: 種類の記号
 
+    /// 通知の種類を示す記号の大きさ。文字と同じく本文との差で持ち、iPhoneの文字サイズで一緒に大きくなる。メンションなどの名前の上の行の記号も同じ大きさにする。
+    public static let symbolText = AppearanceValue(id: "notification.text.symbol", title: "大きさ", range: -40...40, step: 1, defaultValue: 2, unit: .textOffset)
     /// 通知の種類を示す記号と、文字の列のあいだ。記号はアイコンの列の右端に揃えず、文字の列からこの幅だけ離して置く。
     /// メンションなどの名前の上の行の記号も同じ幅で置き、通知のタイムラインの記号を縦に揃える。
     public static let symbolSpacing = AppearanceValue(id: "notification.symbolSpacing", title: "文字の列とのすき間", range: 0...100, step: 1, defaultValue: SpacingScale.s1)
@@ -68,7 +70,7 @@ public enum NotificationAppearanceCatalog {
     public static let groups: [AppearanceGroup] = [
         AppearanceGroup(id: "group", title: "まとめた通知", values: [groupAvatarSize, groupAvatarSpacing, groupAvatarHeaderSpacing]),
         AppearanceGroup(id: "header", title: "誰が何をしたかの行", values: [headerText, headerAvatarSize, headerAvatarNameSpacing]),
-        AppearanceGroup(id: "symbol", title: "種類の記号", values: [symbolSpacing]),
+        AppearanceGroup(id: "symbol", title: "種類の記号", values: [symbolText, symbolSpacing]),
         AppearanceGroup(id: "account", title: "フォローなどのハンドル", values: [accountText, accountSpacing]),
         AppearanceGroup(id: "quoted", title: "お気に入りやブーストで再掲する投稿", values: [quotedSpacing, quotedBodyText, quotedBodyLines, quotedMediaSpacing, quotedThumbnailSize, quotedThumbnailSpacing, quotedPollSpacing, quotedNoteText, quotedNoteSpacing]),
         AppearanceGroup(id: "context", title: "メンションなどの名前の上の行", values: [contextText, contextSpacing]),

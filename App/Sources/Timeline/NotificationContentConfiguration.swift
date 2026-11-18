@@ -66,6 +66,8 @@ struct NotificationContentConfiguration: UIContentConfiguration {
         /// 投稿のセルのアイコンの一辺。本文の列の左端を投稿のセルと揃えるため、同じ幅の列を空ける。
         var avatarSize: CGFloat
         var headerFont: UIFont
+        /// 種類の記号の大きさを決める書体。
+        var symbolFont: UIFont
         /// 誰が何をしたかの行と、投稿の中身のあいだの余白。
         var bodySpacing: CGFloat
         /// 記号と、誰が何をしたかの行の文字とのすき間。
@@ -243,7 +245,7 @@ final class NotificationContentView: UIView, UIContentView {
         headerInteraction?.target = configuration.accountTarget
         let metrics = configuration.metrics
         // ベースラインの位置を読むため、大きさの設定を画像そのものに当てておく。
-        symbolView.image = UIImage(systemName: configuration.symbolName, withConfiguration: UIImage.SymbolConfiguration(font: metrics.headerFont))
+        symbolView.image = UIImage(systemName: configuration.symbolName, withConfiguration: UIImage.SymbolConfiguration(font: metrics.symbolFont))
         symbolView.tintColor = configuration.symbolColor
         headerLabel.emojiImages = configuration.emojiImages
         headerLabel.attributedText = configuration.header
@@ -261,10 +263,13 @@ final class NotificationContentView: UIView, UIContentView {
         let bottom = bottomAnchor.constraint(equalTo: bodyView.bottomAnchor, constant: margins.bottom)
         bottom.priority = UILayoutPriority(UILayoutPriority.defaultHigh.rawValue - 1)
         // まとめた行では、アイコンを並べた下に誰が何をしたかの行を置く。上の余白とアイコンとのあいだは、行の字面の上端から測る。
+        // 種類の記号は大きさを文字と別に決めるので、文字より大きければ、記号の上端もその位置より下に置き、行を記号の分だけ下げる。
         let headerTopInset = headerLabel.glyphsTopInset
-        let headerTop = configuration.groupAvatars.isEmpty
-            ? headerLabel.firstBaselineAnchor.constraint(equalTo: topAnchor, constant: margins.top + headerTopInset)
-            : headerLabel.firstBaselineAnchor.constraint(equalTo: groupAvatarClip.bottomAnchor, constant: metrics.groupAvatarHeaderSpacing + headerTopInset)
+        let (contentTop, contentTopSpacing) = configuration.groupAvatars.isEmpty
+            ? (topAnchor, margins.top)
+            : (groupAvatarClip.bottomAnchor, metrics.groupAvatarHeaderSpacing)
+        let headerTop = headerLabel.firstBaselineAnchor.constraint(equalTo: contentTop, constant: contentTopSpacing + headerTopInset)
+        headerTop.priority = .defaultHigh
         let groupAvatarSizes = groupAvatarViews.flatMap { view in
             [view.widthAnchor.constraint(equalToConstant: metrics.groupAvatarSize), view.heightAnchor.constraint(equalToConstant: metrics.groupAvatarSize)]
         }
@@ -277,6 +282,8 @@ final class NotificationContentView: UIView, UIContentView {
             // 記号は、メンションなどの名前の上の行の記号と同じく、文字の1行目のベースラインに乗せる。
             PostContentView.symbolVerticalConstraint(symbolView, beside: headerLabel, onBaseline: true),
             headerTop,
+            headerLabel.firstBaselineAnchor.constraint(greaterThanOrEqualTo: contentTop, constant: contentTopSpacing + headerTopInset),
+            symbolView.topAnchor.constraint(greaterThanOrEqualTo: contentTop, constant: contentTopSpacing),
             headerLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: textLeading),
             headerLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margins.trailing),
             // 間隔は、誰が何をしたかの行の字面の下端から測る。

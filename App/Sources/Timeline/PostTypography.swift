@@ -23,6 +23,8 @@ struct PostTypography: Equatable {
         case xPostBody
         /// 通知の、誰が何をしたかの行。
         case notificationHeader
+        /// 通知の種類を示す記号。
+        case notificationSymbol
         /// メンションなどの投稿として出す通知の、名前の上の行。
         case notificationContext
         /// フォローなどの通知で、誰が何をしたかの行の下に添えるハンドル。
@@ -50,6 +52,7 @@ struct PostTypography: Equatable {
             case .xPostName: AppearanceCatalog.xPostNameText
             case .xPostBody: AppearanceCatalog.xPostBodyText
             case .notificationHeader: NotificationAppearanceCatalog.headerText
+            case .notificationSymbol: NotificationAppearanceCatalog.symbolText
             case .notificationContext: NotificationAppearanceCatalog.contextText
             case .notificationAccount: NotificationAppearanceCatalog.accountText
             case .notificationQuotedBody: NotificationAppearanceCatalog.quotedBodyText

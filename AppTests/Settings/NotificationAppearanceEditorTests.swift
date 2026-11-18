@@ -22,6 +22,19 @@ struct NotificationAppearanceEditorTests {
         samples.configurations(groups: groups, focus: focus).compactMap { $0 as? any AppearancePreviewConfiguration }
     }
 
+    /// 種類の記号だけを大きくしても、記号は行の上の余白の内側に収まり、行の上へはみ出さない。
+    @Test func largeSymbolStaysInsideRowMargin() throws {
+        let settings = AppSettings.isolated()
+        settings.setValue(30, for: NotificationAppearanceCatalog.symbolText)
+        let rows = layOutPreview(settings).rowFrames()
+        let top = settings.rowMargins.top
+        let symbols = rows.flatMap { ($0[.notificationSymbol] ?? []) + ($0[.contextSymbol] ?? []) }
+        try #require(!symbols.isEmpty)
+        for symbol in symbols {
+            #expect(symbol.minY >= top - 0.5, "記号の上端\(symbol.minY)が、行の上の余白\(top)より上にあります")
+        }
+    }
+
     /// プレビューの見本だけで、どの項目も場所を示せる。
     @Test func samplesShowEveryItem() throws {
         let rows = layOutPreview(.isolated()).rowFrames()

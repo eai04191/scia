@@ -65,7 +65,7 @@ extension TimelineViewController {
         configuration.context = PostContentConfiguration.Context(
             symbolName: appearance.symbolName,
             symbolColor: appearance.color,
-            notificationSymbolFont: typography.font(.notificationHeader),
+            notificationSymbolFont: typography.font(.notificationSymbol),
             avatar: nil,
             text: text,
             accessibilityText: text.string,
@@ -213,6 +213,7 @@ extension TimelineViewController {
                 margins: settings.rowMargins,
                 avatarSize: settings.value(of: AppearanceCatalog.avatarSize),
                 headerFont: font,
+                symbolFont: PostTypography(settings: settings).font(.notificationSymbol),
                 bodySpacing: bodySpacing,
                 symbolSpacing: settings.value(of: N.symbolSpacing),
                 avatarSpacing: settings.value(of: AppearanceCatalog.avatarSpacing),

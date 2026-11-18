@@ -151,6 +151,7 @@ public enum AppearanceHighlight: Equatable, Sendable {
             (N.headerAvatarSize, .firstOf([.part(.notificationHeaderAvatar), .part(.notificationHeader)])),
             (N.headerAvatarNameSpacing, .firstOf([.part(.notificationHeaderAvatarGap), .part(.notificationHeader)])),
 
+            (N.symbolText, .firstOf([.part(.notificationSymbol), .part(.contextSymbol)])),
             // メンションなどの名前の上の行の記号も同じ幅で置くので、誰が何をしたかの行がなければ、そちらで示す。
             (N.symbolSpacing, .firstOf([
                 .horizontalGap(leading: [.notificationSymbol], trailing: [.notificationHeader]),

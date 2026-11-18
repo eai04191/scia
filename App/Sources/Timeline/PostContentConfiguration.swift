@@ -897,8 +897,9 @@ final class PostContentView: UIView, UIContentView {
             let symbolLeads = configuration.avatar == nil && !contextIcon.isHidden
             let contextLeading = symbolLeads ? contextIcon.trailingAnchor : textGuide.leadingAnchor
             let contextLeadingSpacing = symbolLeads ? metrics.contextSymbolSpacing : 0
+            let contextTop = contextGuide.topAnchor.constraint(equalTo: topAnchor, constant: margins.top)
             constraints += [
-                contextGuide.topAnchor.constraint(equalTo: topAnchor, constant: margins.top),
+                contextTop,
                 contextGuide.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor),
                 contextGuide.trailingAnchor.constraint(equalTo: textGuide.trailingAnchor),
                 contextLabel.topAnchor.constraint(greaterThanOrEqualTo: contextGuide.topAnchor),
@@ -913,6 +914,15 @@ final class PostContentView: UIView, UIContentView {
                 Self.symbolVerticalConstraint(contextIcon, beside: contextLabel, onBaseline: context.notificationSymbolFont != nil),
                 avatarView.topAnchor.constraint(equalTo: contextGuide.bottomAnchor, constant: metrics.contextSpacing),
             ]
+            // 通知の種類の記号は大きさを文字と別に決めるので、文字より大きければ、記号の上端が上の余白の内側に来るまで、名前の上の行を下げる。
+            if context.notificationSymbolFont != nil {
+                // 上へ寄せる力は、行を文字の高さに縮める力（defaultLow）より弱くする。強いと、行を下げずに縦に伸ばし、名前の行とのあいだが広がる。
+                contextTop.priority = .defaultLow - 1
+                constraints += [
+                    contextGuide.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: margins.top),
+                    contextIcon.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: margins.top),
+                ]
+            }
             if context.avatar != nil {
                 constraints += [
                     contextAvatarView.leadingAnchor.constraint(equalTo: contextLeading, constant: contextLeadingSpacing),
