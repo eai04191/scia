@@ -106,8 +106,7 @@ struct PresetManagementView: View {
             openPreset(id)
         } label: {
             HStack(spacing: 8) {
-                Text(library.name(of: id) ?? "")
-                    .lineLimit(1)
+                PresetNameLabel(name: library.name(of: id) ?? "", isBuiltIn: id.isBuiltIn)
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.forward")
                     .font(.footnote.weight(.semibold))
@@ -294,6 +293,12 @@ extension View {
     }
 }
 
+extension PresetID {
+    var isBuiltIn: Bool {
+        if case .builtIn = self { true } else { false }
+    }
+}
+
 extension PresetLibrary {
     /// アプリかどれかのアカウントが使っているか。
     fileprivate func isUsed(_ id: PresetID) -> Bool {
@@ -433,22 +438,22 @@ private struct PresetChoiceSections: View {
     }
 
     private func choice(_ id: PresetID) -> some View {
-        PresetChoiceRow(title: library.name(of: id) ?? "", isSelected: selected == id) { select(id) }
+        PresetChoiceRow(title: library.name(of: id) ?? "", isBuiltIn: id.isBuiltIn, isSelected: selected == id) { select(id) }
     }
 }
 
 /// 選ぶ画面の1行。選んでいるものにチェックマークを付ける。
 private struct PresetChoiceRow: View {
     let title: String
+    var isBuiltIn = false
     let isSelected: Bool
     let select: () -> Void
 
     var body: some View {
         Button(action: select) {
             HStack {
-                Text(title)
+                PresetNameLabel(name: title, isBuiltIn: isBuiltIn)
                     .foregroundStyle(Color.primary)
-                    .lineLimit(1)
                 Spacer(minLength: 8)
                 if isSelected {
                     Image(systemName: "checkmark")

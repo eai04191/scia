@@ -1,5 +1,13 @@
 /// 設定の画面の行と画面ごとに、読んでいるプリセットが変えたかと、親のプリセットの値へ戻すこと（docs/preset.mdの「既定値から変えた項目」）。
 /// 行と画面がプリセットのどの値を変えるかは、ここにまとめる。分類の画面は、その中の画面と行をまとめて見る。
+extension SettingsItem {
+    /// 行が変える値をプリセットに持つか。持たない行には、プリセットに含めないことを示す（docs/preset.md）。
+    @MainActor
+    public var isInPreset: Bool {
+        !AppSettings.keys(of: self).isEmpty
+    }
+}
+
 extension AppSettings {
     /// 行が変える値を、読んでいるプリセットが変えたか。プリセットに含めない値の行は、いつもfalse。
     public func isModified(_ item: SettingsItem) -> Bool {

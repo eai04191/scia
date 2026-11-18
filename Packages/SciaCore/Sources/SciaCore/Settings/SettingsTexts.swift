@@ -124,8 +124,12 @@ public enum SettingsTexts {
         public static let duplicateToEdit = "複製して変更"
         /// プリセットの画面の、プリセットを削除する行。
         public static let deletePreset = "プリセットを削除"
-        /// 「表示」「操作」「作成」の中の、プリセットに含めない設定の節の下に書く。
+        /// 「表示」「操作」「作成」の中の、プリセットに含めない設定の情報ボタンを押して出す説明。
         public static let notInPreset = "プリセットに含まれず、どのプリセットでも共通です。"
+        /// プリセットに含めない設定の情報ボタンの読み上げ。
+        public static let notInPresetInfo = "プリセットに含まれない設定"
+        /// 組み込みのプリセットに添える鍵のアイコンの読み上げ。
+        public static let builtIn = "組み込み"
         /// 「標準」の画面の説明。
         public static let standardFooter = "アプリのデフォルトの値をそのまま使います。"
         /// 新規作成のボタンの読み上げ。
@@ -261,11 +265,6 @@ public enum SettingsTexts {
         }
 
         public static let removeLanguageFooter = "言語は“設定”>“アプリ”>“翻訳”>“言語”で削除できます。"
-
-        /// 端末にある言語の節の下の説明。プリセットに含めないことを書き、言語ごとにダウンロードするモデルでは、削除する場所も書く。
-        public static func installedFooter(usesSharedModel: Bool) -> String {
-            usesSharedModel ? Presets.notInPreset : "\(removeLanguageFooter)\n\(Presets.notInPreset)"
-        }
 
         /// 言語をダウンロードするボタンの読み上げ。
         public static func download(languageName: String) -> String {

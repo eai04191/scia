@@ -84,12 +84,14 @@ struct AutoTranslationSettingsView: View {
         }
         if canUseAppleIntelligence {
             Section {
-                Picker(SettingsTexts.AutoTranslation.mode, selection: $settings.autoTranslationStrategy) {
+                Picker(selection: $settings.autoTranslationStrategy) {
                     Text(TranslationStrategy.highFidelity.title).tag(TranslationStrategy.highFidelity)
                     Text(TranslationStrategy.lowLatency.title).tag(TranslationStrategy.lowLatency)
+                } label: {
+                    NotInPresetLabel(title: SettingsTexts.AutoTranslation.mode)
                 }
-            } footer: {
-                Text(SettingsTexts.Presets.notInPreset)
+                // 選択の行は1つの要素として読まれ、情報ボタンに届かないので、同じ説明をヒントで読む。
+                .accessibilityHint(SettingsTexts.Presets.notInPreset)
             }
         }
         if loadedSubject == subject {
@@ -102,9 +104,7 @@ struct AutoTranslationSettingsView: View {
                 }
                 .onDelete { settings.autoTranslationExcludedHandles.remove(atOffsets: $0) }
             } header: {
-                Text(SettingsTexts.AutoTranslation.excludedUsers)
-            } footer: {
-                Text(SettingsTexts.Presets.notInPreset)
+                NotInPresetLabel(title: SettingsTexts.AutoTranslation.excludedUsers)
             }
         }
     }
@@ -120,9 +120,11 @@ struct AutoTranslationSettingsView: View {
                     Toggle(language.name, isOn: isOn(language))
                 }
             } header: {
-                Text(SettingsTexts.AutoTranslation.installedHeader(usesSharedModel: usesSharedModel))
+                NotInPresetLabel(title: SettingsTexts.AutoTranslation.installedHeader(usesSharedModel: usesSharedModel))
             } footer: {
-                Text(SettingsTexts.AutoTranslation.installedFooter(usesSharedModel: usesSharedModel))
+                if !usesSharedModel {
+                    Text(SettingsTexts.AutoTranslation.removeLanguageFooter)
+                }
             }
         }
         if !availability.downloadable.isEmpty {
@@ -140,7 +142,7 @@ struct AutoTranslationSettingsView: View {
                     .accessibilityLabel(SettingsTexts.AutoTranslation.download(languageName: language.name))
                 }
             } header: {
-                Text(SettingsTexts.AutoTranslation.downloadable)
+                NotInPresetLabel(title: SettingsTexts.AutoTranslation.downloadable)
             }
         }
     }

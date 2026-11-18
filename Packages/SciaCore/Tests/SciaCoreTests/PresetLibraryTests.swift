@@ -158,7 +158,7 @@ struct PresetLibraryTests {
         #expect(library == before)
     }
 
-    /// 使っている名前は、組み込みのプリセットの名前も含めて付けられない。ショートカットの候補や一覧で、名前だけで見分けられるようにするため。
+    /// ほかの使う人のプリセットが使っている名前は付けられない。組み込みのプリセットの名前とは重なってもよい。
     @Test func rejectsTakenName() throws {
         var library = PresetLibrary()
         let home = try library.create(parent: .builtIn(.standard), name: "家")
@@ -166,9 +166,11 @@ struct PresetLibraryTests {
         let before = library
 
         #expect(throws: PresetError.nameTaken) { try library.rename(outside, to: "家") }
-        #expect(throws: PresetError.nameTaken) { try library.rename(outside, to: "標準") }
         #expect(throws: PresetError.nameTaken) { try library.create(parent: home, name: "家") }
         #expect(library == before)
+
+        try library.rename(outside, to: "標準")
+        #expect(library.name(of: outside) == "標準")
 
         // 自分の今の名前に付け直すのは断らない。
         try library.rename(home, to: "家")

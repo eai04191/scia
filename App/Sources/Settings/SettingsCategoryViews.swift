@@ -270,9 +270,18 @@ struct SettingsScreenForm: View {
         }
     }
 
+    @ViewBuilder
     private func toggle(_ item: SettingsItem, isOn: Binding<Bool>) -> some View {
-        Toggle(isOn: isOn) {
-            ModifiedLabel(title: item.title, isModified: settings.isModified(item))
+        if item.isInPreset {
+            Toggle(isOn: isOn) {
+                ModifiedLabel(title: item.title, isModified: settings.isModified(item))
+            }
+        } else {
+            // スイッチの行は1つの要素として読まれ、情報ボタンに届かないので、同じ説明をヒントで読む。
+            Toggle(isOn: isOn) {
+                NotInPresetLabel(title: item.title)
+            }
+            .accessibilityHint(SettingsTexts.Presets.notInPreset)
         }
     }
 }
@@ -429,6 +438,61 @@ struct ModifiedLabel: View {
         HStack(spacing: 6) {
             Text(title)
             ModifiedIndicator(isModified: isModified)
+        }
+    }
+}
+
+/// プリセットに含めない設定の名前の横に置く情報ボタン。押すと、どのプリセットでも共通であることをポップオーバーで出す（docs/preset.md）。
+struct NotInPresetInfoButton: View {
+    @State private var isShown = false
+
+    var body: some View {
+        Button {
+            isShown = true
+        } label: {
+            Image(systemName: "info.circle")
+                .foregroundStyle(.tint)
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(SettingsTexts.Presets.notInPresetInfo)
+        .popover(isPresented: $isShown) {
+            Text(SettingsTexts.Presets.notInPreset)
+                .font(.subheadline)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 280)
+                .padding()
+                .presentationCompactAdaptation(.popover)
+        }
+    }
+}
+
+/// 名前の横に、プリセットに含めないことを示す情報ボタンを添えたラベル。
+struct NotInPresetLabel: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(title)
+            NotInPresetInfoButton()
+        }
+    }
+}
+
+/// 組み込みのプリセットの名前に添える鍵のアイコン。名前は使う人のプリセットと重なりうるので、アイコンで見分ける（docs/preset.md）。
+struct PresetNameLabel: View {
+    let name: String
+    let isBuiltIn: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(name)
+                .lineLimit(1)
+            if isBuiltIn {
+                Image(systemName: "lock.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel(SettingsTexts.Presets.builtIn)
+            }
         }
     }
 }

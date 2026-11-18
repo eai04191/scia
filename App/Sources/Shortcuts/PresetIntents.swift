@@ -14,8 +14,12 @@ struct PresetEntity: AppEntity {
     let id: String
     let name: String
 
+    /// 組み込みのプリセットには鍵のアイコンを添える。名前は使う人のプリセットと重なりうるので、アイコンで見分ける（docs/preset.md）。
     var displayRepresentation: DisplayRepresentation {
-        DisplayRepresentation(title: "\(name)")
+        guard PresetID(token: id).map({ if case .builtIn = $0 { true } else { false } }) == true else {
+            return DisplayRepresentation(title: "\(name)")
+        }
+        return DisplayRepresentation(title: "\(name)", image: DisplayRepresentation.Image(systemName: "lock.fill"))
     }
 }
 

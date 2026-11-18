@@ -93,7 +93,13 @@ struct PresetComparisonView: View {
         Picker(title, selection: selection) {
             Section {
                 ForEach(BuiltInPreset.allCases, id: \.self) { preset in
-                    Text(preset.title).tag(PresetID.builtIn(preset))
+                    Label {
+                        Text(preset.title)
+                    } icon: {
+                        // メニューは項目のアイコンを決まった大きさと色で描き、SwiftUIの`font`と`foregroundStyle`は効かないので、ほかの画面の鍵（`PresetNameLabel`）と同じ大きさと色を画像に持たせる。
+                        Image(uiImage: Self.lockImage)
+                    }
+                    .tag(PresetID.builtIn(preset))
                 }
             }
             if !library.userPresets.isEmpty {
@@ -105,6 +111,9 @@ struct PresetComparisonView: View {
             }
         }
     }
+
+    private static let lockImage = UIImage(systemName: "lock.fill", withConfiguration: UIImage.SymbolConfiguration(textStyle: .caption1))?
+        .withTintColor(.secondaryLabel, renderingMode: .alwaysOriginal) ?? UIImage()
 
     /// 比べているプリセットがほかの窓で消されたら、標準に替える。
     private func dropDeleted() {
