@@ -98,6 +98,31 @@ struct SettingsModifiedTests {
         #expect(settings.isModified(.autoTranslation))
     }
 
+    /// 組み込みのプリセットの値は、どれも設定の画面の行か画面からたどれるキーで、範囲の中の値を持つ。
+    /// たどれないキーや範囲の外の値は、選んでも効かないか、設定の画面で戻せないため。
+    @Test(arguments: BuiltInPreset.allCases)
+    func builtInValuesAreReachable(_ preset: BuiltInPreset) throws {
+        let reachable = Set([SettingsPage.display, .interaction, .compose].flatMap(AppSettings.keys(of:)))
+        for key in preset.values.keys {
+            #expect(reachable.contains(key), "\(preset)の\(key)")
+        }
+        let app = AppSettings(defaults: TestScratch.defaults("SettingsModifiedTests.builtIn"))
+        try app.store.tryUpdateLibrary { library throws(PresetError) in try library.select(.builtIn(preset), for: .app) }
+        for item in AppearanceCatalog.values where preset.values["appearanceValue.\(item.id)"] != nil {
+            guard case .number(let number) = preset.values["appearanceValue.\(item.id)"] else { continue }
+            #expect(item.range.contains(number), "\(preset)の\(item.id)")
+            #expect(app.value(of: item) == number)
+        }
+    }
+
+    /// コンパクトは、アクションバーを常には出さず、タップで開く。
+    @Test func compactOpensActionBarByTap() throws {
+        let app = AppSettings(defaults: TestScratch.defaults("SettingsModifiedTests.compact"))
+        try app.store.tryUpdateLibrary { library throws(PresetError) in try library.select(.builtIn(.compact), for: .app) }
+        #expect(!app.appearance.showsActionBar)
+        #expect(app.statusActions.tap == .actionBar)
+    }
+
     /// プリセットに含めない値の行には、点を付けない。
     @Test func excludedItemIsNeverMarked() throws {
         let settings = try makeSettings()

@@ -4,17 +4,52 @@ public import Foundation
 public enum BuiltInPreset: String, CaseIterable, Codable, Sendable {
     /// アプリの既定値そのまま。
     case standard
+    /// 余白と名前の行の文字を詰め、メディアを本文の右に小さく傾けずに並べ、アクションバーを常には出さずにタップで開く。
+    case compact
+    /// 余白を広げ、アイコンと文字とメディアとアクションバーのボタンを大きく描く。
+    case relaxed
 
     public var title: String {
         switch self {
         case .standard: "標準"
+        case .compact: "コンパクト"
+        case .relaxed: "ゆったり"
         }
     }
 
-    /// アプリの既定値から変える値。キーは`PresetLibrary`の値のキー。
+    /// アプリの既定値から変える値。キーは`AppSettings`がプリセットに持つ値のキー（`AppSettings+Modified.swift`の行と画面からたどれることを、テストで確かめる）。
     public var values: [String: PresetValue] {
         switch self {
-        case .standard: [:]
+        case .standard:
+            [:]
+        case .compact:
+            [
+                "appearanceValue.timeline.rowPaddingTop": .number(8),
+                "appearanceValue.timeline.rowPaddingBottom": .number(8),
+                "appearanceValue.timeline.avatarSize": .number(32),
+                "appearanceValue.timeline.avatarSpacing": .number(8),
+                "appearanceValue.text.namePrimary": .number(1),
+                "appearanceValue.text.nameSecondary": .number(-1),
+                "appearanceValue.timeline.nameBodySpacing": .number(3),
+                "appearanceValue.timeline.bodyMediaSpacing": .number(6),
+                "appearanceValue.timeline.mediaTallestAspectRatio": .number(1),
+                "appearanceChoice.mediaArrangement": .text("besideBody"),
+                "appearanceChoice.tiltsStackedPhotos": .bool(false),
+                "appearanceChoice.showsActionBar": .bool(false),
+                "objectActions.status.tap": .text("actionBar"),
+            ]
+        case .relaxed:
+            [
+                "appearanceValue.timeline.rowPaddingTop": .number(20),
+                "appearanceValue.timeline.rowPaddingBottom": .number(20),
+                "appearanceValue.timeline.avatarSize": .number(48),
+                "appearanceValue.timeline.avatarSpacing": .number(12),
+                "appearanceValue.text.body": .number(1),
+                "appearanceValue.timeline.nameBodySpacing": .number(7),
+                "appearanceValue.timeline.bodyMediaSpacing": .number(14),
+                "appearanceValue.timeline.mediaTallestAspectRatio": .number(0.6),
+                "appearanceValue.actionBar.iconSize": .number(17),
+            ]
         }
     }
 }
