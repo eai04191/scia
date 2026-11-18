@@ -109,7 +109,8 @@ final class NotificationContentView: UIView, UIContentView {
     private let headerLabel = EmojiLabel()
     private let bodyView: PostBodyView
     let reactionGlowView = ReactionGlowView()
-    /// 誰が何をしたかの行の最後のベースライン。プレビューで、行の字面の下端を測るのに使う。
+    /// 誰が何をしたかの行の最初と最後のベースライン。プレビューで、行の字面の上端と下端を測るのに使う。
+    private let headerFirstBaselineGuide = UILayoutGuide()
     private let headerLastBaselineGuide = UILayoutGuide()
     private var current: NotificationContentConfiguration
 
@@ -161,8 +162,11 @@ final class NotificationContentView: UIView, UIContentView {
             fitsStack,
         ])
         reactionGlowView.install(in: self)
+        addLayoutGuide(headerFirstBaselineGuide)
         addLayoutGuide(headerLastBaselineGuide)
         NSLayoutConstraint.activate([
+            headerFirstBaselineGuide.topAnchor.constraint(equalTo: headerLabel.firstBaselineAnchor),
+            headerFirstBaselineGuide.heightAnchor.constraint(equalToConstant: 0),
             headerLastBaselineGuide.topAnchor.constraint(equalTo: headerLabel.lastBaselineAnchor),
             headerLastBaselineGuide.heightAnchor.constraint(equalToConstant: 0),
         ])
@@ -256,10 +260,11 @@ final class NotificationContentView: UIView, UIContentView {
         // ラベルから削ると、UILabelは収まらない行を描かないため、2行の本文が1行で切れる。
         let bottom = bottomAnchor.constraint(equalTo: bodyView.bottomAnchor, constant: margins.bottom)
         bottom.priority = UILayoutPriority(UILayoutPriority.defaultHigh.rawValue - 1)
-        // まとめた行では、アイコンを並べた下に誰が何をしたかの行を置く。
+        // まとめた行では、アイコンを並べた下に誰が何をしたかの行を置く。上の余白とアイコンとのあいだは、行の字面の上端から測る。
+        let headerTopInset = headerLabel.glyphsTopInset
         let headerTop = configuration.groupAvatars.isEmpty
-            ? headerLabel.topAnchor.constraint(equalTo: topAnchor, constant: margins.top)
-            : headerLabel.topAnchor.constraint(equalTo: groupAvatarClip.bottomAnchor, constant: metrics.groupAvatarHeaderSpacing)
+            ? headerLabel.firstBaselineAnchor.constraint(equalTo: topAnchor, constant: margins.top + headerTopInset)
+            : headerLabel.firstBaselineAnchor.constraint(equalTo: groupAvatarClip.bottomAnchor, constant: metrics.groupAvatarHeaderSpacing + headerTopInset)
         let groupAvatarSizes = groupAvatarViews.flatMap { view in
             [view.widthAnchor.constraint(equalToConstant: metrics.groupAvatarSize), view.heightAnchor.constraint(equalToConstant: metrics.groupAvatarSize)]
         }
@@ -380,11 +385,12 @@ extension NotificationContentView {
         return frames
     }
 
-    /// 誰が何をしたかの行の字面。上端はラベルの上端、下端は最後のベースラインからem枠で測る。下に置く中身との間隔は、この下端から測るため。
+    /// 誰が何をしたかの行の字面。上端は最初のベースラインから、下端は最後のベースラインから、em枠で測る。上下の間隔は、この上端と下端から測るため。
     private func headerGlyphsFrame() -> [CGRect]? {
         guard let label = headerLabel.previewFrame(in: self)?.first else { return nil }
+        let top = headerFirstBaselineGuide.layoutFrame.minY - headerLabel.glyphsTopInset
         let bottom = headerLastBaselineGuide.layoutFrame.minY + current.metrics.headerFont.pointSize * PostBodyView.emBoxDescent
-        return [CGRect(x: label.minX, y: label.minY, width: label.width, height: max(bottom - label.minY, 0))]
+        return [CGRect(x: label.minX, y: top, width: label.width, height: max(bottom - top, 0))]
     }
 
     /// 名前の前に差し込んだアイコンと、アイコンと名前のすき間。アイコンを差し込んでいなければ空。

@@ -145,7 +145,7 @@ public enum AppearanceHighlight: Equatable, Sendable {
         let notificationPairs: [(AppearanceValue, AppearanceHighlight)] = [
             (N.groupAvatarSize, .part(.groupAvatars)),
             (N.groupAvatarSpacing, .part(.groupAvatarGaps)),
-            (N.groupAvatarHeaderSpacing, .verticalGap(above: [.groupAvatars], below: [.notificationHeader])),
+            (N.groupAvatarHeaderSpacing, .verticalGap(above: [.groupAvatars], below: [.notificationHeaderGlyphs])),
 
             (N.headerText, .part(.notificationHeader)),
             (N.headerAvatarSize, .firstOf([.part(.notificationHeaderAvatar), .part(.notificationHeader)])),

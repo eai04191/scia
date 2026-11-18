@@ -22,6 +22,8 @@ final class SpoilerView: UIControl {
     private let textLabel = EmojiLabel()
     private let toggleLabel = UILabel()
     private var paddingConstraints: [NSLayoutConstraint] = []
+    private lazy var textBaselines = LabelBaselineGuides(of: textLabel, in: self)
+    private lazy var toggleBaselines = LabelBaselineGuides(of: toggleLabel, in: self)
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -34,6 +36,7 @@ final class SpoilerView: UIControl {
             label.isUserInteractionEnabled = false
             addSubview(label)
         }
+        _ = (textBaselines, toggleBaselines)
         NSLayoutConstraint.activate([
             toggleLabel.leadingAnchor.constraint(equalTo: textLabel.leadingAnchor),
             toggleLabel.trailingAnchor.constraint(lessThanOrEqualTo: textLabel.trailingAnchor),
@@ -62,21 +65,21 @@ final class SpoilerView: UIControl {
         paddingConstraints = [
             textLabel.firstBaselineAnchor.constraint(equalTo: topAnchor, constant: content.padding + PostBodyView.textTopInset(of: content.text)),
             textLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: content.padding),
-            toggleLabel.topAnchor.constraint(equalTo: textLabel.bottomAnchor, constant: content.buttonSpacing),
+            toggleLabel.firstBaselineAnchor.constraint(equalTo: textLabel.lastBaselineAnchor, constant: textLabel.glyphsBottomInset + content.buttonSpacing + toggleLabel.glyphsTopInset),
             textLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -content.padding),
-            bottomAnchor.constraint(equalTo: toggleLabel.lastBaselineAnchor, constant: content.padding + toggleLabel.font.pointSize * PostBodyView.emBoxDescent),
+            bottomAnchor.constraint(equalTo: toggleLabel.lastBaselineAnchor, constant: content.padding + toggleLabel.glyphsBottomInset),
         ]
         NSLayoutConstraint.activate(paddingConstraints)
     }
 
-    /// 開閉のボタンの文字の枠。「投稿の見た目」のプレビューで場所を示すときに使う。
+    /// 開閉のボタンの字面の枠。「投稿の見た目」のプレビューで場所を示すときに使う。
     func buttonPreviewFrame(in space: UIView) -> [CGRect]? {
-        toggleLabel.previewFrame(in: space)
+        toggleBaselines.glyphsFrame(in: space)
     }
 
-    /// 注意書きの文字の枠。「投稿の見た目」のプレビューで、文字と開くボタンのあいだを示すときに使う。
+    /// 注意書きの字面の枠。「投稿の見た目」のプレビューで、文字と開くボタンのあいだを示すときに使う。
     func textPreviewFrame(in space: UIView) -> [CGRect]? {
-        textLabel.previewFrame(in: space)
+        textBaselines.glyphsFrame(in: space)
     }
 
     static func toggleTitle(isCollapsed: Bool, kind: PostBodyContent.Spoiler.Kind) -> String {

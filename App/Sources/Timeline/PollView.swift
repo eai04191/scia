@@ -362,10 +362,10 @@ final class PollView: UIView {
         summaryText.cancelTransition()
     }
 
-    /// 表示中の選択肢ごとの、枠と文字の枠。「投稿の見た目」のプレビューで、選択肢のあいだと上下の余白を示すときに使う。
+    /// 表示中の選択肢ごとの、枠と文字の字面の枠。「投稿の見た目」のプレビューで、選択肢のあいだと上下の余白を示すときに使う。
     func optionPreviewFrames(in space: UIView) -> [(option: CGRect, title: CGRect)] {
         optionViews.compactMap { option in
-            guard let frame = option.previewFrame(in: space)?.first, let title = option.titleLabel.previewFrame(in: space)?.first else { return nil }
+            guard let frame = option.previewFrame(in: space)?.first, let title = option.titleGlyphsFrame(in: space)?.first else { return nil }
             return (frame, title)
         }
     }
@@ -434,6 +434,7 @@ final class PollOptionView: UIControl {
     private let percentText = NumericTextOverlay(alignment: .trailing)
     private let ownVoteView = UIImageView(image: UIImage(systemName: "checkmark"))
     private var variableConstraints: [NSLayoutConstraint] = []
+    private lazy var titleBaselines = LabelBaselineGuides(of: titleLabel, in: self)
     /// 棒の長さの割合。描いている長さと、伸ばした先の長さ。
     private var drawnFraction: CGFloat = 0
     private var targetFraction: CGFloat = 0
@@ -479,6 +480,7 @@ final class PollOptionView: UIControl {
             addSubview(view)
         }
         percentText.overlay(on: percentLabel)
+        _ = titleBaselines
         // 枠の色はCGColorで、外観やティントカラーが変わっても描き直されないため、変わったら当て直す。
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: Self, _) in
             self.layer.borderColor = UIColor.tintColor.cgColor
@@ -545,8 +547,9 @@ final class PollOptionView: UIControl {
             percentLabel.firstBaselineAnchor.constraint(equalTo: titleLabel.firstBaselineAnchor),
             titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: horizontalPadding + leadingWidth + 6),
             titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -(horizontalPadding + trailingWidth + 4)),
-            titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: padding),
-            bottomAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: padding),
+            // 上下の余白は、投稿の本文と同じく、選択肢の文字の字面から測る。
+            titleLabel.firstBaselineAnchor.constraint(equalTo: topAnchor, constant: padding + titleLabel.glyphsTopInset),
+            bottomAnchor.constraint(equalTo: titleLabel.lastBaselineAnchor, constant: padding + titleLabel.glyphsBottomInset),
             ownVoteView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -horizontalPadding),
             ownVoteView.centerYAnchor.constraint(equalTo: titleLabel.firstBaselineAnchor, constant: -font.capHeight / 2),
         ]
@@ -562,6 +565,11 @@ final class PollOptionView: UIControl {
             accessibilityTraits = .staticText
             accessibilityValue = [option.fraction.map { Self.percentText($0) }, option.isOwnVote ? PostTexts.Poll.ownVote : nil].compactMap(\.self).joinedAsTextList
         }
+    }
+
+    /// 選択肢の文字の字面の枠。「投稿の見た目」のプレビューで、上下の余白を示すときに使う。
+    func titleGlyphsFrame(in space: UIView) -> [CGRect]? {
+        titleBaselines.glyphsFrame(in: space)
     }
 
     private static func percentText(_ fraction: Double) -> String {

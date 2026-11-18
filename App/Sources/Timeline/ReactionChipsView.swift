@@ -410,12 +410,20 @@ final class ReactionChipButton: UIControl {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// 高さは中身ではなく文字の行の高さで決める。カスタム絵文字の画像はUnicodeの絵文字より行を少し高くするため、中身で決めると並んだボタンの高さが揃わない。
+    /// 高さは中身ではなく文字の字面（em枠）の高さで決め、上下の余白は投稿の本文と同じく字面から測る。
+    /// カスタム絵文字の画像はUnicodeの絵文字より行を少し高くするため、中身で決めると並んだボタンの高さが揃わない。
     override func sizeThatFits(_ size: CGSize) -> CGSize {
         let side = sidePadding(within: size.width)
         let contentWidth = contentSizes(within: size.width - side.leading - side.trailing).total
-        let lineHeight = ceil(label.font.lineHeight)
-        return CGSize(width: max(ceil(contentWidth) + side.leading + side.trailing, 44), height: lineHeight + padding.top + padding.bottom)
+        let glyphsHeight = ceil(label.font.pointSize * (PostBodyView.emBoxAscent + PostBodyView.emBoxDescent))
+        return CGSize(width: max(ceil(contentWidth) + side.leading + side.trailing, 44), height: glyphsHeight + padding.top + padding.bottom)
+    }
+
+    /// 文字の行の中央から、字面（em枠）の中央までの下向きの距離。中身を、行ではなく字面がボタンの上下の真ん中に来るように置くのに使う。
+    private static func glyphsCenterOffset(of font: UIFont) -> CGFloat {
+        let lineCenterAboveBaseline = (font.ascender + font.descender) / 2
+        let glyphsCenterAboveBaseline = font.pointSize * (PostBodyView.emBoxAscent - PostBodyView.emBoxDescent) / 2
+        return lineCenterAboveBaseline - glyphsCenterAboveBaseline
     }
 
     /// 絵文字と数を並べる幅。数のあいだは、これまで空白1文字で空けていたのと同じ幅にする。
@@ -526,13 +534,14 @@ final class ReactionChipButton: UIControl {
     override func layoutSubviews() {
         super.layoutSubviews()
         layer.cornerRadius = bounds.height / 2
-        // 中身の高さのまま縦の真ん中に置く。行より高い中身も、切らずにはみ出させる。
+        // 中身の高さのまま、字面が縦の真ん中に来るように置く。行より高い中身も、切らずにはみ出させる。
+        let shift = Self.glyphsCenterOffset(of: label.font)
         let side = sidePadding(within: bounds.width)
         let width = bounds.width - side.leading - side.trailing
         let sizes = contentSizes(within: width)
         guard count != nil else {
             let height = ceil(sizes.emoji.height)
-            label.frame = CGRect(x: side.leading, y: (bounds.height - height) / 2, width: width, height: height)
+            label.frame = CGRect(x: side.leading, y: (bounds.height - height) / 2 + shift, width: width, height: height)
             label.textAlignment = .center
             return
         }
@@ -540,7 +549,7 @@ final class ReactionChipButton: UIControl {
         let emojiWidth = min(ceil(sizes.emoji.width), max(width - sizes.gap - sizes.count.width, 0))
         let emojiHeight = ceil(sizes.emoji.height)
         label.textAlignment = .natural
-        label.frame = CGRect(x: start, y: (bounds.height - emojiHeight) / 2, width: emojiWidth, height: emojiHeight)
+        label.frame = CGRect(x: start, y: (bounds.height - emojiHeight) / 2 + shift, width: emojiWidth, height: emojiHeight)
         // 数の枠は左端に寄せて描かせ、入れ替わっている間は、入れ替わる前の枠の幅より狭めない。
         // ボタンの幅は先に新しい幅になるので、新しい数の幅にすると、数が減って幅が狭まるときに、入れ替わる途中の前の数が切り詰められるため（録画で確かめた）。
         // 入れ替わっていないときは今の幅に収める。列が狭まったときに、前の広い枠のまま数をボタンからはみ出させないため。
@@ -548,7 +557,7 @@ final class ReactionChipButton: UIControl {
         let available = max(bounds.width - countX - side.trailing, ceil(sizes.count.width))
         let countWidth = max(available, transitionCountFrameWidth ?? 0)
         lastCountFrameWidth = countWidth
-        countHosting.view.frame = CGRect(x: countX, y: 0, width: countWidth, height: bounds.height)
+        countHosting.view.frame = CGRect(x: countX, y: Self.glyphsCenterOffset(of: countFont), width: countWidth, height: bounds.height)
     }
 
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {

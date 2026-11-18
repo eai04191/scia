@@ -1,4 +1,5 @@
 import SciaCore
+import TextKit2Label
 import UIKit
 
 /// 投稿のリンクカード。左にサムネイル、右にサイトの名前、見出し、説明を1行ずつ並べる。見せ方は`docs/link-card.md`。
@@ -57,9 +58,10 @@ final class LinkCardView: UIButton {
     /// 閲覧注意のぼかし。ぼかしの素材を作るのは重く、タイムラインの行はどれもリンクカードを持つため、初めてぼかすときに作る。
     private var coverView: UIView?
     private let symbolView = UIImageView(image: UIImage(systemName: "link"))
-    private let siteLabel = UILabel()
-    private let headlineLabel = UILabel()
-    private let descriptionLabel = UILabel()
+    // 行の上下を字面から測るため、描くのと同じ並べ方でベースラインを求められるよう、TextKit 2で描く。
+    private let siteLabel = TextKitLabel()
+    private let headlineLabel = TextKitLabel()
+    private let descriptionLabel = TextKitLabel()
     private(set) var content: Content?
     private var loadTask: Task<Void, Never>?
     /// いま描いているサムネイルの取得元。同じなら読み直さない。
@@ -101,6 +103,7 @@ final class LinkCardView: UIButton {
         siteLabel.textColor = .secondaryLabel
         descriptionLabel.textColor = .secondaryLabel
         for label in [siteLabel, headlineLabel, descriptionLabel] {
+            label.drawsWithTextKit = true
             label.lineBreakMode = .byTruncatingTail
         }
         for view in [thumbnailView, symbolView, siteLabel, headlineLabel, descriptionLabel] {
@@ -315,12 +318,16 @@ final class LinkCardView: UIButton {
 
     private func setText(of content: Content) {
         let text = Self.text(of: content.card)
-        for (label, string) in [(siteLabel, text.site), (headlineLabel, text.title), (descriptionLabel, text.description)] {
-            label.text = string
-            label.textAlignment = Self.alignment(of: string)
-        }
         headlineLabel.textColor = text.titleIsURL ? .secondaryLabel : .label
-        updateFonts()
+        updateFonts(texts: [(siteLabel, text.site), (headlineLabel, text.title), (descriptionLabel, text.description)])
+    }
+
+    /// 文字列を、ラベルの書体と色と、文字の書く方向の揃えを付けて入れる。
+    /// TextKit 2で描くラベルは、入れた時点の書体と色を文字列に持ち、`textAlignment`も読まないので、書体や色を変えたら入れ直す。
+    private static func setDisplayedText(_ string: String, of label: TextKitLabel) {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = alignment(of: string)
+        label.attributedText = NSAttributedString(string: string, attributes: [.font: label.font as UIFont, .foregroundColor: label.textColor as UIColor, .paragraphStyle: paragraph])
     }
 
     /// 文字を、その言語の書く方向に寄せる。サムネイルの位置にも、アプリの言語の方向にもよらない。
@@ -365,29 +372,49 @@ final class LinkCardView: UIButton {
     /// 見出しの行の高さを決める文字。見出しの代わりにURLを出すときは、太字にせず控えめにする。
     private var titleFont: UIFont { typography.font(.linkCardTitle, compatibleWith: traitCollection) }
     /// 縦に並べる文字の行と、それぞれの文字と行数。出さない行は含めない。
-    private var textRows: [(label: UILabel, font: UIFont, lines: Int)] {
+    private var textRows: [(label: TextKitLabel, font: UIFont, lines: Int)] {
         let descriptionLines = content?.descriptionLines ?? 1
         return [
             content?.showsSite == false ? nil : (siteLabel, siteFont, 1),
-            (headlineLabel, titleFont, max(content?.titleLines ?? 1, 1)),
+            // 見出しは太字にすることがあるので、ラベルに入れた書体で測る。
+            (headlineLabel, headlineLabel.font, max(content?.titleLines ?? 1, 1)),
             descriptionLines > 0 ? (descriptionLabel, siteFont, descriptionLines) : nil,
         ].compactMap(\.self)
     }
 
-    /// 文字の行を並べた高さ。説明が短くて行数より少なくても、カードの高さを揃えるため、決めた行数ぶんを取る。
+    /// 文字の行を並べた、最初の行の字面の上端から最後の行の字面の下端までの高さ。行のあいだも字面から測る。
+    /// 説明が短くて行数より少なくても、カードの高さを揃えるため、決めた行数ぶんを取る。
     private var textHeight: CGFloat {
         let rows = textRows
         let spacing = content?.lineSpacing ?? 0
-        return rows.reduce(0) { $0 + Self.blockHeight(font: $1.font, lines: $1.lines) } + spacing * CGFloat(max(rows.count - 1, 0))
+        return rows.reduce(0) { $0 + Self.glyphsHeight(font: $1.font, lines: $1.lines) } + spacing * CGFloat(max(rows.count - 1, 0))
     }
 
-    /// `lines`行ぶんの文字の高さ。1行は書体の行の高さで取る。
-    /// 2行以上は、日本語を含めて実際に折り返したときの高さで測る。日本語の代わりの書体は行が高く、書体の行の高さを行数倍した枠には1行しか入らないため。
-    private static func blockHeight(font: UIFont, lines: Int) -> CGFloat {
-        guard lines > 1 else { return font.lineHeight }
-        let sample = Array(repeating: PostTexts.lineHeightSample, count: lines).joined(separator: "\n") as NSString
-        return ceil(sample.boundingRect(with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude), options: .usesLineFragmentOrigin, attributes: [.font: font], context: nil).height)
+    /// `lines`行ぶんの文字の、最初の行の字面の上端から最後の行の字面の下端まで。日本語を含めて改行した見本を、描くのと同じTextKit 2で並べたベースラインから、em枠で測る。
+    private static func glyphsHeight(font: UIFont, lines: Int) -> CGFloat {
+        let key = GlyphsHeightKey(font: font, lines: lines)
+        if let height = glyphsHeights[key] { return height }
+        let sampler = TextKitLabel()
+        sampler.drawsWithTextKit = true
+        sampler.numberOfLines = 0
+        sampler.font = font
+        sampler.text = Array(repeating: PostTexts.lineHeightSample, count: lines).joined(separator: "\n")
+        let width = CGFloat(10_000)
+        let height = sampler.textRect(forBounds: CGRect(x: 0, y: 0, width: width, height: .greatestFiniteMagnitude), limitedToNumberOfLines: 0).height
+        let baselines = sampler.textKitBaselines(width: width)
+        let result = (height - baselines.lastFromBottom) - baselines.first + font.pointSize * (PostBodyView.emBoxAscent + PostBodyView.emBoxDescent)
+        glyphsHeights[key] = result
+        return result
     }
+
+    private struct GlyphsHeightKey: Hashable {
+        let font: UIFont
+        let lines: Int
+    }
+
+    /// 書体と行数ごとの`glyphsHeight`。見本は変わらないので、一度測ったら使い回す。
+    private static var glyphsHeights: [GlyphsHeightKey: CGFloat] = [:]
+
 
     /// テストで、説明が描く行を確かめるためのラベル。
     var descriptionLabelForTesting: UILabel? {
@@ -397,15 +424,15 @@ final class LinkCardView: UIButton {
     /// 見出しと、サイト名と説明の枠。「投稿の見た目」のプレビューで場所を示すときに使う。
     func textPreviewFrames(in space: UIView) -> AppearancePreviewFrames {
         var frames: AppearancePreviewFrames = [:]
-        frames[.cardTitle] = headlineLabel.previewFrame(in: space)
+        frames[.cardTitle] = glyphsFrame(of: headlineLabel, in: space)
         frames[.cardImage] = thumbnailWidth > 0 ? thumbnailView.previewFrame(in: space) : nil
-        frames[.cardDescription] = descriptionLabel.previewFrame(in: space)
-        frames[.cardSite] = siteLabel.previewFrame(in: space)
-        let detail = [siteLabel, descriptionLabel].compactMap { $0.previewFrame(in: space) }.flatMap(\.self)
+        frames[.cardDescription] = glyphsFrame(of: descriptionLabel, in: space)
+        frames[.cardSite] = glyphsFrame(of: siteLabel, in: space)
+        let detail = [siteLabel, descriptionLabel].compactMap { glyphsFrame(of: $0, in: space) }.flatMap(\.self)
         if !detail.isEmpty {
             frames[.cardDetail] = detail
         }
-        let rows = textRows.compactMap { $0.label.previewFrame(in: space)?.first }
+        let rows = textRows.compactMap { glyphsFrame(of: $0.label, in: space)?.first }
         if rows.count > 1 {
             frames[.cardLineGaps] = AppearanceHighlight.gaps(between: rows)
         }
@@ -418,7 +445,7 @@ final class LinkCardView: UIButton {
             // 画像を出さない設定では、画像があった端を示す。
             frames[.cardImageSlot] = [CGRect(x: thumbnailOnRight ? card.maxX - thickness : card.minX, y: card.minY, width: thickness, height: card.height)]
         }
-        if let site = siteLabel.previewFrame(in: space), !siteLabel.isHidden {
+        if let site = glyphsFrame(of: siteLabel, in: space), !siteLabel.isHidden {
             frames[.cardSiteSlot] = site
         } else if content?.showsSite == false, let first = rows.first {
             frames[.cardSiteSlot] = [CGRect(x: first.minX, y: first.minY - thickness, width: first.width, height: thickness)]
@@ -429,7 +456,18 @@ final class LinkCardView: UIButton {
         return frames
     }
 
-    private func updateFonts() {
+    /// 文字の行の字面の枠。上端は最初のベースラインから、下端は最後のベースラインから、並びと同じくem枠で測る。
+    private func glyphsFrame(of label: TextKitLabel, in space: UIView) -> [CGRect]? {
+        guard let frame = label.previewFrame(in: space)?.first, let text = label.attributedText, text.length > 0,
+              let row = textRows.first(where: { $0.label === label }) else { return nil }
+        let baselines = label.textKitBaselines(width: label.bounds.width)
+        let top = frame.minY + baselines.first - row.font.pointSize * PostBodyView.emBoxAscent
+        let bottom = frame.maxY - baselines.lastFromBottom + row.font.pointSize * PostBodyView.emBoxDescent
+        return [CGRect(x: frame.minX, y: top, width: frame.width, height: max(bottom - top, 0))]
+    }
+
+    /// - Parameter texts: 入れ直す文字列。nilなら、今の文字列を新しい書体で入れ直す。
+    private func updateFonts(texts: [(TextKitLabel, String)]? = nil) {
         siteLabel.isHidden = content?.showsSite == false
         descriptionLabel.isHidden = (content?.descriptionLines ?? 1) == 0
         descriptionLabel.numberOfLines = max(content?.descriptionLines ?? 1, 1)
@@ -438,6 +476,9 @@ final class LinkCardView: UIButton {
         let showsURL = content.map { Self.text(of: $0.card).titleIsURL } ?? false
         headlineLabel.font = showsURL || content?.boldsTitle == false ? titleFont : titleFont.bold
         descriptionLabel.font = siteFont
+        for (label, string) in texts ?? [siteLabel, headlineLabel, descriptionLabel].map({ ($0, $0.text ?? "") }) {
+            Self.setDisplayedText(string, of: label)
+        }
     }
 
     private func updateBorderColor() {
@@ -484,13 +525,16 @@ final class LinkCardView: UIButton {
         let padding = content?.padding ?? 0
         let textX = (thumbnailOnRight ? 0 : thumbnailWidth) + padding
         let textWidth = max(bounds.width - thumbnailWidth - padding * 2, 0)
+        // 各行の字面の上端。
         var y = (bounds.height - textHeight) / 2
         for (label, font, lines) in textRows {
             // 行数より短い説明は、上に詰めて置く。UILabelは枠の上下中央に描くため、枠を文字の高さに合わせる。
-            let block = Self.blockHeight(font: font, lines: lines)
+            // 枠は文字の高さちょうどにし、ベースラインを並べたとおりの位置に置く。
             let fitted = label.textRect(forBounds: CGRect(x: 0, y: 0, width: textWidth, height: .greatestFiniteMagnitude), limitedToNumberOfLines: lines).height
-            label.frame = CGRect(x: textX, y: y, width: textWidth, height: ceil(max(min(block, fitted), font.lineHeight)))
-            y += block + (content?.lineSpacing ?? 0)
+            // 字面の上端が行の上端に来るよう、出す文字の最初のベースラインから、ラベルの上端を決める。
+            let firstBaseline = label.textKitBaselines(width: textWidth).first
+            label.frame = CGRect(x: textX, y: y - (firstBaseline - font.pointSize * PostBodyView.emBoxAscent), width: textWidth, height: fitted)
+            y += Self.glyphsHeight(font: font, lines: lines) + (content?.lineSpacing ?? 0)
         }
         updateThumbnail()
     }

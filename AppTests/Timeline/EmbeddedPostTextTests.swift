@@ -100,7 +100,7 @@ struct EmbeddedPostTextTests {
         #expect(abs(unicodeHeight - customHeight) < 1, "\(unicodeHeight) \(customHeight)")
     }
 
-    /// 本文の右に出すサムネイルの上端は、本文の1行目の字面の上端にそろえる。
+    /// 本文の右に出すサムネイルの上端は、本文の1行目の字面の上端にそろえる。字面の上端は、囲みの上端から内側の余白だけ下に置く。
     @Test func besideMediaTopAlignsWithFirstLine() throws {
         let attachment = MediaAttachment(
             id: "1",
@@ -122,7 +122,9 @@ struct EmbeddedPostTextTests {
         let layout = TextKitLabelLayout.layout(of: TextKitLabelLayout.filled(text, style: style), width: textWidth, maximumLines: 0, style: style)
         let firstBaseline = try #require(TextKitLabelLayout.metrics(of: layout, displayScale: view.traitCollection.displayScale)).firstBaseline
 
-        #expect(abs(grid.frame.minY - (padding + firstBaseline - PostBodyView.textTopInset(of: text))) < 0.5)
+        let label = try #require(view.subviews.compactMap { $0 as? LinkLabel }.first)
+        #expect(abs(grid.frame.minY - (label.frame.minY + firstBaseline - PostBodyView.textTopInset(of: text))) < 0.5)
+        #expect(abs(grid.frame.minY - padding) < 0.5)
     }
 
     /// 大きくした絵文字が、最初の段落の折り返したあとの行にだけあれば、サムネイルの上端は、絵文字のない1行目の字面の上端にそろえる。
@@ -151,6 +153,8 @@ struct EmbeddedPostTextTests {
         let metrics = try #require(TextKitLabelLayout.metrics(of: layout, displayScale: view.traitCollection.displayScale))
 
         try #require(metrics.lineCount > 1)
-        #expect(abs(grid.frame.minY - (padding + metrics.firstBaseline - font.pointSize * PostBodyView.emBoxAscent)) < 0.5)
+        let label = try #require(view.subviews.compactMap { $0 as? LinkLabel }.first)
+        #expect(abs(grid.frame.minY - (label.frame.minY + metrics.firstBaseline - font.pointSize * PostBodyView.emBoxAscent)) < 0.5)
+        #expect(abs(grid.frame.minY - padding) < 0.5)
     }
 }
