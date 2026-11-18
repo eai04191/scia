@@ -247,7 +247,7 @@ extension SettingsPage {
             [
                 SettingsSection(header: "HDRのメディアの明るさ", rows: [.item(.mediaDynamicRange), .item(.viewerMediaDynamicRange)]),
                 SettingsSection(header: "モバイル通信", rows: [.item(.originalThumbnailsOnExpensiveNetwork)]),
-                SettingsSection(footer: "投稿したアプリが自動で付けたと思われる説明にならない代替テキストをないものとして扱います。", rows: [.item(.ignoresUselessAltText)]),
+                SettingsSection(footer: "投稿したアプリが自動で付けたと思われる説明にならない代替テキストをないものとして扱います。" + SettingsTexts.Presets.notInPreset, rows: [.item(.ignoresUselessAltText)]),
             ]
         case .profile:
             [

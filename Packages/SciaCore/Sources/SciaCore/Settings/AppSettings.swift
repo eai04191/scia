@@ -131,9 +131,10 @@ public final class AppSettings {
     }
 
     /// タイムラインの本文を自動で訳す投稿の言語。空なら訳さない（docs/auto-translation.md）。
+    /// プリセットに含めない。言語のモデルが入っているものだけ選べ、端末の状態で選べるものが変わるため（docs/preset.md）。
     public var autoTranslationLanguages: [String] {
-        get { list(Keys.autoTranslationLanguages) ?? [] }
-        set { write(.list(newValue), Keys.autoTranslationLanguages) }
+        get { store.autoTranslationLanguages }
+        set { store.autoTranslationLanguages = newValue }
     }
 
     /// 自動翻訳の対象外にした人のハンドル（`username@domain`）。対象外にした順（docs/auto-translation.md）。
@@ -170,9 +171,10 @@ public final class AppSettings {
     }
 
     /// 自動翻訳の翻訳の方式（docs/auto-translation.md）。
+    /// プリセットに含めない。Apple Intelligenceを使える端末だけ選べ、端末の状態で選べるものが変わるため（docs/preset.md）。
     public var autoTranslationStrategy: TranslationStrategy {
-        get { choice(Keys.autoTranslationStrategy, default: .lowLatency) }
-        set { write(.text(newValue.rawValue), Keys.autoTranslationStrategy) }
+        get { store.autoTranslationStrategy }
+        set { store.autoTranslationStrategy = newValue }
     }
 
     /// 届いた通知を、ステータスバーの場所に流す。
@@ -694,9 +696,7 @@ public final class AppSettings {
         static let showsProfileEndorsements = "showsProfileEndorsements"
         static let usesDynamicProfileAccent = "usesDynamicProfileAccent"
         static let isAutoTranslationEnabled = "isAutoTranslationEnabled"
-        static let autoTranslationLanguages = "autoTranslationLanguages"
         static let autoTranslationTarget = "autoTranslationTarget"
-        static let autoTranslationStrategy = "autoTranslationStrategy"
         static let insertionMotion = "insertionMotion"
         static let accentColor = "accentColor"
         static let linkBrowser = "linkBrowser"
@@ -778,6 +778,14 @@ public final class SettingsStore {
         didSet { defaults.set(autoTranslationExcludedHandles, forKey: Keys.autoTranslationExcludedHandles) }
     }
 
+    var autoTranslationLanguages: [String] {
+        didSet { defaults.set(autoTranslationLanguages, forKey: Keys.autoTranslationLanguages) }
+    }
+
+    var autoTranslationStrategy: TranslationStrategy {
+        didSet { defaults.set(autoTranslationStrategy.rawValue, forKey: Keys.autoTranslationStrategy) }
+    }
+
     var autoTranslationModelRevision = 0
 
     var profilePostsFilter: ProfilePostsFilter {
@@ -818,6 +826,9 @@ public final class SettingsStore {
         library = PresetLibrary(stored: defaults.data(forKey: Keys.presets))
         ignoresUselessAltText = defaults.object(forKey: Keys.ignoresUselessAltText) as? Bool ?? true
         autoTranslationExcludedHandles = defaults.stringArray(forKey: Keys.autoTranslationExcludedHandles) ?? []
+        autoTranslationLanguages = defaults.stringArray(forKey: Keys.autoTranslationLanguages) ?? []
+        // 読めない値（名前を変えた方式など）は、持っていないときと同じく既定値にする。
+        autoTranslationStrategy = defaults.string(forKey: Keys.autoTranslationStrategy).flatMap(TranslationStrategy.init(rawValue:)) ?? .lowLatency
         profilePostsFilter = ProfilePostsFilter(
             showsReplies: defaults.object(forKey: Keys.profileShowsReplies) as? Bool ?? ProfilePostsFilter.standard.showsReplies,
             showsBoosts: defaults.object(forKey: Keys.profileShowsBoosts) as? Bool ?? ProfilePostsFilter.standard.showsBoosts
@@ -990,6 +1001,8 @@ public final class SettingsStore {
         static let presets = "settings.presets"
         static let ignoresUselessAltText = "settings.ignoresUselessAltText"
         static let autoTranslationExcludedHandles = "settings.autoTranslationExcludedHandles"
+        static let autoTranslationLanguages = "settings.autoTranslationLanguages"
+        static let autoTranslationStrategy = "settings.autoTranslationStrategy"
         static let profileShowsReplies = "settings.profileShowsReplies"
         static let profileShowsBoosts = "settings.profileShowsBoosts"
         static let emojiSkinTone = "settings.emojiSkinTone"

@@ -240,18 +240,11 @@ private struct CatalogBuilder {
         let title = switch setting {
         case .enabled: SettingsTexts.AutoTranslation.toggle
         case .target: SettingsTexts.AutoTranslation.target
-        case .strategy: SettingsTexts.AutoTranslation.mode
-        case .languages: SettingsTexts.AutoTranslation.installedHeader(usesSharedModel: false)
         }
         return Entry(title: title, keys: [AppSettings.key(of: setting)]) { settings in
             switch setting {
-            case .enabled: return PresetComparison.on(settings.isAutoTranslationEnabled)
-            case .target:
-                return PresetComparison.text(settings.autoTranslationTarget.map(languageName) ?? SettingsTexts.AutoTranslation.deviceLanguage(name: deviceLanguageName))
-            case .strategy: return PresetComparison.text(settings.autoTranslationStrategy.title)
-            case .languages:
-                let names = settings.autoTranslationLanguages.map(languageName)
-                return .text(names.isEmpty ? TextLists.ItemList(single: SettingsTexts.MenuLayout.empty) : TextLists.items(names))
+            case .enabled: PresetComparison.on(settings.isAutoTranslationEnabled)
+            case .target: PresetComparison.text(settings.autoTranslationTarget.map(languageName) ?? SettingsTexts.AutoTranslation.deviceLanguage(name: deviceLanguageName))
             }
         }
     }

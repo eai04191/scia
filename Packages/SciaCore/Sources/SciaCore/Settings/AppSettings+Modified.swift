@@ -45,8 +45,6 @@ extension AppSettings {
         switch setting {
         case .enabled: Keys.isAutoTranslationEnabled
         case .target: Keys.autoTranslationTarget
-        case .strategy: Keys.autoTranslationStrategy
-        case .languages: Keys.autoTranslationLanguages
         }
     }
 
@@ -150,14 +148,10 @@ extension AppSettings {
     }
 }
 
-/// 自動翻訳の画面で、プリセットに持つ設定。行ごとに点を付けて戻せるようにする。
+/// 自動翻訳の画面で、プリセットに持つ設定。行ごとに点を付けて戻せるようにする。訳す言語と翻訳モードはプリセットに含めない（docs/preset.md）。
 public enum AutoTranslationSetting: CaseIterable, Sendable {
     /// `AppSettings.isAutoTranslationEnabled`。
     case enabled
     /// `AppSettings.autoTranslationTarget`。
     case target
-    /// `AppSettings.autoTranslationStrategy`。
-    case strategy
-    /// `AppSettings.autoTranslationLanguages`。訳す言語のスイッチをまとめて1つの値として持つ。
-    case languages
 }

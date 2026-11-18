@@ -85,17 +85,30 @@ struct SettingsModifiedTests {
     @Test func autoTranslationSettingsResetIndependently() throws {
         let settings = try makeSettings()
         settings.autoTranslationTarget = "en"
-        settings.autoTranslationLanguages = ["fr"]
+        settings.isAutoTranslationEnabled = true
 
         #expect(settings.isModified(AutoTranslationSetting.target))
-        #expect(settings.isModified(AutoTranslationSetting.languages))
-        #expect(!settings.isModified(AutoTranslationSetting.enabled))
+        #expect(settings.isModified(AutoTranslationSetting.enabled))
 
         settings.reset(AutoTranslationSetting.target)
 
         #expect(settings.autoTranslationTarget == nil)
-        #expect(settings.autoTranslationLanguages == ["fr"])
+        #expect(settings.isAutoTranslationEnabled)
         #expect(settings.isModified(.autoTranslation))
+    }
+
+    /// 訳す言語と翻訳モードはプリセットに含めない。プリセットを替えても変わらず、変えても点を付けない。
+    @Test func autoTranslationLanguagesAndStrategyStayOutOfPresets() throws {
+        let settings = AppSettings(defaults: TestScratch.defaults("SettingsModifiedTests.translation"))
+        settings.autoTranslationLanguages = ["fr"]
+        settings.autoTranslationStrategy = .highFidelity
+
+        try settings.store.tryUpdateLibrary { library throws(PresetError) in try library.select(.builtIn(.compact), for: .app) }
+
+        #expect(settings.autoTranslationLanguages == ["fr"])
+        #expect(settings.autoTranslationStrategy == .highFidelity)
+        #expect(settings.presetID == .builtIn(.compact))
+        #expect(!settings.isModified(.autoTranslation))
     }
 
     /// 組み込みのプリセットの値は、どれも設定の画面の行か画面からたどれるキーで、範囲の中の値を持つ。

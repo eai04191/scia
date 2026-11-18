@@ -81,25 +81,30 @@ struct AutoTranslationSettingsView: View {
             }
             .pickerStyle(.navigationLink)
             .contextMenu { resetButton(.target) }
-            if canUseAppleIntelligence {
-                Picker(selection: $settings.autoTranslationStrategy) {
+        }
+        if canUseAppleIntelligence {
+            Section {
+                Picker(SettingsTexts.AutoTranslation.mode, selection: $settings.autoTranslationStrategy) {
                     Text(TranslationStrategy.highFidelity.title).tag(TranslationStrategy.highFidelity)
                     Text(TranslationStrategy.lowLatency.title).tag(TranslationStrategy.lowLatency)
-                } label: {
-                    ModifiedLabel(title: SettingsTexts.AutoTranslation.mode, isModified: settings.isModified(AutoTranslationSetting.strategy))
                 }
-                .contextMenu { resetButton(.strategy) }
+            } footer: {
+                Text(SettingsTexts.Presets.notInPreset)
             }
         }
         if loadedSubject == subject {
             languages
         }
         if !settings.autoTranslationExcludedHandles.isEmpty {
-            Section(SettingsTexts.AutoTranslation.excludedUsers) {
+            Section {
                 ForEach(settings.autoTranslationExcludedHandles, id: \.self) { handle in
                     Text(verbatim: "@\(handle)")
                 }
                 .onDelete { settings.autoTranslationExcludedHandles.remove(atOffsets: $0) }
+            } header: {
+                Text(SettingsTexts.AutoTranslation.excludedUsers)
+            } footer: {
+                Text(SettingsTexts.Presets.notInPreset)
             }
         }
     }
@@ -113,14 +118,11 @@ struct AutoTranslationSettingsView: View {
             Section {
                 ForEach(availability.installed) { language in
                     Toggle(language.name, isOn: isOn(language))
-                        .contextMenu { resetButton(.languages) }
                 }
             } header: {
-                ModifiedLabel(title: SettingsTexts.AutoTranslation.installedHeader(usesSharedModel: usesSharedModel), isModified: settings.isModified(AutoTranslationSetting.languages))
+                Text(SettingsTexts.AutoTranslation.installedHeader(usesSharedModel: usesSharedModel))
             } footer: {
-                if !usesSharedModel {
-                    Text(SettingsTexts.AutoTranslation.removeLanguageFooter)
-                }
+                Text(SettingsTexts.AutoTranslation.installedFooter(usesSharedModel: usesSharedModel))
             }
         }
         if !availability.downloadable.isEmpty {
