@@ -518,7 +518,17 @@ final class SessionController {
         var completionSources = ComposeCompletion.Sources(
             searchAccounts: { query, limit in try await client.searchAccountsForCompletion(query, limit: limit) },
             searchHashtags: { query, limit in try await client.searchHashtagsForCompletion(query, limit: limit) },
-            customEmojis: { try await client.customEmojis() },
+            customEmojis: {
+                #if DEBUG
+                // 検証用。ほかのサーバーの絵文字のリストを、ログインせずに絵文字ピッカーへ出す。
+                if let host = UserDefaults.standard.string(forKey: "debug.customEmojiHost"), let url = URL(string: "https://\(host)/api/v1/custom_emojis") {
+                    let decoder = JSONDecoder()
+                    decoder.keyDecodingStrategy = .convertFromSnakeCase
+                    return ServerEmoji.lastOfEachShortcode(try decoder.decode([ServerEmoji].self, from: try await AppDependencies.remoteFetch.data(from: url)))
+                }
+                #endif
+                return try await client.customEmojis()
+            },
             featuredTags: {
                 // 補完が読むのは、まだ持っていないか、前に読めなかったときだけなので、そのたびに読み直す。
                 await ownFeaturedTags.refresh(purpose: .display)
