@@ -376,13 +376,13 @@ public final class AppSettings {
 
     // MARK: アニメーション
 
-    /// アイコンのアニメーションを再生するか。「アカウントの設定に従う」（nil）なら、表示しているアカウントのサーバーの設定（`serverAutoplaysAnimations`）に従う。
+    /// アイコンのアニメーションを再生するか。「アカウント設定に従う」（nil）なら、表示しているアカウントのサーバーの設定（`serverAutoplaysAnimations`）に従う。
     public var animatesAvatars: Bool {
         get { appearance.animatesAvatars ?? serverAutoplaysAnimations }
         set { appearance.animatesAvatars = newValue }
     }
 
-    /// カスタム絵文字のアニメーションを再生するか。「アカウントの設定に従う」（nil）なら、表示しているアカウントのサーバーの設定（`serverAutoplaysAnimations`）に従う。
+    /// カスタム絵文字のアニメーションを再生するか。「アカウント設定に従う」（nil）なら、表示しているアカウントのサーバーの設定（`serverAutoplaysAnimations`）に従う。
     public var animatesCustomEmojis: Bool {
         get { appearance.animatesCustomEmojis ?? serverAutoplaysAnimations }
         set { appearance.animatesCustomEmojis = newValue }
@@ -398,7 +398,7 @@ public final class AppSettings {
 
     // MARK: メディアの表示
 
-    /// 添付ファイルを、開く前にぼかすか。「アカウントの設定に従う」（nil）なら、表示しているアカウントのサーバーの設定（`serverMediaDisplay`）に従う。
+    /// 添付ファイルを、開く前にぼかすか。「アカウント設定に従う」（nil）なら、表示しているアカウントのサーバーの設定（`serverMediaDisplay`）に従う。
     public var mediaDisplay: MediaDisplay {
         get { appearance.mediaDisplay ?? serverMediaDisplay }
         set { appearance.mediaDisplay = newValue }

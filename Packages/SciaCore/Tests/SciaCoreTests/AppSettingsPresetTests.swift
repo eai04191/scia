@@ -153,7 +153,7 @@ struct AppSettingsPresetTests {
         #expect(homeSettings.statusActions.tap == inherited)
     }
 
-    /// 「アカウントの設定に従う」は値の1つで、親がオンにしていても、子で選べる。選ぶと、そのアカウントのサーバーの値に従う。
+    /// 「アカウント設定に従う」は値の1つで、親がオンにしていても、子で選べる。選ぶと、そのアカウントのサーバーの値に従う。
     @Test func followsAccountSettingOverridesParent() throws {
         let app = makeSettings()
         var base: PresetID = .builtIn(.standard)

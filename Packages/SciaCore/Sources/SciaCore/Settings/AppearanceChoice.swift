@@ -215,7 +215,7 @@ public enum AppearanceChoiceControl {
 public struct AppearanceChoiceOptions {
     /// 選択肢の名前。並べる順。
     public let titles: [String]
-    /// 選択肢の名前の下に添える文。`titles`と同じ順で、添えない選択肢はnil。「アカウントの設定に従う」に、今のアカウントの値を添える。
+    /// 選択肢の名前の下に添える文。`titles`と同じ順で、添えない選択肢はnil。「アカウント設定に従う」に、今のアカウントの値を添える。
     public let subtitles: (AppSettings) -> [String?]
     /// 今選んでいる選択肢の番号。
     public let selectedIndex: (AppSettings) -> Int
@@ -370,11 +370,11 @@ extension AppearanceChoice {
         }
     }
 
-    /// アニメーションを再生するか。「アカウントの設定に従う」はサーバーのアカウントの設定に従い、親のプリセットがオンやオフを持っていても選べる（docs/preset.md）。
-    /// サーバーのアカウントの設定に従う選択肢の名前。
-    static let followsAccountTitle = "アカウントの設定に従う"
+    /// アニメーションを再生するか。「アカウント設定に従う」はサーバーのアカウントの設定に従い、親のプリセットがオンやオフを持っていても選べる（docs/preset.md）。
+    /// サーバーのアカウント設定に従う選択肢の名前。
+    static let followsAccountTitle = "アカウント設定に従う"
 
-    /// 「アカウントの設定に従う」に添える、今のアカウントの値。
+    /// 「アカウント設定に従う」に添える、今のアカウントの値。
     @MainActor private static func serverAnimationSubtitle(_ value: Bool?, _ settings: AppSettings) -> String? {
         guard value == nil else { return nil }
         return settings.serverAutoplaysAnimations ? "オン" : "オフ"

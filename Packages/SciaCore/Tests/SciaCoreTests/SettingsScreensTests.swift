@@ -154,15 +154,15 @@ struct SettingsScreensTests {
         #expect(!settings.isAppearanceGroupModified(media))
     }
 
-    /// アニメーションを再生するかは、「アカウントの設定に従う」「オン」「オフ」から選び、既定は「アカウントの設定に従う」。
-    /// 選んだあとに「アカウントの設定に従う」へ戻せる（docs/preset.md）。
+    /// アニメーションを再生するかは、「アカウント設定に従う」「オン」「オフ」から選び、既定は「アカウント設定に従う」。
+    /// 選んだあとに「アカウント設定に従う」へ戻せる（docs/preset.md）。
     @Test func animationChoiceFollowsAccountUntilChosen() {
         let settings = AppSettings(defaults: TestScratch.defaults("SettingsScreensTests.animations"))
         guard case .options(let options) = AppearanceChoice.animatesAvatars.control else {
             Issue.record("アイコンのアニメーションが、選ぶメニューになっていません")
             return
         }
-        #expect(options.titles == ["アカウントの設定に従う", "オン", "オフ"])
+        #expect(options.titles == ["アカウント設定に従う", "オン", "オフ"])
         #expect(options.selectedIndex(settings) == 0)
 
         options.select(2, settings)

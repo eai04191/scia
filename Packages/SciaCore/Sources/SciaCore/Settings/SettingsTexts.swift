@@ -423,7 +423,7 @@ extension OptionalFeature {
     public var title: String {
         switch self {
         case .markers: "既読位置の保存"
-        case .preferences: "アカウントの設定（公開範囲のデフォルトなど）"
+        case .preferences: "アカウント設定（公開範囲のデフォルトなど）"
         case .instanceV2: "サーバーの設定（v2）"
         case .multipleStatuses: "リンクカードの取り直し"
         case .multipleAccounts: "メンションされたユーザーのアイコン"

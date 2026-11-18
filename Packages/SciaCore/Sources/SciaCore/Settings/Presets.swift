@@ -61,7 +61,7 @@ public enum PresetValue: Codable, Hashable, Sendable {
     case number(Double)
     case text(String)
     case list([String])
-    /// 値がないことを選んだもの。「アカウントの設定に従う」のように、ないことが選択肢の1つになる項目で使う。
+    /// 値がないことを選んだもの。「アカウント設定に従う」のように、ないことが選択肢の1つになる項目で使う。
     /// 項目を持たない（親に従う）こととは別。
     case null
 
