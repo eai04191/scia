@@ -183,7 +183,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         guard traits.verticalSizeClass != .compact else {
             return InAppBrowserSheetLayout(collapsed: nil, medium: nil, large: height)
         }
-        let large = height - Double(window.safeAreaInsets.top) - tuning.value(of: TuningCatalog.inAppBrowserSheetLargeTopGap)
+        let large = height - Double(window.safeAreaInsets.top) - SpacingScale.s2
         let collapsedHeight = tuning.value(of: TuningCatalog.inAppBrowserCollapsedHeight)
         let inner = settings.inAppBrowserHeight.sheetHeight(available: Double(window.safeAreaHeight), minimum: collapsedHeight)
         let medium = min(inner + Double(window.safeAreaInsets.bottom), large)

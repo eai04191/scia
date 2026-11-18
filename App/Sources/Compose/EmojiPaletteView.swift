@@ -70,13 +70,8 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     }
 
     /// 下の段と、シートの下端（キーボードを出していればキーボードの上端）との間。
-    var barBottomInset: CGFloat = 12 {
-        didSet {
-            guard barBottomInset != oldValue else { return }
-            sectionBarBottom.constant = -barBottomInset
-            updateBottomInset()
-        }
-    }
+    /// 下げすぎると、まとまりのボタンを横にスワイプする指がホームインジケーターの操作に取られ、横にスクロールできなかった。
+    private let barBottomInset = CGFloat(SpacingScale.s3)
 
     var cellSize: CGFloat = 48 {
         didSet {

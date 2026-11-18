@@ -69,7 +69,6 @@ struct EmojiPaletteViewTests {
         tuning.setValue(0.5, for: TuningCatalog.composeEmojiPaletteMinimumHeightFraction)
         tuning.setValue(true, for: TuningCatalog.composeEmojiPaletteHardEdgeEffect)
         tuning.setValue(44, for: TuningCatalog.composeEmojiPaletteBarHeight)
-        tuning.setValue(20, for: TuningCatalog.composeEmojiPaletteBarBottomInset)
         tuning.setValue(56, for: TuningCatalog.composeEmojiPaletteCellSize)
         tuning.setValue(160, for: TuningCatalog.composeEmojiPalettePreviewHeight)
         let core = ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning))
@@ -82,7 +81,6 @@ struct EmojiPaletteViewTests {
         #expect(palette.minimumHeightFraction == 0.5)
         #expect(palette.hardEdgeEffect)
         #expect(palette.barHeight == 44)
-        #expect(palette.barBottomInset == 20)
         #expect(palette.cellSize == 56)
         #expect(palette.previewHeight == 160)
     }

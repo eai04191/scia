@@ -472,7 +472,6 @@ final class ProfileController {
                 dim: tuning.value(of: TuningCatalog.profileBannerReflectionDim),
                 seam: tuning.value(of: TuningCatalog.profileBannerReflectionSeam)
             )
-            header.countsSpacing = tuning.value(of: TuningCatalog.profileCountsSpacing)
             header.noteFadeWidth = tuning.value(of: TuningCatalog.profileNoteFadeWidth)
             header.noteExpandDuration = tuning.value(of: TuningCatalog.profileNoteExpandDuration)
             header.accentOptions = ProfileCardPalette.Options(tuning: tuning)

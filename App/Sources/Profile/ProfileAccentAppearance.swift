@@ -118,12 +118,10 @@ struct ProfileAccentAppearance {
 }
 
 extension ProfileCardPalette.Options {
-    /// チューニングの値で作る。
+    /// チューニングの値で作る。確保するコントラストはWCAGとAPCAの目安で決めた値で、チューニングでは変えない。
     @MainActor
     init(tuning: TuningStore) {
         self.init()
-        body = ContrastTarget(ratio: tuning.value(of: TuningCatalog.profileAccentBodyContrast), lc: tuning.value(of: TuningCatalog.profileAccentBodyLc))
-        secondary = ContrastTarget(ratio: tuning.value(of: TuningCatalog.profileAccentSecondaryContrast), lc: tuning.value(of: TuningCatalog.profileAccentSecondaryLc))
         tintsSecondaryText = tuning.value(of: TuningCatalog.profileAccentTintsText)
         darkLightness = tuning.value(of: TuningCatalog.profileAccentDarkLightness)
         darkNeutralMaxLightness = tuning.value(of: TuningCatalog.profileAccentDarkNeutralMaxLightness)

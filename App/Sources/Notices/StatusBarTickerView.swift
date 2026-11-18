@@ -683,6 +683,9 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
         }
     }
 
+    /// 通知の記号の幅の真ん中。
+    private static let typicalSymbolWidth: CGFloat = 17
+
     private func cornerRadius(for frame: CGRect) -> CGFloat {
         switch cutout {
         case .island:
@@ -704,12 +707,12 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
     }
 
     /// 背景の左端から左の中身までの余白と、右の中身から背景の右端までの余白。
-    /// アイランドの機種では、チューニングの値を使う。左は先頭の記号が端の半円と同心に見える値、右は行末のぼかしを端の半円の中に入れる値を初めの値にする。
+    /// アイランドの機種では、左は、記号ごとに変えず、通知の記号の幅（13ptの太字で14〜20pt）の真ん中の記号が端の半円と同心になる長さにする。
+    /// 右は、行末のぼかしを端の半円の中に入れ、余白は一番狭いすき間の段だけにする。
     private var edgePaddings: (leading: CGFloat, trailing: CGFloat) {
         switch cutout {
-        case .island:
-            let tuning = AppDependencies.tuning
-            return (tuning.value(of: TuningCatalog.statusBarTickerLeadingPadding), tuning.value(of: TuningCatalog.statusBarTickerTrailingPadding))
+        case .island(let rect, _):
+            return (rect.height / 2 - Self.typicalSymbolWidth / 2, SpacingScale.s1)
         case .notch: return (14, 14)
         case .none: return (0, 0)
         }

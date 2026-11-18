@@ -520,15 +520,6 @@ public enum TuningCatalog {
         defaultValue: 24
     )
 
-    /// プロフィールの補足情報のカードで、投稿、フォロー、フォロワーの数の行の上と下に空ける余白。
-    public static let profileCountsSpacing = NumberTuning(
-        id: "profile.countsSpacing",
-        title: "補足情報のカードの数の行の上下の余白（pt）",
-        range: 0...32,
-        step: 1,
-        defaultValue: 14
-    )
-
     /// プロフィールの自己紹介を切っているときに、最後の行の右端に重ねる「さらに表示」の手前で、文字をぼかす幅。
     public static let profileNoteFadeWidth = NumberTuning(
         id: "profile.noteFadeWidth",
@@ -545,42 +536,6 @@ public enum TuningCatalog {
         range: 0...1,
         step: 0.05,
         defaultValue: 0.35
-    )
-
-    /// プロフィールのカードで、本文とリンクに確保するコントラスト比（WCAG 2.1）。APCAのLcと両方に届くまで、地に敷く色の明るさを動かす。
-    public static let profileAccentBodyContrast = NumberTuning(
-        id: "profile.accentBodyContrast",
-        title: "カードの本文のWCAGのコントラスト比",
-        range: 1...7,
-        step: 0.5,
-        defaultValue: 4.5
-    )
-
-    /// プロフィールのカードで、見出しや日付などの控えめな文字に確保するコントラスト比。控えめな文字は、この比とAPCAのLcを両方保てる一番薄い色にする。
-    public static let profileAccentSecondaryContrast = NumberTuning(
-        id: "profile.accentSecondaryContrast",
-        title: "カードの控えめな文字のWCAGのコントラスト比",
-        range: 1...7,
-        step: 0.5,
-        defaultValue: 3
-    )
-
-    /// プロフィールのカードで、本文とリンクに確保するAPCAのLcの絶対値。WCAGの比と両方に届くようにする。
-    public static let profileAccentBodyLc = NumberTuning(
-        id: "profile.accentBodyLc",
-        title: "カードの本文のAPCAのLc",
-        range: 0...100,
-        step: 5,
-        defaultValue: 75
-    )
-
-    /// プロフィールのカードで、見出しや日付などの控えめな文字に確保するAPCAのLcの絶対値。13ptの文字のAPCAの目安（Lc 90）より低いのは、本文と強弱を付けるため。
-    public static let profileAccentSecondaryLc = NumberTuning(
-        id: "profile.accentSecondaryLc",
-        title: "カードの控えめな文字のAPCAのLc",
-        range: 0...100,
-        step: 5,
-        defaultValue: 60
     )
 
     /// ダークモードで、地に敷くカードの色の明るさに掛ける倍率。暗い画面で色の面がまぶしくならないようにする。
@@ -1144,25 +1099,6 @@ public enum TuningCatalog {
         defaultValue: false
     )
 
-    /// アイランドの機種で、カプセルの左端から、先頭の記号までの余白。
-    /// 記号ごとに変えず1つの値にする。初めの値は、通知の記号の幅（13ptの太字で14〜20pt、⭐️は17.3pt）の真ん中あたりの記号が、端の半円（半径18.33pt）と同心に見える値。
-    public static let statusBarTickerLeadingPadding = NumberTuning(
-        id: "statusBarTicker.leadingPadding",
-        title: "ステータスバーの通知の左の余白（pt）",
-        range: 0...24,
-        step: 0.5,
-        defaultValue: 10
-    )
-
-    /// アイランドの機種で、右の文頭の行末から、カプセルの右端までの余白。行末はぼかすので、ぼかしの区間を端の半円の中に入れ、余白を別に足さない。
-    public static let statusBarTickerTrailingPadding = NumberTuning(
-        id: "statusBarTicker.trailingPadding",
-        title: "ステータスバーの通知の右の余白（pt）",
-        range: 0...24,
-        step: 0.5,
-        defaultValue: 4
-    )
-
     /// ステータスバーの通知で、入りきらない名前と文頭の行末をぼかす幅。
     public static let statusBarTickerFadeWidth = NumberTuning(
         id: "statusBarTicker.fadeWidth",
@@ -1310,15 +1246,6 @@ public enum TuningCatalog {
         defaultValue: 13
     )
 
-    /// アプリ内のSafariのシートを全画面に広げたときの、安全領域の上端からの空き（pt）。
-    public static let inAppBrowserSheetLargeTopGap = NumberTuning(
-        id: "browser.sheetLargeTopGap",
-        title: "アプリ内のSafariを全画面に広げたときの上の空き（pt）",
-        range: 0...40,
-        step: 1,
-        defaultValue: 8
-    )
-
     /// iPadの幅などでの、アプリ内のSafariのシートの幅の上限（pt）。
     public static let inAppBrowserSheetMaximumWidth = NumberTuning(
         id: "browser.sheetMaximumWidth",
@@ -1335,15 +1262,6 @@ public enum TuningCatalog {
         range: 0...1,
         step: 0.05,
         defaultValue: 0.3
-    )
-
-    /// アプリ内のSafariを伏せたときに、縮めた後ろの画面とシートの間に空ける隙間（pt）。
-    public static let inAppBrowserDockGap = NumberTuning(
-        id: "browser.dockGap",
-        title: "アプリ内のSafariを伏せたときの後ろの画面との隙間（pt）",
-        range: 0...24,
-        step: 1,
-        defaultValue: 4
     )
 
     /// アプリ内のSafariを伏せたときに、タブバーとカプセルを下げる長さ（pt）。縮めた後ろの画面を、見せる範囲よりこの長さだけ下へはみ出させる。
@@ -1834,17 +1752,6 @@ public enum TuningCatalog {
         defaultValue: 38
     )
 
-    /// 絵文字のシートの下の段と、シートの下端との間（pt）。キーボードを出しているときは、キーボードの上端との間。
-    /// 小さいほどiOSのキーボードの地球儀の段のように、ホームインジケーターの場所まで下がる。
-    /// 下げすぎると、まとまりのボタンを横にスワイプする指がホームインジケーターの操作に取られ、横にスクロールできなかった。
-    public static let composeEmojiPaletteBarBottomInset = NumberTuning(
-        id: "compose.emojiPalette.barBottomInset",
-        title: "絵文字のシートの下の段の下の余白（pt）",
-        range: 0...40,
-        step: 1,
-        defaultValue: 12
-    )
-
     /// 絵文字のパレットの、絵文字1つの枠の大きさ（pt）。
     public static let composeEmojiPaletteCellSize = NumberTuning(
         id: "compose.emojiPalette.cellSize",
@@ -2203,13 +2110,8 @@ public enum TuningCatalog {
             .number(profileBannerReflectionBlur),
             .number(profileBannerReflectionDim),
             .number(profileBannerReflectionSeam),
-            .number(profileCountsSpacing),
             .number(profileNoteFadeWidth),
             .number(profileNoteExpandDuration),
-            .number(profileAccentBodyContrast),
-            .number(profileAccentSecondaryContrast),
-            .number(profileAccentBodyLc),
-            .number(profileAccentSecondaryLc),
             .number(profileAccentDarkLightness),
             .number(profileAccentDarkNeutralMaxLightness),
             .number(profileAccentFadeDuration),
@@ -2282,7 +2184,6 @@ public enum TuningCatalog {
             .toggle(composeEmojiPaletteHardEdgeEffect),
             .number(composeEmojiPaletteHapticIntensity),
             .number(composeEmojiPaletteBarHeight),
-            .number(composeEmojiPaletteBarBottomInset),
             .number(composeEmojiPaletteCellSize),
             .number(composeEmojiPalettePreviewHeight),
             .number(composeEmojiPaletteMaxSpan),
@@ -2316,10 +2217,8 @@ public enum TuningCatalog {
             .number(inAppBrowserSnapDwell),
             .number(inAppBrowserSnapTolerance),
             .number(inAppBrowserSafariTopInset),
-            .number(inAppBrowserSheetLargeTopGap),
             .number(inAppBrowserSheetMaximumWidth),
             .number(inAppBrowserSheetDimAlpha),
-            .number(inAppBrowserDockGap),
             .number(inAppBrowserDockContentOverhang),
             .number(inAppBrowserDockCornerRadius),
             .number(inAppBrowserDockDuration),
@@ -2377,8 +2276,6 @@ public enum TuningCatalog {
             .number(statusBarTickerCapacity),
             .number(statusBarTickerAnimationDuration),
             .toggle(statusBarTickerBadgesSymbol),
-            .number(statusBarTickerLeadingPadding),
-            .number(statusBarTickerTrailingPadding),
             .number(statusBarTickerFadeWidth),
         ]),
         TuningSection(id: "media.video", title: "ビューア：動画", items: [

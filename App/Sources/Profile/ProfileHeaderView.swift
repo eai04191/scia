@@ -241,12 +241,7 @@ final class ProfileHeaderView: UIView {
     /// 補足情報の行どうしの間の区切り線。カードの色に合わせて塗り直す。
     private var fieldRowDividers: [UIView] = []
     /// 補足情報のカードで、数の行の上と下に空ける余白。上は区切り線から、下はほかのサーバーのアカウントの行まで。
-    var countsSpacing: CGFloat = 14 {
-        didSet {
-            guard countsSpacing != oldValue else { return }
-            applyCountsSpacing()
-        }
-    }
+    private let countsSpacing = CGFloat(SpacingScale.s3)
     /// 自己紹介を切っているときに、「さらに表示」の手前で文字をぼかす幅。
     var noteFadeWidth: CGFloat {
         get { noteView.fadeWidth }
