@@ -208,6 +208,20 @@ struct PostActionBarTests {
         #expect(harness.viewController.openActionBarItemID == nil)
     }
 
+    /// スレッドの中心の投稿ですべての部品を見せる設定では、その投稿にはいつも出ているので、開く操作は何もせず、ほかの投稿の引き出しも閉じない。
+    @Test func toggleDoesNothingOnThreadFocusRevealingAllParts() throws {
+        let (harness, statuses) = try harness()
+        defer { harness.tearDown() }
+        let other = TimelineViewController.ItemID.status(statuses[12].id)
+        harness.viewController.toggleActionBar(for: other)
+        harness.viewController.threadFocusID = statuses[10].id
+        harness.settings.appearance.revealsAllPartsInThread = true
+        harness.viewController.reconfigure(Set(statuses.map { .status($0.id) }))
+
+        #expect(!harness.viewController.toggleActionBar(for: .status(statuses[10].id)), "いつも出ている投稿で開閉したことを返しています")
+        #expect(harness.viewController.openActionBarItemID == other)
+    }
+
     /// 開くのはタイムラインの投稿だけで、通知には出せない。
     @Test func cannotShowOnNotifications() throws {
         let harness = try TimelineHarness()
