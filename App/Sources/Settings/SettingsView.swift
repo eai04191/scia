@@ -184,17 +184,8 @@ struct SettingsView: View {
     }
 
     private func rootIcon(of page: SettingsPage) -> (systemImage: String, color: UIColor) {
-        switch page {
-        case .account: ("person.crop.circle.fill", .systemBlue)
-        case .presets: ("square.stack.3d.up.fill", .systemPurple)
-        case .tabs: (tabBarShape.shape.symbolName, .systemBlue)
-        case .display: ("circle.lefthalf.filled", .systemBlue)
-        case .interaction: ("hand.tap.fill", .systemOrange)
-        case .compose: ("square.and.pencil", .systemGreen)
-        case .storage: ("externaldrive.fill", .systemGray)
-        case .about: ("doc.text.fill", .systemGray)
-        default: ("gearshape.fill", .systemGray)
-        }
+        if page == .tabs { return (tabBarShape.shape.symbolName, .systemBlue) }
+        return page.categoryIcon ?? ("gearshape.fill", .systemGray)
     }
 
     /// 値を変える画面には、サブタイトルに直しているプリセットを出す。
@@ -296,6 +287,22 @@ struct SettingsView: View {
         case .prefetchedMediaCache: MediaCacheView(category: .mediaPrefetch, actions: StorageView.Actions.app.mediaPrefetch)
         case .licenses: LicensesView()
         case .acknowledgments: AcknowledgmentsView(openProfile: openProfile)
+        }
+    }
+}
+
+extension SettingsPage {
+    /// トップの画面の分類の行に添えるアイコン。プリセットの画面の分類の行にも同じものを添える。タブの並びはタブバーの形で替わるので、ここには持たない。
+    var categoryIcon: (systemImage: String, color: UIColor)? {
+        switch self {
+        case .account: ("person.crop.circle.fill", .systemBlue)
+        case .presets: ("square.stack.3d.up.fill", .systemPurple)
+        case .display: ("circle.lefthalf.filled", .systemBlue)
+        case .interaction: ("hand.tap.fill", .systemOrange)
+        case .compose: ("square.and.pencil", .systemGreen)
+        case .storage: ("externaldrive.fill", .systemGray)
+        case .about: ("doc.text.fill", .systemGray)
+        default: nil
         }
     }
 }

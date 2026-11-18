@@ -185,7 +185,6 @@ struct PresetEditorView: View {
     private var library: PresetLibrary { settings.store.observedLibrary }
 
     var body: some View {
-        .navigationBarTitleDisplayMode(.inline)
         Form {
             switch preset {
             case .user(let number): userSections(number)
@@ -193,6 +192,7 @@ struct PresetEditorView: View {
             }
         }
         .navigationTitle(library.name(of: preset) ?? SettingsPage.presetEditor.title)
+        .navigationBarTitleDisplayMode(.inline)
         .onDisappear(perform: rename)
         .background(WindowAnchorView(anchor: anchor))
     }
@@ -216,7 +216,11 @@ struct PresetEditorView: View {
         }
         Section {
             ForEach([SettingsPage.display, .interaction, .compose], id: \.self) { page in
-                NavigationLink(value: page) { Text(page.rowTitle) }
+                NavigationLink(value: page) {
+                    if let icon = page.categoryIcon {
+                        SettingsCategoryLabel(page.rowTitle, systemImage: icon.systemImage, color: icon.color)
+                    }
+                }
             }
         }
         Section {
