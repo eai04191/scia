@@ -97,7 +97,27 @@ struct API {
         return await send(method, url, body: data)
     }
 
+    // App Store Connect APIは一時的に500を返すことがあるので、5xxは間をあけて試し直す
     private func send(_ method: String, _ url: URL, body: Data?) async -> [String: Any] {
+        let attempts = 3
+        for attempt in 1...attempts {
+            let (status, data) = await sendOnce(method, url, body: body)
+            if (200..<300).contains(status) {
+                if data.isEmpty { return [:] }
+                guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    fail("\(method) \(url.path)の応答を読めない")
+                }
+                return object
+            }
+            let message = "\(method) \(url.path)が\(status)を返した: \(String(decoding: data, as: UTF8.self))"
+            guard (500..<600).contains(status), attempt < attempts else { fail(message) }
+            log("\(message)。\(attempt * 10)秒後に試し直す（\(attempt + 1)/\(attempts)回目）")
+            try? await Task.sleep(for: .seconds(attempt * 10))
+        }
+        fail("\(method) \(url.path)を試し直す回数を使い切った")
+    }
+
+    private func sendOnce(_ method: String, _ url: URL, body: Data?) async -> (status: Int, data: Data) {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("Bearer \(signer.token())", forHTTPHeaderField: "Authorization")
@@ -113,14 +133,7 @@ struct API {
             fail("\(method) \(url.path)に失敗: \(error)")
         }
         guard let status = (response as? HTTPURLResponse)?.statusCode else { fail("\(method) \(url.path)の応答がHTTPでない") }
-        guard (200..<300).contains(status) else {
-            fail("\(method) \(url.path)が\(status)を返した: \(String(decoding: data, as: UTF8.self))")
-        }
-        if data.isEmpty { return [:] }
-        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            fail("\(method) \(url.path)の応答を読めない")
-        }
-        return object
+        return (status, data)
     }
 }
 
