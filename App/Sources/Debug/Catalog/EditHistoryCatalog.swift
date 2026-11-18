@@ -110,7 +110,7 @@ enum EditHistoryCatalog {
             }
             let column = UIStackView()
             column.axis = .vertical
-            for content in builder.contents(for: history, language: "ja", latestCover: covers.cover(for: latest, filterTitles: filterTitles), isHidden: covers.isHidden(statusID: latest.id), filterTitles: filterTitles, revealedEditNumbers: []) {
+            for content in builder.contents(for: history, language: "ja", latestCover: covers.cover(for: latest, filterTitles: filterTitles, display: builder.settings.mediaDisplay), isHidden: covers.isHidden(statusID: latest.id), filterTitles: filterTitles, revealedEditNumbers: []) {
                 let view = EditHistoryEntryView(mediaImages: AppDependencies.mediaImages)
                 view.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 16, leading: 20, bottom: 16, trailing: 20)
                 view.apply(content)

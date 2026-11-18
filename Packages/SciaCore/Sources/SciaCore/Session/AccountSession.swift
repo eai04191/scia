@@ -443,6 +443,7 @@ public final class AccountSession {
         preferencesVersion += 1
         preferences = loaded
         settings.rememberServerAnimations(loaded.autoplaysAnimations, of: credential.handle)
+        settings.rememberServerMediaDisplay(loaded.mediaDisplay, of: credential.handle)
         onPreferencesLoad(loaded)
         return loaded
     }

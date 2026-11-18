@@ -30,7 +30,8 @@ struct EditHistoryContentBuilder {
             latestCover: latestCover,
             isHidden: isHidden,
             filterTitles: filterTitles,
-            revealedEditNumbers: revealedEditNumbers
+            revealedEditNumbers: revealedEditNumbers,
+            display: settings.mediaDisplay
         ).map { content(for: $0, language: language, now: now) }
     }
 

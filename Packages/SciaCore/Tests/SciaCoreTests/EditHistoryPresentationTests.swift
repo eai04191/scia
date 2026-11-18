@@ -25,9 +25,10 @@ struct EditHistoryPresentationTests {
         latestCover: MediaCover? = nil,
         isHidden: Bool = false,
         filterTitles: [String] = [],
-        revealed: Set<Int> = []
+        revealed: Set<Int> = [],
+        display: MediaDisplay = .hidesSensitive
     ) -> [EditHistoryPresentation.Entry] {
-        EditHistoryPresentation.entries(for: history, latestCover: latestCover, isHidden: isHidden, filterTitles: filterTitles, revealedEditNumbers: revealed)
+        EditHistoryPresentation.entries(for: history, latestCover: latestCover, isHidden: isHidden, filterTitles: filterTitles, revealedEditNumbers: revealed, display: display)
     }
 
     @Test func titlesNameEachRevisionAndMarkTheLatest() throws {
@@ -60,6 +61,9 @@ struct EditHistoryPresentationTests {
         #expect(entries(plain, isHidden: true)[1].mediaCover == .hidden)
         #expect(entries(plain)[1].mediaCover == nil)
         #expect(entries(sensitive, revealed: [0])[1].mediaCover == nil)
+        // 「メディアの表示」に従い、常に表示なら閲覧注意の版もぼかさず、常に隠すなら閲覧注意のない版もぼかす。
+        #expect(entries(sensitive, display: .showsAll)[1].mediaCover == nil)
+        #expect(entries(plain, display: .hidesAll)[1].mediaCover == .hidden)
         #expect(entries(sensitive, latestCover: .hidden)[0].mediaCover == .hidden)
     }
 

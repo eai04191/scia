@@ -396,6 +396,26 @@ public final class AppSettings {
         return store.serverAnimationAutoplays[account] ?? false
     }
 
+    // MARK: メディアの表示
+
+    /// 添付ファイルを、開く前にぼかすか。「アカウントの設定に従う」（nil）なら、表示しているアカウントのサーバーの設定（`serverMediaDisplay`）に従う。
+    public var mediaDisplay: MediaDisplay {
+        get { appearance.mediaDisplay ?? serverMediaDisplay }
+        set { appearance.mediaDisplay = newValue }
+    }
+
+    /// 表示しているアカウントの、サーバーの設定「メディアの表示」（`reading:expand:media`）。読み方は`serverAutoplaysAnimations`と同じ。
+    /// 読めた値を覚えていないアカウントでは、Mastodonの既定と同じく閲覧注意だけ隠す。
+    public var serverMediaDisplay: MediaDisplay {
+        guard let account else { return store.lastServerMediaDisplay }
+        return store.serverMediaDisplays[account] ?? .hidesSensitive
+    }
+
+    /// 読めたサーバーの値を覚える。表示しているアカウントの値なら、すぐ従う。
+    public func rememberServerMediaDisplay(_ display: MediaDisplay, of account: String) {
+        store.rememberServerMediaDisplay(display, of: account)
+    }
+
     /// 表示を始めるアカウントの、覚えたサーバーの値に従う。
     public func followServerPreferences(of account: String) {
         store.followServerPreferences(of: account)
@@ -845,6 +865,11 @@ public final class SettingsStore {
 
     /// アプリの設定（`AppDependencies.settings`）が読む、最後に表示を始めたアカウントのサーバーの値。
     private(set) var lastServerAutoplaysAnimations = false
+    /// アカウントごとに覚えた、サーバーの「メディアの表示」。キーはアカウントのハンドル。覚える理由は`serverAnimationAutoplays`と同じ。
+    private(set) var serverMediaDisplays: [String: MediaDisplay]
+
+    /// アプリの設定が読む、最後に表示を始めたアカウントのサーバーの「メディアの表示」。
+    private(set) var lastServerMediaDisplay = MediaDisplay.hidesSensitive
     @ObservationIgnored private var preferenceAccount: String?
 
     public init(defaults: UserDefaults, keepsComposeBarOpenByDefault: Bool = false) {
@@ -865,6 +890,7 @@ public final class SettingsStore {
         switchTabItems = AccountScopedDefaults.accountValues(named: Keys.switchTabItem, in: defaults).compactMapValues { ($0 as? String).flatMap(TabItem.init(rawValue:)) }
         shownTabItems = AccountScopedDefaults.accountValues(named: Keys.shownTabItem, in: defaults).compactMapValues { ($0 as? String).flatMap(TabItem.init(rawValue:)) }
         serverAnimationAutoplays = AccountScopedDefaults.accountValues(named: Keys.serverAutoplaysAnimations, in: defaults).compactMapValues { $0 as? Bool }
+        serverMediaDisplays = AccountScopedDefaults.accountValues(named: Keys.serverMediaDisplay, in: defaults).compactMapValues { ($0 as? String).flatMap(MediaDisplay.init(rawValue:)) }
     }
 
     /// プリセットを変える。変えられなかったとき（消えたプリセットを指したなど）は、何も変えない。
@@ -1024,6 +1050,20 @@ public final class SettingsStore {
         if lastServerAutoplaysAnimations != autoplays {
             lastServerAutoplaysAnimations = autoplays
         }
+        let mediaDisplay = serverMediaDisplays[account] ?? .hidesSensitive
+        if lastServerMediaDisplay != mediaDisplay {
+            lastServerMediaDisplay = mediaDisplay
+        }
+    }
+
+    func rememberServerMediaDisplay(_ display: MediaDisplay, of account: String) {
+        if serverMediaDisplays[account] != display {
+            serverMediaDisplays[account] = display
+            defaults.set(display.rawValue, forKey: AccountScopedDefaults.key(Keys.serverMediaDisplay, account: account))
+        }
+        if preferenceAccount == account, lastServerMediaDisplay != display {
+            lastServerMediaDisplay = display
+        }
     }
 
     func rememberServerAnimations(_ autoplays: Bool, of account: String) {
@@ -1041,8 +1081,10 @@ public final class SettingsStore {
         switchTabItems[account] = nil
         shownTabItems[account] = nil
         serverAnimationAutoplays[account] = nil
+        serverMediaDisplays[account] = nil
         if preferenceAccount == account {
             lastServerAutoplaysAnimations = false
+            lastServerMediaDisplay = .hidesSensitive
         }
         updateLibrary { $0.forgetAccount(account) }
     }
@@ -1061,6 +1103,7 @@ public final class SettingsStore {
         static let switchTabItem = "switchTabItem"
         static let shownTabItem = "shownTabItem"
         static let serverAutoplaysAnimations = "serverAutoplaysAnimations"
+        static let serverMediaDisplay = "serverMediaDisplay"
     }
 }
 

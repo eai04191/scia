@@ -92,6 +92,16 @@ final class SessionController {
     /// サーバーが受け付ける言語。投稿欄の言語のシートと「投稿のデフォルト」で使う。
     private let postingLanguages: PostingLanguageCache
     private lazy var quoteControl = QuoteControl(session: session, tasks: tasks)
+    private lazy var accountAppearance = AccountPreferencesModel(
+        initial: session.preferences,
+        load: { [weak session] in
+            guard let session else { throw CancellationError() }
+            return try await session.reloadPreferences()
+        },
+        tasks: tasks.child()
+    )
+    /// Mastodonのウェブの「外観」の設定の画面。
+    private var accountAppearanceWebURL: URL { credential.instance.appending(path: "settings/preferences/appearance") }
     private lazy var postingDefaults: PostingDefaultsModel = {
         let model = PostingDefaultsModel(api: .init(session: session), initial: session.preferences, tasks: tasks.child())
         model.onFailure = { [weak self] reason in
@@ -3233,6 +3243,7 @@ final class SessionController {
             filters: (filters, now),
             notificationPolicy: notificationPolicy,
             postingDefaults: (postingDefaults, postingDefaultLanguages),
+            appearance: (accountAppearance, accountAppearanceWebURL),
             createList: { [weak self] in self?.listEditor.presentCreate() },
             deleteList: { [weak self] id, title in self?.listEditor.confirmDelete(listID: id, title: title) }
         )
@@ -4523,6 +4534,8 @@ final class SessionController {
             showFilters()
         case .postingDefaults:
             showPostingDefaults()
+        case .accountAppearance:
+            rootViewController.presentOnFrontmost(AccountAppearanceView.makeSheet(model: accountAppearance, webURL: accountAppearanceWebURL), animated: true)
         case .quotes(let statusID):
             if let source = tabs.selectedNavigation?.topViewController {
                 openQuotes(of: statusID, from: source)

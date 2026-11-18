@@ -7,6 +7,8 @@ public struct ServerPreferences: Sendable, Equatable {
     public var defaultSensitive: Bool
     /// 注意書き（CW）のある投稿を、最初から開いておくか。
     public var expandsSpoilers: Bool
+    /// 添付ファイルを、開く前にぼかすか（「メディアの表示」）。
+    public var mediaDisplay: MediaDisplay
     /// 新しく投稿するときの言語のコード。決めていなければnil。
     public var defaultLanguage: String?
     /// アイコンやカスタム絵文字などのアニメーションを自動で再生するか（「アニメーションGIFを自動再生する」）。
@@ -14,10 +16,11 @@ public struct ServerPreferences: Sendable, Equatable {
     /// 新しく投稿するときの、引用できる人の既定値。引用に対応していないサーバーではnil。
     public var defaultQuotePolicy: QuotePolicy?
 
-    public init(defaultVisibility: Status.Visibility, defaultSensitive: Bool, expandsSpoilers: Bool, defaultLanguage: String? = nil, autoplaysAnimations: Bool = false, defaultQuotePolicy: QuotePolicy? = nil) {
+    public init(defaultVisibility: Status.Visibility, defaultSensitive: Bool, expandsSpoilers: Bool, mediaDisplay: MediaDisplay = .hidesSensitive, defaultLanguage: String? = nil, autoplaysAnimations: Bool = false, defaultQuotePolicy: QuotePolicy? = nil) {
         self.defaultVisibility = defaultVisibility
         self.defaultSensitive = defaultSensitive
         self.expandsSpoilers = expandsSpoilers
+        self.mediaDisplay = mediaDisplay
         self.defaultLanguage = defaultLanguage
         self.autoplaysAnimations = autoplaysAnimations
         self.defaultQuotePolicy = defaultQuotePolicy

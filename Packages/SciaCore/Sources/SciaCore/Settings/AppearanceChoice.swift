@@ -43,6 +43,7 @@ public enum AppearanceChoice: Hashable, CaseIterable, Sendable {
     case showsFilterNote
     case showsSpoiler
     case showsMedia
+    case mediaDisplay
     case showsQuote
     case showsEmbedAvatar
     case showsPoll
@@ -62,7 +63,7 @@ public enum AppearanceChoice: Hashable, CaseIterable, Sendable {
         case "name": [.showsNameRow, .nameStyle, .stacksNameParts, .timeStyle, .showsNameCustomEmojis, .boldsName, .showsTime, .showsVisibilitySymbol, .showsEditedMark]
         case "body": [.showsBody, .showsReadMore, .showsFilterNote, .glyphLanguage, .emojiStyle, .showsCustomEmojis, .animatesCustomEmojis]
         case "spoiler": [.showsSpoiler]
-        case "media": [.showsMedia, .mediaArrangement, .embedMediaArrangement, .tiltsStackedPhotos, .showsMediaBadges]
+        case "media": [.showsMedia, .mediaDisplay, .mediaArrangement, .embedMediaArrangement, .tiltsStackedPhotos, .showsMediaBadges]
         case "linkCard": [.showsLinkCard, .boldsLinkCardTitle, .showsLinkCardImage, .linkCardThumbnailSide, .showsLinkCardSite]
         case AppearanceCatalog.xPostGroupID: [.showsQuote, .showsEmbedAvatar]
         case "poll": [.showsPoll]
@@ -118,6 +119,7 @@ public enum AppearanceChoice: Hashable, CaseIterable, Sendable {
         case .showsFilterNote: "フィルターの注記を表示"
         case .showsSpoiler: "注意書きを表示"
         case .showsMedia: "メディアを表示"
+        case .mediaDisplay: "表示"
         case .showsQuote: "引用を表示"
         case .showsEmbedAvatar: "アイコンを表示"
         case .showsPoll: "投票を表示"
@@ -183,6 +185,7 @@ public enum AppearanceChoice: Hashable, CaseIterable, Sendable {
         case .showsFilterNote: .firstOf([.part(.filterNote), .part(.filterNoteSlot)])
         case .showsSpoiler: .firstOf([.part(.spoiler), .part(.spoilerSlot)])
         case .showsMedia: .firstOf([.part(.media), .part(.besideMedia), .part(.mediaSlot)])
+        case .mediaDisplay: .firstOf([.part(.media), .part(.besideMedia)])
         case .showsQuote: .firstOf([.part(.xPost), .part(.quoteSlot)])
         case .showsEmbedAvatar: .part(.xPostAvatar)
         case .showsPoll: .firstOf([.part(.poll), .part(.pollSlot)])
@@ -319,6 +322,8 @@ extension AppearanceChoice {
             ])
         case .emojiStyle: .options(\.emojiStyle, [(.system, "Apple"), (.twemoji, "Twemoji")])
         case .animatesCustomEmojis: .options(\.animatesCustomEmojis, Self.animationChoices)
+        // 選ぶまではサーバーの設定に従うので、今の値は`AppSettings`から読む。
+        case .mediaDisplay: .options(\.mediaDisplay, [(nil, Self.followsAccountTitle)] + MediaDisplay.allCases.map { ($0, $0.title) })
         case .mediaArrangement: .options(\.mediaArrangement, [(.belowBody, "本文の下に大きく"), (.besideBody, "本文の右に小さく")])
         case .embedMediaArrangement:
             .options(\.embedMediaArrangement, [(.sameAsPost, "投稿と同じ"), (.besideBody, "本文の右に小さく"), (.belowBody, "本文の下に大きく")])
@@ -354,8 +359,11 @@ extension AppearanceChoice {
     }
 
     /// アニメーションを再生するか。「アカウントの設定に従う」はサーバーのアカウントの設定に従い、親のプリセットがオンやオフを持っていても選べる（docs/preset.md）。
+    /// サーバーのアカウントの設定に従う選択肢の名前。
+    static let followsAccountTitle = "アカウントの設定に従う"
+
     @MainActor private static let animationChoices: [(value: Bool?, title: String)] = [
-        (nil, "アカウントの設定に従う"),
+        (nil, followsAccountTitle),
         (true, "オン"),
         (false, "オフ"),
     ]

@@ -53,6 +53,8 @@ public enum AppDestination: Equatable, Sendable {
     case filters
     /// `posting-defaults`。新しく投稿するときの既定の画面を開く。
     case postingDefaults
+    /// `account-appearance`。アカウント設定の外観を見せる画面を開く。
+    case accountAppearance
     /// `announcements`。サーバーのお知らせのリストを開く。
     case announcements
     /// アカウントの画面。サーバーにあるものの入口を並べる。決まりはdocs/account-screen.mdにある。
@@ -129,7 +131,7 @@ public enum AppDestination: Equatable, Sendable {
         case .tab, .userTab, .profile, .myProfile, .thread, .quotes, .editHistory, .apiResponse, .accounts, .hashtag, .accountHashtag, .search, .scheduled,
              .notificationRequests, .notificationRequest:
             true
-        case .settings, .appearanceGroup, .notificationAppearanceGroup, .profileEdit, .operationStatus, .notificationPolicy, .filters, .postingDefaults, .announcements, .account, .inAppBrowserHeight, .note, .report, .compose, .crashReport:
+        case .settings, .appearanceGroup, .notificationAppearanceGroup, .profileEdit, .operationStatus, .notificationPolicy, .filters, .postingDefaults, .accountAppearance, .announcements, .account, .inAppBrowserHeight, .note, .report, .compose, .crashReport:
             false
         }
     }
@@ -161,6 +163,7 @@ public enum AppDestination: Equatable, Sendable {
         case .notificationPolicy: "notification policy"
         case .filters: "filters"
         case .postingDefaults: "posting defaults"
+        case .accountAppearance: "account appearance"
         case .announcements: "announcements"
         case .account: "account"
         case .inAppBrowserHeight: "in-app browser height"
@@ -220,6 +223,7 @@ public enum AppDestination: Equatable, Sendable {
         case ("notification-policy", ""): .notificationPolicy
         case ("filters", ""): .filters
         case ("posting-defaults", ""): .postingDefaults
+        case ("account-appearance", ""): .accountAppearance
         case ("announcements", ""): .announcements
         case ("account", ""): .account
         case ("in-app-browser-height", ""):
@@ -279,6 +283,7 @@ public enum AppDestination: Equatable, Sendable {
         case .notificationPolicy: ("notification-policy", nil, [])
         case .filters: ("filters", nil, [])
         case .postingDefaults: ("posting-defaults", nil, [])
+        case .accountAppearance: ("account-appearance", nil, [])
         case .announcements: ("announcements", nil, [])
         case .account: ("account", nil, [])
         case .inAppBrowserHeight(let page): ("in-app-browser-height", nil, page.map { [("return", $0.rawValue)] } ?? [])

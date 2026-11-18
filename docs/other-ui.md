@@ -39,7 +39,7 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
   - 届いたものを描き直すのはUI。`xPosts.onChange`、`translations?.onChange`、`onTranslationSettingsChange`で受ける
 - ストリーミングの状態の変化は、`streamingHub.onChange`ではなく`onStreamingChange`で受ける。`streamingHub.onChange`は1つしか置けず、セッションが使う
 - 一覧のモデルは`init(…session:…)`で作る。`session`を受け取らない一覧（`ThreadModel`、`SearchModel`、`AccountNotificationsModel`、UIが持つ一覧）は、`session.statuses.register(_:)`で登録する。登録した一覧は、削除、編集、お気に入りなどで変わった投稿を受け取る
-- アカウントの設定（`onPreferencesLoad`）は、注意書きを最初から開くか（`ServerPreferences.expandsSpoilers`を`SpoilerExpansion`へ）に使う。アニメーションを再生するかは、セッションが設定（`AppSettings`）へ覚えさせる
+- アカウントの設定（`onPreferencesLoad`）は、注意書きを最初から開くか（`ServerPreferences.expandsSpoilers`を`SpoilerExpansion`へ）に使う。アニメーションを再生するかとメディアの表示は、セッションが設定（`AppSettings`）へ覚えさせる。添付ファイルをぼかすかは、`MediaCovers`に`AppSettings.mediaDisplay`を渡して決める
 - `tasks: TaskScope`を受け取るモデル（`ThreadModel`、`SearchModel`、`NotificationRequestsModel`、`AccountNotificationsModel`など）には、`session.tasks.child()`を渡す。`TaskScope`は手放すと閉じるので、画面を閉じたときに`close()`を呼ばなくてよい。モデルを持つものが捨てられれば、始めた処理も止まる
 - `backgroundTime`の引数と`enterBackground()`、`enterForeground()`は、OSがバックグラウンドでアプリを止めるUIだけが使う
 

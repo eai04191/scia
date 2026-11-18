@@ -26,5 +26,6 @@
 - サーバーのお知らせ: `scia://announcements`（お知らせのシート）
 - 保留中の通知: `scia://notification-requests`（通知のタブに保留中の通知を送ってきた人のリスト）、`scia://notification-request?id=<保留中の通知のID>`（その上にその人からの通知）、`scia://notification-policy`（通知のフィルタリングの設定）。IDは`api/v1/notifications/requests`で調べる。ダミーのセッションでは`dummy-request-1`〜`3`
 - 投稿のデフォルト: `scia://posting-defaults`（新しく投稿するときの公開範囲、引用できる人、言語、閲覧注意の既定を変えるシート。変えるとサーバーの設定が変わる。決まりはdocs/account-screen.md）
+- 外観: `scia://account-appearance`（アカウント設定の外観のうち、Sciaが従う値を見せるシート。変更はウェブで行う。決まりはdocs/account-screen.md）
 - フィルター: `scia://filters`（自分のフィルターを並べたシート。決まりはdocs/filters.md）
 - そのほか: `scia://crash-report?id=<投稿のID>`（隔離した投稿について開発者に送る内容の画面。決まりはdocs/crash-quarantine.md）、`scia://operation-status`（操作の状況）、`scia://in-app-browser-height`（重ねた画面を閉じ、ホームの上にアプリ内のSafariの高さを選ぶシートを出す。`?return=<設定の画面>`で、閉じたときにその設定の画面を開き直す）

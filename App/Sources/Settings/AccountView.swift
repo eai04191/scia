@@ -33,6 +33,8 @@ struct AccountScreenContext {
     let notificationPolicy: NotificationPolicyModel
     /// 「投稿のデフォルト」の画面に渡すもの。
     let postingDefaults: (model: PostingDefaultsModel, languages: PostingLanguageSource)
+    /// 「外観」の画面に渡すもの。
+    let appearance: (model: AccountPreferencesModel, webURL: URL)
     /// 名前を入れるアラートを出して、リストを作る。
     let createList: @MainActor () -> Void
     /// 確かめてから、リストを消す。
@@ -82,6 +84,10 @@ struct AccountView: View {
             }
             Section {
                 // この節の画面は投稿やリンクを出さないので、アカウントの画面を閉じずに、この中で進む。
+                // Mastodonのウェブの設定と同じ順に並べる。
+                NavigationLink(SettingsTexts.AccountAppearance.title) {
+                    AccountAppearanceView(model: context.appearance.model, webURL: context.appearance.webURL)
+                }
                 NavigationLink(SettingsTexts.PostingDefaults.title) {
                     PostingDefaultsView(model: context.postingDefaults.model, languages: context.postingDefaults.languages)
                 }

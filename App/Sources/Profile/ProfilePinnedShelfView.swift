@@ -282,7 +282,7 @@ struct ProfileShelfItem: Equatable {
             media = nil
             return
         }
-        var media = MediaGridView.Content.make(of: status.mediaAttachments, cover: covers.cover(for: status, filterTitles: verdict.mediaTitles), settings: settings, tuning: tuning, network: network)
+        var media = MediaGridView.Content.make(of: status.mediaAttachments, cover: covers.cover(for: status, filterTitles: verdict.mediaTitles, display: settings.mediaDisplay), settings: settings, tuning: tuning, network: network)
         media?.arrange(.besideBody, seed: status.id, settings: settings)
         self.media = media
     }

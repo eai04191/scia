@@ -176,6 +176,9 @@ struct AppearanceSheets {
         case .showsFilterNote: return flip(\.appearance.showsFilterNote)
         case .showsSpoiler: return flip(\.appearance.showsSpoiler)
         case .showsMedia: return flip(\.appearance.showsMedia)
+        case .mediaDisplay:
+            settings.mediaDisplay = .hidesAll
+            return "→ 常に隠す"
         case .showsQuote: return flip(\.appearance.showsQuote)
         case .showsEmbedAvatar: return flip(\.appearance.showsEmbedAvatar)
         case .showsPoll: return flip(\.appearance.showsPoll)

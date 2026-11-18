@@ -75,6 +75,8 @@ final class PostListStyle {
             _ = settings.postActionBarLayout
             // アニメーションを再生するかは、選ぶまでサーバーの値に従うため、読めた値が変わったときも描き直す。
             _ = settings.serverAutoplaysAnimations
+            // メディアの表示も、選ぶまでサーバーの値に従う。
+            _ = settings.mediaDisplay
             _ = settings.accentColor.underlinesLinks
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor in

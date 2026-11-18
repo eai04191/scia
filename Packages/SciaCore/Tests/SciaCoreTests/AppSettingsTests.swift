@@ -277,6 +277,32 @@ struct AppSettingsTests {
         #expect(!relaunched.animatesCustomEmojis)
     }
 
+    /// メディアの表示は、選ぶまでは表示しているアカウントのサーバーの値に従い、選んだらその値を使う。サーバーの値はアカウントごとに覚える。
+    @Test func mediaDisplayFollowsServerUntilChosen() throws {
+        let defaults = try makeDefaults()
+        let settings = AppSettings(defaults: defaults)
+        settings.followServerPreferences(of: "alice@example.social")
+        #expect(settings.mediaDisplay == .hidesSensitive)
+        settings.rememberServerMediaDisplay(.showsAll, of: "alice@example.social")
+        settings.rememberServerMediaDisplay(.hidesAll, of: "bob@example.social")
+        #expect(settings.mediaDisplay == .showsAll)
+
+        settings.followServerPreferences(of: "bob@example.social")
+        #expect(settings.mediaDisplay == .hidesAll)
+
+        settings.mediaDisplay = .hidesSensitive
+        #expect(settings.appearance.mediaDisplay == .hidesSensitive)
+        #expect(settings.mediaDisplay == .hidesSensitive)
+
+        // 既定に戻すと、選んだ値を忘れてサーバーの値に戻る。
+        settings.resetAppearance()
+        #expect(settings.mediaDisplay == .hidesAll)
+
+        let relaunched = AppSettings(defaults: defaults)
+        relaunched.followServerPreferences(of: "alice@example.social")
+        #expect(relaunched.mediaDisplay == .showsAll)
+    }
+
     @Test func persistsStatusDisplay() throws {
         let defaults = try makeDefaults()
         let settings = AppSettings(defaults: defaults)

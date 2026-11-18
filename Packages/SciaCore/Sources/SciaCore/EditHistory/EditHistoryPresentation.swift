@@ -48,12 +48,14 @@ public enum EditHistoryPresentation {
     ///   - filterTitles: 添付ファイルをぼかすフィルターのうち、一致したものの名前。フィルターは今の内容に一致したものだが、
     ///     ぼかしたいのはこの投稿の添付ファイルなので、版ごとに判定し直さず、過去の版と外した添付ファイルにも当てる。
     ///   - revealedEditNumbers: ぼかしを外した版。
+    ///   - display: 過去の版と外した添付ファイルを、閲覧注意でぼかすか。
     public static func entries(
         for history: StatusEditHistory,
         latestCover: MediaCover?,
         isHidden: Bool,
         filterTitles: [String],
-        revealedEditNumbers: Set<Int>
+        revealedEditNumbers: Set<Int>,
+        display: MediaDisplay
     ) -> [Entry] {
         history.entries.enumerated().map { index, entry in
             self.entry(
@@ -63,7 +65,8 @@ public enum EditHistoryPresentation {
                 latestCover: latestCover,
                 isHidden: isHidden,
                 filterTitles: filterTitles,
-                isRevealed: revealedEditNumbers.contains(entry.editNumber)
+                isRevealed: revealedEditNumbers.contains(entry.editNumber),
+                display: display
             )
         }
     }
@@ -79,16 +82,17 @@ public enum EditHistoryPresentation {
         latestCover: MediaCover?,
         isHidden: Bool,
         filterTitles: [String],
-        isRevealed: Bool
+        isRevealed: Bool,
+        display: MediaDisplay
     ) -> Entry {
         let revision = entry.revision
-        // 過去の版は、閲覧注意か注意書きがあるか、使う人が隠したか、フィルターに一致していれば、タップするまで添付ファイルをぼかす。
+        // 過去の版は、「メディアの表示」で閲覧注意をぼかすか、使う人が隠したか、フィルターに一致していれば、タップするまで添付ファイルをぼかす。
         // 理由はタイムラインと同じく、フィルター、閲覧注意、隠した、の順に出す。
         func cover(of revision: StatusRevision?) -> MediaCover? {
             guard let revision, !isRevealed else { return nil }
             let isSensitive = revision.sensitive || !revision.spoilerText.isEmpty
             if !filterTitles.isEmpty { return .filtered(filterTitles) }
-            guard isSensitive || isHidden else { return nil }
+            guard display.covers(isSensitive: isSensitive) || isHidden else { return nil }
             return isSensitive ? .sensitive : .hidden
         }
         let revisionCover = isLatest ? latestCover : cover(of: revision)

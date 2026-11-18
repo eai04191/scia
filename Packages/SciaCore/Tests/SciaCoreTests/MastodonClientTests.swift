@@ -621,6 +621,20 @@ struct MastodonClientTests {
         #expect(try await client.preferences().defaultQuotePolicy == nil)
     }
 
+    /// メディアの表示は、返らないか読めない値なら、Mastodonの既定と同じく閲覧注意だけ隠す。
+    @Test(arguments: [
+        (#"{"reading:expand:media":"show_all"}"#, MediaDisplay.showsAll),
+        (#"{"reading:expand:media":"hide_all"}"#, .hidesAll),
+        (#"{"reading:expand:media":"default"}"#, .hidesSensitive),
+        (#"{"reading:expand:media":"blur"}"#, .hidesSensitive),
+        ("{}", .hidesSensitive),
+    ])
+    func readsMediaDisplay(json: String, expected: MediaDisplay) async throws {
+        let transport = StubTransport([.json(json, statusCode: 200)])
+
+        #expect(try await makeClient(transport).preferences().mediaDisplay == expected)
+    }
+
     @Test func postStatusSendsPoll() async throws {
         let transport = StubTransport([.json(Self.interactedStatus, statusCode: 200)])
         let poll = PollDraft(options: [" 朝 ", "", "夜"], multiple: true, hidesTotals: true, expiresIn: 3_600)

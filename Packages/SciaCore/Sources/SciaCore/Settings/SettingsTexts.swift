@@ -294,6 +294,20 @@ public enum SettingsTexts {
         public static let noLists = "リストはありません"
     }
 
+    /// アカウントの画面の「外観」。Sciaが従う、APIでは変えられないアカウントの設定を見せる。項目の名前はMastodonのウェブの日本語に合わせる。
+    public enum AccountAppearance {
+        public static let title = "外観"
+        public static let mediaDisplay = "メディアの表示"
+        public static let expandsSpoilers = "閲覧注意としてマークされた投稿を常に展開する"
+        public static let autoplaysAnimations = "アニメーションGIFを自動再生する"
+        /// アカウントの設定をまだ読めていないときの、値の代わり。
+        public static let loadingValue = "読み込み中"
+        /// Mastodonのウェブの「外観」の画面を開くボタン。
+        public static let changeOnWeb = "ウェブで変更"
+        /// 画面の一番上の説明。値が何か、何に使えるか、ここでは変えられないことを示す。
+        public static let notEditable = "これらはMastodonのウェブで設定した外観の好みです。表示設定の値として使用できますが、ウェブ以外から変更することはできません。"
+    }
+
     /// 投稿のデフォルトの画面。
     public enum PostingDefaults {
         public static let title = "投稿のデフォルト"

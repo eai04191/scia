@@ -14,7 +14,7 @@ extension TimelineViewController {
 
     /// 添付ファイルをぼかす理由。ぼかさなければnil。
     func mediaCover(for status: Status) -> MediaCover? {
-        mediaCovers.cover(for: status, filterTitles: filterWarnings.verdict(for: status).mediaTitles)
+        mediaCovers.cover(for: status, filterTitles: filterWarnings.verdict(for: status).mediaTitles, display: settings.mediaDisplay)
     }
 
     /// `attachments`を並べる中身。引用とXの投稿の囲みの添付ファイルにも使う。

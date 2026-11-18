@@ -256,7 +256,7 @@ public enum AppearanceCatalog {
         AppearanceGroup(id: "name", title: "名前の行", values: [namePrimaryText, nameSecondaryText, timeText, namePartsSpacing, nameStackSpacing, nameTimeSpacing, visibilitySymbolSpacing, editedMarkSpacing, nameFadeWidth, nameUnicodeEmojiScale, nameCustomEmojiScale, nameBodySpacing, nameMediaSpacing]),
         AppearanceGroup(id: "body", title: "本文", values: [bodyText, bodyLineSpacing, paragraphSpacing, quoteIndent, quoteBarWidth, unicodeEmojiScale, customEmojiScale, emojiOnlyScale, emojiOnlyLimit, bodyTruncationThreshold, bodyTruncatedLines, filterNoteText, filterNoteSpacing]),
         AppearanceGroup(id: "spoiler", title: "注意書き", values: [spoilerButtonText, spoilerButtonSpacing, spoilerPadding, spoilerCornerRadius, spoilerBodySpacing]),
-        AppearanceGroup(id: "media", title: "メディア", values: [bodyMediaSpacing, mediaTileSpacing, mediaTallestAspectRatio, mediaWidestAspectRatio, mediaBesideSide]),
+        AppearanceGroup(id: Self.mediaGroupID, title: Self.mediaGroupTitle, values: [bodyMediaSpacing, mediaTileSpacing, mediaTallestAspectRatio, mediaWidestAspectRatio, mediaBesideSide]),
         AppearanceGroup(id: "linkCard", title: "リンクカード", values: [linkCardTitleText, linkCardDetailText, linkCardTitleLines, linkCardDescriptionLines, linkCardLineSpacing, linkCardImageWidthRatio, bodyLinkCardSpacing, linkCardPadding]),
         // Xの投稿の囲みも同じ値を使うが、Xの投稿は設定でオンにしたときだけ出すため、名前には書かない。
         AppearanceGroup(id: Self.xPostGroupID, title: "引用", values: [xPostNameText, xPostBodyText, xPostAvatarSize, xPostAvatarNameSpacing, xPostHeaderSpacing, xPostMediaSpacing, xPostPadding, bodyXPostSpacing]),
@@ -271,6 +271,8 @@ public enum AppearanceCatalog {
 
     /// 引用とXの投稿の囲みの部品の区画。
     public static let xPostGroupID = "xPost"
+    public static let mediaGroupID = "media"
+    public static let mediaGroupTitle = "メディア"
 
     /// アクションバーの区画。見本では、いつも出す設定でなくてもアクションバーを出す。
     public static let actionBarGroupID = "actionBar"

@@ -48,6 +48,7 @@ struct AppDestinationTests {
             ("scia://notification-policy", .notificationPolicy),
             ("scia://filters", .filters),
             ("scia://posting-defaults", .postingDefaults),
+            ("scia://account-appearance", .accountAppearance),
             ("scia://quotes?id=123", .quotes(statusID: "123")),
             ("scia://quotes", nil),
             ("scia://announcements", .announcements),
@@ -110,7 +111,7 @@ struct AppDestinationTests {
         + [.accounts(.followers(accountID: nil)), .accounts(.followers(accountID: "9")), .accounts(.following(accountID: nil)), .accounts(.following(accountID: "9"))]
         + [.accounts(.favourited(statusID: "123")), .accounts(.reblogged(statusID: "123")), .accounts(.emojiReactioned(statusID: "123", name: "👍")), .accounts(.emojiReactioned(statusID: "123", name: "blob_cat"))]
         + [.hashtag(name: "日本語 & tag"), .accountHashtag(acct: "bob@example.com", name: "scia"), .search(query: nil), .search(query: "https://example.com/@bob/1"), .scheduled, .operationStatus]
-        + [.notificationRequests, .notificationRequest(id: "7"), .notificationPolicy, .filters, .postingDefaults, .quotes(statusID: "123"), .announcements, .account, .inAppBrowserHeight(returningTo: nil), .inAppBrowserHeight(returningTo: .interaction)]
+        + [.notificationRequests, .notificationRequest(id: "7"), .notificationPolicy, .filters, .postingDefaults, .accountAppearance, .quotes(statusID: "123"), .announcements, .account, .inAppBrowserHeight(returningTo: nil), .inAppBrowserHeight(returningTo: .interaction)]
         + [.note(acct: "bob@example.com"), .report(acct: "bob+1@example.com")]
         + [.compose(.tools), .compose(.language), .compose(.schedule), .compose(.emoji), .compose(.mediaPicker)]
         + [.compose(.attachment(index: 0)), .compose(.altText(index: 2)), .compose(.crop(index: 3))]
@@ -144,7 +145,7 @@ struct AppDestinationTests {
     enum Kind: CaseIterable {
         case tab, userTabList, userTabHashtag, userTabProfile, userTabAccountHashtag, settings, appearanceGroup, notificationAppearanceGroup, profile, myProfile, profileEdit
         case thread, editHistory, apiResponse, crashReport, followers, following, favourited, reblogged, emojiReactioned, hashtag, accountHashtag, search, scheduled, operationStatus
-        case notificationRequests, notificationRequest, notificationPolicy, filters, postingDefaults, quotes, announcements, account, inAppBrowserHeight
+        case notificationRequests, notificationRequest, notificationPolicy, filters, postingDefaults, accountAppearance, quotes, announcements, account, inAppBrowserHeight
         case note, report, composeTools, composeLanguage, composeSchedule, composeEmoji, composeMediaPicker, composeAttachment, composeAltText, composeCrop
     }
 
@@ -180,6 +181,7 @@ struct AppDestinationTests {
         case .notificationPolicy: .notificationPolicy
         case .filters: .filters
         case .postingDefaults: .postingDefaults
+        case .accountAppearance: .accountAppearance
         case .quotes: .quotes
         case .announcements: .announcements
         case .account: .account

@@ -91,6 +91,8 @@ public struct AppearanceChoices: Codable, Hashable, Sendable {
     public var showsSpoiler = true
     /// 添付ファイルのサムネイルを出す。引用とXの投稿の囲みの中のサムネイルも含む。
     public var showsMedia = true
+    /// 添付ファイルを、開く前にぼかすか。選んでいなければnilで、サーバーの設定に従う（`AppSettings.mediaDisplay`）。
+    public var mediaDisplay: MediaDisplay?
     /// 引用の囲みを出す。
     public var showsQuote = true
     /// 引用とXの投稿の囲みの、作者のアイコンを出す。

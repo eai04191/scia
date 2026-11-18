@@ -110,13 +110,13 @@ struct FilteredMediaCoverTests {
     @Test func coversFilteredMediaUntilRevealed() {
         var covers = MediaCovers()
         let target = status("10")
-        #expect(covers.cover(for: target, filterTitles: ["a"]) == .filtered(["a"]))
+        #expect(covers.cover(for: target, filterTitles: ["a"], display: .hidesSensitive) == .filtered(["a"]))
 
         covers.reveal(target)
-        #expect(covers.cover(for: target, filterTitles: ["a"]) == nil)
+        #expect(covers.cover(for: target, filterTitles: ["a"], display: .hidesSensitive) == nil)
 
         covers.hide(target)
-        #expect(covers.cover(for: target, filterTitles: ["a"]) == .filtered(["a"]))
+        #expect(covers.cover(for: target, filterTitles: ["a"], display: .hidesSensitive) == .filtered(["a"]))
     }
 }
 

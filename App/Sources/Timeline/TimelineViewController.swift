@@ -2505,7 +2505,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             configuration.hiddenSlots.append(.pollSlot)
         }
         configuration.onPollAction = { [weak self] action in self?.handlePollAction(action, on: status, keeping: itemID) }
-        configuration.card?.coversImage = mediaCovers.linkCardImageCover(for: shown) != nil
+        configuration.card?.coversImage = mediaCovers.linkCardImageCover(for: shown, display: settings.mediaDisplay) != nil
         if let itemID, let url = configuration.card?.card.url {
             configuration.linkCardTarget = linkTarget(for: url, id: itemID) { [weak self] in self?.onOpenLink?(.url(url), shown) }
         }

@@ -265,7 +265,7 @@ final class ScheduledStatusesViewController: UICollectionViewController {
         configuration.onToggleSpoiler = { [weak self] in self?.toggleSpoiler(of: scheduled.id) }
         configuration.onRevealMedia = { [weak self] in self?.revealMedia(of: preview) }
         // 投稿されたときと同じく、閲覧注意と注意書きのある予約の添付はぼかす。
-        if var media = MediaGridView.Content.make(of: scheduled.mediaAttachments, cover: mediaCovers.cover(for: preview, filterTitles: []), settings: settings, tuning: tuning, network: AppDependencies.network) {
+        if var media = MediaGridView.Content.make(of: scheduled.mediaAttachments, cover: mediaCovers.cover(for: preview, filterTitles: [], display: settings.mediaDisplay), settings: settings, tuning: tuning, network: AppDependencies.network) {
             media.arrange(settings.appearance.mediaArrangement, seed: scheduled.id, settings: settings)
             configuration.media = media
             configuration.onSelectMedia = { [weak self] index, grid in

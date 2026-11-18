@@ -365,6 +365,7 @@ public struct MastodonClient: Sendable {
             let visibility: Status.Visibility?
             let sensitive: Bool?
             let expandsSpoilers: Bool?
+            let mediaDisplay: String?
             let language: String?
             let autoplaysAnimations: Bool?
             let quotePolicy: String?
@@ -374,6 +375,7 @@ public struct MastodonClient: Sendable {
                 case sensitive = "posting:default:sensitive"
                 case language = "posting:default:language"
                 case expandsSpoilers = "reading:expand:spoilers"
+                case mediaDisplay = "reading:expand:media"
                 case autoplaysAnimations = "reading:autoplay:gifs"
                 case quotePolicy = "posting:default:quote_policy"
             }
@@ -388,6 +390,7 @@ public struct MastodonClient: Sendable {
             defaultVisibility: preferences.visibility ?? .public,
             defaultSensitive: preferences.sensitive ?? false,
             expandsSpoilers: preferences.expandsSpoilers ?? false,
+            mediaDisplay: preferences.mediaDisplay.flatMap(MediaDisplay.init(rawValue:)) ?? .hidesSensitive,
             defaultLanguage: preferences.language.flatMap { $0.isEmpty ? nil : $0 },
             autoplaysAnimations: preferences.autoplaysAnimations ?? false,
             defaultQuotePolicy: preferences.quotePolicy.flatMap(QuotePolicy.init(rawValue:))

@@ -167,7 +167,7 @@ final class EditHistoryViewController: UIViewController {
     /// 今の投稿の版のぼかし。タイムラインを読んだあとに閲覧注意を付ける編集がされていることがあるため、手元の投稿ではなく、読んだ最新の版の閲覧注意で決める。
     private func latestCover(of history: StatusEditHistory) -> MediaCover? {
         guard let latest = history.entries.first?.revision else { return nil }
-        return mediaCovers.cover(forStatusID: status.id, isSensitive: latest.sensitive || !latest.spoilerText.isEmpty, filterTitles: filterTitles)
+        return mediaCovers.cover(forStatusID: status.id, isSensitive: latest.sensitive || !latest.spoilerText.isEmpty, filterTitles: filterTitles, display: builder.settings.mediaDisplay)
     }
 
     /// ぼかしを外す。今の投稿の版なら、タイムラインの同じ投稿の行もそろえるよう、セッションに知らせる。
