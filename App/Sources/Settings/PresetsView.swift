@@ -89,11 +89,8 @@ struct PresetManagementView: View {
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Section(SettingsTexts.Presets.createTitle) {
-                        ForEach(BuiltInPreset.allCases, id: \.self) { createButton(parent: .builtIn($0)) }
-                        ForEach(library.userPresets, id: \.id) { createButton(parent: .user($0.id)) }
-                    }
+                Button {
+                    create(parent: .builtIn(.standard))
                 } label: {
                     Image(systemName: "plus")
                         .accessibilityLabel(SettingsTexts.Presets.add)
@@ -143,10 +140,6 @@ struct PresetManagementView: View {
         } message: {
             Text(SettingsTexts.Presets.deleteConfirmMessage(parent: library.isUsed(id) ? library.parentName(of: id) : nil))
         }
-    }
-
-    private func createButton(parent: PresetID) -> some View {
-        Button(library.name(of: parent) ?? "") { create(parent: parent) }
     }
 
     /// `parent`を親にしたプリセットを、名前を聞いてから作り、その画面を開く。
