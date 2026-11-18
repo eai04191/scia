@@ -70,6 +70,7 @@ enum CatalogComponent: String, CaseIterable {
 
     case storage
     case mediaCache = "media-cache"
+    case builtInPresets = "built-in-presets"
 
     /// 検索の語が、名前かURLの名前（`rawValue`）に含まれるか。
     func matches(_ query: String) -> Bool {
@@ -128,6 +129,7 @@ enum CatalogComponent: String, CaseIterable {
         case .profileEdit: "プロフィールの編集"
         case .storage: "設定のストレージ"
         case .mediaCache: "ストレージのメディアのキャッシュ"
+        case .builtInPresets: "組み込みのプリセット（標準との差分）"
         }
     }
 
@@ -184,6 +186,7 @@ enum CatalogComponent: String, CaseIterable {
         case .profileEdit: ProfileEditCatalog.states()
         case .storage: StorageCatalog.states()
         case .mediaCache: StorageCatalog.mediaCacheStates()
+        case .builtInPresets: BuiltInPresetCatalog.states()
         }
     }
 
@@ -234,7 +237,7 @@ enum CatalogSection: CaseIterable {
         case .profile: [.profileHeader, .profileAccent, .profileEdit]
         case .appWide: [.notices, .noticeLayout, .statusBarTicker, .operationStatus, .login]
         case .sheets: [.announcements, .reportSheet, .crashReport, .listMembership, .filters]
-        case .settings: [.storage, .mediaCache]
+        case .settings: [.storage, .mediaCache, .builtInPresets]
         }
     }
 

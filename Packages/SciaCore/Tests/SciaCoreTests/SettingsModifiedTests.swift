@@ -115,6 +115,15 @@ struct SettingsModifiedTests {
         }
     }
 
+    /// 組み込みのプリセットが持つ値は、どれもアプリの既定値との差分に出る。比べない種類の値や、既定値と同じ値を足すと落ちる。
+    @Test(arguments: BuiltInPreset.allCases)
+    func builtInValuesAppearInDifferences(_ preset: BuiltInPreset) {
+        let base = AppSettings(defaults: TestScratch.defaults("SettingsModifiedTests.differences"))
+        let differences = base.editing(.builtIn(preset)).differences(from: base.editing(.builtIn(.standard)))
+        let shown = Set(differences.flatMap(\.keys))
+        #expect(shown == Set(preset.values.keys))
+    }
+
     /// コンパクトは、アクションバーを常には出さず、タップで開く。
     @Test func compactOpensActionBarByTap() throws {
         let app = AppSettings(defaults: TestScratch.defaults("SettingsModifiedTests.compact"))
