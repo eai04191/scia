@@ -53,6 +53,9 @@ final class EmojiGlyphArchive: Sendable {
     /// それぞれが書き足す位置を持って、相手の記録を切り詰めて消すため。
     private let switching = Mutex<[Geometry: Files]>([:])
     private let logger = SciaLog.logger(category: "emoji")
+    /// どれかのプリセットが使う絵文字の種類。切り替えても、この種類の今のiOSの版のフォルダーは消さない。
+    /// プリセットを切り替えるたびに、消した画像を作り直さないため（docs/preset.md）。
+    private let keptStyles = Mutex<Set<EmojiStyle>>([])
 
     init(directory: URL, availableCapacity: @escaping @Sendable () -> Int? = EmojiImageFiles.opportunisticCapacity) {
         self.directory = directory
@@ -60,6 +63,19 @@ final class EmojiGlyphArchive: Sendable {
     }
 
     private var geometryFile: URL { directory.appending(path: "geometry.json") }
+
+    /// 消さずに残す絵文字の種類を渡す。減ったら、その場で、残さなくなった種類のフォルダーを消す。
+    /// 同じ大きさと絵のまま使い続けると、`use`で消す契機が来ないため。
+    func keep(styles: Set<EmojiStyle>) {
+        let previous = keptStyles.withLock { kept in
+            defer { kept = styles }
+            return kept
+        }
+        guard !previous.isSubset(of: styles) else { return }
+        switching.withLock { opened in
+            removeFolders(except: Set(opened.keys))
+        }
+    }
 
     /// 絵文字ピッカーで描く大きさと絵を渡す。前に作ったときと違えば、前の画像を消して作り直す。
     /// 起動したあと、絵文字ピッカーを開く前は、前に渡した大きさと絵で読む（`loadStoredGeometry()`）。
@@ -110,10 +126,13 @@ final class EmojiGlyphArchive: Sendable {
 
     /// この起動のうちに開いた大きさと絵のほかのフォルダーを消す。開いたものは、書き手（`EmojiThumbnails`）を使い回すので、
     /// 消すと、戻ったときに書いたつもりの画像がファイルに残らず、次の起動で作り直すまで枠が空くため。次に起動して切り替えたときに消える。
+    /// どれかのプリセットが使う種類で、今のiOSの版のフォルダーも消さない。
     private func removeFolders(except geometries: Set<Geometry>) {
         let kept = Set(geometries.map { folder(for: $0).lastPathComponent })
+        let keptPrefixes = keptStyles.withLock { $0 }.map { "\($0.rawValue)-\(Self.systemVersion)-" }
         let folders = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isDirectoryKey])) ?? []
-        for folder in folders where !kept.contains(folder.lastPathComponent) && (try? folder.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+        for folder in folders where !kept.contains(folder.lastPathComponent) && !keptPrefixes.contains(where: folder.lastPathComponent.hasPrefix)
+            && (try? folder.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
             try? FileManager.default.removeItem(at: folder)
         }
     }

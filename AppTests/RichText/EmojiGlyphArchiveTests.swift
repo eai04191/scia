@@ -68,6 +68,48 @@ struct EmojiGlyphArchiveTests {
         #expect(reopened.glyph(for: "😀", geometry: Self.geometry) == nil, "絵文字の絵の設定が違うので読まない")
     }
 
+    /// どれかのプリセットが使う絵文字の種類の画像は、次の起動でほかの種類に切り替えても消さない。プリセットを行き来するたびに作り直さないため。
+    /// どのプリセットも使わない種類の画像は、今までどおり消す。
+    @Test(arguments: [true, false])
+    func keepsImagesOfStylesInPresets(keepsTwemoji: Bool) async throws {
+        let archive = makeArchive(capacity: Int.max)
+        archive.use(Self.geometry)
+        await archive.build(["😀"])
+        _ = await waitForGlyph("😀", in: archive) { $0.isFull }
+        await archive.flush()
+
+        // 次の起動で、ほかの種類に切り替えてから戻る。
+        let relaunched = makeArchive(capacity: Int.max)
+        relaunched.keep(styles: keepsTwemoji ? [.system, .twemoji] : [.system])
+        var other = Self.geometry
+        other.style = .system
+        relaunched.use(other)
+        let next = makeArchive(capacity: Int.max)
+        next.use(Self.geometry)
+
+        #expect((next.glyph(for: "😀", geometry: Self.geometry) != nil) == keepsTwemoji)
+    }
+
+    /// プリセットを消すなどして、どのプリセットも使わなくなった絵の画像は、その場で消す。同じ大きさと絵のまま使い続けると、消す契機が来ないため。
+    @Test func removesImagesOfStylesNoLongerInPresets() async throws {
+        let archive = makeArchive(capacity: Int.max)
+        archive.use(Self.geometry)
+        await archive.build(["😀"])
+        _ = await waitForGlyph("😀", in: archive) { $0.isFull }
+        await archive.flush()
+        let relaunched = makeArchive(capacity: Int.max)
+        relaunched.keep(styles: [.system, .twemoji])
+        var other = Self.geometry
+        other.style = .system
+        relaunched.use(other)
+
+        relaunched.keep(styles: [.system])
+
+        let next = makeArchive(capacity: Int.max)
+        next.use(Self.geometry)
+        #expect(next.glyph(for: "😀", geometry: Self.geometry) == nil)
+    }
+
     /// 裏で作る側は、絵文字ピッカーが記録した大きさがあればそれを使い、なければ自分で計算した大きさを使う。
     /// 画面の倍率の違う画面にシーンが複数あると、計算した大きさが絵文字ピッカーのものと食い違い、互いの画像を消し合うため。
     @Test func prefersGeometryRecordedByPalette() {

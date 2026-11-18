@@ -254,6 +254,18 @@ struct AppSettingsPresetTests {
         #expect(account.accentColor == .purple)
     }
 
+    /// どれかのプリセットが使う絵文字の種類を、使っていないプリセットの分も含めて並べる。
+    @Test func emojiStylesInPresetsIncludesUnusedPresets() throws {
+        let app = makeSettings()
+        #expect(app.store.emojiStylesInPresets == [.system])
+        try app.store.tryUpdateLibrary { library throws(PresetError) in
+            let home = try library.create(parent: .builtIn(.standard), name: "家")
+            try library.setValue(.text(EmojiStyle.twemoji.rawValue), forKey: AppearanceStorage.key("emojiStyle"), in: home)
+        }
+        #expect(app.presetID == .builtIn(.standard))
+        #expect(app.store.emojiStylesInPresets == [.system, .twemoji])
+    }
+
     /// 書いた値は保存し、起動し直しても読める。
     @Test func persistsPresets() throws {
         let defaults = TestScratch.defaults("AppSettingsPresetTests")

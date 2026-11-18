@@ -121,7 +121,22 @@ enum AppDependencies {
     static let emojiGlyphImages = EmojiGlyphImageStore()
 
     /// 絵文字ピッカーのUnicodeの絵文字の画像を、端末に置いて持つ。設定のストレージで「絵文字」に数えるよう、カスタム絵文字の画像と同じフォルダーに置く。
-    static let emojiGlyphArchive = EmojiGlyphArchive(directory: emojiImageDirectory.appending(path: "Glyphs"))
+    static let emojiGlyphArchive: EmojiGlyphArchive = {
+        let archive = EmojiGlyphArchive(directory: emojiImageDirectory.appending(path: "Glyphs"))
+        keepPresetEmojiStyles(in: archive)
+        return archive
+    }()
+
+    /// どれかのプリセットが使う絵文字の種類を、端末に置いた画像の保存先に渡し続ける。
+    private static func keepPresetEmojiStyles(in archive: EmojiGlyphArchive) {
+        withObservationTracking {
+            archive.keep(styles: settings.store.emojiStylesInPresets)
+        } onChange: {
+            Task(.withoutRequests) { @MainActor in
+                keepPresetEmojiStyles(in: archive)
+            }
+        }
+    }
 
     static var customEmojis: CustomEmojiCaches { images.customEmojis }
 

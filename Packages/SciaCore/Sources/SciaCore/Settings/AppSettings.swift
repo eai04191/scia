@@ -838,6 +838,14 @@ public final class SettingsStore {
         library = updated
     }
 
+    /// どれかのプリセット（組み込みのプリセットを含む）が使う「絵文字」の種類。プリセットのどれかが変わると購読に届く。
+    /// 絵文字ピッカーのために端末に置いた画像のうち、どのプリセットでも使わない種類のものだけを消すのに使う。
+    public var emojiStylesInPresets: Set<EmojiStyle> {
+        let library = observedLibrary
+        let ids = BuiltInPreset.allCases.map(PresetID.builtIn) + library.userPresets.map { PresetID.user($0.id) }
+        return Set(ids.map { resolvedAppearance(in: $0).emojiStyle })
+    }
+
     /// ショートカットから、アプリのプリセットを選ぶか、アカウントにプリセットを割り当てる。アカウントに`nil`を渡すと、割り当てを外す。
     /// 消えたプリセットやログアウトしたアカウントを指したら、何も変えずに失敗する（docs/preset.md）。
     /// - Parameter signedInAccounts: ログインしているアカウントのハンドル。
