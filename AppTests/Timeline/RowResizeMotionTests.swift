@@ -152,7 +152,9 @@ struct RowResizeMotionTests {
         let body = try #require(harness.visibleCell(of: id)?.contentView as? PostContentView).postBody
         let text = try #require(body.subviews.first { $0 is LinkLabel }, "本文がありません")
         let grow = try #require(text.layer.mask?.animation(forKey: TimelineViewController.partRevealName) as? CASpringAnimation, "伸びた本文を切り抜いていません")
-        #expect(abs((grow.toValue as? CGFloat ?? 0) - text.bounds.height) < 0.5, "切り抜きの行き先が、今の高さになっていません")
+        let mask = try #require(text.layer.mask)
+        let endBottom = (grow.toValue as? CGFloat ?? 0) + (grow.keyPath == "position.y" ? mask.bounds.height : 0)
+        #expect(abs(endBottom - text.bounds.height) < 0.5, "切り抜きの行き先が、今の高さになっていません")
     }
 
     /// 編集で本文にリンクが足された見えている投稿は、描き直したあとの中身で、カードを取り直す投稿として報告する。
@@ -274,6 +276,75 @@ struct RowResizeMotionTests {
         #expect(grown > 0, "編集しても行が伸びていません")
         let bar = try #require((cell.contentView as? PostContentView)?.postBody.actionBar, "アクションバーがありません")
         #expect(abs(harness.initialOffsetY(of: bar, in: cell) + grown) < 0.5, "アクションバーが、前の位置から動いていません（\(harness.initialOffsetY(of: bar, in: cell))pt、伸びは\(grown)pt）")
+    }
+
+    /// 注意書きを開いて本文の下の部品（リンクカード）が現れるとき、部品の見える範囲は、下がってくるアクションバーの上端までにする。
+    /// 部品の上端から切り抜きを広げると、アクションバーより先に下へ広がり、下がってくる途中のアクションバーが部品に重なる。
+    @Test func partAppearingBelowTextStaysAboveDescendingActionBar() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.settings.appearance.showsActionBar = true
+        var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
+        let base = statuses[10]
+        let card = PreviewCard(url: try #require(URL(string: "https://news.example/a")), title: "見出し", description: "説明", type: .link, providerName: "", image: nil, width: 0, height: 0, blurhash: nil)
+        statuses[10] = Status(id: base.id, createdAt: base.createdAt, account: base.account, content: "<p>注意書きの下の本文</p>", spoilerText: "注意書き", url: nil, card: card)
+        harness.setStatuses(statuses)
+        let id = TimelineViewController.ItemID.status(statuses[10].id)
+        try harness.scroll(to: id, at: .centeredVertically)
+
+        harness.viewController.toggleSpoiler(of: statuses[10], keeping: id)
+
+        let cell = try #require(harness.visibleCell(of: id))
+        let body = try #require(cell.contentView as? PostContentView).postBody
+        let cardView = try #require(body.linkCard, "リンクカードが出ていません")
+        let bar = try #require(body.actionBar, "アクションバーがありません")
+        let barTop = bar.convert(bar.bounds, to: cell).minY + harness.initialOffsetY(of: bar, in: cell)
+        let mask = try #require(cardView.layer.mask, "カードを切り抜いていません")
+        let reveal = try #require(mask.animation(forKey: TimelineViewController.partRevealName) as? CASpringAnimation, "カードを切り抜いて現していません")
+        let from = try #require(reveal.fromValue as? CGFloat)
+        let maskBottom = switch reveal.keyPath {
+        case "bounds.size.height": from
+        case "position.y": from + mask.bounds.height
+        default: CGFloat.infinity
+        }
+        let cardBottom = cardView.convert(cardView.bounds, to: cell).minY + harness.initialOffsetY(of: cardView, in: cell) + maskBottom
+        #expect(cardBottom <= barTop + 0.5, "動き始めに、カードがアクションバーの上端より\(cardBottom - barTop)pt下まで見えています")
+    }
+
+    /// 注意書きを開いて本文を現している途中に本文がまた伸びたら（絵文字が届いた、編集されたなど）、今見えている本文の下の端から現し続ける。
+    /// 前の切り抜きの形を読み違えると、まだ見せていない本文が、伸びたコマで一度に現れる。
+    @Test func growingWhileRevealingContinuesFromVisibleBottom() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.settings.appearance.showsActionBar = true
+        var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
+        statuses[10] = replacing(statuses[10], content: "<p>" + String(repeating: "注意書きの下の本文。", count: 10) + "</p>", spoilerText: "注意書き")
+        harness.setStatuses(statuses)
+        let id = TimelineViewController.ItemID.status(statuses[10].id)
+        try harness.scroll(to: id, at: .centeredVertically)
+        let clock = LayerClock(freezing: harness.window.layer)
+
+        harness.viewController.toggleSpoiler(of: statuses[10], keeping: id)
+        try await clock.advance(by: 0.1)
+        let body = try #require(harness.visibleCell(of: id)?.contentView as? PostContentView).postBody
+        let text = try #require(body.subviews.first { $0 is LinkLabel }, "本文がありません")
+        let shown = try #require(text.layer.mask?.presentation(), "本文を切り抜いて現していません")
+        let visibleBottom = shown.position.y + (1 - shown.anchorPoint.y) * shown.bounds.height
+        #expect(visibleBottom < text.bounds.height - 1, "動きの途中なのに、本文が全部見えています")
+
+        statuses[10] = replacing(statuses[10], content: "<p>" + String(repeating: "注意書きの下の本文。", count: 30) + "</p>", spoilerText: "注意書き")
+        harness.setStatuses(statuses)
+        harness.collectionView.layoutIfNeeded()
+
+        let mask = try #require(text.layer.mask, "伸びた本文を切り抜いていません")
+        let reveal = try #require(mask.animation(forKey: TimelineViewController.partRevealName) as? CASpringAnimation, "伸びた本文を切り抜いていません")
+        let from = try #require(reveal.fromValue as? CGFloat)
+        let startBottom = switch reveal.keyPath {
+        case "bounds.size.height": from
+        case "position.y": from + (1 - mask.anchorPoint.y) * mask.bounds.height
+        default: CGFloat.infinity
+        }
+        #expect(abs(startBottom - visibleBottom) < 1, "伸びたコマで、本文の見える下の端が\(visibleBottom)ptから\(startBottom)ptへ飛んでいます")
     }
 
     /// 本文の編集と一緒にリンクカードがなくなったら、カードのあった場所には、描き直す前の像を見せる。

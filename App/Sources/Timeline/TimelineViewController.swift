@@ -837,6 +837,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// すぐ下の区切り線だけが動いて見える。本文が自分で付ける動き（届いた絵文字、訳文、本文より下の部品）は、そのまま使う。
     ///
     /// 伸びた部品は、前の高さから切り抜きを広げる。新しく現れた部品（描き直す前は隠れていたか、なかった部品）は、最後の位置に置いたまま切り抜きを広げる。
+    /// 下に前から出ていた部品があれば、切り抜きの下の端をその部品の上の端に合わせて動かす。現れた部品の上の端から広げると、本文の下の部品（画像、Xの投稿の囲みなど）が、下がってくるアクションバーより先に見え、重なる。
     /// 切り抜かないと、伸びた分や現れた部品が、動いている途中のまわりの部品に重なる。
     ///
     /// 下端を保って上へ伸び縮みした行（`keepsBottom`）では、中身全体を、伸びた分だけ下から動かす。部品の動きと足し合わさり、変わった箇所より下の部品は差し引きで止まり、上の部品だけが動く。
@@ -849,12 +850,15 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         // 部品のビューには、現れるときに初めて作られるものがある（リンクカードなど）。前の一覧にないものも、隠れていた部品と同じに扱う。
         let known = Set(before.parts.map { ObjectIdentifier($0.view) })
         let created = (rowParts(of: cell)?.parts ?? []).filter { !known.contains(ObjectIdentifier($0.view)) }.map { RowPart($0.view, 0, 0, true, .zero) }
+        let staying = before.parts.filter { !$0.wasHidden && !$0.view.isHidden }
         for part in before.parts + created where !part.view.isHidden {
             let view = part.view
             if part.wasHidden {
                 if keepsBottom {
                     shiftRow(view.layer, by: growth, duration: duration)
                     revealPart(view, from: max(view.bounds.height - growth, 0), anchoredAtBottom: true, duration: duration)
+                } else if let edge = followedEdge(of: view, in: cell, among: staying) {
+                    revealPart(view, followingEdgeFrom: edge.from, to: edge.to, duration: duration)
                 } else {
                     revealPart(view, from: 0, anchoredAtBottom: false, duration: duration)
                 }
@@ -952,17 +956,23 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 動かし直さないと、切り抜きは前の高さまでしか広がらず、足された分が、切り抜きを外すコマで一度に現れる。
     private func revealPart(_ view: UIView, from height: CGFloat, anchoredAtBottom: Bool, duration: TimeInterval) {
         let newHeight = view.bounds.height
+        guard newHeight - height > 0.5 else { return }
+        // 上の端から広げる切り抜きは、下の部品に合わせて現すときと同じ形にする。形を分けると、広げている途中にまた伸びたとき、今見えている下の端を読み違える。
+        guard anchoredAtBottom else {
+            revealPart(view, followingEdgeFrom: height, to: newHeight, duration: duration)
+            return
+        }
         let running = view.layer.mask.flatMap { $0.name == Self.partRevealName ? $0 : nil }
-        guard newHeight - height > 0.5, running != nil || view.layer.mask == nil else { return }
+        guard running != nil || view.layer.mask == nil else { return }
         let mask = running ?? CALayer()
         let from = running?.presentation()?.bounds.height ?? height
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         mask.name = Self.partRevealName
         mask.backgroundColor = UIColor.black.cgColor
-        mask.anchorPoint = anchoredAtBottom ? CGPoint(x: 0, y: 1) : .zero
+        mask.anchorPoint = CGPoint(x: 0, y: 1)
         mask.bounds = CGRect(origin: .zero, size: view.bounds.size)
-        mask.position = anchoredAtBottom ? CGPoint(x: 0, y: newHeight) : .zero
+        mask.position = CGPoint(x: 0, y: newHeight)
         CATransaction.commit()
         let grow = CASpringAnimation.rowSpring(keyPath: "bounds.size.height", duration: duration)
         grow.fromValue = from
@@ -973,6 +983,46 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             view.layer.mask = nil
         }
         mask.add(grow, forKey: Self.partRevealName)
+        view.layer.mask = mask
+    }
+
+    /// 新しく現れた部品のすぐ下にあり、描き直す前から出ていた部品の上端の、描き直す前と後の位置を、現れた部品の座標で返す。下に出ていた部品がなければnil。
+    /// 下の部品は、前の位置から新しい位置へ動く。現れた部品の切り抜きの下端をその上端に合わせて動かせば、下がってくる部品（アクションバーなど）が、現れた部品に重ならない。
+    private func followedEdge(of view: UIView, in cell: UICollectionViewCell, among staying: [RowPart]) -> (from: CGFloat, to: CGFloat)? {
+        let frame = view.convert(view.bounds, to: cell)
+        let below = staying.compactMap { part -> (old: CGFloat, new: CGFloat)? in
+            guard part.view !== view, !part.view.isDescendant(of: view), !view.isDescendant(of: part.view) else { return nil }
+            let new = part.view.convert(part.view.bounds, to: cell)
+            guard new.minY >= frame.maxY - 0.5, new.maxX > frame.minX, new.minX < frame.maxX else { return nil }
+            return (part.frameInCell.minY, new.minY)
+        }
+        guard let next = below.min(by: { $0.new < $1.new }), next.new - next.old > 0.5 else { return nil }
+        return (next.old - frame.minY, next.new - frame.minY)
+    }
+
+    /// 現れた部品を、切り抜きの下端を`from`から`to`（部品の座標）へ、下の部品と同じスプリングで動かして見せる。`from`は部品の上端より上（負）でもよい。
+    /// 切り抜きを広げている途中なら、今見えている下端から動かし直す。
+    private func revealPart(_ view: UIView, followingEdgeFrom from: CGFloat, to: CGFloat, duration: TimeInterval) {
+        let running = view.layer.mask.flatMap { $0.name == Self.partRevealName ? $0 : nil }
+        guard running != nil || view.layer.mask == nil else { return }
+        let mask = running ?? CALayer()
+        let start = running?.presentation().map { $0.position.y + (1 - $0.anchorPoint.y) * $0.bounds.height } ?? from
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        mask.name = Self.partRevealName
+        mask.backgroundColor = UIColor.black.cgColor
+        mask.anchorPoint = .zero
+        mask.bounds = CGRect(x: 0, y: 0, width: view.bounds.width, height: to)
+        mask.position = .zero
+        CATransaction.commit()
+        let follow = CASpringAnimation.rowSpring(keyPath: "position.y", duration: duration)
+        follow.fromValue = start - to
+        follow.toValue = 0
+        follow.delegate = RowShiftCompletion { [weak view, weak mask] in
+            guard let view, let mask, view.layer.mask === mask, mask.animation(forKey: Self.partRevealName) == nil else { return }
+            view.layer.mask = nil
+        }
+        mask.add(follow, forKey: Self.partRevealName)
         view.layer.mask = mask
     }
 
