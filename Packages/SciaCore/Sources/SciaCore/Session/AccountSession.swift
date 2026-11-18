@@ -73,7 +73,8 @@ public final class AccountSession {
     private var capabilitiesState: CapabilitiesState = .unknown
     private var capabilitiesLoad: Task<Void, Never>?
     private var lists: [WeakList] = []
-    private let settings: AppSettings
+    /// このアカウントが使うプリセットの設定。
+    public let settings: AppSettings
     private let tuning: TuningStore
     private let translationSetup: StatusTranslationSetup?
     private let logger = SciaLog.logger(category: "session")

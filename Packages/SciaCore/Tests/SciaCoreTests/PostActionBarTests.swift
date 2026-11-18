@@ -41,9 +41,11 @@ struct PostActionBarTests {
     }
 
     @Test func readsActionBarToken() {
-        let defaults = TestScratch.defaults("PostActionBarTests")
-        defaults.set(["actionBar", "menu"], forKey: "settings.objectActions.status")
-        let settings = AppSettings(defaults: defaults)
+        let settings = AppSettings(defaults: TestScratch.defaults("PostActionBarTests"))
+        settings.store.updateLibrary { library throws(PresetError) in
+            try library.setValue(.text("actionBar"), forKey: "objectActions.status.tap", for: .app)
+            try library.setValue(.text("menu"), forKey: "objectActions.status.longPress", for: .app)
+        }
         #expect(settings.statusActions == ObjectActions(tap: .actionBar, longPress: .menu))
         #expect(ObjectAction<StatusMenuItem>.actionBar.token == "actionBar")
     }

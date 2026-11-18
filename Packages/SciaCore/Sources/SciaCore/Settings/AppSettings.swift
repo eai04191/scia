@@ -2,57 +2,118 @@ public import Foundation
 public import Observation
 
 /// 使う人が設定画面で選ぶ値。変更はObservationで購読できる。
+/// プリセットに含める値は、`target`が指すプリセットから読み、そこへ書く。含めない値は、端末に1つの`SettingsStore`に読み書きする（docs/preset.md）。
+/// 同じ`SettingsStore`を共有する`AppSettings`を、アプリ（`AppDependencies.settings`）と、窓に開いたアカウントごと（`forAccount(_:)`）に作る。
 @MainActor
 @Observable
 public final class AppSettings {
-    @ObservationIgnored private let defaults: UserDefaults
+    /// 値を読み書きするプリセットを、どう決めるか。
+    public enum Target: Hashable, Sendable {
+        /// アプリかアカウントが使うプリセット。組み込みのプリセットを使っているときに値を変えると、それを親にしたプリセットを作って切り替える。
+        case scope(PresetScope)
+        /// プリセットを選ぶ画面から開いた、決まったプリセット。
+        case preset(PresetID)
+    }
+
+    @ObservationIgnored public let store: SettingsStore
+    @ObservationIgnored public let target: Target
+
+    /// - Parameter keepsComposeBarOpenByDefault: 使う人が選んでいないときの`keepsComposeBarOpen`。端末で決まるので、アプリが渡す。
+    public convenience init(defaults: UserDefaults, keepsComposeBarOpenByDefault: Bool = false) {
+        self.init(store: SettingsStore(defaults: defaults, keepsComposeBarOpenByDefault: keepsComposeBarOpenByDefault), target: .scope(.app))
+    }
+
+    public init(store: SettingsStore, target: Target) {
+        self.store = store
+        self.target = target
+    }
+
+    /// 同じ保存先を共有し、アカウントが使うプリセットを読み書きする設定。
+    public func forAccount(_ handle: String) -> AppSettings {
+        AppSettings(store: store, target: .scope(.account(handle)))
+    }
+
+    /// 同じ保存先を共有し、決まったプリセットを読み書きする設定。
+    public func editing(_ preset: PresetID) -> AppSettings {
+        AppSettings(store: store, target: .preset(preset))
+    }
+
+    /// 値を読むプリセット。
+    public var presetID: PresetID {
+        switch target {
+        case .scope(let scope):
+            store.trackSelection()
+            return store.library.preset(for: scope)
+        case .preset(let id):
+            return id
+        }
+    }
+
+    /// 表示しているアカウント。アプリの設定と、決まったプリセットの設定ではnil。
+    private var account: String? {
+        guard case .scope(.account(let handle)) = target else { return nil }
+        return handle
+    }
+
+    // MARK: プリセットに含める値
 
     /// モバイル通信とインターネット共有でも、タイムラインのサムネイルに元の画像を読む。
     /// オフなら、サーバーが縮めたプレビュー画像を読む。
     public var usesOriginalThumbnailsOnExpensiveNetwork: Bool {
-        didSet { defaults.set(usesOriginalThumbnailsOnExpensiveNetwork, forKey: Keys.usesOriginalThumbnailsOnExpensiveNetwork) }
+        get { bool(Keys.usesOriginalThumbnailsOnExpensiveNetwork, default: true) }
+        set { write(.bool(newValue), Keys.usesOriginalThumbnailsOnExpensiveNetwork) }
     }
 
     /// 「undefined」や「Screenshot」のような、説明にならない代替テキストを付いていないものとして扱う。
+    /// プリセットに含めない。見た目ではなく、代替テキストの扱いの設定のため（docs/preset.md）。
     public var ignoresUselessAltText: Bool {
-        didSet { defaults.set(ignoresUselessAltText, forKey: Keys.ignoresUselessAltText) }
+        get { store.ignoresUselessAltText }
+        set { store.ignoresUselessAltText = newValue }
     }
 
     /// プロフィールの自己紹介を、折りたたむか、最初から全文を出すか。
     public var profileNoteLength: ProfileNoteLength {
-        didSet { defaults.set(profileNoteLength.rawValue, forKey: Keys.profileNoteLength) }
+        get { choice(Keys.profileNoteLength, default: .collapsed) }
+        set { write(.text(newValue.rawValue), Keys.profileNoteLength) }
     }
 
     /// プロフィールの固定された投稿を、タイムラインの上の棚に分けて出す。オフなら、投稿のタイムラインの先頭に並べる。
     public var separatesProfilePinned: Bool {
-        didSet { defaults.set(separatesProfilePinned, forKey: Keys.separatesProfilePinned) }
+        get { bool(Keys.separatesProfilePinned, default: true) }
+        set { write(.bool(newValue), Keys.separatesProfilePinned) }
     }
 
     /// プロフィールに、注目のハッシュタグの棚を出す。オフなら読み込まない。
     public var showsProfileFeaturedTags: Bool {
-        didSet { defaults.set(showsProfileFeaturedTags, forKey: Keys.showsProfileFeaturedTags) }
+        get { bool(Keys.showsProfileFeaturedTags, default: true) }
+        set { write(.bool(newValue), Keys.showsProfileFeaturedTags) }
     }
 
     /// プロフィールに、紹介しているユーザーの棚を出す。オフなら読み込まない。
     public var showsProfileEndorsements: Bool {
-        didSet { defaults.set(showsProfileEndorsements, forKey: Keys.showsProfileEndorsements) }
+        get { bool(Keys.showsProfileEndorsements, default: true) }
+        set { write(.bool(newValue), Keys.showsProfileEndorsements) }
     }
 
     /// プロフィールの補足情報のカード、固定された投稿のカード、フォローのボタン、画面のティントカラーを、アイコンから取った色で塗る。
     /// オフなら、システムの色とアプリのアクセントカラーのままにする。
     public var usesDynamicProfileAccent: Bool {
-        didSet { defaults.set(usesDynamicProfileAccent, forKey: Keys.usesDynamicProfileAccent) }
+        get { bool(Keys.usesDynamicProfileAccent, default: true) }
+        set { write(.bool(newValue), Keys.usesDynamicProfileAccent) }
     }
 
     /// Xの投稿へのリンクを、fxtwitterから読んだ作者、本文、添付ファイルの囲みで出す。
     /// 表示しただけでSciaと関係のないfxtwitterとXに通信するので、既定はオフにし、使う人がオンにしたときだけ通信する（docs/link-card.md）。
+    /// 組み込みのプリセットはこの値を持たない（docs/preset.md）。
     public var expandsXPosts: Bool {
-        didSet { defaults.set(expandsXPosts, forKey: Keys.expandsXPosts) }
+        get { bool(Keys.expandsXPosts, default: false) }
+        set { write(.bool(newValue), Keys.expandsXPosts) }
     }
 
     /// タイムラインの本文を自動で訳す（docs/auto-translation.md）。
     public var isAutoTranslationEnabled: Bool {
-        didSet { defaults.set(isAutoTranslationEnabled, forKey: Keys.isAutoTranslationEnabled) }
+        get { bool(Keys.isAutoTranslationEnabled, default: false) }
+        set { write(.bool(newValue), Keys.isAutoTranslationEnabled) }
     }
 
     /// 自動翻訳がオンなら、訳す投稿の言語。オフなら空。
@@ -61,20 +122,23 @@ public final class AppSettings {
     }
 
     /// 翻訳の言語モデルが入るたびに増える。増えたら、モデルがなくて訳せなかった投稿を訳し直す。保存しない。
-    public private(set) var autoTranslationModelRevision = 0
+    public var autoTranslationModelRevision: Int { store.autoTranslationModelRevision }
 
     public func noteAutoTranslationModelInstalled() {
-        autoTranslationModelRevision += 1
+        store.autoTranslationModelRevision += 1
     }
 
     /// タイムラインの本文を自動で訳す投稿の言語。空なら訳さない（docs/auto-translation.md）。
     public var autoTranslationLanguages: [String] {
-        didSet { defaults.set(autoTranslationLanguages, forKey: Keys.autoTranslationLanguages) }
+        get { list(Keys.autoTranslationLanguages) ?? [] }
+        set { write(.list(newValue), Keys.autoTranslationLanguages) }
     }
 
     /// 自動翻訳の対象外にした人のハンドル（`username@domain`）。対象外にした順（docs/auto-translation.md）。
+    /// プリセットに含めない。値が設定ではなく、溜めたデータのため（docs/preset.md）。
     public var autoTranslationExcludedHandles: [String] {
-        didSet { defaults.set(autoTranslationExcludedHandles, forKey: Keys.autoTranslationExcludedHandles) }
+        get { store.autoTranslationExcludedHandles }
+        set { store.autoTranslationExcludedHandles = newValue }
     }
 
     /// 同じサーバーの人は、ログインしたアドレスのサーバー名を補ったハンドルで比べる。どのアカウントから見ても同じ人を同じハンドルで指すため。
@@ -94,80 +158,110 @@ public final class AppSettings {
 
     /// 自動翻訳の翻訳先の言語の識別子。nilならデバイスの言語（docs/auto-translation.md）。
     public var autoTranslationTarget: String? {
-        didSet { defaults.set(autoTranslationTarget, forKey: Keys.autoTranslationTarget) }
+        get {
+            switch value(Keys.autoTranslationTarget) {
+            case .text(let identifier): identifier
+            default: nil
+            }
+        }
+        set { write(newValue.map(PresetValue.text) ?? .null, Keys.autoTranslationTarget) }
     }
 
     /// 自動翻訳の翻訳の方式（docs/auto-translation.md）。
     public var autoTranslationStrategy: TranslationStrategy {
-        didSet { defaults.set(autoTranslationStrategy.rawValue, forKey: Keys.autoTranslationStrategy) }
+        get { choice(Keys.autoTranslationStrategy, default: .lowLatency) }
+        set { write(.text(newValue.rawValue), Keys.autoTranslationStrategy) }
     }
 
     /// 届いた通知を、ステータスバーの場所に流す。
     public var showsStatusBarTicker: Bool {
-        didSet { defaults.set(showsStatusBarTicker, forKey: Keys.showsStatusBarTicker) }
+        get { bool(Keys.showsStatusBarTicker, default: true) }
+        set { write(.bool(newValue), Keys.showsStatusBarTicker) }
     }
 
     /// 最上部で新着に追従しているとき、新着を足してから最上部へ動かして見せるか。最上部より下で読んでいるときは、読んでいる位置を保つため動かさない。
     public var insertionMotion: InsertionMotion {
-        didSet { defaults.set(insertionMotion.rawValue, forKey: Keys.insertionMotion) }
+        get { choice(Keys.insertionMotion, default: .followsSystem) }
+        set { write(.text(newValue.rawValue), Keys.insertionMotion) }
     }
 
     /// ボタンやリンクに付けるアクセントカラー。
     public var accentColor: AccentColorChoice {
-        didSet { defaults.set(accentColor.rawValue, forKey: Keys.accentColor) }
+        get { choice(Keys.accentColor, default: .blue) }
+        set { write(.text(newValue.rawValue), Keys.accentColor) }
     }
 
     /// プロフィール画面の「投稿」に、返信とブーストを混ぜるか。どのアカウントのプロフィールにも効かせる。
+    /// プリセットに含めない。設定の画面の外で、使っているうちに変わるため（docs/preset.md）。
     public var profilePostsFilter: ProfilePostsFilter {
-        didSet {
-            defaults.set(profilePostsFilter.showsReplies, forKey: Keys.profileShowsReplies)
-            defaults.set(profilePostsFilter.showsBoosts, forKey: Keys.profileShowsBoosts)
-        }
+        get { store.profilePostsFilter }
+        set { store.profilePostsFilter = newValue }
     }
 
     /// 本文のURLのリンクを、既定のブラウザとアプリ内のSafariのどちらで開くか。
     public var linkBrowser: LinkBrowser {
-        didSet { defaults.set(linkBrowser.rawValue, forKey: Keys.linkBrowser) }
+        get { choice(Keys.linkBrowser, default: .inApp) }
+        set { write(.text(newValue.rawValue), Keys.linkBrowser) }
     }
 
     /// 絵文字のパレットと補完で、肌の色を変えられる絵文字に付ける既定の肌の色。決まりはdocs/compose.mdの「絵文字の肌の色」にある。
+    /// プリセットに含めない。設定の画面の外で、使っているうちに変わるため（docs/preset.md）。
     public var emojiSkinTone: EmojiSkinTone {
-        didSet { defaults.set(emojiSkinTone.rawValue, forKey: Keys.emojiSkinTone) }
+        get { store.emojiSkinTone }
+        set { store.emojiSkinTone = newValue }
     }
 
     /// アプリ内のSafariを中くらいの高さで出すときのシートの高さ。
+    /// 数でない値（NaNや無限大）は刻みに寄せられないので、持っていないときと同じく標準にする。
     public var inAppBrowserHeight: InAppBrowserHeight {
-        didSet { defaults.set(inAppBrowserHeight.spaceAbove, forKey: Keys.inAppBrowserSpaceAbove) }
+        get {
+            guard let space = number(Keys.inAppBrowserSpaceAbove), space.isFinite else { return .standard }
+            return InAppBrowserHeight(spaceAbove: space)
+        }
+        set { write(.number(newValue.spaceAbove), Keys.inAppBrowserSpaceAbove) }
     }
 
     /// アプリ内のSafariを最初から全画面で開くか。オフなら`inAppBrowserHeight`の高さで開く。
     public var opensInAppBrowserFullScreen: Bool {
-        didSet { defaults.set(opensInAppBrowserFullScreen, forKey: Keys.opensInAppBrowserFullScreen) }
+        get { bool(Keys.opensInAppBrowserFullScreen, default: false) }
+        set { write(.bool(newValue), Keys.opensInAppBrowserFullScreen) }
     }
 
     /// メニューの「ブースト」でブーストするときの公開範囲。
     public var reblogVisibility: ReblogVisibility {
-        didSet { defaults.set(reblogVisibility.rawValue, forKey: Keys.reblogVisibility) }
+        get { choice(Keys.reblogVisibility, default: .accountDefault) }
+        set { write(.text(newValue.rawValue), Keys.reblogVisibility) }
     }
 
-    /// 「投稿の見た目」の選択肢。まとめて1つのキーに保存する。
+    /// 「投稿の見た目」の選択肢。選択肢ごとに、プリセットの別々の値として持つ。
     public var appearance: AppearanceChoices {
-        didSet { defaults.set(appearance.storedData, forKey: Keys.appearanceChoices) }
+        get { store.resolvedAppearance(in: presetID) }
+        set {
+            let current = AppearanceStorage.fields(of: appearance)
+            for (field, value) in AppearanceStorage.fields(of: newValue) where current[field] != value {
+                write(value, AppearanceStorage.key(field))
+            }
+        }
     }
 
-    /// 「投稿の見た目」と「通知の見た目」で変えた数値。キーは`AppearanceValue.id`。既定値のままの項目は持たない。
-    public private(set) var appearanceValues: [String: Double]
+    /// 「投稿の見た目」と「通知の見た目」の数値。キーは`AppearanceValue.id`。購読のために読む。
+    public var appearanceValues: [String: Double] {
+        Dictionary(uniqueKeysWithValues: Self.appearanceItems.map { ($0.id, value(of: $0)) })
+    }
 
+    private static let appearanceItems = AppearanceCatalog.values + NotificationAppearanceCatalog.values
+
+    /// 範囲の外の値は、持っていないときと同じく既定値にする。
     public func value(of item: AppearanceValue) -> Double {
-        appearanceValues[item.id] ?? item.defaultValue
+        guard let stored = number(Self.appearanceKey(item)), item.range.contains(stored) else { return item.defaultValue }
+        return stored
     }
 
     /// 範囲外の値は範囲内に丸めて保存する。数でない値（NaNや無限）は、行数などを整数に直すところで落ちるため、保存しない。
     public func setValue(_ value: Double, for item: AppearanceValue) {
         guard value.isFinite else { return }
         let clamped = min(max(Self.snapped(value, toMultipleOf: item.step), item.range.lowerBound), item.range.upperBound)
-        appearanceValues[item.id] = clamped
-        defaults.set(clamped, forKey: Keys.appearance(item.id))
+        write(.number(clamped), Self.appearanceKey(item))
     }
 
     /// 刻みの倍数との差が計算の誤差ほどしかない値を、その倍数にする。＋−（`Stepper`）は今の値に刻みを足すので、
@@ -180,253 +274,251 @@ public final class AppSettings {
         return step < 1 ? nearest / (1 / step).rounded() : nearest * step
     }
 
+    /// 読んでいるプリセットが変えた項目か。値が親と同じでも、変えた項目として扱う（docs/preset.md）。
     public func isModified(_ item: AppearanceValue) -> Bool {
-        value(of: item) != item.defaultValue
+        isModified(key: Self.appearanceKey(item))
     }
 
     public func isModified(_ choice: AppearanceChoice) -> Bool {
-        choice.isModified(in: appearance)
+        isModified(key: AppearanceStorage.key(choice.field))
     }
 
+    /// 変えたことを取り消し、親のプリセットの値に従わせる。
     public func reset(_ choice: AppearanceChoice) {
-        choice.reset(in: &appearance)
+        reset(keys: [AppearanceStorage.key(choice.field)])
     }
 
-    /// 「投稿の見た目」の分類の、数値か選択肢のどれかが、既定値から変わっているか。
+    /// 「投稿の見た目」の分類の、数値か選択肢のどれかを、読んでいるプリセットが変えたか。
     public func isAppearanceGroupModified(_ group: AppearanceGroup) -> Bool {
         group.values.contains(where: isModified) || AppearanceChoice.choices(inGroup: group.id).contains(where: isModified)
     }
 
-    /// 分類の外に置く「スレッドで開いた投稿はすべて表示」が、既定値から変わっているか。
+    /// 分類の外に置く「スレッドで開いた投稿はすべて表示」を、読んでいるプリセットが変えたか。
     public var isRevealsAllPartsInThreadModified: Bool {
-        appearance.revealsAllPartsInThread != AppearanceChoices().revealsAllPartsInThread
+        isModified(key: AppearanceStorage.key(AppearanceStorage.revealsAllPartsInThread))
     }
 
     public func resetRevealsAllPartsInThread() {
-        appearance.revealsAllPartsInThread = AppearanceChoices().revealsAllPartsInThread
+        reset(keys: [AppearanceStorage.key(AppearanceStorage.revealsAllPartsInThread)])
     }
 
     public var isAppearanceModified: Bool {
-        AppearanceCatalog.values.contains(where: isModified) || appearance != AppearanceChoices()
+        AppearanceCatalog.values.contains(where: isModified) || AppearanceStorage.fieldNames.contains { isModified(key: AppearanceStorage.key($0)) }
     }
 
-    /// 「投稿の見た目」の数値と選択肢を、すべて既定値へ戻す。
+    /// 「投稿の見た目」の数値と選択肢を、すべて親のプリセットの値に従わせる。
     public func resetAppearance() {
         reset(AppearanceCatalog.values)
-        appearance = AppearanceChoices()
+        reset(keys: AppearanceStorage.fieldNames.map(AppearanceStorage.key))
     }
 
-    /// 「通知の見た目」の数値のどれかが、既定値から変わっているか。
+    /// 「通知の見た目」の数値のどれかを、読んでいるプリセットが変えたか。
     public var isNotificationAppearanceModified: Bool {
         NotificationAppearanceCatalog.values.contains(where: isModified)
     }
 
-    /// 「通知の見た目」の数値を、すべて既定値へ戻す。
+    /// 「通知の見た目」の数値を、すべて親のプリセットの値に従わせる。
     public func resetNotificationAppearance() {
         reset(NotificationAppearanceCatalog.values)
     }
 
-    /// 項目を既定値へ戻す。
+    /// 項目を、親のプリセットの値に従わせる。
     public func reset(_ items: [AppearanceValue]) {
-        for item in items {
-            appearanceValues[item.id] = nil
-            defaults.removeObject(forKey: Keys.appearance(item.id))
-        }
+        reset(keys: items.map(Self.appearanceKey))
     }
 
+    // MARK: タブ（プリセットに含めない。アカウントに固有のため）
+
     /// アカウントごとのタブの並び。キーはアカウントのハンドル。保存していないアカウントは既定の並びを使う。
-    /// ログアウトで消せるよう、アカウントごとのキー（`AccountScopedDefaults`）に1つずつ保存する。
-    public private(set) var tabLayouts: [String: MenuLayout<TabItem>]
+    public var tabLayouts: [String: MenuLayout<TabItem>] { store.tabLayouts }
 
     /// - Parameter account: アカウントのハンドル（`Credential.handle`）。
     public func tabLayout(for account: String) -> MenuLayout<TabItem> {
-        tabLayouts[account] ?? TabItem.defaultLayout
+        store.tabLayouts[account] ?? TabItem.defaultLayout
     }
 
     public func setTabLayout(_ layout: MenuLayout<TabItem>, for account: String) {
-        tabLayouts[account] = layout
-        defaults.set(layout.tokens, forKey: AccountScopedDefaults.key(Keys.tabLayout, account: account))
+        store.setTabLayout(layout, for: account)
     }
 
-    /// アカウントごとの、切り替えタブで最後に開いた項目。キーはアカウントのハンドル。
-    /// 開くたびに書くので、ほかの設定と違って変更を購読させない。
-    @ObservationIgnored private var switchTabItems: [String: TabItem]
-
     public func switchTabItem(for account: String) -> TabItem? {
-        switchTabItems[account]
+        store.switchTabItems[account]
     }
 
     public func setSwitchTabItem(_ item: TabItem, for account: String) {
-        guard switchTabItems[account] != item else { return }
-        switchTabItems[account] = item
-        defaults.set(item.rawValue, forKey: AccountScopedDefaults.key(Keys.switchTabItem, account: account))
+        store.setSwitchTabItem(item, for: account)
     }
 
-    /// アカウントごとの、最後に見ていたタブの項目。切り替えタブの中なら、開いていた項目。キーはアカウントのハンドル。
-    /// 起動したときに、この項目を開く。タブを移るたびに書くので、変更を購読させない。
-    @ObservationIgnored private var shownTabItems: [String: TabItem]
-
     public func shownTabItem(for account: String) -> TabItem? {
-        shownTabItems[account]
+        store.shownTabItems[account]
     }
 
     public func setShownTabItem(_ item: TabItem, for account: String) {
-        guard shownTabItems[account] != item else { return }
-        shownTabItems[account] = item
-        defaults.set(item.rawValue, forKey: AccountScopedDefaults.key(Keys.shownTabItem, account: account))
+        store.setShownTabItem(item, for: account)
     }
 
-    /// アイコンのアニメーションを再生するか。選ぶまでは、表示しているアカウントのサーバーの設定（`serverAutoplaysAnimations`）に従う。
+    // MARK: アニメーション
+
+    /// アイコンのアニメーションを再生するか。「アカウントの設定に従う」（nil）なら、表示しているアカウントのサーバーの設定（`serverAutoplaysAnimations`）に従う。
     public var animatesAvatars: Bool {
         get { appearance.animatesAvatars ?? serverAutoplaysAnimations }
         set { appearance.animatesAvatars = newValue }
     }
 
-    /// カスタム絵文字のアニメーションを再生するか。選ぶまでは、表示しているアカウントのサーバーの設定（`serverAutoplaysAnimations`）に従う。
+    /// カスタム絵文字のアニメーションを再生するか。「アカウントの設定に従う」（nil）なら、表示しているアカウントのサーバーの設定（`serverAutoplaysAnimations`）に従う。
     public var animatesCustomEmojis: Bool {
         get { appearance.animatesCustomEmojis ?? serverAutoplaysAnimations }
         set { appearance.animatesCustomEmojis = newValue }
     }
 
     /// 表示しているアカウントの、サーバーの設定「アニメーションGIFを自動再生する」（`reading:autoplay:gifs`）。
-    /// 設定は端末に1つなので、窓を分けて別のアカウントを開いているときは、最後に表示を始めたアカウントの値になる。
+    /// アカウントの設定は、そのアカウントの覚えた値を読む。アプリの設定は、最後に表示を始めたアカウントの値を読む。
     /// 読めた値を覚えていないアカウントでは、Mastodonの既定と同じくfalseにする。
-    public private(set) var serverAutoplaysAnimations = false
-    @ObservationIgnored private var animationAccount: String?
-    /// アカウントごとに覚えた、サーバーの「アニメーションGIFを自動再生する」。キーはアカウントのハンドル。
-    /// 起動のたびに既定から始めて、読めたところで動き出さないよう、読めた値を覚えておき、表示を始めるときに使う。
-    @ObservationIgnored private var serverAnimationAutoplays: [String: Bool]
+    public var serverAutoplaysAnimations: Bool {
+        guard let account else { return store.lastServerAutoplaysAnimations }
+        return store.serverAnimationAutoplays[account] ?? false
+    }
 
     /// 表示を始めるアカウントの、覚えたサーバーの値に従う。
     public func followServerAnimations(of account: String) {
-        animationAccount = account
-        serverAutoplaysAnimations = serverAnimationAutoplays[account] ?? false
+        store.followServerAnimations(of: account)
     }
 
     /// 読めたサーバーの値を覚える。表示しているアカウントの値なら、すぐ従う。
     public func rememberServerAnimations(_ autoplays: Bool, of account: String) {
-        if serverAnimationAutoplays[account] != autoplays {
-            serverAnimationAutoplays[account] = autoplays
-            defaults.set(autoplays, forKey: AccountScopedDefaults.key(Keys.serverAutoplaysAnimations, account: account))
-        }
-        if animationAccount == account, serverAutoplaysAnimations != autoplays {
-            serverAutoplaysAnimations = autoplays
-        }
+        store.rememberServerAnimations(autoplays, of: account)
     }
 
-    /// ログアウトしたアカウントの並び、最後に開いた項目、覚えたサーバーの値を忘れる。保存したキーは`AccountScopedDefaults.removeData`が消す。
+    /// ログアウトしたアカウントの並び、最後に開いた項目、覚えたサーバーの値、プリセットの割り当てを忘れる。保存したキーは`AccountScopedDefaults.removeData`が消す。
     func forgetAccount(_ account: String) {
-        tabLayouts[account] = nil
-        switchTabItems[account] = nil
-        shownTabItems[account] = nil
-        serverAnimationAutoplays[account] = nil
-        if animationAccount == account {
-            serverAutoplaysAnimations = false
-        }
+        store.forgetAccount(account)
     }
+
+    // MARK: 操作
 
     /// 投稿を長押しして出すメニューの並び。通知のメニューもこれで組む。
     public var statusMenuLayout: MenuLayout<StatusMenuItem> {
-        didSet { defaults.set(statusMenuLayout.tokens, forKey: Keys.statusMenuLayout) }
+        get { layout(Keys.statusMenuLayout, default: StatusMenuItem.defaultLayout) }
+        set { write(.list(newValue.tokens), Keys.statusMenuLayout) }
     }
 
     /// 投稿のメニューの中に、ユーザーごとのサブメニューとして出すメニューの並び。
     public var userMenuLayout: MenuLayout<UserMenuItem> {
-        didSet { defaults.set(userMenuLayout.tokens, forKey: Keys.userMenuLayout) }
+        get { layout(Keys.userMenuLayout, default: UserMenuItem.defaultLayout) }
+        set { write(.list(newValue.tokens), Keys.userMenuLayout) }
     }
 
     /// 本文のURLのリンクを長押しして出すメニューの並び。メンションはユーザーのメニューで出す。
     public var linkMenuLayout: MenuLayout<LinkMenuItem> {
-        didSet { defaults.set(linkMenuLayout.tokens, forKey: Keys.linkMenuLayout) }
+        get { layout(Keys.linkMenuLayout, default: LinkMenuItem.defaultLayout) }
+        set { write(.list(newValue.tokens), Keys.linkMenuLayout) }
     }
 
     /// ほかのサービスの投稿（Xの投稿の囲みなど）を長押しして出すメニューの並び。
     public var externalPostMenuLayout: MenuLayout<ExternalPostMenuItem> {
-        didSet { defaults.set(externalPostMenuLayout.tokens, forKey: Keys.externalPostMenuLayout) }
+        get { layout(Keys.externalPostMenuLayout, default: ExternalPostMenuItem.defaultLayout) }
+        set { write(.list(newValue.tokens), Keys.externalPostMenuLayout) }
     }
 
     /// プロフィールの表示名、自己紹介、補足情報の行を長押しして出すメニューの並び。
     public var profileTextMenuLayout: MenuLayout<ProfileTextMenuItem> {
-        didSet { defaults.set(profileTextMenuLayout.tokens, forKey: Keys.profileTextMenuLayout) }
+        get { layout(Keys.profileTextMenuLayout, default: ProfileTextMenuItem.defaultLayout) }
+        set { write(.list(newValue.tokens), Keys.profileTextMenuLayout) }
     }
 
     public var customEmojiMenuLayout: MenuLayout<CustomEmojiMenuItem> {
-        didSet { defaults.set(customEmojiMenuLayout.tokens, forKey: Keys.customEmojiMenuLayout) }
+        get { layout(Keys.customEmojiMenuLayout, default: CustomEmojiMenuItem.defaultLayout) }
+        set { write(.list(newValue.tokens), Keys.customEmojiMenuLayout) }
     }
 
     /// 本文のハッシュタグを長押しして出すメニューの並び。
     public var hashtagMenuLayout: MenuLayout<HashtagMenuItem> {
-        didSet { defaults.set(hashtagMenuLayout.tokens, forKey: Keys.hashtagMenuLayout) }
+        get { layout(Keys.hashtagMenuLayout, default: HashtagMenuItem.defaultLayout) }
+        set { write(.list(newValue.tokens), Keys.hashtagMenuLayout) }
     }
 
     /// 投稿の絵文字のリアクションのボタンを長押しして出すメニューの並び。
     public var reactionMenuLayout: MenuLayout<ReactionMenuItem> {
-        didSet { defaults.set(reactionMenuLayout.tokens, forKey: Keys.reactionMenuLayout) }
+        get { layout(Keys.reactionMenuLayout, default: ReactionMenuItem.defaultLayout) }
+        set { write(.list(newValue.tokens), Keys.reactionMenuLayout) }
     }
 
     /// メディアを長押ししたときと、ビューアのメニューの並び。
     public var mediaMenuLayout: MenuLayout<MediaMenuItem> {
-        didSet { defaults.set(mediaMenuLayout.tokens, forKey: Keys.mediaMenuLayout) }
+        get { layout(Keys.mediaMenuLayout, default: MediaMenuItem.defaultLayout) }
+        set { write(.list(newValue.tokens), Keys.mediaMenuLayout) }
     }
 
     /// 投稿の行をタップ、長押ししたときの操作。決まりはdocs/object-actions.mdにある。
     public var statusActions: ObjectActions<StatusMenuItem> {
-        didSet { defaults.set(statusActions.tokens, forKey: Keys.statusActions) }
+        get { actions(Keys.statusActions) }
+        set { writeActions(newValue, Keys.statusActions) }
     }
 
     /// 引用の囲みをタップ、長押ししたときの操作。項目は投稿のメニューから選ぶ。
     public var quotedStatusActions: ObjectActions<StatusMenuItem> {
-        didSet { defaults.set(quotedStatusActions.tokens, forKey: Keys.quotedStatusActions) }
+        get { actions(Keys.quotedStatusActions) }
+        set { writeActions(newValue, Keys.quotedStatusActions) }
     }
 
     /// 通知の行をタップ、長押ししたときの操作。項目は投稿のメニューから選ぶ。
     public var notificationActions: ObjectActions<StatusMenuItem> {
-        didSet { defaults.set(notificationActions.tokens, forKey: Keys.notificationActions) }
+        get { actions(Keys.notificationActions) }
+        set { writeActions(newValue, Keys.notificationActions) }
     }
 
     /// アイコン、「〜がブースト」の行、人のリストの行、メンションをタップ、長押ししたときの操作。
     public var userActions: ObjectActions<UserMenuItem> {
-        didSet { defaults.set(userActions.tokens, forKey: Keys.userActions) }
+        get { actions(Keys.userActions) }
+        set { writeActions(newValue, Keys.userActions) }
     }
 
     /// URLのリンク、リンクカードをタップ、長押ししたときの操作。
     public var linkActions: ObjectActions<LinkMenuItem> {
-        didSet { defaults.set(linkActions.tokens, forKey: Keys.linkActions) }
+        get { actions(Keys.linkActions) }
+        set { writeActions(newValue, Keys.linkActions) }
     }
 
     /// ほかのサービスの投稿（Xの投稿の囲みなど）をタップ、長押ししたときの操作。
     public var externalPostActions: ObjectActions<ExternalPostMenuItem> {
-        didSet { defaults.set(externalPostActions.tokens, forKey: Keys.externalPostActions) }
+        get { actions(Keys.externalPostActions) }
+        set { writeActions(newValue, Keys.externalPostActions) }
     }
 
     /// ハッシュタグをタップ、長押ししたときの操作。
     public var hashtagActions: ObjectActions<HashtagMenuItem> {
-        didSet { defaults.set(hashtagActions.tokens, forKey: Keys.hashtagActions) }
+        get { actions(Keys.hashtagActions) }
+        set { writeActions(newValue, Keys.hashtagActions) }
     }
 
     /// 投稿の絵文字のリアクションのボタンをタップ、長押ししたときの操作。
     public var reactionActions: ObjectActions<ReactionMenuItem> {
-        didSet { defaults.set(reactionActions.tokens, forKey: Keys.reactionActions) }
+        get { actions(Keys.reactionActions) }
+        set { writeActions(newValue, Keys.reactionActions) }
     }
 
     /// サムネイル、リンクカードの画像、プロフィールの画像をタップ、長押ししたときの操作。ビューアの中は含めない。
     public var mediaActions: ObjectActions<MediaMenuItem> {
-        didSet { defaults.set(mediaActions.tokens, forKey: Keys.mediaActions) }
+        get { actions(Keys.mediaActions) }
+        set { writeActions(newValue, Keys.mediaActions) }
     }
 
     /// アクションバーに並べるボタンの並び。決まりはdocs/post-action-bar.mdにある。
     public var postActionBarLayout: MenuLayout<PostActionBarItem> {
-        didSet { defaults.set(postActionBarLayout.tokens, forKey: Keys.postActionBarLayout) }
+        get { layout(Keys.postActionBarLayout, default: PostActionBarItem.defaultLayout) }
+        set { write(.list(newValue.tokens), Keys.postActionBarLayout) }
     }
 
     /// 投稿を右にスワイプして出すボタンの並び（行の先頭の側）。決まりはdocs/object-actions.mdの「投稿のスワイプ」にある。
     public var postLeadingSwipeLayout: MenuLayout<PostSwipeItem> {
-        didSet { defaults.set(postLeadingSwipeLayout.tokens, forKey: Keys.postLeadingSwipeLayout) }
+        get { layout(Keys.postLeadingSwipeLayout, default: PostSwipeItem.defaultLayout) }
+        set { write(.list(newValue.tokens), Keys.postLeadingSwipeLayout) }
     }
 
     /// 投稿を左にスワイプして出すボタンの並び（行の末尾の側）。
     public var postTrailingSwipeLayout: MenuLayout<PostSwipeItem> {
-        didSet { defaults.set(postTrailingSwipeLayout.tokens, forKey: Keys.postTrailingSwipeLayout) }
+        get { layout(Keys.postTrailingSwipeLayout, default: PostSwipeItem.defaultLayout) }
+        set { write(.list(newValue.tokens), Keys.postTrailingSwipeLayout) }
     }
 
     /// 投稿のタップ、長押し、スワイプのどれかに「アクションバーを開く」を割り当てているか。
@@ -437,203 +529,499 @@ public final class AppSettings {
 
     /// アクションバーを出している投稿のメニューに、アクションバーに並べた項目も出すか。決まりはdocs/post-action-bar.mdにある。
     public var showsActionBarItemsInMenu: Bool {
-        didSet { defaults.set(showsActionBarItemsInMenu, forKey: Keys.showsActionBarItemsInMenu) }
+        get { bool(Keys.showsActionBarItemsInMenu, default: false) }
+        set { write(.bool(newValue), Keys.showsActionBarItemsInMenu) }
     }
 
     /// アクションバーを出している投稿のメニューに、アクションバーのボタンの長押しで出す項目も出すか。
     public var showsActionBarLongPressItemsInMenu: Bool {
-        didSet { defaults.set(showsActionBarLongPressItemsInMenu, forKey: Keys.showsActionBarLongPressItemsInMenu) }
+        get { bool(Keys.showsActionBarLongPressItemsInMenu, default: false) }
+        set { write(.bool(newValue), Keys.showsActionBarLongPressItemsInMenu) }
     }
 
     /// 投稿欄の部品を足す項目の並び。どれをツールバーに常に出し、どれを＋のメニューに入れるか。
     public var composeToolLayout: MenuLayout<ComposeToolItem> {
-        didSet { defaults.set(composeToolLayout.tokens, forKey: Keys.composeToolLayout) }
+        get { layout(Keys.composeToolLayout, default: ComposeToolItem.defaultLayout) }
+        set { write(.list(newValue.tokens), Keys.composeToolLayout) }
     }
 
     /// 切り替えタブのメニューに、タブの設定の画面を開く「カスタマイズ」を出す。タブの並びの項目はどれもタブになるため、並びに載せず、ここで出すかを決める。
-    /// 決まりはdocs/tabs.mdにある。
+    /// 決まりはdocs/tabs.mdにある。プリセットに含めない。「タブ」の画面に置くため（docs/preset.md）。
     public var showsTabMenuCustomize: Bool {
-        didSet { defaults.set(showsTabMenuCustomize, forKey: Keys.showsTabMenuCustomize) }
+        get { store.showsTabMenuCustomize }
+        set { store.showsTabMenuCustomize = newValue }
     }
 
     /// 書いていないときに、空の投稿欄を隠す。書くときは、タイムラインの右上のボタンで出す。
     /// 下書きや返信先があるときは、残っていると分かるよう隠さない。
     public var hidesEmptyComposeBar: Bool {
-        didSet { defaults.set(hidesEmptyComposeBar, forKey: Keys.hidesEmptyComposeBar) }
+        get { bool(Keys.hidesEmptyComposeBar, default: false) }
+        set { write(.bool(newValue), Keys.hidesEmptyComposeBar) }
     }
 
     /// 書いていないときも投稿欄を細いカプセルに畳まず、書いているときの形で出しておく。
     /// 畳むのはタイムラインを広く使うためで、画面の広いMacやiPadでは、押した投稿欄が広がって、押した位置にボタンが来てしまうのを避けたいため。
     /// 既定は初期化子で渡す。Macでは、書き始めても欄がその場で広がるので、既定で畳まない。
     public var keepsComposeBarOpen: Bool {
-        didSet { defaults.set(keepsComposeBarOpen, forKey: Keys.keepsComposeBarOpen) }
+        get { bool(Keys.keepsComposeBarOpen, default: store.keepsComposeBarOpenByDefault) }
+        set { write(.bool(newValue), Keys.keepsComposeBarOpen) }
     }
 
     /// 送る前に画像を縮める大きさ。選んだ大きさに収まる画像は元のまま送る。
+    /// iPhoneの標準の写真（4032×3024）と動画（1080p）はそのまま送られ、それより大きな写真と4Kの動画だけが縮む。
     public var imageUploadSize: ImageUploadSize {
-        didSet { defaults.set(imageUploadSize.rawValue, forKey: Keys.imageUploadSize) }
+        get { choice(Keys.imageUploadSize, default: .long4096) }
+        set { write(.text(newValue.rawValue), Keys.imageUploadSize) }
     }
 
     /// 送る前に動画を縮める大きさ。選んだ大きさに収まる動画は元のまま送る。
     public var videoUploadSize: VideoUploadSize {
-        didSet { defaults.set(videoUploadSize.rawValue, forKey: Keys.videoUploadSize) }
+        get { choice(Keys.videoUploadSize, default: .p1080) }
+        set { write(.text(newValue.rawValue), Keys.videoUploadSize) }
     }
 
     /// ビューアの外（タイムライン、プロフィール、リンクカード、投稿欄のサムネイルなど）で、HDRのメディアを描く明るさ。
     public var mediaDynamicRange: MediaDynamicRange {
-        didSet { defaults.set(mediaDynamicRange.rawValue, forKey: Keys.mediaDynamicRange) }
+        get { choice(Keys.mediaDynamicRange, default: .standard) }
+        set { write(.text(newValue.rawValue), Keys.mediaDynamicRange) }
     }
 
     /// ビューアで、HDRのメディアを描く明るさ。
     public var viewerMediaDynamicRange: MediaDynamicRange {
-        didSet { defaults.set(viewerMediaDynamicRange.rawValue, forKey: Keys.viewerMediaDynamicRange) }
+        get { choice(Keys.viewerMediaDynamicRange, default: .constrainedHigh) }
+        set { write(.text(newValue.rawValue), Keys.viewerMediaDynamicRange) }
     }
 
-    /// 保存した値から、アプリ内のSafariの高さを読む。数でない値（NaNや無限大）は刻みに寄せられないので、保存していないときと同じく標準にする。
-    private static func inAppBrowserHeight(stored: Any?) -> InAppBrowserHeight {
-        guard let space = stored as? Double, space.isFinite else { return .standard }
-        return InAppBrowserHeight(spaceAbove: space)
+    // MARK: 読み書き
+
+    private func value(_ key: String) -> PresetValue? {
+        store.track(key)
+        return store.library.value(forKey: key, in: presetID)
+    }
+
+    private func bool(_ key: String, default defaultValue: Bool) -> Bool {
+        guard case .bool(let value) = value(key) else { return defaultValue }
+        return value
+    }
+
+    private func number(_ key: String) -> Double? {
+        guard case .number(let value) = value(key) else { return nil }
+        return value
+    }
+
+    private func list(_ key: String) -> [String]? {
+        guard case .list(let value) = value(key) else { return nil }
+        return value
+    }
+
+    /// 読めない値（名前を変えた選択肢など）は、持っていないときと同じく既定値にする。
+    private func choice<Value: RawRepresentable<String>>(_ key: String, default defaultValue: Value) -> Value {
+        guard case .text(let raw) = value(key) else { return defaultValue }
+        return Value(rawValue: raw) ?? defaultValue
+    }
+
+    private func layout<Item>(_ key: String, default defaultValue: MenuLayout<Item>) -> MenuLayout<Item> {
+        list(key).map(MenuLayout.init(tokens:)) ?? defaultValue
+    }
+
+    /// タップと長押しは、別々の値として持つ（docs/preset.md）。読めない操作（なくなった項目など）は、その操作だけ既定に戻す。
+    private func actions<Item: ObjectActionItem>(_ key: String) -> ObjectActions<Item> {
+        func token(_ suffix: String) -> String {
+            guard case .text(let token) = value("\(key).\(suffix)") else { return "" }
+            return token
+        }
+        return ObjectActions(tokens: [token("tap"), token("longPress")], default: .standard)
+    }
+
+    /// 変わった操作だけを書く。片方だけを変えたとき、もう片方を変えた項目にしないため。
+    private func writeActions<Item: ObjectActionItem>(_ actions: ObjectActions<Item>, _ key: String) {
+        let current: ObjectActions<Item> = self.actions(key)
+        if actions.tap != current.tap { write(.text(actions.tap.token), "\(key).tap") }
+        if actions.longPress != current.longPress { write(.text(actions.longPress.token), "\(key).longPress") }
+    }
+
+    /// 読んでいるプリセットへ書く。組み込みのプリセットを使っていれば、それを親にしたプリセットを作って切り替える。
+    /// 書く先のプリセットが消えていたら（開いていた編集の画面のプリセットを、ほかで消したときなど）、書く先がないので書かない。
+    private func write(_ value: PresetValue, _ key: String) {
+        store.updateLibrary { library throws(PresetError) in
+            switch target {
+            case .scope(let scope): try library.setValue(value, forKey: key, for: scope)
+            case .preset(let id): try library.setValue(value, forKey: key, in: id)
+            }
+        }
+    }
+
+    private func isModified(key: String) -> Bool {
+        store.track(key)
+        return store.library.isModified(key, in: presetID)
+    }
+
+    /// 組み込みのプリセットを読んでいるときは、変えた項目がないので何もしない。
+    private func reset(keys: [String]) {
+        let id = presetID
+        guard case .user = id else { return }
+        store.updateLibrary { library throws(PresetError) in
+            for key in keys {
+                try library.resetValue(forKey: key, in: id)
+            }
+        }
+    }
+
+    private static func appearanceKey(_ item: AppearanceValue) -> String {
+        "appearanceValue.\(item.id)"
+    }
+
+    /// プリセットに持つ値のキー。
+    enum Keys {
+        static let usesOriginalThumbnailsOnExpensiveNetwork = "usesOriginalThumbnailsOnExpensiveNetwork"
+        static let showsStatusBarTicker = "showsStatusBarTicker"
+        static let expandsXPosts = "expandsXPosts"
+        static let profileNoteLength = "profileNoteLength"
+        static let separatesProfilePinned = "separatesProfilePinned"
+        static let showsProfileFeaturedTags = "showsProfileFeaturedTags"
+        static let showsProfileEndorsements = "showsProfileEndorsements"
+        static let usesDynamicProfileAccent = "usesDynamicProfileAccent"
+        static let isAutoTranslationEnabled = "isAutoTranslationEnabled"
+        static let autoTranslationLanguages = "autoTranslationLanguages"
+        static let autoTranslationTarget = "autoTranslationTarget"
+        static let autoTranslationStrategy = "autoTranslationStrategy"
+        static let insertionMotion = "insertionMotion"
+        static let accentColor = "accentColor"
+        static let linkBrowser = "linkBrowser"
+        static let inAppBrowserSpaceAbove = "inAppBrowserSpaceAbove"
+        static let opensInAppBrowserFullScreen = "opensInAppBrowserFullScreen"
+        static let reblogVisibility = "reblogVisibility"
+        static let statusMenuLayout = "statusMenuLayout"
+        static let userMenuLayout = "userMenuLayout"
+        static let linkMenuLayout = "linkMenuLayout"
+        static let externalPostMenuLayout = "externalPostMenuLayout"
+        static let profileTextMenuLayout = "profileTextMenuLayout"
+        static let customEmojiMenuLayout = "customEmojiMenuLayout"
+        static let hashtagMenuLayout = "hashtagMenuLayout"
+        static let reactionMenuLayout = "reactionMenuLayout"
+        static let mediaMenuLayout = "mediaMenuLayout"
+        static let composeToolLayout = "composeToolLayout"
+        static let postActionBarLayout = "postActionBarLayout"
+        static let postLeadingSwipeLayout = "postLeadingSwipeLayout"
+        static let postTrailingSwipeLayout = "postTrailingSwipeLayout"
+        static let showsActionBarItemsInMenu = "showsActionBarItemsInMenu"
+        static let showsActionBarLongPressItemsInMenu = "showsActionBarLongPressItemsInMenu"
+        static let statusActions = "objectActions.status"
+        static let quotedStatusActions = "objectActions.quotedStatus"
+        static let notificationActions = "objectActions.notification"
+        static let userActions = "objectActions.user"
+        static let linkActions = "objectActions.link"
+        static let externalPostActions = "objectActions.externalPost"
+        static let hashtagActions = "objectActions.hashtag"
+        static let reactionActions = "objectActions.reaction"
+        static let mediaActions = "objectActions.media"
+        static let hidesEmptyComposeBar = "hidesEmptyComposeBar"
+        static let keepsComposeBarOpen = "keepsComposeBarOpen"
+        static let imageUploadSize = "imageUploadSize"
+        static let videoUploadSize = "videoUploadSize"
+        static let mediaDynamicRange = "mediaDynamicRange"
+        static let viewerMediaDynamicRange = "viewerMediaDynamicRange"
+    }
+}
+
+/// 端末に1つの設定の保存先。プリセットと、プリセットに含めない値を持つ。
+@MainActor
+@Observable
+public final class SettingsStore {
+    @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored let keepsComposeBarOpenByDefault: Bool
+
+    /// プリセット。読んでも購読にならない。値は`AppSettings`から読み、プリセットの一覧を出す画面は`observedLibrary`を読む。
+    /// 1つのプロパティとして購読させると、どの値を変えても、すべての値の購読が反応するため（翻訳の言語の購読が、アクセントカラーを変えただけで翻訳をやり直すなど）。
+    @ObservationIgnored public private(set) var library: PresetLibrary {
+        didSet {
+            appearanceCache = [:]
+            defaults.set(library.storedData, forKey: Keys.presets)
+            notifyChanges(from: oldValue)
+        }
+    }
+
+    /// プリセットを購読して読む。プリセットのどれかが変わると届く。
+    public var observedLibrary: PresetLibrary {
+        _ = anyChange.revision
+        return library
+    }
+
+    /// 値のキーごとの購読。読まれたキーだけ作る。
+    @ObservationIgnored private var keyChanges: [String: ChangeSignal] = [:]
+    /// アプリとアカウントが使うプリセットの選び直し。
+    private let selectionChange = ChangeSignal()
+    /// 親の付け替えと、プリセットの削除。値をたどる道が変わるので、どの値も変わりうる。
+    private let structureChange = ChangeSignal()
+    private let anyChange = ChangeSignal()
+
+    /// プリセットごとの、解決した「投稿の見た目」の選択肢。行を描くたびに読むので、プリセットが変わるまで覚える。
+    @ObservationIgnored private var appearanceCache: [PresetID: AppearanceChoices] = [:]
+
+    var ignoresUselessAltText: Bool {
+        didSet { defaults.set(ignoresUselessAltText, forKey: Keys.ignoresUselessAltText) }
+    }
+
+    var autoTranslationExcludedHandles: [String] {
+        didSet { defaults.set(autoTranslationExcludedHandles, forKey: Keys.autoTranslationExcludedHandles) }
+    }
+
+    var autoTranslationModelRevision = 0
+
+    var profilePostsFilter: ProfilePostsFilter {
+        didSet {
+            defaults.set(profilePostsFilter.showsReplies, forKey: Keys.profileShowsReplies)
+            defaults.set(profilePostsFilter.showsBoosts, forKey: Keys.profileShowsBoosts)
+        }
+    }
+
+    var emojiSkinTone: EmojiSkinTone {
+        didSet { defaults.set(emojiSkinTone.rawValue, forKey: Keys.emojiSkinTone) }
+    }
+
+    var showsTabMenuCustomize: Bool {
+        didSet { defaults.set(showsTabMenuCustomize, forKey: Keys.showsTabMenuCustomize) }
+    }
+
+    /// ログアウトで消せるよう、アカウントごとのキー（`AccountScopedDefaults`）に1つずつ保存する。
+    private(set) var tabLayouts: [String: MenuLayout<TabItem>]
+
+    /// アカウントごとの、切り替えタブで最後に開いた項目。開くたびに書くので、ほかの設定と違って変更を購読させない。
+    @ObservationIgnored private(set) var switchTabItems: [String: TabItem]
+
+    /// アカウントごとの、最後に見ていたタブの項目。切り替えタブの中なら、開いていた項目。起動したときに、この項目を開く。タブを移るたびに書くので、変更を購読させない。
+    @ObservationIgnored private(set) var shownTabItems: [String: TabItem]
+
+    /// アカウントごとに覚えた、サーバーの「アニメーションGIFを自動再生する」。キーはアカウントのハンドル。
+    /// 起動のたびに既定から始めて、読めたところで動き出さないよう、読めた値を覚えておき、表示を始めるときに使う。
+    private(set) var serverAnimationAutoplays: [String: Bool]
+
+    /// アプリの設定（`AppDependencies.settings`）が読む、最後に表示を始めたアカウントのサーバーの値。
+    private(set) var lastServerAutoplaysAnimations = false
+    @ObservationIgnored private var animationAccount: String?
+
+    public init(defaults: UserDefaults, keepsComposeBarOpenByDefault: Bool = false) {
+        self.defaults = defaults
+        self.keepsComposeBarOpenByDefault = keepsComposeBarOpenByDefault
+        library = PresetLibrary(stored: defaults.data(forKey: Keys.presets))
+        ignoresUselessAltText = defaults.object(forKey: Keys.ignoresUselessAltText) as? Bool ?? true
+        autoTranslationExcludedHandles = defaults.stringArray(forKey: Keys.autoTranslationExcludedHandles) ?? []
+        profilePostsFilter = ProfilePostsFilter(
+            showsReplies: defaults.object(forKey: Keys.profileShowsReplies) as? Bool ?? ProfilePostsFilter.standard.showsReplies,
+            showsBoosts: defaults.object(forKey: Keys.profileShowsBoosts) as? Bool ?? ProfilePostsFilter.standard.showsBoosts
+        )
+        emojiSkinTone = (defaults.object(forKey: Keys.emojiSkinTone) as? Int).flatMap(EmojiSkinTone.init(rawValue:)) ?? .none
+        showsTabMenuCustomize = defaults.object(forKey: Keys.showsTabMenuCustomize) as? Bool ?? true
+        tabLayouts = AccountScopedDefaults.accountValues(named: Keys.tabLayout, in: defaults).compactMapValues { ($0 as? [String]).map(MenuLayout.init(tokens:)) }
+        switchTabItems = AccountScopedDefaults.accountValues(named: Keys.switchTabItem, in: defaults).compactMapValues { ($0 as? String).flatMap(TabItem.init(rawValue:)) }
+        shownTabItems = AccountScopedDefaults.accountValues(named: Keys.shownTabItem, in: defaults).compactMapValues { ($0 as? String).flatMap(TabItem.init(rawValue:)) }
+        serverAnimationAutoplays = AccountScopedDefaults.accountValues(named: Keys.serverAutoplaysAnimations, in: defaults).compactMapValues { $0 as? Bool }
+    }
+
+    /// プリセットを変える。変えられなかったとき（消えたプリセットを指したなど）は、何も変えない。
+    public func updateLibrary(_ change: (inout PresetLibrary) throws(PresetError) -> Void) {
+        var updated = library
+        do {
+            try change(&updated)
+        } catch {
+            return
+        }
+        guard updated != library else { return }
+        library = updated
+    }
+
+    /// プリセットを変え、変えられなかった理由を返す。ショートカットのように、失敗を使う人へ返す操作で使う。
+    public func tryUpdateLibrary(_ change: (inout PresetLibrary) throws(PresetError) -> Void) throws(PresetError) {
+        var updated = library
+        try change(&updated)
+        guard updated != library else { return }
+        library = updated
+    }
+
+    func resolvedAppearance(in preset: PresetID) -> AppearanceChoices {
+        for field in AppearanceStorage.fieldNames {
+            track(AppearanceStorage.key(field))
+        }
+        if let cached = appearanceCache[preset] { return cached }
+        var values: [String: PresetValue] = [:]
+        for field in AppearanceStorage.fieldNames {
+            if let value = library.value(forKey: AppearanceStorage.key(field), in: preset) {
+                values[field] = value
+            }
+        }
+        let resolved = AppearanceStorage.choices(from: values)
+        appearanceCache[preset] = resolved
+        return resolved
+    }
+
+    /// `key`の値の変化を購読する。
+    func track(_ key: String) {
+        let signal = keyChanges[key] ?? {
+            let created = ChangeSignal()
+            keyChanges[key] = created
+            return created
+        }()
+        _ = signal.revision
+        _ = structureChange.revision
+    }
+
+    /// アプリとアカウントが使うプリセットの選び直しを購読する。
+    func trackSelection() {
+        _ = selectionChange.revision
+        _ = structureChange.revision
+    }
+
+    /// 前のプリセットと比べ、変わったものの購読だけに知らせる。プリセットを作っただけでは、ほかのプリセットの値は変わらないので知らせない。
+    private func notifyChanges(from old: PresetLibrary) {
+        anyChange.revision += 1
+        if old.appPreset != library.appPreset || old.accountPresets != library.accountPresets {
+            selectionChange.revision += 1
+        }
+        let oldPresets = Dictionary(uniqueKeysWithValues: old.userPresets.map { ($0.id, $0) })
+        let newPresets = Dictionary(uniqueKeysWithValues: library.userPresets.map { ($0.id, $0) })
+        let structureChanged = oldPresets.contains { id, preset in newPresets[id]?.parent != preset.parent }
+        if structureChanged {
+            structureChange.revision += 1
+            return
+        }
+        var changedKeys: Set<String> = []
+        for (id, preset) in newPresets {
+            let before = oldPresets[id]?.values ?? [:]
+            for key in Set(before.keys).union(preset.values.keys) where before[key] != preset.values[key] {
+                changedKeys.insert(key)
+            }
+        }
+        for key in changedKeys {
+            keyChanges[key]?.revision += 1
+        }
+    }
+
+    func setTabLayout(_ layout: MenuLayout<TabItem>, for account: String) {
+        tabLayouts[account] = layout
+        defaults.set(layout.tokens, forKey: AccountScopedDefaults.key(Keys.tabLayout, account: account))
+    }
+
+    func setSwitchTabItem(_ item: TabItem, for account: String) {
+        guard switchTabItems[account] != item else { return }
+        switchTabItems[account] = item
+        defaults.set(item.rawValue, forKey: AccountScopedDefaults.key(Keys.switchTabItem, account: account))
+    }
+
+    func setShownTabItem(_ item: TabItem, for account: String) {
+        guard shownTabItems[account] != item else { return }
+        shownTabItems[account] = item
+        defaults.set(item.rawValue, forKey: AccountScopedDefaults.key(Keys.shownTabItem, account: account))
+    }
+
+    func followServerAnimations(of account: String) {
+        animationAccount = account
+        let autoplays = serverAnimationAutoplays[account] ?? false
+        if lastServerAutoplaysAnimations != autoplays {
+            lastServerAutoplaysAnimations = autoplays
+        }
+    }
+
+    func rememberServerAnimations(_ autoplays: Bool, of account: String) {
+        if serverAnimationAutoplays[account] != autoplays {
+            serverAnimationAutoplays[account] = autoplays
+            defaults.set(autoplays, forKey: AccountScopedDefaults.key(Keys.serverAutoplaysAnimations, account: account))
+        }
+        if animationAccount == account, lastServerAutoplaysAnimations != autoplays {
+            lastServerAutoplaysAnimations = autoplays
+        }
+    }
+
+    func forgetAccount(_ account: String) {
+        tabLayouts[account] = nil
+        switchTabItems[account] = nil
+        shownTabItems[account] = nil
+        serverAnimationAutoplays[account] = nil
+        if animationAccount == account {
+            lastServerAutoplaysAnimations = false
+        }
+        updateLibrary { $0.forgetAccount(account) }
     }
 
     private enum Keys {
-        static let usesOriginalThumbnailsOnExpensiveNetwork = "settings.usesOriginalThumbnailsOnExpensiveNetwork"
+        static let presets = "settings.presets"
         static let ignoresUselessAltText = "settings.ignoresUselessAltText"
-        static let showsStatusBarTicker = "settings.showsStatusBarTicker"
-        static let expandsXPosts = "settings.expandsXPosts"
-        static let usesDynamicProfileAccent = "settings.usesDynamicProfileAccent"
-        static let profileNoteLength = "settings.profileNoteLength"
-        static let separatesProfilePinned = "settings.separatesProfilePinned"
-        static let showsProfileFeaturedTags = "settings.showsProfileFeaturedTags"
-        static let showsProfileEndorsements = "settings.showsProfileEndorsements"
-        static let isAutoTranslationEnabled = "settings.isAutoTranslationEnabled"
-        static let autoTranslationLanguages = "settings.autoTranslationLanguages"
         static let autoTranslationExcludedHandles = "settings.autoTranslationExcludedHandles"
-        static let autoTranslationTarget = "settings.autoTranslationTarget"
-        static let autoTranslationStrategy = "settings.autoTranslationStrategy"
-        static let appearanceChoices = "settings.appearanceChoices"
-        static let insertionMotion = "settings.insertionMotion"
-        static let accentColor = "settings.accentColor"
         static let profileShowsReplies = "settings.profileShowsReplies"
         static let profileShowsBoosts = "settings.profileShowsBoosts"
-        static let linkBrowser = "settings.linkBrowser"
         static let emojiSkinTone = "settings.emojiSkinTone"
-        static let inAppBrowserSpaceAbove = "settings.inAppBrowserSpaceAbove"
-        static let opensInAppBrowserFullScreen = "settings.opensInAppBrowserFullScreen"
-        static let reblogVisibility = "settings.reblogVisibility"
-        static let statusMenuLayout = "settings.statusMenuLayout"
-        static let userMenuLayout = "settings.userMenuLayout"
-        static let linkMenuLayout = "settings.linkMenuLayout"
-        static let externalPostMenuLayout = "settings.externalPostMenuLayout"
-        static let profileTextMenuLayout = "settings.profileTextMenuLayout"
-        static let customEmojiMenuLayout = "settings.customEmojiMenuLayout"
-        static let hashtagMenuLayout = "settings.hashtagMenuLayout"
-        static let reactionMenuLayout = "settings.reactionMenuLayout"
-        static let mediaMenuLayout = "settings.mediaMenuLayout"
-        static let composeToolLayout = "settings.composeToolLayout"
-        static let postActionBarLayout = "settings.postActionBarLayout"
-        static let postLeadingSwipeLayout = "settings.postLeadingSwipeLayout"
-        static let postTrailingSwipeLayout = "settings.postTrailingSwipeLayout"
-        static let showsActionBarItemsInMenu = "settings.showsActionBarItemsInMenu"
-        static let showsActionBarLongPressItemsInMenu = "settings.showsActionBarLongPressItemsInMenu"
-        static let statusActions = "settings.objectActions.status"
-        static let quotedStatusActions = "settings.objectActions.quotedStatus"
-        static let notificationActions = "settings.objectActions.notification"
-        static let userActions = "settings.objectActions.user"
-        static let linkActions = "settings.objectActions.link"
-        static let externalPostActions = "settings.objectActions.externalPost"
-        static let hashtagActions = "settings.objectActions.hashtag"
-        static let reactionActions = "settings.objectActions.reaction"
-        static let mediaActions = "settings.objectActions.media"
+        static let showsTabMenuCustomize = "settings.showsTabMenuCustomize"
         /// `AccountScopedDefaults`で、アカウントごとのキーにする名前。
         static let tabLayout = "tabLayout"
         static let switchTabItem = "switchTabItem"
         static let shownTabItem = "shownTabItem"
         static let serverAutoplaysAnimations = "serverAutoplaysAnimations"
-        static let hidesEmptyComposeBar = "settings.hidesEmptyComposeBar"
-        static let keepsComposeBarOpen = "settings.keepsComposeBarOpen"
-        static let showsTabMenuCustomize = "settings.showsTabMenuCustomize"
-        static let imageUploadSize = "settings.imageUploadSize"
-        static let videoUploadSize = "settings.videoUploadSize"
-        static let mediaDynamicRange = "settings.mediaDynamicRange"
-        static let viewerMediaDynamicRange = "settings.viewerMediaDynamicRange"
+    }
+}
 
-        static func appearance(_ id: String) -> String {
-            "settings.appearance.\(id)"
+/// 購読させるための印。値が変わったことだけを知らせる。
+@MainActor
+@Observable
+final class ChangeSignal {
+    var revision = 0
+}
+
+/// 「投稿の見た目」の選択肢を、選択肢ごとのプリセットの値に分けて持つ形。
+enum AppearanceStorage {
+    static let revealsAllPartsInThread = "revealsAllPartsInThread"
+
+    /// 選択肢の名前。既定ではnilの項目は既定の値のJSONに出ないので、プロパティの名前で決める。
+    static let fieldNames: [String] = Mirror(reflecting: AppearanceChoices()).children.compactMap(\.label)
+
+    static func key(_ field: String) -> String {
+        "appearanceChoice.\(field)"
+    }
+
+    /// 選択肢ごとの値。nilの項目は`.null`にする。
+    static func fields(of choices: AppearanceChoices) -> [String: PresetValue] {
+        let encoded = (try? JSONSerialization.jsonObject(with: choices.storedData)) as? [String: Any] ?? [:]
+        var fields: [String: PresetValue] = [:]
+        for name in fieldNames {
+            fields[name] = encoded[name].flatMap(presetValue) ?? .null
+        }
+        return fields
+    }
+
+    /// 持っていない項目は既定値に、読めない値の項目も既定値にする（`AppearanceChoices(stored:)`）。
+    static func choices(from values: [String: PresetValue]) -> AppearanceChoices {
+        let object = values.mapValues(jsonValue)
+        guard let data = try? JSONSerialization.data(withJSONObject: object) else { return AppearanceChoices() }
+        return AppearanceChoices(stored: data)
+    }
+
+    private static func presetValue(_ value: Any) -> PresetValue? {
+        switch value {
+        case let number as NSNumber where CFGetTypeID(number) == CFBooleanGetTypeID(): .bool(number.boolValue)
+        case let number as NSNumber: .number(number.doubleValue)
+        case let text as String: .text(text)
+        case is NSNull: .null
+        default: nil
         }
     }
 
-    /// - Parameter keepsComposeBarOpenByDefault: 使う人が選んでいないときの`keepsComposeBarOpen`。端末で決まるので、アプリが渡す。
-    public init(defaults: UserDefaults, keepsComposeBarOpenByDefault: Bool = false) {
-        self.defaults = defaults
-        usesOriginalThumbnailsOnExpensiveNetwork = defaults.object(forKey: Keys.usesOriginalThumbnailsOnExpensiveNetwork) as? Bool ?? true
-        ignoresUselessAltText = defaults.object(forKey: Keys.ignoresUselessAltText) as? Bool ?? true
-        showsStatusBarTicker = defaults.object(forKey: Keys.showsStatusBarTicker) as? Bool ?? true
-        expandsXPosts = defaults.bool(forKey: Keys.expandsXPosts)
-        usesDynamicProfileAccent = defaults.object(forKey: Keys.usesDynamicProfileAccent) as? Bool ?? true
-        separatesProfilePinned = defaults.object(forKey: Keys.separatesProfilePinned) as? Bool ?? true
-        showsProfileFeaturedTags = defaults.object(forKey: Keys.showsProfileFeaturedTags) as? Bool ?? true
-        showsProfileEndorsements = defaults.object(forKey: Keys.showsProfileEndorsements) as? Bool ?? true
-        profileNoteLength = defaults.string(forKey: Keys.profileNoteLength).flatMap(ProfileNoteLength.init(rawValue:)) ?? .collapsed
-        isAutoTranslationEnabled = defaults.bool(forKey: Keys.isAutoTranslationEnabled)
-        autoTranslationLanguages = defaults.stringArray(forKey: Keys.autoTranslationLanguages) ?? []
-        autoTranslationExcludedHandles = defaults.stringArray(forKey: Keys.autoTranslationExcludedHandles) ?? []
-        autoTranslationTarget = defaults.string(forKey: Keys.autoTranslationTarget)
-        autoTranslationStrategy = defaults.string(forKey: Keys.autoTranslationStrategy).flatMap(TranslationStrategy.init(rawValue:)) ?? .lowLatency
-        appearance = AppearanceChoices(stored: defaults.data(forKey: Keys.appearanceChoices))
-        insertionMotion = defaults.string(forKey: Keys.insertionMotion).flatMap(InsertionMotion.init(rawValue:)) ?? .followsSystem
-        accentColor = defaults.string(forKey: Keys.accentColor).flatMap(AccentColorChoice.init(rawValue:)) ?? .blue
-        linkBrowser = defaults.string(forKey: Keys.linkBrowser).flatMap(LinkBrowser.init(rawValue:)) ?? .inApp
-        emojiSkinTone = (defaults.object(forKey: Keys.emojiSkinTone) as? Int).flatMap(EmojiSkinTone.init(rawValue:)) ?? .none
-        inAppBrowserHeight = Self.inAppBrowserHeight(stored: defaults.object(forKey: Keys.inAppBrowserSpaceAbove))
-        opensInAppBrowserFullScreen = defaults.bool(forKey: Keys.opensInAppBrowserFullScreen)
-        reblogVisibility = defaults.string(forKey: Keys.reblogVisibility).flatMap(ReblogVisibility.init(rawValue:)) ?? .accountDefault
-        statusMenuLayout = defaults.stringArray(forKey: Keys.statusMenuLayout).map(MenuLayout.init(tokens:)) ?? StatusMenuItem.defaultLayout
-        userMenuLayout = defaults.stringArray(forKey: Keys.userMenuLayout).map(MenuLayout.init(tokens:)) ?? UserMenuItem.defaultLayout
-        linkMenuLayout = defaults.stringArray(forKey: Keys.linkMenuLayout).map(MenuLayout.init(tokens:)) ?? LinkMenuItem.defaultLayout
-        externalPostMenuLayout = defaults.stringArray(forKey: Keys.externalPostMenuLayout).map(MenuLayout.init(tokens:)) ?? ExternalPostMenuItem.defaultLayout
-        profileTextMenuLayout = defaults.stringArray(forKey: Keys.profileTextMenuLayout).map(MenuLayout.init(tokens:)) ?? ProfileTextMenuItem.defaultLayout
-        customEmojiMenuLayout = defaults.stringArray(forKey: Keys.customEmojiMenuLayout).map(MenuLayout.init(tokens:)) ?? CustomEmojiMenuItem.defaultLayout
-        hashtagMenuLayout = defaults.stringArray(forKey: Keys.hashtagMenuLayout).map(MenuLayout.init(tokens:)) ?? HashtagMenuItem.defaultLayout
-        reactionMenuLayout = defaults.stringArray(forKey: Keys.reactionMenuLayout).map(MenuLayout.init(tokens:)) ?? ReactionMenuItem.defaultLayout
-        mediaMenuLayout = defaults.stringArray(forKey: Keys.mediaMenuLayout).map(MenuLayout.init(tokens:)) ?? MediaMenuItem.defaultLayout
-        composeToolLayout = defaults.stringArray(forKey: Keys.composeToolLayout).map(MenuLayout.init(tokens:)) ?? ComposeToolItem.defaultLayout
-        postActionBarLayout = defaults.stringArray(forKey: Keys.postActionBarLayout).map(MenuLayout.init(tokens:)) ?? PostActionBarItem.defaultLayout
-        postLeadingSwipeLayout = defaults.stringArray(forKey: Keys.postLeadingSwipeLayout).map(MenuLayout.init(tokens:)) ?? PostSwipeItem.defaultLayout
-        postTrailingSwipeLayout = defaults.stringArray(forKey: Keys.postTrailingSwipeLayout).map(MenuLayout.init(tokens:)) ?? PostSwipeItem.defaultLayout
-        showsActionBarItemsInMenu = defaults.bool(forKey: Keys.showsActionBarItemsInMenu)
-        showsActionBarLongPressItemsInMenu = defaults.bool(forKey: Keys.showsActionBarLongPressItemsInMenu)
-        statusActions = defaults.stringArray(forKey: Keys.statusActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
-        quotedStatusActions = defaults.stringArray(forKey: Keys.quotedStatusActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
-        notificationActions = defaults.stringArray(forKey: Keys.notificationActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
-        userActions = defaults.stringArray(forKey: Keys.userActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
-        linkActions = defaults.stringArray(forKey: Keys.linkActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
-        externalPostActions = defaults.stringArray(forKey: Keys.externalPostActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
-        hashtagActions = defaults.stringArray(forKey: Keys.hashtagActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
-        reactionActions = defaults.stringArray(forKey: Keys.reactionActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
-        mediaActions = defaults.stringArray(forKey: Keys.mediaActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
-        tabLayouts = AccountScopedDefaults.accountValues(named: Keys.tabLayout, in: defaults).compactMapValues { ($0 as? [String]).map(MenuLayout.init(tokens:)) }
-        switchTabItems = AccountScopedDefaults.accountValues(named: Keys.switchTabItem, in: defaults).compactMapValues { ($0 as? String).flatMap(TabItem.init(rawValue:)) }
-        shownTabItems = AccountScopedDefaults.accountValues(named: Keys.shownTabItem, in: defaults).compactMapValues { ($0 as? String).flatMap(TabItem.init(rawValue:)) }
-        serverAnimationAutoplays = AccountScopedDefaults.accountValues(named: Keys.serverAutoplaysAnimations, in: defaults).compactMapValues { $0 as? Bool }
-        hidesEmptyComposeBar = defaults.object(forKey: Keys.hidesEmptyComposeBar) as? Bool ?? false
-        keepsComposeBarOpen = defaults.object(forKey: Keys.keepsComposeBarOpen) as? Bool ?? keepsComposeBarOpenByDefault
-        showsTabMenuCustomize = defaults.object(forKey: Keys.showsTabMenuCustomize) as? Bool ?? true
-        // iPhoneの標準の写真（4032×3024）と動画（1080p）はそのまま送られ、それより大きな写真と4Kの動画だけが縮む。
-        imageUploadSize = defaults.string(forKey: Keys.imageUploadSize).flatMap(ImageUploadSize.init(rawValue:)) ?? .long4096
-        videoUploadSize = defaults.string(forKey: Keys.videoUploadSize).flatMap(VideoUploadSize.init(rawValue:)) ?? .p1080
-        mediaDynamicRange = defaults.string(forKey: Keys.mediaDynamicRange).flatMap(MediaDynamicRange.init(rawValue:)) ?? .standard
-        viewerMediaDynamicRange = defaults.string(forKey: Keys.viewerMediaDynamicRange).flatMap(MediaDynamicRange.init(rawValue:)) ?? .constrainedHigh
-        var appearanceValues: [String: Double] = [:]
-        for item in AppearanceCatalog.values + NotificationAppearanceCatalog.values {
-            if let stored = defaults.object(forKey: Keys.appearance(item.id)) as? Double, item.range.contains(stored) {
-                appearanceValues[item.id] = stored
-            }
+    private static func jsonValue(_ value: PresetValue) -> Any {
+        switch value {
+        case .bool(let bool): bool
+        case .number(let number): number
+        case .text(let text): text
+        case .list(let list): list
+        case .null: NSNull()
         }
-        self.appearanceValues = appearanceValues
-        profilePostsFilter = ProfilePostsFilter(
-            showsReplies: defaults.object(forKey: Keys.profileShowsReplies) as? Bool ?? ProfilePostsFilter.standard.showsReplies,
-            showsBoosts: defaults.object(forKey: Keys.profileShowsBoosts) as? Bool ?? ProfilePostsFilter.standard.showsBoosts
-        )
+    }
+}
+
+extension AppearanceChoice {
+    /// `AppearanceChoices`の中の、この選択肢のプロパティの名前。
+    var field: String {
+        switch self {
+        case .nameStyle: "statusNameStyle"
+        case .timeStyle: "statusTimeStyle"
+        default: "\(self)"
+        }
     }
 }
 

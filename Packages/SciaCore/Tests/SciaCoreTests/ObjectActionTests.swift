@@ -39,10 +39,13 @@ struct ObjectActionTests {
 
     /// なくなった項目や知らない形は、その操作だけ既定に戻す。
     @Test func unknownTokensFallBackToDefaultPerTrigger() {
-        let defaults = TestScratch.defaults("ObjectActionTests")
-        defaults.set(["item:removedItem", "item:bookmark"], forKey: "settings.objectActions.status")
-        defaults.set(["menu"], forKey: "settings.objectActions.link")
-        let settings = AppSettings(defaults: defaults)
+        let settings = AppSettings(defaults: TestScratch.defaults("ObjectActionTests"))
+        settings.store.updateLibrary { library throws(PresetError) in
+            try library.setValue(.text("item:removedItem"), forKey: "objectActions.status.tap", for: .app)
+            try library.setValue(.text("item:bookmark"), forKey: "objectActions.status.longPress", for: .app)
+            try library.setValue(.text("menu"), forKey: "objectActions.link.tap", for: .app)
+            try library.setValue(.text("unknown"), forKey: "objectActions.link.longPress", for: .app)
+        }
         #expect(settings.statusActions == ObjectActions(tap: .item(.openThread), longPress: .item(.bookmark)))
         #expect(settings.linkActions == ObjectActions(tap: .menu, longPress: .menu))
     }

@@ -25,6 +25,9 @@ public enum PresetValue: Codable, Hashable, Sendable {
     case number(Double)
     case text(String)
     case list([String])
+    /// 値がないことを選んだもの。「アカウントの設定に従う」のように、ないことが選択肢の1つになる項目で使う。
+    /// 項目を持たない（親に従う）こととは別。
+    case null
 
     /// 保存の形に書ける値か。数でない値（NaNや無限）は`JSONEncoder`が書けず、ライブラリ全体を保存できなくなる。
     var isStorable: Bool {
@@ -235,6 +238,7 @@ public struct PresetLibrary: Codable, Equatable, Sendable {
 
     // MARK: 内側
 
+    /// 割り当てていないアカウントは、アプリのプリセットを使っているので、アプリのプリセットを変える。
     private mutating func editableTarget(for scope: PresetScope) throws(PresetError) -> PresetID {
         var owner = scope
         if case .account(let handle) = scope, accountPresets[handle] == nil {
@@ -242,7 +246,6 @@ public struct PresetLibrary: Codable, Equatable, Sendable {
         }
         let current = preset(for: owner)
         guard case .builtIn = current else { return current }
-    /// 割り当てていないアカウントは、アプリのプリセットを使っているので、アプリのプリセットを変える。
         let created = try create(parent: current)
         try select(created, for: owner)
         return created
