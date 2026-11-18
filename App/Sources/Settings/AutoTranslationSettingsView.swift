@@ -81,9 +81,7 @@ struct AutoTranslationSettingsView: View {
             }
             .pickerStyle(.navigationLink)
             .contextMenu { resetButton(.target) }
-        }
-        if canUseAppleIntelligence {
-            Section {
+            if canUseAppleIntelligence {
                 // 情報ボタンを値の右（行の右端）に置くため、名前と選択を並べて組む。
                 HStack(spacing: 8) {
                     Text(SettingsTexts.AutoTranslation.mode)
