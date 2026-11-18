@@ -35,7 +35,6 @@ public enum BuiltInPreset: String, CaseIterable, Codable, Sendable {
 
     private static let compactValues = BuiltInPreset.compact.withSpacing([
         "appearanceValue.timeline.avatarSize": .number(32),
-        "appearanceValue.text.namePrimary": .number(1),
         "appearanceValue.text.nameSecondary": .number(-1),
         "appearanceValue.timeline.mediaTallestAspectRatio": .number(1),
         "appearanceChoice.mediaArrangement": .text("besideBody"),

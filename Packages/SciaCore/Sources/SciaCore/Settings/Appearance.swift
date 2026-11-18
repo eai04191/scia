@@ -78,7 +78,7 @@ public enum AppearanceCatalog {
     /// 本文の文字の大きさ。ほかの文字は、ここからの差で決める。
     public static let bodyText = AppearanceValue(id: "text.body", title: "本文の文字", range: -14...57, step: 1, defaultValue: 0, unit: .bodyTextOffset)
     /// 名前の行で、太字で描く前の部分。名前の表記によって、名前かハンドルになる。
-    public static let namePrimaryText = AppearanceValue(id: "text.namePrimary", title: "太字の部分の文字", range: -40...40, step: 1, defaultValue: 2, unit: .textOffset)
+    public static let namePrimaryText = AppearanceValue(id: "text.namePrimary", title: "太字の部分の文字", range: -40...40, step: 1, defaultValue: 0, unit: .textOffset)
     /// 名前の行で、太字の後ろに添える部分。
     public static let nameSecondaryText = AppearanceValue(id: "text.nameSecondary", title: "添える部分の文字", range: -40...40, step: 1, defaultValue: 0, unit: .textOffset)
     public static let timeText = AppearanceValue(id: "text.time", title: "時刻の文字", range: -40...40, step: 1, defaultValue: 0, unit: .textOffset)

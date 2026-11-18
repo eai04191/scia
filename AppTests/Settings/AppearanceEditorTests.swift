@@ -16,7 +16,7 @@ struct AppearanceEditorTests {
 
     private let large = UITraitCollection(preferredContentSizeCategory: .large)
 
-    /// 既定の差では、設定を足す前と同じ大きさで描く。本文と時刻はsubheadline、名前はbody、リンクカードのサイト名はcaption1、投票の票数と注意書きのボタンはfootnote。
+    /// 既定の差では、設定を足す前と同じ大きさで描く。本文と時刻と名前はsubheadline、リンクカードのサイト名はcaption1、投票の票数と注意書きのボタンはfootnote。
     @Test func defaultTypographyMatchesPreviousTextStyles() throws {
         let typography = PostTypography(settings: try makeSettings())
         func size(_ style: UIFont.TextStyle) -> CGFloat {
@@ -24,12 +24,12 @@ struct AppearanceEditorTests {
         }
         #expect(typography.font(.body, compatibleWith: large).pointSize == size(.subheadline))
         #expect(typography.font(.time, compatibleWith: large).pointSize == size(.subheadline))
-        #expect(typography.font(.namePrimary, compatibleWith: large).pointSize == size(.body))
+        #expect(typography.font(.namePrimary, compatibleWith: large).pointSize == size(.subheadline))
         #expect(typography.font(.linkCardDetail, compatibleWith: large).pointSize == size(.caption1))
         #expect(typography.font(.pollFooter, compatibleWith: large).pointSize == size(.footnote))
         #expect(typography.font(.spoilerButton, compatibleWith: large).pointSize == size(.footnote))
         #expect(typography.font(.namePrimary, compatibleWith: large).fontDescriptor.symbolicTraits.contains(.traitBold))
-        // 通知の誰が何をしたかの行は、文字の段で名前と同じ段にする。ハンドルとメンションの上の行は本文と同じ。
+        // 通知の誰が何をしたかの行は、文字の段で本文の1段上にする。ハンドルとメンションの上の行は本文と同じ。
         #expect(typography.font(.notificationHeader, compatibleWith: large).pointSize == size(.body))
         #expect(typography.font(.notificationAccount, compatibleWith: large).pointSize == size(.subheadline))
         #expect(typography.font(.notificationContext, compatibleWith: large).pointSize == size(.subheadline))
