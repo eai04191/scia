@@ -83,7 +83,7 @@ struct AccountQuery: EntityQuery {
 /// アプリのプリセットを切り替える。アプリを前に出さずに切り替え、次に表示するときに効かせる（docs/preset.md）。
 struct SelectAppPresetIntent: AppIntent {
     // scialint:disable:next user_text_outside_core
-    static let title: LocalizedStringResource = "アプリのプリセットを切り替える"
+    static let title: LocalizedStringResource = "アプリのプリセットを設定"
     static let openAppWhenRun = false
 
     // scialint:disable:next user_text_outside_core
@@ -100,7 +100,7 @@ struct SelectAppPresetIntent: AppIntent {
 /// アカウントにプリセットを割り当てる。プリセットを選ばなければ、割り当てを外してアプリのプリセットに従わせる。
 struct AssignAccountPresetIntent: AppIntent {
     // scialint:disable:next user_text_outside_core
-    static let title: LocalizedStringResource = "アカウントにプリセットを割り当てる"
+    static let title: LocalizedStringResource = "アカウントのプリセットを設定"
     static let openAppWhenRun = false
 
     // scialint:disable:next user_text_outside_core
