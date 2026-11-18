@@ -31,15 +31,35 @@ struct PresetQuery: EntityQuery {
         }
     }
 
-    func suggestedEntities() async throws -> [PresetEntity] {
-        await MainActor.run { Self.all() }
+    /// アプリの選ぶ画面と同じく、使う人のプリセットは「マイプリセット」の見出しの下に分けて並べる。
+    func suggestedEntities() async throws -> IntentItemCollection<PresetEntity> {
+        let (builtIn, user, userHeader) = await MainActor.run { (Self.builtIn(), Self.user(), SettingsTexts.Presets.userHeader) }
+        var sections = [IntentItemSection(items: builtIn.map { IntentItem($0) })]
+        if !user.isEmpty {
+            sections.append(IntentItemSection("\(userHeader)", items: user))
+        }
+        return IntentItemCollection(sections: sections)
     }
 
     /// 組み込みのプリセット、使う人のプリセットの順。
     @MainActor
     private static func all() -> [PresetEntity] {
+        builtIn() + user()
+    }
+
+    @MainActor
+    private static func builtIn() -> [PresetEntity] {
+        entities(BuiltInPreset.allCases.map(PresetID.builtIn))
+    }
+
+    @MainActor
+    private static func user() -> [PresetEntity] {
+        entities(AppDependencies.settings.store.library.userPresets.map { PresetID.user($0.id) })
+    }
+
+    @MainActor
+    private static func entities(_ ids: [PresetID]) -> [PresetEntity] {
         let library = AppDependencies.settings.store.library
-        let ids = BuiltInPreset.allCases.map(PresetID.builtIn) + library.userPresets.map { PresetID.user($0.id) }
         return ids.compactMap { id in
             library.name(of: id).map { PresetEntity(id: id.token, name: $0) }
         }
