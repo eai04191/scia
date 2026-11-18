@@ -98,7 +98,7 @@ GIFやAPNGのアニメーションするカスタム絵文字を、どこで、�
 |---|---|---|
 | 何か | 端末に残した`api/v1/custom_emojis`の応答に、URLが載っている画像 | ほかのサーバーの人の絵文字の画像と、差し替える前の画像 |
 | 数 | サーバーの絵文字の数で決まる（fedibird.comで6117個、140MB） | タイムラインを読むほど増え、終わりがない |
-| 置き場所 | `Library/Caches/EmojiImages/Files`（前の作りがすべての画像を置いていたフォルダー） | `Library/Caches/EmojiImages/Others` |
+| 置き場所 | `Library/Caches/EmojiImages/Listed/<版>`（`EmojiImageFiles.listedVersion`。ほかの版のフォルダーと、版を付ける前の`Files`は読まず、起動したときに消す） | `Library/Caches/EmojiImages/Others` |
 
 - 画像を置くとき、URLが端末に残したどれかのサーバーの応答に載っていればA、載っていなければBに置く。読むときは両方を探す
 - 応答が新しくなったら（読んだとき、ログアウトして消したとき）、分け直す。載ったBの画像はAへ移し、載らなくなったAの画像は消す。ログアウトでは、そのサーバーの応答にだけ載っていた画像が消え、ほかのサーバーの応答にも載っている画像は残る

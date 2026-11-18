@@ -303,7 +303,8 @@ struct StoredCustomEmojis: Codable, Sendable {
     }
 
     /// 書き方を変えたら上げる。読んだファイルの値が違えば、読まずにサーバーから読み直す。
-    static let currentVersion = 1
+    /// 2は、先読みが別の絵文字の画像から覚えた縦横比を捨てるために上げた（書き方は1と同じ）。
+    static let currentVersion = 2
 
     let version: Int
     let emojis: [Entry]

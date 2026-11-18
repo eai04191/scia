@@ -46,6 +46,34 @@ struct EmojiImageFilesTests {
         #expect(await files.containsListed(try url("other")) == false)
     }
 
+    /// 今の版でないフォルダーに残ったAの画像は、応答に載っていても読まず、分け直しで消す。
+    /// 先読みが別の絵文字の画像を置いたことがあり、残すと読み続けるため。版を付ける前のフォルダー（`Files`）も同じ。
+    @Test(arguments: ["Files", "Listed/\(EmojiImageFiles.listedVersion - 1)"])
+    func removesListedImagesOfOtherVersions(folder: String) async throws {
+        let url = try url("a.png")
+        let old = root.appending(path: "images/\(folder)")
+        _ = try await MediaFileCache(directory: old, sharingDirectory: root.appending(path: "old-sharing"), sizeLimit: .max)
+            .store(image(), named: "a.png", for: url, generation: 0)
+        let files = makeFiles()
+
+        await files.updateListed([url])
+
+        #expect(await files.data(for: url) == nil)
+        #expect(!FileManager.default.fileExists(atPath: old.path(percentEncoded: false)))
+    }
+
+    /// 今の版のフォルダーに置いたAの画像は、分け直しても残る。
+    @Test func keepsListedImagesOfCurrentVersion() async throws {
+        let url = try url("a.png")
+        let files = makeFiles()
+        await files.updateListed([url])
+        try await files.store(image(), named: "a.png", for: url, generation: files.generation)
+
+        await makeFiles().updateListed([url])
+
+        #expect(await makeFiles().data(for: url) == image())
+    }
+
     /// 応答を読むまでは、どれもBに置き、読んだら、載っていた画像をAへ移す。
     @Test func movesOthersToListedWhenTheyAppearInResponse() async throws {
         let files = makeFiles()

@@ -37,7 +37,8 @@ public final class EmojiThumbnails: Sendable {
     }
 
     /// 書き方を変えたら上げる。読んだファイルの値か高さが違えば、捨てて作り直す。
-    static var version: UInt32 { 2 }
+    /// 3は、先読みが別の絵文字の画像から作った小さい静止画を捨てるために上げた（書き方は2と同じ）。
+    static var version: UInt32 { 3 }
     /// 1枚の幅の、高さに対する上限の割合。極端に横長な絵文字で場所を取りすぎないため。静止画の読み方（`ImageDecoder.maxPixelSize(forHeight:of:)`）と同じ。
     static var maxAspectRatio: Double { 8 }
 

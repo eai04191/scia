@@ -23,6 +23,13 @@ public actor EmojiImageFiles {
     }
 
     nonisolated let listed: MediaFileCache
+    /// Aに置いた画像を全部捨てて取得し直させるときに上げる。Aは置いた画像を確かめ直さず、「キャッシュを消去」でも消えないため。
+    /// 2は、先読みが別の絵文字の画像として置いたファイルを捨てるために上げた。どのファイルがそうかは、端末では見分けられない。
+    static let listedVersion = 2
+    /// 版ごとのAのフォルダーを置くフォルダー。
+    private nonisolated let listedVersionsDirectory: URL
+    /// 版を付ける前に、Aを置いていたフォルダー。
+    private nonisolated let legacyListedDirectory: URL
     nonisolated let others: MediaFileCache
     private let availableCapacity: @Sendable () -> Int?
     private let logger = SciaLog.logger(category: "emoji")
@@ -53,9 +60,14 @@ public actor EmojiImageFiles {
         othersSizeLimit: Int = EmojiImageFiles.othersSizeLimit,
         availableCapacity: @escaping @Sendable () -> Int? = EmojiImageFiles.opportunisticCapacity
     ) {
-        // Aは、前の作りがすべての画像を置いていたフォルダー（`Files`）をそのまま使う。起動したときの分け直し（`updateListed(_:)`）で、
-        // 応答に載っていない画像が消えるので、前の作りで置いたほかのサーバーの絵文字の画像が、「キャッシュを消去」で消せないまま残らない。
-        listed = MediaFileCache(directory: directory.appending(path: "Files"), sharingDirectory: sharingDirectory.appending(path: "Listed"), sizeLimit: .max)
+        // Aは、版の名前のフォルダーに置く。ほかの版のフォルダーと、版を付ける前のフォルダー（`Files`）は、起動したときの分け直し（`updateListed(_:)`）で消す。
+        legacyListedDirectory = directory.appending(path: "Files")
+        listedVersionsDirectory = directory.appending(path: "Listed")
+        listed = MediaFileCache(
+            directory: listedVersionsDirectory.appending(fileName: SafeFileName(String(Self.listedVersion)), directoryHint: .isDirectory),
+            sharingDirectory: sharingDirectory.appending(path: "Listed"),
+            sizeLimit: .max
+        )
         others = MediaFileCache(directory: directory.appending(path: "Others"), sharingDirectory: sharingDirectory.appending(path: "Others"), sizeLimit: othersSizeLimit)
         self.availableCapacity = availableCapacity
     }
@@ -152,6 +164,7 @@ public actor EmojiImageFiles {
         listingGeneration += 1
         let generation = listingGeneration
         listedURLs = urls
+        removeOtherListedVersions()
         let removed = await listed.remove(except: urls)
         let othersSizes = await others.sizesByFolderName()
         var moved = 0
@@ -175,6 +188,21 @@ public actor EmojiImageFiles {
             }
         }
         logger.info("emoji images listed=\(urls.count, privacy: .public) removed=\(removed, privacy: .public) moved=\(moved, privacy: .public)")
+    }
+
+    /// 今の版でないAのフォルダーを消す。
+    private func removeOtherListedVersions() {
+        let current = String(Self.listedVersion)
+        let versions = (try? FileManager.default.contentsOfDirectory(at: listedVersionsDirectory, includingPropertiesForKeys: nil)) ?? []
+        for folder in versions + [legacyListedDirectory] where folder.lastPathComponent != current {
+            do {
+                try FileManager.default.removeItem(at: folder)
+            } catch CocoaError.fileNoSuchFile {
+                continue
+            } catch {
+                logger.error("emoji image old version remove failed: \(SciaLog.describe(error), privacy: .public)")
+            }
+        }
     }
 
     /// AとBに置いた画像の大きさを、フォルダーの名前（`MediaFileCache.folderName(for:)`）で引けるように並べる。設定のストレージで、サーバーごとに数えるのに使う。

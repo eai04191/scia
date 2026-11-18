@@ -17,6 +17,15 @@ public final class OversizedEmojiRecord: Sendable {
         }
     }
 
+    /// 端末に書き出す形。
+    private struct Stored: Codable {
+        /// 書き方を変えたら上げる。2は、先読みが別の絵文字の画像として置いたファイルから残した大きさを捨てるために付けた。
+        static let currentVersion = 2
+
+        let version: Int
+        let entries: [Entry]
+    }
+
     /// 残す数の上限。超えたら古いものから消す。消したものは、次に描くときに元の画像を読み直して、また残す。
     static let maxCount = 1_000
 
@@ -28,7 +37,9 @@ public final class OversizedEmojiRecord: Sendable {
 
     public init(file: URL) {
         self.file = file
-        let stored = (try? Data(contentsOf: file)).flatMap { try? JSONDecoder().decode([Entry].self, from: $0) }
+        // 版のない前の書き方（記録の配列）と、版の違うファイルは読まない。次に残すときに書き直す。
+        let stored = (try? Data(contentsOf: file)).flatMap { try? JSONDecoder().decode(Stored.self, from: $0) }
+            .flatMap { $0.version == Stored.currentVersion ? $0.entries : nil }
         entries = Mutex(stored ?? [])
         launchEntries = Mutex(Dictionary((stored ?? []).map { ($0.url, $0) }) { _, last in last })
     }
@@ -68,7 +79,7 @@ public final class OversizedEmojiRecord: Sendable {
     private func write(_ entries: [Entry]) {
         do {
             try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try JSONEncoder().encode(entries).write(to: file, options: .atomic)
+            try JSONEncoder().encode(Stored(version: Stored.currentVersion, entries: entries)).write(to: file, options: .atomic)
         } catch {
             logger.error("oversized emoji record write failed: \(SciaLog.describe(error), privacy: .public)")
         }

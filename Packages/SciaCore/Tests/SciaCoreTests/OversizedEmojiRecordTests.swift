@@ -21,6 +21,18 @@ struct OversizedEmojiRecordTests {
         #expect(!record.contains(try url("other.gif")))
     }
 
+    /// 版のない前の書き方のファイルは読まない。先読みが別の絵文字の画像として置いたファイルから残した大きさを、持ち越さないため。
+    @Test func ignoresRecordWithoutVersion() throws {
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let old = #"[{"url":"https://files.example.social/custom_emojis/big.gif","width":2000,"height":2000,"frameCount":10}]"#
+        try Data(old.utf8).write(to: file)
+
+        let record = OversizedEmojiRecord(file: file)
+
+        #expect(!record.contains(try url("big.gif")))
+        #expect(!record.wasKnownAtLaunch(try url("big.gif")))
+    }
+
     /// 描く場所が動かない版を選ぶのは、起動したときに残っていたものだけ。この起動の間に残したものは、次の起動から選ぶ。
     @Test func choiceUsesOnlyRecordsKnownAtLaunch() throws {
         let emoji = CustomEmoji(shortcode: "big", url: try url("big.gif"), staticUrl: try url("big_static.png"))
