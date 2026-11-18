@@ -244,6 +244,11 @@ public final class AppSettings {
         }
     }
 
+    /// 「投稿の見た目」の選択肢の今の値を、親から受け継いだ値と同じでも、読んでいるプリセットの値として書く。
+    func pinAppearanceChoice(_ field: String) {
+        write(AppearanceStorage.fields(of: appearance)[field] ?? .null, AppearanceStorage.key(field))
+    }
+
     /// 「投稿の見た目」と「通知の見た目」の数値。キーは`AppearanceValue.id`。購読のために読む。
     public var appearanceValues: [String: Double] {
         Dictionary(uniqueKeysWithValues: Self.appearanceItems.map { ($0.id, value(of: $0)) })
@@ -642,7 +647,7 @@ public final class AppSettings {
 
     /// 読んでいるプリセットへ書く。組み込みのプリセットを使っていれば、それを親にしたプリセットを作って切り替える。
     /// 書く先のプリセットが消えていたら（開いていた編集の画面のプリセットを、ほかで消したときなど）、書く先がないので書かない。
-    private func write(_ value: PresetValue, _ key: String) {
+    func write(_ value: PresetValue, _ key: String) {
         store.updateLibrary { library throws(PresetError) in
             switch target {
             case .scope(let scope): try library.setValue(value, forKey: key, for: scope)

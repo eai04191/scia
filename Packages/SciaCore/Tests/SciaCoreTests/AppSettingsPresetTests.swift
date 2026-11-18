@@ -143,6 +143,28 @@ struct AppSettingsPresetTests {
         #expect(app.editing(home).isModified(.animatesAvatars))
     }
 
+    /// メニューで選んだ選択肢は、親から受け継いだ値と同じでも、そのプリセットの値として持つ。あとで親を変えても、選んだ値のまま残る。
+    @Test func choosingInheritedOptionPinsIt() throws {
+        let app = makeSettings()
+        var base: PresetID = .builtIn(.standard)
+        var home: PresetID = .builtIn(.standard)
+        try app.store.tryUpdateLibrary { library throws(PresetError) in
+            base = try library.create(parent: .builtIn(.standard), name: "自分用")
+            home = try library.create(parent: base, name: "家")
+        }
+        let homeSettings = app.editing(home)
+        guard case .options(let options) = AppearanceChoice.animatesAvatars.control else {
+            Issue.record("アイコンのアニメーションが、選ぶメニューになっていません")
+            return
+        }
+
+        options.select(0, homeSettings)
+        app.editing(base).appearance.animatesAvatars = true
+
+        #expect(homeSettings.isModified(.animatesAvatars))
+        #expect(homeSettings.appearance.animatesAvatars == nil)
+    }
+
     /// サーバーの「アニメーションGIFを自動再生する」は、アカウントの設定ごとに、そのアカウントの覚えた値を読む。窓を分けて別のアカウントを開いていても混ざらない。
     @Test func serverAnimationsArePerAccount() {
         let app = makeSettings()

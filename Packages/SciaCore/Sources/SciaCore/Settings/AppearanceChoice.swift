@@ -217,6 +217,21 @@ public struct AppearanceChoiceOptions {
     /// `titles`の番号の選択肢を選ぶ。
     public let select: (Int, AppSettings) -> Void
 
+    private init(titles: [String], selectedIndex: @escaping (AppSettings) -> Int, select: @escaping (Int, AppSettings) -> Void) {
+        self.titles = titles
+        self.selectedIndex = selectedIndex
+        self.select = select
+    }
+
+    /// 選んだあとに、選んだ値を`field`の選択肢としてプリセットに書く。
+    func pinning(_ field: String) -> Self {
+        let select = select
+        return Self(titles: titles, selectedIndex: selectedIndex) { index, settings in
+            select(index, settings)
+            settings.pinAppearanceChoice(field)
+        }
+    }
+
     init<Value: Equatable>(_ keyPath: ReferenceWritableKeyPath<AppSettings, Value>, _ options: [(value: Value, title: String)]) {
         titles = options.map(\.title)
         selectedIndex = { settings in options.firstIndex { $0.value == settings[keyPath: keyPath] } ?? 0 }
@@ -244,11 +259,6 @@ struct AppearanceChoiceDefinition {
         Self(control: .toggle(settingsKeyPath(stored)), stored: stored)
     }
 
-    /// 選ぶまではほかの値に従うスイッチ。今の値は`shown`から読み、選んだかは`stored`で見る。
-    static func toggle(_ shown: ReferenceWritableKeyPath<AppSettings, Bool>, stored: WritableKeyPath<AppearanceChoices, Bool?>) -> Self {
-        Self(control: .toggle(shown), stored: stored)
-    }
-
     static func options<Value: Equatable>(_ stored: WritableKeyPath<AppearanceChoices, Value>, _ options: [(value: Value, title: String)]) -> Self {
         Self(control: .options(AppearanceChoiceOptions(settingsKeyPath(stored), options)), stored: stored)
     }
@@ -262,8 +272,12 @@ struct AppearanceChoiceDefinition {
 
 extension AppearanceChoice {
     @MainActor
+    /// メニューで選んだ選択肢は、読んでいるプリセットの値として持つ。親から受け継いだ値と同じでも持つので、あとで親を変えても選んだ値のまま残る（docs/preset.md）。
     public var control: AppearanceChoiceControl {
-        definition.control
+        switch definition.control {
+        case .toggle(let keyPath): .toggle(keyPath)
+        case .options(let options): .options(options.pinning(field))
+        }
     }
 
     /// 既定の値から変わっているか。
@@ -289,7 +303,7 @@ extension AppearanceChoice {
         case .avatarShape: .options(\.avatarShape, [(.circle, "円"), (.roundedSquare, "角丸の四角")])
         case .showsAvatarBorder: .toggle(\.showsAvatarBorder)
         // 選ぶまではサーバーの設定に従うので、今の値は`AppSettings`から読む。
-        case .animatesAvatars: .toggle(\.animatesAvatars, stored: \.animatesAvatars)
+        case .animatesAvatars: .options(\.animatesAvatars, Self.animationChoices)
         case .wrapsBelowAvatar: .toggle(\.wrapsBelowAvatar)
         case .showsReplyLines: .toggle(\.showsReplyLines)
         case .nameStyle: .options(\.statusNameStyle, Self.nameStyles)
@@ -304,7 +318,7 @@ extension AppearanceChoice {
                 (.automatic, "自動"), (.japanese, "日本語"), (.simplifiedChinese, "簡体字中国語"), (.traditionalChinese, "繁体字中国語"), (.korean, "韓国語"),
             ])
         case .emojiStyle: .options(\.emojiStyle, [(.system, "Apple"), (.twemoji, "Twemoji")])
-        case .animatesCustomEmojis: .toggle(\.animatesCustomEmojis, stored: \.animatesCustomEmojis)
+        case .animatesCustomEmojis: .options(\.animatesCustomEmojis, Self.animationChoices)
         case .mediaArrangement: .options(\.mediaArrangement, [(.belowBody, "本文の下に大きく"), (.besideBody, "本文の右に小さく")])
         case .embedMediaArrangement:
             .options(\.embedMediaArrangement, [(.sameAsPost, "投稿と同じ"), (.besideBody, "本文の右に小さく"), (.belowBody, "本文の下に大きく")])
@@ -338,6 +352,13 @@ extension AppearanceChoice {
         case .showsNameCustomEmojis: .toggle(\.showsNameCustomEmojis)
         }
     }
+
+    /// アニメーションを再生するか。「アカウントの設定に従う」はサーバーのアカウントの設定に従い、親のプリセットがオンやオフを持っていても選べる（docs/preset.md）。
+    @MainActor private static let animationChoices: [(value: Bool?, title: String)] = [
+        (nil, "アカウントの設定に従う"),
+        (true, "オン"),
+        (false, "オフ"),
+    ]
 
     @MainActor private static let nameStyles: [(value: StatusNameStyle, title: String)] = [
         (.nameAndAcct, "名前、ハンドル"),

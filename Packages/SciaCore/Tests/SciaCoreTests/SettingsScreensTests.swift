@@ -154,18 +154,22 @@ struct SettingsScreensTests {
         #expect(!settings.isAppearanceGroupModified(media))
     }
 
-    @Test func animationToggleShowsServerValueUntilChosen() {
+    /// アニメーションを再生するかは、「アカウントの設定に従う」「オン」「オフ」から選び、既定は「アカウントの設定に従う」。
+    /// 選んだあとに「アカウントの設定に従う」へ戻せる（docs/preset.md）。
+    @Test func animationChoiceFollowsAccountUntilChosen() {
         let settings = AppSettings(defaults: TestScratch.defaults("SettingsScreensTests.animations"))
-        settings.followServerAnimations(of: "@alice@example.social")
-        settings.rememberServerAnimations(true, of: "@alice@example.social")
-        guard case .toggle(let keyPath) = AppearanceChoice.animatesAvatars.control else {
-            Issue.record("アイコンのアニメーションが、スイッチになっていません")
+        guard case .options(let options) = AppearanceChoice.animatesAvatars.control else {
+            Issue.record("アイコンのアニメーションが、選ぶメニューになっていません")
             return
         }
+        #expect(options.titles == ["アカウントの設定に従う", "オン", "オフ"])
+        #expect(options.selectedIndex(settings) == 0)
 
-        #expect(settings[keyPath: keyPath])
-        settings[keyPath: keyPath] = false
+        options.select(2, settings)
         #expect(settings.appearance.animatesAvatars == false)
+        options.select(0, settings)
+        #expect(settings.appearance.animatesAvatars == nil)
+        #expect(options.selectedIndex(settings) == 0)
     }
 
     /// ほかの選択のために見た目に効かない項目は、変えられなくする。
