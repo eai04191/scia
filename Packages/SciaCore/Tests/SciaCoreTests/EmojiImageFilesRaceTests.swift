@@ -4,9 +4,17 @@ import Testing
 @testable import SciaCore
 
 /// actorの上で、外から開けるまで止まる。置く処理と分け直しが重なる順番を、テストで決めるのに使う。
+/// actorを処理中のままにして後ろの処理を並ばせるには、`await`せずにスレッドごと止めるしかない。
+/// 協調スレッドで止めると、コアの少ないCIのrunnerでは協調スレッドを使い切り、開ける側のテストも走れなくなるため、`holding(_:)`で専用のスレッドで止める。
 private final class ActorHold: Sendable {
     let entered = Gate()
     private let semaphore = DispatchSemaphore(value: 0)
+    private let executor = QueueTaskExecutor()
+
+    /// `body`の中で呼んだ標準のactorの処理を、専用のスレッドで走らせるタスク。
+    func holding(_ body: @escaping @Sendable (ActorHold) async -> Void) -> Task<Void, Never> {
+        Task(executorPreference: executor) { await body(self) }
+    }
 
     func hold() {
         entered.open()
@@ -14,6 +22,15 @@ private final class ActorHold: Sendable {
     }
 
     func release() { semaphore.signal() }
+}
+
+private final class QueueTaskExecutor: TaskExecutor {
+    private let queue = DispatchQueue(label: "EmojiImageFilesRaceTests.hold")
+
+    func enqueue(_ job: consuming ExecutorJob) {
+        let job = UnownedJob(job)
+        queue.async { job.runSynchronously(on: self.asUnownedTaskExecutor()) }
+    }
 }
 
 extension MediaFileCache {
@@ -44,7 +61,7 @@ struct EmojiImageFilesRaceTests {
 
         // ファイルの置き場所を止め、置く処理を、応答に載っていると見たあとで待たせる。
         let disk = ActorHold()
-        let diskTask = Task { await files.listed.hold(disk) }
+        let diskTask = disk.holding { await files.listed.hold($0) }
         try await disk.entered.wait()
         defer { disk.release() }
         let writing = Task(priority: .background) {
@@ -59,7 +76,7 @@ struct EmojiImageFilesRaceTests {
         let removing = Task { await files.updateListed([]) }
         try await waitUntil { !files.isListed(url) }
         let owner = ActorHold()
-        let ownerTask = Task { await files.hold(owner) }
+        let ownerTask = owner.holding { await files.hold($0) }
         try await owner.entered.wait()
         defer { owner.release() }
 
