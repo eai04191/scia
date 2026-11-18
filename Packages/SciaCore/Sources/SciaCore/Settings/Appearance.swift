@@ -22,10 +22,13 @@ public struct AppearanceValue: Sendable, Identifiable, Hashable {
     public let step: Double
     public let defaultValue: Double
     public let unit: Unit
+    /// プリセットに持つ値のキー。行を描くたびに読むので、読むたびに組み立てない。
+    let presetKey: String
 
     public init(id: String, title: String, range: ClosedRange<Double>, step: Double, defaultValue: Double, unit: Unit = .point) {
         precondition(range.contains(defaultValue), "\(id)の既定値が範囲外です")
         self.id = id
+        presetKey = "appearanceValue.\(id)"
         self.title = title
         self.range = range
         self.step = step

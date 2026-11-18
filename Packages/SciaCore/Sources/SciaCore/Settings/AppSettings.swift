@@ -612,9 +612,7 @@ public final class AppSettings {
     // MARK: 読み書き
 
     private func value(_ key: String) -> PresetValue? {
-        let preset = presetID
-        store.track(key, in: preset)
-        return store.library.value(forKey: key, in: preset)
+        store.read(key, in: presetID)
     }
 
     private func bool(_ key: String, default defaultValue: Bool) -> Bool {
@@ -692,7 +690,7 @@ public final class AppSettings {
     }
 
     static func appearanceKey(_ item: AppearanceValue) -> String {
-        "appearanceValue.\(item.id)"
+        item.presetKey
     }
 
     /// プリセットに持つ値のキー。
@@ -759,6 +757,7 @@ public final class SettingsStore {
     @ObservationIgnored public private(set) var library: PresetLibrary {
         didSet {
             appearanceCache = [:]
+            for entry in reads.values { entry.value = nil }
             defaults.set(library.storedData, forKey: Keys.presets)
             notifyChanges(from: oldValue)
         }
@@ -770,18 +769,33 @@ public final class SettingsStore {
         return library
     }
 
-    /// 使う人のプリセットの値の、キーごとの購読。読まれたものだけ作る。キーは`(プリセットの番号, 値のキー)`。
+    /// 読むプリセットと値のキーごとの購読。読まれたものだけ作る。
     /// プリセットごとに分けるのは、使っていないプリセットを直しても、同じキーをほかのプリセットで読む画面に届かないようにするため。
+    /// 読むプリセットごとに1つにするのは、行を描くたびに数十の値を読むので、読むたびに親をたどって購読を重ねると重いため。親の値が変わったときは、`notifyChanges`が子の購読にも知らせる。
     @ObservationIgnored private var keyChanges: [ValueKey: ChangeSignal] = [:]
 
+    /// 読むプリセットと値のキーごとの、親までたどって解決した値と、その購読。値を持たないキーはnilを覚える。値はプリセットが変わるまで覚える。
+    /// 行を描くたびに数十の値を読むので、購読と値を1回で引けるよう、1つの辞書に持つ。
+    @ObservationIgnored private var reads: [ValueKey: ReadEntry] = [:]
+
+    private final class ReadEntry {
+        let signal: ChangeSignal
+        var value: PresetValue??
+
+        init(signal: ChangeSignal) {
+            self.signal = signal
+        }
+    }
+
     private struct ValueKey: Hashable {
-        let preset: Int
+        let preset: PresetID
         let key: String
     }
+
+    /// 「投稿の見た目」の選択肢を、まとめて購読するためのキー。選択肢は行を描くたびにすべて読むので、選択肢ごとに購読しない。
+    private static let appearanceChoicesKey = "appearanceChoice"
     /// アプリとアカウントが使うプリセットの選び直し。
     private let selectionChange = ChangeSignal()
-    /// 親の付け替えと、プリセットの削除。値をたどる道が変わるので、どの値も変わりうる。
-    private let structureChange = ChangeSignal()
     private let anyChange = ChangeSignal()
 
     /// プリセットごとの、解決した「投稿の見た目」の選択肢。行を描くたびに読むので、プリセットが変わるまで覚える。
@@ -906,9 +920,7 @@ public final class SettingsStore {
     }
 
     func resolvedAppearance(in preset: PresetID) -> AppearanceChoices {
-        for field in AppearanceStorage.fieldNames {
-            track(AppearanceStorage.key(field), in: preset)
-        }
+        track(Self.appearanceChoicesKey, in: preset)
         if let cached = appearanceCache[preset] { return cached }
         var values: [String: PresetValue] = [:]
         for field in AppearanceStorage.fieldNames {
@@ -921,25 +933,36 @@ public final class SettingsStore {
         return resolved
     }
 
-    /// `preset`で読む`key`の値の変化を購読する。値を受け継ぐ先祖の使う人のプリセットの変化も購読する。組み込みのプリセットの値は変わらない。
+    /// `preset`で読む`key`の値の変化を購読する。値を受け継ぐ先祖のプリセットの変化も、`notifyChanges`がこの購読に知らせる。
     func track(_ key: String, in preset: PresetID) {
-        for id in [preset] + library.ancestors(of: preset) {
-            guard case .user(let number) = id else { continue }
-            let valueKey = ValueKey(preset: number, key: key)
-            let signal = keyChanges[valueKey] ?? {
-                let created = ChangeSignal()
-                keyChanges[valueKey] = created
-                return created
-            }()
-            _ = signal.revision
-        }
-        _ = structureChange.revision
+        _ = signal(for: ValueKey(preset: preset, key: key)).revision
+    }
+
+    /// `preset`で読む`key`の値を、変化を購読して読む。親までたどった結果を、プリセットが変わるまで覚える。
+    func read(_ key: String, in preset: PresetID) -> PresetValue? {
+        let valueKey = ValueKey(preset: preset, key: key)
+        let entry = reads[valueKey] ?? {
+            let created = ReadEntry(signal: signal(for: valueKey))
+            reads[valueKey] = created
+            return created
+        }()
+        _ = entry.signal.revision
+        if let cached = entry.value { return cached }
+        let resolved = library.value(forKey: key, in: preset)
+        entry.value = .some(resolved)
+        return resolved
+    }
+
+    private func signal(for valueKey: ValueKey) -> ChangeSignal {
+        if let signal = keyChanges[valueKey] { return signal }
+        let created = ChangeSignal()
+        keyChanges[valueKey] = created
+        return created
     }
 
     /// アプリとアカウントが使うプリセットの選び直しを購読する。
     func trackSelection() {
         _ = selectionChange.revision
-        _ = structureChange.revision
     }
 
     /// 前のプリセットと比べ、変わったものの購読だけに知らせる。プリセットを作っただけでは、ほかのプリセットの値は変わらないので知らせない。
@@ -951,14 +974,29 @@ public final class SettingsStore {
         let oldPresets = Dictionary(uniqueKeysWithValues: old.userPresets.map { ($0.id, $0) })
         let newPresets = Dictionary(uniqueKeysWithValues: library.userPresets.map { ($0.id, $0) })
         let structureChanged = oldPresets.contains { id, preset in newPresets[id]?.parent != preset.parent }
+        // 親の付け替えと削除では、値をたどる道が変わり、どの値も変わりうるので、すべての購読に知らせる。
+        // 値を読むたびに付け替えの購読も重ねると、行を描くたびに数十の値を読むので重いため、読む側では購読しない。
         if structureChanged {
-            structureChange.revision += 1
+            selectionChange.revision += 1
+            for signal in keyChanges.values { signal.revision += 1 }
             return
         }
+        var changed: Set<ValueKey> = []
         for (id, preset) in newPresets {
             let before = oldPresets[id]?.values ?? [:]
             for key in Set(before.keys).union(preset.values.keys) where before[key] != preset.values[key] {
-                keyChanges[ValueKey(preset: id, key: key)]?.revision += 1
+                changed.insert(ValueKey(preset: .user(id), key: key))
+                if key.hasPrefix(Self.appearanceChoicesKey + ".") {
+                    changed.insert(ValueKey(preset: .user(id), key: Self.appearanceChoicesKey))
+                }
+            }
+        }
+        guard !changed.isEmpty else { return }
+        // 読むプリセットか、その先祖のプリセットの値が変わった購読に知らせる。
+        for (valueKey, signal) in keyChanges {
+            let chain = [valueKey.preset] + library.ancestors(of: valueKey.preset)
+            if chain.contains(where: { changed.contains(ValueKey(preset: $0, key: valueKey.key)) }) {
+                signal.revision += 1
             }
         }
     }
