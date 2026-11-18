@@ -23,6 +23,7 @@ public final class AppSettings {
     /// - Parameter keepsComposeBarOpenByDefault: 使う人が選んでいないときの`keepsComposeBarOpen`。端末で決まるので、アプリが渡す。
     public convenience init(defaults: UserDefaults, keepsComposeBarOpenByDefault: Bool = false) {
         self.init(store: SettingsStore(defaults: defaults, keepsComposeBarOpenByDefault: keepsComposeBarOpenByDefault), target: .scope(.app))
+        LegacySettingsMigration.migrate(into: self, defaults: defaults)
     }
 
     public init(store: SettingsStore, target: Target) {

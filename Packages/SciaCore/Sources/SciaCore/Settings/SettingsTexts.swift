@@ -78,6 +78,8 @@ public enum SettingsTexts {
     /// プリセットの画面（docs/preset.md）。
     public enum Presets {
         public static let userHeader = "マイプリセット"
+        /// プリセットより前の版の設定を移したプリセットの名前。
+        public static let migratedName = "移行した設定"
         /// アカウントに割り当てない選択肢と、割り当てていないアカウントの行の値。
         public static let followsApp = "アプリに従う"
         /// プリセットの画面の、アプリのプリセットを選ぶ行。
