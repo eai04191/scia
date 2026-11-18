@@ -37,6 +37,7 @@ public enum BuiltInPreset: String, CaseIterable, Codable, Sendable {
                 "appearanceChoice.tiltsStackedPhotos": .bool(false),
                 "appearanceChoice.showsActionBar": .bool(false),
                 "objectActions.status.tap": .text("actionBar"),
+                "objectActions.status.longPress": .text("item:openThread"),
             ]
         case .relaxed:
             [
