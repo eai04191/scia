@@ -83,8 +83,8 @@ struct AutoTranslationSettingsView: View {
             .contextMenu { resetButton(.target) }
             if canUseAppleIntelligence {
                 Picker(selection: $settings.autoTranslationStrategy) {
-                    Text(verbatim: "Apple Intelligence").tag(TranslationStrategy.highFidelity)
-                    Text(SettingsTexts.AutoTranslation.standardMode).tag(TranslationStrategy.lowLatency)
+                    Text(TranslationStrategy.highFidelity.title).tag(TranslationStrategy.highFidelity)
+                    Text(TranslationStrategy.lowLatency.title).tag(TranslationStrategy.lowLatency)
                 } label: {
                     ModifiedLabel(title: SettingsTexts.AutoTranslation.mode, isModified: settings.isModified(AutoTranslationSetting.strategy))
                 }

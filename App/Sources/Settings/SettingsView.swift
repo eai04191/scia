@@ -235,7 +235,10 @@ struct SettingsView: View {
             PresetsView(settings: settings) { id in
                 editingSettings = settings.editing(id)
                 path.append(.presetEditor)
+            } openComparison: {
+                path.append(.presetComparison)
             }
+        case .presetComparison: PresetComparisonView(settings: settings)
         case .accountPreset: AccountPresetView(settings: settings, account: account)
         case .presetEditor:
             if let editingSettings, case .preset(let id) = editingSettings.target {

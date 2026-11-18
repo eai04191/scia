@@ -8,6 +8,8 @@ struct PresetsView: View {
     let settings: AppSettings
     /// 選ばずに中身を変える画面を開く。
     let openEditor: (PresetID) -> Void
+    /// 2つのプリセットを比べる画面を開く。
+    let openComparison: () -> Void
     @State private var deleting: PresetID?
     /// この画面を出している窓。名前を聞くアラートを、操作した窓に出すために読む。
     @State private var anchor = WindowAnchor()
@@ -26,6 +28,16 @@ struct PresetsView: View {
             }
         }
         .navigationTitle(SettingsPage.presets.title)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button(SettingsTexts.Presets.compare, systemImage: "square.split.2x1", action: openComparison)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .accessibilityLabel(SettingsTexts.Presets.moreMenu)
+                }
+            }
+        }
         .background(WindowAnchorView(anchor: anchor))
     }
 

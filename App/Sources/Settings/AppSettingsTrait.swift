@@ -32,9 +32,10 @@ extension UIMutableTraits {
 
 /// 窓に設定を載せ、その設定のアクセントカラーとHDRの明るさを窓に当て続ける。
 /// アカウントを切り替えたら、新しい設定に載せ替える。前の設定の見張りは、載せ替えた時点で止める。前の設定が変わったときに、前のアカウントの色で塗り直さないため。
+/// 窓と違うプリセットを描く部品（プリセットを比較の見本など）では、その部品のビューに載せる。
 @MainActor
 final class WindowSettings {
-    private weak var window: UIWindow?
+    private weak var window: UIView?
     private let followsTint: Bool
     private var generation = 0
 
@@ -42,6 +43,11 @@ final class WindowSettings {
     init(window: UIWindow, followsTint: Bool = true) {
         self.window = window
         self.followsTint = followsTint
+    }
+
+    init(view: UIView) {
+        self.window = view
+        self.followsTint = true
     }
 
     func use(_ settings: AppSettings) {

@@ -114,6 +114,46 @@ public enum SettingsTexts {
         public static func accountTarget(name: String) -> String {
             "アカウント（\(name)）"
         }
+
+        /// プリセットを選ぶ画面の右上のメニューの読み上げ。
+        public static let moreMenu = "その他"
+        /// 2つのプリセットを比べる画面を開く項目と、その画面の題。
+        public static let compare = "プリセットを比較"
+        public static let compareBase = "比較元"
+        public static let compareTarget = "比較先"
+        /// 比べた2つのプリセットで、読む値が違う項目がないときの一覧。
+        public static let noDifferences = "違いはありません"
+        /// 並びが違う項目の行の値。押すと並びを並べた画面を開く。
+        public static let layoutDiffers = "並びが異なります"
+        /// 並びの画面で、非表示にした項目に添える文字。
+        public static let hidden = "非表示"
+        public static let on = "オン"
+        public static let off = "オフ"
+
+        /// 長さの値。`number`は`AppearanceValue.numberText`で書いた数。
+        public static func points(_ number: String) -> String {
+            "\(number) pt"
+        }
+
+        /// 行数の値。
+        public static func lines(_ number: String) -> String {
+            "\(number)行"
+        }
+
+        /// 比べた項目の節の見出し。設定の画面の階層をつなぐ。
+        public static func path(_ titles: [String]) -> String {
+            titles.joined(separator: ">")
+        }
+
+        /// 全画面で開くアプリ内のSafariの高さの値。つまみを下げたときの高さを添える。
+        public static func fullScreenInAppBrowser(height: String) -> String {
+            "全画面・\(height)"
+        }
+
+        /// 比べた項目の行の読み上げの値。
+        public static func comparedValues(base: String, compared: String) -> String {
+            "比較元は\(base)、比較先は\(compared)"
+        }
     }
 
     public enum Tabs {

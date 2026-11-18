@@ -6,9 +6,9 @@ import UIKit
 enum PostRowCatalog {
     private typealias Fixtures = CatalogFixtures
 
-    static let author = Fixtures.account(displayName: "カタログのアカウント", acct: "catalog@example.com")
+    private static let author = Fixtures.account(displayName: "カタログのアカウント", acct: "catalog@example.com")
     private static let longFilterTitle = String(repeating: "長いフィルターの名前", count: 4)
-    static let booster = Fixtures.account(
+    private static let booster = Fixtures.account(
         displayName: "ブーストした人",
         acct: "booster@example.com",
         avatar: Fixtures.imageURL(width: 200, height: 200, color: .systemPink)
@@ -595,7 +595,7 @@ enum PostRowCatalog {
         ]
     }
 
-    static func status(
+    private static func status(
         content: String,
         account: Account = author,
         spoilerText: String = "",

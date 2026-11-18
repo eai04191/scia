@@ -159,6 +159,7 @@ extension SettingsPage {
         case .appIcon: "アプリのアイコン"
         case .presets, .accountPreset: "プリセット"
         case .presetEditor: "プリセットを編集"
+        case .presetComparison: SettingsTexts.Presets.compare
         case .appearance: "投稿"
         case .notificationAppearance: "通知"
         case .linkLoading: "リンク先の読み込み"
@@ -271,7 +272,7 @@ extension SettingsPage {
              .userActions, .linkActions, .externalPostActions, .hashtagActions, .mediaActions, .reactionActions, .statusMenu, .statusActionBar,
              .statusLeadingSwipe, .statusTrailingSwipe, .userMenu, .linkMenu, .externalPostMenu, .profileTextMenu, .customEmojiMenu, .hashtagMenu, .mediaMenu, .reactionMenu,
              .composeTools, .connection, .connectionTimelines, .storage, .viewedMediaCache, .prefetchedMediaCache, .licenses, .acknowledgments,
-             .presets, .accountPreset, .presetEditor:
+             .presets, .accountPreset, .presetEditor, .presetComparison:
             nil
         }
     }

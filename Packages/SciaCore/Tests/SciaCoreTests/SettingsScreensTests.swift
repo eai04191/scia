@@ -47,8 +47,8 @@ struct SettingsScreensTests {
                 reachable.formUnion([screen.menu, screen.actionBar].compactMap(\.self) + screen.swipes.map(\.page))
             }
         }
-        // 接続の状態とストレージは、値と一緒に並べる画面なので、入り口は画面の中にある。プリセットの編集は、プリセットの一覧の行から開く。
-        reachable.formUnion([.connectionTimelines, .viewedMediaCache, .prefetchedMediaCache, .presetEditor])
+        // 接続の状態とストレージは、値と一緒に並べる画面なので、入り口は画面の中にある。プリセットの編集は、プリセットの一覧の行から、比較は一覧の右上のメニューから開く。
+        reachable.formUnion([.connectionTimelines, .viewedMediaCache, .prefetchedMediaCache, .presetEditor, .presetComparison])
 
         #expect(Set(SettingsPage.allCases).subtracting(reachable).isEmpty)
     }

@@ -13,6 +13,8 @@ final class AppearanceTimelinePreviewController: UIViewController {
     private var fitRevision: Int?
     /// 高さを渡した幅。nilなら、次に並べたときに渡す。
     private var fittedWidth: CGFloat?
+    /// 見本に渡したプリセットのアクセントカラーと設定を、見本に当て続ける。窓と違うプリセット（プリセットを比較、プリセットを管理から開いた見た目）の見本も、そのプリセットの色で描くため。
+    private var previewSettings: WindowSettings?
 
     init(timeline: TimelineViewController) {
         self.timeline = timeline
@@ -31,6 +33,9 @@ final class AppearanceTimelinePreviewController: UIViewController {
         timeline.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(timeline.view)
         timeline.didMove(toParent: self)
+        let previewSettings = WindowSettings(view: view)
+        previewSettings.use(timeline.settings)
+        self.previewSettings = previewSettings
     }
 
     /// 見本を並べる。触っている間だけ足した見本は、そこまでスクロールして見せる。

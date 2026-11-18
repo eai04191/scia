@@ -5,3 +5,13 @@ public enum TranslationStrategy: String, Codable, CaseIterable, Sendable {
     /// 従来のモデルで訳す。
     case lowLatency
 }
+
+extension TranslationStrategy {
+    /// 設定の「翻訳モード」の選択肢の名前。
+    public var title: String {
+        switch self {
+        case .highFidelity: "Apple Intelligence"
+        case .lowLatency: SettingsTexts.AutoTranslation.standardMode
+        }
+    }
+}
