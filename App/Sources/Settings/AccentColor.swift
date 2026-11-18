@@ -87,9 +87,11 @@ class TintFollowingButton: UIButton {
 /// 表示の分類から入る、アクセントカラーを選ぶ行。
 struct AccentColorPicker: View {
     @Binding var selection: AccentColorChoice
+    /// 読んでいるプリセットが変えたか。
+    var isModified = false
 
     var body: some View {
-        Picker(SettingsItem.accentColor.title, selection: $selection) {
+        Picker(selection: $selection) {
             ForEach(AccentColorChoice.allCases, id: \.self) { choice in
                 Label {
                     Text(choice.title)
@@ -99,6 +101,8 @@ struct AccentColorPicker: View {
                 }
                 .tag(choice)
             }
+        } label: {
+            ModifiedLabel(title: SettingsItem.accentColor.title, isModified: isModified)
         }
         .pickerStyle(.navigationLink)
     }

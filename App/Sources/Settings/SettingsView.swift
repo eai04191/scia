@@ -20,7 +20,7 @@ struct SettingsView: View {
     /// アカウントの画面に出すものと、押したときの処理。
     let accountScreen: AccountScreenContext
     /// 設定を閉じ、ホームの上でアプリ内のSafariの高さを選ぶシートを出す。
-    let openInAppBrowserHeight: @MainActor () -> Void
+    let openInAppBrowserHeight: @MainActor (AppSettings) -> Void
     /// 謝辞の画面で、設定の画面を閉じて、ハンドルの人のプロフィールを開く。
     let openProfile: @MainActor (_ acct: String) -> Void
     /// トップの画面にいるかを、載せている側（`SettingsHostingController`）へ伝える。
@@ -45,11 +45,12 @@ struct SettingsView: View {
         tabSources: SettingsTabSourceActions,
         tabBarShape: TabBarShapeModel,
         accountScreen: AccountScreenContext,
-        openInAppBrowserHeight: @escaping @MainActor () -> Void,
+        openInAppBrowserHeight: @escaping @MainActor (AppSettings) -> Void,
         openProfile: @escaping @MainActor (_ acct: String) -> Void,
         navigation: SettingsNavigationState,
         opening page: SettingsPage? = nil,
-        appearanceGroup: AppearanceGroup.ID? = nil
+        appearanceGroup: AppearanceGroup.ID? = nil,
+        editing: AppSettings? = nil
     ) {
         self.settings = settings
         self.instance = instance
@@ -63,8 +64,10 @@ struct SettingsView: View {
         self.openProfile = openProfile
         self.navigation = navigation
         let opening = page?.path ?? []
+        _editingSettings = State(initialValue: editing)
         // 分類の中の画面をURLで直接開くときも、アカウントにプリセットを割り当てていれば、先に変えるプリセットを選ばせる。
-        if let first = opening.first, Self.choosesTarget(first), settings.store.library.accountPresets[account] != nil {
+        // 変えるプリセットを渡されたとき（アプリ内のSafariの高さのシートから戻るとき）は、選び直させない。
+        if editing == nil, let first = opening.first, Self.choosesTarget(first), settings.store.library.accountPresets[account] != nil {
             _path = State(initialValue: [])
             _choosingTarget = State(initialValue: opening)
         } else {
@@ -117,6 +120,12 @@ struct SettingsView: View {
             if path.isEmpty {
                 editingSettings = nil
             }
+        }
+        .onChange(of: settings.store.observedLibrary) { _, library in
+            // 編集しているプリセットがほかで消されたら、書く先がないので、編集をやめて一覧に戻る。
+            guard case .preset(let id) = editingSettings?.target, !library.contains(id) else { return }
+            editingSettings = nil
+            path = path.first == .presets ? [.presets] : []
         }
     }
 
@@ -218,7 +227,7 @@ struct SettingsView: View {
     private func destination(_ page: SettingsPage) -> some View {
         switch page {
         case .display, .compose, .media, .profile, .linkLoading: SettingsScreenForm(page: page, settings: current)
-        case .interaction: SettingsScreenForm(page: page, settings: current, openInAppBrowserHeight: openInAppBrowserHeight)
+        case .interaction: SettingsScreenForm(page: page, settings: current) { [current] in openInAppBrowserHeight(current) }
         case .about: AboutSettingsView()
         case .appIcon: AppIconSettingsView()
         case .account: AccountView(settings: settings, account: account, context: accountScreen)
@@ -273,19 +282,19 @@ struct SettingsView: View {
         case .hashtagActions: ObjectActionsSettingsView(entity: .hashtag, settings: current)
         case .reactionActions: ObjectActionsSettingsView(entity: .reaction, settings: current)
         case .mediaActions: ObjectActionsSettingsView(entity: .media, settings: current)
-        case .statusMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).statusMenuLayout)
-        case .statusActionBar: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).postActionBarLayout)
-        case .statusLeadingSwipe: MenuLayoutSettingsView(title: page.title(isRightToLeft: layoutDirection == .rightToLeft), layout: Bindable(current).postLeadingSwipeLayout)
-        case .statusTrailingSwipe: MenuLayoutSettingsView(title: page.title(isRightToLeft: layoutDirection == .rightToLeft), layout: Bindable(current).postTrailingSwipeLayout)
-        case .userMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).userMenuLayout)
-        case .linkMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).linkMenuLayout)
-        case .externalPostMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).externalPostMenuLayout)
-        case .profileTextMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).profileTextMenuLayout)
-        case .customEmojiMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).customEmojiMenuLayout)
-        case .hashtagMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).hashtagMenuLayout)
-        case .reactionMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).reactionMenuLayout)
-        case .mediaMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).mediaMenuLayout)
-        case .composeTools: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).composeToolLayout)
+        case .statusMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).statusMenuLayout, reset: { current.reset(page) })
+        case .statusActionBar: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).postActionBarLayout, reset: { current.reset(page) })
+        case .statusLeadingSwipe: MenuLayoutSettingsView(title: page.title(isRightToLeft: layoutDirection == .rightToLeft), layout: Bindable(current).postLeadingSwipeLayout, reset: { current.reset(page) })
+        case .statusTrailingSwipe: MenuLayoutSettingsView(title: page.title(isRightToLeft: layoutDirection == .rightToLeft), layout: Bindable(current).postTrailingSwipeLayout, reset: { current.reset(page) })
+        case .userMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).userMenuLayout, reset: { current.reset(page) })
+        case .linkMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).linkMenuLayout, reset: { current.reset(page) })
+        case .externalPostMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).externalPostMenuLayout, reset: { current.reset(page) })
+        case .profileTextMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).profileTextMenuLayout, reset: { current.reset(page) })
+        case .customEmojiMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).customEmojiMenuLayout, reset: { current.reset(page) })
+        case .hashtagMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).hashtagMenuLayout, reset: { current.reset(page) })
+        case .reactionMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).reactionMenuLayout, reset: { current.reset(page) })
+        case .mediaMenu: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).mediaMenuLayout, reset: { current.reset(page) })
+        case .composeTools: MenuLayoutSettingsView(title: page.title, layout: Bindable(current).composeToolLayout, reset: { current.reset(page) })
         case .connection: ConnectionStatusView(instance: instance, diagnostics: diagnostics)
         case .connectionTimelines: StreamingTimelinesView(diagnostics: diagnostics, listTitles: listTitles)
         case .storage: StorageView()
@@ -319,9 +328,9 @@ extension UIViewController {
     ///   - page: 設定のトップの画面から重ねて開いておく画面。
     ///   - appearanceGroup: `page`が「投稿の見た目」か「通知の見た目」のとき、その上に重ねておく分類の画面。
     ///   - onShownChange: 設定の画面が出たときにtrue、消えたときにfalseで呼ぶ。
-    func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, tabSources: SettingsTabSourceActions, tabBarShape: TabBarShapeModel, accountScreen: AccountScreenContext, openInAppBrowserHeight: @escaping @MainActor () -> Void, openProfile: @escaping @MainActor (_ acct: String) -> Void, opening page: SettingsPage? = nil, appearanceGroup: AppearanceGroup.ID? = nil, onShownChange: @escaping (Bool) -> Void) {
+    func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, tabSources: SettingsTabSourceActions, tabBarShape: TabBarShapeModel, accountScreen: AccountScreenContext, openInAppBrowserHeight: @escaping @MainActor (AppSettings) -> Void, openProfile: @escaping @MainActor (_ acct: String) -> Void, opening page: SettingsPage? = nil, appearanceGroup: AppearanceGroup.ID? = nil, editing: AppSettings? = nil, onShownChange: @escaping (Bool) -> Void) {
         let navigation = SettingsNavigationState()
-        let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, tabSources: tabSources, tabBarShape: tabBarShape, accountScreen: accountScreen, openInAppBrowserHeight: openInAppBrowserHeight, openProfile: openProfile, navigation: navigation, opening: page, appearanceGroup: appearanceGroup)
+        let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, tabSources: tabSources, tabBarShape: tabBarShape, accountScreen: accountScreen, openInAppBrowserHeight: openInAppBrowserHeight, openProfile: openProfile, navigation: navigation, opening: page, appearanceGroup: appearanceGroup, editing: editing)
         presentOnFrontmost(SettingsHostingController(rootView: view, navigation: navigation, onShownChange: onShownChange))
     }
 

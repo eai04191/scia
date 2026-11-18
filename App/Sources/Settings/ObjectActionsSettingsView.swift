@@ -17,8 +17,8 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
     var body: some View {
         Form {
             Section {
-                picker(ObjectActionsScreen.tapTitle, selection: $actions.tap)
-                picker(ObjectActionsScreen.longPressTitle, selection: $actions.longPress)
+                picker(ObjectActionsScreen.tapTitle, selection: $actions.tap, trigger: .tap)
+                picker(ObjectActionsScreen.longPressTitle, selection: $actions.longPress, trigger: .longPress)
             } footer: {
                 if !actions.opensMenu {
                     Text(screen.noMenuFooter())
@@ -26,11 +26,11 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
             }
             if screen.menu != nil || screen.actionBar != nil {
                 Section {
-                    if let menu = screen.menu {
-                        NavigationLink(menu.rowTitle, value: menu)
-                    }
-                    if let actionBar = screen.actionBar {
-                        NavigationLink(actionBar.rowTitle, value: actionBar)
+                    ForEach([screen.menu, screen.actionBar].compactMap(\.self), id: \.self) { page in
+                        NavigationLink(value: page) {
+                            ModifiedLabel(title: page.rowTitle, isModified: settings.isModified(page))
+                        }
+                        .contextMenu { ResetButton(isModified: settings.isModified(page)) { settings.reset(page) } }
                     }
                 }
             }
@@ -44,7 +44,10 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
             if !screen.toggles.isEmpty {
                 Section {
                     ForEach(screen.toggles, id: \.self) { toggle in
-                        Toggle(toggle.title, isOn: binding(of: toggle))
+                        Toggle(isOn: binding(of: toggle)) {
+                            ModifiedLabel(title: toggle.title, isModified: settings.isModified(toggle))
+                        }
+                        .contextMenu { ResetButton(isModified: settings.isModified(toggle)) { settings.reset(toggle) } }
                     }
                 } header: {
                     Text(ObjectActionsScreen.toggleHeader)
@@ -63,7 +66,7 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
     }
 
     /// 行の右端の今の値は、iPhoneの設定アプリと同じく、アイコンを付けない灰色の名前だけにする。アイコンは選ぶリストにだけ出す。
-    private func picker(_ label: String, selection: Binding<ObjectAction<Item>>) -> some View {
+    private func picker(_ label: String, selection: Binding<ObjectAction<Item>>, trigger: ObjectTrigger) -> some View {
         Picker(selection: selection) {
             Section {
                 Label(ObjectActionsScreen.openMenuTitle, systemImage: ObjectActionsScreen.openMenuSymbolName).tag(ObjectAction<Item>.menu)
@@ -78,12 +81,13 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
                 }
             }
         } label: {
-            Text(label)
+            ModifiedLabel(title: label, isModified: settings.isModified(trigger, on: screen.page))
         } currentValueLabel: {
             Text(name(of: selection.wrappedValue))
                 .foregroundStyle(.secondary)
         }
         .pickerStyle(.navigationLink)
+        .contextMenu { ResetButton(isModified: settings.isModified(trigger, on: screen.page)) { settings.reset(trigger, on: screen.page) } }
     }
 
     /// iOSの設定アプリと同じく、名前と今の値を並べ、シェブロンで並びの画面へ入る。
@@ -91,7 +95,7 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
         NavigationLink(value: side.page) {
             // 値が長くても、名前の右の1行に収めて末尾を省く。`LabeledContent`は値が長いと名前の下へ回すため、並べて組む。
             HStack {
-                Text(side.title(isRightToLeft: layoutDirection == .rightToLeft))
+                ModifiedLabel(title: side.title(isRightToLeft: layoutDirection == .rightToLeft), isModified: settings.isModified(side.page))
                     .layoutPriority(1)
                 Spacer()
                 ItemListText(list: side.layout(in: settings).swipeSummary, textStyle: .body)
@@ -99,6 +103,7 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
                     .lineLimit(1)
             }
         }
+        .contextMenu { ResetButton(isModified: settings.isModified(side.page)) { settings.reset(side.page) } }
     }
 
     private func option(_ item: Item) -> some View {

@@ -50,7 +50,10 @@ struct AutoTranslationSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Toggle(SettingsTexts.AutoTranslation.toggle, isOn: $settings.isAutoTranslationEnabled.animation())
+                Toggle(isOn: $settings.isAutoTranslationEnabled.animation()) {
+                    ModifiedLabel(title: SettingsTexts.AutoTranslation.toggle, isModified: settings.isModified(AutoTranslationSetting.enabled))
+                }
+                .contextMenu { resetButton(.enabled) }
             }
             if settings.isAutoTranslationEnabled {
                 options
@@ -68,18 +71,24 @@ struct AutoTranslationSettingsView: View {
 
     @ViewBuilder private var options: some View {
         Section {
-            Picker(SettingsTexts.AutoTranslation.target, selection: $settings.autoTranslationTarget) {
+            Picker(selection: $settings.autoTranslationTarget) {
                 Text(SettingsTexts.AutoTranslation.deviceLanguage(name: Self.name(of: Locale.current.language))).tag(String?.none)
                 ForEach(availability.targets) { language in
                     Text(language.name).tag(String?.some(language.code))
                 }
+            } label: {
+                ModifiedLabel(title: SettingsTexts.AutoTranslation.target, isModified: settings.isModified(AutoTranslationSetting.target))
             }
             .pickerStyle(.navigationLink)
+            .contextMenu { resetButton(.target) }
             if canUseAppleIntelligence {
-                Picker(SettingsTexts.AutoTranslation.mode, selection: $settings.autoTranslationStrategy) {
+                Picker(selection: $settings.autoTranslationStrategy) {
                     Text(verbatim: "Apple Intelligence").tag(TranslationStrategy.highFidelity)
                     Text(SettingsTexts.AutoTranslation.standardMode).tag(TranslationStrategy.lowLatency)
+                } label: {
+                    ModifiedLabel(title: SettingsTexts.AutoTranslation.mode, isModified: settings.isModified(AutoTranslationSetting.strategy))
                 }
+                .contextMenu { resetButton(.strategy) }
             }
         }
         if loadedSubject == subject {
@@ -95,14 +104,19 @@ struct AutoTranslationSettingsView: View {
         }
     }
 
+    private func resetButton(_ setting: AutoTranslationSetting) -> some View {
+        ResetButton(isModified: settings.isModified(setting)) { settings.reset(setting) }
+    }
+
     @ViewBuilder private var languages: some View {
         if !availability.installed.isEmpty {
             Section {
                 ForEach(availability.installed) { language in
                     Toggle(language.name, isOn: isOn(language))
+                        .contextMenu { resetButton(.languages) }
                 }
             } header: {
-                Text(SettingsTexts.AutoTranslation.installedHeader(usesSharedModel: usesSharedModel))
+                ModifiedLabel(title: SettingsTexts.AutoTranslation.installedHeader(usesSharedModel: usesSharedModel), isModified: settings.isModified(AutoTranslationSetting.languages))
             } footer: {
                 if !usesSharedModel {
                     Text(SettingsTexts.AutoTranslation.removeLanguageFooter)

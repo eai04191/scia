@@ -339,7 +339,7 @@ public struct ObjectActionsScreen: Hashable, Sendable {
     /// スイッチの節。投稿では、アクションバーを出している投稿のメニューに何を出すかを置く。
     public let toggles: [Toggle]
 
-    public enum Toggle: String, Hashable, Sendable {
+    public enum Toggle: String, CaseIterable, Hashable, Sendable {
         /// `AppSettings.showsActionBarItemsInMenu`。
         case actionBarItemsInMenu
         /// `AppSettings.showsActionBarLongPressItemsInMenu`。

@@ -166,13 +166,23 @@ struct SettingsScreenForm: View {
         Form {
             ForEach(sections, id: \.self) { section in
                 if section.rows == [.item(.statusBarTicker)] {
-                    StatusBarTickerSettingsSection(isOn: $settings.showsStatusBarTicker, isAvailable: StatusBarCutout.isAvailable)
+                    StatusBarTickerSettingsSection(
+                        isOn: $settings.showsStatusBarTicker,
+                        isAvailable: StatusBarCutout.isAvailable,
+                        isModified: settings.isModified(.statusBarTicker)
+                    ) { settings.reset(.statusBarTicker) }
                 } else {
                     SettingsFormSection(header: section.header, footer: footer(of: section)) {
                         ForEach(section.rows, id: \.self) { row in
                             switch row {
-                            case .page(let page): NavigationLink(page.rowTitle, value: page)
-                            case .item(let item): itemRow(item)
+                            case .page(let page):
+                                NavigationLink(value: page) {
+                                    ModifiedLabel(title: page.rowTitle, isModified: settings.isModified(page))
+                                }
+                                .contextMenu { ResetButton(isModified: settings.isModified(page)) { settings.reset(page) } }
+                            case .item(let item):
+                                itemRow(item)
+                                    .contextMenu { ResetButton(isModified: settings.isModified(item)) { settings.reset(item) } }
                             }
                         }
                     }
@@ -210,15 +220,19 @@ struct SettingsScreenForm: View {
     @ViewBuilder
     private func itemRow(_ item: SettingsItem) -> some View {
         switch item {
-        case .accentColor: AccentColorPicker(selection: $settings.accentColor)
+        case .accentColor: AccentColorPicker(selection: $settings.accentColor, isModified: settings.isModified(.accentColor))
         case .insertionMotion: choicePicker(item, selection: $settings.insertionMotion, title: \.title)
-        case .statusBarTicker: StatusBarTickerToggle(isOn: $settings.showsStatusBarTicker, isAvailable: StatusBarCutout.isAvailable)
+        case .statusBarTicker: StatusBarTickerToggle(isOn: $settings.showsStatusBarTicker, isAvailable: StatusBarCutout.isAvailable, isModified: settings.isModified(.statusBarTicker))
         case .linkBrowser: choicePicker(item, selection: $settings.linkBrowser, title: \.title)
         case .inAppBrowserHeight:
             // 本物のホームの上で選ぶので、設定の画面を重ねずに外へ出る。行の見た目は、ほかの画面へ入る行に揃え、シェブロンを付ける。
             Button(action: openInAppBrowserHeight) {
                 HStack(spacing: 8) {
-                    LabeledContent(item.title, value: SettingsItem.inAppBrowserHeightValue(in: settings))
+                    LabeledContent {
+                        Text(SettingsItem.inAppBrowserHeightValue(in: settings))
+                    } label: {
+                        ModifiedLabel(title: item.title, isModified: settings.isModified(item))
+                    }
                     Image(systemName: "chevron.forward")
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(.tertiary)
@@ -232,14 +246,14 @@ struct SettingsScreenForm: View {
         case .videoUploadSize: choicePicker(item, selection: $settings.videoUploadSize, title: \.title)
         case .mediaDynamicRange: choicePicker(item, selection: $settings.mediaDynamicRange, title: \.title)
         case .viewerMediaDynamicRange: choicePicker(item, selection: $settings.viewerMediaDynamicRange, title: \.title)
-        case .originalThumbnailsOnExpensiveNetwork: Toggle(item.title, isOn: $settings.usesOriginalThumbnailsOnExpensiveNetwork)
-        case .ignoresUselessAltText: Toggle(item.title, isOn: $settings.ignoresUselessAltText)
-        case .profilePinned: Toggle(item.title, isOn: $settings.separatesProfilePinned)
-        case .profileFeaturedTags: Toggle(item.title, isOn: $settings.showsProfileFeaturedTags)
-        case .profileEndorsements: Toggle(item.title, isOn: $settings.showsProfileEndorsements)
+        case .originalThumbnailsOnExpensiveNetwork: toggle(item, isOn: $settings.usesOriginalThumbnailsOnExpensiveNetwork)
+        case .ignoresUselessAltText: toggle(item, isOn: $settings.ignoresUselessAltText)
+        case .profilePinned: toggle(item, isOn: $settings.separatesProfilePinned)
+        case .profileFeaturedTags: toggle(item, isOn: $settings.showsProfileFeaturedTags)
+        case .profileEndorsements: toggle(item, isOn: $settings.showsProfileEndorsements)
         case .profileNoteLength: choicePicker(item, selection: $settings.profileNoteLength, title: \.title)
-        case .dynamicProfileAccent: Toggle(item.title, isOn: $settings.usesDynamicProfileAccent)
-        case .expandsXPosts: Toggle(item.title, isOn: $settings.expandsXPosts)
+        case .dynamicProfileAccent: toggle(item, isOn: $settings.usesDynamicProfileAccent)
+        case .expandsXPosts: toggle(item, isOn: $settings.expandsXPosts)
         case .version, .build, .branch, .commit, .builtAt, .sourceCode, .privacyPolicy:
             // 情報の画面（`AboutSettingsView`）が描く。
             EmptyView()
@@ -247,10 +261,18 @@ struct SettingsScreenForm: View {
     }
 
     private func choicePicker<Choice: CaseIterable & Hashable>(_ item: SettingsItem, selection: Binding<Choice>, title: KeyPath<Choice, String>) -> some View where Choice.AllCases: RandomAccessCollection {
-        Picker(item.title, selection: selection) {
+        Picker(selection: selection) {
             ForEach(Choice.allCases, id: \.self) { choice in
                 Text(choice[keyPath: title]).tag(choice)
             }
+        } label: {
+            ModifiedLabel(title: item.title, isModified: settings.isModified(item))
+        }
+    }
+
+    private func toggle(_ item: SettingsItem, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            ModifiedLabel(title: item.title, isModified: settings.isModified(item))
         }
     }
 }
@@ -346,10 +368,14 @@ struct StatusBarTickerSettingsSection: View {
     @Binding var isOn: Bool
     /// この機種でステータスバーの通知を出せるか。
     let isAvailable: Bool
+    /// 読んでいるプリセットが変えたか。変えていれば、長押しのメニューで親のプリセットの値に戻す。
+    var isModified = false
+    var reset: () -> Void = {}
 
     var body: some View {
         Section {
-            StatusBarTickerToggle(isOn: $isOn, isAvailable: isAvailable)
+            StatusBarTickerToggle(isOn: $isOn, isAvailable: isAvailable, isModified: isModified)
+                .contextMenu { ResetButton(isModified: isModified, reset: reset) }
         } footer: {
             if !isAvailable {
                 Text(SettingsTexts.Display.statusBarTickerUnavailable)
@@ -361,10 +387,14 @@ struct StatusBarTickerSettingsSection: View {
 struct StatusBarTickerToggle: View {
     @Binding var isOn: Bool
     let isAvailable: Bool
+    /// 読んでいるプリセットが変えたか。
+    var isModified = false
 
     var body: some View {
-        Toggle(SettingsItem.statusBarTicker.title, isOn: Binding { isAvailable && isOn } set: { isOn = $0 })
-            .disabled(!isAvailable)
+        Toggle(isOn: Binding { isAvailable && isOn } set: { isOn = $0 }) {
+            ModifiedLabel(title: SettingsItem.statusBarTicker.title, isModified: isModified)
+        }
+        .disabled(!isAvailable)
     }
 }
 
@@ -387,5 +417,29 @@ private struct AppIconChoiceRow: View {
             }
             Text(choice.title)
         }
+    }
+}
+
+/// 名前と、読んでいるプリセットが変えた項目に添えるインジケーター（docs/preset.md）。
+struct ModifiedLabel: View {
+    let title: String
+    let isModified: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(title)
+            ModifiedIndicator(isModified: isModified)
+        }
+    }
+}
+
+/// 長押しのメニューの「デフォルトに戻す」。変えた値を、親のプリセットの値に従わせる。
+struct ResetButton: View {
+    let isModified: Bool
+    let reset: () -> Void
+
+    var body: some View {
+        Button(SettingsTexts.Appearance.resetItem, systemImage: "arrow.uturn.backward", action: reset)
+            .disabled(!isModified)
     }
 }

@@ -287,6 +287,10 @@ final class SessionController {
     private var browserCoversTimelines = false
     /// アプリ内のSafariの高さを選ぶシートが覆っている高さ。
     private var heightPickerObscuredHeight: CGFloat = 0
+    /// 設定の画面から、アプリ内のSafariの高さを選ぶシートを開くときに、その画面で選んだプリセットの設定。開いたら空にする。
+    private var inAppBrowserHeightSettings: AppSettings?
+    /// アプリ内のSafariの高さのシートから設定の画面に戻るときに、変え続けるプリセットの設定。アプリのプリセットならnil。開いたら空にする。
+    private var settingsReturnTarget: AppSettings?
     /// 出ている設定の画面の数。設定の画面の上に、URLで設定の画面をもう1枚重ねることがある。
     private var shownSettingsCount = 0
     /// 積んだ画面の下を覆っている高さ。投稿欄、アプリ内のSafariのシート、その高さを選ぶシートのうち、いちばん高いもの。
@@ -3190,6 +3194,9 @@ final class SessionController {
     /// 設定の画面を、いちばん手前の画面に重ねて出す。
     /// - Parameter appearanceGroup: `page`が「投稿の見た目」か「通知の見た目」のとき、その上に重ねておく分類の画面。
     private func presentSettings(opening page: SettingsPage?, appearanceGroup: AppearanceGroup.ID? = nil) {
+        // アプリ内のSafariの高さのシートから戻るときは、シートを開く前に設定の画面で選んでいたプリセットを変え続ける。
+        let editing = settingsReturnTarget
+        settingsReturnTarget = nil
         rootViewController.presentSettings(
             instance: credential.instance,
             account: credential.handle,
@@ -3198,10 +3205,14 @@ final class SessionController {
             tabSources: settingsTabSourceActions,
             tabBarShape: tabs.shape,
             accountScreen: accountScreenContext,
-            openInAppBrowserHeight: { [weak self] in self?.open(.inAppBrowserHeight(returningTo: .interaction)) },
+            openInAppBrowserHeight: { [weak self] settings in
+                self?.inAppBrowserHeightSettings = settings
+                self?.open(.inAppBrowserHeight(returningTo: .interaction))
+            },
             openProfile: { [weak self] in self?.open(.profile(acct: $0)) },
             opening: page,
             appearanceGroup: appearanceGroup,
+            editing: editing,
             onShownChange: { [weak self] in self?.settingsShownChanged($0) }
         )
     }
@@ -3349,24 +3360,54 @@ final class SessionController {
     /// ホームのタブを無効にしていれば、選んでいるタブのタイムラインの上に出す。
     /// - Parameter page: 閉じたときに開き直す設定の画面。nilなら開き直さない。
     private func showInAppBrowserHeight(returningTo page: SettingsPage?) {
+        let fromSettings = inAppBrowserHeightSettings
+        inAppBrowserHeightSettings = nil
         closeScreensForDestination { [weak self] in
             guard let self, let window = rootViewController.viewIfLoaded?.window else { return }
             tabs.show(.home)
             tabs.selectedNavigation?.popToRootViewController(animated: false)
-            // 設定の画面から開くので、設定の画面と同じくアプリのプリセットを変える。
-            let sheet = InAppBrowserHeightSheet(settings: AppDependencies.settings, window: window) { [weak self] in
-                // 上にアプリ内のSafariを重ねていれば一緒に閉じるので、閉じたことが届くよう、まとめて閉じる経路を通す。
-                self?.rootViewController.dismissPresentedScreens(animated: true) {
-                    if let page { self?.open(.settings(page)) }
-                }
+            if let fromSettings {
+                presentInAppBrowserHeightSheet(settings: fromSettings, window: window, returningTo: page)
+            } else if settings.store.library.accountPresets[credential.handle] != nil {
+                // URLで直接開いたときも、アカウントにプリセットを割り当てていれば、設定の画面と同じく変えるプリセットを選ばせる。
+                chooseInAppBrowserHeightTarget(window: window, returningTo: page)
+            } else {
+                presentInAppBrowserHeightSheet(settings: AppDependencies.settings, window: window, returningTo: page)
             }
-            // アプリ内のSafariと同じく、覆う高さをタイムラインの下の余白と見えた投稿の判定に使わせる。
-            sheet.onObscuredHeightChange = { [weak self] height in
-                self?.heightPickerObscuredHeight = height
-                self?.applyObscuredBottomHeight()
-            }
-            rootViewController.present(sheet, animated: true)
         }
+    }
+
+    private func chooseInAppBrowserHeightTarget(window: UIWindow, returningTo page: SettingsPage?) {
+        let library = settings.store.library
+        let sheet = UIAlertController(title: SettingsTexts.Presets.targetTitle, message: nil, preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: SettingsTexts.Presets.appTarget(name: library.name(of: library.appPreset) ?? ""), style: .default) { [weak self] _ in
+            self?.presentInAppBrowserHeightSheet(settings: AppDependencies.settings, window: window, returningTo: page)
+        })
+        sheet.addAction(UIAlertAction(title: SettingsTexts.Presets.accountTarget(name: library.name(of: library.preset(forAccount: credential.handle)) ?? ""), style: .default) { [weak self] _ in
+            guard let self else { return }
+            presentInAppBrowserHeightSheet(settings: settings, window: window, returningTo: page)
+        })
+        sheet.addAction(UIAlertAction(title: SettingsTexts.cancel, style: .cancel))
+        sheet.popoverPresentationController?.sourceView = rootViewController.view
+        rootViewController.present(sheet, animated: true)
+    }
+
+    /// - Parameter settings: 高さを書くプリセットの設定。閉じて設定の画面に戻るときも、このプリセットを変え続ける。
+    private func presentInAppBrowserHeightSheet(settings: AppSettings, window: UIWindow, returningTo page: SettingsPage?) {
+        let sheet = InAppBrowserHeightSheet(settings: settings, window: window) { [weak self] in
+            // 上にアプリ内のSafariを重ねていれば一緒に閉じるので、閉じたことが届くよう、まとめて閉じる経路を通す。
+            self?.rootViewController.dismissPresentedScreens(animated: true) {
+                guard let self, let page else { return }
+                self.settingsReturnTarget = settings === AppDependencies.settings ? nil : settings
+                self.open(.settings(page))
+            }
+        }
+        // アプリ内のSafariと同じく、覆う高さをタイムラインの下の余白と見えた投稿の判定に使わせる。
+        sheet.onObscuredHeightChange = { [weak self] height in
+            self?.heightPickerObscuredHeight = height
+            self?.applyObscuredBottomHeight()
+        }
+        rootViewController.present(sheet, animated: true)
     }
 
     /// タブの並びの画面で、リストを作る、消す。

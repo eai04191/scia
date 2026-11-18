@@ -18,9 +18,11 @@ struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
     var actions: [MenuLayoutAction] = []
     /// 左へスワイプして消せる項目。タブの並びのリスト。
     var itemDeletion: MenuLayoutItemDeletion<Item>?
+    /// 「最初の並びに戻す」で、並びを親のプリセットの並びに従わせる。nilなら既定の並びを書く。プリセットに含めない並び（タブ）はnil（docs/preset.md）。
+    var reset: (() -> Void)?
 
     var body: some View {
-        MenuLayoutList(layout: $layout, image: image, imageRevision: imageRevision(), options: options, actions: actions, itemDeletion: itemDeletion)
+        MenuLayoutList(layout: $layout, image: image, imageRevision: imageRevision(), options: options, actions: actions, itemDeletion: itemDeletion, reset: reset)
             .ignoresSafeArea()
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
@@ -57,6 +59,7 @@ private struct MenuLayoutList<Item: MenuItemKind & MenuItemPresentable>: UIViewC
     let options: [MenuLayoutOption]
     let actions: [MenuLayoutAction]
     let itemDeletion: MenuLayoutItemDeletion<Item>?
+    let reset: (() -> Void)?
 
     func makeUIViewController(context: Context) -> MenuLayoutViewController<Item> {
         MenuLayoutViewController(layout: layout, image: image, imageRevision: imageRevision, options: options, actions: actions, itemDeletion: itemDeletion) { layout = $0 }
@@ -64,6 +67,7 @@ private struct MenuLayoutList<Item: MenuItemKind & MenuItemPresentable>: UIViewC
 
     func updateUIViewController(_ controller: MenuLayoutViewController<Item>, context: Context) {
         controller.onChange = { layout = $0 }
+        controller.onReset = reset
         controller.update(layout)
         controller.setImageRevision(imageRevision)
     }
@@ -72,6 +76,8 @@ private struct MenuLayoutList<Item: MenuItemKind & MenuItemPresentable>: UIViewC
 /// 汎用のクラスは、拡張でObjective-Cのプロトコルに準拠できないため、delegateのメソッドも本体に置く。
 final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: UIViewController, UICollectionViewDelegate {
     var onChange: (MenuLayout<Item>) -> Void
+    /// 「最初の並びに戻す」で呼ぶ。戻した並びは`update(_:)`で届く。nilなら、既定の並びを書く。
+    var onReset: (() -> Void)?
 
     /// 区切り線は同じ値が並ぶため、リストで見分けるIDを行ごとに振る。
     /// 「その他」の境目も行として持つが、リストには出さず、節の分かれ目にする。
@@ -600,6 +606,10 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         case .action(let index):
             actions[index].handler()
         case .reset:
+            if let onReset {
+                onReset()
+                return
+            }
             rows = Item.defaultLayout.elements.map { Row(element: $0) }
             save()
             applySnapshot(animated: !UIAccessibility.isReduceMotionEnabled)

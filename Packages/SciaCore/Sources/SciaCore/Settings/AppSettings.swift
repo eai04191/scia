@@ -651,13 +651,13 @@ public final class AppSettings {
         }
     }
 
-    private func isModified(key: String) -> Bool {
+    func isModified(key: String) -> Bool {
         store.track(key)
         return store.library.isModified(key, in: presetID)
     }
 
     /// 組み込みのプリセットを読んでいるときは、変えた項目がないので何もしない。
-    private func reset(keys: [String]) {
+    func reset(keys: [String]) {
         let id = presetID
         guard case .user = id else { return }
         store.updateLibrary { library throws(PresetError) in
@@ -667,7 +667,7 @@ public final class AppSettings {
         }
     }
 
-    private static func appearanceKey(_ item: AppearanceValue) -> String {
+    static func appearanceKey(_ item: AppearanceValue) -> String {
         "appearanceValue.\(item.id)"
     }
 
