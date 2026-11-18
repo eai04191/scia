@@ -843,6 +843,14 @@ public final class SettingsStore {
         library = updated
     }
 
+    /// アカウントに割り当てたプリセットが使う「絵文字」の種類のうち、アプリのプリセットと違うもの。
+    /// 絵文字ピッカーのために、アプリのプリセットの絵に加えて、端末に置く画像を先に作る絵（docs/preset.md）。
+    public var accountEmojiStyles: Set<EmojiStyle> {
+        let library = observedLibrary
+        let appStyle = resolvedAppearance(in: library.appPreset).emojiStyle
+        return Set(library.accountPresets.values.map { resolvedAppearance(in: $0).emojiStyle }).subtracting([appStyle])
+    }
+
     /// どれかのプリセット（組み込みのプリセットを含む）が使う「絵文字」の種類。プリセットのどれかが変わると購読に届く。
     /// 絵文字ピッカーのために端末に置いた画像のうち、どのプリセットでも使わない種類のものだけを消すのに使う。
     public var emojiStylesInPresets: Set<EmojiStyle> {

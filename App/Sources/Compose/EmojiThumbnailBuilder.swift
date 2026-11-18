@@ -92,18 +92,34 @@ final class EmojiThumbnailBuilder {
         let settings = AppDependencies.settings
         let tuning = AppDependencies.tuning
         return {
-            let (style, texts, geometry) = await MainActor.run {
+            let (style, texts, geometry, accountStyles) = await MainActor.run {
                 let style = settings.appearance.emojiStyle
                 let side = tuning.value(of: TuningCatalog.composeEmojiPaletteCellSize)
                 let geometry = displayScale().map { EmojiPaletteCell.glyphGeometry(cellSize: CGSize(width: side, height: side), scale: $0, style: style) }
                 // 絵文字ピッカーは既定の肌の色で並べるので、その色の画像を作る。
-                return (style, StandardEmojiAvailability.groups(for: style, skinTone: settings.emojiSkinTone).flatMap { $0.emojis.map(\.emoji) }, geometry)
+                let accountStyles = settings.store.accountEmojiStyles.map { accountStyle in
+                    (accountStyle, StandardEmojiAvailability.groups(for: accountStyle, skinTone: settings.emojiSkinTone).flatMap { $0.emojis.map(\.emoji) })
+                }
+                return (style, StandardEmojiAvailability.groups(for: style, skinTone: settings.emojiSkinTone).flatMap { $0.emojis.map(\.emoji) }, geometry, accountStyles)
+            }
+            // アカウントに割り当てたプリセットの絵は、絵文字ピッカーが記録した大きさで作る。
+            // 記録は、下でアプリの絵の組を開くときに計算した大きさで書き換わることがあるので、その前に読んでおく。
+            let accountGeometries = accountStyles.compactMap { accountStyle, accountTexts -> (EmojiGlyphArchive.Geometry, [String])? in
+                var styled = geometry
+                styled?.style = accountStyle
+                return (glyphs.recordedGeometry(style: accountStyle) ?? styled).map { ($0, accountTexts) }
             }
             // 絵文字ピッカーが記録した大きさがあれば、それを使う。なければ計算した大きさで作る。
             if !glyphs.loadStoredGeometry(style: style), let geometry {
                 glyphs.use(geometry)
             }
             await glyphs.build(texts, includesFull: includesFull)
+            // 今の大きさと絵は、アプリのプリセットのまま残す（docs/preset.md）。
+            for (accountGeometry, accountTexts) in accountGeometries {
+                guard !Task.isCancelled else { break }
+                glyphs.prepare(accountGeometry)
+                await glyphs.build(accountTexts, includesFull: includesFull, geometry: accountGeometry)
+            }
         }
     }
 

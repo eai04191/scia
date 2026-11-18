@@ -52,6 +52,8 @@ final class EmojiGlyphArchive: Sendable {
     /// 切り替え（`use`、`loadStoredGeometry`）を1つずつ行う。並べて行うと、同じファイルを書く`EmojiThumbnails`が2つでき、
     /// それぞれが書き足す位置を持って、相手の記録を切り詰めて消すため。
     private let switching = Mutex<[Geometry: Files]>([:])
+    /// この起動で開いた大きさと絵ごとのファイル。画像を引くときに読む。`switching`は開くあいだ握るので、描くたびに待たないよう別に持つ。
+    private let openedFiles = Mutex<[Geometry: Files]>([:])
     private let logger = SciaLog.logger(category: "emoji")
     /// どれかのプリセットが使う絵文字の種類。切り替えても、この種類の今のiOSの版のフォルダーは消さない。
     /// プリセットを切り替えるたびに、消した画像を作り直さないため（docs/preset.md）。
@@ -113,6 +115,14 @@ final class EmojiGlyphArchive: Sendable {
         }
     }
 
+    /// 前に絵文字ピッカーで渡した大きさで、絵を`style`にしたもの。iOSの版が変わっていればnil。
+    /// アカウントのプリセットの絵の画像を作るときに、大きさを絵文字ピッカーに揃えるのに使う。
+    func recordedGeometry(style: EmojiStyle) -> Geometry? {
+        guard var stored = storedGeometry(), stored.systemVersion == Self.systemVersion else { return nil }
+        stored.style = style
+        return stored
+    }
+
     private func storedGeometry() -> Geometry? {
         (try? Data(contentsOf: geometryFile)).flatMap { try? JSONDecoder().decode(Geometry.self, from: $0) }
     }
@@ -137,10 +147,20 @@ final class EmojiGlyphArchive: Sendable {
         }
     }
 
+    /// 今の大きさと絵を変えずに、`geometry`のファイルを開く。アカウントのプリセットの絵の画像を、裏で作るときに使う。
+    /// 今の大きさと絵と、絵文字ピッカーが記録した大きさは、絵文字ピッカーのものを残す。
+    func prepare(_ geometry: Geometry) {
+        switching.withLock { opened in
+            open(geometry, opened: &opened, makesCurrent: false)
+        }
+    }
+
     /// 同じ大きさと絵のファイルは、前に開いたものを使い回す。書き手（`EmojiThumbnails`の書く順番）を1つにするため。
-    private func open(_ geometry: Geometry, opened: inout [Geometry: Files]) {
+    private func open(_ geometry: Geometry, opened: inout [Geometry: Files], makesCurrent: Bool = true) {
         if let reused = opened[geometry] {
-            files.withLock { $0 = reused }
+            if makesCurrent {
+                files.withLock { $0 = reused }
+            }
             return
         }
         let folder = folder(for: geometry)
@@ -152,7 +172,10 @@ final class EmojiGlyphArchive: Sendable {
         made.small.load()
         made.full.load()
         opened[geometry] = made
-        files.withLock { $0 = made }
+        openedFiles.withLock { $0[geometry] = made }
+        if makesCurrent {
+            files.withLock { $0 = made }
+        }
     }
 
     static var systemVersion: String {
@@ -161,9 +184,13 @@ final class EmojiGlyphArchive: Sendable {
     }
 
     /// `text`の画像。描く大きさの画像があればそれを、なければ小さい画像を返す。どちらもなければnil。
-    /// `geometry`が今の大きさと絵と違えば、使わない。
+    /// `geometry`が今の大きさと絵でなく、どのプリセットも使わない絵なら、使わない。
+    /// プリセットの使う絵の画像は、窓ごとにアカウントの絵が違うときも使えるよう、今の大きさと絵でなくても返す（docs/preset.md）。
     func glyph(for text: String, geometry: Geometry) -> Glyph? {
-        guard let files = files.withLock({ $0 }), files.geometry == geometry else { return nil }
+        let isCurrent = files.withLock { $0?.geometry } == geometry
+        guard isCurrent || keptStyles.withLock({ $0.contains(geometry.style) }),
+              let files = openedFiles.withLock({ $0[geometry] })
+        else { return nil }
         for isShape in [false, true] {
             let url = Self.url(text, isShape: isShape)
             if let image = files.full.image(for: url) {
@@ -188,8 +215,10 @@ final class EmojiGlyphArchive: Sendable {
     /// 小さい画像は全部作る。描く大きさの画像は、`includesFull`で、必須でない用途の空きが残りの見積もり以上あるときだけ作る。
     /// - Parameter includesFull: falseなら小さい画像だけを、小さく描いて作る。絵文字ピッカーを開いている間に呼ぶ。
     ///   描く大きさで描いてから縮めるより軽く、絵文字ピッカーの画像の読み込みと取り合うCPUを減らすため。
-    func build(_ texts: [String], includesFull: Bool = true) async {
-        guard let files = files.withLock({ $0 }) else { return }
+    /// - Parameter geometry: 作る大きさと絵。開いたもののどれか。nilなら今の大きさと絵。
+    func build(_ texts: [String], includesFull: Bool = true, geometry: Geometry? = nil) async {
+        let target = geometry.flatMap { geometry in openedFiles.withLock { $0[geometry] } } ?? files.withLock { $0 }
+        guard let files = target else { return }
         let missing = texts.filter { text in
             ![false, true].contains { files.small.contains(Self.url(text, isShape: $0)) && (!includesFull || files.full.contains(Self.url(text, isShape: $0))) }
         }
@@ -213,8 +242,10 @@ final class EmojiGlyphArchive: Sendable {
                 drawn.scale = CGFloat(Self.smallPixelHeight) / drawn.height
             }
             guard let (image, isShape) = await Self.render(text, geometry: drawn) else { continue }
-            // 作っている間に大きさか絵が変わったら、前の大きさの画像を足さずにやめる。
-            guard !Task.isCancelled, self.files.withLock({ $0?.geometry }) == files.geometry else { break }
+            // 作っている間に大きさか絵が変わり、作っている絵をどのプリセットも使わなくなったら、前の大きさの画像を足さずにやめる。
+            guard !Task.isCancelled,
+                  self.files.withLock({ $0?.geometry }) == files.geometry || keptStyles.withLock({ $0.contains(files.geometry.style) })
+            else { break }
             let url = Self.url(text, isShape: isShape)
             files.small.add(url, image: image)
             if keepsFull {

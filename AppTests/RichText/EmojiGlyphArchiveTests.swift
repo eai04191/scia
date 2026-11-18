@@ -110,6 +110,25 @@ struct EmojiGlyphArchiveTests {
         #expect(next.glyph(for: "😀", geometry: Self.geometry) == nil)
     }
 
+    /// アカウントのプリセットの絵の画像は、今の大きさと絵を変えずに作り、窓ごとに絵が違っても引ける。
+    /// どのプリセットも使わない絵なら、今の大きさと絵でない画像は引かない。
+    @Test func buildsAndServesAccountStyleWithoutSwitching() async throws {
+        let archive = makeArchive(capacity: Int.max)
+        var system = Self.geometry
+        system.style = .system
+        archive.keep(styles: [.system, .twemoji])
+        archive.use(system)
+
+        archive.prepare(Self.geometry)
+        await archive.build(["😀"], geometry: Self.geometry)
+
+        let glyph = try #require(await waitForGlyph("😀", in: archive) { $0.isFull })
+        #expect(glyph.isFull)
+        #expect(archive.recordedGeometry(style: .system) == system, "絵文字ピッカーが記録した大きさと絵は変えない")
+        archive.keep(styles: [.system])
+        #expect(archive.glyph(for: "😀", geometry: Self.geometry) == nil)
+    }
+
     /// 裏で作る側は、絵文字ピッカーが記録した大きさがあればそれを使い、なければ自分で計算した大きさを使う。
     /// 画面の倍率の違う画面にシーンが複数あると、計算した大きさが絵文字ピッカーのものと食い違い、互いの画像を消し合うため。
     @Test func prefersGeometryRecordedByPalette() {

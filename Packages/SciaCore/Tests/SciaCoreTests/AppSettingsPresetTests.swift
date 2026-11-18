@@ -288,6 +288,23 @@ struct AppSettingsPresetTests {
         #expect(app.store.emojiStylesInPresets == [.system, .twemoji])
     }
 
+    /// アカウントに割り当てたプリセットの絵文字の種類のうち、アプリのプリセットと違うものを並べる。使っていないプリセットの種類は並べない。
+    @Test func accountEmojiStylesListsAssignedDifferentStyles() throws {
+        let app = makeSettings()
+        #expect(app.store.accountEmojiStyles.isEmpty)
+        try app.store.tryUpdateLibrary { library throws(PresetError) in
+            let twemoji = try library.create(parent: .builtIn(.standard), name: "twemoji")
+            try library.setValue(.text(EmojiStyle.twemoji.rawValue), forKey: AppearanceStorage.key("emojiStyle"), in: twemoji)
+            _ = try library.create(parent: twemoji, name: "使っていない")
+            try library.select(.builtIn(.standard), for: .account("a@example.social"))
+        }
+        #expect(app.store.accountEmojiStyles.isEmpty)
+        try app.store.tryUpdateLibrary { library throws(PresetError) in
+            try library.select(.user(1), for: .account("b@example.social"))
+        }
+        #expect(app.store.accountEmojiStyles == [.twemoji])
+    }
+
     /// 書いた値は保存し、起動し直しても読める。
     @Test func persistsPresets() throws {
         let defaults = TestScratch.defaults("AppSettingsPresetTests")
