@@ -23,11 +23,12 @@ public enum BuiltInPreset: String, CaseIterable, Codable, Sendable {
         }
     }
 
-    /// すき間の段の単位。nilなら既定の単位（`SpacingScale.unit`）のまま。
-    public var spacingUnit: Double? {
+    /// すき間の段ごとの長さ。nilなら既定の段（`SpacingScale.Level.value()`）のまま。
+    /// コンパクトは外側ほど強く詰め、部品の中は標準のまま詰めない。中まで詰めると、文字が縁や隣の文字に寄って読みにくくなるため。
+    public var spacing: [SpacingScale.Level: Double]? {
         switch self {
         case .standard: nil
-        case .compact: 2
+        case .compact: [.s1: 4, .s2: 6, .s3: 8, .s4: 10]
         }
     }
 
@@ -35,7 +36,6 @@ public enum BuiltInPreset: String, CaseIterable, Codable, Sendable {
 
     private static let compactValues = BuiltInPreset.compact.withSpacing([
         "appearanceValue.timeline.avatarSize": .number(32),
-        "appearanceValue.text.nameSecondary": .number(-1),
         "appearanceValue.timeline.mediaTallestAspectRatio": .number(1),
         "appearanceChoice.mediaArrangement": .text("besideBody"),
         "appearanceChoice.tiltsStackedPhotos": .bool(false),
@@ -46,12 +46,14 @@ public enum BuiltInPreset: String, CaseIterable, Codable, Sendable {
 
     /// `values`に、すき間の項目を段の単位から求めた値を足す。
     private func withSpacing(_ values: [String: PresetValue]) -> [String: PresetValue] {
-        guard let unit = spacingUnit else { return values }
+        guard let spacing else { return values }
         var result = values
         for item in AppearanceCatalog.values + NotificationAppearanceCatalog.values {
             guard case .spacing(let level) = item.role else { continue }
             precondition(result[item.presetKey] == nil, "\(item.id)はすき間の段で決めるので、個々に並べない")
-            result[item.presetKey] = .number(level.value(unit: unit))
+            // 既定値と同じ段は持たない。プリセットの比較に、変えていない値が出るため。
+            guard let value = spacing[level], value != item.defaultValue else { continue }
+            result[item.presetKey] = .number(value)
         }
         return result
     }
