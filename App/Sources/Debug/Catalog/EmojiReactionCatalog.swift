@@ -18,9 +18,12 @@ enum EmojiReactionCatalog {
         let many = ["👍", "🎉", "❤️", "😂", "🤔", "👀", "🙏", "🔥", "✨", "🥺", "🍣", "#️⃣", "🇯🇵", "👨‍👩‍👧‍👦"].enumerated().map { index, emoji in
             EmojiReaction(emoji: ReactionEmoji(name: emoji), count: index + 1, me: index == 2)
         }
-        func post(_ title: String, _ reactions: [EmojiReaction], content: String = "<p>リアクションの付いた投稿。</p>", spoilerText: String = "", showsAddButton: Bool = true) -> CatalogState {
+        func post(
+            _ title: String, _ reactions: [EmojiReaction], content: String = "<p>リアクションの付いた投稿。</p>", spoilerText: String = "", showsAddButton: Bool = true,
+            settings: @escaping @MainActor () -> AppSettings = { AppDependencies.settings }
+        ) -> CatalogState {
             CatalogState(title: title) {
-                let timeline = TimelineViewController(texts: .home, settings: AppDependencies.settings, refresh: {})
+                let timeline = TimelineViewController(texts: .home, settings: settings(), refresh: {})
                 timeline.myAccountID = author.id
                 timeline.capabilities.supportsEmojiReactions = true
                 timeline.onToggleEmojiReaction = { _, _ in }
@@ -44,11 +47,31 @@ enum EmojiReactionCatalog {
             post("自分がしたもの", [EmojiReaction(emoji: ReactionEmoji(name: "👍"), count: 3, me: true), EmojiReaction(emoji: ReactionEmoji(name: "🎉"), count: 1, me: false)]),
             post("折り返すほど多い", many),
             post("このサーバーとほかのサーバーのカスタム絵文字", [EmojiReaction(emoji: local, count: 2, me: true), EmojiReaction(emoji: remote, count: 5, me: false)]),
+            post("“ショートコードで表示”と“表示しない”にしたカスタム絵文字（表示しないものはボタンごと出さない）", [EmojiReaction(emoji: local, count: 2, me: true), EmojiReaction(emoji: remote, count: 5, me: false)]) {
+                hidingEmojis(local, remote)
+            },
             post("画像のURLが読めなかったカスタム絵文字（ショートコードを文字で出す）", [EmojiReaction(emoji: ReactionEmoji(name: "broken_emoji"), count: 1, me: false)]),
             post("数が大きい（桁区切り）", [EmojiReaction(emoji: ReactionEmoji(name: "🎉"), count: 12_345, me: true), EmojiReaction(emoji: ReactionEmoji(name: "👀"), count: 1_234_567, me: false)]),
             post("押す前の数が届いた自分のリアクション（0でも1と出す）", [EmojiReaction(emoji: ReactionEmoji(name: "👍"), count: 0, me: true)]),
             post("注意書きで折りたたんでいても出す", [EmojiReaction(emoji: ReactionEmoji(name: "🙈"), count: 2, me: false)], spoilerText: "注意書き"),
             post("「＋」のない列（プレビューなど、付けられない場所）", [EmojiReaction(emoji: ReactionEmoji(name: "👍"), count: 1, me: false)], showsAddButton: false),
         ]
+    }
+
+    /// `local`を“ショートコードで表示”、`remote`を“表示しない”にしたカタログ用の設定。描き方の一覧はアプリ全体で1つなので、アプリの設定には書かない。
+    /// ほかの状態と見比べられるよう、プリセット（「投稿の見た目」など）はアプリのものを写す。
+    @MainActor
+    private static func hidingEmojis(_ local: ReactionEmoji, _ remote: ReactionEmoji) -> AppSettings {
+        let suiteName = "net.mizle.scia.catalog.emojiReactions.hiding"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            preconditionFailure("カタログのUserDefaultsを作れない")
+        }
+        defaults.removePersistentDomain(forName: suiteName)
+        let app = AppSettings(defaults: defaults)
+        app.store.updateLibrary { $0 = AppDependencies.settings.store.library }
+        let settings = app.forAccount("@catalog@example.com")
+        if let emoji = local.customEmoji { settings.setCustomEmojiDisplay(.shortcode, of: emoji) }
+        if let emoji = remote.customEmoji { settings.setCustomEmojiDisplay(.hidden, of: emoji) }
+        return settings
     }
 }

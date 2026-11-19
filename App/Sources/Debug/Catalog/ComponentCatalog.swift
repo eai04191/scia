@@ -70,6 +70,7 @@ enum CatalogComponent: String, CaseIterable {
     case filters
 
     case storage
+    case customEmojiDisplays = "custom-emoji-displays"
     case mediaCache = "media-cache"
 
     /// 検索の語が、名前かURLの名前（`rawValue`）に含まれるか。
@@ -129,6 +130,7 @@ enum CatalogComponent: String, CaseIterable {
         case .filters: "フィルター"
         case .profileEdit: "プロフィールの編集"
         case .storage: "設定のストレージ"
+        case .customEmojiDisplays: "設定の表示を変更したカスタム絵文字"
         case .mediaCache: "ストレージのメディアのキャッシュ"
         }
     }
@@ -185,6 +187,7 @@ enum CatalogComponent: String, CaseIterable {
         case .filters: FiltersCatalog.states()
         case .profileEdit: ProfileEditCatalog.states()
         case .storage: StorageCatalog.states()
+        case .customEmojiDisplays: CustomEmojiDisplaysCatalog.states()
         case .mediaCache: StorageCatalog.mediaCacheStates()
         }
     }
@@ -237,7 +240,7 @@ enum CatalogSection: CaseIterable {
         case .profile: [.profileHeader, .profileAccent, .profileEdit]
         case .appWide: [.notices, .noticeLayout, .statusBarTicker, .operationStatus, .hdrHeadroom, .login]
         case .sheets: [.announcements, .reportSheet, .crashReport, .listMembership, .filters]
-        case .settings: [.storage, .mediaCache]
+        case .settings: [.storage, .mediaCache, .customEmojiDisplays]
         }
     }
 
