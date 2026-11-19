@@ -152,6 +152,7 @@ extension SessionController {
                 browser.open(url, from: rootViewController.frontmostPresented)
             }
         case .reset:
+            browser.closeFullScreen()
             rootViewController.dismissPresentedScreens(animated: false)
             for navigation in tabs.allNavigations {
                 navigation.popToRootViewController(animated: false)
