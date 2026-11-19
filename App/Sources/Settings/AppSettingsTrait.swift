@@ -62,7 +62,9 @@ final class WindowSettings {
             if followsTint {
                 window.tintColor = settings.accentColor.uiColor
             }
-            window.traitOverrides.imageDynamicRange = UIImage.DynamicRange(settings.mediaDynamicRange)
+            let range = UIImage.DynamicRange(settings.mediaDynamicRange)
+            window.traitOverrides.imageDynamicRange = range
+            window.traitOverrides.mediaDynamicRange = range
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor in
                 self?.follow(settings, generation: generation)

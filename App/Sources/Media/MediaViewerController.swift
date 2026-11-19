@@ -368,6 +368,7 @@ final class MediaViewerController: UIViewController {
         overrideUserInterfaceStyle = .dark
         MediaDynamicRangeTraits.follow(self, settings: settings, { $0.viewerMediaDynamicRange }) { viewer, range in
             viewer.traitOverrides.imageDynamicRange = range
+            viewer.traitOverrides.mediaDynamicRange = range
         }
         // 下にタイムラインを残しているため、VoiceOverがそちらを読まないようにする。
         view.accessibilityViewIsModal = true
@@ -1642,6 +1643,8 @@ extension MediaViewerController {
         }
         let overlay = UIView(frame: window.bounds)
         overlay.isUserInteractionEnabled = false
+        // 複製の画像は明るさの幅のtraitに従うため、窓へ移しても、ビューアの明るさのまま閉じ始める。
+        overlay.traitOverrides.mediaDynamicRange = traitCollection.mediaDynamicRange
         backdrop.frame = overlay.bounds
         overlay.addSubview(backdrop)
         let chromeSnapshots = chromeViews.compactMap { chrome -> UIView? in
@@ -1738,6 +1741,8 @@ extension MediaViewerController {
     /// バーの奥に描く複製。複製と同じ画像と切り抜き方で、サムネイルに重ねた表示も載せる。
     private func makeUnderlay(decoratedLike tile: (any MediaViewerSource)?) -> MediaBarLayering.Underlay {
         let image = FocusCroppedImageView()
+        // タイムラインの中に置くので、そのままでは一覧の明るさで描く。最前面の複製と同じ明るさにそろえる。
+        image.traitOverrides.mediaDynamicRange = traitCollection.mediaDynamicRange
         image.image = morph.image
         image.focus = morph.focus
         image.layer.cornerCurve = morph.layer.cornerCurve

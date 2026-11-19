@@ -14,7 +14,7 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
     /// サムネイルを出している間も元の画像の大きさで決めるよう、出している画像とは別に、`image`より先に設定する。
     var naturalSize: CGSize?
 
-    private let imageView = UIImageView()
+    private let imageView = DynamicRangeFollowingImageView()
     var onSingleTap: (() -> Void)?
     /// ダブルタップして拡大するときと、戻すときの時間。UIScrollViewの`animated`の拡大は時間を変えられないため、自前で動かす。
     var doubleTapZoomDuration: TimeInterval = 0.2

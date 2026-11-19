@@ -6,7 +6,7 @@ import UIKit
 /// 枠をUIKitのアニメーションで動かすときは、同じアニメーションの中で`layoutIfNeeded`を呼び、中の画像も一緒に動かす。
 /// 呼ばないと、中の画像だけが動き終えた位置へ飛ぶ。毎フレーム枠を置き直す動きでは、描く前に並べ直されるため呼ばなくてよい。
 final class FocusCroppedImageView: UIView {
-    private let imageView = UIImageView()
+    private let imageView = DynamicRangeFollowingImageView()
     /// 中の画像を薄くしたぶん見せる、紙の白。
     private let paperView = UIView()
     /// 全体を暗くする。
