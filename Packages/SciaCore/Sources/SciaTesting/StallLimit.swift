@@ -44,12 +44,12 @@ final class ProgressLog: Sendable {
 
     var stepCount: Int { state.withLock { $0.steps.count } }
 
-    /// 最後のいくつかの段階の、始まってからの時間。
+    /// 最後のいくつかの段階の、始まってからの時間。失敗のメッセージの日本語に合わせ、Macの言語の設定によらず日本語の書式で書く。
     var history: String {
         state.withLock { state in
             let recent = state.steps.suffix(8)
             let omitted = state.steps.count - recent.count
-            return (omitted > 0 ? "（前の\(omitted)個の段階は省略）\n" : "") + recent.map { "\($0.at.formatted(.units(allowed: [.seconds], fractionalPart: .show(length: 1)))) \($0.step)" }.joined(separator: "\n")
+            return (omitted > 0 ? "（前の\(omitted)個の段階は省略）\n" : "") + recent.map { "\($0.at.formatted(.units(allowed: [.seconds], fractionalPart: .show(length: 1)).locale(Locale(identifier: "ja_JP")))) \($0.step)" }.joined(separator: "\n")
         }
     }
 }
