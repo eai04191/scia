@@ -1,4 +1,5 @@
 import QuartzCore
+import SafariServices
 import UIKit
 
 /// 開発用。指を受けるビューの範囲を、受けるビューごとに色を変えて、すべての画面の上に重ねて出す。
@@ -8,6 +9,7 @@ import UIKit
 /// SwiftUIの部品の中は、ボタンがUIKitのビューではないため、`UIHostingController`のビュー1つの範囲として出る。
 /// 親のビューに付けたジェスチャーは、指を受けた子のビューの範囲に含めて出し、どのジェスチャーが勝つかは出さない。
 /// 別のプロセスが描くもの（写真のピッカー、システムのメニュー）は調べられない。
+/// アプリ内のSafari（SFSafariViewController）の上のタッチは、アプリの`hitTest`を通らずにSafariへ届く。Safariのビューの範囲で、`hitTest`がSafariの中のビューか、Safariより奥のビューを返したときは、Safariのビューが受けるものとして出す。
 @MainActor
 enum HitAreaOverlay {
     private static var windows: [ObjectIdentifier: HitAreaWindow] = [:]
@@ -99,12 +101,13 @@ private final class HitAreaWindow: UIWindow {
 
     private func makeGrid() -> HitGrid? {
         let targets = targetWindows()
+        let safariViews = Self.safariViews(in: targets)
         let step = Self.step
         let columns = Int((bounds.width / step).rounded(.up))
         let rows = Int((bounds.height / step).rounded(.up))
         guard columns > 0, rows > 0 else { return nil }
         return HitGrid(columns: columns, rows: rows, detail: detailCells(in: targets, columns: columns, rows: rows)) { [weak self] column, row in
-            self?.hitView(at: CGPoint(x: (CGFloat(column) + 0.5) * step, y: (CGFloat(row) + 0.5) * step), in: targets)
+            self?.hitView(at: CGPoint(x: (CGFloat(column) + 0.5) * step, y: (CGFloat(row) + 0.5) * step), in: targets, safariViews: safariViews)
         }
     }
 
@@ -216,18 +219,38 @@ private final class HitAreaWindow: UIWindow {
         }.map(\.element)
     }
 
-    private func hitView(at point: CGPoint, in targets: [UIWindow]) -> UIView? {
+    private func hitView(at point: CGPoint, in targets: [UIWindow], safariViews: [UIView]) -> UIView? {
         for window in targets {
             let local = window.frame == frame ? point : window.convert(point, from: self)
             if let view = window.hitTest(local, with: nil) {
-                return view
+                let safari = safariViews.first { safari in
+                    safari.window === window && (safari.isDescendant(of: view) || view.isDescendant(of: safari)) && safari.layer.presentation()?.opacity ?? 1 > 0.01
+                        && safari.point(inside: safari.convert(local, from: window), with: nil)
+                }
+                return safari ?? view
             }
         }
         return nil
     }
 
+    /// 表示しているアプリ内のSafariのビュー。
+    private static func safariViews(in windows: [UIWindow]) -> [UIView] {
+        var result: [UIView] = []
+        func visit(_ view: UIView) {
+            guard !view.isHidden, view.alpha > 0.01 else { return }
+            if view.next is SFSafariViewController {
+                result.append(view)
+                return
+            }
+            view.subviews.forEach(visit)
+        }
+        windows.forEach(visit)
+        return result
+    }
+
     /// 型の名前。SwiftUIの入れ物のように型の引数が長いものは、引数を省く。
     private static func typeName(of view: UIView) -> String {
+        if let safari = view.next as? SFSafariViewController { return String(describing: type(of: safari)) }
         let name = String(describing: type(of: view))
         guard let bracket = name.firstIndex(of: "<") else { return name }
         return String(name[..<bracket])
