@@ -106,13 +106,13 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         self.url = url
         self.mentions = mentions
         self.tags = tags
-        self.emojis = emojis
+        self.emojis = emojis.owned(by: account.emojiDomain)
         self.mediaAttachments = mediaAttachments
         self.sensitive = sensitive
         self.visibility = visibility
         self.inReplyToId = inReplyToId
         self.inReplyToAccountId = inReplyToAccountId
-        self.poll = poll
+        self.poll = poll?.owned(by: account.emojiDomain)
         self.card = card
         self.quote = quote
         self.quoteApproval = quoteApproval
@@ -147,13 +147,13 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         url = container.decodeURL(.destination, forKey: .url)
         mentions = try container.decodeLossyArray(Mention.self, forKey: .mentions)
         tags = try container.decodeLossyArray(Tag.self, forKey: .tags)
-        emojis = try container.decodeLossyArray(CustomEmoji.self, forKey: .emojis)
+        emojis = try container.decodeLossyArray(CustomEmoji.self, forKey: .emojis).owned(by: account.emojiDomain)
         mediaAttachments = try container.decodeLossyArray(MediaAttachment.self, forKey: .mediaAttachments)
         sensitive = try container.decode(Bool.self, forKey: .sensitive)
         visibility = try container.decodeIfPresent(Visibility.self, forKey: .visibility) ?? .public
         inReplyToId = try container.decodeIfPresent(String.self, forKey: .inReplyToId)
         inReplyToAccountId = try container.decodeIfPresent(String.self, forKey: .inReplyToAccountId)
-        poll = container.decodeLossyIfPresent(Poll.self, forKey: .poll)
+        poll = container.decodeLossyIfPresent(Poll.self, forKey: .poll)?.owned(by: account.emojiDomain)
         card = container.decodeLossyIfPresent(PreviewCard.self, forKey: .card)
         // Fedibirdは、引用元の投稿の`quote`をいつもnullにし、引用元のIDだけを`quote_id`に残す。
         quote = container.decodeLossyIfPresent(Quote.self, forKey: .quote)
@@ -326,7 +326,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     public func adoptingPoll(_ result: Poll) -> Status {
         guard let poll, poll.id == result.id, poll.hasSameChoices(as: result) else { return self }
         var status = self
-        status.poll = result
+        status.poll = result.owned(by: account.emojiDomain)
         return status
     }
 

@@ -134,7 +134,17 @@ public struct ReactionEmoji: Codable, Hashable, Sendable {
 
     /// カスタム絵文字なら、本文の絵文字と同じ部品で描くための絵文字。
     public var customEmoji: CustomEmoji? {
-        url.map { CustomEmoji(shortcode: name, url: $0, staticUrl: staticUrl ?? $0) }
+        guard let url, let source = customSource else { return nil }
+        return CustomEmoji(shortcode: source.shortcode, url: url, staticUrl: staticUrl ?? url, domain: source.domain)
+    }
+
+    /// カスタム絵文字のショートコードと、絵文字を持つサーバー（nilならログインしているサーバー）。画像のURLがなくても返す。Unicodeの絵文字ではnil。
+    /// ChuckyaとFirefishの形のサーバーが名前に付けたサーバー（`shortcode@host`）は、ショートコードから外し、絵文字を持つサーバーにする。
+    public var customSource: (shortcode: String, domain: String?)? {
+        guard isCustom else { return nil }
+        let parts = name.split(separator: "@", maxSplits: 1)
+        let host = parts.count > 1 ? String(parts[1]) : nil
+        return (parts.first.map(String.init) ?? name, domain ?? host)
     }
 }
 

@@ -378,6 +378,7 @@ extension CustomEmojiMenuItem: MenuItemContentProviding {
     public var content: MenuItemContent {
         switch self {
         case .copyShortcode: .own(title: "ショートコードをコピー", symbolName: "doc.on.doc")
+        case .display: .own(title: "表示", symbolName: "eye")
         case .open: .own(title: "開く", symbolName: "arrow.up.left.and.arrow.down.right")
         case .share: .own(title: "共有", symbolName: "square.and.arrow.up")
         case .saveToPhotos: .own(title: "写真に保存", symbolName: "square.and.arrow.down")

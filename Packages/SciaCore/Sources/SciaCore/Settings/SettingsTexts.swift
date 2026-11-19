@@ -252,6 +252,12 @@ public enum SettingsTexts {
     }
 
     /// 自動翻訳の画面。
+    /// 描き方を変えたカスタム絵文字の画面。決まりはdocs/animated-custom-emoji.mdの「絵文字ごとの描き方」にある。
+    public enum CustomEmojis {
+        /// 変えた絵文字がないときに出す行。
+        public static let empty = "カスタム絵文字のメニューの“表示”で変更した絵文字が、ここに表示されます。"
+    }
+
     public enum AutoTranslation {
         /// 自動翻訳を切り替えるスイッチ。
         public static let toggle = "自動翻訳"

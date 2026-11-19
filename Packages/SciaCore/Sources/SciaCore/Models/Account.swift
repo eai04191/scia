@@ -82,7 +82,7 @@ public struct Account: Codable, Hashable, Sendable, Identifiable {
         self.note = note
         self.url = url ?? avatar
         self.fields = fields
-        self.emojis = emojis
+        self.emojis = emojis.owned(by: Self.emojiDomain(ofAcct: acct))
         self.locked = locked
         self.bot = bot
         self.followersCount = followersCount
@@ -106,7 +106,7 @@ public struct Account: Codable, Hashable, Sendable, Identifiable {
         note = try container.decode(String.self, forKey: .note)
         url = container.decodeURL(.destination, forKey: .url)
         fields = try container.decodeLossyArray(Field.self, forKey: .fields)
-        emojis = try container.decodeLossyArray(CustomEmoji.self, forKey: .emojis)
+        emojis = try container.decodeLossyArray(CustomEmoji.self, forKey: .emojis).owned(by: Self.emojiDomain(ofAcct: acct))
         locked = try container.decode(Bool.self, forKey: .locked)
         bot = try container.decode(Bool.self, forKey: .bot)
         followersCount = try container.decodeCount(forKey: .followersCount)

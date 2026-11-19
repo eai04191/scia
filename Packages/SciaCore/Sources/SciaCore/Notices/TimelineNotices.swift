@@ -45,6 +45,11 @@ extension Notice {
         }
     }
 
+    /// カスタム絵文字のメニューで、絵文字の描き方を変えた。その絵文字が画面になければ、変わったことが見えないため知らせる。
+    public static func customEmojiDisplayChanged(_ emoji: CustomEmoji, to display: CustomEmojiDisplay) -> Notice {
+        Notice(id: "customEmoji.displayChanged", kind: .success, title: ":\(emoji.shortcode):を“\(display.title)”に変更しました")
+    }
+
     /// 投稿の本文をコピーした。
     public static let textCopied = Notice(id: "timeline.textCopied", kind: .success, title: "テキストをコピーしました")
 

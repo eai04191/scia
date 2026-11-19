@@ -26,6 +26,8 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
         case animated(Resolution)
         /// 1コマしかないか、大きすぎて動かさない。静止画で描く。
         case still
+        /// 取れたが、画像として読めなかった。静止画で描くが、動くかは分からない。
+        case unreadable
         case failed
     }
 
@@ -112,6 +114,9 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     /// macOSでテストを走らせたとき、`NSCache`に持っていて、読み終えても取り出せないまま60秒の間に9万回あまり読み直したことがある。
     private var animations = MemoryCache<URL, EmojiAnimation>(totalCostLimit: 64 * 1024 * 1024)
     private var listeners: [Listener] = []
+    /// 元の画像を読んで動かさないと分かったときに知らせる先。描く側は静止画のまま描けているので、`listeners`には知らせない。
+    /// 動きの選択肢を出すかを決める画面（`isKnownStill`）だけが使う。
+    private var stillListeners: [Listener] = []
     /// 画像を読めたときに、元の画像の、描く向きに直した幅と高さを渡す。サーバーが縦横比を返さないカスタム絵文字の縦横比を、リストに残すために使う（`CustomEmojiCaches.learn`）。
     public var onSourceSize: (@MainActor (URL, Int, Int) -> Void)?
     /// 読んだデータを端末に残さないときに、URLを渡す。端末に置いたファイルを消すのに使う（`StoredImageFetch.discard`）。
@@ -184,9 +189,16 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     public func hasFinishedLoadingAnimation(for url: URL) -> Bool {
         if oversized?.contains(url) == true { return true }
         return switch animationStates[url] {
-        case .animated, .still, .failed: true
+        case .animated, .still, .unreadable, .failed: true
         case .loading, nil: false
         }
+    }
+
+    /// `url`の元の画像を読んで、動かさないと分かったか。1コマしかないか、大きすぎて動かせない画像。読んでいない、読めなかった画像ではfalse。
+    public func isKnownStill(_ url: URL) -> Bool {
+        if oversized?.contains(url) == true { return true }
+        if case .still = animationStates[url] { return true }
+        return false
     }
 
     /// アニメーションする絵文字の、コマに分けた画像。`url`は絵文字の元の画像（`CustomEmoji.url`）を渡す。
@@ -220,7 +232,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
                 loadAnimation(url, pixelHeight: loadHeight)
             }
             return nil
-        case .loading, .still:
+        case .loading, .still, .unreadable:
             return nil
         case nil:
             if retry.allowsAutomaticLoad(of: url) {
@@ -263,6 +275,11 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     /// 画像が届いたときに呼ぶ処理を登録する。`owner`が解放されると呼ばれなくなる。
     public func addListener(owner: AnyObject, onLoad: @escaping @MainActor (Set<URL>) -> Void) {
         listeners.append(Listener(owner: owner, onLoad: onLoad))
+    }
+
+    /// 元の画像を読んで動かさないと分かったとき（`isKnownStill`がtrueになったとき）に、そのURLを知らせる。`owner`が解放されたら知らせない。
+    public func addStillListener(owner: AnyObject, onStill: @escaping @MainActor (Set<URL>) -> Void) {
+        stillListeners.append(Listener(owner: owner, onLoad: onStill))
     }
 
     /// 読んでいる途中に、もっと高く描くことになったときは、読み終えて知らせを受けた描く側が求め直したときに、読み直す。
@@ -652,7 +669,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
                     // 動かせないことは記録が覚えている。ここで覚えると、記録を消したあとに読み直さず、残し直せない。
                     state = nil
                 } else {
-                    state = .still
+                    state = size == nil ? .unreadable : .still
                 }
                 retry.recordSuccess(for: url)
             } catch {
@@ -665,8 +682,16 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
                 }
             }
             animationStates[url] = state
-            if case .animated = state {
+            switch state {
+            case .animated:
                 notify(url)
+            case .still:
+                stillListeners.removeAll { $0.owner == nil }
+                for listener in stillListeners {
+                    listener.onLoad([url])
+                }
+            case .loading, .unreadable, .failed, nil:
+                break
             }
         } }
     }

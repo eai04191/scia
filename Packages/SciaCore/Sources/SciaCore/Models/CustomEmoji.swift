@@ -6,11 +6,16 @@ public struct CustomEmoji: Codable, Hashable, Sendable {
     public let url: URL
     /// アニメーションしない版。
     public let staticUrl: URL
+    /// 絵文字を持つサーバー。nilならログインしているサーバー。APIは返さないので、投稿やアカウントを読むときに、書いた人のサーバーを付ける。
+    /// Mastodonは、本文や表示名の絵文字を、書いた人のサーバーの絵文字から付けるため（docs/animated-custom-emoji.mdの「絵文字ごとの描き方」）。
+    /// 投稿やアカウントは、読むたびに付け直す。保存した絵文字（補完で選んだ人の表示名など）は、保存したサーバーを読み戻す。
+    public internal(set) var domain: String?
 
-    public init(shortcode: String, url: URL, staticUrl: URL) {
+    public init(shortcode: String, url: URL, staticUrl: URL, domain: String? = nil) {
         self.shortcode = shortcode
         self.url = url
         self.staticUrl = staticUrl
+        self.domain = domain
     }
 
     /// 画像のURLは、読み込む画像として受け付けるスキームでなければ、絵文字ごと読めないものとする。
@@ -19,6 +24,7 @@ public struct CustomEmoji: Codable, Hashable, Sendable {
         shortcode = try container.decode(String.self, forKey: .shortcode)
         url = try container.decodeRequiredURL(.media, forKey: .url)
         staticUrl = try container.decodeRequiredURL(.media, forKey: .staticUrl)
+        domain = container.decodeLossyIfPresent(String.self, forKey: .domain)
     }
 
     /// 絵文字の画像を、メディアのメニューとビューアで扱う添付ファイルとして表す。
@@ -26,6 +32,27 @@ public struct CustomEmoji: Codable, Hashable, Sendable {
     /// IDは添付ファイルのIDと混ざらないよう、画像のURLから作る。サーバーごとに同じショートコードで別の絵文字がありうるため、ショートコードでは作らない。
     public var attachment: MediaAttachment {
         MediaAttachment(id: "emoji:\(url.absoluteString)", type: .image, url: url, previewUrl: staticUrl)
+    }
+}
+
+extension [CustomEmoji] {
+    /// `domain`のサーバーの絵文字として付け直したもの。
+    func owned(by domain: String?) -> [CustomEmoji] {
+        map { emoji in
+            var emoji = emoji
+            emoji.domain = domain
+            return emoji
+        }
+    }
+}
+
+extension Account {
+    /// この人が書いた本文や表示名の絵文字を持つサーバー。ログインしているサーバーの人ならnil。
+    var emojiDomain: String? { Self.emojiDomain(ofAcct: acct) }
+
+    static func emojiDomain(ofAcct acct: String) -> String? {
+        let parts = acct.split(separator: "@", maxSplits: 1)
+        return parts.count > 1 ? String(parts[1]) : nil
     }
 }
 

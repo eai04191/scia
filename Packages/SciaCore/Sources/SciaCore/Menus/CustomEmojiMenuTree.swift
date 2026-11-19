@@ -2,6 +2,8 @@
 public enum CustomEmojiMenuCommand {
     /// `:shortcode:`の文字をコピーする。
     case copyShortcode(String)
+    /// 絵文字の描き方を変える。
+    case setDisplay(CustomEmojiDisplay)
     case open
     case share
     case saveToPhotos
@@ -25,6 +27,10 @@ public struct CustomEmojiMenuTree {
     public var linkBrowser: LinkBrowser?
     /// 開く項目を出すか。開く先のない置き場所では、リンクのコピーだけを出す。
     public var opensURLs = true
+    /// 今の描き方。nilなら、置く側が描き方を変えられないので、「表示」を出さない。
+    public var display: CustomEmojiDisplay?
+    /// 元の画像を読んで、動かさないと分かったか。分かっていれば、「表示」に動きだけを変える選択肢を出さない。
+    public var isKnownStill = false
 
     public init(emoji: CustomEmoji) {
         self.emoji = emoji
@@ -65,6 +71,11 @@ public struct CustomEmojiMenuTree {
         case .copyShortcode:
             // メディアの情報の行と同じく、コピーする文字を名前にし、項目の名前をサブタイトルに置く。項目の名前を名前にすると、メニューの幅で2行に折り返すため。
             return .action(shortcodeText, subtitle: item.title, icon: .symbol(item.symbolName), .copyShortcode(shortcodeText))
+        case .display:
+            guard let display else { return nil }
+            return .submenu(item.title, subtitle: display.title, icon: .symbol(item.symbolName), CustomEmojiDisplay.choices(isKnownStill: isKnownStill, current: display).map { choice in
+                .action(choice.title, isSelected: choice == display, .setDisplay(choice))
+            })
         case .open:
             return open ? action(item, .open) : nil
         case .share:

@@ -167,6 +167,50 @@ public final class AppSettings {
         if isExcluded { autoTranslationExcludedHandles.append(handle) }
     }
 
+    // MARK: 絵文字ごとの描き方
+
+    /// 既定から描き方を変えたカスタム絵文字。変えた順（docs/animated-custom-emoji.mdの「絵文字ごとの描き方」）。
+    /// プリセットに含めない。値が設定ではなく、溜めたデータのため（docs/preset.md）。
+    public var customEmojiDisplayRules: [CustomEmojiDisplayRule] {
+        get { store.customEmojiDisplayRules }
+        set { store.customEmojiDisplayRules = newValue }
+    }
+
+    /// 文字を描くときに引く、絵文字ごとの描き方。サーバーの付いていない絵文字は、この設定のアカウントのサーバーの絵文字として引く。
+    /// アカウントのない設定は、最後に表示を始めたアカウントのサーバーで引く。
+    public var customEmojiDisplays: CustomEmojiDisplays {
+        store.customEmojiDisplays(localServer: emojiLocalServer)
+    }
+
+    public func customEmojiDisplay(of emoji: CustomEmoji) -> CustomEmojiDisplay {
+        customEmojiDisplays.display(of: emoji)
+    }
+
+    /// `emoji`の描き方を変える。既定（`plays`）にしたら、一覧から外す。ほかの描き方から変えたときは、一覧の位置を変えない。
+    public func setCustomEmojiDisplay(_ display: CustomEmojiDisplay, of emoji: CustomEmoji) {
+        guard let domain = emoji.domain ?? emojiLocalServer else { return }
+        let id = CustomEmojiID(shortcode: emoji.shortcode, domain: domain)
+        var rules = customEmojiDisplayRules
+        if display == .plays {
+            rules.removeAll { $0.id == id }
+        } else if let index = rules.firstIndex(where: { $0.id == id }) {
+            rules[index].display = display
+            rules[index].url = emoji.url
+            rules[index].staticUrl = emoji.staticUrl
+        } else {
+            rules.append(CustomEmojiDisplayRule(id: id, display: display, url: emoji.url, staticUrl: emoji.staticUrl))
+        }
+        guard rules != customEmojiDisplayRules else { return }
+        customEmojiDisplayRules = rules
+    }
+
+    /// サーバーの付いていない絵文字を持つサーバー。アカウントのハンドル（`@username@server`）のサーバー。
+    private var emojiLocalServer: String? {
+        guard let handle = account ?? store.lastPreferenceAccount, let at = handle.lastIndex(of: "@") else { return nil }
+        let server = handle[handle.index(after: at)...]
+        return server.isEmpty ? nil : String(server)
+    }
+
     /// 自動翻訳の翻訳先の言語の識別子。nilならデバイスの言語（docs/auto-translation.md）。
     public var autoTranslationTarget: String? {
         get {
@@ -914,6 +958,29 @@ public final class SettingsStore {
         didSet { defaults.set(autoTranslationLanguages, forKey: Keys.autoTranslationLanguages) }
     }
 
+    var customEmojiDisplayRules: [CustomEmojiDisplayRule] {
+        didSet {
+            customEmojiDisplays = [:]
+            defaults.set(try? JSONEncoder().encode(customEmojiDisplayRules), forKey: Keys.customEmojiDisplayRules)
+        }
+    }
+
+    /// サーバーごとの、`customEmojiDisplayRules`から作った描き方。文字を描くたびに引くので、決まりが変わるまで覚える。
+    @ObservationIgnored private var customEmojiDisplays: [String: CustomEmojiDisplays] = [:]
+
+    func customEmojiDisplays(localServer: String?) -> CustomEmojiDisplays {
+        // 覚えた描き方を返すときも、読んだ側が決まりの変化を購読できるよう、決まりを読む。
+        let rules = customEmojiDisplayRules
+        let key = localServer ?? ""
+        if let displays = customEmojiDisplays[key] { return displays }
+        let displays = CustomEmojiDisplays(rules: rules, localServer: localServer)
+        customEmojiDisplays[key] = displays
+        return displays
+    }
+
+    /// 最後に表示を始めたアカウント。アカウントのない設定が、ログインしているサーバーを決めるのに使う。
+    var lastPreferenceAccount: String? { preferenceAccount }
+
     var autoTranslationStrategy: TranslationStrategy {
         didSet { defaults.set(autoTranslationStrategy.rawValue, forKey: Keys.autoTranslationStrategy) }
     }
@@ -963,6 +1030,8 @@ public final class SettingsStore {
         library = PresetLibrary(stored: defaults.data(forKey: Keys.presets))
         autoTranslationExcludedHandles = defaults.stringArray(forKey: Keys.autoTranslationExcludedHandles) ?? []
         autoTranslationLanguages = defaults.stringArray(forKey: Keys.autoTranslationLanguages) ?? []
+        // 読めない値は、持っていないときと同じく、どの絵文字も既定で描く。
+        customEmojiDisplayRules = defaults.data(forKey: Keys.customEmojiDisplayRules).flatMap { try? JSONDecoder().decode([CustomEmojiDisplayRule].self, from: $0) } ?? []
         // 読めない値（名前を変えた方式など）は、持っていないときと同じく既定値にする。
         autoTranslationStrategy = defaults.string(forKey: Keys.autoTranslationStrategy).flatMap(TranslationStrategy.init(rawValue:)) ?? .lowLatency
         profilePostsFilter = ProfilePostsFilter(
@@ -1201,6 +1270,7 @@ public final class SettingsStore {
         static let autoTranslationExcludedHandles = "settings.autoTranslationExcludedHandles"
         static let autoTranslationLanguages = "settings.autoTranslationLanguages"
         static let autoTranslationStrategy = "settings.autoTranslationStrategy"
+        static let customEmojiDisplayRules = "settings.customEmojiDisplayRules"
         static let profileShowsReplies = "settings.profileShowsReplies"
         static let profileShowsBoosts = "settings.profileShowsBoosts"
         static let emojiSkinTone = "settings.emojiSkinTone"

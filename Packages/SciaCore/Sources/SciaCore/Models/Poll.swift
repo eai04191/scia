@@ -15,7 +15,7 @@ public struct Poll: Codable, Hashable, Sendable, Identifiable {
     public let votersCount: Int?
     public let options: [Option]
     /// 選択肢で使われるカスタム絵文字。
-    public let emojis: [CustomEmoji]
+    public private(set) var emojis: [CustomEmoji]
     /// 自分が投票している。ログインせずに読んだときは返らないため、無ければfalseにする。
     public let voted: Bool
     /// 自分が選んだ選択肢の、`options`での位置。ログインせずに読んだときは返らないため、無ければ空にする。
@@ -76,5 +76,12 @@ public struct Poll: Codable, Hashable, Sendable, Identifiable {
             title = try container.decode(String.self, forKey: .title)
             votesCount = try container.decodeCountIfPresent(forKey: .votesCount)
         }
+    }
+
+    /// 選択肢の絵文字を、`domain`のサーバーの絵文字として付け直したもの。投票の絵文字は、投稿を書いた人のサーバーのもの。
+    func owned(by domain: String?) -> Poll {
+        var poll = self
+        poll.emojis = emojis.owned(by: domain)
+        return poll
     }
 }

@@ -146,6 +146,8 @@
   "customEmoji": [
     "item:copyShortcode",
     "separator",
+    "item:display",
+    "separator",
     "item:open",
     "item:saveToPhotos",
     "separator",

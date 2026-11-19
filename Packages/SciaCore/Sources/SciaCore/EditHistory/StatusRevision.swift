@@ -35,7 +35,7 @@ public struct StatusRevision: Decodable, Equatable, Sendable {
         self.createdAt = createdAt
         self.account = account
         self.mediaAttachments = mediaAttachments
-        self.emojis = emojis
+        self.emojis = emojis.owned(by: account.emojiDomain)
         self.pollOptions = pollOptions
     }
 
@@ -48,7 +48,7 @@ public struct StatusRevision: Decodable, Equatable, Sendable {
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         account = try container.decode(Account.self, forKey: .account)
         mediaAttachments = try container.decodeLossyArray(MediaAttachment.self, forKey: .mediaAttachments)
-        emojis = try container.decodeLossyArray(CustomEmoji.self, forKey: .emojis)
+        emojis = try container.decodeLossyArray(CustomEmoji.self, forKey: .emojis).owned(by: account.emojiDomain)
         pollOptions = container.decodeLossyIfPresent(RevisionPoll.self, forKey: .poll)?.options.map(\.title)
     }
 

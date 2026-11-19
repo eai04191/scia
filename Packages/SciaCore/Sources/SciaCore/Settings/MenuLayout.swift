@@ -533,6 +533,8 @@ public enum ReactionMenuItem: String, BundledMenuDefaults {
 public enum CustomEmojiMenuItem: String, BundledMenuDefaults {
     /// `:shortcode:`の文字をコピーする。
     case copyShortcode
+    /// この絵文字の描き方（表示する、遅く再生、アニメーションしない、ショートコードで表示、表示しない）を選ぶサブメニュー。
+    case display
     /// 絵文字の画像をビューアで開く。
     case open
     /// 絵文字の画像のファイルを共有する。

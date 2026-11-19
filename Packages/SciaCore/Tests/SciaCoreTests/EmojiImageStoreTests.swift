@@ -186,6 +186,27 @@ struct EmojiImageStoreTests {
         #expect(sizes == ["emoji.png 400x100"])
     }
 
+    /// 1コマしかない元の画像は、読み終えてから動かないと分かる。読む前には分からない。分かったら、知りたい側にだけ知らせる。
+    @Test func knowsStillOnlyAfterLoadingOriginal() async throws {
+        let store = makeStore(try Self.png(width: 40, height: 40))
+        let owner = NSObject()
+        var stills: [Set<URL>] = []
+        store.addStillListener(owner: owner) { stills.append($0) }
+        #expect(!store.isKnownStill(url))
+        _ = store.animation(for: url)
+        try await waitUntil { store.hasFinishedLoadingAnimation(for: url) }
+        #expect(store.isKnownStill(url))
+        #expect(stills == [[url]])
+    }
+
+    /// 画像として読めないデータは、動くかが分からないので、動かないと分かったことにしない。
+    @Test func unreadableOriginalIsNotKnownStill() async throws {
+        let store = makeStore(Data("not an image".utf8))
+        _ = store.animation(for: url)
+        try await waitUntil { store.hasFinishedLoadingAnimation(for: url) }
+        #expect(!store.isKnownStill(url))
+    }
+
     /// 読めた応答の出どころを数えて、状態ダンプに出す。捨てた画像の読み直しが通信になっているかを、違和感レポートで見るため。
     @Test func countsWhereResponsesCameFrom() async throws {
         let data = try Self.png(width: 100, height: 100)

@@ -148,6 +148,7 @@ enum MenuFixture {
 
     static let customEmoji = MenuLayout<CustomEmojiMenuItem>(tokens: [
         "item:copyShortcode",
+        "item:display",
         "separator",
         "item:open",
         "item:share",

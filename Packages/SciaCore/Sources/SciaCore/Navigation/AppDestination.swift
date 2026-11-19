@@ -347,6 +347,8 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     case linkLoading = "link-loading"
     /// 自動で訳す投稿の言語を選ぶ画面。決まりはdocs/auto-translation.mdにある。
     case autoTranslation = "auto-translation"
+    /// 描き方を既定から変えたカスタム絵文字を並べる画面。決まりはdocs/animated-custom-emoji.mdの「絵文字ごとの描き方」にある。
+    case customEmojis = "custom-emojis"
     case tabs
     /// アプリのプリセットを選ぶ画面。プリセットを作る、名前を変える、消す、選ばずに中身を変えるのもここから（docs/preset.md）。
     case presets
@@ -399,7 +401,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     /// 設定のトップの画面からこの画面までに重ねる画面。
     public var path: [SettingsPage] {
         switch self {
-        case .appearance, .notificationAppearance, .media, .profile, .linkLoading, .autoTranslation: [.display, self]
+        case .appearance, .notificationAppearance, .media, .profile, .customEmojis, .linkLoading, .autoTranslation: [.display, self]
         case .statusActions, .quotedStatusActions, .notificationActions, .userActions, .linkActions, .externalPostActions, .hashtagActions, .mediaActions,
              .reactionActions, .profileTextMenu, .customEmojiMenu:
             [.interaction, self]
