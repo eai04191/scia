@@ -407,6 +407,21 @@ struct NotificationAppearanceTests {
         #expect(bounds.minY >= -font.pointSize * PostBodyView.emBoxDescent - 0.001)
     }
 
+    /// 名前の前のアイコンを文字より大きくすると、行がアイコンの分だけ高くなり、アイコンは行の上の余白より上に出ない。
+    /// 文がアイコンから始まる言い回しで、アイコンの文字から書体を読めずに文字の高さで測ると、上の行にめり込む。
+    @Test(arguments: [18.0, 60, 200])
+    func headerAvatarStaysBelowTopMargin(side: Double) throws {
+        let settings = AppSettings.isolated()
+        settings.setValue(side, for: NotificationAppearanceCatalog.headerAvatarSize)
+        let notification = try #require(notifications().first { $0.type == .follow })
+        let view = try #require(makeViewController(settings).contentConfiguration(for: notification, base: .cell()).makeContentView() as? NotificationContentView)
+        let size = view.systemLayoutSizeFitting(CGSize(width: 402, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
+        view.frame = CGRect(origin: .zero, size: size)
+        view.layoutIfNeeded()
+        let avatar = try #require(view.previewFrames()[.notificationHeaderAvatar]?.first)
+        #expect(avatar.minY >= settings.rowMargins.top - 0.5, "アイコンの上端が\(avatar.minY)で、上の余白\(settings.rowMargins.top)より上に出ました")
+    }
+
     /// 名前の前のアイコンの大きさを0にすると、アイコンもすき間も置かない。
     @Test func headerAvatarSizeZeroRemovesAvatar() throws {
         let settings = AppSettings.isolated()
