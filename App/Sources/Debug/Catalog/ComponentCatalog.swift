@@ -60,6 +60,7 @@ enum CatalogComponent: String, CaseIterable {
     case noticeLayout = "notice-layout"
     case statusBarTicker = "status-bar-ticker"
     case operationStatus = "operation-status"
+    case hdrHeadroom = "hdr-headroom"
 
     case announcements
     case reportSheet = "report-sheet"
@@ -92,6 +93,7 @@ enum CatalogComponent: String, CaseIterable {
         case .noticeLayout: "アプリ内通知のチップの並べ方"
         case .statusBarTicker: "ステータスバーの通知"
         case .operationStatus: "操作の状況のリスト"
+        case .hdrHeadroom: "HDRの余地を保てる描き方"
         case .videoControls: "動画の再生の操作"
         case .mediaStatus: "ビューアの読み込み中と見せられないとき"
         case .timelineEmpty: "タイムラインが空のときの表示"
@@ -156,7 +158,7 @@ enum CatalogComponent: String, CaseIterable {
         case .timelineGap: TimelineCatalog.gapStates()
         case .timelineOverlays: TimelineOverlayCatalog.states()
         case .streamingStatus: StreamingStatusCatalog.states()
-        case .timelineMotion: []
+        case .timelineMotion, .hdrHeadroom: []
         case .mediaGrid: MediaGridCatalog.states()
         case .profileHeader: ProfileHeaderCatalog.states()
         case .profileAccent: ProfileHeaderCatalog.accentStates()
@@ -192,6 +194,7 @@ enum CatalogComponent: String, CaseIterable {
     func makeScreen() -> UIViewController {
         switch self {
         case .timelineMotion: TimelineMotionLabViewController()
+        case .hdrHeadroom: HDRHeadroomLabViewController()
         default: ComponentStatesViewController(component: self)
         }
     }
@@ -232,7 +235,7 @@ enum CatalogSection: CaseIterable {
         case .notificationsAndAccounts: [.notifications, .accounts, .notificationRequests]
         case .viewer: [.caption, .videoControls, .mediaStatus]
         case .profile: [.profileHeader, .profileAccent, .profileEdit]
-        case .appWide: [.notices, .noticeLayout, .statusBarTicker, .operationStatus, .login]
+        case .appWide: [.notices, .noticeLayout, .statusBarTicker, .operationStatus, .hdrHeadroom, .login]
         case .sheets: [.announcements, .reportSheet, .crashReport, .listMembership, .filters]
         case .settings: [.storage, .mediaCache]
         }
