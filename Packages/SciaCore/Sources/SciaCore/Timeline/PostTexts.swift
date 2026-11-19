@@ -170,7 +170,7 @@ public enum PostTexts {
     public static let openGroupAccounts = "通知を送った人のリスト"
 
     /// 通知の行の、誰が何をしたかの文。文を丸ごと持ち、名前、ほかの人の数、付けた絵文字の範囲を添える。
-    /// 描く側は、名前と絵文字をカスタム絵文字の画像で、ほかの人の数をリンクの色で描き、ほかの部分を言い回しの色で描く。
+    /// 描く側は、名前と絵文字をカスタム絵文字の画像で、ほかの人の数を名前と同じ色で描き、ほかの部分を言い回しの色で描く。
     public struct NotificationHeader: Equatable, Sendable {
         public let text: String
         /// 操作した人の名前。種類の文が名前を含まない通知（投票の終了）ではnil。

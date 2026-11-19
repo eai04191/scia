@@ -182,10 +182,7 @@ extension TimelineViewController {
         }
         if let range = sentence.otherAccounts {
             var linkAttributes = phraseAttributes
-            linkAttributes[.foregroundColor] = UIColor.tintColor
-            if settings.accentColor.underlinesLinks {
-                linkAttributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
-            }
+            linkAttributes[.foregroundColor] = base.textProperties.color
             linkAttributes[.groupAccountsLink] = true
             parts.append((range, NSAttributedString(string: String(sentence.text[range]), attributes: linkAttributes)))
         }
