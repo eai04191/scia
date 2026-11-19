@@ -4,6 +4,7 @@ import UIKit
 /// UIKitの`UIView.animate(withDuration:delay:usingSpringWithDamping:initialSpringVelocity:)`が使うスプリング。
 /// 係数（質量・硬さ・減衰）は、UIKit自身に一度アニメーションを作らせて読む。UIKitが時間と減衰比から係数を決める式は公開されていないため。
 /// 同じ係数の進み具合を自分で計算し、キーフレームのアニメーションにして、UIKitのスプリングと同じ動きを、UIKitで動かせない値（背景に合わせた中身の位置など）にも当てる。
+/// 付いて動かす動きをSwiftUIのスプリングに置き換えるときは、この計算も一緒に置き換える。片方だけ替えると、付いて動く値がずれる。
 struct UIKitSpring: Equatable {
     let mass: Double
     let stiffness: Double

@@ -14,6 +14,8 @@ generate:
 	xcodegen generate
 
 ## Config/app-info.jsonから、App/Sources/Settings/AppInfo.generated.swiftとREADME.mdの生成の節を書き出す
+## 謝辞、第三者のライセンス、Scia自身のリンクは、JSONだけを編集する。書き出したものは直接編集せず、JSONと一緒にcommitする。合っているかはmake checkが調べる
+## JSONのcontactは、クラッシュした投稿の報告の宛先（メールとMastodonのハンドル）
 app-info:
 	python3 Tools/generate-app-info.py
 
@@ -54,7 +56,7 @@ test-core:
 test-memory-cache:
 	swift test --package-path Packages/MemoryCache --quiet
 
-## SciaCoreとMemoryCacheのテストを、Release構成で実行する。最適化したビルドでだけ変わる動きを見つける。
+## SciaCoreとMemoryCacheのテストを、Release構成で実行する。最適化したビルドでだけ変わる動きを見つける。make checkには入っていない
 ## `@testable import`のために、テストできる形（-enable-testing）でビルドする
 ## WARNINGS=errorを渡すと、警告をエラーとして扱う。Package.swiftが警告をエラーにするのはDebug構成だけなので、Releaseにしかない警告はこれで見つける
 RELEASE_WARNING_FLAGS := $(if $(filter error,$(WARNINGS)),-Xswiftc -warnings-as-errors)
@@ -247,7 +249,7 @@ check-test-here: generate
 	@if [ "$$(cat $(CHECK_REST_STATUS))" = 0 ]; then Tools/check-stamp.sh record check "$$(cat $(CHECK_TREE))"; else grep -aE ': error: |\*\*\*|recorded an issue|failed after' $(CHECK_REST_LOG) | tail -40; echo "make checkのlintかmacOSのテストが落ちました。出力は$(CHECK_REST_LOG)"; fi
 	@[ "$$(cat $(CHECK_REST_STATUS))" = 0 ] && [ "$$(cat $(TEST_STATUS))" = 0 ]
 
-## ローカルのmainを、make checkとmake testの両方が通った中身のcommitにしか動かさないhookを入れる。worktreeにも効く
+## ローカルのmainを、make checkとmake testの両方が通った中身のcommitにしか動かさないhookを入れる。checkoutごとに1回で、worktreeにも効く
 hooks:
 	ln -sfn ../../Tools/git-hooks/reference-transaction "$$(git rev-parse --git-common-dir)/hooks/reference-transaction"
 

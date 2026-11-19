@@ -60,3 +60,8 @@
 ## デバッグ版だけの画面
 
 - `scia-debug://viewer?index=<n>`（選んでいるタブで一番上に見えている画像付きの投稿を、n番目の添付ファイルでビューアに開く。代替テキストの全文はビューアの「代替テキスト」から開く）、`scia-debug://profile-edit?crop=<avatar|header>`（ダミーの画像でアイコンかヘッダー画像の切り抜きを開く）、`scia-debug://discomfort-report`（違和感レポート）、`scia-debug://tuning`（チューニング）、`scia-debug://catalog`（部品カタログ）
+
+## デバッグメニューと違和感レポート
+
+- デバッグメニューは、デバッグ版では常に出す。Releaseでは、設定の「情報」の「ビルド」の行を7回タップするとオンになり（同じ操作でオフに戻る）、チューニング、部品カタログ、違和感レポート、当たり判定の表示、HDRの余地の表示だけを出す。通信や既読位置を変える検証の項目と`scia-debug://`は、DEBUGのビルドだけに入れる
+- 違和感レポートは、デバッグメニューから開く。シェイクで開くのはデバッグ版だけ。ユーザーが残した違和感レポートは、アプリのDocuments/DiscomfortReportsにJSONで保存される。シミュレーターでは`xcrun simctl get_app_container '<使う端末>' net.mizle.scia data`で場所を調べられる
