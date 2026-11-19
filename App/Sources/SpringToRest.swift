@@ -12,11 +12,11 @@ extension UIView {
     /// 続きは、この動きで付いた距離をすべて足しても残りが1pxの`settledPixelFraction`より小さくなるまで動く。
     /// 入れ子の層の残りは足し合わさって見えるため、層ごとの残りでは決めない。
     /// 続きの途中で次の動きが始まっても、続きは見えている位置に足し合わさっているので、次の動きはそこから始まり、続きは0へ減って終わる。
-    static func animateSpringToRest(duration: TimeInterval, delay: TimeInterval = 0, options: UIView.AnimationOptions = [], in root: UIView, animations: () -> Void, completion: ((Bool) -> Void)? = nil) {
+    static func animateSpringToRest(duration: TimeInterval, delay: TimeInterval = 0, initialVelocity: CGFloat = 0, options: UIView.AnimationOptions = [], in root: UIView, animations: () -> Void, completion: ((Bool) -> Void)? = nil) {
         let top = outermostLayer(of: root)
         let before = springKeys(in: top)
         let ending = SpringRestEnding(completion: completion)
-        UIView.animate(springDuration: duration, bounce: 0, initialSpringVelocity: 0, delay: delay, options: options, animations: animations) { finished in
+        UIView.animate(springDuration: duration, bounce: 0, initialSpringVelocity: initialVelocity, delay: delay, options: options, animations: animations) { finished in
             ending.springDidEnd(finished: finished)
         }
         let added = springKeys(in: top).flatMap { id, entry in

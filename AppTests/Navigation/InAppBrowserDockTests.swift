@@ -35,6 +35,25 @@ struct InAppBrowserDockTests {
         #expect(content.view.frame.height == 800)
     }
 
+    /// 縮める動きは、レイヤーのアニメーションで動かす。SwiftUIのスプリング（`animateSmoothly`）は、アプリの中で毎コマ値を入れて動かすので、伏せたシートと並べると60Hzで描かれる。
+    @Test func containerAnimatesOnLayers() throws {
+        let content = UIViewController()
+        let container = InAppBrowserDockContainer(content: content)
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 400, height: 800)
+        window.rootViewController = container
+        window.isHidden = false
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        let visibleArea = try #require(content.view.superview)
+
+        container.setReservedHeight(160, contentOverhang: 14, cornerRadius: 44, duration: 0.35)
+
+        let springs = (visibleArea.layer.animationKeys() ?? []).compactMap { visibleArea.layer.animation(forKey: $0) as? CASpringAnimation }
+        #expect(!springs.isEmpty)
+    }
+
     /// 手で伏せた高さまで下げたときだけ後ろの画面を縮める。開く途中に伏せた高さを通るときと、投稿欄のために下げたときは縮めない。
     @Test func docksOnlyWhenLoweredByHand() async throws {
         let harness = try TimelineHarness(notices: notices)

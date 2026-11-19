@@ -25,6 +25,8 @@ final class InAppBrowserOverlayWindow: UIWindow {
     private var safariContainer: UIView? { presenter?.presentedViewController?.view.superview }
 
     private let frameSource: any FrameSource
+    /// SwiftUIの`.smooth`の既定の長さ。
+    private static let expandDuration: TimeInterval = 0.5
 
     init(windowScene: UIWindowScene, behind: @escaping () -> UIView?, frameSource: any FrameSource) {
         self.frameSource = frameSource
@@ -62,7 +64,6 @@ final class InAppBrowserOverlayWindow: UIWindow {
     }
 
     /// 伏せた置き方から、画面いっぱいへ広げる。
-    /// 広げる動きの間は、閉じる動きと同じく120Hzを頼む（`InAppBrowserOverlayPresenter`）。頼まないと60Hzで描かれることがある。
     func expand(completion: @escaping () -> Void) {
         guard isCollapsed, let container = safariContainer else {
             completion()
@@ -76,15 +77,12 @@ final class InAppBrowserOverlayWindow: UIWindow {
             completion()
             return
         }
-        let highFrameRate = FrameTicker(source: frameSource) { [weak self] _ in self?.isHidden == false }
-        highFrameRate.start()
-        UIView.animate(.smooth) {
+        UIView.animateSmoothSpring(duration: Self.expandDuration, in: container, frameSource: frameSource) {
             container.transform = .identity
             self.visibleArea.frame = container.bounds
             self.sheetShape.frame = container.bounds
             self.sheetShape.layer.cornerRadius = 0
         } completion: {
-            highFrameRate.stop()
             container.mask = nil
             completion()
         }

@@ -162,14 +162,27 @@ final class InAppBrowserPresentationController: UIPresentationController {
     }
 
     /// 今見えている位置で止める。動いている途中につかんだときに、飛ばないようにするため。
-    private func cancelMove() {
+    func cancelMove() {
         moveToken += 1
         guard isMoving, let view = presentedView, let visible = view.layer.presentation()?.frame else {
             isMoving = false
             return
         }
         isMoving = false
-        UIView.performStoppingSmoothAnimations { view.frame = visible }
+        let dimmingAlpha = dimming.layer.presentation()?.opacity
+        // 足し合わせるスプリングが残ると、入れた位置にスプリングの残りが足されて動き続けるので、外してから入れる。
+        Self.removeAnimations(in: view.layer)
+        dimming.layer.removeAllAnimations()
+        UIView.performWithoutAnimation {
+            view.frame = visible
+            view.layoutIfNeeded()
+            if let dimmingAlpha { dimming.alpha = CGFloat(dimmingAlpha) }
+        }
+    }
+
+    private static func removeAnimations(in layer: CALayer) {
+        layer.removeAllAnimations()
+        layer.sublayers?.forEach(removeAnimations(in:))
     }
 
     private func move(to detent: InAppBrowserDetent, velocity: CGFloat, animated: Bool) {
@@ -190,18 +203,16 @@ final class InAppBrowserPresentationController: UIPresentationController {
         let duration = configuration.duration()
         guard animated, duration > 0 else {
             isMoving = false
-            UIView.performStoppingSmoothAnimations(changes)
+            Self.removeAnimations(in: view.layer)
+            dimming.layer.removeAllAnimations()
+            UIView.performWithoutAnimation(changes)
             finish()
             return
         }
         isMoving = true
         let distance = target.minY - view.frame.minY
-        guard velocity != 0, distance != 0 else {
-            UIView.animateSmoothly(duration: duration, changes: changes, completion: finish)
-            return
-        }
-        let unitVelocity = max(-20, min(20, velocity / distance))
-        UIView.animate(.interpolatingSpring(duration: duration, bounce: 0, initialVelocity: unitVelocity), changes: changes, completion: finish)
+        let unitVelocity = distance == 0 ? 0 : max(-20, min(20, velocity / distance))
+        UIView.animateSmoothSpring(duration: duration, initialVelocity: unitVelocity, in: view, changes: changes, completion: finish)
     }
 
     /// シートが止まったら、Safariのビューの高さを決める。伏せた段では中くらいの高さのままにして、Safariの下のツールバーをシートの下へはみ出させる。
@@ -329,7 +340,8 @@ final class InAppBrowserSheetTransition: NSObject, UIViewControllerAnimatedTrans
             view.frame = offscreen
             container.addSubview(view)
         }
-        UIView.animateSmoothly(duration: transitionContext.isAnimated ? duration : 0) {
+        // 後ろの画面を縮める動き（`animate(alongsideTransition:)`）と並べて動かすので、レイヤーのアニメーションにする。
+        UIView.animateSmoothSpring(duration: transitionContext.isAnimated ? duration : 0, in: view) {
             view.frame = target
         } completion: {
             transitionContext.completeTransition(!transitionContext.transitionWasCancelled)

@@ -133,6 +133,49 @@ struct InAppBrowserTests {
         root.dismiss(animated: false)
     }
 
+    /// シートを動かす動きは、レイヤーのアニメーションで動かす。SwiftUIのスプリング（`animateSmoothly`）は、アプリの中で毎コマ値を入れて動かすので、60Hzで描かれる。
+    @Test func sheetMovesOnLayers() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let browser = InAppBrowser(settings: AppDependencies.settings)
+        let sheet = try await openSheet(with: browser, from: root)
+        let presentation = try #require(sheet.sheetPresentation)
+        let view = try #require(presentation.presentedView)
+
+        presentation.select(.large, animated: true)
+
+        let springs = (view.layer.animationKeys() ?? []).compactMap { view.layer.animation(forKey: $0) as? CASpringAnimation }
+        #expect(!springs.isEmpty)
+        root.dismiss(animated: false)
+    }
+
+    /// 動いている途中につかむと、今見えている位置で止め、足し合わせるスプリングの残りを外す。残すと、止めた位置に残りが足されて動き続ける。
+    @Test func grabbingWhileMovingStopsWhereShown() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let browser = InAppBrowser(settings: AppDependencies.settings)
+        let sheet = try await openSheet(with: browser, from: root)
+        let presentation = try #require(sheet.sheetPresentation)
+        let view = try #require(presentation.presentedView)
+        let window = try #require(view.window)
+        let start = view.frame.minY
+        let clock = LayerClock(freezing: window.layer)
+        defer { clock.release() }
+
+        presentation.select(.large, animated: true)
+        try await clock.advance(by: 0.1)
+        let shown = try #require(view.layer.presentation()?.frame.minY)
+        #expect(shown != start && shown != view.frame.minY)
+
+        presentation.cancelMove()
+
+        #expect(view.layer.animationKeys()?.isEmpty ?? true)
+        #expect(abs(view.frame.minY - shown) < 0.5)
+        root.dismiss(animated: false)
+    }
+
     private func openSheet(with browser: InAppBrowser, from root: UIViewController) async throws -> InAppBrowserSheet {
         browser.open(try #require(URL(string: "https://example.com/1")), from: root)
         try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }

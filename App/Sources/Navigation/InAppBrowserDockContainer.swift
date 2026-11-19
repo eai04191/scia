@@ -58,11 +58,8 @@ final class InAppBrowserDockContainer: UIViewController {
             self.visibleArea.layer.cornerRadius = height > 0 ? cornerRadius : 0
             self.view.layoutIfNeeded()
         }
-        // 動かさないときは、動いている途中のスプリングも止める。`animateSmoothly(duration: 0)`では前の行き先へ動き続ける。
-        guard duration > 0 else {
-            UIView.performStoppingSmoothAnimations(changes)
-            return
-        }
-        UIView.animateSmoothly(duration: duration, changes: changes)
+        // 伏せたシートと並べて動かすので、レイヤーのアニメーションにする。
+        // 動かさないで変えるのは、全画面のSafariが覆って見えないときだけなので、動いている途中のスプリングの残りは止めない。
+        UIView.animateSmoothSpring(duration: duration, in: view, changes: changes)
     }
 }
