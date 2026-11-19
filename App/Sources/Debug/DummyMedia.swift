@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreImage
 import SciaCore
 import UIKit
 
@@ -55,6 +56,42 @@ enum DummyMedia {
     /// 縦長の1枚。1枚だけの投稿はサムネイルがタイムラインの幅いっぱいに大きく出るため、バーの下へ戻る開閉を確かめやすい。
     static func singleTallAttachment(idPrefix: String) -> [MediaAttachment] {
         attachments([specs[0]], idPrefix: idPrefix)
+    }
+
+    /// HDRの縦長の1枚。灰色の地の真ん中に、白の4倍の明るさの帯を描いたHLGのPNG。設定の「HDRのメディアの明るさ」を選び直したときに、帯の明るさが変わるかを確かめる。
+    static func singleHDRAttachment(idPrefix: String) -> [MediaAttachment] {
+        guard let url = hdrBandURL(width: 900, height: 1_600) else { return [] }
+        return [MediaAttachment(
+            id: "\(idPrefix)-0",
+            type: .image,
+            url: url,
+            previewUrl: url,
+            description: "白より明るい帯のあるHDRの画像",
+            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 900, height: 1_600))
+        )]
+    }
+
+    private static func hdrBandURL(width: Int, height: Int) -> URL? {
+        guard let space = CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3),
+              let context = CGContext(
+                  data: nil, width: width, height: height, bitsPerComponent: 16, bytesPerRow: 0, space: space,
+                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.floatComponents.rawValue | CGImageByteOrderInfo.order16Little.rawValue
+              ),
+              let gray = CGColor(colorSpace: space, components: [0.2, 0.2, 0.2, 1]),
+              let white = CGColor(colorSpace: space, components: [1, 1, 1, 1]),
+              let band = CGColor(colorSpace: space, components: [4, 4, 4, 1])
+        else { return nil }
+        context.setFillColor(gray)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        // 帯の上下に白の帯を並べ、白より明るいかを見比べられるようにする。
+        context.setFillColor(white)
+        context.fill(CGRect(x: 0, y: height / 2 - height / 6, width: width, height: height / 3))
+        context.setFillColor(band)
+        context.fill(CGRect(x: 0, y: height / 2 - height / 12, width: width, height: height / 6))
+        guard let image = context.makeImage(), let hlg = CGColorSpace(name: CGColorSpace.itur_2100_HLG),
+              let data = CIContext().pngRepresentation(of: CIImage(cgImage: image), format: .RGBA16, colorSpace: hlg)
+        else { return nil }
+        return URL(string: "data:image/png;base64,\(data.base64EncodedString())")
     }
 
     private static func attachments(_ specs: [Spec], idPrefix: String) -> [MediaAttachment] {

@@ -64,6 +64,8 @@ extension FeedTimelineController {
             streamDummyMediaStatus(content: "ビューアの確認用に画面より小さい画像を3枚添付", attachments: DummyMedia.smallAttachments)
         case .transparent:
             streamDummyMediaStatus(content: "ビューアの確認用に透明な部分のある画像を1枚添付", attachments: DummyMedia.singleTransparentAttachment)
+        case .hdr:
+            streamDummyMediaStatus(content: "HDRの明るさの確認用に、白より明るい帯のある画像を1枚添付", attachments: DummyMedia.singleHDRAttachment)
         case .video:
             streamDummyVideoStatus(content: "ビューアの確認用に動画とGIFを1本ずつ添付", make: DummyMedia.videoAttachments)
         case .longVideo:
@@ -500,6 +502,7 @@ enum DebugDummyPost: String, CaseIterable {
     case tall
     case small
     case transparent
+    case hdr
     case video
     case longVideo = "long-video"
     case linkCard = "link-card"
@@ -521,6 +524,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .tall: "縦長の画像1枚"
         case .small: "小さい画像3枚"
         case .transparent: "透過画像1枚"
+        case .hdr: "HDRの画像1枚"
         case .video: "動画とGIF"
         case .longVideo: "音声付きの長い動画"
         case .linkCard: "後から届くリンクカード（画像なし）"
@@ -557,7 +561,7 @@ enum DebugDummyPost: String, CaseIterable {
     var menuGroup: MenuGroup? {
         switch self {
         case .arrivals, .animatedEmojis: .timeline
-        case .images, .tall, .small, .transparent, .video, .longVideo: .media
+        case .images, .tall, .small, .transparent, .hdr, .video, .longVideo: .media
         case .linkCard, .linkCardImage, .linkCardSensitive, .xPost: .delayed
         case .spoilers, .filtered, .polls, .quotes, .reactions: .content
         case .notifications: nil
@@ -571,6 +575,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .tall: "rectangle.portrait"
         case .small: "photo"
         case .transparent: "circle.dashed"
+        case .hdr: "sun.max"
         case .video: "play.rectangle"
         case .longVideo: "speaker.wave.2"
         case .linkCard, .linkCardImage, .linkCardSensitive: "link"
