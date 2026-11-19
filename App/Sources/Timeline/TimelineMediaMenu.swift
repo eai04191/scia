@@ -53,8 +53,8 @@ extension TimelineViewController {
 
     func builtMediaMenu(for target: MediaMenuTarget, entry: TimelineEntry, id: ItemID, groups: MenuLayout<MediaMenuItem>.Groups? = nil) -> BuiltMenu<MediaMenuCommand>? {
         let subject = entry.targetStatus.map { OperationStatus.Subject($0.displayed) }
-        // 「投稿」はほかの対象のメニューの中のサブメニューなので、投稿（通知の行なら通知）のタップと長押しに割り当てた項目も出す。
-        let statusActions = if case .notification = entry { settings.notificationActions } else { settings.statusActions }
+        // 「投稿」はほかの対象のメニューの中のサブメニューなので、行の対象（投稿と同じ見た目で出さない通知の行なら通知）のタップと長押しに割り当てた項目も出す。
+        let statusActions = if case .notification = entry, entry.operatedPost == nil { settings.notificationActions } else { settings.statusActions }
         let statusGroups = settings.statusMenuLayout.submenuGroups(actions: statusActions)
         return builtMediaMenu(for: target, subject: subject, statusMenu: statusMenu(for: entry, id: id, groups: statusGroups), groups: groups)
     }

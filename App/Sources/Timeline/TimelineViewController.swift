@@ -2690,7 +2690,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// リストのアイテムにアクションバーを出せるか。出すのは投稿だけで、通知には出さない（docs/post-action-bar.mdの「出し方」）。
     func canShowActionBar(in entry: TimelineEntry) -> Bool {
-        !isAppearancePreview && entry.postStatus != nil
+        !isAppearancePreview && entry.operatedPost != nil
     }
 
     /// 投稿にアクションバーを出すか。いつも出す設定か、引き出しを開いている投稿で出す。
@@ -2719,7 +2719,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 項目を出せるかや今の名前を決めるための、投稿のメニューの木。アクションバーのボタンと投稿のスワイプのボタンで使う。
     /// 組むだけで通信しない。メニューを出すときと違い、メニューに出る人の関係は読み直さず、カスタム絵文字の画像も読まない。
     func offlineStatusMenuTree(for status: Status, id: ItemID, canSelectText: Bool) -> StatusMenuTree {
-        var tree = statusMenuTree(status: status, notification: nil, id: id, canSelectText: canSelectText)
+        let notification: MastodonNotification? = if case .notification(let notification) = entry(for: id) { notification } else { nil }
+        var tree = statusMenuTree(status: status, notification: notification, id: id, canSelectText: canSelectText)
         let emojiGroups = settings.customEmojiMenuLayout.groups
         tree.customEmoji = { [weak self] emoji in
             self?.customEmojiMenuTree(for: emoji).submenu(groups: emojiGroups)
@@ -2740,7 +2741,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// - Returns: 開閉したら、動きが着くまでの時間（スプリングの知覚上の長さ）。動かさずに開閉したら0。
     @discardableResult
     func toggleActionBar(for id: ItemID) -> TimeInterval? {
-        guard let status = entries[id]?.postStatus, !appearance(for: status).showsActionBar else { return nil }
+        guard let status = entries[id]?.operatedPost, !appearance(for: status).showsActionBar else { return nil }
         let previous = openActionBarItemID
         openActionBarItemID = previous == id ? nil : id
         let ids = Set([previous, id].compactMap(\.self)).intersection(dataSource.snapshot().itemIdentifiers)
@@ -2765,7 +2766,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         Task(.withoutRequests) { @MainActor [weak self] in
             guard let self else { return }
             guard let (id, status) = collectionView.indexPathsForVisibleItems.lazy.compactMap({ indexPath -> (ItemID, Status)? in
-                      guard let id = self.dataSource.itemIdentifier(for: indexPath), let entry = self.entries[id], self.canShowActionBar(in: entry), let status = entry.postStatus else { return nil }
+                      guard let id = self.dataSource.itemIdentifier(for: indexPath), let entry = self.entries[id], self.canShowActionBar(in: entry), let status = entry.operatedPost else { return nil }
                       return (id, status)
                   }).first
             else {

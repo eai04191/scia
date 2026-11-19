@@ -27,6 +27,20 @@ struct TimelineEntryTests {
         #expect(TimelineEntry.gap(TimelineGap(newerID: "20", olderID: "10")).postStatus == nil)
     }
 
+    /// 投稿として操作するのは、投稿の項目と、投稿と同じ見た目で出す通知の対象の投稿。再掲する通知と、投稿の届いていない通知は含まない。
+    @Test func operatedPostCoversPostsAndPostLikeNotifications() {
+        let post = status()
+        let bob = account("2", "bob")
+
+        #expect(TimelineEntry.status(post).operatedPost == post)
+        #expect(TimelineEntry.pinned(post).operatedPost == post)
+        #expect(TimelineEntry.notification(notification(.mention, from: bob, status: post)).operatedPost == post)
+        #expect(TimelineEntry.notification(notification(.poll, from: bob, status: post)).operatedPost == post)
+        #expect(TimelineEntry.notification(notification(.favourite, from: bob, status: post)).operatedPost == nil)
+        #expect(TimelineEntry.notification(notification(.mention, from: bob)).operatedPost == nil)
+        #expect(TimelineEntry.account(bob).operatedPost == nil)
+    }
+
     /// 項目が指す投稿は、通知なら対象の投稿。ブーストは元の投稿にしない。
     @Test func targetStatusCoversNotifications() {
         let boost = status("11", reblog: status("10"))

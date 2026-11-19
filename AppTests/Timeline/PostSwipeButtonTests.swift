@@ -26,6 +26,23 @@ struct PostSwipeButtonTests {
         #expect(configuration.actions.map(\.title) == ["返信"])
     }
 
+    /// 投稿と同じ見た目で出す通知にも、投稿のスワイプを出し、通知でだけ出る項目も押せる。再掲する通知には出さない。
+    @Test func notificationsLookingLikePostsAreSwipedAsPosts() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.settings.postTrailingSwipeLayout = MenuLayout(elements: [.item(.status(.dismissNotification), isVisible: true), .item(.status(.reply), isVisible: true)])
+        let status = StatusFactory.make(count: 1, startingAt: 1_000)[0]
+        harness.viewController.setEntries([
+            .notification(MastodonNotification(id: "n1", type: .mention, createdAt: status.createdAt, account: status.account, status: status)),
+            .notification(MastodonNotification(id: "n2", type: .favourite, createdAt: status.createdAt, account: status.account, status: status)),
+        ])
+        harness.scroll(toFraction: 0)
+
+        let configuration = try #require(harness.viewController.postSwipe(at: IndexPath(item: 0, section: 0), side: .trailing))
+        #expect(configuration.actions.map(\.title) == ["通知を削除", "返信"])
+        #expect(harness.viewController.postSwipe(at: IndexPath(item: 1, section: 0), side: .trailing) == nil)
+    }
+
     /// メニューに項目があれば、「メニュー」のボタンを出す。
     @Test func menuButtonIsShownWhenMenuHasItems() throws {
         let harness = try TimelineHarness()

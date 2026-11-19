@@ -24,7 +24,7 @@ extension TimelineViewController {
         case .status(let status), .pinned(let status):
             return rowStatusTarget(.status, entry: entry, id: id, opening: status)
         case .notification(let notification):
-            return rowStatusTarget(.notification, entry: entry, id: id, opening: notification.status)
+            return rowStatusTarget(entry.operatedPost == nil ? .notification : .status, entry: entry, id: id, opening: notification.status)
         case .account(let account):
             return userTarget(for: account, id: id)
         case .notificationRequest(let request):
@@ -198,11 +198,7 @@ extension TimelineViewController {
     /// ボタンを出せるかと今の名前は、アクションバーのボタンと同じく、組むだけで通信しない投稿のメニューの木で決める。押したら、タップに割り当てた1項目と同じ組み方で行う。
     func postSwipe(at indexPath: IndexPath, side: PostSwipeSide) -> UISwipeActionsConfiguration? {
         guard !isSelectingPosts, let id = itemID(at: indexPath), let entry = entry(for: id) else { return nil }
-        let status: Status
-        switch entry {
-        case .status(let rowStatus), .pinned(let rowStatus): status = rowStatus
-        default: return nil
-        }
+        guard let status = entry.operatedPost else { return nil }
         let items = switch side {
         case .leading: settings.postLeadingSwipeLayout.swipeItems
         case .trailing: settings.postTrailingSwipeLayout.swipeItems

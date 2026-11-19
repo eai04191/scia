@@ -64,6 +64,16 @@ public enum TimelineEntry: Hashable, Sendable, Identifiable {
         }
     }
 
+    /// 投稿として操作する項目の投稿。投稿として並ぶ項目と、投稿と同じ見た目で出す通知（`MastodonNotification.Layout.post`）の対象の投稿。
+    /// タップと長押しの設定、アクションバー、スワイプを投稿と同じにする（docs/object-actions.mdの「対象」）。
+    public var operatedPost: Status? {
+        switch self {
+        case .status(let status), .pinned(let status): status
+        case .notification(let notification): notification.layout == .post ? notification.status : nil
+        case .gap, .unreadable, .account, .notificationRequest, .search: nil
+        }
+    }
+
     /// 項目が指す投稿。投稿の項目ならその投稿、通知なら対象の投稿。ギャップやフォローの通知などではnil。
     public var targetStatus: Status? {
         switch self {

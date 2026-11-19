@@ -232,14 +232,26 @@ struct PostActionBarTests {
         #expect(harness.viewController.openActionBarItemID == other)
     }
 
-    /// 開くのはタイムラインの投稿だけで、通知には出せない。
-    @Test func cannotShowOnNotifications() throws {
+    /// 通知では、投稿と同じ見た目で出すもの（メンション、投票の終了など）にだけ出し、再掲する通知には出さない。
+    @Test func showsOnlyOnNotificationsLookingLikePosts() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
+        harness.settings.appearance.showsActionBar = true
         let status = StatusFactory.make(count: 1, startingAt: 1_000)[0]
-        let notification = MastodonNotification(id: "n1", type: .mention, createdAt: status.createdAt, account: status.account, status: status)
+        func notification(_ id: String, _ type: MastodonNotification.Kind) -> MastodonNotification {
+            MastodonNotification(id: id, type: type, createdAt: status.createdAt, account: status.account, status: status)
+        }
+        let mention = notification("n1", .mention)
+        let poll = notification("n2", .poll)
+        let favourite = notification("n3", .favourite)
+        harness.viewController.setEntries([.notification(mention), .notification(poll), .notification(favourite)])
+        harness.scroll(toFraction: 0)
+
         #expect(harness.viewController.canShowActionBar(in: .status(status)))
-        #expect(!harness.viewController.canShowActionBar(in: .notification(notification)))
+        for shown in [mention, poll] {
+            #expect((harness.visibleCell(of: .notification(shown.id))?.contentView as? PostContentView)?.postBody.actionBar != nil, "\(shown.type)の通知にアクションバーがありません")
+        }
+        #expect(!harness.viewController.canShowActionBar(in: .notification(favourite)))
     }
 
     private func buttons(in harness: TimelineHarness, of id: Status.ID) -> [PostActionBarButton] {
@@ -396,6 +408,24 @@ struct PostActionBarTests {
         let target = harness.viewController.statusTarget(for: statuses[20], id: .status(statuses[10].id)) { _ in opened += 1 }
         target.perform(.tap, in: harness.viewController.view, at: .zero)
         #expect(opened == 1)
+    }
+
+    /// 投稿のタップに「アクションバーを開く」を選ぶと、投稿と同じ見た目で出す通知もタップで開く。再掲する通知は、通知の操作に従ってスレッドを開くので開かない。
+    @Test func notificationsLookingLikePostsFollowPostTap() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.settings.appearance.showsActionBar = false
+        harness.settings.statusActions.tap = .actionBar
+        let status = StatusFactory.make(count: 1, startingAt: 1_000)[0]
+        let mention = MastodonNotification(id: "n1", type: .mention, createdAt: status.createdAt, account: status.account, status: status)
+        let favourite = MastodonNotification(id: "n2", type: .favourite, createdAt: status.createdAt, account: status.account, status: status)
+        harness.viewController.setEntries([.notification(mention), .notification(favourite)])
+        harness.scroll(toFraction: 0)
+
+        harness.viewController.rowTarget(at: IndexPath(item: 1, section: 0))?.perform(.tap, in: harness.viewController.view, at: .zero)
+        #expect(harness.viewController.openActionBarItemID == nil)
+        harness.viewController.rowTarget(at: IndexPath(item: 0, section: 0))?.perform(.tap, in: harness.viewController.view, at: .zero)
+        #expect(harness.viewController.openActionBarItemID == .notification(mention.id))
     }
 
     /// ほかのメニューの中から開く投稿のメニュー（並びを渡して組むもの）からは、除かない。
