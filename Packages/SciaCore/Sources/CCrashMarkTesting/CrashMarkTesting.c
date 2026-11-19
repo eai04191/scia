@@ -44,10 +44,14 @@ static void ccm_testing_crash(ccm_crash_kind kind) {
     case CCM_CRASH_KILLED:
         kill(getpid(), SIGKILL);
         break;
+    case CCM_CRASH_NEVER:
+        for (;;) {
+            pause();
+        }
     }
 }
 
-int ccm_testing_crash_child(const char *path, const char *account, const char *item, ccm_crash_kind kind) {
+int ccm_testing_start_crash_child(const char *path, const char *account, const char *item, ccm_crash_kind kind) {
     pid_t child = fork();
     if (child == 0) {
         if (!ccm_install(path)) {
@@ -58,7 +62,13 @@ int ccm_testing_crash_child(const char *path, const char *account, const char *i
         ccm_testing_crash(kind);
         _exit(101);
     }
+    return child;
+}
+
+int ccm_testing_wait_child(int child) {
     int status = 0;
-    waitpid(child, &status, 0);
+    if (waitpid(child, &status, 0) != child) {
+        return -1;
+    }
     return WIFSIGNALED(status) ? WTERMSIG(status) : 0;
 }
