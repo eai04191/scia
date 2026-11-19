@@ -1,4 +1,5 @@
 import SciaCore
+import SciaTesting
 import Testing
 import UIKit
 @testable import Scia
@@ -35,5 +36,52 @@ struct MenuLayoutDeletionTests {
 
         controller.update(MenuLayout(elements: [.item(.local, isVisible: true), .more, .item(.home, isVisible: true)]))
         #expect(Set(controller.rowIDs).isDisjoint(with: expected))
+    }
+
+    /// 削除で表示中のタブが1つになったら、残った行は作り直さなくても、そのスイッチを切れなくする。タブバーを空にさせないため。
+    @Test func lastVisibleTabSwitchIsDisabledAfterDeletion() async throws {
+        let others = TabItem.defaultLayout.elements.map { element -> MenuLayout<TabItem>.Element in
+            if case .item(let item, _) = element { .item(item, isVisible: item == .home) } else { element }
+        }
+        let layout = MenuLayout<TabItem>(elements: [.item(Self.bob, isVisible: true)] + others)
+        let controller = MenuLayoutViewController<TabItem>(
+            layout: layout,
+            image: { _ in nil },
+            imageRevision: 0,
+            options: [],
+            actions: [],
+            itemDeletion: MenuLayoutItemDeletion(canDelete: \.isUserAdded) { _ in }
+        ) { _ in }
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+        }
+        window.frame = CGRect(x: 0, y: 0, width: 402, height: 2400)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        window.layoutIfNeeded()
+        let collectionView = try #require(controller.view.subviews.compactMap { $0 as? UICollectionView }.first)
+        let homeSwitch = {
+            window.layoutIfNeeded()
+            let cell = collectionView.visibleCells.first { cell in
+                ((cell as? UICollectionViewListCell)?.contentConfiguration as? UIListContentConfiguration)?.text == TabItem.home.title
+            }
+            return cell.flatMap { Self.firstSwitch(in: $0) }
+        }
+        #expect(homeSwitch()?.isEnabled == true)
+
+        controller.requestDeletion(of: Self.bob)
+        controller.update(MenuLayout(elements: layout.elements.filter { $0 != .item(Self.bob, isVisible: true) }))
+
+        try await waitUntil { homeSwitch()?.isEnabled == false }
+    }
+
+    private static func firstSwitch(in view: UIView) -> UISwitch? {
+        for subview in view.subviews {
+            if let toggle = subview as? UISwitch ?? firstSwitch(in: subview) { return toggle }
+        }
+        return nil
     }
 }

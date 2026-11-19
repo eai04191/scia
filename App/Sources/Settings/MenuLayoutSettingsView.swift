@@ -409,11 +409,12 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             cell.contentConfiguration = content
             let toggle = UISwitch()
             toggle.isOn = isVisible
-            toggle.isEnabled = !(Item.requiresVisibleItem && isVisible && visibleItemCount == 1)
+            toggle.isEnabled = canSwitch(row.id)
             toggle.addAction(UIAction { [weak self, id = row.id] action in
                 guard let toggle = action.sender as? UISwitch else { return }
                 self?.setVisible(toggle.isOn, id: id)
             }, for: .valueChanged)
+            switchesByCell.setObject(RowSwitch(rowID: row.id, toggle: toggle), forKey: cell)
             cell.accessories = [.customView(configuration: .init(customView: toggle, placement: .trailing())), reorder]
         case .separator:
             cell.contentConfiguration = UIHostingConfiguration { SeparatorRow() }
@@ -440,6 +441,15 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         return .customView(configuration: .init(customView: buttons, placement: .trailing(), reservedLayoutWidth: .actual, maintainsFixedSize: true))
     }
 
+    /// セルに今置いている表示のスイッチ。切り替えられるかを、セルを描き直さずに変えるために持つ。
+    private let switchesByCell = NSMapTable<UICollectionViewListCell, RowSwitch>.weakToStrongObjects()
+
+    /// 最後の1つの表示中の項目は、切れなくする。
+    private func canSwitch(_ id: UUID) -> Bool {
+        guard Item.requiresVisibleItem, case .item(_, true)? = rows.first(where: { $0.id == id })?.element else { return true }
+        return visibleItemCount > 1
+    }
+
     /// セルに今置いている上下のボタン。押せるかを、セルを描き直さずに変えるために持つ。
     private let moveButtonsByCell = NSMapTable<UICollectionViewListCell, MenuLayoutMoveButtons>.weakToWeakObjects()
 
@@ -463,16 +473,19 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         applySnapshot(animated: !UIAccessibility.isReduceMotionEnabled) { [weak self] in self?.refreshDependentRows() }
     }
 
-    /// 上下のボタンが押せるかは、行を動かしたり足したり消したりして端が変わるたびに変わるので、見えている行のボタンを変える。
-    /// 行を描き直すと、スイッチとボタンが作り直されて、入れ替わる動きが右端に出るため、ボタンの押せる状態だけを変える。
+    /// 表示のスイッチを切り替えられるかと、上下のボタンを押せるかは、表示を切り替えたり、行を動かしたり足したり消したりするたびに変わるので、見えている行の分を変える。
+    /// 行を描き直すと、スイッチとボタンが作り直されて、入れ替わる動きが右端に出るため、押せる状態だけを変える。
     /// 動かしている最中のセルは取り出せないので、並びを当て終えてから呼ぶ。
-    private func refreshMoveButtons() {
-        guard movesWithButtons else { return }
+    private func refreshRowControls() {
         for row in rows where row.element != .more {
             guard let indexPath = dataSource?.indexPath(for: .row(row.id)),
-                  let cell = collectionView.cellForItem(at: indexPath) as? UICollectionViewListCell,
-                  let buttons = moveButtonsByCell.object(forKey: cell), buttons.rowID == row.id else { continue }
-            buttons.update { [self] move in canMove(row.id, move) }
+                  let cell = collectionView.cellForItem(at: indexPath) as? UICollectionViewListCell else { continue }
+            if let rowSwitch = switchesByCell.object(forKey: cell), rowSwitch.rowID == row.id {
+                rowSwitch.toggle.isEnabled = canSwitch(row.id)
+            }
+            if movesWithButtons, let buttons = moveButtonsByCell.object(forKey: cell), buttons.rowID == row.id {
+                buttons.update { [self] move in canMove(row.id, move) }
+            }
         }
     }
 
@@ -499,7 +512,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         }
         dataSource?.apply(snapshot, animatingDifferences: animated) { [weak self] in
             self?.refreshRowGroups()
-            self?.refreshMoveButtons()
+            self?.refreshRowControls()
             completion?()
         }
     }
@@ -605,25 +618,12 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         rows[index].element = .item(item, isVisible: isVisible)
         save()
         refreshRowGroups()
-        if Item.requiresVisibleItem {
-            refreshItemSwitches()
-        }
+        refreshRowControls()
     }
 
     /// 表示する項目の数。
     private var visibleItemCount: Int {
         rows.count { if case .item(_, true) = $0.element { true } else { false } }
-    }
-
-    /// 最後の1つのスイッチを切れなくするため、表示の切り替えのたびに、見えている項目の行を描き直す。
-    /// `refreshRowGroups`と同じく、data sourceへの`apply`ではなく見えているセルを直接描き直す。
-    private func refreshItemSwitches() {
-        for row in rows {
-            guard case .item = row.element,
-                  let indexPath = dataSource?.indexPath(for: .row(row.id)),
-                  let cell = collectionView.cellForItem(at: indexPath) as? UICollectionViewListCell else { continue }
-            configure(cell, for: row)
-        }
     }
 
     private func removeRow(id: UUID) {
@@ -785,6 +785,17 @@ private extension MenuLayout.Element {
         case .separator, .rowSeparator: true
         case .item, .more: false
         }
+    }
+}
+
+/// 並びの項目の行に置いた、表示のスイッチ。セルが別の行に使い回されても取り違えないよう、行のIDと組にする。
+private final class RowSwitch {
+    let rowID: UUID
+    let toggle: UISwitch
+
+    init(rowID: UUID, toggle: UISwitch) {
+        self.rowID = rowID
+        self.toggle = toggle
     }
 }
 
