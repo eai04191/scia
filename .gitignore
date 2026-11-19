@@ -9,7 +9,10 @@ xcuserdata/
 DerivedData/
 .build/
 .swiftpm/
+__pycache__/
 # 人ごとのビルド設定（Config/Base.xcconfigから読み込む）
 Config/Local.xcconfig
 # 人ごとのコンパイルキャッシュの置き場所（Config/Cache.xcconfigから読み込む）
 Config/CacheLocal.xcconfig
+# 描画性能の計測時にだけ配置するテスト
+/AppTests/RenderSettingsBenchmarkGenerated/
