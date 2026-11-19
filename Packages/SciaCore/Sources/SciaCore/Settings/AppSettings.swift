@@ -971,7 +971,7 @@ public final class SettingsStore {
         )
         emojiSkinTone = (defaults.object(forKey: Keys.emojiSkinTone) as? Int).flatMap(EmojiSkinTone.init(rawValue:)) ?? .none
         showsTabMenuCustomize = defaults.object(forKey: Keys.showsTabMenuCustomize) as? Bool ?? true
-        tabLayouts = AccountScopedDefaults.accountValues(named: Keys.tabLayout, in: defaults).compactMapValues { ($0 as? [String]).map(MenuLayout.init(tokens:)) }
+        tabLayouts = AccountScopedDefaults.accountValues(named: Keys.tabLayout, in: defaults).compactMapValues { ($0 as? [String]).map { MenuLayout(tokens: $0).keepingVisibleTab } }
         switchTabItems = AccountScopedDefaults.accountValues(named: Keys.switchTabItem, in: defaults).compactMapValues { ($0 as? String).flatMap(TabItem.init(rawValue:)) }
         shownTabItems = AccountScopedDefaults.accountValues(named: Keys.shownTabItem, in: defaults).compactMapValues { ($0 as? String).flatMap(TabItem.init(rawValue:)) }
         serverAnimationAutoplays = AccountScopedDefaults.accountValues(named: Keys.serverAutoplaysAnimations, in: defaults).compactMapValues { $0 as? Bool }
@@ -1134,6 +1134,7 @@ public final class SettingsStore {
     }
 
     func setTabLayout(_ layout: MenuLayout<TabItem>, for account: String) {
+        let layout = layout.keepingVisibleTab
         tabLayouts[account] = layout
         defaults.set(layout.tokens, forKey: AccountScopedDefaults.key(Keys.tabLayout, account: account))
     }

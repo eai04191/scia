@@ -78,6 +78,46 @@ struct MenuLayoutDeletionTests {
         try await waitUntil { homeSwitch()?.isEnabled == false }
     }
 
+    /// 表示中の最後のタブを消し、ホームを表示にした並びが届いても、残る行は作り直さず、外れた行だけを閉じる。ホームのスイッチは入れる。
+    @Test func deletingLastVisibleTabKeepsRowsAndTurnsHomeOn() async throws {
+        let others = TabItem.defaultLayout.elements.map { element -> MenuLayout<TabItem>.Element in
+            if case .item(let item, _) = element { .item(item, isVisible: false) } else { element }
+        }
+        let layout = MenuLayout<TabItem>(elements: [.item(Self.bob, isVisible: true)] + others)
+        let controller = MenuLayoutViewController<TabItem>(
+            layout: layout,
+            image: { _ in nil },
+            imageRevision: 0,
+            options: [],
+            actions: [],
+            itemDeletion: MenuLayoutItemDeletion(canDelete: \.isUserAdded) { _ in }
+        ) { _ in }
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+        }
+        window.frame = CGRect(x: 0, y: 0, width: 402, height: 2400)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        window.layoutIfNeeded()
+        let collectionView = try #require(controller.view.subviews.compactMap { $0 as? UICollectionView }.first)
+        let before = controller.rowIDs
+
+        controller.requestDeletion(of: Self.bob)
+        controller.update(MenuLayout(elements: others.map { $0 == .item(.home, isVisible: false) ? .item(.home, isVisible: true) : $0 }))
+
+        #expect(controller.rowIDs == Array(before.dropFirst()))
+        try await waitUntil {
+            window.layoutIfNeeded()
+            let cell = collectionView.visibleCells.first { cell in
+                ((cell as? UICollectionViewListCell)?.contentConfiguration as? UIListContentConfiguration)?.text == TabItem.home.title
+            }
+            return cell.flatMap { Self.firstSwitch(in: $0) }?.isOn == true
+        }
+    }
+
     private static func firstSwitch(in view: UIView) -> UISwitch? {
         for subview in view.subviews {
             if let toggle = subview as? UISwitch ?? firstSwitch(in: subview) { return toggle }

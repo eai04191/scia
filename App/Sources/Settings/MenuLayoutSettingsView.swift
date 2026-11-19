@@ -173,17 +173,28 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         let remaining = rows.filter { row in
             if case .item(let item, _) = row.element { !deletionRequests.contains(item) } else { true }
         }
-        if remaining.count < rows.count, layout.tokens == MenuLayout(defaultElements: remaining.map(\.element)).tokens {
+        // 表示中の最後のタブを消すと、ホームを表示にした並びが届くので、表示の違いは比べずに、残る行と同じ並びかを見る。
+        if remaining.count < rows.count, Self.tokensIgnoringVisibility(layout.elements) == Self.tokensIgnoringVisibility(remaining.map(\.element)) {
             let kept = Set(remaining.map(\.id))
             deletionRequests.subtract(rows.compactMap { row in
                 if case .item(let item, _) = row.element, !kept.contains(row.id) { item } else { nil }
             })
-            rows = remaining
+            rows = zip(remaining, layout.elements).map { row, element in
+                var row = row
+                row.element = element
+                return row
+            }
             applySnapshot(animated: !UIAccessibility.isReduceMotionEnabled)
             return
         }
         rows = layout.elements.map { Row(element: $0) }
         applySnapshot(animated: false)
+    }
+
+    private static func tokensIgnoringVisibility(_ elements: [MenuLayout<Item>.Element]) -> [String] {
+        MenuLayout(defaultElements: elements.map { element in
+            if case .item(let item, _) = element { .item(item, isVisible: true) } else { element }
+        }).tokens
     }
 
     /// 項目の削除を頼む。並びから外すのは、画面を作る側が行う。
@@ -473,14 +484,15 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         applySnapshot(animated: !UIAccessibility.isReduceMotionEnabled) { [weak self] in self?.refreshDependentRows() }
     }
 
-    /// 表示のスイッチを切り替えられるかと、上下のボタンを押せるかは、表示を切り替えたり、行を動かしたり足したり消したりするたびに変わるので、見えている行の分を変える。
+    /// 表示のスイッチの入り切りと切り替えられるか、上下のボタンを押せるかは、表示を切り替えたり、行を動かしたり足したり消したりするたびに変わるので、見えている行の分を変える。
     /// 行を描き直すと、スイッチとボタンが作り直されて、入れ替わる動きが右端に出るため、押せる状態だけを変える。
     /// 動かしている最中のセルは取り出せないので、並びを当て終えてから呼ぶ。
     private func refreshRowControls() {
         for row in rows where row.element != .more {
             guard let indexPath = dataSource?.indexPath(for: .row(row.id)),
                   let cell = collectionView.cellForItem(at: indexPath) as? UICollectionViewListCell else { continue }
-            if let rowSwitch = switchesByCell.object(forKey: cell), rowSwitch.rowID == row.id {
+            if let rowSwitch = switchesByCell.object(forKey: cell), rowSwitch.rowID == row.id, case .item(_, let isVisible) = row.element {
+                rowSwitch.toggle.setOn(isVisible, animated: true)
                 rowSwitch.toggle.isEnabled = canSwitch(row.id)
             }
             if movesWithButtons, let buttons = moveButtonsByCell.object(forKey: cell), buttons.rowID == row.id {

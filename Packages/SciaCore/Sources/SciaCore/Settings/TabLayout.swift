@@ -189,6 +189,13 @@ public enum TabItem: MenuItemKind {
 }
 
 extension MenuLayout where Item == TabItem {
+    /// 表示中のタブが1つもなければ、ホームを表示にした並び。タブバーは空にできず、そのときはホームだけを出すので、並びもそれに合わせる。
+    /// 表示中の最後のタブを消したとき（アプリの中でも、ほかの端末やウェブでリストを消したときも）に起きる。
+    var keepingVisibleTab: MenuLayout<TabItem> {
+        guard !elements.contains(where: { if case .item(_, true) = $0 { true } else { false } }) else { return self }
+        return MenuLayout(elements: elements.map { $0 == .item(.home, isVisible: false) ? .item(.home, isVisible: true) : $0 })
+    }
+
     /// サーバーにあるリストを並びに反映する。決まりはdocs/tabs.mdの「リスト」にある。
     /// まだないリストは無効にして最後のリストの後ろに足し、もうないリストは外し、名前が変わったリストは名前を書き換える。ほかの項目の並びと表示は変えない。
     public func syncingLists(_ lists: [MastodonList]) -> MenuLayout<TabItem> {

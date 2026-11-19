@@ -191,6 +191,34 @@ struct TabLayoutSettingsTests {
         #expect(relaunched.tabLayout(for: "@bob@example.social") == TabItem.defaultLayout)
     }
 
+    /// 表示中の最後のタブを消して表示中のタブがなくなったら、ホームを表示にして保存する。タブバーは空にできず、そのときはホームだけを出すため、並びもそれに合わせる。
+    @Test func savingLayoutWithoutVisibleTabShowsHome() throws {
+        let defaults = try makeDefaults()
+        let settings = AppSettings(defaults: defaults)
+        let list = TabItem.list(id: "1", title: "見る")
+        let layout = MenuLayout<TabItem>.fixture([.item(list, isVisible: true), .more])
+
+        settings.setTabLayout(layout.removing(list), for: "@alice@example.social")
+
+        let visible = { (layout: MenuLayout<TabItem>) in
+            layout.elements.compactMap { element -> TabItem? in if case .item(let item, true) = element { item } else { nil } }
+        }
+        #expect(visible(settings.tabLayout(for: "@alice@example.social")) == [.home])
+        #expect(visible(AppSettings(defaults: defaults).tabLayout(for: "@alice@example.social")) == [.home])
+    }
+
+    /// 表示中のタブがない並びがすでに保存されていたら、読むときにホームを表示にする。
+    @Test func loadingLayoutWithoutVisibleTabShowsHome() throws {
+        let defaults = try makeDefaults()
+        AppSettings(defaults: defaults).setTabLayout(MenuLayout<TabItem>.fixture([.item(.local, isVisible: true), .more]), for: "@alice@example.social")
+        let key = try #require(defaults.dictionaryRepresentation().keys.first { $0.hasSuffix("tabLayout") && $0.contains("@alice@example.social") })
+        defaults.set((defaults.stringArray(forKey: key) ?? []).map { $0.replacingOccurrences(of: "item:", with: "hidden:") }, forKey: key)
+
+        let relaunched = AppSettings(defaults: defaults)
+
+        #expect(relaunched.tabLayout(for: "@alice@example.social").elements.contains(.item(.home, isVisible: true)))
+    }
+
     /// 切り替えタブで最後に開いた項目は、起動し直しても覚えておく。アカウントごとに持つ。
     @Test func switchTabItemIsPerAccountAndPersists() throws {
         let defaults = try makeDefaults()
