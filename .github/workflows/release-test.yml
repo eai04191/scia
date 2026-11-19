@@ -56,8 +56,9 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_27.2.app
 
+      # テストが固まったら、jobの上限まで待たずに、テストのプロセスのスタックをログに出して止める
       - name: Test
-        run: make test-release WARNINGS="$WARNINGS"
+        run: Tools/watch-release-test.sh make test-release WARNINGS="$WARNINGS"
 
       - name: Install XcodeGen
         if: env.WARNINGS == 'error'
