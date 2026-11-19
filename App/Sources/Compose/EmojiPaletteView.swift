@@ -852,7 +852,7 @@ extension EmojiPaletteView {
         let hand = StandardEmoji(emoji: "✋", name: "", keywords: [], version: "", skinTones: .single(["✋🏻", "✋🏼", "✋🏽", "✋🏾", "✋🏿"]))
         skinToneButton.configuration?.image = glyphIcon(hand.withSkinTone(defaultSkinTone).emoji, side: 24)
         skinToneButton.accessibilityValue = defaultSkinTone.title
-        skinToneButton.menu = UIMenu(options: .displayAsPalette, children: EmojiSkinTone.allCases.map { tone in
+        skinToneButton.menu = Self.paletteMenu(EmojiSkinTone.allCases.map { tone in
             UIAction(title: tone.title, image: glyphIcon(hand.withSkinTone(tone).emoji, side: 28), state: tone == defaultSkinTone ? .on : .off) { [weak self] _ in
                 self?.onDefaultSkinToneChange(tone)
             }
@@ -880,7 +880,7 @@ extension EmojiPaletteView {
 
     /// 1人の絵文字。押した色の絵文字を、その1回だけ入れる。既定の色は変えない。
     private func singleSkinToneMenu(for emoji: StandardEmoji, current: EmojiSkinTone) -> UIMenu {
-        UIMenu(options: .displayAsPalette, children: EmojiSkinTone.allCases.map { tone in
+        Self.paletteMenu(EmojiSkinTone.allCases.map { tone in
             let toned = emoji.withSkinTone(tone)
             return UIAction(title: tone.title, image: glyphIcon(toned.emoji, side: 28), state: tone == current ? .on : .off) { [weak self] _ in
                 self?.insert(toned)
@@ -918,6 +918,13 @@ extension EmojiPaletteView {
         pairSelection = selection
         glyphPreview?.text = selection.emoji.withSkinTones(selection.first, selection.second).emoji
         collectionView.contextMenuInteraction?.updateVisibleMenu { [weak self] menu in self?.pairSkinToneMenu() ?? menu }
+    }
+
+    /// 色を横に並べるだけのメニュー。並べる段はルートに置かず、ルートの中に入れる。
+    /// Macでは、ルートを`.displayAsPalette`にしたメニューは表示されずに終わり、UIKitがそのメニューを閉じ終えていない扱いのまま残すため、
+    /// アプリを終えるまでどのメニューも出なくなる。
+    private static func paletteMenu(_ children: [UIMenuElement]) -> UIMenu {
+        UIMenu(children: [UIMenu(options: [.displayInline, .displayAsPalette], children: children)])
     }
 
     /// 肌の色の見本。肌の色の修飾だけを描くと、その色の四角になる。色なしは、絵文字の書体の既定の色に近い手で示す。
