@@ -167,10 +167,8 @@ public enum AppearanceHighlight: Equatable, Sendable {
             (N.quotedMediaSpacing, .verticalGap(above: [.quotedBodyGlyphs], below: [.quotedMedia])),
             (N.quotedThumbnailSize, .part(.quotedThumbnails)),
             (N.quotedThumbnailSpacing, .part(.quotedThumbnailGaps)),
-            // 投票は添付ファイルの下に置くので、添付ファイルのない行で示す。
-            (N.quotedPollSpacing, .verticalGap(above: [.quotedBodyGlyphs], below: [.quotedPoll], absent: [.quotedMedia])),
             (N.quotedNoteText, .part(.quotedNote)),
-            (N.quotedNoteSpacing, .verticalGap(above: [.quotedPoll, .quotedMedia, .quotedBodyGlyphs], below: [.quotedNote])),
+            (N.quotedNoteSpacing, .verticalGap(above: [.quotedMedia, .quotedBodyGlyphs], below: [.quotedNote])),
 
             (N.contextText, .part(.contextLine)),
             (N.contextSpacing, .verticalGap(above: [.contextLine], below: [.avatar])),

@@ -10,16 +10,16 @@ import UIKit
 struct NotificationAppearanceEditorTests {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
-    private func layOutPreview(_ settings: AppSettings, height: CGFloat = 4_000, groups: Set<AppearanceGroup.ID>? = nil, focus: AppearanceValue? = nil) -> AppearancePreviewView {
+    private func layOutPreview(_ settings: AppSettings, height: CGFloat = 4_000, groups: Set<AppearanceGroup.ID>? = nil) -> AppearancePreviewView {
         let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: height))
         let samples = NotificationAppearanceSamples(settings: settings, tuning: TuningStore(defaults: nil), now: now)
-        preview.apply(Self.previewConfigurations(samples, groups: groups, focus: focus))
+        preview.apply(Self.previewConfigurations(samples, groups: groups))
         preview.layoutIfNeeded()
         return preview
     }
 
-    private static func previewConfigurations(_ samples: NotificationAppearanceSamples, groups: Set<AppearanceGroup.ID>? = nil, focus: AppearanceValue? = nil) -> [any AppearancePreviewConfiguration] {
-        samples.configurations(groups: groups, focus: focus).compactMap { $0 as? any AppearancePreviewConfiguration }
+    private static func previewConfigurations(_ samples: NotificationAppearanceSamples, groups: Set<AppearanceGroup.ID>? = nil) -> [any AppearancePreviewConfiguration] {
+        samples.configurations(groups: groups).compactMap { $0 as? any AppearancePreviewConfiguration }
     }
 
     /// 種類の記号だけを大きくしても、記号は行の上の余白の内側に収まり、行の上へはみ出さない。
@@ -50,7 +50,7 @@ struct NotificationAppearanceEditorTests {
         let values = try #require(NotificationAppearanceCatalog.groups.first { $0.id == group }).values
         for item in values {
             let highlight = try #require(AppearanceHighlight(item), "\(item.id)に示す場所がありません")
-            let rows = layOutPreview(.isolated(), groups: [group], focus: item).rowFrames()
+            let rows = layOutPreview(.isolated(), groups: [group]).rowFrames()
             #expect(highlight.locate(in: rows) != nil, "\(item.id)の場所が\(group)の見本にありません")
         }
     }

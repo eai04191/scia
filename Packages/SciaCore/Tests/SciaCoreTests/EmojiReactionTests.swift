@@ -232,7 +232,7 @@ struct EmojiReactionTests {
         #expect(notification.type == .emojiReaction)
         #expect(notification.reactionEmoji == remoteCat)
         #expect(notification.groupKey == "ungrouped-50")
-        #expect(notification.layout == .quoted(showsPollResults: false))
+        #expect(notification.layout == .quoted)
     }
 
     /// PleromaとAkkomaの通知は、種類が`pleroma:emoji_reaction`で、絵文字を`emoji`（`:shortcode:`かUnicodeの絵文字）と`emoji_url`に入れる。

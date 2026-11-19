@@ -350,16 +350,15 @@ public struct NotificationAppearancePreviewSamples: Sendable {
 
     /// プレビューに並べる見本。
     /// - Parameters:
-    ///   - groups: 見本を出す分類。渡すと、その分類の見本（`sampleIDs(for:focus:)`）だけを返す。nilならすべての見本を返す。
-    ///   - focus: 触っている項目。`groups`を渡したとき、その項目にしか要らない見本を足す。
-    public func notifications(groups: Set<AppearanceGroup.ID>? = nil, focus: AppearanceValue? = nil) -> [MastodonNotification] {
-        let shown = groups.map { Self.sampleIDs(for: $0, focus: focus) }
+    /// - Parameter groups: 見本を出す分類。渡すと、その分類の見本（`sampleIDs(for:)`）だけを返す。nilならすべての見本を返す。
+    public func notifications(groups: Set<AppearanceGroup.ID>? = nil) -> [MastodonNotification] {
+        let shown = groups.map { Self.sampleIDs(for: $0) }
         return notifications.filter { shown?.contains($0.id) ?? true }
     }
 
-    /// 分類の見本の通知のID。分類ごとの見本に、触っている項目にしか要らない見本を足す。分類が空なら、分類を並べた画面に出す部品の少ない通知を1件だけにする。
-    public static func sampleIDs(for groups: Set<AppearanceGroup.ID>, focus: AppearanceValue?) -> Set<String> {
-        let names = groups.isEmpty ? ["follow"] : groups.flatMap { groupSamples[$0] ?? [] } + focusSamples(focus)
+    /// 分類の見本の通知のID。分類が空なら、分類を並べた画面に出す部品の少ない通知を1件だけにする。
+    public static func sampleIDs(for groups: Set<AppearanceGroup.ID>) -> Set<String> {
+        let names = groups.isEmpty ? ["follow"] : groups.flatMap { groupSamples[$0] ?? [] }
         return Set(names.map { "preview-\($0)" })
     }
 
@@ -373,14 +372,6 @@ public struct NotificationAppearancePreviewSamples: Sendable {
         "quoted": ["reblog"],
         "context": ["mention"],
     ]
-
-    /// 分類のうち一部の項目にしか要らない見本。本文と投票のあいだは、添付ファイルと投票を同じ投稿に付けられないので、投票の通知を触っている間だけ出す。
-    private static func focusSamples(_ focus: AppearanceValue?) -> [String] {
-        switch focus {
-        case NotificationAppearanceCatalog.quotedPollSpacing: ["poll"]
-        default: []
-        }
-    }
 
     private static func notifications(date: Date, sources: PreviewSampleSources) -> [MastodonNotification] {
         let avatar = sources.avatar
@@ -407,15 +398,6 @@ public struct NotificationAppearancePreviewSamples: Sendable {
             mediaAttachments: photos.map(photo),
             quote: Quote(state: "accepted", quotedStatus: quoted)
         )
-        let poll = Poll(
-            id: "preview-poll",
-            expiresAt: date,
-            expired: true,
-            multiple: false,
-            votesCount: 12,
-            options: [Poll.Option(title: "円", votesCount: 7), Poll.Option(title: "角丸の四角", votesCount: 5)]
-        )
-        let polled = Status(id: "preview-polled", createdAt: date, account: scia, content: "<p>アイコンの形はどちらが好きですか？</p>", spoilerText: "", url: nil, poll: poll)
         let mention = Status(
             id: "preview-mentioning",
             createdAt: date,
@@ -434,7 +416,6 @@ public struct NotificationAppearancePreviewSamples: Sendable {
                 groupKey: "follow-preview", notificationsCount: 5, sampleAccounts: others + [friend]
             ),
             MastodonNotification(id: "preview-reblog", type: .reblog, createdAt: date, account: friend, status: reshown),
-            MastodonNotification(id: "preview-poll", type: .poll, createdAt: date, account: scia, status: polled),
             MastodonNotification(id: "preview-mention", type: .mention, createdAt: date, account: friend, status: mention),
         ]
     }

@@ -46,11 +46,10 @@ public struct PollDisplay: Equatable, Sendable {
     /// `summary`に出す人数か票数。表示が数字を入れ替えるときに、増えたか減ったかで入れ替わる向きを決める。
     public let count: Int
 
-    /// - Parameter allowsVoting: 投票する形にしてよい。投票の終了の通知のように、結果を知るために出す場所ではfalseにする。
     /// - Parameter locale: 人数と票数の区切り方を決める、端末の地域。
-    public init(poll: Poll, choices: PollChoices, now: Date, allowsVoting: Bool = true, locale: Locale = .autoupdatingCurrent) {
+    public init(poll: Poll, choices: PollChoices, now: Date, locale: Locale = .autoupdatingCurrent) {
         let isExpired = poll.isExpired(at: now)
-        let showsResults = !allowsVoting || poll.voted || isExpired || choices.isRevealed(poll.id) || poll.options.isEmpty
+        let showsResults = poll.voted || isExpired || choices.isRevealed(poll.id) || poll.options.isEmpty
         mode = showsResults ? .results : .voting
         multiple = poll.multiple
         isSubmitting = choices.isSubmitting(poll.id)
@@ -73,8 +72,8 @@ public struct PollDisplay: Equatable, Sendable {
         }
         canSubmit = !showsResults && !selection.isEmpty && !isSubmitting
         canRevealResults = !showsResults && !hidesTotals
-        canReturnToVoting = allowsVoting && showsResults && !poll.voted && !isExpired && !poll.options.isEmpty
-        canRefresh = allowsVoting && showsResults && !poll.expired
+        canReturnToVoting = showsResults && !poll.voted && !isExpired && !poll.options.isEmpty
+        canRefresh = showsResults && !poll.expired
         var parts = [poll.votersCount.map { "\(Self.countText($0, locale: locale))人" } ?? "\(Self.countText(poll.votesCount, locale: locale))票"]
         if let expiresAt = poll.expiresAt {
             parts.append(isExpired ? "終了" : Self.remainingText(until: expiresAt, now: now))

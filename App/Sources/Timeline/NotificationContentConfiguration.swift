@@ -376,7 +376,6 @@ extension NotificationContentView {
                 .bodyText: .quotedBodyText,
                 .bodyGlyphs: .quotedBodyGlyphs,
                 .media: .quotedMedia,
-                .poll: .quotedPoll,
                 .filterNote: .quotedNote,
             ]
             for (part, quoted) in parts {

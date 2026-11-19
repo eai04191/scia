@@ -465,9 +465,10 @@ enum PostRowCatalog {
             row("ブースト（本文のない画像だけの投稿）", .reblog, status: status(content: "", media: [
                 Fixtures.attachment("a", width: 1_600, height: 900, color: .systemIndigo),
             ])),
-            row("投票の終了（結果を出し、押せない）", .poll, status: status(content: "<p>締め切った自分の投票。</p>", poll: PollCatalog.endedPoll)),
-            row("ブーストした投稿の編集", .update, status: mine),
-            row("引用した投稿の編集", .quotedUpdate, status: mine),
+            row("投票の終了（自分の投票）", .poll, status: status(content: "<p>締め切った自分の投票。</p>", poll: PollCatalog.endedPoll)),
+            row("投票の終了（投票した相手の投票）", .poll, status: status(content: "<p>締め切った相手の投票。</p>", account: booster, poll: PollCatalog.endedPoll)),
+            row("ブーストした投稿の編集", .update, status: status(content: "<p>ブーストした相手の投稿。</p>", account: booster)),
+            row("引用した投稿の編集（引用した自分の投稿を再掲する）", .quotedUpdate, status: status(content: "<p>相手の投稿を引用した自分の投稿。</p>", quote: Quote(state: "accepted", quotedStatus: mentioned))),
             row("フォロー", .follow, status: nil),
             row("フォロー（名前が長い）", .follow, status: nil, account: Fixtures.account(
                 displayName: String(repeating: "とても長い名前", count: 4),

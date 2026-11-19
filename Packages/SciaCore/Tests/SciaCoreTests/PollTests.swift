@@ -91,15 +91,6 @@ struct PollDisplayTests {
         #expect(before != after)
     }
 
-    /// 投票の終了の通知のように、結果を知るための場所では、投票する形にしない。
-    @Test func resultsWhenVotingIsNotAllowed() {
-        let display = PollDisplay(poll: poll(), choices: PollChoices(), now: now, allowsVoting: false)
-
-        #expect(display.mode == .results)
-        #expect(!display.canReturnToVoting)
-        #expect(!display.canRefresh)
-    }
-
     @Test func fractionsUseVotersForMultipleChoicePolls() {
         let display = PollDisplay(poll: poll(multiple: true, votes: [3, 2], votersCount: 4, voted: true, ownVotes: [0, 1]), choices: PollChoices(), now: now)
 

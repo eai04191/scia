@@ -53,7 +53,6 @@ public enum NotificationAppearanceCatalog {
     /// 1列に並べるサムネイル同士のすき間。
     public static let quotedThumbnailSpacing = AppearanceValue(id: "notification.quotedThumbnailSpacing", title: "サムネイル同士のすき間", range: 0...100, step: 1, spacing: .s1)
     /// 再掲する本文と、結果の形で足す投票のあいだ。
-    public static let quotedPollSpacing = AppearanceValue(id: "notification.quotedPollSpacing", title: "本文と投票のあいだ", range: 0...100, step: 1, spacing: .s3)
     /// 引用のある投稿を再掲するときに、囲みの代わりに一番下に置く1行の文字。
     public static let quotedNoteText = AppearanceValue(id: "notification.text.quotedNote", title: "引用のある投稿を示す行の文字", range: -40...40, step: 1, defaultValue: -2, unit: .textOffset)
     /// 本文などと、引用のある投稿を示す1行のあいだ。
@@ -72,7 +71,7 @@ public enum NotificationAppearanceCatalog {
         AppearanceGroup(id: "header", title: "誰が何をしたかの行", values: [headerText, headerAvatarSize, headerAvatarNameSpacing]),
         AppearanceGroup(id: "symbol", title: "種類の記号", values: [symbolText, symbolSpacing]),
         AppearanceGroup(id: "account", title: "フォローなどのハンドル", values: [accountText, accountSpacing]),
-        AppearanceGroup(id: "quoted", title: "お気に入りやブーストで再掲する投稿", values: [quotedSpacing, quotedBodyText, quotedBodyLines, quotedMediaSpacing, quotedThumbnailSize, quotedThumbnailSpacing, quotedPollSpacing, quotedNoteText, quotedNoteSpacing]),
+        AppearanceGroup(id: "quoted", title: "お気に入りやブーストで再掲する投稿", values: [quotedSpacing, quotedBodyText, quotedBodyLines, quotedMediaSpacing, quotedThumbnailSize, quotedThumbnailSpacing, quotedNoteText, quotedNoteSpacing]),
         AppearanceGroup(id: "context", title: "メンションなどの名前の上の行", values: [contextText, contextSpacing]),
     ]
 

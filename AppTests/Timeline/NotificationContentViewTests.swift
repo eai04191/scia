@@ -187,7 +187,7 @@ struct NotificationAppearanceTests {
         TimelineViewController(settings: settings, refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline)
     }
 
-    /// 通知の行の組み方をひととおり。再掲する投稿には、本文、注意書き、画像、投票、引用を付ける。
+    /// 通知の行の組み方をひととおり。対象の投稿には、本文、注意書き、画像、投票、引用を付ける。
     private func notifications() throws -> [MastodonNotification] {
         let base = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
         let bob = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: base.account.avatar)
@@ -239,20 +239,18 @@ struct NotificationAppearanceTests {
         }
     }
 
-    /// 再掲する投稿の、サムネイル、投票、引用を示す行のあいだは、それぞれの項目で決まる。
+    /// 再掲する投稿の、サムネイルと引用を示す行のあいだは、それぞれの項目で決まる。
     @Test func quotedSpacingsAreIndependent() throws {
         typealias N = NotificationAppearanceCatalog
         let settings = AppSettings.isolated()
         settings.setValue(11, for: N.quotedMediaSpacing)
-        settings.setValue(12, for: N.quotedPollSpacing)
         settings.setValue(13, for: N.quotedNoteSpacing)
         settings.setValue(14, for: N.quotedSpacing)
         settings.setValue(15, for: N.quotedThumbnailSpacing)
         settings.setValue(50, for: N.quotedThumbnailSize)
-        let notification = try #require(notifications().first { $0.type == .poll })
+        let notification = try #require(notifications().first { $0.type == .favourite })
         let configuration = try #require(makeViewController(settings).contentConfiguration(for: notification, base: .cell()) as? NotificationContentConfiguration)
         #expect(configuration.body.mediaSpacing == 11)
-        #expect(configuration.body.pollSpacing == 12)
         #expect(configuration.body.filterNoteSpacing == 13)
         #expect(configuration.metrics.bodySpacing == 14)
         #expect(configuration.body.media?.spacing == 15)

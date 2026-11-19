@@ -96,7 +96,7 @@ struct NotificationAppearanceGroupEditorView: View {
             VStack(spacing: 0) {
                 FittedAppearancePreview(
                     timeline: samples.timeline,
-                    entries: samples.entries(groups: [group.id], focus: focused),
+                    entries: samples.entries(groups: [group.id]),
                     heightLimit: geometry.size.height * AppearanceGroupEditorView.previewHeightLimit
                 )
                 Divider()
@@ -142,16 +142,14 @@ struct NotificationAppearanceSamples {
     }
 
     /// プレビューのタイムラインに並べる見本。
-    /// - Parameters:
-    ///   - groups: 見本を出す分類。nilならすべての見本を返す。
-    ///   - focus: 触っている項目。`groups`を渡したとき、その項目にしか要らない見本を足す。
-    func entries(groups: Set<AppearanceGroup.ID>? = nil, focus: AppearanceValue? = nil) -> [TimelineEntry] {
-        samples.notifications(groups: groups, focus: focus).map { .notification($0) }
+    /// - Parameter groups: 見本を出す分類。nilならすべての見本を返す。
+    func entries(groups: Set<AppearanceGroup.ID>? = nil) -> [TimelineEntry] {
+        samples.notifications(groups: groups).map { .notification($0) }
     }
 
     /// 見本の行の中身。テストで、見本の部品の位置を測るのに使う。
-    func configurations(groups: Set<AppearanceGroup.ID>? = nil, focus: AppearanceValue? = nil) -> [any UIContentConfiguration] {
-        entries(groups: groups, focus: focus).compactMap { entry in
+    func configurations(groups: Set<AppearanceGroup.ID>? = nil) -> [any UIContentConfiguration] {
+        entries(groups: groups).compactMap { entry in
             guard case .notification(let notification) = entry else { return nil }
             return timeline.contentConfiguration(for: notification, base: .cell())
         }

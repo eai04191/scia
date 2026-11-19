@@ -3,8 +3,7 @@ import UIKit
 
 extension TimelineViewController {
     /// 投稿の投票。投票がなければnil。ブーストなら、元の投稿を渡す。
-    /// - Parameter allowsVoting: 投票する形にしてよい。投票の終了の通知のように、結果を知るために出す場所ではfalseにする。
-    func pollContent(for shown: Status, allowsVoting: Bool = true, base: UIListContentConfiguration) -> PollView.Content? {
+    func pollContent(for shown: Status, base: UIListContentConfiguration) -> PollView.Content? {
         guard let poll = shown.poll else { return nil }
         let typography = PostTypography(settings: settings)
         let font = typography.font(.body)
@@ -12,7 +11,7 @@ extension TimelineViewController {
         let renderer = RichTextRenderer(font: font, textColor: .label, settings: settings, showsCustomEmojis: appearance(for: shown).showsCustomEmojis, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier(for: shown.language))
         return PollView.Content(
             pollID: poll.id,
-            display: PollDisplay(poll: poll, choices: pollChoices, now: now(), allowsVoting: allowsVoting),
+            display: PollDisplay(poll: poll, choices: pollChoices, now: now()),
             titles: poll.options.map { renderer.render(.plain($0.title, emojis: poll.emojis)) },
             titleFont: font,
             footerFont: typography.font(.pollFooter),

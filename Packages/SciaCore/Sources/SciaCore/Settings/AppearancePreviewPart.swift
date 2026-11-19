@@ -217,8 +217,6 @@ public enum AppearancePreviewPart: Hashable, CaseIterable, Sendable {
     case quotedThumbnails
     /// 1列に並べたサムネイル同士のあいだ。
     case quotedThumbnailGaps
-    /// 結果の形で足した投票。
-    case quotedPoll
     /// 引用のある投稿であることを示す1行。
     case quotedNote
 }

@@ -20,9 +20,9 @@ extension TimelineViewController {
         case .post:
             guard let status = notification.status else { return headerOnlyConfiguration(for: notification, base: base) }
             return postConfiguration(for: notification, status: status, itemID: itemID, base: base)
-        case .quoted(let showsPollResults):
+        case .quoted:
             guard let status = notification.status else { return headerOnlyConfiguration(for: notification, base: base) }
-            return quotedConfiguration(for: notification, status: status, showsPollResults: showsPollResults, itemID: itemID, base: base)
+            return quotedConfiguration(for: notification, status: status, itemID: itemID, base: base)
         case .headerOnly:
             return headerOnlyConfiguration(for: notification, base: base)
         }
@@ -43,7 +43,7 @@ extension TimelineViewController {
         return kept
     }
 
-    /// メンションなど、相手が書いた投稿を読む通知。投稿として扱い、投稿の部品は「投稿の見た目」で描く。
+    /// メンションや投票の終了など、投稿を読む通知。投稿として扱い、投稿の部品は「投稿の見た目」で描く。
     /// 名前の上に足す、誰が何をしたかの行だけは、通知のための部品なので「通知の見た目」で描く。
     /// 投稿した人は通知を送った人と同じで、下の名前の行にアイコンが出るため、上の行にはアイコンを出さない。
     private func postConfiguration(for notification: MastodonNotification, status: Status, itemID: ItemID?, base: UIListContentConfiguration) -> PostContentConfiguration {
@@ -80,9 +80,8 @@ extension TimelineViewController {
 
     /// お気に入りやブーストなど、自分の投稿の再掲になる通知。誰が何をしたかの行を目立たせ、本文は控えめな色で、段落と改行を詰めて短く切り、
     /// 添付ファイルは小さなサムネイルを1列だけ並べる。引用は囲みを出さず、引用のある投稿であることを示す1行にする。
-    /// 再掲の縮めた形は通知のためのものなので、大きさと余白は「通知の見た目」で決める。注意書きのボックスや投票の部品は、投稿と同じ部品を使う。
-    /// - Parameter showsPollResults: 投票を結果の形で足す。投票はできない形にし、選択肢は押下を受けない。
-    private func quotedConfiguration(for notification: MastodonNotification, status: Status, showsPollResults: Bool, itemID: ItemID?, base: UIListContentConfiguration) -> NotificationContentConfiguration {
+    /// 再掲の縮めた形は通知のためのものなので、大きさと余白は「通知の見た目」で決める。注意書きのボックスは、投稿と同じ部品を使う。
+    private func quotedConfiguration(for notification: MastodonNotification, status: Status, itemID: ItemID?, base: UIListContentConfiguration) -> NotificationContentConfiguration {
         typealias N = NotificationAppearanceCatalog
         let shown = status.displayed
         let typography = PostTypography(settings: settings)
@@ -99,8 +98,6 @@ extension TimelineViewController {
                 maximumLines: Int(settings.value(of: N.quotedBodyLines)),
                 media: media,
                 mediaSpacing: settings.value(of: N.quotedMediaSpacing),
-                poll: showsPollResults ? pollContent(for: shown, allowsVoting: false, base: base) : nil,
-                pollSpacing: settings.value(of: N.quotedPollSpacing),
                 statusID: shown.id,
                 hashtagAccount: shown.account,
                 // 再掲では引用の囲みを出さず、引用のある投稿であることだけを、一番下の1行で示す。

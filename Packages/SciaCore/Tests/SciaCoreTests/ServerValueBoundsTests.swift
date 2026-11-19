@@ -73,7 +73,7 @@ struct ServerValueBoundsTests {
         let json = #"{"id":"1","expires_at":null,"expired":true,"multiple":false,"votes_count":1,"voters_count":null,"options":[{"title":"多い","votes_count":9223372036854775807},{"title":"負","votes_count":-9223372036854775808}],"emojis":[]}"#
         let poll = try MastodonDecoder.make().decode(Poll.self, from: Data(json.utf8))
 
-        let display = PollDisplay(poll: poll, choices: PollChoices(), now: Date(timeIntervalSince1970: 0), allowsVoting: false)
+        let display = PollDisplay(poll: poll, choices: PollChoices(), now: Date(timeIntervalSince1970: 0))
 
         #expect(poll.options.map(\.votesCount) == [ServerCount.upperBound, 0])
         #expect(display.options.map(\.fraction) == [1, 0])

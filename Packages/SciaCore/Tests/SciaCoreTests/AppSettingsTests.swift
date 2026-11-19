@@ -480,14 +480,14 @@ struct AppSettingsTests {
     @Test func notificationAppearancePersistsAndResetsAlone() throws {
         let defaults = try makeDefaults()
         let settings = AppSettings(defaults: defaults)
-        settings.setValue(12, for: NotificationAppearanceCatalog.quotedPollSpacing)
+        settings.setValue(37, for: NotificationAppearanceCatalog.quotedMediaSpacing)
         settings.setValue(4, for: AppearanceCatalog.bodyText)
         let relaunched = AppSettings(defaults: defaults)
-        #expect(relaunched.value(of: NotificationAppearanceCatalog.quotedPollSpacing) == 12)
+        #expect(relaunched.value(of: NotificationAppearanceCatalog.quotedMediaSpacing) == 37)
         #expect(relaunched.isNotificationAppearanceModified)
         relaunched.resetNotificationAppearance()
         #expect(!relaunched.isNotificationAppearanceModified)
-        #expect(AppSettings(defaults: defaults).value(of: NotificationAppearanceCatalog.quotedPollSpacing) == NotificationAppearanceCatalog.quotedPollSpacing.defaultValue)
+        #expect(AppSettings(defaults: defaults).value(of: NotificationAppearanceCatalog.quotedMediaSpacing) == NotificationAppearanceCatalog.quotedMediaSpacing.defaultValue)
         #expect(AppSettings(defaults: defaults).value(of: AppearanceCatalog.bodyText) == 4)
     }
 
