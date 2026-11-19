@@ -27,6 +27,8 @@ struct EmojiPaletteMenu {
         tree.saveToPhotos = context.transfers != nil
         tree.linkBrowser = settings.linkBrowser
         tree.opensURLs = context.openURL != nil
+        tree.display = settings.customEmojiDisplay(of: emoji.emoji)
+        tree.isKnownStill = emojiImages.isKnownStill(emoji.url)
         let renderer = MenuRenderer<CustomEmojiMenuCommand> { [weak palette] command in
             guard let palette else { return }
             perform(command, on: emoji, in: palette)
@@ -40,6 +42,9 @@ struct EmojiPaletteMenu {
         switch command {
         case .copyShortcode(let text), .copyValue(let text):
             copy(text)
+        case .setDisplay(let display):
+            settings.setCustomEmojiDisplay(display, of: emoji.emoji)
+            show(.customEmojiDisplayChanged(emoji.emoji, to: display))
         case .open:
             open(emoji, from: presenter, closing: palette)
         case .share:

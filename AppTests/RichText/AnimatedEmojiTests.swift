@@ -50,14 +50,18 @@ struct AnimatedEmojiTests {
     /// 静止画とアニメーション版が届くまで待ってから、`text`を描いたラベル。
     /// - Parameter lineBreakMode: はみ出す分の扱い。本物の本文や名前と同じく、文字列の段落に入れる。UILabelは文字列を入れたときに、
     ///   段落の設定で自分の`lineBreakMode`を上書きするため、ラベルに入れても効かない。
-    private func label(_ text: RichText, store: EmojiImageStore<UIImage>, numberOfLines: Int = 0, lineBreakMode: NSLineBreakMode = .byWordWrapping, width: CGFloat = 300) async throws -> LinkLabel {
-        let renderer = RichTextRenderer(font: font, textColor: .label, settings: AppDependencies.settings, emojiImages: store, language: "ja")
+    private func label(
+        _ text: RichText, store: EmojiImageStore<UIImage>, settings: AppSettings = AppDependencies.settings,
+        numberOfLines: Int = 0, lineBreakMode: NSLineBreakMode = .byWordWrapping, width: CGFloat = 300
+    ) async throws -> LinkLabel {
+        let renderer = RichTextRenderer(font: font, textColor: .label, settings: settings, emojiImages: store, language: "ja")
         let emojis = text.blocks.flatMap(\.inlines).compactMap { inline -> CustomEmoji? in
             if case .emoji(let emoji) = inline { emoji } else { nil }
         }
-        // 1回目で読み込みを始め、届くまで待つ。
+        // 1回目で読み込みを始め、届くまで待つ。絵文字ごとに画像を描かないと選んだ絵文字も、ほかの場所で読まれたときと同じく両方を読んでおく。
         _ = renderer.render(text)
         for emoji in emojis {
+            _ = store.image(for: emoji.staticUrl)
             _ = store.animation(for: emoji.url)
         }
         try await waitUntil { emojis.allSatisfy { store.image(for: $0.staticUrl) != nil && store.hasFinishedLoadingAnimation(for: $0.url) } }
@@ -105,6 +109,59 @@ struct AnimatedEmojiTests {
         let animation = try #require(layer.animation(forKey: "frames") as? CAKeyframeAnimation)
         #expect(animation.values?.count == 3)
         #expect(animation.keyTimes?.count == 4)
+    }
+
+    /// `crab`の描き方を`display`にした、ログインしているサーバーのアカウントの設定。
+    private func settings(_ display: CustomEmojiDisplay, of crab: CustomEmoji) -> AppSettings {
+        let settings = AppSettings(defaults: TestScratch.defaults("AnimatedEmojiTests")).forAccount("@alice@example.social")
+        settings.setCustomEmojiDisplay(display, of: crab)
+        return settings
+    }
+
+    /// 「遅く再生」の絵文字は、どのコマも2倍の長さで送る。コマの切り替わる位置の割合は変えない。
+    @Test(.scratch) func slowEmojiPlaysAtHalfSpeed() async throws {
+        let crab = try emoji("crab")
+        let label = try await label(RichText.plain(":crab:", emojis: [crab]), store: try store(), settings: settings(.playsSlowly, of: crab))
+
+        let layer = try #require(animatedLayers(of: label).first)
+        let animation = try #require(layer.animation(forKey: "frames") as? CAKeyframeAnimation)
+        #expect(abs(animation.duration - 0.6) < 0.001)
+        #expect(animation.keyTimes?.map(\.doubleValue).last.map { abs($0 - 1) < 0.001 } == true)
+    }
+
+    /// 「アニメーションしない」の絵文字は、ほかの場所でアニメーションを読んでいても層を重ねず、動かない版で描く。
+    @Test(.scratch) func stillEmojiIsDrawnWithStaticImage() async throws {
+        let crab = try emoji("crab")
+        let store = try store()
+        let label = try await label(RichText.plain(":crab:", emojis: [crab]), store: store, settings: settings(.still, of: crab))
+
+        #expect(animatedLayers(of: label).isEmpty)
+        #expect(attachment(at: 0, of: label)?.image === store.image(for: crab.staticUrl))
+    }
+
+    /// 「ショートコードで表示」は画像の代わりに`:shortcode:`を、「表示しない」は何も出さない。ほかのサーバーの同じショートコードの絵文字は変えない。
+    @Test(.scratch) func shortcodeAndHiddenEmojisDrawNoImage() throws {
+        let crab = try emoji("crab")
+        let remote = CustomEmoji(shortcode: crab.shortcode, url: crab.url, staticUrl: crab.staticUrl, domain: "remote.example")
+        let text = RichText.plain("A:crab:B", emojis: [crab])
+        let remoteText = RichText.plain(":crab:", emojis: [remote])
+        for (display, expected) in [(CustomEmojiDisplay.shortcode, "A:crab:B"), (.hidden, "AB")] {
+            let renderer = RichTextRenderer(font: font, textColor: .label, settings: settings(display, of: crab), emojiImages: try store(), language: "ja")
+            #expect(renderer.render(text).string == expected)
+            #expect(renderer.render(remoteText).string == "\u{FFFC}")
+        }
+    }
+
+    /// 「表示しない」にした絵文字の前が空白か段落の頭なら、後ろの空白を1つ詰め、空白が2つ並んで残らないようにする。
+    @Test(.scratch) func hiddenEmojiDoesNotLeaveDoubleSpace() throws {
+        let crab = try emoji("crab")
+        let renderer = RichTextRenderer(font: font, textColor: .label, settings: settings(.hidden, of: crab), emojiImages: try store(), language: "ja")
+        for (source, expected) in [("動く :crab: 動く", "動く 動く"), (":crab: :crab: 本文", "本文"), ("前 :crab:", "前 "), ("A:crab: B", "A B")] {
+            #expect(renderer.render(RichText.plain(source, emojis: [crab])).string == expected, "\(source)")
+        }
+        // 書式で区切られて、絵文字の後ろの空白が1文字だけのインラインになっても、詰めるのは1つだけ。
+        let split = RichText.html("<p>前 :crab: <b> 本文</b></p>", emojis: [crab])
+        #expect(renderer.render(split).string == "前  本文")
     }
 
     /// セルを描き直して同じ文字列を渡し直しても、層を作り直さない。作り直すと、描き直すたびに層とアニメーションを作る手間がかかるため。

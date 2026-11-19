@@ -188,7 +188,7 @@ struct StatusMenuTests {
         await recorder.releaseAccounts()
     }
 
-    /// カスタム絵文字は「その他」に、絵文字ごとの`:shortcode:`のサブメニューで並び、中にカスタム絵文字のメニューを出す。先頭の項目は`:shortcode:`のコピー。
+    /// カスタム絵文字は「その他」に、絵文字ごとの`:shortcode:`のサブメニューで並び、中にカスタム絵文字のメニューを出す。先頭の項目は`:shortcode:`のコピーで、次に今の描き方を添えた「表示」を置く。
     @Test func customEmojisListCustomEmojiMenuPerEmojiInMore() throws {
         let emojiURL = try #require(URL(string: "https://example.social/emoji/blobcat.png"))
         let base = try status(url: nil)
@@ -200,7 +200,7 @@ struct StatusMenuTests {
         let more = try #require(menu(for: .status(post))?.children.last as? UIMenu)
         #expect(more.title == "その他")
         let emoji = try #require(more.children.flatMap { ($0 as? UIMenu)?.children ?? [$0] }.first { $0.title == ":blobcat:" })
-        #expect(describe(emoji) == ":blobcat:[:blobcat:,開く,リンクをコピー,ブラウザで開く,その他[メディアの情報[PNG],カスタマイズ]]")
+        #expect(describe(emoji) == ":blobcat:[:blobcat:,表示(表示する)[表示する,遅く再生,アニメーションしない,ショートコードで表示,表示しない],開く,リンクをコピー,ブラウザで開く,その他[メディアの情報[PNG],カスタマイズ]]")
     }
 
     /// ハッシュタグの「ミュート」は、自分のフィルターを覚えていれば、その場でミュートしているかを決め、読み込み中の行を出さない。

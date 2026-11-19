@@ -89,7 +89,7 @@ struct PostContentBuilder {
         let bodyRenderer = postBodyRenderer(of: shown, translation: translation, isTranslating: isTranslating)
         let showsBody = appearance.showsBody
         let preparedBody = showsBody ? preparedBodies?.prepared(for: shown, translation: translation, renderer: bodyRenderer) : nil
-        let body = showsBody ? withoutBlankLeftByHiddenEmojis(preparedBody?.text ?? bodyRenderer.render(translation ?? .status(shown))) : NSAttributedString()
+        let body = showsBody ? withoutBlankLeftByHiddenEmojis(preparedBody?.text ?? bodyRenderer.render(translation ?? .status(shown)), of: shown) : NSAttributedString()
         let context: PostContentConfiguration.Context? = if isPinned {
             PostContentConfiguration.Context(
                 symbolName: "pin.fill",
@@ -187,8 +187,9 @@ struct PostContentBuilder {
     func reactionChips(for shown: Status, localEmojis: [String: CustomEmoji]) -> [ReactionChipsView.Reaction]? {
         guard !shown.emojiReactions.isEmpty, appearance.showsReactions else { return nil }
         let renderer = RichTextRenderer(font: values.typography.font(.reaction), textColor: .label, settings: settings, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
-        return shown.emojiReactions.map { reaction in
+        let chips: [ReactionChipsView.Reaction] = shown.emojiReactions.compactMap { reaction in
             let emoji = reaction.emoji.resolvingImage(in: localEmojis)
+            if let source = emoji.customSource, renderer.hidesReaction(shortcode: source.shortcode, domain: source.domain) { return nil }
             // 画像のないカスタム絵文字（URLが読めなかったもの）は、ショートコードを文字で出す。
             let shortcode = emoji.isCustom ? ":\(emoji.name):" : nil
             let text: RichText = emoji.customEmoji.map { .plain(":\($0.shortcode):", emojis: [$0]) } ?? .plain(shortcode ?? emoji.name, emojis: [])
@@ -200,6 +201,8 @@ struct PostContentBuilder {
                 spokenName: shortcode ?? emoji.name
             )
         }
+        // 出すリアクションが残らなければ、リアクションのない投稿と同じく列ごと出さない。
+        return chips.isEmpty ? nil : chips
     }
 
     /// 絵文字のリアクションのボタンの文字と大きさ。
@@ -384,7 +387,7 @@ struct PostContentBuilder {
             ),
             filterWarning: filterWarning.map(SpoilerView.Content.init),
             spoiler: spoiler.map(SpoilerView.Content.init),
-            text: withoutBlankLeftByHiddenEmojis(translated(bodyRenderer(of: quoted, font: font, color: .label), by: translation).render(translation?.text ?? .status(quoted))),
+            text: withoutBlankLeftByHiddenEmojis(translated(bodyRenderer(of: quoted, font: font, color: .label), by: translation).render(translation?.text ?? .status(quoted)), of: quoted),
             translation: embedTranslation(translation),
             media: media,
             notes: notes,
@@ -412,10 +415,11 @@ struct PostContentBuilder {
         noteText(PostTexts.quoteNote, symbolName: "quote.bubble", color: .secondaryLabel, font: font)
     }
 
-    /// カスタム絵文字を出さない設定で、絵文字を除いた本文に空白と改行しか残らなければ、本文のない投稿と同じく空にする。
+    /// カスタム絵文字を出さない設定か、本文の絵文字のどれかを「表示しない」にしていて、絵文字を除いた本文に空白と改行しか残らなければ、本文のない投稿と同じく空にする。
     /// 残すと、絵文字だけの本文のあった場所に、空の行と本文とのすき間が残る。
-    private func withoutBlankLeftByHiddenEmojis(_ text: NSAttributedString) -> NSAttributedString {
-        guard !appearance.showsCustomEmojis, text.string.unicodeScalars.allSatisfy({ CharacterSet.whitespacesAndNewlines.contains($0) }) else { return text }
+    private func withoutBlankLeftByHiddenEmojis(_ text: NSAttributedString, of status: Status) -> NSAttributedString {
+        let hidesEmojis = !appearance.showsCustomEmojis || status.emojis.contains { settings.customEmojiDisplay(of: $0) == .hidden }
+        guard hidesEmojis, text.string.unicodeScalars.allSatisfy({ CharacterSet.whitespacesAndNewlines.contains($0) }) else { return text }
         return NSAttributedString()
     }
 

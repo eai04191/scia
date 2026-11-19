@@ -319,6 +319,45 @@ struct HiddenPostPartsTests {
         #expect(timeline { $0.appearance.showsCustomEmojis = false }.contentConfiguration(for: emojiOnly, base: .cell()).body.length == 0)
     }
 
+    /// 本文の絵文字を絵文字ごとに「表示しない」にしたときも、絵文字だけの本文は、あいだの空白や改行を残さず空にする。
+    /// 同じ本文でも「ショートコードで表示」なら、ショートコードの文字を残す。
+    @Test func emojiOnlyBodyWithHiddenEmojiIsEmpty() throws {
+        let base = try status()
+        let url = try #require(URL(string: "https://files.example.social/blob.png"))
+        let account = Account(id: base.account.id, username: "alice", acct: "alice@remote.example", displayName: "名前", avatar: base.account.avatar)
+        let post = Status(
+            id: base.id, createdAt: base.createdAt, account: account, content: "<p>:blob: :blob:</p><p>:blob:</p>", spoilerText: "", url: nil,
+            emojis: [CustomEmoji(shortcode: "blob", url: url, staticUrl: url)]
+        )
+        func rule(_ display: CustomEmojiDisplay) -> CustomEmojiDisplayRule {
+            CustomEmojiDisplayRule(id: CustomEmojiID(shortcode: "blob", domain: "remote.example"), display: display, url: url, staticUrl: url)
+        }
+
+        #expect(timeline { $0.customEmojiDisplayRules = [rule(.hidden)] }.contentConfiguration(for: post, base: .cell()).body.length == 0)
+        #expect(timeline { $0.customEmojiDisplayRules = [rule(.shortcode)] }.contentConfiguration(for: post, base: .cell()).body.string.contains(":blob:"))
+    }
+
+    /// 「表示しない」にした絵文字のリアクションは、ボタンごと出さない。残るリアクションがなければ、列ごと出さない。
+    @Test func reactionWithHiddenEmojiIsNotShown() throws {
+        let base = try status()
+        let url = try #require(URL(string: "https://files.example.social/blob.png"))
+        let blob = EmojiReaction(emoji: ReactionEmoji(name: "blob", domain: "remote.example", url: url, staticUrl: url), count: 2, me: false)
+        let thumbs = EmojiReaction(emoji: ReactionEmoji(name: "👍"), count: 1, me: false)
+        func post(_ reactions: [EmojiReaction]) -> Status {
+            Status(id: base.id, createdAt: base.createdAt, account: base.account, content: base.content, spoilerText: "", url: nil, emojiReactions: reactions)
+        }
+        let timeline = timeline {
+            $0.customEmojiDisplayRules = [CustomEmojiDisplayRule(id: CustomEmojiID(shortcode: "blob", domain: "remote.example"), display: .hidden, url: url, staticUrl: url)]
+        }
+        timeline.capabilities.supportsEmojiReactions = true
+
+        #expect(timeline.contentConfiguration(for: post([blob, thumbs]), base: .cell()).reactions?.map(\.name) == ["👍"])
+        #expect(timeline.contentConfiguration(for: post([blob]), base: .cell()).reactions == nil)
+        // 画像のURLを返さないサーバーのリアクションも、名前とサーバーで見分けて出さない。
+        let withoutImage = EmojiReaction(emoji: ReactionEmoji(name: "blob", domain: "remote.example"), count: 1, me: false)
+        #expect(timeline.contentConfiguration(for: post([withoutImage, thumbs]), base: .cell()).reactions?.map(\.name) == ["👍"])
+    }
+
     /// 投稿のアイコンを出さないと、投稿の区切り線は本文の左端（行の左の余白）から引く。アイコンを出したままの通知や人の行は、アイコンの列の右から引く。
     @Test func hiddenAvatarMovesOnlyPostSeparators() {
         let settings = AppSettings.isolated()

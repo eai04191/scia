@@ -142,6 +142,8 @@ final class ProfileEndorsementsShelfView: ProfileShelfView {
         let animatesAvatars: Bool
         let animatesCustomEmojis: Bool
         let glyphLanguage: String
+        /// 表示名のカスタム絵文字ごとの描き方。変わったらカードを描き直す。
+        var emojiDisplays = CustomEmojiDisplays.none
     }
 
     /// カードが押された。

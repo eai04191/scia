@@ -155,7 +155,7 @@ final class BodyTextPreparer {
                     id: status.id,
                     status: status,
                     source: Source(status, translation: translated),
-                    renderer: made.withEmojiSnapshot(of: status.emojis.map(made.emojiChoice.url(of:))),
+                    renderer: made.withEmojiSnapshot(of: status.emojis.compactMap(made.imageURL(of:))),
                     geometry: geometry,
                     truncation: truncation(status)
                 )))
@@ -221,7 +221,7 @@ final class BodyTextPreparer {
         return Entry(
             source: request.source,
             renderer: request.renderer,
-            emojiPixelHeights: emojiPixelHeights(in: text, urls: request.renderer.showsCustomEmojis ? request.renderer.emojiURLs(in: richText) : [], choice: request.renderer.emojiChoice, scale: request.renderer.displayScale),
+            emojiPixelHeights: emojiPixelHeights(in: text, urls: request.renderer.showsCustomEmojis ? request.renderer.emojiURLs(in: richText) : [], renderer: request.renderer),
             text: text,
             layout: layout
         )
@@ -229,14 +229,14 @@ final class BodyTextPreparer {
 
     /// 本文の絵文字の画像のURLごとの、描いた高さのピクセル数。同じ絵文字を違う高さで描いていれば、高いほう。
     /// 画像を置かずに文字で描いた絵文字は、ストアの既定の高さにする。
-    private nonisolated static func emojiPixelHeights(in text: NSAttributedString, urls: Set<URL>, choice: EmojiImageChoice, scale: CGFloat) -> [URL: Int] {
+    private nonisolated static func emojiPixelHeights(in text: NSAttributedString, urls: Set<URL>, renderer: RichTextRenderer) -> [URL: Int] {
         var heights = Dictionary(uniqueKeysWithValues: urls.map { ($0, EmojiImageStore<UIImage>.pixelHeight) })
         text.enumerateAttribute(.customEmoji, in: NSRange(location: 0, length: text.length)) { value, range, _ in
             guard let emoji = value as? CustomEmoji,
+                  let url = renderer.imageURL(of: emoji),
                   let attachment = text.attribute(.attachment, at: range.location, effectiveRange: nil) as? NSTextAttachment
             else { return }
-            let height = RichTextRenderer.pixelHeight(of: attachment.bounds.height, scale: scale)
-            let url = choice.url(of: emoji)
+            let height = RichTextRenderer.pixelHeight(of: attachment.bounds.height, scale: renderer.displayScale)
             heights[url] = max(heights[url] ?? 0, height)
         }
         return heights

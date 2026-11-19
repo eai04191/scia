@@ -17,10 +17,12 @@ final class AnimatedEmojiOverlay {
         let animation: EmojiAnimation
         /// 動く層の上に重ねる色。編集履歴で足した絵文字を示す。
         let tint: UIColor?
+        /// コマを送る速さの、元の速さに対する割合。
+        let rate: Double
 
-        /// 同じ位置に同じアニメーションを同じ色で描く。
+        /// 同じ位置に同じアニメーションを同じ色と速さで描く。
         func isSame(as other: Entry) -> Bool {
-            index == other.index && animation === other.animation && tint == other.tint
+            index == other.index && animation === other.animation && tint == other.tint && rate == other.rate
         }
     }
 
@@ -89,6 +91,9 @@ final class AnimatedEmojiOverlay {
         var result: NSMutableAttributedString?
         text.enumerateAttribute(.customEmoji, in: NSRange(location: 0, length: text.length)) { value, range, _ in
             guard let emoji = value as? CustomEmoji else { return }
+            // 絵文字ごとに動かさないと選んだ絵文字は、ほかの場所で読んだアニメーションがあっても重ねない。
+            let rate = text.attribute(.emojiPlaybackRate, at: range.location, effectiveRange: nil) as? Double ?? 1
+            guard rate > 0 else { return }
             emojiURLs.insert(emoji.url)
             // 同じ絵文字を違う大きさで描くこともあるので、一番大きいものに合わせる。
             for index in range.location..<NSMaxRange(range) {
@@ -105,7 +110,7 @@ final class AnimatedEmojiOverlay {
                 let mutable = result ?? NSMutableAttributedString(attributedString: text)
                 mutable.addAttribute(.attachment, value: placeholder, range: NSRange(location: index, length: 1))
                 result = mutable
-                entries.append(Entry(index: index, animation: animation, tint: text.attribute(.emojiTint, at: index, effectiveRange: nil) as? UIColor))
+                entries.append(Entry(index: index, animation: animation, tint: text.attribute(.emojiTint, at: index, effectiveRange: nil) as? UIColor, rate: rate))
             }
         }
         return result ?? text
@@ -153,7 +158,7 @@ final class AnimatedEmojiOverlay {
         removeLayers()
         let scale = host.contentsScale
         layers = entries.map { entry in
-            let layer = Self.makeLayer(entry.animation.image, scale: scale)
+            let layer = Self.makeLayer(entry.animation.image, scale: scale, rate: entry.rate)
             if let tint = entry.tint {
                 let tintLayer = CALayer()
                 // 層はラベルを並べる途中で作るので、`current`はラベルの見た目の設定になる。作ったあとにライトとダークを切り替えても、同じ絵文字なら層を使い続けるため色は前のままになるが、
@@ -161,7 +166,7 @@ final class AnimatedEmojiOverlay {
                 tintLayer.backgroundColor = tint.resolvedColor(with: UITraitCollection.current).cgColor
                 // 絵文字の描かれている画素にだけ重ねる。透明な部分にも重ねると、ラベルが塗った下地と重なって、そこだけ色が濃くなるため。
                 // マスクも同じ時刻で始めるので、絵文字と同じコマを送る。
-                tintLayer.mask = Self.makeLayer(entry.animation.image, scale: scale)
+                tintLayer.mask = Self.makeLayer(entry.animation.image, scale: scale, rate: entry.rate)
                 layer.addSublayer(tintLayer)
             }
             host.addSublayer(layer)
@@ -171,27 +176,30 @@ final class AnimatedEmojiOverlay {
     }
 
     /// `image`のコマを送る層。枠いっぱいに、縦横比を保って描く。
-    static func makeLayer(_ image: AnimatedImage, scale: CGFloat) -> CALayer {
+    /// - Parameter rate: コマを送る速さの、元の速さに対する割合。
+    static func makeLayer(_ image: AnimatedImage, scale: CGFloat, rate: Double = 1) -> CALayer {
         let layer = CALayer()
         layer.contentsGravity = .resizeAspect
         layer.contentsScale = scale
         layer.contents = image.sheet
         layer.contentsRect = image.contentsRect(ofFrame: 0)
-        layer.add(frameAnimation(of: image), forKey: "frames")
+        layer.add(frameAnimation(of: image, rate: rate), forKey: "frames")
         return layer
     }
 
     /// コマを送るアニメーション。並べた画像の中の、表示する範囲を切り替える。
     /// 始める位置を今の時刻を1周の長さで割った余りにして、同じ長さのアニメーションを揃える。
-    /// - Parameter mediaTime: 画面の描き換えと同じ時間の、今の時刻。
-    static func frameAnimation(of image: AnimatedImage, mediaTime: CFTimeInterval = AppDependencies.mediaTime()) -> CAKeyframeAnimation {
-        let total = image.duration
+    /// - Parameters:
+    ///   - rate: コマを送る速さの、元の速さに対する割合。1周の長さを割合で割る。
+    ///   - mediaTime: 画面の描き換えと同じ時間の、今の時刻。
+    static func frameAnimation(of image: AnimatedImage, rate: Double = 1, mediaTime: CFTimeInterval = AppDependencies.mediaTime()) -> CAKeyframeAnimation {
         var keyTimes: [NSNumber] = [0]
         var elapsed = 0.0
         for duration in image.durations {
             elapsed += duration
-            keyTimes.append(NSNumber(value: elapsed / total))
+            keyTimes.append(NSNumber(value: elapsed / image.duration))
         }
+        let total = image.duration / rate
         let animation = CAKeyframeAnimation(keyPath: "contentsRect")
         animation.values = (0..<image.frameCount).map { NSValue(cgRect: image.contentsRect(ofFrame: $0)) }
         // 区切りごとに切り替える送り方では、時刻の数をコマの数より1つ多くし、最後を1にする。

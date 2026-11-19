@@ -191,18 +191,12 @@ struct SettingsView: View {
     /// 値を変える画面には、サブタイトルに直しているプリセットを出す。
     @ViewBuilder
     private func destination(_ page: SettingsPage) -> some View {
-        if Self.changesPresetValues(page) {
+        if page.changesPresetValues {
             screen(page)
                 .presetEditingSubtitle(current)
         } else {
             screen(page)
         }
-    }
-
-    /// 「表示」「操作」「作成」と、その中の画面か。
-    private static func changesPresetValues(_ page: SettingsPage) -> Bool {
-        guard let first = page.path.first else { return false }
-        return [.display, .interaction, .compose].contains(first)
     }
 
     @ViewBuilder
@@ -232,6 +226,7 @@ struct SettingsView: View {
         case .notificationAppearance:
             NotificationAppearanceEditorView(settings: current, opening: appearanceGroup)
                 .onAppear { appearanceGroup = nil }
+        case .customEmojis: CustomEmojiDisplaySettingsView(settings: current)
         case .autoTranslation:
             if #available(iOS 26.4, *) {
                 AutoTranslationSettingsView(settings: current)

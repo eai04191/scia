@@ -30,6 +30,9 @@ struct RichTextRenderer: Sendable {
     /// カスタム絵文字の2つの画像のどちらで描くか。描いた文字列を出すラベルが絵文字を動かすなら元の画像、動かさないなら動かない版（docs/animated-custom-emoji.mdの「コマの読み方」）。
     /// 描く場所ごとに渡さず、設定から読む。設定がオンでも絵文字を動かさないラベルに出す文字列だけ、初期化で`animatesEmojis`にfalseを渡す。
     let emojiChoice: EmojiImageChoice
+    /// カスタム絵文字ごとの描き方（docs/animated-custom-emoji.mdの「絵文字ごとの描き方」）。描く場所ごとに渡さず、設定から読む。
+    /// 絵文字ごとの描き方を効かせない場所（絵文字ピッカーなど）は、描き手を使わずに絵文字を描く。
+    let emojiDisplays: CustomEmojiDisplays
     /// 文字列に付ける言語。付けないと、漢字とかなの書体が端末の言語の設定で決まり、英語の設定では日本語も中国語の書体で描かれる。
     var language: String
     /// 訳文の中に残した原文の部分（`RichText.Style.original`）に付ける言語。nilなら`language`を付ける。
@@ -80,6 +83,7 @@ struct RichTextRenderer: Sendable {
         self.showsCustomEmojis = showsCustomEmojis
         self.emojiImages = .store(emojiImages)
         emojiChoice = emojiImages.choice(animates: animatesEmojis ?? AnimatedImagePlayback.animatesCustomEmojis(settings))
+        emojiDisplays = settings.customEmojiDisplays
         self.language = language
         self.emojiStyle = emojiStyle ?? settings.appearance.emojiStyle
         self.displayScale = displayScale
@@ -148,7 +152,7 @@ struct RichTextRenderer: Sendable {
             && underlinesLinks == other.underlinesLinks && paragraphSpacing == other.paragraphSpacing && lineSpacing == other.lineSpacing
             && indentPerLevel == other.indentPerLevel && quoteBarWidth == other.quoteBarWidth && showsCustomEmojis == other.showsCustomEmojis && emojiScale == other.emojiScale && unicodeEmojiScale == other.unicodeEmojiScale
             && emojiOnly == other.emojiOnly && language == other.language && originalLanguage == other.originalLanguage && emojiStyle == other.emojiStyle && displayScale == other.displayScale
-            && marksTranslation == other.marksTranslation && emojiChoice.animates == other.emojiChoice.animates
+            && marksTranslation == other.marksTranslation && emojiChoice.animates == other.emojiChoice.animates && emojiDisplays == other.emojiDisplays
     }
 
     func render(_ text: RichText) -> NSAttributedString {
@@ -198,14 +202,35 @@ struct RichTextRenderer: Sendable {
             if let marker = block.listMarker {
                 result.append(NSAttributedString(string: marker, attributes: attributes(style: [], block: block)))
             }
-            for inline in block.inlines {
-                result.append(render(inline, block: block))
-            }
+            appendInlines(of: block, to: result, blockStart: start)
             applyParagraphStyle(for: block, to: result, range: NSRange(location: start, length: result.length - start))
         }
         result.separateFallbackSymbols(in: NSRange(location: 0, length: result.length))
         EmojiFont.restoreTextPresentation(in: result)
         return result
+    }
+
+    /// 段落のインラインを並べる。「表示しない」にした絵文字の前が空白か段落の頭なら、後ろの空白を1つ詰める。前後の空白が2つ並んで残らないようにするため。
+    private func appendInlines(of block: RichText.Block, to result: NSMutableAttributedString, blockStart: Int) {
+        var dropsLeadingSpace = false
+        for inline in block.inlines {
+            if case .emoji(let emoji) = inline, showsCustomEmojis, emojiDisplays.display(of: emoji) == .hidden {
+                dropsLeadingSpace = dropsLeadingSpace || result.length == blockStart || result.string.last.map(Self.isSpace) == true
+                continue
+            }
+            var rendered = render(inline, block: block)
+            if dropsLeadingSpace, rendered.string.first.map(Self.isSpace) == true {
+                rendered = rendered.attributedSubstring(from: NSRange(location: 1, length: rendered.length - 1))
+                dropsLeadingSpace = false
+            } else if rendered.length > 0 {
+                dropsLeadingSpace = false
+            }
+            result.append(rendered)
+        }
+    }
+
+    private static func isSpace(_ character: Character) -> Bool {
+        character == " " || character == "\u{3000}"
     }
 
     /// 絵文字だけの本文。上限までの数なら、カスタム絵文字と普通の絵文字の割合に同じ倍率を掛けて、普段の釣り合いのまま大きくする。
@@ -355,8 +380,23 @@ struct RichTextRenderer: Sendable {
     /// 本文中のすべてのカスタム絵文字の、表示に使うURL。
     func emojiURLs(in text: RichText) -> Set<URL> {
         Set(text.blocks.flatMap(\.inlines).compactMap { inline in
-            if case .emoji(let emoji) = inline { emojiChoice.url(of: emoji) } else { nil }
+            if case .emoji(let emoji) = inline { imageURL(of: emoji) } else { nil }
         })
+    }
+
+    /// 「表示しない」にした絵文字か。リアクションは、この絵文字のものをボタンごと出さない（docs/animated-custom-emoji.mdの「絵文字ごとの描き方」）。
+    /// 画像のURLのないリアクションも、ショートコードとサーバーで見分ける。
+    func hidesReaction(shortcode: String, domain: String?) -> Bool {
+        emojiDisplays.display(shortcode: shortcode, domain: domain) == .hidden
+    }
+
+    /// `emoji`を描くのに読む画像のURL。画像を描かない絵文字はnil。
+    func imageURL(of emoji: CustomEmoji) -> URL? {
+        switch emojiDisplays.display(of: emoji) {
+        case .plays, .playsSlowly: emojiChoice.url(of: emoji)
+        case .still: emoji.staticUrl
+        case .shortcode, .hidden: nil
+        }
     }
 
     private func render(_ inline: RichText.Inline, block: RichText.Block) -> NSAttributedString {
@@ -381,12 +421,16 @@ struct RichTextRenderer: Sendable {
     }
 
     private func render(_ emoji: CustomEmoji, block: RichText.Block) -> NSAttributedString {
+        let display = emojiDisplays.display(of: emoji)
+        guard let url = imageURL(of: emoji) else {
+            return display == .hidden ? NSAttributedString() : NSAttributedString(string: ":\(emoji.shortcode):", attributes: attributes(style: [], block: block))
+        }
         let font = font(for: [], block: block)
         // 割合が同じなら、Unicodeの絵文字と同じ高さに描く。
         let height = EmojiFont.glyphHeight(of: font) * emojiScale
         // 先に画像を求める。前に読めなかった画像も、間隔が過ぎていればここで読み直しが始まる。読めるまでは文字で描く。
         // 絵文字だけの本文のように大きく描くときは、その高さで読み直させ、読み終えるまでは持っている画像を拡大して描く。
-        let state = emojiState(of: emojiChoice.url(of: emoji), pixelHeight: Self.pixelHeight(of: height, scale: displayScale))
+        let state = emojiState(of: url, pixelHeight: Self.pixelHeight(of: height, scale: displayScale))
         if state == .failed {
             return NSAttributedString(string: ":\(emoji.shortcode):", attributes: attributes(style: [], block: block))
         }
@@ -407,6 +451,12 @@ struct RichTextRenderer: Sendable {
         string.addAttributes(attributes(style: [], block: block), range: NSRange(location: 0, length: string.length))
         // アニメーションする絵文字を、描く部品が動かせるよう、どの絵文字かを残す。
         string.addAttribute(.customEmoji, value: emoji, range: NSRange(location: 0, length: string.length))
+        // 動かす部品が、絵文字ごとに選んだ速さで動かし、動かさない絵文字には層を重ねないよう、速さを残す。0なら動かさない。
+        if let rate = display.playbackRate {
+            if rate != 1 { string.addAttribute(.emojiPlaybackRate, value: rate, range: NSRange(location: 0, length: string.length)) }
+        } else {
+            string.addAttribute(.emojiPlaybackRate, value: 0.0, range: NSRange(location: 0, length: string.length))
+        }
         return string
     }
 
@@ -678,6 +728,8 @@ extension NSAttributedString.Key {
     static let translationMark = NSAttributedString.Key("net.mizle.scia.translationMark")
     /// 画像を埋め込んだカスタム絵文字（`CustomEmoji`）。`LinkLabel`が、アニメーションする絵文字を動かすのに読む。
     static let customEmoji = NSAttributedString.Key("net.mizle.scia.customEmoji")
+    /// カスタム絵文字のコマを送る速さの、元の速さに対する割合（`Double`）。付いていなければ元の速さ、0なら動かさない。
+    static let emojiPlaybackRate = NSAttributedString.Key("net.mizle.scia.emojiPlaybackRate")
     /// カスタム絵文字を動かすときに、動く層の上に重ねる色（`UIColor`）。編集履歴で足した絵文字を示すのに使う。
     static let emojiTint = NSAttributedString.Key("net.mizle.scia.emojiTint")
     /// 表示する文字と違う文字をコピーに渡すリンクの、その文字（`RichText.CopiedLinkText`）。サーバーが縮めて見せるURLを、「テキストを選択」で元の文字に戻して出すのに使う。

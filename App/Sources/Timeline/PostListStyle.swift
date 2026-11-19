@@ -80,6 +80,7 @@ final class PostListStyle {
             // メディアの表示も、選ぶまでサーバーの値に従う。
             _ = settings.mediaDisplay
             _ = settings.accentColor.underlinesLinks
+            _ = settings.customEmojiDisplays
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor in
                 guard let self else { return }

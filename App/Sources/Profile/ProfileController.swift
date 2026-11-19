@@ -251,6 +251,7 @@ final class ProfileController {
             _ = settings.separatesProfilePinned
             _ = settings.showsProfileFeaturedTags
             _ = settings.showsProfileEndorsements
+            _ = settings.customEmojiDisplays
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor in
                 self?.afterTransition { controller in
@@ -517,7 +518,8 @@ final class ProfileController {
                 avatarShape: settings.appearance.avatarShape,
                 animatesAvatars: settings.animatesAvatars,
                 animatesCustomEmojis: settings.animatesCustomEmojis,
-                glyphLanguage: settings.glyphLanguageIdentifier()
+                glyphLanguage: settings.glyphLanguageIdentifier(),
+                emojiDisplays: settings.customEmojiDisplays
             )
         )
         if changesSections || changesPinned || changesFeatured {

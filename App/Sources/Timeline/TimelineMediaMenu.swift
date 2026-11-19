@@ -219,6 +219,11 @@ final class CustomEmojiMenus {
         case .customize:
             timeline?.openMenuSettings(.customEmojiMenu)
             return
+        case .setDisplay(let display):
+            guard let timeline else { return }
+            timeline.settings.setCustomEmojiDisplay(display, of: emoji)
+            timeline.showNotice(.customEmojiDisplayChanged(emoji, to: display), duration: timeline.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+            return
         case .open: media = .open
         case .share: media = .share
         case .saveToPhotos: media = .saveToPhotos
@@ -243,6 +248,8 @@ extension TimelineViewController {
         tree.share = mediaTransfers != nil
         tree.saveToPhotos = mediaTransfers != nil
         tree.linkBrowser = settings.linkBrowser
+        tree.display = settings.customEmojiDisplay(of: emoji)
+        tree.isKnownStill = emojiImages.isKnownStill(emoji.url)
         return tree
     }
 }

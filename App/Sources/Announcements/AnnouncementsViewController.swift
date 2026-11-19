@@ -241,8 +241,10 @@ final class AnnouncementsViewController: UIViewController {
         let bodyRenderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, settings: settings, paragraphSpacing: 6, emojiImages: emojiImages, language: language)
         let parser = MastodonHTMLParser(mentions: announcement.mentions, tags: announcement.tags, emojis: announcement.emojis)
         let reactionRenderer = RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, settings: settings, emojiImages: emojiImages, language: language)
-        let reactions = announcement.reactions.map { reaction in
+        let reactions: [ReactionChipsView.Reaction] = announcement.reactions.compactMap { reaction in
             let customEmoji = reaction.customEmoji
+            // お知らせのリアクションの絵文字は、ログインしているサーバーのもの。
+            if reactionRenderer.hidesReaction(shortcode: reaction.name, domain: nil) { return nil }
             let text: RichText = customEmoji.map { .plain(":\($0.shortcode):", emojis: [$0]) } ?? .plain(reaction.name, emojis: [])
             return ReactionChipsView.Reaction(
                 name: reaction.name,

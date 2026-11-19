@@ -265,6 +265,8 @@ struct ProfileShelfItem: Equatable {
     /// カードの本文の右に重ねて出す添付ファイル。出さないならnil。ぼかしは、タイムラインの行と同じく、使う人が開いたり隠したりした選択に従う。
     /// 「投稿の見た目」の並べ方によらず、本文の右に小さく出すときの形にする。カードの幅には、本文の下に大きく並べる余地がないため。
     let media: MediaGridView.Content?
+    /// 本文のカスタム絵文字ごとの描き方。変わったらカードを描き直す。
+    let emojiDisplays: CustomEmojiDisplays
 
     @MainActor
     init(
@@ -277,6 +279,7 @@ struct ProfileShelfItem: Equatable {
     ) {
         self.status = status
         self.verdict = verdict
+        emojiDisplays = settings.customEmojiDisplays
         // 注意書きとフィルターの警告の投稿は、本文と同じく添付ファイルも出さない。
         guard status.spoilerText.isEmpty, verdict.warningTitles.isEmpty else {
             media = nil
