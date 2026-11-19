@@ -145,8 +145,8 @@ extension SessionController {
             }
         case .textBenchmark:
             TextLayoutBenchmark.write(in: rootViewController.view.window)
-        case .browser(let url):
-            if settings.linkBrowser == .inAppFullScreen {
+        case .browser(let url, let style):
+            if (style ?? settings.linkBrowser) == .inAppFullScreen {
                 browser.openFullScreen(url, from: rootViewController.frontmostPresented)
             } else {
                 browser.open(url, from: rootViewController.frontmostPresented)

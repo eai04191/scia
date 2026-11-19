@@ -88,8 +88,9 @@ enum DebugURL: Equatable {
     case translationLanguages([String])
     /// `scia-debug://text-benchmark`。画面に出ている本文を、UILabelとTextKit 2で並べる時間を、アプリのDocuments/AgentDump/text-benchmark.txtに書き出す（`TextLayoutBenchmark`）。
     case textBenchmark
-    /// `scia-debug://browser?url=<URL>`。アプリ内のSafariでURLを開く。実機でアプリ内のSafariのデータを溜めるため。
-    case browser(URL)
+    /// `scia-debug://browser?url=<URL>&style=<sheet|fullScreen>`。アプリ内のSafariでURLを開く。実機でアプリ内のSafariのデータを溜めるため。
+    /// `style`を省くと、設定の開く場所に従う。
+    case browser(URL, style: LinkBrowser?)
     /// `scia-debug://reset`。重ねた画面をすべて閉じ、どのタブも最初の画面に戻して、ホームのタブを選ぶ。
     case reset
     /// `scia-debug://tuning`。チューニングパネルを開く。
@@ -231,7 +232,16 @@ enum DebugURL: Equatable {
         case "settings": Self.settingsSet(url)
         case "tags": Self.tags(url)
         case "compose": Self.compose(url)
-        case "browser": Self.query("url", in: url).flatMap(URL.init(string:)).flatMap { LinkBrowser.inApp.browser(for: $0) == .inApp ? .browser($0) : nil }
+        case "browser":
+            Self.query("url", in: url).flatMap(URL.init(string:)).flatMap { target in
+                guard LinkBrowser.inApp.browser(for: target) == .inApp else { return nil }
+                let style: LinkBrowser? = switch Self.query("style", in: url) {
+                case "sheet": .inApp
+                case "fullScreen": .inAppFullScreen
+                default: nil
+                }
+                return .browser(target, style: style)
+            }
         case "profile-edit": Self.profileEdit(url)
         default: nil
         }
