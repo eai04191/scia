@@ -4,7 +4,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// Macで、並びの行を、ドラッグの代わりに上下のボタンで動かす。
+/// Macで、並びの行を、ドラッグの代わりに上下のボタンで動かす。どの端末でも、長押しのメニューから行を削除する。
 @MainActor
 @Suite(.failureState)
 struct MenuLayoutMoveButtonTests {
@@ -84,6 +84,55 @@ struct MenuLayoutMoveButtonTests {
         #expect(try screen.button(SettingsTexts.MenuLayout.moveDown, inRowTitled: last).isEnabled == false)
     }
 
+    /// 右クリックのメニューの「削除」で、スワイプと同じく、区切り線の行を外す。Macでは、マウスで行をスワイプできないため。
+    @Test func menuDeletesSeparator() throws {
+        var saved: MenuLayout<StatusMenuItem>?
+        let screen = try Screen<StatusMenuItem>(layout: StatusMenuItem.defaultLayout) { saved = $0 }
+        defer { screen.close() }
+        let separators = StatusMenuItem.defaultLayout.elements.count { $0 == .separator }
+        let elements = StatusMenuItem.defaultLayout.elements
+        let separator = try #require(elements.firstIndex(of: .separator))
+        try #require(separator < elements.firstIndex(of: .more) ?? elements.endIndex)
+        let indexPath = IndexPath(item: separator, section: 0)
+
+        let delete = try #require(screen.collectionViewController.rowMenu(at: indexPath).flatMap(Self.action(titled: SettingsTexts.delete)))
+        delete.performWithSender(nil, target: nil)
+
+        #expect(saved?.elements.count { $0 == .separator } == separators - 1)
+    }
+
+    /// ドラッグで並べ替える端末でも、長押しのメニューに「削除」を出す。遠くへ動かす項目は出さない。iPadにマウスをつないだときも、行をスワイプできないため。
+    @Test func menuOffersOnlyDeleteWhenDragging() throws {
+        let screen = try Screen<StatusMenuItem>(layout: StatusMenuItem.defaultLayout, movesWithButtons: false)
+        defer { screen.close() }
+        let separator = try #require(StatusMenuItem.defaultLayout.elements.firstIndex(of: .separator))
+
+        let menu = try #require(screen.collectionViewController.rowMenu(at: IndexPath(item: separator, section: 0)))
+
+        #expect(Self.action(titled: SettingsTexts.delete)(menu) != nil)
+        #expect(Self.action(titled: SettingsTexts.MenuLayout.moveToTop)(menu) == nil)
+        #expect(Self.action(titled: SettingsTexts.MenuLayout.moveToBottom)(menu) == nil)
+    }
+
+    /// スワイプで消せない項目には、「削除」を出さない。
+    @Test func menuOmitsDeleteForUndeletableItem() throws {
+        let screen = try Screen(layout: ComposeToolItem.defaultLayout)
+        defer { screen.close() }
+
+        let item = try #require(screen.rowTitles(inSection: 0).firstIndex { $0 != nil })
+
+        let menu = try #require(screen.collectionViewController.rowMenu(at: IndexPath(item: item, section: 0)))
+        #expect(Self.action(titled: SettingsTexts.delete)(menu) == nil)
+    }
+
+    private static func action(titled title: String) -> (UIMenu) -> UIAction? {
+        { menu in
+            menu.children.lazy.compactMap { element in
+                (element as? UIAction).flatMap { $0.title == title ? $0 : nil } ?? (element as? UIMenu).flatMap(action(titled: title))
+            }.first
+        }
+    }
+
     private static func title(of element: MenuLayout<ComposeToolItem>.Element) -> String? {
         if case .item(let item, _) = element { item.title } else { nil }
     }
@@ -93,8 +142,9 @@ struct MenuLayoutMoveButtonTests {
     private struct Screen<Item: MenuItemKind & MenuItemPresentable> {
         let window: UIWindow
         let collectionView: UICollectionView
+        let collectionViewController: MenuLayoutViewController<Item>
 
-        init(layout: MenuLayout<Item>, onChange: @escaping (MenuLayout<Item>) -> Void = { _ in }) throws {
+        init(layout: MenuLayout<Item>, movesWithButtons: Bool = true, onChange: @escaping (MenuLayout<Item>) -> Void = { _ in }) throws {
             let controller = MenuLayoutViewController<Item>(
                 layout: layout,
                 image: { _ in nil },
@@ -102,7 +152,7 @@ struct MenuLayoutMoveButtonTests {
                 options: [],
                 actions: [],
                 itemDeletion: nil,
-                movesWithButtons: true,
+                movesWithButtons: movesWithButtons,
                 onChange: onChange
             )
             let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
@@ -112,7 +162,9 @@ struct MenuLayoutMoveButtonTests {
             window.makeKeyAndVisible()
             window.layoutIfNeeded()
             collectionView = try #require(controller.view.subviews.compactMap { $0 as? UICollectionView }.first)
+            collectionViewController = controller
         }
+
 
         func close() {
             window.isHidden = true

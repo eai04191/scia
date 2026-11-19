@@ -674,16 +674,31 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         }
     }
 
-    /// ボタンで動かすときは、遠くへ動かす項目を右クリックのメニューに出す。
     func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemsAt indexPaths: [IndexPath], point: CGPoint) -> UIContextMenuConfiguration? {
-        guard movesWithButtons, indexPaths.count == 1, let index = rowIndex(at: indexPaths[0]) else { return nil }
+        guard indexPaths.count == 1, let menu = rowMenu(at: indexPaths[0]) else { return nil }
+        return UIContextMenuConfiguration(actionProvider: { _ in menu })
+    }
+
+    /// 行を長押し（右クリック）して出すメニュー。スワイプで出す「削除」を出す。マウスでは行をスワイプできないため。
+    /// ボタンで動かすときは、遠くへ動かす項目も出す。出す項目がなければnil。
+    func rowMenu(at indexPath: IndexPath) -> UIMenu? {
+        guard let index = rowIndex(at: indexPath) else { return nil }
         let id = rows[index].id
-        let actions = [(MenuLayoutMove.toTop, "arrow.up.to.line"), (.toBottom, "arrow.down.to.line")].compactMap { move, symbolName -> UIAction? in
-            guard move.destination(from: index, count: movableRowCount) != nil else { return nil }
+        let moves = [(MenuLayoutMove.toTop, "arrow.up.to.line"), (.toBottom, "arrow.down.to.line")].compactMap { move, symbolName -> UIAction? in
+            guard movesWithButtons, move.destination(from: index, count: movableRowCount) != nil else { return nil }
             return UIAction(title: move.title, image: UIImage(systemName: symbolName)) { [weak self] _ in self?.moveRow(id: id, move) }
         }
-        guard !actions.isEmpty else { return nil }
-        return UIContextMenuConfiguration(actionProvider: { _ in UIMenu(children: actions) })
+        let delete: UIAction? = switch rows[index].element {
+        case .item(let item, _) where itemDeletion?.canDelete(item) == true:
+            UIAction(title: SettingsTexts.delete, image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in self?.requestDeletion(of: item) }
+        case .separator, .rowSeparator:
+            UIAction(title: SettingsTexts.delete, image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in self?.removeRow(id: id) }
+        default:
+            nil
+        }
+        let sections = [moves, delete.map { [$0] } ?? []].filter { !$0.isEmpty }
+        guard !sections.isEmpty else { return nil }
+        return UIMenu(children: sections.map { UIMenu(options: .displayInline, children: $0) })
     }
 
     /// 並べ替えは並びの2つの節の中だけで行い、下のボタンの間には入れない。節をまたいで動かせる。
