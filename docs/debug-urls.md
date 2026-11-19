@@ -60,7 +60,7 @@
 
 ## デバッグ版だけの画面
 
-- `scia-debug://viewer?index=<n>`（選んでいるタブで一番上に見えている画像付きの投稿を、n番目の添付ファイルでビューアに開く。代替テキストの全文はビューアの「代替テキスト」から開く）、`scia-debug://profile-edit?crop=<avatar|header>`（ダミーの画像でアイコンかヘッダー画像の切り抜きを開く）、`scia-debug://discomfort-report`（違和感レポート）、`scia-debug://tuning`（チューニング）、`scia-debug://catalog`（部品カタログ）
+- `scia-debug://viewer?index=<n>`（選んでいるタブで一番上に見えている画像付きの投稿を、n番目の添付ファイルでビューアに開く。代替テキストの全文はビューアの「代替テキスト」から開く）、`scia-debug://profile-edit?crop=<avatar|header>`（ダミーの画像でアイコンかヘッダー画像の切り抜きを開く）、`scia-debug://discomfort-report`（違和感レポート）、`scia-debug://tuning`（チューニング）、`scia-debug://tuning-set?id=<項目のID>&value=<数>`（数のチューニングの値を変える。指でパネルを触れない実機で測るときに使う。アプリが起動していないときに`devicectl device process launch --payload-url`で送ると、値が変わらないことがあったので、起動してから送る）、`scia-debug://catalog`（部品カタログ）
 
 ## デバッグメニューと違和感レポート
 

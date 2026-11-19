@@ -95,6 +95,8 @@ enum DebugURL: Equatable {
     case reset
     /// `scia-debug://tuning`。チューニングパネルを開く。
     case tuning
+    /// `scia-debug://tuning-set?id=<項目のID>&value=<数>`。数のチューニングの値を変える。指でパネルを触れない実機で測るため。
+    case tuningSet(id: String, value: Double)
     /// `scia-debug://viewer?index=<n>`。選んでいるタブの、画面のいちばん上に見えている添付ファイル付きの投稿を、n番目（0から）の添付ファイルでビューアに開く。
     /// サムネイルをタップしたのと同じ経路で開く。
     case viewer(index: Int)
@@ -232,6 +234,9 @@ enum DebugURL: Equatable {
         case "settings": Self.settingsSet(url)
         case "tags": Self.tags(url)
         case "compose": Self.compose(url)
+        case "tuning-set":
+            // NaNや無限は、範囲に丸めても残り、整数に直すところで落ちるので受け付けない。
+            Self.query("id", in: url).flatMap { id in Self.query("value", in: url).flatMap(Double.init).flatMap { $0.isFinite ? .tuningSet(id: id, value: $0) : nil } }
         case "browser":
             Self.query("url", in: url).flatMap(URL.init(string:)).flatMap { target in
                 guard LinkBrowser.inApp.browser(for: target) == .inApp else { return nil }

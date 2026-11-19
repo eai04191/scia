@@ -151,6 +151,16 @@ extension SessionController {
             } else {
                 browser.open(url, from: rootViewController.frontmostPresented)
             }
+        case .tuningSet(let id, let value):
+            let item = TuningCatalog.sections.lazy.flatMap(\.items).compactMap { item -> NumberTuning? in
+                if case .number(let tuning) = item, tuning.id == id { return tuning }
+                return nil
+            }.first
+            guard let item else {
+                logger.error("tuning-set: unknown id \(id, privacy: .public)")
+                return
+            }
+            AppDependencies.tuning.setValue(value, for: item)
         case .reset:
             browser.closeFullScreen()
             rootViewController.dismissPresentedScreens(animated: false)
