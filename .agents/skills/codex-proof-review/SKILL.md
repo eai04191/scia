@@ -21,14 +21,14 @@ description: SciaCoreの変更を、Codexに使い捨ての複製で実際に動
 
    ```bash
    dir="$(mktemp -d)/copy"
-   .claude/skills/codex-proof-review/make-copy.sh "$dir"
+   .agents/skills/codex-proof-review/make-copy.sh "$dir"
    ```
 
    `make-copy.sh`は、HEADに未commitの変更と未追跡のファイルを足した状態を再現する。このリポジトリのbranchを書き換えないよう、remoteは外してある
 3. 下の「Codexへの指示」を一時ファイルに書き、`run-codex.sh`で複製の中でCodexを走らせる。数分かかるので、バックグラウンドで走らせる
 
    ```bash
-   .claude/skills/codex-proof-review/run-codex.sh "$dir" <prompt-file> <out-file> <log-file>
+   .agents/skills/codex-proof-review/run-codex.sh "$dir" <prompt-file> <out-file> <log-file>
    ```
 
    `run-codex.sh`は、Codexの権限プロファイルでファイルシステムを既定で読めなくし、複製、一時ディレクトリ、Xcodeなどの必要な場所だけを開ける。これでホームの資格情報のファイルとKeychainに届かなくなる。ファイルの権限では止まらない環境変数は、`shell_environment_policy`で最小限に絞る。外への通信は先を絞らずに開ける。SciaはOSSで、環境の秘密情報を読めなければ持ち出されるものがないため。`gh`はコマンドごと使えないので、Mastodonのソースは`curl`で読ませる

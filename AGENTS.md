@@ -15,6 +15,9 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 
 ## 文書の使い分け
 
+- リポジトリのスキルは`.agents/skills/<名前>/`を正とし、Claude Codeは`.claude/skills/<名前>`の相対シンボリックリンクから同じ実体を読む。スキルを追加するときはリンクもGitに含め、リンク先はそのworktree内にする。Claude専用のプラグイン（`scia-session-id`）は`.claude/skills/`に置く
+- スキルの本文を共有しても、エージェント固有のツールやhookは共用されない。スキルに指定されたツールがないときは、その手順を実行できると判断しない。明示起動だけのスキルは、Claude Codeの`disable-model-invocation: true`とCodexの`agents/openai.yaml`の`policy.allow_implicit_invocation: false`を両方設定する
+
 - `docs/`はagentが読む文書で、人は読まない。人が読むのは`README.md`と`FEATURES.md`で、`docs/`とは別物として扱う
 - `README.md`と`FEATURES.md`の変更は、ユーザーが自分の端末で`Tools/human-review.sh approve <commit>`を走らせて承認するまで、mainに入らない（`make hooks`のhookと`Tools/merge-queue.sh`で止める）。agentは承認を走らせず、`script`などで端末を作って入力を流し込むこともしない
 - `FEATURES.md`: Sciaでできることのリスト。使う人に見える機能を足したり変えたりしたら、ファイルの先頭のコメントに従って合わせる
@@ -45,7 +48,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `make archive`: 実機向けのReleaseビルドをアーカイブする。ビルド番号はアーカイブしたUTCの日時になる
 - `make testflight`: アーカイブしてApp Store Connectへ上げる。mainは、GitHub Actions（`.github/workflows/testflight.yml`）が毎朝5時（JST）に、前に上げたときから変わっていれば、Release構成のテスト（`make test-release`）に通してから上げる。上げたビルドは、`make testflight-external`で外部テストのグループ（リポジトリのvariablesの`TESTFLIGHT_EXTERNAL_GROUP`）に足し、TestFlight App Reviewに出す
 - `make hooks`: ローカルのmainを、`make check`と`make test`の両方が通った中身のcommitにしか動かさないhookを入れる。checkoutごとに1回で、worktreeにも効く。hookが止める条件は「Git」にある
-- `make scenario-run PERSONA=<役>`: 何も知らないエージェントを、`Tools/scenario/personas/`の役で初めて使う人としてSciaに触らせ、報告とスクリーンショットを`~/scia-scenario/runs/`に残す。外へ出ないMastodon（`mastodon.localhost`）と専用の端末`Scia Scenario`を使い、Release構成のSciaを入れる。先に`make scenario-setup`で準備する（何度走らせても同じ状態になる）。DockerとAXe（`brew install cameroncooke/axe/axe`）が要る。ユーザーが`/scenario`で起動したときは、`.claude/skills/scenario`の手順で走らせてまとめる
+- `make scenario-run PERSONA=<役>`: 何も知らないエージェントを、`Tools/scenario/personas/`の役で初めて使う人としてSciaに触らせ、報告とスクリーンショットを`~/scia-scenario/runs/`に残す。外へ出ないMastodon（`mastodon.localhost`）と専用の端末`Scia Scenario`を使い、Release構成のSciaを入れる。先に`make scenario-setup`で準備する（何度走らせても同じ状態になる）。DockerとAXe（`brew install cameroncooke/axe/axe`）が要る。ユーザーが`/scenario`で起動したときは、`.agents/skills/scenario`の手順で走らせてまとめる
 
 ## シミュレーター
 
@@ -170,5 +173,5 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - 開発のための変更（チューニングパネル、違和感レポート、検証ハーネス、ビルドやlintの設定など）を`feat`・`fix`・`perf`で書くときは、`feat(dev):`、`fix(dev):`のようにdev scopeを付けてリリースノートから外す
 - 使う人向けの変更と開発のための変更は別のcommitに分ける
 - pushはユーザーが行う（`make scheduled-push`で入れた毎朝の自動pushを含む）。agentはcommitまでで止め、pushやpush承認の依頼はしない
-- mainへは、ユーザーが`/merge-to-main`で起動したときだけ、`.claude/skills/merge-to-main`の手順で入れる（agentからは起動しない。共通の`tidy-ff-merge`は、`make check`と`make test`を通さないので使わない）。`Tools/merge-queue.sh`が、どのスレッドからでも1つずつ、branchをmainへrebaseし、そのworktreeで`make check`と`make test`を通してから、fast-forwardで入れる。通したあとにファイルを変えたり、rebaseで中身が変わったりしたら、通し直す。`make hooks`のhookは、`make check`と`make test`の両方が通っていない中身のcommitと、中身が新しくなるmerge commitをmainに入れず、作業ツリーに触る前に止める。通った中身との違いがMarkdown（`*.md`）とログイン画面の補完に使うサーバーのリスト（`known-servers.txt`）だけなら、走らせ直さずに通ったものとして扱う
+- mainへは、ユーザーが`/merge-to-main`で起動したときだけ、`.agents/skills/merge-to-main`の手順で入れる（agentからは起動しない。共通の`tidy-ff-merge`は、`make check`と`make test`を通さないので使わない）。`Tools/merge-queue.sh`が、どのスレッドからでも1つずつ、branchをmainへrebaseし、そのworktreeで`make check`と`make test`を通してから、fast-forwardで入れる。通したあとにファイルを変えたり、rebaseで中身が変わったりしたら、通し直す。`make hooks`のhookは、`make check`と`make test`の両方が通っていない中身のcommitと、中身が新しくなるmerge commitをmainに入れず、作業ツリーに触る前に止める。通った中身との違いがMarkdown（`*.md`）とログイン画面の補完に使うサーバーのリスト（`known-servers.txt`）だけなら、走らせ直さずに通ったものとして扱う
 - worktreeの中では、fixup commitを作ることも、`rebase --autosquash`で元のcommitへまとめることも、確認なしで行ってよい。後ろに載ったユーザーのcommitのhashが作り直されても構わない

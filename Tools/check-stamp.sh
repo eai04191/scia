@@ -9,8 +9,8 @@
 #   Tools/check-stamp.sh record-remote <check|test> <tree>  別のMacが<tree>の中身で走らせて通ったものとして覚える。手元の作業ツリーとは比べない
 #   Tools/check-stamp.sh missing <commit> [<base>]   <commit>の中身でまだ通っていないもの（make check、make test）を1行ずつ出す
 # <base>を渡すと、<base>の中身で通っていて、<commit>との違いがMarkdown（*.md）とサーバーのリスト（known-servers.txt）だけなら、通ったものとして扱い、<commit>の中身も覚える。
-# 追跡しているMarkdownは、ルートの文書、docs/、.claude/にしかなく、ビルドにもlintにもテストにも入らないので、結果が変わらないため。
-# .claude/skills/にはシェルスクリプトもあるので、ディレクトリではなく拡張子で見る。
+# 追跡しているMarkdownは、ビルドにもlintにもテストにも入らないので、結果が変わらないため。
+# .agents/skills/にはシェルスクリプトもあるので、ディレクトリではなく拡張子で見る。
 # サーバーのリストは、GitHub Actionsが毎週作り直してPRにするデータで、読むテストはServerSuggestionsTestsのloadsTheBundledListだけ。その条件（1000件を超える、mastodon.socialがある、空の行がない）は、Tools/update-known-servers.shが書き出す前に確かめる。
 # 手でリストを書き換えたときは、この条件を誰も確かめないまま通ったものとして扱う。リストを手で直すことはなく、確かめるためにmake testを走らせると、除外する意味がなくなるので、そこまでは見ない。
 set -euo pipefail

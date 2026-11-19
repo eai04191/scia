@@ -40,7 +40,7 @@ Sciaの変更を、Mastodonに投稿する短い動画で伝える。コード�
 
 ## 素材
 
-- **色:** シミュレーターで実物のSciaの画面を撮り、そこから画素の色を取る。端末は`sim`のskill（`.claude/skills/sim`）の手順で借り、見たい画面を`scia://`や`scia-debug://`のURLで開いて、`Tools/sim.sh shot '<端末>' --full <ファイル>`で原寸を撮る。ダークとライトは`xcrun simctl ui '<端末>' appearance dark|light`で切り替える。画素は`ffmpeg -i <画像> -vf "crop=1:1:<x>:<y>,format=rgb24" -f rawvideo - | od -An -tx1`で読む。紺の地に水色、上にぼんやりしたにじみ、のような「それらしい」色は使わない（AI生成らしく見える）。
+- **色:** シミュレーターで実物のSciaの画面を撮り、そこから画素の色を取る。端末は`sim`のskill（`.agents/skills/sim`）の手順で借り、見たい画面を`scia://`や`scia-debug://`のURLで開いて、`Tools/sim.sh shot '<端末>' --full <ファイル>`で原寸を撮る。ダークとライトは`xcrun simctl ui '<端末>' appearance dark|light`で切り替える。画素は`ffmpeg -i <画像> -vf "crop=1:1:<x>:<y>,format=rgb24" -f rawvideo - | od -An -tx1`で読む。紺の地に水色、上にぼんやりしたにじみ、のような「それらしい」色は使わない（AI生成らしく見える）。
 - **アイコン:** SF Symbolsは、ユーザーが書き出したテンプレート（`~/Documents/sfsymbols/symbol/*.svg`）から`scripts/sfsymbol.py`で形を取り出す。自分で描いた形を使わない。足りないシンボルは描かずに、名前を挙げてユーザーに足してもらう（SF Symbolsアプリで、シンボルを選んで「テンプレートを書き出す」で出したSVG）。
 - **アプリのアイコン:** Icon Composerの`ictool`で`App/Resources/AppIcon.icon`を書き出す（Liquid Glassのまま）。自分で描いたロゴを使わない。
   ```bash
