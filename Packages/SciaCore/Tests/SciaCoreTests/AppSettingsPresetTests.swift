@@ -410,4 +410,92 @@ struct AppSettingsPresetTests {
             #expect(AppearanceStorage.fieldNames.contains(choice.field), "\(choice)")
         }
     }
+    /// 同じ対象を開く設定を先に読んでいても、割り当て・解除・再選択のたびに現在の値を読む。
+    @Test func cachedReadersFollowRepeatedSelections() throws {
+        let app = makeSettings()
+        app.accentColor = .purple
+        let first = app.forAccount("a@example.social")
+        let second = app.forAccount("a@example.social")
+        let fixed = app.editing(app.presetID)
+        #expect(first.accentColor == .purple)
+        #expect(second.accentColor == .purple)
+        #expect(fixed.accentColor == .purple)
+
+        for _ in 0..<3 {
+            let changed = Gate()
+            let fixedChanged = Gate()
+            withObservationTracking { _ = first.accentColor } onChange: { changed.open() }
+            withObservationTracking { _ = fixed.accentColor } onChange: { fixedChanged.open() }
+            try app.store.tryUpdateLibrary { library throws(PresetError) in
+                try library.select(.builtIn(.standard), for: .account("a@example.social"))
+            }
+            #expect(changed.isOpen)
+            #expect(!fixedChanged.isOpen)
+            #expect(first.accentColor == .blue)
+            #expect(second.accentColor == .blue)
+            #expect(fixed.accentColor == .purple)
+
+            let unassigned = Gate()
+            withObservationTracking { _ = second.accentColor } onChange: { unassigned.open() }
+            app.store.updateLibrary { $0.unassign(account: "a@example.social") }
+            #expect(unassigned.isOpen)
+            #expect(first.accentColor == .purple)
+            #expect(second.accentColor == .purple)
+        }
+    }
+
+    /// 値がない状態もキャッシュする。親へ値を追加してからリセットし、親を削除しても古い値を返さない。
+    @Test func cachedMissingValueFollowsParentEditsAndDeletion() throws {
+        let app = makeSettings()
+        var parent = PresetID.builtIn(.standard)
+        var child = PresetID.builtIn(.standard)
+        try app.store.tryUpdateLibrary { library throws(PresetError) in
+            parent = try library.create(parent: .builtIn(.standard), name: "親")
+            child = try library.create(parent: parent, name: "子")
+            try library.select(child, for: .app)
+        }
+        let editor = app.editing(parent)
+        let fixed = app.editing(child)
+        let item = AppearanceCatalog.bodyText
+        #expect(app.value(of: item) == item.defaultValue)
+        #expect(fixed.value(of: item) == item.defaultValue)
+        for value in [2.0, 3.0] {
+            let changed = Gate()
+            withObservationTracking { _ = fixed.value(of: item) } onChange: { changed.open() }
+            editor.setValue(value, for: item)
+            #expect(changed.isOpen)
+            #expect(app.value(of: item) == value)
+            #expect(fixed.value(of: item) == value)
+            editor.reset([item])
+            #expect(app.value(of: item) == item.defaultValue)
+            #expect(fixed.value(of: item) == item.defaultValue)
+        }
+        editor.setValue(4, for: item)
+        #expect(app.value(of: item) == 4)
+        #expect(fixed.value(of: item) == 4)
+        try app.store.tryUpdateLibrary { library throws(PresetError) in try library.delete(parent) }
+        #expect(app.value(of: item) == 4)
+        #expect(fixed.value(of: item) == 4)
+        fixed.reset([item])
+        #expect(app.value(of: item) == item.defaultValue)
+        #expect(fixed.value(of: item) == item.defaultValue)
+    }
+
+    /// 選び直したあとで再購読した読者には、前に使っていたプリセットの編集は届かない。
+    @Test func cachedReaderStopsObservingPreviousPreset() throws {
+        let app = makeSettings()
+        app.accentColor = .purple
+        let oldPreset = app.editing(app.presetID)
+        let account = app.forAccount("a@example.social")
+        #expect(account.accentColor == .purple)
+        try app.store.tryUpdateLibrary { library throws(PresetError) in
+            try library.select(.builtIn(.standard), for: .account("a@example.social"))
+        }
+        let changed = Gate()
+        withObservationTracking { _ = account.accentColor } onChange: { changed.open() }
+        oldPreset.accentColor = .indigo
+        #expect(!changed.isOpen)
+        #expect(account.accentColor == .blue)
+    }
+
 }

@@ -76,7 +76,7 @@ extension AppSettings {
     /// 読んでいるプリセットの値と、`account`のタブの設定を、設定の画面の順に並べる。
     public func directEntries(account: String) -> [SettingsDirectEntry] {
         let presetEntries = Self.directPlaces.map { key, place in
-            SettingsDirectEntry(key: key, place: place, value: store.read(key, in: presetID))
+            SettingsDirectEntry(key: key, place: place, value: value(key))
         }
         let tabs = Self.pagePath(.tabs).joined(separator: " > ")
         let translation = Self.pagePath(.autoTranslation).joined(separator: " > ")

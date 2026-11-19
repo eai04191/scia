@@ -638,10 +638,18 @@ public final class AppSettings {
 
     // MARK: 読み書き
 
-    private func value(_ key: String) -> PresetValue? {
+    func value(_ key: String) -> PresetValue? {
         if let readProbe, readProbe.key == key { return readProbe.value }
-        return store.read(key, in: presetID)
+        let entry = reads[key] ?? {
+            let entry = store.readEntry(key, for: target)
+            reads[key] = entry
+            return entry
+        }()
+        return store.read(entry)
     }
+
+    /// キーだけで読み取り先を引く。選び直しはストアがこの読み取り先へ知らせるので、値を読むたびにプリセットを選び直して購読する必要がない。
+    @ObservationIgnored private var reads: [String: SettingsStore.ReadEntry] = [:]
 
     /// `canRead(_:forKey:by:)`で、保存していない値を読ませている間だけ持つ。
     @ObservationIgnored private var readProbe: (key: String, value: PresetValue, isUnreadable: Bool)?
@@ -855,17 +863,33 @@ public final class SettingsStore {
     /// 読むプリセットごとに1つにするのは、行を描くたびに数十の値を読むので、読むたびに親をたどって購読を重ねると重いため。親の値が変わったときは、`notifyChanges`が子の購読にも知らせる。
     @ObservationIgnored private var keyChanges: [ValueKey: ChangeSignal] = [:]
 
-    /// 読むプリセットと値のキーごとの、親までたどって解決した値と、その購読。値を持たないキーはnilを覚える。値はプリセットが変わるまで覚える。
-    /// 行を描くたびに数十の値を読むので、購読と値を1回で引けるよう、1つの辞書に持つ。
-    @ObservationIgnored private var reads: [ValueKey: ReadEntry] = [:]
+    /// 読む対象とキーごとの値と購読。同じ対象を開く`AppSettings`同士で共有し、各設定も参照を持ってキーだけで引く。
+    /// 値の変更だけでなく、対象の選び直しも同じ購読へ知らせ、読み取り時の購読を1つにする。
+    @ObservationIgnored private var reads: [ReadKey: ReadEntry] = [:]
 
-    private final class ReadEntry {
-        let signal: ChangeSignal
+    @MainActor
+    fileprivate final class ReadEntry {
+        let target: AppSettings.Target
+        let key: String
+        let signal = ChangeSignal()
         var value: PresetValue??
 
-        init(signal: ChangeSignal) {
-            self.signal = signal
+        init(target: AppSettings.Target, key: String) {
+            self.target = target
+            self.key = key
         }
+
+        func preset(in library: PresetLibrary) -> PresetID {
+            switch target {
+            case .scope(let scope): library.preset(for: scope)
+            case .preset(let id): id
+            }
+        }
+    }
+
+    private struct ReadKey: Hashable {
+        let target: AppSettings.Target
+        let key: String
     }
 
     private struct ValueKey: Hashable {
@@ -1025,17 +1049,19 @@ public final class SettingsStore {
         _ = signal(for: ValueKey(preset: preset, key: key)).revision
     }
 
-    /// `preset`で読む`key`の値を、変化を購読して読む。親までたどった結果を、プリセットが変わるまで覚える。
-    func read(_ key: String, in preset: PresetID) -> PresetValue? {
-        let valueKey = ValueKey(preset: preset, key: key)
-        let entry = reads[valueKey] ?? {
-            let created = ReadEntry(signal: signal(for: valueKey))
-            reads[valueKey] = created
-            return created
-        }()
+    fileprivate func readEntry(_ key: String, for target: AppSettings.Target) -> ReadEntry {
+        let readKey = ReadKey(target: target, key: key)
+        if let entry = reads[readKey] { return entry }
+        let entry = ReadEntry(target: target, key: key)
+        reads[readKey] = entry
+        return entry
+    }
+
+    /// 対象とキーの読み取り先を再利用し、値が無効になったときだけプリセットと継承先をたどる。値がない場合も覚える。
+    fileprivate func read(_ entry: ReadEntry) -> PresetValue? {
         _ = entry.signal.revision
         if let cached = entry.value { return cached }
-        let resolved = library.value(forKey: key, in: preset)
+        let resolved = library.value(forKey: entry.key, in: entry.preset(in: library))
         entry.value = .some(resolved)
         return resolved
     }
@@ -1055,7 +1081,8 @@ public final class SettingsStore {
     /// 前のプリセットと比べ、変わったものの購読だけに知らせる。プリセットを作っただけでは、ほかのプリセットの値は変わらないので知らせない。
     private func notifyChanges(from old: PresetLibrary) {
         anyChange.revision += 1
-        if old.appPreset != library.appPreset || old.accountPresets != library.accountPresets {
+        let selectionChanged = old.appPreset != library.appPreset || old.accountPresets != library.accountPresets
+        if selectionChanged {
             selectionChange.revision += 1
         }
         let oldPresets = Dictionary(uniqueKeysWithValues: old.userPresets.map { ($0.id, $0) })
@@ -1066,6 +1093,7 @@ public final class SettingsStore {
         if structureChanged {
             selectionChange.revision += 1
             for signal in keyChanges.values { signal.revision += 1 }
+            for entry in reads.values { entry.signal.revision += 1 }
             return
         }
         var changed: Set<ValueKey> = []
@@ -1078,12 +1106,29 @@ public final class SettingsStore {
                 }
             }
         }
+        notifyReads(changed: changed, selectionChanged: selectionChanged)
         guard !changed.isEmpty else { return }
         // 読むプリセットか、その先祖のプリセットの値が変わった購読に知らせる。
         for (valueKey, signal) in keyChanges {
             let chain = [valueKey.preset] + library.ancestors(of: valueKey.preset)
             if chain.contains(where: { changed.contains(ValueKey(preset: $0, key: valueKey.key)) }) {
                 signal.revision += 1
+            }
+        }
+    }
+
+    private func notifyReads(changed: Set<ValueKey>, selectionChanged: Bool) {
+        for entry in reads.values {
+            // 従来の選択の購読と同じく、どの割り当ての変更でもscopeの読者へ知らせる。固定プリセットの読者は選び直しに反応しない。
+            if selectionChanged, case .scope = entry.target {
+                entry.signal.revision += 1
+                continue
+            }
+            guard !changed.isEmpty else { continue }
+            let preset = entry.preset(in: library)
+            let chain = [preset] + library.ancestors(of: preset)
+            if chain.contains(where: { changed.contains(ValueKey(preset: $0, key: entry.key)) }) {
+                entry.signal.revision += 1
             }
         }
     }
