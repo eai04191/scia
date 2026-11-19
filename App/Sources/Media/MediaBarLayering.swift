@@ -183,6 +183,8 @@ final class MediaBarLayering {
         image.focus = morph.focus
         image.paperColor = morph.paperColor
         image.paperBorder = morph.paperBorder
+        image.dynamicRangeUnderFadePortion = morph.dynamicRangeUnderFadePortion
+        image.blendDynamicRange(morph.blendedDynamicRange, amount: morph.dynamicRangeBlend)
         image.contentOpacity = morph.contentOpacity
         image.dimming = morph.dimming
         image.place(unrotatedFrame: host.convert(morphFrame, from: window), rotation: rotation - host.rotation(in: window))

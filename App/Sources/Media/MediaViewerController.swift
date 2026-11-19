@@ -123,6 +123,8 @@ final class MediaViewerController: UIViewController {
         let doubleTapZoomDuration: TimeInterval
         /// タイムラインで重ねた写真とのあいだの開閉で、写真の白いフチを細くしきる（閉じるときは太くし始める）動きの進み具合。0から1。
         var paperBorderPortion: Double = 1
+        /// 一覧とビューアの明るさが違うときの開閉で、2つの明るさの画像を入れ替える終わりに、下の画像を薄くしてなくす区間。入れ替えの進み具合の幅。0から1。
+        var dynamicRangeUnderFadePortion: Double = 0.1
         /// 開く途中で左右にめくったときに、途中の見え方を薄くして、開ききった見え方へ移す時間。
         var interruptedOpenFadeDuration: TimeInterval = 0.2
         /// 元の大きさの分からない画像が届いたときに、画面に収めた大きさから等倍へ縮める時間。
@@ -328,6 +330,11 @@ final class MediaViewerController: UIViewController {
     /// 複製の角度（ラジアン）、回転を戻したときの枠（複製を載せている層の座標。閉じる動きではウィンドウと同じ）、白いフチの幅、中身の濃さ、暗さ。
     var morphPlacement: (rotation: CGFloat, unrotatedFrame: CGRect, border: CGFloat, contentOpacity: CGFloat, dimming: CGFloat, shadowOpacity: Float) {
         (morph.transformRotation, morph.unrotatedFrame, morph.paperBorder, morph.contentOpacity, morph.dimming, morphShadow.isHidden ? 0 : morphShadow.opacity * Float(morphShadow.alpha))
+    }
+
+    /// 複製の見えている画像の明るさの幅。ほぼ見えない（濃さが1%未満の）ものは除く。
+    var morphDynamicRanges: Set<Int> {
+        Set(morph.visibleDynamicRanges.filter { $0.alpha >= 0.01 }.map(\.range.rawValue))
     }
 
     override var keyCommands: [UIKeyCommand]? {
@@ -1178,6 +1185,13 @@ extension MediaViewerController {
             morph.image = fading.image
             morph.setImage(image, crossfadeDuration: fading.remaining, from: fading.alpha)
         }
+        // サムネイルの位置から始めるなら一覧の明るさから、ビューアの画像の位置から始めるならビューアの明るさから移す。
+        morph.dynamicRangeUnderFadePortion = CGFloat(timing.dynamicRangeUnderFadePortion)
+        if let tile {
+            morph.blendDynamicRange(toward: tile, amount: decorationAlpha)
+        } else {
+            morph.blendDynamicRange(nil, amount: 0)
+        }
         // 重ねた表示はフチの内側に置くので、先に枠とフチを決める。
         // 紙の色は、ビューア（常にダーク）ではなく起点の写真の外観で決める。ライトテーマのタイムラインの白いフチから、グレーに替わって見えないようにする。
         morph.paperColor = PhotoPaper.color.resolvedColor(with: tile?.traitCollection ?? traitCollection)
@@ -1383,6 +1397,8 @@ extension MediaViewerController {
                 let paperProgress = min(min(max(progress, 0), 1) / CGFloat(max(self.timing.paperBorderPortion, 0.01)), 1)
                 // 影も、フチを細くしきるのと同じ区間で薄くしてなくす。
                 self.morphShadow.opacity = startShadow * Float(1 - paperProgress)
+                // 広がるのに合わせて、一覧の明るさからビューアの明るさへ移す。バーの奥の複製は並べ直しで写すので、その前に決める。
+                self.morph.blendDynamicRange(self.morph.blendedDynamicRange, amount: 1 - min(max(progress, 0), 1))
                 // 行き先は毎フレーム読み直す。開く途中に元の大きさの分からない画像が届くと、ページの画像が等倍へ縮み始めるため。
                 self.updateOpening(progress: progress, from: start, radius: startRadius, rotation: startRotation, border: startBorder, to: self.presentedContentFrame(in: self.view))
                 self.morph.contentOpacity = startAppearance + (1 - startAppearance) * paperProgress
@@ -1539,7 +1555,10 @@ extension MediaViewerController {
     private func stopSettling(_ animator: UIViewPropertyAnimator) {
         shadowSettling?.stop()
         shadowSettling = nil
+        // 明るさの入れ替えは濃さのアニメーションで戻しているので、止める前に見えている値を読み、閉じる動きへ引き継ぐ。
+        let presentedBlend = morph.presentedDynamicRangeBlend
         animator.stopAnimation(true)
+        morph.blendDynamicRange(morph.blendedDynamicRange, amount: presentedBlend)
         let presentedBorder = morph.layer.presentation()?.borderWidth ?? morph.paperBorder
         morph.layer.removeAnimation(forKey: "paperBorder")
         morph.paperBorder = presentedBorder
@@ -1588,6 +1607,7 @@ extension MediaViewerController {
             self.morph.place(unrotatedFrame: target, rotation: 0)
             self.morph.contentOpacity = 1
             self.morph.dimming = 0
+            self.morph.blendDynamicRange(self.morph.blendedDynamicRange, amount: 0)
             self.morph.layoutIfNeeded()
             self.morph.layer.cornerRadius = 0
             self.setDecorationAlpha(0)
@@ -3280,6 +3300,7 @@ extension MediaViewerController.Timing {
             videoSkipEffectDuration: tuning.value(of: TuningCatalog.mediaVideoSkipEffectDuration),
             doubleTapZoomDuration: tuning.value(of: TuningCatalog.mediaDoubleTapZoomDuration),
             paperBorderPortion: tuning.value(of: TuningCatalog.mediaPaperBorderPortion),
+            dynamicRangeUnderFadePortion: tuning.value(of: TuningCatalog.mediaDynamicRangeUnderFadePortion),
             interruptedOpenFadeDuration: tuning.value(of: TuningCatalog.mediaInterruptedOpenFadeDuration),
             naturalSizeDuration: tuning.value(of: TuningCatalog.mediaNaturalSizeDuration),
             placeholderFadeDuration: tuning.value(of: TuningCatalog.mediaPlaceholderFadeDuration),

@@ -7,6 +7,8 @@ import UIKit
 /// 呼ばないと、中の画像だけが動き終えた位置へ飛ぶ。毎フレーム枠を置き直す動きでは、描く前に並べ直されるため呼ばなくてよい。
 final class FocusCroppedImageView: UIView {
     private let imageView = DynamicRangeFollowingImageView()
+    /// `imageView`と同じ画像を、ほかの明るさの幅で描いて重ねる。開閉の複製で、ビューアと一覧の明るさのあいだを移すのに使う。
+    private let blendView = DynamicRangeFollowingImageView()
     /// 中の画像を薄くしたぶん見せる、紙の白。
     private let paperView = UIView()
     /// 全体を暗くする。
@@ -15,9 +17,60 @@ final class FocusCroppedImageView: UIView {
     /// 中の画像の濃さ。下げたぶん、紙の白を見せる。タイムラインで中身を描かずに紙だけを見せる写真へ、ビューアの複製を着かせるときに使う。
     var contentOpacity: CGFloat = 1 {
         didSet {
-            imageView.alpha = contentOpacity
+            applyOpacities()
             paperView.alpha = 1 - contentOpacity
         }
+    }
+
+    /// 重ねて描く明るさの幅。nilなら重ねず、まわりの明るさだけで描く。
+    private(set) var blendedDynamicRange: UIImage.DynamicRange?
+    /// 重ねた明るさの画像の濃さ。1なら重ねた明るさだけで描く。
+    private(set) var dynamicRangeBlend: CGFloat = 0
+
+    /// 中の画像を、まわりの明るさの代わりに`range`で描いた画像を`amount`の濃さで重ねて描く。`range`がnilなら重ねない。
+    /// 明るさの幅は3段で、途中の値を指定できないため、2つの明るさの画像の濃さを入れ替えて移す。
+    func blendDynamicRange(_ range: UIImage.DynamicRange?, amount: CGFloat) {
+        blendedDynamicRange = range
+        dynamicRangeBlend = range == nil ? 0 : min(max(amount, 0), 1)
+        if let range, !blendView.traitOverrides.contains(MediaDynamicRangeTrait.self) || blendView.traitOverrides.mediaDynamicRange != range {
+            blendView.traitOverrides.mediaDynamicRange = range
+        }
+        applyOpacities()
+    }
+
+    /// `source`の明るさで描いた画像を`amount`の濃さで重ねる。`source`が自分と同じ明るさなら重ねない。
+    func blendDynamicRange(toward source: UIView, amount: CGFloat) {
+        let range = source.traitCollection.mediaDynamicRange
+        blendDynamicRange(range == traitCollection.mediaDynamicRange ? nil : range, amount: amount)
+    }
+
+    /// 入れ替えの終わりに、下の画像を薄くしてなくす区間。入れ替えの進み具合の幅。
+    var dynamicRangeUnderFadePortion: CGFloat = 0.1 {
+        didSet { applyOpacities() }
+    }
+
+    /// 下の画像は、重ねた画像が不透明に近づく終わりの区間で薄くしてなくす。不透明な画像は、重ねた画像の下に下の画像が不透明なまま残らないと透けて見えるので、区間の外では薄くしない。
+    /// 下の画像を最後まで残すと、透明な部分のある画像が2枚重なった濃さのまま着き、複製を外したところで薄くなる。
+    private func applyOpacities() {
+        blendView.alpha = contentOpacity * dynamicRangeBlend
+        let portion = max(dynamicRangeUnderFadePortion, 0.01)
+        imageView.alpha = contentOpacity * min(max((1 - dynamicRangeBlend) / portion, 0), 1)
+    }
+
+    /// アニメーションで動かしている途中の、見えている重ねた画像の濃さ。
+    var presentedDynamicRangeBlend: CGFloat {
+        let content = 1 - CGFloat(paperView.layer.presentation()?.opacity ?? Float(paperView.alpha))
+        guard content > 0 else { return dynamicRangeBlend }
+        return min(max(CGFloat(blendView.layer.presentation()?.opacity ?? Float(blendView.alpha)) / content, 0), 1)
+    }
+
+    /// 見えている画像の明るさの幅と、不透明な画像でその明るさが見えている割合。下の画像は、重ねた画像に覆われた分を除く。
+    /// 開閉の両端で、複製がどの明るさで描いているかを確かめるのに使う。
+    var visibleDynamicRanges: [(range: UIImage.DynamicRange, alpha: CGFloat)] {
+        [
+            (imageView.preferredImageDynamicRange, imageView.alpha * (1 - blendView.alpha)),
+            (blendView.preferredImageDynamicRange, blendView.alpha),
+        ].filter { $0.1 > 0 }
     }
 
     /// 全体を暗くする度合い。タイムラインで暗くした写真へ、ビューアの複製を着かせるときに使う。
@@ -40,8 +93,10 @@ final class FocusCroppedImageView: UIView {
         lastCrossfadeDuration = crossfadeDuration
         if newImage !== imageView.image {
             imageView.fadeOutCurrentImage(duration: crossfadeDuration, from: startAlpha)
+            blendView.fadeOutCurrentImage(duration: crossfadeDuration, from: startAlpha)
         }
         imageView.image = newImage
+        blendView.image = newImage
         setNeedsLayout()
     }
 
@@ -84,11 +139,14 @@ final class FocusCroppedImageView: UIView {
         // 元の大きさの画像をタイムラインの写真ほどに縮めて描くと、既定の線形の縮小では細い線が間引かれて模様が乱れる。
         // ビューアの開閉では、縮めた複製からタイムラインのサムネイルへ着地の一コマで替わるため、乱れが消える瞬間が見える。
         imageView.layer.minificationFilter = .trilinear
+        blendView.contentMode = .scaleAspectFill
+        blendView.layer.minificationFilter = .trilinear
+        blendView.alpha = 0
         paperView.backgroundColor = paperColor
         paperView.alpha = 0
         dimView.backgroundColor = .black
         dimView.alpha = 0
-        for view in [paperView, imageView, dimView] {
+        for view in [paperView, imageView, blendView, dimView] {
             view.isUserInteractionEnabled = false
             addSubview(view)
         }
@@ -105,5 +163,6 @@ final class FocusCroppedImageView: UIView {
         dimView.frame = bounds
         let inner = bounds.insetBy(dx: paperBorder, dy: paperBorder)
         imageView.frame = MediaFocus.fillFrame(imageSize: imageView.image?.size ?? inner.size, in: inner, focus: focus)
+        blendView.frame = imageView.frame
     }
 }

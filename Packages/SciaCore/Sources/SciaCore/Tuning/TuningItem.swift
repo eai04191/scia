@@ -833,6 +833,16 @@ public enum TuningCatalog {
         defaultValue: 0.4
     )
 
+    /// 一覧とビューアの明るさが違うときの開閉で、2つの明るさの画像を入れ替える終わりに、下の画像を薄くしてなくす区間。入れ替えの進み具合の幅。0から1。
+    /// 下の画像を最後まで残すと、透明な部分のある画像が濃く描かれたまま着き、複製を外したところで薄くなる。広げるほど、不透明な画像が途中で透けて見える。
+    public static let mediaDynamicRangeUnderFadePortion = NumberTuning(
+        id: "media.dynamicRangeUnderFadePortion",
+        title: "開閉で明るさを入れ替える終わりに、下の画像を薄くする区間",
+        range: 0.01...1,
+        step: 0.01,
+        defaultValue: 0.1
+    )
+
     /// ビューアを閉じるとき、サムネイルへ縮めて戻すまでの時間。
     public static let mediaCloseDuration = NumberTuning(
         id: "media.closeDuration",
@@ -2239,6 +2249,7 @@ public enum TuningCatalog {
         TuningSection(id: "media.transition", title: "ビューア：開閉の動き", items: [
             .number(mediaOpenDuration),
             .number(mediaPaperBorderPortion),
+            .number(mediaDynamicRangeUnderFadePortion),
             .number(mediaCloseDuration),
             .number(mediaDragCloseBounce),
             .number(mediaInterruptedOpenFadeDuration),

@@ -1520,6 +1520,58 @@ struct MediaViewerControllerTests {
         #expect(!tile.isConcealedForViewer)
     }
 
+    /// 一覧とビューアで明るさの設定が違っても、開き始めと閉じ終わりは一覧の明るさ、開ききったところはビューアの明るさで描き、途中は2つを重ねて移す。
+    /// 明るさの幅は3段で途中の値を指定できないため、どちらかの端で1コマで切り替えると、サムネイルとの受け渡しで明るさが跳ぶ。
+    @Test func transitionBlendsDynamicRangeBetweenListAndViewer() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        harness.window.traitOverrides.mediaDynamicRange = .standard
+        let tile = MediaTileView(store: .offline)
+        tile.frame = CGRect(x: 100, y: 200, width: 120, height: 120)
+        harness.viewController.view.addSubview(tile)
+        let attachment = MediaAttachment(
+            id: "1",
+            type: .image,
+            url: nil,
+            previewUrl: nil,
+            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_600, height: 900)),
+            blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+        )
+        tile.apply(attachment, hiddenCount: 0, isCovered: false, policy: .offline)
+        MediaViewerController.present(
+            attachments: [attachment],
+            startIndex: 0,
+            store: .offline,
+            dragToDismiss: drag,
+            timing: timing,
+            from: harness.viewController,
+            sourceTile: { _ in tile },
+            onDismiss: {},
+            frameSource: harness.frames
+        )
+        let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
+        try await waitUntil { viewer.isContentHiddenForTransition }
+        let viewerRange = viewer.traitCollection.mediaDynamicRange.rawValue
+        let listRange = UIImage.DynamicRange.standard.rawValue
+        try #require(viewerRange != listRange, "ビューアの明るさが一覧と同じなので確かめられません")
+        #expect(viewer.morphDynamicRanges == [listRange], "開き始めが一覧の明るさではありません: \(viewer.morphDynamicRanges)")
+        var sawBlend = false
+        var last: Set<Int> = []
+        while viewer.isMoving {
+            harness.frames.step()
+            guard viewer.isMoving else { break }
+            last = viewer.morphDynamicRanges
+            if last == [listRange, viewerRange] { sawBlend = true }
+        }
+        #expect(sawBlend, "開く途中で2つの明るさを重ねていません")
+        #expect(last == [viewerRange], "開き終わりがビューアの明るさではありません: \(last)")
+
+        viewer.close()
+        try await waitUntil { harness.viewController.presentedViewController == nil }
+        harness.frames.runUntilStopped()
+        #expect(viewer.morphDynamicRanges == [listRange], "閉じ終わりが一覧の明るさではありません: \(viewer.morphDynamicRanges)")
+    }
+
     /// タイムラインで重ねた写真のように回して置いた起点からは、同じ角度と大きさから回しながら開き、開ききったらまっすぐにする。
     /// 閉じるときは、起点の角度と大きさまで回しながら戻す。外側に接する四角へ戻すと、閉じ終わりにまっすぐな四角から回した写真へ切り替わって見えるため。
     /// 写真の白いフチも、フチを含めた写真の枠から始めて開くにつれて細くしてなくし、閉じるときは元の太さに戻す。

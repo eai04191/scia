@@ -56,6 +56,8 @@ final class MediaClosingFlight {
     private let startBorder: CGFloat
     /// 閉じ始めの複製の、中身の濃さと暗さ。
     private let startAppearance: (contentOpacity: CGFloat, dimming: CGFloat)
+    /// 閉じ始めに重ねていた一覧の明るさの濃さ。開く途中から閉じるときは、0より大きい。
+    private let startDynamicRangeBlend: CGFloat
     /// 閉じ始めの影の濃さ。
     private let startShadowOpacity: Float
     /// 写真の白いフチを太くし始めてから着くまでの、動きの進み具合の幅。後半で太くし、広がった画像を細い線が囲まないようにする。
@@ -110,6 +112,7 @@ final class MediaClosingFlight {
         startRadius = parts.morph.layer.cornerRadius
         startBorder = parts.morph.paperBorder
         startAppearance = (parts.morph.contentOpacity, parts.morph.dimming)
+        startDynamicRangeBlend = parts.morph.dynamicRangeBlend
         startShadowOpacity = parts.shadow.opacity
         startDecorationAlpha = parts.decoration?.alpha ?? 0
         startFadingAlphas = parts.fadingViews.map(\.alpha)
@@ -152,6 +155,8 @@ final class MediaClosingFlight {
             let border = (paper?.width ?? 0) * scale
             lastTarget = (tile.unrotatedFrame(in: window).insetBy(dx: -border, dy: -border), tile.rotation(in: window), (paper?.cornerRadius ?? tile.layer.cornerRadius) * scale, border, tile.viewerAppearance, tile.viewerShadowOpacity)
             parts.morph.layer.maskedCorners = tile.layer.maskedCorners
+            // 縮むのに合わせて、ビューアの明るさから戻り先の明るさへ移す。
+            parts.morph.blendDynamicRange(toward: tile, amount: startDynamicRangeBlend + (1 - startDynamicRangeBlend) * clamped)
             parts.layering.track(tile)
             parts.overlap?.follow(tile)
         }
