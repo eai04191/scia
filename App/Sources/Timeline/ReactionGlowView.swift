@@ -115,7 +115,9 @@ protocol ReactionGlowHosting {
 
 /// 行の中身の後ろに敷いて、下の端に置く。行の大きさには関わらない。
 ///
-/// 左から右への色と濃さは、1本のグラデーション（`ReactionGlowGradient`）で描く。縦に上へ薄くなる形は、それにマスクで付ける。
+/// 左から右への色と濃さは、1本のグラデーション（`ReactionGlowGradient`）を横長の画像に描いて、層の中身にする。縦に上へ薄くなる形は、それにマスクで付ける。
+/// `CAGradientLayer`に白より明るい色を塗ると、白より明るく描けても、iOSは画面の明るさの余地を保たず、時間がたつと1.2倍ほどまで下げる。
+/// 明るさの余地のタグを付けた画像なら、余地を保つ（部品カタログの「HDRの余地を保てる描き方」で実機で確かめた）。
 final class ReactionGlowView: UIView {
     /// 光が出ているか。消えていく途中も含む。
     var isShowing: Bool {
@@ -150,11 +152,11 @@ final class ReactionGlowView: UIView {
     }
 
 
-    private let glow = CAGradientLayer()
+    private let glow = CALayer()
     /// 下の端から離れるほど早く暗くなるよう、なめらかに落とす。直線で落とすと、上の端に境目が見える。
     private let falloff = CAGradientLayer()
     /// 下の端のすぐ上に重ねる、いちばん明るいにじみ。上へすぐに消える。
-    private let bloom = CAGradientLayer()
+    private let bloom = CALayer()
     private let bloomFalloff = CAGradientLayer()
     private var icons: [IconView] = []
     private var current: ReactionGlow?
@@ -215,8 +217,7 @@ final class ReactionGlowView: UIView {
         clipsToBounds = true
         isAccessibilityElement = false
         for gradient in [glow, bloom] {
-            gradient.startPoint = CGPoint(x: 0, y: 0.5)
-            gradient.endPoint = CGPoint(x: 1, y: 0.5)
+            gradient.contentsGravity = .resize
             layer.addSublayer(gradient)
         }
         falloff.startPoint = CGPoint(x: 0.5, y: 0)
@@ -368,7 +369,7 @@ final class ReactionGlowView: UIView {
         }
         let gradient = makeGradient(levels)
         let stops = gradient.stops()
-        let locations = stops.map { NSNumber(value: $0.location) }
+        let locations = stops.map { CGFloat($0.location) }
         // にじみを、白より明るいHDRの色で描く。ライトでは照らされた側もHDRの色にし、白い背景の上に白より明るい光を足す。
         // ダークでは照らされた側はSDRのまま。黒い背景の上ではSDRの色でも十分に明るく見えるため。
         // HDRで描けない画面（白より明るくできる余地が1倍）では、SDRで描く。白より明るい色は白に丸められ、ライトでは光が白い背景に溶けて見えなくなるため。
@@ -387,9 +388,9 @@ final class ReactionGlowView: UIView {
                 ? Self.cgColor(white.lightAdded(stop.color, intensity: style.lightIntensity * style.lightBloomIntensityRatio), alpha: stop.alpha)
                 : Self.cgColor(stop.color, alpha: stop.alpha, exposure: exposure)
         }
+        let imageWidth = max(Int((bounds.width * traitCollection.displayScale).rounded(.up)), 1)
         for (layer, layerColors) in [(glow, colors), (bloom, bloomColors)] {
-            layer.colors = layerColors
-            layer.locations = locations
+            layer.contents = Self.gradientImage(colors: layerColors, locations: locations, width: imageWidth)
         }
         // 白より明るい色は、レイヤーがHDRで描くと決めたときだけ、白で頭打ちにならずに描かれる。
         let usesHDR = exposure > 1 || (isDark && canDrawHDR && style.allowsHDR && style.darkGlowHDRExposure > 1)
@@ -549,6 +550,23 @@ final class ReactionGlowView: UIView {
         }
         func clamped(_ value: Double) -> Double { min(max(value, 0), 1) }
         return UIColor(red: clamped(color.red), green: clamped(color.green), blue: clamped(color.blue), alpha: alpha, linearExposure: exposure).cgColor
+    }
+
+    /// 左から右への色の並びを描いた、高さ1画素の画像。色が白より明るければ、いちばん明るい色の余地をタグとして付ける。
+    /// 色は拡張sRGBで、白より明るい成分は1を超えたまま描く。
+    /// 幅は光の画素の幅にする。狭い画像を引き伸ばすと、混ぜる幅を0にしても、2色の境目がぼやけるため。
+    private static func gradientImage(colors: [CGColor], locations: [CGFloat], width: Int) -> CGImage? {
+        guard let space = CGColorSpace(name: CGColorSpace.extendedSRGB),
+              let gradient = CGGradient(colorsSpace: space, colors: colors as CFArray, locations: locations),
+              let context = CGContext(
+                  data: nil, width: width, height: 1, bitsPerComponent: 16, bytesPerRow: 0, space: space,
+                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.floatComponents.rawValue | CGImageByteOrderInfo.order16Little.rawValue
+              )
+        else { return nil }
+        context.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: width, y: 0), options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
+        guard let image = context.makeImage() else { return nil }
+        let headroom = colors.map(\.contentHeadroom).max() ?? 0
+        return headroom > 1 ? CGImageCreateCopyWithContentHeadroom(Float(headroom), image) : image
     }
 
     /// `UIColor`の成分は、広い色域でも0...1の外に出る形のsRGBで取れる。
