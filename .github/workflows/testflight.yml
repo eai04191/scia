@@ -124,7 +124,7 @@ jobs:
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: make testflight APPLE_AUTH="-authenticationKeyPath $RUNNER_TEMP/AuthKey.p8 -authenticationKeyID $KEY_ID -authenticationKeyIssuerID $ISSUER_ID"
 
-      # 前に上げたcommitからの、使う人向けの変更（dev scopeのない feat・fix・perf）のcommitの件名を並べる。
+      # 前に上げたcommitからの、使う人向けの変更（dev scopeのない feat・fix・perf）のcommitの件名を、比較ページのURLと件数のあとに並べる（Tools/what-to-test.py）。
       # 前に上げたcommitは、このworkflowの前の成功した実行のものなので、そのビルドを外部に出さなかった日（同じバージョンのほかのビルドが審査中だった日）の変更は、次のビルドのWhat to Testに入らない。
       # 外部に出したビルドとcommitの対応はApp Store Connectに残らず、対応を残すにはリポジトリへの書き込みが要るため、これは受け入れている。
       - name: Write What to Test
@@ -134,8 +134,7 @@ jobs:
           if [ -z "$LAST" ]; then
             echo 'Sciaのベータ版です。'
           else
-            changes=$(git log --reverse --format=%s "$LAST..HEAD" | grep -E '^(feat|fix|perf)(\([^)]*\))?!?: ' | grep -v -E '^[a-z]+\(dev\)' | sed 's/^/* /' || true)
-            printf '前のビルドからの変更:\n\n%s\n' "${changes:-* 使う人に見える変更はありません}"
+            python3 Tools/what-to-test.py "$LAST" "$(git rev-parse HEAD)" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
           fi > "$RUNNER_TEMP/what-to-test.txt"
           cat "$RUNNER_TEMP/what-to-test.txt"
 

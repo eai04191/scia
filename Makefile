@@ -7,7 +7,7 @@ SIM_ARCH ?= $(shell uname -m)
 # 同じDerivedDataを使うDebugのビルドには、すべてコンパイルキャッシュの設定を渡す（Config/Cache.xcconfig）。Tools/system-ui-check.shも同じものを渡す
 CACHE_XCCONFIG := -xcconfig Config/Cache.xcconfig
 
-.PHONY: generate app-info check-app-info lint test-lint test-sim-guard test-agent-workflow test-core test-memory-cache test-release build-release-strict build warnings test test-here test-on-sim sim-keyboard scenario-build scenario-setup scenario-reset scenario-run archive testflight testflight-external promo readme-screenshots readme-icons update-known-servers check check-here check-steps check-test check-test-here hooks scheduled-push scheduled-push-uninstall menu-editor clean
+.PHONY: generate app-info check-app-info lint test-lint test-sim-guard test-what-to-test test-agent-workflow test-core test-memory-cache test-release build-release-strict build warnings test test-here test-on-sim sim-keyboard scenario-build scenario-setup scenario-reset scenario-run archive testflight testflight-external promo readme-screenshots readme-icons update-known-servers check check-here check-steps check-test check-test-here hooks scheduled-push scheduled-push-uninstall menu-editor clean
 
 ## project.ymlからXcodeプロジェクトを生成する
 generate:
@@ -37,6 +37,10 @@ test-lint:
 ## 借りていない端末への命令を止めるhook（Tools/sim-lease-guard.py）の、コマンドから端末を読み取る部分のテスト
 test-sim-guard:
 	python3 Tools/sim-lease-guard.py --self-test
+
+## TestFlightのWhat to Testを書き出す部分（Tools/what-to-test.py）の、件名の選び方と文字数の収め方のテスト
+test-what-to-test:
+	python3 Tools/what-to-test.py --self-test
 
 ## ClaudeとCodexのsim操作のガード、端末の貸し借り、マージキューを一時リポジトリで検証する
 test-agent-workflow:
@@ -212,7 +216,7 @@ check-here:
 	@Tools/check-stamp.sh record check "$$(cat $(CHECK_TREE))"
 
 ## SciaCoreのテスト、キャッシュのパッケージのテスト、lintの規則のテスト、アプリのビルドは互いを待たないので、並べて走らせる。出力が混ざるので、失敗はmakeが最後に出すターゲット名から追う
-CHECK_TESTS := test-core test-memory-cache test-lint test-sim-guard test-agent-workflow check-app-info
+CHECK_TESTS := test-core test-memory-cache test-lint test-sim-guard test-what-to-test test-agent-workflow check-app-info
 check-steps: lint
 	@$(MAKE) --no-print-directory -j4 $(CHECK_TESTS) warnings
 
