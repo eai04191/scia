@@ -6,8 +6,10 @@ import UIKit
 ///
 /// Safariを入れ物の子にするのはAppleのドキュメントが禁じている。Safariは帯の下を出す範囲（`area`）からモーダルで出し、シートを動かすのは引ける範囲を引いたときだけにする。ページのスワイプでシートが動かないようにするため。
 /// シートの上端からSafariのバーの真ん中までに、引ける範囲（`barGrabArea`）を重ねる。
+///
+/// 全画面で開くSafariを読み込む間は、Safariを持たず、帯とグラバーだけのシートにする（`safari`がnil）。Safariは`InAppBrowserOverlayWindow`から出して、`safariFrameOnScreen`に重ねる。
 final class InAppBrowserSheet: UIViewController {
-    let safari: SFSafariViewController
+    let safari: SFSafariViewController?
     private let handleHeight: CGFloat
     private let area: UIViewController
     /// シートの上端からSafariのバーの真ん中までに重ねる、シートを引ける範囲。Safariの上で触れたことはSafariのプロセスへ行くが、上に自分のビューを重ねると、そこで触れたことはアプリに届き、シートのジェスチャーが受ける。
@@ -41,7 +43,7 @@ final class InAppBrowserSheet: UIViewController {
         var isVisible: Bool
     }
 
-    init(safari: SFSafariViewController, handleHeight: CGFloat, barGrab: BarGrab, safariResizeDelay: Duration, safariTopInset: CGFloat, clock: any Clock<Duration>, configuration: InAppBrowserPresentationController.Configuration) {
+    init(safari: SFSafariViewController?, handleHeight: CGFloat, barGrab: BarGrab, safariResizeDelay: Duration, safariTopInset: CGFloat, clock: any Clock<Duration>, configuration: InAppBrowserPresentationController.Configuration) {
         self.safari = safari
         self.handleHeight = handleHeight
         self.barGrab = barGrab
@@ -53,8 +55,8 @@ final class InAppBrowserSheet: UIViewController {
         super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .custom
         transitioningDelegate = self
-        safari.modalPresentationStyle = .overCurrentContext
-        safari.transitioningDelegate = self
+        safari?.modalPresentationStyle = .overCurrentContext
+        safari?.transitioningDelegate = self
     }
 
     @available(*, unavailable)
@@ -93,6 +95,33 @@ final class InAppBrowserSheet: UIViewController {
         return front === self || front === safari
     }
 
+    /// Safariのバーの上端の、画面の上の位置。動いている途中なら、いま描かれている位置を返す。
+    var safariTopOnScreen: CGFloat? {
+        guard let window = view.window else { return nil }
+        // Safariは`area`から出すが、置かれるのは`area`ではなくシートの上端から`safariTopInset`だけ下（`placeSafari`）。
+        return window.convert(view.convert(CGPoint(x: 0, y: safariTopInset), to: window), to: nil).y + movingOffset
+    }
+
+    /// シートが動いている途中の、いま描かれている上端と、行き着く上端との差。
+    private var movingOffset: CGFloat {
+        guard let visible = view.layer.presentation()?.frame else { return 0 }
+        return visible.minY - view.frame.minY
+    }
+
+    /// シートの形。画面の上の枠と、角の丸み。動いている途中なら、いま描かれている形。
+    var shapeOnScreen: InAppBrowserSheetShape? {
+        guard let window = view.window, let superview = view.superview else { return nil }
+        let visible = view.layer.presentation()?.frame ?? view.frame
+        let frame = window.convert(superview.convert(visible, to: window), to: nil)
+        return InAppBrowserSheetShape(frame: frame, cornerRadius: view.layer.cornerRadius, cornerCurve: view.layer.cornerCurve, maskedCorners: view.layer.maskedCorners)
+    }
+
+    /// Safariのバーを引ける範囲の、画面の上の位置。
+    var barGrabRectOnScreen: CGRect {
+        guard barGrabArea.superview != nil, let window = view.window else { return .null }
+        return window.convert(barGrabArea.convert(barGrabArea.bounds, to: window), to: nil).offsetBy(dx: 0, dy: movingOffset)
+    }
+
     /// シートが止まったら呼ぶ。少し待って、続けて変わる行き先を1回の変更にまとめる。
     func resizeSafari(toHeight height: CGFloat) {
         pendingResize?.cancel()
@@ -109,7 +138,7 @@ final class InAppBrowserSheet: UIViewController {
 
     /// Safariの下端をシートの`sheetHeight`の位置に合わせ、上端を`safariTopInset`だけ下げる。
     private func placeSafari(sheetHeight: CGFloat) {
-        guard let container = safari.viewIfLoaded?.superview else { return }
+        guard let safari, let container = safari.viewIfLoaded?.superview else { return }
         safari.view.frame = CGRect(x: container.bounds.minX, y: container.bounds.minY + safariTopInset, width: container.bounds.width, height: sheetHeight - safariTopInset)
     }
 
@@ -120,7 +149,7 @@ final class InAppBrowserSheet: UIViewController {
 
     /// シートを出し始めたあとに呼んで、帯の下にSafariを重ね、その上にSafariのバーの引ける範囲を重ねる。シートと一緒に上がってくるよう、Safariは動かさずに出す。
     func presentSafari() {
-        area.present(safari, animated: false)
+        if let safari { area.present(safari, animated: false) }
         // 待ってから動かすと、出したあとにSafariが下がって見えるため、すぐ置く。
         if let height = sheetPresentation?.safariSheetHeight { placeSafari(sheetHeight: height) }
         let width = view.bounds.width
@@ -221,4 +250,12 @@ private final class SheetClosingTransition: NSObject, UIViewControllerAnimatedTr
             transitionContext.completeTransition(!transitionContext.transitionWasCancelled)
         }
     }
+}
+
+/// シートの形。全画面で開くSafariを読み込む間に、重ねたSafariをこの形で切り抜く。
+struct InAppBrowserSheetShape {
+    var frame: CGRect
+    var cornerRadius: CGFloat
+    var cornerCurve: CALayerCornerCurve
+    var maskedCorners: CACornerMask
 }

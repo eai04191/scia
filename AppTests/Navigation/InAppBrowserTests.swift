@@ -45,9 +45,10 @@ struct InAppBrowserTests {
         try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
         let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
         #expect(sheet.presentedViewController == nil)
-        #expect(sheet.safari.presentingViewController?.parent === sheet)
+        let safari = try #require(sheet.safari)
+        #expect(safari.presentingViewController?.parent === sheet)
 
-        sheet.safari.dismiss(animated: true)
+        safari.dismiss(animated: true)
 
         try await waitUntil { root.presentedViewController == nil }
     }
@@ -61,15 +62,16 @@ struct InAppBrowserTests {
         browser.open(try #require(URL(string: "https://example.com/1")), from: root)
         try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
         let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
-        try await waitUntil { sheet.safari.viewIfLoaded?.window != nil }
+        try await waitUntil { sheet.safari?.viewIfLoaded?.window != nil }
         sheet.view.layoutIfNeeded()
+        let safari = try #require(sheet.safari)
 
         let handle = CGFloat(TuningCatalog.inAppBrowserHandleHeight.defaultValue)
         let inset = CGFloat(TuningCatalog.inAppBrowserBarGrabInset.defaultValue)
         let height = CGFloat(TuningCatalog.inAppBrowserBarGrabHeight.defaultValue)
 
         #expect(sheet.view.subviews.last === sheet.barGrabArea)
-        #expect(sheet.safari.view.isDescendant(of: sheet.view))
+        #expect(safari.view.isDescendant(of: sheet.view))
         let safariInset = CGFloat(TuningCatalog.inAppBrowserSafariTopInset.defaultValue)
         #expect(sheet.barGrabArea.frame == CGRect(x: inset, y: 0, width: sheet.view.bounds.width - inset * 2, height: safariInset + handle + height))
         root.dismiss(animated: false)
@@ -107,7 +109,7 @@ struct InAppBrowserTests {
         let delay = Duration.seconds(TuningCatalog.inAppBrowserSafariResizeDelay.defaultValue)
         try await clock.advance(afterSleeping: delay)
         let large = CGFloat(presentation.layout.large)
-        try await waitUntil { sheet.safari.view.frame.maxY == large }
+        try await waitUntil { sheet.safari?.view.frame.maxY == large }
         root.dismiss(animated: false)
     }
 
@@ -127,7 +129,7 @@ struct InAppBrowserTests {
         let delay = Duration.seconds(TuningCatalog.inAppBrowserSafariResizeDelay.defaultValue)
         try await clock.advance(afterSleeping: delay)
         let medium = try #require(presentation.layout.medium)
-        try await waitUntil { sheet.safari.view.frame.maxY == CGFloat(medium) }
+        try await waitUntil { sheet.safari?.view.frame.maxY == CGFloat(medium) }
         root.dismiss(animated: false)
     }
 
@@ -135,7 +137,7 @@ struct InAppBrowserTests {
         browser.open(try #require(URL(string: "https://example.com/1")), from: root)
         try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
         let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
-        try await waitUntil { sheet.safari.viewIfLoaded?.window != nil }
+        try await waitUntil { sheet.safari?.viewIfLoaded?.window != nil }
         return sheet
     }
 }

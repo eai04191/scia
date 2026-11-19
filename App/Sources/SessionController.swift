@@ -663,12 +663,12 @@ final class SessionController {
             browserObscuredHeight = height
             applyObscuredBottomHeight()
         }
-        browser.onDockedHeightChange = { [weak self] height in
+        browser.onDockedHeightChange = { [weak self] height, animated in
             self?.windowRootViewController.setReservedHeight(
                 height > 0 ? height + CGFloat(SpacingScale.s1) : 0,
                 contentOverhang: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserDockContentOverhang)),
                 cornerRadius: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserDockCornerRadius)),
-                duration: tuning.value(of: TuningCatalog.inAppBrowserDockDuration)
+                duration: animated ? tuning.value(of: TuningCatalog.inAppBrowserDockDuration) : 0
             )
         }
         browser.onPresenceChange = { [weak self] _ in self?.applyShowsFocusInlineCompose() }
@@ -4296,10 +4296,12 @@ final class SessionController {
         case .open(let destination):
             open(destination)
         case .share(let id, let unreadableCount):
+            browser.closeFullScreen()
             rootViewController.closeScreensForSharedContent { [weak self] in
                 self?.receiveSharedMedia(id: id, unreadableCount: unreadableCount)
             }
         case .compose(let text):
+            browser.closeFullScreen()
             rootViewController.closeScreensForSharedContent { [weak self] in
                 self?.receiveSharedText(text)
             }
@@ -4485,7 +4487,8 @@ final class SessionController {
         // タブを見せる行き先は、上に重ねた画面を、書きかけのある画面も含めてすべて閉じてから開く。重ねたままでは見えず、積むのもやめるため。
         // アプリ内のSafariは伏せた高さへ下げて残す。伏せたシートの上に後ろの画面が見えるため。
         // 送られた行き先は使う人の新しい操作なので、出ていた画面より優先する。並びにないか無効にしているタブは開かないので、閉じずにやめる。
-        if destination.showsTab, rootViewController.presentedViewController != nil {
+        // 全画面に広げたアプリ内のSafariは、アプリのウインドウの外に重ねているので、重ねた画面がなくても閉じる。
+        if destination.showsTab, rootViewController.presentedViewController != nil || browser.showsFullScreen {
             guard canShowTab(of: destination) else {
                 logger.error("open tab: no enabled tab in layout")
                 return
@@ -4493,6 +4496,8 @@ final class SessionController {
             closeScreensForDestination(keepingBrowser: true) { [weak self] in self?.show(destination) }
             return
         }
+        // タブを見せない行き先は、手前の画面の上に出すので、全画面のSafariの裏に隠れないよう閉じる。
+        browser.closeFullScreen()
         show(destination)
     }
 
@@ -4505,6 +4510,7 @@ final class SessionController {
             logger.error("open destination dropped: alert shown")
             return
         }
+        browser.closeFullScreen()
         if keepingBrowser, rootViewController.presentedViewController is InAppBrowserSheet, browser.lowerToShowScreenBehind() {
             rootViewController.closeScreensAboveInAppBrowser(completion: open)
             return

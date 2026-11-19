@@ -13,7 +13,8 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
     /// シートが画面の下から覆っている高さが変わったときに呼ぶ。閉じたら0を渡す。タイムラインの下に、シートより上へ出せるだけの余白を取るために使う。
     var onObscuredHeightChange: ((CGFloat) -> Void)?
     /// シートを手で伏せた高さまで下げて、後ろの画面をシートの上に縮めるときに、シートが画面の下から占める高さを渡す。縮めないときは0を渡す。
-    var onDockedHeightChange: ((CGFloat) -> Void)?
+    /// `animated`がfalseなら、動かさずに変える。
+    var onDockedHeightChange: ((_ height: CGFloat, _ animated: Bool) -> Void)?
     /// シートを全画面に広げてタイムラインを覆ったか、覆うのをやめたときに呼ぶ。覆っている間は、タイムラインの投稿を見たと報告させない。
     var onCoverageChange: ((Bool) -> Void)?
     /// シートを出したか、閉じたときに呼ぶ。中身を差し替えるときは呼ばない。
@@ -23,18 +24,17 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
     private let settings: AppSettings
     private let clock: any Clock<Duration>
     private weak var current: InAppBrowserSheet?
-    /// 全画面で出しているSafari（`openFullScreen`）。
-    private weak var fullScreen: SFSafariViewController?
     /// 投稿欄で書き始めて伏せる前の高さ。書き終えたらここへ戻す。書いている間に手で高さを変えたら、手で選んだ高さを尊重して戻さない。
     private var detentBeforeCompose: InAppBrowserDetent?
     /// 伏せた高さで出して、開く高さまで広げ終えるまでの間。この間は伏せた段にいても、後ろの画面を縮めない。
     private var isGrowingFromCollapsed = false
     private let logger = SciaLog.logger(category: "browser")
 
-    init(tuning: TuningStore = AppDependencies.tuning, settings: AppSettings, clock: any Clock<Duration> = AppDependencies.clock) {
+    init(tuning: TuningStore = AppDependencies.tuning, settings: AppSettings, clock: any Clock<Duration> = AppDependencies.clock, frameSource: any FrameSource = DisplayLinkFrameSource.shared) {
         self.tuning = tuning
         self.settings = settings
         self.clock = clock
+        self.frameSource = frameSource
     }
 
     /// シートを出している。中身を差し替える途中も含む。
@@ -99,28 +99,182 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         browserSheet.presentSafari()
     }
 
-    /// 全画面で開く。SFSafariViewControllerを標準の出し方で出すと、右から入り、左端から右へのスワイプで閉じる。
+    /// 全画面で開く。SFSafariViewControllerを標準の出し方で出し、右から入り、左端から右へのスワイプで閉じるようにする。
+    /// 読み込みの間は、シートを手で伏せた高さまで下げたときと同じ見え方で待ち、読み込み終えたら全画面に広げる。伏せた高さのない画面（iPhoneの横向き、iPad）では、すぐ全画面で出す。
     /// `url`の条件と、閉じている途中の画面を待つのは`open`と同じ。
     func openFullScreen(_ url: URL, from root: UIViewController) {
         root.afterOngoingDismissal { [weak self] in self?.openFullScreenAfterDismissal(url, from: root) }
     }
 
     private func openFullScreenAfterDismissal(_ url: URL, from root: UIViewController) {
-        guard root.viewIfLoaded?.window != nil else {
+        guard let window = root.viewIfLoaded?.window, let scene = window.windowScene else {
             logger.error("in-app browser full screen open ignored without window")
             return
         }
-        let safari = SFSafariViewController(url: url)
-        safari.delegate = self
-        // 重ねた画面をまとめて閉じたとき（`dismissPresentedScreens`）は、`safariViewControllerDidFinish`が呼ばれず、これで知る。
-        safari.presentationController?.delegate = self
-        fullScreen = safari
-        logger.info("in-app browser open full screen")
-        onCoverageChange?(true)
-        root.frontmostPresented.present(safari, animated: true)
+        dropFullScreenOverlay()
+        // 出しているシート（伏せたシートを含む）は、閉じ終えてから次を出す。閉じ終える前に出すと、UIKitが出すのを断る。
+        // `root`が閉じるシートやその上の画面のこともあるので、閉じ終えたら、残った側の画面から出す。
+        if let current, let presenter = current.presentingViewController {
+            presenter.dismissPresentedScreens(animated: false) { [weak self] in
+                guard let self else { return }
+                if self.current === current { self.didClose(current) }
+                self.presentFullScreen(url, from: presenter, in: window, scene: scene)
+            }
+            return
+        }
+        presentFullScreen(url, from: root, in: window, scene: scene)
     }
 
-    private func makeSheet(safari: SFSafariViewController) -> InAppBrowserSheet {
+    private func presentFullScreen(_ url: URL, from root: UIViewController, in window: UIWindow, scene: UIWindowScene) {
+        let safari = SFSafariViewController(url: url)
+        safari.delegate = self
+        let overlay = InAppBrowserOverlayWindow(windowScene: scene, behind: { [weak window] in window }, frameSource: frameSource)
+        // 重ねたウインドウを隠す経路（`closeFullScreen`）のほかに、Safariが閉じたことを知る。
+        safari.presentationController?.delegate = self
+        let session = FullScreenSession(safari: safari, window: overlay)
+        fullScreen = session
+        guard collapsesWhileLoading(in: window) else {
+            logger.info("in-app browser open full screen")
+            overlay.isHidden = false
+            onCoverageChange?(true)
+            overlay.presenter?.present(safari, animated: true)
+            return
+        }
+        logger.info("in-app browser open full screen from collapsed sheet")
+        let browserSheet = makeSheet(safari: nil)
+        browserSheet.initialDetent = .collapsed
+        current = browserSheet
+        session.loadingSheet = browserSheet
+        detentBeforeCompose = nil
+        isGrowingFromCollapsed = false
+        onPresenceChange?(true)
+        root.frontmostPresented.present(browserSheet, animated: true)
+        // 手で伏せた高さまで下げたときと同じく、後ろの画面をシートの上に縮める。シートが動き始めるのと同じコマで縮め始めるよう、シートを出す動きに載せる。
+        // `present`を呼んだ時点で縮めると、シートが動き始めるより先に縮み、空いたところにタイムラインの端が見える（iOS 27のシミュレーターで録って確かめた）。
+        let dock = { [weak self, weak browserSheet] in
+            guard let self, let presentation = browserSheet?.sheetPresentation else { return }
+            self.selectionDidChange(presentation)
+        }
+        if let coordinator = browserSheet.transitionCoordinator {
+            coordinator.animate(alongsideTransition: { _ in dock() })
+        } else {
+            dock()
+        }
+        browserSheet.presentSafari()
+        // シートが上がってくる間も、Safariのバーがシートと一緒に動くよう、出し始めから重ねる。
+        overlay.alpha = 0
+        overlay.isHidden = false
+        overlay.presenter?.present(safari, animated: false)
+        let follower = FrameTicker(source: frameSource) { [weak self, session] _ in
+            self?.follow(session) ?? false
+        }
+        session.follower = follower
+        follower.start()
+        _ = follow(session)
+    }
+
+    /// 全画面で開いたSafariと、それを載せた重ねたウインドウ。読み込みの間は、伏せたシートに重ねる。
+    private final class FullScreenSession {
+        let safari: SFSafariViewController
+        let window: InAppBrowserOverlayWindow
+        /// 読み込みの間に重ねている、Safariを持たない伏せたシート。全画面に広げたらnil。
+        weak var loadingSheet: InAppBrowserSheet?
+        /// 読み込みの間、毎コマ重ねたウインドウをシートの位置に合わせる。
+        var follower: FrameTicker?
+        /// 読み込み終えたが、シートの上に別の画面を重ねていたので、広げるのを待っている。
+        var expandsWhenUncovered = false
+
+        init(safari: SFSafariViewController, window: InAppBrowserOverlayWindow) {
+            self.safari = safari
+            self.window = window
+        }
+    }
+
+    /// 全画面で出しているSafari（`openFullScreen`）。閉じ始めたらnil。
+    private var fullScreen: FullScreenSession?
+    private let frameSource: any FrameSource
+
+    /// 読み込みの間、伏せたシートで待つか。iPhoneの縦向きで、シートが画面の幅いっぱいのときだけにする。
+    /// iPhoneの横向きには伏せた高さがない。iPadでは、狭いウインドウでも伏せたシートの上にSafariのバーが出なかった（iOS 27のシミュレーター）。
+    /// 重ねたSafariは画面の幅で描かれるので、シートが画面より狭いと（チューニングの最大幅）、シートの形で切り抜くと左右のボタンが欠ける。
+    private func collapsesWhileLoading(in window: UIWindow) -> Bool {
+        let traits = window.traitCollection
+        guard traits.userInterfaceIdiom == .phone, traits.horizontalSizeClass == .compact, traits.verticalSizeClass == .regular else { return false }
+        guard CGFloat(tuning.value(of: TuningCatalog.inAppBrowserSheetMaximumWidth)) >= window.bounds.width else { return false }
+        return sheetLayout(in: window, traits: traits).collapsed != nil
+    }
+
+    /// 重ねたウインドウを、伏せたシートのSafariを出す場所に合わせる。シートの上に別の画面を重ねている間は、Safariのバーがその画面の上に出ないよう、見えなくする。
+    /// シートがなくなったら、続けないのでfalseを返す。
+    private func follow(_ session: FullScreenSession) -> Bool {
+        guard let sheet = session.loadingSheet, !session.window.isHidden else {
+            session.follower = nil
+            return false
+        }
+        guard sheet.presentedViewController == nil, let top = sheet.safariTopOnScreen, let shape = sheet.shapeOnScreen else {
+            session.window.alpha = 0
+            return true
+        }
+        if session.expandsWhenUncovered {
+            expand(session)
+            return false
+        }
+        session.window.alpha = session.window.placeCollapsed(safariTop: top, sheet: shape, passthrough: sheet.barGrabRectOnScreen) ? 1 : 0
+        return true
+    }
+
+    /// 伏せたシートで待つのをやめ、全画面に広げる。広げ終えたら、裏に隠れたシートを片付ける。
+    /// シートの上に別の画面を重ねている間は広げず、その画面が閉じてから広げる（`follow`）。重ねたまま広げると、伏せたシートを片付けるときに、上の画面まで閉じてしまう。
+    private func expand(_ session: FullScreenSession) {
+        guard fullScreen === session, let sheet = session.loadingSheet else { return }
+        guard sheet.presentedViewController == nil else {
+            session.expandsWhenUncovered = true
+            return
+        }
+        logger.info("in-app browser full screen expand")
+        session.follower?.stop()
+        session.follower = nil
+        session.window.alpha = 1
+        onCoverageChange?(true)
+        session.window.expand { [weak self, weak sheet] in
+            session.loadingSheet = nil
+            guard let self, let sheet else { return }
+            sheet.presentingViewController?.dismiss(animated: false)
+            self.didClose(sheet, coversScreenBehind: self.fullScreen === session)
+        }
+    }
+
+    /// 全画面に広げたSafariを出しているか。広げたあとはアプリのウインドウに何も重ねていないので、重ねた画面があるかだけでは分からない。
+    var showsFullScreen: Bool { fullScreen != nil && fullScreen?.loadingSheet == nil }
+
+    /// 全画面に広げたSafariを、動かさずに閉じる。重ねた画面をまとめて閉じるとき（行き先を開く、共有から戻る）に呼ぶ。
+    /// 重ねたウインドウは、`dismissPresentedScreens`が辿るアプリのウインドウの外にあるため、別に閉じる。
+    /// 読み込みの間は何もしない。伏せたシートはアプリのウインドウにあり、まとめて閉じる経路が書きかけの画面を守りながら閉じ、閉じたら重ねたSafariも閉じる（`presentationControllerDidDismiss`）。
+    func closeFullScreen() {
+        guard showsFullScreen else { return }
+        logger.info("in-app browser full screen close")
+        dropFullScreenOverlay()
+        onCoverageChange?(presentation?.coversScreenBehind ?? false)
+    }
+
+    /// 重ねたウインドウを、動かさずに閉じる。伏せたシートは閉じない。
+    private func dropFullScreenOverlay() {
+        guard let session = fullScreen else { return }
+        fullScreen = nil
+        session.follower?.stop()
+        session.follower = nil
+        session.window.presenter?.dismiss(animated: false)
+        session.window.isHidden = true
+    }
+
+    func safariViewController(_ controller: SFSafariViewController, didCompleteInitialLoad didLoadSuccessfully: Bool) {
+        logger.info("in-app browser initial load completed ok=\(didLoadSuccessfully, privacy: .public)")
+        // 読み込めなかったときも、Safariが出す失敗のページを見せるために広げる。
+        guard let session = fullScreen, session.safari === controller else { return }
+        expand(session)
+    }
+
+    private func makeSheet(safari: SFSafariViewController?) -> InAppBrowserSheet {
         let configuration = InAppBrowserPresentationController.Configuration(
             cornerRadius: CGFloat(tuning.value(of: TuningCatalog.inAppBrowserDockCornerRadius)),
             duration: { [tuning] in tuning.value(of: TuningCatalog.inAppBrowserDockDuration) },
@@ -224,7 +378,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         case .medium, .large: CGFloat(layout.medium ?? 0)
         }
         let docks = isCollapsed && canDock(presentation)
-        onDockedHeightChange?(docks ? height : 0)
+        onDockedHeightChange?(docks ? height : 0, true)
         onObscuredHeightChange?(docks ? 0 : height)
     }
 
@@ -236,6 +390,12 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
 
     private func selectionDidChange(_ presentation: InAppBrowserPresentationController) {
         reportObscuredHeight(of: presentation)
+        // 全画面で開くSafariを読み込む間に、伏せた高さから離れたら（引いて広げた、横向きにしたなど）、読み込みを待たずに全画面に広げる。
+        if let fullScreen, fullScreen.loadingSheet?.sheetPresentation === presentation {
+            // 横向きでは伏せた高さがなくなるが、選んでいる段は伏せたままになる。
+            if presentation.selected != .collapsed || presentation.layout.collapsed == nil { expand(fullScreen) }
+            return
+        }
         onCoverageChange?(presentation.coversScreenBehind)
     }
 
@@ -247,32 +407,42 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         selectionDidChange(presentation)
     }
 
-    private func didClose(_ browserSheet: InAppBrowserSheet?) {
+    /// - Parameter coversScreenBehind: シートを閉じても、全画面のSafariがまだ後ろの画面を覆っているか。
+    private func didClose(_ browserSheet: InAppBrowserSheet?, coversScreenBehind: Bool = false) {
         guard current === browserSheet || current == nil else { return }
         current = nil
         detentBeforeCompose = nil
         isGrowingFromCollapsed = false
         logger.info("in-app browser close")
-        onDockedHeightChange?(0)
+        // 全画面のSafariが覆ったままなら、戻す動きは見えないので動かさない。動かすと、見えない動きのために画面の合成が働く（検証用のSE3で、広がりきったあとの0.6秒に約100ms分を測った）。
+        onDockedHeightChange?(0, !coversScreenBehind)
         onObscuredHeightChange?(0)
-        onCoverageChange?(false)
+        onCoverageChange?(coversScreenBehind)
         onPresenceChange?(false)
     }
 
-    private func didCloseFullScreen() {
-        guard fullScreen != nil else { return }
+    /// 全画面のSafariが閉じたとき。×で閉じたときは、閉じる動きが終わってから重ねたウインドウを隠す。
+    /// 読み込みの間（伏せたシートに重ねている間）なら、シートも一緒に下げて閉じ、重ねたウインドウはシートに付いて下がる。
+    private func didCloseFullScreen(_ session: FullScreenSession) {
+        guard fullScreen === session else { return }
         logger.info("in-app browser full screen closed")
         fullScreen = nil
-        // シートを全画面に広げたまま、その上に全画面のSafariを重ねていたときは、シートがまだ覆っている。
-        onCoverageChange?(presentation?.coversScreenBehind ?? false)
+        session.window.hideAfterSafariDismissal()
+        if let sheet = session.loadingSheet {
+            sheet.presentingViewController?.dismiss(animated: true)
+            didClose(sheet)
+        } else {
+            // シートを全画面に広げたまま、その上に全画面のSafariを重ねていたときは、シートがまだ覆っている。
+            onCoverageChange?(presentation?.coversScreenBehind ?? false)
+        }
     }
 
     // MARK: - SFSafariViewControllerDelegate
 
     /// 左上の×で閉じたとき。シートごと閉じる（`InAppBrowserSheet`）。全画面では、左端からのスワイプで閉じたときにも呼ばれる。
     func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
-        if controller === fullScreen {
-            didCloseFullScreen()
+        if let fullScreen, fullScreen.safari === controller {
+            didCloseFullScreen(fullScreen)
             return
         }
         logger.info("in-app browser finished by close button")
@@ -284,12 +454,16 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
 
     /// 下へのスワイプで閉じたとき。
     func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
-        if let fullScreen, presentationController.presentedViewController === fullScreen {
-            didCloseFullScreen()
+        if let fullScreen, presentationController.presentedViewController === fullScreen.safari {
+            didCloseFullScreen(fullScreen)
             return
         }
         guard let browserSheet = presentationController.presentedViewController as? InAppBrowserSheet else { return }
         logger.info("in-app browser dismissed by swipe")
+        if let fullScreen, fullScreen.loadingSheet === browserSheet {
+            // 読み込みの間に伏せたシートを閉じたら（下へ払った、重ねた画面をまとめて閉じた）、重ねたSafariも閉じる。
+            dropFullScreenOverlay()
+        }
         didClose(browserSheet)
     }
 }

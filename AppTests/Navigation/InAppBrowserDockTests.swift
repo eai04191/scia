@@ -43,7 +43,7 @@ struct InAppBrowserDockTests {
         let browser = InAppBrowser(tuning: .withoutBrowserMotion(), settings: AppDependencies.settings)
         var docked: [CGFloat] = []
         var obscured: CGFloat = 0
-        browser.onDockedHeightChange = { docked.append($0) }
+        browser.onDockedHeightChange = { height, _ in docked.append(height) }
         browser.onObscuredHeightChange = { obscured = $0 }
         browser.open(try #require(URL(string: "https://example.com/1")), from: root)
         try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false && obscured > 0 }
@@ -73,7 +73,7 @@ struct InAppBrowserDockTests {
         let root = harness.viewController
         let browser = InAppBrowser(tuning: .withoutBrowserMotion(), settings: AppDependencies.settings)
         var docked: CGFloat = 0
-        browser.onDockedHeightChange = { docked = $0 }
+        browser.onDockedHeightChange = { height, _ in docked = height }
         browser.open(try #require(URL(string: "https://example.com/1")), from: root)
         try await waitUntil { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false }
         let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
