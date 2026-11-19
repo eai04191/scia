@@ -7,6 +7,7 @@ import UIKit
 @MainActor
 final class PostListStyle {
     let settings: AppSettings
+    let renderSettings: PostRenderSettings
     private let tuning: TuningStore
     private let network: NetworkConditionsMonitor
 
@@ -29,6 +30,7 @@ final class PostListStyle {
 
     init(settings: AppSettings, tuning: TuningStore, network: NetworkConditionsMonitor) {
         self.settings = settings
+        renderSettings = PostRenderSettings(settings: settings)
         self.tuning = tuning
         self.network = network
     }

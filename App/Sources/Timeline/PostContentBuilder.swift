@@ -5,7 +5,9 @@ import UIKit
 @MainActor
 struct PostContentBuilder {
     let tuning: TuningStore
-    let settings: AppSettings
+    let renderSettings: PostRenderSettings
+    private var settings: AppSettings { renderSettings.settings }
+    private var values: PostRenderSettings.Values { renderSettings.read() }
     let emojiImages: EmojiImageStore<UIImage>
     let mediaImages: MediaImageStore<UIImage>
     let avatarImages: AvatarImageStore<UIImage>
@@ -16,7 +18,7 @@ struct PostContentBuilder {
 
     /// 組むときの見た目の選択肢。
     var appearance: AppearanceChoices {
-        appearanceOverride ?? settings.appearance
+        appearanceOverride ?? values.appearance
     }
 
     /// タップしたときの処理と添付ファイルは含めない。タイムラインでは呼び出し側が足す。
@@ -25,49 +27,50 @@ struct PostContentBuilder {
     /// - Parameter translation: 本文を原文の代わりに描く訳文。
     /// - Parameter isTranslating: 本文の訳文を待っている。
     func configuration(for status: Status, isPinned: Bool = false, replyLabel: ReplyLabel? = nil, translation: RichText? = nil, isTranslating: Bool = false, base: UIListContentConfiguration) -> PostContentConfiguration {
+        let values = values
         let shown = status.displayed
-        let typography = PostTypography(settings: settings)
+        let typography = values.typography
         // 名前の上の行も名前を描くので、名前の行と同じ割合で絵文字の大きさを変える。本文の絵文字は本文の割合で描く。
-        let emojiScale = CGFloat(settings.value(of: AppearanceCatalog.nameCustomEmojiScale))
-        let unicodeEmojiScale = CGFloat(settings.value(of: AppearanceCatalog.nameUnicodeEmojiScale))
+        let emojiScale = CGFloat(values.value(of: AppearanceCatalog.nameCustomEmojiScale))
+        let unicodeEmojiScale = CGFloat(values.value(of: AppearanceCatalog.nameUnicodeEmojiScale))
         let metrics = PostContentConfiguration.Metrics(
-            margins: settings.rowMargins,
-            avatarSize: settings.postAvatarSize(appearance),
-            boosterAvatarSize: settings.value(of: AppearanceCatalog.boosterAvatarSize),
-            nameFadeWidth: settings.value(of: AppearanceCatalog.nameFadeWidth),
-            contextSymbolSpacing: settings.value(of: AppearanceCatalog.contextSymbolSpacing),
-            contextAvatarTextSpacing: settings.value(of: AppearanceCatalog.contextAvatarTextSpacing),
-            avatarSpacing: settings.postAvatarSpacing(appearance),
-            contextSpacing: settings.value(of: AppearanceCatalog.contextSpacing),
-            replyLineWidth: settings.value(of: AppearanceCatalog.replyLineWidth),
-            replyLineGap: settings.value(of: AppearanceCatalog.replyLineGap),
-            nameBodySpacing: settings.value(of: AppearanceCatalog.nameBodySpacing),
-            bodyMediaSpacing: settings.value(of: AppearanceCatalog.bodyMediaSpacing),
-            nameMediaSpacing: settings.value(of: AppearanceCatalog.nameMediaSpacing),
-            bodyLinkCardSpacing: settings.value(of: AppearanceCatalog.bodyLinkCardSpacing),
-            bodyPollSpacing: settings.value(of: AppearanceCatalog.bodyPollSpacing),
-            namePartsSpacing: settings.value(of: AppearanceCatalog.namePartsSpacing),
-            nameTimeSpacing: settings.value(of: AppearanceCatalog.nameTimeSpacing),
-            nameStackSpacing: settings.value(of: AppearanceCatalog.nameStackSpacing),
+            margins: values.rowMargins,
+            avatarSize: (appearance.showsAvatar ? values.value(of: AppearanceCatalog.avatarSize) : 0),
+            boosterAvatarSize: values.value(of: AppearanceCatalog.boosterAvatarSize),
+            nameFadeWidth: values.value(of: AppearanceCatalog.nameFadeWidth),
+            contextSymbolSpacing: values.value(of: AppearanceCatalog.contextSymbolSpacing),
+            contextAvatarTextSpacing: values.value(of: AppearanceCatalog.contextAvatarTextSpacing),
+            avatarSpacing: (appearance.showsAvatar ? values.value(of: AppearanceCatalog.avatarSpacing) : 0),
+            contextSpacing: values.value(of: AppearanceCatalog.contextSpacing),
+            replyLineWidth: values.value(of: AppearanceCatalog.replyLineWidth),
+            replyLineGap: values.value(of: AppearanceCatalog.replyLineGap),
+            nameBodySpacing: values.value(of: AppearanceCatalog.nameBodySpacing),
+            bodyMediaSpacing: values.value(of: AppearanceCatalog.bodyMediaSpacing),
+            nameMediaSpacing: values.value(of: AppearanceCatalog.nameMediaSpacing),
+            bodyLinkCardSpacing: values.value(of: AppearanceCatalog.bodyLinkCardSpacing),
+            bodyPollSpacing: values.value(of: AppearanceCatalog.bodyPollSpacing),
+            namePartsSpacing: values.value(of: AppearanceCatalog.namePartsSpacing),
+            nameTimeSpacing: values.value(of: AppearanceCatalog.nameTimeSpacing),
+            nameStackSpacing: values.value(of: AppearanceCatalog.nameStackSpacing),
             nameFont: typography.font(.namePrimary),
             timeFont: typography.font(.time),
             // 名前の上の行は、ブーストならブーストした人の名前の文字、返信と固定ならラベルの文字で描く。記号の大きさもこれに合わせる。
             contextFont: typography.font(status.reblog != nil ? .context : .contextLabel),
-            visibilitySymbolSpacing: settings.value(of: AppearanceCatalog.visibilitySymbolSpacing),
-            editedMarkSpacing: settings.value(of: AppearanceCatalog.editedMarkSpacing),
-            filterNoteSpacing: settings.value(of: AppearanceCatalog.filterNoteSpacing),
+            visibilitySymbolSpacing: values.value(of: AppearanceCatalog.visibilitySymbolSpacing),
+            editedMarkSpacing: values.value(of: AppearanceCatalog.editedMarkSpacing),
+            filterNoteSpacing: values.value(of: AppearanceCatalog.filterNoteSpacing),
             showsContextSymbol: appearance.showsContextSymbol,
-            bodyEmbedSpacing: settings.value(of: AppearanceCatalog.bodyXPostSpacing),
-            reactionsSpacing: settings.value(of: AppearanceCatalog.bodyReactionsSpacing),
+            bodyEmbedSpacing: values.value(of: AppearanceCatalog.bodyXPostSpacing),
+            reactionsSpacing: values.value(of: AppearanceCatalog.bodyReactionsSpacing),
             reactionStyle: reactionStyle(typography: typography),
-            actionBarSpacing: settings.value(of: AppearanceCatalog.actionBarSpacing)
+            actionBarSpacing: values.value(of: AppearanceCatalog.actionBarSpacing)
         )
         let language = settings.glyphLanguageIdentifier()
         let primaryRenderer = RichTextRenderer(font: metrics.nameFont, textColor: base.textProperties.color, settings: settings, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
         let secondaryRenderer = RichTextRenderer(font: typography.font(.nameSecondary), textColor: .secondaryLabel, settings: settings, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
         let contextRenderer = RichTextRenderer(font: metrics.contextFont, textColor: .secondaryLabel, settings: settings, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
         let contextSecondaryRenderer = RichTextRenderer(font: typography.font(.contextSecondary), textColor: .secondaryLabel, settings: settings, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
-        let boosterName = Self.joined(spacing: settings.value(of: AppearanceCatalog.contextPartsSpacing), appearance.contextNameStyle.parts.enumerated().map { index, part in
+        let boosterName = Self.joined(spacing: values.value(of: AppearanceCatalog.contextPartsSpacing), appearance.contextNameStyle.parts.enumerated().map { index, part in
             let renderer = index == 0 ? contextRenderer : contextSecondaryRenderer
             return switch part {
             case .displayName: renderer.render(.plain(status.account.displayNameOrUsername, emojis: status.account.emojis))
@@ -167,13 +170,14 @@ struct PostContentBuilder {
     /// - Parameter countFont: 件数の文字。時刻と同じ文字で描くので、投稿を組んだときの時刻の文字を渡す。書体を組み直すと重いため。
     /// - Parameter isAvailable: 投稿のメニューの項目を、いま押して行えるか。
     func actionBar(for shown: Status, countFont: UIFont, isAvailable: (StatusMenuItem) -> Bool) -> PostActionBarContent {
-        PostActionBarContent(
+        let values = values
+        return PostActionBarContent(
             buttons: PostActionBarButton.buttons(for: shown, items: settings.postActionBarLayout.actionBarItems, showsCounts: appearance.showsActionBarCounts, isAvailable: isAvailable),
-            iconSize: settings.value(of: AppearanceCatalog.actionBarIconSize),
-            padding: settings.value(of: AppearanceCatalog.actionBarPadding),
+            iconSize: values.value(of: AppearanceCatalog.actionBarIconSize),
+            padding: values.value(of: AppearanceCatalog.actionBarPadding),
             countFont: countFont,
             lightFavouriteIsYellow: appearance.reactionGlowLightFavouriteColor == .yellow,
-            leadingHitReach: settings.value(of: AppearanceCatalog.actionBarIconSize) * tuning.value(of: TuningCatalog.actionBarLeadingHitReach),
+            leadingHitReach: values.value(of: AppearanceCatalog.actionBarIconSize) * tuning.value(of: TuningCatalog.actionBarLeadingHitReach),
             statusID: shown.id
         )
     }
@@ -182,7 +186,7 @@ struct PostContentBuilder {
     /// ボタンは、絵文字の名前で見分ける。Fedibirdは名前でまとめるため、同じ名前のリアクションは1つしか並ばない。
     func reactionChips(for shown: Status, localEmojis: [String: CustomEmoji]) -> [ReactionChipsView.Reaction]? {
         guard !shown.emojiReactions.isEmpty, appearance.showsReactions else { return nil }
-        let renderer = RichTextRenderer(font: PostTypography(settings: settings).font(.reaction), textColor: .label, settings: settings, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
+        let renderer = RichTextRenderer(font: values.typography.font(.reaction), textColor: .label, settings: settings, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
         return shown.emojiReactions.map { reaction in
             let emoji = reaction.emoji.resolvingImage(in: localEmojis)
             // 画像のないカスタム絵文字（URLが読めなかったもの）は、ショートコードを文字で出す。
@@ -200,11 +204,12 @@ struct PostContentBuilder {
 
     /// 絵文字のリアクションのボタンの文字と大きさ。
     private func reactionStyle(typography: PostTypography) -> ReactionChipsView.Style {
-        let vertical = settings.value(of: AppearanceCatalog.reactionPadding)
-        let horizontal = settings.value(of: AppearanceCatalog.reactionHorizontalPadding)
+        let values = values
+        let vertical = values.value(of: AppearanceCatalog.reactionPadding)
+        let horizontal = values.value(of: AppearanceCatalog.reactionHorizontalPadding)
         return ReactionChipsView.Style(
             font: typography.font(.reaction),
-            spacing: settings.value(of: AppearanceCatalog.reactionSpacing),
+            spacing: values.value(of: AppearanceCatalog.reactionSpacing),
             padding: NSDirectionalEdgeInsets(top: vertical, leading: horizontal, bottom: vertical, trailing: horizontal)
         )
     }
@@ -229,7 +234,7 @@ struct PostContentBuilder {
             url: settings.animatesAvatars ? account.avatar : account.avatarStatic,
             shape: appearance.avatarShape,
             animates: settings.animatesAvatars,
-            cornerRatio: settings.value(of: AppearanceCatalog.avatarCornerRatio),
+            cornerRatio: values.value(of: AppearanceCatalog.avatarCornerRatio),
             showsBorder: appearance.showsAvatarBorder
         )
     }
@@ -260,7 +265,7 @@ struct PostContentBuilder {
     /// - Parameter enlargesEmojiOnly: 本文が絵文字だけなら、絵文字を大きく描く。タイムラインの投稿の本文だけで使い、縮めた見た目の再掲では使わない。
     /// - Parameter joinsLines: 段落と改行を詰めて1続きに描く。通知で再掲する投稿で使う（docs/notification-display.mdの「再掲する投稿の本文」）。
     func body(of status: Status, base: UIListContentConfiguration, color: UIColor = .label, font: UIFont? = nil, enlargesEmojiOnly: Bool = false, joinsLines: Bool = false) -> NSAttributedString {
-        var renderer = bodyRenderer(of: status, font: font ?? PostTypography(settings: settings).font(.body), color: color)
+        var renderer = bodyRenderer(of: status, font: font ?? values.typography.font(.body), color: color)
         if enlargesEmojiOnly {
             renderer.emojiOnly = emojiOnlyEnlargement
         }
@@ -272,7 +277,7 @@ struct PostContentBuilder {
     /// - Parameter translation: 本文を原文の代わりに描く訳文。訳文は翻訳先の言語の字形で描き、訳文の中に残した原文の部分は投稿の言語の字形で描く。
     /// - Parameter isTranslating: 本文の訳文を待っている。訳文か、待っている原文には、先頭に翻訳のマークの空きを足す。
     func postBodyRenderer(of status: Status, translation: RichText? = nil, isTranslating: Bool = false) -> RichTextRenderer {
-        var renderer = bodyRenderer(of: status, font: PostTypography(settings: settings).font(.body), color: .label)
+        var renderer = bodyRenderer(of: status, font: values.typography.font(.body), color: .label)
         renderer.emojiOnly = emojiOnlyEnlargement
         renderer.marksTranslation = translation != nil || isTranslating
         if translation != nil {
@@ -284,33 +289,34 @@ struct PostContentBuilder {
 
     private var emojiOnlyEnlargement: EmojiOnlyEnlargement {
         EmojiOnlyEnlargement(
-            scale: settings.value(of: AppearanceCatalog.emojiOnlyScale),
-            limit: Int(settings.value(of: AppearanceCatalog.emojiOnlyLimit))
+            scale: values.value(of: AppearanceCatalog.emojiOnlyScale),
+            limit: Int(values.value(of: AppearanceCatalog.emojiOnlyLimit))
         )
     }
 
     /// HTMLではない文字（予約した投稿のソースなど）を、投稿の本文と同じ文字の大きさと行間で描く。空白と改行は書いたまま残す。
     func body(plain text: String, of status: Status, base: UIListContentConfiguration) -> NSAttributedString {
-        bodyRenderer(of: status, font: PostTypography(settings: settings).font(.body), color: .label).render(.plain(text, emojis: status.emojis))
+        bodyRenderer(of: status, font: values.typography.font(.body), color: .label).render(.plain(text, emojis: status.emojis))
     }
 
     /// 投稿のリンクカード。出さない投稿ならnil。
     func linkCard(of status: Status) -> LinkCardView.Content? {
+        let values = values
         guard appearance.showsLinkCard else { return nil }
         return LinkCard(status: status).map {
             LinkCardView.Content(
                 card: $0,
-                padding: settings.value(of: AppearanceCatalog.linkCardPadding),
+                padding: values.value(of: AppearanceCatalog.linkCardPadding),
                 transitionDuration: tuning.value(of: TuningCatalog.linkCardTransitionDuration),
                 thumbnailSide: appearance.linkCardThumbnailSide,
-                typography: PostTypography(settings: settings),
+                typography: values.typography,
                 showsSite: appearance.showsLinkCardSite,
                 showsImage: appearance.showsLinkCardImage,
-                descriptionLines: Int(settings.value(of: AppearanceCatalog.linkCardDescriptionLines)),
-                lineSpacing: settings.value(of: AppearanceCatalog.linkCardLineSpacing),
-                titleLines: Int(settings.value(of: AppearanceCatalog.linkCardTitleLines)),
+                descriptionLines: Int(values.value(of: AppearanceCatalog.linkCardDescriptionLines)),
+                lineSpacing: values.value(of: AppearanceCatalog.linkCardLineSpacing),
+                titleLines: Int(values.value(of: AppearanceCatalog.linkCardTitleLines)),
                 boldsTitle: appearance.boldsLinkCardTitle,
-                imageWidthRatio: settings.value(of: AppearanceCatalog.linkCardImageWidthRatio)
+                imageWidthRatio: values.value(of: AppearanceCatalog.linkCardImageWidthRatio)
             )
         }
     }
@@ -319,10 +325,10 @@ struct PostContentBuilder {
     /// 本文はXの投稿の言語で描く。言語が分からなければ、使う人の言語で描く。
     /// - Parameter translation: 本文の自動翻訳の状態。訳さない投稿ではnil。
     func xPost(_ post: XPost, translation: EmbedTranslation? = nil, media: MediaGridView.Content?, base: UIListContentConfiguration) -> EmbeddedPostView.Content {
-        let typography = PostTypography(settings: settings)
+        let typography = values.typography
         let language = settings.glyphLanguageIdentifier(for: post.language)
         // Xの投稿にカスタム絵文字はないが、翻訳のマークを引用の囲みと同じ大きさにするため、同じ倍率を渡す。
-        let body = translated(RichTextRenderer(font: typography.font(.xPostBody), textColor: .label, settings: settings, emojiScale: settings.value(of: AppearanceCatalog.customEmojiScale), showsCustomEmojis: appearance.showsCustomEmojis, emojiImages: emojiImages, language: language), by: translation)
+        let body = translated(RichTextRenderer(font: typography.font(.xPostBody), textColor: .label, settings: settings, emojiScale: values.value(of: AppearanceCatalog.customEmojiScale), showsCustomEmojis: appearance.showsCustomEmojis, emojiImages: emojiImages, language: language), by: translation)
         let font = typography.font(.xPostBody)
         let notes: [EmbeddedPostView.Content.Note] = switch post.quote {
         case .link:
@@ -355,7 +361,7 @@ struct PostContentBuilder {
     ///   - media: 引用元の添付ファイル。ぼかすかはタイムラインが覚えているため、置く側が決めて渡す。
     ///   - translation: 本文の自動翻訳の状態。訳さない投稿ではnil。
     func quote(_ quoted: Status, translation: EmbedTranslation? = nil, filterWarning: PostBodyContent.Spoiler? = nil, spoiler: PostBodyContent.Spoiler?, media: MediaGridView.Content?, base: UIListContentConfiguration) -> EmbeddedPostView.Content {
-        let font = PostTypography(settings: settings).font(.xPostBody)
+        let font = values.typography.font(.xPostBody)
         var notes: [EmbeddedPostView.Content.Note] = []
         // 囲みが投稿1件分に近い重さにならないよう、投票は選択肢を並べず、あることだけを示す。
         if quoted.poll != nil, appearance.showsPoll {
@@ -391,7 +397,7 @@ struct PostContentBuilder {
     ///   - id: 引用した投稿のID。
     ///   - revealTitle: 押して開けるときに、理由の下に添える押せることを示す文言。開けなければnil。
     func quotePlaceholder(id: Status.ID, message: String, revealTitle: String?, base: UIListContentConfiguration) -> EmbeddedPostView.Content {
-        let font = PostTypography(settings: settings).font(.xPostBody)
+        let font = values.typography.font(.xPostBody)
         let text = NSMutableAttributedString(string: message, attributes: [.font: font, .foregroundColor: UIColor.secondaryLabel])
         if let revealTitle {
             text.append(NSAttributedString(string: "\n" + revealTitle, attributes: [.font: font, .foregroundColor: UIColor.tintColor]))
@@ -429,10 +435,11 @@ struct PostContentBuilder {
         notes: [EmbeddedPostView.Content.Note] = [],
         openActionName: String
     ) -> EmbeddedPostView.Content {
+        let values = values
         var content = EmbeddedPostView.Content(
             id: id,
             header: header,
-            avatarSize: showsEmbedAvatar ? settings.value(of: AppearanceCatalog.xPostAvatarSize) : 0,
+            avatarSize: showsEmbedAvatar ? values.value(of: AppearanceCatalog.xPostAvatarSize) : 0,
             filterWarning: filterWarning,
             spoiler: spoiler,
             text: text,
@@ -440,10 +447,10 @@ struct PostContentBuilder {
             media: media,
             notes: notes,
             openActionName: openActionName,
-            padding: settings.value(of: AppearanceCatalog.xPostPadding),
-            avatarNameSpacing: showsEmbedAvatar ? settings.value(of: AppearanceCatalog.xPostAvatarNameSpacing) : 0,
-            headerSpacing: settings.value(of: AppearanceCatalog.xPostHeaderSpacing),
-            mediaSpacing: settings.value(of: AppearanceCatalog.xPostMediaSpacing),
+            padding: values.value(of: AppearanceCatalog.xPostPadding),
+            avatarNameSpacing: showsEmbedAvatar ? values.value(of: AppearanceCatalog.xPostAvatarNameSpacing) : 0,
+            headerSpacing: values.value(of: AppearanceCatalog.xPostHeaderSpacing),
+            mediaSpacing: values.value(of: AppearanceCatalog.xPostMediaSpacing),
             transitionDuration: tuning.value(of: TuningCatalog.linkCardTransitionDuration)
         )
         content.showsReadMore = appearance.showsReadMore
@@ -481,7 +488,7 @@ struct PostContentBuilder {
 
     /// 囲みの作者の行。名前だけを太くし、ハンドルを控えめに添える。
     private func embedName(_ name: RichText, handle: String, base: UIListContentConfiguration) -> NSAttributedString {
-        let nameFont = PostTypography(settings: settings).font(.xPostName)
+        let nameFont = values.typography.font(.xPostName)
         let language = settings.glyphLanguageIdentifier()
         let primary = RichTextRenderer(font: Self.boldFont(nameFont), textColor: base.textProperties.color, settings: settings, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
         let secondary = RichTextRenderer(font: nameFont, textColor: .secondaryLabel, settings: settings, showsCustomEmojis: appearance.showsNameCustomEmojis, emojiImages: emojiImages, language: language)
@@ -505,22 +512,24 @@ struct PostContentBuilder {
     /// 投稿の注意書き。注意書きがなければnil。開いているかはタイムラインが覚えているため、ここでは折りたたんだ形で返す。
     /// - Parameter font: 注意書きの文字の書体。nilなら本文の文字で描く。
     func spoiler(of status: Status, base: UIListContentConfiguration, color: UIColor = .label, font: UIFont? = nil) -> PostBodyContent.Spoiler? {
+        let values = values
         guard !status.spoilerText.isEmpty, appearance.showsSpoiler else { return nil }
         return PostBodyContent.Spoiler(
-            text: bodyRenderer(of: status, font: font ?? PostTypography(settings: settings).font(.body), color: color).render(.plain(status.spoilerText, emojis: status.emojis)),
+            text: bodyRenderer(of: status, font: font ?? values.typography.font(.body), color: color).render(.plain(status.spoilerText, emojis: status.emojis)),
             isCollapsed: true,
-            padding: settings.value(of: AppearanceCatalog.spoilerPadding),
-            bodySpacing: settings.value(of: AppearanceCatalog.spoilerBodySpacing),
-            buttonFont: PostTypography(settings: settings).font(.spoilerButton),
-            buttonSpacing: settings.value(of: AppearanceCatalog.spoilerButtonSpacing),
-            cornerRadius: settings.value(of: AppearanceCatalog.spoilerCornerRadius)
+            padding: values.value(of: AppearanceCatalog.spoilerPadding),
+            bodySpacing: values.value(of: AppearanceCatalog.spoilerBodySpacing),
+            buttonFont: values.typography.font(.spoilerButton),
+            buttonSpacing: values.value(of: AppearanceCatalog.spoilerButtonSpacing),
+            cornerRadius: values.value(of: AppearanceCatalog.spoilerCornerRadius)
         )
     }
 
     /// フィルターの警告。注意書きと同じボックスに入れて注意書きの上に出し、開くまで注意書きも本文も添付ファイルも出さない。
     /// フィルターの名前は使う人が付けたものなので、投稿の言語ではなく、アプリの文字で描く。
     func filterWarning(titles: [String], base: UIListContentConfiguration) -> PostBodyContent.Spoiler {
-        let font = PostTypography(settings: settings).font(.body)
+        let values = values
+        let font = values.typography.font(.body)
         let warning = PostTexts.filterWarning(titles: titles)
         let text = NSMutableAttributedString(string: warning.text, attributes: [.font: font, .foregroundColor: UIColor.secondaryLabel])
         text.addAttribute(.foregroundColor, value: UIColor.label, range: NSRange(warning.emphasis, in: warning.text))
@@ -529,17 +538,17 @@ struct PostContentBuilder {
             text: text,
             isCollapsed: true,
             kind: .filter,
-            padding: settings.value(of: AppearanceCatalog.spoilerPadding),
-            bodySpacing: settings.value(of: AppearanceCatalog.spoilerBodySpacing),
-            buttonFont: PostTypography(settings: settings).font(.spoilerButton),
-            buttonSpacing: settings.value(of: AppearanceCatalog.spoilerButtonSpacing),
-            cornerRadius: settings.value(of: AppearanceCatalog.spoilerCornerRadius)
+            padding: values.value(of: AppearanceCatalog.spoilerPadding),
+            bodySpacing: values.value(of: AppearanceCatalog.spoilerBodySpacing),
+            buttonFont: values.typography.font(.spoilerButton),
+            buttonSpacing: values.value(of: AppearanceCatalog.spoilerButtonSpacing),
+            cornerRadius: values.value(of: AppearanceCatalog.spoilerCornerRadius)
         )
     }
 
     /// 自分の投稿が、自分のフィルターに一致していることを示す1行。投稿は折りたたまないので、目立たせず、本文より小さく控えめな色で描く。
     func ownFilterNote(titles: [String]) -> NSAttributedString {
-        let font = PostTypography(settings: settings).font(.filterNote)
+        let font = values.typography.font(.filterNote)
         let text = NSMutableAttributedString()
         if let symbol = UIImage(systemName: "line.3.horizontal.decrease.circle", withConfiguration: UIImage.SymbolConfiguration(font: font, scale: .small)) {
             text.append(NSAttributedString(attachment: NSTextAttachment(image: symbol.withRenderingMode(.alwaysTemplate))))
@@ -552,15 +561,16 @@ struct PostContentBuilder {
 
     /// 本文と注意書きは投稿した人が書いたものなので、投稿の言語で描く。
     private func bodyRenderer(of status: Status, font: UIFont, color: UIColor) -> RichTextRenderer {
-        RichTextRenderer(
+        let values = values
+        return RichTextRenderer(
             font: font,
             textColor: color, settings: settings,
-            paragraphSpacing: settings.value(of: AppearanceCatalog.paragraphSpacing),
-            lineSpacing: settings.value(of: AppearanceCatalog.bodyLineSpacing),
-            indentPerLevel: font.pointSize * settings.value(of: AppearanceCatalog.quoteIndent),
-            quoteBarWidth: settings.value(of: AppearanceCatalog.quoteBarWidth),
-            emojiScale: settings.value(of: AppearanceCatalog.customEmojiScale),
-            unicodeEmojiScale: settings.value(of: AppearanceCatalog.unicodeEmojiScale),
+            paragraphSpacing: values.value(of: AppearanceCatalog.paragraphSpacing),
+            lineSpacing: values.value(of: AppearanceCatalog.bodyLineSpacing),
+            indentPerLevel: font.pointSize * values.value(of: AppearanceCatalog.quoteIndent),
+            quoteBarWidth: values.value(of: AppearanceCatalog.quoteBarWidth),
+            emojiScale: values.value(of: AppearanceCatalog.customEmojiScale),
+            unicodeEmojiScale: values.value(of: AppearanceCatalog.unicodeEmojiScale),
             showsCustomEmojis: appearance.showsCustomEmojis, emojiImages: emojiImages,
             language: settings.glyphLanguageIdentifier(for: status.language)
         )

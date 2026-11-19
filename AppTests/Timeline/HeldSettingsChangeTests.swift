@@ -26,6 +26,21 @@ struct HeldSettingsChangeTests {
         #expect(!harness.viewController.hasHeldSettingsChange)
     }
 
+    @Test func shownTimelineAppliesShortcutPresetAtOnce() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.settings.setValue(6, for: AppearanceCatalog.bodyText)
+        let statuses = StatusFactory.make(count: 5, startingAt: 100)
+        harness.setStatuses(statuses)
+        let before = try #require(bodyPointSize(harness, statuses[0].id))
+
+        try harness.settings.store.applyShortcut(selecting: .builtIn(.compact), for: .app, signedInAccounts: [])
+        let expected = PostTypography(settings: harness.settings).font(.body).pointSize
+        #expect(expected != before)
+        try await waitUntil { bodyPointSize(harness, statuses[0].id) == expected }
+        #expect(!harness.viewController.hasHeldSettingsChange)
+    }
+
     @Test func heldChangeAppliesWhenReleased() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

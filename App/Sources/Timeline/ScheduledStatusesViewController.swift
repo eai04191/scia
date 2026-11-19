@@ -252,7 +252,7 @@ final class ScheduledStatusesViewController: UICollectionViewController {
             sensitive: params.sensitive,
             visibility: params.visibility ?? .public
         )
-        let builder = PostContentBuilder(tuning: tuning, settings: settings, emojiImages: AppDependencies.emojiImages, mediaImages: AppDependencies.mediaImages, avatarImages: AppDependencies.avatarImages)
+        let builder = PostContentBuilder(tuning: tuning, renderSettings: listStyle.renderSettings, emojiImages: AppDependencies.emojiImages, mediaImages: AppDependencies.mediaImages, avatarImages: AppDependencies.avatarImages)
         var configuration = builder.configuration(for: preview, base: base)
         // 本文は書いたときのソースの文字なので、HTMLとして読まずに、空白と改行を書いたまま描く。
         // メンションやハッシュタグはリンクにしない。予約はまだ投稿ではなく、サーバーがリンクを作っていないため。

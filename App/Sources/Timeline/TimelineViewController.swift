@@ -2440,7 +2440,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// 投稿のセルの中身を組み立てる。今のチューニングと設定を読むため、使うたびに作る。
     var postContentBuilder: PostContentBuilder {
-        PostContentBuilder(tuning: tuning, settings: settings, emojiImages: emojiImages, mediaImages: mediaImages, avatarImages: avatarImages, preparedBodies: bodyTextPreparer)
+        PostContentBuilder(tuning: tuning, renderSettings: listStyle.renderSettings, emojiImages: emojiImages, mediaImages: mediaImages, avatarImages: avatarImages, preparedBodies: bodyTextPreparer)
     }
 
     /// `status`の行を組むときの見た目の選択肢。スレッドで開いた投稿は、選んでいれば、表示しない設定にした部品もすべて出す（docs/appearance.md）。

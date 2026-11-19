@@ -14,7 +14,7 @@ struct BodyTextPreparerTests {
     private let emoji = CustomEmoji(shortcode: "blob", url: URL(string: "https://example.com/blob.gif")!, staticUrl: URL(string: "https://example.com/blob.png")!)
 
     private func builder(emojiImages: EmojiImageStore<UIImage> = .offline, preparer: BodyTextPreparer? = nil) -> PostContentBuilder {
-        PostContentBuilder(tuning: AppDependencies.tuning, settings: AppDependencies.settings, emojiImages: emojiImages, mediaImages: .offline, avatarImages: .offline, preparedBodies: preparer)
+        PostContentBuilder(tuning: AppDependencies.tuning, renderSettings: PostRenderSettings(settings: AppDependencies.settings), emojiImages: emojiImages, mediaImages: .offline, avatarImages: .offline, preparedBodies: preparer)
     }
 
     private func status(_ content: String, emojis: [CustomEmoji] = [], language: String = "ja") -> Status {
@@ -144,7 +144,7 @@ struct BodyTextPreparerTests {
         let settings = AppSettings(defaults: TestScratch.defaults("BodyTextPreparerTests.glyphs"))
         settings.autoTranslationTarget = "ja"
         let preparer = BodyTextPreparer()
-        let builder = PostContentBuilder(tuning: AppDependencies.tuning, settings: settings, emojiImages: .offline, mediaImages: .offline, avatarImages: .offline, preparedBodies: preparer)
+        let builder = PostContentBuilder(tuning: AppDependencies.tuning, renderSettings: PostRenderSettings(settings: settings), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline, preparedBodies: preparer)
         let chinese = status("<p>你好</p>", language: "zh")
         let translation = RichText(blocks: [RichText.Block(inlines: [.text("直す", [])])])
         func language(_ text: NSAttributedString) -> String? {

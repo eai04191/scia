@@ -110,7 +110,7 @@ struct ScheduledStatusesControllerTests {
 struct ScheduledStatusBodyTests {
     /// 書いたときのソースの文字なので、HTMLとして読まず、連続する空白、字下げ、改行、記号を書いたまま残す。
     @Test func plainBodyKeepsSourceAsWritten() {
-        let builder = PostContentBuilder(tuning: AppDependencies.tuning, settings: AppDependencies.settings, emojiImages: AppDependencies.emojiImages, mediaImages: AppDependencies.mediaImages, avatarImages: AppDependencies.avatarImages)
+        let builder = PostContentBuilder(tuning: AppDependencies.tuning, renderSettings: PostRenderSettings(settings: AppDependencies.settings), emojiImages: AppDependencies.emojiImages, mediaImages: AppDependencies.mediaImages, avatarImages: AppDependencies.avatarImages)
         let status = Status(id: "1", createdAt: Date(timeIntervalSince1970: 0), account: Account(id: "1", username: "a", acct: "a", displayName: "A", avatar: nil), content: "", spoilerText: "", url: nil)
         let source = "A  B\n  字下げ\n<b>&</b>"
 
