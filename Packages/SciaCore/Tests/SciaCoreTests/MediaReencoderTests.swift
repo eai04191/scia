@@ -10,7 +10,8 @@ import UniformTypeIdentifiers
 /// 画像と動画を、AVFoundationとImageIOで実際に書き出して確かめる。
 /// 固まったら、テストの実行を止めずに失敗させる。テスト全体の時間では見ない。ほかのビルドと重なると、シミュレーターのコーデックがふだんの100倍以上遅くなり、
 /// 固まっていないのに1分を過ぎたことがあるため。動画のテストは、コマや書き出しの進み具合を伝える。
-@Suite(.scratch, .stallLimit)
+/// 1件ずつ走らせる。GitHub ActionsのRelease構成のテストで、動画の書き出し3件が同時に`copyNextSampleBuffer`から戻らなくなり、協調スレッド3本をすべて占めて、ほかのテストまで止めたため。
+@Suite(.scratch, .stallLimit, .serialized)
 struct MediaReencoderTests {
     private func makeDirectory() throws -> URL {
         let directory = TestScratch.url("MediaReencoderTests")
