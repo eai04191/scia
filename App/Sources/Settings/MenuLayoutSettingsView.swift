@@ -123,6 +123,10 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     /// スワイプで削除を頼んだ項目。並びから外れて届いたら、残る行はそのままにして、行を動きで閉じる。使う人の操作で消えるため。
     /// 確かめる画面で取りやめても残るが、その項目がほかの経路で外れて届いたときに、行が動いて閉じるだけで済む。
     private var deletionRequests: Set<Item> = []
+    /// 行を、つまみのドラッグではなく、上下のボタンと右クリックのメニューで動かす。
+    /// MacのDesigned for iPadでは、一覧の並べ替えのドラッグがボタンを離しても終わらず、持ち上げた行が浮いたまま残る。
+    /// macOS 27.2.1で、この一覧と同じ組み方だけを持つアプリでも起きたため、アプリの側では直せない。
+    private let movesWithButtons: Bool
 
     init(
         layout: MenuLayout<Item>,
@@ -131,9 +135,11 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         options: [MenuLayoutOption],
         actions: [MenuLayoutAction],
         itemDeletion: MenuLayoutItemDeletion<Item>?,
+        movesWithButtons: Bool = ProcessInfo.processInfo.isiOSAppOnMac,
         onChange: @escaping (MenuLayout<Item>) -> Void
     ) {
         rows = layout.elements.map { Row(element: $0) }
+        self.movesWithButtons = movesWithButtons
         self.image = image
         self.imageRevision = imageRevision
         self.options = options
@@ -153,6 +159,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         collectionView.frame = view.bounds
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         collectionView.delegate = self
+        collectionView.dragInteractionEnabled = !movesWithButtons
         collectionView.hidesTopEdgeEffectOnMac()
         view.addSubview(collectionView)
         dataSource = makeDataSource()
@@ -385,7 +392,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     }
 
     private func configure(_ cell: UICollectionViewListCell, for row: Row) {
-        let reorder = UICellAccessory.reorder(displayed: .always, options: .init(showsVerticalSeparator: false))
+        let reorder = moveAccessory(for: row, in: cell)
         // セルは種類をまたいで使い回され、字下げは使い回しても残るため、区切り線などの行でも付け直す。
         let index = rows.firstIndex { $0.id == row.id }
         cell.indentationWidth = rowGroupIndentation
@@ -424,8 +431,53 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         }
     }
 
+    /// 行を動かす部品。ふだんはドラッグするつまみで、ボタンで動かすときは上と下のボタン。端の行では、動けない向きのボタンを押せなくする。
+    private func moveAccessory(for row: Row, in cell: UICollectionViewListCell) -> UICellAccessory {
+        guard movesWithButtons else { return .reorder(displayed: .always, options: .init(showsVerticalSeparator: false)) }
+        let buttons = MenuLayoutMoveButtons(rowID: row.id, side: moveButtonSide) { [weak self, id = row.id] move in self?.moveRow(id: id, move) }
+        buttons.update { [self] move in canMove(row.id, move) }
+        moveButtonsByCell.setObject(buttons, forKey: cell)
+        return .customView(configuration: .init(customView: buttons, placement: .trailing(), reservedLayoutWidth: .actual, maintainsFixedSize: true))
+    }
+
+    /// セルに今置いている上下のボタン。押せるかを、セルを描き直さずに変えるために持つ。
+    private let moveButtonsByCell = NSMapTable<UICollectionViewListCell, MenuLayoutMoveButtons>.weakToWeakObjects()
+
+    private func canMove(_ id: UUID, _ move: MenuLayoutMove) -> Bool {
+        rows.firstIndex { $0.id == id }.flatMap { move.destination(from: $0, count: movableRowCount) } != nil
+    }
+
+    /// 上下のボタンの1辺。押しやすさは、ほかの行のアクセサリーに合わせる。
+    private let moveButtonSide: CGFloat = 36
+
+    /// 動かせる行の数。境目の後ろの節を出さない並びでは、境目より後ろへ動かすと画面から消えるため、境目の前だけを数える。
+    private var movableRowCount: Int {
+        Item.hasMoreSection ? rows.count : moreIndex
+    }
+
+    /// 並べ替えのドラッグを終えたときと同じく、保存して、行の線と字下げを引き直す。
+    private func moveRow(id: UUID, _ move: MenuLayoutMove) {
+        guard let index = rows.firstIndex(where: { $0.id == id }), let destination = move.destination(from: index, count: movableRowCount) else { return }
+        rows.insert(rows.remove(at: index), at: destination)
+        save()
+        applySnapshot(animated: !UIAccessibility.isReduceMotionEnabled) { [weak self] in self?.refreshDependentRows() }
+    }
+
+    /// 上下のボタンが押せるかは、行を動かしたり足したり消したりして端が変わるたびに変わるので、見えている行のボタンを変える。
+    /// 行を描き直すと、スイッチとボタンが作り直されて、入れ替わる動きが右端に出るため、ボタンの押せる状態だけを変える。
+    /// 動かしている最中のセルは取り出せないので、並びを当て終えてから呼ぶ。
+    private func refreshMoveButtons() {
+        guard movesWithButtons else { return }
+        for row in rows where row.element != .more {
+            guard let indexPath = dataSource?.indexPath(for: .row(row.id)),
+                  let cell = collectionView.cellForItem(at: indexPath) as? UICollectionViewListCell,
+                  let buttons = moveButtonsByCell.object(forKey: cell), buttons.rowID == row.id else { continue }
+            buttons.update { [self] move in canMove(row.id, move) }
+        }
+    }
+
     /// 横並びの字下げは、行を足したり消したりし終わってから付け直す。
-    private func applySnapshot(animated: Bool) {
+    private func applySnapshot(animated: Bool, completion: (() -> Void)? = nil) {
         var snapshot = NSDiffableDataSourceSnapshot<Section, Cell>()
         // 境目を持たない並びでは、境目の後ろの節を出さない。
         let sections: [(Section, ArraySlice<Row>)] = [(.main, rows[..<moreIndex])] + (Item.hasMoreSection ? [(.more, rows[min(moreIndex + 1, rows.endIndex)...])] : [])
@@ -445,7 +497,11 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             snapshot.appendSections([.option(index)])
             snapshot.appendItems([.option(index)], toSection: .option(index))
         }
-        dataSource?.apply(snapshot, animatingDifferences: animated) { [weak self] in self?.refreshRowGroups() }
+        dataSource?.apply(snapshot, animatingDifferences: animated) { [weak self] in
+            self?.refreshRowGroups()
+            self?.refreshMoveButtons()
+            completion?()
+        }
     }
 
     /// 横並びの字下げと行どうしの線は、ほかの行の並びや表示で変わるため、並びが変わるたびに描き直す。
@@ -618,6 +674,18 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         }
     }
 
+    /// ボタンで動かすときは、遠くへ動かす項目を右クリックのメニューに出す。
+    func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemsAt indexPaths: [IndexPath], point: CGPoint) -> UIContextMenuConfiguration? {
+        guard movesWithButtons, indexPaths.count == 1, let index = rowIndex(at: indexPaths[0]) else { return nil }
+        let id = rows[index].id
+        let actions = [(MenuLayoutMove.toTop, "arrow.up.to.line"), (.toBottom, "arrow.down.to.line")].compactMap { move, symbolName -> UIAction? in
+            guard move.destination(from: index, count: movableRowCount) != nil else { return nil }
+            return UIAction(title: move.title, image: UIImage(systemName: symbolName)) { [weak self] _ in self?.moveRow(id: id, move) }
+        }
+        guard !actions.isEmpty else { return nil }
+        return UIContextMenuConfiguration(actionProvider: { _ in UIMenu(children: actions) })
+    }
+
     /// 並べ替えは並びの2つの節の中だけで行い、下のボタンの間には入れない。節をまたいで動かせる。
     func collectionView(
         _ collectionView: UICollectionView,
@@ -716,6 +784,36 @@ private extension MenuLayout.Element {
         switch self {
         case .separator, .rowSeparator: true
         case .item, .more: false
+        }
+    }
+}
+
+/// 並びの行の、上と下に動かすボタン。
+private final class MenuLayoutMoveButtons: UIStackView {
+    let rowID: UUID
+    private let buttons: [(MenuLayoutMove, UIButton)]
+
+    init(rowID: UUID, side: CGFloat, onMove: @escaping @MainActor (MenuLayoutMove) -> Void) {
+        self.rowID = rowID
+        buttons = [(MenuLayoutMove.up, "chevron.up"), (.down, "chevron.down")].map { move, symbolName in
+            let button = UIButton(configuration: .plain(), primaryAction: UIAction(image: UIImage(systemName: symbolName)) { _ in onMove(move) })
+            button.accessibilityLabel = move.title
+            return (move, button)
+        }
+        super.init(frame: .zero)
+        buttons.forEach { addArrangedSubview($0.1) }
+        // アクセサリーは、置くビューの大きさを自動レイアウトから求めず、既定では決まった幅しか場所を取らないので、大きさを付けて、その幅で場所を取らせる。
+        frame.size = CGSize(width: side * CGFloat(buttons.count), height: side)
+    }
+
+    @available(*, unavailable)
+    required init(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func update(canMove: (MenuLayoutMove) -> Bool) {
+        for (move, button) in buttons {
+            button.isEnabled = canMove(move)
         }
     }
 }

@@ -590,3 +590,33 @@ public enum MediaMenuItem: String, BundledMenuDefaults {
     public static let defaultsKey = "media"
     public static let defaultLayout = MenuLayout<MediaMenuItem>.bundledDefault()
 }
+
+/// 並びの画面で、ドラッグの代わりにボタンやメニューで行を動かす向き。MacのDesigned for iPadで使う（docs/menus.md）。
+public enum MenuLayoutMove: Sendable, CaseIterable {
+    case up
+    case down
+    case toTop
+    case toBottom
+
+    public var title: String {
+        switch self {
+        case .up: SettingsTexts.MenuLayout.moveUp
+        case .down: SettingsTexts.MenuLayout.moveDown
+        case .toTop: SettingsTexts.MenuLayout.moveToTop
+        case .toBottom: SettingsTexts.MenuLayout.moveToBottom
+        }
+    }
+
+    /// `count`個の並びで、`index`の行を取り出して入れ直す位置。動かないならnil。
+    /// 「その他」の境目も並びの1つとして数えるので、上下に1つ動かして境目と入れ替わると、行は境目の反対側の節に入る。
+    public func destination(from index: Int, count: Int) -> Int? {
+        guard (0..<count).contains(index) else { return nil }
+        let destination = switch self {
+        case .up: index - 1
+        case .down: index + 1
+        case .toTop: 0
+        case .toBottom: count - 1
+        }
+        return destination != index && (0..<count).contains(destination) ? destination : nil
+    }
+}

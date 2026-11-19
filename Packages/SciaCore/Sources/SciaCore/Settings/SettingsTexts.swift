@@ -201,6 +201,10 @@ public enum SettingsTexts {
         public static let separator = "区切り線"
         /// 横並びの区切り線の行の読み上げ。
         public static let rowSeparatorAccessibilityLabel = "横並びの区切り線"
+        public static let moveUp = "上へ移動"
+        public static let moveDown = "下へ移動"
+        public static let moveToTop = "一番上へ移動"
+        public static let moveToBottom = "一番下へ移動"
     }
 
     /// ストレージの画面。
