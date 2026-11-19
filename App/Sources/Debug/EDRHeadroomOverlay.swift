@@ -26,6 +26,7 @@ enum EDRHeadroomOverlay {
             window.addSubview(overlay)
             NSLayoutConstraint.activate([
                 overlay.trailingAnchor.constraint(equalTo: window.safeAreaLayoutGuide.trailingAnchor, constant: -8),
+                overlay.leadingAnchor.constraint(greaterThanOrEqualTo: window.safeAreaLayoutGuide.leadingAnchor, constant: 8),
                 // 投稿欄とタブバーより上に置く。
                 overlay.bottomAnchor.constraint(equalTo: window.safeAreaLayoutGuide.bottomAnchor, constant: -120),
             ])
@@ -88,6 +89,57 @@ private final class EDRHeadroomOverlayView: UIView {
         let requestsHDR = tuning.value(of: TuningCatalog.reactionGlowHDRExposure) > 1
             || (isDark && tuning.value(of: TuningCatalog.reactionGlowDarkGlowHDRExposure) > 1)
         let glow = ReactionGlowView.mayDrawInHDR && potential > 1 && requestsHDR && AppDependencies.settings.appearance.drawsReactionGlowInHDR ? "HDR" : "SDR"
-        label.text = String(format: "EDRの余地 今 %.2f / 最大 %.2f\n光 %@", current, potential, glow)
+        let settings = window.traitCollection.appSettings
+        let windowRange = "窓の設定 \(settings.store.library.name(of: settings.presetID) ?? "-")・一覧 \(settings.mediaDynamicRange.rawValue)・窓のtrait \(Self.name(of: window.traitCollection.imageDynamicRange))"
+        label.text = ([String(format: "EDRの余地 今 %.2f / 最大 %.2f\n光 %@", current, potential, glow), windowRange] + Self.hdrDrawers(in: window)).joined(separator: "\n")
+    }
+
+    /// 窓の中でHDRで描きうるものを、種類ごとに数えて並べる。余地を上げているものを探すため。
+    /// HDRの画像を出している画像ビュー（実際の明るさの幅と画像ビューの指定）と、HDRを指定したレイヤーを数える。隠れているものと透明なものは数えない。
+    private static func hdrDrawers(in window: UIWindow) -> [String] {
+        var counts: [String: Int] = [:]
+        func visit(_ view: UIView) {
+            guard !view.isHidden, view.alpha > 0, !(view is EDRHeadroomOverlayView) else { return }
+            if let imageView = view as? UIImageView, imageView.image?.isHighDynamicRange == true {
+                let key = "HDRの画像 \(type(of: imageView)) trait \(name(of: imageView.traitCollection.imageDynamicRange))・設定のtrait \(name(of: imageView.traitCollection.mediaDynamicRange))・指定 \(name(of: imageView.preferredImageDynamicRange))\(boundary(above: imageView))"
+                counts[key, default: 0] += 1
+            }
+            visitLayers(view.layer, owner: view)
+            view.subviews.forEach(visit)
+        }
+        func visitLayers(_ layer: CALayer, owner: UIView) {
+            guard !layer.isHidden, layer.opacity > 0 else { return }
+            if layer.preferredDynamicRange == .high || layer.preferredDynamicRange == .constrainedHigh || layer.contentsHeadroom > 1 {
+                let key = "HDRのレイヤー \(type(of: layer)) in \(type(of: owner))"
+                counts[key, default: 0] += 1
+            }
+            // サブビューのレイヤーは、そのビューを見るときに数える。
+            for sublayer in layer.sublayers ?? [] where !(sublayer.delegate is UIView) {
+                visitLayers(sublayer, owner: owner)
+            }
+        }
+        visit(window)
+        return counts.sorted { $0.key < $1.key }.map { "\($0.value)× \($0.key)" }
+    }
+
+    /// `view`から親をたどり、明るさの幅が親と違う最初のビューを返す。窓の値が途中で上書きされている場所を探すため。
+    private static func boundary(above view: UIView) -> String {
+        var current = view
+        while let parent = current.superview {
+            if parent.traitCollection.imageDynamicRange != current.traitCollection.imageDynamicRange {
+                return "\n  境目: \(type(of: current))（\(name(of: current.traitCollection.imageDynamicRange))）の親 \(type(of: parent))（\(name(of: parent.traitCollection.imageDynamicRange))）"
+            }
+            current = parent
+        }
+        return ""
+    }
+
+    private static func name(of range: UIImage.DynamicRange) -> String {
+        switch range {
+        case .standard: "SDR"
+        case .constrainedHigh: "控えめなHDR"
+        case .high: "HDR"
+        default: "未指定"
+        }
     }
 }
