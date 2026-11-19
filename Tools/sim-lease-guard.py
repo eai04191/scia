@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""借りていない端末へ命令を送るのを、実行の前に止める。Claude CodeのPreToolUseのhook（.claude/settings.json）から呼ぶ。
+"""借りていない端末へ命令を送るのを、実行の前に止める。Claude CodeとCodexのPreToolUseのhookから呼ぶ。
 
 貸し借り（Tools/sim.sh acquire）は約束事で、端末に鍵は掛からない。`xcrun simctl`とシミュレーターのツールは、
-名前を渡せばどの端末にも届くので、次の2つを止める。
+名前を渡せばどの端末にも届くので、次の操作を止める。
 
 - 端末に命令を送る`xcrun simctl`を、直接呼ぶこと。貸し借りを確かめる関門（`Tools/sim.sh ctl '<端末>' <操作> ...`）を通させる。
   コマンドのどの引数が端末かを、ここでは読み解かない。操作ごとにオプションと端末の位置が違い、読み違えるとすり抜けるため。
+- AXeで端末を直接操作すること。`Tools/sim.sh axe`を通して、貸し借りを確かめてからUDIDを渡す。
 - シミュレーターのツールで、このworktreeが借りていない貸し借りの端末（`Scia 1`〜`Scia 4`、`Scia iPad 1`、`Scia Duo`など。`Tools/sim.sh`の`pool`が決める）を指すこと。
 
 標準入力にhookの入力のJSONを受け取り、止めるときは理由を標準エラーに書いて終了コード2で終わる。
@@ -30,12 +31,14 @@ TOOL_ACTIONS_WITHOUT_DEVICE = {"detach"}
 WRAPPERS = {"env", "sudo", "time", "nohup", "command", "exec", "xargs", "caffeinate"}
 # 文字列をコマンドとして実行するシェル。
 SHELLS = {"bash", "sh", "zsh"}
+# 区切ったコマンドの先頭に残る、条件・ループ・グループの構文。
+CONTROL_PREFIXES = {"if", "then", "elif", "else", "while", "until", "do", "!", "{"}
 
 
-def direct_simctl_operations(command):
-    """コマンドが直接実行する`simctl`の操作のうち、端末に命令を送るもの。読み取れないコマンドは"?"を返す。
+def direct_device_operations(command, program="simctl"):
+    """コマンドが直接実行する`program`の操作のうち、端末に命令を送るもの。読み取れないコマンドは"?"を返す。
 
-    実行される位置にある`simctl`だけを数える。`rg simctl`や`echo 'xcrun simctl ...'`のような、検索の語や表示する文字列は数えない。
+    実行される位置にあるコマンドだけを数える。`rg simctl`や`echo 'xcrun simctl ...'`のような、検索の語や表示する文字列は数えない。
     `bash -c "..."`や`eval`に渡した文字列は、コマンドとして実行されるので中を読む。
     """
     # 行の継続をつなぎ、改行はコマンドの区切りとして読む。
@@ -46,22 +49,22 @@ def direct_simctl_operations(command):
         tokens = list(lexer)
     except ValueError:
         # 引用符が閉じていないなど、分けられないコマンド。
-        return ["?"] if "simctl" in command else []
+        return ["?"] if program in command else []
     operations, segment = [], []
     for token in tokens + [";"]:
         # 区切りの記号は、`);`や`&&`のように、続けて書くと1つの語になる。
         if re.fullmatch(r"[();<>|&]+", token):
-            operations += segment_operations(segment)
+            operations += segment_operations(segment, program)
             segment = []
         else:
             segment.append(token)
     return operations
 
 
-def segment_operations(words):
-    """区切りのない1つのコマンド（語の並び）が実行する`simctl`の操作。"""
+def segment_operations(words, program="simctl"):
+    """区切りのない1つのコマンド（語の並び）が実行する端末操作。"""
     # 先頭の`VAR=値`と、ほかのコマンドを実行する語を読み飛ばして、実行されるコマンドの語を探す。
-    while words and (re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", words[0]) or os.path.basename(words[0]) in WRAPPERS or (words[0].startswith("-") and len(words) > 1)):
+    while words and (words[0] in CONTROL_PREFIXES or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", words[0]) or os.path.basename(words[0]) in WRAPPERS or (words[0].startswith("-") and len(words) > 1)):
         words = words[1:]
     if not words:
         return []
@@ -70,10 +73,16 @@ def segment_operations(words):
         # `-c`の次の語がコマンドの文字列。`-lc`のようにまとめて書いたものも拾う。
         for index, word in enumerate(words[1:], start=1):
             if re.fullmatch(r"-[a-zA-Z]*c[a-zA-Z]*", word) and index + 1 < len(words):
-                return direct_simctl_operations(words[index + 1])
+                return direct_device_operations(words[index + 1], program)
         return []
     if name == "eval":
-        return direct_simctl_operations(" ".join(words[1:]))
+        return direct_device_operations(" ".join(words[1:]), program)
+    if program == "axe":
+        options = words[:words.index("--")] if "--" in words else words
+        if name != "axe" or "--help" in options or "-h" in options:
+            return []
+        rest = words[1:]
+        return [rest[0]] if rest and rest[0] not in {"list-simulators", "list-devices", "help", "--version"} else []
     if name == "xcrun":
         # xcrun自身のオプション（`--sdk iphonesimulator`、`-r`など）の後ろにあるsimctlを探す。
         for index, word in enumerate(words[1:], start=1):
@@ -119,12 +128,16 @@ def main():
     tool, tool_input = payload.get("tool_name"), payload.get("tool_input") or {}
     if tool == "Bash":
         command = tool_input.get("command", "")
-        if "simctl" not in command:
+        if "simctl" not in command and "axe" not in command:
             return 0
-        operations = direct_simctl_operations(command)
-        if not operations or repository_top(payload.get("cwd")) is None:
+        operations = direct_device_operations(command)
+        axe_operations = direct_device_operations(command, "axe")
+        if not (operations or axe_operations) or repository_top(payload.get("cwd")) is None:
             # このリポジトリの外には、貸し借りの決まりがない。
             return 0
+        if axe_operations:
+            print("AXeの直接の操作を止めた。Tools/sim.sh axe '<借りた端末>' <操作> <引数...>を使う。--udidは渡さない。", file=sys.stderr)
+            return 2
         print(f"xcrun simctl {operations[0]}の直接の呼び出しを止めた。端末に命令を送るsimctlは、貸し借りを確かめる"
               f"Tools/sim.sh ctl '<借りた端末>' {operations[0]} <引数...>で送る。"
               "Tools/sim.sh acquireの出力の最後の行で、借りた端末を確かめてから、次のコマンドで送る。", file=sys.stderr)
@@ -173,7 +186,7 @@ def self_test():
     }
     failed = False
     for command, expected in cases.items():
-        actual = direct_simctl_operations(command)
+        actual = direct_device_operations(command)
         if actual != expected:
             failed = True
             print(f"NG: {command}\n  期待: {expected}\n  実際: {actual}")

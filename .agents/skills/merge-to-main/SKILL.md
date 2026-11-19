@@ -1,7 +1,7 @@
 ---
 name: merge-to-main
-description: sciaの作業branchを、ほかのスレッドと1つずつ、ローカルのmainへ安全に入れる。残タスクや同意を取っていない項目がないかを確かめ、mergeに適切な単位かを判断してから、Tools/merge-queue.shの列に並べる。番が来たら最新のmainへrebaseし、まだ通っていないmake checkとmake testだけを走らせてfast-forwardで入れ、archiveしてよいかを伝える。ユーザーが/merge-to-mainで起動したときだけ使う。
-argument-hint: "[after:<セッションID>...]"
+description: sciaの作業branchを、ほかのスレッドと1つずつ、ローカルのmainへ安全に入れる。残タスクや同意を取っていない項目がないかを確かめ、mergeに適切な単位かを判断してから、Tools/merge-queue.shの列に並べる。番が来たら最新のmainへrebaseし、まだ通っていないmake checkとmake testだけを走らせてfast-forwardで入れ、archiveしてよいかを伝える。ユーザーがmerge-to-mainスキルを明示的に起動したときだけ使う。
+argument-hint: "[after:<セッションID>... | after-branch:<branch>...]"
 disable-model-invocation: true
 ---
 
@@ -13,7 +13,16 @@ mainへ入れる処理（rebase、`make check`、`make test`、fast-forward）�
 
 targetは、指定がなければ`git symbolic-ref --short refs/remotes/origin/HEAD`のbranch名(例: `main`)。比較にはremoteではなくローカルのtargetを使う。
 
-引数（`$ARGUMENTS`）には、前提のスレッドのセッションID（`after:local_…`、複数可）が入る。`make check`と`make test`は、列が`Tools/test-dispatch.sh`を通して、空いている枠で走らせる。
+引数には、前提のスレッドのID（`after:<ID>`）か、前提のローカルbranch（`after-branch:<branch>`）が入る。複数指定してよい。`make check`と`make test`は、列が`Tools/test-dispatch.sh`を通して、空いている枠で走らせる。
+
+## 実行環境の手順
+
+開始時に、自分の実行環境の参照だけを読む。共通の検証・履歴整理・終了コードの扱いはこの本文に従う。
+
+- Claude Code: [claude.md](references/claude.md)
+- Codex: [codex.md](references/codex.md)
+
+`after-branch:`は両方で使える。`git show-ref --verify refs/heads/<branch>`で存在を確かめてからキューに渡す。別のエージェントのチャットを参照するツールがない場合も、ユーザーが指定したbranchで依存関係を表せる。IDからbranchを確かめられなければ推測せず、解決できなかったIDを報告する。
 
 ## 1. 残タスクと、同意を取っていない項目を確かめる
 
@@ -30,7 +39,7 @@ targetは、指定がなければ`git symbolic-ref --short refs/remotes/origin/H
 
 ## 2. mergeに適切な単位かを判断する
 
-1. `git worktree list`で、targetがどのworktreeでcheckoutされているかを調べる。そのworktreeに未commitの変更がある場合は、止めて報告する
+1. `git symbolic-ref --quiet --short HEAD`で作業branchを確かめる。detached HEADなら、現在のHEADに変更目的の分かるbranchを作る（`git switch -c <種別>/<目的>`）。targetそのものにいる場合は、作業branchを入れる操作にならないので止めて報告する。`git worktree list`で、targetがどのworktreeでcheckoutされているかを調べる。そのworktreeに未commitの変更がある場合は、止めて報告する
 2. `git merge-base --is-ancestor <target> HEAD`でfast-forwardできるか調べる。できなければ、rebase前のHEADのSHAを控えてから`git rebase <target>`で載せ直す。conflictしたら、両側のcommitの意図を読んで両方の変更を残すよう解決し、`git rebase --continue`で続ける。両側が同じ規則や挙動を別の方向に変えていて、どちらを優先するか決める必要がある場合は、`git rebase --abort`で戻して報告する
 3. `git rev-parse <target>`でtargetのSHAを控える。以降はbranch名ではなくこのSHAを使う
 4. `git log --reverse --format='%h %s' <targetのSHA>..HEAD`と差分全体を読み、mainに入れる単位として次を満たすかを判断する
@@ -49,8 +58,8 @@ targetは、指定がなければ`git symbolic-ref --short refs/remotes/origin/H
 
 ## 3. 列に並ぶ
 
-- 引数の`after:`のセッションIDごとに、`mcp__ccd_session_mgmt__get_session`でそのスレッドのbranchを引く。引けなければ、並ばずに報告する
-- 作業ツリーに未commitの変更がないことを確かめてから、作業branchのworktreeで`Tools/merge-queue.sh run <前提のbranch>...`をBashの`run_in_background`で起動する。並んだことを伝えて、ターンを終える。待っている間と走っている間は、作業ツリーを変えない。列は`Tools/merge-queue.sh status`で見られる
+- 引数の`after:`のIDごとに、実行環境の参照に従って前提のbranchを解決する。引けなければ、並ばずに報告する
+- 作業ツリーに未commitの変更がないことを確かめてから、作業branchのworktreeで`Tools/merge-queue.sh run <前提のbranch>...`を実行環境の参照に従って起動し、終了を扱う。並んだことを伝える。待っている間と走っている間は、作業ツリーを変えない。列は`Tools/merge-queue.sh status`で見られる
 
 ## 4. 終わったら
 
@@ -63,7 +72,7 @@ targetは、指定がなければ`git symbolic-ref --short refs/remotes/origin/H
   - 作業branchの変更が原因なら、作業branchで直してcommitし、手順2の5からやり直して並び直す
   - 作業branchの変更が触れていないテストなら、一度だけ並び直す。通れば、たまに落ちるテストとして報告に書く。また落ちたら報告する。`Tools/check-stamp.sh missing <targetのSHA>`で、targetの中身では通っていたかも添える
   - 直すのに、仕様や挙動の判断が要るなら、報告する
-- 5（前提のbranchが、列にもmainにもないまま10分経った）: 前提のスレッドを`get_session`で引き、`isRunning`がtrueなら、まだ準備の途中なので並び直す。falseなら、並び直さずに、どのスレッドが入らないまま止まっているかを報告する
+- 5（前提のbranchが、列にもmainにもないまま10分経った）: 実行環境の参照に従って前提のスレッドの状態を確認する。まだ作業中と確認できたら並び直す。止まっている場合や、`after-branch:`だけでスレッドが不明な場合は、どの前提が入らなかったかを報告する
 - 6（FEATURES.mdかREADME.mdの変更を人が承認していない）: ユーザーに、自分の端末で出力にある`Tools/human-review.sh approve <commit>`を走らせて承認してもらうよう頼み、ターンを終える。agentは承認を走らせない。承認されたと伝えられたら、手順3で並び直す
 - 1（それ以外）: 出力を報告する
 
@@ -86,8 +95,4 @@ targetは、指定がなければ`git symbolic-ref --short refs/remotes/origin/H
 
 どれもなければ「archiveしてよい」と書く。あれば、archiveの前に片付けるものと、閉じても困らないものに分けて挙げる。見つけたものは、確認せずに直したりdocsに書き足したりしない。
 
-「archiveしてよい」と書いたら、`mcp__ccd_session_mgmt__set_session_title`でthread名の先頭に✅を付ける。そのあと同じthreadで作業を始めたら、最初に✅を外す。
-
-- `session_id`は必須で、このthreadなら`"self"`を渡す
-- `title`には新しい名前を丸ごと渡す。今の名前は`mcp__ccd_session_mgmt__get_session`に`"self"`を渡して引く
-- どちらも最初は名前しか分からないツールなので、`ToolSearch`で定義を読み込んでから呼ぶ
+「archiveしてよい」と書いたら、実行環境の参照に従ってthread名の先頭に✅を付ける。そのあと同じthreadで作業を始めたら、最初に✅を外す。

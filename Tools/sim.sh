@@ -44,7 +44,9 @@
 #     端末は、いつも操作のすぐ後ろに置く。simctlが端末の前に受け取るオプション（`launch --console`、`launch -a arm64`など）は使えない。
 #     オプションの値を端末と取り違えて、確かめていない端末に届くのを避けるため。
 #     引数にほかの貸し借りの端末を書いたとき（`erase`や`delete`は端末をいくつも受け取る）は、それも借りていなければ止める。
-#   shot、dump、reset、ctlは、このworktreeが借りている端末にしか使えない。
+#   Tools/sim.sh axe '<端末>' <操作> [引数...]
+#     借りた端末の名前をUDIDへ変換し、AXeでタップ・スワイプなどを送る。--udidはここで付けるので渡さない。
+#   shot、dump、reset、ctl、axeは、このworktreeが借りている端末にしか使えない。
 set -euo pipefail
 
 BUNDLE_ID=net.mizle.scia
@@ -296,14 +298,13 @@ for pid, (_, command) in procs.items():
     # Claudeのアプリ本体が直接起動したもの（シミュレーターのパネルが画面の向きを読むlog streamなど）は、スレッドの操作ではない。
     if owner == "app":
         continue
-    where = "スレッドの外（ターミナルなど）"
-    if owner is not None:
-        out = subprocess.run(["lsof", "-a", "-p", str(owner), "-d", "cwd", "-Fn"], capture_output=True, text=True).stdout
-        where = next((l[1:] for l in out.splitlines() if l.startswith("n")), "不明")
-        # 元のcheckoutの下に.claude/worktrees/のworktreeがあるので、パスの前方一致ではなく、処理のworktreeで比べる。
-        top = subprocess.run(["git", "-C", where, "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
-        if exclude and top == exclude:
-            continue
+    # Codexのapp-serverは複数のworktreeで共有される。親ではなく実際の処理のcwdで借り手を調べる。
+    out = subprocess.run(["lsof", "-a", "-p", str(pid), "-d", "cwd", "-Fn"], capture_output=True, text=True).stdout
+    where = next((l[1:] for l in out.splitlines() if l.startswith("n")), "不明")
+    # 元のcheckoutの下にもworktreeがあるので、パスの前方一致ではなく、処理のworktreeで比べる。
+    top = subprocess.run(["git", "-C", where, "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
+    if exclude and top == exclude:
+        continue
     found.append(f"{pid} {where}: {command[:160]}")
 if found:
     print("\n".join(found))
@@ -646,6 +647,28 @@ command_ctl() {
     exec xcrun simctl "$operation" "$sim" "$@"
 }
 
+command_axe() {
+    [ $# -ge 2 ] || fail "使い方: Tools/sim.sh axe '<端末>' <操作> [引数...]"
+    local sim=$1 operation=$2 argument udid sims
+    shift 2
+    sims=$(pool) || fail "端末のリストを読めない"
+    grep -qxF -- "$sim" <<< "$sims" || fail "貸す端末の名前で書く: $sim"
+    require_lease "$sim"
+    # batchなどは別の入力から端末を指定できるため、1台への入力と読み取りだけを許す。
+    case $operation in
+        tap|swipe|drag|draw|touch|type|key|key-sequence|key-combo|button|gesture|slider|hinge|rotate|describe-ui|displays) ;;
+        *) fail "対応していないAXeの操作: $operation" ;;
+    esac
+    for argument in "$@"; do
+        case $argument in
+            --) break ;;
+            --udid|--udid=*) fail "--udidは渡さない。借りた端末の名前から決める" ;;
+        esac
+    done
+    udid=$(device_udid "$sim")
+    exec axe "$operation" --udid "$udid" "$@"
+}
+
 command_status() {
     local sim holder build procs
     while IFS= read -r sim; do
@@ -657,7 +680,7 @@ command_status() {
     done <<< "$(pool)"
 }
 
-[ $# -ge 1 ] || fail "使い方: Tools/sim.sh shot|dump|reset|busy|ready '<端末>' [オプション]、Tools/sim.sh ctl '<端末>' <simctlの操作> [引数...]、Tools/sim.sh acquire [--wait <秒>] ['<端末>']、Tools/sim.sh release [--numbered]、Tools/sim.sh status、Tools/sim.sh leased ['<端末>']、Tools/sim.sh drag <x1> <y1> <x2> <y2>"
+[ $# -ge 1 ] || fail "使い方: Tools/sim.sh shot|dump|reset|busy|ready '<端末>' [オプション]、Tools/sim.sh ctl '<端末>' <simctlの操作> [引数...]、Tools/sim.sh axe '<端末>' <操作> [引数...]、Tools/sim.sh acquire [--wait <秒>] ['<端末>']、Tools/sim.sh release [--numbered]、Tools/sim.sh status、Tools/sim.sh leased ['<端末>']、Tools/sim.sh drag <x1> <y1> <x2> <y2>"
 subcommand=$1
 shift
 case $subcommand in
@@ -672,6 +695,7 @@ case $subcommand in
     status) command_status "$@" ;;
     leased) command_leased "$@" ;;
     ctl) command_ctl "$@" ;;
+    axe) command_axe "$@" ;;
     __acquire_try) command___acquire_try "$@" ;;
     __release) command___release "$@" ;;
     __release_one) command___release_one "$@" ;;

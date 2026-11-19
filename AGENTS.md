@@ -167,11 +167,15 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 
 ## Git
 
+- Codexで実装を始めるときは、現在のworktreeの`git symbolic-ref --quiet --short HEAD`を確認する。detached HEADなら、同じHEADに変更目的を表す`feat/`、`fix/`、`chore/`などのbranchを作ってから作業する。質問・調査だけでは作らない
+- Codexで新しいworktreeを作る依頼では、アプリの`create_worktree`を使い、返されたworkspaceで作業する。既存worktreeでの続きは移動しない。新しいworktreeの`Config/Local.xcconfig`と`Config/CacheLocal.xcconfig`がない場合は、`git worktree list`で確認した元のcheckoutに存在するものだけコピーする。既存ファイルは上書きせず、署名やキャッシュの値をソースへ書き込まない
+- Codexの`make build`、`make check`、`make test`は`exec_command`でそのworktreeを`workdir`に指定する。長い処理は返された`session_id`を`write_stdin`で終了まで待ち、終了コードと出力を確認する。`make check`と`make test`の振り分け・simの貸し借りはClaudeと共通で、別のキューを作らない
+
 - 作業branchが`claude/epic-feistel-987485`のようにランダムな名前なら、作業を始めたら最初に`git branch -m`で`claude/fix-profile-open-race`のような名前へrenameする。`claude/`は残し、その後ろを種別と中身の分かる名前にする。ランダムな名前のままだと、どのbranchに何が入っているかが名前から分からず、扱いにくいため
 - commit messageはConventional Commitsで書く。将来git-cliffでリリースノートを自動生成し、`feat:`、`fix:`、`perf:`だけを使う人向けの変更として載せる前提で種別を選ぶ
 - `feat:`は使う人に見える機能の追加、`fix:`は使う人が遭遇する不具合の修正、`perf:`は使う人が体感する性能の改善に使う
 - 開発のための変更（チューニングパネル、違和感レポート、検証ハーネス、ビルドやlintの設定など）を`feat`・`fix`・`perf`で書くときは、`feat(dev):`、`fix(dev):`のようにdev scopeを付けてリリースノートから外す
 - 使う人向けの変更と開発のための変更は別のcommitに分ける
 - pushはユーザーが行う（`make scheduled-push`で入れた毎朝の自動pushを含む）。agentはcommitまでで止め、pushやpush承認の依頼はしない
-- mainへは、ユーザーが`/merge-to-main`で起動したときだけ、`.agents/skills/merge-to-main`の手順で入れる（agentからは起動しない。共通の`tidy-ff-merge`は、`make check`と`make test`を通さないので使わない）。`Tools/merge-queue.sh`が、どのスレッドからでも1つずつ、branchをmainへrebaseし、そのworktreeで`make check`と`make test`を通してから、fast-forwardで入れる。通したあとにファイルを変えたり、rebaseで中身が変わったりしたら、通し直す。`make hooks`のhookは、`make check`と`make test`の両方が通っていない中身のcommitと、中身が新しくなるmerge commitをmainに入れず、作業ツリーに触る前に止める。通った中身との違いがMarkdown（`*.md`）とログイン画面の補完に使うサーバーのリスト（`known-servers.txt`）だけなら、走らせ直さずに通ったものとして扱う
+- mainへは、ユーザーが`merge-to-main`スキルを明示的に起動したときだけ、`.agents/skills/merge-to-main`の手順で入れる（agentからは起動しない。共通の`tidy-ff-merge`は、`make check`と`make test`を通さないので使わない）。`Tools/merge-queue.sh`が、どのスレッドからでも1つずつ、branchをmainへrebaseし、そのworktreeで`make check`と`make test`を通してから、fast-forwardで入れる。通したあとにファイルを変えたり、rebaseで中身が変わったりしたら、通し直す。`make hooks`のhookは、`make check`と`make test`の両方が通っていない中身のcommitと、中身が新しくなるmerge commitをmainに入れず、作業ツリーに触る前に止める。通った中身との違いがMarkdown（`*.md`）とログイン画面の補完に使うサーバーのリスト（`known-servers.txt`）だけなら、走らせ直さずに通ったものとして扱う
 - worktreeの中では、fixup commitを作ることも、`rebase --autosquash`で元のcommitへまとめることも、確認なしで行ってよい。後ろに載ったユーザーのcommitのhashが作り直されても構わない

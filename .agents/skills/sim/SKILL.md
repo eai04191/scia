@@ -10,6 +10,23 @@ argument-hint: "[番号か名前]"
 
 引数（`$ARGUMENTS`）には、使う端末の番号（1〜4）か名前（`Scia iPad 1`、`Scia Duo`など）が入ることがある。ユーザーが特定の端末を指定したときと、iPadや画面を開閉するiPhoneでの見え方を確かめるときだけ渡す。
 
+## 実行環境
+
+- Claude Codeはシミュレーターのツールを使い、毎回`device`に借りた端末の名前を渡す
+- Codexは`Tools/sim.sh axe '<端末>' <操作> <引数...>`でAXeを使う。名前からUDIDを引く前に貸し借りを確認するので、`--udid`は渡さない。AXeがなければ`brew install cameroncooke/axe/axe`が必要と報告する。画像は`shot`の出力を`view_image`で開く
+- Codexのコマンドは`exec_command`で起動し、返された`session_id`を`write_stdin`で終了まで待つ。1回の待機は60秒以下にする。Claude向けのBashのtimeout指定は使わず、待機時間とコマンドの終了を区別する
+- 直接のsimctl・AXe操作を止めるhookは、Claude Codeの`.claude/settings.json`とCodexの`.codex/hooks.json`から同じ`Tools/sim-lease-guard.py`を呼ぶ。Codexのworktreeでは元のcheckout側のプロジェクト設定が参照される場合があるので、導入をmainへ反映したあと新しいセッションで`/hooks`の一覧にこのhookがあることを確認する。新しいhookが信頼待ちなら、ユーザーに`/hooks`で定義の確認と信頼をしてもらう。agentは信頼設定を書き換えない。hookの信頼前も貸し借りとラッパーの手順は守る
+
+Codexでの入力例（座標は`dump`で確かめてから決める）:
+
+```bash
+Tools/sim.sh axe '<端末>' tap -x 200 -y 400 --hold 0.15
+Tools/sim.sh axe '<端末>' swipe --start-x 200 --start-y 600 --end-x 200 --end-y 300 --duration 0.5
+Tools/sim.sh axe '<端末>' draw 200,600 200,400 200,400.5 200,400 --duration 1
+```
+
+`tap`、`swipe`、`drag`、`draw`、`touch`、`type`、`key`、`key-sequence`、`key-combo`、`button`、`gesture`、`slider`、`hinge`、`rotate`、`describe-ui`、`displays`を使える。引数は`axe <操作> --help`で確認する。`draw`は点の列を通るドラッグに使う。操作後は`dump`で結果を確かめる。`type`はUSキーボードで入力できる文字に限られるため、投稿本文や日本語は共通手順のデバッグURLで入れる。
+
 ## 1. 借りる
 
 シミュレーターを触る直前（確かめ、録画、`ONLY`を付けた`make test`、`Tools/sim.sh shot`・`dump`の前）に、`Tools/sim.sh acquire`を走らせる。番号を指定されたら`Tools/sim.sh acquire 'Scia <番号>'`、名前なら`Tools/sim.sh acquire '<名前>'`にする。端末を省くと番号の端末から貸し、ほかの端末（`Scia iPad 1`、`Scia Duo`など）は名指ししたときだけ貸す。名指しで借りた端末は、端末を省いた`acquire`で番号の端末を借りても持ったままになり、別の端末を名指しすると返る。
