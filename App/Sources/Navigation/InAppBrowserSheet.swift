@@ -15,6 +15,9 @@ final class InAppBrowserSheet: UIViewController {
     /// Safariのバーとページは別のプロセスが描いていて、アプリからはどちらの上かを触れた場所で選び分けられないので、範囲の高さと左右の空きはチューニングで決める。
     let barGrabArea = UIView()
     private let grabber = InAppBrowserGrabberView()
+    /// ステータスバーを押したことを受けるスクロールビュー。UIKitは、手前に出した画面の配下のスクロールビューにしか問い合わせないため、後ろの画面にはここから渡す。
+    /// 最上部にいるスクロールビューには問い合わせないので、最上部からずらしておく。`isUserInteractionEnabled`か`isScrollEnabled`を切ると問い合わせる対象に入らないので（シミュレーターで確かめた）、触れて動かないようにパンのジェスチャーだけを切る。
+    private let scrollToTopReceiver = UIScrollView()
     private let barGrab: BarGrab
     private let clock: any Clock<Duration>
     private let safariResizeDelay: Duration
@@ -69,6 +72,18 @@ final class InAppBrowserSheet: UIViewController {
         area.definesPresentationContext = true
         view.addSubview(area.view)
         area.didMove(toParent: self)
+        scrollToTopReceiver.contentSize = CGSize(width: 1, height: 3)
+        scrollToTopReceiver.contentOffset.y = 1
+        scrollToTopReceiver.panGestureRecognizer.isEnabled = false
+        scrollToTopReceiver.delegate = self
+        view.insertSubview(scrollToTopReceiver, at: 0)
+    }
+
+    /// UIKitは、押したところの真下にあるスクロールビューにだけ問い合わせる。シートがウインドウより狭い（iPad）ときも、シートの左右で押したことを受けられるよう、受け手はウインドウの幅に広げる。
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        let width = view.window.map { view.convert($0.bounds, from: $0) } ?? view.bounds
+        scrollToTopReceiver.frame = CGRect(x: width.minX, y: 0, width: width.width, height: 1)
     }
 
     /// 後ろの画面を触れる状態か。全画面に広げているときと、シートの上に画面を重ねているときは触れない。
@@ -148,6 +163,17 @@ private final class InAppBrowserGrabberView: UIView {
     override func accessibilityActivate() -> Bool {
         presentation?.selectNextDetent()
         return presentation != nil
+    }
+}
+
+extension InAppBrowserSheet: UIScrollViewDelegate {
+    /// 後ろの画面が見えている間は、後ろの画面でステータスバーを押したときと同じく、見えているスクロールビューを最上部へ動かす。全画面では何もしない。
+    func scrollViewShouldScrollToTop(_ scrollView: UIScrollView) -> Bool {
+        guard sheetPresentation?.passesTouchesOutsideSheet == true, let behind = presentingViewController?.viewIfLoaded else { return false }
+        for target in behind.scrollViewsScrollingToTop() where target.delegate?.scrollViewShouldScrollToTop?(target) ?? true {
+            target.setContentOffset(CGPoint(x: target.contentOffset.x, y: -target.adjustedContentInset.top), animated: true)
+        }
+        return false
     }
 }
 

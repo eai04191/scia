@@ -205,6 +205,95 @@ struct InAppBrowserDockTests {
         root.dismiss(animated: false)
     }
 
+    /// ステータスバーを押したら、伏せた高さと中くらいの高さでは後ろの画面のスクロールビューを最上部へ動かし、全画面では動かさない。
+    /// 後ろの画面に届くかはUIKitの公開されていない作りで決まるので、ステータスバーを押したときにUIKitが呼ぶ処理を呼んで確かめる。iOSの更新で作りが変わると落ちる。
+    @Test func statusBarTapReachesScreenBehind() async throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = ShakeDetectingWindow(windowScene: scene)
+        let root = UIViewController()
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
+        scrollView.contentSize = CGSize(width: 400, height: 4000)
+        // 最上部にいると、UIKitは押されても問い合わせない。
+        scrollView.contentOffset.y = 1000
+        let delegate = ScrollToTopRecorder()
+        scrollView.delegate = delegate
+        root.view.addSubview(scrollView)
+        window.rootViewController = root
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        let browser = InAppBrowser(tuning: .withoutBrowserMotion(), settings: AppDependencies.settings)
+        let (_, presentation) = try await openBrowser(browser, from: root)
+        presentation.select(.medium, animated: false)
+
+        try tapStatusBar(in: scene, x: 100)
+        #expect(delegate.count == 1)
+
+        presentation.select(.collapsed, animated: false)
+        try tapStatusBar(in: scene, x: 100)
+        #expect(delegate.count == 2)
+
+        presentation.select(.large, animated: false)
+        try tapStatusBar(in: scene, x: 100)
+        #expect(delegate.count == 2)
+        root.dismiss(animated: false)
+    }
+
+    /// 後ろの画面のスクロールビューが動かし方を自分で決めないときは、UIKitと同じく最上部へ動かす。
+    @Test func statusBarTapScrollsScreenBehindWithoutDelegate() async throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = ShakeDetectingWindow(windowScene: scene)
+        let root = UIViewController()
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
+        scrollView.contentSize = CGSize(width: 400, height: 4000)
+        scrollView.contentOffset.y = 1000
+        root.view.addSubview(scrollView)
+        window.rootViewController = root
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        let browser = InAppBrowser(tuning: .withoutBrowserMotion(), settings: AppDependencies.settings)
+        let (_, presentation) = try await openBrowser(browser, from: root)
+        presentation.select(.medium, animated: false)
+
+        try tapStatusBar(in: scene, x: 100)
+        try await waitUntil { scrollView.contentOffset.y == -scrollView.adjustedContentInset.top }
+        root.dismiss(animated: false)
+    }
+
+    /// シートがウインドウより狭いときも、シートの左右でステータスバーを押したら後ろの画面に届く。
+    @Test func statusBarTapBesideNarrowSheetReachesScreenBehind() async throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = ShakeDetectingWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 1000, height: 800)
+        let root = UIViewController()
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+        scrollView.contentSize = CGSize(width: 1000, height: 4000)
+        scrollView.contentOffset.y = 1000
+        let delegate = ScrollToTopRecorder()
+        scrollView.delegate = delegate
+        root.view.addSubview(scrollView)
+        window.rootViewController = root
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        let browser = InAppBrowser(tuning: .withoutBrowserMotion(), settings: AppDependencies.settings)
+        let (sheet, presentation) = try await openBrowser(browser, from: root)
+        presentation.select(.medium, animated: false)
+        #expect(sheet.view.frame.minX > 50)
+        try tapStatusBar(in: scene, x: 50)
+        #expect(delegate.count == 1)
+        root.dismiss(animated: false)
+    }
+
+    private func tapStatusBar(in scene: UIWindowScene, x: CGFloat) throws {
+        let manager = try #require(scene.statusBarManager)
+        let selector = NSSelectorFromString("_handleScrollToTopAtXPosition:")
+        try #require(manager.responds(to: selector), "iOSの更新で、ステータスバーを押したときの処理の名前が変わった")
+        typealias Handle = @convention(c) (AnyObject, Selector, CGFloat) -> Void
+        unsafeBitCast(manager.method(for: selector), to: Handle.self)(manager, selector, x)
+    }
+
     private func openBrowser(_ browser: InAppBrowser, from root: UIViewController) async throws -> (InAppBrowserSheet, InAppBrowserPresentationController) {
         browser.open(try #require(URL(string: "https://example.com/1")), from: root)
         try await waitUntil { root.frontmostPresented is InAppBrowserSheet || root.frontmostPresented is SFSafariViewController }
@@ -327,5 +416,14 @@ struct InAppBrowserDockTests {
         presentation.select(.large, animated: false)
         #expect(window.hitTest(CGPoint(x: 100, y: 5), with: nil) === presentation.containerView)
         root.dismiss(animated: false)
+    }
+}
+
+private final class ScrollToTopRecorder: NSObject, UIScrollViewDelegate {
+    private(set) var count = 0
+
+    func scrollViewShouldScrollToTop(_ scrollView: UIScrollView) -> Bool {
+        count += 1
+        return false
     }
 }
