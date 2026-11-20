@@ -304,6 +304,18 @@ struct UserMenuTreeTests {
         #expect(!account("alice").hasHandle("alice@example.social", localServer: "local.example"))
     }
 
+    /// 国際化ドメインのサーバーは、書かれたハンドルが`xn--`の形でも、サーバーが`acct`をUnicodeの形で返す。同じサーバーとして比べる。ポートが違えば別のサーバー。
+    @Test func handleMatchTreatsPunycodeAndUnicodeServerAsSame() {
+        func account(_ acct: String) -> Account { Account(id: "1", username: "alice", acct: acct, displayName: "", avatar: nil) }
+        #expect(account("alice@幼女.art").hasHandle("alice@xn--vusz0j.art", localServer: "local.example"))
+        #expect(account("alice@xn--vusz0j.art").hasHandle("alice@幼女.art", localServer: "local.example"))
+        #expect(!account("alice@幼女.art").hasHandle("alice@xn--vusz0j.social", localServer: "local.example"))
+        #expect(!account("alice@example.social:8443").hasHandle("alice@example.social", localServer: "local.example"))
+        #expect(account("alice@幼女.art:8443").hasHandle("alice@xn--vusz0j.art:8443", localServer: "local.example"))
+        #expect(!account("alice@x@example.social").hasHandle("alice@example.social", localServer: "local.example"))
+        #expect(!account("alice@example.social/x").hasHandle("alice@example.social", localServer: "local.example"))
+    }
+
     /// 「その他」に何かあれば、1項目でもサブメニューにする。出す項目がなければ何も出さない。
     @Test func submenuWhenProfileIsInMoreAndNothingWhenEmpty() {
         #expect(submenu(MenuLayout(elements: [.more, .item(.profile, isVisible: true)] + UserMenuItem.allCases.filter { $0 != .profile }.map { .item($0, isVisible: false) }).groups) == "@alice[その他[プロフィール]]")
