@@ -1,4 +1,5 @@
 import Synchronization
+public import Testing
 
 /// 開くまで、待っている相手を止めておく門。時間の長さではなく、テストが条件を確かめてから先へ進ませる。開いた後に待つ相手は止めない。
 public final class Gate: Sendable {
@@ -9,9 +10,12 @@ public final class Gate: Sendable {
     }
 
     private let state: Mutex<State>
+    private let diagnostic: DiagnosticResource
 
     /// - Parameter isOpen: 開いた状態で作るか。待たせないときにも同じ形で渡すために使う。
-    public init(isOpen: Bool = false) {
+    public init(isOpen: Bool = false, sourceLocation: SourceLocation = #_sourceLocation) {
+        diagnostic = DiagnosticResource("Gate", sourceLocation: sourceLocation)
+        diagnostic.note("作成 open=\(isOpen)")
         state = Mutex(State(isOpen: isOpen))
     }
 
@@ -23,6 +27,7 @@ public final class Gate: Sendable {
     public func open() {
         let waiters = state.withLock { state in
             state.isOpen = true
+            diagnostic.note("open 解除数=\(state.waiters.count) 待機数=0")
             defer { state.waiters.removeAll() }
             return state.waiters.values
         }
@@ -41,6 +46,7 @@ public final class Gate: Sendable {
                     if state.isOpen { return .success(()) }
                     if Task.isCancelled { return .failure(CancellationError()) }
                     state.waiters[id] = continuation
+                    diagnostic.note("wait #\(id) 待機数=\(state.waiters.count)")
                     return nil
                 }
                 if let resume {
@@ -48,7 +54,15 @@ public final class Gate: Sendable {
                 }
             }
         } onCancel: {
-            state.withLock { $0.waiters.removeValue(forKey: id) }?.resume(throwing: CancellationError())
+            let waiter = state.withLock { state in
+                let waiter = state.waiters.removeValue(forKey: id)
+                diagnostic.note("cancel #\(id) open=\(state.isOpen) 待機数=\(state.waiters.count)")
+                return waiter
+            }
+            waiter?.resume(throwing: CancellationError())
+        }
+        state.withLock { state in
+            diagnostic.note("wait #\(id) 終了 open=\(state.isOpen) 待機数=\(state.waiters.count)")
         }
     }
 }

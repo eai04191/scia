@@ -60,6 +60,14 @@ jobs:
       - name: Test
         run: Tools/watch-release-test.sh make test-release WARNINGS="$WARNINGS"
 
+      - name: Save test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-test-diagnostics
+          path: DerivedData/test-logs/
+          if-no-files-found: warn
+
       - name: Install XcodeGen
         if: env.WARNINGS == 'error'
         run: |

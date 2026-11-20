@@ -82,6 +82,47 @@ public enum TestScratch {
             items.withLock { $0.append(item) }
         }
 
+        func captureFiles(emit: @Sendable (Data, String) -> Void) {
+            let items = items.withLock { $0 }
+            var manifest: [String] = []
+            for (index, item) in items.enumerated() {
+                let url: URL
+                switch item {
+                case .item(let value): url = value
+                case .defaults(let suite):
+                    CFPreferencesAppSynchronize(suite as CFString)
+                    url = URL.libraryDirectory.appending(path: "Preferences/\(suite).plist")
+                }
+                let files: [URL]
+                if (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                    let errors = Mutex<[String]>([])
+                    guard let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey], errorHandler: { failedURL, error in
+                        errors.withLock { $0.append("列挙できませんでした: \(failedURL.path): \(error)") }
+                        return true
+                    }) else {
+                        manifest.append("列挙できませんでした: \(url.path)")
+                        continue
+                    }
+                    files = enumerator.compactMap { $0 as? URL }.sorted { $0.path < $1.path }
+                    manifest += errors.withLock { $0 }
+                } else {
+                    files = [url]
+                }
+                for (fileIndex, file) in files.enumerated() {
+                    do {
+                        let values = try file.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+                        guard values.isRegularFile == true, values.isSymbolicLink != true else { continue }
+                        let name = "scratch-\(index)-\(fileIndex)-\(file.lastPathComponent)"
+                        emit(try Data(contentsOf: file), name)
+                        manifest.append("\(name): \(file.path)")
+                    } catch {
+                        manifest.append("保存できませんでした: \(file.path): \(error)")
+                    }
+                }
+            }
+            emit(Data(manifest.joined(separator: "\n").utf8), "scratch-files.txt")
+        }
+
         /// 作ったものを消す。設定は、まだファイルに書き出していない値を書き出させてから、plistのファイルを消す。
         /// 書き出す前に消すと、あとでまとめて書き出したときにplistが戻る（iOSのシミュレーターでは、10秒おきにまとめて書き出して戻った）。
         /// 値を消す`removePersistentDomain`は呼ばない。呼ぶと、あとから空のplistが書き戻された（macOSで、プロセスが終わるときに戻るのを確かめた）。
@@ -110,7 +151,17 @@ public struct TestScratchTrait: SuiteTrait, TestTrait, TestScoping {
         let registry = TestScratch.Registry()
         defer { registry.removeAll() }
         try await TestScratch.$registry.withValue(registry) {
-            try await function()
+            let diagnostics = TestDiagnostics.current ?? TestDiagnostics()
+            try await diagnostics.withScope(for: test, testCase: testCase, scratch: registry) {
+                do {
+                    try await function()
+                } catch is ExpectationFailedError {
+                    // #requireはすでに失敗を記録している。
+                } catch {
+                    // 外へ投げると、失敗の記録より先にscratchが消えるため、このscopeで記録する。
+                    Issue.record(error)
+                }
+            }
         }
     }
 }

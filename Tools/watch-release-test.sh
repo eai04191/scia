@@ -8,8 +8,11 @@ set -u
 
 limit=${TEST_RUN_LIMIT:-60}
 root=$(cd "$(dirname "$0")/.." && pwd)
-log=$(mktemp)
-trap 'rm -f "$log"' EXIT
+mkdir -p "$root/DerivedData/test-logs"
+log=$(mktemp "$root/DerivedData/test-logs/release.log.XXXXXX") || exit $?
+sw_vers > "$log.environment.txt"
+xcodebuild -version >> "$log.environment.txt"
+uname -m >> "$log.environment.txt"
 
 "$@" > "$log" 2>&1 &
 command_pid=$!

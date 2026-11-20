@@ -49,8 +49,12 @@ test-agent-workflow:
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s Tools/tests -p 'test_agent_workflow.py'
 
 ## SciaCoreのユニットテストをmacOS上で実行する（シミュレーター不要）
+TEST_LOGS := $(abspath $(DERIVED_DATA)/test-logs)
 test-core:
-	cd Packages/SciaCore && swift test
+	@mkdir -p "$(TEST_LOGS)"
+	@attachments=$$(mktemp -d "$(TEST_LOGS)/failed-attachments-XXXXXX") || exit $$?; \
+	(cd Packages/SciaCore && swift test --attachments-path "$$attachments"); status=$$?; \
+	rmdir "$$attachments" 2>/dev/null || true; exit $$status
 
 ## Sciaに依存しないキャッシュのパッケージ（Packages/MemoryCache）のテストをmacOS上で実行する
 test-memory-cache:
@@ -61,7 +65,10 @@ test-memory-cache:
 ## WARNINGS=errorを渡すと、警告をエラーとして扱う。Package.swiftが警告をエラーにするのはDebug構成だけなので、Releaseにしかない警告はこれで見つける
 RELEASE_WARNING_FLAGS := $(if $(filter error,$(WARNINGS)),-Xswiftc -warnings-as-errors)
 test-release:
-	cd Packages/SciaCore && swift test -c release -Xswiftc -enable-testing $(RELEASE_WARNING_FLAGS)
+	@mkdir -p "$(TEST_LOGS)"
+	@attachments=$$(mktemp -d "$(TEST_LOGS)/failed-attachments-XXXXXX") || exit $$?; \
+	(cd Packages/SciaCore && swift test --attachments-path "$$attachments" -c release -Xswiftc -enable-testing $(RELEASE_WARNING_FLAGS)); status=$$?; \
+	rmdir "$$attachments" 2>/dev/null || true; exit $$status
 	swift test --package-path Packages/MemoryCache -c release -Xswiftc -enable-testing $(RELEASE_WARNING_FLAGS) --quiet
 
 ## アプリをシミュレーター向けに、Releaseで、警告をエラーとして扱ってビルドする。project.ymlはReleaseで警告を止めないので、Releaseにしかない警告はこれで見つける

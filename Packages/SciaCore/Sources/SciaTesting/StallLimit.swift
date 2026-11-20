@@ -71,6 +71,21 @@ public struct StallLimitTrait: SuiteTrait, TestTrait, TestScoping {
     public var isRecursive: Bool { true }
 
     public func provideScope(for test: Test, testCase: Test.Case?, performing function: @Sendable () async throws -> Void) async throws {
+        let diagnostics = TestDiagnostics.current ?? TestDiagnostics()
+        try await diagnostics.withScope(for: test, testCase: testCase) {
+            do {
+                try await runScope(for: test, performing: function)
+            } catch is ExpectationFailedError {
+                // #requireはすでに失敗を記録している。
+            } catch let hang as WaitHang {
+                throw hang
+            } catch {
+                Issue.record(error)
+            }
+        }
+    }
+
+    private func runScope(for test: Test, performing function: @Sendable () async throws -> Void) async throws {
         let log = ProgressLog(clock: clock)
         let sourceLocation = test.sourceLocation
         let name = test.name

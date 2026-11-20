@@ -20,10 +20,14 @@ nonisolated(nonsending) public func waitUntil(
     _ condition: nonisolated(nonsending) () async throws -> Bool,
     sourceLocation: SourceLocation = #_sourceLocation
 ) async throws {
+    let diagnostic = DiagnosticResource("waitUntil", sourceLocation: sourceLocation)
+    diagnostic.note("開始 limit=\(limit)")
+    defer { diagnostic.note("終了") }
     let deadline = ContinuousClock.now + limit
     while try await !condition() {
         guard ContinuousClock.now < deadline else {
-            let message = ["条件を満たさないまま、固まったとみなす上限を過ぎました", await state()].compactMap(\.self).joined(separator: "\n")
+            diagnostic.note("タイムアウト")
+            let message = ["条件を満たさないまま、固まったとみなす上限を過ぎました", await state(), TestDiagnostics.current?.history, TestDiagnostics.environmentAndStack].compactMap(\.self).joined(separator: "\n")
             Issue.record(Comment(rawValue: message), sourceLocation: sourceLocation)
             throw WaitHang()
         }

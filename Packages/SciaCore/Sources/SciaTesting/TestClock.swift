@@ -33,11 +33,14 @@ public final class TestClock: Clock, Sendable {
     }
 
     private let state = Mutex(State())
+    private let diagnostic: DiagnosticResource
     /// `date`の、時計を進めていないときの値。
     private let origin: Date
 
-    public init(origin: Date = Date(timeIntervalSince1970: 1_800_000_000)) {
+    public init(origin: Date = Date(timeIntervalSince1970: 1_800_000_000), sourceLocation: SourceLocation = #_sourceLocation) {
+        diagnostic = DiagnosticResource("TestClock", sourceLocation: sourceLocation)
         self.origin = origin
+        diagnostic.note("作成 now=0 待機数=0")
     }
 
     public var now: Instant { state.withLock { $0.now } }
@@ -80,6 +83,7 @@ public final class TestClock: Clock, Sendable {
                     if deadline <= state.now { return .success(()) }
                     if Task.isCancelled { return .failure(CancellationError()) }
                     state.sleepers[id] = Sleeper(deadline: deadline, continuation: continuation)
+                    diagnostic.note("sleep #\(id) deadline=\(deadline.offset) now=\(state.now.offset) 待機数=\(state.sleepers.count)")
                     return nil
                 }
                 if let resume {
@@ -87,7 +91,12 @@ public final class TestClock: Clock, Sendable {
                 }
             }
         } onCancel: {
-            state.withLock { $0.sleepers.removeValue(forKey: id) }?.continuation.resume(throwing: CancellationError())
+            let sleeper = state.withLock { state in
+                let sleeper = state.sleepers.removeValue(forKey: id)
+                diagnostic.note("cancel #\(id) now=\(state.now.offset) 待機数=\(state.sleepers.count)")
+                return sleeper
+            }
+            sleeper?.continuation.resume(throwing: CancellationError())
         }
     }
 
@@ -100,6 +109,7 @@ public final class TestClock: Clock, Sendable {
             for id in due.keys {
                 state.sleepers.removeValue(forKey: id)
             }
+            diagnostic.note("advance now=\(now.offset) 解除=\(due.keys.sorted()) 待機数=\(state.sleepers.count)")
             return due.values.sorted { $0.deadline < $1.deadline }
         }
         due.forEach { $0.continuation.resume() }

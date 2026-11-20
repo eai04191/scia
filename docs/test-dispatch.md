@@ -77,3 +77,13 @@ SCIA_REMOTE_SIMS=('Scia Remote 1' 'Scia Remote 2')
 
 - `make test`の記録: 全部を走らせると、`DerivedData/test-logs/watch-<時刻>`に実行中の負荷（`load.log`）と、30秒たっても終わらないSciaCoreのテストのスタック（`<テストの名前>-<ハッシュ>.sample.txt`。名前の英数字のほかは`_`になるので、どのテストかは末尾の`test:`の行で見る）が残る。落ちた回の`.xcresult`と、その回の`watch-<時刻>`のコピーは、`DerivedData/test-logs/failed-<時刻>`に残る
 - テストが落ちたら、`DerivedData/test-logs/failed-<時刻>`のxcresultを`xcrun xcresulttool get test-results tests --path <xcresult>`で読む。別のMacで走った分も手元のここに届く。式の実際の値は`make test`の出力に残らず、ここにある。落ちたテストの前後のアプリのログ（`SciaLog`）は、`xcrun xcresulttool export diagnostics --path <xcresult> --output-path <フォルダー>`で取り出した`StandardOutputAndStandardError.txt`にある（`get log --type console`では出ない）
+
+### 失敗時の共通診断
+
+`.scratch`と`.stallLimit`のテストでは、最初の失敗時に`failure-diagnostics.txt`をSwift Testingの添付ファイルとして残す。OS、CPU数、失敗を記録したスレッドのスタックと、`Gate`・`TestClock`・`waitUntil`の履歴が入る。履歴は直近128件を残し、それ以前の件数を表示する。各待機オブジェクトの最後の状態は、履歴から外れても残る。並列のテストケースは別々に記録する。
+
+`.scratch`では、その時点で残っている登録済みのファイルと設定のplistも、削除する前に添付する。`scratch-files.txt`が添付名と元のパスの対応表で、読み取れなかったファイルの理由もここに残る。テストがすでに削除したファイルは復元しない。シンボリックリンクは添付しない。
+
+`make test-core`と`make test-release`の添付は`DerivedData/test-logs/failed-attachments-<実行ごとの識別子>/`、Xcodeで走るテストの添付はxcresultに入る。`swift test`を直接使うときは、先に保存先を作って`--attachments-path <保存先>`を渡す。指定しないとSwift Testingが添付を破棄する。Release testのCIでは、失敗時にログと添付を`release-test-diagnostics` artifactへ保存する。
+
+`.scratch`も`.stallLimit`もないテストには、Swift Testingの公開APIで一括の失敗ハンドラーを設定できない。`waitUntil`のタイムアウトでは設定によらず失敗を記録したスレッドのスタックを出すが、その場合は待機オブジェクトの履歴を収集しない。スタックは停止中の全asyncタスクの履歴ではなく、失敗を報告した時点のもの。プロセス全体が止まった場合は、既存のwatchスクリプトが採るスタックを使う。
