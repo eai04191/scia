@@ -31,7 +31,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `make test ONLY='SciaTests/LinkLabelTests'`: 一部のテストだけを走らせる。手元で走り、このworktreeが借りている端末を使うので、先に借りる。識別子は空白で区切って複数渡せる。`xcodebuild ... test`を直接走らせるときは、`-collect-test-diagnostics never`を付ける。付けないと、テストが失敗したときにシミュレーターの診断を集め、応答を待って10分止まる
 - `make check`: 変更を報告する前に必ず通す
 - `make check-test`: `make check`と`make test`を、続けて走らせるより早く両方走らせる
-- `make test`、`make check`、`make check-test`は、`SIM`も`ONLY`も指定しなければ、テストを任せる別のMacと手元の空いている枠で走らせるので、端末は借りなくてよい。通ると、確かめた作業ツリーの中身を覚え、mainに入れるときに使う。手元で走らせるときは`SCIA_REMOTE_TEST=local`を付ける。テストが落ちたら、`DerivedData/test-logs/failed-<時刻>`のxcresultを読む。振り分けと落ちたテストの記録の読み方は[docs/test-dispatch.md](docs/test-dispatch.md)にある
+- `make test`、`make check`、`make check-test`は、`SIM`も`ONLY`も指定しなければ、テストを任せる別のMacと手元の空いている枠で走らせるので、端末は借りなくてよい。通ると、確かめた作業ツリーの中身を覚え、mainに入れるときに使う。どちらで走っても、通ったビルドのアプリが`DerivedData/checked/Scia.app`に置かれるので、そのあとコードを変えていなければ、`make build`せずにこれをシミュレーターに入れる。手元で走る`make check`と同時に`make build`しないため、通るのを待たずに確かめたいときは、`make check`の前に`make build`する。手元で走らせるときは`SCIA_REMOTE_TEST=local`を付ける。テストが落ちたら、`DerivedData/test-logs/failed-<時刻>`のxcresultを読む。振り分けと落ちたテストの記録の読み方は[docs/test-dispatch.md](docs/test-dispatch.md)にある
 - ほかのターゲット（Releaseのテスト、TestFlight、`make scenario-run`など）は、Makefileの`##`のコメントにある。謝辞、ライセンス、プライバシーポリシーのリンクは`Config/app-info.json`だけを編集し、`make app-info`で書き出す
 
 ## シミュレーター

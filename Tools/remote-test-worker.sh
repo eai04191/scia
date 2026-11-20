@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tools/test-dispatch.shが、テストを任せるMacへSSHで送って走らせる。treeの中身のtarを標準入力で受け取る。
-# 使い方: remote-test-worker.sh <check|test|check-test> <tree> <依頼のID> <端末>...
+# 使い方: remote-test-worker.sh <check|test|check-test> <tree> <依頼のID> <DEVELOPMENT_TEAM（空なら付けない）> <依頼元のbranch> <依頼元のcommit> <端末>...
 # 渡した端末の数だけ、作業コピーと端末の組で同時に走らせる。
 # SIGTERMを受けると、順番待ちでも実行中でも、この依頼だけを止めて終わる。Tools/test-dispatch.shは依頼のIDで~/scia/jobs/のPIDを引いて送る。
 # 走らせると決まったら、標準出力の最初の行にそのことを書く。受け付けないときは標準出力に何も書かない。Tools/test-dispatch.shは最初の行で、受け付けられたと知る。
@@ -10,7 +10,10 @@ set -uo pipefail
 target=$1
 tree=$2
 id=$3
-sims=("${@:4}")
+team=$4
+branch=$5
+commit=$6
+sims=("${@:7}")
 sim=
 
 export PATH=/opt/homebrew/bin:$PATH
@@ -57,7 +60,7 @@ on_term() {
     exit 143
 }
 
-mkdir -p ~/scia/logs ~/scia/jobs ~/scia/results
+mkdir -p ~/scia/logs ~/scia/jobs ~/scia/results ~/scia/apps
 echo "$$" > ~/scia/jobs/"$id".pid
 trap 'rm -rf "$incoming" ~/scia/jobs/"$id".pid' EXIT
 trap on_term TERM
@@ -78,6 +81,12 @@ tar -x -C "$incoming" || exit 1
 rsync -rlcp --delete --exclude-from="$incoming/.gitignore" --exclude=.git "$incoming/" "$work/" || exit 1
 
 cd "$work" || exit 1
+# 手元のビルドと同じapplication-identifierのアプリにするため、手元のDEVELOPMENT_TEAMを、手元と同じくConfig/Local.xcconfigから読ませる。.gitignoreにあるのでtreeには入らない
+if [ -n "$team" ]; then
+    echo "DEVELOPMENT_TEAM = $team" > Config/Local.xcconfig
+else
+    rm -f Config/Local.xcconfig
+fi
 [ -d .git ] || git init -q -b job
 git add -A
 got=$(git write-tree)
@@ -94,7 +103,7 @@ limit 150 xcrun simctl bootstatus "$sim" -b > /dev/null || { echo "error: $sim �
 log=~/scia/logs/$tree.$target.$id.log
 # ロックのファイル記述子を閉じてから起動する。xcodebuildの常駐プロセスが受け継ぐと、終わってもロックが外れないため
 set -m
-caffeinate -i make "$target-here" SIM="$sim" > "$log" 2>&1 8>&- &
+SCIA_GIT_BRANCH=$branch SCIA_GIT_COMMIT=$commit caffeinate -i make "$target-here" SIM="$sim" > "$log" 2>&1 8>&- &
 job=$!
 set +m
 
@@ -112,6 +121,7 @@ result=$?
 limit 40 xcrun simctl shutdown "$sim"
 find ~/scia/logs -type f -mtime +7 -delete
 find ~/scia/results -mindepth 1 -maxdepth 1 -mtime +7 -exec rm -rf {} +
+find ~/scia/apps -mindepth 1 -maxdepth 1 -mtime +1 -exec rm -rf {} +
 
 if [ -n "$stopped" ]; then
     echo "貸し出しを止めたので、テストを中断しました"
@@ -123,6 +133,10 @@ if [ "$result" -ne 0 ]; then
     mkdir -p "$results"
     find "$work/DerivedData/test-logs" -mindepth 1 -maxdepth 1 -type d -name 'failed-*' -newer ~/scia/jobs/"$id".pid -exec mv {} "$results/" \; 2>/dev/null
     rmdir "$results" 2>/dev/null
+fi
+# 通った回のアプリ（Tools/keep-checked-app.shが残したもの）を、Tools/test-dispatch.shが依頼のIDで受け取れる場所へコピーする。作業コピーは次の依頼が上書きするため
+if [ "$result" -eq 0 ] && [ -d "$work/DerivedData/checked" ]; then
+    cp -Rc "$work/DerivedData/checked" ~/scia/apps/"$id"
 fi
 grep -aE ': error: |\*\*\*|✘ Test|Test run with' "$log" | tail -30 | cut -c1-240
 exit "$result"

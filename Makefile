@@ -134,6 +134,7 @@ else
 	[ $$app -eq 0 ] && [ $$core_status -eq 0 ]
 	Tools/system-ui-check.sh '$(SIM)' $(DERIVED_DATA)
 	@Tools/check-stamp.sh record test "$$(cat $(TEST_TREE))"
+	@Tools/keep-checked-app.sh "$$(cat $(TEST_TREE))" $(DERIVED_DATA)
 endif
 
 ## シミュレーターのハードウェアキーボードを外してソフトウェアキーボードを出す（KEYBOARD=hardwareでつなぎ直す）
@@ -223,6 +224,7 @@ check-here:
 	@mkdir -p $(DERIVED_DATA) && Tools/check-stamp.sh tree > $(CHECK_TREE)
 	@$(MAKE) --no-print-directory check-steps
 	@Tools/check-stamp.sh record check "$$(cat $(CHECK_TREE))"
+	@Tools/keep-checked-app.sh "$$(cat $(CHECK_TREE))" $(DERIVED_DATA)
 
 ## SciaCoreのテスト、キャッシュのパッケージのテスト、lintの規則のテスト、アプリのビルドは互いを待たないので、並べて走らせる。出力が混ざるので、失敗はmakeが最後に出すターゲット名から追う
 CHECK_TESTS := test-core test-memory-cache test-lint test-sim-guard test-what-to-test test-agent-workflow check-app-info

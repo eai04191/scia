@@ -154,7 +154,7 @@ remote() {
     trap 'cancel 143' TERM
     # 前で走らせると、シェルは終わるまで止める合図を扱わないので、後ろで走らせて待つ
     git archive "$tree" | ssh "${ssh_args[@]}" "$SCIA_REMOTE_HOST" \
-        "/bin/bash -c \"\$(echo $worker | base64 -d)\" remote-test-worker $target $tree $id$(printf ' %q' "${SCIA_REMOTE_SIMS[@]}")" > >(release_ticket_on_acceptance) &
+        "/bin/bash -c \"\$(echo $worker | base64 -d)\" remote-test-worker $target $tree $id '$(development_team)'$(printf ' %q' "$(build_branch)" "$(build_commit)")$(printf ' %q' "${SCIA_REMOTE_SIMS[@]}")" > >(release_ticket_on_acceptance) &
     pipeline=$!
     wait "$pipeline" || status=$?
     trap - HUP INT TERM
@@ -162,6 +162,7 @@ remote() {
     case "$status" in
         0)
             remember "$target" "$tree"
+            fetch_checked_app || true
             ;;
         "$NOT_ACCEPTED")
             exit "$NOT_ACCEPTED"
@@ -191,6 +192,46 @@ fetch_failed_results() {
     for name in $names; do
         echo "落ちた回のxcresultは${PWD}/${dest}/${name}に受け取りました"
     done
+}
+
+# 手元のConfig/Local.xcconfigのDEVELOPMENT_TEAM。別のMacのビルドにも渡し、アプリのapplication-identifierを手元のビルドと揃える
+# 揃えないと、受け取ったアプリが手元のビルドのキーチェーンを読めず、シミュレーターに入れるとログインしていない状態で起動する
+development_team() {
+    sed -nE 's#^[[:space:]]*DEVELOPMENT_TEAM[[:space:]]*=[[:space:]]*([A-Z0-9]+)[[:space:]]*(//.*)?$#\1#p' Config/Local.xcconfig 2>/dev/null | tail -1
+}
+
+# アプリの設定などに出るビルド元（Tools/embed-build-info.sh）を、別のMacの作業コピーではなく手元のbranchとcommitにする
+build_branch() {
+    git symbolic-ref --short -q HEAD || echo "(detached HEAD)"
+}
+
+build_commit() {
+    local commit
+    commit=$(git rev-parse --short HEAD)
+    [ -z "$(git status --porcelain)" ] || commit="$commit-dirty"
+    echo "$commit"
+}
+
+# 通った回のアプリを別のMacから手元のDerivedData/checkedへ運ぶ。手元で通った回と同じ場所に置くので、どちらで走っても、通ったあとはmake buildし直さずにシミュレーターへ入れられる
+# 受け取れなくても通ったことは変わらないので、失敗しても終了コードに影響させない
+fetch_checked_app() {
+    local app="~/scia/apps/$id" incoming
+    # 受け取れなかったときに、前の回のアプリを今回のものとして入れないよう、先に消す
+    rm -rf DerivedData/checked
+    if ! results_ssh "test -d $app"; then
+        echo "確かめた中身のアプリを受け取れませんでした。手元でmake buildしてください" >&2
+        return 1
+    fi
+    mkdir -p DerivedData
+    incoming=$(mktemp -d DerivedData/checked-incoming.XXXXXX)
+    if ! results_ssh "tar -c -C $app ." | tar -x -C "$incoming"; then
+        rm -rf "$incoming"
+        echo "確かめた中身のアプリを受け取れませんでした。手元でmake buildしてください" >&2
+        return 1
+    fi
+    mv "$incoming" DerivedData/checked
+    results_ssh "rm -rf $app" || true
+    echo "確かめた中身のアプリは${PWD}/DerivedData/checked/Scia.appに受け取りました"
 }
 
 # 接続が固まってmainへ入れる列を止めないよう、応答がなくなったら諦める

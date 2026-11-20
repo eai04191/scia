@@ -4,6 +4,8 @@
 
 `make build`と、シミュレーターを触って確かめる作業は手元で行う。
 
+通った回は、そのビルドのアプリを`DerivedData/checked/Scia.app`に、確かめたtreeを`DerivedData/checked/tree`に置く（`Tools/keep-checked-app.sh`）。別のMacで通った回は、別のMacが`~/scia/apps/<依頼のID>`に残したものを入口が受け取る。手元のビルドの成果物（`Build/Products`）とは分けて置き、別のMacでビルドした中身を手元の差分ビルドに混ぜない。入口は手元の`Config/Local.xcconfig`の`DEVELOPMENT_TEAM`を別のMacへ渡し、別のMacは作業コピーの`Config/Local.xcconfig`に書いてビルドする。`application-identifier`が手元のビルドと違うと、受け取ったアプリが手元のキーチェーンのログインを読めないため。
+
 ## 流れ
 
 1. 順番札を取る。`Tools/merge-queue.sh`は、待たせるとmainへ入れる処理の全体が止まるので、列の先頭に並ぶ
