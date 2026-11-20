@@ -29,5 +29,4 @@
 - 外観: `scia://account-appearance`（アカウント設定の外観のうち、Sciaが従う値を見せるシート。変更はウェブで行う。決まりはdocs/account-screen.md）
 - フィルター: `scia://filters`（自分のフィルターを並べたシート。決まりはdocs/filters.md）
 - そのほか: `scia://crash-report?id=<投稿のID>`（隔離した投稿について開発者に送る内容の画面。決まりはdocs/crash-quarantine.md）、`scia://operation-status`（操作の状況）、`scia://in-app-browser-height`（重ねた画面を閉じ、ホームの上にアプリ内のSafariの高さを選ぶシートを出す。`?return=<設定の画面>`で、閉じたときにその設定の画面を開き直す）
-
 - 自分用の表示: `scia://user-display?acct=<user@domain>`。対象のユーザーを読み、表示名・アイコン・アニメーション停止の編集シートを開く。
