@@ -124,6 +124,17 @@ enum ProfileHeaderCatalog {
     @MainActor
     static func states() -> [CatalogState] {
         [
+            CatalogState(title: "自分用の長い表示名とアニメーション停止") {
+                let suite = "net.mizle.scia.catalog.userDisplay"
+                guard let defaults = UserDefaults(suiteName: suite) else { preconditionFailure("カタログのUserDefaultsを作れない") }
+                defaults.removePersistentDomain(forName: suite)
+                let settings = AppSettings(defaults: defaults)
+                let account = Fixtures.account(displayName: "元の名前", acct: "alice@example.com")
+                do {
+                    try settings.userDisplays.save(.init(name: "自分が覚えている長い表示名・折り返しても設定への入口が読める", stopsAnimation: true), for: account, in: settings)
+                } catch { preconditionFailure("カタログの設定を保存できない") }
+                return header(account, .following, settings: settings)
+            },
             CatalogState(title: "フォローしていない（ヘッダー画像、自己紹介、確認済みのリンク）") { header(fullAccount, .notFollowing(locked: false)) },
             CatalogState(title: "フォローしていない承認制のアカウント") {
                 header(Fixtures.account(acct: "locked", note: "<p>承認制</p>", locked: true), .notFollowing(locked: true))
@@ -345,13 +356,14 @@ enum ProfileHeaderCatalog {
         endorsements: [Account] = [],
         hasMoreEndorsements: Bool = false,
         privateNote: String = "",
+        settings: AppSettings = AppDependencies.settings,
         configure: (ProfileHeaderView) -> Void = { _ in }
     ) -> UIView {
         let header = ProfileHeaderView(
             emojiImages: AppDependencies.emojiImages,
             mediaImages: AppDependencies.mediaImages,
             avatarImages: AppDependencies.avatarImages,
-            settings: AppDependencies.settings
+            settings: settings
         )
         configure(header)
         var content = ProfileHeaderView.Content(
