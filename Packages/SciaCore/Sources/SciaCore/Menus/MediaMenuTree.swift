@@ -60,7 +60,7 @@ public struct MediaMenuTree {
     @MainActor
     private func node(for item: MediaMenuItem) -> MenuNode<MediaMenuCommand>? {
         if let action = item.urlAction {
-            guard let linkBrowser, action == .copyLink || opensURLs else { return nil }
+            guard fileURL?.isFileURL != true, let linkBrowser, action == .copyLink || opensURLs else { return nil }
             return action.node(url: fileURL, linkBrowser: linkBrowser).map(MediaMenuCommand.url)
         }
         switch item {

@@ -59,7 +59,7 @@ extension TimelineViewController {
         }
         let text = NSMutableAttributedString(attributedString: phrase(appearance.phrase.before))
         if appearance.phrase.includesName {
-            text.append(renderer.render(.plain(notification.account.displayNameOrUsername, emojis: notification.account.emojis)))
+            text.append(renderer.render(.plain(settings.userDisplays.display(of: notification.account, in: settings).name, emojis: settings.userDisplays.display(of: notification.account, in: settings).emojis)))
         }
         text.append(phrase(appearance.phrase.after))
         configuration.context = PostContentConfiguration.Context(
@@ -69,7 +69,7 @@ extension TimelineViewController {
             avatar: nil,
             text: text,
             accessibilityText: text.string,
-            accountName: notification.account.displayNameOrUsername
+            accountName: settings.userDisplays.display(of: notification.account, in: settings).name
         )
         configuration.metrics.contextSymbolSpacing = settings.value(of: NotificationAppearanceCatalog.symbolSpacing)
         configuration.metrics.contextSpacing = settings.value(of: NotificationAppearanceCatalog.contextSpacing)
@@ -165,7 +165,7 @@ extension TimelineViewController {
         let otherAccountCount = notification.isGroup ? notification.notificationsCount - 1 : nil
         let sentence = PostTexts.notificationHeader(
             appearance,
-            name: notification.account.displayNameOrUsername,
+            name: settings.userDisplays.display(of: notification.account, in: settings).name,
             otherAccountCount: otherAccountCount,
             reactionEmoji: emojiText
         )
@@ -177,7 +177,7 @@ extension TimelineViewController {
             if !notification.isGroup {
                 name.append(avatarAttachment(of: notification.account, font: font))
             }
-            name.append(nameRenderer.render(.plain(notification.account.displayNameOrUsername, emojis: notification.account.emojis)))
+            name.append(nameRenderer.render(.plain(settings.userDisplays.display(of: notification.account, in: settings).name, emojis: settings.userDisplays.display(of: notification.account, in: settings).emojis)))
             parts.append((range, name))
         }
         if let range = sentence.otherAccounts {
@@ -223,20 +223,20 @@ extension TimelineViewController {
             // カスタム絵文字は画像の文字で読めないので、本文と同じくショートコードで読む。
             configuration.headerAccessibilityText = PostTexts.notificationHeader(
                 appearance,
-                name: notification.account.displayNameOrUsername,
+                name: settings.userDisplays.display(of: notification.account, in: settings).name,
                 otherAccountCount: otherAccountCount,
                 reactionEmoji: emoji.isCustom ? ":\(emoji.name):" : emoji.name
             ).text
         }
         if appearance.phrase.includesName {
-            configuration.accountName = notification.account.displayNameOrUsername
+            configuration.accountName = settings.userDisplays.display(of: notification.account, in: settings).name
             configuration.onOpenAccount = { [weak self] in self?.onOpenProfile?(notification.account) }
             configuration.accountTarget = userTarget(for: notification.account, id: .notification(notification.id))
         }
         if notification.isGroup {
             let accounts = notification.sampleAccounts
             configuration.groupAvatars = accounts.map(avatarContent(of:))
-            configuration.groupAccountNames = accounts.map(\.displayNameOrUsername)
+            configuration.groupAccountNames = accounts.map { settings.userDisplays.display(of: $0, in: settings).name }
             configuration.onOpenGroupAccount = { [weak self] index in
                 guard accounts.indices.contains(index) else { return }
                 self?.onOpenProfile?(accounts[index])

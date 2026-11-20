@@ -41,8 +41,8 @@ struct AccountSessionStoresTests {
         defer { session.close() }
 
         session.start { 0 }
-        // 走っているのは、レート制限が明けたときと電波が戻ったときの、やり直しの見張りの2つだけ。どちらも閉じるまで走り続けるので、終わりは待たない。
-        #expect(session.tasks.runningCount == 2)
+        // 受信したユーザー情報、レート制限の解除、電波の回復の3つを、セッションを閉じるまで購読する。
+        #expect(session.tasks.runningCount == 3)
         #expect(transport.requests.isEmpty)
 
         session.loadServerInfo()

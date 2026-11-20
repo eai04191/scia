@@ -133,7 +133,7 @@ extension TimelineViewController {
         ])
         return AccountRowConfiguration(
             avatar: avatarContent(of: account),
-            name: nameRenderer.render(.plain(account.displayNameOrUsername, emojis: account.emojis)),
+            name: nameRenderer.render(.plain(settings.userDisplays.display(of: account, in: settings).name, emojis: settings.userDisplays.display(of: account, in: settings).emojis)),
             handle: handle,
             margins: settings.rowMargins,
             avatarSize: settings.value(of: AppearanceCatalog.avatarSize),

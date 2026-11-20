@@ -20,7 +20,7 @@ struct UserMenuTreeTests {
         UserMenuActions(
             mention: { _ in }, copy: { _, _, _ in }, localServer: "example.social",
             resolveTarget: { _ in throw CancellationError() }, loadRelation: { _, _ in nil }, knownRelation: known, reloadRelations: { _ in },
-            changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, addToList: { _ in },
+            changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, addToList: { _ in }, editDisplay: { _ in },
             isExcludedFromAutoTranslation: isExcluded, accounts: AccountCache { _ in [] }
         )
     }
@@ -33,6 +33,42 @@ struct UserMenuTreeTests {
         UserMenuTree(subject: UserMenuSubject(.account(alice)), actions: actions, linkBrowser: .inApp)
             .submenu(groups: groups, avatar: .user(.account(alice)))
             .map { MenuNodeTests.describe([$0]) }
+    }
+
+    @Test func displayCustomizationIsHiddenByDefaultAndInSavedLayouts() {
+        for layout in [UserMenuItem.defaultLayout, MenuFixture.user] {
+            #expect(layout.elements.contains(.item(.editDisplay, isVisible: false)))
+            #expect(!(layout.groups.main + layout.groups.more).contains { $0.items.contains(.editDisplay) })
+        }
+        let restored = MenuLayout<UserMenuItem>(tokens: ["item:editDisplay", "more"])
+        #expect(restored.groups.main.contains { $0.items.contains(.editDisplay) })
+    }
+
+    @Test func displayCustomizationUsesTheCommonMenuForEveryTarget() throws {
+        let subjects = [
+            UserMenuSubject(.account(alice)),
+            UserMenuSubject(mentionLink: try #require(alice.url), acct: "alice"),
+            UserMenuSubject(handle: alice.acct),
+        ]
+        for subject in subjects {
+            let tree = UserMenuTree(subject: subject, actions: actions(), linkBrowser: .inApp)
+            let groups = MenuLayout<UserMenuItem>.Groups.single(.editDisplay)
+            let menu = try #require(tree.menu(groups: groups, avatar: nil))
+            let profile = try #require(tree.profileScreenMenu(groups: groups))
+            for node in [menu, profile] {
+                let commands = node.flattenedChildren.compactMap(\.command)
+                #expect(commands.contains { if case .editDisplay = $0 { true } else { false } })
+            }
+            let inline = try #require(tree.submenu(groups: groups, avatar: nil))
+            #expect(inline.title == UserDisplayTexts.edit(acct: subject.acct))
+            #expect(tree.relationReloadID(groups: groups) == nil)
+        }
+    }
+
+    @Test func displayCustomizationNeedsSessionActions() {
+        let tree = UserMenuTree(subject: UserMenuSubject(.account(alice)), actions: nil, linkBrowser: .inApp)
+        #expect(tree.menu(groups: .single(.editDisplay), avatar: nil) == nil)
+        #expect(tree.profileScreenMenu(groups: .single(.editDisplay)) == nil)
     }
 
     // MARK: - 関係の項目
@@ -244,7 +280,7 @@ struct UserMenuTreeTests {
             let actions = UserMenuActions(
                 mention: { _ in }, copy: { _, _, _ in }, localServer: "example.social",
                 resolveTarget: { _ in UserIdentity(id: "2", acct: "alice") }, loadRelation: loadRelation, knownRelation: { _ in .myself(nil) }, reloadRelations: { _ in },
-                changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, addToList: { _ in }, accounts: AccountCache { _ in [] }
+                changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, addToList: { _ in }, editDisplay: { _ in }, accounts: AccountCache { _ in [] }
             )
             let tree = UserMenuTree(subject: UserMenuSubject(.account(alice)), actions: actions, linkBrowser: .inApp)
             let menu = try #require(tree.menu(groups: layout(visible: [.follow, .note, .mute]), avatar: nil))
@@ -270,7 +306,7 @@ struct UserMenuTreeTests {
                 guard case .account = target else { return nil }
                 return .myself(nil)
             },
-            reloadRelations: { _ in }, changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, addToList: { _ in }, accounts: AccountCache { _ in [] }
+            reloadRelations: { _ in }, changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, addToList: { _ in }, editDisplay: { _ in }, accounts: AccountCache { _ in [] }
         )
         let tree = UserMenuTree(subject: UserMenuSubject(mentionLink: try #require(alice.url), acct: "alice"), actions: actions, linkBrowser: .inApp)
         let menu = try #require(tree.menu(groups: layout(visible: [.follow, .note, .report]), avatar: nil))

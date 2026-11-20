@@ -28,6 +28,7 @@ final class ProfileTabIcons {
 
     @ObservationIgnored private let settings: AppSettings
     @ObservationIgnored private var avatars: [String: UIImage] = [:]
+    @ObservationIgnored private var sources: [String: URL] = [:]
     /// アイコンが変わるたびに増える。設定の並びは、これが変わったら行を描き直す。
     private(set) var revision = 0
     /// アイコンが変わったとき。届いたときと、アイコンの形の設定を変えたとき。アクセントカラーで変わる縁は、タブバーが選び直しを見張って描き直させる。
@@ -38,6 +39,12 @@ final class ProfileTabIcons {
         observeAppearance()
     }
 
+    func prepareAvatar(forAccountID id: String, source: URL?) {
+        guard sources[id] != source else { return }
+        sources[id] = source
+        if avatars.removeValue(forKey: id) != nil { changed() }
+    }
+
     func setAvatar(_ avatar: UIImage, forAccountID id: String) {
         avatars[id] = avatar
         changed()
@@ -45,6 +52,7 @@ final class ProfileTabIcons {
 
     /// 並びから外したプロフィールのアイコンを捨てる。
     func removeAvatars(except accountIDs: Set<String>) {
+        sources = sources.filter { accountIDs.contains($0.key) }
         let kept = avatars.filter { accountIDs.contains($0.key) }
         guard kept.count != avatars.count else { return }
         avatars = kept

@@ -17,14 +17,17 @@ final class MediaDownloads {
     /// 落としている途中のファイルを置く場所。落とし終えたらキャッシュへ移す。
     private let stagingDirectory: URL
     private let download: Download
+    private let localImageDirectory: URL?
     private let logger = SciaLog.logger(category: "media")
 
     /// - Parameter stagingDirectory: 落としている途中のファイルを置く場所。前回の起動で落とし損ねたものを消すため、作るときに中身を空にする。
     init(
         files: MediaFileCache,
         stagingDirectory: URL = .temporaryDirectory.appending(path: "MediaDownloads"),
+        localImageDirectory: URL? = nil,
         download: @escaping Download = MediaDownloads.network
     ) {
+        self.localImageDirectory = localImageDirectory
         self.files = files
         self.stagingDirectory = stagingDirectory
         self.download = download
@@ -34,6 +37,12 @@ final class MediaDownloads {
     /// `url`のファイルの、共有や保存に渡すコピーを返す。キャッシュになければ落として置いてからコピーする。
     /// - Parameter onProgress: 落とし始めたら0を、そのあと進み具合を0から1で、メインアクターで受け取る。キャッシュにあれば呼ばない。
     func fileForSharing(for url: URL, onProgress: @escaping @MainActor (Double) -> Void) async throws -> URL {
+        if url.isFileURL, let localImageDirectory, url.deletingLastPathComponent().standardizedFileURL.path == localImageDirectory.standardizedFileURL.path {
+            let generation = await files.generation
+            let name = await MediaOriginalFileName.name(ofFileAt: url, for: url) ?? url.lastPathComponent
+            let data = try Data(contentsOf: url)
+            _ = try await files.store(data, named: name, for: url, generation: generation)
+        }
         if let copy = try await files.copyForSharing(for: url) {
             return copy
         }

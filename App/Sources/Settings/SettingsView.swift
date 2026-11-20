@@ -24,6 +24,8 @@ struct SettingsView: View {
     /// 謝辞の画面で、設定の画面を閉じて、ハンドルの人のプロフィールを開く。
     let openProfile: @MainActor (_ acct: String) -> Void
     /// トップの画面にいるかを、載せている側（`SettingsHostingController`）へ伝える。
+    let openUserDisplay: @MainActor (String) -> Void
+    let userDisplayLoader: UserDisplayLoader
     let navigation: SettingsNavigationState
     @Environment(\.dismiss) private var dismiss
     @Environment(\.layoutDirection) private var layoutDirection
@@ -48,6 +50,8 @@ struct SettingsView: View {
         accountScreen: AccountScreenContext,
         openInAppBrowserHeight: @escaping @MainActor (AppSettings) -> Void,
         openProfile: @escaping @MainActor (_ acct: String) -> Void,
+        openUserDisplay: @escaping @MainActor (String) -> Void,
+        userDisplayLoader: UserDisplayLoader,
         navigation: SettingsNavigationState,
         opening page: SettingsPage? = nil,
         appearanceGroup: AppearanceGroup.ID? = nil,
@@ -64,6 +68,8 @@ struct SettingsView: View {
         self.accountScreen = accountScreen
         self.openInAppBrowserHeight = openInAppBrowserHeight
         self.openProfile = openProfile
+        self.openUserDisplay = openUserDisplay
+        self.userDisplayLoader = userDisplayLoader
         self.navigation = navigation
         _editingSettings = State(initialValue: editing)
         // 「プリセットを管理」から開いたプリセットを直している途中にアプリ内のSafariの高さを選びに出たときは、戻ったときもそのプリセットの画面を挟む。
@@ -117,6 +123,7 @@ struct SettingsView: View {
         }
         .onChange(of: path, initial: true) {
             navigation.isAtRoot = path.isEmpty
+            navigation.page = path.last
         }
         .onChange(of: path) {
             // プリセットの画面から戻ったら、トップの分類はまた開いているアカウントのプリセットを直す。
@@ -227,6 +234,7 @@ struct SettingsView: View {
             NotificationAppearanceEditorView(settings: current, opening: appearanceGroup)
                 .onAppear { appearanceGroup = nil }
         case .customEmojis: CustomEmojiDisplaySettingsView(settings: current)
+        case .userDisplays: UserDisplaySettingsView(settings: current, open: openUserDisplay, loader: userDisplayLoader)
         case .autoTranslation:
             if #available(iOS 26.4, *) {
                 AutoTranslationSettingsView(settings: current)
@@ -325,9 +333,9 @@ extension UIViewController {
     ///   - page: 設定のトップの画面から重ねて開いておく画面。
     ///   - appearanceGroup: `page`が「投稿の見た目」か「通知の見た目」のとき、その上に重ねておく分類の画面。
     ///   - onShownChange: 設定の画面が出たときにtrue、消えたときにfalseで呼ぶ。
-    func presentSettings(windowSettings: AppSettings, instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, tabSources: SettingsTabSourceActions, tabBarShape: TabBarShapeModel, accountScreen: AccountScreenContext, openInAppBrowserHeight: @escaping @MainActor (AppSettings) -> Void, openProfile: @escaping @MainActor (_ acct: String) -> Void, opening page: SettingsPage? = nil, appearanceGroup: AppearanceGroup.ID? = nil, editing: AppSettings? = nil, onShownChange: @escaping (Bool) -> Void) {
+    func presentSettings(windowSettings: AppSettings, instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, tabSources: SettingsTabSourceActions, tabBarShape: TabBarShapeModel, accountScreen: AccountScreenContext, openInAppBrowserHeight: @escaping @MainActor (AppSettings) -> Void, openProfile: @escaping @MainActor (_ acct: String) -> Void, openUserDisplay: @escaping @MainActor (String, @escaping @MainActor () -> Bool) -> Void, userDisplayLoader: UserDisplayLoader, opening page: SettingsPage? = nil, appearanceGroup: AppearanceGroup.ID? = nil, editing: AppSettings? = nil, onShownChange: @escaping (Bool) -> Void) {
         let navigation = SettingsNavigationState()
-        let view = SettingsView(settings: AppDependencies.settings, windowSettings: windowSettings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, tabSources: tabSources, tabBarShape: tabBarShape, accountScreen: accountScreen, openInAppBrowserHeight: openInAppBrowserHeight, openProfile: openProfile, navigation: navigation, opening: page, appearanceGroup: appearanceGroup, editing: editing)
+        let view = SettingsView(settings: AppDependencies.settings, windowSettings: windowSettings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, tabSources: tabSources, tabBarShape: tabBarShape, accountScreen: accountScreen, openInAppBrowserHeight: openInAppBrowserHeight, openProfile: openProfile, openUserDisplay: { acct in openUserDisplay(acct, { navigation.page == .userDisplays }) }, userDisplayLoader: userDisplayLoader, navigation: navigation, opening: page, appearanceGroup: appearanceGroup, editing: editing)
         presentOnFrontmost(SettingsHostingController(rootView: view, navigation: navigation, onShownChange: onShownChange))
     }
 
@@ -350,6 +358,7 @@ private let settingsLogger = SciaLog.logger(category: "settings")
 @MainActor
 final class SettingsNavigationState {
     var isAtRoot = true
+    var page: SettingsPage?
 }
 
 /// 設定の画面を載せ、出たときと消えたときを1回ずつ知らせる。設定の画面の上に重ねたシートが出ている間は、まだ出ている扱いにする。

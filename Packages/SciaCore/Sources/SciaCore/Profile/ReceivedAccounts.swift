@@ -25,6 +25,14 @@ public final class ReceivedAccounts: Sendable {
         var entries: CostLimitedCache<String, Entry>
     }
 
+    private let updates = Mutex<AsyncStream<[Account]>.Continuation?>(nil)
+
+    var changes: AsyncStream<[Account]> {
+        let (stream, continuation) = AsyncStream<[Account]>.makeStream()
+        updates.withLock { $0 = continuation }
+        continuation.onTermination = { [weak self] _ in self?.updates.withLock { $0 = nil } }
+        return stream
+    }
     private let state: Mutex<State>
 
     /// - Parameter limit: 覚える人数の上限。
@@ -45,15 +53,29 @@ public final class ReceivedAccounts: Sendable {
         state.withLock { $0.entries.value(forKey: id)?.account }
     }
 
+    public func account(acct: String, localDomain: String?) -> Account? {
+        state.withLock { state in
+            state.entries.values.first { entry in
+                let handle = entry.account.acct
+                if handle.lowercased() == acct.lowercased() { return handle.contains("@") || localDomain != nil }
+                return localDomain.map { "\(handle)@\($0)".lowercased() == acct.lowercased() } ?? false
+            }?.account
+        }
+    }
+
     /// `order`の番号で受け取った`accounts`を覚える。同じ人をもっとあとの番号で覚えていれば、そちらを残す。
     /// 同じ番号は同じ応答なので、あとに読んだほうで置き換える。
     public func remember(_ accounts: [Account], order: Int) {
         guard !accounts.isEmpty else { return }
-        state.withLock { state in
+        let accepted = state.withLock { state -> [Account] in
+            var accepted: [Account] = []
             for account in accounts where state.entries.value(forKey: account.id).map({ $0.order <= order }) ?? true {
                 state.entries.setValue(Entry(account: account, order: order), forKey: account.id, cost: 1)
+                accepted.append(account)
             }
+            return accepted
         }
+        if !accepted.isEmpty { updates.withLock { _ = $0?.yield(accepted) } }
     }
 
     /// `decode`の中で読んだアカウントを、`order`の番号で覚える。

@@ -51,7 +51,7 @@ struct StatusMenuTests {
         UserMenuActions(
             mention: { _ in }, copy: { _, _, _ in }, localServer: "example.social",
             resolveTarget: { _ in throw CancellationError() }, loadRelation: { _, _ in nil }, knownRelation: known, reloadRelations: reload,
-            changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, addToList: { _ in }, accounts: accounts
+            changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, addToList: { _ in }, editDisplay: { _ in }, accounts: accounts
         )
     }
 

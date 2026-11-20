@@ -65,6 +65,16 @@ struct MediaMenuTreeTests {
         #expect(!described.contains("ブラウザで開く"))
     }
 
+    @Test func localImageKeepsImageActionsWithoutURLActions() {
+        var menu = timelineMenu(for: attachment(.image))
+        menu.fileURL = URL(filePath: "/private/app/UserDisplayImages/image")
+        let described = MenuNodeTests.describe(menu.nodes(groups: MenuFixture.media.groups))
+        #expect(described.contains("共有"))
+        #expect(described.contains("写真に保存"))
+        #expect(!described.contains("リンクをコピー"))
+        #expect(!described.contains("ブラウザで開く"))
+    }
+
     /// 設定で隠した項目と、「その他」へ動かした項目は、その通りに出す。
     @Test func followsCustomizedLayout() {
         var elements = MenuFixture.media.elements.compactMap { element -> MenuLayout<MediaMenuItem>.Element? in

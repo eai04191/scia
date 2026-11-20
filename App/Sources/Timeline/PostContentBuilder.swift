@@ -73,7 +73,7 @@ struct PostContentBuilder {
         let boosterName = Self.joined(spacing: values.value(of: AppearanceCatalog.contextPartsSpacing), appearance.contextNameStyle.parts.enumerated().map { index, part in
             let renderer = index == 0 ? contextRenderer : contextSecondaryRenderer
             return switch part {
-            case .displayName: renderer.render(.plain(status.account.displayNameOrUsername, emojis: status.account.emojis))
+            case .displayName: renderer.render(.plain(settings.userDisplays.display(of: status.account, in: settings).name, emojis: settings.userDisplays.display(of: status.account, in: settings).emojis))
             case .acct: renderer.render(.plain("@\(status.account.acct)", emojis: []))
             }
         })
@@ -82,7 +82,7 @@ struct PostContentBuilder {
         let nameParts = nameStyle.parts.enumerated().map { index, part in
             let renderer = index == 0 ? primaryRenderer : secondaryRenderer
             return switch part {
-            case .displayName: renderer.render(.plain(shown.account.displayNameOrUsername, emojis: shown.account.emojis))
+            case .displayName: renderer.render(.plain(settings.userDisplays.display(of: shown.account, in: settings).name, emojis: settings.userDisplays.display(of: shown.account, in: settings).emojis))
             case .acct: renderer.render(.plain("@\(shown.account.acct)", emojis: []))
             }
         }
@@ -103,8 +103,8 @@ struct PostContentBuilder {
                 avatar: appearance.showsBoosterAvatar ? avatarContent(of: status.account) : nil,
                 text: boosterName.text,
                 secondaryRange: boosterName.secondaryRange,
-                accessibilityText: PostTexts.boosted(by: status.account.displayNameOrUsername),
-                accountName: status.account.displayNameOrUsername
+                accessibilityText: PostTexts.boosted(by: settings.userDisplays.display(of: status.account, in: settings).name),
+                accountName: settings.userDisplays.display(of: status.account, in: settings).name
             )
         } else if let replyLabel, appearance.showsReplyLabel {
             replyContext(replyLabel, font: metrics.contextFont, language: language)
@@ -115,7 +115,7 @@ struct PostContentBuilder {
             context: context,
             avatar: appearance.showsAvatar ? avatarContent(of: shown.account) : nil,
             nameParts: nameParts,
-            authorName: shown.account.displayNameOrUsername,
+            authorName: settings.userDisplays.display(of: shown.account, in: settings).name,
             createdAt: shown.createdAt,
             isEdited: shown.editedAt != nil,
             visibility: shown.visibility,
@@ -233,10 +233,11 @@ struct PostContentBuilder {
     }
 
     func avatarContent(of account: Account) -> AvatarView.Content {
-        AvatarView.Content(
-            url: settings.animatesAvatars ? account.avatar : account.avatarStatic,
+        let avatar = settings.userDisplays.display(of: account, in: settings).avatar(animates: settings.animatesAvatars)
+        return AvatarView.Content(
+            url: avatar.url,
             shape: appearance.avatarShape,
-            animates: settings.animatesAvatars,
+            animates: avatar.animates,
             cornerRatio: values.value(of: AppearanceCatalog.avatarCornerRatio),
             showsBorder: appearance.showsAvatarBorder
         )
@@ -382,7 +383,7 @@ struct PostContentBuilder {
             id: "quote:\(quoted.id)",
             header: EmbeddedPostView.Content.Header(
                 avatar: showsEmbedAvatar ? avatarContent(of: quoted.account) : AvatarView.Content(url: nil, shape: appearance.avatarShape, animates: false),
-                name: embedName(.plain(quoted.account.displayNameOrUsername, emojis: quoted.account.emojis), handle: quoted.account.acct, base: base),
+                name: embedName(.plain(settings.userDisplays.display(of: quoted.account, in: settings).name, emojis: settings.userDisplays.display(of: quoted.account, in: settings).emojis), handle: quoted.account.acct, base: base),
                 opensAccount: true
             ),
             filterWarning: filterWarning.map(SpoilerView.Content.init),

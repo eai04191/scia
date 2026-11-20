@@ -80,6 +80,7 @@
     "item:notify",
     "item:endorse",
     "item:autoTranslation",
+    "hidden:editDisplay",
     "separator",
     "item:customize"
   ],

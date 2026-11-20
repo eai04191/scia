@@ -63,6 +63,7 @@ public final class AccountSession {
     @ObservationIgnored private var preferencesVersion = 0
     private var instanceConfiguration: InstanceConfiguration?
     private let configurationLoad = SharedLoad()
+    private let userDisplayDomainLoad = SharedLoad()
     private let preferencesLoad = SharedLoad()
     /// サーバーの、Mastodonにない機能の有無。読めていないうちと、読めなかったときはMastodonと同じ。
     public private(set) var capabilities = ServerCapabilities.mastodon
@@ -133,6 +134,7 @@ public final class AccountSession {
         unauthorized.authorization = authorization
         let tasks = TaskScope()
         self.tasks = tasks
+        settings.userDisplays.connect(accounts: accounts, settings: settings, received: receivedAccounts, tasks: tasks)
         // 閉じたあと（ログアウトやアカウントの切り替えのあと）に届いた401では、ログインし直しを促さない。
         tasks.onClose { unauthorized.authorization = nil }
         // 開いているスレッドなどの購読を、閉じる順に頼らずに止めるため、申し込みが残っていても切る。
@@ -195,6 +197,7 @@ public final class AccountSession {
     public func loadServerInfo() {
         loadServerVersion()
         preloadComposeDefaults()
+        tasks.run(.display) { [weak self] in _ = await self?.loadUserDisplayDomain() }
         loadCapabilities()
     }
 
@@ -306,6 +309,7 @@ public final class AccountSession {
 
     private func recover(reason: String) {
         logger.info("recover reason=\(reason, privacy: .public)")
+        tasks.run(.display) { [weak self] in _ = await self?.loadUserDisplayDomain() }
         loadCapabilities()
         // つながっていなければ、待っている間隔を飛ばしてつなぎ直す。
         streamingHub.recover()
@@ -352,6 +356,18 @@ public final class AccountSession {
             } catch {
                 // 読めないと添付とペーストが使えないため、違和感レポートで理由を追えるよう残す。
                 logger.info("instance configuration unavailable error=\(SciaLog.describe(error), privacy: .public)")
+            }
+        }
+    }
+
+    public func loadUserDisplayDomain() async -> String? {
+        await userDisplayDomainLoad.run(cached: { settings.userDisplayDomain }) {
+            do {
+                let domain = try await client.accountDomain()
+                try Task.checkCancellation()
+                settings.setUserDisplayDomain(domain)
+            } catch {
+                logger.info("user display domain unavailable error=\(SciaLog.describe(error), privacy: .public)")
             }
         }
     }

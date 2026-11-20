@@ -18,6 +18,76 @@ struct AccountSessionTests {
         .testing(transport: transport, connector: connector, clock: clock, now: { Self.now })
     }
 
+    @Test(.requestPurpose(.action)) func userDisplayDomainRetriesFailureAndCachesSuccess() async throws {
+        let attempts = Mutex(0)
+        let body = try Data(contentsOf: try #require(Bundle.module.url(forResource: "instance_account_domain", withExtension: "json", subdirectory: "Fixtures")))
+        let transport = RoutedTransport { _ in
+            let attempt = attempts.withLock { $0 += 1; return $0 }
+            return attempt == 1 ? (500, Data()) : (200, body)
+        }
+        let settings = AppSettings(defaults: TestScratch.defaults("domainSession")).forAccount("@alice@web.example.com")
+        let session = AccountSession.testing(transport: transport, settings: settings)
+        defer { session.close() }
+        #expect(await session.loadUserDisplayDomain() == nil)
+        #expect(session.settings.userDisplayKey(acct: "alice") == nil)
+        #expect(await session.loadUserDisplayDomain() == "example.com")
+        #expect(await session.loadUserDisplayDomain() == "example.com")
+        #expect(session.settings.userDisplayKey(acct: "alice") == "alice@example.com")
+        #expect(attempts.withLock { $0 } == 2)
+    }
+
+    @Test(.requestPurpose(.action)) func userDisplayLookupRejectsSimilarAccount() async throws {
+        let body = try accountBody("Similar name")
+        let transport = RoutedTransport { _ in
+            (200, Data("{\"accounts\":[".utf8) + body + Data("]}".utf8))
+        }
+        let session = makeSession(transport: transport)
+        defer { session.close() }
+        await #expect(throws: ProfileNotFound.self) {
+            try await session.resolveUserDisplayAccount(acct: "deleted@remote.example")
+        }
+    }
+
+    @Test(.requestPurpose(.action)) func userDisplayLookupMatchesCanonicalLocalHandle() async throws {
+        let account = try accountBody("Local Bob")
+        let local = Data(String(decoding: account, as: UTF8.self).replacingOccurrences(of: "bob@remote.example", with: "bob").utf8)
+        let domain = try Data(contentsOf: try #require(Bundle.module.url(forResource: "instance_account_domain", withExtension: "json", subdirectory: "Fixtures")))
+        let transport = RoutedTransport { request in
+            request.url?.path == "/api/v1/instance" ? (200, domain) : (200, Data("{\"accounts\":[".utf8) + local + Data("]}".utf8))
+        }
+        let settings = AppSettings(defaults: TestScratch.defaults("localLookup")).forAccount("@me@web.example.com")
+        let session = AccountSession.testing(transport: transport, settings: settings)
+        defer { session.close() }
+        #expect(try await session.resolveUserDisplayAccount(acct: "BOB@EXAMPLE.COM").acct == "bob")
+        await #expect(throws: ProfileNotFound.self) {
+            try await session.resolveUserDisplayAccount(acct: "bob@web.example.com")
+        }
+    }
+
+    @Test func supersededUserDisplayDoesNotOpenAfterDomainArrives() async throws {
+        let domain = try Data(contentsOf: try #require(Bundle.module.url(forResource: "instance_account_domain", withExtension: "json", subdirectory: "Fixtures")))
+        let gate = Gate()
+        let transport = RoutedTransport { _ in try await gate.wait(); return (200, domain) }
+        let settings = AppSettings(defaults: TestScratch.defaults("slowDomain")).forAccount("@me@web.example.com")
+        let session = AccountSession.testing(transport: transport, settings: settings)
+        defer { session.close() }
+        let lookup = LatestLookup(clock: TestClock(), slowAfter: { nil })
+        let local = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: nil)
+        let remote = Account(id: "2", username: "bob", acct: "bob@remote.example", displayName: "Bob", avatar: nil)
+        var opened: [String] = []
+        lookup.start(.action, { try await session.prepareUserDisplay(local) }, isStillWanted: { true }) { result in
+            if case .success(let account) = result { opened.append(account.acct) }
+        }
+        try await waitUntil { gate.waiterCount == 1 }
+        #expect(lookup.isWaiting)
+        lookup.start(.action, { try await session.prepareUserDisplay(remote) }, isStillWanted: { true }) { result in
+            if case .success(let account) = result { opened.append(account.acct) }
+        }
+        gate.open()
+        try await waitUntil { !lookup.isWaiting && gate.waiterCount == 0 }
+        #expect(opened == ["bob@remote.example"])
+    }
+
     /// 書き始めたときと同じく、使う人の操作として読む。
     private func applyComposeDefaults(of session: AccountSession, to model: ComposeModel) async {
         await RequestPurpose.$current.withValue(.action) {
@@ -205,8 +275,9 @@ struct AccountSessionTests {
         var notified = false
         session.onCredentialsInvalid = { notified = true }
 
+        let ongoingTasks = session.tasks.runningCount
         session.reportStreamingUnauthorized()
-        try await waitUntil { session.tasks.runningCount == 0 }
+        try await waitUntil { session.tasks.runningCount == ongoingTasks }
 
         #expect(transport.requests(to: "/api/v1/accounts/verify_credentials").count == 1)
         #expect(list.stopCount == 0)

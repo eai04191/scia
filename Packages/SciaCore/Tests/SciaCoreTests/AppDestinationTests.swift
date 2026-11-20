@@ -21,6 +21,7 @@ struct AppDestinationTests {
             ("scia://profile", nil),
             ("scia://my-profile", .myProfile),
             ("scia://profile-edit", .profileEdit),
+            ("scia://user-display?acct=bob@example.com", .userDisplay(acct: "bob@example.com")),
             ("scia://thread?id=123", .thread(statusID: "123")),
             ("scia://thread", nil),
             ("scia://thread?id=", nil),
@@ -106,7 +107,7 @@ struct AppDestinationTests {
     static let samples: [AppDestination] = [.tab(.home), .tab(.scheduled)]
         + [.userTab(.list(id: "12")), .userTab(.hashtag(name: "日本語")), .userTab(.profile(acct: "bob@example.com")), .userTab(.accountHashtag(acct: "bob", name: "scia"))]
         + [.settings(nil)] + SettingsPage.allCases.filter { $0 != .presetEditor }.map { .settings($0) } + [.appearanceGroup("name"), .notificationAppearanceGroup("header")]
-        + [.profile(acct: "bob@example.com"), .profile(acct: "bob"), .myProfile, .profileEdit]
+        + [.profile(acct: "bob@example.com"), .profile(acct: "bob"), .myProfile, .profileEdit, .userDisplay(acct: "bob@example.com")]
         + [.thread(statusID: "123"), .editHistory(statusID: "123"), .apiResponse(statusID: "123"), .crashReport(statusID: "123")]
         + [.accounts(.followers(accountID: nil)), .accounts(.followers(accountID: "9")), .accounts(.following(accountID: nil)), .accounts(.following(accountID: "9"))]
         + [.accounts(.favourited(statusID: "123")), .accounts(.reblogged(statusID: "123")), .accounts(.emojiReactioned(statusID: "123", name: "👍")), .accounts(.emojiReactioned(statusID: "123", name: "blob_cat"))]
@@ -143,7 +144,7 @@ struct AppDestinationTests {
     }
 
     enum Kind: CaseIterable {
-        case tab, userTabList, userTabHashtag, userTabProfile, userTabAccountHashtag, settings, appearanceGroup, notificationAppearanceGroup, profile, myProfile, profileEdit
+        case tab, userTabList, userTabHashtag, userTabProfile, userTabAccountHashtag, settings, appearanceGroup, notificationAppearanceGroup, profile, myProfile, profileEdit, userDisplay
         case thread, editHistory, apiResponse, crashReport, followers, following, favourited, reblogged, emojiReactioned, hashtag, accountHashtag, search, scheduled, operationStatus
         case notificationRequests, notificationRequest, notificationPolicy, filters, postingDefaults, accountAppearance, quotes, announcements, account, inAppBrowserHeight
         case note, report, composeTools, composeLanguage, composeSchedule, composeEmoji, composeMediaPicker, composeAttachment, composeAltText, composeCrop
@@ -162,6 +163,7 @@ struct AppDestinationTests {
         case .profile: .profile
         case .myProfile: .myProfile
         case .profileEdit: .profileEdit
+        case .userDisplay: .userDisplay
         case .thread: .thread
         case .editHistory: .editHistory
         case .apiResponse: .apiResponse

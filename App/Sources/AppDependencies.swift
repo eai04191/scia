@@ -161,7 +161,7 @@ enum AppDependencies {
 
     static var mediaImages: MediaImageStore<UIImage> { images.media }
 
-    static let mediaDownloads = MediaDownloads(files: mediaFiles)
+    static let mediaDownloads = MediaDownloads(files: mediaFiles, localImageDirectory: settings.store.userDisplayImageDirectory)
 
     static let network = NetworkConditionsMonitor()
 

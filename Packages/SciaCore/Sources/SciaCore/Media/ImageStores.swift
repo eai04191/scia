@@ -63,9 +63,13 @@ public final class ImageStores<Image: AnyObject & Sendable> {
             sharingDirectory: .temporaryDirectory.appending(path: "MediaPrefetchSharing"),
             sizeLimit: Self.prefetchSizeLimit
         )
+        let userDisplayImageDirectory = settings.store.userDisplayImageDirectory
         let remoteFetch = RemoteFetch(client: http)
         let retryPolicy: @MainActor () -> RetrySchedule.Policy = { TuningCatalog.imageRetry(in: tuning) }
         avatars = AvatarImageStore(clock: clock, retryPolicy: retryPolicy, maker: maker) { url in
+            if url.isFileURL, url.deletingLastPathComponent().standardizedFileURL.path == userDisplayImageDirectory.standardizedFileURL.path {
+                return try Data(contentsOf: url)
+            }
             if let data = await localData(url) {
                 return data
             }
@@ -74,6 +78,9 @@ public final class ImageStores<Image: AnyObject & Sendable> {
         self.mediaFiles = mediaFiles
         self.mediaPrefetchFiles = mediaPrefetchFiles
         media = MediaImageStore(files: mediaFiles, prefetchedFiles: mediaPrefetchFiles, clock: clock, retryPolicy: retryPolicy, maker: maker) { url, range in
+            if url.isFileURL, url.deletingLastPathComponent().standardizedFileURL.path == userDisplayImageDirectory.standardizedFileURL.path {
+                return try Data(contentsOf: url)
+            }
             if range == nil, let data = await localData(url) {
                 return data
             }

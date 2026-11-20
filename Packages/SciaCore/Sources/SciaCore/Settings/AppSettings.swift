@@ -16,6 +16,7 @@ public final class AppSettings {
     }
 
     @ObservationIgnored public let store: SettingsStore
+    @ObservationIgnored public let userDisplays: UserDisplayStore
     @ObservationIgnored public let target: Target
     /// 組み込みのプリセットを使っているときに値を変え、それを親にしたプリセットを作って切り替えたときに、作ったプリセットを渡す（docs/preset.md）。
     @ObservationIgnored public var onPresetCreated: (@MainActor (PresetID) -> Void)?
@@ -28,6 +29,7 @@ public final class AppSettings {
 
     public init(store: SettingsStore, target: Target) {
         self.store = store
+        userDisplays = store.sharedUserDisplays()
         self.target = target
         if case .scope(.account(let handle)) = target { account = handle }
     }
@@ -65,6 +67,7 @@ public final class AppSettings {
 
     /// サーバーの設定に従う値を読むアカウント。アカウントの設定と、そこから作った決まったプリセットの設定で持つ。アプリの設定ではnil。
     @ObservationIgnored private var account: String?
+    var userDisplayScope: String? { account }
 
     // MARK: プリセットに含める値
 
@@ -205,7 +208,7 @@ public final class AppSettings {
     }
 
     /// サーバーの付いていない絵文字を持つサーバー。アカウントのハンドル（`@username@server`）のサーバー。
-    private var emojiLocalServer: String? {
+    var emojiLocalServer: String? {
         guard let handle = account ?? store.lastPreferenceAccount, let at = handle.lastIndex(of: "@") else { return nil }
         let server = handle[handle.index(after: at)...]
         return server.isEmpty ? nil : String(server)
@@ -882,6 +885,14 @@ public final class AppSettings {
 @MainActor
 @Observable
 public final class SettingsStore {
+    @ObservationIgnored private weak var displayStore: UserDisplayStore?
+
+    func sharedUserDisplays() -> UserDisplayStore {
+        if let displayStore { return displayStore }
+        let displayStore = UserDisplayStore(store: self)
+        self.displayStore = displayStore
+        return displayStore
+    }
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored let keepsComposeBarOpenByDefault: Bool
 
@@ -949,6 +960,14 @@ public final class SettingsStore {
 
     /// プリセットごとの、解決した「投稿の見た目」の選択肢。行を描くたびに読むので、プリセットが変わるまで覚える。
     @ObservationIgnored private var appearanceCache: [PresetID: AppearanceChoices] = [:]
+
+    public let userDisplayImageDirectory: URL
+    var userDisplayDomains: [String: String] {
+        didSet { defaults.set(userDisplayDomains, forKey: "settings.userDisplayDomains") }
+    }
+    var userDisplayRules: [String: UserDisplayRule] {
+        didSet { defaults.set(try? JSONEncoder().encode(userDisplayRules), forKey: "settings.userDisplayRules") }
+    }
 
     var autoTranslationExcludedHandles: [String] {
         didSet { defaults.set(autoTranslationExcludedHandles, forKey: Keys.autoTranslationExcludedHandles) }
@@ -1024,7 +1043,10 @@ public final class SettingsStore {
     private(set) var lastServerMediaDisplay = MediaDisplay.hidesSensitive
     @ObservationIgnored private var preferenceAccount: String?
 
-    public init(defaults: UserDefaults, keepsComposeBarOpenByDefault: Bool = false) {
+    public init(defaults: UserDefaults, keepsComposeBarOpenByDefault: Bool = false, userDisplayImageDirectory: URL = .applicationSupportDirectory.appending(path: "UserDisplayImages")) {
+        self.userDisplayImageDirectory = userDisplayImageDirectory
+        userDisplayDomains = defaults.dictionary(forKey: "settings.userDisplayDomains") as? [String: String] ?? [:]
+        userDisplayRules = defaults.data(forKey: "settings.userDisplayRules").flatMap { try? JSONDecoder().decode([String: UserDisplayRule].self, from: $0) } ?? [:]
         self.defaults = defaults
         self.keepsComposeBarOpenByDefault = keepsComposeBarOpenByDefault
         library = PresetLibrary(stored: defaults.data(forKey: Keys.presets))

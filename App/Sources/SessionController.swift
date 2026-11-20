@@ -354,7 +354,7 @@ final class SessionController {
         let tasks = session.tasks
         self.tasks = tasks
         let client = session.client
-        otherAccounts = OtherAccounts(current: credential, tasks: tasks, settings: settings) { MastodonClient(credential: $0, transport: transport, isOtherAccount: true) }
+        otherAccounts = OtherAccounts(current: credential, tasks: tasks, settings: settings) { MastodonClient(credential: $0, transport: transport, isOtherAccount: true, receivedAccounts: $1) }
         let streamingHub = session.streamingHub
         let home = FeedTimelineController(feed: .home, session: session)
         let local = FeedTimelineController(feed: .local, session: session)
@@ -730,9 +730,26 @@ final class SessionController {
         tabs.onPlacementChange = { [weak self] in self?.applyEnabledItems($0) }
         applyEnabledItems(tabs.placement)
         observeTabLayout()
+        observeUserDisplays()
         observeHidesEmptyComposeBar()
         // 投稿欄を置くとタブバーの画面を読み込むため、各タイムラインの設定を終えてから置く。
         composer.install(in: tabBarController)
+    }
+
+    private func observeUserDisplays() {
+        withObservationTracking {
+            settings.userDisplays.observeChanges()
+        } onChange: { [weak self] in
+            Task(.withoutRequests) { @MainActor [weak self] in
+                guard let self, !tasks.isClosed else { return }
+                for item in tabs.placement.tabs + tabs.placement.switchable {
+                    if case .profile(let id, _, _) = item, let account = accounts.account(id) {
+                        loadProfileTabIcon(of: account, for: item)
+                    }
+                }
+                observeUserDisplays()
+            }
+        }
     }
 
     /// 設定でタブの並びを変えたら、タブバーを組み直し、無効にした項目の購読をやめ、有効にした項目の購読を戻す。
@@ -1044,12 +1061,15 @@ final class SessionController {
 
     /// タブに置いたプロフィールの、タブに出すその人のアイコンを読む。読めなければ記号のままにする。
     private func loadProfileTabIcon(of account: Account, for item: TabItem) {
-        guard let url = account.avatarStatic, let tasks = profileTabs.tasks(for: item) else { return }
+        let source = settings.userDisplays.display(of: account, in: settings).avatarStatic
+        profileTabIcons.prepareAvatar(forAccountID: account.id, source: source)
+        guard let url = source, let tasks = profileTabs.tasks(for: item) else { return }
         let key = AvatarView.key(url: url, animates: false, side: ProfileTabIcons.loadSide, scale: tabs.tabBarController.traitCollection.displayScale)
-        tasks.run(.display) { [weak self] in
+        tasks.run(key: "user-display-avatar", .replacing, .display) { [weak self] in
             do {
                 let image = try await AppDependencies.avatarImages.image(for: key)
-                self?.profileTabIcons.setAvatar(image, forAccountID: account.id)
+                guard let self, !Task.isCancelled, settings.userDisplays.display(of: accounts.latest(of: account), in: settings).avatarStatic == key.url else { return }
+                profileTabIcons.setAvatar(image, forAccountID: account.id)
             } catch {
                 self?.logger.error("profile tab icon load failed: \(SciaLog.describe(error), privacy: .public)")
             }
@@ -1566,7 +1586,7 @@ final class SessionController {
 
     private func pushProfile(_ account: Account, from source: UIViewController) {
         let (controller, viewController) = makeProfile(account, tasks: tasks.child())
-        viewController.screenBarItems.append(tabToggleItem(for: .profile(accountID: account.id, acct: account.acct), avatarURL: account.avatarStatic))
+        viewController.screenBarItems.append(tabToggleItem(for: .profile(accountID: account.id, acct: account.acct), avatarURL: settings.userDisplays.display(of: account, in: settings).avatarStatic))
         UserAction.openProfile.record()
         source.navigationController?.pushViewController(viewController, animated: true)
         controller.start()
@@ -1579,6 +1599,7 @@ final class SessionController {
         }
         configure(viewController)
         controller.onEditProfile = { [weak self] in self?.presentProfileEditor() }
+        controller.onEditUserDisplay = { [weak self] in self?.presentUserDisplayEditor(for: $0) }
         controller.onEndorsementRemoved = { [weak self] in
             guard let self else { return }
             profiles.reloadFeatured(of: credential.accountID)
@@ -2337,6 +2358,7 @@ final class SessionController {
     private func composeAccountDidChange(_ writing: ComposeAccount<UIImage>?) {
         guard let writing, let account = otherAccounts.account(id: writing.id) else {
             composer.writingAccount = nil
+            composer.completionDisplaySettings = settings
             composer.completion.switchSources(completionSources, recentMentions: RecentMentions(defaults: .standard, account: credential.handle))
             composer.completion.prefetch()
             applyComposeDefaults()
@@ -2345,6 +2367,22 @@ final class SessionController {
         let client = otherAccounts.client(for: account)
         let sources = ComposeCompletion.Sources(client: client).remembering(customEmojisIn: AppDependencies.customEmojis.cache(for: account.credential.instance))
             .readingPersonalEmojiSet(with: client) { try await account.loadedCapabilities { try await client.serverCapabilities() } }
+        let displaySettings = otherAccounts.displaySettings(for: account)
+        composer.completionDisplaySettings = displaySettings
+        if displaySettings.userDisplayDomain == nil {
+            tasks.run(.display) { [weak self] in
+                do {
+                    let domain = try await client.accountDomain()
+                    try Task.checkCancellation()
+                    displaySettings.setUserDisplayDomain(domain)
+                    if self?.composer.model.otherAccount?.id == account.credential.id {
+                        self?.composer.completionDisplaySettings = displaySettings
+                    }
+                } catch {
+                    self?.logger.info("writing account domain unavailable error=\(SciaLog.describe(error), privacy: .public)")
+                }
+            }
+        }
         composer.completion.switchSources(sources, recentMentions: RecentMentions(defaults: .standard, account: account.credential.handle))
         // 開いている絵文字のパレットや補完が、替えた先のサーバーの絵文字とタグを読み直すよう、書き始めたときと同じく読み始める。
         composer.completion.prefetch()
@@ -2925,6 +2963,9 @@ final class SessionController {
                     self?.presentListMembership(accountID: id, acct: acct)
                 }
             },
+            editDisplay: { [weak self] target in
+                self?.openUserDisplayEditor(for: target)
+            },
             isExcludedFromAutoTranslation: { [weak self] acct in
                 guard let self, translations != nil, settings.isAutoTranslationEnabled else { return nil }
                 return settings.isExcludedFromAutoTranslation(acct: acct, localServer: credential.server)
@@ -3222,11 +3263,56 @@ final class SessionController {
                 self?.open(.inAppBrowserHeight(returningTo: .interaction))
             },
             openProfile: { [weak self] in self?.open(.profile(acct: $0)) },
+            openUserDisplay: { [weak self] acct, wanted in self?.openUserDisplayEditor(acct: acct, isStillWanted: wanted) },
+            userDisplayLoader: UserDisplayLoader(settings: settings, tasks: tasks.child()) { [session] in
+                try await session.resolveUserDisplayAccount(acct: $0, sharesRequests: false)
+            },
             opening: page,
             appearanceGroup: appearanceGroup,
             editing: editing,
             onShownChange: { [weak self] in self?.settingsShownChanged($0) }
         )
+    }
+
+    private func openUserDisplayEditor(for target: UserMenuTarget) {
+        openUserDisplayEditor { @MainActor [weak self] in
+            guard let self else { throw CancellationError() }
+            let identity = try await identity(of: target)
+            let account: Account
+            if let cached = accounts.account(identity.id) {
+                account = cached
+            } else {
+                account = try await client.account(identity.id)
+            }
+            return try await session.prepareUserDisplay(account)
+        }
+    }
+
+    private func presentUserDisplayEditor(for account: Account) {
+        let session = session
+        openUserDisplayEditor { try await session.prepareUserDisplay(account) }
+    }
+
+    private func openUserDisplayEditor(acct: String, isStillWanted: @escaping @MainActor () -> Bool = { true }) {
+        let session = session
+        openUserDisplayEditor({ try await session.resolveUserDisplayAccount(acct: acct) }, isStillWanted: isStillWanted)
+    }
+
+    private func openUserDisplayEditor(_ load: @escaping @Sendable () async throws -> Account, isStillWanted: @escaping @MainActor () -> Bool = { true }) {
+        let presenter = rootViewController.frontmostPresented
+        guard let source = presenter === rootViewController ? tabs.selectedNavigation?.topViewController : (presenter as? UINavigationController)?.topViewController ?? presenter else { return }
+        let anchor = source.navigationController.map { _ in PushAnchor(source) }
+        lookUp("user display", load, isStillWanted: { [weak self, weak source, weak presenter] in
+            guard let self, let source, let presenter,
+                  source.viewIfLoaded?.window != nil, !source.isBeingDismissed,
+                  rootViewController.frontmostPresented === presenter else { return false }
+            return (anchor?.isStillShowing ?? true) && isStillWanted()
+        }) { [weak self] account in
+            guard let self else { return }
+            let editor = UserDisplayViewController(account: account, settings: settings, tasks: tasks)
+            editor.onError = { [weak self] error, title in self?.handle(error, title: title) }
+            rootViewController.presentOnFrontmost(UINavigationController(rootViewController: editor), animated: true)
+        }
     }
 
     // MARK: - アカウントの画面
@@ -4473,6 +4559,8 @@ final class SessionController {
             }
         case .profileEdit:
             presentProfileEditor()
+        case .userDisplay(let acct):
+            openUserDisplayEditor(acct: acct)
         case .thread(let statusID):
             guard let source = tabs.selectedNavigation?.topViewController else { return }
             // 押した行の代わりに、画面の安全領域の上端に置いて開く。
@@ -4599,6 +4687,7 @@ final class SessionController {
     }
 
     func enterForeground() {
+        tasks.run(.display) { [weak self] in _ = await self?.session.loadUserDisplayDomain() }
         for feed in feeds {
             feed.enterForeground()
         }

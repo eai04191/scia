@@ -92,6 +92,7 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 
 ## メニューと確認と失敗
 
+- ユーザーの表示の編集は、共通の`UserMenuTree`が`editDisplay`命令を出し、`UserMenuActions.editDisplay`へ選んだ対象を渡す。UIは対象を解決し、既存の表示編集画面を開く。メニューの既定では非表示。
 - 何を出すかはSciaCoreが決め、UIは描くだけにする。確認は`Confirmation`、メニューは`MenuNode`（`StatusMenuTree`など）
 - 受け持たない項目を外した並びは、`MenuLayout(defaultElements:)`で作る
 - 失敗の文言は`ErrorPresentation`（`@_spi(FailureDisplay) import SciaCore`で読む）
@@ -116,3 +117,15 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 ## SciaCoreにあるが、iOSの画面の作りに合わせた部品
 
 `MediaBarSwap`、`TextMorphPlan`、`DragToDismiss`、`SpringDriver`、`FrameTicker`、`SpringScroll`は、iOSの画面の重なりや動きに合わせてある。UIKitをimportしないので別のUIでもビルドできるが、同じ画面の作りでなければ使わない。
+
+## ユーザーごとの表示
+
+- `AppSettings.userDisplays`は同じ`SettingsStore`を使う全セッションで共有する`UserDisplayStore`。`display(of:in:)`で`Account`または`LocalMention`から共有の`UserDisplay`を取得する。画面はその名前・絵文字・アイコンを読む。`avatar(animates:)`は全体設定と個別設定を合成したURLと再生可否を返す。送信・コピー・共有には元のアカウントを使う。
+- `UserDisplayStore.save(_:for:in:imageData:)`と`remove(forKey:)`を編集・解除の入口にする。画像データはUIで切り抜いて渡す。永続化は`SettingsStore`へ委譲し、全ログインアカウントで共通、端末内保存、プリセット対象外。
+- SwiftUIは`UserDisplay`の読み取りを購読する。UIKitで描画済みの文字や画像を持つ画面は`UserDisplayStore.observeChanges()`を既存の描き直しの購読に含める。画面ごとに変更設定のキーや優先順位を判断しない。
+- `AccountSession`は`ReceivedAccounts`の更新をセッションの`TaskScope`で購読し、既存の`AccountCache`で最新の情報を確認して表示モデルへ伝える。元情報は変更しない。表示モデルは直近の最大2,000人を保持し、画面が持ち続けているモデルは保持枠から外れても共有と更新を維持する。
+- セッション以外で作るクライアントも、同じ取得元の`ReceivedAccounts`・`AccountCache`・`AppSettings`を`UserDisplayStore.connect(accounts:settings:received:tasks:)`へ渡す。取得元の`TaskScope`は呼び出し側で保持し、終了時に閉じる。別の窓の同じログインアカウントとは取得元を分ける。
+- ローカルユーザーのキーには接続先でなくWebFingerドメインを使う。`AccountSession.loadUserDisplayDomain()`で取得・保持する。セッションを使わないUIは`MastodonClient.accountDomain()`の結果をアカウントごとの`AppSettings.setUserDisplayDomain(_:)`へ渡す。未取得ならローカルユーザーの保存は失敗する。編集前は`prepareUserDisplay(_:)`を待つ。一覧のハンドルから開くときは`resolveUserDisplayAccount(acct:)`で一致する人だけを解決する。
+- ハンドルしかない一覧では`UserDisplayLoader`で共有モデルを取得する。独自のアカウントキャッシュは持たず、未取得の元情報の通信と取消を画面の`TaskScope`で管理する。取得処理には`AccountSession.resolveUserDisplayAccount(acct:sharesRequests:)`へ`sharesRequests: false`を渡す。共有キャッシュの検索を待つと行の取り消しが検索へ伝わらないため、行の通信は共有しない。
+- 選択画像は`SettingsStore.userDisplayImageDirectory`に置く。テストでは一時ディレクトリを渡す。アイコンの読み込みは`ImageStores.avatars`を使う。
+- `UserAvatarSymbol`は自分用アイコンに選べるシンボルと表示名を持つ。画像の描画は各UIで行い、`UserDisplayStore.save`の`imageData`に渡す。

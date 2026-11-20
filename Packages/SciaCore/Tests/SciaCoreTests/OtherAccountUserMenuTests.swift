@@ -48,7 +48,7 @@ struct OtherAccountUserMenuTests {
         UserMenuActions(
             mention: { _ in }, copy: { _, _, _ in }, localServer: "example.social",
             resolveTarget: { _ in throw CancellationError() }, loadRelation: { _, _ in nil }, knownRelation: { _ in nil }, reloadRelations: { _ in },
-            changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, addToList: { _ in }, accounts: AccountCache { _ in [] },
+            changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, addToList: { _ in }, editDisplay: { _ in }, accounts: AccountCache { _ in [] },
             otherAccounts: { accounts }
         )
     }

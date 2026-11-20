@@ -103,6 +103,8 @@ struct FeedTimelineControllerTests {
         }
         let controller = try makeController(transport: transport)
 
+        let session = try #require(sessions.sessions.last)
+        let ongoingTasks = session.tasks.runningCount
         controller.start(purpose: .action)
         // 既読位置と最新のページを並行に読むので、どちらも止まってから止める。
         try await waitUntil { gate.waiterCount >= 2 }
@@ -110,8 +112,7 @@ struct FeedTimelineControllerTests {
         gate.open()
         // 止めた読み込みが、取り消しを受けて戻り切るまで待つ。
         try await waitUntil { controller.runningTaskCount == 0 }
-        let session = try #require(sessions.sessions.last)
-        try await waitUntil { session.tasks.runningCount == 0 }
+        try await waitUntil { session.tasks.runningCount == ongoingTasks }
 
         #expect(session.authorization.state == .valid, "止めた読み込みの401を、セッションに知らせました")
     }

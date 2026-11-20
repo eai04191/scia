@@ -627,6 +627,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var hasHeldSettingsChange: Bool { listStyle.hasHeldChange }
 
     private func applySettingsChange() {
+        emojiURLIndex = nil
         if isAppearancePreview {
             applyPreviewSettingsChange()
             return
@@ -725,12 +726,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     private func makeEmojiURLIndex() -> [URL: [ItemID]] {
         var index: [URL: [ItemID]] = [:]
+        let accountEmojis: (Account) -> [CustomEmoji] = { [settings] in settings.userDisplays.display(of: $0, in: settings).emojis }
         for (id, entry) in entries {
             let urls: Set<URL> = switch entry {
-            case .status(let status), .pinned(let status): Self.emojiURLs(of: status, quoteSources: quoteSourceChanges, localReactionEmojis: localReactionEmojis)
-            case .notification(let notification): Self.emojiURLs(of: notification, quoteSources: quoteSourceChanges, localReactionEmojis: localReactionEmojis)
-            case .account(let account): Self.imageURLs(of: account.emojis)
-            case .notificationRequest(let request): Self.imageURLs(of: request.account.emojis)
+            case .status(let status), .pinned(let status): Self.emojiURLs(of: status, quoteSources: quoteSourceChanges, localReactionEmojis: localReactionEmojis, accountEmojis: accountEmojis)
+            case .notification(let notification): Self.emojiURLs(of: notification, quoteSources: quoteSourceChanges, localReactionEmojis: localReactionEmojis, accountEmojis: accountEmojis)
+            case .account(let account): Self.imageURLs(of: accountEmojis(account))
+            case .notificationRequest(let request): Self.imageURLs(of: accountEmojis(request.account))
             case .gap, .unreadable, .search: []
             }
             for url in urls {
@@ -1148,11 +1150,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// 引用の囲みに出す引用元の本文、注意書き、作者の名前の絵文字も含める。引用元は、囲みと同じく受け取ったあとの変化を当てた版から集める。
-    static func emojiURLs(of status: Status, quoteSources: QuoteSourceChanges, localReactionEmojis: [String: CustomEmoji] = [:]) -> Set<URL> {
+    static func emojiURLs(of status: Status, quoteSources: QuoteSourceChanges, localReactionEmojis: [String: CustomEmoji] = [:], accountEmojis: (Account) -> [CustomEmoji]) -> Set<URL> {
         let shown = status.displayed
-        let quoted = quoteSources.applying(to: shown).quote?.quotedStatus.map { $0.emojis + $0.account.emojis } ?? []
+        let quoted = quoteSources.applying(to: shown).quote?.quotedStatus.map { $0.emojis + accountEmojis($0.account) } ?? []
         let reactions = shown.emojiReactions.compactMap { $0.emoji.resolvingImage(in: localReactionEmojis).customEmoji }
-        return imageURLs(of: shown.emojis + (shown.poll?.emojis ?? []) + shown.account.emojis + status.account.emojis + quoted + reactions)
+        return imageURLs(of: shown.emojis + (shown.poll?.emojis ?? []) + accountEmojis(shown.account) + accountEmojis(status.account) + quoted + reactions)
     }
 
     /// 絵文字の画像のURL。描く場所によって元の画像と動かない版のどちらを読むかが違うので、両方を入れる。
@@ -1160,8 +1162,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         Set(emojis.flatMap { [$0.url, $0.staticUrl] })
     }
 
-    private static func emojiURLs(of notification: MastodonNotification, quoteSources: QuoteSourceChanges, localReactionEmojis: [String: CustomEmoji]) -> Set<URL> {
-        imageURLs(of: notification.account.emojis + [notification.reactionEmoji?.customEmoji].compactMap(\.self)).union(notification.status.map { emojiURLs(of: $0, quoteSources: quoteSources, localReactionEmojis: localReactionEmojis) } ?? [])
+    private static func emojiURLs(of notification: MastodonNotification, quoteSources: QuoteSourceChanges, localReactionEmojis: [String: CustomEmoji], accountEmojis: (Account) -> [CustomEmoji]) -> Set<URL> {
+        imageURLs(of: accountEmojis(notification.account) + [notification.reactionEmoji?.customEmoji].compactMap(\.self)).union(notification.status.map { emojiURLs(of: $0, quoteSources: quoteSources, localReactionEmojis: localReactionEmojis, accountEmojis: accountEmojis) } ?? [])
     }
 
     /// 端末の文字の大きさが変わったら、行をすべて組み直し、変わる前に読んでいた位置へ戻す。

@@ -19,6 +19,7 @@ public enum AppDestination: Equatable, Sendable {
     case myProfile
     /// `profile-edit`。自分のプロフィールの編集を開く。
     case profileEdit
+    case userDisplay(acct: String)
     /// `thread?id=<投稿のID>`。選んでいるタブに、その投稿のスレッドを開く。
     case thread(statusID: String)
     /// `edit-history?id=<投稿のID>`。その投稿の編集履歴を開く。
@@ -131,7 +132,7 @@ public enum AppDestination: Equatable, Sendable {
         case .tab, .userTab, .profile, .myProfile, .thread, .quotes, .editHistory, .apiResponse, .accounts, .hashtag, .accountHashtag, .search, .scheduled,
              .notificationRequests, .notificationRequest:
             true
-        case .settings, .appearanceGroup, .notificationAppearanceGroup, .profileEdit, .operationStatus, .notificationPolicy, .filters, .postingDefaults, .accountAppearance, .announcements, .account, .inAppBrowserHeight, .note, .report, .compose, .crashReport:
+        case .settings, .appearanceGroup, .notificationAppearanceGroup, .profileEdit, .userDisplay, .operationStatus, .notificationPolicy, .filters, .postingDefaults, .accountAppearance, .announcements, .account, .inAppBrowserHeight, .note, .report, .compose, .crashReport:
             false
         }
     }
@@ -147,6 +148,7 @@ public enum AppDestination: Equatable, Sendable {
         case .profile: "profile"
         case .myProfile: "my profile"
         case .profileEdit: "profile edit"
+        case .userDisplay: "user display"
         case .thread: "thread"
         case .quotes: "quotes"
         case .editHistory: "edit history"
@@ -203,6 +205,7 @@ public enum AppDestination: Equatable, Sendable {
             path.contains("/") ? nil : (path.isEmpty ? nil : .profile(acct: String(path.trimmingPrefix("@"))))
         case ("my-profile", ""): .myProfile
         case ("profile-edit", ""): .profileEdit
+        case ("user-display", ""): query("acct").map { .userDisplay(acct: $0) }
         case ("thread", ""): query("id").map { .thread(statusID: $0) }
         case ("quotes", ""): query("id").map { .quotes(statusID: $0) }
         case ("edit-history", ""): query("id").map { .editHistory(statusID: $0) }
@@ -263,6 +266,7 @@ public enum AppDestination: Equatable, Sendable {
         case .profile(let acct): ("profile", acct, [])
         case .myProfile: ("my-profile", nil, [])
         case .profileEdit: ("profile-edit", nil, [])
+        case .userDisplay(let acct): ("user-display", nil, [("acct", acct)])
         case .thread(let statusID): ("thread", nil, [("id", statusID)])
         case .quotes(let statusID): ("quotes", nil, [("id", statusID)])
         case .editHistory(let statusID): ("edit-history", nil, [("id", statusID)])
@@ -349,6 +353,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     case autoTranslation = "auto-translation"
     /// 描き方を既定から変えたカスタム絵文字を並べる画面。決まりはdocs/animated-custom-emoji.mdの「絵文字ごとの描き方」にある。
     case customEmojis = "custom-emojis"
+    case userDisplays = "user-displays"
     case tabs
     /// アプリのプリセットを選ぶ画面。プリセットを作る、名前を変える、消す、選ばずに中身を変えるのもここから（docs/preset.md）。
     case presets
@@ -401,7 +406,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     /// 設定のトップの画面からこの画面までに重ねる画面。
     public var path: [SettingsPage] {
         switch self {
-        case .appearance, .notificationAppearance, .media, .profile, .customEmojis, .linkLoading, .autoTranslation: [.display, self]
+        case .appearance, .notificationAppearance, .media, .profile, .customEmojis, .userDisplays, .linkLoading, .autoTranslation: [.display, self]
         case .statusActions, .quotedStatusActions, .notificationActions, .userActions, .linkActions, .externalPostActions, .hashtagActions, .mediaActions,
              .reactionActions, .profileTextMenu, .customEmojiMenu:
             [.interaction, self]

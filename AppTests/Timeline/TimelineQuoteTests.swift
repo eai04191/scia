@@ -227,17 +227,30 @@ struct TimelineQuoteTests {
     }
 
     /// 引用元にだけある絵文字の画像が届いたときも、引用している行を描き直す。
+    @Test func emojiDependenciesFollowSharedAuthorUpdates() throws {
+        let settings = AppSettings(store: SettingsStore(defaults: TestScratch.defaults("author-emoji")), target: .scope(.app))
+        let status = StatusFactory.make(count: 1, startingAt: 1_000)[0]
+        let original = status.account
+        let emoji = CustomEmoji(shortcode: "new", url: try #require(URL(string: "https://example.com/new.gif")), staticUrl: try #require(URL(string: "https://example.com/new.png")))
+        _ = settings.userDisplays.display(of: original, in: settings)
+        let updated = Account(id: original.id, username: original.username, acct: original.acct, displayName: ":new:", avatar: nil, emojis: [emoji])
+        settings.userDisplays.receive(updated, in: settings)
+        let urls = TimelineViewController.emojiURLs(of: status, quoteSources: QuoteSourceChanges(), accountEmojis: { settings.userDisplays.display(of: $0, in: settings).emojis })
+        #expect(urls.contains(emoji.url))
+        #expect(urls.contains(emoji.staticUrl))
+    }
+
     @Test func emojiURLsIncludeQuotedStatus() throws {
         let emoji = CustomEmoji(shortcode: "q", url: try #require(URL(string: "https://remote.example/q.png")), staticUrl: try #require(URL(string: "https://remote.example/q-static.png")))
         let source = Status(id: "q1", createdAt: Date(timeIntervalSince1970: 0), account: quotedAccount, content: "<p>:q:</p>", spoilerText: "", url: nil, emojis: [emoji])
         let status = quoting(StatusFactory.make(count: 1, startingAt: 1_000)[0], Quote(state: "accepted", quotedStatus: source))
 
-        #expect(TimelineViewController.emojiURLs(of: status, quoteSources: QuoteSourceChanges()).contains(emoji.staticUrl))
+        #expect(TimelineViewController.emojiURLs(of: status, quoteSources: QuoteSourceChanges(), accountEmojis: { $0.emojis }).contains(emoji.staticUrl))
         // 引用元の編集で足された絵文字も含める。
         let added = CustomEmoji(shortcode: "a", url: try #require(URL(string: "https://remote.example/a.png")), staticUrl: try #require(URL(string: "https://remote.example/a-static.png")))
         var changes = QuoteSourceChanges()
         changes.edit(Status(id: "q1", createdAt: source.createdAt, account: quotedAccount, content: "<p>:a:</p>", spoilerText: "", url: nil, emojis: [added], editedAt: Date(timeIntervalSince1970: 10)))
-        #expect(TimelineViewController.emojiURLs(of: status, quoteSources: changes).contains(added.staticUrl))
+        #expect(TimelineViewController.emojiURLs(of: status, quoteSources: changes, accountEmojis: { $0.emojis }).contains(added.staticUrl))
     }
 
     /// 承認待ちだった引用を取り直して、承認された引用元の囲みに替わるときは、docs/vision.mdの「タイムラインの動き」のとおり伸ばす。

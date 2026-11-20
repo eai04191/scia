@@ -35,6 +35,10 @@ final class ProfileHeaderView: UIView {
         let usesAvatarAccent: Bool
     }
 
+    var onEditUserDisplay: (() -> Void)?
+    private let userDisplayWarning = UIHostingController(rootView: ProfileCustomizationWarning(message: "", action: {}))
+    private var userDisplayContainer: UIView?
+
     var onToggleFollow: ((UIView) -> Void)?
     /// 自分のプロフィールで、フォローのボタンの場所に出す「プロフィールを編集」を押した。
     var onEditProfile: (() -> Void)?
@@ -484,6 +488,10 @@ final class ProfileHeaderView: UIView {
             acctButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 44),
         ])
         let identity = inset([nameLabel, acctRow], spacing: 2)
+        userDisplayWarning.sizingOptions = .intrinsicContentSize
+        userDisplayWarning.view.backgroundColor = .clear
+        let customization = inset([userDisplayWarning.view])
+        userDisplayContainer = customization
 
         // 自己紹介はカードにせず、名前の下にそのまま置く。
         let note = inset([noteView])
@@ -500,10 +508,10 @@ final class ProfileHeaderView: UIView {
         aboutBox.setCustomSpacing(8, after: fieldsStack)
         applyCountsSpacing()
         aboutBox.backgroundColor = .secondarySystemFill
-        aboutBox.layer.cornerRadius = 16
+        aboutBox.layer.cornerRadius = ProfileCardMetrics.cornerRadius
         aboutBox.layer.cornerCurve = .continuous
         aboutBox.isLayoutMarginsRelativeArrangement = true
-        aboutBox.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)
+        aboutBox.directionalLayoutMargins = NSDirectionalEdgeInsets(top: ProfileCardMetrics.contentInset, leading: ProfileCardMetrics.contentInset, bottom: ProfileCardMetrics.contentInset, trailing: ProfileCardMetrics.contentInset)
         let about = inset([aboutBox])
 
         pinnedShelf.isHidden = true
@@ -512,7 +520,7 @@ final class ProfileHeaderView: UIView {
         let tabs = inset([tabRow])
         let contentStack = UIStackView()
         // 固定された投稿は投稿のタイムラインに近いところに残し、注目のハッシュタグと紹介しているユーザーはその上に置く。
-        for view in [identity, note, privateNote, about, featuredTagsShelf, endorsementsShelf, pinnedShelf, tabs] as [UIView] {
+        for view in [identity, customization, note, privateNote, about, featuredTagsShelf, endorsementsShelf, pinnedShelf, tabs] as [UIView] {
             contentStack.addArrangedSubview(view)
         }
         noteContainer = note
@@ -523,6 +531,7 @@ final class ProfileHeaderView: UIView {
         contentStack.axis = .vertical
         contentStack.spacing = 24
         contentStack.setCustomSpacing(12, after: identity)
+        contentStack.setCustomSpacing(16, after: customization)
         contentStack.setCustomSpacing(16, after: note)
         contentStack.setCustomSpacing(16, after: privateNote)
 
@@ -740,12 +749,21 @@ final class ProfileHeaderView: UIView {
         let previous = self.content
         self.content = content
         let account = content.account
+        let displayWarning = settings.userDisplays.display(of: account, in: settings).warning
+        if let displayWarning {
+            userDisplayWarning.rootView = ProfileCustomizationWarning(message: displayWarning) { [weak self] in
+                self?.onEditUserDisplay?()
+            }
+            userDisplayWarning.view.invalidateIntrinsicContentSize()
+        }
+        userDisplayContainer?.isHidden = displayWarning == nil
         if previous?.account.id != account.id { avatarAccent = nil }
 
+        let avatar = settings.userDisplays.display(of: account, in: settings).avatar(animates: content.animatesAvatar)
         avatarView.apply(AvatarView.Content(
-            url: content.animatesAvatar ? account.avatar : account.avatarStatic,
+            url: avatar.url,
             shape: content.avatarShape,
-            animates: content.animatesAvatar
+            animates: avatar.animates
         ))
         avatarRingView.layer.cornerRadius = switch content.avatarShape {
         case .circle: (Self.avatarSize + Self.avatarRing * 2) / 2
@@ -760,7 +778,7 @@ final class ProfileHeaderView: UIView {
         let animatedEmojis = content.animatesCustomEmojis ? emojiImages : nil
         nameLabel.emojiImages = animatedEmojis
         nameLabel.attributedText = RichTextRenderer(font: boldTitle, textColor: .label, settings: settings, emojiImages: emojiImages, language: content.glyphLanguage)
-            .render(.plain(account.displayNameOrUsername, emojis: account.emojis))
+            .render(.plain(settings.userDisplays.display(of: account, in: settings).name, emojis: settings.userDisplays.display(of: account, in: settings).emojis))
         acctButton.configuration?.attributedTitle = AttributedString(acctText(of: account))
 
         let body = UIFont.preferredFont(forTextStyle: .body)

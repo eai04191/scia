@@ -81,6 +81,7 @@ final class PostListStyle {
             _ = settings.mediaDisplay
             _ = settings.accentColor.underlinesLinks
             _ = settings.customEmojiDisplays
+            settings.userDisplays.observeChanges()
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor in
                 guard let self else { return }

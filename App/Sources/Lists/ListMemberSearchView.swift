@@ -81,17 +81,18 @@ struct ListMemberSearchView: View {
 
     /// 行は、検索の候補の人の行と同じ部品で描く。
     private func row(_ account: Account) -> some View {
+        let display = settings.userDisplays.display(of: account, in: settings)
         let isMember = memberIDs.contains(account.id)
         let emojiImages = AppDependencies.emojiImages
         return Button {
             toggle(account)
         } label: {
             RowLayout {
-                AvatarImage(url: account.avatarStatic ?? account.avatar, shape: settings.appearance.avatarShape)
+                AvatarImage(url: display.avatarStatic, shape: settings.appearance.avatarShape)
             } title: {
                 RichTextLabel(numberOfLines: 1, emojiImages: emojiImages, animatesEmojis: settings.animatesCustomEmojis, fadesTail: true) {
                     RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, settings: settings, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
-                        .render(.plain(account.displayNameOrUsername, emojis: account.emojis))
+                        .render(.plain(display.name, emojis: display.emojis))
                 }
             } subtitle: {
                 Text("@\(account.acct)").fadingTail(of: account.acct)
@@ -108,7 +109,7 @@ struct ListMemberSearchView: View {
         // 標準では文字が色付きになるので、検索の候補と同じく通常の色にする。
         .foregroundStyle(.primary)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(TextLists.account(name: account.displayNameOrUsername, acct: account.acct))
+        .accessibilityLabel(TextLists.account(name: display.name, acct: account.acct))
         .accessibilityAddTraits(isMember ? [.isButton, .isSelected] : .isButton)
         .disabled(pendingIDs.contains(account.id))
     }

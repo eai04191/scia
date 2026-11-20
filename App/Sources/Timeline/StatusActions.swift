@@ -401,8 +401,12 @@ extension TimelineViewController {
 
     /// 「別のアカウントで」のアカウントの行のアイコン。プロフィールをまだ読めていなければ、読み終えてから差し替える。
     func otherAccountMenuIcon(for account: OtherAccount) -> UIImage {
-        guard let profile = account.profile else { return pendingMenuIcon(.otherAccount(account)) }
-        return userMenuIcon(for: .account(profile), id: nil)
+        let displaySettings = settings.forAccount(account.credential.handle)
+        if let profile = account.profile, let key = userMenuIconKey(of: profile, displaySettings: displaySettings),
+           let image = avatarImages.cachedImage(for: key), let icon = Self.userMenuIcon(image, shape: settings.appearance.avatarShape) {
+            return icon
+        }
+        return pendingMenuIcon(.otherAccount(account))
     }
 
     func menuIcon(ofOtherAccount account: OtherAccount) -> UIImage? {
@@ -426,15 +430,16 @@ extension TimelineViewController {
 
     /// 行に描いた大きさか、メニューのアイコンの大きさで読み込み済みのアイコン。
     private func cachedAvatar(of account: Account, id: ItemID?) -> UIImage? {
-        let urls = Set([account.avatar, account.avatarStatic].compactMap(\.self))
+        let display = settings.userDisplays.display(of: account, in: settings)
+        let urls = Set([display.avatar, display.avatarStatic].compactMap(\.self))
         let rowKeys = id.flatMap(entry(for:)).map { avatarKeys(for: [$0]) } ?? []
         let rowImage = rowKeys.filter { urls.contains($0.url) }.lazy.compactMap { self.avatarImages.cachedImage(for: $0) }.first
         return rowImage ?? userMenuIconKey(of: account).flatMap { avatarImages.cachedImage(for: $0) }
     }
 
     /// メニューのアイコンの大きさで読む、止まったアイコン。
-    private func userMenuIconKey(of account: Account) -> AvatarImageKey? {
-        account.avatarStatic.map { AvatarView.key(url: $0, animates: false, side: Self.menuIconSide, scale: traitCollection.displayScale) }
+    private func userMenuIconKey(of account: Account, displaySettings: AppSettings? = nil) -> AvatarImageKey? {
+        (displaySettings ?? settings).userDisplays.display(of: account, in: (displaySettings ?? settings)).avatarStatic.map { AvatarView.key(url: $0, animates: false, side: Self.menuIconSide, scale: traitCollection.displayScale) }
     }
 
     /// メニューを組みながら集めた人のアイコンを読み、開いているメニューのプレースホルダーのアイコンを差し替える。
@@ -462,7 +467,7 @@ extension TimelineViewController {
                 case .otherAccount(let account):
                     Task(.action) { [weak self] in
                         guard let profile = await account.loadedProfile() else { return }
-                        self?.loadMenuIcon(of: profile, replacing: icon.placeholder)
+                        self?.loadMenuIcon(of: profile, replacing: icon.placeholder, displaySettings: self?.settings.forAccount(account.credential.handle))
                     }
                 }
             }
@@ -477,8 +482,8 @@ extension TimelineViewController {
     }
 
     /// `account`のアイコンを読み、開いているメニューの`placeholder`を差し替える。
-    private func loadMenuIcon(of account: Account, replacing placeholder: UIImage) {
-        guard let key = userMenuIconKey(of: account) else { return }
+    private func loadMenuIcon(of account: Account, replacing placeholder: UIImage, displaySettings: AppSettings? = nil) {
+        guard let key = userMenuIconKey(of: account, displaySettings: displaySettings) else { return }
         Task(.action) { [weak self] in
             // 使う人が開いたメニューなので、前に読めなかったアイコンも間隔を待たずに読み直す。
             guard let self, let image = try? await avatarImages.image(for: key, retriesNow: true),
@@ -501,8 +506,8 @@ extension TimelineViewController {
         // 「別のアカウントで」のアカウントのプロフィールをまだ読めていなければ記号を出し、読んだアイコンは次に開いたときに出す。
         defer { loadPendingMenuIcons() }
         return menu.profileScreenMenu(groups: settings.userMenuLayout.groups) { [weak self] avatar in
-            guard case .otherAccount(let account) = avatar, let profile = account.profile else { return nil }
-            return self?.userMenuIcon(for: .account(profile), id: nil)
+            guard case .otherAccount(let account) = avatar else { return nil }
+            return self?.otherAccountMenuIcon(for: account)
         } didRenderDeferred: { [weak self] in
             // 「別のアカウントで」のアカウントの行は、相手を探してからあとで描くので、そのときに集めたアイコンも読む。
             self?.loadPendingMenuIcons()

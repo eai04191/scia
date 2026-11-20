@@ -391,6 +391,9 @@ final class InlineComposeController: NSObject {
     /// 出しているアラートを閉じたら、入力欄にキーボードを戻す。シートやビューアの上に出したときはfalse。
     private var alertReturnsFocus = true
     /// 補完の候補のリスト。タイムラインに重ねて欄の上に出し、広げて欄の上に場所がなければ打っている行のすぐ下に重ねる。
+    var completionDisplaySettings: AppSettings? {
+        didSet { completionList.userDisplaySettings = completionDisplaySettings }
+    }
     private lazy var completionList = ComposeCompletionList(settings: settings)
     /// 欄の上に出すときの、候補のリストの下端を欄の上端に付ける制約。
     private var completionListAboveBar: NSLayoutConstraint?

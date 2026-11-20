@@ -832,7 +832,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
             self.metrics = metrics
             self.settings = settings
             let appearance = NotificationAppearance(item.kind)
-            accessibilityLabel = item.accessibilityLabel
+            accessibilityLabel = item.accessibilityLabel(name: settings.userDisplays.display(of: item.account, in: settings).name)
 
             for stack in [left, right] {
                 stack.axis = .horizontal
@@ -901,7 +901,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
                 avatar.widthAnchor.constraint(equalToConstant: metrics.avatarSide),
                 avatar.heightAnchor.constraint(equalToConstant: metrics.avatarSide),
             ])
-            avatar.apply(AvatarView.Content(url: item.account.avatarStatic, shape: settings.appearance.avatarShape, animates: false))
+            avatar.apply(AvatarView.Content(url: settings.userDisplays.display(of: item.account, in: settings).avatarStatic, shape: settings.appearance.avatarShape, animates: false))
             if metrics.badgesSymbol {
                 left.addArrangedSubview(Self.badged(avatar, with: symbol, side: metrics.avatarSide))
                 // 右下にはみ出す記号の分を空ける。
@@ -941,7 +941,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
             // scialint:disable:next fixed_font_size
             let font = UIFont.systemFont(ofSize: metrics.fontSize, weight: .semibold)
             let nameRenderer = RichTextRenderer(font: font, textColor: .label, settings: settings, emojiImages: AppDependencies.emojiImages, language: settings.glyphLanguageIdentifier())
-            nameLabel.attributedText = nameRenderer.render(.plain(item.account.displayNameOrUsername, emojis: item.account.emojis))
+            nameLabel.attributedText = nameRenderer.render(.plain(settings.userDisplays.display(of: item.account, in: settings).name, emojis: settings.userDisplays.display(of: item.account, in: settings).emojis))
             let subjectColor = UIColor.secondaryLabel
             var renderer = RichTextRenderer(
                 // scialint:disable:next fixed_font_size

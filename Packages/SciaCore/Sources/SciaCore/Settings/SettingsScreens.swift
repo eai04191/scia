@@ -168,6 +168,7 @@ extension SettingsPage {
         case .linkLoading: "リンク先の読み込み"
         case .autoTranslation: "自動翻訳"
         case .customEmojis: "表示を変更したカスタム絵文字"
+        case .userDisplays: "表示を変更したユーザー"
         case .tabs: "タブ"
         case .account: "アカウント"
         case .statusActions: "投稿"
@@ -219,7 +220,7 @@ extension SettingsPage {
 
     /// プリセットの値を変える画面か。「表示」「操作」「作成」と、その中の画面。プリセットに含めない値だけを並べる画面は除く。
     public var changesPresetValues: Bool {
-        guard self != .customEmojis, let first = path.first else { return false }
+        guard self != .customEmojis, self != .userDisplays, let first = path.first else { return false }
         return [.display, .interaction, .compose].contains(first)
     }
 
@@ -236,7 +237,7 @@ extension SettingsPage {
                 SettingsSection(footer: "“自動”では“視差効果を減らす”がオンのときはアニメーションしません。", rows: [.item(.insertionMotion)]),
                 SettingsSection(rows: [.item(.statusBarTicker)]),
                 SettingsSection(rows: [.page(.linkLoading), .page(.autoTranslation)]),
-                SettingsSection(rows: [.page(.customEmojis)]),
+                SettingsSection(rows: [.page(.customEmojis), .page(.userDisplays)]),
             ]
         case .interaction:
             [
@@ -279,7 +280,7 @@ extension SettingsPage {
                 SettingsSection(rows: [.page(.connection), .page(.licenses), .page(.acknowledgments)]),
                 SettingsSection(rows: [.item(.sourceCode), .item(.privacyPolicy)]),
             ]
-        case .appIcon, .appearance, .notificationAppearance, .autoTranslation, .customEmojis, .tabs, .account, .statusActions, .quotedStatusActions, .notificationActions,
+        case .appIcon, .appearance, .notificationAppearance, .autoTranslation, .customEmojis, .userDisplays, .tabs, .account, .statusActions, .quotedStatusActions, .notificationActions,
              .userActions, .linkActions, .externalPostActions, .hashtagActions, .mediaActions, .reactionActions, .statusMenu, .statusActionBar,
              .statusLeadingSwipe, .statusTrailingSwipe, .userMenu, .linkMenu, .externalPostMenu, .profileTextMenu, .customEmojiMenu, .hashtagMenu, .mediaMenu, .reactionMenu,
              .composeTools, .connection, .connectionTimelines, .storage, .viewedMediaCache, .prefetchedMediaCache, .licenses, .acknowledgments,

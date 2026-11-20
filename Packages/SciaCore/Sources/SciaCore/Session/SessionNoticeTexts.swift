@@ -64,7 +64,10 @@ extension StatusBarTickerItem {
     /// ステータスバーの通知の読み上げ。通知のタイムラインの行と同じく、誰が何をしたかを読み、続けて対象の投稿の文頭を読む。
     /// 絵文字のリアクションは、何の絵文字かまで読む。カスタム絵文字はショートコードで読む。
     public var accessibilityLabel: String {
-        let name = account.displayNameOrUsername
+        accessibilityLabel(name: account.displayNameOrUsername)
+    }
+
+    public func accessibilityLabel(name: String) -> String {
         let action: String
         if let emoji = reactionEmoji {
             action = "\(name)が\(emoji.isCustom ? ":\(emoji.name):" : emoji.name)でリアクションしました"

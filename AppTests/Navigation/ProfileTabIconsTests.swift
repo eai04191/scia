@@ -36,6 +36,28 @@ struct ProfileTabIconsTests {
         #expect(icons.icon(for: .profile(accountID: "3", acct: "carol")) == nil)
     }
 
+    @Test func changedSourceDiscardsOldAvatarBeforeLoading() throws {
+        let icons = ProfileTabIcons(settings: .isolated())
+        let custom = URL(fileURLWithPath: "/custom-avatar")
+        let original = try #require(URL(string: "https://example.com/avatar.png"))
+        icons.prepareAvatar(forAccountID: "2", source: custom)
+        icons.setAvatar(Self.avatar, forAccountID: "2")
+        let revision = icons.revision
+        icons.prepareAvatar(forAccountID: "2", source: custom)
+        #expect(icons.revision == revision)
+        #expect(icons.hasAvatar(for: Self.bob))
+
+        icons.prepareAvatar(forAccountID: "2", source: original)
+        #expect(icons.icon(for: Self.bob) == nil)
+        #expect(!icons.hasAvatar(for: Self.bob))
+        #expect(icons.revision == revision + 1)
+
+        icons.setAvatar(Self.avatar, forAccountID: "2")
+        icons.prepareAvatar(forAccountID: "2", source: nil)
+        #expect(icons.icon(for: Self.bob) == nil)
+        #expect(!icons.hasAvatar(for: Self.bob))
+    }
+
     /// 選んでいるときは、縁の内側に縮めたアイコンを置き、角は縁の色になる。縁はアクセントカラーで描く。
     @Test func selectedIconHasRing() throws {
         let settings = AppSettings.isolated()

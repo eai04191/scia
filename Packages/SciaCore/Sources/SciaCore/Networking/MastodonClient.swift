@@ -169,6 +169,19 @@ public struct MastodonClient: Sendable {
     }
 
     /// ストリーミングAPIの接続先。REST APIと別のホストのことがある。
+    /// v1のuriはWebFingerのドメイン。接続先やプロフィールURLのホストとは異なることがある。
+    public func accountDomain() async throws -> String {
+        struct Instance: Decodable { let uri: String }
+        let domain = try await get(Instance.self, path: "api/v1/instance", query: []).0.uri
+        guard !domain.isEmpty, !domain.contains(where: { $0.isWhitespace }),
+              let components = URLComponents(string: "https://" + domain),
+              components.host != nil, components.user == nil, components.password == nil,
+              components.path.isEmpty, components.query == nil, components.fragment == nil else {
+            throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Invalid WebFinger domain"))
+        }
+        return domain.lowercased()
+    }
+
     /// https://docs.joinmastodon.org/methods/instance/#v2
     func streamingURLFromV2() async throws -> URL {
         struct Instance: Decodable {

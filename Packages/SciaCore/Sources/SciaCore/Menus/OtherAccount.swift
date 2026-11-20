@@ -374,6 +374,7 @@ public final class OtherAccount {
             editNote: { _ in },
             report: { _, _, _ in },
             addToList: { _ in },
+            editDisplay: { _ in },
             accounts: accounts
         )
     }
@@ -475,7 +476,7 @@ public enum OtherAccountUserAction: Sendable {
         case .addToList: self = .addToList(accountID: id, acct: acct)
         case .mention: self = .mention(acct: acct)
         // 「別のアカウントで」の中には、どのアカウントでも同じ結果になる項目を組まない。
-        case .url, .urlAfterFinding, .openProfile, .copy, .excludeFromAutoTranslation, .otherAccount, .logIn, .customize: return nil
+        case .url, .urlAfterFinding, .openProfile, .copy, .editDisplay, .excludeFromAutoTranslation, .otherAccount, .logIn, .customize: return nil
         }
     }
 }

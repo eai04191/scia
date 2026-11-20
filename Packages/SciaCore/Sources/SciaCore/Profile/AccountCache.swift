@@ -42,6 +42,10 @@ public final class AccountCache {
         received.account(id)
     }
 
+    public func account(acct: String, localDomain: String?) -> Account? {
+        received.account(acct: acct, localDomain: localDomain)
+    }
+
     /// `account`と同じ人の、覚えている一番新しいアカウント。覚えていなければ`account`を返す。
     /// プロフィール画面を開くときに渡るアカウントは、前に受け取った投稿に付いてきたものなどで、そのあとに受け取ったものより古いことがあるため、これで出す。
     public func latest(of account: Account) -> Account {

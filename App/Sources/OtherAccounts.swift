@@ -9,7 +9,7 @@ import SciaCore
 final class OtherAccounts {
     private let current: Credential
     private let tasks: TaskScope
-    private let makeClient: (Credential) -> MastodonClient
+    private let makeClient: (Credential, ReceivedAccounts) -> MastodonClient
     /// 窓に開いたアカウントの設定。ほかのアカウントで出す部品も、窓の見た目で描く。
     private let settings: AppSettings
     /// 絵文字のパレットのカスタム絵文字のメニューが使う、セッションの部品。
@@ -26,11 +26,41 @@ final class OtherAccounts {
     ///   - current: このセッションのアカウント。並べない。
     ///   - tasks: 探し直す処理を始めるセッションの持ち主。
     ///   - makeClient: ほかのアカウントのクライアントを作る。このセッションと同じ通信の実体を使う。
-    init(current: Credential, tasks: TaskScope, settings: AppSettings, makeClient: @escaping (Credential) -> MastodonClient) {
+    init(current: Credential, tasks: TaskScope, settings: AppSettings, makeClient: @escaping (Credential, ReceivedAccounts) -> MastodonClient) {
         self.settings = settings
         self.current = current
         self.tasks = tasks
         self.makeClient = makeClient
+    }
+
+    private struct DisplaySource {
+        let credential: Credential
+        let received: ReceivedAccounts
+        let accounts: AccountCache
+        let settings: AppSettings
+        let tasks: TaskScope
+    }
+    private var displaySources: [Credential.ID: DisplaySource] = [:]
+
+    private func observedClient(_ credential: Credential) -> MastodonClient {
+        if let source = displaySources[credential.id], source.credential == credential {
+            return makeClient(credential, source.received)
+        }
+        displaySources[credential.id]?.tasks.close()
+        let received = ReceivedAccounts()
+        let client = makeClient(credential, received)
+        let accounts = AccountCache(received: received) { ids in try await client.accounts(ids) }
+        let context = settings.forAccount(credential.handle)
+        let scope = tasks.child()
+        context.userDisplays.connect(accounts: accounts, settings: context, received: received, tasks: scope)
+        displaySources[credential.id] = DisplaySource(credential: credential, received: received, accounts: accounts, settings: context, tasks: scope)
+        return client
+    }
+
+    func displaySettings(for account: OtherAccount) -> AppSettings {
+        _ = observedClient(account.credential)
+        guard let source = displaySources[account.credential.id] else { preconditionFailure("表示の取得元がない") }
+        return source.settings
     }
 
     /// 今ログインしているほかのアカウント。アカウントの切り替えのメニューと同じ順。開くたびに読み、追加やログアウトに追いつく。
@@ -38,6 +68,11 @@ final class OtherAccounts {
     func list(loadsProfiles: Bool = true) -> [OtherAccount] {
         guard let registry = try? AppDependencies.accounts.get() else { return [] }
         let credentials = registry.accounts.filter { $0.id != current.id }
+        let keptIDs = Set(credentials.map(\.id))
+        for (id, source) in displaySources where !keptIDs.contains(id) {
+            source.tasks.close()
+            displaySources[id] = nil
+        }
         var kept: [Credential.ID: OtherAccount] = [:]
         var keptHashtags: [Credential.ID: OtherAccountHashtags] = [:]
         let listed = credentials.map { credential in
@@ -47,7 +82,7 @@ final class OtherAccounts {
                 keptHashtags[credential.id] = hashtags
                 return account
             }
-            let client = makeClient(credential)
+            let client = observedClient(credential)
             let account = OtherAccount(credential: credential, operations: .init(client: client), tasks: tasks)
             // 同じタグへの操作を重ねて送らない仕組みが、ほかのアカウントの操作まで止めないよう、アカウントごとの子で始める。
             let hashtags = OtherAccountHashtags(client: client, tasks: tasks.child())
@@ -140,10 +175,9 @@ final class OtherAccounts {
     /// ログアウトしていれば、渡したときの認証情報で作る。
     func latestClient(for account: OtherAccount) -> @MainActor @Sendable () -> MastodonClient {
         let given = account.credential
-        let makeClient = makeClient
-        return {
+        return { [self] in
             let credential = (try? AppDependencies.accounts.get())?.accounts.first { $0.id == given.id } ?? given
-            return makeClient(credential)
+            return observedClient(credential)
         }
     }
 
@@ -170,7 +204,7 @@ final class OtherAccounts {
 
     /// `account`としてAPIを呼ぶクライアント。そのアカウントのシートに渡す。
     func client(for account: OtherAccount) -> MastodonClient {
-        makeClient(account.credential)
+        observedClient(account.credential)
     }
 
     /// ほかのアカウントのプロフィールを読み、「別のアカウントで」の行にアイコンを出せるようにする。読めなかったアカウントは、次にメニューを組むときに読み直す。

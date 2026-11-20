@@ -13,6 +13,24 @@ struct MediaDownloadsTests {
         TestScratch.url("MediaDownloadsTests")
     }
 
+    @Test func sharesCustomAvatarWithoutDownloadingOrDeletingOriginal() async throws {
+        let directory = TestScratch.url("custom-avatar")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let original = directory.appending(path: "image")
+        let data = Data([1, 2, 3])
+        try data.write(to: original)
+        let files = MediaFileCache.temporary()
+        let downloads = MediaDownloads(files: files, stagingDirectory: makeStaging(), localImageDirectory: directory) { _, _, _ in
+            Issue.record("ローカル画像を通信で取得しようとした")
+            throw CancellationError()
+        }
+        let copy = try await downloads.fileForSharing(for: original) { _ in }
+        #expect(copy != original)
+        #expect(try Data(contentsOf: copy) == data)
+        await files.removeAll()
+        #expect(try Data(contentsOf: original) == data)
+    }
+
     /// 落としたファイルはキャッシュに置き、同じ添付ファイルをまた共有するときは落とし直さない。渡すのは毎回キャッシュのコピー。
     @Test func reusesCachedFileAndReturnsCopies() async throws {
         let files = MediaFileCache.temporary()

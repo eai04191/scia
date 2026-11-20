@@ -364,6 +364,7 @@ public enum UserMenuItem: String, BundledMenuDefaults {
     case notify
     /// その人の投稿を自動翻訳するかを切り替える。自動翻訳がオンのときだけ出る。決まりはdocs/auto-translation.mdの「対象」にある。
     case autoTranslation
+    case editDisplay
     /// フォローしている相手を、自分のプロフィールで紹介する。紹介していれば外す。
     case endorse
     /// 相手のプロフィールに、自分にしか見えないメモを書くシートを開く。メモがあれば編集する。メモは関係と一緒に返る。
@@ -402,7 +403,7 @@ public enum UserMenuItem: String, BundledMenuDefaults {
         switch self {
         case .follow, .showReblogs, .notify, .endorse, .note, .mute, .block: true
         // 「別のアカウントで」の中の関係は、そのアカウントで読み直す（`UserMenuTree.refreshOtherAccounts(groups:)`）。
-        case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .addToList, .autoTranslation, .report, .otherAccounts, .customize: false
+        case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .addToList, .autoTranslation, .editDisplay, .report, .otherAccounts, .customize: false
         }
     }
 }

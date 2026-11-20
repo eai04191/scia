@@ -25,13 +25,13 @@ struct ImageStoresTests {
     }
 
     /// 通信を1度も通さないストア。通れば失敗する。
-    private func makeStores(localData: @escaping @Sendable (URL) async -> Data?) -> ImageStores<CGImage> {
+    private func makeStores(settings: AppSettings? = nil, localData: @escaping @Sendable (URL) async -> Data?) -> ImageStores<CGImage> {
         let http = HTTPClient(transport: StubTransport([]), retry: RetryPolicy(maxRetries: 0, initialDelay: .zero), clock: TestClock(), now: { Date(timeIntervalSince1970: 0) })
         return ImageStores(
             http: http,
             tuning: TuningStore(defaults: nil),
             network: NetworkConditionsMonitor(monitor: nil),
-            settings: AppSettings(defaults: TestScratch.defaults("ImageStoresTests.stores")),
+            settings: settings ?? AppSettings(defaults: TestScratch.defaults("ImageStoresTests.stores")),
             maker: PlatformImageMaker<CGImage>(still: { $0 }, animated: { _, _ in nil }),
             clock: TestClock(),
             localData: localData,
@@ -50,6 +50,20 @@ struct ImageStoresTests {
 
         _ = try await stores.avatars.image(for: AvatarImageKey(url: url, maxPixelSize: 8, animates: false))
         _ = try await stores.media.image(for: url, maxPixelSize: 8, purpose: .display)
+    }
+
+    @Test func savedUserImageLoadsAsAvatarAndViewerWithoutNetwork() async throws {
+        let store = SettingsStore(defaults: TestScratch.defaults("savedAvatar"), userDisplayImageDirectory: root.appending(path: "saved"))
+        let settings = AppSettings(store: store, target: .scope(.app)).forAccount("@me@example.com")
+        let account = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: nil)
+        settings.setUserDisplayDomain("example.com")
+        try settings.userDisplays.save(.init(), for: account, in: settings, imageData: Self.png())
+        let url = try #require(settings.userDisplays.display(of: account, in: settings).avatar)
+        let stores = makeStores(settings: settings) { _ in nil }
+        let avatar = try await stores.avatars.image(for: AvatarImageKey(url: url, maxPixelSize: 8, animates: false))
+        let viewer = try await stores.media.image(for: url, maxPixelSize: 8, purpose: .display)
+        #expect(avatar.width == 8)
+        #expect(viewer.width == 8)
     }
 
     /// 元の画像を読むかと先読みするかは回線と設定で、プレビュー画像を引き伸ばしてよい倍率はチューニングで決める。

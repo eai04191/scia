@@ -16,6 +16,11 @@ import UIKit
 /// 置き場所の計算とハードウェアキーボードの操作は、投稿欄（UIKit）が受け持つ。
 @MainActor
 final class ComposeCompletionList: UIView {
+    var userDisplaySettings: AppSettings? {
+        get { model.userDisplaySettings }
+        set { model.userDisplaySettings = newValue }
+    }
+
     enum Row: Hashable {
         case candidate(CompletionCandidate)
         case loading
@@ -199,6 +204,7 @@ private final class CompletionListModel {
     var generation = 0
     /// 行を薄くして出し入れする時間。ガラスの伸び縮みと同じ時間。
     @ObservationIgnored var rowFadeDuration: TimeInterval = 0.25
+    var userDisplaySettings: AppSettings?
     @ObservationIgnored var settings = AppDependencies.settings
     @ObservationIgnored var emojiImages = AppDependencies.emojiImages
     @ObservationIgnored var onSelect: (CompletionCandidate) -> Void = { _ in }
@@ -392,26 +398,26 @@ private struct CompletionRowView: View {
         switch candidate {
         case .account(let account):
             RowLayout {
-                AvatarImage(url: account.avatarStatic ?? account.avatar, shape: model.settings.appearance.avatarShape)
+                AvatarImage(url: (model.userDisplaySettings ?? model.settings).userDisplays.display(of: account, in: (model.userDisplaySettings ?? model.settings)).avatarStatic, shape: model.settings.appearance.avatarShape)
             } title: {
                 RichTextLabel(numberOfLines: 1, emojiImages: model.emojiImages, animatesEmojis: model.settings.animatesCustomEmojis, fadesTail: true) { [model] in
                     RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, settings: model.settings, emojiImages: model.emojiImages, language: model.settings.glyphLanguageIdentifier())
-                        .render(.plain(account.displayNameOrUsername, emojis: account.emojis))
+                        .render(.plain((model.userDisplaySettings ?? model.settings).userDisplays.display(of: account, in: (model.userDisplaySettings ?? model.settings)).name, emojis: (model.userDisplaySettings ?? model.settings).userDisplays.display(of: account, in: (model.userDisplaySettings ?? model.settings)).emojis))
                 }
             } subtitle: {
                 Text("@\(account.acct)").fadingTail(of: account.acct)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(TextLists.account(name: account.displayNameOrUsername, acct: account.acct))
+            .accessibilityLabel(TextLists.account(name: (model.userDisplaySettings ?? model.settings).userDisplays.display(of: account, in: (model.userDisplaySettings ?? model.settings)).name, acct: account.acct))
         case .localAccount(let mention, let source):
             // 検索の結果より上に出る理由が分かるよう、どこから出した人かを添える。
             let subtitle = ComposeTexts.Completion.localAccountSubtitle(acct: mention.acct, source: source)
             RowLayout {
-                AvatarImage(url: mention.avatar, shape: model.settings.appearance.avatarShape)
+                AvatarImage(url: (model.userDisplaySettings ?? model.settings).userDisplays.display(of: mention, in: (model.userDisplaySettings ?? model.settings)).avatarStatic, shape: model.settings.appearance.avatarShape)
             } title: {
                 RichTextLabel(numberOfLines: 1, emojiImages: model.emojiImages, animatesEmojis: model.settings.animatesCustomEmojis, fadesTail: true) { [model] in
                     RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, settings: model.settings, emojiImages: model.emojiImages, language: model.settings.glyphLanguageIdentifier())
-                        .render(.plain(mention.displayNameOrUsername, emojis: mention.emojis))
+                        .render(.plain((model.userDisplaySettings ?? model.settings).userDisplays.display(of: mention, in: (model.userDisplaySettings ?? model.settings)).name, emojis: (model.userDisplaySettings ?? model.settings).userDisplays.display(of: mention, in: (model.userDisplaySettings ?? model.settings)).emojis))
                 }
             } subtitle: {
                 // 長いハンドルでも、どこから出した人かは切らずに見せる。
@@ -421,7 +427,7 @@ private struct CompletionRowView: View {
                 }
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(TextLists.joined([TextLists.account(name: mention.displayNameOrUsername, acct: mention.acct), source.title]))
+            .accessibilityLabel(TextLists.joined([TextLists.account(name: (model.userDisplaySettings ?? model.settings).userDisplays.display(of: mention, in: (model.userDisplaySettings ?? model.settings)).name, acct: mention.acct), source.title]))
         case .hashtag(let hashtag):
             RowLayout {
                 Image(systemName: "number").foregroundStyle(.secondary)
@@ -553,24 +559,5 @@ private struct RowButtonStyle: ButtonStyle {
                         .fill(Color(uiColor: .tertiarySystemFill))
                 }
             }
-    }
-}
-
-/// アカウントのアイコン。タイムラインと同じ読み込みと形にする。
-struct AvatarImage: UIViewRepresentable {
-    let url: URL?
-    let shape: AvatarShape
-
-    func makeUIView(context: Context) -> AvatarView {
-        AvatarView(store: AppDependencies.avatarImages)
-    }
-
-    func updateUIView(_ view: AvatarView, context: Context) {
-        view.apply(AvatarView.Content(url: url, shape: shape, animates: false))
-    }
-
-    /// 中身は`UIImageView`で、画像が入るたびに大きさの希望が変わる。そのまま使うとSwiftUIが並べ直し続けて止まったため、決まった大きさにする。
-    func sizeThatFits(_ proposal: ProposedViewSize, uiView: AvatarView, context: Context) -> CGSize? {
-        CGSize(width: proposal.width ?? 30, height: proposal.height ?? 30)
     }
 }

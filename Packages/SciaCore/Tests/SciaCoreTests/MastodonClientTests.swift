@@ -20,6 +20,18 @@ struct MastodonClientTests {
         )
     }
 
+    @Test func accountDomainUsesWebFingerDomain() async throws {
+        let client = try makeClient(StubTransport([try .fixture("instance_account_domain")]))
+        #expect(try await client.accountDomain() == "example.com")
+    }
+
+    @Test(arguments: ["", "https://example.com", "example.com/path", "a@example.com", "example.com?q=a", "example com"])
+    func accountDomainRejectsMalformedValues(_ domain: String) async throws {
+        let body = try JSONEncoder().encode(["uri": domain])
+        let client = try makeClient(StubTransport([.json(String(decoding: body, as: UTF8.self), statusCode: 200)]))
+        await #expect(throws: DecodingError.self) { try await client.accountDomain() }
+    }
+
     /// 応答の中で読んだアカウントを、ブーストした人もブーストされた投稿の投稿者も、すべて覚える。送る前にとった番号のものより新しいものとして置き換える。
     @Test func remembersAccountsReadInResponse() async throws {
         let received = ReceivedAccounts()

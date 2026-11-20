@@ -22,6 +22,7 @@ final class ProfileController {
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
     /// 自分のプロフィールで「プロフィールを編集」を押した。
     var onEditProfile: (() -> Void)?
+    var onEditUserDisplay: ((Account) -> Void)?
     /// フォローかフォロワーの数が押されたときに、開く人のリストを渡して呼ぶ。
     var onOpenAccountList: ((AccountListKind) -> Void)?
     /// フォローのボタンで、紹介している相手のフォローを外した。サーバーは紹介も消すので、自分のプロフィールの棚を読み直すのに使う。
@@ -125,6 +126,7 @@ final class ProfileController {
         header.onToggleFollow = { [weak self] source in self?.confirmToggleFollow(from: source) }
         header.onRetryRelationship = { [weak self] in self?.reloadRelationship() }
         header.onEditProfile = { [weak self] in self?.onEditProfile?() }
+        header.onEditUserDisplay = { [weak self] in self?.editUserDisplay() }
         header.onEditPrivateNote = { [weak self] in self?.editPrivateNote() }
         header.onOpenCountList = { [weak self] list in
             guard let self else { return }
@@ -205,7 +207,7 @@ final class ProfileController {
         if header.redrawEndorsements(ifUsing: urls) {
             viewController?.headerDidChangeSize()
         }
-        guard store.account.emojis.hasImage(in: urls) else { return }
+        guard (store.account.emojis + settings.userDisplays.display(of: store.account, in: settings).emojis).hasImage(in: urls) else { return }
         updateHeader()
     }
 
@@ -252,6 +254,7 @@ final class ProfileController {
             _ = settings.showsProfileFeaturedTags
             _ = settings.showsProfileEndorsements
             _ = settings.customEmojiDisplays
+            settings.userDisplays.observeChanges()
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor in
                 self?.afterTransition { controller in
@@ -584,17 +587,21 @@ final class ProfileController {
         return viewController.tuning.value(of: TuningCatalog.profileRevealDuration)
     }
 
+    func editUserDisplay() {
+        onEditUserDisplay?(store.account)
+    }
+
     /// 開いているユーザーのユーザーのメニューを出すボタン。並びの設定を開いている間に変えても反映するよう、押すたびに組む。
-    /// 設定ですべての項目を隠していると、空のメニューが出る。ボタンを消すには設定の変化を見張る必要があり、すべて隠すことはまずないため、そのままにする。
     private func makeUserMenuItem() -> UIBarButtonItem {
         let item = UIBarButtonItem(image: UIImage(systemName: "ellipsis"))
         item.accessibilityLabel = ProfileTexts.userMenu
         item.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self, weak item] completion in
-            guard let self, let item, let menu = self.viewController?.profileUserMenu(for: self.store.account, from: item) else {
+            guard let self, let item else {
                 completion([])
                 return
             }
-            completion(menu.children)
+            let menu = self.viewController?.profileUserMenu(for: self.store.account, from: item)
+            completion(menu?.children ?? [])
         }])
         return item
     }
@@ -609,7 +616,9 @@ final class ProfileController {
 
     /// 説明にならない代替テキストは、タイムラインの添付ファイルと同じく、ビューアにもメニューにも出さないよう除いておく。
     private func attachment(of image: ProfileImage) -> MediaAttachment? {
-        store.account.attachment(of: image)?.filteringAltText(ignoresUseless: settings.ignoresUselessAltText)
+        settings.userDisplays.display(of: store.account, in: settings)
+            .attachment(of: image, original: store.account)?
+            .filteringAltText(ignoresUseless: settings.ignoresUselessAltText)
     }
 
     /// アイコンかヘッダー画像のメディアのメニュー。投稿がないため「投稿」は出さない。

@@ -18,6 +18,7 @@ public enum UserMenuCommand: Sendable {
     case report(accountID: String, acct: String, statusID: String?)
     /// その人をどのリストに入れるかを選ぶシートを開く。
     case addToList
+    case editDisplay
     /// 「別のアカウントで」の、ほかのアカウントとしての操作。
     case otherAccount(OtherAccount, OtherAccountUserAction)
     /// ログアウトされたアカウントにログインし直す。「別のアカウントで」で、そのアカウントで人を探せなかったときに出す。
@@ -106,6 +107,7 @@ public struct UserMenuActions {
     public let report: @MainActor (_ accountID: String, _ acct: String, _ statusID: String?) -> Void
     /// その人をどのリストに入れるかを選ぶシートを開く。リンクのメンションは、相手を探してから開く。
     public let addToList: @MainActor (UserMenuTarget) -> Void
+    public let editDisplay: @MainActor (UserMenuTarget) -> Void
     /// その人を自動翻訳の対象外にしているか。自動翻訳を使えないかオフなら、項目を出さないのでnil。
     public let isExcludedFromAutoTranslation: @MainActor (_ acct: String) -> Bool?
     /// その人を自動翻訳の対象外にするか、対象に戻す。
@@ -133,6 +135,7 @@ public struct UserMenuActions {
         editNote: @escaping @MainActor (UserRelation) -> Void,
         report: @escaping @MainActor (_ accountID: String, _ acct: String, _ statusID: String?) -> Void,
         addToList: @escaping @MainActor (UserMenuTarget) -> Void,
+        editDisplay: @escaping @MainActor (UserMenuTarget) -> Void,
         isExcludedFromAutoTranslation: @escaping @MainActor (_ acct: String) -> Bool? = { _ in nil },
         excludeFromAutoTranslation: @escaping @MainActor (Bool, _ acct: String) -> Void = { _, _ in },
         accounts: AccountCache,
@@ -154,6 +157,7 @@ public struct UserMenuActions {
         self.editNote = editNote
         self.report = report
         self.addToList = addToList
+        self.editDisplay = editDisplay
         self.accounts = accounts
         self.otherAccounts = otherAccounts
         self.performAsOtherAccount = performAsOtherAccount
@@ -299,6 +303,9 @@ public struct UserMenuTree {
             case .addToList:
                 guard tree.actions != nil else { return [] }
                 return [.action(inSubmenu ? item.title : "@\(subject.acct)をリストに追加", icon: .symbol(item.symbolName), .addToList)]
+            case .editDisplay:
+                guard tree.actions != nil else { return [] }
+                return [.action(inSubmenu ? item.title : UserDisplayTexts.edit(acct: subject.acct), icon: .symbol(item.symbolName), .editDisplay)]
             case .autoTranslation:
                 // リンクのメンションと文字のままのハンドルは、選ぶまで相手を探さず、対象外かが分からないので出さない。
                 guard case .account(_, let acct) = subject.target, let isExcluded = tree.actions?.isExcludedFromAutoTranslation(acct) else { return [] }
@@ -454,7 +461,7 @@ extension UserMenuTree {
             return [node(item.title, "hand.raised", isDestructive: true, .block)]
         case .report:
             return [.action(item.title, icon: .symbol(item.symbolName), .report(accountID: relation.accountID, acct: relation.acct, statusID: reportableStatusID))]
-        case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .addToList, .autoTranslation, .otherAccounts, .customize:
+        case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .addToList, .autoTranslation, .editDisplay, .otherAccounts, .customize:
             return []
         }
     }

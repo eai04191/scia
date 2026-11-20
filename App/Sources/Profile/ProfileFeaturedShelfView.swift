@@ -80,6 +80,7 @@ final class ProfileFeaturedTagsShelfView: ProfileShelfView {
     var menuLifecycle = MenuLifecycle()
     private(set) var tags: [FeaturedTag] = []
     private var menuInteractions: [ProfileTextMenuInteraction] = []
+    private var shownDisplays: [UserDisplay.Snapshot] = []
 
     init() {
         super.init(title: ProfileTexts.Shelf.featuredTags, itemSpacing: 8)
@@ -155,6 +156,7 @@ final class ProfileEndorsementsShelfView: ProfileShelfView {
     var menuLifecycle = MenuLifecycle()
     private(set) var content: Content?
     private var menuInteractions: [ProfileTextMenuInteraction] = []
+    private var shownDisplays: [UserDisplay.Snapshot] = []
     private let emojiImages: EmojiImageStore<UIImage>
     private let avatarImages: AvatarImageStore<UIImage>
 
@@ -169,14 +171,16 @@ final class ProfileEndorsementsShelfView: ProfileShelfView {
 
     /// 並べる人を変える。中身が同じなら作り直さない。
     func setContent(_ content: Content) {
-        guard content != self.content else { return }
+        let displays = content.accounts.map { settings.userDisplays.display(of: $0, in: settings).snapshot }
+        guard content != self.content || displays != shownDisplays else { return }
+        shownDisplays = displays
         rebuild(content)
     }
 
     /// 並べている人の表示名に、`urls`のどれかのカスタム絵文字を使っている人がいる。
     func uses(emojiURLs urls: Set<URL>) -> Bool {
         content?.accounts.contains { account in
-            account.emojis.hasImage(in: urls)
+            settings.userDisplays.display(of: account, in: settings).emojis.hasImage(in: urls)
         } ?? false
     }
 
@@ -251,7 +255,8 @@ final class ProfileEndorsedCard: UIControl {
         background.translatesAutoresizingMaskIntoConstraints = false
         addSubview(background)
 
-        avatarView.apply(AvatarView.Content(url: content.animatesAvatars ? account.avatar : account.avatarStatic, shape: content.avatarShape, animates: content.animatesAvatars))
+        let avatar = settings.userDisplays.display(of: account, in: settings).avatar(animates: content.animatesAvatars)
+        avatarView.apply(AvatarView.Content(url: avatar.url, shape: content.avatarShape, animates: avatar.animates))
         let font = UIFont.preferredFont(forTextStyle: .subheadline)
         let bold = font.fontDescriptor.withSymbolicTraits(.traitBold).map { UIFont(descriptor: $0, size: 0) } ?? font
         nameLabel.numberOfLines = 1
@@ -259,7 +264,7 @@ final class ProfileEndorsedCard: UIControl {
         nameLabel.textAlignment = .center
         nameLabel.emojiImages = content.animatesCustomEmojis ? emojiImages : nil
         nameLabel.attributedText = RichTextRenderer(font: bold, textColor: .label, settings: settings, emojiImages: emojiImages, language: content.glyphLanguage)
-            .render(.plain(account.displayNameOrUsername, emojis: account.emojis))
+            .render(.plain(settings.userDisplays.display(of: account, in: settings).name, emojis: settings.userDisplays.display(of: account, in: settings).emojis))
             .truncatingTail(alignment: .center)
         handleLabel.text = "@\(account.acct)"
         handleLabel.font = .preferredFont(forTextStyle: .caption1)
@@ -293,7 +298,7 @@ final class ProfileEndorsedCard: UIControl {
         isAccessibilityElement = true
         accessibilityTraits = .button
         // 人のリストの行と同じく、描いた名前を読ませる。カスタム絵文字の`:shortcode:`を読ませないため。
-        accessibilityLabel = TextLists.account(name: nameLabel.attributedText?.string ?? account.displayNameOrUsername, acct: account.acct)
+        accessibilityLabel = TextLists.account(name: nameLabel.attributedText?.string ?? settings.userDisplays.display(of: account, in: settings).name, acct: account.acct)
     }
 
     @available(*, unavailable)

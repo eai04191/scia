@@ -48,7 +48,7 @@ final class AccountNotificationsController {
         answer: @escaping (NotificationRequestDecision) async -> Bool
     ) -> (AccountNotificationsController, TimelineViewController) {
         let model = AccountNotificationsModel(accountID: request.account.id, client: client, tasks: tasks)
-        let viewController = TimelineViewController(texts: .accountNotifications(name: request.account.displayNameOrUsername), settings: settings) { [weak model] in await model?.refresh() }
+        let viewController = TimelineViewController(texts: .accountNotifications(name: settings.userDisplays.display(of: request.account, in: settings).name), settings: settings) { [weak model] in await model?.refresh() }
         let controller = AccountNotificationsController(model: model, viewController: viewController)
         viewController.lifetimeOwner = controller
         viewController.navigationItem.subtitle = "@\(request.account.acct)"
