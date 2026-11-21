@@ -306,6 +306,14 @@ public enum SettingsTexts {
         public static let noLists = "リストはありません"
     }
 
+    /// 「アカウントを管理」の画面。
+    public enum SignedInAccounts {
+        /// 401が返ったアカウントの、ハンドルの代わりに出す状態。
+        public static let loggedOut = "ログアウトされています"
+        /// 行を左へスワイプして出すボタン。
+        public static let logOut = "ログアウト"
+    }
+
     /// アカウントの画面の「外観」。Sciaが従う、APIでは変えられないアカウントの設定を見せる。項目の名前はMastodonのウェブの日本語に合わせる。
     public enum AccountAppearance {
         public static let title = "外観"

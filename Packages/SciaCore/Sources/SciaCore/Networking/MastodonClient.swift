@@ -792,6 +792,12 @@ public struct MastodonClient: Sendable {
         _ = try await get(Verified.self, path: "api/v1/accounts/verify_credentials", query: [])
     }
 
+    /// トークンの持ち主のアカウント。トークンが無効なら401の`MastodonAPIError`を投げる。
+    /// https://docs.joinmastodon.org/methods/accounts/#verify_credentials
+    public func ownAccount() async throws -> Account {
+        try await get(Account.self, path: "api/v1/accounts/verify_credentials", query: []).0
+    }
+
     // MARK: - プロフィールの編集
 
     /// 自分のプロフィールを、編集できる平文と一緒に読む。

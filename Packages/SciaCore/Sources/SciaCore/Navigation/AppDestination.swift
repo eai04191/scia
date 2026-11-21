@@ -384,6 +384,8 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     case presetComparison = "preset-comparison"
     /// アカウントの画面を、設定のトップの画面に重ねる。
     case account
+    /// ログインしているアカウントを並べ替え、切り替え、ログアウトする画面。決まりはdocs/account-screen.mdの「アカウントを管理」にある。
+    case accountManagement = "account-management"
     case statusActions = "status-actions"
     case quotedStatusActions = "quoted-status-actions"
     case notificationActions = "notification-actions"
@@ -438,7 +440,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
         case .viewedMediaCache, .prefetchedMediaCache: [.storage, self]
         case .presetManagement, .appPreset, .accountPreset: [.presets, self]
         case .presetEditor, .presetComparison: [.presets, .presetManagement, self]
-        case .display, .interaction, .compose, .about, .appIcon, .tabs, .account, .storage, .presets: [self]
+        case .display, .interaction, .compose, .about, .appIcon, .tabs, .account, .accountManagement, .storage, .presets: [self]
         }
     }
 }

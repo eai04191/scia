@@ -19,6 +19,9 @@ struct SettingsView: View {
     let tabBarShape: TabBarShapeModel
     /// アカウントの画面に出すものと、押したときの処理。
     let accountScreen: AccountScreenContext
+    /// 「アカウントを管理」の画面に渡すもの。
+    /// アカウントのリストを読めないとき（Keychainを読めないなど）はnil。
+    let signedInAccountsContext: SignedInAccountsContext?
     /// 設定を閉じ、ホームの上でアプリ内のSafariの高さを選ぶシートを出す。
     let openInAppBrowserHeight: @MainActor (AppSettings) -> Void
     /// 謝辞の画面で、設定の画面を閉じて、ハンドルの人のプロフィールを開く。
@@ -48,6 +51,7 @@ struct SettingsView: View {
         tabSources: SettingsTabSourceActions,
         tabBarShape: TabBarShapeModel,
         accountScreen: AccountScreenContext,
+        signedInAccounts: SignedInAccountsContext?,
         openInAppBrowserHeight: @escaping @MainActor (AppSettings) -> Void,
         openProfile: @escaping @MainActor (_ acct: String) -> Void,
         openUserDisplay: @escaping @MainActor (String) -> Void,
@@ -66,6 +70,7 @@ struct SettingsView: View {
         self.tabSources = tabSources
         self.tabBarShape = tabBarShape
         self.accountScreen = accountScreen
+        signedInAccountsContext = signedInAccounts
         self.openInAppBrowserHeight = openInAppBrowserHeight
         self.openProfile = openProfile
         self.openUserDisplay = openUserDisplay
@@ -214,6 +219,10 @@ struct SettingsView: View {
         case .about: AboutSettingsView()
         case .appIcon: AppIconSettingsView()
         case .account: AccountView(settings: settings, account: account, context: accountScreen)
+        case .accountManagement:
+            if let signedInAccountsContext {
+                SignedInAccountsView(settings: windowSettings, context: signedInAccountsContext)
+            }
         case .presets: PresetsView(settings: settings, accounts: signedInAccounts)
         case .presetManagement:
             PresetManagementView(settings: settings, openPreset: openPreset) {
@@ -299,6 +308,7 @@ extension SettingsPage {
     var categoryIcon: (systemImage: String, color: UIColor)? {
         switch self {
         case .account: ("person.crop.circle.fill", .systemBlue)
+        case .accountManagement: ("person.2.fill", .systemGray)
         case .presets: ("square.stack.3d.up.fill", .systemPurple)
         case .display: ("circle.lefthalf.filled", .systemBlue)
         case .interaction: ("hand.tap.fill", .systemOrange)
@@ -328,14 +338,15 @@ extension UIViewController {
     ///   - tabSources: タブの並びでリストを作る、消す。
     ///   - tabBarShape: 今のウインドウでのタブバーの形。
     ///   - accountScreen: アカウントの画面に出すものと、押したときの処理。
+    ///   - signedInAccounts: 「アカウントを管理」の画面に渡すもの。
     ///   - openInAppBrowserHeight: 設定を閉じ、ホームの上でアプリ内のSafariの高さを選ぶシートを出す。
     ///   - openProfile: 謝辞の画面で、設定の画面を閉じて、ハンドルの人のプロフィールを開く。
     ///   - page: 設定のトップの画面から重ねて開いておく画面。
     ///   - appearanceGroup: `page`が「投稿の見た目」か「通知の見た目」のとき、その上に重ねておく分類の画面。
     ///   - onShownChange: 設定の画面が出たときにtrue、消えたときにfalseで呼ぶ。
-    func presentSettings(windowSettings: AppSettings, instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, tabSources: SettingsTabSourceActions, tabBarShape: TabBarShapeModel, accountScreen: AccountScreenContext, openInAppBrowserHeight: @escaping @MainActor (AppSettings) -> Void, openProfile: @escaping @MainActor (_ acct: String) -> Void, openUserDisplay: @escaping @MainActor (String, @escaping @MainActor () -> Bool) -> Void, userDisplayLoader: UserDisplayLoader, opening page: SettingsPage? = nil, appearanceGroup: AppearanceGroup.ID? = nil, editing: AppSettings? = nil, onShownChange: @escaping (Bool) -> Void) {
+    func presentSettings(windowSettings: AppSettings, instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, tabSources: SettingsTabSourceActions, tabBarShape: TabBarShapeModel, accountScreen: AccountScreenContext, signedInAccounts: SignedInAccountsContext?, openInAppBrowserHeight: @escaping @MainActor (AppSettings) -> Void, openProfile: @escaping @MainActor (_ acct: String) -> Void, openUserDisplay: @escaping @MainActor (String, @escaping @MainActor () -> Bool) -> Void, userDisplayLoader: UserDisplayLoader, opening page: SettingsPage? = nil, appearanceGroup: AppearanceGroup.ID? = nil, editing: AppSettings? = nil, onShownChange: @escaping (Bool) -> Void) {
         let navigation = SettingsNavigationState()
-        let view = SettingsView(settings: AppDependencies.settings, windowSettings: windowSettings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, tabSources: tabSources, tabBarShape: tabBarShape, accountScreen: accountScreen, openInAppBrowserHeight: openInAppBrowserHeight, openProfile: openProfile, openUserDisplay: { acct in openUserDisplay(acct, { navigation.page == .userDisplays }) }, userDisplayLoader: userDisplayLoader, navigation: navigation, opening: page, appearanceGroup: appearanceGroup, editing: editing)
+        let view = SettingsView(settings: AppDependencies.settings, windowSettings: windowSettings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, tabSources: tabSources, tabBarShape: tabBarShape, accountScreen: accountScreen, signedInAccounts: signedInAccounts, openInAppBrowserHeight: openInAppBrowserHeight, openProfile: openProfile, openUserDisplay: { acct in openUserDisplay(acct, { navigation.page == .userDisplays }) }, userDisplayLoader: userDisplayLoader, navigation: navigation, opening: page, appearanceGroup: appearanceGroup, editing: editing)
         presentOnFrontmost(SettingsHostingController(rootView: view, navigation: navigation, onShownChange: onShownChange))
     }
 

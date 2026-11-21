@@ -1,17 +1,19 @@
 public import Foundation
+public import Observation
 
 /// ログインしたアカウントのリストと、いま使っているアカウント。
 ///
 /// 一度に使うのは1アカウントだけで、切り替えて使う。リストと選択を分けて持つのは、将来は複数のアカウントを同時に使えるようにするため。
 @MainActor
+@Observable
 public final class AccountRegistry {
-    /// 追加した順。
+    /// 使う人が並べた順。並べ替えていなければ、追加した順。
     public private(set) var accounts: [Credential] = []
     public private(set) var current: Credential?
 
-    private let storage: any CredentialStorage
+    @ObservationIgnored private let storage: any CredentialStorage
     /// 並び順と選択の保存先。nilなら保存しない。
-    private let defaults: UserDefaults?
+    @ObservationIgnored private let defaults: UserDefaults?
     private static let orderKey = "accounts.order"
     private static let currentKey = "accounts.current"
 
@@ -66,6 +68,16 @@ public final class AccountRegistry {
     public func select(_ id: Credential.ID) {
         guard let account = accounts.first(where: { $0.id == id }) else { return }
         current = account
+        persist()
+    }
+
+    /// `source`の位置のアカウントを、動かす前の並びで`destination`の位置の前へ動かす。SwiftUIの`onMove`が渡す位置をそのまま受け取る。
+    public func move(fromOffsets source: IndexSet, toOffset destination: Int) {
+        let moving = source.filter(accounts.indices.contains).map { accounts[$0] }
+        var remaining = accounts.indices.filter { !source.contains($0) }.map { accounts[$0] }
+        let insertion = min(destination - source.count { $0 < destination }, remaining.count)
+        remaining.insert(contentsOf: moving, at: max(insertion, 0))
+        accounts = remaining
         persist()
     }
 

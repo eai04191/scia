@@ -241,7 +241,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         let session = SessionController(credential: credential, accountMenu: { [weak self] in
             self?.makeAccountMenu() ?? UIMenu()
-        }, logOut: logOut, onReauthenticate: { [weak self] session, credential in
+        }, logOut: logOut, accountManagement: accountManagement, onReauthenticate: { [weak self] session, credential in
             guard let self, session === self.session else { return }
             await self.reauthenticate(credential, isCurrent: credential.id == session.credential.id)
         })
@@ -290,6 +290,31 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         try? AppDependencies.accounts.get()
     }
 
+    /// 「アカウントを管理」の画面で行う、アカウントの切り替え、ログアウト、追加。アカウントのメニューと同じ流れで行う。
+    private var accountManagement: AccountManagement {
+        AccountManagement(
+            currentID: { [weak self] in self?.checkedAccountID },
+            canLogOut: Self.canLogOut,
+            switchTo: { [weak self] id in
+                guard let self, let account = accounts?.accounts.first(where: { $0.id == id }) else { return }
+                confirmDiscardingDraft(switchingTo: account) { [weak self] in self?.switchAccount(to: id) }
+            },
+            logOut: { [weak self] id in
+                guard let self, let account = accounts?.accounts.first(where: { $0.id == id }) else { return }
+                confirmLogOut(account)
+            },
+            add: { [weak self] in self?.confirmAddingAccount() }
+        )
+    }
+
+    /// アカウントのリストでチェックマークを付けるアカウント。ダミーを選んでいる間は、裏で選んだままの本物のアカウントに付けない。
+    private var checkedAccountID: Credential.ID? {
+        #if DEBUG
+        if Self.showsDummySession { return nil }
+        #endif
+        return accounts?.current?.id
+    }
+
     /// アカウントのリスト、追加、設定のメニュー。開くたびに今のアカウントで組み立て直す。
     private func makeAccountMenu() -> UIMenu {
         guard let accounts else { return UIMenu() }
@@ -300,17 +325,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             self?.session?.open(.settings(nil))
         }
         #if DEBUG
-        let isDummy = Self.showsDummySession
-        let dummy = [UIAction(title: DummyServer.credential.handle, subtitle: "ダミーのデータ", state: isDummy ? .on : .off) { [weak self] _ in
+        let dummy = [UIAction(title: DummyServer.credential.handle, subtitle: "ダミーのデータ", state: Self.showsDummySession ? .on : .off) { [weak self] _ in
             guard let self else { return }
             confirmDiscardingDraft(switchingTo: DummyServer.credential) { [weak self] in self?.openDummySession() }
         }]
-        // ダミーを選んでいる間は、裏で選んだままの本物のアカウントにチェックマークを付けない。
-        let checkedID = isDummy ? nil : accounts.current?.id
         #else
         let dummy: [UIAction] = []
-        let checkedID = accounts.current?.id
         #endif
+        let checkedID = checkedAccountID
         let switching = accounts.accounts.map { account in
             UIAction(title: account.handle, state: account.id == checkedID ? .on : .off) { [weak self] _ in
                 guard let self else { return }
@@ -361,6 +383,23 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         alert.addAction(UIAlertAction(title: AccountSwitchTexts.cancel, style: .cancel))
         alert.addAction(UIAlertAction(title: AccountSwitchTexts.Adding.confirm, style: .default) { [weak self] _ in self?.presentAddAccount() })
         root.presentOnFrontmost(alert)
+    }
+
+    private static func hasWrittenDraft(composingAs id: Credential.ID) -> Bool {
+        UIApplication.shared.connectedScenes.contains { scene in
+            guard let session = (scene.delegate as? SceneDelegate)?.session else { return false }
+            return session.composingOtherAccountID == id && session.hasWrittenDraft
+        }
+    }
+
+    /// 投稿欄で`id`のアカウントを選んでいる窓の画面を、今のアカウントのまま作り直す。ログアウトしたアカウントで送らないため。
+    private static func rebuildScenes(composingAs id: Credential.ID) {
+        for scene in UIApplication.shared.connectedScenes {
+            guard let delegate = scene.delegate as? SceneDelegate, let session = delegate.session,
+                  session.composingOtherAccountID == id
+            else { continue }
+            delegate.showTimeline(for: session.credential)
+        }
     }
 
     private static var hasWrittenDraftInAnyScene: Bool {
@@ -484,15 +523,23 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     private func confirmLogOut() {
-        guard let root = window?.rootViewController, let current = accounts?.current else { return }
+        guard let current = accounts?.current else { return }
+        confirmLogOut(current)
+    }
+
+    /// 書きかけの投稿が破棄されることは、画面を作り直す窓に書きかけがあるときだけ添える。
+    /// 作り直すのは、使っているアカウントならすべての窓、ほかのアカウントなら投稿欄でそのアカウントを選んでいる窓（docs/compose.mdの「アカウントを変えるとき」）。
+    private func confirmLogOut(_ account: Credential) {
+        guard let root = window?.rootViewController else { return }
+        let discardsDraft = account.id == accounts?.current?.id ? Self.hasWrittenDraftInAnyScene : Self.hasWrittenDraft(composingAs: account.id)
         let alert = UIAlertController(
-            title: AccountSwitchTexts.LoggingOut.title(handle: current.handle),
-            message: AccountSwitchTexts.LoggingOut.message(discardsDraft: Self.hasWrittenDraftInAnyScene),
+            title: AccountSwitchTexts.LoggingOut.title(handle: account.handle),
+            message: AccountSwitchTexts.LoggingOut.message(discardsDraft: discardsDraft),
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: AccountSwitchTexts.cancel, style: .cancel))
         alert.addAction(UIAlertAction(title: AccountSwitchTexts.LoggingOut.confirm, style: .destructive) { [weak self] _ in
-            self?.logOut(current)
+            self?.logOut(account)
         })
         root.presentOnFrontmost(alert)
     }
@@ -514,6 +561,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
         logger.info("account removed")
+        Self.rebuildScenes(composingAs: credential.id)
         showCurrentAccount()
         Self.syncAllScenes()
     }

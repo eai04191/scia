@@ -66,6 +66,30 @@ struct AccountRegistryTests {
         #expect(relaunched.current?.id == (try credential("2")).id)
     }
 
+    /// 並べ替えた順は、起動し直しても残り、使っているアカウントは替えない。位置はSwiftUIの`onMove`と同じく、動かす前の並びで数える。
+    @Test(arguments: [
+        (source: [0], destination: 3, expected: ["2", "3", "1"]),
+        (source: [2], destination: 0, expected: ["3", "1", "2"]),
+        (source: [0, 2], destination: 2, expected: ["2", "1", "3"]),
+        (source: [1], destination: 1, expected: ["1", "2", "3"]),
+    ])
+    func movingKeepsOrderAcrossLaunches(source: [Int], destination: Int, expected: [String]) throws {
+        let storage = MemoryStorage()
+        let defaults = try makeDefaults()
+        let registry = try AccountRegistry(storage: storage, defaults: defaults)
+        for id in ["1", "2", "3"] {
+            try registry.add(try credential(id))
+        }
+        registry.select(try credential("2").id)
+
+        registry.move(fromOffsets: IndexSet(source), toOffset: destination)
+        let relaunched = try AccountRegistry(storage: storage, defaults: defaults)
+
+        #expect(registry.accounts.map(\.accountID) == expected)
+        #expect(relaunched.accounts.map(\.accountID) == expected)
+        #expect(relaunched.current?.accountID == "2")
+    }
+
     @Test func loggingInAgainReplacesCredentialWithoutDuplicating() throws {
         let registry = try AccountRegistry(storage: MemoryStorage(), defaults: try makeDefaults())
         try registry.add(try credential("1", token: "old"))

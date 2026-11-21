@@ -121,6 +121,12 @@ final class OtherAccounts {
         }
     }
 
+    /// 「アカウントを管理」の画面で、そのアカウントのトークンでそのアカウント自身を読むもの。
+    func ownAccount(of credential: Credential) -> @Sendable () async throws -> Account {
+        let client = makeClient(credential, ReceivedAccounts())
+        return { try await client.ownAccount() }
+    }
+
     /// ほかのアカウントでログインしているか。プロフィールの読み込みを起こさないので、投稿欄のボタンを並べ直すたびに読んでよい。
     var hasOthers: Bool {
         guard let registry = try? AppDependencies.accounts.get() else { return false }

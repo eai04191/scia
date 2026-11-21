@@ -149,6 +149,7 @@ extension SettingsPage {
     public static func rootSections(handle: String) -> [SettingsSection] {
         [
             SettingsSection(header: handle, rows: [.page(.account), .page(.tabs)]),
+            SettingsSection(rows: [.page(.accountManagement)]),
             SettingsSection(rows: [.page(.presets)]),
             SettingsSection(rows: [.page(.display), .page(.interaction), .page(.compose), .page(.appIcon)]),
             SettingsSection(rows: [.page(.storage), .page(.about)]),
@@ -180,6 +181,7 @@ extension SettingsPage {
         case .userDisplays: "表示を変更したユーザー"
         case .tabs: "タブ"
         case .account: "アカウント"
+        case .accountManagement: "アカウントを管理"
         case .statusActions: "投稿"
         case .quotedStatusActions: "引用の投稿"
         case .notificationActions: "通知"
@@ -289,7 +291,7 @@ extension SettingsPage {
                 SettingsSection(rows: [.page(.connection), .page(.licenses), .page(.acknowledgments)]),
                 SettingsSection(rows: [.item(.sourceCode), .item(.privacyPolicy)]),
             ]
-        case .appIcon, .appearance, .notificationAppearance, .autoTranslation, .customEmojis, .userDisplays, .tabs, .account, .statusActions, .quotedStatusActions, .notificationActions,
+        case .appIcon, .appearance, .notificationAppearance, .autoTranslation, .customEmojis, .userDisplays, .tabs, .account, .accountManagement, .statusActions, .quotedStatusActions, .notificationActions,
              .userActions, .linkActions, .externalPostActions, .hashtagActions, .mediaActions, .reactionActions, .statusMenu, .statusActionBar,
              .statusLeadingSwipe, .statusTrailingSwipe, .userMenu, .linkMenu, .externalPostMenu, .profileTextMenu, .customEmojiMenu, .hashtagMenu, .mediaMenu, .reactionMenu,
              .composeTools, .connection, .connectionTimelines, .storage, .viewedMediaCache, .prefetchedMediaCache, .licenses, .acknowledgments,

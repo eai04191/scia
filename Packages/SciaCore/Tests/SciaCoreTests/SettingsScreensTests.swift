@@ -22,8 +22,8 @@ struct SettingsScreensTests {
     @Test func rootListsAccountSettingsUnderHandle() {
         let sections = SettingsPage.rootSections(handle: "@alice@example.social")
 
-        #expect(sections.map(\.header) == ["@alice@example.social", nil, nil, nil])
-        #expect(sections.map { $0.rows.map(\.title) } == [["アカウント", "タブ"], ["プリセット"], ["表示", "操作", "作成", "アプリのアイコン"], ["ストレージ", "情報"]])
+        #expect(sections.map(\.header) == ["@alice@example.social", nil, nil, nil, nil])
+        #expect(sections.map { $0.rows.map(\.title) } == [["アカウント", "タブ"], ["アカウントを管理"], ["プリセット"], ["表示", "操作", "作成", "アプリのアイコン"], ["ストレージ", "情報"]])
     }
 
     /// 画面へ入る行は、`path`でその画面の1つ手前に重ねる画面にだけ並べる。食い違うと、URLで開いたときと行から入ったときで戻る先が変わる。

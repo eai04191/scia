@@ -60,6 +60,8 @@ final class SessionController {
     private let accountMenu: @MainActor () -> UIMenu
     /// 確かめてからログアウトする。ログアウトさせないアカウント（ダミー）ではnil。
     private let logOut: (@MainActor () -> Void)?
+    /// 「アカウントを管理」の画面で、アカウントを切り替え、ログアウトし、追加する。
+    private let accountManagement: AccountManagement
     /// タブを無効にしていて、アカウントの画面から選んでいるタブに積んだ、ブックマークとお気に入りのタイムライン。
     private let pushedSavedLists = NSHashTable<SavedStatusesController>.weakObjects()
     /// 同じく積んだ、フォロー中のハッシュタグ。
@@ -271,6 +273,8 @@ final class SessionController {
     let composer: InlineComposeController
     /// 投稿欄に、捨てると失われる書きかけがあるか。下書きはこの画面一式だけが持つので、アカウントを切り替える前に確かめる。
     var hasWrittenDraft: Bool { composer.model.hasWrittenContent }
+    /// 投稿欄で投稿するアカウントに選んでいる、ほかのアカウント（`Credential.id`）。今のアカウントで書いていればnil。
+    var composingOtherAccountID: String? { composer.model.otherAccount?.id }
     /// 書き始めたときに始めた、サーバーの上限と既定の公開範囲などの読み込み。共有されたメディアを、読み終えてから足すのに使う。
     private var composeDefaultsTask: Task<Void, Never>?
     /// 画面のどこにドロップした画像や動画でも、投稿欄に添付する受け口。
@@ -311,9 +315,10 @@ final class SessionController {
     /// - Parameters:
     ///   - accountMenu: アカウントの切り替えなどのメニュー。開くたびに呼んで組み立て直す。
     ///   - logOut: 確かめてからログアウトする。ログアウトさせないアカウントではnil。
+    ///   - accountManagement: 「アカウントを管理」の画面で、アカウントを切り替え、ログアウトし、追加する。
     ///   - onReauthenticate: トークンが無効なアカウントで、ログインし直しのボタンが押されたときに、そのアカウントを渡して呼ぶ。ログインし直しが終わるか、取り消されたら返る。
     ///     このセッションのアカウントのほか、「別のアカウントで」の操作で無効と分かったほかのアカウントも渡す。
-    init(credential: Credential, accountMenu: @escaping @MainActor () -> UIMenu, logOut: (@MainActor () -> Void)?, onReauthenticate: @escaping (SessionController, Credential) async -> Void) {
+    init(credential: Credential, accountMenu: @escaping @MainActor () -> UIMenu, logOut: (@MainActor () -> Void)?, accountManagement: AccountManagement, onReauthenticate: @escaping (SessionController, Credential) async -> Void) {
         self.credential = credential
         operationStatus = OperationStatus(store: OperationFailureStore(defaults: .standard, account: credential.handle), now: AppDependencies.now)
         let settings = AppDependencies.settings.forAccount(credential.handle)
@@ -321,6 +326,7 @@ final class SessionController {
         self.onReauthenticate = onReauthenticate
         self.accountMenu = accountMenu
         self.logOut = logOut
+        self.accountManagement = accountManagement
         let tuning = AppDependencies.tuning
         #if DEBUG
         let transport = BurstMonitoringTransport(base: FaultInjectingTransport(base: ScenarioMode.server?.transport ?? URLSessionTransport()), monitor: RequestBurstLog.monitor)
@@ -3319,6 +3325,7 @@ final class SessionController {
             tabSources: settingsTabSourceActions,
             tabBarShape: tabs.shape,
             accountScreen: accountScreenContext,
+            signedInAccounts: signedInAccountsContext,
             openInAppBrowserHeight: { [weak self] settings in
                 self?.inAppBrowserHeightSettings = settings
                 self?.open(.inAppBrowserHeight(returningTo: .interaction))
@@ -3374,6 +3381,24 @@ final class SessionController {
             editor.onError = { [weak self] error, title in self?.handle(error, title: title) }
             rootViewController.presentOnFrontmost(UINavigationController(rootViewController: editor), animated: true)
         }
+    }
+
+    /// 「アカウントを管理」の画面に渡すもの。設定を出すたびに作り、画面を出すたびに読み直す。
+    private var signedInAccountsContext: SignedInAccountsContext? {
+        guard let registry = try? AppDependencies.accounts.get() else { return nil }
+        let model = SignedInAccountsModel(
+            registry: registry,
+            currentID: accountManagement.currentID(),
+            tasks: tasks.child(),
+            loadProfile: { [otherAccounts, client, credential] account in
+                guard account.id != credential.id else { return { try await client.ownAccount() } }
+                return otherAccounts.ownAccount(of: account)
+            },
+            logIn: { [weak self] account in
+                await self?.reauthenticationTask(for: account)?.value
+            }
+        )
+        return SignedInAccountsContext(model: model, management: accountManagement)
     }
 
     // MARK: - アカウントの画面
@@ -4322,18 +4347,25 @@ final class SessionController {
         reauthenticate(other)
     }
 
+    /// 「アカウントを管理」の画面から、そのアカウントにログインし直す。ほかの入口と同じく、ログインし直している途中なら始めずにnilを返す。
+    private func reauthenticationTask(for account: Credential) -> Task<Void, Never>? {
+        account.id == credential.id ? reauthenticate() : reauthenticate(account)
+    }
+
     /// ほかのアカウントにログインし直す。続けて押されても、同じアカウントの認可画面を重ねて出さない。
-    private func reauthenticate(_ other: Credential) {
+    @discardableResult
+    private func reauthenticate(_ other: Credential) -> Task<Void, Never>? {
         tasks.run(key: "otherAccountReauthenticate:\(other.id)", .skippingWhileRunning, .action) { [weak self] in
             guard let self else { return }
             await onReauthenticate(self, other)
         }
     }
 
-    private func reauthenticate() {
-        guard !isReauthenticating else { return }
+    @discardableResult
+    private func reauthenticate() -> Task<Void, Never>? {
+        guard !isReauthenticating else { return nil }
         setReauthenticating(true)
-        tasks.run(.action) { [weak self] in
+        return tasks.run(.action) { [weak self] in
             guard let self else { return }
             await onReauthenticate(self, credential)
             setReauthenticating(false)
