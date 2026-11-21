@@ -348,7 +348,12 @@ extension SessionController {
         )
         let line = String(format: "%@ distance=%.0f duration=%.2f dropped=%d hitch=%.3f %@\n", label, distance, duration, hitches.droppedFrames, hitches.hitchTime, device)
         logger.info("debug autoscroll: \(line, privacy: .public)")
-        let file = URL.documentsDirectory.appending(path: "DebugAutoscroll.log")
+        Self.appendLine(line, toDocument: "DebugAutoscroll.log")
+    }
+
+    /// アプリのDocumentsのファイルに1行書き足す。なければ作る。指で操作できない実機から、`devicectl device copy from`で取り出して読むため。
+    private static func appendLine(_ line: String, toDocument name: String) {
+        let file = URL.documentsDirectory.appending(path: name)
         guard let data = line.data(using: .utf8) else { return }
         if let handle = try? FileHandle(forWritingTo: file) {
             defer { try? handle.close() }
