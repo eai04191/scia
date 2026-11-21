@@ -25,9 +25,16 @@ struct MastodonClientTests {
         #expect(try await client.accountDomain() == "example.com")
     }
 
+    /// v2の`instance`がないサーバーでは、v1の`uri`を読む。
+    @Test func accountDomainFallsBackToV1WhenV2IsMissing() async throws {
+        let transport = StubTransport([.json("<html>Not Found</html>", statusCode: 404), .json(#"{"uri":"EXAMPLE.COM"}"#, statusCode: 200)])
+        #expect(try await makeClient(transport).accountDomain() == "example.com")
+        #expect(await transport.requests.map(\.url?.path) == ["/api/v2/instance", "/api/v1/instance"])
+    }
+
     @Test(arguments: ["", "https://example.com", "example.com/path", "a@example.com", "example.com?q=a", "example com"])
     func accountDomainRejectsMalformedValues(_ domain: String) async throws {
-        let body = try JSONEncoder().encode(["uri": domain])
+        let body = try JSONEncoder().encode(["domain": domain])
         let client = try makeClient(StubTransport([.json(String(decoding: body, as: UTF8.self), statusCode: 200)]))
         await #expect(throws: DecodingError.self) { try await client.accountDomain() }
     }
@@ -500,23 +507,24 @@ struct MastodonClientTests {
         #expect(try await makeClient(mastodon).serverCapabilities() == .mastodon)
     }
 
-    /// `configuration.reactions`を返すサーバーでだけ`api/v2/instance`も読み、Chuckyaの宣言があるかで形を決める。Mastodonでは読まない。
-    /// `api/v2/instance`がないサーバーは、宣言がないものとして扱う。
+    /// `configuration.reactions`を返すサーバーでは、`api_versions`にChuckyaの宣言があるかで形を決める。
+    /// v2の`instance`がないサーバーでだけv1を読み、宣言がないものとして扱う。
     @Test func readsReactionStyleFromInstance() async throws {
-        let reactions = #"{"configuration":{"reactions":{"max_reactions":1}}}"#
-        let chuckya = StubTransport([.json(reactions, statusCode: 200), .json(#"{"api_versions":{"mastodon":12,"glitch":1,"chuckya":5}}"#, statusCode: 200)])
+        let chuckya = StubTransport([.json(#"{"configuration":{"reactions":{"max_reactions":1}},"api_versions":{"mastodon":12,"glitch":1,"chuckya":5}}"#, statusCode: 200)])
         #expect(try await makeClient(chuckya).serverCapabilities().emojiReactions == .chuckya)
-        #expect(await chuckya.requests.map(\.url?.path) == ["/api/v1/instance", "/api/v2/instance"])
+        #expect(await chuckya.requests.map(\.url?.path) == ["/api/v2/instance"])
 
-        let firefish = StubTransport([.json(reactions, statusCode: 200), .json(#"{"api_versions":{"mastodon":7}}"#, statusCode: 200)])
+        let firefish = StubTransport([.json(#"{"configuration":{"reactions":{"max_reactions":1}},"api_versions":{"mastodon":7}}"#, statusCode: 200)])
         #expect(try await makeClient(firefish).serverCapabilities().emojiReactions == .firefish)
 
-        let withoutVersions = StubTransport([.json(reactions, statusCode: 200), .json("{}", statusCode: 200)])
+        let reactions = #"{"configuration":{"reactions":{"max_reactions":1}}}"#
+        let withoutVersions = StubTransport([.json(reactions, statusCode: 200)])
         #expect(try await makeClient(withoutVersions).serverCapabilities().emojiReactions == .firefish)
 
         // SharkeyとIceshrimpには`api/v2/instance`がない。
-        let withoutV2 = StubTransport([.json(reactions, statusCode: 200), .json(#"{"error":"Unknown API endpoint."}"#, statusCode: 404)])
+        let withoutV2 = StubTransport([.json(#"{"error":"Unknown API endpoint."}"#, statusCode: 404), .json(reactions, statusCode: 200)])
         #expect(try await makeClient(withoutV2).serverCapabilities().emojiReactions == .firefish)
+        #expect(await withoutV2.requests.map(\.url?.path) == ["/api/v2/instance", "/api/v1/instance"])
 
         let pleroma = StubTransport([.json(#"{"pleroma":{"metadata":{"features":["pleroma_api","pleroma_emoji_reactions"]}}}"#, statusCode: 200)])
         #expect(try await makeClient(pleroma).serverCapabilities().emojiReactions == .pleroma)
@@ -544,6 +552,44 @@ struct MastodonClientTests {
             "POST /api/v1/statuses/1/react/:blobcat:", "POST /api/v1/statuses/1/unreact/:blobcat:",
             "PUT /api/v1/pleroma/statuses/1/reactions/blobcat", "DELETE /api/v1/pleroma/statuses/1/reactions/blobcat",
         ])
+    }
+
+    /// サーバーの版、投稿欄の上限、機能の有無は、v2の`instance`を1回だけ読んで同じ応答を使う。
+    /// 1つの項目を読めなくても、ほかの項目は同じ応答から読む。
+    @Test func instanceReadersShareOneResponse() async throws {
+        let transport = StubTransport([.json(#"{"version":"4.5.0","configuration":{"statuses":{"max_characters":1000}}}"#, statusCode: 200)])
+        let client = try makeClient(transport)
+
+        async let version = client.serverVersion()
+        async let configuration = client.instanceConfiguration()
+        async let capabilities = client.serverCapabilities()
+        #expect(try await version == "4.5.0")
+        #expect(try await configuration.maxCharacters == 1000)
+        #expect(try await capabilities == .mastodon)
+        await #expect(throws: DecodingError.self) { try await client.streamingURLFromV2() }
+        #expect(await transport.requests.map(\.url?.path) == ["/api/v2/instance"])
+    }
+
+    /// 読めなかった応答は覚えず、次の呼び出しで読み直す。
+    @Test func instanceIsReadAgainAfterFailure() async throws {
+        let transport = StubTransport([.json("<html>Bad Gateway</html>", statusCode: 502), .json(#"{"configuration":{}}"#, statusCode: 200)])
+        let client = MastodonClient(credential: try makeClient(transport).credential, transport: transport, retry: RetryPolicy(maxRetries: 0, initialDelay: .zero))
+
+        await #expect(throws: MastodonAPIError.self) { try await client.instanceConfiguration() }
+        #expect(try await client.instanceConfiguration().maxCharacters == 500)
+        #expect(try await client.serverCapabilities() == .mastodon)
+        #expect(await transport.requests.count == 2)
+    }
+
+    /// 200でもJSONのオブジェクトとして読めない応答は覚えず、次の呼び出しで読み直す。
+    @Test(arguments: ["", "<html>Maintenance</html>", "[]"])
+    func instanceIsReadAgainAfterUnreadableResponse(_ body: String) async throws {
+        let transport = StubTransport([.json(body, statusCode: 200), .json(#"{"configuration":{"statuses":{"max_characters":1000}}}"#, statusCode: 200)])
+        let client = try makeClient(transport)
+
+        await #expect(throws: DecodingError.self) { try await client.instanceConfiguration() }
+        #expect(try await client.instanceConfiguration().maxCharacters == 1000)
+        #expect(await transport.requests.count == 2)
     }
 
     @Test func readsPersonalEmojiSetSupportFromInstance() async throws {

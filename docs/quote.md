@@ -126,7 +126,7 @@ Mastodonは、ほかのサーバーの投稿の引用の承認を確かめられ
 
 ## Fedibirdの形
 
-Fedibirdの引用は、Mastodonの引用より前からあり、APIの形が違う。`api/v1/instance`の`feature_quote`がtrueのサーバーを、Fedibirdの形として扱う。形はfedibird/mastodonの`app/serializers/rest/status_serializer.rb`、`app/controllers/api/v1/statuses_controller.rb`、`app/models/status.rb`にある。
+Fedibirdの引用は、Mastodonの引用より前からあり、APIの形が違う。`instance`の`feature_quote`がtrueのサーバーを、Fedibirdの形として扱う。形はfedibird/mastodonの`app/serializers/rest/status_serializer.rb`、`app/controllers/api/v1/statuses_controller.rb`、`app/models/status.rb`にある。
 
 サーバーで違う決まり（引用できるか、送り方、取り消せるか）は`QuoteRules`に集め、使う側はサーバーの種類を見ずにそこに聞く。届いた投稿は、サーバーを見ずに形で読み分ける。
 

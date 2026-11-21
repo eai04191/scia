@@ -4,7 +4,7 @@ Fedibirdの、自分で選んだ絵文字をカテゴリーに分けて並べた
 
 ## 対象のサーバー
 
-- `api/v1/instance`の`fedibird_capabilities`に`personal_emoji_sets`があるサーバーでだけ読む
+- `instance`の`fedibird_capabilities`に`personal_emoji_sets`があるサーバーでだけ読む
 - サーバー情報が読めないうちや読めなかったときは、対応していないものとして扱う
 
 ## 読む値

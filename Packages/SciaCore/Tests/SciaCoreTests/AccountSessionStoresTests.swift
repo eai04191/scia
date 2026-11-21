@@ -71,6 +71,36 @@ struct AccountSessionStoresTests {
         #expect(next.animatesAvatars == settings.animatesAvatars)
     }
 
+    /// 起動してサーバーの情報を読み、ストリーミングにつなぐまでに、サーバーの情報（`api/v2/instance`）は1回だけ読み、`api/v1/instance`は読まない。
+    /// 版、投稿欄の上限、機能の有無、表示に使うドメイン、ストリーミングの接続先が、同じ応答を使う。
+    @Test func startupReadsInstanceOnce() async throws {
+        let transport = RoutedTransport { request in
+            switch request.url?.path() {
+            case "/api/v2/instance": (200, Data(#"{"domain":"example.social","version":"4.7.3","configuration":{"urls":{"streaming":"wss://streaming.example.social"},"statuses":{"max_characters":1000}}}"#.utf8))
+            case "/api/v1/preferences": (200, Self.preferences)
+            default: (404, Data())
+            }
+        }
+        let session = AccountSession.testing(transport: transport, connector: ScriptedConnector([.init()]))
+        defer { session.close() }
+        var capabilities: ServerCapabilities?
+        session.onCapabilitiesLoad = { capabilities = $0 }
+
+        session.start { 0 }
+        session.loadServerInfo()
+        let subscription = session.streamingHub.subscribe(StreamingSubscription(stream: "user")) { _ in }
+        defer { subscription.cancel() }
+        try await waitUntil { session.diagnostics.serverVersion != nil && capabilities != nil && session.diagnostics.streaming == .connected }
+        let configuration = await session.loadInstanceConfiguration()
+        let domain = await session.loadUserDisplayDomain()
+
+        #expect(configuration?.maxCharacters == 1000)
+        #expect(domain == "example.social")
+        #expect(capabilities == .mastodon)
+        #expect(transport.requests(to: "/api/v2/instance").count == 1)
+        #expect(transport.requests(to: "/api/v1/instance").isEmpty)
+    }
+
     /// ストリーミングの状態は、UIが渡さなくても接続の状態に入り、そのあとでUIに知らせる。
     @Test func streamingStateReachesDiagnosticsBeforeUI() async throws {
         let session = AccountSession.testing(transport: transport(), connector: ScriptedConnector([.init()]))

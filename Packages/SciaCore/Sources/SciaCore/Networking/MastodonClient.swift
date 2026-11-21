@@ -16,6 +16,7 @@ public struct MastodonClient: Sendable {
     private let onUnauthorized: (@Sendable () async -> Void)?
     /// 応答の中で読んだアカウントを覚える先。nilなら覚えない。
     private let receivedAccounts: ReceivedAccounts?
+    private let instanceCache = InstanceResponseCache()
     private static let logger = SciaLog.logger(category: "network")
 
     /// - Parameters:
@@ -168,11 +169,17 @@ public struct MastodonClient: Sendable {
         _ = try await post([String: Marker].self, path: "api/v1/markers", form: [URLQueryItem(name: "\(timeline.rawValue)[last_read_id]", value: lastReadID)], feature: .markers)
     }
 
-    /// ストリーミングAPIの接続先。REST APIと別のホストのことがある。
-    /// v1のuriはWebFingerのドメイン。接続先やプロフィールURLのホストとは異なることがある。
+    /// WebFingerのドメイン（v2の`domain`、v1の`uri`）。接続先やプロフィールURLのホストとは異なることがある。
+    /// v2の`instance`がないサーバーでだけ、v1を読む。
     public func accountDomain() async throws -> String {
-        struct Instance: Decodable { let uri: String }
-        let domain = try await get(Instance.self, path: "api/v1/instance", query: []).0.uri
+        struct InstanceV1: Decodable { let uri: String }
+        struct InstanceV2: Decodable { let domain: String }
+        let domain: String
+        do {
+            domain = try await instanceV2(InstanceV2.self).domain
+        } catch is FeatureUnavailable {
+            domain = try await get(InstanceV1.self, path: "api/v1/instance", query: []).0.uri
+        }
         guard !domain.isEmpty, !domain.contains(where: { $0.isWhitespace }),
               let components = URLComponents(string: "https://" + domain),
               components.host != nil, components.user == nil, components.password == nil,
@@ -201,7 +208,7 @@ public struct MastodonClient: Sendable {
             }
             let configuration: Configuration
         }
-        return try await get(Instance.self, path: "api/v2/instance", query: [], feature: .instanceV2).0.configuration.urls.streaming
+        return try await instanceV2(Instance.self).configuration.urls.streaming
     }
 
     /// v2の`instance`がないサーバーのための、v1の接続先。
@@ -231,7 +238,7 @@ public struct MastodonClient: Sendable {
             let version: String
         }
         do {
-            return try await get(Instance.self, path: "api/v2/instance", query: [], feature: .instanceV2).0.version
+            return try await instanceV2(Instance.self).version
         } catch let error as MastodonAPIError where error.isUnauthorized {
             throw error
         } catch {
@@ -239,14 +246,14 @@ public struct MastodonClient: Sendable {
         }
     }
 
-    /// サーバーの、Mastodonにない機能の有無。`api/v1/instance`の、Fedibirdの拡張の`fedibird_capabilities`と`feature_quote`、`configuration.reactions`、Pleromaの`pleroma.metadata.features`で決める。
-    /// Fedibirdとkmyblue、Chuckya、Sharkey、Catodon、Iceshrimp、Pleroma、Akkomaはv1に必ず返す。項目がないサーバーは、Mastodonと同じとみなす。
-    /// `configuration.reactions`を返すサーバーでだけ、`api/v2/instance`の`api_versions`も読み、Chuckyaの宣言があるかで形を決める。宣言はv1にはない。
+    /// サーバーの、Mastodonにない機能の有無。`instance`の、Fedibirdの拡張の`fedibird_capabilities`と`feature_quote`、`configuration.reactions`、`api_versions`のChuckyaの宣言、Pleromaの`pleroma.metadata.features`で決める。
+    /// 項目がないサーバーは、Mastodonと同じとみなす。v2の`instance`がないサーバーでだけ、v1を読む。
     public func serverCapabilities() async throws -> ServerCapabilities {
         struct Instance: Decodable {
             let fedibirdCapabilities: [String]?
             let featureQuote: Bool?
             let configuration: Configuration?
+            let apiVersions: [String: ServerLimit]?
 
             struct Configuration: Decodable {
                 let reactions: Reactions?
@@ -264,21 +271,16 @@ public struct MastodonClient: Sendable {
 
             let pleroma: Pleroma?
         }
-        struct InstanceV2: Decodable {
-            let apiVersions: [String: ServerLimit]?
+        let instance: Instance
+        do {
+            instance = try await instanceV2(Instance.self)
+        } catch is FeatureUnavailable {
+            instance = try await get(Instance.self, path: "api/v1/instance", query: []).0
         }
-        let instance = try await get(Instance.self, path: "api/v1/instance", query: []).0
         let fedibirdCapabilities = instance.fedibirdCapabilities ?? []
         var reactEndpoints: EmojiReactionStyle?
         if instance.configuration?.reactions != nil, !fedibirdCapabilities.contains("emoji_reaction") {
-            // SharkeyとIceshrimpには`api/v2/instance`がない。ないサーバーは、宣言がないものとして扱う。
-            let apiVersions: [String: ServerLimit]?
-            do {
-                apiVersions = try await get(InstanceV2.self, path: "api/v2/instance", query: [], feature: .instanceV2).0.apiVersions
-            } catch is FeatureUnavailable {
-                apiVersions = nil
-            }
-            reactEndpoints = apiVersions?["chuckya"] != nil ? .chuckya : .firefish
+            reactEndpoints = instance.apiVersions?["chuckya"] != nil ? .chuckya : .firefish
         }
         return ServerCapabilities(
             fedibirdCapabilities: fedibirdCapabilities,
@@ -327,7 +329,7 @@ public struct MastodonClient: Sendable {
             }
             let configuration: Configuration
         }
-        let configuration = try await get(Instance.self, path: "api/v2/instance", query: [], feature: .instanceV2).0.configuration
+        let configuration = try await instanceV2(Instance.self).configuration
         // 投稿の設定を返さないサーバーには、Mastodonの既定値を使う。
         // 代替テキストの上限は4.4.0から返るが、それより前のMastodonも1500文字で検証している。
         let maxCharacters = configuration.statuses?.maxCharacters?.value ?? 500
@@ -1493,6 +1495,19 @@ public struct MastodonClient: Sendable {
     /// https://docs.joinmastodon.org/methods/follow_requests/#reject
     public func rejectFollowRequest(from accountID: String) async throws -> Relationship {
         try await post(Relationship.self, path: "api/v1/follow_requests/\(accountID)/reject", form: []).0
+    }
+
+    /// v2の`instance`を読む。応答はこのクライアントの間で覚え、呼び出しごとに要る項目を読み分ける。
+    /// JSONのオブジェクトとして読めない応答は覚えず、次の呼び出しで読み直す。
+    /// https://docs.joinmastodon.org/methods/instance/#v2
+    private func instanceV2<T: Decodable>(_ type: T.Type) async throws -> T {
+        let request = URLRequest(url: credential.instance.appending(path: "api/v2/instance"))
+        let cached = try await instanceCache.response { [self] in
+            let (data, response) = try await send(request, feature: .instanceV2)
+            _ = try decode(InstanceResponseCache.JSONObject.self, from: data, of: response, for: request)
+            return InstanceResponseCache.Response(data: data, response: response, request: request)
+        }
+        return try decode(type, from: cached.data, of: cached.response, for: cached.request)
     }
 
     /// - Parameter feature: なくても使える機能のAPIなら、その機能。使えないと分かったら、セッションの間は送らない。

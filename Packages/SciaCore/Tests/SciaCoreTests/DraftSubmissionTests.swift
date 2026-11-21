@@ -132,7 +132,7 @@ struct DraftSubmissionTests {
     @Test func sessionSubmitsQuoteWithLoadedRules() async throws {
         let transport = RoutedTransport { request in
             switch request.url?.path() {
-            case "/api/v1/instance": (200, Data(#"{"feature_quote":true,"fedibird_capabilities":[]}"#.utf8))
+            case "/api/v2/instance": (200, Data(#"{"feature_quote":true,"fedibird_capabilities":[]}"#.utf8))
             case "/api/v1/statuses": (200, try Self.statusBody(5))
             default: (404, Data())
             }
@@ -145,7 +145,7 @@ struct DraftSubmissionTests {
 
         let bodies = transport.requests(to: "/api/v1/statuses").map { String(decoding: $0.httpBody ?? Data(), as: UTF8.self) }
         #expect(bodies.map { $0.contains("quote_id=9") } == [true, true])
-        #expect(transport.requests(to: "/api/v1/instance").count == 1)
+        #expect(transport.requests(to: "/api/v2/instance").count == 1)
         #expect(session.capabilities.quotes == .fedibird)
     }
 

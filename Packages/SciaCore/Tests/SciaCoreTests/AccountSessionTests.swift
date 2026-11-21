@@ -53,7 +53,7 @@ struct AccountSessionTests {
         let local = Data(String(decoding: account, as: UTF8.self).replacingOccurrences(of: "bob@remote.example", with: "bob").utf8)
         let domain = try Data(contentsOf: try #require(Bundle.module.url(forResource: "instance_account_domain", withExtension: "json", subdirectory: "Fixtures")))
         let transport = RoutedTransport { request in
-            request.url?.path == "/api/v1/instance" ? (200, domain) : (200, Data("{\"accounts\":[".utf8) + local + Data("]}".utf8))
+            request.url?.path == "/api/v2/instance" ? (200, domain) : (200, Data("{\"accounts\":[".utf8) + local + Data("]}".utf8))
         }
         let settings = AppSettings(defaults: TestScratch.defaults("localLookup")).forAccount("@me@web.example.com")
         let session = AccountSession.testing(transport: transport, settings: settings)

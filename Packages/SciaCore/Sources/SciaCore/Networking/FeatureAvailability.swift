@@ -7,7 +7,7 @@ public enum OptionalFeature: String, Sendable, CaseIterable {
     case markers
     /// アカウントの設定（投稿の公開範囲の既定値、注意書きを開いておくか）。https://docs.joinmastodon.org/methods/preferences/
     case preferences
-    /// v2の`instance`。投稿欄の上限とストリーミングの接続先に使う。https://docs.joinmastodon.org/methods/instance/#v2
+    /// v2の`instance`。サーバーの版、投稿欄の上限、機能の有無、ストリーミングの接続先に使う。https://docs.joinmastodon.org/methods/instance/#v2
     case instanceV2
     /// 複数の投稿をまとめて読む。Mastodon 4.3から。カードが付く前に受け取った投稿のカードを取り直すのに使う。
     /// https://docs.joinmastodon.org/methods/statuses/#index

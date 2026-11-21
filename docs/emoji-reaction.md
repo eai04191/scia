@@ -4,11 +4,11 @@
 
 ## 対象のサーバー
 
-- `api/v1/instance`の`fedibird_capabilities`に`emoji_reaction`があるサーバーを、Fedibirdの形として扱う。FedibirdとkmyblueがFedibirdの形で返す
-- そうでなく、`api/v1/instance`に`configuration.reactions`があるサーバーを、`react/:name`で付け外しするサーバーとして扱う。そのうち、`api/v2/instance`の`api_versions`に`chuckya`があるサーバーをChuckyaの形、ないサーバーをFirefishの形として扱う。`api/v2/instance`がないサーバー（Sharkey、Iceshrimp）も、Firefishの形にする
+- `instance`の`fedibird_capabilities`に`emoji_reaction`があるサーバーを、Fedibirdの形として扱う。FedibirdとkmyblueがFedibirdの形で返す
+- そうでなく、`instance`に`configuration.reactions`があるサーバーを、`react/:name`で付け外しするサーバーとして扱う。そのうち、`api_versions`に`chuckya`があるサーバーをChuckyaの形、ないサーバーをFirefishの形として扱う。`api/v2/instance`がないサーバー（Sharkey、Iceshrimp）も、Firefishの形にする
 - 形は、サーバーが自分で返す宣言で決める。バージョンの表記やソフトウェアの名前では決めない。数値（`max_reactions`）から動きを推測もしない
-- `api/v2/instance`は、`configuration.reactions`があるサーバーでだけ読む。セッションを始めるときに1回で、Mastodonでは読まない
-- そのどれでもなく、`api/v1/instance`の`pleroma.metadata.features`に`pleroma_emoji_reactions`があるサーバーを、Pleromaの形として扱う。PleromaとAkkomaが返す。Iceshrimp.NETはこの値も`configuration.reactions`も返すので、実物で確かめてあるFirefishの形になる
+- `instance`は、ほかの用途と同じ`api/v2/instance`の応答から読み、`api/v2/instance`がないサーバーでだけ`api/v1/instance`を読む
+- そのどれでもなく、`instance`の`pleroma.metadata.features`に`pleroma_emoji_reactions`があるサーバーを、Pleromaの形として扱う。PleromaとAkkomaが返す。Iceshrimp.NETはこの値も`configuration.reactions`も返すので、実物で確かめてあるFirefishの形になる
 - どれかの形のサーバーでだけ、リアクションを出し、付け外しできるようにする
 - 機能を宣言しているのに一部のAPIを持たないサーバーには、代わりの読み方を足さず、項目も隠さない。Holloは`fedibird_capabilities`に`emoji_reaction`を返してFedibirdの形で付け外しできるが、`emoji_reactioned_by`を持たないので、「リアクションした人」は読み込めなかった表示（HTTP 404）になる
 - 対応していないサーバーでは、投稿に`emoji_reactions`が入っていても出さず、メニューの項目と操作も出さない
