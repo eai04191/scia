@@ -109,13 +109,13 @@ struct CustomEmojiCacheTests {
         try await waitUntil { restored.snapshot.emojis != nil }
         let loads = Mutex(0)
         let gate = Gate()
-        let sources = ComposeCompletion.Sources(searchAccounts: { _, _ in [] }, searchHashtags: { _, _ in [] }, customEmojis: { [emoji = emoji("wide"), added = emoji("added")] in
+        let sources = CompletionModel.Sources(searchAccounts: { _, _ in [] }, searchHashtags: { _, _ in [] }, customEmojis: { [emoji = emoji("wide"), added = emoji("added")] in
             loads.withLock { $0 += 1 }
             try await gate.wait()
             return [emoji, added]
         }).remembering(customEmojisIn: restored)
 
-        let completion = ComposeCompletion(sources: sources, settings: ComposeCompletion.Settings(debounce: .milliseconds(30), limit: 5))
+        let completion = CompletionModel(sources: sources, settings: CompletionModel.Settings(debounce: .milliseconds(30), limit: 5))
         #expect(completion.emojisForPalette()?.map(\.aspectRatio) == [4])
         completion.loadEmojisIfNeeded()
         try await waitUntil { loads.withLock { $0 } == 1 }
@@ -125,7 +125,7 @@ struct CustomEmojiCacheTests {
         #expect(completion.emojis?.count == 2)
         #expect(completion.emojisForPalette()?.map(\.aspectRatio) == [4, nil])
 
-        let next = ComposeCompletion(sources: sources, settings: ComposeCompletion.Settings(debounce: .milliseconds(30), limit: 5))
+        let next = CompletionModel(sources: sources, settings: CompletionModel.Settings(debounce: .milliseconds(30), limit: 5))
         next.loadEmojisIfNeeded()
         #expect(next.emojis?.count == 2, "この起動で読めたリストは、読み直さずに渡す")
         #expect(loads.withLock { $0 } == 1)
@@ -165,11 +165,11 @@ struct CustomEmojiCacheTests {
         let caches = makeCaches()
         let cache = caches.cache(for: instance)
         let loads = Mutex(0)
-        let sources = ComposeCompletion.Sources(searchAccounts: { _, _ in [] }, searchHashtags: { _, _ in [] }, customEmojis: { [emoji = emoji("wide")] in
+        let sources = CompletionModel.Sources(searchAccounts: { _, _ in [] }, searchHashtags: { _, _ in [] }, customEmojis: { [emoji = emoji("wide")] in
             loads.withLock { $0 += 1 }
             return [emoji]
         }).remembering(customEmojisIn: cache)
-        let completion = ComposeCompletion(sources: sources, settings: ComposeCompletion.Settings(debounce: .milliseconds(30), limit: 5))
+        let completion = CompletionModel(sources: sources, settings: CompletionModel.Settings(debounce: .milliseconds(30), limit: 5))
         completion.loadEmojisIfNeeded()
         try await waitUntil { cache.snapshot.emojis != nil }
 

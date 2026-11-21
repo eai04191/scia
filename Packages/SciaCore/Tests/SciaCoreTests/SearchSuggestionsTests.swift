@@ -6,7 +6,7 @@ import Testing
 @MainActor
 @Suite(.serialized, .scratch)
 struct SearchSuggestionsTests {
-    private static let settings = ComposeCompletion.Settings(debounce: .milliseconds(200), limit: 4, minimumSearchQueryLength: 2)
+    private static let settings = CompletionModel.Settings(debounce: .milliseconds(200), limit: 4, minimumSearchQueryLength: 2)
 
     /// ユーザーの検索には1人、ハッシュタグの検索には1つを返す。
     nonisolated private static func transport() -> RoutedTransport {

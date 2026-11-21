@@ -104,7 +104,7 @@ enum ProfileEditCatalog {
     ) -> CatalogState {
         CatalogState(title: title) {
             let editor = ProfileEditor(limits: limits, api: ProfileEditor.API(source: load ?? { source }, save: save, featuredTags: featuredTags, endorsements: endorsements))
-            let completion = TextInputCompletion(completion: ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)), recentEmojis: nil, settings: AppDependencies.settings)
+            let completion = TextInputCompletion(completion: CompletionModel(sources: .unavailable, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)), recentEmojis: nil, settings: AppDependencies.settings)
             let controller = ProfileEditViewController(editor: editor, completion: completion, settings: AppDependencies.settings)
             Task {
                 await editor.load()

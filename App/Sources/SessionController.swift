@@ -183,7 +183,7 @@ final class SessionController {
     /// 投稿にリアクションする絵文字を選ぶシート。開くときに、カスタム絵文字と最近使った絵文字を読む。
     private lazy var emojiReactionPicker = {
         let picker = EmojiReactionPicker(completion: TextInputCompletion(
-            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
+            completion: CompletionModel(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
             recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance),
             settings: settings
         ))
@@ -253,7 +253,7 @@ final class SessionController {
     /// 「フォロー中のハッシュタグ」のタブ。
     private let followedTagsList: FollowedTagsController
     /// 補完の候補を読む口。投稿欄とプロフィールの編集で使う。
-    private let completionSources: ComposeCompletion.Sources
+    private let completionSources: CompletionModel.Sources
     /// カスタム絵文字のリストを読めたことを、初期化のあとのセッションへ伝える。
     private let localReactionEmojiRelay = LocalReactionEmojiRelay()
     /// ログインしているサーバーのカスタム絵文字を、ショートコードで引くもの。リアクションに画像のURLを付けないサーバー（Firefishの形）でだけ入れる。
@@ -535,7 +535,7 @@ final class SessionController {
         }
         let customEmojis = AppDependencies.customEmojis.cache(for: credential.instance)
         self.customEmojis = customEmojis
-        var completionSources = ComposeCompletion.Sources(
+        var completionSources = CompletionModel.Sources(
             searchAccounts: { query, limit in try await client.searchAccountsForCompletion(query, limit: limit) },
             searchHashtags: { query, limit in try await client.searchHashtagsForCompletion(query, limit: limit) },
             customEmojis: {
@@ -567,7 +567,7 @@ final class SessionController {
             return emojis
         }
         self.completionSources = completionSources
-        let completion = ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, account: credential.handle))
+        let completion = CompletionModel(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, account: credential.handle))
         let postingLanguages = PostingLanguageCache { try await client.postingLanguages() }
         self.postingLanguages = postingLanguages
         composer = InlineComposeController(
@@ -1772,7 +1772,7 @@ final class SessionController {
     /// - Parameter close: リンクを開く前に、お知らせを出している画面を閉じる。閉じ終えたら、渡した処理を呼ぶ。
     private func makeAnnouncements(isEmbedded: Bool, close: @escaping @MainActor (@escaping () -> Void) -> Void) -> AnnouncementsViewController {
         let completion = TextInputCompletion(
-            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
+            completion: CompletionModel(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
             recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance),
             settings: settings
         )
@@ -2006,15 +2006,15 @@ final class SessionController {
             editor.charactersReservedPerURL = configuration.charactersReservedPerURL
         }
         let completion = TextInputCompletion(
-            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, account: credential.handle)),
+            completion: CompletionModel(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, account: credential.handle)),
             recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance),
             settings: settings
         )
         // 紹介しているユーザーの追加の行は、サーバーがフォローしていない相手を断るので、フォローしている人だけから探す。
-        var endorsementSources = ComposeCompletion.Sources.unavailable
+        var endorsementSources = CompletionModel.Sources.unavailable
         endorsementSources.searchAccounts = { [client] query, limit in try await client.searchAccountsForCompletion(query, limit: limit, following: true) }
         let endorsementCompletion = TextInputCompletion(
-            completion: ComposeCompletion(sources: endorsementSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
+            completion: CompletionModel(sources: endorsementSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
             recentEmojis: nil,
             settings: settings
         )
@@ -2365,7 +2365,7 @@ final class SessionController {
             return
         }
         let client = otherAccounts.client(for: account)
-        let sources = ComposeCompletion.Sources(client: client).remembering(customEmojisIn: AppDependencies.customEmojis.cache(for: account.credential.instance))
+        let sources = CompletionModel.Sources(client: client).remembering(customEmojisIn: AppDependencies.customEmojis.cache(for: account.credential.instance))
             .readingPersonalEmojiSet(with: client) { try await account.loadedCapabilities { try await client.serverCapabilities() } }
         let displaySettings = otherAccounts.displaySettings(for: account)
         composer.completionDisplaySettings = displaySettings

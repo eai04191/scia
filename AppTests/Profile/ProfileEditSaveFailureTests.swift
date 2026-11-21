@@ -27,7 +27,7 @@ struct ProfileEditSaveFailureTests {
             )
         )
         let tuning = TuningStore(defaults: nil)
-        let completion = TextInputCompletion(completion: ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning)), recentEmojis: nil, settings: AppDependencies.settings)
+        let completion = TextInputCompletion(completion: CompletionModel(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning)), recentEmojis: nil, settings: AppDependencies.settings)
         let images = MediaImageStore<UIImage>(files: .temporary()) { _, _ in throw URLError(.timedOut) }
         let controller = ProfileEditViewController(editor: editor, completion: completion, mediaImages: images, settings: .isolated(), tuning: tuning, clock: clock)
         var failures = 0

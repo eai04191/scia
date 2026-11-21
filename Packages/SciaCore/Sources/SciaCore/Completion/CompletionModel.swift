@@ -99,7 +99,7 @@ public enum EmojiCompletion {
     }
 }
 
-/// 投稿欄の補完の状態。打った語から候補を探し、出すものを決める。
+/// 入力欄の補完の状態。打った語から候補を探し、出すものを決める。
 ///
 /// メンションとハッシュタグは、打つのが止まるまで少し待ってから問い合わせ、語が変わったら前の問い合わせを取り消す。
 /// 取り消しが間に合わず届いた古い応答は捨てる。一度引いた語は覚えておき、消して打ち直したときに問い合わせ直さない。
@@ -112,7 +112,7 @@ public enum EmojiCompletion {
 /// 失敗しても、打つのは止めない。候補の場所で知らせ、押すと問い合わせ直す。
 @MainActor
 @Observable
-public final class ComposeCompletion {
+public final class CompletionModel {
     /// 候補を探す口。テストでは差し替える。
     public struct Sources: Sendable {
         public var searchAccounts: @Sendable (String, Int) async throws -> [Account]

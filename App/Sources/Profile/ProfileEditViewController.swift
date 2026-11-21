@@ -105,7 +105,7 @@ final class ProfileEditViewController: UIViewController {
         self.editor = editor
         self.clock = clock
         textCompletion = completion
-        self.endorsementCompletion = endorsementCompletion ?? TextInputCompletion(completion: ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning)), recentEmojis: nil, settings: settings)
+        self.endorsementCompletion = endorsementCompletion ?? TextInputCompletion(completion: CompletionModel(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning)), recentEmojis: nil, settings: settings)
         self.mediaImages = mediaImages
         self.settings = settings
         self.tuning = tuning

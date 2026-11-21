@@ -11,10 +11,10 @@ struct EmojiPaletteViewTests {
     /// 個人セットは、絵文字ピッカーを出している間に読み直したものが届いたら、その場で並べ直す。
     @Test func personalSetArrivingWhileShownReplacesTheSections() async throws {
         let sets = PersonalSets(["前のカテゴリー", "後のカテゴリー"])
-        var sources = ComposeCompletion.Sources.unavailable
+        var sources = CompletionModel.Sources.unavailable
         sources.personalEmojiSet = { await sets.next() }
         let tuning = TuningStore(defaults: nil)
-        let core = ComposeCompletion(sources: sources, settings: TuningCatalog.completionSettings(in: tuning))
+        let core = CompletionModel(sources: sources, settings: TuningCatalog.completionSettings(in: tuning))
         let completion = TextInputCompletion(completion: core, recentEmojis: nil, tuning: tuning, settings: AppDependencies.settings)
         let palette = EmojiPaletteView(emojiImages: .offline, thumbnailBuilder: nil)
         palette.frame = CGRect(x: 0, y: 0, width: 400, height: 400)
@@ -71,7 +71,7 @@ struct EmojiPaletteViewTests {
         tuning.setValue(44, for: TuningCatalog.composeEmojiPaletteBarHeight)
         tuning.setValue(56, for: TuningCatalog.composeEmojiPaletteCellSize)
         tuning.setValue(160, for: TuningCatalog.composeEmojiPalettePreviewHeight)
-        let core = ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning))
+        let core = CompletionModel(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning))
         let completion = TextInputCompletion(completion: core, recentEmojis: nil, tuning: tuning, settings: AppDependencies.settings)
         let palette = EmojiPaletteView(emojiImages: .offline, thumbnailBuilder: nil)
 
@@ -119,7 +119,7 @@ struct EmojiPaletteViewTests {
     @Test(.scratch) func choosingDefaultSkinToneUpdatesThePaletteAndCompletion() throws {
         let tuning = TuningStore(defaults: nil)
         let settings = AppSettings(defaults: TestScratch.defaults("EmojiPaletteViewTests.skinTone"))
-        let core = ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning))
+        let core = CompletionModel(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning))
         let completion = TextInputCompletion(completion: core, recentEmojis: nil, tuning: tuning, settings: settings)
         let palette = EmojiPaletteView(emojiImages: .offline, thumbnailBuilder: nil)
         palette.frame = CGRect(x: 0, y: 0, width: 400, height: 400)

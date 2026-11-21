@@ -21,7 +21,7 @@ final class InlineComposeController: NSObject {
     /// 本文と注意書きの補完とパレット。本文ではメンション、ハッシュタグ、カスタム絵文字を、注意書きではカスタム絵文字だけを補完する。
     /// サーバーは注意書きのメンションとハッシュタグを読まないため。
     private let textCompletion: TextInputCompletion
-    var completion: ComposeCompletion { textCompletion.completion }
+    var completion: CompletionModel { textCompletion.completion }
     /// 絵文字のパレットのカスタム絵文字のメニューが使う、セッションの部品。
     var paletteMenu: EmojiPaletteMenuContext {
         get { textCompletion.paletteMenu }
@@ -432,10 +432,10 @@ final class InlineComposeController: NSObject {
         linkTitleVoiceOverObservation?.cancel()
     }
 
-    init(model: ComposeModel<UIImage>, completion: ComposeCompletion? = nil, recentEmojis: RecentEmojis? = nil, languages: PostingLanguageSource = .unavailable, tuning: TuningStore = AppDependencies.tuning, settings: AppSettings, keyboardNotifications: NotificationCenter = .default) {
+    init(model: ComposeModel<UIImage>, completion: CompletionModel? = nil, recentEmojis: RecentEmojis? = nil, languages: PostingLanguageSource = .unavailable, tuning: TuningStore = AppDependencies.tuning, settings: AppSettings, keyboardNotifications: NotificationCenter = .default) {
         self.model = model
         textCompletion = TextInputCompletion(
-            completion: completion ?? ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning)),
+            completion: completion ?? CompletionModel(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning)),
             recentEmojis: recentEmojis,
             tuning: tuning,
             settings: settings

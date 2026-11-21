@@ -899,7 +899,7 @@ struct MastodonClientTests {
         let transport = StubTransport([try .fixture("home_timeline")])
         let client = try makeClient(transport)
 
-        _ = try await ComposeCompletion.Sources(client: client).statusTags()
+        _ = try await CompletionModel.Sources(client: client).statusTags()
 
         #expect(await transport.requests.first?.url?.path() == "/api/v1/accounts/\(client.credential.accountID)/statuses")
     }

@@ -106,7 +106,7 @@ final class CompletionList: UIView {
 
     /// - Parameter animation: 出ている候補のリストで候補を入れ替えるときの動き。nilなら、すぐ入れ替える。
     ///   前にも後にも同じ場所にある候補はその場に残し、消える候補を薄くしきってから、ガラスの枠を伸び縮みさせて、増えた候補を浮かび上がらせる。
-    func update(_ content: ComposeCompletion.Content, kind: CompletionKind, selectedIndex: Int, animation: Animation? = nil) {
+    func update(_ content: CompletionModel.Content, kind: CompletionKind, selectedIndex: Int, animation: Animation? = nil) {
         let rows: [Row] = switch content {
         case .candidates(let candidates): candidates.map(Row.candidate)
         case .loading: [.loading]
@@ -339,7 +339,7 @@ private struct CompletionListView: View {
             .glassEffect(.regular, in: .rect(cornerRadius: Self.cornerRadius))
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(ComposeTexts.Completion.listLabel)
+        .accessibilityLabel(CompletionTexts.listLabel)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: anchor == .bottom ? .bottom : .top)
     }
 }
@@ -365,20 +365,20 @@ private struct CompletionRowView: View {
                     CandidateRowLayout(subtitleLines: 3) {
                         Image(systemName: "exclamationmark.triangle").foregroundStyle(.secondary)
                     } title: {
-                        Text(ComposeTexts.Completion.failed)
+                        Text(CompletionTexts.failed)
                     } subtitle: {
                         Text(message)
                     } trailing: {
                         Image(systemName: logsIn ? "person.crop.circle.badge.exclamationmark" : "arrow.clockwise").foregroundStyle(.secondary)
                     }
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(ComposeTexts.Completion.failedAccessibilityLabel(message: message))
+                    .accessibilityLabel(CompletionTexts.failedAccessibilityLabel(message: message))
                 }
             case .loading:
                 CandidateRowLayout {
                     ProgressView()
                 } title: {
-                    Text(ComposeTexts.Completion.loading).foregroundStyle(.secondary)
+                    Text(CompletionTexts.loading).foregroundStyle(.secondary)
                 }
             case .empty(let kind):
                 CandidateRowLayout {
@@ -411,7 +411,7 @@ private struct CompletionRowView: View {
             .accessibilityLabel(TextLists.account(name: (model.userDisplaySettings ?? model.settings).userDisplays.display(of: account, in: (model.userDisplaySettings ?? model.settings)).name, acct: account.acct))
         case .localAccount(let mention, let source):
             // 検索の結果より上に出る理由が分かるよう、どこから出した人かを添える。
-            let subtitle = ComposeTexts.Completion.localAccountSubtitle(acct: mention.acct, source: source)
+            let subtitle = CompletionTexts.localAccountSubtitle(acct: mention.acct, source: source)
             CandidateRowLayout {
                 AvatarImage(url: (model.userDisplaySettings ?? model.settings).userDisplays.display(of: mention, in: (model.userDisplaySettings ?? model.settings)).avatarStatic, shape: model.settings.appearance.avatarShape)
             } title: {
@@ -435,11 +435,11 @@ private struct CompletionRowView: View {
                 Text(hashtag.name).fadingTail(of: hashtag.name)
             } subtitle: {
                 if hashtag.recentUses > 0 {
-                    Text(ComposeTexts.Completion.recentUses(hashtag.recentUses))
+                    Text(CompletionTexts.recentUses(hashtag.recentUses))
                 }
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(ComposeTexts.Completion.hashtagAccessibilityLabel(name: hashtag.name))
+            .accessibilityLabel(CompletionTexts.hashtagAccessibilityLabel(name: hashtag.name))
         case .ownHashtag(let hashtag):
             let note = hashtag.source.title
             // 検索の結果より上に出る理由が分かるよう、自分のタグであることを添える。
@@ -451,7 +451,7 @@ private struct CompletionRowView: View {
                 Text(note)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(ComposeTexts.Completion.hashtagAccessibilityLabel(name: hashtag.name, note: note))
+            .accessibilityLabel(CompletionTexts.hashtagAccessibilityLabel(name: hashtag.name, note: note))
         case .emoji(let emoji):
             CandidateRowLayout {
                 EmojiImage(emoji, choice: model.emojiImages.choice(animates: model.settings.animatesCustomEmojis), store: model.emojiImages)
@@ -459,7 +459,7 @@ private struct CompletionRowView: View {
                 Text(":\(emoji.shortcode):").fadingTail(of: emoji.shortcode)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(ComposeTexts.Completion.emojiAccessibilityLabel(name: emoji.shortcode))
+            .accessibilityLabel(CompletionTexts.emojiAccessibilityLabel(name: emoji.shortcode))
         case .standardEmoji(let emoji):
             // 本文と同じ設定の絵（OSの絵文字かtwemoji）で、カスタム絵文字の画像と同じくらいの大きさに描く。
             // 文字ではなく画像と並べる絵なので、端末の文字の大きさではなく枠の大きさで決める。
@@ -472,7 +472,7 @@ private struct CompletionRowView: View {
                 Text(emoji.englishName).fadingTail(of: emoji.englishName)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(ComposeTexts.Completion.emojiAccessibilityLabel(name: emoji.name))
+            .accessibilityLabel(CompletionTexts.emojiAccessibilityLabel(name: emoji.name))
         }
     }
 }

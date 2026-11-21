@@ -37,7 +37,7 @@ public final class SessionStatuses {
     /// - 予約したら、予約投稿の一覧に足す
     /// - 編集したら、その投稿を持つ一覧すべてで編集後の投稿に置き換え、引用元としても編集したことにする
     /// - Parameter completion: 投稿と編集に付けたハッシュタグを、補完の最近使ったものに足す。
-    public func reflect(_ submitted: SubmittedDraft, usingTagsIn completion: ComposeCompletion?) {
+    public func reflect(_ submitted: SubmittedDraft, usingTagsIn completion: CompletionModel?) {
         switch submitted {
         case .posted(let posted):
             for list in lists.compactMap(\.list) {

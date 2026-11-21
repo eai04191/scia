@@ -5,7 +5,7 @@ import Testing
 
 @Suite(.scratch)
 @MainActor
-struct ComposeCompletionTests {
+struct CompletionModelTests {
     /// 問い合わせを記録し、語ごとに決めた応答を返す。`held`の語は、`release`するまで応答を返さない（取り消されても返さない）。
     actor Server {
         private(set) var queries: [String] = []
@@ -122,10 +122,10 @@ struct ComposeCompletionTests {
         minimumSearch: Int = 1,
         recentMentions: RecentMentions? = nil,
         sleep: @escaping @Sendable (Duration) async throws -> Void = { _ in try Task.checkCancellation() }
-    ) -> ComposeCompletion {
+    ) -> CompletionModel {
         let server = server
-        return ComposeCompletion(
-            sources: ComposeCompletion.Sources(
+        return CompletionModel(
+            sources: CompletionModel.Sources(
                 searchAccounts: { try await server.accounts($0, limit: $1) },
                 searchHashtags: { try await server.hashtags($0, limit: $1) },
                 customEmojis: { try await server.emojis() },
@@ -134,7 +134,7 @@ struct ComposeCompletionTests {
                 statusTags: { try await server.statusTags() },
                 accounts: { await server.accounts($0) }
             ),
-            settings: ComposeCompletion.Settings(debounce: .milliseconds(30), limit: limit, minimumSearchQueryLength: minimumSearch),
+            settings: CompletionModel.Settings(debounce: .milliseconds(30), limit: limit, minimumSearchQueryLength: minimumSearch),
             recentMentions: recentMentions,
             sleep: sleep
         )
@@ -148,7 +148,7 @@ struct ComposeCompletionTests {
         CompletionToken(kind: .emoji, range: 0 ..< 1 + query.utf16.count, query: query, needsLeadingSpace: false)
     }
 
-    private func accts(_ content: ComposeCompletion.Content?) -> [String] {
+    private func accts(_ content: CompletionModel.Content?) -> [String] {
         guard case .candidates(let candidates) = content else { return [] }
         return candidates.map(\.completion)
     }
@@ -266,12 +266,12 @@ struct ComposeCompletionTests {
     /// 絵文字のパレットを開いたときに、読み込み中の段を挟まずに並べるため。
     @Test func startsWithEmojisLoadedElsewhere() async throws {
         let server = server
-        let cache = CustomEmojiCaches(directory: TestScratch.url("ComposeCompletionTests-loaded-elsewhere"), clock: TestClock()).cache(for: URL(string: "https://example.social")!)
+        let cache = CustomEmojiCaches(directory: TestScratch.url("CompletionModelTests-loaded-elsewhere"), clock: TestClock()).cache(for: URL(string: "https://example.social")!)
         cache.remember(try await server.emojis(), loadStartedAt: cache.generation)
-        let completion = ComposeCompletion(
-            sources: ComposeCompletion.Sources(searchAccounts: { _, _ in [] }, searchHashtags: { _, _ in [] }, customEmojis: { try await server.emojis() })
+        let completion = CompletionModel(
+            sources: CompletionModel.Sources(searchAccounts: { _, _ in [] }, searchHashtags: { _, _ in [] }, customEmojis: { try await server.emojis() })
                 .remembering(customEmojisIn: cache),
-            settings: ComposeCompletion.Settings(debounce: .milliseconds(30), limit: 5)
+            settings: CompletionModel.Settings(debounce: .milliseconds(30), limit: 5)
         )
         #expect(completion.emojis?.map(\.shortcode) == ["blobcat_heart", "blobcat", "ablob", "taiyaki"])
         completion.loadEmojisIfNeeded()
@@ -285,11 +285,11 @@ struct ComposeCompletionTests {
     /// 取得元に覚えさせると、読めた絵文字のリストを覚え、次の画面の補完に渡せる。読めなかったときは、前に読めたリストを残す。
     @Test func remembersLoadedEmojisInCache() async throws {
         let server = server
-        let cache = CustomEmojiCaches(directory: TestScratch.url("ComposeCompletionTests-emojis"), clock: TestClock()).cache(for: URL(string: "https://example.social")!)
-        let sources = ComposeCompletion.Sources(searchAccounts: { _, _ in [] }, searchHashtags: { _, _ in [] }, customEmojis: { try await server.emojis() })
+        let cache = CustomEmojiCaches(directory: TestScratch.url("CompletionModelTests-emojis"), clock: TestClock()).cache(for: URL(string: "https://example.social")!)
+        let sources = CompletionModel.Sources(searchAccounts: { _, _ in [] }, searchHashtags: { _, _ in [] }, customEmojis: { try await server.emojis() })
             .remembering(customEmojisIn: cache)
         #expect(cache.emojis == nil)
-        let completion = ComposeCompletion(sources: sources, settings: ComposeCompletion.Settings(debounce: .milliseconds(30), limit: 5))
+        let completion = CompletionModel(sources: sources, settings: CompletionModel.Settings(debounce: .milliseconds(30), limit: 5))
         completion.loadEmojisIfNeeded()
         try await waitUntil { cache.emojis != nil }
         #expect(cache.emojis?.count == 5)
@@ -429,7 +429,7 @@ struct ComposeCompletionTests {
 
     /// 止められている間は、補完では自動で読み込み直さないので、押せば読み込めると伝える。
     @Test func pausedMessageSaysTapToRetry() {
-        let message = ComposeCompletion.failure(for: AutomaticRequestsPaused(until: Date(timeIntervalSince1970: 1_800_000_000))).text
+        let message = CompletionModel.failure(for: AutomaticRequestsPaused(until: Date(timeIntervalSince1970: 1_800_000_000))).text
         #expect(message.contains("タップして再読み込みできます"))
         #expect(!message.contains("自動で"))
     }
@@ -438,7 +438,7 @@ struct ComposeCompletionTests {
     @Test func failureKeepsLoggedOutAccount() {
         let sender = RequestAccount(id: "https://fedibird.com#9004", handle: "@Eai@fedibird.com")
 
-        #expect(ComposeCompletion.failure(for: MastodonAPIError(statusCode: 401, message: "", account: sender)).loggedOutAccount == sender)
+        #expect(CompletionModel.failure(for: MastodonAPIError(statusCode: 401, message: "", account: sender)).loggedOutAccount == sender)
     }
 
     private func hashtag(_ query: String) -> CompletionToken {
@@ -689,7 +689,7 @@ struct ComposeCompletionTests {
         completion.textDidChange(hashtag("ra"))
         try await waitUntil { !completion.isLoading }
         #expect(accts(completion.content) == ["#ra", "#rain"])
-        #expect(await server.hashtagLimits == [ComposeCompletion.hashtagSearchLimit])
+        #expect(await server.hashtagLimits == [CompletionModel.hashtagSearchLimit])
     }
 
     /// サーバーが同じタグとして扱う表記（アクセント、全角、大文字）は、自分のタグの方だけを残す。
@@ -732,7 +732,7 @@ struct ComposeCompletionTests {
     // MARK: - 手元の候補
 
     private func makeRecentMentions() throws -> RecentMentions {
-        let defaults = TestScratch.defaults("ComposeCompletionTests")
+        let defaults = TestScratch.defaults("CompletionModelTests")
         return RecentMentions(defaults: defaults, account: "@me@example.social")
     }
 
@@ -865,12 +865,12 @@ struct ComposeCompletionTests {
     /// 投稿するアカウントを替えたら、替えた先のサーバーの絵文字を読み直す。替える前に読み始めた応答は使わない。
     @Test func switchingSourcesForgetsEmojisOfPreviousServer() async throws {
         let gate = Gate()
-        let home = ComposeCompletion.Sources(searchAccounts: { _, _ in [] }, searchHashtags: { _, _ in [] }, customEmojis: {
+        let home = CompletionModel.Sources(searchAccounts: { _, _ in [] }, searchHashtags: { _, _ in [] }, customEmojis: {
             try await gate.wait()
             return [.stub("home")]
         })
-        let other = ComposeCompletion.Sources(searchAccounts: { _, _ in [] }, searchHashtags: { _, _ in [] }, customEmojis: { [.stub("other")] })
-        let completion = ComposeCompletion(sources: home, settings: ComposeCompletion.Settings(debounce: .milliseconds(30), limit: 5))
+        let other = CompletionModel.Sources(searchAccounts: { _, _ in [] }, searchHashtags: { _, _ in [] }, customEmojis: { [.stub("other")] })
+        let completion = CompletionModel(sources: home, settings: CompletionModel.Settings(debounce: .milliseconds(30), limit: 5))
 
         completion.loadEmojisIfNeeded()
         completion.switchSources(other, recentMentions: nil)
@@ -884,9 +884,9 @@ struct ComposeCompletionTests {
     /// 個人セットは、絵文字のパレットを開くたびに読み直す。読み直せなかったときは、前に読んだものを残す。
     @Test func reloadsPersonalEmojiSetAndKeepsItOnFailure() async throws {
         let responses = PersonalSetResponses([.success(.stub("first")), .failure(URLError(.timedOut)), .success(.stub("second"))])
-        var sources = ComposeCompletion.Sources.unavailable
+        var sources = CompletionModel.Sources.unavailable
         sources.personalEmojiSet = { try await responses.next() }
-        let completion = ComposeCompletion(sources: sources, settings: ComposeCompletion.Settings(debounce: .milliseconds(30), limit: 5))
+        let completion = CompletionModel(sources: sources, settings: CompletionModel.Settings(debounce: .milliseconds(30), limit: 5))
 
         completion.loadEmojisIfNeeded()
         try await waitUntil { await responses.served >= 1 && completion.personalEmojiSet != nil }
@@ -903,14 +903,14 @@ struct ComposeCompletionTests {
     /// 投稿するアカウントを替えたら、前のアカウントの個人セットを捨てる。替える前に読み始めた応答は使わない。
     @Test func switchingSourcesForgetsPersonalEmojiSet() async throws {
         let gate = Gate()
-        var home = ComposeCompletion.Sources.unavailable
+        var home = CompletionModel.Sources.unavailable
         home.personalEmojiSet = {
             try await gate.wait()
             return .stub("home")
         }
-        var other = ComposeCompletion.Sources.unavailable
+        var other = CompletionModel.Sources.unavailable
         other.personalEmojiSet = { .stub("other") }
-        let completion = ComposeCompletion(sources: home, settings: ComposeCompletion.Settings(debounce: .milliseconds(30), limit: 5))
+        let completion = CompletionModel(sources: home, settings: CompletionModel.Settings(debounce: .milliseconds(30), limit: 5))
 
         completion.loadEmojisIfNeeded()
         completion.switchSources(other, recentMentions: nil)

@@ -376,7 +376,7 @@ actor CustomEmojiFiles {
 
 }
 
-extension ComposeCompletion.Sources {
+extension CompletionModel.Sources {
     /// カスタム絵文字のリストを読めたら、`cache`に残させ、補完が作られたときと読み直す前に、残したリストを渡させる。
     /// 読めなかったときは、前に読めたリストを残す。
     public func remembering(customEmojisIn cache: CustomEmojiCache) -> Self {

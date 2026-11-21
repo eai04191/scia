@@ -106,7 +106,7 @@ enum AnnouncementsCatalog {
                     model.apply(.announcement(row))
                 }
             }
-            let completion = TextInputCompletion(completion: ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)), recentEmojis: nil, settings: AppDependencies.settings)
+            let completion = TextInputCompletion(completion: CompletionModel(sources: .unavailable, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)), recentEmojis: nil, settings: AppDependencies.settings)
             let controller = AnnouncementsViewController(model: model, completion: completion, settings: AppDependencies.settings, now: { now })
             return CatalogControllerHost(UINavigationController(rootViewController: controller), height: rows.isEmpty ? 260 : 480)
         }

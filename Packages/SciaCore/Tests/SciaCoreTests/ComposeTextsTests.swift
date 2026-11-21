@@ -10,7 +10,7 @@ struct ComposeTextsTests {
     }
 
     @Test func localAccountSubtitleMarksTheHandle() {
-        let subtitle = ComposeTexts.Completion.localAccountSubtitle(acct: "bob@remote.example", source: .recent)
+        let subtitle = CompletionTexts.localAccountSubtitle(acct: "bob@remote.example", source: .recent)
 
         #expect(subtitle.text == "@bob@remote.example・前にメンションした人")
         #expect(subtitle.text[subtitle.emphasis] == "@bob@remote.example")
@@ -18,8 +18,8 @@ struct ComposeTextsTests {
     }
 
     @Test func hashtagLabelAddsNoteOnlyWhenGiven() {
-        #expect(ComposeTexts.Completion.hashtagAccessibilityLabel(name: "scia") == "ハッシュタグ scia")
-        #expect(ComposeTexts.Completion.hashtagAccessibilityLabel(name: "scia", note: OwnHashtag.Source.recent.title) == "ハッシュタグ scia、最近使ったタグ")
+        #expect(CompletionTexts.hashtagAccessibilityLabel(name: "scia") == "ハッシュタグ scia")
+        #expect(CompletionTexts.hashtagAccessibilityLabel(name: "scia", note: OwnHashtag.Source.recent.title) == "ハッシュタグ scia、最近使ったタグ")
     }
 
     @Test func pollOptionsCountFromOne() {

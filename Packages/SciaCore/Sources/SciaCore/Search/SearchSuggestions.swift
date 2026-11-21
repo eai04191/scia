@@ -88,7 +88,7 @@ public final class SearchSuggestions {
     public private(set) var content = Content()
     private let client: MastodonClient
     private let recents: RecentSearches
-    private let settings: ComposeCompletion.Settings
+    private let settings: CompletionModel.Settings
     private let clock: any Clock<Duration>
     private let tasks: TaskScope
     private let logger = SciaLog.logger(category: "search")
@@ -96,7 +96,7 @@ public final class SearchSuggestions {
     public var runningTaskCount: Int { tasks.runningCount }
 
     /// - Parameter settings: 投稿欄の補完と同じ、問い合わせるまでの間合い、出す数、サーバーで探す文字数。
-    public init(client: MastodonClient, recents: RecentSearches, settings: ComposeCompletion.Settings, clock: any Clock<Duration> = SystemTime.clock, tasks: TaskScope) {
+    public init(client: MastodonClient, recents: RecentSearches, settings: CompletionModel.Settings, clock: any Clock<Duration> = SystemTime.clock, tasks: TaskScope) {
         self.client = client
         self.recents = recents
         self.settings = settings

@@ -1931,15 +1931,15 @@ public enum TuningCatalog {
     )
 
     @MainActor
-    public static func completionSettings(in store: TuningStore) -> ComposeCompletion.Settings {
-        ComposeCompletion.Settings(
+    public static func completionSettings(in store: TuningStore) -> CompletionModel.Settings {
+        CompletionModel.Settings(
             debounce: .milliseconds(Int(store.value(of: completionDebounce) * 1000)),
             limit: Int(store.value(of: completionLimit)),
             minimumSearchQueryLength: Int(store.value(of: completionMinimumQuery))
         )
     }
 
-    /// 語にする文字数。メンションとハッシュタグは記号だけでも語にし、サーバーで探すかは`ComposeCompletion`が決める。
+    /// 語にする文字数。メンションとハッシュタグは記号だけでも語にし、サーバーで探すかは`CompletionModel`が決める。
     @MainActor
     public static func completionMinimumQueryLength(in store: TuningStore) -> [CompletionKind: Int] {
         [.mention: 0, .hashtag: 0, .emoji: Int(store.value(of: completionEmojiMinimumQuery))]

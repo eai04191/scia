@@ -8,7 +8,7 @@ import UIKit
 /// 選んだものを入力欄に入れることだけを受け持つ。
 @MainActor
 final class TextInputCompletion {
-    let completion: ComposeCompletion
+    let completion: CompletionModel
     /// 最近使ったカスタム絵文字。パレットの先頭に出す。なければ出さず、覚えない。
     private let recentEmojis: RecentEmojis?
     private let tuning: TuningStore
@@ -29,7 +29,7 @@ final class TextInputCompletion {
     private(set) weak var input: (any UITextInput)?
     private var inputHadMarkedText = false
 
-    init(completion: ComposeCompletion, recentEmojis: RecentEmojis?, tuning: TuningStore = AppDependencies.tuning, settings: AppSettings) {
+    init(completion: CompletionModel, recentEmojis: RecentEmojis?, tuning: TuningStore = AppDependencies.tuning, settings: AppSettings) {
         self.completion = completion
         self.recentEmojis = recentEmojis
         self.tuning = tuning

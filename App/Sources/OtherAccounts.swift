@@ -191,9 +191,9 @@ final class OtherAccounts {
             return known.picker
         }
         let client = client(for: account)
-        let sources = ComposeCompletion.Sources(client: client).readingPersonalEmojiSet(with: client) { try await account.loadedCapabilities { try await client.serverCapabilities() } }
+        let sources = CompletionModel.Sources(client: client).readingPersonalEmojiSet(with: client) { try await account.loadedCapabilities { try await client.serverCapabilities() } }
         let picker = EmojiReactionPicker(completion: TextInputCompletion(
-            completion: ComposeCompletion(sources: sources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
+            completion: CompletionModel(sources: sources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
             recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance),
             settings: settings
         ))
