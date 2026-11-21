@@ -99,13 +99,18 @@ struct RichTextRenderer: Sendable {
 
     /// カスタム絵文字の画像の、描いたときの状態。
     enum EmojiImageState: Equatable {
-        case loaded(UIImage)
+        /// 画像と、それを描く高さのピクセル数。
+        case loaded(UIImage, pixelHeight: Int)
         case loading
         case failed
 
+        /// 同じURLの画像なら、描き方が同じになるものを等しいとする。ストアはURLごとに一番高く読んだ1枚だけを持つので、ほかの画面が大きく読み直すと画像が替わるが、
+        /// 前の画像が描く高さに足りていれば（`EmojiImageStore.upscaleTolerance`まで）、どちらで描いても見た目は変わらない。替わるたびに作り直すと、
+        /// すでに絵文字を描けている本文を、見た目の変わらないまま作り直すため。
         static func == (lhs: Self, rhs: Self) -> Bool {
             switch (lhs, rhs) {
-            case (.loaded(let lhs), .loaded(let rhs)): lhs === rhs
+            case (.loaded(let lhs, let height), .loaded(let rhs, _)):
+                lhs === rhs || lhs.pixelSize == rhs.pixelSize || (lhs.covers(pixelHeight: height) && rhs.covers(pixelHeight: height))
             case (.loading, .loading), (.failed, .failed): true
             default: false
             }
@@ -121,7 +126,7 @@ struct RichTextRenderer: Sendable {
         // カスタム絵文字を描かないときは、画像を求めない。求めると読み込みが始まる。
         for url in urls where showsCustomEmojis {
             switch emojiState(of: url, pixelHeight: EmojiImageStore<UIImage>.pixelHeight) {
-            case .loaded(let image): images[url] = image
+            case .loaded(let image, _): images[url] = image
             case .failed: failed.insert(url)
             case .loading: break
             }
@@ -139,10 +144,10 @@ struct RichTextRenderer: Sendable {
         case .store(let store):
             MainActor.assumeIsolated {
                 // 先に画像を求める。前に読めなかった画像も、間隔が過ぎていればここで読み直しが始まる。
-                if let image = store.image(for: url, pixelHeight: pixelHeight) { .loaded(image) } else if store.hasFailed(url) { .failed } else { .loading }
+                if let image = store.image(for: url, pixelHeight: pixelHeight) { .loaded(image, pixelHeight: pixelHeight) } else if store.hasFailed(url) { .failed } else { .loading }
             }
         case .snapshot(let images, let failed):
-            if let image = images[url] { .loaded(image) } else if failed.contains(url) { .failed } else { .loading }
+            if let image = images[url] { .loaded(image, pixelHeight: pixelHeight) } else if failed.contains(url) { .failed } else { .loading }
         }
     }
 
@@ -434,7 +439,7 @@ struct RichTextRenderer: Sendable {
         if state == .failed {
             return NSAttributedString(string: ":\(emoji.shortcode):", attributes: attributes(style: [], block: block))
         }
-        let image: UIImage? = if case .loaded(let image) = state { image } else { nil }
+        let image: UIImage? = if case .loaded(let image, _) = state { image } else { nil }
         // 絵文字の中心を、和文の字面（em枠）の中心に揃える。文字と大きさが違っても、文字が絵文字の横の真ん中に来るようにするため。
         // 欧文の大文字の中心とも0.03emほどしか違わない。等倍の絵文字は、下端がほぼ文字の下端（descender）に来る。
         let y = Self.emojiCenterHeight * font.pointSize - height / 2
@@ -773,5 +778,17 @@ extension NSAttributedString {
     /// 自動翻訳のマークの空きを除いた文字。読み上げに渡す。
     var stringWithoutTranslationMark: String {
         withoutTranslationMark.string
+    }
+}
+
+private extension UIImage {
+    /// 画素の幅と高さ。
+    var pixelSize: CGSize {
+        CGSize(width: size.width * scale, height: size.height * scale)
+    }
+
+    /// `pixelHeight`の高さで描くのに、拡大しすぎずに描けるか。`EmojiImageStore`が読み直さずに拡大して描く割合と同じにする。
+    func covers(pixelHeight: Int) -> Bool {
+        Double(size.height * scale) * EmojiImageStore<UIImage>.upscaleTolerance >= Double(pixelHeight)
     }
 }

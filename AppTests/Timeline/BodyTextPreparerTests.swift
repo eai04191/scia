@@ -125,6 +125,34 @@ struct BodyTextPreparerTests {
         #expect(failed.text.string.contains(":blob:"))
     }
 
+    /// 本文の絵文字の画像を、ほかの画面（絵文字ピッカーのプレビューなど）が大きく読み直しても、前の画像で描く高さに足りていれば、作っておいた本文をそのまま使う。
+    /// 見た目の変わらないまま、すでに絵文字を描けている本文を作り直さないため。
+    @Test func largerReloadByAnotherScreenKeepsPreparedText() async throws {
+        let preparer = BodyTextPreparer()
+        let png = UIGraphicsImageRenderer(size: CGSize(width: 400, height: 400), format: {
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            return format
+        }()).pngData { context in
+            UIColor.red.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 400, height: 400))
+        }
+        let store = EmojiImageStore<UIImage> { _ in png }
+        let builder = builder(emojiImages: store, preparer: preparer)
+        let status = status("<p>絵文字 :blob:</p>", emojis: [emoji])
+        _ = store.image(for: emoji.staticUrl)
+        try await waitUntil { store.image(for: emoji.staticUrl) != nil }
+        _ = try await prepare(status, builder: builder, preparer: preparer, geometry: nil)
+        let before = try #require(store.image(for: emoji.staticUrl))
+
+        let palette = NSObject()
+        store.addListener(owner: palette) { _ in }
+        _ = store.image(for: emoji.staticUrl, pixelHeight: 360, requester: palette)
+        try await waitUntil { store.image(for: emoji.staticUrl) !== before }
+
+        #expect(preparer.prepared(for: status, translation: nil, renderer: builder.postBodyRenderer(of: status)) != nil)
+    }
+
     /// 訳文で頼んだ本文は訳文で作り、原文で描くときには使わない。
     @Test func preparesTranslatedBody() async throws {
         let preparer = BodyTextPreparer()
