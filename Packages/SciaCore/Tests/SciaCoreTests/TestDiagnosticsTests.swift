@@ -74,7 +74,7 @@ struct TestDiagnosticsTests {
         let output = Mutex<[String: Data]>([:])
         registry.captureFiles { data, name in output.withLock { $0[name] = data } }
         let manifest = String(decoding: try #require(output.withLock { $0["scratch-files.txt"] }), as: UTF8.self)
-        #expect(manifest.contains(root.path))
+        #expect(manifest.contains(root.resolvingSymlinksInPath().path), "\(manifest)")
         #expect(manifest.contains("列挙できませんでした"))
     }
 
