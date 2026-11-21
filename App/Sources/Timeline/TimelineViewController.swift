@@ -797,15 +797,57 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                 sendOut(old.snapshot, from: old.minY, to: minY, duration: duration)
             }
         }
+        let edgeShifts = rowEdgeShifts(before: before.mapValues { ($0.minY, $0.maxY) }, after: after.mapValues { ($0.minY, $0.maxY) }, resized: ids)
+        for (id, row) in after where before[id] == nil {
+            guard let shift = edgeShifts[id]?.top else { continue }
+            if shiftRow(row.cell.layer, by: shift, duration: duration) {
+                moved.append(row.cell)
+            }
+        }
         for (key, separator) in visibleSeparators() {
-            guard let old = separatorsBefore[key]?.minY else { continue }
-            if shiftRow(separator.view.layer, by: separator.minY - old, duration: duration) {
+            let shift: CGFloat? = if let old = separatorsBefore[key]?.minY {
+                separator.minY - old
+            } else {
+                // 行の下端に付く区切り線なので、その行の下端と同じだけ動かす。
+                after.filter { $0.value.minY <= separator.minY && separator.minY <= $0.value.maxY + 1 }
+                    .min { abs($0.value.maxY - separator.minY) < abs($1.value.maxY - separator.minY) }
+                    .flatMap { edgeShifts[$0.key]?.bottom }
+            }
+            if let shift, shiftRow(separator.view.layer, by: shift, duration: duration) {
                 moved.append(separator.view)
             }
         }
         for view in moved {
             collectionView.bringSubviewToFront(view)
         }
+    }
+
+    /// 描き直したあとに見えている行の、上端と下端が描き直しで動いた長さ（画面の座標）。
+    /// 描き直す前は表示領域の外にあり、描き直して表示領域に入った行（長い本文を折りたたんで、下の行が上がってきたなど）は、前の位置が分からないので、
+    /// 前から出ていた一番近い行から求める。高さが変わるのは描き直した行だけなので、そのあいだに並ぶ行は、上にある前から出ていた行の下端と同じだけ動いている。
+    /// 上に前から出ていた行がなければ、下にある前から出ていた行の上端に合わせる。あいだに、前の高さの分からない描き直した行があれば求めない。
+    private func rowEdgeShifts(before: [ItemID: (minY: CGFloat, maxY: CGFloat)], after: [ItemID: (minY: CGFloat, maxY: CGFloat)], resized: Set<ItemID>) -> [ItemID: (top: CGFloat, bottom: CGFloat)] {
+        let order = after.keys.compactMap { id in dataSource.indexPath(for: id).map { (id, $0) } }.sorted { $0.1 < $1.1 }.map(\.0)
+        var shifts: [ItemID: (top: CGFloat, bottom: CGFloat)] = [:]
+        for id in order {
+            guard let new = after[id], let old = before[id] else { continue }
+            shifts[id] = (new.minY - old.minY, new.maxY - old.maxY)
+        }
+        func nearest(from index: Int, step: Int, edge: ((top: CGFloat, bottom: CGFloat)) -> CGFloat) -> CGFloat? {
+            var cursor = index + step
+            while order.indices.contains(cursor) {
+                let id = order[cursor]
+                if before[id] != nil { return shifts[id].map(edge) }
+                if resized.contains(id) { return nil }
+                cursor += step
+            }
+            return nil
+        }
+        for (index, id) in order.enumerated() where before[id] == nil && !resized.contains(id) {
+            guard let shift = nearest(from: index, step: -1, edge: \.bottom) ?? nearest(from: index, step: 1, edge: \.top) else { continue }
+            shifts[id] = (shift, shift)
+        }
+        return shifts
     }
 
     /// `reconfigureShiftingRowsBelow`が、`duration`で動かしてつなぐか。動かさないときは、動きなしで描き直す。

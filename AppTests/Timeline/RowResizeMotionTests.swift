@@ -51,6 +51,33 @@ struct RowResizeMotionTests {
         #expect(abs(mask.frame.minY - textTop) < 0.01, "なくなった本文の枠の上の端まで縮めていません")
     }
 
+    /// 画面より長い本文の注意書きを閉じると、閉じる前は表示領域の外にあって、閉じて表示領域に入った下の行も、すぐ下の行と同じだけ下から動かす。
+    /// 動かさないと、その行だけが最後の位置に1コマで現れ、動くのはすぐ下の行だけになる。
+    @Test func closingLongSpoilerShiftsRowsEnteringFromBelow() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
+        statuses[10] = replacing(statuses[10], content: (1...60).map { "<p>注意書きの下の本文の\($0)段落目</p>" }.joined(), spoilerText: "注意書き")
+        harness.setStatuses(statuses)
+        let id = TimelineViewController.ItemID.status(statuses[10].id)
+        try harness.scroll(to: id, at: .top)
+        harness.viewController.toggleSpoiler(of: statuses[10], keeping: id)
+        harness.collectionView.layoutIfNeeded()
+        let below = (11...13).map { TimelineViewController.ItemID.status(statuses[$0].id) }
+        #expect(below.allSatisfy { harness.visibleCell(of: $0) == nil }, "開いた本文が画面より短く、下の行が表示領域に残っています")
+        try await waitUntil { harness.visibleCell(of: id)?.snapshotView(afterScreenUpdates: false) != nil }
+
+        harness.viewController.toggleSpoiler(of: statuses[10], keeping: id)
+
+        let shifts = try below.map { item in
+            let cell = try #require(harness.visibleCell(of: item), "閉じても下の行が表示領域に入っていません")
+            let moves = (cell.layer.animationKeys() ?? []).filter { $0.hasPrefix("rowShift") }.compactMap { (cell.layer.animation(forKey: $0) as? CABasicAnimation)?.fromValue as? CGPoint }
+            return try #require(moves.first, "閉じて表示領域に入った行を動かしていません").y
+        }
+        #expect(try #require(shifts.first) > 0, "下の行を下から動かしていません")
+        #expect(shifts.allSatisfy { abs($0 - shifts[0]) < 0.5 }, "下の行が同じだけ動いていません: \(shifts)")
+    }
+
     /// 編集で本文が伸びた行も、その行の位置を保ち、下の行を元の位置から動かす。
     @Test func editedRowShiftsRowsBelow() throws {
         let harness = try TimelineHarness()
