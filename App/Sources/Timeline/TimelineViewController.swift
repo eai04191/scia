@@ -3453,7 +3453,8 @@ extension TimelineViewController {
     }
 
     /// スナップショットを当て、更新前の基準の要素を同じ位置に戻す。戻した基準を返す。
-    /// `anchorID`がなければ、表示領域の上端にあった要素を基準にする。
+    /// `anchorID`がないか、表示領域の外にあれば、表示領域の上端にあった要素を基準にする。
+    /// 画面外の要素の位置を保つと、その要素と表示領域の間で増えた分だけ、読んでいる行が動くため（ギャップの読み込みを待つ間にギャップを越えて読み進めたときなど）。
     /// - Parameter ids: 中身を描き直す行。上端が表示領域の上端より上にある行が含まれていて、その高さが変わったら、その行の下端を保つ（`upwardResizingRow`）。
     ///   描き直しても高さが変わらなければ、上端を保つ。描き直す行には、高さの変わらない行も入るため（同じ絵文字を使う行など）。
     @discardableResult
@@ -3462,7 +3463,7 @@ extension TimelineViewController {
         defer { isRestoringAnchor = false }
         // 表示領域の上端にかかっている行が消えるときは、残る行のうち一番上に見えている行を基準にする。
         // 消える行を基準にすると、当て直したあとに位置を合わせる行がなく、読んでいる行が流れるため。指定された行が消えるときも同じにする。
-        let remainingAnchorID = anchorID.flatMap { snapshot.indexOfItem($0) != nil ? $0 : nil }
+        let remainingAnchorID = anchorID.flatMap { snapshot.indexOfItem($0) != nil && isVisible($0) ? $0 : nil }
         let remaining = Set(snapshot.itemIdentifiers)
         let upward = remainingAnchorID == nil ? upwardResizingRow(ids, among: remaining) : nil
         guard var anchor = remainingAnchorID.flatMap(anchor(of:)) ?? currentAnchor(among: remaining) else {
@@ -3477,6 +3478,16 @@ extension TimelineViewController {
             restore(anchor)
         }
         return anchor
+    }
+
+    private func isVisible(_ id: ItemID) -> Bool {
+        collectionView.layoutIfNeeded()
+        guard let indexPath = dataSource.indexPath(for: id),
+              let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame
+        else { return false }
+        let visibleTop = collectionView.contentOffset.y + collectionView.adjustedContentInset.top
+        let visibleBottom = collectionView.contentOffset.y + collectionView.bounds.height - collectionView.adjustedContentInset.bottom
+        return frame.maxY > visibleTop && frame.minY < visibleBottom
     }
 
     /// contentOffsetを動かすと、新たに表示されたセルが推定サイズから実サイズへ変わり、基準の位置がまたずれる。

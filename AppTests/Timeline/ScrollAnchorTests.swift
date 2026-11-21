@@ -574,6 +574,30 @@ struct ScrollAnchorTests {
         #expect(abs(after - before) <= tolerance, "ギャップの下の投稿が\(after - before)pt動きました")
     }
 
+    /// ギャップを古い側から読み始めたあと、応答が届くまでにギャップを越えて上へ読み進めても、読んでいる投稿が画面上で動かない。
+    @Test(arguments: [3, 40])
+    func gapResponseAfterCrossingKeepsVisibleRow(loadedCount: Int) throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let (entries, gap, above, below) = entriesWithGap()
+        harness.viewController.setEntries(entries)
+        try harness.scroll(to: .gap(gap.id), at: .top)
+        let loadingAnchor = TimelineEntry.ID.status(below.id)
+        try harness.scroll(to: .status(above.id), at: .bottom)
+        let reading = try #require(harness.viewController.currentAnchor())
+        let before = try #require(harness.windowMinY(of: reading.id))
+        let offsetBefore = harness.collectionView.contentOffset.y
+
+        let loaded = StatusFactory.make(count: loadedCount, startingAt: 1_500)
+        harness.viewController.setEntries(
+            entriesWithGap(loadedInGap: loaded).entries,
+            keeping: loadingAnchor
+        )
+
+        let after = harness.windowMinY(of: reading.id)
+        #expect(after.map { abs($0 - before) <= tolerance } == true, "読み込み待ちの間にギャップを越えたあと、読んでいる行が動きました: offset=\(offsetBefore)→\(harness.collectionView.contentOffset.y), rowY=\(before)→\(String(describing: after))")
+    }
+
     /// 上から読み進めてギャップを新しい側から読むと、ギャップのすぐ上の投稿が画面上で動かない。
     @Test(arguments: [3, 40])
     func loadingGapFromNewerKeepsStatusAboveGap(loadedCount: Int) throws {
