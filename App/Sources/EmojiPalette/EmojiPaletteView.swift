@@ -324,8 +324,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         searchField.autocapitalizationType = .none
         searchField.autocorrectionType = .no
         searchField.spellCheckingType = .no
-        // ペーストした文字を、コピーしたとおりに入れる。理由は`GlyphLanguageTextView`の`smartInsertDeleteType`と同じ。
-        searchField.smartInsertDeleteType = .no
+        searchField.smartInsertDeleteType = .offOnMac
         searchField.returnKeyType = .done
         searchField.delegate = self
         searchField.addAction(UIAction { [weak self] _ in self?.onQueryChange() }, for: .editingChanged)

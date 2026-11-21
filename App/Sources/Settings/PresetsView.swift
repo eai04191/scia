@@ -364,7 +364,7 @@ enum PresetNameInput {
             field.text = text
             field.placeholder = SettingsTexts.Presets.name
             field.clearButtonMode = .whileEditing
-            field.smartInsertDeleteType = .no
+            field.smartInsertDeleteType = .offOnMac
             field.addAction(UIAction { [weak action, weak field] _ in
                 action?.isEnabled = !(field?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             }, for: .editingChanged)

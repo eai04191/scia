@@ -10,9 +10,9 @@ import UIKit
 class GlyphLanguageTextField: UITextField {
     private var language: String?
 
-    /// ペーストした文字を、コピーしたとおりに入れる。理由は`GlyphLanguageTextView`と同じ。
+    /// スマート挿入は`GlyphLanguageTextView`と同じに決める。
     override var smartInsertDeleteType: UITextSmartInsertDeleteType {
-        get { .no }
+        get { .offOnMac }
         set {}
     }
 

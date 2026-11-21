@@ -1393,8 +1393,7 @@ final class SessionController {
             field.text = item.title == defaultTitle ? "" : item.title
             field.placeholder = defaultTitle
             field.clearButtonMode = .whileEditing
-            // ペーストした文字を、コピーしたとおりに入れる。理由は`GlyphLanguageTextView`の`smartInsertDeleteType`と同じ。
-            field.smartInsertDeleteType = .no
+            field.smartInsertDeleteType = .offOnMac
         }
         alert.addAction(UIAlertAction(title: TabMenuTexts.Rename.cancel, style: .cancel))
         alert.addAction(UIAlertAction(title: TabMenuTexts.Rename.save, style: .default) { [weak self, weak alert, settings] _ in

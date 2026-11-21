@@ -7,10 +7,9 @@ import UIKit
 class GlyphLanguageTextView: UITextView, NSTextStorageDelegate {
     private var settings: AppSettings?
 
-    /// ペーストした文字を、コピーしたとおりに入れる。UIKitのスマート挿入は、英字の後ろに「─」を貼ると間に空白を足していた。
-    /// 人が書いてサーバーに送る文字の入力欄は、どれもこの型か`GlyphLanguageTextField`なので、ここで切る。
+    /// 人が書いてサーバーに送る文字の入力欄は、どれもこの型か`GlyphLanguageTextField`なので、スマート挿入はここで決める。
     override var smartInsertDeleteType: UITextSmartInsertDeleteType {
-        get { .no }
+        get { .offOnMac }
         set {}
     }
 

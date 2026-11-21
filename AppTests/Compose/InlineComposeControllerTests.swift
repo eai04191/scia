@@ -399,25 +399,45 @@ final class InlineComposeControllerTests {
         #expect(composer.overlappingRows.isEmpty, "行が重なりました\n\(composer.stateDump())")
     }
 
-    /// 英字の後ろに記号をペーストしても、本文と注意書きの欄が間に空白を足さない。UIKitのスマート挿入は、「abc」の後ろに「─」を貼ると「abc ─」にしていた。
-    @Test func pasteKeepsTextAsCopied() async throws {
+    /// 英字の後ろに記号をペーストしたとき、本文と注意書きの欄は、iOS標準の入力欄と同じ文字になる。
+    /// iOSのスマート挿入は設定のスマート句読点に従うので、端末の設定がどちらでも、標準の入力欄と比べる。
+    @Test func pasteMatchesStandardTextInput() async throws {
         defer { window.isHidden = true }
         composer.beginEditing()
         composer.model.showsSpoiler = true
         try await waitUntilSettled()
         let textView = try #require(textViews(in: window).first)
-        textView.becomeFirstResponder()
-        textView.insertText("abc")
-        textView.paste(itemProviders: [NSItemProvider(object: "─" as NSString)])
-        try await waitUntil { textView.text != "abc" }
-        #expect(textView.text == "abc─")
-
         let spoilerField = try #require(textFields(in: window).first { $0.placeholder?.hasPrefix("注意書き") == true })
-        spoilerField.becomeFirstResponder()
-        spoilerField.insertText("abc")
-        spoilerField.paste(itemProviders: [NSItemProvider(object: "─" as NSString)])
-        try await waitUntil { spoilerField.text != "abc" }
-        #expect(spoilerField.text == "abc─")
+        let standardView = UITextView()
+        let standardField = UITextField()
+        for view in [standardView, standardField] as [UIView] {
+            view.frame = CGRect(x: 0, y: 0, width: 200, height: 44)
+            window.addSubview(view)
+        }
+        defer {
+            standardView.removeFromSuperview()
+            standardField.removeFromSuperview()
+        }
+
+        var viewTexts: [String] = []
+        for view in [standardView, textView] {
+            view.becomeFirstResponder()
+            view.insertText("abc")
+            view.paste(itemProviders: [NSItemProvider(object: "─" as NSString)])
+            try await waitUntil { view.text != "abc" }
+            viewTexts.append(view.text)
+        }
+        #expect(viewTexts[1] == viewTexts[0], "本文が標準の入力欄と違います: \(viewTexts)")
+
+        var fieldTexts: [String] = []
+        for field in [standardField, spoilerField] {
+            field.becomeFirstResponder()
+            field.insertText("abc")
+            field.paste(itemProviders: [NSItemProvider(object: "─" as NSString)])
+            try await waitUntil { field.text != "abc" }
+            fieldTexts.append(field.text ?? "")
+        }
+        #expect(fieldTexts[1] == fieldTexts[0], "注意書きが標準の入力欄と違います: \(fieldTexts)")
     }
 
     /// 投票の欄を出して本文を書いているとき、欄を全部出すと本文に最低の行数も残らないなら、選択肢の欄を1行に折りたたむ。

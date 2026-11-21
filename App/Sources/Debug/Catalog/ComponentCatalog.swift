@@ -412,8 +412,7 @@ final class ComponentCatalogViewController: UIViewController, UISearchResultsUpd
         searchController.searchResultsUpdater = self
         searchController.obscuresBackgroundDuringPresentation = false
         searchController.searchBar.autocapitalizationType = .none
-        // ペーストした文字を、コピーしたとおりに入れる。理由は`GlyphLanguageTextView`の`smartInsertDeleteType`と同じ。
-        searchController.searchBar.searchTextField.smartInsertDeleteType = .no
+        searchController.searchBar.searchTextField.smartInsertDeleteType = .offOnMac
         navigationItem.searchController = searchController
         navigationItem.hidesSearchBarWhenScrolling = false
         collectionView.frame = view.bounds
