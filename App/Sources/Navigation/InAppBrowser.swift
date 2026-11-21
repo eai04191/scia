@@ -222,7 +222,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         guard fullScreen === session, session.collapsedSheet == nil, current == nil,
               let appWindow = session.appWindow, collapsesWhileLoading(in: appWindow),
               let root = appWindow.rootViewController else { return }
-        logger.info("in-app browser full screen collapse")
+        logger.info("in-app browser full screen collapse \(session.window.geometryLog, privacy: .public)")
         let browserSheet = makeSheet(safari: nil)
         browserSheet.initialDetent = .collapsed
         current = browserSheet
@@ -241,6 +241,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
             session.window.collapse(safariTop: top, sheet: shape) { [weak self, weak session] in
                 // 縮める途中に引き上げて、もう広げ始めていたら、合わせ続けない。
                 guard let self, let session, self.fullScreen === session, session.collapsedSheet === browserSheet, session.window.isCollapsed else { return }
+                self.logger.info("in-app browser full screen collapsed \(session.window.geometryLog, privacy: .public)")
                 self.startFollowing(session)
             }
         }
@@ -343,7 +344,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
             startFollowing(session)
             return
         }
-        logger.info("in-app browser full screen expand")
+        logger.info("in-app browser full screen expand \(session.window.geometryLog, privacy: .public)")
         session.expandsWhenUncovered = false
         session.awaitsFirstExpansion = false
         session.follower?.stop()
@@ -351,6 +352,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         session.window.alpha = 1
         onCoverageChange?(true)
         session.window.expand { [weak self, weak sheet] in
+            self?.logger.info("in-app browser full screen expanded \(session.window.geometryLog, privacy: .public)")
             // 広げ終えるまでに、別の伏せたシートに替わっていたら、そちらは片付けない。
             guard let self, let sheet, session.collapsedSheet === sheet else { return }
             // 広げる途中にシートの上に画面を重ねたら（行き先を開いたなど）、その画面を閉じない。読み込みの間に重ねたときと同じく、Safariを隠し、その画面を閉じてから広げる（`follow`）。

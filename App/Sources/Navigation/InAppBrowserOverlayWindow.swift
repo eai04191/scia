@@ -69,6 +69,23 @@ final class InAppBrowserOverlayWindow: UIWindow {
         barGrabView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(handleBarGrabTap)))
         barGrabView.addGestureRecognizer(barGrabPan)
         addSubview(barGrabView)
+        AppDependencies.stateDumps.register("inAppBrowserOverlay", owner: self) { $0.stateDump() }
+    }
+
+    /// 全画面のSafariが、伏せて広げたあとにたまにステータスバーの裏まで上がって描かれる（iPhone 16 Pro）。シミュレーターでは再現しないので、起きたときの位置と安全領域を違和感レポートで読めるようにする。
+    func stateDump() -> String {
+        let safari = presenter?.presentedViewController?.viewIfLoaded
+        return """
+        hidden: \(isHidden) collapsed: \(isCollapsed) safeArea: \(safeAreaInsets) barGrab: hidden=\(barGrabView.isHidden) frame=\(barGrabView.frame)
+        container: transform=\(safariContainer.map { "\($0.transform)" } ?? "nil") frame=\(safariContainer.map { "\($0.frame)" } ?? "nil") mask=\(safariContainer?.mask != nil)
+        safari: frame=\(safari.map { "\($0.frame)" } ?? "nil") shown=\(safari?.layer.presentation().map { "\($0.frame)" } ?? "nil") safeArea=\(safari.map { "\($0.safeAreaInsets)" } ?? "nil") speed=\(safari.map { "\($0.layer.speed)" } ?? "nil") beingDismissed=\(presenter?.presentedViewController?.isBeingDismissed ?? false)
+        """
+    }
+
+    /// 伏せる、広げるたびに、ログに残す値。
+    var geometryLog: String {
+        let safari = presenter?.presentedViewController?.viewIfLoaded
+        return "windowTop=\(safeAreaInsets.top) safariFrame=\(safari.map { "\($0.frame)" } ?? "nil") safariTop=\(safari.map { "\($0.safeAreaInsets.top)" } ?? "nil") containerTy=\(safariContainer.map { "\($0.transform.ty)" } ?? "nil")"
     }
 
     @available(*, unavailable)
