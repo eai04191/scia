@@ -29,7 +29,7 @@ final class ProfileEditViewController: UIViewController {
     private let loadingView = UIActivityIndicatorView(style: .medium)
     private let failureView = UIStackView()
     private let failureReason = FailureReasonStackView()
-    private lazy var completionList = ComposeCompletionList(settings: settings)
+    private lazy var completionList = CompletionList(settings: settings)
     private var completionListTop: NSLayoutConstraint?
     private var completionListHeight: NSLayoutConstraint?
     private var isCompletionListShown = false

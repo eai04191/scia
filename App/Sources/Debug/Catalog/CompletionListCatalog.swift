@@ -1,7 +1,7 @@
 import SciaCore
 import UIKit
 
-/// 投稿欄の補完の候補のリスト（`ComposeCompletionList`）の状態。ガラスの効果を見られるよう、画像の上に置く。
+/// 投稿欄の補完の候補のリスト（`CompletionList`）の状態。ガラスの効果を見られるよう、画像の上に置く。
 /// 押しても何も起きない。候補のリストが欄の上や打っている行の下に重なる見え方は、実物で確かめる。
 /// ふだんの出方に合わせて、いちばん優先する候補を一番下に置く（欄の上に出すとき）。上に置く出方は1つだけ並べる。
 enum CompletionListCatalog {
@@ -67,7 +67,7 @@ enum CompletionListCatalog {
 
     @MainActor
     private static func list(_ content: ComposeCompletion.Content, kind: CompletionKind, selected: Int = 0, growsUpward: Bool = true) -> UIView {
-        let list = ComposeCompletionList(settings: AppDependencies.settings)
+        let list = CompletionList(settings: AppDependencies.settings)
         list.growsUpward = growsUpward
         list.update(content, kind: kind, selectedIndex: selected)
         let height = list.contentHeight

@@ -394,7 +394,7 @@ final class InlineComposeController: NSObject {
     var completionDisplaySettings: AppSettings? {
         didSet { completionList.userDisplaySettings = completionDisplaySettings }
     }
-    private lazy var completionList = ComposeCompletionList(settings: settings)
+    private lazy var completionList = CompletionList(settings: settings)
     /// 欄の上に出すときの、候補のリストの下端を欄の上端に付ける制約。
     private var completionListAboveBar: NSLayoutConstraint?
     /// 本文に重ねるときの、候補のリストの上端の位置。打っている行に合わせて決める。
@@ -3572,7 +3572,7 @@ final class InlineComposeController: NSObject {
         let safeTop = host.view.safeAreaLayoutGuide.layoutFrame.minY
         let available = bar.frame.minY - completionListSpacing * 2 - safeTop
         // 欄の上に2行ぶんの場所がなければ、欄の中身に重ねる。欄の上に出すと、上の安全領域を越えて画面の外へはみ出し、選べなかったため。
-        let fitsAboveBar = available >= min(wanted, ComposeCompletionList.rowHeight * 2)
+        let fitsAboveBar = available >= min(wanted, CompletionList.rowHeight * 2)
         var height: CGFloat
         if !fitsAboveBar, let caret = textCompletion.caretRect(in: host.view) {
             let lower = tools.convert(tools.bounds, to: host.view).minY - completionListSpacing
@@ -3594,7 +3594,7 @@ final class InlineComposeController: NSObject {
             completionListAboveBar.isActive = false
             completionListTop.isActive = true
         } else {
-            height = max(available, min(wanted, ComposeCompletionList.rowHeight * 2))
+            height = max(available, min(wanted, CompletionList.rowHeight * 2))
             completionList.growsUpward = true
             completionListTop.isActive = false
             completionListAboveBar.isActive = true
@@ -4441,39 +4441,6 @@ final class ComposeLineField: GlyphLanguageTextField {
 
     @objc private func dismissCompletion() {
         completionKeys.dismiss()
-    }
-}
-
-/// 補完の候補を出している間の、ハードウェアキーボードの操作。
-@MainActor
-struct CompletionKeys {
-    /// 確定できる候補を出している。
-    var hasCandidate: () -> Bool = { false }
-    /// 候補のリストを出している（候補がなくても、読み込み中や失敗の行を出している）。
-    var isShown: () -> Bool = { false }
-    var move: (Int) -> Void = { _ in }
-    var confirm: () -> Void = {}
-    var dismiss: () -> Void = {}
-
-    /// 出している間だけ返す。出していないときは、↑↓・Tab・Return・Escはふだんどおり入力欄が受ける。
-    func commands(move: Selector, confirm: Selector, dismiss: Selector) -> [UIKeyCommand] {
-        var commands: [UIKeyCommand] = []
-        if hasCandidate() {
-            commands += [
-                UIKeyCommand(input: UIKeyCommand.inputUpArrow, modifierFlags: [], action: move),
-                UIKeyCommand(input: UIKeyCommand.inputDownArrow, modifierFlags: [], action: move),
-                UIKeyCommand(input: "\t", modifierFlags: [], action: confirm),
-                UIKeyCommand(input: "\r", modifierFlags: [], action: confirm),
-            ]
-        }
-        if isShown() {
-            commands.append(UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: dismiss))
-        }
-        // 矢印やTab、Returnは、入力欄の移動や改行より先に受ける。
-        for command in commands {
-            command.wantsPriorityOverSystemBehavior = true
-        }
-        return commands
     }
 }
 

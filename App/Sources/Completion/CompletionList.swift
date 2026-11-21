@@ -15,7 +15,7 @@ import UIKit
 /// UIKitの`containerConcentric`は、候補のリストをスクロールしても丸めが付け替わらなかったが、SwiftUIでは追従した。
 /// 置き場所の計算とハードウェアキーボードの操作は、投稿欄（UIKit）が受け持つ。
 @MainActor
-final class ComposeCompletionList: UIView {
+final class CompletionList: UIView {
     var userDisplaySettings: AppSettings? {
         get { model.userDisplaySettings }
         set { model.userDisplaySettings = newValue }
@@ -133,10 +133,10 @@ final class ComposeCompletionList: UIView {
 /// 行の見分け。中身と、打っている文字に近い端から何番目かの組で見分ける。前にも後にも同じ場所にある候補はその場に残し、
 /// 場所が変わった候補は、ほかの行の上を滑らせずに、消してから新しい場所に出す。滑らせると、ほかの行と文字が重なって読めなかった。
 private struct CompletionRowID: Hashable {
-    let row: ComposeCompletionList.Row
+    let row: CompletionList.Row
     let index: Int
 
-    static func ids(of rows: [ComposeCompletionList.Row]) -> [CompletionRowID] {
+    static func ids(of rows: [CompletionList.Row]) -> [CompletionRowID] {
         rows.enumerated().map { CompletionRowID(row: $1, index: $0) }
     }
 }
@@ -145,13 +145,13 @@ private struct CompletionRowID: Hashable {
 @Observable
 private final class CompletionListModel {
     /// 出したい行。投稿欄が置き場所を決めるのに使う。
-    @ObservationIgnored var rows: [ComposeCompletionList.Row] = []
+    @ObservationIgnored var rows: [CompletionList.Row] = []
     /// いま並べている行。入れ替えの途中は、消える候補を薄くしきるまで、前の行のまま。
-    var displayedRows: [ComposeCompletionList.Row] = []
+    var displayedRows: [CompletionList.Row] = []
     /// 薄くしている途中の、消える行。
     var fadingOut: Set<CompletionRowID> = []
     /// 薄くしきったら並べる行。薄くしている途中にまた入れ替わったら、ここだけを替える。
-    @ObservationIgnored private var pendingRows: [ComposeCompletionList.Row] = []
+    @ObservationIgnored private var pendingRows: [CompletionList.Row] = []
     /// 薄くしている途中か。
     @ObservationIgnored private(set) var isSwapping = false
     /// 薄くし始めた回数。前の薄くし方の続きを捨てるのに使う。
@@ -161,7 +161,7 @@ private final class CompletionListModel {
     /// 同時に入れ替えると、消える行と増える行が同じ場所で重なり、文字が二重に読めたため。
     /// 薄くしている途中にまた入れ替わったら、いま並べている行から比べ直し、見えている濃さから続ける。消す行が同じなら、その薄くし方を続け、
     /// 薄くしきったところで最新の行を並べる。同じ値を入れ直しても新しい動きにならず、続きがすぐ呼ばれて、薄くしきる前に行が消えるため。
-    func show(_ rows: [ComposeCompletionList.Row], animated: Bool) {
+    func show(_ rows: [CompletionList.Row], animated: Bool) {
         pendingRows = rows
         guard animated, rowFadeDuration > 0 else {
             fadeGeneration += 1
@@ -218,14 +218,14 @@ private struct CompletionListView: View {
     private struct Item: Identifiable {
         let id: CompletionRowID
         let index: Int
-        let row: ComposeCompletionList.Row
+        let row: CompletionList.Row
     }
 
     /// 下から積むときは、見た目だけを逆に並べる。
     ///
     /// 行には、番号ではなく、この時点で写し取った行の中身を渡す。番号だけを渡して描くときに`model.rows`を読むと、
     /// 候補が減った直後にSwiftUIが古い番号の行を描き直し、範囲外を読んで落ちた（実機で、自分のタグから検索の結果に入れ替わるとき）。
-    private func items(_ rows: [ComposeCompletionList.Row]) -> [Item] {
+    private func items(_ rows: [CompletionList.Row]) -> [Item] {
         let all = rows.enumerated().map { index, row in
             Item(id: CompletionRowID(row: row, index: index), index: index, row: row)
         }
@@ -244,20 +244,20 @@ private struct CompletionListView: View {
     /// 行を、打っている文字に近い端からの距離で置き、出してよい場所いっぱいの、大きさの変わらない入れ物に入れる。
     /// ガラスの形と、中身を切り抜く形だけを、候補の数に合わせた高さで動かす。行は、ガラスがどう伸び縮みしてもその場から動かない。
     /// 行をガラスの枠の中に入れて枠ごと高さを動かすと、行がガラスの端に引きずられて動いたため。
-    private func anchoredRows(_ items: [Item], rows: [ComposeCompletionList.Row]) -> some View {
+    private func anchoredRows(_ items: [Item], rows: [CompletionList.Row]) -> some View {
         let edge: Alignment = model.growsUpward ? .bottom : .top
         let paddedEdge: Edge.Set = model.growsUpward ? .bottom : .top
         var distances: [CGFloat] = []
-        var distance = ComposeCompletionList.verticalInset
+        var distance = CompletionList.verticalInset
         for row in rows {
             distances.append(distance)
-            distance += ComposeCompletionList.height(of: row)
+            distance += CompletionList.height(of: row)
         }
-        let glassHeight = ComposeCompletionList.contentHeight(of: rows)
+        let glassHeight = CompletionList.contentHeight(of: rows)
         return ZStack(alignment: edge) {
             ForEach(items) { item in
                 CompletionRowView(model: model, index: item.index, row: item.row, rowCount: rows.count)
-                    .frame(height: ComposeCompletionList.height(of: item.row))
+                    .frame(height: CompletionList.height(of: item.row))
                     .opacity(model.fadingOut.contains(item.id) ? 0 : 1)
                     // 端からの距離は`offset`ではなく余白で置く。`offset`はレイアウト上の位置を変えないので、
                     // 行の背景の`ConcentricRectangle`が、どの行も打っている文字に近い端に接しているものとして丸まり、反対の端の行が同心にならなかったため。
@@ -294,12 +294,12 @@ private struct CompletionListView: View {
         VStack(spacing: 0) {
             ForEach(items) { item in
                 CompletionRowView(model: model, index: item.index, row: item.row, rowCount: rowCount)
-                    .frame(height: ComposeCompletionList.height(of: item.row))
+                    .frame(height: CompletionList.height(of: item.row))
                     .opacity(model.fadingOut.contains(item.id) ? 0 : 1)
                     .transition(rowTransition)
             }
         }
-        .padding(.vertical, ComposeCompletionList.verticalInset)
+        .padding(.vertical, CompletionList.verticalInset)
     }
 
     /// ガラスの枠は、候補の数に合わせた高さにし、打っている文字に近い端に寄せる。候補の数が変わると、反対側の端が伸び縮みする。
@@ -347,7 +347,7 @@ private struct CompletionListView: View {
 private struct CompletionRowView: View {
     let model: CompletionListModel
     let index: Int
-    let row: ComposeCompletionList.Row
+    let row: CompletionList.Row
     let rowCount: Int
 
     var body: some View {
