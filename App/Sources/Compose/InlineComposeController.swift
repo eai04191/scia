@@ -1752,7 +1752,7 @@ final class InlineComposeController: NSObject {
 
     /// 言語の名前。サーバーに任せているときは、そう書く。
     private func languageName(_ code: String?) -> String {
-        guard let code else { return ComposeTexts.Language.serverDecides }
+        guard let code else { return PostingLanguageTexts.serverDecides }
         return PostingLanguage.localizedName(of: code, in: .current) ?? chosenLanguageNames[code] ?? PostingLanguage.badgeText(of: code)
     }
 

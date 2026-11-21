@@ -32,13 +32,13 @@ struct PostingLanguageView: View {
                     }
                 }
             }
-            .searchable(text: $picker.query, placement: .navigationBarDrawer(displayMode: .always), prompt: ComposeTexts.Language.searchPrompt)
+            .searchable(text: $picker.query, placement: .navigationBarDrawer(displayMode: .always), prompt: PostingLanguageTexts.searchPrompt)
             .topEdgeEffectHiddenOnMac()
             .navigationTitle(purpose.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(ComposeTexts.cancel, role: .cancel) { close() }
+                    Button(PostingLanguageTexts.cancel, role: .cancel) { close() }
                 }
             }
             .task(.action, id: loadGeneration) {
@@ -56,12 +56,12 @@ struct PostingLanguageView: View {
                 .frame(maxWidth: .infinity)
         case .failed(let error):
             VStack(alignment: .leading, spacing: 4) {
-                Text(ComposeTexts.Language.loadFailed)
+                Text(PostingLanguageTexts.loadFailed)
                 FailureReason(reason: ErrorPresentation(error), includesCode: false)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-            Button(ComposeTexts.retry) {
+            Button(PostingLanguageTexts.retry) {
                 loadGeneration += 1
             }
         case .loaded:
@@ -77,7 +77,7 @@ struct PostingLanguageView: View {
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(row.code == nil ? ComposeTexts.Language.serverDecides : row.name)
+                    Text(row.code == nil ? PostingLanguageTexts.serverDecides : row.name)
                     if row.code == nil {
                         Text(purpose.serverDecidesNote)
                             .font(.footnote)
