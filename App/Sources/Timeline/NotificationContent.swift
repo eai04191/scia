@@ -261,9 +261,9 @@ extension TimelineViewController {
         let attachment = AvatarTextAttachment()
         attachment.source = image
         attachment.image = Self.shapedAvatar(image, side: side, shape: content.shape, cornerRatio: content.cornerRatio)
-        attachment.bounds = CGRect(x: 0, y: max((font.ascender + font.descender - side) / 2, -font.pointSize * PostBodyView.emBoxDescent), width: side, height: side)
+        attachment.bounds = CGRect(x: 0, y: max((font.ascender + font.descender - side) / 2, -font.pointSize * GlyphMetrics.emBoxDescent), width: side, height: side)
         let string = NSMutableAttributedString(attachment: attachment)
-        // 行の上の余白は、最初の文字の書体と絵文字の上端から測る（`PostBodyView.textTopInset(of:)`）。文はアイコンから始まることがあるので、書体を付けておく。
+        // 行の上の余白は、最初の文字の書体と絵文字の上端から測る（`GlyphMetrics.textTopInset(of:)`）。文はアイコンから始まることがあるので、書体を付けておく。
         string.addAttribute(.font, value: font, range: NSRange(location: 0, length: string.length))
         // 画像の添付の文字には字送りが効かないので、後ろに空白を置き、空白の幅を差し引いた字送りで、すき間を設定の値にする。
         let spaceWidth = (" " as NSString).size(withAttributes: [.font: font]).width

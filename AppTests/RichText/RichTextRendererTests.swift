@@ -426,9 +426,9 @@ extension RichTextRendererTests {
         #expect(!string.substring(with: metrics.firstLineRange).contains("😀"))
         #expect(NSMaxRange(metrics.lastLineRange) == string.length)
         #expect(!string.substring(with: metrics.lastLineRange).contains("😀"))
-        #expect(PostBodyView.textTopInset(of: text, firstLine: metrics.firstLineRange) == font.pointSize * PostBodyView.emBoxAscent)
-        #expect(PostBodyView.textTopInset(of: text) > font.pointSize * PostBodyView.emBoxAscent, "段落で測ると絵文字の上端になる")
-        #expect(PostBodyView.textBottomInset(of: text, lastLine: metrics.lastLineRange) == font.pointSize * PostBodyView.emBoxDescent)
+        #expect(GlyphMetrics.textTopInset(of: text, firstLine: metrics.firstLineRange) == font.pointSize * GlyphMetrics.emBoxAscent)
+        #expect(GlyphMetrics.textTopInset(of: text) > font.pointSize * GlyphMetrics.emBoxAscent, "段落で測ると絵文字の上端になる")
+        #expect(GlyphMetrics.textBottomInset(of: text, lastLine: metrics.lastLineRange) == font.pointSize * GlyphMetrics.emBoxDescent)
     }
 
     /// 同じ行の中で「…」に置き換わった絵文字は描かない。

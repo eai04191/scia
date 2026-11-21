@@ -177,7 +177,7 @@ final class PostBodyView: UIView {
     private lazy var textKitFirstBaseline = textFirstBaselineGuide.topAnchor.constraint(equalTo: textLabel.topAnchor)
     private lazy var textKitLastBaseline = textLastBaselineGuide.topAnchor.constraint(equalTo: textLabel.bottomAnchor)
     /// 本文の最初の文字の字面の上端と、最後の文字の字面の下端の位置。本文の上下の部品は、ここからすき間を取って置く。
-    /// ベースラインからの距離（`textTopInset`、`textBottomInset`）は、行より広いカスタム絵文字を縮めて置くと並べる幅で変わるので、ベースラインと一緒に並べた幅で決め直す。
+    /// ベースラインからの距離（`GlyphMetrics.textTopInset`、`GlyphMetrics.textBottomInset`）は、行より広いカスタム絵文字を縮めて置くと並べる幅で変わるので、ベースラインと一緒に並べた幅で決め直す。
     private let textGlyphsTopGuide = UILayoutGuide()
     private let textGlyphsBottomGuide = UILayoutGuide()
     private lazy var textGlyphsTop = textFirstBaselineGuide.topAnchor.constraint(equalTo: textGlyphsTopGuide.topAnchor)
@@ -402,7 +402,7 @@ final class PostBodyView: UIView {
     /// フィルターの注記の枠。上端は、最初のベースラインからem枠で測った字面の上端にする。
     private func filterNoteGlyphsFrame(in space: UIView) -> [CGRect]? {
         guard let note = filterNote, let frame = note.previewFrame(in: space)?.first, let text = note.attributedText else { return nil }
-        let top = convert(CGPoint(x: 0, y: filterNoteBaselineGuide.layoutFrame.minY - Self.textTopInset(of: text)), to: space).y
+        let top = convert(CGPoint(x: 0, y: filterNoteBaselineGuide.layoutFrame.minY - GlyphMetrics.textTopInset(of: text)), to: space).y
         return [CGRect(x: frame.minX, y: top, width: frame.width, height: max(frame.maxY - top, 0))]
     }
 
@@ -999,8 +999,8 @@ final class PostBodyView: UIView {
         if let source = textGlyphsInsetsSource, source.text === content.text, source.width == width, source.isTruncated == isTruncated { return false }
         textGlyphsInsetsSource = (content.text, width, isTruncated)
         let lines = textLabel.textKitLineRanges(of: content.text, width: width)
-        let top = Self.textTopInset(of: content.text, width: width, firstLine: lines?.first)
-        let bottom = Self.textBottomInset(of: content.text, isTruncated: isTruncated, width: width, lastLine: lines?.last)
+        let top = GlyphMetrics.textTopInset(of: content.text, width: width, firstLine: lines?.first)
+        let bottom = GlyphMetrics.textBottomInset(of: content.text, isTruncated: isTruncated, width: width, lastLine: lines?.last)
         guard textGlyphsTop.constant != top || textGlyphsBottom.constant != bottom else { return false }
         textGlyphsTop.constant = top
         textGlyphsBottom.constant = bottom
@@ -1202,8 +1202,8 @@ final class PostBodyView: UIView {
         // 先頭の記号は画像の文字なので、読み上げでは除く。
         filterNoteLabel.accessibilityLabel = note.string.trimmingCharacters(in: CharacterSet(charactersIn: "\u{FFFC}").union(.whitespaces))
         let lastBottom = bottomEdge(of: bottom)
-        variableConstraints.append(filterNoteLabel.firstBaselineAnchor.constraint(equalTo: lastBottom.anchor, constant: lastBottom.inset + spacing + Self.textTopInset(of: note)))
-        return .text(filterNoteLabel, bottomInset: Self.textBottomInset(of: note))
+        variableConstraints.append(filterNoteLabel.firstBaselineAnchor.constraint(equalTo: lastBottom.anchor, constant: lastBottom.inset + spacing + GlyphMetrics.textTopInset(of: note)))
+        return .text(filterNoteLabel, bottomInset: GlyphMetrics.textBottomInset(of: note))
     }
 
     /// アクションバーを一番下の部品の下に置き、自分の下端を決める。注意書きで折りたたんでいても出す。投稿への操作で、中身を開かなくても使えるため。
@@ -1238,44 +1238,6 @@ final class PostBodyView: UIView {
         case .beside(let parts, _): (anchor: parts, inset: 0)
         case .text(let label, let inset): (anchor: label.lastBaselineAnchor, inset: inset)
         }
-    }
-
-    /// 和文の字面の枠（em枠）の、ベースラインから上端と下端までの距離。日本語の字面はcapHeightより上に出るため、em枠で測る。
-    /// em枠はベースラインの上0.88em、下0.12emにあるとみなす。
-    nonisolated static let emBoxAscent: CGFloat = 0.88
-    nonisolated static let emBoxDescent: CGFloat = 0.12
-
-    /// 先頭の文字の、ベースラインから字面の上端まで。絵文字が字面より上へ伸びていれば、その上端まで。
-    /// 絵文字を文字の行より大きくした段落は、絵文字が字面の中心から上下へ伸び、行が文字の行より高くなる。
-    /// 字面だけで測ると、1行目の絵文字が上の部品（名前の行）に重なるため、絵文字の上端で測る。
-    /// 字面に、書体のascenderを超えた分だけを足すと、ascenderが字面より高いぶん絵文字の上端に届かず、上の部品との間隔が設定より狭くなる。
-    /// UILabelで描くラベルは段落のどの行も同じ高さに広げるので（`RichTextRenderer`の`minimumLineHeight`）、絵文字が1行目になくても最初の段落の絵文字で測る。
-    /// 段落の中の改行で区切った行は、高さが違えば`RichTextRenderer`が段落に分けるので、最初の段落は改行の前の行だけになる。
-    /// - Parameter width: 並べる幅。渡せば、行より広いカスタム絵文字は縮めて置く大きさで測る。
-    /// - Parameter firstLine: TextKit 2で並べた最初の行の文字の範囲（`TextKitLabel.textKitLineRanges(of:width:)`）。TextKit 2は行ごとに高さを決めるので、渡せばその行の絵文字で測る。
-    static func textTopInset(of text: NSAttributedString, width: CGFloat? = nil, firstLine: NSRange? = nil) -> CGFloat {
-        guard text.length > 0 else { return 0 }
-        let range = firstLine ?? (text.string as NSString).paragraphRange(for: NSRange(location: 0, length: 0))
-        guard let font = RichTextRenderer.textFont(in: text, range: range) else { return 0 }
-        return max(font.pointSize * emBoxAscent, RichTextRenderer.emojiExtent(in: text, range: range, width: width).above)
-    }
-
-    /// 最後の文字の、ベースラインから字面の下端まで。最後の段落の絵文字が字面より下へ伸びていれば、その下端まで。
-    /// - Parameter isTruncated: 行数で切って描くときはtrue。最後に見える行がどの段落か分からないため、全体の絵文字で測る。
-    ///   切れた先にだけ大きい絵文字があると、下の部品とのあいだが絵文字の分だけ広く空くが、重なるよりよいので受け入れる。
-    ///   長い本文を切る決まり（`PostBodyContent.truncation`）では、falseのまま最後の段落で測る。切るかどうかは並べる幅で決まるため、
-    ///   全体で測ると、切っていないほとんどの投稿でも途中の段落の絵文字の分だけ下の部品とのあいだが広がる。切ったときは、見える最後の行に、
-    ///   最後の段落より下へ伸びる大きい絵文字があると、その差の分だけ下の部品に近づく。幅が分かるのは並べるときで、あいだの制約を作る中身の適用では分からず、
-    ///   並べるときに制約を変えると、行の高さがタイムラインの測った高さと食い違うため、対応しない。
-    /// - Parameter width: 並べる幅。渡せば、行より広いカスタム絵文字は縮めて置く大きさで測る。
-    /// - Parameter lastLine: TextKit 2で並べた最後の行の文字の範囲（`TextKitLabel.textKitLineRanges(of:width:)`）。渡せばその行の絵文字で測る。`isTruncated`なら使わない。
-    static func textBottomInset(of text: NSAttributedString, isTruncated: Bool = false, width: CGFloat? = nil, lastLine: NSRange? = nil) -> CGFloat {
-        guard text.length > 0 else { return 0 }
-        let range = isTruncated
-            ? NSRange(location: 0, length: text.length)
-            : lastLine ?? (text.string as NSString).paragraphRange(for: NSRange(location: text.length - 1, length: 0))
-        guard let font = RichTextRenderer.textFont(in: text, range: range, fromEnd: true) else { return 0 }
-        return max(font.pointSize * emBoxDescent, RichTextRenderer.emojiExtent(in: text, range: range, width: width).below)
     }
 
     /// 本文を先に並べるときに使う、本文のラベルの値と幅。本文を出していないとき、添付ファイルを本文の右に並べて幅を狭めているとき、幅が決まる前はnil。

@@ -792,7 +792,7 @@ final class PostContentView: UIView, UIContentView {
         var frames: AppearancePreviewFrames = [:]
         if current.isNameStacked, let first = nameFirstLineGlyphs(), let second = nameLabels[1].previewFrame(in: self)?.first {
             let baseline = nameLastBaselineGuide.layoutFrame.minY
-            let top = baseline - PostBodyView.textTopInset(of: current.nameParts[1])
+            let top = baseline - GlyphMetrics.textTopInset(of: current.nameParts[1])
             frames[.nameFirstLineGlyphs] = [first]
             frames[.nameSecondLineGlyphs] = [CGRect(x: second.minX, y: top, width: second.width, height: baseline + Self.nameBottomInset(of: current) - top)]
         }
@@ -986,7 +986,7 @@ final class PostContentView: UIView, UIContentView {
     private func nameStackConstraints(for configuration: PostContentConfiguration) -> [NSLayoutConstraint] {
         guard configuration.isNameStacked else { return [] }
         let second = nameLabels[1]
-        let offset = Self.firstLineBottomInset(of: configuration) + configuration.metrics.nameStackSpacing + PostBodyView.textTopInset(of: configuration.nameParts[1])
+        let offset = Self.firstLineBottomInset(of: configuration) + configuration.metrics.nameStackSpacing + GlyphMetrics.textTopInset(of: configuration.nameParts[1])
         return [
             second.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor),
             second.trailingAnchor.constraint(equalTo: textGuide.trailingAnchor),
@@ -998,23 +998,23 @@ final class PostContentView: UIView, UIContentView {
     static func nameBottomInset(of configuration: PostContentConfiguration) -> CGFloat {
         guard configuration.isNameStacked else { return firstLineBottomInset(of: configuration) }
         let second = configuration.nameParts[1]
-        return max(PostBodyView.textBottomInset(of: second), pointSize(of: second) * PostBodyView.emBoxDescent)
+        return max(GlyphMetrics.textBottomInset(of: second), pointSize(of: second) * GlyphMetrics.emBoxDescent)
     }
 
     /// 名前の1段目の最初の部分（既定では名前）の、ベースラインから字面の上端まで。大きくした絵文字が字面より上へ伸びていれば、その上端まで。アイコンの上端をここに揃える。
     static func avatarAlignedTopInset(of configuration: PostContentConfiguration) -> CGFloat {
-        guard let first = configuration.firstLineNameParts.first else { return configuration.metrics.nameFont.pointSize * PostBodyView.emBoxAscent }
-        return PostBodyView.textTopInset(of: first)
+        guard let first = configuration.firstLineNameParts.first else { return configuration.metrics.nameFont.pointSize * GlyphMetrics.emBoxAscent }
+        return GlyphMetrics.textTopInset(of: first)
     }
 
     /// 名前の1段目のベースラインから、字面の上端まで。大きくした絵文字が字面より上へ伸びていれば、その上端まで。
     static func firstLineTopInset(of configuration: PostContentConfiguration) -> CGFloat {
-        configuration.firstLineNameParts.map { PostBodyView.textTopInset(of: $0) }.reduce(largestNamePointSize(of: configuration) * PostBodyView.emBoxAscent, max)
+        configuration.firstLineNameParts.map { GlyphMetrics.textTopInset(of: $0) }.reduce(largestNamePointSize(of: configuration) * GlyphMetrics.emBoxAscent, max)
     }
 
     /// 名前の1段目のベースラインから、字面の下端まで。
     static func firstLineBottomInset(of configuration: PostContentConfiguration) -> CGFloat {
-        configuration.firstLineNameParts.map { PostBodyView.textBottomInset(of: $0) }.reduce(largestNamePointSize(of: configuration) * PostBodyView.emBoxDescent, max)
+        configuration.firstLineNameParts.map { GlyphMetrics.textBottomInset(of: $0) }.reduce(largestNamePointSize(of: configuration) * GlyphMetrics.emBoxDescent, max)
     }
 
     /// 名前の1段目に出す文字（名前、ハンドル、時刻）のうち、いちばん大きい文字の大きさ。大きさを変えた絵文字は除く。

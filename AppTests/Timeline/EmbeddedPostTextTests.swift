@@ -123,7 +123,7 @@ struct EmbeddedPostTextTests {
         let firstBaseline = try #require(TextKitLabelLayout.metrics(of: layout, displayScale: view.traitCollection.displayScale)).firstBaseline
 
         let label = try #require(view.subviews.compactMap { $0 as? LinkLabel }.first)
-        #expect(abs(grid.frame.minY - (label.frame.minY + firstBaseline - PostBodyView.textTopInset(of: text))) < 0.5)
+        #expect(abs(grid.frame.minY - (label.frame.minY + firstBaseline - GlyphMetrics.textTopInset(of: text))) < 0.5)
         #expect(abs(grid.frame.minY - padding) < 0.5)
     }
 
@@ -154,7 +154,7 @@ struct EmbeddedPostTextTests {
 
         try #require(metrics.lineCount > 1)
         let label = try #require(view.subviews.compactMap { $0 as? LinkLabel }.first)
-        #expect(abs(grid.frame.minY - (label.frame.minY + metrics.firstBaseline - font.pointSize * PostBodyView.emBoxAscent)) < 0.5)
+        #expect(abs(grid.frame.minY - (label.frame.minY + metrics.firstBaseline - font.pointSize * GlyphMetrics.emBoxAscent)) < 0.5)
         #expect(abs(grid.frame.minY - padding) < 0.5)
     }
 }

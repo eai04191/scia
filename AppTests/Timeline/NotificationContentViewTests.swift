@@ -404,7 +404,7 @@ struct NotificationAppearanceTests {
         let bounds = try #require(attachment).bounds
         let font = try #require(header.attribute(.font, at: index + 1, effectiveRange: nil) as? UIFont)
         #expect(abs(bounds.height - side) < 0.001)
-        #expect(bounds.minY >= -font.pointSize * PostBodyView.emBoxDescent - 0.001)
+        #expect(bounds.minY >= -font.pointSize * GlyphMetrics.emBoxDescent - 0.001)
     }
 
     /// 名前の前のアイコンを文字より大きくすると、行がアイコンの分だけ高くなり、アイコンは行の上の余白より上に出ない。

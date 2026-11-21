@@ -487,8 +487,8 @@ extension PostContentViewTests {
         let body = try #require(frames[.bodyGlyphs]?.first)
         let emojis = (frames[.customEmojis] ?? []) + (frames[.unicodeEmojis] ?? [])
         let font = PostTypography(settings: .isolated()).font(.body)
-        let above = font.ascender - font.pointSize * PostBodyView.emBoxAscent
-        let below = -font.descender - font.pointSize * PostBodyView.emBoxDescent
+        let above = font.ascender - font.pointSize * GlyphMetrics.emBoxAscent
+        let below = -font.descender - font.pointSize * GlyphMetrics.emBoxDescent
 
         #expect(emojis.count >= 4)
         for emoji in emojis {
@@ -507,8 +507,8 @@ extension PostContentViewTests {
         ]))
         let below = RichTextRenderer.emojiExtent(in: text, range: NSRange(location: 0, length: text.length)).below
 
-        #expect(PostBodyView.textBottomInset(of: text, isTruncated: true) >= below - 0.01 + font.pointSize * PostBodyView.emBoxDescent + font.descender)
-        #expect(PostBodyView.textBottomInset(of: text, isTruncated: true) > PostBodyView.textBottomInset(of: text))
+        #expect(GlyphMetrics.textBottomInset(of: text, isTruncated: true) >= below - 0.01 + font.pointSize * GlyphMetrics.emBoxDescent + font.descender)
+        #expect(GlyphMetrics.textBottomInset(of: text, isTruncated: true) > GlyphMetrics.textBottomInset(of: text))
     }
 
     /// 普通の絵文字が既定の1倍でも、名前と本文の普通の絵文字の枠を返す。返さないと、「投稿の見た目」で既定値に戻したとき、

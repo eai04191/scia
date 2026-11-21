@@ -111,7 +111,7 @@ final class EmbeddedPostView: UIButton {
     private let textLastBaselineGuide = UILayoutGuide()
     private lazy var textLastBaseline = textLastBaselineGuide.topAnchor.constraint(equalTo: textLabel.bottomAnchor)
     /// 本文の最初の文字の字面の上端と、最後の文字の字面の下端。本文の上下の部品は、投稿の本文と同じく、ここからすき間を取って置く。
-    /// ベースラインからの距離（`PostBodyView.textTopInset`、`textBottomInset`）は、行より広いカスタム絵文字を縮めて置くと並べる幅で変わるので、ベースラインと一緒に決め直す。
+    /// ベースラインからの距離（`GlyphMetrics.textTopInset`、`textBottomInset`）は、行より広いカスタム絵文字を縮めて置くと並べる幅で変わるので、ベースラインと一緒に決め直す。
     private let textGlyphsTopGuide = UILayoutGuide()
     private let textGlyphsBottomGuide = UILayoutGuide()
     private lazy var textGlyphsTop = textFirstBaselineGuide.topAnchor.constraint(equalTo: textGlyphsTopGuide.topAnchor)
@@ -418,11 +418,11 @@ final class EmbeddedPostView: UIButton {
         }
         let lines = content.flatMap { textLabel.textKitLineRanges(of: $0.text, width: width) }
         // 字面までの距離も画素にそろえる。字面の上端から置くサムネイルが画素の途中に来ると、同じく正方形の高さが幅と1画素ずれる。
-        let top = ((content.map { PostBodyView.textTopInset(of: $0.text, width: width, firstLine: lines?.first) } ?? 0) * scale).rounded() / scale
+        let top = ((content.map { GlyphMetrics.textTopInset(of: $0.text, width: width, firstLine: lines?.first) } ?? 0) * scale).rounded() / scale
         if textGlyphsTop.constant != top {
             textGlyphsTop.constant = top
         }
-        let bottom = ((content.map { PostBodyView.textBottomInset(of: $0.text, width: width, lastLine: lines?.last) } ?? 0) * scale).rounded() / scale
+        let bottom = ((content.map { GlyphMetrics.textBottomInset(of: $0.text, width: width, lastLine: lines?.last) } ?? 0) * scale).rounded() / scale
         if textGlyphsBottom.constant != bottom {
             textGlyphsBottom.constant = bottom
         }

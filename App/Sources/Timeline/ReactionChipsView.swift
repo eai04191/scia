@@ -415,14 +415,14 @@ final class ReactionChipButton: UIControl {
     override func sizeThatFits(_ size: CGSize) -> CGSize {
         let side = sidePadding(within: size.width)
         let contentWidth = contentSizes(within: size.width - side.leading - side.trailing).total
-        let glyphsHeight = ceil(label.font.pointSize * (PostBodyView.emBoxAscent + PostBodyView.emBoxDescent))
+        let glyphsHeight = ceil(label.font.pointSize * (GlyphMetrics.emBoxAscent + GlyphMetrics.emBoxDescent))
         return CGSize(width: max(ceil(contentWidth) + side.leading + side.trailing, 44), height: glyphsHeight + padding.top + padding.bottom)
     }
 
     /// 文字の行の中央から、字面（em枠）の中央までの下向きの距離。中身を、行ではなく字面がボタンの上下の真ん中に来るように置くのに使う。
     private static func glyphsCenterOffset(of font: UIFont) -> CGFloat {
         let lineCenterAboveBaseline = (font.ascender + font.descender) / 2
-        let glyphsCenterAboveBaseline = font.pointSize * (PostBodyView.emBoxAscent - PostBodyView.emBoxDescent) / 2
+        let glyphsCenterAboveBaseline = font.pointSize * (GlyphMetrics.emBoxAscent - GlyphMetrics.emBoxDescent) / 2
         return lineCenterAboveBaseline - glyphsCenterAboveBaseline
     }
 

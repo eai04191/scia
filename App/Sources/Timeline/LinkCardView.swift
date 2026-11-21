@@ -402,7 +402,7 @@ final class LinkCardView: UIButton {
         let width = CGFloat(10_000)
         let height = sampler.textRect(forBounds: CGRect(x: 0, y: 0, width: width, height: .greatestFiniteMagnitude), limitedToNumberOfLines: 0).height
         let baselines = sampler.textKitBaselines(width: width)
-        let result = (height - baselines.lastFromBottom) - baselines.first + font.pointSize * (PostBodyView.emBoxAscent + PostBodyView.emBoxDescent)
+        let result = (height - baselines.lastFromBottom) - baselines.first + font.pointSize * (GlyphMetrics.emBoxAscent + GlyphMetrics.emBoxDescent)
         glyphsHeights[key] = result
         return result
     }
@@ -461,8 +461,8 @@ final class LinkCardView: UIButton {
         guard let frame = label.previewFrame(in: space)?.first, let text = label.attributedText, text.length > 0,
               let row = textRows.first(where: { $0.label === label }) else { return nil }
         let baselines = label.textKitBaselines(width: label.bounds.width)
-        let top = frame.minY + baselines.first - row.font.pointSize * PostBodyView.emBoxAscent
-        let bottom = frame.maxY - baselines.lastFromBottom + row.font.pointSize * PostBodyView.emBoxDescent
+        let top = frame.minY + baselines.first - row.font.pointSize * GlyphMetrics.emBoxAscent
+        let bottom = frame.maxY - baselines.lastFromBottom + row.font.pointSize * GlyphMetrics.emBoxDescent
         return [CGRect(x: frame.minX, y: top, width: frame.width, height: max(bottom - top, 0))]
     }
 
@@ -533,7 +533,7 @@ final class LinkCardView: UIButton {
             let fitted = label.textRect(forBounds: CGRect(x: 0, y: 0, width: textWidth, height: .greatestFiniteMagnitude), limitedToNumberOfLines: lines).height
             // 字面の上端が行の上端に来るよう、出す文字の最初のベースラインから、ラベルの上端を決める。
             let firstBaseline = label.textKitBaselines(width: textWidth).first
-            label.frame = CGRect(x: textX, y: y - (firstBaseline - font.pointSize * PostBodyView.emBoxAscent), width: textWidth, height: fitted)
+            label.frame = CGRect(x: textX, y: y - (firstBaseline - font.pointSize * GlyphMetrics.emBoxAscent), width: textWidth, height: fitted)
             y += Self.glyphsHeight(font: font, lines: lines) + (content?.lineSpacing ?? 0)
         }
         updateThumbnail()

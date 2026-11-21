@@ -87,11 +87,11 @@ struct LineFittingAttachmentTests {
         let frame = try #require(attachmentFrames(in: label, text: text).first)
         let baselines = label.textKitBaselines(width: width)
 
-        let top = PostBodyView.textTopInset(of: text, width: width)
-        let bottom = PostBodyView.textBottomInset(of: text, width: width)
+        let top = GlyphMetrics.textTopInset(of: text, width: width)
+        let bottom = GlyphMetrics.textBottomInset(of: text, width: width)
         // 絵文字は字面より上下へ伸びるので、字面の上下は絵文字の上下の端になる。
         #expect(abs(top - (baselines.first - frame.minY)) < 0.5, "上\(top) ベースライン\(baselines.first) 絵文字\(frame)")
         #expect(abs(bottom - (frame.maxY - (label.bounds.height - baselines.lastFromBottom))) < 0.5, "下\(bottom) 絵文字\(frame)")
-        #expect(top < PostBodyView.textTopInset(of: text))
+        #expect(top < GlyphMetrics.textTopInset(of: text))
     }
 }

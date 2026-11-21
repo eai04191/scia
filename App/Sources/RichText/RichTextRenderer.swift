@@ -466,7 +466,7 @@ struct RichTextRenderer: Sendable {
     }
 
     /// カスタム絵文字の中心の、ベースラインからの高さ（文字の大きさに対する割合）。em枠の中心。
-    static let emojiCenterHeight = (PostBodyView.emBoxAscent - PostBodyView.emBoxDescent) / 2
+    static let emojiCenterHeight = (GlyphMetrics.emBoxAscent - GlyphMetrics.emBoxDescent) / 2
 
     /// 読み込み中のカスタム絵文字の場所を空けておく、透明な画像。ラベルが、画像が届いて入れ替わったことを見分けるのにも使う。
     static let emojiPlaceholder = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1)).image { _ in }

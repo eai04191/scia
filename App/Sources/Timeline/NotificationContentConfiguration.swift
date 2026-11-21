@@ -287,7 +287,7 @@ final class NotificationContentView: UIView, UIContentView {
             headerLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: textLeading),
             headerLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margins.trailing),
             // 間隔は、誰が何をしたかの行の字面の下端から測る。
-            bodyView.topAnchor.constraint(equalTo: headerLabel.lastBaselineAnchor, constant: metrics.bodySpacing + metrics.headerFont.pointSize * PostBodyView.emBoxDescent),
+            bodyView.topAnchor.constraint(equalTo: headerLabel.lastBaselineAnchor, constant: metrics.bodySpacing + metrics.headerFont.pointSize * GlyphMetrics.emBoxDescent),
             bodyView.leadingAnchor.constraint(equalTo: headerLabel.leadingAnchor),
             bodyView.trailingAnchor.constraint(equalTo: headerLabel.trailingAnchor),
             bottom,
@@ -395,7 +395,7 @@ extension NotificationContentView {
     private func headerGlyphsFrame() -> [CGRect]? {
         guard let label = headerLabel.previewFrame(in: self)?.first else { return nil }
         let top = headerFirstBaselineGuide.layoutFrame.minY - headerLabel.glyphsTopInset
-        let bottom = headerLastBaselineGuide.layoutFrame.minY + current.metrics.headerFont.pointSize * PostBodyView.emBoxDescent
+        let bottom = headerLastBaselineGuide.layoutFrame.minY + current.metrics.headerFont.pointSize * GlyphMetrics.emBoxDescent
         return [CGRect(x: label.minX, y: top, width: label.width, height: max(bottom - top, 0))]
     }
 
