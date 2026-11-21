@@ -343,9 +343,10 @@ extension FeedTimelineController {
         let now = model.now()
         let xPosts = viewController.xPosts
         var dummies: [Status] = []
-        for (number, kind) in ["画像", "Xの投稿", "画像付きのXの投稿"].enumerated() {
+        for (number, kind) in ["画像", "Xの投稿", "画像付きのXの投稿", "画面より長い本文"].enumerated() {
             let base = Self.dummyStatus(number: number + 1, avatar: avatar, now: now)
-            let isX = number > 0
+            let isX = number == 1 || number == 2
+            let isLong = number == 3
             guard let link = URL(string: "https://x.com/dummy/status/\(base.id)") else { return }
             if isX {
                 xPosts?.deliver(XPost(
@@ -366,10 +367,12 @@ extension FeedTimelineController {
                 account: Account(id: "dummy", username: "dummy", acct: "dummy", displayName: "ダミー（注意書きと\(kind)）", avatar: avatar),
                 content: isX
                     ? #"<p>注意書きの中に\#(kind) <a href="\#(link.absoluteString)">x.com/dummy/status/\#(base.id)</a></p>"#
+                    : isLong
+                    ? (1...40).map { "<p>注意書きの中の長い本文の\($0)段落目</p>" }.joined()
                     : "<p>注意書きの中に\(kind)</p>",
                 spoilerText: "ダミーの注意書き（\(kind)）",
                 url: nil,
-                mediaAttachments: isX ? [] : DummyMedia.attachments(idPrefix: base.id)
+                mediaAttachments: isX || isLong ? [] : DummyMedia.attachments(idPrefix: base.id)
             ))
         }
         model.debugRun { model in
