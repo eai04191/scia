@@ -244,13 +244,19 @@ public enum URLMenuAction: Sendable {
         }
     }
 
+    private static func inAppBrowser(following setting: LinkBrowser) -> LinkBrowser {
+        setting == .inAppFullScreen ? .inAppFullScreen : .inApp
+    }
+
     /// 開く項目で`url`を開く場所。その場所で開けなければnil。
     public func browser(for url: URL, following setting: LinkBrowser) -> LinkBrowser? {
         switch self {
         case .openInBrowser: setting.browser(for: url)
         case .openInDefaultBrowser: .external
         // アプリ内のSafariは、httpとhttps以外のURLを渡すと例外で落ちる。黙って既定のブラウザで開くと選んだ場所と違うため、押せないようにする。
-        case .openInAppSafari: LinkBrowser.inApp.browser(for: url) == .inApp ? .inApp : nil
+        // 出し方は、設定でアプリ内のSafariを全画面にしていれば全画面、そうでなければシートにする。
+        case .openInAppSafari:
+            Self.inAppBrowser(following: setting).browser(for: url).opensInApp ? Self.inAppBrowser(following: setting) : nil
         case .copyLink, .share: nil
         }
     }

@@ -23,6 +23,8 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
     private let settings: AppSettings
     private let clock: any Clock<Duration>
     private weak var current: InAppBrowserSheet?
+    /// 全画面で出しているSafari（`openFullScreen`）。
+    private weak var fullScreen: SFSafariViewController?
     /// 投稿欄で書き始めて伏せる前の高さ。書き終えたらここへ戻す。書いている間に手で高さを変えたら、手で選んだ高さを尊重して戻さない。
     private var detentBeforeCompose: InAppBrowserDetent?
     /// 伏せた高さで出して、開く高さまで広げ終えるまでの間。この間は伏せた段にいても、後ろの画面を縮めない。
@@ -95,6 +97,27 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
             self.select(opening, on: presentation)
         }
         browserSheet.presentSafari()
+    }
+
+    /// 全画面で開く。SFSafariViewControllerを標準の出し方で出すと、右から入り、左端から右へのスワイプで閉じる。
+    /// `url`の条件と、閉じている途中の画面を待つのは`open`と同じ。
+    func openFullScreen(_ url: URL, from root: UIViewController) {
+        root.afterOngoingDismissal { [weak self] in self?.openFullScreenAfterDismissal(url, from: root) }
+    }
+
+    private func openFullScreenAfterDismissal(_ url: URL, from root: UIViewController) {
+        guard root.viewIfLoaded?.window != nil else {
+            logger.error("in-app browser full screen open ignored without window")
+            return
+        }
+        let safari = SFSafariViewController(url: url)
+        safari.delegate = self
+        // 重ねた画面をまとめて閉じたとき（`dismissPresentedScreens`）は、`safariViewControllerDidFinish`が呼ばれず、これで知る。
+        safari.presentationController?.delegate = self
+        fullScreen = safari
+        logger.info("in-app browser open full screen")
+        onCoverageChange?(true)
+        root.frontmostPresented.present(safari, animated: true)
     }
 
     private func makeSheet(safari: SFSafariViewController) -> InAppBrowserSheet {
@@ -236,10 +259,22 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         onPresenceChange?(false)
     }
 
+    private func didCloseFullScreen() {
+        guard fullScreen != nil else { return }
+        logger.info("in-app browser full screen closed")
+        fullScreen = nil
+        // シートを全画面に広げたまま、その上に全画面のSafariを重ねていたときは、シートがまだ覆っている。
+        onCoverageChange?(presentation?.coversScreenBehind ?? false)
+    }
+
     // MARK: - SFSafariViewControllerDelegate
 
-    /// 左上の×で閉じたとき。シートごと閉じる（`InAppBrowserSheet`）。
+    /// 左上の×で閉じたとき。シートごと閉じる（`InAppBrowserSheet`）。全画面では、左端からのスワイプで閉じたときにも呼ばれる。
     func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
+        if controller === fullScreen {
+            didCloseFullScreen()
+            return
+        }
         logger.info("in-app browser finished by close button")
         guard current?.safari === controller else { return }
         didClose(current)
@@ -249,6 +284,10 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
 
     /// 下へのスワイプで閉じたとき。
     func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        if let fullScreen, presentationController.presentedViewController === fullScreen {
+            didCloseFullScreen()
+            return
+        }
         guard let browserSheet = presentationController.presentedViewController as? InAppBrowserSheet else { return }
         logger.info("in-app browser dismissed by swipe")
         didClose(browserSheet)

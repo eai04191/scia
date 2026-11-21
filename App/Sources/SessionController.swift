@@ -1439,6 +1439,7 @@ final class SessionController {
         switch browser {
         case .external: UIApplication.shared.open(url)
         case .inApp: self.browser.open(url, from: rootViewController)
+        case .inAppFullScreen: self.browser.openFullScreen(url, from: rootViewController)
         }
     }
 
