@@ -99,9 +99,12 @@ extension UIView {
               let whole = spring.copy() as? CASpringAnimation,
               let cancel = spring.copy() as? CASpringAnimation else { return }
         // 始まりの時間は元のまま写す。元が0なら、Core Animationが渡したときの同じ時間を3つに入れる。
+        // UIKitは、画面遷移の中の動き（シートを出す動きで確かめた）では`removedOnCompletion`を切り、外す役を自分で持つ。写したままだと、止まったあとも層に残り続ける。
         whole.delegate = nil
+        whole.isRemovedOnCompletion = true
         whole.duration = end
         cancel.delegate = nil
+        cancel.isRemovedOnCompletion = true
         cancel.fromValue = from.negated
         cancel.toValue = to.negated
         layer.add(whole, forKey: key)

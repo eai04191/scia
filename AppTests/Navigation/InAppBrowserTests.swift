@@ -150,6 +150,21 @@ struct InAppBrowserTests {
         root.dismiss(animated: false)
     }
 
+    /// シートを出し終えたら、出す動きのスプリングを層に残さない。残ると、止まったあとも動いているものとして数えられ続ける。
+    @Test func presentingLeavesNoAnimations() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let browser = InAppBrowser(settings: AppDependencies.settings)
+        let sheet = try await openSheet(with: browser, from: root)
+        let view = try #require(sheet.sheetPresentation?.presentedView)
+        // 出し終えた時点で、出す動きの続きは終わっている。そのあと続けて段の高さへ動くことがあり、その続きも止まれば外れる。
+        let rests = (view.layer.animationKeys() ?? []).filter { $0.hasPrefix("springToRest.") }
+        try await waitUntil { Set(view.layer.animationKeys() ?? []).isDisjoint(with: rests) }
+
+        root.dismiss(animated: false)
+    }
+
     /// 動いている途中につかむと、今見えている位置で止め、足し合わせるスプリングの残りを外す。残すと、止めた位置に残りが足されて動き続ける。
     @Test func grabbingWhileMovingStopsWhereShown() async throws {
         let harness = try TimelineHarness(notices: notices)
