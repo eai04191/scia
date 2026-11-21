@@ -131,7 +131,11 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     private lazy var collectionView: UICollectionView = EmojiPaletteCollectionView(frame: .zero, collectionViewLayout: makeLayout())
     /// スクロールの間に落ちたフレームと、そのフレームに使った処理を数える。違和感レポートで、パレットのスクロールの重さを読むため。
     private let scrollHitches = ScrollHitchMonitor()
-    private var scrollStart: (offset: CGFloat, time: CFTimeInterval)?
+    private var scrollStart: (offset: CGFloat, time: CFTimeInterval, screen: String)?
+    #if DEBUG
+    /// `scia-debug://emoji-palette/section`で動かした移動が終わったときに、落ちたフレームと、そのフレームに使った処理を渡す。
+    private var debugJumpCompletion: ((HitchCounter.Summary, FrameWorkTally, (layouts: [Double], configures: [Double])) -> Void)?
+    #endif
     var mediaTime: () -> CFTimeInterval = AppDependencies.mediaTime
     private lazy var dataSource = makeDataSource()
     /// 検索欄の入れ物。絵文字のリストの上端に重ね、リストの端の効果を、検索欄の形に合わせて描かせる。
@@ -593,6 +597,10 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
 
     private func configureCell(at indexPath: IndexPath, _ cell: UICollectionViewCell?) {
         guard let cell = cell as? EmojiPaletteCell, let emoji = emoji(at: indexPath) else { return }
+        #if DEBUG
+        let start = AppDependencies.mediaTime()
+        defer { (collectionView as? EmojiPaletteCollectionView)?.debugConfigureDurations?.append(AppDependencies.mediaTime() - start) }
+        #endif
         FrameWork.measure("EmojiPaletteCell.configure") { cell.configure(emoji, store: emojiImages, thumbnails: thumbnails, glyphs: glyphImages, glyphArchive: glyphArchive, emojiStyle: emojiStyle) }
     }
 
@@ -726,9 +734,34 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         let bottom = max(top, collectionView.contentSize.height + collectionView.adjustedContentInset.bottom - collectionView.bounds.height)
         let y = min(max((header?.frame.minY ?? 0) + top, top), bottom)
         recordScroll()
+        let start = collectionView.contentOffset.y
         collectionView.setContentOffset(CGPoint(x: 0, y: y), animated: true)
+        // 移る間の落ちたフレームも、指のスクロールと同じく数える。動かないときは、終わりの通知が来ない。
+        if y != start {
+            scrollStart = (start, mediaTime(), Self.sectionJumpScreenName)
+            scrollHitches.start()
+        }
         setSelectedSection(index)
     }
+
+    #if DEBUG
+    /// まとまりのボタンを押したのと同じく、`index`番目（負なら後ろから）のまとまりへ移り、移り終えたら落ちたフレームを渡す。動かなければすぐ空の結果を渡す。
+    /// 並べ直し1回ごとの時間も、落ちなかったフレームの分まで渡す。
+    func debugJump(toSection index: Int, completion: @escaping (HitchCounter.Summary, FrameWorkTally, (layouts: [Double], configures: [Double])) -> Void) {
+        let resolved = index < 0 ? sections.count + index : index
+        // 前の移動の途中なら、その結果を渡さないよう先に終える。
+        recordScroll()
+        (collectionView as? EmojiPaletteCollectionView)?.debugLayoutDurations = []
+        (collectionView as? EmojiPaletteCollectionView)?.debugConfigureDurations = []
+        debugJumpCompletion = completion
+        scrollToSection(resolved)
+        guard scrollStart == nil, let completion = debugJumpCompletion else { return }
+        debugJumpCompletion = nil
+        (collectionView as? EmojiPaletteCollectionView)?.debugLayoutDurations = nil
+        (collectionView as? EmojiPaletteCollectionView)?.debugConfigureDurations = nil
+        completion(scrollHitches.finish().summary, FrameWorkTally(), ([], []))
+    }
+    #endif
 
     /// 上端に見えているまとまりのボタンに色を付ける。
     private func updateSelectedSection() {
@@ -801,7 +834,7 @@ extension EmojiPaletteView: UICollectionViewDelegate {
         guard scrollView === collectionView else { return }
         // 慣性で動いている途中で触れると、前のスクロールは止まりの通知を受けずに終わるため、ここで記録する。
         recordScroll()
-        scrollStart = (scrollView.contentOffset.y, mediaTime())
+        scrollStart = (scrollView.contentOffset.y, mediaTime(), Self.scrollScreenName)
         scrollHitches.start()
     }
 
@@ -815,13 +848,28 @@ extension EmojiPaletteView: UICollectionViewDelegate {
         recordScroll()
     }
 
+    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        guard scrollView === collectionView else { return }
+        recordScroll()
+    }
+
     private func recordScroll() {
         guard let start = scrollStart else { return }
         scrollStart = nil
         let (hitches, work) = scrollHitches.finish()
-        FrameWorkLog.record(work, screen: Self.scrollScreenName)
+        #if DEBUG
+        if let completion = debugJumpCompletion {
+            debugJumpCompletion = nil
+            let list = collectionView as? EmojiPaletteCollectionView
+            let durations = (layouts: list?.debugLayoutDurations ?? [], configures: list?.debugConfigureDurations ?? [])
+            list?.debugLayoutDurations = nil
+            list?.debugConfigureDurations = nil
+            completion(hitches, work, durations)
+        }
+        #endif
+        FrameWorkLog.record(work, screen: start.screen)
         UserAction.scroll(ScrollRecord(
-            screen: Self.scrollScreenName,
+            screen: start.screen,
             startOffset: start.offset,
             endOffset: collectionView.contentOffset.y,
             viewportHeight: collectionView.bounds.inset(by: collectionView.adjustedContentInset).height,
@@ -832,6 +880,8 @@ extension EmojiPaletteView: UICollectionViewDelegate {
 
     /// スクロールの記録に書く画面の名前。
     static let scrollScreenName = "emojiPalette"
+    /// まとまりのボタンで移ったときの、スクロールの記録に書く画面の名前。指のスクロールと分けて読めるようにする。
+    static let sectionJumpScreenName = "emojiPaletteSectionJump"
 }
 
 // MARK: - 肌の色
@@ -1067,7 +1117,18 @@ final class EmojiPalettePreviewController: UIViewController {
 
 /// 並べ直しにかかった時間を、スクロールの記録に渡す。
 private final class EmojiPaletteCollectionView: UICollectionView {
+    #if DEBUG
+    /// `scia-debug://emoji-palette/section`で移る間の、並べ直し1回ごとの時間（秒）。落ちなかったフレームも含めて、1フレームの重さを読むため。
+    var debugLayoutDurations: [Double]?
+    /// 同じ間の、セルの組み立て1回ごとの時間（秒）。
+    var debugConfigureDurations: [Double]?
+    #endif
+
     override func layoutSubviews() {
+        #if DEBUG
+        let start = AppDependencies.mediaTime()
+        defer { debugLayoutDurations?.append(AppDependencies.mediaTime() - start) }
+        #endif
         FrameWork.measure("EmojiPaletteCollectionView.layoutSubviews") { super.layoutSubviews() }
     }
 }

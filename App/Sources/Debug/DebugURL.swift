@@ -103,6 +103,9 @@ enum DebugURL: Equatable {
     /// `scia-debug://autoscroll?distance=<pt>&speed=<pt/秒>`。選んでいるタブのタイムラインを、決まった速さで決まった距離だけ動かす。distanceが負なら上へ戻す。
     /// 指で操作できない検証用の実機で、スクロールの重さ（hitch）を同じ条件で測るため。慣性のない一定の速さで動かすので、指のスクロールとは動きが違う。
     case autoScroll(distance: CGFloat, speed: CGFloat)
+    /// `scia-debug://emoji-palette/section?index=<n>`。開いている絵文字ピッカーで、n番目（0から。負なら後ろから）のまとまりのボタンを押したのと同じく移る。
+    /// 指で操作できない検証用の実機で、遠くのまとまりへ移るときの重さ（hitch）を同じ条件で測るため。
+    case emojiPaletteSection(index: Int)
     /// `scia-debug://appearance?json=<パーセントエンコードしたJSON>`。「投稿の見た目」の選ぶ項目（`AppearanceChoices`）のうち、JSONに書いた項目だけを上書きする。
     /// 例は`{"showsActionBar":false}`。設定のファイルを書き換えられない検証用の実機で、設定を変えて測り比べるため。`scia-debug://appearance?json={}`では何も変わらない。
     case appearance(json: String)
@@ -221,6 +224,7 @@ enum DebugURL: Equatable {
         case "media-limits": Self.mediaLimits(url)
         case "viewer": Self.viewer(url)
         case "autoscroll": Self.autoScroll(url)
+        case "emoji-palette" where last == "section": Int(Self.query("index", in: url) ?? "").map { .emojiPaletteSection(index: $0) }
         case "appearance": Self.query("json", in: url).map { .appearance(json: $0) }
         case "inject": Self.inject(url)
         case "lists": Self.lists(url)

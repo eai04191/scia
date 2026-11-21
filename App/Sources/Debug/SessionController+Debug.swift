@@ -172,6 +172,8 @@ extension SessionController {
             overrideAppearanceChoices(json: json)
         case .autoScroll(let distance, let speed):
             autoScroll(distance: distance, speed: speed)
+        case .emojiPaletteSection(let index):
+            jumpEmojiPalette(toSection: index)
         case .createList(let title):
             changeTabSourcesForDebug("create") { _ = try await $0.createList(title: title) }
         case .deleteList(let id):
@@ -362,6 +364,35 @@ extension SessionController {
         } else {
             try? data.write(to: file)
         }
+    }
+
+    /// 開いている絵文字ピッカーで、まとまりのボタンを押したのと同じく移る。移り終えたら、落ちたフレームと、そのフレームに使った処理を
+    /// Documents/DebugEmojiPalette.logに1行ずつ書き足す。
+    private func jumpEmojiPalette(toSection index: Int) {
+        let windows = rootViewController.view.window?.windowScene?.windows ?? []
+        guard let palette = windows.lazy.compactMap({ Self.emojiPalette(in: $0) }).first else {
+            logger.error("debug emoji palette: no palette")
+            return
+        }
+        let startedAt = AppDependencies.mediaTime()
+        palette.debugJump(toSection: index) { [logger] hitches, work, durations in
+            let layouts = durations.layouts
+            let sorted = layouts.sorted()
+            let median = sorted.isEmpty ? 0 : sorted[sorted.count / 2]
+            let line = String(
+                format: "index=%d cellSize=%.0f duration=%.2f layouts=%d layoutMedianMs=%.1f layoutMaxMs=%.1f layoutTotalMs=%.1f dropped=%d hitch=%.3f %@",
+                index, palette.cellSize, AppDependencies.mediaTime() - startedAt, layouts.count, median * 1000, (sorted.last ?? 0) * 1000, layouts.reduce(0, +) * 1000,
+                hitches.droppedFrames, hitches.hitchTime, work.logLine
+            ) + String(format: " configures=%d configureTotalMs=%.1f", durations.configures.count, durations.configures.reduce(0, +) * 1000) + " layoutsMs=" + layouts.map { String(format: "%.1f", $0 * 1000) }.joined(separator: ",") + "\n"
+            logger.info("debug emoji palette: \(line, privacy: .public)")
+            Self.appendLine(line, toDocument: "DebugEmojiPalette.log")
+        }
+    }
+
+    private static func emojiPalette(in view: UIView) -> EmojiPaletteView? {
+        guard !view.isHidden else { return nil }
+        if let palette = view as? EmojiPaletteView { return palette }
+        return view.subviews.lazy.compactMap(emojiPalette(in:)).first
     }
 
     private static func collectionViews(in view: UIView) -> [UICollectionView] {
