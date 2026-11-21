@@ -1859,7 +1859,7 @@ final class InlineComposeController: NSObject {
     private var pendingSheet: PendingSheet?
     /// 出しているシート。メディアを選ぶシートか、絵文字のパレットのシート。どちらも出している間は、投稿欄のバーをシートの上端に留め、書いている状態を保つ。
     /// 閉じる途中のシートと、次に出したシートが同時にあるときは、閉じていないほうにする。閉じる途中のほうにすると、出したシートのバーの留めを外してしまう。
-    private var bottomSheet: (any ComposeBottomSheet)? {
+    private var bottomSheet: (any TrackedSheet)? {
         if let mediaPicker, !mediaPicker.isClosing { return mediaPicker }
         if let emojiSheet, !emojiSheet.isClosing { return emojiSheet }
         return mediaPicker ?? emojiSheet

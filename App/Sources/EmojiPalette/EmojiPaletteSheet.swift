@@ -2,34 +2,15 @@ import os
 import SciaCore
 import UIKit
 
-/// 投稿欄の下に出すシート。メディアを選ぶシートと絵文字のパレットのシートを、投稿欄のバーを留めておく間の扱いで同じに扱う。
-/// 開閉は、どちらも`ComposeSheetLifecycle`で追う。
-@MainActor
-protocol ComposeBottomSheet: AnyObject {
-    var lifecycle: ComposeSheetLifecycle { get }
-}
-
-extension ComposeBottomSheet {
-    /// 閉じることが決まったあと。
-    var isClosing: Bool { lifecycle.isClosing }
-
-    /// プログラムから閉じる。`notifiesWillClose`なら、閉じることが決まった知らせ（キーボードを戻す）を出す。
-    func close(notifiesWillClose: Bool) {
-        lifecycle.close(notifiesWillClose: notifiesWillClose)
-    }
-}
-
-extension MediaPickerSheet: ComposeBottomSheet {}
-
 /// カスタム絵文字のパレットを載せるシート。低い段と全画面の2段で出す。
 ///
 /// 低い段はメディアを選ぶシートと同じく、投稿欄のバーをシートの上端に留め、書いている本文を見せる。
 /// 全画面になるのは、上の掴みを引き上げたときと、検索欄にキーボードを出したときだけにする。絵文字をスクロールして広がらないよう、
 /// スクロールが端に届いても広げない。検索欄にキーボードを出すと、選んだ段にかかわらずUIKitがシートを全画面まで広げる（`scia-debug://sheet-keyboard`で確かめた）。
 @MainActor
-final class EmojiPaletteSheet: NSObject, ComposeBottomSheet {
+final class EmojiPaletteSheet: NSObject, TrackedSheet {
     /// 開閉。閉じることが決まった知らせ、閉じ終わりの知らせもここで受ける。
-    let lifecycle: ComposeSheetLifecycle
+    let lifecycle: SheetLifecycle
 
     private let controller = UIViewController()
     private let palette: EmojiPaletteView
@@ -38,7 +19,7 @@ final class EmojiPaletteSheet: NSObject, ComposeBottomSheet {
     /// - Parameter lowHeight: 低いときのシートの高さ。画面の下の安全領域は含まない。
     init(palette: EmojiPaletteView, lowHeight: CGFloat) {
         self.palette = palette
-        lifecycle = ComposeSheetLifecycle(controller: controller, name: "emoji palette sheet")
+        lifecycle = SheetLifecycle(controller: controller, name: "emoji palette sheet")
         super.init()
         controller.view.backgroundColor = .clear
         palette.closeSheet = { [weak self] in self?.lifecycle.close(notifiesWillClose: false) }

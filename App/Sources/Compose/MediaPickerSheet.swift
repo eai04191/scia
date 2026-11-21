@@ -7,11 +7,11 @@ import UIKit
 ///
 /// 選び方と、ここで頼っている公式に保証されていない挙動は docs/media-attachment.md にまとめている。
 @MainActor
-final class MediaPickerSheet: NSObject {
+final class MediaPickerSheet: NSObject, TrackedSheet {
     /// 選択が変わるたびに、今の選択を順に渡す。
     var onSelectionChange: ([PHPickerResult]) -> Void = { _ in }
     /// 開閉。閉じることが決まった知らせ、閉じ終わりの知らせもここで受ける。
-    let lifecycle: ComposeSheetLifecycle
+    let lifecycle: SheetLifecycle
 
     private let picker: PHPickerViewController
     private var selectedIDs: [String]
@@ -43,7 +43,7 @@ final class MediaPickerSheet: NSObject {
         // 低いときは余白をなくしてバーを消す。最大に広げたら余白を戻してバーを出す。
         configuration.edgesWithoutContentMargins = .all
         picker = PHPickerViewController(configuration: configuration)
-        lifecycle = ComposeSheetLifecycle(controller: picker, name: "media picker")
+        lifecycle = SheetLifecycle(controller: picker, name: "media picker")
         super.init()
         picker.delegate = self
         if let sheet = picker.sheetPresentationController {

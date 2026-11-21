@@ -2,14 +2,14 @@ import os
 import SciaCore
 import UIKit
 
-/// 投稿欄の下に出すシート（メディアを選ぶシート、絵文字のパレットのシート）が開いているか閉じたかを、シートの画面がウィンドウにあるかで決める。
+/// シート（メディアを選ぶシート、絵文字のパレットのシート）が開いているか閉じたかを、シートの画面がウィンドウにあるかで決める。
 ///
 /// UIKitの開閉の知らせ（`presentationControllerWillDismiss`、`presentationControllerDidDismiss`、`dismiss`の完了）は、届かないことがある。
 /// 実機では、ピッカーの中身を読み込んでいる間に下へスワイプしたときと、閉じる途中に別のシートへ切り替えたときに、知らせのないままシートが消えた。
 /// 知らせだけで決めると、投稿欄はシートを出しているつもりのままになり、ボタンが何もしなくなる。知らせは閉じ始めを早く知るためだけに使い、
 /// 閉じ終わりは、知らせとウィンドウから外れたことのうち先に来たほうで、一度だけ知らせる。
 @MainActor
-final class ComposeSheetLifecycle {
+final class SheetLifecycle {
     /// 閉じることが決まった時点で呼ぶ。キーボードをシートが下がるのと同時に上げるために使う。`close(notifiesWillClose: false)`で閉じるときは呼ばない。
     var onWillClose: () -> Void = {}
     /// 閉じ終わったときに一度だけ呼ぶ。
@@ -155,5 +155,21 @@ private final class WindowObserverView: UIView {
     override func didMoveToWindow() {
         super.didMoveToWindow()
         onWindowChange(window != nil)
+    }
+}
+
+/// 開閉を`SheetLifecycle`で追うシート。
+@MainActor
+protocol TrackedSheet: AnyObject {
+    var lifecycle: SheetLifecycle { get }
+}
+
+extension TrackedSheet {
+    /// 閉じることが決まったあと。
+    var isClosing: Bool { lifecycle.isClosing }
+
+    /// プログラムから閉じる。`notifiesWillClose`なら、閉じることが決まった知らせ（キーボードを戻す）を出す。
+    func close(notifiesWillClose: Bool) {
+        lifecycle.close(notifiesWillClose: notifiesWillClose)
     }
 }

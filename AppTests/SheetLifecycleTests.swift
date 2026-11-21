@@ -6,7 +6,7 @@ import UIKit
 /// 投稿欄の下に出すシートが閉じたことを、UIKitの開閉の知らせが来ても来なくても、一度だけ知らせるか確かめる。
 @MainActor
 @Suite(.failureState)
-struct ComposeSheetLifecycleTests {
+struct SheetLifecycleTests {
     private final class Recorder {
         var willClose = 0
         var didClose = 0
@@ -22,9 +22,9 @@ struct ComposeSheetLifecycleTests {
         return (window, host)
     }
 
-    private func makeLifecycle() -> (ComposeSheetLifecycle, UIViewController, Recorder) {
+    private func makeLifecycle() -> (SheetLifecycle, UIViewController, Recorder) {
         let controller = UIViewController()
-        let lifecycle = ComposeSheetLifecycle(controller: controller, name: "test sheet")
+        let lifecycle = SheetLifecycle(controller: controller, name: "test sheet")
         let recorder = Recorder()
         lifecycle.onWillClose = { recorder.willClose += 1 }
         lifecycle.onDidClose = { recorder.didClose += 1 }
@@ -32,7 +32,7 @@ struct ComposeSheetLifecycleTests {
         return (lifecycle, controller, recorder)
     }
 
-    private func presentAndWait(_ lifecycle: ComposeSheetLifecycle, _ controller: UIViewController, from host: UIViewController, recorder: Recorder) async throws {
+    private func presentAndWait(_ lifecycle: SheetLifecycle, _ controller: UIViewController, from host: UIViewController, recorder: Recorder) async throws {
         lifecycle.present(from: host)
         try await waitUntil { recorder.didAppear > 0 }
         #expect(controller.presentingViewController === host)
