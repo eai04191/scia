@@ -362,7 +362,7 @@ private struct CompletionRowView: View {
                 .buttonStyle(RowButtonStyle(isSelected: CompletionRowID(row: row, index: index) == model.selectedID))
             case .failed(let reason):
                 FailureRowButton(reason: reason, retry: { model.onRetry() }, style: RowButtonStyle(isSelected: false)) { message, logsIn in
-                    RowLayout(subtitleLines: 3) {
+                    CandidateRowLayout(subtitleLines: 3) {
                         Image(systemName: "exclamationmark.triangle").foregroundStyle(.secondary)
                     } title: {
                         Text(ComposeTexts.Completion.failed)
@@ -375,13 +375,13 @@ private struct CompletionRowView: View {
                     .accessibilityLabel(ComposeTexts.Completion.failedAccessibilityLabel(message: message))
                 }
             case .loading:
-                RowLayout {
+                CandidateRowLayout {
                     ProgressView()
                 } title: {
                     Text(ComposeTexts.Completion.loading).foregroundStyle(.secondary)
                 }
             case .empty(let kind):
-                RowLayout {
+                CandidateRowLayout {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 } title: {
                     Text(kind.emptyTitle).foregroundStyle(.secondary)
@@ -397,7 +397,7 @@ private struct CompletionRowView: View {
     private func candidateLabel(_ candidate: CompletionCandidate) -> some View {
         switch candidate {
         case .account(let account):
-            RowLayout {
+            CandidateRowLayout {
                 AvatarImage(url: (model.userDisplaySettings ?? model.settings).userDisplays.display(of: account, in: (model.userDisplaySettings ?? model.settings)).avatarStatic, shape: model.settings.appearance.avatarShape)
             } title: {
                 RichTextLabel(numberOfLines: 1, emojiImages: model.emojiImages, animatesEmojis: model.settings.animatesCustomEmojis, fadesTail: true) { [model] in
@@ -412,7 +412,7 @@ private struct CompletionRowView: View {
         case .localAccount(let mention, let source):
             // 検索の結果より上に出る理由が分かるよう、どこから出した人かを添える。
             let subtitle = ComposeTexts.Completion.localAccountSubtitle(acct: mention.acct, source: source)
-            RowLayout {
+            CandidateRowLayout {
                 AvatarImage(url: (model.userDisplaySettings ?? model.settings).userDisplays.display(of: mention, in: (model.userDisplaySettings ?? model.settings)).avatarStatic, shape: model.settings.appearance.avatarShape)
             } title: {
                 RichTextLabel(numberOfLines: 1, emojiImages: model.emojiImages, animatesEmojis: model.settings.animatesCustomEmojis, fadesTail: true) { [model] in
@@ -429,7 +429,7 @@ private struct CompletionRowView: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(TextLists.joined([TextLists.account(name: (model.userDisplaySettings ?? model.settings).userDisplays.display(of: mention, in: (model.userDisplaySettings ?? model.settings)).name, acct: mention.acct), source.title]))
         case .hashtag(let hashtag):
-            RowLayout {
+            CandidateRowLayout {
                 Image(systemName: "number").foregroundStyle(.secondary)
             } title: {
                 Text(hashtag.name).fadingTail(of: hashtag.name)
@@ -443,7 +443,7 @@ private struct CompletionRowView: View {
         case .ownHashtag(let hashtag):
             let note = hashtag.source.title
             // 検索の結果より上に出る理由が分かるよう、自分のタグであることを添える。
-            RowLayout {
+            CandidateRowLayout {
                 Image(systemName: "number").foregroundStyle(.secondary)
             } title: {
                 Text(hashtag.name).fadingTail(of: hashtag.name)
@@ -453,7 +453,7 @@ private struct CompletionRowView: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(ComposeTexts.Completion.hashtagAccessibilityLabel(name: hashtag.name, note: note))
         case .emoji(let emoji):
-            RowLayout {
+            CandidateRowLayout {
                 EmojiImage(emoji, choice: model.emojiImages.choice(animates: model.settings.animatesCustomEmojis), store: model.emojiImages)
             } title: {
                 Text(":\(emoji.shortcode):").fadingTail(of: emoji.shortcode)
@@ -463,7 +463,7 @@ private struct CompletionRowView: View {
         case .standardEmoji(let emoji):
             // 本文と同じ設定の絵（OSの絵文字かtwemoji）で、カスタム絵文字の画像と同じくらいの大きさに描く。
             // 文字ではなく画像と並べる絵なので、端末の文字の大きさではなく枠の大きさで決める。
-            RowLayout {
+            CandidateRowLayout {
                 // scialint:disable:next fixed_font_size
                 Text(emoji.emoji).font(Font(EmojiFont.font(.systemFont(ofSize: 24), style: model.settings.appearance.emojiStyle)))
             } title: {
@@ -473,75 +473,6 @@ private struct CompletionRowView: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(ComposeTexts.Completion.emojiAccessibilityLabel(name: emoji.name))
-        }
-    }
-}
-
-/// 候補の1行。左にアイコンか絵文字、右に名前と補足を2段で並べる。長い名前は、名前ごとに`fadingTail`で行末をぼかして切る。
-struct RowLayout<Icon: View, Title: View, Subtitle: View, Trailing: View>: View {
-    var subtitleLines = 1
-    @ViewBuilder let icon: Icon
-    @ViewBuilder let title: Title
-    @ViewBuilder let subtitle: Subtitle
-    @ViewBuilder let trailing: Trailing
-
-    var body: some View {
-        HStack(spacing: 10) {
-            icon.frame(width: 30, height: 30)
-            VStack(alignment: .leading, spacing: 1) {
-                title
-                    .font(.subheadline)
-                    .lineLimit(1)
-                subtitle
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(subtitleLines)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            trailing
-        }
-        .padding(.horizontal, 10)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .contentShape(.rect)
-    }
-}
-
-extension RowLayout where Subtitle == EmptyView, Trailing == EmptyView {
-    init(@ViewBuilder icon: () -> Icon, @ViewBuilder title: () -> Title) {
-        self.init(icon: icon, title: title, subtitle: { EmptyView() }, trailing: { EmptyView() })
-    }
-}
-
-extension RowLayout where Trailing == EmptyView {
-    init(@ViewBuilder icon: () -> Icon, @ViewBuilder title: () -> Title, @ViewBuilder subtitle: () -> Subtitle) {
-        self.init(icon: icon, title: title, subtitle: subtitle, trailing: { EmptyView() })
-    }
-}
-
-extension View {
-    /// 1行に入りきらないときに、「…」で切らず、行末を透明へ向けてぼかす。入りきるときは何もかけない。タイムラインの名前（`FadingLabel`）と同じ見え方にする。
-    /// 右から左に書く文字列では、行末は左端なので、文字列の頭を右端にそろえて左端をぼかす。画面の向きではなく、文字列の向きで決める。
-    func fadingTail(of text: String) -> some View {
-        let isRightToLeft = FadingLabel.isRightToLeft(text)
-        return ViewThatFits(in: .horizontal) {
-            self
-            // 大きさは、ふつうに1行で切った見えない文字で決め、全文は重ねて描くだけにする。全文の幅を大きさにすると、候補のリストの幅まで広がるため。
-            self
-                .hidden()
-                .frame(maxWidth: .infinity, alignment: isRightToLeft ? .trailing : .leading)
-                .overlay(alignment: isRightToLeft ? .trailing : .leading) {
-                    self.fixedSize(horizontal: true, vertical: false)
-                }
-                .clipped()
-                .mask {
-                    // FadingLabelの既定と同じく、行末の20ptをぼかす。
-                    let fade = LinearGradient(colors: isRightToLeft ? [.clear, .black] : [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 20)
-                    HStack(spacing: 0) {
-                        if isRightToLeft { fade }
-                        Color.black
-                        if !isRightToLeft { fade }
-                    }
-                }
         }
     }
 }

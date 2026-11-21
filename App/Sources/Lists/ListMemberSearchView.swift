@@ -87,7 +87,7 @@ struct ListMemberSearchView: View {
         return Button {
             toggle(account)
         } label: {
-            RowLayout {
+            CandidateRowLayout {
                 AvatarImage(url: display.avatarStatic, shape: settings.appearance.avatarShape)
             } title: {
                 RichTextLabel(numberOfLines: 1, emojiImages: emojiImages, animatesEmojis: settings.animatesCustomEmojis, fadesTail: true) {
