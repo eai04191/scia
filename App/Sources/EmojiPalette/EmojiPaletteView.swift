@@ -1144,7 +1144,7 @@ final class EmojiPaletteCell: UICollectionViewCell {
     static let reuseIdentifier = "EmojiPaletteCell"
     private let imageView = EmojiImageView(frame: .zero)
     /// Unicodeの絵文字を、文字として描いた画像で出す。
-    private let glyphView = UIImageView()
+    private let glyphView = EmojiPaletteGlyphView()
     /// 画像ができるのを待っているUnicodeの絵文字。
     private var glyphRequest: EmojiGlyphImageStore.Request?
     /// 最後に組み立てた絵文字と枠の大きさ。届くのを待たずに、描く画像がそろっていたときだけ持つ（`isShowingFinalImage`）。
@@ -1159,9 +1159,6 @@ final class EmojiPaletteCell: UICollectionViewCell {
         highlight.isHidden = true
         contentView.addSubview(highlight)
         contentView.addSubview(imageView)
-        glyphView.contentMode = .center
-        // 端末に置いた、形だけのUnicodeの絵文字の画像に付ける色。
-        glyphView.tintColor = .label
         contentView.addSubview(glyphView)
         isAccessibilityElement = true
         accessibilityTraits = .button
@@ -1281,7 +1278,7 @@ final class EmojiPaletteCell: UICollectionViewCell {
 
     /// Unicodeの絵文字の画像。端末に置いた描く大きさの画像があればそれを、なければメモリの画像を使い、どちらもなければ、
     /// メモリの画像を作らせて、届くまで端末に置いた小さい画像で描く（docs/animated-custom-emoji.mdの「Unicodeの絵文字の画像」）。
-    /// 端末に置いた画像のうち形だけのものは、テンプレートの画像にして、今の外観の文字の色（`glyphView`の`tintColor`）で描く。
+    /// 端末に置いた画像のうち形だけのものは、テンプレートの画像にして、今の外観の文字の色で描く（`EmojiPaletteGlyphView`）。
     /// `isFinal`は、描く大きさの画像か。端末に置いた小さい画像で描いているか、まだ画像がなければfalse。
     private static func glyphImage(for request: EmojiGlyphImageStore.Request, glyphs: EmojiGlyphImageStore, archive: EmojiGlyphArchive) -> (image: UIImage?, isFinal: Bool) {
         let geometry = EmojiGlyphArchive.Geometry(
@@ -1317,6 +1314,49 @@ extension EmojiPaletteView: UITextFieldDelegate {
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
         onSearchSubmit()
         return false
+    }
+}
+
+/// パレットのUnicodeの絵文字の画像を、枠の中央に元の大きさで描く。テンプレートの画像は、今の外観の文字の色で塗る。
+/// `UIImageView`は画像を入れるたびに、ビューの特性に合わせた画像を作り直す（`imageWithConfiguration`）ので、まとまりのボタンで遠くへ移る間に毎フレーム50個ほど入れ替えると、
+/// それだけでSE3の1フレームの数msを使っていた。層に画像を直接置いて、作り直しを避ける。
+final class EmojiPaletteGlyphView: UIView {
+    var image: UIImage? {
+        didSet {
+            guard image !== oldValue else { return }
+            update()
+        }
+    }
+
+    /// テンプレートの画像の形。地を文字の色で塗り、この形で切り抜く。
+    private let shape = UIView()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        layer.contentsGravity = .center
+        shape.layer.contentsGravity = .center
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        shape.frame = bounds
+    }
+
+    private func update() {
+        let isTemplate = image?.renderingMode == .alwaysTemplate
+        let target = isTemplate ? shape.layer : layer
+        let other = isTemplate ? layer : shape.layer
+        other.contents = nil
+        target.contents = image?.cgImage
+        target.contentsScale = image?.scale ?? 1
+        backgroundColor = isTemplate ? .label : nil
+        mask = isTemplate ? shape : nil
     }
 }
 

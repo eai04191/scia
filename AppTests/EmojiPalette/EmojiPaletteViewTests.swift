@@ -306,8 +306,49 @@ struct EmojiPaletteViewTests {
         try await waitUntil { cells.allSatisfy { Self.glyphView(of: $0)?.image === drawn } }
     }
 
-    private static func glyphView(of cell: UICollectionViewCell) -> UIImageView? {
-        cell.contentView.subviews.filter { type(of: $0) == UIImageView.self }.compactMap { $0 as? UIImageView }.first
+    /// 形だけのUnicodeの絵文字の画像（テンプレートの画像）は、今の外観の文字の色で塗り、色のある画像はそのままの色で描く。
+    @Test func glyphViewTintsShapeWithLabelColor() throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 40, height: 40)
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 2
+        let square = UIGraphicsImageRenderer(size: CGSize(width: 20, height: 20), format: format).image { context in
+            UIColor.red.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 20, height: 20))
+        }
+        let view = EmojiPaletteGlyphView(frame: CGRect(x: 0, y: 0, width: 40, height: 40))
+        window.addSubview(view)
+
+        func centerColor(style: UIUserInterfaceStyle) throws -> UIColor {
+            window.overrideUserInterfaceStyle = style
+            window.backgroundColor = .clear
+            view.layoutIfNeeded()
+            let snapshot = UIGraphicsImageRenderer(bounds: view.bounds, format: format).image { _ in
+                view.drawHierarchy(in: view.bounds, afterScreenUpdates: true)
+            }
+            var pixel: [UInt8] = [0, 0, 0, 0]
+            let context = CGContext(data: &pixel, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+            context?.draw(try #require(snapshot.cgImage), in: CGRect(x: -40, y: -40, width: 80, height: 80))
+            return UIColor(red: CGFloat(pixel[0]) / 255, green: CGFloat(pixel[1]) / 255, blue: CGFloat(pixel[2]) / 255, alpha: CGFloat(pixel[3]) / 255)
+        }
+        func components(_ color: UIColor) -> [CGFloat] {
+            var (red, green, blue, alpha): (CGFloat, CGFloat, CGFloat, CGFloat) = (0, 0, 0, 0)
+            color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+            return [red, green, blue, alpha].map { ($0 * 10).rounded() / 10 }
+        }
+
+        view.image = square
+        #expect(components(try centerColor(style: .light)) == [1, 0, 0, 1], "色のある画像は、その色で描く")
+        view.image = square.withRenderingMode(.alwaysTemplate)
+        #expect(components(try centerColor(style: .light)) == components(UIColor.label.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light))))
+        #expect(components(try centerColor(style: .dark)) == components(UIColor.label.resolvedColor(with: UITraitCollection(userInterfaceStyle: .dark))))
+    }
+
+    private static func glyphView(of cell: UICollectionViewCell) -> EmojiPaletteGlyphView? {
+        cell.contentView.subviews.compactMap { $0 as? EmojiPaletteGlyphView }.first
     }
 
     private static func descendants(of view: UIView) -> [UIView] {
