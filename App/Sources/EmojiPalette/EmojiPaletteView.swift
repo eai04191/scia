@@ -790,6 +790,8 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
 
 extension EmojiPaletteView: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+        // 同じ並べ直しの中で組み立てたばかりのセルは、組み立て直さない。遠くのまとまりへ移る間は毎フレーム見えているセルがすべて入れ替わり、組み立てが倍になるため。
+        if let cell = cell as? EmojiPaletteCell, let emoji = emoji(at: indexPath), cell.isShowingFinalImage(of: emoji) { return }
         configureCell(at: indexPath, cell)
     }
 
@@ -1145,6 +1147,8 @@ final class EmojiPaletteCell: UICollectionViewCell {
     private let glyphView = UIImageView()
     /// 画像ができるのを待っているUnicodeの絵文字。
     private var glyphRequest: EmojiGlyphImageStore.Request?
+    /// 最後に組み立てた絵文字と枠の大きさ。届くのを待たずに、描く画像がそろっていたときだけ持つ（`isShowingFinalImage`）。
+    private var finalImage: (emoji: PaletteEmoji, size: CGSize)?
     private let highlight = UIView()
 
     override init(frame: CGRect) {
@@ -1180,6 +1184,16 @@ final class EmojiPaletteCell: UICollectionViewCell {
         didSet { highlight.isHidden = !isHighlighted }
     }
 
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        finalImage = nil
+    }
+
+    /// `emoji`を今の枠の大きさで、描く画像がそろった状態で組み立て済みか。小さい静止画や読み込み中の画像で描いていれば、届いた画像で組み立て直すのでfalse。
+    func isShowingFinalImage(of emoji: PaletteEmoji) -> Bool {
+        finalImage.map { $0.emoji == emoji && $0.size == bounds.size } ?? false
+    }
+
     /// 横長の絵文字はマスを横に足して幅が変わるので、余白は高さから決める。
     private static func imageInset(in size: CGSize) -> CGFloat {
         round(size.height * EmojiPaletteGrid.imageInsetFraction)
@@ -1211,10 +1225,20 @@ final class EmojiPaletteCell: UICollectionViewCell {
             // 動かすので元の画像だけを読み、動かない絵文字もその最初のコマで描く。
             let choice = Self.choice(of: store)
             let url = choice.url(of: custom)
-            imageView.stillImage = store.image(for: url, pixelHeight: pixelHeight, requester: requester) ?? thumbnails.image(for: url).map { UIImage(cgImage: $0) }
-            imageView.animation = choice.animationURL(of: custom).flatMap { store.animation(for: $0, pixelHeight: pixelHeight, requester: requester) }
+            let still = store.image(for: url, pixelHeight: pixelHeight, requester: requester)
+            imageView.stillImage = still ?? thumbnails.image(for: url).map { UIImage(cgImage: $0) }
+            let animationURL = choice.animationURL(of: custom)
+            imageView.animation = animationURL.flatMap { store.animation(for: $0, pixelHeight: pixelHeight, requester: requester) }
             accessibilityLabel = custom.shortcode
             accessibilityValue = nil
+            // 高く読み直している途中の画像も、届いたら組み立て直すので、描く高さに足りているときだけそろったとみなす。
+            let coversHeight = still.map { Double($0.size.height * $0.scale) * EmojiImageStore<UIImage>.upscaleTolerance >= Double(pixelHeight) } ?? false
+            // アニメーションも、描く高さに足りるコマか、動かさないと分かったときだけそろったとみなす。読めなかったときは、読み直しの知らせで組み立て直す。
+            let animationIsFinal = animationURL.map { url in
+                imageView.animation.map { Double($0.image.frameHeight) * EmojiImageStore<UIImage>.upscaleTolerance >= Double(pixelHeight) } ?? store.isKnownStill(url)
+            } ?? true
+            let isFinal = coversHeight && animationIsFinal
+            finalImage = isFinal ? (emoji, bounds.size) : nil
         case .standard(let standard):
             imageView.isHidden = true
             imageView.stillImage = nil
@@ -1235,7 +1259,9 @@ final class EmojiPaletteCell: UICollectionViewCell {
             )
             guard request != glyphRequest || glyphView.image == nil else { break }
             glyphRequest = request
-            glyphView.image = Self.glyphImage(for: request, glyphs: glyphs, archive: glyphArchive)
+            let glyph = Self.glyphImage(for: request, glyphs: glyphs, archive: glyphArchive)
+            glyphView.image = glyph.image
+            finalImage = glyph.isFinal ? (emoji, bounds.size) : nil
         }
     }
 
@@ -1256,7 +1282,8 @@ final class EmojiPaletteCell: UICollectionViewCell {
     /// Unicodeの絵文字の画像。端末に置いた描く大きさの画像があればそれを、なければメモリの画像を使い、どちらもなければ、
     /// メモリの画像を作らせて、届くまで端末に置いた小さい画像で描く（docs/animated-custom-emoji.mdの「Unicodeの絵文字の画像」）。
     /// 端末に置いた画像のうち形だけのものは、テンプレートの画像にして、今の外観の文字の色（`glyphView`の`tintColor`）で描く。
-    private static func glyphImage(for request: EmojiGlyphImageStore.Request, glyphs: EmojiGlyphImageStore, archive: EmojiGlyphArchive) -> UIImage? {
+    /// `isFinal`は、描く大きさの画像か。端末に置いた小さい画像で描いているか、まだ画像がなければfalse。
+    private static func glyphImage(for request: EmojiGlyphImageStore.Request, glyphs: EmojiGlyphImageStore, archive: EmojiGlyphArchive) -> (image: UIImage?, isFinal: Bool) {
         let geometry = EmojiGlyphArchive.Geometry(
             pointSize: request.pointSize, width: request.width, height: request.height, scale: request.scale, style: request.style, systemVersion: EmojiGlyphArchive.systemVersion
         )
@@ -1268,9 +1295,12 @@ final class EmojiPaletteCell: UICollectionViewCell {
             return glyph.isShape ? image.withRenderingMode(.alwaysTemplate) : image
         }
         if let stored, stored.isFull {
-            return image(stored)
+            return (image(stored), true)
         }
-        return glyphs.image(for: request) ?? stored.map(image)
+        if let rendered = glyphs.image(for: request) {
+            return (rendered, true)
+        }
+        return (stored.map(image), false)
     }
 
     func showGlyph(_ image: UIImage, for request: EmojiGlyphImageStore.Request) {

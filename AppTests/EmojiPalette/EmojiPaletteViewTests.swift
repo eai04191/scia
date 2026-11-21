@@ -240,6 +240,36 @@ struct EmojiPaletteViewTests {
         try await waitUntil { store.image(for: emoji.url) != nil && Self.imageView(of: cell)?.image?.cgImage?.height == 96 }
     }
 
+    /// 描く画像がそろって組み立てたセルだけを、組み立て済みとみなす。パレットは、組み立て済みのセルを画面に入る直前に組み立て直さない。
+    /// 小さい静止画で描いたセルや、枠の大きさが変わったセルは、組み立て直して届いた画像で描く。
+    @Test func cellIsFinalOnlyWithItsImage() async throws {
+        let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 96, height: 96)).image { _ in }.pngData())
+        let store = EmojiImageStore { _ in png }
+        let base = URL(filePath: "/")
+        let emoji = PaletteEmoji.custom(ServerEmoji(shortcode: "blob", url: base.appending(path: "blob.png"), staticUrl: base.appending(path: "blob_static.png")))
+        let cell = EmojiPaletteCell(frame: CGRect(x: 0, y: 0, width: 48, height: 48))
+        let requester = NSObject()
+        func configure() {
+            cell.configure(
+                emoji, store: store, requester: requester,
+                thumbnails: EmojiThumbnails(file: TestScratch.url("EmojiPaletteViewTests").appending(path: "thumbnails.bin"), pixelHeight: 8),
+                glyphs: EmojiGlyphImageStore(),
+                glyphArchive: EmojiGlyphArchive(directory: TestScratch.url("EmojiPaletteViewTests")) { 0 },
+                emojiStyle: .system
+            )
+        }
+
+        configure()
+        #expect(!cell.isShowingFinalImage(of: emoji), "画像が届く前は組み立て済みとみなさない")
+        guard case .custom(let custom) = emoji else { return }
+        try await waitUntil { store.image(for: custom.url) != nil && store.hasFinishedLoadingAnimation(for: custom.url) }
+        configure()
+        #expect(cell.isShowingFinalImage(of: emoji))
+        #expect(!cell.isShowingFinalImage(of: .custom(ServerEmoji(shortcode: "other", url: base.appending(path: "other.png"), staticUrl: base.appending(path: "other_static.png")))))
+        cell.frame.size = CGSize(width: 96, height: 48)
+        #expect(!cell.isShowingFinalImage(of: emoji), "枠の大きさが変われば組み立て直す")
+    }
+
     /// Unicodeの絵文字は、画像ができるまで空けておき、できたら見えているセルに入れる。
     /// 文字として描いていたときは、セルを画面に出すフレームで絵を作り、速いスクロールでフレームが落ちた。
     @Test func standardEmojiAppearsWhenItsImageIsReady() async throws {
