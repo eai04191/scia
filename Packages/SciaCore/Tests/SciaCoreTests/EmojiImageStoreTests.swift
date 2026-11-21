@@ -376,6 +376,93 @@ struct EmojiImageStoreTests {
         #expect(fetches.count.withLock { $0 } == 2)
     }
 
+    private final class Owner {}
+
+    /// 持ち主を渡して高さを上げて読み直したときは、読み終えたことをその持ち主の知らせ先にだけ知らせる。前の画像で描けているほかの画面を描き直させないため。
+    @Test func notifiesOnlyRequesterOfUpgrade() async throws {
+        let store = makeStore(try Self.png(width: 400, height: 400))
+        let requester = Owner()
+        let other = Owner()
+        var requesterNotified: [Set<URL>] = []
+        var otherNotified: [Set<URL>] = []
+        store.addListener(owner: requester) { requesterNotified.append($0) }
+        store.addListener(owner: other) { otherNotified.append($0) }
+        _ = store.image(for: url, requester: requester)
+        try await waitUntil { requesterNotified.count >= 1 }
+        #expect(otherNotified == [[url]], "初めて読んだ画像は、待っているほかの画面にも知らせる")
+
+        #expect(store.image(for: url, pixelHeight: 200, requester: requester)?.height == 96)
+        try await waitUntil { requesterNotified.count >= 2 }
+        #expect(requesterNotified.last == [url])
+        #expect(store.image(for: url, pixelHeight: 200)?.height == 200)
+        #expect(otherNotified == [[url]], "前の画像で描けているほかの画面には知らせない")
+    }
+
+    /// 持ち主を渡して高く読み直している間に前の画像がメモリから捨てられ、ほかの画面が求めて画像を得られなかったら、その画面にも読み終えたことを知らせる。
+    @Test func notifiesDrawerThatMissedEvictedImageDuringUpgrade() async throws {
+        let png = try Self.png(width: 400, height: 400)
+        let gate = Gate()
+        let calls = Mutex(0)
+        let store = EmojiImageStore<CGImage>(
+            clock: TestClock(),
+            retryPolicy: { RetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) },
+            maker: PlatformImageMaker(still: { $0 }, animated: { _, _ in nil }),
+            upgradePurpose: { .enhancement(onExpensiveNetwork: false) }
+        ) { _ in
+            if calls.withLock({ $0 += 1; return $0 }) > 1 { try await gate.wait() }
+            return png
+        }
+        let requester = Owner()
+        let other = Owner()
+        var otherNotified: [Set<URL>] = []
+        store.addListener(owner: requester) { _ in }
+        store.addListener(owner: other) { otherNotified.append($0) }
+        _ = store.image(for: url)
+        try await waitUntil { otherNotified.count >= 1 }
+
+        _ = store.image(for: url, pixelHeight: 200, requester: requester)
+        store.releaseUnusedMemory()
+        #expect(store.image(for: url) == nil, "前の画像は捨てられている")
+        gate.open()
+        try await waitUntil { otherNotified.count >= 2 }
+    }
+
+    /// 持ち主を渡さずに同じURLを高く求めた描く側がいれば、誰が待っているか分からないので、すべての知らせ先に知らせる。
+    @Test func notifiesEveryoneWhenUnknownDrawerAlsoWaitsForUpgrade() async throws {
+        let store = makeStore(try Self.png(width: 400, height: 400))
+        let requester = Owner()
+        let other = Owner()
+        var otherNotified: [Set<URL>] = []
+        store.addListener(owner: requester) { _ in }
+        store.addListener(owner: other) { otherNotified.append($0) }
+        _ = store.image(for: url)
+        try await waitUntil { otherNotified.count >= 1 }
+
+        _ = store.image(for: url, pixelHeight: 200, requester: requester)
+        _ = store.image(for: url, pixelHeight: 200)
+        try await waitUntil { otherNotified.count >= 2 }
+        #expect(store.image(for: url)?.height == 200)
+    }
+
+    /// 動く絵文字を持ち主を渡して高く読み直したときも、その持ち主の知らせ先にだけ知らせる。
+    @Test func notifiesOnlyRequesterOfAnimationUpgrade() async throws {
+        let store = makeStore(try Self.gif(size: 512, frameCount: 4))
+        let requester = Owner()
+        let other = Owner()
+        var requesterNotified: [Set<URL>] = []
+        var otherNotified: [Set<URL>] = []
+        store.addListener(owner: requester) { requesterNotified.append($0) }
+        store.addListener(owner: other) { otherNotified.append($0) }
+        _ = store.animation(for: url, requester: requester)
+        try await waitUntil(state: { await animationState(of: store, url) }) { requesterNotified.count >= 1 }
+        #expect(otherNotified.count == 1)
+
+        _ = store.animation(for: url, pixelHeight: 200, requester: requester)
+        try await waitUntil(state: { await animationState(of: store, url) }) { requesterNotified.count >= 2 }
+        #expect(store.animation(for: url, pixelHeight: 200)?.image.frameHeight == 200)
+        #expect(otherNotified.count == 1, "前のコマで動かせているほかの画面には知らせない")
+    }
+
     /// 元の画像が求めた高さより小さければ、元の大きさで読み、それより高く描くことになっても読み直さない。拡大しても、ぼけは消えないため。
     @Test func doesNotReloadBeyondSourceSize() async throws {
         let store = makeStore(try Self.png(width: 128, height: 128))

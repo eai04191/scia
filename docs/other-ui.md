@@ -16,6 +16,7 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 - `NetworkConditionsMonitor`: 回線の見張り。サムネイルの条件（`thumbnailPolicy(settings:tuning:)`）と、電波が戻った回数（`recoveryCount`）を出す
 - `ImageStores`: アイコン、添付ファイル、カスタム絵文字の画像のストア（`avatars`、`media`、`emojis`）と、サーバーごとのカスタム絵文字のリスト（`customEmojis`）。置き場所、読み方、読み直しの間隔まで組んである。UIは画像の型の作り方（`PlatformImageMaker`）だけを渡す。絵文字の画像のストアは、アカウントごとに作らない
 - カスタム絵文字の画像は、`ImageStores`が`emojiImageFiles`（`EmojiImageFiles`）に、端末に残した`api/v1/custom_emojis`の応答に載っている画像（A）とそれ以外（B）を分けて置く。応答が変わったら（`CustomEmojiCaches.onListsChanged`）、`EmojiImageFiles.updateListed(_:)`で分け直し、`EmojiPrefetch`で先読みする。絵文字ピッカーの小さい静止画は`emojiThumbnails`（`EmojiThumbnails`）。決まりは[animated-custom-emoji.md](animated-custom-emoji.md)
+- 絵文字の画像を、ほかの画面で描くより高く求めるとき（絵文字ピッカーのプレビューやマスなど）は、`EmojiImageStore`の`image(for:pixelHeight:retriesNow:requester:)`と`animation(for:pixelHeight:requester:)`に、`addListener`に渡した持ち主を渡す。読み直し終えたことはその持ち主にだけ知らせ、前の画像で描けているほかの画面を描き直させない。持ち主を渡さずに求めた画面があれば、すべてに知らせる
 - 設定のストレージの「絵文字」の中の行は、`EmojiStorageRow.rows(_:)`で数える
 - `CrashMark`と`PostQuarantine`、`PostCrashReport`: クラッシュした投稿の隔離と、開発者に送る文章（[crash-quarantine.md](crash-quarantine.md)）。行の処理の前に印を付け、隠すのと送る画面はUIで書く
 - `AccountRegistry`と`KeychainCredentialStore(service:)`: ログインしたアカウント。サービス名はUIで決める

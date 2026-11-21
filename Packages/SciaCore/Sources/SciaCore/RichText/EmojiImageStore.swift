@@ -19,6 +19,34 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
         let onLoad: @MainActor (Set<URL>) -> Void
     }
 
+    private struct WeakOwner {
+        weak var object: AnyObject?
+    }
+
+    /// 高さを上げて読み直す画像。静止画とアニメーションは同じURLでも別に読み直すので分ける。
+    private struct UpgradeKey: Hashable {
+        let url: URL
+        let isAnimation: Bool
+    }
+
+    /// 高さを上げて読み直すのを待っている描く側。
+    private struct UpgradeWaiters {
+        /// 持ち主を渡さずに求めた描く側がいる。誰が待っているか分からないので、すべての描く側に知らせる。
+        var includesUnknown = false
+        var owners: [WeakOwner] = []
+
+        mutating func add(_ requester: AnyObject?) {
+            owners.removeAll { $0.object == nil }
+            guard let requester else {
+                includesUnknown = true
+                return
+            }
+            if !owners.contains(where: { $0.object === requester }) {
+                owners.append(WeakOwner(object: requester))
+            }
+        }
+    }
+
     /// アニメーション版の読み込みの状態。コマそのものは`animations`に持つ。
     private enum AnimationState {
         case loading
@@ -55,7 +83,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     /// 読み直さずに拡大して描いてよい割合。少し大きさの違う場所で描くたびに読み直さないため。
     /// 拡大で増える見え方の誤差を、描き直すこと自体（ぴったりの高さで描かずに縮めたり、少し拡大したりする）で避けられない誤差の1割までに抑える。
     /// サーバーの絵文字40個をFLIP（3倍の画面のppd 95）で測ると、2%拡大した誤差に比べて、10%で約11%、20%で約31%増え、増え方に境目はなかった。
-    nonisolated static var upscaleTolerance: Double { 1.1 }
+    public nonisolated static var upscaleTolerance: Double { 1.1 }
 
     /// 静止画1枚に使ってよいピクセル数。1024×1024（4MB）。大きく描く絵文字を高く読むときも、これを超えない高さで止める。
     /// 1枚で`stills`の上限（32MB）を超えると、入れたそばから捨てられ、描くたびに読み直し続けるため、上限の1/8に収める。
@@ -129,6 +157,10 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     /// 読んでいる途中の通信。同じURLの静止画とアニメーションを同時に求められたときに、1回の通信を分け合う。
     private var fetches: [URL: (purpose: RequestPurpose?, task: Task<(Data, ResponseSource?), any Error>)] = [:]
     private var pendingNotification: Set<URL> = []
+    /// 高さを上げて読み直し終えたことを、求めた描く側にだけ知らせるURLと、知らせる先の持ち主。すべての描く側に知らせるURL（`pendingNotification`）とは別に溜める。
+    private var pendingTargetedNotification: [URL: [WeakOwner]] = [:]
+    /// 高さを上げて読み直している画像を、待っている描く側。読み終えたら、ここに挙がった描く側にだけ知らせる（`notifyUpgrade`）。
+    private var upgradeWaiters: [UpgradeKey: UpgradeWaiters] = [:]
     /// 端末のファイルから読んだ静止画の、知らせを配るまでの時間の記録。求められてからの長さを返す関数、ファイルを読み終えた時点、展開し終えた時点。
     private var arriving: [URL: (elapsed: @Sendable () -> Duration, fetched: Duration, decoding: DecodeTimes, decoded: Duration)] = [:]
     private let logger = SciaLog.logger(category: "emoji")
@@ -164,7 +196,10 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     ///   - pixelHeight: 描く高さのピクセル数。持っている画像より高ければ、その高さで読み直し、読み終えるまでは持っている画像を返す。
     ///     読み直すのは、質を上げる通信を送ってよいときだけ（`upgradePurpose`）。送れなければ、持っている画像を拡大して描く。
     ///   - retriesNow: 使う人が自分で見に行った操作（投稿のメニューを開くなど）で、間隔を待たずに読み直す。
-    public func image(for url: URL, pixelHeight: Int = pixelHeight, retriesNow: Bool = false) -> Image? {
+    ///   - requester: 高さを上げて読み直し終えたときに知らせる先。`addListener`に渡した`owner`と同じものを渡すと、ほかに持ち主を渡さずに同じURLを高く求めた描く側がいなければ、
+    ///     その知らせ先にだけ知らせる。前の画像で描けているほかの画面（タイムラインなど）を、見た目の変わらない描き直しに付き合わせないため。nilなら、すべての知らせ先に知らせる。
+    ///     初めて読むときと、読めなかった画像を読み直したときは、待っている描く側がほかにもいうるので、いつもすべての知らせ先に知らせる。
+    public func image(for url: URL, pixelHeight: Int = pixelHeight, retriesNow: Bool = false, requester: AnyObject? = nil) -> Image? {
         let loadHeight = Self.loadHeight(for: pixelHeight)
         if let image = stills.value(forKey: url), let resolution = stillResolutions[url] {
             if resolution.needsReload(for: loadHeight) {
@@ -172,6 +207,10 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
                     load(url, pixelHeight: loadHeight, purpose: purpose)
                 } else {
                     reloadStillFromStorage(url, pixelHeight: loadHeight)
+                }
+                // 読み直しを始めなかったときは、知らせることもないので覚えない。
+                if isUpgradingStill(url) {
+                    upgradeWaiters[UpgradeKey(url: url, isAnimation: false), default: UpgradeWaiters()].add(requester)
                 }
             }
             return image
@@ -182,6 +221,8 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
         if retriesNow || retry.allowsAutomaticLoad(of: url) {
             load(url, pixelHeight: loadHeight, purpose: retriesNow ? .action : .display)
         }
+        // 高く読み直している間に前の画像がメモリから捨てられていたら、この描く側も読み終えるのを待つので、すべての知らせ先に知らせる。
+        upgradeWaiters[UpgradeKey(url: url, isAnimation: false)]?.add(nil)
         return nil
     }
 
@@ -206,7 +247,8 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     /// - Parameter pixelHeight: 描く高さのピクセル数。持っているコマより高ければ、その高さで読み直し、読み終えるまでは持っているコマを返す。
     ///   その高さでは`AnimatedImage.maxByteCount`を超えるときは、動きを止めないよう、収まる中で一番高く読む。
     ///   静止画と同じく、持っているコマより高く読み直すのは、質を上げる通信を送ってよいときだけ。
-    public func animation(for url: URL, pixelHeight: Int = pixelHeight) -> EmojiAnimation? {
+    /// - Parameter requester: 高さを上げて読み直し終えたときに知らせる先。`image(for:pixelHeight:retriesNow:requester:)`と同じ。
+    public func animation(for url: URL, pixelHeight: Int = pixelHeight, requester: AnyObject? = nil) -> EmojiAnimation? {
         // 大きすぎて動かせないと分かっている元の画像は、読まない。
         if oversized?.contains(url) == true { return nil }
         let loadHeight = Self.loadHeight(for: pixelHeight)
@@ -215,7 +257,13 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
             guard let animation = animations.value(forKey: url) else {
                 stats.animationReloads += 1
                 loadAnimation(url, pixelHeight: max(loadHeight, resolution.pixelHeight))
+                upgradeWaiters[UpgradeKey(url: url, isAnimation: true)]?.add(nil)
                 return nil
+            }
+            defer {
+                if resolution.needsReload(for: loadHeight), isUpgradingAnimation(url) {
+                    upgradeWaiters[UpgradeKey(url: url, isAnimation: true), default: UpgradeWaiters()].add(requester)
+                }
             }
             if resolution.needsReload(for: loadHeight), !upgradingAnimations.contains(url) {
                 if let purpose = upgradePurpose(), retry.allowsAutomaticLoad(of: url) {
@@ -286,6 +334,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     /// - Parameter purpose: 行に描いたときの読み込みは自動の通信として送り、止められている間は送らない（docs/network.md）。
     private func load(_ url: URL, pixelHeight: Int, purpose: RequestPurpose) {
         guard loading.insert(url).inserted else { return }
+        let isUpgrade = stillResolutions[url] != nil && stills.contains(url)
         let elapsed = stopwatch(on: clock)
         let isReload = evictedStills.contains(url)
         if isReload {
@@ -333,7 +382,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
                     scheduleRetry(url)
                 }
             }
-            notify(url)
+            if isUpgrade { notifyUpgrade(UpgradeKey(url: url, isAnimation: false), keepsWaiters: reloadingStills.contains(url)) } else { notify(url) }
         } }
     }
 
@@ -345,7 +394,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
         Task(.withoutRequests) { [self] in
             defer {
                 reloadingStills.remove(url)
-                notify(url)
+                notifyUpgrade(UpgradeKey(url: url, isAnimation: false), keepsWaiters: loading.contains(url))
             }
             let elapsed = stopwatch(on: clock)
             guard let data = await storedData(url),
@@ -375,6 +424,10 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
                   let (image, isLargest, _) = await Task.detached(priority: .utility, operation: { await Self.decodeAnimation(data, pixelHeight: pixelHeight) }).value
             else {
                 storageMisses[url] = writeCount
+                // 作り直せなかったので知らせない。通信でも読み直していなければ、待っている描く側も覚えておかない。
+                if !upgradingAnimations.contains(url) {
+                    upgradeWaiters[UpgradeKey(url: url, isAnimation: true)] = nil
+                }
                 return
             }
             if case .animated(let current) = animationStates[url], current.pixelHeight >= pixelHeight { return }
@@ -382,7 +435,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
             stats.animationBytes += image.byteCount
             stats.largestAnimationBytes = max(stats.largestAnimationBytes, image.byteCount)
             animationStates[url] = .animated(Resolution(pixelHeight: pixelHeight, isLargest: isLargest))
-            notify(url)
+            notifyUpgrade(UpgradeKey(url: url, isAnimation: true), keepsWaiters: upgradingAnimations.contains(url))
         }
     }
 
@@ -684,7 +737,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
             animationStates[url] = state
             switch state {
             case .animated:
-                notify(url)
+                if current == nil { notify(url) } else { notifyUpgrade(UpgradeKey(url: url, isAnimation: true), keepsWaiters: reloadingAnimations.contains(url)) }
             case .still:
                 stillListeners.removeAll { $0.owner == nil }
                 for listener in stillListeners {
@@ -716,18 +769,48 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
         }
     }
 
+    /// 高さを上げて読み直し終えた（読み直せなかった）ことを、待っている描く側に知らせる。持ち主の分からない描く側が待っていれば、すべての知らせ先に知らせる。
+    /// - Parameter keepsWaiters: 同じ画像を別の経路（通信と端末）でも読み直している途中か。そちらが終えたときにも知らせるので、待っている描く側を残す。
+    private func notifyUpgrade(_ key: UpgradeKey, keepsWaiters: Bool) {
+        let waiters = keepsWaiters ? upgradeWaiters[key] : upgradeWaiters.removeValue(forKey: key)
+        guard let waiters, !waiters.includesUnknown else { return notify(key.url) }
+        let owners = waiters.owners.filter { $0.object != nil }
+        guard !owners.isEmpty else { return }
+        scheduleDelivery()
+        pendingTargetedNotification[key.url, default: []].append(contentsOf: owners)
+    }
+
+    /// 静止画を高く読み直している途中か。通信でも端末からでもよい。
+    private func isUpgradingStill(_ url: URL) -> Bool {
+        loading.contains(url) || reloadingStills.contains(url)
+    }
+
+    /// アニメーションを高く読み直している途中か。通信でも端末からでもよい。
+    private func isUpgradingAnimation(_ url: URL) -> Bool {
+        upgradingAnimations.contains(url) || reloadingAnimations.contains(url)
+    }
+
     /// 同じ時期に届いた画像をまとめて知らせ、セルの再構成を減らす。
     private func notify(_ url: URL) {
-        let isFirst = pendingNotification.isEmpty
+        scheduleDelivery()
         pendingNotification.insert(url)
-        guard isFirst else { return }
+    }
+
+    /// 溜めた知らせを配る処理を、まだ予約していなければ予約する。
+    private func scheduleDelivery() {
+        guard pendingNotification.isEmpty, pendingTargetedNotification.isEmpty else { return }
         Task {
             let urls = pendingNotification
+            let targeted = pendingTargetedNotification
             pendingNotification = []
+            pendingTargetedNotification = [:]
             listeners.removeAll { $0.owner == nil }
-            let arrived = urls.compactMap { arriving.removeValue(forKey: $0) }.map { ($0, $0.elapsed()) }
+            let arrived = urls.union(targeted.keys).compactMap { arriving.removeValue(forKey: $0) }.map { ($0, $0.elapsed()) }
             for listener in listeners {
-                listener.onLoad(urls)
+                let own = targeted.filter { _, owners in owners.contains { $0.object === listener.owner } }.keys
+                let delivered = own.isEmpty ? urls : urls.union(own)
+                guard !delivered.isEmpty else { continue }
+                listener.onLoad(delivered)
             }
             for (arrival, delivered) in arrived {
                 stats.stillArrival.record(fetched: arrival.fetched, decoding: arrival.decoding, decoded: arrival.decoded, delivered: delivered, redrawn: arrival.elapsed())

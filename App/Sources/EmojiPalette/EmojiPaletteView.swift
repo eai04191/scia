@@ -601,7 +601,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         let start = AppDependencies.mediaTime()
         defer { (collectionView as? EmojiPaletteCollectionView)?.debugConfigureDurations?.append(AppDependencies.mediaTime() - start) }
         #endif
-        FrameWork.measure("EmojiPaletteCell.configure") { cell.configure(emoji, store: emojiImages, thumbnails: thumbnails, glyphs: glyphImages, glyphArchive: glyphArchive, emojiStyle: emojiStyle) }
+        FrameWork.measure("EmojiPaletteCell.configure") { cell.configure(emoji, store: emojiImages, requester: self, thumbnails: thumbnails, glyphs: glyphImages, glyphArchive: glyphArchive, emojiStyle: emojiStyle) }
     }
 
     /// できたUnicodeの絵文字の画像を、それを待っているセルに入れる。
@@ -813,8 +813,9 @@ extension EmojiPaletteView: UICollectionViewDelegate {
         let maxWidth = bounds.width - 64
         let menu = menu
         return UIContextMenuConfiguration(identifier: nil, previewProvider: { [weak self] in
-            let preview = EmojiPalettePreviewController(emoji: emoji, store: store, height: height, maxWidth: maxWidth)
-            self?.preview = preview
+            guard let self else { return nil }
+            let preview = EmojiPalettePreviewController(emoji: emoji, store: store, requester: self, height: height, maxWidth: maxWidth)
+            self.preview = preview
             return preview
         }, actionProvider: { _ in
             menu?(emoji)
@@ -1052,14 +1053,17 @@ final class EmojiGlyphPreviewController: UIViewController {
 final class EmojiPalettePreviewController: UIViewController {
     private let emoji: ServerEmoji
     private let store: EmojiImageStore<UIImage>
+    /// 大きく読み直し終えたことを知らせてもらう、ストアの知らせ先の持ち主。パレットが受けて、このプレビューに渡す（`imagesDidLoad`）。
+    private weak var requester: AnyObject?
     private let height: CGFloat
     private let maxWidth: CGFloat
     private let imageView = EmojiImageView(frame: .zero)
     private static let padding: CGFloat = 16
 
-    init(emoji: ServerEmoji, store: EmojiImageStore<UIImage>, height: CGFloat, maxWidth: CGFloat) {
+    init(emoji: ServerEmoji, store: EmojiImageStore<UIImage>, requester: AnyObject, height: CGFloat, maxWidth: CGFloat) {
         self.emoji = emoji
         self.store = store
+        self.requester = requester
         self.height = height
         self.maxWidth = maxWidth
         super.init(nibName: nil, bundle: nil)
@@ -1093,7 +1097,7 @@ final class EmojiPalettePreviewController: UIViewController {
         let choice = EmojiPaletteCell.choice(of: store)
         let url = choice.url(of: emoji)
         // 縦横比は、持っている画像から知る。まだなければサーバーが返したものを使い、どちらもなければ正方形にする。
-        let known = store.image(for: url, retriesNow: retriesNow)
+        let known = store.image(for: url, retriesNow: retriesNow, requester: requester)
         let aspectRatio: CGFloat = if let size = known?.size, size.height > 0 {
             size.width / size.height
         } else {
@@ -1102,8 +1106,8 @@ final class EmojiPalettePreviewController: UIViewController {
         let size = Self.contentSize(aspectRatio: aspectRatio, height: height, maxWidth: maxWidth)
         // 横長の絵文字は幅に収めて縮めるので、縮めたあとの高さで読む。縮める前の高さで読むと、描く大きさの何倍もの画素を展開する。
         let pixelHeight = RichTextRenderer.pixelHeight(of: size.height - Self.padding * 2, scale: traitCollection.displayScale)
-        imageView.stillImage = store.image(for: url, pixelHeight: pixelHeight, retriesNow: retriesNow)
-        imageView.animation = choice.animationURL(of: emoji).flatMap { store.animation(for: $0, pixelHeight: pixelHeight) }
+        imageView.stillImage = store.image(for: url, pixelHeight: pixelHeight, retriesNow: retriesNow, requester: requester)
+        imageView.animation = choice.animationURL(of: emoji).flatMap { store.animation(for: $0, pixelHeight: pixelHeight, requester: requester) }
         preferredContentSize = size
     }
 
@@ -1194,7 +1198,8 @@ final class EmojiPaletteCell: UICollectionViewCell {
 
     /// カスタム絵文字は、「カスタム絵文字のアニメーションを再生する」の設定によらず動かす。
     /// 静止画がメモリになければ、届くまで小さい静止画で描き、届いたら差し替える（`reconfigureVisibleCells`）。
-    func configure(_ emoji: PaletteEmoji, store: EmojiImageStore<UIImage>, thumbnails: EmojiThumbnails, glyphs: EmojiGlyphImageStore, glyphArchive: EmojiGlyphArchive, emojiStyle: EmojiStyle) {
+    /// - Parameter requester: 大きく読み直し終えたことを知らせてもらう、ストアの知らせ先の持ち主（パレット）。
+    func configure(_ emoji: PaletteEmoji, store: EmojiImageStore<UIImage>, requester: AnyObject, thumbnails: EmojiThumbnails, glyphs: EmojiGlyphImageStore, glyphArchive: EmojiGlyphArchive, emojiStyle: EmojiStyle) {
         switch emoji {
         case .custom(let custom):
             glyphView.isHidden = true
@@ -1206,8 +1211,8 @@ final class EmojiPaletteCell: UICollectionViewCell {
             // 動かすので元の画像だけを読み、動かない絵文字もその最初のコマで描く。
             let choice = Self.choice(of: store)
             let url = choice.url(of: custom)
-            imageView.stillImage = store.image(for: url, pixelHeight: pixelHeight) ?? thumbnails.image(for: url).map { UIImage(cgImage: $0) }
-            imageView.animation = choice.animationURL(of: custom).flatMap { store.animation(for: $0, pixelHeight: pixelHeight) }
+            imageView.stillImage = store.image(for: url, pixelHeight: pixelHeight, requester: requester) ?? thumbnails.image(for: url).map { UIImage(cgImage: $0) }
+            imageView.animation = choice.animationURL(of: custom).flatMap { store.animation(for: $0, pixelHeight: pixelHeight, requester: requester) }
             accessibilityLabel = custom.shortcode
             accessibilityValue = nil
         case .standard(let standard):
