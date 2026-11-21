@@ -51,7 +51,7 @@ private struct UserDisplaySettingsRow: View {
                 .frame(width: 28, height: 28)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                name
+                AccountNameText(name: display.name, emojis: display.emojis, settings: settings)
                 Text(verbatim: "@" + handle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -67,18 +67,24 @@ private struct UserDisplaySettingsRow: View {
         .contentShape(Rectangle())
     }
 
-    @ViewBuilder
-    private var name: some View {
-        if display.emojis.isEmpty {
-            Text(verbatim: display.name)
+}
+
+/// 設定の画面の行に出す、アカウントの名前。カスタム絵文字を含めば絵文字の画像で描く。
+struct AccountNameText: View {
+    let name: String
+    let emojis: [CustomEmoji]
+    let settings: AppSettings
+
+    var body: some View {
+        if emojis.isEmpty {
+            Text(verbatim: name)
                 .lineLimit(1)
                 .truncationMode(.middle)
         } else {
             RichTextLabel(numberOfLines: 1, animatesEmojis: settings.animatesCustomEmojis) {
                 RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, settings: settings, emojiImages: AppDependencies.emojiImages, language: settings.glyphLanguageIdentifier())
-                    .render(.plain(display.name, emojis: display.emojis))
+                    .render(.plain(name, emojis: emojis))
             }
         }
     }
-
 }
