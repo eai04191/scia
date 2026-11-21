@@ -37,7 +37,7 @@ public struct ServerSuggestions: Sendable {
     /// それぞれの中では、ログイン済みのアカウントのサーバーを先に、ほかは月間アクティブ数の多い順に並べる。
     /// 何も打っていなければ、ログイン済みのサーバーと、月間アクティブ数の多いサーバーを出す。
     public func suggestions(for input: String, limit: Int = 5) -> [String] {
-        let query = Self.normalize(input)
+        let query = DomainInput.normalize(input)
         guard !query.isEmpty else { return Array(domains.prefix(limit)) }
 
         var exact: [String] = []
@@ -58,23 +58,8 @@ public struct ServerSuggestions: Sendable {
     /// 候補の中で、打ったものに当たる部分。候補の行で太字にして、なぜその候補が出たかを見せる。
     /// 何も打っていないときと、当たらないときはnil。
     public static func matchedRange(of input: String, in domain: String) -> Range<String.Index>? {
-        let query = normalize(input)
+        let query = DomainInput.normalize(input)
         guard !query.isEmpty else { return nil }
         return domain.range(of: query)
-    }
-
-    /// `https://`や末尾の`/`、`@alice@`のようなアカウントの部分を除き、ドメインとして比べられる形にする。
-    static func normalize(_ input: String) -> String {
-        var query = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if let range = query.range(of: "://") {
-            query = String(query[range.upperBound...])
-        }
-        if let slash = query.firstIndex(of: "/") {
-            query = String(query[..<slash])
-        }
-        if let at = query.lastIndex(of: "@") {
-            query = String(query[query.index(after: at)...])
-        }
-        return query
     }
 }
