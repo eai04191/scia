@@ -53,7 +53,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - UIKitの動きは、SwiftUIのスプリング（`.smooth`、`.snappy`など）を`UIView.animate(_:changes:completion:)`に渡して書き、`UIViewPropertyAnimator`で動かすときは`UISpringTimingParameters(duration:bounce:)`で同じスプリングにする。`UIView.animate(withDuration:)`の既定の加減速や`usingSpringWithDamping`では書かず、前の書き方で残っている動きは、その箇所に手を入れるときに置き換える。OSから渡る時間と曲線に合わせる動き（キーボードの出入りに付いて動く投稿欄など）は、渡された値のまま動かす
 - 画面の骨格、スクロール位置の制御、入力（入力欄、変換、キー操作、フォーカス）、ジェスチャーはUIKitで作る。中に入力もスクロール位置の精密な制御も持たない表示の部品は、SwiftUIで作れないかを先に考え、UIKitの画面に`UIHostingController`で載せる。Liquid Glassの組み方（`glassEffect`、`ConcentricRectangle`、`.containerShape`）をそのまま使えるため。UIKitで作った部品でLiquid Glassの不都合が出たら、SwiftUIへの置き換えを候補に入れる
 - `UIViewRepresentable`で包む部品は`sizeThatFits`で大きさを決める。中身が大きさの希望を変え続けて、並べ直しが止まらなくなることがあるため
-- 人が書く文字の入力欄は`GlyphLanguageTextView`か`GlyphLanguageTextField`で作り、ほかのUIKitの入力欄（検索欄、アラートの入力欄など）では`smartInsertDeleteType = .no`を入れる。スマート挿入は、英字の後ろに「─」を貼ると「abc ─」のように、ペーストした文字の前に空白を足すため。SwiftUIの入力欄（`TextEditor`、`TextField`、`.searchable`）は、SwiftUIから切れない
+- 人が書く文字の入力欄は`GlyphLanguageTextView`か`GlyphLanguageTextField`で作り、ほかのUIKitの入力欄（検索欄、アラートの入力欄など）では`smartInsertDeleteType = .offOnMac`を入れる。スマート挿入は、英字の後ろに「─」を貼ると「abc ─」のように、ペーストした文字の前に空白を足す。iOSでは設定のスマート句読点に従うので既定のままにし、Macで動くときだけ切る。Macでは、Macのスマート引用符とスマートダッシュを切っても空白が付いたため、iOSのキーボード設定が届いていないと見ている（直接は確かめていない）。SwiftUIの入力欄（`TextEditor`、`TextField`、`.searchable`）は、SwiftUIから切れない
 - `Form`や`List`で作る画面（設定、通報など）を作ったり変えたりするときは、[docs/form-list.md](docs/form-list.md)に従う
 - Mastodon APIの仕様は、公式ドキュメント（https://docs.joinmastodon.org/ ）で確認する。サーバー実装による差異は、必要になった時点で個別に対応してテストに残す
 - サーバー（ほかのサーバーの利用者が書いた投稿や、fxtwitterの応答を含む）から来る件数、上限、URLは、読むところで`decodeCount`、`ServerLimit`、`decodeURL`で確かめる。読んだあとの計算でも、サーバーの値から作った数（縦横比や割合）を整数に直す前に、範囲に収める
