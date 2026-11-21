@@ -241,12 +241,12 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
                 sections.insert(statusSection, at: index)
             }
             self.sections = sections
-            statusLabel.text = ComposeTexts.EmojiPalette.noEmojis
+            statusLabel.text = EmojiPaletteTexts.noEmojis
             statusLabel.isHidden = !sections.isEmpty
         case .searchResults(let emojis, let customStatus):
             self.customStatus = customStatus
             sections = (customStatus == nil ? [] : [statusSection]) + (emojis.isEmpty ? [] : [EmojiPaletteSection(kind: .searchResults, emojis: emojis)])
-            statusLabel.text = ComposeTexts.EmojiPalette.noResults
+            statusLabel.text = EmojiPaletteTexts.noResults
             statusLabel.isHidden = !emojis.isEmpty
         }
         applySnapshot()
@@ -318,8 +318,8 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
 
     private func configureViews() {
         searchField.translatesAutoresizingMaskIntoConstraints = false
-        searchField.placeholder = ComposeTexts.EmojiPalette.search
-        searchField.accessibilityLabel = ComposeTexts.EmojiPalette.search
+        searchField.placeholder = EmojiPaletteTexts.search
+        searchField.accessibilityLabel = EmojiPaletteTexts.search
         // Unicodeの絵文字は日本語の言葉でも探すので、ふだんのキーボードにする。
         searchField.autocapitalizationType = .none
         searchField.autocorrectionType = .no
@@ -333,7 +333,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         topBar.addSubview(searchField)
         skinToneButton.translatesAutoresizingMaskIntoConstraints = false
         skinToneButton.configuration?.contentInsets = .zero
-        skinToneButton.accessibilityLabel = ComposeTexts.EmojiPalette.defaultSkinTone
+        skinToneButton.accessibilityLabel = EmojiPaletteTexts.defaultSkinTone
         skinToneButton.showsMenuAsPrimaryAction = true
         topBar.addSubview(skinToneButton)
         updateSkinToneButton()
@@ -370,7 +370,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         deleteButton.translatesAutoresizingMaskIntoConstraints = false
         deleteButton.configuration?.image = UIImage(systemName: "delete.backward")
         deleteButton.configuration?.baseForegroundColor = .label
-        deleteButton.accessibilityLabel = ComposeTexts.delete
+        deleteButton.accessibilityLabel = EmojiPaletteTexts.delete
         deleteButton.addAction(UIAction { [weak self] _ in
             self?.playInputFeedback()
             self?.onDelete()
@@ -898,9 +898,9 @@ extension EmojiPaletteView {
         }
         let toned = selection.emoji.withSkinTones(selection.first, selection.second)
         return UIMenu(children: [
-            row(ComposeTexts.EmojiPalette.firstPersonSkinTone, current: selection.first) { [weak self] tone in self?.choosePairTone(first: tone) },
-            row(ComposeTexts.EmojiPalette.secondPersonSkinTone, current: selection.second) { [weak self] tone in self?.choosePairTone(second: tone) },
-            UIAction(title: ComposeTexts.EmojiPalette.insertEmoji, image: glyphIcon(toned.emoji, side: 28)) { [weak self] _ in self?.insert(toned) },
+            row(EmojiPaletteTexts.firstPersonSkinTone, current: selection.first) { [weak self] tone in self?.choosePairTone(first: tone) },
+            row(EmojiPaletteTexts.secondPersonSkinTone, current: selection.second) { [weak self] tone in self?.choosePairTone(second: tone) },
+            UIAction(title: EmojiPaletteTexts.insertEmoji, image: glyphIcon(toned.emoji, side: 28)) { [weak self] _ in self?.insert(toned) },
         ])
     }
 
@@ -1273,7 +1273,7 @@ private final class EmojiPaletteStatusCell: UICollectionViewCell {
         label.textColor = .secondaryLabel
         label.numberOfLines = 0
         label.textAlignment = .center
-        retryButton.configuration?.title = ComposeTexts.retry
+        retryButton.configuration?.title = EmojiPaletteTexts.retry
         retryButton.addAction(UIAction { [weak self] _ in self?.onRetry() }, for: .primaryActionTriggered)
         // 読み込み中はインジケーターと文言を横に、失敗は文言の下に読み直すボタンを置く。カスタム絵文字の中身の代わりに出すので、タイムラインが空のときやタイムラインの失敗と同じく中央にそろえる。
         let message = UIStackView(arrangedSubviews: [spinner, label])
@@ -1306,7 +1306,7 @@ private final class EmojiPaletteStatusCell: UICollectionViewCell {
         case .loading:
             spinner.startAnimating()
             spinner.isHidden = false
-            label.text = ComposeTexts.EmojiPalette.loadingCustomEmojis
+            label.text = EmojiPaletteTexts.loadingCustomEmojis
             retryButton.isHidden = true
         case .failed(let reason):
             spinner.stopAnimating()

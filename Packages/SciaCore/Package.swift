@@ -27,7 +27,7 @@ let package = Package(
         .target(
             name: "SciaCore",
             dependencies: ["MemoryCache", "CCrashMark"],
-            resources: [.copy("Auth/Resources/known-servers.txt"), .copy("Compose/Resources/standard-emoji.json"), .copy("Settings/Resources/menu-defaults.json")],
+            resources: [.copy("Auth/Resources/known-servers.txt"), .copy("EmojiPalette/Resources/standard-emoji.json"), .copy("Settings/Resources/menu-defaults.json")],
             swiftSettings: swiftSettings
         ),
         .target(

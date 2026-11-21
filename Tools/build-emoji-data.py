@@ -33,7 +33,7 @@ from pathlib import Path
 UNICODE_EMOJI_VERSION = "17.0"
 CLDR_VERSION = "48.2.3"
 GEMOJI_VERSION = "v4.1.0"
-OUTPUT = Path("Packages/SciaCore/Sources/SciaCore/Compose/Resources/standard-emoji.json")
+OUTPUT = Path("Packages/SciaCore/Sources/SciaCore/EmojiPalette/Resources/standard-emoji.json")
 
 # emoji-test.txtのまとまりの名前を、iOSの絵文字キーボードに近い日本語の名前にする。
 GROUP_TITLES = {
