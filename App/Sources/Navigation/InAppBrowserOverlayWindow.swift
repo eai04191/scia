@@ -10,14 +10,35 @@ import UIKit
 ///
 /// 伏せている間は、Safariを入れたビューを下へずらし、Safariのバーの上端をシートのSafariを出す場所に合わせる。Safariは上の安全領域の下にバーを描くので、安全領域の分はマスクで隠す。
 /// 見えているところの外で触れたことは、下のウインドウへ通す。
+/// Safariのバーの上には、シートと同じ引ける範囲（`InAppBrowserBarGrabView`）を、Safariより手前に置く。Safariの上で触れたことはこのウインドウの`hitTest`を通らずにSafariへ行くので、下のウインドウのシートの範囲では受けられないため。
+/// 伏せている間は、そこを引くかタップすると、シートを引いたかタップしたときと同じに動く（`onBarGrabPan`、`onBarGrabTap`）。全画面に広げている間は、タップで伏せる。
 /// ずらすのはウインドウではなく、UIKitがSafariを入れたビュー（Safariのビューの親）にする。ウインドウの`transform`とマスクは、`UIView.animate`で動かしても描かれる値が変わらなかった（iOS 27のシミュレーター）。
 final class InAppBrowserOverlayWindow: UIWindow {
-    private(set) var isCollapsed = false
+    private(set) var isCollapsed = false {
+        didSet { updateBarGrab() }
+    }
+    /// 広げている途中。
+    private(set) var isExpanding = false
     /// 見せる範囲。Safariのバーの上端から下で、その中をシートの形（`sheetShape`）で切り抜く。
     private let visibleArea = UIView()
     private let sheetShape = UIView()
-    /// 伏せている間に、下のウインドウへ通すところ（シートのバーを引ける範囲）。画面の座標。
-    private var passthroughRect: CGRect = .null
+    /// 伏せたままSafariを閉じ始めたときに、Safariの閉じる動きの中で呼ぶ。ここで伏せたシートを閉じると、シートの下がる動きがSafariの閉じる動きと同じ時間で動く。
+    var onCollapsedDismissalBegin: (() -> Void)?
+    /// Safariのバーの上の引ける範囲をタップしたときに呼ぶ。
+    var onBarGrabTap: (() -> Void)?
+    /// 全画面に広げている間に、タップで伏せられるか。伏せられないとき（iPhoneの横向きなど）は引ける範囲を出さない。
+    /// 出すと、タップで何も起きないまま、重ねた範囲のSafariのバーのボタンを押せなくなる。
+    var canCollapse: (() -> Bool)? {
+        didSet { updateBarGrab() }
+    }
+    /// 伏せている間に、Safariのバーの上の引ける範囲を引いたときに呼ぶ。指が動いた縦の長さと速さ（画面の座標）を渡す。
+    var onBarGrabPan: ((_ state: UIGestureRecognizer.State, _ translation: CGFloat, _ velocity: CGFloat) -> Void)?
+    private let barGrabView: InAppBrowserBarGrabView
+    private lazy var barGrabPan = UIPanGestureRecognizer(target: self, action: #selector(handleBarGrabPan))
+    /// 伏せたまま閉じる間、閉じる動きを止めているSafariの層。
+    private var heldSafariLayer: CALayer?
+    /// 止める前に、終わらせるよう求められた（シートを下げる時間が0のとき）。そのあとは止めない。
+    private var finishedSafariDismissalHold = false
 
     var presenter: InAppBrowserOverlayPresenter? { rootViewController as? InAppBrowserOverlayPresenter }
 
@@ -28,15 +49,26 @@ final class InAppBrowserOverlayWindow: UIWindow {
     /// SwiftUIの`.smooth`の既定の長さ。
     private static let expandDuration: TimeInterval = 0.5
 
-    init(windowScene: UIWindowScene, behind: @escaping () -> UIView?, frameSource: any FrameSource) {
+    init(windowScene: UIWindowScene, behind: @escaping () -> UIView?, barGrab: InAppBrowserBarGrab, frameSource: any FrameSource) {
         self.frameSource = frameSource
+        barGrabView = InAppBrowserBarGrabView(barGrab: barGrab)
         super.init(windowScene: windowScene)
         backgroundColor = .clear
         windowLevel = .normal + 1
-        rootViewController = InAppBrowserOverlayPresenter(behind: behind, frameSource: frameSource)
+        let presenter = InAppBrowserOverlayPresenter(behind: behind, frameSource: frameSource)
+        rootViewController = presenter
+        presenter.hostWindow = self
+        // 伏せられるかは画面の向きで変わるので、引ける範囲を出すかを決め直す。
+        registerForTraitChanges([UITraitVerticalSizeClass.self, UITraitHorizontalSizeClass.self]) { (window: Self, _) in
+            window.setNeedsLayout()
+        }
         visibleArea.clipsToBounds = true
         sheetShape.backgroundColor = .black
         visibleArea.addSubview(sheetShape)
+        barGrabView.isHidden = true
+        barGrabView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(handleBarGrabTap)))
+        barGrabView.addGestureRecognizer(barGrabPan)
+        addSubview(barGrabView)
     }
 
     @available(*, unavailable)
@@ -44,12 +76,13 @@ final class InAppBrowserOverlayWindow: UIWindow {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// Safariのバーの上端が画面の`safariTop`に来るように、伏せて置き、シートの形（`sheet`）で切り抜く。`passthrough`はシートのバーを引ける範囲（画面の座標）。
+    /// Safariのバーの上端が画面の`safariTop`に来るように、伏せて置き、シートの形（`sheet`）で切り抜く。引ける範囲も、シートと同じ位置に置く。
     /// まだSafariを出していなければ、置けないのでfalseを返す。
-    func placeCollapsed(safariTop: CGFloat, sheet: InAppBrowserSheetShape, passthrough: CGRect) -> Bool {
+    func placeCollapsed(safariTop: CGFloat, sheet: InAppBrowserSheetShape) -> Bool {
         guard let container = safariContainer else { return false }
         isCollapsed = true
-        passthroughRect = passthrough
+        isExpanding = false
+        barGrabView.frame = barGrabView.barGrab.frame(width: sheet.frame.width, safariTop: safariTop).offsetBy(dx: sheet.frame.minX, dy: 0)
         let top = safeAreaInsets.top
         let shift = safariTop - top
         container.transform = CGAffineTransform(translationX: 0, y: shift)
@@ -63,6 +96,29 @@ final class InAppBrowserOverlayWindow: UIWindow {
         return true
     }
 
+    /// 画面いっぱいから、`placeCollapsed`と同じ伏せた置き方へ縮める。
+    func collapse(safariTop: CGFloat, sheet: InAppBrowserSheetShape, completion: @escaping () -> Void) {
+        guard !isCollapsed, let container = safariContainer else {
+            completion()
+            return
+        }
+        // 動き始めは、画面いっぱいを見せる切り抜きにする。
+        visibleArea.frame = container.bounds
+        sheetShape.frame = container.bounds
+        sheetShape.layer.cornerRadius = 0
+        container.mask = visibleArea
+        guard !UIAccessibility.isReduceMotionEnabled else {
+            _ = placeCollapsed(safariTop: safariTop, sheet: sheet)
+            completion()
+            return
+        }
+        UIView.animateSmoothSpring(duration: Self.expandDuration, in: self, frameSource: frameSource) {
+            _ = self.placeCollapsed(safariTop: safariTop, sheet: sheet)
+        } completion: {
+            completion()
+        }
+    }
+
     /// 伏せた置き方から、画面いっぱいへ広げる。
     func expand(completion: @escaping () -> Void) {
         guard isCollapsed, let container = safariContainer else {
@@ -70,30 +126,99 @@ final class InAppBrowserOverlayWindow: UIWindow {
             return
         }
         isCollapsed = false
-        passthroughRect = .null
+        isExpanding = true
         guard !UIAccessibility.isReduceMotionEnabled else {
             container.transform = .identity
             container.mask = nil
+            placeExpandedBarGrab()
+            isExpanding = false
             completion()
             return
         }
-        UIView.animateSmoothSpring(duration: Self.expandDuration, in: container, frameSource: frameSource) {
+        UIView.animateSmoothSpring(duration: Self.expandDuration, in: self, frameSource: frameSource) {
+            self.placeExpandedBarGrab()
             container.transform = .identity
             self.visibleArea.frame = container.bounds
             self.sheetShape.frame = container.bounds
             self.sheetShape.layer.cornerRadius = 0
         } completion: {
+            // 広げる途中に伏せ直していたら、伏せた切り抜きを外さない。
+            guard self.isExpanding else { return }
+            self.isExpanding = false
             container.mask = nil
             completion()
         }
     }
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        // 伏せる途中と広げる途中は、引ける範囲が動いている。`hitTest`は行き先の位置で判定するので、見えている位置で受ける（シートの`moveGrabTarget`と同じ）。
+        if !barGrabView.isHidden, barGrabView.alpha > 0.01, (barGrabView.layer.presentation()?.frame ?? barGrabView.frame).contains(point) { return barGrabView }
+        let hit = super.hitTest(point, with: event)
+        if hit === barGrabView { return hit }
         if isCollapsed, let container = safariContainer {
-            let onScreen = convert(point, to: nil)
-            guard container.convert(visibleArea.frame, to: nil).contains(onScreen), !passthroughRect.contains(onScreen) else { return nil }
+            guard container.convert(visibleArea.frame, to: nil).contains(convert(point, to: nil)) else { return nil }
         }
-        return super.hitTest(point, with: event)
+        return hit
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if !isCollapsed { placeExpandedBarGrab() }
+        updateBarGrab()
+    }
+
+    /// 全画面のSafariのバーは上の安全領域の下にあるので、引ける範囲もそこに合わせる。
+    private func placeExpandedBarGrab() {
+        barGrabView.frame = barGrabView.barGrab.frame(width: bounds.width, safariTop: safeAreaInsets.top)
+    }
+
+    /// Safariを出すと、UIKitがその入れ物をこのウインドウの一番手前に足すので、引ける範囲をその上へ出し直す。
+    override func didAddSubview(_ subview: UIView) {
+        super.didAddSubview(subview)
+        guard subview !== barGrabView else { return }
+        bringSubviewToFront(barGrabView)
+        updateBarGrab()
+    }
+
+    /// 引ける範囲は、Safariを出している間に出す。全画面に広げている間は、タップで伏せられるときだけ出す。
+    /// VoiceOverでは、伏せている間はシートのグラバーが受け持つので、全画面に広げている間だけ読む。引くのは伏せている間だけ。
+    private func updateBarGrab() {
+        barGrabView.isHidden = !barGrabView.barGrab.isEnabled || safariContainer == nil || (!isCollapsed && canCollapse?() != true)
+        barGrabPan.isEnabled = isCollapsed
+        barGrabView.readsAsCollapsed = isCollapsed
+        barGrabView.onAccessibilityActivate = isCollapsed ? nil : { [weak self] in self?.handleBarGrabTap() }
+    }
+
+    @objc private func handleBarGrabTap() {
+        guard !barGrabView.isHidden else { return }
+        onBarGrabTap?()
+    }
+
+    @objc private func handleBarGrabPan(_ pan: UIPanGestureRecognizer) {
+        onBarGrabPan?(pan.state, pan.translation(in: self).y, pan.velocity(in: self).y)
+    }
+
+    /// 伏せたまま閉じるとき、Safariの閉じる動き（Safariを入れたビューの中で右へ抜ける）を、動き始めの位置で止める。Safariは下がるシートに付いていくだけに見せる。
+    /// 止めている間は、閉じる動きが終わらないので、Safariは閉じ終えない。シートが下がりきったら`finishHeldSafariDismissal`で終わらせる。
+    /// 動きを写して逆向きに打ち消すと、Safariの動きとずれ、最大27pt横に動いて見えた（iOS 27のシミュレーター）。
+    func holdSafariDismissalSlide() {
+        guard isCollapsed, !finishedSafariDismissalHold, let safari = presenter?.presentedViewController?.viewIfLoaded else { return }
+        let layer = safari.layer
+        let begin = (layer.animationKeys() ?? []).compactMap { layer.animation(forKey: $0)?.beginTime }.filter { $0 > 0 }.min()
+        let now = layer.convertTime(AppDependencies.mediaTime(), from: nil)
+        layer.timeOffset = begin.map { min($0, now) } ?? now
+        layer.speed = 0
+        heldSafariLayer = layer
+    }
+
+    /// 止めていた閉じる動きを外し、Safariを閉じ終えさせる。
+    func finishHeldSafariDismissal() {
+        finishedSafariDismissalHold = true
+        guard let layer = heldSafariLayer else { return }
+        heldSafariLayer = nil
+        layer.speed = 1
+        layer.timeOffset = 0
+        layer.removeAllAnimations()
     }
 
     /// Safariを閉じ終えてから隠す。もう閉じていれば、すぐ隠す。
@@ -116,7 +241,9 @@ final class InAppBrowserOverlayWindow: UIWindow {
 final class InAppBrowserOverlayPresenter: UIViewController {
     /// Safariを閉じ終えて、この画面が出きったときに一度だけ呼ぶ。
     var onSafariDismissed: (() -> Void)?
+
     private let behind: () -> UIView?
+    weak var hostWindow: InAppBrowserOverlayWindow?
     private let frameSource: any FrameSource
     private var dismissalFrames: FrameTicker?
 
@@ -139,6 +266,17 @@ final class InAppBrowserOverlayPresenter: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         guard let coordinator = transitionCoordinator else { return }
+        // 伏せたまま閉じるときは、Safariは下がるシートに付いていき、横には動かさないので、後ろの画面もずらさない。
+        if let hostWindow, hostWindow.isCollapsed {
+            // 指で動かす閉じ方（左端からのスワイプ）は、止めると指に付いてこないので止めない。
+            guard !coordinator.isInteractive else { return }
+            coordinator.animate(alongsideTransition: { [weak hostWindow] _ in
+                hostWindow?.onCollapsedDismissalBegin?()
+                // Safariの閉じる動きは、この時点ではまだ層に付いていないので、付いたあとに止める。
+                DispatchQueue.main.async { hostWindow?.holdSafariDismissalSlide() }
+            })
+            return
+        }
         let behind = behind()
         let ticker = FrameTicker(source: frameSource) { [weak self, weak behind] _ in
             // 動かさずに閉じてウインドウを隠したときは、閉じる動きの終わりを待たずに止める。

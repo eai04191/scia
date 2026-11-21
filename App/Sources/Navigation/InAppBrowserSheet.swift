@@ -7,20 +7,17 @@ import UIKit
 /// Safariを入れ物の子にするのはAppleのドキュメントが禁じている。Safariは帯の下を出す範囲（`area`）からモーダルで出し、シートを動かすのは引ける範囲を引いたときだけにする。ページのスワイプでシートが動かないようにするため。
 /// シートの上端からSafariのバーの真ん中までに、引ける範囲（`barGrabArea`）を重ねる。
 ///
-/// 全画面で開くSafariを読み込む間は、Safariを持たず、帯とグラバーだけのシートにする（`safari`がnil）。Safariは`InAppBrowserOverlayWindow`から出して、`safariFrameOnScreen`に重ねる。
+/// 全画面で開くSafariが伏せている間は、Safariを持たず、帯とグラバーだけのシートにする（`safari`がnil）。Safariは`InAppBrowserOverlayWindow`から出して重ね、引ける範囲もそちらのSafariの手前に置く。
 final class InAppBrowserSheet: UIViewController {
     let safari: SFSafariViewController?
     private let handleHeight: CGFloat
     private let area: UIViewController
-    /// シートの上端からSafariのバーの真ん中までに重ねる、シートを引ける範囲。Safariの上で触れたことはSafariのプロセスへ行くが、上に自分のビューを重ねると、そこで触れたことはアプリに届き、シートのジェスチャーが受ける。
-    /// 色のない（完全に透明な）ビューでは、触れたことが重ねたビューを通り抜けてSafariへ行き、シートを引けない（シミュレーターで確かめた）。そのため、見た目にはわからない濃さの色を付ける。
-    /// Safariのバーとページは別のプロセスが描いていて、アプリからはどちらの上かを触れた場所で選び分けられないので、範囲の高さと左右の空きはチューニングで決める。
-    let barGrabArea = UIView()
+    /// シートの上端からSafariのバーの真ん中までに重ねる、シートを引ける範囲。そこで触れたことは、シートのジェスチャーが受ける。
+    let barGrabArea: InAppBrowserBarGrabView
     private let grabber = InAppBrowserGrabberView()
     /// ステータスバーを押したことを受けるスクロールビュー。UIKitは、手前に出した画面の配下のスクロールビューにしか問い合わせないため、後ろの画面にはここから渡す。
     /// 最上部にいるスクロールビューには問い合わせないので、最上部からずらしておく。`isUserInteractionEnabled`か`isScrollEnabled`を切ると問い合わせる対象に入らないので（シミュレーターで確かめた）、触れて動かないようにパンのジェスチャーだけを切る。
     private let scrollToTopReceiver = UIScrollView()
-    private let barGrab: BarGrab
     private let clock: any Clock<Duration>
     private let safariResizeDelay: Duration
     /// シートの上端からSafariのビューまでの空き。Safariの×ボタンの上の余白を、左の余白と揃える。
@@ -34,21 +31,25 @@ final class InAppBrowserSheet: UIViewController {
     weak var presentationDelegate: (any UIAdaptivePresentationControllerDelegate)?
     private(set) weak var sheetPresentation: InAppBrowserPresentationController?
     var onPresentationCreated: ((InAppBrowserPresentationController) -> Void)?
+    /// シートが動き出すかもしれないとき。このシートの上に画面を出すときと、シートが閉じ始めるとき。
+    var onMayMove: (() -> Void)?
 
-    /// Safariのバーの上に重ねる、シートを引ける範囲の決まり。
-    struct BarGrab {
-        var height: CGFloat
-        var inset: CGFloat
-        /// 範囲がどこにあるかを確かめるために、見える色で塗る。
-        var isVisible: Bool
+    override func present(_ viewControllerToPresent: UIViewController, animated flag: Bool, completion: (() -> Void)? = nil) {
+        onMayMove?()
+        super.present(viewControllerToPresent, animated: flag, completion: completion)
     }
 
-    init(safari: SFSafariViewController?, handleHeight: CGFloat, barGrab: BarGrab, safariResizeDelay: Duration, safariTopInset: CGFloat, clock: any Clock<Duration>, configuration: InAppBrowserPresentationController.Configuration) {
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        onMayMove?()
+    }
+
+    init(safari: SFSafariViewController?, barGrab: InAppBrowserBarGrab, safariResizeDelay: Duration, clock: any Clock<Duration>, configuration: InAppBrowserPresentationController.Configuration) {
         self.safari = safari
-        self.handleHeight = handleHeight
-        self.barGrab = barGrab
+        handleHeight = barGrab.handleHeight
+        barGrabArea = InAppBrowserBarGrabView(barGrab: barGrab)
         self.safariResizeDelay = safariResizeDelay
-        self.safariTopInset = safariTopInset
+        safariTopInset = barGrab.safariTopInset
         self.clock = clock
         self.configuration = configuration
         area = UIViewController()
@@ -116,12 +117,6 @@ final class InAppBrowserSheet: UIViewController {
         return InAppBrowserSheetShape(frame: frame, cornerRadius: view.layer.cornerRadius, cornerCurve: view.layer.cornerCurve, maskedCorners: view.layer.maskedCorners)
     }
 
-    /// Safariのバーを引ける範囲の、画面の上の位置。
-    var barGrabRectOnScreen: CGRect {
-        guard barGrabArea.superview != nil, let window = view.window else { return .null }
-        return window.convert(barGrabArea.convert(barGrabArea.bounds, to: window), to: nil).offsetBy(dx: 0, dy: movingOffset)
-    }
-
     /// シートが止まったら呼ぶ。少し待って、続けて変わる行き先を1回の変更にまとめる。
     func resizeSafari(toHeight height: CGFloat) {
         pendingResize?.cancel()
@@ -157,9 +152,9 @@ final class InAppBrowserSheet: UIViewController {
         grabber.autoresizingMask = [.flexibleLeftMargin, .flexibleRightMargin]
         grabber.presentation = sheetPresentation
         view.addSubview(grabber)
-        guard barGrab.height > 0 else { return }
-        barGrabArea.backgroundColor = barGrab.isVisible ? UIColor.systemRed.withAlphaComponent(0.4) : UIColor.black.withAlphaComponent(0.01)
-        barGrabArea.frame = CGRect(x: barGrab.inset, y: 0, width: max(0, width - barGrab.inset * 2), height: safariTopInset + handleHeight + barGrab.height)
+        // Safariを持たないシート（全画面で開くSafariが伏せている間）では、重ねたウインドウのSafariの手前に置く（`InAppBrowserOverlayWindow`）。
+        guard safari != nil, barGrabArea.barGrab.isEnabled else { return }
+        barGrabArea.frame = barGrabArea.barGrab.frame(width: width, safariTop: safariTopInset)
         barGrabArea.autoresizingMask = [.flexibleWidth]
         view.addSubview(barGrabArea)
     }

@@ -27,6 +27,8 @@ final class InAppBrowserPresentationController: UIPresentationController {
     var onSelectionChange: (() -> Void)?
     /// 画面の回転などで、段の高さが変わったとき。
     var onLayoutChange: (() -> Void)?
+    /// シートが動き出すとき（指で引く、段へ動かす）。
+    var onMove: (() -> Void)?
     private var lastBaseLayout: InAppBrowserSheetLayout?
     /// 指を止めて作ったスナップ点。ほかの段へ動かすと消える。
     private(set) var temporaryHeight: Double?
@@ -187,6 +189,7 @@ final class InAppBrowserPresentationController: UIPresentationController {
 
     private func move(to detent: InAppBrowserDetent, velocity: CGFloat, animated: Bool) {
         guard let view = presentedView else { return }
+        onMove?()
         moveToken += 1
         let token = moveToken
         let target = sheetFrame(for: detent)
@@ -226,8 +229,16 @@ final class InAppBrowserPresentationController: UIPresentationController {
     }
 
     @objc private func handlePan(_ pan: UIPanGestureRecognizer) {
+        guard let container = containerView else { return }
+        drag(pan.state, translation: pan.translation(in: container).y, velocity: pan.velocity(in: container).y)
+    }
+
+    /// シートを指で引く。シートのパンと、全画面で開くSafariが伏せている間に、重ねたウインドウのSafariの手前に置いた引ける範囲（`InAppBrowserOverlayWindow`）のパンが呼ぶ。
+    /// `translation`と`velocity`は、指が動いた縦の長さと速さ（画面の座標）。
+    func drag(_ state: UIGestureRecognizer.State, translation: CGFloat, velocity: CGFloat) {
         guard let view = presentedView, let container = containerView, layout.detents.count > 1 else { return }
-        switch pan.state {
+        onMove?()
+        switch state {
         case .began:
             cancelMove()
             isDragging = true
@@ -235,14 +246,14 @@ final class InAppBrowserPresentationController: UIPresentationController {
             sheet?.cancelSafariResize()
             updateDwell(height: container.bounds.height - dragStartY)
         case .changed:
-            let y = rubberBanded(dragStartY + pan.translation(in: container).y, in: container)
+            let y = rubberBanded(dragStartY + translation, in: container)
             view.frame.origin.y = y
             updateDimming(height: container.bounds.height - y)
             updateDwell(height: container.bounds.height - y)
         case .ended, .cancelled, .failed:
             isDragging = false
             endDwell()
-            finishDrag(height: container.bounds.height - view.frame.minY, velocity: pan.velocity(in: container).y)
+            finishDrag(height: container.bounds.height - view.frame.minY, velocity: velocity)
         default:
             break
         }

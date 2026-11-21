@@ -4284,6 +4284,7 @@ final class SessionController {
     func stop() {
         operationStatus.stopSaving()
         statusBarTicker.clear()
+        browser.stop()
         session.close()
     }
 
