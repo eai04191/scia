@@ -209,7 +209,7 @@ public enum TuningCatalog {
         title: "続きを読むで本文を広げる時間（秒）",
         range: 0...1.5,
         step: 0.05,
-        defaultValue: 0.4
+        defaultValue: 0.1
     )
 
     /// アクションバーの引き出しを開閉するときに、投稿が伸び縮みしてまわりのアイテムが動く時間。0なら動かさない。決まりはdocs/post-action-bar.mdの「引き出し」にある。

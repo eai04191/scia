@@ -344,6 +344,8 @@ struct RowResizeMotionTests {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
         harness.settings.appearance.showsActionBar = true
+        // 0.1秒進めたところを動きの途中として見るため、開閉の時間をそれより長くする。
+        harness.tuning.setValue(0.4, for: TuningCatalog.longBodyExpandDuration)
         var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
         statuses[10] = replacing(statuses[10], content: "<p>" + String(repeating: "注意書きの下の本文。", count: 10) + "</p>", spoilerText: "注意書き")
         harness.setStatuses(statuses)
