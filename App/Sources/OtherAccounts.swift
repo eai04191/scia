@@ -10,6 +10,7 @@ final class OtherAccounts {
     private let current: Credential
     private let tasks: TaskScope
     private let makeClient: (Credential, ReceivedAccounts) -> MastodonClient
+    private let registry: @MainActor () -> AccountRegistry?
     /// 窓に開いたアカウントの設定。ほかのアカウントで出す部品も、窓の見た目で描く。
     private let settings: AppSettings
     /// 絵文字のパレットのカスタム絵文字のメニューが使う、セッションの部品。
@@ -25,9 +26,11 @@ final class OtherAccounts {
     /// - Parameters:
     ///   - current: このセッションのアカウント。並べない。
     ///   - tasks: 探し直す処理を始めるセッションの持ち主。
+    ///   - registry: ログインしているアカウント。
     ///   - makeClient: ほかのアカウントのクライアントを作る。このセッションと同じ通信の実体を使う。
-    init(current: Credential, tasks: TaskScope, settings: AppSettings, makeClient: @escaping (Credential, ReceivedAccounts) -> MastodonClient) {
+    init(current: Credential, tasks: TaskScope, settings: AppSettings, registry: @escaping @MainActor () -> AccountRegistry? = { try? AppDependencies.accounts.get() }, makeClient: @escaping (Credential, ReceivedAccounts) -> MastodonClient) {
         self.settings = settings
+        self.registry = registry
         self.current = current
         self.tasks = tasks
         self.makeClient = makeClient
@@ -66,7 +69,7 @@ final class OtherAccounts {
     /// 今ログインしているほかのアカウント。アカウントの切り替えのメニューと同じ順。開くたびに読み、追加やログアウトに追いつく。
     /// - Parameter loadsProfiles: 読めていないアイコンと、サーバーの対応を読み直すか。メニューを開くときだけ読む。メニューを開かずに組むとき（アクションバーのボタンを押せるかを決めるとき）は読まず、スクロールで投稿を組むたびにほかのサーバーへ通信しないようにする。
     func list(loadsProfiles: Bool = true) -> [OtherAccount] {
-        guard let registry = try? AppDependencies.accounts.get() else { return [] }
+        guard let registry = registry() else { return [] }
         let credentials = registry.accounts.filter { $0.id != current.id }
         let keptIDs = Set(credentials.map(\.id))
         for (id, source) in displaySources where !keptIDs.contains(id) {
@@ -129,13 +132,15 @@ final class OtherAccounts {
 
     /// ほかのアカウントでログインしているか。プロフィールの読み込みを起こさないので、投稿欄のボタンを並べ直すたびに読んでよい。
     var hasOthers: Bool {
-        guard let registry = try? AppDependencies.accounts.get() else { return false }
+        guard let registry = registry() else { return false }
         return registry.accounts.contains { $0.id != current.id }
     }
 
     /// ログインしているほかのアカウントのうち、`Credential.id`が`id`のもの。ログアウトしていればnil。
     func account(id: String) -> OtherAccount? {
-        accounts[id]
+        // 一覧はメニューを開くときに読み直すので、それまでにほかの窓でログアウトしたアカウントも残っている。
+        guard registry()?.accounts.contains(where: { $0.id == id }) == true else { return nil }
+        return accounts[id]
     }
 
     /// アカウントごとの、投稿欄で使うサーバーの上限とアカウントの設定。読めたものを覚え、読めなかったものは次に呼ばれたときに読み直す。
@@ -178,11 +183,13 @@ final class OtherAccounts {
 
     /// `account`としてAPIを呼ぶクライアントを、呼ぶたびにそのアカウントの今の認証情報で作るもの。
     /// 投稿欄のように長く持つ送り先に渡す。持っている間にログインし直しても、新しいトークンで送るため。
-    /// ログアウトしていれば、渡したときの認証情報で作る。
+    /// ログアウトしていれば、送らずに失敗するクライアントを作る。ログアウトはサーバーのトークンを取り消さないので、渡したときの認証情報で送ると通ってしまうため。
     func latestClient(for account: OtherAccount) -> @MainActor @Sendable () -> MastodonClient {
         let given = account.credential
         return { [self] in
-            let credential = (try? AppDependencies.accounts.get())?.accounts.first { $0.id == given.id } ?? given
+            guard let credential = registry()?.accounts.first(where: { $0.id == given.id }) else {
+                return MastodonClient(credential: given, transport: RemovedAccountTransport(handle: given.handle), isOtherAccount: true)
+            }
             return observedClient(credential)
         }
     }
@@ -216,5 +223,14 @@ final class OtherAccounts {
     /// ほかのアカウントのプロフィールを読み、「別のアカウントで」の行にアイコンを出せるようにする。読めなかったアカウントは、次にメニューを組むときに読み直す。
     func loadProfiles() {
         _ = list()
+    }
+}
+
+/// この端末でログアウトしたアカウントの送り先。送らずに失敗する。
+private struct RemovedAccountTransport: HTTPTransport {
+    let handle: String
+
+    func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        throw RemovedAccount(handle: handle)
     }
 }

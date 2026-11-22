@@ -1027,13 +1027,19 @@ public final class ComposeModel<Thumbnail: Sendable> {
 
     /// 削除して書き直す元の投稿を、添付を残して削除する。削除できたら（もう消えていたときを含む）trueを返す。
     /// サーバーが断ったら元の投稿は残っているので、書き直しを続けられる。応答を受け取れなかったら、届いたか分からないものとして、送り直すときに削除から送り直す。
+    /// 削除が届かなかったと分かる失敗。サーバーが断った（5xxでない応答）か、ログアウトしたアカウントなので送らなかった。
+    private static func deletionDidNotHappen(_ error: any Error) -> Bool {
+        if let error = error as? MastodonAPIError { return error.statusCode < 500 }
+        return error is RemovedAccount
+    }
+
     private func deleteRedraftedStatus(_ id: Status.ID) async -> Bool {
         logger.info("compose: deleting redrafted status")
         do {
             try await redraftService.deleteStatus(id)
         } catch let error as MastodonAPIError where error.statusCode == 404 {
             logger.info("compose: redrafted status already gone")
-        } catch let error as MastodonAPIError where error.statusCode < 500 {
+        } catch where Self.deletionDidNotHappen(error) {
             logger.error("compose: redrafted status delete refused: \(SciaLog.describe(error), privacy: .public)")
             postError = ErrorPresentation(error).leading("元の投稿を削除できなかったため、投稿しませんでした。")
             return false

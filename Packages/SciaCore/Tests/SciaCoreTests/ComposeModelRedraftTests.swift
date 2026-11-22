@@ -181,6 +181,21 @@ struct ComposeModelRedraftTests {
         #expect(Confirmation.discardingRedraft(draft: model) == nil)
     }
 
+    /// ほかの窓でログアウトしたアカウントで書き直していたら、削除は送っていないので、断られたときと同じく元の投稿は残っているものとして扱う。
+    @Test func deletionAsRemovedAccountKeepsOriginal() async {
+        let events = Events()
+        let model = makeModel(events, redraft: redraftService(events, delete: { throw RemovedAccount(handle: "@me@example.com") }) { Self.attachment($0) }) { _ in
+            events.append("post")
+        }
+        model.beginRedrafting(status(), source: Self.source)
+
+        await model.submit()
+
+        #expect(model.redraft?.deletion == .pending)
+        #expect(model.postError?.text.hasPrefix("元の投稿を削除できなかったため") == true)
+        #expect(Confirmation.discardingRedraft(draft: model) == nil)
+    }
+
     /// 応答を受け取れず、削除が届いたか分からなければ、やめる前に確かめ、送り直すときは削除から送り直す。404なら届いていたものとして続ける。
     @Test func uncertainDeletionIsRetried() async {
         let events = Events()

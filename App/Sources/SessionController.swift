@@ -2338,6 +2338,8 @@ final class SessionController {
             return current?.displayed.uri == target.displayed.uri
         } completion: { [weak self] result in
             guard let self, case .success(let lookup) = result else { return }
+            // 探している間にログアウトしたアカウントには替えない。
+            if let id, otherAccounts.account(id: id) == nil { return }
             let title = SessionTexts.Failure.switchWritingAccount
             let reason: ErrorPresentation
             switch lookup {

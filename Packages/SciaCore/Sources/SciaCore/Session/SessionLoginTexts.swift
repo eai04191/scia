@@ -51,6 +51,11 @@ public enum AccountSwitchTexts {
         public static let confirm = "ログアウト"
     }
 
+    /// この端末でログアウトしたアカウントで、開いたままのシートなどから送ろうとしたときの理由。端末から消したアカウントはログインし直しても戻さないので、「ログインし直す」は添えない。
+    public static func removedAccount(handle: String) -> String {
+        "\(handle)からはログアウトしました。"
+    }
+
     public static let reauthenticationFailure = "ログインし直せませんでした"
     public static let logOutFailure = "ログアウトできませんでした"
 
