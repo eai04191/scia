@@ -56,7 +56,7 @@ struct AccountView: View {
             Section {
                 // タブの画面に開くものがないので、アカウントの画面を閉じずに、この中で進む。リンクを押したときだけ、閉じてから開く。
                 NavigationLink {
-                    AnnouncementsPage(make: context.makeAnnouncements)
+                    EmbeddedViewController(make: context.makeAnnouncements)
                         .ignoresSafeArea()
                         .navigationTitle(SettingsTexts.Account.announcements)
                         .navigationBarTitleDisplayMode(.inline)
@@ -114,17 +114,6 @@ struct AccountView: View {
     private func row(_ title: String, value: String? = nil, opens item: AccountScreenItem) -> some View {
         AccountScreenRow(title: title, value: value) { context.open(item) }
     }
-}
-
-/// UIKitで作ったお知らせの画面を、アカウントの画面の中の1画面として置く。
-private struct AnnouncementsPage: UIViewControllerRepresentable {
-    let make: @MainActor () -> UIViewController
-
-    func makeUIViewController(context: Context) -> UIViewController {
-        make()
-    }
-
-    func updateUIViewController(_ viewController: UIViewController, context: Context) {}
 }
 
 /// アカウントの画面を閉じてほかの画面を開く行。ほかの画面へ入る行に揃え、シェブロンを付ける。
