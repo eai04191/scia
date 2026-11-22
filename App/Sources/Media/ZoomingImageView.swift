@@ -245,6 +245,7 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
         bounds: \(bounds.size)
         fittedBoundsSize: \(fittedBoundsSize)
         fittedEdges: \(fittedEdges)
+        reservedRegions: \(reservedRegionsDump())
         imageSize: \(imageView.image.map { "\($0.size) scale=\($0.scale)" } ?? "nil")
         animation: \(animation.map { "\($0.frameCount) frames \($0.frameWidth)x\($0.frameHeight)" } ?? "nil")
         naturalSize: \(naturalSize.map { "\($0)" } ?? "nil")
@@ -255,6 +256,12 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
         imageView.frame: \(imageView.frame)
         imageView.bounds: \(imageView.bounds)
         """
+    }
+
+    private func reservedRegionsDump() -> String {
+        guard #available(iOS 27.1, *) else { return "unavailable" }
+        let regions = reservedRegions(kind: .occlusion, options: .includeInactive) + reservedRegions(kind: .division, options: .includeInactive)
+        return regions.map { "\($0.kind) frame=\($0.frame) margins=\($0.margins) active=\($0.isActive)" }.joined(separator: "; ")
     }
 
     /// 画面の中央に見えている点の、画像の中での位置。左上が0、右下が1。
