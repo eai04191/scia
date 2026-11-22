@@ -999,6 +999,8 @@ public struct MastodonClient: Sendable {
     /// https://docs.joinmastodon.org/methods/accounts/#following
     /// https://docs.joinmastodon.org/methods/lists/#accounts
     /// https://docs.joinmastodon.org/methods/accounts/#endorsements
+    /// https://docs.joinmastodon.org/methods/mutes/#get
+    /// https://docs.joinmastodon.org/methods/blocks/#get
     /// - Parameter emojiReactionStyle: リアクションした人を読むときの、サーバーのAPIの形。ほかのリストでは使わない。
     public func accounts(in list: AccountListKind, maxID: String?, limit: Int, emojiReactionStyle: EmojiReactionStyle = .fedibird) async throws -> AccountListPage {
         if case .emojiReactionedBy(let statusID, let name) = list {
@@ -1014,6 +1016,8 @@ public struct MastodonClient: Sendable {
         case .following(let accountID): "api/v1/accounts/\(accountID)/following"
         case .listMembers(let listID): "api/v1/lists/\(listID)/accounts"
         case .endorsements(let accountID): "api/v1/accounts/\(accountID)/endorsements"
+        case .mutes: "api/v1/mutes"
+        case .blocks: "api/v1/blocks"
         }
         let query = [URLQueryItem(name: "limit", value: String(limit))] + (maxID.map { [URLQueryItem(name: "max_id", value: $0)] } ?? [])
         let (accounts, response) = try await get(ElementList<Account>.self, path: path, query: query)
@@ -1433,17 +1437,48 @@ public struct MastodonClient: Sendable {
     /// ユーザーのメニューの関係の項目で選んだ変更を、相手`id`へ送る。
     public func send(_ change: UserRelationChange, to id: String) async throws -> Relationship {
         switch change {
-        case .follow: try await follow(id)
-        case .unfollow, .cancelFollowRequest: try await unfollow(id)
-        case .showReblogs(let shows): try await follow(id, reblogs: shows)
-        case .notify(let notifies): try await follow(id, notify: notifies)
-        case .endorse(true): try await endorse(id)
-        case .endorse(false): try await unendorse(id)
-        case .mute(let duration): try await mute(id, duration: duration)
-        case .unmute: try await unmute(id)
-        case .block: try await block(id)
-        case .unblock: try await unblock(id)
+        case .follow: return try await follow(id)
+        case .unfollow, .cancelFollowRequest: return try await unfollow(id)
+        case .showReblogs(let shows): return try await follow(id, reblogs: shows)
+        case .notify(let notifies): return try await follow(id, notify: notifies)
+        case .endorse(true): return try await endorse(id)
+        case .endorse(false): return try await unendorse(id)
+        case .mute(let duration): return try await mute(id, duration: duration)
+        case .unmute: return try await unmute(id)
+        case .block: return try await block(id)
+        case .unblock: return try await unblock(id)
+        case .blockDomain(let domain): try await blockDomain(domain)
+        case .unblockDomain(let domain): try await unblockDomain(domain)
         }
+        // ドメインのブロックの応答は空なので、相手との関係を読み直して返す。読み直せなくても、変更はサーバーが受け付けている。
+        do {
+            guard let relationship = try await relationship(with: id) else { throw URLError(.badServerResponse) }
+            return relationship
+        } catch {
+            throw RelationChangeAppliedError(underlying: error)
+        }
+    }
+
+    /// ブロックしているドメインを、サーバーが返す順に返す。1回に読める件数の上限は200件。
+    /// - Parameter maxID: 前のページの`DomainBlockPage.nextMaxID`。nilなら最初のページ。
+    /// https://docs.joinmastodon.org/methods/domain_blocks/#get
+    public func domainBlocks(maxID: String?, limit: Int) async throws -> DomainBlockPage {
+        let query = [URLQueryItem(name: "limit", value: String(limit))] + (maxID.map { [URLQueryItem(name: "max_id", value: $0)] } ?? [])
+        let (domains, response) = try await get([String].self, path: "api/v1/domain_blocks", query: query)
+        let link = response.value(forHTTPHeaderField: "Link").map(LinkHeader.init)
+        return DomainBlockPage(domains: domains, nextMaxID: link?.queryValue("max_id", of: "next"))
+    }
+
+    /// ドメインをブロックする。サーバーは、そのドメインのフォロワーを外す。ブロック済みのドメインでも、ないドメインでも受け付ける。
+    /// https://docs.joinmastodon.org/methods/domain_blocks/#block
+    public func blockDomain(_ domain: String) async throws {
+        _ = try await send(formRequest(method: "POST", path: "api/v1/domain_blocks", form: [URLQueryItem(name: "domain", value: domain)]))
+    }
+
+    /// ブロックしていないドメインでも受け付ける。
+    /// https://docs.joinmastodon.org/methods/domain_blocks/#unblock
+    public func unblockDomain(_ domain: String) async throws {
+        _ = try await send(formRequest(method: "DELETE", path: "api/v1/domain_blocks", form: [URLQueryItem(name: "domain", value: domain)]))
     }
 
     /// アカウントを通報する。応答の中身は使わない。`Idempotency-Key`を受け付けないため、二重に届かないよう送り直さない。
@@ -1785,6 +1820,10 @@ public enum AccountListKind: Hashable, Sendable {
     case following(accountID: String)
     /// 自分のリストのメンバー。
     case listMembers(listID: String)
+    /// 自分がミュートしている人。
+    case mutes
+    /// 自分がブロックしている人。
+    case blocks
 }
 
 /// 検索で探す種類。`rawValue`は`api/v2/search`の`type`に渡す値。
@@ -1852,6 +1891,28 @@ public struct AccountListPage: Sendable, Equatable {
 
     public init(accounts: [Account], nextMaxID: String?) {
         self.accounts = accounts
+        self.nextMaxID = nextMaxID
+    }
+}
+
+/// 関係の変更はサーバーが受け付けたが、そのあとに相手との関係を読み直せなかった。変更が済んだものとして扱い、関係は後で読み直す。
+public struct RelationChangeAppliedError: Error {
+    public let underlying: any Error
+
+    public init(underlying: any Error) {
+        self.underlying = underlying
+    }
+}
+
+/// ブロックしているドメインの1ページ分。
+public struct DomainBlockPage: Sendable, Equatable {
+    /// サーバーが返す順。
+    public let domains: [String]
+    /// 続きのページを読むときの`max_id`。`Link`ヘッダーに`next`がなければnilで、これより後ろはない。
+    public let nextMaxID: String?
+
+    public init(domains: [String], nextMaxID: String?) {
+        self.domains = domains
         self.nextMaxID = nextMaxID
     }
 }

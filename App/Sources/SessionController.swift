@@ -229,6 +229,7 @@ final class SessionController {
     private let navigationDelegate = NoticeNavigationDelegate()
     /// 開いているプロフィール画面。投稿への操作の結果を反映するために持つ。閉じたものは自然に消える。
     private let profiles: ProfileRegistry
+    private let moderation: ModerationScreens
     /// 開いているスレッドの画面。投稿への操作の結果を反映するために持つ。閉じたものは自然に消える。
     private let threads: ThreadRegistry
     /// 開いている検索の結果。投稿への操作の結果を反映するために持つ。閉じたものは自然に消える。
@@ -432,6 +433,10 @@ final class SessionController {
         self.client = client
         let profiles = ProfileRegistry(relationships: session.relationships)
         self.profiles = profiles
+        moderation = ModerationScreens(client: client, tasks: tasks.child(), relationships: session.relationships, accounts: session.accounts, openProfiles: ModerationScreens.OpenProfiles(
+            accountIDs: { [weak profiles] domain in profiles?.accountIDs(onDomain: domain) ?? [] },
+            apply: { [weak profiles] relationship in profiles?.apply(relationship, reloadsAccount: true) }
+        ))
         let threads = ThreadRegistry()
         self.threads = threads
         let searches = SearchRegistry()
@@ -1645,6 +1650,45 @@ final class SessionController {
         controller.start(purpose: .action)
     }
 
+    // MARK: - ミュートとブロック
+
+    /// ミュートかブロックの人のリスト。行のスワイプでの解除は、ユーザーのメニューと同じく送り、送れたら`ModerationScreens`が行を消す。決まりはdocs/moderation-lists.mdにある。
+    /// 人を押したときは、出している画面（アカウントの画面か、URLで開いたシート）を閉じてから、タブの画面にプロフィールを開く。
+    private func makeModerationList(_ kind: AccountListKind) -> TimelineViewController {
+        let (controller, viewController) = AccountListController.make(kind: kind, client: client, settings: settings, tasks: tasks.child())
+        UserAction.openAccountList.record()
+        configure(viewController)
+        controller.onChangeRelation = { [weak self] change, account in
+            guard let self else { return }
+            let relationship = session.relationships[account.id] ?? Relationship(id: account.id)
+            confirmChanging(change, of: UserRelation(accountID: account.id, acct: account.acct, relationship: relationship))
+        }
+        moderation.register(controller)
+        viewController.onOpenProfile = { [weak self] account in
+            self?.closeScreensForDestination { [weak self] in
+                guard let self, let source = tabs.selectedNavigation?.topViewController else { return }
+                openProfile(account, from: source)
+            }
+        }
+        controller.start(purpose: .action)
+        return viewController
+    }
+
+    /// `scia://accounts/<muted|blocked>`で開く、単独のシート。アカウントの画面からは、その中で進むので使わない。
+    private func presentModerationList(_ kind: AccountListKind) {
+        let viewController = makeModerationList(kind)
+        let navigation = UINavigationController(rootViewController: viewController)
+        // 閉じるボタンは、お知らせのシートと同じ形にする。右上はデバッグメニューのボタンが使うので、左に置く。
+        viewController.navigationItem.leftBarButtonItem = UIBarButtonItem(systemItem: .close, primaryAction: UIAction { [weak navigation] _ in
+            navigation?.dismiss(animated: true)
+        })
+        rootViewController.presentOnFrontmost(navigation, animated: true)
+    }
+
+    private func presentBlockDomain() {
+        moderation.presentBlockDomain(on: rootViewController)
+    }
+
     // MARK: - 保留中の通知
 
     /// 通知のタブの右上に保留中の通知を開くボタンを置き、人数を添える。決まりはdocs/notification-filter.mdの「入口」にある。
@@ -2572,6 +2616,10 @@ final class SessionController {
                 let relationship = try await account.change(change, of: relation)
                 guard let self else { return }
                 notices.showTransient(Notice(id: "user.relationChanged", kind: .success, title: OtherAccountTexts.title(change.doneTitle(relationship), handle: handle)), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+            } catch is RelationChangeAppliedError {
+                // 関係を読み直せなくても、変更はサーバーが受け付けているので、済んだことを知らせる。
+                guard let self else { return }
+                notices.showTransient(Notice(id: "user.relationChanged", kind: .success, title: OtherAccountTexts.title(change.doneTitle(Relationship(id: relation.accountID)), handle: handle)), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
             } catch {
                 guard let self else { return }
                 logger.error("other account relation change failed: \(SciaLog.describe(error), privacy: .public)")
@@ -3087,6 +3135,13 @@ final class SessionController {
             do {
                 let relationship = try await client.send(change, to: id)
                 apply(relationship, after: change)
+            } catch let error as RelationChangeAppliedError {
+                logger.error("user relation reload after change failed: \(SciaLog.describe(error.underlying), privacy: .public)")
+                if let domain = change.domain {
+                    moderation.domainBlocksDidChange(domain)
+                }
+                session.relationships.reload([id], purpose: .display)
+                notices.showTransient(Notice(id: "user.relationChanged", kind: .success, title: change.doneTitle(Relationship(id: id))), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
             } catch {
                 logger.error("user relation change failed: \(SciaLog.describe(error), privacy: .public)")
                 handle(error, title: change.failureTitle)
@@ -3095,7 +3150,11 @@ final class SessionController {
     }
 
     private func apply(_ relationship: Relationship, after change: UserRelationChange) {
+        if let domain = change.domain {
+            moderation.domainBlocksDidChange(domain)
+        }
         profiles.apply(relationship, reloadsAccount: change.changesFollow)
+        moderation.apply(relationship)
         switch change {
         case .mute, .unmute, .block, .unblock:
             excludeInLists(relationship)
@@ -3106,12 +3165,14 @@ final class SessionController {
             break
         case .unfollow, .cancelFollowRequest, .endorse:
             break
+        case .blockDomain, .unblockDomain:
+            break
         }
         // 紹介を変えたときと、サーバーが紹介も消すフォローの解除とブロックのあとは、開いている自分のプロフィールの紹介しているユーザーを読み直す。
         switch change {
-        case .endorse, .unfollow, .block:
+        case .endorse, .unfollow, .block, .blockDomain:
             profiles.reloadFeatured(of: credential.accountID)
-        case .follow, .cancelFollowRequest, .showReblogs, .notify, .mute, .unmute, .unblock:
+        case .follow, .cancelFollowRequest, .showReblogs, .notify, .mute, .unmute, .unblock, .unblockDomain:
             break
         }
         notices.showTransient(Notice(id: "user.relationChanged", kind: .success, title: change.doneTitle(relationship)), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
@@ -3330,6 +3391,11 @@ final class SessionController {
             notificationPolicy: notificationPolicy,
             postingDefaults: (postingDefaults, postingDefaultLanguages),
             appearance: (accountAppearance, accountAppearanceWebURL),
+            moderation: ModerationScreenContext(
+                makeAccountList: { [weak self] kind in self?.makeModerationList(kind) ?? UIViewController() },
+                domainBlocks: moderation.domainBlocks,
+                blockDomain: { [weak self] in self?.presentBlockDomain() }
+            ),
             createList: { [weak self] in self?.listEditor.presentCreate() },
             deleteList: { [weak self] id, title in self?.listEditor.confirmDelete(listID: id, title: title) }
         )
@@ -4594,6 +4660,10 @@ final class SessionController {
                 openAccountList(.rebloggedBy(statusID), from: source)
             case .emojiReactioned(let statusID, let name):
                 openAccountList(.emojiReactionedBy(statusID, name: name), from: source)
+            case .muted:
+                presentModerationList(.mutes)
+            case .blocked:
+                presentModerationList(.blocks)
             }
         case .hashtag(let name):
             if let source = tabs.selectedNavigation?.topViewController {
@@ -4627,6 +4697,8 @@ final class SessionController {
             showNotificationPolicy()
         case .filters:
             showFilters()
+        case .domainBlocks:
+            rootViewController.presentOnFrontmost(DomainBlocksView.makeSheet(model: moderation.domainBlocks) { [weak self] in self?.presentBlockDomain() }, animated: true)
         case .postingDefaults:
             showPostingDefaults()
         case .accountAppearance:
@@ -4983,6 +5055,12 @@ private final class ProfileRegistry {
         for entry in entries where entry.controller?.accountID == relationship.id {
             entry.controller?.apply(relationship, reloadsAccount: reloadsAccount)
         }
+    }
+
+    /// 開いているプロフィールのうち、`domain`の人のアカウントのID。
+    func accountIDs(onDomain domain: String) -> [String] {
+        entries.removeAll { $0.controller == nil }
+        return entries.compactMap(\.controller).filter { UserHandle.domain(ofAcct: $0.acct).map { UserHandle.mayBeSameDomain($0, domain) } ?? false }.map(\.accountID)
     }
 
     /// 編集して保存した自分のプロフィールを、開いている自分のプロフィールに反映する。

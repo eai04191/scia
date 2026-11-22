@@ -684,6 +684,25 @@ struct OtherAccountMenuTests {
         #expect(known.relationship.following)
     }
 
+    /// ドメインのブロックを変えたら、そのアカウントで覚えている、そのドメインの人と見つけていない人の関係を忘れ、変えた相手の関係だけを覚える。
+    @Test func blockDomainForgetsRelationsOnDomain() async throws {
+        let bob = try account("bob", operations(search: { _ in [] }, relationships: { ids in ids.map { Relationship(id: $0) } }, changeRelation: { _, id in
+            Relationship(id: id, domainBlocking: true)
+        }))
+        bob.reloadRelations(["500", "501"])
+        try await waitUntil { bob.userActions.knownRelation(.account(id: "501", acct: "carol@remote.example")) != nil }
+        let relation = UserRelation(accountID: "500", acct: "alice@remote.example", relationship: Relationship(id: "500"))
+
+        _ = try await bob.change(.blockDomain("remote.example"), of: relation)
+
+        guard case .relation(let known) = bob.userActions.knownRelation(.account(id: "500", acct: "alice@remote.example")) else {
+            Issue.record("変えた相手の関係を覚えていません")
+            return
+        }
+        #expect(known.relationship.domainBlocking)
+        #expect(bob.userActions.knownRelation(.account(id: "501", acct: "carol@remote.example")) == nil)
+    }
+
     /// そのアカウント自身が投稿者なら、自分に出せる項目（メモ、リストに追加）だけを出し、関係の項目は出さない。
     @Test func showsOwnUserMenuWithoutRelationItems() async throws {
         let me = Account(id: "50", username: "bob", acct: "bob", displayName: "Bob", avatar: nil)

@@ -16,6 +16,8 @@ public struct Relationship: Codable, Hashable, Sendable {
     public let muting: Bool
     /// ミュートで、相手からの通知も隠している。
     public let mutingNotifications: Bool
+    /// 相手のサーバーのドメインをブロックしている。
+    public let domainBlocking: Bool
     /// 相手を自分のプロフィールで紹介している。
     public let endorsed: Bool
     /// 相手のプロフィールに書いた、自分にしか見えないメモ。書いていなければ空。サーバーは整形せず、書いたままの平文で返す。
@@ -32,6 +34,7 @@ public struct Relationship: Codable, Hashable, Sendable {
         blockedBy: Bool = false,
         muting: Bool = false,
         mutingNotifications: Bool = false,
+        domainBlocking: Bool = false,
         endorsed: Bool = false,
         note: String = ""
     ) {
@@ -45,6 +48,7 @@ public struct Relationship: Codable, Hashable, Sendable {
         self.blockedBy = blockedBy
         self.muting = muting
         self.mutingNotifications = mutingNotifications
+        self.domainBlocking = domainBlocking
         self.endorsed = endorsed
         self.note = note
     }

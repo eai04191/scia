@@ -25,6 +25,10 @@ struct ConfirmationTests {
         #expect(Confirmation.relationChange(.cancelFollowRequest, acct: "bob")?.buttons.last?.title == "リクエストを取り消す")
         #expect(Confirmation.relationChange(.follow, acct: "bob") == nil)
         #expect(Confirmation.relationChange(.unblock, acct: "bob") == nil)
+        // ドメインのブロックは、そのドメインのフォロワーが外れて戻らないので確かめる。解除は確かめない。
+        #expect(Confirmation.relationChange(.blockDomain("remote.example"), acct: "bob@remote.example") == Confirmation.blockingDomain("remote.example"))
+        #expect(Confirmation.blockingDomain("remote.example").title == "remote.exampleをブロックしますか？")
+        #expect(Confirmation.relationChange(.unblockDomain("remote.example"), acct: "bob@remote.example") == nil)
         #expect(Confirmation.relationChange(.endorse(true), acct: "bob") == nil)
         #expect(Confirmation.relationChange(.endorse(false), acct: "bob") == nil)
         // 紹介している相手のフォローを外すと、サーバーは紹介も消すので、そのことを添える。

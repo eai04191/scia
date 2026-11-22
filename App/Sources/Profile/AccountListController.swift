@@ -4,6 +4,7 @@ import SciaCore
 
 /// 人のリスト（お気に入りした人、ブーストした人、フォロワー、フォロー、リストのメンバー）の読み込みを、TimelineViewControllerの表示へつなぐ。
 /// 画面はプロフィールやスレッドと同じくpushで開く。決まりはdocs/account-list.mdにある。リストのメンバーでは、外したり足したりもできる（docs/lists.mdの「メンバー」）。
+/// ミュートしたユーザーとブロックしたユーザーでは、行から解除でき、解除したら行を消す（docs/moderation-lists.md）。
 @MainActor
 final class AccountListController {
     /// 1回に読む件数。APIの上限は80件。
@@ -15,6 +16,9 @@ final class AccountListController {
     /// この画面が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときと、画面を閉じてこのコントローラーが捨てられたときに閉じる。
     private let tasks: TaskScope
     private let client: MastodonClient
+    private let kind: AccountListKind
+    /// ミュートとブロックのリストで、行から解除するときに呼ぶ。関係の変更はセッションが送り、送れたら`apply(_:)`で行を消す。
+    var onChangeRelation: ((UserRelationChange, Account) -> Void)?
     /// リストのメンバーを並べているなら、そのリスト。
     private let listID: String?
     /// リストのメンバーを外したり足したりできなかったときに呼ぶ。知らせ方はセッションが決める。
@@ -45,6 +49,7 @@ final class AccountListController {
     ) {
         self.tasks = tasks
         self.client = client
+        self.kind = kind
         if case .listMembers(let listID) = kind {
             self.listID = listID
         } else {
@@ -63,7 +68,21 @@ final class AccountListController {
         viewController.onRetry = { [weak self] in self?.retry() }
         if listID != nil {
             viewController.onRemoveAccount = { [weak self] account in self?.removeMember(account) }
+        } else if let change = kind.removalChange, let title = kind.removalTitle {
+            viewController.accountRemoval = (title, change.symbolName)
+            viewController.onRemoveAccount = { [weak self] account in self?.onChangeRelation?(change, account) }
         }
+    }
+
+    /// 関係が変わって、もうこのリストに入らない人の行を消す。使う人の操作（スワイプか、長押しのメニュー）で消えるので、標準の削除の動きで閉じる。
+    /// まだ行がなくても、読んでいる途中の応答に入っていれば読み終えてから除くよう、ストアには伝える。
+    func apply(_ relationship: Relationship) {
+        guard kind.contains(relationship) == false else { return }
+        let isShown = store.accounts.contains { $0.id == relationship.id }
+        store.remove(accountID: relationship.id)
+        guard isShown else { return }
+        showMemberChange(animatesRemoval: true)
+        logger.info("accountList removed by relation change")
     }
 
     /// リストから外す。サーバーが受け付けたら、使う人の操作で行が消えるので、標準の削除の動きで行を閉じる。外せなければ行を残す。
@@ -166,7 +185,7 @@ final class AccountListController {
         }
     }
 
-    /// メンバーを足したり外したりしたあとに描き直す。末尾の「メンバーはいません」は、行の有無で出し分けるので、描き直させる。
+    /// 人を足したり外したりしたあとに描き直す。末尾の「メンバーはいません」などは、行の有無で出し分けるので、描き直させる。
     private func showMemberChange(animatesRemoval: Bool = false) {
         showEntries(animatesRemoval: animatesRemoval)
         viewController?.setContentState(.loaded)

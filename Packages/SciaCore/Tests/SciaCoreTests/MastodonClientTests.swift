@@ -979,7 +979,7 @@ struct MastodonClientTests {
     }
 
     @Test func followAndUnfollowPostToAccount() async throws {
-        let relationship = #"{"id":"2","following":true,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"endorsed":false,"note":""}"#
+        let relationship = #"{"id":"2","following":true,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"domain_blocking":false,"endorsed":false,"note":""}"#
         let transport = StubTransport([.json(relationship, statusCode: 200), .json(relationship, statusCode: 200)])
         let client = try makeClient(transport)
 
@@ -993,7 +993,7 @@ struct MastodonClientTests {
 
     /// フォローの設定は渡したものだけを送り、渡さなければサーバーの既定に任せる。
     @Test func followSendsOnlyGivenSettings() async throws {
-        let relationship = #"{"id":"2","following":true,"showing_reblogs":false,"notifying":true,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"endorsed":false,"note":""}"#
+        let relationship = #"{"id":"2","following":true,"showing_reblogs":false,"notifying":true,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"domain_blocking":false,"endorsed":false,"note":""}"#
         let transport = StubTransport([.json(relationship, statusCode: 200), .json(relationship, statusCode: 200), .json(relationship, statusCode: 200)])
         let client = try makeClient(transport)
 
@@ -1009,7 +1009,7 @@ struct MastodonClientTests {
 
     /// ミュートの時間は秒で送り、無期限なら送らない（サーバーの既定の0が無期限）。ミュート、ブロックと解除は、それぞれのパスにPOSTする。
     @Test func muteBlockAndTheirUndoPostToAccount() async throws {
-        let relationship = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":true,"muting_notifications":true,"endorsed":false,"note":""}"#
+        let relationship = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":true,"muting_notifications":true,"domain_blocking":false,"endorsed":false,"note":""}"#
         let transport = StubTransport(Array(repeating: .json(relationship, statusCode: 200), count: 5))
         let client = try makeClient(transport)
 
@@ -1072,8 +1072,8 @@ struct MastodonClientTests {
 
     /// メモは`comment`で送り、空なら空の`comment`を送って消す。応答の関係からメモを読む。
     @Test func setNotePostsCommentAndDecodesNote() async throws {
-        let written = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"endorsed":false,"note":"前に会った & 話した"}"#
-        let cleared = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"endorsed":false,"note":""}"#
+        let written = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"domain_blocking":false,"endorsed":false,"note":"前に会った & 話した"}"#
+        let cleared = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"domain_blocking":false,"endorsed":false,"note":""}"#
         let transport = StubTransport([.json(written, statusCode: 200), .json(cleared, statusCode: 200)])
         let client = try makeClient(transport)
 
@@ -1092,7 +1092,7 @@ struct MastodonClientTests {
     }
 
     @Test func authorizeAndRejectFollowRequestPostToFollowRequests() async throws {
-        let relationship = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":true,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"endorsed":false,"note":""}"#
+        let relationship = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":true,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"domain_blocking":false,"endorsed":false,"note":""}"#
         let transport = StubTransport([.json(relationship, statusCode: 200), .json(relationship, statusCode: 200)])
         let client = try makeClient(transport)
 
@@ -1336,7 +1336,7 @@ struct MastodonClientTests {
 
     /// 紹介は、4.4より前のサーバーにもある`pin`と`unpin`で送り、応答の関係から紹介しているかを読む。
     @Test func endorseAndUnendorsePostToPinPaths() async throws {
-        let endorsed = #"{"id":"2","following":true,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"endorsed":true,"note":""}"#
+        let endorsed = #"{"id":"2","following":true,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"domain_blocking":false,"endorsed":true,"note":""}"#
         let transport = StubTransport([.json(endorsed, statusCode: 200), .json(endorsed.replacingOccurrences(of: #""endorsed":true"#, with: #""endorsed":false"#), statusCode: 200)])
         let client = try makeClient(transport)
 

@@ -77,6 +77,8 @@ public struct TimelineTexts: Sendable {
         case .following: ("フォロー", "フォローしている人はいません")
         case .listMembers: ("メンバー", "メンバーはいません")
         case .endorsements: ("紹介しているユーザー", "紹介しているユーザーはいません")
+        case .mutes: (ModerationTexts.mutedAccounts, "ミュートしているユーザーはいません")
+        case .blocks: (ModerationTexts.blockedAccounts, "ブロックしているユーザーはいません")
         }
         return TimelineTexts(dumpName: "accountList", title: title, empty: empty, reachedEnd: "", unreadable: "表示できないアカウント")
     }

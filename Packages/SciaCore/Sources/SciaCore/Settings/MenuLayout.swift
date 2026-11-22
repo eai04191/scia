@@ -373,6 +373,8 @@ public enum UserMenuItem: String, BundledMenuDefaults {
     case mute
     /// ブロックしていなければブロックし、ブロック中なら解除する。
     case block
+    /// ほかのサーバーの人のドメインをブロックしていなければブロックし、ブロック中なら解除する。同じサーバーの人には出さない。
+    case blockDomain
     /// 通報のシートを開く。
     case report
     /// ログインしているほかのアカウントとしてその人を操作するサブメニュー。ほかのアカウントでログインしているときだけ出る。決まりはdocs/other-accounts.mdにある。
@@ -401,7 +403,7 @@ public enum UserMenuItem: String, BundledMenuDefaults {
     /// 相手との関係で中身が変わる項目。通報は関係で変わらず、自分に出さないかはIDで決まるため含めない。
     public var dependsOnRelationship: Bool {
         switch self {
-        case .follow, .showReblogs, .notify, .endorse, .note, .mute, .block: true
+        case .follow, .showReblogs, .notify, .endorse, .note, .mute, .block, .blockDomain: true
         // 「別のアカウントで」の中の関係は、そのアカウントで読み直す（`UserMenuTree.refreshOtherAccounts(groups:)`）。
         case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .addToList, .autoTranslation, .editDisplay, .report, .otherAccounts, .customize: false
         }

@@ -23,6 +23,23 @@ public struct UserHandle: Equatable, Sendable {
         server = parts.count > 1 ? String(parts[1]) : localServer
     }
 
+    /// `acct`のサーバーの部分。同じサーバーのユーザーの`acct`にはないのでnil。
+    public static func domain(ofAcct acct: String) -> String? {
+        let parts = acct.split(separator: "@", maxSplits: 1)
+        return parts.count > 1 ? String(parts[1]) : nil
+    }
+
+    /// 2つのドメインが、同じサーバーかもしれないか。忘れすぎてよいところ（覚えている関係を忘れるなど）で使う。
+    /// Mastodonは国際化ドメインを、`acct`ではUnicode（`Account#pretty_acct`）、ドメインのブロックではPunycodeで書くので、文字のままでは比べられない。
+    /// Punycodeに直さず、どちらも国際化ドメインなら同じかもしれないとみなす。
+    public static func mayBeSameDomain(_ a: String, _ b: String) -> Bool {
+        a.lowercased() == b.lowercased() || (isInternationalized(a) && isInternationalized(b))
+    }
+
+    private static func isInternationalized(_ domain: String) -> Bool {
+        !domain.unicodeScalars.allSatisfy(\.isASCII) || domain.lowercased().split(separator: ".").contains { $0.hasPrefix("xn--") }
+    }
+
     /// `@username@domain`の形。
     public var handle: String { "@\(username)@\(server)" }
 

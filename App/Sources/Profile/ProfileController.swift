@@ -348,6 +348,9 @@ final class ProfileController {
     /// 開いているプロフィールのアカウントのID。
     var accountID: String { store.account.id }
 
+    /// 開いているプロフィールのアカウントの`acct`。
+    var acct: String { store.account.acct }
+
     // MARK: - 前に出ている間の読み直し
 
     /// タブに置いたプロフィールで、前に出ている間は間隔をおいて新着を読む。アカウントの投稿のストリームはないため。

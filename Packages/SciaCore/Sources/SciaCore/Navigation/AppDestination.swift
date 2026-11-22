@@ -33,6 +33,7 @@ public enum AppDestination: Equatable, Sendable {
     /// `accounts/<followers|following>`で自分の、`?id=<アカウントのID>`でその人のフォロワーかフォローしている人のリストを開く。
     /// `accounts/<favourited|reblogged>?id=<投稿のID>`で、その投稿をお気に入りした人、ブーストした人のリストを開く。
     /// `accounts/emoji-reactioned?id=<投稿のID>&name=<絵文字>`で、その投稿にその絵文字でリアクションした人のリストを開く。
+    /// `accounts/<muted|blocked>`で、自分がミュートした人、ブロックした人のリストを開く。
     case accounts(AccountList)
     /// `hashtag?name=<名前>`。選んでいるタブに、そのハッシュタグのタイムラインを開く。
     case hashtag(name: String)
@@ -52,6 +53,8 @@ public enum AppDestination: Equatable, Sendable {
     case notificationPolicy
     /// `filters`。自分のフィルターを並べた画面を開く。
     case filters
+    /// `domain-blocks`。自分がブロックしたドメインを並べた画面を開く。
+    case domainBlocks
     /// `posting-defaults`。新しく投稿するときの既定の画面を開く。
     case postingDefaults
     /// `account-appearance`。アカウント設定の外観を見せる画面を開く。
@@ -103,6 +106,8 @@ public enum AppDestination: Equatable, Sendable {
         /// その投稿にその絵文字でリアクションした人。`name`は絵文字の名前（Unicodeの絵文字か、カスタム絵文字のショートコード）。
         case emojiReactioned(statusID: String, name: String)
         case reblogged(statusID: String)
+        case muted
+        case blocked
     }
 
     public enum ComposeScreen: Equatable, Sendable {
@@ -129,10 +134,13 @@ public enum AppDestination: Equatable, Sendable {
     /// 予約投稿は、タブを無効にしていれば手前に重ねるが、タブに並べていればタブを見せるので、こちらに入れる。
     public var showsTab: Bool {
         switch self {
-        case .tab, .userTab, .profile, .myProfile, .thread, .quotes, .editHistory, .apiResponse, .accounts, .hashtag, .accountHashtag, .search, .scheduled,
+        case .tab, .userTab, .profile, .myProfile, .thread, .quotes, .editHistory, .apiResponse, .hashtag, .accountHashtag, .search, .scheduled,
              .notificationRequests, .notificationRequest:
             true
-        case .settings, .appearanceGroup, .notificationAppearanceGroup, .profileEdit, .userDisplay, .operationStatus, .notificationPolicy, .filters, .postingDefaults, .accountAppearance, .announcements, .account, .inAppBrowserHeight, .note, .report, .compose, .crashReport:
+        // ミュートとブロックのリストは、アカウントの画面のサーバーでの設定の項目なので、フィルターと同じく単独のシートで出す（docs/account-screen.md）。
+        case .accounts(let list):
+            list != .muted && list != .blocked
+        case .settings, .appearanceGroup, .notificationAppearanceGroup, .profileEdit, .userDisplay, .operationStatus, .notificationPolicy, .filters, .domainBlocks, .postingDefaults, .accountAppearance, .announcements, .account, .inAppBrowserHeight, .note, .report, .compose, .crashReport:
             false
         }
     }
@@ -164,6 +172,7 @@ public enum AppDestination: Equatable, Sendable {
         case .notificationRequest: "notification request"
         case .notificationPolicy: "notification policy"
         case .filters: "filters"
+        case .domainBlocks: "domain blocks"
         case .postingDefaults: "posting defaults"
         case .accountAppearance: "account appearance"
         case .announcements: "announcements"
@@ -216,6 +225,8 @@ public enum AppDestination: Equatable, Sendable {
         case ("accounts", "favourited"): query("id").map { .accounts(.favourited(statusID: $0)) }
         case ("accounts", "emoji-reactioned"): query("id").flatMap { id in query("name").map { .accounts(.emojiReactioned(statusID: id, name: $0)) } }
         case ("accounts", "reblogged"): query("id").map { .accounts(.reblogged(statusID: $0)) }
+        case ("accounts", "muted"): .accounts(.muted)
+        case ("accounts", "blocked"): .accounts(.blocked)
         case ("hashtag", ""): query("name").map { .hashtag(name: $0) }
         case ("account-hashtag", ""): query("acct").flatMap { acct in query("name").map { .accountHashtag(acct: acct, name: $0) } }
         case ("search", ""): .search(query: query("q"))
@@ -225,6 +236,7 @@ public enum AppDestination: Equatable, Sendable {
         case ("notification-request", ""): query("id").map { .notificationRequest(id: $0) }
         case ("notification-policy", ""): .notificationPolicy
         case ("filters", ""): .filters
+        case ("domain-blocks", ""): .domainBlocks
         case ("posting-defaults", ""): .postingDefaults
         case ("account-appearance", ""): .accountAppearance
         case ("announcements", ""): .announcements
@@ -277,6 +289,8 @@ public enum AppDestination: Equatable, Sendable {
         case .accounts(.favourited(let statusID)): ("accounts", "favourited", [("id", statusID)])
         case .accounts(.emojiReactioned(let statusID, let name)): ("accounts", "emoji-reactioned", [("id", statusID), ("name", name)])
         case .accounts(.reblogged(let statusID)): ("accounts", "reblogged", [("id", statusID)])
+        case .accounts(.muted): ("accounts", "muted", [])
+        case .accounts(.blocked): ("accounts", "blocked", [])
         case .hashtag(let name): ("hashtag", nil, [("name", name)])
         case .accountHashtag(let acct, let name): ("account-hashtag", nil, [("acct", acct), ("name", name)])
         case .search(let query): ("search", nil, query.map { [("q", $0)] } ?? [])
@@ -286,6 +300,7 @@ public enum AppDestination: Equatable, Sendable {
         case .notificationRequest(let id): ("notification-request", nil, [("id", id)])
         case .notificationPolicy: ("notification-policy", nil, [])
         case .filters: ("filters", nil, [])
+        case .domainBlocks: ("domain-blocks", nil, [])
         case .postingDefaults: ("posting-defaults", nil, [])
         case .accountAppearance: ("account-appearance", nil, [])
         case .announcements: ("announcements", nil, [])

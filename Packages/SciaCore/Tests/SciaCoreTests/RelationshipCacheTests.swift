@@ -194,6 +194,76 @@ struct RelationshipCacheTests {
         #expect(cache["1"]?.following == true)
     }
 
+    /// ドメインのブロックを変えたら、そのドメインの人と、ハンドルが分からない人の関係を忘れる。ほかのドメインの人と、同じサーバーの人は残す。
+    @Test func forgetRelationsOnDomainForgetsDomainAndUnknownHandles() {
+        let cache = makeCache(Server())
+        for id in ["1", "2", "3", "4"] {
+            cache[id] = Relationship(id: id, following: true)
+        }
+        let accts = ["1": "a@Blocked.example", "2": "b@other.example", "4": "c"]
+
+        cache.forgetRelations(onDomain: "blocked.example") { accts[$0] }
+
+        #expect(cache["1"] == nil)
+        #expect(cache["2"] != nil)
+        #expect(cache["3"] == nil)
+        #expect(cache["4"] != nil)
+    }
+
+    /// 国際化ドメインは、ドメインのブロックのPunycodeと`acct`のUnicodeで表記が違うので、どちらも国際化ドメインなら忘れる。ASCIIのドメインでは国際化ドメインの人を残す。
+    @Test func forgetRelationsOnInternationalizedDomain() {
+        let cache = makeCache(Server())
+        for id in ["1", "2", "3"] {
+            cache[id] = Relationship(id: id, following: true)
+        }
+        let accts = ["1": "bob@münchen.example", "2": "c@other.example", "3": "d@xn--caf-dma.example"]
+
+        cache.forgetRelations(onDomain: "xn--mnchen-3ya.example") { accts[$0] }
+        #expect(cache["1"] == nil)
+        #expect(cache["2"] != nil)
+
+        cache["1"] = Relationship(id: "1", following: true)
+        cache.forgetRelations(onDomain: "other.example") { accts[$0] }
+        #expect(cache["1"] != nil)
+        #expect(cache["2"] == nil)
+    }
+
+    /// 読んでいる途中に忘れたら、届いた応答は忘れる前に読んだものなので使わず、読み直した関係を返す。
+    @Test func relationshipRereadsWhenForgottenWhileLoading() async throws {
+        let server = Server(holds: true)
+        let cache = makeCache(server)
+        server.setFollowing(false)
+        let waiting = Task { try await cache.relationship("1") }
+        await server.waitForRequests(1)
+
+        server.setFollowing(true)
+        cache.forgetRelations(onDomain: "blocked.example") { _ in nil }
+        server.release()
+        await server.waitForRequests(2)
+        server.release()
+
+        #expect(try await waiting.value?.following == true)
+        #expect(server.requests == [["1"], ["1"]])
+    }
+
+    /// 読んでいる途中に忘れてから求められても、忘れる前の読み直しを待って「見つからない」にせず、読み直した関係を返す。
+    @Test func relationshipAskedAfterForgettingWhileLoadingRereads() async throws {
+        let server = Server(holds: true)
+        let cache = makeCache(server)
+        server.setFollowing(false)
+        cache.reload(["1"], purpose: .action)
+        await server.waitForRequests(1)
+
+        server.setFollowing(true)
+        cache.forgetRelations(onDomain: "blocked.example") { _ in nil }
+        let waiting = Task { try await cache.relationship("1") }
+        await server.waitForRequests(2)
+        server.release()
+
+        #expect(try await waiting.value?.following == true)
+        #expect(server.requests == [["1"], ["1"]])
+    }
+
     /// 止めたら、走っている読み直しを取り消し、以後は読まない。ログアウトのあとに前のアカウントで通信し続けないため。
     @Test func closeCancelsReloadAndStopsLoading() async throws {
         let server = Server(holds: true)

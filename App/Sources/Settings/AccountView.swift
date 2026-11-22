@@ -35,6 +35,8 @@ struct AccountScreenContext {
     let postingDefaults: (model: PostingDefaultsModel, languages: PostingLanguageSource)
     /// 「外観」の画面に渡すもの。
     let appearance: (model: AccountPreferencesModel, webURL: URL)
+    /// ミュートしたユーザー、ブロックしたユーザー、ブロックしたドメインの画面に渡すもの。
+    let moderation: ModerationScreenContext
     /// 名前を入れるアラートを出して、リストを作る。
     let createList: @MainActor () -> Void
     /// 確かめてから、リストを消す。
@@ -94,6 +96,7 @@ struct AccountView: View {
                 NavigationLink(SettingsTexts.Filters.title) {
                     FiltersView(model: context.filters.model, now: context.filters.now, settings: settings)
                 }
+                ModerationLinks(context: context.moderation)
                 if context.showsNotificationPolicy() {
                     NavigationLink(SettingsTexts.NotificationFiltering.title) {
                         NotificationPolicyView(model: context.notificationPolicy)

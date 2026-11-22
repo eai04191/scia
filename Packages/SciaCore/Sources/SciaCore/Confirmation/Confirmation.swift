@@ -147,9 +147,21 @@ extension Confirmation where Choice == Proceed {
             .destructive(title: "\(by)@\(acct)へのフォローリクエストを取り消しますか？", message: nil, action: "リクエストを取り消す")
         case .block:
             .destructive(title: "\(by)@\(acct)をブロックしますか？", message: "相手の投稿と通知が表示されなくなり、お互いのフォローが外れます。", action: "ブロック")
-        case .follow, .showReblogs, .notify, .endorse, .mute, .unmute, .unblock:
+        case .blockDomain(let domain):
+            blockingDomain(domain, actor: actor)
+        case .follow, .showReblogs, .notify, .endorse, .mute, .unmute, .unblock, .unblockDomain:
             nil
         }
+    }
+
+    /// ドメインのブロックは、そのドメインの人とのお互いのフォローを外し、解除しても戻らないので確かめる。ユーザーのメニューと、ブロックしたドメインの画面で同じ文言を使う。
+    /// - Parameter actor: 「別のアカウントで」で、ほかのアカウントとして行うときの、そのアカウントの名前（`@username`）。
+    public static func blockingDomain(_ domain: String, actor: String? = nil) -> Confirmation {
+        .destructive(
+            title: "\(actor.map { "\($0)で" } ?? "")\(domain)をブロックしますか？",
+            message: ModerationTexts.blockDomainMessage,
+            action: "ブロック"
+        )
     }
 
     // MARK: - リスト

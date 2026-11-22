@@ -1,8 +1,8 @@
-/// ユーザーのメニューの、相手との関係で中身が変わる項目（フォロー、フォローの設定、プロフィールで紹介、メモ、ミュート、ブロック）。決まりはdocs/menus.mdの「ユーザーのメニュー」にある。
+/// ユーザーのメニューの、相手との関係で中身が変わる項目（フォロー、フォローの設定、プロフィールで紹介、メモ、ミュート、ブロック、ドメインのブロック）。決まりはdocs/menus.mdの「ユーザーのメニュー」にある。
 extension UserMenuItem {
     public var isRelation: Bool {
         switch self {
-        case .follow, .showReblogs, .notify, .endorse, .note, .mute, .block, .report: true
+        case .follow, .showReblogs, .notify, .endorse, .note, .mute, .block, .blockDomain, .report: true
         case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .addToList, .autoTranslation, .editDisplay, .otherAccounts, .customize: false
         }
     }
@@ -35,6 +35,19 @@ public enum UserRelationChange: Sendable {
     case unmute
     case block
     case unblock
+    /// 相手のサーバーのドメインをブロックする。値はドメイン。
+    case blockDomain(String)
+    case unblockDomain(String)
+
+    /// ユーザーのメニューの、ドメインをブロックする項目の名前。
+    public static func blockDomainTitle(_ domain: String) -> String {
+        "\(domain)をブロック"
+    }
+
+    /// ユーザーのメニューの、ドメインのブロックを解除する項目の名前。
+    public static func unblockDomainTitle(_ domain: String) -> String {
+        "\(domain)のブロックを解除"
+    }
 
     /// ミュートの期間の選択肢。Mastodonのwebと同じ並び。
     public static let muteDurations: [(title: String, duration: Duration?)] = [
@@ -50,11 +63,20 @@ public enum UserRelationChange: Sendable {
 }
 
 extension UserRelationChange {
+    /// ドメインのブロックを変えるなら、そのドメイン。
+    public var domain: String? {
+        switch self {
+        case .blockDomain(let domain), .unblockDomain(let domain): domain
+        case .follow, .unfollow, .cancelFollowRequest, .showReblogs, .notify, .endorse, .mute, .unmute, .block, .unblock: nil
+        }
+    }
+
     /// フォローそのものを変える。フォロワー数が変わるため、開いているプロフィールのアカウントを読み直す。
     public var changesFollow: Bool {
         switch self {
-        case .follow, .unfollow, .cancelFollowRequest, .block: true
-        case .showReblogs, .notify, .endorse, .mute, .unmute, .unblock: false
+        // Mastodonはドメインをブロックすると、APIのドキュメントと違い、そのドメインの人への自分のフォローも外す（`AfterBlockDomainFromAccountService#remove_follows!`）。
+        case .follow, .unfollow, .cancelFollowRequest, .block, .blockDomain: true
+        case .showReblogs, .notify, .endorse, .mute, .unmute, .unblock, .unblockDomain: false
         }
     }
 
@@ -71,6 +93,8 @@ extension UserRelationChange {
         case .unmute: "ミュートを解除しました"
         case .block: "ブロックしました"
         case .unblock: "ブロックを解除しました"
+        case .blockDomain(let domain): "\(domain)をブロックしました"
+        case .unblockDomain(let domain): "\(domain)のブロックを解除しました"
         }
     }
 
@@ -81,6 +105,7 @@ extension UserRelationChange {
         case .endorse: "プロフィールでの紹介を変更できませんでした"
         case .mute, .unmute: "ミュートを変更できませんでした"
         case .block, .unblock: "ブロックを変更できませんでした"
+        case .blockDomain, .unblockDomain: "ドメインのブロックを変更できませんでした"
         }
     }
 }

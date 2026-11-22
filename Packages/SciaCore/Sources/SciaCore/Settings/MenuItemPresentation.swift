@@ -143,6 +143,7 @@ extension UserMenuItem: MenuItemContentProviding {
         case .note: .own(title: "メモを追加", symbolName: "note.text")
         case .mute: .own(title: "ミュート", symbolName: "speaker.slash")
         case .block: .own(title: "ブロック", symbolName: "hand.raised")
+        case .blockDomain: .own(title: "ドメインをブロック", symbolName: "network.slash")
         case .report: .own(title: "通報", symbolName: "flag")
         case .otherAccounts: .own(title: "別のアカウントで", symbolName: "person.2")
         case .customize: .own(title: "カスタマイズ", symbolName: "slider.horizontal.3")

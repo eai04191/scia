@@ -75,8 +75,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private var pendingOpening: (id: ItemID, windowY: CGFloat)?
     /// 投稿のアイコンやブーストした人の行がタップされたとき、またはメニューで選ばれたときに、そのアカウントを渡して呼ぶ。
     var onOpenProfile: ((Account) -> Void)?
-    /// 人の行を左へスワイプして「外す」を押した。リストのメンバーの画面でだけ渡す。
+    /// 人の行を左へスワイプして「外す」を押した。リストのメンバー、ミュートしたユーザー、ブロックしたユーザーの画面でだけ渡す。
     var onRemoveAccount: ((Account) -> Void)?
+    /// 人の行を左へスワイプして出すボタンの名前と記号。
+    var accountRemoval = (title: TimelineScreenTexts.removeAccount, symbolName: "person.badge.minus")
     /// アカウントの全体を持たない相手（メンション）のプロフィールを、IDで開く。
     var onOpenProfileID: ((String) -> Void)?
     /// 投稿の本文のリンクがタップされたときに、行き先と、本文を描いた投稿（ブーストなら元の投稿）を渡して呼ぶ。
@@ -2242,14 +2244,14 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         return UISwipeActionsConfiguration(actions: [action])
     }
 
-    /// 人の行を左へスワイプして外す。リストのメンバーの画面でだけ出す。行を消すのは外せてからなので、スワイプした行はいったん戻す。
+    /// 人の行を左へスワイプして外す。`onRemoveAccount`を渡した画面でだけ出す。行を消すのは外せてからなので、スワイプした行はいったん戻す。
     private func accountRemovalSwipe(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         guard let id = dataSource.itemIdentifier(for: indexPath), case .account(let account) = entries[id], let onRemoveAccount else { return nil }
-        let action = UIContextualAction(style: .destructive, title: TimelineScreenTexts.removeAccount) { _, _, completion in
+        let action = UIContextualAction(style: .destructive, title: accountRemoval.title) { _, _, completion in
             onRemoveAccount(account)
             completion(false)
         }
-        action.image = UIImage(systemName: "person.badge.minus")
+        action.image = UIImage(systemName: accountRemoval.symbolName)
         return UISwipeActionsConfiguration(actions: [action])
     }
 

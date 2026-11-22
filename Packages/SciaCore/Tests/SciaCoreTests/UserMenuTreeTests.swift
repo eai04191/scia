@@ -115,6 +115,21 @@ struct UserMenuTreeTests {
         #expect(describe(.block, Relationship(id: "2", blocking: true)) == "ブロックを解除")
     }
 
+    /// ドメインのブロックは、ほかのサーバーの人にだけ、そのドメインの名前で出す。ブロック中なら解除を出す。
+    @Test func blockDomainItemNamesRemoteDomain() throws {
+        func describe(acct: String, _ relationship: Relationship) -> String {
+            MenuNodeTests.describe(UserMenuTree.relationNodes(.blockDomain, relation: UserRelation(accountID: "2", acct: acct, relationship: relationship)))
+        }
+        #expect(describe(acct: "alice", Relationship(id: "2")) == "")
+        #expect(describe(acct: "alice@remote.example", Relationship(id: "2")) == "remote.exampleをブロック!")
+        #expect(describe(acct: "alice@remote.example", Relationship(id: "2", domainBlocking: true)) == "remote.exampleのブロックを解除")
+        let command = try #require(UserMenuTree.relationNodes(.blockDomain, relation: UserRelation(accountID: "2", acct: "alice@remote.example", relationship: Relationship(id: "2"))).first?.command)
+        guard case .changeRelation(.blockDomain("remote.example"), _) = command else {
+            Issue.record("ドメインのブロックを送っていません: \(command)")
+            return
+        }
+    }
+
     /// メモは、なければ「メモを追加」、あれば「メモを編集」にする。ブロックしていても書ける。押すとシートを開く。
     @Test func noteItemAddsOrEditsNote() throws {
         #expect(describe(.note, Relationship(id: "2")) == "メモを追加")
@@ -197,10 +212,10 @@ struct UserMenuTreeTests {
 
     // MARK: - 投稿のメニューのサブメニュー
 
-    /// 既定のユーザーのメニューは、開く・書く操作、フォローとリストに追加、持ち出す操作、ミュート・ブロック・通報でまとまりを分け、ユーザー名とサーバーのコピー、メモ、フォローの設定、プロフィールで紹介は「その他」に入れる。
+    /// 既定のユーザーのメニューは、開く・書く操作、フォローとリストに追加、持ち出す操作、ミュート・ブロック・ドメインのブロック・通報でまとまりを分け、ユーザー名とサーバーのコピー、メモ、フォローの設定、プロフィールで紹介は「その他」に入れる。
     /// 関係を覚えていない相手の関係の項目は、読んでから中身を決める。通報は関係で変わらないため、読まずに出す。開く場所を選んで開く2つは隠れている。
     @Test func defaultUserMenuHasMentionAndCopyUsername() {
-        #expect(submenu(actions: actions()) == "@alice[プロフィール,メンション,…,リストに追加,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,…,…,通報,その他[ユーザー名をコピー,サーバーをコピー,…,…,…,…,カスタマイズ]]")
+        #expect(submenu(actions: actions()) == "@alice[プロフィール,メンション,…,リストに追加,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,…,…,…,通報,その他[ユーザー名をコピー,サーバーをコピー,…,…,…,…,カスタマイズ]]")
     }
 
     /// メンション、ハンドルをコピー、関係の項目を組むものを渡されていない画面では、これらを出さない。

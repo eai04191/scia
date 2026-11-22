@@ -335,9 +335,22 @@ public final class OtherAccount {
 
     /// そのアカウントとして、そのサーバーでのIDの相手へ関係の変更を送り、結果を覚える。
     public func change(_ change: UserRelationChange, of relation: UserRelation) async throws -> Relationship {
-        let relationship = try await operations.changeRelation(change, relation.accountID)
+        let relationship: Relationship
+        do {
+            relationship = try await operations.changeRelation(change, relation.accountID)
+        } catch let error as RelationChangeAppliedError {
+            if let domain = change.domain { forgetRelations(onDomain: domain) }
+            throw error
+        }
+        if let domain = change.domain { forgetRelations(onDomain: domain) }
         relationships[relation.accountID] = relationship
         return relationship
+    }
+
+    /// 見つけた人のハンドルでドメインを見分け、そのドメインの人と、見分けられない人の関係を忘れる。
+    private func forgetRelations(onDomain domain: String) {
+        let accts = Dictionary(people.values.map { ($0.id, $0.acct) }) { first, _ in first }
+        relationships.forgetRelations(onDomain: domain) { accts[$0] }
     }
 
     /// そのアカウントのシート（メモ、リストに追加）で変わった関係を覚える。次に開いたメニューの項目に出す。

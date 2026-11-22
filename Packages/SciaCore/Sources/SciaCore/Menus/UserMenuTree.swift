@@ -310,7 +310,7 @@ public struct UserMenuTree {
                 // リンクのメンションと文字のままのハンドルは、選ぶまで相手を探さず、対象外かが分からないので出さない。
                 guard case .account(_, let acct) = subject.target, let isExcluded = tree.actions?.isExcludedFromAutoTranslation(acct) else { return [] }
                 return [.action(inSubmenu ? item.title : "@\(subject.acct)を自動翻訳", icon: .symbol(item.symbolName), isSelected: !isExcluded, .excludeFromAutoTranslation(!isExcluded, acct: acct))]
-            case .follow, .showReblogs, .notify, .endorse, .note, .mute, .block, .report:
+            case .follow, .showReblogs, .notify, .endorse, .note, .mute, .block, .blockDomain, .report:
                 guard let actions = tree.actions, let load else { return [] }
                 return tree.relationNodes(item, actions: actions, load: load, failureSlots: failureSlots)
             case .otherAccounts:
@@ -459,6 +459,11 @@ extension UserMenuTree {
         case .block:
             if relationship.blocking { return [node("ブロックを解除", "hand.raised.slash", .unblock)] }
             return [node(item.title, "hand.raised", isDestructive: true, .block)]
+        case .blockDomain:
+            // 同じサーバーの人の`acct`にはドメインがなく、自分のサーバーはブロックできない。
+            guard let domain = UserHandle.domain(ofAcct: relation.acct) else { return [] }
+            if relationship.domainBlocking { return [node(UserRelationChange.unblockDomainTitle(domain), "network", .unblockDomain(domain))] }
+            return [node(UserRelationChange.blockDomainTitle(domain), item.symbolName, isDestructive: true, .blockDomain(domain))]
         case .report:
             return [.action(item.title, icon: .symbol(item.symbolName), .report(accountID: relation.accountID, acct: relation.acct, statusID: reportableStatusID))]
         case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .addToList, .autoTranslation, .editDisplay, .otherAccounts, .customize:

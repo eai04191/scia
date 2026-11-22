@@ -110,9 +110,9 @@ struct AppDestinationTests {
         + [.profile(acct: "bob@example.com"), .profile(acct: "bob"), .myProfile, .profileEdit, .userDisplay(acct: "bob@example.com")]
         + [.thread(statusID: "123"), .editHistory(statusID: "123"), .apiResponse(statusID: "123"), .crashReport(statusID: "123")]
         + [.accounts(.followers(accountID: nil)), .accounts(.followers(accountID: "9")), .accounts(.following(accountID: nil)), .accounts(.following(accountID: "9"))]
-        + [.accounts(.favourited(statusID: "123")), .accounts(.reblogged(statusID: "123")), .accounts(.emojiReactioned(statusID: "123", name: "👍")), .accounts(.emojiReactioned(statusID: "123", name: "blob_cat"))]
+        + [.accounts(.favourited(statusID: "123")), .accounts(.reblogged(statusID: "123")), .accounts(.emojiReactioned(statusID: "123", name: "👍")), .accounts(.emojiReactioned(statusID: "123", name: "blob_cat")), .accounts(.muted), .accounts(.blocked)]
         + [.hashtag(name: "日本語 & tag"), .accountHashtag(acct: "bob@example.com", name: "scia"), .search(query: nil), .search(query: "https://example.com/@bob/1"), .scheduled, .operationStatus]
-        + [.notificationRequests, .notificationRequest(id: "7"), .notificationPolicy, .filters, .postingDefaults, .accountAppearance, .quotes(statusID: "123"), .announcements, .account, .inAppBrowserHeight(returningTo: nil), .inAppBrowserHeight(returningTo: .interaction)]
+        + [.notificationRequests, .notificationRequest(id: "7"), .notificationPolicy, .filters, .domainBlocks, .postingDefaults, .accountAppearance, .quotes(statusID: "123"), .announcements, .account, .inAppBrowserHeight(returningTo: nil), .inAppBrowserHeight(returningTo: .interaction)]
         + [.note(acct: "bob@example.com"), .report(acct: "bob+1@example.com")]
         + [.compose(.tools), .compose(.language), .compose(.schedule), .compose(.emoji), .compose(.mediaPicker)]
         + [.compose(.attachment(index: 0)), .compose(.altText(index: 2)), .compose(.crop(index: 3))]
@@ -123,6 +123,13 @@ struct AppDestinationTests {
         let url = try #require(destination.url(scheme: "scia"))
         #expect(url.scheme == "scia")
         #expect(AppDestination(url) == destination, "\(url.absoluteString)")
+    }
+
+    /// ミュートとブロックの人のリストは、アカウントの画面のサーバーでの設定の項目なので、ほかの人のリストと違いタブに積まずにシートで出す。
+    @Test func moderationListsAreSheets() {
+        #expect(!AppDestination.accounts(.muted).showsTab)
+        #expect(!AppDestination.accounts(.blocked).showsTab)
+        #expect(AppDestination.accounts(.followers(accountID: nil)).showsTab)
     }
 
     /// 見本が、開く先のすべての項目を含む。開く先を足すと`kind(of:)`がビルドできなくなり、足した種類の見本がなければこのテストが落ちる。
@@ -145,8 +152,8 @@ struct AppDestinationTests {
 
     enum Kind: CaseIterable {
         case tab, userTabList, userTabHashtag, userTabProfile, userTabAccountHashtag, settings, appearanceGroup, notificationAppearanceGroup, profile, myProfile, profileEdit, userDisplay
-        case thread, editHistory, apiResponse, crashReport, followers, following, favourited, reblogged, emojiReactioned, hashtag, accountHashtag, search, scheduled, operationStatus
-        case notificationRequests, notificationRequest, notificationPolicy, filters, postingDefaults, accountAppearance, quotes, announcements, account, inAppBrowserHeight
+        case thread, editHistory, apiResponse, crashReport, followers, following, favourited, reblogged, emojiReactioned, muted, blocked, hashtag, accountHashtag, search, scheduled, operationStatus
+        case notificationRequests, notificationRequest, notificationPolicy, filters, domainBlocks, postingDefaults, accountAppearance, quotes, announcements, account, inAppBrowserHeight
         case note, report, composeTools, composeLanguage, composeSchedule, composeEmoji, composeMediaPicker, composeAttachment, composeAltText, composeCrop
     }
 
@@ -173,6 +180,8 @@ struct AppDestinationTests {
         case .accounts(.favourited): .favourited
         case .accounts(.reblogged): .reblogged
         case .accounts(.emojiReactioned): .emojiReactioned
+        case .accounts(.muted): .muted
+        case .accounts(.blocked): .blocked
         case .hashtag: .hashtag
         case .accountHashtag: .accountHashtag
         case .search: .search
@@ -182,6 +191,7 @@ struct AppDestinationTests {
         case .notificationRequest: .notificationRequest
         case .notificationPolicy: .notificationPolicy
         case .filters: .filters
+        case .domainBlocks: .domainBlocks
         case .postingDefaults: .postingDefaults
         case .accountAppearance: .accountAppearance
         case .quotes: .quotes

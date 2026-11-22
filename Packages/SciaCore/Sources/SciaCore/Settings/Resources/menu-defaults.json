@@ -73,6 +73,7 @@
     "separator",
     "item:mute",
     "item:block",
+    "item:blockDomain",
     "item:report",
     "separator",
     "item:note",

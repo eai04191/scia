@@ -136,7 +136,7 @@ struct OtherAccountUserMenuTests {
         var tree = UserMenuTree(subject: UserMenuSubject(.account(alice)), actions: actions([bob]), linkBrowser: .inApp)
         tree.otherAccountGroups = layout
         let menu = try #require(tree.menu(groups: .single(.otherAccounts), avatar: nil)?.flattenedChildren.first)
-        #expect(MenuNodeTests.describe(await loaded(menu.children)) == "メンション|フォロー,リストに追加|ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日],ブロック!,通報|メモを追加")
+        #expect(MenuNodeTests.describe(await loaded(menu.children)) == "メンション|フォロー,リストに追加|ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日],ブロック!,remote.exampleをブロック!,通報|メモを追加")
     }
 
     /// メンションとリストに追加は、そのアカウントのサーバーでの相手のIDとハンドルで行う。

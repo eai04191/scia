@@ -72,7 +72,7 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 - 値の型に結び付かない画面の文言は、画面ごとの`…Texts`にある。iOSのアプリは、使う人に見える文言をすべてここか値の型から読む（`make lint`の`user_text_outside_core`で止めている）ので、iOSの画面にある文言はどれもSciaCoreで見つかる
   - タイムライン: `TimelineScreenTexts`、`BatchActionTexts`（まとめてブースト）、`StreamingStatusTexts`（引っぱると見える接続の状態）、`ScheduledStatusTexts`、`SearchScreenTexts`、`AnnouncementTexts`、`EditHistoryTexts`、`MediaViewerTexts`
   - アカウント一式: `SessionTexts`（操作の失敗の見出しなど）、`HashtagChangeTexts`、`TabMenuTexts`、`NoticeTexts`、`OperationStatusTexts`、`StatusBarTickerTexts`、`LoginTexts`、`AccountSwitchTexts`、`CrashReportTexts`、`APIResponseTexts`、`InAppBrowserSheetTexts`
-  - プロフィールとリスト: `ProfileTexts`、`AccountNoteTexts`、`ProfileEditTexts`、`ReportTexts`、`ListTexts`
+  - プロフィールとリスト: `ProfileTexts`、`AccountNoteTexts`、`ProfileEditTexts`、`ReportTexts`、`ListTexts`、`ModerationTexts`（ミュートとブロックのリスト）
   - 投稿欄: `ComposeTexts`。設定: `SettingsTexts`
   - 「キャンセル」「再試行」のような短い語も、画面ごとの`…Texts`に別々に置いてある。共通の定数はない
 
