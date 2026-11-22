@@ -37,10 +37,6 @@ extension MediaFileCache {
     fileprivate func hold(_ block: ActorHold) { block.hold() }
 }
 
-extension EmojiImageFiles {
-    fileprivate func hold(_ block: ActorHold) { block.hold() }
-}
-
 /// Aに置くのと、ログアウトで応答を消したときの分け直しが重なっても、応答に載っていない画像をAに残さない。
 @Suite(.scratch)
 struct EmojiImageFilesRaceTests {
@@ -75,16 +71,10 @@ struct EmojiImageFilesRaceTests {
         // そのサーバーの最後のアカウントをログアウトして、応答を消したときと同じ分け直し。
         let removing = Task { await files.updateListed([]) }
         try await waitUntil { !files.isListed(url) }
-        let owner = ActorHold()
-        let ownerTask = owner.holding { await files.hold($0) }
-        try await owner.entered.wait()
-        defer { owner.release() }
 
+        // 止めたactorに並んだ、置く処理と分け直しのどちらが先に走るかは決まらない。どちらが先でも、置き終えたあとの確かめ直しで外れる。
         disk.release()
-        try await waitUntil { await !files.listed.contains(url) }
-        owner.release()
         await diskTask.value
-        await ownerTask.value
         let kept = try await writing.value
         await removing.value
 
