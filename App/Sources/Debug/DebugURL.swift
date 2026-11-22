@@ -70,6 +70,8 @@ enum DebugURL: Equatable {
     case mediaLimits(MediaLimits?)
     /// `scia-debug://catalog`で部品のカタログを開く。`scia-debug://catalog/<CatalogComponent.rawValue>`なら、その部品の状態を並べた画面まで開く。
     case catalog(CatalogComponent?)
+    /// `scia-debug://benchmark`でベンチマークの一覧を開く。`scia-debug://benchmark/<Benchmark.id>`なら、そのベンチマークの画面まで開く。
+    case benchmark(String?)
     /// `scia-debug://dump`。画面にある要素の名前と枠を、アプリのDocuments/AgentDump/screen.txtに書き出す。
     /// agentがスクリーンショットを読まずに、タップする座標や今の画面を文字で知るため。
     case dump
@@ -181,6 +183,7 @@ enum DebugURL: Equatable {
         "upload/normal": .slowUploads(seconds: nil),
         "media-limits/server": .mediaLimits(nil),
         "catalog": .catalog(nil),
+        "benchmark": .benchmark(nil),
         "dump": .dump,
         "storage-probe": .storageProbe,
         "settings/list": .settingsList,
@@ -216,6 +219,7 @@ enum DebugURL: Equatable {
         case "scenario": .scenario(last)
         case "unsupported": OptionalFeature(rawValue: last).map { .unsupported($0) }
         case "catalog": CatalogComponent(rawValue: last).map { .catalog($0) }
+        case "benchmark": .benchmark(last)
         case "status": Self.status(url)
         case "crash": Self.crash(url)
         case "download": Self.slowDownload(url)

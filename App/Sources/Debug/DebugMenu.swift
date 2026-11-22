@@ -21,6 +21,9 @@ extension UIViewController {
             UIAction(title: "部品カタログ", image: UIImage(systemName: "square.grid.2x2")) { [weak self] _ in
                 self?.presentComponentCatalog()
             },
+            UIAction(title: "ベンチマーク", image: UIImage(systemName: "speedometer")) { [weak self] _ in
+                self?.presentBenchmarks()
+            },
             // シミュレーターやUIテストからも開けるよう、シェイクと同じ処理をメニューにも置く。
             UIAction(title: "違和感レポート", image: UIImage(systemName: "exclamationmark.bubble")) { [weak self] _ in
                 guard let window = self?.view.window else { return }
