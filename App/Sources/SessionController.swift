@@ -972,12 +972,15 @@ final class SessionController {
             let recent = UIAction(title: OperationStatusTexts.title, image: UIImage(systemName: "list.bullet.clipboard")) { _ in
                 self?.showOperationStatus()
             }
+            let settings = UIAction(title: SettingsPage.rootTitle, image: UIImage(systemName: "gearshape")) { _ in
+                self?.open(.settings(nil))
+            }
             // お知らせは、未読があるときだけ並べる。未読がなければ、アカウントの画面から開く。決まりはdocs/account-screen.mdにある。
             let unread = self?.announcements.unreadCount ?? 0
             let announcements = UIAction(title: SessionTexts.announcements, subtitle: SessionTexts.unreadAnnouncements(count: unread), image: UIImage(systemName: "megaphone")) { _ in
                 self?.showAnnouncements()
             }
-            let top = unread > 0 ? [account, recent, announcements] : [account, recent]
+            let top = unread > 0 ? [account, recent, settings, announcements] : [account, recent, settings]
             return UIMenu(children: [UIMenu(options: .displayInline, children: top)] + accountMenu().children)
         }
         if let item = viewController.navigationItem.leftBarButtonItem {

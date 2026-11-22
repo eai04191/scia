@@ -315,14 +315,11 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         return accounts?.current?.id
     }
 
-    /// アカウントのリスト、追加、設定のメニュー。開くたびに今のアカウントで組み立て直す。
+    /// アカウントのリストと「アカウントを管理」のメニュー。開くたびに今のアカウントで組み立て直す。
     private func makeAccountMenu() -> UIMenu {
         guard let accounts else { return UIMenu() }
-        let add = UIAction(title: AccountSwitchTexts.addAccount, image: UIImage(systemName: "person.badge.plus")) { [weak self] _ in
-            self?.confirmAddingAccount()
-        }
-        let settings = UIAction(title: SettingsPage.rootTitle, image: UIImage(systemName: "gearshape")) { [weak self] _ in
-            self?.session?.open(.settings(nil))
+        let manage = UIAction(title: SettingsPage.accountManagement.title(), image: UIImage(systemName: "person.2.badge.gearshape")) { [weak self] _ in
+            self?.session?.open(.settings(.accountManagement))
         }
         #if DEBUG
         let dummy = [UIAction(title: DummyServer.credential.handle, subtitle: "ダミーのデータ", state: Self.showsDummySession ? .on : .off) { [weak self] _ in
@@ -341,8 +338,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         } + dummy
         return UIMenu(children: [
             UIMenu(options: .displayInline, children: switching),
-            add,
-            UIMenu(options: .displayInline, children: [settings]),
+            UIMenu(options: .displayInline, children: [manage]),
         ])
     }
 
