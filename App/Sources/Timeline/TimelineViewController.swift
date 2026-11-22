@@ -684,7 +684,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             self.collectionView.layoutIfNeeded()
         }
         if animates {
-            UIView.animate(.smooth, changes: apply)
+            UIView.animateSpring(duration: Self.smoothDuration, in: collectionView, changes: apply)
         } else {
             UIView.performWithoutAnimation(apply)
         }
@@ -1418,7 +1418,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private func revealFirstEntries(over loadingSnapshot: UIView?) {
         let duration = tuning.value(of: TuningCatalog.accountSwitchDuration)
         if let loadingSnapshot {
-            UIView.animateSmoothly(duration: duration * 0.6) {
+            UIView.animateSpring(duration: duration * 0.6, in: loadingSnapshot) {
                 loadingSnapshot.alpha = 0
             } completion: {
                 loadingSnapshot.removeFromSuperview()
@@ -1662,7 +1662,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
         newArrivalsButtonGeneration += 1
         let generation = newArrivalsButtonGeneration
-        UIView.animateSmoothly(duration: newArrivalsButtonDuration) {
+        UIView.animateSpring(duration: newArrivalsButtonDuration, in: button) {
             button.alpha = isShown ? 1 : 0
         } completion: {
             guard generation == self.newArrivalsButtonGeneration, !self.newArrivalsButtonShown else { return }
@@ -2551,6 +2551,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// 画面に出ている行の前と後ろそれぞれで、本文を先に作る行の数。
     private static let preparedBodyRows = 12
+    /// 見本の描き直しを動かす長さ。SwiftUIの`.smooth`の既定の長さと同じ。
+    private static let smoothDuration: TimeInterval = 0.5
 
     /// - Parameters:
     ///   - isPinned: プロフィールの上に置く、固定された投稿。名前の上に固定されていることを示す行を出す。

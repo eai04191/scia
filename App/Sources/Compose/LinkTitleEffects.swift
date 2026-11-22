@@ -569,13 +569,13 @@ private final class ShimmerView: UIView {
 
     func appear(duration: TimeInterval) {
         alpha = 0
-        UIView.animateSmoothly(duration: duration) {
+        UIView.animateSpring(duration: duration, in: self) {
             self.alpha = 1
         }
     }
 
     func disappear(duration: TimeInterval) {
-        UIView.animateSmoothly(duration: duration) {
+        UIView.animateSpring(duration: duration, in: self) {
             self.alpha = 0
         } completion: {
             self.removeFromSuperview()

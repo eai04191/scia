@@ -141,8 +141,6 @@ struct TimelineNoticeTests {
         CATransaction.flush()
 
         // 見えている幅はまだ変わらず、置いた幅は広がっている。1コマで広げず、動きの中で広げる。
-        // 広げる動きはSwiftUIのスプリング（`animateSmoothly`）で、層の時計では進まない。止めた窓で進むかどうかは、
-        // それまでにほかの窓でSwiftUIの動きを使ったかで変わるため、広がっていく途中の幅は確かめない。
         #expect(abs(try #require(chip.layer.presentation()).bounds.width - before) < 0.5)
         #expect(chip.bounds.width > before + 1)
     }

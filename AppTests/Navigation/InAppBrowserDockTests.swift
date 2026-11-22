@@ -35,7 +35,7 @@ struct InAppBrowserDockTests {
         #expect(content.view.frame.height == 800)
     }
 
-    /// 縮める動きは、レイヤーのアニメーションで動かす。SwiftUIのスプリング（`animateSmoothly`）は、アプリの中で毎コマ値を入れて動かすので、伏せたシートと並べると60Hzで描かれる。
+    /// 縮める動きは、レイヤーのアニメーションで動かす。SwiftUIのスプリングを`UIView.animate(_:changes:)`に渡すと、アプリの中で毎コマ値を入れて動かすので、伏せたシートと並べると60Hzで描かれる。
     @Test func containerAnimatesOnLayers() throws {
         let content = UIViewController()
         let container = InAppBrowserDockContainer(content: content)

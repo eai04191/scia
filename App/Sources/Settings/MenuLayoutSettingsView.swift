@@ -567,7 +567,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         let members = rowGroupIndices
         // 視差効果を減らす設定では動かさない（docs/vision.mdの「タイムラインの動き」）。
         let duration = UIAccessibility.isReduceMotionEnabled ? 0 : AppDependencies.tuning.value(of: TuningCatalog.menuLayoutIndentDuration)
-        UIView.animateSmoothly(duration: duration) { [self] in
+        UIView.animateSpring(duration: duration, in: collectionView) { [self] in
             for (index, row) in rows.enumerated() {
                 guard case .item = row.element,
                       let indexPath = dataSource?.indexPath(for: .row(row.id)),

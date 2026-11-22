@@ -37,10 +37,10 @@ enum TabAddFlight {
         window.addSubview(carrier)
 
         // 1. ボタンから浮かび上がる。飛び始めても止めずに続ける。
-        UIView.animate(.spring(duration: motion.popScaleSpring.duration, bounce: motion.popScaleSpring.bounce)) {
+        UIView.animateSpring(duration: motion.popScaleSpring.duration, bounce: motion.popScaleSpring.bounce, in: icon) {
             icon.transform = CGAffineTransform(scaleX: motion.popScalePeak, y: motion.popScalePeak)
         }
-        UIView.animate(.spring(duration: motion.popOpacitySpring.duration, bounce: motion.popOpacitySpring.bounce)) {
+        UIView.animateSpring(duration: motion.popOpacitySpring.duration, bounce: motion.popOpacitySpring.bounce, in: icon) {
             icon.alpha = 1
         }
 
@@ -89,7 +89,7 @@ enum TabAddFlight {
         ring.transform = CGAffineTransform(scaleX: motion.ringScaleFrom, y: motion.ringScaleFrom)
         ring.alpha = motion.ringOpacityFrom
         window.addSubview(ring)
-        UIView.animate(.spring(duration: motion.ringSpring.duration, bounce: motion.ringSpring.bounce)) {
+        UIView.animateSpring(duration: motion.ringSpring.duration, bounce: motion.ringSpring.bounce, in: ring) {
             ring.transform = CGAffineTransform(scaleX: motion.ringScaleTo, y: motion.ringScaleTo)
             ring.alpha = 0
         } completion: {

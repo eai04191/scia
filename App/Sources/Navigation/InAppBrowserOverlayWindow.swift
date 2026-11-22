@@ -129,7 +129,7 @@ final class InAppBrowserOverlayWindow: UIWindow {
             completion()
             return
         }
-        UIView.animateSmoothSpring(duration: Self.expandDuration, in: self, frameSource: frameSource) {
+        UIView.animateSpring(duration: Self.expandDuration, beginsFromCurrentState: true, in: self, frameSource: frameSource) {
             _ = self.placeCollapsed(safariTop: safariTop, sheet: sheet)
         } completion: {
             completion()
@@ -152,7 +152,7 @@ final class InAppBrowserOverlayWindow: UIWindow {
             completion()
             return
         }
-        UIView.animateSmoothSpring(duration: Self.expandDuration, in: self, frameSource: frameSource) {
+        UIView.animateSpring(duration: Self.expandDuration, beginsFromCurrentState: true, in: self, frameSource: frameSource) {
             self.placeExpandedBarGrab()
             container.transform = .identity
             self.visibleArea.frame = container.bounds

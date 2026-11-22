@@ -199,12 +199,12 @@ final class LinkCardView: UIButton {
         // 新しい文字は直前に濃さを0にしたばかりで、画面上はまだ濃いため、今の見た目からは始めない。
         // 像は、薄くし終えてから外す。位置の動きの完了で外すと、サムネイルの枠が変わらないカードでは位置の動きが何も動かさず、
         // 完了がすぐ呼ばれて、古い文字が1コマで消えるため。
-        UIView.animateSmoothly(duration: duration * 0.4) {
+        UIView.animateSpring(duration: duration * 0.4, in: self) {
             for (_, snapshot) in snapshots { snapshot.alpha = 0 }
         } completion: {
             self.removeTransitionSnapshots(snapshots.map(\.1))
         }
-        UIView.animateSmoothly(duration: duration * 0.6, delay: duration * 0.2) {
+        UIView.animateSpring(duration: duration * 0.6, delay: duration * 0.2, in: self) {
             for label in changed { label.alpha = 1 }
         }
     }
@@ -635,7 +635,7 @@ final class LinkCardView: UIButton {
         thumbnailView.image = base
         incomingThumbnail = incoming
         incomingThumbnailBase = base
-        UIView.animateSmoothly(duration: duration) {
+        UIView.animateSpring(duration: duration, in: incoming) {
             incoming.alpha = 1
         } completion: {
             guard self.incomingThumbnail === incoming else { return }
@@ -668,7 +668,7 @@ final class LinkCardView: UIButton {
         copy.isUserInteractionEnabled = false
         insertSubview(copy, aboveSubview: thumbnailView)
         transitionSnapshots.append(copy)
-        UIView.animateSmoothly(duration: duration) {
+        UIView.animateSpring(duration: duration, in: copy) {
             copy.alpha = 0
         } completion: {
             self.removeTransitionSnapshots([copy])

@@ -60,6 +60,6 @@ final class InAppBrowserDockContainer: UIViewController {
         }
         // 伏せたシートと並べて動かすので、レイヤーのアニメーションにする。
         // 動かさないで変えるのは、全画面のSafariが覆って見えないときだけなので、動いている途中のスプリングの残りは止めない。
-        UIView.animateSmoothSpring(duration: duration, in: view, changes: changes)
+        UIView.animateSpring(duration: duration, beginsFromCurrentState: true, in: view, changes: changes)
     }
 }

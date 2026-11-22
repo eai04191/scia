@@ -422,7 +422,7 @@ final class AppearanceSamples {
         cover.isUserInteractionEnabled = false
         collectionView.addSubview(cover)
         change()
-        UIView.animateSmoothly(duration: duration) {
+        UIView.animateSpring(duration: duration, in: cover) {
             cover.alpha = 0
         } completion: {
             cover.removeFromSuperview()

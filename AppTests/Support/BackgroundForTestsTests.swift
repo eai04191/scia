@@ -20,13 +20,13 @@ struct BackgroundForTestsTests {
 
         // 止まるのは、裏に回る前にスプリングの動きを一度でも走らせたプロセスだけなので、先に走らせる。
         var finishedBefore = false
-        UIView.animateSmoothly(duration: 0.05) { view.frame.origin.y = 20 } completion: { finishedBefore = true }
+        UIView.animate(.smooth(duration: 0.05)) { view.frame.origin.y = 20 } completion: { finishedBefore = true }
         try await waitUntil { finishedBefore }
 
         whileInBackground {}
 
         var finished = false
-        UIView.animateSmoothly(duration: 0.05) { view.frame.origin.y = 50 } completion: { finished = true }
+        UIView.animate(.smooth(duration: 0.05)) { view.frame.origin.y = 50 } completion: { finished = true }
         try await waitUntil { finished }
     }
 }

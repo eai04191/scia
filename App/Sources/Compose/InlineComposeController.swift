@@ -225,9 +225,8 @@ final class InlineComposeController: NSObject {
     /// 本文の行の増減で欄の高さを動かしている数。動かし終えるまで入力欄を切り抜く。
     private var textHeightAnimations = 0
     /// 本文の行の増減で欄の高さを変える動き。テストでは、動きの終わりの処理を呼ぶ時を決めるために差し替える。
-    /// この動きはSwiftUIのスプリングで、テストの止めた窓では、終わりの処理が呼ばれるかが前に走ったテストで変わり、全体を走らせると呼ばれなかったため。
-    var animateTextHeight: @MainActor (_ duration: TimeInterval, _ changes: () -> Void, _ completion: @escaping @MainActor () -> Void) -> Void = { duration, changes, completion in
-        UIView.animateSmoothly(duration: duration, changes: changes, completion: completion)
+    var animateTextHeight: @MainActor (_ duration: TimeInterval, _ root: UIView, _ changes: () -> Void, _ completion: @escaping @MainActor () -> Void) -> Void = { duration, root, changes, completion in
+        UIView.animateSpring(duration: duration, in: root, changes: changes, completion: completion)
     }
     /// 投票の欄。＋のメニューから足したときだけ、本文の下に出す。
     private let pollEditor = ComposePollEditor()
@@ -1278,7 +1277,7 @@ final class InlineComposeController: NSObject {
         ), animatesRows: animates, settingsDuration: showsMotion ? tuning.value(of: TuningCatalog.composePollSettingDuration) : 0)
         guard changed, animates, let host else { return }
         var leaving: [UIView] = []
-        UIView.animateSmoothly(duration: tuning.value(of: TuningCatalog.composePollOptionDuration)) {
+        UIView.animateSpring(duration: tuning.value(of: TuningCatalog.composePollOptionDuration), in: host.view) {
             leaving = self.pollEditor.revealRowChanges()
             host.view.layoutIfNeeded()
             self.layoutCompletionListIfShown()
@@ -1377,7 +1376,7 @@ final class InlineComposeController: NSObject {
             return
         }
         var finish = {}
-        UIView.animateSmoothly(duration: tuning.value(of: TuningCatalog.composePollFoldDuration)) {
+        UIView.animateSpring(duration: tuning.value(of: TuningCatalog.composePollFoldDuration), in: host.view) {
             finish = self.pollEditor.setFolded(folded)
             host.view.layoutIfNeeded()
             self.layoutCompletionListIfShown()
@@ -2394,9 +2393,7 @@ final class InlineComposeController: NSObject {
         var flightGeneration: Int?
         let morphDuration = tuning.value(of: TuningCatalog.composeMorphDuration)
         let morphEnd = mediaTime() + morphDuration
-        // SwiftUIの`.smooth`と同じスプリングで動かす。複製を見えている形で止めて向かい直すため、Core Animationで動くUIKitの書き方にする。
-        // UIKitがスプリングを打ち切って、動き終わりのコマでバーと中身が残りの分だけ飛ばないよう、止まるところまで動かす。
-        UIView.animateSpringToRest(duration: morphDuration, options: [.allowUserInteraction, .beginFromCurrentState], in: bar) {
+        UIView.animateSpring(duration: morphDuration, beginsFromCurrentState: true, in: bar) {
             if collapses || expands {
                 self.applyExpandedLayout()
             }
@@ -2430,7 +2427,7 @@ final class InlineComposeController: NSObject {
                     UIView.animate(springDuration: morphDuration - delay, bounce: 0, delay: delay, options: [.allowUserInteraction, .beginFromCurrentState, .overrideInheritedDuration, .overrideInheritedCurve], animations: animations)
                 }
             }
-        } completion: { _ in
+        } completion: {
             if let generation {
                 self.endCollapse(generation: generation)
             }
@@ -2451,11 +2448,11 @@ final class InlineComposeController: NSObject {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 morphFlights.retarget(on: morphEnds(editing: editing), generation: flightGeneration) { [bar] delay, animations in
-                    UIView.animateSpringToRest(duration: max(morphEnd - mediaTime() - delay, 0.05), delay: delay, options: [.allowUserInteraction, .beginFromCurrentState], in: bar, animations: animations)
+                    UIView.animateSpring(duration: max(morphEnd - mediaTime() - delay, 0.05), delay: delay, beginsFromCurrentState: true, in: bar, changes: animations)
                 }
                 if let textGeneration, let side = textMorphSide(editing: editing) {
                     textMorph.retarget(on: side, generation: textGeneration) { [bar] animations in
-                        UIView.animateSpringToRest(duration: max(morphEnd - mediaTime(), 0.05), options: [.allowUserInteraction, .beginFromCurrentState], in: bar, animations: animations)
+                        UIView.animateSpring(duration: max(morphEnd - mediaTime(), 0.05), beginsFromCurrentState: true, in: bar, changes: animations)
                     }
                 }
             }
@@ -3079,7 +3076,7 @@ final class InlineComposeController: NSObject {
         previous.isUserInteractionEnabled = false
         replyRow.addSubview(previous)
         replyButton.stopFading(at: 0)
-        UIView.animateSmoothly(duration: tuning.value(of: TuningCatalog.composeReplyLabelSwitchDuration)) {
+        UIView.animateSpring(duration: tuning.value(of: TuningCatalog.composeReplyLabelSwitchDuration), in: host.view) {
             previous.alpha = 0
             self.replyButton.alpha = 1
             host.view.layoutIfNeeded()
@@ -4087,7 +4084,7 @@ extension InlineComposeController: UITextViewDelegate {
         // ふだんは切り抜かない。入力欄の上に重ねる部品（ハイライトしたURLなど）が枠の外へ出ることがあるため。
         textHeightAnimations += 1
         textView.clipsToBounds = true
-        animateTextHeight(tuning.value(of: TuningCatalog.composeTextGrowDuration)) {
+        animateTextHeight(tuning.value(of: TuningCatalog.composeTextGrowDuration), host.view) {
             host.view.layoutIfNeeded()
             self.layoutCompletionListIfShown()
             host.view.layoutIfNeeded()

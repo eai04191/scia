@@ -371,7 +371,7 @@ final class ComposePollOptionMark: UIView {
     func setMultiple(_ multiple: Bool, duration: TimeInterval) {
         guard multiple != self.multiple else { return }
         self.multiple = multiple
-        UIView.animateSmoothly(duration: duration) {
+        UIView.animateSpring(duration: duration, in: self) {
             self.applyShape()
         }
     }

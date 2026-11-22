@@ -121,7 +121,7 @@ final class MediaStatusView: UIView {
             completion()
             return
         }
-        UIView.animateSmoothly(duration: Self.fadeDuration, changes: changes, completion: completion)
+        UIView.animateSpring(duration: Self.fadeDuration, in: self, changes: changes, completion: completion)
     }
 
     /// 動画の操作の部品の出し入れ（`VideoControlsView.setControlsHidden`）と揃える。

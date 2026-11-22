@@ -1164,14 +1164,14 @@ final class PostBodyView: UIView {
     /// カードの像を先に薄くし、囲みを少し遅れて濃くする。同時に入れ替えると、出だしで両方が濃いまま重なって読めないため（リンクカードの文字の入れ替えと同じ）。
     private func animateEmbedArrival(_ embedView: EmbeddedPostView, leavingCard: UIView?, duration: TimeInterval) {
         if let leavingCard {
-            UIView.animateSmoothly(duration: duration * 0.4) {
+            UIView.animateSpring(duration: duration * 0.4, in: leavingCard) {
                 leavingCard.alpha = 0
             } completion: { [weak self] in
                 guard let self, self.leavingCardSnapshot === leavingCard else { return }
                 self.removeLeavingCardSnapshot()
             }
         }
-        UIView.animateSmoothly(duration: duration * 0.6, delay: duration * 0.2) {
+        UIView.animateSpring(duration: duration * 0.6, delay: duration * 0.2, in: embedView) {
             embedView.alpha = 1
         }
     }

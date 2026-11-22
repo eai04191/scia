@@ -1679,11 +1679,11 @@ final class InlineComposeControllerTests {
     /// 動き終えたときに切り抜きを外していたので、スクロールしているのに枠の外の行が見え、下のツールバーに重なった。
     @Test func growingPastLimitWhileGrowingKeepsTextClipped() async throws {
         defer { window.isHidden = true }
-        // 動きの終わりの処理は、止めた窓では呼ばれるかが前に走ったテストで変わるので、変える分だけ並べ直し、終わりの処理はあとでまとめて呼ぶ。
+        // 動きの終わりの処理を呼ぶ時を決めるため、変える分だけ並べ直し、終わりの処理はあとでまとめて呼ぶ。
         var completions: [@MainActor () -> Void] = []
         // 終わりの処理は投稿欄を持ち、投稿欄は差し替えたクロージャーを通してこの配列を持つので、テストの終わりに空にして持ち合いを切る。
         defer { completions = [] }
-        composer.animateTextHeight = { _, changes, completion in
+        composer.animateTextHeight = { _, _, changes, completion in
             changes()
             completions.append(completion)
         }

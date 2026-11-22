@@ -2,7 +2,7 @@ import QuartzCore
 import UIKit
 
 extension UIView {
-    /// `UIView.animate(springDuration:bounce: 0, ...)`と同じスプリングで、止まるところまで動かす。
+    /// `UIView.animate(springDuration:bounce:...)`と同じスプリングで、止まるところまで動かす。止まるまで続けるのは`bounce`が0のときだけ。
     /// UIKitは、このスプリングを動く距離の約0.1%を残した時点で打ち切り、残りを最後のコマで飛ばす（時間を1.5秒に伸ばした投稿欄の閉じる動きで、
     /// 135pt動くバーが約2.2秒の時点で0.14pt手前から目標へ飛んだ。割合は時間によらないので、短い動きでも同じだけ飛ぶ）。
     /// そこで、`root`の中の層にこの動きで付いた、足し合わせるスプリングのそれぞれを、打ち切られたあとも同じスプリングで続ける。
@@ -12,11 +12,11 @@ extension UIView {
     /// 続きは、この動きで付いた距離をすべて足しても残りが1pxの`settledPixelFraction`より小さくなるまで動く。
     /// 入れ子の層の残りは足し合わさって見えるため、層ごとの残りでは決めない。
     /// 続きの途中で次の動きが始まっても、続きは見えている位置に足し合わさっているので、次の動きはそこから始まり、続きは0へ減って終わる。
-    static func animateSpringToRest(duration: TimeInterval, delay: TimeInterval = 0, initialVelocity: CGFloat = 0, options: UIView.AnimationOptions = [], in root: UIView, animations: () -> Void, completion: ((Bool) -> Void)? = nil) {
+    static func animateSpringToRest(duration: TimeInterval, bounce: CGFloat = 0, delay: TimeInterval = 0, initialVelocity: CGFloat = 0, options: UIView.AnimationOptions = [], in root: UIView, animations: () -> Void, completion: ((Bool) -> Void)? = nil) {
         let top = outermostLayer(of: root)
         let before = springKeys(in: top)
         let ending = SpringRestEnding(completion: completion)
-        UIView.animate(springDuration: duration, bounce: 0, initialSpringVelocity: initialVelocity, delay: delay, options: options, animations: animations) { finished in
+        UIView.animate(springDuration: duration, bounce: bounce, initialSpringVelocity: initialVelocity, delay: delay, options: options, animations: animations) { finished in
             ending.springDidEnd(finished: finished)
         }
         let added = springKeys(in: top).flatMap { id, entry in
@@ -46,7 +46,7 @@ extension UIView {
 
     /// `view`を受け持つ層のうち、いちばん外側のもの。`view.layer`の外に、同じビューを受け持つ層が重なっていることがあり、
     /// そのときはビューの位置と大きさを外側の層が持つ（iOS 26の`UIVisualEffectView`では`_UIMultiLayer`が持っていた）。
-    private static func outermostLayer(of view: UIView) -> CALayer {
+    static func outermostLayer(of view: UIView) -> CALayer {
         var layer = view.layer
         while let outer = layer.superlayer, outer.delegate === view {
             layer = outer
@@ -80,8 +80,8 @@ extension UIView {
     /// `spring`を、打ち切られたあとも、残りの割合が`remainingLimit`より小さくなるまで続ける。続きは`key`と、その後ろに`.cancel`を付けた名前で足す。
     /// 止まるまでの長さにした同じスプリングを足し、元の長さの間だけ、逆向きの同じスプリングで打ち消す。
     /// 打ち切られる時点から始まる続きを1つ足す形にしないのは、途中から始めるために`timeOffset`をずらすと、Core Animationが動きの長さの中で時間を折り返し、違う位置を描いたため。
-    /// 減衰しすぎず振動もしない（バウンス0の）スプリングだけを扱う。`animateSpringToRest`の動きはどれもバウンス0で、
-    /// 中で別のスプリングを重ねたときは、止まるまでの長さを見積もる式が当てはまらないので、続けない。
+    /// 減衰しすぎず振動もしない（バウンス0の）スプリングだけを扱う。バウンスのあるスプリングや、中で別のスプリングを重ねたときは、
+    /// 止まるまでの長さを見積もる式が当てはまらないので、続けない。
     private static func addRest(after spring: CASpringAnimation, from: SpringDelta, to layer: CALayer, key: String, remainingLimit: CGFloat) {
         let omega = (spring.stiffness / spring.mass).squareRoot()
         guard omega > 0, abs(spring.damping - 2 * omega * spring.mass) <= 0.01 * spring.damping,

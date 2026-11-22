@@ -4,7 +4,7 @@ import SwiftUI
 import UIKit
 
 extension Benchmark {
-    /// SwiftUIのスプリングを`UIView.animate(_:changes:)`に渡した動き（`animateSmoothly`）と、UIKitのスプリングで、同じ四角を動かす。
+    /// SwiftUIのスプリングを`UIView.animate(_:changes:)`に渡した動きと、アプリが動きに使うUIKitのスプリング（`animateSpring`）で、同じ四角を動かす。
     /// 120Hzを頼んだ表示の時計が刻むたびに見えている値を読み、値が何刻みごとに変わったかを数える。
     /// SwiftUIのスプリングはアプリが毎コマ値を入れ、UIKitのスプリングは層のアニメーションなので、読めるのはアプリから見えている値まで。
     /// 描画のプロセスが実際に何Hzで画面に出したかは測れない。
@@ -29,19 +29,22 @@ private struct FrameRateMotion {
 
     static let all: [FrameRateMotion] = [
         FrameRateMotion(name: "SwiftUIのスプリング 位置", read: \.position.x) { view in
-            UIView.animateSmoothly(duration: 1) { view.center.x += 160 }
+            UIView.animate(.smooth(duration: 1)) { view.center.x += 160 }
         },
         FrameRateMotion(name: "SwiftUIのスプリング 濃さ", read: { CGFloat($0.opacity) }) { view in
-            UIView.animateSmoothly(duration: 1) { view.alpha = 0 }
+            UIView.animate(.smooth(duration: 1)) { view.alpha = 0 }
         },
         FrameRateMotion(name: "SwiftUIのスプリング 大きさ", read: \.bounds.width) { view in
-            UIView.animateSmoothly(duration: 1) { view.bounds.size.width = 160 }
+            UIView.animate(.smooth(duration: 1)) { view.bounds.size.width = 160 }
         },
         FrameRateMotion(name: "UIKitのスプリング 位置", read: \.position.x) { view in
-            UIView.animate(springDuration: 1, bounce: 0) { view.center.x += 160 }
+            UIView.animateSpring(duration: 1, in: view) { view.center.x += 160 }
         },
         FrameRateMotion(name: "UIKitのスプリング 濃さ", read: { CGFloat($0.opacity) }) { view in
-            UIView.animate(springDuration: 1, bounce: 0) { view.alpha = 0 }
+            UIView.animateSpring(duration: 1, in: view) { view.alpha = 0 }
+        },
+        FrameRateMotion(name: "UIKitのスプリング 大きさ", read: \.bounds.width) { view in
+            UIView.animateSpring(duration: 1, in: view) { view.bounds.size.width = 160 }
         },
     ]
 

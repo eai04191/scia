@@ -112,7 +112,7 @@ final class ComposeMorphFlights {
             }
             if let betweenShadow = source.betweenShadow {
                 copy.attachBetweenShadow(betweenShadow)
-                UIView.animateSmoothly(duration: Self.decorationRevealDuration) {
+                UIView.animateSpring(duration: Self.decorationRevealDuration, in: copy) {
                     copy.betweenShadowAlpha = 0
                 }
             }
@@ -230,7 +230,7 @@ final class ComposeMorphFlights {
                 // 着いた先の重ねた表示は、複製に載せていないので、着いてから浮かび上がらせる。
                 if let decoration = end.decoration, let destination = flight.ends.last, destination.view === end.view {
                     decoration.alpha = 0
-                    UIView.animateSmoothly(duration: Self.decorationRevealDuration) {
+                    UIView.animateSpring(duration: Self.decorationRevealDuration, in: decoration) {
                         decoration.alpha = 1
                     }
                 }

@@ -133,7 +133,7 @@ struct InAppBrowserTests {
         root.dismiss(animated: false)
     }
 
-    /// シートを動かす動きは、レイヤーのアニメーションで動かす。SwiftUIのスプリング（`animateSmoothly`）は、アプリの中で毎コマ値を入れて動かすので、60Hzで描かれる。
+    /// シートを動かす動きは、レイヤーのアニメーションで動かす。SwiftUIのスプリングを`UIView.animate(_:changes:)`に渡すと、アプリの中で毎コマ値を入れて動かすので、60Hzで描かれる。
     @Test func sheetMovesOnLayers() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }

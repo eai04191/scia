@@ -589,7 +589,7 @@ final class MediaViewerController: UIViewController {
                     self.captionView.text = description
                 }
             }
-            UIView.animateSmoothly(duration: duration) {
+            UIView.animateSpring(duration: duration, in: captionView) {
                 self.captionView.alpha = 1
             }
             return
@@ -599,7 +599,7 @@ final class MediaViewerController: UIViewController {
             captionView.isHidden = true
             return
         }
-        UIView.animateSmoothly(duration: duration) {
+        UIView.animateSpring(duration: duration, in: captionView) {
             self.captionView.alpha = 0
         } completion: {
             guard generation == self.captionGeneration, !self.captionShown else { return }
@@ -627,7 +627,7 @@ final class MediaViewerController: UIViewController {
     /// 画像を1回タップしたら、ボタンと説明を隠して画像だけにする。もう1回で戻す。
     fileprivate func toggleChrome() {
         isChromeHidden.toggle()
-        UIView.animateSmoothly(duration: Self.chromeFadeDuration) {
+        UIView.animateSpring(duration: Self.chromeFadeDuration, in: view) {
             // 説明は、出し入れと一緒に`updateChrome`が薄くする。
             for view in self.chromeViews where view !== self.captionView {
                 view.alpha = self.isChromeHidden ? 0 : 1
@@ -908,14 +908,14 @@ final class MediaViewerController: UIViewController {
                 descriptionEditor.isHidden = false
             }
             descriptionEditor.isUserInteractionEnabled = true
-            UIView.animateSmoothly(duration: duration) {
+            UIView.animateSpring(duration: duration, in: descriptionEditor) {
                 self.descriptionEditor.alpha = 1
             }
             return
         }
         // 薄くしている間に触れても、書き始めないようにする。書き直すときは帯を押す。
         descriptionEditor.isUserInteractionEnabled = false
-        UIView.animateSmoothly(duration: duration) {
+        UIView.animateSpring(duration: duration, in: descriptionEditor) {
             self.descriptionEditor.alpha = 0
         } completion: {
             guard generation == self.descriptionEditorGeneration else { return }
@@ -1227,7 +1227,7 @@ extension MediaViewerController {
         copy.isUserInteractionEnabled = false
         view.insertSubview(copy, aboveSubview: morphOverlap?.view ?? morph)
         pageOverlayCopy = copy
-        UIView.animateSmoothly(duration: Self.chromeFadeDuration) {
+        UIView.animateSpring(duration: Self.chromeFadeDuration, in: copy) {
             copy.alpha = 0
         }
     }
@@ -1283,7 +1283,7 @@ extension MediaViewerController {
         if let overlay = pages[currentIndex]?.transitionOverlay {
             // 開き終えたときと、閉じずに戻し終えたときは、部品を薄い状態から浮かび上がらせる。
             overlay.alpha = 0
-            UIView.animateSmoothly(duration: Self.chromeFadeDuration) {
+            UIView.animateSpring(duration: Self.chromeFadeDuration, in: overlay) {
                 overlay.alpha = 1
             }
         }
@@ -1333,7 +1333,7 @@ extension MediaViewerController {
             window.addSubview(copy)
         }
         interruptedMotionCopy = copy
-        UIView.animateSmoothly(duration: timing.interruptedOpenFadeDuration) {
+        UIView.animateSpring(duration: timing.interruptedOpenFadeDuration, in: copy) {
             copy.alpha = 0
         } completion: { [weak self] in
             copy.removeFromSuperview()
@@ -1686,7 +1686,7 @@ extension MediaViewerController {
             copy.alpha = alpha
             overlay.addSubview(copy)
             pageOverlayCopy = nil
-            UIView.animateSmoothly(duration: Self.chromeFadeDuration * alpha) {
+            UIView.animateSpring(duration: Self.chromeFadeDuration * alpha, in: copy) {
                 copy.alpha = 0
             } completion: {
                 copy.removeFromSuperview()
@@ -2659,7 +2659,7 @@ final class PlayerPageController: MediaPageController {
             loadStatusView.alpha = alpha
             return
         }
-        UIView.animateSmoothly(duration: MediaStatusView.fadeDuration) {
+        UIView.animateSpring(duration: MediaStatusView.fadeDuration, in: loadStatusView) {
             self.loadStatusView.alpha = alpha
         }
     }

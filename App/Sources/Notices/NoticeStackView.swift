@@ -390,7 +390,8 @@ final class NoticeStackView: UIView {
             let target = frame(for: chip, at: y)
             if chip !== growingChip, target.width > chip.bounds.width || target.height > chip.bounds.height {
                 // 詰め直しのスプリングで広げている途中でも、その動きを止めてすぐ広げる。
-                UIView.performStoppingSmoothAnimations {
+                UIView.removeAnimations(of: ["bounds", "position"], in: chip)
+                UIView.performWithoutAnimation {
                     chip.bounds.size = CGSize(width: max(target.width, chip.bounds.width), height: max(target.height, chip.bounds.height))
                     chip.layoutIfNeeded()
                 }
@@ -408,7 +409,7 @@ final class NoticeStackView: UIView {
             placeChips()
             return
         }
-        UIView.animateSmoothly(duration: animationDuration) {
+        UIView.animateSpring(duration: animationDuration, in: self) {
             self.placeChips(growingWithAnimation: growingChip)
             self.layoutIfNeeded()
         }

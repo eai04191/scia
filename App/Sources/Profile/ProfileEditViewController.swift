@@ -305,14 +305,14 @@ final class ProfileEditViewController: UIViewController {
         guard duration > 0, view.window != nil else { return }
         isRevealingTable = true
         tableView.alpha = 0
-        UIView.animateSmoothly(duration: duration * 0.6) {
+        UIView.animateSpring(duration: duration * 0.6, in: loadingView) {
             self.loadingView.alpha = 0
         } completion: {
             self.isRevealingTable = false
             self.loadingView.stopAnimating()
             self.loadingView.alpha = 1
         }
-        UIView.animateSmoothly(duration: duration) {
+        UIView.animateSpring(duration: duration, in: tableView) {
             self.tableView.alpha = 1
         }
     }
@@ -471,7 +471,7 @@ final class ProfileEditViewController: UIViewController {
             guard let self, isTableLoaded else { return }
             // 待つ上限を過ぎて届いたヘッダー画像で枠の高さが変わったときは、下の欄ごと動かす。
             if animated, !UIAccessibility.isReduceMotionEnabled {
-                UIView.animateSmoothly(duration: self.imagesCell.imageFadeDuration) {
+                UIView.animateSpring(duration: self.imagesCell.imageFadeDuration, in: self.tableView) {
                     self.tableView.performBatchUpdates(nil)
                     self.tableView.layoutIfNeeded()
                 }

@@ -215,7 +215,7 @@ final class InAppBrowserPresentationController: UIPresentationController {
         isMoving = true
         let distance = target.minY - view.frame.minY
         let unitVelocity = distance == 0 ? 0 : max(-20, min(20, velocity / distance))
-        UIView.animateSmoothSpring(duration: duration, initialVelocity: unitVelocity, in: view, changes: changes, completion: finish)
+        UIView.animateSpring(duration: duration, initialVelocity: unitVelocity, beginsFromCurrentState: true, in: view, changes: changes, completion: finish)
     }
 
     /// シートが止まったら、Safariのビューの高さを決める。伏せた段では中くらいの高さのままにして、Safariの下のツールバーをシートの下へはみ出させる。
@@ -352,7 +352,7 @@ final class InAppBrowserSheetTransition: NSObject, UIViewControllerAnimatedTrans
             container.addSubview(view)
         }
         // 後ろの画面を縮める動き（`animate(alongsideTransition:)`）と並べて動かすので、レイヤーのアニメーションにする。
-        UIView.animateSmoothSpring(duration: transitionContext.isAnimated ? duration : 0, in: view) {
+        UIView.animateSpring(duration: transitionContext.isAnimated ? duration : 0, beginsFromCurrentState: true, in: view) {
             view.frame = target
         } completion: {
             transitionContext.completeTransition(!transitionContext.transitionWasCancelled)

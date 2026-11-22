@@ -24,7 +24,7 @@ extension UIImageView {
         copy.isUserInteractionEnabled = false
         copy.alpha = startAlpha
         addSubview(copy)
-        UIView.animateSmoothly(duration: duration) {
+        UIView.animateSpring(duration: duration, in: copy) {
             copy.alpha = 0
         } completion: {
             copy.removeFromSuperview()
