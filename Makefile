@@ -29,6 +29,7 @@ check-app-info:
 lint:
 	swiftlint lint --quiet --config .swiftlint.yml
 	swift run --package-path Tools/SciaLint --quiet scia-lint .
+	python3 Tools/check-device-cutouts.py
 	@# macOSのbashは、UTF-8のロケールで変数名の直後の非ASCII文字を変数名の続きと読むので、${name}の形で区切る
 	@git ls-files -z -- '*.sh' Makefile Tools/git-hooks | xargs -0 perl -Mutf8 -CSD -ne 'next if /^\s*@?#/; if (/(?<![\\\$$])\$$\$$?[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7F]/) { print "$$ARGV:$$.: error: 変数名を波括弧で区切る: $$_"; $$bad = 1 } close ARGV if eof; END { exit($$bad // 0) }'
 
