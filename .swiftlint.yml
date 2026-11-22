@@ -14,6 +14,7 @@ only_rules:
   - network_conditions_outside_policy
   - test_file_without_scratch
   - failure_reason_outside_display
+  - swiftui_animation_in_uikit
 
 included:
   - App
@@ -112,6 +113,19 @@ custom_rules:
       - doccomment
       - string
     message: "実際の時間に直接触れない。時間をおく処理はClockで、今の日付は日付を返す関数で受け取り、既定値はSystemTimeかAppDependenciesを参照する"
+    severity: error
+
+  # SwiftUIのアニメーションをUIView.animateに渡すと、アプリの中で毎コマ値を入れて動かすので、120Hzの画面でも60Hzで描かれる。
+  # 比べるために測るベンチマークだけは、この書き方を使う
+  swiftui_animation_in_uikit:
+    included: "(App/Sources|ShareExtension)/.*\\.swift"
+    excluded: "App/Sources/Debug/Benchmark/"
+    regex: "\\bUIView\\.animate\\(\\s*\\.(smooth|snappy|bouncy|spring|interpolatingSpring|linear|easeIn|easeOut|easeInOut|default)\\b"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+      - string
+    message: "UIKitの動きはUIView.animateSpring(duration:bounce:in:)で書く。SwiftUIのアニメーションを渡すと60Hzで描かれる"
     severity: error
 
   # 失敗の理由の文言を部品を通さずに出すと、ログアウトされたときの「ログインし直す」が付かない。場所ごとに付けて回り、投稿欄、リスト、通報で漏れた。
