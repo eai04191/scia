@@ -53,4 +53,20 @@ struct TextKitLabelTests {
         #expect(label.text == nil)
         #expect(label.textKitLineCount(width: width) == 0)
     }
+
+    /// 重ねて描く字形の場所取りは、2文字以上の絵文字（サロゲートペア、結合子でつないだ絵文字）でも、行の高さに入る。
+    /// iOS 26のTextKit 2は、場所取りの後ろの幅のない文字によって、場所取りの枠を行の高さに入れない。
+    @Test(arguments: ["⌚", "😁", "👨‍👩‍👧"]) func overlaidGlyphPlaceholderSetsLineHeight(emoji: String) throws {
+        let font = UIFont.systemFont(ofSize: 17)
+        let text = NSAttributedString(string: emoji, attributes: [.font: font.withSize(50), .overlaidGlyphs: font])
+        let style = TextKitLabelLayout.Style(font: font, textColor: .label, lineBreakMode: .byWordWrapping, direction: .leftToRight, displayScale: 2, overlaysGlyphs: true)
+        let layout = TextKitLabelLayout.layout(of: text, width: width, maximumLines: 0, style: style)
+        let placed = try #require(layout.overlaidText)
+        let placeholder = try #require(placed.attribute(.attachment, at: 0, effectiveRange: nil) as? NSTextAttachment)
+        let metrics = try #require(TextKitLabelLayout.metrics(of: layout, displayScale: 2))
+
+        #expect(placeholder.bounds.height > font.lineHeight * 2)
+        #expect(metrics.firstBaseline >= placeholder.bounds.maxY - 0.5)
+        #expect(metrics.size.height >= placeholder.bounds.height - 0.5)
+    }
 }

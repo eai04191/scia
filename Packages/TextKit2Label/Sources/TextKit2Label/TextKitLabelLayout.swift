@@ -130,12 +130,13 @@ public enum TextKitLabelLayout {
                 var rest = attributes
                 attributes[.attachment] = placeholder
                 attributes[.overlaidGlyph] = OverlaidGlyph(text: glyph, font: font, color: attributes[.foregroundColor] as? UIColor, baselineOffset: offset)
-                // 結合子やサロゲートペアの2文字目からは、幅のない文字にする。前の文字に付く結合用の文字（U+034F）にし、
-                // 場所取りとのあいだで改行せず、後ろの文字との改行の機会は場所取りのものにする。語結合子（U+2060）では、後ろの文字との改行もなくなる。
+                // 結合子やサロゲートペアの2文字目からは、幅のない文字（U+200C）にする。場所取りとのあいだで改行せず、後ろの文字との改行の機会は場所取りのものになる。
+                // 語結合子（U+2060）では、後ろの文字との改行もなくなる。結合用の文字（U+034F）では、iOS 26のTextKit 2が場所取りの枠を行の高さに入れず、
+                // 行が文字だけの高さになって、字形の上がラベルからはみ出て切れる（iOS 26.5と27.2で測った。27.2ではどちらの文字でも入る）。
                 rest[.attachment] = nil
                 rest[.overlaidGlyphFiller] = true
                 let replacement = NSMutableAttributedString(string: "\u{FFFC}", attributes: attributes)
-                replacement.append(NSAttributedString(string: String(repeating: "\u{034F}", count: cluster.length - 1), attributes: rest))
+                replacement.append(NSAttributedString(string: String(repeating: "\u{200C}", count: cluster.length - 1), attributes: rest))
                 result.replaceCharacters(in: cluster, with: replacement)
             }
         }
