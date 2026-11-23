@@ -189,6 +189,18 @@ enum AppDependencies {
         try AccountRegistry(storage: KeychainCredentialStore(service: "net.mizle.scia.credential"), defaults: .standard)
     }
 
+    /// ログインしているアカウントごとの、ウィンドウをまたいで共有する部品。
+    static let signedInAccounts: SignedInAccounts = {
+        #if DEBUG
+        let transport = BurstMonitoringTransport(base: FaultInjectingTransport(base: ScenarioMode.server?.transport ?? URLSessionTransport()), monitor: RequestBurstLog.monitor)
+        #else
+        let transport = BurstMonitoringTransport(base: URLSessionTransport(), monitor: RequestBurstLog.monitor)
+        #endif
+        return SignedInAccounts(settings: settings, registry: { try? accounts.get() }) {
+            MastodonClient(credential: $0, transport: transport, isOtherAccount: true, receivedAccounts: $1)
+        }
+    }()
+
     static let oauth = OAuthClient(
         configuration: OAuthClient.Configuration(redirectURI: oauthRedirectURI),
         client: http

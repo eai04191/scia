@@ -14,12 +14,15 @@ final class OtherAccountHashtags {
     private let featured: LatestValueCache<[FeaturedTag]>
     private let filters: ServerFilterCache
     private let logger = SciaLog.logger(category: "otherAccountHashtags")
-    /// 済んだことを知らせる。文言の初めに、どのアカウントで行ったかは入れていない。
-    var onDone: (String) -> Void = { _ in }
-    /// 失敗を知らせる。見出しの初めに、どのアカウントで行ったかは入れていない。
-    var onFailure: (String, any Error) -> Void = { _, _ in }
 
-    /// - Parameter tasks: 送る処理を始めるセッションの持ち主。ログアウトやアカウントの切り替えで、キャッシュの通信と一緒に止める。
+    /// 済んだことと失敗の知らせ先。文言の初めに、どのアカウントで行ったかは入れていない。
+    /// 状態はウィンドウをまたいで共有するが、知らせは操作したウィンドウに出すので、操作ごとに渡す。
+    struct Report {
+        var done: @MainActor (String) -> Void
+        var failure: @MainActor (String, any Error) -> Void
+    }
+
+    /// - Parameter tasks: 送る処理を始める、そのアカウントの持ち主。ログアウトで、キャッシュの通信と一緒に止める。
     init(client: MastodonClient, tasks: TaskScope, now: @escaping () -> Date = AppDependencies.now) {
         self.client = client
         self.tasks = tasks
@@ -37,7 +40,8 @@ final class OtherAccountHashtags {
         }
     }
 
-    var actions: HashtagMenuActions {
+    /// 済んだことと失敗を`report`に知らせる操作。
+    func actions(report: Report) -> HashtagMenuActions {
         let followed = followed
         let featured = featured
         let filters = filters
@@ -48,48 +52,48 @@ final class OtherAccountHashtags {
                 // まだ読めていなければ、開いたメニューがこの読み直しを待つので、操作として送る。
                 refresh: { filters.refresh(purpose: .action) },
                 load: { name in HashtagMute.find(name, in: try await filters.latest(), now: now()) != nil },
-                mute: { [weak self] name, duration in self?.mute(name, duration: duration) },
-                unmute: { [weak self] name in self?.unmute(name) }
+                mute: { [weak self] name, duration in self?.mute(name, duration: duration, report: report) },
+                unmute: { [weak self] name in self?.unmute(name, report: report) }
             ),
             follow: HashtagToggleActions(
                 known: { name in followed.value.map { $0.contains(named: name) } },
                 refresh: { followed.refresh(purpose: .action) },
                 load: { name in try await followed.latest().contains(named: name) },
-                turnOn: { [weak self] name in self?.follow(name) },
-                turnOff: { [weak self] name in self?.unfollow(name) }
+                turnOn: { [weak self] name in self?.follow(name, report: report) },
+                turnOff: { [weak self] name in self?.unfollow(name, report: report) }
             ),
             feature: HashtagToggleActions(
                 known: { name in featured.value.map { $0.first(named: name) != nil } },
                 refresh: { featured.refresh(purpose: .action) },
                 load: { name in try await featured.latest().first(named: name) != nil },
-                turnOn: { [weak self] name in self?.feature(name) },
-                turnOff: { [weak self] name in self?.unfeature(name) }
+                turnOn: { [weak self] name in self?.feature(name, report: report) },
+                turnOff: { [weak self] name in self?.unfeature(name, report: report) }
             )
         )
     }
 
-    private func follow(_ name: String) {
-        send(key: "follow:\(name)", done: HashtagChangeTexts.followed(name), failure: HashtagChangeTexts.followFailure, reloading: followed) { client in
+    private func follow(_ name: String, report: Report) {
+        send(key: "follow:\(name)", done: HashtagChangeTexts.followed(name), failure: HashtagChangeTexts.followFailure, reloading: followed, report: report) { client in
             try await client.followTag(name)
         }
     }
 
-    private func unfollow(_ name: String) {
-        send(key: "follow:\(name)", done: HashtagChangeTexts.unfollowed(name), failure: HashtagChangeTexts.unfollowFailure, reloading: followed) { client in
+    private func unfollow(_ name: String, report: Report) {
+        send(key: "follow:\(name)", done: HashtagChangeTexts.unfollowed(name), failure: HashtagChangeTexts.unfollowFailure, reloading: followed, report: report) { client in
             try await client.unfollowTag(name)
         }
     }
 
-    private func feature(_ name: String) {
-        send(key: "feature:\(name)", done: HashtagChangeTexts.featured(name), failure: HashtagChangeTexts.featureFailure, reloading: featured) { client in
+    private func feature(_ name: String, report: Report) {
+        send(key: "feature:\(name)", done: HashtagChangeTexts.featured(name), failure: HashtagChangeTexts.featureFailure, reloading: featured, report: report) { client in
             _ = try await client.featureTag(name)
         }
     }
 
     /// 外すIDは、外すときに読み直したハッシュタグで決める。今のアカウントで外すときと同じく、別の端末で足し直したタグを古いIDで消さないため。
-    private func unfeature(_ name: String) {
+    private func unfeature(_ name: String, report: Report) {
         let featured = featured
-        send(key: "feature:\(name)", done: HashtagChangeTexts.unfeatured(name), failure: HashtagChangeTexts.featureFailure, reloading: featured) { client in
+        send(key: "feature:\(name)", done: HashtagChangeTexts.unfeatured(name), failure: HashtagChangeTexts.featureFailure, reloading: featured, report: report) { client in
             featured.reload(purpose: .action)
             if let tag = try await featured.latest().first(named: name) {
                 try await client.unfeatureTag(tag.id)
@@ -97,17 +101,17 @@ final class OtherAccountHashtags {
         }
     }
 
-    private func mute(_ name: String, duration: Duration?) {
-        send(key: "mute:\(name)", done: HashtagChangeTexts.muted(name), failure: HashtagChangeTexts.muteFailure, reloading: filters) { client in
+    private func mute(_ name: String, duration: Duration?, report: Report) {
+        send(key: "mute:\(name)", done: HashtagChangeTexts.muted(name), failure: HashtagChangeTexts.muteFailure, reloading: filters, report: report) { client in
             try await HashtagMute.mute(name, duration: duration, client: client)
         }
     }
 
     /// 解く条件は、解除するときにフィルターを読み直して決める。今のアカウントで解除するときと同じく、ほかで足した条件まで消さないため。
-    private func unmute(_ name: String) {
+    private func unmute(_ name: String, report: Report) {
         let filters = filters
         let now = now
-        send(key: "mute:\(name)", done: HashtagChangeTexts.unmuted(name), failure: HashtagChangeTexts.muteFailure, reloading: filters) { client in
+        send(key: "mute:\(name)", done: HashtagChangeTexts.unmuted(name), failure: HashtagChangeTexts.muteFailure, reloading: filters, report: report) { client in
             filters.reload(purpose: .action)
             if let muted = HashtagMute.find(name, in: try await filters.latest(), now: now()) {
                 try await muted.unmute(client: client)
@@ -117,17 +121,17 @@ final class OtherAccountHashtags {
 
     /// 送り終える前にメニューを開き直して押しても、同じ要求を重ねて送らない。済んでも失敗しても、覚えているハッシュタグを読み直す。
     /// 失敗しても、応答が届かなかっただけで変わっていることがあるため。
-    private func send<Value>(key: String, done: String, failure: String, reloading cache: LatestValueCache<Value>, _ operation: @escaping @MainActor (MastodonClient) async throws -> Void) {
+    private func send<Value>(key: String, done: String, failure: String, reloading cache: LatestValueCache<Value>, report: Report, _ operation: @escaping @MainActor (MastodonClient) async throws -> Void) {
         let client = client
         tasks.run(key: key, .skippingWhileRunning, .action) { [weak self] in
             do {
                 try await operation(client)
                 cache.reload(purpose: .action)
-                self?.onDone(done)
+                report.done(done)
             } catch {
                 cache.reload(purpose: .action)
                 self?.logger.error("other account hashtag change failed: \(SciaLog.describe(error), privacy: .public)")
-                self?.onFailure(failure, error)
+                report.failure(failure, error)
             }
         }
     }

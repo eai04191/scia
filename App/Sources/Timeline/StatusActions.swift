@@ -135,6 +135,7 @@ extension TimelineViewController {
         tree.hashtagMenu = settings.hashtagMenuLayout.submenuGroups(actions: settings.hashtagActions)
         tree.hashtagActions = hashtagMenuActions?.withoutRefresh
         tree.otherAccounts = otherAccounts?.list(loadsProfiles: false) ?? []
+        tree.otherAccountHashtagActions = { [otherAccounts] in otherAccounts?.hashtagActions(for: $0) }
         tree.otherAccountGroups = settings.statusMenuLayout.submenuGroups(actions: settings.statusActions)
         return tree
     }

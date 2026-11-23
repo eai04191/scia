@@ -362,7 +362,7 @@ final class SessionController {
         let tasks = session.tasks
         self.tasks = tasks
         let client = session.client
-        otherAccounts = OtherAccounts(current: credential, tasks: tasks, settings: settings) { MastodonClient(credential: $0, transport: transport, isOtherAccount: true, receivedAccounts: $1) }
+        otherAccounts = OtherAccounts(current: credential, tasks: tasks, settings: settings)
         let streamingHub = session.streamingHub
         let home = FeedTimelineController(feed: .home, session: session)
         let local = FeedTimelineController(feed: .local, session: session)
@@ -2516,16 +2516,16 @@ final class SessionController {
     }
 
 
-    /// ほかのアカウントとして、ハッシュタグをフォロー、ミュート、プロフィールで紹介する。済んだことと失敗は`otherAccounts`の知らせで出す。
+    /// ほかのアカウントとして、ハッシュタグをフォロー、ミュート、プロフィールで紹介する。済んだことと失敗は、このウィンドウの`otherAccounts`の知らせで出す。
     private func perform(_ command: HashtagMenuCommand, on name: String, as account: OtherAccount) {
-        let actions = account.hashtagActions
+        let actions = otherAccounts.hashtagActions(for: account)
         switch command {
-        case .mute(let duration): actions?.mute?.mute(name, duration)
-        case .unmute: actions?.mute?.unmute(name)
-        case .follow: actions?.follow?.turnOn(name)
-        case .unfollow: actions?.follow?.turnOff(name)
-        case .feature: actions?.feature?.turnOn(name)
-        case .unfeature: actions?.feature?.turnOff(name)
+        case .mute(let duration): actions.mute?.mute(name, duration)
+        case .unmute: actions.mute?.unmute(name)
+        case .follow: actions.follow?.turnOn(name)
+        case .unfollow: actions.follow?.turnOff(name)
+        case .feature: actions.feature?.turnOn(name)
+        case .unfeature: actions.feature?.turnOff(name)
         case .url, .openTimeline, .openAccountStatuses, .addToCompose, .customize:
             // 「別のアカウントで」の並びから除いているので来ない（`StatusMenuTree.sameForEveryAccountHashtagItems`）。
             break

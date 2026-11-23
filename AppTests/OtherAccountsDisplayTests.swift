@@ -14,9 +14,10 @@ struct OtherAccountsDisplayTests {
         let tasks = TaskScope()
         defer { tasks.close() }
         let transport = CompletionTransport()
-        let otherAccounts = OtherAccounts(current: credential, tasks: tasks, settings: settings) {
+        let shared = SignedInAccounts(settings: settings, registry: { nil }) {
             MastodonClient(credential: $0, transport: transport, receivedAccounts: $1)
         }
+        let otherAccounts = OtherAccounts(current: credential, tasks: tasks, settings: settings, shared: shared, registry: { nil })
         let account = OtherAccount(credential: credential, operations: .init(client: MastodonClient(credential: credential, transport: transport)), tasks: tasks)
         let context = otherAccounts.displaySettings(for: account)
         let client = otherAccounts.client(for: account)

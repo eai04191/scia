@@ -291,7 +291,7 @@ struct OtherAccountMenuTests {
     @Test func showsHashtagMenusAsOtherAccount() async throws {
         let found = Status(id: "7000", createdAt: Date(timeIntervalSince1970: 100), account: alice, content: "", spoilerText: "", uri: uri, url: nil, tags: [Tag(name: "swift", url: nil)])
         let bob = try account("bob", operations { _ in [found] })
-        bob.hashtagActions = HashtagMenuActions(mute: nil, follow: HashtagToggleActions(
+        let hashtagActions = HashtagMenuActions(mute: nil, follow: HashtagToggleActions(
             known: { _ in true },
             refresh: {},
             load: { _ in true },
@@ -301,7 +301,9 @@ struct OtherAccountMenuTests {
         let groups = MenuLayout<StatusMenuItem>.Groups(main: [.init([.hashtags])], more: [])
         _ = await bob.lookup(status(uri: uri))
 
-        let menu = try #require(node(tree(status(uri: uri), accounts: [bob], groups: groups)))
+        var shown = tree(status(uri: uri), accounts: [bob], groups: groups)
+        shown.otherAccountHashtagActions = { $0 === bob ? hashtagActions : nil }
+        let menu = try #require(node(shown))
         #expect(MenuNodeTests.describe(menu.children) == "#swift[フォローを外す]")
         let unfollow = try #require(menu.flattenedChildren.first?.flattenedChildren.first)
         guard case .otherAccount(let command) = unfollow.command, case .hashtag(let tag, .unfollow) = command.action else {
@@ -317,7 +319,7 @@ struct OtherAccountMenuTests {
         let found = Status(id: "7000", createdAt: Date(timeIntervalSince1970: 100), account: alice, content: "", spoilerText: "", uri: uri, url: nil, tags: [Tag(name: "swift", url: nil)])
         let bob = try account("bob", operations { _ in [found] })
         let refreshes = Mutex(0)
-        bob.hashtagActions = HashtagMenuActions(mute: nil, follow: HashtagToggleActions(
+        let hashtagActions = HashtagMenuActions(mute: nil, follow: HashtagToggleActions(
             known: { _ in false },
             refresh: { refreshes.withLock { $0 += 1 } },
             load: { _ in false },
@@ -326,7 +328,9 @@ struct OtherAccountMenuTests {
         ))
         let groups = MenuLayout<StatusMenuItem>.Groups(main: [.init([.author, .hashtags])], more: [])
         _ = await bob.lookup(status(uri: uri))
-        let built = tree(status(uri: uri), accounts: [bob], groups: groups).menu(groups: .single(.otherAccounts), includesFollowRequest: false)
+        var shown = tree(status(uri: uri), accounts: [bob], groups: groups)
+        shown.otherAccountHashtagActions = { $0 === bob ? hashtagActions : nil }
+        let built = shown.menu(groups: .single(.otherAccounts), includesFollowRequest: false)
         let before = refreshes.withLock { $0 }
 
         #expect(built.otherAccountRelationIDs(found, bob) == ["1"])

@@ -100,9 +100,6 @@ public final class OtherAccount {
     private var peopleFailures: [AccountLookup: any Error] = [:]
     /// プロフィールのURLごとの、走っている人の検索。同じ人を探しているときは、送り直さずに待つ。
     private var peopleSearches: [AccountLookup: Task<Void, Never>] = [:]
-    /// そのアカウントのハッシュタグのフォロー、ミュート、プロフィールでの紹介を読んで変えるもの。nilなら、それらの項目を出さない。
-    /// そのアカウントのクライアントで読むハッシュタグのリストが要るので、アプリが作って入れる。
-    public var hashtagActions: HashtagMenuActions?
     /// そのアカウント自身のプロフィール。読めるまでnil。
     public private(set) var profile: Account?
     private var profileLoad: Task<Void, Never>?

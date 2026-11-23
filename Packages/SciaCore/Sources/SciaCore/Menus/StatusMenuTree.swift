@@ -137,6 +137,9 @@ public struct StatusMenuTree {
     public var customEmoji: @MainActor (CustomEmoji) -> MenuNode<CustomEmojiMenuCommand>? = { _ in nil }
     /// 「別のアカウントで」に並べる、ログインしているほかのアカウント。空なら項目を出さない。
     public var otherAccounts: [OtherAccount] = []
+    /// 「別のアカウントで」の中の、そのアカウントのハッシュタグのフォロー、ミュート、プロフィールでの紹介を読んで変えるもの。nilなら、それらの項目を出さない。
+    /// アカウントはウィンドウをまたいで共有するが、済んだことと失敗は操作したウィンドウに出すので、メニューを出す側が渡す。
+    public var otherAccountHashtagActions: @MainActor (OtherAccount) -> HashtagMenuActions? = { _ in nil }
     /// 「別のアカウントで」の中の並び。投稿のメニューの、ほかのメニューの中に出すときの並び（`submenuGroups`）を渡す。
     public var otherAccountGroups: MenuLayout<StatusMenuItem>.Groups = StatusMenuItem.defaultLayout.groups
     /// ユーザーのメニューのサブメニューに付ける、その人のアイコン。nilならアイコンを付けない。
@@ -529,7 +532,7 @@ public struct StatusMenuTree {
         tree.userActions = account.userActions
         tree.userMenu = otherAccountUserGroups
         tree.hashtagMenu = hashtagMenu.excluding(Self.sameForEveryAccountHashtagItems)
-        tree.hashtagActions = account.hashtagActions
+        tree.hashtagActions = otherAccountHashtagActions(account)
         tree.booster = booster.flatMap(account.person)
         tree.notifyingAccounts = notifyingAccounts.compactMap(account.person)
         // IDはそのアカウントのサーバーのものなので、今のアカウントで同じ人をプロフィールのURLで探してアイコンを付ける。

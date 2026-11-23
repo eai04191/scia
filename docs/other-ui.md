@@ -20,6 +20,7 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 - 設定のストレージの「絵文字」の中の行は、`EmojiStorageRow.rows(_:)`で数える
 - `CrashMark`と`PostQuarantine`、`PostCrashReport`: クラッシュした投稿の隔離と、開発者に送る文章（[crash-quarantine.md](crash-quarantine.md)）。行の処理の前に印を付け、隠すのと送る画面はUIで書く
 - `AccountRegistry`と`KeychainCredentialStore(service:)`: ログインしたアカウント。サービス名はUIで決める
+- ログインしているアカウントごとの、「別のアカウントで」の部品（`OtherAccount`、そのアカウントのクライアント、ハッシュタグの状態、投稿欄の上限と既定値）は、アプリに1つ持ち、ウィンドウごとに作らない。使われたアカウントの分だけ作り、アカウントごとの`TaskScope`の子で始める。`AccountRegistry.accounts`を購読し、ログアウトしたアカウントと、ログインし直してトークンが変わったアカウントの部品は、その`TaskScope`を閉じて捨てる。ストリーミングはつながない。ウィンドウごとに持つのは、絵文字のパレットのメニュー、リアクションの絵文字を選ぶシート、ハッシュタグの操作の済んだことと失敗の知らせ先だけ。ハッシュタグの操作は`StatusMenuTree.otherAccountHashtagActions`で、メニューを出すウィンドウが渡す（iOSは`App/Sources/SignedInAccounts.swift`と`OtherAccounts.swift`）
 - ログアウトは`AccountLogout.logOut(_:from:defaults:settings:images:)`。アカウントのリストから消し、そのアカウントのために覚えた設定、メディアのキャッシュ、そのサーバーのカスタム絵文字のリストを消す。呼んだあと、そのアカウントのセッションを閉じ、残ったアカウントかログインの画面を出すのはUI。使う人がログアウトを選んだときだけ呼ぶ
 
 ## ログイン
@@ -127,7 +128,7 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 - `UserDisplayStore.save(_:for:in:imageData:)`と`remove(forKey:)`を編集・解除の入口にする。画像データはUIで切り抜いて渡す。永続化は`SettingsStore`へ委譲し、全ログインアカウントで共通、端末内保存、プリセット対象外。
 - SwiftUIは`UserDisplay`の読み取りを購読する。UIKitで描画済みの文字や画像を持つ画面は`UserDisplayStore.observeChanges()`を既存の描き直しの購読に含める。画面ごとに変更設定のキーや優先順位を判断しない。
 - `AccountSession`は`ReceivedAccounts`の更新をセッションの`TaskScope`で購読し、既存の`AccountCache`で最新の情報を確認して表示モデルへ伝える。元情報は変更しない。表示モデルは直近の最大2,000人を保持し、画面が持ち続けているモデルは保持枠から外れても共有と更新を維持する。
-- セッション以外で作るクライアントも、同じ取得元の`ReceivedAccounts`・`AccountCache`・`AppSettings`を`UserDisplayStore.connect(accounts:settings:received:tasks:)`へ渡す。取得元の`TaskScope`は呼び出し側で保持し、終了時に閉じる。別の窓の同じログインアカウントとは取得元を分ける。
+- セッション以外で作るクライアントも、同じ取得元の`ReceivedAccounts`・`AccountCache`・`AppSettings`を`UserDisplayStore.connect(accounts:settings:received:tasks:)`へ渡す。取得元の`TaskScope`は呼び出し側で保持し、終了時に閉じる。`ReceivedAccounts`の変化を読めるのは1か所だけなので、1つの取得元をつなぐのは1回にする。2回つなぐと、前のつなぎに変化が届かなくなる。`UserDisplayStore`は端末に1つなので、どのウィンドウから読む人も、つないだ1か所の変化で描き直る。窓に開いたアカウントのセッションとは取得元を分ける。
 - ローカルユーザーのキーには接続先でなくWebFingerドメインを使う。`AccountSession.loadUserDisplayDomain()`で取得・保持する。セッションを使わないUIは`MastodonClient.accountDomain()`の結果をアカウントごとの`AppSettings.setUserDisplayDomain(_:)`へ渡す。未取得ならローカルユーザーの保存は失敗する。編集前は`prepareUserDisplay(_:)`を待つ。一覧のハンドルから開くときは`resolveUserDisplayAccount(acct:)`で一致する人だけを解決する。
 - ハンドルしかない一覧では`UserDisplayLoader`で共有モデルを取得する。独自のアカウントキャッシュは持たず、未取得の元情報の通信と取消を画面の`TaskScope`で管理する。取得処理には`AccountSession.resolveUserDisplayAccount(acct:sharesRequests:)`へ`sharesRequests: false`を渡す。共有キャッシュの検索を待つと行の取り消しが検索へ伝わらないため、行の通信は共有しない。
 - 選択画像は`SettingsStore.userDisplayImageDirectory`に置く。テストでは一時ディレクトリを渡す。アイコンの読み込みは`ImageStores.avatars`を使う。
