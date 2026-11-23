@@ -2304,17 +2304,12 @@ final class SessionController {
     private func writingAccountChoices() -> [InlineComposeController.AccountChoice] {
         let others = otherAccounts.list()
         guard !others.isEmpty else { return [] }
-        let writing = composer.model.otherAccount?.id
-        let home = InlineComposeController.AccountChoice(
-            id: nil, username: credential.username, server: credential.server, isCurrent: writing == nil,
-            avatarURL: cachedMyAccount?.avatarStatic,
-            loadAvatarURL: { [weak self] in try? await self?.myAccount(purpose: .display).avatarStatic }
-        )
-        return [home] + others.map { account in
+        let writing = composer.model.writingAccountID
+        return ([homeComposeSource] + others.map(composeSource(for:))).map { source in
             InlineComposeController.AccountChoice(
-                id: account.credential.id, username: account.credential.username, server: account.credential.server, isCurrent: writing == account.credential.id,
-                avatarURL: account.profile?.avatarStatic,
-                loadAvatarURL: { await account.loadedProfile()?.avatarStatic }
+                id: source.id == credential.id ? nil : source.id, username: source.credential.username, server: source.credential.server, isCurrent: writing == source.id,
+                avatarURL: source.avatarURL,
+                loadAvatarURL: source.loadAvatarURL
             )
         }
     }
@@ -2325,10 +2320,9 @@ final class SessionController {
     /// 引用元は、替えた先のアカウントで引用できなければ替えずに知らせる。フォロワーだけが引用できる投稿などで、替えた先では断られるため。
     /// - Parameter id: 選んだアカウントの`Credential.id`。今のアカウントならnil。
     private func chooseWritingAccount(_ id: String?) {
-        let other = id.flatMap { otherAccounts.account(id: $0) }
         // 選んでいる間にログアウトしたアカウントには替えない。
-        guard id == nil || other != nil else { return }
-        let writing = other.map(composeAccount(for:))
+        guard let source = composeSource(for: id ?? credential.id) else { return }
+        let writing = id == nil ? nil : source.makeAccount()
         let model = composer.model
         guard let target = model.replyTo ?? model.quoteTarget else {
             writingAccountLookup.cancel()
@@ -2336,15 +2330,10 @@ final class SessionController {
             return
         }
         let isReply = model.replyTo != nil
-        let username = other?.credential.username ?? credential.username
-        writingAccountLookup.start(.action) { [weak self] () -> OtherAccount.Lookup in
-            if let other {
-                // 引用できるかは、替えた先のサーバーの引用の決まりで決めるので、読み終えてから探す。
-                if !isReply { _ = try? await other.loadedCapabilities() }
-                return await other.lookup(target)
-            }
-            if !isReply { _ = try? await self?.session.loadedCapabilities() }
-            return await self?.lookUpOnHome(target) ?? .notFound
+        writingAccountLookup.start(.action) { () -> OtherAccount.Lookup in
+            // 引用できるかは、替えた先のサーバーの引用の決まりで決めるので、読み終えてから探す。
+            if !isReply { await source.loadCapabilities() }
+            return await source.lookup(target)
         } isStillWanted: { [weak self] in
             let current = isReply ? self?.composer.model.replyTo : self?.composer.model.quoteTarget
             return current?.displayed.uri == target.displayed.uri
@@ -2357,14 +2346,13 @@ final class SessionController {
             switch lookup {
             case .found(let found):
                 // 引用に対応していないサーバーでも、引用できないものとして替えない。
-                let quotes = other?.capabilities.quotes ?? session.capabilities.quotes
-                if isReply || quotes.availability(of: found)?.canQuote == true {
+                if isReply || source.quoteRules().availability(of: found)?.canQuote == true {
                     composer.switchWritingAccount(to: writing, replyTo: isReply ? found : nil, quoteTarget: isReply ? nil : found)
                     return
                 }
-                reason = ErrorPresentation(message: SessionTexts.cannotQuote(username: username), code: nil)
+                reason = ErrorPresentation(message: SessionTexts.cannotQuote(username: source.credential.username), code: nil)
             case .notFound:
-                reason = ErrorPresentation(message: SessionTexts.cannotSee(username: username, isReply: isReply), code: nil)
+                reason = ErrorPresentation(message: SessionTexts.cannotSee(username: source.credential.username, isReply: isReply), code: nil)
             case .failed(let error):
                 reason = ErrorPresentation(error)
             }
@@ -2372,6 +2360,60 @@ final class SessionController {
                 self?.presentAlert(title: title, reason: reason)
             })
         }
+    }
+
+    /// 投稿欄で`id`のアカウントとして書くときの読み先。ログアウトしていればnil。
+    private func composeSource(for id: Credential.ID) -> ComposeSource? {
+        if id == credential.id { return homeComposeSource }
+        return otherAccounts.list(loadsProfiles: false).first { $0.credential.id == id }.map(composeSource(for:))
+    }
+
+    /// ウィンドウのアカウントとして書くときの読み先。セッションのクライアントと、セッションが読んだ値を使う。
+    private var homeComposeSource: ComposeSource {
+        ComposeSource(
+            credential: credential,
+            makeAccount: { [homeComposeAccount] in homeComposeAccount },
+            makeCompletionSources: { [completionSources] in completionSources },
+            displaySettings: settings,
+            loadDisplayDomain: nil,
+            defaults: { [session] in await session.composeDefaults() },
+            avatarURL: cachedMyAccount?.avatarStatic,
+            loadAvatarURL: { [weak self] in try? await self?.myAccount(purpose: .display).avatarStatic },
+            loadCapabilities: { [session] in _ = try? await session.loadedCapabilities() },
+            quoteRules: { [session] in session.capabilities.quotes },
+            lookup: { [weak self] status in await self?.lookUpOnHome(status) ?? .notFound }
+        )
+    }
+
+    /// ほかのアカウントとして書くときの読み先。そのアカウントのクライアントと、そのアカウントについて読んだ値を使う。
+    private func composeSource(for account: OtherAccount) -> ComposeSource {
+        let client = otherAccounts.client(for: account)
+        let displaySettings = otherAccounts.displaySettings(for: account)
+        return ComposeSource(
+            credential: account.credential,
+            makeAccount: { self.composeAccount(for: account) },
+            makeCompletionSources: {
+                CompletionModel.Sources(client: client).remembering(customEmojisIn: AppDependencies.customEmojis.cache(for: account.credential.instance))
+                    .readingPersonalEmojiSet(with: client) { try await account.loadedCapabilities { try await client.serverCapabilities() } }
+            },
+            displaySettings: displaySettings,
+            loadDisplayDomain: { [weak self] in
+                guard displaySettings.userDisplayDomain == nil else { return }
+                do {
+                    let domain = try await client.accountDomain()
+                    try Task.checkCancellation()
+                    displaySettings.setUserDisplayDomain(domain)
+                } catch {
+                    self?.logger.info("writing account domain unavailable error=\(SciaLog.describe(error), privacy: .public)")
+                }
+            },
+            defaults: otherAccounts.composeDefaults(of: account),
+            avatarURL: account.profile?.avatarStatic,
+            loadAvatarURL: { await account.loadedProfile()?.avatarStatic },
+            loadCapabilities: { _ = try? await account.loadedCapabilities() },
+            quoteRules: { account.capabilities.quotes },
+            lookup: { status in await account.lookup(status) }
+        )
     }
 
     /// 今のアカウントのサーバーで、`status`（ブーストなら元の投稿）をURIで探す。ほかのアカウントのサーバーの投稿を、今のアカウントの投稿に引き直すのに使う。
@@ -2423,81 +2465,48 @@ final class SessionController {
         }
     }
 
-    /// 投稿するアカウントを替えたら、補完と絵文字をそのアカウントのサーバーで探すようにし、投稿欄に書いているアカウントを出して、上限と既定値を読む。
+    /// 投稿するアカウントを替えたら、補完と絵文字をそのアカウントのサーバーで探すようにし、ほかのアカウントなら投稿欄に書いているアカウントを出して、上限と既定値を読む。
     private func composeAccountDidChange(_ writing: ComposeAccount<UIImage>?) {
-        guard let writing, let account = otherAccounts.account(id: writing.id) else {
-            composer.writingAccount = nil
-            composer.completionDisplaySettings = settings
-            composer.completion.switchSources(completionSources, recentMentions: RecentMentions(defaults: .standard, account: credential.handle))
-            composer.completion.prefetch()
-            applyComposeDefaults()
-            return
-        }
-        let client = otherAccounts.client(for: account)
-        let sources = CompletionModel.Sources(client: client).remembering(customEmojisIn: AppDependencies.customEmojis.cache(for: account.credential.instance))
-            .readingPersonalEmojiSet(with: client) { try await account.loadedCapabilities { try await client.serverCapabilities() } }
-        let displaySettings = otherAccounts.displaySettings(for: account)
-        composer.completionDisplaySettings = displaySettings
-        if displaySettings.userDisplayDomain == nil {
+        let source = writing.flatMap { composeSource(for: $0.id) } ?? homeComposeSource
+        composer.completionDisplaySettings = source.displaySettings
+        if let loadDisplayDomain = source.loadDisplayDomain {
             tasks.run(.display) { [weak self] in
-                do {
-                    let domain = try await client.accountDomain()
-                    try Task.checkCancellation()
-                    displaySettings.setUserDisplayDomain(domain)
-                    if self?.composer.model.otherAccount?.id == account.credential.id {
-                        self?.composer.completionDisplaySettings = displaySettings
-                    }
-                } catch {
-                    self?.logger.info("writing account domain unavailable error=\(SciaLog.describe(error), privacy: .public)")
+                await loadDisplayDomain()
+                if self?.composer.model.writingAccountID == source.id {
+                    self?.composer.completionDisplaySettings = source.displaySettings
                 }
             }
         }
-        composer.completion.switchSources(sources, recentMentions: RecentMentions(defaults: .standard, account: account.credential.handle))
+        composer.completion.switchSources(source.makeCompletionSources(), recentMentions: RecentMentions(defaults: .standard, account: source.credential.handle))
         // 開いている絵文字のパレットや補完が、替えた先のサーバーの絵文字とタグを読み直すよう、書き始めたときと同じく読み始める。
         composer.completion.prefetch()
-        composer.writingAccount = InlineComposeController.WritingAccount(username: account.credential.username, avatar: nil)
-        loadWritingAccountAvatar(of: account)
-        applyComposeDefaults(of: writing)
+        if source.id == credential.id {
+            composer.writingAccount = nil
+        } else {
+            composer.writingAccount = InlineComposeController.WritingAccount(username: source.credential.username, avatar: nil)
+            loadWritingAccountAvatar(of: source)
+        }
+        applyComposeDefaults()
     }
 
     /// 投稿欄の、書いているアカウントの行のアイコンを読む。読めなければ記号のままにする。
-    private func loadWritingAccountAvatar(of account: OtherAccount) {
+    private func loadWritingAccountAvatar(of source: ComposeSource) {
         let scale = tabs.tabBarController.traitCollection.displayScale
         let side = UIFontMetrics(forTextStyle: .footnote).scaledValue(for: 18)
         tasks.run(.display) { [weak self] in
-            guard let url = await account.loadedProfile()?.avatarStatic else { return }
+            guard let url = await source.loadAvatarURL() else { return }
             do {
                 let image = try await AppDependencies.avatarImages.image(for: AvatarView.key(url: url, animates: false, side: side, scale: scale))
-                guard let self, composer.model.otherAccount?.id == account.credential.id else { return }
+                guard let self, composer.model.writingAccountID == source.id else { return }
                 let icon = AvatarIcon.image(image, side: side, shape: settings.appearance.avatarShape)
-                composer.writingAccount = InlineComposeController.WritingAccount(username: account.credential.username, avatar: icon)
+                composer.writingAccount = InlineComposeController.WritingAccount(username: source.credential.username, avatar: icon)
             } catch {
                 self?.logger.error("writing account avatar load failed: \(SciaLog.describe(error), privacy: .public)")
             }
         }
     }
 
-    /// 書いているほかのアカウントのサーバーの上限と、そのアカウントの既定の公開範囲、閲覧注意、言語を読み、投稿欄に反映する。
-    /// 読み終える前に投稿するアカウントを替えていたら、投稿欄が使わない（`ComposeModel.apply`の`accountID`）。
-    private func applyComposeDefaults(of writing: ComposeAccount<UIImage>) {
-        guard let account = otherAccounts.account(id: writing.id) else { return }
-        let defaults = otherAccounts.composeDefaults(of: account)
-        composeDefaultsTask = tasks.run(.action) { [weak self] in
-            let loaded = await defaults()
-            let configuration = Self.composeConfiguration(loaded.configuration)
-            let preferences = loaded.preferences
-            self?.composer.model.apply(
-                configuration: configuration,
-                defaultVisibility: preferences?.defaultVisibility,
-                defaultSensitive: preferences?.defaultSensitive,
-                defaultLanguage: preferences.map(\.defaultLanguage),
-                defaultQuotePolicy: preferences.map(\.defaultQuotePolicy),
-                accountID: writing.id
-            )
-        }
-    }
-
-    /// ほかのアカウントのサーバーの上限を、投稿欄で使う形にする。デバッグ版では、メディアの上限の差し替えを入れる。
+    /// サーバーの上限を、投稿欄で使う形にする。デバッグ版では、メディアの上限の差し替えを入れる。
     private static func composeConfiguration(_ configuration: InstanceConfiguration?) -> InstanceConfiguration? {
         #if DEBUG
         DebugFaults.applyingMediaLimits(to: configuration)
@@ -4250,7 +4259,7 @@ final class SessionController {
     func rebindDraft() {
         let model = composer.model
         let writingID = model.writingAccountID
-        let writing = writingID == credential.id ? nil : otherAccounts.list(loadsProfiles: false).first { $0.credential.id == writingID }.map(composeAccount(for:))
+        let writing = writingID == credential.id ? nil : composeSource(for: writingID)?.makeAccount()
         switch model.rebind(home: homeComposeAccount, writing: writing) {
         case .awaitingRetarget:
             // 「投稿するアカウント」で今のアカウントを選んだときと同じく、返信先か引用元を探してから替え、見つからなければ替えずに知らせる。
@@ -4265,10 +4274,11 @@ final class SessionController {
     /// 書いていたアカウントからログアウトして外した返信先か引用元を、このアカウントのサーバーで探して付け直す。見つからないか引用できなければ、外したことを知らせる。
     /// 探し終えるまで投稿欄は投稿させない（`ComposeModel.pendingRetarget`）。探している間に返信先を付け直すか下書きを捨てていたら、何もしない。
     private func reattach(_ target: Status, isReply: Bool) {
-        writingAccountLookup.start(.action) { [weak self] () -> OtherAccount.Lookup in
+        let source = homeComposeSource
+        writingAccountLookup.start(.action) { () -> OtherAccount.Lookup in
             // 引用できるかは、このアカウントのサーバーの引用の決まりで決めるので、読み終えてから探す。
-            if !isReply { _ = try? await self?.session.loadedCapabilities() }
-            return await self?.lookUpOnHome(target) ?? .notFound
+            if !isReply { await source.loadCapabilities() }
+            return await source.lookup(target)
         } isStillWanted: { [weak self] in
             self?.composer.model.pendingRetarget?.status.displayed.uri == target.displayed.uri
         } completion: { [weak self] result in
@@ -4277,7 +4287,7 @@ final class SessionController {
             let reason: ErrorPresentation
             switch lookup {
             case .found(let found):
-                if isReply || session.capabilities.quotes.availability(of: found)?.canQuote == true {
+                if isReply || source.quoteRules().availability(of: found)?.canQuote == true {
                     composer.resolvePendingRetarget(found)
                     return
                 }
@@ -4310,19 +4320,21 @@ final class SessionController {
         }
     }
 
-    /// 既定の公開範囲などを読めたら、投稿欄に反映する。読めなかったら、次に書き始めたときに読み直す。
+    /// 書いているアカウントのサーバーの上限と、既定の公開範囲、閲覧注意、言語を読めたら、投稿欄に反映する。読めなかったら、次に書き始めたときに読み直す。
+    /// 読み終える前に書いているアカウントを替えていたら、投稿欄が使わない（`ComposeModel.apply`の`accountID`）。
     private func applyComposeDefaults() {
-        if let writing = composer.model.otherAccount {
-            applyComposeDefaults(of: writing)
-            return
-        }
+        guard let source = composeSource(for: composer.model.writingAccountID) else { return }
         composeDefaultsTask = tasks.run(.action) { [weak self] in
-            guard let self else { return }
-            #if DEBUG
-            await session.applyComposeDefaults(to: composer.model, adjustingConfiguration: DebugFaults.applyingMediaLimits(to:))
-            #else
-            await session.applyComposeDefaults(to: composer.model)
-            #endif
+            let loaded = await source.defaults()
+            let preferences = loaded.preferences
+            self?.composer.model.apply(
+                configuration: Self.composeConfiguration(loaded.configuration),
+                defaultVisibility: preferences?.defaultVisibility,
+                defaultSensitive: preferences?.defaultSensitive,
+                defaultLanguage: preferences.map(\.defaultLanguage),
+                defaultQuotePolicy: preferences.map(\.defaultQuotePolicy),
+                accountID: source.id
+            )
         }
     }
 

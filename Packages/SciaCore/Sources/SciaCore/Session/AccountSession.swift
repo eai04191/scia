@@ -476,6 +476,13 @@ public final class AccountSession {
         return adoptPreferences(updated, readAt: version)
     }
 
+    /// 投稿欄で使う、インスタンスの上限とアカウントの設定。読めなかった値はnilで、次に呼ばれたときに読み直す。
+    public func composeDefaults() async -> (configuration: InstanceConfiguration?, preferences: ServerPreferences?) {
+        async let configuration = loadInstanceConfiguration()
+        async let preferences = loadPreferences()
+        return await (configuration, preferences)
+    }
+
     /// インスタンスの上限と、アカウントの既定の公開範囲、閲覧注意、言語を読み、投稿欄に反映する。
     /// `ComposeModel`は反映するまで投稿させないので、書き始めるときに呼ぶ。読めなかった値は既定のまま使えるようにし、次に呼ばれたときに読み直す。
     /// - Parameter adjustingConfiguration: 反映する前に上限を差し替える。デバッグ版で、送る前に縮める流れを確かめるのに使う。
@@ -483,10 +490,9 @@ public final class AccountSession {
         to model: ComposeModel<Thumbnail>,
         adjustingConfiguration: (InstanceConfiguration?) -> InstanceConfiguration? = { $0 }
     ) async {
-        async let configuration = loadInstanceConfiguration()
-        async let preferences = loadPreferences()
-        let loaded = adjustingConfiguration(await configuration)
-        let loadedPreferences = await preferences
+        let defaults = await composeDefaults()
+        let loaded = adjustingConfiguration(defaults.configuration)
+        let loadedPreferences = defaults.preferences
         model.apply(configuration: loaded, defaultVisibility: loadedPreferences?.defaultVisibility, defaultSensitive: loadedPreferences?.defaultSensitive, defaultLanguage: loadedPreferences.map(\.defaultLanguage), defaultQuotePolicy: loadedPreferences.map(\.defaultQuotePolicy), accountID: credential.id)
     }
 }
