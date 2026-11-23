@@ -139,6 +139,13 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 }
                 continue
             }
+            if case .newWindow = url {
+                logger.info("debug url: \(context.url.absoluteString, privacy: .public)")
+                UIApplication.shared.activateSceneSession(for: UISceneSessionActivationRequest(role: .windowApplication)) { [logger] error in
+                    logger.error("new window failed: \(SciaLog.describe(error), privacy: .public)")
+                }
+                continue
+            }
             if case .account(let acct) = url {
                 logger.info("debug url: \(context.url.absoluteString, privacy: .public)")
                 switchAccount(toHandle: acct)

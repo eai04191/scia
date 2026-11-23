@@ -34,6 +34,8 @@ enum DebugURL: Equatable {
     case emojiReaction(statusID: String?, name: String, count: Int, me: Bool)
     /// `scia-debug://dummy-session`で、通信しないダミーのデータでホームと通知の画面に入る（`DummyServer`）。ログイン画面でも、ログイン済みでも受け付ける。
     case dummySession
+    /// `scia-debug://new-window`で、新しいウィンドウを開く。ウィンドウごとのアカウントを、Dockやメニューを触らずに確かめるため。セッションがなくても受け付ける。
+    case newWindow
     /// `scia-debug://unreadable`。以後のホームと通知の応答の一部を読めない形に壊し、読み込み直す。
     case unreadable
     /// `scia-debug://status/<ステータスコード>`。以後のREST APIにそのステータスのHTMLのエラーページを返させ、読み込み直す。
@@ -170,6 +172,7 @@ enum DebugURL: Equatable {
     /// 引数を持たないURL。`host`か`host/path`で引く。
     private static let fixed: [String: DebugURL] = [
         "dummy-session": .dummySession,
+        "new-window": .newWindow,
         "unauthorized": .unauthorized,
         "unreadable": .unreadable,
         "status/ok": .statusCleared,

@@ -73,7 +73,7 @@ extension SessionController {
         switch url {
         case .dummy(let post):
             home.streamDummy(post)
-        case .dummySession, .account, .hitAreas:
+        case .dummySession, .account, .hitAreas, .newWindow:
             // SceneDelegateが、セッションの有無にかかわらず先に受けるため、ここには来ない。
             break
         case .scenario(let event):

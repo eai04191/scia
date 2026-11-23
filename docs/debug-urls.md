@@ -5,6 +5,7 @@
 ## セッションとアカウント
 
 - `Tools/sim.sh ctl '<使う端末>' openurl 'scia-debug://dummy-session'`で、通信しないダミーの投稿と通知でホームと通知の画面に入れる。ログインしていない端末（機種ごとに作る一時的な端末など）でも、ログイン済みの端末でも入れる。ログイン画面のデバッグ用のボタン「ダミーのデータで入る」でも入れる。ログイン済みの端末では、アカウントのメニューにダミーのアカウントが並び、本物のアカウントを選ぶと戻る。Keychainには保存しないので、起動し直すと保存してあるアカウントかログイン画面に戻る。投稿への操作はサーバーに届かず失敗する。新しい端末では、最初にURLを送ったときに「“Scia”で開きますか？」が出るので、一度「開く」を押す必要がある
+- `scia-debug://new-window`で、新しいウィンドウを開く。iPadとMacで、ウィンドウごとのアカウント（docs/account-screen.mdの「ウィンドウとアカウント」）を確かめるのに使う。送ったURLは、いちばん手前のウィンドウが受ける
 - 絵文字のリアクション（Fedibirdの拡張、docs/emoji-reaction.md）の実物は、`Scia 4`に保存してあるFedibirdのアカウントで確かめる。`Tools/sim.sh acquire 'Scia 4'`で端末を指定して借り、`Tools/sim.sh ctl 'Scia 4' openurl 'scia-debug://account?acct=<ハンドル>'`で、メニューを触らずに保存してあるアカウントに切り替える。付け外しは、ほかの人に通知が届かないよう、そのアカウントの自分の投稿で試し、確かめたら外す。リアクションの通知は`Tools/inject/notification-emoji-reaction.json`を流して見る
 - ほかのサーバーのカスタム絵文字は、ログインせずに絵文字ピッカーへ出せる。`Tools/sim.sh ctl '<使う端末>' spawn defaults write net.mizle.scia debug.customEmojiHost <ホスト名>`を入れて起動し直すと、今のアカウントの絵文字のリストの代わりに、そのサーバーの`api/v1/custom_emojis`を読む。端末に残したリストと画像を使わせないときは、アプリのLibrary/Cachesの`CustomEmojis`と`EmojiImages`を消してから起動する。読んだリストは今のアカウントのサーバーのリストとして端末に残るので、確かめ終えたら`Tools/sim.sh ctl '<使う端末>' spawn defaults delete net.mizle.scia debug.customEmojiHost`で外し（`Tools/sim.sh reset`では外れない）、アプリを終了してLibrary/Cachesの`CustomEmojis`と`EmojiImages`を消す
 
