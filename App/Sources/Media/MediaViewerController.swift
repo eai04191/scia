@@ -66,6 +66,8 @@ final class MediaViewerController: UIViewController {
     private var dismissedHandlers: [() -> Void] = []
     /// 黒い下地。画像だけを動かし、下地はその場で濃くしたり薄くしたりする。
     private let backdrop = UIView()
+    /// 画面に収めるときに避ける幅を読む。ページは左右にめくると動くため、動かないビューアの画面で読み、各ページへ渡す。
+    private let reservedRegionsView = MediaViewerReservedRegionsView()
     /// 開閉とドラッグで動かす画像の複製。縦横比を保って枠を埋めるように切り抜くため、枠の形をサムネイルとビューアの画像のあいだで変えるだけで、
     /// サムネイルと同じ切り抜き方へ移る。
     private let morph = FocusCroppedImageView()
@@ -372,6 +374,15 @@ final class MediaViewerController: UIViewController {
         backdrop.frame = view.bounds
         backdrop.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(backdrop)
+        reservedRegionsView.frame = view.bounds
+        reservedRegionsView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        reservedRegionsView.onChange = { [weak self] regions in
+            guard let self else { return }
+            for page in self.pages.values {
+                page.reservedRegions = regions
+            }
+        }
+        view.addSubview(reservedRegionsView)
         overrideUserInterfaceStyle = .dark
         MediaDynamicRangeTraits.follow(self, settings: settings, { $0.viewerMediaDynamicRange }) { viewer, range in
             viewer.traitOverrides.imageDynamicRange = range
@@ -488,6 +499,9 @@ final class MediaViewerController: UIViewController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        // 回転で画面の大きさが変わったときに、ページを並べ直す前に避ける領域を読み直す。
+        reservedRegionsView.frame = view.bounds
+        reservedRegionsView.refresh()
         layOutPages()
         updateBottomCoveredHeight()
     }
@@ -515,8 +529,11 @@ final class MediaViewerController: UIViewController {
         guard isEditingDescription, descriptionEditor.isEditing, let page = pages[currentIndex] else { return .identity }
         // 枠は画面と同じ大きさで原点も同じなので、枠の座標がそのまま画面の座標になる。
         let content = page.view.convert(page.contentFrame, to: pageController.view)
-        // 上は書いていないときと同じく、ボタンや状態の表示と重ねてよい。ボタンは右上にしかなく、タップで隠せるため。
-        let available = CGRect(x: 0, y: 0, width: view.bounds.width, height: descriptionEditor.frame.minY)
+        // 上は書いていないときと同じく、ボタンや状態の表示と重ねてよい。ボタンは右上にしかなく、タップで隠せるため。アイランドなどの避ける範囲には重ねない。
+        let editableSize = CGSize(width: view.bounds.width, height: descriptionEditor.frame.minY)
+        // `fittingTransform`は画面に見えている部分だけを収めるので、避ける辺も見えている部分の大きさで決める。
+        let edges = MediaViewerFit.edges(for: content.intersection(view.bounds).size, avoiding: reservedRegionsView.regions, in: editableSize)
+        let available = CGRect(x: edges.left, y: edges.top, width: view.bounds.width - edges.left - edges.right, height: descriptionEditor.frame.minY - edges.top)
         return Self.fittingTransform(content: content, into: available, in: view.bounds)
     }
 
@@ -655,6 +672,7 @@ final class MediaViewerController: UIViewController {
         page.setChromeHidden(isChromeHidden, animated: false)
         page.onOpenInBrowser = { [weak self] url in self?.openInBrowser(url) }
         page.bottomCoveredHeight = captionCoveredHeight
+        page.reservedRegions = reservedRegionsView.regions
         page.isEditingDescription = isEditingDescription
         if let image = page as? ImagePageController {
             image.doubleTapZoomDuration = timing.doubleTapZoomDuration
@@ -1919,6 +1937,15 @@ class MediaPageController: UIViewController {
     /// 画面の下で、ビューアの説明に隠れている高さ。ページの中のボタンをこれより上に出す。
     var bottomCoveredHeight: CGFloat = 0
 
+    /// 画面に収めるときに避ける、画面を覆う領域。ページの枠の座標。
+    var reservedRegions: [CGRect] = [] {
+        didSet {
+            if reservedRegions != oldValue, isViewLoaded {
+                view.setNeedsLayout()
+            }
+        }
+    }
+
     /// ビューアで代替テキストを書いている。
     var isEditingDescription = false
 
@@ -1966,6 +1993,10 @@ extension MediaPageController: UIContextMenuInteractionDelegate {
 final class ImagePageController: MediaPageController {
     private let store: MediaImageStore<UIImage>
     private let zoomView = ZoomingImageView()
+
+    override var reservedRegions: [CGRect] {
+        didSet { zoomView.reservedRegions = reservedRegions }
+    }
     /// 読み込み中と、読み込めなかったことの表示。
     private let statusView = MediaStatusView()
     /// 閉じ始めに、ビューアが読み込み中や失敗の表示を薄くして消せるよう渡す。
@@ -2091,6 +2122,7 @@ final class ImagePageController: MediaPageController {
         super.viewDidLoad()
         zoomView.frame = view.bounds
         zoomView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        zoomView.reservedRegions = reservedRegions
         zoomView.onSingleTap = { [weak self] in self?.onSingleTap?() }
         zoomView.imageAccessibilityLabel = item.description
         view.addSubview(zoomView)
@@ -2458,7 +2490,7 @@ final class PlayerPageController: MediaPageController {
     /// 画面に収めた大きさの何倍まで拡大できるか。画像と同じにする。
     private static let maximumZoomScale: CGFloat = 4
     /// 映像の枠を決めたときの、ページの大きさ、映像の縦横比、拡大できるか。変わったら拡大を戻して決め直す。
-    private var fittedLayout: (size: CGSize, aspectRatio: CGFloat?, canZoom: Bool)?
+    private var fittedLayout: (size: CGSize, regions: [CGRect], edges: MediaViewerFit.Edges, aspectRatio: CGFloat?, canZoom: Bool)?
     /// 最初のコマを描いた。描くまでは、下に出しているサムネイルが拡大に付いてこないので、拡大させない。
     private var hasDisplayedVideo = false
 
@@ -2480,16 +2512,18 @@ final class PlayerPageController: MediaPageController {
     /// 映像を画面に収めた枠を拡大の中身にする。ページ全体を中身にすると、拡大したときに上下や左右の黒い余白まで動かせるため。
     private func layoutZoom() {
         let size = view.bounds.size
+        let regions = reservedRegions
         let aspectRatio = videoAspectRatio
         let canZoom = aspectRatio != nil && hasDisplayedVideo
-        if let fittedLayout, fittedLayout.size == size {
+        if let fittedLayout, fittedLayout.size == size, fittedLayout.regions == regions {
             // 再生する項目から分かった縦横比が添付ファイルの値とわずかに違っても、拡大して見ている途中では決め直さない。拡大が戻ってしまうため。
             if isZoomedIn || (fittedLayout.aspectRatio == aspectRatio && fittedLayout.canZoom == canZoom) { return }
         }
         guard size.width > 0, size.height > 0 else { return }
-        fittedLayout = (size, aspectRatio, canZoom)
+        let edges = aspectRatio.map { MediaViewerFit.edges(for: CGSize(width: $0, height: 1), avoiding: regions, in: size) } ?? .zero
+        fittedLayout = (size, regions, edges, aspectRatio, canZoom)
         zoomScroll.zoomScale = 1
-        let fitted = aspectRatio.map { AVMakeRect(aspectRatio: CGSize(width: $0, height: 1), insideRect: view.bounds).size } ?? size
+        let fitted = aspectRatio.map { MediaViewerFit.frame(contentSize: CGSize(width: $0, height: 1), in: size, avoiding: edges).size } ?? size
         playerController.view.frame = CGRect(origin: .zero, size: fitted)
         zoomScroll.contentSize = fitted
         zoomScroll.maximumZoomScale = canZoom ? Self.maximumZoomScale : 1
@@ -2497,9 +2531,8 @@ final class PlayerPageController: MediaPageController {
     }
 
     private func centerZoomContent() {
-        let horizontal = max((zoomScroll.bounds.width - zoomScroll.contentSize.width) / 2, 0)
-        let vertical = max((zoomScroll.bounds.height - zoomScroll.contentSize.height) / 2, 0)
-        zoomScroll.contentInset = UIEdgeInsets(top: vertical, left: horizontal, bottom: vertical, right: horizontal)
+        let edges = fittedLayout?.edges ?? .zero
+        zoomScroll.contentInset = UIEdgeInsets(MediaViewerFit.margins(contentSize: zoomScroll.contentSize, in: zoomScroll.bounds.size, avoiding: edges))
     }
 
     /// 動画の表示の準備が整うまでは、添付ファイルの縦横比で画面に収めた枠を返す。開く遷移はその準備より先に始まるため。
@@ -2510,7 +2543,11 @@ final class PlayerPageController: MediaPageController {
         }
         guard let aspectRatio = videoAspectRatio else { return view.bounds }
         // 映像の枠を決める前は、決めたときと同じ枠を計算で返す。
-        guard fittedLayout != nil else { return AVMakeRect(aspectRatio: CGSize(width: aspectRatio, height: 1), insideRect: view.bounds) }
+        guard fittedLayout != nil else {
+            let content = CGSize(width: aspectRatio, height: 1)
+            let edges = MediaViewerFit.edges(for: content, avoiding: reservedRegions, in: view.bounds.size)
+            return MediaViewerFit.frame(contentSize: content, in: view.bounds.size, avoiding: edges)
+        }
         return zoomScroll.convert(playerController.view.frame, to: view)
     }
 

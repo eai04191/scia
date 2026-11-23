@@ -51,6 +51,7 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 - 末尾の何行手前で続きを読み、どのギャップをどちらの端から読むかは`TimelineLoadTrigger`。結果を`approachEnd()`と`approachGap(_:from:)`に渡す
 - 引用元の囲みは、`session.statuses.quoteSources`を当てて出し、`onQuoteSourcesChange`で描き直す
 - サムネイルにどの画像を読むかは`MediaThumbnailSelection`に、`NetworkConditionsMonitor.thumbnailPolicy(settings:tuning:)`の条件を渡して決める
+- 添付ファイルのビューアで画像や動画を画面に収める大きさと置き場所は`MediaViewerFit`。避ける辺は、中身の大きさと予約領域（`UIView.ReservedRegion`の`occlusion`）の枠を`edges(for:avoiding:in:)`に渡して決める。収めた中身がかかる領域だけを避ける。拡大して画面より大きくなったら避けない
 
 - 一覧のモデルの始め方は、モデルごとに違う
   - `FeedTimelineModel`、`NotificationsModel`: 起動のときに読むなら`start(purpose:)`、開くまで読まないなら、画面に出るたびに`startIfNeeded()`。`startIfNeeded()`は何度呼んでもよい

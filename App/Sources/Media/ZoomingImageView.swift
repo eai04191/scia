@@ -178,10 +178,23 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
 
     /// 倍率を決めたときの大きさ。画像の差し替えでも倍率を決め直すため、レイアウトの時点の大きさではなく、こちらと比べる。
     private var fittedBoundsSize: CGSize = .zero
+    /// 倍率を決めたときの、画面に収めるときに避ける幅。
+    private var fittedEdges: MediaViewerFit.Edges = .zero
+
+    /// 画面に収めるときに避ける、画面を覆う領域。自身の枠の座標。
+    var reservedRegions: [CGRect] = [] {
+        didSet {
+            if reservedRegions != oldValue {
+                setNeedsLayout()
+            }
+        }
+    }
+    /// 倍率を決めたときの、画面を覆う領域。
+    private var fittedRegions: [CGRect] = []
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        if bounds.size != fittedBoundsSize {
+        if bounds.size != fittedBoundsSize || reservedRegions != fittedRegions {
             updateZoomScales(resetting: true)
         }
         centerImage()
@@ -191,7 +204,9 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
     private func updateZoomScales(resetting: Bool) {
         guard let size = imageView.image?.size, size.width > 0, size.height > 0, bounds.width > 0, bounds.height > 0 else { return }
         fittedBoundsSize = bounds.size
-        let fit = min(bounds.width / size.width, bounds.height / size.height)
+        fittedRegions = reservedRegions
+        fittedEdges = MediaViewerFit.edges(for: size, avoiding: fittedRegions, in: bounds.size)
+        let fit = MediaViewerFit.scale(contentSize: size, in: bounds.size, avoiding: fittedEdges)
         let previousImageWidth = imageView.frame.width
         let previousCenter = normalizedVisibleCenter()
         // 倍率の範囲が前の画像のままだと、1への切り替えが範囲へ切り上げられ、拡大した状態の`imageView`に大きさを設定してしまう。
@@ -220,7 +235,7 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
     /// 等倍で出したときの大きさの、画面に収めた大きさに対する割合。1を超えない。等倍が分からないか、ほぼ画面に収まるなら1。
     private func naturalRatio() -> CGFloat {
         guard let naturalSize, naturalSize.width > 0, naturalSize.height > 0 else { return 1 }
-        let ratio = 1 / min(bounds.width / naturalSize.width, bounds.height / naturalSize.height)
+        let ratio = 1 / MediaViewerFit.scale(contentSize: naturalSize, in: bounds.size, avoiding: fittedEdges)
         return ratio >= Self.nearFitRatio ? 1 : ratio
     }
 
@@ -229,6 +244,7 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
         """
         bounds: \(bounds.size)
         fittedBoundsSize: \(fittedBoundsSize)
+        fittedEdges: \(fittedEdges)
         imageSize: \(imageView.image.map { "\($0.size) scale=\($0.scale)" } ?? "nil")
         animation: \(animation.map { "\($0.frameCount) frames \($0.frameWidth)x\($0.frameHeight)" } ?? "nil")
         naturalSize: \(naturalSize.map { "\($0)" } ?? "nil")
@@ -261,11 +277,9 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
         contentOffset = CGPoint(x: min(max(target.x, minOffset.x), maxOffset.x), y: min(max(target.y, minOffset.y), maxOffset.y))
     }
 
-    /// 画面より小さいときは真ん中に置く。
+    /// 画面より小さいときは、避ける範囲にかからないよう真ん中に置く。
     private func centerImage() {
-        let horizontal = max((bounds.width - contentSize.width) / 2, 0)
-        let vertical = max((bounds.height - contentSize.height) / 2, 0)
-        contentInset = UIEdgeInsets(top: vertical, left: horizontal, bottom: vertical, right: horizontal)
+        contentInset = UIEdgeInsets(MediaViewerFit.margins(contentSize: contentSize, in: bounds.size, avoiding: fittedEdges))
     }
 
     @objc private func doubleTapped(_ recognizer: UITapGestureRecognizer) {
