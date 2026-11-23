@@ -121,7 +121,7 @@ struct ComposeModelScheduleTests {
             sent.append(draft)
             if fails { throw URLError(.timedOut) }
         }
-        model.onScheduleRewritten = { rewritten.append($0) }
+        model.setHomeHandlers(onScheduleRewritten: { rewritten.append($0) })
         let scheduled = scheduled(inReplyToID: "5")
 
         model.beginRewriting(scheduled)
@@ -161,7 +161,7 @@ struct ComposeModelScheduleTests {
         var sent: [StatusDraft] = []
         var rewritten: [ScheduledStatus.ID] = []
         let model = makeModel { sent.append($0) }
-        model.onScheduleRewritten = { rewritten.append($0) }
+        model.setHomeHandlers(onScheduleRewritten: { rewritten.append($0) })
         let scheduled = scheduled(inReplyToID: "5")
         model.beginRewriting(scheduled)
 
@@ -252,7 +252,7 @@ struct ComposeModelScheduleTests {
     @Test func resetStopsRewritingWithoutCancelling() async {
         var rewritten: [ScheduledStatus.ID] = []
         let model = makeModel { _ in }
-        model.onScheduleRewritten = { rewritten.append($0) }
+        model.setHomeHandlers(onScheduleRewritten: { rewritten.append($0) })
         model.beginRewriting(scheduled())
 
         model.reset()

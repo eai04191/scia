@@ -214,7 +214,7 @@ struct ComposeModelAccountTests {
         let deleted = Posted()
         let model = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }
         var homeDeleted: [String] = []
-        model.onRedraftDeleted = { homeDeleted.append($0) }
+        model.setHomeHandlers(onRedraftDeleted: { homeDeleted.append($0) })
         model.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
         let redraft = ComposeRedraftService(
             deleteStatus: { id in deleted.texts.withLock { $0.append("delete:\(id)") } },
@@ -256,161 +256,245 @@ struct ComposeModelAccountTests {
         #expect(model.pollLimits == limits)
     }
 
-    // MARK: - 同じアカウントにログインし直したあとの引き継ぎ
+    // MARK: - アカウントを替えて画面を作り直したとき
 
-    /// 同じアカウントにログインし直して画面を作り直しても、書いた本文、注意書き、返信先、選んだ公開範囲と言語を残し、新しい画面の送り先で送る。
-    /// 上限と既定値は新しい画面で読み直す。読み直しても、選んだ公開範囲と言語は上書きしない。
-    @Test func adoptsDraftAfterLoggingInAgain() async throws {
+    /// ウィンドウのアカウントを`server`のアカウントにしたときの送り先。送ったものを`posted`に`server:本文:返信先`で残す。
+    private func home(_ id: String, myAccountID: String, uploads: Uploads, posted: Posted) -> ComposeAccount<Never> {
+        ComposeAccount(id: id, myAccountID: myAccountID, media: uploads.service(server: "\(id).example")) { draft in
+            posted.texts.withLock { $0.append("\(id):\(draft.text):\(draft.inReplyToID ?? "-")") }
+        }
+    }
+
+    /// ウィンドウのアカウントで書いていた下書きは、ウィンドウのアカウントを切り替えると、切り替えた先のアカウントで書く形になる。
+    /// 本文は残し、添付は切り替えた先のサーバーの上限を読んでからアップロードし直す。
+    @Test func followsWindowAccountWhenSwitched() async throws {
         let posted = Posted()
-        let previous = ComposeModel(tasks: TaskScope(), myAccountID: "1") { draft in
-            posted.texts.withLock { $0.append("previous:\(draft.text)") }
-        }
-        previous.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
-        previous.setReplyTarget(status(id: "10"))
-        previous.text += "了解"
-        previous.showsSpoiler = true
-        previous.spoilerText = "注意"
-        previous.choose(.unlisted)
-        previous.choose(language: "en")
-        let text = previous.text
-
-        let renewed = ComposeModel(tasks: TaskScope(), myAccountID: "1") { draft in
-            posted.texts.withLock { $0.append("renewed:\(draft.text):\(draft.inReplyToID ?? "-")") }
-        }
-        renewed.adoptDraft(from: previous, otherAccount: nil)
-
-        #expect(renewed.text == text)
-        #expect(renewed.spoilerText == "注意")
-        #expect(renewed.showsSpoiler)
-        #expect(renewed.replyTo?.id == "10")
-        #expect(renewed.hasWrittenContent)
-
-        renewed.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil, defaultLanguage: "ja")
-        #expect(renewed.visibility == .unlisted)
-        #expect(renewed.language == "en")
-        await renewed.submit()
-        #expect(posted.texts.withLock { $0 } == ["renewed:\(text):10"])
-    }
-
-    /// アップロードが済んだ添付は、同じアカウントのメディアなので、送り直さずに使う。済んでいない添付は、新しい画面で上限を読んでから送り直す。
-    /// 前の画面の送りかけは、前の画面を止めたあとに応答が届いても、引き継いだ下書きを書き換えない。
-    @Test func keepsUploadedAttachmentsAndReuploadsUnfinishedOnesAfterLoggingInAgain() async throws {
-        let previousUploads = Uploads()
-        let renewedUploads = Uploads()
-        let gate = Gate()
-        let previousTasks = TaskScope()
-        let previous = ComposeModel(tasks: previousTasks, myAccountID: "1", media: previousUploads.service(server: "previous.example", gate: gate, gatedFilename: "b.jpg")) { _ in }
-        previous.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
-        previous.applyPickerSelection([try picked("a"), try picked("b")])
-        try await waitUntil {
-            previous.attachments.first?.serverID == "previous.example-a.jpg" && previousUploads.names.withLock { $0.contains("previous.example:b.jpg") }
-        }
-
-        let renewed = ComposeModel(tasks: TaskScope(), myAccountID: "1", media: renewedUploads.service(server: "renewed.example")) { _ in }
-        renewed.adoptDraft(from: previous, otherAccount: nil)
-        previousTasks.close()
-        gate.open()
-
-        #expect(renewed.attachments.map(\.serverID) == ["previous.example-a.jpg", nil])
-        #expect(previous.attachments.isEmpty)
-        renewed.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
-        try await waitUntil { renewed.attachments.last?.serverID == "renewed.example-b.jpg" }
-        #expect(renewed.attachments.first?.serverID == "previous.example-a.jpg")
-        #expect(renewedUploads.names.withLock { $0 } == ["renewed.example:b.jpg"])
-    }
-
-    /// 編集の途中でログインし直しても、編集している投稿を引き継ぐ。
-    @Test func adoptsEditAfterLoggingInAgain() throws {
-        let previous = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }
-        #expect(previous.beginEditing(status(id: "10", accountID: "1"), source: StatusSource(id: "10", text: "前の本文", spoilerText: "")))
-        previous.text = "直した本文"
-
-        let renewed = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }
-        renewed.adoptDraft(from: previous, otherAccount: nil)
-
-        #expect(renewed.editedStatus?.id == "10")
-        #expect(renewed.text == "直した本文")
-    }
-
-    /// ほかのアカウントで書いている途中にログインし直しても、そのアカウントで書いたままにする。
-    @Test func adoptsOtherAccountAfterLoggingInAgain() async throws {
-        let posted = Posted()
-        let previous = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }
-        previous.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
-        previous.switchAccount(to: other(Uploads(), posted: posted))
-        previous.text = "別のアカウントから"
-
-        let renewed = ComposeModel(tasks: TaskScope(), myAccountID: "1") { draft in
-            posted.texts.withLock { $0.append("home:\(draft.text)") }
-        }
-        var changes: [String?] = []
-        renewed.onAccountChange = { changes.append($0?.id) }
-        renewed.adoptDraft(from: previous, otherAccount: other(Uploads(), posted: posted))
-
-        #expect(renewed.myAccountID == "50")
-        #expect(changes == ["other"])
-        renewed.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil, accountID: "other")
-        await renewed.submit()
-        #expect(posted.texts.withLock { $0 } == ["other:別のアカウントから"])
-    }
-
-    /// 代替テキストを送っている途中にログインし直しても、新しい画面で送り直す。送り直さないと、送り終えるのを待つ投稿が進まなくなるため。
-    @Test func resendsPendingDescriptionAfterLoggingInAgain() async throws {
-        let media = MediaAttachment(id: "m1", type: .image, url: URL(string: "https://home.example/m.jpg"), previewUrl: nil)
-        let gate = Gate()
-        var previousService = ComposeMediaService.unavailable
-        previousService.updateDescription = { id, description in
-            try await gate.wait()
-            return MediaAttachment(id: id, type: .image, url: media.url, previewUrl: nil, description: description)
-        }
-        let previousTasks = TaskScope()
-        let previous = ComposeModel(tasks: previousTasks, myAccountID: "1", media: previousService) { _ in }
-        let scheduled = ScheduledStatus(id: "s1", scheduledAt: Date(timeIntervalSince1970: 2_000_000_000), params: .init(text: "予約", mediaIDs: ["m1"]), mediaAttachments: [media])
-        #expect(previous.beginRewriting(scheduled))
-        previous.setDescription("書いた代替テキスト", of: try #require(previous.attachments.first?.id))
-        try await waitUntil { gate.waiterCount == 1 }
-
-        let sent = Mutex<[String]>([])
-        var renewedService = ComposeMediaService.unavailable
-        renewedService.updateDescription = { id, description in
-            sent.withLock { $0.append(description) }
-            return MediaAttachment(id: id, type: .image, url: media.url, previewUrl: nil, description: description)
-        }
-        let renewed = ComposeModel(tasks: TaskScope(), myAccountID: "1", media: renewedService) { _ in }
-        renewed.adoptDraft(from: previous, otherAccount: nil)
-        previousTasks.close()
-
-        try await waitUntil { renewed.isMediaReady }
-        #expect(sent.withLock { $0 } == ["書いた代替テキスト"])
-    }
-
-    /// ペーストや共有で足したメディアを読み込んでいる途中にログインし直しても、読み込んだファイルを前の画面の処理が消さず、新しい画面で送る。
-    /// 読み込みは1回きりで、新しい画面も同じ読み込みの結果を使うため。
-    @Test func keepsFileStillLoadingWhenLoggingInAgain() async throws {
-        let file = try picked("pasted")
-        let loaded = try await file.load([])
-        let gate = Gate()
-        // アプリのペーストと共有の読み込みは、始めた1つの読み込みの結果を何度でも返す。
-        let loading = Task {
-            try await gate.wait()
-            return loaded
-        }
-        let previousTasks = TaskScope()
-        let previous = ComposeModel(tasks: previousTasks, myAccountID: "1") { _ in }
-        previous.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
-        previous.addPastedMedia([PastedMedia(kind: .image, load: { try await loading.value })])
-        try await waitUntil { gate.waiterCount == 1 }
-
         let uploads = Uploads()
-        let renewed = ComposeModel(tasks: TaskScope(), myAccountID: "1", media: uploads.service(server: "renewed.example")) { _ in }
-        renewed.adoptDraft(from: previous, otherAccount: nil)
-        previousTasks.close()
-        gate.open()
-        await previousTasks.waitForRunning()
+        let model = ComposeModel(tasks: TaskScope(), home: home("a", myAccountID: "1", uploads: uploads, posted: posted))
+        model.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
+        model.text = "書きかけ"
+        model.applyPickerSelection([try picked("p")])
+        try await waitUntil { model.attachments.first?.serverID == "a.example-p.jpg" }
 
-        #expect(FileManager.default.fileExists(atPath: loaded.url.path))
-        renewed.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
-        try await waitUntil { renewed.isMediaReady }
-        #expect(uploads.names.withLock { $0 } == ["renewed.example:pasted.jpg"])
+        let rebinding = model.rebind(home: home("b", myAccountID: "2", uploads: uploads, posted: posted), writing: home("a", myAccountID: "1", uploads: uploads, posted: posted))
+
+        guard case .followed = rebinding else { Issue.record("\(rebinding)"); return }
+        #expect(model.otherAccount == nil)
+        #expect(model.myAccountID == "2")
+        #expect(model.text == "書きかけ")
+        #expect(!model.canPost)
+        model.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
+        try await waitUntil { model.attachments.first?.serverID == "b.example-p.jpg" }
+        await model.submit()
+        #expect(posted.texts.withLock { $0 } == ["b:書きかけ:-"])
+    }
+
+    /// 返信を書いていたら、切り替えた先のサーバーで返信先を探し直すまで、書いていたアカウントのまま残す。
+    @Test func keepsWritingAccountUntilReplyTargetIsFound() throws {
+        let posted = Posted()
+        let uploads = Uploads()
+        let model = ComposeModel(tasks: TaskScope(), home: home("a", myAccountID: "1", uploads: uploads, posted: posted))
+        model.setReplyTarget(status(id: "10"))
+        var changes: [String?] = []
+        model.onAccountChange = { changes.append($0?.id) }
+
+        let rebinding = model.rebind(home: home("b", myAccountID: "2", uploads: uploads, posted: posted), writing: home("a", myAccountID: "1", uploads: uploads, posted: posted))
+
+        guard case .awaitingRetarget(let target, let isReply) = rebinding else { Issue.record("\(rebinding)"); return }
+        #expect(target.id == "10")
+        #expect(isReply)
+        #expect(model.otherAccount?.id == "a")
+        #expect(model.replyTo?.id == "10")
+        #expect(changes == ["a"])
+    }
+
+    /// 編集の途中は、切り替えた先では続けられないので、書いていたアカウントのまま残す。
+    @Test func keepsWritingAccountWhileEditing() throws {
+        let posted = Posted()
+        let uploads = Uploads()
+        let model = ComposeModel(tasks: TaskScope(), home: home("a", myAccountID: "1", uploads: uploads, posted: posted))
+        #expect(model.beginEditing(status(id: "10", accountID: "1"), source: StatusSource(id: "10", text: "前の本文", spoilerText: "")))
+
+        let rebinding = model.rebind(home: home("b", myAccountID: "2", uploads: uploads, posted: posted), writing: home("a", myAccountID: "1", uploads: uploads, posted: posted))
+
+        guard case .kept = rebinding else { Issue.record("\(rebinding)"); return }
+        #expect(model.otherAccount?.id == "a")
+        #expect(model.editedStatus?.id == "10")
+    }
+
+    /// 「投稿するアカウント」で選んでいたアカウントは、ウィンドウを別のアカウントに切り替えても、選んだまま残す。
+    /// 切り替えた先が選んでいたアカウントなら、ウィンドウのアカウントで書く形にし、同じサーバーなので添付はアップロードし直さない。
+    @Test func keepsChosenAccountAndBecomesHomeWhenWindowSwitchesToIt() async throws {
+        let posted = Posted()
+        let uploads = Uploads()
+        let model = ComposeModel(tasks: TaskScope(), home: home("a", myAccountID: "1", uploads: uploads, posted: posted))
+        model.switchAccount(to: home("c", myAccountID: "3", uploads: uploads, posted: posted))
+        model.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil, accountID: "c")
+        model.applyPickerSelection([try picked("p")])
+        try await waitUntil { model.attachments.first?.serverID == "c.example-p.jpg" }
+
+        let toB = model.rebind(home: home("b", myAccountID: "2", uploads: uploads, posted: posted), writing: home("c", myAccountID: "3", uploads: uploads, posted: posted))
+        guard case .kept = toB else { Issue.record("\(toB)"); return }
+        #expect(model.otherAccount?.id == "c")
+
+        let toC = model.rebind(home: home("c", myAccountID: "3", uploads: uploads, posted: posted), writing: nil)
+        guard case .kept = toC else { Issue.record("\(toC)"); return }
+        #expect(model.otherAccount == nil)
+        #expect(model.canPost)
+        #expect(model.attachments.first?.serverID == "c.example-p.jpg")
+        #expect(uploads.names.withLock { $0 } == ["c.example:p.jpg"])
+    }
+
+    /// 同じアカウントにログインし直したら、下書きも添付もそのまま、新しい送り先で送る。
+    @Test func keepsDraftAndUsesNewTokenAfterLoggingInAgain() async throws {
+        let posted = Posted()
+        let uploads = Uploads()
+        let model = ComposeModel(tasks: TaskScope(), home: home("a", myAccountID: "1", uploads: uploads, posted: posted))
+        model.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
+        model.setReplyTarget(status(id: "10"))
+        model.text += "了解"
+        let renewed = ComposeAccount<Never>(id: "a", myAccountID: "1", media: uploads.service(server: "a.example")) { draft in
+            posted.texts.withLock { $0.append("renewed:\(draft.inReplyToID ?? "-")") }
+        }
+
+        let rebinding = model.rebind(home: renewed, writing: nil)
+
+        guard case .kept = rebinding else { Issue.record("\(rebinding)"); return }
+        #expect(model.replyTo?.id == "10")
+        await model.submit()
+        #expect(posted.texts.withLock { $0 } == ["renewed:10"])
+    }
+
+    /// 書いていたアカウントからログアウトしていたら、下書きを残してウィンドウのアカウントに戻す。返信先はそのサーバーでのIDなので外し、呼ぶ側が探し直せるよう返す。
+    @Test func returnsToWindowAccountWhenWritingAccountIsLoggedOut() throws {
+        let posted = Posted()
+        let uploads = Uploads()
+        let model = ComposeModel(tasks: TaskScope(), home: home("a", myAccountID: "1", uploads: uploads, posted: posted))
+        model.switchAccount(to: home("c", myAccountID: "3", uploads: uploads, posted: posted))
+        model.setReplyTarget(status(id: "10"))
+        model.text += "了解"
+
+        let rebinding = model.rebind(home: home("a", myAccountID: "1", uploads: uploads, posted: posted), writing: nil)
+
+        guard case .returned(let dropped, let isReply) = rebinding else { Issue.record("\(rebinding)"); return }
+        #expect(dropped?.id == "10")
+        #expect(isReply)
+        #expect(model.otherAccount == nil)
+        #expect(model.replyTo == nil)
+        #expect(model.text.hasSuffix("了解"))
+    }
+
+    /// ログアウトしたアカウントの投稿の編集は、ウィンドウのアカウントでは続けられないので捨てる。
+    @Test func discardsEditOfLoggedOutAccount() throws {
+        let posted = Posted()
+        let uploads = Uploads()
+        let model = ComposeModel(tasks: TaskScope(), home: home("a", myAccountID: "1", uploads: uploads, posted: posted))
+        let other = home("c", myAccountID: "3", uploads: uploads, posted: posted)
+        #expect(model.beginEditing(status(id: "700", accountID: "3"), source: StatusSource(id: "700", text: "前の本文", spoilerText: ""), as: other))
+        #expect(model.pointsToServerPost)
+
+        let rebinding = model.rebind(home: home("a", myAccountID: "1", uploads: uploads, posted: posted), writing: nil)
+
+        guard case .discarded = rebinding else { Issue.record("\(rebinding)"); return }
+        #expect(model.editedStatus == nil)
+        #expect(model.otherAccount == nil)
+        #expect(!model.hasWrittenContent)
+    }
+
+    /// 送っている間にウィンドウのアカウントを切り替えても、送った結果は送り始めたアカウントに知らせる。切り替えた先の一覧に入れないため。
+    @Test func reportsSubmissionToAccountThatStartedIt() async throws {
+        let gate = Gate()
+        var received: [String] = []
+        let a = ComposeAccount<Never>(id: "a", myAccountID: "1", media: .unavailable, onSubmitted: { _ in received.append("a") }) { draft in
+            try await gate.wait()
+            return .stub(for: draft)
+        }
+        let model = ComposeModel(tasks: TaskScope(), home: a)
+        model.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
+        model.text = "Aの投稿"
+        let sending = model.tasks.run(.action) { await model.submit() }
+        try await waitUntil { gate.waiterCount >= 1 }
+
+        let b = ComposeAccount<Never>(id: "b", myAccountID: "2", media: .unavailable, onSubmitted: { _ in received.append("b") }) { .stub(for: $0) }
+        let rebuiltA = ComposeAccount<Never>(id: "a", myAccountID: "1", media: .unavailable, onSubmitted: { _ in received.append("rebuilt a") }) { .stub(for: $0) }
+        model.rebind(home: b, writing: rebuiltA)
+        gate.open()
+        await sending?.value
+
+        #expect(received == ["a"])
+    }
+
+    /// 添付の準備を待って送る途中に、書いていたアカウントからログアウトしたら、待つのをやめて下書きを残す。使う人が選んでいないウィンドウのアカウントで送らないため。
+    @Test func stopsWaitingToPostWhenWritingAccountIsLoggedOut() async throws {
+        let posted = Posted()
+        let uploads = Uploads()
+        let gate = Gate()
+        let a = ComposeAccount<Never>(id: "a", myAccountID: "1", media: uploads.service(server: "a.example", gate: gate)) { draft in
+            posted.texts.withLock { $0.append("a:\(draft.text)") }
+        }
+        let model = ComposeModel(tasks: TaskScope(), home: a)
+        model.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
+        model.text = "Aで送る投稿"
+        model.applyPickerSelection([try picked("p")])
+        try await waitUntil { gate.waiterCount >= 1 }
+        let sending = model.tasks.run(.action) { await model.submit() }
+        try await waitUntil { model.isWaitingForMedia }
+
+        model.rebind(home: home("b", myAccountID: "2", uploads: uploads, posted: posted), writing: nil)
+        model.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
+        gate.open()
+        await sending?.value
+        try await waitUntil { model.attachments.first?.serverID == "b.example-p.jpg" }
+
+        #expect(posted.texts.withLock { $0 }.isEmpty)
+        #expect(model.text == "Aで送る投稿")
+    }
+
+    /// ログアウトで外した返信先を探している間は投稿させない。見つかったら付け直し、下書きを捨てたら探していた返信先は付けない。
+    @Test func holdsPostingUntilDroppedReplyTargetIsResolved() throws {
+        let posted = Posted()
+        let uploads = Uploads()
+        let model = ComposeModel(tasks: TaskScope(), home: home("a", myAccountID: "1", uploads: uploads, posted: posted))
+        model.switchAccount(to: home("c", myAccountID: "3", uploads: uploads, posted: posted))
+        model.setReplyTarget(status(id: "10"))
+        model.text += "了解"
+        model.rebind(home: home("a", myAccountID: "1", uploads: uploads, posted: posted), writing: nil)
+        model.apply(configuration: configuration, defaultVisibility: .public, defaultSensitive: nil)
+
+        #expect(model.pendingRetarget?.status.id == "10")
+        #expect(!model.canPost)
+        model.resolvePendingRetarget(status(id: "20"))
+        #expect(model.replyTo?.id == "20")
+        #expect(model.canPost)
+
+        model.switchAccount(to: home("c", myAccountID: "3", uploads: uploads, posted: posted))
+        model.setReplyTarget(status(id: "30"))
+        model.rebind(home: home("a", myAccountID: "1", uploads: uploads, posted: posted), writing: nil)
+        model.reset()
+        #expect(model.pendingRetarget == nil)
+        model.resolvePendingRetarget(status(id: "40"))
+        #expect(model.replyTo == nil)
+    }
+
+    /// 前の画面一式が読んでいたウィンドウのアカウントの上限と既定値は、切り替えたあとに届いても使わない。切り替えた先の既定の公開範囲を読む前に投稿させないため。
+    @Test func ignoresDefaultsOfPreviousWindowAccount() async throws {
+        let gate = Gate()
+        let previous = AccountSession.testing(transport: RoutedTransport { _ in
+            try await gate.wait()
+            return (404, Data())
+        })
+        defer { previous.close() }
+        let model = ComposeModel(tasks: TaskScope(), home: ComposeAccount(id: previous.credential.id, myAccountID: previous.credential.accountID, media: .unavailable) { .stub(for: $0) })
+        model.text = "切り替えた先の既定値を読む前の投稿"
+        let applying = previous.tasks.run(.action) { await previous.applyComposeDefaults(to: model) }
+        try await waitUntil { gate.waiterCount >= 1 }
+        previous.close()
+
+        model.rebind(home: ComposeAccount(id: "b", myAccountID: "2", media: .unavailable) { .stub(for: $0) }, writing: ComposeAccount(id: previous.credential.id, myAccountID: previous.credential.accountID, media: .unavailable) { .stub(for: $0) })
+        gate.open()
+        await applying?.value
+
+        #expect(model.writingAccountID == "b")
+        #expect(!model.canPost)
     }
 }

@@ -96,6 +96,10 @@ public enum SessionTexts {
         public static let notificationPolicy = "通知のフィルタリングを変更できませんでした"
         public static let openStatus = "投稿を開けませんでした"
         public static let switchWritingAccount = "投稿するアカウントを替えられませんでした"
+        /// 書いていたアカウントからログアウトして投稿欄を今のアカウントに戻したとき、返信先か引用元を付け直せなかった。
+        public static func droppedTarget(isReply: Bool) -> String {
+            isReply ? "返信先を外しました" : "引用元を外しました"
+        }
         public static let mention = "メンションできませんでした"
         public static let profileLink = "リンクを取得できませんでした"
         public static let startQuote = "引用を始められませんでした"

@@ -10,7 +10,7 @@ final class SessionController {
     let windowRootViewController: InAppBrowserDockContainer
     /// このセッションで使っているアカウント。
     let credential: Credential
-    /// このセッションのアカウントが使うプリセットの設定。窓ごとに、開いたアカウントの値で描き、動かす（docs/preset.md）。
+    /// このセッションのアカウントが使うプリセットの設定。ウィンドウごとに、開いたアカウントの値で描き、動かす（docs/preset.md）。
     let settings: AppSettings
     let home: FeedTimelineController
     let local: FeedTimelineController
@@ -270,11 +270,10 @@ final class SessionController {
     /// このサーバーのカスタム絵文字のリスト。端末に残し、開くたびに補完を作るプロフィールの編集にも、読み込み中を挟まずに渡す。
     private let customEmojis: CustomEmojiCache
     /// タブバーの上の投稿欄。ホームと通知のどちらでも同じ下書きを使う。
+    /// 下書き（`composer.model`）はウィンドウが持ち、アカウントを替えて画面一式を作り直しても、次の画面一式に渡す（docs/compose.mdの「アカウントを変えるとき」）。
     let composer: InlineComposeController
-    /// 投稿欄に、捨てると失われる書きかけがあるか。下書きはこの画面一式だけが持つので、アカウントを切り替える前に確かめる。
-    var hasWrittenDraft: Bool { composer.model.hasWrittenContent }
-    /// 投稿欄で投稿するアカウントに選んでいる、ほかのアカウント（`Credential.id`）。今のアカウントで書いていればnil。
-    var composingOtherAccountID: String? { composer.model.otherAccount?.id }
+    /// このアカウントで書くときの送り先。ウィンドウの下書きをこの画面一式につなぎ直すときに渡す。
+    private let homeComposeAccount: ComposeAccount<UIImage>
     /// 書き始めたときに始めた、サーバーの上限と既定の公開範囲などの読み込み。共有されたメディアを、読み終えてから足すのに使う。
     private var composeDefaultsTask: Task<Void, Never>?
     /// 画面のどこにドロップした画像や動画でも、投稿欄に添付する受け口。
@@ -318,7 +317,9 @@ final class SessionController {
     ///   - accountManagement: 「アカウントを管理」の画面で、アカウントを切り替え、ログアウトし、追加する。
     ///   - onReauthenticate: トークンが無効なアカウントで、ログインし直しのボタンが押されたときに、そのアカウントを渡して呼ぶ。ログインし直しが終わるか、取り消されたら返る。
     ///     このセッションのアカウントのほか、「別のアカウントで」の操作で無効と分かったほかのアカウントも渡す。
-    init(credential: Credential, accountMenu: @escaping @MainActor () -> UIMenu, logOut: (@MainActor () -> Void)?, accountManagement: AccountManagement, onReauthenticate: @escaping (SessionController, Credential) async -> Void) {
+    ///   - draft: ウィンドウが持っている下書き。ウィンドウで初めて作る画面一式ならnilで、`draftTasks`の子で作る。渡したら、作ったあとに`rebindDraft()`でつなぎ直す。
+    ///   - draftTasks: 下書きの送信とアップロードの持ち主。ウィンドウを閉じるまで閉じない。
+    init(credential: Credential, accountMenu: @escaping @MainActor () -> UIMenu, logOut: (@MainActor () -> Void)?, accountManagement: AccountManagement, draft: ComposeModel<UIImage>?, draftTasks: TaskScope, onReauthenticate: @escaping (SessionController, Credential) async -> Void) {
         self.credential = credential
         operationStatus = OperationStatus(store: OperationFailureStore(defaults: .standard, account: credential.handle), now: AppDependencies.now)
         let settings = AppDependencies.settings.forAccount(credential.handle)
@@ -581,8 +582,21 @@ final class SessionController {
         let completion = CompletionModel(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, account: credential.handle))
         let postingLanguages = PostingLanguageCache { try await client.postingLanguages() }
         self.postingLanguages = postingLanguages
+        // 送った結果は、送り始めたときの画面一式に知らせる。下書きはウィンドウが持つので、送っている間にアカウントを替えると、替えた先の画面一式の一覧に入れないため。
+        let homeComposeAccount = ComposeAccount(
+            id: credential.id,
+            myAccountID: credential.accountID,
+            media: media,
+            redraft: redraft,
+            onRedraftDeleted: { [weak statuses = session.statuses] id in statuses?.removeStatus(id) },
+            onSubmitted: { submitted in myAccountReference.session?.didSubmit(submitted) },
+            // 書き直した予約を送っている間にウィンドウのアカウントを切り替えると、送り終えたときにはこの画面一式は止まっていて、元の予約を取り消さずに残る。
+            // 取り消しの失敗を出す画面一式がないため。送っている間の短い切り替えに限られるので、ここでは扱わない。
+            onScheduleRewritten: { id in myAccountReference.session?.cancelRewrittenSchedule(id) }
+        ) { [session] draft in try await session.submit(draft) }
+        self.homeComposeAccount = homeComposeAccount
         composer = InlineComposeController(
-            model: ComposeModel<UIImage>(tasks: tasks.child(), home: ComposeAccount(id: credential.id, myAccountID: credential.accountID, media: media, redraft: redraft) { [session] draft in try await session.submit(draft) }, backgroundTime: BackgroundTime.request),
+            model: draft ?? ComposeModel<UIImage>(tasks: draftTasks.child(), home: homeComposeAccount, backgroundTime: BackgroundTime.request),
             completion: completion,
             recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance),
             languages: PostingLanguageSource(recent: RecentPostingLanguages(defaults: .standard, account: credential.handle), load: postingLanguages.languages),
@@ -691,12 +705,9 @@ final class SessionController {
             }
         }
         notices.showOperationStatus = { [weak self] presenter in self?.showOperationStatus(from: presenter) }
-        composer.model.onSubmitted = { [weak self] submitted in self?.didSubmit(submitted) }
         myAccountReference.session = self
         scheduled.viewController.mediaTransfers = mediaTransfers
         scheduled.viewController.notices = notices
-        composer.model.onScheduleRewritten = { [weak self] id in self?.cancelRewrittenSchedule(id) }
-        composer.model.onRedraftDeleted = { [weak statuses = session.statuses] id in statuses?.removeStatus(id) }
         session.statuses.onQuoteSourcesChange = { [weak self] changes, change in self?.applyQuoteSourceChanges(changes, affecting: change) }
         composer.onShowScheduledStatuses = { [weak self] in self?.open(.scheduled) }
         scheduled.onRewrite = { [weak self] status in self?.confirmRewriting(status) }
@@ -2332,6 +2343,7 @@ final class SessionController {
                 if !isReply { _ = try? await other.loadedCapabilities() }
                 return await other.lookup(target)
             }
+            if !isReply { _ = try? await self?.session.loadedCapabilities() }
             return await self?.lookUpOnHome(target) ?? .notFound
         } isStillWanted: { [weak self] in
             let current = isReply ? self?.composer.model.replyTo : self?.composer.model.quoteTarget
@@ -2399,6 +2411,8 @@ final class SessionController {
             case .posted:
                 self?.showToggledNotice(OtherAccountTexts.title(OtherAccountTexts.posted, handle: handle))
             }
+        }, onScheduleRewritten: { [weak self] id in
+            self?.cancelRewrittenSchedule(id, as: client())
         }) { draft in
             try await client().submit(draft) { [weak account] in
                 guard let account else { throw CancellationError() }
@@ -3830,10 +3844,12 @@ final class SessionController {
 
     /// 書き直した投稿を送れたので、元の予約を取り消す。取り消せなければ、両方投稿されないよう知らせて予約投稿の画面を開く。
     /// もう投稿されていたら（404）、取り消すものはないので何もしない。
-    private func cancelRewrittenSchedule(_ id: ScheduledStatus.ID) {
+    /// - Parameter other: 予約を書き直したのが、このウィンドウのほかのアカウントのとき、そのアカウントのクライアント。このアカウントの予約投稿の一覧は変えない。
+    private func cancelRewrittenSchedule(_ id: ScheduledStatus.ID, as other: MastodonClient? = nil) {
         logger.info("rewritten schedule cancel start")
         // 書き直した投稿を送ってすぐバックグラウンドへ移っても、取り消し終えるまでアプリを止めないよう頼む。取り消せないまま元の予約が投稿されないようにするため。
         let endBackgroundTime = BackgroundTime.request("cancel rewritten schedule")
+        let client = other ?? client
         let task = tasks.run(.action) { [weak self, client] in
             defer { endBackgroundTime() }
             do {
@@ -3849,6 +3865,7 @@ final class SessionController {
                 return
             }
             self?.logger.info("rewritten schedule cancel done")
+            guard other == nil else { return }
             self?.scheduled.didCancel(id)
             for list in self?.pushedScheduled ?? [] {
                 list.didCancel(id)
@@ -4228,24 +4245,68 @@ final class SessionController {
 
     // MARK: - 投稿
 
-    /// 同じアカウントにログインし直して作り直した画面に、前の画面の下書きを引き継ぐ。決まりはdocs/compose.mdの「アカウントを変えるとき」にある。
-    /// 投稿欄は、開いていても閉じたカプセルで始める。前の画面を止める前に呼ぶ。
-    func adoptDraft(from previous: SessionController) {
-        let draft = previous.composer.model
-        guard previous.credential.id == credential.id, draft.hasWrittenContent || draft.canDiscardDraft else { return }
-        var writing: ComposeAccount<UIImage>?
-        if let other = draft.otherAccount {
-            if let account = otherAccounts.list(loadsProfiles: false).first(where: { $0.credential.id == other.id }) {
-                writing = composeAccount(for: account)
-            } else {
-                // ログインし直している間に、書いていたほかのアカウントからログアウトしていた。今のアカウントの下書きに戻せなければ（そのアカウントの投稿の編集など）、引き継がない。
-                guard draft.switchAccount(to: nil) else { return }
-            }
+    /// ウィンドウが持つ下書きを、この画面一式のアカウントにつなぎ直す。決まりはdocs/compose.mdの「アカウントを変えるとき」にある。
+    /// 画面一式を作り直したときと、書いているほかのアカウントからログアウトしたときに呼ぶ。投稿欄は、開いていても閉じたカプセルで始める。
+    func rebindDraft() {
+        let model = composer.model
+        let writingID = model.writingAccountID
+        let writing = writingID == credential.id ? nil : otherAccounts.list(loadsProfiles: false).first { $0.credential.id == writingID }.map(composeAccount(for:))
+        switch model.rebind(home: homeComposeAccount, writing: writing) {
+        case .awaitingRetarget:
+            // 「投稿するアカウント」で今のアカウントを選んだときと同じく、返信先か引用元を探してから替え、見つからなければ替えずに知らせる。
+            chooseWritingAccount(nil)
+        case .returned(let dropped?, let isReply):
+            reattach(dropped, isReply: isReply)
+        case .returned(nil, _), .kept, .followed, .discarded:
+            break
         }
-        composer.model.adoptDraft(from: draft, otherAccount: writing)
-        // ほかのアカウントで書いているときは、`onAccountChange`がそのサーバーの値を読む。
-        if writing == nil {
-            applyComposeDefaults()
+    }
+
+    /// 書いていたアカウントからログアウトして外した返信先か引用元を、このアカウントのサーバーで探して付け直す。見つからないか引用できなければ、外したことを知らせる。
+    /// 探し終えるまで投稿欄は投稿させない（`ComposeModel.pendingRetarget`）。探している間に返信先を付け直すか下書きを捨てていたら、何もしない。
+    private func reattach(_ target: Status, isReply: Bool) {
+        writingAccountLookup.start(.action) { [weak self] () -> OtherAccount.Lookup in
+            // 引用できるかは、このアカウントのサーバーの引用の決まりで決めるので、読み終えてから探す。
+            if !isReply { _ = try? await self?.session.loadedCapabilities() }
+            return await self?.lookUpOnHome(target) ?? .notFound
+        } isStillWanted: { [weak self] in
+            self?.composer.model.pendingRetarget?.status.displayed.uri == target.displayed.uri
+        } completion: { [weak self] result in
+            guard let self, case .success(let lookup) = result else { return }
+            let title = SessionTexts.Failure.droppedTarget(isReply: isReply)
+            let reason: ErrorPresentation
+            switch lookup {
+            case .found(let found):
+                if isReply || session.capabilities.quotes.availability(of: found)?.canQuote == true {
+                    composer.resolvePendingRetarget(found)
+                    return
+                }
+                reason = ErrorPresentation(message: SessionTexts.cannotQuote(username: credential.username), code: nil)
+            case .notFound:
+                reason = ErrorPresentation(message: SessionTexts.cannotSee(username: credential.username, isReply: isReply), code: nil)
+            case .failed(let error):
+                reason = ErrorPresentation(error)
+            }
+            composer.resolvePendingRetarget(nil)
+            showFailureNotice(.interactionFailure(title: title) { [weak self] in
+                self?.presentAlert(title: title, reason: reason)
+            })
+        }
+    }
+
+    /// ログインしているアカウントが変わったら、ほかのアカウントの一覧を合わせ、書いているほかのアカウントからログアウトしていれば下書きをこのアカウントに戻す。
+    /// このアカウントからのログアウトは、ウィンドウが画面一式を作り直すので、ここでは扱わない。
+    private func observeAccounts() {
+        guard let registry = try? AppDependencies.accounts.get() else { return }
+        tasks.run(.display) { [weak self] in
+            for await ids in Observations({ Set(registry.accounts.map(\.id)) }) {
+                guard let self else { return }
+                _ = otherAccounts.list(loadsProfiles: false)
+                let writingID = composer.model.writingAccountID
+                if writingID != credential.id, !ids.contains(writingID) {
+                    rebindDraft()
+                }
+            }
         }
     }
 
@@ -4274,6 +4335,7 @@ final class SessionController {
         otherAccounts.onHashtagFailure = { [weak self] account, title, error in
             self?.showOtherAccountFailure(title: OtherAccountTexts.title(title, handle: account.credential.handle), error: error)
         }
+        observeAccounts()
         let network = AppDependencies.network
         session.start { network.recoveryCount }
         // ホームのほかの読み込みは、ホームの最初の読み込みを終えてから始める。起動と同時に送ると、サーバーで順番待ちになり、ホームの応答まで遅れたため。
@@ -4382,10 +4444,11 @@ final class SessionController {
         notices.reauthentication?.isInProgress = isReauthenticating
     }
 
-    /// このセッションで始めた処理を全部止め、以後の結果を捨てる。ログアウト、アカウントの切り替え、窓を閉じたときなど、画面を捨てるときに呼ぶ。
+    /// このセッションで始めた処理を全部止め、以後の結果を捨てる。ログアウト、アカウントの切り替え、ウィンドウを閉じたときなど、画面を捨てるときに呼ぶ。
     /// タイムライン、開いている画面、投稿欄の送信とアップロード、ストリーミングは、どれも持ち主の子で始めているので、ここで並べなくても止まる。
     func stop() {
         operationStatus.stopSaving()
+        composer.stop()
         statusBarTicker.clear()
         browser.stop()
         session.close()

@@ -6,14 +6,18 @@ import UIKit
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
     private var windowSettings: WindowSettings?
-    /// 窓に出しているアカウントの画面一式。替えたり外したりしたら、前のセッションで始めた処理を止める。
-    /// ログアウト、アカウントの切り替え、ログイン画面に戻す、窓を閉じるのどの経路でも、ここを通れば止まる。
+    /// ウィンドウに出しているアカウントの画面一式。替えたり外したりしたら、前のセッションで始めた処理を止める。
+    /// ログアウト、アカウントの切り替え、ログイン画面に戻す、ウィンドウを閉じるのどの経路でも、ここを通れば止まる。
     private var session: SessionController? {
         didSet {
             guard oldValue !== session else { return }
             oldValue?.stop()
         }
     }
+    /// ウィンドウの下書き。アカウントを替えて画面一式を作り直しても、次の画面一式に渡す（docs/compose.mdの「アカウントを変えるとき」）。
+    private var draft: ComposeModel<UIImage>?
+    /// 下書きの送信とアップロードの持ち主。ウィンドウを閉じたときに閉じる。
+    private let draftTasks = TaskScope()
     private let logger = SciaLog.logger(category: "lifecycle")
     /// 保存したアカウントを読めずにログイン画面を出している。端末のロック中など一時的なことがあるので、前面に戻ったら読み直す。
     private var isShowingAccountsLoadFailure = false
@@ -88,7 +92,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         session.open(url)
     }
 
-    /// アプリの中から、この窓のセッションで画面を開く。ログインしていなければ何もしない。
+    /// アプリの中から、このウィンドウのセッションで画面を開く。ログインしていなければ何もしない。
     func open(_ destination: AppDestination) {
         guard let session else {
             logger.error("destination ignored without session")
@@ -147,14 +151,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
     // scialint:enable log_private_value
 
-    /// 保存してあるアカウントのうち、ハンドルが`acct`のものに切り替える。書きかけの投稿は、メニューから選ぶときと同じく、捨てるかを確かめる。
+    /// 保存してあるアカウントのうち、ハンドルが`acct`のものに切り替える。
     private func switchAccount(toHandle acct: String) {
         let handle = acct.hasPrefix("@") ? acct : "@" + acct
         guard let account = accounts?.accounts.first(where: { $0.handle.caseInsensitiveCompare(handle) == .orderedSame }) else {
             logger.error("debug account not found")
             return
         }
-        confirmDiscardingDraft(switchingTo: account) { [weak self] in self?.switchAccount(to: account.id) }
+        switchAccount(to: account.id)
     }
     #endif
 
@@ -178,12 +182,13 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         #endif
     }
 
-    /// 窓を閉じたときや、OSが裏にいる窓を手放したとき。窓の画面一式を捨て、そのセッションで始めた処理を止める。
+    /// ウィンドウを閉じたときや、OSが裏にいるウィンドウを手放したとき。ウィンドウの画面一式を捨て、そのセッションで始めた処理を止める。
     func sceneDidDisconnect(_ scene: UIScene) {
         logger.info("scene didDisconnect")
         session = nil
+        draftTasks.close()
         #if DEBUG
-        // 出したまま窓を閉じると、重ねたウィンドウと毎フレームの処理が残るため。
+        // 出したままウィンドウを閉じると、重ねたウィンドウと毎フレームの処理が残るため。
         if let scene = scene as? UIWindowScene {
             HitAreaOverlay.setShown(false, in: scene)
         }
@@ -232,8 +237,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
     }
 
-    /// - Parameter previous: 同じアカウントにログインし直して作り直すときの、前の画面一式。書きかけの下書きを引き継ぐ。
-    func showTimeline(for credential: Credential, adoptingDraftFrom previous: SessionController? = nil) {
+    func showTimeline(for credential: Credential) {
         isShowingAccountsLoadFailure = false
         var logOut: (@MainActor () -> Void)?
         if Self.canLogOut {
@@ -241,16 +245,18 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         let session = SessionController(credential: credential, accountMenu: { [weak self] in
             self?.makeAccountMenu() ?? UIMenu()
-        }, logOut: logOut, accountManagement: accountManagement, onReauthenticate: { [weak self] session, credential in
+        }, logOut: logOut, accountManagement: accountManagement, draft: draft, draftTasks: draftTasks, onReauthenticate: { [weak self] session, credential in
             guard let self, session === self.session else { return }
             await self.reauthenticate(credential, isCurrent: credential.id == session.credential.id)
         })
-        // 前の画面一式は、下の差し替えで止める。止めると送りかけの添付も止まるので、その前に移す。
-        if let previous {
-            session.adoptDraft(from: previous)
-        }
         let replacesSession = self.session != nil
+        let hadDraft = draft != nil
         self.session = session
+        draft = session.composer.model
+        // 前の画面一式を止めてからつなぎ直す。前の画面一式が、つなぎ直した下書きの変化を受けないようにするため。
+        if hadDraft {
+            session.rebindDraft()
+        }
         windowSettings?.use(session.settings)
         // アカウントを切り替えたときは、前のアカウントの画面から薄くして入れ替える。起動したときは、ローンチ画面から切り替える。
         let duration = replacesSession ? AppDependencies.tuning.value(of: TuningCatalog.accountSwitchDuration) : 0
@@ -268,7 +274,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             installNoticeOverlay()
         }
         session.start()
-        // 裏にいる窓でアカウントを切り替えたときなど。始めた時点で裏なら、前に戻るまで接続しない。戻ったときに`sceneWillEnterForeground`で始め直す。
+        // 裏にいるウィンドウでアカウントを切り替えたときなど。始めた時点で裏なら、前に戻るまで接続しない。戻ったときに`sceneWillEnterForeground`で始め直す。
         if window?.windowScene?.activationState == .background {
             session.enterBackground()
         }
@@ -297,13 +303,13 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             canLogOut: Self.canLogOut,
             switchTo: { [weak self] id in
                 guard let self, let account = accounts?.accounts.first(where: { $0.id == id }) else { return }
-                confirmDiscardingDraft(switchingTo: account) { [weak self] in self?.switchAccount(to: id) }
+                switchAccount(to: account.id)
             },
             logOut: { [weak self] id in
                 guard let self, let account = accounts?.accounts.first(where: { $0.id == id }) else { return }
                 confirmLogOut(account)
             },
-            add: { [weak self] in self?.confirmAddingAccount() }
+            add: { [weak self] in self?.presentAddAccount() }
         )
     }
 
@@ -323,8 +329,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         #if DEBUG
         let dummy = [UIAction(title: DummyServer.credential.handle, subtitle: "ダミーのデータ", state: Self.showsDummySession ? .on : .off) { [weak self] _ in
-            guard let self else { return }
-            confirmDiscardingDraft(switchingTo: DummyServer.credential) { [weak self] in self?.openDummySession() }
+            self?.openDummySession()
         }]
         #else
         let dummy: [UIAction] = []
@@ -332,8 +337,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let checkedID = checkedAccountID
         let switching = accounts.accounts.map { account in
             UIAction(title: account.handle, state: account.id == checkedID ? .on : .off) { [weak self] _ in
-                guard let self else { return }
-                confirmDiscardingDraft(switchingTo: account) { [weak self] in self?.switchAccount(to: account.id) }
+                self?.switchAccount(to: account.id)
             }
         } + dummy
         return UIMenu(children: [
@@ -342,65 +346,12 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         ])
     }
 
-    /// 書きかけの投稿があれば、捨てて切り替えるかを確かめてから`perform`で切り替える。なければすぐ切り替える。
-    /// 下書きはアカウントの画面一式が持ち、切り替えると画面ごと作り直して消えるため。
-    /// 切り替えるとすべてのシーンの画面を作り直すので、どのシーンの書きかけも数える。今の画面と同じアカウントを選んだときは、作り直さないので確かめない。
-    private func confirmDiscardingDraft(switchingTo account: Credential, perform: @escaping @MainActor () -> Void) {
-        guard account != session?.credential, Self.hasWrittenDraftInAnyScene,
-              let root = window?.rootViewController
-        else {
-            perform()
-            return
-        }
-        let alert = UIAlertController(
-            title: AccountSwitchTexts.Switching.title(handle: account.handle),
-            message: AccountSwitchTexts.Switching.message,
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: AccountSwitchTexts.cancel, style: .cancel))
-        alert.addAction(UIAlertAction(title: AccountSwitchTexts.Switching.confirm, style: .destructive) { _ in perform() })
-        root.presentOnFrontmost(alert)
-    }
-
-    /// 書きかけの投稿があれば、ログインのシートを出す前に、追加すると破棄されることを確かめる。ログインできると追加したアカウントに切り替わり、画面ごと作り直すため。
-    /// シートを出している間は、出した窓の投稿欄に書けないので、出す前に一度だけ確かめる。
-    /// シートを出している間に、別の窓で書いたり、共有から本文が届いたりした下書きは、確かめないままログインできたときに消える。
-    /// 確かめるのをシートを出す前にしたのは、作者の判断。ログインできたときに確かめると、サーバーでのログインは済んでいるので、やめたときにそのアカウントを加えるだけにするか捨てるかを決める必要があるため、ここでは扱わない。
-    private func confirmAddingAccount() {
-        guard Self.hasWrittenDraftInAnyScene, let root = window?.rootViewController else {
-            presentAddAccount()
-            return
-        }
-        let alert = UIAlertController(
-            title: AccountSwitchTexts.Adding.title,
-            message: AccountSwitchTexts.Adding.message,
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: AccountSwitchTexts.cancel, style: .cancel))
-        alert.addAction(UIAlertAction(title: AccountSwitchTexts.Adding.confirm, style: .default) { [weak self] _ in self?.presentAddAccount() })
-        root.presentOnFrontmost(alert)
-    }
-
-    private static func hasWrittenDraft(composingAs id: Credential.ID) -> Bool {
+    /// `id`のアカウントからログアウトすると、どれかのウィンドウの下書きが捨てられるか。
+    /// そのアカウントのサーバーの投稿（編集、削除して書き直す、書き直す予約）を書いている下書きは、ほかのアカウントでは続けられないため（docs/compose.mdの「アカウントを変えるとき」）。
+    private static func discardsDraft(loggingOut id: Credential.ID) -> Bool {
         UIApplication.shared.connectedScenes.contains { scene in
-            guard let session = (scene.delegate as? SceneDelegate)?.session else { return false }
-            return session.composingOtherAccountID == id && session.hasWrittenDraft
-        }
-    }
-
-    /// 投稿欄で`id`のアカウントを選んでいる窓の画面を、今のアカウントのまま作り直す。ログアウトしたアカウントで送らないため。
-    private static func rebuildScenes(composingAs id: Credential.ID) {
-        for scene in UIApplication.shared.connectedScenes {
-            guard let delegate = scene.delegate as? SceneDelegate, let session = delegate.session,
-                  session.composingOtherAccountID == id
-            else { continue }
-            delegate.showTimeline(for: session.credential)
-        }
-    }
-
-    private static var hasWrittenDraftInAnyScene: Bool {
-        UIApplication.shared.connectedScenes.contains { scene in
-            (scene.delegate as? SceneDelegate)?.session?.hasWrittenDraft == true
+            guard let draft = (scene.delegate as? SceneDelegate)?.draft else { return false }
+            return draft.writingAccountID == id && draft.pointsToServerPost
         }
     }
 
@@ -438,8 +389,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
         guard session?.credential != current else { return }
-        // 同じアカウントにログインし直したときは、切り替えと違って確かめずに作り直すので、下書きを引き継ぐ（docs/compose.mdの「アカウントを変えるとき」）。
-        showTimeline(for: current, adoptingDraftFrom: session?.credential.id == current.id ? session : nil)
+        showTimeline(for: current)
     }
 
     /// トークンが無効になったアカウントに、ログインし直す。ログイン画面は挟まず、そのアカウントのサーバーの認可画面を出す。
@@ -475,7 +425,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         } catch is CancellationError {
             logger.info("reauthentication cancelled")
         } catch where Task.isCancelled {
-            // 別の窓での切り替えなどで、ログインし直していたセッションを止めた。通信はURLErrorの取り消しで戻るので、失敗として知らせない。
+            // 別のウィンドウでの切り替えなどで、ログインし直していたセッションを止めた。通信はURLErrorの取り消しで戻るので、失敗として知らせない。
             logger.info("reauthentication cancelled with session")
         } catch {
             logger.error("reauthentication failed: \(SciaLog.describe(error), privacy: .public)")
@@ -523,11 +473,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         confirmLogOut(current)
     }
 
-    /// 書きかけの投稿が破棄されることは、画面を作り直す窓に書きかけがあるときだけ添える。
-    /// 作り直すのは、使っているアカウントならすべての窓、ほかのアカウントなら投稿欄でそのアカウントを選んでいる窓（docs/compose.mdの「アカウントを変えるとき」）。
     private func confirmLogOut(_ account: Credential) {
         guard let root = window?.rootViewController else { return }
-        let discardsDraft = account.id == accounts?.current?.id ? Self.hasWrittenDraftInAnyScene : Self.hasWrittenDraft(composingAs: account.id)
+        let discardsDraft = Self.discardsDraft(loggingOut: account.id)
         let alert = UIAlertController(
             title: AccountSwitchTexts.LoggingOut.title(handle: account.handle),
             message: AccountSwitchTexts.LoggingOut.message(discardsDraft: discardsDraft),
@@ -557,7 +505,6 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
         logger.info("account removed")
-        Self.rebuildScenes(composingAs: credential.id)
         showCurrentAccount()
         Self.syncAllScenes()
     }
@@ -570,6 +517,11 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func showLogin(errorMessage: String?) {
         // ログイン画面に替えたら、出していたアカウントの処理を止める。
         session = nil
+        // ログアウトしたアカウントの投稿の編集や書き直しは、ほかのアカウントでは続けられないので捨てる（docs/compose.mdの「アカウントを変えるとき」）。
+        // 開けるアカウントがなく、新しい画面一式へのつなぎ直しを通らないため、ここで捨てる。同じアカウントにログインし直しても戻さない。
+        if let draft, let accounts, draft.pointsToServerPost, !accounts.accounts.contains(where: { $0.id == draft.writingAccountID }) {
+            draft.reset()
+        }
         windowSettings?.use(AppDependencies.settings)
         isShowingAccountsLoadFailure = false
         let model = LoginModel(oauth: AppDependencies.oauth, accountDomains: accountDomains) { [weak self] credential in

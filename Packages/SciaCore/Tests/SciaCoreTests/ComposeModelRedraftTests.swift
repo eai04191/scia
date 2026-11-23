@@ -131,7 +131,7 @@ struct ComposeModelRedraftTests {
         let model = makeModel(events, redraft: redraftService(events) { Self.attachment($0) }) { draft in
             events.append("post \(draft.mediaIDs ?? [])")
         }
-        model.onRedraftDeleted = { deleted.append($0) }
+        model.setHomeHandlers(onRedraftDeleted: { deleted.append($0) })
         model.beginRedrafting(status(media: [Self.attachment("100"), Self.attachment("101")]), source: Self.source)
         let first = try #require(model.attachments.first?.id)
         // 元の投稿に付いている間は、代替テキストを送らない。サーバーが断るため。

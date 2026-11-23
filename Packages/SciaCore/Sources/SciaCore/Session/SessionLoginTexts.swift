@@ -19,30 +19,13 @@ public enum AccountSwitchTexts {
     public static let addAccount = "アカウントを追加"
     public static let cancel = "キャンセル"
 
-    /// 書きかけの投稿があるときに、切り替えるかを確かめるアラート。
-    public enum Switching {
-        public static func title(handle: String) -> String {
-            "\(handle)に切り替えますか？"
-        }
-
-        public static let message = "書きかけの投稿は破棄されます。"
-        public static let confirm = "切り替える"
-    }
-
-    /// 書きかけの投稿があるときに、アカウントを足すかを確かめるアラート。
-    public enum Adding {
-        public static let title = "アカウントを追加しますか？"
-        public static let message = "ログインすると追加したアカウントに切り替わり、書きかけの投稿は破棄されます。"
-        public static let confirm = "追加する"
-    }
-
     /// ログアウトするかを確かめるアラート。
     public enum LoggingOut {
         public static func title(handle: String) -> String {
             "\(handle)からログアウトしますか？"
         }
 
-        /// - Parameter discardsDraft: 書きかけの投稿がある。使っているアカウントを消すと、画面ごと作り直して下書きも消えるため、添える。
+        /// - Parameter discardsDraft: ログアウトするアカウントのサーバーの投稿の編集、削除して書き直す、予約の書き直しを書いている。ほかのアカウントでは続けられず、下書きを捨てるため、添える。
         public static func message(discardsDraft: Bool) -> String {
             "アカウントの情報はこのデバイスから削除されます。もう一度使うにはログインし直す必要があります。"
                 + (discardsDraft ? "書きかけの投稿も破棄されます。" : "")

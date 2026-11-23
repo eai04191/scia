@@ -31,7 +31,7 @@ public final class SessionStatuses {
         scheduledLists.append(WeakScheduledList(list: list))
     }
 
-    /// 投稿欄から今のアカウントで送れた結果（`ComposeModel.onSubmitted`）を、ストリーミングの知らせを待たずに一覧へ反映する。
+    /// 投稿欄から今のアカウントで送れた結果（ウィンドウのアカウントの`ComposeAccount.onSubmitted`）を、ストリーミングの知らせを待たずに一覧へ反映する。
     /// ストリーミングで届くまで数秒かかることがあり、切れている間は届かないため。
     /// - 投稿したら、受け取る一覧（ホームと、返信先を開いているスレッド）に足す（`SessionStatusList.receivePosted(_:)`）
     /// - 予約したら、予約投稿の一覧に足す
@@ -70,7 +70,7 @@ public final class SessionStatuses {
     }
 
     /// 消えた自分の投稿を、どの一覧からも除き、引用元としても消えたことにする。
-    /// この端末で消したとき（`StatusDeletion`）と、削除して書き直すために消したとき（`ComposeModel.onRedraftDeleted`）に呼ぶ。
+    /// この端末で消したとき（`StatusDeletion`）と、削除して書き直すために消したとき（ウィンドウのアカウントの`ComposeAccount.onRedraftDeleted`）に呼ぶ。
     public func removeStatus(_ id: Status.ID) {
         for list in lists.compactMap(\.list) {
             list.removeStatus(id)

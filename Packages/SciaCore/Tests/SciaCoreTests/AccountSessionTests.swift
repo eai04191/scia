@@ -383,7 +383,7 @@ struct AccountSessionTests {
         defer { session.close() }
         var loaded: ServerPreferences?
         session.onPreferencesLoad = { loaded = $0 }
-        let model = ComposeModel(tasks: session.tasks.child(), myAccountID: "1") { _ in }
+        let model = ComposeModel(tasks: session.tasks.child(), home: ComposeAccount(id: session.credential.id, myAccountID: "1", media: .unavailable) { .stub(for: $0) })
         model.text = "hello"
         #expect(!model.canPost)
 
@@ -414,7 +414,7 @@ struct AccountSessionTests {
         }
         let session = makeSession(transport: transport)
         defer { session.close() }
-        let model = ComposeModel(tasks: session.tasks.child(), myAccountID: "1") { _ in }
+        let model = ComposeModel(tasks: session.tasks.child(), home: ComposeAccount(id: session.credential.id, myAccountID: "1", media: .unavailable) { .stub(for: $0) })
         model.text = "hello"
 
         session.preloadComposeDefaults()
@@ -447,7 +447,7 @@ struct AccountSessionTests {
         }
         let session = makeSession(transport: transport)
         defer { session.close() }
-        let model = ComposeModel(tasks: session.tasks.child(), myAccountID: "1") { _ in }
+        let model = ComposeModel(tasks: session.tasks.child(), home: ComposeAccount(id: session.credential.id, myAccountID: "1", media: .unavailable) { .stub(for: $0) })
 
         session.preloadComposeDefaults()
         try await waitUntil { gate.waiterCount >= 1 }
@@ -466,7 +466,7 @@ struct AccountSessionTests {
         let transport = RoutedTransport { _ in (403, Data()) }
         let session = makeSession(transport: transport)
         defer { session.close() }
-        let model = ComposeModel(tasks: session.tasks.child(), myAccountID: "1") { _ in }
+        let model = ComposeModel(tasks: session.tasks.child(), home: ComposeAccount(id: session.credential.id, myAccountID: "1", media: .unavailable) { .stub(for: $0) })
         model.text = "hello"
 
         await applyComposeDefaults(of: session, to: model)

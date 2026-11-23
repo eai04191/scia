@@ -23,6 +23,16 @@ extension SciaCore.ComposeModel where Thumbnail == Never {
     /// テストで作る下書きの、ウィンドウのアカウントの`ComposeAccount.id`。
     static var homeID: String { "home" }
 
+    /// ウィンドウのアカウントで送った結果の通知先を差し替える。送り先と添付の口はそのまま使う。ウィンドウのアカウントで書いているときに呼ぶ。
+    func setHomeHandlers(
+        onSubmitted: @escaping (SubmittedDraft) -> Void = { _ in },
+        onScheduleRewritten: @escaping (ScheduledStatus.ID) -> Void = { _ in },
+        onRedraftDeleted: @escaping (Status.ID) -> Void = { _ in }
+    ) {
+        let home = homeAccount
+        rebind(home: ComposeAccount(id: home.id, myAccountID: home.myAccountID, media: home.media, redraft: home.redraft, onRedraftDeleted: onRedraftDeleted, onSubmitted: onSubmitted, onScheduleRewritten: onScheduleRewritten, submit: home.submit), writing: nil)
+    }
+
     /// バックグラウンドの延長を頼まずに作る。延長を確かめるテストは、`backgroundTime`を渡して作る。
     convenience init(
         tasks: TaskScope,

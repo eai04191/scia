@@ -1654,6 +1654,12 @@ final class InlineComposeController: NSObject {
     ///   - account: 投稿するアカウント。nilなら今のアカウント。
     ///   - replyTo: 替えた先のサーバーの返信先。
     ///   - quoteTarget: 替えた先のサーバーの引用元。
+    /// ログアウトで外した返信先か引用元を探し終えたら、見つかった投稿を付け直すか、外したままにして投稿できるようにする。
+    func resolvePendingRetarget(_ found: Status?) {
+        model.resolvePendingRetarget(found)
+        update()
+    }
+
     func switchWritingAccount(to account: ComposeAccount<UIImage>?, replyTo: Status? = nil, quoteTarget: Status? = nil) {
         guard model.switchAccount(to: account) else { return }
         if let replyTo {
@@ -2288,6 +2294,11 @@ final class InlineComposeController: NSObject {
         logger.info("compose: bar \(sinks ? "sinking with" : "returning with", privacy: .public) keyboard")
         applyBarPlacement()
         slideBar {}
+    }
+
+    /// 画面一式を止めたときに呼ぶ。前の画面一式は外したあとも少しの間残るので、その間にキーボードが動いても、外した画面の制約を組み直さないようにする。
+    func stop() {
+        keyboardNotifications.removeObserver(self)
     }
 
     @objc private func keyboardDidChangeFrame(_ notification: Notification) {

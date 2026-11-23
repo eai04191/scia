@@ -155,10 +155,10 @@ struct DraftSubmissionTests {
         let model = makeModel(submit: { try await client.submit($0) { .mastodon } })
         var textWhenSubmitted: String?
         var postedID: Status.ID?
-        model.onSubmitted = { submitted in
+        model.setHomeHandlers(onSubmitted: { submitted in
             textWhenSubmitted = model.text
             if case .posted(let status) = submitted { postedID = status.id }
-        }
+        })
         model.text = "こんにちは"
 
         await asAction { await model.submit() }
@@ -175,7 +175,7 @@ struct DraftSubmissionTests {
             return .stub(for: StatusDraft())
         }
         var homeSubmitted = 0
-        model.onSubmitted = { _ in homeSubmitted += 1 }
+        model.setHomeHandlers(onSubmitted: { _ in homeSubmitted += 1 })
         var otherSubmitted: [SubmittedDraft] = []
         let client = MastodonClient(credential: TimelineModelFixtures.credential(), transport: Self.server(), isOtherAccount: true)
         let other = ComposeAccount<Never>(id: "other", myAccountID: "50", media: .unavailable, onSubmitted: { otherSubmitted.append($0) }, submit: { try await client.submit($0) { .mastodon } })

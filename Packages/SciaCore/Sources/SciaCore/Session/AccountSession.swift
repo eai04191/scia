@@ -487,7 +487,7 @@ public final class AccountSession {
         async let preferences = loadPreferences()
         let loaded = adjustingConfiguration(await configuration)
         let loadedPreferences = await preferences
-        model.apply(configuration: loaded, defaultVisibility: loadedPreferences?.defaultVisibility, defaultSensitive: loadedPreferences?.defaultSensitive, defaultLanguage: loadedPreferences.map(\.defaultLanguage), defaultQuotePolicy: loadedPreferences.map(\.defaultQuotePolicy))
+        model.apply(configuration: loaded, defaultVisibility: loadedPreferences?.defaultVisibility, defaultSensitive: loadedPreferences?.defaultSensitive, defaultLanguage: loadedPreferences.map(\.defaultLanguage), defaultQuotePolicy: loadedPreferences.map(\.defaultQuotePolicy), accountID: credential.id)
     }
 }
 

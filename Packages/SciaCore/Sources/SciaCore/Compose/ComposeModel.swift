@@ -88,8 +88,20 @@ public final class ComposeModel<Thumbnail: Sendable> {
     public private(set) var otherAccount: ComposeAccount<Thumbnail>?
     /// ウィンドウに開いているアカウント。下書きはウィンドウが持ち、アカウントを替えて画面を作り直したら`rebind(home:writing:)`で替える。
     @ObservationIgnored public private(set) var homeAccount: ComposeAccount<Thumbnail>
+    /// 書いていたアカウントからログアウトして外した返信先か引用元。ウィンドウのアカウントのサーバーで探し終えるまで投稿させない（`resolvePendingRetarget(_:)`）。
+    /// 返信のつもりの投稿が、探している間に新しい投稿として送られないようにするため。
+    public private(set) var pendingRetarget: PendingRetarget?
+
+    /// ログアウトで外し、探し直している返信先か引用元。
+    public struct PendingRetarget: Sendable {
+        public let status: Status
+        public let isReply: Bool
+    }
+
     /// 書いているアカウント。
     private var writingAccount: ComposeAccount<Thumbnail> { otherAccount ?? homeAccount }
+    /// 書いているアカウントの`ComposeAccount.id`。
+    public var writingAccountID: String { writingAccount.id }
     /// 書いているアカウントの、そのサーバーでの自分のアカウントのID。
     public var myAccountID: String { writingAccount.myAccountID }
     /// 投稿するアカウントを替えたあと、新しいサーバーの上限を読むまで、アップロードし直すのを待っている添付。上限に合わせて縮め直すため。
@@ -105,8 +117,6 @@ public final class ComposeModel<Thumbnail: Sendable> {
     @ObservationIgnored public let tasks: TaskScope
     @ObservationIgnored private let backgroundTime: @MainActor (String) -> @MainActor () -> Void
     @ObservationIgnored private var uploadTasks: [DraftAttachment.ID: Task<Void, Never>] = [:]
-    /// `adoptDraft`でほかの下書きへ渡した添付。渡したあとに止まった読み込みが、渡した先の使うファイルを消さないようにする。
-    @ObservationIgnored private var handedOverAttachments: Set<DraftAttachment.ID> = []
     @ObservationIgnored private var thumbnailTasks: [DraftAttachment.ID: Task<Void, Never>] = [:]
     /// 削除した元の投稿から外れるのを待っている添付。投稿の可否が変わるので、変更を見張れるようにする。
     private var releaseTasks: [DraftAttachment.ID: Task<Void, Never>] = [:] {
@@ -125,15 +135,8 @@ public final class ComposeModel<Thumbnail: Sendable> {
     @ObservationIgnored private var mediaWait: CheckedContinuation<MediaWaitOutcome, Never>?
     @ObservationIgnored private var pickerSelection = MediaPickerSelection()
     @ObservationIgnored private let logger = SciaLog.logger(category: "compose")
-    /// ウィンドウのアカウントで送れたとき、下書きを空に戻す前に、送った結果を渡して呼ぶ。投稿、予約、編集のどれだったかと、サーバーが返したものが入る。
-    /// 一覧へ反映するのは呼ぶ側で、何をどこへ反映するかは`SubmittedDraft`の各場合にある。ほかのアカウントで送ったときは呼ばず、`ComposeAccount.onSubmitted`を呼ぶ。
-    @ObservationIgnored public var onSubmitted: (SubmittedDraft) -> Void = { _ in }
-    /// 投稿できて、下書きを空に戻したあとに呼ぶ。どのアカウントで送ったときも呼ぶ。
+    /// 投稿できて、下書きを空に戻したあとに呼ぶ。どのアカウントで送ったときも呼ぶ。送った結果は、送ったアカウントの`ComposeAccount.onSubmitted`に渡る。
     @ObservationIgnored public var onPosted: () -> Void = {}
-    /// 予約を書き直した投稿を送れて、`onPosted`を呼んだあとに、元の予約のIDを渡して呼ぶ。元の予約を取り消すのは呼ぶ側。
-    @ObservationIgnored public var onScheduleRewritten: (ScheduledStatus.ID) -> Void = { _ in }
-    /// 削除して書き直す元の投稿を削除できたら（もう消えていたときを含む）、そのIDを渡して呼ぶ。タイムラインから除くのは呼ぶ側。
-    @ObservationIgnored public var onRedraftDeleted: (Status.ID) -> Void = { _ in }
     /// サーバーの上限のために、設定で選んだより小さく、または低い画質にした。使う人が選んでいない画質の変化なので、知らせる。
     @ObservationIgnored public var onMediaReduced: (MediaAttachment.Kind) -> Void = { _ in }
     /// ペーストしたメディアのうち、添付の上限を超えて足さなかったものの種類。
@@ -144,7 +147,6 @@ public final class ComposeModel<Thumbnail: Sendable> {
     /// - Parameter backgroundTime: 送っている途中にバックグラウンドへ移っても、送り終えるまでアプリを止めないよう頼む。頼んで、終えるときに呼ぶものを返す。
     ///   OSがバックグラウンドでアプリを止めるUI（iOS）が渡す。止めないUI（macOS）では省き、頼まない。
     /// - Parameter home: ウィンドウのアカウント。`submit`は、ふつうは`AccountSession.submit(_:)`で、そのクライアントで受けた401はセッションへ知らせる。
-    ///   送れた結果は、`home.onSubmitted`ではなく`onSubmitted`に渡る。
     public init(
         tasks: TaskScope,
         replyTo: Status? = nil,
@@ -247,7 +249,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
 
     /// 投稿ボタンを押せる。添付の準備が済んでいなくても、失敗したものがなければ押せ、済むのを待ってから送る。
     public var canPost: Bool {
-        !isPosting && (hasResolvedDefaults || hasChosenVisibility || editedStatus != nil)
+        !isPosting && pendingRetarget == nil && (hasResolvedDefaults || hasChosenVisibility || editedStatus != nil)
             && draftToPost.canSubmit(maxCharacters: maxCharacters, charactersReservedPerURL: charactersReservedPerURL, maxMediaAttachments: maxMediaAttachments, pollLimits: pollLimits)
             && !attachments.contains { attachmentStatus(of: $0.id) == .descriptionFailed }
     }
@@ -361,7 +363,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     /// インスタンスの上限と、ユーザーの既定の公開範囲、閲覧注意、言語、引用できる人を反映する。公開範囲、言語、引用できる人は、自分で選んでいたら変えない。
     /// 既定の閲覧注意は、この後に最初の添付を足したときから使う。
     /// - Parameter defaultLanguage: 既定の言語。読めなければnilで、今のままにする。既定を決めていなければ`.some(nil)`。
-    /// - Parameter accountID: 値を読んだアカウントの`ComposeAccount.id`。今のアカウントならnil。読んでいる間に投稿するアカウントを替えていたら、何もしない。
+    /// - Parameter accountID: 値を読んだアカウントの`ComposeAccount.id`。nilならウィンドウのアカウント。読んでいる間に書いているアカウントを替えていたら、何もしない。
     ///   前のアカウントのサーバーの上限や既定値で、替えたアカウントの下書きを決めないため。
     /// - Parameter defaultQuotePolicy: 既定の引用できる人。読めなければnilで、今のままにする。引用に対応していないサーバーなら`.some(nil)`で、送らない。
     public func apply(
@@ -372,7 +374,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
         defaultQuotePolicy: QuotePolicy?? = nil,
         accountID: String? = nil
     ) {
-        guard accountID == otherAccount?.id else { return }
+        guard (accountID ?? homeAccount.id) == writingAccount.id else { return }
         hasResolvedDefaults = true
         defer { startAwaitingReuploads() }
         if let defaultQuotePolicy {
@@ -487,6 +489,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     /// 決まった範囲は選んだものとして扱い、あとから届く既定の公開範囲でも広げない。予約が公開範囲を送っておらず、既定もまだ届いていないときだけは、
     /// 保つ範囲がないので、届いた既定と新しい相手から決める。
     private func retarget(to draft: StatusDraft, replyTo: Status?, quoteTarget: Status?) {
+        pendingRetarget = nil
         let typed = typedText
         let isRewriting = rewritingSchedule != nil
         let keepsSpoiler = isRewriting || (showsSpoiler && (spoilerText != initialDraft.spoilerText || initialDraft.spoilerText.isEmpty))
@@ -707,6 +710,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     /// 下書きを空にして、返信先のない新しい投稿に戻す。編集していれば、編集をやめる。
     /// ほかのアカウントで書いていれば、今のアカウントに戻す。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
     public func reset() {
+        pendingRetarget = nil
         leaveOtherAccount()
         initialDraft = StatusDraft()
         replyTo = nil
@@ -751,14 +755,16 @@ public final class ComposeModel<Thumbnail: Sendable> {
         !isPosting && !pointsToServerPost
     }
 
-    /// 書いているアカウントのサーバーにある投稿（編集、削除して書き直す、書き直す予約）を指している。ほかのサーバーへは移せない。
-    private var pointsToServerPost: Bool {
+    /// 書いているアカウントのサーバーにある投稿（編集、削除して書き直す、書き直す予約）を指している。ほかのサーバーへは移せないので、
+    /// 書いているアカウントからログアウトすると捨てる（`rebind(home:writing:)`）。
+    public var pointsToServerPost: Bool {
         // 添付はみな、端末のファイルから選んだかペーストしたもの。編集や書き直しの添付は、サーバーにしかないので移せない。
         editedStatus != nil || redraft != nil || rewritingSchedule != nil || !attachments.allSatisfy { localMedia[$0.id] != nil }
     }
 
     /// 書いているアカウントを、ほかのサーバーのアカウントにする。返信先と引用元を外し、添付は新しいサーバーの上限を読んでからアップロードし直す。
     private func moveToAnotherServer(_ account: ComposeAccount<Thumbnail>?) {
+        pendingRetarget = nil
         otherAccount = account
         if replyTo != nil || quoteTarget != nil {
             retarget(to: StatusDraft(), replyTo: nil, quoteTarget: nil)
@@ -772,86 +778,86 @@ public final class ComposeModel<Thumbnail: Sendable> {
     }
 
 
+    /// `rebind(home:writing:)`で、下書きをどう扱ったか。
+    public enum Rebinding {
+        /// 書いていたアカウントのまま。
+        case kept
+        /// ウィンドウのアカウントに付いていった。
+        case followed
+        /// ウィンドウのアカウントに付いていくには、返信先か引用元を新しいサーバーで探し直す必要がある。それまでは書いていたアカウントのまま残す。
+        /// 呼ぶ側が探し、付け直せたら`switchAccount(to: nil)`と同じく替える。
+        case awaitingRetarget(Status, isReply: Bool)
+        /// 書いていたアカウントからログアウトしていたので、ウィンドウのアカウントに戻した。返信先か引用元を外していたら`dropped`に入り、`pendingRetarget`にも残る。
+        /// 呼ぶ側が探し、`resolvePendingRetarget(_:)`で付け直すか外す。
+        case returned(dropped: Status?, isReply: Bool)
+        /// 書いていたアカウントからログアウトしていて、ウィンドウのアカウントでは続けられない下書き（その投稿の編集や書き直し）なので捨てた。
+        case discarded
+    }
+
+    /// アカウントを替えて画面を作り直したときに、新しい画面の、ウィンドウのアカウントと書いているアカウントにつなぎ直す。決まりはdocs/compose.mdの「アカウントを変えるとき」にある。
+    /// - Parameters:
+    ///   - home: 新しい画面の、ウィンドウのアカウント。
+    ///   - writing: 書いていたアカウントを、新しい画面で作り直したもの。そのアカウントからログアウトしていればnil。書いていたのが`home`と同じアカウントなら使わない。
+    @discardableResult
+    public func rebind(home: ComposeAccount<Thumbnail>, writing: ComposeAccount<Thumbnail>?) -> Rebinding {
+        let writingID = writingAccount.id
+        let followsHome = otherAccount == nil
+        homeAccount = home
+        if writingID == home.id {
+            // 同じアカウントにログインし直したか、選んでいたアカウントにウィンドウを切り替えた。同じサーバーなので、添付も既定値もそのまま使う。
+            if otherAccount != nil {
+                otherAccount = nil
+                onAccountChange(nil)
+            }
+            return .kept
+        }
+        guard let writing else {
+            // 送っている途中なら、ログアウトしたアカウントの送り先は送らずに失敗するので、送り直せるようウィンドウのアカウントへ移す。
+            guard !pointsToServerPost else {
+                reset()
+                return .discarded
+            }
+            let dropped = replyTo ?? quoteTarget
+            let isReply = replyTo != nil
+            // 添付の準備を待って送る途中なら、待つのをやめる。準備が済んだあとに、使う人が選んでいないウィンドウのアカウントで送らないため。
+            cancelWaitingForMedia()
+            moveToAnotherServer(nil)
+            pendingRetarget = dropped.map { PendingRetarget(status: $0, isReply: isReply) }
+            return .returned(dropped: dropped, isReply: isReply)
+        }
+        otherAccount = writing
+        guard followsHome, canMoveToAnotherServer else {
+            onAccountChange(writing)
+            return .kept
+        }
+        if let target = replyTo ?? quoteTarget {
+            onAccountChange(writing)
+            return .awaitingRetarget(target, isReply: replyTo != nil)
+        }
+        moveToAnotherServer(nil)
+        return .followed
+    }
+
+    /// ログアウトで外した返信先か引用元を探し終えたら呼ぶ。見つかった投稿を付け直し、見つからなければ外したままにして、投稿できるようにする。
+    /// 探している間に返信先を付け直すか下書きを捨てていたら、もう探していないので何もしない。
+    /// - Parameter found: ウィンドウのアカウントのサーバーで見つけた投稿。見つからないか引用できなければnil。
+    public func resolvePendingRetarget(_ found: Status?) {
+        guard let pending = pendingRetarget else { return }
+        pendingRetarget = nil
+        guard let found else { return }
+        if pending.isReply {
+            setReplyTarget(found)
+        } else {
+            setQuoteTarget(found)
+        }
+    }
+
     /// ユーザーのメニューの「メンション」で、本文に語を入れる前に、投稿するアカウントを`account`にする。入れてよければtrue。
     /// 同じアカウントのままなら替えないので、編集や書き直しの途中でも入れられる。送っている間はfalse。ほかのアカウントへ替えられるかは`switchAccount`の決まりに従う。
     public func prepareInsertion(as account: ComposeAccount<Thumbnail>?) -> Bool {
         guard !isPosting else { return false }
         guard account?.id != otherAccount?.id else { return true }
         return switchAccount(to: account)
-    }
-
-    /// 同じアカウントにログインし直して画面を作り直すとき、前の画面の下書きを引き継ぐ。決まりはdocs/compose.mdの「アカウントを変えるとき」にある。
-    /// 作ったばかりの空の下書きに呼ぶ。`previous`の添付はこちらへ移すので、引き継いだあとの`previous`は使わない。
-    /// サーバーの上限と既定値は引き継がず、`apply`で読み直す。選んだ公開範囲と言語は、読み直しても上書きしない。
-    /// アップロードが済んだ添付は、同じアカウントのメディアなのでそのまま使う。済んでいない添付は、上限を読んでからアップロードし直す。
-    /// - Parameter otherAccount: `previous`がほかのアカウントで書いていたら、この画面で作り直したそのアカウント。今のアカウントで書いていたらnil。
-    public func adoptDraft(from previous: ComposeModel, otherAccount: ComposeAccount<Thumbnail>?) {
-        initialDraft = previous.initialDraft
-        text = previous.text
-        spoilerText = previous.spoilerText
-        showsSpoiler = previous.showsSpoiler
-        visibility = previous.visibility
-        hasChosenVisibility = previous.hasChosenVisibility
-        replyTo = previous.replyTo
-        quoteTarget = previous.quoteTarget
-        editedStatus = previous.editedStatus
-        poll = previous.poll
-        scheduledAt = previous.scheduledAt
-        rewritingSchedule = previous.rewritingSchedule
-        redraft = previous.redraft
-        language = previous.language
-        hasChosenLanguage = previous.hasChosenLanguage
-        quotePolicy = previous.quotePolicy
-        hasChosenQuotePolicy = previous.hasChosenQuotePolicy
-        insertedURLs = previous.insertedURLs
-        // 応答だけを受け取れなかった投稿を、ログインし直してから送り直しても、同じ投稿として送る。
-        lastSubmitted = previous.lastSubmitted
-        if let otherAccount {
-            self.otherAccount = otherAccount
-            forgetServerDefaults()
-            onAccountChange(otherAccount)
-        }
-        pickerSelection = previous.pickerSelection
-        let handedOver = previous.handOverAttachments()
-        attachments = handedOver.attachments
-        localMedia = handedOver.localMedia
-        // 前の画面の送りかけが抜けるのを待ってから送り直すよう、`startAwaitingReuploads`に渡す。
-        uploadTasks = handedOver.uploads
-        for attachment in attachments {
-            if case .uploaded = attachment.state {
-                // 前の画面で送りかけていた代替テキストは、止めて渡されるので、ここで送り直す。
-                sendDescriptionIfNeeded(attachment.id)
-            } else {
-                prepareReupload(attachment.id)
-            }
-        }
-        // 読み込んだファイルは使い回すので、作り終えていなかったサムネイルはここで作り直す。
-        for (id, local) in localMedia {
-            guard let file = local.file, local.thumbnail == nil else { continue }
-            thumbnailTasks[id] = tasks.run(.action) { [weak self, media] in
-                let thumbnail = await media.makeThumbnail(file)
-                guard !Task.isCancelled else { return }
-                self?.localMedia[id]?.thumbnail = thumbnail
-            }
-        }
-        startReleasingRedraftMedia()
-    }
-
-    /// 添付を、端末のファイルを消さずに手放す。送りかけは止めずに渡し、応答が届いてもこの下書きには書き戻らない。
-    private func handOverAttachments() -> (attachments: [DraftAttachment], localMedia: [DraftAttachment.ID: LocalMedia<Thumbnail>], uploads: [DraftAttachment.ID: Task<Void, Never>]) {
-        for task in [thumbnailTasks, descriptionTasks, releaseTasks].flatMap(\.values) {
-            task.cancel()
-        }
-        thumbnailTasks = [:]
-        descriptionTasks = [:]
-        releaseTasks = [:]
-        handedOverAttachments.formUnion(attachments.map(\.id))
-        let handedOver = (attachments, localMedia, uploadTasks)
-        uploadTasks = [:]
-        localMedia = [:]
-        attachments = []
-        pickerSelection = MediaPickerSelection()
-        return handedOver
     }
 
     /// ほかのアカウントで書いていれば、今のアカウントに戻す。下書きを空にするときに呼ぶ。
@@ -956,20 +962,16 @@ public final class ComposeModel<Thumbnail: Sendable> {
         }
         let draft = submission(of: draftToPost)
         lastSubmitted = draft
-        // 送っている間は投稿するアカウントを替えさせないが、送り終えたときに知らせる先を、送ったアカウントに決めておく。
-        let account = otherAccount
+        // 送っている間にウィンドウのアカウントを替えても、送り終えたときに知らせる先を、送ったアカウントに決めておく。
+        let account = writingAccount
         do {
-            let submitted = try await (account ?? homeAccount).submit(draft)
-            if let account {
-                account.onSubmitted(submitted)
-            } else {
-                onSubmitted(submitted)
-            }
+            let submitted = try await account.submit(draft)
+            account.onSubmitted(submitted)
             let rewritten = rewritingSchedule?.id
             reset()
             onPosted()
             if let rewritten {
-                onScheduleRewritten(rewritten)
+                account.onScheduleRewritten(rewritten)
             }
         } catch {
             // 編集は応答だけを失っても、代替テキストはサーバーに届いていることがある。元の値に戻して送り直しても届くよう、送った添付に目印を付ける。
@@ -1063,11 +1065,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
             return false
         }
         redraft?.deletion = .done
-        if let otherAccount {
-            otherAccount.onRedraftDeleted(id)
-        } else {
-            onRedraftDeleted(id)
-        }
+        writingAccount.onRedraftDeleted(id)
         return true
     }
 
@@ -1864,17 +1862,11 @@ extension ComposeModel {
         localMedia[id]?.sending = nil
         let file = try await local.load(media.unprocessableImageTypes().union([rejected.mimeType]))
         guard localMedia[id] != nil, !Task.isCancelled else {
-            removeUnlessHandedOver(file, of: id)
+            file.remove()
             throw CancellationError()
         }
         localMedia[id]?.file = file
         return file
-    }
-
-    /// 添付を外したあとに読み込みが済んだファイルを消す。`adoptDraft`でほかの下書きへ渡した添付のファイルは、渡した先が同じ読み込みの結果を使うので消さない。
-    private func removeUnlessHandedOver(_ file: LocalMediaFile, of id: DraftAttachment.ID) {
-        guard !handedOverAttachments.contains(id) else { return }
-        file.remove()
     }
 
     /// 読み込み済みならそのファイルを使う。初めて読み込んだら、サムネイルも作り始める。
@@ -1882,7 +1874,7 @@ extension ComposeModel {
         if let file = local.file { return file }
         let file = try await local.load(media.unprocessableImageTypes())
         guard localMedia[id] != nil, !Task.isCancelled else {
-            removeUnlessHandedOver(file, of: id)
+            file.remove()
             throw CancellationError()
         }
         localMedia[id]?.file = file

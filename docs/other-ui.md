@@ -80,6 +80,7 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 ## 投稿
 
 - 投稿欄は`ComposeModel`。`AccountSession.applyComposeDefaults(to:)`が済むまで`canPost`はfalseのまま。書き始めたときに待たせないよう、セッションを始めたら`preloadComposeDefaults()`で先に読んでおく
+- 下書き（`ComposeModel`）は、アカウントの画面一式ではなくウィンドウが持つ。アカウントを替えて画面一式を作り直したら、新しい画面一式の`ComposeAccount`を`rebind(home:writing:)`に渡してつなぎ直し、返った`Rebinding`に従って返信先を探し直す。ログアウトで外した返信先は`pendingRetarget`に残り、探し終えたら`resolvePendingRetarget(_:)`を呼ぶまで投稿させない。送った結果は、送り始めたときの`ComposeAccount`の`onSubmitted`、`onScheduleRewritten`、`onRedraftDeleted`に渡る（[compose.md](compose.md)の「アカウントを変えるとき」）。書いているアカウント（`writingAccountID`）からログアウトしたときも同じ`rebind`を呼ぶ
 - 送れた結果（`onSubmitted`）は`session.statuses.reflect(_:usingTagsIn:)`に渡す。どの一覧へ配るかはそこで決まる
 - 書きかけの投稿欄で返信、引用、編集、書き直しを始める前に、進むか、確かめるか、断るかは`Confirmation.starting(_:draft:now:)`が決める（共有されたもので書き始めるときは`Confirmation.shared`）。後から選んだ投稿の読み込みだけを使うのは`LatestLookup`
 - 投稿欄の文言: 本文の上のラベル（返信先、引用元、編集、書き直し）は`ComposeModel.contextChip`、投稿ボタンの名前は`sendButtonTitle`、添付の状態は`ComposeAttachmentStatus.title`、絵文字のパレットの見出しは`EmojiPaletteSection.Kind.title`。添付を縮めた、ペーストした添付を足さなかった、ビューアでの添付の状態のチップは`Notice.mediaReduced(_:)`、`Notice.pastedMediaSkipped(_:)`、`Notice.draftStatus(_:progress:reduction:showFailure:)`
