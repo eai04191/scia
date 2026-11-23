@@ -7,6 +7,22 @@ typealias ComposeModel = SciaCore.ComposeModel<Never>
 typealias ComposeMediaService = SciaCore.ComposeMediaService<Never>
 
 extension SciaCore.ComposeModel where Thumbnail == Never {
+    /// ウィンドウのアカウントの送り先を並べて作る。アカウントを見分けるものは`ComposeModel.homeID`にする。
+    convenience init(
+        tasks: TaskScope,
+        replyTo: Status? = nil,
+        myAccountID: String,
+        media: ComposeMediaService = .unavailable,
+        redraft: ComposeRedraftService = .unavailable,
+        backgroundTime: @escaping @MainActor (String) -> @MainActor () -> Void = { _ in {} },
+        submit: @escaping (StatusDraft) async throws -> SubmittedDraft
+    ) {
+        self.init(tasks: tasks, replyTo: replyTo, home: ComposeAccount(id: Self.homeID, myAccountID: myAccountID, media: media, redraft: redraft, submit: submit), backgroundTime: backgroundTime)
+    }
+
+    /// テストで作る下書きの、ウィンドウのアカウントの`ComposeAccount.id`。
+    static var homeID: String { "home" }
+
     /// バックグラウンドの延長を頼まずに作る。延長を確かめるテストは、`backgroundTime`を渡して作る。
     convenience init(
         tasks: TaskScope,

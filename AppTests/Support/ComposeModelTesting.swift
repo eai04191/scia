@@ -11,10 +11,11 @@ extension ComposeModel where Thumbnail == UIImage {
         backgroundTime: @escaping @MainActor (String) -> @MainActor () -> Void,
         post: @escaping (StatusDraft) async throws -> Void
     ) {
-        self.init(tasks: tasks, myAccountID: myAccountID, media: media, backgroundTime: backgroundTime) { draft in
+        let home = ComposeAccount(id: "home", myAccountID: myAccountID, media: media) { draft in
             try await post(draft)
             return .stub(for: draft)
         }
+        self.init(tasks: tasks, home: home, backgroundTime: backgroundTime)
     }
 }
 

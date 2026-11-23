@@ -582,7 +582,7 @@ final class SessionController {
         let postingLanguages = PostingLanguageCache { try await client.postingLanguages() }
         self.postingLanguages = postingLanguages
         composer = InlineComposeController(
-            model: ComposeModel<UIImage>(tasks: tasks.child(), myAccountID: credential.accountID, media: media, redraft: redraft, backgroundTime: BackgroundTime.request, submit: { [session] draft in try await session.submit(draft) }),
+            model: ComposeModel<UIImage>(tasks: tasks.child(), home: ComposeAccount(id: credential.id, myAccountID: credential.accountID, media: media, redraft: redraft) { [session] draft in try await session.submit(draft) }, backgroundTime: BackgroundTime.request),
             completion: completion,
             recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance),
             languages: PostingLanguageSource(recent: RecentPostingLanguages(defaults: .standard, account: credential.handle), load: postingLanguages.languages),

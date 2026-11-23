@@ -84,12 +84,14 @@ public final class ComposeModel<Thumbnail: Sendable> {
     /// 最後に送った内容。同じ内容を送り直すときだけ同じIdempotency-Keyを使い、変えたら別の投稿として新しいキーにする。
     /// 応答だけが失われていた場合に、変えた内容が投稿されないまま成功扱いにならないようにするため。
     @ObservationIgnored private var lastSubmitted: StatusDraft?
-    /// 書いているほかのアカウント。今のアカウントで書いていればnil。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
+    /// 書いているほかのアカウント。ウィンドウのアカウント（`homeAccount`）で書いていればnil。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
     public private(set) var otherAccount: ComposeAccount<Thumbnail>?
-    /// 今のアカウントの、自分のアカウントのID。
-    @ObservationIgnored private let homeAccountID: String
+    /// ウィンドウに開いているアカウント。下書きはウィンドウが持ち、アカウントを替えて画面を作り直したら`rebind(home:writing:)`で替える。
+    @ObservationIgnored public private(set) var homeAccount: ComposeAccount<Thumbnail>
+    /// 書いているアカウント。
+    private var writingAccount: ComposeAccount<Thumbnail> { otherAccount ?? homeAccount }
     /// 書いているアカウントの、そのサーバーでの自分のアカウントのID。
-    public var myAccountID: String { otherAccount?.myAccountID ?? homeAccountID }
+    public var myAccountID: String { writingAccount.myAccountID }
     /// 投稿するアカウントを替えたあと、新しいサーバーの上限を読むまで、アップロードし直すのを待っている添付。上限に合わせて縮め直すため。
     @ObservationIgnored private var awaitingReupload: Set<DraftAttachment.ID> = []
     /// 投稿するアカウントを替えた回数。替える前に始めたアップロードが、前のサーバーの結果を書き戻さないようにする。
@@ -98,10 +100,8 @@ public final class ComposeModel<Thumbnail: Sendable> {
     @ObservationIgnored public var now: () -> Date = SystemTime.now
     /// 予約の日時を区切る暦。テストでは決まったタイムゾーンの暦に差し替える。
     @ObservationIgnored public var calendar = Calendar.autoupdatingCurrent
-    @ObservationIgnored private let homeSubmit: (StatusDraft) async throws -> SubmittedDraft
-    @ObservationIgnored private let homeMedia: ComposeMediaService<Thumbnail>
-    private var media: ComposeMediaService<Thumbnail> { otherAccount?.media ?? homeMedia }
-    /// 下書きの送信とアップロードの持ち主。セッションの持ち主の子で、ログアウトやアカウントの切り替えで閉じると、送っている途中のものも止める。
+    private var media: ComposeMediaService<Thumbnail> { writingAccount.media }
+    /// 下書きの送信とアップロードの持ち主。ウィンドウの持ち主の子で、ウィンドウを閉じると、送っている途中のものも止める。
     @ObservationIgnored public let tasks: TaskScope
     @ObservationIgnored private let backgroundTime: @MainActor (String) -> @MainActor () -> Void
     @ObservationIgnored private var uploadTasks: [DraftAttachment.ID: Task<Void, Never>] = [:]
@@ -112,9 +112,8 @@ public final class ComposeModel<Thumbnail: Sendable> {
     private var releaseTasks: [DraftAttachment.ID: Task<Void, Never>] = [:] {
         didSet { settleMediaWait() }
     }
-    @ObservationIgnored private let homeRedraftService: ComposeRedraftService
     /// 書いているアカウントのサーバーで、削除して書き直す元の投稿を消す口。
-    private var redraftService: ComposeRedraftService { otherAccount?.redraft ?? homeRedraftService }
+    private var redraftService: ComposeRedraftService { writingAccount.redraft }
     /// 送っている間に、書き直している元の投稿を「削除」で消した。送るのをやめられるところでやめ、送り終えたら空に戻す。
     @ObservationIgnored private var stopsRedraftingAfterSubmit = false
     /// 代替テキストを送っている添付。送っている間は、書き戻してサーバーの値と同じになっても、送り終えるまで投稿させない。
@@ -126,7 +125,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     @ObservationIgnored private var mediaWait: CheckedContinuation<MediaWaitOutcome, Never>?
     @ObservationIgnored private var pickerSelection = MediaPickerSelection()
     @ObservationIgnored private let logger = SciaLog.logger(category: "compose")
-    /// 今のアカウントで送れたとき、下書きを空に戻す前に、送った結果を渡して呼ぶ。投稿、予約、編集のどれだったかと、サーバーが返したものが入る。
+    /// ウィンドウのアカウントで送れたとき、下書きを空に戻す前に、送った結果を渡して呼ぶ。投稿、予約、編集のどれだったかと、サーバーが返したものが入る。
     /// 一覧へ反映するのは呼ぶ側で、何をどこへ反映するかは`SubmittedDraft`の各場合にある。ほかのアカウントで送ったときは呼ばず、`ComposeAccount.onSubmitted`を呼ぶ。
     @ObservationIgnored public var onSubmitted: (SubmittedDraft) -> Void = { _ in }
     /// 投稿できて、下書きを空に戻したあとに呼ぶ。どのアカウントで送ったときも呼ぶ。
@@ -144,30 +143,24 @@ public final class ComposeModel<Thumbnail: Sendable> {
 
     /// - Parameter backgroundTime: 送っている途中にバックグラウンドへ移っても、送り終えるまでアプリを止めないよう頼む。頼んで、終えるときに呼ぶものを返す。
     ///   OSがバックグラウンドでアプリを止めるUI（iOS）が渡す。止めないUI（macOS）では省き、頼まない。
-    /// - Parameter submit: 下書きを今のアカウントのサーバーへ送る。ふつうは`AccountSession.submit(_:)`を渡す。
-    ///   投稿、予約、編集のどれで送るかは下書きの中身で決まり、そのクライアントで受けた401はセッションへ知らせる。送れた結果は`onSubmitted`に渡る。
+    /// - Parameter home: ウィンドウのアカウント。`submit`は、ふつうは`AccountSession.submit(_:)`で、そのクライアントで受けた401はセッションへ知らせる。
+    ///   送れた結果は、`home.onSubmitted`ではなく`onSubmitted`に渡る。
     public init(
         tasks: TaskScope,
         replyTo: Status? = nil,
-        myAccountID: String,
-        media: ComposeMediaService<Thumbnail> = .unavailable,
-        redraft redraftService: ComposeRedraftService = .unavailable,
-        backgroundTime: @escaping @MainActor (String) -> @MainActor () -> Void = { _ in {} },
-        submit: @escaping (StatusDraft) async throws -> SubmittedDraft
+        home: ComposeAccount<Thumbnail>,
+        backgroundTime: @escaping @MainActor (String) -> @MainActor () -> Void = { _ in {} }
     ) {
         self.tasks = tasks
         self.backgroundTime = backgroundTime
-        let draft = replyTo.map { StatusDraft.reply(to: $0, myAccountID: myAccountID) } ?? StatusDraft()
+        let draft = replyTo.map { StatusDraft.reply(to: $0, myAccountID: home.myAccountID) } ?? StatusDraft()
         initialDraft = draft
         text = draft.text
         spoilerText = draft.spoilerText
         showsSpoiler = !draft.spoilerText.isEmpty
         visibility = draft.visibility
         self.replyTo = replyTo
-        homeAccountID = myAccountID
-        homeSubmit = submit
-        homeMedia = media
-        homeRedraftService = redraftService
+        homeAccount = home
     }
 
     /// 送る内容。注意書きの欄を隠していれば、注意書きは送らない。
@@ -748,9 +741,24 @@ public final class ComposeModel<Thumbnail: Sendable> {
     public func switchAccount(to account: ComposeAccount<Thumbnail>?) -> Bool {
         guard !isPosting, editedStatus == nil, redraft == nil else { return false }
         guard account?.id != otherAccount?.id else { return true }
-        guard rewritingSchedule == nil else { return false }
-        // 添付はみな、端末のファイルから選んだかペーストしたもの。編集や書き直しの添付は、上で替えないので来ない。
-        guard attachments.allSatisfy({ localMedia[$0.id] != nil }) else { return false }
+        guard canMoveToAnotherServer else { return false }
+        moveToAnotherServer(account)
+        return true
+    }
+
+    /// 送っていない下書きで、ほかのサーバーへ移せるか。
+    private var canMoveToAnotherServer: Bool {
+        !isPosting && !pointsToServerPost
+    }
+
+    /// 書いているアカウントのサーバーにある投稿（編集、削除して書き直す、書き直す予約）を指している。ほかのサーバーへは移せない。
+    private var pointsToServerPost: Bool {
+        // 添付はみな、端末のファイルから選んだかペーストしたもの。編集や書き直しの添付は、サーバーにしかないので移せない。
+        editedStatus != nil || redraft != nil || rewritingSchedule != nil || !attachments.allSatisfy { localMedia[$0.id] != nil }
+    }
+
+    /// 書いているアカウントを、ほかのサーバーのアカウントにする。返信先と引用元を外し、添付は新しいサーバーの上限を読んでからアップロードし直す。
+    private func moveToAnotherServer(_ account: ComposeAccount<Thumbnail>?) {
         otherAccount = account
         if replyTo != nil || quoteTarget != nil {
             retarget(to: StatusDraft(), replyTo: nil, quoteTarget: nil)
@@ -761,8 +769,8 @@ public final class ComposeModel<Thumbnail: Sendable> {
             prepareReupload(attachment.id)
         }
         onAccountChange(account)
-        return true
     }
+
 
     /// ユーザーのメニューの「メンション」で、本文に語を入れる前に、投稿するアカウントを`account`にする。入れてよければtrue。
     /// 同じアカウントのままなら替えないので、編集や書き直しの途中でも入れられる。送っている間はfalse。ほかのアカウントへ替えられるかは`switchAccount`の決まりに従う。
@@ -951,7 +959,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
         // 送っている間は投稿するアカウントを替えさせないが、送り終えたときに知らせる先を、送ったアカウントに決めておく。
         let account = otherAccount
         do {
-            let submitted = try await (account?.submit ?? homeSubmit)(draft)
+            let submitted = try await (account ?? homeAccount).submit(draft)
             if let account {
                 account.onSubmitted(submitted)
             } else {
