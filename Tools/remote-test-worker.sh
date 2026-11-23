@@ -127,16 +127,23 @@ if [ -n "$stopped" ]; then
     echo "貸し出しを止めたので、テストを中断しました"
     exit 75
 fi
-# 落ちた回のxcresultを、Tools/test-dispatch.shが依頼のIDで受け取れる場所へ移す。作業コピーに残っている前の依頼の分は、この依頼の始まりより古いので移さない
+# 落ちた回のxcresultと、走らせた出力の全文を、Tools/test-dispatch.shが依頼のIDで受け取れる場所へ移す。作業コピーに残っている前の依頼の分は、この依頼の始まりより古いので移さない
+# 出力の全文は、作業コピーの分（checkの残りのDerivedData/check-rest.log、対象ごとのDerivedData/check-logs）が次の依頼に上書きされるため、ここでコピーする
 if [ "$result" -ne 0 ]; then
     results=~/scia/results/$id
     mkdir -p "$results"
     find "$work/DerivedData/test-logs" -mindepth 1 -maxdepth 1 -type d -name 'failed-*' -newer ~/scia/jobs/"$id".pid -exec mv {} "$results/" \; 2>/dev/null
-    rmdir "$results" 2>/dev/null
+    output=$results/remote-output-$id
+    mkdir -p "$output"
+    cp "$log" "$output/make.log"
+    find "$work/DerivedData" -maxdepth 1 -name check-rest.log -newer ~/scia/jobs/"$id".pid -exec cp {} "$output/" \;
+    find "$work/DerivedData/check-logs" -type f -newer ~/scia/jobs/"$id".pid -exec cp {} "$output/" \; 2>/dev/null
 fi
 # 通った回のアプリ（Tools/keep-checked-app.shが残したもの）を、Tools/test-dispatch.shが依頼のIDで受け取れる場所へコピーする。作業コピーは次の依頼が上書きするため
 if [ "$result" -eq 0 ] && [ -d "$work/DerivedData/checked" ]; then
     cp -Rc "$work/DerivedData/checked" ~/scia/apps/"$id"
 fi
 grep -aE ': error: |\*\*\*|✘ Test|Test run with' "$log" | tail -30 | cut -c1-240
+# 落ちた対象の出力（Tools/check-logged.shの見出しから見出しまで）は、形で選んだ行に入らないことがあるので、そのまま返す
+sed -n '/^==== 落ちた: /,/^==== ここまで: /p' "$log"
 exit "$result"

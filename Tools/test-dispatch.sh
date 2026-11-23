@@ -178,19 +178,19 @@ remote() {
     esac
 }
 
-# 落ちた回のxcresultを別のMacから手元のDerivedData/test-logsへ運ぶ。受け取れなくてもテストの結果は「落ちた」のままなので、失敗しても終了コードに影響させない
+# 落ちた回のxcresultと出力の全文を別のMacから手元のDerivedData/test-logsへ運ぶ。受け取れなくてもテストの結果は「落ちた」のままなので、失敗しても終了コードに影響させない
 fetch_failed_results() {
     local results="~/scia/results/$id" dest=DerivedData/test-logs names name
     names=$(results_ssh "ls $results 2>/dev/null") || return 0
     [[ -n "$names" ]] || return 0
     mkdir -p "$dest"
     if ! results_ssh "tar -c -C $results ." | tar -x -C "$dest"; then
-        echo "落ちた回のxcresultを受け取れませんでした。$SCIA_REMOTE_HOST の $results に残っています" >&2
+        echo "落ちた回の記録を受け取れませんでした。$SCIA_REMOTE_HOST の $results に残っています" >&2
         return 1
     fi
     results_ssh "rm -rf $results" || true
     for name in $names; do
-        echo "落ちた回のxcresultは${PWD}/${dest}/${name}に受け取りました"
+        echo "落ちた回の記録は${PWD}/${dest}/${name}に受け取りました"
     done
 }
 

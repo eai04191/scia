@@ -37,7 +37,9 @@
 
 別のMacは、`SCIA_REMOTE_SIMS`の端末の数だけ、作業コピー（`~/scia/tree-<番号>`）と端末の組で同時に走らせる。
 
-落ちた回のxcresultは、別のMacの`~/scia/results/<依頼のID>`に移し、入口が手元の`DerivedData/test-logs/failed-<時刻>`へ受け取って別のMacの分を消す。受け取れなければ別のMacに7日残る。
+落ちた回のxcresultと出力の全文は、別のMacの`~/scia/results/<依頼のID>`に移し、入口が手元の`DerivedData/test-logs`へ受け取って別のMacの分を消す。xcresultは`failed-<時刻>`、出力の全文は`remote-output-<依頼のID>`に入る。受け取れなければ別のMacに7日残る。
+
+`make check`で並べて走らせるlintとmacOSのテストは、対象ごとに`DerivedData/check-logs/<対象>.log`へ書く。落ちた対象は、`==== 落ちた: <対象>`から`==== ここまで: <対象>`の間に、ログ全体から選んだ失敗の行とログの末尾を入れた区間を`<対象>.failed`に書き、並べた対象が全部終わってから出す（`Tools/check-logged.sh`）。別のMacも、この間の行をそのまま返す。
 
 ## 手元の端末
 

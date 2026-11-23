@@ -193,5 +193,38 @@ class MergeQueueTests(unittest.TestCase):
         self.assertEqual(self.git('rev-parse', 'main'), self.git('rev-parse', 'second'))
 
 
+class CheckLoggedTests(unittest.TestCase):
+    """make checkで並べて走らせる対象は、落ちたら、形を問わずその出力を見出しの間に入れた区間を残す。"""
+
+    def run_logged(self, command):
+        with tempfile.TemporaryDirectory() as temp:
+            result = subprocess.run(
+                [str(ROOT / 'Tools' / 'check-logged.sh'), temp, 'demo', 'sh', '-c', command],
+                capture_output=True, text=True,
+            )
+            failed = Path(temp) / 'demo.failed'
+            return result, (Path(temp) / 'demo.log').read_text(), failed.read_text() if failed.exists() else None
+
+    def test_keeps_output_of_failed_target(self):
+        result, log, failed = self.run_logged('echo "FAIL: test_x"; exit 3')
+        self.assertEqual(result.returncode, 3)
+        lines = failed.splitlines()
+        self.assertTrue(lines[0].startswith('==== 落ちた: demo'))
+        self.assertIn('FAIL: test_x', lines)
+        self.assertEqual(lines[-1], '==== ここまで: demo')
+        self.assertIn('FAIL: test_x', log)
+
+    def test_keeps_failure_lines_before_the_tail(self):
+        _, _, failed = self.run_logged('echo "✘ Test early() failed"; seq 1 200; exit 1')
+        self.assertIn('✘ Test early() failed', failed.splitlines())
+
+    def test_leaves_nothing_when_target_passes(self):
+        result, log, failed = self.run_logged('echo ok')
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, '')
+        self.assertEqual(log, 'ok\n')
+        self.assertIsNone(failed)
+
+
 if __name__ == '__main__':
     unittest.main()
