@@ -19,6 +19,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// 下書きの送信とアップロードの持ち主。ウィンドウを閉じたときに閉じる。
     private let draftTasks = TaskScope()
     private let logger = SciaLog.logger(category: "lifecycle")
+    /// このウィンドウのシーン。開いているアカウントを、ウィンドウを開き直しても使えるよう`userInfo`に残す。
+    private weak var sceneSession: UISceneSession?
     /// 保存したアカウントを読めずにログイン画面を出している。端末のロック中など一時的なことがあるので、前面に戻ったら読み直す。
     private var isShowingAccountsLoadFailure = false
 
@@ -29,6 +31,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     ) {
         guard let windowScene = scene as? UIWindowScene else { return }
         logger.info("scene willConnect")
+        sceneSession = session
         if ProcessInfo.processInfo.isiOSAppOnMac {
             // Macで縦長のウィンドウに並べられるよう、最小幅を今のiPhoneで一番狭い幅まで下げる
             windowScene.sizeRestrictions?.minimumSize = CGSize(width: 375, height: 480)
@@ -163,7 +166,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     #endif
 
     #if DEBUG
-    /// ダミーのセッションを選んでいるか。選んでいるアカウントと同じく、シーンをまたいで1つ。
+    /// ダミーのセッションを選んでいるか。シーンをまたいで1つ。
     /// Keychainにも`AccountRegistry`にも入れないので、起動し直すと保存してあるアカウントかログイン画面に戻る。
     private static var showsDummySession = false
 
@@ -224,8 +227,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         #endif
         switch AppDependencies.accounts {
-        case .success(let accounts):
-            if let credential = accounts.current {
+        case .success:
+            if let credential = windowAccount {
+                windowAccountID = credential.id
                 showTimeline(for: credential)
             } else {
                 showLogin(errorMessage: nil)
@@ -318,7 +322,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         #if DEBUG
         if Self.showsDummySession { return nil }
         #endif
-        return accounts?.current?.id
+        return windowAccount?.id
     }
 
     /// アカウントのリストと「アカウントを管理」のメニュー。開くたびに今のアカウントで組み立て直す。
@@ -355,26 +359,42 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
     }
 
+    private static let accountIDKey = "accountID"
+
+    /// このウィンドウで開いているアカウントの`Credential.id`。アカウントはウィンドウごとに開く（docs/account-screen.mdの「ウィンドウとアカウント」）。
+    private var windowAccountID: Credential.ID? {
+        get { sceneSession?.userInfo?[Self.accountIDKey] as? String }
+        set { sceneSession?.userInfo = (sceneSession?.userInfo ?? [:]).merging([Self.accountIDKey: newValue as Any]) { $1 } }
+    }
+
+    /// このウィンドウで開くアカウント。開いていたアカウントからログアウトしていれば、最後に切り替えたアカウント（`AccountRegistry.current`）。
+    private var windowAccount: Credential? {
+        guard let accounts else { return nil }
+        return accounts.accounts.first { $0.id == windowAccountID } ?? accounts.current
+    }
+
+    /// このウィンドウを`id`のアカウントに切り替える。ほかのウィンドウは切り替えない。新しいウィンドウはこのアカウントで開く。
     /// ダミーを選んでいる間は、裏で選んだままのアカウントを選んでも、ダミーから抜けてそのアカウントに戻る。
     private func switchAccount(to id: Credential.ID) {
         guard let accounts else { return }
         Self.leaveDummySession()
         accounts.select(id)
+        windowAccountID = id
         logger.info("account switched")
         Self.syncAllScenes()
     }
 
-    /// 選んでいるアカウントはシーンをまたいで1つなので、変えたらすべてのシーンの画面をそれに揃える。
-    /// 揃えないと、別のシーンが古いアカウントや、ログインし直す前の古いトークンのまま投稿したりするため。
+    /// アカウントを足したり消したり、ログインし直したりしたら、どのウィンドウも、開くアカウントを読み直す。
+    /// ログアウトしたアカウントを開いていたウィンドウは別のアカウントに、ログインし直したアカウントを開いていたウィンドウは新しいトークンの画面にする。
     private static func syncAllScenes() {
         for scene in UIApplication.shared.connectedScenes {
-            (scene.delegate as? SceneDelegate)?.showCurrentAccount()
+            (scene.delegate as? SceneDelegate)?.showWindowAccount()
         }
     }
 
-    /// 選んでいるアカウントの画面にする。すでにそのアカウントの画面なら何もしない。アカウントがなければログイン画面にする。
+    /// このウィンドウで開くアカウントの画面にする。すでにそのアカウントの画面なら何もしない。アカウントがなければログイン画面にする。
     /// ログインし直してトークンが変わったときは、同じアカウントでも作り直す。
-    private func showCurrentAccount() {
+    private func showWindowAccount() {
         #if DEBUG
         if Self.showsDummySession {
             guard session?.credential != DummyServer.credential else { return }
@@ -382,20 +402,21 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
         #endif
-        guard let current = accounts?.current else {
+        guard let account = windowAccount else {
             // すでにログイン画面なら作り直さない。出しているエラーの文言を消さないため。
             guard session != nil else { return }
             showLogin(errorMessage: nil)
             return
         }
-        guard session?.credential != current else { return }
-        showTimeline(for: current)
+        windowAccountID = account.id
+        guard session?.credential != account else { return }
+        showTimeline(for: account)
     }
 
     /// トークンが無効になったアカウントに、ログインし直す。ログイン画面は挟まず、そのアカウントのサーバーの認可画面を出す。
     /// 別のアカウントでログインされたら、そのアカウントは加えない。ログインし直しのつもりで、アカウントが増えたり切り替わったりしないようにするため。
-    /// - Parameter isCurrent: 使っているアカウントか。使っているアカウントなら、ログインし直している間に使うアカウントが変わったら、結果を捨てる。
-    ///   ほかのアカウント（「別のアカウントで」で操作したアカウント）なら、使うアカウントは替えずに認証情報だけを新しくし、その間にログアウトしていたら結果を捨てる。
+    /// - Parameter isCurrent: このウィンドウで開いているアカウントか。そうなら、ログインし直している間にこのウィンドウのアカウントが変わったら、結果を捨てる。
+    ///   ほかのアカウント（「別のアカウントで」で操作したアカウント）なら、開くアカウントは替えずに認証情報だけを新しくする。どちらも、その間にログアウトしていたら結果を捨てる。
     private func reauthenticate(_ credential: Credential, isCurrent: Bool) async {
         guard let window, let accounts else { return }
         let authenticator = WebAuthenticator(anchor: window)
@@ -406,19 +427,15 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             guard renewed.id == credential.id else {
                 throw DifferentAccountLoggedIn(expected: credential.handle, actual: renewed.handle)
             }
-            // ログインし直している間に、別のシーンでログアウトや切り替えをしていたら、結果を捨てる。
+            // ログインし直している間に、ログアウトや切り替えをしていたら、結果を捨てる。
             // 加えると、消したアカウントが戻ったり、切り替えたアカウントから戻ったりするため。
-            if isCurrent {
-                guard accounts.current?.id == credential.id else {
-                    logger.info("reauthentication discarded: account changed")
-                    return
-                }
-                try accounts.add(renewed)
-            } else {
-                guard try accounts.renew(renewed) else {
-                    logger.info("reauthentication discarded: account removed")
-                    return
-                }
+            if isCurrent, windowAccount?.id != credential.id {
+                logger.info("reauthentication discarded: account changed")
+                return
+            }
+            guard try accounts.renew(renewed) else {
+                logger.info("reauthentication discarded: account removed")
+                return
             }
             logger.info("account reauthenticated (current: \(isCurrent, privacy: .public))")
             Self.syncAllScenes()
@@ -442,6 +459,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let model = LoginModel(oauth: AppDependencies.oauth, accountDomains: accountDomains) { [weak self] credential in
             guard !attempt.isCancelled else { return }
             try self?.accounts?.add(credential)
+            self?.windowAccountID = credential.id
             Self.leaveDummySession()
             sheet?.dismiss(animated: true)
             Self.syncAllScenes()
@@ -469,8 +487,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     private func confirmLogOut() {
-        guard let current = accounts?.current else { return }
-        confirmLogOut(current)
+        guard let account = windowAccount else { return }
+        confirmLogOut(account)
     }
 
     private func confirmLogOut(_ account: Credential) {
@@ -492,7 +510,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// サーバー側のトークンは失効させない。使う人がログアウトを選んだときだけ呼ぶ。APIの応答を理由には呼ばない。
     private func logOut(_ credential: Credential) {
         guard let accounts else {
-            showCurrentAccount()
+            showWindowAccount()
             return
         }
         do {
@@ -505,7 +523,6 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
         logger.info("account removed")
-        showCurrentAccount()
         Self.syncAllScenes()
     }
 
@@ -529,6 +546,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 throw AccountsUnavailable()
             }
             try accounts.add(credential)
+            self?.windowAccountID = credential.id
             Self.leaveDummySession()
             Self.syncAllScenes()
         }
