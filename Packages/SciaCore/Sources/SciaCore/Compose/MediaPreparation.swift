@@ -134,6 +134,7 @@ public struct ImagePlan: Sendable, Equatable {
     ///   - cropping: 切り抜いて送る。中身が変わるので、収まっていても作り直す。`size`には切り抜いたあとの大きさを、`byteCount`には元の容量を渡す。
     ///     切り抜いたあとの容量は作り直すまで分からないため、容量の上限は作り直しながら確かめ、`exceedsSizeLimit`にはしない。
     ///   - writableMIMETypes: この端末のImageIOが書き出せる形式。
+    ///   - hasAlpha: 元の画像が透過を持つ。持つなら、透過を持てないJPEGでは作り直さない。
     /// - Returns: 元のまま送るならnil。
     /// - Throws: 作り直す必要があるのに、サーバーが受け付けて端末が書き出せる形式がないとき、`MediaReencodingError.noSupportedFormat`。
     public static func make(
@@ -145,6 +146,7 @@ public struct ImagePlan: Sendable, Equatable {
         supportedMIMETypes: [String]?,
         unprocessableMIMETypes: Set<String>,
         writableMIMETypes: Set<String> = ImageReencoder.writableMIMETypes,
+        hasAlpha: Bool,
         cropping: Bool = false
     ) throws -> ImagePlan? {
         // アニメーションを保ったまま縮められないので、GIFは作り直さない。
@@ -154,7 +156,9 @@ public struct ImagePlan: Sendable, Equatable {
         let exceedsSizeLimit = !cropping && (limits.imageSizeLimit.map { byteCount > $0 } ?? false)
         let unsupported = supportedMIMETypes.map { !$0.contains(mimeType) } ?? false
         guard cropping || target != size || exceedsSizeLimit || unsupported || unprocessableMIMETypes.contains(mimeType) else { return nil }
-        guard let output = outputMIMEType(for: mimeType, supported: supportedMIMETypes, unprocessable: unprocessableMIMETypes, writable: writableMIMETypes) else {
+        guard let output = outputMIMEType(
+            for: mimeType, supported: supportedMIMETypes, unprocessable: unprocessableMIMETypes, writable: writableMIMETypes, hasAlpha: hasAlpha
+        ) else {
             throw MediaReencodingError.noSupportedFormat
         }
         return ImagePlan(
@@ -166,10 +170,11 @@ public struct ImagePlan: Sendable, Equatable {
     }
 
     /// 作り直す形式。元がPNGならPNGを先に試す。JPEGにすると、スクリーンショットの文字がにじみ、透過も消えるため。
+    /// 透過を持つ画像は、JPEGにしない。受け付ける形式がJPEGしかなければ、透過を消して送らず、作り直せなかったことにする。
     /// AVIFはiOSの書き出しでHEICとほぼ同じ大きさにしかならず時間は数倍かかるので、HEICとJPEGより後にする。
-    static func outputMIMEType(for mimeType: String, supported: [String]?, unprocessable: Set<String>, writable: Set<String>) -> String? {
+    static func outputMIMEType(for mimeType: String, supported: [String]?, unprocessable: Set<String>, writable: Set<String>, hasAlpha: Bool) -> String? {
         let order = ["image/heic", "image/jpeg", "image/avif", "image/png"]
-        let candidates = mimeType == "image/png" ? ["image/png"] + order : order
+        let candidates = (mimeType == "image/png" ? ["image/png"] + order : order).filter { !hasAlpha || $0 != "image/jpeg" }
         return candidates.first { type in
             let accepted = supported.map { $0.contains(type) } ?? ["image/jpeg", "image/png"].contains(type)
             return accepted && !unprocessable.contains(type) && writable.contains(type)

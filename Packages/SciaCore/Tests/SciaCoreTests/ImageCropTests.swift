@@ -230,7 +230,7 @@ struct ImageCropEncodingTests {
         let limits = MediaLimits(imageSizeLimit: 1000, imageMatrixLimit: nil, videoSizeLimit: nil, videoMatrixLimit: nil, videoFrameRateLimit: nil)
         let plan = try ImagePlan.make(
             size: PixelSize(width: 100, height: 100), byteCount: 5000, mimeType: "image/png", setting: .original, limits: limits,
-            supportedMIMETypes: nil, unprocessableMIMETypes: [], cropping: true
+            supportedMIMETypes: nil, unprocessableMIMETypes: [], hasAlpha: false, cropping: true
         )
         #expect(plan == ImagePlan(mimeType: "image/png", size: PixelSize(width: 100, height: 100), sizeBySetting: PixelSize(width: 100, height: 100), exceedsSizeLimit: false))
     }

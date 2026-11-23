@@ -21,7 +21,8 @@ struct MediaPreparationTests {
         limits: MediaLimits? = nil,
         supported: [String]?? = nil,
         unprocessable: Set<String> = [],
-        writable: Set<String> = ["image/jpeg", "image/png", "image/heic", "image/avif"]
+        writable: Set<String> = ["image/jpeg", "image/png", "image/heic", "image/avif"],
+        hasAlpha: Bool = false
     ) throws -> ImagePlan? {
         try ImagePlan.make(
             size: PixelSize(width: width, height: height),
@@ -31,7 +32,8 @@ struct MediaPreparationTests {
             limits: limits ?? mastodonLimits,
             supportedMIMETypes: supported ?? self.supported,
             unprocessableMIMETypes: unprocessable,
-            writableMIMETypes: writable
+            writableMIMETypes: writable,
+            hasAlpha: hasAlpha
         )
     }
 
@@ -127,6 +129,21 @@ struct MediaPreparationTests {
     @Test func skipsFormatsTheDeviceCannotWrite() throws {
         let plan = try #require(try imagePlan(4032, 3024, supported: ["image/png", "image/avif"], writable: ["image/jpeg", "image/png"]))
         #expect(plan.mimeType == "image/png")
+    }
+
+    /// 透過を持つHEICは、HEICを処理できないサーバー（JPEGで送り直すとき）や載せていないサーバーでも、JPEGにせずPNGで作り直す。
+    @Test func keepsTransparencyWhenHEICIsUnavailable() throws {
+        let unprocessable = try #require(try imagePlan(4032, 3024, unprocessable: ["image/heic", "image/heif", "image/avif"], hasAlpha: true))
+        #expect(unprocessable.mimeType == "image/png")
+        let unlisted = try #require(try imagePlan(4032, 3024, supported: ["image/jpeg", "image/png"], hasAlpha: true))
+        #expect(unlisted.mimeType == "image/png")
+    }
+
+    /// 透過を持つ画像は、サーバーがJPEGしか受け付けなければ、透過を消して送らず、作り直せなかったことにする。
+    @Test func refusesToDropTransparency() throws {
+        #expect(throws: MediaReencodingError.noSupportedFormat) {
+            try imagePlan(1000, 1000, mimeType: "image/png", supported: ["image/jpeg"], hasAlpha: true)
+        }
     }
 
     /// 元がPNGでも、サーバーがPNGを載せていなければ、受け付ける形式で作り直す。

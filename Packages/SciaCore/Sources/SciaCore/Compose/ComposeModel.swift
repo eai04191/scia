@@ -1748,6 +1748,7 @@ extension ComposeModel {
                 size: size, byteCount: byteCount, mimeType: file.mimeType, setting: settings.imageSize, limits: mediaLimits,
                 supportedMIMETypes: supportedMediaTypes,
                 unprocessableMIMETypes: media.unprocessableImageTypes().union(forcingJPEG ? UnprocessableMediaFormats.replaceableMIMETypes : []),
+                hasAlpha: ImageReencoder.hasAlpha(file.url),
                 cropping: crop != nil
             )
             reencoded = plan != nil

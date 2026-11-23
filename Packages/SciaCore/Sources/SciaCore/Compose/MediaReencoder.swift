@@ -70,6 +70,14 @@ public enum ImageReencoder {
         return (5...8).contains(orientation) ? PixelSize(width: height, height: width) : PixelSize(width: width, height: height)
     }
 
+    /// 透過を持つか。読めなければfalse。
+    public static func hasAlpha(_ url: URL) -> Bool {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+        else { return false }
+        return properties[kCGImagePropertyHasAlpha] as? Bool == true
+    }
+
     /// 計画どおりの大きさと形式で作り直す。容量の上限を超えたら、収まるまで解像度を下げて作り直す。
     ///
     /// 向きは画素に反映し、位置情報などのメタデータは書き出さない。色空間（Display P3など）は画像の色空間として残る。

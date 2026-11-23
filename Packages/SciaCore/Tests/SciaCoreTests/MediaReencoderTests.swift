@@ -71,6 +71,24 @@ struct MediaReencoderTests {
         #expect(output[kCGImagePropertyGPSDictionary] == nil)
     }
 
+    /// 透過を持つHEICを、HEICを載せないサーバーへ作り直すと、透過を保ったPNGになる。
+    @Test func keepsTransparencyOfHEICForServersWithoutHEIC() async throws {
+        let directory = try makeDirectory()
+        let source = directory.appending(path: "transparent.heic")
+        try writeImage(width: 400, height: 300, type: .heic, alpha: true, to: source)
+        #expect(ImageReencoder.hasAlpha(source))
+        let size = try #require(ImageReencoder.size(of: source))
+
+        let plan = try #require(try ImagePlan.make(
+            size: size, byteCount: ImageReencoder.byteCount(of: source), mimeType: "image/heic", setting: .original, limits: .unknown,
+            supportedMIMETypes: ["image/jpeg", "image/png"], unprocessableMIMETypes: [], hasAlpha: ImageReencoder.hasAlpha(source)
+        ))
+        let prepared = try await ImageReencoder.reencode(source, plan: plan, originalSize: size, sizeLimit: nil, quality: 0.85, destination: directory.appending(path: "out"))
+
+        #expect(prepared.mimeType == "image/png")
+        #expect(ImageReencoder.hasAlpha(prepared.url))
+    }
+
     /// サーバーが受け付けるなら、HEICで作り直す。
     @Test func reencodesAsHEIC() async throws {
         let directory = try makeDirectory()
