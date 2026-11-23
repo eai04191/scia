@@ -127,11 +127,16 @@ final class ShareViewController: UIViewController {
     }
 
     /// 画像、動画、音声の表現をファイルで受け取り、App Groupのフォルダーにコピーする。受け取ったファイルは完了の処理を抜けると消されるため、その中でコピーする。
+    /// 型が`public.image`だけの項目は、画像のオブジェクトとして読む（`storeImage`）。
     private func store(_ provider: NSItemProvider, in inbox: SharedMediaInbox, id: UUID, index: Int) async throws {
         let type = provider.registeredTypeIdentifiers
             .compactMap { UTType($0) }
             .first { $0.conforms(to: .movie) || $0.conforms(to: .image) || $0.conforms(to: .audio) }
         guard let type else { throw CocoaError(.fileReadUnsupportedScheme) }
+        guard type != .image else {
+            try await storeImage(provider, in: inbox, id: id, index: index)
+            return
+        }
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             _ = provider.loadFileRepresentation(for: type, openInPlace: false) { url, _, error in
                 guard let url else {
@@ -146,6 +151,29 @@ final class ShareViewController: UIViewController {
                 }
             }
         }
+    }
+
+    /// Xの画像の共有は、型を`public.image`とだけ登録し、`UIImage`を渡す（実機のログで確かめた）。元のファイルは届かないので、拡張の中で書き出す。
+    /// アプリは拡張子から形式を決めるので、書き出した形式の拡張子を付けた名前で置く。
+    private func storeImage(_ provider: NSItemProvider, in inbox: SharedMediaInbox, id: UUID, index: Int) async throws {
+        let item = try await provider.loadItem(forTypeIdentifier: UTType.image.identifier)
+        guard let image = item as? UIImage else {
+            logger.error("unsupported image item class=\(String(describing: type(of: item)), privacy: .public)")
+            throw CocoaError(.fileReadUnsupportedScheme)
+        }
+        try await Self.write(image, in: inbox, id: id, index: index)
+    }
+
+    /// 大きな画像では時間がかかるため、書き出しとコピーはメインスレッドの外でする。HEICは透過も持てるので、どの画像もHEICにする。
+    @concurrent
+    private static func write(_ image: UIImage, in inbox: SharedMediaInbox, id: UUID, index: Int) async throws {
+        guard let data = image.heicData() else { throw CocoaError(.fileWriteUnknown) }
+        let folder = FileManager.default.temporaryDirectory.appending(fileName: SafeFileName(UUID().uuidString), directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appending(path: "image.heic")
+        try data.write(to: file)
+        try inbox.store(file, id: id, index: index)
     }
 
     private func fail() {
