@@ -1587,8 +1587,8 @@ struct MediaViewerControllerTests {
         harness.viewController.view.addSubview(photo)
         let tile = MediaTileView(store: .offline)
         tile.frame = CGRect(x: border, y: border, width: 100, height: 100)
-        tile.paperBorder = (border, 12)
-        tile.viewerShadowOpacity = 0.2
+        tile.viewerLook.paperBorder = (border, 12)
+        tile.viewerLook.shadowOpacity = 0.2
         photo.addSubview(tile)
         let attachment = MediaAttachment(
             id: "1",
@@ -1799,7 +1799,7 @@ struct MediaViewerControllerTests {
         harness.viewController.view.addSubview(photo)
         let tile = MediaTileView(store: .offline)
         tile.frame = CGRect(x: border, y: border, width: 100, height: 100)
-        tile.paperBorder = (border, 12)
+        tile.viewerLook.paperBorder = (border, 12)
         photo.addSubview(tile)
         let attachment = MediaAttachment(
             id: "1",
@@ -1824,7 +1824,8 @@ struct MediaViewerControllerTests {
         let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
         try await waitUntil { viewer.isContentHiddenForTransition }
         harness.frames.runUntilStopped()
-        tile.viewerAppearance = (0, 0.12)
+        tile.viewerLook.contentOpacity = 0
+        tile.viewerLook.dimming = 0.12
         viewer.close()
         try await waitUntil { harness.viewController.presentedViewController == nil }
         harness.frames.runUntilStopped()
@@ -1850,8 +1851,8 @@ struct MediaViewerControllerTests {
         list.addSubview(row)
         let tile = MediaTileView(store: .offline)
         tile.frame = CGRect(x: 20, y: 0, width: 160, height: 90)
-        tile.paperBorder = (2, 3)
-        tile.viewerShadowOpacity = 0.2
+        tile.viewerLook.paperBorder = (2, 3)
+        tile.viewerLook.shadowOpacity = 0.2
         row.addSubview(tile)
         let attachment = MediaAttachment(
             id: "1",

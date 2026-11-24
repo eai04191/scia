@@ -14,7 +14,17 @@ struct MediaMenuTests {
         }
     }
 
-    private final class Thumbnail: UIImageView, MediaViewerSource {}
+    private final class Thumbnail: UIImageView, MediaViewerSource {
+        var thumbnailFocus: MediaFocus? { nil }
+        var overlappingViews: [UIView] { [] }
+        var viewerLook: MediaViewerSourceLook { .plain }
+
+        func makeDecorationCopy() -> UIView {
+            emptyDecorationCopy()
+        }
+
+        func showsAttachment(_ id: MediaAttachment.ID) -> Bool { true }
+    }
 
     private func makeWindow() throws -> UIWindow {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)

@@ -79,7 +79,7 @@ class PhotoStackView: UIView {
         betweenShadowOpacity = between
         PhotoStackShadow.castStack(on: stackShadow.layer, opacity: stack)
         for photo in photos {
-            photo.tile.viewerShadowOpacity = stack
+            photo.tile.viewerLook.shadowOpacity = stack
         }
         setNeedsLayout()
     }
@@ -229,7 +229,7 @@ final class StackedPhotoView: UIView {
     var dimming: CGFloat = 0 {
         didSet {
             dimView.alpha = dimming
-            tile.viewerAppearance.dimming = dimming
+            tile.viewerLook.dimming = dimming
         }
     }
 
@@ -238,7 +238,7 @@ final class StackedPhotoView: UIView {
     var showsContent = true {
         didSet {
             tile.alpha = showsContent ? 1 : 0
-            tile.viewerAppearance.contentOpacity = showsContent ? 1 : 0
+            tile.viewerLook.contentOpacity = showsContent ? 1 : 0
         }
     }
 
@@ -275,7 +275,7 @@ final class StackedPhotoView: UIView {
         // 小さな枠では、ALTやGIFのバッジは読めないため出さない。手前の写真に出すかは、使う側が決める。
         tile.hidesBadge = true
         tile.layer.cornerRadius = Self.cornerRadius - Self.border / 2
-        tile.paperBorder = (Self.border, Self.cornerRadius)
+        tile.viewerLook.paperBorder = (Self.border, Self.cornerRadius)
         // 回して置くので、縁がギザギザにならないよう、紙と中の画像の縁をなめらかに描く。
         layer.allowsEdgeAntialiasing = true
         tile.layer.allowsEdgeAntialiasing = true

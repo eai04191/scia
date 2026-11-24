@@ -1215,12 +1215,12 @@ extension MediaViewerController {
         morph.paperColor = PhotoPaper.color.resolvedColor(with: tile?.traitCollection ?? traitCollection)
         morph.paperBorder = border
         // 起点の近くから始めるときは、起点の見え方（中身を描かない、暗くする）から始める。
-        let appearance: (contentOpacity: CGFloat, dimming: CGFloat) = border > 0 ? tile?.viewerAppearance ?? (1, 0) : (1, 0)
-        morph.contentOpacity = appearance.contentOpacity
-        morph.dimming = appearance.dimming
+        let look = border > 0 ? tile?.viewerLook ?? .plain : .plain
+        morph.contentOpacity = look.contentOpacity
+        morph.dimming = look.dimming
         morph.place(unrotatedFrame: frame, rotation: rotation)
         // 影は、起点の近くから始めるときだけ起点と同じ濃さから始める。ビューアの画像の位置から始めるときは描かず、閉じる動きが濃くしていく。
-        morphShadow.opacity = border > 0 ? tile?.viewerShadowOpacity ?? 0 : 0
+        morphShadow.opacity = look.shadowOpacity
         attachDecoration(from: tile, alpha: decorationAlpha)
         morphFollowsPage = page?.drawsImage ?? false
         morph.layer.cornerRadius = cornerRadius
@@ -1398,7 +1398,7 @@ extension MediaViewerController {
         if movesImage, let tile = currentTile {
             // 白いフチの付いた起点（タイムラインで重ねた写真）からは、フチを含めた写真の枠と角の丸みから始める。
             // 縮めて置いた起点（タイムラインで傾けずに重ねた奥の写真）では、フチと角の丸みも同じ倍率で細くなっている。
-            let paper = tile.paperBorder
+            let paper = tile.viewerLook.paperBorder
             let tileScale = tile.scale(in: view)
             let startBorder = (paper?.width ?? 0) * tileScale
             let start = tileFrame(of: tile).insetBy(dx: -startBorder, dy: -startBorder)

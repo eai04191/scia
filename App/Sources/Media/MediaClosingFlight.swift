@@ -150,10 +150,11 @@ final class MediaClosingFlight {
         if let tile {
             // 白いフチの付いた起点（タイムラインで重ねた写真）へは、フチを含めた写真の枠と角の丸みへ、フチを太くしながら戻す。
             // 縮めて置いた起点（タイムラインで傾けずに重ねた奥の写真）へは、フチと角の丸みも同じ倍率で細くして戻す。
-            let paper = tile.paperBorder
+            let look = tile.viewerLook
+            let paper = look.paperBorder
             let scale = tile.scale(in: window)
             let border = (paper?.width ?? 0) * scale
-            lastTarget = (tile.unrotatedFrame(in: window).insetBy(dx: -border, dy: -border), tile.rotation(in: window), (paper?.cornerRadius ?? tile.layer.cornerRadius) * scale, border, tile.viewerAppearance, tile.viewerShadowOpacity)
+            lastTarget = (tile.unrotatedFrame(in: window).insetBy(dx: -border, dy: -border), tile.rotation(in: window), (paper?.cornerRadius ?? tile.layer.cornerRadius) * scale, border, (look.contentOpacity, look.dimming), look.shadowOpacity)
             parts.morph.layer.maskedCorners = tile.layer.maskedCorners
             // 縮むのに合わせて、ビューアの明るさから戻り先の明るさへ移す。
             parts.morph.blendDynamicRange(toward: tile, amount: startDynamicRangeBlend + (1 - startDynamicRangeBlend) * clamped)

@@ -24,25 +24,44 @@ protocol MediaViewerSource: UIView {
     /// `id`の添付ファイルを描いているか。タイムラインで重ねた写真は、何番目の添付ファイルでも手前の写真を開閉の起点にするため、起点が別の添付ファイルを描いていることがある。
     /// 描いていなければ、ビューアは起点の枠と角の丸みだけを使い、画像、焦点、重ねた表示は使わない。
     func showsAttachment(_ id: MediaAttachment.ID) -> Bool
-    /// 起点を囲む白いフチ（タイムラインで重ねた写真の紙）の幅と、フチの外側の角の丸み。フチがなければnil。
-    /// ビューアは開閉で動かす画像にもこのフチを付け、ビューアの画像の位置へ向かうにつれて細くしてなくす。
-    var paperBorder: (width: CGFloat, cornerRadius: CGFloat)? { get }
-    /// 起点の見え方。中身の濃さ（0なら紙だけを見せる）と、暗くする度合い。タイムラインで傾けずに重ねた奥の写真は、中身を描かず暗くしている。
-    /// ビューアは開閉で動かす画像を、起点の近くではこの見え方に近づける。
-    var viewerAppearance: (contentOpacity: CGFloat, dimming: CGFloat) { get }
-    /// 起点が下の面に落としている影の濃さ。影を落とさなければ0。タイムラインで重ねた写真は、スタックの影を落としている。
-    /// ビューアは開閉で動かす画像に同じ形の影を付け、起点の近くではこの濃さにする。
-    var viewerShadowOpacity: Float { get }
+    /// 起点の見え方。ビューアは開閉で動かす画像を、起点の近くではこの見え方に近づける。
+    var viewerLook: MediaViewerSourceLook { get }
 }
 
+// 起点の見え方を答える口には、既定の実装を付けない。新しい起点が書き忘れると、何もない見え方としてコンパイルが通り、開閉の両端で本物と複製が食い違うため。
+
 extension MediaViewerSource {
-    var overlappingViews: [UIView] { [] }
-    var thumbnailFocus: MediaFocus? { nil }
-    /// 添付ファイルを1つしか描かない起点（プロフィールの画像やリンクカードの画像）は、いつも開いたものを描いている。
-    func showsAttachment(_ id: MediaAttachment.ID) -> Bool { true }
-    var paperBorder: (width: CGFloat, cornerRadius: CGFloat)? { nil }
-    var viewerAppearance: (contentOpacity: CGFloat, dimming: CGFloat) { (1, 0) }
-    var viewerShadowOpacity: Float { 0 }
+    /// 何も重ねていない起点の、重ねた表示の複製。
+    func emptyDecorationCopy() -> UIView {
+        let container = UIView(frame: bounds)
+        container.isUserInteractionEnabled = false
+        return container
+    }
+}
+
+/// ビューアの開閉の起点の見え方。どの値にも既定値を付けず、起点ごとに書く。
+struct MediaViewerSourceLook {
+    /// 起点を囲む白いフチ（タイムラインで重ねた写真の紙）の幅と、フチの外側の角の丸み。フチがなければnil。
+    /// ビューアは開閉で動かす画像にもこのフチを付け、ビューアの画像の位置へ向かうにつれて細くしてなくす。
+    var paperBorder: (width: CGFloat, cornerRadius: CGFloat)?
+    /// 中身の濃さ。0なら紙だけを見せる。タイムラインで傾けずに重ねた奥の写真は、中身を描かない。
+    var contentOpacity: CGFloat
+    /// 暗くする度合い。タイムラインで傾けずに重ねた奥の写真は、暗くしている。
+    var dimming: CGFloat
+    /// 起点が下の面に落としている影の濃さ。影を落とさなければ0。タイムラインで重ねた写真は、スタックの影を落としている。
+    /// ビューアは開閉で動かす画像に同じ形の影を付け、起点の近くではこの濃さにする。
+    var shadowOpacity: Float
+
+    // 省略できる引数にしないよう、イニシャライザーを書く（`var`のオプショナルは、自動で作るイニシャライザーでは省略できる）。
+    init(paperBorder: (width: CGFloat, cornerRadius: CGFloat)?, contentOpacity: CGFloat, dimming: CGFloat, shadowOpacity: Float) {
+        self.paperBorder = paperBorder
+        self.contentOpacity = contentOpacity
+        self.dimming = dimming
+        self.shadowOpacity = shadowOpacity
+    }
+
+    /// フチも影もなく、画像をそのまま描く見え方。
+    static let plain = MediaViewerSourceLook(paperBorder: nil, contentOpacity: 1, dimming: 0, shadowOpacity: 0)
 }
 
 /// 起点を隠している、隠す側1つ分の取り分。隠す側（開いているビューア、サムネイルへ戻る動き、持ち上げた画像）は、隠すときにこれを作って持ち、要らなくなったら`release()`で返す。
@@ -145,19 +164,13 @@ extension UIView {
     }
 }
 
-/// 画像を1枚描くだけのビュー。プロフィールのアイコンやヘッダー画像のように、上に重ねる表示がない。
+/// 画像を1枚描くだけのビュー（プロフィールのヘッダー画像、リンクカードの画像）の、画像の読み方と隠し方。
 extension MediaViewerSource where Self: UIImageView {
     var thumbnailImage: UIImage? { image }
     var loadedThumbnail: UIImage? { image }
 
     var placeholderColor: UIColor? {
         backgroundColor?.resolvedColor(with: traitCollection)
-    }
-
-    func makeDecorationCopy() -> UIView {
-        let container = UIView(frame: bounds)
-        container.isUserInteractionEnabled = false
-        return container
     }
 
     var isConcealedForViewer: Bool {

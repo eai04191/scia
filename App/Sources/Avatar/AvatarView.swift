@@ -151,11 +151,15 @@ extension AvatarView: MediaViewerSource {
         backgroundColor?.resolvedColor(with: traitCollection)
     }
 
+    var thumbnailFocus: MediaFocus? { nil }
+    var overlappingViews: [UIView] { [] }
+    var viewerLook: MediaViewerSourceLook { .plain }
+
     func makeDecorationCopy() -> UIView {
-        let container = UIView(frame: bounds)
-        container.isUserInteractionEnabled = false
-        return container
+        emptyDecorationCopy()
     }
+
+    func showsAttachment(_ id: MediaAttachment.ID) -> Bool { true }
 
     var isConcealedForViewer: Bool {
         get { layer.mask != nil }

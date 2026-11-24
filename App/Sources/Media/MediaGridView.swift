@@ -514,14 +514,8 @@ final class MediaTileView: UIButton, MediaViewerSource {
     /// 上に重なっているビュー。タイムラインで重ねた奥の写真では、それより手前の写真。
     var overlappingViews: [UIView] = []
 
-    /// 囲んでいる白いフチ。タイムラインで重ねた写真の中のサムネイルでは、その写真のフチ。
-    var paperBorder: (width: CGFloat, cornerRadius: CGFloat)?
-
-    /// 見え方。タイムラインで重ねた写真の中のサムネイルでは、その写真が中身を描くかと暗さ。
-    var viewerAppearance: (contentOpacity: CGFloat, dimming: CGFloat) = (1, 0)
-
-    /// 下の面に落としている影の濃さ。タイムラインで重ねた写真の中のサムネイルでは、スタックの影の濃さ。
-    var viewerShadowOpacity: Float = 0
+    /// 見え方。タイムラインで重ねた写真の中のサムネイルでは、その写真のフチ、中身を描くかと暗さ、スタックの影の濃さ。
+    var viewerLook = MediaViewerSourceLook.plain
 
     override var isHighlighted: Bool {
         didSet { alpha = isHighlighted ? 0.7 : 1 }

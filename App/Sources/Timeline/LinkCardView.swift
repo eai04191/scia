@@ -684,6 +684,15 @@ final class LinkCardThumbnailView: UIImageView, MediaViewerSource {
     private(set) var imageURL: URL?
 
     var thumbnailImage: UIImage? { image }
+    var thumbnailFocus: MediaFocus? { nil }
+    var overlappingViews: [UIView] { [] }
+    var viewerLook: MediaViewerSourceLook { .plain }
+
+    func makeDecorationCopy() -> UIView {
+        emptyDecorationCopy()
+    }
+
+    func showsAttachment(_ id: MediaAttachment.ID) -> Bool { true }
 
     func showPlaceholder(_ placeholder: UIImage?, for url: URL?) {
         loadedThumbnail = nil

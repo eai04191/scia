@@ -1283,6 +1283,14 @@ final class ProfileHeaderView: UIView {
 /// ヘッダー画像。タップすると、ビューアで大きく見る。
 private final class ProfileBannerView: UIImageView, MediaViewerSource {
     var overlappingViews: [UIView] = []
+    var thumbnailFocus: MediaFocus? { nil }
+    var viewerLook: MediaViewerSourceLook { .plain }
+
+    func makeDecorationCopy() -> UIView {
+        emptyDecorationCopy()
+    }
+
+    func showsAttachment(_ id: MediaAttachment.ID) -> Bool { true }
     /// ビューアが画像を動かしている間、ヘッダー画像に重ねて隠すビュー。
     /// ヘッダー画像そのものを隠すと、上へ伸ばしたぼかしも消え、隠すのをやめてからも数コマ遅れて出るため、画像は隠さずに上に重ねる。
     weak var cover: UIView?
