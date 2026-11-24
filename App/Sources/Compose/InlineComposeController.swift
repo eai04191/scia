@@ -2493,7 +2493,7 @@ final class InlineComposeController: NSObject {
                 tile.superview?.layoutIfNeeded()
                 // 重ねた状態の表示も一緒に隠す。隠さないと、閉じ始めに空いた枠の位置に取り残され、開くときは写真が着く前から浮かぶ。
                 let overlay = attachmentStrip.overlay(for: id)
-                ends[.attachment(id)] = .init(view: tile, content: .thumbnail(tile.thumbnailImage, tile.thumbnailFocus), cornerRadius: MediaGridView.cornerRadius, decoration: overlay, makeThumbnailDecoration: tile.makeDecorationCopy) { concealed in
+                ends[.attachment(id)] = .init(view: tile, content: .thumbnail(tile.thumbnailImage, tile.thumbnailFocus), cornerRadius: MediaGridView.cornerRadius, decoration: overlay, makeThumbnailDecoration: { tile.makeDecorationCopy(includesPlay: false) }, makePlayCopy: tile.makePlayCopy) { concealed in
                     tile.alpha = concealed ? 0 : 1
                     overlay?.alpha = concealed ? 0 : 1
                 }
@@ -2517,7 +2517,9 @@ final class InlineComposeController: NSObject {
                     : .thumbnail(model.localMedia[id]?.thumbnail, nil)
                 // 写真同士の影は、その写真のものなので、3枚目の位置に重ねる4枚目より後ろには載せない。
                 let betweenShadow = index < 3 ? photo.betweenShadowSnapshot() : nil
-                ends[.attachment(id)] = .init(view: photo, content: content, cornerRadius: StackedPhotoView.cornerRadius, border: StackedPhotoView.border, betweenShadow: betweenShadow) { concealed in
+                // 再生アイコンも3枚目の写真のものなので、4枚目より後ろには載せない。
+                let makePlayCopy = index < 3 ? photo.tile.makePlayCopy : nil
+                ends[.attachment(id)] = .init(view: photo, content: content, cornerRadius: StackedPhotoView.cornerRadius, border: StackedPhotoView.border, betweenShadow: betweenShadow, makePlayCopy: makePlayCopy) { concealed in
                     photo.alpha = concealed ? 0 : 1
                     thumbnails.setStackShadowConcealed(concealed)
                 }

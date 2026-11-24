@@ -458,6 +458,11 @@ final class MediaTileView: UIButton, MediaViewerSource {
     /// 画像では含めない。複製とサムネイルが同じ絵で、重ねると透明な部分が濃く見えるため。
     /// 複製の大きさが変わっても、サムネイルと同じ角からの位置を保つ。ラベルは画像にし、全体を覆う残りの枚数と中央の再生マークは、伸び縮みしないよう作り直す。
     func makeDecorationCopy() -> UIView {
+        makeDecorationCopy(includesPlay: true)
+    }
+
+    /// - Parameter includesPlay: 再生アイコンを含める。投稿欄の開閉のように、再生アイコンを`makePlayCopy`で別に動かすときはfalseにする。
+    func makeDecorationCopy(includesPlay: Bool) -> UIView {
         let container = UIView(frame: bounds)
         container.isUserInteractionEnabled = false
         if showsMovingImage, let thumbnail = thumbnailView.image {
@@ -478,18 +483,8 @@ final class MediaTileView: UIButton, MediaViewerSource {
             copy.autoresizingMask = [.flexibleRightMargin, .flexibleTopMargin]
             container.addSubview(copy)
         }
-        // バッジと違って画像に描かず、丸と三角をそのまま載せる。複製はビューアの大きさまで広がるため、画像にすると三角がぼける。
-        if !playView.isHidden {
-            let copy = UIView(frame: playView.frame)
-            copy.backgroundColor = playView.backgroundColor
-            copy.layer.cornerRadius = playView.layer.cornerRadius
-            copy.autoresizingMask = [.flexibleLeftMargin, .flexibleRightMargin, .flexibleTopMargin, .flexibleBottomMargin]
-            let glyph = UIImageView(image: playGlyphView.image)
-            glyph.frame = playGlyphView.frame
-            glyph.contentMode = playGlyphView.contentMode
-            glyph.preferredSymbolConfiguration = playGlyphView.preferredSymbolConfiguration
-            glyph.tintColor = playGlyphView.tintColor
-            copy.addSubview(glyph)
+        if includesPlay, let copy = makePlayCopy() {
+            copy.frame = playView.frame
             container.addSubview(copy)
         }
         if let symbol = symbolView.image {
@@ -516,6 +511,23 @@ final class MediaTileView: UIButton, MediaViewerSource {
             container.addSubview(copy)
         }
         return container
+    }
+
+    /// 動画の再生アイコンの複製。動画でなければnil。複製を置いた枠の大きさが変わっても、中央で同じ大きさのまま残る。
+    /// バッジと違って画像に描かず、丸と三角をそのまま載せる。複製はビューアの大きさまで広がるため、画像にすると三角がぼける。
+    func makePlayCopy() -> UIView? {
+        guard !playView.isHidden else { return nil }
+        let copy = UIView(frame: CGRect(origin: .zero, size: playView.bounds.size))
+        copy.backgroundColor = playView.backgroundColor
+        copy.layer.cornerRadius = playView.layer.cornerRadius
+        copy.autoresizingMask = [.flexibleLeftMargin, .flexibleRightMargin, .flexibleTopMargin, .flexibleBottomMargin]
+        let glyph = UIImageView(image: playGlyphView.image)
+        glyph.frame = playGlyphView.frame
+        glyph.contentMode = playGlyphView.contentMode
+        glyph.preferredSymbolConfiguration = playGlyphView.preferredSymbolConfiguration
+        glyph.tintColor = playGlyphView.tintColor
+        copy.addSubview(glyph)
+        return copy
     }
 
     /// バッジに出すラベル。

@@ -33,11 +33,31 @@ final class ComposeMorphFlights {
         var decoration: UIView?
         /// 上に重ねた写真が落としている影の像。カプセルの写真だけに付く。起点にあれば複製に載せ、動き始めに薄くする。
         var betweenShadow: UIView?
-        /// サムネイルに重ねている表示（ALTやGIFのバッジ、再生アイコン）の複製を作る。列のサムネイルだけに付く。カプセルの写真はバッジを出さないため。
+        /// サムネイルに重ねている表示（ALTやGIFのバッジ）の複製を作る。列のサムネイルだけに付く。カプセルの写真はバッジを出さないため。
         /// 複製に載せ、列に向かうときは近づくにつれて濃くし、カプセルに向かうときは薄くする。載せないと、列に着いて本物に替わったコマでバッジが付く。
         var makeThumbnailDecoration: (() -> UIView)?
+        /// 動画の再生アイコンの複製を作る。動画でなければnilを返す。列のサムネイルにもカプセルの写真にも出るので、バッジとは別に1つだけ載せ、
+        /// 起点の大きさから行き先の大きさへ変えながら動かす。列とカプセルで大きさが違い、2つを重ねて入れ替えると、途中で丸が二重に見えるため。
+        var makePlayCopy: (() -> UIView?)?
         /// 動かしている間、本物を見えなくする。重ねた表示も一緒に隠す。
         let conceal: (Bool) -> Void
+    }
+
+    /// 再生アイコンの丸の直径と三角の幅。
+    struct PlaySize: Equatable {
+        let diameter: CGFloat
+        let glyph: CGFloat
+
+        init(diameter: CGFloat, glyph: CGFloat) {
+            self.diameter = diameter
+            self.glyph = glyph
+        }
+
+        /// `MediaTileView.makePlayCopy`が作った複製の大きさ。三角は最初のサブビュー。
+        @MainActor
+        init(of copy: UIView) {
+            self.init(diameter: copy.bounds.width, glyph: copy.subviews.first?.intrinsicContentSize.width ?? 0)
+        }
     }
 
     enum Content {
@@ -110,6 +130,9 @@ final class ComposeMorphFlights {
             if let thumbnailDecoration = source.makeThumbnailDecoration?() {
                 copy.attachThumbnailDecoration(thumbnailDecoration)
             }
+            if let play = source.makePlayCopy?() ?? nil {
+                copy.attachPlay(play)
+            }
             if let betweenShadow = source.betweenShadow {
                 copy.attachBetweenShadow(betweenShadow)
                 UIView.animateSpring(duration: Self.decorationRevealDuration, in: copy) {
@@ -150,6 +173,8 @@ final class ComposeMorphFlights {
                 flight.copy.alpha = 0
                 continue
             }
+            // 再生アイコンの複製も、この中で作る。アニメーションの中で作ると、作ったばかりのビューの`tintColor`の設定まで動き、三角が既定の色から白へ変わっていく。
+            var targetPlay: UIView?
             UIView.performWithoutAnimation {
                 conceal(target)
                 // 行き先のほうが大きな画像を描いていれば差し替え、カプセルの小さな画像を広げてぼやけさせない。
@@ -161,8 +186,11 @@ final class ComposeMorphFlights {
                     flight.copy.thumbnailDecorationAlpha = 0
                 }
                 flight.copy.markThumbnailDecorationAlphaBeforeMove()
+                targetPlay = target.makePlayCopy?() ?? nil
+                flight.copy.preparePlay(toward: targetPlay)
             }
             let showsThumbnailDecoration = target.makeThumbnailDecoration != nil
+            let targetPlaySize = targetPlay.map(PlaySize.init(of:))
             let destination = geometry(of: target)
             let delay = delays[key] ?? 0
             flight.ends.append(target)
@@ -176,6 +204,7 @@ final class ComposeMorphFlights {
                 // 複製に載せた重ねた表示は、行き先によらず向かう間に薄くする。列に着くときは、着いてから本物を浮かび上がらせる。
                 copy.decorationAlpha = 0
                 copy.thumbnailDecorationAlpha = showsThumbnailDecoration ? 1 : 0
+                copy.showPlay(targetPlaySize)
             }
             if delay > 0 {
                 delayedAnimation(delay, move)
@@ -193,7 +222,7 @@ final class ComposeMorphFlights {
     func retarget(on targets: [Key: End], generation: Int, animations: (TimeInterval, @escaping () -> Void) -> Void) {
         guard generation == self.generation else { return }
         let now = mediaTime()
-        var moved: [(FlightCopy, FlightCopy.Geometry, TimeInterval, Bool)] = []
+        var moved: [(FlightCopy, FlightCopy.Geometry, TimeInterval, Bool, PlaySize?)] = []
         for (key, var flight) in flights {
             guard let target = targets[key], let previous = flight.destination else { continue }
             let destination = geometry(of: target)
@@ -205,14 +234,19 @@ final class ComposeMorphFlights {
             flight.destination = destination
             flights[key] = flight
             flight.copy.freezeAtPresentation()
-            moved.append((flight.copy, destination, max(flight.startTime - now, 0), target.makeThumbnailDecoration != nil))
+            var targetPlaySize: PlaySize?
+            UIView.performWithoutAnimation {
+                targetPlaySize = (target.makePlayCopy?() ?? nil).map(PlaySize.init(of:))
+            }
+            moved.append((flight.copy, destination, max(flight.startTime - now, 0), target.makeThumbnailDecoration != nil, targetPlaySize))
         }
-        for (copy, destination, delay, showsThumbnailDecoration) in moved {
+        for (copy, destination, delay, showsThumbnailDecoration, targetPlaySize) in moved {
             animations(delay) {
                 copy.apply(destination)
                 // 止めたときに見えている濃さで残した重ねた表示も、残りの時間で薄くし続ける。
                 copy.decorationAlpha = 0
                 copy.thumbnailDecorationAlpha = showsThumbnailDecoration ? 1 : 0
+                copy.showPlay(targetPlaySize)
             }
         }
     }
@@ -320,18 +354,86 @@ private final class FlightCopy: UIView {
         set { thumbnailDecoration?.alpha = newValue }
     }
 
-    /// 送信中の暗い下地などの重ねた表示より奥に置く。列のサムネイルでも、状態の表示はバッジより手前にあるため。
+    /// 再生アイコンと、送信中の暗い下地などの重ねた表示より奥に置く。列のサムネイルでも、状態の表示はバッジより手前にあるため。
     func attachThumbnailDecoration(_ copy: UIView) {
         thumbnailDecoration?.removeFromSuperview()
         thumbnailDecoration = copy
         copy.isUserInteractionEnabled = false
         copy.frame = inner.bounds
         copy.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        if let below = play ?? decoration {
+            inner.insertSubview(copy, belowSubview: below)
+        } else {
+            inner.addSubview(copy)
+        }
+    }
+
+    /// 動画の再生アイコンの複製。中の画像の中央に置き、大きさは`transform`で変える。
+    private var play: UIView?
+    /// `play`を作ったときの大きさ。`transform`で縮める前の大きさ。
+    private var playSize = ComposeMorphFlights.PlaySize(diameter: 0, glyph: 0)
+    /// 行き先へ向かい始める前の、再生アイコンの丸と三角の`transform`と濃さ。まだ一度も描いていない複製を止めるとき、見えている形として使う。
+    private var playStateBeforeMove: (transform: CGAffineTransform, glyphTransform: CGAffineTransform, alpha: CGFloat)?
+
+    /// 再生アイコンの三角。丸と別の倍率で縮める。
+    private var playGlyph: UIView? { play?.subviews.first }
+
+    /// サムネイルに重ねている表示より手前、送信中の暗い下地などの重ねた表示より奥に置く。列のサムネイルと同じ重なり順にするため。
+    func attachPlay(_ copy: UIView) {
+        play?.removeFromSuperview()
+        play = copy
+        playSize = ComposeMorphFlights.PlaySize(of: copy)
+        copy.isUserInteractionEnabled = false
+        copy.center = CGPoint(x: inner.bounds.midX, y: inner.bounds.midY)
+        copy.autoresizingMask = [.flexibleLeftMargin, .flexibleRightMargin, .flexibleTopMargin, .flexibleBottomMargin]
         if let decoration {
             inner.insertSubview(copy, belowSubview: decoration)
         } else {
             inner.addSubview(copy)
         }
+    }
+
+    /// 行き先の再生アイコンが今のものより大きければ、行き先のものに差し替え、今の見えている大きさに縮めて置く。
+    /// 小さく作った丸と三角を広げるとぼけるため、大きいほうを縮めて動かす。行き先に再生アイコンがなければ、今のものを残して薄くする。
+    func preparePlay(toward target: UIView?) {
+        defer { playStateBeforeMove = play.map { ($0.transform, playGlyph?.transform ?? .identity, $0.alpha) } }
+        guard let target else { return }
+        guard let play else {
+            attachPlay(target)
+            target.alpha = 0
+            return
+        }
+        let shown = shownPlaySize(of: play)
+        let targetSize = ComposeMorphFlights.PlaySize(of: target)
+        guard targetSize.diameter > playSize.diameter else { return }
+        let alpha = play.alpha
+        attachPlay(target)
+        applyPlay(shown)
+        target.alpha = alpha
+    }
+
+    /// アニメーションの中で呼ぶ。行き先の大きさにし、行き先に再生アイコンがなければ（`size`がnil）薄くする。
+    func showPlay(_ size: ComposeMorphFlights.PlaySize?) {
+        guard let play else { return }
+        if let size {
+            applyPlay(size)
+            play.alpha = 1
+        } else {
+            play.alpha = 0
+        }
+    }
+
+    private func shownPlaySize(of play: UIView) -> ComposeMorphFlights.PlaySize {
+        ComposeMorphFlights.PlaySize(diameter: playSize.diameter * play.transform.a, glyph: playSize.glyph * play.transform.a * (playGlyph?.transform.a ?? 1))
+    }
+
+    /// 丸と三角を、それぞれ`size`の大きさに見えるように縮める。タイルは三角の大きさを丸の大きさから丸めて決めるので、丸と同じ倍率で縮めると、着いた先の三角と大きさがずれる。
+    private func applyPlay(_ size: ComposeMorphFlights.PlaySize) {
+        guard let play, playSize.diameter > 0, playSize.glyph > 0 else { return }
+        let scale = size.diameter / playSize.diameter
+        play.transform = CGAffineTransform(scaleX: scale, y: scale)
+        let glyphScale = size.glyph / playSize.glyph / scale
+        playGlyph?.transform = CGAffineTransform(scaleX: glyphScale, y: glyphScale)
     }
 
     func attachDecoration(_ snapshot: UIView?) {
@@ -415,6 +517,11 @@ private final class FlightCopy: UIView {
             // 重ねた表示は、行き先へ向かう動きで薄くし始めるまで、濃いまま見えている。
             decoration?.alpha = 1
             thumbnailDecoration?.alpha = thumbnailDecorationAlphaBeforeMove
+            if let play, let playStateBeforeMove {
+                play.transform = playStateBeforeMove.transform
+                playGlyph?.transform = playStateBeforeMove.glyphTransform
+                play.alpha = playStateBeforeMove.alpha
+            }
             return
         }
         let presented = layer.presentation()
@@ -428,6 +535,13 @@ private final class FlightCopy: UIView {
         let opacity = presented.map { CGFloat($0.opacity) } ?? alpha
         let decorationOpacity = decoration.map { decoration in decoration.layer.presentation().map { CGFloat($0.opacity) } ?? decoration.alpha }
         let thumbnailDecorationOpacity = thumbnailDecoration.map { decoration in decoration.layer.presentation().map { CGFloat($0.opacity) } ?? decoration.alpha }
+        let playPresented = play.map { play in
+            (
+                transform: play.layer.presentation().map { CATransform3DGetAffineTransform($0.transform) } ?? play.transform,
+                glyphTransform: playGlyph.map { glyph in glyph.layer.presentation().map { CATransform3DGetAffineTransform($0.transform) } ?? glyph.transform } ?? .identity,
+                alpha: play.layer.presentation().map { CGFloat($0.opacity) } ?? play.alpha
+            )
+        }
         // 中の画像（`FocusCroppedImageView`の中の画像）も前の行き先へ動き続けるので、中まですべての動きを止め、今の大きさで並べ直す。
         Self.removeAllAnimations(in: layer)
         border = max((size.width - innerSize.width) / 2, 0)
@@ -442,6 +556,11 @@ private final class FlightCopy: UIView {
         }
         if let thumbnailDecorationOpacity {
             thumbnailDecoration?.alpha = thumbnailDecorationOpacity
+        }
+        if let playPresented {
+            play?.transform = playPresented.transform
+            playGlyph?.transform = playPresented.glyphTransform
+            play?.alpha = playPresented.alpha
         }
         setNeedsLayout()
         layoutIfNeeded()
