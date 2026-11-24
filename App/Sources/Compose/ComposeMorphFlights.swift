@@ -25,22 +25,49 @@ final class ComposeMorphFlights {
     struct End {
         let view: UIView
         let content: Content
-        var cornerRadius: CGFloat = 0
-        /// 白いフチの幅。カプセルの写真だけに付く。
-        var border: CGFloat = 0
-        /// 写真に重ねた表示（列のサムネイルの、送信中の暗い下地や失敗のアイコンなど）。起点にあれば像を複製に載せ、
-        /// 向かう間に薄くする。行き先にあれば、着いてから浮かび上がらせる。
-        var decoration: UIView?
-        /// 上に重ねた写真が落としている影の像。カプセルの写真だけに付く。起点にあれば複製に載せ、動き始めに薄くする。
-        var betweenShadow: UIView?
         /// 動かしている間、本物を見えなくする。重ねた表示も一緒に隠す。
         let conceal: (Bool) -> Void
     }
 
+    /// 複製に描く中身。どの値にも既定値を付けず、両端の本物の見え方を渡し忘れると、コンパイルが通らないようにする。
     enum Content {
-        case symbol(UIImage?)
-        /// サムネイルの画像と焦点と、その上に重ねている表示（`MediaTileView.decorationLayout`）。重ねた表示は、本物と同じ部品で複製にも描く。
-        case thumbnail(UIImage?, MediaFocus?, MediaTileDecorationLayout)
+        /// ラベルのアイコン。複製は`tint`の色で描くので、本物の色を渡す。
+        case symbol(UIImage?, tint: UIColor)
+        case thumbnail(Thumbnail)
+    }
+
+    struct Thumbnail {
+        let image: UIImage?
+        let focus: MediaFocus?
+        /// 上に重ねている表示（`MediaTileView.decorationLayout`）。本物と同じ部品で複製にも描く。
+        let decoration: MediaTileDecorationLayout
+        let cornerRadius: CGFloat
+        /// 白いフチの幅。カプセルの写真だけに付く。
+        let border: CGFloat
+        /// 送信の状態の表示。起点にあれば像を複製に載せ、向かう間に薄くする。行き先にあれば、着いてから浮かび上がらせる。出していなければnil。
+        let status: StatusOverlay?
+        /// 上に重ねた写真が落としている影の像。起点にあれば複製に載せ、動き始めに薄くする。
+        let betweenShadow: UIView?
+    }
+
+    /// 写真に重ねた送信の状態の表示と、複製の大きさが変わるときの置き方。
+    enum StatusOverlay {
+        /// 写真の上に収まる表示（列のサムネイルの暗い下地や失敗のアイコンなど）。中の画像の中央に元の大きさのまま置き、画像の枠で切る。
+        case covering(UIView)
+
+        var view: UIView {
+            switch self {
+            case .covering(let view): view
+            }
+        }
+
+        /// 見えているものがあるか。何も出していなければ、像を載せない。
+        @MainActor
+        var showsSomething: Bool {
+            switch self {
+            case .covering(let view): view.subviews.contains { !$0.isHidden && $0.alpha > 0 }
+            }
+        }
     }
 
     private struct Flight {
@@ -102,16 +129,16 @@ final class ComposeMorphFlights {
                 container.addSubview(copy)
             }
             copy.apply(geometry(of: source))
-            if let decoration = source.decoration, Self.showsSomething(decoration) {
-                copy.attachDecoration(decoration.snapshotView(afterScreenUpdates: false))
-            }
-            if case .thumbnail(_, _, let layout) = source.content {
-                copy.attachTileDecoration(layout, of: source.view, shown: true)
-            }
-            if let betweenShadow = source.betweenShadow {
-                copy.attachBetweenShadow(betweenShadow)
-                UIView.animateSpring(duration: Self.decorationRevealDuration, in: copy) {
-                    copy.betweenShadowAlpha = 0
+            if case .thumbnail(let thumbnail) = source.content {
+                if let status = thumbnail.status, status.showsSomething {
+                    copy.attachStatus(status, of: source.view)
+                }
+                copy.attachTileDecoration(thumbnail.decoration, of: source.view, shown: true)
+                if let betweenShadow = thumbnail.betweenShadow {
+                    copy.attachBetweenShadow(betweenShadow)
+                    UIView.animateSpring(duration: Self.decorationRevealDuration, in: copy) {
+                        copy.betweenShadowAlpha = 0
+                    }
                 }
             }
             conceal(source)
@@ -151,12 +178,12 @@ final class ComposeMorphFlights {
             // 行き先の重ねた表示も、この中で作る。アニメーションの中で作ると、作ったばかりのビューの`tintColor`の設定まで動き、三角が既定の色から白へ変わっていく。
             UIView.performWithoutAnimation {
                 conceal(target)
-                if case .thumbnail(let image, let focus, let layout) = target.content {
+                if case .thumbnail(let thumbnail) = target.content {
                     // 行き先のほうが大きな画像を描いていれば差し替え、カプセルの小さな画像を広げてぼやけさせない。
-                    if let image {
-                        flight.copy.replaceThumbnailIfLarger(image, focus: focus)
+                    if let image = thumbnail.image {
+                        flight.copy.replaceThumbnailIfLarger(image, focus: thumbnail.focus)
                     }
-                    flight.copy.attachTileDecoration(layout, of: target.view, shown: false)
+                    flight.copy.attachTileDecoration(thumbnail.decoration, of: target.view, shown: false)
                 }
                 flight.copy.markTileDecorationBeforeMove()
             }
@@ -203,9 +230,9 @@ final class ComposeMorphFlights {
             flight.destination = destination
             flights[key] = flight
             flight.copy.freezeAtPresentation()
-            if case .thumbnail(_, _, let layout) = target.content {
+            if case .thumbnail(let thumbnail) = target.content {
                 UIView.performWithoutAnimation {
-                    flight.copy.attachTileDecoration(layout, of: target.view, shown: false)
+                    flight.copy.attachTileDecoration(thumbnail.decoration, of: target.view, shown: false)
                 }
             }
             moved.append((flight.copy, destination, max(flight.startTime - now, 0), target.view))
@@ -231,10 +258,11 @@ final class ComposeMorphFlights {
             for end in flight.ends {
                 end.conceal(false)
                 // 着いた先の重ねた表示は、複製に載せていないので、着いてから浮かび上がらせる。
-                if let decoration = end.decoration, let destination = flight.ends.last, destination.view === end.view {
-                    decoration.alpha = 0
-                    UIView.animateSpring(duration: Self.decorationRevealDuration, in: decoration) {
-                        decoration.alpha = 1
+                if case .thumbnail(let thumbnail) = end.content, let status = thumbnail.status?.view,
+                   let destination = flight.ends.last, destination.view === end.view {
+                    status.alpha = 0
+                    UIView.animateSpring(duration: Self.decorationRevealDuration, in: status) {
+                        status.alpha = 1
                     }
                 }
             }
@@ -246,11 +274,6 @@ final class ComposeMorphFlights {
     /// 着いた先の重ねた表示を浮かび上がらせる時間。カプセルの写真同士の影を浮かび上がらせる時間と揃え、動き始めに写真同士の影を薄くする時間にも使う。
     private static let decorationRevealDuration: TimeInterval = 0.15
 
-    /// 重ねた表示に、見えているものがあるか。何も出していなければ、像を載せない。
-    private static func showsSomething(_ decoration: UIView) -> Bool {
-        decoration.subviews.contains { !$0.isHidden && $0.alpha > 0 }
-    }
-
     private func conceal(_ end: End) {
         UIView.performWithoutAnimation { end.conceal(true) }
     }
@@ -258,12 +281,16 @@ final class ComposeMorphFlights {
     /// 本物の、複製を置く入れ物の中での中心、大きさ、回転。回すのはカプセルの奥の写真だけで、その親は回っていない。
     private func geometry(of end: End) -> FlightCopy.Geometry {
         let view = end.view
+        let (cornerRadius, border): (CGFloat, CGFloat) = switch end.content {
+        case .symbol: (0, 0)
+        case .thumbnail(let thumbnail): (thumbnail.cornerRadius, thumbnail.border)
+        }
         return FlightCopy.Geometry(
             center: view.convert(CGPoint(x: view.bounds.midX, y: view.bounds.midY), to: container),
             size: view.bounds.size,
             rotation: atan2(view.transform.b, view.transform.a),
-            cornerRadius: end.cornerRadius,
-            border: end.border
+            cornerRadius: cornerRadius,
+            border: border
         )
     }
 }
@@ -281,7 +308,7 @@ private final class FlightCopy: UIView {
 
     private let inner: UIView
     private var border: CGFloat = 0
-    /// 起点の写真に重ねていた表示の像。中の画像の中央に、元の大きさのまま置く。
+    /// 起点の写真に重ねていた送信の状態の表示の像。
     private var decoration: UIView?
 
     var decorationAlpha: CGFloat {
@@ -431,27 +458,32 @@ private final class FlightCopy: UIView {
         owner.playGlyph.transform = CGAffineTransform(scaleX: glyphScale, y: glyphScale)
     }
 
-    func attachDecoration(_ snapshot: UIView?) {
+    /// `view`（起点の本物）に重ねた送信の状態の表示の像を載せる。
+    func attachStatus(_ status: ComposeMorphFlights.StatusOverlay, of view: UIView) {
         decoration?.removeFromSuperview()
+        decoration = nil
+        guard let snapshot = status.view.snapshotView(afterScreenUpdates: false) else { return }
         decoration = snapshot
-        guard let snapshot else { return }
         snapshot.isUserInteractionEnabled = false
-        snapshot.center = CGPoint(x: inner.bounds.midX, y: inner.bounds.midY)
-        snapshot.autoresizingMask = [.flexibleLeftMargin, .flexibleRightMargin, .flexibleTopMargin, .flexibleBottomMargin]
-        inner.addSubview(snapshot)
+        switch status {
+        case .covering:
+            snapshot.center = CGPoint(x: inner.bounds.midX, y: inner.bounds.midY)
+            snapshot.autoresizingMask = [.flexibleLeftMargin, .flexibleRightMargin, .flexibleTopMargin, .flexibleBottomMargin]
+            inner.addSubview(snapshot)
+        }
     }
 
     init(content: ComposeMorphFlights.Content) {
         switch content {
-        case .symbol(let image):
+        case .symbol(let image, let tint):
             let imageView = UIImageView(image: image)
             imageView.contentMode = .scaleAspectFit
-            imageView.tintColor = .tintColor
+            imageView.tintColor = tint
             inner = imageView
-        case .thumbnail(let image, let focus, _):
+        case .thumbnail(let thumbnail):
             let imageView = FocusCroppedImageView()
-            imageView.image = image
-            imageView.focus = focus
+            imageView.image = thumbnail.image
+            imageView.focus = thumbnail.focus
             imageView.backgroundColor = .secondarySystemFill
             inner = imageView
         }

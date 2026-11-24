@@ -25,7 +25,7 @@ struct ComposeMorphFlightsTests {
         let flights = ComposeMorphFlights(container: container)
         let key = ComposeMorphFlights.Key.chip
         func end(_ view: UIView) -> ComposeMorphFlights.End {
-            .init(view: view, content: .thumbnail(nil, nil, .undecorated(size: view.bounds.size))) { view.alpha = $0 ? 0 : 1 }
+            .init(view: view, content: .thumbnail(Self.thumbnail(.undecorated(size: view.bounds.size)))) { view.alpha = $0 ? 0 : 1 }
         }
 
         flights.takeOff(from: [key: end(source)], stackingOrder: [key], stackShadowOpacity: 0)
@@ -57,7 +57,7 @@ struct ComposeMorphFlightsTests {
         let shadow = UIView()
         let flights = ComposeMorphFlights(container: container)
         let key = ComposeMorphFlights.Key.attachment(UUID())
-        let end = ComposeMorphFlights.End(view: source, content: .thumbnail(nil, nil, .undecorated(size: source.bounds.size)), cornerRadius: 3, border: 2, betweenShadow: shadow) { source.alpha = $0 ? 0 : 1 }
+        let end = ComposeMorphFlights.End(view: source, content: .thumbnail(Self.thumbnail(.undecorated(size: source.bounds.size), cornerRadius: 3, border: 2, betweenShadow: shadow))) { source.alpha = $0 ? 0 : 1 }
 
         flights.takeOff(from: [key: end], stackingOrder: [key], stackShadowOpacity: 0)
 
@@ -80,10 +80,10 @@ struct ComposeMorphFlightsTests {
         let flights = ComposeMorphFlights(container: container)
         let key = ComposeMorphFlights.Key.attachment(UUID())
 
-        flights.takeOff(from: [key: .init(view: source, content: .thumbnail(nil, nil, .undecorated(size: source.bounds.size))) { source.alpha = $0 ? 0 : 1 }], stackingOrder: [key], stackShadowOpacity: 0)
+        flights.takeOff(from: [key: .init(view: source, content: .thumbnail(Self.thumbnail(.undecorated(size: source.bounds.size)))) { source.alpha = $0 ? 0 : 1 }], stackingOrder: [key], stackShadowOpacity: 0)
         UIView.animate(withDuration: 1) {
             _ = flights.land(
-                on: [key: .init(view: target, content: .thumbnail(nil, nil, Self.badged(size: target.bounds.size))) { target.alpha = $0 ? 0 : 1 }],
+                on: [key: .init(view: target, content: .thumbnail(Self.thumbnail(Self.badged(size: target.bounds.size)))) { target.alpha = $0 ? 0 : 1 }],
                 delays: [:], stackShadowOpacity: 0, duration: 1
             ) { _, animations in animations() }
         }
@@ -104,11 +104,11 @@ struct ComposeMorphFlightsTests {
         let flights = ComposeMorphFlights(container: container)
         let key = ComposeMorphFlights.Key.attachment(UUID())
 
-        flights.takeOff(from: [key: .init(view: source, content: .thumbnail(nil, nil, Self.badged(size: source.bounds.size))) { source.alpha = $0 ? 0 : 1 }], stackingOrder: [key], stackShadowOpacity: 0)
+        flights.takeOff(from: [key: .init(view: source, content: .thumbnail(Self.thumbnail(Self.badged(size: source.bounds.size)))) { source.alpha = $0 ? 0 : 1 }], stackingOrder: [key], stackShadowOpacity: 0)
         let badge = try #require(Self.badges(in: container).first { !$0.isHidden }, "複製にバッジを載せていません")
         #expect(badge.alpha == 1)
         UIView.animate(withDuration: 1) {
-            _ = flights.land(on: [key: .init(view: target, content: .thumbnail(nil, nil, .undecorated(size: target.bounds.size))) { target.alpha = $0 ? 0 : 1 }], delays: [:], stackShadowOpacity: 0, duration: 1) { _, animations in animations() }
+            _ = flights.land(on: [key: .init(view: target, content: .thumbnail(Self.thumbnail(.undecorated(size: target.bounds.size)))) { target.alpha = $0 ? 0 : 1 }], delays: [:], stackShadowOpacity: 0, duration: 1) { _, animations in animations() }
         }
 
         #expect(badge.alpha == 0)
@@ -127,7 +127,7 @@ struct ComposeMorphFlightsTests {
         let flights = ComposeMorphFlights(container: container)
         let key = ComposeMorphFlights.Key.attachment(UUID())
         func end(_ view: UIView, _ layout: MediaTileDecorationLayout) -> ComposeMorphFlights.End {
-            .init(view: view, content: .thumbnail(nil, nil, layout)) { view.alpha = $0 ? 0 : 1 }
+            .init(view: view, content: .thumbnail(Self.thumbnail(layout))) { view.alpha = $0 ? 0 : 1 }
         }
 
         flights.takeOff(from: [key: end(strip, .undecorated(size: strip.bounds.size))], stackingOrder: [key], stackShadowOpacity: 0)
@@ -140,6 +140,32 @@ struct ComposeMorphFlightsTests {
         }
 
         #expect(Self.decorations(in: container).contains { $0.decoration.showsPlay && $0.view(for: .play).alpha == 1 }, "向かい直した先の再生アイコンを見せていません")
+    }
+
+    /// ラベルのアイコンの複製は、本物から渡された色で描く。決まった色で描くと、本物の色を変えたときに、両端でアイコンの色が1コマで替わる。
+    @Test func symbolCopyUsesRealTint() throws {
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: 400, height: 400))
+        let source = UIImageView(image: UIImage(systemName: "clock"))
+        source.frame = CGRect(x: 16, y: 10, width: 20, height: 20)
+        source.tintColor = .systemRed
+        container.addSubview(source)
+        let flights = ComposeMorphFlights(container: container)
+
+        flights.takeOff(from: [.schedule: .init(view: source, content: .symbol(source.image, tint: source.tintColor)) { source.alpha = $0 ? 0 : 1 }], stackingOrder: [.schedule], stackShadowOpacity: 0)
+
+        let copies = container.subviews.flatMap(\.subviews).compactMap { $0 as? UIImageView }
+        let copy = try #require(copies.first)
+        #expect(copy.tintColor == .systemRed)
+    }
+
+    private static func thumbnail(
+        _ layout: MediaTileDecorationLayout,
+        cornerRadius: CGFloat = 0,
+        border: CGFloat = 0,
+        status: ComposeMorphFlights.StatusOverlay? = nil,
+        betweenShadow: UIView? = nil
+    ) -> ComposeMorphFlights.Thumbnail {
+        ComposeMorphFlights.Thumbnail(image: nil, focus: nil, decoration: layout, cornerRadius: cornerRadius, border: border, status: status, betweenShadow: betweenShadow)
     }
 
     /// 動画の再生アイコンを出しているタイル。

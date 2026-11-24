@@ -2481,19 +2481,28 @@ final class InlineComposeController: NSObject {
         if editing {
             if !replyRow.isHidden, let icon = replyButton.imageView, icon.image != nil {
                 replyButton.layoutIfNeeded()
-                ends[.chip] = .init(view: icon, content: .symbol(icon.image)) { icon.alpha = $0 ? 0 : 1 }
+                ends[.chip] = .init(view: icon, content: .symbol(icon.image, tint: icon.tintColor)) { icon.alpha = $0 ? 0 : 1 }
             }
             if !scheduleRow.isHidden, let icon = scheduleDateButton.imageView, icon.image != nil {
                 scheduleRow.layoutIfNeeded()
                 scheduleDateButton.layoutIfNeeded()
-                ends[.schedule] = .init(view: icon, content: .symbol(icon.image)) { icon.alpha = $0 ? 0 : 1 }
+                ends[.schedule] = .init(view: icon, content: .symbol(icon.image, tint: icon.tintColor)) { icon.alpha = $0 ? 0 : 1 }
             }
             for id in ids {
                 guard let tile = attachmentStrip.tile(for: id) else { continue }
                 tile.superview?.layoutIfNeeded()
                 // 重ねた状態の表示も一緒に隠す。隠さないと、閉じ始めに空いた枠の位置に取り残され、開くときは写真が着く前から浮かぶ。
                 let overlay = attachmentStrip.overlay(for: id)
-                ends[.attachment(id)] = .init(view: tile, content: .thumbnail(tile.thumbnailImage, tile.thumbnailFocus, tile.decorationLayout), cornerRadius: MediaGridView.cornerRadius, decoration: overlay) { concealed in
+                let thumbnail = ComposeMorphFlights.Thumbnail(
+                    image: tile.thumbnailImage,
+                    focus: tile.thumbnailFocus,
+                    decoration: tile.decorationLayout,
+                    cornerRadius: MediaGridView.cornerRadius,
+                    border: 0,
+                    status: overlay.map { .covering($0) },
+                    betweenShadow: nil
+                )
+                ends[.attachment(id)] = .init(view: tile, content: .thumbnail(thumbnail)) { concealed in
                     tile.alpha = concealed ? 0 : 1
                     overlay?.alpha = concealed ? 0 : 1
                 }
@@ -2502,23 +2511,28 @@ final class InlineComposeController: NSObject {
             restContent.layoutIfNeeded()
             let icon = restContent.chipIcon
             if !icon.isHidden, icon.image != nil {
-                ends[.chip] = .init(view: icon, content: .symbol(icon.image)) { icon.alpha = $0 ? 0 : 1 }
+                ends[.chip] = .init(view: icon, content: .symbol(icon.image, tint: icon.tintColor)) { icon.alpha = $0 ? 0 : 1 }
             }
             let schedule = restContent.scheduleIcon
             if !schedule.isHidden {
-                ends[.schedule] = .init(view: schedule, content: .symbol(schedule.image)) { schedule.alpha = $0 ? 0 : 1 }
+                ends[.schedule] = .init(view: schedule, content: .symbol(schedule.image, tint: schedule.tintColor)) { schedule.alpha = $0 ? 0 : 1 }
             }
             for (index, id) in ids.enumerated() {
                 let thumbnails = restContent.thumbnails
                 guard !thumbnails.isHidden, let photo = thumbnails.photo(for: id) ?? (index >= 3 ? thumbnails.photo(for: ids[2]) : nil) else { continue }
                 // 4枚目より後ろは3枚目の写真の位置に重ねるので、描くのはその添付の画像にする。手元にない画像は、列に着くときに列の画像に替える。
-                // 3枚目の下に隠れて重なっているので、重ねた表示は描かない。
-                let content: ComposeMorphFlights.Content = index < 3
-                    ? .thumbnail(photo.tile.thumbnailImage, photo.tile.thumbnailFocus, photo.tile.decorationLayout)
-                    : .thumbnail(model.localMedia[id]?.thumbnail, nil, .undecorated(size: photo.tile.bounds.size))
-                // 写真同士の影は、その写真のものなので、3枚目の位置に重ねる4枚目より後ろには載せない。
-                let betweenShadow = index < 3 ? photo.betweenShadowSnapshot() : nil
-                ends[.attachment(id)] = .init(view: photo, content: content, cornerRadius: StackedPhotoView.cornerRadius, border: StackedPhotoView.border, betweenShadow: betweenShadow) { concealed in
+                // 3枚目の下に隠れて重なっているので、重ねた表示と写真同士の影は描かない。どちらも3枚目の写真に付いているもの。
+                let isOwnPhoto = index < 3
+                let thumbnail = ComposeMorphFlights.Thumbnail(
+                    image: isOwnPhoto ? photo.tile.thumbnailImage : model.localMedia[id]?.thumbnail,
+                    focus: isOwnPhoto ? photo.tile.thumbnailFocus : nil,
+                    decoration: isOwnPhoto ? photo.tile.decorationLayout : .undecorated(size: photo.tile.bounds.size),
+                    cornerRadius: StackedPhotoView.cornerRadius,
+                    border: StackedPhotoView.border,
+                    status: nil,
+                    betweenShadow: isOwnPhoto ? photo.betweenShadowSnapshot() : nil
+                )
+                ends[.attachment(id)] = .init(view: photo, content: .thumbnail(thumbnail)) { concealed in
                     photo.alpha = concealed ? 0 : 1
                     thumbnails.setStackShadowConcealed(concealed)
                 }
