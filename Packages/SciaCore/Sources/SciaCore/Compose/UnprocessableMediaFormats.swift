@@ -3,7 +3,7 @@ public import Observation
 
 /// 対応形式として返しているのに、サーバーが処理できなかった画像の形式を、サーバーとその版ごとに覚える。
 ///
-/// Mastodon 4.7.2と4.7.3は、`supported_mime_types`にHEIC、HEIF、AVIFを載せたまま、画像の読み込みを止めていて、送ると`POST /api/v2/media`が500を返す。
+/// `supported_mime_types`に載せた形式でも、送ると`POST /api/v2/media`が500を返すサーバーがある。
 /// 一度失敗したら、同じ版の間はその形式を送らず、起動し直しても覚えておく。版が変われば、サーバーが直ったかもしれないので、もう一度試す。
 @MainActor
 @Observable

@@ -1665,7 +1665,7 @@ extension ComposeModel {
             } catch let error where UnprocessableMediaFormats.shouldReplaceWithJPEG(mimeType: sending.mimeType, error: error) {
                 // 切り抜き直して止めたアップロードには、止める前に届いたエラーがそのまま返る。送り直すと元のファイルを消すので、先に止まったかを確かめる。
                 try Task.checkCancellation()
-                // 対応形式として返しているのに処理できないサーバーがある（Mastodon 4.7.2と4.7.3のHEICなど）。
+                // 対応形式として返しているのに処理できないサーバーがある。
                 // 同じ写真のJPEGで1回だけ送り直し、このサーバーのこの版ではその形式を送らないと覚える。
                 logger.info("attachment format unprocessable, resending as jpeg mime=\(sending.mimeType, privacy: .public) reencoded=\(sending != file, privacy: .public)")
                 media.recordUnprocessableImageType(sending.mimeType)

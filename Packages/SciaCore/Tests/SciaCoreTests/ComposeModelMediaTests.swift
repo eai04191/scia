@@ -157,7 +157,7 @@ struct ComposeModelMediaTests {
         #expect(CGImageDestinationFinalize(destination))
     }
 
-    /// 対応形式として返しながらHEICを処理できないサーバー（Mastodon 4.7.2と4.7.3）では、同じ写真のJPEGで1回だけ送り直し、その形式を覚える。
+    /// 対応形式として返しながらHEICを処理できないサーバーでは、同じ写真のJPEGで1回だけ送り直し、その形式を覚える。
     @Test func resendsUnprocessableHEICAsJPEGOnce() async throws {
         let server = FakeServer()
         server.uploadResult = { upload in
