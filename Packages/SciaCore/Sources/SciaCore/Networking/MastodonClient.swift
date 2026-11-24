@@ -367,7 +367,8 @@ public struct MastodonClient: Sendable {
             charactersReservedPerURL: charactersReservedPerURL,
             maxMediaAttachments: configuration.statuses?.maxMediaAttachments?.value ?? 4,
             mediaDescriptionLimit: configuration.mediaAttachments?.descriptionLimit?.value ?? 1500,
-            supportedMediaTypes: configuration.mediaAttachments?.supportedMimeTypes,
+            // 任意のファイルを受け付けるサーバー（Pleroma）は、形式を絞らないものとして読む。
+            supportedMediaTypes: configuration.mediaAttachments?.supportedMimeTypes.flatMap { $0.contains("application/octet-stream") ? nil : $0 },
             profileLimits: ProfileLimits(
                 displayName: configuration.accounts?.maxDisplayNameLength?.value ?? ProfileLimits.beforeMastodon46.displayName,
                 note: configuration.accounts?.maxNoteLength?.value ?? ProfileLimits.beforeMastodon46.note,
@@ -1728,7 +1729,7 @@ public struct InstanceConfiguration: Sendable, Equatable {
     public let maxMediaAttachments: Int
     /// 代替テキストの文字数の上限。
     public let mediaDescriptionLimit: Int
-    /// アップロードできるファイルのMIMEタイプ。返さないサーバーではnilで、送ってみるまで分からない。
+    /// アップロードできるファイルのMIMEタイプ。返さないサーバーと、任意のファイル（`application/octet-stream`）を受け付けるサーバーではnilで、送ってみるまで分からない。
     public let supportedMediaTypes: [String]?
     /// プロフィールの各項目の上限。
     public let profileLimits: ProfileLimits

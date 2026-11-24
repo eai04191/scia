@@ -840,6 +840,16 @@ struct MastodonClientTests {
         #expect(configuration.maxMediaAttachments == 8)
     }
 
+    /// 任意のファイル（`application/octet-stream`）を受け付けると返すサーバー（Pleroma）は、形式を絞らないものとして読む。
+    /// 一覧のとおりに読むと、どの画像の形式も受け付けないことになり、送る前に作り直す先がなくなるため。
+    @Test(arguments: [["application/octet-stream"], ["image/png", "image/heic", "application/octet-stream"]])
+    func instanceConfigurationReadsOctetStreamAsAnyType(_ types: [String]) async throws {
+        let body = try JSONEncoder().encode(["configuration": ["media_attachments": ["supported_mime_types": types]]])
+        let transport = StubTransport([.json(String(decoding: body, as: UTF8.self), statusCode: 200)])
+
+        #expect(try await makeClient(transport).instanceConfiguration().supportedMediaTypes == nil)
+    }
+
     /// v2の`instance`がないサーバー（Sharkey）では、v1の`configuration`から上限を読む。
     @Test func instanceConfigurationFallsBackToV1() async throws {
         let v1 = #"""
