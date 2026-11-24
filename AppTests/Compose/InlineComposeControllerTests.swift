@@ -1222,6 +1222,149 @@ final class InlineComposeControllerTests {
         #expect(!carried.isEmpty, "広がる間に動かす複製に、バッジを載せていません")
     }
 
+    /// 開閉で動かす添付の写真の複製は、動き始めと着地のコマで、本物の写真と同じに見える（重ねた表示、再生アイコン、バッジを含む）。
+    /// 動き始めは本物を隠したコマ、着地は本物に替えたコマなので、違うと、そのコマで再生アイコンやバッジが付いたり消えたりする。
+    /// 複製に何を載せるかは両端の写真ごとに渡すので、片方で渡し忘れても動きは崩れず、ここで見た目を比べないと気づけない。
+    /// 動画とGIFは実物のコーデックで書き出して読むので、固まったときに止まるよう`.stallLimit`を付ける。
+    @Test(.stallLimit, arguments: [MediaAttachment.Kind.image, .video, .gifv], [true, false])
+    func attachmentMorphMatchesRealAtBothEnds(kind: MediaAttachment.Kind, opening: Bool) async throws {
+        defer { window.isHidden = true }
+        let progress = StallProgress.current
+        let composer = try installComposer(media: .localOnly(kind: kind)) { _ in }
+        composer.model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
+        composer.beginEditing()
+        composer.model.applyPickerSelection([try await pickedMedia(kind: kind)])
+        progress.note("添付のファイルを書き出した")
+        try await waitUntil { composer.model.attachments.first.map { if case .uploaded = $0.state { true } else { false } } ?? false }
+        progress.note("添付の送信が済んだ")
+        try await waitUntilSettled()
+        let id = try #require(composer.model.attachments.first?.id)
+        if opening {
+            composer.endEditing()
+            try await waitUntilSettled()
+        }
+        useDefaultAnimationDurations()
+        let strip = { try #require(self.attachmentStrips(in: self.window).first?.tile(for: id)) }
+        let capsule = { try #require(self.restContents(in: self.window).first?.thumbnails.photo(for: id)) }
+        let source: UIView = try opening ? capsule() : strip()
+
+        let sourceRect = region(of: source)
+        let before = try drawWindow()
+        if opening {
+            composer.beginEditing()
+        } else {
+            composer.endEditing()
+        }
+        try await clock.advance(by: 0)
+        #expect(source.alpha == 0, "動き始めのコマで、本物を隠していません")
+        try expectSameDrawing(drawWindow(), before, in: sourceRect, "動き始めのコマの複製が、起点の本物と違って見えます")
+        progress.note("動き始めのコマを比べた")
+
+        // 本物を隠している間は、複製が動いている。隠すのをやめる直前のコマを、着地のコマとして残す。
+        var landing: (image: CGImage, at: TimeInterval)?
+        var target: UIView?
+        while clock.now < 5 {
+            let current: UIView = try opening ? strip() : capsule()
+            guard current.alpha == 0 else { break }
+            target = current
+            landing = (try drawWindow(), clock.now)
+            try await clock.advance(by: LayerClock.frame)
+        }
+        try await waitUntilSettled()
+        let landed = try #require(target, "動かす間、行き先の本物を隠していません")
+        let last = try #require(landing)
+        try expectSameDrawing(last.image, drawWindow(), in: region(of: landed), "着地のコマ（\(last.at)秒）の複製が、行き先の本物と違って見えます")
+    }
+
+    /// 画面に出ている見え方のまま、ウィンドウを描く。動いている途中のコマも、止めた時間の見え方で描かれる。
+    private func drawWindow(sourceLocation: SourceLocation = #_sourceLocation) throws -> CGImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = window.screen.scale
+        let image = UIGraphicsImageRenderer(bounds: window.bounds, format: format).image { _ in
+            _ = window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+        }
+        return try #require(image.cgImage, sourceLocation: sourceLocation)
+    }
+
+    /// `view`を囲む、ウィンドウの中の範囲。傾けた写真も、角まで含める。
+    private func region(of view: UIView) -> CGRect {
+        let bounds = view.bounds
+        return [CGPoint(x: bounds.minX, y: bounds.minY), CGPoint(x: bounds.maxX, y: bounds.minY), CGPoint(x: bounds.minX, y: bounds.maxY), CGPoint(x: bounds.maxX, y: bounds.maxY)]
+            .map { CGRect(origin: view.convert($0, to: window), size: .zero) }
+            .reduce(CGRect.null) { $0.union($1) }
+    }
+
+    /// `rect`（ウィンドウの中の座標）の中で、2枚の画像が同じに見えるかを確かめる。
+    /// 傾けた写真の縁や記号の輪郭は、複製と本物で画素の境目への載り方が1画素に満たない幅だけ違い、縁の画素の色の混ざり方が変わる。目で見て分からないこの違いは許すため、
+    /// `actual`の画素の色が、`expected`の同じ位置のまわり3×3の画素の色の範囲（成分ごと）に入っていれば、同じとみなす。
+    /// 縁の混ざった色は両側の色のあいだに入る。再生アイコンやバッジの有無、角の丸みの違いは、一様な色の中に別の色として現れるので、範囲に入らない。
+    private func expectSameDrawing(_ actual: CGImage, _ expected: CGImage, in rect: CGRect, _ message: String, sourceLocation: SourceLocation = #_sourceLocation) throws {
+        let scale = window.screen.scale
+        let pixelRect = CGRect(x: rect.minX * scale, y: rect.minY * scale, width: rect.width * scale, height: rect.height * scale).integral
+        let (a, width, height) = try pixels(of: actual, in: pixelRect, sourceLocation: sourceLocation)
+        // 範囲の端の画素も、範囲の外の隣り合う画素と比べられるよう、1画素広く切り出す。
+        let (b, expectedWidth, expectedHeight) = try pixels(of: expected, in: pixelRect.insetBy(dx: -1, dy: -1), sourceLocation: sourceLocation)
+        try #require(width + 2 == expectedWidth && height + 2 == expectedHeight, "範囲がウィンドウの端にかかっています", sourceLocation: sourceLocation)
+        var differing = 0
+        for y in 0 ..< height {
+            for x in 0 ..< width {
+                let index = (y * width + x) * 4
+                let inRange = (0 ..< 3).allSatisfy { channel in
+                    var low = 255
+                    var high = 0
+                    for ny in y ... y + 2 {
+                        for nx in x ... x + 2 {
+                            let value = Int(b[(ny * expectedWidth + nx) * 4 + channel])
+                            low = min(low, value)
+                            high = max(high, value)
+                        }
+                    }
+                    let value = Int(a[index + channel])
+                    return value >= low - Self.drawingTolerance && value <= high + Self.drawingTolerance
+                }
+                if !inRange { differing += 1 }
+            }
+        }
+        #expect(differing == 0, "\(message): \(differing)画素が違います", sourceLocation: sourceLocation)
+    }
+
+    /// 色の範囲に足す余裕（成分ごと、0から255）。
+    private static let drawingTolerance = 16
+
+    /// `rect`（画像の画素の座標）を切り出した画素。画像の外にかかる分は切り落とすので、幅と高さも返す。
+    private func pixels(of image: CGImage, in rect: CGRect, sourceLocation: SourceLocation) throws -> (pixels: [UInt8], width: Int, height: Int) {
+        let cropped = try #require(image.cropping(to: rect), sourceLocation: sourceLocation)
+        let width = cropped.width
+        let height = cropped.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        pixels.withUnsafeMutableBytes { buffer in
+            CGContext(data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?
+                .draw(cropped, in: CGRect(x: 0, y: 0, width: width, height: height))
+        }
+        return (pixels, width, height)
+    }
+
+    /// 手元のファイルの添付。送る前に中身を読むので、読めるファイルにする。サムネイルは`ComposeMediaService.localOnly`の`makeThumbnail`で描く。
+    private func pickedMedia(kind: MediaAttachment.Kind) async throws -> PickedMedia {
+        let folder = TestScratch.url("InlineComposeControllerTests").appending(path: "attachment-\(kind)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let file: LocalMediaFile
+        switch kind {
+        case .video, .gifv:
+            let url = folder.appending(path: "m.mp4")
+            try await TestVideo.write(width: 32, height: 32, withAudio: false, to: url)
+            file = LocalMediaFile(url: url, mimeType: "video/mp4", kind: kind)
+        default:
+            let url = folder.appending(path: "m.jpg")
+            try #require(UIGraphicsImageRenderer(size: CGSize(width: 4, height: 3)).jpegData(withCompressionQuality: 0.8) { context in
+                UIColor.systemBlue.setFill()
+                context.fill(CGRect(x: 0, y: 0, width: 4, height: 3))
+            } as Data?).write(to: url)
+            file = LocalMediaFile(url: url, mimeType: "image/jpeg", kind: .image)
+        }
+        return PickedMedia(assetIdentifier: "m") { _ in file }
+    }
+
     private func badges(in view: UIView) -> [MediaBadgeView] {
         (view as? MediaBadgeView).map { [$0] } ?? view.subviews.flatMap(badges(in:))
     }
@@ -2027,5 +2170,30 @@ private extension NSTextLayoutManager {
             return true
         }
         return starts
+    }
+}
+
+private extension ComposeMediaService<UIImage> {
+    /// 通信せずに、すぐ変換まで済ませる。サムネイルは、左右で色の違う横長の画像にする（切り抜きの位置がずれると分かるように）。
+    static func localOnly(kind: MediaAttachment.Kind) -> Self {
+        let attachment = { (id: String) in MediaAttachment(id: id, type: kind, url: URL(string: "https://example.social/m"), previewUrl: nil, description: nil) }
+        return ComposeMediaService(
+            upload: { upload in attachment("m-\(upload.filename)") },
+            waitUntilProcessed: { id in attachment(id) },
+            updateDescription: { id, _ in attachment(id) },
+            makeThumbnail: { _ in
+                await MainActor.run {
+                    UIGraphicsImageRenderer(size: CGSize(width: 120, height: 80)).image { context in
+                        UIColor.systemOrange.setFill()
+                        context.fill(CGRect(x: 0, y: 0, width: 60, height: 80))
+                        UIColor.systemTeal.setFill()
+                        context.fill(CGRect(x: 60, y: 0, width: 60, height: 80))
+                    }
+                }
+            },
+            unprocessableImageTypes: { [] },
+            recordUnprocessableImageType: { _ in },
+            preparation: { .keepsOriginal }
+        )
     }
 }
