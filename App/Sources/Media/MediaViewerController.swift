@@ -2425,6 +2425,8 @@ final class PlayerPageController: MediaPageController {
     }
     /// 音声のトラックがあるか。なければ消音のボタンを出さない。
     private var hasAudio = false
+    /// 画面に出ているか。出ている間だけ、音声セッションへの希望を出す。
+    private var isShown = false
     /// 再生している間、最後に触れてから操作の部品とビューアのボタンを隠すまでの時間。
     var controlsHideDelay: TimeInterval = 3
     /// ダブルタップで10秒戻ったか進んだことを知らせる表示を、出しておく時間。
@@ -2706,6 +2708,7 @@ final class PlayerPageController: MediaPageController {
         if playerController.player == nil {
             setUpPlayer()
             if viewIfLoaded?.window != nil {
+                updateAudioMode()
                 playerController.player?.play()
             }
         } else {
@@ -2835,6 +2838,7 @@ final class PlayerPageController: MediaPageController {
             let audible = try? await playerItem.asset.loadTracks(withMediaCharacteristic: .audible)
             _ = try? await playerItem.asset.load(.duration)
             self?.hasAudio = audible?.isEmpty == false
+            self?.updateAudioMode()
             self?.updateControls()
         }
     }
@@ -2895,6 +2899,7 @@ final class PlayerPageController: MediaPageController {
         if let timeObserver {
             playerController.player?.removeTimeObserver(timeObserver)
         }
+        MediaAudioSession.shared.set(nil, for: self)
     }
 
     /// 再生している位置を部品に映す。`elapsed`を渡したら、プレイヤーの位置の代わりにそれを出す。シークしてから位置が届くまでの間に使う。
@@ -2987,7 +2992,14 @@ final class PlayerPageController: MediaPageController {
 
     private func toggleMute() {
         playerController.player?.isMuted.toggle()
+        updateAudioMode()
         updateControls()
+    }
+
+    /// 表示している間、音声のトラックと消音の状態から、音声セッションへの希望を出し直す。
+    private func updateAudioMode() {
+        guard isShown, let player = playerController.player else { return }
+        MediaAudioSession.shared.set(.forPlayer(hasAudio: hasAudio, isMuted: player.isMuted), for: self)
     }
 
     /// 再生速度を選ぶ項目。選んだ速さは、止めてから再生し直しても続く。
@@ -3155,7 +3167,15 @@ final class PlayerPageController: MediaPageController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        isShown = true
+        updateAudioMode()
         playerController.player?.play()
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        isShown = false
+        MediaAudioSession.shared.set(nil, for: self)
     }
 
     override func viewWillDisappear(_ animated: Bool) {
