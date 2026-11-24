@@ -1228,15 +1228,34 @@ final class InlineComposeControllerTests {
     /// 動画とGIFは実物のコーデックで書き出して読むので、固まったときに止まるよう`.stallLimit`を付ける。
     @Test(.stallLimit, arguments: [MediaAttachment.Kind.image, .video, .gifv], [true, false])
     func attachmentMorphMatchesRealAtBothEnds(kind: MediaAttachment.Kind, opening: Bool) async throws {
+        try await expectAttachmentMorphMatchesReal(kind: kind, failing: false, opening: opening)
+    }
+
+    /// 送れなかった添付の写真も、両端のコマで本物と同じに見える。カプセルの写真の右下の失敗のアイコンは写真の外にはみ出すので、はみ出す分まで比べる。
+    /// 動画は、失敗のアイコンと再生アイコンを一緒に載せる。
+    @Test(.stallLimit, arguments: [MediaAttachment.Kind.image, .video], [true, false])
+    func failedAttachmentMorphMatchesRealAtBothEnds(kind: MediaAttachment.Kind, opening: Bool) async throws {
+        try await expectAttachmentMorphMatchesReal(kind: kind, failing: true, opening: opening)
+    }
+
+    private func expectAttachmentMorphMatchesReal(kind: MediaAttachment.Kind, failing: Bool, opening: Bool) async throws {
         defer { window.isHidden = true }
         let progress = StallProgress.current
-        let composer = try installComposer(media: .localOnly(kind: kind)) { _ in }
+        let composer = try installComposer(media: .localOnly(kind: kind, failing: failing)) { _ in }
         composer.model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         composer.beginEditing()
         composer.model.applyPickerSelection([try await pickedMedia(kind: kind)])
         progress.note("添付のファイルを書き出した")
-        try await waitUntil { composer.model.attachments.first.map { if case .uploaded = $0.state { true } else { false } } ?? false }
-        progress.note("添付の送信が済んだ")
+        try await waitUntil {
+            composer.model.attachments.first.map {
+                switch $0.state {
+                case .uploaded: !failing
+                case .failed: failing
+                case .uploading, .processing: false
+                }
+            } ?? false
+        }
+        progress.note("添付の送信を終えた")
         try await waitUntilSettled()
         let id = try #require(composer.model.attachments.first?.id)
         if opening {
@@ -1248,7 +1267,7 @@ final class InlineComposeControllerTests {
         let capsule = { try #require(self.restContents(in: self.window).first?.thumbnails.photo(for: id)) }
         let source: UIView = try opening ? capsule() : strip()
 
-        let sourceRect = region(of: source)
+        let sourceRect = compared(source, failing: failing)
         let before = try drawWindow()
         if opening {
             composer.beginEditing()
@@ -1260,20 +1279,32 @@ final class InlineComposeControllerTests {
         try expectSameDrawing(drawWindow(), before, in: sourceRect, "動き始めのコマの複製が、起点の本物と違って見えます")
         progress.note("動き始めのコマを比べた")
 
-        // 本物を隠している間は、複製が動いている。隠すのをやめる直前のコマを、着地のコマとして残す。
+        // 本物を隠している間は、複製が動いている。隠すのをやめる直前のコマを着地のコマとして残し、本物に替えた最初のコマと比べる。
+        // 送信の状態の表示のように、本物に替えてから浮かび上がらせるものがあるので、止まったあとの画面とは比べない。
         var landing: (image: CGImage, at: TimeInterval)?
         var target: UIView?
+        var revealed: CGImage?
         while clock.now < 5 {
             let current: UIView = try opening ? strip() : capsule()
-            guard current.alpha == 0 else { break }
+            guard current.alpha == 0 else {
+                revealed = try drawWindow()
+                break
+            }
             target = current
             landing = (try drawWindow(), clock.now)
             try await clock.advance(by: LayerClock.frame)
         }
-        try await waitUntilSettled()
         let landed = try #require(target, "動かす間、行き先の本物を隠していません")
         let last = try #require(landing)
-        try expectSameDrawing(last.image, drawWindow(), in: region(of: landed), "着地のコマ（\(last.at)秒）の複製が、行き先の本物と違って見えます")
+        let first = try #require(revealed, "動き終えても、行き先の本物を隠したままです")
+        try expectSameDrawing(last.image, first, in: compared(landed, failing: failing), "着地のコマ（\(last.at)秒）の複製が、行き先の本物と違って見えます")
+        try await waitUntilSettled()
+    }
+
+    /// 両端のコマで比べる、`end`（列のサムネイルかカプセルの写真）のウィンドウの中の範囲。カプセルの写真の失敗のアイコンは写真の外にはみ出すので、アイコンまで含める。
+    private func compared(_ end: UIView, failing: Bool) -> CGRect {
+        guard failing, let photo = end as? StackedPhotoView else { return region(of: end) }
+        return region(of: photo).union(region(of: photo.failureMarkView))
     }
 
     /// 画面に出ている見え方のまま、ウィンドウを描く。動いている途中のコマも、止めた時間の見え方で描かれる。
@@ -1326,6 +1357,14 @@ final class InlineComposeControllerTests {
             }
         }
         #expect(differing == 0, "\(message): \(differing)画素が違います", sourceLocation: sourceLocation)
+        if differing > 0 {
+            // どこが違うかを見られるよう、比べた範囲の2枚を残す。
+            for (image, name) in [(actual, "actual"), (expected, "expected")] {
+                if let cropped = image.cropping(to: pixelRect), let png = UIImage(cgImage: cropped).pngData() {
+                    Attachment.record(png, named: "drawing-\(name).png", sourceLocation: sourceLocation)
+                }
+            }
+        }
     }
 
     /// 色の範囲に足す余裕（成分ごと、0から255）。
@@ -2171,10 +2210,14 @@ private extension NSTextLayoutManager {
 
 private extension ComposeMediaService<UIImage> {
     /// 通信せずに、すぐ変換まで済ませる。サムネイルは、左右で色の違う横長の画像にする（切り抜きの位置がずれると分かるように）。
-    static func localOnly(kind: MediaAttachment.Kind) -> Self {
+    /// `failing`なら、ファイルの送信に失敗する。
+    static func localOnly(kind: MediaAttachment.Kind, failing: Bool = false) -> Self {
         let attachment = { (id: String) in MediaAttachment(id: id, type: kind, url: URL(string: "https://example.social/m"), previewUrl: nil, description: nil) }
         return ComposeMediaService(
-            upload: { upload in attachment("m-\(upload.filename)") },
+            upload: { upload in
+                if failing { throw URLError(.notConnectedToInternet) }
+                return attachment("m-\(upload.filename)")
+            },
             waitUntilProcessed: { id in attachment(id) },
             updateDescription: { id, _ in attachment(id) },
             makeThumbnail: { _ in

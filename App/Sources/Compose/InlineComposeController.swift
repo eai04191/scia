@@ -2521,7 +2521,7 @@ final class InlineComposeController: NSObject {
                 let thumbnails = restContent.thumbnails
                 guard !thumbnails.isHidden, let photo = thumbnails.photo(for: id) ?? (index >= 3 ? thumbnails.photo(for: ids[2]) : nil) else { continue }
                 // 4枚目より後ろは3枚目の写真の位置に重ねるので、描くのはその添付の画像にする。手元にない画像は、列に着くときに列の画像に替える。
-                // 3枚目の下に隠れて重なっているので、重ねた表示と写真同士の影は描かない。どちらも3枚目の写真に付いているもの。
+                // 3枚目の下に隠れて重なっているので、重ねた表示、失敗のアイコン、写真同士の影は描かない。どれも3枚目の写真に付いているもの。
                 let isOwnPhoto = index < 3
                 let thumbnail = ComposeMorphFlights.Thumbnail(
                     image: isOwnPhoto ? photo.tile.thumbnailImage : model.localMedia[id]?.thumbnail,
@@ -2529,7 +2529,7 @@ final class InlineComposeController: NSObject {
                     decoration: isOwnPhoto ? photo.tile.decorationLayout : .undecorated(size: photo.tile.bounds.size),
                     cornerRadius: StackedPhotoView.cornerRadius,
                     border: StackedPhotoView.border,
-                    status: nil,
+                    status: isOwnPhoto ? .bottomTrailingCorner(photo.failureMarkView) : nil,
                     betweenShadow: isOwnPhoto ? photo.betweenShadowSnapshot() : nil
                 )
                 ends[.attachment(id)] = .init(view: photo, content: .thumbnail(thumbnail)) { concealed in

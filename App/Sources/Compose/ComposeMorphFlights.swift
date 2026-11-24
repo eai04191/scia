@@ -54,10 +54,12 @@ final class ComposeMorphFlights {
     enum StatusOverlay {
         /// 写真の上に収まる表示（列のサムネイルの暗い下地や失敗のアイコンなど）。中の画像の中央に元の大きさのまま置き、画像の枠で切る。
         case covering(UIView)
+        /// 写真の右下の角に掛かる表示（カプセルの写真の失敗のアイコン）。角からの位置を保ち、写真の外にはみ出して描く。
+        case bottomTrailingCorner(UIView)
 
         var view: UIView {
             switch self {
-            case .covering(let view): view
+            case .covering(let view), .bottomTrailingCorner(let view): view
             }
         }
 
@@ -66,6 +68,7 @@ final class ComposeMorphFlights {
         var showsSomething: Bool {
             switch self {
             case .covering(let view): view.subviews.contains { !$0.isHidden && $0.alpha > 0 }
+            case .bottomTrailingCorner(let view): !view.isHidden && view.alpha > 0
             }
         }
     }
@@ -148,6 +151,11 @@ final class ComposeMorphFlights {
         for key in order {
             if let copy = flights[key]?.copy {
                 copy.superview?.bringSubviewToFront(copy)
+            }
+        }
+        for key in order {
+            if let overhang = flights[key]?.copy.overhang {
+                container.bringSubviewToFront(overhang)
             }
         }
     }
@@ -310,6 +318,25 @@ private final class FlightCopy: UIView {
     private var border: CGFloat = 0
     /// 起点の写真に重ねていた送信の状態の表示の像。
     private var decoration: UIView?
+    /// 写真の外にはみ出す表示の像を入れる、複製と同じ位置、大きさ、回転で動かす入れ物。写真の複製を入れる影の入れ物の外に置く。
+    /// 影の入れ物は中身の形で影を落とすので、中に置くと、本物では影を落とさない失敗のアイコンまで影を落とすため。
+    private(set) var overhang: UIView?
+
+    override var alpha: CGFloat {
+        didSet { overhang?.alpha = alpha }
+    }
+
+    override func removeFromSuperview() {
+        overhang?.removeFromSuperview()
+        super.removeFromSuperview()
+    }
+
+    private func followWithOverhang() {
+        guard let overhang else { return }
+        overhang.bounds = bounds
+        overhang.center = center
+        overhang.transform = transform
+    }
 
     var decorationAlpha: CGFloat {
         get { decoration?.alpha ?? 0 }
@@ -353,7 +380,7 @@ private final class FlightCopy: UIView {
         added.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         if let existing {
             inner.insertSubview(added, aboveSubview: existing.view)
-        } else if let decoration {
+        } else if let decoration, decoration.superview === inner {
             inner.insertSubview(added, belowSubview: decoration)
         } else {
             inner.addSubview(added)
@@ -470,6 +497,18 @@ private final class FlightCopy: UIView {
             snapshot.center = CGPoint(x: inner.bounds.midX, y: inner.bounds.midY)
             snapshot.autoresizingMask = [.flexibleLeftMargin, .flexibleRightMargin, .flexibleTopMargin, .flexibleBottomMargin]
             inner.addSubview(snapshot)
+        case .bottomTrailingCorner(let mark):
+            guard let group = superview, let container = group.superview else { return }
+            let overhang = UIView()
+            overhang.isUserInteractionEnabled = false
+            container.insertSubview(overhang, aboveSubview: group)
+            self.overhang = overhang
+            followWithOverhang()
+            overhang.alpha = alpha
+            // 複製は本物と同じ大きさと回転で置いているので、本物の中の枠をそのまま使える。
+            snapshot.frame = mark.convert(mark.bounds, to: view)
+            snapshot.autoresizingMask = [.flexibleLeftMargin, .flexibleTopMargin]
+            overhang.addSubview(snapshot)
         }
     }
 
@@ -520,6 +559,7 @@ private final class FlightCopy: UIView {
         transform = CGAffineTransform(rotationAngle: geometry.rotation)
         layer.cornerRadius = geometry.cornerRadius
         inner.layer.cornerRadius = max(geometry.cornerRadius - geometry.border / 2, 0)
+        followWithOverhang()
         setNeedsLayout()
         layoutIfNeeded()
         inner.setNeedsLayout()
@@ -537,6 +577,9 @@ private final class FlightCopy: UIView {
     func freezeAtPresentation() {
         guard layer.presentation() != nil else {
             Self.removeAllAnimations(in: layer)
+            if let overhang {
+                Self.removeAllAnimations(in: overhang.layer)
+            }
             if let previousGeometry {
                 apply(previousGeometry)
                 self.previousGeometry = previousGeometry
@@ -568,6 +611,9 @@ private final class FlightCopy: UIView {
         }
         // 中の画像（`FocusCroppedImageView`の中の画像）も前の行き先へ動き続けるので、中まですべての動きを止め、今の大きさで並べ直す。
         Self.removeAllAnimations(in: layer)
+        if let overhang {
+            Self.removeAllAnimations(in: overhang.layer)
+        }
         border = max((size.width - innerSize.width) / 2, 0)
         bounds = CGRect(origin: .zero, size: size)
         center = position
@@ -575,6 +621,7 @@ private final class FlightCopy: UIView {
         layer.cornerRadius = radius
         inner.layer.cornerRadius = innerRadius
         alpha = opacity
+        followWithOverhang()
         if let decorationOpacity {
             decoration?.alpha = decorationOpacity
         }

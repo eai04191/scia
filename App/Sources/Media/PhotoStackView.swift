@@ -260,6 +260,9 @@ final class StackedPhotoView: UIView {
         didSet { failureMark.isHidden = !showsFailure }
     }
 
+    /// 右下の角の失敗のアイコン。出していなければ隠している。投稿欄の開閉で、複製に像を載せる。
+    var failureMarkView: UIView { failureMark }
+
     init(store: MediaImageStore<UIImage>) {
         tile = MediaTileView(store: store)
         super.init(frame: .zero)
