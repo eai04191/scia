@@ -38,7 +38,7 @@ public struct StreamingClient: Sendable {
         }
         var request = URLRequest(url: baseURL.appending(path: "api/v1/streaming"))
         // Mastodonが推奨する`Authorization`で渡す。Mastodonは両方あれば`Authorization`を使う。
-        // Pleromaは`Authorization`を読まず、トークンのない接続を匿名で受け入れて`user`の購読を断るため、`Sec-WebSocket-Protocol`でも渡す。
+        // Pleromaは`Authorization`を読まず、トークンのない接続を匿名で受け入れて`user`の購読を断るため、`Sec-WebSocket-Protocol`でも渡す。docs/server-compatibility.md#streaming-auth
         // クエリのaccess_tokenはアクセスログに残りうるため使わない。
         request.setValue("Bearer \(credential.accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue(credential.accessToken, forHTTPHeaderField: "Sec-WebSocket-Protocol")

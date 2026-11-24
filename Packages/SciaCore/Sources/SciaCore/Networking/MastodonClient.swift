@@ -336,6 +336,7 @@ public struct MastodonClient: Sendable {
 
             /// `configuration`を返さないPleroma系のサーバー（Akkoma）の、一番上にあるPleromaの名前の上限。
             /// `upload_limit`は、Pleromaがv2の`configuration`で返すときと同じく、画像と動画の両方の上限にする。
+            /// docs/server-compatibility.md#instance-v1-configuration
             var pleromaConfiguration: Configuration {
                 Configuration(
                     accounts: nil,
@@ -367,7 +368,7 @@ public struct MastodonClient: Sendable {
             charactersReservedPerURL: charactersReservedPerURL,
             maxMediaAttachments: configuration.statuses?.maxMediaAttachments?.value ?? 4,
             mediaDescriptionLimit: configuration.mediaAttachments?.descriptionLimit?.value ?? 1500,
-            // 任意のファイルを受け付けるサーバー（Pleroma）は、形式を絞らないものとして読む。
+            // 任意のファイルを受け付けるサーバー（Pleroma）は、形式を絞らないものとして読む。docs/server-compatibility.md#supported-mime-types
             supportedMediaTypes: configuration.mediaAttachments?.supportedMimeTypes.flatMap { $0.contains("application/octet-stream") ? nil : $0 },
             profileLimits: ProfileLimits(
                 displayName: configuration.accounts?.maxDisplayNameLength?.value ?? ProfileLimits.beforeMastodon46.displayName,
@@ -704,7 +705,7 @@ public struct MastodonClient: Sendable {
         }
         // そのあと、同じ編集をいつももう一度送る。PleromaとAkkomaは、`media_ids`付きで編集し直すまで投稿に出さない。
         // SharkeyとCatodonは`PUT`だけで投稿に出すが、ほかのサーバーへは編集のときにしか送らないので、送らないと連合先に古い代替テキストが残る。
-        // そのため、これらのサーバーでは編集の履歴に中身の同じ版が1つ余分に残る。docs/server-compatibility.md
+        // そのため、これらのサーバーでは編集の履歴に中身の同じ版が1つ余分に残る。docs/server-compatibility.md#media-attributes
         try Task.checkCancellation()
         return try await send(request, decoding: Status.self).0
     }

@@ -1,7 +1,7 @@
 import Foundation
 
 /// 投稿、予約、編集で送る本文。JSONで送る。
-/// form形式の`media_ids[]`や`poll[options][]`を読まずに捨てるサーバー（Sharkey、26.11.1までのCatodon）があるため。
+/// form形式の`media_ids[]`や`poll[options][]`を読まずに捨てるサーバー（Sharkey、26.11.1までのCatodon）があるため。docs/server-compatibility.md#media-ids-form
 /// https://docs.joinmastodon.org/methods/statuses/#create
 struct StatusRequestBody: Encodable, Equatable {
     struct MediaAttribute: Encodable, Equatable {

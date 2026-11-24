@@ -12,6 +12,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 ## 文書の使い分け
 
 - `docs/`はagentが読む文書で、人は読まない。人が読むのは`README.md`と`FEATURES.md`で、`docs/`とは別物として扱う
+- 例外として、`docs/server-compatibility.md`は人も読む。ほかのMastodon互換の実装の開発者に見せるため、短く平易に書き、書き方はファイルの先頭のコメントに従う。ほかの実装のための手当てを足したり外したりしたら、合わせる
 - `README.md`と`FEATURES.md`の変更は、ユーザーが自分の端末で`Tools/human-review.sh approve <commit>`を走らせて承認するまで、mainに入らない。agentは承認を走らせず、`script`などで端末を作って入力を流し込むこともしない
 - `FEATURES.md`: Sciaでできることのリスト。使う人に見える機能を足したり変えたりしたら、ファイルの先頭のコメントに従って合わせる
 - `docs/vision.md`: 何を作り、何を作らないかと、設計の判断の基準。作業が終わっても残す考え方を書く
