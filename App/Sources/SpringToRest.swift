@@ -107,8 +107,11 @@ extension UIView {
         cancel.isRemovedOnCompletion = true
         cancel.fromValue = from.negated
         cancel.toValue = to.negated
-        layer.add(whole, forKey: key)
+        // 打ち消しを先に足す。足し合わせる動きは足した順に重なり、元、続き、打ち消しの順だと、途中で元の差の2倍を足した値を通る。
+        // 角の丸みのように負にならない値では、そこで値が詰められたと見られ、投稿欄を開く動き出しのコマで、写真の角が行き先に近い丸みで描かれた。
+        // 打ち消しを先にすれば、途中の値はモデルの値になる。
         layer.add(cancel, forKey: key + ".cancel")
+        layer.add(whole, forKey: key)
     }
 }
 
