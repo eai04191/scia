@@ -56,7 +56,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `UIViewRepresentable`で包む部品は`sizeThatFits`で大きさを決める。中身が大きさの希望を変え続けて、並べ直しが止まらなくなることがあるため
 - 人が書く文字の入力欄は`GlyphLanguageTextView`か`GlyphLanguageTextField`で作り、ほかのUIKitの入力欄（検索欄、アラートの入力欄など）では`smartInsertDeleteType = .offOnMac`を入れる。スマート挿入は、英字の後ろに「─」を貼ると「abc ─」のように、ペーストした文字の前に空白を足す。iOSでは設定のスマート句読点に従うので既定のままにし、Macで動くときだけ切る。Macでは、Macのスマート引用符とスマートダッシュを切っても空白が付いたため、iOSのキーボード設定が届いていないと見ている（直接は確かめていない）。SwiftUIの入力欄（`TextEditor`、`TextField`、`.searchable`）は、SwiftUIから切れない
 - `Form`や`List`で作る画面（設定、通報など）を作ったり変えたりするときは、[docs/form-list.md](docs/form-list.md)に従う
-- Mastodon APIの仕様は、公式ドキュメント（https://docs.joinmastodon.org/ ）で確認する。サーバー実装による差異は、必要になった時点で個別に対応してテストに残す
+- Mastodon APIの仕様は、公式ドキュメント（https://docs.joinmastodon.org/ ）で確認する。サーバー実装による差異は、必要になった時点で個別に対応してテストに残す。要求はまずMastodonが想定している形で送り、ほかの実装への手当ては、その結果を見てから足す
 - サーバー（ほかのサーバーの利用者が書いた投稿や、fxtwitterの応答を含む）から来る件数、上限、URLは、読むところで`decodeCount`、`ServerLimit`、`decodeURL`で確かめる。読んだあとの計算でも、サーバーの値から作った数（縦横比や割合）を整数に直す前に、範囲に収める
 - ファイルやフォルダーの名前は、文字列の決まった名前でなければ`SafeFileName`で作り、`appending(fileName:)`でつなげる
 - ログと状態ダンプに何を`privacy: .public`で出してよいかは、[docs/logging.md](docs/logging.md)に従う
