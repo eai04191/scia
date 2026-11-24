@@ -31,7 +31,7 @@ public struct StreamingClient: Sendable {
         self.receivedAccounts = receivedAccounts
     }
 
-    /// - Parameter baseURL: `StreamingEndpoint.url()`で得た接続先。
+    /// - Parameter baseURL: `MastodonClient.streamingURL()`で得た接続先。
     public func open(baseURL: URL) async throws -> StreamingConnection {
         if try RequestPurpose.declared().isAutomatic {
             try await rateLimit.checkAutomaticRequest()

@@ -26,9 +26,8 @@ struct ThreadControllerTests {
         let client = MastodonClient(credential: credential, transport: transport)
         let connector = MessageQueueConnector()
         let streaming = StreamingClient(credential: credential, connector: connector)
-        let streamingEndpoint = StreamingEndpoint(client: client)
         let streamingHub = StreamingHub(livePolicy: { TuningCatalog.liveUpdates(in: TuningStore(defaults: nil)) }) {
-            try await streaming.open(baseURL: try await streamingEndpoint.url())
+            try await streaming.open(baseURL: try await client.streamingURL())
         }
         let (controller, viewController) = ThreadController.make(focus: Self.focus, client: client, streamingHub: streamingHub, settings: AppDependencies.settings, tasks: TaskScope())
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
@@ -79,9 +78,8 @@ struct ThreadControllerTests {
         )
         let client = MastodonClient(credential: credential, transport: transport)
         let streaming = StreamingClient(credential: credential, connector: MessageQueueConnector())
-        let streamingEndpoint = StreamingEndpoint(client: client)
         let streamingHub = StreamingHub(livePolicy: { TuningCatalog.liveUpdates(in: TuningStore(defaults: nil)) }) {
-            try await streaming.open(baseURL: try await streamingEndpoint.url())
+            try await streaming.open(baseURL: try await client.streamingURL())
         }
         let session = TaskScope()
         let (controller, viewController) = ThreadController.make(focus: Self.focus, client: client, streamingHub: streamingHub, settings: AppDependencies.settings, tasks: session.child())

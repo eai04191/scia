@@ -61,7 +61,7 @@
 
 ## 枚数とエラー
 
-- 枚数の上限は、接続先のサーバーの値（`/api/v2/instance`の`max_media_attachments`）に合わせる。項目がなければ4にする
+- 枚数の上限は、接続先のサーバーの値（`instance`の`max_media_attachments`。読み方は[通信](network.md)の「サーバーの`instance`」）に合わせる。項目がなければ4にする
 - 受け付けるかどうかはサーバーが決めるので、断られたらエラーとして伝える。伝え方は、エラーの伝え方の設計に合わせる
 
 ## 送る前に端末で縮める
@@ -82,7 +82,7 @@
 
 ### サーバーの上限
 
-- 上限は、`/api/v2/instance`の`configuration.media_attachments`にある値（`image_size_limit`、`image_matrix_limit`、`video_size_limit`、`video_matrix_limit`、`video_frame_rate_limit`）だけを使う。サーバーは容量や解像度を変えていることが多いので、MastodonやAPIで取れない既定値を前提にしない。返さない項目は推測で補わず、そのまま送ってサーバーの判断に任せる
+- 上限は、`instance`の`configuration.media_attachments`にある値（`image_size_limit`、`image_matrix_limit`、`video_size_limit`、`video_matrix_limit`、`video_frame_rate_limit`）だけを使う。サーバーは容量や解像度を変えていることが多いので、MastodonやAPIで取れない既定値を前提にしない。返さない項目は推測で補わず、そのまま送ってサーバーの判断に任せる
 - サーバーが保存するときに、どこまで縮めるか、どの形式に作り直すかも、APIで取れないので前提にしない
 - 解像度は収まっていて容量だけが超えるとき、JPEGとHEICの画像は、解像度を保ったまま縮めるときと同じ品質で作り直し、それでも超えるときだけ解像度を段階的に下げる。容量は解像度より品質で大きく変わるため。PNGは品質を下げられないので、PNGのまま解像度を下げる。JPEGにすると、スクリーンショットの文字がにじみ、透過も消えるため
 - 動画は、長さから上限に収まるビットレートを計算して書き出し、そのビットレートが解像度に対して低すぎるときは解像度を下げる。動画の長さは保ち、上限に収めるために後ろを切ることはしない

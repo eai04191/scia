@@ -566,7 +566,7 @@ struct MastodonClientTests {
         #expect(try await version == "4.5.0")
         #expect(try await configuration.maxCharacters == 1000)
         #expect(try await capabilities == .mastodon)
-        await #expect(throws: DecodingError.self) { try await client.streamingURLFromV2() }
+        await #expect(throws: DecodingError.self) { try await client.accountDomain() }
         #expect(await transport.requests.map(\.url?.path) == ["/api/v2/instance"])
     }
 
@@ -838,6 +838,61 @@ struct MastodonClientTests {
 
         #expect(configuration.maxCharacters == 10000)
         #expect(configuration.maxMediaAttachments == 8)
+    }
+
+    /// v2の`instance`がないサーバー（Sharkey）では、v1の`configuration`から上限を読む。
+    @Test func instanceConfigurationFallsBackToV1() async throws {
+        let v1 = #"""
+        {"uri":"example.social","version":"3.0.0 (compatible; Sharkey 2025.4.7)","configuration":{"statuses":{"max_characters":3000,"max_media_attachments":16},"media_attachments":{"supported_mime_types":["image/png","image/jpeg"],"image_size_limit":10485760}}}
+        """#
+        let transport = StubTransport([.json(#"{"error":"Unknown API endpoint."}"#, statusCode: 404), .json(v1, statusCode: 200)])
+
+        let configuration = try await makeClient(transport).instanceConfiguration()
+
+        #expect(configuration.maxCharacters == 3000)
+        #expect(configuration.maxMediaAttachments == 16)
+        #expect(configuration.supportedMediaTypes == ["image/png", "image/jpeg"])
+        #expect(configuration.mediaLimits.imageSizeLimit == 10_485_760)
+        #expect(await transport.requests.map(\.url?.path) == ["/api/v2/instance", "/api/v1/instance"])
+    }
+
+    /// `configuration`を返さないPleroma系のサーバー（Akkoma）では、`instance`の一番上にあるPleromaの項目から上限を読む。
+    @Test func instanceConfigurationReadsPleromaLimitsWithoutConfiguration() async throws {
+        let v1 = #"""
+        {"uri":"example.social","version":"2.7.2 (compatible; Akkoma 3.20.1)","max_toot_chars":5000,"description_limit":5000,"upload_limit":16000000,"poll_limits":{"max_options":20,"max_option_chars":200,"min_expiration":0,"max_expiration":31536000}}
+        """#
+        let transport = StubTransport([.json(#"{"error":"Not implemented"}"#, statusCode: 404), .json(v1, statusCode: 200)])
+
+        let configuration = try await makeClient(transport).instanceConfiguration()
+
+        #expect(configuration.maxCharacters == 5000)
+        #expect(configuration.mediaDescriptionLimit == 5000)
+        #expect(configuration.maxMediaAttachments == 4)
+        #expect(configuration.supportedMediaTypes == nil)
+        #expect(configuration.mediaLimits == MediaLimits(imageSizeLimit: 16_000_000, imageMatrixLimit: nil, videoSizeLimit: 16_000_000, videoMatrixLimit: nil, videoFrameRateLimit: nil))
+        // 0の下限は、ほかの上限と同じく読めない値として既定値にする。
+        #expect(configuration.pollLimits == PollLimits(maxOptions: 20, maxCharactersPerOption: 200, expirationRange: PollLimits.mastodonDefault.expirationRange.lowerBound...31_536_000))
+    }
+
+    /// v2の`instance`がないサーバーでも、版、ドメイン、投稿欄の上限、機能の有無、ストリーミングの接続先は、v1を1回だけ読んで同じ応答を使う。
+    @Test func instanceReadersShareOneV1Response() async throws {
+        let v1 = #"""
+        {"uri":"example.social","version":"2.7.2 (compatible; Akkoma 3.20.1)","urls":{"streaming_api":"wss://example.social"},"max_toot_chars":5000,"pleroma":{"metadata":{"features":["pleroma_emoji_reactions"]}}}
+        """#
+        let transport = StubTransport([.json(#"{"error":"Not implemented"}"#, statusCode: 404), .json(v1, statusCode: 200)])
+        let client = try makeClient(transport)
+
+        async let version = client.serverVersion()
+        async let domain = client.accountDomain()
+        async let configuration = client.instanceConfiguration()
+        async let capabilities = client.serverCapabilities()
+        async let streaming = client.streamingURL()
+        #expect(try await version == "2.7.2 (compatible; Akkoma 3.20.1)")
+        #expect(try await domain == "example.social")
+        #expect(try await configuration.maxCharacters == 5000)
+        #expect(try await capabilities.emojiReactions == .pleroma)
+        #expect(try await streaming.absoluteString == "wss://example.social")
+        #expect(await transport.requests.map(\.url?.path) == ["/api/v2/instance", "/api/v1/instance"])
     }
 
     /// 下限が上限を超えるような読めない値なら、既定値にする。

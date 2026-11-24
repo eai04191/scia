@@ -125,9 +125,8 @@ public final class AccountSession {
         let accounts = AccountCache(received: receivedAccounts) { ids in try await client.accounts(ids) }
         self.accounts = accounts
         let streaming = StreamingClient(credential: credential, connector: connector, rateLimit: rateLimit, now: now, receivedAccounts: receivedAccounts)
-        let streamingEndpoint = StreamingEndpoint(client: client)
         let streamingHub = StreamingHub(livePolicy: { TuningCatalog.liveUpdates(in: tuning) }, clock: clock) {
-            try await streaming.open(baseURL: try await streamingEndpoint.url())
+            try await streaming.open(baseURL: try await client.streamingURL())
         }
         self.streamingHub = streamingHub
         authorization = AuthorizationCheck(clock: clock) { try await client.verifyCredentials() }

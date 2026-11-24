@@ -93,18 +93,18 @@ struct FeatureAvailabilityTests {
         #expect(await features.disabled.map(\.feature) == [.preferences])
     }
 
-    /// v2のinstanceがないサーバーでは、投稿欄の上限を読むたびに送らず、ストリーミングの接続先はすぐv1を使う。
+    /// v2のinstanceがないサーバーでは、v2を送り直さず、投稿欄の上限もストリーミングの接続先もv1から読む。
     @Test func unsupportedInstanceV2FallsBackToV1WithoutRequestingAgain() async throws {
         let features = FeatureAvailability()
         let transport = StubTransport([
             .json("<html>Not Found</html>", statusCode: 404),
-            .json(#"{"uri":"example.social","urls":{"streaming_api":"wss://v1.example.social"}}"#, statusCode: 200),
+            .json(#"{"uri":"example.social","urls":{"streaming_api":"wss://v1.example.social"},"configuration":{"statuses":{"max_characters":1000}}}"#, statusCode: 200),
         ])
         let client = try makeClient(transport, features: features)
 
-        await #expect(throws: FeatureUnavailable.self) { try await client.instanceConfiguration() }
-        await #expect(throws: FeatureUnavailable.self) { try await client.instanceConfiguration() }
-        #expect(try await StreamingEndpoint(client: client).url().absoluteString == "wss://v1.example.social")
+        #expect(try await client.instanceConfiguration().maxCharacters == 1000)
+        #expect(try await client.instanceConfiguration().maxCharacters == 1000)
+        #expect(try await client.streamingURL().absoluteString == "wss://v1.example.social")
 
         #expect(await transport.requests.map { $0.url?.path() } == ["/api/v2/instance", "/api/v1/instance"])
     }

@@ -1,7 +1,7 @@
 import Foundation
 import Synchronization
 
-/// v2の`instance`の応答を、クライアント（とその複製）の間で覚える。版、投稿欄の上限、機能の有無、ストリーミングの接続先が、同じ応答から読む。
+/// `instance`の応答を、クライアント（とその複製）の間で覚える。版、ドメイン、投稿欄の上限、機能の有無、ストリーミングの接続先が、同じ応答から読む。
 ///
 /// 同時に呼ばれても、同じ目的（`RequestPurpose`）の呼び出しは、読む通信を1回にまとめる。目的が違えば合流させない。レート制限で自動の通信を控えている間に、操作の呼び出しまで断られないため。
 /// 読めなければ覚えず、次の呼び出しで読み直す。
@@ -11,6 +11,13 @@ final class InstanceResponseCache: Sendable {
         let data: Data
         let response: HTTPURLResponse
         let request: URLRequest
+        /// v1とv2では、同じ値でも項目の名前と置き場所が違う。
+        var version: APIVersion = .v2
+    }
+
+    enum APIVersion: Sendable {
+        case v1
+        case v2
     }
 
     /// JSONのオブジェクトとして読めるかだけを確かめる。読めない応答は覚えない。

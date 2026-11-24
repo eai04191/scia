@@ -17,6 +17,7 @@ public struct MastodonClient: Sendable {
     /// 応答の中で読んだアカウントを覚える先。nilなら覚えない。
     private let receivedAccounts: ReceivedAccounts?
     private let instanceCache = InstanceResponseCache()
+    private let instanceV1Cache = InstanceResponseCache()
     private static let logger = SciaLog.logger(category: "network")
 
     /// - Parameters:
@@ -170,15 +171,13 @@ public struct MastodonClient: Sendable {
     }
 
     /// WebFingerのドメイン（v2の`domain`、v1の`uri`）。接続先やプロフィールURLのホストとは異なることがある。
-    /// v2の`instance`がないサーバーでだけ、v1を読む。
     public func accountDomain() async throws -> String {
         struct InstanceV1: Decodable { let uri: String }
         struct InstanceV2: Decodable { let domain: String }
-        let domain: String
-        do {
-            domain = try await instanceV2(InstanceV2.self).domain
-        } catch is FeatureUnavailable {
-            domain = try await get(InstanceV1.self, path: "api/v1/instance", query: []).0.uri
+        let instance = try await instanceResponse()
+        let domain = switch instance.version {
+        case .v2: try decode(InstanceV2.self, from: instance).domain
+        case .v1: try decode(InstanceV1.self, from: instance).uri
         }
         guard !domain.isEmpty, !domain.contains(where: { $0.isWhitespace }),
               let components = URLComponents(string: "https://" + domain),
@@ -189,9 +188,12 @@ public struct MastodonClient: Sendable {
         return domain.lowercased()
     }
 
+    /// ストリーミングの接続先。v2の`configuration.urls.streaming`、v1の`urls.streaming_api`。
+    /// v2は返すのに接続先を読めないサーバーでは、v1を読む。
     /// https://docs.joinmastodon.org/methods/instance/#v2
-    func streamingURLFromV2() async throws -> URL {
-        struct Instance: Decodable {
+    /// https://docs.joinmastodon.org/entities/V1_Instance/#streaming_api
+    public func streamingURL() async throws -> URL {
+        struct InstanceV2: Decodable {
             struct Configuration: Decodable {
                 struct URLs: Decodable {
                     let streaming: URL
@@ -208,13 +210,7 @@ public struct MastodonClient: Sendable {
             }
             let configuration: Configuration
         }
-        return try await instanceV2(Instance.self).configuration.urls.streaming
-    }
-
-    /// v2の`instance`がないサーバーのための、v1の接続先。
-    /// https://docs.joinmastodon.org/entities/V1_Instance/#streaming_api
-    func streamingURLFromV1() async throws -> URL {
-        struct Instance: Decodable {
+        struct InstanceV1: Decodable {
             struct URLs: Decodable {
                 let streamingApi: URL
 
@@ -228,7 +224,16 @@ public struct MastodonClient: Sendable {
             }
             let urls: URLs
         }
-        return try await get(Instance.self, path: "api/v1/instance", query: []).0.urls.streamingApi
+        let instance = try await instanceResponse()
+        if instance.version == .v2 {
+            do {
+                return try decode(InstanceV2.self, from: instance).configuration.urls.streaming
+            } catch is DecodingError {
+                Self.logger.info("streaming endpoint missing from v2 instance, reading v1")
+                return try decode(InstanceV1.self, from: try await instanceV1Response()).urls.streamingApi
+            }
+        }
+        return try decode(InstanceV1.self, from: instance).urls.streamingApi
     }
 
     /// サーバーの版。Mastodon以外のサーバーは、互換の版のあとに自分の名前と版を書くことが多い。記録に残し、原因を絞るのに使う。
@@ -237,17 +242,11 @@ public struct MastodonClient: Sendable {
         struct Instance: Decodable {
             let version: String
         }
-        do {
-            return try await instanceV2(Instance.self).version
-        } catch let error as MastodonAPIError where error.isUnauthorized {
-            throw error
-        } catch {
-            return try await get(Instance.self, path: "api/v1/instance", query: []).0.version
-        }
+        return try decode(Instance.self, from: try await instanceResponse()).version
     }
 
     /// サーバーの、Mastodonにない機能の有無。`instance`の、Fedibirdの拡張の`fedibird_capabilities`と`feature_quote`、`configuration.reactions`、`api_versions`のChuckyaの宣言、Pleromaの`pleroma.metadata.features`で決める。
-    /// 項目がないサーバーは、Mastodonと同じとみなす。v2の`instance`がないサーバーでだけ、v1を読む。
+    /// 項目がないサーバーは、Mastodonと同じとみなす。
     public func serverCapabilities() async throws -> ServerCapabilities {
         struct Instance: Decodable {
             let fedibirdCapabilities: [String]?
@@ -271,12 +270,7 @@ public struct MastodonClient: Sendable {
 
             let pleroma: Pleroma?
         }
-        let instance: Instance
-        do {
-            instance = try await instanceV2(Instance.self)
-        } catch is FeatureUnavailable {
-            instance = try await get(Instance.self, path: "api/v1/instance", query: []).0
-        }
+        let instance = try decode(Instance.self, from: try await instanceResponse())
         let fedibirdCapabilities = instance.fedibirdCapabilities ?? []
         var reactEndpoints: EmojiReactionStyle?
         if instance.configuration?.reactions != nil, !fedibirdCapabilities.contains("emoji_reaction") {
@@ -290,6 +284,7 @@ public struct MastodonClient: Sendable {
         )
     }
 
+    /// 投稿欄とプロフィールの編集の上限。v2とv1の`configuration`から読む。
     /// https://docs.joinmastodon.org/methods/instance/#v2
     public func instanceConfiguration() async throws -> InstanceConfiguration {
         struct Instance: Decodable {
@@ -327,9 +322,41 @@ public struct MastodonClient: Sendable {
                 let mediaAttachments: MediaAttachments?
                 let polls: Polls?
             }
-            let configuration: Configuration
+            struct PleromaPollLimits: Decodable {
+                let maxOptions: ServerLimit?
+                let maxOptionChars: ServerLimit?
+                let minExpiration: ServerLimit?
+                let maxExpiration: ServerLimit?
+            }
+            let configuration: Configuration?
+            let maxTootChars: ServerLimit?
+            let descriptionLimit: ServerLimit?
+            let uploadLimit: ServerLimit?
+            let pollLimits: PleromaPollLimits?
+
+            /// `configuration`を返さないPleroma系のサーバー（Akkoma）の、一番上にあるPleromaの名前の上限。
+            /// `upload_limit`は、Pleromaがv2の`configuration`で返すときと同じく、画像と動画の両方の上限にする。
+            var pleromaConfiguration: Configuration {
+                Configuration(
+                    accounts: nil,
+                    statuses: Configuration.Statuses(maxCharacters: maxTootChars, maxMediaAttachments: nil, charactersReservedPerUrl: nil),
+                    mediaAttachments: Configuration.MediaAttachments(
+                        supportedMimeTypes: nil,
+                        descriptionLimit: descriptionLimit,
+                        imageSizeLimit: uploadLimit,
+                        imageMatrixLimit: nil,
+                        videoSizeLimit: uploadLimit,
+                        videoMatrixLimit: nil,
+                        videoFrameRateLimit: nil
+                    ),
+                    polls: pollLimits.map {
+                        Configuration.Polls(maxOptions: $0.maxOptions, maxCharactersPerOption: $0.maxOptionChars, minExpiration: $0.minExpiration, maxExpiration: $0.maxExpiration)
+                    }
+                )
+            }
         }
-        let configuration = try await instanceV2(Instance.self).configuration
+        let instance = try decode(Instance.self, from: try await instanceResponse())
+        let configuration = instance.configuration ?? instance.pleromaConfiguration
         // 投稿の設定を返さないサーバーには、Mastodonの既定値を使う。
         // 代替テキストの上限は4.4.0から返るが、それより前のMastodonも1500文字で検証している。
         let maxCharacters = configuration.statuses?.maxCharacters?.value ?? 500
@@ -1538,17 +1565,37 @@ public struct MastodonClient: Sendable {
         try await post(Relationship.self, path: "api/v1/follow_requests/\(accountID)/reject", form: []).0
     }
 
-    /// v2の`instance`を読む。応答はこのクライアントの間で覚え、呼び出しごとに要る項目を読み分ける。
+    /// サーバーの`instance`。版、ドメイン、投稿欄の上限、機能の有無、ストリーミングの接続先は、すべてここから読む。
+    /// v2を読み、v2がないサーバー（404）でだけv1を読む。応答はこのクライアントの間で覚え、呼び出しごとに要る項目を読み分ける。
     /// JSONのオブジェクトとして読めない応答は覚えず、次の呼び出しで読み直す。
     /// https://docs.joinmastodon.org/methods/instance/#v2
-    private func instanceV2<T: Decodable>(_ type: T.Type) async throws -> T {
-        let request = URLRequest(url: credential.instance.appending(path: "api/v2/instance"))
-        let cached = try await instanceCache.response { [self] in
-            let (data, response) = try await send(request, feature: .instanceV2)
-            _ = try decode(InstanceResponseCache.JSONObject.self, from: data, of: response, for: request)
-            return InstanceResponseCache.Response(data: data, response: response, request: request)
+    private func instanceResponse() async throws -> InstanceResponseCache.Response {
+        try await instanceCache.response { [self] in
+            do {
+                return try await loadInstance(path: "api/v2/instance", version: .v2, feature: .instanceV2)
+            } catch is FeatureUnavailable {
+                return try await instanceV1Response()
+            }
         }
-        return try decode(type, from: cached.data, of: cached.response, for: cached.request)
+    }
+
+    /// v1の`instance`。v2がないサーバーと、v2がストリーミングの接続先を返さないサーバーでだけ読む。
+    /// https://docs.joinmastodon.org/methods/instance/#v1
+    private func instanceV1Response() async throws -> InstanceResponseCache.Response {
+        try await instanceV1Cache.response { [self] in
+            try await loadInstance(path: "api/v1/instance", version: .v1, feature: nil)
+        }
+    }
+
+    private func loadInstance(path: String, version: InstanceResponseCache.APIVersion, feature: OptionalFeature?) async throws -> InstanceResponseCache.Response {
+        let request = URLRequest(url: credential.instance.appending(path: path))
+        let (data, response) = try await send(request, feature: feature)
+        _ = try decode(InstanceResponseCache.JSONObject.self, from: data, of: response, for: request)
+        return InstanceResponseCache.Response(data: data, response: response, request: request, version: version)
+    }
+
+    private func decode<T: Decodable>(_ type: T.Type, from instance: InstanceResponseCache.Response) throws -> T {
+        try decode(type, from: instance.data, of: instance.response, for: instance.request)
     }
 
     /// - Parameter feature: なくても使える機能のAPIなら、その機能。使えないと分かったら、セッションの間は送らない。

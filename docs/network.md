@@ -34,6 +34,14 @@
 - 送ってよいかを回線と設定から決めるのは、`NetworkUsePolicy`だけにする。呼び出し側は、目的を名乗って送ってよいかを聞き、読むもの（プレビューか元の画像か）を選ぶ。回線の状態を直接読んで分ける書き方は、`make lint`の`network_conditions_outside_policy`で止める
 - 質を上げると先読みのリクエストには、同じ決まりで`URLRequest`の`allowsConstrainedNetworkAccess`と`allowsExpensiveNetworkAccess`を付ける。呼び出し側が聞いたあとでWi-Fiからモバイル通信に変わっても、OSが送らない。OSが送らなかったら、回線で控えた失敗にする（下の「失敗の分け方」）
 
+## サーバーの`instance`
+
+- 版、ドメイン、投稿欄とプロフィールの上限、機能の有無、ストリーミングの接続先は、すべて`MastodonClient`の1つの読み込みから読む。値ごとに読み分けると、v1に切り替える条件が値ごとにずれ、v2がないサーバーで一部の値だけ読めなくなるため
+- `api/v2/instance`を読み、404のサーバー（Akkoma、Sharkey）でだけ`api/v1/instance`を読む。v1の値は、名前と置き場所の違う項目（`uri`、`urls.streaming_api`）をv1の名前で読む
+- 上限はv1でも`configuration`から読む。`configuration`を返さないPleroma系のサーバー（Akkoma）は、一番上の`max_toot_chars`、`description_limit`、`upload_limit`、`poll_limits`から読む
+- v2は返すのにストリーミングの接続先を読めないサーバーでは、接続先だけv1から読む
+- 読めた応答は、セッションのクライアントの間で覚え、同時に読んでも通信を1回にまとめる。読めなかったら覚えず、次に読むときに読み直す
+
 ## 失敗の分け方
 
 どの経路も、失敗を次の4つに分け（`HTTPFailure`）、送り直すか、待って読み直すか、あきらめるかを、この分け方だけで決める。経路ごとにステータスを読み分けると、429を「読めない」として二度と読まない経路が出るため。
