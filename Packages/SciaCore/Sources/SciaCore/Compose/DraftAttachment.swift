@@ -7,8 +7,8 @@ public struct DraftAttachment: Sendable, Equatable, Identifiable {
     public var state: State
     /// 利用者が書いた代替テキスト。サーバーに送った値は`State.uploaded`の添付ファイルの`description`にある。
     public var description: String
-    /// 編集している投稿に、もう付いている添付。代替テキストは`PUT /api/v1/media/:id`では直せず（投稿に付いた添付をサーバーが拒む）、
-    /// 編集の`media_attributes[]`で一緒に送る。
+    /// 編集している投稿に、もう付いている添付。代替テキストは、Mastodonでは`PUT /api/v1/media/:id`では直せず（投稿に付いた添付をサーバーが拒む）、
+    /// 編集の`media_attributes`で一緒に送る（`MastodonClient.editStatus`）。
     public let isAttachedToStatus: Bool
     /// 投稿に付いている添付で、書き換えた代替テキストを編集と一緒に送ったが、届いたか分からない（応答を受け取れなかった）。
     /// サーバーの値が元のままか、送った値か分からないので、次の編集では元と同じ値でも送る。

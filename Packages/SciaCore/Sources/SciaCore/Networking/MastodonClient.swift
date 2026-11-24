@@ -691,7 +691,22 @@ public struct MastodonClient: Sendable {
     /// https://docs.joinmastodon.org/methods/statuses/#edit
     public func editStatus(_ target: StatusEditTarget, to draft: StatusDraft, now: Date = SystemTime.now()) async throws -> Status {
         guard let body = draft.editBody(poll: target.poll, now: now) else { throw StatusPostError.attachmentsNotReady }
-        return try await send(jsonRequest(method: "PUT", path: "api/v1/statuses/\(target.statusID)", body: body), decoding: Status.self).0
+        let request = try jsonRequest(method: "PUT", path: "api/v1/statuses/\(target.statusID)", body: body)
+        let edited = try await send(request, decoding: Status.self).0
+        let ignored = draft.changedAttachedDescriptions.filter { changed in
+            edited.mediaAttachments.first { $0.id == changed.id }?.description ?? "" != changed.description
+        }
+        guard !ignored.isEmpty else { return edited }
+        // 編集の`media_attributes`を読まないサーバー（Pleroma、Akkoma、Sharkey、Catodon）には、投稿に付いた添付にも`PUT /api/v1/media/:id`で送る。
+        // Mastodonは投稿に付いた添付へのこの要求を404で断るので、`media_attributes`で変わらなかったときだけ送る。
+        for (id, description) in ignored {
+            _ = try await updateMediaDescription(id, description: description)
+        }
+        // そのあと、同じ編集をいつももう一度送る。PleromaとAkkomaは、`media_ids`付きで編集し直すまで投稿に出さない。
+        // SharkeyとCatodonは`PUT`だけで投稿に出すが、ほかのサーバーへは編集のときにしか送らないので、送らないと連合先に古い代替テキストが残る。
+        // そのため、これらのサーバーでは編集の履歴に中身の同じ版が1つ余分に残る。docs/server-compatibility.md
+        try Task.checkCancellation()
+        return try await send(request, decoding: Status.self).0
     }
 
     /// 自分の投稿を削除する。応答の中身は使わない。

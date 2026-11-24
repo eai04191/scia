@@ -233,6 +233,63 @@ struct StatusEditClientTests {
         #expect(edited.editedAt != nil)
     }
 
+    /// 添付の代替テキストが`description`の、編集したあとの投稿。
+    private static func edited(description: String) -> StubTransport.Response {
+        .json(editedStatus.replacingOccurrences(of: #""media_attachments":[]"#, with: #""media_attachments":[{"id":"100","type":"image","url":"https://example.social/100.png","preview_url":null,"description":"\#(description)"}]"#), statusCode: 200)
+    }
+
+    /// 投稿に付いた添付の代替テキストを「猫」から「三毛猫」に変える編集。
+    private static func descriptionEdit() -> StatusDraft {
+        let target = StatusEditTarget(statusID: "113000000000000001", poll: nil)
+        var draft = StatusDraft(text: "直した", editing: target)
+        let media = MediaAttachment(id: "100", type: .image, url: URL(string: "https://example.social/100.png"), previewUrl: nil, description: "猫")
+        draft.attachments = [DraftAttachment(state: .uploaded(media), description: "三毛猫", isAttachedToStatus: true)]
+        return draft
+    }
+
+    private func sentRequests(_ transport: StubTransport) async -> [String] {
+        await transport.requests.map { "\($0.httpMethod ?? "") \($0.url?.path() ?? "")" }
+    }
+
+    /// Mastodonは編集の`media_attributes`で代替テキストを変えるので、編集だけを送る。
+    @Test func editChangesDescriptionWithMediaAttributes() async throws {
+        let transport = StubTransport([Self.edited(description: "三毛猫")])
+        let draft = Self.descriptionEdit()
+
+        let edited = try await makeClient(transport).editStatus(try #require(draft.editing), to: draft)
+
+        #expect(edited.mediaAttachments.map(\.description) == ["三毛猫"])
+        #expect(await sentRequests(transport) == ["PUT /api/v1/statuses/113000000000000001"])
+    }
+
+    /// `media_attributes`を読まないサーバー（Pleroma、Akkoma、Sharkey、Catodon）には、`PUT /api/v1/media/:id`で代替テキストを送り、
+    /// 編集をもう一度送る。Pleroma、Akkomaは編集し直すまで投稿に出ず、Sharkey、Catodonは`PUT`ではほかのサーバーに送らないため。
+    @Test func editSendsDescriptionByMediaUpdateAndResendsWhenIgnored() async throws {
+        let media = #"{"id":"100","type":"image","url":"https://example.social/100.png","preview_url":null,"description":"三毛猫"}"#
+        let transport = StubTransport([Self.edited(description: "猫"), .json(media, statusCode: 200), Self.edited(description: "三毛猫")])
+        let draft = Self.descriptionEdit()
+
+        let edited = try await makeClient(transport).editStatus(try #require(draft.editing), to: draft)
+
+        #expect(edited.mediaAttachments.map(\.description) == ["三毛猫"])
+        #expect(await sentRequests(transport) == [
+            "PUT /api/v1/statuses/113000000000000001", "PUT /api/v1/media/100", "PUT /api/v1/statuses/113000000000000001",
+        ])
+        #expect(try MastodonClientTests.jsonBody(of: try #require(await transport.requests.last)) == MastodonClientTests.jsonBody(of: try #require(await transport.requests.first)))
+    }
+
+    /// 代替テキストを消したとき、返った投稿の空の代替テキストが`null`でも（Mastodon）、消えたものとして手当てを始めない。
+    @Test func editTreatsNullDescriptionAsCleared() async throws {
+        let cleared = StubTransport.Response.json(Self.editedStatus.replacingOccurrences(of: #""media_attachments":[]"#, with: #""media_attachments":[{"id":"100","type":"image","url":"https://example.social/100.png","preview_url":null,"description":null}]"#), statusCode: 200)
+        let transport = StubTransport([cleared])
+        var draft = Self.descriptionEdit()
+        draft.attachments[0].description = ""
+
+        _ = try await makeClient(transport).editStatus(try #require(draft.editing), to: draft)
+
+        #expect(await sentRequests(transport) == ["PUT /api/v1/statuses/113000000000000001"])
+    }
+
     /// ふつうの削除では、web UIと同じく添付もすぐ消す。削除して書き直すときは、新しい投稿に付け直すので残す。
     @Test func deleteSendsDelete() async throws {
         let transport = StubTransport([.json(Self.editedStatus, statusCode: 200), .json(Self.editedStatus, statusCode: 200)])
