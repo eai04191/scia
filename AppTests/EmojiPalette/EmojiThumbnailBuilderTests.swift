@@ -10,26 +10,32 @@ import Testing
 struct EmojiThumbnailBuilderTests {
     /// 作る処理の代わり。始めた回ごとに門を作り、開けるまで終わらない。止められても、開けるまで終わらない（展開の途中で止められた形）。
     private final class Builds: Sendable {
-        let gates = Mutex<[Gate]>([])
-        let cancelled = Mutex<[Bool]>([])
+        private struct Run {
+            let gate = Gate()
+            var cancelled = false
+            var isWatchingCancellation = false
+        }
+
+        private let runs = Mutex<[Run]>([])
 
         func run() async {
-            let gate = Gate()
-            let index = gates.withLock { gates in
-                gates.append(gate)
-                return gates.count - 1
+            let (index, gate) = runs.withLock { runs in
+                runs.append(Run())
+                return (runs.count - 1, runs[runs.count - 1].gate)
             }
-            cancelled.withLock { $0.append(false) }
             // 門は取り消されると待つのをやめるので、取り消されない別の処理で待ち、止められても開けるまで終わらないようにする。
             await withTaskCancellationHandler {
+                // 止められたことを記録できるようになってから、始めたと数える。数える前に止められると、記録が止めたあとに遅れて付くため。
+                runs.withLock { $0[index].isWatchingCancellation = true }
                 await Task(.withoutRequests) { try? await gate.wait() }.value
             } onCancel: {
-                cancelled.withLock { $0[index] = true }
+                runs.withLock { $0[index].cancelled = true }
             }
         }
 
-        var count: Int { gates.withLock { $0.count } }
-        func open(_ index: Int) { gates.withLock { $0[index] }.open() }
+        var count: Int { runs.withLock { $0.count { $0.isWatchingCancellation } } }
+        var cancelled: [Bool] { runs.withLock { $0.map(\.cancelled) } }
+        func open(_ index: Int) { runs.withLock { $0[index].gate }.open() }
     }
 
     /// 止めた作業が終わる前に、絵文字ピッカーを閉じて作業を始め直しても、あとで始めた作業を絵文字ピッカーを開いたときに止められる。
@@ -49,7 +55,7 @@ struct EmojiThumbnailBuilderTests {
         #expect(builder.isBuilding, "あとで始めた作業は、まだ作っている")
         builder.paletteDidAppear()
         #expect(!builder.isBuilding)
-        #expect(builds.cancelled.withLock { $0 } == [true, true])
+        #expect(builds.cancelled == [true, true])
         builds.open(1)
         try await waitUntil { builder.finishedCount >= 2 }
     }
@@ -67,7 +73,7 @@ struct EmojiThumbnailBuilderTests {
 
         builder.paletteDidDisappear()
         #expect(!builder.isBuildingWhileShown)
-        #expect(shown.cancelled.withLock { $0 } == [true])
+        #expect(shown.cancelled == [true])
         try await waitUntil { builds.count >= 1 }
         shown.open(0)
         builds.open(0)
