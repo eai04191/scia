@@ -25,7 +25,7 @@ struct ComposeMorphFlightsTests {
         let flights = ComposeMorphFlights(container: container)
         let key = ComposeMorphFlights.Key.chip
         func end(_ view: UIView) -> ComposeMorphFlights.End {
-            .init(view: view, content: .thumbnail(nil, nil)) { view.alpha = $0 ? 0 : 1 }
+            .init(view: view, content: .thumbnail(nil, nil, .undecorated(size: view.bounds.size))) { view.alpha = $0 ? 0 : 1 }
         }
 
         flights.takeOff(from: [key: end(source)], stackingOrder: [key], stackShadowOpacity: 0)
@@ -57,7 +57,7 @@ struct ComposeMorphFlightsTests {
         let shadow = UIView()
         let flights = ComposeMorphFlights(container: container)
         let key = ComposeMorphFlights.Key.attachment(UUID())
-        let end = ComposeMorphFlights.End(view: source, content: .thumbnail(nil, nil), cornerRadius: 3, border: 2, betweenShadow: shadow) { source.alpha = $0 ? 0 : 1 }
+        let end = ComposeMorphFlights.End(view: source, content: .thumbnail(nil, nil, .undecorated(size: source.bounds.size)), cornerRadius: 3, border: 2, betweenShadow: shadow) { source.alpha = $0 ? 0 : 1 }
 
         flights.takeOff(from: [key: end], stackingOrder: [key], stackShadowOpacity: 0)
 
@@ -69,53 +69,102 @@ struct ComposeMorphFlightsTests {
         // 載せた影は、動き始めに薄くし始める。
         #expect(shadow.alpha == 0)
     }
-    /// 列のサムネイルへ向かう複製は、サムネイルに重ねている表示（バッジなど）の複製を載せ、近づくにつれて濃くする。
+    /// 列のサムネイルへ向かう複製は、サムネイルに重ねている表示（バッジなど）を載せ、近づくにつれて濃くする。
     /// 載せないと、列に着いて本物に替わったコマで、バッジが1コマで付く。
-    @Test func landingOnStripFadesInThumbnailDecoration() throws {
+    @Test func landingOnStripFadesInBadge() throws {
         let container = UIView(frame: CGRect(x: 0, y: 0, width: 400, height: 400))
         let source = UIView(frame: CGRect(x: 16, y: 300, width: 26, height: 26))
         let target = UIView(frame: CGRect(x: 16, y: 10, width: 64, height: 64))
         container.addSubview(source)
         container.addSubview(target)
-        let badge = UIView()
         let flights = ComposeMorphFlights(container: container)
         let key = ComposeMorphFlights.Key.attachment(UUID())
 
-        flights.takeOff(from: [key: .init(view: source, content: .thumbnail(nil, nil)) { source.alpha = $0 ? 0 : 1 }], stackingOrder: [key], stackShadowOpacity: 0)
+        flights.takeOff(from: [key: .init(view: source, content: .thumbnail(nil, nil, .undecorated(size: source.bounds.size))) { source.alpha = $0 ? 0 : 1 }], stackingOrder: [key], stackShadowOpacity: 0)
         UIView.animate(withDuration: 1) {
             _ = flights.land(
-                on: [key: .init(view: target, content: .thumbnail(nil, nil), makeThumbnailDecoration: { badge }) { target.alpha = $0 ? 0 : 1 }],
+                on: [key: .init(view: target, content: .thumbnail(nil, nil, Self.badged(size: target.bounds.size))) { target.alpha = $0 ? 0 : 1 }],
                 delays: [:], stackShadowOpacity: 0, duration: 1
             ) { _, animations in animations() }
         }
 
-        #expect(badge.superview != nil, "複製にバッジを載せていません")
+        let badge = try #require(Self.badges(in: container).first { !$0.isHidden }, "複製にバッジを載せていません")
         #expect(badge.alpha == 1)
         let fade = try #require(badge.layer.animation(forKey: "opacity") as? CABasicAnimation, "バッジを濃くしていません")
         #expect((fade.fromValue as? Float) == 0)
-        #expect(badge.autoresizingMask == [.flexibleWidth, .flexibleHeight])
     }
 
     /// 列のサムネイルからカプセルへ向かう複製は、バッジを載せて動き始め、カプセルに近づくにつれて薄くする。カプセルの写真はバッジを出さないため。
-    @Test func takingOffFromStripFadesOutThumbnailDecoration() throws {
+    @Test func takingOffFromStripFadesOutBadge() throws {
         let container = UIView(frame: CGRect(x: 0, y: 0, width: 400, height: 400))
         let source = UIView(frame: CGRect(x: 16, y: 10, width: 64, height: 64))
         let target = UIView(frame: CGRect(x: 16, y: 300, width: 26, height: 26))
         container.addSubview(source)
         container.addSubview(target)
-        let badge = UIView()
         let flights = ComposeMorphFlights(container: container)
         let key = ComposeMorphFlights.Key.attachment(UUID())
 
-        flights.takeOff(from: [key: .init(view: source, content: .thumbnail(nil, nil), makeThumbnailDecoration: { badge }) { source.alpha = $0 ? 0 : 1 }], stackingOrder: [key], stackShadowOpacity: 0)
-        #expect(badge.superview != nil, "複製にバッジを載せていません")
+        flights.takeOff(from: [key: .init(view: source, content: .thumbnail(nil, nil, Self.badged(size: source.bounds.size))) { source.alpha = $0 ? 0 : 1 }], stackingOrder: [key], stackShadowOpacity: 0)
+        let badge = try #require(Self.badges(in: container).first { !$0.isHidden }, "複製にバッジを載せていません")
         #expect(badge.alpha == 1)
         UIView.animate(withDuration: 1) {
-            _ = flights.land(on: [key: .init(view: target, content: .thumbnail(nil, nil)) { target.alpha = $0 ? 0 : 1 }], delays: [:], stackShadowOpacity: 0, duration: 1) { _, animations in animations() }
+            _ = flights.land(on: [key: .init(view: target, content: .thumbnail(nil, nil, .undecorated(size: target.bounds.size))) { target.alpha = $0 ? 0 : 1 }], delays: [:], stackShadowOpacity: 0, duration: 1) { _, animations in animations() }
         }
 
         #expect(badge.alpha == 0)
         let fade = try #require(badge.layer.animation(forKey: "opacity") as? CABasicAnimation, "バッジを薄くしていません")
         #expect((fade.fromValue as? Float) == 1)
+    }
+
+    /// 動いている途中に向かい直すとき、同じ本物でも重ねた表示が変わっていれば、変わったあとの表示へ向かう。
+    /// 動画の読み込み前に閉じ始め、読み込み終えてから開き直すと、列のサムネイルに再生アイコンが付いている。前の表示のままだと、着地のコマで再生アイコンが付く。
+    @Test func reversingTowardChangedDecorationShowsIt() throws {
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: 400, height: 400))
+        let strip = UIView(frame: CGRect(x: 16, y: 10, width: 64, height: 64))
+        let capsule = UIView(frame: CGRect(x: 16, y: 300, width: 26, height: 26))
+        container.addSubview(strip)
+        container.addSubview(capsule)
+        let flights = ComposeMorphFlights(container: container)
+        let key = ComposeMorphFlights.Key.attachment(UUID())
+        func end(_ view: UIView, _ layout: MediaTileDecorationLayout) -> ComposeMorphFlights.End {
+            .init(view: view, content: .thumbnail(nil, nil, layout)) { view.alpha = $0 ? 0 : 1 }
+        }
+
+        flights.takeOff(from: [key: end(strip, .undecorated(size: strip.bounds.size))], stackingOrder: [key], stackShadowOpacity: 0)
+        UIView.animate(withDuration: 1) {
+            _ = flights.land(on: [key: end(capsule, .undecorated(size: capsule.bounds.size))], delays: [:], stackShadowOpacity: 0, duration: 1) { _, animations in animations() }
+        }
+        flights.takeOff(from: [key: end(capsule, .undecorated(size: capsule.bounds.size))], stackingOrder: [key], stackShadowOpacity: 0)
+        UIView.animate(withDuration: 1) {
+            _ = flights.land(on: [key: end(strip, Self.playing(size: strip.bounds.size))], delays: [:], stackShadowOpacity: 0, duration: 1) { _, animations in animations() }
+        }
+
+        #expect(Self.decorations(in: container).contains { $0.decoration.showsPlay && $0.view(for: .play).alpha == 1 }, "向かい直した先の再生アイコンを見せていません")
+    }
+
+    /// 動画の再生アイコンを出しているタイル。
+    private static func playing(size: CGSize) -> MediaTileDecorationLayout {
+        MediaTileDecorationLayout(
+            decoration: MediaTileDecoration(showsPlay: true, badgeMarks: [], showsBadge: true, symbol: nil, hiddenCount: 0),
+            sizing: MediaTileSymbolSizing(ratio: 0.4, range: 10...36),
+            size: size
+        )
+    }
+
+    private static func decorations(in view: UIView) -> [MediaTileDecorationView] {
+        (view as? MediaTileDecorationView).map { [$0] } ?? view.subviews.flatMap(decorations(in:))
+    }
+
+    /// GIFのバッジを出しているタイル。
+    private static func badged(size: CGSize) -> MediaTileDecorationLayout {
+        MediaTileDecorationLayout(
+            decoration: MediaTileDecoration(showsPlay: false, badgeMarks: [.gif], showsBadge: true, symbol: nil, hiddenCount: 0),
+            sizing: MediaTileSymbolSizing(ratio: 0.4, range: 10...36),
+            size: size
+        )
+    }
+
+    private static func badges(in view: UIView) -> [MediaBadgeView] {
+        (view as? MediaBadgeView).map { [$0] } ?? view.subviews.flatMap(badges(in:))
     }
 }

@@ -87,9 +87,9 @@ struct MediaTileViewTests {
         )
     }
 
-    /// 複製の中の画像を、入れ子のビューまで含めて集める。再生マークは丸のビューの中に三角を入れて載せるため。
+    /// 複製の中の見えている画像を、入れ子のビューまで含めて集める。再生マークは丸のビューの中に三角を入れて載せるため。
     private static func images(in view: UIView) -> [UIImage] {
-        view.subviews.flatMap { subview in
+        view.subviews.filter { !$0.isHidden }.flatMap { subview in
             [(subview as? UIImageView)?.image].compactMap(\.self) + images(in: subview)
         }
     }

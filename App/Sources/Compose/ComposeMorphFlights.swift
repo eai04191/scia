@@ -33,36 +33,14 @@ final class ComposeMorphFlights {
         var decoration: UIView?
         /// 上に重ねた写真が落としている影の像。カプセルの写真だけに付く。起点にあれば複製に載せ、動き始めに薄くする。
         var betweenShadow: UIView?
-        /// サムネイルに重ねている表示（ALTやGIFのバッジ）の複製を作る。列のサムネイルだけに付く。カプセルの写真はバッジを出さないため。
-        /// 複製に載せ、列に向かうときは近づくにつれて濃くし、カプセルに向かうときは薄くする。載せないと、列に着いて本物に替わったコマでバッジが付く。
-        var makeThumbnailDecoration: (() -> UIView)?
-        /// 動画の再生アイコンの複製を作る。動画でなければnilを返す。列のサムネイルにもカプセルの写真にも出るので、バッジとは別に1つだけ載せ、
-        /// 起点の大きさから行き先の大きさへ変えながら動かす。列とカプセルで大きさが違い、2つを重ねて入れ替えると、途中で丸が二重に見えるため。
-        var makePlayCopy: (() -> UIView?)?
         /// 動かしている間、本物を見えなくする。重ねた表示も一緒に隠す。
         let conceal: (Bool) -> Void
     }
 
-    /// 再生アイコンの丸の直径と三角の幅。
-    struct PlaySize: Equatable {
-        let diameter: CGFloat
-        let glyph: CGFloat
-
-        init(diameter: CGFloat, glyph: CGFloat) {
-            self.diameter = diameter
-            self.glyph = glyph
-        }
-
-        /// `MediaTileView.makePlayCopy`が作った複製の大きさ。三角は最初のサブビュー。
-        @MainActor
-        init(of copy: UIView) {
-            self.init(diameter: copy.bounds.width, glyph: copy.subviews.first?.intrinsicContentSize.width ?? 0)
-        }
-    }
-
     enum Content {
         case symbol(UIImage?)
-        case thumbnail(UIImage?, MediaFocus?)
+        /// サムネイルの画像と焦点と、その上に重ねている表示（`MediaTileView.decorationLayout`）。重ねた表示は、本物と同じ部品で複製にも描く。
+        case thumbnail(UIImage?, MediaFocus?, MediaTileDecorationLayout)
     }
 
     private struct Flight {
@@ -127,11 +105,8 @@ final class ComposeMorphFlights {
             if let decoration = source.decoration, Self.showsSomething(decoration) {
                 copy.attachDecoration(decoration.snapshotView(afterScreenUpdates: false))
             }
-            if let thumbnailDecoration = source.makeThumbnailDecoration?() {
-                copy.attachThumbnailDecoration(thumbnailDecoration)
-            }
-            if let play = source.makePlayCopy?() ?? nil {
-                copy.attachPlay(play)
+            if case .thumbnail(_, _, let layout) = source.content {
+                copy.attachTileDecoration(layout, of: source.view, shown: true)
             }
             if let betweenShadow = source.betweenShadow {
                 copy.attachBetweenShadow(betweenShadow)
@@ -173,24 +148,19 @@ final class ComposeMorphFlights {
                 flight.copy.alpha = 0
                 continue
             }
-            // 再生アイコンの複製も、この中で作る。アニメーションの中で作ると、作ったばかりのビューの`tintColor`の設定まで動き、三角が既定の色から白へ変わっていく。
-            var targetPlay: UIView?
+            // 行き先の重ねた表示も、この中で作る。アニメーションの中で作ると、作ったばかりのビューの`tintColor`の設定まで動き、三角が既定の色から白へ変わっていく。
             UIView.performWithoutAnimation {
                 conceal(target)
-                // 行き先のほうが大きな画像を描いていれば差し替え、カプセルの小さな画像を広げてぼやけさせない。
-                if case .thumbnail(let image?, let focus) = target.content {
-                    flight.copy.replaceThumbnailIfLarger(image, focus: focus)
+                if case .thumbnail(let image, let focus, let layout) = target.content {
+                    // 行き先のほうが大きな画像を描いていれば差し替え、カプセルの小さな画像を広げてぼやけさせない。
+                    if let image {
+                        flight.copy.replaceThumbnailIfLarger(image, focus: focus)
+                    }
+                    flight.copy.attachTileDecoration(layout, of: target.view, shown: false)
                 }
-                if !flight.copy.hasThumbnailDecoration, let thumbnailDecoration = target.makeThumbnailDecoration?() {
-                    flight.copy.attachThumbnailDecoration(thumbnailDecoration)
-                    flight.copy.thumbnailDecorationAlpha = 0
-                }
-                flight.copy.markThumbnailDecorationAlphaBeforeMove()
-                targetPlay = target.makePlayCopy?() ?? nil
-                flight.copy.preparePlay(toward: targetPlay)
+                flight.copy.markTileDecorationBeforeMove()
             }
-            let showsThumbnailDecoration = target.makeThumbnailDecoration != nil
-            let targetPlaySize = targetPlay.map(PlaySize.init(of:))
+            let targetView = target.view
             let destination = geometry(of: target)
             let delay = delays[key] ?? 0
             flight.ends.append(target)
@@ -203,8 +173,7 @@ final class ComposeMorphFlights {
                 copy.apply(destination)
                 // 複製に載せた重ねた表示は、行き先によらず向かう間に薄くする。列に着くときは、着いてから本物を浮かび上がらせる。
                 copy.decorationAlpha = 0
-                copy.thumbnailDecorationAlpha = showsThumbnailDecoration ? 1 : 0
-                copy.showPlay(targetPlaySize)
+                copy.showTileDecoration(of: targetView)
             }
             if delay > 0 {
                 delayedAnimation(delay, move)
@@ -222,7 +191,7 @@ final class ComposeMorphFlights {
     func retarget(on targets: [Key: End], generation: Int, animations: (TimeInterval, @escaping () -> Void) -> Void) {
         guard generation == self.generation else { return }
         let now = mediaTime()
-        var moved: [(FlightCopy, FlightCopy.Geometry, TimeInterval, Bool, PlaySize?)] = []
+        var moved: [(FlightCopy, FlightCopy.Geometry, TimeInterval, UIView)] = []
         for (key, var flight) in flights {
             guard let target = targets[key], let previous = flight.destination else { continue }
             let destination = geometry(of: target)
@@ -234,19 +203,19 @@ final class ComposeMorphFlights {
             flight.destination = destination
             flights[key] = flight
             flight.copy.freezeAtPresentation()
-            var targetPlaySize: PlaySize?
-            UIView.performWithoutAnimation {
-                targetPlaySize = (target.makePlayCopy?() ?? nil).map(PlaySize.init(of:))
+            if case .thumbnail(_, _, let layout) = target.content {
+                UIView.performWithoutAnimation {
+                    flight.copy.attachTileDecoration(layout, of: target.view, shown: false)
+                }
             }
-            moved.append((flight.copy, destination, max(flight.startTime - now, 0), target.makeThumbnailDecoration != nil, targetPlaySize))
+            moved.append((flight.copy, destination, max(flight.startTime - now, 0), target.view))
         }
-        for (copy, destination, delay, showsThumbnailDecoration, targetPlaySize) in moved {
+        for (copy, destination, delay, targetView) in moved {
             animations(delay) {
                 copy.apply(destination)
                 // 止めたときに見えている濃さで残した重ねた表示も、残りの時間で薄くし続ける。
                 copy.decorationAlpha = 0
-                copy.thumbnailDecorationAlpha = showsThumbnailDecoration ? 1 : 0
-                copy.showPlay(targetPlaySize)
+                copy.showTileDecoration(of: targetView)
             }
         }
     }
@@ -337,103 +306,129 @@ private final class FlightCopy: UIView {
         addSubview(snapshot)
     }
 
-    /// サムネイルに重ねている表示の複製。中の画像と同じ大きさにし、伸び縮みしても、サムネイルと同じ角からの位置を保つ。
-    private var thumbnailDecoration: UIView?
+    /// 両端のタイルの上の表示。本物と同じ部品で、それぞれのタイルの大きさで並べ、伸び縮みしても中の画像の角からの位置を保つ。本物ごとに持つ。
+    private var tileDecorations: [ObjectIdentifier: (view: MediaTileDecorationView, layout: MediaTileDecorationLayout)] = [:]
+    /// 再生アイコンを見せている表示。列とカプセルで再生アイコンの大きさが違い、2つを重ねて入れ替えると途中で丸が二重に見えるため、
+    /// 1つだけを見せ、起点の大きさから行き先の大きさへ変えながら動かす。小さく作った丸と三角を広げるとぼけるので、大きいほうを縮めて動かす。
+    private var playOwner: MediaTileDecorationView?
+    /// 行き先へ向かい始める前の、重ねた表示の部品の`transform`と濃さ。まだ一度も描いていない複製を止めるとき、見えている形として使う。
+    private var tileDecorationBeforeMove: [(view: UIView, transform: CGAffineTransform, alpha: CGFloat)] = []
 
-    var hasThumbnailDecoration: Bool { thumbnailDecoration != nil }
-
-    /// 行き先へ向かい始める前の、サムネイルに重ねている表示の濃さ。まだ一度も描いていない複製を止めるとき、見えている濃さとして使う。
-    private var thumbnailDecorationAlphaBeforeMove: CGFloat = 0
-
-    func markThumbnailDecorationAlphaBeforeMove() {
-        thumbnailDecorationAlphaBeforeMove = thumbnailDecorationAlpha
-    }
-
-    var thumbnailDecorationAlpha: CGFloat {
-        get { thumbnailDecoration?.alpha ?? 0 }
-        set { thumbnailDecoration?.alpha = newValue }
-    }
-
-    /// 再生アイコンと、送信中の暗い下地などの重ねた表示より奥に置く。列のサムネイルでも、状態の表示はバッジより手前にあるため。
-    func attachThumbnailDecoration(_ copy: UIView) {
-        thumbnailDecoration?.removeFromSuperview()
-        thumbnailDecoration = copy
-        copy.isUserInteractionEnabled = false
-        copy.frame = inner.bounds
-        copy.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        if let below = play ?? decoration {
-            inner.insertSubview(copy, belowSubview: below)
+    /// `view`の上の表示を載せる。`shown`がfalseなら、どの部品も見せずに載せ、`showTileDecoration`で濃くする。
+    /// 再生アイコンの丸と三角より手前に、送信中の暗い下地などの重ねた表示（`attachDecoration`）を置く。列のサムネイルと同じ重なり順にするため。
+    /// 同じ本物の表示を載せていても、表示が変わっていれば（動画を読み込み終えて再生アイコンが付いたなど）作り直し、部品の今の濃さを引き継ぐ。
+    func attachTileDecoration(_ layout: MediaTileDecorationLayout, of view: UIView, shown: Bool) {
+        let id = ObjectIdentifier(view)
+        let existing = tileDecorations[id]
+        guard existing?.layout != layout else { return }
+        let added = MediaTileDecorationView(frozen: layout)
+        added.frame = inner.bounds
+        added.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        if let existing {
+            inner.insertSubview(added, aboveSubview: existing.view)
+        } else if let decoration {
+            inner.insertSubview(added, belowSubview: decoration)
         } else {
-            inner.addSubview(copy)
+            inner.addSubview(added)
         }
+        tileDecorations[id] = (added, layout)
+        for part in MediaTileDecorationView.Part.allCases {
+            added.view(for: part).alpha = existing.map { $0.view.view(for: part).alpha } ?? (shown ? 1 : 0)
+        }
+        if let existing {
+            existing.view.removeFromSuperview()
+            if existing.view === playOwner {
+                // 見せていた再生アイコンを、作り直した表示へ、見えている大きさと濃さのまま移す。作り直した表示になければ、ほかの表示から選び直す。
+                let shownSize = shownPlaySize(of: existing.view)
+                let alpha = existing.view.view(for: .play).alpha
+                playOwner = nil
+                if layout.decoration.showsPlay {
+                    playOwner = added
+                    applyPlay(shownSize)
+                    added.view(for: .play).alpha = alpha
+                } else {
+                    tileDecorations.values.forEach { adoptPlay(of: $0.view) }
+                }
+                return
+            }
+            added.view(for: .play).alpha = 0
+        }
+        adoptPlay(of: added)
     }
 
-    /// 動画の再生アイコンの複製。中の画像の中央に置き、大きさは`transform`で変える。
-    private var play: UIView?
-    /// `play`を作ったときの大きさ。`transform`で縮める前の大きさ。
-    private var playSize = ComposeMorphFlights.PlaySize(diameter: 0, glyph: 0)
-    /// 行き先へ向かい始める前の、再生アイコンの丸と三角の`transform`と濃さ。まだ一度も描いていない複製を止めるとき、見えている形として使う。
-    private var playStateBeforeMove: (transform: CGAffineTransform, glyphTransform: CGAffineTransform, alpha: CGFloat)?
-
-    /// 再生アイコンの三角。丸と別の倍率で縮める。
-    private var playGlyph: UIView? { play?.subviews.first }
-
-    /// サムネイルに重ねている表示より手前、送信中の暗い下地などの重ねた表示より奥に置く。列のサムネイルと同じ重なり順にするため。
-    func attachPlay(_ copy: UIView) {
-        play?.removeFromSuperview()
-        play = copy
-        playSize = ComposeMorphFlights.PlaySize(of: copy)
-        copy.isUserInteractionEnabled = false
-        copy.center = CGPoint(x: inner.bounds.midX, y: inner.bounds.midY)
-        copy.autoresizingMask = [.flexibleLeftMargin, .flexibleRightMargin, .flexibleTopMargin, .flexibleBottomMargin]
-        if let decoration {
-            inner.insertSubview(copy, belowSubview: decoration)
-        } else {
-            inner.addSubview(copy)
-        }
-    }
-
-    /// 行き先の再生アイコンが今のものより大きければ、行き先のものに差し替え、今の見えている大きさに縮めて置く。
-    /// 小さく作った丸と三角を広げるとぼけるため、大きいほうを縮めて動かす。行き先に再生アイコンがなければ、今のものを残して薄くする。
-    func preparePlay(toward target: UIView?) {
-        defer { playStateBeforeMove = play.map { ($0.transform, playGlyph?.transform ?? .identity, $0.alpha) } }
-        guard let target else { return }
-        guard let play else {
-            attachPlay(target)
-            target.alpha = 0
+    /// `added`の再生アイコンを、見せる1つにするか決める。まだ見せていなければ選び、見せているものより大きければ、見えている大きさと濃さのまま替える。
+    private func adoptPlay(of added: MediaTileDecorationView) {
+        guard added.decoration.showsPlay else { return }
+        guard let owner = playOwner else {
+            playOwner = added
             return
         }
-        let shown = shownPlaySize(of: play)
-        let targetSize = ComposeMorphFlights.PlaySize(of: target)
-        guard targetSize.diameter > playSize.diameter else { return }
-        let alpha = play.alpha
-        attachPlay(target)
-        applyPlay(shown)
-        target.alpha = alpha
+        guard owner !== added, Self.playSize(of: added).diameter > Self.playSize(of: owner).diameter else { return }
+        let shownSize = shownPlaySize(of: owner)
+        let alpha = owner.view(for: .play).alpha
+        owner.view(for: .play).alpha = 0
+        playOwner = added
+        applyPlay(shownSize)
+        added.view(for: .play).alpha = alpha
     }
 
-    /// アニメーションの中で呼ぶ。行き先の大きさにし、行き先に再生アイコンがなければ（`size`がnil）薄くする。
-    func showPlay(_ size: ComposeMorphFlights.PlaySize?) {
-        guard let play else { return }
-        if let size {
-            applyPlay(size)
-            play.alpha = 1
-        } else {
-            play.alpha = 0
+    func markTileDecorationBeforeMove() {
+        tileDecorationBeforeMove = tileDecorationParts.map { ($0, $0.transform, $0.alpha) }
+    }
+
+    /// アニメーションの中で呼ぶ。`view`の上の表示を見せ、ほかの本物の表示を薄くする。部品を足したら、ここで動かし方を決める。
+    func showTileDecoration(of view: UIView) {
+        let target = tileDecorations[ObjectIdentifier(view)]?.view
+        for decoration in tileDecorations.values.map(\.view) {
+            for part in MediaTileDecorationView.Part.allCases {
+                switch part {
+                case .play:
+                    // 見せている1つだけを、行き先の大きさへ変える。行き先に再生アイコンがなければ薄くする。
+                    guard decoration === playOwner else { continue }
+                    if let target, target.decoration.showsPlay {
+                        applyPlay(Self.playSize(of: target))
+                        decoration.view(for: .play).alpha = 1
+                    } else {
+                        decoration.view(for: .play).alpha = 0
+                    }
+                case .symbol, .more, .badge:
+                    // 起点のものを薄くし、行き先のものを濃くする。
+                    decoration.view(for: part).alpha = decoration === target ? 1 : 0
+                }
+            }
         }
     }
 
-    private func shownPlaySize(of play: UIView) -> ComposeMorphFlights.PlaySize {
-        ComposeMorphFlights.PlaySize(diameter: playSize.diameter * play.transform.a, glyph: playSize.glyph * play.transform.a * (playGlyph?.transform.a ?? 1))
+    /// 重ねた表示の部品と、再生アイコンの三角。止めるときに、見えている形を読み戻す。
+    private var tileDecorationParts: [UIView] {
+        tileDecorations.values.map(\.view).flatMap { decoration in MediaTileDecorationView.Part.allCases.map(decoration.view(for:)) + [decoration.playGlyph] }
     }
 
-    /// 丸と三角を、それぞれ`size`の大きさに見えるように縮める。タイルは三角の大きさを丸の大きさから丸めて決めるので、丸と同じ倍率で縮めると、着いた先の三角と大きさがずれる。
-    private func applyPlay(_ size: ComposeMorphFlights.PlaySize) {
-        guard let play, playSize.diameter > 0, playSize.glyph > 0 else { return }
-        let scale = size.diameter / playSize.diameter
-        play.transform = CGAffineTransform(scaleX: scale, y: scale)
-        let glyphScale = size.glyph / playSize.glyph / scale
-        playGlyph?.transform = CGAffineTransform(scaleX: glyphScale, y: glyphScale)
+    /// 再生アイコンの丸の直径と三角の幅。タイルは三角の大きさを丸の大きさから丸めて決めるので、丸と三角を別の倍率で縮める。
+    private struct PlaySize {
+        let diameter: CGFloat
+        let glyph: CGFloat
+    }
+
+    private static func playSize(of decoration: MediaTileDecorationView) -> PlaySize {
+        PlaySize(diameter: decoration.view(for: .play).bounds.width, glyph: decoration.playGlyph.intrinsicContentSize.width)
+    }
+
+    private func shownPlaySize(of decoration: MediaTileDecorationView) -> PlaySize {
+        let size = Self.playSize(of: decoration)
+        let scale = decoration.view(for: .play).transform.a
+        return PlaySize(diameter: size.diameter * scale, glyph: size.glyph * scale * decoration.playGlyph.transform.a)
+    }
+
+    /// 見せている再生アイコンの丸と三角を、それぞれ`size`の大きさに見えるように縮める。
+    private func applyPlay(_ size: PlaySize) {
+        guard let owner = playOwner else { return }
+        let native = Self.playSize(of: owner)
+        guard native.diameter > 0, native.glyph > 0 else { return }
+        let scale = size.diameter / native.diameter
+        owner.view(for: .play).transform = CGAffineTransform(scaleX: scale, y: scale)
+        let glyphScale = size.glyph / native.glyph / scale
+        owner.playGlyph.transform = CGAffineTransform(scaleX: glyphScale, y: glyphScale)
     }
 
     func attachDecoration(_ snapshot: UIView?) {
@@ -453,7 +448,7 @@ private final class FlightCopy: UIView {
             imageView.contentMode = .scaleAspectFit
             imageView.tintColor = .tintColor
             inner = imageView
-        case .thumbnail(let image, let focus):
+        case .thumbnail(let image, let focus, _):
             let imageView = FocusCroppedImageView()
             imageView.image = image
             imageView.focus = focus
@@ -516,11 +511,9 @@ private final class FlightCopy: UIView {
             }
             // 重ねた表示は、行き先へ向かう動きで薄くし始めるまで、濃いまま見えている。
             decoration?.alpha = 1
-            thumbnailDecoration?.alpha = thumbnailDecorationAlphaBeforeMove
-            if let play, let playStateBeforeMove {
-                play.transform = playStateBeforeMove.transform
-                playGlyph?.transform = playStateBeforeMove.glyphTransform
-                play.alpha = playStateBeforeMove.alpha
+            for part in tileDecorationBeforeMove {
+                part.view.transform = part.transform
+                part.view.alpha = part.alpha
             }
             return
         }
@@ -534,12 +527,11 @@ private final class FlightCopy: UIView {
         let innerRadius = innerPresented?.cornerRadius ?? inner.layer.cornerRadius
         let opacity = presented.map { CGFloat($0.opacity) } ?? alpha
         let decorationOpacity = decoration.map { decoration in decoration.layer.presentation().map { CGFloat($0.opacity) } ?? decoration.alpha }
-        let thumbnailDecorationOpacity = thumbnailDecoration.map { decoration in decoration.layer.presentation().map { CGFloat($0.opacity) } ?? decoration.alpha }
-        let playPresented = play.map { play in
+        let partsPresented = tileDecorationParts.map { part in
             (
-                transform: play.layer.presentation().map { CATransform3DGetAffineTransform($0.transform) } ?? play.transform,
-                glyphTransform: playGlyph.map { glyph in glyph.layer.presentation().map { CATransform3DGetAffineTransform($0.transform) } ?? glyph.transform } ?? .identity,
-                alpha: play.layer.presentation().map { CGFloat($0.opacity) } ?? play.alpha
+                view: part,
+                transform: part.layer.presentation().map { CATransform3DGetAffineTransform($0.transform) } ?? part.transform,
+                alpha: part.layer.presentation().map { CGFloat($0.opacity) } ?? part.alpha
             )
         }
         // 中の画像（`FocusCroppedImageView`の中の画像）も前の行き先へ動き続けるので、中まですべての動きを止め、今の大きさで並べ直す。
@@ -554,13 +546,9 @@ private final class FlightCopy: UIView {
         if let decorationOpacity {
             decoration?.alpha = decorationOpacity
         }
-        if let thumbnailDecorationOpacity {
-            thumbnailDecoration?.alpha = thumbnailDecorationOpacity
-        }
-        if let playPresented {
-            play?.transform = playPresented.transform
-            playGlyph?.transform = playPresented.glyphTransform
-            play?.alpha = playPresented.alpha
+        for part in partsPresented {
+            part.view.transform = part.transform
+            part.view.alpha = part.alpha
         }
         setNeedsLayout()
         layoutIfNeeded()

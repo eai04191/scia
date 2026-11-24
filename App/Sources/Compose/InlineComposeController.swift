@@ -2493,7 +2493,7 @@ final class InlineComposeController: NSObject {
                 tile.superview?.layoutIfNeeded()
                 // 重ねた状態の表示も一緒に隠す。隠さないと、閉じ始めに空いた枠の位置に取り残され、開くときは写真が着く前から浮かぶ。
                 let overlay = attachmentStrip.overlay(for: id)
-                ends[.attachment(id)] = .init(view: tile, content: .thumbnail(tile.thumbnailImage, tile.thumbnailFocus), cornerRadius: MediaGridView.cornerRadius, decoration: overlay, makeThumbnailDecoration: { tile.makeDecorationCopy(includesPlay: false) }, makePlayCopy: tile.makePlayCopy) { concealed in
+                ends[.attachment(id)] = .init(view: tile, content: .thumbnail(tile.thumbnailImage, tile.thumbnailFocus, tile.decorationLayout), cornerRadius: MediaGridView.cornerRadius, decoration: overlay) { concealed in
                     tile.alpha = concealed ? 0 : 1
                     overlay?.alpha = concealed ? 0 : 1
                 }
@@ -2512,14 +2512,13 @@ final class InlineComposeController: NSObject {
                 let thumbnails = restContent.thumbnails
                 guard !thumbnails.isHidden, let photo = thumbnails.photo(for: id) ?? (index >= 3 ? thumbnails.photo(for: ids[2]) : nil) else { continue }
                 // 4枚目より後ろは3枚目の写真の位置に重ねるので、描くのはその添付の画像にする。手元にない画像は、列に着くときに列の画像に替える。
+                // 3枚目の下に隠れて重なっているので、重ねた表示は描かない。
                 let content: ComposeMorphFlights.Content = index < 3
-                    ? .thumbnail(photo.tile.thumbnailImage, photo.tile.thumbnailFocus)
-                    : .thumbnail(model.localMedia[id]?.thumbnail, nil)
+                    ? .thumbnail(photo.tile.thumbnailImage, photo.tile.thumbnailFocus, photo.tile.decorationLayout)
+                    : .thumbnail(model.localMedia[id]?.thumbnail, nil, .undecorated(size: photo.tile.bounds.size))
                 // 写真同士の影は、その写真のものなので、3枚目の位置に重ねる4枚目より後ろには載せない。
                 let betweenShadow = index < 3 ? photo.betweenShadowSnapshot() : nil
-                // 再生アイコンも3枚目の写真のものなので、4枚目より後ろには載せない。
-                let makePlayCopy = index < 3 ? photo.tile.makePlayCopy : nil
-                ends[.attachment(id)] = .init(view: photo, content: content, cornerRadius: StackedPhotoView.cornerRadius, border: StackedPhotoView.border, betweenShadow: betweenShadow, makePlayCopy: makePlayCopy) { concealed in
+                ends[.attachment(id)] = .init(view: photo, content: content, cornerRadius: StackedPhotoView.cornerRadius, border: StackedPhotoView.border, betweenShadow: betweenShadow) { concealed in
                     photo.alpha = concealed ? 0 : 1
                     thumbnails.setStackShadowConcealed(concealed)
                 }

@@ -309,12 +309,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
     private var dynamicRangeGeneration = 0
     private let tuning: TuningStore
     private let thumbnailView = FocusCroppedImageView()
-    private let symbolView = UIImageView()
-    /// 動画の再生アイコン。バッジと同じ下地の丸に三角を載せ、タイムラインのバッジとも、ビューアの丸い再生ボタンとも揃える。
-    private let playView = UIView()
-    private let playGlyphView = UIImageView(image: UIImage(systemName: "play.fill"))
-    private let badge = MediaBadgeView()
-    private let moreLabel = UILabel()
+    private let decorationView = MediaTileDecorationView()
     private var loadTask: Task<Void, Never>?
     private var attachment: MediaAttachment?
     /// メディアのメニュー。サムネイルはボタンで、タイムラインの行のコンテキストメニューが届かないため、自分で受ける。
@@ -350,25 +345,11 @@ final class MediaTileView: UIButton, MediaViewerSource {
         isAccessibilityElement = true
         accessibilityTraits = [.button, .image]
 
-        symbolView.contentMode = .center
-        symbolView.layer.shadowColor = UIColor.black.cgColor
-        symbolView.layer.shadowRadius = 4
-        symbolView.layer.shadowOffset = .zero
-        playView.backgroundColor = MediaBadgeView.backgroundColor
-        playView.isHidden = true
-        playGlyphView.tintColor = .white
-        playGlyphView.contentMode = .center
-        playView.addSubview(playGlyphView)
-        moreLabel.font = .preferredFont(forTextStyle: .title1).bold
-        moreLabel.textColor = .white
-        moreLabel.textAlignment = .center
-        moreLabel.backgroundColor = UIColor.black.withAlphaComponent(0.45)
-        for view in [thumbnailView, symbolView, playView, moreLabel, badge] {
-            view.isUserInteractionEnabled = false
-            addSubview(view)
-        }
-        // 読む画像の大きさは画面の倍率で決まるため、別の画面へ移ったら選び直す。バッジは文字の大きさで幅が変わるため、並べ直す。
-        registerForTraitChanges([UITraitDisplayScale.self, UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
+        thumbnailView.isUserInteractionEnabled = false
+        addSubview(thumbnailView)
+        addSubview(decorationView)
+        // 読む画像の大きさは画面の倍率で決まるため、別の画面へ移ったら選び直す。
+        registerForTraitChanges([UITraitDisplayScale.self]) { (self: Self, _) in
             self.setNeedsLayout()
         }
         followDynamicRanges()
@@ -418,22 +399,13 @@ final class MediaTileView: UIButton, MediaViewerSource {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// 動画の再生などのアイコンの大きさを決める、チューニングの値。
-    private var symbolSizing = (ratio: 0.0, range: 0.0...0.0)
-    /// いまアイコンに当てている大きさ。同じなら設定し直さない。
-    private var symbolPointSize: CGFloat?
-
     /// アイコンの大きさのチューニングを読み続ける。変えたら、出ているタイルのアイコンも描き直す。
     private func followSymbolSizing() {
         withObservationTracking {
-            symbolSizing = (
-                ratio: tuning.value(of: TuningCatalog.mediaSymbolRatio),
-                range: tuning.value(of: TuningCatalog.mediaSymbolMinSize)...tuning.value(of: TuningCatalog.mediaSymbolMaxSize)
-            )
+            decorationView.sizing = MediaTileSymbolSizing(tuning: tuning)
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor in
                 self?.followSymbolSizing()
-                self?.setNeedsLayout()
             }
         }
     }
@@ -445,7 +417,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
 
     /// 読み込んだサムネイル。blurhashのぼかしは含まない。ビューアで元の画像が届くまでの下地にする。
     private(set) var loadedThumbnail: UIImage? {
-        didSet { updateBadge() }
+        didSet { updateDecoration() }
     }
 
     /// 画像の奥に敷いている背景の色。透明な部分のある画像では、この色が透けて見える。
@@ -453,16 +425,15 @@ final class MediaTileView: UIButton, MediaViewerSource {
         backgroundColor?.resolvedColor(with: traitCollection)
     }
 
+    /// 画像の上に重ねている表示と、それを並べた大きさ。開閉で動かす複製に、同じ表示を同じ部品で描かせる。
+    var decorationLayout: MediaTileDecorationLayout {
+        MediaTileDecorationLayout(decoration: decorationView.decoration, sizing: decorationView.sizing, size: bounds.size)
+    }
+
     /// 画像の上に重ねている表示（ALTやGIFのバッジ、動画の再生マーク、残りの枚数）の複製。ビューアが動かす画像の複製に載せて、サムネイルとのあいだを一緒に動かす。
     /// 動画とGIFではサムネイルの画像も含める。ビューアの複製は再生していたコマを描くため、重ねた表示と一緒にサムネイルへ近づくほど濃くし、着地で絵が切り替わらないようにする。
     /// 画像では含めない。複製とサムネイルが同じ絵で、重ねると透明な部分が濃く見えるため。
-    /// 複製の大きさが変わっても、サムネイルと同じ角からの位置を保つ。ラベルは画像にし、全体を覆う残りの枚数と中央の再生マークは、伸び縮みしないよう作り直す。
     func makeDecorationCopy() -> UIView {
-        makeDecorationCopy(includesPlay: true)
-    }
-
-    /// - Parameter includesPlay: 再生アイコンを含める。投稿欄の開閉のように、再生アイコンを`makePlayCopy`で別に動かすときはfalseにする。
-    func makeDecorationCopy(includesPlay: Bool) -> UIView {
         let container = UIView(frame: bounds)
         container.isUserInteractionEnabled = false
         if showsMovingImage, let thumbnail = thumbnailView.image {
@@ -472,78 +443,33 @@ final class MediaTileView: UIButton, MediaViewerSource {
             copy.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             container.addSubview(copy)
         }
-        if !badge.isHidden {
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = traitCollection.displayScale
-            let image = UIGraphicsImageRenderer(bounds: badge.bounds, format: format).image { context in
-                badge.layer.render(in: context.cgContext)
-            }
-            let copy = UIImageView(image: image)
-            copy.frame = badge.frame
-            copy.autoresizingMask = [.flexibleRightMargin, .flexibleTopMargin]
-            container.addSubview(copy)
-        }
-        if includesPlay, let copy = makePlayCopy() {
-            copy.frame = playView.frame
-            container.addSubview(copy)
-        }
-        if let symbol = symbolView.image {
-            let copy = UIImageView(image: symbol)
-            copy.frame = bounds
-            copy.contentMode = symbolView.contentMode
-            copy.preferredSymbolConfiguration = symbolView.preferredSymbolConfiguration
-            copy.tintColor = symbolView.tintColor
-            copy.layer.shadowColor = symbolView.layer.shadowColor
-            copy.layer.shadowRadius = symbolView.layer.shadowRadius
-            copy.layer.shadowOffset = symbolView.layer.shadowOffset
-            copy.layer.shadowOpacity = symbolView.layer.shadowOpacity
-            copy.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            container.addSubview(copy)
-        }
-        if !moreLabel.isHidden {
-            let copy = UILabel(frame: bounds)
-            copy.text = moreLabel.text
-            copy.font = moreLabel.font
-            copy.textColor = moreLabel.textColor
-            copy.textAlignment = moreLabel.textAlignment
-            copy.backgroundColor = moreLabel.backgroundColor
-            copy.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            container.addSubview(copy)
-        }
+        let decoration = MediaTileDecorationView(frozen: decorationLayout)
+        decoration.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        container.addSubview(decoration)
         return container
-    }
-
-    /// 動画の再生アイコンの複製。動画でなければnil。複製を置いた枠の大きさが変わっても、中央で同じ大きさのまま残る。
-    /// バッジと違って画像に描かず、丸と三角をそのまま載せる。複製はビューアの大きさまで広がるため、画像にすると三角がぼける。
-    func makePlayCopy() -> UIView? {
-        guard !playView.isHidden else { return nil }
-        let copy = UIView(frame: CGRect(origin: .zero, size: playView.bounds.size))
-        copy.backgroundColor = playView.backgroundColor
-        copy.layer.cornerRadius = playView.layer.cornerRadius
-        copy.autoresizingMask = [.flexibleLeftMargin, .flexibleRightMargin, .flexibleTopMargin, .flexibleBottomMargin]
-        let glyph = UIImageView(image: playGlyphView.image)
-        glyph.frame = playGlyphView.frame
-        glyph.contentMode = playGlyphView.contentMode
-        glyph.preferredSymbolConfiguration = playGlyphView.preferredSymbolConfiguration
-        glyph.tintColor = playGlyphView.tintColor
-        copy.addSubview(glyph)
-        return copy
     }
 
     /// バッジに出すラベル。
     private var marks: [MediaBadgeView.Mark] = [] {
-        didSet { updateBadge() }
+        didSet { updateDecoration() }
     }
 
     /// バッジを出さない。投稿欄で、バッジの位置に代替テキストの送信の状態を出している間に使う。
     var hidesBadge = false {
-        didSet { updateBadge() }
+        didSet { updateDecoration() }
     }
 
     /// 開くとタイムラインより明るくなる設定か。サムネイルがHDRなら、HDRのバッジを出す。
     private var marksHDR = false {
-        didSet { updateBadge() }
+        didSet { updateDecoration() }
     }
+
+    /// 動画の再生アイコンを出す。
+    private var showsPlay = false
+    /// 中央に出す記号。
+    private var symbol: MediaTileDecoration.Symbol?
+    /// 残りの枚数。
+    private var hiddenCount = 0
 
     /// 読み上げに使う、添付ファイルの種類と代替テキスト。
     private var accessibilityParts: (kind: String, description: String?) = ("", nil)
@@ -551,22 +477,26 @@ final class MediaTileView: UIButton, MediaViewerSource {
     /// サムネイルはサーバーが作るので、サーバーがHDRの情報を消したメディアでは、HDRでもfalseになる。
     private var isHDRThumbnail: Bool { loadedThumbnail?.isHighDynamicRange ?? false }
 
-    private func updateBadge() {
+    private func updateDecoration() {
         let showsHDR = marksHDR && isHDRThumbnail
         // 消していても大きさと位置は決めておき、「投稿の見た目」のプレビューで、バッジがあった位置を示せるようにする。
-        badge.marks = marks + (showsHDR ? [.hdr] : [])
-        badge.isHidden = hidesBadge || badge.marks.isEmpty
+        decorationView.decoration = MediaTileDecoration(
+            showsPlay: showsPlay,
+            badgeMarks: marks + (showsHDR ? [.hdr] : []),
+            showsBadge: !hidesBadge,
+            symbol: symbol,
+            hiddenCount: hiddenCount
+        )
         accessibilityLabel = [accessibilityParts.kind, showsHDR ? "HDR" : nil, accessibilityParts.description]
             .compactMap(\.self)
             .filter { !$0.isEmpty }
             .joinedAsTextList
-        setNeedsLayout()
     }
 
     /// バッジの枠。消していれば、バッジがあった位置。付けるラベルがなければnil。
     func badgePreviewFrame(in space: UIView) -> CGRect? {
-        guard !isHidden, !badge.marks.isEmpty else { return nil }
-        return badge.convert(badge.bounds, to: space)
+        guard !isHidden else { return nil }
+        return decorationView.badgePreviewFrame(in: space)
     }
 
     /// ビューアがこのサムネイルとのあいだで画像を動かしている間、見えなくする。
@@ -621,17 +551,13 @@ final class MediaTileView: UIButton, MediaViewerSource {
         thumbnailView.focus = attachment?.meta?.focus
         setNeedsLayout()
         guard let attachment else { return }
-        symbolView.image = Self.symbolName(of: attachment.type).flatMap { UIImage(systemName: $0) }
-        // 画像の上に重ねるときは白く、画像のない枠の上では本文に近い色にする。
         let isOverImage = (!isCovered && Self.hasThumbnail(attachment)) || attachment.blurhash != nil
-        symbolView.tintColor = isOverImage ? .white : .secondaryLabel
-        symbolView.layer.shadowOpacity = isOverImage ? 0.4 : 0
-        playView.isHidden = attachment.type != .video
-        marks = MediaBadgeView.marks(hasDescription: !(attachment.description?.isEmpty ?? true), kind: attachment.type)
-        moreLabel.isHidden = hiddenCount == 0
-        moreLabel.text = "+\(hiddenCount)"
+        symbol = Self.symbolName(of: attachment.type).map { MediaTileDecoration.Symbol(name: $0, isOverImage: isOverImage) }
+        showsPlay = attachment.type == .video
+        self.hiddenCount = hiddenCount
         accessibilityParts = (attachment.type.displayName, attachment.description)
-        updateBadge()
+        marks = MediaBadgeView.marks(hasDescription: !(attachment.description?.isEmpty ?? true), kind: attachment.type)
+        updateDecoration()
         accessibilityValue = hiddenCount > 0 ? PostTexts.hiddenMediaCount(hiddenCount) : nil
     }
 
@@ -647,14 +573,12 @@ final class MediaTileView: UIButton, MediaViewerSource {
         thumbnailView.focus = nil
         loadedThumbnail = thumbnail
         thumbnailView.image = thumbnail
-        symbolView.image = kind.flatMap(Self.symbolName(of:)).flatMap { UIImage(systemName: $0) }
-        symbolView.tintColor = .white
-        symbolView.layer.shadowOpacity = 0.4
-        playView.isHidden = kind != .video
-        marks = MediaBadgeView.marks(hasDescription: !description.isEmpty, kind: kind)
-        moreLabel.isHidden = true
+        symbol = kind.flatMap(Self.symbolName(of:)).map { MediaTileDecoration.Symbol(name: $0, isOverImage: true) }
+        showsPlay = kind == .video
+        hiddenCount = 0
         accessibilityParts = (kind.map(\.displayName) ?? PostTexts.unknownMediaKind, description)
-        updateBadge()
+        marks = MediaBadgeView.marks(hasDescription: !description.isEmpty, kind: kind)
+        updateDecoration()
         accessibilityValue = nil
         setNeedsLayout()
     }
@@ -725,29 +649,8 @@ final class MediaTileView: UIButton, MediaViewerSource {
         super.layoutSubviews()
         updateSource()
         thumbnailView.frame = bounds
-        symbolView.frame = bounds
-        let pointSize = MediaTileSymbol.pointSize(tileSize: bounds.size, ratio: symbolSizing.ratio, range: symbolSizing.range)
-        if symbolPointSize != pointSize {
-            symbolPointSize = pointSize
-            symbolView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: pointSize)
-            playGlyphView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: (pointSize * Self.playGlyphRatio).rounded())
-        }
-        playView.bounds.size = CGSize(width: pointSize, height: pointSize)
-        playView.center = CGPoint(x: bounds.midX, y: bounds.midY)
-        playView.layer.cornerRadius = pointSize / 2
-        // 三角は重心が左に寄って見えるため、丸の中で少し右へずらす。
-        playGlyphView.frame = playView.bounds.offsetBy(dx: pointSize * Self.playGlyphOffsetRatio, dy: 0)
-        moreLabel.frame = bounds
-        // バッジをタイルの端から離す余白。狭いタイルでもすべてのラベルを出せるよう、タイルの短い辺に合わせて6ptから2ptまで縮める。
-        let inset = min(max(min(bounds.width, bounds.height) / 10, 2), 6).rounded()
-        let badgeSize = badge.sizeThatFits(CGSize(width: max(bounds.width - inset * 2, 0), height: bounds.height))
-        badge.frame = CGRect(x: inset, y: bounds.maxY - inset - badgeSize.height, width: badgeSize.width, height: badgeSize.height)
+        decorationView.frame = bounds
     }
-
-    /// 再生アイコンの丸の直径に対する、三角の大きさの比。
-    private static let playGlyphRatio: CGFloat = 0.45
-    /// 再生アイコンの三角を右へずらす量の、丸の直径に対する比。
-    private static let playGlyphOffsetRatio: CGFloat = 0.04
 
     /// タイムラインに画像を出せるか。音声と種類の分からないファイルは、プレビューのURLが画像とは限らないため読まない。
     private static func hasThumbnail(_ attachment: MediaAttachment) -> Bool {

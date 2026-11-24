@@ -1217,8 +1217,8 @@ final class InlineComposeControllerTests {
         let strip = try #require(attachmentStrips(in: window).first)
         let badge = try #require(badges(in: strip).first, "添付のサムネイルにバッジがありません")
         #expect(!badge.isHidden)
-        // 複製に載せたバッジは、本物のバッジを描いた画像で、本物と同じ大きさになる。
-        let carried = imageViews(in: window).filter { !$0.isDescendant(of: strip) && $0.bounds.size == badge.bounds.size }
+        // 複製に載せたバッジは、本物と同じ部品で、本物と同じラベルを描く。
+        let carried = badges(in: window).filter { !$0.isDescendant(of: strip) && !$0.isHidden && $0.marks == badge.marks }
         #expect(!carried.isEmpty, "広がる間に動かす複製に、バッジを載せていません")
     }
 
@@ -1367,10 +1367,6 @@ final class InlineComposeControllerTests {
 
     private func badges(in view: UIView) -> [MediaBadgeView] {
         (view as? MediaBadgeView).map { [$0] } ?? view.subviews.flatMap(badges(in:))
-    }
-
-    private func imageViews(in view: UIView) -> [UIImageView] {
-        ((view as? UIImageView).map { [$0] } ?? []) + view.subviews.flatMap(imageViews(in:))
     }
 
     /// 送信を待たせるComposeModelで投稿欄を置き直す。
