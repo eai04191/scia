@@ -50,9 +50,9 @@ struct StatusEditTests {
         )
     }
 
-    private func form(_ draft: StatusDraft) throws -> [URLQueryItem] {
+    private func body(_ draft: StatusDraft) throws -> StatusRequestBody {
         let editing = try #require(draft.editing)
-        return try #require(draft.editForm(poll: editing.poll, now: Self.now))
+        return try #require(draft.editBody(poll: editing.poll, now: Self.now))
     }
 
     // MARK: - 編集の下書き
@@ -70,12 +70,12 @@ struct StatusEditTests {
     }
 
     /// 言語は元の投稿のまま始め、送り直す。言語の分からない投稿では送らず、サーバーに今の言語を残させる。
-    @Test(arguments: [("en", ["en"]), (nil, [])] as [(String?, [String])])
-    func editKeepsLanguage(language: String?, expected: [String]) throws {
+    @Test(arguments: ["en", nil] as [String?])
+    func editKeepsLanguage(language: String?) throws {
         let draft = try #require(StatusDraft.edit(of: status(language: language), source: StatusSource(id: "10", text: "本文", spoilerText: ""), now: Self.now))
 
         #expect(draft.language == language)
-        #expect(try form(draft).filter { $0.name == "language" }.compactMap(\.value) == expected)
+        #expect(try body(draft).language == language)
     }
 
     /// 注意書きなしで添付だけ閲覧注意にしていた投稿は、空の注意書きの欄を出して閲覧注意を保つ。
@@ -99,68 +99,51 @@ struct StatusEditTests {
         #expect(draft.changedAttachedDescriptions.map(\.description) == ["犬"])
     }
 
-    // MARK: - 送るフォーム
+    // MARK: - 送る本文
 
     /// 送ったが届いたか分からない代替テキストは、元と同じ値に戻しても送る。応答だけを失い、サーバーが書き換えた値のままのことがあるため。
     @Test func unconfirmedDescriptionIsSentEvenWhenRestored() throws {
         var draft = try #require(StatusDraft.edit(of: status(media: [media("100", description: "猫")]), source: StatusSource(id: "10", text: "", spoilerText: ""), now: Self.now))
         draft.attachments[0].hasUnconfirmedDescription = true
 
-        #expect(try form(draft).filter { $0.name.hasPrefix("media_attributes") } == [
-            URLQueryItem(name: "media_attributes[][id]", value: "100"),
-            URLQueryItem(name: "media_attributes[][description]", value: "猫"),
-        ])
+        #expect(try body(draft).mediaAttributes == [StatusRequestBody.MediaAttribute(id: "100", description: "猫")])
     }
 
     /// 変えていない添付、注意書き、閲覧注意も毎回送る。送らなければサーバーが消すため。公開範囲と返信先は送らない。
-    @Test func formSendsEveryEditableField() throws {
+    @Test func bodySendsEveryEditableField() throws {
         let draft = try #require(StatusDraft.edit(of: status(media: [media("100", description: "猫")], sensitive: true), source: StatusSource(id: "10", text: "本文", spoilerText: ""), now: Self.now))
 
-        #expect(try form(draft) == [
-            URLQueryItem(name: "status", value: "本文"),
-            URLQueryItem(name: "spoiler_text", value: ""),
-            URLQueryItem(name: "sensitive", value: "true"),
-            URLQueryItem(name: "media_ids[]", value: "100"),
-        ])
+        #expect(try body(draft) == StatusRequestBody(status: "本文", spoilerText: "", sensitive: true, mediaIDs: ["100"]))
     }
 
     /// 書き換えた代替テキストは、要素ごとにidを先に置いて送る。新しく足した添付は、アップロードの流れで送り済みなので含めない。
-    @Test func formSendsChangedDescriptionsOfAttachedMedia() throws {
+    @Test func bodySendsChangedDescriptionsOfAttachedMedia() throws {
         var draft = try #require(StatusDraft.edit(of: status(media: [media("100", description: "猫"), media("101")]), source: StatusSource(id: "10", text: "", spoilerText: ""), now: Self.now))
         draft.attachments[0].description = "三毛猫"
         draft.attachments[1].description = "犬"
         draft.attachments.append(DraftAttachment(state: .uploaded(media("102", description: "鳥")), description: "鳥"))
 
-        let attributes = try form(draft).filter { $0.name.hasPrefix("media_attributes") }
-
-        #expect(attributes == [
-            URLQueryItem(name: "media_attributes[][id]", value: "100"),
-            URLQueryItem(name: "media_attributes[][description]", value: "三毛猫"),
-            URLQueryItem(name: "media_attributes[][id]", value: "101"),
-            URLQueryItem(name: "media_attributes[][description]", value: "犬"),
+        #expect(try body(draft).mediaAttributes == [
+            StatusRequestBody.MediaAttribute(id: "100", description: "三毛猫"),
+            StatusRequestBody.MediaAttribute(id: "101", description: "犬"),
         ])
-        #expect(try form(draft).filter { $0.name == "media_ids[]" }.map(\.value) == ["100", "101", "102"])
+        #expect(try body(draft).mediaIDs == ["100", "101", "102"])
     }
 
-    /// 添付を全部外したら`media_ids[]`を送らない。空の値は、サーバーがIDの0として探して拒むため。
-    @Test func formOmitsMediaIDsWhenAllRemoved() throws {
+    /// 添付を全部外したら`media_ids`を送らない。送らなければ添付は外れる。
+    @Test func bodyOmitsMediaIDsWhenAllRemoved() throws {
         var draft = try #require(StatusDraft.edit(of: status(media: [media("100")]), source: StatusSource(id: "10", text: "本文", spoilerText: ""), now: Self.now))
         draft.attachments.removeAll()
 
-        #expect(try form(draft).allSatisfy { !$0.name.hasPrefix("media") })
+        #expect(try body(draft).mediaIDs == nil)
+        #expect(try body(draft).mediaAttributes == nil)
     }
 
     /// 投票は、選択肢、複数選べるか、票数を隠すかを元のまま、残りの時間で送り直す。
-    @Test func formResendsPollAsIs() throws {
+    @Test func bodyResendsPollAsIs() throws {
         let draft = try #require(StatusDraft.edit(of: status(poll: poll(expiresIn: 3600.4)), source: StatusSource(id: "10", text: "どっち？", spoilerText: ""), now: Self.now))
 
-        #expect(try form(draft).filter { $0.name.hasPrefix("poll") } == [
-            URLQueryItem(name: "poll[options][]", value: "はい"),
-            URLQueryItem(name: "poll[options][]", value: "いいえ"),
-            URLQueryItem(name: "poll[expires_in]", value: "3601"),
-            URLQueryItem(name: "poll[multiple]", value: "true"),
-            URLQueryItem(name: "poll[hide_totals]", value: "false"),
-        ])
+        #expect(try body(draft).poll == StatusRequestBody.Poll(options: ["はい", "いいえ"], expiresIn: 3601, multiple: true, hideTotals: false))
     }
 
     /// 締め切る前に選択肢の票数がnullなら、票数を隠す投票として送り直す。
@@ -175,11 +158,11 @@ struct StatusEditTests {
         #expect(StatusDraft.edit(of: status(poll: poll(expiresIn: 299)), source: StatusSource(id: "10", text: "", spoilerText: ""), now: Self.now) == nil)
     }
 
-    @Test func formIsNilWhileAttachmentIsUploading() throws {
+    @Test func bodyIsNilWhileAttachmentIsUploading() throws {
         var draft = try #require(StatusDraft.edit(of: status(), source: StatusSource(id: "10", text: "本文", spoilerText: ""), now: Self.now))
         draft.attachments.append(DraftAttachment(state: .uploading))
 
-        #expect(draft.editForm(poll: nil, now: Self.now) == nil)
+        #expect(draft.editBody(poll: nil, now: Self.now) == nil)
     }
 
     // MARK: - 編集できる投稿
@@ -235,7 +218,7 @@ struct StatusEditClientTests {
         #expect(await transport.requests.first?.url?.path() == "/api/v1/statuses/113000000000000001/source")
     }
 
-    @Test func editPutsFormAndDecodesEditedStatus() async throws {
+    @Test func editPutsJSONAndDecodesEditedStatus() async throws {
         let transport = StubTransport([.json(Self.editedStatus, statusCode: 200)])
         let draft = StatusDraft(text: "直した + 足した", editing: StatusEditTarget(statusID: "113000000000000001", poll: nil))
 
@@ -245,9 +228,8 @@ struct StatusEditClientTests {
         #expect(request.httpMethod == "PUT")
         #expect(request.url?.path() == "/api/v1/statuses/113000000000000001")
         #expect(request.value(forHTTPHeaderField: "Idempotency-Key") == nil)
-        var components = URLComponents()
-        components.percentEncodedQuery = String(decoding: try #require(request.httpBody), as: UTF8.self)
-        #expect(components.queryItems?.first == URLQueryItem(name: "status", value: "直した + 足した"))
+        #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        #expect(try MastodonClientTests.jsonBody(of: request) == #"{"sensitive":false,"spoiler_text":"","status":"直した + 足した"}"#)
         #expect(edited.editedAt != nil)
     }
 

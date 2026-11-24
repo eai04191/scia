@@ -84,7 +84,7 @@ struct ScheduledStatusTests {
         #expect(requests[1].url?.query()?.contains("max_id=60") == true)
     }
 
-    /// 予約は投稿と同じフォームに`scheduled_at`を足し、同じ`Idempotency-Key`を付けて送る。
+    /// 予約は投稿と同じ本文に`scheduled_at`を足し、同じ`Idempotency-Key`を付けて送る。
     @Test func scheduleSendsPostFormWithDate() async throws {
         let response = #"{"id":"70","scheduled_at":"2026-10-28T00:00:00.000Z","params":{"text":"おはよう","visibility":"public"},"media_attachments":[]}"#
         let transport = StubTransport([.json(response, statusCode: 200)])
@@ -97,12 +97,7 @@ struct ScheduledStatusTests {
         #expect(request.url?.path() == "/api/v1/statuses")
         #expect(request.httpMethod == "POST")
         #expect(request.value(forHTTPHeaderField: "Idempotency-Key") == "key-1")
-        #expect(try Self.formItems(of: request) == [
-            URLQueryItem(name: "status", value: "おはよう"),
-            URLQueryItem(name: "visibility", value: "public"),
-            URLQueryItem(name: "sensitive", value: "false"),
-            URLQueryItem(name: "scheduled_at", value: "2026-10-28T00:00:00Z"),
-        ])
+        #expect(try MastodonClientTests.jsonBody(of: request) == #"{"scheduled_at":"2026-10-28T00:00:00Z","sensitive":false,"status":"おはよう","visibility":"public"}"#)
     }
 
     @Test func rescheduleAndCancelUseTheirPaths() async throws {

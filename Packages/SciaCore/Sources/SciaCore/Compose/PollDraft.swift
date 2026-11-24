@@ -78,13 +78,9 @@ public struct PollDraft: Sendable, Hashable {
             && limits.expirationRange.contains(expiresIn)
     }
 
-    /// 投稿のフォームに足す項目。
-    var formItems: [URLQueryItem] {
-        filledOptions.map { URLQueryItem(name: "poll[options][]", value: $0) } + [
-            URLQueryItem(name: "poll[expires_in]", value: String(expiresIn)),
-            URLQueryItem(name: "poll[multiple]", value: multiple ? "true" : "false"),
-            URLQueryItem(name: "poll[hide_totals]", value: hidesTotals ? "true" : "false"),
-        ]
+    /// 投稿の本文に入れる投票。
+    var requestBody: StatusRequestBody.Poll {
+        StatusRequestBody.Poll(options: filledOptions, expiresIn: expiresIn, multiple: multiple, hideTotals: hidesTotals)
     }
 }
 

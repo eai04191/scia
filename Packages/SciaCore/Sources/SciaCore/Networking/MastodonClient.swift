@@ -560,48 +560,38 @@ public struct MastodonClient: Sendable {
     /// https://docs.joinmastodon.org/methods/statuses/#create
     /// - Parameter quotes: サーバーの引用の決まり。引用元のIDを入れるパラメーターの名前を決める。
     public func postStatus(_ draft: StatusDraft, quotes: QuoteRules = .mastodon) async throws -> Status {
-        try await post(Status.self, path: "api/v1/statuses", form: try postForm(of: draft, quotes: quotes), headers: ["Idempotency-Key": draft.idempotencyKey]).0
+        let request = try jsonRequest(method: "POST", path: "api/v1/statuses", body: try postBody(of: draft, quotes: quotes), headers: ["Idempotency-Key": draft.idempotencyKey])
+        return try await send(request, decoding: Status.self).0
     }
 
     /// `date`に投稿するよう予約する。投稿と同じく、下書きごとの`Idempotency-Key`を付ける。サーバーは予約にも同じキーで二重に作らない。
     /// 今から5分以内の日時は、サーバーが422の`MastodonAPIError`で断る。過去の日時はすぐ投稿されてしまうため、送る前に`ScheduledPosting.accepts`で確かめる。
     /// https://docs.joinmastodon.org/methods/statuses/#create
     public func scheduleStatus(_ draft: StatusDraft, at date: Date, quotes: QuoteRules = .mastodon) async throws -> ScheduledStatus {
-        let form = try postForm(of: draft, quotes: quotes) + [URLQueryItem(name: "scheduled_at", value: date.formatted(.iso8601))]
-        return try await post(ScheduledStatus.self, path: "api/v1/statuses", form: form, headers: ["Idempotency-Key": draft.idempotencyKey]).0
+        var body = try postBody(of: draft, quotes: quotes)
+        body.scheduledAt = date
+        let request = try jsonRequest(method: "POST", path: "api/v1/statuses", body: body, headers: ["Idempotency-Key": draft.idempotencyKey])
+        return try await send(request, decoding: ScheduledStatus.self).0
     }
 
-    /// 投稿と予約で送るフォーム。
-    private func postForm(of draft: StatusDraft, quotes: QuoteRules) throws -> [URLQueryItem] {
+    /// 投稿と予約で送る本文。
+    private func postBody(of draft: StatusDraft, quotes: QuoteRules) throws -> StatusRequestBody {
         guard let mediaIDs = draft.mediaIDs else { throw StatusPostError.attachmentsNotReady }
-        var form = [
-            URLQueryItem(name: "status", value: draft.text),
-            URLQueryItem(name: "visibility", value: draft.visibility.rawValue),
+        return StatusRequestBody(
+            status: draft.text,
+            spoilerText: draft.spoilerText.isEmpty ? nil : draft.spoilerText,
             // 付けないときも送る。送らなければ、サーバーはアカウントの「既定で閲覧注意にする」に従い、注意書きの欄を閉じた投稿まで閲覧注意にするため。
-            URLQueryItem(name: "sensitive", value: draft.sensitive ? "true" : "false"),
-        ]
-        if !draft.spoilerText.isEmpty {
-            form.append(URLQueryItem(name: "spoiler_text", value: draft.spoilerText))
-        }
-        if let inReplyToID = draft.inReplyToID {
-            form.append(URLQueryItem(name: "in_reply_to_id", value: inReplyToID))
-        }
-        if let quotedStatusID = draft.quotedStatusID {
-            form.append(URLQueryItem(name: quotes.quotedStatusParameter, value: quotedStatusID))
-        }
-        // 送らなければ、サーバーはアカウントの既定の言語、なければweb UIの表示言語にする。
-        if let language = draft.language {
-            form.append(URLQueryItem(name: "language", value: language))
-        }
-        // 送らなければ、サーバーはアカウントの既定にする。
-        if let quotePolicy = draft.sentQuotePolicy {
-            form.append(URLQueryItem(name: "quote_approval_policy", value: quotePolicy.rawValue))
-        }
-        form += mediaIDs.map { URLQueryItem(name: "media_ids[]", value: $0) }
-        if let poll = draft.poll {
-            form += poll.formItems
-        }
-        return form
+            sensitive: draft.sensitive,
+            visibility: draft.visibility,
+            inReplyToID: draft.inReplyToID,
+            quote: draft.quotedStatusID.map { StatusRequestBody.Quote(parameter: quotes.quotedStatusParameter, statusID: $0) },
+            // 送らなければ、サーバーはアカウントの既定の言語、なければweb UIの表示言語にする。
+            language: draft.language,
+            // 送らなければ、サーバーはアカウントの既定にする。
+            quoteApprovalPolicy: draft.sentQuotePolicy,
+            mediaIDs: mediaIDs.isEmpty ? nil : mediaIDs,
+            poll: draft.poll?.requestBody
+        )
     }
 
     /// 予約した投稿をすべて返す。並びはサーバーが返すまま（予約した新しい順）。続きを`Link`ヘッダーで読み、最後まで読み切ってから返す。
@@ -700,8 +690,8 @@ public struct MastodonClient: Sendable {
     /// 添付ファイルが済んでいなければ送らずに`StatusPostError.attachmentsNotReady`を投げる。
     /// https://docs.joinmastodon.org/methods/statuses/#edit
     public func editStatus(_ target: StatusEditTarget, to draft: StatusDraft, now: Date = SystemTime.now()) async throws -> Status {
-        guard let form = draft.editForm(poll: target.poll, now: now) else { throw StatusPostError.attachmentsNotReady }
-        return try await send(formRequest(method: "PUT", path: "api/v1/statuses/\(target.statusID)", form: form), decoding: Status.self).0
+        guard let body = draft.editBody(poll: target.poll, now: now) else { throw StatusPostError.attachmentsNotReady }
+        return try await send(jsonRequest(method: "PUT", path: "api/v1/statuses/\(target.statusID)", body: body), decoding: Status.self).0
     }
 
     /// 自分の投稿を削除する。応答の中身は使わない。
@@ -1627,6 +1617,17 @@ public struct MastodonClient: Sendable {
         feature: OptionalFeature? = nil
     ) async throws -> (T, HTTPURLResponse) {
         try await send(formRequest(method: "POST", url: url, form: form, headers: headers), decoding: type, feature: feature)
+    }
+
+    private func jsonRequest(method: String, path: String, body: StatusRequestBody, headers: [String: String] = [:]) throws -> URLRequest {
+        var request = URLRequest(url: credential.instance.appending(path: path))
+        request.httpMethod = method
+        for (field, value) in headers {
+            request.setValue(value, forHTTPHeaderField: field)
+        }
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try body.encoded()
+        return request
     }
 
     private func formRequest(method: String, path: String, form: [URLQueryItem], headers: [String: String] = [:]) -> URLRequest {

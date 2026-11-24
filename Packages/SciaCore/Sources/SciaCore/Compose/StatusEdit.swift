@@ -131,35 +131,22 @@ extension StatusDraft {
         }
     }
 
-    /// 編集で送るフォーム。添付、注意書き、閲覧注意、投票は、変えていなくても毎回送る。送らなければサーバーが消すため。
-    /// 添付がなければ`media_ids[]`を送らない。空の値を送ると、サーバーはIDの0として探して拒む。送らなければ添付は外れる。
-    func editForm(poll: PollResubmission?, now: Date) -> [URLQueryItem]? {
+    /// 編集で送る本文。添付、注意書き、閲覧注意、投票は、変えていなくても毎回送る。送らなければサーバーが消すため。
+    /// 添付がなければ`media_ids`を送らない。送らなければ添付は外れる。
+    func editBody(poll: PollResubmission?, now: Date) -> StatusRequestBody? {
         guard let mediaIDs else { return nil }
-        var form = [
-            URLQueryItem(name: "status", value: text),
-            URLQueryItem(name: "spoiler_text", value: spoilerText),
-            URLQueryItem(name: "sensitive", value: sensitive ? "true" : "false"),
-        ]
-        // 言語は、送らなければサーバーが今の言語のまま残すので、分からないときだけ送らない。
-        if let language {
-            form.append(URLQueryItem(name: "language", value: language))
-        }
-        // 送らなければ、サーバーは今の値のまま残す。
-        if let sentQuotePolicy {
-            form.append(URLQueryItem(name: "quote_approval_policy", value: sentQuotePolicy.rawValue))
-        }
-        form += mediaIDs.map { URLQueryItem(name: "media_ids[]", value: $0) }
-        // Rackは配列の中のハッシュを、同じキーがもう一度出たところで次の要素に分ける。要素ごとにidを先に置く。
-        for (id, description) in changedAttachedDescriptions {
-            form.append(URLQueryItem(name: "media_attributes[][id]", value: id))
-            form.append(URLQueryItem(name: "media_attributes[][description]", value: description))
-        }
-        if let poll {
-            form += poll.options.map { URLQueryItem(name: "poll[options][]", value: $0) }
-            form.append(URLQueryItem(name: "poll[expires_in]", value: String(poll.expiresIn(now: now))))
-            form.append(URLQueryItem(name: "poll[multiple]", value: poll.multiple ? "true" : "false"))
-            form.append(URLQueryItem(name: "poll[hide_totals]", value: poll.hideTotals ? "true" : "false"))
-        }
-        return form
+        let attributes = changedAttachedDescriptions.map { StatusRequestBody.MediaAttribute(id: $0.id, description: $0.description) }
+        return StatusRequestBody(
+            status: text,
+            spoilerText: spoilerText,
+            sensitive: sensitive,
+            // 言語は、送らなければサーバーが今の言語のまま残すので、分からないときだけ送らない。
+            language: language,
+            // 送らなければ、サーバーは今の値のまま残す。
+            quoteApprovalPolicy: sentQuotePolicy,
+            mediaIDs: mediaIDs.isEmpty ? nil : mediaIDs,
+            mediaAttributes: attributes.isEmpty ? nil : attributes,
+            poll: poll.map { StatusRequestBody.Poll(options: $0.options, expiresIn: $0.expiresIn(now: now), multiple: $0.multiple, hideTotals: $0.hideTotals) }
+        )
     }
 }

@@ -23,7 +23,7 @@ struct DraftSubmissionTests {
             switch (request.httpMethod, request.url?.path()) {
             case ("POST", "/api/v1/statuses"):
                 let body = String(decoding: request.httpBody ?? Data(), as: UTF8.self)
-                return body.contains("scheduled_at=") ? (200, Data(scheduledJSON.utf8)) : (200, try statusBody(5))
+                return body.contains(#""scheduled_at":"#) ? (200, Data(scheduledJSON.utf8)) : (200, try statusBody(5))
             case ("PUT", "/api/v1/statuses/4"):
                 return (200, try statusBody(4))
             default:
@@ -69,7 +69,7 @@ struct DraftSubmissionTests {
         guard case .scheduled(let scheduled) = submitted else { Issue.record("予約として送りませんでした: \(submitted)"); return }
         #expect(scheduled.id == "70")
         let body = String(decoding: try #require(transport.requests(to: "/api/v1/statuses").first?.httpBody), as: UTF8.self)
-        #expect(body.contains("scheduled_at="))
+        #expect(body.contains(#""scheduled_at":"#))
     }
 
     /// 編集の対象があれば、予約の日時があっても編集し、サーバーが返した編集後の投稿を返す。Mastodonは編集の予約を受け付けないため。
@@ -97,7 +97,7 @@ struct DraftSubmissionTests {
         _ = try await asAction { try await client.submit(draft) { .mastodon } }
 
         let body = String(decoding: try #require(transport.requests(to: "/api/v1/statuses/4").first?.httpBody), as: UTF8.self)
-        #expect(body.contains("poll%5Bexpires_in%5D=3601"), "\(body)")
+        #expect(body.contains(#""expires_in":3601"#), "\(body)")
     }
 
     /// 引用のある下書きは、渡された引用の決まりのパラメーターで送る。引用のない下書きと編集では、決まりを聞かない。
@@ -111,8 +111,8 @@ struct DraftSubmissionTests {
         _ = try await asAction { try await client.submit(StatusDraft(text: "こんにちは")) { asked.withLock { $0 += 1 }; return .fedibird } }
 
         let bodies = transport.requests(to: "/api/v1/statuses").map { String(decoding: $0.httpBody ?? Data(), as: UTF8.self) }
-        #expect(bodies.map { $0.contains("quote_id=9") } == [true, false, false])
-        #expect(bodies.map { $0.contains("quoted_status_id=9") } == [false, true, false])
+        #expect(bodies.map { $0.contains(#""quote_id":"9""#) } == [true, false, false])
+        #expect(bodies.map { $0.contains(#""quoted_status_id":"9""#) } == [false, true, false])
         #expect(asked.withLock { $0 } == 2)
     }
 
@@ -144,7 +144,7 @@ struct DraftSubmissionTests {
         _ = try await asAction { try await session.submit(StatusDraft(text: "もう一度", quotedStatusID: "9")) }
 
         let bodies = transport.requests(to: "/api/v1/statuses").map { String(decoding: $0.httpBody ?? Data(), as: UTF8.self) }
-        #expect(bodies.map { $0.contains("quote_id=9") } == [true, true])
+        #expect(bodies.map { $0.contains(#""quote_id":"9""#) } == [true, true])
         #expect(transport.requests(to: "/api/v2/instance").count == 1)
         #expect(session.capabilities.quotes == .fedibird)
     }

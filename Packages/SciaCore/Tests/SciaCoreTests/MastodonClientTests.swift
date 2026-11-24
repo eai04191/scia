@@ -20,6 +20,11 @@ struct MastodonClientTests {
         )
     }
 
+    /// 投稿、予約、編集の本文。キーの順を決めて書き出すので、文字列のまま比べる。
+    static func jsonBody(of request: URLRequest) throws -> String {
+        String(decoding: try #require(request.httpBody), as: UTF8.self)
+    }
+
     @Test func accountDomainUsesWebFingerDomain() async throws {
         let client = try makeClient(StubTransport([try .fixture("instance_account_domain")]))
         #expect(try await client.accountDomain() == "example.com")
@@ -438,7 +443,7 @@ struct MastodonClientTests {
         #expect(status.id == "113000000000000001")
     }
 
-    @Test func postStatusSendsFormWithIdempotencyKey() async throws {
+    @Test func postStatusSendsJSONWithIdempotencyKey() async throws {
         let transport = StubTransport([.json(Self.interactedStatus, statusCode: 200)])
         let draft = StatusDraft(text: "@bob こんにちは + テスト", spoilerText: "注意", visibility: .private, inReplyToID: "113000000000000000", idempotencyKey: "key-1")
 
@@ -447,28 +452,17 @@ struct MastodonClientTests {
         let request = try #require(await transport.requests.first)
         #expect(request.url?.path() == "/api/v1/statuses")
         #expect(request.value(forHTTPHeaderField: "Idempotency-Key") == "key-1")
-        var components = URLComponents()
-        components.percentEncodedQuery = String(decoding: try #require(request.httpBody), as: UTF8.self)
-        #expect(components.queryItems == [
-            URLQueryItem(name: "status", value: "@bob こんにちは + テスト"),
-            URLQueryItem(name: "visibility", value: "private"),
-            URLQueryItem(name: "sensitive", value: "false"),
-            URLQueryItem(name: "spoiler_text", value: "注意"),
-            URLQueryItem(name: "in_reply_to_id", value: "113000000000000000"),
-        ])
+        #expect(try Self.jsonBody(of: request) == #"{"in_reply_to_id":"113000000000000000","sensitive":false,"spoiler_text":"注意","status":"@bob こんにちは + テスト","visibility":"private"}"#)
     }
 
     /// 言語を選んでいれば送り、選んでいなければ送らずにサーバーに任せる。
-    @Test(arguments: [("en", ["en"]), (nil, [])] as [(String?, [String])])
-    func postStatusSendsLanguageOnlyWhenChosen(language: String?, expected: [String]) async throws {
+    @Test(arguments: [("en", #"{"language":"en","sensitive":false,"status":"hello","visibility":"public"}"#), (nil, #"{"sensitive":false,"status":"hello","visibility":"public"}"#)] as [(String?, String)])
+    func postStatusSendsLanguageOnlyWhenChosen(language: String?, expected: String) async throws {
         let transport = StubTransport([.json(Self.interactedStatus, statusCode: 200)])
 
         _ = try await makeClient(transport).postStatus(StatusDraft(text: "hello", idempotencyKey: "key-1", language: language))
 
-        let request = try #require(await transport.requests.first)
-        var components = URLComponents()
-        components.percentEncodedQuery = String(decoding: try #require(request.httpBody), as: UTF8.self)
-        #expect(components.queryItems?.filter { $0.name == "language" }.compactMap(\.value) == expected)
+        #expect(try Self.jsonBody(of: try #require(await transport.requests.first)) == expected)
     }
 
     @Test func readsPostingLanguages() async throws {
@@ -484,9 +478,7 @@ struct MastodonClientTests {
 
         _ = try await makeClient(transport).postStatus(StatusDraft(text: "見て", quotedStatusID: "113000000000000000", idempotencyKey: "key-1"))
 
-        let items = try form(of: try #require(await transport.requests.first))
-        #expect(items.filter { $0.name.contains("quot") } == [URLQueryItem(name: "quoted_status_id", value: "113000000000000000")])
-        #expect(!items.contains { $0.name == "in_reply_to_id" })
+        #expect(try Self.jsonBody(of: try #require(await transport.requests.first)) == #"{"quoted_status_id":"113000000000000000","sensitive":false,"status":"見て","visibility":"public"}"#)
     }
 
     /// Fedibirdの形では`quote_id`で送る。`quoted_status_id`では、引用のない投稿として受け付けられる。
@@ -495,8 +487,7 @@ struct MastodonClientTests {
 
         _ = try await makeClient(transport).postStatus(StatusDraft(text: "見て", quotedStatusID: "113000000000000000", idempotencyKey: "key-1"), quotes: .fedibird)
 
-        let items = try form(of: try #require(await transport.requests.first))
-        #expect(items.filter { $0.name.contains("quot") } == [URLQueryItem(name: "quote_id", value: "113000000000000000")])
+        #expect(try Self.jsonBody(of: try #require(await transport.requests.first)) == #"{"quote_id":"113000000000000000","sensitive":false,"status":"見て","visibility":"public"}"#)
     }
 
     @Test func readsQuoteRulesFromInstance() async throws {
@@ -613,8 +604,11 @@ struct MastodonClientTests {
         _ = try await client.postStatus(StatusDraft(text: "b", visibility: .private, quotePolicy: .public))
         _ = try await client.postStatus(StatusDraft(text: "c"))
 
-        let sent = try await transport.requests.map { try form(of: $0).filter { $0.name == "quote_approval_policy" }.map(\.value) }
-        #expect(sent == [["followers"], ["nobody"], []])
+        #expect(try await transport.requests.map { try Self.jsonBody(of: $0) } == [
+            #"{"quote_approval_policy":"followers","sensitive":false,"status":"a","visibility":"public"}"#,
+            #"{"quote_approval_policy":"nobody","sensitive":false,"status":"b","visibility":"private"}"#,
+            #"{"sensitive":false,"status":"c","visibility":"public"}"#,
+        ])
     }
 
     @Test func setQuotePolicyPutsInteractionPolicy() async throws {
@@ -700,15 +694,7 @@ struct MastodonClientTests {
         _ = try await makeClient(transport).postStatus(StatusDraft(text: "どっち", poll: poll, idempotencyKey: "key-1"))
 
         let request = try #require(await transport.requests.first)
-        var components = URLComponents()
-        components.percentEncodedQuery = String(decoding: try #require(request.httpBody), as: UTF8.self)
-        #expect(components.queryItems?.filter { $0.name.hasPrefix("poll") } == [
-            URLQueryItem(name: "poll[options][]", value: "朝"),
-            URLQueryItem(name: "poll[options][]", value: "夜"),
-            URLQueryItem(name: "poll[expires_in]", value: "3600"),
-            URLQueryItem(name: "poll[multiple]", value: "true"),
-            URLQueryItem(name: "poll[hide_totals]", value: "true"),
-        ])
+        #expect(try Self.jsonBody(of: request) == #"{"poll":{"expires_in":3600,"hide_totals":true,"multiple":true,"options":["朝","夜"]},"sensitive":false,"status":"どっち","visibility":"public"}"#)
     }
 
     @Test func postStatusSendsMediaIDsInOrder() async throws {
@@ -720,15 +706,8 @@ struct MastodonClientTests {
         _ = try await makeClient(transport).postStatus(StatusDraft(attachments: attachments, idempotencyKey: "key-1"))
 
         let request = try #require(await transport.requests.first)
-        var components = URLComponents()
-        components.percentEncodedQuery = String(decoding: try #require(request.httpBody), as: UTF8.self)
-        #expect(components.queryItems == [
-            URLQueryItem(name: "status", value: ""),
-            URLQueryItem(name: "visibility", value: "public"),
-            URLQueryItem(name: "sensitive", value: "false"),
-            URLQueryItem(name: "media_ids[]", value: "113000000000000102"),
-            URLQueryItem(name: "media_ids[]", value: "113000000000000100"),
-        ])
+        #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        #expect(try Self.jsonBody(of: request) == #"{"media_ids":["113000000000000102","113000000000000100"],"sensitive":false,"status":"","visibility":"public"}"#)
     }
 
     /// 注意書きの欄を出して空のまま添付付きで送ると、注意書きなしで閲覧注意だけを付ける。
@@ -739,14 +718,7 @@ struct MastodonClientTests {
         _ = try await makeClient(transport).postStatus(StatusDraft(hasSpoiler: true, attachments: [attachment], idempotencyKey: "key-1"))
 
         let request = try #require(await transport.requests.first)
-        var components = URLComponents()
-        components.percentEncodedQuery = String(decoding: try #require(request.httpBody), as: UTF8.self)
-        #expect(components.queryItems == [
-            URLQueryItem(name: "status", value: ""),
-            URLQueryItem(name: "visibility", value: "public"),
-            URLQueryItem(name: "sensitive", value: "true"),
-            URLQueryItem(name: "media_ids[]", value: "113000000000000102"),
-        ])
+        #expect(try Self.jsonBody(of: request) == #"{"media_ids":["113000000000000102"],"sensitive":true,"status":"","visibility":"public"}"#)
     }
 
     @Test func postStatusRefusesPendingAttachmentsWithoutSending() async throws {
