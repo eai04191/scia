@@ -44,6 +44,21 @@ public final class LayerClock {
         } while remaining > 1e-9
     }
 
+    /// 今ある終わりのある動きのうち、最後に終わるもののコマの1つ手前まで進める。途中で終わる動きの終わりの処理は、`advance(by:)`と同じくそのコマで呼ばれる。
+    /// 終わりの処理が次の動きを始めて最後の終わりが延びたら、延びた先の1つ手前まで進め直す。
+    /// 動きがすべて終わって見え方が替わる直前のコマを、1コマずつ進めて描かずに見るのに使う。
+    public func advanceToFrameBeforeLastEnd() async throws {
+        // 足したばかりの動きは、コミットするまで始まりの時間（`beginTime`）が0のままで、終わりが分からない。今の時間で始めさせる。
+        // コミットしたあとに0のままの動きは、時間0で始まった動きなので、そのまま終わりを測れる。
+        CATransaction.flush()
+        while let remaining = Self.timeUntilEnd(in: layer, at: now, root: layer, latest: true) {
+            // 終わる時点ちょうどのコマも、Core Animationが終わったとみなすことがあるので、終わる時点より前のコマで止める。
+            let frames = Int(((remaining - Self.endedMargin) / Self.frame).rounded(.up))
+            guard frames > 1 else { return }
+            try await advance(by: Self.frame * Double(frames - 1))
+        }
+    }
+
     /// 終わりのある動きがなくなるまで進める。止まらない動き（カーソルの点滅など）は待たない。
     /// 終わりの処理がすぐ次の動きを始めることがあるので、そのあともう1コマ進めて、動きが始まらないことを確かめる。
     public func runUntilIdle(sourceLocation: SourceLocation = #_sourceLocation) async throws {
@@ -81,7 +96,7 @@ public final class LayerClock {
     /// 足したばかりの動きは、次にCATransactionをコミットした時点から始まり、それまで始まりの時間（`beginTime`）が0のままになる。
     /// そのまま飛ばすと、動きの始まりが飛んだ先にずれるので、始まりの決まっていない動きがあるうちは、1コマずつ進めたときと同じく1コマだけ進めて始まりを決める。
     private func framesUntilNextEnd() -> Int {
-        guard !Self.hasUnstartedAnimations(in: layer), let remaining = Self.timeUntilNextEnd(in: layer, at: now, root: layer) else { return 1 }
+        guard !Self.hasUnstartedAnimations(in: layer), let remaining = Self.timeUntilEnd(in: layer, at: now, root: layer, latest: false) else { return 1 }
         return max(1, Int(((remaining + Self.endedMargin) / Self.frame).rounded(.up)))
     }
 
@@ -97,11 +112,11 @@ public final class LayerClock {
         return own || (layer.sublayers ?? []).contains(where: hasUnstartedAnimations(in:))
     }
 
-    /// `time`（止めた層の時間）のあとに終わる、終わりのある動きのうち、いちばん早く終わるものまでの長さ。終わるのを待たない動き（`finiteAnimations`に含めないもの）は見ない。
+    /// `time`（止めた層の時間）のあとに終わる、終わりのある動きのうち、いちばん早く終わるもの（`latest`なら、いちばん遅く終わるもの）までの長さ。終わるのを待たない動き（`finiteAnimations`に含めないもの）は見ない。
     /// 終わったのにまだ外れていない動き（終わりが今からendedMargin以内で、外させなかったもの）があれば、0以下を返して次のコマで外させる。終わっても残す動き（`isRemovedOnCompletion`がfalse）は、終わったら見ない。
     /// 止めた層の時間から各層の時間へは直せる（`endedAnimations`と同じ）が、逆向きは止めた層の速さ0で割ることになるので、各層の時間で残りの長さを測る。
     /// 止めた層の中の層は速さを変えていない前提で、その長さを止めた層の時間の長さとみなす。
-    private static func timeUntilNextEnd(in layer: CALayer, at time: TimeInterval, root: CALayer) -> TimeInterval? {
+    private static func timeUntilEnd(in layer: CALayer, at time: TimeInterval, root: CALayer, latest: Bool) -> TimeInterval? {
         #if canImport(UIKit)
         if layer.delegate is UIActivityIndicatorView || layer.delegate is UIRefreshControl { return nil }
         #endif
@@ -111,8 +126,8 @@ public final class LayerClock {
             let remaining = animation.beginTime + activeDuration(of: animation) - local
             return remaining > 0 || animation.isRemovedOnCompletion ? remaining : nil
         }
-        let nested = (layer.sublayers ?? []).compactMap { timeUntilNextEnd(in: $0, at: time, root: root) }
-        return (own + nested).min()
+        let nested = (layer.sublayers ?? []).compactMap { timeUntilEnd(in: $0, at: time, root: root, latest: latest) }
+        return latest ? (own + nested).max() : (own + nested).min()
     }
 
     /// 時間を戻す。止めている間に始めた動きは、戻したとたんに終わりまで進む。
