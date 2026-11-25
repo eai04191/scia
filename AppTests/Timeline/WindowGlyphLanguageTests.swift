@@ -270,18 +270,17 @@ struct WindowGlyphLanguageTests {
         let window = try window()
         window.useAppLanguage()
         window.isHidden = false
-        func hosted(_ view: some View) -> Data {
+        let drawer = HierarchyDrawer()
+        func hosted(_ view: some View) throws -> Data {
             let host = UIHostingController(rootView: view.font(.system(size: 40)).frame(width: 300, height: 60, alignment: .leading))
             window.rootViewController = host
             host.view.frame = CGRect(x: 0, y: 0, width: 300, height: 60)
             host.view.layoutIfNeeded()
-            return UIGraphicsImageRenderer(bounds: host.view.bounds).pngData { _ in
-                host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
-            }
+            return try #require(drawer.image(of: host.view).pngData())
         }
-        let plain = hosted(Text(text))
-        let japanese = hosted(Text(text).typesettingLanguage(.init(identifier: "ja")))
-        let chinese = hosted(Text(text).typesettingLanguage(.init(identifier: "zh-Hans")))
+        let plain = try hosted(Text(text))
+        let japanese = try hosted(Text(text).typesettingLanguage(.init(identifier: "ja")))
+        let chinese = try hosted(Text(text).typesettingLanguage(.init(identifier: "zh-Hans")))
 
         #expect(plain == japanese)
         #expect(plain != chinese)

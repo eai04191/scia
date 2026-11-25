@@ -10,6 +10,7 @@ import UIKit
 @Suite(.scratch, .serialized, .failureState)
 final class InlineComposeControllerTests {
     private let window: UIWindow
+    private let drawer = HierarchyDrawer()
     private let composer: InlineComposeController
     private let settings: AppSettings
     private let tuning = TuningStore(defaults: nil)
@@ -1311,12 +1312,7 @@ final class InlineComposeControllerTests {
 
     /// 画面に出ている見え方のまま、ウィンドウを描く。動いている途中のコマも、止めた時間の見え方で描かれる。
     private func drawWindow(sourceLocation: SourceLocation = #_sourceLocation) throws -> CGImage {
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = window.screen.scale
-        let image = UIGraphicsImageRenderer(bounds: window.bounds, format: format).image { _ in
-            _ = window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
-        }
-        return try #require(image.cgImage, sourceLocation: sourceLocation)
+        try #require(drawer.image(of: window, sourceLocation: sourceLocation).cgImage, sourceLocation: sourceLocation)
     }
 
     /// `view`を囲む、ウィンドウの中の範囲。傾けた写真も、角まで含める。

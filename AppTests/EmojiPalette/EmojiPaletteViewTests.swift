@@ -321,14 +321,13 @@ struct EmojiPaletteViewTests {
         }
         let view = EmojiPaletteGlyphView(frame: CGRect(x: 0, y: 0, width: 40, height: 40))
         window.addSubview(view)
+        let drawer = HierarchyDrawer()
 
         func centerColor(style: UIUserInterfaceStyle) throws -> UIColor {
             window.overrideUserInterfaceStyle = style
             window.backgroundColor = .clear
             view.layoutIfNeeded()
-            let snapshot = UIGraphicsImageRenderer(bounds: view.bounds, format: format).image { _ in
-                view.drawHierarchy(in: view.bounds, afterScreenUpdates: true)
-            }
+            let snapshot = drawer.image(of: view, scale: 2)
             var pixel: [UInt8] = [0, 0, 0, 0]
             let context = CGContext(data: &pixel, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
             context?.draw(try #require(snapshot.cgImage), in: CGRect(x: -40, y: -40, width: 80, height: 80))

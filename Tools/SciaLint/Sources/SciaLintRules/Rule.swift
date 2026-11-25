@@ -26,6 +26,7 @@ public enum Linter {
         .presentWithoutWaiting,
         .confirmationDialogWithoutAnchor,
         .backgroundNotificationInTest,
+        .drawHierarchyInTest,
         .suiteWithoutFailureState,
         .fixedFontSize,
         .dimmedWhiteText,
