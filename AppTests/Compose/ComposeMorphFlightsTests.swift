@@ -116,6 +116,95 @@ struct ComposeMorphFlightsTests {
         #expect((fade.fromValue as? Float) == 1)
     }
 
+    /// カプセルの写真へ向かう複製は、写真の右下の失敗のアイコンを載せ、近づくにつれて濃くする。本物に替えたあとで浮かび上がらせると、
+    /// 開閉の完了は動きが止まって見えてからしばらく後なので、写真が止まってからアイコンが遅れて出る。
+    @Test func landingOnCapsuleFadesInFailureMarkOnCopy() throws {
+        // 本物の像を撮るので、ウィンドウに載せる。
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 400, height: 400)
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        let container = UIView(frame: window.bounds)
+        window.addSubview(container)
+        let source = UIView(frame: CGRect(x: 16, y: 10, width: 64, height: 64))
+        let target = UIView(frame: CGRect(x: 16, y: 300, width: 26, height: 26))
+        let mark = UIView(frame: CGRect(x: 18, y: 18, width: 14, height: 14))
+        mark.backgroundColor = .systemRed
+        target.addSubview(mark)
+        container.addSubview(source)
+        container.addSubview(target)
+        // 像は描いたことのあるビューからしか撮れない。
+        CATransaction.flush()
+        let flights = ComposeMorphFlights(container: container)
+        let key = ComposeMorphFlights.Key.attachment(UUID())
+
+        flights.takeOff(from: [key: .init(view: source, content: .thumbnail(Self.thumbnail(.undecorated(size: source.bounds.size)))) { source.alpha = $0 ? 0 : 1 }], stackingOrder: [key], stackShadowOpacity: 0)
+        var generation = 0
+        UIView.animate(withDuration: 1) {
+            generation = flights.land(
+                on: [key: .init(view: target, content: .thumbnail(Self.thumbnail(.undecorated(size: target.bounds.size), status: .bottomTrailingCorner(mark)))) { target.alpha = $0 ? 0 : 1 }],
+                delays: [:], stackShadowOpacity: 0, duration: 1
+            ) { _, animations in animations() }
+        }
+
+        let copies = container.subviews.flatMap(\.subviews).filter { $0 !== mark && $0.bounds.size == mark.bounds.size }
+        let copy = try #require(copies.first, "複製に失敗のアイコンを載せていません")
+        #expect(copy.alpha == 1)
+        let fade = try #require(copy.layer.animation(forKey: "opacity") as? CABasicAnimation, "失敗のアイコンを濃くしていません")
+        #expect((fade.fromValue as? Float) == 0)
+        // 複製が行き先の大きさになったとき、本物のアイコンと重なる。
+        let holder = try #require(copy.superview)
+        holder.bounds.size = target.bounds.size
+        holder.layoutIfNeeded()
+        #expect(copy.frame == mark.frame)
+
+        flights.finish(generation: generation)
+        #expect(mark.layer.animation(forKey: "opacity") == nil, "本物に替えてから、失敗のアイコンを浮かび上がらせています")
+    }
+
+    /// 描く前に行き先を測り直し、そのまま逆へ向かうとき、行き先の失敗のアイコンの像は、まだ見せていない濃さに戻る。
+    /// 測り直しで撮り直した像を戻さないと、見せ始める前のアイコンが濃いまま起点へ向かう。
+    @Test func reversingBeforeFirstDrawKeepsTargetMarkHidden() throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 400, height: 400)
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        let container = UIView(frame: window.bounds)
+        window.addSubview(container)
+        let source = UIView(frame: CGRect(x: 16, y: 10, width: 64, height: 64))
+        let target = UIView(frame: CGRect(x: 16, y: 300, width: 26, height: 26))
+        let mark = UIView(frame: CGRect(x: 18, y: 18, width: 14, height: 14))
+        mark.backgroundColor = .systemRed
+        target.addSubview(mark)
+        container.addSubview(source)
+        container.addSubview(target)
+        // 像は描いたことのあるビューからしか撮れない。
+        CATransaction.flush()
+        let flights = ComposeMorphFlights(container: container)
+        let key = ComposeMorphFlights.Key.attachment(UUID())
+        let strip = ComposeMorphFlights.End(view: source, content: .thumbnail(Self.thumbnail(.undecorated(size: source.bounds.size)))) { source.alpha = $0 ? 0 : 1 }
+        func capsule() -> ComposeMorphFlights.End {
+            .init(view: target, content: .thumbnail(Self.thumbnail(.undecorated(size: target.bounds.size), status: .bottomTrailingCorner(mark)))) { target.alpha = $0 ? 0 : 1 }
+        }
+
+        flights.takeOff(from: [key: strip], stackingOrder: [key], stackShadowOpacity: 0)
+        var generation = 0
+        UIView.animate(withDuration: 1) {
+            generation = flights.land(on: [key: capsule()], delays: [:], stackShadowOpacity: 0, duration: 1) { _, animations in animations() }
+        }
+        target.frame.origin.y = 320
+        flights.retarget(on: [key: capsule()], generation: generation) { _, animations in
+            UIView.animate(withDuration: 1, animations: animations)
+        }
+        flights.takeOff(from: [key: capsule()], stackingOrder: [key], stackShadowOpacity: 0)
+
+        let marks = container.subviews.flatMap(\.subviews).filter { $0 !== mark && $0.bounds.size == mark.bounds.size }
+        #expect(marks.count == 1)
+        #expect(marks.allSatisfy { $0.alpha == 0 }, "見せ始める前の失敗のアイコンを、濃いまま戻しています")
+    }
+
     /// 動いている途中に向かい直すとき、同じ本物でも重ねた表示が変わっていれば、変わったあとの表示へ向かう。
     /// 動画の読み込み前に閉じ始め、読み込み終えてから開き直すと、列のサムネイルに再生アイコンが付いている。前の表示のままだと、着地のコマで再生アイコンが付く。
     @Test func reversingTowardChangedDecorationShowsIt() throws {

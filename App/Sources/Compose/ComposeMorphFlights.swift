@@ -44,7 +44,7 @@ final class ComposeMorphFlights {
         let cornerRadius: CGFloat
         /// 白いフチの幅。カプセルの写真だけに付く。
         let border: CGFloat
-        /// 送信の状態の表示。起点にあれば像を複製に載せ、向かう間に薄くする。行き先にあれば、着いてから浮かび上がらせる。出していなければnil。
+        /// 送信の状態の表示。両端の表示の像を複製に載せ、起点のものを薄くしながら行き先のものを濃くする。出していなければnil。
         let status: StatusOverlay?
         /// 上に重ねた写真が落としている影の像。起点にあれば複製に載せ、動き始めに薄くする。
         let betweenShadow: UIView?
@@ -133,9 +133,7 @@ final class ComposeMorphFlights {
             }
             copy.apply(geometry(of: source))
             if case .thumbnail(let thumbnail) = source.content {
-                if let status = thumbnail.status, status.showsSomething {
-                    copy.attachStatus(status, of: source.view)
-                }
+                copy.attachStatus(thumbnail.status, of: source.view, shown: true)
                 copy.attachTileDecoration(thumbnail.decoration, of: source.view, shown: true)
                 if let betweenShadow = thumbnail.betweenShadow {
                     copy.attachBetweenShadow(betweenShadow)
@@ -191,6 +189,7 @@ final class ComposeMorphFlights {
                     if let image = thumbnail.image {
                         flight.copy.replaceThumbnailIfLarger(image, focus: thumbnail.focus)
                     }
+                    flight.copy.attachStatus(thumbnail.status, of: target.view, shown: false)
                     flight.copy.attachTileDecoration(thumbnail.decoration, of: target.view, shown: false)
                 }
                 flight.copy.markTileDecorationBeforeMove()
@@ -206,8 +205,7 @@ final class ComposeMorphFlights {
             let move = {
                 copy.alpha = 1
                 copy.apply(destination)
-                // 複製に載せた重ねた表示は、行き先によらず向かう間に薄くする。列に着くときは、着いてから本物を浮かび上がらせる。
-                copy.decorationAlpha = 0
+                copy.showStatus(of: targetView)
                 copy.showTileDecoration(of: targetView)
             }
             if delay > 0 {
@@ -240,6 +238,7 @@ final class ComposeMorphFlights {
             flight.copy.freezeAtPresentation()
             if case .thumbnail(let thumbnail) = target.content {
                 UIView.performWithoutAnimation {
+                    flight.copy.attachStatus(thumbnail.status, of: target.view, shown: false)
                     flight.copy.attachTileDecoration(thumbnail.decoration, of: target.view, shown: false)
                 }
             }
@@ -248,8 +247,7 @@ final class ComposeMorphFlights {
         for (copy, destination, delay, targetView) in moved {
             animations(delay) {
                 copy.apply(destination)
-                // 止めたときに見えている濃さで残した重ねた表示も、残りの時間で薄くし続ける。
-                copy.decorationAlpha = 0
+                copy.showStatus(of: targetView)
                 copy.showTileDecoration(of: targetView)
             }
         }
@@ -265,21 +263,13 @@ final class ComposeMorphFlights {
             flight.copy.removeFromSuperview()
             for end in flight.ends {
                 end.conceal(false)
-                // 着いた先の重ねた表示は、複製に載せていないので、着いてから浮かび上がらせる。
-                if case .thumbnail(let thumbnail) = end.content, let status = thumbnail.status?.view,
-                   let destination = flight.ends.last, destination.view === end.view {
-                    status.alpha = 0
-                    UIView.animateSpring(duration: Self.decorationRevealDuration, in: status) {
-                        status.alpha = 1
-                    }
-                }
             }
         }
         flights = [:]
         return true
     }
 
-    /// 着いた先の重ねた表示を浮かび上がらせる時間。カプセルの写真同士の影を浮かび上がらせる時間と揃え、動き始めに写真同士の影を薄くする時間にも使う。
+    /// 動き始めに写真同士の影を薄くする時間。カプセルに着いてから写真同士の影を浮かび上がらせる時間と揃える。
     private static let decorationRevealDuration: TimeInterval = 0.15
 
     private func conceal(_ end: End) {
@@ -316,8 +306,10 @@ private final class FlightCopy: UIView {
 
     private let inner: UIView
     private var border: CGFloat = 0
-    /// 起点の写真に重ねていた送信の状態の表示の像。
-    private var decoration: UIView?
+    /// 両端の写真に重ねている送信の状態の表示の像。本物ごとに持つ。
+    private var statuses: [ObjectIdentifier: UIView] = [:]
+    /// 写真の上に収まる状態の表示の像を入れる、中の画像と同じ大きさの入れ物。タイルの上の表示より手前に置く。
+    private var coveringStatuses: UIView?
     /// 写真の外にはみ出す表示の像を入れる、複製と同じ位置、大きさ、回転で動かす入れ物。写真の複製を入れる影の入れ物の外に置く。
     /// 影の入れ物は中身の形で影を落とすので、中に置くと、本物では影を落とさない失敗のアイコンまで影を落とすため。
     private(set) var overhang: UIView?
@@ -336,11 +328,6 @@ private final class FlightCopy: UIView {
         overhang.bounds = bounds
         overhang.center = center
         overhang.transform = transform
-    }
-
-    var decorationAlpha: CGFloat {
-        get { decoration?.alpha ?? 0 }
-        set { decoration?.alpha = newValue }
     }
 
     /// 起点の写真に、上の写真が落としていた影の像。写真と同じ大きさなので、複製の大きさに合わせて伸び縮みさせる。
@@ -380,8 +367,8 @@ private final class FlightCopy: UIView {
         added.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         if let existing {
             inner.insertSubview(added, aboveSubview: existing.view)
-        } else if let decoration, decoration.superview === inner {
-            inner.insertSubview(added, belowSubview: decoration)
+        } else if let coveringStatuses {
+            inner.insertSubview(added, belowSubview: coveringStatuses)
         } else {
             inner.addSubview(added)
         }
@@ -453,9 +440,10 @@ private final class FlightCopy: UIView {
         }
     }
 
-    /// 重ねた表示の部品と、再生アイコンの三角。止めるときに、見えている形を読み戻す。
+    /// 重ねた表示の部品と、再生アイコンの三角と、送信の状態の表示の像。止めるときに、見えている形を読み戻す。
     private var tileDecorationParts: [UIView] {
         tileDecorations.values.map(\.view).flatMap { decoration in MediaTileDecorationView.Part.allCases.map(decoration.view(for:)) + [decoration.playGlyph] }
+            + statuses.values
     }
 
     /// 再生アイコンの丸の直径と三角の幅。タイルは三角の大きさを丸の大きさから丸めて決めるので、丸と三角を別の倍率で縮める。
@@ -485,30 +473,63 @@ private final class FlightCopy: UIView {
         owner.playGlyph.transform = CGAffineTransform(scaleX: glyphScale, y: glyphScale)
     }
 
-    /// `view`（起点の本物）に重ねた送信の状態の表示の像を載せる。
-    func attachStatus(_ status: ComposeMorphFlights.StatusOverlay, of view: UIView) {
-        decoration?.removeFromSuperview()
-        decoration = nil
+    /// `view`（両端の本物）に重ねた送信の状態の表示の像を載せる。`shown`がfalseなら見せずに載せ、`showStatus`で濃くする。
+    /// 同じ本物の像を載せていれば、今の表示で撮り直して今の濃さを引き継ぐ。撮れなければ前の像を残す。表示を出していなければ、載せていた像を外す。
+    func attachStatus(_ status: ComposeMorphFlights.StatusOverlay?, of view: UIView, shown: Bool) {
+        let id = ObjectIdentifier(view)
+        let existing = statuses[id]
+        guard let status, status.showsSomething else {
+            existing?.removeFromSuperview()
+            statuses[id] = nil
+            return
+        }
         guard let snapshot = status.view.snapshotView(afterScreenUpdates: false) else { return }
-        decoration = snapshot
+        existing?.removeFromSuperview()
         snapshot.isUserInteractionEnabled = false
+        snapshot.alpha = existing?.alpha ?? (shown ? 1 : 0)
+        // 動かす前の濃さの記録も、撮り直した像へ移す。止めるときに、外した像ではなく今の像を戻すため。
+        tileDecorationBeforeMove = tileDecorationBeforeMove.map { part in
+            part.view === existing ? (view: snapshot, transform: part.transform, alpha: part.alpha) : part
+        }
         switch status {
         case .covering:
-            snapshot.center = CGPoint(x: inner.bounds.midX, y: inner.bounds.midY)
+            let covering = coveringStatuses ?? {
+                let covering = UIView(frame: inner.bounds)
+                covering.isUserInteractionEnabled = false
+                covering.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                inner.addSubview(covering)
+                coveringStatuses = covering
+                return covering
+            }()
+            snapshot.center = CGPoint(x: covering.bounds.midX, y: covering.bounds.midY)
             snapshot.autoresizingMask = [.flexibleLeftMargin, .flexibleRightMargin, .flexibleTopMargin, .flexibleBottomMargin]
-            inner.addSubview(snapshot)
+            covering.addSubview(snapshot)
         case .bottomTrailingCorner(let mark):
-            guard let group = superview, let container = group.superview else { return }
-            let overhang = UIView()
-            overhang.isUserInteractionEnabled = false
-            container.insertSubview(overhang, aboveSubview: group)
-            self.overhang = overhang
-            followWithOverhang()
-            overhang.alpha = alpha
-            // 複製は本物と同じ大きさと回転で置いているので、本物の中の枠をそのまま使える。
-            snapshot.frame = mark.convert(mark.bounds, to: view)
+            guard let overhang = overhang ?? makeOverhang() else { return }
+            // 複製が本物と同じ大きさになったとき本物と重なるよう、本物の右下の角からの位置で置く。行き先の像は、起点の大きさの複製に載せるため。
+            let frame = mark.convert(mark.bounds, to: view)
+            snapshot.frame = frame.offsetBy(dx: overhang.bounds.width - view.bounds.width, dy: overhang.bounds.height - view.bounds.height)
             snapshot.autoresizingMask = [.flexibleLeftMargin, .flexibleTopMargin]
             overhang.addSubview(snapshot)
+        }
+        statuses[id] = snapshot
+    }
+
+    private func makeOverhang() -> UIView? {
+        guard let group = superview, let container = group.superview else { return nil }
+        let overhang = UIView()
+        overhang.isUserInteractionEnabled = false
+        container.insertSubview(overhang, aboveSubview: group)
+        self.overhang = overhang
+        followWithOverhang()
+        overhang.alpha = alpha
+        return overhang
+    }
+
+    /// アニメーションの中で呼ぶ。`view`の送信の状態の表示を濃くし、ほかの本物の表示を薄くする。
+    func showStatus(of view: UIView) {
+        for (id, status) in statuses {
+            status.alpha = id == ObjectIdentifier(view) ? 1 : 0
         }
     }
 
@@ -584,8 +605,6 @@ private final class FlightCopy: UIView {
                 apply(previousGeometry)
                 self.previousGeometry = previousGeometry
             }
-            // 重ねた表示は、行き先へ向かう動きで薄くし始めるまで、濃いまま見えている。
-            decoration?.alpha = 1
             for part in tileDecorationBeforeMove {
                 part.view.transform = part.transform
                 part.view.alpha = part.alpha
@@ -601,7 +620,6 @@ private final class FlightCopy: UIView {
         let radius = presented?.cornerRadius ?? layer.cornerRadius
         let innerRadius = innerPresented?.cornerRadius ?? inner.layer.cornerRadius
         let opacity = presented.map { CGFloat($0.opacity) } ?? alpha
-        let decorationOpacity = decoration.map { decoration in decoration.layer.presentation().map { CGFloat($0.opacity) } ?? decoration.alpha }
         let partsPresented = tileDecorationParts.map { part in
             (
                 view: part,
@@ -622,9 +640,6 @@ private final class FlightCopy: UIView {
         inner.layer.cornerRadius = innerRadius
         alpha = opacity
         followWithOverhang()
-        if let decorationOpacity {
-            decoration?.alpha = decorationOpacity
-        }
         for part in partsPresented {
             part.view.transform = part.transform
             part.view.alpha = part.alpha

@@ -1280,7 +1280,7 @@ final class InlineComposeControllerTests {
         progress.note("動き始めのコマを比べた")
 
         // 本物を隠している間は、複製が動いている。隠すのをやめる直前のコマを着地のコマとして残し、本物に替えた最初のコマと比べる。
-        // 送信の状態の表示のように、本物に替えてから浮かび上がらせるものがあるので、止まったあとの画面とは比べない。
+        // カプセルの写真同士の影のように、本物に替えてから浮かび上がらせるものがあるので、止まったあとの画面とは比べない。
         var landing: (image: CGImage, at: TimeInterval)?
         var target: UIView?
         var revealed: CGImage?
