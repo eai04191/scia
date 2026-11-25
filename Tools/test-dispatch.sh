@@ -163,7 +163,6 @@ remote() {
         0)
             remember "$target" "$tree"
             fetch_checked_app || true
-            fetch_timing "$tree" || true
             ;;
         "$NOT_ACCEPTED")
             exit "$NOT_ACCEPTED"
@@ -233,19 +232,6 @@ fetch_checked_app() {
     mv "$incoming" DerivedData/checked
     results_ssh "rm -rf $app" || true
     echo "確かめた中身のアプリは${PWD}/DerivedData/checked/Scia.appに受け取りました"
-}
-
-# 別のMacで通ったmake testの1件ずつの時間を受け取り、手元に覚える。make checkだけの回は時間がない
-# 受け取れなければ記録がないままになり、マージキューがmake testを走らせ直して作るので、失敗しても終了コードに影響させない
-fetch_timing() {
-    local timing="~/scia/timing/$id.tsv" content
-    results_ssh "test -f $timing" || return 0
-    # 途中で接続が切れた記録を覚えないよう、受け取り終えてから渡す
-    if ! content=$(results_ssh "cat $timing") || ! Tools/test-timing.py import "$1" <<< "$content"; then
-        echo "テストの時間を受け取れませんでした。$SCIA_REMOTE_HOST の $timing に残っています" >&2
-        return 1
-    fi
-    results_ssh "rm -f $timing" || true
 }
 
 # 接続が固まってmainへ入れる列を止めないよう、応答がなくなったら諦める

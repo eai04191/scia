@@ -60,7 +60,7 @@ on_term() {
     exit 143
 }
 
-mkdir -p ~/scia/logs ~/scia/jobs ~/scia/results ~/scia/apps ~/scia/timing
+mkdir -p ~/scia/logs ~/scia/jobs ~/scia/results ~/scia/apps
 echo "$$" > ~/scia/jobs/"$id".pid
 trap 'rm -rf "$incoming" ~/scia/jobs/"$id".pid' EXIT
 trap on_term TERM
@@ -122,7 +122,6 @@ limit 40 xcrun simctl shutdown "$sim"
 find ~/scia/logs -type f -mtime +7 -delete
 find ~/scia/results -mindepth 1 -maxdepth 1 -mtime +7 -exec rm -rf {} +
 find ~/scia/apps -mindepth 1 -maxdepth 1 -mtime +1 -exec rm -rf {} +
-find ~/scia/timing -type f -mtime +7 -delete
 
 if [ -n "$stopped" ]; then
     echo "貸し出しを止めたので、テストを中断しました"
@@ -143,10 +142,6 @@ fi
 # 通った回のアプリ（Tools/keep-checked-app.shが残したもの）を、Tools/test-dispatch.shが依頼のIDで受け取れる場所へコピーする。作業コピーは次の依頼が上書きするため
 if [ "$result" -eq 0 ] && [ -d "$work/DerivedData/checked" ]; then
     cp -Rc "$work/DerivedData/checked" ~/scia/apps/"$id"
-fi
-# 通った回の1件ずつのテストの時間（make testがTools/test-timing.pyで作業コピーの.gitに覚えたもの）を、依頼のIDで受け取れる場所へ移す。make checkだけの回はない
-if [ "$result" -eq 0 ] && [ -f "$work/.git/scia-check/timing/$tree.tsv" ]; then
-    mv "$work/.git/scia-check/timing/$tree.tsv" ~/scia/timing/"$id".tsv
 fi
 grep -aE ': error: |\*\*\*|✘ Test|Test run with' "$log" | tail -30 | cut -c1-240
 # 落ちた対象の出力（Tools/check-logged.shの見出しから見出しまで）は、形で選んだ行に入らないことがあるので、そのまま返す

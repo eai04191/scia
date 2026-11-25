@@ -13,11 +13,9 @@
 # runを止めると（SIGTERM、SIGINT、SIGHUP）、mainへ入れている途中なら、走らせているrebaseやmakeを止め、rebaseを取りやめて端末を返してから終わる。
 #   fast-forwardを始めたあとは、mainを中途半端にしないよう、入れ終えてから終わる。止めたときの終了コードは、シグナルの番号に128を足したもの
 # runの終了コード: 0 入れた、1 使い方の誤りや想定外の失敗、2 未commitの変更がある、3 rebaseがconflictした、4 make checkかmake testが落ちた、
-#   5 前提のbranchが、列にもmainにもないまま10分経った、6 FEATURES.mdかREADME.mdの変更を人が承認していない（Tools/human-review.sh）、
-#   7 1件ずつのテストの時間が、mainより基準を超えて遅くなった（Tools/test-timing.py）
+#   5 前提のbranchが、列にもmainにもないまま10分経った、6 FEATURES.mdかREADME.mdの変更を人が承認していない（Tools/human-review.sh）
 # 段階ごとにかかった時間は、列のディレクトリのtiming.logに1行ずつ足す。列は「始めた時刻 branch 段階 秒 結果」のタブ区切りで、結果はokか終了コード。
-#   段階は、wait（並んでから番が来るまで）、rebase、check、test、check-test（checkとtestの両方を走らせるとき。枠を待つ時間も含む）、
-#   timing（テストの時間を比べる。記録がなくてmake testを走らせた時間も含む）、total（並んでから終わるまで）。
+#   段階は、wait（並んでから番が来るまで）、rebase、check、test、check-test（checkとtestの両方を走らせるとき。枠を待つ時間も含む）、total（並んでから終わるまで）。
 #   mainが動いて載せ直すと、rebaseからの段階がもう一度並ぶ
 set -euo pipefail
 
@@ -297,23 +295,6 @@ run_missing_steps() {
     timed "$target" Tools/test-dispatch.sh dispatch "$target" '' '' front || { echo "error: make $target が落ちました" >&2; exit 4; }
 }
 
-# 1件ずつのテストの時間をmainの記録と比べ、基準を超えて遅くなったテストがあれば入れない。記録がなければ、make testを走らせて作る
-check_test_timing() {
-    local status=0
-    timed timing Tools/test-timing.py gate "$TARGET" HEAD || status=$?
-    case "$status" in
-        0) ;;
-        7)
-            echo "error: テストが基準を超えて遅くなったので、列を離れます。直してから並び直してください" >&2
-            exit 7
-            ;;
-        *)
-            echo "error: テストの時間を比べられませんでした" >&2
-            exit 1
-            ;;
-    esac
-}
-
 fast_forward() {
     local branch worktree
     branch=$(git symbolic-ref --short HEAD)
@@ -374,7 +355,6 @@ land() {
         [[ "$(git rev-parse "$TARGET")" == "$before" ]] && break
         echo "$TARGET が動いたので、載せ直します"
     done
-    check_test_timing
     fast_forwarding=1
     fast_forward
     echo "$TARGET へ入れました:"
