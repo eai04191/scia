@@ -29,6 +29,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `make test-core`: SciaCoreのテスト（macOS上、シミュレーター不要）
 - `make build`: シミュレーター向けにビルドする
 - `make test`: シミュレーターでテストする。`SIM='<端末>'`で指定もできるが、貸し借りする端末は借りているものしか受け付けない。端末のiOSの版で初めて走らせたときは、UIKitの公開されていない作りに頼る部分のUIテスト（`SciaSystemUITests`）も走らせる
+- `make test`と`make check-test`は、全部を走らせて通ると、1件ずつのテストの時間を分岐元のmainと比べ、基準を超えて遅くなったテストを出す。merge-to-mainはそのままでは止まるので、出たら報告の前に直す（[docs/test-dispatch.md](docs/test-dispatch.md)の「テストの時間」）
 - `make test ONLY='SciaTests/LinkLabelTests'`: 一部のテストだけを走らせる。手元で走り、このworktreeが借りている端末を使うので、先に借りる。識別子は空白で区切って複数渡せる。`xcodebuild ... test`を直接走らせるときは、`-collect-test-diagnostics never`を付ける。付けないと、テストが失敗したときにシミュレーターの診断を集め、応答を待って10分止まる
 - `make check`: 変更を報告する前に必ず通す
 - `make check-test`: `make check`と`make test`を、続けて走らせるより早く両方走らせる

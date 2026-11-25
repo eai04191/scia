@@ -77,6 +77,19 @@ SCIA_REMOTE_SIMS=('Scia Remote 1' 'Scia Remote 2')
 - `runner`で、`xcrun simctl create 'Scia Remote <番号>' com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro com.apple.CoreSimulator.SimRuntime.iOS-27-2`で、`SCIA_REMOTE_SIMS`の端末を作る
 - `runner`で、作った端末ごとに`simslim on <UDID> --except photos`を走らせる。手元の`Scia 1`〜`4`と同じく、メモリを減らすため
 
+## テストの時間
+
+テストを遅くする変更をmainに入れないため、1件ずつのテストの時間を比べる（`Tools/test-timing.py`）。
+
+- `make test`が全部を走らせて通ると、xcresultから1件ずつの時間を読み、`.git`の共通ディレクトリの`scia-check/timing/<tree>.tsv`に覚える。走らせたMacの名前も書く。どのworktreeのブランチも、比べる元のmainの記録を読めるよう、worktreeの中ではなく共通ディレクトリに置く
+- 別のMacで通った回は、別のMacが作業コピーの`.git`に覚えた記録を`~/scia/timing/<依頼のID>.tsv`へ移し、入口が受け取って手元で覚え、別のMacの分を消す。受け取れなければ別のMacに7日残り、マージキューは記録がないものとして`make test`を走らせ直す
+- 通ったあと、`make test`と`make check-test`は、`ONLY`を指定していなければ、今の作業ツリーのtreeを分岐元のmainの記録と比べて、基準を超えたテストを出す。分岐元の記録がないときと、走らせている間に作業ツリーを変えて記録がないときは比べない
+- マージキューは、fast-forwardの前にmainの記録と比べ、基準を超えたテストがあれば終了コード7で止める。mainか作業branchの記録がなければ、その中身で`make test`を走らせて作る。mainの分は、`.git`の共通ディレクトリの`scia-test-timing-base`に一時的なworktreeを作って走らせ、終わったら消す
+- 比べる元のmainのcommitにこの仕組み（`Tools/test-timing.py`）がなければ、`make test`を走らせても記録ができないので比べない。この仕組みをmainへ入れる1回だけ起きる
+- Markdownとサーバーのリストだけが違うcommitは、テストの中身が同じなので、`Tools/check-stamp.sh`と同じく、さかのぼって記録のあるcommitの記録を使う
+- 基準は、1秒以上かつ2倍以上遅くなったテストと、新しく足した1秒以上のテスト
+- テストのビルドの時間は比べない
+
 ## 落ちたテストの記録
 
 - `make test`の記録: 全部を走らせると、`DerivedData/test-logs/watch-<時刻>`に実行中の負荷（`load.log`）と、30秒たっても終わらないSciaCoreのテストのスタック（`<テストの名前>-<ハッシュ>.sample.txt`。名前の英数字のほかは`_`になるので、どのテストかは末尾の`test:`の行で見る）が残る。落ちた回の`.xcresult`と、その回の`watch-<時刻>`のコピーは、`DerivedData/test-logs/failed-<時刻>`に残る

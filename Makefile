@@ -99,14 +99,18 @@ TEST_TREE := $(DERIVED_DATA)/test-tree
 TEST_ARGS = -project $(PROJECT) -scheme $(SCHEME) -destination 'platform=iOS Simulator,name=$(SIM)' -derivedDataPath $(DERIVED_DATA) $(CACHE_XCCONFIG) -collect-test-diagnostics never
 ## 決めた端末をSIMに入れて呼び直す。テストの間ずっと、処理の引数に端末の名前が残り、Tools/sim.sh busyが使っている処理として見つけられるようにするため
 ## SIMもONLYもなければ、テストを任せる別のMacと手元の、空いている枠で走らせるので、端末は借りなくてよい（docs/test-dispatch.md）。手元ではtest-here
+## 全部を走らせて通ったら、1件ずつのテストの時間を分岐元のmainと比べ、基準を超えて遅くなったテストを出す（Tools/test-timing.py）
 test:
 	@Tools/test-dispatch.sh dispatch test '$(SIM)' '$(ONLY)'
+	@$(if $(strip $(ONLY)),:,Tools/test-timing.py warn)
 
 ## 手元の端末で走らせる
 test-here: generate
 	@sim=$$(Tools/sim.sh leased '$(SIM)') && $(MAKE) --no-print-directory test-on-sim SIM="$$sim"
 
 ## make testから、走らせる端末を決めたあとに呼ぶ。直接は走らせない
+## 結果のファイルの名前に付ける時刻。通ったあとの行が、同じ回のxcresultから1件ずつのテストの時間を読むので、makeの変数で揃える
+test-on-sim: TEST_STAMP := $(shell date +%Y.%m.%d_%H-%M-%S)
 test-on-sim:
 	@mkdir -p $(DERIVED_DATA) && Tools/check-stamp.sh tree > $(TEST_TREE)
 	@# アクセシビリティの要素を作る設定（Tools/sim.sh dumpが入れる）を切る。アプリは起動時にこの設定を読むので、端末の前の状態でテストの結果が変わらないよう、テストのアプリを起動する前に揃える
@@ -122,7 +126,7 @@ else
 	@# 止められたら、どちらのxcodebuildも止めて終わるのを待つ。前で走らせると、シェルはそれが終わるまで止める合図を扱わないので、どちらも後ろで走らせて待つ
 	@# Tools/watch-tests.shが、負荷と、なかなか終わらないSciaCoreのテストのスタックをtest-logs/watch-<時刻>に残す。Xcodeの結果のファイルは古いものから消えるので、落ちた回の分は、負荷の記録と一緒にtest-logs/failed-<時刻>にコピーする。取っている途中のスタックが欠けないよう、止めたあとに終わりを待ってからコピーする。別のMacで走った回は、このフォルダーだけが手元に届く
 	@# 結果のファイルの名前は始めた秒で決まり、同時に始めると重なるので、SciaCoreTestsの分は名前を決めて書く。出力は混ざらないよう、ファイルに書いて落ちたときだけ出す
-	@stamp=$$(date +%Y.%m.%d_%H-%M-%S); mkdir -p $(DERIVED_DATA)/test-logs; core_log=$(DERIVED_DATA)/test-logs/SciaCore-$$stamp.log; \
+	@stamp=$(TEST_STAMP); mkdir -p $(DERIVED_DATA)/test-logs; core_log=$(DERIVED_DATA)/test-logs/SciaCore-$$stamp.log; \
 	stop() { kill $$core $$app $$watch 2>/dev/null; wait; echo "SciaCoreTestsとTextKit2LabelTestsの出力は$$core_log"; exit $$1; }; \
 	trap 'stop 129' HUP; trap 'stop 130' INT; trap 'stop 143' TERM; \
 	xcodebuild $(TEST_ARGS) -resultBundlePath "$(DERIVED_DATA)/Logs/Test/SciaCore-$$stamp.xcresult" -only-testing:SciaCoreTests -only-testing:TextKit2LabelTests test-without-building > "$$core_log" 2>&1 & core=$$!; \
@@ -136,6 +140,7 @@ else
 	Tools/system-ui-check.sh '$(SIM)' $(DERIVED_DATA)
 	@Tools/check-stamp.sh record test "$$(cat $(TEST_TREE))"
 	@Tools/keep-checked-app.sh "$$(cat $(TEST_TREE))" $(DERIVED_DATA)
+	@Tools/test-timing.py record "$$(cat $(TEST_TREE))" "$(DERIVED_DATA)/Logs/Test/SciaCore-$(TEST_STAMP).xcresult" "$(DERIVED_DATA)/Logs/Test/Scia-$(TEST_STAMP).xcresult"
 endif
 
 ## シミュレーターのハードウェアキーボードを外してソフトウェアキーボードを出す（KEYBOARD=hardwareでつなぎ直す）
@@ -250,6 +255,7 @@ TEST_STATUS := $(DERIVED_DATA)/test-status
 ## SIMもONLYもなければ、テストを任せる別のMacと手元の、空いている枠で走らせる（docs/test-dispatch.md）。手元ではcheck-test-here
 check-test:
 	@Tools/test-dispatch.sh dispatch check-test '$(SIM)' '$(ONLY)'
+	@$(if $(strip $(ONLY)),:,Tools/test-timing.py warn)
 
 check-test-here: generate
 	@mkdir -p $(DERIVED_DATA) && Tools/check-stamp.sh tree > $(CHECK_TREE)

@@ -1,8 +1,10 @@
 """エージェント共通の端末操作とマージキューを、実端末や本物のmainに触れずに検証する。"""
+import importlib.util
 import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import tempfile
 import time
@@ -116,6 +118,7 @@ class MergeQueueTests(unittest.TestCase):
         (self.root / 'Tools/generate-app-info.py').write_text('import sys\nassert sys.argv[1:] == ["--check"]\n')
         self.script('human-review.sh', '#!/bin/sh\n[ "${SCIA_TEST_HUMAN_MISSING:-0}" != 1 ] || echo README.md\nexit 0\n')
         self.script('test-dispatch.sh', '#!/bin/sh\n[ "$1 $2" = "dispatch check-test" ] || exit 90\nprintf "%s\\n" "$(git branch --show-current)" >> "$(git rev-parse --git-common-dir)/tested"\nexit "${SCIA_TEST_CHECK_EXIT:-0}"\n')
+        self.script('test-timing.py', '#!/bin/sh\n[ "$1 $2 $3" = "gate main HEAD" ] || exit 90\nexit "${SCIA_TEST_TIMING_EXIT:-0}"\n')
         self.git('add', '.')
         self.git('commit', '-qm', 'fixture')
         self.initial = self.git('rev-parse', 'HEAD')
@@ -150,7 +153,8 @@ class MergeQueueTests(unittest.TestCase):
 
     def test_failed_check_and_missing_human_approval_leave_main_unchanged(self):
         work = self.branch('feature')
-        for environment, expected in [({'SCIA_TEST_CHECK_EXIT': '1'}, 4), ({'SCIA_TEST_HUMAN_MISSING': '1'}, 6)]:
+        for environment, expected in [({'SCIA_TEST_CHECK_EXIT': '1'}, 4), ({'SCIA_TEST_HUMAN_MISSING': '1'}, 6),
+                                      ({'SCIA_TEST_TIMING_EXIT': '7'}, 7)]:
             with self.subTest(environment=environment):
                 result = self.run_queue(work, **environment)
                 self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
@@ -191,6 +195,142 @@ class MergeQueueTests(unittest.TestCase):
         self.assertTrue((self.root / 'first').is_file())
         self.assertTrue((self.root / 'second').is_file())
         self.assertEqual(self.git('rev-parse', 'main'), self.git('rev-parse', 'second'))
+
+
+class TestTimingTests(unittest.TestCase):
+    """1件ずつのテストの時間をmainの記録と比べ、基準を超えて遅くなったテストでだけ止める。"""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve() / 'repo'
+        self.root.mkdir()
+        self.git('init', '-q', '-b', 'main')
+        self.git('config', 'user.name', 'Workflow test')
+        self.git('config', 'user.email', 'workflow@example.invalid')
+        (self.root / 'Tools').mkdir()
+        (self.root / 'Config').mkdir()
+        (self.root / 'Config/.keep').write_text('')
+        shutil.copy2(ROOT / 'Tools/test-timing.py', self.root / 'Tools/test-timing.py')
+        # make testの代わりに、走らせた中身のtreeへ、SCIA_TEST_TIMINGの時間を記録する。どのcommitで走ったかを残す
+        dispatch = self.root / 'Tools/test-dispatch.sh'
+        dispatch.write_text('#!/bin/sh\n[ "$1 $2 $5" = "dispatch test front" ] || exit 90\n'
+                            'git rev-parse HEAD >> "$(git rev-parse --git-common-dir)/tested"\n'
+                            'printf "# host runner\\n%s\\n" "$SCIA_TEST_TIMING" | Tools/test-timing.py import "$(git rev-parse HEAD^{tree})"\n')
+        dispatch.chmod(0o755)
+        self.commit('code', 'base')
+        self.base = self.git('rev-parse', 'HEAD')
+
+    def git(self, *arguments):
+        return subprocess.check_output(['git', *arguments], cwd=self.root, text=True, stderr=subprocess.PIPE).strip()
+
+    def commit(self, name, content):
+        (self.root / name).write_text(content)
+        self.git('add', '-A')
+        self.git('commit', '-qm', name)
+
+    def record(self, commit, **durations):
+        directory = self.root / '.git/scia-check/timing'
+        directory.mkdir(parents=True, exist_ok=True)
+        lines = ['# host local'] + [f'SciaTests/Suite/{name}()\t{seconds}' for name, seconds in durations.items()]
+        (directory / f'{self.git("rev-parse", commit + "^{tree}")}.tsv').write_text('\n'.join(lines) + '\n')
+
+    def gate(self, timing=''):
+        return subprocess.run(['Tools/test-timing.py', 'gate', self.base, 'HEAD'], cwd=self.root, text=True,
+                              capture_output=True, timeout=30, env=dict(os.environ, SCIA_TEST_TIMING=timing))
+
+    def test_stops_only_on_tests_slower_beyond_both_limits(self):
+        self.record(self.base, doubled=1.0, slightly=1.5, tiny=0.1)
+        self.commit('code', 'branch')
+        cases = [
+            ({'doubled': 1.9, 'slightly': 1.5, 'tiny': 0.1}, 0),
+            ({'doubled': 1.0, 'slightly': 2.6, 'tiny': 0.1}, 0),
+            ({'doubled': 1.0, 'slightly': 1.5, 'tiny': 0.9}, 0),
+            ({'doubled': 1.0, 'slightly': 1.5, 'tiny': 0.1, 'added': 0.9}, 0),
+            ({'doubled': 2.0, 'slightly': 1.5, 'tiny': 0.1}, 7),
+            ({'doubled': 1.0, 'slightly': 1.5, 'tiny': 0.1, 'added': 1.0}, 7),
+        ]
+        for durations, expected in cases:
+            with self.subTest(durations=durations):
+                self.record('HEAD', **durations)
+                result = self.gate()
+                self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+        self.assertIn('SciaTests/Suite/added()  新しいテスト 1.00秒', result.stdout)
+        self.assertFalse((self.root / '.git/tested').exists())
+
+    def test_names_tests_by_bundle_whatever_the_project(self):
+        spec = importlib.util.spec_from_file_location('test_timing', ROOT / 'Tools/test-timing.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(module.test_name('test://com.apple.xcode/Scia/SciaTests/Suite/case(value:)?args=abc'),
+                         'SciaTests/Suite/case(value:)')
+        self.assertEqual(module.test_name('test://com.apple.xcode/SciaCore/SciaCoreTests/Suite/case()'),
+                         'SciaCoreTests/Suite/case()')
+
+    def test_markdown_only_commit_uses_the_record_of_its_ancestor(self):
+        self.record(self.base, case=1.0)
+        self.commit('README.md', 'docs')
+        self.record('HEAD~1', case=1.0)
+        self.commit('code', 'branch')
+        self.record('HEAD', case=1.0)
+        self.base = self.git('rev-parse', 'HEAD~1')
+        result = self.gate()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse((self.root / '.git/tested').exists())
+
+    def test_runs_make_test_on_base_without_record_and_removes_its_worktree(self):
+        self.commit('code', 'branch')
+        self.record('HEAD', **{'case': 3.0})
+        result = self.gate(timing='SciaTests/Suite/case()\t1.0')
+        self.assertEqual(result.returncode, 7, result.stdout + result.stderr)
+        self.assertEqual((self.root / '.git/tested').read_text().split(), [self.base])
+        self.assertFalse((self.root / '.git/scia-test-timing-base').exists())
+        self.assertEqual(len(self.git('worktree', 'list').splitlines()), 1)
+
+    def test_base_without_timing_tool_is_not_compared(self):
+        self.git('rm', '-q', 'Tools/test-timing.py')
+        self.git('commit', '-qm', 'before timing')
+        self.base = self.git('rev-parse', 'HEAD')
+        shutil.copy2(ROOT / 'Tools/test-timing.py', self.root / 'Tools/test-timing.py')
+        self.commit('code', 'branch')
+        result = self.gate()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('記録する仕組みがないので、比べません', result.stdout)
+        self.assertFalse((self.root / '.git/tested').exists())
+
+    def test_stopping_base_run_waits_for_make_test_and_removes_its_worktree(self):
+        (self.root / 'Tools/test-dispatch.sh').write_text('#!/bin/sh\ntrap \'echo cleaned > "$(git rev-parse --git-common-dir)/cleaned"; exit 143\' TERM\nwhile :; do sleep 0.1; done\n')
+        # 比べる元のcommitのworktreeで走るので、止まらないmake testを比べる元に入れる
+        self.commit('code', 'base that never finishes testing')
+        self.base = self.git('rev-parse', 'HEAD')
+        self.commit('code', 'branch')
+        self.record('HEAD', case=1.0)
+        worktree = self.root / '.git/scia-test-timing-base'
+        gate = subprocess.Popen(['Tools/test-timing.py', 'gate', self.base, 'HEAD'], cwd=self.root, text=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
+        try:
+            deadline = time.monotonic() + 10
+            while not (worktree / 'Tools/test-dispatch.sh').exists() or not self.git('worktree', 'list').count('scia-test-timing-base'):
+                self.assertIsNone(gate.poll())
+                self.assertLess(time.monotonic(), deadline)
+                time.sleep(0.05)
+            time.sleep(0.5)
+            os.killpg(gate.pid, signal.SIGTERM)
+            output, _ = gate.communicate(timeout=10)
+        finally:
+            if gate.poll() is None:
+                os.killpg(gate.pid, signal.SIGKILL)
+        self.assertEqual(gate.returncode, 128 + signal.SIGTERM, output)
+        self.assertTrue((self.root / '.git/cleaned').exists())
+        self.assertFalse(worktree.exists())
+        self.assertEqual(len(self.git('worktree', 'list').splitlines()), 1)
+
+    def test_code_change_without_record_runs_make_test_here(self):
+        self.record(self.base, case=1.0)
+        self.commit('code', 'branch')
+        result = self.gate(timing='SciaTests/Suite/case()\t1.0')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((self.root / '.git/tested').read_text().split(), [self.git('rev-parse', 'HEAD')])
 
 
 class CheckLoggedTests(unittest.TestCase):
