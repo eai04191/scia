@@ -1337,9 +1337,12 @@ final class InlineComposeControllerTests {
         let (b, expectedWidth, expectedHeight) = try pixels(of: expected, in: pixelRect.insetBy(dx: -1, dy: -1), sourceLocation: sourceLocation)
         try #require(width + 2 == expectedWidth && height + 2 == expectedHeight, "範囲がウィンドウの端にかかっています", sourceLocation: sourceLocation)
         var differing = 0
+        // 外れた画素の位置（範囲の左上からの画素）と、色と、許した色の範囲。範囲の端の画素は範囲の外の画素とも比べるので、残す画像だけでは読めない。
+        var samples: [String] = []
         for y in 0 ..< height {
             for x in 0 ..< width {
                 let index = (y * width + x) * 4
+                var ranges: [String] = []
                 let inRange = (0 ..< 3).allSatisfy { channel in
                     var low = 255
                     var high = 0
@@ -1351,12 +1354,18 @@ final class InlineComposeControllerTests {
                         }
                     }
                     let value = Int(a[index + channel])
+                    ranges.append("\(value) in \(low)...\(high)")
                     return value >= low - Self.drawingTolerance && value <= high + Self.drawingTolerance
                 }
-                if !inRange { differing += 1 }
+                if !inRange {
+                    differing += 1
+                    if samples.count < 5 {
+                        samples.append("(\(x), \(y)) \(ranges.joined(separator: ", "))")
+                    }
+                }
             }
         }
-        #expect(differing == 0, "\(message): \(differing)画素が違います", sourceLocation: sourceLocation)
+        #expect(differing == 0, "\(message): \(differing)画素が違います（範囲\(width)×\(height)画素。\(samples.joined(separator: "; "))）", sourceLocation: sourceLocation)
         if differing > 0 {
             // どこが違うかを見られるよう、比べた範囲の2枚を残す。
             for (image, name) in [(actual, "actual"), (expected, "expected")] {
