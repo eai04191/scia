@@ -1243,7 +1243,9 @@ final class InlineComposeControllerTests {
         let progress = StallProgress.current
         let composer = try installComposer(media: .localOnly(kind: kind, failing: failing)) { _ in }
         composer.model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
-        composer.beginEditing()
+        if !opening {
+            composer.beginEditing()
+        }
         composer.model.applyPickerSelection([try await pickedMedia(kind: kind)])
         progress.note("添付のファイルを書き出した")
         try await waitUntil {
@@ -1258,10 +1260,6 @@ final class InlineComposeControllerTests {
         progress.note("添付の送信を終えた")
         try await waitUntilSettled()
         let id = try #require(composer.model.attachments.first?.id)
-        if opening {
-            composer.endEditing()
-            try await waitUntilSettled()
-        }
         useDefaultAnimationDurations()
         let strip = { try #require(self.attachmentStrips(in: self.window).first?.tile(for: id)) }
         let capsule = { try #require(self.restContents(in: self.window).first?.thumbnails.photo(for: id)) }
@@ -1291,6 +1289,10 @@ final class InlineComposeControllerTests {
                 break
             }
             target = current
+            // 本物に替えるのは動きの終わりの処理なので、動きがすべて終わる直前のコマだけを描く。
+            try await clock.advanceToFrameBeforeLastEnd()
+            // 最後の動きより前に本物に替わると、替えたあとのコマを着地として比べてしまうので、そのときは落とす。
+            try #require(current.alpha == 0, "動きがすべて終わる前に、行き先の本物に替わりました（\(clock.now)秒）")
             landing = (try drawWindow(), clock.now)
             try await clock.advance(by: LayerClock.frame)
         }
@@ -1339,29 +1341,41 @@ final class InlineComposeControllerTests {
         var differing = 0
         // 外れた画素の位置（範囲の左上からの画素）と、色と、許した色の範囲。範囲の端の画素は範囲の外の画素とも比べるので、残す画像だけでは読めない。
         var samples: [String] = []
+        func allowed(x: Int, y: Int, channel: Int) -> (low: Int, high: Int) {
+            var low = 255
+            var high = 0
+            for ny in y ... y + 2 {
+                for nx in x ... x + 2 {
+                    let value = Int(b[(ny * expectedWidth + nx) * 4 + channel])
+                    low = min(low, value)
+                    high = max(high, value)
+                }
+            }
+            return (low, high)
+        }
         for y in 0 ..< height {
             for x in 0 ..< width {
                 let index = (y * width + x) * 4
-                var ranges: [String] = []
-                let inRange = (0 ..< 3).allSatisfy { channel in
-                    var low = 255
-                    var high = 0
-                    for ny in y ... y + 2 {
-                        for nx in x ... x + 2 {
-                            let value = Int(b[(ny * expectedWidth + nx) * 4 + channel])
-                            low = min(low, value)
-                            high = max(high, value)
-                        }
-                    }
-                    let value = Int(a[index + channel])
-                    ranges.append("\(value) in \(low)...\(high)")
-                    return value >= low - Self.drawingTolerance && value <= high + Self.drawingTolerance
+                // まわりの画素に同じ位置の画素も入るので、同じ位置の画素と余裕の中で一致すれば、範囲に入る。ほとんどの画素はこれで済み、まわりを見ずに済む。
+                let center = ((y + 1) * expectedWidth + x + 1) * 4
+                if abs(Int(a[index]) - Int(b[center])) <= Self.drawingTolerance,
+                   abs(Int(a[index + 1]) - Int(b[center + 1])) <= Self.drawingTolerance,
+                   abs(Int(a[index + 2]) - Int(b[center + 2])) <= Self.drawingTolerance {
+                    continue
                 }
-                if !inRange {
-                    differing += 1
-                    if samples.count < 5 {
-                        samples.append("(\(x), \(y)) \(ranges.joined(separator: ", "))")
+                let inRange = (0 ..< 3).allSatisfy { channel in
+                    let range = allowed(x: x, y: y, channel: channel)
+                    let value = Int(a[index + channel])
+                    return value >= range.low - Self.drawingTolerance && value <= range.high + Self.drawingTolerance
+                }
+                guard !inRange else { continue }
+                differing += 1
+                if samples.count < 5 {
+                    let ranges = (0 ..< 3).map { channel in
+                        let range = allowed(x: x, y: y, channel: channel)
+                        return "\(a[index + channel]) in \(range.low)...\(range.high)"
                     }
+                    samples.append("(\(x), \(y)) \(ranges.joined(separator: ", "))")
                 }
             }
         }
@@ -1400,7 +1414,7 @@ final class InlineComposeControllerTests {
         switch kind {
         case .video, .gifv:
             let url = folder.appending(path: "m.mp4")
-            try await TestVideo.write(width: 32, height: 32, withAudio: false, to: url)
+            try FileManager.default.copyItem(at: try #require(Bundle(for: Self.self).url(forResource: "attachment", withExtension: "mp4")), to: url)
             file = LocalMediaFile(url: url, mimeType: "video/mp4", kind: kind)
         default:
             let url = folder.appending(path: "m.jpg")
