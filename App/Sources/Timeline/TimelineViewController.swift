@@ -168,6 +168,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private var gapFailures: [String: ErrorPresentation] = [:]
     private(set) var isShowingMenu = false
     private var swipeCloseTicker: FrameTicker?
+    /// 位置を保って並びを置き換えたあと、スクロール位置が一度に大きく動かないかを見張る間の、基準の要素、直前の位置、見張りを終える時刻。
+    private var offsetLeapWatch: (anchorID: ItemID, offset: CGFloat, until: CFTimeInterval)?
+    /// 直前の`restore`で位置を合わせ直した回数と、合わせ終えたか。
+    private var lastRestore = (steps: 0, settled: true)
     /// スワイプのボタンを閉じる途中に届いた並びの更新。閉じ終えたときに反映する。
     private var heldEntries: HeldEntries?
     /// 画面に出ていない間（ほかのタブ、上に重ねた画面の下）に、絵文字やXの投稿が届いて求められた描き直し。画面に出るときに描き直す。
@@ -1386,9 +1390,16 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             }
             logger.info("setEntries count=\(newEntries.count, privacy: .public) followsTop=true animated=\(animates, privacy: .public)")
         } else {
+            let offsetBefore = collectionView.contentOffset.y
+            let heightBefore = collectionView.contentSize.height
+            let phase = scrollPhase
             // このあと下の行ごと動かして描き直す行も、高さが変わるので、位置を保つ基準にしない。
             let anchor = applyPreservingAnchor(snapshot, keeping: anchorID, resizing: Set(snapshot.reconfiguredItemIdentifiers).union(resizedIDs).union(reactionChangedIDs))
-            logger.info("setEntries count=\(newEntries.count, privacy: .public) anchor=\(anchor.map { Self.label($0.id) } ?? "nil", privacy: .public)")
+            let kept = anchor.flatMap { distanceFromVisibleTop(of: $0.id) }
+            logger.info("setEntries count=\(newEntries.count, privacy: .public) anchor=\(anchor.map { Self.label($0.id) } ?? "nil", privacy: .public) requested=\(anchorID.map(Self.label) ?? "nil", privacy: .public) distance=\(Self.number(anchor?.distanceFromVisibleTop), privacy: .public)→\(Self.number(kept), privacy: .public) offset=\(Self.number(offsetBefore), privacy: .public)→\(Self.number(self.collectionView.contentOffset.y), privacy: .public) contentHeight=\(Self.number(heightBefore), privacy: .public)→\(Self.number(self.collectionView.contentSize.height), privacy: .public) restoreSteps=\(self.lastRestore.steps, privacy: .public) settled=\(self.lastRestore.settled, privacy: .public) scroll=\(phase, privacy: .public)")
+            if let anchor {
+                offsetLeapWatch = (anchor.id, collectionView.contentOffset.y, mediaTime() + 1)
+            }
         }
         if threadFocusID != nil {
             updateBottomInset()
@@ -3012,6 +3023,7 @@ extension TimelineViewController: UICollectionViewDelegate {
     }
 
     private func handleScroll(_ scrollView: UIScrollView) {
+        checkOffsetLeap()
         prepareBodiesAroundVisibleRows()
         if scrollView.isTracking {
             // 指が下へ動いていれば、内容は上の新しい投稿の方へ動く。
@@ -3539,15 +3551,54 @@ extension TimelineViewController {
     /// contentOffsetを動かすと、新たに表示されたセルが推定サイズから実サイズへ変わり、基準の位置がまたずれる。
     /// そのため、基準の位置が変わらなくなるまで補正を繰り返す。
     private func restore(_ anchor: ScrollAnchor) {
-        for _ in 0..<8 {
+        for step in 0..<8 {
             collectionView.layoutIfNeeded()
             guard let indexPath = dataSource.indexPath(for: anchor.id),
                   let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame
-            else { return }
+            else {
+                lastRestore = (step, false)
+                return
+            }
             let target = frame.minY - anchor.distanceFromVisibleTop - collectionView.adjustedContentInset.top
-            if abs(collectionView.contentOffset.y - target) < 0.01 { return }
+            if abs(collectionView.contentOffset.y - target) < 0.01 {
+                lastRestore = (step, true)
+                return
+            }
             collectionView.contentOffset.y = target
         }
+        lastRestore = (8, false)
+    }
+
+    /// 指で動かしているか、慣性で動いているか。位置を保ったときのログに出す。
+    private var scrollPhase: String {
+        if collectionView.isTracking { "tracking" } else if collectionView.isDecelerating { "decelerating" } else { "idle" }
+    }
+
+    /// 位置を保って並びを置き換えたあとの1秒、スクロール位置が一度に表示領域の高さ以上動いたら、ログに出す。
+    /// 置き換えた直後に読んでいる位置が跳ぶことがあり、補正の中で起きたのか、そのあとUIKitが動かしたのかを分けるため。
+    /// 位置を変えるとスクロールの通知が届くので、通知のたびに直前の位置と比べる。ほかの補正の最中は、補正で動くので比べない。
+    private func checkOffsetLeap() {
+        guard let watch = offsetLeapWatch else { return }
+        guard mediaTime() < watch.until else {
+            offsetLeapWatch = nil
+            return
+        }
+        let offset = collectionView.contentOffset.y
+        offsetLeapWatch?.offset = offset
+        guard !isRestoringAnchor, abs(offset - watch.offset) >= collectionView.bounds.height else { return }
+        logger.info("offset leap after setEntries offset=\(Self.number(watch.offset), privacy: .public)→\(Self.number(offset), privacy: .public) remaining=\(Self.number(watch.until - self.mediaTime()), privacy: .public)s anchor=\(Self.label(watch.anchorID), privacy: .public) distance=\(Self.number(self.distanceFromVisibleTop(of: watch.anchorID)), privacy: .public) contentHeight=\(Self.number(self.collectionView.contentSize.height), privacy: .public) scroll=\(self.scrollPhase, privacy: .public)")
+    }
+
+    /// 要素の上端の、表示領域の上端からの距離。ログに出すために読むので、並べ直さずに今の位置から読む。
+    private func distanceFromVisibleTop(of id: ItemID) -> CGFloat? {
+        guard let indexPath = dataSource.indexPath(for: id),
+              let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame
+        else { return nil }
+        return frame.minY - collectionView.contentOffset.y - collectionView.adjustedContentInset.top
+    }
+
+    private static func number(_ value: CGFloat?) -> String {
+        value.map { String(format: "%.1f", Double($0)) } ?? "nil"
     }
 }
 
