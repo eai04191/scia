@@ -133,7 +133,7 @@ public enum EmojiPalette {
         return sections
     }
 
-    /// 検索の結果。個人セットのうち検索の語（ショートコード、別名、読みなど）に検索語を含むものを先に、カスタム絵文字のショートコードの一致、Unicodeの絵文字の名前と言葉の一致の順に並べる。
+    /// 検索の結果。個人セットのうち検索の語（ショートコード、別名、読みなど）に検索語を含むものを先に、カスタム絵文字のショートコードとエイリアスの一致、Unicodeの絵文字の名前と言葉の一致の順に並べる。
     /// 検索欄は日本語の入力のまま打つので、全角の英数字は半角にそろえてからショートコードと比べる。
     public static func searchResults(matching query: String, emojis: [ServerEmoji], personal: PersonalEmojiSet? = nil, standardGroups: [StandardEmojiGroup], limit: Int) -> [PaletteEmoji] {
         let normalized = query.precomposedStringWithCompatibilityMapping

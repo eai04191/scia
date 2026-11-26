@@ -460,6 +460,17 @@ private struct CompletionRowView: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(CompletionTexts.emojiAccessibilityLabel(name: emoji.shortcode))
+        case .aliasEmoji(let emoji, let alias):
+            // ショートコードと打った語が違うので、なぜ出てきたかが分かるよう、合ったエイリアスを名前の位置に置く。
+            CandidateRowLayout {
+                EmojiImage(emoji, choice: model.emojiImages.choice(animates: model.settings.animatesCustomEmojis), store: model.emojiImages)
+            } title: {
+                Text(alias).fadingTail(of: alias)
+            } subtitle: {
+                Text(":\(emoji.shortcode):").fadingTail(of: emoji.shortcode)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(CompletionTexts.emojiAccessibilityLabel(alias: alias, shortcode: emoji.shortcode))
         case .standardEmoji(let emoji):
             // 本文と同じ設定の絵（OSの絵文字かtwemoji）で、カスタム絵文字の画像と同じくらいの大きさに描く。
             // 文字ではなく画像と並べる絵なので、端末の文字の大きさではなく枠の大きさで決める。

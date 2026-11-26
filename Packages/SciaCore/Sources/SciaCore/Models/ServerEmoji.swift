@@ -12,18 +12,24 @@ public struct ServerEmoji: Decodable, Hashable, Sendable {
     /// 画像の縦横比（幅/高さ）。Fedibirdが`width`と`height`で返す。Mastodonは返さないのでnil。
     /// Mastodonでは、画像が届いたときに分かった縦横比を`CustomEmojiCache`が残し、パレットに渡すときに`withAspectRatio(_:)`で入れる。
     public let aspectRatio: Double?
+    /// 検索で比べる別の語。Fedibirdが`aliases`で、管理者が付けたキーワードに別名と読みを足して返す。Mastodonは返さないので空。
+    public let aliases: [String]
+    /// 検索で比べるために`StandardEmojiSearch.normalize`でそろえた`aliases`。打つたびに数千の語をそろえ直さないよう、作るときにそろえておく。
+    let normalizedAliases: [String]
 
-    public init(shortcode: String, url: URL, staticUrl: URL, visibleInPicker: Bool = true, category: String? = nil, aspectRatio: Double? = nil) {
+    public init(shortcode: String, url: URL, staticUrl: URL, visibleInPicker: Bool = true, category: String? = nil, aspectRatio: Double? = nil, aliases: [String] = []) {
         self.shortcode = shortcode
         self.url = url
         self.staticUrl = staticUrl
         self.visibleInPicker = visibleInPicker
         self.category = category
         self.aspectRatio = aspectRatio
+        self.aliases = aliases
+        normalizedAliases = aliases.map(StandardEmojiSearch.normalize)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case shortcode, url, staticUrl, visibleInPicker, category, width, height
+        case shortcode, url, staticUrl, visibleInPicker, category, width, height, aliases
     }
 
     /// 選択に出すかを返さないサーバーでは、出すものとして扱う。
@@ -38,6 +44,11 @@ public struct ServerEmoji: Decodable, Hashable, Sendable {
         let width = (try? container.decodeCountIfPresent(forKey: .width)) ?? nil
         let height = (try? container.decodeCountIfPresent(forKey: .height)) ?? nil
         aspectRatio = if let width, let height, width > 0, height > 0 { Double(width) / Double(height) } else { nil }
+        // Fedibirdは読みの頭に空白を入れて返すことがある。
+        aliases = ((try? container.decodeIfPresent([String].self, forKey: .aliases)) ?? [])
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        normalizedAliases = aliases.map(StandardEmojiSearch.normalize)
     }
 
     /// 同じショートコードの絵文字のうち、後に来た1件だけを、その位置に残す。Mastodonのwebも、ショートコードをキーに応答の順で保存するので、後に来たものが残る。
@@ -50,7 +61,7 @@ public struct ServerEmoji: Decodable, Hashable, Sendable {
 
     /// 縦横比を`aspectRatio`にした絵文字。
     public func withAspectRatio(_ aspectRatio: Double?) -> ServerEmoji {
-        ServerEmoji(shortcode: shortcode, url: url, staticUrl: staticUrl, visibleInPicker: visibleInPicker, category: category, aspectRatio: aspectRatio)
+        ServerEmoji(shortcode: shortcode, url: url, staticUrl: staticUrl, visibleInPicker: visibleInPicker, category: category, aspectRatio: aspectRatio, aliases: aliases)
     }
 
     public var emoji: CustomEmoji {

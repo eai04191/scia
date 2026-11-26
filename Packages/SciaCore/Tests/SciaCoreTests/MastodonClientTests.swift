@@ -1303,6 +1303,16 @@ struct MastodonClientTests {
         #expect(emojis.first { $0.shortcode == "no_size" }?.aspectRatio == nil)
     }
 
+    /// Fedibirdが返すエイリアスを、前後の空白を除いて読む。空の語は捨て、返さない絵文字は空にする。
+    @Test func customEmojisReadFedibirdAliases() async throws {
+        let transport = StubTransport([try .fixture("custom_emojis_fedibird")])
+
+        let emojis = try await makeClient(transport).customEmojis()
+
+        #expect(emojis.first { $0.shortcode == "wide_word" }?.aliases == ["くぅー疲れましたw", "くぅーつかれました"])
+        #expect(emojis.first { $0.shortcode == "no_size" }?.aliases == [])
+    }
+
     /// 同じショートコードの絵文字を返すサーバーでは、Mastodonのwebと同じく、後に来た1件だけを残す。
     /// 残すと、絵文字のパレットが同じ項目を2つ並べようとして落ちる。
     @Test func customEmojisKeepLastOfSameShortcode() async throws {

@@ -824,7 +824,7 @@ final class ProfileEditViewController: UIViewController {
             switch candidate {
             case .hashtag(let tag): addFeaturedTag(tag.name)
             case .ownHashtag(let tag): addFeaturedTag(tag.name)
-            case .account, .localAccount, .emoji, .standardEmoji: break
+            case .account, .localAccount, .emoji, .aliasEmoji, .standardEmoji: break
             }
             return true
         }
@@ -833,7 +833,7 @@ final class ProfileEditViewController: UIViewController {
             let name = switch candidate {
             case .hashtag(let tag): tag.name
             case .ownHashtag(let tag): tag.name
-            case .account, .localAccount, .emoji, .standardEmoji: String?.none
+            case .account, .localAccount, .emoji, .aliasEmoji, .standardEmoji: String?.none
             }
             guard let name else { return false }
             return editor.featuredTagNames.contains { Hashtag.normalizedName($0) == Hashtag.normalizedName(name) }

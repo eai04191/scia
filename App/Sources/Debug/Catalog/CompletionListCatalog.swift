@@ -33,6 +33,8 @@ enum CompletionListCatalog {
         let emojis: [CompletionCandidate] = [
             .emoji(ServerEmoji(shortcode: "blobcat", url: emojiURL, staticUrl: emojiURL)),
             .emoji(ServerEmoji(shortcode: "a_very_long_shortcode_for_a_custom_emoji_that_does_not_fit_in_the_list", url: emojiURL, staticUrl: emojiURL)),
+            .aliasEmoji(ServerEmoji(shortcode: "kuu_tukaremasita", url: emojiURL, staticUrl: emojiURL), alias: "くぅー疲れましたw"),
+            .aliasEmoji(ServerEmoji(shortcode: "a_very_long_shortcode_for_an_aliased_custom_emoji", url: emojiURL, staticUrl: emojiURL), alias: "候補のリストの幅に収まらない長いエイリアスで当たったカスタム絵文字"),
         ]
         // 実際の絵文字から、名前の短いものと、日本語と英語の名前が候補のリストの幅に収まらない長いもの。
         let standardEmojis: [CompletionCandidate] = ["🐈", "👍", "🧑‍🦼‍➡️", "🇬🇸"].compactMap { character in
@@ -44,7 +46,7 @@ enum CompletionListCatalog {
             CatalogState(title: "ハードウェアキーボードで2つ目を選んでいる") { list(.candidates(accounts), kind: .mention, selected: 1) },
             CatalogState(title: "広げて打っている行の下に出すとき（一番上が最優先）") { list(.candidates(accounts), kind: .mention, growsUpward: false) },
             CatalogState(title: "ハッシュタグの候補（プロフィールのタグ、最近使ったタグ、最近の投稿の件数、長い名前）") { list(.candidates(hashtags), kind: .hashtag) },
-            CatalogState(title: "カスタム絵文字の候補（長いショートコード）") { list(.candidates(emojis), kind: .emoji) },
+            CatalogState(title: "カスタム絵文字の候補（長いショートコード、エイリアスで当たったもの、長いエイリアス）") { list(.candidates(emojis), kind: .emoji) },
             CatalogState(title: "カスタム絵文字とUnicodeの絵文字の候補（Unicodeの絵文字の長い名前）") { list(.candidates(Array(emojis.prefix(1)) + standardEmojis), kind: .emoji) },
             CatalogState(title: "カスタム絵文字のリストを読み込めなかったが、Unicodeの絵文字は出せる") {
                 list(.candidatesWithFailure(Array(standardEmojis.prefix(2)), CompletionModel.failure(for: MastodonAPIError(statusCode: 502, message: "Bad Gateway"))), kind: .emoji)

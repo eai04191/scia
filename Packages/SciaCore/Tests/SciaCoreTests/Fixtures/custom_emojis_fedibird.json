@@ -6,7 +6,14 @@
     "visible_in_picker": true,
     "category": "単語（横長）",
     "width": 1426,
-    "height": 256
+    "height": 256,
+    "alternate_name": "くぅー疲れましたw",
+    "ruby": " くぅーつかれました",
+    "aliases": [
+      "くぅー疲れましたw",
+      " くぅーつかれました",
+      ""
+    ]
   },
   {
     "shortcode": "zero_height",

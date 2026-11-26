@@ -11,6 +11,8 @@ public enum CompletionCandidate: Hashable, Sendable, Identifiable {
     /// 返信先の人か、補完で選んだことのある人。サーバーの検索結果と同じ人なら、こちらだけを出す。
     case localAccount(LocalMention, LocalMentionSource)
     case emoji(ServerEmoji)
+    /// ショートコードではなくエイリアスが語に合ったカスタム絵文字。なぜ出てきたかが分かるよう、合ったエイリアスを行に出す。
+    case aliasEmoji(ServerEmoji, alias: String)
     case standardEmoji(StandardEmoji)
 
     public var id: String {
@@ -20,7 +22,7 @@ public enum CompletionCandidate: Hashable, Sendable, Identifiable {
         // サーバーが同じタグとして扱う表記は、同じ候補とみなす。
         case .hashtag(let hashtag): "hashtag:\(Hashtag.normalizedName(hashtag.name))"
         case .ownHashtag(let hashtag): "hashtag:\(Hashtag.normalizedName(hashtag.name))"
-        case .emoji(let emoji): "emoji:\(emoji.shortcode)"
+        case .emoji(let emoji), .aliasEmoji(let emoji, _): "emoji:\(emoji.shortcode)"
         case .standardEmoji(let emoji): "standardEmoji:\(emoji.emoji)"
         }
     }
@@ -32,7 +34,7 @@ public enum CompletionCandidate: Hashable, Sendable, Identifiable {
         case .localAccount(let mention, _): "@\(mention.acct)"
         case .hashtag(let hashtag): "#\(hashtag.name)"
         case .ownHashtag(let hashtag): "#\(hashtag.name)"
-        case .emoji(let emoji): ":\(emoji.shortcode):"
+        case .emoji(let emoji), .aliasEmoji(let emoji, _): ":\(emoji.shortcode):"
         case .standardEmoji(let emoji): emoji.emoji
         }
     }
@@ -57,45 +59,63 @@ public enum EmojiCompletion {
     /// カスタム絵文字とUnicodeの絵文字を、合ったところの強さで混ぜて並べる。
     /// ショートコードと一致するカスタム絵文字、名前と一致するUnicodeの絵文字、語で始まるカスタム絵文字、言葉と一致するか名前か言葉が語で始まるUnicodeの絵文字、
     /// 語を含むカスタム絵文字、語を含むか単語をつなげたものと合うUnicodeの絵文字の順にする。
+    /// カスタム絵文字の「語で始まる」と「語を含む」は、それぞれショートコードで合ったものの後に、エイリアスで合ったものを並べる。
     /// カスタム絵文字を全部先にすると、`cat1`、`cat2`のように語で始まるものが多いサーバーでは、🐈のような名前と一致する絵文字が候補の数から押し出されるため。
     /// 名前と一致するものより下は、カスタム絵文字を先にする。サーバーにしかない絵文字を探しに来ることが多いため。
     public static func candidates(matching query: String, custom: [ServerEmoji], standard groups: [StandardEmojiGroup], limit: Int) -> [CompletionCandidate] {
         let customQuery = query.precomposedStringWithCompatibilityMapping.lowercased()
-        let customMatches = candidates(matching: customQuery, in: custom, limit: Int.max)
-        let exactCustom = customMatches.filter { $0.shortcode.lowercased() == customQuery }
-        let prefixedCustom = customMatches.filter { $0.shortcode.lowercased() != customQuery && $0.shortcode.lowercased().hasPrefix(customQuery) }
-        let containedCustom = customMatches.filter { !$0.shortcode.lowercased().hasPrefix(customQuery) }
+        let customMatches = matches(matching: customQuery, in: custom)
+        let exactCustom = customMatches.prefixed.filter { $0.shortcode.lowercased() == customQuery }
+        let prefixedCustom = customMatches.prefixed.filter { $0.shortcode.lowercased() != customQuery }.map(CompletionCandidate.emoji)
+            + customMatches.aliasPrefixed.map(CompletionCandidate.aliasEmoji)
+        let containedCustom = customMatches.contained.map(CompletionCandidate.emoji) + customMatches.aliasContained.map(CompletionCandidate.aliasEmoji)
         let standard = StandardEmojiSearch.matches(matching: query, in: groups)
         let standardNamed = standard.filter { $0.kind == .nameExact }.map(\.emoji)
         let standardContained = standard.filter { $0.kind >= .contained }.map(\.emoji)
         let standardRest = standard.filter { $0.kind != .nameExact && $0.kind < .contained }.map(\.emoji)
         let ordered: [CompletionCandidate] = exactCustom.map(CompletionCandidate.emoji)
             + standardNamed.map(CompletionCandidate.standardEmoji)
-            + prefixedCustom.map(CompletionCandidate.emoji)
+            + prefixedCustom
             + standardRest.map(CompletionCandidate.standardEmoji)
-            + containedCustom.map(CompletionCandidate.emoji)
+            + containedCustom
             + standardContained.map(CompletionCandidate.standardEmoji)
         return Array(ordered.prefix(max(limit, 0)))
     }
 
-    /// 大文字小文字を区別せず、語で始まるものを先に、語を含むものを後に並べる。それぞれ短い順、同じ長さなら名前の順。
-    /// ピッカーに出さない絵文字は除く。
+    /// 大文字小文字を区別せず、ショートコードが語で始まるもの、エイリアスが語で始まるもの、ショートコードが語を含むもの、エイリアスが語を含むものの順に並べる。
+    /// それぞれ短い順、同じ長さなら名前の順。ピッカーに出さない絵文字は除く。
     public static func candidates(matching query: String, in emojis: [ServerEmoji], limit: Int) -> [ServerEmoji] {
+        let matches = matches(matching: query, in: emojis)
+        return Array((matches.prefixed + matches.aliasPrefixed.map(\.0) + matches.contained + matches.aliasContained.map(\.0)).prefix(max(limit, 0)))
+    }
+
+    /// 語に合ったカスタム絵文字を、合ったところごとに分ける。ショートコードが合った絵文字は、エイリアスの方には入れない。
+    /// エイリアスは、ひらがなとカタカナ、全角と半角も区別しない（`StandardEmojiSearch.normalize`）。エイリアスで合ったものには、合ったエイリアスを添える。
+    private static func matches(matching query: String, in emojis: [ServerEmoji]) -> (prefixed: [ServerEmoji], aliasPrefixed: [(ServerEmoji, alias: String)], contained: [ServerEmoji], aliasContained: [(ServerEmoji, alias: String)]) {
         let query = query.lowercased()
+        let aliasQuery = StandardEmojiSearch.normalize(query)
         var prefixed: [ServerEmoji] = []
+        var aliasPrefixed: [(ServerEmoji, alias: String)] = []
         var contained: [ServerEmoji] = []
+        var aliasContained: [(ServerEmoji, alias: String)] = []
         for emoji in emojis where emoji.visibleInPicker {
             let shortcode = emoji.shortcode.lowercased()
             if shortcode.hasPrefix(query) {
                 prefixed.append(emoji)
             } else if shortcode.contains(query) {
                 contained.append(emoji)
+            } else if aliasQuery.isEmpty {
+                continue
+            } else if let index = emoji.normalizedAliases.firstIndex(where: { $0.hasPrefix(aliasQuery) }) {
+                aliasPrefixed.append((emoji, emoji.aliases[index]))
+            } else if let index = emoji.normalizedAliases.firstIndex(where: { $0.contains(aliasQuery) }) {
+                aliasContained.append((emoji, emoji.aliases[index]))
             }
         }
         let order: (ServerEmoji, ServerEmoji) -> Bool = { lhs, rhs in
             lhs.shortcode.count != rhs.shortcode.count ? lhs.shortcode.count < rhs.shortcode.count : lhs.shortcode.lowercased() < rhs.shortcode.lowercased()
         }
-        return Array((prefixed.sorted(by: order) + contained.sorted(by: order)).prefix(max(limit, 0)))
+        return (prefixed.sorted(by: order), aliasPrefixed.sorted { order($0.0, $1.0) }, contained.sorted(by: order), aliasContained.sorted { order($0.0, $1.0) })
     }
 }
 
@@ -378,7 +398,7 @@ public final class CompletionModel {
         switch candidate {
         case .account(let account): recentMentions?.record(LocalMention(account: account))
         case .localAccount(let mention, _): recentMentions?.record(mention)
-        case .hashtag, .ownHashtag, .emoji, .standardEmoji, nil: break
+        case .hashtag, .ownHashtag, .emoji, .aliasEmoji, .standardEmoji, nil: break
         }
         clear()
     }

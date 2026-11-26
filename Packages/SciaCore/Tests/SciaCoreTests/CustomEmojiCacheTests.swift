@@ -51,6 +51,18 @@ struct CustomEmojiCacheTests {
         #expect(snapshot.learnedAspectRatios == [emoji("wide").staticUrl: 4])
     }
 
+    /// エイリアスも書き出し、起動し直したあとのパレットと補完で使える。
+    @Test func keepsAliasesAcrossLaunches() async throws {
+        let cache = makeCaches().cache(for: instance)
+        let aliased = ServerEmoji(shortcode: "aliased", url: files.appending(path: "a.png"), staticUrl: files.appending(path: "a.png"), aliases: ["別名", "べつめい"])
+        cache.remember([aliased], loadStartedAt: cache.generation)
+        try await waitUntil { FileManager.default.fileExists(atPath: file.path) }
+
+        let snapshot = try await restored(makeCaches())
+
+        #expect(snapshot.emojis?.first?.aliases == ["別名", "べつめい"])
+    }
+
     /// アニメーション版の画像が届いても、静止画のURLで縦横比を残す。投稿の本文で動かして描いた絵文字も、パレットで使えるようにするため。
     /// リストにない絵文字（ほかのサーバーの絵文字）と、サーバーが縦横比を返した絵文字は残さない。
     @Test func learnsOnlyEmojisInListWithoutServerAspectRatio() {

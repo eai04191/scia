@@ -271,6 +271,7 @@ struct StoredCustomEmojis: Codable, Sendable {
         let category: String?
         /// サーバーが返した縦横比か、画像から分かった縦横比。どちらも分からなければnil。
         let aspectRatio: Double?
+        let aliases: [String]
 
         init(_ emoji: ServerEmoji, aspectRatio: Double?) {
             shortcode = emoji.shortcode
@@ -279,10 +280,11 @@ struct StoredCustomEmojis: Codable, Sendable {
             visibleInPicker = emoji.visibleInPicker
             category = emoji.category
             self.aspectRatio = aspectRatio
+            aliases = emoji.aliases
         }
 
         private enum CodingKeys: String, CodingKey {
-            case shortcode, url, staticUrl, visibleInPicker, category, aspectRatio
+            case shortcode, url, staticUrl, visibleInPicker, category, aspectRatio, aliases
         }
 
         /// URLは、サーバーの応答を読むときと同じく、読み込む画像として受け付けるスキームだけを通す。
@@ -294,11 +296,13 @@ struct StoredCustomEmojis: Codable, Sendable {
             visibleInPicker = try container.decode(Bool.self, forKey: .visibleInPicker)
             category = try container.decodeIfPresent(String.self, forKey: .category)
             aspectRatio = try container.decodeIfPresent(Double.self, forKey: .aspectRatio).flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+            // エイリアスを書く前のファイルにはない。端末に残したリストは起動のたびに読み直すので、それまでは空のままにする。
+            aliases = try container.decodeIfPresent([String].self, forKey: .aliases) ?? []
         }
 
         /// 縦横比は、サーバーが返したものと見分けずに、画像から分かったものとして持つ。読み直したリストでサーバーが返せば、そちらを使う。
         var emoji: ServerEmoji {
-            ServerEmoji(shortcode: shortcode, url: url, staticUrl: staticUrl, visibleInPicker: visibleInPicker, category: category)
+            ServerEmoji(shortcode: shortcode, url: url, staticUrl: staticUrl, visibleInPicker: visibleInPicker, category: category, aliases: aliases)
         }
     }
 

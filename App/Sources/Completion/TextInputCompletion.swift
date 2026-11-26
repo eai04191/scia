@@ -122,7 +122,7 @@ final class TextInputCompletion {
         logger.info("completion: selected \(token.kind.rawValue, privacy: .public) leadingSpace=\(token.needsLeadingSpace)")
         guard apply(insertion, to: input) else { return }
         switch candidate {
-        case .emoji(let emoji): recentEmojis?.record(PaletteEmoji.custom(emoji).recentKey)
+        case .emoji(let emoji), .aliasEmoji(let emoji, _): recentEmojis?.record(PaletteEmoji.custom(emoji).recentKey)
         case .standardEmoji(let emoji): recentEmojis?.record(PaletteEmoji.standard(emoji).recentKey)
         case .account, .localAccount, .hashtag, .ownHashtag: break
         }

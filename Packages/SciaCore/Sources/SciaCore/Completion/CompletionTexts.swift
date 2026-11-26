@@ -34,6 +34,11 @@ public enum CompletionTexts {
     public static func emojiAccessibilityLabel(name: String) -> String {
         "絵文字 \(name)"
     }
+
+    /// エイリアスで出たカスタム絵文字の候補の読み上げ。合ったエイリアスとショートコードの両方を読む。
+    public static func emojiAccessibilityLabel(alias: String, shortcode: String) -> String {
+        "絵文字 \(alias)、\(shortcode)"
+    }
 }
 
 extension LocalMentionSource {

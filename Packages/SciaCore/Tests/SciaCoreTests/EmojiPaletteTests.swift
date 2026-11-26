@@ -6,9 +6,9 @@ import SciaTesting
 @Suite(.scratch)
 @MainActor
 struct EmojiPaletteTests {
-    private func emoji(_ shortcode: String, category: String? = nil, visible: Bool = true) throws -> ServerEmoji {
+    private func emoji(_ shortcode: String, category: String? = nil, visible: Bool = true, aliases: [String] = []) throws -> ServerEmoji {
         let url = try #require(URL(string: "https://example.social/emoji/\(shortcode).png"))
-        return ServerEmoji(shortcode: shortcode, url: url, staticUrl: url, visibleInPicker: visible, category: category)
+        return ServerEmoji(shortcode: shortcode, url: url, staticUrl: url, visibleInPicker: visible, category: category, aliases: aliases)
     }
 
     private func makeDefaults() throws -> UserDefaults {
@@ -323,6 +323,50 @@ struct EmojiPaletteTests {
     @Test func searchResultsFindCustomEmojisByFullwidthQuery() throws {
         let results = EmojiPalette.searchResults(matching: "ｂｌｏｂ", emojis: [try emoji("blobcat")], standardGroups: [], limit: 10)
         #expect(results.map(\.recentKey) == ["blobcat"])
+    }
+
+    /// Fedibirdのエイリアスでもカスタム絵文字を探せる。ひらがなとカタカナ、全角と半角は区別しない。ピッカーに出さない絵文字は出さない。
+    @Test func searchResultsFindCustomEmojisByAlias() throws {
+        let emojis = [
+            try emoji("kuu_tukaremasita", aliases: ["くぅー疲れましたw", "くぅーつかれました"]),
+            try emoji("hidden_kuu", visible: false, aliases: ["くぅー"]),
+            try emoji("friday", aliases: ["13nichinokinyoubi"]),
+        ]
+        let search = { (query: String) in EmojiPalette.searchResults(matching: query, emojis: emojis, standardGroups: [], limit: 10).map(\.recentKey) }
+        #expect(search("クゥーツカレ") == ["kuu_tukaremasita"])
+        #expect(search("疲れ") == ["kuu_tukaremasita"])
+        #expect(search("ｎｉｃｈｉ") == ["friday"])
+    }
+
+    /// 補完では、エイリアスで当たった絵文字を、同じ強さでショートコードが当たった絵文字のすぐ後に並べる。
+    /// 語で始まるものは名前と一致するUnicodeの絵文字より後、語を含むだけのものは、語を含むカスタム絵文字の後でUnicodeの絵文字より前。
+    @Test func completionPutsAliasMatchesAfterShortcodeMatches() throws {
+        let groups = [StandardEmojiGroup(title: "動物と自然", emojis: [
+            standard("🐈", "ねこ", []),
+            standard("🐱", "ネコの顔", ["こねこ"]),
+        ])]
+        let custom = [
+            try emoji("kuro", aliases: ["nekoclub", "ねこです"]),
+            try emoji("neko"),
+            try emoji("kitten", aliases: ["koneko", "こねこ"]),
+            try emoji("nekomimi"),
+            try emoji("blobneko"),
+        ]
+        let results = EmojiCompletion.candidates(matching: "neko", custom: custom, standard: groups, limit: 10)
+        #expect(results.map(\.completion) == [":neko:", ":nekomimi:", ":kuro:", ":blobneko:", ":kitten:"])
+        let japanese = EmojiCompletion.candidates(matching: "ねこ", custom: custom, standard: groups, limit: 10)
+        #expect(japanese.map(\.completion) == ["🐈", ":kuro:", "🐱", ":kitten:"])
+    }
+
+    /// エイリアスで当たった補完の候補は、当たったエイリアスを添える。語で始まるエイリアスを、語を含むだけのエイリアスより先に選ぶ。
+    /// ショートコードで当たったものは、エイリアスにも合っていても添えない。
+    @Test func completionCarriesMatchedAlias() throws {
+        let kuu = try emoji("kuu_tukaremasita", aliases: ["ほむら", "くぅー疲れましたw", "くぅーつかれました"])
+        let tired = try emoji("tired", aliases: ["もうくぅー"])
+        let kuuShortcode = try emoji("kuu", aliases: ["くぅー"])
+        let results = EmojiCompletion.candidates(matching: "クゥー", custom: [kuu, tired], standard: [], limit: 10)
+        #expect(results == [.aliasEmoji(kuu, alias: "くぅー疲れましたw"), .aliasEmoji(tired, alias: "もうくぅー")])
+        #expect(EmojiCompletion.candidates(matching: "kuu", custom: [kuuShortcode], standard: [], limit: 10) == [.emoji(kuuShortcode)])
     }
 
     // MARK: - マス
