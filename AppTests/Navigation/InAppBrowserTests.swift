@@ -155,12 +155,20 @@ struct InAppBrowserTests {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let root = harness.viewController
+        let clock = LayerClock(freezing: try #require(root.view.window).layer)
+        defer { clock.release() }
         let browser = InAppBrowser(settings: AppDependencies.settings)
-        let sheet = try await openSheet(with: browser, from: root)
+        browser.open(try #require(URL(string: "https://example.com/1")), from: root)
+        try await clock.advance(until: { root.presentedViewController is InAppBrowserSheet && root.presentedViewController?.isBeingPresented == false })
+        let sheet = try #require(root.presentedViewController as? InAppBrowserSheet)
+        try await clock.advance(until: { sheet.safari?.viewIfLoaded?.window != nil })
         let view = try #require(sheet.sheetPresentation?.presentedView)
         // 出し終えた時点で、出す動きの続きは終わっている。そのあと続けて段の高さへ動くことがあり、その続きも止まれば外れる。
         let rests = (view.layer.animationKeys() ?? []).filter { $0.hasPrefix("springToRest.") }
-        try await waitUntil { Set(view.layer.animationKeys() ?? []).isDisjoint(with: rests) }
+        // 終わるまで待つ形にすると、外れないときに、固まったとみなす上限まで1コマずつ進めてから落ちる。続きの長さだけ進めてから確かめる。
+        let longest = rests.compactMap { view.layer.animation(forKey: $0)?.duration }.max() ?? 0
+        try await clock.advance(by: longest + LayerClock.frame)
+        #expect(Set(view.layer.animationKeys() ?? []).isDisjoint(with: rests))
 
         root.dismiss(animated: false)
     }

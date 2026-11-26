@@ -334,8 +334,10 @@ struct InAppBrowserFullScreenTests {
         defer { harness.tearDown() }
         let root = harness.viewController
         let frames = ManualFrameSource()
-        let (browser, sheet, overlay) = try await openFullScreen(from: root, frames: frames, tuning: AppDependencies.tuning)
-        try await waitUntil { root.presentedViewController?.isBeingPresented == false }
+        // 出す動きは実際の時間で待つので、0で出してから、確かめる間の動きを既定の長さに戻す。
+        let tuning = TuningStore.withoutBrowserMotion()
+        let (browser, sheet, overlay) = try await openFullScreen(from: root, frames: frames, tuning: tuning)
+        tuning.setValue(TuningCatalog.inAppBrowserDockDuration.defaultValue, for: TuningCatalog.inAppBrowserDockDuration)
         frames.advance(by: ManualFrameSource.frame)
         let clock = LayerClock(freezing: overlay.layer)
         defer { clock.release() }
